@@ -3,11 +3,13 @@
 //! canvas, runs the seams in order and copies the view back to the document's `View`.
 
 use craft::behavior::{CanvasView, PressPhase};
+use craft::keymap::Mods;
 use craft::ui::canvas::{
     Canvas, CanvasScrollbars, CanvasSpace, RotateView, ToolHostResponse, ToolPass, ViewCommands, ViewRequest, ViewTarget, canvas_space, tool_pass,
 };
 use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
 use craft::ui::runtime::env::Env;
+use craft::ui::runtime::focus::NudgeMods;
 use craft::ui::style::StyleCx;
 use egui::Ui;
 use serde_json::json;
@@ -71,6 +73,19 @@ pub(crate) fn animated_zoom(p: &vectorcraft_engine::Prefs) -> bool {
 pub(crate) fn revolve_editing(app: &VectorcraftApp) -> bool {
     app.three_d_dialog.is_some()
 }
+
+/// The arrows the canvas takes with nothing in the window focused, as it takes every arrow while it has the focus:
+/// each modifier combination. A plain arrow nudges, Shift ten times as far, Alt nudges a copy, and an arrow an app
+/// command is bound to runs it ([`tool_adapter`]).
+const ARROWS: NudgeMods = {
+    let mut arrows = NudgeMods::NONE;
+    let mut held = 0;
+    while held < 16 {
+        arrows = arrows.with(Mods { cmd: held & 1 != 0, ctrl: held & 2 != 0, alt: held & 4 != 0, shift: held & 8 != 0 });
+        held += 1;
+    }
+    arrows
+};
 
 /// The id `Canvas::new("Document")` gets for a body of `win`.
 pub(crate) fn canvas_id(win: Win) -> egui::Id {
@@ -166,6 +181,7 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
         .layer_bounds(&layers)
         .queued(&queued)
         .navigation(crate::app::view::navigation(prefs))
+        .body_nudges(ARROWS)
         .rulers(x, y)
         .with_rulers(strips)
         .precise_cursors(prefs.use_precise_cursors);
@@ -227,6 +243,9 @@ fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: O
     let presenting = app.ui.screen_mode == 3;
     let mut out = Body { context_at: artboards::show(app, ui, space, win, kind).map(|p| space.view.to_screen(p)), ..Body::default() };
     grids(app, ui, space, win);
+    if live {
+        find_shown_tool(app, ui.ctx(), space);
+    }
     marks::show(app, ui, space, win, kind);
     if !presenting {
         crate::panels::tabs::stop_guide(app, ui, space);
@@ -273,6 +292,38 @@ fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: O
     drops::show(app, ui, win, kind);
     raster::picture(app, ui, space, win, kind);
     out
+}
+
+/// The keys held now, as the engine's tools read them, with `space` set while Space is down.
+pub(crate) fn held_mods(ctx: &egui::Context) -> vectorcraft_tools::Mods {
+    let (m, space) = ctx.input(|i| (i.modifiers, i.key_down(egui::Key::Space)));
+    mods(m, space)
+}
+
+/// The tool whose marks and widgets the canvas draws with the keys held now: while Cmd is held, the selection tool
+/// a press at the pointer borrows ([`find_shown_tool`]), else the active tool.
+pub(crate) fn shown_tool(app: &VectorcraftApp, ctx: &egui::Context) -> &'static str {
+    app.session.hover_tool_id(&held_mods(ctx))
+}
+
+/// Finds the tool whose marks and widgets the canvas draws this frame for the pointer where it is now
+/// ([`vectorcraft_engine::Session::hover_tool_at`]), which [`shown_tool`] then answers. While the view moves, the art
+/// under the pointer is not hit-tested again (#2452), and the last answer stays.
+fn find_shown_tool(app: &mut VectorcraftApp, ctx: &egui::Context, space: &CanvasSpace) {
+    let wait = cursor::hover_wait(&mut app.canvas.view_moved, ViewKey::of(&space.view), craft::ui::runtime::frame::clock(ctx));
+    if wait.is_some() {
+        return;
+    }
+    let held = held_mods(ctx);
+    let named = app.session.shown_tool_id(&held);
+    let at = ctx.input(|i| i.pointer.hover_pos()).filter(|p| space.view.rect.contains(*p)).map(|p| space.view.to_doc(p));
+    let view = app.view_info();
+    app.session.hover_tool_at(at, &held, view);
+    // The status bar and the help bar are drawn before the canvas: when the tool they name changes with this
+    // frame's pointer, they are drawn again.
+    if app.session.shown_tool_id(&held) != named {
+        ctx.request_repaint();
+    }
 }
 
 /// The document grid, in the picture slot under the art when Grids In Back is on and over it

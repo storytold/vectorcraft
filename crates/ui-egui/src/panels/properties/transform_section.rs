@@ -12,7 +12,6 @@ use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::pickers::Select;
 use craft::ui::popover::Popover;
-use craft::ui::sections::Section;
 use egui::Ui;
 use serde_json::json;
 use vectorcraft_doc::{LiveCorners, LiveShape, NodeKind};
@@ -31,14 +30,14 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         Text::new(tl!("No Selection")).shade(Shade::Muted).show(ui);
         return;
     }
-    Section::fixed(tl!("Transform")).show(ui, |ui, _| {
+    super::section(tl!("Transform")).show(ui, |ui, _| {
         let mut groups = TransformGroups::NONE;
         groups.reference = true;
         groups.position = true;
         groups.size = true;
         transform::object_fields(app, ui, groups);
         Row::new().show(ui, |ui, _| {
-            transform::rotate_field(app, ui);
+            transform::rotate_field(app, ui, &[]);
             // The icons are named for their mirror line: `flip-vertical-2` draws a vertical line, the
             // left-right flip, which the Properties panel calls Flip Along Horizontal Axis (#1910).
             IconButton::command(IconId::new("flip-vertical-2"), "ui.transform.flipHorizontal").label(tl!("Flip Along Horizontal Axis")).show(ui);
@@ -107,5 +106,5 @@ pub(super) fn corner_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// Ruler guides selected on their own: a Transform section with the X of the vertical ones and
 /// the Y of the horizontal ones, which move them, as the Transform panel shows them (#1597).
 pub(super) fn guide_sections(app: &mut VectorcraftApp, ui: &mut Ui, guides: (Option<f64>, Option<f64>)) {
-    Section::fixed(tl!("Transform")).show(ui, |ui, _| transform::guide_fields(app, ui, guides));
+    super::section(tl!("Transform")).show(ui, |ui, _| transform::guide_fields(app, ui, guides));
 }

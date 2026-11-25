@@ -22,8 +22,8 @@ use craft::behavior::{Axis, DockSide, IconId};
 use craft::ui::buttons::IconButton;
 use craft::ui::contract::{Bind, BodyCx, PlainData, Show as _, Tracked};
 use craft::ui::docking::{
-    DockCommands, DockConfig, DockEvent, DockGrid, DockPanels, DockScene, DockSizes, DockTo, DragUnit, FloatSpace, GroupAt, HidePanels, PanelKey,
-    PanelSpec, PanelSpecs, actions as command_actions, move_actions, request_actions,
+    ColumnCards, DockCommands, DockConfig, DockEvent, DockGrid, DockPanels, DockScene, DockSizes, DockTo, DragUnit, FloatSpace, GroupAt, HidePanels,
+    PanelKey, PanelSpec, PanelSpecs, actions as command_actions, move_actions, request_actions,
 };
 use craft::ui::menu::PanelRow;
 use craft::ui::patterns::dock::DockArea;
@@ -31,6 +31,7 @@ use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::commands::CommandRef;
 use craft::ui::runtime::frame::{ChromeToggle, request_chrome_toggle};
 use craft::ui::shell::chrome_state;
+use craft::ui::tabs::PanelTabLook;
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
@@ -1131,7 +1132,7 @@ impl Specs {
         let grids = layout_of(&app.ui)
             .panels()
             .into_iter()
-            .filter_map(|panel| rail_owner(&app.ui, panel).map(|owner| (panel.clone(), crate::toolbar::dock_grid(app, &owner, app.ui_ctx.as_ref()))))
+            .filter_map(|panel| rail_owner(&app.ui, panel).map(|owner| (panel.clone(), crate::toolbar::dock_grid(app, &owner))))
             .collect();
         Specs {
             lang: crate::i18n::current().code(),
@@ -1234,8 +1235,7 @@ impl DockPanels<String> for Panels<'_> {
 
     fn group_header(&mut self, panels: &[String], active: usize, ui: &mut egui::Ui, _cx: &mut BodyCx<'_>) {
         let Some(panel) = panels.get(active).filter(|p| sizes::has_sizes(p)) else { return };
-        // PLAN: the cycle control's icon (two stacked triangles) is not an app asset yet; `cycle-sizes` names it for whoever draws it.
-        IconButton::command(IconId::new("cycle-sizes"), CommandRef::with_params("window.panel.cycleOptions", json!({"panel": panel}))).show(ui);
+        IconButton::command(IconId::new("dc-cycle-sizes"), CommandRef::with_params("window.panel.cycleOptions", json!({"panel": panel}))).show(ui);
     }
 
     fn panel_rows(&mut self, panel: &String) -> Vec<PanelRow> {
@@ -1312,9 +1312,21 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, keeps_tools: boo
     let hand_over = app.dock_rt.hand_over.take();
     let output = {
         let mut panels = Panels { app: &mut *app };
-        let mut area = DockArea::new("Dock", Bind::bound(&mut workspace), &specs, &mut panels, DockConfig::default())
-            .hide(hide)
-            .flyout(Bind::bound(&mut flyout));
+        let mut area = DockArea::new(
+            "Dock",
+            Bind::bound(&mut workspace),
+            &specs,
+            &mut panels,
+            DockConfig::default()
+                .panel_menu_always(true)
+                .panel_menu_icon(IconId::new("menu"))
+                .floating_rounded_body(true)
+                .tab_look(PanelTabLook::Block)
+                .column_cards(ColumnCards::Stepped)
+                .flush_docks(true),
+        )
+        .hide(hide)
+        .flyout(Bind::bound(&mut flyout));
         if let Some((panel, grab)) = hand_over {
             area = area.continue_move((panel, grab));
         }
@@ -1350,7 +1362,9 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, keeps_tools: boo
         // Shift as the frame holds it: the window system sends a file drag no key events, and a second pass of the
         // frame reads the same state.
         let shift = ctx.input(|i| i.modifiers.shift);
-        crate::place::os_drop(app, output.window_files, crate::place::DropSpot::Unknown, shift);
+        // The panel each drop landed on is not a target here: every dropped file opens, as before.
+        let files = output.window_files.into_iter().flat_map(|drop| drop.files).collect();
+        crate::place::os_drop(app, files, crate::place::DropSpot::Unknown, shift);
     }
     if output.float_space.is_some() {
         app.dock_rt.space = output.float_space;

@@ -1,6 +1,6 @@
 use craft::behavior::IconId;
 use craft::ui::bars::{Bar, BarKind};
-use craft::ui::buttons::{Button, IconButton, Link};
+use craft::ui::buttons::{Button, IconButton};
 use craft::ui::contract::{Bind, PopupKind, Props as _, Show as _, ShowContainer as _, SideLabel, Trigger};
 use craft::ui::display::{Divider, Elide, Shade, Text};
 use craft::ui::form::Field;
@@ -23,14 +23,18 @@ pub(crate) mod rank {
     pub const SELECT_SIMILAR: u8 = 1;
     /// The inline X/Y/W/H fields and the Snapping menu.
     pub const FIELDS: u8 = 2;
+    /// The type groups (Character, Paragraph and area type's vertical alignment) and the Align buttons after them:
+    /// they leave after Select Similar, Snapping and the X/Y/W/H fields and before every other member, so Opacity,
+    /// the Style picker and Recolor Artwork show while type is selected.
+    pub const TYPE: u8 = 3;
     /// The parts of a group that its other members work without: the width profile, Recolor Artwork, Global Edit
     /// Options, Document Setup, an image's Edit Original.
-    pub const DETAIL: u8 = 3;
+    pub const DETAIL: u8 = 4;
     /// The Opacity link and field: they leave before the groups, so the narrower Style link and picker after them
     /// can show without them.
-    pub const OPACITY: u8 = 4;
+    pub const OPACITY: u8 = 5;
     /// Every other member of the bar.
-    pub const GROUP: u8 = 5;
+    pub const GROUP: u8 = 6;
 }
 
 /// An anchor button: icon, tooltip, command and the convert command's `to`.
@@ -323,7 +327,7 @@ fn opacity_field(app: &mut VectorcraftApp, ui: &mut Ui, opacity: f32, selected: 
 fn style_group(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut open = false;
     ranked(ui, rank::GROUP, |ui| {
-        open |= Link::new(tl!("Style:")).show(ui).clicked();
+        open |= crate::panels::option_link(tl!("Style:")).show(ui).clicked();
         crate::panels::graphic_styles::style_picker(app, ui);
     });
     if open {
@@ -533,7 +537,7 @@ fn object_name(app: &VectorcraftApp, anchors: AnchorControls) -> Option<(&'stati
 fn object_label(app: &mut VectorcraftApp, ui: &mut Ui, label: &'static str, image: bool) {
     if !image {
         Text::new(label).elide(Elide::End).show(ui);
-    } else if Link::new(label).show(ui).clicked() {
+    } else if crate::panels::option_link(label).show(ui).clicked() {
         crate::panels::links::show_selected_image(app, ui.ctx());
     }
 }
@@ -597,14 +601,21 @@ fn members(app: &mut VectorcraftApp, ui: &mut Ui) {
     if group_on(app, "graphicStyle") && count > 0 {
         style_group(app, ui);
     }
-    if group_on(app, "character") {
-        crate::panels::character::control_bar(app, ui);
+    let (character, paragraph) = (group_on(app, "character"), group_on(app, "paragraph"));
+    let typed = (character || paragraph) && crate::panels::character::text_style(app).is_some();
+    if typed && character {
+        ranked(ui, rank::TYPE, |ui| {
+            crate::panels::character::control_bar(app, ui);
+        });
     }
-    if group_on(app, "paragraph") {
-        crate::panels::paragraph::control_bar(app, ui);
+    if typed && paragraph {
+        ranked(ui, rank::TYPE, |ui| {
+            crate::panels::paragraph::control_bar(app, ui);
+        });
     }
-    if group_on(app, "verticalAlignment") && crate::panels::properties::vertical_align::shown(app).is_some() {
-        group(ui, rank::GROUP, |ui| {
+    let vertical = group_on(app, "verticalAlignment") && crate::panels::properties::vertical_align::shown(app).is_some();
+    if vertical {
+        group(ui, rank::TYPE, |ui| {
             crate::panels::properties::vertical_align::buttons(app, ui);
         });
     }
@@ -615,7 +626,9 @@ fn members(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     }
     if group_on(app, "alignDistribute") {
-        group(ui, rank::GROUP, |ui| crate::panels::align::control_bar_strip(app, ui));
+        // After the type groups, the Align buttons take their rank and, coming last, leave first.
+        let rank = if typed || vertical { rank::TYPE } else { rank::GROUP };
+        group(ui, rank, |ui| crate::panels::align::control_bar_strip(app, ui));
     }
     if transform {
         // The Transform link opens the whole Transform panel in a popover; X/Y/W/H follow inline while the

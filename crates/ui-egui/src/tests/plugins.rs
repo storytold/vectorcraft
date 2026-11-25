@@ -410,7 +410,7 @@ fn installing_a_plugin_over_another_module_asks_first() {
     h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
 }
 
-/// A plug-in with two commands: Grow, which adds a triangle (`_context.command` is `grow`), and
+/// A plug-in with two commands, each of which adds a triangle when run as a command: Grow, and
 /// Size, with a parameter, whose `menu` names another menu.
 fn commands_plugin(id: &str) -> Vec<u8> {
     let manifest = format!(
@@ -418,7 +418,7 @@ fn commands_plugin(id: &str) -> Vec<u8> {
         {{"id":"size","label":"Size","menu":"File","params":{{"by":{{"type":"number","min":0,"max":10,"default":2}}}}}}]}}"#
     );
     let triangle = r#"{"objects":[{"path":{"subpaths":[{"closed":true,"anchors":[{"p":[0,0]},{"p":[5,0]},{"p":[5,5]}]}]}}]}"#;
-    wat::parse_str(tpl::when_given(&manifest, tpl::Given::Params, r#""command":"grow""#, triangle)).unwrap()
+    wat::parse_str(tpl::when_given(&manifest, tpl::Given::Params, r#""mode":"command""#, triangle)).unwrap()
 }
 
 /// A plug-in's commands are items of Object › Plug-ins › its name (never the menu a manifest
@@ -465,6 +465,241 @@ fn plugin_commands_are_menu_items_and_shortcut_entries() {
     assert!(menus::menu_entries(h.state()).iter().all(|e| e.command.as_deref() != Some(grow)));
     assert!(crate::shortcut_editor::entries().iter().all(|e| e.key != grow));
     assert!(row(grow).is_none());
+}
+
+/// A filter at API level 2 named `name` whose commands are `commands` (a JSON list).
+fn placing_plugin(id: &str, name: &str, commands: &str) -> String {
+    placing_kind(id, name, "filter", commands)
+}
+
+/// A plug-in of `kind` at API level 2 named `name` whose commands are `commands` (a JSON list).
+fn placing_kind(id: &str, name: &str, kind: &str, commands: &str) -> String {
+    let manifest = format!(r#"{{"id":"{id}","name":"{name}","api":2,"version":"1","kind":"{kind}","commands":{commands}}}"#);
+    vectorcraft_format::base64_encode(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap())
+}
+
+/// A command whose manifest's `menu` names another menu is listed there, after the built-in item
+/// `after` names or at the end of the menu, with its plug-in's name after its label, and not in its
+/// plug-in's submenu; one with no `menu` stays there. Commands of two plug-ins at the same spot are
+/// listed in plug-in id order whichever was installed first. Keyboard Shortcuts and the command
+/// palette list it under its menu, and removing its plug-in takes it out of every menu.
+#[test]
+fn a_plugin_command_is_placed_in_the_menu_its_manifest_names() {
+    let mut app = app();
+    let (ant, bee) = ("test.ui.place.ant", "test.ui.place.bee");
+    let low = |id: &str| vectorcraft_engine::cmd::plugin::command_id(id, "low");
+    // Bee is installed first; Ant's id sorts first.
+    let bee_commands = r#"[{"id":"low","label":"Low Area","menu":{"path":["Select"],"after":"Inverse"}},
+        {"id":"tail","label":"Tail","menu":{"path":["Select"],"after":"No Such Item"}}]"#;
+    app.run("plugin.install", json!({"dataBase64": placing_plugin(bee, "Bee", bee_commands)})).unwrap();
+    let ant_commands = r#"[{"id":"low","label":"Low Area","menu":{"path":["Select"],"after":"Inverse…"},"params":{"area":{"type":"number","min":0,"max":100,"default":4}}},
+        {"id":"same","label":"Same Area","menu":{"path":["Select","Same"]}},
+        {"id":"lost","label":"Lost Anchor","menu":{"path":["Select"],"after":"No Such Item"}},
+        {"id":"end","label":"End","menu":{"path":["Select"]}},
+        {"id":"edges","label":"Edges","menu":{"path":["View"],"after":"Show Edges"}},
+        {"id":"stay","label":"Stay"}]"#;
+    app.run("plugin.install", json!({"dataBase64": placing_plugin(ant, "Ant", ant_commands)})).unwrap();
+
+    let entries = menus::menu_entries(&app);
+    let select: Vec<&menus::MenuEntry> = entries.iter().filter(|e| e.path == ["Select"]).collect();
+    let at = |command: &str| select.iter().position(|e| e.command.as_deref() == Some(command));
+    let inverse = at("select.inverse").expect("Inverse is listed");
+    assert_eq!((at(&low(ant)), at(&low(bee))), (Some(inverse + 1), Some(inverse + 2)), "after Inverse, Ant's before Bee's");
+    assert_eq!(select[inverse + 1].label, "Low Area (Ant)…", "the item names its plug-in");
+    assert_eq!(select[inverse + 2].label, "Low Area (Bee)");
+    // An `after` that names no item means the end of the menu, as no `after` does, and the end keeps
+    // plug-in id order and then manifest order too.
+    let command = vectorcraft_engine::cmd::plugin::command_id;
+    let lost = command(ant, "lost");
+    let tail = [at(&lost), at(&command(ant, "end")), at(&command(bee, "tail"))];
+    let n = select.len();
+    assert_eq!(tail, [Some(n - 3), Some(n - 2), Some(n - 1)], "Ant's two, then Bee's, at the end");
+    let same = vectorcraft_engine::cmd::plugin::command_id(ant, "same");
+    assert!(entry(&entries, &["Select", "Same"], "Same Area (Ant)").is_some_and(|e| e.command.as_deref() == Some(same.as_str())));
+    assert!(menus::menu_strings().contains("Same"), "Select › Same is still a built-in submenu");
+    // An item that switches between two labels is matched by either of them.
+    let view: Vec<&menus::MenuEntry> = entries.iter().filter(|e| e.path == ["View"]).collect();
+    let edges = view.iter().position(|e| e.command.as_deref() == Some("view.edges")).expect("Hide Edges is listed");
+    assert_eq!(view.get(edges + 1).and_then(|e| e.command.clone()), Some(command(ant, "edges")), "after the edges toggle");
+
+    // Each placed command is in one menu only; Stay is still in Ant's submenu.
+    for command in [low(ant), low(bee), same.clone(), lost.clone()] {
+        assert_eq!(entries.iter().filter(|e| e.command.as_deref() == Some(command.as_str())).count(), 1, "{command}");
+    }
+    assert!(entry(&entries, &["Object", "Plug-ins", "Ant"], "Stay").is_some());
+    let bee_item = entry(&entries, &["Object", "Plug-ins"], "Bee").expect("Bee is a plain item again: all its commands are placed");
+    assert_eq!(bee_item.command.as_deref(), Some("plugin.dialog"));
+
+    let listed = crate::shortcut_editor::entry(&low(ant)).expect("in Keyboard Shortcuts");
+    assert_eq!((listed.label.as_str(), listed.group.as_str()), ("Low Area (Ant)", "Select"));
+    assert!(crate::palette::items().iter().any(|(name, id)| *id == low(bee) && name.ends_with("Low Area (Bee)")), "in the command palette");
+
+    app.run("plugin.remove", json!({"id": ant})).unwrap();
+    let entries = menus::menu_entries(&app);
+    assert!(entries.iter().all(|e| e.command.as_deref().is_none_or(|c| !c.starts_with("plugin.test.ui.place.ant."))), "Ant's commands are gone");
+    assert!(entries.iter().any(|e| e.path == ["Select"] && e.command.as_deref() == Some(low(bee).as_str())));
+    app.run("plugin.remove", json!({"id": bee})).unwrap();
+    assert!(menus::menu_entries(&app).iter().all(|e| e.command.as_deref() != Some(low(bee).as_str())));
+    assert!(crate::shortcut_editor::entries().iter().all(|e| e.key != low(bee)));
+}
+
+/// Commands placed after an item that switches between two labels are one spot whichever label
+/// their `after` names: they keep manifest order within a plug-in and plug-in id order across
+/// plug-ins.
+#[test]
+fn both_labels_of_a_switching_item_are_one_spot() {
+    let mut app = app();
+    let (ape, bat) = ("test.ui.place.ape", "test.ui.place.bat");
+    let command = vectorcraft_engine::cmd::plugin::command_id;
+    let ape_commands = r#"[{"id":"first","label":"First","menu":{"path":["View"],"after":"Hide Bounding Box"}},
+        {"id":"second","label":"Second","menu":{"path":["View"],"after":"Show Bounding Box"}}]"#;
+    let bat_commands = r#"[{"id":"third","label":"Third","menu":{"path":["View"],"after":"Hide Bounding Box"}}]"#;
+    // Bat is installed first; Ape's id sorts first.
+    app.run("plugin.install", json!({"dataBase64": placing_plugin(bat, "Bat", bat_commands)})).unwrap();
+    app.run("plugin.install", json!({"dataBase64": placing_plugin(ape, "Ape", ape_commands)})).unwrap();
+
+    let entries = menus::menu_entries(&app);
+    let view: Vec<&menus::MenuEntry> = entries.iter().filter(|e| e.path == ["View"]).collect();
+    let toggle = view.iter().position(|e| e.command.as_deref() == Some("view.boundingBox")).expect("Hide Bounding Box is listed");
+    let after: Vec<Option<String>> = (1..=3).map(|i| view.get(toggle + i).and_then(|e| e.command.clone())).collect();
+    assert_eq!(after, [Some(command(ape, "first")), Some(command(ape, "second")), Some(command(bat, "third"))]);
+    for id in [ape, bat] {
+        app.run("plugin.remove", json!({"id": id})).unwrap();
+    }
+}
+
+/// A live effect whose commands are all placed elsewhere is a single item in Effect › Plug-ins. A
+/// filter with the same name placing a command with the same label at the same spot keeps it in its
+/// own submenu, so the menu shows that label once. Replaced by a module whose command has no
+/// `menu`, the effect's command leaves the menu it was placed in and is listed once, in its
+/// submenu.
+#[test]
+fn placed_commands_of_a_live_effect_and_a_clashing_label() {
+    let mut app = app();
+    let (eff, twin) = ("test.ui.place.eff", "test.ui.place.twin");
+    let command = vectorcraft_engine::cmd::plugin::command_id;
+    let placed = r#"[{"id":"low","label":"Low Area","menu":{"path":["Select"],"after":"Inverse"}}]"#;
+    app.run("plugin.install", json!({"dataBase64": placing_kind(eff, "Glow", "effect", placed)})).unwrap();
+    app.run("plugin.install", json!({"dataBase64": placing_plugin(twin, "Glow", placed)})).unwrap();
+
+    let entries = menus::menu_entries(&app);
+    let (low, twin_low) = (command(eff, "low"), command(twin, "low"));
+    let in_select: Vec<&menus::MenuEntry> = entries.iter().filter(|e| e.path == ["Select"] && e.label == "Low Area (Glow)").collect();
+    assert_eq!(in_select.len(), 1, "the label is listed once");
+    assert_eq!(in_select[0].command.as_deref(), Some(low.as_str()), "the plug-in with the lower id takes the spot");
+    let own = entry(&entries, &["Effect", "Plug-ins"], "Glow").expect("the effect is a single item");
+    assert!(own.command.as_deref().is_some_and(|c| !vectorcraft_engine::cmd::plugin::is_command_id(c)), "{:?}", own.command);
+    assert!(entries.iter().all(|e| e.path != ["Effect", "Plug-ins", "Glow"]), "no submenu is left");
+    assert!(entry(&entries, &["Object", "Plug-ins", "Glow"], "Low Area").is_some_and(|e| e.command.as_deref() == Some(twin_low.as_str())));
+    let listed = crate::shortcut_editor::entry(&twin_low).expect("in Keyboard Shortcuts");
+    assert_eq!((listed.label.as_str(), listed.group.as_str()), ("Low Area", "Object › Plug-ins › Glow"));
+
+    // An item whose two labels share no first word is matched by either label too.
+    let global = "test.ui.place.global";
+    let after_stop = r#"[{"id":"next","label":"Next","menu":{"path":["Select"],"after":"Stop Global Edit"}}]"#;
+    app.run("plugin.install", json!({"dataBase64": placing_plugin(global, "Global", after_stop)})).unwrap();
+    let entries = menus::menu_entries(&app);
+    let select: Vec<&menus::MenuEntry> = entries.iter().filter(|e| e.path == ["Select"]).collect();
+    let toggle = select.iter().position(|e| e.command.as_deref() == Some("select.globalEdit")).expect("Start Global Edit is listed");
+    assert_eq!(select.get(toggle + 1).and_then(|e| e.command.clone()), Some(command(global, "next")));
+    app.run("plugin.remove", json!({"id": global})).unwrap();
+
+    let unplaced = placing_kind(eff, "Glow", "effect", r#"[{"id":"low","label":"Low Area"}]"#);
+    app.run("plugin.install", json!({"dataBase64": unplaced, "replace": true})).unwrap();
+    let entries = menus::menu_entries(&app);
+    assert_eq!(entries.iter().filter(|e| e.command.as_deref() == Some(low.as_str())).count(), 1, "listed once");
+    assert!(entry(&entries, &["Effect", "Plug-ins", "Glow"], "Low Area").is_some(), "back in its submenu");
+    assert!(
+        entry(&entries, &["Select"], "Low Area (Glow)").is_some_and(|e| e.command.as_deref() == Some(twin_low.as_str())),
+        "the filter's takes the spot"
+    );
+    for id in [eff, twin] {
+        app.run("plugin.remove", json!({"id": id})).unwrap();
+    }
+}
+
+/// Every menu a manifest's `menu` may name is a built-in menu of the menu bar, so a command placed
+/// there is never left in its plug-in's submenu while Keyboard Shortcuts lists it under that menu.
+#[test]
+fn every_menu_a_plugin_may_name_is_in_the_menu_bar() {
+    fn find<'a>(items: &'a [menus::Node], label: &str) -> Option<&'a [menus::Node]> {
+        items.iter().find_map(|it| match it {
+            menus::Node::Submenu { label: l, children, .. } if l == label => Some(children.as_slice()),
+            _ => None,
+        })
+    }
+    let tree = menus::menu_tree();
+    for place in vectorcraft_plugins::manifest::MENU_PLACES {
+        let (first, rest) = place.split_first().unwrap();
+        let mut menu = tree.iter().find(|(title, _)| title == first).map(|(_, items)| items.as_slice());
+        for segment in rest {
+            menu = menu.and_then(|m| find(m, segment));
+        }
+        assert!(menu.is_some(), "{place:?} is in the menu bar");
+    }
+}
+
+/// Every engine command whose menu item switches between two labels is in the engine's
+/// `SWITCHING_LABELS`, so a placed plug-in command that reads like its other label stays in its
+/// plug-in's submenu without the desktop app too.
+#[test]
+fn engine_commands_with_two_labels_are_known_to_the_engine() {
+    use vectorcraft_engine::cmd::plugin::{SWITCHING_LABELS, other_state};
+    for spec in vectorcraft_engine::cmd::command_specs() {
+        let switches = menus::DYNAMIC_LABELS.contains(&spec.label)
+            && other_state(spec.label).is_some_and(|other| menus::DYNAMIC_LABELS.contains(&other.as_str()));
+        assert_eq!(SWITCHING_LABELS.contains(&spec.label), switches, "{} ({})", spec.id, spec.label);
+    }
+}
+
+/// Every item of a menu a plug-in command may be placed in, other than an engine command of that
+/// menu, is in the engine's `DESKTOP_MENU_ITEMS` with both of its labels, so a placed plug-in
+/// command that reads like it stays in its plug-in's submenu without the desktop app too.
+#[test]
+fn desktop_items_of_placeable_menus_are_known_to_the_engine() {
+    use vectorcraft_engine::cmd::plugin::{DESKTOP_MENU_ITEMS, SWITCHING_LABELS, other_state};
+    let key = |l: &str| l.chars().filter(|ch| ch.is_alphanumeric()).flat_map(char::to_lowercase).collect::<String>();
+    let tree = menus::menu_tree();
+    let mut missing = Vec::new();
+    for place in vectorcraft_plugins::manifest::MENU_PLACES {
+        let (first, rest) = place.split_first().unwrap();
+        let mut items = tree.iter().find(|(title, _)| title == first).map(|(_, items)| items.as_slice()).unwrap();
+        for segment in rest {
+            items = items
+                .iter()
+                .find_map(|it| match it {
+                    menus::Node::Submenu { label, children, .. } if label.as_str() == *segment => Some(children.as_slice()),
+                    _ => None,
+                })
+                .unwrap();
+        }
+        let engine_reads = |label: &str| {
+            vectorcraft_engine::cmd::command_specs().iter().any(|s| {
+                s.menu == *place
+                    && (key(s.label) == key(label)
+                        || SWITCHING_LABELS.contains(&s.label) && other_state(s.label).is_some_and(|o| key(&o) == key(label)))
+            })
+        };
+        for it in items {
+            let label = match it {
+                menus::Node::Item(i) if !menus::lists_plugin(&i.command.id, &i.command.params) => i.label.as_str(),
+                menus::Node::Submenu { label, children, .. } if !menus::holds_plugin_commands(children) => label.as_str(),
+                _ => continue,
+            };
+            let mut labels = vec![label.to_string()];
+            if menus::DYNAMIC_LABELS.contains(&label) {
+                labels.extend(other_state(label));
+            }
+            for l in labels {
+                let known = DESKTOP_MENU_ITEMS.iter().any(|(path, d)| path == place && key(d) == key(&l));
+                if !engine_reads(&l) && !known && !missing.contains(&(place, l.clone())) {
+                    missing.push((place, l));
+                }
+            }
+        }
+    }
+    let rows: Vec<String> = missing.iter().map(|(place, l)| format!("    (&{place:?}, {l:?}),")).collect();
+    assert!(missing.is_empty(), "missing from DESKTOP_MENU_ITEMS:\n{}", rows.join("\n"));
 }
 
 /// The `grant` and `allowHeavy` that `ui.installPlugin` is given approve nothing: it asks all the

@@ -1,8 +1,9 @@
 use super::status_bar::ANIMATED_ZOOM_HINT;
 use super::{Cow, Ui, VectorcraftApp, menus};
 use craft::behavior::IconId;
+use craft::theme::ControlSize;
 use craft::ui::bars::{Bar, BarKind};
-use craft::ui::contract::{Show as _, ShowContainer as _};
+use craft::ui::contract::{Props as _, Show as _, ShowContainer as _};
 use craft::ui::display::{Elide, Icon, Text};
 use craft::ui::primitives::IconSpec;
 use craft::ui::style::Span;
@@ -18,6 +19,8 @@ fn hint_for(tool: &str) -> Option<&'static [(&'static str, bool)]> {
             (" out from a highlighted edge to place its dimension  |  ", false),
             ("Click", true),
             (" two points, then move and click to place an aligned, horizontal or vertical dimension  |  ", false),
+            ("Alt+Click", true),
+            (" a path, then move and click to place its overall width or height  |  ", false),
             ("Esc", true),
             (" cancels  |  Double-click the tool for options", false),
         ],
@@ -34,6 +37,14 @@ fn hint_for(tool: &str) -> Option<&'static [(&'static str, bool)]> {
             (" an anchor or path segment to select it  |  ", false),
             ("Drag", true),
             (" to move  |  ", false),
+            ("Shift+Click", true),
+            (" to add", false),
+        ],
+        "groupSelection" => &[
+            ("Click", true),
+            (" an object in a group to select it  |  ", false),
+            ("Click again", true),
+            (" to add the group it is in  |  ", false),
             ("Shift+Click", true),
             (" to add", false),
         ],
@@ -251,14 +262,15 @@ pub fn hint_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let segments: Vec<(Cow<'static, str>, bool)> = match crate::dialogs::three_d::hint(app) {
         Some(hint) => vec![(Cow::Borrowed(hint), false)],
         None => {
-            let tool = app.session.tool_id();
+            // While Cmd is held, the hints of the selection tool it lends.
+            let held = crate::canvas::held_mods(ui.ctx());
+            let tool = app.session.shown_tool_id(&held);
             let hint = if tool == "zoom" && crate::canvas::animated_zoom(&app.session.prefs) { ANIMATED_ZOOM_HINT } else { tool };
             hint_segments(app, hint)
         }
     };
     Bar::new(tl!("Help Bar"), BarKind::Status).show(ui, |ui, _| {
-        // PLAN: assumed the framework icon "help" (document-panels-w1).
-        Icon::new(IconSpec::svg(IconId::new("help"))).show(ui);
+        Icon::new(IconSpec::svg(IconId::new("dc-help"))).size(ControlSize::Md).show(ui);
         let spans = segments
             .iter()
             .map(|(text, bold)| {

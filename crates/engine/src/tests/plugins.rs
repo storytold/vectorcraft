@@ -182,6 +182,136 @@ fn filters_make_guides_and_locked_objects_left_unselected() {
     assert_eq!(st.history.undo.len(), undo + 1);
 }
 
+/// A compound path handed back with its path as it was keeps its members, hidden and locked ones
+/// included. A changed path replaces its members, and is refused while a member is hidden, locked,
+/// a guide or not a path, as is turning it into a plain path.
+#[test]
+fn a_filter_keeps_or_replaces_a_compound_path_s_members_whole() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Appearance, Node, NodeKind};
+    use vectorcraft_geom::FillRule;
+    let mut s = session();
+    let compound_of = |s: &mut Session, members: Vec<Node>| {
+        let mut id = NodeId(0);
+        s.edit("Set up", |d, _| {
+            let n = Node::new(d.alloc_id(), NodeKind::Compound { children: members.into_iter().map(Arc::new).collect(), rule: FillRule::NonZero });
+            let layer = d.layers[0].id;
+            id = d.insert(Some(layer), usize::MAX, n).unwrap();
+            Ok(())
+        })
+        .unwrap();
+        id
+    };
+    let members = |s: &Session, id: NodeId| match &node(s, id).kind {
+        NodeKind::Compound { children, .. } => children.iter().map(|c| (c.id, c.visible, c.locked, c.path_data().cloned())).collect::<Vec<_>>(),
+        _ => Vec::new(),
+    };
+    let new_ids = |s: &mut Session| s.edit("Set up", |d, _| Ok([d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id()])).unwrap();
+    let [a, b, c, d] = new_ids(&mut s);
+    let [g, h, i, j] = new_ids(&mut s);
+    let hidden = |id: NodeId, x: f64| {
+        let mut n = Node::path(id, square_at(x), Appearance::default());
+        n.visible = false;
+        n
+    };
+    let locked = |id: NodeId, x: f64| {
+        let mut n = Node::path(id, square_at(x), Appearance::default());
+        n.locked = true;
+        n
+    };
+    // A member with an empty subpath, which plug-in output can't hold, still counts as handed back.
+    let empty = Node::path(g, PathData::single(SubPath::polyline(&[], false)), Appearance::default());
+    let kept = compound_of(&mut s, vec![hidden(a, 40.0), locked(b, 80.0), empty]);
+    let plain =
+        compound_of(&mut s, vec![Node::path(c, square_at(120.0), Appearance::default()), Node::path(d, square_at(160.0), Appearance::default())]);
+    let was = members(&s, kept);
+    install_wat(&mut s, &tpl::module(&tpl::manifest("test.engine.compound.echo", "filter", "{}"), tpl::ECHO, "", 1));
+    run(&mut s, "plugin.run", json!({"id": "test.engine.compound.echo", "ids": [kept.0]}));
+    assert_eq!(members(&s, kept), was, "handed back as it was, the members stay as they were");
+    // New geometry for a compound with a hidden or a locked member, or the same geometry as a plain
+    // path, is refused, and the document is left alone.
+    let mut moved = square_at(200.0);
+    moved.subpaths.extend(square_at(240.0).subpaths);
+    let reshape = |id: &str, target: NodeId, extra: Value| {
+        let mut o = json!({"id": target.0, "path": moved.clone()});
+        o.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        tpl::returning(&tpl::manifest(id, "filter", "{}"), &json!({ "objects": [o] }).to_string())
+    };
+    let hidden_only = compound_of(&mut s, vec![hidden(h, 360.0)]);
+    let locked_only = compound_of(&mut s, vec![Node::path(i, square_at(360.0), Appearance::default()), locked(j, 380.0)]);
+    // A member that is itself a compound path, shown and unlocked but holding a hidden member: its
+    // geometry isn't in the input, so a new path or a plain path would drop it.
+    let [k, l, m, _] = new_ids(&mut s);
+    let inner = Node::new(k, NodeKind::Compound { children: vec![Arc::new(hidden(l, 400.0))], rule: FillRule::NonZero });
+    let nested = compound_of(&mut s, vec![Node::path(m, square_at(440.0), Appearance::default()), inner]);
+    let was_nested = node(&s, nested).clone();
+    run(&mut s, "plugin.run", json!({"id": "test.engine.compound.echo", "ids": [nested.0]}));
+    assert_eq!(node(&s, nested).kind, was_nested.kind, "handed back as it was, a nested compound member stays");
+    let flagged = "a hidden, locked or guide member";
+    for (target, why) in [(hidden_only, flagged), (locked_only, flagged), (nested, "a member that isn't a path")] {
+        install_wat(&mut s, &reshape("test.engine.compound.reshape", target, json!({})));
+        let flatten = tpl::returning(
+            &tpl::manifest("test.engine.compound.flatten", "filter", "{}"),
+            &json!({"objects": [{"id": target.0, "type": "path"}]}).to_string(),
+        );
+        install_wat(&mut s, &flatten);
+        let before = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+        for id in ["test.engine.compound.reshape", "test.engine.compound.flatten"] {
+            let e = s.execute("plugin.run", &json!({"id": id, "ids": [target.0]})).unwrap_err().to_string();
+            assert!(e.contains(&format!("compound path {} has {why}", target.0)), "{id}: {e}");
+            assert_eq!((s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len()), before, "{id}");
+        }
+    }
+    // Without such members, new geometry replaces the members: one per subpath, in the old members' places.
+    install_wat(&mut s, &reshape("test.engine.compound.reshape", plain, json!({})));
+    run(&mut s, "plugin.run", json!({"id": "test.engine.compound.reshape", "ids": [plain.0]}));
+    let now = members(&s, plain);
+    assert_eq!(now.iter().map(|m| m.3.clone()).collect::<Vec<_>>(), [Some(square_at(200.0)), Some(square_at(240.0))]);
+    assert!(now.iter().all(|m| m.1 && !m.2), "shown and unlocked members: {now:?}");
+    assert_eq!(now.iter().map(|m| m.0).collect::<Vec<_>>(), [c, d], "the members keep their places' ids");
+    // A guide member is refused the same way, unless the output sets `guide` for the whole object.
+    let guide_of = |s: &mut Session| {
+        let [e, f, ..] = new_ids(s);
+        let mut guide_member = Node::path(e, square_at(280.0), Appearance::default());
+        if let NodeKind::Path { guide, .. } = &mut guide_member.kind {
+            *guide = true;
+        }
+        compound_of(s, vec![guide_member, Node::path(f, square_at(320.0), Appearance::default())])
+    };
+    let guides = |s: &Session, id: NodeId| match &node(s, id).kind {
+        NodeKind::Compound { children, .. } => children.iter().map(|c| matches!(c.kind, NodeKind::Path { guide: true, .. })).collect::<Vec<_>>(),
+        _ => Vec::new(),
+    };
+    let guide = guide_of(&mut s);
+    install_wat(&mut s, &reshape("test.engine.compound.reshape", guide, json!({})));
+    let err = s.execute("plugin.run", &json!({"id": "test.engine.compound.reshape", "ids": [guide.0]})).unwrap_err().to_string();
+    assert!(err.contains("guide member"), "{err}");
+    let flatten = tpl::returning(
+        &tpl::manifest("test.engine.compound.flatten.unflagged", "filter", "{}"),
+        &json!({"objects": [{"id": guide.0, "type": "path"}]}).to_string(),
+    );
+    install_wat(&mut s, &flatten);
+    let err = s.execute("plugin.run", &json!({"id": "test.engine.compound.flatten.unflagged", "ids": [guide.0]})).unwrap_err().to_string();
+    assert!(err.contains(&format!("compound path {} has {flagged}", guide.0)), "{err}");
+    assert_eq!(guides(&s, guide), [true, false], "a refused flatten leaves the guide member as it was");
+    for (id, on) in [("test.engine.compound.unguide", false), ("test.engine.compound.reguide", true)] {
+        let target = guide_of(&mut s);
+        install_wat(&mut s, &reshape(id, target, json!({ "guide": on })));
+        run(&mut s, "plugin.run", json!({"id": id, "ids": [target.0]}));
+        assert_eq!(members(&s, target).iter().map(|m| m.3.clone()).collect::<Vec<_>>(), [Some(square_at(200.0)), Some(square_at(240.0))], "{id}");
+        assert_eq!(guides(&s, target), [on, on], "{id}: every new member takes the output's `guide`");
+    }
+    // Turning it into a plain path is allowed the same way when the output sets `guide`.
+    let target = guide_of(&mut s);
+    let flatten = tpl::returning(
+        &tpl::manifest("test.engine.compound.flatten.guide", "filter", "{}"),
+        &json!({"objects": [{"id": target.0, "type": "path", "guide": true}]}).to_string(),
+    );
+    install_wat(&mut s, &flatten);
+    run(&mut s, "plugin.run", json!({"id": "test.engine.compound.flatten.guide", "ids": [target.0]}));
+    assert!(matches!(node(&s, target).kind, NodeKind::Path { guide: true, .. }), "{:?}", node(&s, target).kind);
+}
+
 #[test]
 fn failing_plugins_leave_the_document_and_history_alone() {
     let mut s = session();
@@ -1808,6 +1938,86 @@ fn filters_keep_their_data_with_the_document() {
     assert_eq!(data(&s), None);
 }
 
+/// A filter run whose output changes nothing (an echo) records no undo step, leaves a saved
+/// document unmodified and the document as it was, and still selects its objects. One that changes
+/// one of the objects records exactly one step, and running it again records none.
+#[test]
+fn a_filter_run_that_changes_nothing_records_no_undo_step() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, "#ff0000");
+    let b = rect(&mut s, 40.0, "#0000ff");
+    let echo = "test.engine.noop.echo";
+    install_wat(&mut s, &tpl::module(&tpl::manifest(echo, "filter", "{}"), tpl::ECHO, "", 1));
+    run(&mut s, "select.none", json!({}));
+    s.doc_mut().unwrap().mark_saved();
+    let (doc, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let r = run(&mut s, "plugin.run", json!({"id": echo, "ids": [a.0, b.0]}));
+    assert_eq!(r["ids"], json!([a.0, b.0]));
+    let st = s.doc().unwrap();
+    assert!(std::sync::Arc::ptr_eq(&st.doc, &doc), "the document stays as it was");
+    assert_eq!((st.history.undo.len(), st.is_dirty()), (undo, false), "no undo step; still saved");
+    assert_eq!(st.selection.objects, [a, b], "its objects are selected");
+    // Renaming one object of the two is one undo step.
+    let renamer = "test.engine.noop.renamer";
+    let renamed = json!({"objects": [{"id": a.0, "name": "Renamed"}, {"id": b.0}]});
+    install_wat(&mut s, &tpl::returning(&tpl::manifest(renamer, "filter", "{}"), &renamed.to_string()));
+    run(&mut s, "plugin.run", json!({"id": renamer, "ids": [a.0, b.0]}));
+    let st = s.doc().unwrap();
+    assert_eq!((st.history.undo.len(), st.is_dirty()), (undo + 1, true));
+    assert_eq!(node(&s, a).name.as_deref(), Some("Renamed"));
+    // Run again, it renames nothing: no second step.
+    run(&mut s, "plugin.run", json!({"id": renamer, "ids": [a.0, b.0]}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    for id in [echo, renamer] {
+        run(&mut s, "plugin.remove", json!({"id": id}));
+    }
+}
+
+/// A filter that writes the data it already keeps with the document records no undo step; writing
+/// other data, or removing it, records one, and removing data it does not keep records none.
+#[test]
+fn a_filter_that_keeps_the_same_data_records_no_undo_step() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let pid = "test.engine.noop.data";
+    let keep = |s: &mut Session, data: Value| {
+        let out = json!({"objects": [{"id": id.0}], "documentData": data});
+        install_wat(s, &tpl::returning(&tpl::manifest(pid, "filter", "{}"), &out.to_string()));
+        run(s, "plugin.run", json!({"id": pid, "ids": [id.0]}));
+        s.doc().unwrap().history.undo.len()
+    };
+    let undo = s.doc().unwrap().history.undo.len();
+    assert_eq!(keep(&mut s, json!({"pen": 2})), undo + 1);
+    assert_eq!(keep(&mut s, json!({"pen": 2})), undo + 1, "the same data: no step");
+    assert_eq!(keep(&mut s, json!({"pen": 3})), undo + 2);
+    assert_eq!(keep(&mut s, Value::Null), undo + 3, "removed");
+    assert_eq!(keep(&mut s, Value::Null), undo + 3, "nothing kept to remove: no step");
+    assert_eq!(s.doc().unwrap().doc.plugin_data(pid), None);
+    run(&mut s, "plugin.remove", json!({"id": pid}));
+}
+
+/// A plug-in command whose run changes nothing records no undo step, and so does a filter or a
+/// command that may call commands and hands back what it is given.
+#[test]
+fn a_plugin_command_that_changes_nothing_records_no_undo_step() {
+    let mut s = session();
+    rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "select.all", json!({}));
+    let undo = s.doc().unwrap().history.undo.len();
+    let id = "test.engine.noop.cmds";
+    install_wat(&mut s, &grower(id));
+    run(&mut s, &format!("plugin.{id}.tidy"), json!({}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "tidy hands back its input");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    let calling = "test.engine.noop.calling";
+    install_echo_calling(&mut s, calling, r#"[{"id":"same","label":"Same"}]"#);
+    run(&mut s, &format!("plugin.{calling}.same"), json!({}));
+    run(&mut s, "plugin.run", json!({"id": calling}));
+    assert!(!s.in_interaction());
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "an echo that may call commands");
+    run(&mut s, "plugin.remove", json!({"id": calling}));
+}
+
 #[test]
 fn plugin_management_commands() {
     let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
@@ -2015,6 +2225,23 @@ fn a_heavy_filter_installs_once_the_user_agrees() {
     assert!(listed["plugins"].as_array().unwrap().iter().any(|p| p["id"] == id && p["budget"] == "heavy"));
     // A light plug-in's entry says nothing of budgets.
     assert!(install(&mut s, DESATURATE).get("budget").is_none());
+}
+
+/// A module that carries its manifest in a `vc_manifest` custom section is inspected and installed
+/// without any of its code running: its start function traps and its `vc_manifest` export loops.
+#[test]
+fn a_plugin_with_a_manifest_section_installs_without_running() {
+    let mut s = session();
+    let id = "test.engine.section";
+    let manifest = format!(r#"{{"id":"{id}","name":"Test {id}","version":"1","kind":"filter","abi":1}}"#);
+    let extra = r#"(func (export "vc_manifest") (result i64) (loop $l (br $l)) (i64.const 0)) (func $trap unreachable) (start $trap)"#;
+    let data = vectorcraft_format::base64_encode(&wat::parse_str(tpl::sectioned(&manifest, tpl::ECHO, extra, 1)).unwrap());
+    let inspected = run(&mut s, "plugin.inspect", json!({"dataBase64": data}));
+    assert_eq!(inspected["id"], id);
+    assert!(vectorcraft_plugins::registry::get(id).is_none(), "inspecting installs nothing");
+    assert_eq!(run(&mut s, "plugin.install", json!({"dataBase64": data}))["id"], id);
+    assert!(vectorcraft_plugins::registry::get(id).is_some());
+    run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
 #[test]
@@ -4733,6 +4960,82 @@ fn plugin_commands_are_registered_run_and_removed() {
     assert!(s.execute(grow, &json!({})).is_err(), "removed, it no longer runs");
 }
 
+/// At API level 2 a command's `menu` lists it in that menu with its plug-in's name after its
+/// label, and `plugin.list` gives its `menu` with `after` escaped. A command whose label reads like
+/// a built-in command of that menu, or like a command a plug-in with a lower id places there,
+/// stays in its plug-in's submenu, and `plugin.list` marks it `placed: false`. Replaced by a module
+/// whose command has no `menu`, a command is back in its submenu.
+#[test]
+fn placed_plugin_commands_are_listed_in_their_menu() {
+    let mut s = session();
+    let placing = |id: &str, name: &str, commands: &str| {
+        let manifest = format!(r#"{{"id":"{id}","name":"{name}","api":2,"version":"1","kind":"filter","commands":{commands}}}"#);
+        tpl::returning(&manifest, r#"{"objects":[]}"#)
+    };
+    let (ant, bee, cat) = ("test.engine.place.ant", "test.engine.place.bee", "test.engine.place.cat");
+    let low = |id: &str| crate::cmd::plugin::command_id(id, "low");
+    let menu_of = |s: &Session, command: &str| listed(s, command).map(|c| c.menu.iter().map(|m| m.to_string()).collect::<Vec<_>>());
+    let in_select = json!([{"id": "low", "label": "Low Area", "menu": {"path": ["Select"], "after": "\u{202E}Inverse"}}]).to_string();
+    let in_select = in_select.as_str();
+
+    let info = install_wat(&mut s, &placing(ant, "Tidy", in_select));
+    let menu = &info["commands"][0]["menu"];
+    assert_eq!(menu["path"], json!(["Select"]));
+    assert!(menu["after"].as_str().is_some_and(|a| a.ends_with("Inverse") && !a.contains('\u{202E}')), "escaped: {menu}");
+    assert!(menu.get("placed").is_none(), "{menu}");
+    let c = listed(&s, &low(ant)).expect("listed");
+    assert_eq!((c.label, menu_of(&s, &low(ant))), ("Low Area (Tidy)", Some(vec!["Select".to_string()])));
+
+    // Another plug-in of the same name placing the same label at the same spot stays in its submenu.
+    let info = install_wat(&mut s, &placing(bee, "Tidy", in_select));
+    assert_eq!(info["commands"][0]["menu"]["placed"], json!(false));
+    assert_eq!(listed(&s, &low(bee)).map(|c| c.label), Some("Low Area"));
+    assert_eq!(menu_of(&s, &low(bee)), Some(vec!["Object".into(), "Plug-ins".into(), "Tidy".into()]));
+    assert_eq!(menu_of(&s, &low(ant)), Some(vec!["Select".to_string()]));
+
+    // `Paste (in Place)` reads like Edit's Paste in Place; Keep is placed.
+    let edit = r#"[{"id":"paste","label":"Paste","menu":{"path":["Edit"]}},{"id":"keep","label":"Keep","menu":{"path":["Edit"]}}]"#;
+    let info = install_wat(&mut s, &placing(cat, "in Place", edit));
+    assert_eq!(info["commands"][0]["menu"]["placed"], json!(false));
+    assert!(info["commands"][1]["menu"].get("placed").is_none());
+    let paste = crate::cmd::plugin::command_id(cat, "paste");
+    assert_eq!(menu_of(&s, &paste), Some(vec!["Object".into(), "Plug-ins".into(), "in Place".into()]));
+    assert_eq!(menu_of(&s, &crate::cmd::plugin::command_id(cat, "keep")), Some(vec!["Edit".to_string()]));
+    // `Stop Global (Edit)` reads like the other label of Select's Start Global Edit.
+    let dog = "test.engine.place.dog";
+    let info = install_wat(&mut s, &placing(dog, "Edit", r#"[{"id":"stop","label":"Stop Global","menu":{"path":["Select"]}}]"#));
+    assert_eq!(info["commands"][0]["menu"]["placed"], json!(false));
+    run(&mut s, "plugin.remove", json!({"id": dog}));
+    // Object's Show All has one label, so `Hide (All)` is placed beside it.
+    let all = "test.engine.place.all";
+    let info = install_wat(&mut s, &placing(all, "All", r#"[{"id":"hide","label":"Hide","menu":{"path":["Object"]}}]"#));
+    assert!(info["commands"][0]["menu"].get("placed").is_none(), "{}", info["commands"][0]);
+    assert_eq!(menu_of(&s, &crate::cmd::plugin::command_id(all, "hide")), Some(vec!["Object".to_string()]));
+    run(&mut s, "plugin.remove", json!({"id": all}));
+    // `Hide (Edges)` reads like the desktop app's View › Hide Edges, with or without the desktop app.
+    let edges = "test.engine.place.edges";
+    let info = install_wat(&mut s, &placing(edges, "Edges", r#"[{"id":"hide","label":"Hide","menu":{"path":["View"]}}]"#));
+    assert_eq!(info["commands"][0]["menu"]["placed"], json!(false));
+    run(&mut s, "plugin.remove", json!({"id": edges}));
+    // Inspecting a plug-in that is not installed reports what installing it gives: of two commands
+    // with one label at one spot, the second stays in its submenu.
+    let twice = r#"[{"id":"a","label":"Low","menu":{"path":["Select"]}},{"id":"b","label":"Low","menu":{"path":["Select"]}}]"#;
+    let data = vectorcraft_format::base64_encode(&wat::parse_str(placing("test.engine.place.eel", "Eel", twice)).unwrap());
+    let inspected = run(&mut s, "plugin.inspect", json!({"dataBase64": data}));
+    assert!(inspected["commands"][0]["menu"].get("placed").is_none(), "{inspected}");
+    assert_eq!(inspected["commands"][1]["menu"]["placed"], json!(false), "{inspected}");
+
+    // Replaced by a module whose command has no `menu`, Ant's command is back in its submenu and
+    // Bee's takes the spot.
+    install_wat(&mut s, &placing(ant, "Tidy", r#"[{"id":"low","label":"Low Area"}]"#));
+    assert_eq!(menu_of(&s, &low(ant)), Some(vec!["Object".into(), "Plug-ins".into(), "Tidy".into()]));
+    assert_eq!(menu_of(&s, &low(bee)), Some(vec!["Select".to_string()]));
+    for id in [ant, bee, cat] {
+        run(&mut s, "plugin.remove", json!({"id": id}));
+    }
+    assert!(listed(&s, &low(bee)).is_none());
+}
+
 /// A command run is journaled like any other, so an action records it with its parameters and
 /// plays it back.
 #[test]
@@ -5461,13 +5764,12 @@ fn deferred_move(s: &mut Session) -> NodeId {
     r
 }
 
-/// The rectangle a run named `label` during [`deferred_move`] left: moved, with the interaction
-/// ended and the move an undo step of its own before the run's.
-fn assert_moved_once(s: &Session, r: NodeId, label: &str) {
+/// The rectangle a run that hands back what it is given left during [`deferred_move`]: moved, with
+/// the interaction ended and the move the last undo step, since the run changed nothing.
+fn assert_moved_once(s: &Session, r: NodeId) {
     assert!(!s.in_interaction());
     assert_eq!(node(s, r).geometric_bounds().unwrap().x0, 17.0, "the filter was given the moved rectangle");
-    let labels: Vec<&str> = s.doc().unwrap().history.undo.iter().rev().take(2).map(|e| e.label.as_str()).collect();
-    assert_eq!(labels, [label, "Move"]);
+    assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Move"));
 }
 
 /// With Real-time Drawing off, `plugin.run` of a filter that calls commands during a drag applies
@@ -5479,7 +5781,7 @@ fn a_filter_that_calls_commands_is_given_a_deferred_move() {
     install_echo_calling(&mut s, id, "[]");
     let r = deferred_move(&mut s);
     run(&mut s, "plugin.run", json!({"id": id}));
-    assert_moved_once(&s, r, &format!("Test {id}"));
+    assert_moved_once(&s, r);
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
@@ -5492,6 +5794,6 @@ fn a_plugin_command_that_calls_commands_is_given_a_deferred_move() {
     install_echo_calling(&mut s, id, r#"[{"id":"same","label":"Same"}]"#);
     let r = deferred_move(&mut s);
     run(&mut s, &format!("plugin.{id}.same"), json!({}));
-    assert_moved_once(&s, r, "Same");
+    assert_moved_once(&s, r);
     run(&mut s, "plugin.remove", json!({"id": id}));
 }

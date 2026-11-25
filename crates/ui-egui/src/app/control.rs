@@ -74,7 +74,27 @@ impl VectorcraftApp {
                 channel.settle(req, reply, document, settle);
             }
         }
+        // A capture is issued only after passes settle it, and an idle window runs none; a hidden
+        // one runs only this logic unless asked to paint. Its readback finishes only in a later frame,
+        // so frames keep coming until it is answered, as production's did.
+        if self.channel.as_ref().is_some_and(|channel| channel.captures.any_pending()) {
+            if self.viewport_hidden(ctx) {
+                host.paint_while_hidden();
+            }
+            ctx.request_repaint();
+        }
         self.answer_pointer_waits(ctx);
+    }
+
+    /// The UI phase of a pass egui keeps: counts it for settling and issues the captures that are
+    /// due, answering those that expired or lost their window meanwhile.
+    pub(crate) fn issue_captures(&mut self, ctx: &egui::Context) {
+        let document = self.document_identity();
+        let finished = self.channel.as_mut().map_or_else(Vec::new, |channel| {
+            channel.captures.note_pass();
+            channel.captures.issue(&WindowHost::of(ctx), motion::now(), document)
+        });
+        self.finish_captures(finished);
     }
 
     /// Answers the requests that waited for injected input once the window host has run it, or

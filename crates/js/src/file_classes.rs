@@ -314,6 +314,12 @@ fn display_name(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<V
     parsed(i, &this, "displayName", "display")
 }
 
+/// `localizedName`: the same decoded name as `displayName`; VectorCraft does not look up a name the
+/// system shows in another language.
+fn localized_name(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    parsed(i, &this, "localizedName", "display")
+}
+
 fn path(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
     parsed(i, &this, "path", "path")
 }
@@ -1029,6 +1035,7 @@ fn common(i: &mut Interp, ctor: ObjId, proto: ObjId) -> JsResult<()> {
     accessor(i, proto, "relativeURI", relative_uri, None)?;
     accessor(i, proto, "name", name, None)?;
     accessor(i, proto, "displayName", display_name, None)?;
+    accessor(i, proto, "localizedName", localized_name, None)?;
     accessor(i, proto, "path", path, None)?;
     accessor(i, proto, "parent", parent, None)?;
     accessor(i, proto, "exists", exists, None)?;

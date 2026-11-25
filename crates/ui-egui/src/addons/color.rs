@@ -14,8 +14,8 @@ use craft::menu::Node;
 use craft::ui::buttons::Button;
 use craft::ui::contract::{Bind, Entry, Show as _, ShowContainer as _};
 use craft::ui::form::{Field, FieldGroup};
+use craft::ui::layout_components::Row;
 use craft::ui::pickers::Select;
-use craft::ui::sections::Section;
 use egui::Ui;
 use serde_json::{Map, Value, json};
 
@@ -179,21 +179,22 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     let (id, params) = st.params();
-    let mut command = None;
-    ui.horizontal(|ui| {
+    let (mut command, mut reset) = (None, false);
+    Row::new().show(ui, |ui, _| {
         if Button::new(tl!("Add as Effect").to_string()).show(ui).clicked() {
             command = Some("effect.apply");
         }
         if Button::new(tl!("Apply as Filter").to_string()).show(ui).clicked() {
             command = Some("addon.color.filter");
         }
-        if Button::new(tl!("Reset").to_string()).show(ui).clicked() {
-            st.values.remove(id);
-        }
+        reset = Button::new(tl!("Reset").to_string()).show(ui).clicked();
     });
+    if reset {
+        st.values.remove(id);
+    }
     // Inks: Duotone's and Print Ink Fixes' dialogs, as their menu items open them.
     let mut ink = None;
-    Section::fixed(tl!("Inks").to_string()).show(ui, |ui, _| {
+    crate::panels::section(tl!("Inks").to_string()).show(ui, |ui, _| {
         for item in [duotone(), print_fixes()] {
             if Button::new(tl!(item.0).to_string()).show(ui).clicked() {
                 ink = Some(item);

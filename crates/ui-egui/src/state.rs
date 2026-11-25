@@ -40,6 +40,21 @@ pub enum ViewMove {
     Jump,
 }
 
+/// Rearrange for selected artboards, confirmed and waiting for the click on the canvas that places
+/// the grid's top-left: the document (`DocState::uid`) and the tool it was confirmed in, and the
+/// `artboard.rearrange` parameters, `indices` included, with the `Artboard::id` of each listed
+/// artboard (`ids`), so a placement whose artboards moved in the list or were removed is dropped.
+/// `armed` is false until the canvas has seen one frame of it, so the Enter that confirmed the
+/// dialog does not also place the artboards.
+#[derive(Clone, Debug)]
+pub struct RearrangePlacement {
+    pub doc: u64,
+    pub tool: String,
+    pub params: Value,
+    pub ids: Vec<u32>,
+    pub armed: bool,
+}
+
 /// Per-document view (camera).
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct View {
@@ -268,7 +283,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::addons::cleanup::ID, "Artwork Cleanup", "sparkles"),
     (crate::addons::color::ID, "Color Effects", "sun"),
     (crate::addons::packaging::ID, "Fold Lines", "scissors"),
-    (crate::addons::packaging::preview::ID, "Fold Preview", "box"),
+    (crate::addons::packaging::preview::ID, "Fold Preview", "dc-cube"),
     (crate::addons::pathtools::ID, "Anchor Inspector", "dc-anchor-smooth"),
     (crate::addons::pathtools::shape::ID, "Parametric Shape", "hexagon"),
     (crate::addons::pen::ID, "Smart Pen", "spline-pointer"),
@@ -612,6 +627,10 @@ pub struct UiState {
     pub view: ViewFlags,
     #[serde(skip)]
     pub brush_key_color_pick: Option<BrushKeyColorPick>,
+    /// Rearrange for selected artboards waiting for its click on the canvas
+    /// (`dialogs::rearrange_artboards`).
+    #[serde(skip)]
+    pub rearrange_placement: Option<RearrangePlacement>,
     /// A control request is being answered: its caller gets what fails as its reply, so no
     /// dialog says it too (`io::report_write_error`).
     #[serde(skip)]
@@ -826,7 +845,7 @@ pub struct UiState {
     #[serde(skip)]
     pub(crate) new_swatch: Option<crate::dialogs::new_swatch::Open>,
     /// Color Wheel panel: the wheel or the box, the box's channel, the slider rows, the
-    /// out-of-gamut shading and the color vision row
+    /// out-of-gamut shading, Show Opacity and the color vision row
     /// (`ui.colorWheel`, [`crate::panels::color_wheel::deserialize_settings`]).
     #[serde(default, deserialize_with = "crate::panels::color_wheel::deserialize_settings")]
     pub color_wheel: crate::panels::color_wheel::Settings,
@@ -1400,6 +1419,7 @@ impl Default for UiState {
             help_bar: true,
             view: ViewFlags::default(),
             brush_key_color_pick: None,
+            rearrange_placement: None,
             answering_control: false,
             group_tool: vectorcraft_tools::TOOL_GROUPS.iter().map(|g| g[0].id.to_string()).collect(),
             touch_drawing_tool: None,

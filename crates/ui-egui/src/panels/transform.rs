@@ -13,9 +13,9 @@ use craft::draw::ui::transform::{
     FieldArrangement, SizeUnit, TransformField, TransformFields, TransformFieldsOutput, TransformGroups, TransformRow, TransformSource,
 };
 use craft::keymap::CommandRef;
-use craft::ui::buttons::{IconButton, Link};
+use craft::ui::buttons::IconButton;
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, Entry, LabelPress, Props, Show, ShowContainer, SideLabel};
+use craft::ui::contract::{Bind, Entry, GlyphLabel, LabelKind, LabelPress, Props, Show, ShowContainer, SideLabel, Sizing};
 use craft::ui::display::{Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
@@ -419,7 +419,8 @@ pub(crate) fn object_bar_fields(app: &mut VectorcraftApp, ui: &mut Ui) -> Option
     Some(out)
 }
 
-/// A field of an angle: its icon as a scrubbing label, the value in degrees and the presets on a ladder of stops.
+/// A field of an angle: its icon in place of its label, which scrubs it, the value in degrees and the presets on a
+/// ladder of stops.
 fn angle_field(
     ui: &mut Ui,
     label: &'static str,
@@ -431,27 +432,27 @@ fn angle_field(
 ) -> Option<NumberOutput> {
     let entries: Vec<Entry<NumberPick>> = presets.iter().map(|v| Entry::new(NumberPick::Number(*v), format!("{v}°"))).collect();
     Field::new(label)
-        .side(SideLabel::new().icon(IconId::new(icon)).scrub(true))
+        .sizing(Sizing::Content)
+        .side(SideLabel::new().kind(LabelKind::Glyph(GlyphLabel::icon(IconId::new(icon)))).tooltip(label).scrub(true))
         .enabled(enabled)
         .show(ui, |ui, _| {
-            NumberField::new(label, Bind::given(Some(shown)))
-                .unit("°")
-                .commit_decimals(2)
-                .range(range.clone())
-                .step_arrows(StepArrows::Leading)
-                .presets(&entries)
-                .stepper(stops_stepper(15.0, presets, |v| format!("{v:.2}")))
-                .show(ui)
+            let field = NumberField::new(label, Bind::given(Some(shown))).unit("°").commit_decimals(2).range(range.clone());
+            // No presets: the plain field production's Properties panel shows.
+            if presets.is_empty() {
+                field.show(ui)
+            } else {
+                field.step_arrows(StepArrows::Leading).presets(&entries).stepper(stops_stepper(15.0, presets, |v| format!("{v:.2}"))).show(ui)
+            }
         })
         .inner
 }
 
 /// Rotate: the bounding box's angle, and a new value turns the selection to it about the reference point
-/// (Alt+Enter turns a copy).
-pub(crate) fn rotate_field(app: &mut VectorcraftApp, ui: &mut Ui) {
+/// (Alt+Enter turns a copy). With no `presets` the field is plain: no step arrows and no preset list.
+pub(crate) fn rotate_field(app: &mut VectorcraftApp, ui: &mut Ui, presets: &[f64]) {
     let bx = app.selection_box();
     let angle = bx.as_ref().map_or(0.0, |b| b.angle);
-    let Some(out) = angle_field(ui, tl!("Rotate"), "rotate-ccw", angle, -360.0..=f64::INFINITY, &ANGLE_PRESETS, bx.is_some()) else { return };
+    let Some(out) = angle_field(ui, tl!("Rotate"), "rotate-ccw", angle, -360.0..=f64::INFINITY, presets, bx.is_some()) else { return };
     let copy = out.edit.submit_mods.alt && app.session.active().is_some_and(|st| st.selection.anchors.is_empty());
     apply_edits(app, &out.edit, EditPath::Preview, |app, v, live| {
         // The angle shown is the preview's while the gesture runs: its release keeps it.
@@ -566,7 +567,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     object_fields(app, ui, panel_groups());
     Row::new().show(ui, |ui, _| {
-        rotate_field(app, ui);
+        rotate_field(app, ui, &ANGLE_PRESETS);
         shear_field(app, ui);
     });
     // Lucide's flip icons are named for their mirror line: flip-vertical-2 draws a vertical
@@ -653,7 +654,7 @@ fn pixel_aligned_ids(app: &VectorcraftApp) -> Vec<u64> {
 /// The Control bar's underlined "Transform" link: a click toggles the Transform panel in a
 /// popover under it, as the Stroke link does with the Stroke panel.
 pub(crate) fn link(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let out = Link::new(tl!("Transform")).tooltip(tl!("Transform options")).show(ui);
+    let out = crate::panels::option_link(tl!("Transform")).tooltip(tl!("Transform options")).show(ui);
     popover(app, ui, &out.response);
 }
 

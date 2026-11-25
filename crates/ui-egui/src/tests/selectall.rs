@@ -145,16 +145,15 @@ fn click(at: Pos2, pressed: bool) -> Event {
 fn cmd_a_in_a_panel_field_selects_its_text_and_leaves_the_art() {
     let mut a = App::new();
     assert_eq!(a.selected(), 1);
-    // The W field shows its number, with its unit painted after it.
-    let (id, rect) = a.field("37");
+    let (id, rect) = a.field("37 pt");
     a.frame(vec![Event::PointerMoved(rect.center()), click(rect.center(), true)]);
     a.frame(vec![click(rect.center(), false)]);
     a.frame(vec![]);
     assert!(a.has_keyboard(id), "the W field has the keyboard");
-    let all = Some((0, "37".chars().count()));
+    let all = Some((0, "37 pt".chars().count()));
     // The window's Cmd+A (Windows, Linux, the web, macOS without the system menu).
     a.frame(vec![press(Key::End, Modifiers::NONE)]);
-    assert_eq!(a.field_selection(id), Some((2, 2)), "End collapses the selection");
+    assert_eq!(a.field_selection(id), Some((5, 5)), "End collapses the selection");
     a.frame(vec![press(Key::A, Modifiers::COMMAND)]);
     assert_eq!(a.field_selection(id), all, "Cmd+A selects the field's text");
     assert_eq!(a.selected(), 1, "and not the art");
@@ -168,7 +167,7 @@ fn cmd_a_in_a_panel_field_selects_its_text_and_leaves_the_art() {
     let out = a.menu("edit.copy");
     // A fired command reaches the field in the next pass.
     let after = a.frame(vec![]);
-    assert_eq!([copied(&out), copied(&after)].concat(), ["37"]);
+    assert_eq!([copied(&out), copied(&after)].concat(), ["37 pt"]);
     assert!(a.app.session.clipboard.is_empty(), "no art copied");
     assert!(a.has_keyboard(id), "the field keeps the keyboard");
 }
@@ -276,7 +275,7 @@ fn the_clipboard_keys_in_a_focused_field_edit_its_text() {
     for _ in 0..3 {
         a.frame(vec![]);
     }
-    for text in ["37", "FFFFFF"] {
+    for text in ["37 pt", "FFFFFF"] {
         let (id, rect) = a.field(text);
         a.frame(vec![Event::PointerMoved(rect.center()), click(rect.center(), true)]);
         a.frame(vec![click(rect.center(), false)]);
@@ -479,11 +478,12 @@ fn panel_text_copied_before_the_art_formats_are_written_stays_on_the_clipboard()
             a.focused = false;
             let copy = a.menu(id);
             a.focused = true;
-            copy
+            // A fired command reaches the field in the next pass.
+            [copied(&copy), copied(&a.frame(vec![]))].concat()
         } else {
-            clipboard_chord(&mut a, event).0
+            copied(&clipboard_chord(&mut a, event).0)
         };
-        assert_eq!(copied(&copy), [length], "{id} copies the selected value (menu: {menu})");
+        assert_eq!(copy, [length], "{id} copies the selected value (menu: {menu})");
         assert_eq!(a.selected(), 1, "{id} leaves the art (menu: {menu})");
         drop(hold);
         crate::background::wait_all(&mut a.app);
@@ -519,7 +519,7 @@ fn the_in_window_edit_menu_acts_on_the_field_it_was_opened_from() {
     // Text on the system clipboard.
     super::sysclip::copy_elsewhere(&board, vec![(vectorcraft_engine::cmd::clipboard::TEXT, b"42 pt".to_vec())]);
     a.paste = Some("42 pt".into());
-    let (id, rect) = a.field("37");
+    let (id, rect) = a.field("37 pt");
     a.frame(vec![Event::PointerMoved(rect.center()), click(rect.center(), true)]);
     a.frame(vec![click(rect.center(), false)]);
     let out = a.frame(vec![press(Key::End, Modifiers::NONE)]);
@@ -531,13 +531,13 @@ fn the_in_window_edit_menu_acts_on_the_field_it_was_opened_from() {
     };
     menu(&mut a, select, "All");
     assert!(a.has_keyboard(id), "the field has the keyboard back");
-    assert_eq!(a.field_selection(id), Some((0, 2)), "Select All selected the field's text");
+    assert_eq!(a.field_selection(id), Some((0, 5)), "Select All selected the field's text");
     assert_eq!(a.selected(), 1, "not the art");
     a.frame(vec![press(Key::End, Modifiers::NONE)]);
     a.frame(vec![press(Key::A, Modifiers::COMMAND)]);
     a.frame(vec![]);
     let out = menu(&mut a, edit, "Copy");
-    assert_eq!(copied(&out), ["37"], "Copy copied the field's text");
+    assert_eq!(copied(&out), ["37 pt"], "Copy copied the field's text");
     assert!(a.app.session.clipboard.is_empty(), "no art copied");
     // Art on the app's clipboard (Paste is enabled): the field still takes the text.
     a.app.run("edit.copy", json!({})).unwrap();

@@ -3,7 +3,7 @@ use craft::ui::buttons::Button;
 use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
 use craft::ui::display::Text;
 use craft::ui::layout_components::Row;
-use craft::ui::shell::{RecentFile, StartAction, StartLink, StartScreen, Template};
+use craft::ui::shell::{RecentFile, StartAction, StartLayout, StartLink, StartScreen, Template};
 
 use super::{Ui, VectorcraftApp, json};
 
@@ -25,26 +25,33 @@ pub(super) fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
     let templates: Vec<Template> = TEMPLATES
         .iter()
         .filter_map(|name| vectorcraft_engine::cmd::newdoc::find(&app.session, name))
-        .map(|s| Template::new(s.name.clone(), s.name.clone(), s.size_label()))
+        .map(|s| Template::new(s.name.clone(), s.name.clone(), s.size_label()).page(s.width, s.height))
         .collect();
     let mut links = vec![];
     let discord = crate::credits::discord_url(app);
     if !discord.is_empty() {
-        links.push(StartLink::url(tl!("Join our Discord"), Some(IconId::new("message-circle")), discord));
+        links.push(StartLink::url(tl!("Join our Discord"), Some(IconId::new("message-circle")), discord).primary());
     }
     for ((label, url), icon) in crate::community::link_urls(app).into_iter().zip(LINK_ICONS) {
         links.push(StartLink::url(tl!(label), Some(IconId::new(icon)), url));
     }
-    // The bindings hold copies so the Learn section can borrow the app.
+    // The column shows no view switch or sort; the bindings hold copies so the Learn section can borrow the app.
     let (mut view, mut sort) = (app.ui.home_view, app.ui.home_sort);
     let mut pressed = None;
     let mut learn = |ui: &mut Ui| learn(app, ui, &mut pressed);
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect).layout(egui::Layout::top_down(egui::Align::Min)));
     let out = StartScreen::new(Bind::bound(&mut view), Bind::bound(&mut sort), &recent)
+        .layout(StartLayout::Column)
+        .title(tl!("Welcome to VectorCraft"))
+        .subtitle(tl!("Vector illustration — fast, open, scriptable."))
+        .new_label(tl!("New file"))
+        .open_label(tl!("Open"))
         .max_recent(6)
         .templates(&templates)
+        .templates_title(tl!("Quickly start a new file"))
         .links(&links)
-        .section(tl!("Learn"), &mut learn)
+        .links_title(tl!("Community"))
+        .app_section(tl!("Learn"), &mut learn)
         .show(&mut child);
     app.ui.home_view = view;
     app.ui.home_sort = sort;

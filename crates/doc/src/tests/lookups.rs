@@ -261,6 +261,120 @@ fn remove_many_matches_removing_one_at_a_time() {
     }
 }
 
+/// A document with `n` squares on its one layer, bottom to top, and their ids.
+fn squares(n: usize) -> (Document, Vec<NodeId>) {
+    let mut d = Document::new(612.0, 792.0);
+    let layer = d.layers[0].id;
+    let ids = (0..n)
+        .map(|k| {
+            let s = square(&mut d);
+            d.insert(Some(layer), k, s).unwrap()
+        })
+        .collect();
+    (d, ids)
+}
+
+/// The first lookup with no cache, which builds it, finds what a walk finds, an id that appears
+/// more than once and one not in the tree included.
+#[test]
+fn a_first_lookup_with_no_cache_finds_what_a_walk_finds() {
+    for seed in 1..10 {
+        let (d, ids) = tree(seed);
+        for id in ids.iter().chain(&[NodeId(999_999)]) {
+            d.drop_lookup_cache();
+            assert_eq!(d.index_path(*id), d.walk_index_path(*id), "seed {seed}: {id:?}");
+        }
+    }
+}
+
+/// A lookup with no cache builds it in one walk of the tree. Removing objects from the top, the
+/// bottom or the middle of a layer, or a group with the objects in it, keeps the cache: the objects
+/// left are found where a walk finds them, without a walk.
+#[test]
+fn remove_many_keeps_the_cache_whichever_objects_it_removes() {
+    let (mut d, ids) = squares(100);
+    let layer = d.layers[0].id;
+    let inner: Vec<Arc<Node>> = (0..3).map(|_| Arc::new(square(&mut d))).collect();
+    let members: Vec<NodeId> = inner.iter().map(|n| n.id).collect();
+    let gid = d.alloc_id();
+    let group = d.insert(Some(layer), 50, Node::group(gid, inner)).unwrap();
+    d.drop_lookup_cache();
+    let walks = tree_walks();
+    assert!(d.node(ids[0]).is_some());
+    assert_eq!(tree_walks() - walks, 1, "building the cache");
+    let walks = tree_walks();
+    d.remove_many(&ids[90..]).unwrap();
+    d.remove_many(&ids[..10]).unwrap();
+    d.remove_many(&[ids[30], ids[60], ids[45]]).unwrap();
+    d.remove_many(&[group]).unwrap();
+    let left: Vec<NodeId> = ids[10..90].iter().copied().filter(|id| ![ids[30], ids[45], ids[60]].contains(id)).collect();
+    let found: Vec<_> = left.iter().map(|id| d.index_path(*id)).collect();
+    assert_eq!(tree_walks() - walks, 0, "after the removals");
+    let walked: Vec<_> = left.iter().map(|id| d.walk_index_path(*id)).collect();
+    assert_eq!(found, walked);
+    assert!(found.iter().all(Option::is_some));
+    let middle = [ids[30], ids[45], ids[60], group];
+    let mut gone = ids[..10].iter().chain(&ids[90..]).chain(&middle).chain(&members);
+    assert!(gone.all(|id| d.node(*id).is_none()));
+}
+
+/// A layer keeps its ruler guides above its art: removing the topmost object moves the guides down,
+/// and the cache still finds them, and the art left, without a walk.
+#[test]
+fn remove_many_keeps_the_cache_in_a_layer_with_ruler_guides() {
+    let (mut d, ids) = squares(20);
+    let layer = d.layers[0].id;
+    let guides: Vec<NodeId> = (0..3)
+        .map(|k| {
+            let g = Node::new(d.alloc_id(), NodeKind::RulerGuide { vertical: k % 2 == 0, pos: k as f64, artboard: None });
+            d.insert(Some(layer), usize::MAX, g).unwrap()
+        })
+        .collect();
+    d.drop_lookup_cache();
+    d.node(ids[0]);
+    let walks = tree_walks();
+    for id in ids.iter().rev().take(5) {
+        d.remove_many(&[*id]).unwrap();
+        let rest = ids[..15].iter().chain(&guides);
+        assert!(rest.into_iter().all(|id| d.index_path(*id) == d.walk_index_path(*id) && d.node(*id).is_some_and(|n| n.id == *id)));
+    }
+    assert!(d.has_lookup_cache());
+    // Each pass above walked once per id to compare: 18 ids, 5 passes.
+    assert_eq!(tree_walks() - walks, 18 * 5, "only the comparison walks");
+}
+
+/// Removing the top objects one at a time keeps the cache only while the removed nodes are less
+/// than half of its entries, so it doesn't keep growing stale. A removed layer counts every node in
+/// it, its ruler guides included.
+#[test]
+fn remove_many_lets_the_cache_go_once_half_of_it_is_removed() {
+    let (mut d, ids) = squares(100);
+    d.drop_lookup_cache();
+    d.node(ids[0]);
+    // The layer and its 100 squares.
+    let entries = 101;
+    let mut removed = 0;
+    for id in ids.iter().rev() {
+        d.remove_many(&[*id]).unwrap();
+        removed += 1;
+        assert_eq!(d.has_lookup_cache(), removed * 2 < entries, "after {removed} removals");
+        if !d.has_lookup_cache() {
+            break;
+        }
+    }
+    assert!(removed < ids.len(), "the cache went before the last removal");
+
+    let (mut d, ids) = squares(100);
+    let top = d.add_layer(None);
+    let guides: Vec<Arc<Node>> =
+        (0..200).map(|k| Arc::new(Node::new(d.alloc_id(), NodeKind::RulerGuide { vertical: false, pos: k as f64, artboard: None }))).collect();
+    d.children_mut(Some(top)).unwrap().extend(guides);
+    d.drop_lookup_cache();
+    d.node(ids[0]);
+    d.remove_many(&[top]).unwrap();
+    assert!(!d.has_lookup_cache(), "the removed layer and its 200 guides are most of the cache");
+}
+
 #[test]
 fn insert_beside_matches_inserting_one_at_a_time() {
     for seed in 1..40 {

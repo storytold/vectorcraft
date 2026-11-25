@@ -183,6 +183,19 @@ impl<'a> SessionTool<'a> {
         tool_enter(&mut self.app(), mods, self.view)
     }
 
+    /// Enter places Rearrange waiting for its click: at the pointer over the canvas, else at the first selected
+    /// artboard's top-left → whether one was waiting. The Enter that confirmed its dialog is not taken.
+    fn place_rearrange(&self) -> bool {
+        use crate::dialogs::rearrange_artboards as rearrange;
+        let mut app = self.app();
+        if !rearrange::refresh_placement(&mut app) || !rearrange::armed(&app) {
+            return false;
+        }
+        let at = app.hover_doc;
+        rearrange::place(&mut app, at);
+        true
+    }
+
     /// A key the tool does not claim while its gesture runs: arrows and digits still reach it, with no modifier (a
     /// grid's rows and columns, the Perspective Selection tool's planes) → whether it took the key; other keys are
     /// [`Self::again`]'s.
@@ -258,6 +271,13 @@ impl CanvasTool for SessionTool<'_> {
             // Presentation Mode: the tool gets nothing; the release of a click steps to the next artboard.
             app.canvas.last_drag = None;
             return ToolAction::Claimed;
+        }
+        // Rearrange waiting for its click takes the press whole: the grid's top-left goes where it was pressed, and the
+        // tool gets no press, drag or release.
+        if crate::dialogs::rearrange_artboards::refresh_placement(&mut app) && !app.any_dialog_open() {
+            let at = pointer_event(PointerKind::Down, pointer, cx).pos;
+            crate::dialogs::rearrange_artboards::place(&mut app, Some(at));
+            return ToolAction::Done;
         }
         // Text typed into a panel's field (its preview) goes to the object it edits before the press can select another.
         if app.session.active().and_then(|st| st.interaction.as_ref()).is_some_and(|it| it.keep_on_switch) {
@@ -353,8 +373,12 @@ impl CanvasTool for SessionTool<'_> {
         let switched = follow == PointerKind::DoubleClick && before != "type" && self.app().session.tool_id() == "type";
         if switched {
             self.app().session.set_tool_option("prevTool", &json!(before));
-            self.send(PointerKind::Down, pointer, cx);
-            self.send(PointerKind::Up, pointer, cx);
+            for kind in [PointerKind::Down, PointerKind::Up] {
+                // Without Cmd, so the Type tool takes the click instead of lending a selection tool.
+                let mut ev = pointer_event(kind, pointer, cx);
+                ev.mods.cmd = false;
+                dispatch(&mut self.app(), &ev, self.view);
+            }
         }
     }
 
@@ -430,25 +454,37 @@ impl CanvasTool for SessionTool<'_> {
                 if self.send_key(k, tool_mods(*mods, space)) || self.busy_key(k) {
                     return true;
                 }
-                // An arrow an application command is bound to runs it, as production's keymap ran it first; one it
-                // leaves moves the selection, with Backtick held only its pattern paint. A panel's own arrows (a page
-                // preview's) are not the canvas's.
+                // An arrow an application command is bound to runs it, as production's keymap ran it first: the
+                // canvas takes every arrow, so no shortcut runs it otherwise. One it leaves moves the selection, with
+                // Backtick held only its pattern paint. A panel's own arrows (a page preview's) are not the canvas's.
                 let chord = Chord::new(*mods, arrow);
-                let bound = self.app().ui_ctx.as_ref().and_then(craft::ui::runtime::commands::keymap).is_some_and(|keymap| {
+                let ctx = self.app().ui_ctx.clone();
+                let bound = ctx.as_ref().and_then(craft::ui::runtime::commands::keymap).and_then(|keymap| {
                     let global = |command: &craft::keymap::CommandRef| {
                         keymap.bindable(command).is_some_and(|def| keymap.scopes().kind(&def.scope) == craft::keymap::ScopeKind::Application)
                     };
-                    !matches!(keymap.lookup_where(&chord, false, &craft::keymap::Active::NONE, &[], &global), craft::keymap::Lookup::None)
+                    match keymap.lookup_where(&chord, false, &craft::keymap::Active::NONE, &[], &global) {
+                        craft::keymap::Lookup::Run(command) => Some(command),
+                        // The key's own press fires the group's first tool, as here.
+                        craft::keymap::Lookup::Cycle(commands) => commands.into_iter().next(),
+                        _ => None,
+                    }
                 });
-                if !bound {
-                    crate::shortcuts::nudge(&mut self.app(), *direction, *mods, with.contains(&Key::Backtick));
+                match ctx.zip(bound) {
+                    Some((ctx, command)) => {
+                        craft::ui::runtime::commands::fire(&ctx, command, craft::ui::runtime::commands::FireSource::Key);
+                    }
+                    None => crate::shortcuts::nudge(&mut self.app(), *direction, *mods, with.contains(&Key::Backtick)),
                 }
-                !bound
+                true
             }
             ToolKey::Delete { forward, .. } => self.send_key(if *forward { EngineKey::Delete } else { EngineKey::Backspace }, held),
             ToolKey::Submit => {
                 // In Presentation Mode Enter opens no dialog: the tool takes none.
                 let presenting = self.app().ui.screen_mode == 3;
+                if !presenting && self.place_rearrange() {
+                    return true;
+                }
                 !presenting && (self.send_key(EngineKey::Enter, held) || self.enter(held))
             }
             ToolKey::Cancel => {
@@ -456,6 +492,13 @@ impl CanvasTool for SessionTool<'_> {
                 if self.app().ui.screen_mode == 3 {
                     return false;
                 }
+                // Escape drops Rearrange waiting for its click.
+                let mut app = self.app();
+                if crate::dialogs::rearrange_artboards::refresh_placement(&mut app) {
+                    crate::dialogs::rearrange_artboards::cancel_placement(&mut app);
+                    return true;
+                }
+                drop(app);
                 let ends = self.app().session.tool_ends_on_escape(self.view);
                 if self.send_key(EngineKey::Escape, held) {
                     return true;
@@ -598,6 +641,10 @@ pub(crate) fn run(app: &mut VectorcraftApp, ui: &mut Ui, pass: &ToolPass) -> Too
         (PressPhase::Idle, _) | (_, None) => None,
         (_, Some(view)) => ui.input(|i| i.pointer.hover_pos()).map(|p| view.to_doc(p)),
     };
+    // Rearrange waiting for its click: dropped with its document or tool, and from the next pass Enter places it.
+    if crate::dialogs::rearrange_artboards::refresh_placement(app) {
+        crate::dialogs::rearrange_artboards::arm(app);
+    }
     show_overlays(app, ui, pass, view_info);
     response
 }
@@ -627,6 +674,8 @@ fn show_overlays(app: &mut VectorcraftApp, ui: &mut Ui, pass: &ToolPass, view_in
     }
     // Gap Options' Preview shows the gaps it finds.
     let mut extra = crate::dialogs::live_paint_gaps::overlays(app);
+    // Rearrange waiting for its click shows where its artboards go.
+    extra.extend(crate::dialogs::rearrange_artboards::placement_overlays(app));
     if app.ui.view.edges && !revolve {
         if app.ui.view.text_threads {
             extra.extend(super::marks::thread_overlays(app, space.view.zoom));
@@ -655,7 +704,7 @@ pub fn dispatch(app: &mut VectorcraftApp, ev: &PointerEvent, view: ViewInfo) {
         return;
     }
     // A press lent to a selection tool (Cmd/Ctrl held) does not use the tool of a held key.
-    if ev.kind == PointerKind::Down && app.session.lent_tool_id(&ev.mods).is_none() {
+    if ev.kind == PointerKind::Down && !app.session.press_lends_tool(ev, view) {
         crate::shortcuts::note_tool_use(app);
     }
     let r = app.session.pointer(ev, view);

@@ -25,6 +25,10 @@ pub const PROGRESS_API: u32 = 2;
 /// The API level that adds a filter's `inputs` ([`crate::InputKind`]).
 pub const INPUTS_API: u32 = 2;
 
+/// The API level that reads a command's `menu` ([`crate::manifest::MenuPlace`]); below it the key
+/// is ignored.
+pub const MENU_API: u32 = 2;
+
 /// The API level that adds a manifest's `context` ([`crate::ContextSection`]): the document's
 /// settings, artboards, layers and swatches, given to a run with or without a selection.
 pub const CONTEXT_API: u32 = 3;

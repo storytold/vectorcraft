@@ -43,9 +43,8 @@ use craft::ui::display::{Shade, Text};
 use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::{List, ListRow, ThumbAspect, ThumbSize, ToggleCell, ToggleState};
 use craft::ui::patterns::form_dialogs::{FormDialog, PathRow};
-use craft::ui::primitives::ContentPainterCx;
+use craft::ui::primitives::{ContentPainterCx, fit_rect};
 use craft::ui::runtime::env::Label;
-use craft::ui::sections::Section;
 use craft::ui::tabs::{Tab, TabKind, TabStrip};
 use craft::ui::text::TextField;
 use craft::ui::tile_grid::{Tile, TileGrid, TilePartEvent};
@@ -602,8 +601,11 @@ impl ExportForScreensDialog {
         let items = Items(doc.artboards.iter().map(|a| (u64::from(a.id), a.name.clone())).collect());
         let caption = |at: usize| format!("{}  {}", at + 1, items.0.get(at).map_or("", |(_, name)| name.as_str()));
         let thumbs = &self.thumbs;
+        // The artboard keeps its proportions, centered in the tile or the row's thumbnail.
         let paint = |at: usize, cx: &ContentPainterCx, rect: egui::Rect| match thumbs.get(at).cloned().flatten() {
-            Some(tex) => cx.picture(tex.id(), rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), 0.0),
+            Some(tex) => {
+                cx.picture(tex.id(), fit_rect(rect, tex.size_vec2()), egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), 0.0)
+            }
             None => {
                 cx.painter.rect_filled(rect, 0.0, egui::Color32::WHITE);
             }
@@ -674,10 +676,10 @@ impl ExportForScreensDialog {
         }
         if text(fields, "tab") != "assets" {
             let n = self.doc.as_ref().map_or(0, |s| s.doc.artboards.len());
-            Section::fixed(tl!("Select:")).show(ui, |ui, _| select_options(ui, fields, n));
+            crate::panels::section(tl!("Select:")).show(ui, |ui, _| select_options(ui, fields, n));
         }
         let web = self.web;
-        Section::fixed(tl!("Export to:")).show(ui, |ui, _| destination(ui, fields, web));
+        crate::panels::section(tl!("Export to:")).show(ui, |ui, _| destination(ui, fields, web));
         pdf_mode(ui, fields);
         let presets = self.presets.as_array().map_or(&[][..], Vec::as_slice);
         let mut picked = None;

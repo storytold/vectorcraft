@@ -159,23 +159,28 @@ fn off() -> Vec<egui::Event> {
 }
 
 /// One headless frame of the whole window (800×600) with `events` and `dropped` files. A drop is
-/// two passes: the files hover with the pointer where `events` put it, then they drop.
+/// three passes: the files hover with the pointer where `events` put it, they drop, and the
+/// target under the pointer takes them in the pass the drop asks for.
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, dropped: &[&str], shift: bool) {
     let files = dropped.iter().map(|p| Arc::new(Dropped(p.into())) as egui::DroppedFileHandle).collect();
     frame_files(app, ctx, events, files, shift);
 }
 
 fn frame_files(app: &mut VectorcraftApp, ctx: &egui::Context, mut events: Vec<egui::Event>, dropped: Vec<egui::DroppedFileHandle>, shift: bool) {
-    events.push(egui::Event::ModifiersChanged(egui::Modifiers { shift, ..Default::default() }));
-    if !dropped.is_empty() {
-        let pointer = events.iter().filter(|e| matches!(e, egui::Event::PointerMoved(_) | egui::Event::PointerGone)).cloned().collect();
-        let hovered = dropped
-            .iter()
-            .map(|f| egui::HoveredFile { path: Some(f.path().to_path_buf()).filter(|p| !p.as_os_str().is_empty()), ..Default::default() })
-            .collect();
-        pass(app, ctx, raw_input(pointer, hovered, vec![]));
+    let mods = egui::Event::ModifiersChanged(egui::Modifiers { shift, ..Default::default() });
+    events.push(mods.clone());
+    if dropped.is_empty() {
+        pass(app, ctx, raw_input(events, vec![], dropped));
+        return;
     }
+    let pointer = events.iter().filter(|e| matches!(e, egui::Event::PointerMoved(_) | egui::Event::PointerGone)).cloned().collect();
+    let hovered = dropped
+        .iter()
+        .map(|f| egui::HoveredFile { path: Some(f.path().to_path_buf()).filter(|p| !p.as_os_str().is_empty()), ..Default::default() })
+        .collect();
+    pass(app, ctx, raw_input(pointer, hovered, vec![]));
     pass(app, ctx, raw_input(events, vec![], dropped));
+    pass(app, ctx, raw_input(vec![mods], vec![], vec![]));
 }
 
 fn raw_input(events: Vec<egui::Event>, hovered_files: Vec<egui::HoveredFile>, dropped_files: Vec<egui::DroppedFileHandle>) -> egui::RawInput {
@@ -930,6 +935,22 @@ fn crop_image_shows_a_box_that_apply_crops_to() {
     // Without an image selected there's nothing to crop.
     app.run("select.none", json!({})).unwrap();
     assert!(!crate::menus::enabled(&app, "ui.cropImage") && app.run("ui.cropImage", json!({})).is_err());
+}
+
+/// With Crop Image in use and room to spare, the Control bar shows the cropping options: the
+/// resolution, the box's position and size, and Apply and Cancel.
+#[test]
+fn the_control_bar_shows_crop_image_s_options_with_apply_and_cancel() {
+    use crate::tests_removeanchors::{control_frame, has};
+    let mut app = app();
+    let dir = Folder::new("ui-place-crop-bar");
+    app.run("file.place", json!({"path": dir.file("crop.png", &png(100, 50, 72.0)), "link": false})).unwrap();
+    app.run("ui.cropImage", json!({})).unwrap();
+    let ctx = window(&app);
+    let bar = control_frame(&mut app, &ctx, vec![]);
+    for s in ["PPI", "X", "Y", "W", "H", "Apply", "Cancel"] {
+        assert!(has(&bar, s), "Crop Image: {s} missing from {:?}", bar.iter().map(|(t, _)| t).collect::<Vec<_>>());
+    }
 }
 
 /// Crop Image's Apply and Object › Rasterize say in the status bar when the image couldn't be

@@ -188,7 +188,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
     let ids: Vec<DialogId> = app.export_dialogs.0.iter().map(|o| o.id).collect();
     for id in ids {
-        let taken = dialogs.with(|host| host.get_mut_by_id::<HostedParamDialog>(id).map(|d| (d.take_footer_action(), d.take_actions())));
+        let taken = dialogs.with(|host| host.get_mut_by_id::<HostedParamDialog>(id).map(|d| (d.take_action(), d.take_actions())));
         let Some(open) = app.export_dialogs.find(id) else { continue };
         let (kind, selection) = (open.kind.clone(), open.selection);
         let Some((footer, actions)) = taken else {

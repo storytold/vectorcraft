@@ -69,6 +69,9 @@ impl Session {
             selection_at_lend: None,
             lent_selection: None,
             last_selection_tool: None,
+            last_part_selection_tool: None,
+            press_lent: None,
+            hover_lent: None,
             last_view: ViewInfo::default(),
             preview_memo: Default::default(),
             depth: 0,
@@ -118,6 +121,7 @@ impl Session {
             journal_note: Default::default(),
             note_depth: 1,
             journal_query: false,
+            defaults_only_ran: None,
             explicit_undo_group: None,
             batch_stash: None,
             batch_steps: None,
@@ -210,6 +214,7 @@ impl Session {
             return;
         }
         self.press_type_selection = None;
+        self.press_lent = None;
         let view = self.last_view;
         // The edit the tool computes on another thread and the input held for it belong to the
         // document being left. The switch goes on whatever they did, as for the deactivation.
@@ -416,6 +421,8 @@ impl Session {
         st.opened_as_tab = old.opened_as_tab;
         st.revision = old.revision + 1;
         st.format = old.format;
+        // What scripts' commands did to the document stays until the person saves it.
+        st.by_script = old.by_script.clone();
         st.save_options = old.save_options.clone();
         // The remembered artboard pick follows the artboards it named when the file read back has
         // the artboards the document had at the save, in the same order and with the same ids (a

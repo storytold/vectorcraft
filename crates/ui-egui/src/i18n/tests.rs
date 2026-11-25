@@ -77,6 +77,17 @@ const UI_STRINGS: &[(&str, &[&str])] = &[
     ("nature icons library", &["Nature Icons", "Leaf", "Flower", "Tree", "Mountain", "Wave"]),
     ("objects on path", &["Detach", "Detach Object from Path"]),
     (
+        "document info image details",
+        &[
+            "{format}; {size}; {detail}",
+            "{x} × {y} ppi",
+            "resolution unavailable",
+            "estimated memory {memory}",
+            "memory unavailable",
+            "Unknown format",
+        ],
+    ),
+    (
         "type preferences",
         &[
             "Start Lists From Typed Markers",
@@ -86,6 +97,7 @@ const UI_STRINGS: &[(&str, &[&str])] = &[
             "Low-Latency Drawing",
         ],
     ),
+    ("rearrange selected artboards", &["Rearrange…", "Selected Artboards: {n}"]),
 ];
 
 #[test]
@@ -104,6 +116,7 @@ fn strings_the_ui_shows_are_in_every_complete_catalog() {
 const MESSAGES: &[(&str, &[&str], &str, &str)] = &[
     ("Packaged 1 file in /out/card Folder", &[], "/out/card", "Packaged"),
     ("Packaged 3 files", &[], "", "Packaged"),
+    (crate::dialogs::rearrange_artboards::PLACE_HINT, &[], "", "Click on the canvas"),
     ("Packaged 1 file (fonts not copied: Mono) in /out/card (draft) v2", &[], "Mono", "Packaged"),
     ("command `object.group` is not available right now: nothing selected", &["es"], "`object.group`", "nothing selected"),
 ];
@@ -197,6 +210,51 @@ fn bundled_catalogs_are_consistent() {
             assert!(known, "{code}: unknown command id {id:?}");
         }
     }
+}
+
+/// A catalog column with its `\n`, `\t` and `\\` escapes read.
+fn unescaped(column: &str) -> String {
+    let mut out = String::with_capacity(column.len());
+    let mut chars = column.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => out.push('\n'),
+            Some('t') => out.push('\t'),
+            Some(other) => out.push(other),
+            None => out.push('\\'),
+        }
+    }
+    out
+}
+
+/// A translated message starts and ends with whitespace only where its English does, so a status
+/// message is not shown with a stray space.
+#[test]
+fn message_translations_keep_their_english_edges() {
+    let mut wrong = Vec::new();
+    for (code, _, catalog) in EMBEDDED {
+        for line in catalog.lines() {
+            let mut columns = line.splitn(3, '\t');
+            let (Some(ctx @ ("@msg" | "@msgplural")), Some(src), Some(tr)) = (columns.next(), columns.next(), columns.next()) else { continue };
+            let (src, tr) = (unescaped(src), unescaped(tr));
+            let plural = ctx == "@msgplural";
+            let sources: Vec<&str> = if plural { src.split('|').collect() } else { vec![src.as_str()] };
+            let forms: Vec<&str> = if plural { tr.split('|').collect() } else { vec![tr.as_str()] };
+            for (i, form) in forms.into_iter().enumerate() {
+                let english = sources.get(i).or(sources.last()).copied().unwrap_or_default();
+                let lead = form.starts_with(char::is_whitespace) && !english.starts_with(char::is_whitespace);
+                let trail = form.ends_with(char::is_whitespace) && !english.ends_with(char::is_whitespace);
+                if lead || trail {
+                    wrong.push(format!("{code}: {src:?} -> {form:?}"));
+                }
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{} message translations add whitespace at an edge:\n{}", wrong.len(), wrong.join("\n"));
 }
 
 /// The engine learns the language the UI is drawn in each frame: new type takes the Japanese
@@ -747,7 +805,7 @@ fn menu_labels() -> Vec<(String, String, serde_json::Value)> {
     fn walk(items: &[Node], out: &mut Vec<(String, String, serde_json::Value)>) {
         for i in items {
             match i {
-                Node::Item(it) if it.command.id == crate::menus::TODO => out.push((it.label.clone(), String::new(), serde_json::Value::Null)),
+                Node::Item(it) if crate::menus::unbound(&it.command.id) => out.push((it.label.clone(), String::new(), serde_json::Value::Null)),
                 Node::Item(it) => out.push((it.label.clone(), it.command.id.clone(), it.command.params.clone())),
                 Node::Heading(l) => out.push((l.clone(), String::new(), serde_json::Value::Null)),
                 Node::Submenu { label, children, .. } => {
@@ -773,11 +831,11 @@ fn menu_item_effect<'a>(id: &str, p: &'a serde_json::Value) -> Option<&'a str> {
 
 /// The label a menu item shows in `lang`, as the menus resolve it: an Effect menu item by its
 /// effect's `@id` row when the catalog has one, any other command by its id's row or its English
-/// label, and a submenu or an unbuilt item by its English label.
+/// label, and a submenu, an unbuilt item or a placeholder by its English label.
 fn shown_menu_label(lang: Lang, item: &crate::menus::Node) -> Option<&str> {
     use crate::menus::Node;
     match item {
-        Node::Item(it) if it.command.id == crate::menus::TODO => Some(tr(lang, &it.label)),
+        Node::Item(it) if crate::menus::unbound(&it.command.id) => Some(tr(lang, &it.label)),
         Node::Item(it) => {
             let (id, p) = (it.command.id.as_str(), &it.command.params);
             let by_effect = menu_item_effect(id, p).map(|e| tr_id(lang, e, "")).filter(|s| !s.is_empty());
@@ -799,7 +857,7 @@ fn menu_items_side_by_side_have_different_labels() {
         for item in items {
             let Some(shown) = shown_menu_label(lang, item) else { continue };
             let (english, what) = match item {
-                Node::Item(it) if it.command.id == crate::menus::TODO => (it.label.as_str(), "submenu or unbuilt item"),
+                Node::Item(it) if crate::menus::unbound(&it.command.id) => (it.label.as_str(), "submenu, unbuilt item or placeholder"),
                 Node::Item(it) => (it.label.as_str(), menu_item_effect(&it.command.id, &it.command.params).unwrap_or(it.command.id.as_str())),
                 Node::Submenu { label, .. } => (label.as_str(), "submenu or unbuilt item"),
                 _ => continue,
@@ -854,7 +912,7 @@ fn menu_items_never_show_an_id() {
     fn walk(lang: Lang, items: &[crate::menus::Node], out: &mut Vec<String>) {
         for item in items {
             match item {
-                crate::menus::Node::Item(it) if it.command.id != crate::menus::TODO => {
+                crate::menus::Node::Item(it) if !crate::menus::unbound(&it.command.id) => {
                     let (l, id) = (&it.label, it.command.id.as_str());
                     let key = menu_item_effect(id, &it.command.params).unwrap_or(id);
                     let shown = shown_menu_label(lang, item).unwrap_or_default();
@@ -1217,6 +1275,55 @@ fn message_scan_joins_a_literal_continued_on_the_next_line() {
     }
 }
 
+/// The scan reads each of Rust's character escapes in a message as the character Rust gives it
+/// (https://doc.rust-lang.org/reference/tokens.html#character-escapes), and stops at the literal's
+/// own closing quote, not at an escaped one.
+#[test]
+fn message_scan_decodes_rust_character_escapes() {
+    let cases = [
+        (r#"a\rb" tail"#, "a\rb"),
+        (r#"a\0b""#, "a\0b"),
+        (r#"\x41\x7f\x7F""#, "A\x7f\x7f"),
+        (r#"caf\u{e9}""#, "café"),
+        (r#"caf\u{E_9}""#, "café"),
+        (r#"\u{1F600}\u{10_FFFF}\u{0}""#, "\u{1F600}\u{10FFFF}\0"),
+        (r#"a\\b""#, "a\\b"),
+        (r#"say \"hi\"" tail"#, "say \"hi\""),
+        (r#"it\'s""#, "it's"),
+        (r#"\n\t""#, "\n\t"),
+    ];
+    let wrong: Vec<_> = cases.iter().filter(|(body, text)| string_literal(body).as_deref() != Some(*text)).collect();
+    assert!(wrong.is_empty(), "{wrong:?}");
+    let found = source_messages(r#"fn run() { let _ = Err("bad \x41 value \u{e9}"); }"#, &[], &Default::default());
+    assert_eq!(found, ["bad A value é"]);
+}
+
+/// A literal with an escape Rust does not accept is not read as a message: an unknown letter, `\x`
+/// with fewer than two hex digits or above `7F`, and `\u` without braces, without digits, with a
+/// leading underscore, with more than six digits, or naming a surrogate or a value above `10FFFF`.
+#[test]
+fn message_scan_rejects_invalid_rust_escapes() {
+    let bodies = [
+        r#"bad \q""#,
+        r#"bad \x4""#,
+        r#"bad \x4g""#,
+        r#"bad \x80""#,
+        r#"bad \x+1""#,
+        concat!(r"bad \u", "00e9\""),
+        r#"bad \u{""#,
+        r#"bad \u{}""#,
+        r#"bad \u{_e9}""#,
+        r#"bad \u{e9""#,
+        r#"bad \u{D800}""#,
+        r#"bad \u{110000}""#,
+        r#"bad \u{1234567}""#,
+    ];
+    let read: Vec<_> = bodies.iter().filter(|body| string_literal(body).is_some()).collect();
+    assert!(read.is_empty(), "{read:?}");
+    let code = r#"fn run() { let _ = Err("bad \q value"); let _ = Err("bad \u{D800} value"); let _ = Err("good value"); }"#;
+    assert_eq!(source_messages(code, &[], &Default::default()), ["good value"]);
+}
+
 /// The scan reads the message of each of the plug-in host's [`ERROR_HELPERS`]: a literal, a
 /// `format!` string with or without a `&` before it, after the location of `out_err` (a
 /// `format!` string too), the number and range of `in_range`, the number and location of `unit`,
@@ -1575,7 +1682,7 @@ fn command_ids(s: &str) -> Vec<&str> {
 /// the messages each one lacks.
 const COMPLETE_MESSAGES: &[&str] = &[
     "cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "zh-hant", "fi", "tr", "ca",
-    "nl", "da", "id",
+    "nl", "da", "id", "bg",
 ];
 
 /// Crates whose error and status messages reach the status bar, the crates whose errors the
@@ -2078,8 +2185,12 @@ fn without_test_module(text: &str) -> &str {
     text
 }
 
-/// The text of a string literal whose opening quote was just read, escapes resolved. A `\` at the
-/// end of a line drops the line break and the whitespace that starts the next line, as Rust does.
+/// The text of a string literal whose opening quote was just read, escapes resolved as Rust resolves
+/// them (https://doc.rust-lang.org/reference/tokens.html#character-escapes): `\n`, `\r`, `\t`, `\0`,
+/// `\\`, `\'`, `\"`, `\x` with two hex digits up to `7F`, and `\u{…}` with one to six hex digits
+/// (underscores allowed after the first) naming a Unicode scalar value. A `\` at the end of a line
+/// drops the line break and the whitespace that starts the next line. A literal with any other
+/// escape, or one left unclosed, is `None`.
 fn string_literal(s: &str) -> Option<String> {
     let mut out = String::new();
     let mut it = s.chars();
@@ -2088,9 +2199,36 @@ fn string_literal(s: &str) -> Option<String> {
             '"' => return Some(out),
             '\\' => match it.next()? {
                 'n' => out.push('\n'),
+                'r' => out.push('\r'),
                 't' => out.push('\t'),
+                '0' => out.push('\0'),
+                c @ ('\\' | '\'' | '"') => out.push(c),
+                'x' => {
+                    let (high, low) = (it.next()?.to_digit(16)?, it.next()?.to_digit(16)?);
+                    out.push(char::from_u32(high * 16 + low).filter(char::is_ascii)?);
+                }
+                'u' => {
+                    if it.next()? != '{' {
+                        return None;
+                    }
+                    let (mut value, mut digits) = (0u32, 0);
+                    loop {
+                        match it.next()? {
+                            '}' if digits > 0 => break,
+                            '_' if digits > 0 => {}
+                            c => {
+                                value = value * 16 + c.to_digit(16)?;
+                                digits += 1;
+                                if digits > 6 {
+                                    return None;
+                                }
+                            }
+                        }
+                    }
+                    out.push(char::from_u32(value)?);
+                }
                 '\n' | '\r' => it = it.as_str().trim_start_matches([' ', '\t', '\n', '\r']).chars(),
-                c => out.push(c),
+                _ => return None,
             },
             c => out.push(c),
         }

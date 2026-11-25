@@ -5,8 +5,9 @@ use std::path::Path;
 
 use craft::host::{Host, PickId, PickRequest};
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Props as _, Show as _};
+use craft::ui::contract::{Props as _, Show as _, ShowContainer as _};
 use craft::ui::display::Text;
+use craft::ui::layout_components::Row;
 use serde::{Deserialize, Serialize};
 
 use crate::VectorcraftApp;
@@ -118,19 +119,21 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, enabled: bool) {
     {
         app.status(e);
     }
-    ui.horizontal_wrapped(|ui| {
+    let chosen = app.original_editor.choice.path.clone();
+    let (mut choose, mut default) = (false, false);
+    Row::new().wrap(true).show(ui, |ui, _| {
         Text::new(tl!("Edit Original with:")).show(ui);
-        let name = app.original_editor.choice.path.as_deref().and_then(|p| Path::new(p).file_name());
+        let name = chosen.as_deref().and_then(|p| Path::new(p).file_name());
         Text::new(name.map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "PhotoCraft".into())).show(ui);
-        if Button::new(tl!("Choose…")).enabled(enabled).show(ui).clicked()
-            && let Err(e) = pick(app)
-        {
-            app.status(e);
-        }
-        if app.original_editor.choice.path.is_some() && Button::new("PhotoCraft").enabled(enabled).show(ui).clicked() {
-            reset(app);
-        }
+        choose = Button::new(tl!("Choose…")).enabled(enabled).show(ui).clicked();
+        default = chosen.is_some() && Button::new("PhotoCraft").enabled(enabled).show(ui).clicked();
     });
+    if choose && let Err(e) = pick(app) {
+        app.status(e);
+    }
+    if default {
+        reset(app);
+    }
 }
 
 #[cfg(test)]
@@ -170,7 +173,7 @@ mod tests {
             let p = dir.join(if cfg!(windows) { "Editor.exe" } else { "editor" });
             std::fs::write(&p, b"").unwrap();
             #[cfg(unix)]
-            std::os::unix::fs::PermissionsExt::set_mode(&mut std::fs::metadata(&p).unwrap().permissions(), 0o755);
+            std::fs::set_permissions(&p, <std::fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o755)).unwrap();
             p
         };
         path.to_string_lossy().into_owned()

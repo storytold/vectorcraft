@@ -906,6 +906,7 @@ font-technology	Variable	Değişken
 	Direct Selection Tool	Doğrudan Seçim Aracı
 	Direction Handles	Yön Kolları
 	Disable Auto Add/Delete	Otomatik Ekleme/Silmeyi Devre Dışı Bırak
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete Bağlantı Noktalarını Kaldırır ve Yolları Birleşik Tutar
 	Interpolate Control Points When Moving Anchors	Bağlantı Noktalarını Taşırken Yön Kollarını Enterpole Et
 	Disable Opacity Mask	Opaklık Maskesini Devre Dışı Bırak
 	Discard	At
@@ -2397,6 +2398,7 @@ font-technology	Variable	Değişken
 	One Point Perspective Preset 5	Tek Noktalı Perspektif Ön Ayarı 5
 	Only Web Colors	Yalnızca Web Renkleri
 	Opacity	Opaklık
+	Show Opacity	Opaklığı Göster
 	Opacity & Mask Define Knockout Shape	Opaklık ve Maske Tanımlama Nakavt Şekli
 	Opacity Mask	Opaklık Maskesi
 	Opacity Mask Info	Opaklık Maskesi Bilgisi
@@ -2844,6 +2846,9 @@ digits	Malayalam	Malayalam
 	Scale Artwork with Artboard	Çalışma Yüzeyi ile Resmi Ölçeklendirin
 	Artboards: {n}	Çalışma yüzeyleri: {n}
 	Rearrange All Artboards…	Tüm Çalışma Yüzeylerini Yeniden Düzenleme…
+	Rearrange…	Yeniden Düzenle…
+	Selected Artboards: {n}	Seçili çalışma yüzeyleri: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Çalışma yüzeylerini yerleştirmek için tuvale tıklayın (Esc iptal eder)
 	Recall Selection	Seçimi Geri Çağır
 	RECENT	SON
 	Recent	Son
@@ -3092,6 +3097,7 @@ digits	Malayalam	Malayalam
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	İzleme dörtgeninde iki parmakla döndürme hareketi tuvalin görünümünü döndürür.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Bir tuşu basılı tutmak, Klavye Kısayolları'ndaki Basılı tutun sütununda bulunan aracı veya komutu çalıştırır; kısa basış olağan kısayolunu çalıştırır.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Olağan kısayolu yerine basılı tutma kısayolunun çalışması için bir tuşun kaç saniye basılı tutulması gerektiği.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete, seçili bağlantı noktalarını kaldırır ve yolu orada açmak yerine her birinin çevresindeki eğriyi yeniden uydurur.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Bağlantı noktalarını taşıdığınızda, bir ucu taşınan her eğri uçlarına göre şeklini korur.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Bir aracın kısayol tuşunu basılı tutmak, tuşu bırakana kadar o aracı seçer, ardından önceki araç yeniden seçilir.
 	Shows the bounding box while you move the selection or draw a shape.	Seçimi taşırken veya bir şekil çizerken sınırlayıcı kutuyu gösterir.
@@ -6165,6 +6171,7 @@ lighting	Light	Işık
 @msg	a 3D effect on a group's fill or stroke draws nothing	bir grubun dolgusundaki veya konturundaki 3 boyutlu efekt hiçbir şey çizmez
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	bir grubun dolgusundaki veya konturundaki 3 boyutlu efekt dışa aktarılacak hiçbir şey çizmez
 @msg	The 3D object is too complex to export	3 boyutlu nesne dışa aktarmak için çok karmaşık
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3 boyutlu nesnenin ağı eksik veya sayı olmayan bir değer içeriyor
 @msg	the <filter> element needs an id, the filter's name	<filter> öğesinin, filtrenin adı olan bir id değeri olmalıdır
 @msg	an SVG filter's id is at most {MAX_NAME} characters	bir SVG filtresinin id değeri en fazla {MAX_NAME} karakterdir
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> bir SVG filtresi öğesi değildir
@@ -7179,6 +7186,12 @@ theme	Appearance	Görünüm
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	çözünürlük kullanılamıyor
+	estimated memory {memory}	tahmini bellek {memory}
+	memory unavailable	bellek kullanılamıyor
+	Unknown format	Bilinmeyen biçim
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -7396,10 +7409,18 @@ axis	Y Axis	Y ekseni
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	onay gerekiyor: {0} istiyor; kullanıcı bunu eklentiyi tek başına yüklerken verir
 @msg	not JSON: {e}	JSON değil: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	WebAssembly ikili dosyası değil (\\0asm üst bilgisi eksik)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	bir işlev türü {MAX_FUNC_TYPE_VALUES} parametre sınırını aşıyor
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	bir işlev türü {MAX_FUNC_TYPE_VALUES} sonuç sınırını aşıyor
 @msg	parameter `{k}`: {what}	`{k}` parametresi: {what}
 @msg	parameter `{name}`: {what}	`{name}` parametresi: {what}
 @msg	plug-in parameters must be a JSON object	eklenti parametreleri bir JSON nesnesi olmalıdır
 @msg	the module must export its linear memory as `memory`	modül doğrusal belleğini `memory` olarak dışa aktarmalıdır
+@msg	the module must export `{name}` with the type {signature}	modül `{name}` öğesini {signature} türüyle dışa aktarmalıdır
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	modülde birden fazla `{MANIFEST_SECTION}` özel bölümü var
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	bellek bütçesi (modülün başlangıç belleği {initial} bayt, sınır {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	`{MANIFEST_SECTION}` özel bölümündeki bildirim `abi` değerini {ABI_VERSION} olarak vermelidir; bu, bu ana bilgisayarın uyguladığı ABI sürümüdür
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	tablo bütçesi (modül {count} tablo tanımlıyor, en büyüğünde {largest} öğe var; sınır {MAX_TABLES} tablo, her biri {MAX_TABLE_ELEMENTS} öğe)
+@msg	the module's table section could not be read	modülün tablo bölümü okunamadı
 @msg	the objects to change are no longer in the document	değiştirilecek nesneler artık belgede değil
 @msg	the runtime panicked	çalışma zamanı çöktü
 @msg	unexpected host trap	ana bilgisayarda beklenmeyen kesme (trap)
@@ -7426,6 +7447,11 @@ axis	Y Axis	Y ekseni
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` ve `maxItems` 0-{MAX_LIST} olmalı, `maxItems` en az 1 olmalı ve varsayılan değer bu kadar öğe içermelidir
 @msg	`name` must be a string	`name` bir dize olmalıdır
 @msg	`opacity` must be a number	`opacity` bir sayı olmalıdır
+@msg	`opacity` must be a number from 0 to 100	`opacity` 0 ile 100 arasında bir sayı olmalıdır
+@msg	`opacity` must be true or false	`opacity` true veya false olmalıdır
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	metin karakterlerinin kendi opaklığı yoktur: Görünüm panelindeki Yeni Dolgu Ekle veya Yeni Kontur Ekle ile bir dolgu veya kontur ekleyin
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	bir sembol örneğinde seçilen nesnenin kendi dolgu veya kontur opaklığı yoktur
+@msg	no target has that fill or stroke to take the opacity	hiçbir hedefte opaklığı alacak o dolgu veya kontur yok
 @msg	`type` must be "path" or "compound"	`type` "path" veya "compound" olmalıdır
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` 1-{MAX_UNIT} yazdırılabilir karakter olmalıdır
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen`, `{other}` için 1 ile {MAX_CONDITION_VALUES} arasında değer listelemelidir
@@ -7469,6 +7495,8 @@ axis	Y Axis	Y ekseni
 @msg	`plates` requires a stop linked to a spot swatch	`plates`, nokta rengi örneğine bağlı bir degrade durağı gerektirir
 @msg	the output	çıktı
 @msg	the path has no anchor points	yolun bağlantı noktası yok
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	{id} bileşik yolunun gizli, kilitli veya kılavuz olan bir üyesi var, bu yüzden üyeleri değiştirilemez
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	{id} bileşik yolunun yol olmayan bir üyesi var, bu yüzden üyeleri değiştirilemez
 @msg	too many anchor points (limit {MAX_ANCHORS})	çok fazla bağlantı noktası (sınır {MAX_ANCHORS})
 @msg	true or false	true veya false
 @msg	a number >= {_1}	bir sayı >= {_1}
@@ -8129,6 +8157,8 @@ axis	Y Axis	Y ekseni
 @msg	`dataBase64` is larger than the module limit	`dataBase64` modül sınırından büyük
 @msg	`dataBase64` is not valid base64	`dataBase64` geçerli bir base64 değil
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly`; `ids`, `reverse` veya `append` ile birleştirilemez
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly`; `ids`, `id` veya `item` ile birleştirilemez
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly`; `brush` ile birleştirilemez
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` ve `childLimit` özeti dilimler: `summary: true` verin
 @msg	`design` is a design name, or null for plain columns	`design` bir tasarım adıdır veya düz sütunlar için null olur
 @msg	`design` is a design name, or null for the default marker	`design` bir tasarım adıdır veya varsayılan işaretçi için null olur

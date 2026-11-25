@@ -261,8 +261,7 @@ fn hints_name_keys_as_the_menus_do() {
 }
 
 /// As the window narrows, the app bar gives up its right-hand controls one at a time, each before the one after it:
-/// Discord, Explore tutorials, Arrange Documents, the search and last the workspace switcher; the search narrows to its
-/// icon before it goes. Whatever shows lies inside the window. Safe Mode's rows are in `tests/safe_mode.rs`, whose
+/// Discord, the search and last the workspace switcher; each keeps its whole width until it goes. Whatever shows lies inside the window. Safe Mode's rows are in `tests/safe_mode.rs`, whose
 /// process owns the Safe Mode switch.
 #[test]
 fn the_app_bar_gives_up_its_right_hand_controls_in_order() {
@@ -270,9 +269,8 @@ fn the_app_bar_gives_up_its_right_hand_controls_in_order() {
     let app = crate::VectorcraftApp::new(Session::new(), Default::default());
     // The bar is the shell's title bar, which only the whole window's frame draws.
     let mut bar = Shown::new(app, egui::vec2(1600.0, 600.0), |app, ui| app.ui(ui));
-    // PLAN: shell-w9 builds Explore tutorials as `IconButton::command(.., "window.learn")`, whose command label is "Learn"; the button keeps production's name "Explore tutorials".
     // In the order the bar gives them up; the search's name goes on with its chord.
-    let controls = ["Discord", "Explore tutorials", "Arrange Documents", "Search commands", "Choose a workspace"];
+    let controls = ["Discord", "Search commands", "Choose a workspace"];
     let mut before: Option<Vec<bool>> = None;
     let mut search_widths = vec![];
     for width in (30..=160).rev().map(|w| w as f32 * 10.0) {
@@ -290,14 +288,13 @@ fn the_app_bar_gives_up_its_right_hand_controls_in_order() {
         if let Some(before) = &before {
             assert!(on.iter().zip(before).all(|(now, was)| !now || *was), "{width}: a control came back as the window narrowed: {on:?}");
         }
-        if let Some(search) = shown[3] {
-            assert!(search_widths.last().is_none_or(|w: &f32| search.rect.width() <= *w + 0.5), "{width}: the search widened as the window narrowed");
+        if let Some(search) = shown[1] {
             search_widths.push(search.rect.width());
         }
         before = Some(on);
     }
     let (widest, narrowest) = (search_widths.first().copied(), search_widths.last().copied());
-    assert!(widest.zip(narrowest).is_some_and(|(w, n)| n < w), "the search field becomes its icon before it goes: {search_widths:?}");
+    assert!(widest.zip(narrowest).is_some_and(|(w, n)| n >= w - 0.5), "the search keeps its width until it goes: {search_widths:?}");
 }
 
 /// A text the status bar painted, with where it lies.
@@ -529,6 +526,18 @@ fn combined_open_and_link_status_lists_notes_on_hover_and_for_accessibility() {
     assert!(!described.as_deref().is_some_and(|d| d.contains("• ")) && shown.is_empty(), "a later message lists nothing: {described:?} {shown:?}");
 }
 
+/// While Cmd/Ctrl is held, Current Tool names the selection tool a press would borrow: Direct
+/// Selection with the Selection tool chosen, and the Selection tool again once the key is let go.
+#[test]
+fn current_tool_names_the_selection_tool_cmd_lends() {
+    let bar = status_readout_app();
+    let app = bar.app();
+    let cmd = vectorcraft_tools::Mods { cmd: true, ..Default::default() };
+    assert_eq!(app.session.tool_id(), "selection");
+    assert_eq!(super::status_bar::info_text(&app, &cmd).0, "Direct Selection");
+    assert_eq!(super::status_bar::info_text(&app, &Default::default()).0, "Selection");
+}
+
 /// The status bar's info field shows the readout `view.statusBarShow` chooses: the navigator's
 /// artboard name, the tool in use, the date and time, the undo and redo counts, or the document's
 /// color profile.
@@ -565,7 +574,7 @@ fn the_status_bar_info_field_shows_the_chosen_readout() {
     // The labels take the UI language's colon (#7991).
     let fr = crate::i18n::Lang::from_code("fr").unwrap();
     crate::i18n::set_current(fr);
-    let (french, _) = super::status_bar::info_text(&bar.app());
+    let (french, _) = super::status_bar::info_text(&bar.app(), &Default::default());
     crate::i18n::set_current(crate::i18n::Lang::EN);
     assert_eq!(french, format!("{}\u{a0}: {before}  {}\u{a0}: 1", crate::i18n::tr(fr, "Undos"), crate::i18n::tr(fr, "Redos")));
 
@@ -2432,6 +2441,58 @@ fn the_control_bar_leaves_members_out_in_its_priority_order() {
     assert!(seen.iter().any(|s| s[0] && !s[1]), "some width shows the Align buttons without the fields");
 }
 
+/// With type selected, the Character and Paragraph groups leave the Control bar before Opacity and the Style group: at
+/// every width that shows the Character group, Opacity, Recolor Artwork and the Style picker show too, the Paragraph
+/// group leaves before the Character group, the Align buttons leave before the Paragraph group, and some width shows
+/// Opacity without them.
+#[test]
+fn the_type_groups_leave_the_control_bar_before_opacity_and_style() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let text = app.run("text.create", json!({"x": 10, "y": 100, "text": "Hi"})).unwrap()["id"].clone();
+    app.run("select.set", json!({ "ids": [text] })).unwrap();
+    let mut bar = control_shown(app);
+    let names = ["Character:", "Paragraph:", "Opacity:", "Recolor Artwork", "Style:", "Horizontal Align Left"];
+    let seen = control_bar_widths(&mut bar, &names);
+    assert!(seen.iter().any(|s| s.iter().all(|shown| *shown)), "a wide bar shows {names:?}");
+    for s in &seen {
+        assert!(!s[0] || s[2..5].iter().all(|shown| *shown), "the Character group shows only with {:?}: {s:?}", &names[2..5]);
+        assert!(!s[1] || s[0], "the Paragraph group shows only with the Character group: {s:?}");
+        assert!(!s[5] || s[1], "the Align buttons show only with the Paragraph group: {s:?}");
+    }
+    assert!(seen.iter().any(|s| s[2] && !s[0]), "some width shows Opacity without the Character group");
+}
+
+/// With area type selected, its vertical alignment buttons leave the Control bar before Opacity and the Style group,
+/// and after the Align buttons that follow them, with the Character and Paragraph groups shown and with both off.
+#[test]
+fn the_vertical_alignment_buttons_leave_the_control_bar_before_opacity_and_style() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let area = json!({"x": 10, "y": 10, "text": "Hi", "area": {"width": 100, "height": 120}});
+    let text = app.run("text.create", area).unwrap()["id"].clone();
+    app.run("select.set", json!({ "ids": [text] })).unwrap();
+    let mut bar = control_shown(app);
+    let names = ["Align Top", "Opacity:", "Recolor Artwork", "Style:", "Horizontal Align Left", "Paragraph:"];
+    for type_groups in [true, false] {
+        for group in ["character", "paragraph"] {
+            bar.app().run("window.control.options", json!({ "group": group, "visible": type_groups })).unwrap();
+        }
+        let case = if type_groups { "with the type groups" } else { "without the type groups" };
+        let seen = control_bar_widths(&mut bar, &names);
+        assert!(seen.iter().any(|s| s[..5].iter().all(|shown| *shown)), "{case}: a wide bar shows {:?}", &names[..5]);
+        for s in &seen {
+            assert!(!s[0] || s[1..4].iter().all(|shown| *shown), "{case}: Align Top shows only with {:?}: {s:?}", &names[1..4]);
+            assert!(!s[4] || s[0], "{case}: the Align buttons show only with Align Top: {s:?}");
+            assert!(type_groups || !s[5], "{case}: the Paragraph group is off: {s:?}");
+            assert!(!type_groups || !s[0] || s[5], "{case}: Align Top shows only with the Paragraph group: {s:?}");
+        }
+        assert!(seen.iter().any(|s| s[1] && !s[0]), "{case}: some width shows Opacity without Align Top");
+    }
+}
+
 /// The names of the bar's X, Y, W and H fields, in their order.
 const BAR_FIELDS: [&str; 4] = ["X position", "Y position", "Width", "Height"];
 
@@ -2459,7 +2520,7 @@ fn label_links_open_their_panels() {
     app.run("window.panel", json!({"panel": links})).unwrap();
     app.run("window.panel.dock", json!({"panel": links, "onto": "layers"})).unwrap();
     let mut bar = control_shown(app);
-    bar.room(egui::vec2(2000.0, 600.0));
+    bar.room(egui::vec2(2400.0, 600.0));
     // Closes the Links panel, clicks `name` on the bar and answers whether the panel shows.
     let click = |bar: &mut Shown, name: &str| {
         // Closing a panel that is already closed is an error that changes nothing.

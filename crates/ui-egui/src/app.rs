@@ -1,15 +1,26 @@
 use craft::automation::ControlChannel;
 use craft::host::{AppInfo, Host, Wake};
+use craft::layers::ui::filter::ObjectsSearch;
 use craft::platform::clipboard::{Clipboard, ClipboardProbe, EventClipboard};
 use craft::platform::clock::monotonic_ms;
 use craft::theme::variant::Tone;
-use craft::ui::contract::Bind;
+use craft::ui::buttons::{ActiveLook, PushButtonLook};
+use craft::ui::choice::ChoiceLook;
+use craft::ui::contract::{Bind, CaptionInk, GlyphColon, LinkLabelInk, LinkLabelUnderline, QuietHeader, SectionRhythm};
+use craft::ui::docking::IconGroupSeparator;
+use craft::ui::list::{CommandHighlight, ThumbRows};
+use craft::ui::menu::MenuTitlePad;
+use craft::ui::patterns::form_dialogs::PresetCardLook;
 use craft::ui::runtime::env::{RootEnv, Scale, ScrubDrags, WindowKey};
 use craft::ui::runtime::frame::{FrameInput, FrameOutput};
 use craft::ui::runtime::toast::{self, Toast};
 use craft::ui::runtime::windows::WindowHost;
+use craft::ui::sections::{DialogButtonLook, QuietTitleRow};
 use craft::ui::shell::embed::CloseDecision;
 use craft::ui::shell::{AppShell, CanvasPanel, Slot};
+use craft::ui::style::TrackFill;
+use craft::ui::tabs::DocumentTabLook;
+use craft::ui::text::{NumberLook, NumberPrecision};
 use vectorcraft_engine::cmd::clipboard::PASTE_ORDER;
 use vectorcraft_engine::cmd::toast::Level;
 
@@ -48,9 +59,12 @@ fn now_secs() -> f64 {
 
 impl VectorcraftApp {
     /// The app around `session`, reaching the platform through `services` (the clipboard, files
-    /// and the like). It starts cataloguing the installed fonts at once, gives Data Recovery the
-    /// host's store and makes a view for each open document.
+    /// and the like). It registers the app's icon sets, starts cataloguing the installed fonts at
+    /// once, gives Data Recovery the host's store and makes a view for each open document.
     pub fn new(mut session: Session, mut services: Services) -> Self {
+        // Every entry point (desktop, web, tests) makes the app before its first pass.
+        craft::ui::primitives::register_app_icons(&super::icons::APP_ICONS);
+        craft::ui::primitives::register_app_icons(&super::cursors::CURSOR_ICONS);
         // The font menus and the first file opened need the installed fonts: catalog them now.
         vectorcraft_text::FontDb::global().scan_in_background();
         if let Some(store) = &services.recovery_store {
@@ -302,6 +316,15 @@ impl VectorcraftApp {
 /// eframe isn't a dependency of this crate (the host owns the event loop); these entry points are
 /// called from the host's `eframe::App` impl through `embed`'s hooks.
 impl VectorcraftApp {
+    /// Seconds on the app's clock: the monotonic clock, or the time a test set in `now_override`.
+    pub(crate) fn now(&self) -> f64 {
+        #[cfg(test)]
+        if let Some(now) = self.now_override {
+            return now;
+        }
+        now_secs()
+    }
+
     /// Applies the work that finished off the UI thread. It stays pending while a script runs, since
     /// every change to the documents ends in a busy error until the script ends.
     pub(crate) fn poll_finished_work(&mut self) {
@@ -409,10 +432,7 @@ impl VectorcraftApp {
         // Monotonic host time, never egui's `InputState::time`: a hidden window's `logic` replays
         // the last shown pass's time, freezing recovery, clipboard polling and deadlines. Tests
         // inject a clock to drive idle scheduling deterministically.
-        #[cfg(test)]
-        let now = self.now_override.unwrap_or_else(now_secs);
-        #[cfg(not(test))]
-        let now = now_secs();
+        let now = self.now();
         self.perf.fps = self.frame_rate.frame(now, self.perf.frame_ms / 1000.0);
         self.sync_views();
         self.refresh_replace_font_warning(false);
@@ -507,11 +527,13 @@ impl VectorcraftApp {
     pub(crate) fn canvas_area(&mut self, ui: &mut egui::Ui) {
         let opening = !self.opening.pending.is_empty();
         let presenting = self.ui.presenting();
+        let large_tabs = self.session.prefs.large_tabs;
         // The tab strip and the document are two closures of one panel: they take the app in
         // turn, and a borrow that fails (a closure re-entered) skips its part.
         let app = std::cell::RefCell::new(self);
         CanvasPanel::new()
             .opening(opening)
+            .large_tabs(large_tabs)
             .tabs(|ui, _cx| {
                 if !presenting && let Ok(mut app) = app.try_borrow_mut() {
                     chrome::doc_tabs(&mut app, ui);
@@ -521,7 +543,10 @@ impl VectorcraftApp {
                 let Ok(mut app) = app.try_borrow_mut() else { return };
                 let app: &mut VectorcraftApp = &mut app;
                 app.canvas.windows.area = Some(ui.available_rect_before_wrap());
-                app.canvas.windows.last_noted = std::mem::take(&mut app.canvas.windows.noted);
+                // Only the shown pass starts the frame's panes: a measuring run before it would drop the last frame's.
+                if !craft::ui::runtime::measure::active(ui.ctx()) {
+                    app.canvas.windows.last_noted = std::mem::take(&mut app.canvas.windows.noted);
+                }
                 let floats = crate::doc_windows::current_floats(app);
                 // The current window's body is in its floating window, drawn after this pane: the pane's drop catcher
                 // waits for it ([`crate::doc_windows::show`]).
@@ -634,9 +659,10 @@ impl VectorcraftApp {
         self.flush_clipboard_out();
         crate::cursors::request_busy(self, &ctx);
         // A pass egui will discard and rerun is not a presented frame: it must not become the
-        // frame-time sample.
+        // frame-time sample, and it must not issue a capture of what it drew.
         if !ctx.will_discard() {
             self.perf.frame_ms = monotonic_ms() - t0;
+            self.issue_captures(&ctx);
             // A hidden window's pass shows nothing, so the step waits for a pass the user sees.
             if step_held && !self.viewport_hidden(&ctx) {
                 crate::panels::actions::playback_shown(self, ctx.cumulative_frame_nr());
@@ -655,8 +681,56 @@ pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> Ro
     // A hand-edited preferences file must not scale the interface to nothing.
     let scaling = if prefs.ui_scaling.is_finite() && prefs.ui_scaling > 0.0 { prefs.ui_scaling as f32 } else { 1.0 };
     let mut root = RootEnv::new().theme(theme).mode(mode).accent(accent).scale(Scale::new(scaling)).tooltips(prefs.show_tool_tips);
+    root.sizes = theme::app_sizes();
     root.values.set(view::zoom_scheme(prefs, native_ppp));
     root.values.set(if prefs.scrub_numeric_fields { ScrubDrags::LabelOnly } else { ScrubDrags::Off });
+    // Number fields as production drew them: the value and its unit one run at the start ("720 pt"), percentages
+    // whole and lengths to a thousandth of a point (357.114 pt).
+    root.values.set(NumberPrecision::Measured);
+    root.values.set(NumberLook::Inline);
+    // Push buttons that ask for no look are filled tiles with no edge at rest, as production's were.
+    root.values.set(PushButtonLook::Filled);
+    // Every icon button that is on (the current tool, Snap, Guides, a panel toggle) shows production's highlight: the
+    // pressed fill (`tool_active`) with no accent edge.
+    root.values.set(ActiveLook::Pressed);
+    // A glyph that stands for a word caption ("X", "W") takes a form's colon as production drew it ("X:"); "#" and
+    // the colour channel letters stay bare.
+    root.values.set(GlyphColon::Form);
+    // A field's label that opens its options ("Opacity:", "Stroke") reads in the normal ink, underlined, as production
+    // drew it.
+    root.values.set(LinkLabelInk::Neutral);
+    // Its underline stands inside the label's rect, under the text, as production drew it.
+    root.values.set(LinkLabelUnderline::Inside);
+    // Other field labels ("X:", "Angle:", "Opacity") read in the normal ink of the values beside them, as production
+    // drew them.
+    root.values.set(CaptionInk::Normal);
+    // Menu rows, open menu bar titles and the command palette's active row show production's hover highlight.
+    root.values.set(CommandHighlight::Hover);
+    // Check boxes, radio buttons and switches that are on take the strong accent with a white mark, sliders fill their
+    // track to the value in the accent, and a dialog's Cancel is a filled button beside its accent answer.
+    root.values.set(ChoiceLook::Strong);
+    root.values.set(TrackFill::Accent);
+    root.values.set(DialogButtonLook::Filled);
+    // Sections stand apart with production's room around their dividers.
+    root.values.set(SectionRhythm::Spaced);
+    // The Properties kind line ("Ellipse") heads the sections under it, so the first draws no divider above it, as
+    // production's did.
+    root.values.set(QuietHeader::Heads);
+    // Quiet headings (the kind line, "Ellipse Properties:") stand a line of text high over their fields, as
+    // production's did.
+    root.values.set(QuietTitleRow::Text);
+    // Layers rows stand as production's: the thumbnail with a tight gap, 14 points of indent per level.
+    root.values.set(ThumbRows::Tight);
+    // The Layers Objects search field fills the filter bar up to its Filter button, as production's did.
+    root.values.set(ObjectsSearch::Fill);
+    // The menu bar's titles stand as close as production's, which share the line with the bar's other controls.
+    root.values.set(MenuTitlePad::Control);
+    // Document tabs show their title and its `*` in the label's semibold face, as production drew them.
+    root.values.set(DocumentTabLook::Semibold);
+    // A collapsed panel column's icon groups stand apart by a hairline, as production drew them.
+    root.values.set(IconGroupSeparator::Rule);
+    // New Document's preset cards show blank paper on a flat card, as production drew them.
+    root.values.set(PresetCardLook::Page);
     // A bare Tab on the canvas, or with nothing focused, toggles the panels (`window.dock`) instead of moving focus.
     root.tab_toggles_chrome = true;
     // Escape in a text field gives up its focus, reverting any typing, so the next keys are the window's.
