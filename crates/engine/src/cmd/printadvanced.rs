@@ -117,7 +117,7 @@ pub(crate) fn bitmap_notes(cmd: &str, doc: &Document, set: &PrintSettings) -> Re
     }
     let printed = vectorcraft_pdf::printed_document(doc, set);
     let regions = vectorcraft_pdf::print_regions(&printed, set).map_err(|e| pdf_error(cmd, e))?;
-    let bleed = set.bleed.of(&printed);
+    let bleed = vectorcraft_pdf::page_bleed(&set.bleed, &printed);
     let lowest = regions
         .iter()
         .map(|(_, r)| outset(*r, bleed))
@@ -133,7 +133,7 @@ pub(crate) fn bitmap_notes(cmd: &str, doc: &Document, set: &PrintSettings) -> Re
 /// without images.
 fn bitmap_document(cmd: &str, doc: &Document, set: &PrintSettings, rich_black: bool) -> Result<(Document, Option<f64>)> {
     let regions = vectorcraft_pdf::print_regions(doc, set).map_err(|e| pdf_error(cmd, e))?;
-    let bleed = set.bleed.of(doc);
+    let bleed = vectorcraft_pdf::page_bleed(&set.bleed, doc);
     let ppi = bitmap_ppi(doc, set);
     let mut art = doc.clone();
     drop_guides(&mut art.layers);

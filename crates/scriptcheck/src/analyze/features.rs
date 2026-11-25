@@ -66,7 +66,8 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                     self.menu(None, l);
                 }
             }
-            Pending::MenuString(l, s) => self.menu(t.is(")").then_some(s), l),
+            Pending::MenuString(l, s) if t.is(",") => self.pending = Pending::MenuStringComma(l, s),
+            Pending::MenuString(l, s) | Pending::MenuStringComma(l, s) => self.menu(t.is(")").then_some(s), l),
             Pending::Open(l) => {
                 if t.kind == T::Str {
                     self.open_mode(&unquote(t.text, 2), l);
@@ -123,7 +124,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         }
         match pending {
             Pending::Window(l) | Pending::WindowType(l) => self.acc.feature(FeatureId::ScriptuiWindow, l),
-            Pending::Menu(l) | Pending::MenuString(l, _) => self.menu(None, l),
+            Pending::Menu(l) | Pending::MenuString(l, _) | Pending::MenuStringComma(l, _) => self.menu(None, l),
             Pending::Setter(l, true) => self.file_setter(l),
             Pending::Open(_) | Pending::Setter(_, false) | Pending::Name(..) | Pending::None => {}
         }

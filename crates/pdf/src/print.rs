@@ -40,7 +40,7 @@ use kurbo::{Affine, Rect, Vec2};
 use serde::Serialize;
 use vectorcraft_color::cms::{self, ProfileKind};
 use vectorcraft_doc::marks::PrinterMarks;
-use vectorcraft_doc::overprint::{OverprintBlack, clear_overprints, darken_overprints};
+use vectorcraft_doc::overprint::{DiscardWhite, OverprintBlack, clear_overprints, darken_overprints};
 use vectorcraft_doc::{ColorMode, Document, Node, NodeKind};
 
 pub use layout::{MAX_COPIES_PER_SHEET, MAX_TILES, TileGrid};
@@ -411,12 +411,12 @@ fn composite_overprints(doc: &mut Document, set: &PrintSettings) {
     if set.output.mode == OutputMode::Separations || how == PrintOverprints::Preserve {
         return;
     }
-    let discard_white = doc.setup.discard_white_overprint;
+    let discard_white = DiscardWhite::of(doc);
     let symbols = doc.symbols.iter_mut().map(|s| &mut s.art);
     let nodes = doc.layers.iter_mut().chain(symbols).chain(doc.patterns.iter_mut().flat_map(|p| p.art.iter_mut()));
     for n in nodes {
         if how == PrintOverprints::Simulate {
-            darken_overprints(n, discard_white);
+            darken_overprints(n, &discard_white, &doc.images);
         }
         clear_overprints(n);
     }
@@ -485,6 +485,14 @@ impl<'a> Job<'a> {
         }
         if !postscript && !set.graphics.auto_flatness {
             setting_notes.push("a fixed flatness is not written yet: the output device flattens curves".into());
+        }
+        // PDF output embeds a subset of each font its license allows, as a saved PDF does;
+        // PostScript output follows Fonts.
+        if !postscript && set.graphics.fonts != FontDownload::Subset {
+            setting_notes.push(format!(
+                "PDF print embeds subsets of the fonts whose licenses allow it and draws the others as outlines: Fonts: {} applies to PostScript output",
+                set.graphics.fonts.label()
+            ));
         }
         Ok(Self { doc, layouts, tiles, inks, document_inks, plates, sheets, warnings, setting_notes })
     }
@@ -623,7 +631,7 @@ pub fn plan<'a>(doc: &'a Document, opts: &PrintOptions) -> Result<PrintPlan<'a>,
     let created = opts.created.or_else(vectorcraft_doc::metadata::output_time);
     let sep = Separator::new(&job.doc, set, opts.postscript);
     let plates: Vec<Document> = (0..job.plates.len()).filter_map(|p| job.ink(Some(p))).map(|i| sep.plate(&i.name)).collect();
-    let marks = set.marks.printer_marks();
+    let marks = crate::printer_marks(&set.marks);
     let sheets = job
         .sheets
         .iter()
@@ -677,7 +685,7 @@ fn upright(mut s: PlannedSheet) -> PlannedSheet {
 
 /// Print `doc` to a PDF as `opts` say.
 pub fn print(doc: &Document, opts: &PrintOptions) -> Result<PrintReport, PdfError> {
-    craft_pdf::write::guard(|| leaving_out_undecodable(doc, |left_out| print_inner(doc, opts, left_out)))
+    craft::pdf::write::guard(|| leaving_out_undecodable(doc, |left_out| print_inner(doc, opts, left_out)))
 }
 
 fn print_inner(doc: &Document, opts: &PrintOptions, left_out: &mut HashSet<String>) -> Result<PrintReport, PdfError> {

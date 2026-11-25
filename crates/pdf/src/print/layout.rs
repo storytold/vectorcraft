@@ -196,8 +196,8 @@ pub(crate) fn layout(
     warnings: &mut Vec<String>,
     setting_notes: &mut Vec<String>,
 ) -> Result<(Vec<Layout>, Vec<TileGrid>), PdfError> {
-    let marks = set.marks.printer_marks();
-    let bleed = set.bleed.of(doc);
+    let marks = crate::printer_marks(&set.marks);
+    let bleed = crate::page_bleed(&set.bleed, doc);
     let (pw, ph) = set.paper();
     let origin = set.tile_origin.placed.then_some((set.tile_origin.x, set.tile_origin.y));
     let (mut pages, mut grids) = (vec![], vec![]);
