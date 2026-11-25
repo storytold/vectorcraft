@@ -1,56 +1,12 @@
-use super::tiles::{describe, draw_registration, pattern_thumb};
-use super::{
-    Document, Entry, Paint, PanelDrag, REGISTRATION, Rect, Response, Sense, Stroke, StrokeKind, SwatchRows, Tokens, Ui, Value, VectorcraftApp, json,
-    pos2, pstate, set_pstate, swatch_params, swatch_tile, vec2,
-};
+use std::sync::{Arc, Weak};
 
-/// The swatches and colour groups selected in the panel, in click order, without names that no
-/// longer exist (deleted, renamed or undone).
-pub(super) fn selection(app: &VectorcraftApp, ui: &Ui) -> Vec<String> {
-    let Some(st) = app.session.active() else { return vec![] };
-    let mut names: Vec<String> = pstate(ui.ctx(), "swatch-selected");
-    names.retain(|n| n == REGISTRATION || st.doc.swatch_name_taken(n));
-    names
-}
-
-/// The names the panel highlights: `sel` plus the swatches of selected colour groups (clicking a
-/// folder selects the whole group).
-pub(super) fn highlighted<'a>(d: &'a Document, sel: &'a [String]) -> Vec<&'a str> {
-    let mut out: Vec<&str> = sel.iter().map(String::as_str).collect();
-    for g in d.swatch_groups.iter().filter(|g| sel.contains(&g.name)) {
-        out.extend(g.swatches.iter().map(|w| w.name.as_str()));
-    }
-    out
-}
-
-/// The selection after a click on `name`: Cmd/Ctrl toggles it, Shift extends from the last clicked
-/// name (kept in panel state `anchor_key`) over `order` (the names as displayed), a plain click
-/// selects it alone.
-pub(crate) fn click_selection(ui: &Ui, anchor_key: &str, mut sel: Vec<String>, order: &[&str], name: &str, m: egui::Modifiers) -> Vec<String> {
-    let anchor: String = pstate(ui.ctx(), anchor_key);
-    let pos = |n: &str| order.iter().position(|o| *o == n);
-    if m.shift
-        && let (Some(a), Some(b)) = (pos(&anchor), pos(name))
-    {
-        for n in &order[a.min(b)..=a.max(b)] {
-            if !sel.iter().any(|s| s == n) {
-                sel.push(n.to_string());
-            }
-        }
-        return sel;
-    }
-    set_pstate(ui.ctx(), anchor_key, name.to_string());
-    if !m.command {
-        return vec![name.to_string()];
-    }
-    match sel.iter().position(|s| s == name) {
-        Some(i) => {
-            sel.remove(i);
-        }
-        None => sel.push(name.to_string()),
-    }
-    sel
-}
+use super::{Document, Paint, PanelDrag, REGISTRATION, Swatch, Value, VectorcraftApp, json, name_of, swatch_params};
+use crate::panel_drag::SwatchRows;
+use craft::color_ui::ui::SwatchKey;
+use craft::keymap::Mods;
+use craft::ui::contract::{DropAt, ReorderMove};
+use vectorcraft_color::SwatchGroup;
+use vectorcraft_engine::{DocState, History, HistoryEntry};
 
 /// A drag released on the panel.
 pub(super) enum Drop {
@@ -72,190 +28,289 @@ pub(super) enum Drop {
 }
 
 impl Drop {
-    /// What releasing `d` before or `after` row `target` (`None`: at the end) does: move the rows
-    /// it carries (with Alt held, `replace`, a swatch grabbed may replace `target`), make a swatch of
-    /// a paint dragged from elsewhere (a spot color with Cmd/Ctrl held, `spot`), or a pattern swatch
-    /// of art dragged off the canvas (appearances: nothing).
-    fn of(d: &PanelDrag, target: Option<String>, after: bool, replace: bool, spot: bool) -> Option<Self> {
+    /// What releasing `d` before or `after` row `target` (`None`: at the end) with `mods` held does:
+    /// move the rows it carries (Alt: a swatch grabbed may replace `target`), make a swatch of a
+    /// paint dragged from elsewhere (Cmd/Ctrl: a spot color), or a pattern swatch of art dragged off
+    /// the canvas (appearances: nothing).
+    fn of(d: &PanelDrag, target: Option<String>, after: bool, mods: Mods) -> Option<Self> {
         match d {
             PanelDrag::Paint { rows: Some(r), .. } => {
-                let with = (replace && !r.groups).then(|| r.grabbed.clone());
+                let with = (mods.alt && !r.groups).then(|| r.grabbed.clone());
                 Some(Drop::Move { names: r.names.clone(), target, after, with })
             }
-            PanelDrag::Paint { paint, .. } => Some(Drop::New { paint: paint.clone(), target, replace, spot }),
-            PanelDrag::Art(ids) => Some(Drop::Pattern { ids: ids.iter().map(|id| id.0).collect(), target, replace }),
+            PanelDrag::Paint { paint, .. } => Some(Drop::New { paint: paint.clone(), target, replace: mods.alt, spot: mods.cmd }),
+            // PLAN: assumed `Art { document: u64, ids: Vec<NodeId> }` (widgets-w13).
+            PanelDrag::Art { ids, .. } => Some(Drop::Pattern { ids: ids.iter().map(|id| id.0).collect(), target, replace: mods.alt }),
             _ => None,
         }
     }
 }
 
-/// Whether the panel takes drag `d`: paints and art dragged off the canvas, not the Appearance
-/// panel's thumbnail.
-fn takes(d: &PanelDrag) -> bool {
-    matches!(d, PanelDrag::Paint { .. } | PanelDrag::Art(_))
-}
-
-/// The drag held over `resp`, if the panel takes it ([`takes`]).
-fn held(resp: &Response) -> Option<std::sync::Arc<PanelDrag>> {
-    resp.dnd_hover_payload::<PanelDrag>().filter(|d| takes(d))
-}
-
-/// The drag in progress, if the panel takes it ([`takes`]), wherever the pointer is.
-fn dragged(ui: &Ui) -> Option<std::sync::Arc<PanelDrag>> {
-    egui::DragAndDrop::payload::<PanelDrag>(ui.ctx()).filter(|d| takes(d))
-}
-
-/// Where the primary button came up this frame and the modifiers held then, when that was over
-/// `resp` with no other layer on top (the test [`egui::Context::rect_contains_pointer`] makes of the
-/// pointer). A drop lands there with those modifiers, even when the pointer moved on or a key was
-/// let go later in the same frame.
-fn released_over(ui: &Ui, resp: &Response) -> Option<(egui::Pos2, egui::Modifiers)> {
-    let up = ui.input(|i| {
-        i.events.iter().find_map(|e| match e {
-            egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, modifiers } => Some((*pos, *modifiers)),
-            _ => None,
-        })
-    })?;
-    let ctx = ui.ctx();
-    let rect = ctx.layer_transform_to_global(resp.layer_id).map_or(resp.interact_rect, |t| t * resp.interact_rect);
-    (rect.is_positive() && rect.contains(up.0) && ctx.layer_id_at(up.0) == Some(resp.layer_id)).then_some(up)
-}
-
-/// The drag a tile or row of `e` starts, moving rows `names`. Colour groups have no paint of their
-/// own (the chip under the pointer draws Registration's mark for Registration).
-pub(super) fn drag_of(e: &Entry, names: Vec<String>) -> PanelDrag {
-    let paint = match e {
-        Entry::Swatch { paint, .. } => paint.clone(),
-        Entry::Registration => Paint::registration(),
-        Entry::Folder(_) => Paint::None,
+/// The drag a row of `key` starts in document `start`, moving rows `names`. Colour groups have no
+/// paint of their own (the chip under the pointer draws Registration's mark for Registration).
+pub(super) fn drag_of(start: &DragStart, key: &SwatchKey, names: Vec<String>) -> PanelDrag {
+    let d = &start.doc;
+    let name = name_of(key);
+    let (paint, params) = match key {
+        SwatchKey::Swatch(_) if name == REGISTRATION => (Paint::registration(), swatch_params(d, name)),
+        SwatchKey::Swatch(_) => match d.swatch(name) {
+            Some(w) => (w.paint.clone(), swatch_params(d, name)),
+            None => (Paint::None, Value::Null),
+        },
+        _ => (Paint::None, Value::Null),
     };
-    let rows = SwatchRows { grabbed: e.name().to_string(), names, groups: e.is_folder() };
-    PanelDrag::Paint { paint, params: swatch_params(e).unwrap_or_default(), rows: Some(rows), library: None }
+    let held = Arc::new(start.rows(&names));
+    let rows = SwatchRows { grabbed: name.to_string(), names, groups: matches!(key, SwatchKey::Group(_)), held };
+    PanelDrag::Paint { paint, params, rows: Some(rows), library: None }
 }
 
-/// What the tiles or rows saw this frame.
-#[derive(Default)]
-pub(super) struct TileEvents {
-    pub(super) clicked: Option<(Entry, egui::Modifiers)>,
-    /// Double-click opens the swatch's editor (Swatch Options, Gradient panel or pattern editing),
-    /// or Edit or Apply Color Group on a colour group.
-    pub(super) edit: Option<Entry>,
-    pub(super) drop: Option<Drop>,
-    /// A drag is held over a tile or row.
-    over: bool,
-    /// A drag of swatches or color groups started on a tile or row.
-    pub(super) started: bool,
+/// A row dragged from the list as it was when the drag started: its swatch or its colour group.
+#[derive(Clone, PartialEq)]
+enum HeldRow {
+    Swatch(Swatch),
+    Group(SwatchGroup),
 }
 
-/// Clicks, double-clicks, tooltips and drag and drop of the tile or row `resp` of entry `e`
-/// (`items`: the panel's rows, `sel`: its selection, `list`: rows stack downwards). A primary-button
-/// drag from it starts a [`PanelDrag`] carrying the rows it moves; see [`tile_drop`] for drags held
-/// over it.
-pub(super) fn tile_input(ui: &Ui, resp: Response, e: &Entry, items: &[Entry], sel: &[String], list: bool, ev: &mut TileEvents) {
-    let name = e.name();
-    if matches!(e, Entry::Swatch { .. } | Entry::Folder(_)) && resp.double_clicked() {
-        ev.edit = Some(e.clone());
+impl HeldRow {
+    /// Row `name` of `d`: its swatch, else the colour group of that name.
+    fn of(d: &Document, name: &str) -> Option<Self> {
+        match d.swatch(name) {
+            Some(w) => Some(HeldRow::Swatch(w.clone())),
+            None => d.swatch_groups.iter().find(|g| g.name == name).cloned().map(HeldRow::Group),
+        }
     }
-    if resp.drag_started_by(egui::PointerButton::Primary) {
-        let with_sel = sel.iter().any(|s| s == name);
-        let names = items
+    /// Whether `d` holds this row unchanged.
+    fn unchanged_in(&self, d: &Document) -> bool {
+        match self {
+            HeldRow::Swatch(w) => d.swatch(&w.name) == Some(w),
+            HeldRow::Group(g) => d.swatch_groups.iter().any(|x| x == g),
+        }
+    }
+}
+
+/// The newest undo step of `st` and the one under it, and the next redo step and the one under it
+/// ([`HistoryEntry::serial`]), 0 for none.
+fn steps(st: &DocState) -> [u64; 4] {
+    let serial = |list: &[HistoryEntry], back: usize| list.len().checked_sub(back).and_then(|i| list.get(i)).map_or(0, HistoryEntry::serial);
+    let h = &st.history;
+    [serial(&h.undo, 1), serial(&h.undo, 2), serial(&h.redo, 1), serial(&h.redo, 2)]
+}
+
+/// A document as a drag from the list finds it: its `uid`, its state, its newest steps ([`steps`])
+/// and the state undoing the newest undo step gives back (that step's document).
+#[derive(Clone)]
+pub(super) struct DragStart {
+    uid: u64,
+    doc: Arc<Document>,
+    steps: [u64; 4],
+    back: Option<Arc<Document>>,
+}
+
+impl DragStart {
+    pub(super) fn of(st: &DocState) -> Self {
+        let back = st.history.undo.last().map(|e| Arc::clone(&e.doc));
+        DragStart { uid: st.uid, doc: Arc::clone(&st.doc), steps: steps(st), back }
+    }
+
+    /// Rows `names` as this document holds them.
+    fn rows(&self, names: &[String]) -> HeldRows {
+        let rows: Vec<_> = names.iter().map(|n| (n.clone(), HeldRow::of(&self.doc, n))).collect();
+        let back = rows.iter().map(|(_, r)| r.as_ref().zip(self.back.as_deref()).is_some_and(|(r, d)| r.unchanged_in(d))).collect();
+        HeldRows { uid: self.uid, doc: Arc::downgrade(&self.doc), steps: self.steps, rows, back }
+    }
+}
+
+/// The rows a drag from the list carries, in the order of its names, and the document (`uid`) and
+/// the state and undo history they were last checked against. A row is `None` once a state of the
+/// document since the drag started did not hold it unchanged: deleted, edited, or deleted and made
+/// again under its name, also with the same paint.
+#[derive(Clone)]
+pub(crate) struct HeldRows {
+    uid: u64,
+    doc: Weak<Document>,
+    /// The newest undo step of the document and the one under it, and the next redo step and the
+    /// one under it ([`steps`]).
+    steps: [u64; 4],
+    rows: Vec<(String, Option<HeldRow>)>,
+    /// For each row, whether the document undoing the newest step gives back (that step's
+    /// document) holds it unchanged.
+    back: Vec<bool>,
+}
+
+impl PartialEq for HeldRows {
+    fn eq(&self, other: &Self) -> bool {
+        self.uid == other.uid && self.doc.ptr_eq(&other.doc) && self.steps == other.steps && self.rows == other.rows && self.back == other.back
+    }
+}
+
+impl std::fmt::Debug for HeldRows {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let held: Vec<(&str, bool)> = self.rows.iter().map(|(n, r)| (n.as_str(), r.is_some())).collect();
+        f.debug_struct("HeldRows").field("uid", &self.uid).field("steps", &self.steps).field("held", &held).finish_non_exhaustive()
+    }
+}
+
+/// `held` checked against every state document `st` passed through since it was last checked, and
+/// the current one. Those states are the ones the redo steps made since then keep (the states an
+/// undo left), and:
+/// - While the newest undo step of then is still in the history, the states the undo steps made
+///   since then keep.
+/// - After an undo of that step, or an edit merged into it, the state before that step and the
+///   states the undo steps made since then keep.
+///
+/// Otherwise (more than one step undone, or steps dropped past the history's limits) the states in
+/// between are not known, and every row is left out of the drop. The panel checks the rows on every
+/// pass and after every command the app runs ([`follow_drag`]), so only the steps of one command go
+/// unseen. One undo step is one change: the states between the commands of a `command.batch` are
+/// not kept, and a row the batch leaves as it found it stays in the drop.
+fn checked(held: HeldRows, st: &DocState) -> HeldRows {
+    let now = steps(st);
+    let same = std::ptr::eq(held.doc.as_ptr(), Arc::as_ptr(&st.doc));
+    if same && held.steps == now {
+        return held;
+    }
+    let (undo, redo) = (&st.history.undo, &st.history.redo);
+    // Where the steps made after the step with `serial` start in `list`: 0 for none.
+    let after = |list: &[HistoryEntry], serial: u64| {
+        if serial == 0 { Some(0) } else { list.iter().rposition(|e| e.serial() == serial).map(|i| i + 1) }
+    };
+    let [newest, below, next, further] = held.steps;
+    // The redo steps made since: above the next redo step of then, or above the one under it once a
+    // redo took that step.
+    let left = redo.get(after(redo, next).or_else(|| after(redo, further)).unwrap_or(0)..).unwrap_or_default();
+    // The states in between, and whether they start with the state an undo of the newest step gave back.
+    let (between, undone) = match after(undo, newest) {
+        // With no step before it, the first step keeps the last checked state, unless steps were
+        // dropped past the history's limits, which leave at least that many steps.
+        Some(0) => {
+            let kept = same
+                || undo.len() < st.history.limit.min(History::MIN_STEPS)
+                || undo.first().is_none_or(|e| std::ptr::eq(held.doc.as_ptr(), Arc::as_ptr(&e.doc)));
+            (kept.then_some(undo.as_slice()), false)
+        }
+        Some(i) => (undo.get(i..), false),
+        None => (after(undo, below).and_then(|i| undo.get(i..)), true),
+    };
+    let unchanged = |r: &HeldRow, b: &[HistoryEntry]| b.iter().chain(left).all(|e| r.unchanged_in(&e.doc)) && r.unchanged_in(&st.doc);
+    let rows: Vec<_> = held
+        .rows
+        .into_iter()
+        .zip(held.back)
+        .map(|((name, row), back)| (name, row.filter(|r| (back || !undone) && between.is_some_and(|b| unchanged(r, b)))))
+        .collect();
+    let last = undo.last();
+    let back = rows.iter().map(|(_, r)| r.as_ref().zip(last).is_some_and(|(r, e)| r.unchanged_in(&e.doc))).collect();
+    HeldRows { uid: held.uid, doc: Arc::downgrade(&st.doc), steps: now, rows, back }
+}
+
+/// The names of drag `r` that the active document has held unchanged since the drag started
+/// ([`checked`]), in the drag's order. Empty when the drag started in another document. The panel
+/// keeps what it found for the drag, so the next check starts from there.
+pub(super) fn follow(app: &mut VectorcraftApp, r: &SwatchRows) -> Vec<String> {
+    let Some(st) = app.session.active() else { return vec![] };
+    if st.uid != r.held.uid {
+        return vec![];
+    }
+    let kept = &mut app.ui.swatches_panel.drag;
+    let from = match kept {
+        Some((start, now)) if Arc::ptr_eq(start, &r.held) => now.clone(),
+        _ => (*r.held).clone(),
+    };
+    let now = checked(from, st);
+    let names = if now.rows.len() == r.names.len() {
+        r.names
             .iter()
-            .filter(|x| x.is_folder() == e.is_folder() && (x.name() == name || (with_sel && sel.iter().any(|s| s == x.name()))))
-            .map(|x| x.name().to_string())
-            .collect();
-        egui::DragAndDrop::set_payload(ui.ctx(), drag_of(e, names));
-        ev.started = true;
-    }
-    tile_drop(ui, &resp, e, list, ev);
-    // The default swatches' names show in the UI's language; the document keeps them as they are.
-    let shown = crate::i18n::t_name("swatch", name);
-    let resp = match e {
-        Entry::Folder(_) => resp.on_hover_text(crate::i18n::fmt(tl!("Color Group: {name}"), &[("name", shown)])),
-        Entry::Swatch { paint, global, spot, .. } if list => resp.on_hover_ui(|ui| {
-            ui.label(format!("{shown} ({})", describe(paint, *global, *spot)));
-        }),
-        _ => resp.on_hover_text(shown),
+            .zip(&now.rows)
+            .filter(|(n, (h, row))| *n == h && row.as_ref().is_some_and(|row| row.unchanged_in(&st.doc)))
+            .map(|(n, _)| n.clone())
+            .collect()
+    } else {
+        vec![]
     };
-    // Only the first click of a run of quick clicks applies and selects the swatch. The second
-    // opens the editor, and the later ones (counted as triple clicks) do nothing. Pattern editing
-    // selects the tile art, and a later click would paint it with the pattern itself.
-    if resp.clicked() && !resp.double_clicked() && !resp.triple_clicked() {
-        ev.clicked = Some((e.clone(), ui.input(|i| i.modifiers)));
+    *kept = Some((Arc::clone(&r.held), now));
+    names
+}
+
+/// Checks the rows being dragged from the list against the active document after a command ran
+/// ([`follow`]), so that the commands after it cannot replace one unseen.
+pub(crate) fn follow_drag(app: &mut VectorcraftApp) {
+    let Some(ctx) = app.ui_ctx.clone() else { return };
+    if let Some(PanelDrag::Paint { rows: Some(r), .. }) = craft::ui::runtime::drag::active::<PanelDrag>(&ctx).as_deref() {
+        follow(app, r);
     }
 }
 
-/// A drag held over the tile or row `resp` of entry `e` shows where it would land (before or after
-/// it by the pointer's half, or into a folder), by where the pointer is and the keys held now. A
-/// release over it ([`released_over`]) sets the drop, by where the button came up and the keys held
-/// then.
-fn tile_drop(ui: &Ui, resp: &Response, e: &Entry, list: bool, ev: &mut TileEvents) {
-    let up = released_over(ui, resp);
-    let hover = held(resp);
-    let Some(d) = hover.clone().or_else(|| up.and_then(|_| dragged(ui))) else { return };
-    let take = || egui::DragAndDrop::take_payload::<PanelDrag>(ui.ctx()).is_some();
-    // Art held with Alt over a pattern swatch would replace its tile art, and the swatch is
-    // outlined; other art goes to the list (see [`zone_input`]).
-    if let PanelDrag::Art(_) = &*d {
-        if !matches!(e, Entry::Swatch { paint: Paint::Pattern { .. }, .. }) {
-            return;
+/// The row `at` names and whether the drop lands after it: onto a row it is that row; in a gap it is
+/// the row under the pointer, after it when the gap lies beyond its position in `shown`; a gap with
+/// no row under the pointer is the end of the list.
+fn place(shown: &[SwatchKey], at: &DropAt<SwatchKey>) -> (Option<String>, bool) {
+    match at {
+        DropAt::Onto(k) => (Some(name_of(k).to_string()), false),
+        DropAt::Gap { key: Some(k), insert, .. } => {
+            let after = shown.iter().position(|s| name_of(s) == name_of(k)).is_some_and(|p| *insert > p);
+            (Some(name_of(k).to_string()), after)
         }
-        if hover.is_some() && crate::panels::alt_held(ui) {
-            ev.over = true;
-            let t = Tokens::get(ui.ctx());
-            ui.painter().rect_stroke(resp.rect.expand(1.0), 0.0, Stroke::new(1.5, t.accent), StrokeKind::Outside);
-        }
-        if up.is_some_and(|(_, m)| m.alt) && take() {
-            ev.drop = Drop::of(&d, Some(e.name().to_string()), false, true, false);
-        }
-        return;
-    }
-    let PanelDrag::Paint { rows, .. } = &*d else { return };
-    let name = e.name();
-    if hover.is_some() {
-        ev.over = true;
-    }
-    // Swatches dropped on one of themselves stay where they are.
-    if rows.as_ref().is_some_and(|r| r.names.iter().any(|n| n == name)) {
-        if up.is_some() {
-            take();
-        }
-        return;
-    }
-    let r = resp.rect;
-    let side = |at: egui::Pos2| if list { at.y > r.center().y } else { at.x > r.center().x };
-    if hover.is_some() {
-        let t = Tokens::get(ui.ctx());
-        let after = side(ui.input(|i| i.pointer.interact_pos()).unwrap_or(r.center()));
-        // A paint from elsewhere, or swatches over a folder, go into it; otherwise a bar marks the slot.
-        if rows.as_ref().is_none_or(|d| e.is_folder() && !d.groups) {
-            ui.painter().rect_stroke(r.expand(1.0), 0.0, Stroke::new(1.5, t.accent), StrokeKind::Outside);
-        } else if list {
-            let y = if after { r.bottom() } else { r.top() };
-            ui.painter().line_segment([pos2(r.left(), y), pos2(r.right(), y)], Stroke::new(2.0, t.accent));
-        } else {
-            let x = if after { r.right() + 0.75 } else { r.left() - 0.75 };
-            ui.painter().line_segment([pos2(x, r.top() - 1.0), pos2(x, r.bottom() + 1.0)], Stroke::new(2.0, t.accent));
-        }
-    }
-    if let Some((at, m)) = up
-        && take()
-    {
-        ev.drop = Drop::of(&d, Some(name.to_string()), side(at), m.alt, m.command);
+        _ => (None, false),
     }
 }
 
-/// Drops between and after the tiles (`zone`: the list's viewport) go to the end of the ungrouped
-/// swatches (colour groups to the end of the groups); the list is outlined while one is held there.
-/// A tile that took the release first leaves nothing to drop here.
-pub(super) fn zone_input(ui: &Ui, zone: &Response, ev: &mut TileEvents) {
-    if held(zone).is_some() && !ev.over {
-        ui.painter().rect_stroke(zone.rect, 0.0, Stroke::new(1.5, Tokens::get(ui.ctx()).accent), StrokeKind::Inside);
+/// `drag` dropped onto a swatch or between rows of the `shown` list (ap.AP2 `Dropped`); a gap with no
+/// row under the pointer is the end of the list.
+pub(super) fn on_dropped(app: &mut VectorcraftApp, shown: &[SwatchKey], at: &DropAt<SwatchKey>, drag: &PanelDrag, mods: Mods) {
+    let (target, after) = place(shown, at);
+    if let Some(drop) = Drop::of(drag, target, after, mods) {
+        apply_drop(app, drop);
     }
-    if let Some((_, m)) = released_over(ui, zone)
-        && let Some(d) = dragged(ui)
-        && egui::DragAndDrop::take_payload::<PanelDrag>(ui.ctx()).is_some()
+}
+
+/// A reorder of the browser: one `swatch.move`, one undo step. `to` counts the `shown` rows left
+/// once the moved ones are taken out, so it names the row the move lands before (or the end).
+pub(super) fn on_reorder(app: &mut VectorcraftApp, shown: &[SwatchKey], mv: &ReorderMove<SwatchKey>) {
+    let Some(d) = app.session.active().map(|st| &st.doc) else { return };
+    let names: Vec<String> = mv.keys.iter().map(|k| name_of(k).to_string()).collect();
+    let rest: Vec<&SwatchKey> = shown.iter().filter(|s| !mv.keys.iter().any(|k| name_of(k) == name_of(s))).collect();
+    let (target, after) = match rest.get(mv.to) {
+        Some(k) => (Some(name_of(k)), false),
+        None => (rest.last().map(|k| name_of(k)), true),
+    };
+    let target = target.or_else(|| mv.parent.as_ref().map(name_of));
+    if let Some(p) = move_params(d, &names, target, after)
+        && let Err(e) = app.run("swatch.move", p)
     {
-        ev.drop = Drop::of(&d, None, false, false, m.command);
+        app.status(e);
+    }
+}
+
+/// The footer buttons a drag can be released on.
+pub(super) enum FooterTarget {
+    /// New Swatch: the dragged swatches are duplicated.
+    New,
+    /// Delete Swatch: the dragged swatches and groups are deleted after asking.
+    Delete,
+}
+
+/// Swatches or groups dragged from the list and released on a footer button (ap.AP8 `FooterDrop`):
+/// New Swatch duplicates the swatches among them, Delete Swatch asks to delete them as a click on
+/// the button does. Only rows the active document has held unchanged since the drag started count
+/// ([`follow`]): a row deleted, edited or replaced under its name meanwhile, and every row of a drag
+/// started in another document, is left alone. Other drags are left to their own targets.
+pub(super) fn on_footer_drop(app: &mut VectorcraftApp, target: FooterTarget, drag: &PanelDrag) {
+    let PanelDrag::Paint { rows: Some(r), .. } = drag else { return };
+    let held = follow(app, r);
+    match target {
+        FooterTarget::Delete => {
+            let names = super::actions::deletable(app, &held);
+            if !names.is_empty() {
+                super::actions::delete(app, names, false);
+            }
+        }
+        FooterTarget::New => {
+            let Some(st) = app.session.active() else { return };
+            let names: Vec<String> = held.into_iter().filter(|n| st.doc.swatch(n).is_some_and(|w| !w.is_reserved())).collect();
+            if !names.is_empty() {
+                super::actions::duplicate(app, &names);
+            }
+        }
     }
 }
 
@@ -377,70 +432,4 @@ pub(super) fn apply_drop(app: &mut VectorcraftApp, drop: Drop) {
     if let Err(e) = app.run(cmd, params) {
         app.status(e);
     }
-}
-
-/// While a panel drags something onto art, a chip follows the pointer: the dragged paint (swatches,
-/// a Fill/Stroke proxy, a Recent Colors chip, the Gradient panel's thumbnail), the fill of the
-/// object whose appearance the Appearance panel's thumbnail carries (or of the first art dragged
-/// off the canvas), or the thumbnail of a dragged graphic style.
-pub(crate) fn drag_preview(app: &VectorcraftApp, ctx: &egui::Context) {
-    let Some(d) = egui::DragAndDrop::payload::<PanelDrag>(ctx) else { return };
-    let fill_of = |id: &vectorcraft_doc::NodeId| app.session.active().and_then(|st| st.doc.node(*id)).map(|n| n.appearance.fill_paint());
-    let (paint, registration) = match &*d {
-        // Colour groups paint nothing.
-        PanelDrag::Paint { params, .. } if params.is_null() => return,
-        PanelDrag::Paint { paint, rows, .. } => (std::borrow::Cow::Borrowed(paint), rows.as_ref().is_some_and(|r| r.grabbed == REGISTRATION)),
-        PanelDrag::Appearance(id) => match fill_of(id) {
-            Some(p) => (std::borrow::Cow::Owned(p), false),
-            None => return,
-        },
-        PanelDrag::Art(ids) => match ids.first().and_then(fill_of) {
-            Some(p) => (std::borrow::Cow::Owned(p), false),
-            None => return,
-        },
-        PanelDrag::GraphicStyle(name) => return pointer_chip(ctx, |ui, r| crate::panels::graphic_styles::paint_style(app, ui, r, name)),
-        // Drawn from the document it was dragged from, whichever document is active now.
-        PanelDrag::Symbol { document, name } => match app.session.documents().iter().find(|st| st.uid == *document) {
-            Some(st) => {
-                return pointer_chip(ctx, |ui, r| crate::panels::symbols::chip(ui, &st.doc, &crate::panels::symbols::document_symbols(st), r, name));
-            }
-            None => return,
-        },
-        PanelDrag::LibrarySymbol { library, name } => match vectorcraft_engine::cmd::symbollib::library(&app.session, library) {
-            Some((_, lib)) => {
-                return pointer_chip(ctx, |ui, r| {
-                    crate::panels::symbols::chip(ui, &lib.doc, &crate::panels::symbols::library_symbols(&lib), r, name)
-                });
-            }
-            None => return,
-        },
-        PanelDrag::Brush { name, .. } => match app.session.active() {
-            Some(st) => return pointer_chip(ctx, |ui, r| crate::panels::brushes::document_chip(ui, r, st, name)),
-            None => return,
-        },
-        PanelDrag::LibraryBrush { library, name } => match vectorcraft_engine::cmd::brushlib::library(&app.session, library) {
-            Some((_, lib)) => return pointer_chip(ctx, |ui, r| crate::panels::brushes::library_chip(ui, r, &lib, name)),
-            None => return,
-        },
-        PanelDrag::LibraryGraphic { library, item } => return pointer_chip(ctx, |ui, r| crate::panels::libraries::chip(app, ui, r, library, item)),
-        PanelDrag::LibraryItem { .. } | PanelDrag::LibraryGroup { .. } => return,
-    };
-    pointer_chip(ctx, |ui, r| {
-        if registration {
-            draw_registration(ui, r);
-        } else {
-            swatch_tile(ui, r, &paint, false, false);
-            pattern_thumb(app, ui, r.shrink(1.0), &paint);
-        }
-    });
-}
-
-/// A 16-point chip `draw` paints, following the pointer.
-fn pointer_chip(ctx: &egui::Context, draw: impl FnOnce(&Ui, Rect)) {
-    let Some(at) = ctx.pointer_hover_pos() else { return };
-    let area = egui::Area::new(egui::Id::unique("swatch-drag-preview")).order(egui::Order::Tooltip).fixed_pos(at + vec2(12.0, 12.0));
-    area.interactable(false).show(ctx, |ui| {
-        let (r, _) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::hover());
-        draw(ui, r);
-    });
 }

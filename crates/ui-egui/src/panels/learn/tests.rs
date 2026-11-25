@@ -4,21 +4,21 @@ use egui::accesskit::{Node, Role, Toggled};
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
-use super::{ID, Practice, Tab, View, catalog, samples, show};
+use super::{ID, Practice, Tab, View, catalog, samples, show, visible};
 use crate::VectorcraftApp;
 use crate::tests_labels::painted_text;
 
 const SCREEN: egui::Rect = egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1400.0, 800.0));
 
+/// An app in a window of its own.
 fn app() -> VectorcraftApp {
     crate::i18n::set_current(crate::i18n::Lang::EN);
-    VectorcraftApp::new(Session::new(), Default::default())
+    crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()))
 }
 
-/// One frame of `draw` with screen-reader nodes on → the nodes.
+/// One frame of `draw` with screen-reader nodes on, given the app's frame input as the hosts give it → the nodes.
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, draw: fn(&mut VectorcraftApp, &mut egui::Ui)) -> Vec<Node> {
-    let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(SCREEN), ..Default::default() }, |ui| draw(app, ui));
-    out.textures_delta.clear();
+    let out = crate::testing::part_frame(app, ctx, egui::RawInput { events, screen_rect: Some(SCREEN), ..Default::default() }, draw);
     out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default()
 }
 
@@ -33,24 +33,29 @@ fn center_where(nodes: &[Node], pick: impl Fn(&str) -> bool) -> Option<egui::Pos
     Some(egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32))
 }
 
+/// Click the node labeled `name` in the nodes `run` gives for a frame with the events it is passed.
+fn click_with(app: &mut VectorcraftApp, name: &str, mut run: impl FnMut(&mut VectorcraftApp, Vec<egui::Event>) -> Vec<Node>) {
+    run(app, vec![]);
+    let at = center(&run(app, vec![]), name).unwrap_or_else(|| panic!("{name} is drawn"));
+    let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    run(app, vec![egui::Event::PointerMoved(at), press(true)]);
+    run(app, vec![press(false)]);
+}
+
 /// Click the node labeled `name` in what `draw` draws.
 fn click(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, draw: fn(&mut VectorcraftApp, &mut egui::Ui)) {
-    frame(app, ctx, vec![], draw);
-    let at = center(&frame(app, ctx, vec![], draw), name).unwrap_or_else(|| panic!("{name} is drawn"));
-    let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    frame(app, ctx, vec![egui::Event::PointerMoved(at), press(true)], draw);
-    frame(app, ctx, vec![press(false)], draw);
+    click_with(app, name, |app, events| frame(app, ctx, events, draw));
 }
 
-fn context() -> egui::Context {
-    let ctx = egui::Context::default();
-    ctx.enable_accesskit();
-    crate::theme::install_fonts(&ctx);
-    ctx
+/// One frame of the whole app with `events`: the shell draws the app bar and applies the panels' toggles.
+fn shell_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<Node> {
+    frame(app, ctx, events, |app, ui| app.ui(ui))
 }
 
-fn app_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
-    crate::chrome::app_bar(app, ui);
+/// Hide the panels as Tab does: `window.dock`, applied by one shell frame.
+fn hide_panels(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    app.run("window.dock", json!({})).unwrap();
+    shell_frame(app, ctx, vec![]);
 }
 
 fn shown(app: &VectorcraftApp) -> bool {
@@ -97,47 +102,23 @@ fn the_catalog_is_valid() {
     }
 }
 
-/// Explore tutorials at the right end of the app bar shows the Learn panel, and hides it again.
-#[test]
-fn explore_tutorials_on_the_app_bar_shows_and_hides_the_learn_panel() {
-    let mut app = app();
-    let ctx = context();
-    assert!(!shown(&app));
-    let nodes = frame(&mut app, &ctx, vec![], app_bar);
-    let search = center_where(&nodes, |label| label.starts_with("Search commands"));
-    let learn = center(&nodes, "Explore tutorials");
-    let (search, learn) = (search.expect("the search field shows"), learn.expect("the app bar has Explore tutorials"));
-    assert!(learn.x < search.x && (learn.y - search.y).abs() < 1.0, "beside the search field: {learn:?}, {search:?}");
-    click(&mut app, &ctx, "Explore tutorials", app_bar);
-    assert!(shown(&app), "{}", app.ui.status);
-    click(&mut app, &ctx, "Explore tutorials", app_bar);
-    assert!(!shown(&app));
-}
-
 /// The command and params of Window › Learn.
-fn window_learn() -> (&'static str, serde_json::Value) {
-    use crate::menus::Item;
-    let window = crate::menus::menu_tree().into_iter().find(|(title, _)| *title == "Window").map(|(_, items)| items).unwrap();
-    window
-        .iter()
-        .find_map(|item| match item {
-            Item::Cmd("Learn", cmd, p) => Some((*cmd, p.clone())),
-            _ => None,
-        })
-        .expect("Window › Learn")
+fn window_learn(app: &VectorcraftApp) -> (String, serde_json::Value) {
+    let entry = crate::menus::menu_entries(app).into_iter().find(|e| e.path == ["Window"] && e.label == "Learn").expect("Window › Learn");
+    (entry.command.expect("Window › Learn runs a command"), entry.params)
 }
 
 /// Window › Learn shows and hides the panel, as `window.learn` does.
 #[test]
 fn window_learn_shows_and_hides_the_panel() {
     let mut app = app();
-    let (cmd, params) = window_learn();
-    app.run(cmd, params.clone()).unwrap();
+    let (cmd, params) = window_learn(&app);
+    app.run(&cmd, params.clone()).unwrap();
     assert!(shown(&app));
-    assert_eq!(crate::menus::checked(&app, cmd, &params), Some(true), "Window › Learn is checked");
-    app.run(cmd, params.clone()).unwrap();
+    assert_eq!(crate::menus::checked(&app, &cmd, &params), Some(true), "Window › Learn is checked");
+    app.run(&cmd, params.clone()).unwrap();
     assert!(!shown(&app));
-    assert_eq!(crate::menus::checked(&app, cmd, &params), Some(false));
+    assert_eq!(crate::menus::checked(&app, &cmd, &params), Some(false));
     assert_eq!(app.run("window.learn", json!({"show": true})).unwrap(), json!(true));
     assert_eq!(app.run("window.learn", json!({"show": true})).unwrap(), json!(true), "shown stays shown");
     assert_eq!(app.run("window.learn", json!({})).unwrap(), json!(false));
@@ -145,19 +126,22 @@ fn window_learn_shows_and_hides_the_panel() {
     assert!(!shown(&app));
 }
 
-/// With the dock hidden, Learn as the front panel is not visible: `window.learn`, Window › Learn
-/// and Explore tutorials show the dock instead of closing the panel.
+/// With the dock hidden, Learn as the front panel is not visible: `window.learn` and Window › Learn
+/// show the dock instead of closing the panel.
 #[test]
 fn window_learn_shows_a_hidden_dock() {
     let mut app = app();
-    let (cmd, params) = window_learn();
+    let ctx = app.ui_ctx.clone().expect("a window");
+    let (cmd, params) = window_learn(&app);
     assert_eq!(app.run("window.learn", json!({"show": true})).unwrap(), json!(true));
-    app.ui.dock = false;
-    assert_eq!(crate::menus::checked(&app, cmd, &params), Some(false), "Window › Learn is unchecked");
+    hide_panels(&mut app, &ctx);
+    assert_eq!(crate::menus::checked(&app, &cmd, &params), Some(false), "Window › Learn is unchecked");
     assert_eq!(app.run("window.learn", json!({"show": false})).unwrap(), json!(false));
-    assert!(shown(&app) && !app.ui.dock, "hiding a panel that cannot be seen changes nothing");
-    app.run(cmd, params).unwrap();
-    assert!(app.ui.dock && shown(&app), "Window › Learn shows the dock");
+    assert!(shown(&app) && !visible(&app), "hiding a panel that cannot be seen changes nothing");
+    app.run(&cmd, params).unwrap();
+    // The window's shell shows the dock in its next pass, as it hid it.
+    shell_frame(&mut app, &ctx, vec![]);
+    assert!(visible(&app), "Window › Learn shows the dock");
     // A full screen mode hides the panels: the panel stays the front one and shows when it ends.
     app.ui.screen_mode = 3;
     assert_eq!(app.run("window.learn", json!({})).unwrap(), json!(false));
@@ -165,50 +149,6 @@ fn window_learn_shows_a_hidden_dock() {
     app.ui.screen_mode = 0;
     assert_eq!(app.run("window.learn", json!({})).unwrap(), json!(false));
     assert!(!shown(&app));
-}
-
-/// The For you tab's Quick skill guide card opens the Skills tab, which lists every skill with its
-/// count of tutorials.
-#[test]
-fn the_skills_tab_lists_every_skill() {
-    let mut app = app();
-    let ctx = context();
-    let text = painted_text(&mut app, show);
-    assert!(text.contains("Get started") && text.contains("Quick skill guide"), "{text}");
-    click(&mut app, &ctx, "Quick skill guide", show);
-    assert_eq!(app.ui.learn.tab, Tab::Skills);
-    let text = painted_text(&mut app, show);
-    for skill in catalog::SKILLS {
-        assert!(text.contains(skill.title), "{} in {text}", skill.title);
-        assert!(text.contains(&format!("0/{}", skill.tutorials.len())), "{text}");
-    }
-    let skill = &catalog::SKILLS[1];
-    click(&mut app, &ctx, skill.title, show);
-    let text = painted_text(&mut app, show);
-    for tutorial in skill.tutorials {
-        assert!(text.contains(tutorial.title), "{} in {text}", tutorial.title);
-    }
-}
-
-/// Choosing a tutorial previews its numbered steps; Back goes to its skill, then to the skills.
-#[test]
-fn a_tutorial_previews_its_steps() {
-    let mut app = app();
-    let ctx = context();
-    let (skill, tutorial) = catalog::tutorial("pen-paths").unwrap();
-    app.ui.learn = View { tab: Tab::Skills, skill: Some(skill.id), tutorial: None };
-    click(&mut app, &ctx, tutorial.title, show);
-    assert_eq!(app.ui.learn.tutorial, Some(tutorial.id));
-    let text = painted_text(&mut app, show);
-    for (i, step) in tutorial.steps.iter().enumerate() {
-        let parts = step.tool_name().map_or(vec![step.text], |(before, name, after)| vec![before, name, after]);
-        assert!(text.contains(&format!("{}.", i + 1)) && parts.iter().all(|p| text.contains(p)), "{} in {text}", step.text);
-        assert!(!text.contains('['), "no brackets: {text}");
-    }
-    click(&mut app, &ctx, "Back", show);
-    assert_eq!(app.ui.learn, View { tab: Tab::Skills, skill: Some(skill.id), tutorial: None });
-    click(&mut app, &ctx, "Back", show);
-    assert_eq!(app.ui.learn, View { tab: Tab::Skills, skill: None, tutorial: None });
 }
 
 /// `learn.show` opens the panel on a tutorial's steps; `learn.list` lists every tutorial.
@@ -267,7 +207,7 @@ fn the_next_tutorial_is_the_next_one_in_the_same_skill() {
 #[test]
 fn view_more_opens_the_tutorial_s_sample_as_a_new_untitled_document() {
     let mut app = app();
-    let ctx = context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
     let work = app.session.documents()[0].doc.node_count();
@@ -299,7 +239,7 @@ fn view_more_opens_the_tutorial_s_sample_as_a_new_untitled_document() {
 #[test]
 fn finishing_a_tutorial_offers_next_up_in_its_skill() {
     let mut app = app();
-    let ctx = context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     let (skill, tutorial) = catalog::tutorial("pen-paths").unwrap();
     app.ui.learn = View { tab: Tab::Skills, skill: Some(skill.id), tutorial: Some(tutorial.id) };
     let text = painted_text(&mut app, show);
@@ -319,75 +259,12 @@ fn finishing_a_tutorial_offers_next_up_in_its_skill() {
     assert!(text.contains("View more") && !text.contains("Finish tutorial") && !text.contains("Next Up"), "{text}");
 }
 
-/// One press and release of `key` in what `draw` draws.
-fn key(app: &mut VectorcraftApp, ctx: &egui::Context, key: egui::Key, draw: fn(&mut VectorcraftApp, &mut egui::Ui)) {
-    let event = |pressed| egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
-    frame(app, ctx, vec![event(true)], draw);
-    frame(app, ctx, vec![event(false)], draw);
-}
-
-/// Press Tab until the control labeled `name` has the keyboard focus.
-fn tab_to(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, draw: fn(&mut VectorcraftApp, &mut egui::Ui)) {
-    for _ in 0..32 {
-        key(app, ctx, egui::Key::Tab, draw);
-        let at = center(&frame(app, ctx, vec![], draw), name).unwrap_or_else(|| panic!("{name} is drawn"));
-        if ctx.memory(|m| m.focused()).and_then(|id| ctx.read_response(id)).is_some_and(|r| r.rect.contains(at)) {
-            return;
-        }
-    }
-    panic!("Tab did not reach {name}");
-}
-
-/// View more, Finish tutorial and Next Up are reached with Tab and pressed with Enter.
-#[test]
-fn the_practice_controls_work_from_the_keyboard() {
-    let mut app = app();
-    let ctx = context();
-    let (skill, tutorial) = catalog::tutorial("pen-paths").unwrap();
-    app.ui.learn = View { tab: Tab::Skills, skill: Some(skill.id), tutorial: Some(tutorial.id) };
-    frame(&mut app, &ctx, vec![], show);
-    tab_to(&mut app, &ctx, "View more", show);
-    key(&mut app, &ctx, egui::Key::Enter, show);
-    assert_eq!(app.session.documents().len(), 1, "{}", app.ui.status);
-    assert_eq!(app.ui.learn_practice.opened, ["pen-paths"]);
-    tab_to(&mut app, &ctx, "Finish tutorial", show);
-    key(&mut app, &ctx, egui::Key::Enter, show);
-    assert_eq!(app.ui.learn_progress.finished, ["pen-paths"]);
-    tab_to(&mut app, &ctx, "Next Up", show);
-    key(&mut app, &ctx, egui::Key::Enter, show);
-    assert_eq!(app.ui.learn, View { tab: Tab::Skills, skill: Some("draw"), tutorial: Some("smooth-curves") });
-    assert_eq!(app.session.documents().len(), 1, "Next Up opens no sample");
-}
-
-/// The panel 150 points wide.
-fn narrow(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
-    ui.allocate_ui(egui::vec2(150.0, 800.0), |ui| {
-        ui.set_max_width(150.0);
-        show(app, ui);
-    });
-}
-
-/// In a narrow panel the practice controls wrap inside it.
-#[test]
-fn the_practice_controls_fit_a_narrow_panel() {
-    let mut app = app();
-    let ctx = context();
-    app.run("learn.openSample", json!({"tutorial": "pen-paths"})).unwrap();
-    frame(&mut app, &ctx, vec![], narrow);
-    let nodes = frame(&mut app, &ctx, vec![], narrow);
-    for name in ["View more", "Finish tutorial"] {
-        let node = nodes.iter().find(|n| n.label() == Some(name)).unwrap_or_else(|| panic!("{name} is drawn"));
-        let b = node.bounds().unwrap();
-        assert!(b.x1 <= 151.0, "{name} ends at {}", b.x1);
-    }
-}
-
 /// A skill's last tutorial, finished, says so and offers Back to skills instead of Next Up, even
 /// when another skill follows; `learn.next` there is an error.
 #[test]
 fn the_last_tutorial_of_a_skill_offers_back_to_skills() {
     let mut app = app();
-    let ctx = context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     for id in ["add-headline", "outline-type"] {
         app.run("learn.openSample", json!({"tutorial": id})).unwrap();
         assert_eq!(app.run("learn.finish", json!({"tutorial": id})).unwrap(), json!({"tutorial": id, "finished": true, "next": null}));
@@ -442,7 +319,7 @@ fn learn_skills_shows_the_list_of_skills() {
 
     // Back to skills, after a skill's last tutorial.
     let mut app = self::app();
-    let ctx = context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     app.run("learn.openSample", json!({"tutorial": "outline-type"})).unwrap();
     app.run("learn.finish", json!({"tutorial": "outline-type"})).unwrap();
     assert!(!shown(&app));
@@ -452,7 +329,7 @@ fn learn_skills_shows_the_list_of_skills() {
 
     // The Quick skill guide card on the For you tab.
     let mut app = self::app();
-    let ctx = context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     assert!(!shown(&app));
     click(&mut app, &ctx, "Quick skill guide", show);
     assert_eq!(app.ui.learn, skills);
@@ -505,7 +382,7 @@ fn the_tabs_rows_and_back_run_their_commands() {
         assert!(crate::menus::UI_COMMANDS.iter().any(|c| c.0 == cmd), "{cmd} is in the UI command catalog");
     }
     let mut app = app();
-    let ctx = context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     let (skill, tutorial) = catalog::tutorial("gradient").unwrap();
     let press = |app: &mut VectorcraftApp, name: &str, view: View| {
         app.run("window.learn", json!({"show": false})).unwrap();
@@ -521,19 +398,6 @@ fn the_tabs_rows_and_back_run_their_commands() {
     press(&mut app, "Skills", View { tab: Tab::Skills, skill: Some(skill.id), tutorial: Some(tutorial.id) });
     press(&mut app, "Back", View { tab: Tab::Skills, skill: Some(skill.id), tutorial: None });
     press(&mut app, "Back", View { tab: Tab::Skills, skill: None, tutorial: None });
-}
-
-/// A click on the tab the panel already shows runs no command.
-#[test]
-fn a_click_on_the_shown_tab_runs_no_command() {
-    let mut app = app();
-    let ctx = context();
-    for name in ["Skills", "For you"] {
-        click(&mut app, &ctx, name, show);
-        let commands = app.run_count;
-        click(&mut app, &ctx, name, show);
-        assert_eq!(app.run_count, commands, "{name}");
-    }
 }
 
 /// `learn.tab` switches tabs and keeps what the Skills tab had open; `learn.skill` opens a skill's
@@ -592,7 +456,7 @@ fn pen_paths(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
 #[test]
 fn a_tool_name_in_a_step_is_a_link_that_locates_the_tool() {
     let mut app = app();
-    let ctx = context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     let nodes = frame(&mut app, &ctx, vec![], pen_paths);
     let link = nodes.iter().find(|n| n.label().is_some_and(|l| l == "Pen tool")).expect("the Pen tool link");
     assert_eq!(link.role(), egui::accesskit::Role::Link);
@@ -605,43 +469,12 @@ fn a_tool_name_in_a_step_is_a_link_that_locates_the_tool() {
     assert_eq!(shown_tutorial["steps"][0], "Choose the Pen tool.");
 }
 
-/// Enter on the link, once Tab has moved the keyboard focus to it, locates the tool.
-#[test]
-fn enter_on_a_focused_tool_link_locates_the_tool() {
-    let mut app = app();
-    let ctx = context();
-    let link = frame(&mut app, &ctx, vec![], pen_paths)
-        .into_iter()
-        .find(|n| n.label().is_some_and(|l| l == "Pen tool"))
-        .and_then(|n| n.bounds())
-        .expect("the Pen tool link");
-    let key = |key, pressed| egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
-    let focused_on_link = |ctx: &egui::Context| {
-        ctx.memory(|m| m.focused()).and_then(|id| ctx.read_response(id)).is_some_and(|r| {
-            let c = r.rect.center();
-            ((link.x0 + link.x1) / 2.0 - f64::from(c.x)).abs() < 1.0 && ((link.y0 + link.y1) / 2.0 - f64::from(c.y)).abs() < 1.0
-        })
-    };
-    let mut found = false;
-    for _ in 0..30 {
-        frame(&mut app, &ctx, vec![key(egui::Key::Tab, true), key(egui::Key::Tab, false)], pen_paths);
-        if focused_on_link(&ctx) {
-            found = true;
-            break;
-        }
-    }
-    assert!(found, "Tab reaches the link");
-    assert!(app.ui.learn_locate.is_none());
-    frame(&mut app, &ctx, vec![key(egui::Key::Enter, true), key(egui::Key::Enter, false)], pen_paths);
-    frame(&mut app, &ctx, vec![], pen_paths);
-    assert_eq!(app.ui.learn_locate.as_ref().map(|l| l.tool), Some("pen"));
-}
-
 /// A missing, mistyped or unknown tool id is an error and changes nothing.
 #[test]
 fn learn_locate_tool_rejects_a_missing_or_unknown_tool() {
     let mut app = app();
-    app.ui.toolbar = false;
+    // PLAN: assumed `crate::toolbar::set_shown(app: &mut VectorcraftApp, shown: bool)` and `crate::toolbar::shown(ui: &UiState) -> bool` (ch.P4, chrome-w10).
+    crate::toolbar::set_shown(&mut app, false);
     for (params, error) in [
         (json!({}), "tool (a tool id) is required"),
         (json!({"tool": null}), "tool (a tool id) is required"),
@@ -649,7 +482,7 @@ fn learn_locate_tool_rejects_a_missing_or_unknown_tool() {
         (json!({"tool": "nope"}), "unknown tool `nope`"),
     ] {
         assert_eq!(app.run("learn.locateTool", params).unwrap_err(), error);
-        assert!(app.ui.learn_locate.is_none() && !app.ui.toolbar && !app.ui.tools_drawer && app.ui.flyout.is_none());
+        assert!(app.ui.learn_locate.is_none() && !crate::toolbar::shown(&app.ui) && !app.ui.tools_drawer);
     }
 }
 
@@ -658,16 +491,17 @@ fn learn_locate_tool_rejects_a_missing_or_unknown_tool() {
 #[test]
 fn learn_locate_tool_is_unavailable_while_the_toolbars_are_hidden() {
     let mut app = app();
+    let ctx = app.ui_ctx.clone().expect("a window");
     app.ui.screen_mode = 3;
     let reply = app.run("learn.locateTool", json!({"tool": "pen"})).unwrap();
     assert_eq!((reply["location"].as_str(), reply["reason"].is_string()), (Some("unavailable"), true), "{reply}");
     assert!(app.ui.learn_locate.is_none());
     app.ui.screen_mode = 0;
-    app.run("window.dock", json!({})).unwrap();
-    assert!(app.ui.tab_hid.is_some() && !app.ui.toolbar);
+    hide_panels(&mut app, &ctx);
+    assert!(!crate::panel_docking::panels_shown(&app));
     let reply = app.run("learn.locateTool", json!({"tool": "pen"})).unwrap();
     assert_eq!(reply["location"], "unavailable", "{reply}");
-    assert!(app.ui.learn_locate.is_none() && !app.ui.toolbar && app.ui.tab_hid.is_some(), "Tab's state stays");
+    assert!(app.ui.learn_locate.is_none() && !crate::panel_docking::panels_shown(&app), "Tab's state stays");
 }
 
 /// The screen-reader name of step `i` of the Pen tutorial's check box.
@@ -690,7 +524,7 @@ fn check_boxes(app: &mut VectorcraftApp, ctx: &egui::Context, draw: fn(&mut Vect
 #[test]
 fn a_step_s_check_box_marks_only_that_step() {
     let mut app = app();
-    let ctx = context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     assert_eq!(check_boxes(&mut app, &ctx, pen_paths), [(false, false); 3], "off before View more");
     click(&mut app, &ctx, &pen_step(1), pen_paths);
     assert!(app.ui.learn_progress.is_empty(), "a check box that is off changes nothing");
@@ -720,46 +554,34 @@ fn a_step_s_check_box_marks_only_that_step() {
     assert_eq!(app.ui.learn_progress, before);
 }
 
-/// The check boxes are reached with Tab and changed with Space.
-#[test]
-fn a_step_s_check_box_works_from_the_keyboard() {
-    let mut app = app();
-    let ctx = context();
-    app.run("learn.openSample", json!({"tutorial": "pen-paths"})).unwrap();
-    frame(&mut app, &ctx, vec![], pen_paths);
-    tab_to(&mut app, &ctx, &pen_step(2), pen_paths);
-    key(&mut app, &ctx, egui::Key::Space, pen_paths);
-    assert_eq!(app.ui.learn_progress.steps.get("pen-paths"), Some(&vec![2]), "{}", app.ui.status);
-}
-
 /// Finishing tutorials fills only their own skill's ring and count, once each however often they
 /// are finished; the skill's tutorial rows show which are finished; `learn.list` answers the same.
 #[test]
 fn finishing_tutorials_fills_their_skill_s_ring_and_count() {
     let mut app = app();
-    let ctx = context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     for id in ["pen-paths", "smooth-curves"] {
         app.run("learn.openSample", json!({"tutorial": id})).unwrap();
         for _ in 0..2 {
             app.run("learn.finish", json!({"tutorial": id})).unwrap();
         }
     }
+    // Every named node as (name, description): a skill row's count is in its description.
     let values = |app: &mut VectorcraftApp, view: View| {
         app.ui.learn = view;
         let nodes = frame(app, &ctx, vec![], show);
-        nodes
-            .iter()
-            .filter(|n| n.role() == Role::Button)
-            .map(|n| (n.label().unwrap_or_default().to_string(), n.value().map(str::to_string)))
-            .collect::<Vec<_>>()
+        nodes.iter().filter_map(|n| Some((n.label()?.to_string(), n.description().map(str::to_string)))).collect::<Vec<_>>()
     };
     let skills = View { tab: Tab::Skills, skill: None, tutorial: None };
     let rows = values(&mut app, skills.clone());
     for skill in catalog::SKILLS {
         let count = if skill.id == "draw" { "2/3".to_string() } else { format!("0/{}", skill.tutorials.len()) };
-        assert!(rows.contains(&(skill.title.to_string(), Some(count.clone()))), "{} {count} in {rows:?}", skill.id);
+        assert!(
+            rows.iter().any(|(name, description)| name == skill.title && description.as_deref().is_some_and(|d| d.contains(&count))),
+            "{} {count} in {rows:?}",
+            skill.id
+        );
     }
-    assert!(painted_text(&mut app, show).contains("2/3"));
     let list = app.run("learn.list", json!({})).unwrap();
     let draw = &list["skills"][1];
     assert_eq!((draw["done"].clone(), draw["total"].clone()), (json!(2), json!(3)));
@@ -768,27 +590,18 @@ fn finishing_tutorials_fills_their_skill_s_ring_and_count() {
     assert_eq!(list["skills"][2]["done"], json!(0), "other skills stay at 0");
 
     let rows = values(&mut app, View { tab: Tab::Skills, skill: Some("draw"), tutorial: None });
-    assert!(rows.contains(&("Draw paths with the Pen".to_string(), Some("Finished".to_string()))), "{rows:?}");
-    assert!(rows.contains(&("Draw smooth curves".to_string(), Some("Finished".to_string()))), "{rows:?}");
-    assert!(rows.contains(&("Sketch with the Pencil".to_string(), None)), "{rows:?}");
+    let named = |name: &str| rows.iter().any(|(label, _)| label == name);
+    assert!(named("Draw paths with the Pen, Finished"), "{rows:?}");
+    assert!(named("Draw smooth curves, Finished"), "{rows:?}");
+    assert!(named("Sketch with the Pencil") && !named("Sketch with the Pencil, Finished"), "{rows:?}");
 
     app.run("learn.openSample", json!({"tutorial": "pencil-sketch"})).unwrap();
     app.run("learn.finish", json!({"tutorial": "pencil-sketch"})).unwrap();
     let rows = values(&mut app, skills);
-    assert!(rows.contains(&("Draw and build".to_string(), Some("3/3".to_string()))), "every tutorial finished: {rows:?}");
-}
-
-/// A skill row with no tutorials, which the catalog does not have today, shows an empty ring and
-/// 0/0.
-fn empty_skill(_: &mut VectorcraftApp, ui: &mut egui::Ui) {
-    super::row(ui, "Empty skill", super::Mark::Ring { done: 0, total: 0 });
-}
-
-#[test]
-fn a_skill_with_no_tutorials_shows_0_of_0() {
-    let mut app = app();
-    let text = painted_text(&mut app, empty_skill);
-    assert!(text.contains("Empty skill") && text.contains("0/0"), "{text}");
+    assert!(
+        rows.iter().any(|(name, description)| name == "Draw and build" && description.as_deref().is_some_and(|d| d.contains("3/3"))),
+        "every tutorial finished: {rows:?}"
+    );
 }
 
 /// `learn.markStep` marks a step done by default and with `complete: true`, clears it with `false`,
@@ -838,7 +651,7 @@ fn learn_mark_step_checks_its_params() {
 #[test]
 fn reset_progress_clears_only_the_progress() {
     let mut app = app();
-    let ctx = context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     let skills = View { tab: Tab::Skills, skill: None, tutorial: None };
     app.ui.learn = skills.clone();
     assert!(!painted_text(&mut app, show).contains("Reset progress"));

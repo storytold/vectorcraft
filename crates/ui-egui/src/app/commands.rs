@@ -1,5 +1,7 @@
+use serde_json::Value;
+
 use super::fonts::MAX_RECENT_FONTS;
-use super::{Value, VectorcraftApp, canvas, dialogs, fileio, io, menus, panels, picks, toolbar};
+use super::{VectorcraftApp, canvas, dialogs, fileio, io, menus, panels};
 use crate::placing;
 use crate::state::ReplaceFontWarning;
 
@@ -75,13 +77,7 @@ impl VectorcraftApp {
     pub fn run(&mut self, id: &str, params: Value) -> Result<Value, String> {
         self.beacon.command(id);
         let touch_workspace = self.session.prefs.touch_workspace;
-        // A file dialog it shows off the UI thread runs it again with the path picked.
-        let result = if self.picks.is_entry_free() {
-            let entry = picks::Entry::Command(id.to_string(), params.clone());
-            picks::as_entry(self, move || entry, |app| app.run_now(id, params))
-        } else {
-            self.run_now(id, params)
-        };
+        let result = self.run_now(id, params);
         if id == "prefs.import" && result.is_ok() {
             crate::prefs_dialog::imported(self, touch_workspace);
         }
@@ -134,9 +130,8 @@ impl VectorcraftApp {
         }
     }
 
-    /// [`Self::run`] it, inside what asks for file dialogs.
+    /// [`Self::run`]'s work.
     fn run_now(&mut self, id: &str, params: Value) -> Result<Value, String> {
-        crate::state::sync_zoom_stops_display_print_size(self.session.prefs.display_print_size);
         self.run_count = self.run_count.wrapping_add(1);
         // In debug builds the app's own calls are held to the params descriptions too (#1442): a
         // panel passing a key its command doesn't read shows up in the tests. Saved steps aren't
@@ -238,25 +233,9 @@ impl VectorcraftApp {
             self.ui.status = e.clone();
             return Err(e);
         }
-        // A command that changes the edited text is an application edit (undo, a panel or menu
-        // edit, a control request). Capture the bounded committed context around it so `Other`
-        // dominates the frame even if an IME receipt follows. Selection/view commands that leave
-        // the committed text and caret unchanged record nothing.
-        let ime_view = self.view_info();
-        let ime_target = crate::ime::target(&mut self.session, ime_view);
-        let ime_before = crate::ime::stamp(&mut self.session, ime_view);
-        let cursor_settings = (self.session.caps_lock, self.session.prefs.use_precise_cursors);
         let spot_base = panels::color_guide::before_command(self);
         let r = self.session.execute(id, &params).map_err(|e| e.to_string());
         let r = panels::actions::after_recorded_command(self, r);
-        if r.is_ok() && cursor_settings != (self.session.caps_lock, self.session.prefs.use_precise_cursors) {
-            self.canvas.hover_cursor = None;
-        }
-        if r.is_ok()
-            && let Some(ctx) = self.ui_ctx.clone()
-        {
-            crate::ime::note_application_edit(self, &ctx, ime_view, ime_target, ime_before);
-        }
         if r.is_ok()
             && let Some(op) = completed_pathfinder_operation(id, &params)
         {
@@ -277,10 +256,8 @@ impl VectorcraftApp {
                 panels::color_guide::after_command(self, id, &params, v, spot_base);
                 // A renamed color group stays selected in the Swatches panel, and the rows dragged
                 // from its list are checked against what the command left.
-                if let Some(ctx) = self.ui_ctx.clone() {
-                    panels::swatches::after_command(&ctx, id, &params, v);
-                    panels::swatches::follow_drag(self, &ctx);
-                }
+                panels::swatches::after_command(self, id, &params, v);
+                panels::swatches::follow_drag(self);
                 if id == "file.new" {
                     self.status("");
                     // New Document's Pixel preview mode (Overprint Preview is the engine's).
@@ -466,7 +443,7 @@ impl VectorcraftApp {
     /// stays as it was.
     pub(crate) fn try_select_tool(&mut self, id: &str) -> Result<(), String> {
         let back = self.ui.brush_key_color_pick.as_ref().map(|pick| pick.back.clone());
-        crate::dialogs::cancel_brush_key_color(self, false);
+        crate::dialogs::brush_art_options::end_key_color_pick(self, false);
         // The tip of a pen whose eraser end selected the Eraser doesn't undo this choice, and
         // neither does letting go of a held tool shortcut.
         self.pen_end.forget_tool();
@@ -523,7 +500,6 @@ impl VectorcraftApp {
         {
             panels::artboards::select(self, panels::artboards::selected(self, n));
         }
-        self.ui.flyout = None;
         switched?;
         crate::panels::image_trace::cancel_ignore_sampler(self, false);
         if let Some(g) = vectorcraft_tools::catalog::group_of(id)
@@ -531,7 +507,6 @@ impl VectorcraftApp {
         {
             *slot = id.to_string();
         }
-        toolbar::remember(self, id);
         Ok(())
     }
 

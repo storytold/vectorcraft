@@ -1,14 +1,13 @@
-use std::sync::{Arc, Weak};
+use craft::keymap::{CommandRef, Mods};
+use craft::ui::menu::PanelRow;
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use serde_json::{Value, json};
 
-use vectorcraft_color::SwatchGroup;
-use vectorcraft_engine::{DocState, History, HistoryEntry};
-
-use super::dnd::{group_of, selection};
+use super::dnd::group_of;
 use super::libraries::SwatchLibraries;
-use super::{
-    Document, Kind, LibraryKind, PanelDrag, Response, Swatch, Ui, Value, VectorcraftApp, View, active_paint, json, library_panel, menu_item, pstate,
-    set_pstate, widgets,
-};
+use super::library_panel;
+use super::{View, active_paint, selected};
+use crate::VectorcraftApp;
 
 /// The selected swatches and groups that can be deleted: every color group in the document and
 /// every swatch that `Swatch::is_reserved` does not reserve (None and Registration). Names the
@@ -66,273 +65,10 @@ pub(super) fn delete(app: &mut VectorcraftApp, names: Vec<String>, now: bool) {
     crate::dialogs::confirm::ask(app, &message, tl!("Art using a deleted global swatch keeps its colour."), "swatch.delete", params);
 }
 
-pub(super) fn bottom(app: &mut VectorcraftApp, ui: &mut Ui, sel: &[String]) {
-    let kind: Kind = pstate(ui.ctx(), "swatch-kind");
-    widgets::bottom_bar(ui, |ui| {
-        let open = library_panel::any_open::<SwatchLibraries>(&app.ui);
-        let lr = widgets::icon_button(ui, "library", SwatchLibraries::MENU, open, 24.0);
-        egui::Popup::menu(&lr).show(|ui| {
-            ui.set_min_width(200.0);
-            library_panel::library_menu::<SwatchLibraries>(app, ui);
-        });
-        let kr = widgets::icon_button(ui, "dc-swatch-kinds", tl!("Show Swatch Kinds"), kind != Kind::All, 24.0);
-        egui::Popup::menu(&kr).show(|ui| {
-            for (k, label) in Kind::ALL {
-                if menu_item(ui, label, true, k == kind) {
-                    set_pstate(ui.ctx(), "swatch-kind", k);
-                }
-            }
-        });
-        // With a colour group selected the options button edits or applies the group.
-        let opts = editable(app, sel);
-        if let Some(g) = selected_group(app, sel).filter(|_| opts.is_none()) {
-            if widgets::icon_button(ui, "palette", tl!("Edit or Apply Color Group"), false, 24.0).clicked() {
-                edit_group(app, &g);
-            }
-        } else if widgets::icon_button_enabled(ui, "dc-options", tl!("Swatch Options"), false, opts.is_some(), 24.0).clicked()
-            && let Some(n) = opts
-        {
-            app.run("ui.swatchOptions", json!({"name": n})).ok();
-        }
-        ui.add_space((ui.available_width() - 3.0 * 28.0).max(0.0));
-        if widgets::icon_button(ui, "dc-folder", tl!("New Color Group"), false, 24.0).clicked() {
-            app.run("ui.newColorGroup", json!({"swatches": deletable(app, sel)})).ok();
-        }
-        // Alt-click skips the dialog; Ctrl/Cmd-click makes a spot color, and Ctrl/Cmd+Shift-click
-        // makes a global process color. Swatches dragged from the list and dropped on it are
-        // duplicated.
-        let copies = dragged_swatches(app, ui.ctx());
-        let new = widgets::icon_button(ui, "dc-new-item", tl!("New Swatch"), false, 24.0);
-        if new.clicked() {
-            new_swatch(app, sel, ui.input(|i| i.modifiers));
-        }
-        drop_on_new(app, ui, &new, copies);
-        // Alt-click deletes without asking. Swatches or color groups dragged from the list can be
-        // dropped on it, also with nothing selected: the button is enabled while they are held.
-        let del = deletable(app, sel);
-        let dragged = dragged_deletable(app, ui.ctx());
-        let trash = widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Swatch"), false, !del.is_empty() || !dragged.is_empty(), 24.0);
-        if trash.clicked() && !del.is_empty() {
-            delete(app, del, ui.input(|i| i.modifiers.alt));
-        }
-        drop_on_delete(app, ui, &trash, dragged);
-    });
-}
-
-/// The panel state key of the document (`uid`) the swatches being dragged from the list belong to.
-pub(super) const DRAG_DOC: &str = "swatch-drag-doc";
-
-/// The panel state key of the rows being dragged from the list ([`HeldRows`]).
-const DRAG_ROWS: &str = "swatch-drag-rows";
-
-/// A row dragged from the list as it was when the drag started: its swatch or its color group.
-#[derive(Clone, PartialEq)]
-enum HeldRow {
-    Swatch(Swatch),
-    Group(SwatchGroup),
-}
-
-impl HeldRow {
-    /// Row `name` of `d`: its swatch, else the color group of that name.
-    fn of(d: &Document, name: &str) -> Option<Self> {
-        match d.swatch(name) {
-            Some(w) => Some(HeldRow::Swatch(w.clone())),
-            None => d.swatch_groups.iter().find(|g| g.name == name).cloned().map(HeldRow::Group),
-        }
-    }
-    /// Whether `d` holds this row unchanged.
-    fn unchanged_in(&self, d: &Document) -> bool {
-        match self {
-            HeldRow::Swatch(w) => d.swatch(&w.name) == Some(w),
-            HeldRow::Group(g) => d.swatch_groups.iter().any(|x| x == g),
-        }
-    }
-}
-
-/// The rows being dragged from the list, in the order of the drag's names, and the document and
-/// undo history they were last checked against. A row is `None` once a state of the document since
-/// the drag started did not hold it unchanged: deleted, edited, or deleted and made again under its
-/// name, also with the same paint.
-#[derive(Clone, Default)]
-struct HeldRows {
-    doc: Weak<Document>,
-    /// The newest undo step of the document and the one under it, and the next redo step and the
-    /// one under it ([`steps`]).
-    steps: [u64; 4],
-    rows: Vec<(String, Option<HeldRow>)>,
-    /// For each row, whether the document undoing the newest step gives back (that step's
-    /// document) holds it unchanged.
-    back: Vec<bool>,
-}
-
-/// The newest undo step of `st` and the one under it, and the next redo step and the one under it
-/// ([`HistoryEntry::serial`]), 0 for none.
-fn steps(st: &DocState) -> [u64; 4] {
-    let serial = |list: &[HistoryEntry], back: usize| list.len().checked_sub(back).and_then(|i| list.get(i)).map_or(0, HistoryEntry::serial);
-    let h = &st.history;
-    [serial(&h.undo, 1), serial(&h.undo, 2), serial(&h.redo, 1), serial(&h.redo, 2)]
-}
-
-impl HeldRows {
-    /// `rows`, checked against document `st` as it is now.
-    fn at(st: &DocState, rows: Vec<(String, Option<HeldRow>)>) -> Self {
-        let last = st.history.undo.last();
-        let back = rows.iter().map(|(_, r)| r.as_ref().zip(last).is_some_and(|(r, e)| r.unchanged_in(&e.doc))).collect();
-        HeldRows { doc: Arc::downgrade(&st.doc), steps: steps(st), rows, back }
-    }
-}
-
-/// Records the document and the rows a drag from the list started with this frame, so that New
-/// Swatch and Delete Swatch act only on rows that stay unchanged until it is dropped.
-pub(super) fn drag_started(app: &VectorcraftApp, ctx: &egui::Context) {
-    let st = app.session.active();
-    set_pstate(ctx, DRAG_DOC, st.map(|st| st.uid));
-    let held = match (st, egui::DragAndDrop::payload::<PanelDrag>(ctx).as_deref()) {
-        (Some(st), Some(PanelDrag::Paint { rows: Some(r), .. })) => {
-            HeldRows::at(st, r.names.iter().map(|n| (n.clone(), HeldRow::of(&st.doc, n))).collect())
-        }
-        _ => HeldRows::default(),
-    };
-    set_pstate(ctx, DRAG_ROWS, held);
-}
-
-/// The dragged rows ([`HeldRows`]) checked against every state document `st` passed through since
-/// they were last checked, and the current one. Those states are the ones the redo steps made
-/// since then keep (the states an undo left), and:
-/// - While the newest undo step of then is still in the history, the states the undo steps made
-///   since then keep.
-/// - After an undo of that step, or an edit merged into it, the state before that step and the
-///   states the undo steps made since then keep.
-///
-/// Otherwise (more than one step undone, or steps dropped past the history's limits) the states in
-/// between are not known, and every row is left out of the drop. The panel checks the rows after
-/// every command the app runs ([`follow_drag`]), so only the steps of one command go unseen. One
-/// undo step is one change: the states between the commands of a `command.batch` are not kept, and
-/// a row the batch leaves as it found it stays in the drop.
-fn held_rows(st: &DocState, ctx: &egui::Context) -> HeldRows {
-    let held: HeldRows = pstate(ctx, DRAG_ROWS);
-    let now = steps(st);
-    let same = std::ptr::eq(held.doc.as_ptr(), Arc::as_ptr(&st.doc));
-    if same && held.steps == now {
-        return held;
-    }
-    let (undo, redo) = (&st.history.undo, &st.history.redo);
-    // Where the steps made after the step with `serial` start in `list`: 0 for none.
-    let after = |list: &[HistoryEntry], serial: u64| {
-        if serial == 0 { Some(0) } else { list.iter().rposition(|e| e.serial() == serial).map(|i| i + 1) }
-    };
-    let [newest, below, next, further] = held.steps;
-    // The redo steps made since: above the next redo step of then, or above the one under it once a
-    // redo took that step.
-    let left = redo.get(after(redo, next).or_else(|| after(redo, further)).unwrap_or(0)..).unwrap_or_default();
-    // The states in between, and whether they start with the state an undo of the newest step gave back.
-    let (between, undone) = match after(undo, newest) {
-        // With no step before it, the first step keeps the last checked state, unless steps were
-        // dropped past the history's limits, which leave at least that many steps.
-        Some(0) => {
-            let kept = same
-                || undo.len() < st.history.limit.min(History::MIN_STEPS)
-                || undo.first().is_none_or(|e| std::ptr::eq(held.doc.as_ptr(), Arc::as_ptr(&e.doc)));
-            (kept.then_some(undo.as_slice()), false)
-        }
-        Some(i) => (undo.get(i..), false),
-        None => (after(undo, below).and_then(|i| undo.get(i..)), true),
-    };
-    let unchanged = |r: &HeldRow, b: &[HistoryEntry]| b.iter().chain(left).all(|e| r.unchanged_in(&e.doc)) && r.unchanged_in(&st.doc);
-    let rows = held
-        .rows
-        .into_iter()
-        .zip(held.back)
-        .map(|((name, row), back)| (name, row.filter(|r| (back || !undone) && between.is_some_and(|b| unchanged(r, b)))))
-        .collect();
-    let held = HeldRows::at(st, rows);
-    set_pstate(ctx, DRAG_ROWS, held.clone());
-    held
-}
-
-/// Checks the rows being dragged from the list against the active document after a command ran
-/// ([`held_rows`]), so that the commands after it cannot replace one unseen.
-pub(crate) fn follow_drag(app: &VectorcraftApp, ctx: &egui::Context) {
-    dragged_rows(app, ctx);
-}
-
-/// The swatches and color groups of the active document being dragged from the list that Delete
-/// Swatch can delete: neither None nor Registration, and still in the document unchanged. Empty for
-/// any other drag, and for a drag started in another document.
-fn dragged_deletable(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
-    let Some(st) = app.session.active() else { return vec![] };
-    let d = &st.doc;
-    dragged_rows(app, ctx).into_iter().filter(|n| d.swatch_name_taken(n) && d.swatch(n).is_none_or(|w| !w.is_reserved())).collect()
-}
-
-/// The names of the swatches or color groups of the active document being dragged from the list,
-/// in panel order, that the document has held unchanged since the drag started ([`held_rows`]).
-/// Empty for any other drag, and for a drag started in another document.
-fn dragged_rows(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
-    let Some(st) = app.session.active() else { return vec![] };
-    if pstate::<Option<u64>>(ctx, DRAG_DOC) != Some(st.uid) {
-        return vec![];
-    }
-    let drag = egui::DragAndDrop::payload::<PanelDrag>(ctx);
-    let Some(PanelDrag::Paint { rows: Some(r), .. }) = drag.as_deref() else { return vec![] };
-    let held = held_rows(st, ctx);
-    if held.rows.len() != r.names.len() {
-        return vec![];
-    }
-    r.names
-        .iter()
-        .zip(&held.rows)
-        .filter(|(n, (h, row))| *n == h && row.as_ref().is_some_and(|row| row.unchanged_in(&st.doc)))
-        .map(|(n, _)| n.clone())
-        .collect()
-}
-
-/// Swatches or color groups (`names`) dragged onto Delete Swatch (`button`): the button is
-/// outlined while they are held over it, and the release of the primary button asks to delete them
-/// as a plain click does ([`delete`]); Alt does not skip the question. The release of another
-/// button ends the drag, and other drags are left to their own targets.
-fn drop_on_delete(app: &mut VectorcraftApp, ui: &Ui, button: &Response, names: Vec<String>) {
-    if names.is_empty() || button.dnd_hover_payload::<PanelDrag>().is_none() {
-        return;
-    }
-    widgets::drop_target_outline(ui, button.rect);
-    if !ui.input(|i| i.pointer.button_released(egui::PointerButton::Primary)) {
-        return;
-    }
-    if button.dnd_release_payload::<PanelDrag>().is_some() {
-        delete(app, names, false);
-    }
-}
-
-/// The swatches of the active document being dragged from the list that New Swatch can duplicate,
-/// in panel order: the dragged rows ([`dragged_rows`]) that are swatches still in the document
-/// unchanged, other than None and Registration.
-fn dragged_swatches(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
-    let Some(st) = app.session.active() else { return vec![] };
-    dragged_rows(app, ctx).into_iter().filter(|n| st.doc.swatch(n).is_some_and(|w| !w.is_reserved())).collect()
-}
-
-/// Swatches (`names`) dragged onto New Swatch (`button`): the button is outlined while they are
-/// held over it, and the release of the primary button duplicates them ([`duplicate`]), whatever
-/// modifiers are held. The release of another button ends the drag, and other drags are left to
-/// their own targets.
-fn drop_on_new(app: &mut VectorcraftApp, ui: &Ui, button: &Response, names: Vec<String>) {
-    if names.is_empty() || button.dnd_hover_payload::<PanelDrag>().is_none() {
-        return;
-    }
-    widgets::drop_target_outline(ui, button.rect);
-    if !ui.input(|i| i.pointer.button_released(egui::PointerButton::Primary)) {
-        return;
-    }
-    if button.dnd_release_payload::<PanelDrag>().is_some() {
-        duplicate(app, ui.ctx(), &names);
-    }
-}
-
 /// Duplicates the swatches `names` (`swatch.duplicate`, each copy just after its swatch and in its
 /// color group) in one undo step and selects the copies. A failure is shown in the status bar and
 /// changes nothing.
-fn duplicate(app: &mut VectorcraftApp, ctx: &egui::Context, names: &[String]) {
+pub(super) fn duplicate(app: &mut VectorcraftApp, names: &[String]) {
     let made = if let [name] = names {
         app.run("swatch.duplicate", json!({ "name": name })).map(|r| vec![r])
     } else {
@@ -341,7 +77,7 @@ fn duplicate(app: &mut VectorcraftApp, ctx: &egui::Context, names: &[String]) {
             .map(|r| r["results"].as_array().cloned().unwrap_or_default())
     };
     match made {
-        Ok(made) => set_pstate(ctx, "swatch-selected", made.iter().filter_map(|r| r["name"].as_str().map(str::to_string)).collect::<Vec<_>>()),
+        Ok(made) => app.ui.swatches_panel.set_swatches(made.iter().filter_map(|r| r["name"].as_str().map(str::to_string)).collect()),
         Err(e) => app.status(e),
     }
 }
@@ -355,10 +91,10 @@ fn target_group(app: &VectorcraftApp, sel: &[String]) -> Option<String> {
 /// New Swatch from the active paint (a color goes into the selected color group), for a click
 /// with modifiers `m`: a plain click opens the dialog and an Alt-click saves at once. Cmd/Ctrl
 /// makes a color a spot color, and Cmd/Ctrl+Shift makes it a global process color.
-pub(super) fn new_swatch(app: &mut VectorcraftApp, sel: &[String], m: egui::Modifiers) {
+pub(super) fn new_swatch(app: &mut VectorcraftApp, sel: &[String], m: Mods) {
     let paint = active_paint(app);
     let group = paint.color().and_then(|_| target_group(app, sel));
-    let (spot, global) = (m.command && !m.shift, m.command && m.shift);
+    let (spot, global) = (m.cmd && !m.shift, m.cmd && m.shift);
     if !m.alt {
         app.run("ui.newSwatch", json!({"spot": spot, "global": global, "group": group})).ok();
         return;
@@ -374,95 +110,149 @@ pub(super) fn new_swatch(app: &mut VectorcraftApp, sel: &[String], m: egui::Modi
     app.run("swatch.new", params).ok();
 }
 
-pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let view = app.ui.swatches_view;
-    let selected = selection(app, ui);
-    let del = deletable(app, &selected);
-    let opts = editable(app, &selected);
-    if menu_item(ui, tl!("New Swatch…"), true, false) {
-        new_swatch(app, &selected, egui::Modifiers::NONE);
-    }
-    if menu_item(ui, tl!("New Color Group…"), true, false) {
-        app.run("ui.newColorGroup", json!({"swatches": del})).ok();
-    }
-    if menu_item(ui, tl!("Duplicate Swatch"), opts.is_some(), false)
-        && let Some(n) = &opts
-    {
-        app.run("swatch.duplicate", json!({"name": n})).ok();
-    }
-    // The first selected colour is kept.
-    let merge = mergeable(app, &selected);
-    if menu_item(ui, tl!("Merge Swatches"), merge.len() > 1, false) {
-        app.run("swatch.merge", json!({ "names": merge })).ok();
-    }
-    if menu_item(ui, tl!("Delete Swatch"), !del.is_empty(), false) {
-        delete(app, del, false);
-    }
-    let group = selected_group(app, &selected);
-    if menu_item(ui, tl!("Edit or Apply Color Group…"), group.is_some(), false)
-        && let Some(g) = &group
-    {
-        edit_group(app, g);
-    }
-    if menu_item(ui, tl!("Ungroup Color Group"), group.is_some(), false)
-        && let Some(g) = group
-    {
-        app.run("swatch.ungroup", json!({ "name": g })).ok();
-    }
-    let sole = sole_group(app, &selected);
-    if menu_item(ui, tl!("Color Group Options…"), sole.is_some(), false)
-        && let Some(g) = sole
-    {
-        app.run("ui.colorGroupOptions", json!({ "group": g })).ok();
-    }
-    if menu_item(ui, tl!("Select All Unused"), true, false)
-        && let Ok(r) = app.run("swatch.unused", json!({}))
-    {
-        let names: Vec<String> = r["names"].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect();
-        set_pstate(ui.ctx(), "swatch-selected", names);
-    }
-    if menu_item(ui, tl!("Add Used Colors"), true, false) {
-        app.run("swatch.addUsedColors", json!({})).ok();
-    }
-    // The selected art's new colors, as global swatches its paints link to.
+/// The id prefix of the panel menu's rows.
+const ROW: &str = "ui.swatches";
+
+fn id(row: &str) -> String {
+    format!("{ROW}.{row}")
+}
+
+fn cmd(row: &str) -> PanelRow {
+    PanelRow::Command(CommandRef::new(id(row)))
+}
+
+fn view_ref(v: View) -> CommandRef {
+    CommandRef::with_params(id("view"), json!({ "view": v }))
+}
+
+/// The libraries of Open Swatch Library, each opening in its panel, then Other Library….
+fn library_rows(app: &VectorcraftApp) -> Vec<PanelRow> {
+    let mut rows = library_panel::library_rows::<SwatchLibraries>(app);
+    rows.push(PanelRow::Command(CommandRef::new("window.swatchLibrary.other")));
+    rows
+}
+
+/// The rows of the panel menu, in order.
+pub(crate) fn menu_rows(app: &VectorcraftApp) -> Vec<PanelRow> {
+    let mut rows = vec![
+        cmd("newSwatch"),
+        cmd("newColorGroup"),
+        cmd("duplicate"),
+        cmd("merge"),
+        cmd("delete"),
+        cmd("editGroup"),
+        cmd("ungroup"),
+        cmd("groupOptions"),
+        cmd("selectUnused"),
+        cmd("addUsedColors"),
+        cmd("addSelectedColors"),
+        PanelRow::Separator,
+        cmd("sortByName"),
+        cmd("sortByKind"),
+        PanelRow::Separator,
+    ];
+    rows.extend(View::ALL.iter().map(|(v, _)| PanelRow::Command(view_ref(*v))));
+    rows.extend([
+        PanelRow::Separator,
+        cmd("showFind"),
+        cmd("showRecent"),
+        PanelRow::Separator,
+        cmd("options"),
+        cmd("spotColors"),
+        PanelRow::Separator,
+        PanelRow::Submenu(tl!("Open Swatch Library").into(), library_rows(app)),
+        PanelRow::Command(CommandRef::with_params("ui.saveSwatchLibrary", json!({ "names": deletable(app, &selected(app)) }))),
+    ]);
+    rows
+}
+
+/// The enabled and checked state of the menu's rows.
+pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
+    let sel = selected(app);
+    let (del, opts, group) = (deletable(app, &sel), editable(app, &sel), selected_group(app, &sel));
     let art_selected = app.session.active().is_some_and(|st| !st.selection.objects.is_empty());
-    if menu_item(ui, tl!("Add Selected Colors"), art_selected, false) {
-        app.run("swatch.addUsedColors", json!({"selection": true, "global": true})).ok();
+    let doc = app.session.active().is_some();
+    let enabled = [
+        ("duplicate", opts.is_some()),
+        ("merge", mergeable(app, &sel).len() > 1),
+        ("delete", !del.is_empty()),
+        ("editGroup", group.is_some()),
+        ("ungroup", group.is_some()),
+        ("groupOptions", sole_group(app, &sel).is_some()),
+        ("addSelectedColors", art_selected),
+        ("options", opts.is_some()),
+        ("spotColors", doc),
+    ];
+    for (row, on) in enabled {
+        states.set(CommandRef::new(id(row)), CommandState::new().enabled(on));
     }
-    ui.separator();
-    if menu_item(ui, tl!("Sort by Name"), true, false) {
-        app.run("swatch.sortByName", json!({})).ok();
+    states.set(CommandRef::new(id("showFind")), CommandState::new().checked(app.ui.swatches_panel.show_find));
+    states.set(CommandRef::new(id("showRecent")), CommandState::new().checked(app.ui.swatches_show_recent_colors));
+    for (v, _) in View::ALL {
+        states.set(view_ref(v), CommandState::new().checked(v == app.ui.swatches_view));
     }
-    if menu_item(ui, tl!("Sort by Kind"), true, false) {
-        app.run("swatch.sortByKind", json!({})).ok();
-    }
-    ui.separator();
-    for (v, label) in View::ALL {
-        if menu_item(ui, label, true, v == view) {
-            app.run("ui.panelView", json!({ "panel": "swatches", "view": v })).ok();
+}
+
+/// Runs panel menu row `id` (`ui.swatches.<row>`); `None` for another panel's id.
+pub(crate) fn run(app: &mut VectorcraftApp, row: &str, params: &Value) -> Option<Result<Value, String>> {
+    let row = row.strip_prefix(ROW)?.strip_prefix('.')?;
+    let sel = selected(app);
+    let (del, opts, group) = (deletable(app, &sel), editable(app, &sel), selected_group(app, &sel));
+    let done = Ok(Value::Null);
+    Some(match row {
+        "newSwatch" => {
+            new_swatch(app, &sel, Mods::default());
+            done
         }
-    }
-    ui.separator();
-    let find: bool = pstate(ui.ctx(), "swatch-show-find");
-    if menu_item(ui, tl!("Show Find Field"), true, find) {
-        set_pstate(ui.ctx(), "swatch-show-find", !find);
-    }
-    let recent = app.ui.swatches_show_recent_colors;
-    if menu_item(ui, tl!("Show Recent Colors"), true, recent) {
-        app.ui.swatches_show_recent_colors = !recent;
-    }
-    ui.separator();
-    if menu_item(ui, tl!("Swatch Options…"), opts.is_some(), false)
-        && let Some(n) = opts
-    {
-        app.run("ui.swatchOptions", json!({"name": n})).ok();
-    }
-    if menu_item(ui, tl!("Spot Colors…"), app.session.active().is_some(), false) {
-        app.run("ui.spotColors", json!({})).ok();
-    }
-    ui.separator();
-    ui.menu_button(tl!("Open Swatch Library"), |ui| library_panel::library_menu::<SwatchLibraries>(app, ui));
-    if menu_item(ui, tl!("Save Swatch Library…"), true, false) {
-        app.run("ui.saveSwatchLibrary", json!({ "names": deletable(app, &selected) })).ok();
-    }
+        "newColorGroup" => app.run("ui.newColorGroup", json!({ "swatches": del })),
+        "duplicate" => match opts {
+            Some(n) => app.run("swatch.duplicate", json!({ "name": n })),
+            None => done,
+        },
+        "merge" => app.run("swatch.merge", json!({ "names": mergeable(app, &sel) })),
+        "delete" => {
+            delete(app, del, false);
+            done
+        }
+        "editGroup" => {
+            if let Some(g) = group {
+                edit_group(app, &g);
+            }
+            done
+        }
+        "ungroup" => match group {
+            Some(g) => app.run("swatch.ungroup", json!({ "name": g })),
+            None => done,
+        },
+        "groupOptions" => match sole_group(app, &sel) {
+            Some(g) => app.run("ui.colorGroupOptions", json!({ "group": g })),
+            None => done,
+        },
+        "selectUnused" => app.run("swatch.unused", json!({})).map(|r| {
+            let names = r["names"].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect();
+            app.ui.swatches_panel.set_swatches(names);
+            r
+        }),
+        "addUsedColors" => app.run("swatch.addUsedColors", json!({})),
+        // The selected art's new colors, as global swatches its paints link to.
+        "addSelectedColors" => app.run("swatch.addUsedColors", json!({"selection": true, "global": true})),
+        "sortByName" => app.run("swatch.sortByName", json!({})),
+        "sortByKind" => app.run("swatch.sortByKind", json!({})),
+        "view" => app.run("ui.panelView", json!({ "panel": "swatches", "view": params["view"] })),
+        "showFind" => {
+            let panel = &mut app.ui.swatches_panel;
+            panel.show_find = !panel.show_find;
+            done
+        }
+        "showRecent" => {
+            app.ui.swatches_show_recent_colors = !app.ui.swatches_show_recent_colors;
+            done
+        }
+        "options" => match opts {
+            Some(n) => app.run("ui.swatchOptions", json!({ "name": n })),
+            None => done,
+        },
+        "spotColors" => app.run("ui.spotColors", json!({})),
+        _ => return None,
+    })
 }
