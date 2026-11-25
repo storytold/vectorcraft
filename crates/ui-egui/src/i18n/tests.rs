@@ -161,22 +161,24 @@ fn numbered_labels_translate_the_name_before_the_number() {
 }
 
 #[test]
-fn arabic_resolves_locales_and_preferences() {
-    let ar = Lang::from_code("ar").expect("ar registered");
-    assert_eq!(ar.name(), "العربية");
-    assert!(!ar.complete_menus());
-    assert_eq!(Lang::from_pref("ar"), ar);
-    for tag in ["ar", "AR", "ar-SA", "ar_EG", "ar_EG.UTF-8", "ar-AE", "ar-MA"] {
-        assert_eq!(i18n().match_tag(tag), Some(ar), "{tag}");
-    }
+fn arabic_is_preparatory_and_unavailable_to_users() {
+    assert_eq!(Lang::from_code("ar"), None);
+    assert!(!Lang::for_picker().iter().any(|l| l.code() == "ar"));
+    assert_eq!(Lang::from_pref("ar"), Lang::from_pref("auto"));
 }
 
 #[test]
-fn arabic_plural_rule_has_six_forms() {
-    let ar = Lang::from_code("ar").expect("ar registered");
+fn arabic_plural_rule_and_catalog_infrastructure() {
+    let (i18n, problems) = I18n::new(EMBEDDED, &["ar"]);
+    assert!(problems.is_empty(), "{problems:?}");
+    let ar = i18n.from_code("ar").expect("ar offered in custom instance");
+    assert_eq!(i18n.name(ar), "العربية");
+    for tag in ["ar", "AR", "ar-SA", "ar_EG", "ar_EG.UTF-8", "ar-AE", "ar-MA"] {
+        assert_eq!(i18n.match_tag(tag), Some(ar), "{tag}");
+    }
     for (n, want) in [(0, "0 إيداع"), (1, "1 إيداع"), (2, "2 إيداعين"), (3, "3 إيداعات"), (11, "11 إيداعًا"), (100, "100 إيداع")]
     {
-        assert_eq!(trn(ar, n, "{n} commit", "{n} commits"), want, "for n={n}");
+        assert_eq!(i18n.trn_plain(ar, n, "{n} commit", "{n} commits"), want, "for n={n}");
     }
 }
 
