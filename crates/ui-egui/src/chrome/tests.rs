@@ -528,6 +528,18 @@ fn combined_open_and_link_status_lists_notes_on_hover_and_for_accessibility() {
     assert!(!described.as_deref().is_some_and(|d| d.contains("• ")) && shown.is_empty(), "a later message lists nothing: {described:?} {shown:?}");
 }
 
+/// While Cmd/Ctrl is held, Current Tool names the selection tool a press would borrow: Direct
+/// Selection with the Selection tool chosen, and the Selection tool again once the key is let go.
+#[test]
+fn current_tool_names_the_selection_tool_cmd_lends() {
+    let bar = status_readout_app();
+    let app = bar.app();
+    let cmd = vectorcraft_tools::Mods { cmd: true, ..Default::default() };
+    assert_eq!(app.session.tool_id(), "selection");
+    assert_eq!(super::status_bar::info_text(&app, &cmd).0, "Direct Selection");
+    assert_eq!(super::status_bar::info_text(&app, &Default::default()).0, "Selection");
+}
+
 /// The status bar's info field shows the readout `view.statusBarShow` chooses: the navigator's
 /// artboard name, the tool in use, the date and time, the undo and redo counts, or the document's
 /// color profile.
@@ -564,7 +576,7 @@ fn the_status_bar_info_field_shows_the_chosen_readout() {
     // The labels take the UI language's colon (#7991).
     let fr = crate::i18n::Lang::from_code("fr").unwrap();
     crate::i18n::set_current(fr);
-    let (french, _) = super::status_bar::info_text(&bar.app());
+    let (french, _) = super::status_bar::info_text(&bar.app(), &Default::default());
     crate::i18n::set_current(crate::i18n::Lang::EN);
     assert_eq!(french, format!("{}\u{a0}: {before}  {}\u{a0}: 1", crate::i18n::tr(fr, "Undos"), crate::i18n::tr(fr, "Redos")));
 
@@ -2429,6 +2441,58 @@ fn the_control_bar_leaves_members_out_in_its_priority_order() {
     assert!(seen.iter().all(|s| s[2..].iter().all(|f| *f == s[1])), "the four fields show or go together");
     assert!(seen.iter().any(|s| s[0] && s[1]), "a wide bar shows the fields and the Align buttons");
     assert!(seen.iter().any(|s| s[0] && !s[1]), "some width shows the Align buttons without the fields");
+}
+
+/// With type selected, the Character and Paragraph groups leave the Control bar before Opacity and the Style group: at
+/// every width that shows the Character group, Opacity, Recolor Artwork and the Style picker show too, the Paragraph
+/// group leaves before the Character group, the Align buttons leave before the Paragraph group, and some width shows
+/// Opacity without them.
+#[test]
+fn the_type_groups_leave_the_control_bar_before_opacity_and_style() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let text = app.run("text.create", json!({"x": 10, "y": 100, "text": "Hi"})).unwrap()["id"].clone();
+    app.run("select.set", json!({ "ids": [text] })).unwrap();
+    let mut bar = control_shown(app);
+    let names = ["Character:", "Paragraph:", "Opacity:", "Recolor Artwork", "Style:", "Horizontal Align Left"];
+    let seen = control_bar_widths(&mut bar, &names);
+    assert!(seen.iter().any(|s| s.iter().all(|shown| *shown)), "a wide bar shows {names:?}");
+    for s in &seen {
+        assert!(!s[0] || s[2..5].iter().all(|shown| *shown), "the Character group shows only with {:?}: {s:?}", &names[2..5]);
+        assert!(!s[1] || s[0], "the Paragraph group shows only with the Character group: {s:?}");
+        assert!(!s[5] || s[1], "the Align buttons show only with the Paragraph group: {s:?}");
+    }
+    assert!(seen.iter().any(|s| s[2] && !s[0]), "some width shows Opacity without the Character group");
+}
+
+/// With area type selected, its vertical alignment buttons leave the Control bar before Opacity and the Style group,
+/// and after the Align buttons that follow them, with the Character and Paragraph groups shown and with both off.
+#[test]
+fn the_vertical_alignment_buttons_leave_the_control_bar_before_opacity_and_style() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let area = json!({"x": 10, "y": 10, "text": "Hi", "area": {"width": 100, "height": 120}});
+    let text = app.run("text.create", area).unwrap()["id"].clone();
+    app.run("select.set", json!({ "ids": [text] })).unwrap();
+    let mut bar = control_shown(app);
+    let names = ["Align Top", "Opacity:", "Recolor Artwork", "Style:", "Horizontal Align Left", "Paragraph:"];
+    for type_groups in [true, false] {
+        for group in ["character", "paragraph"] {
+            bar.app().run("window.control.options", json!({ "group": group, "visible": type_groups })).unwrap();
+        }
+        let case = if type_groups { "with the type groups" } else { "without the type groups" };
+        let seen = control_bar_widths(&mut bar, &names);
+        assert!(seen.iter().any(|s| s[..5].iter().all(|shown| *shown)), "{case}: a wide bar shows {:?}", &names[..5]);
+        for s in &seen {
+            assert!(!s[0] || s[1..4].iter().all(|shown| *shown), "{case}: Align Top shows only with {:?}: {s:?}", &names[1..4]);
+            assert!(!s[4] || s[0], "{case}: the Align buttons show only with Align Top: {s:?}");
+            assert!(type_groups || !s[5], "{case}: the Paragraph group is off: {s:?}");
+            assert!(!type_groups || !s[0] || s[5], "{case}: Align Top shows only with the Paragraph group: {s:?}");
+        }
+        assert!(seen.iter().any(|s| s[1] && !s[0]), "{case}: some width shows Opacity without Align Top");
+    }
 }
 
 /// The names of the bar's X, Y, W and H fields, in their order.

@@ -301,3 +301,61 @@ fn open_anchor_delete_and_backspace_cut_the_clicked_anchor_then_clear() {
         assert!(pieces.iter().all(|piece| app.session.doc().unwrap().doc.node(*piece).is_none()), "the next {key:?} clears every piece");
     }
 }
+
+/// With General › Delete Removes Anchor Points and Keeps Paths Joined on, both deletion keys
+/// remove the clicked anchor of a closed path and leave it closed, in one undo step.
+#[test]
+fn with_the_preference_on_delete_and_backspace_keep_the_path_joined() {
+    for key in [egui::Key::Delete, egui::Key::Backspace] {
+        let mut app = app();
+        app.run("prefs.set", json!({"key": "deleteKeepsPathsJoined", "value": true})).unwrap();
+        let id = rect(&mut app);
+        app.select_tool("directSelection");
+        let ctx = crate::testing::ui_context();
+        for _ in 0..3 {
+            anchor_delete_frame(&mut app, &ctx, vec![]);
+        }
+        let at = app.canvas_view().unwrap().to_screen(Point::new(150.0, 50.0));
+        let click = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        anchor_delete_frame(&mut app, &ctx, vec![Event::PointerMoved(at), click(true)]);
+        anchor_delete_frame(&mut app, &ctx, vec![click(false)]);
+        let st = app.session.doc().unwrap();
+        assert_eq!(st.selection.anchors.get(&id).map(|a| a.len()), Some(1), "the real canvas click selected one anchor");
+        let (before, undo) = (st.doc.clone(), st.history.undo.len());
+        let press = |pressed| Event::Key { key, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+        anchor_delete_frame(&mut app, &ctx, vec![press(true)]);
+        anchor_delete_frame(&mut app, &ctx, vec![press(false)]);
+        let st = app.session.doc().unwrap();
+        let path = st.doc.node(id).and_then(|n| n.path_data()).unwrap();
+        assert_eq!(path.subpaths.len(), 1);
+        assert!(path.subpaths[0].closed, "{key:?} keeps the path closed");
+        assert_eq!(anchor_count(&app, id), 3);
+        assert_eq!(st.history.undo.len(), undo + 1);
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc, before);
+    }
+}
+
+/// The Smart Pen does not take Delete, so with it chosen Delete follows the preference too.
+#[test]
+fn with_the_smart_pen_chosen_delete_follows_the_preference() {
+    for on in [false, true] {
+        let mut app = app();
+        app.run("prefs.set", json!({"key": "deleteKeepsPathsJoined", "value": on})).unwrap();
+        let id = rect(&mut app);
+        app.select_tool("smartPen");
+        let ctx = crate::testing::ui_context();
+        for _ in 0..3 {
+            anchor_delete_frame(&mut app, &ctx, vec![]);
+        }
+        app.run("select.anchors", json!({"id": id.0, "anchors": [[0, 1]], "mode": "set"})).unwrap();
+        let press = |pressed| Event::Key { key: egui::Key::Delete, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+        anchor_delete_frame(&mut app, &ctx, vec![press(true)]);
+        anchor_delete_frame(&mut app, &ctx, vec![press(false)]);
+        assert_eq!(app.session.tool_id(), "smartPen");
+        let st = app.session.doc().unwrap();
+        let closed = st.doc.node(id).and_then(|n| n.path_data()).is_some_and(|p| p.subpaths.len() == 1 && p.subpaths[0].closed);
+        assert_eq!(closed, on, "with the preference {on}, Delete keeps the path closed: {on}");
+        assert_eq!(anchor_count(&app, id), 3, "Delete removed one anchor");
+    }
+}

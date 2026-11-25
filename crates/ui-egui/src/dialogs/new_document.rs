@@ -20,7 +20,7 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Background, ColorMode, Unit};
 use vectorcraft_engine::cmd::newdoc::{self, ArtboardLayout, DocSettings, MAX_ARTBOARDS, PreviewMode, RASTER_PPI};
 
-use craft::behavior::Mixed;
+use craft::behavior::{IconId, Mixed};
 use craft::ui::buttons::Button;
 use craft::ui::choice::{Checkbox, Segmented};
 use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _, clicked};
@@ -299,7 +299,10 @@ impl DocumentSettings for VcNewDocument {
         Row::new().show(ui, |ui, _| {
             Field::new(height.clone()).show(ui, |ui, _| size_field(ui, &height, &mut s.height, lengths));
             Field::new(orientation.clone()).show(ui, |ui, _| {
-                let entries = [Entry::new(Orientation::Portrait, portrait.clone()), Entry::new(Orientation::Landscape, landscape.clone())];
+                let entries = [
+                    Entry::new(Orientation::Portrait, portrait.clone()).icon(IconId::new("orientation_portrait")),
+                    Entry::new(Orientation::Landscape, landscape.clone()).icon(IconId::new("orientation_landscape")),
+                ];
                 picked = Segmented::new(orientation.clone(), Bind::given(current), &entries).show(ui).value().cloned();
             });
             Field::new(artboards.clone()).show(ui, |ui, _| {
@@ -781,6 +784,50 @@ mod tests {
 
     fn general_units(app: &mut VectorcraftApp, units: &str) {
         app.run("prefs.set", json!({"key": "unitsGeneral", "value": units, "documentUnits": false})).unwrap();
+    }
+
+    /// The window's frames with the dialog open, laid out; the last frame's output.
+    fn laid_out(app: &mut VectorcraftApp) -> egui::FullOutput {
+        let ctx = ctx(app);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
+        let mut frame = |i: u32| {
+            let input = egui::RawInput { time: Some(0.1 * f64::from(i)), screen_rect: Some(screen), ..Default::default() };
+            crate::testing::part_frame(app, &ctx, input, |app, ui| app.ui(ui))
+        };
+        (0..3).for_each(|i| drop(frame(i)));
+        frame(3)
+    }
+
+    /// Orientation shows a page icon for Portrait and for Landscape, named for screen readers, as production's buttons
+    /// did; before, it showed the words, and Landscape, cut short, ran into Artboards.
+    #[test]
+    fn orientation_shows_two_page_icons_beside_artboards() {
+        fn texts(s: &egui::Shape, out: &mut Vec<(String, egui::Pos2)>) {
+            match s {
+                egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect().center())),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+                _ => {}
+            }
+        }
+        let mut app = app();
+        open(&mut app);
+        let out = laid_out(&mut app);
+        let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        let bounds = |label: &str, role: egui::accesskit::Role| {
+            let (_, n) = nodes.iter().find(|(_, n)| n.label() == Some(label) && n.role() == role).unwrap_or_else(|| panic!("no {role:?} {label}"));
+            n.bounds().expect("bounds")
+        };
+        let landscape = bounds("Landscape", egui::accesskit::Role::RadioButton);
+        let artboards = bounds("Artboards", egui::accesskit::Role::SpinButton);
+        assert!(landscape.x1 <= artboards.x0, "Landscape {landscape:?} stays left of Artboards {artboards:?}");
+        let group = bounds("Orientation", egui::accesskit::Role::RadioGroup);
+        let mut drawn = Vec::new();
+        out.shapes.iter().for_each(|s| texts(&s.shape, &mut drawn));
+        let inside: Vec<_> = drawn
+            .iter()
+            .filter(|(_, at)| (group.x0..=group.x1).contains(&f64::from(at.x)) && (group.y0..=group.y1).contains(&f64::from(at.y)))
+            .collect();
+        assert!(inside.is_empty(), "the segments draw icons, not words: {inside:?}");
     }
 
     /// Recent shows each entry as it was made: a portrait and a landscape A3 are two documents, and

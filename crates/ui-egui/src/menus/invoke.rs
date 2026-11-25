@@ -90,6 +90,14 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     {
         return;
     }
+    // The Artboard tool's Rearrange (its canvas menu) opens Rearrange for the artboards it lists,
+    // whose OK waits for a click on the canvas.
+    if id == "artboard.rearrange"
+        && let Some(indices) = crate::dialogs::rearrange_artboards::menu_indices(&p)
+    {
+        crate::dialogs::rearrange_artboards::open_selected(app, &indices);
+        return;
+    }
     // Params first: some dialogs' fields take a look through the session (Move's last move).
     if p.as_object().is_none_or(|o| o.is_empty())
         && let Some(opened) = open_menu_dialog(app, id)

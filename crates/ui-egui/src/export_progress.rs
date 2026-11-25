@@ -39,9 +39,10 @@ pub(crate) struct Shown {
     pub hide: Option<&'static str>,
 }
 
-/// Seconds on the clock the jobs record their start with.
-pub(crate) fn now() -> f64 {
-    craft::platform::clock::monotonic_ms() / 1000.0
+/// Seconds on the clock the jobs record their start with: the app's clock, which a test can hold
+/// still.
+pub(crate) fn now(app: &VectorcraftApp) -> f64 {
+    app.now()
 }
 
 /// The window of the first table that has a job it shows. Opening and placing wait for the tables
@@ -58,7 +59,7 @@ fn first(app: &VectorcraftApp) -> Option<Shown> {
 /// no other dialog is open, and runs the command of the button pressed.
 pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let Some(shown) = first(app) else { return };
-    let age = now() - shown.started;
+    let age = now(app) - shown.started;
     if age < DELAY {
         // Nothing else wakes the frame that opens the window.
         ui.ctx().request_repaint_after(Duration::from_secs_f64(DELAY - age));
@@ -99,7 +100,8 @@ mod tests {
     use super::DELAY;
     use crate::{Services, VectorcraftApp, background};
 
-    /// An app whose background writer waits until `go` is set.
+    /// An app whose background writer waits until `go` is set. Its clock stands still: a job is only
+    /// old enough for its window after [`age`].
     fn app(go: Arc<std::sync::atomic::AtomicBool>) -> VectorcraftApp {
         let services = Services {
             write_shared: Some(Arc::new(move |_: &str, _: &[u8]| {
@@ -112,6 +114,7 @@ mod tests {
         };
         let mut app = VectorcraftApp::new(Session::new(), services);
         crate::tests_background::threaded(&mut app);
+        app.now_override = Some(0.0);
         app
     }
 
