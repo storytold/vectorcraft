@@ -1,24 +1,20 @@
-//! A script's ScriptUI palette in the app: it stays open after the run, and a click on it waits in
-//! line and starts its handler's run on the next frame.
+//! A script's ScriptUI palette in the app: it stays open on the dialog host after the run, follows
+//! the session's palette, and a click on it waits in line and starts its handler's run on the next
+//! frame.
 
 use serde_json::json;
-use vectorcraft_engine::Session;
-use vectorcraft_engine::script::{UiEvent, UiValue};
+use vectorcraft_engine::script::{UiEvent, UiKind, UiValue};
 
-use crate::dialogs::script_window;
-use crate::state::Dialog;
-use crate::{VectorcraftApp, menus, script_palettes, script_runs};
+use super::script_dialogs::{app, is_open};
+use crate::dialogs::script_run::ScriptNotice;
+use crate::script_palettes::{self, PaletteWindow, with_palette};
+use crate::{VectorcraftApp, menus, script_runs};
 
-fn app() -> VectorcraftApp {
-    let mut app = VectorcraftApp::new(Session::new(), crate::Services::default());
-    app.run("file.new", json!({})).unwrap();
-    app.session.prefs.show_external_script_warning = false;
-    app
-}
+const TOOLS: &str = "#targetengine tools\nvar p = new Window('palette', 'Tools'); var go = p.add('button', undefined, 'Go'); \
+                     go.onClick = function () { vc.log('clicked'); }; p.show();";
 
-/// No text typed in a palette's fields.
-fn drafts() -> Dialog {
-    Dialog::new(script_window::KIND, json!({}))
+fn start(app: &mut VectorcraftApp, source: &str) {
+    menus::run_ui_command(app, "ui.runScript", &json!({"source": source, "name": "p.js"})).unwrap().unwrap();
 }
 
 fn run_to_end(app: &mut VectorcraftApp) {
@@ -31,37 +27,77 @@ fn run_to_end(app: &mut VectorcraftApp) {
     panic!("the script did not end");
 }
 
-/// One headless frame in which `f` runs. → whether the frame asked for the next one at once.
-fn frame(ctx: &egui::Context, f: impl FnMut(&mut egui::Ui)) -> bool {
-    frame_delay(ctx, f).is_zero()
+/// Runs `source`, then follows its palettes into the dialog host. → the first palette's id.
+fn shown(app: &mut VectorcraftApp, source: &str) -> u64 {
+    start(app, source);
+    run_to_end(app);
+    follow(app);
+    app.session.script_palettes()[0].id
 }
 
-/// One headless frame in which `f` runs. → how long until the frame asked for the next one;
+/// The frame's follow of the session's palettes into the dialog host.
+fn follow(app: &mut VectorcraftApp) {
+    let ctx = app.ui_ctx.clone().unwrap();
+    script_palettes::show(app, &ctx);
+}
+
+/// One headless pass in which `f` runs. → how long until the pass asked for the next one;
 /// `Duration::MAX` when it asked for none.
-fn frame_delay(ctx: &egui::Context, f: impl FnMut(&mut egui::Ui)) -> std::time::Duration {
+fn frame_delay(app: &mut VectorcraftApp, mut f: impl FnMut(&mut VectorcraftApp, &egui::Context)) -> std::time::Duration {
+    let ctx = app.ui_ctx.clone().unwrap();
     let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0)));
-    let mut out = ctx.run_ui(egui::RawInput { screen_rect, ..Default::default() }, f);
+    let mut out = ctx.run_ui(egui::RawInput { screen_rect, ..Default::default() }, |ui| f(app, ui.ctx()));
     out.textures_delta.clear();
     out.viewport_output.get(&egui::ViewportId::ROOT).map_or(std::time::Duration::MAX, |v| v.repaint_delay)
+}
+
+/// Runs passes of `f` until one asks for no frame at once. → whether one did.
+fn settle(app: &mut VectorcraftApp, mut f: impl FnMut(&mut VectorcraftApp, &egui::Context)) -> bool {
+    (0..10).any(|_| !frame_delay(app, &mut f).is_zero())
+}
+
+fn give(app: &VectorcraftApp, id: u64, event: UiEvent) {
+    with_palette(app, id, |w| w.give(event)).unwrap();
+}
+
+#[test]
+fn a_shown_palette_opens_on_the_dialog_host_and_closes_when_hidden() {
+    let mut app = app();
+    let id = shown(&mut app, TOOLS);
+    assert!(is_open::<PaletteWindow>(&app), "the palette stays open after the run");
+    start(&mut app, "#targetengine tools\np.hide();");
+    run_to_end(&mut app);
+    follow(&mut app);
+    assert!(with_palette(&app, id, |_| ()).is_none(), "a hidden palette's dialog closes");
+    start(&mut app, "#targetengine tools\np.show();");
+    run_to_end(&mut app);
+    follow(&mut app);
+    assert!(with_palette(&app, id, |_| ()).is_some(), "showing it again opens it");
+}
+
+#[test]
+fn a_script_dialog_opens_while_a_palette_is_open() {
+    let mut app = app();
+    shown(&mut app, TOOLS);
+    start(&mut app, "vc.log(confirm('Go?'));");
+    for _ in 0..10_000 {
+        if is_open::<ScriptNotice>(&app) {
+            break;
+        }
+        assert!(app.session.script_running(), "the run waits at its confirm");
+        script_runs::poll(&mut app);
+    }
+    assert!(is_open::<ScriptNotice>(&app), "the palette beside the documents does not keep the confirm from opening");
+    assert!(is_open::<PaletteWindow>(&app));
 }
 
 #[test]
 fn a_click_on_a_palette_asks_for_the_frame_that_starts_its_run() {
     let mut app = app();
-    let source = "#targetengine tools\nvar p = new Window('palette', 'Tools'); var go = p.add('button', undefined, 'Go'); \
-                  go.onClick = function () { vc.log('clicked'); }; p.show();";
-    menus::run_ui_command(&mut app, "ui.runScript", &json!({"source": source, "name": "p.js"})).unwrap().unwrap();
-    run_to_end(&mut app);
-    let id = app.session.script_palettes()[0].id;
-    let ctx = egui::Context::default();
-    for _ in 0..3 {
-        frame(&ctx, |_| {});
-    }
-    assert!(!frame(&ctx, |_| {}), "an idle frame asks for no other");
-    assert!(
-        frame(&ctx, |ui| script_palettes::give(&mut app, ui.ctx(), id, &mut drafts(), vec![UiEvent::Click(1)])),
-        "the click asks for the next frame"
-    );
+    let id = shown(&mut app, TOOLS);
+    assert!(settle(&mut app, |_, _| {}), "an idle pass asks for no other");
+    give(&app, id, UiEvent::Click(1));
+    assert!(frame_delay(&mut app, script_palettes::show).is_zero(), "the click asks for the next frame");
     assert_eq!(app.session.script_palette_events_waiting(), 1);
     script_runs::poll(&mut app);
     run_to_end(&mut app);
@@ -72,12 +108,8 @@ fn a_click_on_a_palette_asks_for_the_frame_that_starts_its_run() {
 #[test]
 fn a_click_waiting_behind_a_run_at_its_dialog_asks_for_no_frames() {
     let mut app = app();
-    let source = "#targetengine tools\nvar p = new Window('palette', 'Tools'); var go = p.add('button', undefined, 'Go'); \
-                  go.onClick = function () { vc.log('clicked'); }; p.show();";
-    menus::run_ui_command(&mut app, "ui.runScript", &json!({"source": source, "name": "p.js"})).unwrap().unwrap();
-    run_to_end(&mut app);
-    let id = app.session.script_palettes()[0].id;
-    menus::run_ui_command(&mut app, "ui.runScript", &json!({"source": "vc.log(confirm('Go?'));", "name": "d.js"})).unwrap().unwrap();
+    let id = shown(&mut app, TOOLS);
+    start(&mut app, "vc.log(confirm('Go?'));");
     for _ in 0..10_000 {
         if app.session.script_dialog().is_some() {
             break;
@@ -85,37 +117,24 @@ fn a_click_waiting_behind_a_run_at_its_dialog_asks_for_no_frames() {
         script_runs::poll(&mut app);
     }
     assert!(app.session.script_dialog().is_some(), "the run waits at its confirm");
-    let ctx = egui::Context::default();
-    frame(&ctx, |ui| script_palettes::give(&mut app, ui.ctx(), id, &mut drafts(), vec![UiEvent::Click(1)]));
+    give(&app, id, UiEvent::Click(1));
+    follow(&mut app);
     assert_eq!(app.session.script_palette_events_waiting(), 1);
-    let mut asks = true;
-    for _ in 0..5 {
-        app.begin_host_iteration();
-        asks = frame(&ctx, |ui| app.tick(ui.ctx()));
-        if !asks {
-            break;
-        }
-    }
-    assert!(!asks, "the waiting click asks for no frames while the run waits for its answer");
+    assert!(settle(&mut app, |app, ctx| app.tick(ctx)), "the waiting click asks for no frames while the run waits for its answer");
     assert_eq!(app.session.script_palette_events_waiting(), 1, "the click still waits");
 }
 
 #[test]
 fn a_click_waiting_for_an_open_undo_group_asks_for_no_frames_and_runs_after_it() {
     let mut app = app();
-    let source = "#targetengine tools\nvar p = new Window('palette', 'Tools'); var go = p.add('button', undefined, 'Go'); \
-                  go.onClick = function () { vc.log('clicked'); }; p.show();";
-    menus::run_ui_command(&mut app, "ui.runScript", &json!({"source": source, "name": "p.js"})).unwrap().unwrap();
-    run_to_end(&mut app);
-    let id = app.session.script_palettes()[0].id;
+    let id = shown(&mut app, TOOLS);
     app.run("edit.undoGroup.begin", json!({})).unwrap();
-    let ctx = egui::Context::default();
-    frame(&ctx, |ui| script_palettes::give(&mut app, ui.ctx(), id, &mut drafts(), vec![UiEvent::Click(1)]));
+    give(&app, id, UiEvent::Click(1));
+    follow(&mut app);
     assert_eq!(app.session.script_palette_events_waiting(), 1);
     let mut delay = std::time::Duration::ZERO;
     for _ in 0..5 {
-        app.begin_host_iteration();
-        delay = frame_delay(&ctx, |ui| app.tick(ui.ctx()));
+        delay = frame_delay(&mut app, |app, ctx| app.tick(ctx));
         if delay == std::time::Duration::MAX {
             break;
         }
@@ -123,12 +142,10 @@ fn a_click_waiting_for_an_open_undo_group_asks_for_no_frames_and_runs_after_it()
     assert_eq!(delay, std::time::Duration::MAX, "the waiting click asks for no frames, now or later, while the undo group is open");
     assert_eq!(app.session.script_palette_events_waiting(), 1, "the click still waits");
     app.run("edit.undoGroup.end", json!({})).unwrap();
-    app.begin_host_iteration();
-    frame(&ctx, |ui| app.tick(ui.ctx()));
+    frame_delay(&mut app, |app, ctx| app.tick(ctx));
     assert_eq!(app.session.script_palette_events_waiting(), 0, "with the group ended the next frame starts the click's run");
     run_to_end(&mut app);
     assert_eq!(app.session.script_report().unwrap()["log"], json!(["clicked"]));
-    assert_eq!(app.session.script_palette_events_waiting(), 0);
 }
 
 #[test]
@@ -136,22 +153,15 @@ fn a_typed_text_stays_in_its_field_when_a_run_adds_a_control_before_it() {
     let mut app = app();
     let source = "#targetengine places\nvar p = new Window('palette'); var g = p.add('group'); g.add('button', undefined, 'First'); \
                   var t = p.add('edittext', undefined, ''); p.show();";
-    menus::run_ui_command(&mut app, "ui.runScript", &json!({"source": source, "name": "p.js"})).unwrap().unwrap();
+    let id = shown(&mut app, source);
+    assert_eq!(app.session.script_palettes()[0].dialog.nodes[3].kind, UiKind::EditText);
+    with_palette(&app, id, |w| w.type_text(3, "typed")).unwrap();
+    start(&mut app, "#targetengine places\ng.add('button', undefined, 'Added');");
     run_to_end(&mut app);
-    let before = app.session.script_palettes()[0].clone();
-    assert_eq!(before.dialog.nodes[3].kind, vectorcraft_engine::script::UiKind::EditText);
-    let ctx = egui::Context::default();
-    let mut drafts = script_palettes::drafts(&ctx, &before);
-    drafts.fields.insert("text3".into(), json!("typed"));
-    script_palettes::keep_drafts(&ctx, &before, drafts);
-    let added = "#targetengine places\ng.add('button', undefined, 'Added');";
-    menus::run_ui_command(&mut app, "ui.runScript", &json!({"source": added, "name": "a.js"})).unwrap().unwrap();
-    run_to_end(&mut app);
-    let after = app.session.script_palettes()[0].clone();
-    assert_eq!(after.dialog.nodes[4].kind, vectorcraft_engine::script::UiKind::EditText, "the added button comes before the field");
-    let drafts = script_palettes::drafts(&ctx, &after);
-    assert_eq!(drafts.fields.get("text4"), Some(&json!("typed")), "{:?}", drafts.fields);
-    assert!(!drafts.fields.contains_key("text3"));
+    follow(&mut app);
+    assert_eq!(app.session.script_palettes()[0].dialog.nodes[4].kind, UiKind::EditText, "the added button comes before the field");
+    assert_eq!(with_palette(&app, id, |w| w.typed(4).map(str::to_string)).unwrap().as_deref(), Some("typed"));
+    assert_eq!(with_palette(&app, id, |w| w.typed(3).map(str::to_string)).unwrap(), None);
 }
 
 #[test]
@@ -163,17 +173,19 @@ fn a_typed_text_the_full_line_refuses_stays_in_its_field() {
          var go = p.add('button', undefined, 'Go'); go.onClick = function () {{ vc.log(t.text); }}; \
          for (var k = 0; k < {MAX_WAITING}; k++) {{ p.add('button', undefined, 'B' + k); }} p.show();"
     );
-    menus::run_ui_command(&mut app, "ui.runScript", &json!({"source": source, "name": "p.js"})).unwrap().unwrap();
-    run_to_end(&mut app);
-    let id = app.session.script_palettes()[0].id;
-    let ctx = egui::Context::default();
-    let fill: Vec<UiEvent> = (3..3 + MAX_WAITING).map(UiEvent::Click).collect();
-    frame(&ctx, |ui| script_palettes::give(&mut app, ui.ctx(), id, &mut drafts(), fill.clone()));
+    let id = shown(&mut app, &source);
+    for c in 3..3 + MAX_WAITING {
+        app.session.script_palette_event(id, UiEvent::Click(c)).unwrap();
+    }
     assert_eq!(app.session.script_palette_events_waiting(), MAX_WAITING, "the line is full");
-    let mut typed = drafts();
-    let events = vec![UiEvent::Change(1, UiValue::Text("typed".into())), UiEvent::Click(2)];
-    frame(&ctx, |ui| script_palettes::give(&mut app, ui.ctx(), id, &mut typed, events.clone()));
-    assert_eq!(typed.fields.get("text1"), Some(&json!("typed")), "the refused text goes back in its field: {:?}", typed.fields);
+    give(&app, id, UiEvent::Change(1, UiValue::Text("typed".into())));
+    give(&app, id, UiEvent::Click(2));
+    follow(&mut app);
+    assert_eq!(
+        with_palette(&app, id, |w| w.typed(1).map(str::to_string)).unwrap().as_deref(),
+        Some("typed"),
+        "the refused text goes back in its field"
+    );
     assert_eq!(app.session.script_palette_events_waiting(), MAX_WAITING, "neither the text nor the click is kept");
 }
 
@@ -182,19 +194,24 @@ fn a_typed_text_the_script_refuses_keeps_the_palette_click_out_of_line() {
     let mut app = app();
     let source = "#targetengine texts\nvar p = new Window('palette'); var t = p.add('edittext', undefined, 'a'); \
                   var go = p.add('button', undefined, 'Go'); go.onClick = function () { vc.log(t.text); }; p.show();";
-    menus::run_ui_command(&mut app, "ui.runScript", &json!({"source": source, "name": "p.js"})).unwrap().unwrap();
-    run_to_end(&mut app);
-    let p = app.session.script_palettes()[0].clone();
+    let id = shown(&mut app, source);
     let long = "x".repeat(16 * 1024 + 1);
-    let mut drafts = Dialog::new(script_window::KIND, json!({}));
-    drafts.fields.insert("text1".into(), json!(long));
-    let mut events = vec![UiEvent::Change(1, UiValue::Text(long.clone())), UiEvent::Click(2)];
-    script_palettes::drafted(&mut app, &p, &mut drafts, &mut events);
-    assert!(events.is_empty(), "neither the long text nor the click is given: {events:?}");
-    assert_eq!(drafts.fields.get("text1"), Some(&json!(long)), "the refused text stays in its field");
-    drafts.fields.insert("text1".into(), json!("fine"));
-    let mut events = vec![UiEvent::Click(2)];
-    script_palettes::drafted(&mut app, &p, &mut drafts, &mut events);
-    assert_eq!(events, vec![UiEvent::Change(1, UiValue::Text("fine".into())), UiEvent::Click(2)]);
-    assert!(!drafts.fields.contains_key("text1"), "the text is given once");
+    with_palette(&app, id, |w| w.type_text(1, &long)).unwrap();
+    give(&app, id, UiEvent::Change(1, UiValue::Text(long.clone())));
+    give(&app, id, UiEvent::Click(2));
+    follow(&mut app);
+    assert_eq!(app.session.script_palette_events_waiting(), 0, "neither the long text nor the click is given");
+    assert_eq!(with_palette(&app, id, |w| w.typed(1).map(str::to_string)).unwrap(), Some(long), "the refused text stays in its field");
+    with_palette(&app, id, |w| w.type_text(1, "fine")).unwrap();
+    give(&app, id, UiEvent::Click(2));
+    follow(&mut app);
+    assert_eq!(app.session.script_palette_events_waiting(), 2, "the typed text, then the click");
+    assert_eq!(with_palette(&app, id, |w| w.typed(1).map(str::to_string)).unwrap(), None, "the text is given once");
+    // The change's run, then the click's.
+    for _ in 0..2 {
+        script_runs::poll(&mut app);
+        run_to_end(&mut app);
+    }
+    assert_eq!(app.session.script_palette_events_waiting(), 0);
+    assert_eq!(app.session.script_report().unwrap()["log"], json!(["fine"]), "the click's handler reads the given text");
 }

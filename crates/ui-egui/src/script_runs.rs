@@ -5,15 +5,12 @@
 //! waits for the person's answer. With no run going, the oldest event a ScriptUI palette waits
 //! with starts its run ([`crate::script_palettes`]).
 
-use serde_json::json;
-
 use crate::VectorcraftApp;
-use crate::dialogs::{script_run, script_window};
-use crate::state::Dialog;
+use crate::dialogs::script_run::{self, GrowthQuestion, ScriptFiles, ScriptNotice};
+use crate::dialogs::script_window;
 
 /// Advances the running script by one slice, or asks what its growth needs asked.
 pub fn poll(app: &mut VectorcraftApp) {
-    script_run::drain(app);
     // With no run going, a waiting palette event starts its run.
     if !app.session.script_running() && !crate::script_palettes::start_next(app) {
         return;
@@ -23,19 +20,14 @@ pub fn poll(app: &mut VectorcraftApp) {
         return;
     }
     let name = app.session.script_name().unwrap_or_default();
-    let cursor_settings = (app.session.caps_lock, app.session.prefs.use_precise_cursors);
     let Some(result) = app.session.script_pump() else {
         // The app draws no more frames while the run waits: its question opens in this one.
         ask(app);
         return;
     };
-    if cursor_settings != (app.session.caps_lock, app.session.prefs.use_precise_cursors) {
-        app.canvas.hover_cursor = None;
-    }
-    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == script_run::GROWTH_KIND || d.kind == script_window::KIND) {
-        app.ui.dialog = None;
-    }
+    script_run::forget::<GrowthQuestion>(app);
     script_run::settle_close(app);
+    script_window::sync(app);
     match result {
         // The commands it ran are journaled now: a recording they no longer fit in names its limit.
         Ok(_) => {
@@ -48,71 +40,36 @@ pub fn poll(app: &mut VectorcraftApp) {
     app.sync_views();
 }
 
-/// Opens what the run waits at, once no other dialog is open: the script's own dialog, or the
-/// question about its growth. Closes the script's dialog when the run no longer waits at it.
-/// → true while the run waits.
+/// Opens what the run waits at, once no other dialog is open, or over the script's ScriptUI dialog:
+/// the script's own dialog, or the question about its growth. Closes the script's dialog when the
+/// run no longer waits at it, and the ScriptUI dialog when its `show()` ends. → true while the run
+/// waits.
 fn ask(app: &mut VectorcraftApp) -> bool {
-    // A ScriptUI dialog the script closed gives way to the file dialog or dialog function it waits
-    // at now.
-    if app.session.script_window().is_none()
-        && (app.session.script_picker().is_some() || app.session.script_dialog().is_some())
-        && app.ui.dialog.as_ref().is_some_and(|d| d.kind == script_window::KIND)
-    {
-        app.ui.dialog = None;
-    }
+    script_window::sync(app);
     if let Some(picker) = app.session.script_picker() {
-        if app.ui.dialog.is_none() {
-            script_run::open_picker(app, &picker);
+        if script_run::can_ask(app) {
+            script_run::open_picker(app, picker);
         }
         return true;
     }
-    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == script_run::PICKER_KIND) {
-        app.ui.dialog = None;
-    }
+    script_run::forget::<ScriptFiles>(app);
     if let Some(dialog) = app.session.script_dialog() {
-        if app.ui.dialog.is_none() {
+        if script_run::can_ask(app) {
             script_run::open_notice(app, &dialog);
         }
         return true;
     }
     // A run asked to stop no longer waits at its dialog.
-    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == script_run::NOTICE_KIND) {
-        app.ui.dialog = None;
-    }
+    script_run::forget::<ScriptNotice>(app);
     // A run past its growth allowance asks about it first, also when its ScriptUI dialog waits
-    // again. The question keeps the dialog of the show() the run is in, with its queued events and
-    // typed text, for Continue to show again.
+    // again.
     if app.session.script_waiting() {
-        let window = app.ui.dialog.take_if(|d| d.kind == script_window::KIND);
-        if app.ui.dialog.is_none() {
-            let showing = app.session.script_window_showing();
-            let mut fields = json!({});
-            if let Some(window) = window.filter(|d| showing.as_ref().is_some_and(|w| script_window::is_open_for(d, w))) {
-                fields[crate::dialogs::PARENT] = serde_json::to_value(window).unwrap_or_default();
-            }
-            app.ui.dialog = Some(Dialog::new(script_run::GROWTH_KIND, fields));
+        if script_run::can_ask(app) {
+            script_run::open_growth(app);
         }
         return true;
     }
-    if let Some(window) = app.session.script_window() {
-        // A dialog the script showed after closing the one that is open replaces it.
-        if app.ui.dialog.as_ref().is_some_and(|d| d.kind == script_window::KIND && !script_window::is_open_for(d, &window)) {
-            app.ui.dialog = None;
-        }
-        if app.ui.dialog.is_none() {
-            script_window::open(app, &window);
-        }
-        // Its heading follows a title a handler changed.
-        if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == script_window::KIND) {
-            d.fields.insert("title".into(), serde_json::Value::from(window.title()));
-        }
-        return true;
-    }
-    // While a handler runs, the ScriptUI dialog stays open, until its show() ends.
-    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == script_window::KIND) && app.session.script_window_showing().is_none() {
-        app.ui.dialog = None;
-    }
-    false
+    app.session.script_window().is_some()
 }
 
 /// Shows why a run ended without its changes. A stopped run that wrote no file says only that it

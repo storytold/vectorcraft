@@ -676,22 +676,24 @@ fn a_palette_list_change_throws_when_an_item_s_text_getter_replaces_the_items() 
 }
 
 #[test]
-fn a_palette_event_finds_its_control_by_its_place() {
-    let placed = |id: usize, place: &[f64]| {
+fn a_palette_event_finds_its_control_by_its_id() {
+    let of = |id: usize, element: f64| {
         let Data::Object(mut fields) = palette_event(1.0, click(id)) else { return Data::Null };
-        fields.push(("place".into(), Data::Array(place.iter().map(|&k| Data::Number(k)).collect())));
+        fields.push(("element".into(), Data::Number(element)));
         Data::Object(fields)
     };
-    // The host's index 1 is the group, where a control a getter added would have moved the button;
-    // the place is the button's, the second control of the palette.
-    let (mut r, _) = palette_realm(vec![placed(1, &[1.0]), placed(2, &[2.0])]);
+    // The palette is element 1, the group 2 and the button 3. The host's indexes are stale: 1 is
+    // the group, and after the group is removed, 2 is past the end.
+    let (mut r, _) = palette_realm(vec![of(1, 3.0), of(2, 3.0), of(1, 99.0)]);
     r.run("var p = new Window('palette'); var g = p.add('group'); var b = p.add('button', undefined, 'Go'); var clicks = 0; b.onClick = function () { clicks++; }; p.show();")
         .unwrap();
     r.run("Window.__vcPaletteEvent();").unwrap();
-    assert_eq!(r.run("clicks").unwrap(), JsValue::Number(1.0), "the click reaches the control at its place");
+    assert_eq!(r.run("clicks").unwrap(), JsValue::Number(1.0), "the click reaches the control with its id");
+    r.run("p.remove(g); Window.__vcPaletteEvent();").unwrap();
+    assert_eq!(r.run("clicks").unwrap(), JsValue::Number(2.0), "the click follows the control after a control before it is removed");
     let e = r.run("try { Window.__vcPaletteEvent(); 'none'; } catch (e) { e.message; }").unwrap();
-    assert_eq!(e, JsValue::String("a palette event names a control the palette no longer holds".into()), "no control at the place");
-    assert_eq!(r.run("clicks").unwrap(), JsValue::Number(1.0));
+    assert_eq!(e, JsValue::String("a palette event names a control the palette no longer holds".into()), "no control with the id");
+    assert_eq!(r.run("clicks").unwrap(), JsValue::Number(2.0));
 }
 
 #[test]
@@ -804,4 +806,288 @@ fn findelement_items_and_selection_follow_the_list() {
         )
         .unwrap();
     assert_eq!(v, JsValue::String("true,b,,,0,b".into()));
+}
+
+#[test]
+fn a_new_control_s_sizes_can_be_set_a_side_at_a_time_and_reach_the_description() {
+    let (mut r, seen, _) = realm(vec![click(1)]);
+    let source = "var w = new Window('dialog'); var b = w.add('button', undefined, 'OK'); \
+        b.preferredSize.width = 100; b.minimumSize.height = 30; b.maximumSize.width = 90; w.size.height = 200; w.show()";
+    assert_eq!(r.run(source).unwrap(), JsValue::Number(1.0));
+    let seen = seen.borrow();
+    let first = nodes(&seen.descriptions[0]);
+    let numbers = |v: &[f64]| Data::Array(v.iter().map(|n| Data::Number(*n)).collect());
+    assert_eq!(field(&first[1], "size"), &numbers(&[100.0, -1.0]), "the side left alone stays to the layout");
+    assert_eq!(field(&first[1], "min"), &numbers(&[-1.0, 30.0]));
+    assert_eq!(field(&first[1], "max"), &numbers(&[90.0, -1.0]));
+    assert_eq!(field(&first[0], "size"), &numbers(&[-1.0, 200.0]), "size takes the place of preferredSize");
+}
+
+#[test]
+fn listeners_run_in_the_capture_target_and_bubbling_phases_until_one_stops() {
+    let (mut r, _, _) = realm(vec![click(2)]);
+    let source = "var w = new Window('dialog'); var g = w.add('group'); var b = g.add('button', undefined, 'Go'); var log = []; \
+        w.addEventListener('click', function (e) { log.push('capture ' + e.eventPhase); }, true); \
+        b.onClick = function () { log.push('onClick'); }; \
+        b.addEventListener('click', function (e) { log.push(e.type + ' ' + (e.target === b) + ' ' + (this === b)); }); \
+        g.addEventListener('click', function (e) { log.push('group ' + (e.currentTarget === g)); }); \
+        w.addEventListener('click', function () { log.push('dialog'); w.close(3); }); \
+        [w.show(), log.join()].join('|')";
+    assert_eq!(r.run(source).unwrap(), JsValue::String("3|capture 1,onClick,click true true,group true,dialog".into()));
+    let (mut r, _, _) = realm(vec![click(1), close(), click(1), close()]);
+    let source = "var w = new Window('dialog'); var b = w.add('button', undefined, 'OK'); var log = []; \
+        function count() { log.push('count'); } b.addEventListener('click', count); b.addEventListener('click', count); \
+        b.addEventListener('click', function (e) { e.stopPropagation(); }); \
+        w.addEventListener('click', function () { log.push('dialog'); }); \
+        w.addEventListener('show', function (e) { log.push('show ' + e.bubbles); }); \
+        var first = w.show(); b.removeEventListener('click', count); var second = w.show(); [first, second, log.join()].join('|')";
+    assert_eq!(
+        r.run(source).unwrap(),
+        JsValue::String("0|0|show false,count,show false".into()),
+        "a button with a click listener does not close the dialog by itself, and the same listener is added once"
+    );
+    for (source, want) in [
+        ("w.addEventListener('click', function () { w.close(3); })", "3"),
+        ("w.addEventListener('click', function () { w.close(3); }, true)", "3"),
+        ("w.addEventListener('click', function () {})", "1"),
+    ] {
+        let (mut r, _, _) = realm(vec![click(1)]);
+        let source = format!("var w = new Window('dialog'); w.add('button', undefined, 'OK'); {source}; String(w.show())");
+        assert_eq!(r.run(&source).unwrap(), JsValue::String(want.into()), "a dialog listener's close(result) decides what show() gives: {source}");
+    }
+    for (source, want) in [
+        ("new Window('dialog').addEventListener('mouseover', function () {})", "Error addEventListener: the event mouseover is not available yet"),
+        ("new Window('dialog').addEventListener('wobble', function () {})", "Error addEventListener: there is no event wobble"),
+        ("new Window('dialog').addEventListener('click', 'code')", "TypeError addEventListener: give the handler as a function"),
+    ] {
+        let (mut r, _, _) = realm(Vec::new());
+        let e = r.run(&format!("try {{ {source}; 'added' }} catch (e) {{ e.name + ' ' + e.message }}")).unwrap();
+        assert_eq!(e, JsValue::String(want.into()), "{source}");
+    }
+}
+
+#[test]
+fn an_event_on_objects_made_to_look_like_controls_ends_with_a_type_error() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run(
+            "var b = new Window('dialog').add('button', undefined, 'Go'); var ran = false; \
+             var f = {__vcKind: 'button'}; var g = {__vcKind: 'group'}; f.__vcParent = g; g.__vcParent = f; f.onClick = function () { ran = true; }; \
+             try { b.notify.call(f, 'onClick'); 'ran' } catch (e) { e.name + ' ' + ran }",
+        )
+        .unwrap();
+    assert_eq!(v, JsValue::String("TypeError false".into()), "a parent cycle ends at once, not when the run's fuel is gone");
+}
+
+#[test]
+fn lists_find_and_remove_items_and_take_their_items_in_the_creation_properties() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run(
+            "var w = new Window('dialog'); var d = w.add('dropdownlist', undefined, undefined, {items: ['a', 'b', 'c']}); \
+             var x = w.add('listbox', undefined, {items: ['x'], name: 'xs'}); \
+             d.selection = 2; var b = d.find('b'); d.remove('b'); d.remove(0); d.remove('zzz'); d.remove(7); \
+             [d.items.length, d.items[0].text, d.selection.text, b.index, d.find('q'), x.items[0].text, x.name].join()",
+        )
+        .unwrap();
+    assert_eq!(v, JsValue::String("1,c,c,-1,,x,xs".into()));
+    let both = r.run("try { new Window('dialog').add('listbox', undefined, ['a'], {items: ['b']}); 'made' } catch (e) { e.name }").unwrap();
+    assert_eq!(both, JsValue::String("TypeError".into()));
+    let freed = r
+        .run(
+            "var w = new Window('dialog'); var l = w.add('listbox'); for (var n = 0; n < 1024; n++) l.add('item', 'i'); \
+             l.remove(0); l.add('item', 'again'); var g = w.add('group'); g.add('button', undefined, 'A'); g.add('button', undefined, 'B'); \
+             g.remove('A'); g.remove(g.children[0]); w.remove(l); var m = w.add('listbox'); \
+             for (var k = 0; k < 1024; k++) m.add('item', 'j'); for (var i = 0; i < 510; i++) w.add('button'); \
+             [g.children.length, w.children.length, m.items.length].join()",
+        )
+        .unwrap();
+    assert_eq!(freed, JsValue::String("0,512,1024".into()), "a removed item or control frees its place");
+}
+
+#[test]
+fn a_group_takes_its_creation_properties_third() {
+    let (mut r, seen, _) = realm(vec![close()]);
+    let v = r
+        .run(
+            "var w = new Window('dialog'); var g = w.add('group', undefined, {orientation: 'column', alignChildren: 'left', name: 'g'}); \
+             var p = w.add('panel', undefined, 'Title', {margins: 4}); w.show(); [g.orientation, g.alignChildren, g.name, g.text, p.text, p.margins].join()",
+        )
+        .unwrap();
+    assert_eq!(v, JsValue::String("column,left,g,,Title,4".into()));
+    let seen = seen.borrow();
+    assert_eq!(field(&nodes(&seen.descriptions[0])[1], "orientation"), &Data::String("column".into()));
+}
+
+#[test]
+fn a_radio_button_turned_on_turns_off_the_others_of_its_set() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run(
+            "var w = new Window('dialog'); var r1 = w.add('radiobutton', undefined, 'A'); var r2 = w.add('radiobutton', undefined, 'B'); \
+             var r3 = w.add('radiobutton', undefined, 'C'); w.add('statictext', undefined, 'Other'); var r4 = w.add('radiobutton', undefined, 'D'); \
+             var c = w.add('checkbox', undefined, 'E'); var clicks = 0; r3.onClick = function () { clicks++; }; \
+             r1.value = true; r2.value = true; var set = [r1.value, r2.value, r3.value]; r4.value = true; \
+             r3.notify('onClick'); r3.notify(); c.notify('onClick'); \
+             set.concat([r1.value, r2.value, r3.value, r4.value, c.value, clicks]).join()",
+        )
+        .unwrap();
+    assert_eq!(
+        v,
+        JsValue::String("false,true,false,false,false,true,true,true,2".into()),
+        "a radio button after another kind of control starts a new set"
+    );
+}
+
+#[test]
+fn a_click_on_a_radio_button_turns_off_only_the_radio_buttons_of_its_set() {
+    let (mut r, _, _) = realm(vec![click(4), close()]);
+    let source = "var w = new Window('dialog'); var r1 = w.add('radiobutton', undefined, 'A'); w.add('statictext', undefined, 'Other'); \
+        var r2 = w.add('radiobutton', undefined, 'B'); var r3 = w.add('radiobutton', undefined, 'C'); r1.value = true; r2.value = true; \
+        [w.show(), r1.value, r2.value, r3.value].join()";
+    assert_eq!(r.run(source).unwrap(), JsValue::String("0,true,false,true".into()));
+}
+
+#[test]
+fn a_group_takes_its_creation_properties_fourth_after_an_empty_third_argument() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run("var g = new Window('dialog').add('group', undefined, undefined, {name: 'g', orientation: 'column'}); [g.name, g.orientation].join()")
+        .unwrap();
+    assert_eq!(v, JsValue::String("g,column".into()));
+}
+
+#[test]
+fn a_capturing_listener_that_stops_a_click_keeps_the_default_button_open() {
+    let (mut r, _, _) = realm(vec![click(1), close()]);
+    let source = "var w = new Window('dialog'); w.add('button', undefined, 'OK'); var log = []; \
+        w.addEventListener('click', function (e) { log.push('stopped'); e.stopPropagation(); }, true); [w.show(), log.join()].join('|')";
+    assert_eq!(r.run(source).unwrap(), JsValue::String("0|stopped".into()));
+    let (mut r, _, _) = realm(vec![click(1)]);
+    let source = "var w = new Window('dialog'); w.add('button', undefined, 'OK'); var seen = 0; \
+        w.addEventListener('click', function () { seen++; }); [w.show(), seen].join()";
+    assert_eq!(
+        r.run(source).unwrap(),
+        JsValue::String("1,1".into()),
+        "a listener on the dialog that does not capture leaves the default button to close it"
+    );
+}
+
+#[test]
+fn listeners_are_limited_show_is_the_dialog_s_and_stop_propagation_reaches_only_running_events() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run(
+            "var w = new Window('dialog'); var b = w.add('button'); \
+             for (var n = 0; n < 256; n++) b.addEventListener('click', function () {}); \
+             var more; try { b.addEventListener('click', function () {}); more = 'added'; } catch (e) { more = e.name; } \
+             var shown; try { b.addEventListener('show', function () {}); shown = 'added'; } catch (e) { shown = e.message; } \
+             var kept, o = Object.freeze({}); var c = w.add('button'); c.addEventListener('click', function (e) { kept = e; }); c.notify(); \
+             kept.stopPropagation.call(o); kept.stopPropagation(); kept.preventDefault(); \
+             [more, shown, Object.getOwnPropertyNames(o).length, kept.cancelable].join('|')",
+        )
+        .unwrap();
+    assert_eq!(v, JsValue::String("RangeError|addEventListener: the event show runs only on a dialog|0|false".into()));
+}
+
+#[test]
+fn a_removed_control_leaves_its_dialog() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run(
+            "var w = new Window('dialog'); w.add('statictext'); var g = w.add('group'); var b = g.add('button', undefined, 'Go'); var heard = 0; \
+             w.addEventListener('click', function () { heard++; }, true); w.addEventListener('click', function () { heard++; }); \
+             w.remove(g); b.notify('onClick'); var errors = []; \
+             try { g.remove(0); } catch (e) { errors.push(e.message); } try { g.add('button'); } catch (e) { errors.push(e.message); } \
+             var added = 0; try { while (true) { w.add('button'); added++; } } catch (e) {} \
+             [g.parent, heard, added, errors.join(';')].join('|')",
+        )
+        .unwrap();
+    assert_eq!(
+        v,
+        JsValue::String("|0|511|remove: the control was removed from its dialog;add: the control was removed from its dialog".into()),
+        "a removed group's controls no longer count toward the dialog's limit and cannot be counted off it twice"
+    );
+}
+
+#[test]
+fn a_text_getter_that_changes_a_list_while_remove_looks_it_up_makes_remove_throw() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run(
+            "var w = new Window('dialog'); var l = w.add('listbox', undefined, ['a', 'b', 'c']); \
+             Object.defineProperty(l.items[0], 'text', {get: function () { l.remove(1); return 'a'; }}); \
+             var m; try { l.remove('c'); m = 'removed'; } catch (e) { m = e.message; } [m, l.items.length, l.items[1].text].join('|')",
+        )
+        .unwrap();
+    assert_eq!(v, JsValue::String("remove: the list changed while the item was looked up|2|c".into()));
+}
+
+#[test]
+fn a_control_a_listener_removes_while_its_click_runs_no_longer_reaches_its_containers() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run(
+            "var w = new Window('dialog'); var g = w.add('group'); var b = g.add('button', undefined, 'Go'); var heard = []; \
+             b.addEventListener('click', function () { g.remove(b); }); \
+             g.addEventListener('click', function () { heard.push('g'); }); w.addEventListener('click', function () { heard.push('w'); }); \
+             b.notify('onClick'); [heard.length, b.parent, b.window].join('|')",
+        )
+        .unwrap();
+    assert_eq!(v, JsValue::String("0||".into()));
+}
+
+#[test]
+fn a_listener_removed_by_an_earlier_one_in_the_same_event_does_not_run() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run(
+            "var w = new Window('dialog'); var b = w.add('button'); var ran = []; function second() { ran.push(2); } \
+             b.addEventListener('click', function () { ran.push(1); b.removeEventListener('click', second); }); \
+             b.addEventListener('click', second); b.notify('onClick'); ran.join(',')",
+        )
+        .unwrap();
+    assert_eq!(v, JsValue::String("1".into()));
+}
+
+#[test]
+fn a_script_cannot_put_its_own_listener_list_on_a_control() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run(
+            "var w = new Window('dialog'); var b = w.add('button'); var a = []; a.length = 4000000000; \
+             var m; try { Object.defineProperty(b, '__vcListeners', {value: a}); m = 'defined'; } catch (e) { m = e.name; } \
+             b.notify('onClick'); m",
+        )
+        .unwrap();
+    assert_eq!(v, JsValue::String("TypeError".into()));
+}
+
+#[test]
+fn an_object_made_to_look_like_an_element_reads_a_long_list_as_empty() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run(
+            "var w = new Window('dialog'); var b = w.add('button'); var a = []; a.length = 4000000000; \
+             var f = {__vcKind: 'button', __vcListeners: a, __vcKids: a}; b.notify.call(f, 'onClick'); \
+             b.findElement.call(f, 'x') === null",
+        )
+        .unwrap();
+    assert_eq!(v, JsValue::Bool(true));
+}
+
+#[test]
+fn remove_refuses_an_object_made_to_look_like_a_container_of_a_real_control() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run(
+            "var w = new Window('dialog'); var g = w.add('group'); var b = g.add('button'); var l = g.add('listbox', undefined, ['a']); \
+             var f = {__vcKind: 'group', __vcWindow: w, __vcParent: w, __vcKids: [b]}; \
+             var fl = {__vcKind: 'listbox', __vcWindow: w, __vcParent: w, __vcItems: l.items}; var m = []; \
+             try { w.remove.call(f, 0); m.push('removed'); } catch (e) { m.push(e.name); } \
+             try { l.removeAll.call(fl); m.push('removed'); } catch (e) { m.push(e.name); } \
+             [m.join(','), b.parent === g, b.window === w].join('|')",
+        )
+        .unwrap();
+    assert_eq!(v, JsValue::String("TypeError,TypeError|true|true".into()));
 }

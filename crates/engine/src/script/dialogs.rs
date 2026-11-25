@@ -217,6 +217,9 @@ pub(crate) struct Dialogs {
     truncated: Cell<bool>,
     /// The ScriptUI dialog whose `show()` is running.
     window: RefCell<Option<Showing>>,
+    /// Where that dialog's record is in `records`, kept from when it opened so a dialog a handler
+    /// opens is listed after it; `None` when the list had stopped at its limit.
+    window_slot: Cell<Option<usize>>,
     /// That dialog waits for what the person does.
     window_waiting: Cell<bool>,
     /// The `show()` calls the run has made.
@@ -236,6 +239,7 @@ impl Dialogs {
             count: Cell::new(0),
             truncated: Cell::new(false),
             window: RefCell::default(),
+            window_slot: Cell::new(None),
             window_waiting: Cell::new(false),
             shows: Cell::new(0),
         }
@@ -313,8 +317,52 @@ impl Dialogs {
                 }
             }
         }
+        self.window_slot.set(self.reserve_record());
         *self.window.borrow_mut() = Some(showing);
         Ok(())
+    }
+
+    /// Keeps a place in the list for the ScriptUI dialog that opens now, counted; its bytes count
+    /// once the dialog ends. → the place, or `None` when the list stopped at its limit.
+    fn reserve_record(&self) -> Option<usize> {
+        self.count.set(self.count.get().saturating_add(1));
+        let mut records = self.records.borrow_mut();
+        if self.truncated.get() || records.len() >= MAX_RECORDS {
+            self.truncated.set(true);
+            return None;
+        }
+        records.push(Value::Null);
+        Some(records.len() - 1)
+    }
+
+    /// Puts the record of the ScriptUI dialog `showing`, with its `answer`, in the place it took
+    /// in the list when it opened. When the dialogs a handler opened left no room for it, the list
+    /// drops the last of them until it fits, or stops before the dialog when it does not fit
+    /// alone, so it still holds the first dialogs in the order they opened, and is marked as
+    /// stopped at its limit.
+    fn end_record(&self, showing: &Showing, answer: Value) {
+        let Some(i) = self.window_slot.take() else { return };
+        let size = |r: &Value| serde_json::to_vec(r).map_or(usize::MAX, |b| b.len());
+        let r = showing.record(answer);
+        let bytes = size(&r);
+        let mut records = self.records.borrow_mut();
+        if i >= records.len() {
+            return;
+        }
+        while self.record_bytes.get().saturating_add(bytes) > MAX_RECORD_BYTES && records.len() > i + 1 {
+            let last = records.pop().map_or(0, |r| size(&r));
+            self.record_bytes.set(self.record_bytes.get().saturating_sub(last));
+            self.truncated.set(true);
+        }
+        if self.record_bytes.get().saturating_add(bytes) > MAX_RECORD_BYTES {
+            records.truncate(i);
+            self.truncated.set(true);
+            return;
+        }
+        self.record_bytes.set(self.record_bytes.get() + bytes);
+        if let Some(slot) = records.get_mut(i) {
+            *slot = r;
+        }
     }
 
     /// The dialog that is showing waits, as `dialog` now is. A run with nobody to ask takes the
@@ -341,7 +389,7 @@ impl Dialogs {
             },
         };
         if let Some(showing) = window.take() {
-            self.push_record(showing.record(json!("missing")));
+            self.end_record(&showing, json!("missing"));
         }
         Err(HostError::Abort(failure))
     }
@@ -355,7 +403,7 @@ impl Dialogs {
         let steps = if left == 1 { "step" } else { "steps" };
         let unused = format!("show: the dialog's answer in `answers` has {left} {steps} the dialog did not use");
         if normal && left > 0 {
-            self.push_record(showing.record(json!("missing")));
+            self.end_record(&showing, json!("missing"));
             return Err(HostError::Abort(unused));
         }
         // A show that a handler's error ended still ends the run when steps are left: the script
@@ -371,7 +419,7 @@ impl Dialogs {
             r if r.fract() == 0.0 && r.abs() < 9.0e15 => json!(r as i64),
             r => json!(r),
         };
-        self.push_record(showing.record(answer));
+        self.end_record(&showing, answer);
         Ok(())
     }
 
@@ -409,7 +457,7 @@ impl Dialogs {
         }
         self.window_waiting.set(false);
         if let Some(showing) = self.window.borrow_mut().take() {
-            self.push_record(showing.record(json!("stop")));
+            self.end_record(&showing, json!("stop"));
         }
     }
 

@@ -64,10 +64,10 @@ pub enum Waiting {
 pub(crate) struct Queued {
     pub(crate) palette: u64,
     pub(crate) event: UiEvent,
-    /// Where the control of a click or a change sits in the palette ([`ScriptUiDialog::place_of`]),
-    /// by which the event finds its control again when a run adds controls before it; empty for a
+    /// The id of the control of a click or a change ([`super::scriptui::UiNode::id`]), by which the
+    /// event finds its control again when a run adds or removes controls before it; `None` for a
     /// close.
-    pub(crate) place: Vec<usize>,
+    pub(crate) element: Option<u64>,
     /// For a list's change, the list's items as the palette showed them when the event was given and
     /// the list's revision then ([`super::scriptui::UiNode::revision`]), which the run checks the list
     /// still has.
@@ -87,14 +87,14 @@ pub(crate) struct Palettes {
     pub(crate) starting: Option<Queued>,
 }
 
-/// Does `event`, for the control at `place`, share the waiting `q`'s place in line: a click on the
-/// same control, a change of it, or a close?
-fn same_place(q: &Queued, event: &UiEvent, place: &[usize]) -> bool {
+/// Does `event`, for the control whose id is `element`, share the waiting `q`'s place in line: a
+/// click on the same control, a change of it, or a close?
+fn same_place(q: &Queued, event: &UiEvent, element: Option<u64>) -> bool {
     let same_kind = matches!(
         (&q.event, event),
         (UiEvent::Click(_), UiEvent::Click(_)) | (UiEvent::Change(..), UiEvent::Change(..)) | (UiEvent::Close, UiEvent::Close)
     );
-    same_kind && q.place == place
+    same_kind && q.element == element
 }
 
 /// The control of a click or a change.
@@ -172,8 +172,8 @@ impl Palettes {
             UiEvent::Change(c, UiValue::Index(_)) => p.dialog.nodes.get(*c).map(|n| (n.items.clone(), n.revision)),
             _ => None,
         };
-        let place = control_of(&mut event).map_or_else(Vec::new, |c| p.dialog.place_of(*c));
-        if let Some(slot) = self.waiting.iter_mut().find(|q| q.palette == id && same_place(q, &event, &place)) {
+        let element = control_of(&mut event).and_then(|c| p.dialog.nodes.get(*c)).map(|n| n.id);
+        if let Some(slot) = self.waiting.iter_mut().find(|q| q.palette == id && same_place(q, &event, element)) {
             slot.event = event;
             slot.list = list;
             return Ok(Waiting::Merged);
@@ -181,12 +181,12 @@ impl Palettes {
         if self.waiting.len() >= MAX_WAITING {
             return Err(format!("{MAX_WAITING} script palette events already wait; this one was not kept"));
         }
-        self.waiting.push_back(Queued { palette: id, event, place, list, grants: None });
+        self.waiting.push_back(Queued { palette: id, event, element, list, grants: None });
         Ok(Waiting::Added)
     }
 
-    /// The oldest waiting event whose palette is still shown, given to the control at its place in
-    /// the palette as the runs since left it, and that palette. An event whose control the palette
+    /// The oldest waiting event whose palette is still shown, given to its control in the palette
+    /// as the runs since left it, and that palette. An event whose control the palette
     /// no longer has, or that the control can no longer take ([`scriptui::check_event`]), for
     /// example because a handler disabled or hid it, is dropped.
     fn next(&mut self) -> Option<(ScriptPalette, Queued)> {
@@ -211,12 +211,12 @@ impl Palettes {
         }
     }
 
-    /// The taken event `q` given to the control at its place in its palette, and that palette, or
-    /// `None` when it is dropped ([`Palettes::next`]).
+    /// The taken event `q` given to its control in its palette, and that palette, or `None` when it
+    /// is dropped ([`Palettes::next`]).
     fn checked(&self, mut q: Queued) -> Option<(ScriptPalette, Queued)> {
         let p = self.list.iter().find(|p| p.id == q.palette && p.visible)?;
         if let Some(c) = control_of(&mut q.event) {
-            *c = p.dialog.control_at(&q.place)?;
+            *c = p.dialog.index_of(q.element?)?;
         }
         // A list's change whose list a run changed since goes to its run, which ends with the
         // error that says so, when the list can still take a change: the choice is checked

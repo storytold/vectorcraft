@@ -43,10 +43,12 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
 /// Reading a file or a folder, a file dialog, a message to the person and a ScriptUI dialog do not
 /// change anything outside it.
 const INSIDE: &[(&str, &str)] = &[
-    ("", "$ File Folder Window alert confirm localize prompt toSource"),
-    ("Window.", "__vcPaletteEvent length prototype"),
-    ("Window.prototype.", "add center close constructor findElement hide show update"),
+    ("", "$ File Folder UnitValue Window alert confirm localize prompt toSource"),
+    ("Window.", "__vcPaletteEvent alert confirm length prompt prototype"),
+    ("Window.prototype.", "add addEventListener center close constructor findElement hide remove removeEventListener show update"),
     ("Object.prototype.", "toSource"),
+    ("UnitValue.", "baseUnit baseUnit= length prototype"),
+    ("UnitValue.prototype.", "as baseUnit baseUnit= constructor convert toString type type= value value="),
     ("localize.", "length"),
     ("toSource.", "length"),
     (
@@ -59,7 +61,7 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "File.prototype.",
         "absoluteURI alias changePath close constructor created creator displayName encoding encoding= eof error error= \
-         exists fsName fullName getRelativeURI hidden length lineFeed lineFeed= modified name openDlg parent path read \
+         exists fsName fullName getRelativeURI hidden length lineFeed lineFeed= localizedName modified name openDlg parent path read \
          readch readln readonly relativeURI resolve saveDlg seek tell toString type",
     ),
     (
@@ -70,7 +72,7 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "Folder.prototype.",
         "absoluteURI alias changePath constructor created displayName error error= exists fsName fullName getFiles \
-         getRelativeURI modified name parent path relativeURI resolve selectDlg toString",
+         getRelativeURI localizedName modified name parent path relativeURI resolve selectDlg toString",
     ),
 ];
 

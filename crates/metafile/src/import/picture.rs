@@ -46,158 +46,53 @@ use super::{BAD_IMAGE, FAR_AWAY, HAIRLINE, LIMIT, MAX_NODES, around, rgb, sane};
 use crate::dib::Rgba;
 use crate::{Imported, Kind};
 
-// The placeable header is interpreted here for VectorCraft’s logical-unit policy.
-const PLACEABLE_KEY: u32 = 0x9AC6_CDD7;
-
 const PATTERNS: &str = "hatched and pattern brushes are filled with their average color";
 const ENDS_EARLY: &str = "the file ends early: what it held was imported";
 const TOO_MANY: &str = "objects past the most one file may hold were left out";
 const AT_LIMIT: &str = "the file or a picture inside it reached a limit on what one file may hold: what came after the limit was not read";
+const PICT_TRUNCATED: &str = "the picture is cut short or reached a limit on what one file may hold: what came after was not read";
 
 /// Points a unit of a WMF without a placeable header (1440 units an inch).
 const WMF_UNIT: f64 = 72.0 / 1440.0;
-/// The SAVEDC levels `craft_metafile` keeps; it stops reading at a SAVEDC past them.
-const SAVED_LEVELS: usize = 1024;
 /// Points a pixel at 96 pixels an inch.
 const PT_PER_PX: f64 = 72.0 / 96.0;
 /// Points a millimetre.
 const PT_PER_MM: f64 = 72.0 / 25.4;
 
-/// WMF records that draw lines and shapes, which `craft_metafile` plays only when the mix mode
-/// lets them draw.
-const WMF_SHAPES: [u16; 10] = [0x0213, 0x0324, 0x0325, 0x0418, 0x041B, 0x0538, 0x061C, 0x0817, 0x081A, 0x0830];
-/// WMF records that draw text and bitmaps, which `craft_metafile` plays whatever the mix mode.
-const WMF_DRAWS: [u16; 5] = [0x0521, 0x0940, 0x0A32, 0x0B41, 0x0F43];
-/// SETROP2 mix modes under which `craft_metafile` draws no lines, shapes or brush fills: R2_XORPEN
-/// and R2_NOP.
-const WMF_MIX_SKIPS: [u16; 2] = [7, 11];
-/// The mix mode a WMF starts in (R2_COPYPEN).
-const WMF_MIX_START: u16 = 13;
-/// PATBLT raster operations `craft_metafile` draws: PATCOPY (with the brush, as the mix mode
-/// allows), BLACKNESS and WHITENESS.
-const PATCOPY: u32 = 0x00F0_0021;
-const BLACKNESS: u32 = 0x0000_0042;
-const WHITENESS: u32 = 0x00FF_0062;
-
-/// Does a WMF draw in a metric map mode (MM_LOMETRIC to MM_TWIPS)? `craft_metafile` plays those
-/// at 96 pixels an inch, whatever the window. The mode that more drawing records are played in
-/// decides, counting only records the reader draws (not lines and shapes under R2_NOP or
-/// R2_XORPEN, nor a PATBLT it does not fill); a file that draws nothing goes by its last mode.
-/// `start` is where the standard header begins.
-fn wmf_metric(bytes: &[u8], start: usize) -> bool {
-    let u16_at = |at: usize| bytes.get(at..at.checked_add(2)?).map(|b| u16::from_le_bytes([b[0], b[1]]));
-    let u32_at = |at: usize| bytes.get(at..at.checked_add(4)?).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
-    let Some(words) = start.checked_add(2).and_then(u16_at) else { return false };
-    let mut at = start.saturating_add(usize::from(words) * 2);
-    let mut mode = 1;
-    let mut mix = WMF_MIX_START;
-    let metric = |mode: u16| (2..=6).contains(&mode);
-    // Drawing records played in a metric mode, and in any other.
-    let (mut in_metric, mut in_other) = (0usize, 0usize);
-    // The map and mix modes SAVEDC kept, which RESTOREDC brings back as the reader does.
-    let mut saved: Vec<(u16, u16)> = Vec::new();
-    // The records as the reader walks them: it stops at the end record, a record shorter than its
-    // header, one that runs past the file and a SAVEDC past its 1,024 levels.
-    while let (Some(words), Some(function)) = (u32_at(at), u16_at(at.saturating_add(4))) {
-        let size = (words as usize).saturating_mul(2);
-        let Some(next) = at.checked_add(size) else { break };
-        if function == 0 || size < 6 || next > bytes.len() {
-            break;
-        }
-        match function {
-            // SETMAPMODE, when the record holds its mode.
-            0x0103 if size >= 8 => mode = u16_at(at + 6).unwrap_or(mode),
-            // SETROP2, when the record holds its mix mode.
-            0x0104 if size >= 8 => mix = u16_at(at + 6).unwrap_or(mix),
-            // SAVEDC.
-            0x001E => {
-                if saved.len() >= SAVED_LEVELS {
-                    break;
-                }
-                saved.push((mode, mix));
-            }
-            // RESTOREDC: a negative count pops that many levels, a positive one goes back to that
-            // level. One that names no saved level changes nothing.
-            0x0127 if size >= 8 => {
-                let n = u16_at(at + 6).map_or(0, |v| i32::from(i16::from_le_bytes(v.to_le_bytes())));
-                let level = if n < 0 { saved.len().checked_sub(n.unsigned_abs() as usize) } else { (n as usize).checked_sub(1) };
-                if let Some(level) = level
-                    && let Some((m, x)) = saved.get(level).copied()
-                {
-                    mode = m;
-                    mix = x;
-                    saved.truncate(level);
-                }
-            }
-            f => {
-                let draws = match f {
-                    _ if WMF_DRAWS.contains(&f) => true,
-                    _ if WMF_SHAPES.contains(&f) => !WMF_MIX_SKIPS.contains(&mix),
-                    // PATBLT: its raster operation, when the record holds one.
-                    0x061D => match u32_at(at + 6).filter(|_| size >= 10) {
-                        Some(PATCOPY) => !WMF_MIX_SKIPS.contains(&mix),
-                        Some(rop) => rop == BLACKNESS || rop == WHITENESS,
-                        None => false,
-                    },
-                    _ => false,
-                };
-                if draws && metric(mode) {
-                    in_metric += 1;
-                } else if draws {
-                    in_other += 1;
-                }
-            }
-        }
-        at = next;
-    }
-    if in_metric == in_other { metric(mode) } else { in_metric > in_other }
-}
-
 /// Points a picture unit across and down. `craft_metafile` gives a placeable WMF with a box and an
 /// EMF with a frame in points, and other files in their logical units (WMF; pixels in a metric map
-/// mode) or device units (EMF).
-fn unit(bytes: &[u8], kind: Kind) -> (f64, f64) {
-    let u16_at = |at: usize| bytes.get(at..at.checked_add(2)?).map(|b| u16::from_le_bytes([b[0], b[1]]));
-    let i16_at = |at: usize| bytes.get(at..at.checked_add(2)?).map(|b| i16::from_le_bytes([b[0], b[1]]));
-    let u32_at = |at: usize| bytes.get(at..at.checked_add(4)?).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
-    let i32_at = |at: usize| bytes.get(at..at.checked_add(4)?).map(|b| i32::from_le_bytes([b[0], b[1], b[2], b[3]]));
-    let positive = |v: Option<i32>| v.filter(|v| *v > 0).map(f64::from);
-    match kind {
-        Kind::Wmf => {
-            let placeable = bytes.get(..4) == Some(&PLACEABLE_KEY.to_le_bytes()[..]);
-            if placeable
-                && let (Some(l), Some(t), Some(r), Some(b)) = (i16_at(6), i16_at(8), i16_at(10), i16_at(12))
-                && r > l
-                && b > t
-            {
-                return (1.0, 1.0);
-            }
-            if wmf_metric(bytes, if placeable { 22 } else { 0 }) {
-                return (PT_PER_PX, PT_PER_PX);
-            }
-            if !placeable {
-                return (WMF_UNIT, WMF_UNIT);
-            }
-            let k = 72.0 / u16_at(14).filter(|v| *v > 0).map_or(1440.0, f64::from);
+/// mode) or device units (EMF). The file's frame and unit facts come from
+/// [`craft_metafile::unit_facts`]; the fallback scales here are VectorCraft's policy.
+fn unit(bytes: &[u8]) -> (f64, f64) {
+    use craft_metafile::{EmfPhysicalSize, UnitFacts};
+    match craft_metafile::unit_facts(bytes) {
+        Some(UnitFacts::WmfPlaceableFrame) => (1.0, 1.0),
+        // `craft_metafile` plays the metric map modes at 96 pixels an inch, whatever the window.
+        Some(UnitFacts::WmfMetricMap) => (PT_PER_PX, PT_PER_PX),
+        // Without a placeable header, or with no units an inch in it: 1440 units an inch.
+        Some(UnitFacts::WmfLogical { units_per_inch }) => {
+            let k = units_per_inch.map_or(WMF_UNIT, |inch| 72.0 / f64::from(inch));
             (k, k)
         }
-        Kind::Emf => {
-            // Device pixels a millimetre on each axis: szlDevice over szlMicrometers when the header
-            // has them, else over szlMillimeters (both sizes must be positive).
-            let device = positive(i32_at(72)).zip(positive(i32_at(76)));
-            let micro = (u32_at(4).is_some_and(|s| s >= 108))
-                .then(|| u32_at(100).zip(u32_at(104)).filter(|(w, h)| *w > 0 && *h > 0).map(|(w, h)| (f64::from(w) / 1000.0, f64::from(h) / 1000.0)))
-                .flatten();
-            let mm = micro.or_else(|| positive(i32_at(80)).zip(positive(i32_at(84))));
-            let px_mm = device.zip(mm).map(|((w, h), (mw, mh))| (w / mw, h / mh));
-            let frame = matches!((i32_at(24), i32_at(28), i32_at(32), i32_at(36)), (Some(l), Some(t), Some(r), Some(b)) if r > l && b > t);
+        Some(UnitFacts::Emf { has_frame, device }) => {
+            // Device pixels a millimetre on each axis.
+            let px_mm = device.map(|d| {
+                let (w, h) = (f64::from(d.pixels.0), f64::from(d.pixels.1));
+                let (mw, mh) = match d.physical_size {
+                    EmfPhysicalSize::Micrometres(w, h) => (f64::from(w) / 1000.0, f64::from(h) / 1000.0),
+                    EmfPhysicalSize::Millimetres(w, h) => (f64::from(w), f64::from(h)),
+                };
+                (w / mw, h / mh)
+            });
             let ok = |v: f64| v.is_finite() && v > 0.0;
             match px_mm {
-                Some(_) if frame => (1.0, 1.0),
+                Some(_) if has_frame => (1.0, 1.0),
                 Some((x, y)) if ok(x) && ok(y) => (PT_PER_MM / x, PT_PER_MM / y),
                 _ => (PT_PER_PX, PT_PER_PX),
             }
         }
+        // Not reached: `crate::sniff` accepted the file through the same shared sniff.
+        None => (PT_PER_PX, PT_PER_PX),
     }
 }
 
@@ -274,7 +169,7 @@ fn average(rgba: &[u8]) -> Option<[u8; 4]> {
     }
     let a = sum[3];
     let alpha = (a / pixels.len().max(1) as u64) as u8;
-    (a > 0).then(|| [(sum[0] / a) as u8, (sum[1] / a) as u8, (sum[2] / a) as u8, alpha.max(1)])
+    (a > 0).then(|| [((sum[0] + a / 2) / a) as u8, ((sum[1] + a / 2) / a) as u8, ((sum[2] + a / 2) / a) as u8, alpha.max(1)])
 }
 
 impl Mapper {
@@ -1168,11 +1063,11 @@ fn retracked(t: &TextObject, laid: &vectorcraft_text::TextLayout, dx: &[f64]) ->
 pub(crate) fn import(bytes: &[u8]) -> Result<Imported, String> {
     let kind = crate::sniff(bytes).ok_or("not an EMF or WMF file")?;
     let pic = craft_metafile::parse(bytes).map_err(|e| match e {
-        craft_metafile::Error::NotMetafile => "not an EMF or WMF file".to_string(),
+        craft_metafile::Error::NotMetafile | craft_metafile::Error::NotPict => "not an EMF or WMF file".to_string(),
         craft_metafile::Error::BadHeader => format!("the {} header is damaged", kind.id().to_uppercase()),
         craft_metafile::Error::NoRecords => format!("the {} file holds no records", kind.id().to_uppercase()),
     })?;
-    let k = unit(bytes, kind);
+    let k = unit(bytes);
     let mut m = Mapper::new(f64::from(pic.width), f64::from(pic.height), k);
     let wire_kind = match kind {
         Kind::Emf => craft_metafile::Kind::Emf,
@@ -1189,4 +1084,22 @@ pub(crate) fn import(bytes: &[u8]) -> Result<Imported, String> {
         m.item(item);
     }
     Ok(m.finish(kind, lost))
+}
+
+/// Turn a metafile picture into a document.
+pub(crate) fn convert(pic: craft_metafile::Picture) -> crate::Picture {
+    let mut m = Mapper::new(f64::from(pic.width), f64::from(pic.height), (1.0, 1.0));
+    if pic.truncated {
+        m.warn(PICT_TRUNCATED);
+    }
+    let lost = Lost { skipped: pic.skipped_records, images: pic.dropped_images, clips: pic.ignored_clips, rops: pic.unplayed_raster_ops };
+    for item in pic.items {
+        m.item(item);
+    }
+    let imported = m.finish(Kind::Wmf, lost);
+    let mut p = crate::Picture { document: imported.document, warnings: imported.warnings };
+    if p.document.layers.iter().all(|l| l.children().is_none_or(|c| c.is_empty())) {
+        p.warnings.push("the picture draws nothing VectorCraft reads".to_string());
+    }
+    p
 }

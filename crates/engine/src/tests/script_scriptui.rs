@@ -81,6 +81,21 @@ fn a_run_with_nobody_to_ask_takes_the_steps_of_its_window_answer() {
 }
 
 #[test]
+fn a_dialog_a_handler_opens_is_listed_after_the_window_that_opened_it() {
+    let mut s = one_doc();
+    let source = format!("{FORM} bold.onClick = function () {{ alert('Bolded'); }}; vc.log(w.show());");
+    let answers = json!([
+        {"kind": "window", "value": [{"control": "Bold", "event": "click"}, {"control": "OK", "event": "click"}]},
+        {"kind": "alert", "value": "ok"},
+    ]);
+    let r = headless(&mut s, &source, answers).unwrap();
+    assert_eq!(r["log"], json!([1]));
+    assert_eq!(r["dialogCount"], 2);
+    assert_eq!(r["dialogs"][0], json!({"kind": "window", "title": "Settings", "controls": 8, "events": 2, "answer": 1}), "{r}");
+    assert_eq!((&r["dialogs"][1]["kind"], &r["dialogs"][1]["message"]), (&json!("alert"), &json!("Bolded")), "{r}");
+}
+
+#[test]
 fn a_missing_wrong_or_unused_step_ends_the_run_and_rolls_it_back() {
     let mut s = one_doc();
     let before = art(&s);
@@ -101,6 +116,21 @@ fn a_missing_wrong_or_unused_step_ends_the_run_and_rolls_it_back() {
         assert_eq!(report["log"], json!([]), "a missing answer cannot be caught: {report}");
         assert_eq!(report["dialogs"][0]["answer"], "missing", "{report}");
     }
+}
+
+#[test]
+fn a_step_names_a_control_by_its_text_only_when_it_has_no_name() {
+    let mut s = one_doc();
+    let source = "var w = new Window('dialog'); \
+        var named = w.add('button', undefined, 'Apply', {name: 'apply'}); named.onClick = function () { vc.log('named'); }; \
+        var plain = w.add('button', undefined, 'Apply'); plain.onClick = function () { vc.log('plain'); }; \
+        w.add('button', undefined, 'OK'); w.show();";
+    let steps = window(json!([{"control": "Apply", "event": "click"}, {"control": "apply", "event": "click"}, {"control": "OK", "event": "click"}]));
+    headless(&mut s, source, steps).unwrap();
+    assert_eq!(s.script_report().unwrap()["log"], json!(["plain", "named"]));
+    let go = "var w = new Window('dialog'); w.add('button', undefined, 'Go', {name: 'go'}); w.show();";
+    let e = headless(&mut s, go, window(json!([{"control": "Go", "event": "click"}]))).unwrap_err().to_string();
+    assert!(e.contains("the dialog has no control named Go"), "{e}");
 }
 
 #[test]
@@ -314,6 +344,49 @@ fn sizes_and_places_are_clamped_and_the_layout_follows_the_containers() {
     }
     let (w, h) = d.size();
     assert!(w <= MAX_EXTENT && h <= MAX_EXTENT);
+}
+
+#[test]
+fn a_hidden_control_and_what_it_holds_take_no_room() {
+    let dialog = with(node("dialog", -1.0), "orientation", Data::String("row".into()));
+    let pair = |w: f64, h: f64| Data::Array(vec![Data::Number(w), Data::Number(h)]);
+    let a = with(node("button", 0.0), "size", pair(100.0, 20.0));
+    let hidden = with(node("group", 0.0), "visible", Data::Bool(false));
+    let inside = with(node("button", 2.0), "size", pair(400.0, 300.0));
+    let b = with(node("button", 0.0), "size", pair(50.0, 20.0));
+    let d: ScriptUiDialog = scriptui::parse(&description(vec![dialog.clone(), a.clone(), hidden, inside, b.clone()])).unwrap();
+    let shown: ScriptUiDialog = scriptui::parse(&description(vec![dialog, a, b])).unwrap();
+    assert_eq!(d.size(), shown.size(), "the hidden group and the button in it leave the dialog's size as it is");
+    assert_eq!(d.nodes[4].rect.x, shown.nodes[2].rect.x, "the next control takes the hidden group's place");
+    assert!(!d.nodes[3].visible, "the button in the hidden group is hidden too");
+}
+
+#[test]
+fn a_control_s_size_keeps_within_its_minimum_and_maximum() {
+    let dialog = node("dialog", -1.0);
+    let pair = |w: f64, h: f64| Data::Array(vec![Data::Number(w), Data::Number(h)]);
+    let wide = with(with(node("button", 0.0), "size", pair(300.0, -1.0)), "max", pair(120.0, -1.0));
+    let tall = with(with(node("button", 0.0), "size", pair(-1.0, -1.0)), "min", pair(-1.0, 60.0));
+    let d: ScriptUiDialog = scriptui::parse(&description(vec![dialog.clone(), wide, tall])).unwrap();
+    assert_eq!(d.nodes[1].rect.w, 120.0, "the maximum width holds over a larger size");
+    assert_eq!(d.nodes[2].rect.h, 60.0, "the minimum height holds over the estimate");
+    let plain: ScriptUiDialog = scriptui::parse(&description(vec![dialog, node("button", 0.0)])).unwrap();
+    assert!(plain.nodes[1].rect.h < 60.0 && plain.nodes[1].rect.w > 0.0, "a size of -1 leaves the side to the estimate");
+    let column = with(with(node("dialog", -1.0), "orientation", Data::String("column".into())), "size", pair(300.0, -1.0));
+    let fill = |n: Data| with(n, "alignment", Data::String("fill".into()));
+    let capped = with(fill(node("button", 0.0)), "max", pair(90.0, -1.0));
+    let d: ScriptUiDialog = scriptui::parse(&description(vec![column, capped, fill(node("button", 0.0))])).unwrap();
+    assert!(d.nodes[2].rect.w > 90.0, "a control that fills its column takes the column's width");
+    assert_eq!(d.nodes[1].rect.w, 90.0, "a control that fills its column stays within its maximum width");
+}
+
+#[test]
+fn window_s_alert_confirm_and_prompt_open_the_script_dialogs() {
+    let mut s = one_doc();
+    let answers = json!([{"kind": "alert", "value": "ok"}, {"kind": "confirm", "value": false}, {"kind": "prompt", "value": "typed"}]);
+    let r = headless(&mut s, "vc.log([typeof Window.alert('Hi'), Window.confirm('Go?'), Window.prompt('Name', 'x')]);", answers).unwrap();
+    assert_eq!(r["log"], json!([["undefined", false, "typed"]]), "{r}");
+    assert_eq!(r["dialogCount"], 3);
 }
 
 /// A description of arbitrary kinds, containers in any order, numbers of any size (infinite and

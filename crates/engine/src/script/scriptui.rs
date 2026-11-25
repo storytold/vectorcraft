@@ -14,8 +14,9 @@
 //! or progress bar's value to its range.
 //!
 //! The layout follows each container's `orientation` (row, column or stack), `alignChildren`,
-//! `spacing` and `margins`, a control's `alignment`, `preferredSize` and `bounds` (left, top, right
-//! and bottom in its container). A control's size comes from its text, items and kind, by
+//! `spacing` and `margins`, a control's `alignment`, `preferredSize` (or `size`), `minimumSize`,
+//! `maximumSize` and `bounds` (left, top, right and bottom in its container); a width or height of
+//! 0 or less in a size leaves that side to the layout. A control's size comes from its text, items and kind, by
 //! VectorCraft's own estimates of a 7-pixel character and a 16-pixel line. The layout is worked out
 //! with loops over the list, from the last control to the first for sizes and from the first to the
 //! last for places, so a description's nesting takes no native stack.
@@ -124,6 +125,9 @@ pub struct UiRect {
 #[derive(Clone, Debug, PartialEq)]
 pub struct UiNode {
     pub kind: UiKind,
+    /// A number no other element of the run has, which stays with the element while the script
+    /// adds and removes controls; its index in the description when the description gives none.
+    pub id: u64,
     /// The index of its container; the dialog's own is 0.
     pub parent: usize,
     pub name: String,
@@ -152,6 +156,8 @@ pub struct UiNode {
     spacing: f32,
     margins: [f32; 4],
     size: [Option<f32>; 2],
+    min_size: [Option<f32>; 2],
+    max_size: [Option<f32>; 2],
     bounds: Option<UiRect>,
 }
 
@@ -195,39 +201,20 @@ impl ScriptUiDialog {
         self.nodes.first().map_or((0.0, 0.0), |n| (n.rect.w, n.rect.h))
     }
 
-    /// The first control whose name, or else whose text, is `control`.
+    /// The first control whose name is `control`, or else the first control without a name
+    /// whose text is `control`.
     pub fn find(&self, control: &str) -> Option<usize> {
         let by = |name: bool| {
-            self.nodes.iter().enumerate().skip(1).find(|(_, n)| if name { n.name == control } else { n.text == control }).map(|(i, _)| i)
+            let hit = |n: &UiNode| if name { n.name == control } else { n.name.is_empty() && n.text == control };
+            self.nodes.iter().enumerate().skip(1).find(|(_, n)| hit(n)).map(|(i, _)| i)
         };
         by(true).or_else(|| by(false))
     }
 
-    /// Where control `i` sits: its position among its container's controls, after its container's
-    /// own position, and so on up to the dialog. `add` puts a new control after the others in its
-    /// container, so adding controls leaves the place of every other one as it was, while its index
-    /// in [`Self::nodes`] can move. Empty for the dialog and for an index it does not have.
-    pub fn place_of(&self, mut i: usize) -> Vec<usize> {
-        let mut place = Vec::new();
-        while i > 0 {
-            let Some(n) = self.nodes.get(i) else { return Vec::new() };
-            place.push(self.nodes.iter().take(i).skip(1).filter(|m| m.parent == n.parent).count());
-            if n.parent >= i {
-                return Vec::new();
-            }
-            i = n.parent;
-        }
-        place.reverse();
-        place
-    }
-
-    /// The index of the control at `place` ([`Self::place_of`]), if the dialog has one there.
-    pub fn control_at(&self, place: &[usize]) -> Option<usize> {
-        let mut at = 0;
-        for &k in place {
-            at = self.nodes.iter().enumerate().skip(1).filter(|(_, n)| n.parent == at).nth(k)?.0;
-        }
-        (at > 0).then_some(at)
+    /// The index in [`Self::nodes`] of the control whose id ([`UiNode::id`]) is `id`, if the dialog
+    /// has one.
+    pub fn index_of(&self, id: u64) -> Option<usize> {
+        self.nodes.iter().position(|n| n.id == id).filter(|i| *i > 0)
     }
 }
 
@@ -516,10 +503,15 @@ pub fn parse(d: &Data) -> Result<ScriptUiDialog, HostError> {
             let (l, t) = (extent(l), extent(t));
             UiRect { x: l, y: t, w: (extent(r) - l).clamp(0.0, MAX_EXTENT), h: (extent(b) - t).clamp(0.0, MAX_EXTENT) }
         });
-        let size = numbers::<2>(field(f, "size"))?.map_or([None, None], |[w, h]| [(w > 0.0).then(|| extent(w)), (h > 0.0).then(|| extent(h))]);
+        // A width or height of 0 or less leaves that side to the layout.
+        let sides = |name: &str| -> Result<[Option<f32>; 2], HostError> {
+            Ok(numbers::<2>(field(f, name))?.map_or([None, None], |[w, h]| [(w > 0.0).then(|| extent(w)), (h > 0.0).then(|| extent(h))]))
+        };
+        let (size, min_size, max_size) = (sides("size")?, sides("min")?, sides("max")?);
         let margins = numbers::<4>(field(f, "margins"))?.map_or([0.0; 4], |m| m.map(|v| extent(v).max(0.0)));
         nodes.push(UiNode {
             kind,
+            id: number(field(f, "id")).filter(|n| *n >= 0.0 && n.fract() == 0.0 && *n < 9.0e15).map_or(i as u64, |n| n as u64),
             parent,
             name: text(field(f, "name"), "a control's name")?,
             text: text(field(f, "text"), "a control's text")?,
@@ -541,6 +533,8 @@ pub fn parse(d: &Data) -> Result<ScriptUiDialog, HostError> {
             spacing: number(field(f, "spacing")).map_or(0.0, |s| extent(s).max(0.0)),
             margins,
             size,
+            min_size,
+            max_size,
             bounds,
         });
     }
@@ -586,6 +580,10 @@ fn layout(d: &mut ScriptUiDialog) {
             let [l, t, r, b] = node.margins;
             let (mut main, mut cross, mut count, mut reach) = (0.0f32, 0.0f32, 0usize, [0.0f32; 2]);
             for &k in &kids[i] {
+                // A hidden control, and everything in it, takes no room.
+                if !d.nodes[k].visible {
+                    continue;
+                }
                 if let Some(bounds) = d.nodes[k].bounds {
                     reach = [reach[0].max(bounds.x + bounds.w), reach[1].max(bounds.y + bounds.h)];
                     continue;
@@ -613,6 +611,12 @@ fn layout(d: &mut ScriptUiDialog) {
             if let Some(v) = node.size[axis] {
                 s[axis] = v;
             }
+            if let Some(v) = node.min_size[axis] {
+                s[axis] = s[axis].max(v);
+            }
+            if let Some(v) = node.max_size[axis] {
+                s[axis] = s[axis].min(v);
+            }
         }
         if let Some(b) = node.bounds {
             s = [b.w, b.h];
@@ -631,34 +635,38 @@ fn layout(d: &mut ScriptUiDialog) {
         let mut cursor = 0.0f32;
         for &k in &kids[i] {
             let kid = &d.nodes[k];
-            let rect = if let Some(bounds) = kid.bounds {
+            let rect = if !kid.visible {
+                UiRect { x, y, w: 0.0, h: 0.0 }
+            } else if let Some(bounds) = kid.bounds {
                 UiRect { x: node.rect.x + bounds.x, y: node.rect.y + bounds.y, w: bounds.w, h: bounds.h }
             } else {
                 let [w, h] = size[k];
                 let h_align = kid.alignment.0.or(node.align_children.0).unwrap_or(Align::Center);
                 let v_align = kid.alignment.1.or(node.align_children.1).unwrap_or(Align::Center);
-                let place = |align: Align, own: f32, room: f32| match align {
+                let max = kid.max_size;
+                // A control that fills its container's room stays within its maximum.
+                let place = |align: Align, own: f32, room: f32, axis: usize| match align {
                     Align::Start => (0.0, own),
                     Align::End => ((room - own).max(0.0), own),
                     Align::Center => (((room - own) / 2.0).max(0.0), own),
-                    Align::Fill => (0.0, room.max(own)),
+                    Align::Fill => (0.0, max[axis].map_or(room.max(own), |m| room.max(own).min(m.max(own)))),
                 };
                 match node.orientation {
                     Orientation::Row => {
-                        let (dy, kh) = place(v_align, h, ch);
+                        let (dy, kh) = place(v_align, h, ch, 1);
                         let r = UiRect { x: x + cursor, y: y + dy, w, h: kh };
                         cursor += w + node.spacing;
                         r
                     }
                     Orientation::Column => {
-                        let (dx, kw) = place(h_align, w, cw);
+                        let (dx, kw) = place(h_align, w, cw, 0);
                         let r = UiRect { x: x + dx, y: y + cursor, w: kw, h };
                         cursor += h + node.spacing;
                         r
                     }
                     Orientation::Stack => {
-                        let (dx, kw) = place(h_align, w, cw);
-                        let (dy, kh) = place(v_align, h, ch);
+                        let (dx, kw) = place(h_align, w, cw, 0);
+                        let (dy, kh) = place(v_align, h, ch, 1);
                         UiRect { x: x + dx, y: y + dy, w: kw, h: kh }
                     }
                 }
@@ -800,9 +808,9 @@ fn palette_close(host: &Host, args: &[Data]) -> Result<Data, HostError> {
     Ok(Data::Undefined)
 }
 
-/// The event a palette handler's run is for, once: `{palette, event, id, value, place, items}`, as
-/// `show()` takes a dialog's event with the palette's id added, the place of a click's or a
-/// change's control ([`ScriptUiDialog::place_of`]), which the run finds the control by, and for a
+/// The event a palette handler's run is for, once: `{palette, event, id, value, element, items}`,
+/// as `show()` takes a dialog's event with the palette's id added, the id of a click's or a
+/// change's control (`element`, [`UiNode::id`]), which the run finds the control by, and for a
 /// list's change the items the palette showed; `null` for any other run, and after the first call.
 fn palette_event(host: &Host, _: &[Data]) -> Result<Data, HostError> {
     let Some(queued) = host.palette_event.borrow_mut().take() else { return Ok(Data::Null) };
@@ -813,8 +821,8 @@ fn palette_event(host: &Host, _: &[Data]) -> Result<Data, HostError> {
 fn event_data(queued: Queued) -> Data {
     let Data::Object(mut fields) = queued.event.data() else { return Data::Null };
     fields.push(("palette".into(), Data::Number(queued.palette as f64)));
-    if !queued.place.is_empty() {
-        fields.push(("place".into(), Data::Array(queued.place.iter().map(|&k| Data::Number(k as f64)).collect())));
+    if let Some(element) = queued.element {
+        fields.push(("element".into(), Data::Number(element as f64)));
     }
     if let Some((items, revision)) = queued.list {
         fields.push(("items".into(), Data::Array(items.into_iter().map(Data::String).collect())));
