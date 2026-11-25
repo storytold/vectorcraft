@@ -2,7 +2,7 @@
 
 **Stage: alpha** · next: beta, ~13 points (ready for real work ~62% → ~75%, and reliable `.ai` exchange) and ~170–270 h away
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-15 · **Change:** minor (G5: built-in Neon & Glow graphic style library (Cyan Neon, Magenta Laser, Amber Tube, Electric Lime, Pulse Violet, Cobalt Phosphor); G5 estimate unchanged (3–13 h); previously: Tech Circuit brush library, G5; previously: docs tidy-up, no content change: stray notes at the top moved into the revision table; scores and estimates unchanged; previously minor: Raster effects 85% → 88%, gallery thumbnails and in-dialog preview in; headline numbers unchanged; Symbols area ~87% → ~88%: dynamic instance parts take opacity, blend, gradient and pattern on the canvas; G5 docs sync for Overlap and Pattern auto corners; previously minor: Tools stays beside the canvas with left-side panels; Hindi catalog draft complete under the translation tests; contributor loanword terminology reviewed; wider proofreading welcome; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-22 · **Change:** minor (Upcoming: G11 names what is left (#864's unit preference, #885), not the fixed Shape Builder regions and Asset Export borders, with docs/roadmap.md's 6–13 h, and the Essentials row names Shape Builder's remaining depth, #8314; previously: G5: built-in Neon & Glow graphic style library (Cyan Neon, Magenta Laser, Amber Tube, Electric Lime, Pulse Violet, Cobalt Phosphor); G5 estimate unchanged (3–13 h); previously: Tech Circuit brush library, G5; previously: docs tidy-up, no content change: stray notes at the top moved into the revision table; scores and estimates unchanged; previously minor: Raster effects 85% → 88%, gallery thumbnails and in-dialog preview in; headline numbers unchanged; Symbols area ~87% → ~88%: dynamic instance parts take opacity, blend, gradient and pattern on the canvas; G5 docs sync for Overlap and Pattern auto corners; previously minor: Tools stays beside the canvas with left-side panels; Hindi catalog draft complete under the translation tests; contributor loanword terminology reviewed; wider proofreading welcome; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 VectorCraft is a clean-room, open-source, pure-Rust reimplementation of the Adobe Illustrator workflow. It runs
 on macOS, Windows, Linux, FreeBSD and the web (WASM), and agents can drive all of it over MCP, the CLI and a JSON
@@ -35,7 +35,7 @@ blocking it ([Alpha gate](docs/roadmap.md#alpha-gate)).
 |---|---:|---:|---:|---|
 | **Full Illustrator** (ready for real work; decides the stage) | **~62%** (57–67%) | **~340–560 h** | ~95–160 h | the mainstream work below, plus 3D (50–85 h), raster effects (23–39 h), advanced type (20–28 h), generative AI (30–60 h), localization (50–85 h) and ecosystem |
 | **Mainstream illustrator** | **~65%** (60–70%) | **~230–380 h** | ~65–110 h | the interaction-fidelity pass (60–90 h), hardening and QA (30–50 h), stability (20–35 h), performance budgets (15–25 h), `.ai` exchange (10–20 h), the remaining depth of the everyday areas |
-| **Essentials user** | **~75%** (70–80%) | **~60–105 h** | ~25–45 h | launch and stability on Windows (20–35 h), in-app help and onboarding (8–15 h), basic QA (10–15 h), Shape Builder regions (4–8 h), UI polish |
+| **Essentials user** | **~75%** (70–80%) | **~60–105 h** | ~25–45 h | launch and stability on Windows (20–35 h), in-app help and onboarding (8–15 h), basic QA (10–15 h), Shape Builder depth (4–8 h; #937's reproduced case is fixed, unconfirmed on the reporter's file), UI polish |
 
 Hours are Opus 5.5 agent wall-clock hours, calibrated from this repo's merged-PR timestamps (e.g. 0.7–1.2 h per
 Photoshop-style filter, ~0.8 h per medium feature); see [calibration](docs/target-app-parity.md#calibration).
@@ -119,7 +119,7 @@ Ranked; detail in [docs/roadmap.md](docs/roadmap.md) and [docs/gaps.md](docs/gap
 1. **Interaction-fidelity pass** (G1), tool by tool from [ui-parity.md](docs/ui-parity.md): 60–90 h.
 2. **`.ai` files from real users** (G9): layer structure, guides, speed: 10–20 h.
 3. **Launch and stability on real machines** (G10): 20–35 h.
-4. **Core-tool correctness** (G11: Shape Builder regions, Asset Export borders): 8–15 h.
+4. **Core-tool correctness** (G11: the unit preference reverting to points, #864, SVG export units fixed; a Transform effect in a fill's or stroke's own effects, #885; Shape Builder regions and Asset Export borders are fixed): 6–13 h.
 5. **Then:** type core and advanced type (G4), the Illustrator 2026 additions (G13), 3D (G3). The Effect Gallery's filter thumbnails and in-dialog preview are in (G2).
 
 ## Progress log
@@ -251,6 +251,7 @@ The full earlier record of what landed is kept in [docs/roadmap.md](docs/roadmap
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-22 | minor | Upcoming: the G11 item names what is left, the unit preference reverting to points (#864; SVG export units are fixed) and a Transform effect in a fill's or stroke's own effects (#885), instead of Shape Builder regions and Asset Export borders, which are fixed (#937, #983 / #1037); its estimate follows docs/roadmap.md and docs/gaps.md, 8–15 → 6–13 h, #8314. The Essentials readiness row's Shape Builder item names what its 4–8 h still covers (checking #937's fix on the reporter's file, still unconfirmed). Headline numbers unchanged. |
 | 2026-11-15 | minor | Graphic Styles: built-in Neon & Glow graphic style library (Cyan Neon, Magenta Laser, Amber Tube, Electric Lime, Pulse Violet, Cobalt Phosphor); G5 estimate unchanged (3–13 h). |
 | 2026-11-14 | minor | Tech Circuit adds three original procedural brushes (Circuit Trace, Bus Lines, Terminal Nodes); ten built-in brush libraries. G5 remaining estimate 3–13 h (estimated); parity scores and headline totals unchanged. |
 | 2026-11-14 | minor | Gujarati (#6613): contributor proofreading completed for all 387 additions, with 11 wording corrections; 4,673 reviewed catalog rows. Status/error messages remain partial; web selection requires a bundled Gujarati face. Scores and estimates unchanged. |

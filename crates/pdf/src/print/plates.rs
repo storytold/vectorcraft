@@ -238,8 +238,9 @@ impl<'a> Separator<'a> {
 
     /// Overprinting fills and strokes of `a`'s subtree with a Normal blending mode, and
     /// overprinting character fills and strokes, that put none of ink `plate` down leave its plate
-    /// as it is: they are drawn as nothing on it (paper white ones that `discard_white` knocks out
-    /// aside, [`DiscardWhite::discards`]). A writer without blending modes (PostScript) then keeps the ink below them,
+    /// as it is: they are drawn as nothing on it. Paper white ones that `discard_white` knocks out
+    /// ([`DiscardWhite::discards`]) stop overprinting instead, and knock out the ink below them on
+    /// the plate as in composite output. A writer without blending modes (PostScript) then keeps the ink below them,
     /// where it would draw their Darken as a knockout. One that puts any ink down is drawn, and on
     /// a PostScript plate its ink replaces the ink below, as a nonzero component of an overprinting
     /// color replaces the backdrop's with overprint mode 1 (ISO 32000-1, 11.7.4.2). On a
@@ -259,6 +260,9 @@ impl<'a> Separator<'a> {
         }
         let image = whole && n.extras().colorize.as_deref().is_some_and(|p| self.no_ink(plate, p));
         for it in &mut n.appearance.items {
+            if it.overprint() && discard_white.discards(it.paint()) {
+                *it.overprint_mut() = false;
+            }
             let normal = match it {
                 AppearanceItem::Fill(l) => l.blend == BlendMode::Normal,
                 AppearanceItem::Stroke(l) => l.blend == BlendMode::Normal,
@@ -274,6 +278,8 @@ impl<'a> Separator<'a> {
         }
         if let NodeKind::Text(t) = &mut n.kind {
             for r in &mut t.runs {
+                r.style.overprint_fill &= !discard_white.discards(&r.style.fill);
+                r.style.overprint_stroke &= !discard_white.discards(&r.style.stroke);
                 if inkless(r.style.overprint_fill, &r.style.fill) {
                     r.style.fill = Paint::None;
                 } else if r.style.overprint_fill {
