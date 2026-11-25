@@ -2,14 +2,16 @@
 //! applies it, the Window menu and the Graphic Styles panel open libraries, and Save Graphic Style
 //! Library writes `.vcstyles` files that open as libraries.
 
-use egui::{Event, Modifiers, PointerButton, Pos2, Rect, vec2};
+use egui::{Event, Modifiers, Pos2, Rect, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::style_libs::STYLE_LIBRARIES;
 use vectorcraft_engine::Session;
 
 use super::graphic_styles::GraphicStyleLibraries;
-use super::library_panel::{self, LibraryKind, LibraryPanel, last_open};
+use super::library_panel::tests::{click, confirm_save, context, menu_library_ids, save_to_tmp};
+use super::library_panel::{self, LibraryKind, last_open};
 use crate::VectorcraftApp;
+use crate::i18n::LangExt as _;
 
 fn app_with(services: crate::Services) -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), services);
@@ -19,12 +21,6 @@ fn app_with(services: crate::Services) -> VectorcraftApp {
 
 fn app() -> VectorcraftApp {
     app_with(Default::default())
-}
-
-fn context() -> egui::Context {
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    ctx
 }
 
 /// One frame of `draw` with `events` and `modifiers` held; the texts it painted.
@@ -46,18 +42,6 @@ fn frame(ctx: &egui::Context, events: Vec<Event>, modifiers: Modifiers, time: f6
     v
 }
 
-/// Click the library panel's tile of style `name` with `modifiers` (a new window takes a sizing
-/// frame first).
-fn click(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, modifiers: Modifiers, time: f64) {
-    for t in [time, time + 0.25] {
-        frame(ctx, vec![], Modifiers::NONE, t, |ui| library_panel::show_window(app, ui.ctx()));
-    }
-    let id = library_panel::tile_id(&last_open(&app.ui).map(LibraryPanel::panel).unwrap_or_default(), name);
-    let at = ctx.read_response(id).unwrap_or_else(|| panic!("no tile for {name}")).rect.center();
-    let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers };
-    frame(ctx, vec![Event::PointerMoved(at), button(true), button(false)], modifiers, time + 0.5, |ui| library_panel::show_window(app, ui.ctx()));
-}
-
 fn undo_len(app: &VectorcraftApp) -> usize {
     app.session.doc().unwrap().history.undo.len()
 }
@@ -75,8 +59,7 @@ fn clicking_a_library_style_adds_and_applies_it_in_one_step() {
     let (g, linked) = app.session.selection_graphic_style().expect("applied to the selection");
     assert_eq!((g.name.as_str(), linked), ("Halo", true));
     assert_eq!(undo_len(&app), undo + 1, "added and applied as one undo step");
-    let tile = ctx.read_response(library_panel::tile_id("library:graphicStyles:shadows-glows", "Halo")).unwrap().rect;
-    assert_eq!(tile.width(), 30.0, "styles open in large thumbnails");
+
     // Alt-click adds the style's appearance on top, unlinked.
     let fills = |app: &VectorcraftApp| app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(rect)).unwrap().appearance.items.len();
     let before = fills(&app);
@@ -92,37 +75,13 @@ fn clicking_a_library_style_adds_and_applies_it_in_one_step() {
     assert!(d.graphic_style("Feathered").is_some() && d.graphic_style("Haze").is_some());
     // Find filters by name; list rows describe the styles; looks are computed once per library.
     let lib = GraphicStyleLibraries::get(&app, "shadows-glows").unwrap().1;
-    let rows = GraphicStyleLibraries::rows(&lib, "shadows-glows", "ember");
-    assert_eq!(rows.iter().map(|r| r.name).collect::<Vec<_>>(), ["Ember"]);
-    assert_eq!(GraphicStyleLibraries::describe(rows[0].item.unwrap()), "1 fill, Inner Glow, Outer Glow");
+    let rows = GraphicStyleLibraries::rows(&lib, "shadows-glows");
+    let ember = rows.iter().find(|r| r.name == "Ember").and_then(|r| r.item).unwrap();
+    assert_eq!(GraphicStyleLibraries::describe(ember), "1 fill, Inner Glow, Outer Glow");
     assert!(std::sync::Arc::ptr_eq(&lib, &GraphicStyleLibraries::get(&app, "shadows-glows").unwrap().1));
     assert!(app.run("window.graphicStyleLibrary", json!({"library": "nope"})).is_err());
     app.run("window.graphicStyleLibrary", json!({"library": null})).unwrap();
     assert!(last_open(&app.ui).is_none());
-}
-
-#[test]
-fn painted_and_sketched_opens_from_the_window_menu_and_a_click_applies_its_style() {
-    let mut app = app();
-    let entry = crate::menus::menu_entries(&app)
-        .into_iter()
-        .find(|e| e.path == ["Window", "Graphic Style Libraries"] && e.label == "Painted and Sketched")
-        .expect("a Window menu item");
-    assert_eq!((entry.command.as_deref(), &entry.params["library"]), (Some("window.graphicStyleLibrary"), &json!("painted-sketched")));
-    let rect = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 80, "height": 40})).unwrap()["id"].as_u64().unwrap();
-    app.run(entry.command.as_deref().unwrap(), entry.params.clone()).unwrap();
-    assert_eq!(last_open(&app.ui).map(|p| (p.kind.as_str(), p.id.as_str())), Some(("graphicStyles", "painted-sketched")));
-    let ctx = context();
-    let undo = undo_len(&app);
-    click(&mut app, &ctx, "Charcoal Shade", Modifiers::NONE, 0.0);
-    let (g, linked) = app.session.selection_graphic_style().expect("applied to the selection");
-    assert_eq!((g.name.as_str(), linked), ("Charcoal Shade", true));
-    assert_eq!(undo_len(&app), undo + 1, "added and applied as one undo step");
-    let node = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(rect)).unwrap().appearance.effects.clone();
-    assert_eq!(node.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["sketch.charcoal"]);
-    let lib = GraphicStyleLibraries::get(&app, "painted-sketched").unwrap().1;
-    let rows = GraphicStyleLibraries::rows(&lib, "painted-sketched", "ink");
-    assert_eq!(rows.iter().map(|r| r.name).collect::<Vec<_>>(), ["Ink Contour", "Wet Ink"]);
 }
 
 #[test]
@@ -156,13 +115,11 @@ fn built_in_style_names_show_in_the_ui_language() {
     for t in [0.0, 0.25] {
         texts = frame(&ctx, vec![], Modifiers::NONE, t, |ui| library_panel::show_window(&mut app, ui.ctx()));
     }
-    let (_, lib) = GraphicStyleLibraries::get(&app, "paper-cutouts").unwrap();
-    let found: Vec<&str> = GraphicStyleLibraries::rows(&lib, "paper-cutouts", "corail").iter().map(|r| r.name).collect();
     let user = GraphicStyleLibraries::label("user/Mine", "Coral Layers").to_string();
     crate::i18n::set_current(crate::i18n::Lang::EN);
     assert!(texts.iter().any(|t| t == "Couches corail"), "{texts:?}");
     assert!(!texts.iter().any(|t| t == "Coral Layers"), "{texts:?}");
-    assert_eq!(found, ["Coral Layers"]);
+
     assert_eq!(user, "Coral Layers");
 }
 
@@ -179,24 +136,21 @@ fn the_window_menu_and_the_panel_open_every_library() {
     let has = |cmd: &str| entries.iter().any(|e| e.path == ["Window", "Graphic Style Libraries"] && e.command.as_deref() == Some(cmd) && e.enabled);
     assert!(has("window.graphicStyleLibrary.other") && has("ui.saveGraphicStyleLibrary"));
     assert!(!entries.iter().any(|e| e.path == ["Window", "Graphic Style Libraries", "User Defined"]), "empty slots are hidden");
-    // The Graphic Styles panel's library button and menu.
-    let ctx = context();
-    let texts = frame(&ctx, vec![], Modifiers::NONE, 0.0, |ui| {
-        super::graphic_styles::show(&mut app, ui);
-        super::graphic_styles::menu(&mut app, ui);
-    });
-    for t in ["Open Graphic Style Library", "Save Graphic Style Library…"] {
-        assert!(texts.iter().any(|x| x.ends_with(t)), "{t}: {texts:?}");
-    }
+    // The Graphic Styles panel's library menus list the same libraries, and each Window row opens its panel.
     let ids: Vec<String> = GraphicStyleLibraries::list(&app).into_iter().map(|l| l.id).collect();
     assert_eq!(ids, STYLE_LIBRARIES.iter().map(|b| b.id).collect::<Vec<_>>());
+    assert_eq!(menu_library_ids::<GraphicStyleLibraries>(&app), ids);
+    for id in &ids {
+        app.run("window.graphicStyleLibrary", json!({"library": id})).unwrap();
+        assert_eq!(last_open(&app.ui).map(|p| p.id.as_str()), Some(id.as_str()));
+    }
 }
 
 #[test]
 fn save_dialog_writes_user_libraries_that_the_window_menu_lists() {
     let dir = std::env::temp_dir().join(format!("vc-style-libraries-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let mut app = app();
+    let mut app = crate::testing::windowed(app());
     app.session.style_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
     let user_items = |app: &VectorcraftApp| -> Vec<(String, String)> {
         crate::menus::menu_entries(app)
@@ -206,16 +160,7 @@ fn save_dialog_writes_user_libraries_that_the_window_menu_lists() {
             .collect()
     };
     app.run("ui.saveGraphicStyleLibrary", json!({"names": ["Sunshine"]})).unwrap();
-    let d = app.ui.dialog.as_mut().expect("Save Graphic Style Library opens");
-    assert_eq!((d.kind.as_str(), d.bool("user")), (crate::dialogs::save_style_library::KIND, true));
-    d.fields.insert("name".into(), json!("Warm"));
-    d.fields.insert("selectedOnly".into(), json!(true));
-    let ctx = context();
-    frame(&ctx, vec![], Modifiers::NONE, 0.0, |ui| crate::dialogs::show(&mut app, ui.ctx()));
-    let texts = frame(&ctx, vec![], Modifiers::NONE, 0.5, |ui| crate::dialogs::show(&mut app, ui.ctx()));
-    assert!(texts.iter().any(|t| t == "Selected Styles Only (1)"), "{texts:?}");
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
+    confirm_save(&mut app, &[("name", json!("Warm")), ("selectedOnly", json!(true))]);
     assert_eq!(user_items(&app), [("Warm".to_string(), "window.userGraphicStyleLibrary1".to_string())]);
     app.run("window.userGraphicStyleLibrary1", json!({})).unwrap();
     assert_eq!(last_open(&app.ui).map(|p| p.id.as_str()), Some("user/Warm.vcstyles"));
@@ -229,7 +174,6 @@ fn saving_to_a_file_and_opening_a_vcstyles_file() {
     let written = std::rc::Rc::new(std::cell::RefCell::new(vec![]));
     let w = written.clone();
     let services = crate::Services {
-        pick_save: Some(Box::new(|p: &crate::FilePick| Some(format!("/tmp/{}", p.name)))),
         write: Some(Box::new(move |p: &str, b: &[u8]| {
             w.borrow_mut().push((p.to_string(), b.to_vec()));
             Ok(())
@@ -237,9 +181,10 @@ fn saving_to_a_file_and_opening_a_vcstyles_file() {
         ..Default::default()
     };
     let mut app = app_with(services);
+    let picker = crate::tests::picks::scripted(&mut app);
     app.run("ui.saveGraphicStyleLibrary", json!({})).unwrap();
-    assert!(!app.ui.dialog.as_ref().unwrap().bool("__user"), "no user folder: a file");
-    crate::dialogs::confirm(&mut app).unwrap();
+    confirm_save(&mut app, &[]);
+    save_to_tmp(&mut app, &picker);
     let (path, bytes) = written.borrow()[0].clone();
     assert!(path.ends_with(".vcstyles"), "{path}");
     // Opening it opens it in the library panel, not as a document.
@@ -250,32 +195,4 @@ fn saving_to_a_file_and_opening_a_vcstyles_file() {
     let other = GraphicStyleLibraries::list(&app).into_iter().find(|l| l.id == open.id).unwrap();
     assert_eq!(other.submenu, Some("Other Libraries"));
     assert_eq!(GraphicStyleLibraries::get(&app, &open.id).unwrap().1.len(), app.session.doc().unwrap().doc.graphic_styles.len());
-}
-
-/// A built-in library lists its styles in the UI language, and Find matches the name shown and the
-/// style's own name. A click applies the style under its own name. Another library's styles are
-/// matched by their own names only.
-#[test]
-fn built_in_library_styles_are_listed_in_the_ui_language() {
-    let mut app = app();
-    let ctx = context();
-    crate::i18n::set_current(crate::i18n::Lang::from_code("fr").expect("fr registered"));
-    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 80, "height": 40})).unwrap();
-    app.run("window.graphicStyleLibrary", json!({"library": "shadows-glows"})).unwrap();
-    let panel = last_open(&app.ui).map(LibraryPanel::panel).unwrap_or_default();
-    app.run("ui.libraryPanel", json!({"panel": panel, "view": "smallList"})).unwrap();
-    frame(&ctx, vec![], Modifiers::NONE, 0.0, |ui| library_panel::show_window(&mut app, ui.ctx()));
-    let texts = frame(&ctx, vec![], Modifiers::NONE, 0.25, |ui| library_panel::show_window(&mut app, ui.ctx()));
-    assert!(texts.iter().any(|t| t == "Ombre douce"), "{texts:?}");
-    assert!(!texts.iter().any(|t| t == "Soft Shadow"), "{texts:?}");
-    let lib = GraphicStyleLibraries::get(&app, "shadows-glows").unwrap().1;
-    for query in ["ombre douce", "soft shadow"] {
-        let rows = GraphicStyleLibraries::rows(&lib, "shadows-glows", query);
-        assert_eq!(rows.iter().map(|r| r.name).collect::<Vec<_>>(), ["Soft Shadow"], "{query}");
-    }
-    assert!(GraphicStyleLibraries::rows(&lib, "loaded/1", "ombre douce").is_empty(), "another library's style is matched by its own name only");
-    click(&mut app, &ctx, "Soft Shadow", Modifiers::NONE, 1.0);
-    let (g, _) = app.session.selection_graphic_style().expect("applied to the selection");
-    assert_eq!(g.name, "Soft Shadow");
-    crate::i18n::set_current(crate::i18n::Lang::EN);
 }

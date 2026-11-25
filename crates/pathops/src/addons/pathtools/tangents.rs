@@ -576,15 +576,13 @@ fn roots(at: &[f64], f: &dyn Fn(f64, usize) -> f64, tol: f64) -> Result<Vec<Root
     let Some(start) = v.iter().position(|x| !zero(*x)) else { return Err(Coincide) };
     let simple = |angle: f64| Root { angle, double: false };
     let mut out = vec![];
-    // Between `lo` (sample `k`) and `hi`, where `s * f` is positive at both ends: the least of
-    // `s * f`, a double root where it reaches zero, two roots where it goes past it, none where it
-    // stays above.
-    let dip = |out: &mut Vec<Root>, s: f64, k: usize, lo: f64, hi: f64| {
-        let g = |t: f64| f(t, k);
+    // Between `lo` and `hi`, where `s * g` is positive at both ends: the least of `s * g`, a double
+    // root where it reaches zero, two roots where it goes past it, none where it stays above.
+    let dip = |out: &mut Vec<Root>, s: f64, g: &dyn Fn(f64) -> f64, lo: f64, hi: f64| {
         let (t, least) = golden(&|t| s * g(t), lo, hi);
         if least < -tol {
-            out.push(simple(bisect(&g, lo, t)));
-            out.push(simple(bisect(&g, t, hi)));
+            out.push(simple(bisect(g, lo, t)));
+            out.push(simple(bisect(g, t, hi)));
         } else if least <= tol {
             out.push(Root { angle: t, double: true });
         }
@@ -604,12 +602,47 @@ fn roots(at: &[f64], f: &dyn Fn(f64, usize) -> f64, tol: f64) -> Result<Vec<Root
                 let (lo, hi) = (theta, ang(k, 2));
                 let s = val(k).signum();
                 if val(k + 2).signum() == s {
-                    dip(&mut out, s, k, lo, hi);
+                    dip(&mut out, s, &|t| f(t, k), lo, hi);
                 } else {
                     out.push(simple(bisect(&|t| f(t, k), lo, hi)));
                 }
             } else {
-                out.push(Root { angle: (ang(k, 1) + ang(k, len)) / 2.0, double: true });
+                // Several samples on zero. Between two of them `f` may still leave the tolerance
+                // (a point just outside a round outline whose two tangents both fall on samples).
+                // Each place where it does is marked with its value, and the roots lie between
+                // neighboring marks: one where the sign changes, a dip where it does not. A run
+                // that never leaves the tolerance (outlines that meet at a corner) is one double
+                // root at its middle.
+                // The run's sample angles, in increasing order, looked up by binary search.
+                let edges: Vec<f64> = (1..=len + 1).map(|j| ang(k, j)).collect();
+                let piece = |t: f64| {
+                    let j = edges.partition_point(|a| *a <= t);
+                    f(t, (k + j) % n)
+                };
+                let mut marks = vec![(theta, val(k))];
+                for j in 1..len {
+                    let (lo, hi) = (ang(k, j), ang(k, j + 1));
+                    let g = |t: f64| f(t, (k + j) % n);
+                    let (t_low, low) = golden(&g, lo, hi);
+                    let (t_high, high) = golden(&|t| -g(t), lo, hi);
+                    let mut found: Vec<(f64, f64)> = [(t_low, low), (t_high, -high)].into_iter().filter(|(_, v)| !zero(*v)).collect();
+                    found.sort_by(|a, b| a.0.total_cmp(&b.0));
+                    marks.extend(found);
+                }
+                marks.push((ang(k, len + 1), val(k + len + 1)));
+                if marks.len() == 2 {
+                    out.push(Root { angle: (ang(k, 1) + ang(k, len)) / 2.0, double: true });
+                } else {
+                    for pair in marks.windows(2) {
+                        if let [(lo, a), (hi, b)] = *pair {
+                            if a.signum() == b.signum() {
+                                dip(&mut out, a.signum(), &piece, lo, hi);
+                            } else {
+                                out.push(simple(bisect(&piece, lo, hi)));
+                            }
+                        }
+                    }
+                }
             }
             continue;
         }
@@ -622,7 +655,7 @@ fn roots(at: &[f64], f: &dyn Fn(f64, usize) -> f64, tol: f64) -> Result<Vec<Root
         let (vp, vk, vn) = (val(prev), val(k), val(next));
         if !zero(vp) && vp.signum() == vk.signum() && vk.abs() < vp.abs() && vk.abs() <= vn.abs() {
             let lo = if k == 0 { ang(prev, 0) - TAU } else { ang(prev, 0) };
-            dip(&mut out, vk.signum(), prev, lo, ang(k, 1));
+            dip(&mut out, vk.signum(), &|t| f(t, prev), lo, ang(k, 1));
         }
     }
     let mut out: Vec<Root> = out.into_iter().map(|r| Root { angle: r.angle.rem_euclid(TAU), ..r }).collect();
@@ -1133,6 +1166,22 @@ mod tests {
         assert_eq!(at(100.0 * tol).len(), 2);
         assert!(at(-1e-6).is_empty());
         assert_eq!(at(1e-6).len(), 2);
+    }
+
+    #[test]
+    fn a_point_whose_two_tangents_fall_on_neighboring_samples_keeps_both() {
+        // The point lies on the bisector of two neighboring sampled normals, at the distance where
+        // its two tangents touch the circle at exactly those normals. Both samples are zero, but
+        // between them the point is well outside the circle: two lines, not one.
+        let (r, half) = (10.0, TAU / SAMPLES as f64 / 2.0);
+        let p = (Vec2::new(half.cos(), half.sin()) * (r / half.cos())).to_point();
+        let all = common_tangents(&Outline::point(p).unwrap(), &circle(0.0, 0.0, r)).unwrap();
+        assert_eq!(all.len(), 2, "{all:?}");
+        // Each runs from the point to where the circle's radius meets it square.
+        for angle in [0.0, 2.0 * half] {
+            let touch = (Vec2::new(angle.cos(), angle.sin()) * r).to_point();
+            assert!(all.iter().any(|t| ends_within(t, p, touch, 1e-6)), "{angle}: {all:?}");
+        }
     }
 
     #[test]
