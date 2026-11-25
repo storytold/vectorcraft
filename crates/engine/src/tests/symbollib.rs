@@ -514,3 +514,45 @@ fn another_documents_symbol_is_added_and_placed_in_one_step() {
     let e = s.execute("symbol.placeFromDocument", &json!({"sourceDocument": source, "name": "Star"})).unwrap_err();
     assert!(e.to_string().contains("no longer open"), "{e}");
 }
+
+/// A symbol dragged onto the canvas, from another document's Symbols panel or from a symbol
+/// library, is stacked as Place Symbol Instance stacks it: in Draw Behind directly below the
+/// selected object, or at the bottom of the current layer with nothing selected, in one undo step
+/// with the symbol it adds. A locked layer refuses it with no edit.
+#[test]
+fn dropped_symbols_go_below_the_selection_in_draw_behind() {
+    let mut s = kit();
+    let source = s.doc().unwrap().uid;
+    run(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    let rect =
+        |s: &mut Session, x: f64| NodeId(run(s, "shape.rectangle", json!({"x": x, "y": 0, "width": 10, "height": 10}))["id"].as_u64().unwrap());
+    let (a, b) = (rect(&mut s, 0.0), rect(&mut s, 20.0));
+    let layer = doc(&s).layers[0].id;
+    let kids = |s: &Session| doc(s).node(layer).unwrap().children().unwrap().iter().map(|c| c.id).collect::<Vec<_>>();
+    run(&mut s, "view.drawMode", json!({"mode": "behind"}));
+    let drops = [
+        ("symbol.placeFromDocument", json!({"sourceDocument": source, "name": "Badge", "x": 30, "y": 40}), "id"),
+        ("symbol.addFromLibrary", json!({"library": "basic shapes", "name": "Square", "place": true, "x": 30, "y": 40}), "placed"),
+    ];
+    for (cmd, p, key) in &drops {
+        for (picked, at) in [(vec![b], 1), (vec![], 0)] {
+            run(&mut s, "select.set", json!({"ids": picked.iter().map(|i| i.0).collect::<Vec<_>>()}));
+            let before = undo_len(&s);
+            let placed = NodeId(run(&mut s, cmd, p.clone())[*key].as_u64().unwrap());
+            let mut want = vec![a, b];
+            want.insert(at, placed);
+            assert_eq!(kids(&s), want, "{cmd} {picked:?}");
+            assert_eq!(undo_len(&s), before + 1, "{cmd}");
+            assert_eq!(s.doc().unwrap().selection.objects, [placed]);
+            run(&mut s, "edit.undo", json!({}));
+            assert!(symbols(&s).is_empty(), "{cmd}: the undo takes the added symbol too");
+        }
+    }
+    // A locked layer takes nothing.
+    run(&mut s, "layer.setProps", json!({"id": layer.0, "locked": true}));
+    let before = (undo_len(&s), doc(&s).clone());
+    for (cmd, p, _) in &drops {
+        assert!(s.execute(cmd, p).is_err(), "{cmd}");
+        assert_eq!((undo_len(&s), doc(&s)), (before.0, &before.1), "{cmd}");
+    }
+}
