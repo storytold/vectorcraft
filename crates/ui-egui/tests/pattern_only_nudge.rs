@@ -74,7 +74,7 @@ impl Scene {
         // As the hosts run a frame: the app gives its input, and the commands the pass fired run as the next frame begins.
         craft::ui::shell::embed::before_input(&self.ctx, |out| self.app.frame_input(out));
         let mut out = self.ctx.run_ui(raw, |ui| self.app.ui(ui));
-        craft::ui::shell::embed::before_input(&self.ctx, |out| self.app.frame_input(out));
+        let _ = self.app.frame_input(craft::ui::runtime::frame::take_output(&self.ctx));
         out.textures_delta.clear();
     }
 
