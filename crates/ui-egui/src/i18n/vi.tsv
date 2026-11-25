@@ -225,6 +225,7 @@
 	Anti-alias Rasters	Khử răng cưa ảnh raster
 	Anti-aliased Artwork	Tác phẩm khử răng cưa
 	Anti-aliasing Method	Phương pháp khử răng cưa
+@id	language.name	Tiếng Việt
 antiAlias	Sharp	Sắc nét
 	Crisp	Rõ nét
 	Strong	Đậm
@@ -1088,6 +1089,7 @@ font-technology	Variable	Biến thiên
 	Direction Handles	Tay nắm hướng
 	Direction:	Hướng:
 	Disable Auto Add/Delete	Tắt tự động thêm/xóa
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete xóa điểm neo và giữ các đường dẫn liền mạch
 	Interpolate Control Points When Moving Anchors	Nội suy tay nắm hướng khi di chuyển điểm neo
 	Disable Opacity Mask	Tắt mặt nạ độ mờ
 	Discard	Loại bỏ
@@ -2934,6 +2936,7 @@ digits	Hindi	Hindi
 	One Point Perspective Preset 5	Thiết lập sẵn phối cảnh một điểm 5
 	Only Web Colors	Chỉ màu web
 	Opacity	Độ mờ
+	Show Opacity	Hiện độ mờ
 	Opacity & Mask Define Knockout Shape	Độ mờ & Mặt nạ xác định hình dạng Knockout
 	Opacity Mask	Mặt nạ độ mờ
 	Opacity Mask Info	Thông tin mặt nạ độ mờ
@@ -3142,6 +3145,12 @@ digits	Hindi	Hindi
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	không có độ phân giải
+	estimated memory {memory}	bộ nhớ ước tính {memory}
+	memory unavailable	không có thông tin bộ nhớ
+	Unknown format	Định dạng không xác định
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -3434,6 +3443,9 @@ mark-style	Japanese	Kiểu Nhật
 	Rearrange All	Sắp xếp lại tất cả
 	Rearrange All Artboards	Sắp xếp lại tất cả bảng vẽ
 	Rearrange All Artboards…	Sắp xếp lại tất cả bảng vẽ…
+	Rearrange…	Sắp xếp lại…
+	Selected Artboards: {n}	Bảng vẽ đã chọn: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Bấm vào khung vẽ để đặt các bảng vẽ (Esc để hủy)
 	Recall Selection	Khôi phục vùng chọn
 	RECENT	GẦN ĐÂY
 	Recent	Gần đây
@@ -3690,6 +3702,7 @@ mark-style	Japanese	Kiểu Nhật
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Cử chỉ xoay bằng hai ngón trên bàn di chuột sẽ xoay khung nhìn của khung vẽ.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Giữ một phím sẽ chạy công cụ hoặc lệnh trong cột Giữ của Phím tắt; nhấn nhanh sẽ chạy phím tắt thông thường của phím đó.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Số giây phải giữ một phím trước khi phím tắt nhấn giữ của nó chạy thay cho phím tắt thông thường.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete xóa các điểm neo đã chọn và khớp lại đường cong quanh từng điểm, thay vì mở đường dẫn tại đó.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Khi bạn di chuyển điểm neo, mỗi đường cong có một đầu bị di chuyển sẽ giữ hình dạng so với các đầu của nó.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Giữ phím tắt của một công cụ sẽ chọn công cụ đó cho đến khi bạn thả ra, rồi công cụ trước đó được chọn lại.
 	Shows the bounding box while you move the selection or draw a shape.	Hiển thị hộp giới hạn khi bạn di chuyển vùng chọn hoặc vẽ một hình.
@@ -6208,6 +6221,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	hiệu ứng 3D trên phần tô hoặc nét của nhóm không vẽ gì
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	hiệu ứng 3D trên phần tô hoặc nét của nhóm không vẽ gì để xuất
 @msg	The 3D object is too complex to export	Đối tượng 3D quá phức tạp để xuất
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Lưới của đối tượng 3D chưa đầy đủ hoặc chứa giá trị không phải là số
 @msg	give one <filter> element	hãy chỉ định một phần tử <filter>
 @msg	the <filter> element needs an id, the filter's name	phần tử <filter> cần có id, là tên của bộ lọc
 @msg	an SVG filter's id is at most {MAX_NAME} characters	id của bộ lọc SVG có tối đa {MAX_NAME} ký tự
@@ -6975,11 +6989,19 @@ axis	Y Axis	Trục Y
 @msg	module is {_1} bytes (limit {_2})	mô-đun có {_1} byte (giới hạn {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	cần phê duyệt: plug-in yêu cầu {0}, quyền mà người dùng cấp khi cài đặt riêng plug-in đó
 @msg	not JSON: {e}	không phải JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	không phải tệp nhị phân WebAssembly (thiếu phần đầu \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	không phải tệp nhị phân WebAssembly (thiếu phần đầu \\0asm)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	một kiểu hàm vượt quá giới hạn {MAX_FUNC_TYPE_VALUES} tham số
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	một kiểu hàm vượt quá giới hạn {MAX_FUNC_TYPE_VALUES} kết quả
 @msg	parameter `{k}`: {what}	tham số `{k}`: {what}
 @msg	parameter `{name}`: {what}	tham số `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	tham số plug-in phải là một đối tượng JSON
 @msg	the module must export its linear memory as `memory`	mô-đun phải export bộ nhớ tuyến tính của nó dưới tên `memory`
+@msg	the module must export `{name}` with the type {signature}	mô-đun phải export `{name}` với kiểu {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	mô-đun có nhiều hơn một phần tùy chỉnh `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	ngân sách bộ nhớ (bộ nhớ ban đầu của mô-đun là {initial} byte, giới hạn {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	tệp kê khai trong phần tùy chỉnh `{MANIFEST_SECTION}` phải đặt `abi` là {ABI_VERSION}, phiên bản ABI mà máy chủ này triển khai
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	ngân sách bảng (mô-đun định nghĩa {count} bảng, bảng lớn nhất có {largest} phần tử; giới hạn {MAX_TABLES} bảng, mỗi bảng {MAX_TABLE_ELEMENTS} phần tử)
+@msg	the module's table section could not be read	không thể đọc phần bảng của mô-đun
 @msg	the objects to change are no longer in the document	các đối tượng cần thay đổi không còn trong tài liệu
 @msg	the runtime panicked	môi trường chạy bị lỗi nghiêm trọng
 @msg	unexpected host trap	máy chủ gặp trap không mong muốn
@@ -7007,6 +7029,11 @@ axis	Y Axis	Trục Y
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` và `maxItems` phải là 0-{MAX_LIST}, `maxItems` ít nhất là 1, và giá trị mặc định phải có đúng số mục đó
 @msg	`name` must be a string	`name` phải là một chuỗi
 @msg	`opacity` must be a number	`opacity` phải là một số
+@msg	`opacity` must be a number from 0 to 100	`opacity` phải là một số từ 0 đến 100
+@msg	`opacity` must be true or false	`opacity` phải là true hoặc false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	ký tự văn bản không có độ mờ riêng: hãy thêm tô hoặc nét bằng Thêm tô mới hoặc Thêm nét mới trong bảng Diện mạo
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	đối tượng được chọn trong một phiên bản biểu tượng không có độ mờ tô hoặc nét riêng
+@msg	no target has that fill or stroke to take the opacity	không đối tượng nào có tô hoặc nét đó để nhận độ mờ
 @msg	`type` must be "path" or "compound"	`type` phải là "path" hoặc "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` phải có 1-{MAX_UNIT} ký tự in được
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` phải liệt kê 1 đến {MAX_CONDITION_VALUES} giá trị cho `{other}`
@@ -7050,6 +7077,8 @@ axis	Y Axis	Trục Y
 @msg	`plates` requires a stop linked to a spot swatch	`plates` cần một điểm dừng chuyển sắc liên kết với mẫu màu đặc biệt
 @msg	the output	đầu ra
 @msg	the path has no anchor points	đường dẫn không có điểm neo
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	đường dẫn phức {id} có thành phần bị ẩn, bị khóa hoặc là đường căn, nên không thể thay thế các thành phần của nó
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	đường dẫn phức {id} có thành phần không phải là đường dẫn, nên không thể thay thế các thành phần của nó
 @msg	too many anchor points (limit {MAX_ANCHORS})	quá nhiều điểm neo (giới hạn {MAX_ANCHORS})
 @msg	true or false	true hoặc false
 @msg	a number >= {_1}	một số >= {_1}

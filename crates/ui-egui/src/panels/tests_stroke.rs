@@ -2,24 +2,25 @@
 
 use serde_json::json;
 
-use super::tests_appearance::{app_with_rect, click, frame_events, run, text_rect};
+use crate::tests::panel_harness::Panel;
+// PLAN: assumed path of object-panels-w8's `Panel` harness (op.A15).
+use super::tests_appearance::{app_with_rect, run};
 use super::*;
 
-/// Click the Dashed Line check box and return the stroke's dash afterwards.
-fn toggle_dashes(ctx: &egui::Context, app: &mut VectorcraftApp) -> Option<vectorcraft_doc::Dash> {
-    let at = text_rect(&frame_events(ctx, app, vec![], stroke::show), "Dashed Line").center();
-    click(ctx, app, at, stroke::show);
-    current_stroke(app).unwrap().dash
+/// Click the editor's Dashed check box and return the stroke's dash afterwards.
+fn toggle_dashes(panel: &mut Panel) -> Option<vectorcraft_doc::Dash> {
+    panel.click("Dashed line");
+    current_stroke(&panel.app()).unwrap().dash
 }
 
 #[test]
 fn turning_dashes_on_fits_them_to_corners_and_turning_back_on_restores_the_last_ones() {
-    let (ctx, mut app) = (egui::Context::default(), app_with_rect());
-    let d = toggle_dashes(&ctx, &mut app).expect("dashes on");
+    let mut panel = Panel::new(app_with_rect(), stroke::show);
+    let d = toggle_dashes(&mut panel).expect("dashes on");
     assert_eq!((d.pattern, d.align_corners), (vec![12.0, 12.0], true));
     // Exact 4/2 dashes turned off and on again come back as they were.
-    run(&mut app, "stroke.set", json!({"dash": [4, 2], "alignDashes": false}));
-    assert!(toggle_dashes(&ctx, &mut app).is_none());
-    let d = toggle_dashes(&ctx, &mut app).expect("dashes on");
+    run(&mut panel.app(), "stroke.set", json!({"dash": [4, 2], "alignDashes": false}));
+    assert!(toggle_dashes(&mut panel).is_none());
+    let d = toggle_dashes(&mut panel).expect("dashes on");
     assert_eq!((d.pattern, d.align_corners), (vec![4.0, 2.0], false));
 }

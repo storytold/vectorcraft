@@ -207,6 +207,7 @@
 	Anti-alias Rasters	Suavizar Rasters
 	Anti-aliased Artwork	Arte Suavizada
 	Anti-aliasing Method	Método de Suavização
+@id	language.name	Português (Brasil)
 antiAlias	Sharp	Nítido
 	Crisp	Definido
 	Strong	Forte
@@ -853,6 +854,7 @@ antiAlias	Sharp	Nítido
 	Direct Selection Tool	Ferramenta Seleção Direta
 	Direction Handles	Alças de Direção
 	Disable Auto Add/Delete	Desativar Adicionar/Excluir Automático
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete Remove Pontos de Ancoragem e Mantém os Demarcadores Unidos
 	Interpolate Control Points When Moving Anchors	Interpolar Alças de Direção ao Mover Pontos de Ancoragem
 	Disable Opacity Mask	Desativar Máscara de Opacidade
 	Discard	Descartar
@@ -2015,6 +2017,12 @@ antiAlias	Sharp	Nítido
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppp
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppp
+	resolution unavailable	resolução indisponível
+	estimated memory {memory}	memória estimada {memory}
+	memory unavailable	memória indisponível
+	Unknown format	Formato desconhecido
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -2148,6 +2156,7 @@ antiAlias	Sharp	Nítido
 	One page per artboard.	Uma página por mesa de trabalho.
 	Only Web Colors	Apenas Cores da Web
 	Opacity	Opacidade
+	Show Opacity	Mostrar Opacidade
 	Opacity & Mask Define Knockout Shape	Opacidade e Máscara Definem Forma de Isolamento
 	Opacity Mask	Máscara de Opacidade
 	Opacity Mask Info	Informações da Máscara de Opacidade
@@ -2554,6 +2563,9 @@ digits	Malayalam	Malaiala
 	Scale Artwork with Artboard	Dimensionar Arte com a Mesa de Trabalho
 	Artboards: {n}	Mesas de Trabalho: {n}
 	Rearrange All Artboards…	Reorganizar Todas as Mesas de Trabalho…
+	Rearrange…	Reorganizar…
+	Selected Artboards: {n}	Mesas de Trabalho Selecionadas: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Clique na tela para posicionar as mesas de trabalho (Esc cancela)
 	Recall Selection	Relembrar Seleção
 	Recent Colors	Cores Recentes
 	Recent Files	Arquivos Recentes
@@ -2781,6 +2793,7 @@ digits	Malayalam	Malaiala
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Um gesto de rotação com dois dedos no trackpad gira a visualização da tela.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Manter uma tecla pressionada executa a ferramenta ou o comando da coluna Manter pressionado em Atalhos de Teclado; um toque rápido executa o atalho habitual.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Quantos segundos uma tecla precisa ficar pressionada até que seu atalho de pressionamento longo seja executado no lugar do atalho habitual.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete remove os pontos de ancoragem selecionados e reajusta a curva em torno de cada um, em vez de abrir o demarcador ali.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Ao mover pontos de ancoragem, cada curva com uma extremidade movida mantém sua forma em relação às extremidades.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Manter pressionado o atalho de uma ferramenta a escolhe até você soltar, e então a ferramenta anterior é escolhida de novo.
 	Shows the bounding box while you move the selection or draw a shape.	Mostra a caixa delimitadora enquanto você move a seleção ou desenha uma forma.
@@ -6811,6 +6824,7 @@ mark-style	Japanese	Japonesas
 @msg	a 3D effect on a group's fill or stroke draws nothing	um efeito 3D no preenchimento ou traçado de um grupo não desenha nada
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	um efeito 3D no preenchimento ou traçado de um grupo não desenha nada para exportar
 @msg	The 3D object is too complex to export	O objeto 3D é complexo demais para ser exportado
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	A malha do objeto 3D está incompleta ou contém um valor que não é um número
 @msg	the <filter> element needs an id, the filter's name	o elemento <filter> precisa de um id, o nome do filtro
 @msg	an SVG filter's id is at most {MAX_NAME} characters	o id de um filtro SVG tem no máximo {MAX_NAME} caracteres
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> não é um elemento de filtro SVG
@@ -7224,11 +7238,19 @@ axis	Y Axis	Eixo Y
 @msg	module is {_1} bytes (limit {_2})	o módulo tem {_1} bytes (limite {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	precisa de aprovação: pede {0}, que o usuário concede ao instalá-lo separadamente
 @msg	not JSON: {e}	não é JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	não é um binário WebAssembly (falta o cabeçalho \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	não é um binário WebAssembly (falta o cabeçalho \\0asm)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	um tipo de função excede o limite de {MAX_FUNC_TYPE_VALUES} parâmetros
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	um tipo de função excede o limite de {MAX_FUNC_TYPE_VALUES} resultados
 @msg	parameter `{k}`: {what}	parâmetro `{k}`: {what}
 @msg	parameter `{name}`: {what}	parâmetro `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	os parâmetros do plug-in devem ser um objeto JSON
 @msg	the module must export its linear memory as `memory`	o módulo deve exportar sua memória linear como `memory`
+@msg	the module must export `{name}` with the type {signature}	o módulo deve exportar `{name}` com o tipo {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	o módulo tem mais de uma seção personalizada `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	orçamento de memória (a memória inicial do módulo é de {initial} bytes, limite {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	o manifesto na seção personalizada `{MANIFEST_SECTION}` deve informar `abi` como {ABI_VERSION}, a versão da ABI que este host implementa
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	orçamento de tabelas (o módulo define {count} tabelas, a maior com {largest} elementos; limite {MAX_TABLES} tabelas de {MAX_TABLE_ELEMENTS} elementos)
+@msg	the module's table section could not be read	não foi possível ler a seção de tabelas do módulo
 @msg	the objects to change are no longer in the document	os objetos a alterar não estão mais no documento
 @msg	the runtime panicked	o ambiente de execução falhou
 @msg	unexpected host trap	trap inesperada do host
@@ -7255,6 +7277,11 @@ axis	Y Axis	Eixo Y
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` e `maxItems` devem ser 0-{MAX_LIST}, `maxItems` pelo menos 1, e o valor padrão deve ter essa quantidade
 @msg	`name` must be a string	`name` deve ser uma string
 @msg	`opacity` must be a number	`opacity` deve ser um número
+@msg	`opacity` must be a number from 0 to 100	`opacity` deve ser um número de 0 a 100
+@msg	`opacity` must be true or false	`opacity` deve ser true ou false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	os caracteres do texto não têm opacidade própria: adicione um preenchimento ou traçado com Adicionar Novo Preenchimento ou Adicionar Novo Traçado do painel Aparência
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	um objeto selecionado em uma instância de símbolo não tem opacidade própria de preenchimento ou traçado
+@msg	no target has that fill or stroke to take the opacity	nenhum destino tem esse preenchimento ou traçado para receber a opacidade
 @msg	`type` must be "path" or "compound"	`type` deve ser "path" ou "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` deve ter 1-{MAX_UNIT} caracteres imprimíveis
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` deve listar de 1 a {MAX_CONDITION_VALUES} valores para `{other}`
@@ -7298,6 +7325,8 @@ axis	Y Axis	Eixo Y
 @msg	`plates` requires a stop linked to a spot swatch	`plates` requer uma parada vinculada a uma amostra de cor spot
 @msg	the output	a saída
 @msg	the path has no anchor points	o caminho não tem pontos de ancoragem
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	o caminho composto {id} tem um membro oculto, bloqueado ou guia, por isso seus membros não podem ser substituídos
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	o caminho composto {id} tem um membro que não é um caminho, por isso seus membros não podem ser substituídos
 @msg	too many anchor points (limit {MAX_ANCHORS})	pontos de ancoragem demais (limite {MAX_ANCHORS})
 @msg	true or false	true ou false
 @msg	a number >= {_1}	um número >= {_1}
@@ -9032,7 +9061,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	The {name} profile could not be read, so the new document has the default settings: {reason}	Não foi possível ler o perfil {name}, então o novo documento tem as configurações padrão: {reason}
 @msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	Armadilha: mais de {_1} pares de objetos estão próximos o bastante para a armadilha, ou objetos demais compartilham uma faixa horizontal; aplique a armadilha a menos objetos por vez
 @msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	Caixa e Linhas de Descasque: nenhuma linha de descasque cabe fora da arte, e a caixa de descasque está desativada
-@msg	\ at end of pattern	\ no fim do padrão
+@msg	\\ at end of pattern	\\ no fim do padrão
 @msg	`alignOn` cannot be empty	`alignOn` não pode ficar vazio
 @msg	`alignOn` must be a string	`alignOn` deve ser uma string
 @msg	`align` is start, center or end	`align` é start, center ou end
@@ -9092,6 +9121,8 @@ swatch	Yellow Green	Verde-amarelado
 @msg	`dataBase64` is larger than the module limit	`dataBase64` excede o limite do módulo
 @msg	`dataBase64` is not valid base64	`dataBase64` não é base64 válido
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` não pode ser combinado com `ids`, `reverse` ou `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` não pode ser combinado com `ids`, `id` ou `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` não pode ser combinado com `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` e `childLimit` recortam o resumo: passe `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` é o nome de um projeto, ou null para colunas simples
 @msg	`design` is a design name, or null for the default marker	`design` é o nome de um projeto, ou null para o marcador padrão
@@ -9366,7 +9397,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	a CMap has too many mappings	um CMap tem mapeamentos demais
 @msg	a DXF drawing has one origin: pass useArtboards: true for one drawing per artboard	um desenho DXF tem uma única origem: passe useArtboards: true para um desenho por prancheta
 @msg	a PDF presets file with over {_1} presets	um arquivo de predefinições de PDF com mais de {_1} predefinições
-@msg	a \u escape needs four hexadecimal digits	um escape \u precisa de quatro dígitos hexadecimais
+@msg	a \\u escape needs four hexadecimal digits	um escape \\u precisa de quatro dígitos hexadecimais
 @msg	a batch preview cannot switch documents	uma prévia de lote não pode trocar de documento
 @msg	a brush named `{nn}` exists	já existe um pincel chamado `{nn}`
 @msg	a comma in an XPath expression must separate function arguments	uma vírgula em uma expressão XPath deve separar argumentos de função
@@ -9719,6 +9750,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	give a pattern name or select an object painted with a pattern	informe o nome de um padrão ou selecione um objeto pintado com um padrão
 @msg	give at least one of clip, invert, disabled, linked	informe pelo menos um de clip, invert, disabled, linked
 @msg	give color, none, swatch or gradient	informe color, none, swatch ou gradient
+@msg	give color, none, swatch, gradient or opacity	informe color, none, swatch, gradient ou opacity
 @msg	give dataBase64	informe dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	informe at (um clique) ou area (um caminho desenhado em volta das sobreposições)
 @msg	give exactly one of `at`, `rect` and `points`	informe exatamente um de `at`, `rect` e `points`

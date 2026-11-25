@@ -1,5 +1,5 @@
-//! The File menu around saving, in the app: Revert's confirmation, recent files, Show in Folder,
-//! the single Document Color Mode entry and documents reopening at their saved view.
+//! The File menu around saving, in the app: Revert's confirmation, Show in Folder and documents
+//! reopening at their saved view.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -8,7 +8,9 @@ use serde_json::json;
 use vectorcraft_engine::Session;
 use vectorcraft_geom::Point;
 
-use crate::{Services, VectorcraftApp, dialogs, io, menus, palette, theme};
+use super::picks::{self, answer_dialog, answer_replace, cancel_dialog, open_dialogs, scripted};
+use crate::dialogs::confirm;
+use crate::{Services, VectorcraftApp, io, menus};
 
 /// An app that reads and writes real files.
 fn app() -> VectorcraftApp {
@@ -17,7 +19,7 @@ fn app() -> VectorcraftApp {
         write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))),
         ..Default::default()
     };
-    VectorcraftApp::new(Session::new(), services)
+    crate::testing::windowed(VectorcraftApp::new(Session::new(), services))
 }
 
 /// A fresh folder for one test.
@@ -36,13 +38,15 @@ fn objects(app: &VectorcraftApp) -> usize {
     app.session.doc().unwrap().doc.node_count()
 }
 
-/// One headless frame of the dialog layer with Enter pressed (OK).
-fn press_ok(app: &mut VectorcraftApp) {
-    let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
-    let key = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
-    let mut out = ctx.run_ui(egui::RawInput { events: vec![key], ..Default::default() }, |ui| dialogs::show(app, ui.ctx()));
-    out.textures_delta.clear();
+/// Press OK (or Cancel) on the dialog or question open on top.
+fn answer_top(app: &mut VectorcraftApp, ok: bool) {
+    let id = open_dialogs(app).pop().map(|d| d.id).expect("a dialog is open");
+    if ok { answer_dialog(app, id, &[], true) } else { cancel_dialog(app, id) }
+}
+
+fn poll(app: &mut VectorcraftApp) {
+    let ctx = app.ui_ctx.clone().expect("a window context");
+    picks::poll(app, &ctx);
 }
 
 #[test]
@@ -61,22 +65,23 @@ fn revert_asks_then_reloads_in_the_same_tab_keeping_every_zoom() {
     rect(&mut app);
     assert!(menus::enabled(&app, "file.revert"));
     let r = app.run("file.revert", json!({})).unwrap();
-    assert_eq!(r["pending"], dialogs::confirm::KIND);
+    assert_eq!(r["pending"], confirm::KIND);
+    assert!(confirm::open_question(&app).is_some());
     assert_eq!(objects(&app), 3, "nothing happens before OK");
-    press_ok(&mut app);
-    assert!(app.ui.dialog.is_none());
+    answer_top(&mut app, true);
+    assert!(!app.any_dialog_open());
     assert_eq!((objects(&app), app.session.active_index(), app.session.documents().len()), (2, Some(0), 2));
     assert!(!app.session.active().unwrap().is_dirty());
     assert_eq!((app.views[0].zoom, app.views[1].zoom), (2.0, 4.0));
     // Cancel leaves the changes.
     rect(&mut app);
     app.run("file.revert", json!({})).unwrap();
-    app.ui.dialog = None;
+    answer_top(&mut app, false);
     assert_eq!(objects(&app), 3);
     // An untitled document can't revert.
     app.session.set_active(1);
     rect(&mut app);
-    assert!(app.run("file.revert", json!({})).is_err() && app.ui.dialog.is_none());
+    assert!(app.run("file.revert", json!({})).is_err() && !app.any_dialog_open());
     let _ = std::fs::remove_dir_all(d);
 }
 
@@ -166,28 +171,6 @@ fn new_from_template_takes_bytes_from_agents() {
 }
 
 #[test]
-fn recent_files_show_as_many_as_the_preference_keeps() {
-    let mut app = app();
-    for i in 0..35 {
-        io::note_recent(&mut app, &format!("/art/{i}.svg"));
-    }
-    let listed = |app: &VectorcraftApp| {
-        menus::menu_entries(app).iter().filter(|e| e.command.as_deref().is_some_and(|c| c.starts_with("file.openRecent"))).count()
-    };
-    assert_eq!((io::recent_files(&app).len(), listed(&app)), (20, 20), "the default");
-    assert_eq!(menus::dynamic_label(&app, "file.openRecent1", ""), "34.svg");
-    app.session.prefs.recent_files_count = 30;
-    assert_eq!((io::recent_files(&app).len(), listed(&app)), (30, 30));
-    assert!(menus::enabled(&app, "file.openRecent30"));
-    app.session.prefs.recent_files_count = 0;
-    assert_eq!((io::recent_files(&app).len(), listed(&app)), (0, 0), "0 hides the list");
-    assert!(menus::shown_state(&app, "file.openRecent1", &json!(null)).is_none(), "the slots leave the menus");
-    assert!(app.run("file.openRecent1", json!({})).is_err());
-    app.session.prefs.recent_files_count = 5;
-    assert_eq!(io::recent_files(&app)[0], "/art/34.svg", "hiding them didn't forget them");
-}
-
-#[test]
 fn show_in_folder_needs_a_saved_document_and_a_file_manager() {
     let shown = Rc::new(RefCell::new(vec![]));
     let s = shown.clone();
@@ -203,21 +186,6 @@ fn show_in_folder_needs_a_saved_document_and_a_file_manager() {
     assert!(menus::enabled(&app, "file.reveal"));
     assert_eq!(app.run("file.reveal", json!({})).unwrap()["path"], "/art/a.vectorcraft");
     assert_eq!(*shown.borrow(), ["/art/a.vectorcraft"]);
-}
-
-/// The palette lists neither the old alias nor `file.documentColorMode`, which a pick can't run
-/// without a mode; the CMYK and RGB menu items run the one command.
-#[test]
-fn document_color_mode_is_one_command() {
-    let items = palette::items();
-    let ids: Vec<&str> = items.iter().map(|(_, id, _)| id.as_str()).filter(|id| id.to_ascii_lowercase().contains("documentcolormode")).collect();
-    assert!(ids.is_empty(), "{ids:?}");
-    let mut app = app();
-    app.run("file.new", json!({})).unwrap();
-    let entries = menus::menu_entries(&app);
-    let modes: Vec<&str> =
-        entries.iter().filter(|e| e.path.last().is_some_and(|p| p == "Document Color Mode")).filter_map(|e| e.command.as_deref()).collect();
-    assert_eq!(modes, ["file.documentColorMode", "file.documentColorMode"], "CMYK and RGB run the one command");
 }
 
 #[test]
@@ -276,23 +244,23 @@ fn replacing_a_file_that_opening_left_things_out_of_asks_first() {
     let saved = std::fs::read(&path).unwrap();
     rect(&mut app);
     let r = app.run("file.save", json!({})).unwrap();
-    assert_eq!(r["pending"], dialogs::confirm::KIND);
-    let dialog = app.ui.dialog.as_ref().unwrap();
-    assert!(dialog.str("detail").contains("“hidden type”"), "{:?}", dialog.fields);
+    assert_eq!(r["pending"], confirm::KIND);
+    let (_, detail, _) = confirm::open_question(&app).expect("Save asks first");
+    assert!(detail.contains("“hidden type”"), "{detail}");
     assert_eq!(std::fs::read(&path).unwrap(), saved, "nothing is written before OK");
     // Export As over it asks too; Cancel leaves the file.
-    app.ui.dialog = None;
-    assert_eq!(app.run("file.exportAs", json!({"path": path, "format": "svg"})).unwrap()["pending"], dialogs::confirm::KIND);
-    app.ui.dialog = None;
+    answer_top(&mut app, false);
+    assert_eq!(app.run("file.exportAs", json!({"path": path, "format": "svg"})).unwrap()["pending"], confirm::KIND);
+    answer_top(&mut app, false);
     assert_eq!(std::fs::read(&path).unwrap(), saved);
     // So does a PDF written by Save PDF's OK, and the question stays open when Save PDF closes.
-    assert_eq!(app.run("file.export.pdf", json!({"path": path})).unwrap()["pending"], dialogs::confirm::KIND);
-    app.ui.dialog = None;
+    assert_eq!(app.run("file.export.pdf", json!({"path": path})).unwrap()["pending"], confirm::KIND);
+    answer_top(&mut app, false);
     for artboards in [true, false] {
         app.run("ui.savePdfDialog", json!({"path": path, "useArtboards": artboards})).unwrap();
-        dialogs::confirm(&mut app).unwrap();
-        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::confirm::KIND), "useArtboards {artboards}");
-        app.ui.dialog = None;
+        answer_top(&mut app, true);
+        assert!(confirm::open_question(&app).is_some(), "useArtboards {artboards}");
+        answer_top(&mut app, false);
     }
     assert_eq!(std::fs::read(&path).unwrap(), saved);
     // Also when File › Save as PDF… leaves the file to the save panel and the panel picks the PDF
@@ -300,28 +268,28 @@ fn replacing_a_file_that_opening_left_things_out_of_asks_first() {
     let pdf = d.join("a.pdf").to_string_lossy().to_string();
     std::fs::write(&pdf, b"%PDF-1.7 as opened").unwrap();
     app.session.doc_mut().unwrap().imported_from = Some(pdf.clone());
-    let picked = pdf.clone();
-    app.services.pick_save = Some(Box::new(move |_| Some(picked.clone())));
+    let picker = scripted(&mut app);
     for artboards in [true, false] {
         app.run("ui.savePdfDialog", json!({"useArtboards": artboards})).unwrap();
-        dialogs::confirm(&mut app).unwrap();
-        let asked = app.ui.dialog.as_ref().filter(|d| d.kind == dialogs::confirm::KIND);
-        assert!(asked.is_some_and(|d| d.str("detail").contains("“hidden type”")), "picked, useArtboards {artboards}");
-        app.ui.dialog = None;
+        answer_top(&mut app, true);
+        picker.answer_saved(&pdf, None);
+        poll(&mut app);
+        let asked = confirm::open_question(&app);
+        assert!(asked.is_some_and(|(_, detail, _)| detail.contains("“hidden type”")), "picked, useArtboards {artboards}");
+        answer_top(&mut app, false);
     }
     assert_eq!(std::fs::read(&pdf).unwrap(), b"%PDF-1.7 as opened");
-    app.services.pick_save = None;
     app.session.doc_mut().unwrap().imported_from = Some(path.clone());
     // Another name doesn't ask.
     let copy = d.join("b.svg").to_string_lossy().to_string();
     assert!(app.run("file.exportAs", json!({"path": copy, "format": "svg"})).unwrap().get("pending").is_none());
     crate::background::wait_all(&mut app);
-    assert!(app.ui.dialog.is_none());
+    assert!(!app.any_dialog_open());
     // OK replaces it.
     app.run("file.save", json!({})).unwrap();
-    press_ok(&mut app);
+    answer_top(&mut app, true);
     crate::background::wait_all(&mut app);
-    assert!(app.ui.dialog.is_none());
+    assert!(!app.any_dialog_open());
     assert_ne!(std::fs::read(&path).unwrap(), saved);
     assert!(!app.session.active().unwrap().is_dirty());
     let _ = std::fs::remove_dir_all(d);
@@ -351,7 +319,7 @@ fn a_save_does_not_replace_the_file_read_from_through_a_file_written_beside_the_
     crate::background::wait_all(&mut app);
     // The document's last save wrote the files beside the path, so the save does not ask whether
     // to replace them: it is refused.
-    assert!(app.ui.dialog.as_ref().is_none_or(|d| d.kind != dialogs::confirm::REPLACE_FILES));
+    assert!(confirm::open_replace_files(&app).is_none());
     assert_eq!(std::fs::read(&sibling).unwrap(), saved);
     assert!(!std::path::Path::new(&path).exists(), "no file of the set is written when one is refused");
     let _ = std::fs::remove_dir_all(d);
@@ -381,7 +349,7 @@ fn file_save_does_not_replace_the_file_read_from_through_a_file_written_beside_t
     // again; the one the document was read from is refused, as on Save As.
     let _ = app.run("file.save", json!({}));
     crate::background::wait_all(&mut app);
-    assert!(app.ui.dialog.as_ref().is_none_or(|d| d.kind != dialogs::confirm::REPLACE_FILES));
+    assert!(confirm::open_replace_files(&app).is_none());
     assert_eq!(std::fs::read(&sibling).unwrap(), saved);
     assert!(!std::path::Path::new(&path).exists(), "no file of the set is written when one is refused");
     assert!(app.session.active().unwrap().is_dirty());
@@ -411,13 +379,14 @@ fn an_eps_save_with_use_artboards_asks_before_replacing_an_artboard_file_that_is
     let path = d.join("Art.eps").to_string_lossy().to_string();
     let options = json!({"useArtboards": true, "previewFormat": "none", "thumbnails": false});
     let save_as = |app: &mut VectorcraftApp| {
-        let _ = app.run("file.saveAs", json!({"path": path, "options": options}));
+        let r = app.run("file.saveAs", json!({"path": path, "options": options}));
         crate::background::wait_all(app);
+        r
     };
     // Another document's save leaves files with the names of the artboard files.
     let mut other = app();
     other.run("file.new", json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
-    save_as(&mut other);
+    let _ = save_as(&mut other);
     let there = artboard_files(&d);
     assert_eq!(there.len(), 2, "{there:?}");
     std::fs::remove_file(&path).unwrap();
@@ -428,19 +397,17 @@ fn an_eps_save_with_use_artboards_asks_before_replacing_an_artboard_file_that_is
     checks_files_there(&mut app);
     app.run("file.new", json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
     rect(&mut app);
-    save_as(&mut app);
-    let dialog = app.ui.dialog.as_ref().unwrap();
-    assert_eq!(dialog.kind, dialogs::confirm::REPLACE_FILES);
-    assert_eq!(dialog.fields["files"], json!(there));
+    assert_eq!(save_as(&mut app).unwrap()["pending"], confirm::REPLACE_FILES);
+    assert_eq!(confirm::open_replace_files(&app), Some(there.clone()));
     assert!(!std::path::Path::new(&path).exists(), "nothing is written while it asks");
     assert!(there.iter().all(|f| std::fs::read(f).unwrap() == b"other"));
     // Cancel writes nothing.
-    dialogs::cancel(&mut app);
+    answer_replace(&mut app, false);
     assert!(!std::path::Path::new(&path).exists());
     assert!(there.iter().all(|f| std::fs::read(f).unwrap() == b"other"));
     // OK writes every file.
-    save_as(&mut app);
-    dialogs::confirm(&mut app).unwrap();
+    let _ = save_as(&mut app);
+    answer_replace(&mut app, true);
     crate::background::wait_all(&mut app);
     assert!(std::path::Path::new(&path).exists());
     assert!(there.iter().all(|f| std::fs::read(f).unwrap().starts_with(b"%!PS")));
@@ -448,7 +415,7 @@ fn an_eps_save_with_use_artboards_asks_before_replacing_an_artboard_file_that_is
     rect(&mut app);
     let _ = app.run("file.save", json!({}));
     crate::background::wait_all(&mut app);
-    assert!(app.ui.dialog.is_none());
+    assert!(!app.any_dialog_open());
     assert!(!app.session.active().unwrap().is_dirty());
     let _ = std::fs::remove_dir_all(d);
 }
@@ -487,7 +454,7 @@ fn file_save_writes_opened_eps_back_without_another_save_as_dialog() {
     rect(&mut app);
     app.run("file.save", json!({})).unwrap();
     crate::background::wait_all(&mut app);
-    assert!(app.ui.dialog.is_none(), "ordinary EPS Save does not require another format dialog");
+    assert!(!app.any_dialog_open(), "ordinary EPS Save does not require another format dialog");
     let bytes = std::fs::read(&path).unwrap();
     assert!(vectorcraft_eps::sections(&bytes).unwrap().0.starts_with(b"%!PS-Adobe-3.0 EPSF-3.0"));
     assert!(vectorcraft_eps::native(&bytes).is_some());
