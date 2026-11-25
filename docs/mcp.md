@@ -8934,8 +8934,8 @@ turn it off to keep each point's other side), and Total Width scales each point'
 one `stroke.widthProfile.set` (one undo step, none when nothing changed), and Delete removes them all; with a
 discontinuous point among them, Incoming and Outgoing edit its two halves and both edit the continuous points.
 Malformed or out-of-range `indices`, or more than one of `index`, `indices` and `t`, are errors that open no dialog. OK
-and Delete on existing points are refused when those points changed since the dialog opened or another document is
-active.
+and Delete on existing points are refused when those points changed since the dialog opened (their place, their widths,
+or which of them pair as a discontinuous point) or another document is active.
 `document.inspect` reports a path's `strokeOptions.widthPoints` (`[t, left, right]`, factors of half the weight; null
 for a uniform stroke). `stroke.widthPoint.remove {id, index | indices}` deletes points; `stroke.widthProfile.set {ids,
 points}` replaces them all, as dragging several Shift-selected points with the Width tool does in one undo step.
