@@ -641,8 +641,9 @@ the module's start function, in a run that isn't a filter's run on a document, o
 - `writes` (filters at `api` 3 only): the kinds among `inputs` the filter may change ([writing type, images and
   symbols](#writing-type-images-and-symbols)), each at most once (`"writes": ["type"]`). Left out or `[]`, everything
   the filter reads stays read-only. An unknown, repeated or wrongly typed entry, a kind `inputs` doesn't list, `writes`
-  on another kind, below `api` 3, or without `doc.write` in `permissions`, is refused when the plug-in is installed, and
-  hosts from before it refuse `api` 3.
+  on another kind, below `api` 3, or without `doc.write` in `permissions`, is refused when the plug-in is installed.
+  Hosts from before `api` 3 refuse the manifest. A host at `api` 3 that doesn't read `writes` installs the filter,
+  ignores the key and keeps everything the filter reads read-only, so an output that changes those objects is refused.
 - `context` (filters, and live effects with `commands`, at `api` 3 only): the parts of the active document a run reads
   in `_context.document`, any of `"settings"`, `"artboards"`, `"layers"` and `"swatches"`, each at most once
   (`"context": ["artboards", "layers"]`). Left out or `[]`, a run gets none, as before. An unknown, repeated or wrongly
