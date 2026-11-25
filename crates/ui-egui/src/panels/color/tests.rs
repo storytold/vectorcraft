@@ -381,3 +381,26 @@ fn picked_mesh_points_are_the_color_the_panel_shows_and_edits() {
     assert_eq!(picked(&app), vec![0, middle], "the Shift-click adds the top middle point");
     assert_eq!(crate::panels::mixed_paints(&app, &ctx), (true, false), "picking recomputes it");
 }
+
+/// The panel's Fill and Stroke wells show a gradient and None as the Tools panel's proxy does,
+/// not as black.
+#[test]
+fn the_wells_show_a_gradient_and_none_as_the_tools_proxy_does() {
+    use crate::tests::panel_harness::Panel;
+    let painted = || {
+        let mut app = app();
+        let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
+        app.run("paint.setFill", json!({"gradient": {"stops": stops}})).unwrap();
+        app.run("paint.setStroke", json!({"none": true})).unwrap();
+        app
+    };
+    let color = Panel::new(painted(), show);
+    let tools = Panel::new(painted(), crate::panels::proxy);
+    // The wells are unnamed parts of the pair, so they are found by the value each one reads as.
+    let wells = tools.values();
+    assert_eq!(wells.len(), 2, "the Tools proxy's two wells read as {wells:?}");
+    assert_ne!(wells[0], wells[1], "a gradient and None read differently");
+    for well in &wells {
+        assert!(color.shows_value(well), "the Color panel shows a well that reads as {well:?}");
+    }
+}

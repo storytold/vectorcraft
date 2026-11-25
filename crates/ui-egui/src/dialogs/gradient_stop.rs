@@ -21,7 +21,7 @@ use craft::ui::choice::Segmented;
 use craft::ui::contract::{Bind, Entry, Show as _, ShowContainer as _};
 use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, StackDialog, dialog_id};
 use craft::ui::form::Field;
-use craft::ui::layout_components::Stack;
+use craft::ui::layout_components::{Row, Stack};
 use craft::ui::notices::Notice;
 use craft::ui::popover::Popover;
 use craft::ui::runtime::env::{Label, UnitKind};
@@ -264,7 +264,7 @@ impl StackDialog for GradientStopPopover {
 /// point: spread). What the user edits is filed in `filed`.
 fn body(ui: &mut Ui, feed: &Feed, tab: &mut Tab, panel: &mut ColorPanelState, filed: &mut Filed) {
     Stack::new().show(ui, |ui, _| {
-        ui.horizontal(|ui| {
+        Row::new().show(ui, |ui, _| {
             let tabs = [
                 Entry::new(Tab::Color, tl!("Color").to_owned()).icon(IconId::new("palette")),
                 Entry::new(Tab::Swatches, tl!("Swatches").to_owned()).icon(IconId::new("swatch-book")),
@@ -288,7 +288,7 @@ fn body(ui: &mut Ui, feed: &Feed, tab: &mut Tab, panel: &mut ColorPanelState, fi
             }
             Tab::Swatches => swatches(ui, feed, filed),
         }
-        ui.horizontal(|ui| {
+        Row::new().show(ui, |ui, _| {
             filed.fields.opacity = percent_field(ui, tl!("Opacity").to_owned(), feed.opacity).or(filed.fields.opacity);
             let (label, amount) = if feed.point { (tl!("Spread"), &mut filed.fields.spread) } else { (tl!("Location"), &mut filed.fields.location) };
             *amount = percent_field(ui, label.to_owned(), feed.amount).or(*amount);

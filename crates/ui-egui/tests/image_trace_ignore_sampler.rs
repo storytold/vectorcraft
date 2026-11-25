@@ -31,13 +31,15 @@ fn pointer_events(events: &[Event]) -> usize {
     events.iter().filter(|event| matches!(event, Event::PointerMoved(_) | Event::PointerButton { .. })).count()
 }
 
-/// One step of the app: the frame of `raw`, then empty frames at its time until all its pointer events arrived. A frame
-/// can take more than one pass, and egui gives the frame's events to its first; the framework gives a pass one press,
-/// as its last pointer event, and holds the events after it for the next frame ("Input pacing", one press per pass).
+/// One step of the app: the frame of `raw`, then empty frames at its time until all its pointer events arrived and the
+/// press lifecycle reported them. A frame can take more than one pass, and egui gives the frame's events to its first;
+/// the framework gives a pass one press, as its last pointer event, and holds the events after it for the next frame
+/// ("Input pacing", one press per pass). The lifecycle reports one phase a pass: a pass that brings a release and the
+/// next press reports the press's Down in the next pass, and the release that follows it one pass later still.
 fn run_ui(app: &mut VectorcraftApp, ctx: &egui::Context, mut raw: RawInput) -> egui::FullOutput {
     let (sent, time, screen_rect) = (pointer_events(&raw.events), raw.time, raw.screen_rect);
     let mut frames = Vec::new();
-    let mut arrived = 0;
+    let (mut arrived, mut owed) = (0, 0);
     loop {
         let mut first = None;
         let out = ctx.run_ui(raw, |ui| {
@@ -49,8 +51,10 @@ fn run_ui(app: &mut VectorcraftApp, ctx: &egui::Context, mut raw: RawInput) -> e
         });
         let first = first.expect("a frame runs a pass");
         arrived += pointer_events(&first.events);
+        let buttons = first.events.iter().filter(|event| matches!(event, Event::PointerButton { .. })).count();
+        owed = (owed + buttons).saturating_sub(out.platform_output.num_completed_passes);
         frames.push(first);
-        if arrived >= sent {
+        if arrived >= sent && owed == 0 {
             FRAME_INPUT.with(|input| *input.borrow_mut() = Some((frames, ctx.cumulative_pass_nr())));
             return out;
         }
@@ -1470,6 +1474,8 @@ fn review_597048_coalesced_pair(sampler_prefix: bool) {
     );
     assert!(frame_event(&ctx, |i| i.pointer.button_double_clicked(PointerButton::Primary)));
     assert_eq!(frame_event(&ctx, |i| i.pointer.button_triple_clicked(PointerButton::Primary)), sampler_prefix);
+    // The canvas gets the second release in the frame after the second press, which the framework asks for.
+    frame_at(&mut app, &ctx, start + 3.0 * step, vec![]);
     assert_eq!(app.session.active().unwrap().isolation, Some(group), "two ordinary clicks isolate after an earlier-frame prefix");
     app.run("object.exitIsolation", json!({"all": true})).unwrap();
     review_gesture_press(&mut app, &ctx, at, start + 5.0 * step);

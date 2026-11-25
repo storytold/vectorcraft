@@ -16,7 +16,7 @@ use vectorcraft_plugins::{registry, wat as tpl};
 
 use super::plugins::{approve, window};
 use crate::dialogs::plugin::InstallPrompt;
-use crate::{VectorcraftApp, dialogs, plugin_runs};
+use crate::{VectorcraftApp, dialogs, export_progress, plugin_runs};
 
 /// An app with a new 200 × 200 pt document.
 fn app() -> VectorcraftApp {
@@ -28,9 +28,11 @@ fn app() -> VectorcraftApp {
 
 /// The window of an [`app`] whose background work waits until the test runs it: a run that OK
 /// started is still running when the frame that started it ends. On threads a fast run could end
-/// before a later pass of that frame, which applies it.
+/// before a later pass of that frame, which applies it. The app's clock stands still, so the
+/// progress window, which would hold the results back, opens only when a test moves the clock.
 fn held_window() -> (Harness<'static, VectorcraftApp>, Arc<ManualJobs>) {
     let mut app = app();
+    app.now_override = Some(0.0);
     let jobs = Arc::new(ManualJobs::new());
     app.host = Arc::new(Host::builder(app.host.app().clone()).i18n(crate::i18n::shared()).jobs(jobs.clone()).build());
     (window(app), jobs)
@@ -156,6 +158,30 @@ fn a_heavy_filter_runs_off_the_ui_thread_and_applies_as_one_undo_step() {
     assert_eq!(st.history.undo.last().unwrap().label, format!("Test {id}"));
     assert_eq!(st.selection.objects.len(), 1, "the triangle it added, selected");
     assert!(app.ui.status.is_empty(), "{}", app.ui.status);
+}
+
+/// The progress window opens once the run is [`export_progress::DELAY`] old on the app's clock,
+/// however long the frames take; after Continue in Background closes it the result applies.
+#[test]
+fn the_progress_window_opens_by_the_app_clock() {
+    use egui_kittest::kittest::Queryable;
+    let (mut h, jobs) = held_window();
+    let id = "test.ui.heavy.clock";
+    install(h.state_mut(), id, 1, "{}");
+    let undo = h.state().session.doc().unwrap().history.undo.len();
+    assert_eq!(h.state_mut().run("plugin.dialog", json!({"id": id})).unwrap()["background"], true);
+    // Only the progress window shows its step.
+    let step = "The plug-in is computing…";
+    frame(&mut h);
+    assert!(h.query_by_label(step).is_none(), "not before the delay");
+    h.state_mut().now_override = Some(export_progress::DELAY);
+    frame(&mut h);
+    assert!(h.query_by_label(step).is_some(), "the progress window, after the delay");
+    assert_eq!(h.state_mut().run("plugin.hideRuns", json!({})).unwrap(), json!({"hidden": 1}));
+    frame(&mut h);
+    assert!(h.query_by_label(step).is_none(), "Continue in Background closed it");
+    finish_held(h.state_mut(), &jobs);
+    assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo + 1);
 }
 
 /// A document edited while the filter runs doesn't take its result: nothing changes, and the status

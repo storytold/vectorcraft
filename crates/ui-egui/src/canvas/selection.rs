@@ -18,8 +18,9 @@ use craft::ui::contract::{Access, Bind, Common, Component, Cx, MeasureCx, PaintU
 use craft::ui::style::{ComponentStyle, DataColor, StyleCx};
 use egui::{Color32, Rect, Response, Shape, Stroke, StrokeKind, vec2};
 use vectorcraft_doc::{NodeId, NodeKind};
-use vectorcraft_engine::{DocState, Prefs};
+use vectorcraft_engine::{DocState, Prefs, ViewInfo};
 use vectorcraft_geom::{AnchorKind, BezPath, PathData, PathEl, Point};
+use vectorcraft_tools::Mods;
 
 use super::cursor::ViewKey;
 use super::outline::{c32, node_outline, selection_hit_at, too_many_anchors, walk_drawn};
@@ -251,10 +252,9 @@ fn grid_path(key: u64, points: impl Iterator<Item = Point>, color: Color32) -> E
 /// The anchors and handles of the selection. An object selected whole has every anchor selected, and so do the
 /// paths inside a group, compound path or clip group selected whole; with Direct Selection's partial selection only
 /// the chosen anchors are, and a selected segment hollows the others. `tool_points` is whether the tool draws its own
-/// points (the Curvature tool while it draws), which leaves nothing here. Nothing too big to outline, and nothing
-/// during Halftone Preview.
-pub(super) fn anchors(app: &VectorcraftApp, st: &DocState, tool_points: bool) -> Anchors {
-    let tool = app.session.tool_id();
+/// points (the Curvature tool while it draws), which leaves nothing here. `tool` is the tool whose marks show
+/// ([`super::shown_tool`]). Nothing too big to outline, and nothing during Halftone Preview.
+pub(super) fn anchors(app: &VectorcraftApp, st: &DocState, tool: &str, tool_points: bool) -> Anchors {
     let curvature = tool == "curvature";
     let prefs = &app.session.prefs;
     let mut out = Anchors {
@@ -324,25 +324,152 @@ pub(super) fn anchors(app: &VectorcraftApp, st: &DocState, tool_points: bool) ->
 }
 
 /// The outline of the object under the pointer at document point `at`, at view `zoom`, for Smart Guides › Object
-/// Highlighting: the object a click of the selection tools would pick, unless it is selected or has too many points.
+/// Highlighting: the object a click of the selection tools would pick, unless the click keeps the selection (the
+/// object, or with the Selection tool selected art inside it, is selected) or the object has too many points.
 /// None while the view moves (`still` false), under Snap to Grid or Pixel Preview, with a tool that is busy or is not
-/// a selection tool, and with the preference off.
-pub(super) fn hover(app: &VectorcraftApp, st: &DocState, at: Point, zoom: f64, still: bool) -> Option<Hovered> {
+/// a selection tool, and with the preference off. `tool` is the tool whose marks show ([`super::shown_tool`]): while
+/// Cmd is held, the selection tool a press borrows.
+pub(super) fn hover(app: &VectorcraftApp, st: &DocState, tool: &str, at: Point, zoom: f64, still: bool) -> Option<Hovered> {
     let (view, prefs) = (&app.ui.view, &app.session.prefs);
     if !still || !view.smart_guides || !prefs.object_highlighting || view.snap_to_grid || view.pixel_preview {
         return None;
     }
-    let tool = app.session.tool_id();
     if app.session.tool_busy() || !matches!(tool, "selection" | "directSelection" | "groupSelection") {
         return None;
     }
     let hit = selection_hit_at(app, at, zoom)?;
     let id = if tool == "selection" { hit.top_object(st.isolation) } else { hit.leaf };
-    if st.selection.contains(id) {
+    // A Selection tool press on selected art inside `id`, such as a group member picked with Group Selection, keeps
+    // the selection and selects nothing new.
+    let kept = if tool == "selection" {
+        vectorcraft_tools::select::selected_under_in(&st.doc, &st.selection, &hit, id).is_some()
+    } else {
+        st.selection.contains(id)
+    };
+    if kept {
         return None;
     }
+    outline_of(st, id)
+}
+
+/// The hover outline of `id` in its layer colour, unless it has too many points.
+fn outline_of(st: &DocState, id: NodeId) -> Option<Hovered> {
     let node = st.doc.node(id).filter(|n| !too_many_anchors([*n]))?;
     Some(Hovered { path: node_outline(node, &st.doc.symbol_boxes()), color: c32(st.doc.layer_color(id)) })
+}
+
+/// The hover outline the canvas shows at document point `at` with the keys `held`: none while Space lends the view
+/// tools, since a press then pans the view; with the Eyedropper, the object its click there acts on
+/// ([`eyedropper_hover`]); else the selection tools' outline ([`hover`]). `tool`, `zoom` and `still` are as [`hover`]
+/// takes them.
+pub(super) fn hover_target(app: &mut VectorcraftApp, tool: &str, at: Point, held: Mods, zoom: f64, still: bool) -> Option<Hovered> {
+    if held.space && (held.cmd || !app.session.tool_wants_text()) {
+        return None;
+    }
+    if tool == "eyedropper" {
+        return eyedropper_hover(app, at, held, still);
+    }
+    let st = app.session.active()?;
+    hover(app, st, tool, at, zoom, still)
+}
+
+/// The outline of the object the Eyedropper's click at `at` with `mods` would act on
+/// ([`vectorcraft_engine::Session::hover_object`]), for Smart Guides › Object Highlighting: the source of a plain
+/// click (locked and template art included), the selected mesh it recolors, with Alt the object that gets the
+/// selection's attributes, and with Shift the object the color comes from. A selected object is outlined too, since a
+/// click on it still acts on it. None under the conditions [`hover`] names.
+pub(super) fn eyedropper_hover(app: &mut VectorcraftApp, at: Point, mods: Mods, still: bool) -> Option<Hovered> {
+    let (view, prefs) = (&app.ui.view, &app.session.prefs);
+    if !still || !view.smart_guides || !prefs.object_highlighting || view.snap_to_grid || view.pixel_preview || app.session.tool_busy() {
+        return None;
+    }
+    let info = app.view_info();
+    let id = eyedropper_hover_object(app, at, mods, info)?;
+    outline_of(app.session.active()?, id)
+}
+
+/// What the Eyedropper's hover object depends on: the point, the keys held, the document as it is, the selection and
+/// isolation, the tool's options (an armed pick), the paint defaults and the selected gradient stop, the selection
+/// tolerance, Eyedropper Options (the raster sample size), whether guides show and are locked, and the view's zoom and
+/// Outline mode: everything the tool's context gives a click that can change what it acts on.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HoverObjectKey {
+    at: Point,
+    mods: Mods,
+    doc: (u64, u64),
+    selection: vectorcraft_doc::Selection,
+    isolation: Option<NodeId>,
+    options: serde_json::Value,
+    paint: vectorcraft_tools::PaintDefaults,
+    fill_active: bool,
+    stop: Option<usize>,
+    tolerance: f64,
+    eyedropper: vectorcraft_engine::EyedropperOptions,
+    guides: (bool, bool),
+    zoom: f64,
+    outline: bool,
+}
+
+/// [`vectorcraft_engine::Session::hover_object`] at `at`, found again only when its [`HoverObjectKey`] changes: over
+/// an image, or with Shift held, finding it samples a color. The cached key is compared field by field, the cheap
+/// fields first, and the key is copied only when it changed.
+fn eyedropper_hover_object(app: &mut VectorcraftApp, at: Point, mods: Mods, view: ViewInfo) -> Option<NodeId> {
+    let st = app.session.active()?;
+    let s = &app.session;
+    let cached = app.canvas.hover_object.as_ref().filter(|(k, _)| {
+        let HoverObjectKey {
+            at: k_at,
+            mods: k_mods,
+            doc,
+            selection,
+            isolation,
+            options,
+            paint,
+            fill_active,
+            stop,
+            tolerance,
+            eyedropper,
+            guides,
+            zoom,
+            outline,
+        } = k;
+        *k_at == at
+            && *k_mods == mods
+            && *doc == (st.uid, st.revision)
+            && *isolation == st.isolation
+            && *fill_active == s.fill_active
+            && *stop == s.selected_stop()
+            && *tolerance == s.prefs.selection_tolerance
+            && *eyedropper == s.prefs.eyedropper
+            && *guides == (view.guides, s.guides_locked())
+            && *zoom == view.zoom
+            && *outline == view.outline
+            && *selection == st.selection
+            && *paint == s.paint
+            && *options == s.tool_options()
+    });
+    if let Some((_, id)) = cached {
+        return *id;
+    }
+    let key = HoverObjectKey {
+        at,
+        mods,
+        doc: (st.uid, st.revision),
+        selection: st.selection.clone(),
+        isolation: st.isolation,
+        options: app.session.tool_options(),
+        paint: app.session.paint.clone(),
+        fill_active: app.session.fill_active,
+        stop: app.session.selected_stop(),
+        tolerance: app.session.prefs.selection_tolerance,
+        eyedropper: app.session.prefs.eyedropper,
+        guides: (view.guides, app.session.guides_locked()),
+        zoom: view.zoom,
+        outline: view.outline,
+    };
+    let id = app.session.hover_object(at, mods, view);
+    app.canvas.hover_object = Some((key, id));
+    id
 }
 
 /// The dots of the selection: point type's origin, the centre of each object that shows it, and the key anchor.
@@ -467,11 +594,13 @@ pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &CanvasSp
         }
         wait.is_none()
     };
-    let Some(st) = app.session.active() else { return };
+    // While Cmd is held, the marks of the selection tool a press borrows.
+    let tool = super::shown_tool(app, ui.ctx());
     let hovered = match (kind, app.hover_doc) {
         (BodyKind::Pane, _) | (_, None) => None,
-        (_, Some(at)) => hover(app, st, at, space.view.zoom, still),
+        (_, Some(at)) => hover_target(app, tool, at, super::held_mods(ui.ctx()), space.view.zoom, still),
     };
+    let Some(st) = app.session.active() else { return };
     if let Some(h) = hovered {
         HoverOutline::new("Object highlight", Some(HoverShape::Path(h.path))).color(DataColor::new(h.color)).show_at(ui, rect);
     }
@@ -482,7 +611,7 @@ pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &CanvasSp
         }
         outline.show_at(ui, rect);
     }
-    let marks = anchors(app, st, tool_points);
+    let marks = anchors(app, st, tool, tool_points);
     if !marks.paths.is_empty() {
         let mut paths = marks.paths;
         // The marks only show the selection: the tools make the edits.
