@@ -337,13 +337,9 @@ impl Class {
             Class::XmlFilter(_) => "Object",
             Class::Math => "Math",
             Class::Json => "JSON",
-            Class::Ordinary
-            | Class::ForIn(_)
-            | Class::Host(_)
-            | Class::FsEntry(_)
-            | Class::Symbol(_)
-            | Class::Iterator(_)
-            | Class::IterRecord(_) => "Object",
+            Class::Ordinary | Class::ForIn(_) | Class::Host(_) | Class::FsEntry(_) | Class::Symbol(_) | Class::Iterator(_) | Class::IterRecord(_) => {
+                "Object"
+            }
             Class::Array { .. } => "Array",
             Class::Function(_) => "Function",
             Class::Error(_) => "Error",
