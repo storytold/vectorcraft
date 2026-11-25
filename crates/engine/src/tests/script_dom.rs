@@ -1598,6 +1598,123 @@ fn a_layers_and_a_groups_lists_give_the_topmost_object_first() {
 }
 
 #[test]
+fn a_layers_and_a_groups_path_items_list_only_the_paths_directly_in_them_topmost_first() {
+    let (mut s, _, b) = doc();
+    let c = rect(&mut s, 200.0, 100.0, 70.0, 20.0);
+    s.execute("select.set", &json!({"ids": [b.0, c.0]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    // The layer holds `a` (30 pt wide) and a group of `b` (50 pt wide) and `c` (70 pt wide); the
+    // document's list holds all three, the layer's only `a`, and a sublayer's path is its own.
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, L = d.layers[0], g = L.groupItems[0], P = L.pathItems, G = g.pathItems;\
+         vc.log(P.length); vc.log(P[0].width); vc.log(P.typename); vc.log(P.parent.typename);\
+         vc.log(G.length); vc.log(G[0].width); vc.log(G[1].width); vc.log(G.parent.typename); vc.log(d.pathItems.length);\
+         var sub = L.layers.add(); sub.pathItems.rectangle(10, 10, 5, 5); vc.log(L.pathItems.length); vc.log(sub.pathItems.length);\
+         vc.log(G.getByName === undefined); vc.log(P[1] === undefined);",
+    );
+    let expected =
+        [json!(1), json!(30), json!("PathItems"), json!("Layer"), json!(2), json!(70), json!(50), json!("GroupItem"), json!(3), json!(1), json!(1)];
+    assert_eq!(out[..11], expected);
+    assert_eq!(out[11..], [json!(false), json!(true)]);
+}
+
+#[test]
+fn a_loop_over_a_groups_path_items_builds_the_list_once() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let ids: Vec<u64> = (0..1000).map(|i| rect(&mut s, f64::from(i % 40) * 10.0, 10.0, 5.0, 5.0).0).collect();
+    s.execute("select.set", &json!({"ids": ids})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    // Reading `length` and `[i]` 1,000 times each stays within 512 KiB of data only when the list
+    // of 1,000 paths is not built again for each read.
+    crate::script::TEST_BRIDGE_BYTES.with(|b| b.set(Some(1 << 19)));
+    let r = run(&mut s, "var P = app.activeDocument.groupItems[0].pathItems, n = 0; for (var i = 0; i < P.length; i++) if (P[i]) n++; vc.log(n);");
+    crate::script::TEST_BRIDGE_BYTES.with(|b| b.set(None));
+    assert_eq!(r.unwrap()["log"], json!([1000]));
+}
+
+#[test]
+fn a_layers_path_items_make_their_paths_on_top_of_that_layer() {
+    let (mut s, ..) = doc();
+    let bottom = s.active().unwrap().doc.layers[0].id;
+    let selected = s.active().unwrap().selection.clone();
+    let steps = undo_steps(&s);
+    // A new layer becomes the current one; each creator of the first layer's `pathItems` still
+    // puts its path on top of that layer.
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, top = d.layers.add(), L = d.layers[1], P = L.pathItems;\
+         var make = [function () { return P.rectangle(100, 100, 20, 10); }, function () { return P.roundedRectangle(100, 100, 20, 10); },\
+           function () { return P.ellipse(); }, function () { return P.polygon(); }, function () { return P.star(); }, function () { return P.add(); }];\
+         for (var i = 0; i < make.length; i++) { var p = make[i](); p.name = 'm' + i; vc.log(p.layer.name === L.name); vc.log(L.pageItems[0].name); }\
+         vc.log(d.activeLayer.name === top.name); vc.log(top.pageItems.length); vc.log(P.length);",
+    );
+    let mut expected = Vec::new();
+    for i in 0..6 {
+        expected.extend([json!(true), json!(format!("m{i}"))]);
+    }
+    expected.extend([json!(true), json!(0), json!(8)]);
+    assert_eq!(out, expected);
+    assert_eq!(undo_steps(&s), steps + 1);
+    let st = s.active().unwrap();
+    let kids = st.doc.node(bottom).unwrap().children().unwrap();
+    assert_eq!(kids.last().unwrap().name.as_deref(), Some("m5"));
+    assert!(st.selection == selected);
+}
+
+#[test]
+fn a_groups_path_items_add_puts_the_path_in_the_group() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let gid = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.none", &json!({})).unwrap();
+    let steps = undo_steps(&s);
+    let before = format!("{:?}", s.active().unwrap().doc.layers);
+    let out = log(
+        &mut s,
+        "var g = app.activeDocument.groupItems[0], n = g.pathItems.add(); n.name = 'N';\
+         vc.log(n.parent.typename); vc.log(g.pageItems[0].name); vc.log(n.pathPoints.length);\
+         var r = g.pathItems.rectangle(50, 50, 10, 10); r.name = 'R'; vc.log(g.pathItems[0].name); vc.log(g.pathItems.length);",
+    );
+    assert_eq!(out, [json!("GroupItem"), json!("N"), json!(0), json!("R"), json!(4)]);
+    assert_eq!(undo_steps(&s), steps + 1);
+    let d = &s.active().unwrap().doc;
+    let top: Vec<Option<&str>> = d.node(gid).unwrap().children().unwrap().iter().rev().take(2).map(|n| n.name.as_deref()).collect();
+    assert_eq!(top, [Some("R"), Some("N")]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
+}
+
+#[test]
+fn path_items_of_a_hidden_or_locked_layer_or_group_make_no_path() {
+    const REFUSED: &str = "Cannot add a path to a hidden or locked layer or group";
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let gid = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.none", &json!({})).unwrap();
+    let lid = s.active().unwrap().doc.layers[0].id;
+    let before = format!("{:?}", s.active().unwrap().doc.layers);
+    s.execute("layer.setProps", &json!({"id": lid.0, "locked": true})).unwrap();
+    let locked = format!("{:?}", s.active().unwrap().doc.layers);
+    for src in ["app.activeDocument.layers[0].pathItems.rectangle(10, 10, 5, 5);", "app.activeDocument.layers[0].pathItems.add();"] {
+        assert!(failure(&mut s, src).contains(REFUSED), "{src}");
+        assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), locked);
+    }
+    s.execute("layer.setProps", &json!({"id": lid.0, "locked": false})).unwrap();
+    s.execute("layer.setProps", &json!({"id": gid.0, "visible": false})).unwrap();
+    let hidden = format!("{:?}", s.active().unwrap().doc.layers);
+    assert!(failure(&mut s, "app.activeDocument.groupItems[0].pathItems.ellipse();").contains(REFUSED));
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), hidden);
+    s.execute("layer.setProps", &json!({"id": gid.0, "visible": true})).unwrap();
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
+    // A group's `pathItems` read after the group is gone throw.
+    let msg = failure(&mut s, "var g = app.activeDocument.groupItems[0], P = g.pathItems; g.remove(); P.length;");
+    assert!(msg.contains("Stale page item"), "{msg}");
+}
+
+#[test]
 fn compound_path_items_add_makes_an_empty_compound_path_that_takes_paths() {
     let (mut s, a, b) = doc();
     s.execute("select.set", &json!({"ids": [a.0]})).unwrap();

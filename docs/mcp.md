@@ -2707,12 +2707,12 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   layers it throws, since a document keeps at least one layer. Assigning a layer to `activeLayer` runs
   `layer.setCurrent`. A `Layer` (https://ai-scripting.docsforadobe.dev/jsobjref/Layer/) has `typename`, `name`,
   `visible`, `locked`, `printable`, `preview`, `dimPlacedImages`, `opacity` (0 to 100), `color`, `parent`,
-  `layers`, `pageItems`, `groupItems`, `compoundPathItems`, `zOrderPosition`, `hasSelectedArtwork`, `isIsolated`,
-  `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`. Its properties run
+  `layers`, `pageItems`, `groupItems`, `compoundPathItems`, `pathItems`, `zOrderPosition`, `hasSelectedArtwork`,
+  `isIsolated`, `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`. Its properties run
   `layer.setProps`, and `opacity` runs `object.setProps`. `move` and `zOrder` run `node.move`; a layer goes into
   another layer, to the top level of the document, or directly above or below another layer. Every page item has
   `layer`, the layer it is in. A `GroupItem` (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/) also has
-  `clipped`, `pageItems`, `groupItems` and `compoundPathItems`, and a `CompoundPathItem`
+  `clipped`, `pageItems`, `groupItems`, `compoundPathItems` and `pathItems`, and a `CompoundPathItem`
   (https://ai-scripting.docsforadobe.dev/jsobjref/CompoundPathItem/) has `pathItems`. `groupItems`
   (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItems/) and `compoundPathItems` have `length`, `[i]`,
   `index(key)`, `getByName(name)`, `add()` and `removeAll()`. `groupItems.add()` runs `object.newGroup`.
@@ -2757,8 +2757,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   run leaves it). The report also lists a document whose active artboard has another index when the run ends because
   artboards were inserted, removed or reordered before it. An index outside the list throws a
   `RangeError`. A layer that was deleted throws `Stale layer`, and an artboard that was deleted throws
-  `Stale artboard`. `Layer.pathItems`, `blendingMode`, `artworkKnockout` and `sliced`, `GroupItem.pathItems` and
-  `GroupItems.createFromFile` throw an error that says they are not available yet.
+  `Stale artboard`. `Layer.blendingMode`, `artworkKnockout` and `sliced` and `GroupItems.createFromFile` throw an
+  error that says they are not available yet.
 - `object.newGroup {parent?, index?, compound?}` adds an empty group to a shown, unlocked layer or group (`parent`;
   default: the current layer), on top of its contents or at `index` (0 is the bottom; in a clipping layer or group,
   index 0 puts it directly above the clipping path), as one undo step named Group, and
@@ -2777,7 +2777,15 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   radius = 50, innerRadius = 20, points = 5, reversed?)`, which run `shape.rectangle`, `path.create`,
   `shape.ellipse`, `shape.polygon` and `shape.star` (and `path.reverse` for `reversed`) and paint the new path as new
   art is painted. `add()` and the shape creators put the new path on top of the active layer whatever the drawing
-  mode, which stays as it was. A `PathItem` (https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/) adds to the page item
+  mode, which stays as it was. A layer's and a group's `pathItems`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Layer/, https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/)
+  have the same members, and their `parent` is that layer or group. Their `add()` and shape creators put the new path
+  on top of that layer's or group's contents, with the current layer left as it was: the path is made with the
+  container's layer as the current one (`layer.setCurrent`) and, for a group, moved into it with `node.move`, in the
+  run's one undo step. VectorCraft's own rules: a layer's or group's `pathItems` list the paths directly in it,
+  topmost first, leaving out paths in its groups, compound paths and sublayers; a layer or group that is hidden or
+  locked, or that is in a hidden or locked layer or group, throws `Cannot add a path to a hidden or locked layer or
+  group` and no path is made. A `PathItem` (https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/) adds to the page item
   members `pathPoints`, `closed`, `evenodd`, `area` (negative for a path that runs counterclockwise), `length`,
   `guides`, `clipping`, `setEntirePath(points)`, `filled`, `fillColor`, `fillOverprint`, `stroked`, `strokeColor`,
   `strokeOverprint`, `strokeWidth`, `strokeCap`, `strokeJoin`, `strokeMiterLimit` (1 to 500), `strokeDashes`,

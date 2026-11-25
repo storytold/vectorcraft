@@ -108,7 +108,7 @@ const INSIDE: &[(&str, &str)] = &[
         "Layer.prototype.",
         "artworkKnockout artworkKnockout= blendingMode blendingMode= color color= compoundPathItems constructor \
          dimPlacedImages dimPlacedImages= groupItems hasSelectedArtwork hasSelectedArtwork= isIsolated layers locked \
-         locked= move name name= opacity opacity= pageItems parent pathItems pathItems= placedItems placedItems= preview \
+         locked= move name name= opacity opacity= pageItems parent pathItems placedItems placedItems= preview \
          preview= printable printable= rasterItems rasterItems= remove sliced sliced= symbolItems symbolItems= textFrames \
          textFrames= typename visible visible= zOrder zOrderPosition",
     ),
@@ -117,7 +117,7 @@ const INSIDE: &[(&str, &str)] = &[
     ("GroupItem.", "prototype"),
     (
         "GroupItem.prototype.",
-        "clipped clipped= compoundPathItems constructor groupItems pageItems pathItems pathItems= placedItems placedItems= \
+        "clipped clipped= compoundPathItems constructor groupItems pageItems pathItems placedItems placedItems= \
          rasterItems rasterItems= symbolItems symbolItems= textFrames textFrames=",
     ),
     ("GroupItems.", "prototype"),

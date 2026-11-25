@@ -102,8 +102,10 @@ pub(super) struct State {
     coords: Cell<Coords>,
     items: RefCell<Vec<ItemList>>,
     locked: RefCell<Vec<LockedList>>,
-    /// The last list of a document's paths ([`paths`]), kept while that document is unchanged.
-    paths: RefCell<Option<ItemList>>,
+    /// The last [`paths::PATH_LISTS`] lists of paths a document's, a layer's or a group's
+    /// `pathItems` gave ([`paths`]), least recently used first, each kept while its document is
+    /// unchanged.
+    paths: RefCell<Vec<paths::PathList>>,
     /// A path and its subpaths with the point changes the run has made to it and not written yet
     /// ([`flush`]).
     pending: RefCell<Option<(Item, Vec<vectorcraft_geom::path::SubPath>)>>,

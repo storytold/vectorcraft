@@ -13,7 +13,9 @@
 //!
 //! VectorCraft's own rules, which the help pages do not state:
 //! - `Document.pathItems` lists the document's paths in the order of `pageItems`, paths inside
-//!   groups and compound paths included.
+//!   groups and compound paths included. A layer's or group's `pathItems` list the paths directly in
+//!   it, topmost first, and make their paths on top of its contents; a layer or group that is hidden
+//!   or locked, or that is in a hidden or locked layer or group, throws [`CONTAINER_LOCKED`].
 //! - A change to the geometry or paint of a path that is hidden or locked, or that is in a hidden
 //!   or locked layer or group, throws `Cannot edit` with nothing changed.
 //! - A path in a compound path or compound shape reads that owner's paint, which the paint
@@ -23,8 +25,8 @@
 //!   fill or stroke only.
 //! - `closed` is true when every subpath of the path is closed, and assigning it opens or closes
 //!   them all.
-//! - `pathItems.add()` and the shape creators make their path on top of the active layer, whatever
-//!   the drawing mode, painted as new art is; `add()` makes a path with no points. `filled` and `stroked` set to true give a path with no fill or stroke new art's fill or
+//! - `pathItems.add()` and the shape creators make their path on top of the active layer (a layer's
+//!   or group's: on top of its contents), whatever the drawing mode, painted as new art is; `add()` makes a path with no points. `filled` and `stroked` set to true give a path with no fill or stroke new art's fill or
 //!   stroke (solid, gradient or pattern), or black when new art has none. `PathPoints.add()` adds
 //!   a corner point with no handles at the last point, or at `[0, 0]` on a path with no points.
 //!   Removing the last points leaves the path, with no points.
@@ -56,8 +58,8 @@ use vectorcraft_js::{Data, HostClass, HostError, HostItem, HostMember, Realm, Ru
 use vectorcraft_tools::params::gradient_params;
 
 use super::{
-    Answer, Coords, Doc, Item, Link, NOT_FOUND, STALE_ITEM, arg, boolean, class, colors, command, coordinate, doc_of, edit_item, editable, find_doc,
-    float, frame, get, given, handle_of, id_of, id_parts, item_of, item_rect, later, method, named, num, number, on_doc, pair, point, point_get,
+    Answer, Coords, Doc, Item, Link, NOT_FOUND, STALE_ITEM, arg, boolean, class, colors, command, coordinate, edit_item, editable, find_doc, float,
+    frame, get, given, handle_of, id_of, id_parts, item_of, item_rect, later, method, named, num, number, on_doc, pair, point, point_get,
     point_method, point_property, property, this_doc, typename_of, whole, with_doc,
 };
 use crate::{DocState, NodeId, NodeKind};
@@ -263,21 +265,48 @@ fn keeping_paint<T>(h: &super::Host, f: impl FnOnce() -> T) -> T {
     r
 }
 
-// ---- Document.pathItems ----
+// ---- Document.pathItems, Layer.pathItems and GroupItem.pathItems ----
 
-/// The ids of a document's paths, in the order of its page items.
-fn path_items(h: &super::Host, st: &DocState) -> Rc<Vec<NodeId>> {
-    if let Some((uid, doc, ids)) = &*h.dom.paths.borrow()
-        && *uid == st.uid
-        && std::sync::Arc::ptr_eq(doc, &st.doc)
+/// A document's uid, the document as it was, the layer or group a list of paths is of (none for the
+/// document's), and the ids it listed then.
+pub(super) type PathList = (u64, Arc<crate::Document>, Option<NodeId>, Rc<Vec<NodeId>>);
+
+/// How many lists of paths [`super::State`] keeps at once.
+pub(super) const PATH_LISTS: usize = 4;
+
+/// The ids of a document's paths, in the order of its page items, or of the paths directly in the
+/// layer or group `container`, topmost first. The last [`PATH_LISTS`] lists are kept while their
+/// documents are unchanged, so a loop over a collection builds its list once. A new list of a
+/// container is charged by the objects it looks at.
+fn path_items(h: &super::Host, st: &DocState, container: Option<NodeId>) -> std::result::Result<Rc<Vec<NodeId>>, HostError> {
     {
-        return ids.clone();
+        let mut lists = h.dom.paths.borrow_mut();
+        if let Some(at) = lists.iter().position(|(uid, doc, c, _)| *uid == st.uid && Arc::ptr_eq(doc, &st.doc) && *c == container) {
+            let list = lists.remove(at);
+            let ids = list.3.clone();
+            lists.push(list);
+            return Ok(ids);
+        }
     }
-    let all = super::page_items(h, st);
-    let ids: Rc<Vec<NodeId>> =
-        Rc::new(all.iter().copied().filter(|i| st.doc.node(*i).is_some_and(|n| matches!(n.kind, NodeKind::Path { .. }))).collect());
-    *h.dom.paths.borrow_mut() = Some((st.uid, st.doc.clone(), ids.clone()));
-    ids
+    let is_path = |n: &crate::doc::Node| matches!(n.kind, NodeKind::Path { .. });
+    let ids: Rc<Vec<NodeId>> = match container {
+        Some(c) => {
+            let children: &[Arc<crate::doc::Node>] = st.doc.node(c).and_then(|n| n.children()).map_or(&[], Vec::as_slice);
+            h.charge_call(children.len() as u64)?;
+            Rc::new(children.iter().rev().filter(|n| is_path(n)).map(|n| n.id).collect())
+        }
+        None => {
+            let all = super::page_items(h, st);
+            Rc::new(all.iter().copied().filter(|i| st.doc.node(*i).is_some_and(is_path)).collect())
+        }
+    };
+    let mut lists = h.dom.paths.borrow_mut();
+    lists.retain(|(uid, doc, ..)| *uid != st.uid || Arc::ptr_eq(doc, &st.doc));
+    if lists.len() >= PATH_LISTS {
+        lists.remove(0);
+    }
+    lists.push((st.uid, st.doc.clone(), container, ids.clone()));
+    Ok(ids)
 }
 
 pub(super) fn doc_path_items(h: &super::Host, a: &[Data]) -> Answer {
@@ -285,32 +314,57 @@ pub(super) fn doc_path_items(h: &super::Host, a: &[Data]) -> Answer {
     Ok(host_ref("PathItems", &[float(h.run), float(doc.uid)]))
 }
 
-fn items_doc(h: &super::Host, a: &[Data]) -> std::result::Result<Doc, HostError> {
-    doc_of(h, arg(a, 0), "PathItems")
+/// The `pathItems` of the layer or group `id` in the document `uid`.
+pub(super) fn held_path_items(h: &super::Host, uid: u64, id: NodeId) -> Data {
+    let [high, low] = id_parts(id);
+    host_ref("PathItems", &[float(h.run), float(uid), high, low])
+}
+
+/// The document of a `PathItems` object, and the layer or group it lists the paths of, if any.
+fn items_scope(h: &super::Host, a: &[Data]) -> std::result::Result<(Doc, Option<NodeId>), HostError> {
+    let Some(handle) = handle_of(arg(a, 0), "PathItems") else { return Err(HostError::Type("this is not a PathItems".into())) };
+    match handle.as_slice() {
+        [run, uid] => Ok((find_doc(h, *run, *uid).ok_or_else(|| HostError::Error(super::STALE_DOCUMENT.into()))?, None)),
+        [run, uid, high, low] => {
+            let doc = find_doc(h, *run, *uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+            let id = id_of(*high, *low).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+            let holds = with_doc(h, doc, |_, st| st.doc.node(id).is_some_and(|n| matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. })));
+            if !holds {
+                return Err(HostError::Error(STALE_ITEM.into()));
+            }
+            Ok((doc, Some(id)))
+        }
+        _ => Err(HostError::Type("this is not a PathItems".into())),
+    }
 }
 
 fn items_length(h: &super::Host, a: &[Data]) -> Answer {
-    let doc = items_doc(h, a)?;
-    Ok(num(float(with_doc(h, doc, |_, st| path_items(h, st).len()) as u64)))
+    let (doc, c) = items_scope(h, a)?;
+    Ok(num(float(with_doc(h, doc, |_, st| path_items(h, st, c).map(|l| l.len()))? as u64)))
 }
 
 fn items_parent(h: &super::Host, a: &[Data]) -> Answer {
-    let doc = items_doc(h, a)?;
-    Ok(host_ref("Document", &[float(h.run), float(doc.uid)]))
+    let (doc, c) = items_scope(h, a)?;
+    Ok(match c {
+        None => host_ref("Document", &[float(h.run), float(doc.uid)]),
+        Some(c) => with_doc(h, doc, |_, st| {
+            if st.doc.node(c).is_some_and(crate::doc::Node::is_layer) { super::layers::layer_ref(h, st.uid, c) } else { super::item_ref(h, st, c) }
+        }),
+    })
 }
 
 fn items_at(h: &super::Host, a: &[Data]) -> Answer {
-    let doc = items_doc(h, a)?;
+    let (doc, c) = items_scope(h, a)?;
     let Data::Number(n) = arg(a, 1) else { return Ok(Data::Undefined) };
     let Some(i) = whole(*n).and_then(|i| usize::try_from(i).ok()) else { return Ok(Data::Undefined) };
-    Ok(with_doc(h, doc, |_, st| path_items(h, st).get(i).map_or(Data::Undefined, |id| super::item_ref(h, st, *id))))
+    with_doc(h, doc, |_, st| Ok(path_items(h, st, c)?.get(i).map_or(Data::Undefined, |id| super::item_ref(h, st, *id))))
 }
 
 fn items_by_name(h: &super::Host, a: &[Data]) -> Answer {
-    let doc = items_doc(h, a)?;
+    let (doc, c) = items_scope(h, a)?;
     let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("give a name, as a string".into())) };
     with_doc(h, doc, |_, st| {
-        let ids = path_items(h, st);
+        let ids = path_items(h, st, c)?;
         h.charge_call(ids.len() as u64)?;
         let id = ids.iter().find(|i| st.doc.node(**i).and_then(|n| n.name.as_deref()) == Some(name.as_str()));
         id.map(|id| super::item_ref(h, st, *id)).ok_or_else(|| HostError::Error(NOT_FOUND.into()))
@@ -328,15 +382,15 @@ fn items_index(h: &super::Host, a: &[Data]) -> Answer {
     }
 }
 
-/// `pathItems.removeAll()`: deletes every path of the document in one command. A hidden or locked
-/// path, or one in a hidden or locked layer or group, stops it before anything is deleted.
+/// `pathItems.removeAll()`: deletes every path the collection lists in one command. A hidden or
+/// locked path, or one in a hidden or locked layer or group, stops it before anything is deleted.
 fn items_remove_all(h: &super::Host, a: &[Data]) -> Answer {
-    let doc = items_doc(h, a)?;
+    let (doc, c) = items_scope(h, a)?;
     let (ids, refused) = with_doc(h, doc, |_, st| {
-        let ids = path_items(h, st);
+        let ids = path_items(h, st, c)?;
         let refused: Vec<u64> = ids.iter().filter(|i| !editable(&st.doc, **i)).map(|i| i.0).take(20).collect();
-        (ids, refused)
-    });
+        Ok::<_, HostError>((ids, refused))
+    })?;
     if !refused.is_empty() {
         let list = refused.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
         return Err(HostError::Error(format!("cannot delete hidden or locked paths: {list}")));
@@ -356,19 +410,53 @@ fn made_id(r: &Data) -> std::result::Result<NodeId, HostError> {
     id.map(NodeId).ok_or_else(|| HostError::Error("the path was not made".into()))
 }
 
-/// Runs the command `id` that makes a path in `doc` on top of the active layer, the selection kept,
-/// and reverses the new path's direction when `reversed`. → the new path.
-fn make(h: &super::Host, doc: Doc, id: &str, params: &Value, reversed: bool) -> Answer {
-    let made = on_doc(h, doc.uid, true, |h| {
+/// The error of a path made in a layer or group that is hidden or locked, or that is in a hidden or
+/// locked layer or group.
+pub const CONTAINER_LOCKED: &str = "Cannot add a path to a hidden or locked layer or group";
+
+/// Runs `make`, which makes a path in `doc` on top of the current layer and gives its id, with the
+/// selection and the current layer kept. With a layer or group `container`, the container's layer
+/// is the current one while `make` runs (`layer.setCurrent`, not an undo step), and a path made
+/// outside the container then moves on top of its contents in the same step; a container that is
+/// hidden or locked, or that is in a hidden or locked layer or group, throws [`CONTAINER_LOCKED`]
+/// before anything is made. → the new path.
+fn make_in(
+    h: &super::Host,
+    doc: Doc,
+    container: Option<NodeId>,
+    make: impl FnOnce(&super::Host) -> std::result::Result<NodeId, HostError>,
+) -> Answer {
+    if let Some(c) = container
+        && !with_doc(h, doc, |_, st| editable(&st.doc, c))
+    {
+        return Err(HostError::Error(CONTAINER_LOCKED.into()));
+    }
+    let made = match container {
+        None => on_doc(h, doc.uid, true, make)?,
+        Some(c) => super::atomically(h, |h| {
+            let id = on_doc(h, doc.uid, true, |h| {
+                command(h, "layer.setCurrent", &json!({"id": c.0, "keepRows": true}))?;
+                make(h)
+            })?;
+            super::place(h, doc, id, &super::Destination { parent: c, beside: None, how: super::Placement::Top })?;
+            Ok(id)
+        })?,
+    };
+    let s = h.session.borrow();
+    let st = s.documents().iter().find(|d| d.uid == doc.uid).ok_or_else(|| HostError::Error(super::STALE_DOCUMENT.into()))?;
+    Ok(super::item_ref(h, st, made))
+}
+
+/// Runs the command `id` that makes a path in `doc`, on top of the active layer or of `container`'s
+/// contents ([`make_in`]), and reverses the new path's direction when `reversed`. → the new path.
+fn make(h: &super::Host, doc: Doc, container: Option<NodeId>, id: &str, params: &Value, reversed: bool) -> Answer {
+    make_in(h, doc, container, |h| {
         let id = made_id(&drawing_normally(h, || command(h, id, params))?)?;
         if reversed {
             command(h, "path.reverse", &json!({"ids": [id.0]}))?;
         }
         Ok(id)
-    })?;
-    let s = h.session.borrow();
-    let st = s.documents().iter().find(|d| d.uid == doc.uid).ok_or_else(|| HostError::Error(super::STALE_DOCUMENT.into()))?;
-    Ok(super::item_ref(h, st, made))
+    })
 }
 
 /// Argument `i`, or `default` when it is left out.
@@ -409,13 +497,13 @@ fn corner(h: &super::Host, doc: Doc, left: f64, top: f64) -> std::result::Result
 
 /// `rectangle(top, left, width, height, reversed?)`.
 fn items_rectangle(h: &super::Host, a: &[Data]) -> Answer {
-    let doc = items_doc(h, a)?;
+    let (doc, into) = items_scope(h, a)?;
     let top = coordinate(arg(a, 1), "top")?;
     let left = coordinate(arg(a, 2), "left")?;
     let (w, ht) = (size(a, 3, None, "width")?, size(a, 4, None, "height")?);
     let reversed = flag(a, 5, "reversed")?;
     let p = corner(h, doc, left, top)?;
-    make(h, doc, "shape.rectangle", &json!({"x": p.x, "y": p.y, "width": w, "height": ht}), reversed)
+    make(h, doc, into, "shape.rectangle", &json!({"x": p.x, "y": p.y, "width": w, "height": ht}), reversed)
 }
 
 /// The anchors of a rectangle `r` with elliptical corners of radii `rx` and `ry`, clockwise on the
@@ -455,7 +543,7 @@ fn rounded(r: Rect, rx: f64, ry: f64) -> Vec<Anchor> {
 /// `roundedRectangle(top, left, width, height, horizontalRadius = 15, verticalRadius = 20,
 /// reversed = false)`: a closed path with `path.create`.
 fn items_rounded_rectangle(h: &super::Host, a: &[Data]) -> Answer {
-    let doc = items_doc(h, a)?;
+    let (doc, into) = items_scope(h, a)?;
     let top = coordinate(arg(a, 1), "top")?;
     let left = coordinate(arg(a, 2), "left")?;
     let (w, ht) = (size(a, 3, None, "width")?, size(a, 4, None, "height")?);
@@ -463,12 +551,12 @@ fn items_rounded_rectangle(h: &super::Host, a: &[Data]) -> Answer {
     let reversed = flag(a, 7, "reversed")?;
     let p = corner(h, doc, left, top)?;
     let anchors: Vec<Value> = rounded(Rect::new(p.x, p.y, p.x + w, p.y + ht), rx, ry).iter().map(anchor_json).collect();
-    make(h, doc, "path.create", &json!({"anchors": anchors, "closed": true}), reversed)
+    make(h, doc, into, "path.create", &json!({"anchors": anchors, "closed": true}), reversed)
 }
 
 /// `ellipse(top = 100, left = 100, width = 50, height = 100, reversed = false, inscribed)`.
 fn items_ellipse(h: &super::Host, a: &[Data]) -> Answer {
-    let doc = items_doc(h, a)?;
+    let (doc, into) = items_scope(h, a)?;
     let top = given(arg(a, 1)).map_or(Ok(100.0), |d| coordinate(d, "top"))?;
     let left = given(arg(a, 2)).map_or(Ok(100.0), |d| coordinate(d, "left"))?;
     let (w, ht) = (size(a, 3, Some(50.0), "width")?, size(a, 4, Some(100.0), "height")?);
@@ -477,7 +565,7 @@ fn items_ellipse(h: &super::Host, a: &[Data]) -> Answer {
         return Err(HostError::Error("ellipse with inscribed true is not available yet".into()));
     }
     let p = corner(h, doc, left, top)?;
-    make(h, doc, "shape.ellipse", &json!({"x": p.x, "y": p.y, "width": w, "height": ht}), reversed)
+    make(h, doc, into, "shape.ellipse", &json!({"x": p.x, "y": p.y, "width": w, "height": ht}), reversed)
 }
 
 /// The center of a polygon or star, in document coordinates.
@@ -489,32 +577,33 @@ fn center(h: &super::Host, doc: Doc, a: &[Data]) -> std::result::Result<Point, H
 
 /// `polygon(centerX = 200, centerY = 300, radius = 50, sides = 8, reversed = false)`.
 fn items_polygon(h: &super::Host, a: &[Data]) -> Answer {
-    let doc = items_doc(h, a)?;
+    let (doc, into) = items_scope(h, a)?;
     let c = center(h, doc, a)?;
     let r = size(a, 3, Some(50.0), "radius")?;
     let sides = count(a, 4, 8.0, 3.0, 1000.0, "sides")?;
     let reversed = flag(a, 5, "reversed")?;
-    make(h, doc, "shape.polygon", &json!({"cx": c.x, "cy": c.y, "radius": r, "sides": sides}), reversed)
+    make(h, doc, into, "shape.polygon", &json!({"cx": c.x, "cy": c.y, "radius": r, "sides": sides}), reversed)
 }
 
 /// `star(centerX = 200, centerY = 300, radius = 50, innerRadius = 20, points = 5, reversed =
 /// false)`.
 fn items_star(h: &super::Host, a: &[Data]) -> Answer {
-    let doc = items_doc(h, a)?;
+    let (doc, into) = items_scope(h, a)?;
     let c = center(h, doc, a)?;
     let r1 = size(a, 3, Some(50.0), "radius")?;
     let r2 = size(a, 4, Some(20.0), "innerRadius")?;
     let points = count(a, 5, 5.0, 2.0, 1000.0, "points")?;
     let reversed = flag(a, 6, "reversed")?;
-    make(h, doc, "shape.star", &json!({"cx": c.x, "cy": c.y, "radius1": r1, "radius2": r2, "points": points}), reversed)
+    make(h, doc, into, "shape.star", &json!({"cx": c.x, "cy": c.y, "radius1": r1, "radius2": r2, "points": points}), reversed)
 }
 
-/// `pathItems.add()`: a path with no points on top of the active layer, from `path.create` with
-/// empty path data, painted as new art. When new art has no fill and no stroke, the black stroke `path.create` gives an open
-/// path is set back to none in the same step.
+/// `pathItems.add()`: a path with no points on top of the active layer, or of the layer's or
+/// group's contents ([`make_in`]), from `path.create` with empty path data, painted as new art.
+/// When new art has no fill and no stroke, the black stroke `path.create` gives an open path is set
+/// back to none in the same step.
 fn items_add(h: &super::Host, a: &[Data]) -> Answer {
-    let doc = items_doc(h, a)?;
-    let made = on_doc(h, doc.uid, true, |h| {
+    let (doc, into) = items_scope(h, a)?;
+    make_in(h, doc, into, |h| {
         let unpainted = {
             let ap = h.session.borrow().new_art();
             ap.fill_paint().is_none() && ap.stroke_paint().is_none()
@@ -524,10 +613,7 @@ fn items_add(h: &super::Host, a: &[Data]) -> Answer {
             keeping_paint(h, || command(h, "paint.setStroke", &json!({"none": true, "ids": [id.0]})))?;
         }
         Ok(id)
-    })?;
-    let s = h.session.borrow();
-    let st = s.documents().iter().find(|d| d.uid == doc.uid).ok_or_else(|| HostError::Error(super::STALE_DOCUMENT.into()))?;
-    Ok(super::item_ref(h, st, made))
+    })
 }
 
 // ---- PathItem geometry ----

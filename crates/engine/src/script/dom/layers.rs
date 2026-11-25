@@ -12,8 +12,8 @@
 //!
 //! VectorCraft's own rules, which the help pages do not state:
 //! - `layers` lists layers top first, as the Layers panel shows them. A layer's or group's
-//!   `pageItems`, `groupItems` and `compoundPathItems`, and a compound path's `pathItems`, list the
-//!   objects directly in it, topmost first. The document's `groupItems` and `compoundPathItems`
+//!   `pageItems`, `groupItems`, `compoundPathItems` and `pathItems`, and a compound path's
+//!   `pathItems`, list the objects directly in it, topmost first. The document's `groupItems` and `compoundPathItems`
 //!   hold every group or compound path at any depth, in the order of the document's `pageItems`.
 //! - `layers.add()` on the document makes a layer above every top-level layer; on a layer it makes
 //!   a sublayer on top of that layer's contents. The new layer becomes the current one.
@@ -114,7 +114,7 @@ fn this_layer(h: &Host, a: &[Data]) -> Result<(Doc, NodeId)> {
     layer_of(h, arg(a, 0))
 }
 
-fn layer_ref(h: &Host, uid: u64, id: NodeId) -> Data {
+pub(super) fn layer_ref(h: &Host, uid: u64, id: NodeId) -> Data {
     let [high, low] = id_parts(id);
     host_ref("Layer", &[float(h.run), float(uid), high, low])
 }
@@ -845,6 +845,17 @@ fn held_compounds(h: &Host, a: &[Data]) -> Answer {
     held(h, a, Kind::Compound)
 }
 
+/// A layer's or group's `pathItems`: the paths directly in it ([`super::paths`]).
+fn held_paths(h: &Host, a: &[Data]) -> Answer {
+    let this = arg(a, 0);
+    if handle_of(this, "Layer").is_some() {
+        let (doc, id) = layer_of(h, this)?;
+        return Ok(super::paths::held_path_items(h, doc.uid, id));
+    }
+    let item = this_item_of(h, a, "GroupItem")?;
+    Ok(super::paths::held_path_items(h, item.doc.uid, item.id))
+}
+
 // ---- GroupItem and CompoundPathItem ----
 
 fn this_item_of(h: &Host, a: &[Data], what: &str) -> Result<Item> {
@@ -897,8 +908,9 @@ pub(super) fn members(class: &str, l: &Link) -> Vec<(String, HostMember)> {
                 ("pageItems", get(l, held_page_items)),
                 ("groupItems", get(l, held_groups)),
                 ("compoundPathItems", get(l, held_compounds)),
+                ("pathItems", get(l, held_paths)),
             ]);
-            m.extend(["pathItems", "textFrames", "symbolItems", "placedItems", "rasterItems"].map(|m| later(l, "GroupItem", m)));
+            m.extend(["textFrames", "symbolItems", "placedItems", "rasterItems"].map(|m| later(l, "GroupItem", m)));
             m
         }
         "CompoundPathItem" => named(vec![("pathItems", get(l, held_page_items))]),
@@ -1320,6 +1332,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
         ("pageItems", get(l, held_page_items)),
         ("groupItems", get(l, held_groups)),
         ("compoundPathItems", get(l, held_compounds)),
+        ("pathItems", get(l, held_paths)),
         ("zOrderPosition", get(l, layer_z_position)),
         ("hasSelectedArtwork", property(l, layer_has_selected, layer_set_has_selected)),
         ("isIsolated", get(l, layer_is_isolated)),
@@ -1328,8 +1341,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
         ("zOrder", method(l, layer_z_order)),
     ]);
     layer.extend(
-        ["pathItems", "textFrames", "symbolItems", "placedItems", "rasterItems", "blendingMode", "artworkKnockout", "sliced"]
-            .map(|m| later(l, "Layer", m)),
+        ["textFrames", "symbolItems", "placedItems", "rasterItems", "blendingMode", "artworkKnockout", "sliced"].map(|m| later(l, "Layer", m)),
     );
     vec![
         class("Layer", None, layer, None),
