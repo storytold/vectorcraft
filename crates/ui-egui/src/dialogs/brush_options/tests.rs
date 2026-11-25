@@ -287,12 +287,14 @@ fn art_brush_direction_segments_are_named_by_their_tooltips() {
     crate::dialogs::tests::settle(&mut app);
     let out = crate::dialogs::tests::frame(&mut app, vec![]);
     let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
-    let labels: Vec<&str> = nodes.iter().filter_map(|(_, node)| node.label()).collect();
+    // Segmented gives each segment the radio button role.
+    let segments: Vec<&str> =
+        nodes.iter().filter(|(_, node)| node.role() == egui::accesskit::Role::RadioButton).filter_map(|(_, node)| node.label()).collect();
     for tip in ["Left to Right", "Right to Left", "Top to Bottom", "Bottom to Top"] {
-        assert!(labels.contains(&tip), "{tip} is not named in {labels:?}");
+        assert!(segments.contains(&tip), "no segment is named {tip} in {segments:?}");
     }
     for glyph in ["→", "←", "↓", "↑"] {
-        assert!(!labels.contains(&glyph), "a segment is named {glyph}");
+        assert!(!segments.contains(&glyph), "a segment is named {glyph}");
     }
 }
 
