@@ -79,7 +79,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-22 | minor | Essentials readiness row: the Shape Builder item names what its 4–8 h still covers, confirming #937's fix on the reporter's file (the reproduced case is fixed), #8314. Scores and estimates unchanged. |
+| 2026-11-22 | minor | Essentials readiness row: the Shape Builder item names what its 4–8 h still covers: checking #937's fix on the reporter's file, still unconfirmed (the reproduced case is fixed), #8314. Scores and estimates unchanged. |
 | 2026-11-20 | minor | G12: Asset Export tiles have item context menus for Export, Remove, Rename, Select Artwork on Canvas and collecting selected artwork; right-click selects an unselected tile and preserves an existing multi-selection. Headless regressions: panels::tests_asset_export. Scores and estimates unchanged. |
 | 2026-11-20 | minor | G12: Actions panel item context menus for action sets (New Action…, New Set…, Duplicate Set, Delete Set, Set Options…) and actions (Play, Record, Duplicate, Delete, Action Options…, Batch…) with selection handling; clicking Duplicate on an action duplicates that action; headless tests in `crates/ui-egui/src/panels/actions.rs`; scores and estimates unchanged. |
 | 2026-11-20 | minor | G12: Appearance panel row context menus (Duplicate Stroke/Fill, Delete Stroke/Fill, Hide/Show Stroke/Fill, Edit Effect…, Duplicate Effect, Delete Effect, Hide/Show Effect, Clear Appearance, Reduce to Basic Appearance); right-clicking an unselected row targets that row first. Headless regressions: `panels::tests_appearance`. Scores and estimates unchanged. |
@@ -3211,7 +3211,7 @@ Edit › Copy and Cut put the selected ruler guides on the clipboard, with the s
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-22 | minor | Essentials readiness row: the Shape Builder item names what its 4–8 h still covers, confirming #937's fix on the reporter's file (the reproduced case is fixed), #8314. Scores and estimates unchanged. |
+| 2026-11-22 | minor | Essentials readiness row: the Shape Builder item names what its 4–8 h still covers: checking #937's fix on the reporter's file, still unconfirmed (the reproduced case is fixed), #8314. Scores and estimates unchanged. |
 | 2026-11-20 | minor | G12: Asset Export tiles have item context menus for Export, Remove, Rename, Select Artwork on Canvas and collecting selected artwork; right-click selects an unselected tile and preserves an existing multi-selection. Headless regressions: panels::tests_asset_export. Scores and estimates unchanged. |
 | 2026-11-19 | minor | Layers: a target circle whose item is targeted and has an appearance of its own keeps its inner ring visible around a smaller appearance dot, so the four looks (not targeted, targeted, with an appearance, both) differ (#8711). Scores and estimates unchanged. |
 | 2026-11-19 | minor | Guides, grids, smart guides, snapping, rulers: View › Trim View hides the ruler guides, guide paths and the grid while it is on and greys out their Show/Hide items; a ruler drag or double-click makes no guide meanwhile (#8363). Scores and estimates unchanged. |
