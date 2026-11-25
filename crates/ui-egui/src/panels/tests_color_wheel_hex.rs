@@ -272,6 +272,15 @@ fn retyping_the_shown_color_in_another_form_changes_nothing() {
         assert_eq!(undo_count(&p.app()), before, "{same}");
         assert!(p.app().ui.status.is_empty(), "{same}: {}", p.app().ui.status);
     }
+    let text = shown(&p);
+    assert_eq!(text, "FF000080");
+    type_in(&mut p, &text);
+    assert_eq!(undo_count(&p.app()), before, "the shown text");
+    assert_eq!(p.app().session.proxy_opacity(false), Some(0.5), "the shown alpha keeps 50 %");
+    type_in(&mut p, "rgb(255 0 0 / 50.4%)");
+    assert_eq!(undo_count(&p.app()), before + 1, "an alpha with the same two digits is applied");
+    assert!(p.app().session.proxy_opacity(false).is_some_and(|o| (o - 0.504).abs() < 1e-4));
+    let before = undo_count(&p.app());
     type_in(&mut p, "#00ff00");
     assert_eq!(undo_count(&p.app()), before + 1, "another color is applied");
     p.run("paint.setFill", json!({"opacity": 99.9}));
@@ -280,6 +289,26 @@ fn retyping_the_shown_color_in_another_form_changes_nothing() {
     type_in(&mut p, "#00ff00ff");
     assert_eq!(undo_count(&p.app()), before + 1, "the alpha ff sets 100 %");
     assert_eq!(p.app().session.proxy_opacity(false), Some(1.0));
+}
+
+/// Retyping the shown text with two objects selected gives the second the first one's opacity, the
+/// one the field shows, and leaves the first's as it was.
+#[test]
+fn retyping_the_shown_alpha_gives_the_selection_the_shown_opacity() {
+    let mut app = app();
+    let first = selected(&app)[0];
+    app.run("paint.setFill", json!({"opacity": 50})).unwrap();
+    app.run("shape.rectangle", json!({"x": 100, "y": 10, "width": 50, "height": 50})).unwrap();
+    let second = selected(&app)[0];
+    app.run("paint.setFill", json!({"color": "#ff0000", "opacity": 80})).unwrap();
+    app.run("select.set", json!({"ids": [first, second]})).unwrap();
+    let mut p = panel(app);
+    let text = shown(&p);
+    assert_eq!(text, "FF000080");
+    type_in(&mut p, &text);
+    let opacity = |id| p.app().session.doc().unwrap().doc.node(id).unwrap().appearance.fill_at(None).map(|f| f.opacity);
+    assert_eq!(opacity(first), Some(0.5), "the first keeps 50 %");
+    assert_eq!(opacity(second), Some(0.5), "the second takes 50 %");
 }
 
 /// Retyping a gradient stop's or a freeform point's color, with or without its alpha, records no

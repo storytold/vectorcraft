@@ -1324,8 +1324,10 @@ fn hex_row(app: &VectorcraftApp, ui: &mut Ui, tgt: &Target, shown: &str) -> Opti
 /// Apply the hex field's committed `text`: it goes through `color.parse` as typed, and a text it
 /// refuses shows its error in the status bar and changes nothing. The text's alpha is not applied
 /// when `opacity_set` (the opacity row set the opacity in this frame), so a press on that row that
-/// commits the text keeps the opacity it set.
-fn apply_text(app: &mut VectorcraftApp, ui: &Ui, text: &str, opacity_set: bool) {
+/// commits the text keeps the opacity it set. When the text is the one the field shows
+/// (`retyped`), its alpha stands for the opacity the field shows, not the value its two digits
+/// round to, so retyping it leaves that opacity as it was.
+fn apply_text(app: &mut VectorcraftApp, ui: &Ui, text: &str, opacity_set: bool, retyped: bool) {
     match app.run("color.parse", json!({ "text": text })) {
         Ok(r) => {
             let Ok(rgb) = serde_json::from_value::<Color>(r["color"].clone()) else { return };
@@ -1334,6 +1336,7 @@ fn apply_text(app: &mut VectorcraftApp, ui: &Ui, text: &str, opacity_set: bool) 
             let cmyk_doc = app.session.active().is_some_and(|d| d.doc.color_mode == ColorMode::Cmyk);
             let c = stored_rgb(&cms::active(), rgb, replaced(app, &tgt, false).as_ref(), cmyk_doc);
             let alpha = r["opacity"].as_f64().map(|o| (o / 100.0) as f32).filter(|_| !opacity_set);
+            let alpha = alpha.map(|a| if retyped { shown_opacity(app, &tgt).0 } else { a });
             apply_typed(app, &tgt, c, alpha);
         }
         Err(e) => app.status(e),
@@ -1448,13 +1451,16 @@ fn show_with(app: &mut VectorcraftApp, panel: &mut WheelUi, ui: &mut Ui) {
     };
     let typed = hex.and_then(|hex| {
         ui.add_space(4.0);
-        hex_row(app, ui, &tgt, &hex)
+        hex_row(app, ui, &tgt, &hex).map(|text| {
+            let shown = text.strip_prefix('#').unwrap_or(&text).eq_ignore_ascii_case(&hex);
+            (text, shown)
+        })
     });
     // A text committed by a press on the wheel, the box or the opacity row is applied first; the
     // opacity edit then goes to the target as the text left it, and a pick to the target as both
     // left it, so a stop keeps all of them.
-    if let Some(text) = &typed {
-        apply_text(app, ui, text, opacity_edit.is_some());
+    if let Some((text, shown)) = &typed {
+        apply_text(app, ui, text, opacity_edit.is_some(), *shown);
     }
     let tgt = if typed.is_some() { wheel_target(app, ui) } else { tgt };
     if let Some(edit) = &opacity_edit {
