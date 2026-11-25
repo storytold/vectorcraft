@@ -49,7 +49,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add to Swatches",
             ["Window", "Swatch Libraries"],
             None,
-            "{library: id or name, names?: [swatch or colour group names in the library] (default: all of it; a group comes as a colour group, a single swatch ungrouped), apply?: \"fill\"|\"stroke\" (also apply the first one to the selection and the defaults, as paint.setFill / paint.setStroke), focus?: true (with apply: false keeps the active proxy)} copy library swatches into the document as one undo step. A swatch the document already has (same name and paint, and for a color the same process, global or spot kind, or a numbered copy of that name with the same color when the name has another color there) isn't added again; a name taken by another swatch gets a number (\"Clay 1 2\"); a tint or gradient whose global or spot color comes in under a numbered name, or is in the document as such a numbered copy, links to that copy; a global or spot color it links to that the document lacks comes in with it. A pattern swatch brings its pattern, as pasting art painted with it does: the same pattern the document has is used, also when its art links to the document's own color of a name, and a name another pattern or swatch has gets a number; a global or spot color its art links to whose name the document gives another color comes in numbered, skipping the names of the library's other swatches, and the pattern links to it → {library, added: [names in the document, the colors patterns, tints and gradients brought included], existing: [names already there], applied?: name}",
+            "{library: id or name, names?: [swatch or colour group names in the library] (default: all of it; a group comes as a colour group, a single swatch ungrouped), apply?: \"fill\"|\"stroke\" (also apply the first one to the selection and the defaults, as paint.setFill / paint.setStroke), focus?: true (with apply: false keeps the active proxy), defaultsOnly?: bool (with apply: apply it to the defaults only, as paint.setFill does; the journal records it for swatches applied while the Live Paint Bucket is the active tool)} copy library swatches into the document as one undo step. A swatch the document already has (same name and paint, and for a color the same process, global or spot kind, or a numbered copy of that name with the same color when the name has another color there) isn't added again; a name taken by another swatch gets a number (\"Clay 1 2\"); a tint or gradient whose global or spot color comes in under a numbered name, or is in the document as such a numbered copy, links to that copy; a global or spot color it links to that the document lacks comes in with it. A pattern swatch brings its pattern, as pasting art painted with it does: the same pattern the document has is used, also when its art links to the document's own color of a name, and a name another pattern or swatch has gets a number; a global or spot color its art links to whose name the document gives another color comes in numbered, skipping the names of the library's other swatches, and the pattern links to it → {library, added: [names in the document, the colors patterns, tints and gradients brought included], existing: [names already there], applied?: name}",
             has_doc,
             add
         ),
@@ -1175,6 +1175,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
         Some(other) => return Err(bad(C, format!("apply is \"fill\" or \"stroke\", not `{other}`"))),
     };
     let focus = switch_or(p, "focus", true, C)?;
+    switch_or(p, "defaultsOnly", false, C)?;
     let picked = picked(&lib, &names_param(p, C)?, C)?;
     // Swatches the document already has (same name and paint; for a pattern swatch, a swatch of the
     // same pattern) are reused, not added again. The patterns are in a built-in pattern library's
@@ -1596,7 +1597,8 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     let mut out = json!({"library": shown_library_id(s, &info.id), "added": added_names, "existing": names(&existing)});
     if let (Some(cmd), Some((_, first))) = (apply, picked.first()) {
         let name = added.iter().chain(&existing).find(|(l, _)| *l == first.name).map_or(first.name.clone(), |(_, n)| n.clone());
-        s.execute(cmd, &json!({"swatch": name, "focus": focus}))?;
+        let only = super::paint::defaults_only(s, p, C)?;
+        s.execute(cmd, &super::paint::with_defaults_only(json!({"swatch": name, "focus": focus}), only))?;
         // Adding and applying undo together.
         squash(s, undo_before, "Add to Swatches");
         out["applied"] = json!(name);

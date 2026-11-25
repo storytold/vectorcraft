@@ -6689,6 +6689,7 @@ mark-style	Japanese	Japońskie
 @msg	a 3D effect on a group's fill or stroke draws nothing	efekt 3D na wypełnieniu lub obrysie grupy niczego nie rysuje
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	efekt 3D na wypełnieniu lub obrysie grupy nie rysuje niczego do eksportu
 @msg	The 3D object is too complex to export	Obiekt 3D jest zbyt złożony, aby go wyeksportować
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Siatka obiektu 3D jest niekompletna lub zawiera wartość, która nie jest liczbą
 @msg	the <filter> element needs an id, the filter's name	element <filter> wymaga id, czyli nazwy filtra
 @msg	an SVG filter's id is at most {MAX_NAME} characters	id filtra SVG ma najwyżej {MAX_NAME} znaków
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> nie jest elementem filtra SVG
@@ -7185,6 +7186,12 @@ axis	Y Axis	Oś Y
 @msg	parameter `{name}`: {what}	parametr `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	parametry wtyczki muszą być obiektem JSON
 @msg	the module must export its linear memory as `memory`	moduł musi eksportować swoją pamięć liniową jako `memory`
+@msg	the module must export `{name}` with the type {signature}	moduł musi eksportować `{name}` z typem {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	moduł ma więcej niż jedną sekcję niestandardową `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	budżet pamięci (pamięć początkowa modułu ma {initial} bajtów, limit {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	manifest w sekcji niestandardowej `{MANIFEST_SECTION}` musi podawać `abi` równe {ABI_VERSION}, czyli wersję ABI implementowaną przez ten host
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	budżet tabel (moduł definiuje {count} tabel, największa ma {largest} elementów; limit {MAX_TABLES} tabel po {MAX_TABLE_ELEMENTS} elementów)
+@msg	the module's table section could not be read	nie można odczytać sekcji tabel modułu
 @msg	the objects to change are no longer in the document	obiektów do zmiany nie ma już w dokumencie
 @msg	the runtime panicked	środowisko uruchomieniowe uległo awarii
 @msg	unexpected host trap	nieoczekiwane przerwanie (trap) hosta
@@ -7254,6 +7261,8 @@ axis	Y Axis	Oś Y
 @msg	`plates` requires a stop linked to a spot swatch	`plates` wymaga punktu koloru połączonego z próbką koloru dodatkowego
 @msg	the output	wyjście
 @msg	the path has no anchor points	ścieżka nie ma punktów kontrolnych
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	ścieżka złożona {id} ma ukryty, zablokowany lub będący linią pomocniczą element, więc jej elementów nie można zastąpić
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	ścieżka złożona {id} ma element, który nie jest ścieżką, więc jej elementów nie można zastąpić
 @msg	too many anchor points (limit {MAX_ANCHORS})	za dużo punktów kontrolnych (limit {MAX_ANCHORS})
 @msg	true or false	true lub false
 @msg	a number >= {_1}	liczbą >= {_1}
@@ -9137,6 +9146,8 @@ breakText	Glyphs	Glify
 @msg	`dataBase64` is larger than the module limit	`dataBase64` przekracza limit rozmiaru modułu
 @msg	`dataBase64` is not valid base64	`dataBase64` nie jest prawidłowym kodem base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` nie można łączyć z `ids`, `reverse` ani `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` nie można łączyć z `ids`, `id` ani `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` nie można łączyć z `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` i `childLimit` ograniczają podsumowanie: przekaż `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` to nazwa wzoru albo null dla zwykłych kolumn
 @msg	`design` is a design name, or null for the default marker	`design` to nazwa wzoru albo null dla domyślnego znacznika

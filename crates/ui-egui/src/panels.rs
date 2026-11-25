@@ -62,7 +62,7 @@ use craft::color_ui::ui::{PaintChip, PairWell, SwatchPair, SwatchPairOutput, Swa
 use craft::keymap::CommandRef;
 use craft::theme::Srgba;
 use craft::theme::variant::Tone;
-use craft::ui::buttons::IconButton;
+use craft::ui::buttons::{IconButton, Link, PopupMark};
 use craft::ui::choice::SwatchSpacing;
 use craft::ui::contract::{Bind, CommandSet as _, Entry, ListDrag, PopupKind, Props as _, Show as _, ShowContainer as _, Sizing, Trigger};
 use craft::ui::display::{Divider, Shade, Text};
@@ -75,6 +75,7 @@ use craft::ui::popover::Popover;
 use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::commands::CommandStates;
 use craft::ui::runtime::env::Label;
+use craft::ui::sections::{HeaderStrength, Section};
 use craft::ui::text::{NumberField, link_toggle};
 use egui::Ui;
 use serde_json::{Value, json};
@@ -244,11 +245,15 @@ pub(crate) fn corner_radius_field(app: &mut VectorcraftApp, ui: &mut Ui, n: &Nod
     });
 }
 
-/// The icon the command catalog gives command `id`: the Align panel's align, distribute and Align
-/// To buttons' and the Pathfinder panel's, so a bar or menu row of the command shows the panel's
-/// glyph. `None` for every other command.
+/// The icon the command catalog gives command `id`: the Align panel's distribute and Align To
+/// buttons' (its align buttons' as the Control bar draws them, [`align::bar_glyph`]) and the
+/// Pathfinder panel's, so a bar or menu row of the command shows the panel's glyph, and each
+/// tool's, which the tool rail and its flyouts show. `None` for every other command.
 pub(crate) fn command_icon(id: &str) -> Option<&'static str> {
     use align::{AlignTo, Button};
+    if let Some(tool) = id.strip_prefix("tool:") {
+        return vectorcraft_tools::tool_info(tool).map(|t| crate::icons::tool_icon(t.icon));
+    }
     if let Some(op) = id.strip_prefix("object.pathfinder.") {
         return pathfinder::SHAPE_MODES.iter().chain(&pathfinder::PATHFINDERS).find(|(_, _, o)| *o == op).map(|(icon, _, _)| *icon);
     }
@@ -261,7 +266,7 @@ pub(crate) fn command_icon(id: &str) -> Option<&'static str> {
     }
     let in_table = |table: &[(&'static str, &str, &str, &str)], axis: &str, v: &str| table.iter().find(|r| r.2 == axis && r.3 == v).map(|r| r.0);
     match align::button(id)? {
-        Button::Align(axis, v) => in_table(&align::ALIGN, axis, v),
+        b @ Button::Align(..) => align::bar_glyph(b),
         Button::AlignCenters => Some("dc-al-center"),
         Button::Distribute(axis, v) => in_table(&align::DISTRIBUTE, axis, v),
         Button::Spacing("vertical") => Some("dc-dist-vspace"),
@@ -691,7 +696,7 @@ pub(crate) fn paint_chip(app: &mut VectorcraftApp, ui: &mut Ui, stroke: bool) {
     };
     let shown = if mixed { Mixed::Mixed } else { Mixed::Same(well_paint(&paint, &|_| None)) };
     let fallback = srgba(&paint.color().unwrap_or(Color::BLACK));
-    let out = PaintChip::new(label, Bind::given(shown), fallback).popover(false).ring(stroke).tooltip(tip).show(ui);
+    let out = PaintChip::new(label, Bind::given(shown), fallback).popover(false).ring(stroke).popup_mark(PopupMark::Menu).tooltip(tip).show(ui);
     let chip = out.edit.response.id;
     if let Some(mods) = out.clicked {
         app.run("paint.toggleActive", json!({ "fill": !stroke })).ok();
@@ -888,6 +893,24 @@ pub(crate) fn whole_steps(range: std::ops::RangeInclusive<f64>) -> ChannelRule {
     let mut rule = ChannelRule::ALPHA;
     rule.range = range;
     rule
+}
+
+/// A section of a panel or dialog under its heading in label text: the reference app's section headings are regular
+/// weight, not bold.
+pub(crate) fn section<'a>(title: impl Into<Label>) -> Section<'a> {
+    Section::fixed(title).strength(HeaderStrength::Normal)
+}
+
+/// A sub-heading over a group of a panel's controls ("Align Objects:", "Shape Modes:"): label text in the normal ink,
+/// with no rule, as the reference app drew them.
+pub(crate) fn subheading<'a>(title: impl Into<Label>) -> Section<'a> {
+    Section::fixed(title).strength(HeaderStrength::Subheading)
+}
+
+/// A link to a control's options ("Stroke", "Opacity:", "Character:"): underlined in the normal ink, as the reference
+/// app drew them; links that leave the panel's subject (a file, more results) keep the accent.
+pub(crate) fn option_link(label: impl Into<Label>) -> Link {
+    Link::new(label).tone(Tone::Neutral)
 }
 
 /// The empty state of a panel with nothing to show: `icon` over the title and the message,

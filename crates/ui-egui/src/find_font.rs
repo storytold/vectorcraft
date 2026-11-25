@@ -20,7 +20,7 @@ use craft::ui::layout_components::Stack;
 use craft::ui::list::{List, ListRow};
 use craft::ui::pickers::Select;
 use craft::ui::primitives::IconSpec;
-use craft::ui::sections::{DialogRole, FooterButton, HeaderStrength, Section};
+use craft::ui::sections::{DialogRole, FooterButton};
 use craft::ui::text::TextField;
 use egui::{Context, Ui};
 use serde_json::{Value, json};
@@ -513,7 +513,7 @@ impl StackDialog for FindFontDialog {
         let row_text = |at: usize| shown.get(at).and_then(|&i| rows.get(i)).map_or_else(String::new, |r| row_label(&r.family, &r.style));
         let out = Dialog::new(tl!("Find Font").to_string()).buttons(buttons).show(ui, |ui, _| {
             Stack::new().show(ui, |ui, _| {
-                Section::fixed(heading.clone()).strength(HeaderStrength::Caption).show(ui, |ui, _| {
+                crate::panels::section(heading.clone()).show(ui, |ui, _| {
                     let docs = Lines { len: count, text: &doc_text };
                     List::<usize>::new(tl!("Fonts in Document").to_string())
                         .select(SelectMode::Single)
@@ -526,7 +526,7 @@ impl StackDialog for FindFontDialog {
                 if offer_folder {
                     folder = clicked(&Button::new(tl!("Find in Folder…").to_string()).show(ui));
                 }
-                Section::fixed(tl!("Replace With Font").to_string()).strength(HeaderStrength::Caption).show(ui, |ui, _| {
+                crate::panels::section(tl!("Replace With Font").to_string()).show(ui, |ui, _| {
                     Field::new(tl!("Replace With Font From").to_string()).show(ui, |ui, _| {
                         let edit = Select::new(tl!("Replace With Font From").to_string(), Bind::given(source), &source_entries).show(ui);
                         new_source = edit.events.value().copied();

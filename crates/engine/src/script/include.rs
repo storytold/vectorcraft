@@ -217,6 +217,15 @@ pub(crate) struct Files {
     levels: usize,
     /// The files `$.evalFile` is running, the script first.
     frames: Vec<Frame>,
+    /// The run reads ECMAScript 2015 ([`es2015_script`]): its files are parsed that way.
+    es2015: bool,
+}
+
+/// A script at `path` runs with [`vectorcraft_js::Options::es2015`] when its file name ends in
+/// `.js` (in any letter case); a `.jsx` script, any other file and a script given as text run as
+/// ECMAScript 5.1 with the ExtendScript extensions.
+pub(crate) fn es2015_script(path: Option<&str>) -> bool {
+    path.and_then(|p| Path::new(p).extension()).is_some_and(|e| e.eq_ignore_ascii_case("js"))
 }
 
 /// The output being built: its UTF-16 text, the line it is on, the units since that line began,
@@ -311,7 +320,13 @@ impl Files {
             chain: real.into_iter().collect(),
             levels: 0,
             frames: vec![Frame { shown: Arc::from(path.unwrap_or_default()), dir }],
+            es2015: es2015_script(path),
         }
+    }
+
+    /// The options a file of this run is parsed with, preprocessor lines aside.
+    pub(crate) fn options(&self) -> Options {
+        Options { max_source_units: MAX_TOTAL_BYTES, es2015: self.es2015, ..Options::default() }
     }
 
     /// The `JSINCLUDE` folders of this process: absolute folders separated by `;`.
@@ -456,7 +471,7 @@ impl Files {
             return Ok(());
         }
         let fail = |kind, message: String, line, column| Failure { kind, message, index, file: shown.clone(), line, column };
-        let options = Options { preprocessor_lines: true, max_source_units: MAX_TOTAL_BYTES, ..Options::default() };
+        let options = Options { preprocessor_lines: true, ..self.options() };
         let program = vectorcraft_js::parse_utf16(&units, &options).map_err(|e| fail(FailKind::Syntax, e.message, e.line, e.column))?;
         let mut cursor = 0usize;
         for d in &program.directives {

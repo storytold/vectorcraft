@@ -1,5 +1,5 @@
 use craft::behavior::{CanvasView, ZoomScheme};
-use craft::ui::canvas::{NavigationOptions, ViewCommands, ViewRequest};
+use craft::ui::canvas::{NavigationOptions, ViewCommands, ViewRequest, WheelScheme};
 use serde_json::Value;
 use vectorcraft_engine::Prefs;
 
@@ -9,7 +9,7 @@ use crate::state::ViewMove;
 /// The canvas's navigation options for `p`: the wheel, Animated Zoom, the trackpad and touch gestures.
 pub(crate) fn navigation(p: &Prefs) -> NavigationOptions {
     let mut options = NavigationOptions::default();
-    options.zoom_with_wheel = p.zoom_with_mouse_wheel;
+    options.wheel = if p.zoom_with_mouse_wheel { WheelScheme::Zoom } else { WheelScheme::Scroll };
     options.animated_zoom = crate::canvas::animated_zoom(p);
     options.scrubby_zoom = crate::canvas::animated_zoom(p);
     options.trackpad_rotate = p.trackpad_rotate_view;

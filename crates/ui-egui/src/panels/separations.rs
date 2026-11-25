@@ -25,7 +25,6 @@ use craft::ui::notices::Notice;
 use craft::ui::pickers::Select;
 use craft::ui::runtime::commands::{CommandState, CommandStates};
 use craft::ui::runtime::env::Label;
-use craft::ui::sections::Section;
 use egui::{Color32, Ui};
 use serde_json::{Value, json};
 use vectorcraft_color::cms::{self, Intent, Policy, ProfileKind};
@@ -423,10 +422,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // pass (not a sizing one) spends it.
     let reveal = app.ui.color_settings_scroll;
     Stack::new().label(tl!("Separations Preview")).show(ui, |ui, _| {
-        Section::fixed(tl!("Separations Preview")).show(ui, |ui, _| plates_section(app, ui));
-        Section::fixed(tl!("Proof Setup")).show(ui, |ui, _| proof_section(app, ui));
+        crate::panels::section(tl!("Separations Preview")).show(ui, |ui, _| plates_section(app, ui));
+        crate::panels::section(tl!("Proof Setup")).show(ui, |ui, _| proof_section(app, ui));
         Lazy::new("color-settings", COLOR_SETTINGS_ESTIMATE).reveal(reveal).show(ui, |ui| {
-            Section::fixed(tl!("Color Settings")).show(ui, |ui, _| settings_rows(app, ui));
+            crate::panels::section(tl!("Color Settings")).show(ui, |ui, _| settings_rows(app, ui));
         });
     });
     if reveal && !ui.is_sizing_pass() {
