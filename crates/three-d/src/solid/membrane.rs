@@ -130,6 +130,27 @@ impl Edges {
         }
     }
 
+    /// The edge that both `a` and `b` lie on within `tolerance`: its index, counted through the
+    /// rings in order, and how far along it `a` and `b` lie (0 at its start, 1 at its end). Only the
+    /// bucket of the midpoint of `a` and `b` is looked in, and each edge looked at takes one from
+    /// `work`, which is not counted against the index's own budget: `None` once `work` is spent.
+    pub(super) fn holding(&self, a: Point, b: Point, tolerance: f64, work: &mut usize) -> Option<(usize, f64, f64)> {
+        let m = a.midpoint(b);
+        let (i, j) = (self.cell(m.x, self.origin.x), self.cell(m.y, self.origin.y));
+        let bucket = self.buckets.get((j * self.n as isize + i) as usize)?;
+        for k in bucket {
+            *work = work.checked_sub(1)?;
+            let Some(&(p, q)) = self.edges.get(*k as usize) else { continue };
+            let d = q - p;
+            if d.hypot2() < 1e-18 || segment_distance(a, p, q) > tolerance || segment_distance(b, p, q) > tolerance {
+                continue;
+            }
+            let along = |v: Point| ((v - p).dot(d) / d.hypot2()).clamp(0.0, 1.0);
+            return Some((*k as usize, along(a), along(b)));
+        }
+        None
+    }
+
     /// Call `f` with each edge whose bounding box overlaps `r` (an edge in several of the
     /// buckets `r` covers comes more than once).
     fn each(&self, r: Rect, mut f: impl FnMut(Point, Point)) {
