@@ -1642,6 +1642,7 @@ fn a_live_effect_plugin_installed_later_takes_a_shortcut_of_its_own() {
 #[test]
 fn each_filter_plugin_takes_a_shortcut_of_its_own() {
     use vectorcraft_plugins::wat as tpl;
+    let _names = crate::tests::SHARED_PLUGIN_NAMES.lock().unwrap_or_else(|e| e.into_inner());
     let (one, two) = ("test.UI.key_filter-one", "test.UI.key_filter-two");
     let (key_one, key_two) = (format!("plugin:{one}"), format!("plugin:{two}"));
     let install = |id: &str, name: &str, params: &str| {
