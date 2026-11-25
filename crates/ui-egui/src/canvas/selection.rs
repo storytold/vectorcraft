@@ -2,7 +2,8 @@
 //! centre point, point type's origin, the key anchor). Each rule is a function of the app that returns what to draw;
 //! `show` hands the results to the framework's controls, which keep what they stroke between passes.
 
-use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
+use std::collections::hash_map::{DefaultHasher, Entry};
 use std::hash::{Hash, Hasher};
 
 use craft::behavior::Input;
@@ -316,10 +317,29 @@ pub(super) fn anchors(app: &VectorcraftApp, st: &DocState, tool: &str, tool_poin
         primary.and_then(|key| chosen.iter().find(|(k, _)| *k == key)).map(|(_, knots)| knots.clone()).unwrap_or_default(),
         segment.map(|(_, at)| at),
     );
-    for (key, knots) in chosen.into_iter().filter(|(key, _)| Some(*key) != primary) {
-        selection = selection.also(key, knots);
-    }
+    selection.others = by_key(chosen.into_iter().filter(|(key, _)| Some(*key) != primary));
     out.selection = selection;
+    out
+}
+
+/// `listed` with the lists of a repeated key joined, each key where it first appears: what
+/// [`PathSelection::also`] makes of the entries added one at a time, found with one lookup per entry.
+fn by_key<K: Copy + Eq + Hash, V>(listed: impl IntoIterator<Item = (K, Vec<V>)>) -> Vec<(K, Vec<V>)> {
+    let mut at: HashMap<K, usize> = HashMap::new();
+    let mut out: Vec<(K, Vec<V>)> = Vec::new();
+    for (key, items) in listed {
+        match at.entry(key) {
+            Entry::Occupied(seen) => {
+                if let Some((_, held)) = out.get_mut(*seen.get()) {
+                    held.extend(items);
+                }
+            }
+            Entry::Vacant(new) => {
+                new.insert(out.len());
+                out.push((key, items));
+            }
+        }
+    }
     out
 }
 
