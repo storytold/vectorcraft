@@ -36,3 +36,12 @@ fn the_color_wheel_box_and_its_strip_stay_inside_the_panel() {
     assert!(strip.height() <= field.height(), "the strip {strip:?} is taller than the box {field:?}");
     assert!(field.right() <= ROOM.x && strip.right() <= ROOM.x, "the box {field:?} or its strip {strip:?} runs past the panel");
 }
+
+#[test]
+fn align_to_shares_the_distribute_spacing_line_inside_the_align_panel() {
+    let panel = Panel::new(app_with_rect(), align::show);
+    let (field, to) = (panel.rect("Distribute Spacing"), panel.rect("Align to Artboard"));
+    assert!(to.left() > field.right(), "Align To at {to:?} is not beside the spacing field {field:?}");
+    assert!((field.top()..=field.bottom()).contains(&to.center().y), "Align To at {to:?} is off the spacing field's line {field:?}");
+    assert!(to.right() <= ROOM.x, "Align To at {to:?} runs past the panel");
+}

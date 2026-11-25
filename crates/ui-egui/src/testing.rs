@@ -2,7 +2,7 @@
 //! gives a real window, so a test lays text out and paints in the app's look; and the frame the
 //! hosts run.
 
-use craft::ui::runtime::frame::{FrameInput, set_input};
+use craft::ui::runtime::frame::{FrameInput, set_input, take_output};
 use craft::ui::shell::embed;
 
 /// Installs the runtime with a window system that has no OS services, the app's interface fonts
@@ -36,8 +36,9 @@ pub(crate) fn ui_context() -> egui::Context {
 
 /// One frame of the whole app on `ctx` as the hosts run it (kb.C26): the app has the window's context, as the hosts
 /// hand it when they create the app, gives the input of the frame
-/// (`embed::before_input`), the window draws with `raw`, and the app takes what the runtime gathered in it, running the
-/// commands it fired, as the host's next frame begins. The frame's texture uploads are handled.
+/// (`embed::before_input`, once, as the hosts call it), the window draws with `raw`, and the app takes what the runtime
+/// gathered in it, running the commands it fired, as the host's next frame begins ([`run_fired`]). The frame's texture
+/// uploads are handled.
 pub(crate) fn app_frame(app: &mut crate::VectorcraftApp, ctx: &egui::Context, raw: egui::RawInput) -> egui::FullOutput {
     part_frame(app, ctx, raw, |app, ui| {
         app.tick(ui.ctx());
@@ -56,9 +57,16 @@ pub(crate) fn part_frame(
     app.raw_input(ctx, &mut raw);
     embed::before_input(ctx, |out| app.frame_input(out));
     let mut out = ctx.run_ui(raw, |ui| draw(app, ui));
-    embed::before_input(ctx, |out| app.frame_input(out));
+    run_fired(app, ctx);
     out.textures_delta.clear();
     out
+}
+
+/// The app takes what the runtime gathered on `ctx` since the last frame began and runs the commands it fired, as the
+/// host's next `embed::before_input` does, without giving the runtime its input: the next frame gives it. A second
+/// input in one frame makes every command state the next frame publishes look changed, and the frame asks for a rerun.
+pub(crate) fn run_fired(app: &mut crate::VectorcraftApp, ctx: &egui::Context) {
+    let _ = app.frame_input(take_output(ctx));
 }
 
 /// Held by a test that changes the custom dictionary, which the whole process shares, or that needs it to hold still:

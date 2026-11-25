@@ -172,6 +172,51 @@ fn disable_and_continue_loads_every_plug_in_but_the_one_that_was_loading() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A marker left by a launch that stopped while the stored plug-ins x and y were both loading.
+fn stopped_while_loading_both(launch: &Path, dir: &Path) {
+    let file = |tag: &str| {
+        let p = std::fs::read_dir(dir).unwrap().flatten().map(|e| e.path()).find(|p| p.to_string_lossy().contains(tag)).unwrap();
+        json!({"file": p.display().to_string()})
+    };
+    let (x, y) = (file("test_ui_x"), file("test_ui_y"));
+    let marker = json!({"format": "vectorcraft-launch", "version": 1, "item": x, "items": [x, y]});
+    std::fs::create_dir_all(launch).unwrap();
+    std::fs::write(launch.join("launch-1-dead.json"), marker.to_string()).unwrap();
+}
+
+#[test]
+fn a_launch_that_stopped_while_two_plug_ins_loaded_offers_to_disable_both() {
+    let _f = fresh();
+    let dir = store_with_two("both");
+    let launch_dir = dir.join("Launch");
+    stopped_while_loading_both(&launch_dir, &dir);
+    let mut app = launch(&dir, &launch_dir, false);
+    let ctx = window();
+    frame(&mut app, &ctx);
+    assert!(ui::choosing(&app));
+    let listed = |app: &VectorcraftApp| app.ui.stopped_plugin.as_ref().and_then(|f| f["items"].as_array().map(Vec::len));
+    assert_eq!(listed(&app), Some(2), "both are listed");
+    let state = app.run("plugin.safeMode", json!({})).unwrap();
+    assert_eq!(state["pendingItems"].as_array().map(Vec::len), Some(2), "{state}");
+    assert_eq!(state["pendingItem"], state["pendingItems"][0]);
+    // Start in Safe Mode leaves both to the next launch.
+    let reply = control(&mut app, &ctx, "ui.dialog.cancel", json!({}));
+    assert_eq!(reply["ok"], true, "{reply}");
+    assert!(!ui::choosing(&app) && registry::list().is_empty());
+    ui::end_launch();
+    safe_mode::set_active(None);
+    let mut app = launch(&dir, &launch_dir, false);
+    let ctx = window();
+    frame(&mut app, &ctx);
+    assert_eq!(listed(&app), Some(2), "both asked again");
+    confirm(&mut app, &ctx);
+    assert!(!safe_mode::active() && safe_mode::previous().is_empty());
+    assert!(registry::get("test.ui.x").is_none() && registry::get("test.ui.y").is_none(), "both are off");
+    assert_eq!(safe_mode::disabled().len(), 2, "both kept off at later launches");
+    done(&launch_dir);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn start_normally_loads_everything_and_start_in_safe_mode_loads_nothing() {
     let _f = fresh();
@@ -225,7 +270,7 @@ fn a_disabled_list_that_cannot_be_saved_says_so() {
     asking_frames(&mut app, &ctx);
     confirm(&mut app, &ctx);
     assert_eq!(app.ui.status, unsaved, "Disable and Continue");
-    assert!(safe_mode::previous().is_some(), "the next launch asks again");
+    assert!(!safe_mode::previous().is_empty(), "the next launch asks again");
     assert!(registry::get("test.ui.x").is_none(), "this launch still skips it");
     app.ui.status.clear();
     app.run("help.safeMode", json!({})).unwrap();
@@ -300,7 +345,7 @@ fn a_safe_mode_flag_launch_leaves_the_stopped_plug_in_to_the_next_launch() {
     let ctx = window();
     frame(&mut app, &ctx);
     assert!(!ui::choosing(&app) && registry::list().is_empty(), "--safe-mode asks nothing");
-    assert!(safe_mode::previous().is_some(), "the plug-in is still pending");
+    assert!(!safe_mode::previous().is_empty(), "the plug-in is still pending");
     ui::end_launch();
     safe_mode::set_active(None);
 

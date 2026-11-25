@@ -699,6 +699,10 @@ fn json_stringify_unwraps_number_string_and_boolean_objects() {
     assert_eq!(string("Object.prototype.valueOf = function () { return 9; }; JSON.stringify(Object(3))"), "3");
     assert_eq!(string("Object.getPrototypeOf(Object(1)).valueOf = function () { return 4; }; JSON.stringify(Object(3))"), "4");
     assert_eq!(string("Object.getPrototypeOf(Object('')).toString = function () { return 'q'; }; JSON.stringify(Object('abc'))"), "\"q\"");
+    // Once the own prototype's method is deleted, the lookup goes on to Object.prototype.
+    let over = "Object.prototype.toString = function () { return '7'; };";
+    assert_eq!(string(&format!("{over} delete String.prototype.toString; JSON.stringify(Object('abc'))")), "\"7\"");
+    assert_eq!(string(&format!("{over} delete Number.prototype.valueOf; delete Number.prototype.toString; JSON.stringify(Object(3))")), "7");
 }
 
 #[test]
