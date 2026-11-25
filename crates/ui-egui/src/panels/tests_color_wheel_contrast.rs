@@ -187,11 +187,14 @@ fn a_drag_on_the_wheel_reads_the_background_only_with_the_ratio() {
     assert!(behind(&p).is_none(), "the answer gave the background");
     let ratio = |p: &Panel| p.app().ui.color_wheel_panel.ratio.as_ref().and_then(|(_, r)| r.as_ref()).and_then(|r| r["ratio"].as_f64());
     let first = ratio(&p);
-    let at = p.node("Saturation and brightness").center();
-    p.fx.drag_hold_at(at, egui::vec2(24.0, 0.0));
+    // A drag on the hue ring, near its right edge.
+    let wheel = p.node("Color wheel").rect;
+    let at = wheel.center() + egui::vec2(wheel.width() * 0.45, 0.0);
+    let by = egui::vec2(0.0, 24.0);
+    p.fx.drag_hold_at(at, by);
     assert!(p.app().session.in_interaction(), "the drag previews on an interaction");
     assert_ne!(ratio(&p), first, "the row asked again for the previewed color");
-    p.fx.release_at(at + egui::vec2(24.0, 0.0)).idle(2);
+    p.fx.release_at(at + by).idle(2);
     assert!(!p.app().session.in_interaction(), "the release ends the drag");
     assert!(behind(&p).is_none(), "the background was not read on its own during or after the drag");
     assert_eq!(measured(&p).as_deref(), Some("#ffffff"));
