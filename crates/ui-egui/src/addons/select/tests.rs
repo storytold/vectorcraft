@@ -88,6 +88,17 @@ fn select_by_artboards_opens_on_the_active_artboard_and_selects_on_ok() {
 }
 
 #[test]
+fn select_by_artboards_draws_its_artboards_and_buttons() {
+    let (app, _) = banner();
+    let mut p = crate::tests::panel_harness::Panel::new(app, crate::tests::picks::dialogs);
+    menus::invoke(&mut p.app(), COMMAND, Value::Null);
+    p.frame();
+    for name in ["Banner", "Select All", "OK", "Cancel"] {
+        assert!(p.shows(name), "{name} is drawn");
+    }
+}
+
+#[test]
 fn a_search_keeps_the_choice_it_hides_and_a_double_click_fits_its_artboard() {
     // Boards 0 and 1 chosen, the search shows 0 and 2: picking row 2 leaves hidden board 1 chosen and drops shown board 0.
     assert_eq!(merge_chosen(&[0, 1], &[0, 2], &[2]), vec![1, 2]);

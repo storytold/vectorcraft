@@ -1011,6 +1011,8 @@ mod tests_effectedit;
 #[cfg(test)]
 mod tests_freeform;
 #[cfg(test)]
+mod tests_icon_buttons;
+#[cfg(test)]
 mod tests_links;
 #[cfg(test)]
 mod tests_maskview;
