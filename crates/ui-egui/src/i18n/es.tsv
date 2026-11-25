@@ -927,6 +927,7 @@ font-technology	Variable	Variables
 	Direct Selection Tool	Herramienta Selección directa
 	Direction Handles	Manejadores de dirección
 	Disable Auto Add/Delete	Desactivar agregar/eliminar automático
+	Delete Removes Anchor Points and Keeps Paths Joined	Suprimir quita puntos de ancla y mantiene los trazados unidos
 	Interpolate Control Points When Moving Anchors	Interpolar manejadores de dirección al mover puntos de ancla
 	Disable Opacity Mask	Desactivar máscara de opacidad
 	Discard	Descartar
@@ -2479,6 +2480,12 @@ font-technology	Variable	Variables
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppp
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppp
+	resolution unavailable	resolución no disponible
+	estimated memory {memory}	memoria estimada {memory}
+	memory unavailable	memoria no disponible
+	Unknown format	Formato desconocido
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -2627,6 +2634,7 @@ font-technology	Variable	Variables
 	One Point Perspective Preset 5	Preajuste de perspectiva de un punto 5
 	Only Web Colors	Solo colores web
 	Opacity	Opacidad
+	Show Opacity	Mostrar opacidad
 	Opacity & Mask Define Knockout Shape	La opacidad y la máscara definen la forma de exclusión
 	Opacity Mask	Máscara de opacidad
 	Opacity Mask Info	Información de máscara de opacidad
@@ -3075,6 +3083,9 @@ digits	Malayalam	Malayálam
 	Scale Artwork with Artboard	Escalar la ilustración con la mesa de trabajo
 	Artboards: {n}	Mesas de trabajo: {n}
 	Rearrange All Artboards…	Reorganizar todas las mesas de trabajo…
+	Rearrange…	Reorganizar…
+	Selected Artboards: {n}	Mesas de trabajo seleccionadas: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Haz clic en el lienzo para colocar las mesas de trabajo (Esc cancela)
 	Recall Selection	Recuperar selección
 	RECENT	RECIENTES
 	Recent	Recientes
@@ -3327,6 +3338,7 @@ digits	Malayalam	Malayálam
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un gesto de giro con dos dedos en un trackpad gira la vista del lienzo.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Mantener pulsada una tecla ejecuta la herramienta o el comando de su columna Mantener pulsado en Métodos abreviados de teclado; una pulsación breve ejecuta su método abreviado habitual.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Cuántos segundos hay que mantener pulsada una tecla para que se ejecute su método abreviado de pulsación larga en lugar del habitual.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Suprimir quita los puntos de ancla seleccionados y reajusta la curva alrededor de cada uno, en lugar de abrir el trazado ahí.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Al mover puntos de ancla, cada curva con un extremo movido conserva su forma respecto a sus extremos.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Mantener pulsado el atajo de una herramienta la elige hasta que lo suelta, y después vuelve a elegirse la herramienta anterior.
 	Shows the bounding box while you move the selection or draw a shape.	Muestra el cuadro delimitador mientras mueve la selección o dibuja una forma.
@@ -7300,6 +7312,8 @@ axis	Y Axis	Eje Y
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	requiere aprobación: pide {0}, que el usuario concede al instalarlo por separado
 @msg	not JSON: {e}	no es JSON: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	no es un binario WebAssembly (falta el encabezado \\0asm)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	un tipo de función supera el límite de {MAX_FUNC_TYPE_VALUES} parámetros
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	un tipo de función supera el límite de {MAX_FUNC_TYPE_VALUES} resultados
 @msg	parameter `{k}`: {what}	parámetro `{k}`: {what}
 @msg	parameter `{name}`: {what}	parámetro `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	los parámetros del plugin deben ser un objeto JSON
@@ -7337,6 +7351,11 @@ axis	Y Axis	Eje Y
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` y `maxItems` deben ser 0-{MAX_LIST}, `maxItems` al menos 1, y el valor predeterminado debe tener esa cantidad
 @msg	`name` must be a string	`name` debe ser una cadena
 @msg	`opacity` must be a number	`opacity` debe ser un número
+@msg	`opacity` must be a number from 0 to 100	`opacity` debe ser un número de 0 a 100
+@msg	`opacity` must be true or false	`opacity` debe ser true o false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	los caracteres de texto no tienen opacidad propia: agregue un relleno o un trazo con Agregar nuevo relleno o Agregar nuevo trazo del panel Apariencia
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	un objeto seleccionado en una instancia de símbolo no tiene opacidad propia de relleno ni de trazo
+@msg	no target has that fill or stroke to take the opacity	ningún destino tiene ese relleno o trazo para recibir la opacidad
 @msg	`type` must be "path" or "compound"	`type` debe ser "path" o "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` debe tener 1-{MAX_UNIT} caracteres imprimibles
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` debe indicar de 1 a {MAX_CONDITION_VALUES} valores para `{other}`

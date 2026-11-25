@@ -930,6 +930,7 @@ font-technology	Variable	Variables
 	Direct Selection Tool	Outil Sélection directe
 	Direction Handles	Poignées de direction
 	Disable Auto Add/Delete	Désactiver l’ajout/suppression automatique
+	Delete Removes Anchor Points and Keeps Paths Joined	Suppr supprime les points d’ancrage et garde les tracés joints
 	Interpolate Control Points When Moving Anchors	Interpoler les poignées de direction lors du déplacement des points d’ancrage
 	Disable Opacity Mask	Désactiver le masque d’opacité
 	Discard	Ignorer
@@ -2467,6 +2468,12 @@ font-technology	Variable	Variables
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppp
+	{format}; {size}; {detail}	{format}, {size}, {detail}
+	{x} × {y} ppi	{x} × {y} ppp
+	resolution unavailable	résolution indisponible
+	estimated memory {memory}	mémoire estimée {memory}
+	memory unavailable	mémoire indisponible
+	Unknown format	Format inconnu
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -2615,6 +2622,7 @@ font-technology	Variable	Variables
 	One Point Perspective Preset 5	Paramètre prédéfini de perspective à un point 5
 	Only Web Colors	Couleurs Web uniquement
 	Opacity	Opacité
+	Show Opacity	Afficher l’opacité
 	Opacity & Mask Define Knockout Shape	L’opacité et le masque définissent la forme de masquage
 	Opacity Mask	Masque d’opacité
 	Opacity Mask Info	Infos sur le masque d’opacité
@@ -3063,6 +3071,9 @@ digits	Malayalam	Malayalam
 	Scale Artwork with Artboard	Mettre à l’échelle l’illustration avec le plan de travail
 	Artboards: {n}	Plans de travail : {n}
 	Rearrange All Artboards…	Réorganiser tous les plans de travail…
+	Rearrange…	Réorganiser…
+	Selected Artboards: {n}	Plans de travail sélectionnés ({n})
+@msg	Click on the canvas to place the artboards (Esc cancels)	Cliquez sur la zone de travail pour placer les plans de travail (Échap pour annuler)
 	Recall Selection	Rappeler la sélection
 	RECENT	RÉCENTS
 	Recent	Récents
@@ -3315,6 +3326,7 @@ digits	Malayalam	Malayalam
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un geste de rotation à deux doigts sur un pavé tactile fait pivoter la vue de la zone de travail.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Maintenir une touche exécute l’outil ou la commande de sa colonne Maintenir dans Raccourcis clavier. Un appui bref exécute son raccourci habituel.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Durée, en secondes, pendant laquelle une touche doit être maintenue pour que son raccourci de maintien s’exécute à la place de son raccourci habituel.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Suppr supprime les points d’ancrage sélectionnés et réajuste la courbe autour de chacun, au lieu d’ouvrir le tracé à cet endroit.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Quand vous déplacez des points d’ancrage, chaque courbe dont une extrémité bouge garde sa forme par rapport à ses extrémités.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Maintenir le raccourci d’un outil choisit cet outil jusqu’à ce que vous le relâchiez, puis l’outil précédent est de nouveau choisi.
 	Shows the bounding box while you move the selection or draw a shape.	Affiche le cadre de sélection pendant que vous déplacez la sélection ou dessinez une forme.
@@ -7321,6 +7333,8 @@ axis	Y Axis	Axe Y
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	approbation requise : il demande {0}, que l’utilisateur accorde en l’installant seul
 @msg	not JSON: {e}	pas du JSON : {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	pas un binaire WebAssembly (en-tête \\0asm absent)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	un type de fonction dépasse la limite de {MAX_FUNC_TYPE_VALUES} paramètres
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	un type de fonction dépasse la limite de {MAX_FUNC_TYPE_VALUES} résultats
 @msg	parameter `{k}`: {what}	paramètre `{k}` : {what}
 @msg	parameter `{name}`: {what}	paramètre `{name}` : {what}
 @msg	plug-in parameters must be a JSON object	les paramètres du plug-in doivent être un objet JSON
@@ -7357,6 +7371,11 @@ axis	Y Axis	Axe Y
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` et `maxItems` doivent valoir 0-{MAX_LIST}, `maxItems` au moins 1, et la valeur par défaut doit en compter autant
 @msg	`name` must be a string	`name` doit être une chaîne
 @msg	`opacity` must be a number	`opacity` doit être un nombre
+@msg	`opacity` must be a number from 0 to 100	`opacity` doit être un nombre compris entre 0 et 100
+@msg	`opacity` must be true or false	`opacity` doit valoir true ou false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	les caractères du texte n’ont pas d’opacité propre : ajoutez un fond ou un contour avec Ajouter un nouveau fond ou Ajouter un nouveau contour dans le panneau Aspect
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	un objet sélectionné dans une occurrence de symbole n’a pas d’opacité de fond ou de contour propre
+@msg	no target has that fill or stroke to take the opacity	aucune cible n’a ce fond ou ce contour pour recevoir l’opacité
 @msg	`type` must be "path" or "compound"	`type` doit valoir "path" ou "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` doit compter 1-{MAX_UNIT} caractères imprimables
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` doit indiquer 1 à {MAX_CONDITION_VALUES} valeurs pour `{other}`
@@ -9536,6 +9555,7 @@ breakText	Glyphs	Glyphes
 @msg	give a pattern name or select an object painted with a pattern	indiquez un nom de motif ou sélectionnez un objet peint avec un motif
 @msg	give at least one of clip, invert, disabled, linked	indiquez au moins l’un des paramètres clip, invert, disabled, linked
 @msg	give color, none, swatch or gradient	indiquez color, none, swatch ou gradient
+@msg	give color, none, swatch, gradient or opacity	indiquez color, none, swatch, gradient ou opacity
 @msg	give dataBase64	indiquez dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	indiquez soit at (un clic), soit area (un tracé dessiné autour des chevauchements)
 @msg	give exactly one of `path`, `data` and `dataBase64`	indiquez exactement un paramètre parmi `path`, `data` et `dataBase64`

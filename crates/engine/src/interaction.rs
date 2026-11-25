@@ -8,6 +8,10 @@ pub struct Interaction {
     /// The selection the previews start from (shared, so a preview frame copies nothing).
     pub selection: Arc<Selection>,
     pub preview: Option<(String, Value)>,
+    /// The active tool began it (a drag): a command from outside the tool runs as a step of its
+    /// own under it ([`crate::Session::outside_interaction`]). A dialog or a panel that begins an
+    /// interaction runs its commands inside it.
+    pub(crate) tool: bool,
     /// A replaced or canceled preview restores these new-art paints from before the interaction.
     pub(crate) paint: vectorcraft_tools::PaintDefaults,
     /// A preview of the interaction gave `defaultsOnly: true`: every later preview and a cancel put
@@ -39,6 +43,61 @@ pub struct Interaction {
     /// A switch to another document keeps the previews as one undo step in this one, as a panel field's scrub keeps
     /// its edits; otherwise the switch cancels the interaction, as it does a drag.
     pub keep_on_switch: bool,
+}
+
+/// An interaction that a command from outside the tool set aside while it runs
+/// ([`crate::Session::outside_interaction`]).
+#[derive(Debug)]
+pub(crate) struct HeldInteraction {
+    /// The [`crate::DocState::uid`] of the interaction's document.
+    pub(crate) uid: u64,
+    pub(crate) interaction: Interaction,
+    /// The document and the selection on show when the command began, when a preview had changed
+    /// them from the interaction's snapshot.
+    pub(crate) shown: Option<(Arc<Document>, Selection)>,
+    /// The document's current layer, highlighted Layers panel rows, highlighted variable and
+    /// isolation when the command began; a cancel puts back the ones it changed as it left them.
+    pub(crate) state: ViewState,
+    /// The new-art paints when the command began: a change the command makes to them stays when
+    /// the interaction's next preview or a cancel puts back the paints it began with.
+    pub(crate) paint: vectorcraft_tools::PaintDefaults,
+}
+
+/// The per-document state an interaction puts back when it is canceled, besides the document and
+/// the selection.
+#[derive(Debug, PartialEq)]
+pub(crate) struct ViewState {
+    pub(crate) active_layer: Option<NodeId>,
+    pub(crate) layer_rows: Vec<NodeId>,
+    pub(crate) variables_highlight: Option<String>,
+    pub(crate) isolation: Option<NodeId>,
+}
+
+impl ViewState {
+    pub(crate) fn of(st: &crate::DocState) -> Self {
+        ViewState {
+            active_layer: st.active_layer,
+            layer_rows: st.layer_rows.clone(),
+            variables_highlight: st.variables_highlight.clone(),
+            isolation: st.isolation,
+        }
+    }
+
+    /// Give `it` the parts of `now` that differ from `self`, the state before a command.
+    pub(crate) fn rebase(&self, now: ViewState, it: &mut Interaction) {
+        if now.active_layer != self.active_layer {
+            it.active_layer = now.active_layer;
+        }
+        if now.layer_rows != self.layer_rows {
+            it.layer_rows = now.layer_rows;
+        }
+        if now.variables_highlight != self.variables_highlight {
+            it.variables_highlight = now.variables_highlight;
+        }
+        if now.isolation != self.isolation {
+            it.isolation = now.isolation;
+        }
+    }
 }
 
 /// What Object → Transform → Transform Again (⌘D) repeats ([`SessionState::last_transform`]).

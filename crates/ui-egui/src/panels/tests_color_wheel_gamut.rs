@@ -83,7 +83,8 @@ fn ui_color_wheel_sets_gamut() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     let with = |v: serde_json::Value| {
         let mut v = v;
-        let rest = json!({"sliders": "none", "harmony": false, "harmonyRule": "complementary", "vision": false, "documentColors": false});
+        let rest =
+            json!({"sliders": "none", "harmony": false, "harmonyRule": "complementary", "opacity": false, "vision": false, "documentColors": false});
         v.as_object_mut().unwrap().extend(rest.as_object().unwrap().clone());
         v
     };
