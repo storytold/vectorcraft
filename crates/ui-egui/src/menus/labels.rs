@@ -2,7 +2,7 @@ use super::slots::{perspective_grid, recent_slot, saved_selection_name, saved_se
 use super::state::{hidden_when_disabled, shortcut_of};
 use super::tree::menu_tree;
 use super::ui_commands::UI_COMMANDS;
-use super::{Node, TODO, Value, VectorcraftApp};
+use super::{Node, Value, VectorcraftApp, unbound};
 use craft::keymap::Chord;
 
 /// Label for toggles whose text flips (Outline/Preview, Hide/Show …).
@@ -371,7 +371,7 @@ pub fn menu_strings() -> std::collections::BTreeSet<String> {
     fn walk(nodes: &[Node], under: &str, out: &mut BTreeSet<String>) {
         for node in nodes {
             match node {
-                Node::Item(it) if it.command.id == TODO => {
+                Node::Item(it) if unbound(&it.command.id) => {
                     out.insert(it.label.clone());
                 }
                 Node::Item(it) => {

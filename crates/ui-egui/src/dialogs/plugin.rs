@@ -46,14 +46,14 @@ use vectorcraft_plugins::{Budget, Kind, Manifest, Plugin, permissions, registry}
 use super::form;
 use super::preview::LivePreview;
 use crate::VectorcraftApp;
-use crate::menus::{Sep, c, cp, heading, sub};
+use crate::menus::{Sep, c, cp, placeholder, sub};
 
 /// The key of the hosted dialog of plug-in filters.
 pub const KIND: &str = "plugin";
 
 const CMD: &str = "plugin.run";
 
-/// Object › Plug-ins' header while no filter plug-in is installed.
+/// Object › Plug-ins' disabled row while no filter plug-in is installed.
 pub const NO_FILTERS: &str = "No filter plug-ins installed";
 
 /// A menu label for plug-in `name`: with an ellipsis when it opens a dialog.
@@ -199,13 +199,13 @@ pub fn object_menu() -> Vec<Node> {
         .map(|p| with_commands(p, cp(label(&p.manifest().name, !p.manifest().params.is_empty()), "plugin.dialog", json!({ "id": p.id() }))))
         .collect();
     if items.is_empty() {
-        items.push(heading(NO_FILTERS));
+        items.push(placeholder(NO_FILTERS));
     }
     items.extend([Sep, c("Install Plug-in…", "ui.installPlugin"), c("Reload Plug-ins", "plugin.reload")]);
     items
 }
 
-/// File › Open With's header while no importer plug-in is installed.
+/// File › Open With's disabled row while no importer plug-in is installed.
 pub const NO_IMPORTERS: &str = "No importer plug-ins installed";
 
 /// File › Open With: the installed importers (`file.openWith {importer}`), each by its name.
@@ -214,7 +214,7 @@ pub fn open_with_menu() -> Vec<Node> {
         .iter()
         .map(|p| cp(label(&p.manifest().name, true), "file.openWith", json!({ "importer": vectorcraft_plugins::export::format_id(p.id()) })))
         .collect();
-    if items.is_empty() { vec![heading(NO_IMPORTERS)] } else { items }
+    if items.is_empty() { vec![placeholder(NO_IMPORTERS)] } else { items }
 }
 
 /// Effect › Plug-ins: the live-effect plug-ins, each with its commands if it has any (`None`

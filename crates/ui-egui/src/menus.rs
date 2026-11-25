@@ -23,6 +23,16 @@ pub(crate) use craft::menu::Node::Separator as Sep;
 /// The command id of an item that is not built yet; its state is always disabled.
 pub(crate) const TODO: &str = "todo";
 
+/// The command id of a placeholder row that stands for an empty list (File › Open With's "No
+/// importer plug-ins installed"); it runs nothing and its state is always disabled.
+pub(crate) const PLACEHOLDER: &str = "placeholder";
+
+/// Whether a row bound to command `id` runs nothing: a Coming Soon row ([`TODO`]) or a placeholder
+/// ([`PLACEHOLDER`]).
+pub(crate) fn unbound(id: &str) -> bool {
+    id == TODO || id == PLACEHOLDER
+}
+
 /// An item that runs command `id` with `params`, labelled `label` (the English source label for
 /// tree rows, the shown name for rows that list names).
 pub(crate) fn named(label: impl Into<String>, id: &str, params: Value) -> Node {
@@ -37,6 +47,11 @@ pub(crate) fn cp(label: &'static str, id: &'static str, params: Value) -> Node {
 /// An item not implemented yet; the model disables it and gives it its tooltip.
 pub(crate) fn todo(label: &'static str) -> Node {
     named(label, TODO, json!({ "label": label }))
+}
+/// A disabled row that stands for an empty list, so its submenu stays in the menu: the layout
+/// drops a heading with no item after it, and with it a submenu left empty.
+pub(crate) fn placeholder(label: &'static str) -> Node {
+    named(label, PLACEHOLDER, json!({ "label": label }))
 }
 pub(crate) fn sub(label: &'static str, children: Vec<Node>) -> Node {
     Node::submenu(label, children)
