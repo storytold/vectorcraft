@@ -309,12 +309,18 @@ impl StackDialog for ScriptWindow {
             let size = egui::vec2(width.max(1.0), height.max(1.0));
             egui::ScrollArea::both().max_width(MAX_SHOWN.x).max_height(MAX_SHOWN.y).auto_shrink([true, true]).show(ui, |ui| {
                 let (area, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+                // Each container comes before the controls it holds.
+                let mut containers: Vec<Option<egui::Id>> = vec![None; window.nodes.len()];
                 for (i, n) in window.nodes.iter().enumerate().skip(1) {
                     if !n.visible {
                         continue;
                     }
-                    let place = Place { origin: area.min, enabled: waiting && n.enabled, default: window.default_element == Some(i) };
+                    let parent = containers.get(n.parent).copied().flatten();
+                    let place = Place { origin: area.min, enabled: waiting && n.enabled, default: window.default_element == Some(i), parent };
                     let shown = control(ui, drafts, &place, (i, n, prompt_of(window, i)));
+                    if let Some(slot) = containers.get_mut(i) {
+                        *slot = shown.container;
+                    }
                     typing |= shown.typing;
                     events.extend(shown.event);
                 }
@@ -379,19 +385,22 @@ impl StackDialog for ScriptWindow {
     }
 }
 
-/// Where a control is drawn: from `origin`, enabled or not, and whether it is the default button.
+/// Where a control is drawn: from `origin`, enabled or not, whether it is the default button, and
+/// the accessibility node of the group or panel that holds it.
 struct Place {
     origin: egui::Pos2,
     enabled: bool,
     default: bool,
+    parent: Option<egui::Id>,
 }
 
-/// What drawing a control gave: the event it gives, and whether an edit field has the keyboard
-/// focus.
+/// What drawing a control gave: the event it gives, whether an edit field has the keyboard focus,
+/// and a group's or a panel's accessibility node.
 #[derive(Default)]
 struct Shown {
     event: Option<UiEvent>,
     typing: bool,
+    container: Option<egui::Id>,
 }
 
 /// The text of the visible static text just before control `i` in its container: the visible
@@ -411,10 +420,17 @@ fn control(ui: &mut Ui, drafts: &mut BTreeMap<u64, String>, place: &Place, (i, n
     let mut shown = Shown::default();
     let enabled = place.enabled;
     let salt = (KIND, n.id);
+    // A control in a group or a panel is that container's child in the accessibility tree.
+    let builder = egui::UiBuilder::new().max_rect(rect);
+    let builder = match place.parent {
+        Some(parent) => builder.accessibility_parent(parent),
+        None => builder,
+    };
     ui.push_id(n.id, |ui| {
-        ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| match n.kind {
-            UiKind::Dialog | UiKind::Group => {}
-            UiKind::Panel => panel(ui, rect, n, enabled),
+        ui.scope_builder(builder, |ui| match n.kind {
+            UiKind::Dialog => {}
+            UiKind::Group => shown.container = Some(group(ui, rect, n, enabled)),
+            UiKind::Panel => shown.container = Some(panel(ui, rect, n, enabled)),
             UiKind::StaticText => {
                 Text::new(n.text.clone()).show(ui);
             }
@@ -490,8 +506,8 @@ fn control(ui: &mut Ui, drafts: &mut BTreeMap<u64, String>, place: &Place, (i, n
 }
 
 /// A panel's frame, with its text over the frame's top edge; screen readers read it as a group,
-/// disabled when the panel is.
-fn panel(ui: &mut Ui, rect: egui::Rect, n: &UiNode, enabled: bool) {
+/// disabled when the panel is. → the id of its node in the accessibility tree.
+fn panel(ui: &mut Ui, rect: egui::Rect, n: &UiNode, enabled: bool) -> egui::Id {
     let frame = rect.shrink(1.0);
     let (enabled, name) = (enabled && ui.is_enabled(), n.text.clone());
     let r = ui.interact(rect, ui.scope_id().with("panel"), egui::Sense::hover());
@@ -502,6 +518,17 @@ fn panel(ui: &mut Ui, rect: egui::Rect, n: &UiNode, enabled: bool) {
         let color = visuals.text_color();
         ui.painter().text(frame.min + egui::vec2(8.0, -6.0), egui::Align2::LEFT_TOP, &n.text, egui::FontId::proportional(11.0), color);
     }
+    r.id
+}
+
+/// A group, which draws nothing; screen readers read it as a group called by the name the script
+/// gave it, disabled when the group is.
+/// → the id of its node in the accessibility tree.
+fn group(ui: &mut Ui, rect: egui::Rect, n: &UiNode, enabled: bool) -> egui::Id {
+    let (enabled, name) = (enabled && ui.is_enabled(), n.name.clone());
+    let r = ui.interact(rect, ui.scope_id().with("group"), egui::Sense::hover());
+    r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Group, enabled, &name));
+    r.id
 }
 
 /// The name screen readers call a list box or a drop-down list `n` by: the visible static text
@@ -557,13 +584,13 @@ fn edit(ui: &mut Ui, drafts: &mut BTreeMap<u64, String>, enabled: bool, (i, n, p
     let committed = out.submitted || out.events.committed().is_some() || out.response.lost_focus();
     if committed && text != n.text && !n.readonly {
         drafts.remove(&n.id);
-        return Shown { event: Some(UiEvent::Change(i, UiValue::Text(text))), typing: true };
+        return Shown { event: Some(UiEvent::Change(i, UiValue::Text(text))), typing: true, container: None };
     }
     // A text the script refused stays in the field until the person changes it.
     if !focused && text == n.text {
         drafts.remove(&n.id);
     }
-    Shown { event: None, typing: focused || committed }
+    Shown { event: None, typing: focused || committed, container: None }
 }
 
 /// The event in the dialog's fields, for the dialog `w`.

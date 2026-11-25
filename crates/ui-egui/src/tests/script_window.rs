@@ -414,6 +414,36 @@ fn a_typed_text_the_script_refuses_stays_in_its_field_when_a_click_on_a_button_t
 }
 
 #[test]
+fn screen_readers_read_a_group_by_its_name() {
+    let mut app = app();
+    start(
+        &mut app,
+        "var w = new Window('dialog'); var g = w.add('group', undefined, {name: 'opts'}); g.add('checkbox', undefined, 'Bold'); vc.log(w.show());",
+    );
+    assert!(until_window(&mut app));
+    step(&mut app, Vec::new());
+    access_nodes(&app);
+    let nodes = access_nodes(&app);
+    let group = nodes.iter().find(|(_, n)| n.role() == egui::accesskit::Role::Group && n.label() == Some("opts"));
+    let (group, _) = group.unwrap_or_else(|| panic!("the group is in the accessibility tree"));
+    let bold = nodes.iter().find(|(_, n)| n.role() == egui::accesskit::Role::CheckBox && n.label() == Some("Bold"));
+    let (bold, _) = bold.unwrap_or_else(|| panic!("no Bold check box"));
+    let parent_of = |id: egui::accesskit::NodeId| nodes.iter().find(|(_, n)| n.children().contains(&id)).map(|(p, _)| *p);
+    let mut at = Some(*bold);
+    let mut inside = false;
+    for _ in 0..16 {
+        at = at.and_then(parent_of);
+        if at == Some(*group) {
+            inside = true;
+            break;
+        }
+    }
+    assert!(inside, "the check box is inside the group in the accessibility tree");
+    app.session.script_request_stop();
+    assert!(!until_window(&mut app));
+}
+
+#[test]
 fn an_edit_field_takes_at_most_its_draft_limit_while_it_is_typed() {
     let mut app = app();
     start(&mut app, "var w = new Window('dialog'); w.add('edittext', undefined, ''); w.add('button', undefined, 'OK'); vc.log(w.show());");
