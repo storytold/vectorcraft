@@ -1325,6 +1325,31 @@ fn bad_writes_are_refused_naming_the_object_and_the_field() {
         (text, json!({"text": {"paragraphs": [{"spaceBefor": 1}, {}]}}), &InputKind::ALL, "text.paragraphs[0]: unknown key 'spaceBefor'".into()),
         (
             text,
+            json!({"text": {"paragraphs": [{"hyphenation": {"wordLongerThen": 3}}, {}]}}),
+            &InputKind::ALL,
+            "text.paragraphs[0].hyphenation: unknown key 'wordLongerThen'".into(),
+        ),
+        (
+            text,
+            json!({"text": {"paragraphs": [{"justification": {"wordSpacng": [80, 100, 133]}}, {}]}}),
+            &InputKind::ALL,
+            "text.paragraphs[0].justification: unknown key 'wordSpacng'".into(),
+        ),
+        (
+            text,
+            json!({"text": {"paragraphs": [{}, {"tabs": [{"position": 36}, {"position": 72, "aling": "center"}]}]}}),
+            &InputKind::ALL,
+            "text.paragraphs[1].tabs[1]: unknown key 'aling'".into(),
+        ),
+        (text, json!({"text": {"paragraphs": [{"list": {"levl": 2}}, {}]}}), &InputKind::ALL, "text.paragraphs[0].list: unknown key 'levl'".into()),
+        (
+            text,
+            json!({"text": {"runs": styled(&|s| s["stroke_dash"] = json!({"pattern": [2, 2], "ofset": 1}))}}),
+            &InputKind::ALL,
+            "text.runs[0].style.stroke_dash: unknown key 'ofset'".into(),
+        ),
+        (
+            text,
             json!({"text": {"runs": [{"text": "Hi\u{FFFC}", "style": style}]}}),
             &InputKind::ALL,
             "holds the character of an inline graphic".into(),

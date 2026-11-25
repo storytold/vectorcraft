@@ -165,6 +165,28 @@ fn strict<T: DeserializeOwned>(v: &Value, parent: &str, key: &str) -> Result<T> 
     serde_json::from_value(v.clone()).map_err(|e| out_err(&at, e))
 }
 
+/// The field `key` of `v`, the style at `at`, holds only attributes `T` reads: an object, or each
+/// object of a list. An unknown key is an error at `at.key` (or `at.key[i]`); other values are left
+/// to the style's own checks.
+fn known_keys<T: DeserializeOwned>(v: &Value, at: &str, key: &str) -> Result<()> {
+    let names = attr_names::<T>();
+    let check = |o: &Map<String, Value>, at: &str| match o.keys().find(|k| !names.contains(&k.as_str())) {
+        Some(k) => {
+            let k = crate::permissions::display_text(k, crate::permissions::MAX_SHOWN_FIELD);
+            Err(out_err(at, format!("unknown key '{k}'")))
+        }
+        None => Ok(()),
+    };
+    match v.get(key) {
+        Some(Value::Object(o)) => check(o, &format!("{at}.{key}")),
+        Some(Value::Array(list)) => list.iter().enumerate().try_for_each(|(i, e)| match e {
+            Value::Object(o) => check(o, &format!("{at}.{key}[{i}]")),
+            _ => Ok(()),
+        }),
+        _ => Ok(()),
+    }
+}
+
 /// A transform from a filter's output: six finite numbers, each within ±[`MAX_COORD`], that don't
 /// flatten the object.
 fn decode_transform(v: &Value, at: &str) -> Result<Affine> {
@@ -267,6 +289,7 @@ fn set_text(doc: &Document, t: &mut TextObject, threaded: bool, runs: Option<&Va
             let text = o.get(key).and_then(Value::as_str).ok_or_else(|| out_err(&at, format!("`{key}` must be a string")))?;
             let style_v = o.get("style").unwrap_or(&Value::Null);
             let mut style: CharStyle = strict(style_v, &at, "style")?;
+            known_keys::<vectorcraft_doc::Dash>(style_v, &format!("{at}.style"), "stroke_dash")?;
             let inline = match o.get("inline") {
                 None | Some(Value::Null) => None,
                 Some(v) => Some(serde_json::from_value(v.clone()).map_err(|e| out_err(&format!("{at}.inline"), e))?),
@@ -447,6 +470,10 @@ fn range_err(at: &str, e: &AttrRangeError) -> Error {
 fn para_style(doc: &Document, v: &Value, parent: &str, key: &str) -> Result<ParaStyle> {
     let mut st: ParaStyle = strict(v, parent, key)?;
     let at = format!("{parent}.{key}");
+    known_keys::<vectorcraft_doc::HyphenationOptions>(v, &at, "hyphenation")?;
+    known_keys::<JustificationOptions>(v, &at, "justification")?;
+    known_keys::<vectorcraft_doc::TabStop>(v, &at, "tabs")?;
+    known_keys::<vectorcraft_doc::text::ParaList>(v, &at, "list")?;
     let justification = match v.get("justification") {
         None | Some(Value::Null) => None,
         Some(j) => Some(serde_json::from_value::<JustificationOptions>(j.clone()).map_err(|e| out_err(&format!("{at}.justification"), e))?),
