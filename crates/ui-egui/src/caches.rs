@@ -60,6 +60,10 @@ pub struct CanvasCache {
     /// The words Edit › Spelling › Auto Spell Check underlined on each text object in the last
     /// frame; dropped while it is off.
     pub spelling: canvas::marks::SpellingMarks,
+    /// The active document's visible text objects for (document uid, revision), which Show Hidden
+    /// Characters and Auto Spell Check draw over. A pass that draws neither drops them
+    /// ([`canvas::marks::marks_of`]).
+    pub text_nodes: canvas::marks::TextNodes,
     /// The Hand, Zoom and Rotate View tools the Space key and its chords lend the canvas, between
     /// passes; the tool adapter takes it out for its call and puts it back.
     pub momentary: Option<craft::ui::canvas::Momentary>,

@@ -133,6 +133,7 @@ impl VectorcraftApp {
                 find_font: None,
                 hidden_chars: Default::default(),
                 spelling: Default::default(),
+                text_nodes: Default::default(),
                 momentary: None,
                 selection_box: None,
                 selection_bounds: None,
