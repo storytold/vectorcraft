@@ -846,8 +846,9 @@ pub(crate) const MAX_IMPORTED_PRESETS: usize = 1000;
 pub(crate) use addons::{DecodedImages, refresh_color_masks};
 /// Packaging Tools' blanks and the objects their print leaves out, for the Fold Preview window.
 pub use addons::{fold_source, print_hidden};
-/// Document Info's category titles and the Objects category's count labels.
-pub use docinfo::{CATEGORIES, OBJECT_LABELS};
+/// Document Info's category titles, the Objects category's count labels, and how its image rows
+/// write a resolution and a number of bytes.
+pub use docinfo::{CATEGORIES, OBJECT_LABELS, byte_size, ppi_number};
 pub use docmenu::guide_indexes;
 pub(crate) use edit::{Unrecorded, settle_interaction, typing_in_progress};
 pub(crate) use object::bounds_rewrite;

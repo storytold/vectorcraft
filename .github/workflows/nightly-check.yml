@@ -1,0 +1,72 @@
+name: Nightly check
+
+# The app-side Nightly pieces, checked without a feed run: the Python suites that read the archive,
+# plist and signing scripts, the workflow contracts, and (on Windows) the packaging and signing
+# PowerShell suites. The producer itself is .github/workflows/nightly.yml; the Apple-silicon bundle
+# is built and verified by nightly-macos.yml behind the `full-ci` label.
+on:
+  push:
+    branches: [main, release]
+    paths: [".github/workflows/nightly*.yml", "packaging/**", "apps/vectorcraft/**", "crates/ui-egui/src/os_window.rs"]
+  pull_request:
+    paths: [".github/workflows/nightly*.yml", "packaging/**", "apps/vectorcraft/**", "crates/ui-egui/src/os_window.rs"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  synthetic:
+    name: Packaging suites and script syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run the synthetic suites
+        run: python3 packaging/nightly-tests.py
+      - name: Parse every nightly shell script
+        run: |
+          set -euo pipefail
+          for script in packaging/nightly-common.sh packaging/linux/nightly.sh packaging/linux/nightly-launch.sh \
+            packaging/linux/nightly-arch-tar.sh packaging/macos/nightly.sh \
+            packaging/macos/nightly-lib.sh packaging/macos/nightly-sign.sh packaging/macos/nightly-verify.sh; do
+            bash -n "$script"
+          done
+      - name: Shellcheck
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          shellcheck -x -P packaging packaging/nightly-common.sh packaging/linux/nightly.sh \
+            packaging/linux/nightly-launch.sh \
+            packaging/macos/nightly.sh packaging/macos/nightly-lib.sh packaging/macos/nightly-sign.sh \
+            packaging/macos/nightly-verify.sh
+
+  windows:
+    name: Windows packaging and signing suites
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Nightly packaging suite
+        shell: pwsh
+        run: ./packaging/windows/nightly-package-tests.ps1 -FixtureRoot $env:RUNNER_TEMP
+      - name: Nightly signing suite
+        shell: pwsh
+        run: ./packaging/windows/nightly-signing-tests.ps1 -FixtureRoot $env:RUNNER_TEMP

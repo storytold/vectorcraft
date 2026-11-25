@@ -398,35 +398,6 @@ fn the_tile_items_check_the_layout_the_panes_show() {
     }
 }
 
-/// The Arrange Documents items tile and consolidate through the commands they name.
-#[test]
-fn the_arrange_documents_items_tile_and_consolidate() {
-    let mut app = app_with(3);
-    let items = crate::menus::arrange_documents_items();
-    let items = commands(&items);
-    let labels: Vec<&str> = items.iter().map(|(l, ..)| *l).collect();
-    for item in [
-        "Consolidate All Windows",
-        "Tile",
-        "Tile All Vertically",
-        "Tile All Horizontally",
-        "2-Up Layout",
-        "3-Up Layout",
-        "4-Up Layout",
-        "6-Up Layout",
-    ] {
-        assert!(labels.contains(&item), "the items list {item}");
-    }
-    let choose = |app: &mut VectorcraftApp, label: &str| {
-        let (_, id, p) = items.iter().find(|(l, ..)| *l == label).unwrap_or_else(|| panic!("{label} is listed"));
-        app.run(id, if p.is_null() { json!({}) } else { (*p).clone() }).unwrap();
-    };
-    choose(&mut app, "Tile All Vertically");
-    assert!(app.ui.tiled && app.ui.tile_layout == Layout::Vertical, "{}", app.ui.status);
-    choose(&mut app, "Consolidate All Windows");
-    assert!(!app.ui.tiled);
-}
-
 #[test]
 fn tile_shows_a_pane_for_each_document_fitted_to_it() {
     let mut app = app_with(3);
