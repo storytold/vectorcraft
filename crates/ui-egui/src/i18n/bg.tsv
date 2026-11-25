@@ -6684,6 +6684,9 @@ file-filter	Flattener presets	Предварителни настройки за
 file-filter	PDF presets	Предварителни настройки за PDF
 file-filter	PDF-compatible .ai	Съвместими с PDF .ai файлове
 file-filter	Print presets	Предварителни настройки за печат
+file-filter	Tracing presets	Предварителни настройки за трасиране
+file-filter	Action sets	Набори от действия
+file-filter	Composite fonts	Съставни шрифтове
 file-filter	Preferences	Настройки
 file-filter	Export presets	Набори за експортиране
 file-filter	SVG Compressed	Компресиран SVG
@@ -7375,6 +7378,7 @@ axis	Y Axis	Y ос
 	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Автоматизация поиска инсталирането на тази приставка. За да я инсталирате, изберете Обект › Приставки › Инсталиране на приставка… сами.
 	File SHA-256: {hash}	SHA-256 на файла: {hash}
 	Read the objects it is given	Четене на обектите, които получава
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Четене на обектите, които получава, както и на настройките, работните области, слоевете и образците на документа
 	Change, add and delete objects in the document	Промяна, добавяне и изтриване на обекти в документа
 	Keep data of its own with the document	Съхраняване на собствени данни в документа
 	Change how the objects its effect is applied to are drawn	Промяна на начина, по който се рисуват обектите, към които е приложен ефектът му
@@ -9073,3 +9077,15 @@ file-filter	Applications	Приложения
 @msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	изображението {_1} не може да се изкриви така: ъглите му не биха образували изпъкнала форма
 @msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	изображението {_1} не може да се изкриви така: ъглите му биха пресекли хоризонта на деформацията
 @msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	изображението {_1} не може да се изкриви така: ъглите му биха били твърде близо един до друг за перспективно преобразуване
+@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	`spacing` трябва да е повече от 0 и най-много {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	`{key}` трябва да е от 0 до {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}` трябва да е от 0,01 до 1000 pt
+@msg	select the banner, or mark every artboard	изберете банера или маркирайте всички работни области
+@msg	the banner has no width or height	банерът няма ширина или височина
+@msg	the grommet inset is too large for the banner	отстъпът на капсите е твърде голям за банера
+@msg	the hem is too deep for the banner	подгъвът е твърде дълбок за банера
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	разстоянието дава повече от {MAX_GROMMETS} капси
+@msg	there is no banner to mark	няма банер за маркиране
+@msg	turn on at least one side	включете поне една страна
+@msg	with no hem and no grommets there is nothing to mark	без подгъв и без капси няма нищо за маркиране
+@msg	{saving} failed: {e}	{saving} неуспешно: {e}
