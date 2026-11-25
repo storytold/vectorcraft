@@ -282,10 +282,12 @@ fn a_trace_started_before_a_revert_does_not_apply() {
 #[test]
 fn the_progress_window_shows_a_trace() {
     let mut app = app();
+    // The app's clock stands still: the trace is only old enough for its window when made so.
+    app.now_override = Some(0.0);
     let ctx = crate::testing::ui_context();
     crate::menus::invoke(&mut app, "imageTrace.make", json!({"preset": "Default"}));
     assert!(!progress(&mut app, &ctx, 0.0).contains("Tracing the image"), "not before the delay");
-    // The delay counts on the monotonic clock: the trace started that long ago.
+    // The delay counts on the app's clock: the trace started that long ago.
     app.trace_runs.running[0].started -= DELAY;
     progress(&mut app, &ctx, DELAY + 0.05); // a new window measures itself unseen first
     let shown = progress(&mut app, &ctx, DELAY + 0.1);
