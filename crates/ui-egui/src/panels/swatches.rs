@@ -18,10 +18,10 @@ use craft::ui::contract::{Bind, DropAt, DropPlace, ListDrag, MemoProps, SelectMo
 use craft::ui::contract::{Entry, Props as _, Show as _, ShowContainer as _, Trigger};
 use craft::ui::menu::{Menu, MenuItem};
 use craft::ui::patterns::presets::{PresetEvent, PresetView, ThumbInfo};
-use craft::ui::primitives::{ContentPainterCx, Glyph, IconSpec, StrokeWidth};
+use craft::ui::primitives::{ContentPainterCx, Glyph, IconSpec, PaintShape, StrokeWidth};
 use craft::ui::runtime::env::Label;
 use craft::ui::sections::{FooterAction, FooterBar};
-use craft::ui::style::UiTokens;
+use craft::ui::style::{DataColor, UiTokens};
 use egui::{Color32, Painter, Rect, Response, Shape, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::swatch::REGISTRATION;
@@ -543,10 +543,7 @@ pub(super) fn paint_swatch(cx: &ContentPainterCx<'_>, rect: Rect, paint: &Paint,
     match paint {
         _ if paint.is_registration() => registration_mark(cx, inner),
         Paint::Solid { .. } => {}
-        Paint::None => {
-            let slash = Stroke::new(cx.stroke_width(StrokeWidth::Medium), Color32::from_rgb(0xe0, 0x20, 0x20));
-            cx.data_shapes([Shape::line_segment([inner.left_bottom(), inner.right_top()], slash)]);
-        }
+        Paint::None => none_slash(cx, inner),
         Paint::Pattern { .. } if pattern.is_some_and(|doc| pattern_thumb_in(doc, cx, inner, paint)) => {}
         _ => crate::paint_preview::paint_rect(cx, inner, paint),
     }
@@ -591,6 +588,15 @@ fn pattern_thumb_in(doc: &Document, cx: &ContentPainterCx<'_>, r: Rect, paint: &
     let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
     cx.data_shapes([Shape::rect_filled(r, 0.0, Color32::WHITE), Shape::image(tex.id(), r, uv, Color32::WHITE)]);
     true
+}
+
+/// The red of None's slash on a swatch tile and of a disabled opacity mask's cross, drawn on the document's white or
+/// black paper. It is the same in every theme.
+pub(super) const OFF_MARK: Color32 = Color32::from_rgb(0xe0, 0x20, 0x20);
+
+/// None's slash across `r`, from its lower left to its upper right, in [`OFF_MARK`] at the medium stroke width.
+fn none_slash(cx: &ContentPainterCx<'_>, r: Rect) {
+    cx.with_draw(|draw| draw.stroke(&PaintShape::Path(vec![r.left_bottom(), r.right_top()]), StrokeWidth::Medium, DataColor::new(OFF_MARK)));
 }
 
 /// Registration's mark: a black target on white.

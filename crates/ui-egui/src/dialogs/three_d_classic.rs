@@ -18,7 +18,7 @@ use craft::ui::list::ThumbAspect;
 use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamKind};
 use craft::ui::pickers::Select;
 use craft::ui::primitives::ContentPainterCx;
-use craft::ui::runtime::env::UnitKind;
+use craft::ui::runtime::env::{Env, UnitKind};
 use craft::ui::sections::{DialogRole, FooterButton};
 use craft::ui::style::DataColor;
 use craft::ui::text::NumberField;
@@ -32,6 +32,7 @@ use vectorcraft_effects::{
 
 use super::revolve::{Place, bevel_row, c3, light_editor};
 use super::three_d::{Data, with_fields};
+use super::track_cube::{SHADE_DARK, SHADE_LIGHT};
 use crate::VectorcraftApp;
 
 /// The field that holds the number of the surface Map Art shows.
@@ -379,10 +380,11 @@ pub(crate) fn map_done(dialog: &mut HostedParamDialog, effect: &str) {
 fn flat_view(ui: &mut Ui, fields: &mut DialogFields, flat: &Flat) -> Response {
     let surface = surface_number(fields);
     let map = maps_of(fields).into_iter().find(|m| m.surface == surface);
-    let size = vec2(ui.available_width().max(ui.spacing().slider_width), ui.spacing().slider_width); // PLAN: tokens.size.plot
+    let tokens = Env::of(ui).tokens.clone();
+    let size = vec2(ui.available_width().max(tokens.size.plot.width), tokens.size.plot.height);
     let (room, response) = ui.allocate_exact_size(size, Sense::hover());
     let (width, height) = (flat.width.max(1e-6), flat.height.max(1e-6));
-    let margin = f64::from(ui.spacing().item_spacing.x) * 2.0;
+    let margin = f64::from(tokens.space.gap.item) * 2.0;
     let zoom = ((f64::from(room.width()) - margin) / width).min((f64::from(room.height()) - margin) / height).max(1e-6);
     let view = CanvasView::new(room, Point::ZERO, zoom);
     let rect = flat.art.map(art_rect);
@@ -390,7 +392,7 @@ fn flat_view(ui: &mut Ui, fields: &mut DialogFields, flat: &Flat) -> Response {
     Canvas::new(tl!("Surface")).view(view).show_at(ui, room, |ui, body| {
         let corner = |x: f64, y: f64| view.to_screen(Point::new(x, y));
         let page = egui::Rect::from_two_pos(corner(-width / 2.0, -height / 2.0), corner(width / 2.0, height / 2.0));
-        let fill = if flat.visible { Color32::from_gray(205) } else { Color32::from_gray(90) };
+        let fill = if flat.visible { SHADE_LIGHT } else { SHADE_DARK };
         if let Some(space) = canvas_space(&body.env) {
             space.paint_picture(ui.ctx(), vec![egui::Shape::rect_filled(page, 0.0, fill)]);
         }
