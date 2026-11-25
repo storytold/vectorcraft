@@ -2862,7 +2862,8 @@ The add-on's Parametric Shape Tool (2026-10-30) draws ten kinds of shape that st
 ellipse, polygon and star with 3 to 1,000 sides or points, ring, arrow, cross, heart, gear, speech bubble; corner radius
 limited to the middle of a side): a drag from the centre sizes and turns one, the arrow keys change its count and values
 while dragging, handles edit a selected one, a double-click places one with the last settings, and its panel edits the
-numbers (its W and H keep the point chosen in the shared reference point locator in place). A shape is a plain path
+numbers (its W and H keep the point chosen in the shared reference point locator in place, and the center when anchors
+are direct-selected). A shape is a plain path
 whose numbers and outline fingerprint sit in one object-data entry that SVG export
 leaves out; moving, rotating or scaling it keeps it editable, editing its anchors makes it a plain path. Convert to
 Parametric Shape recognises plain rectangles, ellipses and regular polygons. Geometry in
