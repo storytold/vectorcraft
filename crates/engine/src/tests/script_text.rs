@@ -225,6 +225,78 @@ fn setting_the_value_a_range_has_records_no_undo_step() {
     assert_eq!(undo_steps(&s), before);
 }
 
+fn paints(s: &Session, id: NodeId) -> Vec<(String, Paint, Paint, f64)> {
+    match &s.active().unwrap().doc.node(id).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| (r.text.clone(), r.style.fill.clone(), r.style.stroke.clone(), r.style.stroke_width)).collect(),
+        _ => panic!("not text"),
+    }
+}
+
+#[test]
+fn character_attributes_paint_only_their_own_characters() {
+    let (mut s, id) = doc_with("abc");
+    let before = undo_steps(&s);
+    let out = log(
+        &mut s,
+        "var r = app.activeDocument.textFrames[0].textRange, b = r.characters[1].characterAttributes;\
+         var red = new RGBColor(); red.red = 255; b.fillColor = red;\
+         var k = new CMYKColor(); k.black = 100; b.strokeColor = k; b.strokeWeight = 2;\
+         vc.log([b.fillColor.typename, b.fillColor.red, b.strokeColor.typename, b.strokeColor.black, b.strokeWeight]);\
+         vc.log([r.characters[0].fillColor.red, r.characters[0].strokeColor.typename]);",
+    );
+    let n = |v: &Value| v.as_f64().unwrap_or(f64::NAN);
+    assert_eq!((out[0][0].as_str(), out[0][2].as_str()), (Some("RGBColor"), Some("CMYKColor")), "{out:?}");
+    assert_eq!((n(&out[0][1]), n(&out[0][3]), n(&out[0][4])), (255.0, 100.0, 2.0), "the paint reads back as given");
+    assert_ne!(n(&out[1][0]), 255.0, "the first character keeps its fill");
+    assert_eq!(out[1][1], json!("NoColor"), "the first character keeps no stroke");
+    let runs = paints(&s, id);
+    let b = runs.iter().find(|r| r.0 == "b").expect("b is a run of its own");
+    assert_eq!(b.1, Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    assert_eq!(b.2, Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0)));
+    assert!(b.3 > 1.0);
+    assert!(runs.iter().filter(|r| r.0 != "b").all(|r| r.1 != b.1 && r.2 == Paint::None), "{runs:?}");
+    assert!(undo_steps(&s) > before);
+
+    let steps = undo_steps(&s);
+    log(&mut s, "var b = app.activeDocument.textFrames[0].textRange.characters[1]; b.fillColor = b.fillColor; b.strokeWeight = b.strokeWeight;");
+    assert_eq!(undo_steps(&s), steps, "setting the paint a range has records no undo step");
+    log(&mut s, "app.activeDocument.textFrames[0].textRange.characters[1].strokeColor = new NoColor();");
+    assert!(paints(&s, id).iter().all(|r| r.2 == Paint::None), "a NoColor takes the stroke away");
+}
+
+#[test]
+fn stroke_weight_reads_back_in_document_points_on_scaled_type() {
+    let (mut s, id) = doc_with("abc");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.scale", &json!({"sx": 200, "sy": 200})).unwrap();
+    let out = log(&mut s, "var r = app.activeDocument.textFrames[0].textRange; r.strokeWeight = 2; vc.log(r.strokeWeight);");
+    assert!((out[0].as_f64().unwrap_or(f64::NAN) - 2.0).abs() < 1e-9, "{out:?}");
+    let stored = paints(&s, id)[0].3;
+    assert!(stored < 2.0, "the type's own scale draws the stored width wider: {stored}");
+    let steps = undo_steps(&s);
+    log(&mut s, "var r = app.activeDocument.textFrames[0].textRange; r.strokeWeight = r.strokeWeight;");
+    assert_eq!(undo_steps(&s), steps, "the weight read back is the weight it has");
+}
+
+#[test]
+fn bad_text_paint_is_refused_without_a_change() {
+    let (mut s, id) = doc_with("abc");
+    let before = undo_steps(&s);
+    let runs = paints(&s, id);
+    for (src, want) in [
+        ("r.fillColor = 'red';", "fillColor must be a color object"),
+        ("var c = new RGBColor(); c.red = 300; r.strokeColor = c;", "RGBColor.red"),
+        ("r.fillColor = new GradientColor();", "not available yet"),
+        ("r.strokeWeight = -1;", "strokeWeight must be from 0 to 1000"),
+        ("r.characterAttributes.strokeWeight = 'thick';", "strokeWeight must be a finite number"),
+    ] {
+        let e = failure(&mut s, &format!("var r = app.activeDocument.textFrames[0].textRange; {src}"));
+        assert!(e.contains(want), "{src}: {e}");
+    }
+    assert_eq!(undo_steps(&s), before);
+    assert_eq!(paints(&s, id), runs);
+}
+
 #[test]
 fn a_leading_equal_to_the_auto_leading_turns_auto_leading_off() {
     let (mut s, id) = doc_with("abc");

@@ -177,12 +177,14 @@ const INSIDE: &[(&str, &str)] = &[
         "TextRange.prototype.",
         "autoLeading autoLeading= baselineShift baselineShift= changeCaseTo changeCaseTo= characterAttributes characterOffset \
          characterOffset= characterStyles characterStyles= characters constructor contents contents= deSelect deSelect= \
-         duplicate duplicate= end end= firstLineIndent firstLineIndent= getLocalCharOverridesJSON getLocalCharOverridesJSON= \
+         duplicate duplicate= end end= fillColor fillColor= firstLineIndent firstLineIndent= getLocalCharOverridesJSON \
+         getLocalCharOverridesJSON= \
          getLocalParaOverridesJSON getLocalParaOverridesJSON= getParagraphLength getTextRunLength horizontalScale \
          horizontalScale= insertionPoints insertionPoints= justification justification= kerning kerning= leading leading= \
          leftIndent leftIndent= length length= lines lines= move move= paragraphAttributes paragraphStyles paragraphStyles= \
          paragraphs parent remove rightIndent rightIndent= rotation rotation= select select= size size= spaceAfter spaceAfter= \
-         spaceBefore spaceBefore= start start= story story= strikeThrough strikeThrough= textFont textFont= textRanges \
+         spaceBefore spaceBefore= start start= story story= strikeThrough strikeThrough= strokeColor strokeColor= \
+         strokeWeight strokeWeight= textFont textFont= textRanges \
          textRanges= textSelection textSelection= tracking tracking= typename underline underline= verticalScale \
          verticalScale= words",
     ),
@@ -195,9 +197,9 @@ const INSIDE: &[(&str, &str)] = &[
     ("CharacterAttributes.", "prototype"),
     (
         "CharacterAttributes.prototype.",
-        "autoLeading autoLeading= baselineShift baselineShift= constructor horizontalScale horizontalScale= leading leading= \
-         rotation rotation= size size= strikeThrough strikeThrough= textFont textFont= tracking tracking= typename underline \
-         underline= verticalScale verticalScale=",
+        "autoLeading autoLeading= baselineShift baselineShift= constructor fillColor fillColor= horizontalScale horizontalScale= \
+         leading leading= rotation rotation= size size= strikeThrough strikeThrough= strokeColor strokeColor= strokeWeight \
+         strokeWeight= textFont textFont= tracking tracking= typename underline underline= verticalScale verticalScale=",
     ),
     ("ParagraphAttributes.", "prototype"),
     (

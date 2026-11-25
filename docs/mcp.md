@@ -2719,8 +2719,10 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `add(contents, relativeObject?, insertionLocation?)` and `addBefore(contents)`, which insert the text and give its
   range, as one `text.editRange`. Character attributes are `size` (0.1 to 1296 pt), `leading` (0.1 to
   5000 pt), `autoLeading`, `tracking` (-1000 to 10000), `baselineShift` (-1296 to 1296 pt), `horizontalScale` and
-  `verticalScale` (1 to 10000 percent), `rotation` (-360 to 360 degrees), `underline`, `strikeThrough` and `textFont`,
-  set with `text.setRangeStyle`; sizes are document points, as the Character panel shows them. Paragraph attributes are
+  `verticalScale` (1 to 10000 percent), `rotation` (-360 to 360 degrees), `underline`, `strikeThrough`, `textFont`,
+  `fillColor` and `strokeColor` (color objects, as a path takes them; a `NoColor` takes the paint away) and
+  `strokeWeight` (0 to 1000 pt) (https://ai-scripting.docsforadobe.dev/jsobjref/CharacterAttributes/), set with
+  `text.setRangeStyle`; sizes are document points, as the Character panel shows them. Paragraph attributes are
   `justification` (a `Justification` value, set with `text.setStyle`; the Auto alignment new type has reads as `LEFT`,
   or `RIGHT` in a right-to-left paragraph, and setting a value replaces it), `firstLineIndent`, `leftIndent`, `rightIndent`,
   `spaceBefore` and `spaceAfter` (-1296 to 1296 pt, set with `text.setFormat`). `app.textFonts`

@@ -3,7 +3,8 @@
 //! `paragraphAttributes`, and `app.textFonts`, as the help pages
 //! <https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItems/>,
 //! <https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItem/>,
-//! <https://ai-scripting.docsforadobe.dev/jsobjref/TextRange/> and
+//! <https://ai-scripting.docsforadobe.dev/jsobjref/TextRange/>,
+//! <https://ai-scripting.docsforadobe.dev/jsobjref/CharacterAttributes/> and
 //! <https://ai-scripting.docsforadobe.dev/jsobjref/TextFonts/> describe them.
 //!
 //! VectorCraft's own rules, which the help pages do not state:
@@ -33,6 +34,8 @@
 //!   value; set on an empty range it changes nothing. A paragraph attribute reads the first
 //!   paragraph the range touches and sets every one of them. A text range has the members of
 //!   both its `characterAttributes` and its `paragraphAttributes`.
+//! - `fillColor` and `strokeColor` take and give color objects as a path's do; a `NoColor` takes
+//!   the paint away. `strokeWeight` is 0 to 1000 points.
 
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, VecDeque};
@@ -40,13 +43,14 @@ use std::rc::Rc;
 use std::sync::{Arc, Weak};
 
 use serde_json::{Value, json};
+use vectorcraft_color::Paint;
 use vectorcraft_doc::{CharStyle, Justify, TextKind, TextObject};
 use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMember, Realm, RunError, host_ref};
 
 use super::{
-    Answer, Doc, Host, Item, Link, NOT_FOUND, STALE_ITEM, all_editable, arg, boolean, class, command, doc_of, doc_ref, edit_item, editable, float,
-    frame, function, get, handle_of, id_parts, item_of, item_ref, method, named, num, number, on_doc, page_items, point, property, text, typename_of,
-    whole, with_doc,
+    Answer, Doc, Host, Item, Link, NOT_FOUND, STALE_ITEM, all_editable, arg, boolean, class, colors, command, doc_of, doc_ref, edit_item, editable,
+    float, frame, function, get, handle_of, id_parts, item_of, item_ref, method, named, num, number, on_doc, page_items, point, property, text,
+    typename_of, whole, with_doc,
 };
 use crate::{DocState, Document, NodeId, NodeKind};
 
@@ -789,9 +793,12 @@ enum Attr {
     Underline,
     StrikeThrough,
     TextFont,
+    FillColor,
+    StrokeColor,
+    StrokeWeight,
 }
 
-const ATTRS: [(&str, Attr); 11] = [
+const ATTRS: [(&str, Attr); 14] = [
     ("size", Attr::Size),
     ("leading", Attr::Leading),
     ("autoLeading", Attr::AutoLeading),
@@ -803,6 +810,9 @@ const ATTRS: [(&str, Attr); 11] = [
     ("underline", Attr::Underline),
     ("strikeThrough", Attr::StrikeThrough),
     ("textFont", Attr::TextFont),
+    ("fillColor", Attr::FillColor),
+    ("strokeColor", Attr::StrokeColor),
+    ("strokeWeight", Attr::StrokeWeight),
 ];
 
 /// The styles of the characters in bytes `a..b`, effective as the Character panel shows them, with
@@ -905,7 +915,16 @@ fn attr_value(h: &Host, attr: Attr, t: &TextObject, s: &CharStyle, para: usize) 
         Attr::Underline => Data::Bool(s.underline),
         Attr::StrikeThrough => Data::Bool(s.strikethrough),
         Attr::TextFont => font_ref(h, &s.font_family, &s.font_style),
+        Attr::FillColor => colors::of_paint(&s.fill),
+        Attr::StrokeColor => colors::of_paint(&s.stroke),
+        Attr::StrokeWeight => num(s.stroke_width * stroke_scale(t)),
     }
+}
+
+/// Document points per text-space point of a character stroke, as `text.setRangeStyle` scales a
+/// `strokeWidth` it is given.
+fn stroke_scale(t: &TextObject) -> f64 {
+    vectorcraft_doc::Scaling::factor(t.xf).filter(|k| k.is_finite() && *k > 1e-12).unwrap_or(1.0)
 }
 
 /// The `text.setRangeStyle` parameter for `attr` set to `v`, and the value it reads as after.
@@ -975,6 +994,20 @@ fn attr_param(h: &Host, attr: Attr, name: &str, v: &Data, first: (&TextObject, &
         Attr::TextFont => {
             let (family, style) = font_of(h, v)?;
             (json!({"font": family, "style": style}), font_ref(h, &family, &style))
+        }
+        Attr::FillColor | Attr::StrokeColor => {
+            let color = colors::assigned(v, name)?;
+            let paint = color.map_or(Paint::None, Paint::solid);
+            let given = color.map_or_else(|| json!("none"), |c| colors::param(&c));
+            let key = if matches!(attr, Attr::FillColor) { "fill" } else { "stroke" };
+            (json!({ key: given }), colors::of_paint(&paint))
+        }
+        Attr::StrokeWeight => {
+            let n = finite()?;
+            if !(0.0..=1000.0).contains(&n) {
+                return Err(HostError::Range("strokeWeight must be from 0 to 1000 points".into()));
+            }
+            (json!({"strokeWidth": n}), num(n))
         }
     })
 }
