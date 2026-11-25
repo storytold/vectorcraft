@@ -1421,7 +1421,10 @@ fn brush_freehand_refuses_unknown_keys() {
     let spec = crate::cmd::find_command("brush.freehand").unwrap();
     let mut keys = crate::cmd::params::accepted_keys(spec.params).expect("the description names every key");
     keys.sort_unstable();
-    assert_eq!(keys, ["brush", "closed", "connect", "extend", "fidelity", "fill", "fit", "keepSelected", "points", "redraw", "style"]);
+    assert_eq!(
+        keys,
+        ["brush", "closed", "connect", "extend", "fidelity", "fill", "fit", "keepSelected", "leaveSelection", "points", "redraw", "style"]
+    );
     let mut s = session();
     let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
     select(&mut s, &[a]);
@@ -2290,6 +2293,73 @@ fn place_and_break_link_round_trip_geometry() {
     assert!(matches!(n.kind, NodeKind::Path { .. }));
     assert!(close(n.geometric_bounds().unwrap(), Rect::new(260.0, 180.0, 340.0, 220.0), 1e-6));
     assert_eq!(n.appearance.stroke_width(), 1.0, "strokes are not scaled by normalisation");
+}
+
+/// In Draw Behind, Place Symbol Instance puts the instance directly below the bottommost selected
+/// object (beside the compound path that holds a selected path, above a clipping path), or at the
+/// bottom of the current layer with nothing selected, selected and in one undo step. Draw Normal
+/// and Draw Inside keep it on top, and a locked layer refuses it with no edit.
+#[test]
+fn placed_instances_go_below_the_selection_in_draw_behind() {
+    let mut s = session();
+    let (inst, name, _) = make_symbol(&mut s);
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 10.0, 10.0), rect(&mut s, 20.0, 0.0, 10.0, 10.0));
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    let kids = |s: &Session, id: NodeId| node(s, id).children().unwrap().iter().map(|c| c.id).collect::<Vec<_>>();
+    let place = |s: &mut Session| NodeId(s.execute("symbol.place", &json!({"name": name, "x": 300, "y": 200})).unwrap()["id"].as_u64().unwrap());
+    s.execute("view.drawMode", &json!({"mode": "behind"})).unwrap();
+    select(&mut s, &[b]);
+    let before = undo_len(&s);
+    let p = place(&mut s);
+    assert_eq!(kids(&s, layer), vec![inst, a, p, b], "directly below the selected object");
+    assert_eq!(undo_len(&s), before + 1);
+    assert_eq!(s.doc().unwrap().selection.objects, [p]);
+    assert!(close(bounds(&s, p), Rect::new(260.0, 180.0, 340.0, 220.0), 1e-9), "{:?}", bounds(&s, p));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(kids(&s, layer), vec![inst, a, b]);
+    // Below the bottommost of several selected objects.
+    select(&mut s, &[b, a]);
+    let p = place(&mut s);
+    assert_eq!(kids(&s, layer), vec![inst, p, a, b]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    // With nothing selected, at the bottom of the current layer.
+    select(&mut s, &[]);
+    let p = place(&mut s);
+    assert_eq!(kids(&s, layer), vec![p, inst, a, b]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    // A path selected in a compound path: beside the compound path, not inside it.
+    select(&mut s, &[a, b]);
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    let compound = kids(&s, layer)[1];
+    let member = kids(&s, compound)[1];
+    select(&mut s, &[member]);
+    let p = place(&mut s);
+    assert_eq!(kids(&s, layer), vec![inst, p, compound]);
+    assert_eq!(kids(&s, compound).len(), 2);
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Draw Normal and Draw Inside put it on top of the layer.
+    for mode in ["normal", "inside"] {
+        select(&mut s, &[compound]);
+        s.execute("view.drawMode", &json!({"mode": mode})).unwrap();
+        let p = place(&mut s);
+        assert_eq!(kids(&s, layer), vec![inst, compound, p], "{mode}");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    // In a clipping layer the clipping path stays at the bottom, the selected clipping path too.
+    s.execute("view.drawMode", &json!({"mode": "behind"})).unwrap();
+    s.execute("layer.clippingMask.toggle", &json!({"id": layer.0})).unwrap();
+    assert_eq!(kids(&s, layer), vec![compound, inst]);
+    for picked in [&[][..], &[compound]] {
+        select(&mut s, picked);
+        let p = place(&mut s);
+        assert_eq!(kids(&s, layer), vec![compound, p, inst], "{picked:?}");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    // A locked layer takes nothing.
+    s.execute("layer.setProps", &json!({"id": layer.0, "locked": true})).unwrap();
+    let before = (undo_len(&s), s.doc().unwrap().doc.clone());
+    assert!(s.execute("symbol.place", &json!({"name": name})).is_err());
+    assert_eq!((undo_len(&s), &s.doc().unwrap().doc), (before.0, &before.1));
 }
 
 #[test]

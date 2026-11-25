@@ -48,7 +48,7 @@ use dynamic::{symbol_instance_reset, symbol_instance_select_part, symbol_instanc
 use symbolism::symbol_set_density;
 use symbols::selected_instances;
 pub(crate) use symbols::{
-    expand_instances_under, expandable_instances, instance_in_place, natural_size, normalize, place_xf, set_natural_size, store_symbol,
+    Placement, expand_instances_under, expandable_instances, instance_in_place, natural_size, normalize, place_xf, set_natural_size, store_symbol,
     stored_natural_size,
 };
 use symbols::{
@@ -234,7 +234,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Place Symbol Instance",
             [],
             None,
-            "{name?, x?, y?} place an instance so its registration point is at (x, y) (default: artboard centre; name default: current) → {id}",
+            "{name?, x?, y?} place an instance so its registration point is at (x, y) (default: artboard centre; name default: current), on top of the current layer, or in Draw Behind directly below the bottommost selected object (at the bottom of the current layer with nothing selected) → {id}",
             has_doc,
             symbol_place
         ),

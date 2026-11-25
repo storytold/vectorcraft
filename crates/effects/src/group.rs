@@ -583,9 +583,10 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
     let own_fill = has_visible_fill(group);
     // A compound shape's area has no paint of its own: the shape's own appearance paints it. The
     // shape's top painting fill is the area's fill for Remove Unpainted Artwork and for Outline's
-    // strokes, while Divide pieces stay unpainted so that the fill is not drawn twice.
+    // strokes, while Divide pieces stay unpainted so that the fill is not drawn twice. The shape's
+    // strokes stay out: the shape's own appearance already strokes the result.
     let area_style = group.is_compound_shape().then(|| {
-        let items = group.appearance.items.iter().filter(|i| paints(i)).cloned().collect();
+        let items = top_painting_fill(&group.appearance).cloned().into_iter().collect();
         Node::path(group.id, PathData::default(), Appearance { items, ..Default::default() })
     });
     let style_of = |s: &Node| -> Option<Node> {
@@ -644,13 +645,19 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
         // (style source, shape) per stack entry; keys index `sources`.
         let mut sources: Vec<Node> = vec![];
         let mut shapes: Vec<po::Shape> = vec![];
+        // Keys of the group operands whose art has no area left at the precision.
+        let mut collapsed: Vec<u64> = vec![];
         for mut lv in all {
             if shape_mode && lv.len() > 1 {
                 let parts: Vec<(PathData, FillRule)> = lv.iter().filter_map(geometry).collect();
                 let refs: Vec<(&PathData, FillRule)> = parts.iter().map(|(p, r)| (p, *r)).collect();
                 let key = sources.len() as u64;
                 if let Some(top) = lv.pop() {
-                    shapes.push(po::Shape::new(po::unite_all_with(&refs, options.precision), FillRule::NonZero, key));
+                    let united = po::unite_all_with(&refs, options.precision);
+                    if united.is_empty() && !parts.is_empty() {
+                        collapsed.push(key);
+                    }
+                    shapes.push(po::Shape::new(united, FillRule::NonZero, key));
                     sources.push(top);
                 }
             } else {
@@ -661,6 +668,18 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
                     }
                 }
             }
+        }
+        // An operand with no area still takes part: Intersect, and Minus Front or Minus Back when
+        // it is the shape the others are cut from, then leave nothing.
+        let is_collapsed = |s: &po::Shape| collapsed.contains(&s.key);
+        let nothing_left = match op {
+            PathfinderOp::Intersect => shapes.iter().any(is_collapsed),
+            PathfinderOp::MinusFront => shapes.first().is_some_and(is_collapsed),
+            PathfinderOp::MinusBack => shapes.last().is_some_and(is_collapsed),
+            _ => false,
+        };
+        if nothing_left {
+            return Some(vec![]);
         }
         shapes.retain(|s| !s.path.is_empty() && s.path.subpaths.iter().all(|sp| sp.anchors.iter().all(|a| a.p.x.is_finite() && a.p.y.is_finite())));
         if shapes.is_empty() {
