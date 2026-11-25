@@ -326,6 +326,45 @@ fn a_text_function_takes_each_argument_as_string_gives_it() {
 }
 
 #[test]
+fn a_symbol_crosses_as_the_text_string_gives_it_and_never_as_data() {
+    let mut r = Realm::with_options(Options { es2015: true, ..Options::default() }, Limits { fuel: 10_000_000, ..Limits::default() });
+    let seen = with_take(&mut r);
+    let texts: Rc<RefCell<Vec<Data>>> = Rc::default();
+    let log = texts.clone();
+    let f: HostFunction = Rc::new(move |args| {
+        log.borrow_mut().extend(args);
+        Ok(Data::Undefined)
+    });
+    r.define_host_object("text", vec![("of".into(), HostItem::TextFunction(f))]).unwrap();
+    r.run("text.of(Symbol('tag'), Symbol())").unwrap();
+    assert_eq!(texts.borrow().as_slice(), [Data::String("Symbol(tag)".into()), Data::String("Symbol()".into())]);
+    // An enumerable Symbol-keyed property is refused; one that is not enumerable is left out.
+    let probe = "var e = 'none'; var v = {a: 1}; v[Symbol('k')] = 2; try { host.take(v); } catch (x) { e = x.name + '|' + x.message; } e";
+    let JsValue::String(out) = r.run(probe).unwrap() else { panic!("not a string") };
+    assert!(out.starts_with("TypeError|") && out.contains("has a Symbol-keyed property"), "{out}");
+    let probe = "var e = 'none'; var v = [1]; v[Symbol('k')] = 2; try { host.take({list: v}); } catch (x) { e = x.name + '|' + x.message; } e";
+    let JsValue::String(out) = r.run(probe).unwrap() else { panic!("not a string") };
+    assert!(out.starts_with("TypeError|") && out.contains(".list has a Symbol-keyed property"), "{out}");
+    assert!(seen.borrow().is_empty(), "the function ran");
+    r.run("var v = {a: 1}; Object.defineProperty(v, Symbol('k'), {value: 2}); host.take(v);").unwrap();
+    assert_eq!(seen.borrow().as_slice(), [Data::Object(vec![("a".into(), Data::Number(1.0))])]);
+}
+
+#[test]
+fn checking_the_symbol_keys_of_a_value_takes_fuel() {
+    // Making the 20,000 hidden keys takes well under 3,000,000 units, in a run of its own; the 500
+    // crossings check 10,000,000 keys.
+    let mut r = Realm::with_options(Options { es2015: true, ..Options::default() }, Limits { fuel: 3_000_000, ..Limits::default() });
+    with_take(&mut r);
+    let setup = "var v = {}; for (var i = 0; i < 20000; i++) Object.defineProperty(v, Symbol(), {value: i}); true";
+    assert_eq!(r.run(setup), Ok(JsValue::Bool(true)));
+    match r.run("for (var j = 0; j < 500; j++) host.take(v);") {
+        Err(RunError { kind: RunErrorKind::Limit(LimitKind::Fuel), .. }) => {}
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
 fn errors_from_the_host_can_be_caught_and_an_abort_cannot() {
     let mut r = realm(1_000_000);
     let f: HostFunction = Rc::new(|a| match a.first() {
