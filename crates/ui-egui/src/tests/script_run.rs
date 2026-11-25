@@ -258,6 +258,27 @@ fn quitting_asks_to_stop_and_stop_undoes_the_run() {
 }
 
 #[test]
+fn a_startup_script_stopped_by_quitting_stays_in_the_status_bar() {
+    let mut app = app();
+    let dir = folder("startup-quit");
+    std::fs::write(dir.join("a.jsx"), "for (;;) {}").unwrap();
+    app.session.attach_startup_scripts_dir(dir.clone());
+    app.session.prefs.show_external_script_warning = false;
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    script_runs::poll(&mut app);
+    assert!(app.session.startup_script_running());
+    script_run::ask_to_close(&mut app);
+    assert!(confirm(&mut app, CLOSE_KIND));
+    finish(&mut app);
+    script_runs::poll(&mut app);
+    let stopped = "The script was stopped and its changes were undone";
+    assert_eq!(app.ui.status, stopped);
+    assert_eq!(app.ui.status_notes.as_ref().and_then(|(_, notes)| notes.first()).map(String::as_str), Some(stopped));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn a_stop_names_the_files_the_run_left_written() {
     let mut app = app();
     app.session.prefs.show_external_script_warning = false;

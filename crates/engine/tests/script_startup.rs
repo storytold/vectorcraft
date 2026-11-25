@@ -217,6 +217,13 @@ fn bad_parameters_are_refused() {
     ] {
         assert!(s.execute("script.startup.run", &p).is_err(), "{p}");
     }
+    // `then` is checked as `script.run` checks its parameters, before any startup script runs.
+    write(&dir, "a.jsx", "vc.log(1);");
+    let then = json!({"source": "vc.log(2);", "bogus": true});
+    let alone = s.execute("script.run", &then).unwrap_err().to_string();
+    let e = s.execute("script.startup.run", &json!({"reason": "menu", "then": then})).unwrap_err().to_string();
+    assert_eq!(e, alone);
+    assert!(started(&s).is_empty(), "no startup script ran");
 }
 
 #[test]

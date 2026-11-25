@@ -578,12 +578,13 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         }
         None => {}
     }
+    let startup = app.session.startup_script_running();
     if let Some(DialogResult::Ok(answer)) = close
         && answer.choice == PromptChoice::Proceed
         && app.session.script_abandon()
     {
         let error = app.session.script_failure_text().unwrap_or_default();
-        crate::script_runs::failed(app, error);
+        crate::script_runs::ended_with_error(app, startup, error);
         forget::<ScriptNotice>(app);
         forget::<ScriptFiles>(app);
         app.sync_views();

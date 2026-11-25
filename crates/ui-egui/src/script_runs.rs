@@ -19,6 +19,7 @@ pub fn poll(app: &mut VectorcraftApp) {
         return;
     }
     let name = app.session.script_name().unwrap_or_default();
+    let startup = app.session.startup_script_running();
     let Some(result) = app.session.script_pump() else {
         // A pump that started the next queued run shows the runs before it that could not start
         // in this frame: with none left running, the app may draw no next one.
@@ -36,7 +37,7 @@ pub fn poll(app: &mut VectorcraftApp) {
                 app.status(format!("Ran {name}"));
             }
         }
-        Err(e) => failed(app, e.to_string()),
+        Err(e) => ended_with_error(app, startup, e.to_string()),
     }
     startup_failures(app);
     app.sync_views();
@@ -171,6 +172,16 @@ pub fn run_at_launch(app: &mut VectorcraftApp) {
     match app.run("script.startup.run", json!({"reason": "launch"})) {
         Ok(reply) => reply_notes(app, &reply),
         Err(e) => app.status(e),
+    }
+}
+
+/// Shows why a run ended without its changes ([`failed`]). When the run was a startup script
+/// (`startup`), the message also stays in the round's notes, so the message of the run that ends
+/// the round does not hide it ([`end_round`]).
+pub(crate) fn ended_with_error(app: &mut VectorcraftApp, startup: bool, error: String) {
+    failed(app, error);
+    if startup {
+        app.ui.startup_notes.push(app.ui.status.clone());
     }
 }
 

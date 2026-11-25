@@ -545,10 +545,13 @@ fn a_stopped_startup_script_says_it_was_stopped_and_the_chosen_script_still_runs
         }
         script_runs::poll(&mut app);
     }
-    assert_eq!(app.ui.status, "The script was stopped and its changes were undone");
+    let stopped = "The script was stopped and its changes were undone".to_string();
+    assert_eq!(app.ui.status, stopped);
     finish(&mut app);
     assert_eq!(started(&app), ["a.jsx", "chosen"]);
-    assert_eq!(app.ui.status, "Ran chosen");
+    // The stopped startup script stays in sight when the chosen script ends, with its message in the hover.
+    assert_eq!(app.ui.status, stopped);
+    assert_eq!(app.ui.status_notes, Some((stopped.clone(), vec![stopped, "Ran chosen".to_string()])));
     let _ = std::fs::remove_dir_all(dir);
 }
 
