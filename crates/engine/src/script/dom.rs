@@ -2,8 +2,10 @@
 //! them, as the help pages <https://ai-scripting.docsforadobe.dev/jsobjref/Application/>,
 //! <https://ai-scripting.docsforadobe.dev/jsobjref/Documents/>,
 //! <https://ai-scripting.docsforadobe.dev/jsobjref/Document/>,
-//! <https://ai-scripting.docsforadobe.dev/jsobjref/PageItems/> and
-//! <https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/> describe them.
+//! <https://ai-scripting.docsforadobe.dev/jsobjref/PageItems/>,
+//! <https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/>,
+//! <https://ai-scripting.docsforadobe.dev/jsobjref/Views/> and
+//! <https://ai-scripting.docsforadobe.dev/jsobjref/View/> describe them.
 //!
 //! The objects are host classes ([`vectorcraft_js::HostClass`]): each holds the run's number, the
 //! document's [`crate::DocState::uid`] and, for art, the object's id, and every read looks the
@@ -25,6 +27,11 @@
 //! - `app.activeDocument` with no document open throws `No active document`.
 //! - Assigning `Document.selection` takes one object, a list of them, `null` or `[]`; every object
 //!   must be one of that document's that can be selected, or nothing changes.
+//! - `Document.views` holds one view while the desktop app gives the document's window
+//!   ([`crate::Session::window_views`]), and none without one. The screen mode is the app's:
+//!   setting it on one view sets it on every view. Its `zoom` is 1 at 100%, from 0.0313 to 640; `screenMode` reads
+//!   Presentation Mode as `ScreenMode.FULLSCREEN`. Changing a view runs no command, is not
+//!   undoable and stays when the run fails.
 //! - Members the help pages list that are not here yet throw an error that says so.
 
 use std::cell::{Cell, RefCell};
@@ -37,7 +44,7 @@ use vectorcraft_geom::{Point, Rect};
 use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMember, Realm, RunError, host_ref, host_ref_parts};
 
 use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current, data_size};
-use crate::{DocState, Document, NodeId, NodeKind, Session};
+use crate::{DocState, Document, NodeId, NodeKind, Session, WindowView};
 
 /// The error for a member read or called with no document open.
 pub const NO_ACTIVE_DOCUMENT: &str = "No active document";
@@ -47,6 +54,8 @@ pub const STALE_ITEM: &str = "Stale page item";
 pub const STALE_DOCUMENT: &str = "Stale document";
 /// The error of `index` and `getByName` when nothing matches.
 pub const NOT_FOUND: &str = "Not found";
+/// The error for a view whose document no longer has a window, or that came from an earlier run.
+pub const STALE_VIEW: &str = "Stale view";
 /// The most objects one read of a selection gives, and the most a selection assignment takes.
 pub const MAX_LISTED: usize = 10_000;
 /// The longest name an object or a path query may have, in bytes.
@@ -1214,6 +1223,154 @@ fn doc_selection(h: &Host, a: &[Data]) -> Answer {
     selection_of(h, doc.uid)
 }
 
+fn doc_views(h: &Host, a: &[Data]) -> Answer {
+    let doc = this_doc(h, a)?;
+    Ok(host_ref("Views", &[float(h.run), float(doc.uid)]))
+}
+
+// ---- Views and View ----
+
+fn views_doc(h: &Host, a: &[Data]) -> std::result::Result<Doc, HostError> {
+    doc_of(h, arg(a, 0), "Views")
+}
+
+/// The window of `doc`, when the app shows one.
+fn window_of(h: &Host, doc: Doc) -> Option<WindowView> {
+    h.session.borrow().window_views.iter().find(|(uid, _)| *uid == doc.uid).map(|(_, v)| *v)
+}
+
+fn views_length(h: &Host, a: &[Data]) -> Answer {
+    let doc = views_doc(h, a)?;
+    Ok(num(if window_of(h, doc).is_some() { 1.0 } else { 0.0 }))
+}
+
+fn views_typename(h: &Host, a: &[Data]) -> Answer {
+    views_doc(h, a)?;
+    Ok(text("Views"))
+}
+
+fn views_parent(h: &Host, a: &[Data]) -> Answer {
+    let doc = views_doc(h, a)?;
+    Ok(doc_ref(h, doc.uid))
+}
+
+fn views_at(h: &Host, a: &[Data]) -> Answer {
+    let doc = views_doc(h, a)?;
+    let first = matches!(arg(a, 1), Data::Number(n) if *n == 0.0);
+    Ok(if first && window_of(h, doc).is_some() { host_ref("View", &[float(h.run), float(doc.uid)]) } else { Data::Undefined })
+}
+
+/// `views.index(key)`: the view at index `key`. A view has no name, so a name finds nothing.
+fn views_index(h: &Host, a: &[Data]) -> Answer {
+    match arg(a, 1) {
+        Data::String(_) => {
+            views_doc(h, a)?;
+            Err(HostError::Error(NOT_FOUND.into()))
+        }
+        Data::Number(_) => match views_at(h, a)? {
+            Data::Undefined => Err(HostError::Error(NOT_FOUND.into())),
+            d => Ok(d),
+        },
+        _ => Err(HostError::Type("give a name or an index".into())),
+    }
+}
+
+/// The document of a `View` and its window, which must still be shown.
+fn this_view(h: &Host, a: &[Data]) -> std::result::Result<(Doc, WindowView), HostError> {
+    let doc = doc_of(h, arg(a, 0), "View")?;
+    let v = window_of(h, doc).ok_or_else(|| HostError::Error(STALE_VIEW.into()))?;
+    Ok((doc, v))
+}
+
+/// Reads the view with `f`, given the document's script coordinates.
+fn read_view(h: &Host, a: &[Data], f: impl FnOnce(&Frame, Coords, &WindowView) -> Data) -> Answer {
+    let (doc, v) = this_view(h, a)?;
+    with_doc(h, doc, |_, st| Ok(f(&frame(st)?, h.dom.coords.get(), &v)))
+}
+
+/// Changes the window of `doc` with `f`. No command runs: the change is not undoable, does not
+/// join the run's undo step and stays when the run fails.
+fn set_window(h: &Host, doc: Doc, f: impl FnOnce(&mut WindowView)) -> Answer {
+    let mut s = h.session.borrow_mut();
+    let v = s.window_views.iter_mut().find(|(uid, _)| *uid == doc.uid).map(|(_, v)| v).ok_or_else(|| HostError::Error(STALE_VIEW.into()))?;
+    f(v);
+    Ok(Data::Undefined)
+}
+
+fn view_typename(h: &Host, a: &[Data]) -> Answer {
+    this_view(h, a)?;
+    Ok(text("View"))
+}
+
+fn view_parent(h: &Host, a: &[Data]) -> Answer {
+    let (doc, _) = this_view(h, a)?;
+    Ok(doc_ref(h, doc.uid))
+}
+
+/// `bounds`: `[left, top, right, bottom]` of the part of the document the canvas shows.
+fn view_bounds(h: &Host, a: &[Data]) -> Answer {
+    read_view(h, a, |f, c, v| f.bounds(c, v.visible()))
+}
+
+fn view_center(h: &Host, a: &[Data]) -> Answer {
+    read_view(h, a, |f, c, v| pair(f.to_script(c, v.center)))
+}
+
+fn view_set_center(h: &Host, a: &[Data]) -> Answer {
+    let (doc, _) = this_view(h, a)?;
+    let p = point(arg(a, 1), "centerPoint")?;
+    let to = with_doc(h, doc, |_, st| frame(st).map(|f| f.to_document(h.dom.coords.get(), p)))?;
+    set_window(h, doc, |v| v.center = to)
+}
+
+fn view_zoom(h: &Host, a: &[Data]) -> Answer {
+    let (_, v) = this_view(h, a)?;
+    Ok(num(v.zoom))
+}
+
+fn view_set_zoom(h: &Host, a: &[Data]) -> Answer {
+    let (doc, _) = this_view(h, a)?;
+    let z = number(arg(a, 1), "zoom")?;
+    let (min, max) = WindowView::ZOOM_RANGE;
+    if !(min..=max).contains(&z) {
+        return Err(HostError::Range(format!("zoom must be from {min} to {max}")));
+    }
+    set_window(h, doc, |v| v.zoom = z)
+}
+
+/// The `ScreenMode` value of each of the app's screen modes: Presentation Mode reads as
+/// `FULLSCREEN`.
+fn screen_mode_name(mode: u8) -> &'static str {
+    match mode {
+        0 => "ScreenMode.MULTIWINDOW",
+        1 => "ScreenMode.DESKTOP",
+        _ => "ScreenMode.FULLSCREEN",
+    }
+}
+
+fn view_screen_mode(h: &Host, a: &[Data]) -> Answer {
+    let (_, v) = this_view(h, a)?;
+    Ok(text(screen_mode_name(v.screen_mode)))
+}
+
+fn view_set_screen_mode(h: &Host, a: &[Data]) -> Answer {
+    let (_, v) = this_view(h, a)?;
+    let mode = match arg(a, 1) {
+        Data::String(s) if s == "ScreenMode.MULTIWINDOW" => 0,
+        Data::String(s) if s == "ScreenMode.DESKTOP" => 1,
+        Data::String(s) if s == "ScreenMode.FULLSCREEN" => 2,
+        _ => return Err(HostError::Type("give a ScreenMode value".into())),
+    };
+    if screen_mode_name(v.screen_mode) == screen_mode_name(mode) {
+        return Ok(Data::Undefined);
+    }
+    // The screen mode is the app's, so every view shows the new one.
+    for (_, v) in &mut h.session.borrow_mut().window_views {
+        v.screen_mode = mode;
+    }
+    Ok(Data::Undefined)
+}
+
 /// The selection of the document `uid`: `null` when nothing is selected, otherwise a new list of
 /// the selected objects.
 fn selection_of(h: &Host, uid: u64) -> Answer {
@@ -1913,6 +2070,7 @@ const ENUMS: &[(&str, &[&str])] = &[
     ("RulerUnits", &["Centimeters", "Qs", "Inches", "Pixels", "Millimeters", "Unknown", "Picas", "Points"]),
     ("DocumentColorSpace", &["CMYK", "RGB"]),
     ("CoordinateSystem", &["ARTBOARDCOORDINATESYSTEM", "DOCUMENTCOORDINATESYSTEM"]),
+    ("ScreenMode", &["DESKTOP", "FULLSCREEN", "MULTIWINDOW"]),
     ("DocumentArtboardLayout", &["Column", "GridByCol", "GridByRow", "RLGridByCol", "RLGridByRow", "RLRow", "Row"]),
     ("DocumentPresetType", &["BasicCMYK", "BasicRGB", "Mobile", "Print", "Video", "Web"]),
     ("DocumentPreviewMode", &["DefaultPreview", "OverprintPreview", "PixelPreview"]),
@@ -1991,13 +2149,38 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("convertCoordinate", method(l, doc_convert)),
         ("pageItems", get(l, doc_page_items)),
         ("selection", property(l, doc_selection, doc_set_selection)),
+        ("views", get(l, doc_views)),
     ]);
     document.extend(
-        ["layers", "artboards", "pathItems", "groupItems", "textFrames", "swatches", "symbols", "views", "activeLayer", "saveAs", "close"]
+        ["layers", "artboards", "pathItems", "groupItems", "textFrames", "swatches", "symbols", "activeLayer", "saveAs", "close"]
             .into_iter()
             .map(|m| later(l, "Document", m)),
     );
     classes.push(class("Document", None, document, None));
+    classes.push(class(
+        "Views",
+        None,
+        named(vec![
+            ("typename", get(l, views_typename)),
+            ("length", get(l, views_length)),
+            ("parent", get(l, views_parent)),
+            ("index", method(l, views_index)),
+        ]),
+        Some(function(l, views_at)),
+    ));
+    classes.push(class(
+        "View",
+        None,
+        named(vec![
+            ("typename", get(l, view_typename)),
+            ("parent", get(l, view_parent)),
+            ("bounds", get(l, view_bounds)),
+            ("centerPoint", property(l, view_center, view_set_center)),
+            ("zoom", property(l, view_zoom, view_set_zoom)),
+            ("screenMode", property(l, view_screen_mode, view_set_screen_mode)),
+        ]),
+        None,
+    ));
     classes.push(class(
         "PageItems",
         None,

@@ -641,6 +641,28 @@ fn a_scripts_file_dialog_keeps_at_most_2048_picked_files() {
 }
 
 #[test]
+fn a_script_sees_the_window_and_sets_its_zoom_centre_and_screen_mode() {
+    let mut app = app();
+    app.canvas_rect = Some(egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(600.0, 400.0)));
+    let before = {
+        let v = app.view_mut().unwrap();
+        v.fitted = true;
+        v.zoom = 1.0;
+        *v
+    };
+    app.session.script_frames = true;
+    let source = "var v = app.activeDocument.views[0]; vc.log(v.bounds[2] - v.bounds[0]); v.zoom = 2;\
+                  v.centerPoint = [10, 20]; v.screenMode = ScreenMode.FULLSCREEN;";
+    app.run("script.run", json!({"source": source, "name": "v.js"})).unwrap();
+    finish(&mut app);
+    let report = app.session.script_report().cloned().unwrap();
+    assert_eq!(report["log"][0].as_f64(), Some(600.0), "the view is as wide as the canvas at 100%");
+    let now = *app.view().unwrap();
+    assert!(now.zoom > before.zoom && now.center != before.center);
+    assert_eq!(app.ui.screen_mode, 2);
+}
+
+#[test]
 fn a_new_app_shows_the_warning_by_default() {
     assert!(Session::new().prefs.show_external_script_warning);
 }

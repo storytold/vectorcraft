@@ -2642,7 +2642,17 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `DocumentPreviewMode.PixelPreview` throws an error that says it is not available yet, and no document is made.
   `showOptionsDialog` true throws `Dialog unavailable` with no document made. A `Document` (https://ai-scripting.docsforadobe.dev/jsobjref/Document/) has `name`,
   `width`, `height`, `rulerUnits`, `documentColorSpace`, `rulerOrigin`, `convertCoordinate(point, source,
-  destination)`, `pageItems` and `selection`. `pageItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PageItems/)
+  destination)`, `pageItems`, `selection` and `views`. `views` (https://ai-scripting.docsforadobe.dev/jsobjref/Views/)
+  holds one view while the document's window is the desktop app's canvas: every document's while the documents are
+  under the tabs, and only the current document's while they are tiled or one floats in a window of its own. Other
+  documents, and every document without a window (headless), have none. `views` has `length`, `[i]` and `index(i)`. The view (https://ai-scripting.docsforadobe.dev/jsobjref/View/) has `typename`,
+  `parent`, `bounds` (`[left, top, right, bottom]` of the part of the document the canvas shows, the box around a
+  rotated canvas), `centerPoint`, `zoom` and `screenMode`, in the run's coordinate system. `zoom` is 1 at 100% and goes
+  from 0.0313 to 640 (VectorCraft's own range); a zoom outside it throws a `RangeError`. `screenMode` reads Normal as
+  `ScreenMode.MULTIWINDOW`, Full Screen Mode with Menu Bar as `ScreenMode.DESKTOP` and Full Screen Mode and
+  Presentation Mode as `ScreenMode.FULLSCREEN` (VectorCraft's own mapping); the screen mode is the app's, so setting it
+  on one view sets it on every view. Changing a view runs no command, adds
+  no undo step and stays when the run fails; a view whose document no longer has a window throws `Stale view`. `pageItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PageItems/)
   lists every object in the document's layers, the objects inside groups, compound paths, blends, envelopes, repeats
   and intertwines included, and has `length`, `[i]`, `index(key)`, `getByName(name)` and `removeAll()`; `i in` either
   collection is true for each

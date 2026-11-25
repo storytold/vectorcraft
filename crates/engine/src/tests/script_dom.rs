@@ -192,6 +192,79 @@ fn ruler_origin_round_trips_without_moving_art() {
     assert!(failure(&mut s, "app.activeDocument.rulerOrigin = [1e12, 0];").contains("outside the canvas"));
 }
 
+/// A window on the document of [`doc`] that shows 300 × 200 pt around (200, 150) at 200%.
+fn window() -> WindowView {
+    WindowView { center: vectorcraft_geom::Point::new(200.0, 150.0), zoom: 2.0, rotation: 0.0, size: [600.0, 400.0], screen_mode: 0 }
+}
+
+/// Shows the active document in the window `v`.
+fn show(s: &mut Session, v: WindowView) {
+    let uid = s.active().unwrap().uid;
+    s.window_views = vec![(uid, v)];
+}
+
+/// The window of the active document.
+fn shown(s: &Session) -> Option<WindowView> {
+    let uid = s.active().unwrap().uid;
+    s.window_views.iter().find(|(u, _)| *u == uid).map(|(_, v)| *v)
+}
+
+#[test]
+fn the_view_shows_the_part_of_the_document_its_window_shows() {
+    let (mut s, ..) = doc();
+    let none = "var v = app.activeDocument.views; vc.log(v.length); vc.log(v[0] === undefined);";
+    assert_eq!(log(&mut s, none), vec![json!(0), json!(true)], "a document without a window has no view");
+    show(&mut s, window());
+    // A rectangle drawn over the visible part of the document has the view's bounds.
+    let r = window().visible();
+    rect(&mut s, r.x0, r.y0, r.width(), r.height());
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument; var v = d.views[0]; vc.log(d.views.length); vc.log(v.typename);\
+         vc.log(v.parent === d); vc.log(v.bounds); var r = d.pageItems[d.pageItems.length - 1];\
+         vc.log(r.geometricBounds); vc.log(v.centerPoint); vc.log(r.position[0] + r.width / 2);\
+         vc.log(r.position[1] - r.height / 2);",
+    );
+    assert_eq!(out[..3], [json!(1), json!("View"), json!(true)]);
+    assert_eq!(out[3], out[4], "the view's bounds are the visible area");
+    assert_eq!(out[5], json!([out[6], out[7]]), "the centre is the middle of the visible area");
+    // Turning the view shows more of the document around the same centre.
+    show(&mut s, WindowView { rotation: 30.0, ..window() });
+    let turned = log(&mut s, "vc.log(app.activeDocument.views[0].bounds);");
+    let width = |b: &Value| b[2].as_f64().unwrap() - b[0].as_f64().unwrap();
+    assert!(width(&turned[0]) > width(&out[3]));
+}
+
+#[test]
+fn setting_the_zoom_changes_the_view_without_an_undo_step() {
+    let (mut s, ..) = doc();
+    show(&mut s, window());
+    // Another document's window.
+    s.window_views.push((u64::MAX, window()));
+    let steps = undo_steps(&s);
+    let out = log(
+        &mut s,
+        "var v = app.activeDocument.views[0]; var b = v.bounds; v.zoom = 4; vc.log(v.zoom);\
+         vc.log(v.bounds[2] - v.bounds[0] < b[2] - b[0]); v.centerPoint = [100, 100]; vc.log(v.centerPoint);\
+         v.screenMode = ScreenMode.FULLSCREEN; vc.log(v.screenMode);",
+    );
+    assert_eq!(out, vec![json!(4), json!(true), json!([100, 100]), json!("ScreenMode.FULLSCREEN")]);
+    let now = shown(&s).unwrap();
+    assert!(now.zoom > window().zoom);
+    assert!(now.center != window().center && now.screen_mode != window().screen_mode);
+    assert_eq!(s.window_views[1].1.screen_mode, now.screen_mode, "the screen mode is the same in every window");
+    assert_eq!(s.window_views[1].1.zoom, window().zoom, "the zoom is each window's own");
+    assert_eq!(undo_steps(&s), steps, "a view change is not undoable");
+    // A bad value throws and leaves the view as it is.
+    for bad in ["v.zoom = 0;", "v.zoom = 1000;", "v.zoom = '2';", "v.centerPoint = [1];", "v.screenMode = 'FULLSCREEN';"] {
+        failure(&mut s, &format!("var v = app.activeDocument.views[0]; {bad}"));
+        assert_eq!(shown(&s), Some(now), "{bad}");
+    }
+    // A run that fails after changing the view keeps the change.
+    failure(&mut s, "app.activeDocument.views[0].zoom = 1; throw new Error('stop');");
+    assert_eq!(shown(&s).map(|v| v.zoom), Some(1.0));
+}
+
 #[test]
 fn page_item_properties_join_one_undo_step() {
     let (mut s, a, _) = doc();

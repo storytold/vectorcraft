@@ -3,6 +3,36 @@ use super::history::{History, HistoryEntry};
 use super::interaction::{Interaction, LastTransform, UndoGroup};
 use super::{Arc, Document, NodeId, NodeKind, Selection, Value, cmd, file_access};
 
+/// A document's window as the desktop app shows it ([`crate::Session::window_views`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WindowView {
+    /// The document point at the centre of the canvas.
+    pub center: vectorcraft_geom::Point,
+    /// The zoom: 1 is 100%.
+    pub zoom: f64,
+    /// The view's rotation in degrees, clockwise on screen.
+    pub rotation: f64,
+    /// The canvas's width and height in document points at a zoom of 1.
+    pub size: [f64; 2],
+    /// View › Screen Mode: 0 Normal, 1 Full Screen Mode with Menu Bar, 2 Full Screen Mode, 3
+    /// Presentation Mode (`view.screenMode`).
+    pub screen_mode: u8,
+}
+
+impl WindowView {
+    /// The smallest and largest zoom the canvas shows.
+    pub const ZOOM_RANGE: (f64, f64) = (0.0313, 640.0);
+
+    /// The part of the document the canvas shows: the box around its four corners, which a
+    /// rotated view turns.
+    pub fn visible(&self) -> vectorcraft_geom::Rect {
+        let (sin, cos) = self.rotation.to_radians().sin_cos();
+        let (w, h) = (self.size[0] / self.zoom / 2.0, self.size[1] / self.zoom / 2.0);
+        let (x, y) = (w * cos.abs() + h * sin.abs(), w * sin.abs() + h * cos.abs());
+        vectorcraft_geom::Rect::new(self.center.x - x, self.center.y - y, self.center.x + x, self.center.y + y)
+    }
+}
+
 /// Per-document editing state.
 #[derive(Clone, Debug)]
 pub struct DocState {

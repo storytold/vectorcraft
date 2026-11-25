@@ -4,6 +4,7 @@
 //! `alert`, `confirm`, `prompt` or a `File` or `Folder` file dialog, waits for the person's answer.
 
 use serde_json::json;
+use vectorcraft_engine::WindowView;
 
 use crate::VectorcraftApp;
 use crate::dialogs::script_run;
@@ -21,7 +22,10 @@ pub fn poll(app: &mut VectorcraftApp) {
     }
     let name = app.session.script_name().unwrap_or_default();
     let cursor_settings = (app.session.caps_lock, app.session.prefs.use_precise_cursors);
-    let Some(result) = app.session.script_pump() else {
+    let shared = share_views(app);
+    let pumped = app.session.script_pump();
+    take_views(app, &shared);
+    let Some(result) = pumped else {
         // The app draws no more frames while the run waits: its question opens in this one.
         ask(app);
         return;
@@ -43,6 +47,51 @@ pub fn poll(app: &mut VectorcraftApp) {
         Err(e) => failed(app, e.to_string()),
     }
     app.sync_views();
+}
+
+/// Gives each document whose window has the canvas's size its view, which a running script reads
+/// as `Document.views`: every document's while the documents are under the tabs, and only the
+/// current document's, whose window holds the canvas, while they are tiled or a document floats in
+/// a window of its own. A document without one gets none. → the views given, for [`take_views`].
+pub(crate) fn share_views(app: &mut VectorcraftApp) -> Vec<(u64, WindowView)> {
+    let ui_zoom = f64::from(app.canvas_ui_zoom);
+    let size = app.canvas_rect.map(|r| [f64::from(r.width()) * ui_zoom, f64::from(r.height()) * ui_zoom]);
+    let mode = app.ui.screen_mode;
+    let tabbed = app.canvas.panes.last.is_empty() && app.ui.floating.is_empty();
+    let current = app.session.active().map(|d| d.uid);
+    let shared: Vec<(u64, WindowView)> = match size {
+        Some(size) => app
+            .view_uids
+            .iter()
+            .zip(&app.views)
+            .filter(|(uid, v)| v.fitted && (tabbed || current == Some(**uid)))
+            .map(|(uid, v)| (*uid, WindowView { center: v.center, zoom: v.zoom, rotation: v.rotation, size, screen_mode: mode }))
+            .collect(),
+        None => vec![],
+    };
+    app.session.window_views.clone_from(&shared);
+    shared
+}
+
+/// Takes the zoom, centre and screen mode a script gave the views [`share_views`] gave.
+pub(crate) fn take_views(app: &mut VectorcraftApp, shared: &[(u64, WindowView)]) {
+    let (min, max) = WindowView::ZOOM_RANGE;
+    for (uid, before) in shared {
+        let Some(now) = app.session.window_views.iter().find(|(u, _)| u == uid).map(|(_, v)| *v) else { continue };
+        if now == *before {
+            continue;
+        }
+        if let Some(v) = app.view_uids.iter().position(|u| u == uid).and_then(|k| app.views.get_mut(k)) {
+            v.zoom = now.zoom.clamp(min, max);
+            v.center = now.center;
+        }
+    }
+    // The screen mode is the app's: a script that sets it on any view sets it on every view.
+    if let (Some((_, before)), Some((_, now))) = (shared.first(), app.session.window_views.first())
+        && now.screen_mode != before.screen_mode
+    {
+        app.ui.screen_mode = now.screen_mode.min(3);
+    }
 }
 
 /// Opens what the run waits at, once no other dialog is open: the script's own dialog, or the
