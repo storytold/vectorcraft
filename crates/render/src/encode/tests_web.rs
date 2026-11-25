@@ -93,6 +93,13 @@ fn lossy_makes_runs_and_smaller_gifs() {
     let mut kept = ix.clone();
     lossy(&mut kept, &px, 100, &fixed);
     assert_eq!(kept, ix);
+    // With one fixed entry of three, no pixel moves into or out of it, and the others still merge.
+    let palette: Vec<[u8; 3]> = vec![[100, 0, 0], [110, 0, 0], [120, 0, 0]];
+    let indices: Vec<u8> = vec![1, 0, 0, 1, 1, 2];
+    let px: Vec<u8> = indices.iter().flat_map(|&i| palette[usize::from(i)].into_iter().chain([255])).collect();
+    let mut part = Indexed { width: 2, height: 3, palette, transparent: None, indices };
+    lossy(&mut part, &px, 100, &[0]);
+    assert_eq!(part.indices, vec![1, 0, 0, 1, 1, 1]);
 }
 
 #[test]

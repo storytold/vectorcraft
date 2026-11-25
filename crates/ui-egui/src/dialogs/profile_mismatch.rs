@@ -1,57 +1,41 @@
 //! The questions Edit › Color Settings' Ask boxes add (Profile Mismatches: Ask When Opening and
-//! Ask When Pasting, Missing Profiles: Ask When Opening), one dialog kind each for opening and for
-//! pasting.
+//! Ask When Pasting, Missing Profiles: Ask When Opening), one dialog each for opening and for
+//! pasting, both on the window's dialog host.
 //!
 //! Opening ([`OPEN_KIND`]): a document whose color mode's profile is not the working space asks
 //! whether to use that profile, convert the colors to the working space or discard the profile; one
 //! with no profile asks whether to leave it, assign the working space or assign a profile. The
 //! choice the policy makes is chosen first. OK opens the document as chosen; Cancel doesn't open
-//! it. The file read waits in [`VectorcraftApp::pending_profile_open`]. Fields: `issue` (`mismatch`
-//! | `missing`), `name` (the file's), `model` (`RGB` | `CMYK`), `profile` (the one it is tagged
-//! with), `working`, `choice` (a `profileChoice` of `document.open`) and `assignProfile`.
+//! it. The file read waits in [`VectorcraftApp::pending_profile_open`]; [`pump`] takes the answer.
+//! The dialog's fields are `action` (`useEmbedded`, `convertToWorking`, `discard`, `leaveAsIs`,
+//! `assignWorking` or `assignProfile`) and, with `assignProfile`, `profile`.
 //!
 //! Pasting ([`PASTE_KIND`]): colors copied, or dragged ([`DROP`]), from a document whose profile is
 //! not this document's ask whether to keep their numbers or convert them. OK runs the paste or the
-//! drop with `profileMismatch`; Cancel pastes or drops nothing. Fields: `mismatches` (as
-//! `clipboard.profileMismatch` lists them), `choice` (`preserveNumbers` | `convert`, or with both
-//! models `{rgb, cmyk}` of those, one for each), `__command`
-//! and `__params` (the paste or drop to run), and `__doc` (the uid of the document it was asked in).
+//! drop with `profileMismatch`; Cancel pastes or drops nothing. The dialog has one radio field per
+//! model (`rgb`, `cmyk`: `preserveNumbers` | `convert`). What is being pasted waits in
+//! [`VectorcraftApp::pending_paste`].
 
+use craft::color_ui::ui::{ProfileAction, ProfileAnswer, ProfileMismatchDialog, ProfileMode, ProfileQuestion as PromptQuestion};
+use craft::ui::contract::Bind;
+use craft::ui::dialog::{DialogId, DialogResult, dialog_id};
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::runtime::env::Label;
 use serde_json::{Value, json};
 use vectorcraft_color::cms::{self, ProfileKind};
 use vectorcraft_engine::cmd::colormgmt::{ProfileChoice, ProfileQuestion};
 use vectorcraft_engine::cmd::fileio::{self, ReadFile};
 use vectorcraft_engine::file_access::ScopeHandle;
 
-use super::swatch_options::{grid, label};
-use super::{DialogResult, DialogSpec};
-use crate::state::Dialog;
-use crate::{VectorcraftApp, widgets};
+use crate::VectorcraftApp;
+use crate::placing::Taken;
 
-/// The dialog kind of the question opening asks.
+/// The key of the question opening asks (the `dialog` an open answers with).
 pub const OPEN_KIND: &str = "profileMismatchOpen";
-/// The dialog kind of the question pasting asks.
+/// The key of the question pasting asks.
 pub const PASTE_KIND: &str = "profileMismatchPaste";
 /// The command a drag of artwork from another document runs, which asks as a paste does.
 pub const DROP: &str = "edit.dropSelection";
-
-pub(super) const OPEN_SPEC: DialogSpec = DialogSpec {
-    heading: |d| if d.str("issue") == "missing" { tl!("Missing Profile") } else { tl!("Embedded Profile Mismatch") }.into(),
-    body: open_body,
-    confirm: open_confirm,
-    min_width: 400.0,
-    max_width: Some(480.0),
-    ..DialogSpec::FORM
-};
-
-pub(super) const PASTE_SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("Paste Profile Mismatch").into(),
-    body: paste_body,
-    confirm: paste_confirm,
-    min_width: 400.0,
-    max_width: Some(480.0),
-    ..DialogSpec::FORM
-};
 
 /// A file read for File › Open that waits for the answer to its profile question.
 pub(crate) struct PendingOpen {
@@ -59,31 +43,43 @@ pub(crate) struct PendingOpen {
     /// Where it was read from: it goes on the recent files once it opens.
     path: Option<String>,
     /// The automation roots in force where the open was asked for: its linked files are read, and
-    /// the document is installed, under them and those of the caller that confirms.
+    /// the document is installed, under them and those of the caller that answers.
     scope: ScopeHandle,
     /// It was read off the UI thread ([`crate::opening`]): the rest of its read is done there too
     /// once the question is answered. An open that answers at once (a path a caller asked for)
-    /// finishes before OK returns.
+    /// finishes before the answer returns.
     background: bool,
+    /// The question the dialog asked ([`question_key`]); `Null` before one was asked. An answer the
+    /// file refuses while the question is unchanged is a failure, not a new question.
+    asked: Value,
 }
 
-/// The choices of a mismatch (`missing`: of a missing profile), as (`choice`, label).
-fn open_choices(missing: bool) -> [(&'static str, &'static str); 3] {
-    if missing {
-        [("leave", tl!("Leave as is")), ("assignWorking", tl!("Assign the working space")), ("assign", tl!("Assign profile:"))]
-    } else {
-        [
-            ("useEmbedded", tl!("Use the embedded profile")),
-            ("convert", tl!("Convert the colors to the working space")),
-            ("discard", tl!("Discard the embedded profile")),
-        ]
-    }
+/// A paste or drop that waits for the answer to its Paste Profile Mismatch question.
+pub(crate) struct PasteAsk {
+    /// The paste command, or [`DROP`].
+    command: String,
+    /// The command's params, without `profileMismatch`.
+    params: Value,
+    /// The models whose profiles differ, as `clipboard.profileMismatch` lists them.
+    mismatches: Vec<Value>,
+    /// The uid of the document the question was asked in: a paste that runs at once pastes nothing
+    /// once another document is active.
+    doc: Option<u64>,
+    /// The chain of a deferred paste (one that waits for its clipboard), which placing answers.
+    deferred: Option<u64>,
 }
+
+/// The engine's choice id and the dialog's action for each answer but Assign profile.
+const ACTIONS: [(&str, ProfileAction); 5] = [
+    ("useEmbedded", ProfileAction::UseEmbedded),
+    ("convert", ProfileAction::ConvertToWorking),
+    ("discard", ProfileAction::Discard),
+    ("leave", ProfileAction::LeaveAsIs),
+    ("assignWorking", ProfileAction::AssignWorking),
+];
 
 /// The choices pasting offers, as (`choice`, label).
-fn paste_choices() -> [(&'static str, &'static str); 2] {
-    [("preserveNumbers", tl!("Preserve the color numbers")), ("convert", tl!("Convert to keep the colors' appearance"))]
-}
+const PASTE_CHOICES: [(&str, &str); 2] = [("preserveNumbers", "Preserve the color numbers"), ("convert", "Convert to keep the colors' appearance")];
 
 /// Open `file`, read for File › Open from `path`, as `document.open` does, unless Edit › Color
 /// Settings asks about its profile ([`ReadFile::ask`]): then the dialog asks first, and the result
@@ -92,7 +88,7 @@ fn paste_choices() -> [(&'static str, &'static str); 2] {
 /// goes on the recent files ([`crate::io::opened`]). `background`: the file was read off the UI
 /// thread, and the rest of its read after an answer is done there too.
 pub fn open_or_ask(app: &mut VectorcraftApp, file: ReadFile, path: Option<String>, background: bool) -> Result<Value, String> {
-    ask_or_open(app, PendingOpen { file, path, scope: ScopeHandle::capture(), background })
+    ask_or_open(app, PendingOpen { file, path, scope: ScopeHandle::capture(), background, asked: Value::Null })
 }
 
 /// [`open_or_ask`] for a file that has its scope already. While another dialog is open (a paste
@@ -104,33 +100,55 @@ fn ask_or_open(app: &mut VectorcraftApp, mut pending: PendingOpen) -> Result<Val
         let scope = pending.scope.clone();
         return open_now(app, pending, scope);
     };
-    if app.pending_profile_open.is_some() || app.ui.dialog.is_some() {
+    if app.pending_profile_open.is_some() || app.any_dialog_open() {
         app.queued_profile_opens.push_back(pending);
         return Ok(json!({ "dialog": OPEN_KIND, "queued": true }));
     }
-    app.ui.dialog = Some(Dialog::new(OPEN_KIND, question_fields(&q, &pending.file.name())));
+    ask(app, pending, &q)
+}
+
+/// Ask question `q` about `pending` on the host, and keep the file waiting for the answer.
+fn ask(app: &mut VectorcraftApp, mut pending: PendingOpen, q: &ProfileQuestion) -> Result<Value, String> {
+    pending.asked = question_key(q);
+    let Some(dialogs) = app.dialogs() else {
+        // No window to ask in: the policy decides, as when the Ask box is off.
+        let choice = ProfileChoice::parse(q.default.id(), None, "document.open").map_err(|e| e.to_string())?;
+        return finish_open(app, pending, choice);
+    };
+    let dialog = open_dialog(&pending.file.name(), q);
     app.pending_profile_open = Some(pending);
+    dialogs.with(|h| h.open(dialog));
     Ok(json!({ "dialog": OPEN_KIND }))
 }
 
-/// The open dialog's fields for question `q` about the file named `name`.
-fn question_fields(q: &ProfileQuestion, name: &str) -> Value {
-    json!({
-        "issue": q.issue.id(),
-        "name": name,
-        "model": q.model_label(),
-        "profile": q.profile,
-        "working": q.working,
-        "choice": q.default.id(),
-        "assignProfile": q.working,
-    })
+/// What identifies question `q`: when it is the same after a refused answer, nothing changed.
+fn question_key(q: &ProfileQuestion) -> Value {
+    json!({ "issue": q.issue.id(), "model": q.model_label(), "profile": q.profile, "working": q.working })
+}
+
+/// The dialog that asks `q` about the file named `name`, starting on the choice the policy makes.
+// PLAN: the Assign profile list starts on its first name, where production started on the working space.
+fn open_dialog(name: &str, q: &ProfileQuestion) -> ProfileMismatchDialog {
+    let (mode, kind) = if q.model_label() == "CMYK" { (ProfileMode::Cmyk, ProfileKind::Cmyk) } else { (ProfileMode::Rgb, ProfileKind::Rgb) };
+    let missing = q.issue.id() == "missing";
+    let question =
+        if missing { PromptQuestion::missing(&q.working) } else { PromptQuestion::mismatch(q.profile.as_deref().unwrap_or_default(), &q.working) };
+    let mut dialog = ProfileMismatchDialog::new(name, mode, question).rememberable(false);
+    if let Some((_, action)) = ACTIONS.iter().find(|(id, _)| *id == q.default.id()) {
+        dialog = dialog.action(*action);
+    }
+    if missing {
+        let names = crate::panels::separations::profile_entries(kind, None).into_iter().map(|(id, _)| id).collect();
+        dialog = dialog.profiles(names);
+    }
+    dialog
 }
 
 /// With no dialog open, the next file waiting for its profile question asks it, or opens as its
 /// policy says when the question is gone (Color Settings changed meanwhile). A file that fails to
 /// open is reported, and the next one comes.
 pub(crate) fn ask_next(app: &mut VectorcraftApp) {
-    while app.pending_profile_open.is_none() && app.ui.dialog.is_none() {
+    while app.pending_profile_open.is_none() && !app.any_dialog_open() {
         let Some(next) = app.queued_profile_opens.pop_front() else { return };
         let name = next.file.name();
         if let Err(e) = ask_or_open(app, next) {
@@ -139,85 +157,65 @@ pub(crate) fn ask_next(app: &mut VectorcraftApp) {
     }
 }
 
-/// The `profileChoice` the open dialog's fields give.
-fn open_choice(d: &Dialog) -> Result<ProfileChoice, String> {
-    let choice = d.str("choice");
-    let profile = d.str("assignProfile");
-    let profile = (choice == "assign").then_some(profile.as_str());
-    ProfileChoice::parse(&choice, profile, "ui.dialog.confirm").map_err(|e| e.to_string())
+/// The `profileChoice` the dialog's answer gives.
+fn open_choice(answer: ProfileAnswer) -> Result<ProfileChoice, String> {
+    let (id, profile) = match answer.action {
+        ProfileAction::AssignProfile => ("assign", answer.profile.as_deref()),
+        action => (ACTIONS.iter().find(|(_, a)| *a == action).map(|(id, _)| *id).ok_or("this question has no such choice")?, None),
+    };
+    ProfileChoice::parse(id, profile, "ui.dialog.confirm").map_err(|e| e.to_string())
 }
 
-fn open_body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let missing = d.str("issue") == "missing";
-    let (name, model, profile, working) = (d.str("name"), d.str("model"), d.str("profile"), d.str("working"));
-    let vars = [("name", name.as_str()), ("model", model.as_str()), ("profile", profile.as_str()), ("working", working.as_str())];
-    let text = if missing {
-        tl!("“{name}” is not tagged with a {model} profile.")
-    } else {
-        tl!("“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.")
-    };
-    ui.label(crate::i18n::fmt(text, &vars));
-    ui.add_space(10.0);
-    let choice = d.str("choice");
-    for (value, text) in open_choices(missing) {
-        ui.horizontal(|ui| {
-            if widgets::radio(ui, text, choice == value, true) {
-                d.fields.insert("choice".into(), json!(value));
-            }
-            if value == "assign" {
-                let kind = if model == "CMYK" { ProfileKind::Cmyk } else { ProfileKind::Rgb };
-                let current = d.str("assignProfile");
-                ui.add_enabled_ui(choice == "assign", |ui| {
-                    if let Some(n) = crate::panels::separations::profile_dropdown(ui, "profile-mismatch-assign", &current, kind, None) {
-                        d.fields.insert("assignProfile".into(), json!(n));
-                    }
-                });
-            }
-        });
+/// Run what the open dialogs and the paste question left to do, once per frame: open the file the
+/// answer opens (or forget it on Cancel), run the paste that was answered, and ask the next file's
+/// question once no dialog is open.
+pub(crate) fn pump(app: &mut VectorcraftApp, _: &egui::Context) {
+    let answered = app.dialogs().and_then(|d| d.with(|h| h.take::<ProfileMismatchDialog>()));
+    match answered.map(DialogResult::ok) {
+        Some(Some(answer)) => answer_open(app, answer),
+        Some(None) => cancel_open(app),
+        None => {}
     }
-    false
+    pump_paste(app);
+    if !app.any_dialog_open() {
+        ask_next(app);
+    }
 }
 
-/// OK: open the waiting file as chosen, under the automation roots of the open and those of the
-/// caller that confirms both. A choice the file refuses keeps the dialog open. When Color Settings
-/// changed the question since it was asked, the dialog asks the question as it stands now instead,
-/// or the file opens as its policy says when there is no question any more. The next file waiting
-/// for its question asks it once no dialog is open ([`settle`]).
-fn open_confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
-    let choice = open_choice(d)?;
-    let Some(mut pending) = app.pending_profile_open.take() else {
-        app.ui.dialog = None;
-        return Ok(Value::Null);
-    };
+/// OK: open the waiting file as chosen.
+fn answer_open(app: &mut VectorcraftApp, answer: ProfileAnswer) {
+    let Some(pending) = app.pending_profile_open.take() else { return };
+    match open_choice(answer) {
+        // A failed open is reported where it fails.
+        Ok(choice) => drop(finish_open(app, pending, choice)),
+        Err(e) => app.status(e),
+    }
+}
+
+/// Open the waiting `pending` as `choice`, under the automation roots of the open and those of the
+/// caller that answers both. When Color Settings changed the question since it was asked, the
+/// dialog asks the question as it stands now instead, or the file opens as its policy says when
+/// there is no question any more.
+fn finish_open(app: &mut VectorcraftApp, mut pending: PendingOpen, choice: ProfileChoice) -> Result<Value, String> {
     let scope = pending.scope.clone().within_current();
     if let Err(e) = scope.clone().run(|| pending.file.answer(choice)) {
-        // The question changed: ask it as it is now (or open by the policy when it is gone).
-        let now = |q: &ProfileQuestion| question_fields(q, "");
-        let asked = |q: &ProfileQuestion| ["issue", "model", "profile", "working"].iter().all(|k| now(q).get(*k) == d.fields.get(*k));
+        let e = e.to_string();
         return match pending.file.ask() {
-            Some(q) if asked(&q) => {
-                app.pending_profile_open = Some(pending);
-                Err(e.to_string())
+            Some(q) if question_key(&q) == pending.asked => {
+                crate::io::report_open_error(app, &pending.file.name(), &e);
+                Err(e)
             }
-            Some(q) => {
-                app.ui.dialog = Some(Dialog::new(OPEN_KIND, question_fields(&q, &pending.file.name())));
-                app.pending_profile_open = Some(pending);
-                Ok(json!({ "dialog": OPEN_KIND }))
-            }
-            None => {
-                app.ui.dialog = None;
-                open_pending(app, pending, scope)
-            }
+            Some(q) => ask(app, pending, &q),
+            None => open_pending(app, pending, scope),
         };
     }
-    app.ui.dialog = None;
     open_pending(app, pending, scope)
 }
 
 /// Open `pending`, answered or without a question, under `scope`; a failure is reported. A file read
 /// off the UI thread does the rest of its read (its linked files and type) there too
 /// ([`crate::opening::finish_answered`]).
-fn open_pending(app: &mut VectorcraftApp, pending: PendingOpen, scope: ScopeHandle) -> DialogResult {
+fn open_pending(app: &mut VectorcraftApp, pending: PendingOpen, scope: ScopeHandle) -> Result<Value, String> {
     let name = pending.file.name();
     let r = open_now(app, pending, scope);
     if let Err(e) = &r {
@@ -227,20 +225,13 @@ fn open_pending(app: &mut VectorcraftApp, pending: PendingOpen, scope: ScopeHand
 }
 
 /// Open `pending` under `scope` without reporting a failure. A file read off the UI thread with part
-/// of its read left ([`ReadFile::read_left`]) does that part there ([`crate::opening::finish_answered`])
-/// → `{background: true, status}`; when no thread can start, it opens at once.
+/// of its read left ([`ReadFile::read_left`]) does that part on a job of its own
+/// ([`crate::opening::finish_answered`]) → `{background: true, status}`.
 fn open_now(app: &mut VectorcraftApp, pending: PendingOpen, scope: ScopeHandle) -> Result<Value, String> {
     let PendingOpen { file, path, background, .. } = pending;
-    let file = match &path {
-        Some(p) if background && file.read_left() && crate::opening::available() => {
-            match crate::opening::finish_answered(app, p, file, scope.clone()) {
-                Ok(r) => return Ok(r),
-                Err(Some(file)) => *file,
-                Err(None) => return Err("the file stopped being read (please report this bug)".to_string()),
-            }
-        }
-        _ => file,
-    };
+    if let Some(p) = path.as_deref().filter(|_| background && file.read_left() && crate::opening::available()) {
+        return Ok(crate::opening::finish_answered(app, p, file, scope));
+    }
     scope.run(|| {
         let r = fileio::open_read(&mut app.session, file).map_err(|e| e.to_string())?;
         crate::io::opened(app, &r);
@@ -252,38 +243,37 @@ fn open_now(app: &mut VectorcraftApp, pending: PendingOpen, scope: ScopeHandle) 
 }
 
 /// Cancel, or the dialog closed some other way: the waiting file doesn't open. The next file waiting
-/// for its question asks it once no dialog is open ([`settle`]).
+/// for its question asks it once no dialog is open ([`pump`]).
 pub(crate) fn cancel_open(app: &mut VectorcraftApp) {
     app.pending_profile_open = None;
-}
-
-/// A file still waiting once its dialog is gone (another dialog took its place) doesn't open; with
-/// no dialog open, the next file waiting for its question asks it.
-pub(crate) fn settle(app: &mut VectorcraftApp) {
-    if app.pending_profile_open.is_some() && !app.ui.dialog.as_ref().is_some_and(|d| d.kind == OPEN_KIND) {
-        app.pending_profile_open = None;
-    }
-    ask_next(app);
 }
 
 /// Before running paste `command` (or `edit.dropSelection`, a drag from another document) with
 /// `params`: when Ask When Pasting is on, `params` don't say what to do (`profileMismatch`) and the
 /// pasted or dropped colors come from another profile, open the dialog instead and answer
 /// `{dialog}`.
-pub fn ask_paste(app: &mut VectorcraftApp, command: &str, params: &Value) -> Option<DialogResult> {
+pub fn ask_paste(app: &mut VectorcraftApp, command: &str, params: &Value) -> Option<Result<Value, String>> {
     // A null choice is no choice, as the paste commands read it.
     if params.get("profileMismatch").is_some_and(|v| !v.is_null()) || !cms::working_settings().ask_mismatch_paste {
         return None;
     }
     let mismatches = paste_mismatches(app, command, params).filter(|a| !a.is_empty())?;
-    let choice = first_choice(&mismatches);
-    let doc = app.session.active().map(|st| st.uid);
-    let fields = json!({ "mismatches": mismatches, "choice": choice, "__command": command, "__params": params, DOC: doc });
-    // A deferred paste this dialog asked about gives way to the new one.
-    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == PASTE_KIND) {
+    open_paste(app, command, params, mismatches)
+}
+
+/// Open the paste question about `mismatches` for `command` with `params`; `None` when there is no
+/// window to ask in (the paste then runs as the policy says, as when the box is off). One question
+/// is open at a time: the host replaces an open one, and a deferred paste it asked about gives way.
+fn open_paste(app: &mut VectorcraftApp, command: &str, params: &Value, mismatches: Vec<Value>) -> Option<Result<Value, String>> {
+    let ctx = app.ui_ctx.clone()?;
+    let dialogs = app.dialogs()?;
+    if app.pending_paste.as_ref().is_some_and(|ask| ask.deferred.is_some()) {
         crate::placing::cancel_swatch_paste(app);
     }
-    app.ui.dialog = Some(Dialog::new(PASTE_KIND, fields));
+    let dialog = paste_dialog(&ctx, &mismatches);
+    let doc = app.session.active().map(|st| st.uid);
+    app.pending_paste = Some(PasteAsk { command: command.to_string(), params: params.clone(), mismatches, doc, deferred: None });
+    dialogs.with(|h| h.open(dialog));
     Some(Ok(json!({ "dialog": PASTE_KIND })))
 }
 
@@ -314,13 +304,17 @@ fn allowed(m: &Value, value: &str) -> bool {
     value != "convert" || convertible(m)
 }
 
+/// The choice mismatch `m` starts on: its model's policy.
+fn default_choice(m: &Value) -> &str {
+    m["default"].as_str().unwrap_or("preserveNumbers")
+}
+
 /// The choice the paste question starts on: the model's policy for one model, and for both a
 /// choice for each (`{rgb, cmyk}`), each starting on its model's policy.
 fn first_choice(mismatches: &[Value]) -> Value {
-    let default = |m: &Value| m["default"].as_str().unwrap_or("preserveNumbers").to_string();
     match mismatches {
-        [m] => json!(default(m)),
-        _ => Value::Object(mismatches.iter().filter_map(|m| Some((m["model"].as_str()?.to_string(), json!(default(m))))).collect()),
+        [m] => json!(default_choice(m)),
+        _ => Value::Object(mismatches.iter().filter_map(|m| Some((m["model"].as_str()?.to_string(), json!(default_choice(m))))).collect()),
     }
 }
 
@@ -329,97 +323,113 @@ fn picked<'a>(choice: &'a Value, model: &str) -> &'a str {
     choice.as_str().or_else(|| choice.get(model).and_then(Value::as_str)).unwrap_or_default()
 }
 
-/// `choice` with `value` picked for the colors of `model`: with one model the value alone, with
-/// both a choice for each in which the other model's stays as `choice` has it.
-fn pick(choice: &Value, mismatches: &[Value], model: &str, value: &str) -> Value {
-    if mismatches.len() < 2 {
-        return json!(value);
-    }
-    let each =
-        mismatches.iter().filter_map(|m| m["model"].as_str()).map(|m| (m.to_string(), json!(if m == model { value } else { picked(choice, m) })));
-    Value::Object(each.collect())
-}
-
-/// Is `choice` one choice for every model, or a choice for each of `mismatches`' models? (Convert
-/// for a model whose colors can't convert keeps their numbers, as the paste commands do.)
-fn valid_choice(choice: &Value, mismatches: &[Value]) -> bool {
-    let known = |v: &str| paste_choices().iter().any(|(c, _)| *c == v);
-    match choice {
-        Value::String(s) => known(s),
-        Value::Object(o) => {
-            let models: Vec<&str> = mismatches.iter().filter_map(|m| m["model"].as_str()).collect();
-            o.len() == models.len() && models.iter().all(|m| o.get(*m).and_then(Value::as_str).is_some_and(known))
-        }
-        _ => false,
-    }
-}
-
-fn paste_body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let mismatches = d.fields.get("mismatches").and_then(Value::as_array).cloned().unwrap_or_default();
-    let choice = d.fields.get("choice").cloned().unwrap_or(Value::Null);
-    // With both models, each has its own choice under its line; with one, the choice follows it.
-    for m in &mismatches {
+/// The paste question about `mismatches`: a line and a pair of choices for each model, each
+/// starting on its model's policy. Colors whose profile is not available can only keep their numbers.
+fn paste_dialog(ctx: &egui::Context, mismatches: &[Value]) -> HostedParamDialog {
+    let start = first_choice(mismatches);
+    let options: Vec<(String, Label)> = PASTE_CHOICES.iter().map(|(value, text)| (value.to_string(), Label::from(tl!(*text)))).collect();
+    let mut params = Vec::new();
+    for m in mismatches {
         let id = m["model"].as_str().unwrap_or_default();
         let model = id.to_ascii_uppercase();
         let (from, to) = (m["clipboard"].as_str().unwrap_or_default(), m["document"].as_str().unwrap_or_default());
         let text = tl!("The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.");
-        ui.label(crate::i18n::fmt(text, &[("model", model.as_str()), ("from", from), ("to", to)]));
-        ui.add_space(6.0);
-        let now = picked(&choice, id);
-        let clicked = ui.push_id(id, |ui| {
-            grid(ui, |ui| {
-                let mut clicked = None;
-                for (value, text) in paste_choices() {
-                    label(ui, "");
-                    // Colors whose profile is not available can only keep their numbers.
-                    if widgets::radio(ui, text, now == value, allowed(m, value)) {
-                        clicked = Some(value);
-                    }
-                    ui.end_row();
-                }
-                clicked
-            })
-        });
-        if let Some(value) = clicked.inner {
-            d.fields.insert("choice".into(), pick(&choice, &mismatches, id, value));
-        }
-        ui.add_space(10.0);
+        let note = crate::i18n::fmt(text, &[("model", model.as_str()), ("from", from), ("to", to)]);
+        let blocked: Vec<&str> = PASTE_CHOICES.iter().map(|(value, _)| *value).filter(|value| !allowed(m, value)).collect();
+        let kind = ParamKind::radio(options.clone(), Some(picked(&start, id).to_string()));
+        params.push(Param::read_only_text(format!("{id}Note"), model.clone(), note));
+        params.push(Param::new(id, model, kind).disabled_options(blocked));
     }
-    false
+    HostedParamDialog::new(ctx, PASTE_KIND, DialogFields::new(), move |fields| {
+        ParamDialog::new(PASTE_KIND, tl!("Paste Profile Mismatch"), params.clone()).values(Bind::bound(fields))
+    })
 }
 
-/// The field that holds the uid of the document the paste question is about.
-const DOC: &str = "__doc";
+/// What the closed paste question `id` answered, once: `Some(Some(choice))` for OK, `Some(None)` for
+/// Cancel, `None` while it is open (a replaced question keeps its `Cancel` under the same id until
+/// the new one answers) or when no paste waits.
+fn paste_answer(app: &VectorcraftApp, id: DialogId) -> Option<Option<Value>> {
+    let ask = app.pending_paste.as_ref()?;
+    app.dialogs()?.with(|h| {
+        if h.get_dyn(id).is_some() {
+            return None;
+        }
+        h.take_by_id::<HostedParamDialog>(id).map(|result| result.ok().map(|result| chosen(&result.fields, &ask.mismatches)))
+    })
+}
+
+/// The `profileMismatch` value the dialog's fields give: one choice for one model, `{rgb, cmyk}`
+/// for both.
+fn chosen(fields: &DialogFields, mismatches: &[Value]) -> Value {
+    let pick = |m: &Value| fields.text(m["model"].as_str().unwrap_or_default()).unwrap_or_else(|| default_choice(m)).to_string();
+    match mismatches {
+        [m] => json!(pick(m)),
+        _ => Value::Object(mismatches.iter().filter_map(|m| Some((m["model"].as_str()?.to_string(), json!(pick(m))))).collect()),
+    }
+}
+
+/// `params` of a paste with the answer `choice` as its `profileMismatch`.
+fn with_choice(params: &Value, choice: Value) -> Value {
+    let mut params = if params.is_object() { params.clone() } else { json!({}) };
+    params["profileMismatch"] = choice;
+    params
+}
+
+/// Run the paste whose question closed, unless it waits for placing (a deferred one).
+fn pump_paste(app: &mut VectorcraftApp) {
+    if app.pending_paste.as_ref().is_none_or(|ask| ask.deferred.is_some()) {
+        return;
+    }
+    let Some(answer) = paste_answer(app, dialog_id(PASTE_KIND)) else { return };
+    let Some(ask) = app.pending_paste.take() else { return };
+    if let Some(choice) = answer
+        && let Err(e) = paste_confirm(app, ask, choice)
+    {
+        app.status(e);
+    }
+}
 
 /// OK: run the paste with the choice; any Swatch Conflict question comes next. When another
-/// document has become the active one since a paste that runs at once asked, it closes as Cancel
-/// does and pastes nothing. When the profiles that paste or drop would bring have changed since it
-/// asked (the clipboard, the dragged objects' document or the destination's profile changed), it
-/// asks again about the new ones; a paste that waited for its clipboard is checked in the document
-/// and with the clipboard it runs with.
-fn paste_confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
-    let choice = d.fields.get("choice").cloned().unwrap_or(Value::Null);
-    let asked = d.fields.get("mismatches").and_then(Value::as_array).cloned().unwrap_or_default();
-    if !valid_choice(&choice, &asked) {
-        let key = "choice";
-        return Err(format!("`{key}` must be one of {}", "preserveNumbers, convert, {rgb, cmyk} of those"));
-    }
-    let deferred = d.fields.get("__deferredPaste").and_then(Value::as_u64);
-    if deferred.is_none() && d.fields.get(DOC).and_then(Value::as_u64) != app.session.active().map(|st| st.uid) {
-        app.ui.dialog = None;
+/// document has become the active one since a paste that runs at once asked, it pastes nothing. When
+/// the profiles that paste or drop would bring have changed since it asked (the clipboard, the
+/// dragged objects' document or the destination's profile changed), it asks again about the new ones.
+fn paste_confirm(app: &mut VectorcraftApp, ask: PasteAsk, choice: Value) -> Result<Value, String> {
+    if ask.deferred.is_none() && ask.doc != app.session.active().map(|st| st.uid) {
         return Ok(json!({}));
     }
-    let command = d.str("__command");
-    let mut params = d.fields.get("__params").cloned().filter(Value::is_object).unwrap_or_else(|| json!({}));
-    params["profileMismatch"] = choice;
-    app.ui.dialog = None;
+    let params = with_choice(&ask.params, choice);
     // Without the answer, the paste asks again about what it brings now.
-    let changed = |app: &mut VectorcraftApp, command: &str, params: &Value| {
-        paste_mismatches(app, command, params).is_some_and(|now| !now.is_empty() && now != asked)
-    };
+    let changed = |app: &mut VectorcraftApp, command: &str, params: &Value| paste_changed(app, command, params, &ask.mismatches);
     let recheck = crate::placing::Recheck { key: "profileMismatch", changed: &changed };
-    // A paste that waited for its clipboard runs in the context it was given in.
-    crate::placing::confirm_swatch_paste(app, &command, params, deferred, Some(&recheck))
+    crate::placing::confirm_swatch_paste(app, &ask.command, params, ask.deferred, Some(&recheck))
+}
+
+/// Do the profiles paste `command` with `params` would bring differ from `asked`, the ones the
+/// question was about? A paste that no longer brings any asks nothing.
+pub(crate) fn paste_changed(app: &mut VectorcraftApp, command: &str, params: &Value, asked: &[Value]) -> bool {
+    paste_mismatches(app, command, params).is_some_and(|now| !now.is_empty() && now != asked)
+}
+
+/// The paste question's dialog, while a paste waits for it.
+pub(crate) fn paste_id(app: &VectorcraftApp) -> Option<DialogId> {
+    app.pending_paste.as_ref().map(|_| dialog_id(PASTE_KIND))
+}
+
+/// The paste the question asks about waits for placing (its clipboard is being read) on `chain`.
+pub(crate) fn defer_paste(app: &mut VectorcraftApp, chain: u64) {
+    if let Some(ask) = &mut app.pending_paste {
+        ask.deferred = Some(chain);
+    }
+}
+
+/// What the question `id` a deferred paste waits on answered: `Answered({command, params, deferred,
+/// asked})` with the choice in `params`, `Cancelled`, or `Open` while it is still asked.
+pub(crate) fn take_paste(app: &mut VectorcraftApp, id: DialogId) -> Taken {
+    let Some(answer) = paste_answer(app, id) else { return Taken::Open };
+    let Some(ask) = app.pending_paste.take() else { return Taken::Cancelled };
+    let Some(choice) = answer else { return Taken::Cancelled };
+    let params = with_choice(&ask.params, choice);
+    Taken::Answered(json!({ "command": ask.command, "params": params, "deferred": ask.deferred, "asked": ask.mismatches }))
 }
 
 #[cfg(test)]

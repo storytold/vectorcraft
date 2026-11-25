@@ -140,9 +140,8 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     if let Some(f) = craft_image_codecs::detect(bytes).and_then(image_format) {
         return Some(f);
     }
-    // A version 2 PICT is known by its version opcodes after the picture's frame, at byte 522 of a
-    // file or byte 10 of a bare picture (version 1 by its file's name), so a format whose
-    // signature starts the file is checked first.
+    // A PICT is known by its version opcodes after the picture's frame, at byte 522 of a file or
+    // byte 10 of a bare picture, so a format whose signature starts the file is checked first.
     if vectorcraft_metafile::is_pict(bytes) {
         return format("pict");
     }
@@ -193,8 +192,11 @@ fn restore_or_import(
     let mut fallback = None;
     if let Some((intact, bytes)) = editing {
         let native = if intact { bytes() } else { None };
-        match native.and_then(|b| native_file(&b).ok()) {
-            Some((doc, _, warnings)) => return Ok((doc, warnings, true)),
+        match native.and_then(|b| decode_native_file(&b).ok()) {
+            Some((mut doc, _, mut warnings)) => {
+                warnings.extend(vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut doc));
+                return Ok((doc, warnings, true));
+            }
             None => fallback = Some(if intact { EDITING_DAMAGED } else { EDITING_STALE }),
         }
     }
@@ -205,9 +207,9 @@ fn restore_or_import(
     Ok((doc, warnings, false))
 }
 
-/// A native file's document and details, the colour profiles it carries installed where missing
-/// (with a warning for each that can't be used).
-pub(crate) fn native_file(bytes: &[u8]) -> Result<(Document, vectorcraft_format::FileInfo, Vec<String>)> {
+/// Decode a native file and install its colour profiles, preserving profile and depth warnings.
+/// The caller must assemble any external resources and bind file fonts before layout.
+pub(crate) fn decode_native_file(bytes: &[u8]) -> Result<(Document, vectorcraft_format::FileInfo, Vec<String>)> {
     let f = vectorcraft_format::load_file(bytes).map_err(err)?;
     let mut warnings = super::native::install_profiles(f.profiles);
     warnings.extend(f.depth_notes);
@@ -424,7 +426,8 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             })?
         }
         "vectorcraft" | "template" => {
-            let (d, info, warnings) = native_file(bytes)?;
+            let (mut d, info, mut warnings) = decode_native_file(bytes)?;
+            warnings.extend(vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut d));
             native_pdf_compatible = Some(info.pdf_compatible);
             converted = info.is_old() || super::extension(name) == vectorcraft_format::LEGACY_EXTENSION;
             (d, warnings, false)
@@ -688,7 +691,8 @@ pub fn open_bytes(s: &mut Session, name: &str, bytes: &[u8], path: Option<String
 /// [`open_bytes`] with the `document.open` options in `p` ([`LoadOptions::from_params`]).
 pub fn open_bytes_with(s: &mut Session, name: &str, bytes: &[u8], path: Option<String>, p: &Value) -> Result<Value> {
     let update_links = s.prefs.update_links == "automatically";
-    open_read(s, read_for_open(name, bytes, path, p, update_links, s.prefs.low_res_proxy_eps)?)
+    let p = s.prefs.with_pdf_font_choice(p);
+    open_read(s, read_for_open(name, bytes, path, &p, update_links, s.prefs.low_res_proxy_eps)?)
 }
 
 /// A file read for `document.open` but not opened yet ([`read_for_open`], [`open_read`]).
@@ -867,7 +871,11 @@ impl ReadFile {
         let Some((update_links, low_res_proxy_eps)) = self.links_left.take() else { return };
         let base = crate::cmd::links::LinkBase::file(self.path.as_deref());
         self.links = crate::cmd::links::resolve(&mut self.loaded.doc, base, update_links, low_res_proxy_eps);
-        Session::refresh_text_bounds(&mut self.loaded.doc);
+        for note in Session::refresh_text_bounds(&mut self.loaded.doc) {
+            if !self.loaded.warnings.contains(&note) {
+                self.loaded.warnings.push(note);
+            }
+        }
     }
 
     /// The policies with the profile answer and the color mode `colorMode` asks for, once; the
@@ -1375,6 +1383,20 @@ pub(crate) fn image_clip(blob: &ImageBlob) -> Option<vectorcraft_geom::PathData>
         return None;
     }
     vectorcraft_geom::path::with_anchor_budget(vectorcraft_geom::path::MAX_READ_ANCHORS, || serde_json::from_slice(json).ok())
+}
+
+/// `blob` with its preview keeping the clipping path its PNG or TIFF keeps ([`image_clip`]), in a
+/// text chunk of the preview PNG as [`png_with_clip`] writes it: a document saved without its
+/// linked files holds the preview alone, and the Links commands then still know a clip group of
+/// that path as the file's. Unchanged without a preview or a clipping path.
+pub(crate) fn preview_with_clip(mut blob: ImageBlob) -> ImageBlob {
+    let Some(proxy) = blob.proxy.clone().filter(|p| !std::sync::Arc::ptr_eq(p, &blob.bytes) && png_clip(p).is_none()) else { return blob };
+    let Some(json) = image_clip(&blob).and_then(|clip| serde_json::to_string(&clip).ok()).filter(|j| j.len() <= MAX_PNG_CLIP) else {
+        return blob;
+    };
+    let png = vectorcraft_render::encode::png::with_text(proxy.to_vec(), &[(CLIP_KEYWORD, json.into())]);
+    blob.proxy = Some(std::sync::Arc::new(png));
+    blob
 }
 
 /// An image as a document of its physical size at the resolution it declares (as Place sizes it;
