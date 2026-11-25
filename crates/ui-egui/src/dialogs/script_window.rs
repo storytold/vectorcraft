@@ -18,7 +18,7 @@
 
 use std::collections::{BTreeMap, VecDeque};
 
-use craft::behavior::{Selection, keyed};
+use craft::behavior::{Selection, SelectionChange, keyed};
 use craft::theme::Variant;
 use craft::ui::buttons::Button;
 use craft::ui::choice::{Checkbox, Radio, RadioGroup};
@@ -462,10 +462,14 @@ fn control(ui: &mut Ui, drafts: &mut BTreeMap<u64, String>, place: &Place, (i, n
                     .max_rows(list_rows(n.rect.h))
                     .selection(Bind::given(selection))
                     .show_items(ui, &source, &mut |k, _| ListRow::new(n.items.get(*k).cloned().unwrap_or_default()));
+                // A click activates a row; the arrow keys and typed letters select one.
                 for event in out.events {
-                    if let CollectionEvent::Activate(k) = event
-                        && n.selection != Some(k)
-                    {
+                    let picked = match event {
+                        CollectionEvent::Activate(k) => Some(k),
+                        CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } => keys.last().copied(),
+                        _ => None,
+                    };
+                    if let Some(k) = picked.filter(|k| n.selection != Some(*k)) {
                         shown.event = Some(UiEvent::Change(i, UiValue::Index(Some(k))));
                     }
                 }

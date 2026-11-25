@@ -696,6 +696,56 @@ fn a_title_a_handler_changes_and_a_list_box_reach_the_dialog() {
 }
 
 #[test]
+fn an_arrow_key_and_a_click_in_a_list_box_give_the_script_the_change() {
+    let mut app = app();
+    start(
+        &mut app,
+        "var w = new Window('dialog'); var l = w.add('listbox', undefined, ['apple', 'pear', 'plum']); l.selection = 0; \
+         var picked = []; l.onChange = function () { picked.push(l.selection.index); }; \
+         w.add('button', undefined, 'OK'); vc.log([w.show(), picked]);",
+    );
+    assert!(until_window(&mut app));
+    let mut on_list = false;
+    for _ in 0..8 {
+        step(&mut app, vec![key(egui::Key::Tab)]);
+        let ctx = app.ui_ctx.clone().unwrap();
+        ctx.enable_accesskit();
+        let dialogs = app.dialogs().unwrap();
+        let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0)));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect, ..Default::default() }, |ui| dialogs.with(|host| host.run(ui)));
+        out.textures_delta.clear();
+        on_list = out.platform_output.accesskit_update.is_some_and(|u| {
+            u.nodes.iter().any(|(id, n)| *id == u.focus && matches!(n.role(), egui::accesskit::Role::ListBox | egui::accesskit::Role::ListItem))
+        });
+        if on_list {
+            break;
+        }
+    }
+    assert!(on_list, "Tab puts the focus on the list box");
+    step(&mut app, vec![key(egui::Key::ArrowDown)]);
+    assert!(until_window(&mut app), "the change handler runs and the dialog waits again");
+    step(&mut app, Vec::new());
+    access_nodes(&app);
+    let nodes = access_nodes(&app);
+    let b = nodes
+        .iter()
+        .map(|(_, n)| n)
+        .find(|n| n.role() == egui::accesskit::Role::ListItem && n.label() == Some("plum"))
+        .and_then(egui::accesskit::Node::bounds)
+        .unwrap_or_else(|| panic!("no plum row"));
+    // The top half of the row: the OK button below the list starts in the row's lower half.
+    let at = egui::pos2((b.x0 + b.x1) as f32 * 0.5, b.y0 as f32 + 4.0);
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    step(&mut app, vec![egui::Event::PointerMoved(at)]);
+    step(&mut app, vec![button(true)]);
+    step(&mut app, vec![button(false)]);
+    assert!(until_window(&mut app), "the change handler runs again");
+    give(&mut app, json!({"event": "click", "control": "OK"})).unwrap();
+    assert!(!until_window(&mut app));
+    assert_eq!(log(&app), json!([[1, [1, 2]]]), "the arrow key picked pear, the click picked plum, and the script was told each time");
+}
+
+#[test]
 fn enter_with_the_focus_on_a_slider_clicks_the_default_button() {
     let mut app = app();
     start(&mut app, "var w = new Window('dialog'); w.add('slider', undefined, 2, 0, 5); w.add('button', undefined, 'OK'); vc.log(w.show());");
