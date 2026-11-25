@@ -7325,6 +7325,8 @@ axis	Y Axis	osa Y
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	vyžaduje schválení: žádá o {0}, což uživatel povolí, když ho instaluje samostatně
 @msg	not JSON: {e}	není JSON: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	není binární soubor WebAssembly (chybí hlavička \\0asm)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	typ funkce má více parametrů, než dovoluje limit ({MAX_FUNC_TYPE_VALUES})
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	typ funkce má více výsledků, než dovoluje limit ({MAX_FUNC_TYPE_VALUES})
 @msg	parameter `{k}`: {what}	parametr `{k}`: {what}
 @msg	parameter `{name}`: {what}	parametr `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	parametry zásuvného modulu musí být objekt JSON

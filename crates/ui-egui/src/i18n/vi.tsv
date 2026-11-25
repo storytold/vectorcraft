@@ -6975,6 +6975,8 @@ axis	Y Axis	Trục Y
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	cần phê duyệt: plug-in yêu cầu {0}, quyền mà người dùng cấp khi cài đặt riêng plug-in đó
 @msg	not JSON: {e}	không phải JSON: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	không phải tệp nhị phân WebAssembly (thiếu phần đầu \\0asm)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	một kiểu hàm vượt quá giới hạn {MAX_FUNC_TYPE_VALUES} tham số
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	một kiểu hàm vượt quá giới hạn {MAX_FUNC_TYPE_VALUES} kết quả
 @msg	parameter `{k}`: {what}	tham số `{k}`: {what}
 @msg	parameter `{name}`: {what}	tham số `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	tham số plug-in phải là một đối tượng JSON

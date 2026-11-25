@@ -9429,6 +9429,8 @@ axis	Y Axis	Y ღერძი
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	საჭიროებს დამტკიცებას: ითხოვს {0}-ს, რასაც მომხმარებელი მისი ცალკე დაყენებისას აძლევს
 @msg	not JSON: {e}	არ არის JSON: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	არ არის WebAssembly-ის ბინარული ფაილი (აკლია \\0asm სათაური)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	ფუნქციის ტიპი აჭარბებს {MAX_FUNC_TYPE_VALUES} პარამეტრის ლიმიტს
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	ფუნქციის ტიპი აჭარბებს {MAX_FUNC_TYPE_VALUES} შედეგის ლიმიტს
 @msg	parameter `{k}`: {what}	პარამეტრი `{k}`: {what}
 @msg	parameter `{name}`: {what}	პარამეტრი `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	პლაგინის პარამეტრები JSON ობიექტი უნდა იყოს

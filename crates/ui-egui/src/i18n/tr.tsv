@@ -7397,6 +7397,8 @@ axis	Y Axis	Y ekseni
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	onay gerekiyor: {0} istiyor; kullanıcı bunu eklentiyi tek başına yüklerken verir
 @msg	not JSON: {e}	JSON değil: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	WebAssembly ikili dosyası değil (\\0asm üst bilgisi eksik)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	bir işlev türü {MAX_FUNC_TYPE_VALUES} parametre sınırını aşıyor
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	bir işlev türü {MAX_FUNC_TYPE_VALUES} sonuç sınırını aşıyor
 @msg	parameter `{k}`: {what}	`{k}` parametresi: {what}
 @msg	parameter `{name}`: {what}	`{name}` parametresi: {what}
 @msg	plug-in parameters must be a JSON object	eklenti parametreleri bir JSON nesnesi olmalıdır

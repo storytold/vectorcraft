@@ -7224,6 +7224,8 @@ axis	Y Axis	Eixo Y
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	precisa de aprovação: pede {0}, que o usuário concede ao instalá-lo separadamente
 @msg	not JSON: {e}	não é JSON: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	não é um binário WebAssembly (falta o cabeçalho \\0asm)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	um tipo de função excede o limite de {MAX_FUNC_TYPE_VALUES} parâmetros
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	um tipo de função excede o limite de {MAX_FUNC_TYPE_VALUES} resultados
 @msg	parameter `{k}`: {what}	parâmetro `{k}`: {what}
 @msg	parameter `{name}`: {what}	parâmetro `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	os parâmetros do plug-in devem ser um objeto JSON

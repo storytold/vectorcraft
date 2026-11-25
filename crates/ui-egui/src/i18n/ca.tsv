@@ -7714,6 +7714,8 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	cal aprovació: demana {0}, que l’usuari concedeix en instal·lar-lo per separat
 @msg	not JSON: {e}	no és JSON: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	no és un binari WebAssembly (falta la capçalera \\0asm)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	un tipus de funció supera el límit de {MAX_FUNC_TYPE_VALUES} paràmetres
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	un tipus de funció supera el límit de {MAX_FUNC_TYPE_VALUES} resultats
 @msg	parameter `{k}`: {what}	paràmetre `{k}`: {what}
 @msg	parameter `{name}`: {what}	paràmetre `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	els paràmetres del complement han de ser un objecte JSON

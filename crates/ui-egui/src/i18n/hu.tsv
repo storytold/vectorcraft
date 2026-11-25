@@ -7310,6 +7310,8 @@ axis	Y Axis	Y tengely
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	jóváhagyás szükséges: ezt kéri: {0}, amit a felhasználó a külön telepítéskor ad meg
 @msg	not JSON: {e}	nem JSON: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	nem WebAssembly bináris (hiányzik a \\0asm fejléc)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	egy függvénytípus paramétereinek száma meghaladja a korlátot ({MAX_FUNC_TYPE_VALUES})
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	egy függvénytípus eredményeinek száma meghaladja a korlátot ({MAX_FUNC_TYPE_VALUES})
 @msg	parameter `{k}`: {what}	`{k}` paraméter: {what}
 @msg	parameter `{name}`: {what}	`{name}` paraméter: {what}
 @msg	plug-in parameters must be a JSON object	a bővítmény paraméterei JSON-objektumot alkossanak

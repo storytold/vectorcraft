@@ -7022,6 +7022,8 @@ axis	Y Axis	Y 軸
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	承認が必要です: {0} を要求しています。これはユーザーが単独でインストールするときに許可します
 @msg	not JSON: {e}	JSON ではありません: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	WebAssembly バイナリではありません (\\0asm ヘッダーがありません)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	関数型のパラメーター数が上限の {MAX_FUNC_TYPE_VALUES} 個を超えています
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	関数型の結果の数が上限の {MAX_FUNC_TYPE_VALUES} 個を超えています
 @msg	parameter `{k}`: {what}	パラメーター `{k}`: {what}
 @msg	parameter `{name}`: {what}	パラメーター `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	プラグインのパラメーターは JSON オブジェクトにしてください

@@ -6978,6 +6978,8 @@ axis	Y Axis	Y 軸
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	需要核准：它要求 {0}，使用者單獨安裝它時授予這些權限
 @msg	not JSON: {e}	不是 JSON：{e}
 @msg	not a WebAssembly binary (missing \\0asm header)	不是 WebAssembly 二進位檔（沒有 \\0asm 標頭）
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	函式型別的參數數目超過上限（{MAX_FUNC_TYPE_VALUES} 個）
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	函式型別的結果數目超過上限（{MAX_FUNC_TYPE_VALUES} 個）
 @msg	parameter `{k}`: {what}	參數 `{k}`：{what}
 @msg	parameter `{name}`: {what}	參數 `{name}`：{what}
 @msg	plug-in parameters must be a JSON object	增效模組參數必須是 JSON 物件

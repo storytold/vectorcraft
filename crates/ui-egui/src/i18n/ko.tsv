@@ -6919,6 +6919,8 @@ axis	Y Axis	Y축
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	승인이 필요합니다. {0}을(를) 요청하며, 사용자가 따로 설치할 때 허용합니다
 @msg	not JSON: {e}	JSON이 아닙니다: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	WebAssembly 바이너리가 아닙니다(\\0asm 헤더 없음)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	함수 형식의 매개변수가 한도인 {MAX_FUNC_TYPE_VALUES}개를 초과합니다
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	함수 형식의 결과가 한도인 {MAX_FUNC_TYPE_VALUES}개를 초과합니다
 @msg	parameter `{k}`: {what}	매개변수 `{k}`: {what}
 @msg	parameter `{name}`: {what}	매개변수 `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	플러그인 매개변수는 JSON 개체여야 합니다

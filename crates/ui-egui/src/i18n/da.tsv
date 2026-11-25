@@ -555,6 +555,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	kræver godkendelse: det beder om {0}, som brugeren tildeler, når det installeres for sig selv
 @msg	not JSON: {e}	ikke JSON: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	ikke en WebAssembly-binærfil (headeren \\0asm mangler)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	en funktionstype overskrider grænsen på {MAX_FUNC_TYPE_VALUES} parametre
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	en funktionstype overskrider grænsen på {MAX_FUNC_TYPE_VALUES} resultater
 @msg	parameter `{k}`: {what}	parameteren `{k}`: {what}
 @msg	parameter `{name}`: {what}	parameteren `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	plug-in-parametrene skal være et JSON-objekt

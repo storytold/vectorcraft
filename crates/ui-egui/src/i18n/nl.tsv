@@ -401,6 +401,8 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	goedkeuring nodig: de plug-in vraagt om {0}, wat de gebruiker toestaat wanneer hij die afzonderlijk installeert
 @msg	not JSON: {e}	geen JSON: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	geen WebAssembly-binair bestand (de header \\0asm ontbreekt)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	een functietype overschrijdt de limiet van {MAX_FUNC_TYPE_VALUES} parameters
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	een functietype overschrijdt de limiet van {MAX_FUNC_TYPE_VALUES} resultaten
 @msg	parameter `{k}`: {what}	parameter `{k}`: {what}
 @msg	parameter `{name}`: {what}	parameter `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	plug-in-parameters moeten een JSON-object zijn

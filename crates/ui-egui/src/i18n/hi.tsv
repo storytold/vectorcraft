@@ -8632,6 +8632,8 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	not a VectorCraft file: {0}	एक वेक्टर क्रेफ्ट फ़ाइल नहीं: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	एक VectorCraft शॉर्टकट सेट नहीं है ( `overrides`)
 @msg	not a WebAssembly binary (missing \\0asm header)	WebAssembly बाइनरी नहीं है (\\0asm हेडर नहीं है)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	एक फ़ंक्शन टाइप में {MAX_FUNC_TYPE_VALUES} पैरामीटर की सीमा से अधिक पैरामीटर हैं
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	एक फ़ंक्शन टाइप में {MAX_FUNC_TYPE_VALUES} परिणामों की सीमा से अधिक परिणाम हैं
 @msg	not a Word document: its compound file has no WordDocument stream	एक वर्ड डॉक्यूमेंट नहीं: इसकी यौगिक फ़ाइल में WordDocument स्ट्रीम नहीं है
 @msg	not a Word document: its main part is not a WordprocessingML document	वर्ड डॉक्यूमेंट नहीं: इसका मुख्य हिस्सा वर्डप्रोसेसिंगएमएल डॉक्यूमेंट नहीं है
 @msg	not a Word document: its package has no main document part	नहीं एक वर्ड डॉक्यूमेंट: इसके पैकेज में कोई मुख्य डॉक्यूमेंट हिस्सा नहीं है

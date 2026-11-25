@@ -7391,6 +7391,8 @@ axis	Y Axis	Y-akseli
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	vaatii hyväksynnän: se pyytää {0}, jotka käyttäjä myöntää asentaessaan sen erikseen
 @msg	not JSON: {e}	ei JSON-muotoa: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	ei WebAssembly-binääri (\\0asm-otsake puuttuu)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	funktiotyyppi ylittää {MAX_FUNC_TYPE_VALUES} parametrin rajan
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	funktiotyyppi ylittää {MAX_FUNC_TYPE_VALUES} tuloksen rajan
 @msg	parameter `{k}`: {what}	parametri `{k}`: {what}
 @msg	parameter `{name}`: {what}	parametri `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	laajennuksen parametrien on oltava JSON-objekti

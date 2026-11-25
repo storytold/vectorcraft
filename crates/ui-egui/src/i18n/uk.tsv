@@ -6929,6 +6929,8 @@ axis	Y Axis	Вісь Y
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	потрібне схвалення: він запитує {0}, що користувач дозволяє під час окремого встановлення
 @msg	not JSON: {e}	не JSON: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	не двійковий файл WebAssembly (немає заголовка \\0asm)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	тип функції має більше параметрів, ніж дозволяє межа ({MAX_FUNC_TYPE_VALUES})
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	тип функції має більше результатів, ніж дозволяє межа ({MAX_FUNC_TYPE_VALUES})
 @msg	parameter `{k}`: {what}	параметр `{k}`: {what}
 @msg	parameter `{name}`: {what}	параметр `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	параметри модуля мають бути об’єктом JSON

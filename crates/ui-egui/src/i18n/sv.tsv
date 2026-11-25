@@ -9623,6 +9623,8 @@ digits	Hindi	Hindi
 @msg	not a stored or deflated central record	inte en central katalogpost av typen stored eller deflated
 @msg	not a valid SVGZ file: {e}	inte en giltig SVGZ-fil: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	inte en WebAssembly-binärfil (huvudet \\0asm saknas)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	en funktionstyp överskrider gränsen på {MAX_FUNC_TYPE_VALUES} parametrar
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	en funktionstyp överskrider gränsen på {MAX_FUNC_TYPE_VALUES} resultat
 @msg	not a Word document: its compound file has no WordDocument stream	inte ett Word-dokument: dess sammansatta fil saknar WordDocument-ström
 @msg	not a Word document: its main part is not a WordprocessingML document	inte ett Word-dokument: dess huvuddel är inte ett WordprocessingML-dokument
 @msg	not a Word document: its package has no main document part	inte ett Word-dokument: dess paket saknar huvuddokumentdel
