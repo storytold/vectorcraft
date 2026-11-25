@@ -113,6 +113,14 @@ fn frame(app: &mut VectorcraftApp, ctx: &egui::Context) {
     out.textures_delta.clear();
 }
 
+/// The first frames of a launch that asks about a stopped plug-in: the first frame puts the choice on the dialog host
+/// after its pass and asks for another frame, which opens it.
+fn asking_frames(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    frame(app, ctx);
+    assert!(ui::choosing(app) && ctx.has_requested_repaint(), "the choice asks for the frame that opens it");
+    frame(app, ctx);
+}
+
 /// A control request, then one frame; the reply says whether it was done.
 fn control(app: &mut VectorcraftApp, ctx: &egui::Context, method: &str, params: Value) -> Value {
     let (req, _rx) = ControlRequest::new(method, params);
@@ -143,7 +151,7 @@ fn disable_and_continue_loads_every_plug_in_but_the_one_that_was_loading() {
     stopped_while_loading_x(&launch_dir, &dir);
     let mut app = launch(&dir, &launch_dir, false);
     let ctx = window();
-    frame(&mut app, &ctx);
+    asking_frames(&mut app, &ctx);
     assert!(ui::choosing(&app));
     assert!(safe_mode::active() && registry::list().is_empty(), "nothing loads until the user chooses");
     assert!(chrome::window_title(&app).ends_with("(Safe Mode)"));
@@ -172,7 +180,7 @@ fn start_normally_loads_everything_and_start_in_safe_mode_loads_nothing() {
     stopped_while_loading_x(&launch_dir, &dir);
     let mut app = launch(&dir, &launch_dir, false);
     let ctx = window();
-    frame(&mut app, &ctx);
+    asking_frames(&mut app, &ctx);
     let reply = control(&mut app, &ctx, "ui.dialog.set", json!({"field": "choice", "value": "alternate"}));
     assert_eq!(reply["ok"], true, "{reply}");
     confirm(&mut app, &ctx);
@@ -184,7 +192,7 @@ fn start_normally_loads_everything_and_start_in_safe_mode_loads_nothing() {
     stopped_while_loading_x(&launch_dir, &dir);
     let mut app = launch(&dir, &launch_dir, false);
     let ctx = window();
-    frame(&mut app, &ctx);
+    asking_frames(&mut app, &ctx);
     assert!(ui::choosing(&app) && !ui::staying_on(&app), "Safe Mode until the user chooses");
     let reply = control(&mut app, &ctx, "ui.dialog.cancel", json!({}));
     assert_eq!(reply["ok"], true, "{reply}");
@@ -214,7 +222,7 @@ fn a_disabled_list_that_cannot_be_saved_says_so() {
     let unsaved = "Couldn't save the disabled plug-ins for the next launch";
     let mut app = launch(&dir, &launch_dir, false);
     let ctx = window();
-    frame(&mut app, &ctx);
+    asking_frames(&mut app, &ctx);
     confirm(&mut app, &ctx);
     assert_eq!(app.ui.status, unsaved, "Disable and Continue");
     assert!(safe_mode::previous().is_some(), "the next launch asks again");
@@ -299,7 +307,7 @@ fn a_safe_mode_flag_launch_leaves_the_stopped_plug_in_to_the_next_launch() {
     // The next launch, without the flag, asks about it before anything loads.
     let mut app = launch(&dir, &launch_dir, false);
     let ctx = window();
-    frame(&mut app, &ctx);
+    asking_frames(&mut app, &ctx);
     assert!(ui::choosing(&app));
     assert!(registry::list().is_empty());
     confirm(&mut app, &ctx);
