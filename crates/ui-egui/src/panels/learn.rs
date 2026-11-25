@@ -1,4 +1,4 @@
-//! Learn panel (Window › Learn, and Explore tutorials at the right end of the app bar): short
+//! Learn panel (Window › Learn): short
 //! hands-on tutorials grouped by skill ([`catalog::SKILLS`]). The For you tab holds the Get started
 //! section with the Quick skill guide card, which opens the Skills tab. The Skills tab lists each
 //! skill with a progress ring that fills as its tutorials are finished and the count of tutorials
@@ -13,8 +13,7 @@
 //! one tutorial, `learn.back` goes up one level, `learn.locateTool` shows where a tool is,
 //! `learn.openSample`, `learn.markStep`, `learn.finish` and `learn.next` run the practice controls,
 //! `learn.resetProgress` clears the progress, and `window.learn` shows or hides the panel. The Home
-//! screen's Learn section shows the same card ([`guide_card`]) and the tutorials, which open the
-//! panel.
+//! screen's Learn section links to the list of skills and to each tutorial, which open the panel.
 
 pub mod catalog;
 pub mod locate;
@@ -109,9 +108,8 @@ fn for_you(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// The Quick skill guide card, as one button: a click, or Enter or Space while it has the keyboard
-/// focus, shows the panel's list of skills (`learn.skills`). The For you tab and the Home screen's
-/// Learn section show it.
-pub(crate) fn guide_card(app: &mut VectorcraftApp, ui: &mut Ui) {
+/// focus, shows the panel's list of skills (`learn.skills`). The For you tab shows it.
+fn guide_card(app: &mut VectorcraftApp, ui: &mut Ui) {
     // PLAN: assumed `Button::detail(impl Into<Label>)` (dp.R3, document-panels-w4).
     let card = Button::new(tl!("Quick skill guide"))
         .icon(IconSpec::svg(IconId::new("graduation-cap")))
@@ -381,8 +379,8 @@ pub(crate) fn visible(app: &VectorcraftApp) -> bool {
     crate::panel_docking::panels_shown(app) && crate::panel_docking::showing(&app.ui, ID)
 }
 
-/// `window.learn {show?}`: show the panel (true), hide it (false) or toggle it (omitted), as the
-/// app bar's Explore tutorials button and Window › Learn do → whether it shows ([`visible`]).
+/// `window.learn {show?}`: show the panel (true), hide it (false) or toggle it (omitted), as
+/// Window › Learn does → whether it shows ([`visible`]).
 /// Showing it also shows a hidden dock; in a full screen mode it makes the panel the front one.
 fn toggle(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let shown = visible(app);

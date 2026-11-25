@@ -116,8 +116,6 @@ pub struct ToolMarksStyle {
     dark: StyleColor,
     /// Text on the pill.
     ink: StyleColor,
-    /// The text of a label.
-    label: StyleColor,
     /// The selection ring of a stop chip.
     accent: StyleColor,
     /// Around a measure's text.
@@ -154,7 +152,6 @@ impl Component for ToolMarks<'_> {
             metrics: Metrics::new(),
             dark: cx.color(tokens.color.overlay.halo),
             ink: cx.color(tokens.color.text.on_strong),
-            label: cx.color(tokens.color.text.normal),
             accent: cx.color(tokens.color.accent.solid),
             pad: Vec2::new(tokens.space.pad.control, tokens.space.gap.tight),
             radius: UiTokens::corner(tokens.shape.radius.control),
@@ -212,8 +209,8 @@ fn paint(draw: &Draw<'_>, view: &CanvasView, overlays: &[Overlay], options: &Pat
             Overlay::Handle { p, color } => handle_end(draw, view.to_screen(*p), data(*color), options, style),
             // The pasteboard names an artboard, so its label is not drawn twice.
             Overlay::Label { text, .. } if names_an_artboard(text) => {}
-            Overlay::Label { p, text, .. } => {
-                let run = TextRun::new(crate::panels::label_or_name(text, true).to_string()).role(TypeRole::Caption).color(style.label); // PLAN: a text run takes a theme colour, so the label's own colour is not applied
+            Overlay::Label { p, text, color } => {
+                let run = TextRun::new(crate::panels::label_or_name(text, true).to_string()).role(TypeRole::Caption).data_color(data(*color));
                 let layout = draw.layout(&run, f32::INFINITY);
                 draw.galley(view.to_screen(*p) + Vec2::new(8.0, -14.0), &layout);
             }
