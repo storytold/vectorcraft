@@ -2142,7 +2142,8 @@ and the action still plays. `Session::replay` plays a journal the same way. The 
 `color` or `channel` it can't read.
 
 `window.panel` refuses every request in Presentation Mode, which hides every panel, and changes nothing. With
-`toggle` it hides only a panel that can be seen, which is the panel the Window menu checks. While Tab or Shift+Tab
+`toggle` it hides only a panel that can be seen, which is the panel the Window menu checks. With `toggle: false` a panel
+that can be seen stays as it is, also in a flyout or a floating window. While Tab or Shift+Tab
 hides the dock, no panel is checked, and the panel shows again with the dock in its earlier place; the toolbar and the
 Control bar stay as they are.
 

@@ -425,6 +425,12 @@ pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
     states.set(CommandRef::new("window.taskBar.resetActions"), CommandState::new().enabled(!app.ui.task_bar_hidden_actions.is_empty()));
 }
 
+/// More Options › Show Properties Panel. It names `toggle: false`, so a click shows the panel and leaves a showing one
+/// showing, docked, floating or in a flyout; it does not run the Window menu row's toggle ([`crate::menus::is_row_of`]).
+pub(crate) fn show_properties() -> CommandRef {
+    CommandRef::with_params("window.panel", json!({"panel": "properties", "toggle": false}))
+}
+
 /// The rows More Options shows after the framework's own: Bar Actions, Reset Bar Actions and Show Properties Panel.
 fn more_rows(offer: &Offer) -> Vec<PanelRow> {
     let actions = offer
@@ -437,7 +443,7 @@ fn more_rows(offer: &Offer) -> Vec<PanelRow> {
         PanelRow::Submenu(Label::from(tl!("Bar Actions")), actions),
         PanelRow::Command(CommandRef::new("window.taskBar.resetActions")),
         PanelRow::Separator,
-        PanelRow::Command(CommandRef::with_params("window.panel", json!({"panel": "properties"}))),
+        PanelRow::Command(show_properties()),
     ]
 }
 

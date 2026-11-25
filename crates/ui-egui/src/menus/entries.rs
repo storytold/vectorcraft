@@ -29,6 +29,9 @@ pub struct MenuEntry {
     pub shown_path: Vec<String>,
 }
 
+/// The command id of the menu rows that show a panel.
+const PANEL_COMMAND: &str = "window.panel";
+
 /// Flattened menu for `ui.menu.list`. A row that shows a panel of the Window menu, there or in another menu (Type ›
 /// Glyphs), lists the params a click on it runs: `window.panel` with `toggle: true`, which puts a showing panel away
 /// ([`is_row_of`]).
@@ -39,11 +42,11 @@ pub fn menu_entries(app: &VectorcraftApp) -> Vec<MenuEntry> {
     }
     let window_panels: Vec<Value> = out
         .iter()
-        .filter(|e| e.path.first().is_some_and(|t| t == "Window") && e.command.as_deref() == Some(PANEL))
+        .filter(|e| e.path.first().is_some_and(|t| t == "Window") && e.command.as_deref() == Some(PANEL_COMMAND))
         .map(|e| e.params.clone())
         .collect();
     for e in &mut out {
-        if e.command.as_deref() == Some(PANEL)
+        if e.command.as_deref() == Some(PANEL_COMMAND)
             && window_panels.contains(&e.params)
             && let Some(params) = e.params.as_object_mut()
         {
@@ -53,11 +56,9 @@ pub fn menu_entries(app: &VectorcraftApp) -> Vec<MenuEntry> {
     out
 }
 
-/// The command of the rows that show a panel.
-const PANEL: &str = "window.panel";
-
 /// Whether `e` is the row of the menu item that runs command `id` with `params`: the same command and params, or a
-/// panel row that [`menu_entries`] lists with `toggle: true` added.
+/// panel row that [`menu_entries`] lists with `toggle: true` added. Another menu's row that shows a panel without
+/// toggling it names `toggle: false` (the task bar's Show Properties Panel), so it does not match a Window row.
 pub fn is_row_of(e: &MenuEntry, id: &str, params: &Value) -> bool {
     if e.command.as_deref() != Some(id) {
         return false;
@@ -66,7 +67,7 @@ pub fn is_row_of(e: &MenuEntry, id: &str, params: &Value) -> bool {
         return true;
     }
     let mut listed = e.params.clone();
-    id == PANEL
+    id == PANEL_COMMAND
         && params.get("toggle").is_none()
         && listed.as_object_mut().and_then(|o| o.remove("toggle")) == Some(Value::Bool(true))
         && listed == *params

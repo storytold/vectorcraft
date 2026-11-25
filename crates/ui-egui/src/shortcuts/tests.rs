@@ -255,19 +255,22 @@ fn window_menu_panel_rows_show_their_panels_shortcuts() {
     let rows: Vec<craft::keymap::CommandRef> =
         app.menus.bar.items().into_iter().filter(|it| it.command.id == "window.panel").map(|it| it.command.clone()).collect();
     assert!(!rows.is_empty(), "the Window menu lists panels");
-    let mut shown = 0;
+    let mut with_keys = 0;
     for row in &rows {
         let panel = row.params["panel"].as_str().expect("a panel row names its panel");
         let entry = crate::keymap::command_of(&format!("panel:{panel}"));
         let chord = craft::ui::runtime::commands::chord(&ctx, row);
         assert_eq!(chord, craft::ui::runtime::commands::chord(&ctx, &entry), "{panel}: the row shows its shortcut's chord");
-        shown += usize::from(chord.is_some());
+        if crate::shortcut_editor::PANEL_SHORTCUTS.iter().any(|(p, _)| *p == panel) {
+            assert!(chord.is_some(), "{panel} has a default key, and its row shows it");
+            with_keys += 1;
+        }
     }
-    let with_keys = crate::shortcut_editor::PANEL_SHORTCUTS.iter().filter(|(panel, _)| rows.iter().any(|r| r.params["panel"] == *panel)).count();
-    assert!(with_keys > 0 && shown >= with_keys, "{shown} rows show a chord, {with_keys} panels have a default key");
+    assert!(with_keys > 0, "some listed panels have a default key");
 }
 
-/// A click on a Window menu row toggles its panel: it puts a showing panel away and shows it again.
+/// A click on a Window menu row toggles its panel: it puts a showing panel away and shows it again. Libraries is
+/// docked in front with no function key, so neither its flyout nor its shortcut toggles it.
 #[test]
 fn a_window_menu_click_toggles_its_panel() {
     use craft::ui::runtime::commands::{FirePhase, FireSource, Fired};
@@ -278,18 +281,41 @@ fn a_window_menu_click_toggles_its_panel() {
         .bar
         .items()
         .into_iter()
-        .find(|it| it.command.id == "window.panel" && it.command.params["panel"] == "layers")
+        .find(|it| it.command.id == "window.panel" && it.command.params["panel"] == "libraries")
         .map(|it| it.command.clone());
-    let row = row.expect("a Window › Layers row");
-    let before = crate::panel_docking::showing(&app.ui, "layers");
+    let row = row.expect("a Window › Libraries row");
+    let before = crate::panel_docking::showing(&app.ui, "libraries");
     let click = |app: &mut VectorcraftApp| {
         crate::shortcuts::run_fired(app, &ctx, &Fired::new(row.clone(), FireSource::Menu, FirePhase::Press, 0.0));
         key_frame(app, &ctx, vec![]);
-        crate::panel_docking::showing(&app.ui, "layers")
+        crate::panel_docking::showing(&app.ui, "libraries")
     };
     let once = click(&mut app);
-    assert_ne!(once, before, "the first click toggles Layers");
+    assert_ne!(once, before, "the first click toggles Libraries");
     assert_eq!(click(&mut app), before, "the second click toggles it back");
+}
+
+/// A click on the task bar's More Options › Show Properties Panel leaves a showing Properties panel showing, docked
+/// and in an icon column's flyout: it does not take the toggle of Window › Properties.
+#[test]
+fn the_task_bar_show_properties_row_keeps_properties_showing() {
+    use craft::ui::runtime::commands::{FirePhase, FireSource, Fired};
+    let mut app = new_app();
+    let ctx = ready(&mut app);
+    let row = crate::canvas::task_bar::show_properties();
+    let click = |app: &mut VectorcraftApp| {
+        crate::shortcuts::run_fired(app, &ctx, &Fired::new(row.clone(), FireSource::Menu, FirePhase::Press, 0.0));
+        key_frame(app, &ctx, vec![]);
+        crate::panel_docking::showing(&app.ui, "properties")
+    };
+    assert!(click(&mut app), "the first click shows Properties");
+    assert!(click(&mut app), "a second click leaves Properties showing");
+    app.run("window.collapseDock", json!({ "collapsed": true })).expect("the dock collapses to icons");
+    key_frame(&mut app, &ctx, vec![]);
+    assert!(click(&mut app), "a click opens the Properties flyout");
+    assert!(click(&mut app), "a second click leaves the flyout open");
+    app.run("window.panel", row.params.clone()).expect("the command runs from automation");
+    assert!(crate::panel_docking::showing(&app.ui, "properties"), "the command leaves the flyout open from automation too");
 }
 
 /// `ui.menu.list` lists a Window menu panel row with the toggle a click on it runs, and a plug-in's row that shows a
