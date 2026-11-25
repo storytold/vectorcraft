@@ -4284,8 +4284,10 @@ already walks Image Trace. Short agent entry points:
   it does not read it on Windows or in the web build. `.ai` brush definitions read and write the wheel as variation
   code 3.
 - Pattern brush scale from the pen: a pattern brush's `scale_mode` (`brush.new`, `brush.options`,
-  `brush.objectOptions`; left out or `null` for Fixed) takes `pressure`, `tilt`, `bearing`, `rotation` and
-  `stylusWheel`, and `scale_max` (1..10000%) is the second scale. The tiles go from `scale` where the pen reads 0 to
+  `brush.objectOptions`; `null` for Fixed) takes `pressure`, `tilt`, `bearing`, `rotation` and
+  `stylusWheel`, and `scale_max` (1..10000%) is the second scale. `brush.new` without a `scale_mode` makes a
+  Fixed brush; `brush.options` without one keeps the brush's mode, and `brush.objectOptions` without one keeps
+  each path's mode. The tiles go from `scale` where the pen reads 0 to
   `scale_max` where it reads 1, over the ranges an Art brush's `width_mode` uses, and half way on a stroke drawn
   without that input; without a `scale_max` both ends are `scale`. Each side, start and end tile is as tall as the
   scale at each point of the stroke, and the tile and the gap after it are as long as the scale at the tile's
