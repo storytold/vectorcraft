@@ -1717,6 +1717,10 @@ fn a_filter_plugin_keeps_its_shortcut_when_replaced_or_reloaded() {
 fn a_heavy_filter_plugin_runs_from_its_shortcut_as_from_its_menu_item() {
     use vectorcraft_plugins::wat as tpl;
     let mut app = new_app();
+    // The background work waits until the test runs it, which it never does: the run started from
+    // the key is still running when Cancel stops it, however long the frames take.
+    let jobs = std::sync::Arc::new(craft::host::ManualJobs::new());
+    app.host = std::sync::Arc::new(craft::host::Host::builder(app.host.app().clone()).i18n(crate::i18n::shared()).jobs(jobs).build());
     app.session.allow_plugin_grants_from_requests();
     app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
     let (at_once, asks) = ("test.UI.heavy_filter-at-once", "test.UI.heavy_filter-asks");
