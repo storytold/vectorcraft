@@ -525,14 +525,18 @@ fn an_empty_password_still_asks_for_the_password() {
     let mut app = app();
     let bytes = pdf(&[PdfPage::new(120.0, 60.0, "1 0 0 rg 0 0 20 20 re f")], Some("pw"));
     let data = vectorcraft_format::base64_encode(&bytes);
+    let close = |app: &VectorcraftApp| {
+        let id = dialog_id(app).expect("an Import PDF dialog");
+        assert!(app.dialogs().unwrap().with(|host| host.cancel_by_id(&ctx(app), id)));
+        assert!(!is_open(app));
+    };
     for password in [json!(""), json!(null)] {
-        app.ui.dialog = None;
         let p = json!({"name": "locked.pdf", "dataBase64": data, "password": password});
         assert!(import_pdf::offer_place_password(&mut app, &p), "asks with password {password}");
         assert_eq!((field(&app, "__locked"), field(&app, "__passwordOnly")), (json!(true), json!(true)));
+        close(&app);
     }
-    app.ui.dialog = None;
     let p = json!({"name": "locked.pdf", "dataBase64": data, "password": "pw"});
     assert!(!import_pdf::offer_place_password(&mut app, &p), "a given password is placed with");
-    assert!(app.ui.dialog.is_none());
+    assert!(!is_open(&app));
 }
