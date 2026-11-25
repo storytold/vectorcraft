@@ -618,14 +618,16 @@ pub(crate) fn preferred_text_as(app: &VectorcraftApp) -> TextAs {
 /// or `.ait` file opens as it says: Outlines would open it from its PDF content, without its
 /// editing data. So does an open with `linkPages`, which refuses Outlines: a linked page shows the
 /// file's own text.
-pub(crate) fn with_preferred_text_as(app: &VectorcraftApp, name: &str, bytes: &[u8], p: &Value) -> Value {
+pub(crate) fn with_preferred_text_as(app: &VectorcraftApp, name: &str, bytes: &[u8], mut p: Value) -> Value {
     let given = p.get("textAs").is_some_and(|v| !v.is_null());
     let linked = p.get("linkPages").and_then(Value::as_bool) == Some(true);
     let options = p.is_object() || p.is_null();
     if given || linked || !options || preferred_text_as(app) == TextAs::Text || fileio::detect(name, bytes).map(|f| f.id) != Some("pdf") {
-        return p.clone();
+        return p;
     }
-    let mut p = if p.is_object() { p.clone() } else { json!({}) };
+    if !p.is_object() {
+        p = json!({});
+    }
     p["textAs"] = json!(TextAs::Outlines.id());
     p
 }
