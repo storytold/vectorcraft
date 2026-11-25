@@ -301,9 +301,9 @@ the suite) keep the agent to the folders you give it:
   outside the read roots, also those the person or an earlier request put there. In `plugin.list`, the plug-in
   folder last loaded is `null` in `folder.folder`, and a failed file in `folder.failed` and a plug-in's `source`
   (also in `plugin.info`) are named by their file name, in the errors too. A plug-in turned off for the next
-  launch (`disabled`, and `pendingItem` in `plugin.safeMode`) has a file outside the read roots named by its file
-  name. `plugin.setEnabled {file}` takes that name, and a plug-in's `source` name, when no other listed file has
-  it. In `file.recovery.list` and `file.recovery.restore`, a
+  launch (`disabled`, and `pendingItem` and `pendingItems` in `plugin.safeMode`) has a file outside the read roots
+  named by its file name. `plugin.setEnabled {file}` takes that name, and a plug-in's `source` name, when no other
+  listed file has it. In `file.recovery.list` and `file.recovery.restore`, a
   document's original file in `path` is `null`, and so is the recovery folder in `location` (`file.recovery.save`
   too); the restored documents keep their files. In `scriptReport`, a file the run wrote (`written`) and the
   included file a failed run stopped in (`file`, also in `message` and the run's error lines in `console`) are named
@@ -8934,8 +8934,8 @@ turn it off to keep each point's other side), and Total Width scales each point'
 one `stroke.widthProfile.set` (one undo step, none when nothing changed), and Delete removes them all; with a
 discontinuous point among them, Incoming and Outgoing edit its two halves and both edit the continuous points.
 Malformed or out-of-range `indices`, or more than one of `index`, `indices` and `t`, are errors that open no dialog. OK
-and Delete on existing points are refused when those points changed since the dialog opened or another document is
-active.
+and Delete on existing points are refused when those points changed since the dialog opened (their place, their widths,
+or which of them pair as a discontinuous point) or another document is active.
 `document.inspect` reports a path's `strokeOptions.widthPoints` (`[t, left, right]`, factors of half the weight; null
 for a uniform stroke). `stroke.widthPoint.remove {id, index | indices}` deletes points; `stroke.widthProfile.set {ids,
 points}` replaces them all, as dragging several Shift-selected points with the Width tool does in one undo step.
@@ -12858,7 +12858,10 @@ a font without vertical metrics keeps its cells. Line-end Punctuation Half Width
 punctuation `palt` or `vpal` re-spaced (the opening bracket at a line's start, consecutive punctuation, the closing
 mark at a line's end); punctuation left full width is trimmed as before. With automatic kerning the font's kerning
 for the re-spaced glyphs comes too: `apkn` with `palt`, and `vkrn` and `vapk` with `vpal` (vertical type is otherwise
-not kerned). Off by default and saved only when on. One undo step.
+not kerned). Off by default and saved only when on. One undo step. With Show East Asian Options on, the Character
+panel menu and the OpenType panel menu ([the help page](https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html))
+each have a Proportional Metrics item that sends this attribute; the OpenType panel's item is checked when every
+character it changes has it.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"proportionalMetrics":true}}}
@@ -13554,7 +13557,16 @@ fit makes `plugin.run` return a memory-budget error naming the object and its si
 memory-budget error `the selection is too large to hand over`, and more than 100,000 of these objects make it return
 an object-budget error. Its output returns
 each of them as `{"id": …}` or exactly as given, otherwise `plugin.run` returns an error naming the object and the
-field, and the document and undo history are unchanged. A filter at plug-in API level 2 whose manifest lists the
+field, and the document and undo history are unchanged. A filter, or a live effect with commands, at plug-in API level 3
+whose manifest lists `context` (`settings`, `artboards`, `layers`, `swatches`; `context` in its `plugin.list` entry)
+also lists `doc.read` in its `permissions`, and each filter or command run is given those parts of the active document in
+`_context.document`, with or without a selection: the document's name without its folder, color mode, units, active
+artboard size, bleed and raster effects resolution; every artboard's id, name and rectangle; every layer and sublayer
+with its id, parent, depth, name, visibility, lock, template, color and whether it is current; and every swatch as
+`swatch.list` lists it. It holds no path and no object. More than 10,000 rows, or more than 4 MiB of them, make
+`plugin.run` and the command return an error before the plug-in starts, with nothing changed, and each row takes 1,000
+instructions from the run's budget (VectorCraft's own values; docs/plugins.md, Document information). This is narrower
+than `document.inspect`, which plug-ins can't call. A filter at plug-in API level 2 whose manifest lists the
 `commands` permission and a `commandAllowlist` (both in its `plugin.list` entry) runs the commands that list names
 while it runs, through `vc_call`: the calls and its output are one undo step, and a run that fails or makes a call that
 fails leaves the documents, selections and history as they were. Without `doc.read` every call fails. A command that
@@ -13670,8 +13682,9 @@ commands, `ids` left out or null means the selection, and an `ids` that is not a
 
 Safe Mode starts VectorCraft without plug-ins: `vectorcraft --safe-mode`, `vectorcraft-cli --safe-mode <subcommand>`, or
 the choice the desktop app offers when the last launch stopped while a plug-in was loading (Disable and Continue, Start
-Normally, Start in Safe Mode). It names that plug-in without saying it caused the stop. Until the user picks Disable and
-Continue or Start Normally, the next launch asks again, also after a `--safe-mode` launch, which asks nothing.
+Normally, Start in Safe Mode). It names that plug-in without saying it caused the stop. When several plug-ins were
+loading at once, it lists all of them, and Disable Listed Plug-ins and Continue turns off every one. Until the user picks
+Disable and Continue or Start Normally, the next launch asks again, also after a `--safe-mode` launch, which asks nothing.
 `vectorcraft --safe-mode` opens its files in a window of its own, and on Windows and Linux a file opened from the file
 manager while the app is in Safe Mode starts a window with plug-ins. Files given on the command line, or opened from
 the file manager while the choice is up, open after the user picks. On Windows and Linux, when the choice is Start in Safe
@@ -13685,7 +13698,8 @@ visible plain symbol instance in a group or layer with a raster effect, since th
 hidden instance, or one in a template sublayer, draws nothing in that image, so its symbol's art does not count. `vectorcraft` rejects an option it does not know (such as
 `--safe-mod`) instead of opening it as a file; `--` before a file name that starts with `-` opens it. The web build keeps
 no installed plug-ins from one page load to the next and has no launch marker, so it never offers the choice. `plugin.safeMode` returns `{active, source, disabled,
-pendingItem}`; a command does not turn Safe Mode on or off. `plugin.setEnabled {id | file, enabled}` turns a plug-in on or
+pendingItem, pendingItems}` (`pendingItems` lists every plug-in the choice names, and `pendingItem` is the first);
+a command does not turn Safe Mode on or off. `plugin.setEnabled {id | file, enabled}` turns a plug-in on or
 off for the next launch, as Help › Safe Mode's Enable on Re-launch does; it does not load, unload or uninstall anything
 now, and `plugin.install` of a disabled plug-in turns it on. Turning a plug-in on by `id` or by installing it also turns
 on the file it is stored in, which names it when it stopped a launch while loading; when the new version can't be saved
