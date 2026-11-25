@@ -480,6 +480,39 @@ fn an_object_in_a_symbol_instance_refuses_a_bad_target() {
     assert_ne!(*s.doc().unwrap().doc, *doc);
 }
 
+/// A bad `target` is refused when `id` or `ids` names an object, and a bad `target` or `aligned`
+/// while the Type tool has characters selected; each leaves the document alone. A good `target`
+/// with an `id` still paints the object.
+#[test]
+fn a_bad_target_is_refused_with_an_id_or_selected_characters() {
+    let mut s = session();
+    let r = rect(&mut s, 10.0);
+    select(&mut s, &[r]);
+    let doc = s.doc().unwrap().doc.clone();
+    for cmd in ["paint.setFill", "paint.setStroke"] {
+        for p in [
+            json!({"color": "#ff0000", "target": "content", "id": r.0}),
+            json!({"color": "#ff0000", "target": "content", "ids": [r.0]}),
+            json!({"opacity": 40, "target": "content", "id": r.0}),
+            json!({"opacity": 40, "target": "content", "ids": [r.0]}),
+        ] {
+            let e = s.execute(cmd, &p).unwrap_err();
+            assert!(e.to_string().contains("`target` must be"), "{cmd} {p}: {e}");
+            assert_eq!(*s.doc().unwrap().doc, *doc, "{cmd} {p}");
+        }
+    }
+    assert_eq!(s.execute("paint.setFill", &json!({"color": "#ff0000", "target": "object", "id": r.0})).unwrap()["objects"], 1);
+    assert_ne!(*s.doc().unwrap().doc, *doc);
+    let t = text(&mut s);
+    select(&mut s, &[t]);
+    select_characters(&mut s, t);
+    let doc = s.doc().unwrap().doc.clone();
+    for p in [json!({"color": "#ff0000", "target": "content"}), json!({"color": "#ff0000", "aligned": "yes"})] {
+        assert!(s.execute("paint.setFill", &p).is_err(), "{p}");
+        assert_eq!(*s.doc().unwrap().doc, *doc, "{p}");
+    }
+}
+
 /// A gradient mesh point picked with the Mesh tool takes a fill opacity itself, and the proxy shows
 /// it; the object's fill item and the other points stay as they were.
 #[test]

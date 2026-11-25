@@ -403,3 +403,264 @@ fn overprinting_gradient_strokes_type_freeforms_and_spot_inks_keep_the_ink_below
     ];
     assert_keeps_the_ink_below(&cases);
 }
+
+#[test]
+fn an_overprinting_freeform_gradient_leaves_out_the_cells_its_samples_write_without_ink_on_a_postscript_plate() {
+    // 0.1% cyan around the left point: not paper white, but the plate's 8-bit samples write it as
+    // none of the ink, so the cyan below prints there.
+    let (faint, inked) = (Color::cmyk(0.001, 0.3, 0.0, 0.0), Color::cmyk(0.6, 0.3, 0.0, 0.0));
+    let mut freeform = GradientPaint::new(Gradient::new(GradientKind::Freeform, vec![GradientStop::new(0.0, faint), GradientStop::new(1.0, inked)]));
+    let pure = |at: Point, c: Color| FreeformPoint { spread: 0.9, ..FreeformPoint::new(at, c) };
+    freeform.freeform =
+        Some(Freeform { points: vec![pure(Point::new(50.0, 50.0), faint), pure(Point::new(150.0, 50.0), inked)], ..Default::default() });
+    let cyan = Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0));
+    assert_keeps_the_ink_below(&[("faint", overprinting(Paint::Gradient(Box::new(freeform)), Paint::None), cyan, "Cyan")]);
+}
+
+/// A 200 × 100 pt document with `words` at 24 pt in black, in family `family`.
+fn typed(words: &str, family: &str) -> Document {
+    let mut d = Document::new(200.0, 100.0);
+    let layer = d.layers[0].id;
+    let style = CharStyle { font_family: family.into(), size: 24.0, fill: Paint::solid(Color::BLACK), ..CharStyle::default() };
+    let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(20.0, 60.0), words, style))));
+    d.insert(Some(layer), 0, n).unwrap();
+    d
+}
+
+/// The regular face of `family`.
+fn face_of(family: &str) -> std::sync::Arc<vectorcraft_text::FontFace> {
+    vectorcraft_text::FontDb::global().face(family, "Regular").unwrap()
+}
+
+/// The bundled fallback face as another family `family` (13 characters, like the bundled name),
+/// whose license flags (OS/2 `fsType`) are `fs`.
+fn licensed(family: &str, fs: u16) -> String {
+    let fallback = vectorcraft_text::FALLBACK_FAMILY;
+    let mut bytes = face_of(fallback).file_data().to_vec();
+    let utf16 = |s: &str| s.encode_utf16().flat_map(u16::to_be_bytes).collect::<Vec<u8>>();
+    for (from, to) in [(utf16(fallback), utf16(family)), (fallback.as_bytes().to_vec(), family.as_bytes().to_vec())] {
+        assert_eq!(from.len(), to.len());
+        let mut at = 0;
+        while let Some(i) = bytes[at..].windows(from.len()).position(|w| w == from) {
+            bytes[at + i..at + i + from.len()].copy_from_slice(&to);
+            at += i + from.len();
+        }
+    }
+    let tables = u16::from_be_bytes([bytes[4], bytes[5]]) as usize;
+    let os2 = (0..tables).map(|i| 12 + 16 * i).find(|r| &bytes[*r..*r + 4] == b"OS/2").unwrap();
+    let off = u32::from_be_bytes(bytes[os2 + 8..os2 + 12].try_into().unwrap()) as usize;
+    bytes[off + 8..off + 10].copy_from_slice(&fs.to_be_bytes());
+    vectorcraft_text::FontDb::global().add_font(bytes);
+    assert!(vectorcraft_text::FontDb::global().has_family(family));
+    family.into()
+}
+
+/// The job's setup and each page's program.
+fn sections(ps: &str) -> (&str, Vec<&str>) {
+    let setup = ps.split_once("%%BeginSetup\n").and_then(|(_, rest)| rest.split_once("%%EndSetup")).map_or("", |(setup, _)| setup);
+    (setup, ps.split("%%Page: ").skip(1).collect())
+}
+
+/// How many glyph procedures the Type 3 fonts in `ps` define.
+fn procs(ps: &str) -> usize {
+    ps.lines().filter(|l| l.starts_with("/g") && l.ends_with("setcachedevice")).count()
+}
+
+fn fonts_job(fonts: PrintFonts) -> PrintJob {
+    PrintJob { fonts, ..PrintJob::default() }
+}
+
+#[test]
+fn type_prints_as_outlines_unless_the_job_sends_fonts() {
+    assert_eq!(PrintJob::default().fonts, PrintFonts::Outlines);
+    let d = typed("AAB", vectorcraft_text::FALLBACK_FAMILY);
+    let ps = text(&print(&[page(&d, None)], &[0], &PrintJob::default()).unwrap());
+    assert!(!ps.contains("FontType") && !ps.contains("> show") && !ps.contains("Resources:"), "{ps}");
+}
+
+#[test]
+fn subset_downloads_used_glyphs_once_per_page() {
+    let d = typed("AAB", vectorcraft_text::FALLBACK_FAMILY);
+    let sheets = [page(&d, None), PrintPage { ink: Some(("Black", 60.0, 45.0)), ..page(&d, None) }];
+    for level in [Level::Two, Level::Three] {
+        let out = print(&sheets, &[0, 1, 0], &PrintJob { level, ..fonts_job(PrintFonts::Subset) }).unwrap();
+        let ps = text(&out);
+        assert!(ps.contains("%%DocumentSuppliedResources: font VCft0.0\n"), "{ps}");
+        let (setup, pages) = sections(&ps);
+        assert!(!setup.contains("FontType"), "{setup}");
+        assert_eq!(pages.len(), 3);
+        for p in pages {
+            // Each printed page, copies and plates included, defines the font with A and B alone.
+            let (page_setup, body) = p.split_once("%%EndPageSetup").unwrap();
+            assert_eq!(page_setup.matches("/FontType 3 def").count(), 1, "{page_setup}");
+            assert_eq!(procs(page_setup), 2, "{page_setup}");
+            assert_eq!(body.matches("> show").count(), 3, "{body}");
+            assert!(body.contains("/VCft0.0 findfont"), "{body}");
+            assert_eq!(procs(body), 0);
+        }
+        assert!(out.warnings.is_empty() && out.setting_notes.is_empty(), "{:?} {:?}", out.warnings, out.setting_notes);
+    }
+    // Read back, the type the font shows draws where its outlines do.
+    let area = Rect::new(36.0, 36.0, 236.0, 136.0);
+    let drawn = |fonts| {
+        let out = print(&sheets[..1], &[0], &fonts_job(fonts)).unwrap();
+        render_region(&crate::import(&out.bytes).unwrap().document, area, 2.0)
+    };
+    let (outlined, shown) = (drawn(PrintFonts::Outlines), drawn(PrintFonts::Subset));
+    assert!(outlined.ink() > 200, "{}", outlined.ink());
+    let (a, b) = (outlined.ink() as f64, shown.ink() as f64);
+    assert!((a - b).abs() < a * 0.05, "outlines {a} px, fonts {b} px");
+    vectorcraft_testkit::raster::assert_similar(&outlined, &shown, 24.0, 0.002);
+}
+
+#[test]
+fn complete_downloads_whole_font_once_before_pages() {
+    let d = typed("AAB", vectorcraft_text::FALLBACK_FAMILY);
+    let glyphs = face_of(vectorcraft_text::FALLBACK_FAMILY).glyph_count() as usize;
+    assert!(glyphs > 256, "{glyphs}");
+    let out = print(&[page(&d, None)], &[0, 0], &fonts_job(PrintFonts::Complete)).unwrap();
+    let ps = text(&out);
+    let (setup, pages) = sections(&ps);
+    // Every glyph of the face, in fonts of 256 glyphs, before the first page.
+    assert_eq!(procs(setup), glyphs);
+    assert_eq!(setup.matches("/FontType 3 def").count(), glyphs.div_ceil(256));
+    let header = ps.split_once("%%EndComments").unwrap().0;
+    let supplied = header.lines().filter(|l| l.starts_with("%%DocumentSuppliedResources: font ") || l.starts_with("%%+ font VCft")).count();
+    assert_eq!(supplied, glyphs.div_ceil(256), "{header}");
+    assert_eq!(pages.len(), 2);
+    for p in pages {
+        assert!(!p.contains("FontType") && procs(p) == 0, "{p}");
+        assert_eq!(p.matches("> show").count(), 3);
+    }
+    assert!(out.warnings.is_empty() && out.setting_notes.is_empty(), "{:?} {:?}", out.warnings, out.setting_notes);
+    // A sheet the order doesn't print sends no font, in any mode.
+    let plain = doc();
+    for fonts in [PrintFonts::Complete, PrintFonts::Subset, PrintFonts::Resident] {
+        let out = print(&[page(&plain, None), page(&d, None)], &[0], &fonts_job(fonts)).unwrap();
+        let ps = text(&out);
+        assert!(!ps.contains("FontType") && !ps.contains("Resources:") && !ps.contains("findfont"), "{fonts:?}: {ps}");
+        assert!(out.setting_notes.is_empty(), "{fonts:?}: {:?}", out.setting_notes);
+    }
+}
+
+#[test]
+fn none_references_font_without_downloading_it() {
+    let face = face_of(vectorcraft_text::FALLBACK_FAMILY);
+    let name = face.postscript_name();
+    let d = typed("AAB", vectorcraft_text::FALLBACK_FAMILY);
+    let out = print(&[page(&d, None)], &[0, 0], &fonts_job(PrintFonts::Resident)).unwrap();
+    let ps = text(&out);
+    assert!(!ps.contains("FontType") && !ps.contains("setcachedevice") && !ps.contains("%%BeginResource"), "{ps}");
+    assert!(ps.contains(&format!("%%DocumentNeededResources: font {name}\n")), "{ps}");
+    let (_, pages) = sections(&ps);
+    assert_eq!(pages.len(), 2);
+    for p in pages {
+        let (page_setup, body) = p.split_once("%%EndPageSetup").unwrap();
+        assert!(page_setup.contains(&format!("%%IncludeResource: font {name}\n")), "{page_setup}");
+        // The printer's font, re-encoded with the names of the glyphs the page shows.
+        assert!(page_setup.contains(&format!("/{name} findfont dup length dict begin")), "{page_setup}");
+        assert!(page_setup.contains(" /A put\n") && page_setup.contains(" /B put\n"), "{page_setup}");
+        assert_eq!(body.matches("> show").count(), 3, "{body}");
+    }
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    assert_eq!(out.setting_notes.len(), 1, "{:?}", out.setting_notes);
+    assert!(out.setting_notes[0].contains(&name), "{:?}", out.setting_notes);
+}
+
+#[test]
+fn forbidden_font_stays_art_with_a_note() {
+    let locked = licensed("Locked Sans 3", 0x0002);
+    let whole = licensed("Entire Sans 3", 0x0100);
+    let fonts_of = |family: &str, fonts| {
+        let d = typed("AB", family);
+        let out = print(&[page(&d, None)], &[0], &fonts_job(fonts)).unwrap();
+        (text(&out), out.warnings)
+    };
+    for fonts in [PrintFonts::Subset, PrintFonts::Complete] {
+        let (ps, warnings) = fonts_of(&locked, fonts);
+        assert!(!ps.contains("FontType") && !ps.contains("> show"), "{ps}");
+        assert!(warnings.iter().any(|w| w.contains(&locked) && w.contains("doesn't allow")), "{warnings:?}");
+    }
+    // A font that may only be sent whole prints as outlines in a subset job and is sent complete.
+    let (ps, warnings) = fonts_of(&whole, PrintFonts::Subset);
+    assert!(!ps.contains("FontType") && !ps.contains("> show"), "{ps}");
+    assert!(warnings.iter().any(|w| w.contains(&whole) && w.contains("whole")), "{warnings:?}");
+    let (ps, warnings) = fonts_of(&whole, PrintFonts::Complete);
+    assert!(sections(&ps).0.contains("/FontType 3 def") && ps.contains("> show"), "{ps}");
+    assert!(warnings.is_empty(), "{warnings:?}");
+    // None sends no font program, so the license doesn't keep it from naming the font.
+    let (ps, warnings) = fonts_of(&locked, PrintFonts::Resident);
+    assert!(ps.contains("> show") && !ps.contains("FontType"), "{ps}");
+    assert!(warnings.is_empty(), "{warnings:?}");
+}
+
+#[test]
+fn complete_large_font_fails_before_partial_output() {
+    let face = face_of(vectorcraft_text::FALLBACK_FAMILY);
+    let gid = face.glyph_for('A');
+    let elements = vectorcraft_text::FontDb::global().outline(&face, gid).elements().len();
+    let mut job = fonts::FontJob::new(PrintFonts::Complete);
+    let (i, _) = job.glyph(face.id(), gid, elements).unwrap();
+    let used = job.every_glyph(&fonts::UsedGlyphs::from([(i, std::collections::BTreeSet::from([gid]))]));
+    job.max = 64 << 10;
+    let mut s = String::from("before\n");
+    let e = job.define(&used, &mut s).unwrap_err();
+    assert!(e.contains("64 KB") && e.contains("Subset"), "{e}");
+    assert_eq!(s, "before\n");
+    // With room, every glyph is defined.
+    job.max = fonts::MAX_FONTS;
+    job.define(&used, &mut s).unwrap();
+    assert_eq!(procs(&s), face.glyph_count() as usize);
+}
+
+#[test]
+fn type_left_out_for_the_page_limit_sends_none_of_its_glyphs() {
+    let family = vectorcraft_text::FALLBACK_FAMILY;
+    let face = face_of(family);
+    let kept = typed("A", family);
+    let mut both = kept.clone();
+    let layer = both.layers[0].id;
+    let style = CharStyle { font_family: family.into(), size: 24.0, fill: Paint::solid(Color::BLACK), ..CharStyle::default() };
+    let n = Node::new(both.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(20.0, 90.0), "BCDEFGH", style))));
+    both.insert(Some(layer), 1, n).unwrap();
+    let o = EpsOptions { region: kept.artboards[0].rect, ..EpsOptions::default() };
+    let walk = |d: &Document, max: usize| {
+        let job = RefCell::new(fonts::FontJob::new(PrintFonts::Subset));
+        crate::scene::Scene::new(d, &o).with_fonts(Some(&job)).with_max_body(max).run()
+    };
+    let alone = walk(&kept, usize::MAX);
+    assert_eq!(alone.fonts.values().map(|g| g.len()).sum::<usize>(), 1, "{:?}", alone.fonts);
+    // The second object passes the limit and is left out: only the glyph of the first is used.
+    let page = walk(&both, alone.body.len() + 10);
+    assert!(page.warnings.iter().any(|w| w.contains("too large")), "{:?}", page.warnings);
+    assert_eq!(page.body, alone.body);
+    assert_eq!(page.fonts, alone.fonts);
+    assert!(page.fonts.values().all(|g| g.contains(&face.glyph_for('A'))), "{:?}", page.fonts);
+}
+
+#[test]
+fn ruby_prints_as_outlines_where_the_canvas_draws_it() {
+    let family = vectorcraft_text::FALLBACK_FAMILY;
+    let mut d = Document::new(200.0, 100.0);
+    let layer = d.layers[0].id;
+    let style = CharStyle { font_family: family.into(), size: 24.0, fill: Paint::solid(Color::BLACK), ..CharStyle::default() };
+    let mut t = TextObject::point(Point::new(20.0, 60.0), "AB", style);
+    t.ruby = vec![vectorcraft_doc::RubySpan::new(0, 2, "xy")];
+    let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+    d.insert(Some(layer), 0, n).unwrap();
+    let area = Rect::new(36.0, 36.0, 236.0, 136.0);
+    let drawn = |fonts| {
+        let out = print(&[page(&d, None)], &[0], &fonts_job(fonts)).unwrap();
+        (text(&out), render_region(&crate::import(&out.bytes).unwrap().document, area, 2.0))
+    };
+    let (_, outlined) = drawn(PrintFonts::Outlines);
+    for fonts in [PrintFonts::Subset, PrintFonts::Complete] {
+        let (ps, shown) = drawn(fonts);
+        // The base text shows through the font; its reading is drawn as outlines, in place.
+        assert_eq!(ps.matches("> show").count(), 2, "{fonts:?}: {ps}");
+        if fonts == PrintFonts::Subset {
+            assert_eq!(procs(&ps), 2, "{ps}");
+        }
+        vectorcraft_testkit::raster::assert_similar(&outlined, &shown, 24.0, 0.002);
+    }
+}

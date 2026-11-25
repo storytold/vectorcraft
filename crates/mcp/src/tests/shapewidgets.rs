@@ -1,5 +1,6 @@
-//! Live shape widgets through MCP: a shape tool's double-click on a selected live shape's corner
-//! widget, whose gesture's `requests` carry the Transform panel, and a drag on a live polygon's
+//! Live shape widgets through MCP: a shape tool's or the Selection tool's double-click on a
+//! selected live shape's corner widget, whose gesture's `requests` carry the Transform panel, and a
+//! drag on a live polygon's
 //! side widget.
 
 use serde_json::{Value, json};
@@ -28,6 +29,10 @@ fn a_corner_widget_double_click_with_a_shape_tool_requests_the_transform_panel()
     // Off the widgets, the double-click asks for nothing.
     let off = ok(&mut h, "pointer_gesture", json!({"events": [{"kind": "doubleclick", "x": 280, "y": 280}]}));
     assert_eq!(off["requests"], json!([]), "{off}");
+    // The Selection tool's double-click on the widget asks for the panel too.
+    let sel = ok(&mut h, "pointer_gesture", json!({"tool": "selection", "events": [{"kind": "doubleclick", "x": at.x, "y": at.y}]}));
+    assert_eq!(sel["requests"], json!([{"panel": "transform"}]), "{sel}");
+    assert_eq!(h.session.doc().unwrap().history.undo.len(), steps, "no undo step");
 }
 
 /// The selected live polygon's sides, radius and transform.
@@ -92,6 +97,8 @@ fn a_batch_that_switches_documents_during_a_side_widget_drag_keeps_its_steps() {
         {"command": "document.activate", "params": {"index": 0}}
     ]});
     h.call("engine.execute", json!({"command": "command.batch", "params": batch})).unwrap();
+    assert_eq!(h.session.active_index(), Some(0), "the batch activates document 0");
+    assert_ne!(h.session.doc().unwrap().uid, uid, "the batch leaves the polygon's document");
     let st = h.session.documents().iter().find(|d| d.uid == uid).expect("the polygon's document");
     let vectorcraft_doc::NodeKind::Path { live, .. } = &st.doc.node(id).unwrap().kind else { panic!("not a path") };
     assert!(matches!(live.as_deref(), Some(vectorcraft_doc::LiveShape::Polygon { sides: 7, .. })), "the settled drag: {live:?}");

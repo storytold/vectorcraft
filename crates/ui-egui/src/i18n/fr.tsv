@@ -209,6 +209,7 @@
 	Anti-alias Rasters	Lisser les images pixellisées
 	Anti-aliased Artwork	Illustration lissée
 	Anti-aliasing Method	Méthode de lissage
+@id	language.name	Français
 antiAlias	Sharp	Net
 	Crisp	Précis
 	Strong	Fort
@@ -6458,6 +6459,7 @@ lighting	Light	Lumière
 @msg	a 3D effect on a group's fill or stroke draws nothing	un effet 3D sur le fond ou le contour d’un groupe ne dessine rien
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un effet 3D sur le fond ou le contour d’un groupe ne dessine rien à exporter
 @msg	The 3D object is too complex to export	L’objet 3D est trop complexe pour être exporté
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Le maillage de l’objet 3D est incomplet ou contient une valeur qui n’est pas un nombre
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l’objet n’a aucun effet 3D (Extrusion et biseautage, Révolution, Gonfler ou Rotation)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` doit être un objet ne contenant que `mode`, avec la valeur shaded ou wireframe
 @msg	its 3D effect builds no solid	son effet 3D ne construit aucun volume
@@ -7333,11 +7335,17 @@ axis	Y Axis	Axe Y
 @msg	module is {_1} bytes (limit {_2})	le module fait {_1} octets (limite {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	approbation requise : il demande {0}, que l’utilisateur accorde en l’installant seul
 @msg	not JSON: {e}	pas du JSON : {e}
-@msg	not a WebAssembly binary (missing \0asm header)	pas un binaire WebAssembly (en-tête \0asm absent)
+@msg	not a WebAssembly binary (missing \\0asm header)	pas un binaire WebAssembly (en-tête \\0asm absent)
 @msg	parameter `{k}`: {what}	paramètre `{k}` : {what}
 @msg	parameter `{name}`: {what}	paramètre `{name}` : {what}
 @msg	plug-in parameters must be a JSON object	les paramètres du plug-in doivent être un objet JSON
 @msg	the module must export its linear memory as `memory`	le module doit exporter sa mémoire linéaire sous le nom `memory`
+@msg	the module must export `{name}` with the type {signature}	le module doit exporter `{name}` avec le type {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	le module a plus d’une section personnalisée `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	budget mémoire (la mémoire initiale du module est de {initial} octets, limite {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	le manifeste de la section personnalisée `{MANIFEST_SECTION}` doit donner `abi` égal à {ABI_VERSION}, la version d’ABI que cet hôte implémente
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	budget de tables (le module définit {count} tables, la plus grande avec {largest} éléments, limite {MAX_TABLES} tables de {MAX_TABLE_ELEMENTS} éléments)
+@msg	the module's table section could not be read	la section des tables du module n’a pas pu être lue
 @msg	the objects to change are no longer in the document	les objets à modifier ne sont plus dans le document
 @msg	the runtime panicked	l’environnement d’exécution a planté
 @msg	unexpected host trap	arrêt inattendu (trap) de l’hôte
@@ -7412,6 +7420,8 @@ axis	Y Axis	Axe Y
 @msg	`plates` requires a stop linked to a spot swatch	`plates` exige une étape liée à une nuance de ton direct
 @msg	the output	la sortie
 @msg	the path has no anchor points	le tracé n’a aucun point d’ancrage
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	le tracé transparent {id} a un membre masqué, verrouillé ou repère, donc ses membres ne peuvent pas être remplacés
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	le tracé transparent {id} a un membre qui n’est pas un tracé, donc ses membres ne peuvent pas être remplacés
 @msg	too many anchor points (limit {MAX_ANCHORS})	trop de points d’ancrage (limite {MAX_ANCHORS})
 @msg	true or false	true ou false
 @msg	a number >= {_1}	un nombre >= {_1}
@@ -8863,7 +8873,7 @@ breakText	Glyphs	Glyphes
 @msg	The {name} profile could not be read, so the new document has the default settings: {reason}	Le profil {name} n’a pas pu être lu, le nouveau document a donc les réglages par défaut : {reason}
 @msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	Recouvrement : plus de {_1} paires d’objets sont assez proches pour un recouvrement, ou trop d’objets partagent une même plage horizontale ; traitez moins d’objets à la fois
 @msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	Cadre et lignes d’échenillage : aucune ligne d’échenillage ne tient hors de l’illustration, et le cadre d’échenillage est désactivé
-@msg	\ at end of pattern	\ à la fin du motif
+@msg	\\ at end of pattern	\\ à la fin du motif
 @msg	`alignOn` cannot be empty	`alignOn` ne peut pas être vide
 @msg	`alignOn` must be a string	`alignOn` doit être une chaîne
 @msg	`align` is start, center or end	`align` vaut start, center ou end
@@ -8913,6 +8923,8 @@ breakText	Glyphs	Glyphes
 @msg	`dataBase64` is larger than the module limit	`dataBase64` dépasse la limite des modules
 @msg	`dataBase64` is not valid base64	`dataBase64` n’est pas du base64 valide
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` ne peut pas être combiné avec `ids`, `reverse` ou `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` ne peut pas être combiné avec `ids`, `id` ou `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` ne peut pas être combiné avec `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` et `childLimit` découpent le résumé : passez `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` est un nom de motif, ou null pour des colonnes simples
 @msg	`design` is a design name, or null for the default marker	`design` est un nom de motif, ou null pour le repère par défaut
@@ -9182,7 +9194,7 @@ breakText	Glyphs	Glyphes
 @msg	a CMap has too many mappings	une CMap contient trop de correspondances
 @msg	a DXF drawing has one origin: pass useArtboards: true for one drawing per artboard	un dessin DXF a une seule origine : passez useArtboards: true pour un dessin par plan de travail
 @msg	a PDF presets file with over {_1} presets	un fichier de paramètres prédéfinis PDF de plus de {_1} paramètres
-@msg	a \u escape needs four hexadecimal digits	un échappement \u nécessite quatre chiffres hexadécimaux
+@msg	a \\u escape needs four hexadecimal digits	un échappement \\u nécessite quatre chiffres hexadécimaux
 @msg	a batch preview cannot switch documents	un aperçu de traitement par lots ne peut pas changer de document
 @msg	a brush named `{nn}` exists	une forme nommée `{nn}` existe déjà
 @msg	a comma in an XPath expression must separate function arguments	une virgule dans une expression XPath doit séparer des arguments de fonction
@@ -9907,7 +9919,7 @@ breakText	Glyphs	Glyphes
 @msg	not a regular expression	ce n’est pas une expression régulière
 @msg	not a stored or deflated central record	ce n’est pas un enregistrement central stocké ou compressé
 @msg	not a valid SVGZ file: {e}	ce n’est pas un fichier SVGZ valide : {e}
-@msg	not an RTF file: it doesn't start with {\rtf	ce n’est pas un fichier RTF : il ne commence pas par {\rtf
+@msg	not an RTF file: it doesn't start with {\\rtf	ce n’est pas un fichier RTF : il ne commence pas par {\\rtf
 @msg	not an action set: the text doesn't start with /version and a number	ce n’est pas un ensemble d’actions : le texte ne commence pas par /version et un nombre
 @msg	not an image VectorCraft reads (see document.formats)	ce n’est pas une image que VectorCraft lit (voir document.formats)
 @msg	not area type (text in a frame) outside perspective	ce n’est pas un texte captif (texte dans un cadre) hors perspective
