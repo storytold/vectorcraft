@@ -101,7 +101,7 @@ GUI beside it (`<app>-bin`, the standard Nightly layout;
 Flatpak) with `--launch-profile nightly-v1 --profile-root <dir> -- "$@"`, and passes a version query,
 help or the Launcher's own `--launch-profile` invocation straight through. The plain tar's
 `vectorcraft` is craft-common-actions' shared template instead
-(`packaging/linux/nightly-tar-launch.sh`, #363 rendered for this app): it always adds its own tokens,
+(`packaging/linux/nightly-tar-launch.sh`, #363 rendered for this app): it adds its own tokens unless the first argument is already a `--launch-profile` pair,
 execs `vectorcraft-bin` beside it with
 `--profile-root <${XDG_DATA_HOME:-~/.local/share}/ai.storyteller.vectorcraft.nightly> --`, and asks a
 bare `--version`/`-V` in the Launcher's form. The
