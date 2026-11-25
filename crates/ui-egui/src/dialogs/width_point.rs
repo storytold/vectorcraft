@@ -33,7 +33,8 @@
 //! `outSide2`, `outTotalWidth` and `outLinked`.
 //!
 //! OK and Delete on existing points, one or several, are refused when those points changed since
-//! the dialog opened or another document is active; the dialog stays open and says why.
+//! the dialog opened (their place, their widths, or which of them pair as a discontinuous point) or
+//! another document is active; the dialog stays open and says why.
 
 // PLAN: the app's manifest depends on `craft-ui`, not on the `craft` facade, so the `craft::` paths below need hub-w2's manifest change.
 use craft::behavior::Mixed;
@@ -208,6 +209,14 @@ fn pairs(points: &[(f64, f64, f64)]) -> Vec<Option<usize>> {
         .collect()
 }
 
+/// The sets of side widths that edit width point `i`, `[incoming, outgoing]`, with the points
+/// paired as `pairs` pairs them: an outgoing half is not edited by the incoming set, and an
+/// incoming half not by the outgoing set.
+fn sets(pairs: &[Option<usize>], i: usize) -> [bool; 2] {
+    let outgoing = i.checked_sub(1).is_some_and(|a| pairs[a] == Some(i));
+    [!outgoing, pairs[i].is_none()]
+}
+
 /// The width points `indices` of `id` names, each discontinuous point's two halves together.
 fn target(app: &VectorcraftApp, id: u64, indices: &Value) -> Result<Resolved, String> {
     const NONE: &str = "no such width point";
@@ -238,7 +247,7 @@ fn target(app: &VectorcraftApp, id: u64, indices: &Value) -> Result<Resolved, St
     let half = st.width / 2.0;
     let entry = |i: usize| {
         let (t, l, r) = points[i];
-        Entry { index: i, t, left: l * half, right: r * half, sets: [!outgoing(i), pairs[i].is_none()] }
+        Entry { index: i, t, left: l * half, right: r * half, sets: sets(&pairs, i) }
     };
     Ok(Resolved::Several(picked.into_iter().map(entry).collect()))
 }
@@ -767,6 +776,12 @@ fn opened_profile(app: &VectorcraftApp, id: u64, open: &[Entry]) -> Result<(Widt
         if t != o.t || l * half != o.left || r * half != o.right {
             return Err(NONE.into());
         }
+    }
+    // Each point is still a continuous point or the same half of a discontinuous one: a point added
+    // at the place of one would leave it changing only one half.
+    let pairs = pairs(&profile.points);
+    if open.iter().any(|o| o.sets != sets(&pairs, o.index)) {
+        return Err(NONE.into());
     }
     Ok((profile, half))
 }

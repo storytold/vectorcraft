@@ -1687,6 +1687,8 @@ fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
     let from = index_param(p, "from", C)?;
     let contents = p.get("contents").map(|_| index_param(p, "contents", C)).transpose()?;
     let mut landed = to;
+    let active = s.active_appearance_item.as_ref().and_then(|a| a.objects.first().copied());
+    let mut active_landed = None;
     // When every object's stack comes out as it was, the document and its undo history stay as they
     // are.
     let before = s.doc()?.doc.clone();
@@ -1694,6 +1696,9 @@ fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
         for id in &ids {
             let Some(n) = d.node_mut(*id) else { continue };
             landed = n.appearance.move_item(from, to).ok_or_else(|| bad(C, format!("no item at index {from}")))?;
+            if active == Some(*id) {
+                active_landed = Some(landed);
+            }
             if let Some(k) = contents.filter(|_| n.contents_label().is_some()) {
                 n.appearance.set_contents_at(k);
             }
@@ -1703,13 +1708,14 @@ fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
         let labels = super::graph::capture_label_changes(&before, d, &ids, true, None);
         Ok(count_changed(d, &before, &ids) + usize::from(kept || painted || labels))
     })?;
-    // The moved row stays the active one; the rows it passed shift by one.
+    // Track the row in its own object's stack, since other stacks may clamp to a different index.
+    let at = active_landed.unwrap_or(landed);
     s.remap_appearance_item(&ids, |a| {
         Some(if a == from {
-            landed
-        } else if from < a && a <= landed {
+            at
+        } else if from < a && a <= at {
             a - 1
-        } else if landed <= a && a < from {
+        } else if at <= a && a < from {
             a + 1
         } else {
             a

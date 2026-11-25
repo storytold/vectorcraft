@@ -86,6 +86,9 @@ pub(crate) fn state_key(app: &VectorcraftApp, input: Option<u64>) -> u64 {
     let mut h = DefaultHasher::new();
     input.hash(&mut h);
     app.run_count.hash(&mut h);
+    // The window's keymap, which the panel rows read their shortcuts from (`Build::decorate`): the framework builds it
+    // after the first frame's menus, and builds a new one when the bindings or the catalog change.
+    app.ui_ctx.as_ref().and_then(craft::ui::runtime::commands::keymap).map(|k| std::sync::Arc::as_ptr(&k).addr()).hash(&mut h);
     let s = &app.session;
     (s.journal.len(), s.active_index(), s.clipboard.is_empty(), s.tool_composing()).hash(&mut h);
     if let Some(d) = s.active() {
@@ -473,11 +476,18 @@ impl Build<'_> {
         item_title(self.app, self.lang, id, params, label)
     }
 
-    /// The alternates (a modifier held as the row is chosen) and the font sample of a row.
+    /// The alternates (a modifier held as the row is chosen), the font sample and the shortcut of a row.
     fn decorate(&self, item: Item, id: &str, params: &Value) -> Item {
         let run_with = |mods: Mods, p: Value| Alternate::new(mods, CommandRef::with_params(id, p));
         let held = |shift: bool, alt: bool| Mods { cmd: false, ctrl: false, alt, shift };
         match id {
+            // A panel row shows the chord of the panel's shortcut (`panel:<id>`), which binds `window.panel {panel}`;
+            // a Window row runs it with `toggle: true`, so the framework finds no chord for the row's own command.
+            "window.panel" => {
+                let mut item = item;
+                item.shortcut = super::labels::item_shortcut(self.app, id, params);
+                item
+            }
             "ui.expandDialog" => item.alternate(run_with(held(false, true), json!({ "immediate": true }))),
             crate::addons::select::link_status::COMMAND => {
                 item.alternate(run_with(held(true, false), crate::addons::select::link_status::with_shift(params.clone())))

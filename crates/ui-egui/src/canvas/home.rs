@@ -1,9 +1,11 @@
 use craft::behavior::IconId;
-use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
-use craft::ui::display::Text;
-use craft::ui::layout_components::Row;
+use craft::ui::buttons::{Button, ControlPlace, LinkLook};
+use craft::ui::contract::{Bind, Gap, Props as _, Show as _, ShowContainer as _};
+use craft::ui::display::{Shade, Text};
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::runtime::env::{Overrides, with_env};
 use craft::ui::shell::{RecentFile, StartAction, StartLayout, StartLink, StartScreen, Template};
+use craft::ui::style::TypeRole;
 
 use super::{Ui, VectorcraftApp, json};
 
@@ -40,7 +42,11 @@ pub(super) fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
     let mut pressed = None;
     let mut learn = |ui: &mut Ui| learn(app, ui, &mut pressed);
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect).layout(egui::Layout::top_down(egui::Align::Min)));
-    let out = StartScreen::new(Bind::bound(&mut view), Bind::bound(&mut sort), &recent)
+    // Production's community links read in the accent alone, with no underline.
+    let plain_links = |overrides: &mut Overrides| {
+        overrides.values.set(LinkLook::Plain);
+    };
+    let start = StartScreen::new(Bind::bound(&mut view), Bind::bound(&mut sort), &recent)
         .layout(StartLayout::Column)
         .title(tl!("Welcome to VectorCraft"))
         .subtitle(tl!("Vector illustration — fast, open, scriptable."))
@@ -51,8 +57,8 @@ pub(super) fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
         .templates_title(tl!("Quickly start a new file"))
         .links(&links)
         .links_title(tl!("Community"))
-        .app_section(tl!("Learn"), &mut learn)
-        .show(&mut child);
+        .app_section(tl!("Learn"), &mut learn);
+    let out = with_env(&mut child, plain_links, |ui| start.show(ui));
     app.ui.home_view = view;
     app.ui.home_sort = sort;
     for action in out.actions {
@@ -87,20 +93,30 @@ fn run_action(app: &mut VectorcraftApp, action: StartAction) {
 }
 
 /// The Home screen's Learn section: the Quick skill guide card, which shows the Learn panel's list
-/// of skills, and the Learn panel's tutorials under their skills, each a button that shows the
-/// panel at its steps (`learn.show`). The start screen may run this twice in a pass, so it only
-/// draws and records the tutorial pressed in `pressed`.
+/// of skills, and the Learn panel's tutorials under their skills (each title dim over its tutorials), each a button
+/// that shows the panel at its steps (`learn.show`), as tall as New and Open and a page heading's gap apart, as
+/// production spaced them. The start screen may run this twice in a pass, so it only draws and records the tutorial
+/// pressed in `pressed`.
 fn learn(app: &mut VectorcraftApp, ui: &mut Ui, pressed: &mut Option<&'static str>) {
     use crate::panels::learn::{catalog, guide_card};
-    guide_card(app, ui); // PLAN: assumed `guide_card(app, ui)` as document-panels-w18 leaves it, on `Button::detail`.
-    for skill in catalog::SKILLS {
-        let _ = Text::new(skill.title).show(ui);
-        let _ = Row::new().show(ui, |ui, _| {
-            for tutorial in skill.tutorials {
-                if Button::new(tutorial.title).id_salt(tutorial.id).show(ui).clicked() {
-                    *pressed = Some(tutorial.id);
-                }
-            }
-        });
-    }
+    let _ = Stack::new().gap(Gap::PageHeading).fill_width().show(ui, |ui, _| {
+        guide_card(app, ui); // PLAN: assumed `guide_card(app, ui)` as document-panels-w18 leaves it, on `Button::detail`.
+        for skill in catalog::SKILLS {
+            let _ = Stack::new().gap(Gap::Stack).fill_width().show(ui, |ui, _| {
+                let _ = Text::new(skill.title).role(TypeRole::Label).shade(Shade::Muted).show(ui);
+                let place = |overrides: &mut Overrides| {
+                    overrides.values.set(ControlPlace::PageAction);
+                };
+                let _ = with_env(ui, place, |ui| {
+                    Row::new().show(ui, |ui, _| {
+                        for tutorial in skill.tutorials {
+                            if Button::new(tutorial.title).id_salt(tutorial.id).show(ui).clicked() {
+                                *pressed = Some(tutorial.id);
+                            }
+                        }
+                    })
+                });
+            });
+        }
+    });
 }
