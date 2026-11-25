@@ -2,7 +2,7 @@ use super::slots::{perspective_grid, recent_slot, saved_selection_name, saved_se
 use super::state::{hidden_when_disabled, shortcut_of};
 use super::tree::menu_tree;
 use super::ui_commands::UI_COMMANDS;
-use super::{Node, TODO, Value, VectorcraftApp};
+use super::{Node, Value, VectorcraftApp, unbound};
 use craft::keymap::Chord;
 
 /// Label for toggles whose text flips (Outline/Preview, Hide/Show …).
@@ -344,9 +344,14 @@ pub const DYNAMIC_LABELS: &[&str] = &[
     "Advanced",
 ];
 
-/// Is `children` a plug-in's submenu: does it hold a command the plug-in declares?
+/// Is `children` a plug-in's submenu: does it hold a command the plug-in declares, and only items
+/// that list plug-ins? A built-in submenu that a plug-in's manifest places a command in is not.
 pub(crate) fn holds_plugin_commands(children: &[Node]) -> bool {
     children.iter().any(|c| matches!(c, Node::Item(i) if vectorcraft_engine::cmd::plugin::is_command_id(&i.command.id)))
+        && children.iter().all(|c| match c {
+            Node::Item(i) => lists_plugin(&i.command.id, &i.command.params),
+            _ => true,
+        })
 }
 
 /// Every English string the menus, the command palette, the panel registry, the toolbar and the
@@ -366,7 +371,7 @@ pub fn menu_strings() -> std::collections::BTreeSet<String> {
     fn walk(nodes: &[Node], under: &str, out: &mut BTreeSet<String>) {
         for node in nodes {
             match node {
-                Node::Item(it) if it.command.id == TODO => {
+                Node::Item(it) if unbound(&it.command.id) => {
                     out.insert(it.label.clone());
                 }
                 Node::Item(it) => {

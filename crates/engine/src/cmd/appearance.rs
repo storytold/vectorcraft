@@ -1198,6 +1198,24 @@ pub(crate) fn capture_series_paint_writes(
     super::graph::capture_series_top_paints(d, &rows)
 }
 
+/// Store on the graph the opacity and blend mode of each row an edit wrote (`written`: an object with the index of the
+/// row) on the series marks among them, when that row is the topmost visible one of its kind, also when the mark
+/// already showed that opacity: it replaces the opacity another mark of the series left on the graph. When the edit
+/// reaches several marks of one series, the frontmost one sets what the graph stores. Returns whether the stored
+/// opacity or blend mode changed.
+pub(crate) fn capture_series_opacity_writes(d: &mut vectorcraft_doc::Document, written: &[(NodeId, usize)]) -> bool {
+    let ids: Vec<NodeId> = written.iter().map(|(id, _)| *id).collect();
+    // A later mark's capture replaces an earlier one's: take them in paint order.
+    let rows: Vec<(NodeId, bool)> = series_children_in_paint_order(d, &ids)
+        .into_iter()
+        .flat_map(|id| {
+            let shown = written.iter().filter(move |(w, _)| *w == id).filter_map(|(_, at)| Some((id, top_row_kind(&d.node(id)?.appearance, *at)?)));
+            shown.collect::<Vec<_>>()
+        })
+        .collect();
+    super::graph::capture_series_opacity(d, &rows)
+}
+
 /// The kind of the row at `at` (fill `true`, stroke `false`) when it is the topmost visible row of that kind in `ap`.
 fn top_row_kind(ap: &Appearance, at: usize) -> Option<bool> {
     let fill = ap.items.get(at)?.is_fill();

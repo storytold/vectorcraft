@@ -8,8 +8,9 @@ use std::sync::Arc;
 
 use craft::behavior::Mixed;
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, Entry, Outcome as _, Props as _, Show as _};
+use craft::ui::contract::{Bind, Entry, Outcome as _, Props as _, Show as _, ShowContainer as _};
 use craft::ui::dialog::{DialogResult, FieldRefusal};
+use craft::ui::layout_components::Row;
 use craft::ui::patterns::form_dialogs::{
     DialogFields, FieldValue, HostedPropertiesDialog, Param, ParamKind, PropertiesDialog, PropertiesTab, PropertyRow, TabLayout,
 };
@@ -843,7 +844,9 @@ fn sets_row() -> Param {
             .and_then(|v| v.as_array().map(|tags| tags.iter().filter_map(Value::as_str).map(str::to_string).collect()))
             .unwrap_or_default();
         let mut clicked = None;
-        let line = ui.horizontal_wrapped(|ui| {
+        let line = Row::new().wrap(true).show(ui, |ui, _| {
+            // The row's body may run more than once in a pass: the last run's click applies.
+            clicked = None;
             for set in &vectorcraft_text::EXTRA_FEATURES[..20] {
                 let current = listed.iter().find(|t| bare(t) == *set).map(|t| !t.starts_with('-'));
                 if let (_, Some(next)) = tri_box(ui, current, Some(Label::from(set.to_string())), set) {
@@ -864,7 +867,7 @@ fn sets_row() -> Param {
                 fields.set("ot_sets", FieldValue::Json(json!(listed)));
             }
         }
-        line.response
+        line.output
     })
 }
 
