@@ -1611,9 +1611,11 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<Option<Described>> {
             ("name".into(), Data::String(name.clone())),
             ("text".into(), Data::String(text.clone())),
         ];
-        names.push((kind.clone(), name, text));
         let enabled = get(i, o, "enabled")?.truthy();
         let visible = get(i, o, "visible")?.truthy();
+        // Enter and Escape click a button found by its name or text only when it can be clicked.
+        let clickable = kind == "button" && enabled && visible;
+        names.push((clickable, name, text));
         d.push(("enabled".into(), Data::Bool(enabled)));
         d.push(("visible".into(), Data::Bool(visible)));
         // A value a getter gives is kept from collection while its own properties are read.
@@ -1694,7 +1696,7 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<Option<Described>> {
         if !matches!(given, Value::Undefined | Value::Null) {
             return Ok(-1.0);
         }
-        let button = |by_name: bool| names.iter().position(|(k, n, t)| k == "button" && (if by_name { n } else { t }).to_lowercase() == word);
+        let button = |by_name: bool| names.iter().position(|(c, n, t)| *c && (if by_name { n } else { t }).to_lowercase() == word);
         Ok(button(true).or_else(|| button(false)).map_or(-1.0, |n| n as f64))
     };
     let def = target(i, "defaultElement", "ok")?;

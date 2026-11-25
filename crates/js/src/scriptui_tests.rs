@@ -404,6 +404,15 @@ fn a_close_that_on_close_asks_for_is_part_of_the_close_it_refuses() {
 }
 
 #[test]
+fn a_hidden_or_disabled_ok_button_is_not_the_default_found_by_its_text() {
+    let (mut r, seen, _) = realm(vec![close()]);
+    let source = "var w = new Window('dialog'); w.add('button', undefined, 'OK').enabled = false; w.add('button', undefined, 'OK').visible = false; \
+        w.add('button', undefined, 'OK'); w.show()";
+    assert_eq!(r.run(source).unwrap(), JsValue::Number(0.0));
+    assert_eq!(field(&seen.borrow().descriptions[0], "defaultElement"), &Data::Number(3.0), "the OK button that can be clicked is the default");
+}
+
+#[test]
 fn an_edit_field_that_hides_its_text_is_refused_when_shown() {
     let (mut r, seen, _) = realm(Vec::new());
     let source = "var w = new Window('dialog'); w.add('edittext', undefined, 'secret', {noecho: true}); try { w.show(); } catch (e) { e.message }";

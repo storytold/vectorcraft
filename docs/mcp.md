@@ -3052,7 +3052,8 @@ close box. The default or cancel button closes the dialog only when it has no `o
 its own and no `capture` handler on a container stopped the click; `click` handlers on the containers that do not
 capture do not keep it from closing (VectorCraft's own rule). `onClose` runs before the dialog closes, and
 returning `false` keeps it open. The default button is `defaultElement`, else a button named or titled OK, and the
-cancel button is `cancelElement`, else a button named or titled Cancel, in any case. A `show()` inside a handler,
+cancel button is `cancelElement`, else a button named or titled Cancel, in any case; a button found by its name or
+title counts only while it is enabled and visible. A `show()` inside a handler,
 or of a dialog that is showing, throws an `Error`, and so does one inside a callback of a built-in function. In
 the app, `alert`, `confirm`, `prompt` and the file dialogs called from a handler also throw an `Error`; in a run with
 nobody to ask, `alert`, `confirm` and `prompt` in a handler take their answers from `answers`. A shown dialog can be shown again after it closes.
