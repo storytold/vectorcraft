@@ -2288,6 +2288,20 @@ fn save_panel_file_types_are_in_complete_catalogs() {
     assert!(missing.is_empty(), "{missing:?}");
 }
 
+/// A picker names its file types with their `file-filter` rows, so the save panel and the Tracing
+/// Presets Import… picker show them in the interface language.
+#[test]
+fn pickers_name_file_types_in_the_interface_language() {
+    let names = |lang| crate::file_asks::filters_in(lang, crate::io::FILE_TYPES).into_iter().map(|f| f.name).collect::<Vec<_>>();
+    let (english, german) = (names(Lang::EN), names(lang("de")));
+    for label in ["Tracing presets", "Action sets", "Composite fonts"] {
+        assert!(english.iter().any(|n| n == label), "{label}");
+        assert!(german.iter().any(|n| n == tr_ctx(lang("de"), "file-filter", label)), "{label}");
+        assert!(!german.iter().any(|n| n == label), "{label} shown in English");
+    }
+    assert_eq!(crate::file_asks::filter_name(lang("de"), "Tracing presets"), "Nachzeichnervorgaben");
+}
+
 /// (context, English source) of the labels [`untranslated_report`] lists for a language without
 /// their rows: the file dialogs' filter names, the status bar's timings, New Document's preset
 /// name, the contributor tooltips, the gradient kind in a swatch's description, the printer mark
