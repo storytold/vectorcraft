@@ -22,6 +22,7 @@
 	Quit VectorCraft	VectorCraft afsluiten
 # Artwork drag between document tabs.
 	Drop Artwork	Illustratie neerzetten
+@id	language.name	Nederlands
 @msg	{key} must be [x, y] with finite coordinates	{key} moet [x, y] met eindige coördinaten zijn
 @msg	ids must contain 1–10000 object ids	ids moet 1–10000 object-id’s bevatten
 
@@ -399,11 +400,19 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	module is {_1} bytes (limit {_2})	de module telt {_1} bytes (limiet {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	goedkeuring nodig: de plug-in vraagt om {0}, wat de gebruiker toestaat wanneer hij die afzonderlijk installeert
 @msg	not JSON: {e}	geen JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	geen WebAssembly-binair bestand (de header \0asm ontbreekt)
+@msg	not a WebAssembly binary (missing \\0asm header)	geen WebAssembly-binair bestand (de header \\0asm ontbreekt)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	een functietype overschrijdt de limiet van {MAX_FUNC_TYPE_VALUES} parameters
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	een functietype overschrijdt de limiet van {MAX_FUNC_TYPE_VALUES} resultaten
 @msg	parameter `{k}`: {what}	parameter `{k}`: {what}
 @msg	parameter `{name}`: {what}	parameter `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	plug-in-parameters moeten een JSON-object zijn
 @msg	the module must export its linear memory as `memory`	de module moet haar lineaire geheugen exporteren als `memory`
+@msg	the module must export `{name}` with the type {signature}	de module moet `{name}` exporteren met het type {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	de module heeft meer dan één aangepaste sectie `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	geheugenbudget (het begingeheugen van de module is {initial} bytes, limiet {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	het manifest in de aangepaste sectie `{MANIFEST_SECTION}` moet `abi` opgeven als {ABI_VERSION}, de ABI-versie die deze host implementeert
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	tabelbudget (de module definieert {count} tabellen, de grootste met {largest} elementen; limiet {MAX_TABLES} tabellen van {MAX_TABLE_ELEMENTS} elementen)
+@msg	the module's table section could not be read	de tabelsectie van de module kon niet worden gelezen
 @msg	the objects to change are no longer in the document	de te wijzigen objecten staan niet meer in het document
 @msg	the runtime panicked	de runtime is vastgelopen
 @msg	unexpected host trap	onverwachte trap in de host
@@ -430,6 +439,11 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` en `maxItems` moeten 0-{MAX_LIST} zijn, `maxItems` minstens 1, en de standaardwaarde zoveel items
 @msg	`name` must be a string	`name` moet een string zijn
 @msg	`opacity` must be a number	`opacity` moet een getal zijn
+@msg	`opacity` must be a number from 0 to 100	`opacity` moet een getal van 0 tot 100 zijn
+@msg	`opacity` must be true or false	`opacity` moet true of false zijn
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	tekens van tekst hebben geen eigen dekking: voeg een vulling of streek toe met Nieuwe vulling toevoegen of Nieuwe streek toevoegen in het deelvenster Uiterlijk
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	een object dat in een symboolinstantie is geselecteerd, heeft geen eigen dekking voor vulling of streek
+@msg	no target has that fill or stroke to take the opacity	geen enkel doel heeft die vulling of streek om de dekking te krijgen
 @msg	`type` must be "path" or "compound"	`type` moet "path" of "compound" zijn
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` moet uit 1-{MAX_UNIT} afdrukbare tekens bestaan
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` noemt 1 tot {MAX_CONDITION_VALUES} waarden voor `{other}`
@@ -473,6 +487,8 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	`plates` requires a stop linked to a spot swatch	`plates` vereist een verloopstop die aan een steunkleurstaal is gekoppeld
 @msg	the output	de uitvoer
 @msg	the path has no anchor points	het pad heeft geen ankerpunten
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	het samengestelde pad {id} heeft een verborgen, vergrendeld of hulplijnlid, dus de leden kunnen niet worden vervangen
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	het samengestelde pad {id} heeft een lid dat geen pad is, dus de leden kunnen niet worden vervangen
 @msg	too many anchor points (limit {MAX_ANCHORS})	te veel ankerpunten (limiet {MAX_ANCHORS})
 @msg	true or false	true of false
 @msg	a number >= {_1}	een getal >= {_1}
@@ -945,6 +961,9 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Artboards	Tekengebieden
 	Convert to Artboards	Converteren naar tekengebieden
 	Rearrange All Artboards…	Alle tekengebieden herschikken…
+	Rearrange…	Herschikken…
+	Selected Artboards: {n}	Geselecteerde tekengebieden: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Klik op het canvas om de tekengebieden te plaatsen (Esc annuleert)
 	Fit to Artwork Bounds	Op artworkgrenzen passend maken
 	Fit to Selected Art	Op geselecteerd artwork passend maken
 	Graph	Grafiek
@@ -1096,6 +1115,7 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Fill & Stroke	Vulling en contour
 	Fill Color	Vulkleur
 	Opacity	Dekking
+	Show Opacity	Dekking tonen
 	Stroke Color	Contourkleur
 	Fill Gradient	Vulverloop
 	Stroke Gradient	Contourverloop
@@ -4123,6 +4143,12 @@ theme	Appearance	Vormgeving
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	resolutie niet beschikbaar
+	estimated memory {memory}	geschat geheugen {memory}
+	memory unavailable	geheugen niet beschikbaar
+	Unknown format	Onbekend formaat
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -4570,6 +4596,7 @@ theme	Appearance	Vormgeving
 	Data Recovery	Gegevensherstel
 	Default Language	Standaardtaal
 	Disable Auto Add/Delete	Automatisch toevoegen/verwijderen uitschakelen
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete verwijdert ankerpunten en houdt paden verbonden
 	Interpolate Control Points When Moving Anchors	Richtingsgrepen interpoleren bij het verplaatsen van ankerpunten
 	Display All Blacks Accurately	Alle zwarttinten nauwkeurig weergeven
 	Display All Blacks as Rich Black	Alle zwarttinten weergeven als rijk zwart
@@ -5130,6 +5157,7 @@ font-technology	Variable	Variabel
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Een draaigebaar met twee vingers op een trackpad draait de weergave van het canvas.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Als u een toets vasthoudt, wordt het gereedschap of de opdracht uit de kolom Houd in Sneltoetsen uitgevoerd; kort drukken voert de gewone sneltoets uit.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Hoeveel seconden u een toets moet vasthouden voordat de vasthoudsneltoets wordt uitgevoerd in plaats van de gewone sneltoets.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete verwijdert de geselecteerde ankerpunten en past de curve rond elk ervan opnieuw aan, in plaats van het pad daar te openen.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Als u ankerpunten verplaatst, behoudt elke curve met één verplaatst uiteinde zijn vorm ten opzichte van zijn uiteinden.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Als u de sneltoets van een gereedschap ingedrukt houdt, is dat gereedschap gekozen tot u loslaat, en daarna wordt het vorige gereedschap weer gekozen.
 	Shows the bounding box while you move the selection or draw a shape.	Toont het begrenzingskader terwijl u de selectie verplaatst of een vorm tekent.
@@ -6534,6 +6562,8 @@ imageTrace	Outline	Contour
 @msg	`dataBase64` is larger than the module limit	`dataBase64` is groter dan de modulelimiet
 @msg	`dataBase64` is not valid base64	`dataBase64` is geen geldige base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` kan niet worden gecombineerd met `ids`, `reverse` of `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` kan niet worden gecombineerd met `ids`, `id` of `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` kan niet worden gecombineerd met `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` en `childLimit` beperken de samenvatting: geef `summary: true` op
 @msg	`design` is a design name, or null for plain columns	`design` is de naam van een ontwerp, of null voor gewone kolommen
 @msg	`design` is a design name, or null for the default marker	`design` is de naam van een ontwerp, of null voor de standaardmarkering
@@ -8608,6 +8638,7 @@ mark-style	Japanese	Japans
 @msg	a 3D effect on a group's fill or stroke draws nothing	een 3D-effect op de vulling of contour van een groep tekent niets
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	een 3D-effect op de vulling of contour van een groep tekent niets om te exporteren
 @msg	The 3D object is too complex to export	Het 3D-object is te complex om te exporteren
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Het net van het 3D-object is onvolledig of bevat een waarde die geen getal is
 @msg	the <filter> element needs an id, the filter's name	het <filter>-element heeft een id nodig, de naam van het filter
 @msg	an SVG filter's id is at most {MAX_NAME} characters	de id van een SVG-filter is hoogstens {MAX_NAME} tekens lang
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> is geen element van een SVG-filter
@@ -10343,10 +10374,6 @@ breakText	Glyphs	Glyphs
 	Tangent Circle	Raakcirkel
 	Tangent Circle Tool	Raakcirkel-gereedschap
 	No tangent circle here	Hier geen raakcirkel
-	Circle Center	Middelpunt van cirkel
-	Circle Radii Lines	Straallijnen
-	Snap Tolerance:	Snapping-tolerantie:
-	Snap When Smart Guides Are Off	Snappen als slimme hulplijnen uit zijn
 	Circle:	Cirkel:
 @msg	`ids` names an object twice	`ids` noemt een object twee keer
 @msg	select two or three paths or compound paths	selecteer twee of drie paden of samengestelde paden

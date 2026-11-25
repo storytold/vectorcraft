@@ -4,7 +4,8 @@
 //! sharpens) the corners whose widgets show together, on every selected path (#938): every corner
 //! of a path selected whole, those with a selected anchor when Direct Selection picked some. Alt-clicking a widget cycles their corner
 //! kind (round, inverted round, chamfer), as the Up and Down arrows do while one is dragged
-//! (#2898); double-clicking one opens the Corners dialog. The
+//! (#2898); double-clicking one opens the Corners dialog with Direct Selection and shows the
+//! Transform panel with the Selection tool. The
 //! Selection and Direct Selection tools share this, and the canvas draws the widgets from the same
 //! geometry.
 
@@ -217,7 +218,8 @@ pub fn over_widget(cx: &ToolContext, p: Point, any_path: bool) -> bool {
     CornerWidgets::for_tool(cx, any_path).and_then(|w| w.hit(p, cx.tol(5.0))).is_some()
 }
 
-/// A double-click on a corner widget opens the Corners dialog for the shown corners of its path.
+/// A double-click on a corner widget opens the Corners dialog for the shown corners of its path
+/// (Direct Selection; the Selection tool shows the Transform panel instead).
 pub fn double_click(cx: &ToolContext, p: Point, any_path: bool) -> Option<Action> {
     let w = CornerWidgets::for_tool(cx, any_path)?;
     let (i, _) = w.hit(p, cx.tol(5.0))?;
