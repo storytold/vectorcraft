@@ -597,6 +597,15 @@ fn a_painted_piece_s_look_is_exported_and_expanded() {
     let pdf = s.execute("document.export", &json!({"format": "pdf"})).unwrap();
     let pdf = vectorcraft_format::base64_decode(pdf["dataBase64"].as_str().unwrap()).unwrap();
     assert!(pdf.windows(9).any(|w| w == b"/Multiply"), "the PDF sets the blending mode");
+    let back = vectorcraft_pdf::import(&pdf).unwrap();
+    let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let read = vectorcraft_render::Renderer::new().render(&back, 200, 200, vectorcraft_geom::Affine::IDENTITY, &opts);
+    let (got_inside, got_grown) = (read.pixel(50, 50), read.pixel(37, 50));
+    assert!(
+        near(got_inside, [128, 255, 128]) && near(got_grown, [128, 255, 128]),
+        "the PDF's piece is half green and grown: {got_inside:?} {got_grown:?}"
+    );
+    assert_eq!(read.pixel(32, 50), WHITE);
     assert_eq!(s.doc().unwrap().doc, before, "export doesn't change the document");
     run(&mut s, "select.set", json!({"ids": [id.0]}));
     run(&mut s, "effect.expandAppearance", json!({}));

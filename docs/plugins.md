@@ -1042,7 +1042,7 @@ fill and stroke the piece returns, three more keys:
   the fills or strokes that an effect on a fill or a stroke returns take `opacity` and `blend` but no `effects` (its
   pieces still take them). A plug-in effect (`plugin.<id>`), this effect's own included, is refused, so the effects a
   piece carries never run a plug-in.
-- Left out, a piece's opacity is the object's, its blending mode Normal and its effects none; a fill or stroke keeps
+- Left out, a piece's opacity is 100%, its blending mode Normal and its effects none; a fill or stroke keeps
   the opacity, blending and effects it would have without the keys. Given, a piece's opacity multiplies the object's,
   and its effects and a fill's or stroke's come after the ones it already has. The object's own opacity, blending mode
   and later effects still apply once to all the pieces together.
