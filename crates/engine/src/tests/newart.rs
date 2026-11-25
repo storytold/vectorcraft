@@ -192,6 +192,47 @@ fn a_paint_the_selected_objects_do_not_share_stays_as_it_was() {
     assert_eq!((s.paint.stroke.clone(), s.paint.stroke_width), (node(&s, a).appearance.stroke_paint(), 5.0), "the strokes are shared");
 }
 
+fn add(s: &mut Session, id: NodeId) {
+    run(s, "select.add", json!({"ids": [id.0]}));
+}
+
+/// Objects added one at a time are compared with the objects already selected: a fill and weight
+/// they all share loads, one they don't stays as it was.
+#[test]
+fn objects_added_one_at_a_time_load_only_the_paints_all_selected_objects_share() {
+    let mut s = session();
+    let a = painted(&mut s, 20.0, "#ff0000", "#00ff00", 5.0);
+    let b = painted(&mut s, 120.0, "#ff0000", "#00ff00", 5.0);
+    let c = painted(&mut s, 220.0, "#0000ff", "#00ff00", 1.0);
+    let red = node(&s, a).appearance.fill_paint();
+    run(&mut s, "select.none", json!({}));
+    add(&mut s, a);
+    (s.paint.fill, s.paint.stroke_width) = (Paint::None, 0.5);
+    add(&mut s, b);
+    assert_eq!((s.paint.fill.clone(), s.paint.stroke_width), (red, 5.0), "a and b share them");
+    (s.paint.fill, s.paint.stroke_width) = (Paint::None, 0.5);
+    add(&mut s, c);
+    assert_eq!((s.paint.fill.clone(), s.paint.stroke_width), (Paint::None, 0.5), "c's differ");
+}
+
+/// An edit of the selected objects between two additions is read: the objects selected before it
+/// are compared as the edit left them.
+#[test]
+fn an_object_added_after_an_edit_is_compared_with_the_edited_objects() {
+    let mut s = session();
+    let a = painted(&mut s, 20.0, "#ff0000", "#00ff00", 5.0);
+    let b = painted(&mut s, 120.0, "#ff0000", "#00ff00", 5.0);
+    let c = painted(&mut s, 220.0, "#0000ff", "#00ff00", 5.0);
+    let blue = node(&s, c).appearance.fill_paint();
+    run(&mut s, "select.none", json!({}));
+    add(&mut s, a);
+    add(&mut s, b);
+    run(&mut s, "paint.setFill", json!({"color": "#0000ff", "ids": [a.0, b.0]}));
+    s.paint.fill = Paint::None;
+    add(&mut s, c);
+    assert_eq!(s.paint.fill, blue, "a, b and c are all blue now");
+}
+
 #[test]
 fn art_without_paint_leaves_the_proxies_as_they_were() {
     let mut s = session();

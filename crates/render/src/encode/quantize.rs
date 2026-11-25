@@ -205,30 +205,28 @@ pub fn quantize_to(rgba: &[u8], width: u32, height: u32, o: &PaletteOptions, pal
 
 /// For each pixel of `rgba`, the entry of `palette` nearest its color, as [`quantize_to`] measures
 /// it (the matte, transparency and `o.reduction`'s distance weights) without dither; `None` for a
-/// pixel that becomes transparent, and for every pixel when `palette` is empty.
-pub fn nearest_entries(rgba: &[u8], o: &PaletteOptions, palette: &[[u8; 3]]) -> Vec<Option<usize>> {
-    let px = rgba.as_chunks::<4>().0;
-    let colors = opaque_colors(px, o, false);
+/// pixel that becomes transparent, and for every pixel when `palette` is empty. `f` gets each
+/// pixel's entry in pixel order, worked out one pixel at a time.
+pub fn nearest_entries(rgba: &[u8], o: &PaletteOptions, palette: &[[u8; 3]], mut f: impl FnMut(Option<usize>)) {
     let pal: Vec<[f32; 3]> = palette.iter().map(|c| c.map(f32::from)).collect();
     let index = PaletteIndex::new(&pal, o.reduction.weights());
-    colors
-        .iter()
-        .zip(px)
-        .map(|(c, p)| if pal.is_empty() || (o.transparency && p[3] < 128) { None } else { Some(index.nearest(c.map(f32::from))) })
-        .collect()
+    for p in rgba.as_chunks::<4>().0 {
+        f(if pal.is_empty() || (o.transparency && p[3] < 128) { None } else { Some(index.nearest(opaque_color(p, o, false).map(f32::from))) });
+    }
 }
 
 /// The color of each pixel when opaque: blended over the matte, and gray when `gray`.
 fn opaque_colors(px: &[[u8; 4]], o: &PaletteOptions, gray: bool) -> Vec<[u8; 3]> {
+    px.iter().map(|p| opaque_color(p, o, gray)).collect()
+}
+
+/// The color of the pixel `p` when opaque, as [`opaque_colors`] gives it.
+fn opaque_color(p: &[u8; 4], o: &PaletteOptions, gray: bool) -> [u8; 3] {
     let matte = o.matte.unwrap_or([255; 3]);
     let blend = o.matte.is_some() || !o.transparency;
-    px.iter()
-        .map(|p| {
-            let a = if blend { p[3] as u32 } else { 255 };
-            let c = [0, 1, 2].map(|i| ((p[i] as u32 * a + matte[i] as u32 * (255 - a) + 127) / 255) as u8);
-            if gray { [luma(c); 3] } else { c }
-        })
-        .collect()
+    let a = if blend { p[3] as u32 } else { 255 };
+    let c = [0, 1, 2].map(|i| ((p[i] as u32 * a + matte[i] as u32 * (255 - a) + 127) / 255) as u8);
+    if gray { [luma(c); 3] } else { c }
 }
 
 /// Map the pixels `px` (their opaque `colors`) to `palette` with `dither`, then drop the entries

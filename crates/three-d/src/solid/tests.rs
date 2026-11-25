@@ -232,7 +232,7 @@ fn a_face_reaching_past_the_eye_has_no_plane() {
     for (far, has_plane) in [(eye / 2.0, true), (2.0 * eye, false)] {
         let mut builder = Builder::new(&camera, false, false, Keep::Facets);
         let corners = vec![V3(-10.0, -10.0, 0.0), V3(10.0, -10.0, 0.0), V3(0.0, 10.0, far)];
-        builder.face(vec![corners], V3(0.0, -far, 20.0), Order::Depth).unwrap();
+        builder.face(vec![corners], V3(0.0, -far, 20.0), Order::Depth, crate::MeshPart::Front, |_| super::Attrs::Corners(vec![])).unwrap();
         assert_eq!(builder.facets.len(), 1, "{far}");
         assert_eq!(builder.facets[0].plane.is_some(), has_plane, "{far}");
     }
