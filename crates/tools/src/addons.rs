@@ -27,12 +27,12 @@ use crate::{Tool, ToolInfo};
 pub const PATH_TOOLS: &[ToolInfo] = &[
     ToolInfo { id: anchor_eraser::ID, label: "Anchor Eraser Brush", shortcut: None, icon: "dc-remove-brush" },
     ToolInfo { id: extend_path::ID, label: "Extend Path Tool", shortcut: None, icon: "dc-arrow-extend" },
-    ToolInfo { id: measure_inspect::ID, label: "Measure & Inspect Tool", shortcut: None, icon: "ruler" },
-    ToolInfo { id: parametric_shape::ID, label: "Parametric Shape Tool", shortcut: None, icon: "hexagon" },
+    ToolInfo { id: measure_inspect::ID, label: "Measure & Inspect Tool", shortcut: None, icon: "dc-measure-inspect" },
+    ToolInfo { id: parametric_shape::ID, label: "Parametric Shape Tool", shortcut: None, icon: "dc-parametric-shape" },
     ToolInfo { id: corner_tool::ID, label: "Corner Tool", shortcut: None, icon: "dc-corner-tool" },
     ToolInfo { id: slide_anchor::ID, label: "Slide Anchor Along Path", shortcut: None, icon: "dc-slide-anchor" },
     ToolInfo { id: shared_edge::ID, label: "Shared Edge Merge Tool", shortcut: None, icon: "dc-shared-edge" },
-    ToolInfo { id: tangent_circle::ID, label: "Tangent Circle Tool", shortcut: None, icon: "circle" },
+    ToolInfo { id: tangent_circle::ID, label: "Tangent Circle Tool", shortcut: None, icon: "dc-tangent-circle" },
 ];
 
 /// Smart Pen's tool, a flyout group of its own.
