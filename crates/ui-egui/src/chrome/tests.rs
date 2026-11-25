@@ -1554,6 +1554,18 @@ fn window_title_follows_the_active_file() {
     );
 }
 
+/// A nightly's window carries the nightly name, with and without a document, so the stable app's
+/// window and taskbar entry never read the same.
+#[test]
+fn a_nightly_window_title_carries_the_nightly_name() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let nightly = crate::os_window::name_for(crate::os_window::LaunchIdentity::NightlyV1);
+    assert_eq!(super::window_title_named(&app, nightly), "VectorCraft Nightly");
+    app.run("file.new", json!({"width": 100, "height": 100, "name": "foo.svg"})).unwrap();
+    let titled = super::window_title_named(&app, nightly);
+    assert!(titled.contains("foo.svg") && titled.ends_with("\u{2014} VectorCraft Nightly"), "{titled}");
+}
+
 /// The document tabs over `app`, with the same per-frame view synchronization as the app.
 fn tabs_with_views(app: &mut crate::VectorcraftApp, ui: &mut egui::Ui) {
     app.sync_views();
