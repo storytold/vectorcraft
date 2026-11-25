@@ -5039,6 +5039,8 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	Script file could not be written	Le fichier du script n’a pas pu être écrit
 @msg	Script file dialogs need a person to answer them	Les boîtes de dialogue de fichiers du script ont besoin d’une personne pour y répondre
 @msg	Script file is not open for writing	Le fichier du script n’est pas ouvert en écriture
+@msg	Script file is read-only	Le fichier du script est en lecture seule
+@msg	Script file is open for writing	Le fichier du script est ouvert en écriture
 @msg	Script file name is already in use	Le nom du fichier du script est déjà utilisé
 @msg	Script file name must be a name without a folder	Le nom du fichier du script doit être un nom sans dossier
 @msg	Script file permission can be kept only for a script run from a file	L’autorisation d’accès aux fichiers ne peut être conservée que pour un script exécuté depuis un fichier

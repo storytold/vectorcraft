@@ -1,5 +1,6 @@
 //! File → Print › Advanced, what needs the renderer and the flattener (the PDF writer does the
-//! rest): Print as Bitmap renders each printed region as one image, and a flattener preset
+//! rest): Print as Bitmap renders each printed region as one image (at `advanced.bitmapResolution`,
+//! or the document's raster effects resolution), and a flattener preset
 //! flattens transparency, both on the document as it prints (only the layers that print,
 //! overprints discarded or simulated in composite output) before it is laid out on paper.
 
@@ -31,7 +32,21 @@ pub(crate) fn flattener(cmd: &str, set: &PrintSettings, saved: &[FlattenerPreset
 /// `doc` as Print as Bitmap and the flattener preset of `set` print it (from `saved` presets), or
 /// `None` when neither applies. Print as Bitmap is for composite output.
 /// `rich_black`: Appearance of Black › Printing / Exporting › Output All Blacks as Rich Black.
+#[cfg(test)]
 pub(crate) fn prepare(cmd: &str, doc: &Document, set: &PrintSettings, saved: &[FlattenerPreset], rich_black: bool) -> Result<Option<Document>> {
+    prepare_noting(cmd, doc, set, saved, rich_black, &mut vec![])
+}
+
+/// [`prepare`], with the note on an image Print as Bitmap prints below `advanced.bitmapResolution`
+/// added to `notes`.
+pub(crate) fn prepare_noting(
+    cmd: &str,
+    doc: &Document,
+    set: &PrintSettings,
+    saved: &[FlattenerPreset],
+    rich_black: bool,
+    notes: &mut Vec<String>,
+) -> Result<Option<Document>> {
     let composite = set.output.mode == OutputMode::Composite;
     let bitmap = set.advanced.print_as_bitmap && composite;
     let flattener = flattener(cmd, set, saved)?;
@@ -40,7 +55,9 @@ pub(crate) fn prepare(cmd: &str, doc: &Document, set: &PrintSettings, saved: &[F
     }
     let printed = vectorcraft_pdf::printed_document(doc, set);
     if bitmap {
-        return bitmap_document(cmd, &printed, set, rich_black).map(Some);
+        let (out, lowest) = bitmap_document(cmd, &printed, set, rich_black)?;
+        notes.extend(capped_note(set, lowest));
+        return Ok(Some(out));
     }
     let Some(mut o) = flattener else { return Ok(None) };
     // Composite overprints that were discarded or simulated aren't preserved either.
@@ -62,12 +79,62 @@ fn drop_guides(nodes: &mut Vec<Arc<Node>>) {
     }
 }
 
+/// The resolution Print as Bitmap renders `doc` at with `set` (ppi): `advanced.bitmapResolution`,
+/// or the document's raster effects resolution when that is 0.
+fn bitmap_ppi(doc: &Document, set: &PrintSettings) -> f64 {
+    let asked = set.advanced.bitmap_resolution;
+    if asked > 0.0 { asked } else { doc.raster_effects_ppi }
+}
+
+/// The pixels per point Print as Bitmap renders `area` at for `ppi`: at most MAX_PIXELS, and no
+/// side longer than the renderer draws (rounded up to whole pixels when it renders).
+fn bitmap_scale(area: Rect, ppi: f64) -> f64 {
+    let side = area.width().max(area.height()).max(1.0);
+    let longest = f64::from(vectorcraft_render::MAX_RASTER_SIDE) - 2.0;
+    (ppi / 72.0).min((MAX_PIXELS / (area.width() * area.height()).max(1.0)).sqrt()).min(longest / side)
+}
+
+/// The note on Print as Bitmap printing below the `advanced.bitmapResolution` of `set`, when the
+/// `lowest` resolution (ppi) an image prints at is lower. None when the job leaves the resolution
+/// to the document.
+fn capped_note(set: &PrintSettings, lowest: Option<f64>) -> Option<String> {
+    let asked = set.advanced.bitmap_resolution;
+    let lowest = lowest.filter(|l| asked > 0.0 && l.is_finite() && *l < asked - 1e-6)?;
+    Some(format!(
+        "Print as Bitmap prints at {} ppi, not the {asked} ppi bitmapResolution asks for: a page prints as at most 64 million pixels and 32,768 pixels a side",
+        lowest.floor()
+    ))
+}
+
+/// What [`prepare`] notes on Print as Bitmap for `doc` printed with `set`, without rendering it,
+/// for the preview: a page with art that prints whose image the pixel limits keep below
+/// `advanced.bitmapResolution`. The art is judged by its bounds, so a page holding only art that
+/// draws nothing (fully transparent) is counted, while the print itself leaves its image out.
+pub(crate) fn bitmap_notes(cmd: &str, doc: &Document, set: &PrintSettings) -> Result<Vec<String>> {
+    let asked = set.advanced.bitmap_resolution;
+    if !(set.advanced.print_as_bitmap && set.output.mode == OutputMode::Composite && asked > 0.0) {
+        return Ok(vec![]);
+    }
+    let printed = vectorcraft_pdf::printed_document(doc, set);
+    let regions = vectorcraft_pdf::print_regions(&printed, set).map_err(|e| pdf_error(cmd, e))?;
+    let bleed = vectorcraft_pdf::page_bleed(&set.bleed, &printed);
+    let lowest = regions
+        .iter()
+        .map(|(_, r)| outset(*r, bleed))
+        .filter(|area| vectorcraft_pdf::prints_art_in(&printed, *area))
+        .map(|area| bitmap_scale(area, asked) * 72.0)
+        .reduce(f64::min);
+    Ok(capped_note(set, lowest).into_iter().collect())
+}
+
 /// `doc` (as it prints) with its art replaced by one image of each printed region (an artboard
-/// with its bleed, or all the art), at the document's raster effects resolution; regions where
-/// nothing is drawn get none.
-fn bitmap_document(cmd: &str, doc: &Document, set: &PrintSettings, rich_black: bool) -> Result<Document> {
+/// with its bleed, or all the art), at [`bitmap_ppi`] within [`bitmap_scale`]'s limits; regions
+/// where nothing is drawn get none. Also the lowest resolution an image prints at (ppi), `None`
+/// without images.
+fn bitmap_document(cmd: &str, doc: &Document, set: &PrintSettings, rich_black: bool) -> Result<(Document, Option<f64>)> {
     let regions = vectorcraft_pdf::print_regions(doc, set).map_err(|e| pdf_error(cmd, e))?;
     let bleed = vectorcraft_pdf::page_bleed(&set.bleed, doc);
+    let ppi = bitmap_ppi(doc, set);
     let mut art = doc.clone();
     drop_guides(&mut art.layers);
     let anti_alias = if doc.raster_effects.anti_alias { AntiAlias::Art } else { AntiAlias::None };
@@ -75,13 +142,10 @@ fn bitmap_document(cmd: &str, doc: &Document, set: &PrintSettings, rich_black: b
     let mut out = doc.clone();
     let mut renderer = vectorcraft_render::Renderer::new();
     let mut images = vec![];
+    let mut lowest: Option<f64> = None;
     for (_, r) in regions {
         let area = outset(r, bleed);
-        // At most MAX_PIXELS, and no side longer than the renderer draws (rounded up to whole
-        // pixels below).
-        let side = area.width().max(area.height()).max(1.0);
-        let longest = f64::from(vectorcraft_render::MAX_RASTER_SIDE) - 2.0;
-        let scale = (doc.raster_effects_ppi / 72.0).min((MAX_PIXELS / (area.width() * area.height()).max(1.0)).sqrt()).min(longest / side);
+        let scale = bitmap_scale(area, ppi);
         if !(scale.is_finite() && scale > 0.0) {
             continue;
         }
@@ -101,11 +165,12 @@ fn bitmap_document(cmd: &str, doc: &Document, set: &PrintSettings, rich_black: b
         let xf = Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale);
         let image = ImageObject { key, width: img.width, height: img.height, xf, link: None, placement: Default::default(), pixels: None };
         images.push(Arc::new(Node::new(out.alloc_id(), NodeKind::Image(Box::new(image)))));
+        lowest = Some(lowest.map_or(scale * 72.0, |l| l.min(scale * 72.0)));
     }
     let mut layer = Node::layer(out.alloc_id(), "Bitmap", LayerColor::Preset(0));
     if let Some(children) = layer.children_mut() {
         *children = images;
     }
     out.layers = vec![Arc::new(layer)];
-    Ok(out)
+    Ok((out, lowest))
 }

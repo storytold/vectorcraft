@@ -5,6 +5,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use craft::print::ui::Printer;
+use egui::accesskit::Role;
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
@@ -467,4 +468,54 @@ fn a_spot_inks_icon_converts_it_to_process_and_back() {
     call_raw(&mut app, "ui.click", json!({"control": {"name": "Keep Gold as spot"}}));
     pump(&mut app);
     assert_eq!(inks(&app), json!([{"name": "Gold", "print": true, "convertToProcess": false}]));
+}
+
+/// What the Advanced section shows, read from the window's access tree after the pump has run: whether
+/// the Resolution field takes input (`None` without the field), and whether the note on the raster
+/// effects resolution shows.
+fn bitmap_rows(app: &mut VectorcraftApp) -> (Option<bool>, bool) {
+    let ctx = ctx(app);
+    ctx.enable_accesskit();
+    pump(app);
+    let out = crate::testing::app_frame(app, &ctx, Default::default());
+    let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+    let field = nodes
+        .iter()
+        .find(|(_, n)| n.label().is_some_and(|l| l.starts_with("Resolution")) && matches!(n.role(), Role::TextInput | Role::SpinButton))
+        .map(|(_, n)| !n.is_disabled());
+    // A label's text is its node's value.
+    let note = nodes.iter().any(|(_, n)| n.label().or(n.value()).is_some_and(|t| t.starts_with("Each page prints as one image")));
+    (field, note)
+}
+
+/// Advanced › Resolution sets the resolution Print as Bitmap prints at: a field dimmed until Print as
+/// Bitmap is on for composite output, with the note on the raster effects resolution only while it is
+/// 0, printed and kept with the document by Print.
+#[test]
+fn the_advanced_section_sets_the_print_as_bitmap_resolution() {
+    let (mut app, jobs) = app();
+    app.run("file.print", json!({})).unwrap();
+    pump(&mut app);
+    press(&mut app, "Advanced");
+    assert_eq!(bitmap_rows(&mut app), (Some(false), true), "dimmed with Print as Bitmap off");
+    set(&mut app, "advanced.printAsBitmap", json!(true));
+    assert_eq!(bitmap_rows(&mut app), (Some(true), true));
+    set(&mut app, "output.mode", json!("separations"));
+    assert_eq!(bitmap_rows(&mut app).0, Some(false), "dimmed for separations");
+    set(&mut app, "output.mode", json!("composite"));
+    pump(&mut app);
+    set(&mut app, "advanced.bitmapResolution", json!(144));
+    assert_eq!(bitmap_rows(&mut app), (Some(true), false), "the note shows only at 0");
+    confirm(&mut app);
+    assert!(!is_open(&app), "Print closes the dialog");
+    let back = vectorcraft_pdf::import(&jobs.borrow()[0].2).unwrap();
+    let mut sizes = vec![];
+    back.walk(|n| {
+        if let vectorcraft_doc::NodeKind::Image(im) = &n.kind {
+            sizes.push((im.width, im.height));
+        }
+    });
+    assert_eq!(sizes, [(240, 180)], "the artboard with art, 120 × 90 pt at 144 ppi");
+    let saved = app.session.active().unwrap().doc.print_setup.as_ref().unwrap();
+    assert_eq!(saved["advanced"]["bitmapResolution"], json!(144.0));
 }

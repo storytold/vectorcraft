@@ -5871,6 +5871,8 @@ liquify-list-end	{0}, {1}	{0} 및 {1}
 @msg	Script file could not be written	스크립트 파일을 쓸 수 없습니다
 @msg	Script file dialogs need a person to answer them	스크립트 파일 대화 상자에는 응답할 사람이 필요합니다
 @msg	Script file is not open for writing	스크립트 파일이 쓰기용으로 열려 있지 않습니다
+@msg	Script file is read-only	스크립트 파일이 읽기 전용입니다
+@msg	Script file is open for writing	스크립트 파일이 쓰기용으로 열려 있습니다
 @msg	Script file name is already in use	스크립트 파일 이름이 이미 사용 중입니다
 @msg	Script file name must be a name without a folder	스크립트 파일 이름은 폴더 없는 이름이어야 합니다
 @msg	Script file permission can be kept only for a script run from a file	파일 권한은 파일에서 실행한 스크립트에만 유지할 수 있습니다

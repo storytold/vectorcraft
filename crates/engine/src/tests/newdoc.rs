@@ -160,7 +160,8 @@ fn ppi_overprint_preview_and_bad_params() {
         json!({"previewMode": "xray"}),
         json!({"artboardLayout": {"layout": "spiral"}}),
         json!({"artboardLayout": {"columns": 0}}),
-        json!({"artboardLayout": {"rows": 2}}),
+        json!({"artboardLayout": {"rows": 0}}),
+        json!({"artboardLayout": {"tiles": 2}}),
         json!({"units": "furlongs"}),
         json!({"width": 160000, "artboards": 1000}),
     ] {
@@ -902,6 +903,22 @@ fn a_damaged_or_oversized_profile_leaves_the_defaults_and_is_reported() {
     let r = s.execute("file.new", &json!({"preset": "Web 1920×1080"})).unwrap();
     assert!(r["profileError"]["reason"].as_str().unwrap_or("").contains("larger than"), "{r}");
     assert_eq!(s.doc().unwrap().doc.artboards[0].rect.width(), 1920.0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_profile_that_is_a_link_is_not_followed() {
+    let (mut s, dir) = with_profiles("link");
+    s.execute("file.newProfiles.edit", &json!({"name": "Print"})).unwrap();
+    // A profile the folder held, moved out and linked back in.
+    let outside = std::env::temp_dir().join(format!("vc-newdoc-profile-outside-{}.vectorcraft", std::process::id()));
+    std::fs::rename(dir.join("Print.vectorcraft"), &outside).unwrap();
+    std::os::unix::fs::symlink(&outside, dir.join("Print.vectorcraft")).unwrap();
+    let r = s.execute("file.new", &json!({"preset": "Letter"})).unwrap();
+    assert_eq!(r["profileError"]["reason"], "not a plain file", "{r}");
+    assert!(r.get("profile").is_none(), "{r}");
+    let _ = std::fs::remove_file(&outside);
     let _ = std::fs::remove_dir_all(&dir);
 }
 

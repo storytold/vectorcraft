@@ -96,7 +96,7 @@ fn printed(n: &Node, symbols: &SymbolBoxes, f: &mut impl FnMut(Rect)) {
 
 /// Is there art that prints in `r`? The box of a symbol instance whose art holds brushed strokes
 /// grows by as far as their brush art can paint ([`SymbolBoxes::with_brush_art`]).
-fn has_art(doc: &Document, r: Rect) -> bool {
+pub(crate) fn has_art(doc: &Document, r: Rect) -> bool {
     let symbols = doc.symbol_boxes().with_brush_art();
     let mut any = false;
     for l in &doc.layers {

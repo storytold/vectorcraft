@@ -2574,7 +2574,9 @@ control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script,
   while 4,096 other `[` are open, assign a property in brackets whose name is a string literal of more than 256
   characters, assign properties of more than 1,000 different names on members (`o.d = …`, `o['d'] = …`), or
   assign or declare `Folder`; a variable whose name a member assignment writes counts as one that may hold a File
-  object), `filesOpened` (files opened in other apps), `network`,
+  object; a document's `saveAs` or `exportFile` counts too, and so does `print` called on `app.activeDocument`,
+  `app.documents[i]`, `documents.add()`, `documents.getByName()` or `app.open()`, or on a variable that holds one of
+  them), `filesOpened` (files opened in other apps), `network`,
   `nativeCode`, `otherApps` (messages to other apps), `environment` (environment variables), `unseenCode` (`eval`,
   `new Function` and `$.evalFile`) and `preferences` (the reference app's preferences changed).
 - `problems` lists what would stop the script loading as written (strings, comments, regular expressions,
@@ -2650,6 +2652,158 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   throws a `RangeError`.
 - `vc.commands` lists the commands a script may run.
 - `vc.log(value)` adds a value to the report and a line to the Script Console.
+- `app` is the application object the help page https://ai-scripting.docsforadobe.dev/jsobjref/Application/
+  describes: `app.documents`, `app.activeDocument` (assigning an open document makes it the active one),
+  `app.selection`, `app.coordinateSystem` and `app.getIsFileOpen(path)`. `app.documents`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Documents/) has `length`, `[i]`, `index(key)`, `getByName(name)`
+  and `add(colorSpace?, width?, height?, numArtBoards?, artboardLayout?, artboardSpacing?, artboardRowsOrCols?)`,
+  which runs `file.new` (`artboardRowsOrCols` is the number of rows for `GridByCol` and `RLGridByCol`, and of
+  columns for the other layouts), and `addDocument(startupPreset, presetSettings?, showOptionsDialog?)`, which runs `file.new`
+  with the New Document profile `startupPreset` names (`Print`, `Web`, `Mobile`, `Video`, another profile of
+  `file.newPresets`, or `Basic CMYK` and `Basic RGB` for no profile), starting from the first preset
+  `file.newPresets` lists for that profile, and the settings of a `new DocumentPreset()`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/DocumentPreset/) in place of the preset's. A `DocumentPreset`
+  starts with the defaults that page gives. Its `documentBleedLink`, `documentBleedOffsetRect` and
+  `transparencyGrid` can be assigned, but `addDocument` throws an error that says they are not available yet when
+  the preset it is given holds one of them with a value other than `null`, and makes no document. A
+  `presetSettings` that is not a `DocumentPreset` (a plain object such as `{width: 500}` included) throws a
+  `TypeError`. A script's `file.new` reads the profile's file in the profiles folder as the person's does, under the
+  automation roots in force; when `file.new` reports a `profileError`, `addDocument` throws an error that names the
+  profile and the reason, and makes no document.
+  `showOptionsDialog` true throws `Dialog unavailable` with no document made. A `Document` (https://ai-scripting.docsforadobe.dev/jsobjref/Document/) has `name`,
+  `width`, `height`, `rulerUnits`, `documentColorSpace`, `rulerOrigin`, `convertCoordinate(point, source,
+  destination)`, `pageItems` and `selection`. `pageItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PageItems/)
+  has `length`, `[i]`, `index(key)`, `getByName(name)` and `removeAll()`; `i in` either collection is true for each
+  entry `[i]` gives. Each page item
+  (https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/) has `typename`, `parent`, `name`, `note` (the
+  Attributes panel's note, trimmed as `attributes.set` trims it), `hidden`, `locked`, `selected` (assigning it adds
+  or removes only that object, as `select.add` and `select.toggle` do, and the other objects stay selected as they
+  were), `opacity` (0 to
+  100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
+  visible bounds), `editable` (false for an object that is hidden or locked, in a hidden or locked layer or group,
+  or on a locked artboard), `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
+  `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/). `move` runs `node.move`, and `duplicate` runs
+  `edit.duplicate` and then `node.move` on the copy. The relative object is a page item or a layer of the same
+  document; `ElementPlacement.INSIDE` and `PLACEATBEGINNING` (the default) put the object on top of a layer's or a
+  group's contents, `PLACEATEND` under them, `PLACEBEFORE` directly above the relative object and `PLACEAFTER`
+  directly below it. An object of another document throws `Cross-document placement is not available`, and when
+  `node.move` refuses the place of a copy, `duplicate` throws that error and leaves the documents, the selection and
+  the undo history as they were before the call. `duplicate` on a path inside a compound path throws
+  `Duplicating a path inside a compound path is not available yet`, and `zOrder` on one throws
+  `Reordering a path inside a compound path is not available yet` and leaves the document unchanged. A script that holds a placed image keeps the
+  same object when the image is embedded: the next read gives that object, now a `RasterItem`. The
+  enumerations `ElementPlacement`, `ZOrderMethod`, `RulerUnits`, `DocumentColorSpace`, `CoordinateSystem`,
+  `DocumentArtboardLayout`, `DocumentPresetType`, `DocumentPreviewMode`, `DocumentRasterResolution` and
+  `DocumentTransparencyGrid` hold strings such as `"ZOrderMethod.BRINGTOFRONT"`.
+  VectorCraft's own rules: documents are listed in tab order, and page items in paint order from the bottom, with the
+  objects inside groups and compound paths after their group and without layers and ruler guides. Script coordinates
+  are points with Y up from the bottom-left corner of the first artboard, or, with
+  `CoordinateSystem.ARTBOARDCOORDINATESYSTEM`, Y down from the top-left corner of the active artboard. `typename`
+  is `TextFrame` for type, and `BlendItem`, `EnvelopeItem`, `RepeatItem`, `PlacedDocumentItem` and `IntertwineItem`
+  for kinds the help pages give no class. Each change runs a command and joins the run's one undo step for each
+  changed document. A value that changes nothing runs no command, and a change to another document leaves the active
+  tab as it was. A bad value throws an error and changes nothing. An object that was deleted, or that a named engine
+  kept from an earlier run, throws `Stale page item`. `remove()` on an object that is hidden or locked, is inside a
+  hidden or locked layer or group, or is a group that holds one, and `removeAll()` when any object is, throw
+  `cannot delete hidden or locked objects` and delete nothing. `remove()` on an object on a locked artboard, and `removeAll()`
+  when any object is on one, throw `cannot delete objects on a locked artboard` and delete nothing. Setting `width` or `height` scales the object along
+  the page's axes, so a rotated object then reads back the size that was set. `index` and `getByName` throw
+  `Not found`; and
+  `app.activeDocument` with no document open throws `No active document`. `Document.selection` takes one page item,
+  a list of at most 10,000, `null` or `[]`, and an object that cannot be selected throws `Cannot select` with
+  nothing changed. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
+  letter case is ignored and `\` matches `/`) and does not resolve the path it is given. A document counts only when
+  the automation read roots allow its file, and that check can look the document's file up on disk. A path with
+  `..`, a network path, a NUL character or more than 4,096 bytes throws an error. Some members the Application,
+  Document and PageItem pages list, such as `Document.layers`, `PageItem.blendingMode`, `PageItem.rotate` and
+  `app.beep`, throw an error that says they are not available yet when they are read or assigned. Other members
+  those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
+  themselves, such as a path's fill, are not defined yet and read as `undefined`.
+- `Document.saveAs(file, options?)` runs `file.saveAs`, and the document then has the new file.
+  `Document.exportFile(file, exportType, options?)` runs `document.export` and leaves the document's file as it is.
+  `app.open(file, documentColorSpace?, options?)` runs `document.open` and gives the new `Document`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Document/, https://ai-scripting.docsforadobe.dev/jsobjref/Application/).
+  `file` is a `File`. `new IllustratorSaveOptions()`, `new EPSSaveOptions()` and `new PDFSaveOptions()` pick the
+  format (https://ai-scripting.docsforadobe.dev/jsobjref/IllustratorSaveOptions/,
+  https://ai-scripting.docsforadobe.dev/jsobjref/EPSSaveOptions/, https://ai-scripting.docsforadobe.dev/jsobjref/PDFSaveOptions/);
+  without options the path's extension picks it. Without options, `saveAs` to a `.ai`, `.eps` or `.pdf` path and
+  `exportFile` as `PNG24`, `JPEG` or `SVG` use the defaults a new options object of that class holds. `saveAs` maps `compressed`, `pdfCompatible`, `embedICCProfile` and
+  `compatibility` (`ILLUSTRATOR17` and `ILLUSTRATOR19`) of `.ai`; `cmykPostScript`, `includeDocumentThumbnails`,
+  `postScript`, `preview`, `overprint` and `compatibility` of EPS; and `pDFPreset`, `compatibility` (`ACROBAT4` to
+  `ACROBAT8` as PDF 1.3 to 1.7), `artboardRange`, `preserveEditability`, `acrobatLayers` and `compressArt` of PDF.
+  `exportType` is an `ExportType`: `PNG24`, `JPEG` and `SVG` take `new ExportOptionsPNG24()`, `new ExportOptionsJPEG()`
+  and `new ExportOptionsSVG()` (https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsPNG24/,
+  https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsJPEG/, https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsSVG/),
+  with `antiAliasing`, `artBoardClipping`, `horizontalScale` and `verticalScale` (the same value, from 1 to
+  776.19; 100 writes one pixel per point whatever the raster effects resolution), `transparency` (PNG24), `qualitySetting` (0 to 100) and `optimization` (JPEG), and
+  `coordinatePrecision` (1 to 7), `embedRasterImages`, `compressed`, `preserveEditability` and
+  `includeVariablesAndDatasets` (SVG); `PNG8`, `GIF` and `TIFF` take no options. `app.open`'s
+  `options` is a `PDFFileOptions` record (https://ai-scripting.docsforadobe.dev/jsobjref/PDFFileOptions/) with
+  `pageToOpen` and `pDFCropToBox`. `app.userInteractionLevel` is `UserInteractionLevel.DISPLAYALERTS` at the start of
+  each run. The enumerations `ExportType`, `Compatibility`, `PDFCompatibility`, `PDFBoxType`, `EPSPreview`,
+  `EPSPostScriptLevelEnum`, `PDFOverprint` and `UserInteractionLevel` hold strings such as `"ExportType.PNG24"`.
+  VectorCraft's own rules: each path is checked as a `File` opened for reading or writing is checked, before the
+  command runs. A path outside the script's folders throws `Script file access denied`, also when it is an open
+  document's file, a link that leads outside them, or the settings folder; a read-only file throws `Script file is
+  read-only`; a file a `File` object holds open for writing throws `Script file is open for writing` on `saveAs`
+  and `exportFile`, and `Script file access denied` when a command would write it besides the file named; and the
+  files a command reads or writes besides the one named, such as an SVG's linked files, are
+  read and written only where the script's folders allow. `userInteractionLevel` does not change what a command
+  does or where it may read and write, since a command a script runs never shows a dialog. `exportFile` adds the
+  format's extension unless the name already ends with it (`.jpg` or `.jpeg`, `.tif` or `.tiff`, `.svgz` with
+  `compressed`), and writes one file: the active artboard with `artBoardClipping`, otherwise the bounds of the
+  visible art. An SVG with `embedRasterImages` false also writes the document's embedded images beside it, and
+  when one of those files may not be written, none of them is. A listed option that is not mapped is accepted at its help page's default, and any other value throws
+  an error that says it is not available yet, as do `ExportType.FLASH` and `ExportType.AutoCAD`; properties the help
+  pages do not list are left out. With `pDFPreset` named, a `PDFSaveOptions` option still at a new object's default
+  keeps the preset's value. A bad value throws an error before anything is written.
+- `Document.print(options?)` runs `file.print` on the document, with the options a script assigned over the
+  document's print settings, or over the preset's when `printPreset` is assigned. The document's print settings
+  stay as they are, and `print` adds no undo step
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Document/, https://ai-scripting.docsforadobe.dev/jsobjref/PrintOptions/).
+  `options` is a `new PrintOptions()`, whose `jobOptions`, `colorManagementOptions`, `colorSeparationOptions`,
+  `coordinateOptions`, `flattenerOptions`, `fontOptions`, `pageMarksOptions`, `paperOptions` and `postScriptOptions`
+  are `new PrintJobOptions()`, `new PrintColorManagementOptions()`, `new PrintColorSeparationOptions()`,
+  `new PrintCoordinateOptions()`, `new PrintFlattenerOptions()`, `new PrintFontOptions()`,
+  `new PrintPageMarksOptions()`, `new PrintPaperOptions()` and `new PrintPostScriptOptions()`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/PrintJobOptions/ and the pages beside it). Each property reads as
+  its help page's default until it is assigned, and a `PrintOptions` holds its option objects by reference, so a change
+  made after the assignment is printed. `print` maps `printPreset` (a print preset's name) and `flattenerPreset`;
+  `copies` (1 to 999), `collate`, `reversePages`, `designation`, `printAllArtboards`, `artboardRange`,
+  `printAsBitmap`, `bitmapResolution` (`advanced.bitmapResolution`: 0 for the document's raster effects resolution,
+  or 1 to 9600 ppi; `print` throws for a value between 0 and 1) and `file` of the job; `colorProfileMode`
+  (`SOURCEPROFILE` and `CUSTOMPROFILE`), `intent` and `name` (an RGB or CMYK profile) of color management;
+  `colorSeparationMode` (`COMPOSITE` and `HOSTBASEDSEPARATION`), `convertSpotColors` and `overPrintBlack`; `emulsion`, `fitToPage`, `horizontalScale` and
+  `verticalScale` (1 to 1000), `orientation`, `position` and `tiling`; `overprint` of the flattener; `colorBars`,
+  `pageInfoMarks`, `registrationMarks`, `trimMarks`, `pageMarksType` and `trimMarksWeight`; `name`, `width`,
+  `height` and `transverse` of the paper; and `negativePrinting` and `postScriptLevel` (`PSLEVEL2` and `PSLEVEL3`).
+  `app.printPresetsList` gives the print presets' names, `[Default]` first, and `app.PPDFileList` is empty.
+  The enumerations `PrintColorProfile`, `PrintColorIntent`, `PrintColorSeparationMode`, `PrintOrientation`,
+  `PrintPosition`, `PrintTiling`, `PrintArtworkDesignation`, `PrintingBounds`, `PrintFontDownloadMode`,
+  `FontSubstitutionPolicy`, `PageMarksTypes`, `PostScriptImageCompressionType` and `PrinterPostScriptLevelEnum` hold
+  strings such as `"PrintTiling.TILEFULLPAGES"`. VectorCraft's own rules: `print` writes the file `jobOptions.file`
+  names, checked as `saveAs` checks its file: PostScript when the name ends with `.ps` or `postScriptLevel` is
+  assigned, a print-ready PDF otherwise, also when that name is a link to a file with another extension. The
+  PostScript is level 2 when `postScriptLevel` is not assigned, the default it reads as. Without a file it throws `Printing to a printer is not available to scripts yet`, and `app.printerList` throws an error
+  that says it is not available yet. `fitToPage` set to true wins over the scale factors and the tiling mode. With
+  `printAllArtboards` false, `artboardRange` picks the artboards, and without a range every artboard prints. With
+  `printAllArtboards` not assigned, an assigned `artboardRange` replaces the range of the settings `print` starts
+  from, which prints when those settings print a range. `print` starts from the preset's settings when `printPreset`
+  is assigned, otherwise from the document's saved settings. When those settings ignore the artboards, an assigned
+  `printArea` prints the artboards an assigned `artboardRange` names, or each artboard without a range. With one of
+  `horizontalScale` and `verticalScale` assigned, the other keeps its value in the settings `print` starts from. `print` throws before anything is written when an assigned `artboardRange` names an
+  artboard the document does not have, also with `printAllArtboards` true, when `printPreset` or `flattenerPreset`
+  is not a preset's name (any case), when `colorManagementOptions.name` is not an RGB or CMYK profile's name (any
+  case), when `paperOptions.name` is not a paper `file.print` knows, or when it names a paper other than `custom`
+  and `width` or `height` is assigned above 0. An assigned name that is empty or only spaces, or holds `/`, `\` or
+  a control character (also at either end), throws too, and each checked name is sent without the spaces around it. `printerName` and `PPDName` take only `""`. A listed option that is not mapped, or a value that is not mapped such as
+  `PrintingBounds.ARTWORKBOUNDS`, `INRIPSEPARATION`, `PSLEVEL1` or a scale above 1000, throws an error that says it
+  is not available yet. Each value is checked when it is assigned: a wrong type, a number that is not finite or is
+  out of range, a string longer than 4,096 bytes, an option object of the wrong class or from an earlier run, and a
+  path given as a string all throw. A run makes at most 256 option objects. Each warning `file.print` gives goes to
+  the Script Console as a line that starts with `Document.print: `. `vc.run` still cannot run `file.print` or
+  `print.*`.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global
@@ -8977,7 +9131,11 @@ and goes back to Document Setup, whose OK runs `document.setup`; its Cancel goes
 
 `file.new` takes everything New Document sets: `preset` (a name from `file.newPresets`), `name`, `width`/`height`
 (points, or lengths such as `"210 mm"`), `units`, `orientation`, `artboards` with `artboardLayout {layout, columns,
-spacing, rightToLeft}`, `bleed`, `backgroundContents`, `colorMode`, `rasterEffectsPpi` (1 to 2,400; a saved preset's
+rows, spacing, rightToLeft}` (`rows` gives a `gridByColumn` layout that many rows, at most one for each artboard, in place of `columns`, and is
+an error with another layout; a preset keeps the rows, and `file.newPresets` lists them as set even when there are
+fewer artboards, until `columns` without `rows`, or another layout, is given; New Document's Columns shows the columns
+the rows give the current number of artboards, and New Document drops the rows when Columns or the layout changes),
+`bleed`, `backgroundContents`, `colorMode`, `rasterEffectsPpi` (1 to 2,400; a saved preset's
 value outside that range is read as the nearer end), `previewMode` and `alignNewObjectsToPixelGrid` (see
 [Align New Objects to Pixel Grid](#align-new-objects-to-pixel-grid)).
 `file.newPresets {category?}` lists the categories and presets (Recent: the last sizes used; Saved: the user's presets,
@@ -9160,9 +9318,11 @@ with the defaults.
 
 The profile is read on every `file.new`, so a replayed journal or a recorded action uses the profile as it is when it
 runs, as `document.open` reads its file when it runs. A file larger than 64 MiB (VectorCraft's own limit) is not read.
-When the file cannot be read, is too large or is not a native document, or the request's read roots leave out the
-folder (whether or not the file exists), the document starts with the defaults and
-`file.new`'s result carries `profileError: {profile, reason}`; the desktop app shows the reason in the status bar. The
+When the file is a link or a folder, cannot be read, is too large or is not a native document, or the request's read
+roots leave out the folder (whether or not the file exists), the document starts with the defaults and
+`file.new`'s result carries `profileError: {profile, reason}`; the desktop app shows the reason in the status bar, and
+a script's `app.documents.addDocument` throws it. A script's file access limits do not apply to reading the profile's
+file. The
 reason given when the read roots leave out the folder does not name the folder's path. Color profiles the profile's
 file carries are installed when they are missing, as `document.open` installs them, and each one that can't be used
 adds a line to `file.new`'s `warnings`. The new document's links find their files through relative paths from the
@@ -11341,16 +11501,22 @@ the placement then shows as placed by the tool, with a Reset button; dragging th
 ## Print advanced options
 
 The Print dialog's Advanced section and the printer profile are print settings too (`print.setup`, `print.preview`,
-`file.print`): `advanced: {printAsBitmap, overprints: preserve|discard|simulate, flattenerPreset}` and `color:
-{profile}`. In composite output, `preserve` writes overprinting fills and strokes with an overprinting graphics state
-(`/OP`, as PDF export does), `discard` makes overprinting fills and strokes knock out and `simulate` prints them
+`file.print`): `advanced: {printAsBitmap, bitmapResolution, overprints: preserve|discard|simulate, flattenerPreset}`
+and `color: {profile}`. In composite output, `preserve` writes overprinting fills and strokes with an overprinting
+graphics state (`/OP`, as PDF export does), `discard` makes overprinting fills and strokes knock out and `simulate` prints them
 as Overprint Preview shows them (darkened); either way the file has no overprint left. Separations always keep
 overprints. `flattenerPreset` (High Resolution, Medium Resolution, Low Resolution or a saved preset,
 `flattener.presets.list`) flattens transparency before printing, as Object → Flatten Transparency does; empty, a
 PDF keeps it live (PostScript, which has none, uses `file.print`'s `flattenerPreset`, else this one, else medium).
-`printAsBitmap` prints each composite page as one image of the art at the document's raster effects resolution,
-or at the highest resolution that fits when the image would be larger than 64 million pixels or longer than 32,768
-pixels a side.
+`printAsBitmap` prints each composite page as one image of the art at `bitmapResolution`, or at the highest
+resolution that fits when the image would be larger than 64 million pixels or longer than 32,768 pixels a side.
+`bitmapResolution` is VectorCraft's own range, 1 to 9600 ppi, and 0 (the default) prints at the document's raster
+effects resolution; any other value is an error. When a page prints below a `bitmapResolution` that was given, the
+reply's `warnings` (and `print.preview`'s) say at what resolution; a page with no art that draws prints no image
+and gets no warning (`print.preview` goes by the bounds of the art, without drawing it). Separations and pages that
+do not print as a bitmap leave it unused. Given in `file.print`'s `settings`, it applies to that job only;
+`print.setup` saves it with the document. (https://ai-scripting.docsforadobe.dev/jsobjref/PrintJobOptions/ lists a
+job's bitmap resolution with a minimum of 0 and does not say what 0 does.)
 `color.profile` names an RGB or CMYK profile: composite PDF colours are converted to it with `color.intent` (CMYK
 colours keep their numbers with `preserveNumbers`), so a CMYK profile writes device CMYK; separations separate with a
 CMYK one. Settings saved before these options load with their defaults.

@@ -89,7 +89,7 @@ impl Session {
             return Err(EngineError::Busy);
         }
         // A step of a batch a script runs is held to the same rule as the script's own commands.
-        if self.script_in_run && crate::script::refused_to_scripts(id) {
+        if self.script_in_run && crate::script::refused_to_scripts(id) && self.script_unfenced != Some(id) {
             return Err(EngineError::Other(crate::script::refused_text(id)));
         }
         // An edit the active tool is computing on another thread (a Shape Builder merge) is

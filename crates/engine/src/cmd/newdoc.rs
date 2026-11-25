@@ -27,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Document Presets",
             [],
             None,
-            "{category?: \"Recent\"|\"Saved\"|\"Mobile\"|\"Web\"|\"Print\"|\"Film & Video\"|\"Art & Illustration\"|\"Branding\"|\"Social\"} the New Document presets by category (Recent: the last sizes used; Saved: the user's presets) → {categories: [{name, presets: [{name, size: \"1920 × 1080 px\", width: pt, height: pt, units, orientation, artboards, artboardLayout: {layout, columns, spacing, rightToLeft}, bleed, backgroundContents, colorMode, rasterEffectsPpi, previewMode, alignNewObjectsToPixelGrid (on in the Mobile and Web presets)}]}]}; file.new {preset: name} starts from one",
+            "{category?: \"Recent\"|\"Saved\"|\"Mobile\"|\"Web\"|\"Print\"|\"Film & Video\"|\"Art & Illustration\"|\"Branding\"|\"Social\"} the New Document presets by category (Recent: the last sizes used; Saved: the user's presets) → {categories: [{name, presets: [{name, size: \"1920 × 1080 px\", width: pt, height: pt, units, orientation, artboards, artboardLayout: {layout, columns, rows? (a grid by column made with rows), spacing, rightToLeft}, bleed, backgroundContents, colorMode, rasterEffectsPpi, previewMode, alignNewObjectsToPixelGrid (on in the Mobile and Web presets)}]}]}; file.new {preset: name} starts from one",
             always,
             list
         ),
@@ -146,6 +146,11 @@ fn de_ppi<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<f64, D:
     Ok(Some(f64::deserialize(d)?).filter(|v| v.is_finite()).unwrap_or(72.0).clamp(1.0, 2400.0))
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_zero(n: &u32) -> bool {
+    *n == 0
+}
+
 /// Everything New Document sets: a preset (built-in, saved or recent) or `file.new`'s params.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -166,6 +171,9 @@ pub struct DocSettings {
     pub layout: ArtboardLayout,
     /// Columns of a grid layout.
     pub columns: u32,
+    /// Rows of a grid by column, in place of `columns` when more than 0.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub rows: u32,
     /// Space between artboards, points: 0 to `MAX_SPACING` (a saved or Recent preset's value
     /// outside that range is read as the nearer end).
     #[serde(deserialize_with = "de_spacing")]
@@ -203,6 +211,7 @@ impl Default for DocSettings {
             artboards: 1,
             layout: ArtboardLayout::GridByRow,
             columns: 0,
+            rows: 0,
             spacing: 20.0,
             right_to_left: false,
             bleed: [0.0; 4],
@@ -222,9 +231,17 @@ pub const MAX_ARTBOARDS: u32 = 1000;
 pub const RASTER_PPI: [(f64, &str); 3] = [(72.0, "Screen (72 ppi)"), (150.0, "Medium (150 ppi)"), (300.0, "High (300 ppi)")];
 
 impl DocSettings {
+    /// The rows a grid by column with `rows` uses, at most one for each artboard.
+    fn grid_rows(&self) -> Option<usize> {
+        (self.layout == ArtboardLayout::GridByColumn && self.rows > 0).then(|| (self.rows as usize).min(self.artboards.max(1) as usize))
+    }
+
     /// The columns a grid actually uses (0 or more than the artboards: one row).
     pub fn grid_columns(&self) -> usize {
         let n = self.artboards.max(1) as usize;
+        if let Some(rows) = self.grid_rows() {
+            return n.div_ceil(rows);
+        }
         match self.layout {
             ArtboardLayout::Row => n,
             ArtboardLayout::Column => 1,
@@ -246,6 +263,12 @@ impl DocSettings {
 
     /// As `file.newPresets` lists it (and `file.new` takes it back).
     pub fn to_json(&self) -> Value {
+        let mut layout =
+            json!({"layout": self.layout.id(), "columns": self.grid_columns(), "spacing": self.spacing, "rightToLeft": self.right_to_left});
+        // The rows as set, also when there are fewer artboards than rows.
+        if let Some(o) = layout.as_object_mut().filter(|_| self.grid_rows().is_some()) {
+            o.insert("rows".into(), json!(self.rows));
+        }
         json!({
             "name": self.name,
             "size": self.size_label(),
@@ -254,7 +277,7 @@ impl DocSettings {
             "units": self.units.label(),
             "orientation": self.orientation(),
             "artboards": self.artboards,
-            "artboardLayout": {"layout": self.layout.id(), "columns": self.grid_columns(), "spacing": self.spacing, "rightToLeft": self.right_to_left},
+            "artboardLayout": layout,
             "bleed": self.bleed,
             "backgroundContents": self.background.id(),
             "colorMode": color_mode_id(self.color_mode),
@@ -337,25 +360,23 @@ impl DocSettings {
         Ok(self)
     }
 
-    /// `artboardLayout: {layout?, columns?, spacing?, rightToLeft?}` or just a layout id.
+    /// `artboardLayout: {layout?, columns?, rows?, spacing?, rightToLeft?}` or just a layout id.
     fn layout_params(&mut self, l: &Value, cmd: &str) -> Result<()> {
         let bad_layout = || bad(cmd, "artboardLayout.layout must be gridByRow, gridByColumn, row or column");
         if let Some(id) = l.as_str() {
             self.layout = ArtboardLayout::parse(id).ok_or_else(bad_layout)?;
+            if self.layout != ArtboardLayout::GridByColumn {
+                self.rows = 0;
+            }
             return Ok(());
         }
         let o = l.as_object().ok_or_else(|| bad(cmd, "artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}"))?;
+        let count = |v: &Value| v.as_f64().filter(|c| c.is_finite() && *c >= 1.0).map(|c| c.round().min(MAX_ARTBOARDS as f64) as u32);
         for (k, v) in o {
             match k.as_str() {
                 "layout" => self.layout = v.as_str().and_then(ArtboardLayout::parse).ok_or_else(bad_layout)?,
-                "columns" => {
-                    self.columns = v
-                        .as_f64()
-                        .filter(|c| c.is_finite() && *c >= 1.0)
-                        .ok_or_else(|| bad(cmd, "artboardLayout.columns must be 1 or more"))?
-                        .round()
-                        .min(MAX_ARTBOARDS as f64) as u32
-                }
+                "columns" => self.columns = count(v).ok_or_else(|| bad(cmd, "artboardLayout.columns must be 1 or more"))?,
+                "rows" => self.rows = count(v).ok_or_else(|| bad(cmd, "artboardLayout.rows must be 1 or more"))?,
                 "spacing" => {
                     self.spacing = v
                         .as_f64()
@@ -366,18 +387,30 @@ impl DocSettings {
                 _ => return Err(bad(cmd, format!("unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)"))),
             }
         }
+        if o.contains_key("rows") && self.layout != ArtboardLayout::GridByColumn {
+            return Err(bad(cmd, "artboardLayout.rows needs the gridByColumn layout"));
+        }
+        // Columns without rows, or another layout, replace a preset's rows.
+        if (o.contains_key("columns") && !o.contains_key("rows")) || self.layout != ArtboardLayout::GridByColumn {
+            self.rows = 0;
+        }
+        if self.grid_rows().is_some() {
+            self.columns = u32::try_from(self.grid_columns()).unwrap_or(u32::MAX);
+        }
         Ok(())
     }
 
-    /// The artboard rectangles, the first at the origin's side.
+    /// The artboard rectangles, the first at the origin's side. A grid by column with `rows` has
+    /// that many rows (at most one for each artboard).
     pub fn boards(&self) -> Vec<Rect> {
         let n = self.artboards.max(1) as usize;
         let sizes = vec![(self.width, self.height); n];
         let by_column = self.layout == ArtboardLayout::GridByColumn;
-        grid_origins(&sizes, Point::ZERO, self.grid_columns(), self.spacing, by_column, self.right_to_left)
-            .into_iter()
-            .map(|o| Rect::from_origin_size(o, (self.width, self.height)))
-            .collect()
+        let origins = match self.grid_rows() {
+            Some(rows) => grid_origins_rc(&sizes, Point::ZERO, (rows, n.div_ceil(rows)), self.spacing, true, self.right_to_left),
+            None => grid_origins(&sizes, Point::ZERO, self.grid_columns(), self.spacing, by_column, self.right_to_left),
+        };
+        origins.into_iter().map(|o| Rect::from_origin_size(o, (self.width, self.height))).collect()
     }
 
     /// The new document (title and swatches set by `file.new`).
@@ -528,7 +561,7 @@ pub(crate) fn side_error(cmd: &str, units: Unit) -> crate::EngineError {
     bad(cmd, format!("width and height must be more than 0 and at most {limit}"))
 }
 /// Largest artboard spacing, points.
-const MAX_SPACING: f64 = 1.0e5;
+pub(crate) const MAX_SPACING: f64 = 1.0e5;
 
 pub fn color_mode_id(m: ColorMode) -> &'static str {
     match m {
@@ -944,20 +977,29 @@ impl Session {
 
     /// Profile `name`'s document, its file's path and a warning for each color profile the file
     /// carries that can't be used: `None` when it has no file (the shipped profile, the defaults),
-    /// the reason when the request being served may not read it, or its file can't be read, is
-    /// larger than [`MAX_PROFILE_BYTES`] or isn't a native document VectorCraft reads.
+    /// the reason when the request being served may not read it, or its file is a link or a folder,
+    /// can't be read, is larger than [`MAX_PROFILE_BYTES`] or isn't a native document VectorCraft
+    /// reads.
     fn read_profile(&self, name: &str) -> std::result::Result<Option<ReadProfile>, String> {
         let Some(path) = self.profile_path(name) else { return Ok(None) };
         let file = path.to_string_lossy().to_string();
         // Checked before the file is looked for, so a request that may not read the folder learns
         // nothing of its files, nor where the folder is.
+        // A script's gate does not apply to reads of the app's own folder; the automation roots in
+        // force still do.
         let denied = |_| PROFILE_DENIED.to_string();
-        crate::file_access::check_read(&file).map_err(denied)?;
-        if std::fs::symlink_metadata(&path).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound) {
-            return Ok(None);
-        }
-        crate::file_access::check_read(&file).map_err(denied)?;
-        let bytes = crate::store::read_capped(&path, MAX_PROFILE_BYTES)?;
+        let read = crate::file_access::app_folder_read(|| {
+            crate::file_access::check_read(&file).map_err(denied)?;
+            match std::fs::symlink_metadata(&path) {
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+                // A link is refused: the script's gate does not check where it leads.
+                Ok(m) if !m.file_type().is_file() => return Err("not a plain file".to_string()),
+                _ => {}
+            }
+            crate::file_access::check_read(&file).map_err(denied)?;
+            crate::store::read_capped(&path, MAX_PROFILE_BYTES).map(Some)
+        })?;
+        let Some(bytes) = read else { return Ok(None) };
         // The color profiles the file carries are installed where missing, as opening it installs
         // them, so the new document's assigned profiles draw and are saved with it.
         let (mut doc, _, mut warnings) = super::fileio::decode_native_file(&bytes).map_err(|e| e.to_string())?;

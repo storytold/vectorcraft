@@ -7759,6 +7759,8 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	Script file could not be written	स्क्रिप्ट फ़ाइल लिखी नहीं जा सकी
 @msg	Script file dialogs need a person to answer them	स्क्रिप्ट के फ़ाइल डायलॉग को उत्तर देने के लिए किसी व्यक्ति की ज़रूरत है
 @msg	Script file is not open for writing	स्क्रिप्ट फ़ाइल लिखने के लिए खुली नहीं है
+@msg	Script file is read-only	स्क्रिप्ट फ़ाइल केवल पढ़ने के लिए है
+@msg	Script file is open for writing	स्क्रिप्ट फ़ाइल लिखने के लिए खुली है
 @msg	Script file name is already in use	स्क्रिप्ट फ़ाइल का नाम पहले से उपयोग में है
 @msg	Script file name must be a name without a folder	स्क्रिप्ट फ़ाइल का नाम बिना फ़ोल्डर वाला नाम होना चाहिए
 @msg	Script file permission can be kept only for a script run from a file	फ़ाइल अनुमति केवल फ़ाइल से चलाई गई स्क्रिप्ट के लिए रखी जा सकती है

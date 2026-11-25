@@ -152,6 +152,179 @@ fn print_as_bitmap_prints_all_of_a_long_artboard() {
     assert!(b.x0 <= 0.0 && b.x1 >= 9000.0, "the image covers the artboard: {b:?}");
 }
 
+/// The images `file.print` prints with `settings`: their pixel sizes and their places on the page
+/// in the print-ready PDF (read back), their pixel sizes in the PostScript file (its image
+/// dictionaries, each size once), and the warnings of both.
+struct Printed {
+    pdf: Vec<(u32, u32)>,
+    placed: Vec<Rect>,
+    ps: Vec<(u32, u32)>,
+    warnings: Vec<String>,
+}
+
+fn printed_images(s: &mut Session, settings: &Value) -> Printed {
+    let warnings = |v: &Value| -> Vec<String> { v["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).map(str::to_string).collect() };
+    let v = s.execute("file.print", &json!({ "settings": settings })).unwrap();
+    let back = vectorcraft_pdf::import(&vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap()).unwrap();
+    let (mut pdf, mut placed) = (vec![], vec![]);
+    back.walk(|n| {
+        if let NodeKind::Image(im) = &n.kind {
+            pdf.push((im.width, im.height));
+            placed.push(im.xf.transform_rect_bbox(Rect::new(0.0, 0.0, f64::from(im.width), f64::from(im.height))));
+        }
+    });
+    let mut all = warnings(&v);
+    let v = s.execute("file.print", &json!({ "settings": settings, "format": "postscript" })).unwrap();
+    let ps = String::from_utf8_lossy(&vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap()).into_owned();
+    let mut sizes = vec![];
+    for part in ps.split("<< /ImageType ").skip(1) {
+        let after = |key: &str| part.split_once(key).and_then(|(_, r)| r.split_whitespace().next()).and_then(|n| n.parse::<u32>().ok());
+        if let (Some(w), Some(h)) = (after("/Width "), after("/Height ")) {
+            sizes.push((w, h));
+        }
+    }
+    sizes.sort_unstable();
+    sizes.dedup();
+    all.extend(warnings(&v));
+    Printed { pdf, placed, ps: sizes, warnings: all }
+}
+
+const CAPPED: &str = "Print as Bitmap prints at";
+
+/// `advanced.bitmapResolution` sets how many pixels Print as Bitmap prints the art with, in a
+/// print-ready PDF and in PostScript, on the same place of the page; 0 or none keeps the
+/// document's raster effects resolution.
+#[test]
+fn bitmap_resolution_sets_the_printed_image_size() {
+    let (mut s, _) = session();
+    s.execute("document.rasterEffectsSettings", &json!({"resolution": 72})).unwrap();
+    let mut places = vec![];
+    for (ppi, size) in [(Value::Null, (200, 100)), (json!(0), (200, 100)), (json!(144), (400, 200)), (json!(36), (100, 50)), (json!(1), (3, 2))] {
+        let mut advanced = json!({"printAsBitmap": true});
+        if !ppi.is_null() {
+            advanced["bitmapResolution"] = ppi.clone();
+        }
+        let p = printed_images(&mut s, &json!({ "advanced": advanced }));
+        assert_eq!((p.pdf.as_slice(), p.ps.as_slice()), ([size].as_slice(), [size].as_slice()), "{ppi}");
+        assert!(!p.warnings.iter().any(|w| w.starts_with(CAPPED)), "{ppi}: {:?}", p.warnings);
+        // At 1 ppi the image is rounded up to whole pixels past the artboard.
+        if ppi != json!(1) {
+            places.extend(p.placed);
+        }
+    }
+    let first = places[0];
+    for r in &places {
+        let apart = (r.x0 - first.x0).abs() + (r.y0 - first.y0).abs() + (r.width() - first.width()).abs() + (r.height() - first.height()).abs();
+        assert!(apart < 1.0, "the image covers the same part of the page: {r:?} vs {first:?}");
+    }
+    // Art that does not print as a bitmap leaves it unused.
+    let p = printed_images(&mut s, &json!({"advanced": {"bitmapResolution": 144}}));
+    assert!(p.pdf.is_empty(), "{:?}", p.pdf);
+}
+
+/// A `bitmapResolution` given to `file.print` applies to that job alone; `print.setup` saves it.
+#[test]
+fn a_bitmap_resolution_given_to_file_print_applies_to_that_job() {
+    let (mut s, _) = session();
+    s.execute("document.rasterEffectsSettings", &json!({"resolution": 72})).unwrap();
+    let undo = s.active().unwrap().history.undo.len();
+    let p = printed_images(&mut s, &json!({"advanced": {"printAsBitmap": true, "bitmapResolution": 144}}));
+    assert_eq!(p.pdf, [(400, 200)]);
+    assert!(doc(&s).print_setup.is_none(), "the saved settings stay as they are");
+    assert_eq!(doc(&s).raster_effects_ppi, 72.0, "and so does the raster effects resolution");
+    assert_eq!(s.active().unwrap().history.undo.len(), undo, "printing adds no undo step");
+    let v = s.execute("print.setup", &json!({"settings": {"advanced": {"printAsBitmap": true, "bitmapResolution": 144}}})).unwrap();
+    assert_eq!(v["settings"]["advanced"]["bitmapResolution"], 144.0);
+    assert_eq!(printed_images(&mut s, &json!({})).pdf, [(400, 200)], "a job without settings prints at the saved one");
+    assert_eq!(printed_images(&mut s, &json!({"advanced": {"bitmapResolution": 0}})).pdf, [(200, 100)], "0 over it: the document's");
+    // A saved 0 is left out of the settings, which read it back as 0.
+    let v = s.execute("print.setup", &json!({"settings": {"advanced": {"bitmapResolution": 0}}})).unwrap();
+    assert!(v["settings"]["advanced"].get("bitmapResolution").is_none(), "{}", v["settings"]["advanced"]);
+}
+
+/// A `bitmapResolution` outside 0 and 1–9600 ppi, or that is not a number, is refused by
+/// `print.setup`, `print.preview` and `file.print` alike, and nothing is saved.
+#[test]
+fn a_bitmap_resolution_out_of_range_is_refused() {
+    let (mut s, _) = session();
+    let undo = s.active().unwrap().history.undo.len();
+    for bad in [json!(0.5), json!(-1), json!(-0.001), json!(9600.5), json!(1e300), json!("high"), json!(true), json!([300])] {
+        let p = json!({"settings": {"advanced": {"printAsBitmap": true, "bitmapResolution": bad}}});
+        for cmd in ["print.setup", "print.preview", "file.print"] {
+            let e = s.execute(cmd, &p).map(|v| panic!("{cmd} {bad}: {v}")).unwrap_err().to_string();
+            assert!(!bad.is_number() || e.contains("advanced.bitmapResolution must be 1–9600 ppi"), "{cmd} {bad}: {e}");
+        }
+    }
+    assert!(doc(&s).print_setup.is_none());
+    assert_eq!(s.active().unwrap().history.undo.len(), undo);
+    for ok in [1.0, 9600.0] {
+        s.execute("print.preview", &json!({"settings": {"advanced": {"printAsBitmap": true, "bitmapResolution": ok}}})).unwrap();
+    }
+}
+
+/// A page the pixel limits print below the `bitmapResolution` asked for gets a warning that names
+/// the resolution it prints at, in `file.print`'s PDF and PostScript replies and in
+/// `print.preview`.
+#[test]
+fn a_bitmap_resolution_the_pixel_limits_lower_is_named() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 9000, "height": 2})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 9000, "height": 2})).unwrap();
+    let set = json!({"advanced": {"printAsBitmap": true, "bitmapResolution": 600}});
+    let p = printed_images(&mut s, &set);
+    // 32,766 pixels across 9,000 pt: 262.1 ppi.
+    let note = "Print as Bitmap prints at 262 ppi, not the 600 ppi bitmapResolution asks for";
+    assert_eq!(p.warnings.iter().filter(|w| w.starts_with(note)).count(), 2, "{:?}", p.warnings);
+    let [(w, _)] = p.pdf[..] else { panic!("one image: {:?}", p.pdf) };
+    assert!((32_000..=vectorcraft_render::MAX_RASTER_SIDE).contains(&w), "{w} pixels");
+    assert_eq!(p.ps, p.pdf);
+    let pv = s.execute("print.preview", &json!({ "settings": set })).unwrap();
+    assert!(pv["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().starts_with(note)), "{}", pv["warnings"]);
+    // A resolution that fits, the document's resolution, and output that is not a bitmap: no note.
+    for set in [
+        json!({"advanced": {"printAsBitmap": true, "bitmapResolution": 200}}),
+        json!({"advanced": {"printAsBitmap": true}}),
+        json!({"advanced": {"bitmapResolution": 600}}),
+        json!({"advanced": {"printAsBitmap": true, "bitmapResolution": 600}, "output": {"mode": "separations"}}),
+    ] {
+        let pv = s.execute("print.preview", &json!({ "settings": set })).unwrap();
+        assert!(!pv["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().starts_with(CAPPED)), "{set}: {}", pv["warnings"]);
+    }
+}
+
+/// An artboard with no art prints no image, so the pixel limits a bitmap of it would meet name no
+/// lower resolution, also with only art that draws nothing on it in `file.print`; once a background
+/// color or art that draws is on it, they do.
+#[test]
+fn an_empty_artboard_does_not_name_a_lower_bitmap_resolution() {
+    let (mut s, _) = session();
+    s.execute("artboard.new", &json!({"x": 0, "y": 500, "width": 9000, "height": 2})).unwrap();
+    let set = json!({"advanced": {"printAsBitmap": true, "bitmapResolution": 600}});
+    let p = printed_images(&mut s, &set);
+    assert_eq!(p.pdf.len(), 1, "only the artboard with art prints an image: {:?}", p.pdf);
+    assert!(!p.warnings.iter().any(|w| w.starts_with(CAPPED)), "{:?}", p.warnings);
+    let pv = s.execute("print.preview", &json!({ "settings": set })).unwrap();
+    assert!(!pv["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().starts_with(CAPPED)), "{}", pv["warnings"]);
+    // A background color prints, in file.print and in what print.preview says alike.
+    s.execute("artboard.setProps", &json!({"index": 1, "color": "#336699"})).unwrap();
+    let p = printed_images(&mut s, &set);
+    assert_eq!(p.pdf.len(), 2, "{:?}", p.pdf);
+    assert_eq!(p.warnings.iter().filter(|w| w.starts_with(CAPPED)).count(), 2, "{:?}", p.warnings);
+    let pv = s.execute("print.preview", &json!({ "settings": set })).unwrap();
+    assert!(pv["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().starts_with(CAPPED)), "{}", pv["warnings"]);
+    s.execute("artboard.setProps", &json!({"index": 1, "color": null})).unwrap();
+    let id = s.execute("shape.rectangle", &json!({"x": 0, "y": 500, "width": 9000, "height": 2})).unwrap()["id"].clone();
+    // Art that draws nothing prints no image either.
+    s.execute("object.setProps", &json!({"ids": [id], "opacity": 0})).unwrap();
+    let p = printed_images(&mut s, &set);
+    assert_eq!(p.pdf.len(), 1, "{:?}", p.pdf);
+    assert!(!p.warnings.iter().any(|w| w.starts_with(CAPPED)), "{:?}", p.warnings);
+    s.execute("object.setProps", &json!({"ids": [id], "opacity": 100})).unwrap();
+    let p = printed_images(&mut s, &set);
+    assert_eq!(p.pdf.len(), 2, "{:?}", p.pdf);
+    assert_eq!(p.warnings.iter().filter(|w| w.starts_with(CAPPED)).count(), 2, "{:?}", p.warnings);
+}
+
 /// Appearance of Black › Printing / Exporting (#394): Print as Bitmap draws pure CMYK black as RGB
 /// black when `rich_black` is on.
 #[test]

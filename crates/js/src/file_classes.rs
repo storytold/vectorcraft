@@ -7,8 +7,10 @@
 //! `File` and `new Folder(path)` always a `Folder`, while `File(path)` gives a `Folder` when the
 //! host's `stat` says the path is a folder, and `Folder(path)` a `File` when it is a file. Two
 //! objects for one path are different objects. An object keeps its path in the host's platform
-//! form, its `error` text, the id of the file it has open (or -1), the encoding set before `open`
-//! and its line feed, in properties that are not enumerable; every name the getters give comes from
+//! form in an internal slot that only the classes' own methods set ([`Class::FsEntry`]), so an
+//! object a script makes with `Object.create(File.prototype)` is not a `File`. It keeps its `error`
+//! text, the id of the file it has open (or -1), the encoding set before `open` and its line feed
+//! in properties that are not enumerable; every name the getters give comes from
 //! the host's `parse` of that path. `Folder.current` is kept in the realm and starts at the host's
 //! `current`.
 //!
@@ -47,7 +49,63 @@ impl Classes {
     }
 }
 
-const PATH: &str = "__vcPath";
+/// The one key of the [`crate::Data`] object that stands for a `File` given to or by a member of a
+/// host class ([`crate::HostClass`]), with the file's path in the host's platform form as its value.
+/// A plain object a script made that carries the key is refused.
+pub const FILE_REF_KEY: &str = "\u{0}fileRef";
+
+/// The path of the `File` that `d` stands for ([`FILE_REF_KEY`]).
+pub fn file_ref_path(d: &crate::Data) -> Option<&str> {
+    let crate::Data::Object(items) = d else { return None };
+    match items.as_slice() {
+        [(k, crate::Data::String(path))] if k == FILE_REF_KEY => Some(path),
+        _ => None,
+    }
+}
+
+impl Interp {
+    /// The [`crate::Data`] for `id` when it is a `File` the `File` class made (its prototype is
+    /// `File.prototype` and it holds its path in its [`Class::FsEntry`]), as [`file_ref_path`] reads
+    /// it; `None` for any other object, one made with `Object.create(File.prototype)` included.
+    pub(crate) fn file_ref_of(&self, id: ObjId) -> JsResult<Option<crate::Data>> {
+        let Some(c) = &self.files else { return Ok(None) };
+        let o = self.object(id)?;
+        if o.proto != Some(c.file_proto) {
+            return Ok(None);
+        }
+        Ok(match &o.class {
+            Class::FsEntry(s) => Some(crate::Data::Object(vec![(FILE_REF_KEY.to_string(), crate::Data::String(s.to_rust_string()))])),
+            _ => None,
+        })
+    }
+
+    /// A new `File` for `path`, the path a [`file_ref_path`] value a host function gives back holds.
+    pub(crate) fn write_file_ref(&mut self, path: &str) -> JsResult<Value> {
+        let Some(proto) = self.files.as_ref().map(|c| c.file_proto) else { return Err(self.type_error("File is not available")) };
+        instance(self, proto, Value::str(path))
+    }
+}
+
+/// The path of `o` when the `File` or `Folder` class made it.
+fn own_path(i: &Interp, o: ObjId) -> JsResult<Option<Value>> {
+    Ok(match &i.object(o)?.class {
+        Class::FsEntry(s) => Some(Value::String(s.clone())),
+        _ => None,
+    })
+}
+
+/// Sets the path of the `File` or `Folder` `o` to `fs`, a path the host gave.
+fn set_path(i: &mut Interp, o: ObjId, fs: Value) -> JsResult<()> {
+    let Value::String(s) = fs else { return Err(i.type_error("File: the host gave no path")) };
+    i.rooted(&[Value::Object(o), Value::String(s.clone())], |i| i.reserve_heap(string_bytes(s.len())))?;
+    if let Some(ob) = i.heap.object_mut(o)
+        && let Class::FsEntry(path) = &mut ob.class
+    {
+        *path = s;
+    }
+    Ok(())
+}
+
 const ERROR: &str = "__vcError";
 const HANDLE: &str = "__vcHandle";
 const RUN: &str = "__vcRun";
@@ -103,7 +161,7 @@ fn set_slot(i: &mut Interp, o: ObjId, name: &str, value: Value) -> JsResult<()> 
 /// `Folder`.
 fn this_path(i: &mut Interp, this: &Value, what: &str) -> JsResult<(ObjId, Value)> {
     if let Some(o) = this.as_object()
-        && let path @ Value::String(_) = slot(i, o, PATH)?
+        && let Some(path) = own_path(i, o)?
     {
         return Ok((o, path));
     }
@@ -114,7 +172,7 @@ fn this_path(i: &mut Interp, this: &Value, what: &str) -> JsResult<(ObjId, Value
 /// `Folder`, or `String(x)`, which may hold URI escapes.
 fn path_text(i: &mut Interp, x: &Value) -> JsResult<(Value, bool)> {
     if let Some(o) = x.as_object()
-        && let path @ Value::String(_) = slot(i, o, PATH)?
+        && let Some(path) = own_path(i, o)?
     {
         return Ok((path, true));
     }
@@ -143,12 +201,12 @@ fn parsed(i: &mut Interp, this: &Value, what: &str, name: &str) -> JsResult<Valu
 
 /// A new object with prototype `proto` for the path `fs`, already in the platform's form.
 fn instance(i: &mut Interp, proto: ObjId, fs: Value) -> JsResult<Value> {
+    let Value::String(path) = fs.clone() else { return Err(i.type_error("File: the host gave no path")) };
     let line_feed = host_value(i, "lineFeed")?;
-    i.rooted(&[fs.clone(), line_feed.clone()], |i| {
-        i.reserve_heap(OBJECT_BYTES + 6 * PROP_BYTES)?;
-        let o = i.heap.alloc_object(Object::new(Class::Ordinary, Some(proto)));
+    i.rooted(&[fs, line_feed.clone()], |i| {
+        i.reserve_heap(OBJECT_BYTES + 5 * PROP_BYTES + string_bytes(path.len()))?;
+        let o = i.heap.alloc_object(Object::new(Class::FsEntry(path.clone()), Some(proto)));
         i.rooted(&[Value::Object(o)], |i| {
-            set_slot(i, o, PATH, fs.clone())?;
             set_slot(i, o, ERROR, Value::str(""))?;
             set_slot(i, o, HANDLE, Value::Number(-1.0))?;
             set_slot(i, o, RUN, Value::Number(-1.0))?;
@@ -399,7 +457,7 @@ fn change_path(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult
     }
     let p = parse(i, &arg(args, 0))?;
     let fs = i.rooted(std::slice::from_ref(&p), |i| field(i, &p, "fs"))?;
-    set_slot(i, o, PATH, fs)?;
+    set_path(i, o, fs)?;
     Ok(Value::Bool(true))
 }
 
@@ -472,7 +530,7 @@ fn set_hidden(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<
     if outcome(i, o, &r)? {
         let fs = i.rooted(std::slice::from_ref(&r), |i| field(i, &r, "fs"))?;
         if matches!(fs, Value::String(_)) {
-            set_slot(i, o, PATH, fs)?;
+            set_path(i, o, fs)?;
         }
     }
     Ok(Value::Undefined)
@@ -501,7 +559,7 @@ fn rename(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Valu
         return Ok(Value::Bool(false));
     }
     let fs = i.rooted(std::slice::from_ref(&r), |i| field(i, &r, "fs"))?;
-    set_slot(i, o, PATH, fs)?;
+    set_path(i, o, fs)?;
     Ok(Value::Bool(true))
 }
 
@@ -678,7 +736,7 @@ fn wrap(i: &mut Interp, folder: bool, me: &Value, answer: Value) -> JsResult<Val
     let error = i.rooted(std::slice::from_ref(&answer), |i| field(i, &answer, "error"))?;
     if matches!(error, Value::String(_)) {
         if let Some(o) = me.as_object()
-            && matches!(slot(i, o, PATH)?, Value::String(_))
+            && own_path(i, o)?.is_some()
         {
             set_slot(i, o, ERROR, error)?;
         }
@@ -1310,5 +1368,22 @@ mod tests {
         assert_eq!(v.unwrap(), JsValue::String("true,true,true,number,0".into()));
         let e = r.run("File.prototype.read.call({})").unwrap_err();
         assert!(e.message.contains("is not a File or a Folder"), "{e:?}");
+    }
+
+    #[test]
+    fn only_the_classes_set_an_objects_path() {
+        let mut r = realm();
+        for forged in [
+            "var x = Object.create(File.prototype); x.__vcPath = '/x';",
+            "function F() { this.__vcPath = '/x'; } F.prototype = File.prototype; var x = new F();",
+        ] {
+            let e = r.run(&format!("{forged} x.fsName")).unwrap_err();
+            assert!(e.message.contains("is not a File or a Folder"), "{forged}: {e:?}");
+        }
+        let v = r.run(
+            "var f = new File('a'); f.__vcPath = '/b'; Object.defineProperty(f, '__vcPath', {value: '/c'}); \
+             var g = new File(f); [f.fsName, f.name, g.fsName, f.changePath('d'), f.fsName].join()",
+        );
+        assert_eq!(v.unwrap(), JsValue::String("/a,a,/a,true,/d".into()));
     }
 }

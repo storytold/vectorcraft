@@ -8758,6 +8758,8 @@ breakText	Glyphs	Glif
 @msg	Script file could not be written	File skrip tidak dapat ditulis
 @msg	Script file dialogs need a person to answer them	Dialog file skrip memerlukan orang untuk menjawabnya
 @msg	Script file is not open for writing	File skrip tidak dibuka untuk ditulis
+@msg	Script file is read-only	File skrip hanya dapat dibaca
+@msg	Script file is open for writing	File skrip sedang dibuka untuk ditulis
 @msg	Script file name is already in use	Nama file skrip sudah digunakan
 @msg	Script file name must be a name without a folder	Nama file skrip harus berupa nama tanpa folder
 @msg	Script file permission can be kept only for a script run from a file	Izin file skrip hanya dapat disimpan untuk skrip yang dijalankan dari file

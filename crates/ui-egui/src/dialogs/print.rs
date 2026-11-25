@@ -387,6 +387,9 @@ fn serve(app: &mut VectorcraftApp, dialogs: &WindowDialogs, open: &mut Open) -> 
             p.set_field("__summary.options", options.into());
             p.set_field("__summary.warnings", warnings.into());
             p.set_field("__inks", FieldValue::Json(inks));
+            for (key, on) in bitmap_companions(&d.settings) {
+                p.set_field(key, on.into());
+            }
         });
     }
     if open.mode == PrintMode::Print {
@@ -633,6 +636,20 @@ fn scaling_ids(tiles: bool) -> Vec<&'static str> {
     PrintScaling::ALL.iter().filter(|s| s.tiles() == tiles).map(|s| s.id()).collect()
 }
 
+/// Set by the pump while Print as Bitmap is on for composite output: Advanced › Resolution takes input.
+const BITMAP_ON: &str = "__bitmap.on";
+/// Set by the pump while `advanced.bitmapResolution` is 0: the note on the raster effects resolution shows.
+const BITMAP_AT_DOCUMENT: &str = "__bitmap.atDocument";
+
+/// The values of [`BITMAP_ON`] and [`BITMAP_AT_DOCUMENT`] for the print settings `settings`.
+fn bitmap_companions(settings: &Value) -> [(&'static str, bool); 2] {
+    let composite = settings["output"]["mode"].as_str() != Some(OutputMode::Separations.id());
+    let on = composite && settings["advanced"]["printAsBitmap"].as_bool() == Some(true);
+    // 0, the default, leaves the resolution to the document.
+    let at_document = settings["advanced"]["bitmapResolution"].as_f64().is_none_or(|ppi| ppi == 0.0);
+    [(BITMAP_ON, on), (BITMAP_AT_DOCUMENT, at_document)]
+}
+
 /// A summary line that the pump fills (`key` is a `__` companion of the fields).
 fn shown(key: &'static str) -> Param {
     Param::custom(key, "", move |ui, fields, _| ui.label(fields.text(key).unwrap_or_default()))
@@ -778,7 +795,11 @@ fn sections(lists: &Lists) -> Vec<PrintSection> {
         length("margin", tl!("Unprintable margin:")),
         note("marginNote", tl!("The edge of the paper the printer can't reach: the art goes inside it, and the preview shows it dashed.")),
         flag("advanced.printAsBitmap", tl!("Print as Bitmap")).enabled_when_in("output.mode", composite.clone()),
-        note("bitmapNote", tl!("Each page prints as one image, at the document's raster effects resolution.")),
+        Param::number("advanced.bitmapResolution", tl!("Resolution:"), 0.0, 1.0, 0)
+            .bounds(Some(0.0), Some(vectorcraft_pdf::MAX_BITMAP_RESOLUTION))
+            .unit(UnitKind::PixelsPerInch)
+            .enabled_when(BITMAP_ON, true),
+        note("bitmapNote", tl!("Each page prints as one image, at the document's raster effects resolution.")).visible_when(BITMAP_AT_DOCUMENT, true),
         Param::section(tl!("Overprint and Transparency Flattener Options")),
         pick::<PrintOverprints>("advanced.overprints", tl!("Overprints:")).enabled_when_in("output.mode", composite),
         Param::new("advanced.flattenerPreset", tl!("Preset:"), ParamKind::choice(flatteners, None)),

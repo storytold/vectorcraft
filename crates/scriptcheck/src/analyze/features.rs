@@ -287,9 +287,27 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         }
     }
 
+    /// Whether this `(` calls a document's `print`: the document-model member chain the `(` has just
+    /// set aside until its `)` is one of [`catalog::DOM_DOCUMENTS`] followed by `called`, the method
+    /// as the chain writes it (`.print()`, or `[]()` when brackets name it).
+    fn document_print(&self, called: &str) -> bool {
+        let chain = self.suspended.last().filter(|c| c.wait.saturating_add(1) == self.depth());
+        chain.and_then(|c| c.path.strip_suffix(called)).is_some_and(|receiver| catalog::DOM_DOCUMENTS.contains(&receiver))
+    }
+
     /// `(` after a name: a call.
     fn call(&mut self, line: Option<usize>) {
         let [h0, h1, h2, h3] = self.h;
+        // `doc['saveAs'](f)`: a document method named by a string literal in brackets.
+        if is(h0, "]")
+            && is(h2, "[")
+            && let Some(name) = h1.filter(|s| s.kind == T::Str).map(|s| unquote(s.text, 32))
+            && (catalog::DOM_FILE_WRITES.contains(&name.as_str()) || (name == catalog::DOM_PRINT && self.document_print("[]()")))
+        {
+            self.acc.feature(FeatureId::FileWrite, line);
+            self.acc.outside(OutsideId::FilesWritten, line, None);
+            return;
+        }
         let Some(callee) = h0.filter(|s| s.kind == T::Ident) else { return };
         let n = callee.text;
         if is(h1, ".") {
@@ -304,7 +322,10 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 self.acc.feature(FeatureId::FileDialog, line);
             } else if catalog::FOLDER_READS.contains(&n) || (file && catalog::FILE_READS.contains(&n)) {
                 self.acc.feature(FeatureId::FileRead, line);
-            } else if file && catalog::FILE_WRITES.contains(&n) {
+            } else if (file && catalog::FILE_WRITES.contains(&n))
+                || catalog::DOM_FILE_WRITES.contains(&n)
+                || (n == catalog::DOM_PRINT && self.document_print(".print()"))
+            {
                 self.acc.feature(FeatureId::FileWrite, line);
                 self.acc.outside(OutsideId::FilesWritten, line, None);
             } else if n == catalog::EXECUTE {

@@ -246,6 +246,11 @@ pub(crate) enum Class {
     },
     /// A `.( )` filter in progress.
     XmlFilter(Box<XmlFilterState>),
+    /// An object of a class a host defined ([`crate::host_classes`]).
+    Host(crate::host_classes::HostObj),
+    /// A `File` or `Folder` ([`crate::file_classes`]) and its path in the host's platform form,
+    /// which only the classes' own methods set.
+    FsEntry(Str),
     /// A `UnitValue` object and its measurement ([`crate::unit_value`]).
     UnitValue(Box<crate::unit_value::Measure>),
 }
@@ -314,7 +319,7 @@ impl Class {
             Class::XmlFilter(_) => "Object",
             Class::Math => "Math",
             Class::Json => "JSON",
-            Class::Ordinary | Class::ForIn(_) => "Object",
+            Class::Ordinary | Class::ForIn(_) | Class::Host(_) | Class::FsEntry(_) => "Object",
             Class::Array { .. } => "Array",
             Class::Function(_) => "Function",
             Class::Error(_) => "Error",
@@ -679,7 +684,7 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
             extra = BOUND_ARG_BYTES * args.len();
         }
         Class::Arguments(map) => work.push(map.env.0),
-        Class::String(s) => strings.add(s),
+        Class::String(s) | Class::FsEntry(s) => strings.add(s),
         Class::RegExp(re) => {
             if strings.seen.insert(Rc::as_ptr(re) as *const () as usize) {
                 strings.bytes += re.heap_bytes();
