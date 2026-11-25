@@ -9626,6 +9626,10 @@ axis	Y Axis	Y ღერძი
 @msg	`inputs` lists `{shown}` twice	`inputs`-ში `{shown}` ორჯერაა ჩამოთვლილი
 @msg	`inputs` needs `api` 2 or later	`inputs`-ს სჭირდება `api` 2 ან უფრო ახალი
 @msg	`inputs` needs the permission `doc.read`	`inputs`-ს სჭირდება ნებართვა `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	მიღებული ობიექტების და დოკუმენტის პარამეტრების, სამუშაო დაფების, შრეებისა და ფერის ნიმუშების წაკითხვა
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context`-ში განსხვავებული სექციები უნდა იყოს: settings, artboards, layers ან swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` განკუთვნილია ფილტრისთვის ან `commands`-ის მქონე ცოცხალი ეფექტისთვის, `api` 3-ზე ან უფრო ახალზე, ნებართვით `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	პლაგინის მიერ მოთხოვნილი დოკუმენტის ინფორმაცია ზედმეტად დიდია გადასაცემად: მაქსიმუმ {MAX_CONTEXT_ITEMS} სამუშაო დაფა, შრე და ფერის ნიმუში {MAX_CONTEXT_BYTES} ბაიტში
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	მეხსიერების ბიუჯეტი (ობიექტს {_1} სჭირდება შეყვანის {size} ბაიტი, დარჩენილია {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	ობიექტების ბიუჯეტი ({MAX_OBJECTS}-ზე მეტი მხოლოდ წასაკითხი ობიექტი)
 @msg	instruction budget	ინსტრუქციების ბიუჯეტი

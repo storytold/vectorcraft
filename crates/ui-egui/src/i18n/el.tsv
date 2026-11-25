@@ -7511,6 +7511,10 @@ axis	Y Axis	Άξονας Y
 @msg	`inputs` lists `{shown}` twice	το `inputs` αναφέρει το `{shown}` δύο φορές
 @msg	`inputs` needs `api` 2 or later	το `inputs` απαιτεί `api` 2 ή νεότερο
 @msg	`inputs` needs the permission `doc.read`	το `inputs` απαιτεί το δικαίωμα `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Ανάγνωση των αντικειμένων που του δίνονται, καθώς και των ρυθμίσεων, των πινάκων σχεδίασης, των επιπέδων και των δειγμάτων χρωμάτων του εγγράφου
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	το `context` πρέπει να απαριθμεί διαφορετικές ενότητες: settings, artboards, layers ή swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	το `context` ισχύει για φίλτρο ή ζωντανό εφέ με `commands`, με `api` 3 ή νεότερο και το δικαίωμα `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	οι πληροφορίες εγγράφου που ζητά το πρόσθετο είναι πολύ μεγάλες για να παραδοθούν: το πολύ {MAX_CONTEXT_ITEMS} πίνακες σχεδίασης, επίπεδα και δείγματα χρωμάτων σε {MAX_CONTEXT_BYTES} byte
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	προϋπολογισμός μνήμης (το αντικείμενο {_1} χρειάζεται {size} byte εισόδου, απομένουν {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	προϋπολογισμός αντικειμένων (περισσότερα από {MAX_OBJECTS} αντικείμενα μόνο για ανάγνωση)
 @msg	instruction budget	προϋπολογισμός εντολών

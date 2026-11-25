@@ -7908,6 +7908,10 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	`inputs` lists `{shown}` twice	`inputs` inclou `{shown}` dues vegades
 @msg	`inputs` needs `api` 2 or later	`inputs` requereix `api` 2 o posterior
 @msg	`inputs` needs the permission `doc.read`	`inputs` requereix el permís `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Llegir els objectes que rep, i la configuració, els taulers, les capes i les mostres del document
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` ha de llistar seccions diferents: settings, artboards, layers o swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` és per a un filtre, o un efecte dinàmic amb `commands`, amb `api` 3 o posterior i el permís `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	la informació del document que demana el complement és massa gran per passar-la: com a màxim {MAX_CONTEXT_ITEMS} taulers, capes i mostres en {MAX_CONTEXT_BYTES} bytes
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	pressupost de memòria (l’objecte {_1} necessita {size} bytes d’entrada, en queden {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	pressupost d’objectes (més de {MAX_OBJECTS} objectes de només lectura)
 @msg	instruction budget	pressupost d’instruccions

@@ -7521,6 +7521,10 @@ axis	Y Axis	osa Y
 @msg	`inputs` lists `{shown}` twice	`inputs` uvádí `{shown}` dvakrát
 @msg	`inputs` needs `api` 2 or later	`inputs` vyžaduje `api` 2 nebo vyšší
 @msg	`inputs` needs the permission `doc.read`	`inputs` vyžaduje oprávnění `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Číst objekty, které dostane, a nastavení, pracovní plochy, vrstvy a vzorky dokumentu
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` musí uvádět různé oddíly: settings, artboards, layers nebo swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` je pro filtr nebo živý efekt s `commands`, s `api` 3 nebo vyšším a s oprávněním `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	informace o dokumentu, které zásuvný modul požaduje, jsou příliš velké na předání: nejvýše {MAX_CONTEXT_ITEMS} pracovních ploch, vrstev a vzorků v {MAX_CONTEXT_BYTES} bajtech
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	rozpočet paměti (objekt {_1} potřebuje {size} bajtů vstupu, zbývá {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	rozpočet objektů (více než {MAX_OBJECTS} objektů jen pro čtení)
 @msg	instruction budget	rozpočet instrukcí

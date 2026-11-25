@@ -13557,7 +13557,16 @@ fit makes `plugin.run` return a memory-budget error naming the object and its si
 memory-budget error `the selection is too large to hand over`, and more than 100,000 of these objects make it return
 an object-budget error. Its output returns
 each of them as `{"id": …}` or exactly as given, otherwise `plugin.run` returns an error naming the object and the
-field, and the document and undo history are unchanged. A filter at plug-in API level 2 whose manifest lists the
+field, and the document and undo history are unchanged. A filter, or a live effect with commands, at plug-in API level 3
+whose manifest lists `context` (`settings`, `artboards`, `layers`, `swatches`; `context` in its `plugin.list` entry)
+also lists `doc.read` in its `permissions`, and each filter or command run is given those parts of the active document in
+`_context.document`, with or without a selection: the document's name without its folder, color mode, units, active
+artboard size, bleed and raster effects resolution; every artboard's id, name and rectangle; every layer and sublayer
+with its id, parent, depth, name, visibility, lock, template, color and whether it is current; and every swatch as
+`swatch.list` lists it. It holds no path and no object. More than 10,000 rows, or more than 4 MiB of them, make
+`plugin.run` and the command return an error before the plug-in starts, with nothing changed, and each row takes 1,000
+instructions from the run's budget (VectorCraft's own values; docs/plugins.md, Document information). This is narrower
+than `document.inspect`, which plug-ins can't call. A filter at plug-in API level 2 whose manifest lists the
 `commands` permission and a `commandAllowlist` (both in its `plugin.list` entry) runs the commands that list names
 while it runs, through `vc_call`: the calls and its output are one undo step, and a run that fails or makes a call that
 fails leaves the documents, selections and history as they were. Without `doc.read` every call fails. A command that

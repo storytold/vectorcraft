@@ -7506,6 +7506,10 @@ axis	Y Axis	Y tengely
 @msg	`inputs` lists `{shown}` twice	az `inputs` kétszer sorolja fel ezt: `{shown}`
 @msg	`inputs` needs `api` 2 or later	az `inputs` használatához `api` 2 vagy újabb szükséges
 @msg	`inputs` needs the permission `doc.read`	az `inputs` használatához a(z) `doc.read` engedély szükséges
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Olvashatja a kapott objektumokat, valamint a dokumentum beállításait, rajztábláit, rétegeit és színmintáit
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	a `context` csak különböző szakaszokat sorolhat fel: settings, artboards, layers vagy swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	a `context` szűrőhöz vagy `commands` kulccsal rendelkező élő effektushoz való, `api` 3 vagy újabb mellett, a(z) `doc.read` engedéllyel
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	a bővítmény által kért dokumentumadatok túl nagyok az átadáshoz: legfeljebb {MAX_CONTEXT_ITEMS} rajztábla, réteg és színminta {MAX_CONTEXT_BYTES} bájtban
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	memóriakeret (a(z) {_1} objektumnak {size} bájt bemenet kell, {left} maradt)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	objektumkeret (több mint {MAX_OBJECTS} csak olvasható objektum)
 @msg	instruction budget	utasításkeret

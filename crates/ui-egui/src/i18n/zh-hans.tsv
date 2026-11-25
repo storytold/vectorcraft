@@ -7353,6 +7353,10 @@ axis	Y Axis	Y 轴
 @msg	`inputs` lists `{shown}` twice	`inputs` 列出了两次 `{shown}`
 @msg	`inputs` needs `api` 2 or later	`inputs` 需要 `api` 2 或更高
 @msg	`inputs` needs the permission `doc.read`	`inputs` 需要权限 `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	读取交给它的对象，以及文档的设置、画板、图层和色板
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` 必须列出互不相同的部分：settings、artboards、layers 或 swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` 仅适用于 `api` 3 或更高、具有权限 `doc.read` 的滤镜或带 `commands` 的实时效果
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	增效工具请求的文档信息太大，无法传递：画板、图层和色板合计最多 {MAX_CONTEXT_ITEMS} 个，最多 {MAX_CONTEXT_BYTES} 字节
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	内存预算（对象 {_1} 需要 {size} 字节的输入，剩余 {left}）
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	对象预算（超过 {MAX_OBJECTS} 个只读对象）
 @msg	instruction budget	指令预算

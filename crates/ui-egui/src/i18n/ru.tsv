@@ -7143,6 +7143,10 @@ axis	Y Axis	Ось Y
 @msg	`inputs` lists `{shown}` twice	в `inputs` `{shown}` указано дважды
 @msg	`inputs` needs `api` 2 or later	для `inputs` нужен `api` 2 или выше
 @msg	`inputs` needs the permission `doc.read`	для `inputs` нужно разрешение `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Читать переданные ему объекты, а также параметры, монтажные области, слои и образцы документа
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` должен перечислять разные разделы: settings, artboards, layers или swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` допустим только для фильтра или динамического эффекта с `commands`, с `api` 3 или выше и с разрешением `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	сведения о документе, которые запрашивает модуль, слишком велики для передачи: не более {MAX_CONTEXT_ITEMS} монтажных областей, слоев и образцов в {MAX_CONTEXT_BYTES} байтах
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	бюджет памяти (объекту {_1} нужно {size} байт входных данных, осталось {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	бюджет объектов (более {MAX_OBJECTS} объектов только для чтения)
 @msg	instruction budget	бюджет инструкций

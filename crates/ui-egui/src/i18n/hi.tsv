@@ -6689,6 +6689,10 @@ arrowhead	Feather	पंख
 @msg	`inputs` lists `{shown}` twice	`inputs` में `{shown}` दो बार सूचीबद्ध है
 @msg	`inputs` needs `api` 2 or later	`inputs` के लिए `api` 2 या बाद का स्तर आवश्यक है
 @msg	`inputs` needs the permission `doc.read`	`inputs` के लिए अनुमति `doc.read` आवश्यक है
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	उसे दिए गए ऑब्जेक्ट्स, और डॉक्यूमेंट की सेटिंग्स, आर्टबोर्ड्स, लेयर्स और स्वॉचेस पढ़ना
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` में अलग-अलग सेक्शन होने चाहिए: settings, artboards, layers या swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` केवल फ़िल्टर, या `commands` वाले लाइव इफ़ेक्ट के लिए है, `api` 3 या उसके बाद और अनुमति `doc.read` के साथ
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	प्लग-इन जो डॉक्यूमेंट जानकारी माँगता है वह सौंपने के लिए बहुत बड़ी है: {MAX_CONTEXT_BYTES} बाइट्स में अधिकतम {MAX_CONTEXT_ITEMS} आर्टबोर्ड्स, लेयर्स और स्वॉचेस
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	मेमोरी बजट (ऑब्जेक्ट {_1} को इनपुट के {size} बाइट चाहिए, {left} शेष हैं)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	ऑब्जेक्ट बजट ({MAX_OBJECTS} से अधिक केवल-पठन ऑब्जेक्ट)
 @msg	the plug-in's grant can't be removed from the plug-in store	प्लग-इन की अनुमति प्लग-इन स्टोर से हटाई नहीं जा सकती

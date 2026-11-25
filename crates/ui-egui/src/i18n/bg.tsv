@@ -7370,6 +7370,7 @@ axis	Y Axis	Y ос
 	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Автоматизация поиска инсталирането на тази приставка. За да я инсталирате, изберете Обект › Приставки › Инсталиране на приставка… сами.
 	File SHA-256: {hash}	SHA-256 на файла: {hash}
 	Read the objects it is given	Четене на обектите, които получава
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Четене на обектите, които получава, както и на настройките, работните области, слоевете и образците на документа
 	Change, add and delete objects in the document	Промяна, добавяне и изтриване на обекти в документа
 	Keep data of its own with the document	Съхраняване на собствени данни в документа
 	Change how the objects its effect is applied to are drawn	Промяна на начина, по който се рисуват обектите, към които е приложен ефектът му

@@ -7376,6 +7376,10 @@ axis	Y Axis	Oś Y
 @msg	`inputs` lists `{shown}` twice	`inputs` wymienia `{shown}` dwa razy
 @msg	`inputs` needs `api` 2 or later	`inputs` wymaga `api` 2 lub nowszego
 @msg	`inputs` needs the permission `doc.read`	`inputs` wymaga uprawnienia `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Odczytywać obiekty, które otrzymuje, oraz ustawienia, obszary kompozycji, warstwy i próbki dokumentu
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` musi wymieniać różne sekcje: settings, artboards, layers lub swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` dotyczy filtra albo efektu na żywo z `commands`, z `api` 3 lub nowszym i z uprawnieniem `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	informacje o dokumencie, o które prosi wtyczka, są zbyt duże, aby je przekazać: najwyżej {MAX_CONTEXT_ITEMS} obszarów kompozycji, warstw i próbek w {MAX_CONTEXT_BYTES} bajtach
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	budżet pamięci (obiekt {_1} wymaga {size} bajtów danych wejściowych, pozostało {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	budżet obiektów (ponad {MAX_OBJECTS} obiektów tylko do odczytu)
 @msg	instruction budget	budżet instrukcji

@@ -43,6 +43,11 @@
 //! A filter whose manifest lists `inputs` (plug-in API level 2) is also given the selected type,
 //! images or symbol instances of those kinds, to read only: its output must return each of them
 //! unchanged ([`objects::decode_output_with`]).
+//!
+//! A filter, or a live effect's command, whose manifest lists `context` (plug-in API level 3) is
+//! also given the parts of the active document it names in `_context.document`, whether or not
+//! anything is selected: the settings, artboards, layers and swatches, as plain values
+//! ([`context`]).
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
@@ -55,6 +60,9 @@ use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd,
 use crate::store::{PluginLoad, StoreTurn};
 
 use vectorcraft_plugins::permissions::{self, Grant, GrantToken, Permission};
+
+mod context;
+pub use context::{CONTEXT_FUEL_PER_ITEM, MAX_CONTEXT_BYTES, MAX_CONTEXT_ITEMS};
 
 /// What a plug-in error looks like to the user. A run the caller cancelled changed nothing.
 fn err(e: vectorcraft_plugins::Error) -> EngineError {
@@ -101,6 +109,9 @@ pub fn describe(p: &Plugin) -> Value {
     }
     if !m.inputs.is_empty() {
         v["inputs"] = json!(m.inputs);
+    }
+    if !m.context.is_empty() {
+        v["context"] = json!(m.context);
     }
     if m.paint_output {
         v["paintOutput"] = json!(true);
@@ -254,15 +265,25 @@ impl FilterRun {
             params["_context"]["mode"] = json!("command");
             params["_context"]["command"] = json!(cmd.id);
         }
+        // The parts of the document its manifest asks for (`context`), selection or not. Each row
+        // costs the run [`context::CONTEXT_FUEL_PER_ITEM`] instructions.
+        let sections = m.context_sections();
+        let mut charged = 0;
+        if !sections.is_empty() && may.contains(&Permission::DocRead) {
+            let given = context::document_context(st, &sections, c)?;
+            params["_context"]["document"] = given.value;
+            charged = (given.items as u64).saturating_mul(context::CONTEXT_FUEL_PER_ITEM);
+        }
         let params = serde_json::to_vec(&params).map_err(|e| bad(c, e.to_string()))?;
         // The input and the parameters may use half the plug-in's memory together.
         let capacity = (plugin.limits().max_memory_bytes / 2).min(i32::MAX as usize).saturating_sub(params.len());
         let (input, read_only) = objects::encode_input_with(&st.doc, &inputs, &kinds, capacity).map_err(err)?;
         let document = (st.uid, st.revision);
-        let limits = match s.prefs.plugin_instruction_budget {
+        let mut limits = match s.prefs.plugin_instruction_budget {
             crate::PluginBudget::Normal => plugin.limits().clone(),
             crate::PluginBudget::Large => plugin.large_limits(),
         };
+        limits.fuel_base = limits.fuel_base.saturating_sub(charged);
         Ok(FilterRun { plugin, command, input, params, inputs, read_only, parent, document, limits })
     }
 
@@ -296,9 +317,15 @@ impl FilterRun {
     }
 
     /// The limits it runs under: the plug-in's, with the Plug-in Instruction Budget in force when
-    /// it was made.
+    /// it was made, less what its document context costs.
     pub fn limits(&self) -> &vectorcraft_plugins::Limits {
         &self.limits
+    }
+
+    /// The parameters it hands the plug-in, `_context` included.
+    #[cfg(test)]
+    pub(crate) fn params_json(&self) -> Value {
+        serde_json::from_slice(&self.params).unwrap_or(Value::Null)
     }
 
     /// Does the plug-in call commands (its manifest's `commandAllowlist`)? Then it runs only in the
@@ -1821,7 +1848,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Plug-ins",
             [],
             None,
-            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema, menu?: {path: [menu label], after?: item label (escaped), placed?: false (it stays in its plug-in's submenu: its label reads like a built-in item or submenu of that menu or another plug-in command placed there)} (the menu its manifest places it in, see docs/plugins.md)}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}], leftOut} | null (under automation read roots, a folder outside them is null, and a failed file and a plug-in's source outside them are named by their file name), safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
+            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), context?: [\"settings\"|\"artboards\"|\"layers\"|\"swatches\"] (the parts of the active document a filter's runs and its or a live effect's commands are given in _context.document, with or without a selection, see docs/plugins.md), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1, 2 or 3), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema, menu?: {path: [menu label], after?: item label (escaped), placed?: false (it stays in its plug-in's submenu: its label reads like a built-in item or submenu of that menu or another plug-in command placed there)} (the menu its manifest places it in, see docs/plugins.md)}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}], leftOut} | null (under automation read roots, a folder outside them is null, and a failed file and a plug-in's source outside them are named by their file name), safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
             always,
             list
         ),

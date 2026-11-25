@@ -7218,6 +7218,10 @@ axis	Y Axis	Y 軸
 @msg	`inputs` lists `{shown}` twice	`inputs` に `{shown}` が 2 回指定されています
 @msg	`inputs` needs `api` 2 or later	`inputs` には `api` 2 以上が必要です
 @msg	`inputs` needs the permission `doc.read`	`inputs` には権限 `doc.read` が必要です
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	渡されたオブジェクトと、ドキュメントの設定、アートボード、レイヤー、スウォッチの読み取り
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` には重複しないセクションを指定してください: settings、artboards、layers、swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` は、`api` 3 以降で権限 `doc.read` を持つフィルターまたは `commands` のあるライブ効果専用です
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	プラグインが求めるドキュメント情報が大きすぎて渡せません: アートボード、レイヤー、スウォッチは合わせて {MAX_CONTEXT_ITEMS} 個、{MAX_CONTEXT_BYTES} バイトまでです
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	メモリ予算 (オブジェクト {_1} には {size} バイトの入力が必要ですが、残りは {left} です)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	オブジェクト予算 ({MAX_OBJECTS} 個を超える読み取り専用オブジェクト)
 @msg	instruction budget	命令予算

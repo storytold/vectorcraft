@@ -4629,6 +4629,168 @@ fn read_only_kind_field_and_omission_refuse_without_undo() {
     assert!(e.contains("`inputs` needs `api` 2"), "{e}");
 }
 
+/// The manifest of a filter at `api` 3 with id `id` that asks for the document information
+/// `context` (a JSON list), with `doc.read` and `doc.write`, and `rest` (keys after a comma, or
+/// nothing).
+fn context_manifest(id: &str, context: &str, rest: &str) -> String {
+    format!(r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":3,"permissions":["doc.read","doc.write"],"context":{context}{rest}}}"#)
+}
+
+/// Installs `src` granted `doc.read` and `doc.write`, in place of any module with its id.
+fn install_reading(s: &mut Session, src: &str) -> Value {
+    let data = vectorcraft_format::base64_encode(&wat::parse_str(src).unwrap());
+    run(s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read", "doc.write"], "replace": true}))
+}
+
+/// A filter at `api` 3 whose manifest lists `context` is given the document's settings, artboards,
+/// layers and swatches in `_context.document` with nothing selected: plain values, hidden and
+/// locked layers with their flags, the active artboard and the current layer marked, and the
+/// document's name without its folder. A filter that doesn't list `context` is given none, and one
+/// that lists it without `doc.read` or below `api` 3 doesn't install.
+#[test]
+fn an_unselected_filter_reads_the_document_context_it_asks_for() {
+    use cmd::plugin::FilterRun;
+    let mut s = session();
+    run(&mut s, "artboard.new", json!({"x": 500, "y": 0, "width": 100, "height": 50}));
+    let hidden = run(&mut s, "layer.new", json!({"name": "Hidden", "visible": false}))["id"].as_u64().unwrap();
+    let locked = run(&mut s, "layer.newSublayer", json!({"parent": hidden, "name": "Locked", "locked": true}))["id"].as_u64().unwrap();
+    run(&mut s, "layer.setCurrent", json!({"id": locked}));
+    run(&mut s, "swatch.new", json!({"name": "Tone", "color": "#ff0000", "global": true}));
+    run(&mut s, "select.none", json!({}));
+    s.doc_mut().unwrap().path = Some("/private/folder/Poster.vectorcraft".into());
+    let second = s.doc().unwrap().doc.artboards[1].id;
+    s.doc_mut().unwrap().active_artboard = Some(second);
+    let id = "test.engine.context";
+    let all = r#"["settings","artboards","layers","swatches"]"#;
+    let installed = install_reading(&mut s, &tpl::returning(&context_manifest(id, all, ""), r#"{"objects":[]}"#));
+    assert_eq!(installed["context"], json!(["settings", "artboards", "layers", "swatches"]));
+    let swatches = run(&mut s, "swatch.list", json!({}))["swatches"].clone();
+    assert!(s.doc().unwrap().selection.objects.is_empty());
+    let given = FilterRun::prepare(&s, &json!({"id": id})).unwrap().params_json()["_context"]["document"].clone();
+    let st = s.doc().unwrap();
+    let d = &st.doc;
+    assert_eq!(given["revision"], json!(st.revision));
+    let board = &d.artboards[1];
+    let settings = json!({
+        "name": "Poster.vectorcraft", "colorMode": "rgb", "units": d.units.label(), "width": board.rect.width(),
+        "height": board.rect.height(), "bleed": d.setup.bleed, "rasterEffectsPpi": d.raster_ppi(), "activeArtboard": second,
+    });
+    assert_eq!(given["settings"], settings);
+    let boards: Vec<Value> = d
+        .artboards
+        .iter()
+        .enumerate()
+        .map(|(i, a)| json!({"id": a.id, "index": i, "name": a.name, "rect": [a.rect.x0, a.rect.y0, a.rect.x1, a.rect.y1], "active": i == 1}))
+        .collect();
+    assert_eq!((boards.len(), &given["artboards"]), (2, &json!(boards)));
+    let layers = given["layers"].as_array().unwrap();
+    let rows: Vec<(String, u64, bool, bool, bool)> = layers
+        .iter()
+        .map(|l| {
+            (l["name"].as_str().unwrap().to_string(), l["depth"].as_u64().unwrap(), l["visible"] == true, l["locked"] == true, l["current"] == true)
+        })
+        .collect();
+    let bottom = d.layers[0].display_name();
+    assert_eq!(rows, [(bottom, 0, true, false, false), ("Hidden".into(), 0, false, false, false), ("Locked".into(), 1, true, true, true)]);
+    assert_eq!((&layers[0]["parentId"], &layers[1]["sublayers"], &layers[2]["parentId"]), (&Value::Null, &json!(1), &json!(hidden)));
+    assert_eq!((&layers[1]["id"], &layers[2]["id"]), (&json!(hidden), &json!(locked)));
+    assert_eq!(given["swatches"], swatches, "as swatch.list lists them");
+    assert!(given["swatches"].as_array().unwrap().iter().any(|w| w["name"] == "Tone" && w["global"] == true));
+    assert!(!given.to_string().contains("/private/folder"), "no path: {given}");
+    // Only the sections asked for.
+    let some = "test.engine.context.some";
+    install_reading(&mut s, &tpl::returning(&context_manifest(some, r#"["layers"]"#, ""), r#"{"objects":[]}"#));
+    let given = FilterRun::prepare(&s, &json!({"id": some})).unwrap().params_json()["_context"]["document"].clone();
+    let keys: Vec<&String> = given.as_object().unwrap().keys().collect();
+    assert_eq!(keys.len(), 2, "{keys:?}");
+    assert!(given.get("layers").is_some() && given.get("revision").is_some());
+    // A filter without `context` is given none.
+    let legacy = "test.engine.context.legacy";
+    install_reading(&mut s, &tpl::returning(&tpl::manifest(legacy, "filter", "{}"), r#"{"objects":[]}"#));
+    assert!(FilterRun::prepare(&s, &json!({"id": legacy})).unwrap().params_json()["_context"].get("document").is_none());
+    // Without `doc.read`, or below `api` 3, it doesn't install.
+    let needs = "`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`";
+    for manifest in [
+        format!(r#"{{"id":"{some}","name":"x","kind":"filter","api":3,"permissions":["doc.write"],"context":["layers"]}}"#),
+        format!(r#"{{"id":"{some}","name":"x","kind":"filter","api":2,"permissions":["doc.read"],"context":["layers"]}}"#),
+    ] {
+        let data = vectorcraft_format::base64_encode(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap());
+        let e = s.execute("plugin.install", &json!({"dataBase64": data, "grant": ["doc.read", "doc.write"], "replace": true})).unwrap_err();
+        assert!(e.to_string().contains(needs), "{manifest}: {e}");
+    }
+}
+
+/// A plug-in command, of a filter or of a live effect, whose manifest lists `context` is given it
+/// too, with nothing selected.
+#[test]
+fn a_plugin_command_reads_the_document_context_without_a_selection() {
+    let mut s = session();
+    let made = json!({"objects": [{"path": triangle(), "name": "Saw layers"}]}).to_string();
+    for (id, kind, permissions) in [
+        ("test.engine.context.command", "filter", r#"["doc.read","doc.write"]"#),
+        ("test.engine.context.effectcommand", "effect", r#"["doc.read","doc.write","effect.render"]"#),
+    ] {
+        let manifest = format!(
+            r#"{{"id":"{id}","name":"Test {id}","kind":"{kind}","api":3,"permissions":{permissions},"context":["layers"],"commands":[{{"id":"look","label":"Look"}}]}}"#
+        );
+        let src = tpl::when_given_else(&manifest, tpl::Given::Params, r#""layers":["#, &made, r#"{"objects":[]}"#);
+        let data = vectorcraft_format::base64_encode(&wat::parse_str(src).unwrap());
+        let grant: Vec<Value> = serde_json::from_str(permissions).unwrap();
+        run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": grant, "replace": true}));
+        run(&mut s, "select.none", json!({}));
+        let ids = run(&mut s, &format!("plugin.{id}.look"), json!({}))["ids"].clone();
+        assert_eq!(ids.as_array().map(Vec::len), Some(1), "{kind}: {ids}");
+        assert_eq!(node(&s, NodeId(ids[0].as_u64().unwrap())).name.as_deref(), Some("Saw layers"), "{kind}");
+    }
+}
+
+/// A document context holds at most [`cmd::plugin::MAX_CONTEXT_ITEMS`] rows in
+/// [`cmd::plugin::MAX_CONTEXT_BYTES`] bytes: past either, the run fails before the plug-in starts,
+/// with the document and undo history as they were. Each row comes off the run's instruction
+/// budget.
+#[test]
+fn the_document_context_is_capped_and_its_rows_cost_instructions() {
+    use cmd::plugin::{CONTEXT_FUEL_PER_ITEM, FilterRun, MAX_CONTEXT_BYTES, MAX_CONTEXT_ITEMS};
+    let mut s = session();
+    let id = "test.engine.context.cap";
+    install_reading(&mut s, &tpl::returning(&context_manifest(id, r#"["swatches"]"#, ""), r#"{"objects":[]}"#));
+    let p = json!({"id": id});
+    let listed = run(&mut s, "swatch.list", json!({}))["swatches"].as_array().unwrap().len();
+    let add = |s: &mut Session, n: usize| {
+        s.edit("Set up", |d, _| {
+            let base = d.swatches.last().unwrap().clone();
+            let at = d.swatches.len();
+            d.swatches.extend((at..at + n).map(|i| vectorcraft_color::Swatch { name: format!("Many {i}"), ..base.clone() }));
+            Ok(())
+        })
+        .unwrap();
+    };
+    add(&mut s, MAX_CONTEXT_ITEMS - listed);
+    let full = FilterRun::prepare(&s, &p).unwrap();
+    assert_eq!(full.params_json()["_context"]["document"]["swatches"].as_array().map(Vec::len), Some(MAX_CONTEXT_ITEMS));
+    assert_eq!(full.limits().fuel_base, full.plugin().limits().fuel_base - MAX_CONTEXT_ITEMS as u64 * CONTEXT_FUEL_PER_ITEM);
+    let too_large = "the document information the plug-in asks for is too large to hand over";
+    add(&mut s, 1);
+    let refused = |s: &mut Session| {
+        let Err(e) = FilterRun::prepare(s, &p) else { panic!("prepared past the cap") };
+        assert!(e.to_string().contains(too_large), "{e}");
+        let (doc, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+        let e = s.execute("plugin.run", &p).unwrap_err().to_string();
+        assert!(e.contains(too_large), "{e}");
+        assert_eq!((&s.doc().unwrap().doc, s.doc().unwrap().history.undo.len()), (&doc, undo));
+    };
+    refused(&mut s);
+    // A few rows past the byte cap are refused as well.
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "edit.undo", json!({}));
+    s.edit("Set up", |d, _| {
+        d.swatches.last_mut().unwrap().name = "n".repeat(MAX_CONTEXT_BYTES);
+        Ok(())
+    })
+    .unwrap();
+    refused(&mut s);
+}
+
 /// A run past its memory budget fails before the plug-in starts, with the document and undo
 /// history as they were: a read-only object whose other fields don't fit, a path and a compound
 /// path that don't fit, and parameters past the input's half of the cap, with objects selected or

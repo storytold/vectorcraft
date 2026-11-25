@@ -718,6 +718,10 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	`inputs` lists `{shown}` twice	`inputs` angiver `{shown}` to gange
 @msg	`inputs` needs `api` 2 or later	`inputs` kræver `api` 2 eller nyere
 @msg	`inputs` needs the permission `doc.read`	`inputs` kræver tilladelsen `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Læse de objekter, den får, og dokumentets indstillinger, tegneflader, lag og farveprøver
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` skal angive forskellige afsnit: settings, artboards, layers eller swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` er til et filter eller en live-effekt med `commands`, ved `api` 3 eller senere og med tilladelsen `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	de dokumentoplysninger, som plug-in'et beder om, er for store til at blive overdraget: højst {MAX_CONTEXT_ITEMS} tegneflader, lag og farveprøver i {MAX_CONTEXT_BYTES} byte
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	hukommelsesbudget (objekt {_1} kræver {size} byte input, {left} tilbage)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	objektbudget (mere end {MAX_OBJECTS} skrivebeskyttede objekter)
 @msg	instruction budget	instruktionsbudget

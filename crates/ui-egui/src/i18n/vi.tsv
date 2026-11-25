@@ -7172,6 +7172,10 @@ axis	Y Axis	Trục Y
 @msg	`inputs` lists `{shown}` twice	`inputs` liệt kê `{shown}` hai lần
 @msg	`inputs` needs `api` 2 or later	`inputs` cần `api` 2 trở lên
 @msg	`inputs` needs the permission `doc.read`	`inputs` cần quyền `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Đọc các đối tượng được trao cho nó, cùng các thiết lập, bảng vẽ, lớp và mẫu màu của tài liệu
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` phải liệt kê các phần khác nhau: settings, artboards, layers hoặc swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` dành cho bộ lọc, hoặc hiệu ứng trực tiếp có `commands`, ở `api` 3 trở lên và có quyền `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	thông tin tài liệu mà plug-in yêu cầu quá lớn để chuyển giao: tối đa {MAX_CONTEXT_ITEMS} bảng vẽ, lớp và mẫu màu trong {MAX_CONTEXT_BYTES} byte
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	ngân sách bộ nhớ (đối tượng {_1} cần {size} byte đầu vào, còn lại {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	ngân sách đối tượng (hơn {MAX_OBJECTS} đối tượng chỉ đọc)
 @msg	instruction budget	ngân sách lệnh

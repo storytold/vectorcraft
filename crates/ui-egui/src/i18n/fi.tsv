@@ -7588,6 +7588,10 @@ axis	Y Axis	Y-akseli
 @msg	`inputs` lists `{shown}` twice	`inputs` luettelee kohteen `{shown}` kahdesti
 @msg	`inputs` needs `api` 2 or later	`inputs` edellyttää `api`-tasoa 2 tai uudempaa
 @msg	`inputs` needs the permission `doc.read`	`inputs` edellyttää käyttöoikeutta `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Lukea sille annetut objektit sekä asiakirjan asetukset, piirtoalustat, tasot ja värimallit
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context`-avaimen on lueteltava eri osiot: settings, artboards, layers tai swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` on suodattimelle tai reaaliaikaiselle tehosteelle, jolla on `commands`, tasolla `api` 3 tai uudempi ja käyttöoikeudella `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	laajennuksen pyytämät asiakirjan tiedot ovat liian suuret luovutettaviksi: enintään {MAX_CONTEXT_ITEMS} piirtoalustaa, tasoa ja värimallia {MAX_CONTEXT_BYTES} tavussa
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	muistibudjetti (objekti {_1} tarvitsee {size} tavua syötettä, jäljellä {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	objektibudjetti (yli {MAX_OBJECTS} vain luku -objektia)
 @msg	instruction budget	käskybudjetti

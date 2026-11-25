@@ -600,6 +600,10 @@
 @msg	`inputs` lists `{shown}` twice	`inputs` mencantumkan `{shown}` dua kali
 @msg	`inputs` needs `api` 2 or later	`inputs` memerlukan `api` 2 atau lebih baru
 @msg	`inputs` needs the permission `doc.read`	`inputs` memerlukan izin `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Membaca objek yang diberikan kepadanya, serta pengaturan, artboard, lapisan, dan sampel warna dokumen
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` harus mencantumkan bagian yang berbeda: settings, artboards, layers, atau swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` untuk filter, atau efek langsung dengan `commands`, pada `api` 3 atau lebih baru dengan izin `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	informasi dokumen yang diminta plug-in terlalu besar untuk diserahkan: paling banyak {MAX_CONTEXT_ITEMS} artboard, lapisan, dan sampel warna dalam {MAX_CONTEXT_BYTES} byte
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	anggaran memori (objek {_1} memerlukan {size} byte masukan, tersisa {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	anggaran objek (lebih dari {MAX_OBJECTS} objek baca-saja)
 @msg	instruction budget	anggaran instruksi

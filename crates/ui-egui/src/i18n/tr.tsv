@@ -7593,6 +7593,10 @@ axis	Y Axis	Y ekseni
 @msg	`inputs` lists `{shown}` twice	`inputs` `{shown}` değerini iki kez listeliyor
 @msg	`inputs` needs `api` 2 or later	`inputs` için `api` 2 veya üstü gerekir
 @msg	`inputs` needs the permission `doc.read`	`inputs` için `doc.read` izni gerekir
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Kendisine verilen nesneleri ve belgenin ayarlarını, çalışma yüzeylerini, katmanlarını ve renk örneklerini okuma
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` farklı bölümleri listelemelidir: settings, artboards, layers veya swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` yalnızca `api` 3 veya sonrasında, `doc.read` izniyle bir filtre ya da `commands` içeren bir canlı efekt içindir
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	eklentinin istediği belge bilgileri aktarılamayacak kadar büyük: {MAX_CONTEXT_BYTES} bayt içinde en fazla {MAX_CONTEXT_ITEMS} çalışma yüzeyi, katman ve renk örneği
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	bellek bütçesi (nesne {_1} için {size} bayt girdi gerekiyor, {left} kaldı)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	nesne bütçesi ({MAX_OBJECTS} adetten fazla salt okunur nesne)
 @msg	instruction budget	talimat bütçesi
