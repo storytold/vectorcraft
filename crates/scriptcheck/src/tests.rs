@@ -624,6 +624,25 @@ fn print_writes_a_file() {
     assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", lines)]);
 }
 
+/// A string literal in brackets that names `activeDocument` or `documents` reads that property, so the
+/// `print` of the document it gives writes a file; any other name in the brackets, a name that is not
+/// a property's, and a computed name do not give a document.
+#[test]
+fn print_on_a_document_named_in_brackets_writes_a_file() {
+    let r = report(concat!(
+        "var o = new PrintOptions(); o.jobOptions.file = new File(p);\n",
+        "app['activeDocument'].print(o);\n",
+        "app[\"documents\"][0].print(o);\n",
+        "var d = app['documents'][1]; d.print(o);\n",
+        "app['documents']['add']().print(o);\n",
+        "app['preferences'].print(o); app['activeDocuments'].print(o); app['documents[]'].print(o);\n",
+        "app['documents'].print(o); app[k].print(o); x.app['activeDocument'].print(o);\n",
+    ));
+    let lines = &[2, 3, 4, 5][..];
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(lines));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", lines)]);
+}
+
 /// Setting a File object's length, hidden or read-only flag changes the file; reading them, comparing
 /// them and setting them on another object does not.
 #[test]

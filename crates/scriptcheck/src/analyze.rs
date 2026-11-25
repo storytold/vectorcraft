@@ -463,6 +463,29 @@ impl Chain {
         self.append(if call { "()" } else { "[]" }, cap);
     }
 
+    /// The index that ends the chain is of the member `name`, which a string literal in brackets
+    /// named: `[]` becomes `.name` when one of [`catalog::DOM_DOCUMENTS`] reads that member as a
+    /// property (`app['activeDocument']`, `app['documents'][0]`). Any other name keeps the index.
+    fn name_index(&mut self, name: &str, cap: usize) {
+        let Some(base) = self.path.strip_suffix("[]").filter(|_| !self.cut) else { return };
+        let property = |d: &&str| {
+            d.strip_prefix(base)
+                .and_then(|m| m.strip_prefix('.'))
+                .and_then(|m| m.strip_prefix(name))
+                .is_some_and(|rest| rest.is_empty() || rest.starts_with('.') || rest.starts_with('['))
+        };
+        let ident = !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '$');
+        if !ident || !catalog::DOM_DOCUMENTS.iter().any(property) {
+            return;
+        }
+        self.path.truncate(self.path.len() - 2);
+        self.chars = self.chars.saturating_sub(2);
+        self.last_change = false;
+        for s in [".", name] {
+            self.append(s, cap);
+        }
+    }
+
     /// The call that ends the chain is of the member `name`, which a string literal in brackets
     /// named: `[]()` becomes `.name()`.
     fn name_call(&mut self, name: &str, cap: usize) {
@@ -1177,6 +1200,16 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                     }
                     if self.suspended.last().is_some_and(|c| c.wait == self.depth()) {
                         self.active = self.suspended.pop();
+                        // `app['activeDocument']`: a string literal in the brackets names a member.
+                        if t.text == "]"
+                            && is(self.h[1], "[")
+                            && let Some(name) = self.h[0].filter(|s| s.kind == T::Str).map(|s| unquote(s.text, 32))
+                        {
+                            let cap = self.chain_cap();
+                            if let Some(c) = self.active.as_mut() {
+                                c.name_index(&name, cap);
+                            }
+                        }
                     }
                     self.close_scopes();
                     let grouped = self.close_parens(t);
