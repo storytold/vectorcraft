@@ -78,15 +78,52 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   tolerance of the level of a parallel line of a linear dimension already drawn has its line on
   that level. The other dimension, and every layer and group it is in, must be visible and
   unlocked. The tool reads at most 20,000 visible, unlocked layers, groups and objects, from the
-  frontmost back, so in a larger document a dimension past them is not a level. This is
-  VectorCraft's own rule. With
+  frontmost back, so in a larger document a dimension past them is not a level. A line that
+  moves off its level by more than 0.000001 pt across the span of both lines is not parallel. A
+  level that would put the line more than 1,000,000 pt from its points is passed over, and the
+  line goes where the pointer is. This is VectorCraft's own rule. With Smart Guides and
   Alignment Guides on, a guide runs along the level across both lines while the dimension is
   placed.
+  The
+  [linear dimensions help](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/plot-linear-dimensions-of-objects.html)
+  describes plotting an object's horizontal and vertical dimensions by holding Alt
+  (Option on macOS) over its path. With Alt held, hovering a path shows a box through the path's
+  outermost points, as a Smart Guide when Smart Guides are on and in the tool's own color when
+  they are off, with its width and height beside the pointer when Measurement Labels are on.
+  Clicking the path, then moving and clicking, places a dimension of the whole path; dragging out
+  from the path places it on release. The rest is VectorCraft's own rule. With
+  the pointer above or below the box the dimension measures the path's width, between its
+  leftmost and rightmost points; to the left or right of the box it measures the height, between
+  the topmost and bottommost points; past a corner, the side the pointer is farther out on
+  decides. The points are read from the segments the path draws, curves included, and an anchor
+  that starts no segment is left out. They are read again whenever the path changes, so a turned
+  path shows its new overall width or height rather than that of its bounding box before the
+  turn. The line keeps its distance from the whole path when the path changes or the dimension
+  changes orientation. Alt has this effect only before the first point is clicked.
 - **Angular:** hover a corner where two straight segments meet and drag outwards. Or click two
   straight lines that meet (or would, extended), then click to place.
 - **Radial:** hover a circle, or a segment that is a perfect arc, and drag: outwards gives its
   radius, inwards its diameter. Clicking it gives its radius. Ellipses have no single radius.
-- **Escape** or switching tools cancels a dimension being placed.
+- **Moving a dimension:** the
+  [linear dimensions help](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/plot-linear-dimensions-of-objects.html)
+  describes repositioning a dimension by dragging it with the Dimension tool. With no points or
+  lines picked, a press within 8 pixels of what a dimension draws (its lines, arrowheads and
+  label), where it is the topmost object that can be edited, followed by a drag of more than 3
+  pixels (8 pixels when the Linear tool finds an anchor, a corner of preview bounds or the end of a
+  dimension line within reach of the press) moves that dimension, as one undo step. A segment of the art
+  as near the press as the dimension's lines and label, or nearer, takes the press instead. The
+  line of a linear dimension moves as far across as the pointer moves; the arc of an angular one
+  moves as far as the pointer moves away from or toward the vertex, to no less than 12 points from
+  it; a radius or diameter line turns about the center as far as the pointer turns, or toward the
+  pointer when it was grabbed at the center. The dimension keeps what it measures and its link to
+  the art. Isolation mode applies as it does to a click: with a part of a dimension isolated, the
+  dimension is not dragged. A dimension that a geometry effect on it, on one of its parts or on a
+  group around it moves or distorts is not dragged, except in Outline view and on a layer whose
+  Preview is off, where effects are not drawn. With Smart Guides on, a linear dimension's line
+  lands on the level of a parallel dimension line, as when it is placed; when two such lines lie
+  on one level, the one nearer the pointer along it wins. A click there without a drag still picks a point.
+  How far the dimension moves is VectorCraft's own rule.
+- **Escape** or switching tools cancels a dimension being placed or moved.
 
 **Tool Options** set the style of new dimensions: units (inches, millimetres, points, picas,
 pixels, centimetres, metres, feet, yards), precision (0–6 decimals), scale, the dimension and
@@ -112,7 +149,9 @@ Measurements follow the art they measure through moves, scaling and anchor and h
 undo and redo included. When the art is reflected, the line of a linked linear dimension goes to
 the reflected side, as far past the outermost point as before. This does not happen for art whose
 anchors and handles all lie on one line, such as a straight line, which a half turn puts in the
-same place as a reflection. An unlinked aligned dimension that is reflected, or scaled by a
+same place as a reflection, nor for a dimension of a whole path whose box through the path's
+outermost points stays where it was, as after Reverse Path Direction or a reflection across the
+middle of that box. An unlinked aligned dimension that is reflected, or scaled by a
 negative factor, has its line on the reflected side of its points. Deleting the art, changing its number of anchors or whether it is
 closed, turning an angle's arm into a curve, or making a measured circle or arc no longer circular
 leaves its dimensions where they were, no longer linked, in the same undo step, rather than
@@ -150,14 +189,22 @@ another document.
 
 ## Commands
 
-- `dimension.create`: two points, or a source (segment, angle, circle, arc, points), the mode,
-  the orientation of a linear dimension (`aligned`, the default, `horizontal` or `vertical`),
-  offset and style; returns the group id and label. `offset` is the distance of the dimension
+- `dimension.create`: two points, or a source (segment, angle, circle, arc, points, extent), the
+  mode, the orientation of a linear dimension (`aligned`, the default, `horizontal` or
+  `vertical`), offset and style; returns the group id and label. `{"kind":"extent","node":<id>}`
+  measures a whole path, linear only: between its leftmost and rightmost points when horizontal
+  or aligned, and its topmost and bottommost points when vertical. A version without the extent
+  source does not open a file that holds one. `offset` is the distance of the dimension
   line from the first point: along the left normal of a → b for an aligned dimension, downward
   for a horizontal one and leftward for a vertical one. A negative offset goes the other way.
 - `dimension.update`: restyle or move existing dimensions, or change the orientation of linear
-  ones. A new orientation keeps the line on the side of the points it was on. An update that
-  changes nothing records no undo step.
+  ones. A new orientation keeps the line on the side of the points it was on. For a dimension of
+  a whole path, a new orientation that would put the line more than 1,000,000 pt from its first
+  point is an error unless the update also gives `offset`. `at: [x,y]`, applied after `offset`,
+  puts a linear dimension's line through the point, gives an angular dimension's arc a radius of
+  the point's distance from the vertex (at least 12 points), or turns a radius or diameter line
+  toward it, keeping what the dimension measures. An update that changes nothing records no undo
+  step.
 - `dimension.applyToAll`: every dimension takes one dimension's style, in one undo step.
 - `tool.select {"tool":"dimension"}` and
   `tool.setOption {"tool":"dimension","values":{"mode":"linear","style":{"units":"mm","scale":"1:10"}}}`
