@@ -153,6 +153,7 @@ const SIZES: &[u8] = br#"{
     "all": {"radius.button": 4},
     "compact": {
         "size.control.md": 26,
+        "size.button": 24,
         "size.panel_header": 33,
         "size.bar.tab": 35,
         "size.bar.tab_large": 44,
