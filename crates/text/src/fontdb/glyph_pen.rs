@@ -54,7 +54,7 @@ impl OutlinePen for FlipPen {
 }
 
 // Share font decoding while preserving the app's existing y-down geometry and resource budget.
-impl craft_font_catalog::GlyphPen for FlipPen {
+impl craft::font_catalog::GlyphPen for FlipPen {
     fn move_to(&mut self, x: f32, y: f32) {
         OutlinePen::move_to(self, x, y);
     }

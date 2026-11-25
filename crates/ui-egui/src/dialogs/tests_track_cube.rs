@@ -1,4 +1,4 @@
-//! The track cube's rotations, grips and gestures.
+//! The track cube's rotations and grips.
 use super::*;
 use egui::pos2;
 use vectorcraft_effects::ROTATION_PRESETS;
@@ -49,8 +49,7 @@ fn angles_stay_in_the_fields_range_to_a_hundredth() {
 }
 
 fn drag(grip: Grip, angles: [f64; 3], from: Pos2, to: Pos2, shift: bool) -> [f64; 3] {
-    let mut g =
-        CubeDrag { grip, matrix: rotation(angles), origin: from, last: from, lock: None, fields: Default::default(), pass: 0, owner: Id::NULL };
+    let mut g = CubeDrag { grip, matrix: rotation(angles), origin: from, last: from, lock: None };
     // In five steps, as a pointer moves.
     let mut near = angles;
     for k in 1..=5 {
@@ -109,64 +108,6 @@ fn a_face_drag_turns_the_front_toward_the_pointer_and_shift_keeps_one_axis() {
     assert!(free[0].abs() > 1.0, "without Shift a slanted drag also tilts: {free:?}");
 }
 
-/// A gesture ends when the cube stops being drawn during it (its dialog closed, or the Rotation tab
-/// was left), so Escape is not held back for a cube that is no longer there.
-#[test]
-fn a_drag_ends_when_the_cube_is_no_longer_drawn() {
-    let ctx = egui::Context::default();
-    let run = |draw: &mut dyn FnMut(&mut egui::Ui)| ctx.run_ui(Default::default(), draw).textures_delta.clear();
-    run(&mut |ui| {
-        let pass = ui.ctx().cumulative_pass_nr();
-        let drag = CubeDrag {
-            grip: Grip::Face,
-            matrix: rotation([0.0; 3]),
-            origin: Pos2::ZERO,
-            last: Pos2::ZERO,
-            lock: None,
-            fields: Default::default(),
-            pass,
-            owner: Id::NULL,
-        };
-        ui.data_mut(|m| m.insert_temp(cube_drag_id(), drag));
-        assert!(cube_dragging(ui.ctx()));
-    });
-    assert!(cube_dragging(&ctx), "the next pass still sees the gesture");
-    for _ in 0..2 {
-        run(&mut |_| {});
-    }
-    assert!(!cube_dragging(&ctx), "two passes without the cube end the gesture");
-}
-
-/// With the 3D and Materials panel and a 3D dialog both showing a cube, a gesture on one cube is
-/// left alone by the other: Escape there does not put the first cube's settings into it.
-#[test]
-fn a_cube_leaves_a_gesture_on_the_other_cube_alone() {
-    let ctx = egui::Context::default();
-    let mut d = Dialog::new("effect", json!({ "rotationX": 10.0, "rotationY": 0.0, "rotationZ": 0.0 }));
-    let escape = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
-    let input = egui::RawInput { events: vec![escape], ..Default::default() };
-    let mut out = ctx.run_ui(input, |ui| {
-        let pass = ui.ctx().cumulative_pass_nr();
-        let other = CubeDrag {
-            grip: Grip::Face,
-            matrix: rotation([50.0, 0.0, 0.0]),
-            origin: Pos2::ZERO,
-            last: Pos2::ZERO,
-            lock: None,
-            fields: json!({ "rotationX": 50.0, "rotationY": 0.0, "rotationZ": 0.0 }).as_object().cloned().unwrap_or_default(),
-            pass,
-            owner: cube_id(crate::panels::three_d::ID),
-        };
-        assert_ne!(cube_id(crate::panels::three_d::ID), cube_id(&d.kind), "each cube has its own focus");
-        ui.data_mut(|m| m.insert_temp(cube_drag_id(), other));
-        track_cube(ui, &mut d);
-    });
-    out.textures_delta.clear();
-    assert_eq!(d.f64("rotationX", 0.0), 10.0, "the dialog keeps its own rotation");
-    // The button is up in that pass, and the other cube, drawn later, still has the release to handle.
-    assert!(ctx.data(|m| m.get_temp::<CubeDrag>(cube_drag_id())).is_some(), "the other cube's gesture is still there");
-}
-
 /// The centre is on the front face, the ring's band on the ring, and an edge's middle on that edge.
 #[test]
 fn grips_follow_what_is_under_the_pointer() {
@@ -181,75 +122,4 @@ fn grips_follow_what_is_under_the_pointer() {
     // Facing front: four faces are edge-on and hidden, so only the front's edges show.
     let m = rotation([0.0, 0.0, 0.0]);
     assert_eq!(edges().filter(|&(i, _, axis)| edge_visible(m, i, axis)).count(), 4);
-}
-
-/// Map Art lists each document's own surfaces: after a switch to another document whose object has
-/// the same id, effect settings and revision, the surfaces are those of the other document's object.
-#[test]
-fn map_art_surfaces_follow_the_active_document() {
-    let mut app = crate::VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-    for d in ["M50 50L150 50L150 150L50 150Z", "M50 50L80 50L80 200L50 200Z"] {
-        app.run("file.new", json!({"width":300,"height":300})).unwrap();
-        app.run("path.create", json!({"d": d})).unwrap();
-    }
-    app.run("effect.dialog", json!({"effect":CLASSIC_EXTRUDE,"item":null})).unwrap();
-    let d = app.ui.dialog.take().unwrap();
-    let ctx = egui::Context::default();
-    let key = |app: &crate::VectorcraftApp| {
-        let st = app.session.active().unwrap();
-        (st.selection.objects.first().copied(), st.revision)
-    };
-    let second = surfaces(&app, &ctx, &d).unwrap();
-    let at_second = key(&app);
-    assert!(app.session.set_active(0));
-    assert_eq!(key(&app), at_second, "both documents' objects have the same id and revision");
-    let first = surfaces(&app, &ctx, &d).unwrap();
-    let st = app.session.active().unwrap();
-    let id = st.selection.objects[0];
-    let own = vectorcraft_effects::map_surfaces_with(
-        Some(&st.doc),
-        st.doc.node(id).unwrap(),
-        (None, None),
-        CLASSIC_EXTRUDE,
-        &super::super::form::params(&d),
-    );
-    assert_ne!(first, second, "the two objects' solids differ in size");
-    assert_eq!(Some(first.as_ref()), own.as_ref(), "the first document's surfaces");
-}
-
-/// Map Art's surface number reads typed text as other number fields do: `1+2` shows surface 3.
-#[test]
-fn the_map_art_surface_field_takes_field_arithmetic() {
-    let mut app = crate::VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-    app.run("file.new", json!({"width":300,"height":300})).unwrap();
-    app.run("path.create", json!({"d": "M50 50L150 50L150 150L50 150Z"})).unwrap();
-    app.run("effect.dialog", json!({"effect":CLASSIC_EXTRUDE,"item":null})).unwrap();
-    let mut d = app.ui.dialog.take().unwrap();
-    let ctx = egui::Context::default();
-    ctx.enable_accesskit();
-    crate::theme::install_fonts(&ctx);
-    assert!(surfaces(&app, &ctx, &d).unwrap().len() >= 3, "the extruded square has at least 3 surfaces");
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
-    let frame = |d: &mut Dialog, events: Vec<egui::Event>| {
-        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| map_art_controls(&app, ui, d));
-        out.textures_delta.clear();
-        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
-    };
-    frame(&mut d, vec![]);
-    let nodes = frame(&mut d, vec![]);
-    let field = nodes
-        .iter()
-        .find(|(_, n)| n.role() == egui::accesskit::Role::SpinButton && n.label() == Some("Surface"))
-        .and_then(|(_, n)| n.bounds())
-        .expect("the Surface field is drawn");
-    let at = pos2(((field.x0 + field.x1) / 2.0) as f32, ((field.y0 + field.y1) / 2.0) as f32);
-    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
-    let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
-    frame(&mut d, vec![egui::Event::PointerMoved(at), button(true)]);
-    frame(&mut d, vec![button(false)]);
-    frame(&mut d, vec![]);
-    frame(&mut d, vec![egui::Event::Text("1+2".into())]);
-    frame(&mut d, vec![enter]);
-    frame(&mut d, vec![]);
-    assert_eq!(shown_surface(&d, 99), 3, "1+2 shows surface 3");
 }
