@@ -26,12 +26,12 @@ fn rect(s: &mut Session, x: f64, y: f64, w: f64, h: f64) -> NodeId {
     NodeId(s.execute("shape.rectangle", &json!({"x": x, "y": y, "width": w, "height": h})).unwrap()["id"].as_u64().unwrap())
 }
 
-/// A 400 × 300 pt document with two rectangles.
+/// A 400 × 300 pt document with two rectangles, `a` on top, so `pathItems[0]` is `a`.
 fn doc() -> (Session, NodeId, NodeId) {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
-    let a = rect(&mut s, 10.0, 20.0, 30.0, 40.0);
     let b = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    let a = rect(&mut s, 10.0, 20.0, 30.0, 40.0);
     s.execute("select.none", &json!({})).unwrap();
     (s, a, b)
 }
@@ -807,7 +807,7 @@ fn locked_paths_and_wrong_objects_are_refused() {
     }
     assert_eq!(art(&s), before);
     s.execute("text.create", &json!({"x": 10, "y": 250, "text": "hi"})).unwrap();
-    let e = failure(&mut s, "var t = app.activeDocument.pageItems[2]; Object.getOwnPropertyDescriptor(PathItem.prototype, 'closed').get.call(t);");
+    let e = failure(&mut s, "var t = app.activeDocument.pageItems[0]; Object.getOwnPropertyDescriptor(PathItem.prototype, 'closed').get.call(t);");
     assert!(e.contains("not a PathItem"), "{e}");
     let e = failure(&mut s, "Object.getOwnPropertyDescriptor(PathPoint.prototype, 'anchor').get.call({});");
     assert!(e.contains("not a PathPoint"), "{e}");

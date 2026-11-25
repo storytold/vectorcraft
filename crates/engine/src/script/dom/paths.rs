@@ -1069,8 +1069,9 @@ fn path_rotate(h: &super::Host, a: &[Data]) -> Answer {
     let place = about_name(arg(a, 6))?;
     let mut params = json!({"angle": angle});
     transform_options(a, 2, &mut params)?;
-    if angle.rem_euclid(360.0) != 0.0 {
-        let (r, _) = item_rect(h, item, false)?;
+    if angle.rem_euclid(360.0) != 0.0
+        && let (Some(r), _) = item_rect(h, item, false)?
+    {
         let origin = about(h, item, place, r)?;
         params["origin"] = json!([origin.x, origin.y]);
         edit_path(h, item, "object.rotate", params)?;
@@ -1099,8 +1100,9 @@ fn path_resize(h: &super::Host, a: &[Data]) -> Answer {
     if new_width.is_some_and(|w| w > MAX_STROKE_WIDTH) {
         return Err(HostError::Range("changeLineWidths would make the stroke weight more than 1000 points".into()));
     }
-    if sx != 100.0 || sy != 100.0 {
-        let (r, _) = item_rect(h, item, false)?;
+    if (sx != 100.0 || sy != 100.0)
+        && let (Some(r), _) = item_rect(h, item, false)?
+    {
         let origin = about(h, item, place, r)?;
         params["origin"] = json!([origin.x, origin.y]);
         edit_path(h, item, "object.scale", params)?;
