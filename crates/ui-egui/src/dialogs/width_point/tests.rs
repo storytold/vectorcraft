@@ -904,3 +904,30 @@ fn one_point_refuses_a_change_since_the_dialog_opened() {
         assert_eq!(app.session.doc().unwrap().doc, paired, "{field}");
     }
 }
+
+#[test]
+fn several_points_refuse_a_change_in_which_points_pair() {
+    // A point added at a selected point's place, after it, pairs with it; a third point at a
+    // discontinuous point's place unpairs its halves. The selected points keep their index, place
+    // and widths.
+    let cases = [
+        (
+            three_app as fn() -> (VectorcraftApp, u64),
+            json!([1, 3]),
+            json!([[0, 1, 1], [0.25, 0.8, 0.4], [0.5, 0.8, 0.8], [0.75, 0.4, 1.2], [0.75, 0.3, 0.3], [1, 1, 1]]),
+        ),
+        (pair_app, json!([0, 1]), json!([[0, 1, 1], [0.5, 0.8, 0.8], [0.5, 0.4, 1.2], [0.5, 0.3, 0.3], [1, 1, 1]])),
+    ];
+    for (make, indices, points) in cases {
+        for field in ["side2", "delete"] {
+            let (mut app, id) = make();
+            app.run("ui.widthPointEdit", json!({"id": id, "indices": indices})).unwrap();
+            assert!(fields(&app).get("indices").is_some(), "{indices}: the several-point dialog opened");
+            app.run("stroke.widthProfile.set", json!({"ids": [id], "points": points})).unwrap();
+            let changed = app.session.doc().unwrap().doc.clone();
+            assert!(press_field(&mut app, field).is_err(), "{indices} {field}");
+            assert!(is_open(&app), "a refused press keeps the dialog open: {indices} {field}");
+            assert_eq!(app.session.doc().unwrap().doc, changed, "{indices} {field}");
+        }
+    }
+}

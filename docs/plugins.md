@@ -28,7 +28,7 @@ in `crates/engine/src/cmd/plugin.rs`).
 
 | Command | Params | What it does |
 |---|---|---|
-| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, commands?, commandAllowlist?, size, source, api, paintOutput?, appearanceOutput?, permissions, hash, cacheBytes}], "folder": report}` (`api` is the manifest's [plug-in API level](#permissions); `budget: "heavy"` for a [heavy filter](#heavy-filters); `commands` lists its [commands](#commands); `commandAllowlist` lists the commands it may [call](#command-calls); `paintOutput: true` marks a [painted live effect](#painted-live-effects), and `appearanceOutput: true` one whose pieces carry [opacity, blending and effects](#opacity-blending-and-effects-on-pieces); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256; `cacheBytes` is the size of its [cache](#settings-and-cache)) |
+| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, commands?, commandAllowlist?, context?, size, source, api, paintOutput?, appearanceOutput?, permissions, hash, cacheBytes}], "folder": report}` (`api` is the manifest's [plug-in API level](#permissions); `context` lists the [document information](#document-information) it reads; `budget: "heavy"` for a [heavy filter](#heavy-filters); `commands` lists its [commands](#commands); `commandAllowlist` lists the commands it may [call](#command-calls); `paintOutput: true` marks a [painted live effect](#painted-live-effects), and `appearanceOutput: true` one whose pieces carry [opacity, blending and effects](#opacity-blending-and-effects-on-pieces); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256; `cacheBytes` is the size of its [cache](#settings-and-cache)) |
 | `plugin.info` | `{"id"}` | One plug-in: the `plugin.list` entry plus `manifest`, `defaults` and `lastError` (a live effect's last failure). |
 | `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`; an `ids` that is not a list of object ids is an error). One undo step; the result is selected, except the objects it locked or made guides. An output that changes no object and none of the data it keeps with the document ([`documentData`](#output)) records no undo step and leaves the document unmodified. |
 | `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace"?: bool`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A module with other bytes than the plug-in installed with its id, or, with none installed, one whose id has [settings and a cache](#settings-and-cache) in the `Plug-ins` folder, installs only with `replace: true`, once the user agreed; it takes that plug-in's place and gets its settings and cache. The same module installs again without `replace`, and `replace: false` refuses a module whose id is installed. A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, unless a grant is already recorded for a module with the same SHA-256. A request's `grant` and `allowHeavy` are refused except in a session started with `vectorcraft-cli --allow-plugin-grants`. With `hash`, a module whose SHA-256 differs is refused. A module whose `commandAllowlist` lists a command no plug-in may call is refused; ids no command has are listed as `unknownCommands` ([command calls](#command-calls)). |
@@ -100,7 +100,8 @@ replaced by a module without it.
   command whose manifest places it in another menu.
 - **Runs.** The parameters are checked against the command's declarations before the plug-in runs. The plug-in runs
   through `vc_run` on the selection (or `ids`) as a filter run does, with `_context.mode` `"command"` and
-  `_context.command` set to the command's id ([Parameters](#parameters)), under the plug-in's
+  `_context.command` set to the command's id ([Parameters](#parameters)), and with the [document
+  information](#document-information) its manifest's `context` lists, under the plug-in's
   [permissions](#permissions): a live effect with commands may also hold `doc.write` and `state`, which only its
   commands use. `ids` left out or null means the selection; an `ids` that is not a list of object ids is an error. One run
   is one undo step named after the command, and a run that changes nothing records none. A run that traps, runs out of its instruction budget or fails leaves the
@@ -148,6 +149,25 @@ picked or typed folder whose contents can't be listed, and `prefs.set` refuses s
 most 1,000 `.wasm` files, the first ones by file name (VectorCraft's own limit); its report counts the files left out
 (`leftOut`). An entry that is not a regular file, such as a subfolder or a named pipe with a `.wasm` name, is listed in
 the report and skipped, and the load does not wait on a named pipe.
+
+**Loading.** On the desktop, the plug-ins in the `Plug-ins` folder and the Additional Plug-ins Folder load on up to four
+worker threads and install in file-name order, whatever order their loads finish in; at most eight loaded modules wait
+to be installed at once. When the desktop app starts, its window shows while they load, and they install as their loads
+finish. Plug-in commands, commands that edit a document, exports, File › Open, control-channel requests and files
+opened at launch wait for them first; view commands and queries chosen from a menu do not. Until then a live effect
+whose plug-in is still loading is drawn as if it weren't there, and another window's `plugin.list` reports the folder
+as `{"folder", "loading": true}`. A folder set later in Preferences, `vectorcraft-cli` and `plugin.reload` wait for
+the loads before they go on. A module whose load panics is reported as failed or skipped with a log record, and the
+others install. So is a module whose read and load take 10 s or longer (VectorCraft's own limit), also one that would have
+finished later, such as a module on a slow network share. The launch marker names every module still loading, so when
+the app stops during the loads, the next launch's Safe Mode choice lists all of them. A module whose load panicked or
+failed is no longer named; one past its 10 s limit is named until its load returns. A module is also skipped when the
+plug-in with its id was installed or removed in another window while it loaded. A module from the `Plug-ins` folder
+installs only when its file, read again on the worker thread after the module loaded, still holds that module, whatever
+the file's modified time. When a file fails because no thread was left to load it, the Additional Plug-ins Folder is
+loaded again the next time the preferences are applied. When the app quits while plug-ins are
+loading, it waits for the modules already loading, for at most 10 s, before it exits. The web build loads one
+module at a time.
 
 Plug-ins are installed **per process**, not per document. Documents store a live effect as an ordinary effect record
 (`{"id": "plugin.<id>", "params": {…}}`): while the plug-in is installed it is drawn, exported and expanded; without it
@@ -236,7 +256,7 @@ capability model proposed for PhotoCraft plug-ins
 
 | Permission | Kinds | What it allows |
 |---|---|---|
-| `doc.read` | filter, effect, exporter | Read the objects it is given. |
+| `doc.read` | filter, effect, exporter | Read the objects it is given, and the [document information](#document-information) its `context` lists. |
 | `doc.write` | filter, effect with `commands` | Change, add and delete objects in the document. |
 | `state` | filter, effect with `commands` | Keep data of its own with the document (`documentData`). |
 | `effect.render` | effect | Change how the objects its effect is applied to are drawn. |
@@ -340,7 +360,10 @@ capability model proposed for PhotoCraft plug-ins
   and `plugin.remove` removes the plug-in. A `grants.json` that can't be opened or read counts as a grant that can't be
   removed. When VectorCraft loads the `Plug-ins` folder, it forgets any grant for an id whose stored module lists no
   permissions. When it can't remove that grant from `grants.json`, or can't read the file, the grant stops counting,
-  including for the next load, which tries the removal again. A grant that stops counting in either of these cases
+  including for the next load, which tries the removal again. When a later file in the folder holds a module with the
+  same id that the forgotten grant covers, the grant is written back and that module installs. When the grant can't be
+  written back, that module is skipped, and when the module doesn't install, the grant is removed again. A grant that
+  stops counting in either of these cases
   does not count for any session in the same process that uses the same `Plug-ins` folder, by any path to it, until
   `grants.json` can be written for that plug-in, as when the plug-in is granted again. Another process on the same
   folder, for example `vectorcraft-cli` beside the app, still reads `grants.json` as it is written. A grant for the
@@ -360,13 +383,16 @@ capability model proposed for PhotoCraft plug-ins
 - The host enforces the grant on a filter run and a command run: without `doc.read` the filter is given no objects;
   without `state` its `documentData` is `null` and an output that sets it is refused; without `doc.write` an output that
   changes the document is refused. A refused output leaves the document as it was.
-- `api` is the plug-in API level the manifest is written for: `1` (the default), `2`, which adds the [host
+- `api` is the plug-in API level the manifest is written for: `1` (the default); `2`, which adds the [host
   imports](#host-imports-api-level-2), a filter's `inputs` ([reading type, images and
-  symbols](#reading-type-images-and-symbols)) and a live effect's [`paintOutput`](#painted-live-effects), or `3`, which
-  adds a painted live effect's [`appearanceOutput`](#opacity-blending-and-effects-on-pieces). A higher one is refused.
-  `plugin.list` and `plugin.info` give it as `api`. `inputs` is not a permission: the objects it asks for are read under `doc.read`, which a filter that lists `inputs` must list in `permissions`, so installing it asks the
-  user to grant them. A level 2 effect that declares `paintOutput` needs no other permission than `doc.read` and
-  `effect.render`.
+  symbols](#reading-type-images-and-symbols)) and a live effect's [`paintOutput`](#painted-live-effects); or `3`, which
+  adds a painted live effect's [`appearanceOutput`](#opacity-blending-and-effects-on-pieces) and `context` ([document
+  information](#document-information)). A higher one is refused. `plugin.list` and
+  `plugin.info` give it as `api`. `inputs` is not a permission: the objects it asks for are read under `doc.read`, which
+  a filter that lists `inputs` must list in `permissions`, so installing it asks the user to grant them. `context` is
+  not a permission either: it is read under `doc.read` in the same way, and the install prompt says that the plug-in
+  reads the document's settings, artboards, layers and swatches. A level 2 effect that declares `paintOutput` needs no
+  other permission than `doc.read` and `effect.render`.
 - Parameter declarations are unchanged by permissions (`params`, below).
 
 Every run gets a **fresh instance**, so no state survives between calls except what a plug-in writes to its
@@ -612,6 +638,12 @@ the module's start function, in a run that isn't a filter's run on a document, o
   filter gets paths and compound paths alone, as before. An unknown, repeated or wrongly typed entry, `inputs` on
   another kind, below `api` 2, or without a `permissions` list that holds `doc.read`, is refused when the plug-in is
   installed, and so is `api` 2 on hosts from before it.
+- `context` (filters, and live effects with `commands`, at `api` 3 only): the parts of the active document a run reads
+  in `_context.document`, any of `"settings"`, `"artboards"`, `"layers"` and `"swatches"`, each at most once
+  (`"context": ["artboards", "layers"]`). Left out or `[]`, a run gets none, as before. An unknown, repeated or wrongly
+  typed entry, `context` on another kind or on a live effect without commands, below `api` 3, or without a
+  `permissions` list that holds `doc.read`, is refused when the plug-in is installed, and so is `api` 3 on hosts from
+  before it ([document information](#document-information)).
 - `paintOutput` (live effects at `api` 2 only): `true` makes the effect return [painted pieces](#painted-live-effects)
   instead of geometry alone. `true` is the only value the key takes; `false`, `null`, another type, another kind or
   `api` 1 is refused when the module is installed, and the error names `paintOutput`. Without the key the effect returns
@@ -792,6 +824,50 @@ the objects after it are written. An output lists at most 100,000 objects, so a 
 objects fails with `plug-in exceeded its object budget (more than 100000 read-only objects)`. An echo of them counts
 toward the 64 MiB output cap.
 
+### Document information
+
+A filter, or a live effect with [commands](#commands), whose manifest lists `context` (plug-in API level 3) gets those
+parts of the active document in `_context.document` on each filter or command run, whether or not anything is
+selected. Drawing a live effect never gets them. The host reads them when the run starts, and they stay as read for
+the whole run. `revision` is the document's revision at that time, so a plug-in that [calls commands](#command-calls)
+can tell that a call changed the document. Only the sections the manifest lists are given:
+
+```json
+"document": {"revision": 7,
+ "settings": {"name": "Poster.vectorcraft", "colorMode": "cmyk", "units": "Millimeters", "width": 612, "height": 792,
+              "bleed": [9, 9, 9, 9], "rasterEffectsPpi": 300, "activeArtboard": 1},
+ "artboards": [{"id": 1, "index": 0, "name": "Front", "rect": [0, 0, 612, 792], "active": true}],
+ "layers": [{"id": 2, "parentId": null, "depth": 0, "name": "Art", "visible": true, "locked": false, "template": false,
+             "color": "Light Blue", "sublayers": 1, "current": false},
+            {"id": 5, "parentId": 2, "depth": 1, "name": "Notes", "visible": false, "locked": true, "template": false,
+             "color": "Red", "sublayers": 0, "current": true}],
+ "swatches": [{"name": "Brand Red", "kind": "color", "group": null, "global": true, "spot": false,
+               "color": {"model": "cmyk", "c": 0, "m": 0.9, "y": 0.8, "k": 0}, "hex": "#e8392c"}]}
+```
+
+- `settings`: `name` is the document's name as its tab shows it, without its folder; `colorMode` is `"rgb"` or
+  `"cmyk"`; `units` are the ruler units as `document.setup` names them; `width` and `height` are the active artboard's
+  size in points (`null` without artboards); `bleed` is `[top, bottom, left, right]` in points; `rasterEffectsPpi` is
+  the Document Raster Effects Settings resolution; `activeArtboard` is the active artboard's id.
+- `artboards`: every artboard in the Artboards panel's order, with its `id`, which stays the same when artboards are
+  reordered, its `index` (its place now), `name`, `rect` (`[x0, y0, x1, y1]` in the document points `bounds` uses) and
+  `active`.
+- `layers`: every layer and sublayer, depth first in document order: the bottom layer first, each layer followed by its
+  sublayers, bottom first. `id` is the id layer commands take; `parentId` is the layer it is in (`null` at the top
+  level); `depth` is 0 for a top-level layer. `visible`, `locked` and `template` are the layer's own settings, so a
+  sublayer of a hidden layer keeps its own `visible`. `color` is the layer color's name or `#rrggbb`; `sublayers` counts
+  the layers directly inside it; `current` marks the current layer. Objects are not listed.
+- `swatches`: every swatch as `swatch.list` lists it (the swatches outside color groups, with the built-in Registration
+  swatch after None, then each color group's): `name`, `kind`, `group`, `global`, `spot`, and for a color its `color` and `hex` (and `tintOf` and `tint`
+  for a tint). A gradient swatch gives its gradient's kind and a pattern swatch its pattern's name, not their art.
+
+The document information holds no file path or folder, no linked file, font file or placed document, and nothing from
+another document. A document with more than 10,000 rows in the sections asked for (artboards, layers and sublayers,
+and swatches together), or whose rows take more than 4 MiB of JSON, fails the run before the plug-in starts, with `the
+document information the plug-in asks for is too large to hand over`, and the document stays as it was. Each row takes
+1,000 instructions from the run's [instruction budget](#instruction-budget-preference), and the document information
+counts toward the half of the memory cap that the input and the parameters share. These rules are VectorCraft's own.
+
 ### Parameters
 
 `params` points at `params_len` bytes of UTF-8 JSON: the validated parameters, plus `_context`:
@@ -805,7 +881,8 @@ toward the 64 MiB output cap.
 `command` is the command's id); `bounds` the selection's geometric bounds (a live effect: the reference box of the
 effect, the object's bounds or those of the previous effect's result); `artboard` (filters) the artboard under the
 selection's centre, else the first; `documentData` (filters) what the plug-in last kept with the document (`null` until
-it keeps something; see Output). A live effect's `item` says where it sits: `"object"` (one of the object's effects), or
+it keeps something; see Output); `document` (filters and commands whose manifest lists `context`) the [document
+information](#document-information) asked for. A live effect's `item` says where it sits: `"object"` (one of the object's effects), or
 `{"fill": i}` / `{"stroke": i}` (in the own effects of the object's `i`th fill or stroke, counted from the bottom as in
 `fills` and `strokes`). An export's `_context` is `{"mode": "export", "extension": "plt", "name": "Poster"}` instead:
 the extension of the file being written (one the exporter lists) and its name without the extension (the document's name
@@ -923,6 +1000,15 @@ is a piece drawn by itself, in the order returned, with paints of its own:
   ordinary path or compound path with its fills and strokes, as one undo step. Object › Expand of gradient and pattern
   fills expands the fills of each piece, and leaves a piece with other paints as it is drawn.
 
+An **exporter** returns `{"dataBase64": "…", "warnings"?: ["…"]}`: the file, in base64, which the host writes as it
+is, and what the export left out or changed, for the user (at most 100 warnings of at most 500 characters each, shown
+with the export's own). A decline (`{"error": …}`), a missing `dataBase64` or data that isn't base64 writes nothing.
+
+An **importer** returns `{"objects": [...], "warnings"?: ["…"]}`: new paths and compound paths (no `id`) in the
+filters' object form, checked as a filter's new objects are, with warnings capped as an exporter's are and shown with
+the open's own. An output with no objects, with keys other than `objects`, `warnings` and `error`, or with an object
+that fails the checks opens nothing, and neither does a decline (`{"error": …}`).
+
 #### Opacity, blending and effects on pieces
 
 A painted live effect whose manifest also has `"api": 3` and `"appearanceOutput": true` may give each piece, and each
@@ -972,15 +1058,6 @@ fill and stroke the piece returns, three more keys:
   returned effects`. Without `appearanceOutput`, the three keys are refused as before.
 - The effect stays live: the document holds only the effect record, and the looks are drawn, exported and expanded
   (Object › Expand Appearance) as the pieces are.
-
-An **exporter** returns `{"dataBase64": "…", "warnings"?: ["…"]}`: the file, in base64, which the host writes as it
-is, and what the export left out or changed, for the user (at most 100 warnings of at most 500 characters each, shown
-with the export's own). A decline (`{"error": …}`), a missing `dataBase64` or data that isn't base64 writes nothing.
-
-An **importer** returns `{"objects": [...], "warnings"?: ["…"]}`: new paths and compound paths (no `id`) in the
-filters' object form, checked as a filter's new objects are, with warnings capped as an exporter's are and shown with
-the open's own. An output with no objects, with keys other than `objects`, `warnings` and `error`, or with an object
-that fails the checks opens nothing, and neither does a decline (`{"error": …}`).
 
 ## Writing a plug-in in Rust
 

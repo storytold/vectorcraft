@@ -6316,6 +6316,9 @@ file-filter	Swatch libraries	Biblioteke uzoraka boja
 file-filter	Flattener presets	Predlošci spljoštavanja
 file-filter	PDF presets	PDF predlošci
 file-filter	Print presets	Predlošci štampanja
+file-filter	Tracing presets	Predlošci praćenja
+file-filter	Action sets	Skupovi akcija
+file-filter	Composite fonts	Kompozitni fontovi
 file-filter	Preferences	Postavke
 file-filter	Export presets	Predlošci izvoza
 file-filter	SVG Compressed	Komprimirani SVG
@@ -6724,6 +6727,7 @@ axis	Y Axis	Y osa
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}” je drugi modul od dodatka s ID-om {_1} i dobio bi postavke i predmemoriju sačuvane za njega: instalirajte ga s `replace: true` kada korisnik pristane
 	File SHA-256: {hash}	SHA-256 datoteke: {hash}
 	Read the objects it is given	Čitati objekte koje dobije
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Čitati objekte koje dobije, kao i postavke, radne ploče, slojeve i uzorke boja dokumenta
 	Change, add and delete objects in the document	Mijenjati, dodavati i brisati objekte u dokumentu
 	Keep data of its own with the document	Čuvati vlastite podatke uz dokument
 	Change how the objects its effect is applied to are drawn	Mijenjati kako se crtaju objekti na koje je primijenjen njegov efekt

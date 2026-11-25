@@ -808,7 +808,7 @@ mod tests {
         crate::safe_mode::set_active(None);
         let dir = std::env::temp_dir().join(format!("vc-effect-overlap-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        assert_eq!(crate::safe_mode::begin_launch(&dir), None);
+        assert_eq!(crate::safe_mode::begin_launch(&dir), []);
         let marker = || {
             let files = std::fs::read_dir(&dir).unwrap().filter_map(|e| Some(e.ok()?.path()));
             let json = files.filter(|p| p.extension().is_some_and(|x| x == "json")).collect::<Vec<_>>();
@@ -817,8 +817,8 @@ mod tests {
         };
         let src = crate::wat::returning(&crate::wat::manifest("test.effect.overlap", "effect", "{}"), r#"{"objects":[]}"#);
         let plugin = registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap()).unwrap();
-        let named = Some(crate::safe_mode::Item::of(&plugin));
-        assert_eq!(marker(), None);
+        let named = vec![crate::safe_mode::Item::of(&plugin)];
+        assert_eq!(marker(), []);
 
         assert!(begin_run(&plugin), "the first run is guarded");
         assert!(begin_run(&plugin), "a run that starts while the first is running is guarded");
@@ -830,9 +830,9 @@ mod tests {
         end_run(plugin.serial(), true);
         assert_eq!(marker(), named, "the third run is still running");
         end_run(plugin.serial(), false);
-        assert_eq!(marker(), None, "no run is running");
+        assert_eq!(marker(), [], "no run is running");
         assert!(!begin_run(&plugin), "later runs aren't guarded");
-        assert_eq!(marker(), None);
+        assert_eq!(marker(), []);
 
         crate::safe_mode::end_launch();
         crate::safe_mode::forget_previous();

@@ -77,7 +77,7 @@ pub(super) fn plain_selected(app: &VectorcraftApp) -> bool {
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.session.active().is_none() {
-        empty_state(ui, "hexagon", tl!("No document"), tl!("Open a document to draw parametric shapes."));
+        empty_state(ui, "dc-parametric-shape", tl!("No document"), tl!("Open a document to draw parametric shapes."));
         return;
     }
     let (id, s) = target(app);
