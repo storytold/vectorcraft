@@ -12858,7 +12858,10 @@ a font without vertical metrics keeps its cells. Line-end Punctuation Half Width
 punctuation `palt` or `vpal` re-spaced (the opening bracket at a line's start, consecutive punctuation, the closing
 mark at a line's end); punctuation left full width is trimmed as before. With automatic kerning the font's kerning
 for the re-spaced glyphs comes too: `apkn` with `palt`, and `vkrn` and `vapk` with `vpal` (vertical type is otherwise
-not kerned). Off by default and saved only when on. One undo step.
+not kerned). Off by default and saved only when on. One undo step. With Show East Asian Options on, the Character
+panel menu and the OpenType panel menu ([the help page](https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html))
+each have a Proportional Metrics item that sends this attribute; the OpenType panel's item is checked when every
+character it changes has it.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"proportionalMetrics":true}}}
