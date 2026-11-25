@@ -11,6 +11,7 @@
 //! Cancel, when it runs at once or when OK runs it without a kept preview ([`in_background`]). A
 //! filter or live effect with commands of its own is a submenu named after it, holding its item and
 //! then its commands; a command with parameters opens the same dialog for them ([`open_command`]).
+//! A command whose manifest names another menu is listed in that menu instead ([`place_commands`]).
 //! Exporters are formats of File › Export › Export As; one with parameters opens dialog
 //! `pluginExport` once the file is picked, and its Export button writes the file. Importers open the
 //! files File › Open finds no built-in format for, and File › Open With lists them; one with
@@ -76,6 +77,117 @@ fn with_commands(plugin: &Plugin, own: Node) -> Node {
         c(label(&command.shown_label(), !command.params.is_empty()), id)
     }));
     sub(registry::intern(&permissions::display_text(m.name.trim(), permissions::MAX_SHOWN_NAME)), items)
+}
+
+/// Moves each plug-in command whose manifest's `menu` names another menu
+/// ([`vectorcraft_plugins::MenuPlace`]) from its plug-in's submenu into that menu of `tree`: after
+/// the built-in item its `after` names (with or without an ellipsis), or at the end of the menu.
+/// Its label ends with the plug-in's name ([`vectorcraft_plugins::Command::menu_label`]).
+/// Commands placed at the same spot are listed in plug-in id order and then in manifest order. A
+/// plug-in's submenu left with its own item alone becomes that item. A command whose menu `tree`
+/// doesn't have, or that [`vectorcraft_engine::cmd::plugin::placed_menu`] leaves in its plug-in's
+/// submenu, stays there.
+pub fn place_commands(tree: &mut [(&'static str, Vec<Node>)]) {
+    let mut spots: Vec<(&'static [&'static str], Option<String>, Vec<Node>)> = Vec::new();
+    for p in registry::list() {
+        let m = p.manifest();
+        if !matches!(m.kind, Kind::Filter | Kind::Effect) {
+            continue;
+        }
+        for command in &m.commands {
+            let Some(place) = &command.place else { continue };
+            if vectorcraft_engine::cmd::plugin::placed_menu(&p, command).is_none() {
+                continue;
+            }
+            // An `after` that names no built-in item of the menu means the end of it, as no `after` does.
+            // The spot is the item's own label, so both labels of an item that switches are one spot.
+            let after = place.after.as_deref().and_then(|a| {
+                let menu = menu_at(tree, place.path)?;
+                menu.iter().find(|it| is_anchor(it, anchor_key(a))).and_then(own_key).map(str::to_string)
+            });
+            let id = registry::intern(&vectorcraft_engine::cmd::plugin::command_id(&m.id, &command.id));
+            let item = c(label(&command.menu_label(&m.name), !command.params.is_empty()), id);
+            match spots.iter_mut().find(|s| s.0 == place.path && s.1 == after) {
+                Some(s) => s.2.push(item),
+                None => spots.push((place.path, after, vec![item])),
+            }
+        }
+    }
+    spots.retain(|s| menu_at(tree, s.0).is_some());
+    if spots.is_empty() {
+        return;
+    }
+    let placed: std::collections::HashSet<String> = spots
+        .iter()
+        .flat_map(|s| s.2.iter())
+        .filter_map(|it| match it {
+            Node::Item(i) => Some(i.command.id.clone()),
+            _ => None,
+        })
+        .collect();
+    // Plug-in submenus are under Object › Plug-ins and Effect › Plug-ins.
+    for (_, items) in tree.iter_mut().filter(|(title, _)| matches!(*title, "Object" | "Effect")) {
+        leave_out(items, &placed);
+    }
+    for (path, after, items) in spots {
+        let Some(menu) = menu_at(tree, path) else { continue };
+        let at = after.and_then(|a| menu.iter().position(|it| own_key(it) == Some(a.as_str()))).map_or(menu.len(), |i| i + 1);
+        menu.splice(at..at, items);
+    }
+}
+
+/// A label as `after` matches it: trimmed, without a closing ellipsis.
+fn anchor_key(label: &str) -> &str {
+    label.trim().trim_end_matches('…').trim_end()
+}
+
+/// Is `it` the built-in item or submenu labeled `key` ([`anchor_key`])? An item of
+/// [`crate::menus::DYNAMIC_LABELS`] matches by the label of either of its states
+/// ([`vectorcraft_engine::cmd::plugin::other_state`]). Items that list a plug-in are never an anchor.
+fn is_anchor(it: &Node, key: &str) -> bool {
+    let other = |l: &str| crate::menus::DYNAMIC_LABELS.contains(&l) && vectorcraft_engine::cmd::plugin::other_state(l).is_some_and(|o| o == key);
+    own_key(it).is_some_and(|own| own == key || matches!(it, Node::Item(i) if other(&i.label)))
+}
+
+/// The label of `it` as [`anchor_key`] reads it, when `it` is a built-in item or submenu that can be
+/// an anchor; `None` for an item that lists a plug-in.
+fn own_key(it: &Node) -> Option<&str> {
+    match it {
+        Node::Item(i) if !crate::menus::lists_plugin(&i.command.id, &i.command.params) => Some(anchor_key(&i.label)),
+        Node::Submenu { label, children, .. } if !crate::menus::holds_plugin_commands(children) => Some(anchor_key(label)),
+        _ => None,
+    }
+}
+
+/// The built-in menu of `tree` at `path`: a top-level menu, then its submenus by label.
+fn menu_at<'a>(tree: &'a mut [(&'static str, Vec<Node>)], path: &[&str]) -> Option<&'a mut Vec<Node>> {
+    let (first, rest) = path.split_first()?;
+    let mut menu = &mut tree.iter_mut().find(|(title, _)| title == first)?.1;
+    for segment in rest {
+        menu = menu.iter_mut().find_map(|it| match it {
+            Node::Submenu { label, children, .. } if label.as_str() == *segment && !crate::menus::holds_plugin_commands(children) => Some(children),
+            _ => None,
+        })?;
+    }
+    Some(menu)
+}
+
+/// Takes the commands in `placed` out of the plug-in submenus under `items`; a submenu left with no
+/// command becomes its plug-in's own item.
+fn leave_out(items: &mut [Node], placed: &std::collections::HashSet<String>) {
+    for it in items.iter_mut() {
+        let Node::Submenu { children, .. } = it else { continue };
+        if !crate::menus::holds_plugin_commands(children) {
+            leave_out(children, placed);
+            continue;
+        }
+        children.retain(|c| !matches!(c, Node::Item(i) if placed.contains(&i.command.id)));
+        if !children.iter().any(|c| matches!(c, Node::Item(i) if vectorcraft_engine::cmd::plugin::is_command_id(&i.command.id)))
+            && let Some(own) = children.first().cloned()
+        {
+            *it = own;
+        }
+    }
 }
 
 /// Object › Plug-ins: the installed object filters (each with its commands, if it has any), then
