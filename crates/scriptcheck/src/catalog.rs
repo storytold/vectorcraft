@@ -38,8 +38,12 @@ pub(crate) const FILE_SETTERS: &[&str] = &["length", "hidden", "readonly"];
 pub(crate) const FILE_DIALOGS: &[&str] = &["openDialog", "saveDialog"];
 pub(crate) const FOLDER_DIALOGS: &[&str] = &["selectDialog"];
 pub(crate) const INSTANCE_DIALOGS: &[&str] = &["openDlg", "saveDlg", "selectDlg"];
+/// The functions of a File object that a Folder object does not have.
+pub(crate) const FILE_ONLY: &[&str] = &["open", "read", "readch", "readln", "write", "writeln", "copy", "createAlias", "openDlg", "saveDlg"];
 pub(crate) const FOLDER_PLACES: &[&str] =
     &["appData", "appPackage", "commonFiles", "current", "desktop", "myDocuments", "startup", "system", "temp", "trash", "userData"];
+/// The `Folder` place a script can assign.
+pub(crate) const FOLDER_CURRENT: &str = "current";
 pub(crate) const EXECUTE: &str = "execute";
 pub(crate) const OPEN: &str = "open";
 /// The open modes that write: write, append and edit.

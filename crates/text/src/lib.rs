@@ -18,7 +18,7 @@ pub mod craft_fonts;
 pub mod edit;
 pub mod embed;
 mod features;
-mod fontconfig;
+mod file_font;
 mod fontdb;
 mod harakat;
 pub mod hyphen;
@@ -37,13 +37,16 @@ pub mod thread;
 
 pub use bitmap::GlyphImage;
 pub use context_alternates::{ContextAlternate, ContextAlternates, alternate_changes, alternates_in_context, is_alternate_feature};
-pub use craft_fonts::{CONDENSED_UI_FONT, CRAFT_FONTS, CraftFont, WEB_FONTS, WebFont};
+pub use craft_fonts::{CRAFT_FONTS, EmbeddedFace, WEB_FONTS, WebFont};
+#[cfg(target_arch = "wasm32")]
+pub use craft_fonts::{SERVED_FONTS, ServedFace};
 pub use features::{
     EXTRA_FEATURES, LIGATURE_TRACKING_LIMITS, MAX_FEATURE_VALUE, MAX_STYLE_FEATURES, OtFeatures, explicit_ligatures, ligatures_suppressed_by,
 };
+pub use file_font::{FILE_FONT_UPEM, FileFontInfo, FileGlyph, MAX_FILE_GLYPHS, build_file_font};
 pub use fontdb::{
     CompositeCoverage, FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontLikeness, FontMatch, FontTraits, GENERIC_FAMILIES, GlyphAlternate,
-    GlyphCategory, GlyphCategoryKind, GlyphOrigin, IcfMargins, JoiningPosition, LentCompositeFonts, OutlineFormat, PlatformFontFiles,
+    GlyphCategory, GlyphCategoryKind, GlyphOrigin, IcfMargins, JoiningPosition, LentCompositeFonts, MAX_FILE_FACES, OutlineFormat, PlatformFontFiles,
     RECENTLY_ADDED_WITHIN, RecentlyAdded, StylisticSet, Substitution, SubstitutionKind, WantedFont, WantedFonts, app_font_dir, is_font_file,
     is_generic_family, is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs, set_user_font_dirs_confined, style_weight,
     system_font_dirs, user_font_dirs,
@@ -1059,18 +1062,6 @@ pub fn line_metrics(data: &[u8], index: u32) -> Option<(f32, f32, f32, f32)> {
     Some((f32::from(m.units_per_em.max(1)), m.ascent, m.descent, m.leading))
 }
 
-/// The x-height of the font at `index` of `data`, at its default axis settings, in ems. `None` if
-/// the font can't be read or gives no x-height.
-pub fn x_height(data: &[u8], index: u32) -> Option<f32> {
-    use skrifa::MetadataProvider;
-    let f = skrifa::FontRef::from_index(data, index).ok()?;
-    let m = f.metrics(skrifa::instance::Size::unscaled(), skrifa::instance::LocationRef::default());
-    m.x_height.filter(|h| *h > 0.0).map(|h| h / f32::from(m.units_per_em.max(1)))
-}
-
-#[cfg(test)]
-#[path = "../build/condensed_ui_face.rs"]
-mod condensed_ui_face_build;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
