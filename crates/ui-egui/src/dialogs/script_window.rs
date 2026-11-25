@@ -27,6 +27,8 @@ use craft::ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusa
 use craft::ui::display::{Progress, Text};
 use craft::ui::list::{List, ListRow};
 use craft::ui::pickers::Select;
+use craft::ui::runtime::focus::Initial;
+use craft::ui::runtime::keys::take_submit;
 use craft::ui::sections::{DialogRole, FooterButton};
 use craft::ui::text::TextField;
 use craft::ui::value_drag::Slider;
@@ -44,6 +46,18 @@ pub const KIND: &str = "scriptWindow";
 
 /// The most of the dialog's content shown at once; a larger dialog scrolls.
 const MAX_SHOWN: egui::Vec2 = egui::vec2(960.0, 640.0);
+
+/// The height of a list box row in the engine's layout, and the room the layout adds around the
+/// rows.
+const LIST_ROW: f32 = 18.0;
+const LIST_PAD: f32 = 6.0;
+
+/// How many rows a list box `height` tall shows; it scrolls the rest, inside the dialog's own
+/// scroll.
+fn list_rows(height: f32) -> u16 {
+    let rows = ((height - LIST_PAD) / LIST_ROW).floor();
+    if rows.is_finite() { rows.clamp(1.0, f32::from(u16::MAX)) as u16 } else { 1 }
+}
 
 /// An event the script has not had yet, with its control by its id ([`UiNode::id`]), which stays
 /// with the control while a handler adds or removes controls before it.
@@ -273,17 +287,24 @@ impl StackDialog for ScriptWindow {
         Some(KIND)
     }
 
-    fn show(&mut self, ui: &mut Ui, _: &DialogStack) -> Option<DialogResult<()>> {
+    fn show(&mut self, ui: &mut Ui, stack: &DialogStack) -> Option<DialogResult<()>> {
+        let top = stack.is_top(self.id());
         let heading = match self.window.title() {
             "" => tl!("Script Alert").to_string(),
             title => shown_text(title, false),
         };
         let mut events = Vec::new();
         let mut typing = false;
+        let mut submit = false;
         let buttons = [FooterButton::new(tl!("Stop"), DialogRole::Other).stays_open(true)];
         let ScriptWindow { window, waiting, drafts, open, .. } = self;
         let (window, waiting) = (&*window, *waiting);
-        let shown = Dialog::new(heading).buttons(buttons).opened(Bind::bound(open)).show(ui, |ui, _| {
+        // The dialog opens with the focus on its default button, so Enter clicks it until the
+        // person moves the focus into a field; without one that can be clicked, on its first control.
+        let focus_default = window.default_element.and_then(|i| window.nodes.get(i)).is_some_and(|n| n.visible && n.enabled);
+        let initial = if focus_default { Initial::Default } else { Initial::First };
+        let dialog = Dialog::new(heading).buttons(buttons).initial_focus(initial).opened(Bind::bound(open));
+        let shown = dialog.show(ui, |ui, _| {
             let (width, height) = window.size();
             let size = egui::vec2(width.max(1.0), height.max(1.0));
             egui::ScrollArea::both().max_width(MAX_SHOWN.x).max_height(MAX_SHOWN.y).auto_shrink([true, true]).show(ui, |ui| {
@@ -298,6 +319,9 @@ impl StackDialog for ScriptWindow {
                     events.extend(shown.event);
                 }
             });
+            // An Enter the focused control left untaken (a slider, a check box) is the dialog's,
+            // unless a question is open over it.
+            submit = top && !typing && take_submit(ui.ctx());
         });
         if shown.output.picked == Some(0) {
             self.stop = true;
@@ -312,7 +336,7 @@ impl StackDialog for ScriptWindow {
         }
         // Enter in a field belongs to the field; with the focus on any other control, it clicks the
         // default button.
-        let enter = ui.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.is_none());
+        let enter = submit || (top && ui.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.is_none()));
         if events.is_empty() && self.waiting && !typing && enter {
             events.extend(self.window.default_element.map(UiEvent::Click));
         }
@@ -397,7 +421,7 @@ fn control(ui: &mut Ui, drafts: &mut BTreeMap<u64, String>, place: &Place, (i, n
             UiKind::Button => {
                 let mut button = Button::new(n.text.clone()).id_salt(salt).enabled(enabled);
                 if place.default {
-                    button = button.variant(Variant::PRIMARY);
+                    button = button.variant(Variant::PRIMARY).default_stop();
                 }
                 if clicked(&button.show(ui)) {
                     shown.event = Some(UiEvent::Click(i));
@@ -432,11 +456,12 @@ fn control(ui: &mut Ui, drafts: &mut BTreeMap<u64, String>, place: &Place, (i, n
                 let selection = n.selection.map(Selection::single).unwrap_or_default();
                 // Screen readers read the box as a list box, by its name or the static text before
                 // it, with the selected item as its value.
-                let out = List::<usize>::options(list_name(n, prompt)).id_salt(salt).enabled(enabled).selection(Bind::given(selection)).show_items(
-                    ui,
-                    &source,
-                    &mut |k, _| ListRow::new(n.items.get(*k).cloned().unwrap_or_default()),
-                );
+                let out = List::<usize>::options(list_name(n, prompt))
+                    .id_salt(salt)
+                    .enabled(enabled)
+                    .max_rows(list_rows(n.rect.h))
+                    .selection(Bind::given(selection))
+                    .show_items(ui, &source, &mut |k, _| ListRow::new(n.items.get(*k).cloned().unwrap_or_default()));
                 for event in out.events {
                     if let CollectionEvent::Activate(k) = event
                         && n.selection != Some(k)
