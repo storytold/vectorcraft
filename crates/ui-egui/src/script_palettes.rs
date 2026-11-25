@@ -5,10 +5,11 @@
 //! is going ([`crate::script_runs::poll`]); the palette stays usable while a run goes on, and its
 //! events wait for it. A palette does not take the keyboard focus when it opens or changes. An edit
 //! field's text is given when it loses the focus, at Enter in a one-line field, or before a click
-//! or a close; a text the script would refuse stays in its field with the error in the status bar.
+//! or a close; a text the script would refuse, or that the full line refuses, stays in its field
+//! with the error in the status bar, and the click or close after it is not given.
 
 use serde_json::json;
-use vectorcraft_engine::script::{ScriptPalette, UiEvent};
+use vectorcraft_engine::script::{ScriptPalette, UiEvent, UiValue};
 
 use crate::VectorcraftApp;
 use crate::dialogs::script_window;
@@ -49,8 +50,8 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             events.push(UiEvent::Close);
         }
         drafted(app, &p, &mut drafts, &mut events);
+        give(app, ctx, p.id, &mut drafts, events);
         keep_drafts(ctx, &p, drafts);
-        give(app, ctx, p.id, events);
     }
 }
 
@@ -83,13 +84,31 @@ pub(crate) fn drafted(app: &mut VectorcraftApp, p: &ScriptPalette, drafts: &mut 
     }
 }
 
-/// Puts the events the person gave the palette `id` in line, or shows why one was refused.
-pub(crate) fn give(app: &mut VectorcraftApp, ctx: &egui::Context, id: u64, events: Vec<UiEvent>) {
+/// Puts the events the person gave the palette `id` in line, or shows why one was refused. A
+/// refused text goes back in its field (`drafts`), and once a change is refused, the clicks and
+/// closes after it are not given, so no handler runs without the change before it.
+pub(crate) fn give(app: &mut VectorcraftApp, ctx: &egui::Context, id: u64, drafts: &mut Dialog, events: Vec<UiEvent>) {
+    let mut change_refused = false;
     for e in events {
+        if change_refused && matches!(e, UiEvent::Click(_) | UiEvent::Close) {
+            continue;
+        }
+        let change = match &e {
+            UiEvent::Change(i, value) => Some((*i, if let UiValue::Text(t) = value { Some(t.clone()) } else { None })),
+            _ => None,
+        };
         match app.session.script_palette_event(id, e) {
             // The next frame starts its run.
             Ok(_) => ctx.request_repaint(),
-            Err(e) => app.status(e),
+            Err(error) => {
+                if let Some((i, text)) = change {
+                    if let Some(text) = text {
+                        script_window::keep_draft(drafts, i, &text);
+                    }
+                    change_refused = true;
+                }
+                app.status(error);
+            }
         }
     }
 }

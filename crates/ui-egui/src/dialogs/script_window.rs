@@ -233,6 +233,11 @@ pub(crate) fn keep_refused_texts(w: &ScriptUiDialog, d: &mut Dialog, events: &mu
     refused
 }
 
+/// Puts `text` back in the edit field `i` of the dialog's drafts `d`, as typed and not given yet.
+pub(crate) fn keep_draft(d: &mut Dialog, i: usize, text: &str) {
+    d.fields.insert(draft_key(i), json!(text));
+}
+
 /// The field that holds an edit field's text while it is typed.
 fn draft_key(i: usize) -> String {
     format!("text{i}")
