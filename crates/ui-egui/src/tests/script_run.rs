@@ -469,9 +469,9 @@ fn a_scripts_file_dialog_keeps_at_most_2048_picked_files() {
 #[test]
 fn a_script_sees_the_window_and_sets_its_zoom_centre_and_screen_mode() {
     let mut app = app();
-    app.canvas_rect = Some(egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(600.0, 400.0)));
     let before = {
         let v = app.view_mut().unwrap();
+        v.rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(600.0, 400.0));
         v.fitted = true;
         v.zoom = 1.0;
         *v

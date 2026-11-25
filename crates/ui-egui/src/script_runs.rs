@@ -40,26 +40,23 @@ pub fn poll(app: &mut VectorcraftApp) {
     app.sync_views();
 }
 
-/// Gives each document whose window has the canvas's size its view, which a running script reads
-/// as `Document.views`: every document's while the documents are under the tabs, and only the
-/// current document's, whose window holds the canvas, while they are tiled or a document floats in
-/// a window of its own. A document without one gets none. → the views given, for [`take_views`].
+/// Gives each document whose view has been drawn its view, which a running script reads as
+/// `Document.views`, with the size of the area that view last drew its art in. A document without
+/// one gets none. → the views given, for [`take_views`].
 pub(crate) fn share_views(app: &mut VectorcraftApp) -> Vec<(u64, WindowView)> {
-    let ui_zoom = f64::from(app.canvas_ui_zoom);
-    let size = app.canvas_rect.map(|r| [f64::from(r.width()) * ui_zoom, f64::from(r.height()) * ui_zoom]);
+    // The view's zoom counts screen points before UI scaling; its area is in the interface's points.
+    let scaling = f64::from(app.ui_scaling());
     let mode = app.ui.screen_mode;
-    let tabbed = app.canvas.panes.last.is_empty() && app.ui.floating.is_empty();
-    let current = app.session.active().map(|d| d.uid);
-    let shared: Vec<(u64, WindowView)> = match size {
-        Some(size) => app
-            .view_uids
-            .iter()
-            .zip(&app.views)
-            .filter(|(uid, v)| v.fitted && (tabbed || current == Some(**uid)))
-            .map(|(uid, v)| (*uid, WindowView { center: v.center, zoom: v.zoom, rotation: v.rotation, size, screen_mode: mode }))
-            .collect(),
-        None => vec![],
-    };
+    let shared: Vec<(u64, WindowView)> = app
+        .view_uids
+        .iter()
+        .zip(&app.views)
+        .filter(|(_, v)| v.fitted && v.rect.width() > 0.0 && v.rect.height() > 0.0)
+        .map(|(uid, v)| {
+            let size = [f64::from(v.rect.width()) * scaling, f64::from(v.rect.height()) * scaling];
+            (*uid, WindowView { center: v.center, zoom: v.zoom, rotation: v.rotation, size, screen_mode: mode })
+        })
+        .collect();
     app.session.window_views.clone_from(&shared);
     shared
 }

@@ -222,7 +222,7 @@ fn the_view_shows_the_part_of_the_document_its_window_shows() {
     let out = log(
         &mut s,
         "var d = app.activeDocument; var v = d.views[0]; vc.log(d.views.length); vc.log(v.typename);\
-         vc.log(v.parent === d); vc.log(v.bounds); var r = d.pageItems[d.pageItems.length - 1];\
+         vc.log(v.parent === d); vc.log(v.bounds); var r = d.pageItems[0];\
          vc.log(r.geometricBounds); vc.log(v.centerPoint); vc.log(r.position[0] + r.width / 2);\
          vc.log(r.position[1] - r.height / 2);",
     );
@@ -234,6 +234,8 @@ fn the_view_shows_the_part_of_the_document_its_window_shows() {
     let turned = log(&mut s, "vc.log(app.activeDocument.views[0].bounds);");
     let width = |b: &Value| b[2].as_f64().unwrap() - b[0].as_f64().unwrap();
     assert!(width(&turned[0]) > width(&out[3]));
+    let names = log(&mut s, "var d = app.activeDocument; vc.log(String(d.views) + String(d.views[0]));");
+    assert_eq!(names, vec![json!("[Views][View]")]);
 }
 
 #[test]

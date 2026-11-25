@@ -191,20 +191,19 @@ fn float_in_window_moves_the_current_document_out_of_the_tabs() {
 }
 
 #[test]
-fn a_script_sees_a_view_only_for_windows_of_the_canvass_size() {
+fn a_script_sees_each_window_at_its_own_size() {
     let mut app = app_with(3);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
-    let uids: Vec<u64> = app.session.documents().iter().map(|d| d.uid).collect();
-    let shared = |app: &mut VectorcraftApp| {
-        app.views.iter_mut().for_each(|v| v.fitted = true);
-        crate::script_runs::share_views(app).into_iter().map(|(uid, _)| uid).collect::<Vec<u64>>()
-    };
-    assert_eq!(shared(&mut app), uids, "tabbed documents share the canvas's size");
     app.run("window.arrange.floatInWindow", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
     frame(&mut app, &ctx, vec![]);
-    assert_eq!(shared(&mut app), [uids[2]], "only the current document's window holds the canvas");
+    let uids: Vec<u64> = app.session.documents().iter().map(|d| d.uid).collect();
+    let shared = crate::script_runs::share_views(&mut app);
+    let width = |uid: u64| shared.iter().find(|(u, _)| *u == uid).map(|(_, v)| v.size[0]);
+    let (floating, tabbed) = (width(uids[2]).unwrap(), width(uids[0]).unwrap());
+    assert!(floating < tabbed, "the floating window is narrower than the main window: {floating} and {tabbed}");
+    assert_eq!(width(uids[1]), None, "a document never drawn has no view");
 }
 
 #[test]

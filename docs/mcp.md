@@ -2694,9 +2694,9 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `showOptionsDialog` true throws `Dialog unavailable` with no document made. A `Document` (https://ai-scripting.docsforadobe.dev/jsobjref/Document/) has `name`,
   `width`, `height`, `rulerUnits`, `documentColorSpace`, `rulerOrigin`, `convertCoordinate(point, source,
   destination)`, `pageItems`, `selection` and `views`. `views` (https://ai-scripting.docsforadobe.dev/jsobjref/Views/)
-  holds one view while the document's window is the desktop app's canvas: every document's while the documents are
-  under the tabs, and only the current document's while they are tiled or one floats in a window of its own. Other
-  documents, and every document without a window (headless), have none. `views` has `length`, `[i]` and `index(i)`. The view (https://ai-scripting.docsforadobe.dev/jsobjref/View/) has `typename`,
+  holds one view once the desktop app has drawn the document in a window, a tab or a tiled pane, sized as the area it
+  last drew the document in. A document the app has not drawn yet, and every document without a window (headless),
+  has none. `views` has `length`, `[i]` and `index(i)`. The view (https://ai-scripting.docsforadobe.dev/jsobjref/View/) has `typename`,
   `parent`, `bounds` (`[left, top, right, bottom]` of the part of the document the canvas shows, the box around a
   rotated canvas), `centerPoint`, `zoom` and `screenMode`, in the run's coordinate system. `zoom` is 1 at 100% and goes
   from 0.0313 to 640 (VectorCraft's own range); a zoom outside it throws a `RangeError`. `screenMode` reads Normal as
