@@ -6952,6 +6952,9 @@ file-filter	Flattener presets	Paramètres prédéfinis d’aplatissement
 file-filter	PDF presets	Paramètres prédéfinis PDF
 file-filter	PDF-compatible .ai	.ai compatible PDF
 file-filter	Print presets	Paramètres prédéfinis d’impression
+file-filter	Tracing presets	Paramètres prédéfinis de vectorisation
+file-filter	Action sets	Jeux de scripts
+file-filter	Composite fonts	Polices composites
 file-filter	Preferences	Préférences
 file-filter	Export presets	Paramètres prédéfinis d’export
 file-filter	SVG Compressed	SVG compressé
@@ -7352,6 +7355,10 @@ axis	Y Axis	Axe Y
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc a renvoyé 0 (mémoire épuisée)
 @msg	vc_alloc returned a block outside memory	vc_alloc a renvoyé un bloc hors de la mémoire
 @msg	vc_run returned error code {packed}	vc_run a renvoyé le code d’erreur {packed}
+@msg	did not finish loading within {secs} s	n’a pas fini de se charger en {secs} s
+@msg	no thread was left to load it	aucun fil d’exécution n’était libre pour le charger
+@msg	panicked while loading	a planté pendant le chargement
+@msg	panicked while loading: {what}	a planté pendant le chargement ({what})
 @msg	{_1} is not a file	{_1} n’est pas un fichier
 @msg	{_1} is {_2} bytes (limit {_3})	{_1} fait {_2} octets (limite {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} objets (limite {MAX_OBJECTS})
@@ -7511,6 +7518,10 @@ axis	Y Axis	Axe Y
 @msg	`inputs` lists `{shown}` twice	`inputs` mentionne `{shown}` deux fois
 @msg	`inputs` needs `api` 2 or later	`inputs` nécessite `api` 2 ou plus
 @msg	`inputs` needs the permission `doc.read`	`inputs` nécessite l’autorisation `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Lire les objets qui lui sont transmis, ainsi que les paramètres, les plans de travail, les calques et les nuances du document
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` doit lister des sections distinctes parmi settings, artboards, layers et swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` est réservé à un filtre, ou à un effet dynamique avec `commands`, avec `api` 3 ou plus et l’autorisation `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	les informations du document que demande le module externe sont trop volumineuses pour être transmises (au plus {MAX_CONTEXT_ITEMS} plans de travail, calques et nuances en {MAX_CONTEXT_BYTES} octets)
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	budget mémoire (l’objet {_1} nécessite {size} octets d’entrée, il en reste {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	budget d’objets (plus de {MAX_OBJECTS} objets en lecture seule)
 @msg	instruction budget	budget d’instructions
@@ -10614,6 +10625,16 @@ breakText	Glyphs	Glyphes
 @msg	the paths are too many or too tangled to find where they cross	les tracés sont trop nombreux ou trop enchevêtrés pour trouver où ils se croisent
 @msg	the rectangle or line reaches too many paths to check	le rectangle ou la ligne atteint trop de tracés pour être vérifié
 @msg	{name} must be a number	{name} doit être un nombre
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}` doit être compris entre 0,01 et 1000 pt
+@msg	select the banner, or mark every artboard	sélectionnez la banderole ou marquez tous les plans de travail
+@msg	the banner has no width or height	la banderole n’a ni largeur ni hauteur
+@msg	the grommet inset is too large for the banner	la distance des œillets au bord est trop grande pour la banderole
+@msg	the hem is too deep for the banner	l’ourlet est trop profond pour la banderole
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	l’espacement produit plus de {MAX_GROMMETS} œillets
+@msg	there is no banner to mark	il n’y a aucune banderole à marquer
+@msg	turn on at least one side	activez au moins un côté
+@msg	with no hem and no grommets there is nothing to mark	sans ourlet ni œillets, il n’y a rien à marquer
+@msg	{saving} failed: {e}	{saving} : échec : {e}
 	Banner Hems and Grommets…	Ourlets et œillets de banderole…
 	Banner Hems and Grommets	Ourlets et œillets de banderole
 	Hem	Ourlet
