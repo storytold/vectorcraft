@@ -2017,6 +2017,8 @@ fn a_file_that_takes_a_while_to_place_shows_a_progress_window() {
     let mut app = VectorcraftApp::new(Session::new(), services);
     crate::tests_background::threaded(&mut app);
     app.placing.off_the_ui_thread = true;
+    // The app's clock stands still: a read is only old enough for its window after `age`.
+    app.now_override = Some(0.0);
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
 
     let ctx = crate::testing::ui_context();

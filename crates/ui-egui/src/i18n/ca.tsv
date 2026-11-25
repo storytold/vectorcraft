@@ -1331,6 +1331,7 @@ arrowhead	Target	Diana
 	Direction:	Direcció:
 	Directives	Directrius
 	Disable Auto Add/Delete	Desactiva l’addició i la supressió automàtiques
+	Delete Removes Anchor Points and Keeps Paths Joined	Suprimir elimina els punts d’ancoratge i manté els camins units
 	Interpolate Control Points When Moving Anchors	Interpola les manetes de direcció en moure punts d’ancoratge
 	Disable Opacity Mask	Desactiva la màscara d’opacitat
 	Discard	Descarta
@@ -3447,6 +3448,12 @@ digits	Malayalam	Malaiàlam
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppp
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppp
+	resolution unavailable	resolució no disponible
+	estimated memory {memory}	memòria estimada {memory}
+	memory unavailable	memòria no disponible
+	Unknown format	Format desconegut
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -3804,6 +3811,9 @@ digits	Malayalam	Malaiàlam
 	Rearrange All	Reorganitza-ho tot
 	Rearrange All Artboards	Reorganitza tots els taulers
 	Rearrange All Artboards…	Reorganitza tots els taulers…
+	Rearrange…	Reorganitza…
+	Selected Artboards: {n}	Taulers seleccionats: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Fes clic al llenç per col·locar els taulers (Esc cancel·la)
 	Rearrange Artboards	Reorganitza els taulers
 	Recall Selection	Recupera la selecció
 	RECENT	RECENTS
@@ -4091,6 +4101,7 @@ digits	Malayalam	Malaiàlam
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un gest de rotació amb dos dits al trackpad gira la vista del llenç.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Mantenir premuda una tecla executa l’eina o l’ordre de la seva columna Mantén a Dreceres de teclat; una pulsació breu executa la seva drecera habitual.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Quants segons cal mantenir premuda una tecla perquè s’executi la seva drecera de pulsació llarga en lloc de la drecera habitual.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Suprimir elimina els punts d’ancoratge seleccionats i reajusta la corba al voltant de cadascun, en lloc d’obrir-hi el camí.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Quan moveu punts d’ancoratge, cada corba amb un extrem desplaçat conserva la forma respecte dels seus extrems.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Mantenir premuda la drecera d’una eina la tria fins que la deixeu anar, i després es torna a triar l’eina anterior.
 	Shows the bounding box while you move the selection or draw a shape.	Mostra el quadre delimitador mentre moveu la selecció o dibuixeu una forma.
@@ -7729,6 +7740,8 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	cal aprovació: demana {0}, que l’usuari concedeix en instal·lar-lo per separat
 @msg	not JSON: {e}	no és JSON: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	no és un binari WebAssembly (falta la capçalera \\0asm)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	un tipus de funció supera el límit de {MAX_FUNC_TYPE_VALUES} paràmetres
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	un tipus de funció supera el límit de {MAX_FUNC_TYPE_VALUES} resultats
 @msg	parameter `{k}`: {what}	paràmetre `{k}`: {what}
 @msg	parameter `{name}`: {what}	paràmetre `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	els paràmetres del complement han de ser un objecte JSON

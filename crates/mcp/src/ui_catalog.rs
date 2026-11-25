@@ -789,7 +789,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.learn",
         "Learn",
         "",
-        "{show?: bool} show (true), hide (false) or toggle (omitted or null) the Learn panel, as Window › Learn and the app bar's Explore tutorials button do; any other value is an error and changes nothing; returns whether the panel shows",
+        "{show?: bool} show (true), hide (false) or toggle (omitted or null) the Learn panel, as Window › Learn does; any other value is an error and changes nothing; returns whether the panel shows",
     ),
     (
         "learn.list",

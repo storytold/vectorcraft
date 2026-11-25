@@ -58,7 +58,7 @@ use std::sync::Arc;
 
 use craft::behavior::{IconId, Mixed};
 use craft::color_ui::ui::{ChannelRule, HarmonyCommand};
-use craft::color_ui::ui::{PaintChip, PairWell, SwatchPair, SwatchPairOutput, SwatchPalette, Well};
+use craft::color_ui::ui::{PaintChip, PaintChipSize, PairWell, SwatchPair, SwatchPairOutput, SwatchPalette, Well};
 use craft::keymap::CommandRef;
 use craft::theme::Srgba;
 use craft::theme::variant::Tone;
@@ -682,8 +682,8 @@ pub struct PaintPopover {
     mixer: bool,
 }
 
-/// The Fill (or `stroke`) chip of the Control bar and the Properties panel: the proxy's paint, "?"
-/// when the selected objects' paints differ, the stroke as a ring. A click brings that proxy
+/// The Fill (or `stroke`) chip of the Control bar and the Properties panel: a small square of the proxy's paint, "?"
+/// when the selected objects' paints differ, the stroke as a ring, as production drew both. A click brings that proxy
 /// forward and opens a popover with the Swatches panel; Shift-click (or the popover's toggle)
 /// shows the Color panel's mixer instead.
 pub(crate) fn paint_chip(app: &mut VectorcraftApp, ui: &mut Ui, stroke: bool) {
@@ -696,7 +696,13 @@ pub(crate) fn paint_chip(app: &mut VectorcraftApp, ui: &mut Ui, stroke: bool) {
     };
     let shown = if mixed { Mixed::Mixed } else { Mixed::Same(well_paint(&paint, &|_| None)) };
     let fallback = srgba(&paint.color().unwrap_or(Color::BLACK));
-    let out = PaintChip::new(label, Bind::given(shown), fallback).popover(false).ring(stroke).popup_mark(PopupMark::Menu).tooltip(tip).show(ui);
+    let out = PaintChip::new(label, Bind::given(shown), fallback)
+        .chip_size(PaintChipSize::Compact)
+        .popover(false)
+        .ring(stroke)
+        .popup_mark(PopupMark::Menu)
+        .tooltip(tip)
+        .show(ui);
     let chip = out.edit.response.id;
     if let Some(mods) = out.clicked {
         app.run("paint.toggleActive", json!({ "fill": !stroke })).ok();
@@ -1008,6 +1014,8 @@ mod tests_freeform;
 mod tests_links;
 #[cfg(test)]
 mod tests_maskview;
+#[cfg(test)]
+mod tests_panel_rows;
 #[cfg(test)]
 mod tests_script_console;
 #[cfg(test)]

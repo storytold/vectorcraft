@@ -66,6 +66,7 @@ use std::sync::Arc;
 
 // PLAN: assumed `craft-color-ui`, `craft-theme`, `craft-behavior` and `craft-keymap` are dependencies of
 // vectorcraft-ui-egui (Cargo.toml is not in this set's table); `craft_ui` does not re-export them at the base.
+use craft::behavior::ColumnWidth;
 use craft::behavior::Mixed;
 use craft::behavior::Selection;
 use craft::color_ui::AreaMode;
@@ -75,7 +76,8 @@ use craft::theme::{ColorModel, HsbModel, ModelValues, RgbModel, Srgba};
 use craft::ui::choice::{SwatchSpacing, SwatchTable};
 use craft::ui::contract::{ActivateOn, Bind, EditResponse, Props as _, Show as _, ShowContainer as _, Sizing};
 use craft::ui::display::{Shade, Text};
-use craft::ui::layout_components::Stack;
+use craft::ui::layout::CellAlign;
+use craft::ui::layout_components::{Grid, Row, Stack};
 use craft::ui::menu::PanelRow;
 use craft::ui::runtime::commands::{CommandState, CommandStates};
 use craft::ui::runtime::env::Label;
@@ -96,6 +98,10 @@ use crate::VectorcraftApp;
 use crate::edits::{EditPath, apply_edits};
 
 pub const ID: &str = "colorWheel";
+
+/// The columns of the panel's top row: the proxy as wide as its content, and the wheel or the box beside it in the
+/// rest of the width.
+const BESIDE: [ColumnWidth; 2] = [ColumnWidth::Content, ColumnWidth::fill(1.0)];
 
 /// What the panel shows right of the proxy: the wheel, or the box (a color field and a channel
 /// strip).
@@ -1490,6 +1496,13 @@ fn move_memory(panel: &mut WheelUi, was: &Owner, now: &Owner) {
 }
 
 fn show_with(app: &mut VectorcraftApp, panel: &mut WheelUi, ui: &mut Ui) {
+    // The stack's gap separates the rows.
+    Stack::new().show(ui, |ui, _| show_rows(app, panel, ui));
+}
+
+/// The panel's rows: the Fill/Stroke proxy beside the box or the wheel, level with its top, then the opacity row,
+/// the hex field, the slider rows, the color vision row and the document colors row that the settings turn on.
+fn show_rows(app: &mut VectorcraftApp, panel: &mut WheelUi, ui: &mut Ui) {
     let tgt = wheel_target(app, ui);
     let color = tgt.color();
     let cms = cms::active();
@@ -1501,18 +1514,19 @@ fn show_with(app: &mut VectorcraftApp, panel: &mut WheelUi, ui: &mut Ui) {
     let set = app.ui.color_wheel.clone();
     let now = ui.input(|i| i.time);
     let mut picked = Picked::default();
-    ui.horizontal_top(|ui| {
-        ui.vertical(|ui| super::proxy(app, ui));
-        picked = match set.view {
-            View::Box => show_box(app, ui, &cx, &set),
-            View::Wheel => show_wheel(app, ui, &cx, &set),
-        };
+    Grid::new(&BESIDE).cells(CellAlign::Top).show(ui, |ui, _| {
+        super::proxy(app, ui);
+        match set.view {
+            View::Box => {
+                Row::new().fill_width().show(ui, |ui, _| picked = show_box(app, ui, &cx, &set));
+            }
+            View::Wheel => picked = show_wheel(app, ui, &cx, &set),
+        }
     });
     // The hex field shows the text of the frame's start, so a text committed when a press on the
     // opacity row takes the focus is kept.
     let hex = set.hex_field.then(|| hex_shown(app, &tgt, color.as_ref()));
     let opacity_edit = if set.opacity {
-        ui.add_space(4.0);
         let shown = color.unwrap_or(app.session.last_solid);
         opacity_row(app, panel, ui, &tgt, &shown, &cms)
     } else {
@@ -1520,7 +1534,6 @@ fn show_with(app: &mut VectorcraftApp, panel: &mut WheelUi, ui: &mut Ui) {
         None
     };
     let typed = hex.and_then(|hex| {
-        ui.add_space(4.0);
         hex_row(app, ui, &tgt, &hex).map(|text| {
             let shown = text.strip_prefix('#').unwrap_or(&text).eq_ignore_ascii_case(&hex);
             (text, shown)
@@ -1557,20 +1570,14 @@ fn show_with(app: &mut VectorcraftApp, panel: &mut WheelUi, ui: &mut Ui) {
     let cx = Pick { tgt: &tgt, color, cms: &cms, behind, cmyk_doc, shown, drawn: None };
     match set.sliders {
         Sliders::None => {}
-        Sliders::Oklch => {
-            ui.add_space(4.0);
-            oklch_rows(app, panel, ui, &cx);
-        }
-        Sliders::Hsl => {
-            ui.add_space(4.0);
-            hsl_rows(app, panel, ui, &cx);
-        }
+        Sliders::Oklch => oklch_rows(app, panel, ui, &cx),
+        Sliders::Hsl => hsl_rows(app, panel, ui, &cx),
     }
     // A row drag whose rows were hidden or replaced (`ui.colorWheel {sliders}`), or turned gray
     // (OKLCH rows after the working RGB space stops being sRGB), reports no release: its preview is
     // kept as one undo step and the interaction ends.
     let sliders = app.ui.color_wheel.sliders;
-    if panel.rows_live.is_some_and(|rows| rows != sliders || (rows == Sliders::Oklch && !cms.rgb_is_srgb())) {
+    if panel.rows_live.is_some_and(|rows| rows != sliders || (rows == Sliders::Oklch && !cx.cms.rgb_is_srgb())) {
         if app.session.in_interaction()
             && let Err(e) = app.session.commit_interaction()
         {
@@ -1580,12 +1587,11 @@ fn show_with(app: &mut VectorcraftApp, panel: &mut WheelUi, ui: &mut Ui) {
         panel.rows_live = None;
     }
     if set.vision {
-        ui.add_space(4.0);
-        vision_row(ui, &cms, color.as_ref());
+        vision_row(ui, cx.cms, cx.color.as_ref());
     }
     if set.document_colors
-        && let Some(u) = document_colors_row(app, panel, ui, &cms, now)
+        && let Some(u) = document_colors_row(app, panel, ui, cx.cms, now)
     {
-        apply_used(app, &tgt, &u, behind);
+        apply_used(app, cx.tgt, &u, cx.behind);
     }
 }

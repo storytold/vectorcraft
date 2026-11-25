@@ -2496,6 +2496,9 @@
 	Artboards	სამუშაო დაფები
 	Convert to Artboards	სამუშაო დაფებად გარდაქმნა
 	Rearrange All Artboards…	ყველა სამუშაო დაფის გადალაგება…
+	Rearrange…	გადალაგება…
+	Selected Artboards: {n}	მონიშნული სამუშაო დაფები: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	დაწკაპეთ ტილოზე სამუშაო დაფების განსათავსებლად (Esc აუქმებს)
 	Fit to Artwork Bounds	ნახატის საზღვრებზე მორგება
 	Fit to Selected Art	მონიშნულ ნახატზე მორგება
 	Graph	დიაგრამა
@@ -5550,6 +5553,12 @@ theme	Appearance	იერსახე
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	გარჩევადობა მიუწვდომელია
+	estimated memory {memory}	სავარაუდო მეხსიერება {memory}
+	memory unavailable	მეხსიერება მიუწვდომელია
+	Unknown format	უცნობი ფორმატი
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -5998,6 +6007,7 @@ theme	Appearance	იერსახე
 	Data Recovery	მონაცემების აღდგენა
 	Default Language	ნაგულისხმევი ენა
 	Disable Auto Add/Delete	ავტომატური დამატება/წაშლის გამორთვა
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete შლის ღუზის წერტილებს და ინარჩუნებს კონტურებს შეერთებულად
 	Interpolate Control Points When Moving Anchors	სახელურების ინტერპოლაცია საყრდენი წერტილების გადაადგილებისას
 	Display All Blacks Accurately	ყველა შავის ზუსტად ჩვენება
 	Display All Blacks as Rich Black	ყველა შავის მდიდარ შავად ჩვენება
@@ -6533,6 +6543,7 @@ font-technology	Variable	ცვლადი
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	ტრეკპადზე ორი თითით მობრუნების ჟესტი ტილოს ხედს აბრუნებს.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	კლავიშის ხანგრძლივი დაჭერა უშვებს ხელსაწყოს ან ბრძანებას კლავიატურის მალსახმობების დაჭერის სვეტიდან; მოკლე დაჭერა უშვებს მის ჩვეულ მალსახმობს.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	რამდენი წამი უნდა იყოს კლავიში დაჭერილი, სანამ ჩვეული მალსახმობის ნაცვლად მისი ხანგრძლივი დაჭერის მალსახმობი გაეშვება.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete შლის არჩეულ ღუზის წერტილებს და თითოეულის გარშემო მრუდს ხელახლა არგებს, ნაცვლად იმისა, რომ იქ კონტური გახსნას.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	როცა ღუზის წერტილებს გადაადგილებთ, ყოველი მრუდი, რომლის ერთი ბოლოც გადაადგილდა, ინარჩუნებს ფორმას თავის ბოლოებთან მიმართებით.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	სანამ ხელსაწყოს მალსახმობ კლავიშს დაჭერილს გიჭირავთ, ეს ხელსაწყოა არჩეული; კლავიშის აშვების შემდეგ ისევ წინა ხელსაწყო აირჩევა.
 	Shows the bounding box while you move the selection or draw a shape.	აჩვენებს შემომსაზღვრელ ჩარჩოს, სანამ მონიშნულს გადაადგილებთ ან ფიგურას ხატავთ.
@@ -9444,6 +9455,8 @@ axis	Y Axis	Y ღერძი
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	საჭიროებს დამტკიცებას: ითხოვს {0}-ს, რასაც მომხმარებელი მისი ცალკე დაყენებისას აძლევს
 @msg	not JSON: {e}	არ არის JSON: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	არ არის WebAssembly-ის ბინარული ფაილი (აკლია \\0asm სათაური)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	ფუნქციის ტიპი აჭარბებს {MAX_FUNC_TYPE_VALUES} პარამეტრის ლიმიტს
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	ფუნქციის ტიპი აჭარბებს {MAX_FUNC_TYPE_VALUES} შედეგის ლიმიტს
 @msg	parameter `{k}`: {what}	პარამეტრი `{k}`: {what}
 @msg	parameter `{name}`: {what}	პარამეტრი `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	პლაგინის პარამეტრები JSON ობიექტი უნდა იყოს

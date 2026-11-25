@@ -363,6 +363,7 @@ fn spawn_labeled(
     });
     let jobs = app.jobs();
     app.placing.lane.push(&*jobs, "vectorcraft-place", job);
+    let started = crate::export_progress::now(app);
     app.placing.pending.push(Pending {
         name,
         label: label.clone(),
@@ -375,7 +376,7 @@ fn spawn_labeled(
         scope: completion,
         token,
         hidden: false,
-        started: crate::export_progress::now(),
+        started,
     });
     let status = format!("{label}…");
     app.status(status.clone());

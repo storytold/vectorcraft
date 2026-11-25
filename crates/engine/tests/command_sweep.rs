@@ -93,7 +93,7 @@ fn every_command_without_a_document() {
 }
 
 /// Regression: huge column counts used to panic with `capacity overflow`; in every layout and
-/// order (#681), with huge and negative spacing too.
+/// order (#681), with huge and negative spacing too, and with `indices` and `at`.
 #[test]
 fn artboard_rearrange_huge_columns() {
     for fx in Fixture::ALL {
@@ -105,6 +105,11 @@ fn artboard_rearrange_huge_columns() {
                     assert_eq!(probe(fx, "artboard.rearrange", &p), None);
                 }
             }
+        }
+        // Listed artboards, out of range, and the grid's top-left at the far ends of the plane.
+        for (indices, at) in [(json!([0]), json!([1e308, -1e308])), (json!([0, u64::MAX]), json!([0, 0])), (json!([]), json!([-1e308, 1e308]))] {
+            let p = json!({ "indices": indices, "at": at, "columns": u64::MAX, "spacing": 1e308 });
+            assert_eq!(probe(fx, "artboard.rearrange", &p), None);
         }
     }
 }

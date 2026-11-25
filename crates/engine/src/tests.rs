@@ -49,6 +49,7 @@ mod curvature_circle;
 mod cut;
 mod dashalign;
 mod dcs;
+mod delete_keeps_joined;
 mod distort;
 mod docsetup;
 mod document_close;

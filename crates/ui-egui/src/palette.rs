@@ -1546,6 +1546,7 @@ mod tests {
     #[test]
     fn each_filter_plugin_is_a_result_of_its_own() {
         use vectorcraft_plugins::wat as tpl;
+        let _names = crate::tests::SHARED_PLUGIN_NAMES.lock().unwrap_or_else(|e| e.into_inner());
         let (one, two) = ("test.UI.palette_filter-one", "test.UI.palette_filter-two");
         let (key_one, key_two) = (format!("plugin:{one}"), format!("plugin:{two}"));
         let install = |id: &str, params: &str| {
@@ -1826,6 +1827,7 @@ mod tests {
     #[test]
     fn filter_plugins_with_one_name_show_their_ids() {
         use vectorcraft_plugins::wat as tpl;
+        let _names = crate::tests::SHARED_PLUGIN_NAMES.lock().unwrap_or_else(|e| e.into_inner());
         let (one, two) = ("test.UI.palette_same-one", "test.UI.palette_same-two");
         for id in [one, two] {
             let manifest = format!(r#"{{"id":"{id}","name":"Same Name","version":"1","kind":"filter","params":{{"wiggle":{{"type":"bool"}}}}}}"#);

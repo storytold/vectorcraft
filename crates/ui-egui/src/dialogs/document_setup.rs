@@ -20,9 +20,10 @@ use craft::color_ui::display::DisplayTransform;
 use craft::theme::{Rgba, Srgba};
 use craft::ui::buttons::Button;
 use craft::ui::choice::Swatch;
-use craft::ui::contract::{Bind, Entry, Show as _, clicked};
+use craft::ui::contract::{Bind, Entry, Show as _, ShowContainer as _, clicked};
 use craft::ui::dialog::dialog_id;
 use craft::ui::display::Picture;
+use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::ThumbAspect;
 use craft::ui::patterns::form_dialogs::{
     CustomContext, DialogFields, FieldValue, HostedPropertiesDialog, Param, ParamKind, PropertiesDialog, PropertiesTab, PropertyRow,
@@ -382,27 +383,32 @@ fn grid_colors_row(setup: DocSetup) -> Param {
         let resolved = grid_colors(&json_map(fields), &setup);
         let menu: Vec<Entry<String>> =
             GRID_COLOR_PRESETS.iter().map(|(n, _)| *n).chain(["Custom"]).map(|n| Entry::new(n.to_string(), n.to_string())).collect();
-        ui.vertical(|ui| {
-            let picked = Select::new(tl!("Grid Colors:"), Bind::given(grid_preset_name(resolved).to_string()), &menu).show(ui).value().cloned();
-            if let Some((_, pair)) = picked.and_then(|n| GRID_COLOR_PRESETS.iter().find(|(p, _)| *p == n)) {
-                fields.set("gridColors", entries_value(*pair));
-            }
-            ui.horizontal(|ui| {
+        let mut picked = None;
+        let (mut wells, mut edits) = ([None; 2], [None; 2]);
+        let shown = Stack::new().show(ui, |ui, _| {
+            picked = Select::new(tl!("Grid Colors:"), Bind::given(grid_preset_name(resolved).to_string()), &menu).show(ui).value().cloned();
+            Row::new().show(ui, |ui, _| {
                 for (i, color) in resolved.iter().enumerate() {
                     let name = format!("{} {}", tl!("Grid Colors:"), i + 1);
                     let [r, g, b, _] = color.to_rgba8(1.0);
                     let srgb = Srgba::rgb(f32::from(r) / 255.0, f32::from(g) / 255.0, f32::from(b) / 255.0);
-                    if Swatch::new(name.clone(), srgb).well().show(ui).clicked {
-                        cx.pick_color(GRID_KEYS[i], srgb);
-                    }
-                    let edited = HexField::hex(name, Bind::given(Rgba::rgb(r, g, b))).show(ui).value().copied();
-                    if let Some(Rgba([r, g, b, _])) = edited {
-                        set_grid_entry(fields, &setup, i, &Color::rgb8(r, g, b));
-                    }
+                    wells[i] = Swatch::new(name.clone(), srgb).well().show(ui).clicked.then_some(srgb);
+                    edits[i] = HexField::hex(name, Bind::given(Rgba::rgb(r, g, b))).show(ui).value().copied();
                 }
             });
-        })
-        .response
+        });
+        if let Some((_, pair)) = picked.and_then(|n| GRID_COLOR_PRESETS.iter().find(|(p, _)| *p == n)) {
+            fields.set("gridColors", entries_value(*pair));
+        }
+        for (i, (well, edit)) in wells.into_iter().zip(edits).enumerate() {
+            if let Some(srgb) = well {
+                cx.pick_color(GRID_KEYS[i], srgb);
+            }
+            if let Some(Rgba([r, g, b, _])) = edit {
+                set_grid_entry(fields, &setup, i, &Color::rgb8(r, g, b));
+            }
+        }
+        shown.output
     })
 }
 

@@ -892,6 +892,7 @@ font-technology	Variable	可變
 	Direct Selection Tool	直接選取工具
 	Direction Handles	控制把手
 	Disable Auto Add/Delete	停用自動增加/刪除
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete 刪除錨點並保持路徑連接
 	Interpolate Control Points When Moving Anchors	移動錨點時內插控制把手
 	Disable Opacity Mask	停用不透明度遮色片
 	Discard	捨棄
@@ -3809,6 +3810,12 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}；{size}；{detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	解析度無法使用
+	estimated memory {memory}	估計記憶體 {memory}
+	memory unavailable	記憶體無法使用
+	Unknown format	未知格式
 	{kind}, {instances}	{kind}，{instances}
 	{kind}, {rows} × {cols}	{kind}，{rows} × {cols}
 	{grid}, {instances}	{grid}，{instances}
@@ -4428,6 +4435,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Scale Artwork with Artboard	隨工作區域縮放圖稿
 	Artboards: {n}	工作區域：{n}
 	Rearrange All Artboards…	重新排列所有工作區域…
+	Rearrange…	重新排列…
+	Selected Artboards: {n}	選取的工作區域：{n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	按一下畫布以放置工作區域 (Esc 取消)
 	Recall Selection	叫出選取範圍
 	RECENT	最近使用
 	Recent	最近使用
@@ -4681,6 +4691,7 @@ digits	Malayalam	馬來亞拉姆數字
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	在觸控式軌跡板上以雙指旋轉手勢可旋轉畫布檢視。
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	按住某個鍵會執行鍵盤快速鍵中其按住欄的工具或命令；快速按下則執行其一般快速鍵。
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	按住某個鍵多少秒後，執行其按住快速鍵而不是一般快速鍵。
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete 會刪除所選錨點並重新擬合每個錨點周圍的曲線，而不會在該處斷開路徑。
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	移動錨點時，只有一端移動的每條曲線都會保持其相對於兩端的形狀。
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	按住工具的快速鍵時選擇該工具，放開後重新選擇之前的工具。
 	Shows the bounding box while you move the selection or draw a shape.	移動選取範圍或繪製形狀時顯示邊框。
@@ -6993,6 +7004,8 @@ axis	Y Axis	Y 軸
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	需要核准：它要求 {0}，使用者單獨安裝它時授予這些權限
 @msg	not JSON: {e}	不是 JSON：{e}
 @msg	not a WebAssembly binary (missing \\0asm header)	不是 WebAssembly 二進位檔（沒有 \\0asm 標頭）
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	函式型別的參數數目超過上限（{MAX_FUNC_TYPE_VALUES} 個）
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	函式型別的結果數目超過上限（{MAX_FUNC_TYPE_VALUES} 個）
 @msg	parameter `{k}`: {what}	參數 `{k}`：{what}
 @msg	parameter `{name}`: {what}	參數 `{name}`：{what}
 @msg	plug-in parameters must be a JSON object	增效模組參數必須是 JSON 物件

@@ -198,6 +198,23 @@ fn a_plugin_may_use_the_listed_webassembly_proposals_and_no_others() {
     }
 }
 
+/// A function type with more than 32 parameters or results is refused before any function body is
+/// validated: the module's extra function has an invalid body, and the error names the limit. A
+/// type with 32 of each loads.
+#[test]
+fn a_function_type_past_32_values_is_refused_before_any_function_body_is_validated() {
+    let i32s = |n: usize| vec!["i32"; n].join(" ");
+    for (word, field) in [("parameters", "param"), ("results", "result")] {
+        let fits = module(MANIFEST, tpl::ECHO, &format!("(type (func ({field} {})))", i32s(32)));
+        assert!(Plugin::load(&fits, Limits::default()).is_ok(), "32 {word}");
+        let past = module(MANIFEST, tpl::ECHO, &format!("(type (func ({field} {}))) (func (i32.add))", i32s(33)));
+        match Plugin::load(&past, Limits::default()) {
+            Err(Error::Module(m)) => assert_eq!(m, format!("a function type exceeds the limit of 32 {word}")),
+            other => panic!("33 {word}: {:?}", other.err()),
+        }
+    }
+}
+
 #[test]
 fn budgets_stop_runaway_plugins() {
     let spin = ok_module("(loop $l (br $l)) (i64.const 0)");
