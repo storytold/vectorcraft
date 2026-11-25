@@ -13,6 +13,7 @@ use craft::platform::watch::FileWatch;
 use craft::ui::dialog::DialogId;
 #[cfg(not(target_arch = "wasm32"))]
 use craft::ui::dialog::{DialogResult, PromptChoice, StandardPrompt};
+use vectorcraft_engine::file_access::ScopeHandle;
 
 use super::export::file_url;
 use super::open::note_recent;
@@ -811,9 +812,22 @@ pub(super) fn checks_replaced(app: &mut VectorcraftApp) -> (Option<crate::Exists
 /// Ask before a save or export of the document `doc` (its uid) replaces `files`, files that are
 /// there beside the one picked in the save panel (a file per artboard, a linked image), which the
 /// panel did not ask about. OK runs `command` with `params` again, replacing them and `allowed`
-/// (those an earlier OK allowed); Cancel writes nothing → `{pending}`.
-pub(super) fn ask_to_replace_files(app: &mut VectorcraftApp, doc: u64, files: &[String], allowed: &[String], command: &str, params: &Value) -> Value {
-    dialogs::confirm::ask_replace_files(app, doc, files, allowed, command, params.clone());
+/// (those an earlier OK allowed); Cancel writes nothing → `{pending}`. `asked` is the file-access
+/// scope and automation flag of the request that started the save or export, captured before it
+/// went to the background: OK runs `command` again under them.
+pub(super) fn ask_to_replace_files(
+    app: &mut VectorcraftApp,
+    doc: u64,
+    files: &[String],
+    allowed: &[String],
+    command: &str,
+    params: &Value,
+    asked: (ScopeHandle, bool),
+) -> Value {
+    let (scope, automated) = asked;
+    scope.run(|| {
+        file_asks::as_automated(app, automated, |app| dialogs::confirm::ask_replace_files(app, doc, files, allowed, command, params.clone()));
+    });
     json!({ "pending": dialogs::confirm::REPLACE_FILES })
 }
 
@@ -1017,6 +1031,8 @@ fn write_plan(
     // Capture the caller before background work leaves the request: it must never open a panel
     // or error dialog later, when answering_control has been reset.
     let by_control = app.automation_asked();
+    // The question whether the save may replace files is asked under the request's scope.
+    let asked_scope = ScopeHandle::capture();
     let location_refused = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let refused_by_work = location_refused.clone();
     let own_path = target.clone();
@@ -1099,7 +1115,7 @@ fn write_plan(
         // Nothing written either: asked first.
         if let Some(files) = r.get("replaces").and_then(Value::as_array) {
             let files: Vec<String> = files.iter().filter_map(Value::as_str).map(str::to_string).collect();
-            return Ok(ask_to_replace_files(app, uid, &files, &allowed, again.0, &again.1));
+            return Ok(ask_to_replace_files(app, uid, &files, &allowed, again.0, &again.1, (asked_scope, by_control)));
         }
         // The document may have closed meanwhile: the file is written all the same.
         done.complete(&mut app.session, uid);
