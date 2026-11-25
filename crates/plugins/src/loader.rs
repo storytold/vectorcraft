@@ -523,13 +523,16 @@ mod tests {
         }
         let (_, clock) = manual();
         let mut loads = Loads::start_with(jobs, 3, LOAD_DEADLINE, clock);
+        // Bound after `loads`, so a failing assertion drops the senders first: the held jobs then
+        // return, and dropping `loads` does not wait on them while the test clock stands still.
+        let release = go;
         for _ in 0..3 {
             recv_soon(&starts);
         }
         // Each job is let go only once the one after it has finished.
         let mut finished = Vec::new();
         for v in (0..3).rev() {
-            go[v].send(()).unwrap();
+            release[v].send(()).unwrap();
             let done = recv_soon(&loads.results.lock().unwrap());
             finished.push(done.0);
             loads.record(done);

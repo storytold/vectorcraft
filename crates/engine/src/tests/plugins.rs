@@ -2164,17 +2164,22 @@ fn a_stored_file_replaced_with_the_same_stamp_while_it_loaded_is_skipped() {
         let (folder, path) = store_with(&format!("plugin-background-replaced{n}"), &id);
         std::fs::File::options().write(true).open(&path).unwrap().set_modified(modified).unwrap();
         let replaced = path.clone();
+        // Set once the file holds other bytes with the old stamp, so the case reaches the check.
+        let rewritten = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let done = rewritten.clone();
         *crate::store::AFTER_STORED_LOAD.lock().unwrap_or_else(|e| e.into_inner()) = Some(std::sync::Arc::new(move |p: &std::path::Path| {
             if p == replaced {
                 let mut bytes = std::fs::read(p).unwrap();
                 bytes.reverse();
                 std::fs::write(p, &bytes).unwrap();
                 std::fs::File::options().write(true).open(p).unwrap().set_modified(modified).unwrap();
+                done.store(true, std::sync::atomic::Ordering::SeqCst);
             }
         }));
         let mut s = session();
         s.attach_plugin_store(folder.0.clone());
         let installed = vectorcraft_plugins::registry::remove(&id);
+        assert!(rewritten.load(std::sync::atomic::Ordering::SeqCst), "the file was not replaced while it loaded ({n})");
         assert!(!installed, "the module installed from a file that no longer holds it ({n})");
     }
 }
@@ -2494,7 +2499,12 @@ fn a_grant_put_back_for_a_module_that_did_not_install_is_removed_again() {
     crate::store::AFTER_GRANTS_READ.set(None);
     let source = vectorcraft_plugins::registry::get(id).and_then(|p| p.source().map(str::to_string));
     assert!(vectorcraft_plugins::registry::remove(id));
-    let listed: Vec<Value> = std::fs::read(&grants).ok().map(|b| serde_json::from_slice(&b).unwrap()).unwrap_or_default();
+    // A grants file that went away holds no grant; one still there must read as a list.
+    let listed: Vec<Value> = match std::fs::read(&grants) {
+        Ok(b) => serde_json::from_slice(&b).unwrap(),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => vec![],
+        Err(e) => panic!("the grants file could not be read: {e}"),
+    };
     assert_eq!(source, None, "the later module replaced the one installed elsewhere");
     assert!(listed.iter().all(|e| e["id"] != id), "the grant put back stayed in the store: {listed:?}");
 }
