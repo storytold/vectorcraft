@@ -300,8 +300,8 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         }
     }
 
-    /// `(` after a name: a call.
-    fn call(&mut self, line: Option<usize>) {
+    /// What the call whose `(` is the current token reaches.
+    fn classify_call(&mut self, line: Option<usize>) {
         let [h0, h1, h2, h3] = self.h;
         // `doc['saveAs'](f)`: a document method named by a string literal in brackets.
         if is(h0, "]")
@@ -373,7 +373,9 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     /// `local['name']`) or an assignment to it ([`Analyzer::assignment`]), or whose `saveAs` or
     /// `exportFile` is assigned: another name may hold its object, or its methods may change, so its
     /// own methods are no longer known (`var b = local`, `f(local)`, `local.saveAs = w`,
-    /// `local[k] = w`, `delete local.saveAs`).
+    /// `local[k] = w`, `delete local.saveAs`). A property assignment whose name is such a variable's
+    /// (`this.local = d`, `$.global['local'] = d`) may give the variable a new value through the global
+    /// object, so its methods are no longer known either.
     fn writer_use(&mut self, t: &Sig<'s>) {
         let [h0, h1, h2, h3] = self.h;
         let writer = |s: Option<Sig<'s>>, before: Option<Sig<'s>>| s.filter(|s| self.writer_bits(Some(*s), before) != 0).map(|s| s.text);
@@ -402,6 +404,42 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         };
         if let Some(name) = escaped {
             self.writers.remove(name);
+        }
+        if changes {
+            let rebound = if is(h1, ".") {
+                h0.filter(|s| s.kind == T::Ident).map(|s| s.text.to_string())
+            } else if is(h0, "]") && is(h2, "[") {
+                h1.filter(|s| s.kind == T::Str).map(|s| unquote(s.text, 256))
+            } else {
+                None
+            };
+            if let Some(name) = rebound {
+                self.writers.remove(&name);
+            }
+        }
+    }
+
+    /// `(` after a name: a call ([`Self::classify_call`]). A call of a variable of
+    /// [`Analyzer::writers`]'s method other than the `saveAs` or `exportFile` its literal defines
+    /// (`local.install()`, `local['install']()`) may replace the object's methods through `this`, so
+    /// after the call they are no longer known.
+    fn call(&mut self, line: Option<usize>) {
+        let [h0, h1, h2, h3] = self.h;
+        let bits = self.writer_bits(h2, h3);
+        let receiver = if is(h1, ".") && bits != 0 && h0.is_some_and(|s| s.kind == T::Ident && !Self::defines(bits, s.text)) {
+            h2
+        } else if is(h0, "]")
+            && is(h2, "[")
+            && self.index_receiver != 0
+            && h1.is_some_and(|s| s.kind == T::Str && !Self::defines(self.index_receiver, &unquote(s.text, 32)))
+        {
+            h3
+        } else {
+            None
+        };
+        self.classify_call(line);
+        if let Some(r) = receiver {
+            self.writers.remove(r.text);
         }
     }
 

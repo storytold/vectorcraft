@@ -2720,8 +2720,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   Attributes panel's note, trimmed as `attributes.set` trims it), `hidden`, `locked`, `selected` (assigning it adds
   or removes only that object, as `select.add` and `select.toggle` do, and the other objects stay selected as they
   were), `opacity` (0 to
-  100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
-  visible bounds), `editable` (false for an object that is hidden or locked, in a hidden or locked layer or group,
+  100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`,
+  `editable` (false for an object that is hidden or locked, in a hidden or locked layer or group,
   or on a locked artboard), `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
   `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`
   (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/). `move` runs `node.move`, and `duplicate` runs
@@ -2788,8 +2788,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   letter case is ignored and `\` matches `/`) and does not resolve the path it is given. A document counts only when
   the automation read roots allow its file, and that check can look the document's file up on disk. A path with
   `..`, a network path, a NUL character or more than 4,096 bytes throws an error. Some members the Application,
-  Document and PageItem pages list, such as `Document.layers`, `PageItem.blendingMode`, `PageItem.rotate` and
-  `app.beep`, throw an error that says they are not available yet when they are read or assigned.
+  Document and PageItem pages list, such as `Document.layers`, `PageItem.blendingMode`, `PageItem.controlBounds`,
+  `PageItem.rotate` and `app.beep`, throw an error that says they are not available yet when they are read or assigned.
   `hasOwnProperty` and `propertyIsEnumerable` are false for those members and true for every other member of an
   object's class, so `item.hasOwnProperty("opacity")` is true on a page item, and `for (k in item)` lists the
   other properties but not the methods. `Object.keys`, `Object.getOwnPropertyNames` and
@@ -2874,8 +2874,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   https://www.indesignjs.de/indesignapi/illustrator/ExportForScreensOptionsPNG8.html,
   https://www.indesignjs.de/indesignapi/illustrator/ExportForScreensOptionsWebOptimizedSVG.html,
   https://www.indesignjs.de/indesignapi/illustrator/ExportForScreensPDFOptions.html). The raster classes map
-  `antiAliasing`, `scaleType` and `scaleTypeValue` (`SCALEBYFACTOR`, `SCALEBYWIDTH` and `SCALEBYHEIGHT` in pixels,
-  `SCALEBYRESOLUTION` in ppi); JPEG also maps `compressionMethod`, `embedICCProfile` and `progressiveScan` (3 to 5);
+  `antiAliasing`, `scaleType` and `scaleTypeValue` (`SCALEBYFACTOR` as a multiplier from 0.01 to 64, so 2 doubles the
+  size, `SCALEBYWIDTH` and `SCALEBYHEIGHT` in pixels, `SCALEBYRESOLUTION` in ppi from 0.72 to 4608); JPEG also maps `compressionMethod`, `embedICCProfile` and `progressiveScan` (3 to 5);
   PNG24 maps `transparency`, `backgroundBlack` and `interlaced`; PNG8 maps `colorCount` (2 to 256), `interlaced`,
   `matte` and `transparency`. The SVG class maps `coordinatePrecision` (1 to 7), `cssProperties`, `fontType`,
   `rasterImageLocation`, `svgId`, `svgMinify` and `svgResponsive`, and the PDF class maps `pdfPreset` (at most 255

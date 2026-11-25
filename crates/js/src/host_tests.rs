@@ -757,6 +757,39 @@ fn objects_of_a_host_class_report_its_available_members_as_their_own() {
 }
 
 #[test]
+fn a_member_a_class_declares_hides_the_one_its_parent_declares() {
+    let mut r = realm(1_000_000);
+    let value: HostFunction = Rc::new(|_| Ok(Data::Number(1.0)));
+    let missing: HostFunction = Rc::new(|_| Err(HostError::Error("not here yet".into())));
+    let base = HostClass {
+        name: "Base".into(),
+        parent: None,
+        members: vec![
+            ("size".to_string(), HostMember::Get(value.clone())),
+            ("later".to_string(), HostMember::Unavailable(missing.clone())),
+            ("kept".to_string(), HostMember::Get(value.clone())),
+        ],
+        index: None,
+        construct: None,
+    };
+    let leaf = HostClass {
+        name: "Leaf".into(),
+        parent: Some("Base".into()),
+        members: vec![("size".to_string(), HostMember::Unavailable(missing)), ("later".to_string(), HostMember::Get(value))],
+        index: None,
+        construct: None,
+    };
+    r.define_host_classes(vec![base, leaf], vec![("it".into(), host_ref("Leaf", &[1.0]))]).unwrap();
+    r.start(
+        "var read; try { it.size; read = 'read'; } catch (e) { read = 'threw'; }\
+         [it.hasOwnProperty('size'), it.propertyIsEnumerable('size'), read, it.hasOwnProperty('later'),\
+          it.propertyIsEnumerable('later'), it.hasOwnProperty('kept')].join()",
+    )
+    .unwrap();
+    assert_eq!(finish(&mut r, 1_000_000).0.unwrap(), JsValue::String("false,false,threw,true,true,true".into()));
+}
+
+#[test]
 fn a_converted_function_reads_each_argument_as_its_list_says() {
     let mut r = realm(1_000_000);
     let seen: Rc<RefCell<Vec<Vec<Data>>>> = Rc::default();

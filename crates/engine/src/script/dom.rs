@@ -1298,15 +1298,17 @@ fn selection_of(h: &Host, uid: u64) -> Answer {
 }
 
 /// The ids an assignment to a document's selection gives: one page item, a list of them, `null` or
-/// `[]`. Every one must be an object of that document that can be selected.
+/// `[]`. Every one must be an object of that document that can be selected; `undefined`, such as an
+/// index past the end of `pageItems`, is not a page item.
 fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId>, HostError> {
     let list: Vec<&Data> = match v {
-        Data::Null | Data::Undefined => Vec::new(),
+        Data::Null => Vec::new(),
         Data::Array(a) if a.len() > MAX_LISTED => return Err(HostError::Range(format!("a selection takes at most {MAX_LISTED} objects"))),
         Data::Array(a) => a.iter().collect(),
         d => vec![d],
     };
     let mut ids: Vec<NodeId> = Vec::with_capacity(list.len());
+    let mut seen: HashSet<NodeId> = HashSet::with_capacity(list.len());
     // The document is read once for every object: nothing changes it while the list is checked.
     let (d, isolation, guides_locked) = with_doc(h, doc, |s, st| (st.doc.clone(), st.isolation, s.guides_locked()));
     let locks = d.locked_artboards();
@@ -1321,7 +1323,7 @@ fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId
             let name = with_doc(h, item.doc, |_, st| st.doc.node(item.id).and_then(typename).unwrap_or("page item"));
             return Err(HostError::Error(format!("Cannot select {name} {}", item.id.0)));
         }
-        if !ids.contains(&item.id) {
+        if seen.insert(item.id) {
             ids.push(item.id);
         }
     }
@@ -1380,6 +1382,11 @@ fn items_length(h: &Host, a: &[Data]) -> Answer {
 fn items_typename(h: &Host, a: &[Data]) -> Answer {
     items_doc(h, a)?;
     Ok(text("PageItems"))
+}
+
+fn items_to_string(h: &Host, a: &[Data]) -> Answer {
+    items_doc(h, a)?;
+    Ok(text("[PageItems]"))
 }
 
 fn items_parent(h: &Host, a: &[Data]) -> Answer {
@@ -1584,9 +1591,9 @@ fn item_set_opacity(h: &Host, a: &[Data]) -> Answer {
     if !(0.0..=100.0).contains(&v) {
         return Err(HostError::Range("opacity must be from 0 to 100".into()));
     }
-    // A value the getter reports for the item's opacity sends the opacity it has, and
-    // `object.setProps` finds the no-op itself: an opacity a graph mark or label already has still
-    // replaces the one the graph keeps for its series or kind.
+    // A value the getter reports for the item's opacity runs no command, unless the item is a graph
+    // mark or label whose graph keeps another opacity for its series or kind: the opacity it has
+    // then replaces that one.
     // The opacity the item already has may be assigned while its layer is hidden or locked, unless
     // it would still replace the opacity a graph keeps for the item's series or kind.
     let item = this_item(h, a)?;
@@ -1601,7 +1608,7 @@ fn item_set_opacity(h: &Host, a: &[Data]) -> Answer {
     if now.is_none() || keeps_other {
         refuse_in_closed_layer(h, item)?;
     }
-    set_props(h, a, |_| false, json!({"opacity": now.unwrap_or(v)}))
+    set_props(h, a, |_| now.is_some() && !keeps_other, json!({"opacity": now.unwrap_or(v)}))
 }
 
 fn item_selected(h: &Host, a: &[Data]) -> Answer {
@@ -2154,7 +2161,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             ("index", method(l, items_index)),
             ("getByName", method(l, items_by_name)),
             ("removeAll", method(l, items_remove_all)),
-            ("toString", class_text("PageItems")),
+            ("toString", method(l, items_to_string)),
         ]),
         Some(function(l, items_at)),
     ));
@@ -2174,7 +2181,6 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("height", property(l, item_height, item_set_height)),
         ("geometricBounds", get(l, item_geometric)),
         ("visibleBounds", get(l, item_visible)),
-        ("controlBounds", get(l, item_visible)),
         ("editable", get(l, item_editable)),
         ("zOrderPosition", get(l, item_z_order_position)),
         ("duplicate", method(l, item_duplicate)),
@@ -2187,6 +2193,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         [
             "artworkKnockout",
             "blendingMode",
+            "controlBounds",
             "isIsolated",
             "layer",
             "pixelAligned",

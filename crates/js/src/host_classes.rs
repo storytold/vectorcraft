@@ -25,11 +25,12 @@
 //!
 //! `hasOwnProperty` and `propertyIsEnumerable` are true on an object of a host class for each
 //! member of its class and of the classes it descends from, apart from the members that are not
-//! available yet ([`HostMember::Unavailable`]). `for`-`in` lists the properties among those members,
+//! available yet ([`HostMember::Unavailable`]). A member a class declares, available or not, hides
+//! the member of that name in the classes it descends from. `for`-`in` lists the properties among those members,
 //! and not the methods. `Object.keys`, `Object.getOwnPropertyNames` and
 //! `Object.getOwnPropertyDescriptor` do not report the members.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::heap::{CONFIGURABLE, Class, ENUMERABLE, Func, Key, ObjId, Object, Prop, key};
@@ -89,8 +90,9 @@ pub(crate) struct Entry {
     family: u32,
     /// The class this class's prototype inherits from, as an index into the realm's classes.
     parent: Option<u32>,
-    /// The names of the members `hasOwnProperty` reports: every member but the unavailable ones.
-    own: Rc<HashSet<Key>>,
+    /// The names of the members the class declares, each with whether `hasOwnProperty` reports it:
+    /// every member but the unavailable ones.
+    own: Rc<HashMap<Key, bool>>,
 }
 
 impl Entry {
@@ -143,14 +145,15 @@ pub fn host_ref_parts(d: &Data) -> Option<(&str, Vec<f64>)> {
 
 impl Interp {
     /// Whether `k` is a member that `hasOwnProperty` reports on `id`: `id` is an object of a host
-    /// class, and `k` names an available member of that class or of a class it descends from.
+    /// class, and the closest of that class and the classes it descends from that declares `k`
+    /// declares it as available.
     pub(crate) fn is_host_member(&self, id: ObjId, k: &[u16]) -> JsResult<bool> {
         let Class::Host(h) = &self.object(id)?.class else { return Ok(false) };
         let mut class = Some(h.class);
         while let Some(c) = class {
             let Some(e) = self.host_classes.get(c as usize) else { return Err(Abrupt::Internal("host class out of range".into())) };
-            if e.own.contains(k) {
-                return Ok(true);
+            if let Some(available) = e.own.get(k) {
+                return Ok(*available);
             }
             class = e.parent;
         }
@@ -307,7 +310,7 @@ fn install_class(i: &mut Interp, class: HostClass) -> JsResult<()> {
     let r = fill_class(i, proto, &class);
     i.temp_roots.truncate(mark);
     let ctor = r?;
-    let members = class.members.iter().filter(|(_, m)| !matches!(m, HostMember::Unavailable(_))).map(|(name, _)| key(name)).collect();
+    let members = class.members.iter().map(|(name, m)| (key(name), !matches!(m, HostMember::Unavailable(_)))).collect();
     i.host_classes.push(Entry {
         name: class.name.as_str().into(),
         proto,

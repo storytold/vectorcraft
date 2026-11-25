@@ -650,6 +650,29 @@ fn a_changed_or_shared_own_save_as_writes_a_file() {
     assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[11, 12, 13, 14, 15, 16, 18, 19, 21, 22][..]));
 }
 
+/// A call of another method of such an object may replace its `saveAs` through `this`, and a property
+/// assignment that names the variable (`this.local = d`) may give it another value through the global
+/// object: after either, its `saveAs` writes the file again.
+#[test]
+fn a_method_call_or_a_global_property_ends_the_own_save_as() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var a = {saveAs: function () {}, install: function () { this.saveAs = app.activeDocument.saveAs; }};\n",
+        "var b = {saveAs: function () {}, install: function () {}};\n",
+        "var c = {saveAs: function () {}}; var e = {saveAs: function () {}}; var g = {saveAs: function () {}};\n",
+        "a.saveAs(f); a.install();\n",
+        "b['install']();\n",
+        "this.c = app.activeDocument;\n",
+        "$.global['e'] = app.activeDocument;\n",
+        "g.saveAs(f); g.saveAs(f);\n",
+        "a.saveAs(f);\n",
+        "b.saveAs(f);\n",
+        "c.saveAs(f);\n",
+        "e.saveAs(f);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[10, 11, 12, 13][..]));
+}
+
 /// Only a `var` statement directly in a function body or the global code that gives its first name
 /// the literal as its whole value makes the literal's `saveAs` the script's own, from the end of the
 /// statement. A literal given in a branch, one the value goes on from, one given by an assignment

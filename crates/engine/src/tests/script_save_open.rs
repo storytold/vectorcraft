@@ -286,8 +286,8 @@ fn save_as_export_file_and_open_refuse_paths_outside_the_grants() {
     }
     let e = failure(&mut s, &base, &format!("Folder.userData; app.activeDocument.saveAs(new File({kept}));"));
     assert!(e.contains("Script file is read-only"), "{e}");
-    let e = failure(&mut s, &base, &format!("app.activeDocument.saveAs(new File({}));", quoted(&dir)));
-    assert!(e.contains("Script file") && !e.contains("ran"), "a folder is not saved over: {e}");
+    let e = failure(&mut s, &base, &format!("Folder.userData; app.activeDocument.saveAs(new File({}));", quoted(&dir)));
+    assert!(e.contains("Script file is not a regular file"), "a folder is not saved over: {e}");
     assert_eq!(std::fs::read_to_string(dir.join("kept.svg")).unwrap(), "kept");
     assert_eq!(std::fs::read_to_string(base.join("settings/Script Grants.json")).unwrap(), "{}");
     assert!(!base.join("outside/x.svg").exists() && !base.join("outside/x.svg.png").exists());
@@ -716,12 +716,18 @@ fn closing_with_save_changes_keeps_the_documents_format() {
         &base,
         &format!(
             "Folder.userData; var d = app.documents.add(DocumentColorSpace.RGB, 200, 100);\n\
-             vc.run('shape.rectangle', {{x: 10, y: 10, width: 50, height: 20}}); d.saveAs(new File({d} + '/p.svg'), new PDFSaveOptions());\n\
-             vc.run('shape.rectangle', {{x: 20, y: 20, width: 5, height: 5}}); d.close(SaveOptions.SAVECHANGES); vc.log(app.documents.length);"
+             vc.run('shape.rectangle', {{x: 10, y: 10, width: 50, height: 20}}); d.saveAs(new File({d} + '/p.svg'), new PDFSaveOptions());"
         ),
+    );
+    let saved = std::fs::read(dir.join("p.svg")).unwrap_or_default();
+    logged(
+        &mut s,
+        &base,
+        "Folder.userData; var d = app.activeDocument; vc.run('shape.rectangle', {x: 20, y: 20, width: 5, height: 5}); d.close(SaveOptions.SAVECHANGES);",
     );
     let bytes = std::fs::read(dir.join("p.svg")).unwrap_or_default();
     assert!(bytes.starts_with(b"%PDF"), "the save on close keeps the PDF format");
+    assert_ne!(bytes, saved, "the close wrote the second rectangle to the file");
     assert!(s.documents().is_empty());
     let _ = std::fs::remove_dir_all(base);
 }

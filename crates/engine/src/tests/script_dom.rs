@@ -266,8 +266,9 @@ fn assigning_the_reported_opacity_changes_nothing() {
     let (mut s, a, _) = doc();
     s.execute("object.setProps", &json!({"id": a.0, "opacity": 100.0 / 3.0})).unwrap();
     let (before, steps) = (s.active().unwrap().doc.node(a).unwrap().opacity, undo_steps(&s));
-    let out = log(&mut s, "var i = app.activeDocument.pageItems[1]; vc.log(i.opacity); i.opacity = i.opacity;");
-    assert_eq!(out, vec![json!(33.3333)]);
+    let r = run(&mut s, "var i = app.activeDocument.pageItems[1]; vc.log(i.opacity); i.opacity = i.opacity;").unwrap();
+    assert_eq!(r["log"], json!([33.3333]));
+    assert_eq!(r["slowestCommands"], json!([]), "no command runs for the opacity the item has");
     assert_eq!(s.active().unwrap().doc.node(a).unwrap().opacity, before);
     assert_eq!(undo_steps(&s), steps);
     // A value close to the reported one but not equal to it is still applied.
@@ -282,8 +283,14 @@ fn assigning_the_reported_opacity_changes_nothing() {
 fn selection_assignment_is_atomic_across_invalid_items() {
     let (mut s, a, b) = doc();
     s.execute("object.setProps", &json!({"ids": [b.0], "locked": true})).unwrap();
-    let e = failure(&mut s, "var p = app.activeDocument.pageItems; app.activeDocument.selection = [p[0], p[1]];");
-    assert!(e.contains("Cannot select PathItem"), "{e}");
+    // The script catches the error and reads the selection before the run ends.
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, p = d.pageItems, e = '';\
+         try { d.selection = [p[0], p[1]]; } catch (x) { e = String(x); } vc.log(e); vc.log(d.selection.length);",
+    );
+    assert!(out[0].as_str().is_some_and(|e| e.contains("Cannot select PathItem")), "{out:?}");
+    assert_eq!(out[1], json!(0));
     assert!(s.active().unwrap().selection.objects.is_empty());
     s.execute("object.setProps", &json!({"ids": [b.0], "locked": false})).unwrap();
     let out = log(
@@ -295,6 +302,13 @@ fn selection_assignment_is_atomic_across_invalid_items() {
     );
     assert_eq!(out, vec![json!(true), json!(2), json!(true), json!(1), json!(1)]);
     assert_eq!(s.active().unwrap().selection.objects, vec![a]);
+    // An index past the end gives `undefined`, which is not a page item: the selection stays.
+    let e = failure(&mut s, "var d = app.activeDocument; d.selection = d.pageItems[99];");
+    assert!(e.contains("this is not a page item"), "{e}");
+    assert_eq!(s.active().unwrap().selection.objects, vec![a]);
+    // A list with an item repeated thousands of times selects it once.
+    log(&mut s, "var d = app.activeDocument, p = d.pageItems, l = []; for (var i = 0; i < 5000; i++) l.push(p[0], p[1]); d.selection = l;");
+    assert_eq!(s.active().unwrap().selection.objects, vec![b, a]);
     // An item of another document cannot be selected here.
     s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
     let e = failure(&mut s, "app.activeDocument.selection = app.documents[0].pageItems[0];");
@@ -680,9 +694,13 @@ fn a_listed_preset_keeps_more_rows_than_artboards() {
 fn stale_documents_throw_on_every_member() {
     let (mut s, _, _) = doc();
     run(&mut s, "#targetengine keep\nvar d = app.activeDocument, p = d.pageItems, l = p[0].parent;").unwrap();
-    for (member, message) in
-        [("d.typename", "Stale document"), ("d.parent", "Stale document"), ("p.typename", "Stale document"), ("l.typename", "Stale")]
-    {
+    for (member, message) in [
+        ("d.typename", "Stale document"),
+        ("d.parent", "Stale document"),
+        ("p.typename", "Stale document"),
+        ("p.toString()", "Stale document"),
+        ("l.typename", "Stale"),
+    ] {
         let e = failure(&mut s, &format!("#targetengine keep\n{member};"));
         assert!(e.contains(message), "{member}: {e}");
     }
@@ -875,9 +893,12 @@ fn a_startup_preset_alone_gives_its_first_size() {
 #[test]
 fn page_item_members_not_built_yet_throw_on_read_and_assignment() {
     let (mut s, _, _) = doc();
-    for source in
-        ["app.activeDocument.pageItems[0].blendingMode;", "app.activeDocument.pageItems[0].uuid = 'x';", "app.activeDocument.pageItems[0].rotate(5);"]
-    {
+    for source in [
+        "app.activeDocument.pageItems[0].blendingMode;",
+        "app.activeDocument.pageItems[0].uuid = 'x';",
+        "app.activeDocument.pageItems[0].rotate(5);",
+        "app.activeDocument.pageItems[0].controlBounds;",
+    ] {
         assert!(failure(&mut s, source).contains("is not available yet"), "{source}");
     }
     assert!(failure(&mut s, "app.activeDocument.layers = 1;").contains("Document.layers is not available yet"));
@@ -1345,8 +1366,8 @@ fn get_is_file_open_cannot_probe_outside_script_scope() {
     let (mut s, _, _) = doc();
     let path = std::env::temp_dir().join(format!("vc-dom-open-{}.svg", std::process::id()));
     s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
-    let p = path.to_string_lossy().replace('\\', "\\\\");
-    let query = format!("vc.log(app.getIsFileOpen('{p}')); vc.log(app.getIsFileOpen('{p}.other'));");
+    let (p, other) = (json!(path.to_string_lossy()), json!(format!("{}.other", path.to_string_lossy())));
+    let query = format!("vc.log(app.getIsFileOpen({p})); vc.log(app.getIsFileOpen({other}));");
     let out = log(&mut s, &query);
     assert_eq!(out, vec![json!(true), json!(false)]);
     // Read roots that leave out the document's file: the same path does not count.

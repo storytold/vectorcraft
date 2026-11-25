@@ -182,7 +182,7 @@ fn failed_script_report_keeps_message_and_adds_origin() {
         ("throw new Error('invalid array length');", "thrown", "Error: invalid array length", "script"),
         ("throw new RangeError('invalid array length');", "thrown", "RangeError: invalid array length", "script"),
         ("throw 'invalid array length';", "thrown", "invalid array length", "script"),
-        ("throw 'ReferenceError: app is not defined';", "thrown", "ReferenceError: app is not defined", "script"),
+        ("throw 'ReferenceError: Window is not defined';", "thrown", "ReferenceError: Window is not defined", "script"),
         ("try { new Array(-1); } catch (e) { throw new Error(e.message); }", "thrown", "Error: invalid array length", "script"),
         ("new Array(-1);", "thrown", "RangeError: invalid array length", "built-in"),
         ("try { new Array(-1); } catch (e) { throw e; }", "thrown", "RangeError: invalid array length", "built-in"),
