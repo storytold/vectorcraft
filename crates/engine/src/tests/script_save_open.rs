@@ -481,6 +481,7 @@ fn bad_arguments_are_refused_with_an_error() {
         (format!("app.open({f}, undefined, {{pageToOpen: 0}});"), "from 1"),
         (format!("app.open({f}, undefined, {{pDFCropToBox: 'art'}});"), "PDFBoxType"),
         (format!("app.open({f}, undefined, 5);"), "PDFFileOptions"),
+        (format!("app.open({f}, undefined, {{pDFCropTobox: PDFBoxType.PDFMEDIABOX}});"), "no property pDFCropTobox"),
         ("app.userInteractionLevel = 'quiet';".into(), "UserInteractionLevel"),
         (format!("app.open({});", quoted(&dir.join("x.svg"))), "open needs a File"),
     ];

@@ -30,7 +30,8 @@
 //!   other value; a property the help pages do not list is left out. With `pDFPreset` named, a
 //!   `PDFSaveOptions` option still at a new object's default keeps the preset's value.
 //! - `app.open(file, documentColorSpace?, options?)` takes `options` as a `PDFFileOptions` record:
-//!   an object with `pageToOpen` and `pDFCropToBox`, used for that call only.
+//!   an object with `pageToOpen` and `pDFCropToBox`, used for that call only. Any other property
+//!   that holds a value, except `parent` and `typename`, throws an error.
 //! - `app.userInteractionLevel` starts at `UserInteractionLevel.DISPLAYALERTS` in each run. The
 //!   commands a script runs never show a dialog, so the level does not change what they do, and it
 //!   never allows a file the script's grants do not.
@@ -686,7 +687,9 @@ fn app_open(h: &Host, a: &[Data]) -> Answer {
                     };
                     p.insert("cropTo".into(), json!(crop));
                 }
-                _ => {}
+                "parent" | "typename" => {}
+                _ if matches!(v, Data::Undefined) => {}
+                other => return Err(HostError::Error(format!("PDFFileOptions has no property {other}"))),
             }
         }
     }

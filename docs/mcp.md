@@ -2739,7 +2739,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `coordinatePrecision` (1 to 7), `embedRasterImages`, `compressed`, `preserveEditability` and
   `includeVariablesAndDatasets` (SVG); `PNG8`, `GIF` and `TIFF` take no options. `app.open`'s
   `options` is a `PDFFileOptions` record (https://ai-scripting.docsforadobe.dev/jsobjref/PDFFileOptions/) with
-  `pageToOpen` and `pDFCropToBox`. `app.userInteractionLevel` is `UserInteractionLevel.DISPLAYALERTS` at the start of
+  `pageToOpen` and `pDFCropToBox`; any other property that holds a value, except `parent` and `typename`, throws an
+  error. `app.userInteractionLevel` is `UserInteractionLevel.DISPLAYALERTS` at the start of
   each run. The enumerations `ExportType`, `Compatibility`, `PDFCompatibility`, `PDFBoxType`, `EPSPreview`,
   `EPSPostScriptLevelEnum`, `PDFOverprint` and `UserInteractionLevel` hold strings such as `"ExportType.PNG24"`.
   VectorCraft's own rules: each path is checked as a `File` opened for reading or writing is checked, before the
