@@ -285,7 +285,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::addons::packaging::ID, "Fold Lines", "scissors"),
     (crate::addons::packaging::preview::ID, "Fold Preview", "dc-cube"),
     (crate::addons::pathtools::ID, "Anchor Inspector", "dc-anchor-smooth"),
-    (crate::addons::pathtools::shape::ID, "Parametric Shape", "hexagon"),
+    (crate::addons::pathtools::shape::ID, "Parametric Shape", "dc-parametric-shape"),
     (crate::addons::pen::ID, "Smart Pen", "spline-pointer"),
     (crate::addons::units::ID, "Unit Converter", "ruler"),
 ];
