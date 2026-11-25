@@ -506,3 +506,24 @@ fn the_heap_counts_each_module_from_when_it_loads() {
     assert!(matches!(r, Err(RunError { kind: RunErrorKind::Limit(LimitKind::Heap), .. })), "{r:?}");
     assert_eq!(*asked.borrow(), ["./a.mjs", "./b.mjs"]);
 }
+
+#[test]
+fn a_module_keeps_no_expression_value_alive_after_its_statement() {
+    // The heap holds one of these arrays and not two, so each must be collectable once the
+    // expression statement that made it ends.
+    let big = "function big() { var a = []; for (var i = 0; i < 50000; i++) a[i] = { i: i }; return a; }";
+    let mut realm = es();
+    assert!(realm.run(&format!("{big} var held = big();")).is_ok());
+    let with_one = realm.collect_garbage();
+    assert!(realm.run("held = null;").is_ok());
+    let without = realm.collect_garbage();
+    let one = with_one - without;
+    realm.set_limits(Limits { heap_bytes: without + one * 3 / 2, ..Limits::default() });
+    let entry = format!("{big} big(); big(); try {{ big(); }} finally {{ big(); }} out.push('done');");
+    let (r, out) = run_with(&mut realm, &entry, &[], ModuleLimits::default());
+    assert_eq!((r, out.as_str()), (Ok(JsValue::Undefined), "done"));
+    // Script and eval code still complete with the value of their last expression statement.
+    assert_eq!(realm.run("1; 2;"), Ok(JsValue::Number(2.0)));
+    assert_eq!(realm.run("eval('3; 4;')"), Ok(JsValue::Number(4.0)));
+    assert_eq!(realm.run("try { 5; } finally { 6; }"), Ok(JsValue::Number(5.0)));
+}

@@ -90,6 +90,8 @@ struct FnCompiler<'a> {
     recursion: u32,
     /// The code was read with [`crate::Options::es2015`]: blocks have scopes of their own.
     es2015: bool,
+    /// The code is a module's ([`compile_module`]), which has no completion value.
+    module: bool,
     scopes: Vec<BlockScope>,
     templates: Vec<Template>,
     uses_this: bool,
@@ -143,6 +145,7 @@ impl<'a> FnCompiler<'a> {
             uses_arguments: false,
             recursion,
             es2015: false,
+            module: false,
             scopes: Vec::new(),
             templates: Vec::new(),
             uses_this: false,
@@ -151,6 +154,12 @@ impl<'a> FnCompiler<'a> {
             annex: HashSet::new(),
             optional: Vec::new(),
         }
+    }
+
+    /// Script and eval code keep the value of the last expression statement as their
+    /// completion value; function and module code do not.
+    fn keeps_completion(&self) -> bool {
+        self.kind != CodeKind::Function && !self.module
     }
 
     // ---- emitting ----
@@ -511,7 +520,7 @@ impl<'a> FnCompiler<'a> {
             Stmt::Empty | Stmt::Debugger => Ok(()),
             Stmt::Expr(e) => {
                 self.expr(*e)?;
-                self.emit(if self.kind == CodeKind::Function { Op::Pop } else { Op::SetCompletion });
+                self.emit(if self.keeps_completion() { Op::SetCompletion } else { Op::Pop });
                 Ok(())
             }
             Stmt::Block(list) => self.block(list),
@@ -1113,7 +1122,7 @@ impl<'a> FnCompiler<'a> {
         self.bind(fin_entry);
         // In script and eval code the finally block keeps the completion value of the try or
         // catch block when it ends normally (ECMA-262 5.1 section 12.14).
-        let keeps_completion = self.kind != CodeKind::Function;
+        let keeps_completion = self.keeps_completion();
         if keeps_completion {
             self.emit(Op::GetCompletion);
         }
@@ -2025,6 +2034,7 @@ pub(crate) fn compile_program(program: &crate::Program, source: &Rc<Source>, kin
 pub(crate) fn compile_module(program: &crate::Program, source: &Rc<Source>) -> CResult<Rc<Code>> {
     let mut c = FnCompiler::new(&program.ast, source, CodeKind::Eval, true, 0);
     c.es2015 = true;
+    c.module = true;
     let hoisted = c.hoist(&program.body, &[])?;
     let top_scope = c.list_scope(&program.body, false)?;
     c.stmts(&program.body)?;
