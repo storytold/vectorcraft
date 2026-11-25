@@ -342,7 +342,9 @@ impl Session {
     /// Drawing showed is applied to it again. The warning or the error of that preview goes to
     /// the command's result ([`Session::note_settled_warning`]); a preview that fails leaves the
     /// interaction with nothing to commit. An interaction whose document the command closed ends,
-    /// and a document the command left an interaction of its own on keeps that one.
+    /// and so does one with anchors or segments selected on a path the command changed in more
+    /// than a move. A document
+    /// the command left an interaction of its own on keeps that one.
     pub(crate) fn put_back_interaction(&mut self) {
         let Some(crate::HeldInteraction { uid, interaction: mut it, shown, state, paint }) = self.held_interaction.take() else { return };
         // A selection command loaded the paints of the selection it made into the fill and stroke
@@ -410,6 +412,13 @@ impl Session {
             if previewed {
                 self.sync_front_profiles();
             }
+            return;
+        }
+        // The drag's anchors and segments are numbered in the paths it began on. When the command
+        // changed one of those paths in more than a move, the numbers can name other points, and
+        // the drag ends without a step.
+        if renumbered(&it.selection, &it.doc, &st.doc) {
+            self.clear_deferred_overlay_cache();
             return;
         }
         let began = std::mem::replace(&mut it.doc, st.doc.clone());
@@ -771,6 +780,36 @@ fn drag_targets(params: &mut Value, began: &Document, doc: &Document) -> bool {
     let (was, now) = (began.editable(), doc.editable());
     ids.retain(|v| v.as_u64().map(vectorcraft_doc::NodeId).is_none_or(|id| doc.node(id).is_some() && (now(id) || !was(id))));
     !ids.is_empty()
+}
+
+/// Whether a path with anchors or segments in `selection` is other in `doc` than in `began`, the
+/// document a drag began from, in more than a move: its anchors added, removed, put in another
+/// order (Reverse Path Direction) or reshaped, or a subpath opened or closed. A path the command
+/// moved as a whole keeps its numbers.
+fn renumbered(selection: &Selection, began: &Document, doc: &Document) -> bool {
+    fn path(d: &Document, id: vectorcraft_doc::NodeId) -> Option<&[vectorcraft_geom::SubPath]> {
+        d.node(id).and_then(|n| n.path_data()).map(|p| p.subpaths.as_slice())
+    }
+    selection.anchors.keys().chain(selection.segments.keys()).any(|&id| match (path(began, id), path(doc, id)) {
+        (Some(was), Some(now)) => !moved_whole(was, now),
+        (was, now) => was.is_some() != now.is_some(),
+    })
+}
+
+/// Whether the subpaths `now` are the subpaths `was` moved by one offset: the same number of each,
+/// each opened or closed as before, every anchor of the same kind, and every anchor and handle
+/// offset alike.
+fn moved_whole(was: &[vectorcraft_geom::SubPath], now: &[vectorcraft_geom::SubPath]) -> bool {
+    if was.len() != now.len() || was.iter().zip(now).any(|(a, b)| a.closed != b.closed || a.anchors.len() != b.anchors.len()) {
+        return false;
+    }
+    let mut pairs = was.iter().zip(now).flat_map(|(a, b)| a.anchors.iter().zip(b.anchors.iter()));
+    let Some((a0, b0)) = pairs.next() else { return true };
+    let (dx, dy) = (b0.p.x - a0.p.x, b0.p.y - a0.p.y);
+    let alike = |a: vectorcraft_geom::Point, b: vectorcraft_geom::Point| {
+        (b.x - a.x - dx).abs() <= vectorcraft_geom::EPS && (b.y - a.y - dy).abs() <= vectorcraft_geom::EPS
+    };
+    std::iter::once((a0, b0)).chain(pairs).all(|(a, b)| a.kind == b.kind && alike(a.p, b.p) && alike(a.h_in, b.h_in) && alike(a.h_out, b.h_out))
 }
 
 /// The journal entries that select `selection` again in `doc` after `made`, the selection a

@@ -722,6 +722,67 @@ fn a_scale_rotate_or_pen_drag_of_an_object_a_command_deleted_ends_without_an_edi
     }
 }
 
+/// A Direct Selection drag of an anchor, with a command during it that numbers the path's anchors
+/// anew (Add Anchor Point before the dragged one, Reverse Path Direction): the command's edit
+/// stays, the drag ends without an edit of its own and moves no other anchor of the path.
+#[test]
+fn an_anchor_drag_after_a_command_renumbers_its_anchors_moves_no_other_anchor() {
+    let commands = [("path.insertAnchor", json!({"segment": 0, "t": 0.5}), 1), ("path.reverse", json!({}), 0)];
+    for ((id, params, added), real_time) in commands.iter().flat_map(|c| [(c, true), (c, false)]) {
+        let at = format!("{id}, real time {real_time}");
+        let (mut s, target, _) = two_squares(real_time);
+        s.execute("select.none", &json!({})).unwrap();
+        s.select_tool("directSelection", view()).unwrap();
+        let points = |s: &Session| -> Vec<(f64, f64)> {
+            let doc = &s.doc().unwrap().doc;
+            let path = doc.node(target).and_then(|n| n.path_data()).expect("the square is a path");
+            path.anchors().map(|(_, _, a)| (a.p.x, a.p.y)).collect()
+        };
+        let before = points(&s);
+        let &(x, y) = before.last().expect("the square has anchors");
+        let steps = s.doc().unwrap().history.undo.len();
+        let mut params = params.clone();
+        params["id"] = json!(target.0);
+        drag_with(&mut s, &[(x, y), (x + 10.0, y + 10.0), (x + 30.0, y + 20.0)], |s| {
+            s.execute(id, &params).unwrap();
+        });
+        assert!(!s.in_interaction(), "{at}");
+        let after = points(&s);
+        assert_eq!(after.len(), before.len() + added, "{at}: the command's edit stays");
+        assert!(before.iter().all(|p| after.contains(p)), "{at}: no anchor of the square moved: {before:?} → {after:?}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "{at}: only the command is a step");
+    }
+}
+
+/// A Direct Selection drag of an anchor, with a command during it that moves the path: the drag
+/// goes on and moves the same anchor of the moved path.
+#[test]
+fn an_anchor_drag_after_a_command_moves_its_path_moves_the_same_anchor() {
+    for real_time in [true, false] {
+        let at = format!("real time {real_time}");
+        let (mut s, target, _) = two_squares(real_time);
+        s.execute("select.none", &json!({})).unwrap();
+        s.select_tool("directSelection", view()).unwrap();
+        let points = |s: &Session| -> Vec<(f64, f64)> {
+            let doc = &s.doc().unwrap().doc;
+            let path = doc.node(target).and_then(|n| n.path_data()).expect("the square is a path");
+            path.anchors().map(|(_, _, a)| (a.p.x, a.p.y)).collect()
+        };
+        let before = points(&s);
+        let &(x, y) = before.last().expect("the square has anchors");
+        let steps = s.doc().unwrap().history.undo.len();
+        drag_with(&mut s, &[(x, y), (x + 10.0, y + 10.0), (x + 30.0, y + 20.0)], |s| {
+            s.execute("object.move", &json!({"ids": [target.0], "dx": 0, "dy": 50})).unwrap();
+        });
+        let after = points(&s);
+        let last = before.len() - 1;
+        let moved: Vec<(f64, f64)> =
+            before.iter().enumerate().map(|(i, &(px, py))| if i == last { (px + 30.0, py + 70.0) } else { (px, py + 50.0) }).collect();
+        assert_eq!(after, moved, "{at}: the drag moves the same anchor of the moved square");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps + 2, "{at}: the move and the drag are a step each");
+    }
+}
+
 /// With the Live Paint Bucket's Selection tool (Cmd+drag), a fill chosen during the drag stays the
 /// new-art fill after the release and after Escape, though the drag puts back the bucket's colors
 /// it began with.
