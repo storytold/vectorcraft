@@ -4,7 +4,8 @@
 //! sharpens) the corners whose widgets show together, on every selected path (#938): every corner
 //! of a path selected whole, those with a selected anchor when Direct Selection picked some. Alt-clicking a widget cycles their corner
 //! kind (round, inverted round, chamfer), as the Up and Down arrows do while one is dragged
-//! (#2898); double-clicking one opens the Corners dialog. The
+//! (#2898); double-clicking one opens the Corners dialog with Direct Selection and shows the
+//! Transform panel with the Selection tool. The
 //! Selection and Direct Selection tools share this, and the canvas draws the widgets from the same
 //! geometry.
 
@@ -55,14 +56,18 @@ struct PathWidgets {
 
 impl PathWidgets {
     /// The widgets of path `id` at `zoom` (screen px per document point), if it has any: any path
-    /// with Direct Selection (`any_path`), live rectangles and polygons with Selection. `id` is
-    /// editable ([`Document::is_editable`]).
-    fn of(doc: &Document, selection: &Selection, id: NodeId, zoom: f64, any_path: bool) -> Option<Self> {
+    /// with Direct Selection (`any_path`), live rectangles and polygons with Selection, when
+    /// `editable` ([`Document::editable`]) answers true for `id`.
+    fn of(doc: &Document, selection: &Selection, id: NodeId, zoom: f64, any_path: bool, editable: &impl Fn(NodeId) -> bool) -> Option<Self> {
         if selection.segments.contains_key(&id) {
             return None;
         }
         let NodeKind::Path { path, live, .. } = &doc.node(id)?.kind else { return None };
         if !any_path && !matches!(live.as_deref(), Some(LiveShape::Rectangle { .. } | LiveShape::Polygon { .. })) {
+            return None;
+        }
+        // After the kind: on a locked artboard it measures the art of the layer object holding `id`.
+        if !editable(id) {
             return None;
         }
         let lc = LiveCorners::new(path, live.as_deref())?;
@@ -105,9 +110,10 @@ impl CornerWidgets {
     /// The widgets at `zoom` (screen px per document point), if the selection has them: on any
     /// path with Direct Selection (`any_path`), on live rectangles and polygons with Selection.
     pub fn of(doc: &Document, selection: &Selection, zoom: f64, any_path: bool) -> Option<Self> {
-        let editable = doc.editable();
-        let paths: Vec<_> =
-            selection.objects.iter().filter(|id| editable(**id)).filter_map(|id| PathWidgets::of(doc, selection, *id, zoom, any_path)).collect();
+        // Made for the first path, then shared: the art on the locked artboards is measured once.
+        let locks = std::cell::OnceCell::new();
+        let editable = |id| locks.get_or_init(|| doc.editable())(id);
+        let paths: Vec<_> = selection.objects.iter().filter_map(|id| PathWidgets::of(doc, selection, *id, zoom, any_path, &editable)).collect();
         (!paths.is_empty()).then_some(Self { paths })
     }
 
@@ -241,7 +247,8 @@ pub fn over_widget(cx: &ToolContext, p: Point, any_path: bool) -> bool {
     CornerWidgets::for_tool(cx, any_path).and_then(|w| w.hit(p, cx.tol(5.0))).is_some()
 }
 
-/// A double-click on a corner widget opens the Corners dialog for the shown corners of its path.
+/// A double-click on a corner widget opens the Corners dialog for the shown corners of its path
+/// (Direct Selection; the Selection tool shows the Transform panel instead).
 pub fn double_click(cx: &ToolContext, p: Point, any_path: bool) -> Option<Action> {
     let w = CornerWidgets::for_tool(cx, any_path)?;
     let (i, _) = w.hit(p, cx.tol(5.0))?;
