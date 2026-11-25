@@ -233,7 +233,10 @@ mod tests {
     }
 
     fn resolved(root: RootEnv) -> Arc<craft::ui::style::UiTokens> {
-        use craft::ui::runtime::{env::Env, frame::{FrameInput, set_input}};
+        use craft::ui::runtime::{
+            env::Env,
+            frame::{FrameInput, set_input},
+        };
         let ctx = crate::testing::ui_context();
         set_input(&ctx, FrameInput::new(root));
         let mut tokens = None;
