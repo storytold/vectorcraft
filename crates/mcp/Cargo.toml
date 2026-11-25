@@ -22,6 +22,7 @@ vectorcraft-format = { workspace = true }
 vectorcraft-tools = { workspace = true }
 vectorcraft-geom = { workspace = true }
 vectorcraft-doc = { workspace = true }
+craft = { workspace = true, features = ["automation"] }
 serde_json = { workspace = true }
 log = { workspace = true }
 
