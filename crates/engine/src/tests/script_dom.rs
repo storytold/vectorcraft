@@ -1315,6 +1315,35 @@ fn prototype_changes_cannot_forge_a_page_item() {
 }
 
 #[test]
+fn select_tool_makes_the_named_tool_current_when_the_run_ends() {
+    let (mut s, _, _) = doc();
+    assert_eq!(s.tool_id(), "selection");
+    // A tool's id, its label and a name in the form scripts pass all choose it; the last one counts.
+    assert_eq!(log(&mut s, "vc.log(app.selectTool('pen'));"), vec![json!(true)]);
+    assert_eq!(s.tool_id(), "pen");
+    log(&mut s, "app.selectTool('Rectangle Tool');");
+    assert_eq!(s.tool_id(), "rectangle");
+    log(&mut s, "app.selectTool('Adobe Ellipse Tool'); app.selectTool('Adobe Direct Select Tool');");
+    assert_eq!(s.tool_id(), "directSelection");
+    log(&mut s, "app.selectTool('Adobe Select Tool');");
+    assert_eq!(s.tool_id(), "selection");
+    // An unknown name throws, a caught error chooses nothing, and a run that fails leaves the tool.
+    assert!(failure(&mut s, "app.selectTool('No Such Tool');").contains("No tool is named \"No Such Tool\""));
+    assert!(failure(&mut s, "app.selectTool('Adobe ');").contains("No tool is named"));
+    let out = log(&mut s, "try { app.selectTool('pencil tool'); } catch (e) { vc.log(e.message); }");
+    assert_eq!(out, vec![json!("No tool is named \"pencil tool\"")]);
+    assert!(failure(&mut s, "app.selectTool('pen'); throw new Error('stop');").contains("stop"));
+    let out = log(&mut s, "try { app.selectTool(5); } catch (e) { vc.log(e.name); }");
+    assert_eq!(out, vec![json!("TypeError")]);
+    assert!(failure(&mut s, "app.selectTool(new Array(5000).join('a'));").contains("too long"));
+    assert_eq!(s.tool_id(), "selection");
+    // With no document open the tool is chosen too.
+    let mut empty = Session::new();
+    log(&mut empty, "app.selectTool('Adobe Freehand Tool');");
+    assert_eq!(empty.tool_id(), "pencil");
+}
+
+#[test]
 fn unsupported_members_say_so() {
     let (mut s, _, _) = doc();
     assert!(failure(&mut s, "app.activeDocument.layers;").contains("Document.layers is not available yet"));

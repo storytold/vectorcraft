@@ -2622,7 +2622,13 @@ app through the global object `vc`, and writes to the Script Console and runs ot
 - `vc.log(value)` adds a value to the report and a line to the Script Console.
 - `app` is the application object the help page https://ai-scripting.docsforadobe.dev/jsobjref/Application/
   describes: `app.documents`, `app.activeDocument` (assigning an open document makes it the active one),
-  `app.selection`, `app.coordinateSystem` and `app.getIsFileOpen(path)`. `app.documents`
+  `app.selection`, `app.coordinateSystem`, `app.getIsFileOpen(path)` and `app.selectTool(name)`. `selectTool`
+  (https://community.adobe.com/questions-652/what-s-new-in-illustrator-scripting-cc2020-769942) takes a tool's id
+  (`pen`), its label (`Pen Tool`) or a tool name in the form that thread lists, returns `true`, and makes the tool it
+  names the current tool when the run ends without an error; the tool chosen last in a run is the one that counts,
+  and a run that fails leaves the tool as it was. A name no tool has throws `No tool is named "<name>"`, a name that
+  is not a string throws a `TypeError`, and a name of more than 4,096 bytes throws a `RangeError`. Which tool each
+  name in that thread chooses is VectorCraft's own reading; names with no VectorCraft tool throw. `app.documents`
   (https://ai-scripting.docsforadobe.dev/jsobjref/Documents/) has `length`, `[i]`, `index(key)`, `getByName(name)`
   and `add(colorSpace?, width?, height?, numArtBoards?, artboardLayout?, artboardSpacing?, artboardRowsOrCols?)`,
   which runs `file.new` (`artboardRowsOrCols` is the number of rows for `GridByCol` and `RLGridByCol`, and of

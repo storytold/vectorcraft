@@ -25,6 +25,9 @@
 //! - `app.activeDocument` with no document open throws `No active document`.
 //! - Assigning `Document.selection` takes one object, a list of them, `null` or `[]`; every object
 //!   must be one of that document's that can be selected, or nothing changes.
+//! - `app.selectTool(name)` takes a tool's id, its label, or a name of the list cited at
+//!   [`TOOL_NAME_PREFIX`], and the tool becomes the current tool when the run ends without an
+//!   error. A run that fails leaves the tool as it was.
 //! - Members the help pages list that are not here yet throw an error that says so.
 
 use std::cell::{Cell, RefCell};
@@ -88,7 +91,8 @@ const ARTBOARD_COORDS: &str = "CoordinateSystem.ARTBOARDCOORDINATESYSTEM";
 /// What the object model keeps for one run: its coordinate system, the lists of page items and the
 /// answers of which objects are on a locked artboard for the last [`ITEM_LISTS`] documents read,
 /// each kept while its document is unchanged, whether a call's own savepoint ([`atomically`]) is
-/// open, and the settings of each `DocumentPreset` the run made.
+/// open, the settings of each `DocumentPreset` the run made, and the tool `app.selectTool` chose
+/// last.
 #[derive(Default)]
 pub(super) struct State {
     coords: Cell<Coords>,
@@ -96,12 +100,19 @@ pub(super) struct State {
     locked: RefCell<Vec<LockedList>>,
     saving: Cell<bool>,
     presets: RefCell<Vec<Vec<(String, Data)>>>,
+    tool: Cell<Option<&'static str>>,
 }
 
 impl State {
     /// Whether a call's own savepoint is open: its commands take none of their own.
     pub(super) fn saving(&self) -> bool {
         self.saving.get()
+    }
+
+    /// The id of the tool `app.selectTool` chose last in the run, which becomes the current tool
+    /// when the run ends without an error.
+    pub(super) fn chosen_tool(&self) -> Option<&'static str> {
+        self.tool.get()
     }
 }
 
@@ -730,6 +741,69 @@ fn app_is_open(h: &Host, a: &[Data]) -> Answer {
     let s = h.session.borrow();
     let open = s.documents().iter().filter_map(|d| d.path.as_deref()).any(|p| path_key(p) == key && crate::file_access::check_read(p).is_ok());
     Ok(Data::Bool(open))
+}
+
+/// The start of the tool names that scripts pass to `app.selectTool`, as the list at
+/// <https://community.adobe.com/questions-652/what-s-new-in-illustrator-scripting-cc2020-769942> gives them.
+const TOOL_NAME_PREFIX: &str = "Adobe "; // brand-ok: the start of the tool names scripts pass
+
+/// The names on that list, without [`TOOL_NAME_PREFIX`], whose words differ from the label of the
+/// VectorCraft tool they choose, with that tool's id. Names whose words are a VectorCraft tool's
+/// label (`Pen Tool`) choose that tool without a row here. The pairs are VectorCraft's own.
+const TOOL_NAMES: &[(&str, &str)] = &[
+    ("Select Tool", "selection"),
+    ("Direct Select Tool", "directSelection"),
+    ("Direct Object Select Tool", "groupSelection"),
+    ("Direct Lasso Tool", "lasso"),
+    ("Path Type Tool", "typeOnPath"),
+    ("Vertical Path Type Tool", "verticalTypeOnPath"),
+    ("Line Tool", "lineSegment"),
+    ("Shape Construction Regular Polygon Tool", "polygon"),
+    ("Shape Construction Star Tool", "star"),
+    ("Shape Construction Spiral Tool", "spiral"),
+    ("Brush Tool", "paintbrush"),
+    ("Freehand Tool", "pencil"),
+    ("Freehand Smooth Tool", "smooth"),
+    ("Freehand Erase Tool", "pathEraser"),
+    ("Corner Join Tool", "join"),
+    ("Knife Tool", "knife"),
+    ("New Twirl Tool", "twirl"),
+    ("Cyrstallize Tool", "crystallize"),
+    ("Planar Paintbucket Tool", "livePaintBucket"),
+    ("Planar Face Select Tool", "livePaintSelection"),
+    ("Mesh Editing Tool", "mesh"),
+    ("Gradient Vector Tool", "gradient"),
+    ("Crop Tool", "artboard"),
+    ("Slice Select Tool", "sliceSelection"),
+    ("Scroll Tool", "hand"),
+    ("Page Tool", "printTiling"),
+];
+
+/// The id of the tool `name` names: a tool's id (`pen`), its label (`Pen Tool`), or a name of the
+/// list [`TOOL_NAME_PREFIX`] cites.
+fn tool_named(name: &str) -> Option<&'static str> {
+    let tools = || vectorcraft_tools::catalog::all_tools();
+    if let Some(t) = tools().find(|t| t.id == name || t.label == name) {
+        return Some(t.id);
+    }
+    let rest = name.strip_prefix(TOOL_NAME_PREFIX)?;
+    if let Some((_, id)) = TOOL_NAMES.iter().find(|(n, _)| *n == rest) {
+        return vectorcraft_tools::tool_info(id).map(|t| t.id);
+    }
+    tools().find(|t| t.label == rest).map(|t| t.id)
+}
+
+/// `app.selectTool(name)`: chooses the tool `name` names ([`tool_named`]) and gives `true`. The
+/// tool becomes the current tool when the run ends without an error, as a choice on the toolbar
+/// does; the tool chosen last in a run is the one that counts. A name no tool has throws.
+fn app_select_tool(h: &Host, a: &[Data]) -> Answer {
+    let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("selectTool needs a tool name, as a string".into())) };
+    if name.len() > MAX_TEXT_BYTES {
+        return Err(HostError::Range("the tool name is too long".into()));
+    }
+    let id = tool_named(name).ok_or_else(|| HostError::Error(format!("No tool is named \"{name}\"")))?;
+    h.dom.tool.set(Some(id));
+    Ok(Data::Bool(true))
 }
 
 // ---- Documents ----
@@ -1948,6 +2022,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("selection", get(l, app_selection)),
         ("coordinateSystem", property(l, app_coords, app_set_coords)),
         ("getIsFileOpen", method(l, app_is_open)),
+        ("selectTool", method(l, app_select_tool)),
     ]);
     application.push(later(l, "Application", "beep"));
     let preset = {
