@@ -634,15 +634,16 @@ fn inflated(stream: &Stream<'_>, most: usize) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
-/// Does `page` carry an editor's private data (`PieceInfo` keys starting with `AIPrivateData` or `AIPDFPrivateData`)?
+/// Does `page` carry an editor's private data (`PieceInfo` keys starting with `AIPrivateData`)?
 /// A file saved without PDF compatibility keeps its art there and shows a placeholder page.
 pub(crate) fn has_private_data(page: &Page<'_>) -> bool {
-    piece_info_has(page, &[b"AIPrivateData", b"AIPDFPrivateData"])
+    piece_info_has(page, &[b"AIPrivateData"])
 }
 
-/// Does `pdf` carry an editor's private data at page or document catalog level?
+/// Does `pdf` carry an editor's private data in its root document catalog (`AIPrivateData`)?
 pub(crate) fn has_private_data_doc(pdf: &Pdf) -> bool {
-    has_private_data_keys(pdf)
+    let xref = pdf.xref();
+    xref.get::<Dict<'_>>(xref.root_id()).is_some_and(|root| dict_piece_info_has(&root, &[b"AIPrivateData"]))
 }
 
 /// Does `page` state where its art is: an art, trim or bleed box (ISO 32000-1 §14.11.2, the

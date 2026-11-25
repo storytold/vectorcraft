@@ -53,13 +53,13 @@ fn ai_fixture_with_locked_group_and_locked_object_imports_with_locks_preserved()
 }
 
 #[test]
-fn catalog_level_piece_info_with_aipdfprivatedata_detects_ai_data_and_preserves_locks() {
+fn catalog_level_piece_info_with_aiprivatedata_detects_ai_data_and_preserves_locks() {
     let (a, b) = (first_extra(1), first_extra(1) + 1);
     let order_obj = first_extra(1) + 2;
     let objs = ["<< /Type /OCG /Name (Layer1) >>".to_string(), "<< /Type /OCG /Name (LockedGroup) /Locked true >>".to_string()];
     let catalog = format!(
         "/OCProperties << /OCGs [{a} 0 R {b} 0 R] /D << /Order {order_obj} 0 R >> >> \
-         /PieceInfo << /Illustrator << /Private << /AIPDFPrivateData1 7 /NumBlock 1 >> >> >>"
+         /PieceInfo << /Illustrator << /Private << /AIPrivateData1 7 /NumBlock 1 >> >> >>"
     );
     let order_body = format!("[{a} 0 R [{b} 0 R]]");
     let content = "/OC /MC0 BDC 1 0 0 rg 10 10 20 20 re f EMC \
