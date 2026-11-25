@@ -305,6 +305,39 @@ fn fill_area_stays_inside_the_isolated_group() {
     assert_eq!(s.doc().unwrap().doc.parent_of(new), s.doc().unwrap().doc.default_layer());
 }
 
+/// In isolation mode, `ids` naming the isolated group, or the layer or a group that holds it, takes
+/// every path of the isolated group. The other paths of that layer or group, and other listed
+/// objects outside the isolated group, do not bound areas.
+#[test]
+fn fill_area_ids_naming_what_holds_the_isolated_group_take_its_paths() {
+    let mut s = session();
+    let outside =
+        [line(&mut s, (200.0, 0.0), (300.0, 100.0)), line(&mut s, (300.0, 0.0), (200.0, 100.0)), line(&mut s, (190.0, 80.0), (310.0, 80.0))];
+    let lines = triangle(&mut s);
+    let ids: Vec<u64> = lines.iter().map(|l| l.0).collect();
+    s.execute("select.set", &json!({"ids": ids})).unwrap();
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    let outer = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    deselect(&mut s);
+    let layer = s.doc().unwrap().doc.default_layer().unwrap();
+    let (undo, kids) = (undo_len(&s), stack(&s));
+    for named in [vec![layer.0], vec![outer.0], vec![g.0], vec![layer.0, outside[0].0]] {
+        let r = s.execute("shapeBuilder.copyRegion", &json!({"point": [250, 70], "ids": named}));
+        assert!(r.is_err(), "the area outside the isolated group, ids {named:?}");
+        assert_eq!((undo_len(&s), stack(&s)), (undo, kids.clone()));
+        let r = s.execute("shapeBuilder.copyRegion", &json!({"point": [50, 70], "ids": named})).unwrap();
+        let new = id_of(&r);
+        assert_eq!(s.doc().unwrap().doc.parent_of(new), Some(g), "ids {named:?}");
+        assert!((area(&s, new) - 900.0).abs() < 1.0, "{}", area(&s, new));
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    let named: Vec<u64> = outside.iter().map(|l| l.0).collect();
+    assert!(s.execute("shapeBuilder.copyRegion", &json!({"point": [50, 70], "ids": named})).is_err(), "only art outside it listed");
+    assert_eq!((undo_len(&s), stack(&s)), (undo, kids));
+}
+
 /// While a compound path is isolated, Fill Area finds no area, for the command and the tool, and
 /// changes nothing: the compound path cannot hold the new path. The same goes for an isolated
 /// Objects on Path group, a group with a Transform effect and a group that is a clipping mask.
