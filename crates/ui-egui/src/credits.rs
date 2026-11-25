@@ -76,7 +76,7 @@ pub fn about_info(app: &mut VectorcraftApp) -> AboutInfo {
         built_with.push('\n');
         built_with.push_str(&crate::i18n::fmt(tl!("Graphics: {adapter}"), &[("adapter", adapter.as_str())]));
     }
-    let mut info = AboutInfo::new("VectorCraft", tl!("Open-source vector illustration in pure Rust."), env!("CARGO_PKG_VERSION"))
+    let mut info = AboutInfo::new(crate::os_window::name(), tl!("Open-source vector illustration in pure Rust."), crate::os_window::version())
         .links(links)
         .built_with(built_with)
         .icon(crate::brand::image());

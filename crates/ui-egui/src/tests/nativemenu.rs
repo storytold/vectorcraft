@@ -125,10 +125,7 @@ impl Mac {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 850.0))),
             ..Default::default()
         };
-        let app = &mut self.app;
-        craft::ui::shell::embed::before_input(&self.ctx, |out| app.frame_input(out));
-
-        crate::testing::app_frame(app, &self.ctx, raw)
+        crate::testing::app_frame(&mut self.app, &self.ctx, raw)
     }
 
     /// AppKit chose an item by its key equivalent `sc`. A paste the menu asks the host for
@@ -315,7 +312,9 @@ fn applying_a_dialog_preview_reads_the_menus() {
         let read = m.angles(4);
         let synced = m.fake.synced();
         crate::tests_synthetic::control(&mut m.app, &m.ctx, "ui.dialog.confirm", json!({}));
-        // OK applies in the dialog's pass, and its layer is gone from the next one.
+        // The OK enters the next frame's pass and applies there; the dialog's layer and the preview's interaction are
+        // gone two frames later.
+        m.frame(vec![]);
         m.frame(vec![]);
         m.frame(vec![]);
         (read, synced, !m.app.session.in_interaction() && !m.app.any_dialog_open(), m.fake.synced())

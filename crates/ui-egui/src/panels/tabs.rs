@@ -1,4 +1,5 @@
-//! Tabs panel: tab-stop alignment, X position (Y in vertical type), leader and "align on", and the
+//! Tabs panel: tab-stop alignment, X position (Y in vertical type; a position typed there for a
+//! paragraph with no stops adds a stop at it), leader and "align on", and the
 //! framework's text ruler numbered in the General unit, on which a click adds a stop, dragging moves
 //! one and dragging it off the ruler deletes it. Ctrl-dragging a stop (Command on macOS) moves all the
 //! stops by the same distance. A stop lands on the ruler's step, or free with Alt held. While a stop is
@@ -677,8 +678,10 @@ pub(crate) fn apply_ruler_edit(app: &mut VectorcraftApp, node: &Node, para: &Par
 }
 
 /// The X (Y in vertical type) field's `value`: a picked marker moves to it, else the picked stop
-/// does and stays picked after the stops are sorted. A position past [`MAX_STOP`] is refused by
-/// `text.tabs.set` and nothing changes. `picked`: the stop and the marker of [`TabsPanel`].
+/// does and stays picked after the stops are sorted. A paragraph with no stops and no picked marker
+/// gets a stop there with the panel's alignment, which is then picked, as a click on the ruler adds
+/// one. A position past [`MAX_STOP`] is refused by `text.tabs.set` and nothing changes. `picked`:
+/// the stop and the marker of [`TabsPanel`].
 pub(crate) fn set_position(app: &mut VectorcraftApp, node: &Node, para: &ParaStyle, span: f64, picked: (usize, Option<RulerItem>), value: f64) {
     let (stop, marker) = picked;
     match marker {
@@ -690,6 +693,13 @@ pub(crate) fn set_position(app: &mut VectorcraftApp, node: &Node, para: &ParaSty
             if let Some(marker) = indent_marker(item) {
                 let targets = indent_targets(app, node);
                 set_marker(app, marker, value, para, span, &targets, false);
+            }
+        }
+        None if para.tabs.is_empty() => {
+            let align = app.ui.tabs_panel.align;
+            let added = TabStop { position: value.max(0.0), align, leader: String::new(), align_on: '.' };
+            if apply(app, std::slice::from_ref(&added)) {
+                app.ui.tabs_panel.stop = 0;
             }
         }
         None => {

@@ -991,6 +991,10 @@ fn code(ops: Vec<Op>) -> Code {
         arrow: false,
         uses_this: false,
         param_init: false,
+        pattern_names: Vec::new(),
+        es2015: false,
+        own_name: None,
+        method: false,
     }
 }
 
