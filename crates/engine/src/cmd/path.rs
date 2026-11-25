@@ -122,7 +122,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Delete Anchor Points",
             [],
             None,
-            "{} delete the direct-selected anchors and their segments, opening closed paths there, and delete objects selected whole alongside them; what remains of a path stays selected, so a second Delete removes it (the Delete key)",
+            "{} delete the direct-selected anchors and their segments, opening closed paths there, and delete objects selected whole alongside them; what remains of a path stays selected, so a second Delete removes it (the Delete key, unless the deleteKeepsPathsJoined preference is on)",
             has_anchors,
             delete_anchors
         ),
@@ -140,7 +140,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Anchor Point",
             [],
             None,
-            "{id, subpath?, segment, t: 0..1} add an anchor at t on the segment → {anchor}; the direct-selected anchors and selected segments keep the same points (a selected segment it splits stays selected as its two halves), and a path that isn't selected becomes the selection with the new anchor direct-selected",
+            "{id, subpath?, segment, t: 0..1, selectAnchor?: bool (the path becomes the selection with only the new anchor direct-selected, also when it is selected)} add an anchor at t on the segment → {anchor}; the direct-selected anchors and selected segments keep the same points (a selected segment it splits stays selected as its two halves), and a path that isn't selected becomes the selection with the new anchor direct-selected",
             has_doc,
             insert_anchor
         ),
@@ -1652,6 +1652,17 @@ fn convert_anchors(s: &mut Session, p: &Value) -> Result<Value> {
 /// Layers are retained, and an object removed with a selected ancestor is not removed twice.
 /// Returns JSON `null` on success; selection is replaced by the surviving object IDs.
 pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
+    delete_anchors_joined(s, p, false)
+}
+
+/// [`delete_anchors`], and with `keep_joined` (General › Delete Removes Anchor Points and Keeps
+/// Paths Joined) a path with direct-selected anchors and no selected segment loses those anchors
+/// as Remove Anchor Points takes them, without opening it, and stays selected with the next
+/// anchor along (the one before at an open subpath's end), so the next Delete goes on along the
+/// path. When no subpath it changed keeps two anchors, the path stays selected whole, as Remove
+/// Anchor Points leaves it. Paths with a selected segment are cut there, as without `keep_joined`
+/// (their selected anchors stay in the path), and objects selected whole are deleted, in the same undo step.
+pub(crate) fn delete_anchors_joined(s: &mut Session, p: &Value, keep_joined: bool) -> Result<Value> {
     // `guides: true` (Cut, #3226): the selected ruler guides go in the same undo step.
     let with_guides = switch_or(p, "guides", false, "path.deleteAnchors")?;
     let st = s.doc()?;
@@ -1681,11 +1692,29 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
             d.remove_many(&whole_ids)?;
         }
         let mut survivors = vec![];
+        let mut following = vec![];
         let remaining: Vec<NodeId> = sel.keys().copied().filter(|id| d.node(*id).is_some()).collect();
         let mut emptied = Beside::replacing(d, &remaining);
         for (id, set) in &sel {
             // The path went with a fully selected group around it.
             if d.node(*id).is_none() {
+                continue;
+            }
+            if keep_joined
+                && !set.is_empty()
+                && !segments.contains_key(id)
+                && let Some(path) = d.node(*id).and_then(|n| match &n.kind {
+                    NodeKind::Path { path, .. } => Some(path),
+                    _ => None,
+                })
+            {
+                let shape: Vec<(usize, bool)> = path.subpaths.iter().map(|sp| (sp.anchors.len(), sp.closed)).collect();
+                let anchors: Vec<(usize, usize)> = set.iter().copied().collect();
+                let next = super::draw2::following_anchors(&shape, &anchors);
+                if !super::draw2::remove_anchors_of(d, selection, &mut emptied, *id, anchors, false)? {
+                    survivors.push(*id);
+                    following.push((*id, next));
+                }
                 continue;
             }
             let original = deletion_source(d, *id)?;
@@ -1731,6 +1760,11 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
         selection.set(survivors);
+        for (id, next) in following {
+            if !next.is_empty() {
+                selection.anchors.insert(id, next);
+            }
+        }
         Ok(())
     })?;
     ok()
@@ -2121,6 +2155,7 @@ fn insert_anchor(s: &mut Session, p: &Value) -> Result<Value> {
     let si = usize_opt(p, "subpath", "path.insertAnchor")?.unwrap_or(0);
     let seg = index_opt(p, "segment", "path.insertAnchor")?.ok_or_else(|| bad("path.insertAnchor", "missing segment"))?;
     let t = number_or(p, "t", 0.5, "path.insertAnchor")?.clamp(0.0, 1.0);
+    let select_anchor = switch_or(p, "selectAnchor", false, "path.insertAnchor")?;
     let idx = s.edit("Add Anchor Point", |d, sel| {
         let path = path_mut(d, id)?;
         let sp = path.subpaths.get_mut(si).ok_or_else(|| EngineError::Other("no such subpath".into()))?;
@@ -2130,8 +2165,9 @@ fn insert_anchor(s: &mut Session, p: &Value) -> Result<Value> {
         let idx = sp.insert_anchor(seg, t);
         renumber_after_insert(sel, id, si, idx);
         // A path that wasn't selected becomes the selection, its new anchor direct-selected, so
-        // the point added shows and can be edited at once (#4237).
-        if !sel.contains(id) {
+        // the point added shows and can be edited at once (#4237). `selectAnchor` does the same
+        // for a path that is selected.
+        if select_anchor || !sel.contains(id) {
             sel.clear();
             sel.add(id);
             sel.anchors.entry(id).or_default().insert((si, idx));
