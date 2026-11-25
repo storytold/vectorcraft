@@ -3031,8 +3031,8 @@ asks whether to stop the script, and Cancel shows it again with the events it ha
 handler takes the run past the growth limit, the question to continue opens over the dialog, and Continue shows the
 dialog again with those events and the text typed in its fields. An event that waits for the script goes to the control
 it was given to, and a typed text stays in its field, also after a handler adds controls before that one.
-`ui.dialog.set` with `event` (`click`, `change` or `close`), `control` (a control's index in the dialog, its name or
-its text) and `value`, then `ui.dialog.confirm`, gives the script that event; a click or a close first gives the
+`ui.dialog.set` with `event` (`click`, `change` or `close`), `control` (a control's index in the dialog, its name, or
+the text of a control without a name) and `value`, then `ui.dialog.confirm`, gives the script that event; a click or a close first gives the
 script the text still typed in the dialog's fields. When one of those texts is longer than 16 KiB, the script gets
 no event and every field keeps its text: `ui.dialog.confirm`, `ui.dialog.cancel` and `ui.dialog.set` with `action`
 return an error, and Escape shows it in the status bar. Such a text stays in its field when the field loses the
@@ -3042,7 +3042,7 @@ open.
 
 A run with nobody to ask takes `{kind: "window", value: [step, ...]}` from `answers` for each `show()`. A step is
 `{control, event: "click"}`, `{control, event: "change", value}` or `{event: "close"}`, where `control` is a
-control's `name`, else its text, and `value` is an edit field's text, a slider's number (kept in its range), or a
+control's `name`, or the text of a control without a name, and `value` is an edit field's text, a slider's number (kept in its range), or a
 list's item index (a whole number, such as `2` or `2.0`) or `null`. The dialog takes the next step each time it
 waits. The run ends with an error that the script cannot catch, and every document goes back, when no step is
 left, when a step names a control the dialog does not have or that cannot take it, or when the dialog closes, or

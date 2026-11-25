@@ -119,6 +119,21 @@ fn a_missing_wrong_or_unused_step_ends_the_run_and_rolls_it_back() {
 }
 
 #[test]
+fn a_step_names_a_control_by_its_text_only_when_it_has_no_name() {
+    let mut s = one_doc();
+    let source = "var w = new Window('dialog'); \
+        var named = w.add('button', undefined, 'Apply', {name: 'apply'}); named.onClick = function () { vc.log('named'); }; \
+        var plain = w.add('button', undefined, 'Apply'); plain.onClick = function () { vc.log('plain'); }; \
+        w.add('button', undefined, 'OK'); w.show();";
+    let steps = window(json!([{"control": "Apply", "event": "click"}, {"control": "apply", "event": "click"}, {"control": "OK", "event": "click"}]));
+    headless(&mut s, source, steps).unwrap();
+    assert_eq!(s.script_report().unwrap()["log"], json!(["plain", "named"]));
+    let go = "var w = new Window('dialog'); w.add('button', undefined, 'Go', {name: 'go'}); w.show();";
+    let e = headless(&mut s, go, window(json!([{"control": "Go", "event": "click"}]))).unwrap_err().to_string();
+    assert!(e.contains("the dialog has no control named Go"), "{e}");
+}
+
+#[test]
 fn window_answers_that_do_not_parse_are_refused_before_the_run() {
     let mut s = one_doc();
     let bad = |i: usize| format!("`answers[0]` has a step {i} that is not a valid click, change or close");
