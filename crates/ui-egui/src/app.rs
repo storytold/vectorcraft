@@ -5,7 +5,7 @@ use craft::platform::clock::monotonic_ms;
 use craft::theme::variant::Tone;
 use craft::ui::buttons::{ActiveLook, PushButtonLook};
 use craft::ui::choice::ChoiceLook;
-use craft::ui::contract::{Bind, CaptionInk, GlyphColon, LinkLabelInk, SectionRhythm};
+use craft::ui::contract::{Bind, CaptionInk, GlyphColon, LinkLabelInk, QuietHeader, SectionRhythm};
 use craft::ui::docking::IconGroupSeparator;
 use craft::ui::list::CommandHighlight;
 use craft::ui::menu::MenuTitlePad;
@@ -703,6 +703,9 @@ pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> Ro
     root.values.set(DialogButtonLook::Filled);
     // Sections stand apart with production's room around their dividers.
     root.values.set(SectionRhythm::Spaced);
+    // The Properties kind line ("Ellipse") heads the sections under it, so the first draws no divider above it, as
+    // production's did.
+    root.values.set(QuietHeader::Heads);
     // The menu bar's titles stand as close as production's, which share the line with the bar's other controls.
     root.values.set(MenuTitlePad::Control);
     // Document tabs show their title and its `*` in the label's semibold face, as production drew them.
