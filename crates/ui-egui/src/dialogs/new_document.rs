@@ -35,7 +35,7 @@ use craft::ui::pickers::Select;
 use craft::ui::popover::Popover;
 use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
 use craft::ui::sections::Section;
-use craft::ui::text::{LinkMode, LinkedFields, NumberField};
+use craft::ui::text::{LinkMode, LinkedFields, LinkedLayout, NumberField};
 
 use super::host::open_held;
 use crate::VectorcraftApp;
@@ -326,6 +326,7 @@ impl DocumentSettings for VcNewDocument {
             let captions = [text(tl!("Top")), text(tl!("Bottom")), text(tl!("Left")), text(tl!("Right"))];
             let out = LinkedFields::<4>::new(bleed.clone(), Bind::given(parts), Bind::bound(&mut linked))
                 .mode(LinkMode::Equal)
+                .layout(LinkedLayout::Columns)
                 .captions(captions)
                 .range(0.0..=vectorcraft_doc::setup::MAX_BLEED)
                 .lengths(lengths)
@@ -805,6 +806,39 @@ mod tests {
         // Next time it opens on the document just made, named after the next untitled one.
         open(&mut app);
         assert_eq!(fields(&app)["name"], json!("Untitled-2"));
+    }
+
+    /// The four Bleed fields stay inside the dialog in a 1280 by 900 window; in one row, Right ran past the dialog's
+    /// right edge.
+    #[test]
+    fn bleed_fields_stay_inside_the_dialog() {
+        let mut app = app();
+        open(&mut app);
+        let ctx = ctx(&app);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
+        // Each frame gives the app's input once, as the hosts do.
+        let frame = |app: &mut VectorcraftApp, i: u32| {
+            let mut raw = egui::RawInput { time: Some(0.1 * f64::from(i)), screen_rect: Some(screen), ..Default::default() };
+            app.adopt_context(&ctx);
+            app.raw_input(&ctx, &mut raw);
+            craft::ui::shell::embed::before_input(&ctx, |out| app.frame_input(out));
+            let mut out = ctx.run_ui(raw, |ui| app.ui(ui));
+            out.textures_delta.clear();
+            out
+        };
+        (0..3).for_each(|i| drop(frame(&mut app, i)));
+        let out = frame(&mut app, 3);
+        let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        let bounds = |label: Option<&str>, role: egui::accesskit::Role| {
+            let found = nodes.iter().find(|(_, n)| n.role() == role && label.is_none_or(|l| n.label() == Some(l)));
+            let (_, n) = found.unwrap_or_else(|| panic!("no {role:?} {label:?}"));
+            n.bounds().expect("bounds")
+        };
+        let dialog = bounds(None, egui::accesskit::Role::Dialog);
+        for side in ["Top", "Bottom", "Left", "Right"] {
+            let field = bounds(Some(side), egui::accesskit::Role::SpinButton);
+            assert!(dialog.x0 <= field.x0 && field.x1 <= dialog.x1, "Bleed {side} {field:?} stays inside the dialog {dialog:?}");
+        }
     }
 
     /// More Settings edits only the artboard layout, spacing and columns, and creates nothing.
