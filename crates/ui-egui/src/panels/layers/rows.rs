@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use craft::behavior::{EditEvent, SelectionChange};
 use craft::keymap::{CommandRef, Mods};
 use craft::layers::ui::panel::{ActivateOn, LayerColumn, LayerDrop, LayerMove, LayerPosition, LayerSelect, LayerToggle, LayersEvent};
@@ -110,15 +112,42 @@ pub(super) fn locate_layer_listed(doc: &Document, root: Option<NodeId>) -> bool 
 pub(super) fn shows_targeted(tree: &DocLayers<'_>, n: &Node, is_sel: bool) -> bool {
     match tree.state().selection.target {
         Some(id) => id == n.id,
-        None if n.is_layer() => {
-            if tree.state().selection.objects.is_empty() {
-                return false;
-            }
-            let art = n.layer_art(true);
-            !art.is_empty() && art.iter().all(|id| tree.is_selected(*id))
-        }
+        None if n.is_layer() => tree.is_full(n.id),
         None => is_sel,
     }
+}
+
+/// The layers and sublayers of `doc` whose [`Node::layer_art`] with `editable` is not empty and
+/// all in `sel`, found in one pass over the layers and their direct children.
+pub(super) fn full_layers(doc: &Document, sel: &HashSet<NodeId>) -> HashSet<NodeId> {
+    /// Adds `layer` to `out` when it is full, and returns its art's count and selected count.
+    fn visit(layer: &Node, sel: &HashSet<NodeId>, out: &mut HashSet<NodeId>) -> (usize, usize) {
+        let (mut art, mut selected) = (0, 0);
+        for c in layer.children().into_iter().flatten() {
+            let counts = !(c.is_ruler_guide() || !c.visible || c.locked || c.is_template());
+            if c.is_layer() {
+                let (a, s) = visit(c, sel, out);
+                if counts {
+                    art += a;
+                    selected += s;
+                }
+            } else if counts {
+                art += 1;
+                selected += usize::from(sel.contains(&c.id));
+            }
+        }
+        if art > 0 && selected == art {
+            out.insert(layer.id);
+        }
+        (art, selected)
+    }
+    let mut out = HashSet::new();
+    if !sel.is_empty() {
+        for layer in doc.layers.iter().filter(|l| l.is_layer()) {
+            visit(layer, sel, &mut out);
+        }
+    }
+    out
 }
 
 /// The `layer.target` of a click with `mods` on the target circle of `id`, by the rules of a row click (#8639): plain

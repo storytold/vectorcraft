@@ -61,6 +61,9 @@ pub struct Prefs {
     /// the curve around each one, instead of deleting them with their segments. Off (the default),
     /// Clear opens the path there.
     pub delete_keeps_paths_joined: bool,
+    /// General › Double-Click Adds Anchor Points: on, a plain double-click on a path segment with
+    /// Direct Selection adds an anchor there. Off (the default), the double-click adds nothing.
+    pub double_click_adds_anchor_points: bool,
     pub use_precise_cursors: bool,
     pub show_tool_tips: bool,
     /// General › Show Tool Cards: with tool tips on, a tool button's tool tip is a card with what the
@@ -486,6 +489,7 @@ impl Default for Prefs {
             disable_auto_add_delete: false,
             interpolate_control_points: false,
             delete_keeps_paths_joined: false,
+            double_click_adds_anchor_points: false,
             use_precise_cursors: false,
             show_tool_tips: true,
             show_tool_cards: false,

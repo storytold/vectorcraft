@@ -39,7 +39,7 @@ fn tolerance(o: &Value, key: &str) -> NumberField<'static> {
 /// checkbox is on.
 fn row(app: &mut VectorcraftApp, ui: &mut Ui, o: &Value, label: &'static str, flag: &str, tol: Option<(&str, &dyn Fn() -> NumberField<'static>)>) {
     let on = o[flag].as_bool().unwrap_or(false);
-    Row::new().fill_width().align(RowAlign::SpaceBetween).show(ui, |ui, _| {
+    Row::new().fill_width().align(RowAlign::SpaceBetween).wrap(true).show(ui, |ui, _| {
         if let Some(now) = Checkbox::new(Bind::given(on)).label(label).id_salt(flag).show(ui).value().copied() {
             app.run("magicWand.set", json!({ flag: now })).ok();
         }

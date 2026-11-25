@@ -3,12 +3,11 @@ use craft::keymap::Mods;
 use craft::layers::ui::panel::MenuTarget; // PLAN: assumed path of craft-layers' panel types
 use craft::layers::ui::tree::LayerRowKey;
 use craft::ui::contract::{Entry, ListDrag, Show as _};
-use craft::ui::display::{Shade, Text};
+use craft::ui::display::{Elide, Text};
 use craft::ui::menu::{MenuRow, PanelRow};
 use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
 use craft::ui::sections::{FooterAction, FooterBar};
-use craft::ui::style::TypeRole;
 
 // PLAN: assumed document-panels-w7's `model` exports `DocLayers` (accessors used here: `doc() -> &Arc<Document>`,
 // `state() -> &DocState`, `root() -> Option<NodeId>`, `layers_only() -> bool`, `guides() -> &[usize]`,
@@ -452,8 +451,9 @@ pub(crate) fn footer(tree: &DocLayers, ui: &mut Ui, out: &mut Vec<(String, Value
             .enabled(locate_ok),
     ];
     let count = crate::i18n::tn(tree.doc().layers.len() as u64, "{n} Layer", "{n} Layers").to_string();
+    // The count is a unit of the footer's row, centred on its buttons' line in the text ink.
     let (output, _) = FooterBar::actions(actions).at_start(0).show_footer_leading(ui, |ui, _| {
-        Text::new(count.clone()).role(TypeRole::Caption).shade(Shade::Muted).show(ui);
+        Text::new(count.clone()).elide(Elide::End).show(ui);
     });
     // The footer runs twice per pass: the sizing pass measures it and must report nothing.
     if ui.is_sizing_pass() {

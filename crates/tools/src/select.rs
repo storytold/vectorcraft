@@ -1675,15 +1675,22 @@ fn object_behind(cx: &ToolContext, p: Point) -> Option<NodeId> {
 /// member with only some anchors or segments selected does not count: the press selects `top`.
 /// A member with every anchor selected (as `select.anchors` and `select.key` leave a path) counts.
 fn selected_under(cx: &ToolContext, h: &Hit, top: NodeId) -> Option<NodeId> {
-    if cx.selection.contains(top) {
+    selected_under_in(cx.doc, cx.selection, h, top)
+}
+
+/// [`selected_under`] in `doc` with `selection`: the selected object a Selection tool press on
+/// `h` lands on, where `top` is the object the press would select. The canvas's hover outline
+/// outlines nothing where this finds an object.
+pub fn selected_under_in(doc: &vectorcraft_doc::Document, selection: &vectorcraft_doc::Selection, h: &Hit, top: NodeId) -> Option<NodeId> {
+    if selection.contains(top) {
         return Some(top);
     }
     let every_anchor = |id: NodeId| {
-        cx.selection
+        selection
             .partial(id)
-            .is_none_or(|picked| cx.doc.node(id).and_then(|n| n.path_data()).is_some_and(|p| p.anchors().all(|(s, i, _)| picked.contains(&(s, i)))))
+            .is_none_or(|picked| doc.node(id).and_then(|n| n.path_data()).is_some_and(|p| p.anchors().all(|(s, i, _)| picked.contains(&(s, i)))))
     };
-    let whole = |id: NodeId| cx.selection.contains(id) && every_anchor(id) && !cx.selection.segments.contains_key(&id);
+    let whole = |id: NodeId| selection.contains(id) && every_anchor(id) && !selection.segments.contains_key(&id);
     let below = h.ancestry.iter().position(|id| *id == top).map_or(&[][..], |i| h.ancestry.get(i..).unwrap_or_default());
     below.iter().copied().chain(std::iter::once(h.leaf)).find(|id| whole(*id))
 }

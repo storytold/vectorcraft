@@ -144,10 +144,11 @@ pub fn launch_with_plug_ins(files: &[String]) -> io::Result<()> {
 }
 
 /// The command [`launch_with_plug_ins`] runs: `exe -- files…`, so a file whose name starts with '-'
-/// stays a file.
+/// stays a file. A nightly launch hands its profile on first (`launch_profile::child_args`), or the
+/// child would refuse to start without one.
 fn app_with_plug_ins(exe: &Path, files: &[String]) -> std::process::Command {
     let mut command = std::process::Command::new(exe);
-    command.arg("--").args(files);
+    command.args(super::launch_profile::child_args(files));
     command
 }
 
