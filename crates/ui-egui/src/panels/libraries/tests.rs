@@ -526,3 +526,32 @@ fn a_shrunk_thumbnail_keeps_its_color_beside_clear_pixels() {
         assert!(p[3] > 0 && [200, 30, 30].iter().zip(p.0).all(|(&want, c)| m(c, p[3]).abs_diff(m(want, p[3])) <= 1), "{p:?}");
     }
 }
+
+/// Graphic thumbnails decoded while the panel draws one frame.
+fn decoded(panel: &mut Harness) -> usize {
+    super::counters::DECODED.with(|c| c.set(0));
+    panel.frame();
+    super::counters::DECODED.with(std::cell::Cell::get)
+}
+
+/// A library of many graphics decodes their thumbnails at most 16 a frame, through the framework's
+/// thumbnail store, and decodes none again once they show.
+#[test]
+fn graphic_thumbnails_decode_a_few_a_frame_and_once() {
+    let mut app = app();
+    app.run("library.create", json!({"name": "Brand"})).unwrap();
+    for i in 0..60 {
+        art(&mut app, f64::from(i), Some(&format!("Mark {i}")));
+    }
+    // The harness draws two frames as it opens.
+    super::counters::DECODED.with(|c| c.set(0));
+    let mut panel = Harness::new(app, show);
+    let opening = super::counters::DECODED.with(std::cell::Cell::get);
+    assert!(opening > 0 && opening <= 32, "{opening} decoded in the first two frames");
+    let mut later = 0;
+    for _ in 0..8 {
+        later += decoded(&mut panel);
+    }
+    assert!(later > 0, "the rest decode in later frames");
+    assert_eq!(decoded(&mut panel), 0, "a shown thumbnail is not decoded again");
+}
