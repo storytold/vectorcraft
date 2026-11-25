@@ -67,7 +67,7 @@ use vectorcraft_js::{Data, HostClass, HostError, HostItem, HostMember, Realm, Ru
 use vectorcraft_tools::params::gradient_params;
 
 use super::{
-    Answer, Coords, Doc, Item, Link, NOT_FOUND, STALE_ITEM, arg, boolean, class, colors, command, coordinate, doc_of, edit_item, editable, find_doc,
+    Answer, Coords, Doc, Item, Link, NOT_FOUND, ON_LOCKED_ARTBOARD, STALE_ITEM, arg, boolean, class, colors, command, coordinate, doc_of, edit_item, editable, find_doc,
     float, frame, get, given, handle_of, id_of, id_parts, item_of, item_rect, later, method, named, num, number, on_doc, pair, point, point_get,
     point_method, point_property, property, this_doc, typename_of, whole, with_doc,
 };
@@ -340,17 +340,24 @@ fn items_index(h: &super::Host, a: &[Data]) -> Answer {
 }
 
 /// `pathItems.removeAll()`: deletes every path of the document in one command. A hidden or locked
-/// path, or one in a hidden or locked layer or group, stops it before anything is deleted.
+/// path, one in a hidden or locked layer or group, or one on a locked artboard stops it before
+/// anything is deleted, as `pageItems.removeAll()` is stopped.
 fn items_remove_all(h: &super::Host, a: &[Data]) -> Answer {
     let doc = items_doc(h, a)?;
-    let (ids, refused) = with_doc(h, doc, |_, st| {
+    let (ids, refused, on_locked) = with_doc(h, doc, |_, st| {
         let ids = path_items(h, st);
         let refused: Vec<u64> = ids.iter().filter(|i| !editable(&st.doc, **i)).map(|i| i.0).take(20).collect();
-        (ids, refused)
+        let locks = st.doc.locked_artboards();
+        let on_locked: Vec<u64> = ids.iter().filter(|i| locks.holds_id(**i)).map(|i| i.0).take(20).collect();
+        (ids, refused, on_locked)
     });
     if !refused.is_empty() {
         let list = refused.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
         return Err(HostError::Error(format!("cannot delete hidden or locked paths: {list}")));
+    }
+    if !on_locked.is_empty() {
+        let list = on_locked.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
+        return Err(HostError::Error(format!("{ON_LOCKED_ARTBOARD}: {list}")));
     }
     if !ids.is_empty() {
         on_doc(h, doc.uid, true, |h| command(h, "edit.clear", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})))?;

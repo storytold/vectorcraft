@@ -97,6 +97,31 @@ fn path_items_remove_all_refuses_locked_paths_and_changes_nothing() {
     assert_eq!(log(&mut s, "vc.log(app.activeDocument.pathItems.length);"), vec![json!(0)]);
 }
 
+/// Paths on a locked artboard stay, a path in a group included: `removeAll()` throws and deletes
+/// nothing, as `pageItems.removeAll()` and `remove()` do.
+#[test]
+fn path_items_remove_all_refuses_paths_on_a_locked_artboard() {
+    let (mut s, a, b) = doc();
+    s.execute("object.group", &json!({"ids": [b.0]})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let lock = |s: &mut Session, locked: bool| {
+        s.edit("Lock Artboard", |d, _| {
+            d.artboards[0].locked = locked;
+            Ok(())
+        })
+        .unwrap();
+    };
+    lock(&mut s, true);
+    let (before, steps) = (art(&s), undo_steps(&s));
+    let e = failure(&mut s, "app.activeDocument.pathItems.removeAll();");
+    assert!(e.contains("cannot delete objects on a locked artboard") && e.contains(&a.0.to_string()) && e.contains(&b.0.to_string()), "{e}");
+    assert_eq!(art(&s), before);
+    assert_eq!(undo_steps(&s), steps);
+    lock(&mut s, false);
+    log(&mut s, "app.activeDocument.pathItems.removeAll();");
+    assert_eq!(log(&mut s, "vc.log(app.activeDocument.pathItems.length);"), vec![json!(0)]);
+}
+
 #[test]
 fn shape_creators_use_documented_defaults_and_y_up() {
     let mut s = Session::new();
