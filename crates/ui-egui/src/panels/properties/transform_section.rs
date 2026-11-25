@@ -18,6 +18,7 @@ use serde_json::json;
 use vectorcraft_doc::{LiveCorners, LiveShape, NodeKind};
 
 use crate::VectorcraftApp;
+use crate::edits::{EditPath, apply_edits};
 use crate::panels::{self, first_selected, transform};
 
 /// The Transform section for the selection: its position and size about the reference point, the
@@ -112,17 +113,21 @@ pub(super) fn corner_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
         panels::set_picked_corners(app, &picked, json!({"kind": kind}));
     }
     let lengths = crate::canvas::general_lengths(app);
-    let mut typed = None;
+    let mut edit = None;
     Field::new(tl!("Corner Radius")).show(ui, |ui, _| {
         Row::new().show(ui, |ui, _| {
-            typed =
-                NumberField::length(tl!("Corner Radius"), Bind::given(picked.radius), lengths).show(ui).edit.events.committed().copied().flatten();
+            edit = Some(NumberField::length(tl!("Corner Radius"), Bind::given(picked.radius), lengths).show(ui).edit);
             panels::corners_link(app, ui);
         });
     });
-    // A negative radius typed in rounds nothing: the command takes 0 or more.
-    if let Some(r) = typed {
-        panels::set_picked_corners(app, &picked, json!({"radius": r.max(0.0)}));
+    if let Some(edit) = edit {
+        // Every value of a scrub sets the corners; the gesture is one undo step.
+        apply_edits(app, &edit, EditPath::Scope, |app, v: &Option<f64>, _| {
+            // A negative radius typed in rounds nothing: the command takes 0 or more.
+            if let Some(r) = v {
+                panels::set_picked_corners(app, &picked, json!({"radius": r.max(0.0)}));
+            }
+        });
     }
 }
 
