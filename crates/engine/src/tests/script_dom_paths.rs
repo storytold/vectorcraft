@@ -282,6 +282,25 @@ fn points_read_before_a_removal_or_replacement_go_stale() {
             json!("Stale path point")
         ]
     );
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pathItems[1], pt = p.pathPoints[0]; vc.log(pt.typename); pt.remove();\
+         try { vc.log(pt.typename); } catch (e) { vc.log(e.message); }",
+    );
+    assert_eq!(out, vec![json!("PathPoint"), json!("Stale path point")]);
+    // The points of a removed path, and collections kept from an earlier run, throw on typename as on
+    // their other members.
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pathItems[0], pp = p.pathPoints; vc.log([pp.typename, app.activeDocument.pathItems.typename]); p.remove();\
+         var a = '', b = ''; try { pp.length; } catch (e) { a = e.message; } try { pp.typename; } catch (e) { b = e.message; } vc.log(a !== '' && a === b);",
+    );
+    assert_eq!(out, vec![json!(["PathPoints", "PathItems"]), json!(true)]);
+    run(&mut s, "#targetengine keep\nvar items = app.activeDocument.pathItems, pts = items[0].pathPoints;").unwrap();
+    for (member, message) in [("items.typename", "Stale document"), ("pts.typename", "Stale")] {
+        let e = failure(&mut s, &format!("#targetengine keep\n{member};"));
+        assert!(e.contains(message), "{member}: {e}");
+    }
 }
 
 #[test]
@@ -468,6 +487,14 @@ fn a_color_read_from_a_path_assigns_back_unchanged() {
          var g = new GrayColor(); g.gray = 25; p.strokeColor = g; vc.log([p.fillColor.red, p.fillColor.green, p.strokeColor.gray]);",
     );
     assert_eq!(out, vec![json!([200, 0.5, 25])], "whole and short values read as they were given");
+    // A Gray ink amount too small for its Gray value to name: assigning the color read back changes nothing.
+    let (mut s, a, _) = doc();
+    let k = f32::from_bits(0x1f00_0000);
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(a).unwrap().appearance.set_fill(Paint::solid(Color::Gray { k }));
+    let steps = undo_steps(&s);
+    let r = run(&mut s, "var p = app.activeDocument.pathItems[0]; p.fillColor = p.fillColor;").unwrap();
+    assert_eq!(paint_of(&s, a, true), Paint::solid(Color::Gray { k }));
+    assert_eq!((undo_steps(&s), &r["slowestCommands"]), (steps, &json!([])));
 }
 
 #[test]
@@ -869,16 +896,49 @@ fn area_sign_follows_direction() {
 fn many_path_edits_are_one_undo_step() {
     let (mut s, a, b) = doc();
     let steps = undo_steps(&s);
+    let look = |s: &Session| [a, b].map(|id| (node(s, id).appearance, node(s, id).path_data().map(|pd| pd.subpaths.clone())));
+    let before = look(&s);
     log(
         &mut s,
         "var p = app.activeDocument.pathItems, c = new RGBColor(); c.green = 200;\
          for (var i = 0; i < p.length; i++) { p[i].fillColor = c; p[i].strokeWidth = 3; p[i].pathPoints[0].anchor = [0, 0]; }",
     );
     assert_eq!(undo_steps(&s), steps + 1);
+    assert_ne!(look(&s), before);
     s.execute("edit.undo", &json!({})).unwrap();
-    for id in [a, b] {
-        assert!((node(&s, id).appearance.stroke_width() - 1.0).abs() < 1e-9);
-    }
+    assert_eq!(look(&s), before, "one Undo puts back the fill, the stroke width and the anchor of both paths");
+}
+
+#[test]
+fn point_indexes_follow_subpaths_through_edits_adds_and_removals() {
+    let (mut s, a, _) = doc();
+    let source = format!(
+        "function A(x) {{ return {{x: x, y: 5, in: [x, 5], out: [x, 5], smooth: false}}; }}\
+         function xs() {{ var out = []; for (var i = 0; i < pp.length; i++) out.push(pp[i].anchor[0]); return out; }}\
+         var p = app.activeDocument.pathItems[0], pp = p.pathPoints;\
+         vc.run('path.setAnchors', {{id: {id}, subpaths: [{{anchors: [A(0), A(1)], closed: false}}, {{anchors: [A(10), A(11), A(12)], closed: false}},\
+         {{anchors: [A(20)], closed: false}}]}});\
+         vc.log(xs()); pp[3].anchor = [50, pp[3].anchor[1]]; vc.log([pp[3].anchor[0], pp[4].anchor[0], pp[5].anchor[0]]);\
+         pp.add(); vc.log([pp.length, pp[6].anchor[0]]);\
+         pp[0].remove(); vc.log(xs()); pp[0].remove(); vc.log(xs()); pp[4].anchor = [70, 0]; vc.log(xs());",
+        id = a.0
+    );
+    let out = log(&mut s, &source);
+    let out: Vec<Value> = out.iter().map(rounded).collect();
+    assert_eq!(
+        out,
+        vec![
+            json!([0, 1, 10, 11, 12, 20]),
+            json!([50, 12, 20]),
+            json!([7, 20]),
+            json!([1, 10, 50, 12, 20, 20]),
+            json!([10, 50, 12, 20, 20]),
+            json!([10, 50, 12, 20, 70]),
+        ]
+    );
+    let subs = node(&s, a).path_data().unwrap().subpaths.clone();
+    let xs: Vec<Vec<f64>> = subs.iter().map(|sp| sp.anchors.iter().map(|an| (an.p.x * 1000.0).round() / 1000.0).collect()).collect();
+    assert_eq!(xs, vec![vec![10.0, 50.0, 12.0], vec![20.0, 70.0]]);
 }
 
 fn selected_anchors(s: &Session, id: NodeId) -> Option<Vec<(usize, usize)>> {

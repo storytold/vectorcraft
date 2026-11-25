@@ -806,6 +806,16 @@ fn note_is_the_attributes_note() {
 }
 
 #[test]
+fn a_profile_starts_from_its_built_in_preset_and_not_a_saved_one_of_the_same_name() {
+    let mut s = Session::new();
+    s.execute("file.newPresets.save", &json!({"name": "Letter", "width": 100, "height": 50, "units": "Millimeters", "colorMode": "rgb"})).unwrap();
+    let out = log(&mut s, "var d = app.documents.addDocument('Print'); vc.log([d.width, d.height, d.documentColorSpace]);");
+    assert_eq!(out, vec![json!([612, 792, "DocumentColorSpace.CMYK"])]);
+    let out = log(&mut s, "var p = new DocumentPreset(); p.width = 300; var d = app.documents.addDocument('Print', p); vc.log([d.width, d.height]);");
+    assert_eq!(out, vec![json!([300, 792])], "presetSettings goes over the built-in preset");
+}
+
+#[test]
 fn document_preset_applies_only_its_given_fields() {
     let mut s = Session::new();
     let out = log(
@@ -1019,8 +1029,8 @@ fn get_is_file_open_cannot_probe_outside_script_scope() {
     let (mut s, _, _) = doc();
     let path = std::env::temp_dir().join(format!("vc-dom-open-{}.svg", std::process::id()));
     s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
-    let p = path.to_string_lossy().replace('\\', "\\\\");
-    let query = format!("vc.log(app.getIsFileOpen('{p}')); vc.log(app.getIsFileOpen('{p}.other'));");
+    let (p, other) = (json!(path.to_string_lossy()), json!(format!("{}.other", path.to_string_lossy())));
+    let query = format!("vc.log(app.getIsFileOpen({p})); vc.log(app.getIsFileOpen({other}));");
     let out = log(&mut s, &query);
     assert_eq!(out, vec![json!(true), json!(false)]);
     // Read roots that leave out the document's file: the same path does not count.

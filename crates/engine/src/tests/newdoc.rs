@@ -1037,3 +1037,11 @@ fn the_new_layer_takes_an_id_no_profile_art_has() {
     // Ids given out later skip the symbol's art too.
     assert!(d.peek_next_id() > d.layers[0].id.0 && d.peek_next_id() > next);
 }
+
+#[test]
+fn a_saved_presets_rows_are_read_within_the_artboard_limit() {
+    let rows = |n: u32| serde_json::from_value::<crate::cmd::newdoc::DocSettings>(json!({"rows": n})).unwrap().rows;
+    assert_eq!(rows(1001), crate::cmd::newdoc::MAX_ARTBOARDS, "file.new takes the listed rows again");
+    assert_eq!(rows(0), 0, "0 stays: columns in their place");
+    assert_eq!(rows(12), 12, "more rows than artboards stay");
+}

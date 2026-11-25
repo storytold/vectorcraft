@@ -55,11 +55,7 @@ fn set_default_color(h: &Host, a: &[Data], fill: bool) -> Answer {
     let what = if fill { "defaultFillColor" } else { "defaultStrokeColor" };
     let color = colors::assigned(arg(a, 1), what)?;
     let now = top_paint(&new_art(h, a)?, fill);
-    let same = match (&color, &now) {
-        (None, Paint::None) => true,
-        (Some(c), Paint::Solid { color, swatch: None, .. }) => c == color,
-        _ => false,
-    };
+    let same = colors::unchanged(arg(a, 1), color, &now, |c| crate::cmd::newart::stored_color(&h.session.borrow(), c));
     let paint = match color {
         Some(c) => json!({"color": colors::param(&c)}),
         None => json!({"none": true}),
@@ -109,7 +105,7 @@ fn set_default_stroke_width(h: &Host, a: &[Data]) -> Answer {
     }
     this_doc(h, a)?;
     let now = h.session.borrow().paint.stroke_width;
-    set(h, (now - w).abs() < 1e-9, json!({"weight": w}))
+    set(h, now == w, json!({"weight": w}))
 }
 
 fn default_cap(h: &Host, a: &[Data]) -> Answer {
@@ -152,7 +148,7 @@ fn set_default_miter(h: &Host, a: &[Data]) -> Answer {
         return Err(HostError::Range("defaultStrokeMiterLimit must be from 1 to 500".into()));
     }
     let now = stroke_option(h, a, 10.0, |s| s.miter_limit)?;
-    set(h, (now - v).abs() < 1e-9, json!({"miterLimit": v}))
+    set(h, now == v, json!({"miterLimit": v}))
 }
 
 fn dashes(h: &Host, a: &[Data]) -> std::result::Result<Vec<f64>, HostError> {
@@ -183,7 +179,7 @@ fn set_default_dash_offset(h: &Host, a: &[Data]) -> Answer {
         return Err(HostError::Error("defaultStrokeDashOffset needs defaultStrokeDashes first".into()));
     }
     let now = stroke_option(h, a, 0.0, |s| s.dash.as_ref().map_or(0.0, |d| d.offset))?;
-    set(h, (now - v).abs() < 1e-9, json!({"dashOffset": v}))
+    set(h, now == v, json!({"dashOffset": v}))
 }
 
 fn scale_factor(h: &Host, a: &[Data]) -> Answer {

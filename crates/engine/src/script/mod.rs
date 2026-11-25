@@ -2227,6 +2227,17 @@ impl Session {
                     RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line: 0, column: 0, authored: false };
                 return Some(self.script_failed(job, &e));
             }
+            // One more allowance may still leave the growth past it: the person is asked again
+            // while they may be, and past that the run ends unkept.
+            if let Err(HostError::Abort(message)) = job.host.charge_growth(0, 0) {
+                let e = RunError { kind: RunErrorKind::Limit(LimitKind::Host), message, line: 0, column: 0, authored: false };
+                return Some(self.script_failed(job, &e));
+            }
+            if job.host.waiting.get() {
+                JOBS.with(|jobs| jobs.borrow_mut().insert(key.id, job));
+                self.script_key = Some(key);
+                return None;
+            }
             return Some(self.script_ended(job));
         }
         // A stop while a dialog waits ends the run there; the interpreter cannot go on from the call.

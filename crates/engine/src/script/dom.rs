@@ -96,12 +96,15 @@ const ARTBOARD_COORDS: &str = "CoordinateSystem.ARTBOARDCOORDINATESYSTEM";
 #[derive(Default)]
 pub(super) struct State {
     coords: Cell<Coords>,
-    items: RefCell<Option<ItemList>>,
-    /// The last list of a document's paths ([`paths`]), kept while that document is unchanged.
-    paths: RefCell<Option<ItemList>>,
+    items: RefCell<Vec<ItemList>>,
+    /// The last list of each document's paths ([`paths`]), kept while that document is unchanged.
+    paths: RefCell<Vec<ItemList>>,
     /// A path and its subpaths with the point changes the run has made to it and not written yet
     /// ([`flush`]).
     pending: RefCell<Option<(Item, Vec<vectorcraft_geom::path::SubPath>)>>,
+    /// The index of the first point of each subpath of the path whose points the run read last,
+    /// and what they were counted from ([`paths`]).
+    point_starts: RefCell<Option<(paths::Counted, Rc<Vec<usize>>)>>,
     /// How many times the points the run read of each path went stale, by document uid and path id
     /// ([`paths`]).
     point_cuts: RefCell<std::collections::HashMap<(u64, u64), u64>>,
@@ -147,6 +150,24 @@ fn atomically<T>(h: &Host, f: impl FnOnce(&Host) -> std::result::Result<T, HostE
 
 /// A document's uid, the document as it was, and the ids of its page items then.
 type ItemList = (u64, Arc<Document>, Rc<Vec<NodeId>>);
+
+/// The most documents whose lists [`State`] keeps at once, the least recently listed going first.
+const KEPT_LISTS: usize = 8;
+
+/// The list kept in `lists` for the document `st`, while that document is unchanged.
+fn kept_list(lists: &RefCell<Vec<ItemList>>, st: &DocState) -> Option<Rc<Vec<NodeId>>> {
+    lists.borrow().iter().find(|(uid, doc, _)| *uid == st.uid && Arc::ptr_eq(doc, &st.doc)).map(|(_, _, ids)| ids.clone())
+}
+
+/// Keeps `ids` in `lists` as the list of the document `st`, in place of the one it had.
+fn keep_list(lists: &RefCell<Vec<ItemList>>, st: &DocState, ids: &Rc<Vec<NodeId>>) {
+    let mut l = lists.borrow_mut();
+    l.retain(|(uid, ..)| *uid != st.uid);
+    if l.len() >= KEPT_LISTS {
+        l.remove(0);
+    }
+    l.push((st.uid, st.doc.clone(), ids.clone()));
+}
 
 type Answer = std::result::Result<Data, HostError>;
 
@@ -396,13 +417,11 @@ fn item_ref(h: &Host, st: &DocState, id: NodeId) -> Data {
     }
 }
 
-/// The ids of a document's page items in paint order ([`State`] keeps the last list).
+/// The ids of a document's page items in paint order ([`State`] keeps the last list of each
+/// document).
 fn page_items(h: &Host, st: &DocState) -> Rc<Vec<NodeId>> {
-    if let Some((uid, doc, ids)) = &*h.dom.items.borrow()
-        && *uid == st.uid
-        && Arc::ptr_eq(doc, &st.doc)
-    {
-        return ids.clone();
+    if let Some(ids) = kept_list(&h.dom.items, st) {
+        return ids;
     }
     fn walk(nodes: &[Arc<crate::doc::Node>], out: &mut Vec<NodeId>) {
         for n in nodes {
@@ -420,7 +439,7 @@ fn page_items(h: &Host, st: &DocState) -> Rc<Vec<NodeId>> {
     let mut ids = Vec::new();
     walk(&st.doc.layers, &mut ids);
     let ids = Rc::new(ids);
-    *h.dom.items.borrow_mut() = Some((st.uid, st.doc.clone(), ids.clone()));
+    keep_list(&h.dom.items, st, &ids);
     ids
 }
 
@@ -639,12 +658,13 @@ fn on_doc<T>(
     Ok(v)
 }
 
-/// Runs `id` with `params` on the item's document, its selection kept. The points the run read of
-/// the item's paths stay valid through the change ([`paths::see_all_points`]).
+/// Runs `id` with `params` on the item's document, its selection kept, as one change: when the
+/// selection cannot be put back, the edit is undone too. The points the run read of the item's
+/// paths stay valid through the change ([`paths::see_all_points`]).
 fn edit_item(h: &Host, item: Item, id: &str, params: &Value) -> std::result::Result<Data, HostError> {
     paths::see_all_points(h);
     let kept = h.dom.editing.replace(Some(item));
-    let r = on_doc(h, item.doc.uid, true, |h| command(h, id, params));
+    let r = atomically(h, |h| on_doc(h, item.doc.uid, true, |h| command(h, id, params)));
     h.dom.editing.set(kept);
     r
 }
@@ -934,6 +954,22 @@ fn startup_preset(name: &str) -> Option<(Option<&'static str>, Option<&'static s
     })
 }
 
+/// The `file.newPresets` fields `addDocument` gives `file.new`: those of the profile's first
+/// built-in preset with `presetSettings` over them.
+const BUILT_IN_SETTINGS: &[&str] = &[
+    "width",
+    "height",
+    "units",
+    "artboards",
+    "artboardLayout",
+    "bleed",
+    "backgroundContents",
+    "colorMode",
+    "rasterEffectsPpi",
+    "previewMode",
+    "alignNewObjectsToPixelGrid",
+];
+
 /// `documents.addDocument(startupPreset, presetSettings?, showOptionsDialog?)`: a new document from
 /// the New Document profile `startupPreset` names, with the settings `presetSettings` gives in
 /// place of the profile's.
@@ -977,15 +1013,26 @@ fn docs_add_document(h: &Host, a: &[Data]) -> Answer {
         Some(Data::Bool(true)) => return Err(HostError::Error(DIALOG_UNAVAILABLE.into())),
         Some(_) => return Err(HostError::Type("showOptionsDialog must be true or false".into())),
     }
-    // The document starts from the first preset of the profile's category (Print: Letter).
-    let first = profile.and_then(|n| crate::cmd::newdoc::category(&h.session.borrow(), n)?.into_iter().next());
-    if let Some(first) = first {
-        p.insert("preset".into(), json!(first.name));
-    }
-    p.insert("profile".into(), profile.map_or(Value::Null, |n| json!(n)));
     if let Some(m) = mode {
         p.entry("colorMode").or_insert_with(|| json!(m));
     }
+    // The document starts from the first built-in preset of the profile's category (Print:
+    // Letter) with `presetSettings` over it, given in full so that a saved preset of the same name
+    // does not stand in for it. Settings `file.new` refuses are left for it to report.
+    let first = profile.and_then(|n| crate::cmd::newdoc::category(&h.session.borrow(), n)?.into_iter().next());
+    if let Some(first) = first {
+        p.insert("preset".into(), json!(first.name));
+        if let Ok(full) = first.with_params(&Value::Object(p.clone()), "file.new")
+            && let Value::Object(settings) = full.to_json()
+        {
+            for key in BUILT_IN_SETTINGS {
+                if let Some(v) = settings.get(*key) {
+                    p.insert((*key).into(), v.clone());
+                }
+            }
+        }
+    }
+    p.insert("profile".into(), profile.map_or(Value::Null, |n| json!(n)));
     // A profile whose file could not be read throws, and the document `file.new` made with the
     // defaults is put back, with the Recent sizes as they were.
     atomically(h, |h| {
@@ -1193,7 +1240,8 @@ fn doc_selection(h: &Host, a: &[Data]) -> Answer {
 fn selection_of(h: &Host, uid: u64) -> Answer {
     let s = h.session.borrow();
     let st = s.documents().iter().find(|d| d.uid == uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
-    let ids: Vec<NodeId> = st.selection.objects.iter().copied().filter(|i| st.doc.node(*i).and_then(typename).is_some()).collect();
+    let ids: Vec<NodeId> =
+        st.selection.objects.iter().copied().filter(|i| st.doc.node(*i).and_then(typename).is_some()).take(MAX_LISTED + 1).collect();
     if ids.is_empty() {
         return Ok(Data::Null);
     }

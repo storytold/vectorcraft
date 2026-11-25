@@ -1,6 +1,8 @@
 //! The new-art template (M3.65): Stroke panel options and graphic styles chosen with nothing
 //! selected, New Art Has Basic Appearance and `paint.default`.
 
+use std::sync::Arc;
+
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Paint};
 use vectorcraft_doc::{Appearance, Dash, LineCap, Node};
@@ -394,6 +396,19 @@ fn set_new_art_refuses_bad_values_with_nothing_changed() {
         assert!(s.execute("appearance.setNewArt", &params).is_err(), "accepted {params}");
         assert_eq!(s.paint, before, "changed new art for {params}");
     }
+}
+
+#[test]
+fn set_new_art_refuses_a_tint_on_a_pattern_without_a_swatch_entry() {
+    let mut s = session();
+    let id = rect(&mut s, 20.0);
+    let name = run(&mut s, "object.pattern.make", json!({"ids": [id.0], "edit": false}))["name"].as_str().unwrap().to_string();
+    run(&mut s, "select.none", json!({}));
+    Arc::make_mut(&mut s.doc_mut().unwrap().doc).remove_swatch(&name);
+    let before = s.paint.clone();
+    assert!(s.execute("appearance.setNewArt", &json!({"fill": {"swatch": name, "tint": 50}})).is_err(), "accepted a tint on {name}");
+    assert_eq!(s.paint, before);
+    assert_eq!(run(&mut s, "appearance.setNewArt", json!({"fill": {"swatch": name}})), json!({"changed": true}));
 }
 
 #[test]

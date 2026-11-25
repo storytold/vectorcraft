@@ -103,6 +103,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "appearance.removeItem",
     "appearance.setActiveItem",
     "appearance.setItem",
+    "appearance.setNewArt",
     "appearance.showAllHidden",
     "appearance.targetContents",
     "appearance.transfer",

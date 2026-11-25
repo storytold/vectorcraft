@@ -171,8 +171,9 @@ pub struct DocSettings {
     pub layout: ArtboardLayout,
     /// Columns of a grid layout.
     pub columns: u32,
-    /// Rows of a grid by column, in place of `columns` when more than 0.
-    #[serde(skip_serializing_if = "is_zero")]
+    /// Rows of a grid by column, in place of `columns` when more than 0, up to `MAX_ARTBOARDS` (a
+    /// saved or Recent preset's larger value is read as `MAX_ARTBOARDS`).
+    #[serde(skip_serializing_if = "is_zero", deserialize_with = "de_rows")]
     pub rows: u32,
     /// Space between artboards, points: 0 to `MAX_SPACING` (a saved or Recent preset's value
     /// outside that range is read as the nearer end).
@@ -592,6 +593,12 @@ fn de_side<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<f64, D
 /// `file.new` reads its `artboards` param.
 fn de_artboards<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<u32, D::Error> {
     Ok(f64::deserialize(d)?.round().clamp(1.0, MAX_ARTBOARDS as f64) as u32)
+}
+
+/// A saved or Recent preset's grid rows, kept to at most [`MAX_ARTBOARDS`]; 0 (columns in their
+/// place) stays 0.
+fn de_rows<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<u32, D::Error> {
+    Ok(u32::deserialize(d)?.min(MAX_ARTBOARDS))
 }
 
 /// A saved or Recent preset's artboard spacing, kept to 0 to [`MAX_SPACING`] points.

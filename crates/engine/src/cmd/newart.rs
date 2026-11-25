@@ -63,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set New Art Appearance",
             [],
             None,
-            "{fill?: {color?, none?, swatch?, tint?, gradient?, keepModel?} (a paint as paint.setFill takes it), stroke?: (a paint, as fill), weight?: 0..1000 pt, cap?: butt|round|square, join?: miter|round|bevel, miterLimit?: 1..500, dash?: [lengths, each 0..1000000 pt, at most 64, not all 0]|null (null: a solid line), dashOffset?: -1000000..1000000 pt (with a dash pattern), fillOverprint?: bool, strokeOverprint?: bool} set the fill, stroke and stroke options the next object drawn gets, whatever is selected: the selection and its art, the active proxy and the recent colors stay as they are. A stroke painted on new art without one gets a 1 pt weight unless `weight` is given. A bad value is an error with nothing changed, and so is any change while New Art Has Basic Appearance is off and an object is selected (new art takes that object's appearance then) → {changed: whether the next object drawn looks different}",
+            "{fill?: {color?, none?, swatch?, tint?, gradient?, keepModel?} (a paint as paint.setFill takes it), stroke?: (a paint, as fill), weight?: 0..1000 pt, cap?: butt|round|square, join?: miter|round|bevel, miterLimit?: 1..500, dash?: [lengths, each 0..1000000 pt, at most 64, not all 0]|null (null: a solid line), dashOffset?: -1000000..1000000 pt (with a dash pattern), fillOverprint?: bool, strokeOverprint?: bool} set the fill, stroke and stroke options the next object drawn gets, whatever is selected: the selection and its art, the active proxy and the recent colors stay as they are. Without `weight` the stored stroke weight stays; a stroke painted on new art without one gets 1 pt only when that stored weight is 0. A bad value is an error with nothing changed, and so is any change while New Art Has Basic Appearance is off and an object is selected (new art takes that object's appearance then) → {changed: whether the next object drawn looks different}",
             always,
             set_new_art
         ),
@@ -75,6 +75,38 @@ const MAX_DASHES: usize = 64;
 /// The largest dash, gap or dash offset `appearance.setNewArt` takes, in points.
 const MAX_DASH_LENGTH: f64 = 1_000_000.0;
 
+/// What [`dash_fault`] finds wrong with a list of dash and gap lengths.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum DashFault {
+    /// More than [`MAX_DASHES`] lengths.
+    TooMany,
+    /// A length that is not a number from 0 to [`MAX_DASH_LENGTH`].
+    OutOfRange,
+    /// Lengths that are all 0.
+    AllZero,
+}
+
+/// What is wrong with the dash and gap lengths `lengths`, which `appearance.setNewArt` and the
+/// scripts' `strokeDashes` and `defaultStrokeDashes` check the same way; `None` when they are good.
+/// An empty list (a solid line) is good.
+pub(crate) fn dash_fault(lengths: &[f64]) -> Option<DashFault> {
+    if lengths.len() > MAX_DASHES {
+        Some(DashFault::TooMany)
+    } else if !lengths.iter().all(|n| n.is_finite() && (0.0..=MAX_DASH_LENGTH).contains(n)) {
+        Some(DashFault::OutOfRange)
+    } else if !lengths.is_empty() && lengths.iter().all(|n| *n == 0.0) {
+        Some(DashFault::AllZero)
+    } else {
+        None
+    }
+}
+
+/// `c` as `appearance.setNewArt` stores it without `keepModel`: an RGB color in the color mode of
+/// the document in front.
+pub(crate) fn stored_color(s: &Session, c: vectorcraft_color::Color) -> vectorcraft_color::Color {
+    super::paint::new_color(s, &json!({}), c)
+}
+
 /// `appearance.setNewArt`: new art's fill, stroke and stroke options, every value checked before
 /// anything changes.
 fn set_new_art(s: &mut Session, p: &Value) -> Result<Value> {
@@ -84,7 +116,8 @@ fn set_new_art(s: &mut Session, p: &Value) -> Result<Value> {
         if !v.is_object() {
             return Err(bad(C, format!("{key} must be a paint object (color, none, swatch or gradient), got {v}")));
         }
-        if v.get("tint").is_some() && v.get("swatch").is_none() {
+        let pattern_only = |name: &str| s.doc().is_ok_and(|st| st.doc.swatch(name).is_none() && st.doc.pattern(name).is_some());
+        if v.get("tint").is_some() && v.get("swatch").and_then(Value::as_str).is_none_or(pattern_only) {
             return Err(bad(C, format!("{key}: `tint` goes with a global or spot `swatch`")));
         }
         let given = super::paint::paint_from(s, v)?.ok_or_else(|| bad(C, format!("{key}: give color, none, swatch or gradient")))?;
@@ -113,11 +146,12 @@ fn set_new_art(s: &mut Session, p: &Value) -> Result<Value> {
         None | Some(Value::Null) => {}
         Some(Value::Array(a)) if a.len() > MAX_DASHES => return Err(bad(C, format!("dash takes at most {MAX_DASHES} lengths"))),
         Some(Value::Array(a)) => {
-            if !a.iter().all(|v| v.as_f64().is_some_and(|n| n.is_finite() && (0.0..=MAX_DASH_LENGTH).contains(&n))) {
-                return Err(bad(C, format!("each dash length must be a number from 0 to {MAX_DASH_LENGTH}")));
-            }
-            if !a.is_empty() && a.iter().all(|v| v.as_f64() == Some(0.0)) {
-                return Err(bad(C, "dash needs a length that is not 0"));
+            let lengths: Option<Vec<f64>> = a.iter().map(Value::as_f64).collect();
+            match lengths.map_or(Some(DashFault::OutOfRange), |l| dash_fault(&l)) {
+                None => {}
+                Some(DashFault::TooMany) => return Err(bad(C, format!("dash takes at most {MAX_DASHES} lengths"))),
+                Some(DashFault::OutOfRange) => return Err(bad(C, format!("each dash length must be a number from 0 to {MAX_DASH_LENGTH}"))),
+                Some(DashFault::AllZero) => return Err(bad(C, "dash needs a length that is not 0")),
             }
         }
         Some(v) => return Err(bad(C, format!("dash must be a list of lengths or null, got {v}"))),

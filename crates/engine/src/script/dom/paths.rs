@@ -69,7 +69,7 @@ use vectorcraft_tools::params::gradient_params;
 use super::{
     Answer, Coords, Doc, Item, Link, NOT_FOUND, STALE_ITEM, arg, boolean, class, colors, command, coordinate, doc_of, edit_item, editable, find_doc,
     float, frame, get, given, handle_of, id_of, id_parts, item_of, item_rect, later, method, named, num, number, on_doc, pair, point, point_get,
-    point_method, point_property, property, this_doc, typename_of, whole, with_doc,
+    point_method, point_property, property, this_doc, whole, with_doc,
 };
 use crate::{DocState, NodeId, NodeKind};
 
@@ -140,9 +140,63 @@ fn path_ref(h: &super::Host, item: Item) -> Data {
     host_ref("PathItem", &[float(h.run), float(item.doc.uid), high, low])
 }
 
-/// How many points a path with the subpaths `subs` has.
-fn point_count(subs: &[SubPath]) -> usize {
-    subs.iter().map(|sp| sp.anchors.len()).sum()
+/// The index of the first point of each subpath of `subs`, followed by the number of points.
+fn starts(subs: &[SubPath]) -> Vec<usize> {
+    let mut out = Vec::with_capacity(subs.len() + 1);
+    let mut n = 0;
+    for sp in subs {
+        out.push(n);
+        n += sp.anchors.len();
+    }
+    out.push(n);
+    out
+}
+
+/// The subpath and the place in it of point `i`, given the [`starts`] of a path's subpaths.
+fn locate_at(starts: &[usize], i: usize) -> Option<(usize, usize)> {
+    if i >= *starts.last()? {
+        return None;
+    }
+    let s = starts.partition_point(|first| *first <= i).checked_sub(1)?;
+    Some((s, i - starts.get(s)?))
+}
+
+/// What the [`starts`] that [`super::State`] keeps were counted from: a path's node as its document
+/// holds it, by document uid, or the waiting point changes of a path ([`edit_points`]).
+pub(super) enum Counted {
+    Node(u64, Arc<crate::doc::Node>),
+    Waiting(Item),
+}
+
+/// The [`starts`] of the path of `item`, its waiting point changes included. They are kept while
+/// the path's node is the same one, or until the waiting changes add or remove points.
+fn point_starts(h: &super::Host, item: Item) -> std::result::Result<Rc<Vec<usize>>, HostError> {
+    let waiting = matches!(&*h.dom.pending.borrow(), Some((w, _)) if same_path(*w, item));
+    if waiting {
+        if let Some((Counted::Waiting(k), kept)) = &*h.dom.point_starts.borrow()
+            && same_path(*k, item)
+        {
+            return Ok(kept.clone());
+        }
+        let counted = Rc::new(read_points(h, item, starts)?);
+        *h.dom.point_starts.borrow_mut() = Some((Counted::Waiting(item), counted.clone()));
+        return Ok(counted);
+    }
+    let node = with_doc(h, item.doc, |_, st| node_arc(&st.doc, item.id).cloned()).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+    if let Some((Counted::Node(uid, kept_node), kept)) = &*h.dom.point_starts.borrow()
+        && *uid == item.doc.uid
+        && Arc::ptr_eq(kept_node, &node)
+    {
+        return Ok(kept.clone());
+    }
+    let counted = Rc::new(starts(&node.path_data().ok_or_else(|| HostError::Type("this is not a PathItem".into()))?.subpaths));
+    *h.dom.point_starts.borrow_mut() = Some((Counted::Node(item.doc.uid, node), counted.clone()));
+    Ok(counted)
+}
+
+/// How many points the path of `item` has, its waiting point changes included ([`point_starts`]).
+fn points_of(h: &super::Host, item: Item) -> std::result::Result<usize, HostError> {
+    Ok(point_starts(h, item)?.last().copied().unwrap_or(0))
 }
 
 /// The subpath and the place in it of point `i`, among the subpaths `subs`.
@@ -180,6 +234,7 @@ fn read_points<T>(h: &super::Host, item: Item, f: impl FnOnce(&[SubPath]) -> T) 
 /// locked, unless it changes nothing. A path that is aligned to the pixel grid, or is in an object
 /// that is, is written at once, so that its points read as the grid snaps them.
 fn edit_points<T>(h: &super::Host, item: Item, f: impl FnOnce(&mut Vec<SubPath>) -> T) -> std::result::Result<T, HostError> {
+    forget_waiting_starts(h);
     if let Some((waiting, subs)) = &mut *h.dom.pending.borrow_mut()
         && same_path(*waiting, item)
     {
@@ -205,6 +260,33 @@ fn edit_points<T>(h: &super::Host, item: Item, f: impl FnOnce(&mut Vec<SubPath>)
     Ok(r)
 }
 
+/// Drops the [`starts`] that [`super::State`] keeps of waiting point changes, which a change can
+/// make wrong.
+fn forget_waiting_starts(h: &super::Host) {
+    let mut kept = h.dom.point_starts.borrow_mut();
+    if matches!(&*kept, Some((Counted::Waiting(_), _))) {
+        *kept = None;
+    }
+}
+
+/// Changes the anchor at index `i` of the path of `item` with `f` ([`edit_points`]). The change
+/// adds and removes no points, so the [`starts`] of the path stay kept.
+fn edit_anchor(h: &super::Host, item: Item, i: usize, f: impl FnOnce(&mut Anchor)) -> std::result::Result<(), HostError> {
+    let counted = point_starts(h, item)?;
+    let at = locate_at(&counted, i);
+    edit_points(h, item, |subs| {
+        if let Some((s, j)) = at
+            && let Some(an) = subs.get_mut(s).and_then(|sp| sp.anchors.get_mut(j))
+        {
+            f(an);
+        }
+    })?;
+    if matches!(&*h.dom.pending.borrow(), Some((w, _)) if same_path(*w, item)) {
+        *h.dom.point_starts.borrow_mut() = Some((Counted::Waiting(item), counted));
+    }
+    Ok(())
+}
+
 /// Gives the path of `item` the subpaths `subs` ([`edit_points`]).
 fn write_path(h: &super::Host, item: Item, subs: Vec<SubPath>) -> std::result::Result<(), HostError> {
     edit_points(h, item, |s| *s = subs)
@@ -214,6 +296,7 @@ fn write_path(h: &super::Host, item: Item, subs: Vec<SubPath>) -> std::result::R
 /// the path has those points already.
 pub(super) fn flush(h: &super::Host) -> std::result::Result<(), HostError> {
     let Some((item, subs)) = h.dom.pending.borrow_mut().take() else { return Ok(()) };
+    forget_waiting_starts(h);
     let same = {
         let s = h.session.borrow();
         let node = s.documents().iter().find(|d| d.uid == item.doc.uid).and_then(|st| st.doc.node(item.id));
@@ -278,16 +361,13 @@ fn keeping_paint<T>(h: &super::Host, f: impl FnOnce() -> T) -> T {
 
 /// The ids of a document's paths, in the order of its page items.
 fn path_items(h: &super::Host, st: &DocState) -> Rc<Vec<NodeId>> {
-    if let Some((uid, doc, ids)) = &*h.dom.paths.borrow()
-        && *uid == st.uid
-        && std::sync::Arc::ptr_eq(doc, &st.doc)
-    {
-        return ids.clone();
+    if let Some(ids) = super::kept_list(&h.dom.paths, st) {
+        return ids;
     }
     let all = super::page_items(h, st);
     let ids: Rc<Vec<NodeId>> =
         Rc::new(all.iter().copied().filter(|i| st.doc.node(*i).is_some_and(|n| matches!(n.kind, NodeKind::Path { .. }))).collect());
-    *h.dom.paths.borrow_mut() = Some((st.uid, st.doc.clone(), ids.clone()));
+    super::keep_list(&h.dom.paths, st, &ids);
     ids
 }
 
@@ -298,6 +378,12 @@ pub(super) fn doc_path_items(h: &super::Host, a: &[Data]) -> Answer {
 
 fn items_doc(h: &super::Host, a: &[Data]) -> std::result::Result<Doc, HostError> {
     doc_of(h, arg(a, 0), "PathItems")
+}
+
+/// `typename` of the paths of a document that is still open.
+fn items_typename(h: &super::Host, a: &[Data]) -> Answer {
+    items_doc(h, a)?;
+    Ok(Data::String("PathItems".into()))
 }
 
 fn items_length(h: &super::Host, a: &[Data]) -> Answer {
@@ -818,12 +904,7 @@ fn set_color(h: &super::Host, a: &[Data], fill: bool) -> Answer {
     let color = colors::assigned(arg(a, 1), if fill { "fillColor" } else { "strokeColor" })?;
     let (item, look) = this_look(h, a)?;
     let now = if fill { &look.fill } else { &look.stroke };
-    let same = match (&color, now) {
-        (None, Paint::None) => true,
-        (Some(c), Paint::Solid { color, swatch: None, .. }) => c == color,
-        _ => false,
-    };
-    if !same {
+    if !colors::unchanged(arg(a, 1), color, now, |c| c) {
         set_paint(h, item, fill, color)?;
     }
     Ok(Data::Undefined)
@@ -928,13 +1009,13 @@ pub(super) fn dash_lengths(d: &Data, what: &str) -> std::result::Result<Vec<f64>
         Data::Array(list) => list.iter().map(|d| number(d, "each dash length")).collect::<std::result::Result<_, _>>()?,
         _ => return Err(HostError::Type(format!("{what} must be an array of lengths"))),
     };
-    if lengths.iter().any(|l| !(0.0..=MAX_STROKE_WIDTH * 1000.0).contains(l)) {
-        return Err(HostError::Range("each dash length must be from 0 to 1000000 points".into()));
+    use crate::cmd::newart::DashFault;
+    match crate::cmd::newart::dash_fault(&lengths) {
+        None => Ok(lengths),
+        Some(DashFault::TooMany) => Err(HostError::Range(format!("{what} takes at most {MAX_DASHES} lengths"))),
+        Some(DashFault::OutOfRange) => Err(HostError::Range("each dash length must be from 0 to 1000000 points".into())),
+        Some(DashFault::AllZero) => Err(HostError::Range(format!("{what} needs a length that is not 0"))),
     }
-    if !lengths.is_empty() && lengths.iter().all(|l| *l == 0.0) {
-        return Err(HostError::Range(format!("{what} needs a length that is not 0")));
-    }
-    Ok(lengths)
 }
 
 /// `strokeDashes = [lengths]`, as [`dash_lengths`] takes them.
@@ -1129,9 +1210,15 @@ fn points_path(h: &super::Host, a: &[Data]) -> std::result::Result<Item, HostErr
     path_at(h, *run, *uid, *high, *low)
 }
 
+/// `typename` of the points of a path that is still in its document.
+fn points_typename(h: &super::Host, a: &[Data]) -> Answer {
+    points_path(h, a)?;
+    Ok(Data::String("PathPoints".into()))
+}
+
 fn points_length(h: &super::Host, a: &[Data]) -> Answer {
     let item = points_path(h, a)?;
-    read_points(h, item, |subs| num(float(point_count(subs) as u64)))
+    Ok(num(float(points_of(h, item)? as u64)))
 }
 
 fn points_parent(h: &super::Host, a: &[Data]) -> Answer {
@@ -1255,7 +1342,7 @@ fn points_at(h: &super::Host, a: &[Data]) -> Answer {
     let item = points_path(h, a)?;
     let Data::Number(n) = arg(a, 1) else { return Ok(Data::Undefined) };
     let Some(i) = whole(*n).and_then(|i| usize::try_from(i).ok()) else { return Ok(Data::Undefined) };
-    let n = read_points(h, item, point_count)?;
+    let n = points_of(h, item)?;
     Ok(if i < n { point_ref(h, item, i) } else { Data::Undefined })
 }
 
@@ -1273,18 +1360,33 @@ fn points_index(h: &super::Host, a: &[Data]) -> Answer {
 fn points_add(h: &super::Host, a: &[Data]) -> Answer {
     let item = points_path(h, a)?;
     let origin = with_doc(h, item.doc, |_, st| frame(st).map(|f| f.to_document(h.dom.coords.get(), [0.0, 0.0])));
-    let (n, last) = read_points(h, item, |subs| (point_count(subs), subs.iter().rev().find_map(|sp| sp.anchors.last()).map(|a| a.p)))?;
+    let mut counted = point_starts(h, item)?;
+    let n = counted.last().copied().unwrap_or(0);
     if n >= MAX_POINTS {
         return Err(HostError::Range(format!("PathPoints.add takes a path to at most {MAX_POINTS} points")));
     }
+    let last = read_points(h, item, |subs| subs.iter().rev().find_map(|sp| sp.anchors.last()).map(|a| a.p))?;
     let p = match last {
         Some(p) => p,
         None => origin?,
     };
+    // The kept starts are dropped, so that `counted` is their only copy and grows in place.
+    *h.dom.point_starts.borrow_mut() = None;
     edit_points(h, item, |subs| match subs.last_mut() {
         Some(sp) => sp.anchors.push(Anchor::corner(p)),
         None => subs.push(SubPath::new(vec![Anchor::corner(p)], false)),
     })?;
+    if matches!(&*h.dom.pending.borrow(), Some((w, _)) if same_path(*w, item)) {
+        let grown = Rc::make_mut(&mut counted);
+        if grown.len() > 1 {
+            if let Some(total) = grown.last_mut() {
+                *total += 1;
+            }
+        } else {
+            *grown = vec![0, 1];
+        }
+        *h.dom.point_starts.borrow_mut() = Some((Counted::Waiting(item), counted));
+    }
     Ok(point_ref(h, item, n))
 }
 
@@ -1307,8 +1409,7 @@ pub(super) fn this_point(h: &super::Host, a: &[Data]) -> std::result::Result<(It
         return Err(HostError::Error(STALE_POINT.into()));
     }
     let i = whole(*i).and_then(|i| usize::try_from(i).ok()).ok_or_else(|| HostError::Error(STALE_POINT.into()))?;
-    let n = read_points(h, item, point_count)?;
-    if i >= n {
+    if i >= points_of(h, item)? {
         return Err(HostError::Error(STALE_POINT.into()));
     }
     Ok((item, i))
@@ -1319,8 +1420,9 @@ fn read_point(h: &super::Host, a: &[Data], f: impl FnOnce(&super::Frame, Coords,
     let (item, i) = this_point(h, a)?;
     let c = h.dom.coords.get();
     let fr = with_doc(h, item.doc, |_, st| frame(st))?;
+    let at = locate_at(&point_starts(h, item)?, i);
     read_points(h, item, |subs| {
-        let anchor = locate(subs, i).and_then(|(s, j)| subs.get(s).and_then(|sp| sp.anchors.get(j)));
+        let anchor = at.and_then(|(s, j)| subs.get(s).and_then(|sp| sp.anchors.get(j)));
         anchor.map(|an| f(&fr, c, an)).ok_or_else(|| HostError::Error(STALE_POINT.into()))
     })?
 }
@@ -1329,13 +1431,7 @@ fn read_point(h: &super::Host, a: &[Data], f: impl FnOnce(&super::Frame, Coords,
 /// coordinates (for a point property) or the value itself.
 fn edit_point(h: &super::Host, a: &[Data], f: impl FnOnce(&mut Anchor)) -> Answer {
     let (item, i) = this_point(h, a)?;
-    edit_points(h, item, |subs| {
-        if let Some((s, j)) = locate(subs, i)
-            && let Some(an) = subs.get_mut(s).and_then(|sp| sp.anchors.get_mut(j))
-        {
-            f(an);
-        }
-    })?;
+    edit_anchor(h, item, i, f)?;
     Ok(Data::Undefined)
 }
 
@@ -1390,6 +1486,12 @@ fn pt_set_type(h: &super::Host, a: &[Data]) -> Answer {
 fn pt_parent(h: &super::Host, a: &[Data]) -> Answer {
     let (item, _) = this_point(h, a)?;
     Ok(path_ref(h, item))
+}
+
+/// `typename` of a point that is still on its path.
+fn pt_typename(h: &super::Host, a: &[Data]) -> Answer {
+    this_point(h, a)?;
+    Ok(Data::String("PathPoint".into()))
 }
 
 /// Whether a group or compound path that holds the path `id` is selected, which selects the path
@@ -1573,7 +1675,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
             "PathItems",
             None,
             named(vec![
-                ("typename", typename_of("PathItems")),
+                ("typename", get(l, items_typename)),
                 ("length", get(l, items_length)),
                 ("parent", get(l, items_parent)),
                 ("index", method(l, items_index)),
@@ -1592,7 +1694,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
             "PathPoints",
             None,
             named(vec![
-                ("typename", typename_of("PathPoints")),
+                ("typename", point_get(l, points_typename)),
                 ("length", point_get(l, points_length)),
                 ("parent", point_get(l, points_parent)),
                 ("index", point_method(l, points_index)),
@@ -1605,7 +1707,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
             "PathPoint",
             None,
             named(vec![
-                ("typename", typename_of("PathPoint")),
+                ("typename", point_get(l, pt_typename)),
                 ("parent", point_get(l, pt_parent)),
                 ("anchor", point_property(l, pt_anchor, pt_set_anchor)),
                 ("leftDirection", point_property(l, pt_left, pt_set_left)),

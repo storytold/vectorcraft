@@ -9147,8 +9147,9 @@ resets it.
 `appearance.setNewArtBasic` rejects an `on` value that is not a boolean. Omitting `on` toggles the current preference.
 `appearance.setNewArt {fill?, stroke?, weight?, cap?, join?, miterLimit?, dash?, dashOffset?, fillOverprint?,
 strokeOverprint?}` sets new art's fill, stroke and stroke options whatever is selected, and leaves the selection, its
-art, the active proxy and Recent Colors as they were. `fill` and `stroke` take a paint as `paint.setFill` does; a
-stroke painted on new art without one gets a 1 pt weight unless `weight` is given. Every value is checked before
+art, the active proxy and Recent Colors as they were. `fill` and `stroke` take a paint as `paint.setFill` does, and
+`tint` only with a global or spot `swatch`. Without `weight` the stored stroke weight stays; a stroke painted on new
+art without one gets 1 pt only when that stored weight is 0. Every value is checked before
 anything changes, and any change while New Art Has Basic Appearance is off and an object is selected is an error. It
 returns `{changed}`, false when the next object would look the same.
 
@@ -9462,8 +9463,8 @@ runs, as `document.open` reads its file when it runs. A file larger than 64 MiB 
 When the file cannot be read, is too large or is not a native document, or the request's read roots leave out the
 folder (whether or not the file exists), the document starts with the defaults and
 `file.new`'s result carries `profileError: {profile, reason}`; the desktop app shows the reason in the status bar, and
-a script's `app.documents.addDocument` throws it. A script's file access limits do not apply to reading the profile's
-file. The
+a script's `app.documents.addDocument` throws it. Reading the profile's file is not limited to the script's folder (the
+`File` and `Folder` rule in [Script engines](#script-engines)), but the request's automation read roots still apply. The
 reason given when the read roots leave out the folder does not name the folder's path. Color profiles the profile's
 file carries are installed when they are missing, as `document.open` installs them, and each one that can't be used
 adds a line to `file.new`'s `warnings`. The new document's links find their files through relative paths from the

@@ -90,6 +90,24 @@ pub(super) fn of_paint(paint: &Paint) -> Data {
     }
 }
 
+/// Whether assigning the color object `d`, read as `assigned`, leaves the paint `now` as it is: a
+/// `NoColor` on no paint, or on an unlinked color either a color equal to it once `store` makes
+/// it what the document stores, or the components reading `now` gives (a Gray value read back can
+/// stand for an ink amount that no Gray value names exactly).
+pub(super) fn unchanged(d: &Data, assigned: Option<Color>, now: &Paint, store: impl FnOnce(Color) -> Color) -> bool {
+    match (assigned, now) {
+        (None, Paint::None) => true,
+        (Some(c), Paint::Solid { color, swatch: None, .. }) => store(c) == *color || shows(d, &of_color(color)),
+        _ => false,
+    }
+}
+
+/// Whether the color object `d` has the class and every component of `shown`.
+fn shows(d: &Data, shown: &Data) -> bool {
+    let (Data::Object(a), Data::Object(b)) = (d, shown) else { return false };
+    b.iter().all(|(k, v)| a.iter().any(|(n, w)| n == k && w == v))
+}
+
 /// The component `key` of color object `o`, from `min` to `max` (0 when it is left out).
 fn component(o: &[(String, Data)], class: &str, key: &str, min: f64, max: f64) -> std::result::Result<f64, HostError> {
     match o.iter().find(|(k, _)| k == key).map(|(_, v)| v) {

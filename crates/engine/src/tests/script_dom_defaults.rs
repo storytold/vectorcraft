@@ -38,15 +38,14 @@ fn node(s: &Session, id: NodeId) -> crate::doc::Node {
 fn a_wider_default_stroke_goes_to_the_next_path_drawn() {
     let (mut s, picked) = doc();
     let (look, steps) = (node(&s, picked).appearance, undo_steps(&s));
-    let r = run(&mut s, "var d = app.activeDocument; var w = d.defaultStrokeWidth; d.defaultStrokeWidth += 1; vc.log(d.defaultStrokeWidth > w);")
-        .unwrap();
-    assert_eq!(r["log"], json!([true]));
+    let wider = s.paint.stroke_width + 1.0;
+    let r = run(&mut s, "var d = app.activeDocument; d.defaultStrokeWidth += 1; vc.log(d.defaultStrokeWidth);").unwrap();
+    assert_eq!(r["log"][0].as_f64(), Some(wider));
     assert_eq!(undo_steps(&s), steps, "a default alone is no undo step");
     assert_eq!(node(&s, picked).appearance, look, "the selected path kept its stroke");
-    let wider = s.new_art().stroke().unwrap().width;
+    assert_eq!(s.new_art().stroke().unwrap().width, wider);
     let out = log(&mut s, "var p = app.activeDocument.pathItems.rectangle(200, 100, 50, 50); vc.log(p.strokeWidth);");
     assert_eq!(out.iter().map(Value::as_f64).collect::<Vec<_>>(), vec![Some(wider)]);
-    assert!(wider > 1.0);
 }
 
 #[test]
@@ -119,6 +118,32 @@ fn default_stroke_options_read_back_and_a_same_value_runs_no_command() {
     assert_eq!(r["slowestCommands"], json!([]), "the same values run no command");
     // `{}` and `[]` give a solid line.
     assert_eq!(log(&mut s, "var d = app.activeDocument; d.defaultStrokeDashes = {}; vc.log(d.defaultStrokeDashes.length);"), vec![json!(0)]);
+}
+
+#[test]
+fn a_slightly_different_number_reaches_new_art() {
+    let (mut s, _) = doc();
+    log(&mut s, "var d = app.activeDocument; d.defaultStrokeWidth = 1; d.defaultStrokeMiterLimit = 7; d.defaultStrokeDashes = [6, 2];");
+    log(
+        &mut s,
+        "var d = app.activeDocument; d.defaultStrokeWidth = 1.0000000005; d.defaultStrokeMiterLimit = 7.0000000005;\
+         d.defaultStrokeDashOffset = 0.0000000005;",
+    );
+    let st = s.new_art().stroke().unwrap().clone();
+    assert_eq!(st.width, 1.000_000_000_5);
+    assert_eq!(st.miter_limit, 7.000_000_000_5);
+    assert_eq!(st.dash.map(|d| d.offset), Some(0.000_000_000_5));
+}
+
+#[test]
+fn an_rgb_default_in_a_cmyk_document_runs_no_command_the_second_time() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300, "colorMode": "cmyk"})).unwrap();
+    let set = "var d = app.activeDocument, c = new RGBColor(); c.red = 200; c.green = 40; c.blue = 90; d.defaultFillColor = c;";
+    let first = run(&mut s, set).unwrap();
+    assert_ne!(first["slowestCommands"], json!([]), "the first assignment changes new art");
+    let again = run(&mut s, set).unwrap();
+    assert_eq!(again["slowestCommands"], json!([]), "the same RGB value runs no command");
 }
 
 #[test]
