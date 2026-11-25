@@ -480,8 +480,12 @@ fn shown_columns(s: &DocSettings) -> u32 {
     s.columns.max(1).min(s.artboards.max(1))
 }
 
-/// Picks the artboard layout `l`. A preset's rows give way to the column count they showed.
+/// Picks the artboard layout `l`. A preset's rows give way to the column count they showed;
+/// picking the layout that is already selected keeps them.
 fn pick_layout(s: &mut DocSettings, l: ArtboardLayout) {
+    if l == s.layout {
+        return;
+    }
     if by_rows(s) {
         s.columns = shown_columns(s);
     }
@@ -812,7 +816,7 @@ mod tests {
     /// showed. Under a grid by row the dialog shows the stored columns, and they stay.
     #[test]
     fn a_new_layout_keeps_the_columns_a_presets_rows_showed() {
-        for to in ArtboardLayout::ALL {
+        for to in ArtboardLayout::ALL.into_iter().filter(|l| *l != ArtboardLayout::GridByColumn) {
             for rows in [json!(4), json!(4.0), json!(3.6)] {
                 let mut s = settings(json!({"artboards": 9, "artboardLayout": {"layout": "gridByColumn", "columns": 2, "rows": rows}}));
                 assert_eq!(shown_columns(&s), 3, "9 artboards in rows {rows}");
@@ -824,6 +828,18 @@ mod tests {
         assert_eq!(shown_columns(&s), 2);
         pick_layout(&mut s, ArtboardLayout::GridByColumn);
         assert_eq!((s.layout, s.columns, s.rows), (ArtboardLayout::GridByColumn, 2, 0));
+        assert_eq!(shown_columns(&s), 2);
+    }
+
+    /// Picking the grid by column that is already selected keeps a preset's rows, so Create puts
+    /// as many artboards in each column as before.
+    #[test]
+    fn picking_the_selected_layout_keeps_a_presets_rows() {
+        let mut s = settings(json!({"artboards": 5, "artboardLayout": {"layout": "gridByColumn", "columns": 2, "rows": 4, "spacing": 10}}));
+        let before = s.to_json()["artboardLayout"].clone();
+        assert_eq!(before["rows"], json!(4));
+        pick_layout(&mut s, ArtboardLayout::GridByColumn);
+        assert_eq!(s.to_json()["artboardLayout"], before);
         assert_eq!(shown_columns(&s), 2);
     }
 
