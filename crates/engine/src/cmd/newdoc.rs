@@ -371,12 +371,24 @@ impl DocSettings {
             return Ok(());
         }
         let o = l.as_object().ok_or_else(|| bad(cmd, "artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}"))?;
-        let count = |v: &Value| v.as_f64().filter(|c| c.is_finite() && *c >= 1.0).map(|c| c.round().min(MAX_ARTBOARDS as f64) as u32);
         for (k, v) in o {
             match k.as_str() {
                 "layout" => self.layout = v.as_str().and_then(ArtboardLayout::parse).ok_or_else(bad_layout)?,
-                "columns" => self.columns = count(v).ok_or_else(|| bad(cmd, "artboardLayout.columns must be 1 or more"))?,
-                "rows" => self.rows = count(v).ok_or_else(|| bad(cmd, "artboardLayout.rows must be 1 or more"))?,
+                "columns" => {
+                    self.columns = v
+                        .as_f64()
+                        .filter(|c| c.is_finite() && *c >= 1.0)
+                        .ok_or_else(|| bad(cmd, "artboardLayout.columns must be 1 or more"))?
+                        .round()
+                        .min(MAX_ARTBOARDS as f64) as u32
+                }
+                "rows" => {
+                    self.rows = v
+                        .as_f64()
+                        .filter(|r| r.fract() == 0.0 && (1.0..=MAX_ARTBOARDS as f64).contains(r))
+                        .map(|r| r as u32)
+                        .ok_or_else(|| bad(cmd, format!("artboardLayout.rows must be a whole number from 1 to {MAX_ARTBOARDS}")))?
+                }
                 "spacing" => {
                     self.spacing = v
                         .as_f64()

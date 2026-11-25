@@ -577,7 +577,7 @@ fn file_new_takes_the_rows_of_a_grid_by_column() {
         assert_eq!((by_row.rows, by_row.to_json()["artboardLayout"].get("rows")), (0, None), "{layout}");
     }
     let e = s.execute("file.new", &json!({"artboardLayout": {"layout": "gridByColumn", "rows": 0}})).unwrap_err().to_string();
-    assert!(e.contains("rows must be 1 or more"), "{e}");
+    assert!(e.contains("rows must be a whole number from 1 to 1000"), "{e}");
     for layout in ["gridByRow", "row", "column"] {
         let e = s.execute("file.new", &json!({"artboardLayout": {"layout": layout, "rows": 2}})).unwrap_err().to_string();
         assert!(e.contains("rows needs the gridByColumn layout"), "{layout}: {e}");
@@ -628,6 +628,21 @@ fn an_edit_keeps_direct_selected_anchors() {
     assert_eq!(s.active().unwrap().selection.anchors, before.anchors);
     assert_eq!(s.active().unwrap().selection.objects, before.objects);
     assert!(s.journal.iter().any(|(id, _)| id == "select.anchorsMany"), "the journal holds the restore");
+}
+
+#[test]
+fn selecting_an_item_keeps_the_direct_selected_anchors_of_others() {
+    let (mut s, a, b) = doc();
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 1]], "mode": "set"})).unwrap();
+    s.execute("select.add", &json!({"ids": [b.0]})).unwrap();
+    let anchors = s.active().unwrap().selection.anchors.clone();
+    assert!(anchors.contains_key(&a));
+    log(&mut s, "app.activeDocument.pageItems[1].selected = false;");
+    let sel = &s.active().unwrap().selection;
+    assert_eq!((sel.objects.clone(), sel.anchors.clone()), (vec![a], anchors.clone()));
+    log(&mut s, "app.activeDocument.pageItems[1].selected = true;");
+    let sel = &s.active().unwrap().selection;
+    assert_eq!((sel.objects.clone(), sel.anchors.get(&a)), (vec![a, b], anchors.get(&a)));
 }
 
 #[test]
@@ -795,9 +810,11 @@ fn a_startup_preset_alone_gives_its_first_size() {
 #[test]
 fn page_item_members_not_built_yet_throw_on_read_and_assignment() {
     let (mut s, _, _) = doc();
-    for source in
-        ["app.activeDocument.pageItems[0].blendingMode;", "app.activeDocument.pageItems[0].uuid = 'x';", "app.activeDocument.pageItems[0].rotate(5);"]
-    {
+    for source in [
+        "app.activeDocument.pageItems[0].blendingMode;",
+        "app.activeDocument.pageItems[0].uuid = 'x';",
+        "app.activeDocument.pageItems[0].transform(5);",
+    ] {
         assert!(failure(&mut s, source).contains("is not available yet"), "{source}");
     }
     assert!(failure(&mut s, "app.activeDocument.layers = 1;").contains("Document.layers is not available yet"));
