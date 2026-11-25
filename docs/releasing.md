@@ -247,6 +247,12 @@ which only the `release` branch can use and which holds the signing secrets. The
 secrets. Every secret is optional: a missing one produces unsigned artifacts and a
 warning, never a failed build.
 
+The supervised nightly signer does not sign from `release`: it runs on `refs/heads/nightly-signer`,
+which only ever fast-forwards to reviewed main commits, and the `release` environment trusts both
+branches. Everything that can reach it is the trust closure: all of `.github/` and `packaging/`,
+including `packaging/env.sh`, which `packaging/macos/import-cert.sh` sources with the Apple keys.
+Stable releases still come only from `refs/heads/release`.
+
 | Secret | Used for |
 |---|---|
 | `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `KEYCHAIN_PASSWORD` | the Developer ID certificate (base64 `.p12`), imported into a temporary keychain by `packaging/macos/import-cert.sh` |
