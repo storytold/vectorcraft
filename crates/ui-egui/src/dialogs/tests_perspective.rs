@@ -147,6 +147,46 @@ fn define_grid_loads_and_saves_presets() {
     assert_eq!(app.session.prefs.perspective_presets.len(), 2);
 }
 
+/// Enter pressed in the field that has the focus, then the passes that run the filed answer and close the dialog.
+fn enter(app: &mut VectorcraftApp) {
+    let ctx = window(app);
+    let key = |pressed| egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    crate::tests::synthetic::key_frame(app, &ctx, vec![key(true)]);
+    crate::tests::synthetic::key_frame(app, &ctx, vec![key(false)]);
+    frame(app);
+    frame(app);
+}
+
+#[test]
+fn enter_is_ok_in_define_grid_and_save_grid_as_preset() {
+    let mut app = app();
+    // Define Grid: Enter in the focused field defines the grid and closes the dialog.
+    app.run("ui.perspectiveGridDialog", json!({})).unwrap();
+    set(&mut app, "angle", json!(30)).unwrap();
+    frame(&mut app);
+    frame(&mut app);
+    assert!(window(&app).memory(|m| m.focused()).is_some(), "a field of the dialog has the focus");
+    enter(&mut app);
+    assert_eq!(kind(&app), None, "Enter closes Define Grid");
+    assert!((grid(&app).viewing_angle() - 30.0).abs() < 1e-9, "Enter defines the grid");
+    // Save Grid as Preset: Enter in the name field saves the preset and closes the dialog.
+    app.run("ui.savePerspectivePreset", json!({})).unwrap();
+    frame(&mut app);
+    frame(&mut app);
+    assert!(window(&app).memory(|m| m.focused()).is_some(), "a field of the dialog has the focus");
+    enter(&mut app);
+    assert_eq!(kind(&app), None, "Enter closes Save Grid as Preset");
+    assert_eq!(app.session.prefs.perspective_presets.len(), 1, "Enter saves the preset");
+    // A name the presets refuse: Enter files it, the refusal shows, and the dialog stays.
+    app.run("ui.savePerspectivePreset", json!({})).unwrap();
+    set(&mut app, "name", json!("[2P-Normal View]")).unwrap();
+    frame(&mut app);
+    frame(&mut app);
+    enter(&mut app);
+    assert_eq!(kind(&app).as_deref(), Some(super::perspective_grid::KIND), "a refused name keeps the dialog open");
+    assert_eq!(app.session.prefs.perspective_presets.len(), 1);
+}
+
 #[test]
 fn the_presets_manager_creates_edits_and_deletes_presets() {
     use super::perspective_presets::{self, Action};
