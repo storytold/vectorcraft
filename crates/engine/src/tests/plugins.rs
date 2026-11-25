@@ -4798,6 +4798,82 @@ fn plugin_commands_are_registered_run_and_removed() {
     assert!(s.execute(grow, &json!({})).is_err(), "removed, it no longer runs");
 }
 
+/// At API level 2 a command's `menu` lists it in that menu with its plug-in's name after its
+/// label, and `plugin.list` gives its `menu` with `after` escaped. A command whose label reads like
+/// a built-in command of that menu, or like a command a plug-in with a lower id places there,
+/// stays in its plug-in's submenu, and `plugin.list` marks it `placed: false`. Replaced by a module
+/// whose command has no `menu`, a command is back in its submenu.
+#[test]
+fn placed_plugin_commands_are_listed_in_their_menu() {
+    let mut s = session();
+    let placing = |id: &str, name: &str, commands: &str| {
+        let manifest = format!(r#"{{"id":"{id}","name":"{name}","api":2,"version":"1","kind":"filter","commands":{commands}}}"#);
+        tpl::returning(&manifest, r#"{"objects":[]}"#)
+    };
+    let (ant, bee, cat) = ("test.engine.place.ant", "test.engine.place.bee", "test.engine.place.cat");
+    let low = |id: &str| crate::cmd::plugin::command_id(id, "low");
+    let menu_of = |s: &Session, command: &str| listed(s, command).map(|c| c.menu.iter().map(|m| m.to_string()).collect::<Vec<_>>());
+    let in_select = json!([{"id": "low", "label": "Low Area", "menu": {"path": ["Select"], "after": "\u{202E}Inverse"}}]).to_string();
+    let in_select = in_select.as_str();
+
+    let info = install_wat(&mut s, &placing(ant, "Tidy", in_select));
+    let menu = &info["commands"][0]["menu"];
+    assert_eq!(menu["path"], json!(["Select"]));
+    assert!(menu["after"].as_str().is_some_and(|a| a.ends_with("Inverse") && !a.contains('\u{202E}')), "escaped: {menu}");
+    assert!(menu.get("placed").is_none(), "{menu}");
+    let c = listed(&s, &low(ant)).expect("listed");
+    assert_eq!((c.label, menu_of(&s, &low(ant))), ("Low Area (Tidy)", Some(vec!["Select".to_string()])));
+
+    // Another plug-in of the same name placing the same label at the same spot stays in its submenu.
+    let info = install_wat(&mut s, &placing(bee, "Tidy", in_select));
+    assert_eq!(info["commands"][0]["menu"]["placed"], json!(false));
+    assert_eq!(listed(&s, &low(bee)).map(|c| c.label), Some("Low Area"));
+    assert_eq!(menu_of(&s, &low(bee)), Some(vec!["Object".into(), "Plug-ins".into(), "Tidy".into()]));
+    assert_eq!(menu_of(&s, &low(ant)), Some(vec!["Select".to_string()]));
+
+    // `Paste (in Place)` reads like Edit's Paste in Place; Keep is placed.
+    let edit = r#"[{"id":"paste","label":"Paste","menu":{"path":["Edit"]}},{"id":"keep","label":"Keep","menu":{"path":["Edit"]}}]"#;
+    let info = install_wat(&mut s, &placing(cat, "in Place", edit));
+    assert_eq!(info["commands"][0]["menu"]["placed"], json!(false));
+    assert!(info["commands"][1]["menu"].get("placed").is_none());
+    let paste = crate::cmd::plugin::command_id(cat, "paste");
+    assert_eq!(menu_of(&s, &paste), Some(vec!["Object".into(), "Plug-ins".into(), "in Place".into()]));
+    assert_eq!(menu_of(&s, &crate::cmd::plugin::command_id(cat, "keep")), Some(vec!["Edit".to_string()]));
+    // `Stop Global (Edit)` reads like the other label of Select's Start Global Edit.
+    let dog = "test.engine.place.dog";
+    let info = install_wat(&mut s, &placing(dog, "Edit", r#"[{"id":"stop","label":"Stop Global","menu":{"path":["Select"]}}]"#));
+    assert_eq!(info["commands"][0]["menu"]["placed"], json!(false));
+    run(&mut s, "plugin.remove", json!({"id": dog}));
+    // Object's Show All has one label, so `Hide (All)` is placed beside it.
+    let all = "test.engine.place.all";
+    let info = install_wat(&mut s, &placing(all, "All", r#"[{"id":"hide","label":"Hide","menu":{"path":["Object"]}}]"#));
+    assert!(info["commands"][0]["menu"].get("placed").is_none(), "{}", info["commands"][0]);
+    assert_eq!(menu_of(&s, &crate::cmd::plugin::command_id(all, "hide")), Some(vec!["Object".to_string()]));
+    run(&mut s, "plugin.remove", json!({"id": all}));
+    // `Hide (Edges)` reads like the desktop app's View › Hide Edges, with or without the desktop app.
+    let edges = "test.engine.place.edges";
+    let info = install_wat(&mut s, &placing(edges, "Edges", r#"[{"id":"hide","label":"Hide","menu":{"path":["View"]}}]"#));
+    assert_eq!(info["commands"][0]["menu"]["placed"], json!(false));
+    run(&mut s, "plugin.remove", json!({"id": edges}));
+    // Inspecting a plug-in that is not installed reports what installing it gives: of two commands
+    // with one label at one spot, the second stays in its submenu.
+    let twice = r#"[{"id":"a","label":"Low","menu":{"path":["Select"]}},{"id":"b","label":"Low","menu":{"path":["Select"]}}]"#;
+    let data = vectorcraft_format::base64_encode(&wat::parse_str(placing("test.engine.place.eel", "Eel", twice)).unwrap());
+    let inspected = run(&mut s, "plugin.inspect", json!({"dataBase64": data}));
+    assert!(inspected["commands"][0]["menu"].get("placed").is_none(), "{inspected}");
+    assert_eq!(inspected["commands"][1]["menu"]["placed"], json!(false), "{inspected}");
+
+    // Replaced by a module whose command has no `menu`, Ant's command is back in its submenu and
+    // Bee's takes the spot.
+    install_wat(&mut s, &placing(ant, "Tidy", r#"[{"id":"low","label":"Low Area"}]"#));
+    assert_eq!(menu_of(&s, &low(ant)), Some(vec!["Object".into(), "Plug-ins".into(), "Tidy".into()]));
+    assert_eq!(menu_of(&s, &low(bee)), Some(vec!["Select".to_string()]));
+    for id in [ant, bee, cat] {
+        run(&mut s, "plugin.remove", json!({"id": id}));
+    }
+    assert!(listed(&s, &low(bee)).is_none());
+}
+
 /// A command run is journaled like any other, so an action records it with its parameters and
 /// plays it back.
 #[test]

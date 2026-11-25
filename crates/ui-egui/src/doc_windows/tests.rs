@@ -87,6 +87,19 @@ fn strip(ctx: &egui::Context) -> egui::Rect {
     named(ctx, egui::accesskit::Role::TabList, |name| name == "Documents").expect("the tab strip was drawn")
 }
 
+/// The tab strip at the top of the floating window drawn at `window` (it starts at the window's left edge, below its
+/// title bar), as the last frame drew it.
+fn window_strip(ctx: &egui::Context, window: egui::Rect) -> egui::Rect {
+    let nodes: std::sync::Arc<Vec<Named>> = ctx.data(|d| d.get_temp(egui::Id::unique(NAMED))).unwrap_or_default();
+    nodes
+        .iter()
+        .find(|(role, name, rect)| {
+            *role == egui::accesskit::Role::TabList && name == "Window" && window.contains(rect.min) && (rect.left() - window.left()).abs() < 0.5
+        })
+        .map(|(_, _, rect)| *rect)
+        .expect("the window's tab strip was drawn")
+}
+
 fn button(pos: Pos2, pressed: bool) -> egui::Event {
     egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
 }
@@ -324,17 +337,20 @@ fn closing_a_floating_window_closes_its_document_and_asks_to_save_an_unsaved_one
     frame(&mut app, &ctx, vec![]);
     // Document 0's window is behind document 1's: its close button is at the top right of its
     // title bar, clear of document 1's window to the right and below.
-    let close_button = |app: &VectorcraftApp, i: usize| (window_of(app, &ctx, i), body_of(app, i));
-    let (area0, body0) = close_button(&app, 0);
-    assert!(body0.top() > area0.top(), "the window has a title bar");
+    let close_button = |app: &VectorcraftApp, i: usize| {
+        let area = window_of(app, &ctx, i);
+        (area, window_strip(&ctx, area))
+    };
+    let (area0, tabs0) = close_button(&app, 0);
+    assert!(tabs0.top() > area0.top(), "the window has a title bar");
     // Close document 1 (in front): it is unsaved after an edit, so the app asks first.
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
     assert!(app.session.documents()[1].is_dirty());
     frame(&mut app, &ctx, vec![]);
     // The close button sits near the right end of the title bar.
     let press_close = |app: &mut VectorcraftApp, i: usize| {
-        let (area, body) = close_button(app, i);
-        let bar = (area.top() + body.top()) / 2.0;
+        let (area, tabs) = close_button(app, i);
+        let bar = (area.top() + tabs.top()) / 2.0;
         let n = app.session.documents().len();
         for dx in (4..40).step_by(3) {
             click(app, &ctx, pos2(area.right() - dx as f32, bar));

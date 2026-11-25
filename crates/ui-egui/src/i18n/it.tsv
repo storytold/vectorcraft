@@ -930,6 +930,7 @@ font-technology	Variable	Variabili
 	Direct Selection Tool	Strumento Selezione diretta
 	Direction Handles	Maniglie di direzione
 	Disable Auto Add/Delete	Disattiva aggiunta/eliminazione automatica
+	Delete Removes Anchor Points and Keeps Paths Joined	Canc rimuove i punti di ancoraggio e mantiene i tracciati uniti
 	Interpolate Control Points When Moving Anchors	Interpola le maniglie di direzione durante lo spostamento dei punti di ancoraggio
 	Disable Opacity Mask	Disattiva maschera di opacità
 	Discard	Scarta
@@ -2521,6 +2522,12 @@ file-filter	Templates	Modelli
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	risoluzione non disponibile
+	estimated memory {memory}	memoria stimata {memory}
+	memory unavailable	memoria non disponibile
+	Unknown format	Formato sconosciuto
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -2669,6 +2676,7 @@ file-filter	Templates	Modelli
 	One Point Perspective Preset 5	Preset prospettiva a un punto 5
 	Only Web Colors	Solo colori web
 	Opacity	Opacità
+	Show Opacity	Mostra opacità
 	Opacity & Mask Define Knockout Shape	Opacità e maschera definiscono la forma di foratura
 	Opacity Mask	Maschera di opacità
 	Opacity Mask Info	Informazioni maschera di opacità
@@ -3123,6 +3131,9 @@ digits	Malayalam	Malayalam
 	Scale Artwork with Artboard	Scala la grafica con la tavola da disegno
 	Artboards: {n}	Tavole da disegno: {n}
 	Rearrange All Artboards…	Ridisponi tutte le tavole da disegno…
+	Rearrange…	Ridisponi…
+	Selected Artboards: {n}	Tavole da disegno selezionate: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Fai clic sull'area di lavoro per posizionare le tavole da disegno (Esc annulla)
 	Recall Selection	Richiama selezione
 	RECENT	RECENTI
 	Recent	Recenti
@@ -3376,6 +3387,7 @@ digits	Malayalam	Malayalam
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un gesto di rotazione con due dita sul trackpad ruota la vista dell'area di lavoro.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Tenere premuto un tasto esegue lo strumento o il comando della sua colonna Tieni premuto in Scelte rapide da tastiera; una pressione breve esegue la sua scorciatoia abituale.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Per quanti secondi va tenuto premuto un tasto prima che venga eseguita la sua scorciatoia a pressione prolungata invece di quella abituale.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Canc rimuove i punti di ancoraggio selezionati e riadatta la curva attorno a ciascuno, invece di aprire lì il tracciato.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Quando sposti i punti di ancoraggio, ogni curva con un’estremità spostata mantiene la propria forma rispetto alle sue estremità.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Tenere premuta la scorciatoia di uno strumento lo sceglie finché non la rilasci, poi viene scelto di nuovo lo strumento precedente.
 	Shows the bounding box while you move the selection or draw a shape.	Mostra il riquadro di delimitazione mentre sposti la selezione o disegni una forma.
@@ -6985,6 +6997,11 @@ axis	Y Axis	Asse Y
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` e `maxItems` devono essere 0-{MAX_LIST}, `maxItems` almeno 1, e il valore predefinito deve averne altrettanti
 @msg	`name` must be a string	`name` deve essere una stringa
 @msg	`opacity` must be a number	`opacity` deve essere un numero
+@msg	`opacity` must be a number from 0 to 100	`opacity` deve essere un numero compreso tra 0 e 100
+@msg	`opacity` must be true or false	`opacity` deve essere true o false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	i caratteri del testo non hanno un'opacità propria: aggiungi un riempimento o una traccia con Aggiungi nuovo riempimento o Aggiungi nuova traccia del pannello Aspetto
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	un oggetto selezionato in un'istanza di simbolo non ha un'opacità propria di riempimento o di traccia
+@msg	no target has that fill or stroke to take the opacity	nessuna destinazione ha quel riempimento o quella traccia per ricevere l'opacità
 @msg	`type` must be "path" or "compound"	`type` deve essere "path" o "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` deve avere 1-{MAX_UNIT} caratteri stampabili
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` deve elencare da 1 a {MAX_CONDITION_VALUES} valori per `{other}`
@@ -9428,6 +9445,7 @@ breakText	Glyphs	Glifi
 @msg	give a pattern name or select an object painted with a pattern	indica il nome di un motivo o seleziona un oggetto dipinto con un motivo
 @msg	give at least one of clip, invert, disabled, linked	indica almeno uno tra clip, invert, disabled, linked
 @msg	give color, none, swatch or gradient	indica color, none, swatch o gradient
+@msg	give color, none, swatch, gradient or opacity	indica color, none, swatch, gradient o opacity
 @msg	give dataBase64	indica dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	indica at (un clic) o area (un tracciato disegnato attorno alle sovrapposizioni)
 @msg	give formats or a preset, not both	indica formats o un predefinito, non entrambi

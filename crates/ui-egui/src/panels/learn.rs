@@ -1,4 +1,4 @@
-//! Learn panel (Window › Learn, and Explore tutorials at the right end of the app bar): short
+//! Learn panel (Window › Learn): short
 //! hands-on tutorials grouped by skill ([`catalog::SKILLS`]). The For you tab holds the Get started
 //! section with the Quick skill guide card, which opens the Skills tab. The Skills tab lists each
 //! skill with a progress ring that fills as its tutorials are finished and the count of tutorials
@@ -381,8 +381,8 @@ pub(crate) fn visible(app: &VectorcraftApp) -> bool {
     crate::panel_docking::panels_shown(app) && crate::panel_docking::showing(&app.ui, ID)
 }
 
-/// `window.learn {show?}`: show the panel (true), hide it (false) or toggle it (omitted), as the
-/// app bar's Explore tutorials button and Window › Learn do → whether it shows ([`visible`]).
+/// `window.learn {show?}`: show the panel (true), hide it (false) or toggle it (omitted), as
+/// Window › Learn does → whether it shows ([`visible`]).
 /// Showing it also shows a hidden dock; in a full screen mode it makes the panel the front one.
 fn toggle(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let shown = visible(app);

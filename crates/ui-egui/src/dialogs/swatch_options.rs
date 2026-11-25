@@ -23,6 +23,7 @@ use craft::ui::choice::Swatch;
 use craft::ui::contract::{Bind, Show as _, ShowContainer as _};
 use craft::ui::dialog::DialogId;
 use craft::ui::form::Field;
+use craft::ui::layout_components::{Row, Stack};
 use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::runtime::env::Label;
 use craft::ui::text::HexField;
@@ -207,10 +208,8 @@ pub(super) fn colour_rows(gamut: Gamut<'static>) -> Vec<Param> {
         // Spot colours are always global.
         Param::new("global", tl!("Global").to_owned(), ParamKind::bool(false)).enabled_when("type", "process").disabled_value(true),
         Param::new("mode", field_label(tl!("Color Mode:")), ParamKind::choice(modes, Some("rgb".to_owned()))),
-        Param::custom("color", tl!("Color").to_owned(), move |ui, fields, context| {
-            ui.vertical(|ui| edit_colour(ui, fields, &gamut, context)).response
-        })
-        .companions(["hex", "hsb"]),
+        Param::custom("color", tl!("Color").to_owned(), move |ui, fields, context| edit_colour(ui, fields, &gamut, context))
+            .companions(["hex", "hsb"]),
     ]
 }
 
@@ -412,7 +411,7 @@ pub(super) fn correct(app: &mut VectorcraftApp, id: DialogId) {
 /// The colour row: one slider and value field per component of the dialog's mode, the hex field (RGB, HSB and
 /// Web), a chip of the colour and under it the mode's warnings. The colour follows the mode: a colour in another
 /// model is converted when the mode changes.
-fn edit_colour(ui: &mut egui::Ui, fields: &mut DialogFields, gamut: &Gamut<'static>, context: &mut CustomContext) {
+fn edit_colour(ui: &mut egui::Ui, fields: &mut DialogFields, gamut: &Gamut<'static>, context: &mut CustomContext) -> egui::Response {
     // A hex colour set from outside the row (automation) replaces the colour once.
     if let Some(hex) = fields.text("hex").map(str::to_owned) {
         fields.remove("hex");
@@ -439,8 +438,9 @@ fn edit_colour(ui: &mut egui::Ui, fields: &mut DialogFields, gamut: &Gamut<'stat
         warnings.push((Warning::Web, ColorWarning::web_colors(tl!("Out of Web Color Warning").to_owned(), Srgba::rgb(r, g, b))));
     }
     let mut edit: Option<(Color, Option<ModelValues>)> = None;
-    ui.horizontal_top(|ui| {
-        ui.vertical(|ui| {
+    let mut actions = Vec::new();
+    let shown = Row::new().show(ui, |ui, _| {
+        Stack::new().show(ui, |ui, _| {
             for (i, ch) in model.channels().iter().enumerate() {
                 let mut rule = ChannelRule::of(ch);
                 if web {
@@ -478,21 +478,26 @@ fn edit_colour(ui: &mut egui::Ui, fields: &mut DialogFields, gamut: &Gamut<'stat
                 }
             }
         });
-        ui.vertical(|ui| {
+        Stack::new().show(ui, |ui, _| {
             Swatch::new(tl!("Color").to_owned(), near).show(ui);
+            actions.clear();
             for (warning, chip) in &warnings {
                 if ColorWarningChip::new(chip).show(ui).clicked {
-                    context.request_action(warning.action());
+                    actions.push(warning.action());
                 }
             }
         });
     });
+    for action in actions {
+        context.request_action(action);
+    }
     if let Some((c, kept)) = edit {
         set_color(fields, c);
         if let Some(k) = kept.filter(|k| k.model == HsbModel.id()) {
             fields.set("hsb", FieldValue::Json(json!([k.values[0], k.values[1], k.values[2]])));
         }
     }
+    shown.output
 }
 
 #[cfg(test)]

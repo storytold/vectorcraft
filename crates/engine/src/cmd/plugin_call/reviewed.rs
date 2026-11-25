@@ -60,6 +60,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "addon.pathtools.erase",
     "addon.pathtools.expandDashes",
     "addon.pathtools.extend",
+    "addon.pathtools.inscribedCircle",
     "addon.pathtools.inspect",
     "addon.pathtools.mergeEdge",
     "addon.pathtools.removeKeepShape",

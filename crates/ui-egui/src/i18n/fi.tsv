@@ -358,6 +358,9 @@
 	Artboards	Piirtoalustat
 	Convert to Artboards	Muunna piirtoalustoiksi
 	Rearrange All Artboards…	Järjestä kaikki piirtoalustat uudelleen…
+	Rearrange…	Järjestä uudelleen…
+	Selected Artboards: {n}	Valitut piirtoalustat: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Sijoita piirtoalustat napsauttamalla kangasta (Esc peruuttaa)
 	Fit to Artwork Bounds	Sovita kuvituksen rajoihin
 	Fit to Selected Art	Sovita valittuun kuvitukseen
 	Graph	Kaavio
@@ -515,6 +518,7 @@
 	Fill & Stroke	Täyttö ja viiva
 	Fill Color	Täyttöväri
 	Opacity	Peittävyys
+	Show Opacity	Näytä peittävyys
 	Stroke Color	Viivan väri
 	Fill Gradient	Täytön liukuväri
 	Stroke Gradient	Viivan liukuväri
@@ -3715,6 +3719,12 @@ theme	Appearance	Ulkoasu
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	tarkkuus ei saatavilla
+	estimated memory {memory}	arvioitu muisti {memory}
+	memory unavailable	muisti ei saatavilla
+	Unknown format	Tuntematon muoto
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -4163,6 +4173,7 @@ theme	Appearance	Ulkoasu
 	Data Recovery	Tietojen palautus
 	Default Language	Oletuskieli
 	Disable Auto Add/Delete	Poista automaattinen lisäys/poisto käytöstä
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete poistaa ankkuripisteet ja pitää polut yhtenäisinä
 	Interpolate Control Points When Moving Anchors	Interpoloi suuntakahvat siirrettäessä ankkuripisteitä
 	Display All Blacks Accurately	Näytä kaikki mustat tarkasti
 	Display All Blacks as Rich Black	Näytä kaikki mustat syvämustina
@@ -4727,6 +4738,7 @@ font-technology	Variable	Muuttuvat
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Kahden sormen kiertoele kosketuslevyllä kiertää piirtopinnan näkymää.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Näppäimen pitäminen painettuna suorittaa työkalun tai komennon sen Pidä pohjassa -sarakkeesta Pikanäppäimissä; lyhyt painallus suorittaa sen tavallisen pikanäppäimen.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Kuinka monta sekuntia näppäintä on pidettävä painettuna, ennen kuin tavallisen pikanäppäimen sijaan suoritetaan sen pitkän painalluksen pikanäppäin.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete poistaa valitut ankkuripisteet ja sovittaa käyrän uudelleen kunkin ympärille sen sijaan, että avaisi polun siitä kohdasta.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Kun siirrät ankkuripisteitä, jokainen käyrä, jonka toinen pää siirtyy, säilyttää muotonsa suhteessa päihinsä.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Työkalun pikanäppäimen pitäminen painettuna valitsee työkalun, kunnes päästät irti, ja sitten edellinen työkalu valitaan uudelleen.
 	Shows the bounding box while you move the selection or draw a shape.	Näyttää rajausruudun, kun siirrät valintaa tai piirrät muotoa.
@@ -7430,6 +7442,11 @@ axis	Y Axis	Y-akseli
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` ja `maxItems` on oltava 0-{MAX_LIST}, `maxItems` vähintään 1, ja oletusarvossa on oltava niin monta kohdetta
 @msg	`name` must be a string	`name` on oltava merkkijono
 @msg	`opacity` must be a number	`opacity` on oltava luku
+@msg	`opacity` must be a number from 0 to 100	`opacity` on oltava luku 0:sta 100:aan
+@msg	`opacity` must be true or false	`opacity` on oltava true tai false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	tekstin merkeillä ei ole omaa peittävyyttä: lisää täyttö tai viiva Ulkoasu-paneelin komennolla Lisää uusi täyttö tai Lisää uusi viiva
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	symbolin ilmentymästä valitulla objektilla ei ole omaa täytön tai viivan peittävyyttä
+@msg	no target has that fill or stroke to take the opacity	millään kohteella ei ole tätä täyttöä tai viivaa, joka ottaisi peittävyyden
 @msg	`type` must be "path" or "compound"	`type` on oltava "path" tai "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit`-kentässä on oltava 1-{MAX_UNIT} tulostettavaa merkkiä
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen`-kentässä on lueteltava 1-{MAX_CONDITION_VALUES} arvoa parametrille `{other}`

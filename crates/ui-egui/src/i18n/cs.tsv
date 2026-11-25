@@ -351,6 +351,9 @@
 	Artboards	Pracovní plochy
 	Convert to Artboards	Převést na pracovní plochy
 	Rearrange All Artboards…	Přeuspořádat všechny pracovní plochy…
+	Rearrange…	Přeuspořádat…
+	Selected Artboards: {n}	Vybrané pracovní plochy: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Kliknutím na plátno umístíte pracovní plochy (Esc zruší)
 	Fit to Artwork Bounds	Přizpůsobit hranicím kresby
 	Fit to Selected Art	Přizpůsobit vybrané kresbě
 	Graph	Graf
@@ -518,6 +521,7 @@
 	Fill & Stroke	Výplň a tah
 	Fill Color	Barva výplně
 	Opacity	Krytí
+	Show Opacity	Zobrazit krytí
 	Stroke Color	Barva tahu
 	Fill Gradient	Přechod výplně
 	Stroke Gradient	Přechod tahu
@@ -3778,6 +3782,12 @@ theme	Appearance	Motiv
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	rozlišení není k dispozici
+	estimated memory {memory}	odhadovaná paměť {memory}
+	memory unavailable	paměť není k dispozici
+	Unknown format	Neznámý formát
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -4232,6 +4242,7 @@ theme	Appearance	Motiv
 	Data Recovery	Obnovení dat
 	Default Language	Výchozí jazyk
 	Disable Auto Add/Delete	Vypnout automatické přidávání/odstraňování
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete odstraní kotevní body a ponechá cesty spojené
 	Interpolate Control Points When Moving Anchors	Interpolovat směrové úchyty při přesouvání kotevních bodů
 	Display All Blacks Accurately	Zobrazovat všechny černé přesně
 	Display All Blacks as Rich Black	Zobrazovat všechny černé jako sytou černou
@@ -4817,6 +4828,7 @@ font-technology	Variable	Variabilní
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gesto otočení dvěma prsty na trackpadu otáčí zobrazení plátna.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Podržení klávesy spustí nástroj nebo příkaz ze sloupce Podržení v Klávesových zkratkách; krátký stisk spustí její obvyklou zkratku.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Jak dlouho v sekundách je nutné klávesu podržet, než se místo obvyklé zkratky spustí její zkratka podržením.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete odstraní vybrané kotevní body a znovu přizpůsobí křivku kolem každého z nich, místo aby tam cestu otevřel.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Když přesouváte kotvové body, každá křivka s jedním přesunutým koncem si zachová tvar vůči svým koncům.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Podržení zkratky nástroje vybere nástroj, dokud ji nepustíte, a pak se znovu vybere předchozí nástroj.
 	Shows the bounding box while you move the selection or draw a shape.	Zobrazí ohraničovací rámeček, když přesouváte výběr nebo kreslíte tvar.
@@ -7363,6 +7375,11 @@ axis	Y Axis	osa Y
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` a `maxItems` musí být 0-{MAX_LIST}, `maxItems` alespoň 1 a výchozí hodnota musí mít tolik položek
 @msg	`name` must be a string	`name` musí být řetězec
 @msg	`opacity` must be a number	`opacity` musí být číslo
+@msg	`opacity` must be a number from 0 to 100	`opacity` musí být číslo od 0 do 100
+@msg	`opacity` must be true or false	`opacity` musí být true nebo false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	znaky textu nemají vlastní krytí: přidejte výplň nebo tah příkazem Přidat novou výplň nebo Přidat nový tah v panelu Vzhled
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	objekt vybraný v instanci symbolu nemá vlastní krytí výplně ani tahu
+@msg	no target has that fill or stroke to take the opacity	žádný cíl nemá tuto výplň nebo tah, který by převzal krytí
 @msg	`type` must be "path" or "compound"	`type` musí být "path" nebo "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` musí mít 1-{MAX_UNIT} tisknutelných znaků
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` musí uvádět 1 až {MAX_CONDITION_VALUES} hodnot pro `{other}`
@@ -9668,6 +9685,7 @@ breakText	Glyphs	Glyfy
 @msg	give a pattern name or select an object painted with a pattern	zadejte název vzorku nebo vyberte objekt vybarvený vzorkem
 @msg	give at least one of clip, invert, disabled, linked	zadejte alespoň jedno z clip, invert, disabled, linked
 @msg	give color, none, swatch or gradient	zadejte color, none, swatch nebo gradient
+@msg	give color, none, swatch, gradient or opacity	zadejte color, none, swatch, gradient nebo opacity
 @msg	give dataBase64	zadejte dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	zadejte buď at (kliknutí), nebo area (cestu nakreslenou kolem překryvů)
 @msg	give exactly one of `at`, `rect` and `points`	zadejte právě jedno z `at`, `rect` a `points`

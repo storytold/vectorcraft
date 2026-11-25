@@ -1089,6 +1089,7 @@ font-technology	Variable	Biến thiên
 	Direction Handles	Tay nắm hướng
 	Direction:	Hướng:
 	Disable Auto Add/Delete	Tắt tự động thêm/xóa
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete xóa điểm neo và giữ các đường dẫn liền mạch
 	Interpolate Control Points When Moving Anchors	Nội suy tay nắm hướng khi di chuyển điểm neo
 	Disable Opacity Mask	Tắt mặt nạ độ mờ
 	Discard	Loại bỏ
@@ -2932,6 +2933,7 @@ digits	Hindi	Hindi
 	One Point Perspective Preset 5	Thiết lập sẵn phối cảnh một điểm 5
 	Only Web Colors	Chỉ màu web
 	Opacity	Độ mờ
+	Show Opacity	Hiện độ mờ
 	Opacity & Mask Define Knockout Shape	Độ mờ & Mặt nạ xác định hình dạng Knockout
 	Opacity Mask	Mặt nạ độ mờ
 	Opacity Mask Info	Thông tin mặt nạ độ mờ
@@ -3140,6 +3142,12 @@ digits	Hindi	Hindi
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	không có độ phân giải
+	estimated memory {memory}	bộ nhớ ước tính {memory}
+	memory unavailable	không có thông tin bộ nhớ
+	Unknown format	Định dạng không xác định
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -3432,6 +3440,9 @@ mark-style	Japanese	Kiểu Nhật
 	Rearrange All	Sắp xếp lại tất cả
 	Rearrange All Artboards	Sắp xếp lại tất cả bảng vẽ
 	Rearrange All Artboards…	Sắp xếp lại tất cả bảng vẽ…
+	Rearrange…	Sắp xếp lại…
+	Selected Artboards: {n}	Bảng vẽ đã chọn: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Bấm vào khung vẽ để đặt các bảng vẽ (Esc để hủy)
 	Recall Selection	Khôi phục vùng chọn
 	RECENT	GẦN ĐÂY
 	Recent	Gần đây
@@ -3688,6 +3699,7 @@ mark-style	Japanese	Kiểu Nhật
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Cử chỉ xoay bằng hai ngón trên bàn di chuột sẽ xoay khung nhìn của khung vẽ.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Giữ một phím sẽ chạy công cụ hoặc lệnh trong cột Giữ của Phím tắt; nhấn nhanh sẽ chạy phím tắt thông thường của phím đó.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Số giây phải giữ một phím trước khi phím tắt nhấn giữ của nó chạy thay cho phím tắt thông thường.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete xóa các điểm neo đã chọn và khớp lại đường cong quanh từng điểm, thay vì mở đường dẫn tại đó.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Khi bạn di chuyển điểm neo, mỗi đường cong có một đầu bị di chuyển sẽ giữ hình dạng so với các đầu của nó.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Giữ phím tắt của một công cụ sẽ chọn công cụ đó cho đến khi bạn thả ra, rồi công cụ trước đó được chọn lại.
 	Shows the bounding box while you move the selection or draw a shape.	Hiển thị hộp giới hạn khi bạn di chuyển vùng chọn hoặc vẽ một hình.
@@ -7014,6 +7026,11 @@ axis	Y Axis	Trục Y
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` và `maxItems` phải là 0-{MAX_LIST}, `maxItems` ít nhất là 1, và giá trị mặc định phải có đúng số mục đó
 @msg	`name` must be a string	`name` phải là một chuỗi
 @msg	`opacity` must be a number	`opacity` phải là một số
+@msg	`opacity` must be a number from 0 to 100	`opacity` phải là một số từ 0 đến 100
+@msg	`opacity` must be true or false	`opacity` phải là true hoặc false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	ký tự văn bản không có độ mờ riêng: hãy thêm tô hoặc nét bằng Thêm tô mới hoặc Thêm nét mới trong bảng Diện mạo
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	đối tượng được chọn trong một phiên bản biểu tượng không có độ mờ tô hoặc nét riêng
+@msg	no target has that fill or stroke to take the opacity	không đối tượng nào có tô hoặc nét đó để nhận độ mờ
 @msg	`type` must be "path" or "compound"	`type` phải là "path" hoặc "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` phải có 1-{MAX_UNIT} ký tự in được
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` phải liệt kê 1 đến {MAX_CONDITION_VALUES} giá trị cho `{other}`

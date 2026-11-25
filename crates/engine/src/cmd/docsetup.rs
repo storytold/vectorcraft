@@ -131,8 +131,10 @@ fn apply(s: &mut DocSetup, units: &mut vectorcraft_doc::Unit, k: &str, v: &Value
             let (name, _, quotes) = LANGUAGES.iter().find(|(n, _, _)| n.eq_ignore_ascii_case(l)).ok_or_else(|| {
                 bad(C, format!("unknown language `{l}` (one of {})", LANGUAGES.iter().map(|(n, _, _)| *n).collect::<Vec<_>>().join(", ")))
             })?;
+            if !s.language.eq_ignore_ascii_case(name) {
+                s.quotes = *quotes;
+            }
             s.language = name.to_string();
-            s.quotes = *quotes;
         }
         "quotes" => s.quotes = quotes_param(v, s.quotes)?,
         "typographersQuotes" => s.typographers_quotes = flag(k, v)?,
@@ -309,5 +311,21 @@ fn restamp_scripts(d: &mut Document) {
         if let Some(v) = def.attrs.get_mut("small_caps").filter(|v| v.is_number()) {
             *v = json!(setup.small_caps_size);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn setup_round_trip_preserves_custom_quotes() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        s.execute(C, &json!({"quotes": {"double": "«»", "single": "‹›"}})).unwrap();
+        let mut fields = s.execute(C, &json!({})).unwrap();
+        fields["bleed"] = json!(4);
+        let reply = s.execute(C, &fields).unwrap();
+        assert_eq!(reply["quotes"], fields["quotes"]);
     }
 }
