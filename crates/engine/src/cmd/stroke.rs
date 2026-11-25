@@ -11,7 +11,7 @@ use vectorcraft_geom::PathData;
 use vectorcraft_tools::builder::is_live_paint;
 
 use super::appearance::{ItemTarget, edit_items, item_target};
-use super::paint::{live_paint_covered, live_paint_parts_skipped, painted};
+use super::paint::{live_paint_parts_skipped, painted};
 use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, ok, str_param};
 use crate::DocState;
 use crate::inspect::{ALIGNS, CAPS, JOINS, StrokeMixed, node_stroke, scale_layer};
@@ -465,7 +465,7 @@ impl Session {
         // A Live Paint group without edges shows the next selected object's stroke; any other object
         // without a painted object shows none. A face or edge selected with its Live Paint group counts
         // with the group, wherever it is in the selection.
-        let covered = live_paint_covered(&st.doc, &st.selection.objects);
+        let covered = st.selection_live_paint_covered(&st.selection.objects);
         for id in st.selection.objects.iter().filter(|id| !covered.contains(*id)) {
             let Some(n) = st.doc.node(*id) else { continue };
             let mut nodes = vec![];
@@ -540,7 +540,7 @@ impl DocState {
         } else {
             let selected: Vec<&Node> = self.selection.objects.iter().filter_map(|id| self.doc.node(*id)).collect();
             // The faces and edges of the selected Live Paint groups: selected as well, they count with their group's.
-            let covered = live_paint_covered(&self.doc, &self.selection.objects);
+            let covered = self.selection_live_paint_covered(&self.selection.objects);
             for n in selected.into_iter().filter(|n| !covered.contains(&n.id)) {
                 painted(n, true, true, &mut nodes);
             }
