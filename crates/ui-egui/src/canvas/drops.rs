@@ -195,8 +195,11 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kind: BodyKi
             later.push((win, rect, ui.layer_id()));
             return;
         }
-        // A pane outside Tile (a floating window's, the main window's while the current window floats).
-        app.canvas.windows.noted.push((win, rect));
+        // A pane outside Tile (a floating window's, the main window's while the current window floats), as shown: a
+        // measuring run's area is not where it draws.
+        if !craft::ui::runtime::measure::active(ui.ctx()) {
+            app.canvas.windows.noted.push((win, rect));
+        }
     }
     let view = match kind {
         BodyKind::Live => app.canvas_view(),

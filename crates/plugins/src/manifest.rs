@@ -34,6 +34,74 @@ pub const MAX_ALLOWED_COMMANDS: usize = 256;
 /// Longest command id a manifest's `commandAllowlist` names, in bytes.
 pub const MAX_ALLOWED_ID: usize = 128;
 
+/// The menus a command's `menu` may name, each as its path of English menu labels. File, Window,
+/// Help and the application menu are not among them, and neither are the submenus that list
+/// files, fonts, panels or other plug-ins.
+pub const MENU_PLACES: &[&[&str]] = &[
+    &["Edit"],
+    &["Edit", "Edit Colors"],
+    &["Object"],
+    &["Object", "Transform"],
+    &["Object", "Arrange"],
+    &["Object", "Path"],
+    &["Object", "Compound Path"],
+    &["Object", "Clipping Mask"],
+    &["Type"],
+    &["Select"],
+    &["Select", "Same"],
+    &["Select", "Object"],
+    &["Effect"],
+    &["View"],
+];
+
+/// Where a command's `menu` places it: in the menu at `path` (one of [`MENU_PLACES`]), after the
+/// built-in item labeled `after` (1 to 64 printable characters), or at the end of that menu when
+/// `after` is left out or names no built-in item there.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct MenuPlace {
+    pub path: &'static [&'static str],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after: Option<String>,
+}
+
+impl MenuPlace {
+    /// Reads a command's `menu` value: `{"path": [label, …], "after"?: label}`.
+    fn read(v: &Value) -> std::result::Result<MenuPlace, String> {
+        let wrong_path = || {
+            let k = "menu.path";
+            let places: Vec<String> =
+                MENU_PLACES.iter().map(|p| format!("[{}]", p.iter().map(|l| format!("{l:?}")).collect::<Vec<_>>().join(", "))).collect();
+            format!("`{k}` must be one of {}", places.join(", "))
+        };
+        let Some(o) = v.as_object() else {
+            let key = "menu";
+            return Err(format!("`{key}` must be an object"));
+        };
+        if let Some(k) = o.keys().find(|k| !matches!(k.as_str(), "path" | "after")) {
+            let k = crate::permissions::display_text(k, crate::permissions::MAX_SHOWN_FIELD);
+            return Err(format!("unknown key `{k}`; the keys here are {}", "path, after"));
+        }
+        let path: Vec<&str> = match o.get("path").and_then(Value::as_array) {
+            Some(path) => path.iter().map(Value::as_str).collect::<Option<_>>().ok_or_else(wrong_path)?,
+            None => return Err(wrong_path()),
+        };
+        let path = *MENU_PLACES.iter().find(|p| **p == path.as_slice()).ok_or_else(wrong_path)?;
+        let key = "menu.after";
+        let after = match o.get("after") {
+            None => None,
+            Some(Value::String(s)) => {
+                let trimmed = s.trim();
+                if trimmed.is_empty() || s.chars().count() > 64 || s.chars().any(char::is_control) {
+                    return Err(format!("`{key}` must be 1-64 printable characters"));
+                }
+                Some(trimmed.to_string())
+            }
+            Some(_) => return Err(format!("`{key}` must be a string")),
+        };
+        Ok(MenuPlace { path, after })
+    }
+}
+
 /// What a plug-in is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -223,9 +291,9 @@ pub struct Param {
 }
 
 /// A menu command a plug-in adds (`commands`): the host lists it under Object › Plug-ins › the
-/// plug-in's name (Effect › Plug-ins for a live effect's), runs it as the command
-/// `plugin.<plug-in id>.<id>`, and calls the plug-in's `vc_run` with `_context.command` set to
-/// `id` and the parameters it declares.
+/// plug-in's name (Effect › Plug-ins for a live effect's), or in the menu its `menu` names, runs it
+/// as the command `plugin.<plug-in id>.<id>`, and calls the plug-in's `vc_run` with
+/// `_context.command` set to `id` and the parameters it declares.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Command {
     /// `[a-z][a-z0-9_]*`, at most [`MAX_COMMAND_ID`] characters, unique within the manifest.
@@ -236,6 +304,13 @@ pub struct Command {
     /// Parameters in declaration (dialog) order, declared as the manifest's own are.
     #[serde(default, deserialize_with = "ordered_params", serialize_with = "params_as_object")]
     pub params: Vec<(String, Param)>,
+    /// The menu it is listed in instead of the plug-in's submenu (`menu`, read at
+    /// [`crate::permissions::MENU_API`] and later).
+    #[serde(rename = "menu", skip_deserializing, skip_serializing_if = "Option::is_none")]
+    pub place: Option<MenuPlace>,
+    /// Each `menu` value the manifest gives, until [`Manifest::parse`] reads them.
+    #[serde(skip)]
+    pub(crate) declared_menu: Vec<Value>,
 }
 
 impl Command {
@@ -243,6 +318,18 @@ impl Command {
     /// most [`crate::permissions::MAX_SHOWN_NAME`] characters.
     pub fn shown_label(&self) -> String {
         crate::permissions::display_text(self.label.trim(), crate::permissions::MAX_SHOWN_NAME)
+    }
+
+    /// The label its menu item shows for plug-in `plugin_name`: [`Command::shown_label`], and for a
+    /// command placed in another menu, followed by the plug-in's name in parentheses.
+    pub fn menu_label(&self, plugin_name: &str) -> String {
+        match self.place {
+            None => self.shown_label(),
+            Some(_) => {
+                let name = crate::permissions::display_text(plugin_name.trim(), crate::permissions::MAX_SHOWN_NAME);
+                format!("{} ({name})", self.shown_label())
+            }
+        }
     }
 }
 
@@ -364,8 +451,9 @@ impl Manifest {
         if serde_json::from_str::<Value>(text).is_ok_and(|v| v.get("paintOutput").is_some_and(|p| *p != Value::Bool(true))) {
             return Err(Error::Manifest("`paintOutput` may only be true".into()));
         }
-        let man: Manifest = serde_json::from_str(text).map_err(|e| Error::Manifest(format!("manifest: {e}")))?;
+        let mut man: Manifest = serde_json::from_str(text).map_err(|e| Error::Manifest(format!("manifest: {e}")))?;
         man.validate()?;
+        man.read_places()?;
         Ok(man)
     }
 
@@ -399,6 +487,31 @@ impl Manifest {
     /// The command with id `id`.
     pub fn command(&self, id: &str) -> Option<&Command> {
         self.commands.iter().find(|c| c.id == id)
+    }
+
+    /// Reads each command's `menu` into its [`Command::place`] at
+    /// [`crate::permissions::MENU_API`] and later, and drops it below that level, where the key is
+    /// ignored. A `menu` that names a menu outside [`MENU_PLACES`], has the wrong shape or is given
+    /// twice is refused, and the error names the command.
+    fn read_places(&mut self) -> Result<()> {
+        let reads = self.api >= permissions::MENU_API;
+        for (i, c) in self.commands.iter_mut().enumerate() {
+            let menus = std::mem::take(&mut c.declared_menu);
+            if !reads {
+                continue;
+            }
+            let name = command_name(i, &c.id);
+            let place = match menus.as_slice() {
+                [] => continue,
+                [menu] => MenuPlace::read(menu),
+                _ => {
+                    let key = "menu";
+                    Err(format!("duplicate field `{key}`"))
+                }
+            };
+            c.place = Some(place.map_err(|e| Error::Manifest(format!("command {name}: {e}")))?);
+        }
+        Ok(())
     }
 
     /// Checks what the module declared: its id, name and text lengths, its extensions, a budget its
@@ -809,7 +922,7 @@ fn ordered_commands<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Resu
             Err(A::Error::custom(self.wrong()))
         }
         fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> std::result::Result<Command, A::Error> {
-            let (mut id, mut label, mut params) = (None::<String>, None::<String>, None::<Params>);
+            let (mut id, mut label, mut params, mut menu) = (None::<String>, None::<String>, None::<Params>, Vec::<Value>::new());
             let named = |id: &Option<String>, e: &dyn std::fmt::Display| {
                 A::Error::custom(format!("command {}: {e}", command_name(self.0, id.as_deref().unwrap_or_default())))
             };
@@ -828,6 +941,11 @@ fn ordered_commands<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Resu
                         params = Some(map.next_value().map_err(|e| named(&id, &e))?);
                         false
                     }
+                    // A repeated `menu` is refused only where the key is read ([`Manifest::parse`]).
+                    "menu" => {
+                        menu.push(map.next_value().map_err(|e| named(&id, &e))?);
+                        false
+                    }
                     "id" | "label" | "params" => true,
                     _ => {
                         map.next_value::<IgnoredAny>()?;
@@ -844,7 +962,7 @@ fn ordered_commands<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Resu
             let Some(label) = label else {
                 return Err(named(&Some(id), &"missing field `label`"));
             };
-            Ok(Command { id, label, params: params.map(|p| p.0).unwrap_or_default() })
+            Ok(Command { id, label, params: params.map(|p| p.0).unwrap_or_default(), place: None, declared_menu: menu })
         }
     }
 
@@ -1220,7 +1338,7 @@ mod tests {
     }
 
     /// A filter or a live effect lists menu commands with their own parameters; a `menu` key is
-    /// ignored. A malformed entry, a bad or repeated id, a label that isn't printable and too many
+    /// ignored at API level 1. A malformed entry, a bad or repeated id, a label that isn't printable and too many
     /// commands are refused, and the error names the command.
     #[test]
     fn commands_are_checked_and_errors_name_them() {
@@ -1242,7 +1360,7 @@ mod tests {
         assert!(serde_json::to_value(Manifest::parse(br#"{"id":"a","name":"x","kind":"filter"}"#).unwrap()).unwrap().get("commands").is_none());
         let effect = Manifest::parse(br#"{"id":"a","name":"x","kind":"effect","commands":[{"id":"c","label":"C"}]}"#).unwrap();
         assert_eq!(effect.commands.len(), 1);
-        let label = |l: &str| Command { id: "c".into(), label: l.into(), params: Vec::new() }.shown_label();
+        let label = |l: &str| Command { id: "c".into(), label: l.into(), params: Vec::new(), place: None, declared_menu: Vec::new() }.shown_label();
         assert_eq!(label("Flip\u{202E}txt.exe"), "Flip\\u{202E}txt.exe");
 
         let many: Vec<String> = (0..=MAX_COMMANDS).map(|i| format!(r#"{{"id":"c{i}","label":"C"}}"#)).collect();
@@ -1296,6 +1414,65 @@ mod tests {
         let hidden =
             Manifest::parse("{\"id\":\"a\",\"name\":\"x\",\"kind\":\"filter\",\"commands\":[{\"id\":\"x\u{202E}\",\"label\":\"A\"}]}".as_bytes());
         assert!(hidden.unwrap_err().to_string().contains("command `x\\u{202E}`"), "an id in an error is escaped");
+    }
+
+    /// At API level 2 a command's `menu` places it in one of [`MENU_PLACES`], after a named item or
+    /// at the end; a menu outside them (File, Help, Window, Edit › Preferences) or a `menu` of the
+    /// wrong shape is refused and the error names the command. At level 1 the key is ignored.
+    #[test]
+    fn a_command_menu_names_an_allowed_place() {
+        let with = |api: u32, menu: &str| {
+            format!(
+                r#"{{"id":"org.example.low","name":"Low Area","api":{api},"kind":"filter","commands":[{{"id":"low","label":"Low Area Closed Paths","menu":{menu}}}]}}"#
+            )
+        };
+        let m = Manifest::parse(with(2, r#"{"path":["Select"],"after":" Inverse "}"#).as_bytes()).unwrap();
+        let c = &m.commands[0];
+        assert_eq!(c.place, Some(MenuPlace { path: &["Select"], after: Some("Inverse".into()) }));
+        assert_eq!(c.menu_label(&m.name), "Low Area Closed Paths (Low Area)", "a placed item names its plug-in");
+        assert_eq!(serde_json::to_value(&m).unwrap()["commands"][0]["menu"], json!({"path": ["Select"], "after": "Inverse"}));
+        let end = Manifest::parse(with(2, r#"{"path":["Select","Same"]}"#).as_bytes()).unwrap();
+        assert_eq!(end.commands[0].place, Some(MenuPlace { path: &["Select", "Same"], after: None }));
+
+        // API level 1 ignores the key, as hosts before it did: the command stays in the plug-in's submenu.
+        for menu in [r#"{"path":["Select"]}"#, r#""File""#, r#"{"path":["File"]}"#, r#"{"path":["Select"]},"menu":{"path":["Edit"]}"#] {
+            let old = Manifest::parse(with(1, menu).as_bytes()).unwrap();
+            assert_eq!(old.commands[0].place, None, "{menu}");
+            assert_eq!(old.commands[0].menu_label(&old.name), "Low Area Closed Paths");
+        }
+
+        let long = format!(r#"{{"path":["Select"],"after":"{}"}}"#, "x".repeat(65));
+        let padded = format!(r#"{{"path":["Select"],"after":" {} "}}"#, "x".repeat(64));
+        for (menu, says) in [
+            (r#"{"path":["File"]}"#, "`menu.path` must be one of"),
+            (r#"{"path":["Help"]}"#, "`menu.path` must be one of"),
+            (r#"{"path":["Window"]}"#, "`menu.path` must be one of"),
+            (r#"{"path":["VectorCraft"]}"#, "`menu.path` must be one of"),
+            (r#"{"path":["Edit","Preferences"]}"#, "`menu.path` must be one of"),
+            (r#"{"path":["Object","Plug-ins"]}"#, "`menu.path` must be one of"),
+            (r#"{"path":["select"]}"#, "`menu.path` must be one of"),
+            (r#"{"path":[]}"#, "`menu.path` must be one of"),
+            (r#"{"path":"Select"}"#, "`menu.path` must be one of"),
+            (r#"{"path":["Select",1]}"#, "`menu.path` must be one of"),
+            (r#"{"after":"Inverse"}"#, "`menu.path` must be one of"),
+            (r#""Select""#, "`menu` must be an object"),
+            (r#"["Select"]"#, "`menu` must be an object"),
+            (r#"{"path":["Select"],"before":"Inverse"}"#, "unknown key `before`"),
+            (r#"{"path":["Select"],"after":3}"#, "`menu.after` must be a string"),
+            (r#"{"path":["Select"],"after":null}"#, "`menu.after` must be a string"),
+            (r#"{"path":["Select"],"after":"  "}"#, "`menu.after` must be 1-64 printable characters"),
+            (r#"{"path":["Select"],"after":"In\u0007verse"}"#, "`menu.after` must be 1-64 printable characters"),
+            (r#"{"path":["Select"],"after":"\nInverse\n"}"#, "`menu.after` must be 1-64 printable characters"),
+            (long.as_str(), "`menu.after` must be 1-64 printable characters"),
+            (padded.as_str(), "`menu.after` must be 1-64 printable characters"),
+            (r#"{"path":["Select"]},"menu":{"path":["Edit"]}"#, "duplicate field `menu`"),
+        ] {
+            let e = Manifest::parse(with(2, menu).as_bytes()).unwrap_err().to_string();
+            assert!(e.contains("command `low`") && e.contains(says), "{menu}: {e}");
+        }
+        let twice =
+            r#"{"id":"a","name":"x","api":2,"kind":"filter","commands":[{"id":"x","label":"A","menu":{"path":["Edit"]},"menu":{"path":["Edit"]}}]}"#;
+        assert!(Manifest::parse(twice.as_bytes()).unwrap_err().to_string().contains("duplicate field `menu`"));
     }
 
     #[test]

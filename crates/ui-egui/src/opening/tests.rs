@@ -526,6 +526,8 @@ fn bytes(title: &str) -> Vec<u8> {
 #[test]
 fn a_file_that_takes_a_while_to_open_shows_a_progress_window() {
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    // The app's clock stands still: a read is only old enough for its window after `age`.
+    app.now_override = Some(0.0);
     let ctx = crate::testing::ui_context();
     assert_eq!(progress(&mut app, &ctx), "", "nothing opening");
     start(&mut app, "/art/Big.vectorcraft", bytes("Big"));

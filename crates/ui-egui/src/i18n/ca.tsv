@@ -3200,6 +3200,7 @@ digits	Malayalam	Malaiàlam
 	One Point Perspective Preset 5	Preajust 5 de perspectiva d’un punt
 	Only Web Colors	Només colors web
 	Opacity	Opacitat
+	Show Opacity	Mostra l’opacitat
 	Opacity & Mask Define Knockout Shape	L’opacitat i la màscara defineixen la forma d’exclusió
 	Opacity Mask	Màscara d’opacitat
 	Opacity Mask Info	Informació de la màscara d’opacitat
@@ -3436,6 +3437,12 @@ digits	Malayalam	Malaiàlam
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppp
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppp
+	resolution unavailable	resolució no disponible
+	estimated memory {memory}	memòria estimada {memory}
+	memory unavailable	memòria no disponible
+	Unknown format	Format desconegut
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -3793,6 +3800,9 @@ digits	Malayalam	Malaiàlam
 	Rearrange All	Reorganitza-ho tot
 	Rearrange All Artboards	Reorganitza tots els taulers
 	Rearrange All Artboards…	Reorganitza tots els taulers…
+	Rearrange…	Reorganitza…
+	Selected Artboards: {n}	Taulers seleccionats: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Fes clic al llenç per col·locar els taulers (Esc cancel·la)
 	Rearrange Artboards	Reorganitza els taulers
 	Recall Selection	Recupera la selecció
 	RECENT	RECENTS
@@ -7716,6 +7726,8 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	cal aprovació: demana {0}, que l’usuari concedeix en instal·lar-lo per separat
 @msg	not JSON: {e}	no és JSON: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	no és un binari WebAssembly (falta la capçalera \\0asm)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	un tipus de funció supera el límit de {MAX_FUNC_TYPE_VALUES} paràmetres
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	un tipus de funció supera el límit de {MAX_FUNC_TYPE_VALUES} resultats
 @msg	parameter `{k}`: {what}	paràmetre `{k}`: {what}
 @msg	parameter `{name}`: {what}	paràmetre `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	els paràmetres del complement han de ser un objecte JSON
@@ -7753,6 +7765,11 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` i `maxItems` han de ser 0-{MAX_LIST}, `maxItems` com a mínim 1, i el valor predeterminat ha de tenir aquesta quantitat
 @msg	`name` must be a string	`name` ha de ser una cadena
 @msg	`opacity` must be a number	`opacity` ha de ser un nombre
+@msg	`opacity` must be a number from 0 to 100	`opacity` ha de ser un nombre del 0 al 100
+@msg	`opacity` must be true or false	`opacity` ha de ser true o false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	els caràcters de text no tenen opacitat pròpia: afegiu un farciment o un traç amb Afegeix un farciment nou o Afegeix un traç nou del tauler Aparença
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	un objecte seleccionat en una instància de símbol no té opacitat pròpia de farciment ni de traç
+@msg	no target has that fill or stroke to take the opacity	cap objectiu no té aquest farciment o traç per rebre l'opacitat
 @msg	`type` must be "path" or "compound"	`type` ha de ser "path" o "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` ha de tenir 1-{MAX_UNIT} caràcters imprimibles
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` ha d’indicar d’1 a {MAX_CONDITION_VALUES} valors per a `{other}`

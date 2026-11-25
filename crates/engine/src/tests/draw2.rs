@@ -4861,6 +4861,460 @@ fn cmd_alt_lends_group_selection_while_direct_selection_is_active() {
 }
 
 #[test]
+fn cmd_lends_the_selection_tool_direct_selection_or_group_selection_chosen_last() {
+    // Cmd held with the Selection tool: Direct Selection takes the press until the release, so a
+    // Cmd-click picks one path inside a group where a plain click picks the group.
+    let (none, cmd) = (Mods::default(), Mods { cmd: true, ..Mods::default() });
+    let v = view();
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    let b = rect(&mut s, 300.0, 100.0, 100.0, 100.0);
+    let group = NodeId(s.execute("object.group", &json!({"ids": [a.0, b.0]})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.none", &json!({})).unwrap();
+    s.select_tool("selection", v).unwrap();
+    assert_eq!(s.lent_tool_id(&none), None);
+    assert_eq!(s.lent_tool_id(&cmd), Some("directSelection"));
+    assert_eq!(s.shown_tool_id(&cmd), "directSelection");
+    assert_eq!(s.shown_tool_id(&none), "selection");
+    s.pointer(&PointerEvent::new(PointerKind::Down, 150.0, 150.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "directSelection");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 150.0, 150.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "selection");
+    let picked = &s.active().unwrap().selection;
+    assert!(picked.contains(a) && !picked.contains(group), "the Cmd-click picks the path, not its group");
+    s.execute("select.none", &json!({})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 150.0, 150.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 150.0, 150.0), v).unwrap();
+    assert!(s.active().unwrap().selection.contains(group), "a plain click picks the group");
+    // Cmd pressed once a drag is under way lends nothing: the pointer and the named tool stay.
+    s.pointer(&PointerEvent::new(PointerKind::Down, 600.0, 500.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 650.0, 550.0), v).unwrap();
+    assert_eq!(s.cursor(Point::new(650.0, 550.0), cmd, v), s.cursor(Point::new(650.0, 550.0), none, v));
+    assert_eq!(s.shown_tool_id(&cmd), "selection");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 650.0, 550.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "selection");
+    // Group Selection lends the Selection tool, and once chosen, is what the Selection tool borrows.
+    s.select_tool("groupSelection", v).unwrap();
+    assert_eq!(s.lent_tool_id(&cmd), Some("selection"));
+    s.select_tool("selection", v).unwrap();
+    assert_eq!(s.lent_tool_id(&cmd), Some("groupSelection"));
+    s.select_tool("directSelection", v).unwrap();
+    s.select_tool("selection", v).unwrap();
+    assert_eq!(s.lent_tool_id(&cmd), Some("directSelection"));
+}
+
+#[test]
+fn a_cmd_double_click_goes_to_the_tool_the_clicks_went_to() {
+    // With the Selection tool, Cmd-clicks go to Direct Selection, and so does the double-click
+    // after them: it does not isolate the group as the Selection tool's double-click would.
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let v = view();
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    let b = rect(&mut s, 300.0, 100.0, 100.0, 100.0);
+    s.execute("object.group", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.select_tool("selection", v).unwrap();
+    for kind in [PointerKind::Down, PointerKind::Up, PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick] {
+        s.pointer(&PointerEvent::new(kind, 150.0, 150.0).with_mods(cmd), v).unwrap();
+    }
+    assert_eq!(s.tool_id(), "selection");
+    assert_eq!(s.doc().unwrap().isolation, None, "Direct Selection's double-click does not isolate the group");
+    // With Group Selection chosen last, the second click selects the group, and the double-click
+    // still goes to Group Selection, as both clicks did.
+    s.select_tool("groupSelection", v).unwrap();
+    s.select_tool("selection", v).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    for kind in [PointerKind::Down, PointerKind::Up, PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick] {
+        s.pointer(&PointerEvent::new(kind, 150.0, 150.0).with_mods(cmd), v).unwrap();
+    }
+    assert_eq!(s.doc().unwrap().isolation, None, "Group Selection's double-click does not isolate the group");
+    s.execute("select.none", &json!({})).unwrap();
+    // A plain double-click is the Selection tool's: it isolates the group.
+    for kind in [PointerKind::Down, PointerKind::Up, PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick] {
+        s.pointer(&PointerEvent::new(kind, 150.0, 150.0), v).unwrap();
+    }
+    assert!(s.doc().unwrap().isolation.is_some());
+}
+
+#[test]
+fn a_cmd_double_click_after_a_tool_switch_goes_to_the_new_tool() {
+    // With the Selection tool, a Cmd-click on type goes to Direct Selection, and so does the
+    // Cmd double-click after it, which edits the type. Once another tool is chosen, the
+    // double-click is that tool's: Group Selection's does not edit the type.
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let v = view();
+    let mut s = session();
+    let id = NodeId(s.execute("text.create", &json!({"x": 100, "y": 200, "size": 48, "text": "Type"})).unwrap()["id"].as_u64().unwrap());
+    let c = s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap().center();
+    let clicks = |s: &mut Session, then: Option<&str>| {
+        s.execute("select.none", &json!({})).unwrap();
+        s.select_tool("selection", v).unwrap();
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, c.x, c.y).with_mods(cmd), v).unwrap();
+        }
+        if let Some(tool) = then {
+            s.select_tool(tool, v).unwrap();
+        }
+        s.pointer(&PointerEvent::new(PointerKind::DoubleClick, c.x, c.y).with_mods(cmd), v).unwrap()
+    };
+    assert_eq!(clicks(&mut s, None), [UiRequest::SwitchTool("type".into())], "Direct Selection's double-click edits the type");
+    assert_eq!(clicks(&mut s, Some("groupSelection")), [], "Group Selection's double-click does not");
+    assert_eq!(s.tool_id(), "groupSelection");
+}
+
+#[test]
+fn a_cmd_double_click_after_switching_away_and_back_goes_to_the_active_tool() {
+    // A Cmd-click with the Selection tool goes to Direct Selection. After a switch to another tool
+    // and back to the Selection tool, or a fresh start of the tool (another view of the document),
+    // the Cmd double-click is the Selection tool's: it isolates the group.
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let v = view();
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    let b = rect(&mut s, 300.0, 100.0, 100.0, 100.0);
+    s.execute("object.group", &json!({"ids": [a.0, b.0]})).unwrap();
+    for reset in [false, true] {
+        s.execute("select.none", &json!({})).unwrap();
+        s.select_tool("selection", v).unwrap();
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, 150.0, 150.0).with_mods(cmd), v).unwrap();
+        }
+        if reset {
+            s.reset_tool();
+        } else {
+            s.select_tool("rectangle", v).unwrap();
+            s.select_tool("selection", v).unwrap();
+        }
+        s.pointer(&PointerEvent::new(PointerKind::DoubleClick, 150.0, 150.0).with_mods(cmd), v).unwrap();
+        assert_eq!(s.tool_id(), "selection");
+        assert!(s.doc().unwrap().isolation.is_some(), "the Selection tool's double-click isolates the group (reset: {reset})");
+        s.execute("object.exitIsolation", &json!({})).unwrap();
+    }
+}
+
+#[test]
+fn a_cmd_press_on_a_selected_object_keeps_select_behind() {
+    // Over a selected object, a Cmd-click with the Selection tool selects the object behind it;
+    // with Select Behind off, Direct Selection takes the press there too.
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let v = view();
+    let mut s = session();
+    let back = rect(&mut s, 100.0, 100.0, 200.0, 200.0);
+    let front = rect(&mut s, 150.0, 150.0, 100.0, 100.0);
+    s.select_tool("selection", v).unwrap();
+    s.execute("select.set", &json!({"ids": [front.0]})).unwrap();
+    // The canvas shows the marks of the tool a press at the pointer takes, and the status bar and
+    // the help bar name it.
+    s.cursor(Point::new(200.0, 200.0), cmd, v);
+    assert_eq!(s.hover_tool_id(&cmd), "selection");
+    assert_eq!(s.shown_tool_id(&cmd), "selection", "the press selects behind: nothing is lent");
+    s.cursor(Point::new(500.0, 500.0), cmd, v);
+    assert_eq!(s.hover_tool_id(&cmd), "directSelection");
+    assert_eq!(s.shown_tool_id(&cmd), "directSelection");
+    // The bounding box's top middle handle, on the middle of the top segment: the press is lent.
+    assert_eq!(s.hover_tool_at(Some(Point::new(200.0, 150.0)), &cmd, v), "directSelection", "on a box handle");
+    // Turning Select Behind off changes what the bars name over the selection.
+    s.cursor(Point::new(200.0, 200.0), cmd, v);
+    s.prefs.ctrl_click_selects_behind = false;
+    assert_eq!(s.shown_tool_id(&cmd), "directSelection");
+    s.prefs.ctrl_click_selects_behind = true;
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 200.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "selection");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 200.0).with_mods(cmd), v).unwrap();
+    let picked = &s.active().unwrap().selection;
+    assert!(picked.contains(back) && !picked.contains(front), "the Cmd-click selects the object behind");
+    // On a selected object's anchor, Direct Selection takes the press.
+    s.execute("select.set", &json!({"ids": [front.0]})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 250.0, 250.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "directSelection");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 250.0, 250.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "selection");
+    s.prefs.ctrl_click_selects_behind = false;
+    s.execute("select.set", &json!({"ids": [front.0]})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 200.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "directSelection");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 200.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "selection");
+}
+
+#[test]
+fn a_cmd_press_on_a_wide_strokes_outer_half_selects_behind() {
+    // Without Use Preview Bounds the bounding box leaves out the outer half of a wide stroke, which
+    // the Selection tool still hits: a Cmd press there selects the object behind.
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let v = view();
+    let mut s = session();
+    assert!(!s.prefs.use_preview_bounds);
+    let back = rect(&mut s, 50.0, 50.0, 300.0, 300.0);
+    let front = rect(&mut s, 150.0, 150.0, 100.0, 100.0);
+    s.execute("stroke.set", &json!({"ids": [front.0], "weight": 40})).unwrap();
+    s.select_tool("selection", v).unwrap();
+    s.execute("select.set", &json!({"ids": [front.0]})).unwrap();
+    // 15 pt outside the path, on its stroke.
+    let at = Point::new(200.0, 135.0);
+    assert_eq!(s.hover_tool_at(Some(at), &cmd, v), "selection", "the press selects behind");
+    s.pointer(&PointerEvent::new(PointerKind::Down, at.x, at.y).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "selection");
+    s.pointer(&PointerEvent::new(PointerKind::Up, at.x, at.y).with_mods(cmd), v).unwrap();
+    let picked = &s.active().unwrap().selection;
+    assert!(picked.contains(back) && !picked.contains(front), "the Cmd-click selects the object behind");
+}
+
+#[test]
+fn a_cmd_press_on_a_lone_selected_object_is_lent() {
+    // With nothing behind the selected object, there is nothing to select behind: Direct Selection
+    // takes the press.
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let v = view();
+    let mut s = session();
+    let lone = rect(&mut s, 150.0, 150.0, 100.0, 100.0);
+    s.select_tool("selection", v).unwrap();
+    s.execute("select.set", &json!({"ids": [lone.0]})).unwrap();
+    assert_eq!(s.hover_tool_at(Some(Point::new(200.0, 200.0)), &cmd, v), "directSelection");
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 200.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "directSelection");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 200.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "selection");
+}
+
+#[test]
+fn a_layer_effect_that_moves_art_moves_where_a_cmd_press_selects_behind() {
+    // A layer effect draws the selected object 250 pt to the right of its path, over the object
+    // behind it: a Cmd press where it is drawn selects behind. A drop shadow there is not hit, so
+    // the press is lent. Outline view hits the path where it is, and Preview afterwards still finds
+    // the moved art.
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let v = view();
+    let outline = ViewInfo { outline: true, ..view() };
+    let drawn = Point::new(450.0, 200.0);
+    // On both rectangles' top edges, which Outline view hits, away from the box's handles.
+    let path = Point::new(170.0, 150.0);
+    for effect in ["distort.transform", "stylize.dropShadow"] {
+        let mut s = session();
+        let back = rect(&mut s, 50.0, 150.0, 700.0, 300.0);
+        let front = rect(&mut s, 150.0, 150.0, 100.0, 100.0);
+        let layer = s.doc().unwrap().doc.layers[0].id;
+        let params = if effect == "distort.transform" { json!({"moveH": 250}) } else { json!({"x": 250, "y": 0, "blur": 0}) };
+        s.execute("effect.apply", &json!({"effect": effect, "params": params, "ids": [layer.0], "item": null})).unwrap();
+        s.select_tool("selection", v).unwrap();
+        s.execute("select.set", &json!({"ids": [front.0]})).unwrap();
+        // The back rectangle is drawn moved too, so it is under both points.
+        if effect == "distort.transform" {
+            assert_eq!(s.hover_tool_at(Some(path), &cmd, outline), "selection", "Outline view: on the path");
+            assert_eq!(s.hover_tool_at(Some(drawn), &cmd, v), "selection", "Preview: where the effect draws it");
+            s.pointer(&PointerEvent::new(PointerKind::Down, drawn.x, drawn.y).with_mods(cmd), v).unwrap();
+            assert_eq!(s.tool_id(), "selection");
+            s.pointer(&PointerEvent::new(PointerKind::Up, drawn.x, drawn.y).with_mods(cmd), v).unwrap();
+            let picked = &s.active().unwrap().selection;
+            assert!(picked.contains(back) && !picked.contains(front), "the Cmd-click selects the object behind");
+        } else {
+            assert_eq!(s.hover_tool_at(Some(drawn), &cmd, v), "directSelection", "on the shadow");
+        }
+    }
+}
+
+#[test]
+fn repeated_cmd_clicks_select_behind_a_group_whose_member_is_selected() {
+    // The first Cmd-click on an unselected group lends Direct Selection, which selects the path
+    // under the pointer. The group holds that selected path, so the next Cmd-click there selects
+    // the object behind the group.
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let v = view();
+    let mut s = session();
+    let back = rect(&mut s, 100.0, 100.0, 200.0, 200.0);
+    let a = rect(&mut s, 150.0, 150.0, 40.0, 40.0);
+    let b = rect(&mut s, 210.0, 150.0, 40.0, 40.0);
+    let group = NodeId(s.execute("object.group", &json!({"ids": [a.0, b.0]})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.none", &json!({})).unwrap();
+    s.select_tool("selection", v).unwrap();
+    let click = |s: &mut Session| {
+        s.pointer(&PointerEvent::new(PointerKind::Down, 170.0, 170.0).with_mods(cmd), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, 170.0, 170.0).with_mods(cmd), v).unwrap();
+    };
+    click(&mut s);
+    let picked = &s.active().unwrap().selection;
+    assert!(picked.contains(a) && !picked.contains(group), "the first Cmd-click picks the path");
+    assert_eq!(s.hover_tool_at(Some(Point::new(170.0, 170.0)), &cmd, v), "selection", "the next press selects behind");
+    click(&mut s);
+    // Made quickly, the two clicks are also a double-click, which neither isolates the group nor
+    // changes what the second click selected, also with Cmd let go before it.
+    s.pointer(&PointerEvent::new(PointerKind::DoubleClick, 170.0, 170.0), v).unwrap();
+    assert_eq!(s.doc().unwrap().isolation, None);
+    let picked = &s.active().unwrap().selection;
+    assert!(picked.contains(back) && !picked.contains(a), "the second Cmd-click selects the object behind the group");
+}
+
+#[test]
+fn a_double_click_after_a_selection_change_is_not_kept_for_select_behind() {
+    // A double-click that follows a Cmd-click selecting behind keeps what it selected, but only
+    // while the document stays as that click left it.
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let v = view();
+    let mut s = session();
+    rect(&mut s, 100.0, 100.0, 200.0, 200.0);
+    let front = rect(&mut s, 150.0, 150.0, 100.0, 100.0);
+    s.select_tool("selection", v).unwrap();
+    s.execute("select.set", &json!({"ids": [front.0]})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 200.0).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 200.0).with_mods(cmd), v).unwrap();
+    assert!(!s.active().unwrap().selection.contains(front), "the Cmd-click selects behind");
+    s.execute("select.set", &json!({"ids": [front.0]})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::DoubleClick, 200.0, 200.0), v).unwrap();
+    assert!(s.doc().unwrap().isolation.is_some(), "the double-click isolates as any other");
+}
+
+#[test]
+fn a_double_click_after_the_pointer_moved_away_is_not_kept_for_select_behind() {
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let v = view();
+    let mut s = session();
+    rect(&mut s, 100.0, 100.0, 200.0, 200.0);
+    let front = rect(&mut s, 150.0, 150.0, 100.0, 100.0);
+    s.select_tool("selection", v).unwrap();
+    s.execute("select.set", &json!({"ids": [front.0]})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 200.0).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 200.0).with_mods(cmd), v).unwrap();
+    assert!(!s.active().unwrap().selection.contains(front), "the Cmd-click selects behind");
+    s.pointer(&PointerEvent::new(PointerKind::Move, 400.0, 400.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Move, 200.0, 200.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::DoubleClick, 200.0, 200.0), v).unwrap();
+    assert!(s.doc().unwrap().isolation.is_some(), "the double-click isolates as any other");
+}
+
+#[test]
+fn a_double_click_after_a_select_behind_drag_is_not_kept_for_select_behind() {
+    // A Cmd press that selects behind and then drags is not a click, also when the drag ends where
+    // it began and moves nothing, so a double-click there is a double-click of its own.
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let v = view();
+    let mut s = session();
+    let back = rect(&mut s, 100.0, 100.0, 200.0, 200.0);
+    let front = rect(&mut s, 150.0, 150.0, 100.0, 100.0);
+    s.select_tool("selection", v).unwrap();
+    s.execute("select.set", &json!({"ids": [front.0]})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 200.0).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 260.0, 200.0).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 200.0).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 200.0).with_mods(cmd), v).unwrap();
+    assert!(s.active().unwrap().selection.contains(back), "the Cmd press selects behind");
+    s.pointer(&PointerEvent::new(PointerKind::DoubleClick, 200.0, 200.0), v).unwrap();
+    assert!(s.doc().unwrap().isolation.is_some(), "the double-click isolates as any other");
+}
+
+#[test]
+fn a_double_click_after_a_select_behind_press_released_away_is_not_kept_for_select_behind() {
+    // The automation interface can send the release far from the press with no drag between.
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let v = view();
+    let mut s = session();
+    let back = rect(&mut s, 100.0, 100.0, 200.0, 200.0);
+    let front = rect(&mut s, 150.0, 150.0, 100.0, 100.0);
+    s.select_tool("selection", v).unwrap();
+    s.execute("select.set", &json!({"ids": [front.0]})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 200.0).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 270.0, 270.0).with_mods(cmd), v).unwrap();
+    assert!(s.active().unwrap().selection.contains(back), "the Cmd press selects behind");
+    s.pointer(&PointerEvent::new(PointerKind::DoubleClick, 270.0, 270.0), v).unwrap();
+    assert!(s.doc().unwrap().isolation.is_some(), "the double-click isolates as any other");
+}
+
+#[test]
+fn a_double_click_in_the_frame_of_a_select_behind_press_keeps_what_it_selected() {
+    // The second press and the double-click can come in one frame, before the release.
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let v = view();
+    let mut s = session();
+    let back = rect(&mut s, 100.0, 100.0, 200.0, 200.0);
+    let front = rect(&mut s, 150.0, 150.0, 100.0, 100.0);
+    s.select_tool("selection", v).unwrap();
+    s.execute("select.set", &json!({"ids": [back.0]})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 200.0).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::DoubleClick, 200.0, 200.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.doc().unwrap().isolation, None, "the double-click neither isolates nor edits");
+    let picked = &s.active().unwrap().selection;
+    assert!(picked.contains(front) && !picked.contains(back), "the press selects behind, back to the topmost");
+}
+
+#[test]
+fn a_cmd_click_on_an_unselected_member_of_a_group_holding_the_selection_selects_behind() {
+    // The group counts as selected wherever its art is, not only over its selected member.
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let v = view();
+    let mut s = session();
+    let back = rect(&mut s, 100.0, 100.0, 300.0, 200.0);
+    let a = rect(&mut s, 150.0, 150.0, 40.0, 40.0);
+    let b = rect(&mut s, 300.0, 150.0, 40.0, 40.0);
+    s.execute("object.group", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.select_tool("selection", v).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    assert_eq!(s.hover_tool_at(Some(Point::new(320.0, 170.0)), &cmd, v), "selection", "on the unselected member");
+    s.pointer(&PointerEvent::new(PointerKind::Down, 320.0, 170.0).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 320.0, 170.0).with_mods(cmd), v).unwrap();
+    let picked = &s.active().unwrap().selection;
+    assert!(picked.contains(back) && !picked.contains(b), "the Cmd-click selects the object behind the group");
+}
+
+#[test]
+fn a_cmd_click_on_a_selected_lines_segment_selects_behind() {
+    // An open, unfilled path is only hit near its segments: a Cmd press there selects the object
+    // behind it, and a Cmd press on its anchor is Direct Selection's.
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let v = view();
+    let mut s = session();
+    let back = rect(&mut s, 100.0, 100.0, 200.0, 200.0);
+    let front = line(&mut s, 150.0, 150.0, 250.0, 250.0);
+    s.select_tool("selection", v).unwrap();
+    s.execute("select.set", &json!({"ids": [front.0]})).unwrap();
+    assert_eq!(s.hover_tool_at(Some(Point::new(150.0, 150.0)), &cmd, v), "directSelection", "on its anchor");
+    // On the segment, away from the anchors and the bounding box's handles.
+    s.pointer(&PointerEvent::new(PointerKind::Down, 180.0, 180.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "selection");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 180.0, 180.0).with_mods(cmd), v).unwrap();
+    let picked = &s.active().unwrap().selection;
+    assert!(picked.contains(back) && !picked.contains(front), "the Cmd-click selects the object behind");
+}
+
+#[test]
+fn a_hovers_lend_decision_holds_only_for_the_tool_and_selection_it_was_found_for() {
+    // While the view moves, the canvas reads the last hover's decision: it does not carry over to
+    // another tool or another selection.
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let v = view();
+    let mut s = session();
+    rect(&mut s, 100.0, 100.0, 200.0, 200.0);
+    let front = rect(&mut s, 150.0, 150.0, 100.0, 100.0);
+    s.select_tool("selection", v).unwrap();
+    s.execute("select.set", &json!({"ids": [front.0]})).unwrap();
+    assert_eq!(s.hover_tool_at(Some(Point::new(200.0, 200.0)), &cmd, v), "selection");
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(s.hover_tool_id(&cmd), "directSelection", "nothing is selected now");
+    assert_eq!(s.hover_tool_at(Some(Point::new(500.0, 500.0)), &cmd, v), "directSelection");
+    s.select_tool("rectangle", v).unwrap();
+    assert_eq!(s.hover_tool_id(&cmd), s.lent_tool_id(&cmd).unwrap(), "the new tool's lend");
+}
+
+#[test]
+fn the_marks_follow_this_frames_pointer_with_cmd_held() {
+    // The canvas asks which tool's marks to draw before it asks for the cursor: the answer is for
+    // the pointer where it is now, and with the pointer off the canvas, the tool Cmd lends.
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let v = view();
+    let mut s = session();
+    rect(&mut s, 100.0, 100.0, 200.0, 200.0);
+    let front = rect(&mut s, 150.0, 150.0, 100.0, 100.0);
+    s.select_tool("selection", v).unwrap();
+    s.execute("select.set", &json!({"ids": [front.0]})).unwrap();
+    s.cursor(Point::new(200.0, 200.0), cmd, v);
+    assert_eq!(s.hover_tool_id(&cmd), "selection");
+    assert_eq!(s.hover_tool_at(Some(Point::new(500.0, 500.0)), &cmd, v), "directSelection", "away from the selection");
+    assert_eq!(s.hover_tool_at(Some(Point::new(200.0, 200.0)), &cmd, v), "selection", "over the selection");
+    assert_eq!(s.hover_tool_at(None, &cmd, v), "directSelection", "off the canvas");
+    assert_eq!(s.hover_tool_id(&cmd), "directSelection", "kept while the view moves");
+    assert_eq!(s.hover_tool_at(None, &Mods::default(), v), "selection", "without Cmd");
+}
+
+#[test]
 fn cmd_lends_the_selection_tool_and_its_bounding_box_to_direct_selection() {
     // #3901: with Direct Selection, Cmd held gives the Selection tool for the press: its cursor,
     // and its bounding box's handles scale the object; Direct Selection is back on the release.

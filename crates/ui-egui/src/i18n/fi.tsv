@@ -358,6 +358,9 @@
 	Artboards	Piirtoalustat
 	Convert to Artboards	Muunna piirtoalustoiksi
 	Rearrange All Artboards…	Järjestä kaikki piirtoalustat uudelleen…
+	Rearrange…	Järjestä uudelleen…
+	Selected Artboards: {n}	Valitut piirtoalustat: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Sijoita piirtoalustat napsauttamalla kangasta (Esc peruuttaa)
 	Fit to Artwork Bounds	Sovita kuvituksen rajoihin
 	Fit to Selected Art	Sovita valittuun kuvitukseen
 	Graph	Kaavio
@@ -515,6 +518,7 @@
 	Fill & Stroke	Täyttö ja viiva
 	Fill Color	Täyttöväri
 	Opacity	Peittävyys
+	Show Opacity	Näytä peittävyys
 	Stroke Color	Viivan väri
 	Fill Gradient	Täytön liukuväri
 	Stroke Gradient	Viivan liukuväri
@@ -3715,6 +3719,12 @@ theme	Appearance	Ulkoasu
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	tarkkuus ei saatavilla
+	estimated memory {memory}	arvioitu muisti {memory}
+	memory unavailable	muisti ei saatavilla
+	Unknown format	Tuntematon muoto
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -7393,6 +7403,8 @@ axis	Y Axis	Y-akseli
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	vaatii hyväksynnän: se pyytää {0}, jotka käyttäjä myöntää asentaessaan sen erikseen
 @msg	not JSON: {e}	ei JSON-muotoa: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	ei WebAssembly-binääri (\\0asm-otsake puuttuu)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	funktiotyyppi ylittää {MAX_FUNC_TYPE_VALUES} parametrin rajan
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	funktiotyyppi ylittää {MAX_FUNC_TYPE_VALUES} tuloksen rajan
 @msg	parameter `{k}`: {what}	parametri `{k}`: {what}
 @msg	parameter `{name}`: {what}	parametri `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	laajennuksen parametrien on oltava JSON-objekti
@@ -7430,6 +7442,11 @@ axis	Y Axis	Y-akseli
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` ja `maxItems` on oltava 0-{MAX_LIST}, `maxItems` vähintään 1, ja oletusarvossa on oltava niin monta kohdetta
 @msg	`name` must be a string	`name` on oltava merkkijono
 @msg	`opacity` must be a number	`opacity` on oltava luku
+@msg	`opacity` must be a number from 0 to 100	`opacity` on oltava luku 0:sta 100:aan
+@msg	`opacity` must be true or false	`opacity` on oltava true tai false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	tekstin merkeillä ei ole omaa peittävyyttä: lisää täyttö tai viiva Ulkoasu-paneelin komennolla Lisää uusi täyttö tai Lisää uusi viiva
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	symbolin ilmentymästä valitulla objektilla ei ole omaa täytön tai viivan peittävyyttä
+@msg	no target has that fill or stroke to take the opacity	millään kohteella ei ole tätä täyttöä tai viivaa, joka ottaisi peittävyyden
 @msg	`type` must be "path" or "compound"	`type` on oltava "path" tai "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit`-kentässä on oltava 1-{MAX_UNIT} tulostettavaa merkkiä
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen`-kentässä on lueteltava 1-{MAX_CONDITION_VALUES} arvoa parametrille `{other}`

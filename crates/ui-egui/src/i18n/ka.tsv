@@ -2496,6 +2496,9 @@
 	Artboards	სამუშაო დაფები
 	Convert to Artboards	სამუშაო დაფებად გარდაქმნა
 	Rearrange All Artboards…	ყველა სამუშაო დაფის გადალაგება…
+	Rearrange…	გადალაგება…
+	Selected Artboards: {n}	მონიშნული სამუშაო დაფები: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	დაწკაპეთ ტილოზე სამუშაო დაფების განსათავსებლად (Esc აუქმებს)
 	Fit to Artwork Bounds	ნახატის საზღვრებზე მორგება
 	Fit to Selected Art	მონიშნულ ნახატზე მორგება
 	Graph	დიაგრამა
@@ -2650,6 +2653,7 @@
 	Fill & Stroke	შევსება და კონტური
 	Fill Color	შევსების ფერი
 	Opacity	გაუმჭვირვალობა
+	Show Opacity	გაუმჭვირვალობის ჩვენება
 	Stroke Color	კონტურის ფერი
 	Fill Gradient	შევსების გრადიენტი
 	Stroke Gradient	კონტურის გრადიენტი
@@ -5538,6 +5542,12 @@ theme	Appearance	იერსახე
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	გარჩევადობა მიუწვდომელია
+	estimated memory {memory}	სავარაუდო მეხსიერება {memory}
+	memory unavailable	მეხსიერება მიუწვდომელია
+	Unknown format	უცნობი ფორმატი
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -9431,6 +9441,8 @@ axis	Y Axis	Y ღერძი
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	საჭიროებს დამტკიცებას: ითხოვს {0}-ს, რასაც მომხმარებელი მისი ცალკე დაყენებისას აძლევს
 @msg	not JSON: {e}	არ არის JSON: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	არ არის WebAssembly-ის ბინარული ფაილი (აკლია \\0asm სათაური)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	ფუნქციის ტიპი აჭარბებს {MAX_FUNC_TYPE_VALUES} პარამეტრის ლიმიტს
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	ფუნქციის ტიპი აჭარბებს {MAX_FUNC_TYPE_VALUES} შედეგის ლიმიტს
 @msg	parameter `{k}`: {what}	პარამეტრი `{k}`: {what}
 @msg	parameter `{name}`: {what}	პარამეტრი `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	პლაგინის პარამეტრები JSON ობიექტი უნდა იყოს
@@ -9468,6 +9480,11 @@ axis	Y Axis	Y ღერძი
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` და `maxItems` უნდა იყოს 0-{MAX_LIST}, `maxItems` მინიმუმ 1, ხოლო ნაგულისხმევ მნიშვნელობაში უნდა იყოს ამდენი ელემენტი
 @msg	`name` must be a string	`name` უნდა იყოს სტრიქონი
 @msg	`opacity` must be a number	`opacity` უნდა იყოს რიცხვი
+@msg	`opacity` must be a number from 0 to 100	`opacity` უნდა იყოს რიცხვი 0-დან 100-მდე
+@msg	`opacity` must be true or false	`opacity` უნდა იყოს true ან false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	ტექსტის სიმბოლოებს საკუთარი გაუმჭვირვალობა არ აქვთ: დაამატეთ შევსება ან კონტური იერსახის პანელის ბრძანებით ახალი შევსების დამატება ან ახალი კონტურის დამატება
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	სიმბოლოს ეგზემპლარში არჩეულ ობიექტს შევსების ან კონტურის საკუთარი გაუმჭვირვალობა არ აქვს
+@msg	no target has that fill or stroke to take the opacity	არცერთ სამიზნეს არ აქვს ის შევსება ან კონტური, რომელიც გაუმჭვირვალობას მიიღებს
 @msg	`type` must be "path" or "compound"	`type` უნდა იყოს "path" ან "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` უნდა შედგებოდეს 1-{MAX_UNIT} დასაბეჭდი სიმბოლოსგან
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen`-ში `{other}`-ისთვის უნდა იყოს 1-დან {MAX_CONDITION_VALUES}-მდე მნიშვნელობა

@@ -2899,3 +2899,57 @@ fn a_marquee_skips_the_anchors_and_segments_of_guides_that_cannot_be_picked() {
     assert!(!crossed(&marquee(false, (140.0, 80.0), (160.0, 120.0))), "locked or hidden: no segment");
     assert!(crossed(&marquee(true, (140.0, 80.0), (160.0, 120.0))), "shown and unlocked");
 }
+
+/// A hover over a large selected group measures only the paths near the pointer when it asks
+/// whether a Cmd press there lands on a part Direct Selection edits.
+#[test]
+fn over_selected_part_measures_only_the_paths_near_the_pointer() {
+    use vectorcraft_doc::{Appearance, Node};
+    let mut d = vectorcraft_doc::Document::new(2000.0, 2000.0);
+    let l = d.layers[0].id;
+    let squares: Vec<std::sync::Arc<Node>> = (0..400)
+        .map(|i| {
+            let (x, y) = (f64::from(i % 20) * 50.0, f64::from(i / 20) * 50.0);
+            let r = vectorcraft_geom::shapes::rectangle(Rect::new(x, y, x + 20.0, y + 20.0));
+            std::sync::Arc::new(Node::path(d.alloc_id(), r, Appearance::default_art()))
+        })
+        .collect();
+    let g = d.alloc_id();
+    d.insert(Some(l), 0, Node::group(g, squares)).unwrap();
+    let p = paint();
+    let mut picked = Selection::default();
+    picked.add(g);
+    let c = cx(&d, &picked, &p);
+    let before = MEASURED_PARTS.get();
+    assert!(over_selected_part(&c, Point::new(520.0, 520.0)), "on a square's corner");
+    assert!(!over_selected_part(&c, Point::new(535.0, 535.0)), "between the squares");
+    let measured = MEASURED_PARTS.get() - before;
+    assert!(measured < 10, "{measured} of 400 paths measured");
+}
+
+/// The cursor, the canvas marks and a press each ask whether a Cmd press at the pointer selects
+/// behind: while the document and the selection stay as they are, the selection's paths are
+/// measured once for a point.
+#[test]
+fn select_behind_is_measured_once_for_a_point() {
+    use vectorcraft_doc::{Appearance, Node};
+    let mut d = vectorcraft_doc::Document::new(400.0, 400.0);
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let square = vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 100.0, 200.0, 200.0));
+    d.insert(Some(l), 0, Node::path(id, square, Appearance::default_art())).unwrap();
+    // Below it, an object to select behind.
+    let back = vectorcraft_geom::shapes::rectangle(Rect::new(50.0, 50.0, 250.0, 250.0));
+    let back_id = d.alloc_id();
+    d.insert(Some(l), 0, Node::path(back_id, back, Appearance::default_art())).unwrap();
+    let p = paint();
+    let mut picked = Selection::default();
+    picked.add(id);
+    let memo = crate::select::PreviewMemo::default();
+    let c = ToolContext { preview_memo: Some(&memo), select_behind: true, ..cx(&d, &picked, &p) };
+    let at = Point::new(150.0, 150.0);
+    let before = MEASURED_PARTS.get();
+    assert!(crate::select::selects_behind_at(&c, at), "inside the selected square, away from its anchors");
+    assert!(crate::select::selects_behind_at(&c, at));
+    assert_eq!(MEASURED_PARTS.get() - before, 1, "measured for the first ask only");
+}

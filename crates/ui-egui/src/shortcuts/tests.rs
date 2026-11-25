@@ -1482,8 +1482,10 @@ fn enter_opens_the_tools_dialog_and_leaves_it_open() {
         key_frame(&mut app, &ctx, vec![]);
         assert_eq!(dialog_kind(&app).as_deref(), Some(dialog), "{tool}: and it stays open");
         assert_eq!(steps(&app), before, "{tool}: the Enter that opened it didn't confirm it");
-        // With its default values only Reflect changes the art. A held OK closes its dialog on the window's next pass.
+        // With its default values only Reflect changes the art. A held OK closes its dialog on the window's next pass,
+        // and its field gives up the keyboard in the frame after that.
         key_frame(&mut app, &ctx, enter());
+        key_frame(&mut app, &ctx, vec![]);
         key_frame(&mut app, &ctx, vec![]);
         let after = (before.0 + usize::from(dialog == "object.reflect"), before.1 + 1);
         assert_eq!((dialog_kind(&app), steps(&app)), (None, after), "{tool}: Enter confirms");
@@ -1642,6 +1644,7 @@ fn a_live_effect_plugin_installed_later_takes_a_shortcut_of_its_own() {
 #[test]
 fn each_filter_plugin_takes_a_shortcut_of_its_own() {
     use vectorcraft_plugins::wat as tpl;
+    let _names = crate::tests::SHARED_PLUGIN_NAMES.lock().unwrap_or_else(|e| e.into_inner());
     let (one, two) = ("test.UI.key_filter-one", "test.UI.key_filter-two");
     let (key_one, key_two) = (format!("plugin:{one}"), format!("plugin:{two}"));
     let install = |id: &str, name: &str, params: &str| {
@@ -1717,6 +1720,10 @@ fn a_filter_plugin_keeps_its_shortcut_when_replaced_or_reloaded() {
 fn a_heavy_filter_plugin_runs_from_its_shortcut_as_from_its_menu_item() {
     use vectorcraft_plugins::wat as tpl;
     let mut app = new_app();
+    // The background work waits until the test runs it, which it never does: the run started from
+    // the key is still running when Cancel stops it, however long the frames take.
+    let jobs = std::sync::Arc::new(craft::host::ManualJobs::new());
+    app.host = std::sync::Arc::new(craft::host::Host::builder(app.host.app().clone()).i18n(crate::i18n::shared()).jobs(jobs).build());
     app.session.allow_plugin_grants_from_requests();
     app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
     let (at_once, asks) = ("test.UI.heavy_filter-at-once", "test.UI.heavy_filter-asks");

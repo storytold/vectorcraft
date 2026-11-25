@@ -344,6 +344,9 @@
 	Artboards	Radne ploče
 	Convert to Artboards	Pretvori u radne ploče
 	Rearrange All Artboards…	Preuredi sve radne ploče…
+	Rearrange…	Preuredi…
+	Selected Artboards: {n}	Odabrane radne ploče: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Kliknite na platno da postavite radne ploče (Esc otkazuje)
 	Fit to Artwork Bounds	Uklopi u granice crteža
 	Fit to Selected Art	Uklopi u odabrani crtež
 	Graph	Grafikon
@@ -504,6 +507,7 @@
 	Fill & Stroke	Ispuna i potez
 	Fill Color	Boja ispune
 	Opacity	Neprozirnost
+	Show Opacity	Prikaži neprozirnost
 	Stroke Color	Boja poteza
 	Fill Gradient	Gradijent ispune
 	Stroke Gradient	Gradijent poteza
@@ -3677,6 +3681,12 @@ theme	Appearance	Izgled
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	rezolucija nije dostupna
+	estimated memory {memory}	procijenjena memorija {memory}
+	memory unavailable	memorija nije dostupna
+	Unknown format	Nepoznat format
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}

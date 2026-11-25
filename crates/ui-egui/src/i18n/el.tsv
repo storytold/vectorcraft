@@ -2090,6 +2090,12 @@ font-technology	Variable	Μεταβλητές
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}· {size}· {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	η ανάλυση δεν είναι διαθέσιμη
+	estimated memory {memory}	εκτιμώμενη μνήμη {memory}
+	memory unavailable	η μνήμη δεν είναι διαθέσιμη
+	Unknown format	Άγνωστη μορφή
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -2143,6 +2149,7 @@ font-technology	Variable	Μεταβλητές
 	On	Ενεργό
 	Only Web Colors	Μόνο χρώματα ιστού
 	Opacity	Αδιαφάνεια
+	Show Opacity	Εμφάνιση αδιαφάνειας
 	Opacity Mask	Μάσκα αδιαφάνειας
 	Opacity:	Αδιαφάνεια:
 	Open	Άνοιγμα
@@ -3941,6 +3948,9 @@ digits	Malayalam	Μαλαγιάλαμ
 	Scale Artwork with Artboard	Κλιμάκωση σχεδίου μαζί με τον πίνακα σχεδίασης
 	Artboards: {n}	Πίνακες σχεδίασης: {n}
 	Rearrange All Artboards…	Αναδιάταξη όλων των πινάκων σχεδίασης…
+	Rearrange…	Αναδιάταξη…
+	Selected Artboards: {n}	Επιλεγμένοι πίνακες σχεδίασης: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Κάντε κλικ στον καμβά για να τοποθετήσετε τους πίνακες σχεδίασης (Esc για ακύρωση)
 	Recall Selection	Ανάκληση επιλογής
 	RECENT	ΠΡΟΣΦΑΤΑ
 	Recent Colors	Πρόσφατα χρώματα
@@ -7316,6 +7326,8 @@ axis	Y Axis	Άξονας Y
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	χρειάζεται έγκριση: ζητά {0}, που ο χρήστης παραχωρεί όταν το εγκαθιστά μόνο του
 @msg	not JSON: {e}	δεν είναι JSON: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	δεν είναι δυαδικό αρχείο WebAssembly (λείπει η κεφαλίδα \\0asm)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	ένας τύπος συνάρτησης υπερβαίνει το όριο των {MAX_FUNC_TYPE_VALUES} παραμέτρων
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	ένας τύπος συνάρτησης υπερβαίνει το όριο των {MAX_FUNC_TYPE_VALUES} αποτελεσμάτων
 @msg	parameter `{k}`: {what}	παράμετρος `{k}`: {what}
 @msg	parameter `{name}`: {what}	παράμετρος `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	οι παράμετροι του προσθέτου πρέπει να είναι αντικείμενο JSON
@@ -7353,6 +7365,11 @@ axis	Y Axis	Άξονας Y
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	τα `minItems` και `maxItems` πρέπει να είναι 0-{MAX_LIST}, το `maxItems` τουλάχιστον 1 και η προεπιλογή να έχει τόσα στοιχεία
 @msg	`name` must be a string	το `name` πρέπει να είναι συμβολοσειρά
 @msg	`opacity` must be a number	το `opacity` πρέπει να είναι αριθμός
+@msg	`opacity` must be a number from 0 to 100	το `opacity` πρέπει να είναι αριθμός από 0 έως 100
+@msg	`opacity` must be true or false	το `opacity` πρέπει να είναι true ή false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	οι χαρακτήρες κειμένου δεν έχουν δική τους αδιαφάνεια: προσθέστε γέμισμα ή περίγραμμα με την Προσθήκη νέου γεμίσματος ή την Προσθήκη νέου περιγράμματος του πίνακα Εμφάνιση
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	ένα αντικείμενο επιλεγμένο σε στιγμιότυπο συμβόλου δεν έχει δική του αδιαφάνεια γεμίσματος ή περιγράμματος
+@msg	no target has that fill or stroke to take the opacity	κανένας στόχος δεν έχει αυτό το γέμισμα ή περίγραμμα για να λάβει την αδιαφάνεια
 @msg	`type` must be "path" or "compound"	το `type` πρέπει να είναι "path" ή "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	το `unit` πρέπει να έχει 1-{MAX_UNIT} εκτυπώσιμους χαρακτήρες
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	το `visibleWhen` πρέπει να αναφέρει 1 έως {MAX_CONDITION_VALUES} τιμές για το `{other}`

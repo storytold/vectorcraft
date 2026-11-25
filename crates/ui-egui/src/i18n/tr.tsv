@@ -2398,6 +2398,7 @@ font-technology	Variable	Değişken
 	One Point Perspective Preset 5	Tek Noktalı Perspektif Ön Ayarı 5
 	Only Web Colors	Yalnızca Web Renkleri
 	Opacity	Opaklık
+	Show Opacity	Opaklığı Göster
 	Opacity & Mask Define Knockout Shape	Opaklık ve Maske Tanımlama Nakavt Şekli
 	Opacity Mask	Opaklık Maskesi
 	Opacity Mask Info	Opaklık Maskesi Bilgisi
@@ -2845,6 +2846,9 @@ digits	Malayalam	Malayalam
 	Scale Artwork with Artboard	Çalışma Yüzeyi ile Resmi Ölçeklendirin
 	Artboards: {n}	Çalışma yüzeyleri: {n}
 	Rearrange All Artboards…	Tüm Çalışma Yüzeylerini Yeniden Düzenleme…
+	Rearrange…	Yeniden Düzenle…
+	Selected Artboards: {n}	Seçili çalışma yüzeyleri: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Çalışma yüzeylerini yerleştirmek için tuvale tıklayın (Esc iptal eder)
 	Recall Selection	Seçimi Geri Çağır
 	RECENT	SON
 	Recent	Son
@@ -7182,6 +7186,12 @@ theme	Appearance	Görünüm
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	çözünürlük kullanılamıyor
+	estimated memory {memory}	tahmini bellek {memory}
+	memory unavailable	bellek kullanılamıyor
+	Unknown format	Bilinmeyen biçim
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -7399,6 +7409,8 @@ axis	Y Axis	Y ekseni
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	onay gerekiyor: {0} istiyor; kullanıcı bunu eklentiyi tek başına yüklerken verir
 @msg	not JSON: {e}	JSON değil: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	WebAssembly ikili dosyası değil (\\0asm üst bilgisi eksik)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	bir işlev türü {MAX_FUNC_TYPE_VALUES} parametre sınırını aşıyor
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	bir işlev türü {MAX_FUNC_TYPE_VALUES} sonuç sınırını aşıyor
 @msg	parameter `{k}`: {what}	`{k}` parametresi: {what}
 @msg	parameter `{name}`: {what}	`{name}` parametresi: {what}
 @msg	plug-in parameters must be a JSON object	eklenti parametreleri bir JSON nesnesi olmalıdır
@@ -7435,6 +7447,11 @@ axis	Y Axis	Y ekseni
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` ve `maxItems` 0-{MAX_LIST} olmalı, `maxItems` en az 1 olmalı ve varsayılan değer bu kadar öğe içermelidir
 @msg	`name` must be a string	`name` bir dize olmalıdır
 @msg	`opacity` must be a number	`opacity` bir sayı olmalıdır
+@msg	`opacity` must be a number from 0 to 100	`opacity` 0 ile 100 arasında bir sayı olmalıdır
+@msg	`opacity` must be true or false	`opacity` true veya false olmalıdır
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	metin karakterlerinin kendi opaklığı yoktur: Görünüm panelindeki Yeni Dolgu Ekle veya Yeni Kontur Ekle ile bir dolgu veya kontur ekleyin
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	bir sembol örneğinde seçilen nesnenin kendi dolgu veya kontur opaklığı yoktur
+@msg	no target has that fill or stroke to take the opacity	hiçbir hedefte opaklığı alacak o dolgu veya kontur yok
 @msg	`type` must be "path" or "compound"	`type` "path" veya "compound" olmalıdır
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` 1-{MAX_UNIT} yazdırılabilir karakter olmalıdır
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen`, `{other}` için 1 ile {MAX_CONDITION_VALUES} arasında değer listelemelidir

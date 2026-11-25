@@ -2408,6 +2408,12 @@ font-technology	Variable	Variabla
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	upplösning inte tillgänglig
+	estimated memory {memory}	uppskattat minne {memory}
+	memory unavailable	minne inte tillgängligt
+	Unknown format	Okänt format
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -2556,6 +2562,7 @@ font-technology	Variable	Variabla
 	One Point Perspective Preset 5	Förinställning 5 för enpunktsperspektiv
 	Only Web Colors	Endast webbfärger
 	Opacity	Opacitet
+	Show Opacity	Visa opacitet
 	Opacity & Mask Define Knockout Shape	Opacitet och mask definierar utsparningsform
 	Opacity Mask	Opacitetsmask
 	Opacity Mask Info	Info om opacitetsmask
@@ -2997,6 +3004,9 @@ digits	Malayalam	Malayalam
 	Scale Artwork with Artboard	Skala grafik med rityta
 	Artboards: {n}	Ritytor: {n}
 	Rearrange All Artboards…	Ordna om alla ritytor…
+	Rearrange…	Ordna om…
+	Selected Artboards: {n}	Markerade ritytor: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Klicka på arbetsytan för att placera ritytorna (Esc avbryter)
 	Recall Selection	Hämta markering
 	RECENT	SENASTE
 	Recent	Senaste
@@ -7369,6 +7379,11 @@ axis	Y Axis	Y-axel
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` och `maxItems` måste vara 0-{MAX_LIST}, `maxItems` minst 1, och standardvärdet måste ha så många poster
 @msg	`name` must be a string	`name` måste vara en sträng
 @msg	`opacity` must be a number	`opacity` måste vara ett tal
+@msg	`opacity` must be a number from 0 to 100	`opacity` måste vara ett tal från 0 till 100
+@msg	`opacity` must be true or false	`opacity` måste vara true eller false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	tecken i text har ingen egen opacitet: lägg till en fyllning eller kontur med Lägg till ny fyllning eller Lägg till ny kontur i panelen Utseende
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	ett objekt som är markerat i en symbolinstans har ingen egen opacitet för fyllning eller kontur
+@msg	no target has that fill or stroke to take the opacity	inget mål har den fyllningen eller konturen som kan ta emot opaciteten
 @msg	`type` must be "path" or "compound"	`type` måste vara "path" eller "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` måste ha 1-{MAX_UNIT} utskrivbara tecken
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` måste ange 1 till {MAX_CONDITION_VALUES} värden för `{other}`
@@ -9329,6 +9344,7 @@ digits	Hindi	Hindi
 @msg	give a pattern name or select an object painted with a pattern	ange ett mönsternamn eller markera ett objekt som är målat med ett mönster
 @msg	give at least one of clip, invert, disabled, linked	ange minst en av clip, invert, disabled, linked
 @msg	give color, none, swatch or gradient	ange color, none, swatch eller gradient
+@msg	give color, none, swatch, gradient or opacity	ange color, none, swatch, gradient eller opacity
 @msg	give dataBase64	ange dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	ange antingen at (ett klick) eller area (en bana ritad runt överlappningarna)
 @msg	give formats or a preset, not both	ange formats eller en förinställning, inte båda
@@ -9625,6 +9641,8 @@ digits	Hindi	Hindi
 @msg	not a stored or deflated central record	inte en central katalogpost av typen stored eller deflated
 @msg	not a valid SVGZ file: {e}	inte en giltig SVGZ-fil: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	inte en WebAssembly-binärfil (huvudet \\0asm saknas)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	en funktionstyp överskrider gränsen på {MAX_FUNC_TYPE_VALUES} parametrar
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	en funktionstyp överskrider gränsen på {MAX_FUNC_TYPE_VALUES} resultat
 @msg	not a Word document: its compound file has no WordDocument stream	inte ett Word-dokument: dess sammansatta fil saknar WordDocument-ström
 @msg	not a Word document: its main part is not a WordprocessingML document	inte ett Word-dokument: dess huvuddel är inte ett WordprocessingML-dokument
 @msg	not a Word document: its package has no main document part	inte ett Word-dokument: dess paket saknar huvuddokumentdel

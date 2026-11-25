@@ -2624,6 +2624,7 @@
 	One page per artboard.	દરેક આર્ટબોર્ડ માટે એક પેજ.
 	Only Web Colors	માત્ર વેબ રંગો
 	Opacity	અપારદર્શકતા
+	Show Opacity	અપારદર્શકતા બતાવો
 	Opacity & Mask Define Knockout Shape	અપારદર્શકતા અને માસ્ક નૉકઆઉટ આકાર વ્યાખ્યાયિત કરે છે
 	Opacity Mask Info	અપારદર્શકતા માસ્ક માહિતી
 	Opacity Mask Options	અપારદર્શકતા માસ્ક વિકલ્પો
@@ -3082,6 +3083,9 @@
 	Rearrange All	બધું ફરીથી ગોઠવો
 	Rearrange All Artboards	બધા આર્ટબોર્ડ ફરીથી ગોઠવો
 	Rearrange All Artboards…	બધા આર્ટબોર્ડ ફરીથી ગોઠવો…
+	Rearrange…	ફરીથી ગોઠવો…
+	Selected Artboards: {n}	પસંદ કરેલા આર્ટબોર્ડ: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	આર્ટબોર્ડ મૂકવા કેનવાસ પર ક્લિક કરો (Esc રદ કરે છે)
 	Rearrange Artboards	આર્ટબોર્ડ ફરીથી ગોઠવો
 	Recall Selection	પસંદગી યાદ કરો
 	Recent Colors	તાજેતરના રંગો
@@ -5208,6 +5212,12 @@ antiAlias	Sharp	શાર્પ
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	રિઝોલ્યુશન ઉપલબ્ધ નથી
+	estimated memory {memory}	અંદાજિત મેમરી {memory}
+	memory unavailable	મેમરી ઉપલબ્ધ નથી
+	Unknown format	અજ્ઞાત ફોર્મેટ
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}

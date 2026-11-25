@@ -311,6 +311,9 @@
 	Artboards	Obszary kompozycji
 	Convert to Artboards	Konwertuj na obszary kompozycji
 	Rearrange All Artboards…	Przestaw wszystkie obszary kompozycji…
+	Rearrange…	Przestaw…
+	Selected Artboards: {n}	Zaznaczone obszary kompozycji: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Kliknij obszar roboczy, aby umieścić obszary kompozycji (Esc anuluje)
 	Fit to Artwork Bounds	Dopasuj do granic kompozycji
 	Fit to Selected Art	Dopasuj do zaznaczonej kompozycji
 	Graph	Wykres
@@ -477,6 +480,7 @@
 	Fill & Stroke	Wypełnienie i obrys
 	Fill Color	Kolor wypełnienia
 	Opacity	Krycie
+	Show Opacity	Pokaż krycie
 	Stroke Color	Kolor obrysu
 	Fill Gradient	Gradient wypełnienia
 	Stroke Gradient	Gradient obrysu
@@ -3657,6 +3661,12 @@ theme	Appearance	Wygląd
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	rozdzielczość niedostępna
+	estimated memory {memory}	szacowana pamięć {memory}
+	memory unavailable	pamięć niedostępna
+	Unknown format	Nieznany format
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -7182,6 +7192,8 @@ axis	Y Axis	Oś Y
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	wymaga zatwierdzenia: prosi o {0}, na co użytkownik zezwala, instalując ją osobno
 @msg	not JSON: {e}	to nie jest JSON: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	to nie jest plik binarny WebAssembly (brak nagłówka \\0asm)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	typ funkcji ma więcej parametrów, niż pozwala limit ({MAX_FUNC_TYPE_VALUES})
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	typ funkcji ma więcej wyników, niż pozwala limit ({MAX_FUNC_TYPE_VALUES})
 @msg	parameter `{k}`: {what}	parametr `{k}`: {what}
 @msg	parameter `{name}`: {what}	parametr `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	parametry wtyczki muszą być obiektem JSON
@@ -7218,6 +7230,11 @@ axis	Y Axis	Oś Y
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` i `maxItems` muszą wynosić 0-{MAX_LIST}, `maxItems` co najmniej 1, a wartość domyślna musi mieć tyle elementów
 @msg	`name` must be a string	`name` musi być ciągiem znaków
 @msg	`opacity` must be a number	`opacity` musi być liczbą
+@msg	`opacity` must be a number from 0 to 100	`opacity` musi być liczbą od 0 do 100
+@msg	`opacity` must be true or false	`opacity` musi mieć wartość true lub false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	znaki tekstu nie mają własnego krycia: dodaj wypełnienie lub obrys poleceniem Dodaj nowe wypełnienie lub Dodaj nowy obrys w panelu Wygląd
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	obiekt zaznaczony w wystąpieniu symbolu nie ma własnego krycia wypełnienia ani obrysu
+@msg	no target has that fill or stroke to take the opacity	żaden cel nie ma tego wypełnienia ani obrysu, które przyjęłoby krycie
 @msg	`type` must be "path" or "compound"	`type` musi mieć wartość "path" lub "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` musi mieć 1-{MAX_UNIT} drukowalnych znaków
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` musi podawać od 1 do {MAX_CONDITION_VALUES} wartości dla `{other}`
@@ -9635,6 +9652,7 @@ breakText	Glyphs	Glify
 @msg	give a pattern name or select an object painted with a pattern	podaj nazwę wzorka albo zaznacz obiekt pomalowany wzorkiem
 @msg	give at least one of clip, invert, disabled, linked	podaj co najmniej jedno z: clip, invert, disabled, linked
 @msg	give color, none, swatch or gradient	podaj color, none, swatch lub gradient
+@msg	give color, none, swatch, gradient or opacity	podaj color, none, swatch, gradient lub opacity
 @msg	give dataBase64	podaj dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	podaj at (kliknięcie) albo area (ścieżkę narysowaną wokół nakładających się obszarów)
 @msg	give formats or a preset, not both	podaj formats albo ustawienie, nie oba naraz

@@ -2468,6 +2468,12 @@ font-technology	Variable	Variables
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppp
+	{format}; {size}; {detail}	{format}, {size}, {detail}
+	{x} × {y} ppi	{x} × {y} ppp
+	resolution unavailable	résolution indisponible
+	estimated memory {memory}	mémoire estimée {memory}
+	memory unavailable	mémoire indisponible
+	Unknown format	Format inconnu
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -2616,6 +2622,7 @@ font-technology	Variable	Variables
 	One Point Perspective Preset 5	Paramètre prédéfini de perspective à un point 5
 	Only Web Colors	Couleurs Web uniquement
 	Opacity	Opacité
+	Show Opacity	Afficher l’opacité
 	Opacity & Mask Define Knockout Shape	L’opacité et le masque définissent la forme de masquage
 	Opacity Mask	Masque d’opacité
 	Opacity Mask Info	Infos sur le masque d’opacité
@@ -3064,6 +3071,9 @@ digits	Malayalam	Malayalam
 	Scale Artwork with Artboard	Mettre à l’échelle l’illustration avec le plan de travail
 	Artboards: {n}	Plans de travail : {n}
 	Rearrange All Artboards…	Réorganiser tous les plans de travail…
+	Rearrange…	Réorganiser…
+	Selected Artboards: {n}	Plans de travail sélectionnés ({n})
+@msg	Click on the canvas to place the artboards (Esc cancels)	Cliquez sur la zone de travail pour placer les plans de travail (Échap pour annuler)
 	Recall Selection	Rappeler la sélection
 	RECENT	RÉCENTS
 	Recent	Récents
@@ -7323,6 +7333,8 @@ axis	Y Axis	Axe Y
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	approbation requise : il demande {0}, que l’utilisateur accorde en l’installant seul
 @msg	not JSON: {e}	pas du JSON : {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	pas un binaire WebAssembly (en-tête \\0asm absent)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	un type de fonction dépasse la limite de {MAX_FUNC_TYPE_VALUES} paramètres
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	un type de fonction dépasse la limite de {MAX_FUNC_TYPE_VALUES} résultats
 @msg	parameter `{k}`: {what}	paramètre `{k}` : {what}
 @msg	parameter `{name}`: {what}	paramètre `{name}` : {what}
 @msg	plug-in parameters must be a JSON object	les paramètres du plug-in doivent être un objet JSON
@@ -7359,6 +7371,11 @@ axis	Y Axis	Axe Y
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` et `maxItems` doivent valoir 0-{MAX_LIST}, `maxItems` au moins 1, et la valeur par défaut doit en compter autant
 @msg	`name` must be a string	`name` doit être une chaîne
 @msg	`opacity` must be a number	`opacity` doit être un nombre
+@msg	`opacity` must be a number from 0 to 100	`opacity` doit être un nombre compris entre 0 et 100
+@msg	`opacity` must be true or false	`opacity` doit valoir true ou false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	les caractères du texte n’ont pas d’opacité propre : ajoutez un fond ou un contour avec Ajouter un nouveau fond ou Ajouter un nouveau contour dans le panneau Aspect
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	un objet sélectionné dans une occurrence de symbole n’a pas d’opacité de fond ou de contour propre
+@msg	no target has that fill or stroke to take the opacity	aucune cible n’a ce fond ou ce contour pour recevoir l’opacité
 @msg	`type` must be "path" or "compound"	`type` doit valoir "path" ou "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` doit compter 1-{MAX_UNIT} caractères imprimables
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` doit indiquer 1 à {MAX_CONDITION_VALUES} valeurs pour `{other}`
@@ -9529,6 +9546,7 @@ breakText	Glyphs	Glyphes
 @msg	give a pattern name or select an object painted with a pattern	indiquez un nom de motif ou sélectionnez un objet peint avec un motif
 @msg	give at least one of clip, invert, disabled, linked	indiquez au moins l’un des paramètres clip, invert, disabled, linked
 @msg	give color, none, swatch or gradient	indiquez color, none, swatch ou gradient
+@msg	give color, none, swatch, gradient or opacity	indiquez color, none, swatch, gradient ou opacity
 @msg	give dataBase64	indiquez dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	indiquez soit at (un clic), soit area (un tracé dessiné autour des chevauchements)
 @msg	give exactly one of `path`, `data` and `dataBase64`	indiquez exactement un paramètre parmi `path`, `data` et `dataBase64`

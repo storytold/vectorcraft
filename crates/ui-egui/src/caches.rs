@@ -159,7 +159,7 @@ pub struct CanvasCache {
     /// The Navigator's view region, for (document uid, revision, View Artboard Contents Only).
     pub nav_region: Option<((u64, u64, bool), vectorcraft_geom::Rect)>,
     /// The Document Info panel's values, for (document uid, revision, selection only, options).
-    pub doc_info: Option<((u64, u64, bool, Value), Value)>,
+    pub doc_info: Option<DocInfoCache>,
     /// The Variables panel's rows, for the panel's key.
     pub(crate) variable_rows: Option<(crate::panels::variables::RowsKey, Rc<crate::panels::variables::Rows>)>,
     /// The Map Art surfaces of the 3D dialog's object.
@@ -167,6 +167,10 @@ pub struct CanvasCache {
     /// The command palette's built rows, for the palette's build key.
     pub(crate) palette: Option<(crate::palette::BuildKey, Arc<crate::palette::Built>)>,
 }
+
+/// [`CanvasCache::doc_info`]: (document uid, revision, selection only, the Artboard tool's options)
+/// and the `document.info` result fetched for them.
+pub type DocInfoCache = ((u64, u64, bool, Value), Arc<Value>);
 
 /// [`CanvasCache::map_surfaces`]: the surfaces and what they were computed for.
 pub type MapSurfacesCache = (MapSurfacesKey, Arc<Vec<vectorcraft_effects::MapSurface>>);
