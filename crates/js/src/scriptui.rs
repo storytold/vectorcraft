@@ -35,7 +35,8 @@
 //! palette does the same for that palette, so the host's list of its controls stays in step.
 //! `update()` on a shown palette, or on a `group` or a `panel` in one, takes each event that waits
 //! for a palette of the run's engine from the host's `paletteTake` (as `paletteEvent` gives it, or
-//! `null`) and gives it to its palette. Then, called from the script's own code (not from a
+//! `null`) and gives it to its palette, while the host's `palettePending` says one waits, giving
+//! `paletteUpdate` each palette's description before each one. Then, called from the script's own code (not from a
 //! handler, a callback of a built-in function, a getter or a conversion), it asks the host's
 //! `paletteDraw` whether the palette is drawn now, and when it is, gives `paletteUpdate` the
 //! palette's description. On the showing dialog, or a group or panel in it, `update()` does
@@ -104,6 +105,8 @@ pub(crate) struct Classes {
     selection_set: ObjId,
     showing: Option<ObjId>,
     palettes: Vec<ObjId>,
+    /// Whether an `update()` is taking the waiting events ([`take_waiting`]).
+    taking: bool,
 }
 
 impl Classes {
@@ -750,10 +753,36 @@ fn update_window(i: &mut Interp, win: ObjId, palette: bool, own: bool) -> JsResu
     Ok(())
 }
 
-/// Hands each event the host's `paletteTake` gives, oldest first, to its palette, until none waits.
+/// Hands each event the host's `paletteTake` gives, oldest first, to its palette, until none waits
+/// (`palettePending`). Before each one the host gets every palette's controls as the script and the
+/// handlers before it left them, as at the end of a run, and drops an event whose control has since
+/// been disabled, hidden or removed. An `update()` that a getter or a handler calls meanwhile takes
+/// no events: the `update()` already taking them goes on with the next one.
 fn take_waiting(i: &mut Interp) -> JsResult<()> {
+    if i.script_ui.as_ref().is_some_and(|c| c.taking) {
+        return Ok(());
+    }
+    set_taking(i, true);
+    let r = take_each(i);
+    set_taking(i, false);
+    r
+}
+
+fn set_taking(i: &mut Interp, taking: bool) {
+    if let Some(c) = i.script_ui.as_mut() {
+        c.taking = taking;
+    }
+}
+
+/// [`take_waiting`]'s loop.
+fn take_each(i: &mut Interp) -> JsResult<()> {
+    let pending = host_fn(i, "palettePending")?;
     let f = host_fn(i, "paletteTake")?;
     loop {
+        if !i.call(&pending, &Value::Undefined, &[])?.truthy() {
+            return Ok(());
+        }
+        update_palettes(i)?;
         let answer = i.call(&f, &Value::Undefined, &[])?;
         if answer.as_object().is_none() {
             return Ok(());
@@ -1496,6 +1525,7 @@ pub(crate) fn install(i: &mut Interp, items: Vec<(String, HostItem)>) -> JsResul
             selection_set,
             showing: None,
             palettes: Vec::new(),
+            taking: false,
         });
         let window = native(i, "Window", window_ctor, 4, NativeKind::Plain, true)?;
         constructor(i, "Window", window, window_proto)?;

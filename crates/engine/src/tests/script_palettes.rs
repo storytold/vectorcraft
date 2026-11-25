@@ -141,6 +141,32 @@ fn update_hands_a_click_given_during_the_run_to_its_handler_so_cancel_stops_the_
 }
 
 #[test]
+fn update_drops_a_waiting_click_on_a_control_an_earlier_handler_disabled() {
+    TEST_ELAPSED.set(Some(Duration::ZERO));
+    let mut s = one_doc();
+    s.script_frames = true;
+    let source = "#targetengine progress\nvar p = new Window('palette'); var stop = p.add('button', undefined, 'Stop'); \
+                  var other = p.add('button', undefined, 'Other'); var stopped = false; var log = []; \
+                  stop.onClick = function () { stopped = true; other.enabled = false; log.push('stop'); }; \
+                  other.onClick = function () { log.push('other'); }; \
+                  p.show(); var k = 0; while (!stopped && k < 100000) { k++; p.update(); } vc.log(log.join());";
+    assert_eq!(run(&mut s, source).unwrap()["running"], true);
+    for _ in 0..100 {
+        if !s.script_palettes().is_empty() {
+            break;
+        }
+        assert!(s.script_pump().is_none(), "the run pauses at the first update()");
+    }
+    let id = only_palette(&s);
+    assert_eq!(s.script_palette_event(id, UiEvent::Click(1)), Ok(Waiting::Added));
+    assert_eq!(s.script_palette_event(id, UiEvent::Click(2)), Ok(Waiting::Added));
+    let report = pump(&mut s).expect("the run ended").unwrap();
+    assert_eq!(report["log"], json!(["stop"]), "the click on the disabled button runs no handler: {report}");
+    assert_eq!(s.script_palette_events_waiting(), 0, "the click on the disabled button is dropped");
+    TEST_ELAPSED.set(None);
+}
+
+#[test]
 fn update_in_a_handler_does_not_pause_the_run() {
     TEST_ELAPSED.set(Some(Duration::ZERO));
     let mut s = one_doc();

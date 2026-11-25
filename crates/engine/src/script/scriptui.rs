@@ -714,6 +714,7 @@ pub(super) fn install(realm: &mut Realm, link: &super::Link) -> Result<(), RunEr
         ("paletteClose".into(), function(link, palette_close)),
         ("paletteEvent".into(), function(link, palette_event)),
         ("paletteTake".into(), function(link, palette_take)),
+        ("palettePending".into(), function(link, palette_pending)),
         ("paletteDraw".into(), function(link, palette_draw)),
     ])
 }
@@ -774,6 +775,13 @@ fn palette_take(host: &Host, _: &[Data]) -> Result<Data, HostError> {
     let engine = palette_engine(host)?.to_string();
     let taken = host.session.borrow_mut().script_palettes.take_for(&engine);
     Ok(taken.map_or(Data::Null, event_data))
+}
+
+/// Whether an event waits for a palette of the run's engine, which a palette's `update()` asks
+/// before it gives the palettes' controls and takes the event with `paletteTake`.
+fn palette_pending(host: &Host, _: &[Data]) -> Result<Data, HostError> {
+    let engine = palette_engine(host)?.to_string();
+    Ok(Data::Bool(host.session.borrow().script_palettes.waits_for(&engine)))
 }
 
 fn palette_hide(host: &Host, args: &[Data]) -> Result<Data, HostError> {

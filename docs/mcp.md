@@ -2993,7 +2993,9 @@ the same controls, handlers and limits:
   `update()` on the palette, or on a group or panel in it, first runs the handlers of the clicks, changes and
   closes that wait for the palettes of the run's engine, oldest first, so a Cancel button's `onClick` can stop
   a loop that calls `update()` (https://extendscript.docsforadobe.dev/user-interface-tools/window-object/).
-  Those events do not wait for runs of their own. In the app, an `update()` in the script's own code then
+  Those events do not wait for runs of their own. Each one is checked against the palette as the script and the
+  handlers before it left it, as an event's own run would be, so a click on a control that an earlier handler
+  disabled, hid or removed runs no handler. In the app, an `update()` in the script's own code then
   pauses the run so the app draws the palette as it is, at most once every 16 ms of the run's time
   (VectorCraft's own interval); an `update()` within the same 16 ms does not pause the run, and the app draws
   its changes at the next pause or when the run ends. An `update()` in a handler, in a callback of a built-in

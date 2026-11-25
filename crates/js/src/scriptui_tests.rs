@@ -384,7 +384,8 @@ fn palette_realm(events: Vec<Data>) -> (Realm, Calls) {
 }
 
 /// [`palette_realm`], whose `paletteTake` also gives the events in `taken`, in order, then `null`,
-/// and whose `paletteDraw` gives the answers in `draws`, in order, then `false`.
+/// whose `palettePending` says whether any of them is left, and whose `paletteDraw` gives the
+/// answers in `draws`, in order, then `false`.
 fn palette_realm_with(events: Vec<Data>, taken: Vec<Data>, draws: Vec<bool>) -> (Realm, Calls) {
     let mut r = Realm::new();
     r.set_limits(Limits { fuel: 10_000_000, ..Limits::default() });
@@ -409,11 +410,17 @@ fn palette_realm_with(events: Vec<Data>, taken: Vec<Data>, draws: Vec<bool>) -> 
         Ok(Data::Number(id))
     });
     let event: HostFunction = Rc::new(move |_| Ok(events.borrow_mut().pop_front().unwrap_or(Data::Null)));
-    let taken = RefCell::new(VecDeque::from(taken));
+    let taken = Rc::new(RefCell::new(VecDeque::from(taken)));
     let c = calls.clone();
+    let left = taken.clone();
     let take: HostFunction = Rc::new(move |_| {
         c.borrow_mut().push(("paletteTake".into(), 0.0));
-        Ok(taken.borrow_mut().pop_front().unwrap_or(Data::Null))
+        Ok(left.borrow_mut().pop_front().unwrap_or(Data::Null))
+    });
+    let c = calls.clone();
+    let pending: HostFunction = Rc::new(move |_| {
+        c.borrow_mut().push(("palettePending".into(), 0.0));
+        Ok(Data::Bool(!taken.borrow().is_empty()))
     });
     let draws = RefCell::new(VecDeque::from(draws));
     let c = calls.clone();
@@ -433,6 +440,7 @@ fn palette_realm_with(events: Vec<Data>, taken: Vec<Data>, draws: Vec<bool>) -> 
         ("paletteClose".into(), HostItem::Function(record("paletteClose", 0))),
         ("paletteEvent".into(), HostItem::Function(event)),
         ("paletteTake".into(), HostItem::Function(take)),
+        ("palettePending".into(), HostItem::Function(pending)),
         ("paletteDraw".into(), HostItem::Function(draw)),
     ];
     r.define_script_ui(items).unwrap();
@@ -533,7 +541,27 @@ fn update_hands_a_waiting_click_to_the_palette_so_a_cancel_button_stops_a_loop()
         )
         .unwrap();
     assert_eq!(done, JsValue::String("1:true".into()), "the first update() runs the click's onClick");
-    assert!(count(&calls, "paletteTake") >= 2, "update() takes events until none waits");
+    assert_eq!(count(&calls, "paletteTake"), 1, "update() takes events while one waits");
+    assert!(count(&calls, "palettePending") >= 2, "update() asks again after each event");
+    let order = names(&calls);
+    let take = order.iter().position(|n| n == "paletteTake");
+    let last_update = order.iter().rposition(|n| n == "paletteUpdate");
+    assert!(take.zip(last_update).is_some_and(|(t, u)| u < t), "the host gets the controls before the event is taken");
+}
+
+#[test]
+fn an_update_a_getter_calls_while_a_click_waits_leaves_the_click_to_the_update_taking_it() {
+    let (mut r, calls) = palette_realm_with(Vec::new(), vec![palette_event(1.0, click(1))], Vec::new());
+    let done = r
+        .run(
+            "var p = new Window('palette'); var b = p.add('button', undefined, 'Go'); var clicks = 0; var reads = 0; var armed = false; \
+             b.onClick = function () { clicks++; }; \
+             Object.defineProperty(p, 'text', {get: function () { if (armed) { reads++; p.update(); } return 'P'; }}); \
+             p.show(); armed = true; p.update(); clicks + ':' + (reads > 0)",
+        )
+        .unwrap();
+    assert_eq!(done, JsValue::String("1:true".into()), "the getter's update() runs, and the click's onClick runs once");
+    assert_eq!(count(&calls, "paletteTake"), 1);
 }
 
 #[test]

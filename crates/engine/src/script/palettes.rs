@@ -240,6 +240,12 @@ impl Palettes {
     pub(crate) fn take_for(&mut self, engine: &str) -> Option<Queued> {
         self.next_of(engine).map(|(_, q)| q)
     }
+
+    /// Whether an event waits for a palette of the engine `engine`, which [`Palettes::take_for`]
+    /// would then check and take.
+    pub(crate) fn waits_for(&self, engine: &str) -> bool {
+        self.waiting.iter().any(|q| self.list.iter().any(|p| p.id == q.palette && p.engine == engine))
+    }
 }
 
 /// `name` in a `#targetengine` line, quoted with a quote it does not hold.
