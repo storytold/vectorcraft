@@ -3,22 +3,19 @@
 //! (`ui.recolorDialog {preset: true, colors?, library?}`, without `group`). OK opens Recolor Artwork with the
 //! preset's colors and the library chosen (None: no limit); Cancel opens nothing.
 //!
-//! Fields: `colors` (the preset's count, null for Color Library) and `limitTo` (a library id,
-//! `"document"` for the document's swatches, `""` for None), as Recolor Artwork's.
+//! Fields: `limitTo` (a library id, `"document"` for the document's swatches, `""` for None), as
+//! Recolor Artwork's.
 
+use craft::ui::patterns::form_dialogs::{DialogFields, Param, ParamKind, ParamResult};
+use craft::ui::runtime::env::Label;
 use serde_json::{Value, json};
 
-use super::DialogSpec;
-use super::recolor::{library_choices, library_param};
-use super::swatch_options::{grid, label};
-use crate::state::Dialog;
-use crate::{VectorcraftApp, widgets};
+use super::recolor::{cancel_open, library_choices, library_param};
+use super::swatch_options::{NO_WINDOW, field_label, hosted};
+use crate::VectorcraftApp;
 
 /// The dialog kind of Recolor with Preset.
 pub const KIND: &str = "recolorPreset";
-
-pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| tl!("Recolor with Preset").into(), body, confirm, min_width: 340.0, ..DialogSpec::FORM };
 
 /// Open the dialog for the preset of `p` (`colors`: a count; `library`: the library it starts on,
 /// "" the first library) on the selected art.
@@ -32,49 +29,33 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     }
     let colors = count(p.get("colors"))?;
     let limit = library_param(app, p)?;
-    // A dialog this one replaces ends as Cancel ends it, its preview rolled back.
-    if app.ui.dialog.is_some() {
-        super::cancel(app);
-    }
-    app.ui.dialog = Some(Dialog::new(KIND, json!({"colors": colors, "limitTo": limit})));
+    let ctx = app.ui_ctx.clone().ok_or(NO_WINDOW)?;
+    // A Recolor Artwork this one opens over ends as Cancel ends it, its preview rolled back.
+    cancel_open(app);
+    let options = library_choices(app).into_iter().map(|(key, name)| (key, Label::from(name))).collect();
+    let mut fields = DialogFields::new();
+    fields.set("limitTo", limit.clone());
+    let rows = vec![Param::new("limitTo", field_label(tl!("Limit to Library:")), ParamKind::choice(options, Some(limit)))];
+    let dialog = hosted(&ctx, KIND, tl!("Recolor with Preset"), fields, rows, false);
+    // Recolor Artwork takes the dialog's place; when it cannot open, this dialog stays.
+    let ok = move |app: &mut VectorcraftApp, answer: &ParamResult| -> Result<(), String> {
+        let mut p = serde_json::Map::new();
+        if let Some(n) = colors {
+            p.insert("colors".into(), json!(n));
+        }
+        if let Some(limit) = answer.fields.text("limitTo").filter(|l| !l.is_empty()) {
+            p.insert("library".into(), json!(limit));
+        }
+        super::recolor::open(app, &Value::Object(p)).map(|_| ())
+    };
+    super::host::open_held(app, dialog, ok).ok_or(NO_WINDOW)?;
     Ok(Value::Null)
 }
 
 /// The preset's count of new colors: none for Color Library, else at least 1.
-fn count(v: Option<&Value>) -> Result<Value, String> {
+fn count(v: Option<&Value>) -> Result<Option<u64>, String> {
     match v {
-        None | Some(Value::Null) => Ok(Value::Null),
-        Some(n) => Ok(json!(n.as_u64().filter(|n| *n >= 1).ok_or("`colors` must be a count of at least 1")?)),
+        None | Some(Value::Null) => Ok(None),
+        Some(n) => n.as_u64().filter(|n| *n >= 1).map(Some).ok_or_else(|| "`colors` must be a count of at least 1".into()),
     }
-}
-
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let (keys, shown) = library_choices(app);
-    let shown: Vec<&str> = shown.iter().map(String::as_str).collect();
-    let cur = d.str("limitTo");
-    let at = keys.iter().position(|k| *k == cur).unwrap_or(0);
-    let current = shown.get(at).copied().unwrap_or_default();
-    grid(ui, |ui| {
-        label(ui, tl!("Limit to Library:"));
-        let library = ui.name_inputs(tl!("Limit to Library:"), |ui| widgets::dropdown_names(ui, "recolor-preset-library", current, &shown, 200.0));
-        if let Some(k) = library.and_then(|i| keys.get(i)) {
-            d.fields.insert("limitTo".into(), json!(k));
-        }
-        ui.end_row();
-    });
-    false
-}
-
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let mut p = serde_json::Map::new();
-    let n = count(d.fields.get("colors"))?;
-    if !n.is_null() {
-        p.insert("colors".into(), n);
-    }
-    let limit = d.str("limitTo");
-    if !limit.is_empty() {
-        p.insert("library".into(), json!(limit));
-    }
-    // Recolor Artwork takes the dialog's place; when it cannot open, this dialog stays.
-    super::recolor::open(app, &Value::Object(p))
 }
