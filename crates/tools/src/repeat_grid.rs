@@ -23,7 +23,7 @@ pub const HANDLE_GAP: f64 = 22.0;
 pub const SLIDER_HALF: f32 = 7.0;
 
 /// How near (screen points) a press must come to a handle to take it.
-const REACH: f64 = 8.0;
+pub const REACH: f64 = 8.0;
 
 /// The smallest tile (source size plus spacing) a spacing slider leaves, in points.
 const MIN_TILE: f64 = 0.01;
@@ -370,17 +370,6 @@ mod tests {
         assert!(GridDrag::hit(&c, g.rows_at, Mods { alt: true, ..Mods::default() }).is_none());
     }
 
-    /// With the Selection tool, a handle drag reads where it is released, and a tool switch cancels
-    /// it.
-    #[test]
-    fn a_handle_drag_reads_its_release_and_a_tool_switch_cancels_it() {
-        let (doc, selection) = grid();
-        let paint = paint();
-        let c = cx(&doc, &selection, &paint);
-        let g = GridHandles::of(&doc, &selection, crate::select::selection_box(&c), 1.0).unwrap();
-        crate::testutil::check_widget_release_and_tool_switch(&c, g.rows_at, g.rows_at + Vec2::new(0.0, 240.0), g.rows_at + Vec2::new(0.0, 360.0));
-    }
-
     #[test]
     fn a_bounding_box_handle_wins_where_they_overlap() {
         let (doc, selection) = grid();
@@ -403,25 +392,5 @@ mod tests {
         assert_eq!(cursor(&c, g.h_slider.unwrap()), Some(Cursor::ResizeH));
         assert_eq!(cursor(&c, g.rows_at), Some(Cursor::ResizeV));
         assert_eq!(cursor(&c, g.corner_at), Some(Cursor::ResizeNwSe));
-    }
-
-    #[test]
-    fn a_tool_switch_cancels_a_grid_handle_drag() {
-        use crate::{PointerEvent, PointerKind, Tool};
-        let (doc, selection) = grid();
-        let paint = paint();
-        let c = cx(&doc, &selection, &paint);
-        let g = GridHandles::of(&doc, &selection, crate::select::selection_box(&c), c.zoom).unwrap();
-        let mut t = crate::select::SelectionTool::default();
-        assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, g.rows_at.x, g.rows_at.y)).is_empty());
-        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, g.rows_at.x, g.rows_at.y + 150.0));
-        assert!(preview(&a).is_some(), "{a:?}");
-        assert_eq!(t.deactivate(&c), vec![Action::Cancel]);
-        assert!(!t.busy());
-        // A press that has not changed the grid leaves nothing to cancel.
-        t.pointer(&c, &PointerEvent::new(PointerKind::Down, g.rows_at.x, g.rows_at.y));
-        assert!(t.busy());
-        assert!(t.deactivate(&c).is_empty());
-        assert!(!t.busy());
     }
 }

@@ -125,3 +125,33 @@ fn type_that_does_not_fit_its_frame_is_named_when_its_artboard_prints() {
     let (_, v) = print_ps(&mut s, json!({"settings": {"artboards": "range", "range": "1"}}));
     assert_eq!(over(&v), 0, "{v}");
 }
+
+/// Graphics › Fonts reaches the PostScript output: Subset (the default) sends each page the
+/// glyphs it shows, None names the printer's font and sends none, Complete sends every glyph once
+/// before the first page. PDF output notes that it embeds subsets.
+#[test]
+fn the_fonts_setting_chooses_how_type_is_sent() {
+    let mut s = session(1);
+    s.execute("text.create", &json!({"x": 20, "y": 100, "text": "Ab", "size": 24})).unwrap();
+    assert_eq!(s.execute("print.setup", &json!({})).unwrap()["settings"]["graphics"]["fonts"], "subset");
+    let fonts = |s: &mut Session, f: &str| print_ps(s, json!({"settings": {"graphics": {"fonts": f}}}));
+    let (ps, _) = print_ps(&mut s, json!({}));
+    let page = ps.split("%%Page: ").nth(1).unwrap();
+    assert_eq!(page.matches("/FontType 3 def").count(), 1, "{ps}");
+    assert_eq!(page.matches("> show").count(), 2, "{page}");
+    assert_eq!(dsc(&ps, "DocumentSuppliedResources"), ["font VCft0.0"]);
+    let (ps, v) = fonts(&mut s, "none");
+    assert!(!ps.contains("FontType") && !ps.contains("%%BeginResource"), "{ps}");
+    assert_eq!(dsc(&ps, "DocumentNeededResources").len(), 1, "{ps}");
+    assert!(v["warnings"].to_string().contains("the printer needs the font"), "{v}");
+    let (ps, _) = fonts(&mut s, "complete");
+    let (head, pages) = ps.split_once("%%EndSetup").unwrap();
+    assert!(head.contains("/FontType 3 def") && !pages.contains("FontType") && pages.contains("> show"), "{ps}");
+    let (ps, _) = fonts(&mut s, "subset");
+    assert_eq!(ps.split("%%Page: ").nth(1).unwrap().matches("/FontType 3 def").count(), 1);
+    // PDF output embeds subsets whatever the setting, and says so.
+    for (f, noted) in [("none", true), ("subset", false), ("complete", true)] {
+        let v = s.execute("file.print", &json!({"settings": {"graphics": {"fonts": f}}})).unwrap();
+        assert_eq!(v["warnings"].to_string().contains("PDF print embeds subsets"), noted, "{f}: {v}");
+    }
+}
