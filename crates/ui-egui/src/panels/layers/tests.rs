@@ -621,6 +621,38 @@ fn shift_clicking_the_first_selection_square_adds_or_removes_one_row() {
     assert!(sel.contains(&a) && sel.contains(&c) && !sel.contains(&g), "the range from A to C: {sel:?}");
 }
 
+/// Each document keeps the selection square clicked last in it: after a click in a second
+/// document, a Shift-click back in the first selects the range from the first document's square.
+#[test]
+fn each_document_keeps_its_selection_square_anchor() {
+    use crate::tests::panel_harness::Panel;
+    use egui::Modifiers;
+    let (mut app, _, [a, b]) = two_rects();
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    let c = NodeId(run(&mut app, "shape.rectangle", json!({"x": 120, "y": 0, "width": 50, "height": 50}))["id"].as_u64().unwrap());
+    for (id, name) in [(a, "A"), (b, "B"), (c, "C")] {
+        name_row(&mut app, id, name);
+    }
+    run(&mut app, "select.none", json!({}));
+    let mut panel = Panel::new(app, show);
+    panel.click_with("Select art of A", Modifiers::NONE);
+    {
+        let mut app = panel.app();
+        run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+        let other = NodeId(run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}))["id"].as_u64().unwrap());
+        name_row(&mut app, other, "D");
+        run(&mut app, "select.none", json!({}));
+    }
+    panel.click_with("Select art of D", Modifiers::NONE);
+    {
+        let mut app = panel.app();
+        run(&mut app, "document.activate", json!({"index": 0}));
+        run(&mut app, "select.none", json!({}));
+    }
+    panel.click_with("Select art of C", Modifiers::SHIFT);
+    assert_eq!(targeted(&panel.app()), (None, vec![a, b, c]), "the range from A, the first document's square, to C");
+}
+
 /// The rows among `rows` whose selection square is full-sized, then those whose square is the
 /// small one, in the order given.
 fn squares(app: &VectorcraftApp, rows: &[NodeId]) -> (Vec<NodeId>, Vec<NodeId>) {

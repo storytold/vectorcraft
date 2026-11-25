@@ -50,7 +50,7 @@
 //! document change, and only those scrolled into view are laid out, so a document of many thousand
 //! objects costs no more per frame than a small one.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use craft::layers::ui::filter::{FilterBy, LayerFilter};
@@ -179,8 +179,9 @@ pub struct LayersUi {
     pub focused: bool,
     /// The target circle clicked last, with its document's `uid`: where a Shift-click on another circle starts.
     pub target_anchor: Option<(u64, NodeId)>,
-    /// The selection square clicked last, with its document's `uid`: where a Shift-click on another square starts.
-    pub art_anchor: Option<(u64, NodeId)>,
+    /// The selection square clicked last in each open document, by the document's `uid`: where a Shift-click on another
+    /// square starts.
+    pub art_anchors: HashMap<u64, NodeId>,
     /// The active document's rows with the [`LayerRows::key`] they were listed at.
     rows: Option<(u64, Tracked<LayerRows>)>,
 }
@@ -190,7 +191,7 @@ impl Default for LayersUi {
     fn default() -> Self {
         let mut filter = LayerFilter::default();
         filter.by = FilterBy::Objects;
-        Self { filter, rename: None, focused: false, target_anchor: None, art_anchor: None, rows: None }
+        Self { filter, rename: None, focused: false, target_anchor: None, art_anchors: HashMap::new(), rows: None }
     }
 }
 
@@ -250,14 +251,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let anchor = app.ui.layers_ui.target_anchor.filter(|(doc, _)| *doc == uid).map(|(_, id)| id);
     let target = target_click.map(|(id, mods)| (id, rows::target_click(&tree, &filter, anchor, id, mods)));
     // A Shift-click on a selection square starts at the last square clicked in this document.
-    let art_anchor = app.ui.layers_ui.art_anchor.filter(|(doc, _)| *doc == uid).map(|(_, id)| id);
+    let art_anchor = app.ui.layers_ui.art_anchors.get(&uid).copied();
     let art = art_click.map(|(id, mods)| (id, rows::art_click(&tree, &filter, art_anchor, id, mods)));
     app.ui.layers_ui.filter = filter;
     if let Some((id, (_, true))) = &target {
         app.ui.layers_ui.target_anchor = Some((uid, *id));
     }
     if let Some((id, (_, true))) = &art {
-        app.ui.layers_ui.art_anchor = Some((uid, *id));
+        // Closed documents' starts are dropped, so the map holds one entry per open document at most.
+        let open: HashSet<u64> = app.session.documents().iter().map(|st| st.uid).collect();
+        let anchors = &mut app.ui.layers_ui.art_anchors;
+        anchors.retain(|doc, _| open.contains(doc));
+        anchors.insert(uid, *id);
     }
     app.ui.layers_ui.focused = output.focused;
     rows::apply(app, output.events);
