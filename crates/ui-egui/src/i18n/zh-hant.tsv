@@ -3954,6 +3954,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	One Point Perspective Preset 5	一點透視預設集 5
 	Only Web Colors	僅限網頁色彩
 	Opacity	不透明度
+	Show Opacity	顯示不透明度
 	Opacity & Mask Define Knockout Shape	不透明度與遮色片定義挖空形狀
 	Opacity Mask	不透明度遮色片
 	Opacity Mask Info	不透明度遮色片資訊
@@ -7016,6 +7017,11 @@ axis	Y Axis	Y 軸
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` 和 `maxItems` 必須是 0-{MAX_LIST}，`maxItems` 至少為 1，且預設值的項目數須在此範圍內
 @msg	`name` must be a string	`name` 必須是字串
 @msg	`opacity` must be a number	`opacity` 必須是數字
+@msg	`opacity` must be a number from 0 to 100	`opacity` 必須是 0 到 100 之間的數字
+@msg	`opacity` must be true or false	`opacity` 必須是 true 或 false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	文字字元沒有自己的不透明度：請用「外觀」面板的「新增填色」或「新增筆畫」新增填色或筆畫
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	在符號實體中選取的物件沒有自己的填色或筆畫不透明度
+@msg	no target has that fill or stroke to take the opacity	沒有目標具有可接受該不透明度的填色或筆畫
 @msg	`type` must be "path" or "compound"	`type` 必須是 "path" 或 "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` 必須是 1-{MAX_UNIT} 個可列印字元
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` 必須為 `{other}` 列出 1 到 {MAX_CONDITION_VALUES} 個值
@@ -9582,6 +9588,7 @@ breakText	Glyphs	字符
 @msg	give a pattern name or select an object painted with a pattern	請提供圖樣名稱，或選取以圖樣上色的物件
 @msg	give at least one of clip, invert, disabled, linked	clip、invert、disabled、linked 請至少提供一個
 @msg	give color, none, swatch or gradient	請提供 color、none、swatch 或 gradient
+@msg	give color, none, swatch, gradient or opacity	請提供 color、none、swatch、gradient 或 opacity
 @msg	give dataBase64	請提供 dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	請提供 at (一次點按) 或 area (圍繞重疊處繪製的路徑) 其中之一
 @msg	give formats or a preset, not both	請提供 formats 或預設集，不要兩者都提供

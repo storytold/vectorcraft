@@ -476,6 +476,11 @@
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` dan `maxItems` harus 0-{MAX_LIST}, `maxItems` setidaknya 1, dan nilai default sebanyak itu
 @msg	`name` must be a string	`name` harus berupa string
 @msg	`opacity` must be a number	`opacity` harus berupa angka
+@msg	`opacity` must be a number from 0 to 100	`opacity` harus berupa angka dari 0 sampai 100
+@msg	`opacity` must be true or false	`opacity` harus true atau false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	karakter teks tidak memiliki opasitas sendiri: tambahkan isian atau guratan dengan Tambahkan isian baru atau Tambahkan guratan baru di panel Tampilan
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	objek yang dipilih dalam instans simbol tidak memiliki opasitas isian atau guratan sendiri
+@msg	no target has that fill or stroke to take the opacity	tidak ada target yang memiliki isian atau guratan tersebut untuk menerima opasitas
 @msg	`type` must be "path" or "compound"	`type` harus "path" atau "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` harus berupa 1-{MAX_UNIT} karakter yang dapat dicetak
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` mencantumkan 1 sampai {MAX_CONDITION_VALUES} nilai untuk `{other}`
@@ -1121,6 +1126,7 @@
 	Fill & Stroke	Isian & stroke
 	Fill Color	Warna isian
 	Opacity	Opasitas
+	Show Opacity	Tampilkan opasitas
 	Stroke Color	Warna stroke
 	Fill Gradient	Gradien isian
 	Stroke Gradient	Gradien stroke

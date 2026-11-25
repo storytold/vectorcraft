@@ -2669,6 +2669,7 @@ file-filter	Templates	Modelli
 	One Point Perspective Preset 5	Preset prospettiva a un punto 5
 	Only Web Colors	Solo colori web
 	Opacity	Opacità
+	Show Opacity	Mostra opacità
 	Opacity & Mask Define Knockout Shape	Opacità e maschera definiscono la forma di foratura
 	Opacity Mask	Maschera di opacità
 	Opacity Mask Info	Informazioni maschera di opacità
@@ -6985,6 +6986,11 @@ axis	Y Axis	Asse Y
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` e `maxItems` devono essere 0-{MAX_LIST}, `maxItems` almeno 1, e il valore predefinito deve averne altrettanti
 @msg	`name` must be a string	`name` deve essere una stringa
 @msg	`opacity` must be a number	`opacity` deve essere un numero
+@msg	`opacity` must be a number from 0 to 100	`opacity` deve essere un numero compreso tra 0 e 100
+@msg	`opacity` must be true or false	`opacity` deve essere true o false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	i caratteri del testo non hanno un'opacità propria: aggiungi un riempimento o una traccia con Aggiungi nuovo riempimento o Aggiungi nuova traccia del pannello Aspetto
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	un oggetto selezionato in un'istanza di simbolo non ha un'opacità propria di riempimento o di traccia
+@msg	no target has that fill or stroke to take the opacity	nessuna destinazione ha quel riempimento o quella traccia per ricevere l'opacità
 @msg	`type` must be "path" or "compound"	`type` deve essere "path" o "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` deve avere 1-{MAX_UNIT} caratteri stampabili
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` deve elencare da 1 a {MAX_CONDITION_VALUES} valori per `{other}`
@@ -9428,6 +9434,7 @@ breakText	Glyphs	Glifi
 @msg	give a pattern name or select an object painted with a pattern	indica il nome di un motivo o seleziona un oggetto dipinto con un motivo
 @msg	give at least one of clip, invert, disabled, linked	indica almeno uno tra clip, invert, disabled, linked
 @msg	give color, none, swatch or gradient	indica color, none, swatch o gradient
+@msg	give color, none, swatch, gradient or opacity	indica color, none, swatch, gradient o opacity
 @msg	give dataBase64	indica dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	indica at (un clic) o area (un tracciato disegnato attorno alle sovrapposizioni)
 @msg	give formats or a preset, not both	indica formats o un predefinito, non entrambi

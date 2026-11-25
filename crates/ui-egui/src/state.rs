@@ -826,7 +826,7 @@ pub struct UiState {
     #[serde(skip)]
     pub(crate) new_swatch: Option<crate::dialogs::new_swatch::Open>,
     /// Color Wheel panel: the wheel or the box, the box's channel, the slider rows, the
-    /// out-of-gamut shading and the color vision row
+    /// out-of-gamut shading, Show Opacity and the color vision row
     /// (`ui.colorWheel`, [`crate::panels::color_wheel::deserialize_settings`]).
     #[serde(default, deserialize_with = "crate::panels::color_wheel::deserialize_settings")]
     pub color_wheel: crate::panels::color_wheel::Settings,

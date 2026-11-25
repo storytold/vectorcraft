@@ -3107,6 +3107,7 @@ file-filter	Templates	Sablonok
 	One Point Perspective Preset 5	Egypontos perspektíva, 5. előbeállítás
 	Only Web Colors	Csak webes színek
 	Opacity	Átlátszatlanság
+	Show Opacity	Átlátszatlanság megjelenítése
 	Opacity & Mask Define Knockout Shape	Az átlátszatlanság és a maszk adja a kiütés alakját
 	Opacity Mask	Átlátszósági maszk
 	Opacity Mask Info	Átlátszósági maszk adatai
@@ -7348,6 +7349,11 @@ axis	Y Axis	Y tengely
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	a `minItems` és a `maxItems` 0-{MAX_LIST} legyen, a `maxItems` legalább 1, és az alapértelmezett érték ennyi elemből álljon
 @msg	`name` must be a string	`name`: karakterlánc kell
 @msg	`opacity` must be a number	`opacity`: szám kell
+@msg	`opacity` must be a number from 0 to 100	`opacity`: 0 és 100 közötti szám kell
+@msg	`opacity` must be true or false	`opacity`: true vagy false kell
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	a szöveg karaktereinek nincs saját átlátszatlansága: adjon hozzá kitöltést vagy körvonalat a Megjelenés panel Új kitöltés hozzáadása vagy Új körvonal hozzáadása parancsával
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	a szimbólumpéldányban kijelölt objektumnak nincs saját kitöltési vagy körvonal-átlátszatlansága
+@msg	no target has that fill or stroke to take the opacity	egyik célnak sincs olyan kitöltése vagy körvonala, amely felvehetné az átlátszatlanságot
 @msg	`type` must be "path" or "compound"	`type`: "path" vagy "compound" kell
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	a `unit` 1-{MAX_UNIT} nyomtatható karakter legyen
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	a `visibleWhen` 1-{MAX_CONDITION_VALUES} értéket adjon meg ehhez: `{other}`

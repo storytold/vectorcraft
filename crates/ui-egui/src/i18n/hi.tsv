@@ -3734,6 +3734,7 @@ arrowhead	Feather	पंख
 	One Point Perspective Preset 5	एक बिंदु पर्सपेक्टिव पूर्व निर्धारित 5
 	Only Web Colors	केवल वेब रंग
 	Opacity	ओपेसिटी
+	Show Opacity	ओपेसिटी दिखाएँ
 	Opacity & Mask Define Knockout Shape	ओपेसिटी एंड मास्क डिफ़ाइन नॉकआउट शेप
 	Opacity Mask	ओपेसिटी मास्क
 	Opacity Mask Info	ओपेसिटी मास्क की जानकारी
@@ -6538,6 +6539,11 @@ arrowhead	Feather	पंख
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` और `maxItems` 0-{MAX_LIST} होने चाहिए, `maxItems` कम से कम 1, और डिफ़ॉल्ट में उतने ही आइटम होने चाहिए
 @msg	`name` must be a string	`name` एक स्ट्रिंग होना चाहिए
 @msg	`opacity` must be a number	`opacity` एक संख्या होना चाहिए
+@msg	`opacity` must be a number from 0 to 100	`opacity` 0 से 100 तक की संख्या होना चाहिए
+@msg	`opacity` must be true or false	`opacity` true या false होना चाहिए
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	टेक्स्ट के कैरेक्टर्स की अपनी ओपेसिटी नहीं होती: अपीयरेंस पैनल के नया फ़िल जोड़ें या नया स्ट्रोक जोड़ें से फ़िल या स्ट्रोक जोड़ें
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	सिंबल इंस्टेंस में सिलेक्ट किए गए ऑब्जेक्ट की अपनी फ़िल या स्ट्रोक ओपेसिटी नहीं होती
+@msg	no target has that fill or stroke to take the opacity	किसी भी टारगेट में वह फ़िल या स्ट्रोक नहीं है जो ओपेसिटी ले सके
 @msg	`type` must be "path" or "compound"	`type` "path" या "compound" होना चाहिए
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` में 1-{MAX_UNIT} प्रिंट करने योग्य वर्ण होने चाहिए
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` में `{other}` के लिए 1 से {MAX_CONDITION_VALUES} मान होने चाहिए
@@ -7989,6 +7995,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	give at least one of clip, invert, disabled, linked	कम से कम एक क्लिप, उलटा, विकलांग, लिंक्ड देना
 @msg	give both `start` and `end` [x, y] (or neither)	`start` और `end` दोनों [x, y] दें (या दोनों न दें)
 @msg	give color, none, swatch or gradient	color, none, swatch या gradient दें
+@msg	give color, none, swatch, gradient or opacity	color, none, swatch, gradient या opacity दें
 @msg	give corners of the path: anchors between two straight sides	पाथ के कोने: दो सीधे पक्षों के बीच एंकर
 @msg	give corners of the path: anchors where its sides meet at an angle	पाथ के कोने: एंकर जहां इसके पक्ष एक कोण पर मिलते हैं
 @msg	give dataBase64	dataBase64 दें

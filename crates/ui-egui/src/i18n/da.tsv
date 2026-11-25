@@ -594,6 +594,11 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` og `maxItems` skal være 0-{MAX_LIST}, `maxItems` mindst 1, og standardværdien skal have så mange
 @msg	`name` must be a string	`name` skal være en streng
 @msg	`opacity` must be a number	`opacity` skal være et tal
+@msg	`opacity` must be a number from 0 to 100	`opacity` skal være et tal fra 0 til 100
+@msg	`opacity` must be true or false	`opacity` skal være true eller false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	tegn i tekst har ingen egen opacitet: tilføj en udfyldning eller kontur med Tilføj ny udfyldning eller Tilføj ny kontur i panelet Udseende
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	et objekt, der er markeret i en symbolforekomst, har ingen egen opacitet for udfyldning eller kontur
+@msg	no target has that fill or stroke to take the opacity	intet mål har den udfyldning eller kontur, der kan modtage opaciteten
 @msg	`type` must be "path" or "compound"	`type` skal være "path" eller "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` skal være 1-{MAX_UNIT} tegn, der kan udskrives
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` angiver 1 til {MAX_CONDITION_VALUES} værdier for `{other}`
@@ -3246,6 +3251,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Fill & Stroke	Fyld og streg
 	Fill Color	Fyldfarve
 	Opacity	Opacitet
+	Show Opacity	Vis opacitet
 	Stroke Color	Stregfarve
 	Fill Gradient	Fyldgradient
 	Stroke Gradient	Streggradient

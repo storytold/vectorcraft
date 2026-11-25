@@ -2627,6 +2627,7 @@ font-technology	Variable	Variables
 	One Point Perspective Preset 5	Preajuste de perspectiva de un punto 5
 	Only Web Colors	Solo colores web
 	Opacity	Opacidad
+	Show Opacity	Mostrar opacidad
 	Opacity & Mask Define Knockout Shape	La opacidad y la máscara definen la forma de exclusión
 	Opacity Mask	Máscara de opacidad
 	Opacity Mask Info	Información de máscara de opacidad
@@ -7339,6 +7340,11 @@ axis	Y Axis	Eje Y
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` y `maxItems` deben ser 0-{MAX_LIST}, `maxItems` al menos 1, y el valor predeterminado debe tener esa cantidad
 @msg	`name` must be a string	`name` debe ser una cadena
 @msg	`opacity` must be a number	`opacity` debe ser un número
+@msg	`opacity` must be a number from 0 to 100	`opacity` debe ser un número de 0 a 100
+@msg	`opacity` must be true or false	`opacity` debe ser true o false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	los caracteres de texto no tienen opacidad propia: agregue un relleno o un trazo con Agregar nuevo relleno o Agregar nuevo trazo del panel Apariencia
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	un objeto seleccionado en una instancia de símbolo no tiene opacidad propia de relleno ni de trazo
+@msg	no target has that fill or stroke to take the opacity	ningún destino tiene ese relleno o trazo para recibir la opacidad
 @msg	`type` must be "path" or "compound"	`type` debe ser "path" o "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` debe tener 1-{MAX_UNIT} caracteres imprimibles
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` debe indicar de 1 a {MAX_CONDITION_VALUES} valores para `{other}`

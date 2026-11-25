@@ -2514,6 +2514,7 @@ file-filter	Templates	模板
 	One Point Perspective Preset 5	一点透视预设 5
 	Only Web Colors	仅 Web 颜色
 	Opacity	不透明度
+	Show Opacity	显示不透明度
 	Opacity & Mask Define Knockout Shape	不透明度与蒙版定义挖空形状
 	Opacity Mask	不透明度蒙版
 	Opacity Mask Info	不透明度蒙版信息
@@ -7195,6 +7196,11 @@ axis	Y Axis	Y 轴
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` 和 `maxItems` 必须是 0-{MAX_LIST}，`maxItems` 至少为 1，且默认值的项数在此范围内
 @msg	`name` must be a string	`name` 必须是字符串
 @msg	`opacity` must be a number	`opacity` 必须是数字
+@msg	`opacity` must be a number from 0 to 100	`opacity` 必须是 0 到 100 之间的数字
+@msg	`opacity` must be true or false	`opacity` 必须是 true 或 false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	文字字符没有自己的不透明度：请用“外观”面板的“添加新填色”或“添加新描边”添加填色或描边
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	在符号实例中选中的对象没有自己的填色或描边不透明度
+@msg	no target has that fill or stroke to take the opacity	没有目标具有可接受该不透明度的填色或描边
 @msg	`type` must be "path" or "compound"	`type` 必须是 "path" 或 "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` 必须是 1-{MAX_UNIT} 个可打印字符
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` 必须为 `{other}` 列出 1 到 {MAX_CONDITION_VALUES} 个值
@@ -9646,6 +9652,7 @@ breakText	Glyphs	字形
 @msg	give a pattern name or select an object painted with a pattern	请给出图案名称，或选择用图案上色的对象
 @msg	give at least one of clip, invert, disabled, linked	请至少给出 clip、invert、disabled、linked 之一
 @msg	give color, none, swatch or gradient	请给出 color、none、swatch 或 gradient
+@msg	give color, none, swatch, gradient or opacity	请给出 color、none、swatch、gradient 或 opacity
 @msg	give dataBase64	请给出 dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	请给出 at (一次单击) 或 area (围绕重叠处绘制的路径)
 @msg	give formats or a preset, not both	请给出 formats 或一个预设，不能两者都给

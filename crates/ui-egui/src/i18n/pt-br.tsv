@@ -2149,6 +2149,7 @@ antiAlias	Sharp	Nítido
 	One page per artboard.	Uma página por mesa de trabalho.
 	Only Web Colors	Apenas Cores da Web
 	Opacity	Opacidade
+	Show Opacity	Mostrar Opacidade
 	Opacity & Mask Define Knockout Shape	Opacidade e Máscara Definem Forma de Isolamento
 	Opacity Mask	Máscara de Opacidade
 	Opacity Mask Info	Informações da Máscara de Opacidade
@@ -7262,6 +7263,11 @@ axis	Y Axis	Eixo Y
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` e `maxItems` devem ser 0-{MAX_LIST}, `maxItems` pelo menos 1, e o valor padrão deve ter essa quantidade
 @msg	`name` must be a string	`name` deve ser uma string
 @msg	`opacity` must be a number	`opacity` deve ser um número
+@msg	`opacity` must be a number from 0 to 100	`opacity` deve ser um número de 0 a 100
+@msg	`opacity` must be true or false	`opacity` deve ser true ou false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	os caracteres do texto não têm opacidade própria: adicione um preenchimento ou traçado com Adicionar Novo Preenchimento ou Adicionar Novo Traçado do painel Aparência
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	um objeto selecionado em uma instância de símbolo não tem opacidade própria de preenchimento ou traçado
+@msg	no target has that fill or stroke to take the opacity	nenhum destino tem esse preenchimento ou traçado para receber a opacidade
 @msg	`type` must be "path" or "compound"	`type` deve ser "path" ou "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` deve ter 1-{MAX_UNIT} caracteres imprimíveis
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` deve listar de 1 a {MAX_CONDITION_VALUES} valores para `{other}`
@@ -9730,6 +9736,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	give a pattern name or select an object painted with a pattern	informe o nome de um padrão ou selecione um objeto pintado com um padrão
 @msg	give at least one of clip, invert, disabled, linked	informe pelo menos um de clip, invert, disabled, linked
 @msg	give color, none, swatch or gradient	informe color, none, swatch ou gradient
+@msg	give color, none, swatch, gradient or opacity	informe color, none, swatch, gradient ou opacity
 @msg	give dataBase64	informe dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	informe at (um clique) ou area (um caminho desenhado em volta das sobreposições)
 @msg	give exactly one of `at`, `rect` and `points`	informe exatamente um de `at`, `rect` e `points`

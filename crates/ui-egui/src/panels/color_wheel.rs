@@ -20,6 +20,13 @@
 //! that color. The markers follow the current color, and a click on one applies its color as a
 //! pick does.
 //!
+//! The panel menu's Show Opacity adds a row under the wheel or the box that sets the opacity of
+//! what the panel edits: the fill item (`paint.setFill {opacity}`), the stroke item
+//! (`paint.setStroke {opacity}`), the selected gradient stop or the selected freeform point (the
+//! first stop or point when none is selected, as for a color pick). The row is gray with nothing
+//! selected, for an object selected in a symbol instance, and when the fill or stroke item it
+//! would set is on type characters or missing.
+//!
 //! Panel menu › Show Color Vision Preview adds a row under the wheel or the box with the color as
 //! simulated for protanopia, deuteranopia and tritanopia, through the simulations View › Proof
 //! Setup uses, and for achromatopsia as the gray with the color's CIE L*. The chips only show the
@@ -40,7 +47,7 @@
 //! preferences too.
 //!
 //! The view, the channel, the slider rows, Show Out-of-Gamut Colors, Show Harmony, Harmony Rule,
-//! Show Color Vision Preview and Show Document Colors are kept with the preferences
+//! Show Opacity, Show Color Vision Preview and Show Document Colors are kept with the preferences
 //! (`ui.colorWheel`).
 
 use std::hash::{Hash, Hasher};
@@ -170,6 +177,9 @@ pub struct Settings {
     /// The rule of Show Harmony, one of [`harmony_rules`].
     #[serde(serialize_with = "serialize_rule", deserialize_with = "deserialize_rule")]
     pub harmony_rule: Harmony,
+    /// Show Opacity: the opacity row under the wheel or the box.
+    #[serde(deserialize_with = "deserialize_flag")]
+    pub opacity: bool,
     /// Show Color Vision Preview: the row of simulated colors under the wheel or the box. A saved
     /// `true` shows the row and any other value hides it.
     #[serde(deserialize_with = "crate::panels::color::deserialize_lenient_bool")]
@@ -222,6 +232,7 @@ impl Default for Settings {
             gamut: false,
             harmony: false,
             harmony_rule: Harmony::Complementary,
+            opacity: false,
             vision: false,
             document_colors: false,
         }
@@ -274,12 +285,12 @@ pub fn deserialize_settings<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Se
     Ok(serde_json::from_value(v).unwrap_or_default())
 }
 
-/// `ui.colorWheel {view?, channel?, sliders?, gamut?, harmony?, harmonyRule?, vision?,
+/// `ui.colorWheel {view?, channel?, sliders?, gamut?, harmony?, harmonyRule?, opacity?, vision?,
 /// documentColors?}`: show the wheel or the box, pick the box's channel, show OKLCH Sliders, HSL
 /// Sliders or neither, show or hide the out-of-gamut shading, show the colors of a harmony rule on
-/// the wheel, and show or hide the color vision row and the Show Document Colors row. Keys left
-/// out or null keep their values; params that are not an object, another key or a value off the
-/// list are an error and change nothing.
+/// the wheel, check or uncheck Show Opacity, and show or hide the color vision row and the Show
+/// Document Colors row. Keys left out or null keep their values; params that are not an object,
+/// another key or a value off the list are an error and change nothing.
 /// `sliders: "oklch"` is an error while the active document's RGB space (its assigned profile,
 /// else the working RGB space) is not sRGB. → the settings.
 pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
@@ -290,7 +301,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
 /// Set the keys of `ui.colorWheel` params `p` in `settings`, with the color settings `cms`; on an
 /// error `settings` stay as they were.
 pub(crate) fn set(settings: &mut Settings, p: &Value, cms: &Cms) -> Result<(), String> {
-    const KEYS: [&str; 8] = ["view", "channel", "sliders", "gamut", "harmony", "harmonyRule", "vision", "documentColors"];
+    const KEYS: [&str; 9] = ["view", "channel", "sliders", "gamut", "harmony", "harmonyRule", "opacity", "vision", "documentColors"];
     match p {
         Value::Null => {}
         Value::Object(o) => {
@@ -338,6 +349,9 @@ pub(crate) fn set(settings: &mut Settings, p: &Value, cms: &Cms) -> Result<(), S
                 format!("`{key}` must be one of {}", ids.join(", "))
             })?
         }
+    }
+    if let Some(on) = crate::menus::opt_bool(p, "opacity")? {
+        set.opacity = on;
     }
     if let Some(on) = crate::menus::opt_bool(p, "vision")? {
         set.vision = on;
@@ -411,6 +425,7 @@ fn items(set: &Settings, srgb: bool) -> Vec<Item> {
             json!({ "harmonyRule": rule.id() }),
         ));
     }
+    out.push(item("opacity".into(), tl!("Show Opacity"), set.opacity, true, json!({ "opacity": !set.opacity })));
     out.push(item("vision".into(), tl!("Show Color Vision Preview"), set.vision, true, json!({ "vision": !set.vision })));
     out.push(item(
         "documentColors".into(),
@@ -424,7 +439,7 @@ fn items(set: &Settings, srgb: bool) -> Vec<Item> {
 
 /// The panel menu: Wheel View and Box View, and Box Channel while the box shows; Show Out-of-Gamut
 /// Colors; HSL Sliders and OKLCH Sliders; Show Harmony and Harmony Rule while the wheel shows; Show
-/// Color Vision Preview; and Show Document Colors.
+/// Opacity; Show Color Vision Preview; and Show Document Colors.
 pub(crate) fn menu_rows(_app: &VectorcraftApp) -> Vec<PanelRow> {
     let command = |row: String| PanelRow::Command(CommandRef::new(row_id(&row)));
     let mut rows = vec![command("view.wheel".into()), command("view.box".into())];
@@ -435,7 +450,7 @@ pub(crate) fn menu_rows(_app: &VectorcraftApp) -> Vec<PanelRow> {
     rows.push(PanelRow::Separator);
     rows.extend(["gamut", "sliders.hsl", "sliders.oklch", "harmony"].map(|row| command(row.into())));
     rows.push(PanelRow::Submenu(Label::from(tl!("Harmony Rule").to_string()), harmony_rules().map(|rule| command(rule_row_id(rule))).collect()));
-    rows.extend(["vision", "documentColors"].map(|row| command(row.into())));
+    rows.extend(["opacity", "vision", "documentColors"].map(|row| command(row.into())));
     rows
 }
 
@@ -521,6 +536,8 @@ pub struct WheelUi {
     oklch_tracks: [Option<([u64; 3], Vec<Srgba>)>; 3],
     /// The slider rows whose drag previews on an open interaction, until it is released.
     rows_live: Option<Sliders>,
+    /// Whether a drag of the Show Opacity row previews on an open interaction, until it is released.
+    opacity_live: bool,
 }
 
 /// The colors the row shows and whether they are the selection's, read with `color.used` once per
@@ -1051,6 +1068,100 @@ fn hsl_rows(app: &mut VectorcraftApp, panel: &mut WheelUi, ui: &mut Ui, cx: &Pic
     });
 }
 
+/// The opacity (0 to 1) the row shows for `tgt` and whether the row can set it: the selected
+/// gradient stop's or freeform point's (the first when none is selected, as [`wheel_target`]
+/// picks it), else that of the fill or stroke item
+/// ([`vectorcraft_engine::Session::proxy_opacity`]), which nothing selected and type characters
+/// do not have. A stop or point of a gradient on type characters belongs to the gradient, so the
+/// row sets it. With nothing selected, or while the Live Paint Bucket paints
+/// ([`vectorcraft_engine::Session::bucket_paints`]), the stop or point belongs to the defaults for
+/// new art, which the row leaves alone, and an object selected in a symbol instance has no opacity
+/// the row can set.
+fn shown_opacity(app: &VectorcraftApp, tgt: &Target) -> (f32, bool) {
+    let stroke = !app.session.fill_active;
+    let selected = !app.session.bucket_paints() && app.session.active().is_some_and(|d| !d.selection.is_empty() && d.selection.symbol_part.is_none());
+    let point = |index: usize| match super::active_paint(app) {
+        Paint::Gradient(g) => super::gradient::shown_points(&g).points.get(index).map(|p| p.opacity),
+        _ => None,
+    };
+    let found = match tgt {
+        _ if !selected => None,
+        Target::Stop { paint: Paint::Gradient(g), index, .. } => g.gradient.stops.get(*index).map(|s| s.opacity),
+        Target::Point { index, .. } => point(*index),
+        _ => app.session.proxy_opacity(stroke),
+    };
+    (found.unwrap_or(1.0), found.is_some())
+}
+
+/// Set the opacity (0 to 1) of what the row edits for `tgt`: a stop through the Gradient panel's
+/// edit, a freeform point through `paint.freeform.setPoint`, else the fill or stroke item through
+/// `paint.setFill` or `paint.setStroke`. A drag previews and commits as one undo step.
+fn apply_opacity(app: &mut VectorcraftApp, tgt: &Target, o: f32, phase: Live) {
+    let o = o.clamp(0.0, 1.0);
+    match tgt {
+        Target::Stop { paint: Paint::Gradient(g), index, .. } => {
+            let mut stops = g.gradient.stops.clone();
+            if let Some(s) = stops.get_mut(*index) {
+                s.opacity = o;
+            }
+            super::gradient::set_stops_keeping_models(app, &stops, None, phase);
+        }
+        Target::Point { index, .. } => {
+            let p = json!({"index": index, "opacity": o, "stroke": !app.session.fill_active});
+            super::live_run(app, "Opacity", "paint.freeform.setPoint", p, phase);
+        }
+        _ => {
+            let cmd = super::proxy_cmd(app, false);
+            super::live_run(app, "Opacity", cmd, json!({"opacity": f64::from(o) * 100.0}), phase);
+        }
+    }
+}
+
+/// End the drag of the Show Opacity row when the row is hidden (`ui.colorWheel {opacity: false}`)
+/// or turned gray before the release: the preview is kept as one undo step and the interaction
+/// ends.
+fn end_opacity_drag(app: &mut VectorcraftApp, panel: &mut WheelUi) {
+    if !panel.opacity_live {
+        return;
+    }
+    if app.session.in_interaction()
+        && let Err(e) = app.session.commit_interaction()
+    {
+        app.status(e.to_string());
+    }
+    app.sync_views();
+    panel.opacity_live = false;
+}
+
+/// The Show Opacity row: a slider whose track shows `color` through `cms` from clear to solid over
+/// the transparency checkerboard, and a percent field. Gray when [`shown_opacity`] finds nothing
+/// to set.
+fn opacity_row(app: &mut VectorcraftApp, panel: &mut WheelUi, ui: &mut Ui, tgt: &Target, color: &Color, cms: &Cms) {
+    let (o, live) = shown_opacity(app, tgt);
+    let [r, g, b] = cms.display_rgb(color).map(|v| v.clamp(0.0, 1.0));
+    let track = vec![Srgba::new(r, g, b, 0.0), Srgba::new(r, g, b, 1.0)];
+    // The row reads dim and takes no edit with nothing it can set.
+    Stack::new().enabled(live).show(ui, |ui, _| {
+        let rule = super::whole_steps(0.0..=100.0);
+        let row = ChannelRow::new(tl!("Opacity").to_string(), Bind::given(f64::from(o) * 100.0), rule)
+            .unit(ChannelUnit::Percent)
+            .track(track.clone())
+            .checker(true);
+        if let Some(edit) = row.show(ui)
+            && live
+        {
+            apply_edits(app, &edit, EditPath::Preview, |app, v, phase| {
+                apply_opacity(app, tgt, (*v / 100.0) as f32, phase);
+                panel.opacity_live = phase == Live::Dragging;
+            });
+        }
+    });
+    // A drag whose row turned gray reports no release.
+    if !live {
+        end_opacity_drag(app, panel);
+    }
+}
+
 /// The wheel: the hue ring around the saturation and brightness square, with Show Harmony's markers
 /// on the ring. A click on a marker applies its color; a press held on one keeps the ring from
 /// picking.
@@ -1114,6 +1225,22 @@ fn show_with(app: &mut VectorcraftApp, panel: &mut WheelUi, ui: &mut Ui) {
             View::Wheel => show_wheel(app, panel, ui, &cx, &set),
         }
     });
+    if set.opacity {
+        ui.add_space(4.0);
+        let shown = color.unwrap_or(app.session.last_solid);
+        let owner = color.map(|c| Owner::of(app, &tgt, c));
+        opacity_row(app, panel, ui, &tgt, &shown, &cms);
+        // An opacity edit of a gradient stop or point changes the gradient its owner holds, and the
+        // HSB picked last stays with the new gradient.
+        if let (Some(c), Some(was)) = (color, owner)
+            && let Some((remembered, ..)) = &mut panel.hsb
+            && *remembered == was
+        {
+            *remembered = Owner::of(app, &tgt, c);
+        }
+    } else {
+        end_opacity_drag(app, panel);
+    }
     match set.sliders {
         Sliders::None => {}
         Sliders::Oklch => {

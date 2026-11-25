@@ -123,6 +123,7 @@ mod outlineobject;
 pub(super) mod outlinestroke;
 mod overprint;
 mod package;
+mod paintopacity;
 mod paintproxy;
 mod panelcmds;
 mod paragraphs;

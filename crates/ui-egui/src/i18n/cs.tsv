@@ -518,6 +518,7 @@
 	Fill & Stroke	Výplň a tah
 	Fill Color	Barva výplně
 	Opacity	Krytí
+	Show Opacity	Zobrazit krytí
 	Stroke Color	Barva tahu
 	Fill Gradient	Přechod výplně
 	Stroke Gradient	Přechod tahu
@@ -7363,6 +7364,11 @@ axis	Y Axis	osa Y
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` a `maxItems` musí být 0-{MAX_LIST}, `maxItems` alespoň 1 a výchozí hodnota musí mít tolik položek
 @msg	`name` must be a string	`name` musí být řetězec
 @msg	`opacity` must be a number	`opacity` musí být číslo
+@msg	`opacity` must be a number from 0 to 100	`opacity` musí být číslo od 0 do 100
+@msg	`opacity` must be true or false	`opacity` musí být true nebo false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	znaky textu nemají vlastní krytí: přidejte výplň nebo tah příkazem Přidat novou výplň nebo Přidat nový tah v panelu Vzhled
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	objekt vybraný v instanci symbolu nemá vlastní krytí výplně ani tahu
+@msg	no target has that fill or stroke to take the opacity	žádný cíl nemá tuto výplň nebo tah, který by převzal krytí
 @msg	`type` must be "path" or "compound"	`type` musí být "path" nebo "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` musí mít 1-{MAX_UNIT} tisknutelných znaků
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` musí uvádět 1 až {MAX_CONDITION_VALUES} hodnot pro `{other}`
@@ -9668,6 +9674,7 @@ breakText	Glyphs	Glyfy
 @msg	give a pattern name or select an object painted with a pattern	zadejte název vzorku nebo vyberte objekt vybarvený vzorkem
 @msg	give at least one of clip, invert, disabled, linked	zadejte alespoň jedno z clip, invert, disabled, linked
 @msg	give color, none, swatch or gradient	zadejte color, none, swatch nebo gradient
+@msg	give color, none, swatch, gradient or opacity	zadejte color, none, swatch, gradient nebo opacity
 @msg	give dataBase64	zadejte dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	zadejte buď at (kliknutí), nebo area (cestu nakreslenou kolem překryvů)
 @msg	give exactly one of `at`, `rect` and `points`	zadejte právě jedno z `at`, `rect` a `points`

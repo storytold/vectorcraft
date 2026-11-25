@@ -692,9 +692,14 @@ whole cell or none of it, so a grayed cell can hold printable colors and a clear
 print. `{"harmony": true, "harmonyRule": "triad"}` puts a marker on the wheel's ring for each other
 color of a Color Guide harmony rule, as Show Harmony and Harmony Rule do; the wheel takes the 15 rules whose colors
 each have a hue of their own (not `monochromatic`, `shades`, `complementary2`, `triad2`, `triad3` or
-`highContrast2`). `{"documentColors": true}` shows the row the panel menu's Show Document Colors adds under the wheel
+`highContrast2`). `"opacity": true` checks Show Opacity, as the panel menu does: a row under the wheel or the box
+with a slider and a percent field sets the opacity of the fill row (`paint.setFill {opacity}`), the stroke row
+(`paint.setStroke {opacity}`), the selected gradient stop or the selected freeform point (the first stop or point
+when none is selected), and `false` hides the row. The row is gray with nothing selected, for an object selected in
+a symbol instance, and when the fill or stroke row it would set is on type characters or missing.
+`{"documentColors": true}` shows the row the panel menu's Show Document Colors adds under the wheel
 or the box. Keys left out keep their values. Params that are not an object, another key or a value off
-the list return an error and change nothing. The command returns `{view, channel, sliders, gamut, harmony, harmonyRule, vision, documentColors}`,
+the list return an error and change nothing. The command returns `{view, channel, sliders, gamut, harmony, harmonyRule, opacity, vision, documentColors}`,
 and the settings are kept with the preferences.
 
 `ui.colorWheel {"sliders": "oklch"}` shows the Color Wheel panel's OKLCH Sliders (L, C and H rows under the wheel or
@@ -904,7 +909,17 @@ Cmd+Alt+/ runs `appearance.addStroke` (`press_key {key: "/", mods: {cmd: true, a
 `item` to edit one of them; `run_command appearance.setActiveItem {"index": n}` makes that row the target of later
 calls that omit `item` (as clicking the row in the Appearance panel does) until the selection changes; the proxy of
 its kind (`paint.proxies`) and the Gradient tool's annotator then show that row.
-`inspect_document` reports it as `paint.appearanceItem`. Live effects take the same `item` to apply to one fill or
+`inspect_document` reports it as `paint.appearanceItem`. `paint.setFill` and `paint.setStroke` also take `opacity`
+(0 to 100, a percentage as in `transparency.set`), which sets the opacity of the fill or stroke row they paint, with
+or without a new paint, as one undo step. An opacity that no target takes is an error and also leaves the paint
+undone. A `swatch` that is not a name does not make the request an opacity alone: it is an error without a paint of
+its own. A color for a grayscale or 1-bit image's drawing color creates no fill row, so an opacity given with it goes
+to a fill row the image has. With New Art Has Basic Appearance off, the next shape copies the first selected object's
+appearance after any command, its opacity included. Without a new paint, `objects` counts only the targets that took the opacity. `paint.proxies` answers it as `fillOpacity` and `strokeOpacity`, from the first selected object that has
+that row (a selected path of a compound path answers with its compound path's row, which the commands edit, and a
+selected Live Paint group answers with its faces' fills and its edges' strokes). It answers null with nothing selected, for an object selected in a symbol instance, while the Live Paint Bucket paints (it is the active tool, or a Cmd+click or an Eyedropper pick works for it),
+while the Type tool has characters selected, and when only type characters (which have no opacity of their own) or objects without that
+row are selected. Live effects take the same `item` to apply to one fill or
 stroke instead of the whole object: `run_command effect.apply {"effect": "path.offsetPath", "item": 0}`, and
 `effect.remove`, `effect.setParams` (`visible` toggles one) and `effect.duplicate` address that item's effects;
 `apply_effect` uses the active item. `effect.list` reports each object's item effects under `applied[].items`.

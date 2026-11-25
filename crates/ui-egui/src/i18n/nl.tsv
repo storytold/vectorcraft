@@ -439,6 +439,11 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` en `maxItems` moeten 0-{MAX_LIST} zijn, `maxItems` minstens 1, en de standaardwaarde zoveel items
 @msg	`name` must be a string	`name` moet een string zijn
 @msg	`opacity` must be a number	`opacity` moet een getal zijn
+@msg	`opacity` must be a number from 0 to 100	`opacity` moet een getal van 0 tot 100 zijn
+@msg	`opacity` must be true or false	`opacity` moet true of false zijn
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	tekens van tekst hebben geen eigen dekking: voeg een vulling of streek toe met Nieuwe vulling toevoegen of Nieuwe streek toevoegen in het deelvenster Uiterlijk
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	een object dat in een symboolinstantie is geselecteerd, heeft geen eigen dekking voor vulling of streek
+@msg	no target has that fill or stroke to take the opacity	geen enkel doel heeft die vulling of streek om de dekking te krijgen
 @msg	`type` must be "path" or "compound"	`type` moet "path" of "compound" zijn
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` moet uit 1-{MAX_UNIT} afdrukbare tekens bestaan
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` noemt 1 tot {MAX_CONDITION_VALUES} waarden voor `{other}`
@@ -1107,6 +1112,7 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Fill & Stroke	Vulling en contour
 	Fill Color	Vulkleur
 	Opacity	Dekking
+	Show Opacity	Dekking tonen
 	Stroke Color	Contourkleur
 	Fill Gradient	Vulverloop
 	Stroke Gradient	Contourverloop

@@ -2584,6 +2584,7 @@ file-filter	Templates	Vorlagen
 	One Point Perspective Preset 5	Einpunktperspektive – Vorgabe 5
 	Only Web Colors	Nur Webfarben
 	Opacity	Deckkraft
+	Show Opacity	Deckkraft einblenden
 	Opacity & Mask Define Knockout Shape	Deckkraft und Maske definieren Aussparungsform
 	Opacity Mask	Deckkraftmaske
 	Opacity Mask Info	Informationen zur Deckkraftmaske
@@ -6946,6 +6947,11 @@ axis	Y Axis	Y-Achse
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` und `maxItems` müssen 0-{MAX_LIST} sein, `maxItems` mindestens 1, und der Standardwert muss so viele Einträge haben
 @msg	`name` must be a string	`name` muss eine Zeichenkette sein
 @msg	`opacity` must be a number	`opacity` muss eine Zahl sein
+@msg	`opacity` must be a number from 0 to 100	`opacity` muss eine Zahl von 0 bis 100 sein
+@msg	`opacity` must be true or false	`opacity` muss true oder false sein
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	Textzeichen haben keine eigene Deckkraft: Fügen Sie mit „Neue Fläche hinzufügen“ oder „Neue Kontur hinzufügen“ im Bedienfeld „Aussehen“ eine Fläche oder Kontur hinzu
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	ein in einer Symbolinstanz ausgewähltes Objekt hat keine eigene Flächen- oder Konturdeckkraft
+@msg	no target has that fill or stroke to take the opacity	kein Ziel hat diese Fläche oder Kontur, die die Deckkraft übernehmen könnte
 @msg	`type` must be "path" or "compound"	`type` muss "path" oder "compound" sein
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` muss 1-{MAX_UNIT} druckbare Zeichen haben
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` muss 1 bis {MAX_CONDITION_VALUES} Werte für `{other}` nennen
@@ -9375,6 +9381,7 @@ breakText	Glyphs	Glyphen
 @msg	give a pattern name or select an object painted with a pattern	geben Sie einen Musternamen an, oder wählen Sie ein mit einem Muster gefärbtes Objekt aus
 @msg	give at least one of clip, invert, disabled, linked	geben Sie mindestens eines von clip, invert, disabled, linked an
 @msg	give color, none, swatch or gradient	geben Sie color, none, swatch oder gradient an
+@msg	give color, none, swatch, gradient or opacity	geben Sie color, none, swatch, gradient oder opacity an
 @msg	give dataBase64	geben Sie dataBase64 an
 @msg	give either at (a click) or area (a path drawn around the overlaps)	geben Sie entweder at (einen Klick) oder area (einen um die Überlappungen gezeichneten Pfad) an
 @msg	give formats or a preset, not both	geben Sie formats oder eine Vorgabe an, nicht beides

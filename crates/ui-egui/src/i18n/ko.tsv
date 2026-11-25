@@ -576,6 +576,7 @@ digits	Malayalam	말라얄람어
 	Side Length:	변 길이:
 	Make Sides Equal	변 길이 같게
 	Opacity	불투명도
+	Show Opacity	불투명도 표시
 	Pie End Angle:	파이 끝 각도:
 	Pie Start Angle:	파이 시작 각도:
 	Stroke Color	선 색상
@@ -6957,6 +6958,11 @@ axis	Y Axis	Y축
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems`와 `maxItems`는 0-{MAX_LIST}, `maxItems`는 1 이상이어야 하며 기본값의 항목 수도 그 범위여야 합니다
 @msg	`name` must be a string	`name`은(는) 문자열이어야 합니다
 @msg	`opacity` must be a number	`opacity`은(는) 숫자여야 합니다
+@msg	`opacity` must be a number from 0 to 100	`opacity`은(는) 0에서 100 사이의 숫자여야 합니다
+@msg	`opacity` must be true or false	`opacity`은(는) true 또는 false여야 합니다
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	문자에는 자체 불투명도가 없습니다. 모양새 패널의 새 칠 추가 또는 새 선 추가로 칠이나 선을 추가하세요
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	심볼 인스턴스에서 선택한 개체에는 자체 칠 또는 선 불투명도가 없습니다
+@msg	no target has that fill or stroke to take the opacity	불투명도를 적용할 해당 칠 또는 선이 있는 대상이 없습니다
 @msg	`type` must be "path" or "compound"	`type`은(는) "path" 또는 "compound"여야 합니다
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit`은(는) 인쇄 가능한 문자 1-{MAX_UNIT}자여야 합니다
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen`에는 `{other}`의 값을 1-{MAX_CONDITION_VALUES}개 나열해야 합니다
@@ -9308,6 +9314,7 @@ breakText	Glyphs	글리프
 @msg	give a pattern name or select an object painted with a pattern	패턴 이름을 지정하거나 패턴으로 칠한 개체를 선택하세요
 @msg	give at least one of clip, invert, disabled, linked	clip, invert, disabled, linked 중 하나 이상을 지정하세요
 @msg	give color, none, swatch or gradient	color, none, swatch 또는 gradient를 지정하세요
+@msg	give color, none, swatch, gradient or opacity	color, none, swatch, gradient 또는 opacity를 지정하세요
 @msg	give dataBase64	dataBase64를 지정하세요
 @msg	give either at (a click) or area (a path drawn around the overlaps)	at(클릭) 또는 area(겹친 부분 둘레에 그린 패스) 중 하나를 지정하세요
 @msg	give exactly one of `at`, `rect` and `points`	`at`, `rect`, `points` 중 정확히 하나를 지정하세요

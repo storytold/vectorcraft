@@ -2650,6 +2650,7 @@
 	Fill & Stroke	შევსება და კონტური
 	Fill Color	შევსების ფერი
 	Opacity	გაუმჭვირვალობა
+	Show Opacity	გაუმჭვირვალობის ჩვენება
 	Stroke Color	კონტურის ფერი
 	Fill Gradient	შევსების გრადიენტი
 	Stroke Gradient	კონტურის გრადიენტი
@@ -9468,6 +9469,11 @@ axis	Y Axis	Y ღერძი
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` და `maxItems` უნდა იყოს 0-{MAX_LIST}, `maxItems` მინიმუმ 1, ხოლო ნაგულისხმევ მნიშვნელობაში უნდა იყოს ამდენი ელემენტი
 @msg	`name` must be a string	`name` უნდა იყოს სტრიქონი
 @msg	`opacity` must be a number	`opacity` უნდა იყოს რიცხვი
+@msg	`opacity` must be a number from 0 to 100	`opacity` უნდა იყოს რიცხვი 0-დან 100-მდე
+@msg	`opacity` must be true or false	`opacity` უნდა იყოს true ან false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	ტექსტის სიმბოლოებს საკუთარი გაუმჭვირვალობა არ აქვთ: დაამატეთ შევსება ან კონტური იერსახის პანელის ბრძანებით ახალი შევსების დამატება ან ახალი კონტურის დამატება
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	სიმბოლოს ეგზემპლარში არჩეულ ობიექტს შევსების ან კონტურის საკუთარი გაუმჭვირვალობა არ აქვს
+@msg	no target has that fill or stroke to take the opacity	არცერთ სამიზნეს არ აქვს ის შევსება ან კონტური, რომელიც გაუმჭვირვალობას მიიღებს
 @msg	`type` must be "path" or "compound"	`type` უნდა იყოს "path" ან "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` უნდა შედგებოდეს 1-{MAX_UNIT} დასაბეჭდი სიმბოლოსგან
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen`-ში `{other}`-ისთვის უნდა იყოს 1-დან {MAX_CONDITION_VALUES}-მდე მნიშვნელობა

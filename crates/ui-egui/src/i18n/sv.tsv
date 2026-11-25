@@ -2555,6 +2555,7 @@ font-technology	Variable	Variabla
 	One Point Perspective Preset 5	Förinställning 5 för enpunktsperspektiv
 	Only Web Colors	Endast webbfärger
 	Opacity	Opacitet
+	Show Opacity	Visa opacitet
 	Opacity & Mask Define Knockout Shape	Opacitet och mask definierar utsparningsform
 	Opacity Mask	Opacitetsmask
 	Opacity Mask Info	Info om opacitetsmask
@@ -7367,6 +7368,11 @@ axis	Y Axis	Y-axel
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` och `maxItems` måste vara 0-{MAX_LIST}, `maxItems` minst 1, och standardvärdet måste ha så många poster
 @msg	`name` must be a string	`name` måste vara en sträng
 @msg	`opacity` must be a number	`opacity` måste vara ett tal
+@msg	`opacity` must be a number from 0 to 100	`opacity` måste vara ett tal från 0 till 100
+@msg	`opacity` must be true or false	`opacity` måste vara true eller false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	tecken i text har ingen egen opacitet: lägg till en fyllning eller kontur med Lägg till ny fyllning eller Lägg till ny kontur i panelen Utseende
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	ett objekt som är markerat i en symbolinstans har ingen egen opacitet för fyllning eller kontur
+@msg	no target has that fill or stroke to take the opacity	inget mål har den fyllningen eller konturen som kan ta emot opaciteten
 @msg	`type` must be "path" or "compound"	`type` måste vara "path" eller "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` måste ha 1-{MAX_UNIT} utskrivbara tecken
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` måste ange 1 till {MAX_CONDITION_VALUES} värden för `{other}`
@@ -9327,6 +9333,7 @@ digits	Hindi	Hindi
 @msg	give a pattern name or select an object painted with a pattern	ange ett mönsternamn eller markera ett objekt som är målat med ett mönster
 @msg	give at least one of clip, invert, disabled, linked	ange minst en av clip, invert, disabled, linked
 @msg	give color, none, swatch or gradient	ange color, none, swatch eller gradient
+@msg	give color, none, swatch, gradient or opacity	ange color, none, swatch, gradient eller opacity
 @msg	give dataBase64	ange dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	ange antingen at (ett klick) eller area (en bana ritad runt överlappningarna)
 @msg	give formats or a preset, not both	ange formats eller en förinställning, inte båda
