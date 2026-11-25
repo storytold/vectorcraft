@@ -94,6 +94,7 @@ pub(crate) mod slices;
 pub mod spelling;
 mod stroke;
 mod style;
+pub use style::styled_node;
 pub mod stylelib;
 mod svgfilter;
 mod swatch;
@@ -854,10 +855,14 @@ pub(crate) use object::bounds_rewrite;
 pub(crate) use object::{keep_aligned_in, refresh_pixel_aligned};
 /// The rules `object.scale`, `object.reflect` and `object.shear` check their params with.
 pub use object::{reflect_axis, scale_factors, shear_tangent};
-pub(crate) use paint::LIVE_PAINT_BUCKET;
+pub(crate) use paint::{LIVE_PAINT_BUCKET, asks_defaults_only};
 pub use plugin_call::{Location, ParamsPlace, key_location, location_in, location_keys};
 pub use select::SIMILAR;
 pub(crate) use vectorcraft_doc::range::parse_range;
+
+/// What the fill and stroke proxies read from the selected objects, kept with the selection
+/// ([`crate::doc_state::SelectionRecord`]).
+pub(crate) use paint::SelectionPaints;
 
 /// A date param in Unix seconds that defaults to the clock: `None` when absent (now, see
 /// [`clock_date`]), `Some(None)` for null (no date), else `Some(Some(seconds))`.

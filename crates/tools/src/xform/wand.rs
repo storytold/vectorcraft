@@ -145,7 +145,12 @@ impl Tool for LassoTool {
                 let poly = std::mem::take(&mut self.points);
                 let (add, sub) = (ev.mods.shift, ev.mods.alt);
                 if poly.len() < 3 {
-                    return if add || sub { vec![] } else { vec![Action::Exec("select.none".into(), json!({}))] };
+                    if add || sub {
+                        return vec![];
+                    }
+                    // The click deselects everything, so no mesh point stays picked.
+                    self.mesh.unfocus();
+                    return vec![Action::Exec("select.none".into(), json!({}))];
                 }
                 vec![lasso_select(cx, &mut self.mesh, &poly, add, sub)]
             }
@@ -165,7 +170,7 @@ impl Tool for LassoTool {
         self.mesh.options()
     }
 
-    /// Pick the gradient mesh points the Eyedropper held (`meshPoints`).
+    /// Pick the gradient mesh points the tool chosen before held (`meshPoints`).
     fn set_option(&mut self, key: &str, value: &Value) {
         if key == "meshPoints" {
             self.mesh.set_options(value);

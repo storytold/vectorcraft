@@ -512,7 +512,7 @@ mod tests {
         assert_eq!(a, vec![Action::Preview("object.blend.setEasing".into(), json!({"id": id.0, "ramp": 0.0}))], "clamped at 0");
         let a = t.pointer(&c, &ev(PointerKind::Drag, at + Vec2::new(500.0, 0.0)));
         assert_eq!(a, vec![Action::Preview("object.blend.setEasing".into(), json!({"id": id.0, "ramp": 100.0}))], "clamped at 100");
-        assert_eq!(t.pointer(&c, &ev(PointerKind::Up, at)), vec![Action::Commit]);
+        assert_eq!(t.pointer(&c, &ev(PointerKind::Up, at + Vec2::new(500.0, 0.0))), vec![Action::Commit]);
         // A click that doesn't move sends nothing.
         assert!(t.pointer(&c, &ev(PointerKind::Down, at)).is_empty());
         assert!(t.pointer(&c, &ev(PointerKind::Up, at)).is_empty());
@@ -544,6 +544,16 @@ mod tests {
         t.pointer(&c, &ev(PointerKind::Down, w[1].at));
         let a = t.pointer(&c, &ev(PointerKind::Drag, w[1].at + Vec2::new(40.0, 10.0)));
         assert_eq!(a[1], Action::Preview("object.blend.setEasing".into(), json!({"id": id.0, "ramp": 50.0})));
+    }
+
+    /// A drag with the Selection tool reads where it is released, and a tool switch cancels it.
+    #[test]
+    fn a_drag_reads_its_release() {
+        let (d, _, s) = blend_doc(&[(100.0, 200.0), (300.0, 200.0)], eased());
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        let at = Point::new(200.0, 216.0);
+        check_widget_release_and_tool_switch(&c, at, at + Vec2::new(20.0, 0.0), at + Vec2::new(40.0, 0.0));
     }
 
     /// Switching away from the Selection or Blend tool during a drag cancels it, and after a press
