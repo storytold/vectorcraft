@@ -550,6 +550,18 @@ fn continuous_arc_after_a_line(s: &mut Session, v: ViewInfo) {
     key(s, ToolKey::AltTap);
 }
 
+/// Whether the tool shows only the path's points and its length handles (a handle and the line to
+/// it from the path's end): no hover preview, label or Smart Guide.
+fn only_points(s: &mut Session, v: ViewInfo) -> bool {
+    let o = s.overlays(v);
+    let handles: Vec<Point> = o.iter().filter_map(|o| if let Overlay::Handle { p, .. } = o { Some(*p) } else { None }).collect();
+    o.iter().all(|o| match o {
+        Overlay::CurvePoint { .. } | Overlay::Handle { .. } => true,
+        Overlay::Line { b, .. } => handles.contains(b),
+        _ => false,
+    })
+}
+
 /// The last point of the path the tool drew (any other path is a two-point line).
 fn drawn_end(s: &Session) -> Point {
     let drawn = paths(s).into_iter().find(|(_, p)| p.subpaths[0].anchors.len() >= 3).unwrap();
@@ -710,9 +722,8 @@ fn a_hover_shows_nothing_after_smart_guides_change() {
     s.pointer(&PointerEvent::new(PointerKind::Move, at.x, at.y), on).unwrap();
     let off_anchor = label(&mut s, on).unwrap() - at;
     assert!(off_anchor.x > 0.0 && (off_anchor.x - off_anchor.y).abs() < 1e-9, "the label sits diagonally off the anchor: {off_anchor:?}");
-    let only_points = |s: &mut Session, v: ViewInfo| s.overlays(v).iter().all(|o| matches!(o, Overlay::CurvePoint { .. }));
     assert!(!only_points(&mut s, on));
-    assert!(only_points(&mut s, off), "only the path's points show");
+    assert!(only_points(&mut s, off), "only the path's points and length handles show");
     // A click before the pointer moves does not bring the stale hover back.
     press_in(&mut s, &[(400.0, 300.0)], off);
     assert_eq!(label(&mut s, off), None, "no label for the stale hover after the click");
@@ -746,7 +757,6 @@ fn a_click_that_adds_nothing_keeps_a_stale_hover_hidden() {
     s.execute("select.set", &json!({"ids": []})).unwrap();
     continuous_arc_after_a_line(&mut s, on);
     s.pointer(&PointerEvent::new(PointerKind::Move, 200.0, 100.0), on).unwrap();
-    let only_points = |s: &mut Session, v: ViewInfo| s.overlays(v).iter().all(|o| matches!(o, Overlay::CurvePoint { .. }));
     assert!(!only_points(&mut s, on), "the anchor's guide shows");
     assert!(only_points(&mut s, off));
     let steps = undo_steps(&s);
@@ -889,6 +899,467 @@ fn path_quick_pen_refuses_bad_params() {
     s.execute("path.quickPen", &json!({"id": id, "closed": true})).unwrap();
     assert!(s.execute("path.quickPen", &json!({"id": id, "pieces": [{"x": 5, "y": 5}]})).is_err(), "closed");
     assert_eq!(paths(&s).len(), before.len());
+}
+
+/// The handle beyond the end of the path being drawn makes its last line longer, as one undo step,
+/// and the next click goes on from the new end.
+#[test]
+fn dragging_the_end_handle_lengthens_the_last_line() {
+    let mut s = session();
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    click(&mut s, 200.0, 100.0);
+    let undo = undo_steps(&s);
+    // The handle stands 20 screen points beyond the end, along the line.
+    press(&mut s, &[(220.0, 100.0), (250.0, 130.0), (280.0, 140.0)]);
+    let ends: Vec<Point> = only_path(&s).anchors.iter().map(|a| a.p).collect();
+    assert_eq!(ends, [pt(100.0, 100.0), pt(260.0, 100.0)]);
+    assert_eq!(undo_steps(&s), undo + 1);
+    click(&mut s, 260.0, 200.0);
+    let ends: Vec<Point> = only_path(&s).anchors.iter().map(|a| a.p).collect();
+    assert_eq!(ends, [pt(100.0, 100.0), pt(260.0, 100.0), pt(260.0, 200.0)], "the drawing went on");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(only_path(&s).anchors.last().unwrap().p, pt(200.0, 100.0));
+}
+
+/// Dragged by its end handle, the last sharp-corner arc goes on around its circle and stays the
+/// last piece, so C still flips it and `[` `]` still change its size.
+#[test]
+fn a_dragged_last_arc_still_flips() {
+    let mut s = session();
+    quick_pen(&mut s);
+    s.set_tool_option_cmd(&json!({"tool": "quickPen", "key": "action", "value": "sharpArc"})).unwrap();
+    click(&mut s, 100.0, 300.0);
+    click(&mut s, 300.0, 300.0);
+    let undo = undo_steps(&s);
+    // The half circle over (200, 300) ends heading down, so its end handle is 20 points below. The
+    // handle turned a quarter around the center, to (180, 400), takes the end to (200, 400).
+    press(&mut s, &[(300.0, 320.0), (260.0, 400.0), (180.0, 400.0)]);
+    let sp = only_path(&s);
+    assert!(sp.anchors.last().unwrap().p.distance(pt(200.0, 400.0)) < 1e-6, "three quarters around: {:?}", sp.anchors.last());
+    assert_eq!(sp.anchors.len(), 4);
+    assert_eq!(undo_steps(&s), undo + 1);
+    assert!(s.tool_claims_key(ToolKey::Letter('c'), view()));
+    key(&mut s, ToolKey::Letter('c'));
+    let flipped = only_path(&s);
+    assert_ne!(flipped, sp);
+    assert!(flipped.anchors.last().unwrap().p.distance(pt(200.0, 400.0)) < 1e-6);
+    assert_eq!(undo_steps(&s), undo + 2);
+    // `]` makes the dragged arc 15° larger: it keeps its ends and gains its own undo step.
+    key(&mut s, ToolKey::BracketRight);
+    let larger = only_path(&s);
+    assert_ne!(larger, flipped);
+    assert!(larger.anchors.last().unwrap().p.distance(pt(200.0, 400.0)) < 1e-6);
+    assert_eq!(undo_steps(&s), undo + 3);
+}
+
+/// Dragged back past its start, the last sharp-corner arc stops at 1°.
+#[test]
+fn a_dragged_last_arc_keeps_at_least_one_degree() {
+    let mut s = session();
+    quick_pen(&mut s);
+    s.set_tool_option_cmd(&json!({"tool": "quickPen", "key": "action", "value": "sharpArc"})).unwrap();
+    click(&mut s, 100.0, 300.0);
+    click(&mut s, 300.0, 300.0);
+    // The half circle about (200, 300) runs over the top from (100, 300) to (300, 300); its end
+    // handle is 20 points below the end. The pointer goes back around the circle from there, past
+    // the start of the arc.
+    let (c, r) = (pt(200.0, 300.0), (100.0f64 * 100.0 + 20.0 * 20.0).sqrt());
+    let a0 = 20.0f64.atan2(100.0);
+    let mut pts = vec![(300.0, 320.0)];
+    for d in [45.0f64, 90.0, 135.0, 175.0, 185.0] {
+        let a = a0 - d.to_radians();
+        pts.push((c.x + r * a.cos(), c.y + r * a.sin()));
+    }
+    press(&mut s, &pts);
+    let sp = only_path(&s);
+    let one = 181f64.to_radians();
+    let end = pt(200.0 + 100.0 * one.cos(), 300.0 + 100.0 * one.sin());
+    assert!(sp.anchors.last().unwrap().p.distance(end) < 1e-6, "{:?}", sp.anchors.last());
+    assert_eq!(sp.anchors.first().unwrap().p, pt(100.0, 300.0));
+}
+
+/// When the last arc goes on around the circle of the arc before it, its end handle still changes
+/// the last arc alone, which C then still flips.
+#[test]
+fn the_end_handle_changes_the_last_arc_on_a_shared_circle() {
+    let mut s = session();
+    quick_pen(&mut s);
+    s.set_tool_option_cmd(&json!({"tool": "quickPen", "key": "action", "value": "sharpArc"})).unwrap();
+    click(&mut s, 100.0, 300.0);
+    click(&mut s, 300.0, 300.0);
+    s.set_tool_option_cmd(&json!({"tool": "quickPen", "key": "turn", "value": 90})).unwrap();
+    // A quarter more around the circle about (200, 300), ending heading left.
+    click(&mut s, 200.0, 400.0);
+    let r = 100.0 * std::f64::consts::FRAC_1_SQRT_2;
+    let to = pt(200.0 - r, 300.0 + r);
+    // The handle at (180, 400) turned 45° more around the center takes the end there with it.
+    let (sin, cos) = std::f64::consts::FRAC_PI_4.sin_cos();
+    let (hx, hy) = (-20.0, 100.0);
+    let pointer = (200.0 + hx * cos - hy * sin, 300.0 + hx * sin + hy * cos);
+    press(&mut s, &[(180.0, 400.0), (170.0, 400.0), pointer]);
+    let sp = only_path(&s);
+    assert!(sp.anchors.last().unwrap().p.distance(to) < 1e-6, "135° from (300, 300): {:?}", sp.anchors.last());
+    assert!(sp.anchors.get(2).unwrap().p.distance(pt(300.0, 300.0)) < 1e-9, "the first arc stays");
+    assert!(s.tool_claims_key(ToolKey::Letter('c'), view()));
+}
+
+/// Once another path is selected while one was being drawn, the selected path shows its handles.
+#[test]
+fn another_selected_path_shows_its_handles() {
+    let mut s = session();
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    click(&mut s, 200.0, 100.0);
+    let r = s.execute("shape.line", &json!({"x1": 300, "y1": 300, "x2": 400, "y2": 300})).unwrap();
+    s.execute("select.set", &json!({"ids": [r["id"]]})).unwrap();
+    let handle =
+        |s: &mut Session| s.overlays(view()).iter().any(|o| matches!(o, vectorcraft_tools::Overlay::Handle { p, .. } if *p == pt(420.0, 300.0)));
+    assert!(handle(&mut s));
+    assert_eq!(s.cursor(pt(420.0, 300.0), Mods::default(), view()), vectorcraft_tools::Cursor::Move);
+}
+
+/// A selected path that is not being drawn shows its handles: the one before its start makes the
+/// first arc shorter around its circle. Escape during a drag takes the drag back.
+#[test]
+fn the_start_handle_of_a_selected_path_shortens_its_arc() {
+    let mut s = session();
+    let r = s
+        .execute("path.quickPen", &json!({"start": [100, 100], "pieces": [{"x": 200, "y": 100, "action": "sharpArc"}, {"x": 300, "y": 100}]}))
+        .unwrap();
+    s.execute("select.set", &json!({"ids": [r["id"]]})).unwrap();
+    quick_pen(&mut s);
+    let undo = undo_steps(&s);
+    let before = only_path(&s);
+    // The half circle leaves (100, 100) heading up, so its start handle is 20 points below.
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 120.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 150.0, 70.0), v).unwrap();
+    assert_ne!(only_path(&s), before, "previewed");
+    key(&mut s, ToolKey::Escape);
+    s.pointer(&PointerEvent::new(PointerKind::Up, 150.0, 70.0), v).unwrap();
+    assert_eq!(only_path(&s), before, "taken back");
+    assert_eq!(undo_steps(&s), undo);
+    // The handle turned a quarter around the center, to (130, 50), takes the start to the top of
+    // the circle: the arc is a quarter from there to (200, 100).
+    press(&mut s, &[(100.0, 120.0), (130.0, 50.0)]);
+    let sp = only_path(&s);
+    assert!(sp.anchors.first().unwrap().p.distance(pt(150.0, 50.0)) < 1e-6, "{:?}", sp.anchors.first());
+    assert_eq!(sp.anchors.len(), 3);
+    assert_eq!(undo_steps(&s), undo + 1);
+}
+
+/// A click on a length handle that does not drag is an ordinary click: while drawing it adds a
+/// point there, and with no path being drawn it starts a new path.
+#[test]
+fn a_click_on_a_handle_adds_a_point() {
+    let mut s = session();
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    click(&mut s, 200.0, 100.0);
+    let undo = undo_steps(&s);
+    click(&mut s, 220.0, 100.0);
+    let ends: Vec<Point> = only_path(&s).anchors.iter().map(|a| a.p).collect();
+    assert_eq!(ends, [pt(100.0, 100.0), pt(200.0, 100.0), pt(220.0, 100.0)]);
+    assert_eq!(undo_steps(&s), undo + 1);
+    // After Escape the path stays selected with its handles; a click on one starts a new path.
+    key(&mut s, ToolKey::Escape);
+    assert_eq!(s.cursor(pt(240.0, 100.0), Mods::default(), view()), vectorcraft_tools::Cursor::Move);
+    click(&mut s, 240.0, 100.0);
+    assert_eq!(paths(&s).len(), 2);
+}
+
+/// During a length drag the tool shows the handle and no preview of a next piece to where the
+/// pointer was before the press.
+#[test]
+fn a_length_drag_shows_no_next_piece() {
+    let mut s = session();
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    click(&mut s, 200.0, 100.0);
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Move, 220.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 220.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 280.0, 100.0), v).unwrap();
+    let o = s.overlays(v);
+    assert!(o.iter().any(|o| matches!(o, vectorcraft_tools::Overlay::Handle { .. })));
+    assert!(!o.iter().any(|o| matches!(o, vectorcraft_tools::Overlay::Path { .. } | vectorcraft_tools::Overlay::Measure { .. })), "{o:?}");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 280.0, 100.0), v).unwrap();
+    assert_eq!(only_path(&s).anchors.last().unwrap().p, pt(260.0, 100.0));
+}
+
+/// A press on a length handle clears the Smart Guides of the hover before it, so none show during
+/// the drag.
+#[test]
+fn a_length_drag_shows_no_smart_guide() {
+    let mut s = session();
+    s.execute("shape.line", &json!({"x1": 220, "y1": 100, "x2": 220, "y2": 300})).unwrap();
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    click(&mut s, 200.0, 100.0);
+    let on = ViewInfo { smart_guides: true, ..Default::default() };
+    // The end handle stands on the other line's anchor, so the hover there shows its guide.
+    s.pointer(&PointerEvent::new(PointerKind::Move, 220.0, 100.0), on).unwrap();
+    assert!(!only_points(&mut s, on), "the anchor's guide shows");
+    s.pointer(&PointerEvent::new(PointerKind::Down, 220.0, 100.0), on).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 280.0, 140.0), on).unwrap();
+    assert!(only_points(&mut s, on), "no guide during the drag: {:?}", s.overlays(on));
+    s.pointer(&PointerEvent::new(PointerKind::Up, 280.0, 140.0), on).unwrap();
+    let drawn = paths(&s).into_iter().find(|(_, p)| p.subpaths[0].anchors.first().is_some_and(|a| a.p == pt(100.0, 100.0))).unwrap();
+    assert_eq!(drawn.1.subpaths[0].anchors.last().unwrap().p, pt(260.0, 100.0));
+}
+
+/// A length drag that would take the path past the canvas leaves it where the drag last put it,
+/// and the drawing goes on from there.
+#[test]
+fn a_length_drag_stays_on_the_canvas() {
+    let mut s = session();
+    quick_pen(&mut s);
+    let x = vectorcraft_doc::MAX_COORD - 1000.0;
+    click(&mut s, x, 100.0);
+    click(&mut s, x + 500.0, 100.0);
+    let undo = undo_steps(&s);
+    let before = only_path(&s);
+    // The end handle is at x + 520; a drag to x + 2000 would put the end at x + 1980, past the canvas.
+    press(&mut s, &[(x + 520.0, 100.0), (x + 2000.0, 100.0)]);
+    assert_eq!(only_path(&s), before);
+    assert_eq!(undo_steps(&s), undo);
+    press(&mut s, &[(x + 520.0, 100.0), (x + 820.0, 100.0)]);
+    assert_eq!(only_path(&s).anchors.last().unwrap().p, pt(x + 800.0, 100.0));
+    assert_eq!(undo_steps(&s), undo + 1);
+    click(&mut s, x + 800.0, 200.0);
+    assert_eq!(only_path(&s).anchors.len(), 3, "the drawing went on");
+}
+
+/// A length drag across a line, or out along it and back, leaves its length as it was: it changes
+/// nothing and records no undo step, on the path being drawn and on a selected path.
+#[test]
+fn a_length_drag_that_keeps_the_length_records_no_undo_step() {
+    let mut s = session();
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    click(&mut s, 200.0, 100.0);
+    let undo = undo_steps(&s);
+    let before = only_path(&s);
+    // The end handle is at (220, 100); the first drag goes straight down from it, the second out
+    // along the line and back.
+    for drag in [[(220.0, 100.0), (220.0, 160.0), (220.0, 160.0)], [(220.0, 100.0), (260.0, 100.0), (220.0, 100.0)]] {
+        press(&mut s, &drag);
+        assert_eq!(only_path(&s), before, "{drag:?}");
+        assert_eq!(undo_steps(&s), undo, "{drag:?}");
+    }
+    key(&mut s, ToolKey::Escape);
+    let undo = undo_steps(&s);
+    for drag in [[(220.0, 100.0), (220.0, 160.0), (220.0, 160.0)], [(220.0, 100.0), (260.0, 100.0), (220.0, 100.0)]] {
+        press(&mut s, &drag);
+        assert_eq!(only_path(&s), before, "{drag:?}");
+        assert_eq!(undo_steps(&s), undo, "{drag:?}");
+    }
+}
+
+/// The paths of a selected compound path show length handles, also after a drag selected the
+/// compound again.
+#[test]
+fn a_compound_path_shows_the_length_handles_of_its_paths() {
+    let mut s = session();
+    let a = s.execute("path.quickPen", &json!({"start": [100, 100], "pieces": [{"x": 200, "y": 100}]})).unwrap();
+    let b = s.execute("path.quickPen", &json!({"start": [100, 300], "pieces": [{"x": 200, "y": 300}]})).unwrap();
+    s.execute("select.set", &json!({"ids": [a["id"], b["id"]]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    quick_pen(&mut s);
+    press(&mut s, &[(220.0, 100.0), (250.0, 100.0), (280.0, 100.0)]);
+    press(&mut s, &[(220.0, 300.0), (250.0, 300.0), (270.0, 300.0)]);
+    let mut ends: Vec<Point> = paths(&s).iter().filter_map(|(_, pd)| pd.subpaths[0].anchors.last().map(|a| a.p)).collect();
+    ends.sort_by(|p, q| p.y.total_cmp(&q.y));
+    assert_eq!(ends, [pt(260.0, 100.0), pt(250.0, 300.0)]);
+}
+
+/// An edit made outside the tool during a length press ends the press: a later drag does not
+/// preview from the path as the press found it, and so does not undo the edit.
+#[test]
+fn an_outside_edit_during_a_length_press_is_kept() {
+    // The edit comes before the first drag event, or after the drag began.
+    for began in [false, true] {
+        let mut s = session();
+        quick_pen(&mut s);
+        click(&mut s, 100.0, 100.0);
+        click(&mut s, 200.0, 100.0);
+        let v = view();
+        let id = paths(&s)[0].0.0;
+        s.pointer(&PointerEvent::new(PointerKind::Down, 220.0, 100.0), v).unwrap();
+        if began {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, 250.0, 100.0), v).unwrap();
+        }
+        s.execute("path.quickPenLength", &json!({"id": id, "length": 40})).unwrap();
+        let edited = only_path(&s);
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 280.0, 100.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, 280.0, 100.0), v).unwrap();
+        assert_eq!(only_path(&s), edited, "began: {began}");
+    }
+    // Escape after the edit takes the drag back without taking the edit back.
+    let mut s = session();
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    click(&mut s, 200.0, 100.0);
+    let v = view();
+    let id = paths(&s)[0].0.0;
+    s.pointer(&PointerEvent::new(PointerKind::Down, 220.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 250.0, 100.0), v).unwrap();
+    s.execute("path.quickPenLength", &json!({"id": id, "length": 40})).unwrap();
+    let edited = only_path(&s);
+    key(&mut s, ToolKey::Escape);
+    s.pointer(&PointerEvent::new(PointerKind::Up, 250.0, 100.0), v).unwrap();
+    assert_eq!(only_path(&s), edited, "escape");
+}
+
+/// C and `[` `]` wait for a length drag to end: they neither add an undo step of their own nor
+/// change the arc the drag is changing.
+#[test]
+fn piece_keys_do_nothing_during_a_length_drag() {
+    let mut s = session();
+    quick_pen(&mut s);
+    s.set_tool_option_cmd(&json!({"tool": "quickPen", "key": "action", "value": "sharpArc"})).unwrap();
+    click(&mut s, 100.0, 300.0);
+    click(&mut s, 300.0, 300.0);
+    let undo = undo_steps(&s);
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 300.0, 320.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 260.0, 400.0), v).unwrap();
+    let during = only_path(&s);
+    for k in [ToolKey::Letter('c'), ToolKey::BracketRight, ToolKey::BracketLeft] {
+        assert!(s.tool_claims_key(k, view()), "{k:?} stays with the tool");
+        key(&mut s, k);
+        assert_eq!(only_path(&s), during, "{k:?}");
+    }
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 180.0, 400.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 180.0, 400.0), v).unwrap();
+    assert_eq!(undo_steps(&s), undo + 1);
+    assert!(only_path(&s).anchors.last().unwrap().p.distance(pt(200.0, 400.0)) < 1e-6);
+}
+
+/// Choosing Quick Pen again during a length drag leaves the drawing alone: the drag goes on, ends
+/// where the pointer is let go, and the next click goes on drawing the same path.
+#[test]
+fn choosing_the_tool_again_during_a_length_drag_keeps_the_drawing() {
+    let mut s = session();
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    click(&mut s, 200.0, 100.0);
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 220.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 250.0, 130.0), v).unwrap();
+    quick_pen(&mut s);
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 280.0, 140.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 280.0, 140.0), v).unwrap();
+    let ends: Vec<Point> = only_path(&s).anchors.iter().map(|a| a.p).collect();
+    assert_eq!(ends, [pt(100.0, 100.0), pt(260.0, 100.0)]);
+    click(&mut s, 260.0, 200.0);
+    assert_eq!(paths(&s).len(), 1, "the drawing went on");
+    assert_eq!(only_path(&s).anchors.len(), 3);
+}
+
+/// A length drag ends where the pointer is let go, also when no drag event came after the press.
+#[test]
+fn a_length_drag_ends_at_the_release_point() {
+    let mut s = session();
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    click(&mut s, 200.0, 100.0);
+    let undo = undo_steps(&s);
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 220.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 250.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 280.0, 100.0), v).unwrap();
+    assert_eq!(only_path(&s).anchors.last().unwrap().p, pt(260.0, 100.0));
+    assert_eq!(undo_steps(&s), undo + 1);
+    // A press let go away from the handle without a drag event drags too.
+    s.pointer(&PointerEvent::new(PointerKind::Down, 280.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 320.0, 100.0), v).unwrap();
+    assert_eq!(only_path(&s).anchors.last().unwrap().p, pt(300.0, 100.0));
+    assert_eq!(only_path(&s).anchors.len(), 2);
+    assert_eq!(undo_steps(&s), undo + 2);
+}
+
+/// `path.quickPenLength` refuses a result past the canvas, not only one past the input limit.
+#[test]
+fn path_quick_pen_length_stays_on_the_canvas() {
+    let mut s = session();
+    let x = vectorcraft_doc::MAX_COORD - 500_000.0;
+    let r = s.execute("path.quickPen", &json!({"start": [x, 0], "pieces": [{"x": x + 10.0, "y": 0}]})).unwrap();
+    let id = r["id"].as_u64().unwrap();
+    let before = only_path(&s);
+    let undo = undo_steps(&s);
+    let e = s.execute("path.quickPenLength", &json!({"id": id, "length": 1_000_000})).unwrap_err().to_string();
+    assert!(e.contains("would exceed the canvas"), "{e}");
+    assert_eq!(only_path(&s), before);
+    assert_eq!(undo_steps(&s), undo);
+    s.execute("path.quickPenLength", &json!({"id": id, "length": 400_000})).unwrap();
+    assert_eq!(only_path(&s).anchors.last().unwrap().p, pt(x + 400_000.0, 0.0));
+}
+
+/// Dragged by the start handle while the path is being drawn, the first line changes and the last
+/// sharp-corner arc stays the last piece, so C still flips it.
+#[test]
+fn the_start_handle_keeps_the_last_arc_a_piece() {
+    let mut s = session();
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 300.0);
+    click(&mut s, 200.0, 300.0);
+    s.set_tool_option_cmd(&json!({"tool": "quickPen", "key": "action", "value": "sharpArc"})).unwrap();
+    click(&mut s, 400.0, 300.0);
+    assert!(s.tool_claims_key(ToolKey::Letter('c'), view()));
+    let undo = undo_steps(&s);
+    // The line leaves (100, 300) heading left, seen from the start, so its handle is 20 points left.
+    press(&mut s, &[(80.0, 300.0), (60.0, 300.0), (50.0, 300.0)]);
+    let sp = only_path(&s);
+    assert_eq!(sp.anchors.first().unwrap().p, pt(70.0, 300.0));
+    assert_eq!(undo_steps(&s), undo + 1);
+    assert!(s.tool_claims_key(ToolKey::Letter('c'), view()), "the last arc is still a piece");
+    key(&mut s, ToolKey::Letter('c'));
+    let flipped = only_path(&s);
+    assert_ne!(flipped, sp);
+    assert_eq!(flipped.anchors.first().unwrap().p, pt(70.0, 300.0));
+    assert!(flipped.anchors.last().unwrap().p.distance(pt(400.0, 300.0)) < 1e-9);
+}
+
+/// `path.quickPenLength` sets the length of a line or an arc at either end; the same length
+/// changes nothing and records no undo step; bad params are refused.
+#[test]
+fn path_quick_pen_length_sets_an_end() {
+    let mut s = session();
+    let r = s.execute("path.quickPen", &json!({"start": [0, 0], "pieces": [{"x": 100, "y": 0}, {"x": 200, "y": 0, "action": "sharpArc"}]})).unwrap();
+    let id = r["id"].as_u64().unwrap();
+    let r = s.execute("path.quickPenLength", &json!({"id": id, "end": "start", "length": 40})).unwrap();
+    assert_eq!((r["kind"].as_str(), r["length"].as_f64()), (Some("line"), Some(40.0)));
+    assert_eq!(only_path(&s).anchors.first().unwrap().p, pt(60.0, 0.0));
+    let undo = undo_steps(&s);
+    let r = s.execute("path.quickPenLength", &json!({"id": id, "length": std::f64::consts::PI * 50.0})).unwrap();
+    assert_eq!(r["kind"], "arc");
+    assert_eq!(undo_steps(&s), undo, "unchanged");
+    s.execute("path.quickPenLength", &json!({"id": id, "length": std::f64::consts::PI * 25.0})).unwrap();
+    assert!(only_path(&s).anchors.last().unwrap().p.distance(pt(150.0, -50.0)) < 1e-9);
+    assert_eq!(undo_steps(&s), undo + 1);
+    let before = paths(&s);
+    let bad: [Value; 7] = [
+        json!({"length": 10}),
+        json!({"id": id}),
+        json!({"id": id, "length": "10"}),
+        json!({"id": id, "length": 0}),
+        json!({"id": id, "length": 1e7, "end": "start"}),
+        json!({"id": id, "length": 10, "end": "middle"}),
+        json!({"id": id, "length": 10, "subpath": 1}),
+    ];
+    for p in bad {
+        assert!(s.execute("path.quickPenLength", &p).is_err(), "{p}");
+    }
+    let curve = s.execute("shape.line", &json!({"x1": 0, "y1": 300, "x2": 100, "y2": 300})).unwrap();
+    s.execute("path.convertAnchor", &json!({"id": curve["id"], "anchor": 1, "to": "smooth", "x": 150, "y": 360})).unwrap();
+    assert!(s.execute("path.quickPenLength", &json!({"id": curve["id"], "length": 10})).is_err(), "not a line or an arc");
+    s.execute("path.quickPen", &json!({"id": id, "closed": true})).unwrap();
+    assert!(s.execute("path.quickPenLength", &json!({"id": id, "length": 10})).is_err(), "closed");
+    assert_eq!(paths(&s).len(), before.len() + 1);
 }
 
 /// With `id` and `keep`, the points after the first `keep` are replaced by the pieces.

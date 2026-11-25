@@ -175,6 +175,16 @@ pub(crate) fn selected(app: &VectorcraftApp, n: usize) -> usize {
 /// The selected artboards (of `n`): while the Artboard tool is in use, those it has selected
 /// (Shift-click, #1139), else the active one.
 pub(crate) fn picked(app: &VectorcraftApp, n: usize) -> Vec<usize> {
+    let mut all = tool_selection(app, n);
+    if all.is_empty() {
+        all.push(selected(app, n));
+    }
+    all
+}
+
+/// The artboards (of `n`) the Artboard tool has selected while it is in use, sorted and once
+/// each; empty with another tool or with none selected.
+pub(crate) fn tool_selection(app: &VectorcraftApp, n: usize) -> Vec<usize> {
     let tool = (app.session.tool_id() == "artboard").then(|| app.session.tool_options()["selected"].clone());
     let mut all: Vec<usize> = tool
         .iter()
@@ -184,9 +194,6 @@ pub(crate) fn picked(app: &VectorcraftApp, n: usize) -> Vec<usize> {
         .filter_map(|i| usize::try_from(i).ok())
         .filter(|i| *i < n)
         .collect();
-    if all.is_empty() {
-        all.push(selected(app, n));
-    }
     all.sort_unstable();
     all.dedup();
     all
@@ -608,6 +615,16 @@ pub(crate) fn open_rearrange(app: &mut VectorcraftApp) {
     app.run("ui.menuDialog", json!({ "command": "artboard.rearrange" })).ok();
 }
 
+/// Open Rearrange for the selected artboards ([`picked`]), whose OK waits for a click on the
+/// canvas.
+pub(crate) fn open_rearrange_selected(app: &mut VectorcraftApp) {
+    let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
+    if n > 0 {
+        let indices = picked(app, n);
+        crate::dialogs::rearrange_artboards::open_selected(app, &indices);
+    }
+}
+
 /// The rows of the panel's menu.
 pub(crate) fn menu_rows(_app: &VectorcraftApp) -> Vec<PanelRow> {
     let command = |id: &'static str| PanelRow::Command(CommandRef::new(id));
@@ -621,6 +638,7 @@ pub(crate) fn menu_rows(_app: &VectorcraftApp) -> Vec<PanelRow> {
         command("artboard.convertToArtboards"),
         PanelRow::Command(CommandRef::with_params("tool.options", json!({"tool": "artboard"}))),
         PanelRow::Command(CommandRef::with_params("ui.menuDialog", json!({"command": "artboard.rearrange"}))),
+        command("ui.artboards.rearrange"),
         PanelRow::Separator,
         command("ui.artboards.fitToArt"),
     ]
@@ -638,12 +656,14 @@ pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
     set(CommandRef::new("artboard.convertToArtboards"), tl!("Convert to Artboards"), crate::menus::enabled(app, "artboard.convertToArtboards"));
     set(CommandRef::with_params("tool.options", json!({"tool": "artboard"})), tl!("Artboard Options…"), n > 0);
     set(CommandRef::with_params("ui.menuDialog", json!({"command": "artboard.rearrange"})), tl!("Rearrange All Artboards…"), n > 1);
+    set(CommandRef::new("ui.artboards.rearrange"), tl!("Rearrange…"), !tool_selection(app, n).is_empty());
     set(CommandRef::new("ui.artboards.fitToArt"), tl!("Fit to Artwork Bounds"), n > 0);
 }
 
 /// Run the panel menu's own row `id` (`ui.artboards.<row>`) → its result; None for any other id. Rename
 /// opens the name field on the active artboard's row when that artboard is selected, else on the first
-/// selected row.
+/// selected row. Rearrange… opens Rearrange for the artboards the Artboard tool has selected, and does
+/// nothing when it has none.
 pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option<Result<Value, String>> {
     let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
     match id {
@@ -658,6 +678,11 @@ pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option
         }
         "ui.artboards.deleteEmpty" => return Some(delete_empty(app)),
         "ui.artboards.fitToArt" => return Some(app.run("artboard.fitToArt", json!({ "indices": picked(app, n) }))),
+        "ui.artboards.rearrange" => {
+            if !tool_selection(app, n).is_empty() {
+                open_rearrange_selected(app);
+            }
+        }
         _ => return None,
     }
     Some(Ok(Value::Null))

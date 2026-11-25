@@ -243,6 +243,9 @@ fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: O
     let presenting = app.ui.screen_mode == 3;
     let mut out = Body { context_at: artboards::show(app, ui, space, win, kind).map(|p| space.view.to_screen(p)), ..Body::default() };
     grids(app, ui, space, win);
+    if live {
+        find_shown_tool(app, ui.ctx(), space);
+    }
     marks::show(app, ui, space, win, kind);
     if !presenting {
         crate::panels::tabs::stop_guide(app, ui, space);
@@ -289,6 +292,38 @@ fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: O
     drops::show(app, ui, win, kind);
     raster::picture(app, ui, space, win, kind);
     out
+}
+
+/// The keys held now, as the engine's tools read them, with `space` set while Space is down.
+pub(crate) fn held_mods(ctx: &egui::Context) -> vectorcraft_tools::Mods {
+    let (m, space) = ctx.input(|i| (i.modifiers, i.key_down(egui::Key::Space)));
+    mods(m, space)
+}
+
+/// The tool whose marks and widgets the canvas draws with the keys held now: while Cmd is held, the selection tool
+/// a press at the pointer borrows ([`find_shown_tool`]), else the active tool.
+pub(crate) fn shown_tool(app: &VectorcraftApp, ctx: &egui::Context) -> &'static str {
+    app.session.hover_tool_id(&held_mods(ctx))
+}
+
+/// Finds the tool whose marks and widgets the canvas draws this frame for the pointer where it is now
+/// ([`vectorcraft_engine::Session::hover_tool_at`]), which [`shown_tool`] then answers. While the view moves, the art
+/// under the pointer is not hit-tested again (#2452), and the last answer stays.
+fn find_shown_tool(app: &mut VectorcraftApp, ctx: &egui::Context, space: &CanvasSpace) {
+    let wait = cursor::hover_wait(&mut app.canvas.view_moved, ViewKey::of(&space.view), craft::ui::runtime::frame::clock(ctx));
+    if wait.is_some() {
+        return;
+    }
+    let held = held_mods(ctx);
+    let named = app.session.shown_tool_id(&held);
+    let at = ctx.input(|i| i.pointer.hover_pos()).filter(|p| space.view.rect.contains(*p)).map(|p| space.view.to_doc(p));
+    let view = app.view_info();
+    app.session.hover_tool_at(at, &held, view);
+    // The status bar and the help bar are drawn before the canvas: when the tool they name changes with this
+    // frame's pointer, they are drawn again.
+    if app.session.shown_tool_id(&held) != named {
+        ctx.request_repaint();
+    }
 }
 
 /// The document grid, in the picture slot under the art when Grids In Back is on and over it

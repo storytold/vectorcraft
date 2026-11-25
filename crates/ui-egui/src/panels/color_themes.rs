@@ -16,7 +16,8 @@ use craft::theme::variant::Tone;
 use craft::theme::{ModelValues, Rgba, Srgba};
 use craft::ui::buttons::IconButton;
 use craft::ui::choice::{SwatchSpacing, SwatchTable};
-use craft::ui::contract::{Bind, CollectionEvent, Entry, Props as _, Show as _, ShowCollection as _};
+use craft::ui::contract::{Bind, CollectionEvent, Entry, Props as _, Show as _, ShowCollection as _, ShowContainer as _};
+use craft::ui::layout_components::Row;
 use craft::ui::list::{List, ListRow, ThumbSize};
 use craft::ui::menu::PanelRow;
 use craft::ui::notices::Notice;
@@ -518,7 +519,7 @@ fn create(app: &mut VectorcraftApp, ui: &mut Ui) {
         d.sel = i;
     }
     sliders(ui, &mut d, &mut mode, &mut held);
-    ui.horizontal(|ui| {
+    Row::new().show(ui, |ui, _| {
         let hex = d.colors.get(d.sel).map(hex_rgba).unwrap_or(Rgba::rgb(0, 0, 0));
         let mut edited = hex;
         HexField::hex(tl!("Color"), Bind::bound(&mut edited)).show(ui);
