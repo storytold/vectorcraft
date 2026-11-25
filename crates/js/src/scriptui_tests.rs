@@ -712,6 +712,20 @@ fn a_palette_event_does_not_run_a_handler_once_a_getter_closed_the_palette() {
 }
 
 #[test]
+fn a_palette_event_runs_no_more_listeners_once_one_closed_the_palette() {
+    let (mut r, calls) = palette_realm(vec![palette_event(1.0, click(1))]);
+    r.run(
+        "var p = new Window('palette'); var b = p.add('button', undefined, 'Go'); var later = 0; \
+         b.addEventListener('click', function () { p.close(); }); b.addEventListener('click', function () { later++; }); \
+         p.addEventListener('click', function () { later++; }); p.show();",
+    )
+    .unwrap();
+    r.run("Window.__vcPaletteEvent();").unwrap();
+    assert!(calls.borrow().contains(&("paletteClose".into(), 1.0)));
+    assert_eq!(r.run("later").unwrap(), JsValue::Number(0.0), "neither the next listener nor the palette's runs after the close");
+}
+
+#[test]
 fn a_palette_list_change_does_not_run_on_change_once_an_item_s_text_getter_closed_the_palette() {
     let (mut r, _) = palette_realm(vec![seen_list_change(1.0)]);
     // The event reads the first item's text twice: for the palette's description, then to compare

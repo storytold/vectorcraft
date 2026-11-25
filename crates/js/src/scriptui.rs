@@ -939,8 +939,10 @@ fn event_stop(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Val
 }
 
 /// Runs the listeners for `ty` on `at` (only those for `capture` unless it is `None`), with `event`,
-/// in the order they were added. A listener that an earlier one removed does not run.
-fn run_listeners(i: &mut Interp, at: ObjId, ty: &str, capture: Option<bool>, event: ObjId, phase: f64) -> JsResult<bool> {
+/// in the order they were added. A listener that an earlier one removed does not run, and none
+/// runs once the palette of `taker` no longer takes the event. → whether it had any; `None` when
+/// the palette stopped taking the event.
+fn run_listeners(i: &mut Interp, at: ObjId, ty: &str, capture: Option<bool>, (event, phase): (ObjId, f64), taker: Taker) -> JsResult<Option<bool>> {
     let wanted = |i: &Interp| -> JsResult<Vec<(Value, bool)>> {
         Ok(listeners_of(i, at)?
             .into_iter()
@@ -950,7 +952,7 @@ fn run_listeners(i: &mut Interp, at: ObjId, ty: &str, capture: Option<bool>, eve
     };
     let first = wanted(i)?;
     if first.is_empty() {
-        return Ok(false);
+        return Ok(Some(false));
     }
     let functions: Vec<Value> = first.iter().map(|(f, _)| f.clone()).collect();
     i.rooted(&functions, |i| {
@@ -960,9 +962,12 @@ fn run_listeners(i: &mut Interp, at: ObjId, ty: &str, capture: Option<bool>, eve
             if !wanted(i)?.iter().any(|(g, d)| same(g, f) && d == c) {
                 continue;
             }
+            if !takes(i, taker)? {
+                return Ok(None);
+            }
             i.call(f, &Value::Object(at), &[Value::Object(event)])?;
         }
-        Ok(true)
+        Ok(Some(true))
     })
 }
 
@@ -1045,10 +1050,9 @@ fn run_event(i: &mut Interp, event: ObjId, target: ObjId, above: &[ObjId], ty: &
             if !containers_above(i, target)?.contains(p) {
                 continue;
             }
-            if !takes(i, taker)? {
+            if run_listeners(i, *p, ty, Some(true), (event, 1.0), taker)?.is_none() {
                 return Ok(None);
             }
-            run_listeners(i, *p, ty, Some(true), event, 1.0)?;
             if stopped(i)? {
                 return Ok(Some(true));
             }
@@ -1068,16 +1072,15 @@ fn run_event(i: &mut Interp, event: ObjId, target: ObjId, above: &[ObjId], ty: &
         if !takes(i, taker)? {
             return Ok(None);
         }
-        let heard = run_listeners(i, target, ty, None, event, 2.0)?;
+        let Some(heard) = run_listeners(i, target, ty, None, (event, 2.0), taker)? else { return Ok(None) };
         if bubbles && !stopped(i)? {
             for p in above {
                 if !containers_above(i, target)?.contains(p) {
                     continue;
                 }
-                if !takes(i, taker)? {
+                if run_listeners(i, *p, ty, Some(false), (event, 3.0), taker)?.is_none() {
                     return Ok(None);
                 }
-                run_listeners(i, *p, ty, Some(false), event, 3.0)?;
                 if stopped(i)? {
                     break;
                 }
