@@ -115,8 +115,9 @@ pub(super) fn rank_fonts(
     let mut ranked: Vec<Ranked> = vec![];
     rank(&index, shapes, &mut ranked);
     // The installed fonts not loaded yet: those whose glyphs match a shape, of the version their
-    // family and style name gives, up to 96 fonts listed in all.
-    let room = MAX_COUNT.saturating_sub(ranked.len());
+    // family and style name gives, up to 96 fonts listed in all. A font that matches only as
+    // combining marks is not listed, so it takes no place.
+    let room = MAX_COUNT.saturating_sub(ranked.iter().filter(|r| r.character).count());
     let found = if let Some(handed) = handed {
         handed
     } else if !search_installed {

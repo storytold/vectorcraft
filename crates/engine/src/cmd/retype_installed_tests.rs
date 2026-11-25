@@ -254,7 +254,13 @@ fn a_run_away_from_the_list_hands_in_the_loaded_faces_that_match_with_the_instal
         vectorcraft_text::test_fonts::named_copy(false, ("Retype Loaded List", "Regular", "Version 1.000", "RetypeLoadedList-Regular")).unwrap(),
     );
     let loaded: Vec<_> = db.loaded_faces().into_iter().filter(|f| f.family == "Retype Loaded List").collect();
-    let search = super::RetypeSearch { command: "type.retypeFonts", doc: 1, shapes: whole(glyphs(&db, "Rx")), faces: loaded.clone(), tolerance: 0.0 };
+    let search = super::RetypeSearch {
+        command: "type.retypeFonts",
+        doc: 1,
+        shapes: whole(glyphs(&db, "Rx")),
+        faces: super::Faces::Given(loaded.clone()),
+        tolerance: 0.0,
+    };
     let found = search.run_in(&db).unwrap();
     let families: Vec<&str> = found.installed.faces.iter().map(|f| f.family.as_str()).collect();
     // The loaded face first, then the installed one, each once.
@@ -308,26 +314,26 @@ fn a_run_away_from_the_command_loads_the_faces_it_finds() {
     s.execute("select.set", &json!({"ids": ids})).unwrap();
     // Off: nothing to run.
     for cmd in ["type.retype", "type.retypeFonts"] {
-        assert!(super::RetypeRun::prepare_in(&s, cmd, &json!({"installed": false}), &db).unwrap().is_none());
+        assert!(super::RetypeRun::prepare(&s, cmd, &json!({"installed": false})).unwrap().is_none());
     }
     // The command's params are checked as it checks them.
-    assert!(super::RetypeRun::prepare_in(&s, "type.retypeFonts", &json!({"count": 0}), &db).is_err());
-    assert!(super::RetypeRun::prepare_in(&s, "type.retype", &json!({"fonts": 1}), &db).is_err());
-    assert!(super::RetypeRun::prepare_in(&s, "type.text", &json!({}), &db).is_err());
+    assert!(super::RetypeRun::prepare(&s, "type.retypeFonts", &json!({"count": 0})).is_err());
+    assert!(super::RetypeRun::prepare(&s, "type.retype", &json!({"fonts": 1})).is_err());
+    assert!(super::RetypeRun::prepare(&s, "type.text", &json!({})).is_err());
     // An unknown key fails before any search, as the command fails on it.
     for cmd in ["type.retype", "type.retypeFonts"] {
-        let e = super::RetypeRun::prepare_in(&s, cmd, &json!({"typo": true}), &db).err().map(|e| e.to_string()).unwrap_or_default();
+        let e = super::RetypeRun::prepare(&s, cmd, &json!({"typo": true})).err().map(|e| e.to_string()).unwrap_or_default();
         assert!(e.contains("typo"), "{cmd}: {e}");
         assert!(s.execute(cmd, &json!({"typo": true})).is_err());
     }
     // Retype: the loaded Source Sans 3 matches both shapes, so no installed file is read.
-    let run = super::RetypeRun::prepare_in(&s, "type.retype", &json!({}), &db).unwrap().unwrap();
+    let run = super::RetypeRun::prepare(&s, "type.retype", &json!({})).unwrap().unwrap();
     assert_eq!(run.command(), "type.retype");
     assert_eq!(run.params(), &json!({}));
     assert_eq!(run.run_in(&db).unwrap().json(), json!({"read": 0, "skipped": 0}));
     assert!(unloaded(&db, "Retype Copy X"));
     // The list compares every installed face: the copy is read and loaded.
-    let run = super::RetypeRun::prepare_in(&s, "type.retypeFonts", &json!({"count": 5}), &db).unwrap().unwrap();
+    let run = super::RetypeRun::prepare(&s, "type.retypeFonts", &json!({"count": 5})).unwrap().unwrap();
     assert_eq!(run.params(), &json!({"count": 5}));
     assert!(run.current(&s));
     let found = run.run_in(&db).unwrap();
@@ -747,7 +753,8 @@ fn a_run_away_from_the_command_hands_in_the_loaded_faces_past_the_ones_compared_
     // The Inter copies are compared first: none matches, and the copy loaded after them does.
     let faces: Vec<_> = db.loaded_faces().into_iter().filter(|f| f.family.starts_with("Retype Run Rest Inter")).collect();
     assert_eq!(faces.len(), vectorcraft_text::retype::MAX_FACES);
-    let search = super::RetypeSearch { command: "type.retype", doc: 1, shapes: whole(shapes.clone()), faces, tolerance: 0.0 };
+    let search =
+        super::RetypeSearch { command: "type.retype", doc: 1, shapes: whole(shapes.clone()), faces: super::Faces::Given(faces), tolerance: 0.0 };
     let found = search.run_in(&db).unwrap();
     assert!(found.installed.faces.iter().any(|f| f.family == "Retype Run Rest 0"), "the loaded copy is handed in");
     assert_eq!((found.installed.read, found.installed.skipped), (0, 0), "no installed file is read for it");
@@ -756,7 +763,9 @@ fn a_run_away_from_the_command_hands_in_the_loaded_faces_past_the_ones_compared_
     // A face compared first that matches is handed in too, as loading others may move it past
     // the faces the command compares first.
     let copy: Vec<_> = db.loaded_faces().into_iter().filter(|f| f.family == "Retype Run Rest 0").collect();
-    let found = super::RetypeSearch { command: "type.retype", doc: 1, shapes: whole(shapes), faces: copy, tolerance: 0.0 }.run_in(&db).unwrap();
+    let found = super::RetypeSearch { command: "type.retype", doc: 1, shapes: whole(shapes), faces: super::Faces::Given(copy), tolerance: 0.0 }
+        .run_in(&db)
+        .unwrap();
     assert_eq!(found.installed.faces.first().map(|f| f.family.as_str()), Some("Retype Run Rest 0"));
 }
 

@@ -494,9 +494,10 @@ fn load(db: &FontDb, face: &Arc<FontFace>) -> Arc<FontFace> {
 }
 
 /// A search of the installed fonts made away from its command, so the app can run it off the UI
-/// thread with a Cancel. [`RetypeRun::prepare`] takes the selected shapes and the loaded faces to
-/// compare from the session, checking the params as the command checks them; [`RetypeSearch::run`]
-/// compares them and searches the installed fonts on any thread, loading the faces that match; and
+/// thread with a Cancel. [`RetypeRun::prepare`] takes the selected shapes and the document from the
+/// session, checking the params as the command checks them; [`RetypeSearch::run`] picks the loaded
+/// faces to compare, compares them and searches the installed fonts on any thread, loading the
+/// faces that match; and
 /// [`RetypeFound::hand_in`] gives what it found to the command, which then runs with
 /// [`RetypeRun::params`] and compares those faces as its own search would, without reading the
 /// installed fonts again.
@@ -517,9 +518,32 @@ pub struct RetypeSearch {
     doc: u64,
     /// The shapes to match, and the loaded faces they are compared with first.
     shapes: Vec<Shape>,
-    faces: Vec<Arc<FontFace>>,
+    faces: Faces,
     /// `type.retype`'s tolerance (0 for `type.retypeFonts`).
     tolerance: f64,
+}
+
+/// The loaded faces a [`RetypeSearch`] compares first.
+enum Faces {
+    /// These faces.
+    #[cfg(test)]
+    Given(Vec<Arc<FontFace>>),
+    /// Those the command picks in `doc`: with `fonts` (`type.retype`'s `fonts` param), the faces of
+    /// those families and of the document's live type ([`super::candidate_faces`]), and without, the
+    /// faces `type.retypeFonts` lists ([`super::fonts::listed_faces`]). They are picked on the
+    /// search's thread, since a family not loaded yet is read from its files.
+    Of { doc: Arc<Document>, fonts: Option<Vec<String>> },
+}
+
+impl Faces {
+    fn get(&self, db: &FontDb) -> Vec<Arc<FontFace>> {
+        match self {
+            #[cfg(test)]
+            Faces::Given(faces) => faces.clone(),
+            Faces::Of { doc, fonts: Some(fonts) } => super::candidate_faces(db, doc, fonts),
+            Faces::Of { doc, fonts: None } => super::fonts::listed_faces(db, doc),
+        }
+    }
 }
 
 /// A shape a [`RetypeSearch`] compares, as `type.retype` matches it ([`super::shape_parts`]): its
@@ -583,12 +607,8 @@ impl RetypeRun {
     /// The search `command` (`type.retype` or `type.retypeFonts`) with params `p` makes in the
     /// active document. None when it reads no installed font: `installed` is false, or no shape has
     /// a glyph's key. An error where the command fails on its params or on the selection.
+    /// The faces to compare are picked when the search runs.
     pub fn prepare(s: &Session, command: &str, p: &Value) -> Result<Option<RetypeRun>> {
-        Self::prepare_in(s, command, p, FontDb::global())
-    }
-
-    /// [`RetypeRun::prepare`] with the fonts of `db`.
-    fn prepare_in(s: &Session, command: &str, p: &Value, db: &FontDb) -> Result<Option<RetypeRun>> {
         let (command, fonts, tolerance) = match command {
             "type.retype" => ("type.retype", Some(super::fonts_param(p)?), super::tolerance_param(p)?),
             "type.retypeFonts" => {
@@ -626,10 +646,7 @@ impl RetypeRun {
         if keys.is_empty() && near.is_empty() {
             return Ok(None);
         }
-        let faces = match &fonts {
-            Some(fonts) => super::candidate_faces(db, &st.doc, fonts),
-            None => super::fonts::listed_faces(db, &st.doc),
-        };
+        let faces = Faces::Of { doc: st.doc.clone(), fonts };
         Ok(Some(RetypeRun {
             params: p.clone(),
             doc: st.uid,
@@ -677,9 +694,10 @@ impl RetypeSearch {
 
     /// [`RetypeSearch::run`] with the fonts of `db`.
     fn run_in(&self, db: &FontDb) -> Result<RetypeFound> {
+        let picked = self.faces.get(db);
         let installed = if self.command == "type.retypeFonts" {
             let shapes: Vec<&BezPath> = self.shapes.iter().map(|s| &s.path).collect();
-            let (ranked, mut found) = super::fonts::rank_fonts(db, self.faces.clone(), &shapes, true, None)?;
+            let (ranked, mut found) = super::fonts::rank_fonts(db, picked, &shapes, true, None)?;
             // The loaded faces that match are handed in too, ahead of the installed ones found:
             // loading those can move a loaded face past the 96 the command lists.
             let mut faces: Vec<Arc<FontFace>> = ranked.iter().map(|r| r.face().clone()).collect();
@@ -695,7 +713,7 @@ impl RetypeSearch {
             let tolerance = self.tolerance;
             let sought: Vec<Sought> = self.shapes.iter().map(Shape::sought).collect();
             let (keys, near) = keys_of(&sought, tolerance);
-            let index = RetypeIndex::build_near(db, self.faces.iter().cloned(), &keys, &near);
+            let index = RetypeIndex::build_near(db, picked.iter().cloned(), &keys, &near);
             let parts: Vec<Vec<Vec<super::GlyphMatch>>> =
                 self.shapes.iter().map(|s| super::shape_parts(&s.path, &s.groups, s.fill, s.once, &[&index], tolerance)).collect();
             let left: Vec<Sought> = sought.iter().zip(&parts).filter(|(_, p)| p.is_empty()).map(|(s, _)| *s).collect();
@@ -709,13 +727,13 @@ impl RetypeSearch {
             }
             // The loaded faces past the ones compared first, then the installed fonts for what
             // none of them matches; the command takes both from what is handed in.
-            let compared: Vec<u32> = self.faces.iter().map(|f| f.id()).collect();
+            let compared: Vec<u32> = picked.iter().map(|f| f.id()).collect();
             // Every face loaded now is compared, among the first ones or with the rest.
             let scanned: Vec<u32> = compared.iter().copied().chain(db.loaded_faces().iter().map(|f| f.id())).collect();
             // A split shape's glyphs may be spread over the faces compared first and the others.
             // Near matching spends an index's comparison budget, so with a tolerance the faces
             // compared first are indexed again for each search that has a split shape to look for.
-            let again = |needed: bool| (needed && tolerance > 0.0).then(|| RetypeIndex::build_near(db, self.faces.iter().cloned(), &keys, &near));
+            let again = |needed: bool| (needed && tolerance > 0.0).then(|| RetypeIndex::build_near(db, picked.iter().cloned(), &keys, &near));
             let fresh = again(left.iter().any(|s| !s.groups.is_empty()));
             let (rest, done, kept) = loaded_rest_for(db, &left, &[fresh.as_ref().unwrap_or(&index)], tolerance, &compared)?;
             let left: Vec<Sought> = left.into_iter().zip(done).filter(|(_, done)| !done).map(|(s, _)| s).collect();
