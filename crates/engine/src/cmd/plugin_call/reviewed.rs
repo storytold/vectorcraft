@@ -467,6 +467,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "path.moveAnchor",
     "path.moveAnchors",
     "path.quickPen",
+    "path.quickPenLength",
     "path.rectCut",
     "path.removeAnchor",
     "path.removeAnchors",

@@ -543,10 +543,32 @@ fn join_numbers_each_parts_corners_after_the_last() {
     square(&mut b, 0.0, 0.0, 10.0, false);
     let (p, r) = shape(&b);
     let one = plane_mesh(&p, FillRule::NonZero, r, front()).unwrap();
-    let both = Mesh::join([one.clone(), one.clone()]);
+    let both = Mesh::join([one.clone(), one.clone()]).unwrap();
     assert_eq!(both.triangles.len(), 2 * one.triangles.len());
     assert!(both.triangles.iter().all(|t| t.iter().all(|i| (*i as usize) < both.positions.len())));
     assert_eq!(both.triangles[one.triangles.len()][0], one.triangles[0][0] + one.positions.len() as u32);
+    assert!(both.is_consistent());
+    assert_eq!(both.uvs.len(), 2 * one.uvs.len());
+    assert_eq!(both.parts.len(), 2 * one.parts.len());
+}
+
+#[test]
+fn join_refuses_a_mesh_whose_lists_do_not_match() {
+    let mut b = BezPath::new();
+    square(&mut b, 0.0, 0.0, 10.0, false);
+    let (p, r) = shape(&b);
+    let one = plane_mesh(&p, FillRule::NonZero, r, front()).unwrap();
+    for broken in [
+        Mesh { uvs: vec![], ..one.clone() },
+        Mesh { parts: vec![], ..one.clone() },
+        Mesh { normals: vec![], ..one.clone() },
+        Mesh { uvs: vec![[f64::NAN, 0.0]; one.uvs.len()], ..one.clone() },
+        Mesh { positions: vec![[f64::INFINITY, 0.0, 0.0]; one.positions.len()], ..one.clone() },
+        Mesh { triangles: vec![[0, 1, u32::MAX]], parts: vec![MeshPart::Front], ..one.clone() },
+    ] {
+        assert!(!broken.is_consistent());
+        assert!(Mesh::join([one.clone(), broken]).is_err());
+    }
 }
 
 /// A mesh's positions and normals as bits, and its triangles.

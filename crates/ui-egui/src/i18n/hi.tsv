@@ -355,6 +355,7 @@
 	Anti-alias Rasters	रास्टर एंटी-एलियास करें
 	Anti-aliased Artwork	एंटी-एलियास किया आर्टवर्क
 	Anti-aliasing Method	एंटी-एलियासिंग विधि
+@id	language.name	हिन्दी
 antiAlias	Sharp	शार्प
 	Crisp	क्रिस्प
 	Strong	स्ट्रॉन्ग
@@ -6580,6 +6581,8 @@ arrowhead	Feather	पंख
 @msg	`plates` requires a stop linked to a spot swatch	`plates` के लिए स्पॉट रंग स्वॉच से जुड़ा स्टॉप आवश्यक है
 @msg	the output	आउटपुट
 @msg	the path has no anchor points	पाथ में कोई एंकर पॉइंट नहीं है
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	कंपाउंड पाथ {id} का कोई सदस्य छिपा हुआ, बंद या गाइड है, इसलिए इसके सदस्य बदले नहीं जा सकते
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	कंपाउंड पाथ {id} का कोई सदस्य पाथ नहीं है, इसलिए इसके सदस्य बदले नहीं जा सकते
 @msg	too many anchor points (limit {MAX_ANCHORS})	बहुत अधिक एंकर पॉइंट (सीमा {MAX_ANCHORS})
 @msg	true or false	true या false
 @msg	a number >= {_1}	एक संख्या >= {_1}
@@ -6804,7 +6807,7 @@ arrowhead	Feather	पंख
 @msg	{label}: select paths, compound paths, groups or text	{label}: चुनें पाथ, यौगिक पाथ, समूह या टेक्स्ट
 @msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	कोई रेखा या अन्य खुला पाथ जो कोई क्षेत्र नहीं घेरता, परिणाम के आकार को नहीं बदलता; इसे शामिल करने के लिए पहले उस पर ऑब्जेक्ट › पाथ › स्ट्रोक को आउटलाइन में बदलें लागू करें
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} ने खाली परिणाम का उत्पादन किया: कोई रेखा या अन्य खुला पाथ कोई क्षेत्र नहीं घेरता; इसे शामिल करने के लिए पहले उस पर ऑब्जेक्ट › पाथ › स्ट्रोक को आउटलाइन में बदलें लागू करें
-@msg	{label}…	{label}...
+@msg	{label}…	{label}…
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name} बनाया गया है और इसे हटाया नहीं जा सकता है।
 @msg	{name} must be {range} (got {v})	{name} को {range} होना चाहिए ({v} मिला)
@@ -7010,6 +7013,8 @@ arrowhead	Feather	पंख
 @msg	`dataBase64` is not valid base64	`dataBase64` मान्य नहीं है base64
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` होना चाहिए `fileNumber`, `fileDataSetName` या `dataSetName`
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` को `ids`, `reverse` या `append` के साथ उपयोग नहीं कर सकते
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` को `ids`, `id` या `item` के साथ उपयोग नहीं कर सकते
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` को `brush` के साथ उपयोग नहीं कर सकते
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` और `childLimit` सारांश के हिस्से चुनते हैं: `summary: true` दें
 @msg	`design` is a design name, or null for plain columns	`design` एक डिजाइन नाम है, या सादे स्तंभों के लिए null है
 @msg	`design` is a design name, or null for the default marker	`design` एक डिजाइन नाम है, या डिफ़ॉल्ट मार्कर के लिए null है
@@ -8198,7 +8203,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	Live Paint: select paths or compound paths	लाइव पेंट: पाथ या यौगिक पाथ सिलेक्ट करें
 @msg	Live Paint: these paths are too degenerate to paint	लाइव पेंट: इन पाथ को पेंट करने के लिए बहुत अलग किया जाता है
 @msg	loading profiles from disk isn't available in the browser	डिस्क से लोडिंग प्रोफ़ाइल ब्राउज़र में उपलब्ध नहीं है
-@msg	Loading VectorCraft…	वेक्टर क्रेफ्ट लोड हो रहा है ...
+@msg	Loading VectorCraft…	वेक्टर क्रेफ्ट लोड हो रहा है …
 @msg	Lock Workspace is not available in VectorCraft	लॉक वर्कस्पेस VectorCraft में उपलब्ध नहीं है
 @msg	Make Guides: select paths	गाइड बनाना: पाथ सिलेक्ट करें
 @msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	मैनिफ़ेस्ट {_1} बाइट्स का है (सीमा {MAX_MANIFEST_BYTES})
@@ -8626,7 +8631,9 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	not a valid SVGZ file: {e}	एक मान्य SVGZ फ़ाइल नहीं: {e}
 @msg	not a VectorCraft file: {0}	एक वेक्टर क्रेफ्ट फ़ाइल नहीं: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	एक VectorCraft शॉर्टकट सेट नहीं है ( `overrides`)
-@msg	not a WebAssembly binary (missing \0asm header)	WebAssembly बाइनरी नहीं है (\0asm हेडर नहीं है)
+@msg	not a WebAssembly binary (missing \\0asm header)	WebAssembly बाइनरी नहीं है (\\0asm हेडर नहीं है)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	एक फ़ंक्शन टाइप में {MAX_FUNC_TYPE_VALUES} पैरामीटर की सीमा से अधिक पैरामीटर हैं
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	एक फ़ंक्शन टाइप में {MAX_FUNC_TYPE_VALUES} परिणामों की सीमा से अधिक परिणाम हैं
 @msg	not a Word document: its compound file has no WordDocument stream	एक वर्ड डॉक्यूमेंट नहीं: इसकी यौगिक फ़ाइल में WordDocument स्ट्रीम नहीं है
 @msg	not a Word document: its main part is not a WordprocessingML document	वर्ड डॉक्यूमेंट नहीं: इसका मुख्य हिस्सा वर्डप्रोसेसिंगएमएल डॉक्यूमेंट नहीं है
 @msg	not a Word document: its package has no main document part	नहीं एक वर्ड डॉक्यूमेंट: इसके पैकेज में कोई मुख्य डॉक्यूमेंट हिस्सा नहीं है
@@ -8642,7 +8649,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	not an export presets file (format `{_1}`)	यह एक्सपोर्ट प्रीसेट फ़ाइल नहीं है (फ़ॉर्मैट `{_1}`)
 @msg	not an export presets file: {e}	एक निर्यात प्रीसेट फ़ाइल नहीं: {e}
 @msg	not an image VectorCraft reads (see document.formats)	यह ऐसी इमेज नहीं है जिसे VectorCraft पढ़ सके (document.formats देखें)
-@msg	not an RTF file: it doesn't start with {{\\rtf	RTF फ़ाइल नहीं: यह {{\rtf के साथ शुरू नहीं होता है
+@msg	not an RTF file: it doesn't start with {{\\rtf	RTF फ़ाइल नहीं: यह {{\\rtf के साथ शुरू नहीं होता है
 @msg	not area type (text in a frame) outside perspective	पर्सपेक्टिव के बाहर का एरिया टाइप (फ़्रेम में टेक्स्ट) नहीं है
 @msg	not editing an opacity mask	ओपेसिटी मास्क संपादित नहीं किया जा रहा है
 @msg	not found	नहीं मिला
@@ -8887,7 +8894,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	rows and cols must be 1..50	पंक्तियां और कॉल 1..50 होना चाहिए
 @msg	rows and columns must be 1..500	rows और columns को 1..500 होना चाहिए
 @msg	rows of objects whose appearances differ can't be reordered together	उन ऑब्जेक्ट्स की पंक्तियाँ जिनकी उपस्थिति भिन्न होती हैं, उन्हें एक साथ फिर से व्यवस्थित नहीं किया जा सकता है
-@msg	Running “{name}”…	"{name}"...
+@msg	Running “{name}”…	"{name}"…
 @msg	Save for Web: the image is empty	वेब के लिए सेव करें: इमेज खाली है
 @msg	save the document first: copy puts the file in its folder	पहले डॉक्यूमेंट को सेव करना: प्रतिलिपि फ़ाइल को अपने फ़ोल्डर में डालती है
 @msg	save the document first: Package collects a saved document	पहले डॉक्यूमेंट को सेव करना: पैकेज एक सेव किए गए डॉक्यूमेंट एकत्र करता है
@@ -9174,6 +9181,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	ग्रुप के फ़िल या स्ट्रोक पर 3D इफ़ेक्ट कुछ नहीं बनाता
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ग्रुप के फ़िल या स्ट्रोक पर 3D इफ़ेक्ट एक्सपोर्ट करने लायक कुछ नहीं बनाता
 @msg	The 3D object is too complex to export	3D ऑब्जेक्ट एक्सपोर्ट करने के लिए बहुत जटिल है
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D ऑब्जेक्ट का मेश अधूरा है या उसमें ऐसा मान है जो संख्या नहीं है
 @msg	give one <filter> element	एक <filter> एलिमेंट दें
 @msg	the <filter> element needs an id, the filter's name	<filter> एलिमेंट को एक id चाहिए, जो फ़िल्टर का नाम है
 @msg	an SVG filter's id is at most {MAX_NAME} characters	SVG फ़िल्टर की id अधिकतम {MAX_NAME} वर्णों की होती है
@@ -9396,6 +9404,12 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	the library holds {MAX_ITEMS} items of this kind already	लाइब्रेरी पहले से ही इस तरह के {MAX_ITEMS} आइटम रखता है
 @msg	the library item is damaged	लाइब्रेरी आइटम क्षतिग्रस्त है
 @msg	the module must export its linear memory as `memory`	मॉड्यूल को अपनी रैखिक मेमोरी `memory` के रूप में एक्सपोर्ट करनी चाहिए
+@msg	the module must export `{name}` with the type {signature}	मॉड्यूल को `{name}` को {signature} प्रकार के साथ एक्सपोर्ट करना चाहिए
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	मॉड्यूल में एक से अधिक `{MANIFEST_SECTION}` कस्टम सेक्शन हैं
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	मेमोरी बजट (मॉड्यूल की प्रारंभिक मेमोरी {initial} बाइट है, सीमा {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	`{MANIFEST_SECTION}` कस्टम सेक्शन के मैनिफ़ेस्ट में `abi` का मान {ABI_VERSION} होना चाहिए, वह ABI संस्करण जिसे यह होस्ट लागू करता है
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	टेबल बजट (मॉड्यूल {count} टेबल परिभाषित करता है, सबसे बड़ी में {largest} एलिमेंट; सीमा {MAX_TABLES} टेबल, प्रत्येक में {MAX_TABLE_ELEMENTS} एलिमेंट)
+@msg	the module's table section could not be read	मॉड्यूल का टेबल सेक्शन पढ़ा नहीं जा सका
 @msg	the name is empty	नाम खाली है
 @msg	the object already has an opacity mask	ऑब्जेक्ट पहले से ही एक अपारदर्शिता मास्क है
 @msg	the object has no fill, stroke or effect	ऑब्जेक्ट में कोई भराव, स्ट्रोक या इफ़ेक्ट नहीं होता है

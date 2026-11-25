@@ -863,6 +863,78 @@ fn unembed_keeps_the_clipping_path_of_an_embedded_psd() {
     }
 }
 
+/// Unembed leaves a clipping mask released or edited in the document as it is, with a path and with
+/// a folder, for a plain image and for a distorted one: no clip group of the file's clipping path is
+/// put back or nested inside the edited mask. Every case runs, and the test names each one that
+/// fails.
+#[test]
+fn unembed_keeps_a_released_or_edited_clipping_mask() {
+    let dir = vectorcraft_testkit::TempDir::new("psd-unembed-mask");
+    let data = vectorcraft_format::base64_encode(&red_psd(&triangle_resources()));
+    let cases = ["release", "move"]
+        .into_iter()
+        .flat_map(|edit| [false, true].into_iter().flat_map(move |distort| [(edit, distort, false), (edit, distort, true)]));
+    let failed: Vec<_> = cases
+        .filter(|&(edit, distort, folder)| {
+            std::panic::catch_unwind(|| unembed_mask_case(&dir.join(format!("{edit}-{distort}-{folder}")), &data, edit, distort, folder)).is_err()
+        })
+        .collect();
+    assert!(failed.is_empty(), "failed: {failed:?}");
+}
+
+/// One case of [`unembed_keeps_a_released_or_edited_clipping_mask`]: the clipping mask of a placed
+/// PSD file's image released or moved (`edit`), the image or the clip group then distorted with
+/// `distort`, and the image unembedded into `out`.
+fn unembed_mask_case(out: &std::path::Path, data: &str, edit: &str, distort: bool, folder: bool) {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 50})).unwrap();
+    let r = s.execute("file.place", &json!({"name": "cut.psd", "dataBase64": data, "at": [50, 25]})).unwrap();
+    let (group, image) = (NodeId(r["ids"][0].as_u64().unwrap()), NodeId(r["image"].as_u64().unwrap()));
+    if edit == "release" {
+        s.execute("select.set", &json!({"ids": [group.0]})).unwrap();
+        s.execute("object.clippingMask.release", &json!({})).unwrap();
+    } else {
+        let Some(NodeKind::Group { children, .. }) = s.doc().unwrap().doc.node(group).map(|n| &n.kind) else { panic!("a clip group") };
+        let mask = children[0].id;
+        s.execute("select.set", &json!({"ids": [mask.0]})).unwrap();
+        s.execute("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
+    }
+    if distort {
+        let target = if edit == "release" { image } else { group };
+        s.execute("select.set", &json!({"ids": [target.0]})).unwrap();
+        s.execute("object.distort", &json!({"corners": [[0, 0], [100, 8], [90, 50], [6, 44]]})).unwrap();
+        assert!(s.doc().unwrap().doc.node(image).unwrap().is_distorted_image(), "{edit}, folder: {folder}: distorted");
+    }
+    let parent = |s: &Session| s.doc().unwrap().doc.parent_of(image);
+    let before = (parent(&s), parent(&s).and_then(|p| s.doc().unwrap().doc.node(p).cloned()));
+    std::fs::create_dir_all(out).unwrap();
+    if folder {
+        s.execute("links.unembed", &json!({"ids": [image.0], "folder": out})).unwrap();
+    } else {
+        s.execute("links.unembed", &json!({"id": image.0, "path": out.join("cut")})).unwrap();
+    }
+    let d = &s.doc().unwrap().doc;
+    let NodeKind::Image(im) = &d.node(image).unwrap().kind else { panic!("an image") };
+    assert!(im.link.is_some(), "{edit}, folder: {folder}: linked to the file written");
+    assert_eq!(parent(&s), before.0, "{edit}, folder: {folder}: the image stays where it was");
+    let after = before.0.and_then(|p| d.node(p));
+    match (edit, after.map(|n| &n.kind), before.1.as_ref().map(|n| &n.kind)) {
+        // Released: the image is in no clip group, as before.
+        ("release", Some(NodeKind::Group { clip, .. }), _) => assert!(!clip, "folder: {folder}: the released mask came back"),
+        ("release", _, _) => {}
+        // Moved: the same clip group of the moved path holds just the image.
+        (_, Some(NodeKind::Group { children: a, clip: true }), Some(NodeKind::Group { children: b, clip: true })) => {
+            assert_eq!(a.len(), 2, "{edit}, folder: {folder}: a clip group was nested inside the edited mask");
+            let path = |c: &std::sync::Arc<vectorcraft_doc::Node>| match &c.kind {
+                NodeKind::Path { path, .. } => path.anchors().map(|(_, _, a)| [a.p.x, a.p.y]).collect::<Vec<_>>(),
+                _ => vec![],
+            };
+            assert_eq!((path(&a[0]), a[1].id), (path(&b[0]), image), "{edit}, folder: {folder}: the clipping mask");
+        }
+        other => panic!("{edit}, folder: {folder}: {other:?}"),
+    }
+}
+
 /// The PNG a PSD file's merged image is kept as holds the clipping path the file names, and only a
 /// text chunk within the size limit that reads as a path gives one back.
 #[test]
