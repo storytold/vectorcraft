@@ -44,6 +44,7 @@
 	Quit VectorCraft	Lopeta VectorCraft
 # Artwork drag between document tabs.
 	Drop Artwork	Pudota kuvitus
+@id	language.name	Suomi
 @msg	{key} must be [x, y] with finite coordinates	{key} on annettava muodossa [x, y] äärellisillä koordinaateilla
 @msg	ids must contain 1–10000 object ids	ids-arvon on sisällettävä 1–10000 objektitunnusta
 
@@ -357,6 +358,9 @@
 	Artboards	Piirtoalustat
 	Convert to Artboards	Muunna piirtoalustoiksi
 	Rearrange All Artboards…	Järjestä kaikki piirtoalustat uudelleen…
+	Rearrange…	Järjestä uudelleen…
+	Selected Artboards: {n}	Valitut piirtoalustat: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Sijoita piirtoalustat napsauttamalla kangasta (Esc peruuttaa)
 	Fit to Artwork Bounds	Sovita kuvituksen rajoihin
 	Fit to Selected Art	Sovita valittuun kuvitukseen
 	Graph	Kaavio
@@ -514,6 +518,7 @@
 	Fill & Stroke	Täyttö ja viiva
 	Fill Color	Täyttöväri
 	Opacity	Peittävyys
+	Show Opacity	Näytä peittävyys
 	Stroke Color	Viivan väri
 	Fill Gradient	Täytön liukuväri
 	Stroke Gradient	Viivan liukuväri
@@ -2848,7 +2853,6 @@ digits	Malayalam	Malajalam
 	Close paths when ends are within:	Sulje polut, kun päät ovat etäisyydellä:
 	Edit selected paths within:	Muokkaa valittuja polkuja etäisyydellä:
 	Fidelity:	Tarkkuus:
-	Smoothness:	Pehmeys:
 	Fill new strokes	Täytä uudet viivat
 	Alt key toggles to Smooth Tool	Alt-näppäin vaihtaa Tasoitustyökaluun
 	Live curve fitting	Käyrän sovitus piirrettäessä
@@ -3715,6 +3719,12 @@ theme	Appearance	Ulkoasu
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	tarkkuus ei saatavilla
+	estimated memory {memory}	arvioitu muisti {memory}
+	memory unavailable	muisti ei saatavilla
+	Unknown format	Tuntematon muoto
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -4163,6 +4173,7 @@ theme	Appearance	Ulkoasu
 	Data Recovery	Tietojen palautus
 	Default Language	Oletuskieli
 	Disable Auto Add/Delete	Poista automaattinen lisäys/poisto käytöstä
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete poistaa ankkuripisteet ja pitää polut yhtenäisinä
 	Interpolate Control Points When Moving Anchors	Interpoloi suuntakahvat siirrettäessä ankkuripisteitä
 	Display All Blacks Accurately	Näytä kaikki mustat tarkasti
 	Display All Blacks as Rich Black	Näytä kaikki mustat syvämustina
@@ -4727,6 +4738,7 @@ font-technology	Variable	Muuttuvat
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Kahden sormen kiertoele kosketuslevyllä kiertää piirtopinnan näkymää.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Näppäimen pitäminen painettuna suorittaa työkalun tai komennon sen Pidä pohjassa -sarakkeesta Pikanäppäimissä; lyhyt painallus suorittaa sen tavallisen pikanäppäimen.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Kuinka monta sekuntia näppäintä on pidettävä painettuna, ennen kuin tavallisen pikanäppäimen sijaan suoritetaan sen pitkän painalluksen pikanäppäin.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete poistaa valitut ankkuripisteet ja sovittaa käyrän uudelleen kunkin ympärille sen sijaan, että avaisi polun siitä kohdasta.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Kun siirrät ankkuripisteitä, jokainen käyrä, jonka toinen pää siirtyy, säilyttää muotonsa suhteessa päihinsä.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Työkalun pikanäppäimen pitäminen painettuna valitsee työkalun, kunnes päästät irti, ja sitten edellinen työkalu valitaan uudelleen.
 	Shows the bounding box while you move the selection or draw a shape.	Näyttää rajausruudun, kun siirrät valintaa tai piirrät muotoa.
@@ -6761,6 +6773,7 @@ mark-style	Japanese	Japanilainen
 @msg	a 3D effect on a group's fill or stroke draws nothing	ryhmän täytön tai viivan 3D-tehoste ei piirrä mitään
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ryhmän täytön tai viivan 3D-tehoste ei piirrä mitään vietävää
 @msg	The 3D object is too complex to export	3D-objekti on liian monimutkainen vietäväksi
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D-objektin verkko on puutteellinen tai sisältää arvon, joka ei ole luku
 @msg	give one <filter> element	anna yksi <filter>-elementti
 @msg	the <filter> element needs an id, the filter's name	<filter>-elementti tarvitsee id:n, suotimen nimen
 @msg	an SVG filter's id is at most {MAX_NAME} characters	SVG-suotimen id on enintään {MAX_NAME} merkkiä
@@ -7389,11 +7402,19 @@ axis	Y Axis	Y-akseli
 @msg	module is {_1} bytes (limit {_2})	moduuli on {_1} tavua (raja {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	vaatii hyväksynnän: se pyytää {0}, jotka käyttäjä myöntää asentaessaan sen erikseen
 @msg	not JSON: {e}	ei JSON-muotoa: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	ei WebAssembly-binääri (\0asm-otsake puuttuu)
+@msg	not a WebAssembly binary (missing \\0asm header)	ei WebAssembly-binääri (\\0asm-otsake puuttuu)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	funktiotyyppi ylittää {MAX_FUNC_TYPE_VALUES} parametrin rajan
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	funktiotyyppi ylittää {MAX_FUNC_TYPE_VALUES} tuloksen rajan
 @msg	parameter `{k}`: {what}	parametri `{k}`: {what}
 @msg	parameter `{name}`: {what}	parametri `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	laajennuksen parametrien on oltava JSON-objekti
 @msg	the module must export its linear memory as `memory`	moduulin on vietävä lineaarinen muistinsa nimellä `memory`
+@msg	the module must export `{name}` with the type {signature}	moduulin on vietävä `{name}` tyypillä {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	moduulissa on useampi kuin yksi mukautettu osio `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	muistibudjetti (moduulin alkumuisti on {initial} tavua, raja {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	mukautetun osion `{MANIFEST_SECTION}` manifestin on annettava `abi` arvona {ABI_VERSION}, ABI-versio, jonka tämä isäntä toteuttaa
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	taulukkobudjetti (moduuli määrittää {count} taulukkoa, suurin {largest} alkiolla; raja {MAX_TABLES} taulukkoa, kussakin enintään {MAX_TABLE_ELEMENTS} alkiota)
+@msg	the module's table section could not be read	moduulin taulukko-osiota ei voitu lukea
 @msg	the objects to change are no longer in the document	muutettavia objekteja ei enää ole asiakirjassa
 @msg	the runtime panicked	suoritusympäristö kaatui
 @msg	unexpected host trap	odottamaton keskeytys (trap) isännässä
@@ -7421,6 +7442,11 @@ axis	Y Axis	Y-akseli
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` ja `maxItems` on oltava 0-{MAX_LIST}, `maxItems` vähintään 1, ja oletusarvossa on oltava niin monta kohdetta
 @msg	`name` must be a string	`name` on oltava merkkijono
 @msg	`opacity` must be a number	`opacity` on oltava luku
+@msg	`opacity` must be a number from 0 to 100	`opacity` on oltava luku 0:sta 100:aan
+@msg	`opacity` must be true or false	`opacity` on oltava true tai false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	tekstin merkeillä ei ole omaa peittävyyttä: lisää täyttö tai viiva Ulkoasu-paneelin komennolla Lisää uusi täyttö tai Lisää uusi viiva
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	symbolin ilmentymästä valitulla objektilla ei ole omaa täytön tai viivan peittävyyttä
+@msg	no target has that fill or stroke to take the opacity	millään kohteella ei ole tätä täyttöä tai viivaa, joka ottaisi peittävyyden
 @msg	`type` must be "path" or "compound"	`type` on oltava "path" tai "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit`-kentässä on oltava 1-{MAX_UNIT} tulostettavaa merkkiä
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen`-kentässä on lueteltava 1-{MAX_CONDITION_VALUES} arvoa parametrille `{other}`
@@ -7464,6 +7490,8 @@ axis	Y Axis	Y-akseli
 @msg	`plates` requires a stop linked to a spot swatch	`plates` vaatii väripisteen, joka on linkitetty spottivärin värimalliin
 @msg	the output	tuloste
 @msg	the path has no anchor points	polulla ei ole ankkuripisteitä
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	yhdistelmäpolulla {id} on piilotettu, lukittu tai apuviivana oleva jäsen, joten sen jäseniä ei voi korvata
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	yhdistelmäpolulla {id} on jäsen, joka ei ole polku, joten sen jäseniä ei voi korvata
 @msg	too many anchor points (limit {MAX_ANCHORS})	liian monta ankkuripistettä (raja {MAX_ANCHORS})
 @msg	true or false	true tai false
 @msg	a number >= {_1}	luku >= {_1}
