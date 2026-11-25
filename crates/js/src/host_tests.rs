@@ -677,6 +677,47 @@ fn a_host_class_constructor_called_with_new_cannot_wait() {
 }
 
 #[test]
+fn objects_of_a_host_class_report_its_available_members_as_their_own() {
+    let mut r = realm(1_000_000);
+    let value: HostFunction = Rc::new(|_| Ok(Data::Number(1.0)));
+    let missing: HostFunction = Rc::new(|_| Err(HostError::Error("not here yet".into())));
+    let base = HostClass {
+        name: "Base".into(),
+        parent: None,
+        members: vec![
+            ("size".to_string(), HostMember::Get(value.clone())),
+            ("shape".to_string(), HostMember::Property { get: value.clone(), set: value.clone() }),
+            ("grow".to_string(), HostMember::Method(value.clone())),
+            ("later".to_string(), HostMember::Unavailable(missing)),
+        ],
+        index: None,
+        construct: None,
+    };
+    let leaf = HostClass {
+        name: "Leaf".into(),
+        parent: Some("Base".into()),
+        members: vec![("leaf".to_string(), HostMember::Get(value))],
+        index: None,
+        construct: None,
+    };
+    r.define_host_classes(vec![base, leaf], vec![("it".into(), host_ref("Leaf", &[1.0]))]).unwrap();
+    r.start(
+        "var own = Object.prototype.hasOwnProperty, keys = [];\
+         for (var k in it) keys.push(k);\
+         [it.hasOwnProperty('size'), it.hasOwnProperty('shape'), it.hasOwnProperty('grow'), it.hasOwnProperty('leaf'),\
+          own.call(it, 'size'), it.propertyIsEnumerable('grow'),\
+          it.hasOwnProperty('later'), it.propertyIsEnumerable('later'), it.hasOwnProperty('nope'),\
+          it.hasOwnProperty('hasOwnProperty'), it.hasOwnProperty('constructor'), 'later' in it,\
+          keys.sort().join(' '), Leaf.prototype.hasOwnProperty('size'), ({}).hasOwnProperty('size')].join()",
+    )
+    .unwrap();
+    assert_eq!(
+        finish(&mut r, 1_000_000).0.unwrap(),
+        JsValue::String("true,true,true,true,true,true,false,false,false,false,false,true,leaf shape size,false,false".into())
+    );
+}
+
+#[test]
 fn a_converted_function_reads_each_argument_as_its_list_says() {
     let mut r = realm(1_000_000);
     let seen: Rc<RefCell<Vec<Vec<Data>>>> = Rc::default();

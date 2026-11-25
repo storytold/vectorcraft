@@ -3,7 +3,7 @@
 
 use serde_json::{Value, json};
 use vectorcraft_color::Color;
-use vectorcraft_color::harmony::Harmony;
+use vectorcraft_color::harmony::{self, Harmony};
 
 use crate::*;
 
@@ -31,7 +31,7 @@ fn themes_save_list_edit_and_delete() {
     let r = run(&mut s, "colorTheme.save", json!({"color": "#3366cc", "rule": "Triad", "name": " Sea "}));
     assert_eq!(r["name"], "Sea");
     let t = &run(&mut s, "colorTheme.list", json!({}))["themes"][1];
-    let want: Vec<String> = Harmony::Triad.theme(Color::from_hex("#3366cc").unwrap()).iter().map(Color::to_hex).collect();
+    let want: Vec<String> = harmony::theme(Harmony::Triad, Color::from_hex("#3366cc").unwrap()).iter().map(Color::to_hex).collect();
     assert_eq!(t["colors"], json!(want));
     assert_eq!(t["rule"], "triad");
     // Names stay unique (ignoring case); replace edits a theme in place, renaming it if asked.
