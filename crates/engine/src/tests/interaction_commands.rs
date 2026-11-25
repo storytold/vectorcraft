@@ -448,7 +448,8 @@ fn find_objects_with_select_during_a_drag_skips_the_drag_preview() {
         assert_eq!(r["matches"][0]["id"], other.0, "{at}: {r}");
         pointer(&mut s, PointerKind::Up, 200.0, 180.0);
         assert_eq!(objects(&s), 2, "{at}: the release draws the rectangle");
-        assert_eq!(journaled(&s, start), ["document.find", "shape.rectangle"], "{at}");
+        // The drag's own selection is journaled after the find, so the release replays on it.
+        assert_eq!(journaled(&s, start), ["document.find", "select.set", "shape.rectangle"], "{at}");
         let (mut replayed, _) = session(real_time);
         replay_from(&s, start, &mut replayed);
         assert_eq!(objects(&replayed), 2, "{at}");
