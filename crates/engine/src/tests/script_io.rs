@@ -652,6 +652,28 @@ fn a_grants_change_without_its_lock_changes_nothing() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `script.grants.revoke` removes a grant by the path `script.grants` lists for it, also when a
+/// link has since taken that path's place and leads elsewhere.
+#[cfg(unix)]
+#[test]
+fn a_grant_whose_path_is_now_a_link_is_revoked_by_its_listed_path() {
+    let base = folder("grants-relinked");
+    let real = std::fs::canonicalize(&base).unwrap();
+    let (kept, other) = (real.join("kept.txt"), real.join("other.txt"));
+    write(&other, b"other");
+    let kept_path = kept.to_string_lossy().into_owned();
+    let grant = json!({"script": "/s.jsx", "sha256": "0", "code": [], "path": kept_path, "write": false, "folder": false});
+    write(&base.join("settings/Script Grants.json"), json!({"version": 1, "grants": [grant]}).to_string().as_bytes());
+    std::os::unix::fs::symlink(&other, &kept).unwrap();
+    let mut s = with_data(&base);
+    let listed = s.execute("script.grants", &json!({})).unwrap();
+    assert_eq!(listed["grants"][0]["path"], json!(kept_path));
+    let r = s.execute("script.grants.revoke", &json!({"script": "/s.jsx", "path": kept_path})).unwrap();
+    assert_eq!(r["removed"], 1, "{r}");
+    assert_eq!(s.execute("script.grants", &json!({})).unwrap()["grants"], json!([]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// Reading and changing the grants file wait for a lock another handle holds only for a bounded
 /// number of tries: then a listing and a change fail, with the file unchanged. A lock
 /// released while it waits is taken.

@@ -1079,15 +1079,15 @@ pub(crate) fn stored_grants(data_dir: &Path) -> std::io::Result<Vec<serde_json::
 }
 
 /// Removes from the grants file beside `data_dir` the grants of the script `script` and of the path
-/// `path`, of both when both are given and of every grant when neither is (`script.grants.revoke`).
-/// → how many were removed.
-pub(crate) fn revoke_grants(data_dir: &Path, script: Option<&str>, path: Option<&str>) -> std::io::Result<usize> {
+/// `path` (each matched by any of its spellings), of both when both are given and of every grant
+/// when neither is (`script.grants.revoke`). → how many were removed.
+pub(crate) fn revoke_grants(data_dir: &Path, script: Option<&[String]>, path: Option<&[String]>) -> std::io::Result<usize> {
     let store = data_dir.with_file_name(GRANTS_FILE);
     let _lock = lock_store(&store)?;
     let grants = try_read_store(&store)?;
     let before = grants.len();
-    let kept: Vec<serde_json::Value> =
-        grants.into_iter().filter(|g| !(script.is_none_or(|s| g["script"] == *s) && path.is_none_or(|p| g["path"] == *p))).collect();
+    let matches = |value: &serde_json::Value, names: Option<&[String]>| names.is_none_or(|names| names.iter().any(|n| value == n.as_str()));
+    let kept: Vec<serde_json::Value> = grants.into_iter().filter(|g| !(matches(&g["script"], script) && matches(&g["path"], path))).collect();
     let removed = before - kept.len();
     if removed > 0 {
         write_store(&store, kept)?;
