@@ -11,44 +11,44 @@ rust-version = "1.95"
 repository = "https://github.com/storytold/vectorcraft"
 
 [workspace.dependencies]
-craft-cms = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
-craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043", default-features = false, features = ["interpret", "write"] }
-craft-docpath = { version = "0.1.0", git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
-craft-proof = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
+craft-cms = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
+craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b", default-features = false, features = ["interpret", "write"] }
+craft-docpath = { version = "0.1.0", git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
+craft-proof = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
 # The `.vectorcraft` envelope: its members, version, embedded images and the data after the JSON.
-craft-vectorcraft-format = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
-craft-gzip = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
+craft-vectorcraft-format = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
+craft-gzip = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
 # Native Affinity documents (craft-libs#914).
-craft-affinity = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
+craft-affinity = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
 # Bounded CDR (v1-v27) and CMX (32-bit) reader (craft-libs#778).
-craft-cdr = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
+craft-cdr = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
 # SVG parsing, limits, SVGZ and writer (craft-libs#778).
-craft-svg = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043", features = ["tree"] }
-craft-mime = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
+craft-svg = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b", features = ["tree"] }
+craft-mime = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
 # EPS container, previews, ASCII85 and DSC comments (craft-libs#778).
-craft-eps = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
+craft-eps = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
 # DXF tags, reader and writer (craft-libs#778, #926, #927).
-craft-plotter = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
-craft-dxf = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
+craft-plotter = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
+craft-dxf = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
 # WMF, EMF and EMF+ reader (craft-libs#778).
-craft-metafile = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
-craft-xml = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
-craft-image-codecs = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
-craft-gif = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
-craft-tiff = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
-craft-ps = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043", default-features = false, features = ["read", "write"] }
-craft-psd = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
-craft-stream-codecs = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
-craft-jxl = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
-craft-codepage = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
+craft-metafile = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
+craft-xml = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
+craft-image-codecs = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
+craft-gif = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
+craft-tiff = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
+craft-ps = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b", default-features = false, features = ["read", "write"] }
+craft-psd = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
+craft-stream-codecs = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
+craft-jxl = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
+craft-codepage = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
 # The framework facade (`craft::ui`, `craft::settings`, `craft::platform`, ...). No default features: each crate names
 # the members it imports.
-craft = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
+craft = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
 # Below the egui layer, so not through the facade: the colour harmony rules and their settings (craft-color-ui
 # without its `ui` feature), the colour type they work in, and the craft-fonts tables the text crate's build writes.
-craft-color-ui = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
-craft-theme = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
-craft-fonts-build = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
+craft-color-ui = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
+craft-theme = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
+craft-fonts-build = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
 # internal
 vectorcraft-geom = { path = "crates/geom" }
 vectorcraft-color = { path = "crates/color" }
@@ -191,13 +191,13 @@ lto = "thin"
 codegen-units = 1
 
 [patch.crates-io]
-hayro-syntax = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
-hayro-interpret = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
-hayro-jbig2 = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
-hayro-cmap = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
-hayro-postscript = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
-krilla = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
-linesweeper = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043" }
+hayro-syntax = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
+hayro-interpret = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
+hayro-jbig2 = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
+hayro-cmap = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
+hayro-postscript = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
+krilla = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
+linesweeper = { git = "https://github.com/storytold/craft-libs", rev = "6fcf61c816c399508a60c7029a59e2c7b6139e0b" }
 ecolor = { git = "https://github.com/storytold/egui.git", rev = "b15ffe9bfc2c8e6748533b32b708e10abaf2afec" }
 emath = { git = "https://github.com/storytold/egui.git", rev = "b15ffe9bfc2c8e6748533b32b708e10abaf2afec" }
 epaint = { git = "https://github.com/storytold/egui.git", rev = "b15ffe9bfc2c8e6748533b32b708e10abaf2afec" }
