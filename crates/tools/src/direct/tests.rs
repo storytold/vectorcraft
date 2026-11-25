@@ -1355,6 +1355,110 @@ fn a_double_click_outside_isolation_leaves_it() {
     assert!(DirectSelectionTool::new(false).pointer(&cx(&d, &none, &p), &PointerEvent::new(PointerKind::DoubleClick, 700.0, 700.0)).is_empty());
 }
 
+/// The anchor a Direct Selection double-click at `at` adds: (path, subpath, segment, t).
+fn double_click_adds(cx: &ToolContext, at: (f64, f64), mods: Mods) -> Option<(u64, usize, usize, f64)> {
+    let a = DirectSelectionTool::new(false).pointer(cx, &PointerEvent::new(PointerKind::DoubleClick, at.0, at.1).with_mods(mods));
+    a.iter().find_map(|a| match a {
+        Action::Exec(c, p) if c == "path.insertAnchor" => {
+            assert_eq!(p["selectAnchor"], true, "the new anchor is selected: {p}");
+            Some((p["id"].as_u64()?, p["subpath"].as_u64()? as usize, p["segment"].as_u64()? as usize, p["t"].as_f64()?))
+        }
+        _ => None,
+    })
+}
+
+/// With General › Double-Click Adds Anchor Points on, a plain
+/// Direct Selection double-click on a segment of a selected or unselected path adds an anchor at
+/// the clicked point. Off, Group Selection, a modifier, an anchor or the fill add none.
+#[test]
+fn with_the_preference_on_a_double_click_on_a_segment_adds_an_anchor_there() {
+    let (d, id) = doc_with_rect();
+    let p = paint();
+    let mut whole = Selection::default();
+    whole.add(id);
+    let none = Selection::default();
+    let top = d.node(id).and_then(|n| n.path_data()).map(|pd| pd.subpaths[0].clone()).unwrap_or_else(|| panic!("the rectangle"));
+    for sel in [&none, &whole] {
+        let on = ToolContext { double_click_adds_anchor: true, ..cx(&d, sel, &p) };
+        let (path, si, seg, t) = double_click_adds(&on, (150.0, 101.0), Mods::default()).unwrap_or_else(|| panic!("an anchor is added"));
+        assert_eq!((path, si), (id.0, 0));
+        let c = top.segment(seg);
+        assert!(c.p0.y == 100.0 && c.p3.y == 100.0, "on the top edge: {c:?}");
+        let at = vectorcraft_geom::ParamCurve::eval(&c, t);
+        assert!(at.distance(Point::new(150.0, 100.0)) < 1e-6, "at the clicked point: {at:?}");
+        assert_eq!(double_click_adds(&on, (100.0, 100.0), Mods::default()), None, "on an anchor");
+        assert_eq!(double_click_adds(&on, (150.0, 150.0), Mods::default()), None, "in the middle of the fill");
+        for m in [Mods { shift: true, ..Mods::default() }, Mods { alt: true, ..Mods::default() }, Mods { cmd: true, ..Mods::default() }] {
+            assert_eq!(double_click_adds(&on, (150.0, 101.0), m), None, "with {m:?}");
+        }
+        let group = DirectSelectionTool::new(true).pointer(&on, &PointerEvent::new(PointerKind::DoubleClick, 150.0, 101.0));
+        assert!(group.is_empty(), "Group Selection: {group:?}");
+        let off = cx(&d, sel, &p);
+        assert!(DirectSelectionTool::new(false).pointer(&off, &PointerEvent::new(PointerKind::DoubleClick, 150.0, 101.0)).is_empty(), "off");
+    }
+    // On a 40 pt stroke 15 pt above the path, the stroke is hit but the path is out of reach.
+    let mut wide = d.clone();
+    if let Some(s) = wide.node_mut(id).and_then(|n| n.appearance.stroke_mut()) {
+        s.width = 40.0;
+    }
+    let on = ToolContext { double_click_adds_anchor: true, ..cx(&wide, &none, &p) };
+    assert!(hit_test(&wide, Point::new(150.0, 85.0), on.selection_hit_options()).is_some_and(|h| matches!(h.kind, HitKind::Stroke)));
+    assert_eq!(double_click_adds(&on, (150.0, 85.0), Mods::default()), None, "away from the path");
+    assert!(double_click_adds(&on, (150.0, 101.0), Mods::default()).is_some(), "on the path");
+    // Without a stroke, the edge is taken within the tolerance, and the fill just past it is not.
+    let mut unstroked = d.clone();
+    if let Some(n) = unstroked.node_mut(id) {
+        n.appearance.set_stroke(vectorcraft_color::Paint::None);
+    }
+    let on = ToolContext { double_click_adds_anchor: true, ..cx(&unstroked, &none, &p) };
+    assert!(double_click_adds(&on, (150.0, 101.0), Mods::default()).is_some(), "on the edge of the fill");
+    assert!(hit_test(&unstroked, Point::new(150.0, 104.0), on.selection_hit_options()).is_some_and(|h| matches!(h.kind, HitKind::Fill)));
+    assert_eq!(double_click_adds(&on, (150.0, 104.0), Mods::default()), None, "on the fill past the tolerance");
+}
+
+/// With the preference on, a double-click on a segment of a path in a group adds the anchor to
+/// that path; on the group's fill it does what it did before (nothing), and outside isolated art it
+/// still leaves isolation mode.
+#[test]
+fn with_the_preference_on_a_double_click_in_a_group_adds_only_on_a_segment() {
+    let (d, inside, outside, inner, _) = nested_group_doc();
+    let p = paint();
+    let none = Selection::default();
+    let on = ToolContext { double_click_adds_anchor: true, ..cx(&d, &none, &p) };
+    assert_eq!(double_click_adds(&on, (150.0, 101.0), Mods::default()).map(|a| a.0), Some(inside.0));
+    assert_eq!(double_click_adds(&on, (350.0, 301.0), Mods::default()).map(|a| a.0), Some(outside.0));
+    assert!(DirectSelectionTool::new(false).pointer(&on, &PointerEvent::new(PointerKind::DoubleClick, 150.0, 150.0)).is_empty(), "the fill");
+    let isolated = ToolContext { isolation: Some(inner), ..on };
+    assert_eq!(double_click_adds(&isolated, (150.0, 101.0), Mods::default()).map(|a| a.0), Some(inside.0), "isolated art");
+    let exit = vec![Action::Exec("object.exitIsolation".into(), json!({}))];
+    assert_eq!(DirectSelectionTool::new(false).pointer(&isolated, &PointerEvent::new(PointerKind::DoubleClick, 350.0, 301.0)), exit);
+}
+
+/// With the preference on, a double-click on a blend's spine point, which a press takes before the
+/// path under it, adds no anchor to that path; on the same path away from the spine point it does.
+/// A clipping path's segment, which a press takes over the art it clips, gets the anchor.
+#[test]
+fn with_the_preference_on_a_double_click_gives_way_to_spine_points_and_reaches_clipping_paths() {
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let key = |id: NodeId, x: f64| {
+        let line = vectorcraft_geom::shapes::line(Point::new(x, 310.0), Point::new(x + 40.0, 310.0));
+        std::sync::Arc::new(vectorcraft_doc::Node::path(id, line, vectorcraft_doc::Appearance::default_art()))
+    };
+    let (g, k1, k2) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let b = vectorcraft_doc::Node::new(g, NodeKind::Blend { children: vec![key(k1, 100.0), key(k2, 200.0)], spec: Default::default() });
+    d.insert(Some(l), 1, b).unwrap();
+    let p = paint();
+    let none = Selection::default();
+    let on = ToolContext { double_click_adds_anchor: true, ..cx(&d, &none, &p) };
+    assert_eq!(double_click_adds(&on, (130.0, 310.0), Mods::default()).map(|a| a.0), Some(k1.0), "on the line");
+    assert_eq!(double_click_adds(&on, (120.0, 310.0), Mods::default()), None, "on the spine point at its center");
+
+    let (d, _, clip, _) = doc_with_masked_square();
+    let on = ToolContext { double_click_adds_anchor: true, ..cx(&d, &none, &p) };
+    assert_eq!(double_click_adds(&on, (500.0, 450.0), Mods::default()).map(|a| a.0), Some(clip.0), "on the clipping path");
+}
+
 /// With Direct Selection, an Alt-click on a path selected whole adds its group on release, and
 /// each further Alt-click adds the next group up, as Group Selection's clicks do, on an anchor,
 /// a segment and the fill alike. The climb stops below the layer and at the isolated group.

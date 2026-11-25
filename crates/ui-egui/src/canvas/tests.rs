@@ -2933,9 +2933,11 @@ fn double_clicking_type_with_the_selection_tool_puts_the_caret_there() {
     let at = xf.to_screen(b.center());
     let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     timed(&mut app, 1.0, vec![egui::Event::PointerMoved(at), button(true), button(false), button(true), button(false)]);
-    // The framework holds a frame's second press for the next pass.
+    // The framework holds a frame's second press for the next frame; the double-click it completes hands the text
+    // to the Type tool two frames after that.
     timed(&mut app, 1.05, vec![]);
     timed(&mut app, 1.1, vec![]);
+    timed(&mut app, 1.15, vec![]);
     // The Type tool edits the text, with the caret inside it, where it was clicked: typing goes
     // into the text, not to tool shortcuts (X would swap fill and stroke).
     assert_eq!(app.session.tool_id(), "type");
@@ -3076,9 +3078,11 @@ fn double_clicking_type_with_the_direct_selection_tool_puts_the_caret_there() {
     let at = xf.to_screen(b.center());
     let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     timed(&mut app, 1.0, vec![egui::Event::PointerMoved(at), button(true), button(false), button(true), button(false)]);
-    // The framework holds a frame's second press for the next pass.
+    // The framework holds a frame's second press for the next frame; the double-click it completes hands the text
+    // to the Type tool two frames after that.
     timed(&mut app, 1.05, vec![]);
     timed(&mut app, 1.1, vec![]);
+    timed(&mut app, 1.15, vec![]);
     // The Type tool edits the text, with the caret inside it, where it was clicked: typing goes
     // into the text, not to tool shortcuts.
     assert_eq!(app.session.tool_id(), "type");
@@ -3136,9 +3140,11 @@ fn double_clicking_type_in_a_missing_font_asks_before_editing() {
     let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     let double_click = |app: &mut VectorcraftApp, time: f64| {
         timed(app, time, vec![egui::Event::PointerMoved(at), button(true), button(false), button(true), button(false)]);
-        // The framework holds a frame's second press for the next pass.
+        // The framework holds a frame's second press for the next frame; the double-click it completes asks two
+        // frames after that.
         timed(app, time + 0.05, vec![]);
         timed(app, time + 0.1, vec![]);
+        timed(app, time + 0.15, vec![]);
     };
     let asking = |app: &VectorcraftApp| app.dialogs().unwrap().with(|h| h.is_open::<crate::dialogs::confirm::MissingFontQuestion>());
     double_click(&mut app, 1.0);
@@ -3238,9 +3244,11 @@ fn escape_while_editing_in_isolation_returns_to_selection_tool_and_keeps_isolati
 
     // 1st double-click on group enters isolation mode.
     timed(&mut app, 1.0, vec![egui::Event::PointerMoved(at), button(true), button(false), button(true), button(false)]);
-    // The framework holds a frame's second press for the next pass.
+    // The framework holds a frame's second press for the next frame; the double-click it completes isolates the group
+    // two frames after that.
     timed(&mut app, 1.05, vec![]);
     timed(&mut app, 1.1, vec![]);
+    timed(&mut app, 1.15, vec![]);
     assert!(app.session.active().unwrap().isolation.is_some(), "should be in isolation mode");
     assert_eq!(app.session.tool_id(), "selection");
 
