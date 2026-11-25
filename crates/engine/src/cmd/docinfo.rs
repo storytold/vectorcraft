@@ -209,10 +209,11 @@ impl ImageRow {
         // A distorted image is measured at its middle, as `image.info` measures it.
         let xf = vectorcraft_doc::image_quad::nearest_affine(n).unwrap_or(im.xf);
         let ppi = super::place::effective_ppi(xf);
-        // A transform that lays both pixel axes on one line leaves the image no area. The
-        // determinant is compared with the product of the two axes' lengths, at any scale.
+        // An image with no pixels across or down has no area, and so does one whose transform lays
+        // both pixel axes on one line. The determinant is compared with the product of the two
+        // axes' lengths, at any scale.
         let [xx, xy, yx, yy, ..] = xf.as_coeffs();
-        let has_area = xf.determinant().abs() > 1e-9 * xx.hypot(xy) * yx.hypot(yy);
+        let has_area = im.width > 0 && im.height > 0 && xf.determinant().abs() > 1e-9 * xx.hypot(xy) * yx.hypot(yy);
         let embedded = im.link.is_none();
         let memory = || u64::from(im.width).checked_mul(u64::from(im.height))?.checked_mul(4);
         Self {
@@ -2480,6 +2481,21 @@ mod tests {
         let ppi = i["imageObjects"][0]["effectivePpi"].as_array().map(|v| v.iter().map(|v| v.as_f64().unwrap_or(0.0)).collect::<Vec<_>>());
         let ppi = ppi.unwrap_or_default();
         assert!(ppi.len() == 2 && ppi.iter().all(|v| (v / 7.2e8 - 1.0).abs() < 1e-9), "{}", i["imageObjects"][0]);
+    }
+
+    /// An image with no pixels across or down has no area, so its row gives no resolution whatever
+    /// its transform.
+    #[test]
+    fn a_zero_pixel_image_has_no_resolution() {
+        let mut s = Session::new();
+        let half = Affine::scale(0.5);
+        images_in(&mut s, &[("a", "image/png", Some("/art/none.png"), 0, 800, half), ("a", "image/png", Some("/art/flat.png"), 1200, 0, half)]);
+        let i = s.execute("document.info", &json!({})).unwrap();
+        let objects = i["imageObjects"].as_array().cloned().unwrap_or_default();
+        assert_eq!(objects.iter().map(|o| o["effectivePpi"].clone()).collect::<Vec<_>>(), [Value::Null, Value::Null], "{objects:?}");
+        let text = s.execute("document.info", &json!({"format": "text"})).unwrap()["text"].as_str().unwrap_or_default().to_string();
+        assert!(text.contains("none.png: PNG; 0 × 800 px; resolution unavailable — /art/none.png\n"), "{text}");
+        assert!(text.contains("flat.png: PNG; 1200 × 0 px; resolution unavailable — /art/flat.png\n"), "{text}");
     }
 
     /// A number of bytes reads in B below 1 KiB, else in KiB, MiB or GiB to a tenth, and a
