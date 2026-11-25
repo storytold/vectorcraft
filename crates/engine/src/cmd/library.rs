@@ -20,7 +20,6 @@ use serde_json::{Map, Value, json};
 use vectorcraft_color::{Color, GradientPaint, Paint};
 use vectorcraft_doc::{Appearance, Node, NodeId, TextStyleDef};
 
-use super::clipboard::SwatchChoices;
 use super::{CommandSpec, EngineError, Result, Session, always, bad, cmd, color_value, has_doc, ids_param, index_opt, ok, point_param, str_param};
 use crate::Clipboard;
 
@@ -713,7 +712,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Use Library Item",
             [],
             None,
-            "{library?, kind, item: name (graphic: id or name), center?: [x, y] (graphic; default: the first artboard's centre), to?: fill|stroke (colors, gradients, patterns; default: the kind's), recorded?: the item as it was when used (recorded in the journal so a replay matches)} graphic: place a copy centred on `center`, its resources pasted along, selected, one undo step; colors and gradients: paint the selection (and the defaults) as paint.setFill/paint.setStroke, a gradient fitting each object; a spot color links to the document's spot swatch of its ink's name, added when the document has none of that colour (a name taken by another colour gets a number), one undo step; patterns: add the pattern and its swatch to the document (a name the document gives another pattern gets a number; the same pattern is reused) and paint the selection (and the defaults) with it, one undo step; charStyle/paraStyle: add the style to the document (a name taken by different attributes gets a number; a character style's color linked to a swatch that isn't a global or spot swatch of the document keeps the color it shows, unlinked) and apply it to the selected text, one undo step → {kind, ids?, style?}",
+            "{library?, kind, item: name (graphic: id or name), center?: [x, y] (graphic; default: the first artboard's centre), to?: fill|stroke (colors, gradients, patterns; default: the kind's), defaultsOnly?: bool (colors, gradients, patterns: paint only the defaults, as with paint.setFill's; the journal records it for an item used while the Live Paint Bucket is the active tool), recorded?: the item as it was when used (recorded in the journal so a replay matches)} graphic: place a copy centred on `center`, its resources pasted along, selected, one undo step; colors and gradients: paint the selection (and the defaults) as paint.setFill/paint.setStroke, a gradient fitting each object; a spot color links to the document's spot swatch of its ink's name, added when the document has none of that colour (a name taken by another colour gets a number), one undo step; patterns: add the pattern and its swatch to the document (a name the document gives another pattern gets a number; the same pattern is reused, also when its art links to the document's own color of a name; a global or spot color its art links to whose name the document gives another color comes in numbered, or as the document's numbered copy of the same color, and the pattern links to it) and paint the selection (and the defaults) with it, one undo step; charStyle/paraStyle: add the style to the document (a name taken by different attributes gets a number; a character style's color linked to a swatch that isn't a global or spot swatch of the document keeps the color it shows, unlinked) and apply it to the selected text, one undo step → {kind, ids?, style?}",
             has_doc,
             use_item
         ),
@@ -1186,6 +1185,7 @@ fn item_param<'a>(s: &Session, p: &'a Value, cmd: &str) -> Result<(String, Kind,
 
 fn use_item(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "library.use";
+    super::switch_or(p, "defaultsOnly", false, C)?;
     // A replay (the journal) carries what the item was, so it doesn't depend on the library.
     let recorded = p.get("recorded").cloned();
     let (kind, data) = match recorded {
@@ -1247,18 +1247,20 @@ fn use_item(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Kind::FillColor | Kind::StrokeColor => {
             let stroke = to_stroke(p, kind)?;
+            let only = super::paint::defaults_only(s, p, C)?;
             let color = data.get("color").cloned().ok_or_else(|| bad(C, "no colour"))?;
             let set = if stroke { "paint.setStroke" } else { "paint.setFill" };
             match str_param(&data, "spot").map(str::trim).filter(|n| !n.is_empty()) {
-                Some(ink) => use_spot(s, set, ink, &color, &data)?,
+                Some(ink) => use_spot(s, set, ink, &color, &data, only)?,
                 None => {
-                    s.execute(set, &json!({ "color": color }))?;
+                    s.execute(set, &super::paint::with_defaults_only(json!({ "color": color }), only))?;
                 }
             }
             Ok(json!({ "kind": if stroke { "strokeColor" } else { "fillColor" } }))
         }
         Kind::FillGradient | Kind::StrokeGradient => {
             let stroke = to_stroke(p, kind)?;
+            let only = super::paint::defaults_only(s, p, C)?;
             let damaged = || bad(C, "the library item is damaged");
             let mut g: GradientPaint = data.get("gradient").cloned().and_then(|v| serde_json::from_value(v).ok()).ok_or_else(damaged)?;
             if !clean_gradient(&mut g) {
@@ -1268,12 +1270,13 @@ fn use_item(s: &mut Session, p: &Value) -> Result<Value> {
             for st in &mut g.gradient.stops {
                 st.color = super::paint::new_color(s, &json!({}), st.color);
             }
-            super::paint::apply_paint(s, &json!({}), Paint::Gradient(Box::new(g)), !stroke)?;
+            super::paint::apply_paint(s, &super::paint::with_defaults_only(json!({}), only), Paint::Gradient(Box::new(g)), !stroke)?;
             Ok(json!({ "kind": if stroke { "strokeGradient" } else { "fillGradient" } }))
         }
         Kind::FillPattern | Kind::StrokePattern => {
             let stroke = to_stroke(p, kind)?;
-            let pattern = use_pattern(s, &data, stroke)?;
+            let only = super::paint::defaults_only(s, p, C)?;
+            let pattern = use_pattern(s, &data, stroke, only)?;
             Ok(json!({ "kind": if stroke { "strokePattern" } else { "fillPattern" }, "pattern": pattern }))
         }
         Kind::CharStyle | Kind::ParaStyle => {
@@ -1304,8 +1307,8 @@ fn use_item(s: &mut Session, p: &Value) -> Result<Value> {
 /// Paint with library spot colour `ink` (`color` its full-strength colour, `data`'s `tint` its
 /// tint) through `set` (paint.setFill or paint.setStroke), linked to the document's spot swatch of
 /// that name: the one it has when it is the same colour, else a new one (a name taken by another
-/// colour gets a number), one undo step (#5812).
-fn use_spot(s: &mut Session, set: &str, ink: &str, color: &Value, data: &Value) -> Result<()> {
+/// colour gets a number), one undo step (#5812). With `only`, only the default takes it.
+fn use_spot(s: &mut Session, set: &str, ink: &str, color: &Value, data: &Value, only: bool) -> Result<()> {
     const C: &str = "library.use";
     let c = color_value(color).ok_or_else(|| bad(C, "the library item is damaged"))?;
     let tint = data.get("tint").and_then(Value::as_f64).filter(|t| t.is_finite()).map_or(1.0, |t| t.clamp(0.0, 1.0));
@@ -1322,7 +1325,7 @@ fn use_spot(s: &mut Session, set: &str, ink: &str, color: &Value, data: &Value) 
         if tint < 1.0 {
             p["tint"] = json!(tint * 100.0);
         }
-        s.execute(set, &p)?;
+        s.execute(set, &super::paint::with_defaults_only(p, only))?;
         Ok(())
     })
 }
@@ -1340,8 +1343,8 @@ fn to_stroke(p: &Value, kind: Kind) -> Result<bool> {
 /// Add library pattern `data` (`{pattern, data}`) to the document, with its swatch and the
 /// resources its art uses (the same pattern there already is reused; a name the document gives
 /// another one gets a number), and paint the selection's fill (`stroke`: stroke) and the default
-/// with it, one undo step → the pattern's name in the document.
-fn use_pattern(s: &mut Session, data: &Value, stroke: bool) -> Result<String> {
+/// with it (with `only`, only the default), one undo step → the pattern's name in the document.
+fn use_pattern(s: &mut Session, data: &Value, stroke: bool, only: bool) -> Result<String> {
     const C: &str = "library.use";
     let damaged = || bad(C, "the library item is damaged");
     let bytes = data.get("data").and_then(Value::as_str).and_then(vectorcraft_format::base64_decode).ok_or_else(damaged)?;
@@ -1353,12 +1356,13 @@ fn use_pattern(s: &mut Session, data: &Value, stroke: bool) -> Result<String> {
     if clip.nodes.is_empty() {
         return Err(damaged());
     }
-    let choices = SwatchChoices::default();
-    // The pattern's name in the document, worked out on a copy: nothing to add is no edit.
-    let mut probe = (*s.doc()?.doc).clone();
-    let imported = clip.import_into(&mut probe, &choices, false)?;
-    let renamed = imported.renamed.iter().find(|r| r["kind"] == "pattern" && r["from"] == name.as_str()).and_then(|r| r["to"].as_str());
-    let target = renamed.unwrap_or(&name).to_string();
+    // The pattern's name in the document, worked out on a copy: nothing to add is no edit. A global
+    // or spot color the pattern's art links to keeps the library's color, as Add to Swatches brings
+    // a library pattern's colors.
+    let current = s.doc()?.doc.clone();
+    let (choices, probe, imported) = super::patternlib::probe_import(&current, &doc, &name, &clip, &Default::default())?;
+    drop(current);
+    let target = super::patternlib::imported_name(&imported, &name);
     let paint = vectorcraft_doc::pattern::pattern_paint(&target);
     // A pattern the document holds without a swatch (an imported SVG's) gets one.
     let has_swatch =
@@ -1378,7 +1382,7 @@ fn use_pattern(s: &mut Session, data: &Value, stroke: bool) -> Result<String> {
         }
         // The pattern itself, not a swatch of its name (a color swatch can share it); `swatch` keeps
         // the placement of a pattern the targets already have, as picking its swatch does.
-        super::paint::apply_paint(s, &json!({ "swatch": target }), paint.clone(), !stroke)
+        super::paint::apply_paint(s, &super::paint::with_defaults_only(json!({ "swatch": target }), only), paint.clone(), !stroke)
     })?;
     Ok(target)
 }

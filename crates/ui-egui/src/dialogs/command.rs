@@ -1,70 +1,278 @@
-//! The generic parameter dialog (`ui.paramDialog`): edits a command's parameters (`__command`,
-//! headed `__label`) and runs it on OK, with the fixed ones in `__params` (not shown) added.
+//! The generic parameter dialog (`ui.paramDialog`): edits a command's parameters and runs it on OK, with the
+//! fixed ones (`__params`, not shown) added. One row per parameter the command takes, its kind from the value the
+//! dialog opens with; the tables below say which are distances, choices and in what order.
 
-use serde_json::{Value, json};
+use std::sync::Arc;
 
-use super::{DialogSpec, form};
-use crate::state::Dialog;
-use crate::theme::Tokens;
-use crate::{VectorcraftApp, widgets};
+use craft::ui::dialog::DialogId;
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
+use serde_json::{Map, Value};
 
-pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: heading_label,
-    body: |app, ui, d| {
-        let command = d.str("__command");
-        let (lengths, order) = (lengths(&command), order(&command));
-        let rank = |k: &str| order.iter().position(|o| *o == k).unwrap_or(order.len());
-        // Area Type Options › Text Flow is a pair of radio buttons after the other options.
-        let flow = if command == "text.areaOptions" { d.fields.remove("flow") } else { None };
-        // Area Type Options: a Row Gutter still as it opened, on rows without a gutter of their own,
-        // follows the Gutter as it is changed.
-        let linked = d.fields.get("__rowGutterLinked").is_some() && d.fields.get("__rowGutterLinked") == d.fields.get("rowGutter");
-        let cmyk = app.session.active().is_some_and(|s| s.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk);
-        let choices = |k: &str| rasterize_color_models(&command, k, cmyk).or_else(|| choices(&command, k));
-        form::param_fields(ui, d, &|k| lengths.contains(&k), &choices, &rank, app.session.general_unit());
-        if command == crate::addons::packaging::SET_ROLE_SWATCH {
-            crate::addons::packaging::follow_role(app, d);
-        }
-        if linked
-            && d.fields.get("rowGutter") == d.fields.get("__rowGutterLinked")
-            && let Some(g) = d.fields.get("gutter").cloned()
-        {
-            d.fields.insert("rowGutter".into(), g.clone());
-            d.fields.insert("__rowGutterLinked".into(), g);
-        }
-        if let Some(v) = flow {
-            let mut rows = v.as_str() == Some("rows");
-            ui.add_space(4.0);
-            egui::Grid::new("text-flow").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
-                let row = ui.label(egui::RichText::new(crate::i18n::colon(tl!("Text Flow"))).color(Tokens::get(ui.ctx()).text));
-                ui.label_inputs_by(row.id, |ui| {
-                    ui.horizontal(|ui| {
-                        if widgets::radio(ui, tl!("By Rows"), rows, true) {
-                            rows = true;
-                        }
-                        if widgets::radio(ui, tl!("By Columns"), !rows, true) {
-                            rows = false;
-                        }
-                    });
-                });
-                ui.end_row();
-            });
-            d.fields.insert("flow".into(), json!(if rows { "rows" } else { "columns" }));
-        }
-        if previews(d) {
-            let (cmd, params) = call(d);
-            form::preview(app, ui, d, &d.str("__label"), &cmd, params);
-        }
-        false
-    },
-    confirm,
-    passes: |d, key| takes(d, key) || (key == "preview" && previews(d)),
-    ..DialogSpec::FORM
-};
+use super::form;
+use super::host::{HeldOptions, open_held_with};
+use super::preview::LivePreview;
+use crate::VectorcraftApp;
 
-/// The dialog's heading (`__label`, English) in the UI language.
-fn heading_label(d: &Dialog) -> String {
-    heading_in(crate::i18n::current(), &d.str("__label"))
+/// The open parameter dialog and what it keeps between frames.
+#[derive(Default)]
+pub(crate) struct CommandDialog {
+    open: Option<Open>,
+}
+
+impl CommandDialog {
+    /// The open dialog's heading, in English, as the menu item gave it.
+    #[cfg(test)]
+    pub(crate) fn label(&self) -> Option<&str> {
+        self.open.as_ref().map(|o| o.label.as_str())
+    }
+}
+
+/// One open parameter dialog.
+struct Open {
+    id: DialogId,
+    command: String,
+    /// The heading, in English, as the menu item gave it.
+    label: String,
+    /// The values the dialog opened with: they give each row its kind and its first value.
+    opening: Map<String, Value>,
+    /// The fixed parameters (`__params`) sent with the dialog's own.
+    fixed: Map<String, Value>,
+    /// Area Type Options: the Row Gutter as it opened on rows without a gutter of their own, while it is still that.
+    linked: Option<f64>,
+    previews: bool,
+    preview: LivePreview,
+    /// Set Role Swatch: the role the Swatch row was last filled for.
+    filled_for: Option<String>,
+    /// The uid of the document whose objects the dialog opened on (`__doc`), for Set Fold Angle.
+    doc: Option<u64>,
+    /// Names this dialog's own open among reopenings of the same command, for its OK and Cancel.
+    token: Arc<()>,
+}
+
+/// What the rows are built against: the document's colour model and its length units.
+#[derive(Clone, Copy)]
+struct Setting {
+    cmyk: bool,
+    units: LengthUnits,
+}
+
+impl Setting {
+    fn of(app: &VectorcraftApp) -> Self {
+        Self {
+            cmyk: app.session.active().is_some_and(|s| s.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk),
+            // PLAN: assumed `canvas::rulers::general_lengths(&VectorcraftApp) -> LengthUnits` (cv.B5)
+            units: crate::canvas::rulers::general_lengths(app),
+        }
+    }
+}
+
+/// Opens the parameter dialog of `command`, headed `label`, on `params` (a menu item's own values, `__params` for the
+/// fixed ones, `__rowGutterLinked` for Area Type Options' linked Row Gutter and `__doc` for the uid of the document
+/// whose objects the dialog edits).
+pub(crate) fn open(app: &mut VectorcraftApp, command: &str, label: &str, mut params: Map<String, Value>) -> Result<Value, String> {
+    let ctx = app.ui_ctx.clone().ok_or("no window")?;
+    if let Some(old) = app.command_dialog.open.take() {
+        old.preview.cancel(app);
+    }
+    let fixed = match params.remove("__params") {
+        Some(Value::Object(m)) => m,
+        _ => Map::new(),
+    };
+    let linked = params.remove("__rowGutterLinked").and_then(|v| v.as_f64());
+    let doc = params.remove("__doc").and_then(|v| v.as_u64());
+    params.retain(|k, _| !k.starts_with("__"));
+    let previews = previews(command, &params);
+    let setting = Setting::of(app);
+    let fields = form::fields_of(&command_params(command, &params, setting), &params);
+    let token = Arc::new(());
+    let dialog = {
+        let (key, heading, opening) = (command.to_string(), heading_label(label), params.clone());
+        HostedParamDialog::command(&ctx, command, fields, move |_: &mut DialogFields| {
+            ParamDialog::command(key.clone(), heading.clone(), command_params(&key, &opening, setting)).previews(previews)
+        })
+        // The Preview box starts off, as production's dialogs did (#5360).
+        .preview_off()
+    };
+    let ok_token = token.clone();
+    let cancel_token = token.clone();
+    let options = HeldOptions { cancel: Some(Box::new(move |app: &mut VectorcraftApp| cancel(app, &cancel_token))), ..Default::default() };
+    let id = open_held_with(app, dialog, move |app, answer| confirm(app, &ok_token, &answer.fields).map(|_| ()), options).ok_or("no window")?;
+    app.command_dialog.open = Some(Open {
+        id,
+        command: command.to_string(),
+        label: label.to_string(),
+        opening: params,
+        fixed,
+        linked,
+        previews,
+        preview: LivePreview::default(),
+        filled_for: None,
+        doc,
+        token,
+    });
+    Ok(Value::Null)
+}
+
+/// One pass of the open dialog, after the shell's: the rules that tie rows together, then the live preview. Never
+/// runs a command inside the dialog host's lock.
+pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+    let Some(mut open) = app.command_dialog.open.take() else { return };
+    step(app, &mut open);
+    // Nothing the step runs opens a dialog; a holder set meanwhile is the newer one.
+    if app.command_dialog.open.is_none() {
+        app.command_dialog.open = Some(open);
+    }
+}
+
+fn step(app: &mut VectorcraftApp, open: &mut Open) {
+    let Some(dialogs) = app.dialogs() else { return };
+    let id = open.id;
+    let seen = dialogs.with(|h| h.get_by_id::<HostedParamDialog>(id).map(|d| (d.fields().clone(), d.is_previewing())));
+    let Some((fields, previewing)) = seen else { return };
+    let params = command_params(&open.command, &open.opening, Setting::of(app));
+    let mut json = form::json_of(&params, &fields);
+    let mut sets: Vec<(&str, FieldValue)> = Vec::new();
+    // Area Type Options: a Row Gutter still as it opened follows the Gutter as it is changed.
+    if let Some(linked) = open.linked
+        && json.get("rowGutter").and_then(Value::as_f64) == Some(linked)
+        && let Some(gutter) = json.get("gutter").and_then(Value::as_f64)
+        && gutter != linked
+    {
+        json.insert("rowGutter".into(), Value::from(gutter));
+        sets.push(("rowGutter", FieldValue::Number(gutter)));
+        open.linked = Some(gutter);
+    }
+    if open.command == crate::addons::packaging::SET_ROLE_SWATCH
+        && let Some(role) = json.get("role").and_then(Value::as_str).map(str::to_string)
+        && let Some(swatch) = crate::addons::packaging::follow_role(app, &role, &mut open.filled_for)
+    {
+        json.insert("swatch".into(), Value::String(swatch.clone()));
+        sets.push(("swatch", FieldValue::Text(swatch)));
+    }
+    if !sets.is_empty() {
+        dialogs.with(|h| {
+            if let Some(d) = h.get_mut_by_id::<HostedParamDialog>(id) {
+                for (key, value) in sets {
+                    d.set_field(key, value);
+                }
+            }
+        });
+    }
+    if open.previews {
+        let value = call(&open.command, &open.fixed, open.linked, json);
+        // The preview reports a refusal in the status bar itself.
+        let _ = open.preview.run(app, previewing, &open.label, &open.command, &value);
+    }
+}
+
+/// OK: runs the command on the dialog's values (keeping a preview as the one undo step) and closes the dialog; an
+/// error keeps it open with the reason under its rows. A dialog opened on one document's objects (`__doc`, its uid)
+/// closes as Cancel does and runs nothing once another document is the active one.
+fn confirm(app: &mut VectorcraftApp, token: &Arc<()>, fields: &DialogFields) -> Result<Value, String> {
+    let open = app.command_dialog.open.take_if(|o| Arc::ptr_eq(&o.token, token)).ok_or("the dialog is gone")?;
+    if open.doc.is_some() && open.doc != app.session.active().map(|st| st.uid) {
+        open.preview.cancel(app);
+        return Ok(Value::Null);
+    }
+    let params = command_params(&open.command, &open.opening, Setting::of(app));
+    let value = call(&open.command, &open.fixed, open.linked, form::json_of(&params, fields));
+    let result = if open.previews {
+        open.preview.clone().commit(app, &open.command, value)
+    } else {
+        // A tool's click-to-size shape (Flare) goes on the active perspective plane while the grid shows.
+        let at = |x: &str, y: &str| Some(vectorcraft_geom::Point::new(value.get(x)?.as_f64()?, value.get(y)?.as_f64()?));
+        match at("cx", "cy").or_else(|| at("x", "y")).and_then(|pt| vectorcraft_engine::perspective_click(&app.session, &open.command, &value, pt)) {
+            Some((c, p)) => app.run(&c, p),
+            None => app.run(&open.command, value),
+        }
+    };
+    if result.is_err() {
+        app.command_dialog.open = Some(open);
+    }
+    result
+}
+
+/// Cancel: rolls back the preview of the dialog `token` names.
+fn cancel(app: &mut VectorcraftApp, token: &Arc<()>) {
+    if let Some(open) = app.command_dialog.open.take_if(|o| Arc::ptr_eq(&o.token, token)) {
+        open.preview.cancel(app);
+    }
+}
+
+/// The rows of `command`'s dialog: one per value it opens with that the command takes, in `order(command)` first and
+/// the rest by name, Area Type Options' Text Flow last.
+fn command_params(command: &str, opening: &Map<String, Value>, setting: Setting) -> Vec<Param> {
+    let order = order(command);
+    let rank = |k: &str| order.iter().position(|o| *o == k).unwrap_or(order.len());
+    let flow = |k: &str| command == "text.areaOptions" && k == "flow";
+    let mut keys: Vec<&String> = opening.keys().filter(|k| !k.starts_with("__") && takes(command, k)).collect();
+    keys.sort_by_key(|k| (flow(k), rank(k)));
+    keys.into_iter().filter_map(|key| row(command, key, opening.get(key)?, setting)).collect()
+}
+
+/// The row of parameter `key` that opens with `value`; none for a value no row edits.
+fn row(command: &str, key: &str, value: &Value, setting: Setting) -> Option<Param> {
+    let label = if command == "text.areaOptions" && key == "flow" {
+        tl!("Text Flow").to_string()
+    } else {
+        let humanized = form::humanize(key);
+        tl!(humanized.trim_end_matches(':')).to_string()
+    };
+    if let Some(options) = rasterize_color_models(command, key, setting.cmyk).or_else(|| choices(command, key)) {
+        let options = options.iter().map(|(l, v)| ((*v).to_string(), Label::from(form::choice_label(l)))).collect();
+        return Some(Param::new(key, label, ParamKind::choice(options, value.as_str().map(str::to_string))));
+    }
+    if command == "text.areaOptions" && key == "flow" {
+        let options =
+            vec![("rows".to_string(), Label::from(tl!("By Rows").to_string())), ("columns".to_string(), Label::from(tl!("By Columns").to_string()))];
+        return Some(Param::new(key, label, ParamKind::radio(options, value.as_str().map(str::to_string))));
+    }
+    Some(match value {
+        Value::Bool(on) => Param::new(key, label, ParamKind::bool(*on)),
+        Value::Number(n) => {
+            let whole = n.is_i64() || n.is_u64();
+            let range = number_range(command, key);
+            // A ranged number (a fold angle) is shown to every place it keeps.
+            let decimals = match range {
+                Some(_) => u32::try_from(crate::addons::packaging::angle_places(n.as_f64())).unwrap_or(u32::MAX),
+                None if whole => 0,
+                None => 3,
+            };
+            let mut param = Param::number(key, label, n.as_f64().unwrap_or(0.0), 1.0, decimals);
+            if let Some(range) = range {
+                param = param.bounds(Some(*range.start()), Some(*range.end()));
+            }
+            if lengths(command).contains(&key) {
+                param = param.length(setting.units);
+                if let Some(range) = length_range(command, key) {
+                    param = param.bounds(Some(*range.start()), Some(*range.end()));
+                }
+            }
+            if key == "ppi" {
+                param = param.unit(UnitKind::PixelsPerInch);
+            }
+            param
+        }
+        Value::String(s) => match hex_rgb(s) {
+            Some(rgb) => Param::new(key, label, ParamKind::color(Some(rgb))),
+            None if s.contains('\n') => Param::new(key, label, ParamKind::text(s.clone())).multiline(4),
+            None => Param::new(key, label, ParamKind::text(s.clone())),
+        },
+        _ => return None,
+    })
+}
+
+/// `#rrggbb` as colour components.
+fn hex_rgb(s: &str) -> Option<[f32; 3]> {
+    let hex = s.strip_prefix('#').filter(|h| h.len() == 6)?;
+    let channel = |at: usize| u8::from_str_radix(hex.get(at..at + 2)?, 16).ok().map(|v| f32::from(v) / 255.0);
+    Some([channel(0)?, channel(2)?, channel(4)?])
+}
+
+/// The dialog's heading in the UI language.
+fn heading_label(label: &str) -> String {
+    heading_in(crate::i18n::current(), label)
 }
 
 /// `label` as a heading in `lang`. A menu item opens the dialog with its label less the "…", so
@@ -86,9 +294,9 @@ fn heading_in(lang: crate::i18n::Lang, label: &str) -> String {
 /// Cutting Tools › Weed Box and Lines, Banner Hems and Grommets and Nest Shapes, and Path
 /// Precision Tools › Common Tangents and the bounding shapes (Add Bounding Rectangle… and Add
 /// Bounding Circle…). (Cancel rolls a preview back whichever dialog started it.)
-fn previews(d: &Dialog) -> bool {
-    match d.str("__command").as_str() {
-        "object.repeat.options" => d.fields.contains_key("gridType"),
+fn previews(command: &str, opening: &Map<String, Value>) -> bool {
+    match command {
+        "object.repeat.options" => opening.contains_key("gridType"),
         "type.pathOptions"
         | crate::addons::typetools::RELEASE
         | crate::addons::image::REMOVE_BACKGROUND
@@ -103,39 +311,37 @@ fn previews(d: &Dialog) -> bool {
     }
 }
 
-/// The command the dialog runs and its parameters: the fields shown and the fixed ones.
-fn call(d: &Dialog) -> (String, Value) {
-    let mut params = form::params(d);
-    if let (Some(o), Some(Value::Object(fixed))) = (params.as_object_mut(), d.fields.get("__params")) {
-        o.extend(fixed.clone());
-    }
+/// The parameters the command runs with: the dialog's values and the fixed ones.
+fn call(command: &str, fixed: &Map<String, Value>, linked: Option<f64>, mut params: Map<String, Value>) -> Value {
+    params.extend(fixed.clone());
     // Area Type Options: a Row Gutter left as it opened, on rows without a gutter of their own,
     // isn't sent, so the rows take the Gutter.
-    if let (Some(o), Some(linked)) = (params.as_object_mut(), d.fields.get("__rowGutterLinked"))
-        && d.fields.get("rowGutter") == Some(linked)
+    if let Some(linked) = linked
+        && params.get("rowGutter").and_then(Value::as_f64) == Some(linked)
     {
-        o.remove("rowGutter");
+        params.remove("rowGutter");
     }
     // Weed Box and Lines: a Spacing of 0, or none, leaves the Count in use; any other Spacing is
     // sent instead of the Count, so the command refuses one below 0.
-    if d.str("__command") == crate::addons::cutting::WEED
-        && let Some(o) = params.as_object_mut()
-    {
+    if command == crate::addons::cutting::WEED {
         let zero = |s: &Value| match s {
             Value::Null => true,
             Value::String(t) => vectorcraft_doc::Unit::Points.parse(t).or_else(|| t.trim().parse().ok()) == Some(0.0),
             v => v.as_f64() == Some(0.0),
         };
-        let by_count = o.get("spacing").is_none_or(zero);
-        o.remove(if by_count { "spacing" } else { "count" });
+        let by_count = params.get("spacing").is_none_or(zero);
+        params.remove(if by_count { "spacing" } else { "count" });
     }
-    (d.str("__command"), params)
+    Value::Object(params)
 }
 
-/// Does the dialog's command take parameter `key` (its params description names it)?
-fn takes(d: &Dialog, key: &str) -> bool {
-    let id = d.str("__command");
-    vectorcraft_engine::find_command(&id).is_some_and(|c| vectorcraft_engine::check_keys(&id, c.params, &serde_json::json!({ key: null })).is_ok())
+/// Does `command` take parameter `key` (its params description names it)?
+fn takes(command: &str, key: &str) -> bool {
+    // An app command (Rotate View) is checked against its own params doc.
+    let params = vectorcraft_engine::find_command(command)
+        .map(|c| c.params)
+        .or_else(|| crate::menus::UI_COMMANDS.iter().find(|c| c.0 == command).map(|c| c.3));
+    params.is_some_and(|params| vectorcraft_engine::check_keys(command, params, &serde_json::json!({ key: null })).is_ok())
 }
 
 /// The parameters of the commands this dialog edits that are distances.
@@ -160,7 +366,7 @@ fn lengths(command: &str) -> &'static [&'static str] {
 
 /// The range (points) of a distance parameter of the commands this dialog edits, where the
 /// command has one: the field refuses a distance typed outside it.
-pub(super) fn length_range(command: &str, key: &str) -> Option<std::ops::RangeInclusive<f64>> {
+pub(crate) fn length_range(command: &str, key: &str) -> Option<std::ops::RangeInclusive<f64>> {
     match (command, key) {
         ("object.textWrap.options", "offset") => Some(vectorcraft_engine::TEXT_WRAP_OFFSET_RANGE),
         // The bounding shapes take an offset of 0 or more, and the command refuses one that takes
@@ -174,7 +380,7 @@ pub(super) fn length_range(command: &str, key: &str) -> Option<std::ops::RangeIn
 
 /// The range of a number parameter (not a distance) of the commands this dialog edits, where the
 /// command has one: the field keeps what is typed within it.
-pub(super) fn number_range(command: &str, key: &str) -> Option<std::ops::RangeInclusive<f64>> {
+fn number_range(command: &str, key: &str) -> Option<std::ops::RangeInclusive<f64>> {
     match (command, key) {
         (crate::addons::packaging::SET_FOLD_ANGLE, "angle") => Some(crate::addons::packaging::FOLD_ANGLES),
         _ => None,
@@ -281,39 +487,108 @@ const FIRST_BASELINE: form::Choices = &[
 /// Area Type Options › Align (vertical alignment of the lines in each row/column).
 const VERTICAL_ALIGN: form::Choices = &[("Top", "top"), ("Center", "center"), ("Bottom", "bottom"), ("Justify", "justify")];
 
-/// Closes before running, so a dialog the command opens stays open. A previewed one keeps its
-/// preview as the one undo step. A dialog opened on one document's objects (`__doc`, its uid)
-/// closes as Cancel does and runs nothing once another document is the active one, as Delete
-/// Brush's question does (`brush_delete.rs`, `confirm`).
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    if let Some(doc) = d.fields.get("__doc")
-        && doc.as_u64() != app.session.active().map(|st| st.uid)
-    {
-        app.ui.dialog = None;
-        return Ok(json!({}));
-    }
-    let (cmd, params) = call(d);
-    if previews(d) {
-        return form::commit_preview(app, &cmd, params);
-    }
-    app.ui.dialog = None;
-    // A tool's click-to-size shape (Flare) goes on the active perspective plane while the grid shows.
-    let at = |x: &str, y: &str| Some(vectorcraft_geom::Point::new(params.get(x)?.as_f64()?, params.get(y)?.as_f64()?));
-    if let Some((c, p)) =
-        at("cx", "cy").or_else(|| at("x", "y")).and_then(|pt| vectorcraft_engine::perspective_click(&app.session, &cmd, &params, pt))
-    {
-        return app.run(&c, p);
-    }
-    app.run(&cmd, params)
-}
-
 #[cfg(test)]
 mod tests {
     use serde_json::json;
-    use vectorcraft_doc::{NodeKind, VerticalAlign};
+    use vectorcraft_doc::{NodeKind, TextFlow, VerticalAlign};
     use vectorcraft_engine::Session;
 
     use super::*;
+    use crate::i18n::LangExt as _;
+
+    /// An app with a window context, so a dialog can open.
+    fn windowed() -> VectorcraftApp {
+        crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()))
+    }
+
+    fn id_of(app: &VectorcraftApp) -> DialogId {
+        app.command_dialog.open.as_ref().expect("a command dialog is open").id
+    }
+
+    /// One frame's pump, twice: the pump of this dialog and then the host's drain of its answers.
+    fn pump(app: &mut VectorcraftApp) {
+        let ctx = app.ui_ctx.clone().unwrap();
+        for _ in 0..2 {
+            crate::dialogs::host::pump(app, &ctx);
+        }
+    }
+
+    /// Sets `field` as automation does and runs a frame.
+    fn set(app: &mut VectorcraftApp, field: &str, value: Value) {
+        let (ctx, id) = (app.ui_ctx.clone().unwrap(), id_of(app));
+        app.dialogs().unwrap().with(|h| h.set_json_field(&ctx, id, field, value)).unwrap();
+        pump(app);
+    }
+
+    fn answer_ok(app: &mut VectorcraftApp) {
+        let (ctx, id) = (app.ui_ctx.clone().unwrap(), id_of(app));
+        app.dialogs().unwrap().with(|h| h.confirm_by_id(&ctx, id));
+        pump(app);
+    }
+
+    fn answer_cancel(app: &mut VectorcraftApp) {
+        let (ctx, id) = (app.ui_ctx.clone().unwrap(), id_of(app));
+        app.dialogs().unwrap().with(|h| h.cancel_by_id(&ctx, id));
+        pump(app);
+    }
+
+    /// The text area of node `$id`.
+    macro_rules! area {
+        ($app:expr, $id:expr) => {
+            match &$app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId($id)).unwrap().kind {
+                NodeKind::Text(t) => &t.area,
+                _ => panic!("text"),
+            }
+        };
+    }
+
+    /// A window app with the object `command` edits selected → the object's id.
+    fn prepared(command: &str) -> (VectorcraftApp, u64) {
+        let mut app = windowed();
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        let rect = json!({"x": 10, "y": 10, "width": 20, "height": 20});
+        let id = match command {
+            "text.areaOptions" => app.run("text.create", json!({"x": 20, "y": 20, "text": "Hello", "area": {"width": 200, "height": 200}})),
+            "object.rasterize" => {
+                let id = app.run("shape.ellipse", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
+                app.run("paint.setFill", json!({"color": "#ff0000", "ids": [id]})).unwrap();
+                Ok(json!({ "id": id }))
+            }
+            "object.repeat.options" => {
+                let id = app.run("shape.rectangle", rect).unwrap()["id"].as_u64().unwrap();
+                app.run("object.repeat.grid", json!({"ids": [id], "rows": 2, "cols": 2})).unwrap();
+                Ok(json!({ "id": id }))
+            }
+            _ => app.run("shape.rectangle", rect),
+        }
+        .unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        (app, id)
+    }
+
+    /// The top-left pixel of the selected raster.
+    fn corner(app: &VectorcraftApp) -> [u8; 4] {
+        pixel(app, false)
+    }
+
+    /// The top-left or the middle pixel of the selected raster.
+    fn pixel(app: &VectorcraftApp, middle: bool) -> [u8; 4] {
+        let st = app.session.active().unwrap();
+        let key = st.selection.objects.iter().find_map(|id| match st.doc.node(*id).map(|n| &n.kind) {
+            Some(NodeKind::Image(i)) => Some(i.key.clone()),
+            _ => None,
+        });
+        let decoded = craft_image_codecs::decode(&st.doc.images[&key.expect("the object became an image")].bytes).unwrap();
+        let img = image::RgbaImage::from_raw(decoded.width(), decoded.height(), decoded.to_rgba8()).unwrap();
+        let (x, y) = if middle { (img.width() / 2, img.height() / 2) } else { (0, 0) };
+        img.get_pixel(x, y).0
+    }
+
+    fn cols(app: &VectorcraftApp) -> u64 {
+        crate::panels::pattern_options::repeat_fields(app).unwrap()["cols"].as_u64().unwrap()
+    }
 
     #[test]
     fn area_type_options_choices_match_the_params_doc() {
@@ -326,125 +601,86 @@ mod tests {
         assert!(choices("text.areaOptions", "inset").is_none());
     }
 
+    /// Each row of a command's dialog, set as automation sets it and confirmed, reaches the engine under its
+    /// own name.
     #[test]
-    fn area_type_options_dialog_sets_the_vertical_alignment() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
-        let id = app.run("text.create", json!({"x": 20, "y": 20, "text": "Hello", "area": {"width": 200, "height": 200}})).unwrap()["id"]
-            .as_u64()
-            .unwrap();
-        app.run("select.set", json!({"ids": [id]})).unwrap();
-        crate::menus::invoke(&mut app, "text.areaOptions", json!({}));
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("verticalAlign"), "top");
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
-        out.textures_delta.clear();
-        app.ui.dialog.as_mut().unwrap().fields.insert("verticalAlign".into(), json!("center"));
-        crate::dialogs::confirm(&mut app).unwrap();
-        let NodeKind::Text(t) = &app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
-        assert_eq!(t.area.vertical_align, VerticalAlign::Center);
+    fn a_parameter_row_sets_its_commands_param() {
+        struct Row {
+            command: &'static str,
+            field: &'static str,
+            value: Value,
+            effect: fn(&VectorcraftApp, u64) -> bool,
+        }
+        let rows = [
+            Row {
+                command: "text.areaOptions",
+                field: "verticalAlign",
+                value: json!("center"),
+                effect: |app, id| area!(app, id).vertical_align == VerticalAlign::Center,
+            },
+            Row {
+                command: "text.areaOptions",
+                field: "firstBaseline",
+                value: json!("emBoxHeight"),
+                effect: |app, id| area!(app, id).first_baseline == vectorcraft_doc::FirstBaseline::EmBoxHeight,
+            },
+            Row { command: "text.areaOptions", field: "flow", value: json!("rows"), effect: |app, id| area!(app, id).flow == TextFlow::Rows },
+            Row { command: "object.rasterize", field: "background", value: json!("white"), effect: |app, _| corner(app) == [255, 255, 255, 255] },
+            Row {
+                command: "object.mesh.create",
+                field: "appearance",
+                value: json!("center"),
+                effect: |app, _| {
+                    let st = app.session.active().unwrap();
+                    st.selection.objects.iter().any(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Mesh(_))))
+                },
+            },
+            Row {
+                command: "object.repeat.options",
+                field: "gridType",
+                value: json!("brickByRow"),
+                effect: |app, _| crate::panels::pattern_options::repeat_fields(app).unwrap()["gridType"] == json!("brickByRow"),
+            },
+        ];
+        for row in rows {
+            let (mut app, id) = prepared(row.command);
+            // A click on the menu row: Create Gradient Mesh… carries the values its dialog opens on.
+            let item = crate::menus::menu_entries(&app).into_iter().find(|e| e.command.as_deref() == Some(row.command)).expect("a menu row");
+            let (cmd, p) = crate::menus::click_target(&item.label, row.command, &item.params);
+            crate::menus::invoke(&mut app, &cmd, p);
+            set(&mut app, row.field, row.value);
+            answer_ok(&mut app);
+            assert!((row.effect)(&app, id), "{} {}", row.command, row.field);
+            assert!(app.command_dialog.open.is_none(), "{}: OK closed the dialog", row.command);
+        }
     }
 
-    /// Area Type Options › First Baseline offers Em Box Height: OK sets it with its Min, and the
-    /// dialog opens again with it chosen.
+    /// Area Type Options: a Row Gutter of its own is sent as set, and one left as it opened follows the Gutter.
     #[test]
-    fn area_type_options_dialog_sets_the_em_box_height_first_baseline() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
-        let id = app.run("text.create", json!({"x": 20, "y": 20, "text": "Hello", "area": {"width": 200, "height": 200}})).unwrap()["id"]
-            .as_u64()
-            .unwrap();
-        app.run("select.set", json!({"ids": [id]})).unwrap();
-        // The labels `i18n::tests::first_baseline_choices_are_in_complete_catalogs` checks.
-        let labels: Vec<&str> = choices("text.areaOptions", "firstBaseline").unwrap().iter().map(|(l, _)| *l).collect();
-        assert_eq!(labels, ["Ascent", "Cap Height", "x Height", "Leading", "Em Box Height", "Fixed"]);
+    fn a_row_gutter_left_as_opened_follows_the_gutter() {
+        let (mut app, id) = prepared("text.areaOptions");
+        let gutters = |app: &VectorcraftApp| (area!(app, id).gutter, area!(app, id).row_gutter);
         crate::menus::invoke(&mut app, "text.areaOptions", json!({}));
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("firstBaseline"), "ascent");
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
-        out.textures_delta.clear();
-        let fields = &mut app.ui.dialog.as_mut().unwrap().fields;
-        fields.insert("firstBaseline".into(), json!("emBoxHeight"));
-        fields.insert("firstBaselineMin".into(), json!(4.0));
-        crate::dialogs::confirm(&mut app).unwrap();
-        let NodeKind::Text(t) = &app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
-        assert_eq!((t.area.first_baseline, t.area.first_baseline_min), (vectorcraft_doc::FirstBaseline::EmBoxHeight, 4.0));
-        crate::menus::invoke(&mut app, "text.areaOptions", json!({}));
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("firstBaseline"), "emBoxHeight");
-    }
-
-    /// Area Type Options shows the gutter between rows beside the gutter, and OK sets a gutter
-    /// between rows of its own.
-    #[test]
-    fn area_type_options_dialog_sets_the_gutter_between_rows() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
-        let id = app.run("text.create", json!({"x": 20, "y": 20, "text": "Hello", "area": {"width": 200, "height": 200}})).unwrap()["id"]
-            .as_u64()
-            .unwrap();
-        app.run("select.set", json!({"ids": [id]})).unwrap();
-        crate::menus::invoke(&mut app, "text.areaOptions", json!({}));
-        assert_eq!(app.ui.dialog.as_ref().unwrap().fields.get("rowGutter"), Some(&json!(18.0)));
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
-        out.textures_delta.clear();
-        app.ui.dialog.as_mut().unwrap().fields.insert("rowGutter".into(), json!(30.0));
-        crate::dialogs::confirm(&mut app).unwrap();
-        let area = |app: &VectorcraftApp| {
-            let NodeKind::Text(t) = &app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
-            (t.area.gutter, t.area.row_gutter)
-        };
-        assert_eq!(area(&app), (18.0, Some(30.0)));
+        set(&mut app, "rowGutter", json!(30.0));
+        answer_ok(&mut app);
+        assert_eq!(gutters(&app), (18.0, Some(30.0)));
         // Rows with a gutter of their own keep it when only the Gutter changes.
         crate::menus::invoke(&mut app, "text.areaOptions", json!({}));
-        app.ui.dialog.as_mut().unwrap().fields.insert("gutter".into(), json!(12.0));
-        crate::dialogs::confirm(&mut app).unwrap();
-        assert_eq!(area(&app), (12.0, Some(30.0)));
+        set(&mut app, "gutter", json!(12.0));
+        answer_ok(&mut app);
+        assert_eq!(gutters(&app), (12.0, Some(30.0)));
         // Without one, a changed Gutter is the rows' too.
         app.run("text.areaOptions", json!({"gutter": 18})).unwrap();
         crate::menus::invoke(&mut app, "text.areaOptions", json!({}));
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
-        out.textures_delta.clear();
-        app.ui.dialog.as_mut().unwrap().fields.insert("gutter".into(), json!(10.0));
-        // The Row Gutter shown follows it.
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
-        out.textures_delta.clear();
-        assert_eq!(app.ui.dialog.as_ref().unwrap().fields.get("rowGutter"), Some(&json!(10.0)));
-        crate::dialogs::confirm(&mut app).unwrap();
-        assert_eq!(area(&app), (10.0, None));
+        set(&mut app, "gutter", json!(10.0));
+        answer_ok(&mut app);
+        assert_eq!(gutters(&app), (10.0, None));
     }
 
-    /// Area Type Options › Text Flow (#4978): two radio buttons, By Columns as new area type has
-    /// it, and OK fills the cells by rows when By Rows is picked.
-    #[test]
-    fn area_type_options_dialog_sets_the_text_flow() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
-        let id = app.run("text.create", json!({"x": 20, "y": 20, "text": "Hello", "area": {"width": 200, "height": 200}})).unwrap()["id"]
-            .as_u64()
-            .unwrap();
-        app.run("select.set", json!({"ids": [id]})).unwrap();
-        crate::menus::invoke(&mut app, "text.areaOptions", json!({}));
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
-        out.textures_delta.clear();
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("flow"), "columns", "drawing the radio buttons keeps the value");
-        app.ui.dialog.as_mut().unwrap().fields.insert("flow".into(), json!("rows"));
-        crate::dialogs::confirm(&mut app).unwrap();
-        let NodeKind::Text(t) = &app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
-        assert_eq!(t.area.flow, vectorcraft_doc::TextFlow::Rows);
-    }
-
-    /// Object › Rasterize › Color Model is a dropdown of the models `object.rasterize` takes, the
-    /// document's own first (#5660): every value runs, and picking Grayscale rasterizes in grays.
+    /// Object › Rasterize › Color Model lists the models the command takes, the document's own first (#5660): every
+    /// value runs, and picking Grayscale rasterizes in grays.
     #[test]
     fn rasterize_color_model_is_a_dropdown_of_the_models_the_command_takes() {
-        use egui::accesskit::Role;
-        use egui_kittest::kittest::Queryable;
         for (mode, own) in [("rgb", "RGB"), ("cmyk", "CMYK")] {
             let models = rasterize_color_models("object.rasterize", "colorModel", mode == "cmyk").unwrap();
             assert_eq!(models.first(), Some(&(own, mode)), "the document's own model first");
@@ -457,245 +693,55 @@ mod tests {
         }
         assert!(rasterize_color_models("object.rasterize", "background", false).is_none());
         assert!(rasterize_color_models("document.rasterEffectsSettings", "colorModel", false).is_none());
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
-        app.run("paint.setFill", json!({"color": "#ff0000", "ids": [id]})).unwrap();
-        app.run("select.set", json!({"ids": [id]})).unwrap();
+        let (mut app, _) = prepared("object.rasterize");
         crate::menus::invoke(&mut app, "object.rasterize", json!({}));
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("colorModel"), "rgb");
-        let mut fonts = false;
-        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
-            move |ui, app: &mut VectorcraftApp| {
-                if !std::mem::replace(&mut fonts, true) {
-                    crate::theme::install_fonts(ui.ctx());
-                    return;
-                }
-                crate::dialogs::show(app, ui.ctx());
-            },
-            app,
-        );
-        h.run_steps(5);
-        assert!(h.query_by_role_and_label(Role::TextInput, "Color Model:").is_none(), "not a text field");
-        h.get_by_role_and_label(Role::ComboBox, "Color Model:").click();
-        h.run_steps(3);
-        h.get_by_label("Grayscale").click();
-        h.run_steps(3);
-        assert_eq!(h.state().ui.dialog.as_ref().unwrap().str("colorModel"), "grayscale");
-        let app = h.state_mut();
-        crate::dialogs::confirm(app).unwrap();
-        let st = app.session.active().unwrap();
-        let key = st.selection.objects.iter().find_map(|id| match st.doc.node(*id).map(|n| &n.kind) {
-            Some(NodeKind::Image(i)) => Some(i.key.clone()),
-            _ => None,
-        });
-        let decoded = craft_image_codecs::decode(&st.doc.images[&key.expect("the rectangle became an image")].bytes).unwrap();
-        let img = image::RgbaImage::from_raw(decoded.width(), decoded.height(), decoded.to_rgba8()).unwrap();
-        let p = img.get_pixel(img.width() / 2, img.height() / 2).0;
+        set(&mut app, "colorModel", json!("grayscale"));
+        answer_ok(&mut app);
+        // The ellipse's middle: its corner is the transparent background.
+        let p = pixel(&app, true);
         assert!(p[0] == p[1] && p[1] == p[2] && p[0] < 128, "red in grayscale: {p:?}");
     }
 
-    /// Object › Rasterize… opens this dialog with its options as parameter labels (#7991): in
-    /// French the heading, every field label and the resolution's unit ("ppp") are drawn in French.
-    #[test]
-    fn rasterize_dialog_is_drawn_in_the_ui_language() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
-        app.run("select.set", json!({"ids": [id]})).unwrap();
-        let entries = crate::menus::menu_entries(&app);
-        let item = entries.iter().find(|e| e.path == ["Object"] && e.label == "Rasterize…").expect("listed");
-        let (cmd, p) = crate::menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
-        crate::menus::invoke(&mut app, &cmd, p);
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("__label"), "Rasterize");
-        let keys: Vec<String> = app.ui.dialog.as_ref().unwrap().fields.keys().filter(|k| !k.starts_with("__")).cloned().collect();
-        assert_eq!(keys.len(), 6, "{keys:?}");
-        assert_eq!(form::humanize("ppi"), "Resolution:");
-        crate::i18n::set_current(crate::i18n::Lang::from_code("fr").unwrap());
-        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-        let heading = heading_label(app.ui.dialog.as_ref().unwrap());
-        crate::i18n::set_current(crate::i18n::Lang::EN);
-        assert_eq!(heading, "Pixelliser");
-        let french = ["Ajouter autour de l’objet", "Lissage", "Arrière-plan", "Masque d’écrêtage", "Modèle colorimétrique", "Résolution", "ppp"];
-        for s in french {
-            assert!(shown.contains(s), "{s} in {shown}");
-        }
-        for s in ["Rasterize", "Add Around", "Anti Alias", "Background", "Clipping Mask", "Color Model", "Resolution", "Ppi", "ppi"] {
-            assert!(!shown.contains(s), "{s} left in English: {shown}");
-        }
-        // Every language with complete menus heads the dialog as the menu item that opened it
-        // reads, and has a row for each label, the unit and the Color Model choices.
-        for lang in crate::i18n::Lang::all().filter(|l| l.complete_menus()) {
-            let menu = crate::i18n::tr(lang, &item.label);
-            assert_ne!(menu, item.label, "{}: menu item", lang.code());
-            assert_eq!(heading_in(lang, "Rasterize"), menu.trim_end_matches('…').trim_end(), "{}: heading", lang.code());
-            let labels = keys.iter().map(|k| form::humanize(k).trim_end_matches(':').to_string());
-            for label in labels.chain(["{n} ppi", "Grayscale", "Bitmap"].map(String::from)) {
-                assert!(crate::i18n::has(lang, &label), "{}: {label}", lang.code());
-            }
-        }
-    }
-
-    /// Object › Path › Clean Up… opens this dialog headed "Clean Up", which most catalogs hold only
-    /// as the menu label "Clean Up…" (#7991). In French the heading and every option are translated.
-    #[test]
-    fn clean_up_dialog_is_drawn_in_the_ui_language() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-        let entries = crate::menus::menu_entries(&app);
-        let item = entries.iter().find(|e| e.path == ["Object", "Path"] && e.label == "Clean Up…").expect("listed");
-        let (cmd, p) = crate::menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
-        crate::menus::invoke(&mut app, &cmd, p);
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("__label"), "Clean Up");
-        crate::i18n::set_current(crate::i18n::Lang::from_code("fr").unwrap());
-        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-        let heading = heading_label(app.ui.dialog.as_ref().unwrap());
-        crate::i18n::set_current(crate::i18n::Lang::EN);
-        assert_eq!(heading, "Nettoyer");
-        for s in ["Nettoyer", "Points isolés", "Objets sans fond ni contour", "Tracés de texte vides"] {
-            assert!(shown.contains(s), "{s} in {shown}");
-        }
-        for s in ["Clean Up", "Stray Points", "Unpainted Objects", "Empty Text Paths"] {
-            assert!(!shown.contains(s), "{s} left in English: {shown}");
-        }
-        assert_eq!(heading_label(app.ui.dialog.as_ref().unwrap()), "Clean Up", "English keeps the label");
-        // Every language with complete menus has the options, and heads the dialog as the menu
-        // item that opened it reads (Hindi also has a plain "Clean Up" row with other wording).
-        for lang in crate::i18n::Lang::all().filter(|l| l.complete_menus()) {
-            let menu = crate::i18n::tr(lang, &item.label);
-            assert_ne!(menu, item.label, "{}: menu item", lang.code());
-            assert_eq!(heading_in(lang, "Clean Up"), menu.trim_end_matches('…').trim_end(), "{}: heading", lang.code());
-            for key in ["strayPoints", "unpaintedObjects", "emptyTextPaths"] {
-                let label = form::humanize(key);
-                assert!(crate::i18n::has(lang, label.trim_end_matches(':')), "{}: {label}", lang.code());
-            }
-        }
-    }
-
-    /// A document with a rectangle made a 2 x 2 Grid Repeat and selected, its Repeat Options
-    /// dialog open.
-    fn grid_options_app() -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
-        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
-        app.run("object.repeat.grid", json!({"ids": [id], "rows": 2, "cols": 2})).unwrap();
-        crate::menus::invoke(&mut app, "object.repeat.options", json!({}));
-        assert_eq!(app.ui.dialog.as_ref().unwrap().kind, "command");
-        app
-    }
-
-    /// One headless frame of the open dialog.
-    fn frame(app: &mut VectorcraftApp) {
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(app, ui.ctx()));
-        out.textures_delta.clear();
-    }
-
-    fn cols(app: &VectorcraftApp) -> u64 {
-        crate::panels::pattern_options::repeat_fields(app).unwrap()["cols"].as_u64().unwrap()
-    }
-
-    /// #2651: the grid options' public page lists a Preview checkbox: with it on, the repeat on
-    /// the canvas follows the fields while the dialog is open; Cancel puts it back without a
-    /// step of history; OK keeps what was previewed as one step.
+    /// #2651: with Preview on, the repeat on the canvas follows the fields while the dialog is open; Cancel puts it
+    /// back without a step of history; OK keeps what was previewed as one step.
     #[test]
     fn grid_repeat_options_preview_on_the_canvas() {
-        let mut app = grid_options_app();
+        let (mut app, _) = prepared("object.repeat.options");
         let steps = app.session.doc().unwrap().history.undo.len();
-        // Off: the fields change nothing until OK.
-        app.ui.dialog.as_mut().unwrap().fields.insert("cols".into(), json!(3));
-        frame(&mut app);
-        assert_eq!(cols(&app), 2, "no preview without the checkbox");
-        // On, the repeat follows the fields.
-        crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "preview".into(), json!(true));
-        frame(&mut app);
+        crate::menus::invoke(&mut app, "object.repeat.options", json!({}));
+        set(&mut app, "preview", json!(true));
+        set(&mut app, "cols", json!(3));
         assert_eq!(cols(&app), 3, "the canvas shows 3 columns while the dialog is open");
-        app.ui.dialog.as_mut().unwrap().fields.insert("cols".into(), json!(4));
-        frame(&mut app);
+        assert!(app.session.in_interaction());
+        set(&mut app, "cols", json!(4));
         assert_eq!(cols(&app), 4, "and follows the next edit");
-        // Cancel puts the original back and leaves no history.
-        crate::dialogs::cancel(&mut app);
+        answer_cancel(&mut app);
         assert_eq!(cols(&app), 2, "Cancel restores the original repeat");
         assert_eq!(app.session.doc().unwrap().history.undo.len(), steps, "and adds no undo step");
         assert!(!app.session.in_interaction());
-        // OK keeps the previewed values as one undo step.
         crate::menus::invoke(&mut app, "object.repeat.options", json!({}));
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("cols".into(), json!(5));
-        crate::dialogs::set_field(d, "preview".into(), json!(true));
-        frame(&mut app);
-        crate::dialogs::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
+        set(&mut app, "preview", json!(true));
+        set(&mut app, "cols", json!(5));
+        answer_ok(&mut app);
         assert_eq!(cols(&app), 5);
         assert_eq!(app.session.doc().unwrap().history.undo.len(), steps + 1, "one undo step");
         app.run("edit.undo", json!({})).unwrap();
         assert_eq!(cols(&app), 2, "one Undo takes the whole change back");
     }
 
-    /// Grid Repeat Options labels its column fields Columns and Flip Columns, as the Rows and Flip
-    /// Rows fields beside them are spelled out.
-    #[test]
-    fn grid_repeat_options_spell_out_columns() {
-        let mut app = grid_options_app();
-        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-        for s in ["Rows:", "Columns:", "Flip Rows:", "Flip Columns:"] {
-            assert!(shown.contains(s), "{s} in {shown}");
-        }
-        assert!(!shown.contains("Cols"), "no Cols label: {shown}");
-    }
-
-    /// Object › Create Gradient Mesh… opens this dialog with the menu's rows, cols, appearance and
-    /// highlight. In French the heading and the four labels are translated, and "cols" is labeled
-    /// Columns (#7991).
-    #[test]
-    fn create_gradient_mesh_dialog_is_drawn_in_the_ui_language() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
-        let entries = crate::menus::menu_entries(&app);
-        let item = entries.iter().find(|e| e.path == ["Object"] && e.label == "Create Gradient Mesh…").expect("listed");
-        let (cmd, p) = crate::menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
-        crate::menus::invoke(&mut app, &cmd, p);
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("__label"), "Create Gradient Mesh");
-        assert_eq!(form::humanize("cols"), "Columns:");
-        crate::i18n::set_current(crate::i18n::Lang::from_code("fr").unwrap());
-        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-        let heading = heading_label(app.ui.dialog.as_ref().unwrap());
-        crate::i18n::set_current(crate::i18n::Lang::EN);
-        assert_eq!(heading, "Créer un filet de dégradé");
-        for s in ["Créer un filet de dégradé", "Lignes", "Colonnes", "Aspect"] {
-            assert!(shown.contains(s), "{s} in {shown}");
-        }
-        for s in ["Create Gradient Mesh", "Rows", "Cols", "Columns", "Appearance", "Highlight"] {
-            assert!(!shown.contains(s), "{s} left in English: {shown}");
-        }
-        // Every language with complete menus heads the dialog as the menu item reads and has the
-        // four labels.
-        for lang in crate::i18n::Lang::all().filter(|l| l.complete_menus()) {
-            let menu = crate::i18n::tr(lang, &item.label);
-            assert_ne!(menu, item.label, "{}: menu item", lang.code());
-            assert_eq!(heading_in(lang, "Create Gradient Mesh"), menu.trim_end_matches('…').trim_end(), "{}: heading", lang.code());
-            for key in ["rows", "cols", "appearance", "highlight"] {
-                let label = form::humanize(key);
-                assert!(crate::i18n::has(lang, label.trim_end_matches(':')), "{}: {label}", lang.code());
-            }
-        }
-    }
-
-    /// Radial and Mirror Repeat Options have no Preview (their public pages list none): their
-    /// fields apply on OK only, and the dialog takes no `preview`.
+    /// Radial and Mirror Repeat Options have no Preview (their public pages list none): their fields apply on OK
+    /// only.
     #[test]
     fn radial_repeat_options_have_no_preview() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let mut app = windowed();
         app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
         let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
         app.run("object.repeat.radial", json!({"ids": [id], "instances": 4})).unwrap();
         crate::menus::invoke(&mut app, "object.repeat.options", json!({}));
-        let d = app.ui.dialog.as_ref().unwrap();
-        assert!(!crate::dialogs::accepts_field(d, "preview"));
-        app.ui.dialog.as_mut().unwrap().fields.insert("instances".into(), json!(7));
-        frame(&mut app);
+        let (ctx, dialog) = (app.ui_ctx.clone().unwrap(), id_of(&app));
+        let refused = app.dialogs().unwrap().with(|h| h.set_json_field(&ctx, dialog, "preview", json!(true)));
+        assert!(refused.is_err() || !app.command_dialog.open.as_ref().unwrap().previews);
+        set(&mut app, "instances", json!(7));
         assert_eq!(crate::panels::pattern_options::repeat_fields(&app).unwrap()["instances"], 4);
         assert!(!app.session.in_interaction());
     }
@@ -721,180 +767,6 @@ mod tests {
         for sent in [5000.0, -5000.0] {
             assert!(s.execute("object.textWrap.options", &json!({ "offset": sent })).is_err(), "{sent}");
         }
-    }
-
-    /// Replaces the text of the dialog's Offset field with `text`, leaving the field focused.
-    fn type_offset(h: &mut egui_kittest::Harness<'_, VectorcraftApp>, text: &str) {
-        use egui::accesskit::Role;
-        use egui_kittest::kittest::Queryable;
-        let all = egui::Modifiers { ctrl: true, command: true, ..Default::default() };
-        h.get_by_role_and_label(Role::TextInput, "Offset:").focus();
-        h.run_steps(2);
-        h.key_press_modifiers(all, egui::Key::A);
-        h.get_by_role_and_label(Role::TextInput, "Offset:").type_text(text);
-        h.run_steps(2);
-    }
-
-    /// Replaces the text of the dialog's Offset field with `text` and presses Enter.
-    fn enter_offset(h: &mut egui_kittest::Harness<'_, VectorcraftApp>, text: &str) {
-        type_offset(h, text);
-        h.key_press(egui::Key::Enter);
-        h.run_steps(3);
-    }
-
-    /// Text Wrap Options › Offset reads a bare number in the document's units and a typed unit as
-    /// typed, and OK sends points. A distance typed outside the command's range, or text that
-    /// doesn't read, is refused: the dialog stays open and the Offset isn't changed.
-    #[test]
-    fn text_wrap_offset_field_takes_document_units_and_refuses_values_outside_its_range() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
-        app.run("document.setUnits", json!({"units": "millimeters"})).unwrap();
-        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
-        app.run("select.set", json!({"ids": [id]})).unwrap();
-        app.run("object.textWrap.make", json!({})).unwrap();
-        let mut fonts = false;
-        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
-            move |ui, app: &mut VectorcraftApp| {
-                if !std::mem::replace(&mut fonts, true) {
-                    crate::theme::install_fonts(ui.ctx());
-                    return;
-                }
-                crate::dialogs::show(app, ui.ctx());
-            },
-            app,
-        );
-        let offset = |h: &mut egui_kittest::Harness<'_, VectorcraftApp>| {
-            h.state_mut().session.execute("object.textWrap.options", &json!({})).unwrap()["offset"].as_f64().unwrap()
-        };
-        // The ends as the field shows them in millimeters (352.7778 mm is 1000.00006 pt) read
-        // back as the ends.
-        let ends = [("-1000 pt", -1000.0), ("352.7778", 1000.0), ("-352.7778", -1000.0), ("1000 pt", 1000.0)];
-        for (text, want) in [("10", 10.0 * 72.0 / 25.4), ("-12 pt", -12.0)].into_iter().chain(ends) {
-            crate::menus::invoke(h.state_mut(), "object.textWrap.options", json!({}));
-            h.run_steps(3);
-            enter_offset(&mut h, text);
-            assert!(h.state().ui.dialog.is_none(), "{text}: OK applied it");
-            assert!((offset(&mut h) - want).abs() < 1e-9, "{text}: {} pt", offset(&mut h));
-        }
-        for text in ["1000.5 pt", "-2000", "abc"] {
-            crate::menus::invoke(h.state_mut(), "object.textWrap.options", json!({}));
-            h.run_steps(3);
-            enter_offset(&mut h, text);
-            let d = h.state().ui.dialog.as_ref().unwrap_or_else(|| panic!("{text}: the dialog stays open"));
-            assert_eq!(d.fields.get("offset"), Some(&json!(1000.0)), "{text}: the field keeps its value");
-            crate::dialogs::cancel(h.state_mut());
-            assert_eq!(offset(&mut h), 1000.0, "{text}: the Offset is unchanged");
-        }
-        // A click on OK with a value outside the range still in the field is refused too.
-        crate::menus::invoke(h.state_mut(), "object.textWrap.options", json!({}));
-        h.run_steps(3);
-        type_offset(&mut h, "2000 pt");
-        click_ok(&mut h);
-        assert!(h.state().ui.dialog.is_some(), "OK leaves the dialog open");
-        assert_eq!(offset(&mut h), 1000.0, "the Offset is unchanged");
-        // After it, a value inside the range committed with Tab and OK pressed from the keyboard
-        // apply.
-        type_offset(&mut h, "-7 pt");
-        h.key_press(egui::Key::Tab);
-        h.run_steps(2);
-        {
-            use egui_kittest::kittest::Queryable;
-            h.get_by_label("OK").focus();
-        }
-        h.run_steps(2);
-        h.key_press(egui::Key::Space);
-        h.run_steps(3);
-        assert!(h.state().ui.dialog.is_none(), "OK from the keyboard applied it");
-        assert_eq!(offset(&mut h), -7.0);
-        // One inside it applies.
-        crate::menus::invoke(h.state_mut(), "object.textWrap.options", json!({}));
-        h.run_steps(3);
-        type_offset(&mut h, "-5 pt");
-        click_ok(&mut h);
-        assert!(h.state().ui.dialog.is_none(), "OK applied it");
-        assert_eq!(offset(&mut h), -5.0);
-    }
-
-    /// In a document in picas, Text Wrap Options › Offset reads a bare number as the other length
-    /// fields in picas do: in points with Preferences › Units › Numbers Without Units Are Points on
-    /// (the default), in picas with it off. A typed unit is read as typed either way.
-    #[test]
-    fn text_wrap_offset_in_picas_follows_numbers_without_units_are_points() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
-        app.run("document.setUnits", json!({"units": "picas"})).unwrap();
-        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
-        app.run("select.set", json!({"ids": [id]})).unwrap();
-        app.run("object.textWrap.make", json!({})).unwrap();
-        let mut fonts = false;
-        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
-            move |ui, app: &mut VectorcraftApp| {
-                if !std::mem::replace(&mut fonts, true) {
-                    crate::theme::install_fonts(ui.ctx());
-                    return;
-                }
-                crate::dialogs::show(app, ui.ctx());
-            },
-            app,
-        );
-        let apply = |h: &mut egui_kittest::Harness<'_, VectorcraftApp>, text: &str| {
-            crate::menus::invoke(h.state_mut(), "object.textWrap.options", json!({}));
-            h.run_steps(3);
-            enter_offset(h, text);
-            assert!(h.state().ui.dialog.is_none(), "{text}: OK applied it");
-            h.state_mut().session.execute("object.textWrap.options", &json!({})).unwrap()["offset"].as_f64().unwrap()
-        };
-        assert_eq!(apply(&mut h, "10"), 10.0, "on by default: a bare number is in points");
-        assert_eq!(apply(&mut h, "2p6"), 30.0, "picas and points as typed");
-        assert_eq!(apply(&mut h, "-1in"), -72.0, "a typed unit wins");
-        crate::widgets::set_bare_numbers_are_points(&h.ctx, false);
-        assert_eq!(apply(&mut h, "10"), 120.0, "off: a bare number is in picas");
-        assert_eq!(apply(&mut h, "-12 pt"), -12.0, "a typed unit wins");
-    }
-
-    /// Clicks the dialog's OK button with the pointer, the press and the release in frames of
-    /// their own.
-    fn click_ok(h: &mut egui_kittest::Harness<'_, VectorcraftApp>) {
-        use egui_kittest::kittest::Queryable;
-        let ok = h.get_by_label("OK").rect().center();
-        let (button, modifiers) = (egui::PointerButton::Primary, egui::Modifiers::default());
-        h.event(egui::Event::PointerMoved(ok));
-        h.run_steps(1);
-        h.event(egui::Event::PointerButton { pos: ok, button, pressed: true, modifiers });
-        h.run_steps(1);
-        h.event(egui::Event::PointerButton { pos: ok, button, pressed: false, modifiers });
-        h.run_steps(3);
-    }
-
-    /// The dialog that is open in `app`, drawn by a kittest harness (the first frame installs the
-    /// fonts).
-    fn dialog_harness(app: VectorcraftApp) -> egui_kittest::Harness<'static, VectorcraftApp> {
-        let mut fonts = false;
-        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
-            move |ui, app: &mut VectorcraftApp| {
-                if !std::mem::replace(&mut fonts, true) {
-                    crate::theme::install_fonts(ui.ctx());
-                    return;
-                }
-                crate::dialogs::show(app, ui.ctx());
-            },
-            app,
-        );
-        h.run_steps(5);
-        h
-    }
-
-    /// Opens the dropdown labeled `label` and picks `choice` in it: the field must be a dropdown,
-    /// not a text field.
-    fn pick(h: &mut egui_kittest::Harness<'_, VectorcraftApp>, label: &str, choice: &str) {
-        use egui::accesskit::Role;
-        use egui_kittest::kittest::Queryable;
-        assert!(h.query_by_role_and_label(Role::TextInput, label).is_none(), "{label} is not a text field");
-        h.get_by_role_and_label(Role::ComboBox, label).click();
-        h.run_steps(3);
-        h.get_by_label(choice).click();
-        h.run_steps(3);
     }
 
     /// The choices this dialog lists for Rasterize, Create Gradient Mesh and Repeat Options are the
@@ -939,74 +811,133 @@ mod tests {
         }
     }
 
-    /// Object › Rasterize… shows Anti Alias and Background as dropdowns of the values
-    /// `object.rasterize` takes. OK rasterizes with the picked ones as one undo step, and a value
-    /// the dialog doesn't list (black) shows as it is and is sent unchanged.
-    #[test]
-    fn rasterize_anti_alias_and_background_are_dropdowns() {
-        let corner = |app: &VectorcraftApp| {
-            let st = app.session.active().unwrap();
-            let key = st.selection.objects.iter().find_map(|id| match st.doc.node(*id).map(|n| &n.kind) {
-                Some(NodeKind::Image(i)) => Some(i.key.clone()),
-                _ => None,
-            });
-            let decoded = craft_image_codecs::decode(&st.doc.images[&key.expect("the ellipse became an image")].bytes).unwrap();
-            image::RgbaImage::from_raw(decoded.width(), decoded.height(), decoded.to_rgba8()).unwrap().get_pixel(0, 0).0
+    use crate::addons::packaging::{SET_FOLD_ANGLE, SET_ROLE};
+
+    /// A window app with two rectangles, `a` a crease and `b` a cut line, nothing selected → (app, a, b).
+    fn fold_lines() -> (VectorcraftApp, u64, u64) {
+        let mut app = windowed();
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let rect = |app: &mut VectorcraftApp, x: f64| {
+            app.run("shape.rectangle", json!({"x": x, "y": 20, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap()
         };
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-        let id = app.run("shape.ellipse", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
-        app.run("paint.setFill", json!({"color": "#ff0000", "ids": [id]})).unwrap();
-        app.run("select.set", json!({"ids": [id]})).unwrap();
-        let steps = app.session.active().unwrap().history.undo.len();
-        crate::menus::invoke(&mut app, "object.rasterize", json!({}));
-        let d = app.ui.dialog.as_ref().unwrap();
-        assert_eq!((d.str("antiAlias"), d.str("background")), ("art".into(), "transparent".into()));
-        let mut h = dialog_harness(app);
-        pick(&mut h, "Anti Alias:", "Type Optimized");
-        pick(&mut h, "Background:", "White");
-        let d = h.state().ui.dialog.as_ref().unwrap();
-        assert_eq!((d.str("antiAlias"), d.str("background")), ("type".into(), "white".into()));
-        let app = h.state_mut();
-        crate::dialogs::confirm(app).unwrap();
-        assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1, "one undo step");
-        assert_eq!(corner(app), [255, 255, 255, 255], "a white background");
-        // A background the dialog doesn't list stays as it is.
-        app.run("edit.undo", json!({})).unwrap();
-        app.run("select.set", json!({"ids": [id]})).unwrap();
-        crate::menus::invoke(app, "object.rasterize", json!({}));
-        app.ui.dialog.as_mut().unwrap().fields.insert("background".into(), json!("black"));
-        frame(app);
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("background"), "black", "drawing the dropdown keeps it");
-        crate::dialogs::confirm(app).unwrap();
-        assert_eq!(corner(app), [0, 0, 0, 255], "a black background");
+        let (a, b) = (rect(&mut app, 20.0), rect(&mut app, 100.0));
+        app.run(SET_ROLE, json!({"role": "crease", "ids": [a]})).unwrap();
+        app.run(SET_ROLE, json!({"role": "cut", "ids": [b]})).unwrap();
+        app.run("select.none", json!({})).unwrap();
+        (app, a, b)
     }
 
-    /// Create Gradient Mesh… shows Appearance, and Repeat Options for a grid repeat its Grid Type,
-    /// as dropdowns of the values their commands take; OK applies the picked one.
-    #[test]
-    fn mesh_appearance_and_repeat_grid_type_are_dropdowns() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
-        let entries = crate::menus::menu_entries(&app);
-        let item = entries.iter().find(|e| e.path == ["Object"] && e.label == "Create Gradient Mesh…").expect("listed");
-        let (cmd, p) = crate::menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
-        crate::menus::invoke(&mut app, &cmd, p);
-        let mut h = dialog_harness(app);
-        pick(&mut h, "Appearance:", "To Center");
-        let app = h.state_mut();
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("appearance"), "center");
-        crate::dialogs::confirm(app).unwrap();
-        let st = app.session.active().unwrap();
-        assert!(st.selection.objects.iter().any(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Mesh(_)))), "a mesh");
+    /// The angle the open Set Fold Angle… dialog shows.
+    fn shown_angle(app: &VectorcraftApp) -> Option<f64> {
+        let id = id_of(app);
+        app.dialogs().unwrap().with(|h| h.get_by_id::<HostedParamDialog>(id).and_then(|d| d.fields().number("angle")))
+    }
 
-        let mut h = dialog_harness(grid_options_app());
-        pick(&mut h, "Grid Type:", "Brick by Row");
-        let app = h.state_mut();
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("gridType"), "brickByRow");
-        crate::dialogs::confirm(app).unwrap();
-        let fields = crate::panels::pattern_options::repeat_fields(app).unwrap();
-        assert_eq!(fields["gridType"], json!("brickByRow"));
+    /// Set Fold Angle… from its menu item → the angle its dialog opens on, the dialog then canceled; `None` when no
+    /// dialog opens.
+    fn opened_angle(app: &mut VectorcraftApp) -> Option<f64> {
+        crate::menus::invoke(app, SET_FOLD_ANGLE, json!({}));
+        app.command_dialog.open.as_ref()?;
+        pump(app);
+        let angle = shown_angle(app);
+        answer_cancel(app);
+        angle
+    }
+
+    /// The angle the selection's fold lines fold at, after selecting `id`.
+    fn fold_angle(app: &mut VectorcraftApp, id: u64) -> Option<f64> {
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        vectorcraft_engine::cmd::selection_fold_angles(&app.session).angle
+    }
+
+    #[test]
+    fn set_fold_angle_opens_its_dialog_on_the_selected_lines_angle() {
+        let (mut app, a, b) = fold_lines();
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        assert_eq!(opened_angle(&mut app), Some(90.0), "a crease folds at 90° until it has an angle of its own");
+        app.run(SET_FOLD_ANGLE, json!({"angle": 45})).unwrap();
+        assert_eq!(opened_angle(&mut app), Some(45.0));
+        // The cut line does not fold, so the crease's angle is still the one shown.
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        assert_eq!(opened_angle(&mut app), Some(45.0));
+        // Lines that differ open on 90°.
+        let c = app.run("shape.rectangle", json!({"x": 180, "y": 20, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
+        app.run(SET_ROLE, json!({"role": "partialCut", "ids": [c]})).unwrap();
+        app.run("select.set", json!({"ids": [a, c]})).unwrap();
+        assert_eq!(opened_angle(&mut app), Some(90.0));
+        // With only a cut line selected there is nothing to set: no dialog opens, and ui.menuDialog gives the reason.
+        app.run("select.set", json!({"ids": [b]})).unwrap();
+        assert_eq!(opened_angle(&mut app), None);
+        assert!(app.command_dialog.open.is_none());
+        let e = app.run("ui.menuDialog", json!({"command": SET_FOLD_ANGLE})).unwrap_err();
+        assert!(e.contains("select a crease, partial cut or perforation line"), "{e}");
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        app.run("ui.menuDialog", json!({"command": SET_FOLD_ANGLE})).unwrap();
+        pump(&mut app);
+        assert_eq!(shown_angle(&app), Some(45.0));
+        answer_cancel(&mut app);
+        // The options dialog opened with an angle keeps it.
+        crate::menus::invoke(&mut app, "ui.paramDialog", json!({"command": SET_FOLD_ANGLE, "label": "Set Fold Angle", "params": {"angle": 30}}));
+        pump(&mut app);
+        assert_eq!(shown_angle(&app), Some(30.0));
+    }
+
+    /// Set Fold Angle…'s OK changes the lines the dialog opened on, even when the selection changes while it is open
+    /// (a remote command can change it): the other crease keeps its angle.
+    #[test]
+    fn set_fold_angle_s_ok_changes_the_lines_the_dialog_opened_on() {
+        let (mut app, a, b) = fold_lines();
+        app.run(SET_ROLE, json!({"role": "crease", "ids": [b]})).unwrap();
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        crate::menus::invoke(&mut app, SET_FOLD_ANGLE, json!({}));
+        pump(&mut app);
+        app.run("select.set", json!({"ids": [b]})).unwrap();
+        set(&mut app, "angle", json!(30.0));
+        answer_ok(&mut app);
+        assert!(app.command_dialog.open.is_none(), "OK closes the dialog");
+        assert_eq!(fold_angle(&mut app, a), Some(30.0), "the line the dialog opened on");
+        assert_eq!(fold_angle(&mut app, b), Some(90.0), "the line selected later keeps its role's angle");
+    }
+
+    /// Set Fold Angle…'s OK changes nothing once another document is the active one, even a line there with the same
+    /// id as the line the dialog opened on.
+    #[test]
+    fn set_fold_angle_s_ok_changes_nothing_in_another_document() {
+        let (mut app, a, _) = fold_lines();
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        crate::menus::invoke(&mut app, SET_FOLD_ANGLE, json!({}));
+        pump(&mut app);
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let other = app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
+        assert_eq!(other, a, "the same id in the other document");
+        app.run(SET_ROLE, json!({"role": "crease", "ids": [other]})).unwrap();
+        set(&mut app, "angle", json!(30.0));
+        answer_ok(&mut app);
+        assert!(app.command_dialog.open.is_none(), "OK closes the dialog");
+        assert_eq!(fold_angle(&mut app, other), Some(90.0), "the other document's line keeps its role's angle");
+        assert!(app.session.set_active(0));
+        assert_eq!(fold_angle(&mut app, a), Some(90.0), "the first document's line is left as it was");
+    }
+
+    /// Set Fold Angle…'s Angle row takes -180° to 180°, the range the command takes, and shows every place the angle
+    /// it opens on has.
+    #[test]
+    fn set_fold_angle_s_angle_row_keeps_the_commands_range() {
+        let (mut app, a, _) = fold_lines();
+        app.run(SET_FOLD_ANGLE, json!({"angle": 179.999999, "ids": [a]})).unwrap();
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        let param = row(SET_FOLD_ANGLE, "angle", &json!(179.999999), Setting::of(&app)).expect("a row");
+        match param.kind {
+            ParamKind::Number { min, max, decimals, .. } => assert_eq!((min, max, decimals), (Some(-180.0), Some(180.0), 6)),
+            _ => panic!("a number row"),
+        }
+        crate::menus::invoke(&mut app, SET_FOLD_ANGLE, json!({}));
+        pump(&mut app);
+        assert_eq!(shown_angle(&app), Some(179.999999));
+        let (ctx, id) = (app.ui_ctx.clone().unwrap(), id_of(&app));
+        assert!(app.dialogs().unwrap().with(|h| h.set_json_field(&ctx, id, "angle", json!(181))).is_err(), "past the range");
+        set(&mut app, "angle", json!(-180));
+        answer_ok(&mut app);
+        assert_eq!(fold_angle(&mut app, a), Some(-180.0));
     }
 }
