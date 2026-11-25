@@ -8,8 +8,9 @@ use std::sync::{Mutex, PoisonError};
 use craft::host::{PickKind, PickRequest};
 use craft::theme::Rgba;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, Entry, Show as _};
+use craft::ui::contract::{Bind, Entry, Show as _, ShowContainer as _};
 use craft::ui::form::{SliderField, SliderFieldLayout};
+use craft::ui::layout_components::Row;
 use craft::ui::patterns::preferences::{GroupSpec, PageSpec, PathSetting, PrefValue, PreferencesDraft, PreferencesModel, RowKind, RowSpec};
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use serde_json::{Map, Value, json};
@@ -350,10 +351,11 @@ impl PreferencesModel for Live<'_> {
             }
             "prefsFile" => {
                 let (mut export, mut import, mut reset) = (false, false, false);
-                ui.horizontal_wrapped(|ui| {
+                let web = crate::io::is_web(self.app);
+                Row::new().wrap(true).show(ui, |ui, _| {
                     export = Button::new(tl!("Export Preferences…")).show(ui).clicked();
                     // Not on the web, whose open dialog answers with the file's contents, not a path to import.
-                    if !crate::io::is_web(self.app) {
+                    if !web {
                         import = Button::new(tl!("Import Preferences…")).show(ui).clicked();
                     }
                     reset = Button::new(tl!("Reset Preferences")).show(ui).clicked();

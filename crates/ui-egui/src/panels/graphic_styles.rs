@@ -20,17 +20,21 @@ use craft::behavior::{EditEvent, GesturePhase, IconId, Selection};
 use craft::ui::contract::{
     Bind, DropAt, DropPayload, DropPlace, Entry, ListDrag, MemoProps, PopupKind, ReorderMove, SelectMode, Show as _, ShowContainer as _, Trigger,
 };
-use craft::ui::display::Divider;
+use craft::ui::display::{Divider, Picture, PictureSize};
+use craft::ui::list::ThumbAspect;
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::patterns::presets::{
     PickerField, PresetBrowser, PresetDrop, PresetEvent, PresetFns, PresetPicker, PresetReorder, PresetRow, PresetSource, PresetState, PresetView,
 };
 use craft::ui::primitives::{
-    ContentPainterCx, FacePaint, IconSpec, Priority, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails,
+    ContentPainterCx, FacePaint, IconSpec, PaintShape, Priority, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions,
+    Thumbnails,
 };
 use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
+use craft::ui::runtime::env::Env;
 use craft::ui::sections::{FooterAction, FooterBar, FooterOutput, Panel};
-use egui::{Color32, Rect, Sense, TextureHandle, Ui, pos2, vec2};
+use craft::ui::style::DataColor;
+use egui::{Color32, Rect, TextureHandle, Ui, pos2};
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_doc::style_libs::STYLE_LIBRARIES;
@@ -129,9 +133,6 @@ pub(crate) struct GraphicStylesPanel {
 fn thumbnails(ctx: &egui::Context, salt: &'static str) -> Thumbnails<StyleKey> {
     Thumbnails::in_context(ctx, salt, ThumbnailOptions::new())
 }
-
-/// Side of the large preview shown while the pointer rests on a style.
-const LARGE: f32 = 132.0;
 
 thread_local! {
     // PLAN: the sheet drops RENDERER, but `render` and `render_object` need one renderer that outlives a call.
@@ -337,7 +338,7 @@ fn paint_thumb(cx: &ContentPainterCx<'_>, rect: Rect, thumbs: &Thumbnails<StyleK
     let request = ThumbRequest::for_cell(rect.width().max(rect.height()), ctx.pixels_per_point());
     let state = thumbs.state(&ctx, source, key, &request, Priority::VISIBLE);
     if !thumbs.paint(cx, rect, &state, &ThumbPaint::default().checker(false)) {
-        cx.painter.rect_filled(rect, 0.0, Color32::WHITE);
+        cx.with_draw(|draw| draw.data_fill(&PaintShape::Rect(rect, egui::CornerRadius::ZERO), DataColor::new(Color32::WHITE)));
     }
 }
 
@@ -385,14 +386,23 @@ fn render_object(app: &VectorcraftApp, doc: &Document, n: &Node, g: &GraphicStyl
 /// The tip over a style: it large, on the selected object when there is one, with its name.
 fn large_tip(app: &VectorcraftApp, thumbs: &StyleThumbs, ui: &mut Ui, key: &StyleKey) {
     let Some(i) = thumbs.d.graphic_style_index(key) else { return };
-    let px = (LARGE * ui.ctx().pixels_per_point()).round() as u32;
+    // The preview is a card thumbnail (`size.thumb.card`) wide, and as tall: the tip is that wide, and the square
+    // picture fills it.
+    let side = Env::of(ui).tokens.size.thumb.card;
+    let px = (side * ui.ctx().pixels_per_point()).round() as u32;
     let look = thumbs.looks.get(i).copied().unwrap_or_default();
     let tex = object_preview(app, ui.ctx(), &thumbs.d.graphic_styles[i], look, thumbs.look.preview, px);
-    let (r, _) = ui.allocate_exact_size(vec2(LARGE, LARGE), Sense::hover());
-    match &tex {
-        Some(tex) => ui.painter().image(tex.id(), r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE),
-        None => ui.painter().rect_filled(r, 0.0, Color32::WHITE),
-    };
+    ui.set_max_width(side);
+    let texture = tex.as_ref().map(TextureHandle::id);
+    // Decorative: the style's name below it says what it shows.
+    Picture::painter("", ThumbAspect::SQUARE, move |cx, rect| {
+        cx.with_draw(|draw| match texture {
+            Some(id) => draw.texture(rect, id, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0))),
+            None => draw.data_fill(&PaintShape::Rect(rect, egui::CornerRadius::ZERO), DataColor::new(Color32::WHITE)),
+        })
+    })
+    .extent(PictureSize::Fill)
+    .show(ui);
     ui.label(key);
 }
 

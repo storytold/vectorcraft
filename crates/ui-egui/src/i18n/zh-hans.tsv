@@ -870,6 +870,7 @@ antiAlias	Sharp	锐利
 	Direct Selection Tool	直接选择工具
 	Direction Handles	方向手柄
 	Disable Auto Add/Delete	禁用自动添加/删除锚点
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete 删除锚点并保持路径连接
 	Interpolate Control Points When Moving Anchors	移动锚点时插值方向手柄
 	Disable Opacity Mask	禁用不透明度蒙版
 	Discard	不存储
@@ -2368,6 +2369,12 @@ file-filter	Templates	模板
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}；{size}；{detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	分辨率不可用
+	estimated memory {memory}	估计内存 {memory}
+	memory unavailable	内存不可用
+	Unknown format	未知格式
 	{kind}, {instances}	{kind}，{instances}
 	{kind}, {rows} × {cols}	{kind}，{rows} × {cols}
 	{grid}, {instances}	{grid}，{instances}
@@ -2514,6 +2521,7 @@ file-filter	Templates	模板
 	One Point Perspective Preset 5	一点透视预设 5
 	Only Web Colors	仅 Web 颜色
 	Opacity	不透明度
+	Show Opacity	显示不透明度
 	Opacity & Mask Define Knockout Shape	不透明度与蒙版定义挖空形状
 	Opacity Mask	不透明度蒙版
 	Opacity Mask Info	不透明度蒙版信息
@@ -2967,6 +2975,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Scale Artwork with Artboard	随画板缩放图稿
 	Artboards: {n}	画板：{n}
 	Rearrange All Artboards…	重新排列所有画板…
+	Rearrange…	重新排列…
+	Selected Artboards: {n}	选定的画板：{n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	单击画布以放置画板 (Esc 取消)
 	Recall Selection	召回选区
 	RECENT	最近使用
 	Recent	最近使用
@@ -3217,6 +3228,7 @@ digits	Malayalam	马拉雅拉姆数字
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	在触控板上用双指旋转手势可旋转画布视图。
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	按住某个键会运行键盘快捷键中其按住列的工具或命令；快速按下则运行其常规快捷键。
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	按住某个键多少秒后，运行其按住快捷键而不是常规快捷键。
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete 会删除所选锚点并重新拟合每个锚点周围的曲线，而不会在该处断开路径。
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	移动锚点时，只有一端移动的每条曲线都会保持其相对于两端的形状。
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	按住工具的快捷键时选择该工具，松开后重新选择之前的工具。
 	Shows the bounding box while you move the selection or draw a shape.	移动所选对象或绘制形状时显示定界框。
@@ -7157,6 +7169,8 @@ axis	Y Axis	Y 轴
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	需要批准：它请求 {0}，用户单独安装它时授予这些权限
 @msg	not JSON: {e}	不是 JSON：{e}
 @msg	not a WebAssembly binary (missing \\0asm header)	不是 WebAssembly 二进制文件（缺少 \\0asm 头）
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	函数类型的参数数目超过上限（{MAX_FUNC_TYPE_VALUES} 个）
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	函数类型的结果数目超过上限（{MAX_FUNC_TYPE_VALUES} 个）
 @msg	parameter `{k}`: {what}	参数 `{k}`：{what}
 @msg	parameter `{name}`: {what}	参数 `{name}`：{what}
 @msg	plug-in parameters must be a JSON object	增效工具参数必须是 JSON 对象
@@ -7193,6 +7207,11 @@ axis	Y Axis	Y 轴
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` 和 `maxItems` 必须是 0-{MAX_LIST}，`maxItems` 至少为 1，且默认值的项数在此范围内
 @msg	`name` must be a string	`name` 必须是字符串
 @msg	`opacity` must be a number	`opacity` 必须是数字
+@msg	`opacity` must be a number from 0 to 100	`opacity` 必须是 0 到 100 之间的数字
+@msg	`opacity` must be true or false	`opacity` 必须是 true 或 false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	文字字符没有自己的不透明度：请用“外观”面板的“添加新填色”或“添加新描边”添加填色或描边
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	在符号实例中选中的对象没有自己的填色或描边不透明度
+@msg	no target has that fill or stroke to take the opacity	没有目标具有可接受该不透明度的填色或描边
 @msg	`type` must be "path" or "compound"	`type` 必须是 "path" 或 "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` 必须是 1-{MAX_UNIT} 个可打印字符
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` 必须为 `{other}` 列出 1 到 {MAX_CONDITION_VALUES} 个值
@@ -9644,6 +9663,7 @@ breakText	Glyphs	字形
 @msg	give a pattern name or select an object painted with a pattern	请给出图案名称，或选择用图案上色的对象
 @msg	give at least one of clip, invert, disabled, linked	请至少给出 clip、invert、disabled、linked 之一
 @msg	give color, none, swatch or gradient	请给出 color、none、swatch 或 gradient
+@msg	give color, none, swatch, gradient or opacity	请给出 color、none、swatch、gradient 或 opacity
 @msg	give dataBase64	请给出 dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	请给出 at (一次单击) 或 area (围绕重叠处绘制的路径)
 @msg	give formats or a preset, not both	请给出 formats 或一个预设，不能两者都给
