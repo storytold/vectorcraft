@@ -456,6 +456,92 @@ fn a_pattern_item_adds_the_swatch_of_a_pattern_the_document_holds_without_one() 
     assert!(!s.doc().unwrap().doc.swatches_iter().any(is_dots), "undone with the paint");
 }
 
+/// A pattern item whose art links to a global color that the document has under the same name in
+/// another color keeps the item's color: the color comes in under a numbered name and the pattern
+/// links to it. Used again, the pattern and that color are reused. A document whose pattern of
+/// that name links to the document's own color (as pasting with Merge leaves it) reuses that one.
+#[test]
+fn a_pattern_item_keeps_its_global_color_when_the_document_has_that_name_in_another_color() {
+    let mut s = session();
+    let lib = run(&mut s, "library.create", json!({}))["id"].as_str().unwrap().to_string();
+    run(&mut s, "swatch.new", json!({"name": "Ink", "color": "#0000ff", "global": true}));
+    let dot = run(&mut s, "shape.ellipse", json!({"x": 0, "y": 0, "width": 10, "height": 10}))["id"].clone();
+    run(&mut s, "paint.setFill", json!({"swatch": "Ink", "ids": [dot]}));
+    make_pattern(&mut s, &dot, "Dots");
+    let a = run(&mut s, "shape.rectangle", json!({"x": 50, "y": 50, "width": 40, "height": 40}))["id"].clone();
+    run(&mut s, "paint.setFill", json!({"swatch": "Dots", "ids": [a]}));
+    run(&mut s, "select.set", json!({"ids": [a]}));
+    run(&mut s, "library.add", json!({"library": lib, "kind": "fillPattern"}));
+    run(&mut s, "edit.copy", json!({}));
+    let names = |s: &Session, base: &str| -> Vec<String> {
+        let d = &s.doc().unwrap().doc;
+        d.swatches_iter().filter(|w| w.name.starts_with(base)).map(|w| w.name.clone()).collect()
+    };
+    let art_link = |s: &Session, pattern: &str| match s.doc().unwrap().doc.pattern(pattern).unwrap().art[0].appearance.fill_paint() {
+        vectorcraft_color::Paint::Solid { swatch, color, .. } => (swatch, color.to_hex()),
+        p => panic!("the pattern's art is not filled with a color: {p:?}"),
+    };
+    // A document whose Ink is red.
+    let red_ink = |s: &mut Session| {
+        run(s, "file.new", json!({"width": 300, "height": 300}));
+        run(s, "swatch.new", json!({"name": "Ink", "color": "#ff0000", "global": true}));
+        let b = run(s, "shape.rectangle", json!({"x": 100, "y": 100, "width": 80, "height": 80}))["id"].clone();
+        run(s, "select.set", json!({"ids": [b]}));
+    };
+    red_ink(&mut s);
+    let r = run(&mut s, "library.use", json!({"library": lib, "kind": "fillPattern", "item": "Dots"}));
+    assert_eq!(r["pattern"], "Dots", "{r}");
+    assert_eq!(art_link(&s, "Dots"), (Some("Ink 2".to_string()), "#0000ff".to_string()));
+    assert_eq!(names(&s, "Ink"), ["Ink", "Ink 2"]);
+    run(&mut s, "library.use", json!({"library": lib, "kind": "fillPattern", "item": "Dots", "to": "stroke"}));
+    assert_eq!(s.doc().unwrap().doc.patterns.len(), 1, "the pattern is reused");
+    assert_eq!(names(&s, "Ink"), ["Ink", "Ink 2"], "the color is reused");
+    // Pasted with Merge, the pattern links to the document's red Ink.
+    red_ink(&mut s);
+    run(&mut s, "edit.paste", json!({"swatchConflict": "merge"}));
+    assert_eq!(art_link(&s, "Dots"), (Some("Ink".to_string()), "#ff0000".to_string()));
+    let r = run(&mut s, "library.use", json!({"library": lib, "kind": "fillPattern", "item": "Dots"}));
+    assert_eq!(r["pattern"], "Dots", "{r}");
+    assert_eq!(s.doc().unwrap().doc.patterns.len(), 1, "the pattern is reused");
+    assert_eq!(names(&s, "Ink"), ["Ink"]);
+}
+
+/// A pattern pasted with Merge whose art uses a tint of a global color is reused by its pattern
+/// item after the tint swatch is deleted: the tint swatch comes back and no copy of the pattern is
+/// added.
+#[test]
+fn a_merged_pattern_whose_tint_swatch_was_deleted_is_reused() {
+    let mut s = session();
+    let lib = run(&mut s, "library.create", json!({}))["id"].as_str().unwrap().to_string();
+    run(&mut s, "swatch.new", json!({"name": "Ink", "color": "#0000ff", "global": true}));
+    run(&mut s, "swatch.new", json!({"swatch": "Ink", "tint": 50}));
+    let dot = run(&mut s, "shape.ellipse", json!({"x": 0, "y": 0, "width": 10, "height": 10}))["id"].clone();
+    run(&mut s, "paint.setFill", json!({"swatch": "Ink", "tint": 50, "ids": [dot]}));
+    make_pattern(&mut s, &dot, "Dots");
+    let a = run(&mut s, "shape.rectangle", json!({"x": 50, "y": 50, "width": 40, "height": 40}))["id"].clone();
+    run(&mut s, "paint.setFill", json!({"swatch": "Dots", "ids": [a]}));
+    run(&mut s, "select.set", json!({"ids": [a]}));
+    run(&mut s, "library.add", json!({"library": lib, "kind": "fillPattern"}));
+    run(&mut s, "edit.copy", json!({}));
+    run(&mut s, "file.new", json!({"width": 300, "height": 300}));
+    run(&mut s, "swatch.new", json!({"name": "Ink", "color": "#ff0000", "global": true}));
+    run(&mut s, "edit.paste", json!({"swatchConflict": "merge"}));
+    let tints: Vec<String> =
+        s.doc().unwrap().doc.swatches_iter().filter(|w| w.name != "Ink" && w.name.starts_with("Ink")).map(|w| w.name.clone()).collect();
+    assert_eq!(tints.len(), 1, "the tint swatch comes with the paste: {tints:?}");
+    run(&mut s, "swatch.delete", json!({"names": tints, "unlink": false}));
+    let b = run(&mut s, "shape.rectangle", json!({"x": 100, "y": 100, "width": 80, "height": 80}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [b]}));
+    let r = run(&mut s, "library.use", json!({"library": lib, "kind": "fillPattern", "item": "Dots"}));
+    assert_eq!(r["pattern"], "Dots", "{r}");
+    assert_eq!(s.doc().unwrap().doc.patterns.len(), 1, "the pattern is reused");
+    let restored = s.doc().unwrap().doc.swatch(&tints[0]).map(|w| w.paint.clone());
+    assert!(
+        matches!(&restored, Some(vectorcraft_color::Paint::Solid { swatch: Some(base), tint, .. }) if base == "Ink" && (*tint - 0.5).abs() < 1e-6),
+        "the tint swatch comes back as a tint of the document's Ink: {restored:?}"
+    );
+}
+
 /// Gradients and patterns go out to a library file and come back; read from a file, a gradient
 /// with too few stops is dropped, one out of range is put in range, and a pattern whose data is
 /// damaged or doesn't hold its pattern fails cleanly when used.

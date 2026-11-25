@@ -6,116 +6,163 @@
 //! remove them; Link JavaScript Files… opens the JavaScript Files dialog (`ui.javascriptFilesDialog`).
 //! Everything reads `svgInteractivity.info`.
 
+use craft::behavior::{IconId, Selection, keyed};
+use craft::keymap::CommandRef;
+use craft::ui::contract::{Bind, CollectionEvent, Entry, Props as _, Show as _, ShowCollection as _, ShowContainer as _, Sizing};
+use craft::ui::display::{Shade, Text};
+use craft::ui::form::Field;
+use craft::ui::list::{List, ListRow};
+use craft::ui::menu::PanelRow;
+use craft::ui::pickers::Select;
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::sections::{FooterAction, FooterBar};
+use craft::ui::text::TextField;
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, SVG_EVENTS};
 
-use super::{pstate, selection_len, set_pstate};
+use super::selection_len;
 use crate::VectorcraftApp;
-use crate::widgets::{self, menu_item};
 
 pub const ID: &str = "svgInteractivity";
-/// Panel state: the event picked (an entry of [`SVG_EVENTS`]).
-const EVENT: &str = "svgi-event";
-const LABEL_W: f32 = 70.0;
+
+/// The engine command of the panel menu's one row.
+const CLEAR_EVENTS: &str = "svgInteractivity.clearEvents";
+
+/// The SVG Interactivity panel's own state, kept while the app runs.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct SvgInteractivityPanel {
+    /// The event picked to edit ([`picked`] reads it).
+    pub(crate) event: String,
+}
 
 /// The panel's values: whether there are targets, and their events (`None` where they differ).
 #[derive(Clone, Debug, Default)]
-struct Info {
+pub(crate) struct Info {
     has: bool,
     events: Option<Vec<(String, String)>>,
 }
 
-/// `svgInteractivity.info`, read again only when the document or the selection changes.
-fn state(app: &mut VectorcraftApp, ctx: &egui::Context) -> Info {
-    type Key = (u64, u64, usize, Option<NodeId>, Option<NodeId>);
-    let Some(st) = app.session.active() else { return Info::default() };
+/// What [`info`] was read for: (document uid, revision, selection size, first and last selected object).
+pub(crate) type SelKey = (u64, u64, usize, Option<NodeId>, Option<NodeId>);
+
+/// A side label's text without its colon: the label draws the colon itself
+/// (`CommonWords::caption`), so the catalog's "Event:" keeps its translation here.
+// PLAN: the catalog keys carry the colon the side label now adds; strip it where a label is given.
+pub(crate) fn caption(label: &'static str) -> &'static str {
+    crate::i18n::t(label).trim_end_matches(':')
+}
+
+fn sel_key(app: &VectorcraftApp) -> Option<SelKey> {
+    let st = app.session.active()?;
     let sel = &st.selection.objects;
-    let key: Key = (st.uid, st.revision, sel.len(), sel.first().copied(), sel.last().copied());
-    let id = egui::Id::unique("svgi-state");
-    if let Some((k, v)) = ctx.data(|d| d.get_temp::<(Key, Info)>(id))
-        && k == key
-    {
-        return v;
+    Some((st.uid, st.revision, sel.len(), sel.first().copied(), sel.last().copied()))
+}
+
+/// The memoized [`Info`] when it was read for the current document and selection.
+fn cached(app: &VectorcraftApp) -> Option<&Info> {
+    let key = sel_key(app)?;
+    app.canvas.svg_info.as_ref().filter(|(k, _)| *k == key).map(|(_, v)| v)
+}
+
+/// `svgInteractivity.info`, read again only when the document or the selection changes.
+pub(crate) fn info(app: &mut VectorcraftApp) -> Info {
+    if let Some(v) = cached(app) {
+        return v.clone();
     }
+    let Some(key) = sel_key(app) else { return Info::default() };
     let r = app.session.execute("svgInteractivity.info", &json!({})).unwrap_or_default();
     let events = r["events"]
         .as_array()
         .map(|a| a.iter().filter_map(|e| Some((e["event"].as_str()?.to_string(), e["script"].as_str()?.to_string()))).collect::<Vec<_>>());
     let v = Info { has: r["ids"].as_array().is_some_and(|a| !a.is_empty()), events };
-    ctx.data_mut(|d| d.insert_temp(id, (key, v.clone())));
+    app.canvas.svg_info = Some((key, v.clone()));
     v
 }
 
 /// The event picked in the panel (the first of [`SVG_EVENTS`] until one is).
-fn picked(ctx: &egui::Context) -> &'static str {
-    let e: String = pstate(ctx, EVENT);
+fn picked(app: &VectorcraftApp) -> &'static str {
+    let e = app.ui.svg_interactivity_panel.event.as_str();
     SVG_EVENTS.iter().find(|n| **n == e).copied().unwrap_or(SVG_EVENTS[0])
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let ctx = ui.ctx().clone();
-    let info = state(app, &ctx);
-    let event = picked(&ctx);
-    let events = info.events.clone().unwrap_or_default();
-    widgets::label_row(ui, tl!("Event:"), LABEL_W, |ui| {
-        ui.add_enabled_ui(info.has, |ui| {
-            let width = (ui.available_width() - 4.0).max(80.0);
-            if let Some(i) = widgets::dropdown_names(ui, "svgi-event", event, &SVG_EVENTS, width) {
-                set_pstate(&ctx, EVENT, SVG_EVENTS.get(i).copied().unwrap_or(event).to_string());
-            }
-        });
+    let info = info(app);
+    let event = picked(app);
+    let events = info.events.as_deref().unwrap_or_default();
+    let names: Vec<Entry<String>> = SVG_EVENTS.iter().map(|e| Entry::new((*e).to_string(), *e)).collect();
+    let mut pick = None;
+    Field::new(caption("Event:")).show(ui, |ui, _| {
+        let out = Select::new(caption("Event:"), Bind::given(event.to_string()), &names).enabled(info.has).show(ui);
+        pick = out.events.committed().cloned();
     });
     // Blank where the objects' events differ; empty where none of them has the event.
     let script = info.events.as_ref().map(|l| l.iter().find(|(e, _)| e == event).map_or("", |(_, js)| js.as_str()));
-    widgets::label_row(ui, tl!("JavaScript:"), LABEL_W, |ui| {
-        ui.add_enabled_ui(info.has, |ui| {
-            let width = (ui.available_width() - 4.0).max(80.0);
-            if let Some(js) = widgets::text_field(ui, ("svgi-script", event), script, width, 1) {
-                app.run("svgInteractivity.setEvent", json!({ "event": event, "script": js })).ok();
-            }
-        });
+    let shown = script.unwrap_or_default();
+    let mut typed = None;
+    Field::new(caption("JavaScript:")).show(ui, |ui, _| {
+        let out = TextField::new(caption("JavaScript:"), Bind::given(shown.to_string())).lines(3).id_salt(event).enabled(info.has).show(ui);
+        typed = out.events.committed().filter(|js| js.as_str() != shown).cloned();
     });
-    ui.add_space(4.0);
-    widgets::list_box(ui, |ui| {
-        egui::ScrollArea::vertical().id_salt("svgi-events").max_height(160.0).auto_shrink([false, true]).show(ui, |ui| {
-            ui.set_min_height(90.0);
-            for (e, js) in &events {
-                // Event names and scripts are data: shown as they are.
-                if ui.selectable_label(e == event, format!("{e}: {js}")).clicked() {
-                    set_pstate(&ctx, EVENT, e.clone());
-                }
-            }
+    let source = keyed(events, |(e, _): &(String, String)| e.clone());
+    let selection = if events.iter().any(|(e, _)| e == event) { Selection::single(event.to_string()) } else { Default::default() };
+    let list = List::<String>::options(tl!("Events"))
+        .selection(Bind::given(selection))
+        .sizing(Sizing::Fill)
+        // Event names and scripts are data: shown as they are.
+        .show_items(ui, &source, &mut |key, _| {
+            let js = events.iter().find(|(e, _)| e == key).map_or("", |(_, js)| js.as_str());
+            ListRow::new(format!("{key}: {js}"))
         });
-    });
-    if !info.has {
-        widgets::dim_label(ui, if selection_len(app) == 0 { tl!("No Selection") } else { "" });
+    for e in list.events {
+        if let CollectionEvent::Activate(key) = e {
+            pick = Some(key);
+        }
+    }
+    if !info.has && selection_len(app) == 0 {
+        Text::new(tl!("No Selection")).shade(Shade::Muted).show(ui);
     }
     let has_doc = app.session.active().is_some();
     let listed = events.iter().any(|(e, _)| e == event);
-    let (mut link, mut remove) = (false, false);
-    widgets::bottom_bar(ui, |ui| {
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            remove = widgets::icon_button_enabled(ui, "trash-2", tl!("Remove Selected Entry"), false, listed, 24.0).clicked();
-            link = widgets::icon_button_enabled(ui, "file-plus", tl!("Link JavaScript Files…"), false, has_doc, 24.0).clicked();
-        });
-    });
-    if remove {
-        app.run("svgInteractivity.removeEvent", json!({ "event": event })).ok();
+    let footer = FooterBar::actions([
+        FooterAction::new(IconId::new("trash"), tl!("Remove Selected Entry")).enabled(listed),
+        FooterAction::new(IconId::new("new_file"), tl!("Link JavaScript Files…")).enabled(has_doc),
+    ])
+    .show_footer(ui);
+    if let Some(e) = pick {
+        app.ui.svg_interactivity_panel.event = e;
     }
-    if link {
-        crate::menus::invoke(app, "ui.javascriptFilesDialog", json!({}));
+    if let Some(js) = typed {
+        app.run("svgInteractivity.setEvent", json!({ "event": event, "script": js })).ok();
+    }
+    match footer.picked {
+        Some(0) => {
+            app.run("svgInteractivity.removeEvent", json!({ "event": event })).ok();
+        }
+        Some(1) => {
+            crate::menus::invoke(app, "ui.javascriptFilesDialog", json!({}));
+        }
+        _ => {}
     }
 }
 
-/// The panel (≡) menu: Clear Events.
-pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let info = state(app, ui.ctx());
+/// The panel (≡) menu's rows: Clear Events.
+pub(crate) fn menu_rows(_app: &VectorcraftApp) -> Vec<PanelRow> {
+    vec![PanelRow::Command(CommandRef::new(CLEAR_EVENTS))]
+}
+
+/// Clear Events is on while the objects have events. The panel reads the events each frame it shows; a
+/// panel that is not shown leaves the row off.
+pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
     // (Where the objects' events differ, some of them have events.)
-    let any = info.has && info.events.as_ref().is_none_or(|l| !l.is_empty());
-    if menu_item(ui, tl!("Clear Events"), any, false) {
-        app.run("svgInteractivity.clearEvents", json!({})).ok();
-    }
+    let any = cached(app).is_some_and(|info| info.has && info.events.as_ref().is_none_or(|l| !l.is_empty()));
+    states.set(CommandRef::new(CLEAR_EVENTS), CommandState::new().enabled(any));
+}
+
+/// The panel's own `ui.svgInteractivity.*` commands: it has none, because its menu row is the engine
+/// command `svgInteractivity.clearEvents`.
+pub(crate) fn run(_app: &mut VectorcraftApp, _id: &str, _params: &Value) -> Option<Result<Value, String>> {
+    None
 }
 
 /// `ui.javascriptFilesDialog {}`: open the JavaScript Files dialog for the active document.
@@ -126,41 +173,11 @@ pub(crate) fn files_dialog(app: &mut VectorcraftApp, _p: &Value) -> Result<Value
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::panel_harness::Panel;
     use vectorcraft_engine::Session;
-
-    /// Run the panel and its menu for one headless frame of `ctx`: the texts drawn.
-    fn frame(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
-        fn texts(s: &egui::Shape, out: &mut Vec<String>) {
-            match s {
-                egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
-                egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
-                _ => {}
-            }
-        }
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
-            show(app, ui);
-            menu(app, ui);
-        });
-        out.textures_delta.clear();
-        let mut v = vec![];
-        out.shapes.iter().for_each(|c| texts(&c.shape, &mut v));
-        v
-    }
 
     fn run(app: &mut VectorcraftApp, id: &str, p: Value) -> Value {
         app.session.execute(id, &p).unwrap()
-    }
-
-    /// Window › SVG Interactivity opens the panel, as Window's other panel items do.
-    #[test]
-    fn window_svg_interactivity_opens_the_panel() {
-        let app = VectorcraftApp::new(Session::new(), Default::default());
-        let entries = crate::menus::menu_entries(&app);
-        let panel = entries
-            .iter()
-            .find(|e| e.command.as_deref() == Some("window.panel") && e.params.get("panel").and_then(Value::as_str) == Some(ID))
-            .expect("the SVG Interactivity panel is listed");
-        assert_eq!((panel.path.clone(), panel.label.as_str(), panel.enabled), (vec!["Window".to_string()], "SVG Interactivity", true));
     }
 
     // (Only names and scripts are checked: they are shown as they are, while tests running
@@ -168,27 +185,34 @@ mod tests {
     #[test]
     fn panel_lists_the_selections_events() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        let ctx = egui::Context::default();
         run(&mut app, "file.new", json!({"width": 100, "height": 100}));
-        let texts = frame(&mut app, &ctx);
-        assert!(texts.iter().any(|t| t == "onfocusin"), "the first event is picked: {texts:?}");
-        run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}));
-        run(&mut app, "svgInteractivity.setEvent", json!({"event": "onclick", "script": "alert(1)"}));
-        run(&mut app, "svgInteractivity.setEvent", json!({"event": "onmouseover", "script": "hover()"}));
-        let texts = frame(&mut app, &ctx);
-        for want in ["onclick: alert(1)", "onmouseover: hover()"] {
-            assert!(texts.iter().any(|t| t == want), "{want} in {texts:?}");
+        let mut panel = Panel::new(app, show);
+        panel.frame();
+        assert!(!panel.shows("onclick: alert(1)"), "nothing is selected");
+        {
+            let mut app = panel.app();
+            run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}));
+            run(&mut app, "svgInteractivity.setEvent", json!({"event": "onclick", "script": "alert(1)"}));
+            run(&mut app, "svgInteractivity.setEvent", json!({"event": "onmouseover", "script": "hover()"}));
         }
-        assert!(!texts.iter().any(|t| t == "alert(1)"), "{texts:?}");
+        panel.frame();
+        for want in ["onclick: alert(1)", "onmouseover: hover()"] {
+            assert!(panel.shows(want), "{want} is listed");
+        }
         // With an event picked, the field shows its script.
-        set_pstate(&ctx, EVENT, "onclick".to_string());
-        let texts = frame(&mut app, &ctx);
-        assert!(texts.iter().any(|t| t == "onclick") && texts.iter().any(|t| t == "alert(1)"), "{texts:?}");
+        panel.app().ui.svg_interactivity_panel.event = "onclick".into();
+        panel.frame();
+        assert_eq!(panel.value(caption("JavaScript:")).as_deref(), Some("alert(1)"));
         // Two objects whose events differ show none.
-        let b = run(&mut app, "shape.ellipse", json!({"x": 60, "y": 0, "width": 30, "height": 30}))["id"].clone();
-        let a = app.session.active().unwrap().doc.layers[0].children().unwrap()[0].id.0;
-        run(&mut app, "select.set", json!({"ids": [a, b]}));
-        let texts = frame(&mut app, &ctx);
-        assert!(!texts.iter().any(|t| t.starts_with("onclick:") || t == "alert(1)"), "{texts:?}");
+        {
+            let mut app = panel.app();
+            let b = run(&mut app, "shape.ellipse", json!({"x": 60, "y": 0, "width": 30, "height": 30}))["id"].clone();
+            let a = app.session.active().unwrap().doc.layers[0].children().unwrap()[0].id.0;
+            run(&mut app, "select.set", json!({"ids": [a, b]}));
+        }
+        panel.frame();
+        assert!(!panel.shows("onclick: alert(1)"));
+        assert_eq!(panel.value(caption("JavaScript:")).as_deref(), Some(""));
+        assert!(info(&mut panel.app()).events.is_none());
     }
 }

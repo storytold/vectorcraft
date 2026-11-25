@@ -471,7 +471,7 @@ fn a_composite_font_is_noted_by_its_cid_font_name() {
     let noted = |font: &str| {
         let resources = format!("/Font << /F1 {font} >>");
         let bytes = one_page("BT /F1 24 Tf 10 30 Td <0001> Tj ET", &resources, &[]);
-        let pdf = craft_pdf::syntax::Pdf::new(bytes).unwrap();
+        let pdf = craft::pdf::syntax::Pdf::new(bytes).unwrap();
         let mut fonts = crate::import_scan::FontNames::new();
         let mut ocgs = crate::import_scan::Ocgs::read(&pdf);
         crate::import_scan::scan_page(&pdf.pages()[0], &mut ocgs, false, &mut fonts, pdf.decode_limits().max_decoded_stream()).unwrap();
@@ -499,7 +499,7 @@ fn a_form_drawn_many_times_reads_its_font_resources_once() {
     let form = stream("/Type /XObject /Subtype /Form /BBox [0 0 100 100]", "0 0 1 rg 50 50 30 30 re f");
     let resources = format!("/Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> /XObject << /X0 {form_no} 0 R >>");
     let page = PdfPage { resources, ..PdfPage::new(100.0, 100.0, &format!("BT /F1 24 Tf 10 30 Td (Hi) Tj ET {}", "/X0 Do ".repeat(500))) };
-    let pdf = craft_pdf::syntax::Pdf::new(pdf_with(&[page], &[&form], None)).unwrap();
+    let pdf = craft::pdf::syntax::Pdf::new(pdf_with(&[page], &[&form], None)).unwrap();
     let mut fonts = crate::import_scan::FontNames::new();
     let mut ocgs = crate::import_scan::Ocgs::read(&pdf);
     let walk = crate::import_scan::walk_page(&pdf.pages()[0], &mut ocgs, false, &mut fonts, pdf.decode_limits().max_decoded_stream());
@@ -539,7 +539,7 @@ fn a_type3_font_on_every_page_has_its_glyph_procedures_read_once() {
         })
         .collect();
     let extra: Vec<&str> = objects.iter().map(String::as_str).collect();
-    let pdf = craft_pdf::syntax::Pdf::new(pdf_with(&pages, &extra, None)).unwrap();
+    let pdf = craft::pdf::syntax::Pdf::new(pdf_with(&pages, &extra, None)).unwrap();
     let mut fonts = crate::import_scan::FontNames::new();
     let mut ocgs = crate::import_scan::Ocgs::read(&pdf);
     crate::import_scan::TEST_CHARPROC_DECODES.with(|d| d.set(0));
@@ -566,7 +566,7 @@ fn fonts_are_noted_past_font_resources_the_reader_cannot_parse() {
         let resources = format!("/Font << /A {junk} /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >>");
         let bytes = one_page("BT /F1 24 Tf 10 30 Td (Hello) Tj ET", &resources, &[]);
         // Opened by the reader alone, without the checks of `pages::open`.
-        let pdf = craft_pdf::syntax::Pdf::new(bytes).unwrap();
+        let pdf = craft::pdf::syntax::Pdf::new(bytes).unwrap();
         let mut fonts = crate::import_scan::FontNames::new();
         let mut ocgs = crate::import_scan::Ocgs::read(&pdf);
         crate::import_scan::scan_page(&pdf.pages()[0], &mut ocgs, false, &mut fonts, pdf.decode_limits().max_decoded_stream()).unwrap();

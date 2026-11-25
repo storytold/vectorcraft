@@ -398,15 +398,6 @@ pub(crate) fn aligned(p: &Value, cmd: &str) -> Result<bool> {
     switch_or(p, "aligned", false, cmd)
 }
 
-/// What the appearances of `ids` share, when there are several of them and they all exist.
-pub(crate) fn shared_stack(d: &vectorcraft_doc::Document, ids: &[NodeId]) -> Option<SharedStack> {
-    if ids.len() < 2 {
-        return None;
-    }
-    let aps: Vec<&Appearance> = ids.iter().map(|id| d.node(*id).map(|n| &*n.appearance)).collect::<Option<_>>()?;
-    Some(SharedStack::of(&aps))
-}
-
 /// Do the appearances of `ids` differ (several objects whose stacks aren't all equal)?
 pub(crate) fn appearances_differ(d: &vectorcraft_doc::Document, ids: &[NodeId]) -> bool {
     let mut aps = ids.iter().filter_map(|id| d.node(*id)).map(|n| &n.appearance);
@@ -1207,6 +1198,24 @@ pub(crate) fn capture_series_paint_writes(
     super::graph::capture_series_top_paints(d, &rows)
 }
 
+/// Store on the graph the opacity and blend mode of each row an edit wrote (`written`: an object with the index of the
+/// row) on the series marks among them, when that row is the topmost visible one of its kind, also when the mark
+/// already showed that opacity: it replaces the opacity another mark of the series left on the graph. When the edit
+/// reaches several marks of one series, the frontmost one sets what the graph stores. Returns whether the stored
+/// opacity or blend mode changed.
+pub(crate) fn capture_series_opacity_writes(d: &mut vectorcraft_doc::Document, written: &[(NodeId, usize)]) -> bool {
+    let ids: Vec<NodeId> = written.iter().map(|(id, _)| *id).collect();
+    // A later mark's capture replaces an earlier one's: take them in paint order.
+    let rows: Vec<(NodeId, bool)> = series_children_in_paint_order(d, &ids)
+        .into_iter()
+        .flat_map(|id| {
+            let shown = written.iter().filter(move |(w, _)| *w == id).filter_map(|(_, at)| Some((id, top_row_kind(&d.node(id)?.appearance, *at)?)));
+            shown.collect::<Vec<_>>()
+        })
+        .collect();
+    super::graph::capture_series_opacity(d, &rows)
+}
+
 /// The kind of the row at `at` (fill `true`, stroke `false`) when it is the topmost visible row of that kind in `ap`.
 fn top_row_kind(ap: &Appearance, at: usize) -> Option<bool> {
     let fill = ap.items.get(at)?.is_fill();
@@ -1530,19 +1539,16 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
     let mut first_at = None;
     let active = s.active_appearance_item.as_ref().and_then(|a| a.objects.first().copied());
     let mut active_at = None;
-    // Aligned rows of a mixed selection are copied right above themselves in each object. Rows of a graph design's art,
-    // which is left out, go to `to` in an object whose stack is the same as the art's.
+    // Aligned rows of a mixed selection are copied right above themselves in each object. Aligned rows of objects whose
+    // stacks are the same, and rows of a graph design's art, which is left out, go to `to` as in one stack.
     let of = design_reference(s, p, C)?;
-    if aligned(p, C)?
-        && to.is_some()
-        && (shared_stack(&s.doc()?.doc, &ids).is_some() || (of.is_some() && appearances_differ(&s.doc()?.doc, &with_reference(of, &ids))))
-    {
+    if aligned(p, C)? && to.is_some() && appearances_differ(&s.doc()?.doc, &with_reference(of, &ids)) {
         return Err(bad(C, "`to` takes the rows of one object's stack, not aligned rows"));
     }
     let before = s.doc()?.doc.clone();
-    // With `to`, the art's stack is the same as the object's, so its rows are the object's, each of which must exist.
-    let per =
-        if to.is_some() { items_per_target(&before, &ids, &idx, aligned(p, C)?) } else { rows_per_target(&before, of, &ids, &idx, aligned(p, C)?) };
+    // With `to`, aligned rows are rows of stacks that are all the same (the art's too), so each target takes the same
+    // indices, each of which must exist.
+    let per = if to.is_some() { vec![idx.clone(); ids.len()] } else { rows_per_target(&before, of, &ids, &idx, aligned(p, C)?) };
     s.edit("Duplicate Item", |d, _| {
         let mut any = false;
         // Copies that became the topmost visible row of their kind: the series stores their paint even when the object
@@ -1681,6 +1687,8 @@ fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
     let from = index_param(p, "from", C)?;
     let contents = p.get("contents").map(|_| index_param(p, "contents", C)).transpose()?;
     let mut landed = to;
+    let active = s.active_appearance_item.as_ref().and_then(|a| a.objects.first().copied());
+    let mut active_landed = None;
     // When every object's stack comes out as it was, the document and its undo history stay as they
     // are.
     let before = s.doc()?.doc.clone();
@@ -1688,6 +1696,9 @@ fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
         for id in &ids {
             let Some(n) = d.node_mut(*id) else { continue };
             landed = n.appearance.move_item(from, to).ok_or_else(|| bad(C, format!("no item at index {from}")))?;
+            if active == Some(*id) {
+                active_landed = Some(landed);
+            }
             if let Some(k) = contents.filter(|_| n.contents_label().is_some()) {
                 n.appearance.set_contents_at(k);
             }
@@ -1697,13 +1708,14 @@ fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
         let labels = super::graph::capture_label_changes(&before, d, &ids, true, None);
         Ok(count_changed(d, &before, &ids) + usize::from(kept || painted || labels))
     })?;
-    // The moved row stays the active one; the rows it passed shift by one.
+    // Track the row in its own object's stack, since other stacks may clamp to a different index.
+    let at = active_landed.unwrap_or(landed);
     s.remap_appearance_item(&ids, |a| {
         Some(if a == from {
-            landed
-        } else if from < a && a <= landed {
+            at
+        } else if from < a && a <= at {
             a - 1
-        } else if landed <= a && a < from {
+        } else if at <= a && a < from {
             a + 1
         } else {
             a

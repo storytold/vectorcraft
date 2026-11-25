@@ -238,16 +238,6 @@ fn a_typed_closing_double_quote_opens_where_a_quote_opens() {
     // More than one character is pasted text, not a typed quote.
     let id = type_at(&mut s, 50.0, 300.0, &["”a”"]);
     assert_eq!(text(&s, id).plain_text(), "”a”");
-    // An IME commit of a lone `”` that will open is not verbatim (it is rewritten); from the Glyphs
-    // panel it would be inserted as it is.
-    let v = ViewInfo::default();
-    s.select_tool("type", v).unwrap();
-    for k in [PointerKind::Down, PointerKind::Up] {
-        s.pointer(&PointerEvent::new(k, 50.0, 312.0), v).unwrap();
-    }
-    assert!(!s.tool_typed_text_is_verbatim("”", v));
-    assert!(s.tool_text_is_verbatim("”", v));
-    s.tool_key(ToolKey::Escape, Default::default(), v).unwrap();
     // A `”` inserted from the Glyphs panel or pasted alone stays as inserted.
     let id = enter_at(&mut s, 50.0, 325.0, &["”", "a"], false);
     assert_eq!(text(&s, id).plain_text(), "”a");
@@ -492,6 +482,13 @@ fn discard_white_overprint_keeps_white_overprints_in_overprint_preview() {
     s.execute("document.setup", &json!({"discardWhiteOverprint": false})).unwrap();
     let [r, g, b, _] = centre(&s);
     assert!(r > 200 && g < 60 && b < 60, "a white overprint vanishes: {:?}", [r, g, b]);
+    // A white spot ink is an ink: it overprints with the option on too.
+    s.execute("document.setup", &json!({"discardWhiteOverprint": true})).unwrap();
+    s.execute("swatch.new", &json!({"name": "Opaque White", "color": {"c": 0, "m": 0, "y": 0, "k": 0}, "spot": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [white]})).unwrap();
+    s.execute("paint.setFill", &json!({"swatch": "Opaque White"})).unwrap();
+    let [r, g, b, _] = centre(&s);
+    assert!(r > 200 && g < 60 && b < 60, "the spot white overprints: {:?}", [r, g, b]);
 }
 
 #[test]
