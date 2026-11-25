@@ -1008,7 +1008,15 @@ impl<'s> Parser<'s> {
                 let default = if self.es2015 && self.eat(Punct::Eq)? { Some(self.parse_assignment(false)?) } else { None };
                 params.push(param);
                 defaults.push(default);
+                // A comma may follow the last parameter (ECMAScript 2017, section 14.1), except in
+                // a setter, which takes one parameter and no comma (section 14.3).
                 if !self.eat(Punct::Comma)? {
+                    break;
+                }
+                if self.at(Punct::RParen) {
+                    if kind == FunctionKind::Setter {
+                        return Err(self.error_at_token(&self.tok, "a setter must have exactly one parameter"));
+                    }
                     break;
                 }
             }
@@ -1473,7 +1481,8 @@ impl<'s> Parser<'s> {
         if !self.at(Punct::RParen) {
             loop {
                 args.push(self.parse_element()?);
-                if !self.eat(Punct::Comma)? {
+                // A comma may follow the last argument (ECMAScript 2017, section 12.3).
+                if !self.eat(Punct::Comma)? || self.at(Punct::RParen) {
                     break;
                 }
             }

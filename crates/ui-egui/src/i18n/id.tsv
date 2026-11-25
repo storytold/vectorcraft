@@ -438,6 +438,8 @@
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	memerlukan persetujuan: plug-in meminta {0}, yang diberikan pengguna saat memasangnya sendiri
 @msg	not JSON: {e}	bukan JSON: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	bukan biner WebAssembly (header \\0asm tidak ada)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	sebuah tipe fungsi melampaui batas {MAX_FUNC_TYPE_VALUES} parameter
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	sebuah tipe fungsi melampaui batas {MAX_FUNC_TYPE_VALUES} hasil
 @msg	parameter `{k}`: {what}	parameter `{k}`: {what}
 @msg	parameter `{name}`: {what}	parameter `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	parameter plug-in harus berupa objek JSON
@@ -474,6 +476,11 @@
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` dan `maxItems` harus 0-{MAX_LIST}, `maxItems` setidaknya 1, dan nilai default sebanyak itu
 @msg	`name` must be a string	`name` harus berupa string
 @msg	`opacity` must be a number	`opacity` harus berupa angka
+@msg	`opacity` must be a number from 0 to 100	`opacity` harus berupa angka dari 0 sampai 100
+@msg	`opacity` must be true or false	`opacity` harus true atau false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	karakter teks tidak memiliki opasitas sendiri: tambahkan isian atau guratan dengan Tambahkan isian baru atau Tambahkan guratan baru di panel Tampilan
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	objek yang dipilih dalam instans simbol tidak memiliki opasitas isian atau guratan sendiri
+@msg	no target has that fill or stroke to take the opacity	tidak ada target yang memiliki isian atau guratan tersebut untuk menerima opasitas
 @msg	`type` must be "path" or "compound"	`type` harus "path" atau "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` harus berupa 1-{MAX_UNIT} karakter yang dapat dicetak
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` mencantumkan 1 sampai {MAX_CONDITION_VALUES} nilai untuk `{other}`
@@ -983,6 +990,9 @@
 	Artboards	Artboard
 	Convert to Artboards	Konversi ke artboard
 	Rearrange All Artboards…	Atur ulang semua artboard…
+	Rearrange…	Atur ulang…
+	Selected Artboards: {n}	Artboard terpilih: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Klik kanvas untuk menempatkan artboard (Esc membatalkan)
 	Fit to Artwork Bounds	Sesuaikan ke batas karya seni
 	Fit to Selected Art	Sesuaikan ke karya seni terseleksi
 	Graph	Grafik
@@ -1134,6 +1144,7 @@
 	Fill & Stroke	Isian & stroke
 	Fill Color	Warna isian
 	Opacity	Opasitas
+	Show Opacity	Tampilkan opasitas
 	Stroke Color	Warna stroke
 	Fill Gradient	Gradien isian
 	Stroke Gradient	Gradien stroke
@@ -4150,6 +4161,12 @@ theme	Appearance	Tampilan
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	resolusi tidak tersedia
+	estimated memory {memory}	perkiraan memori {memory}
+	memory unavailable	memori tidak tersedia
+	Unknown format	Format tidak dikenal
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -4597,6 +4614,7 @@ theme	Appearance	Tampilan
 	Data Recovery	Pemulihan data
 	Default Language	Bahasa standar
 	Disable Auto Add/Delete	Nonaktifkan tambah/hapus otomatis
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete menghapus titik jangkar dan menjaga jalur tetap tersambung
 	Interpolate Control Points When Moving Anchors	Interpolasikan gagang arah saat memindahkan titik jangkar
 	Display All Blacks Accurately	Tampilkan semua warna hitam secara akurat
 	Display All Blacks as Rich Black	Tampilkan semua warna hitam sebagai rich black
@@ -5155,6 +5173,7 @@ font-technology	Variable	Variabel
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gerakan putar dua jari pada trackpad memutar tampilan kanvas.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Menahan tombol menjalankan alat atau perintah di kolom Tahan pada Pintasan papan ketik; tekanan singkat menjalankan pintasan biasanya.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Berapa detik tombol harus ditahan sebelum pintasan tahannya berjalan sebagai ganti pintasan biasanya.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete menghapus titik jangkar yang dipilih dan menyesuaikan ulang kurva di sekitar masing-masing, alih-alih membuka jalur di sana.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Saat Anda memindahkan titik jangkar, setiap kurva dengan satu ujung yang dipindahkan mempertahankan bentuknya terhadap ujung-ujungnya.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Menahan tombol pintasan alat memilih alat itu sampai Anda melepasnya, lalu alat sebelumnya dipilih lagi.
 	Shows the bounding box while you move the selection or draw a shape.	Menampilkan kotak pembatas saat Anda memindahkan seleksi atau menggambar bentuk.

@@ -129,7 +129,7 @@ pub(crate) fn finish_answered(app: &mut VectorcraftApp, path: &str, file: ReadFi
 /// Lists the file being read for `path` and tells the status bar → `{background: true, status}`.
 fn track(app: &mut VectorcraftApp, path: &str, done: Receiver<Result<ReadFile, String>>, scope: ScopeHandle, token: CancelToken) -> Value {
     let label = format!("Opening {}", fileio::file_name(path));
-    let started = crate::export_progress::now();
+    let started = crate::export_progress::now(app);
     app.opening.pending.push(Pending { path: path.to_string(), label: label.clone(), done, scope, token, hidden: false, started });
     let status = format!("{label}…");
     app.status(status.clone());

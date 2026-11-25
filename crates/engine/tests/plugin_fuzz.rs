@@ -711,9 +711,10 @@ proptest! {
     }
 
     /// Manifests with hostile `commands` (junk of every type, bad and repeated ids, labels with
-    /// control and bidirectional override characters, a `menu` naming another menu, junk
-    /// parameters) parse to an error or to commands whose menu labels show no hidden character and
-    /// that sit under Plug-ins alone; installing one and running each of its commands ends as an
+    /// control and bidirectional override characters, a `menu` of any shape naming any menu, junk
+    /// parameters) at API level 1 or 2 parse to an error or to commands whose menu labels show no
+    /// hidden character and that sit under Plug-ins, or at level 2 in one of the menus a manifest
+    /// may name, with the plug-in's name; installing one and running each of its commands ends as an
     /// error or an edit, never a panic, and the document then renders and exports.
     #[test]
     fn hostile_manifest_commands_never_crash(
@@ -727,7 +728,17 @@ proptest! {
                         1 => "[a-z\u{0007}\n]{1,8}".prop_map(Value::from),
                         1 => arb_junk(),
                     ],
-                    prop_oneof![Just(Value::Null), Just(json!("File")), arb_junk()],
+                    prop_oneof![
+                        Just(Value::Null),
+                        Just(json!("File")),
+                        Just(json!({"path": ["Select"], "after": "Inverse"})),
+                        Just(json!({"path": ["Object", "Path"]})),
+                        Just(json!({"path": ["File"]})),
+                        Just(json!({"path": ["Select"], "after": "\u{202E}Inverse"})),
+                        arb_junk().prop_map(|j| json!({"path": j})),
+                        arb_junk().prop_map(|j| json!({"path": ["Select"], "after": j})),
+                        arb_junk(),
+                    ],
                     prop_oneof![Just(Value::Null), Just(json!({"by": {"type": "number", "min": 0, "max": 10, "default": 2}})), arb_junk()],
                 )
                     .prop_map(|(id, label, menu, params)| {
@@ -746,8 +757,9 @@ proptest! {
         ),
         junk in prop::option::weighted(0.1, arb_junk()),
         given in prop_oneof![Just(json!({})), Just(json!({"by": 3})), arb_junk()],
+        api in 1u32..=2,
     ) {
-        let mut m = json!({"id": "fuzz.commands", "name": "Fuzz \u{202E}Commands", "kind": kind});
+        let mut m = json!({"id": "fuzz.commands", "name": "Fuzz \u{202E}Commands", "kind": kind, "api": api});
         if matches!(kind, "exporter" | "importer") {
             m["extensions"] = json!(["fz"]);
         }
@@ -760,6 +772,12 @@ proptest! {
                 let shown = c.shown_label();
                 prop_assert!(!shown.chars().any(|ch| ch.is_control() || matches!(ch, '\u{202E}' | '\u{2066}' | '\u{200F}')), "{}", shown);
                 prop_assert!(shown.chars().count() <= vectorcraft_plugins::permissions::MAX_SHOWN_NAME);
+                let placed = c.menu_label(&man.name);
+                prop_assert!(!placed.chars().any(|ch| ch.is_control() || matches!(ch, '\u{202E}' | '\u{2066}' | '\u{200F}')), "{}", placed);
+                if let Some(place) = &c.place {
+                    prop_assert!(api >= 2 && vectorcraft_plugins::manifest::MENU_PLACES.contains(&place.path), "{:?}", place);
+                    prop_assert!(placed.ends_with(')') && placed.len() > shown.len(), "a placed item names its plug-in: {}", placed);
+                }
             }
         }
         let mut s = rich_session();
@@ -778,7 +796,9 @@ proptest! {
         let ran = r.map_err(|msg| TestCaseError::fail(format!("panicked running {text}: {msg}")))?;
         prop_assert!(ran.is_empty() || parsed.is_ok(), "a manifest that doesn't parse installed: {}", text);
         for (id, menu) in &ran {
-            prop_assert!(menu.len() == 3 && menu[1] == "Plug-ins" && matches!(menu[0], "Object" | "Effect"), "{id}: {menu:?}");
+            let submenu = menu.len() == 3 && menu[1] == "Plug-ins" && matches!(menu[0], "Object" | "Effect");
+            let place = api >= 2 && vectorcraft_plugins::manifest::MENU_PLACES.contains(&menu.as_slice());
+            prop_assert!(submenu || place, "{id}: {menu:?}");
         }
         renders(&s, "after hostile commands")?;
         vectorcraft_plugins::registry::remove("fuzz.commands");

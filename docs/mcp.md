@@ -692,9 +692,14 @@ whole cell or none of it, so a grayed cell can hold printable colors and a clear
 print. `{"harmony": true, "harmonyRule": "triad"}` puts a marker on the wheel's ring for each other
 color of a Color Guide harmony rule, as Show Harmony and Harmony Rule do; the wheel takes the 15 rules whose colors
 each have a hue of their own (not `monochromatic`, `shades`, `complementary2`, `triad2`, `triad3` or
-`highContrast2`). `{"documentColors": true}` shows the row the panel menu's Show Document Colors adds under the wheel
+`highContrast2`). `"opacity": true` checks Show Opacity, as the panel menu does: a row under the wheel or the box
+with a slider and a percent field sets the opacity of the fill row (`paint.setFill {opacity}`), the stroke row
+(`paint.setStroke {opacity}`), the selected gradient stop or the selected freeform point (the first stop or point
+when none is selected), and `false` hides the row. The row is gray with nothing selected, for an object selected in
+a symbol instance, and when the fill or stroke row it would set is on type characters or missing.
+`{"documentColors": true}` shows the row the panel menu's Show Document Colors adds under the wheel
 or the box. Keys left out keep their values. Params that are not an object, another key or a value off
-the list return an error and change nothing. The command returns `{view, channel, sliders, gamut, harmony, harmonyRule, vision, documentColors}`,
+the list return an error and change nothing. The command returns `{view, channel, sliders, gamut, harmony, harmonyRule, opacity, vision, documentColors}`,
 and the settings are kept with the preferences.
 
 `ui.colorWheel {"sliders": "oklch"}` shows the Color Wheel panel's OKLCH Sliders (L, C and H rows under the wheel or
@@ -904,7 +909,17 @@ Cmd+Alt+/ runs `appearance.addStroke` (`press_key {key: "/", mods: {cmd: true, a
 `item` to edit one of them; `run_command appearance.setActiveItem {"index": n}` makes that row the target of later
 calls that omit `item` (as clicking the row in the Appearance panel does) until the selection changes; the proxy of
 its kind (`paint.proxies`) and the Gradient tool's annotator then show that row.
-`inspect_document` reports it as `paint.appearanceItem`. Live effects take the same `item` to apply to one fill or
+`inspect_document` reports it as `paint.appearanceItem`. `paint.setFill` and `paint.setStroke` also take `opacity`
+(0 to 100, a percentage as in `transparency.set`), which sets the opacity of the fill or stroke row they paint, with
+or without a new paint, as one undo step. An opacity that no target takes is an error and also leaves the paint
+undone. A `swatch` that is not a name does not make the request an opacity alone: it is an error without a paint of
+its own. A color for a grayscale or 1-bit image's drawing color creates no fill row, so an opacity given with it goes
+to a fill row the image has. With New Art Has Basic Appearance off, the next shape copies the first selected object's
+appearance after any command, its opacity included. Without a new paint, `objects` counts only the targets that took the opacity. `paint.proxies` answers it as `fillOpacity` and `strokeOpacity`, from the first selected object that has
+that row (a selected path of a compound path answers with its compound path's row, which the commands edit, and a
+selected Live Paint group answers with its faces' fills and its edges' strokes). It answers null with nothing selected, for an object selected in a symbol instance, while the Live Paint Bucket paints (it is the active tool, or a Cmd+click or an Eyedropper pick works for it),
+while the Type tool has characters selected, and when only type characters (which have no opacity of their own) or objects without that
+row are selected. Live effects take the same `item` to apply to one fill or
 stroke instead of the whole object: `run_command effect.apply {"effect": "path.offsetPath", "item": 0}`, and
 `effect.remove`, `effect.setParams` (`visible` toggles one) and `effect.duplicate` address that item's effects;
 `apply_effect` uses the active item. `effect.list` reports each object's item effects under `applied[].items`.
@@ -2948,10 +2963,11 @@ script reads files with them:
   `%xx` escapes are read as UTF-8, and on Windows `/` and `\` both separate names and `/c/` names drive C. `File(path)`
   without `new` gives a `Folder` for an existing folder, and `Folder(path)` gives a `File` for an existing file. Two
   objects for the same path are different objects.
-- `name`, `displayName`, `fsName`, `absoluteURI`, `fullName`, `relativeURI`, `path`, `parent` and `toString()` come
-  from the path. `exists`, `length`, `created`, `modified`, `hidden`, `readonly` and `alias` read the file system.
-  `exists` is true for a `File` only when the path names something other than a folder, and for a `Folder` only
-  when it names a folder.
+- `name`, `displayName`, `localizedName`, `fsName`, `absoluteURI`, `fullName`, `relativeURI`, `path`, `parent` and
+  `toString()` come from the path. `localizedName` gives the same decoded name as `displayName`: VectorCraft does not
+  look up a name the system shows in another language. `exists`, `length`, `created`, `modified`, `hidden`,
+  `readonly` and `alias` read the file system. `exists` is true for a `File` only when the path names something
+  other than a folder, and for a `Folder` only when it names a folder.
   `File.encode`, `File.decode` and `File.isEncodingAvailable` (and the same on `Folder`), `File.fs`, and the folders
   `Folder.temp`, `Folder.desktop`, `Folder.myDocuments`, `Folder.userData` and the others are there too.
 - `open('r')` opens a file to read, and `read([chars])`, `readln()`, `readch()`, `seek(pos[, mode])`, `tell()`, `eof`
@@ -3116,7 +3132,9 @@ is given as its file name alone. `script.grants.revoke {script?, path?, all?}` r
 a script file, of a path, of both together, or with `all: true` every grant, and returns `{removed}`. A path is
 matched after its links are followed; under automation read roots, a path outside them is matched as given. While a script
 runs it is refused with the busy error, as the run keeps the grants it started with. A grants file that is there but
-cannot be read is left as it is: `script.grants.revoke` fails, and a grant picked with Always is not kept. A script
+cannot be read, a link to a missing file included, is left as it is: `script.grants` and `script.grants.revoke` fail, and a grant picked with Always is
+not kept. A missing grants file lists no grants, and `script.grants` leaves out a grant in the file that is not well
+formed. A script
 cannot run either command.
 
 ```json
@@ -3353,6 +3371,14 @@ are kept, and selecting an ancestor together with its descendants deletes that s
 Without `ids`, direct-selected anchors or selected ruler guides retain their usual Clear behavior.
 With `ids`, `guides: true` also deletes the selected ruler guides. The command rejects a `guides` value that is not a
 boolean.
+Without `ids`, `keepJoined: true` removes the direct-selected anchors of each path that has no selected segment as
+`path.removeAnchors` does (see Removing anchor points): the path stays joined, and the next anchor along is selected
+(the one before at an open path's end). When no subpath that lost an anchor keeps two anchors, the path stays selected
+whole, as `path.removeAnchors` leaves it, so the next Delete removes the whole path. Paths with a selected segment are
+cut there, and their selected anchors stay in the path, as with `keepJoined: false`; and objects selected whole are deleted, in the
+same undo step. `keepJoined` defaults to the `deleteKeepsPathsJoined` preference, and the value used joins the journal
+entry; a saved step without it opens the paths, as it did when it was recorded. With `ids`, `keepJoined` has no
+effect. A `keepJoined` value that is not a boolean is an error, with or without `ids`.
 
 `edit.copy` takes a compound-path member selected on its own (whole or in part, with Direct or Group Selection) as an
 ordinary path with the compound's paint, transparency, opacity mask and fill rule. The path is linked to the compound's
@@ -3769,13 +3795,12 @@ not included.
 
 ## Learn panel
 
-Window › Learn and the Explore tutorials button beside the search field at the right end of the app bar show and hide
-the Learn panel. Its For you tab holds a Get started section with a Quick skill guide card; choosing the card opens
+Window › Learn shows and hides the Learn panel. Its For you tab holds a Get started section with a Quick skill guide card; choosing the card opens
 the Skills tab. The Skills tab lists VectorCraft's own skills, each with a progress ring and the count of its tutorials
 finished of all its tutorials. Choosing a skill lists its tutorials, choosing a tutorial shows its numbered steps, and
 Back goes up one level.
 The tutorial text is English. `window.learn {show?}` shows the panel (`show: true`), hides it (`show: false`) or
-toggles it (`show` omitted or null), and answers whether it shows; Window › Learn and Explore tutorials run it.
+toggles it (`show` omitted or null), and answers whether it shows; Window › Learn runs it.
 The panel counts as hidden while the dock is hidden or a full screen mode hides the panels. Showing it shows a hidden
 dock; in a full screen mode it makes Learn the front panel, which shows when the mode ends, and answers false. Any
 other value of `show` is an error and changes nothing. `learn.list {}` →
@@ -5150,10 +5175,18 @@ printed plates an image whose pixels do not take its color (a preview of its fil
 pixels. Older files that listed Overprint Black objects in the document get the flags on load.
 PDF export writes them with `advanced.overprint: "preserve"` (the default): each overprinting fill and stroke sets a
 graphics state with `/OP true /op true /OPM 1` (`/OPM 0` in PDF/A). With `discardWhiteOverprint` (`document.setup`, on by
-default) white ones knock out instead, but not a tint above 0% of a spot swatch, which prints as that ink;
-`"discard"` writes none. EPS export (`overprints: "preserve"`, the default) turns
-overprinting on for a colorized image's color as it does for fills and strokes, except a white color with
-`discardWhiteOverprint` on, which knocks out unless it is such a spot tint. PDF export writes an overprinting
+default) paper white ones knock out instead; `"discard"` writes none. Paper white is solid white that is not a spot
+white. Spot white objects keep overprinting
+([white overprint](https://helpx.adobe.com/illustrator/desktop/manage-colors/apply-transparency-and-blending/white-overprint.html),
+[reference, White Overprint](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=650)).
+These are VectorCraft's own rules: a spot white is a white linked to a solid spot swatch at a tint above 0% (an opaque
+white ink, for example), so a 0% tint of a spot swatch is paper white, and so is a spot white that printed separations
+convert to process inks. A spot white's fills, strokes, characters and colorized image colors keep overprinting in PDF
+export, Overprint Preview, Separations Preview and printed separations, its fills, strokes and colorized image colors
+keep overprinting in composite print with Overprints set to Simulate, and Print Ink Fixes' `removeWhiteOverprint`
+leaves it overprinting. EPS export (`overprints: "preserve"`, the default) turns overprinting on for a colorized image's
+color as it does for fills and strokes, except a paper white color with `discardWhiteOverprint` on, which knocks out;
+EPS export applies `discardWhiteOverprint` to nothing else. PDF export writes an overprinting
 colorized image in a gray or CMYK color in only the process inks the color puts down, and EPS export does too (one
 DeviceN image at Level 3, one Separation image per ink at Level 2). The previews and printed separations show a
 colorized image knocking out when it has a visible effect of its own other than a warp or a geometry effect (a drop
@@ -5910,23 +5943,40 @@ same extension and bytes as one there, loads as that User Defined library (categ
 is refused before it is read.
 From a document, such as a `.ai` or `.eps` swatch library, it reads the colors, tints, gradients and pattern swatches
 in the document's order and color groups; `swatch.library.add` brings a pattern swatch's pattern, with its tile and
-art, into the document as a pattern swatch under the library swatch's name and in its color group. A global or spot
+art, into the document as a pattern swatch under the library swatch's name. The swatch goes into its color group when
+`names` is left out or when the first entry of `names` that covers the swatch is its group; when that first entry is
+the swatch's own name, the swatch comes in ungrouped. A library swatch named after its
+pattern instead takes the name the pattern comes in under, when the pattern comes in under another name that no
+library swatch has and the swatch does not keep a free numbered name as described below. For such a swatch, when the
+document already has a swatch under any name that paints that pattern placed the same way, that swatch is used and
+nothing is added. Otherwise, when a
+swatch or color group of the document already uses that name, the swatch comes in under a numbered copy of it
+("Tiles 2 2"). A global or spot
 color the pattern's art links to keeps the library's color: when the document gives its name another color, it comes
-in under a numbered name ("Ink 2") and the pattern links to that. That numbered name skips the names the library
-gives its other swatches. A library color whose name the document gives
-another color is the document's numbered copy of the same color when it has one, so adding the pattern and its color
-again adds nothing. A pattern the document already holds with its art linked to the document's own color of that name
-is used as it is. A library tint or gradient whose global or spot color comes in under a numbered name, or is in the
-document as such a numbered copy, links to that copy, whether the color is picked before or after it, was added
-earlier or came with a pattern's art. A library global color is not the document's process color of the same name and
-paint: it comes in numbered. A global or spot color that a library tint or gradient links to and the document lacks
-comes in with the tint or gradient, under a numbered name when the document gives its name another swatch. The
-document's tint or gradient of the library one's name is that swatch when it links to the copy of the color that the
-art of a pattern picked with it takes; a numbered copy that the library also names stands for that library swatch
-otherwise. When the document's tint or gradient links to a color the document no longer has (deleted without
-unlinking), that color comes back under its own name. A pattern is found again when it was pasted with Add or Merge for all of its colors; one pasted
-with Merge for some colors and Add for others is added again as a copy. `added` lists the colors the pattern's art, a
-tint or a gradient brings too. A document with
+in under a numbered name ("Ink 2") and the pattern links to that. That numbered name, and the numbered names of a
+pattern swatch and of a pattern the art is painted with, skip the names the library gives its other swatches. A swatch
+of a numbered library name, such as a color or tint "Ink 2", that the pattern's art brings keeps that name when the
+document does not use it. Of two library swatches with one numbered name, the first one in the library keeps the name
+when the other is a swatch the pattern's art brings or a pattern swatch. A pattern the art is painted with keeps a
+numbered name; when the library's swatch of that name places the pattern otherwise, the swatch that comes with the
+pattern gets another name. When the document gives that name to another pattern, the pattern comes in under a new
+number, and its swatch keeps the library swatch's name when no swatch or color group uses it. A library color whose
+name the document gives another color is the document's numbered copy of the same color when it has one, so adding the
+pattern and its color again adds nothing; a numbered copy whose name the library gives another swatch, and which is
+that swatch, is not a copy of another color, whether or not the pattern's art uses that swatch. A pattern the document
+already holds with its art linked to the document's own color of that name, or to a numbered copy of the color as
+pasting leaves it, is used as it is, unless using it would give another swatch a name the library uses. A library
+tint or gradient whose global or spot color comes in under a numbered name, or is in the document as such a numbered
+copy, links to that copy, whether the color is picked before or after it, was added earlier or came with a pattern's
+art. A library global or spot color is not the document's color of the same name and paint when that color is of
+another kind (process, global or spot): it comes in numbered. A global or spot color that a library tint or gradient
+links to and the document lacks comes in with the tint or gradient, under a numbered name when the document gives its
+name another swatch. The document's tint or gradient of the library one's name is that swatch when it links to the
+copy of the color that the art of a pattern picked with it takes; a numbered copy that the library also names stands
+for that library swatch otherwise. When the document's tint or gradient links to a color the document no longer has
+(deleted without unlinking), that color comes back under its own name. A pattern is found again when it was pasted
+with Add or Merge for all of its colors; one pasted with Merge for some colors and Add for others is added again as a
+copy. `added` lists the colors the pattern's art, a tint or a gradient brings too. A document with
 no swatches, and a `.ai`, `.eps` or PostScript file whose swatches are only the default ones, are refused with
 "`<file>` has no swatches of its own", unless the document has graph designs: it then loads with no swatches. The
 Swatch Libraries filter of Other Library… lists `.ai`, `.ait` and `.eps` (`.epsf`) files as well as the library files.
@@ -7007,6 +7057,8 @@ The anchor after each removed one is then selected (the one before at an open pa
 `path.removeAnchors` again goes on along the path.
 `path.removeAnchor {id, subpath?, anchor}` (the Delete Anchor Point tool) removes one anchor the same way, and
 `path.deleteAnchors {}` (the Delete key) deletes the selected anchors with their segments, opening closed paths there.
+With the `deleteKeepsPathsJoined` preference on, the Delete key (`edit.clear`) removes them as `path.removeAnchors`
+does instead.
 
 ```json
 {"name":"run_command","arguments":{"command":"select.anchors","params":{"id":12,"anchors":[[0,1],[0,3]]}}}
@@ -7213,7 +7265,15 @@ there too and a `brush.freehand` call does not change the path's brush or the se
 A `pointer_gesture` with `mods: {cmd: true}` held at the press, with any tool but the selection tools (Command on
 macOS, Ctrl elsewhere), drags with the selection tool chosen last (`select_tool`), or Direct Selection with the Pen,
 Curvature and anchor tools until one is chosen; the release gives the tool back as it was, so the Pen goes on drawing
-the path it had begun while that stays selected. Its reply's `tool` is the tool given back.
+the path it had begun while that stays selected. With Direct Selection or Group Selection, `mods.cmd` drags with the
+Selection tool (with Direct Selection and `mods.alt` held too, with Group Selection). With the Selection tool, it drags
+with Direct Selection or Group Selection, whichever was chosen last (Direct Selection until one is), except where the
+press lands on a selected object, or on a group holding a selected member, with another object under the pointer, away
+from its anchors, direction handles, mesh points, blend spine and the bounding box's handles and rotate zones, while
+`ctrlClickSelectsBehind` is on: there the Selection tool keeps the press and selects the object behind. A double-click
+or triple-click made with Cmd still held after Cmd-clicks goes to the tool the clicks went to, and one that follows a
+Cmd-click selecting behind keeps what that click selected, without isolating or editing. Its reply's `tool` is the tool
+given back.
 
 `tool.selectLastSelection` (Select Last Selection Tool, `{}`) chooses the selection tool chosen last, as Ctrl+` does on
 Windows and Linux ([the help page](https://helpx.adobe.com/illustrator/using/default-keyboard-shortcuts.html) lists the
@@ -7530,9 +7590,36 @@ the path. The command returns an error and changes nothing when both or neither 
 an unknown `action`, a `turn` outside 1 to 359, a `flip` or `closed` that is not true or false, a `keep` outside 1 to
 the subpath's points, and for a closed subpath, a locked or hidden path or an `id` that is not a path.
 
+Dragging the handle at the start or end of the path makes the line or arc there longer or shorter, as
+[Draw with the Quick Pen tool](https://helpx.adobe.com/illustrator/web/add-and-edit-artwork/draw-and-edit-paths/draw-with-quick-pen-tool.html)
+describes. The tool shows a handle 20 screen points beyond each end of the path being drawn, along the direction the
+path leaves that end, where the end is a straight line or a circular arc; with no path being drawn, it shows them on
+each open subpath of the one editable path selected. A line keeps its other point and its direction. An arc keeps its
+other point, its circle and the way it turns, and its sweep follows the pointer around the circle, up to 359°. The
+dragged end stays on its line or circle and does not snap to Smart Guides, and a drag stops where the path would
+reach past the canvas. Each drag is one undo step, Escape during
+the drag takes it back, and the path being drawn goes on from the new end. The pieces of the path being drawn that the
+drag does not change stay pieces: C and `[` `]` still change the last one. The last piece, dragged by its end, stays
+that piece, and as an arc it keeps an arc size of at least 1°. C and `[` `]` do nothing until the drag ends, and the
+end goes where the pointer is let go. A click on a handle that does not drag is an ordinary
+click: it adds a point, closes the path or starts a new one. The handle's place, the 359° limit, the 1° minimum,
+Escape during a drag, the handles on a selected path and the dragged end not snapping are VectorCraft's own rules.
+
+`path.quickPenLength {id, subpath?, end?, length}` does the same for scripts and agents: it makes the line or arc at
+`end` (`"end"`, the default, or `"start"`) of the open subpath `subpath` (0 when left out) `length` points long,
+selects the path, as one undo step, and answers `{id, kind, length}`, where `kind` is `"line"` or `"arc"`. The arc at an
+end is the run of segments before it that lie on one circle and turn the same way, as the Quick Pen draws them. A
+`length` the line or arc already has changes nothing and records no undo step. The command returns an error and
+changes nothing when `id` or `length` is missing, when `length` is not a number, is under 0.001, or is over 1000000
+for a line or over 359° of its circle for an arc, for an `end` other than `"start"` or `"end"`, an end that is neither
+a straight line nor a circular arc (`the end is not a straight line or a circular arc`), a result that would reach past
+the canvas, a closed subpath, a locked or hidden path, and an `id` that is not a path. For an arc, the error gives the
+359° limit in points, rounded down to the thousandth.
+
 ```json
 {"name":"run_command","arguments":{"command":"path.quickPen","params":{"start":[100,100],"pieces":[{"x":200,"y":100},{"x":300,"y":200,"action":"continuousArc"},{"x":300,"y":300,"action":"sharpArc","turn":90,"flip":true}]}}}
 {"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"quickPen","key":"action","value":"sharpArc"}}}
+{"name":"run_command","arguments":{"command":"path.quickPenLength","params":{"id":12,"end":"start","length":40}}}
 ```
 
 ## Registration and trim marks
@@ -8427,6 +8514,12 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
   as it did when it was recorded. Align and
   Distribute, and the anchors of type paths and area type frames (`text.reshapePath`, `text.reshapeArea`), move as
   before. Off, the handles of a moved anchor move with it and the other handles stay where they are.
+- `deleteKeepsPathsJoined` (General › Delete Removes Anchor Points and Keeps Paths Joined, off by default): the
+  default of the `keepJoined` param of `edit.clear` (Delete, Backspace, Edit › Clear, and the Layers panel's Delete
+  button while no row is highlighted). On, Delete removes the direct-selected anchors of a path as `path.removeAnchors` does, refitting the curve
+  around each one, so a closed path stays closed and an open path stays in one piece; a path left with fewer than two
+  anchors is deleted. The next anchor along (the one before at an open path's end) is then selected, so the next
+  Delete goes on along the path. Off, Delete deletes the anchors with their segments and opens the path there.
 - `hideCornerWidgetAbove` (177° by default): corners wider than this show no Live Corners widget (a rectangle's right
   angles hide below 90°).
 - `transformPatternTiles` (off by default): the default of the transforms' `patterns` param (`object.transform`,
@@ -9012,7 +9105,7 @@ area, in a grid of as many columns as the square root of the number of windows, 
 its pane. Each view of a document counts as a window (see `window.newWindow` below). With fewer than two windows open it
 leaves the view, `tiled` and the layout as they are. It returns
 `{tiled, panes, layout}`. `window.arrange.tile {layout}` picks another layout, as the other Tile items of Window ›
-Arrange and of the application bar's Arrange Documents button do: `grid` (the default), `vertical` (Tile All
+Arrange do: `grid` (the default), `vertical` (Tile All
 Vertically: side by side in one row), `horizontal` (Tile All Horizontally: stacked in one column), and `2up`, `3up`,
 `4up` and `6up`, which show at most that many windows (2-Up and 3-Up side by side, 4-Up two by two, 6-Up three by
 two) and leave the others under their tabs. Those layouts show the first windows in tab order, and the current
@@ -9177,7 +9270,7 @@ unless `link: false`; a Photoshop document as its merged image), an SVG as one g
 and swatches it uses. A VectorCraft document read from `path` is a placed document: one locked object showing its
 artboard `page` (or, with `crop: "bounding"`, its art's bounds), linked to the file and read again when it changes
 (see Linked images), and vectors in every output; with `link: false` (or from `dataBase64`) it is an editable copy
-of its art, as one clipped group. A PDF, `.ai` or `.ait` page read from `path` (with neither `password` nor
+of its art, as one clipped group. A PDF, `.ai` or `.ait` page read from `path` (with neither a non-empty `password` nor
 `textAs: "outlines"`) is a placed document the same way, showing page `page` clipped to its `crop` box (or its
 art's bounds); with `link: false` it is placed as one clipped group. An EPS file, a PostScript file or a PostScript `.ai` read from `path` is a placed document
 too, showing the art `link: false` places (clipped to its bounding box, or its art's bounds with `crop: "bounding"`);
@@ -9250,7 +9343,7 @@ slices (Place PSD). `showImportOptions: false` places such a file without asking
 its dialog: the text options, the DXF fit, lineweight, centering and layer choices with the drawing at 1:1 in its own
 unit, and the PSD conversion, hidden-layer and Import Slices choices. A PDF is placed on page 1 (or `page`) and its
 crop box, and an encrypted PDF given no
-`password` still asks for the password. An encrypted PDF given a `page` and no `password` asks for the password with
+`password` (or an empty one) still asks for the password. An encrypted PDF given a `page` and no `password` asks for the password with
 Show Import Options on too, and places that page. A `showImportOptions` that is not true or false is refused, and nothing is placed. The
 Place dialog (File › Place, or `file.place {paths}`) has a Show Import Options checkbox after Link, Template and
 Replace ([Place multiple files in a document](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-other-file-types/place-multiple-files-in-a-document.html)).
@@ -9511,21 +9604,48 @@ page in the page's order, and no entries for objects or the view: Cut (`artboard
 (`edit.paste`), Undo, Redo, New Artboard (`artboard.new`), Duplicate Artboards (`artboard.duplicate`), Rename
 (`artboard.rename`), Delete Artboards (`artboard.delete` with `indices`), Delete Empty Artboards
 (`artboard.deleteEmpty`), Select All Artboards (`artboard.selectAll`), Lock Artboards and Unlock Artboards
-(`artboard.setProps` with `locked`), Rearrange (`artboard.rearrange`), Fit to Artwork Bounds (`artboard.fitToArt`),
-Switch Orientation (`artboard.switchOrientation`), Artboard Options (`tool.options {tool: "artboard"}`) and Export
-(`file.exportForScreens`). Exit Isolation Mode and the Unlock submenu for locked objects under the pointer follow them.
-Cut, Copy, Duplicate Artboards, Rename, Delete Artboards, Lock Selected, Unlock Selected, Fit to Artwork Bounds, Switch
-Orientation and Export act on the artboards the tool has selected, else the active one. Artboard Options opens on the
-active artboard. New Artboard, Paste, Undo, Redo, Delete Empty Artboards, Select All Artboards and Rearrange do not act on
-the selected artboards. Lock All and Unlock All act on every artboard, and Lock All Except Selected acts on the artboards
-that are not selected. A right-click on an artboard that is not selected first selects it alone. An entry that cannot
-run is left out: Cut with a locked artboard or every artboard selected, Delete Artboards with no artboard to delete, Select All Artboards with every artboard selected, Rearrange with
-one artboard, Fit to Artwork Bounds with no art on a selected unlocked artboard, Switch Orientation with no selected
-artboard to change, and a lock entry with no artboard to change. The menu measures the art for Delete Empty Artboards and
+(`artboard.setProps` with `locked`), Rearrange (`artboard.rearrange` with `indices`), Fit to Artwork Bounds
+(`artboard.fitToArt`), Switch Orientation (`artboard.switchOrientation`), Artboard Options
+(`tool.options {tool: "artboard"}`) and Export (`file.exportForScreens`). Exit Isolation Mode and the Unlock submenu
+for locked objects under the pointer follow them. Cut, Copy, Duplicate Artboards, Rename, Delete Artboards, Lock
+Selected, Unlock Selected, Rearrange, Fit to Artwork Bounds, Switch Orientation and Export act on the artboards the tool
+has selected, else the active one. Artboard Options opens on the active artboard. New Artboard, Paste, Undo, Redo,
+Delete Empty Artboards and Select All Artboards do not act on the selected artboards. Lock All and Unlock All act on
+every artboard, and Lock All Except Selected acts on the artboards that are not selected. A right-click on an artboard
+that is not selected first selects it alone. An entry that cannot run is left out: Cut with a locked artboard or every
+artboard selected, Delete Artboards with no artboard to delete, Select All Artboards with every artboard selected, Fit
+to Artwork Bounds with no art on a selected unlocked artboard, Switch Orientation with no selected artboard to change,
+and a lock entry with no artboard to change. The menu measures the art for Delete Empty Artboards and
 Fit to Artwork Bounds once, at the right-click. Paste centers copied artboards on the right-click's point
 (`edit.paste {artboardsAt: [x, y]}`) and centers copied objects there too (`center`). Chosen from a menu or the command
 palette with the tool in use, `artboard.new` makes the new artboard active, `artboard.duplicate` selects the copies,
 and `artboard.delete` and `artboard.deleteEmpty` make a remaining artboard active.
+
+Rearrange for selected artboards: the
+[Rearrange artboards](https://helpx.adobe.com/illustrator/desktop/create-manage-artboards/organize-manage-artboards/rearrange-artboards.html)
+help page describes rearranging only the artboards picked with the Artboard tool, with the same layout, order, count,
+spacing and move-artwork choices as for all artboards, and a click on the canvas that puts the arrangement in place.
+`artboard.rearrange {indices: [n…]}` lays out only those artboards (zero-based, sorted, an index given twice counts once),
+in document order, and leaves every other artboard, its art and its guides where they are; `at: [x, y]` puts the
+grid's top-left there, else at the first listed artboard's top-left. A listed locked artboard stays where it is and
+keeps its cell. With `moveArtwork`, an object moves with the listed artboard its center is on; an object whose center
+is on another artboard stays. `indices` that is not a list, an empty list, an entry that is not a whole number and an
+`at` that is not [x, y] are refused before anything moves, and an index past the last artboard is `no such artboard`.
+The reply adds `indices` and `moved`, the number of artboards that moved; with none moved (every listed artboard
+locked, or already in place) no undo step is recorded. Without `indices` the command lays out every artboard, and its
+reply is `{artboards, rows, columns}`; `at` there puts the grid's top-left at `at` too. In the desktop app, the
+Artboard tool's canvas menu and Contextual Task Bar (Rearrange), and while the Artboard tool is in use the Artboards
+panel's menu (Rearrange…), open the Rearrange dialog (kind `rearrangeArtboards` with field `indices`) for the
+artboards the tool has selected, showing their count. With another tool Rearrange… is off. The panel's Rearrange
+button stays Rearrange All Artboards. Its OK changes nothing yet: the grid's outline follows the pointer, and the
+next press on the canvas runs `artboard.rearrange` with `indices` and `at` at the press, as one undo step. Enter, when
+no other control has the keyboard focus, runs it with `at` at the pointer over the canvas, else without `at` (the grid at the first selected artboard's top-left).
+A press with Space held pans or zooms as usual and places nothing. Esc, another tool or another document cancels it
+without an edit. The status bar reads "Click on the canvas to place the
+artboards (Esc cancels)" meanwhile. The top-left reference point, the outline, the fallback to the first artboard's
+corner and the rules for locked artboards and art on other artboards are VectorCraft's own. Object › Artboards ›
+Rearrange All Artboards…, the Artboards panel's Rearrange All Artboards… and the Properties panel's Rearrange All still
+lay out every artboard at once.
 
 Locked artboards: `artboard.setProps {index, locked: true}` locks an artboard and `{index, locked: false}` unlocks it,
 each in one undo step. The Artboards panel's lock column, left of a row's options icon, shows a lock on a locked
@@ -10150,9 +10270,15 @@ type in a mask or in a symbol's or pattern's art once however many objects show 
 (`[{font, match, family, style, file, embedding}]`: each font of `fonts`, in order, as the fontDetails category's rows give it: `match` is `exact`, `style` (a style the family lacks, shown in
 `family` `style`), `missingWithFallback` (not installed, shown in `family` `style`) or `missing`; `file` is the face's
 file name, null for a built-in face; `embedding` is `allowed`, `editing`, `previewPrint` or `forbidden`, null when no
-face is found), `imageObjects` (`[{name, width, height, linked, file}]`: the image objects in the order the
-linkedImages and embeddedImages categories list them, with the file a linked image's row shows and null for an
-embedded one), `document.unitId` (the document's units as Preferences › Units names them, such as `millimeters`, beside
+face is found), `imageObjects` (`[{name, width, height, linked, file, format, effectivePpi, memoryBytes,
+storedBytes}]`: the image objects in the order the linkedImages and embeddedImages categories list them, with the file
+a linked image's row shows and null for an embedded one; `format` is a linked image's file format by its extension,
+else the format of the pixels the document holds, null when neither is known; `effectivePpi` is `[x, y]`, the pixels
+per inch at the size the image is placed at (a distorted image measured at its middle), null when it has no area;
+`memoryBytes` is, for an embedded image, width × height × 4, the bytes of the 8-bit RGBA pixels it is drawn from, and
+`storedBytes` is the bytes of the encoded image the document holds; both are null for a linked image; a linkedImages row reads
+`PNG; 1200 × 800 px; 150 ppi — /art/photo.png` and an embeddedImages row `PNG; 1200 × 800 px; estimated memory 3.7 MiB`,
+with `Unknown format`, `resolution unavailable` or `memory unavailable` for a value that is null), `document.unitId` (the document's units as Preferences › Units names them, such as `millimeters`, beside
 the English `document.units`), `document.transparency` (`{gridSize, gridColors, gridColorsName, simulatePaper,
 flattenerPreset}`: File › Document Setup's transparency settings, the grid's size (`small`, `medium` or `large`), its
 two colors as `#rrggbb`, their preset's name or `Custom`, Simulate Colored Paper and the flattener preset, which the
@@ -13494,7 +13620,9 @@ changes nothing when a new `pluginsFolder` is missing, is not a folder or can't 
 value or the folder the preference already holds, and the web build does not check folders.
 A filter or live effect may declare commands of its own ([plugins.md](plugins.md#commands)): each is the command
 `plugin.<id>.<command>` while the plug-in is installed, listed by `command_list` and in its `plugin.list` entry
-(`commands: [{id, command, label, params, paramsSchema}]`). Run it with `{ids?, params?}` (its parameters may also
+(`commands: [{id, command, label, params, paramsSchema, menu?}]`; `menu`, `{path, after?, placed?}`, is the menu its
+manifest places it in, with `placed: false` when the command stays in its plug-in's submenu, see
+[plugins.md](plugins.md#placing-a-command-in-another-menu)). Run it with `{ids?, params?}` (its parameters may also
 be top-level keys): the parameters are checked before the plug-in runs, a run is one undo step named after the
 command, and a run that traps or runs out of its instruction budget returns an error that starts with the plug-in's
 name and the command's label and leaves the document and the undo history as they were. For `plugin.run` and plug-in
@@ -15055,6 +15183,30 @@ Commands:
   ```json
   {"name":"run_command","arguments":{"command":"addon.pathtools.boundingCircle","params":{"offset":2}}}
   ```
+- `addon.pathtools.inscribedCircle {}` draws the largest live circle inside each selected closed path or compound
+  path (Object › Plug-ins › Path Precision Tools › Add Inscribed Circle, #6966). Its center is the shape's
+  [pole of inaccessibility](https://en.wikipedia.org/wiki/Pole_of_inaccessibility). A path of a compound path
+  selected on its own counts as a path. The circle lies in the area the shape fills under its fill rule: holes and the
+  overlaps of crossing subpaths count as the fill shows them, and strokes and effects are left out. The command
+  flattens the outline to within 0.005 pt and searches square cells best first to within 0.01 pt, then measures the
+  radius from the center to the curves, so before the circle is drawn its radius is within 0.02 pt of the largest.
+  When the box of the filled area is less than 10 pt across on its narrower side, the search and the flattening use
+  a thousandth and a two-thousandth of that side, and the radius is within a five-hundredth of it. A curve whose
+  control polygon is longer than 4096² times the flattening tolerance (83,886 pt at 0.005 pt) is flattened more
+  coarsely, and the circle can be smaller by as much. A curved hole narrower than the flattening tolerance can also
+  make it smaller. A shape that flattening would close up or move off its curves is flattened finer, down to 1/65,536
+  of the tolerance. The drawn circle's four curves reach up to 0.03% of its radius past a true circle, so the command
+  draws it 0.03% smaller, and it stays inside where it touches the shape. Holes and gaps narrower than 1e-6 pt close
+  up, and edges can move by as much, as in the other path operations. The circles get the current paint and go on
+  top of the current layer, or of the isolated group, as other new art does; inside an isolated compound path they
+  join it and take its appearance. The new circles are selected, and one undo removes them all. It is an error,
+  with the document unchanged, when a selected object is not a closed path or compound path ("object N is not a
+  closed path or compound path"; an open path has no inside), when it fills no area ("object N fills no area"), and
+  when its outline has more than 262,144 anchors (in subpaths of two or more) or more than 262,144 straight pieces
+  once flattened, or the searches of all the selected objects together measure more than 134,217,728 distances from
+  a point to an edge, or one search keeps more than 1,048,576 cells waiting, or the shape is so thin for its length
+  that it flattens to no area even at the finest tolerance ("object N is too complex to measure").
+  → `{id: the first circle, ids}`
 
 A parametric shape is an ordinary path. It keeps its numbers, with a fingerprint of the outline they drew, in one
 entry of its object data (`vc-pathtools-shape`, as `document.node` lists `attrs.data`), which SVG export leaves out;
@@ -15530,7 +15682,7 @@ document's inks for print, as one undo step:
 | `scope` | `selection`, `document` (the selection, or the document while nothing is selected) | What it fixes; `ids` stand for the selection |
 | `inkLimit` | total ink % 1…400, 0 off (off) | CMYK colours (solid, gradient stops, gradient meshes) with more ink than this are scaled down to it; colours of spot swatches and Registration stay |
 | `excludePureBlack` | bool (true) | Black-only CMYK and grey colours keep their ink |
-| `removeWhiteOverprint` | bool (false) | White fills and strokes, characters' and the white color of a colorized image stop overprinting |
+| `removeWhiteOverprint` | bool (false) | White fills and strokes, characters' and the white color of a colorized image stop overprinting; a white linked to a spot swatch at a tint above 0% is an ink and keeps overprinting |
 | `overprintBlack` | black % 1…100, 0 off (off) | Black-only and grey fills and strokes this dark or darker overprint, as `edit.colors.overprintBlack` sets it (not spot-linked or rich blacks) |
 | `textOnly` | bool (false) | Overprint Black on type only |
 | `fill`, `stroke` | bool (true) | Which paints the fixes reach |

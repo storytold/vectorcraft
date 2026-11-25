@@ -4,7 +4,7 @@ use wasmi::{
     Config, CustomFuelCosts, EnforcedLimits, Engine, ExternType, Instance, Memory, Module, Store, StoreLimitsBuilder, TypedFunc, TypedResumableCall,
     Val, ValType, WasmParams, WasmResults,
 };
-use wasmparser::{Validator, WasmFeatures};
+use wasmparser::{CompositeInnerType, Parser, Payload, Validator, WasmFeatures};
 
 use crate::host::{self, Bridge, Deadline, Host, Report, Run};
 use crate::manifest::{MANIFEST_SECTION, MAX_MANIFEST_BYTES, Manifest, Runtime};
@@ -42,10 +42,44 @@ const WASM_FEATURES: WasmFeatures = WasmFeatures::MUTABLE_GLOBAL
     .union(WasmFeatures::EXTENDED_CONST)
     .union(WasmFeatures::FLOATS);
 
+/// The most parameters or results a function type may have: the limit `EnforcedLimits::strict()`
+/// sets in wasmi 2.0.0.
+const MAX_FUNC_TYPE_VALUES: usize = 32;
+
 /// Validates `bytes` with only [`WASM_FEATURES`] on, before wasmi reads the module. A module that
-/// uses any other proposal is refused with the validator's error, which names the proposal.
+/// uses any other proposal is refused with the validator's error, which names the proposal. A
+/// function type with more than [`MAX_FUNC_TYPE_VALUES`] parameters or results is refused before
+/// any function body is validated.
 fn check_features(bytes: &[u8]) -> Result<()> {
+    check_func_types(bytes)?;
     Validator::new_with_features(WASM_FEATURES).validate_all(bytes).map(|_| ()).map_err(|e| Error::Module(e.to_string()))
+}
+
+/// Refuses a function type in the type section with more than [`MAX_FUNC_TYPE_VALUES`] parameters
+/// or results, with wasmi's message. Reading stops at the code section. A section that doesn't
+/// parse is left to the validator, which reports it.
+fn check_func_types(bytes: &[u8]) -> Result<()> {
+    for payload in Parser::new(0).parse_all(bytes) {
+        let types = match payload {
+            Ok(Payload::TypeSection(types)) => types,
+            Ok(Payload::CodeSectionStart { .. }) | Err(_) => return Ok(()),
+            Ok(_) => continue,
+        };
+        for group in types {
+            let Ok(group) = group else { return Ok(()) };
+            for ty in group.types() {
+                if let CompositeInnerType::Func(f) = &ty.composite_type.inner {
+                    if f.params().len() > MAX_FUNC_TYPE_VALUES {
+                        return Err(Error::Module(format!("a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters")));
+                    }
+                    if f.results().len() > MAX_FUNC_TYPE_VALUES {
+                        return Err(Error::Module(format!("a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results")));
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Sets each WebAssembly proposal that wasmi's `Config` has a setter for in this build on or off,
