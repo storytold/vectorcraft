@@ -515,6 +515,33 @@ fn diacritic_position_fields_show_set_reset_and_commit() {
     assert!(t.runs.iter().all(|r| (r.style.diacritic_horizontal, r.style.diacritic_vertical) == (-120.0, 1000.0)));
 }
 
+/// The number fields read typed text as the app's other number fields do: `6x2`, `10+4`, `200/2%`,
+/// `45°`, a decimal comma, and a length with its unit. `%` and `°` only where the field takes them,
+/// and an exponent is not read.
+#[test]
+fn number_fields_take_field_arithmetic() {
+    let typed = [
+        ("size", "6x2", 12.0),
+        ("tracking", "10+4", 14.0),
+        ("h_scale", "200/2%", 100.0),
+        ("rotation", "45°", 45.0),
+        ("fill_tint", "25*2", 50.0),
+        ("leading", "1 in", 72.0),
+        ("baseline_shift", "\u{2212}2", -2.0),
+        ("kerning", "12,5", 12.5),
+    ];
+    for (key, text, want) in typed {
+        let (mut d, _) = dialog_for(json!({}));
+        put(&mut d, key, json!(text));
+        assert_eq!(optional_number(&Values::new(&d), key), Ok(Some(json!(want))), "{key} {text}");
+    }
+    for (key, text) in [("size", "12°"), ("leading", "50%"), ("tracking", "10%"), ("rotation", "45%"), ("h_scale", "1%2"), ("size", "1e3")] {
+        let (mut d, _) = dialog_for(json!({}));
+        put(&mut d, key, json!(text));
+        assert!(optional_number(&Values::new(&d), key).is_err(), "{key} {text}");
+    }
+}
+
 /// Tsume: empty is unset, an explicit 0 stays set, a typed value stops at 0 and 100, Reset Panel
 /// unsets it, and it commits to the style and the text set in it.
 #[test]
@@ -523,7 +550,7 @@ fn tsume_field_shows_sets_resets_and_commits() {
     assert_eq!(val(&d, "tsume"), json!(""));
     let (mut d, o) = dialog_for(json!({"tsume": 50.0}));
     assert_eq!(val(&d, "tsume"), json!("50.0"));
-    for (typed, kept) in [("0", 0.0), ("25.5", 25.5), ("150", 100.0), ("-5", 0.0)] {
+    for (typed, kept) in [("0", 0.0), ("25.5", 25.5), ("25%", 25.0), ("50/2%", 25.0), ("150", 100.0), ("-5", 0.0)] {
         put(&mut d, "tsume", json!(typed));
         assert_eq!(edited_attrs(&d, &o).unwrap(), attrs(json!({"tsume": kept})), "{typed}");
     }

@@ -13360,7 +13360,10 @@ dialog exposes `name`, `font_family`, `font_style`, `size`, `leading`, `kerning`
 `tcyLeftRight`, `rotation`, `akiLeft`, `akiRight`, `tsume`, `diacriticHorizontal`, `diacriticVertical`, `language`, `fill`, `fill_tint`, `stroke`, `stroke_tint`, `stroke_width`, `overprint_fill`, `overprint_stroke`,
 `ot_figure`, `ot_position`, `ot_liga`, `ot_calt`, `ot_dlig`, `ot_swsh`, `ot_salt`, `ot_titl`, `ot_ordn`, `ot_frac`,
 `ot_sets`, `section` (`general`, `basic`, `advanced`, `color` or `opentype`), and `preview`. An empty field leaves its
-attribute unset. `leading` and `kerning` also accept `Auto` to store an explicit automatic value.
+attribute unset. `leading` and `kerning` also accept `Auto` to store an explicit automatic value. A number field
+given as text takes the arithmetic of the app's number fields (`"6x2"`, `"10+4"`) and a decimal comma; `size`, `leading`,
+`baseline_shift`, `tcyUpDown`, `tcyLeftRight` and `stroke_width` also read a unit (`"1 in"`), a final `%` is read only
+in `h_scale`, `v_scale`, `tsume`, `fill_tint` and `stroke_tint`, and a final `°` only in `rotation`.
 Advanced Character Formats holds `h_scale` and `v_scale` (percent, 1 to 10000),
 `baseline_shift` (points, -1296 to 1296), the Tate-chu-yoko Settings `tcyUpDown` and `tcyLeftRight` (points,
 -1296 to 1296, as `text.setRangeStyle` takes them; an explicit 0 stays distinct from unset), `rotation` (degrees, stored from -180 to 180), Insert Aki Left and Right `akiLeft` and `akiRight` (thousandths of

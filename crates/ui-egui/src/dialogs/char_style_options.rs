@@ -429,6 +429,23 @@ fn case_from_attrs(attrs: &Map<String, Value>) -> Option<&'static str> {
     }
 }
 
+/// The number the text typed into number field `key` reads as, with the arithmetic of the app's number
+/// fields (`6x2`, `10+4`, `200/2`) and a decimal comma: a length in points in the length fields (`1 in`),
+/// and a final `%` in the percent fields or `°` in Character Rotation.
+fn typed_number(key: &str, text: &str) -> Option<f64> {
+    let text = text.trim().replace('\u{2212}', "-");
+    let text = vectorcraft_doc::decimal_point(&text);
+    let mark = match key {
+        "size" | "leading" | "baseline_shift" | "tcyUpDown" | "tcyLeftRight" | "stroke_width" => {
+            return vectorcraft_doc::Unit::Points.parse(&text);
+        }
+        "h_scale" | "v_scale" | "tsume" | "fill_tint" | "stroke_tint" => Some('%'),
+        "rotation" => Some('°'),
+        _ => None,
+    };
+    vectorcraft_doc::parse_number(mark.and_then(|m| text.strip_suffix(m)).unwrap_or(&text))
+}
+
 fn optional_number(d: &Values, key: &str) -> Result<Option<Value>, String> {
     let label = match key {
         "size" => tl!("Size"),
@@ -458,7 +475,7 @@ fn optional_number(d: &Values, key: &str) -> Result<Option<Value>, String> {
         Some(v) => {
             let n = v
                 .as_f64()
-                .or_else(|| v.as_str().and_then(|s| s.trim().parse::<f64>().ok()))
+                .or_else(|| v.as_str().and_then(|s| typed_number(key, s)))
                 .filter(|n| n.is_finite())
                 .ok_or_else(|| format!("{label} must be a number"))?;
             // Character Style fields use the Character panel's visible ranges.
