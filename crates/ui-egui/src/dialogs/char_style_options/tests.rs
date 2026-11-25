@@ -574,6 +574,41 @@ fn tsume_field_shows_sets_resets_and_commits() {
     assert!(t.runs.iter().all(|r| r.style.tsume == 75.0));
 }
 
+/// The Insert Aki, Tsume and diacritic rows each have the Character panel's presets menu beside the field, and a
+/// preset picked from it is the field's value and commits to the style, with each frame drawn once.
+#[test]
+fn aki_tsume_and_diacritic_rows_pick_from_the_character_panel_presets() {
+    use craft::ui::testing::Fixture;
+    let mut fx = Fixture::new(|ui| crate::dialogs::host::window_dialogs(ui.ctx()).with(|host| host.run(ui)));
+    fx.room(egui::vec2(900.0, 900.0));
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.ui_ctx = Some(fx.ctx().clone());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    styled(&mut app, json!({"size": 24.0}), "Text");
+    open(&mut app, "Body");
+    set::<Existing>(&app, "tab", json!("advanced"));
+    fx.settle();
+
+    let presets_in_row = |fx: &Fixture, label: &str| {
+        let field = fx.by_label(label).unwrap_or_else(|| panic!("the {label} field"));
+        let tree = fx.tree();
+        tree.keys().into_iter().filter(|key| tree.name_of(*key) == Some("Presets")).filter_map(|key| fx.target(key)).find(|chevron| {
+            chevron.rect.center().y > field.rect.top() && chevron.rect.center().y < field.rect.bottom() && chevron.rect.left() >= field.rect.left()
+        })
+    };
+    for label in ["Insert Aki Left", "Insert Aki Right", "Tsume (%)", "Adjust Horizontal Diacritic Position", "Adjust Vertical Diacritic Position"] {
+        assert!(presets_in_row(&fx, label).is_some(), "{label} has a presets menu");
+    }
+
+    let chevron = presets_in_row(&fx, "Insert Aki Left").unwrap();
+    fx.click(&chevron).settle();
+    let pick = fx.by_label("500").expect("the 500 preset");
+    fx.click(&pick).settle();
+    assert_eq!(fields::<Existing>(&app)["akiLeft"], json!("500"));
+    assert!(ok::<Existing>(&mut app));
+    assert_eq!(app.session.doc().unwrap().doc.char_styles[0].attrs, attrs(json!({"size": 24.0, "akiLeft": 500.0})));
+}
+
 /// The negated tags of the twenty stylistic sets: an explicit empty Stylistic Sets choice.
 fn no_sets() -> Vec<String> {
     vectorcraft_text::EXTRA_FEATURES[..20].iter().map(|s| format!("-{s}")).collect()
