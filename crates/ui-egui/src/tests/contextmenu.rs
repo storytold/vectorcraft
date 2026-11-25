@@ -619,12 +619,13 @@ fn outline_stroke_ignores_a_linked_dimensions_lines_when_its_source_is_selected(
         let source = rect(&mut app, 50.0, 50.0);
         app.run("paint.setFill", json!({"color": "#ff8010"})).unwrap();
         app.run("paint.setStroke", json!({"none": true})).unwrap();
-        let dimension = NodeId(
-            app.run("dimension.create", json!({"source": {"kind": "segment", "edge": {"node": source.0, "subpath": 0, "segment": 0}}}))
-                .unwrap()["id"]
-                .as_u64()
-                .unwrap(),
-        );
+        let dimension =
+            NodeId(
+                app.run("dimension.create", json!({"source": {"kind": "segment", "edge": {"node": source.0, "subpath": 0, "segment": 0}}})).unwrap()
+                    ["id"]
+                    .as_u64()
+                    .unwrap(),
+            );
         app.run("select.set", json!({"ids": [source.0, dimension.0]})).unwrap();
         if grouped {
             app.run("object.group", json!({})).unwrap();
