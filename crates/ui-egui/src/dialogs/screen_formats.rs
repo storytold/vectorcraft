@@ -73,8 +73,9 @@ pub(crate) const SIZES: [&str; 12] = ["0.5x", "0.75x", "1x", "1.5x", "2x", "3x",
 /// The iOS and Android rows (the engine's `mobile` and `density` presets) and their labels.
 pub(crate) const PLATFORMS: [(&str, &str); 2] = [("mobile", "iOS"), ("density", "Android")];
 
-/// The columns of the format rows: scale, suffix, format and the remove button.
-const COLUMNS: &[ColumnWidth] = &[ColumnWidth::Content; 4];
+/// The columns of the format rows: scale, suffix and format share the room the remove button leaves. When the
+/// fields cannot narrow that far, the grid stacks the cells.
+const COLUMNS: &[ColumnWidth] = &[ColumnWidth::fill(1.0), ColumnWidth::fill(1.0), ColumnWidth::fill(1.0), ColumnWidth::Content];
 
 /// The text of `key` in `fields`, "" when it has none.
 fn text<'a>(fields: &'a Map<String, Value>, key: &str) -> &'a str {

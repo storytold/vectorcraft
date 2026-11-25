@@ -214,6 +214,8 @@ mod tests_raster_formats;
 mod tests_raster_supplied_options;
 
 #[cfg(test)]
+mod tests_custom_rows;
+#[cfg(test)]
 mod tests_dxf;
 #[cfg(test)]
 mod tests_screen_assets;

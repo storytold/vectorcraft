@@ -241,7 +241,7 @@ pub(crate) fn items_at(now: f64) -> Vec<Node> {
     };
     let mut nodes = level(&listing.entries);
     let notes = [listing.truncated.then_some(TRUNCATED), listing.unreadable.then_some(UNREADABLE), note];
-    nodes.extend(notes.into_iter().flatten().map(Node::heading));
+    nodes.extend(notes.into_iter().flatten().map(crate::menus::placeholder));
     if !nodes.is_empty() {
         nodes.push(Node::Separator);
     }
