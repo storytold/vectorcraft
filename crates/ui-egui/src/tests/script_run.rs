@@ -546,7 +546,8 @@ fn the_warning_lists_what_a_scripts_included_files_reach() {
 #[test]
 fn the_warning_lists_a_need_without_the_outside_heading() {
     let mut app = app();
-    menus::run_ui_command(&mut app, "ui.runScript", &json!({"source": "var w = new Window('dialog', 'Title');", "name": "dialog.js"})).unwrap().unwrap();
+    let source = "var w = new Window('dialog', 'Title');";
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({"source": source, "name": "dialog.js"})).unwrap().unwrap();
     assert_eq!(fields(&app, KIND)["reaches"]["outside"], json!([]));
     let texts = dialog_texts(&mut app);
     assert!(texts.iter().any(|t| t == script_check::need_label("dialogs").unwrap()), "{texts:?}");
