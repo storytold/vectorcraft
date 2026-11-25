@@ -183,6 +183,7 @@
 	Anti-alias Rasters	Pixelbilder glätten
 	Anti-aliased Artwork	Geglättete Grafik
 	Anti-aliasing Method	Glättungsmethode
+@id	language.name	Deutsch
 antiAlias	Sharp	Scharf
 	Crisp	Klar
 	Strong	Stark
@@ -908,6 +909,7 @@ font-technology	Variable	Variabel
 	Direct Selection Tool	Direktauswahl-Werkzeug
 	Direction Handles	Richtungsgriffe
 	Disable Auto Add/Delete	Automatisches Hinzufügen/Löschen deaktivieren
+	Delete Removes Anchor Points and Keeps Paths Joined	Entf entfernt Ankerpunkte und lässt Pfade verbunden
 	Interpolate Control Points When Moving Anchors	Richtungsgriffe beim Verschieben von Ankerpunkten interpolieren
 	Disable Opacity Mask	Deckkraftmaske deaktivieren
 	Discard	Verwerfen
@@ -2435,6 +2437,12 @@ file-filter	Templates	Vorlagen
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	Auflösung nicht verfügbar
+	estimated memory {memory}	geschätzter Speicher {memory}
+	memory unavailable	Speicher nicht verfügbar
+	Unknown format	Unbekanntes Format
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -2583,6 +2591,7 @@ file-filter	Templates	Vorlagen
 	One Point Perspective Preset 5	Einpunktperspektive – Vorgabe 5
 	Only Web Colors	Nur Webfarben
 	Opacity	Deckkraft
+	Show Opacity	Deckkraft einblenden
 	Opacity & Mask Define Knockout Shape	Deckkraft und Maske definieren Aussparungsform
 	Opacity Mask	Deckkraftmaske
 	Opacity Mask Info	Informationen zur Deckkraftmaske
@@ -3037,6 +3046,9 @@ digits	Malayalam	Malayalam
 	Scale Artwork with Artboard	Grafik mit Zeichenfläche skalieren
 	Artboards: {n}	Zeichenflächen: {n}
 	Rearrange All Artboards…	Alle Zeichenflächen neu anordnen…
+	Rearrange…	Neu anordnen…
+	Selected Artboards: {n}	Ausgewählte Zeichenflächen: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Klicken Sie auf die Arbeitsfläche, um die Zeichenflächen zu platzieren (Esc bricht ab)
 	Recall Selection	Auswahl abrufen
 	RECENT	ZULETZT VERWENDET
 	Recent	Zuletzt verwendet
@@ -3290,6 +3302,7 @@ digits	Malayalam	Malayalam
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Eine Drehgeste mit zwei Fingern auf einem Trackpad dreht die Ansicht der Arbeitsfläche.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Halten Sie eine Taste, wird das Werkzeug oder der Befehl aus ihrer Spalte „Halten“ unter „Tastaturbefehle“ ausgeführt; ein kurzer Druck führt ihren üblichen Tastaturbefehl aus.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Wie viele Sekunden eine Taste gehalten werden muss, bevor statt ihres üblichen Tastaturbefehls ihr Halte-Tastaturbefehl ausgeführt wird.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Entf entfernt die ausgewählten Ankerpunkte und passt die Kurve um jeden davon neu an, statt den Pfad dort zu öffnen.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Wenn Sie Ankerpunkte verschieben, behält jede Kurve mit einem verschobenen Ende ihre Form relativ zu ihren Enden.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Solange Sie das Tastaturkürzel eines Werkzeugs gedrückt halten, ist dieses Werkzeug gewählt; danach wird wieder das vorherige gewählt.
 	Shows the bounding box while you move the selection or draw a shape.	Zeigt den Begrenzungsrahmen an, während Sie die Auswahl verschieben oder eine Form zeichnen.
@@ -6436,6 +6449,7 @@ lighting	Light	Licht
 @msg	a 3D effect on a group's fill or stroke draws nothing	ein 3D-Effekt auf der Fläche oder Kontur einer Gruppe zeichnet nichts
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ein 3D-Effekt auf der Fläche oder Kontur einer Gruppe zeichnet nichts, das exportiert werden kann
 @msg	The 3D object is too complex to export	Das 3D-Objekt ist zu komplex für den Export
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Das Netz des 3D-Objekts ist unvollständig oder enthält einen Wert, der keine Zahl ist
 @msg	the <filter> element needs an id, the filter's name	das <filter>-Element braucht eine id, den Namen des Filters
 @msg	an SVG filter's id is at most {MAX_NAME} characters	die id eines SVG-Filters hat höchstens {MAX_NAME} Zeichen
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> ist kein Element eines SVG-Filters
@@ -6914,11 +6928,19 @@ axis	Y Axis	Y-Achse
 @msg	module is {_1} bytes (limit {_2})	das Modul ist {_1} Byte groß (Grenze {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	muss genehmigt werden: Es verlangt {0}, was der Benutzer gewährt, wenn er es einzeln installiert
 @msg	not JSON: {e}	kein JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	keine WebAssembly-Binärdatei (der Header \0asm fehlt)
+@msg	not a WebAssembly binary (missing \\0asm header)	keine WebAssembly-Binärdatei (der Header \\0asm fehlt)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	ein Funktionstyp überschreitet die Grenze von {MAX_FUNC_TYPE_VALUES} Parametern
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	ein Funktionstyp überschreitet die Grenze von {MAX_FUNC_TYPE_VALUES} Ergebnissen
 @msg	parameter `{k}`: {what}	Parameter `{k}`: {what}
 @msg	parameter `{name}`: {what}	Parameter `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	die Plug-in-Parameter müssen ein JSON-Objekt sein
 @msg	the module must export its linear memory as `memory`	das Modul muss seinen linearen Speicher als `memory` exportieren
+@msg	the module must export `{name}` with the type {signature}	das Modul muss `{name}` mit dem Typ {signature} exportieren
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	das Modul hat mehr als einen benutzerdefinierten Abschnitt `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	Speicherbudget (der Anfangsspeicher des Moduls ist {initial} Byte groß, Grenze {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	das Manifest im benutzerdefinierten Abschnitt `{MANIFEST_SECTION}` muss `abi` als {ABI_VERSION} angeben, die ABI-Version, die dieser Host unterstützt
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	Tabellenbudget (das Modul definiert {count} Tabellen, die größte mit {largest} Elementen; Grenze {MAX_TABLES} Tabellen mit je {MAX_TABLE_ELEMENTS} Elementen)
+@msg	the module's table section could not be read	der Tabellenabschnitt des Moduls konnte nicht gelesen werden
 @msg	the objects to change are no longer in the document	die zu ändernden Objekte sind nicht mehr im Dokument
 @msg	the runtime panicked	die Laufzeitumgebung ist abgestürzt
 @msg	unexpected host trap	unerwarteter Abbruch (Trap) im Host
@@ -6945,6 +6967,11 @@ axis	Y Axis	Y-Achse
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` und `maxItems` müssen 0-{MAX_LIST} sein, `maxItems` mindestens 1, und der Standardwert muss so viele Einträge haben
 @msg	`name` must be a string	`name` muss eine Zeichenkette sein
 @msg	`opacity` must be a number	`opacity` muss eine Zahl sein
+@msg	`opacity` must be a number from 0 to 100	`opacity` muss eine Zahl von 0 bis 100 sein
+@msg	`opacity` must be true or false	`opacity` muss true oder false sein
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	Textzeichen haben keine eigene Deckkraft: Fügen Sie mit „Neue Fläche hinzufügen“ oder „Neue Kontur hinzufügen“ im Bedienfeld „Aussehen“ eine Fläche oder Kontur hinzu
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	ein in einer Symbolinstanz ausgewähltes Objekt hat keine eigene Flächen- oder Konturdeckkraft
+@msg	no target has that fill or stroke to take the opacity	kein Ziel hat diese Fläche oder Kontur, die die Deckkraft übernehmen könnte
 @msg	`type` must be "path" or "compound"	`type` muss "path" oder "compound" sein
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` muss 1-{MAX_UNIT} druckbare Zeichen haben
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` muss 1 bis {MAX_CONDITION_VALUES} Werte für `{other}` nennen
@@ -6988,6 +7015,8 @@ axis	Y Axis	Y-Achse
 @msg	`plates` requires a stop linked to a spot swatch	`plates` erfordert einen Farbstopp, der mit einem Volltonfarbfeld verknüpft ist
 @msg	the output	die Ausgabe
 @msg	the path has no anchor points	der Pfad hat keine Ankerpunkte
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	der zusammengesetzte Pfad {id} hat ein ausgeblendetes, gesperrtes oder als Hilfslinie dienendes Element, daher lassen sich seine Elemente nicht ersetzen
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	der zusammengesetzte Pfad {id} hat ein Element, das kein Pfad ist, daher lassen sich seine Elemente nicht ersetzen
 @msg	too many anchor points (limit {MAX_ANCHORS})	zu viele Ankerpunkte (Grenze {MAX_ANCHORS})
 @msg	true or false	true oder false
 @msg	a number >= {_1}	eine Zahl >= {_1}
@@ -8882,6 +8911,8 @@ breakText	Glyphs	Glyphen
 @msg	`dataBase64` is larger than the module limit	`dataBase64` ist größer als die Modulgrenze
 @msg	`dataBase64` is not valid base64	`dataBase64` ist kein gültiges Base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` kann nicht mit `ids`, `reverse` oder `append` kombiniert werden
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` kann nicht mit `ids`, `id` oder `item` kombiniert werden
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` kann nicht mit `brush` kombiniert werden
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` und `childLimit` begrenzen die Zusammenfassung: Übergeben Sie `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` ist ein Designname oder null für einfache Säulen
 @msg	`design` is a design name, or null for the default marker	`design` ist ein Designname oder null für die Standardmarkierung
@@ -9370,6 +9401,7 @@ breakText	Glyphs	Glyphen
 @msg	give a pattern name or select an object painted with a pattern	geben Sie einen Musternamen an, oder wählen Sie ein mit einem Muster gefärbtes Objekt aus
 @msg	give at least one of clip, invert, disabled, linked	geben Sie mindestens eines von clip, invert, disabled, linked an
 @msg	give color, none, swatch or gradient	geben Sie color, none, swatch oder gradient an
+@msg	give color, none, swatch, gradient or opacity	geben Sie color, none, swatch, gradient oder opacity an
 @msg	give dataBase64	geben Sie dataBase64 an
 @msg	give either at (a click) or area (a path drawn around the overlaps)	geben Sie entweder at (einen Klick) oder area (einen um die Überlappungen gezeichneten Pfad) an
 @msg	give formats or a preset, not both	geben Sie formats oder eine Vorgabe an, nicht beides
