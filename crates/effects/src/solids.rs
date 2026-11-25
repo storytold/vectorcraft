@@ -2893,10 +2893,13 @@ fn split_graphics(id: &str, p: &Value, bounds: Rect, mesh: Mesh, (color, opacity
         };
         let Some(on_mesh) = on_mesh else { continue };
         let (mut taken, mut left, mut art) = (Mesh::default(), Mesh::default(), vec![]);
-        for t in &rest.triangles {
-            let corner = |i: u32| rest.positions.get(i as usize).copied().zip(rest.normals.get(i as usize).copied());
+        for (t, part) in rest.triangles.iter().zip(&rest.parts) {
+            let corner = |i: u32| {
+                let i = i as usize;
+                Some((*rest.positions.get(i)?, *rest.normals.get(i)?, *rest.uvs.get(i)?))
+            };
             let Some(corners) = t.iter().map(|&i| corner(i)).collect::<Option<Vec<_>>>() else { continue };
-            let points: Option<Vec<Point>> = corners.iter().map(|(m, n)| on_mesh.art_point(*m, *n)).collect();
+            let points: Option<Vec<Point>> = corners.iter().map(|(m, n, _)| on_mesh.art_point(*m, *n)).collect();
             let into = match points {
                 Some(points) => {
                     art.extend(points);
@@ -2905,11 +2908,13 @@ fn split_graphics(id: &str, p: &Value, bounds: Rect, mesh: Mesh, (color, opacity
                 None => &mut left,
             };
             let base = into.positions.len() as u32;
-            for (m, n) in corners {
+            for (m, n, uv) in corners {
                 into.positions.push(m);
                 into.normals.push(n);
+                into.uvs.push(uv);
             }
             into.triangles.push([base, base + 1, base + 2]);
+            into.parts.push(*part);
         }
         rest = left;
         if !taken.is_empty() {

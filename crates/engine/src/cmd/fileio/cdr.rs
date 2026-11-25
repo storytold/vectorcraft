@@ -1,7 +1,7 @@
 //! `.cdr` drawings of versions 1 to 27 (`.cdr`, and `.cdt` templates): the pages, layers,
 //! guidelines, groups, curves, rectangles, ellipses, arcs and polygons with uniform fills and
 //! outlines, their hidden and locked states, fill rules and uniform transparency that
-//! `vectorcraft-cdr` reads, mapped to editable VectorCraft art. Pages become
+//! `craft-cdr` reads, mapped to editable VectorCraft art. Pages become
 //! artboards side by side; layers of the same name on different pages become one layer where the
 //! pages stack them in the same order. What the
 //! reader leaves out is listed in the warnings, one line for each kind ([`note`]). `.cmx` exchange
@@ -10,9 +10,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use craft_cdr::model::{self as cd, LayerKind};
+use craft_cdr::{Limits, Warning};
 use kurbo::{Affine, Rect};
-use vectorcraft_cdr::model::{self as cd, LayerKind};
-use vectorcraft_cdr::{Limits, Warning};
 use vectorcraft_doc::{Artboard, ColorMode, Document, Guide, LayerColor, Node, NodeKind};
 
 use super::load::err;
@@ -92,12 +92,12 @@ const MAX_LAYERS: usize = 10_000;
 
 /// Is `bytes` a `.cdr` drawing this importer reads?
 pub(super) fn is_cdr(bytes: &[u8]) -> bool {
-    vectorcraft_cdr::is_cdr(bytes)
+    craft_cdr::is_cdr(bytes)
 }
 
 pub(super) fn import(bytes: &[u8]) -> Result<(Document, Vec<String>)> {
-    let d = vectorcraft_cdr::read(bytes, Limits::default()).map_err(|e| match e {
-        vectorcraft_cdr::Error::Version(v) => {
+    let d = craft_cdr::read(bytes, Limits::default()).map_err(|e| match e {
+        craft_cdr::Error::Version(v) => {
             let version = v / 100;
             err(format!("CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27"))
         }
@@ -108,13 +108,13 @@ pub(super) fn import(bytes: &[u8]) -> Result<(Document, Vec<String>)> {
 
 /// Is `bytes` a `.cmx` file, of any byte order or coordinate size?
 pub(super) fn is_cmx(bytes: &[u8]) -> bool {
-    vectorcraft_cdr::is_cmx(bytes)
+    craft_cdr::is_cmx(bytes)
 }
 
 /// A `.cmx` file with 32-bit coordinates: its pages, layers, groups and curves with uniform fills
 /// and outlines, mapped as a `.cdr` drawing's are.
 pub(super) fn import_cmx(bytes: &[u8]) -> Result<(Document, Vec<String>)> {
-    let d = vectorcraft_cdr::read_cmx(bytes, Limits::default()).map_err(|why| err(format!("this CMX file can't be read ({why})")))?;
+    let d = craft_cdr::read_cmx(bytes, Limits::default()).map_err(|why| err(format!("this CMX file can't be read ({why})")))?;
     Ok(build(&d, cmx_note, CMX_PAGES_CUT))
 }
 

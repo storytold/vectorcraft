@@ -1,36 +1,61 @@
-//! Appearance panel: the full stack as in the reference app — the object row (its thumbnail drags
-//! the appearance onto art), each stroke/fill row (eye, disclosure, link label, swatch, weight,
-//! brush/dash/profile notes) with "Opacity: Default" sub-rows, fx rows (the name opens the
-//! effect's dialog; the disclosure an inline editor), the object's Opacity row and the bottom bar.
-//! Groups and layers show a Contents row and type a Characters row where their members
+//! Appearance panel: the full stack as in the reference app, as one list. The object row (its
+//! thumbnail drags the appearance onto art), each stroke/fill row (eye, disclosure, link label,
+//! swatch, weight, brush/dash/profile notes) with its Opacity and effect rows, fx rows (the name
+//! opens the effect's dialog; the disclosure an inline editor), the object's Opacity row and the
+//! footer. Groups and layers show a Contents row and type a Characters row where their members
 //! (characters) paint among the object's own fills and strokes: double-clicking Contents targets
 //! the members, double-clicking Characters edits the characters' paint and its name opens the
 //! Character panel. The panels a row's link opens (Color, Stroke, Transparency, Character) are
-//! popups: a press outside closes them, and their first text field takes the keyboard.
+//! popovers beside the panel, level with the row.
 //!
 //! Rows drag: a fill/stroke row reorders the stack (across the Contents row too), the Contents row
 //! moves between the fills and strokes, an effect row reorders its list or moves into another item
-//! (dropped on its row) or onto the object; Alt copies instead. Dropped on Duplicate Selected Item
-//! or Delete Selected Item, a fill/stroke row (with the other selected rows, when it is one of
-//! them) or an effect row is copied or removed. Cmd-click and Shift-click select several
-//! fills/strokes for Duplicate and Delete. Delete on a selected Opacity row sets it back to
-//! Default (100%, Normal).
+//! (dropped into its row) or onto the object; Alt copies instead. Dropped on Duplicate Selected
+//! Item or Delete Selected Item, the dragged rows are copied or removed. The list's selection rules
+//! pick several fills/strokes or effects of one list for Duplicate and Delete. Delete on a selected
+//! Opacity row sets it back to Default (100%, Normal).
 
+use std::cell::RefCell;
+use std::collections::HashSet;
+use std::hash::Hash;
 use std::sync::{Arc, OnceLock};
 
-use egui::{Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
+use craft::behavior::overlay::{Align, Side};
+use craft::behavior::{ColumnKey, ColumnWidth, CopyKeys, DisplayOrder, EditEvent, IconId, ItemSource, Selection};
+use craft::theme::Srgba;
+use craft::ui::buttons::{Button, ButtonOutput};
+use craft::ui::choice::{Swatch, SwatchOutput};
+use craft::ui::contract::overlay::{Anchor, Place};
+use craft::ui::contract::{
+    Bind, CollectionEvent, CollectionResponse, ColumnSpec, FieldLabelRole, ItemCx, ListDrag, MemoProps, PopupKind, Props as _, ReorderMove,
+    ReorderRule, Show as _, ShowCollection as _, ShowContainer as _, SideLabel, ToggleColumn, Trigger, clicked,
+};
+use craft::ui::display::{Picture, Shade, Text};
+use craft::ui::form::Field;
+use craft::ui::layout_components::Stack;
+use craft::ui::list::{List, ListRow, RowDragSpot, RowEvent, RowInk, ThumbAspect, ThumbSize, ThumbTarget, ToggleCell};
+use craft::ui::menu::{Menu, MenuItem, PanelRow};
+use craft::ui::patterns::form_dialogs::{DialogFields, Param, ParamRows};
+use craft::ui::patterns::presets::{
+    PresetBrowser, PresetEvent, PresetFns, PresetRow, PresetRowMenu, PresetSource, PresetState, PresetTiles, PresetView,
+};
+use craft::ui::popover::Popover;
+use craft::ui::primitives::IconSpec;
+use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
+use craft::ui::runtime::env::Label;
+use craft::ui::sections::{FooterAction, FooterBar};
+use craft::ui::text::NumberOutput;
+use egui::{Rect, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Paint};
-use vectorcraft_doc::{AppearanceItem, Effect, Node, NodeId};
+use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, Node, NodeId};
 
-use super::{pstate, set_pstate};
-use crate::panels::stroke::paint_profile;
-use crate::theme::Tokens;
-use crate::widgets::{self, PanelDrag, menu_item};
-use crate::{VectorcraftApp, icons};
-
-const ROW: f32 = 30.0;
-pub(super) const EYE_W: f32 = 26.0;
+use super::stroke::{self, WeightTarget};
+// PLAN: hub-w2 declares `mod effect_params` private to `dialogs`; Appearance's inline editor (ef.C3: "built one way for the dialog, the gallery catalog and Appearance A3") needs `pub(crate) mod effect_params`.
+use crate::dialogs::effect_params::{EffectCx, effect_params, stored_params};
+use crate::dialogs::form::{fields_of, json_of};
+use crate::panel_drag::PanelDrag;
+use crate::{VectorcraftApp, paint_preview};
 
 /// What is selected in the stack (for Duplicate / Delete). A fill/stroke row (also the owner of a
 /// selected item effect) is the engine's active appearance item (`appearance.setActiveItem`), so
@@ -72,25 +97,129 @@ impl Sel {
     }
 }
 
+/// A row of the panel's list: the rows of the selected object's stack (named as [`Sel`] names
+/// them), the object row and the note of a mixed selection, and the rows of what new art gets
+/// with nothing selected.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum RowKey {
+    /// The object row, or "No Selection": picking it targets the whole object again.
+    Object,
+    /// The "Mixed Appearances" note of objects whose stacks differ.
+    Mixed,
+    /// Fill/stroke `i`.
+    Item(usize),
+    /// Object-level effect `k`.
+    Effect(usize),
+    /// Effect `k` of fill/stroke `i`.
+    ItemEffect(usize, usize),
+    /// The Contents (type: Characters) row.
+    Contents,
+    /// The Opacity row of fill/stroke `i`.
+    ItemOpacity(usize),
+    /// The object's own Opacity row.
+    Opacity,
+    /// New art's fill/stroke `i`.
+    NewArtItem(usize),
+    /// Effect `k` of new art's fill/stroke `item` (`None`: of new art itself).
+    NewArtEffect(Option<usize>, usize),
+    /// New art's opacity.
+    NewArtOpacity,
+}
+
+impl RowKey {
+    /// The stack row `sel` stands for.
+    fn of(sel: Sel) -> Option<RowKey> {
+        Some(match sel {
+            Sel::None => return None,
+            Sel::Item(i) => RowKey::Item(i),
+            Sel::Effect(k) => RowKey::Effect(k),
+            Sel::ItemEffect(i, k) => RowKey::ItemEffect(i, k),
+            Sel::Contents => RowKey::Contents,
+            Sel::ItemOpacity(i) => RowKey::ItemOpacity(i),
+            Sel::Opacity => RowKey::Opacity,
+        })
+    }
+
+    /// The row as the active row: none for the object row, the note and new art's rows.
+    fn sel(self) -> Sel {
+        match self {
+            RowKey::Item(i) => Sel::Item(i),
+            RowKey::Effect(k) => Sel::Effect(k),
+            RowKey::ItemEffect(i, k) => Sel::ItemEffect(i, k),
+            RowKey::Contents => Sel::Contents,
+            RowKey::ItemOpacity(i) => Sel::ItemOpacity(i),
+            RowKey::Opacity => Sel::Opacity,
+            RowKey::Object | RowKey::Mixed | RowKey::NewArtItem(_) | RowKey::NewArtEffect(..) | RowKey::NewArtOpacity => Sel::None,
+        }
+    }
+
+    /// The list (`None`: the object's) and position of an effect row of the stack.
+    fn effect(self) -> Option<(Option<usize>, usize)> {
+        match self {
+            RowKey::Effect(k) => Some((None, k)),
+            RowKey::ItemEffect(i, k) => Some((Some(i), k)),
+            _ => None,
+        }
+    }
+
+    /// A fill/stroke row holds its Opacity and effect rows; an effect row its inline editor.
+    fn has_children(self) -> bool {
+        matches!(self, RowKey::Item(_) | RowKey::Effect(_) | RowKey::ItemEffect(..))
+    }
+
+    /// Fill/stroke, effect and Contents rows drag; the others stay where the stack puts them.
+    fn drags(self) -> bool {
+        matches!(self, RowKey::Item(_) | RowKey::Effect(_) | RowKey::ItemEffect(..) | RowKey::Contents)
+    }
+
+    /// A row of the object as a whole: an effect dropped beside it goes to the object's list.
+    fn object_level(self) -> bool {
+        matches!(self, RowKey::Object | RowKey::Contents | RowKey::Opacity)
+    }
+}
+
+/// The Appearance panel's state for the session: the rows picked in the list and their object,
+/// the open rows, the object row's thumbnail and the popovers rows open.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct AppearancePanel {
+    /// The object the selection's rows belong to.
+    pub(crate) owner: Option<NodeId>,
+    /// The picked rows: fills/strokes or the effects of one list, else one row; the lead is the
+    /// active row.
+    pub(crate) selection: Selection<RowKey>,
+    /// The fill/stroke rows that show their Opacity and effect rows, and the effect rows that show
+    /// their inline editor.
+    pub(crate) open: HashSet<RowKey>,
+    /// Hide Thumbnail: the object row shows no thumbnail.
+    pub(crate) hide_thumb: bool,
+    /// The row whose link opened the popover `UiState::transient_panel` names.
+    pub(crate) popup_row: Option<RowKey>,
+    /// The fill/stroke row whose swatch shows the document's swatches.
+    pub(crate) swatches_for: Option<RowKey>,
+    /// The row whose context menu the list last asked for.
+    pub(crate) menu: Option<RowKey>,
+}
+
 /// The selected row of `node` (the first selected object): a selected effect row while that
 /// effect still exists and agrees with the engine's active item, else the active item's row.
-fn current_sel(app: &VectorcraftApp, ctx: &egui::Context, node: Option<&Node>) -> Sel {
+fn current_sel(app: &VectorcraftApp, node: Option<&Node>) -> Sel {
     let Some(n) = node else { return Sel::None };
-    let (owner, sel): (Option<NodeId>, Sel) = pstate(ctx, "ap-sel");
-    let exists = |item: Option<usize>, k: usize| owner == Some(n.id) && n.appearance.effects_at(item).is_some_and(|fx| k < fx.len());
+    let panel = &app.ui.appearance_panel;
+    let sel = panel.selection.lead.filter(|_| panel.owner == Some(n.id)).map_or(Sel::None, RowKey::sel);
+    let exists = |item: Option<usize>, k: usize| n.appearance.effects_at(item).is_some_and(|fx| k < fx.len());
     match (app.session.appearance_item(), sel) {
         (Some(i), Sel::ItemEffect(j, k)) if i == j && exists(Some(i), k) => sel,
-        (Some(i), Sel::ItemOpacity(j)) if i == j && owner == Some(n.id) => sel,
+        (Some(i), Sel::ItemOpacity(j)) if i == j => sel,
         (Some(i), _) => Sel::Item(i),
         (None, Sel::Effect(k)) if exists(None, k) => sel,
-        (None, Sel::Contents) if owner == Some(n.id) && n.contents_label().is_some() => sel,
-        (None, Sel::Opacity) if owner == Some(n.id) => sel,
+        (None, Sel::Contents) if n.contents_label().is_some() => sel,
+        (None, Sel::Opacity) => sel,
         (None, _) => Sel::None,
     }
 }
 
-/// Which rows a highlight is made of: fills/strokes, or the effects of one list (`None`: the
-/// object's own). Rows of different kinds or lists are never highlighted together.
+/// Which rows a selection is made of: fills/strokes, or the effects of one list (`None`: the
+/// object's own). Rows of different kinds or lists are never selected together.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum Rows {
     #[default]
@@ -99,20 +228,19 @@ enum Rows {
 }
 
 impl Rows {
-    /// The row `index` of this kind as a selection.
-    fn sel(self, index: usize) -> Sel {
+    /// The row `index` of this kind.
+    fn key(self, index: usize) -> RowKey {
         match self {
-            Rows::Items => Sel::Item(index),
-            Rows::Effects(None) => Sel::Effect(index),
-            Rows::Effects(Some(i)) => Sel::ItemEffect(i, index),
+            Rows::Items => RowKey::Item(index),
+            Rows::Effects(None) => RowKey::Effect(index),
+            Rows::Effects(Some(i)) => RowKey::ItemEffect(i, index),
         }
     }
-    /// The rows of this kind on `n`, listed top-down as the panel shows them (fills/strokes from the
-    /// top of the paint order, effects in list order).
-    fn order(self, n: &Node) -> Vec<usize> {
+    /// How many rows of this kind `n` has.
+    fn len(self, n: &Node) -> usize {
         match self {
-            Rows::Items => (0..n.appearance.items.len()).rev().collect(),
-            Rows::Effects(item) => (0..n.appearance.effects_at(item).map_or(0, |fx| fx.len())).collect(),
+            Rows::Items => n.appearance.items.len(),
+            Rows::Effects(item) => n.appearance.effects_at(item).map_or(0, |fx| fx.len()),
         }
     }
 }
@@ -129,90 +257,78 @@ impl Sel {
     }
 }
 
-/// The highlighted rows of an object (panel state `"ap-multi"`): their kind and list, the rows in
-/// the order they were highlighted (as `layer.highlight` keeps the Layers panel's), and the anchor
-/// Shift ranges start from (the last row clicked without Shift), and the row that was active when
-/// they were highlighted.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-struct Highlight {
-    owner: Option<NodeId>,
-    rows: Rows,
-    order: Vec<usize>,
-    anchor: Option<usize>,
-    active: Option<usize>,
+/// The object whose rows the panel lists, which the panel's selection belongs to.
+fn subject(app: &VectorcraftApp) -> Option<NodeId> {
+    app.session.active().and_then(|d| d.selection.subjects().first().copied())
 }
 
 /// Make `sel` the active row; its fill/stroke becomes the active item that paint and effect edits
-/// target. The highlighted rows stay as they are.
-fn set_active(app: &mut VectorcraftApp, ctx: &egui::Context, sel: Sel) {
+/// target. The picked rows stay as they are.
+fn set_active(app: &mut VectorcraftApp, sel: Sel) {
     if app.session.appearance_item() != sel.item() {
         app.run("appearance.setActiveItem", json!({ "index": sel.item() })).ok();
     }
-    let owner = app.session.active().and_then(|d| d.selection.subjects().first().copied());
-    set_pstate(ctx, "ap-sel", (owner, sel));
+    app.ui.appearance_panel.owner = subject(app);
 }
 
 /// Select a row; its fill/stroke becomes the active item that paint and effect edits target.
-/// It is the only highlighted row and the anchor.
-pub(crate) fn select_row(app: &mut VectorcraftApp, ctx: &egui::Context, sel: Sel) {
-    set_active(app, ctx, sel);
-    let owner = app.session.active().and_then(|d| d.selection.subjects().first().copied());
-    let (rows, order) = sel.rows().map_or((Rows::Items, vec![]), |(r, k)| (r, vec![k]));
-    let anchor = order.first().copied();
-    set_pstate(ctx, "ap-multi", Highlight { owner, rows, order, anchor, active: anchor });
+/// It is the only picked row and the anchor.
+pub(crate) fn select_row(app: &mut VectorcraftApp, sel: Sel) {
+    set_active(app, sel);
+    app.ui.appearance_panel.selection = RowKey::of(sel).map_or_else(Selection::default, Selection::single);
 }
 
-/// The highlighted rows of `n` with `sel` active: the stored ones while they belong to `n`, are of
-/// the active row's kind and list and hold it (rows that no longer exist dropped), else just the
-/// active row. When the active row has changed outside the panel since (Add New Fill makes the new
-/// fill active), also just the active row. With no row active, none (the anchor stays).
-fn highlight(ctx: &egui::Context, n: &Node, sel: Sel) -> Highlight {
-    let mut h: Highlight = pstate(ctx, "ap-multi");
-    let ours = h.owner == Some(n.id);
-    let Some((rows, active)) = sel.rows() else {
-        return Highlight { owner: Some(n.id), order: vec![], anchor: h.anchor.filter(|_| ours), rows: h.rows, active: None };
+/// The list's selection of `n` with `sel` active: the panel's while it belongs to `n`, its lead is
+/// the active row and its rows are of that row's list (rows that no longer exist dropped), else
+/// the active row alone. When the active row has changed outside the panel since (Add New Fill
+/// makes the new fill active), also the active row alone.
+fn list_selection(app: &VectorcraftApp, n: &Node, sel: Sel) -> Selection<RowKey> {
+    let Some(active) = RowKey::of(sel) else { return Selection::default() };
+    let panel = &app.ui.appearance_panel;
+    let held = &panel.selection;
+    let Some((rows, _)) = sel.rows().filter(|_| panel.owner == Some(n.id) && held.lead == Some(active)) else {
+        return Selection::single(active);
     };
-    if !ours || h.rows != rows || h.active != Some(active) || !h.order.contains(&active) {
-        return Highlight { owner: Some(n.id), rows, order: vec![active], anchor: Some(active), active: Some(active) };
+    let fits = |key: &RowKey| key.sel().rows().is_some_and(|(r, k)| r == rows && k < rows.len(n));
+    let mut items: Vec<RowKey> = held.items.iter().copied().filter(fits).collect();
+    if !items.contains(&active) {
+        items.push(active);
     }
-    let len = rows.order(n).len();
-    h.order.retain(|k| *k < len);
-    h
+    Selection::new(items, Some(active), held.anchor.filter(fits).or(Some(active)))
 }
 
-/// The highlighted fill/stroke rows of `n` (paint order, ascending): the active row plus those
-/// Cmd/Shift-clicked with it.
-fn selected_items(ctx: &egui::Context, n: Option<&Node>, sel: Sel) -> Vec<usize> {
-    let (Some(n), Sel::Item(_)) = (n, sel) else { return vec![] };
-    let mut set = highlight(ctx, n, sel).order;
+/// A selection change keeps the rows of the lead's list only (fills/strokes, or the effects of
+/// one list; another row alone), so a pick in another list starts a new selection.
+fn one_list(mut selection: Selection<RowKey>) -> Selection<RowKey> {
+    let Some(lead) = selection.lead else { return selection };
+    let list = lead.sel().rows().map(|(rows, _)| rows);
+    selection.items.retain(|key| match list {
+        Some(rows) => key.sel().rows().is_some_and(|(r, _)| r == rows),
+        None => *key == lead,
+    });
+    if selection.anchor.is_none_or(|anchor| !selection.items.contains(&anchor)) {
+        selection.anchor = Some(lead);
+    }
+    selection
+}
+
+/// The picked fill/stroke rows of `n` (paint order, ascending): the active row plus those picked
+/// with it.
+fn selected_items(app: &VectorcraftApp, n: &Node, sel: Sel) -> Vec<usize> {
+    if !matches!(sel, Sel::Item(_)) {
+        return vec![];
+    }
+    let mut set: Vec<usize> = list_selection(app, n, sel).items.iter().filter_map(|key| key.sel().rows().map(|(_, k)| k)).collect();
     set.sort_unstable();
     set
 }
 
-/// The highlighted effect rows of `n`: their list (`None`: the object's) and positions, ascending.
-fn selected_effects(ctx: &egui::Context, n: Option<&Node>, sel: Sel) -> Option<(Option<usize>, Vec<usize>)> {
-    let (n, (Rows::Effects(list), _)) = (n?, sel.rows()?) else { return None };
-    let mut set = highlight(ctx, n, sel).order;
+/// The picked effect rows of `n`: their list (`None`: the object's) and positions, ascending.
+fn selected_effects(app: &VectorcraftApp, n: &Node, sel: Sel) -> Option<(Option<usize>, Vec<usize>)> {
+    let (Rows::Effects(list), _) = sel.rows()? else { return None };
+    let mut set: Vec<usize> = list_selection(app, n, sel).items.iter().filter_map(|key| key.effect().map(|(_, k)| k)).collect();
     set.sort_unstable();
     Some((list, set))
-}
-
-/// Click on row `k` of kind `rows` with modifiers `m`, by the Layers panel's rules
-/// ([`widgets::row_click`]): Shift highlights the range from the anchor, Shift+Ctrl/Cmd adds it,
-/// Ctrl/Cmd toggles the row, a plain click highlights only it. A row of another kind or list starts
-/// a new highlight. The clicked row becomes active, or the first highlighted one when its
-/// highlight went off.
-fn click_row(app: &mut VectorcraftApp, ctx: &egui::Context, n: &Node, sel: Sel, rows: Rows, k: usize, m: egui::Modifiers) {
-    let h = highlight(ctx, n, sel);
-    let (mut order, anchor) = if h.rows == rows { (h.order, h.anchor) } else { (vec![], None) };
-    let click = widgets::row_click(&rows.order(n), &order, anchor, k, m);
-    widgets::apply_row_click(&mut order, &click);
-    let anchor = if click.moves_anchor() { Some(k) } else { anchor };
-    let active = if order.contains(&k) { Some(k) } else { order.first().copied() };
-    set_active(app, ctx, active.map_or(Sel::None, |a| rows.sel(a)));
-    set_pstate(ctx, "ap-multi", Highlight { owner: Some(n.id), rows, order, anchor, active });
-    // The panel has the keyboard now (Delete removes the highlighted rows).
-    super::set_row_keys(ctx, ROW_KEYS, true);
 }
 
 /// An effect as the fx menu lists it: (id, label without the ellipsis, Effect-menu path).
@@ -236,8 +352,8 @@ pub fn effect_label(id: &str) -> String {
         .unwrap_or_else(|| id.rsplit('.').next().unwrap_or(id).to_string())
 }
 
-/// Is `id` one of our own effects? A plug-in's effect name and parameters come from the plug-in
-/// and are shown as they are.
+/// Is `id` one of our own effects? A plug-in's effect name comes from the plug-in and is shown as
+/// it is.
 fn built_in_effect(id: &str) -> bool {
     catalog().iter().any(|c| c.0 == id)
 }
@@ -277,322 +393,711 @@ pub fn opacity_text(opacity: f32, blend: BlendMode) -> String {
     }
 }
 
-fn row(ui: &mut Ui, selected: bool) -> (Rect, egui::Response) {
-    let t = Tokens::get(ui.ctx());
-    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW), Sense::click_and_drag());
-    if selected {
-        ui.painter().rect_filled(r, 0.0, t.row_selected);
-    }
-    ui.painter().line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0, t.input_border));
-    ui.painter().line_segment([pos2(r.left() + EYE_W, r.top()), pos2(r.left() + EYE_W, r.bottom())], Stroke::new(1.0, t.border));
-    (r, resp)
-}
-
-fn eye(ui: &mut Ui, r: Rect, id: impl std::hash::Hash + std::fmt::Debug, on: bool, enabled: bool) -> bool {
-    let t = Tokens::get(ui.ctx());
-    let er = Rect::from_center_size(pos2(r.left() + EYE_W / 2.0, r.center().y), vec2(16.0, 16.0));
-    let resp = ui.interact(er, ui.scope_id().with(id), if enabled { Sense::click() } else { Sense::hover() });
-    let col = if !enabled {
-        t.text_disabled
-    } else if resp.hovered() {
-        t.text_strong
-    } else {
-        t.icon
-    };
-    icons::paint(ui, if on { "eye" } else { "eye-off" }, er, col);
-    enabled && resp.on_hover_text(tl!("Click to toggle visibility")).clicked()
-}
-
-fn chevron(ui: &mut Ui, r: Rect, id: impl std::hash::Hash + std::fmt::Debug, open: bool) -> bool {
-    let t = Tokens::get(ui.ctx());
-    let cr = Rect::from_center_size(pos2(r.left() + EYE_W + 12.0, r.center().y), vec2(12.0, 12.0));
-    let resp = ui.interact(cr, ui.scope_id().with(id), Sense::click());
-    icons::paint(ui, if open { "chevron-down" } else { "chevron-right" }, cr, if resp.hovered() { t.text_strong } else { t.icon });
-    resp.clicked()
-}
-
-/// Text `s` at `pos` (left, vertically centred), strong or plain.
-fn text(ui: &Ui, pos: egui::Pos2, s: &str, strong: bool) {
-    let t = Tokens::get(ui.ctx());
-    ui.painter().text(pos, egui::Align2::LEFT_CENTER, s, egui::FontId::proportional(12.5), if strong { t.text_strong } else { t.text });
-}
-
-/// Paint `p` as a swatch in `r`, with a black edge and a white frame; `mixed` (objects whose
-/// fills differ) shows "?".
-fn chip(ui: &Ui, r: Rect, p: &Paint, mixed: bool) {
-    ui.painter().rect_filled(r.expand(1.0), 0.0, egui::Color32::BLACK);
-    widgets::proxy_chip(ui, r, p, mixed, None);
-    ui.painter().rect_stroke(r, 0.0, Stroke::new(1.0, egui::Color32::WHITE), StrokeKind::Inside);
-}
-
-/// A dotted-underline link drawn at `pos`; returns clicked.
-/// A row's dotted-underlined label at `pos`, clickable whatever modifiers are held.
-fn link(ui: &mut Ui, pos: egui::Pos2, id: impl std::hash::Hash + std::fmt::Debug, s: &str) -> egui::Response {
-    let t = Tokens::get(ui.ctx());
-    let galley = ui.painter().layout_no_wrap(s.to_string(), egui::FontId::proportional(12.5), t.text_strong);
-    let r = Rect::from_min_size(pos2(pos.x, pos.y - galley.size().y / 2.0), galley.size());
-    let resp = ui.interact(r, ui.scope_id().with(id), Sense::click());
-    ui.painter().galley(r.min, galley, t.text_strong);
-    let mut x = r.left();
-    while x < r.right() {
-        ui.painter().line_segment([pos2(x, r.bottom()), pos2((x + 1.0).min(r.right()), r.bottom())], Stroke::new(1.0, t.text_dim));
-        x += 2.5;
-    }
-    resp
-}
-
-/// Where a row's popup opens: the height of the click that opened it (panel state).
-const POPUP_AT: &str = "ap-popup-at";
-/// The frame the row's popup was last drawn in (panel state).
-const POPUP_FRAME: &str = "ap-popup-frame";
-/// The row's popup's width, a floating panel's.
+/// A row popover's width, a floating panel's.
 const POPUP_W: f32 = 260.0;
-/// The room a row's popup keeps from the Appearance panel and the window's edges.
-const POPUP_GAP: f32 = 6.0;
+/// The least height of a row popover; it otherwise takes 60% of the window.
+const POPUP_MIN_TALL: f32 = 200.0;
+/// The columns of the swatch popover's chips.
+const SWATCH_COLUMNS: u16 = 12;
+/// The rows of chips the swatch popover shows before its grid scrolls inside the popover's own scroll.
+const SWATCH_ROWS: u16 = 12;
+/// The width and height of a stroke row's profile picture, as its aspect.
+const PROFILE_ASPECT: (u16, u16) = (14, 5);
 
-/// Open panel `id` as a row's popup ([`row_popup`]) at the height of the click that opened it; its
-/// first text field takes the keyboard. A panel showing already (in the dock, a floating window or
-/// an icon column's flyout) opens no popup.
-pub(crate) fn open_popup(app: &mut VectorcraftApp, ctx: &egui::Context, id: &str) {
-    if crate::panel_docking::showing(&app.ui, id) {
-        app.ui.transient_panel = None;
-        return;
-    }
-    app.ui.transient_panel = Some(id.into());
-    app.ui.transient_focus = true;
-    set_pstate(ctx, POPUP_AT, ctx.pointer_interact_pos().map(|p| p.y));
-    // Drawn from the next frame on: this one has gone by already for it.
-    set_pstate(ctx, POPUP_FRAME, Some(ctx.cumulative_frame_nr()));
-}
+/// The eye column.
+const EYE: ColumnKey = ColumnKey::new("eye");
+/// The rest of a row after the eye: the link that stands for its label, and its trailing parts.
+const NAME: ColumnKey = ColumnKey::new("name");
 
-/// A row's popup ([`open_popup`]): its panel beside the Appearance panel `panel` (left of it, else
-/// right of it when there is no room), level with the row that opened it, so it shows which row it
-/// belongs to. A press outside it, Escape, the Appearance panel going out of sight, or the panel
-/// showing elsewhere puts it away.
-pub(crate) fn row_popup(app: &mut VectorcraftApp, ctx: &egui::Context, panel: Rect) {
-    let Some(id) = app.ui.transient_panel.clone() else { return };
-    let close = |app: &mut VectorcraftApp| {
-        app.ui.transient_panel = None;
-        app.ui.transient_focus = false;
+/// The footer's actions, in the order given: Add New Stroke, Add New Fill and Add New Effect sit
+/// at the start edge, Delete, Duplicate and Clear from the end edge.
+const ADD_STROKE: usize = 0;
+const ADD_FILL: usize = 1;
+const ADD_EFFECT: usize = 2;
+const DELETE: usize = 3;
+const DUPLICATE: usize = 4;
+const CLEAR: usize = 5;
+
+/// The panel menu's rows of the panel's own (not engine) commands.
+const DUPLICATE_ITEM: &str = "ui.appearance.duplicateItem";
+const REMOVE_ITEM: &str = "ui.appearance.removeItem";
+const THUMBNAIL: &str = "ui.appearance.thumbnail";
+
+/// The Appearance panel: the object row, the stack of the selected object (or of new art with
+/// nothing selected) and the footer; Delete in the list removes the picked rows.
+pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let node = first_subject(app);
+    let summary = summary(app);
+    let mix = summary.as_ref().and_then(|s| s.mixed(app));
+    let new_art = app.session.new_art();
+    let label = object_row_label(app, summary.as_deref(), mix.is_some(), node.is_some());
+    let rows = StackRows::new(node.as_deref(), &new_art, mix, &app.ui.appearance_panel.open);
+    let order = rows.keys();
+    let sel = current_sel(app, node.as_deref());
+    let mut selection = node.as_deref().map_or_else(Selection::default, |n| list_selection(app, n, sel));
+    let list_id = ui.scope_id().with("appearance-rows");
+    let has = node.is_some();
+    // A dragged fill/stroke or effect row lights Duplicate and Delete up, also with nothing picked.
+    let dragged = craft::ui::runtime::drag::active::<ListDrag<RowKey>>(ui.ctx())
+        .is_some_and(|drag| drag.list == list_id && button_drop_command(&drag.keys, true).is_some());
+    let can = has && (sel.editable() || dragged);
+    let can_delete = can || (has && sel.deletable());
+    let body = ui.max_rect();
+    let copy = craft::ui::runtime::pointer::frame(ui.ctx()).mods.alt;
+    let pass = RefCell::new(Pass::default());
+    let footer = RefCell::new(None);
+    let shared: &VectorcraftApp = app;
+    let cx = RowCx {
+        app: shared,
+        node: node.as_deref(),
+        new_art: &new_art,
+        mix,
+        label: &label,
+        hide_thumb: shared.ui.appearance_panel.hide_thumb,
+        open: &shared.ui.appearance_panel.open,
+        pass: &pass,
     };
-    // Drawn in every frame since it opened: the Appearance panel stayed in sight.
-    let frame = ctx.cumulative_frame_nr();
-    let last: Option<u64> = pstate(ctx, POPUP_FRAME);
-    if last.is_none_or(|f| f + 1 < frame) || crate::panel_docking::showing(&app.ui, &id) {
-        return close(app);
-    }
-    set_pstate(ctx, POPUP_FRAME, Some(frame));
-    let area_id = egui::Id::unique("ap-row-popup");
-    let shown = ctx.memory(|m| m.area_rect(area_id));
-    // A press outside it (not one that closes a dropdown the popup opened) or Escape puts it away.
-    // With a field in it that has the keyboard, a press draws it once more first, so the field lets
-    // go of the keyboard to that press and commits what was typed, as in a panel (#6429). Escape
-    // drops what was typed.
-    let pressed_outside = ctx.input(|i| i.pointer.any_pressed() && i.pointer.interact_pos().is_some_and(|p| shown.is_some_and(|r| !r.contains(p))));
-    let mut last = false;
-    if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
-        return close(app);
-    } else if pressed_outside && !egui::Popup::is_any_open(ctx) {
-        if !widgets::field_focused_in(ctx, egui::LayerId::new(egui::Order::Foreground, area_id)) {
-            return close(app);
+    let shown = Stack::new().fill().footer(|ui, _| *footer.borrow_mut() = Some(footer_bar(has, can, can_delete, list_id).show_footer(ui))).show(
+        ui,
+        |ui, _| {
+            // A pass's own rows report its parts.
+            *pass.borrow_mut() = Pass::default();
+            show_list(ui, &cx, &rows, &order, &mut selection, list_id, copy)
+        },
+    );
+    let pass = pass.into_inner();
+    if let Some(list) = shown.inner {
+        let opener = list.response.clone();
+        apply_list(app, node.as_deref(), &order, selection, list);
+        if let (Some(key), Some(n)) = (app.ui.appearance_panel.menu, node.as_deref()) {
+            row_menu(app, ui, &opener, n, key);
         }
-        last = true;
     }
-    // Fields let go of the keyboard on a click, which this press isn't yet. The app-wide option
-    // goes back however this function ends, a panic in the panel included.
-    let _surrender = last.then(|| SurrenderOnPress::set(ctx));
-    let screen = ctx.content_rect();
-    let left = panel.left() - POPUP_GAP - POPUP_W;
-    let x = if left >= screen.left() + POPUP_GAP { left } else { (panel.right() + POPUP_GAP).min(screen.right() - POPUP_W - POPUP_GAP) };
-    let at: Option<f32> = pstate(ctx, POPUP_AT);
-    let y = at.unwrap_or(panel.top()) - 14.0;
-    let label = crate::state::all_panels().find(|(p, _)| *p == id).map_or(id.as_str(), |(_, l)| l).to_string();
-    let tall = (screen.height() * 0.6).max(200.0);
-    egui::Area::new(area_id).order(egui::Order::Foreground).fixed_pos(pos2(x, y)).constrain(true).show(ctx, |ui| {
-        egui::Frame::popup(ui.style()).inner_margin(egui::Margin::ZERO).show(ui, |ui| {
-            ui.set_width(POPUP_W);
-            let t = Tokens::get(ui.ctx());
-            egui::Frame::NONE.inner_margin(egui::Margin::symmetric(10, 6)).show(ui, |ui| {
-                ui.label(egui::RichText::new(tl!(&label)).strong().color(t.text_strong));
-            });
-            // Just opened: its first enabled text field takes the keyboard, as a dialog's does.
-            let focus = app.ui.transient_focus;
-            if focus {
-                ui.data_mut(|m| m.insert_temp(widgets::dialog_focus_flag(), true));
+    apply_parts(app, node.as_deref(), pass.acts);
+    if let Some(out) = footer.into_inner() {
+        let sel = current_sel(app, node.as_deref());
+        match out.picked {
+            Some(ADD_STROKE) => {
+                app.run("appearance.addStroke", json!({})).ok();
             }
-            crate::dock::panel_body(app, ui, &id, POPUP_W, tall);
-            // Taken (the flag is gone): done. Still there (nothing could take it yet): next frame.
-            if focus && ui.data_mut(|m| m.remove_temp::<bool>(widgets::dialog_focus_flag())).is_none() {
-                app.ui.transient_focus = false;
+            Some(ADD_FILL) => {
+                app.run("appearance.addFill", json!({})).ok();
             }
-        });
+            Some(DELETE) => {
+                delete_selected(app, node.as_deref(), sel).ok();
+            }
+            Some(DUPLICATE) => {
+                duplicate_selected(app, node.as_deref(), sel).ok();
+            }
+            Some(CLEAR) => {
+                app.run("appearance.clear", json!({})).ok();
+            }
+            _ => {}
+        }
+        if let (Some(dropped), Some(n)) = (&out.dropped, node.as_deref())
+            && let Some(drag) = dropped.payload::<ListDrag<RowKey>>()
+        {
+            drop_on_footer(app, n, sel, &drag.keys, dropped.index == DUPLICATE);
+        }
+        if let Some(opener) = out.responses.get(ADD_EFFECT) {
+            Menu::new(tl!("Add New Effect")).opened_by(opener, Trigger::Click).show(ui, |ui, _| fx_menu(app, ui));
+        }
+    }
+    show_swatch_popup(app, ui, &pass.swatches);
+    show_row_popup(app, ui, &pass.links, body);
+}
+
+/// The object row's name: the selection's kind ("Path", "Layer"…), or "No Selection"; a linked
+/// object names its graphic style ("Rectangle: Sunshine"), and so does new art with nothing
+/// selected.
+fn object_row_label(app: &VectorcraftApp, summary: Option<&Summary>, mixed: bool, has_node: bool) -> String {
+    let label = tl!(summary.map_or("No Selection", |s| s.label));
+    let style = match app.session.selection_graphic_style() {
+        Some((g, true)) if !mixed => Some(g.name.as_str()),
+        _ if !has_node => app.session.new_art_transparency().2,
+        _ => None,
+    };
+    match style {
+        Some(name) => format!("{} {name}", crate::i18n::colon(label)),
+        None => label.to_string(),
+    }
+}
+
+/// The list over `rows` (`order` their keys), bound to `selection`. A mixed selection's rows don't
+/// drag: where one would go in each of the different stacks isn't one place.
+fn show_list(
+    ui: &mut Ui,
+    cx: &RowCx<'_>,
+    rows: &StackRows,
+    order: &[RowKey],
+    selection: &mut Selection<RowKey>,
+    list_id: egui::Id,
+    copy: bool,
+) -> CollectionResponse<RowKey, RowEvent> {
+    let columns = vec![
+        ColumnSpec::toggle(EYE, Label::Empty, ToggleColumn::default()).icon(IconId::new("eye")),
+        ColumnSpec::new(NAME, Label::Empty, ColumnWidth::fill(1.0)),
+    ];
+    let mut list = List::new(tl!("Appearance"))
+        .id(list_id)
+        .tree(true)
+        .columns(columns)
+        .deletable(true)
+        .selection(Bind::bound(selection))
+        .can_drag(|key: &RowKey| key.drags());
+    if let Some(n) = cx.node.filter(|_| cx.mix.is_none()) {
+        list = list
+            .reorder(ReorderRule::new().copy_with(CopyKeys::Alt).into_groups())
+            .accepts(move |drag: &ListDrag<RowKey>, over: Option<&RowKey>, insert: usize| accepts(n, order, drag, over, insert, copy));
+    }
+    list.show_items(ui, rows, &mut |key, item| build_row(cx, *key, item))
+}
+
+/// Applies what the list reported: the picks (the one-list rule, then the active row), opened
+/// rows, eyes, activations, Delete and a reorder.
+fn apply_list(
+    app: &mut VectorcraftApp,
+    node: Option<&Node>,
+    order: &[RowKey],
+    selection: Selection<RowKey>,
+    list: CollectionResponse<RowKey, RowEvent>,
+) {
+    let (mut picked, mut deleted) = (false, false);
+    let (mut eyes, mut activated, mut moved) = (vec![], vec![], None);
+    for event in list.events {
+        match event {
+            CollectionEvent::Selection { .. } => picked = true,
+            CollectionEvent::Toggle(EditEvent::Set { after, .. }) => eyes.push((after.key, after.on)),
+            CollectionEvent::Open(change) => {
+                let open = &mut app.ui.appearance_panel.open;
+                if change.open {
+                    open.insert(change.key);
+                } else {
+                    open.remove(&change.key);
+                }
+            }
+            CollectionEvent::Activate(key) => activated.push(key),
+            CollectionEvent::ContextMenu(request) => app.ui.appearance_panel.menu = Some(request.key),
+            CollectionEvent::Delete(_) => deleted = true,
+            CollectionEvent::Reorder(EditEvent::Set { after, .. } | EditEvent::Commit { after, .. }) => moved = Some(after),
+            _ => {}
+        }
+    }
+    if picked {
+        let chosen = one_list(selection);
+        set_active(app, chosen.lead.map_or(Sel::None, RowKey::sel));
+        app.ui.appearance_panel.selection = chosen;
+    }
+    for (key, on) in eyes {
+        toggle_eye(app, key, on);
+    }
+    let Some(n) = node else { return };
+    for key in activated {
+        activate(app, n, key);
+    }
+    if deleted {
+        let sel = current_sel(app, node);
+        delete_selected(app, node, sel).ok();
+    }
+    if let Some(mv) = moved {
+        reorder(app, n, order, &mv);
+    }
+}
+
+/// What a row's context menu runs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RowAct {
+    Clear,
+    Reduce,
+    EditEffect,
+    Duplicate,
+    Delete,
+    /// Hide or show the row's fill/stroke or effect.
+    Eye(bool),
+}
+
+/// The context menu of row `key` of `n`, hanging from the list, which picked the row unless it was picked already:
+/// Clear Appearance and Reduce to Basic Appearance on the object row; Duplicate, Delete and Hide or Show on a
+/// fill/stroke row, and Edit Effect…, Duplicate, Delete and Hide or Show on an effect row, Duplicate and Delete for
+/// every picked row of its kind. The other rows have none.
+fn row_menu(app: &mut VectorcraftApp, ui: &mut Ui, opener: &egui::Response, n: &Node, key: RowKey) {
+    let sel = current_sel(app, Some(n));
+    let rows: Vec<(RowAct, &str, bool)> = match key {
+        RowKey::Object => vec![
+            (RowAct::Clear, tl!("Clear Appearance"), true),
+            (RowAct::Reduce, tl!("Reduce to Basic Appearance"), any_subject_needs_reduction(app)),
+        ],
+        RowKey::Item(i) => {
+            let Some(it) = n.appearance.items.get(i) else { return };
+            let stroke = matches!(it, AppearanceItem::Stroke(_));
+            let (duplicate, delete) = match (selected_items(app, n, sel).len() > 1, stroke) {
+                (true, _) => (tl!("Duplicate Items"), tl!("Delete Items")),
+                (false, true) => (tl!("Duplicate Stroke"), tl!("Delete Stroke")),
+                (false, false) => (tl!("Duplicate Fill"), tl!("Delete Fill")),
+            };
+            let eye = match (it.visible(), stroke) {
+                (true, true) => tl!("Hide Stroke"),
+                (false, true) => tl!("Show Stroke"),
+                (true, false) => tl!("Hide Fill"),
+                (false, false) => tl!("Show Fill"),
+            };
+            vec![(RowAct::Duplicate, duplicate, true), (RowAct::Delete, delete, true), (RowAct::Eye(!it.visible()), eye, true)]
+        }
+        RowKey::Effect(_) | RowKey::ItemEffect(..) => {
+            let Some((item, k)) = key.effect() else { return };
+            let Some(e) = n.appearance.effects_at(item).and_then(|fx| fx.get(k)) else { return };
+            let many = selected_effects(app, n, sel).is_some_and(|(list, ks)| list == item && ks.len() > 1);
+            let (duplicate, delete) =
+                if many { (tl!("Duplicate Effects"), tl!("Delete Effects")) } else { (tl!("Duplicate Effect"), tl!("Delete Effect")) };
+            let eye = if e.visible { tl!("Hide Effect") } else { tl!("Show Effect") };
+            vec![
+                (RowAct::EditEffect, tl!("Edit Effect…"), true),
+                (RowAct::Duplicate, duplicate, true),
+                (RowAct::Delete, delete, true),
+                (RowAct::Eye(!e.visible), eye, true),
+            ]
+        }
+        _ => return,
+    };
+    let shown = Menu::context(tl!("Appearance"), opener).show(ui, |ui, _| {
+        let mut ran = None;
+        for (act, label, enabled) in &rows {
+            if MenuItem::new(*label).enabled(*enabled).show(ui).ran {
+                ran = Some(*act);
+            }
+        }
+        ran
     });
-    if last {
-        close(app);
+    match shown.inner.flatten() {
+        Some(RowAct::Clear) => {
+            app.run("appearance.clear", json!({})).ok();
+        }
+        Some(RowAct::Reduce) => {
+            app.run("appearance.reduceToBasic", json!({})).ok();
+        }
+        Some(RowAct::EditEffect) => edit_effect(app, n, key),
+        Some(RowAct::Duplicate) => {
+            duplicate_selected(app, Some(n), sel).ok();
+        }
+        Some(RowAct::Delete) => {
+            delete_selected(app, Some(n), sel).ok();
+        }
+        Some(RowAct::Eye(on)) => toggle_eye(app, key, on),
+        None => {}
     }
 }
 
-/// While it lives, a press anywhere makes a field let go of the keyboard, as a click does
-/// otherwise; dropped, egui's previous `surrender_focus_on` is back ([`row_popup`]'s last frame).
-struct SurrenderOnPress(egui::Context, egui::SurrenderFocusOn);
-
-impl SurrenderOnPress {
-    fn set(ctx: &egui::Context) -> Self {
-        let before = ctx.options(|o| o.input_options.surrender_focus_on);
-        ctx.options_mut(|o| o.input_options.surrender_focus_on = egui::SurrenderFocusOn::Presses);
-        Self(ctx.clone(), before)
-    }
-}
-
-impl Drop for SurrenderOnPress {
-    fn drop(&mut self) {
-        let before = self.1;
-        self.0.options_mut(|o| o.input_options.surrender_focus_on = before);
-    }
-}
-
-/// A row's name that edits the row when clicked ([`link`]), with the tooltip "Click to edit".
-fn name_link(ui: &mut Ui, pos: egui::Pos2, id: impl std::hash::Hash + std::fmt::Debug, s: &str) -> egui::Response {
-    link(ui, pos, id, s).on_hover_text(tl!("Click to edit"))
-}
-
-/// The tooltip of an effect row's empty space, "Double-click to edit", unless the pointer is on its
-/// name (`name`), which has its own.
-fn edit_tip(resp: egui::Response, name: &egui::Response) -> egui::Response {
-    if name.hovered() { resp } else { resp.on_hover_text(tl!("Double-click to edit")) }
-}
-
-/// Does any selected subject have a non-basic appearance that can be reduced?
+/// Whether a selected object, or the compound path holding it, has more than a basic appearance to reduce.
 fn any_subject_needs_reduction(app: &VectorcraftApp) -> bool {
     let Some(st) = app.session.active() else { return false };
     st.selection.subjects().iter().any(|id| {
-        let target_node = st
-            .doc
-            .parent_of(*id)
-            .and_then(|p| st.doc.node(p))
-            .filter(|p| matches!(p.kind, vectorcraft_doc::NodeKind::Compound { .. }))
-            .or_else(|| st.doc.node(*id));
-        target_node.is_some_and(|n| !n.appearance.is_basic())
+        let compound = st.doc.parent_of(*id).and_then(|p| st.doc.node(p)).filter(|p| matches!(p.kind, vectorcraft_doc::NodeKind::Compound { .. }));
+        compound.or_else(|| st.doc.node(*id)).is_some_and(|n| !n.appearance.is_basic())
     })
 }
 
-/// The Appearance panel: the object row, the stack of the selected object (or of new art with nothing selected) and the bottom bar; Delete/Backspace after a row click remove the highlighted rows.
-pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
-    let node = first_subject(app);
-    let sel = current_sel(app, ui.ctx(), node.as_deref());
-    let hide_thumb: bool = pstate(ui.ctx(), "ap-hide-thumb");
-    widgets::list_box(ui, |ui| {
-        ui.spacing_mut().item_spacing.y = 0.0;
-        // Object row (clicking it targets the whole object again).
-        let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW + 4.0), Sense::click());
-        if resp.clicked() && sel != Sel::None {
-            select_row(app, ui.ctx(), Sel::None);
-        }
-        if resp.secondary_clicked() {
-            super::set_row_keys(ui.ctx(), ROW_KEYS, true);
-            if sel != Sel::None {
-                select_row(app, ui.ctx(), Sel::None);
+/// Applies what the rows' parts did: links, swatches, weights and inline editor edits.
+fn apply_parts(app: &mut VectorcraftApp, node: Option<&Node>, acts: Vec<Act>) {
+    for act in acts {
+        match act {
+            Act::Link(key) => follow_link(app, node, key),
+            Act::Swatch(key, painted, shift) => swatch_pressed(app, key, painted, shift),
+            Act::Weight(target, out) => stroke::apply_weight(app, &out, target),
+            Act::Params(item, k, params) => {
+                app.run("effect.setParams", aligned(app, json!({"item": item, "index": k, "params": params}))).ok();
+            }
+            Act::Dialog(item, k, effect) => {
+                app.run("effect.dialog", aligned(app, json!({"effect": effect, "index": k, "item": item}))).ok();
             }
         }
-        resp.context_menu(|ui| {
-            let has = node.is_some();
-            if menu_item(ui, tl!("Clear Appearance"), has, false) {
-                app.run("appearance.clear", json!({})).ok();
-                ui.close();
-            }
-            let can_reduce = any_subject_needs_reduction(app);
-            if menu_item(ui, tl!("Reduce to Basic Appearance"), can_reduce, false) {
-                app.run("appearance.reduceToBasic", json!({})).ok();
-                ui.close();
-            }
-        });
-        ui.painter().line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0, t.input_border));
-        let summary = summary(app, ui.ctx());
-        let mix = summary.as_ref().and_then(|s| s.mixed(app));
-        let mixed = mix.is_some();
-        let label = tl!(summary.as_ref().map_or("No Selection", |s| s.label));
-        // A linked object names its graphic style ("Rectangle: Sunshine"), and so does new art
-        // with nothing selected.
-        let style = match app.session.selection_graphic_style() {
-            Some((g, true)) if !mixed => Some(g.name.as_str()),
-            _ if node.is_none() => app.session.new_art_transparency().2,
-            _ => None,
-        };
-        let label = match style {
-            Some(name) => std::borrow::Cow::Owned(format!("{} {name}", crate::i18n::colon(label))),
-            None => std::borrow::Cow::Borrowed(label),
-        };
-        if !hide_thumb {
-            let th = Rect::from_min_size(r.left_center() + vec2(6.0, -12.0), vec2(24.0, 24.0));
-            // Objects whose fills differ show "?", like the Properties panel's Fill chip.
-            let fill = match &node {
-                Some(n) => n.appearance.fill_paint(),
-                None => app.session.paint.fill.clone(),
-            };
-            chip(ui, th, &fill, mix.is_some_and(|m| m.fills_differ));
-            if let Some(n) = node.as_ref().filter(|_| !mixed) {
-                thumbnail_drag(ui, th, n.id);
-            }
-        }
-        text(ui, r.left_center() + vec2(if hide_thumb { 8.0 } else { 46.0 }, 0.0), &label, true);
-        match &node {
-            // Objects that differ list what they share, under a note that they differ.
-            Some(n) if let Some(m) = mix => {
-                let (mr, _) = ui.allocate_exact_size(vec2(ui.available_width(), ROW), Sense::hover());
-                let mut job = egui::text::LayoutJob::default();
-                let format = egui::TextFormat { font_id: egui::FontId::proportional(12.0), color: t.text_dim, italics: true, ..Default::default() };
-                job.append(tl!("Mixed Appearances"), 0.0, format);
-                let g = ui.painter().layout_job(job);
-                ui.painter().galley(mr.left_center() + vec2(EYE_W + 24.0, -g.size().y / 2.0), g, t.text_dim);
-                if !(m.shared.items.is_empty() && m.shared.effects.is_empty()) {
-                    stack(app, ui, n, sel, r, Some(m));
-                }
-            }
-            Some(n) => stack(app, ui, n, sel, r, None),
-            None => default_stack(app, ui),
-        }
-        // An empty spacer row at the end of the list.
-        ui.allocate_exact_size(vec2(ui.available_width(), 10.0), Sense::hover());
-    });
-    bottom(app, ui, node.as_deref(), sel);
-    delete_key(app, ui);
-    // A row's popup, beside the panel (in the same window when the panel floats).
-    let panel = ui.max_rect();
-    row_popup(app, ui.ctx(), panel);
-}
-
-/// The panel state that says the Appearance panel's rows have the keyboard ([`super::has_row_keys`]).
-pub(crate) const ROW_KEYS: &str = "ap-keys";
-
-/// Delete or Backspace removes the highlighted rows while the panel has the keyboard: a row was
-/// clicked last, not somewhere outside the panel, the panel was drawn in every frame since, and no
-/// text field has the focus (the Layers panel's rule). The app's shortcuts leave the keys to the
-/// panel meanwhile ([`super::rows_take_delete`]); otherwise they delete the selected art.
-fn delete_key(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let panel = ui.min_rect();
-    let ctx = ui.ctx().clone();
-    let pressed_outside = ctx.input(|i| i.pointer.any_pressed() && i.pointer.interact_pos().is_some_and(|p| !panel.contains(p)));
-    let keys = super::has_row_keys(&ctx, ROW_KEYS) && !pressed_outside;
-    super::set_row_keys(&ctx, ROW_KEYS, keys);
-    let node = first_subject(app);
-    let sel = current_sel(app, &ctx, node.as_deref());
-    if keys
-        && sel.deletable()
-        && ctx.memory(|m| m.focused().is_none())
-        && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete) || i.consume_key(egui::Modifiers::NONE, egui::Key::Backspace))
-    {
-        delete_selected(app, ui, node.as_deref(), sel);
     }
 }
 
-/// The object row's thumbnail drags this object's appearance onto art ([`PanelDrag::Appearance`];
-/// a chip of its fill follows the pointer).
-fn thumbnail_drag(ui: &mut Ui, th: Rect, id: NodeId) {
-    let resp = ui.interact(th, ui.scope_id().with("ap-thumb"), Sense::drag()).on_hover_text(tl!("Drag onto art to apply this appearance"));
-    widgets::drag_source(ui, &resp, || PanelDrag::Appearance(id));
-    if resp.dragged_by(egui::PointerButton::Primary) {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+/// A part of a row that acted in a pass, applied once the list is shown.
+enum Act {
+    /// The row's name link was clicked.
+    Link(RowKey),
+    /// The row's swatch was clicked, with Shift (the mixer) or without (the swatches).
+    Swatch(RowKey, Painted, bool),
+    /// The stroke weight field's output.
+    Weight(WeightTarget, Box<NumberOutput>),
+    /// The inline editor of effect `k` of list `item` changed these parameters.
+    Params(Option<usize>, usize, serde_json::Map<String, Value>),
+    /// The inline editor of effect `k` of list `item` asks for the effect's dialog.
+    Dialog(Option<usize>, usize, String),
+}
+
+/// What the rows' parts did in one pass.
+#[derive(Default)]
+struct Pass {
+    acts: Vec<Act>,
+    /// The name links shown, by row: a row's popover hangs from its link.
+    links: Vec<(RowKey, egui::Response)>,
+    /// The swatches shown, by row, with what they paint: the swatch popover hangs from its swatch.
+    swatches: Vec<(RowKey, Painted, egui::Response)>,
+}
+
+/// What a row reads to build itself.
+struct RowCx<'a> {
+    app: &'a VectorcraftApp,
+    node: Option<&'a Node>,
+    new_art: &'a Appearance,
+    mix: Option<&'a Mixed>,
+    label: &'a str,
+    hide_thumb: bool,
+    open: &'a HashSet<RowKey>,
+    pass: &'a RefCell<Pass>,
+}
+
+/// One row of the list.
+fn build_row<'r>(cx: &'r RowCx<'_>, key: RowKey, item: &mut ItemCx<'_, 'r, RowKey>) -> ListRow<'r> {
+    let row = match key {
+        RowKey::Object => object_row(cx),
+        RowKey::Mixed => ListRow::new(tl!("Mixed Appearances")).italic(true).ink(RowInk::Muted),
+        RowKey::Item(i) | RowKey::NewArtItem(i) => item_row(cx, key, i),
+        RowKey::Effect(_) | RowKey::ItemEffect(..) => effect_row(cx, key, item),
+        RowKey::NewArtEffect(list, k) => {
+            let e = cx.new_art.effects_at(list).and_then(|fx| fx.get(k));
+            let label = e.map_or_else(String::new, |e| effect_row_label(&e.id));
+            ListRow::new(label).toggle(ToggleCell::eye(EYE, e.is_some_and(|e| e.visible))).trailing_icon(fx_icon(), Label::Empty)
+        }
+        RowKey::ItemOpacity(_) | RowKey::Opacity => opacity_row(cx, key),
+        RowKey::NewArtOpacity => {
+            let (opacity, blend, _) = cx.app.session.new_art_transparency();
+            let label = crate::i18n::fmt(tl!("Opacity: {value}"), &[("value", &opacity_text(opacity, blend))]);
+            ListRow::new(label).toggle(ToggleCell::eye(EYE, true))
+        }
+        RowKey::Contents => contents_row(cx),
+    };
+    let row = row.cells(item.cells()).state(item.row.clone()).depth(item.depth);
+    if key.has_children() { row.group(cx.open.contains(&key)) } else { row }
+}
+
+/// The fx mark at the end of an effect row.
+fn fx_icon() -> IconSpec<'static> {
+    IconSpec::svg(IconId::new("dc-fx"))
+}
+
+/// The output of a row's name link: a click follows it, and the link is where the row's popover
+/// hangs.
+// PLAN: decisions.md's `ItemCx::part_opener(part)` names a part of the row's own item; the name link is a hosted `Link` (`ListRow::cell_field`), a component with no `PartRef` in the row, so the popover hangs from the link's own `ButtonOutput::response`.
+fn link_output(pass: &RefCell<Pass>, key: RowKey) -> impl FnOnce(ButtonOutput) + '_ {
+    move |out| {
+        let mut pass = pass.borrow_mut();
+        if out.clicked() {
+            pass.acts.push(Act::Link(key));
+        }
+        pass.links.push((key, out.response));
+    }
+}
+
+/// The object row: the selection's name and, unless Hide Thumbnail is on or the objects' fills
+/// differ, a thumbnail of the fill that drags this object's appearance onto art.
+fn object_row<'r>(cx: &'r RowCx<'_>) -> ListRow<'r> {
+    let row = ListRow::new(cx.label.to_string()).strong(true);
+    if cx.hide_thumb || cx.mix.is_some_and(|m| m.fills_differ) {
+        return row;
+    }
+    let fill = match cx.node {
+        Some(n) => n.appearance.fill_paint(),
+        None => cx.app.session.paint.fill.clone(),
+    };
+    let row = row.thumb(ThumbSize::Small, move |painter, rect| paint_preview::paint_rect(painter, rect, &fill));
+    match cx.node.filter(|_| cx.mix.is_none()) {
+        Some(n) => row.part_drag(RowDragSpot::Thumb(ThumbTarget::First), PanelDrag::Appearance(n.id)),
+        None => row,
+    }
+}
+
+/// A fill/stroke row of the object (`Item`) or of new art (`NewArtItem`): its eye, the link that
+/// edits it, its swatch and, for a stroke, its weight and notes.
+fn item_row<'r>(cx: &'r RowCx<'_>, key: RowKey, i: usize) -> ListRow<'r> {
+    let new_art = matches!(key, RowKey::NewArtItem(_));
+    let stack: Option<&Appearance> = if new_art { Some(cx.new_art) } else { cx.node.map(|n| &*n.appearance) };
+    let Some(it) = stack.and_then(|ap| ap.items.get(i)) else { return ListRow::new(Label::Empty) };
+    let fill = it.is_fill();
+    let (name, link) = if fill { (tl!("Fill"), tl!("Fill:")) } else { (tl!("Stroke"), tl!("Stroke:")) };
+    let mut row = ListRow::new(name).toggle(ToggleCell::eye(EYE, it.visible())).cell_field(
+        NAME,
+        crate::panels::option_link(link).tooltip(tl!("Click to edit")),
+        link_output(cx.pass, key),
+    );
+    // The first trailing part added is the outermost: the profile closes the row, the swatch sits
+    // nearest the label.
+    if let AppearanceItem::Stroke(st) = it {
+        if let Some(points) = st.profile.as_ref().filter(|p| p.preset_id() != Some("uniform")).map(|p| p.points.clone()) {
+            let aspect = ThumbAspect::new(PROFILE_ASPECT.0, PROFILE_ASPECT.1);
+            let profile = Picture::painter(Label::Empty, aspect, move |painter, rect| stroke::paint_profile(painter, rect, Some(points.as_slice())));
+            row = row.trailing_field(profile, |_| {});
+        }
+        if let Some(notes) = stroke_notes(st) {
+            row = row.trailing_field(Text::new(notes).shade(Shade::Muted), |_| {});
+        }
+        let target = if new_art { WeightTarget::Shown } else { WeightTarget::Item(i) };
+        let pass = cx.pass;
+        row = row.trailing_field(stroke::weight_number(cx.app, Some(st.width)), move |out| {
+            pass.borrow_mut().acts.push(Act::Weight(target, Box::new(out)))
+        });
+    }
+    let painted = if new_art { Painted::NewArt { fill } } else { Painted::Item(i) };
+    let pass = cx.pass;
+    row.trailing_field(paint_swatch(it.is_fill(), it.paint()), move |out: SwatchOutput| {
+        let mut pass = pass.borrow_mut();
+        if let Some(activation) = out.activation {
+            pass.acts.push(Act::Swatch(key, painted, activation.mods.shift));
+        }
+        pass.swatches.push((key, painted, out.response));
+    })
+}
+
+/// The well of a fill (`fill`) or stroke row, named for it: `paint` as its face, its colour (a solid paint's) as its
+/// value.
+fn paint_swatch(fill: bool, paint: &Paint) -> Swatch {
+    let color = paint.color().map_or(Srgba::BLACK, |c| {
+        let [r, g, b] = c.to_rgb();
+        Srgba::rgb(r, g, b)
+    });
+    let row = if fill { tl!("Fill") } else { tl!("Stroke") };
+    Swatch::new(crate::i18n::fmt(tl!("{row} swatch"), &[("row", row)]), color)
+        .face(paint_preview::rect_face(paint))
+        .tooltip(tl!("Click to choose a swatch, Shift-click to mix a colour"))
+}
+
+/// A stroke row's notes after the weight: its brush and "Dashed".
+fn stroke_notes(st: &vectorcraft_doc::StrokeLayer) -> Option<String> {
+    let dashed = st.dash.as_ref().is_some_and(|d| d.is_dashed()).then_some(tl!("Dashed"));
+    let notes: Vec<&str> = st.brush.as_deref().into_iter().chain(dashed).collect();
+    (!notes.is_empty()).then(|| notes.join(", "))
+}
+
+/// An Opacity row: of the object or, under it, of a fill/stroke. "Opacity:" opens the
+/// Transparency panel on it. A mixed selection whose objects' opacity or blend mode differ
+/// reads "Mixed".
+fn opacity_row<'r>(cx: &'r RowCx<'_>, key: RowKey) -> ListRow<'r> {
+    let shown = match (key, cx.node) {
+        (RowKey::ItemOpacity(i), Some(n)) => n.appearance.items.get(i).map_or_else(String::new, |it| opacity_text(it.opacity(), it.blend())),
+        _ if cx.mix.is_some_and(|m| m.transparency) => tl!("Mixed").to_string(),
+        (_, Some(n)) => opacity_text(n.opacity, n.blend),
+        (_, None) => String::new(),
+    };
+    ListRow::new(tl!("Opacity"))
+        .toggle(ToggleCell::eye(EYE, true))
+        .cell_field(NAME, crate::panels::option_link(tl!("Opacity:")).tooltip(tl!("Click to edit")), link_output(cx.pass, key))
+        // A screen reader reads the shown opacity as the row's description.
+        .description(shown.clone())
+        .trailing(shown)
+}
+
+/// The Contents (type: Characters) row: picking it sends paint edits to the members
+/// (characters); double-clicking Contents targets the members, Characters opens the Color panel
+/// on the characters' paint (whose chips it shows), and its name the Character panel.
+fn contents_row<'r>(cx: &'r RowCx<'_>) -> ListRow<'r> {
+    let Some((n, label)) = cx.node.and_then(|n| n.contents_label().map(|label| (n, tl!(label).to_string()))) else {
+        return ListRow::new(Label::Empty);
+    };
+    let characters = matches!(n.kind, vectorcraft_doc::NodeKind::Text(_));
+    let mut row = ListRow::new(label.clone()).toggle(ToggleCell::eye(EYE, true));
+    if characters {
+        row = row.cell_field(NAME, crate::panels::option_link(label).tooltip(tl!("Click to edit")), link_output(cx.pass, RowKey::Contents));
+        // The characters' stroke closes the row, their fill before it.
+        for stroke in [true, false] {
+            let paint = n.proxy_paint_only(stroke, None).cloned().unwrap_or(Paint::None);
+            let chip = Picture::painter(Label::Empty, ThumbAspect::SQUARE, move |painter, rect| paint_preview::paint_rect(painter, rect, &paint));
+            row = row.trailing_field(chip, |_| {});
+        }
+    }
+    match n.kind {
+        // An image's row has no members to target.
+        vectorcraft_doc::NodeKind::Image(_) => row,
+        _ if characters => row.tooltip(tl!("Double-click to edit the characters' paint")),
+        _ => row.tooltip(tl!("Double-click to target the contents")),
+    }
+}
+
+/// An effect row: of the object or, under it, of a fill/stroke. Its name edits the effect on a
+/// click: its settings dialog, or the inline editor of an effect without settings; its disclosure
+/// shows the inline editor.
+fn effect_row<'r>(cx: &'r RowCx<'_>, key: RowKey, item: &mut ItemCx<'_, 'r, RowKey>) -> ListRow<'r> {
+    let Some((list, k)) = key.effect() else { return ListRow::new(Label::Empty) };
+    let Some(e) = cx.node.and_then(|n| n.appearance.effects_at(list)).and_then(|fx| fx.get(k)) else { return ListRow::new(Label::Empty) };
+    let label = effect_row_label(&e.id);
+    let tip = skipped_effect_tip(&e.id).unwrap_or_else(|| tl!("Click to edit").to_string());
+    let row = ListRow::new(label.clone())
+        .toggle(ToggleCell::eye(EYE, e.visible))
+        .cell_field(NAME, crate::panels::option_link(label).tooltip(tip), link_output(cx.pass, key))
+        .trailing_icon(fx_icon(), Label::Empty)
+        .tooltip(tl!("Double-click to edit"));
+    if cx.open.contains(&key) {
+        item.detail(effect_editor(cx.app, cx.pass, list, k, e));
+    }
+    row
+}
+
+/// The inline editor of effect `k` of list `item`: the rows of the effect's dialog over its
+/// current values ([`editor_params`]), or "No options". Each edit sends the parameters it changed
+/// through `effect.setParams`; Free Distort's Edit… opens its dialog, where its corners are
+/// dragged.
+fn effect_editor<'r>(app: &VectorcraftApp, pass: &'r RefCell<Pass>, item: Option<usize>, k: usize, e: &Effect) -> impl FnOnce(&mut Ui) + 'r {
+    let values = editor_params(e);
+    let free_distort = e.id == crate::dialogs::free_distort::FREE_DISTORT;
+    let params: Vec<Param> = if free_distort || values.is_empty() {
+        vec![]
+    } else {
+        // The rows a plug-in shows depend on its values: the first list reads them, the second
+        // shows them.
+        let effect = EffectCx::new(app, &e.id, true);
+        let opening = fields_of(&effect_params(&effect, &DialogFields::new()), &values);
+        let mut rows = effect_params(&effect, &opening);
+        // Load Texture… loads its file in the effect's dialog: the editor shows the parameters.
+        rows.retain(|row| row.key != "texturePath");
+        // An effect with no rows of its own (a plug-in since removed) shows its values as they are.
+        if rows.is_empty() { stored_params(&effect, &values) } else { rows }
+    };
+    let fields = fields_of(&params, &values);
+    let (name, id) = (effect_label(&e.id), e.id.clone());
+    move |ui| {
+        if free_distort {
+            // The button keeps its own name: the label says what it edits.
+            let edit = Field::new(tl!("Corners"))
+                .side(SideLabel::new().role(FieldLabelRole::Describes))
+                .show(ui, |ui, _| clicked(&Button::new(tl!("Edit…")).show(ui)))
+                .inner;
+            if edit == Some(true) {
+                pass.borrow_mut().acts.push(Act::Dialog(item, k, id));
+            }
+            return;
+        }
+        if params.is_empty() {
+            Text::new(tl!("No options")).shade(Shade::Muted).show(ui);
+            return;
+        }
+        let out = ParamRows::new(name, &params, Bind::given(fields.clone())).show(ui);
+        let before = json_of(&params, &fields);
+        for event in out.events.iter() {
+            let (EditEvent::Set { after, .. } | EditEvent::Commit { after, .. }) = event else { continue };
+            let changed: serde_json::Map<String, Value> = json_of(&params, after).into_iter().filter(|(key, v)| before.get(key) != Some(v)).collect();
+            if !changed.is_empty() {
+                pass.borrow_mut().acts.push(Act::Params(item, k, changed));
+            }
+        }
+    }
+}
+
+/// The rows of the list, in order: the object row, the note of a mixed selection, then the stack
+/// of the object (its fills and strokes with their open Opacity and effect rows, the Contents row
+/// in its slot, the object's effects and Opacity) or of new art.
+struct StackRows {
+    rows: Vec<StackRow>,
+}
+
+/// One row of [`StackRows`].
+struct StackRow {
+    key: RowKey,
+    depth: usize,
+    /// The eye: on, and whether it toggles.
+    eye: Option<(bool, bool)>,
+    open: bool,
+}
+
+impl StackRows {
+    /// The rows of `node`, or of `new_art` with nothing selected; `mix`: a mixed selection (`node`
+    /// its first object), which lists only the rows its objects share and no Contents row (each
+    /// object's differs).
+    fn new(node: Option<&Node>, new_art: &Appearance, mix: Option<&Mixed>, open: &HashSet<RowKey>) -> Self {
+        let mut rows = vec![];
+        let mut push = |key: RowKey, depth: usize, eye: Option<(bool, bool)>| rows.push(StackRow { key, depth, eye, open: open.contains(&key) });
+        push(RowKey::Object, 0, None);
+        let Some(n) = node else {
+            for (i, it) in new_art.items.iter().enumerate().rev() {
+                push(RowKey::NewArtItem(i), 0, Some((it.visible(), false)));
+                for (k, e) in it.effects().iter().enumerate() {
+                    push(RowKey::NewArtEffect(Some(i), k), 1, Some((e.visible, false)));
+                }
+            }
+            for (k, e) in new_art.effects.iter().enumerate() {
+                push(RowKey::NewArtEffect(None, k), 0, Some((e.visible, false)));
+            }
+            push(RowKey::NewArtOpacity, 0, Some((true, false)));
+            return StackRows { rows };
+        };
+        if let Some(m) = mix {
+            push(RowKey::Mixed, 0, None);
+            if m.shared.items.is_empty() && m.shared.effects.is_empty() {
+                return StackRows { rows };
+            }
+        }
+        let contents = n.contents_label().is_some() && mix.is_none();
+        let below = n.appearance.contents_at();
+        for (i, it) in n.appearance.items.iter().enumerate().rev() {
+            if mix.is_some_and(|m| !m.shared.has_item(i)) {
+                continue;
+            }
+            // The Contents row sits right above the items painted below the members.
+            if contents && i + 1 == below {
+                push(RowKey::Contents, 0, Some((true, false)));
+            }
+            push(RowKey::Item(i), 0, Some((it.visible(), true)));
+            if open.contains(&RowKey::Item(i)) {
+                push(RowKey::ItemOpacity(i), 1, Some((true, false)));
+                for (k, e) in it.effects().iter().enumerate() {
+                    push(RowKey::ItemEffect(i, k), 1, Some((e.visible, true)));
+                }
+            }
+        }
+        if contents && below == 0 {
+            push(RowKey::Contents, 0, Some((true, false)));
+        }
+        for (k, e) in n.appearance.effects.iter().enumerate() {
+            if mix.is_none_or(|m| m.shared.has_effect(k)) {
+                push(RowKey::Effect(k), 0, Some((e.visible, true)));
+            }
+        }
+        push(RowKey::Opacity, 0, Some((true, false)));
+        StackRows { rows }
+    }
+
+    /// The keys in display order.
+    fn keys(&self) -> Vec<RowKey> {
+        self.rows.iter().map(|row| row.key).collect()
+    }
+}
+
+impl DisplayOrder<RowKey> for StackRows {
+    fn len(&self) -> usize {
+        self.rows.len()
+    }
+
+    fn key(&self, at: usize) -> RowKey {
+        self.rows.get(at).map_or(RowKey::Object, |row| row.key)
+    }
+
+    fn depth(&self, at: usize) -> usize {
+        self.rows.get(at).map_or(0, |row| row.depth)
+    }
+
+    fn has_children(&self, at: usize) -> bool {
+        self.rows.get(at).is_some_and(|row| row.key.has_children())
+    }
+
+    fn open(&self, at: usize) -> bool {
+        self.rows.get(at).is_some_and(|row| row.open)
+    }
+
+    /// The note and new art's rows are never picked: they only show what is there.
+    fn enabled(&self, at: usize) -> bool {
+        self.rows
+            .get(at)
+            .is_some_and(|row| !matches!(row.key, RowKey::Mixed | RowKey::NewArtItem(_) | RowKey::NewArtEffect(..) | RowKey::NewArtOpacity))
+    }
+}
+
+impl ItemSource<RowKey> for StackRows {
+    fn toggled(&self, at: usize, column: &ColumnKey) -> bool {
+        *column == EYE && self.rows.get(at).and_then(|row| row.eye).is_some_and(|(on, _)| on)
+    }
+
+    fn toggle_enabled(&self, at: usize, column: &ColumnKey) -> bool {
+        *column == EYE && self.rows.get(at).and_then(|row| row.eye).is_some_and(|(_, toggles)| toggles)
     }
 }
 
@@ -660,27 +1165,27 @@ impl Summary {
 }
 
 /// The active document's [`Summary`], made again only when the document changes (its id or its
-/// revision) or the appearance subjects do, compared id by id. `None` with no document open.
-pub(crate) fn summary(app: &VectorcraftApp, ctx: &egui::Context) -> Option<Arc<Summary>> {
+/// revision) or the appearance subjects do, compared id by id; kept in
+/// `CanvasCache::appearance_summary`. `None` with no document open.
+pub(crate) fn summary(app: &mut VectorcraftApp) -> Option<Arc<Summary>> {
     let st = app.session.active()?;
     let subjects = st.selection.subjects();
-    let id = egui::Id::unique("ap-summary");
-    if let Some(s) = ctx.data(|d| d.get_temp::<Arc<Summary>>(id))
+    if let Some(s) = &app.canvas.appearance_summary
         && s.uid == st.uid
         && s.revision == st.revision
         && s.subjects == subjects
     {
-        return Some(s);
+        return Some(s.clone());
     }
     let s = Arc::new(Summary { uid: st.uid, revision: st.revision, subjects: subjects.to_vec(), label: object_label(app), mixed: OnceLock::new() });
-    ctx.data_mut(|d| d.insert_temp(id, s.clone()));
+    app.canvas.appearance_summary = Some(s.clone());
     Some(s)
 }
 
 /// `params` of an item or effect command the panel runs, with `aligned` when the selected objects'
 /// stacks differ: its indices are then rows of the first object's stack, which each other object
 /// edits where it has them (the panel lists only the rows they share).
-fn aligned(app: &VectorcraftApp, mut params: Value) -> Value {
+pub(super) fn aligned(app: &VectorcraftApp, mut params: Value) -> Value {
     let differ = app.session.active().is_some_and(|st| {
         let mut aps = st.selection.subjects().iter().filter_map(|id| st.doc.node(*id)).map(|n| &n.appearance);
         aps.next().is_some_and(|first| aps.any(|a| a != first))
@@ -691,676 +1196,152 @@ fn aligned(app: &VectorcraftApp, mut params: Value) -> Value {
     params
 }
 
-/// What the next object drawn gets when nothing is selected (`Session::new_art`): its fills and
-/// strokes, effects and transparency as rows. "Stroke:" opens the Stroke panel, which sets up its
-/// stroke, and "Fill:" the Color panel on its fill; the swatches and the weight field work as an
-/// object's ([`swatch_button`], [`weight_field`]), on its top fill and stroke.
-fn default_stack(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
-    let ap = app.session.new_art();
-    let (opacity, blend, _) = app.session.new_art_transparency();
-    let fx = |ui: &mut Ui, e: &Effect, id: (Option<usize>, usize)| {
-        let (r, _) = row(ui, false);
-        eye(ui, r, ("ap-def-fx", id), e.visible, false);
-        text(ui, pos2(r.left() + EYE_W + 24.0 + if id.0.is_some() { 12.0 } else { 0.0 }, r.center().y), &effect_row_label(&e.id), false);
-        icons::paint(ui, "dc-fx", Rect::from_center_size(r.right_center() - vec2(14.0, 0.0), vec2(16.0, 16.0)), t.icon);
+/// Shows or hides a fill/stroke or effect: its eye was clicked.
+fn toggle_eye(app: &mut VectorcraftApp, key: RowKey, on: bool) {
+    let (cmd, params) = match key {
+        RowKey::Item(i) => ("appearance.setItem", json!({"index": i, "visible": on})),
+        RowKey::Effect(k) => ("effect.setParams", json!({"item": null, "index": k, "visible": on})),
+        RowKey::ItemEffect(i, k) => ("effect.setParams", json!({"item": i, "index": k, "visible": on})),
+        _ => return,
     };
-    for (i, it) in ap.items.iter().enumerate().rev() {
-        let (r, _) = row(ui, false);
-        eye(ui, r, ("ap-def-eye", i), it.visible(), false);
-        let lx = r.left() + EYE_W + 24.0;
-        let label = if it.is_fill() { tl!("Fill:") } else { tl!("Stroke:") };
-        if name_link(ui, pos2(lx, r.center().y), ("ap-def-link", i), label).clicked() {
-            // The Color panel then edits this one of the next object's paints.
-            app.run("paint.toggleActive", json!({ "fill": it.is_fill() })).ok();
-            open_popup(app, ui.ctx(), if it.is_fill() { "color" } else { "stroke" });
-        }
-        // A graphic style can give the next object two fills or strokes with the same target: a
-        // child Ui salted by the row keeps their widget ids apart (and, unlike `push_id`, takes no
-        // layout space).
-        let mut cells = ui.new_child(egui::UiBuilder::new().id_salt(("ap-def-row", i)).max_rect(r));
-        swatch_button(app, &mut cells, r, it.paint(), Painted::NewArt { fill: it.is_fill() });
-        if let AppearanceItem::Stroke(st) = it {
-            weight_field(app, &mut cells, r, st, Painted::NewArt { fill: false });
-        }
-        for (k, e) in it.effects().iter().enumerate() {
-            fx(ui, e, (Some(i), k));
-        }
-    }
-    for (k, e) in ap.effects.iter().enumerate() {
-        fx(ui, e, (None, k));
-    }
-    let (r, _) = row(ui, false);
-    eye(ui, r, "ap-def-op", true, false);
-    text(
-        ui,
-        r.left_center() + vec2(EYE_W + 24.0, 0.0),
-        &crate::i18n::fmt(tl!("Opacity: {value}"), &[("value", &opacity_text(opacity, blend))]),
-        false,
-    );
+    app.run(cmd, aligned(app, params)).ok();
 }
 
-/// A stack row being dragged.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Dragged {
-    Item(usize),
-    /// The Contents (Characters) row.
-    Contents,
-    /// Effect `k` of fill/stroke `item` (`None`: of the object).
-    Effect(Option<usize>, usize),
-}
-
-/// What a stack row stands for when a dragged row is dropped on it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Slot {
-    /// Fill/stroke row `index` (`sub`: one of its indented sub-rows).
-    Item { index: usize, sub: bool },
-    /// Effect `k` of fill/stroke `item` (`None`: of the object).
-    Effect(Option<usize>, usize),
-    /// The object row (`top`) or the object's Opacity row.
-    Object { top: bool },
-    /// The Contents (Characters) row.
-    Contents,
-}
-
-/// Context menu and right-click selection for a stroke or fill row.
-fn item_row_context(
-    app: &mut VectorcraftApp,
-    ui: &mut Ui,
-    n: &Node,
-    resps: (&egui::Response, &egui::Response),
-    i: usize,
-    it: &AppearanceItem,
-    items: &[usize],
-) {
-    let (resp, name) = resps;
-    if resp.secondary_clicked() || name.secondary_clicked() {
-        super::set_row_keys(ui.ctx(), ROW_KEYS, true);
-        if !items.contains(&i) {
-            select_row(app, ui.ctx(), Sel::Item(i));
-        }
-    }
-    let is_stroke = matches!(it, AppearanceItem::Stroke(_));
-    let visible = it.visible();
-    let vis_label = if is_stroke {
-        if visible { tl!("Hide Stroke") } else { tl!("Show Stroke") }
-    } else {
-        if visible { tl!("Hide Fill") } else { tl!("Show Fill") }
-    };
-    let mut menu = |ui: &mut Ui| {
-        let sel = current_sel(app, ui.ctx(), Some(n));
-        let sel_items = selected_items(ui.ctx(), Some(n), sel);
-        let multi = sel_items.len() > 1;
-        let (dup_label, del_label) = if multi {
-            (tl!("Duplicate Items"), tl!("Delete Items"))
-        } else if is_stroke {
-            (tl!("Duplicate Stroke"), tl!("Delete Stroke"))
-        } else {
-            (tl!("Duplicate Fill"), tl!("Delete Fill"))
-        };
-        if menu_item(ui, dup_label, true, false) {
-            duplicate_selected(app, ui, Some(n), sel);
-            ui.close();
-        }
-        if menu_item(ui, del_label, true, false) {
-            delete_selected(app, ui, Some(n), sel);
-            ui.close();
-        }
-        if menu_item(ui, vis_label, true, false) {
-            app.run("appearance.setItem", aligned(app, json!({"index": i, "visible": !visible}))).ok();
-            ui.close();
-        }
-    };
-    resp.context_menu(&mut menu);
-    name.context_menu(&mut menu);
-}
-
-/// The rows of object `n` (fills/strokes with their Opacity and effect rows, the Contents row, the object's effects and Opacity) with the click rules, row drags and drop markers; `sel` is the active row.
-/// `only`: a mixed selection (`n` its first object): only the rows its objects share are listed,
-/// and rows aren't dragged (where one would go in each of the different stacks isn't one place).
-fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel, object_row: Rect, only: Option<&Mixed>) {
-    let t = Tokens::get(ui.ctx());
-    let ctx = ui.ctx().clone();
-    let dragging: Option<Dragged> = pstate::<Option<Dragged>>(&ctx, "ap-drag").filter(|_| only.is_none());
-    let items = selected_items(&ctx, Some(n), sel);
-    let effects = selected_effects(&ctx, Some(n), sel);
-    let lit = |item: Option<usize>, k: usize| effects.as_ref().is_some_and(|(list, ks)| *list == item && ks.contains(&k));
-    let mut rows = vec![(Slot::Object { top: true }, object_row)];
-    let mut stopped = false;
-    // Starts (primary button only) or ends a row drag.
-    let frozen = only.is_some();
-    let mut track = |resp: &egui::Response, what: Dragged| {
-        if frozen {
-            return;
-        }
-        if resp.drag_started_by(egui::PointerButton::Primary) {
-            set_pstate(&ctx, "ap-drag", Some(what));
-            // Where the row was grabbed, for its dimmed copy under the pointer.
-            // (From where the button went down: the drag starts once the pointer has moved on.)
-            let grab = ctx.input(|i| i.pointer.press_origin()).map_or(vec2(EYE_W, ROW / 2.0), |p| p - resp.rect.min);
-            set_pstate(&ctx, "ap-grab", (grab, resp.rect.width()));
-        }
-        stopped |= resp.drag_stopped();
-    };
-    // A mixed selection's Contents rows differ object by object: none is listed.
-    let contents = n.contents_label().filter(|_| only.is_none());
-    let below = n.appearance.contents_at();
-    for (i, it) in n.appearance.items.iter().enumerate().rev() {
-        if only.is_some_and(|m| !m.shared.has_item(i)) {
-            continue;
-        }
-        // The Contents row sits right above the items painted below the members.
-        if let Some(label) = contents.filter(|_| i + 1 == below) {
-            let (r, resp) = contents_row(app, ui, n, label, sel);
-            rows.push((Slot::Contents, r));
-            track(&resp, Dragged::Contents);
-        }
-        let open: bool = pstate(ui.ctx(), &format!("ap-open-{i}"));
-        let (r, resp) = row(ui, items.contains(&i));
-        rows.push((Slot::Item { index: i, sub: false }, r));
-        let (visible, paint) = (it.visible(), it.paint());
-        let is_stroke = !it.is_fill();
-        if eye(ui, r, ("ap-eye", i), visible, true) {
-            app.run("appearance.setItem", aligned(app, json!({"index": i, "visible": !visible}))).ok();
-        }
-        if chevron(ui, r, ("ap-chev", i), open) {
-            set_pstate(ui.ctx(), &format!("ap-open-{i}"), !open);
-        }
-        let lx = r.left() + EYE_W + 24.0;
-        // The label edits the row (the Stroke or Color panel); the empty space only takes the click
-        // rules.
-        let label = if is_stroke { tl!("Stroke:") } else { tl!("Fill:") };
-        let name = name_link(ui, pos2(lx, r.center().y), ("ap-link", i), label);
-        if name.clicked() {
-            select_row(app, ui.ctx(), Sel::Item(i));
-            // The panel has the keyboard (Delete removes this row, not the art).
-            super::set_row_keys(ui.ctx(), ROW_KEYS, true);
-            open_popup(app, ui.ctx(), if is_stroke { "stroke" } else { "color" });
-        }
-        swatch_button(app, ui, r, paint, Painted::Item(i));
-        if let AppearanceItem::Stroke(st) = it {
-            weight_field(app, ui, r, st, Painted::Item(i));
-        }
-        if resp.clicked() {
-            let m = ui.input(|inp| inp.modifiers);
-            click_row(app, ui.ctx(), n, sel, Rows::Items, i, m);
-        }
-        item_row_context(app, ui, n, (&resp, &name), i, it, &items);
-        track(&resp, Dragged::Item(i));
-        if open {
-            let r = opacity_row(app, ui, Some(i), it.opacity(), it.blend(), sel, false);
-            rows.push((Slot::Item { index: i, sub: true }, r));
-            for (k, e) in it.effects().iter().enumerate() {
-                let (r, resp) = effect_row(app, ui, n, Some(i), k, e, lit(Some(i), k));
-                if resp.clicked() {
-                    let m = ui.input(|inp| inp.modifiers);
-                    click_row(app, ui.ctx(), n, sel, Rows::Effects(Some(i)), k, m);
+/// A double click (or Enter) on a row of `n`: Contents targets the members, Characters opens the
+/// Color panel on the characters' paint, an effect row edits the effect.
+fn activate(app: &mut VectorcraftApp, n: &Node, key: RowKey) {
+    match key {
+        RowKey::Contents => {
+            select_row(app, Sel::Contents);
+            match n.kind {
+                vectorcraft_doc::NodeKind::Text(_) => open_row_popup(app, "color", key),
+                vectorcraft_doc::NodeKind::Image(_) => {}
+                _ => {
+                    app.run("appearance.targetContents", json!({})).ok();
                 }
-                rows.push((Slot::Effect(Some(i), k), r));
-                track(&resp, Dragged::Effect(Some(i), k));
             }
         }
+        RowKey::Effect(_) | RowKey::ItemEffect(..) => edit_effect(app, n, key),
+        _ => {}
     }
-    if let Some(label) = contents.filter(|_| below == 0) {
-        let (r, resp) = contents_row(app, ui, n, label, sel);
-        rows.push((Slot::Contents, r));
-        track(&resp, Dragged::Contents);
-    }
-    // Object-level effects.
-    for (k, e) in n.appearance.effects.iter().enumerate() {
-        if only.is_some_and(|m| !m.shared.has_effect(k)) {
-            continue;
+}
+
+/// Edits effect row `key` of `n`: its settings dialog, or the inline editor of an effect without
+/// settings.
+fn edit_effect(app: &mut VectorcraftApp, n: &Node, key: RowKey) {
+    let Some((item, k)) = key.effect() else { return };
+    let Some(id) = n.appearance.effects_at(item).and_then(|fx| fx.get(k)).map(|e| e.id.clone()) else { return };
+    select_row(app, key.sel());
+    if has_options(&id) {
+        app.run("effect.dialog", aligned(app, json!({"effect": id, "index": k, "item": item}))).ok();
+    } else {
+        let open = &mut app.ui.appearance_panel.open;
+        if !open.remove(&key) {
+            open.insert(key);
         }
-        let (r, resp) = effect_row(app, ui, n, None, k, e, lit(None, k));
-        if resp.clicked() {
-            let m = ui.input(|inp| inp.modifiers);
-            click_row(app, ui.ctx(), n, sel, Rows::Effects(None), k, m);
-        }
-        rows.push((Slot::Effect(None, k), r));
-        track(&resp, Dragged::Effect(None, k));
     }
-    let r = opacity_row(app, ui, None, n.opacity, n.blend, sel, only.is_some_and(|m| m.transparency));
-    rows.push((Slot::Object { top: false }, r));
-    let Some(what) = dragging else { return };
-    let pointer = ui.ctx().pointer_interact_pos();
-    if let Some(p) = pointer
-        && let Some((slot, r)) = slot_at(&rows, p)
-    {
-        // Drop marker: a line where the row lands, or a frame round the row it goes into.
-        let stroke = Stroke::new(2.0, t.accent);
-        let line = |y: f32| {
-            ui.painter().line_segment([pos2(r.left(), y), pos2(r.right(), y)], stroke);
-        };
-        match (what, slot) {
-            (Dragged::Effect(..), Slot::Effect(..)) => line(if p.y < r.center().y { r.top() } else { r.bottom() }),
-            (Dragged::Effect(..), _) => {
-                ui.painter().rect_stroke(r.shrink(1.0), 0.0, stroke, StrokeKind::Inside);
+}
+
+/// A row's name link was clicked: the row is selected and the panel that edits it opens as its
+/// popover (an effect edits itself); new art's Fill:/Stroke: first makes that paint of the next
+/// object the one the Color panel edits.
+fn follow_link(app: &mut VectorcraftApp, node: Option<&Node>, key: RowKey) {
+    match key {
+        RowKey::Item(i) => {
+            select_row(app, Sel::Item(i));
+            let stroke = node.and_then(|n| n.appearance.items.get(i)).is_some_and(|it| !it.is_fill());
+            open_row_popup(app, if stroke { "stroke" } else { "color" }, key);
+        }
+        RowKey::ItemOpacity(_) | RowKey::Opacity => {
+            select_row(app, key.sel());
+            open_row_popup(app, "transparency", key);
+        }
+        RowKey::Contents => {
+            select_row(app, Sel::Contents);
+            open_row_popup(app, "character", key);
+        }
+        RowKey::Effect(_) | RowKey::ItemEffect(..) => {
+            if let Some(n) = node {
+                edit_effect(app, n, key);
             }
-            // Onto the Contents row: an item from above lands just below it, one from below just above.
-            (Dragged::Item(from), Slot::Contents) => line(if from >= below { r.bottom() } else { r.top() }),
-            (Dragged::Item(from), _) => line(if item_at(n, slot) > from { r.top() } else { r.bottom() }),
-            (Dragged::Contents, _) => line(if contents_slot(n, slot).is_some_and(|k| k > below) { r.top() } else { r.bottom() }),
         }
+        RowKey::NewArtItem(i) => {
+            let fill = app.session.new_art().items.get(i).is_some_and(AppearanceItem::is_fill);
+            app.run("paint.toggleActive", json!({ "fill": fill })).ok();
+            open_row_popup(app, if fill { "color" } else { "stroke" }, key);
+        }
+        _ => {}
     }
-    // The drag ends in `bottom`, which takes drops on its Duplicate and Delete buttons.
-    // Several highlighted rows, one of them grabbed, drop together.
-    let set = match what {
-        Dragged::Item(i) if items.contains(&i) => items.clone(),
-        Dragged::Effect(item, k) => effects.as_ref().filter(|(list, ks)| *list == item && ks.contains(&k)).map_or(vec![], |(_, ks)| ks.clone()),
-        _ => vec![],
-    };
-    if ui.ctx().input(|i| i.pointer.any_down())
-        && let Some(pos) = ui.ctx().input(|i| i.pointer.latest_pos())
-    {
-        let order = if set.len() > 1 { highlight(&ctx, n, sel).order } else { vec![] };
-        drag_ghost(app, ui, n, what, &order, pos, object_row.width());
-    }
-    if stopped
-        && set.len() > 1
-        && let Some(p) = pointer
-    {
-        block_drop(app, ui.ctx(), n, sel, &rows, what, &set, p);
+}
+
+/// A row's swatch was clicked: Shift opens the Color panel on its paint (selecting its row, or for
+/// new art making that paint the one the Color panel edits); a plain click shows or hides the
+/// document's swatches.
+fn swatch_pressed(app: &mut VectorcraftApp, key: RowKey, painted: Painted, shift: bool) {
+    if !shift {
+        let panel = &mut app.ui.appearance_panel;
+        panel.swatches_for = (panel.swatches_for != Some(key)).then_some(key);
         return;
     }
-    if stopped
-        && let Some(p) = pointer
-        && let Some((cmd, params)) = drop_command(n, &rows, what, p, ui.input(|i| i.modifiers.alt))
-        && let Ok(r) = app.run(cmd, params)
-        && let Some(k) = r["index"].as_u64().filter(|_| cmd == "effect.move")
-    {
-        // The dropped effect becomes the selected row (a moved fill/stroke stays active in the engine).
-        let k = k as usize;
-        select_row(app, ui.ctx(), r["item"].as_u64().map_or(Sel::Effect(k), |i| Sel::ItemEffect(i as usize, k)));
+    match painted {
+        Painted::Item(i) => select_row(app, Sel::Item(i)),
+        Painted::NewArt { fill } => {
+            app.run("paint.toggleActive", json!({ "fill": fill })).ok();
+        }
+    }
+    open_row_popup(app, "color", key);
+}
+
+/// Opens panel `id` as the popover of row `row`. A panel showing already (in the dock, a floating
+/// window or an icon column's flyout) opens no popover.
+fn open_row_popup(app: &mut VectorcraftApp, id: &str, row: RowKey) {
+    let showing = crate::panel_docking::showing(&app.ui, id);
+    app.ui.transient_panel = (!showing).then(|| id.to_string());
+    app.ui.appearance_panel.popup_row = (!showing).then_some(row);
+}
+
+/// Puts a row's popover away.
+fn close_row_popup(app: &mut VectorcraftApp) {
+    app.ui.transient_panel = None;
+    app.ui.appearance_panel.popup_row = None;
+}
+
+/// The popover a row's link opened: its panel beside the panel body `body` (before it, else after
+/// it when there is no room), level with the row's link (`links`), so it shows which row it
+/// belongs to. Escape, a press outside, the row leaving the view or the panel showing elsewhere
+/// puts it away.
+fn show_row_popup(app: &mut VectorcraftApp, ui: &mut Ui, links: &[(RowKey, egui::Response)], body: Rect) {
+    let (Some(row), Some(id)) = (app.ui.appearance_panel.popup_row, app.ui.transient_panel.clone()) else { return };
+    let opener = links.iter().find(|(key, _)| *key == row).map(|(_, response)| response);
+    let Some(opener) = opener.filter(|_| !crate::panel_docking::showing(&app.ui, &id)) else { return close_row_popup(app) };
+    let band = Rect::from_x_y_ranges(body.x_range(), opener.rect.y_range());
+    let label = crate::state::all_panels().find(|(p, _)| *p == id).map_or(id.as_str(), |(_, l)| l).to_string();
+    let tall = (ui.ctx().content_rect().height() * 0.6).max(POPUP_MIN_TALL);
+    let mut open = true;
+    Popover::new(tl!(&label).to_string(), Bind::bound(&mut open))
+        .opened_by(opener)
+        .overlay(|o| o.place(Place::anchored(Anchor::Rect(band), Side::Start, Align::Start).flipping_across()))
+        .show(ui, |ui, _| {
+            ui.allocate_ui(vec2(POPUP_W, tall), |ui| crate::dock::panel_body(app, ui, &id));
+        });
+    if !open {
+        close_row_popup(app);
     }
 }
 
-/// Drop the highlighted rows `set` (ascending; `what` grabbed) at `p`: they move (Alt: are copied)
-/// as one block ([`block_drop_command`]) and the moved rows (the copies) stay highlighted, the
-/// active row with its row.
-#[allow(clippy::too_many_arguments)]
-fn block_drop(app: &mut VectorcraftApp, ctx: &egui::Context, n: &Node, sel: Sel, rows: &[(Slot, Rect)], what: Dragged, set: &[usize], p: egui::Pos2) {
-    let copy = ctx.input(|i| i.modifiers.alt);
-    let Some((cmd, params)) = block_drop_command(n, rows, what, set, p, copy) else { return };
-    let Ok(r) = app.run(cmd, params.clone()) else { return };
-    let h = highlight(ctx, n, sel);
-    // Where the lowest of them landed, and in which kind of rows.
-    let (landed, kind) = match what {
-        Dragged::Effect(..) => (r["index"].as_u64().map(|k| k as usize), Rows::Effects(r["item"].as_u64().map(|i| i as usize))),
-        _ if copy => (params["to"].as_u64().map(|t| (t as usize).min(n.appearance.items.len())), Rows::Items),
-        _ => (r["index"].as_u64().map(|k| k as usize), Rows::Items),
+/// The swatches a row's swatch shows (`swatches`: the swatches shown, with what they paint); a pick
+/// or a press outside puts them away, as does the row leaving the view.
+fn show_swatch_popup(app: &mut VectorcraftApp, ui: &mut Ui, swatches: &[(RowKey, Painted, egui::Response)]) {
+    let Some(row) = app.ui.appearance_panel.swatches_for else { return };
+    let Some((_, target, opener)) = swatches.iter().find(|(key, ..)| *key == row) else {
+        app.ui.appearance_panel.swatches_for = None;
+        return;
     };
-    let Some(landed) = landed else { return };
-    let moved = |i: usize| set.iter().position(|s| *s == i).map(|k| landed + k);
-    let order: Vec<usize> = h.order.iter().filter_map(|i| moved(*i)).collect();
-    let active = sel.rows().and_then(|(_, a)| moved(a)).or(order.first().copied());
-    set_active(app, ctx, active.map_or(Sel::None, |a| kind.sel(a)));
-    let anchor = h.anchor.and_then(moved).or(active);
-    set_pstate(ctx, "ap-multi", Highlight { owner: Some(n.id), rows: kind, order, anchor, active });
-}
-
-/// The dimmed copy of the dragged rows under the pointer at `pos` ([`widgets::drag_ghost`]): the
-/// row [`widgets::ghost_row`] picks from the dragged rows `order` (highlight order; empty: only the
-/// grabbed one), with its label, colour swatch and stroke weight, or its effect's name.
-fn drag_ghost(app: &VectorcraftApp, ui: &Ui, n: &Node, what: Dragged, order: &[usize], pos: egui::Pos2, width: f32) {
-    let (grab, w): (egui::Vec2, f32) = pstate(ui.ctx(), "ap-grab");
-    let r = Rect::from_min_size(pos - grab, vec2(if w > 0.0 { w } else { width }, ROW));
-    let shown = match what {
-        Dragged::Item(i) => Dragged::Item(widgets::ghost_row(order, i)),
-        Dragged::Effect(item, k) => Dragged::Effect(item, widgets::ghost_row(order, k)),
-        Dragged::Contents => Dragged::Contents,
-    };
-    let weight = match shown {
-        Dragged::Item(i) => match n.appearance.items.get(i) {
-            Some(AppearanceItem::Stroke(st)) => Some(app.session.stroke_unit().format(st.width)),
-            _ => None,
-        },
-        _ => None,
-    };
-    widgets::drag_ghost(ui.ctx(), ui.scope_id().with("ap-ghost"), r, |ui, r| {
-        let y = r.center().y;
-        match shown {
-            Dragged::Item(i) => {
-                let Some(it) = n.appearance.items.get(i) else { return };
-                text(ui, pos2(r.left() + EYE_W + 24.0, y), if it.is_fill() { tl!("Fill:") } else { tl!("Stroke:") }, false);
-                chip(ui, Rect::from_min_size(pos2(r.left() + EYE_W + 76.0, y - 9.0), vec2(18.0, 18.0)), it.paint(), false);
-                if let Some(w) = &weight {
-                    text(ui, pos2(r.left() + EYE_W + 104.0, y), w, false);
-                }
-            }
-            Dragged::Effect(item, k) => {
-                let Some(e) = n.appearance.effects_at(item).and_then(|fx| fx.get(k)) else { return };
-                let indent = if item.is_some() { 12.0 } else { 0.0 };
-                text(ui, pos2(r.left() + indent + EYE_W + 24.0, y), &effect_row_label(&e.id), false);
-            }
-            Dragged::Contents => {
-                if let Some(label) = n.contents_label() {
-                    text(ui, pos2(r.left() + EYE_W + 24.0, y), tl!(label), false);
-                }
-            }
-        }
-    });
-}
-
-/// The row under `p`.
-fn slot_at(rows: &[(Slot, Rect)], p: egui::Pos2) -> Option<(Slot, Rect)> {
-    rows.iter().find(|(_, r)| r.contains(p)).copied()
-}
-
-/// Paint-order index a dragged fill/stroke lands on when dropped on row `slot`: that row's item;
-/// the object row stands above the topmost item, the rows below the items under item 0, the
-/// Contents row for the first item above it.
-fn item_at(n: &Node, slot: Slot) -> usize {
-    match slot {
-        Slot::Item { index, .. } | Slot::Effect(Some(index), _) => index,
-        Slot::Object { top: true } => n.appearance.items.len().saturating_sub(1),
-        Slot::Object { top: false } | Slot::Effect(None, _) => 0,
-        Slot::Contents => n.appearance.contents_at(),
+    let mut open = true;
+    let picked = Popover::new(tl!("Swatches"), Bind::bound(&mut open)).opened_by(opener).show(ui, |ui, _| swatch_picker(app, ui, *target)).inner;
+    if !open || picked == Some(true) {
+        app.ui.appearance_panel.swatches_for = None;
     }
-}
-
-/// How many items paint below the Contents row after it is dropped on row `slot`: it goes above a
-/// fill or stroke above it and below one below it; the object row is above everything, the rows
-/// under the stack below everything. `None` on itself.
-fn contents_slot(n: &Node, slot: Slot) -> Option<usize> {
-    let k = n.appearance.contents_at();
-    match slot {
-        Slot::Item { index, .. } | Slot::Effect(Some(index), _) => Some(if index >= k { index + 1 } else { index }),
-        Slot::Object { top: true } => Some(n.appearance.items.len()),
-        Slot::Object { top: false } | Slot::Effect(None, _) => Some(0),
-        Slot::Contents => None,
-    }
-}
-
-/// The command a drop of `what` at `p` runs (`copy`: Alt held), or None when it would change
-/// nothing or lands outside the stack.
-fn drop_command(n: &Node, rows: &[(Slot, Rect)], what: Dragged, p: egui::Pos2, copy: bool) -> Option<(&'static str, Value)> {
-    let (slot, r) = slot_at(rows, p)?;
-    match what {
-        Dragged::Item(from) => {
-            let to = item_at(n, slot);
-            if copy {
-                // The copy goes where the row was dropped: above that row when dragged up, below it
-                // when dragged down.
-                let at = if to >= from { to + 1 } else { to };
-                return Some(("appearance.duplicateItem", json!({"index": from, "to": at})));
-            }
-            // The Contents row ends up below an item dropped on the object row, above one dropped
-            // under the stack, and on the far side of one dropped on it (elsewhere it stays put).
-            let k = n.appearance.contents_at();
-            let others = k - usize::from(from < k);
-            let contents = match slot {
-                Slot::Contents if from < k => Some(others),
-                Slot::Contents | Slot::Object { top: false } | Slot::Effect(None, _) => Some(others + 1),
-                Slot::Object { top: true } => Some(others),
-                _ => None,
-            }
-            .filter(|_| n.contents_label().is_some());
-            let to = if slot == Slot::Contents { others } else { to };
-            if to == from && contents.is_none_or(|c| c == k) {
-                return None;
-            }
-            let mut params = json!({"from": from, "to": to});
-            if let Some(c) = contents {
-                params["contents"] = json!(c);
-            }
-            Some(("appearance.moveItem", params))
-        }
-        Dragged::Contents => {
-            let to = contents_slot(n, slot)?;
-            (to != n.appearance.contents_at()).then(|| ("appearance.moveItem", json!({"from": "contents", "to": to})))
-        }
-        Dragged::Effect(from_item, k) => {
-            let (item, pos) = match slot {
-                Slot::Effect(item, k2) => (item, k2 + usize::from(p.y > r.center().y)),
-                Slot::Item { index, .. } => (Some(index), n.appearance.effects_at(Some(index))?.len()),
-                Slot::Object { .. } | Slot::Contents => (None, n.appearance.effects.len()),
-            };
-            // Within its own list the effect leaves its old place first.
-            let same = item == from_item && !copy;
-            let pos = if same && pos > k { pos - 1 } else { pos };
-            if same && pos == k {
-                return None;
-            }
-            Some(("effect.move", json!({"from": k, "fromItem": from_item, "to": pos, "toItem": item, "copy": copy})))
-        }
-    }
-}
-
-/// The command a drop of several highlighted rows `set` (ascending; `what` is the row grabbed, one
-/// of them) at `p` runs (`copy`: Alt held), or None on one of their own rows or outside the stack.
-/// Fill/strokes land as one block in their order: next to the row dropped on and on its side of the
-/// Contents row; on the Contents row on the far side from the grabbed row; on the object row on
-/// top, under the stack at the bottom. Effects land together in the list dropped on.
-fn block_drop_command(n: &Node, rows: &[(Slot, Rect)], what: Dragged, set: &[usize], p: egui::Pos2, copy: bool) -> Option<(&'static str, Value)> {
-    let (slot, r) = slot_at(rows, p)?;
-    let m = set.len();
-    match what {
-        Dragged::Item(grabbed) => {
-            let len = n.appearance.items.len();
-            let k = n.appearance.contents_at();
-            let unmoved_below = (0..k).filter(|i| !set.contains(i)).count();
-            // (lowest copy's index among all items, items painting below Contents afterwards)
-            let place = |t: usize, above: bool| {
-                if copy {
-                    (if above { t + 1 } else { t }, if t < k { k + m } else { k })
-                } else {
-                    let rank = (0..t).filter(|i| !set.contains(i)).count();
-                    (if above { rank + 1 } else { rank }, if t < k { unmoved_below + m } else { unmoved_below })
-                }
-            };
-            let (to, contents) = match slot {
-                Slot::Item { index, .. } | Slot::Effect(Some(index), _) if set.contains(&index) => return None,
-                Slot::Item { index, .. } | Slot::Effect(Some(index), _) => place(index, index > grabbed),
-                // From above the Contents row the block lands just below it, from below just above.
-                Slot::Contents => {
-                    let below = if copy { k } else { unmoved_below };
-                    (below, if grabbed >= k { below + m } else { below })
-                }
-                Slot::Object { top: true } => (if copy { len } else { len.saturating_sub(m) }, if copy { k } else { unmoved_below }),
-                Slot::Object { top: false } | Slot::Effect(None, _) => (0, if copy { k + m } else { unmoved_below + m }),
-            };
-            let mut params = json!({"indices": set, "to": to});
-            if n.contents_label().is_some() {
-                params["contents"] = json!(contents);
-            }
-            Some((if copy { "appearance.duplicateItem" } else { "appearance.moveItem" }, params))
-        }
-        Dragged::Effect(from_item, _) => {
-            let (item, pos) = match slot {
-                Slot::Effect(item, k2) if item == from_item && set.contains(&k2) => return None,
-                Slot::Effect(item, k2) => (item, k2 + usize::from(p.y > r.center().y)),
-                Slot::Item { index, .. } => (Some(index), n.appearance.effects_at(Some(index))?.len()),
-                Slot::Object { .. } | Slot::Contents => (None, n.appearance.effects.len()),
-            };
-            // Within their own list the effects leave their places first.
-            let same = item == from_item && !copy;
-            let pos = if same { pos - set.iter().filter(|s| **s < pos).count() } else { pos };
-            let contiguous = set.windows(2).all(|w| w.get(1).copied() == w.first().map(|a| a + 1));
-            if same && contiguous && set.first() == Some(&pos) {
-                return None;
-            }
-            Some(("effect.move", json!({"from": set, "fromItem": from_item, "to": pos, "toItem": item, "copy": copy})))
-        }
-        Dragged::Contents => None,
-    }
-}
-
-/// The Contents (type: Characters) row of `n`: clicking it sends paint edits to the members
-/// (characters); double-clicking Contents targets the members, Characters opens the Color panel
-/// on the characters' paint (whose chips it shows), and its name the Character panel. Returns its
-/// rect and response (for dragging).
-fn contents_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, label: &str, sel: Sel) -> (Rect, egui::Response) {
-    let (r, resp) = row(ui, sel == Sel::Contents);
-    eye(ui, r, "ap-contents-eye", true, false);
-    let characters = matches!(n.kind, vectorcraft_doc::NodeKind::Text(_));
-    let at = pos2(r.left() + EYE_W + 24.0, r.center().y);
-    let name = if characters {
-        let name = name_link(ui, at, "ap-characters-link", tl!(label));
-        if name.clicked() {
-            select_row(app, ui.ctx(), Sel::Contents);
-            super::set_row_keys(ui.ctx(), ROW_KEYS, true);
-            open_popup(app, ui.ctx(), "character");
-        }
-        Some(name)
-    } else {
-        text(ui, at, tl!(label), false);
-        None
-    };
-    if characters {
-        for (k, stroke) in [false, true].into_iter().enumerate() {
-            let cr = Rect::from_min_size(pos2(r.left() + EYE_W + 100.0 + 24.0 * k as f32, r.center().y - 9.0), vec2(18.0, 18.0));
-            chip(ui, cr, n.proxy_paint_only(stroke, None).unwrap_or(&Paint::None), false);
-        }
-    }
-    // An image's row has no members to target.
-    let image = matches!(n.kind, vectorcraft_doc::NodeKind::Image(_));
-    let resp = if image || name.is_some_and(|n| n.hovered()) {
-        resp
-    } else {
-        resp.on_hover_text(if characters { tl!("Double-click to edit the characters' paint") } else { tl!("Double-click to target the contents") })
-    };
-    if resp.clicked() || resp.double_clicked() {
-        select_row(app, ui.ctx(), Sel::Contents);
-        // The panel has the keyboard (Delete then removes nothing, rather than the object).
-        super::set_row_keys(ui.ctx(), ROW_KEYS, true);
-    }
-    if resp.double_clicked() {
-        if characters {
-            open_popup(app, ui.ctx(), "color");
-        } else if !image {
-            app.run("appearance.targetContents", json!({})).ok();
-        }
-    }
-    (r, resp)
-}
-
-/// A stroke row's notes after the weight: its brush, "Dashed" and its width profile (drawn).
-fn stroke_notes(ui: &Ui, r: Rect, st: &vectorcraft_doc::StrokeLayer) {
-    let t = Tokens::get(ui.ctx());
-    let painter = ui.painter_at(r);
-    let dashed = st.dash.as_ref().is_some_and(|d| d.is_dashed()).then_some(tl!("Dashed"));
-    let notes: Vec<&str> = st.brush.as_deref().into_iter().chain(dashed).collect();
-    let mut x = r.left();
-    if !notes.is_empty() {
-        let g = painter.layout_no_wrap(notes.join(", "), egui::FontId::proportional(11.5), t.text_dim);
-        x += g.size().x + 6.0;
-        painter.galley(pos2(r.left(), r.center().y - g.size().y / 2.0), g, t.text_dim);
-    }
-    if let Some(p) = st.profile.as_ref().filter(|p| p.preset_id() != Some("uniform")) {
-        let pr = Rect::from_min_size(pos2(x, r.center().y - 5.0), vec2(28.0, 10.0));
-        if pr.right() <= r.right() {
-            paint_profile(ui, pr, Some(&p.points), t.text);
-        }
-    }
-}
-
-/// An Opacity row: of the object (`item: None`) or, indented, of fill/stroke `item`. A click
-/// highlights the row itself (any modifiers: it is never one of several); only "Opacity:" edits
-/// it: it opens the Transparency panel on it (the engine's active item is the row's fill/stroke,
-/// whose opacity and blend the panel edits). Returns the row's rect.
-///
-/// `mixed`: the selected objects' opacity or blend mode differ: it reads "Mixed".
-fn opacity_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, opacity: f32, blend: BlendMode, sel: Sel, mixed: bool) -> Rect {
-    let this = item.map_or(Sel::Opacity, Sel::ItemOpacity);
-    let (r, resp) = row(ui, sel == this);
-    eye(ui, r, ("ap-op-eye", item), true, false);
-    let lx = r.left() + EYE_W + 24.0 + if item.is_some() { 12.0 } else { 0.0 };
-    let link = name_link(ui, pos2(lx, r.center().y), ("ap-op-link", item), tl!("Opacity:")).clicked();
-    if link || resp.clicked() {
-        select_row(app, ui.ctx(), this);
-        // The panel has the keyboard (Delete then sets the row back to Default, rather than
-        // deleting the object).
-        super::set_row_keys(ui.ctx(), ROW_KEYS, true);
-    }
-    if link {
-        open_popup(app, ui.ctx(), "transparency");
-    }
-    let shown = if mixed { tl!("Mixed").to_string() } else { opacity_text(opacity, blend) };
-    text(ui, pos2(lx + 56.0, r.center().y), &shown, false);
-    r
-}
-
-/// An effect row: of the object (`item: None`) or, indented under it, of fill/stroke `item`.
-/// Clicking the name opens the effect's dialog to edit it (the disclosure: an inline editor).
-/// Returns the row's rect and response (for dragging).
-fn effect_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, item: Option<usize>, k: usize, e: &Effect, selected: bool) -> (Rect, egui::Response) {
-    let t = Tokens::get(ui.ctx());
-    let open_key = format!("ap-fx-open-{item:?}-{k}");
-    let open: bool = pstate(ui.ctx(), &open_key);
-    let this = item.map_or(Sel::Effect(k), |i| Sel::ItemEffect(i, k));
-    let (row_rect, resp) = row(ui, selected);
-    let r = row_rect;
-    if eye(ui, r, ("ap-fx-eye", item, k), e.visible, true) {
-        app.run("effect.setParams", aligned(app, json!({"item": item, "index": k, "visible": !e.visible}))).ok();
-    }
-    let indent = if item.is_some() { 12.0 } else { 0.0 };
-    let r = Rect::from_min_max(pos2(r.left() + indent, r.top()), r.max);
-    if chevron(ui, r, ("ap-fx-chev", item, k), open) {
-        set_pstate(ui.ctx(), &open_key, !open);
-    }
-    let lx = r.left() + EYE_W + 24.0;
-    // The name edits the effect on a click; the empty space takes the click rules (in `stack`)
-    // and edits it on a double-click: its settings dialog, or the inline editor of an effect
-    // without settings.
-    let name = name_link(ui, pos2(lx, r.center().y), ("ap-fx-link", item, k), &effect_row_label(&e.id));
-    let name = match skipped_effect_tip(&e.id) {
-        Some(tip) => name.on_hover_text(tip),
-        None => name,
-    };
-    let resp = edit_tip(resp, &name);
-    let edit = name.clicked() || resp.double_clicked();
-    if edit {
-        select_row(app, ui.ctx(), this);
-        super::set_row_keys(ui.ctx(), ROW_KEYS, true);
-        if has_options(&e.id) {
-            app.run("effect.dialog", aligned(app, json!({"effect": e.id, "index": k, "item": item}))).ok();
-        } else {
-            set_pstate(ui.ctx(), &open_key, !open);
-        }
-    }
-    if resp.secondary_clicked() || name.secondary_clicked() {
-        super::set_row_keys(ui.ctx(), ROW_KEYS, true);
-        if !selected {
-            select_row(app, ui.ctx(), this);
-        }
-    }
-    let mut menu = |ui: &mut Ui| {
-        if menu_item(ui, tl!("Edit Effect…"), true, false) {
-            select_row(app, ui.ctx(), this);
-            super::set_row_keys(ui.ctx(), ROW_KEYS, true);
-            if has_options(&e.id) {
-                app.run("effect.dialog", aligned(app, json!({"effect": e.id, "index": k, "item": item}))).ok();
-            } else {
-                set_pstate(ui.ctx(), &open_key, !open);
-            }
-            ui.close();
-        }
-        let sel = current_sel(app, ui.ctx(), Some(n));
-        let sel_fx = selected_effects(ui.ctx(), Some(n), sel);
-        let multi = sel_fx.as_ref().is_some_and(|(list, ks)| *list == item && ks.len() > 1);
-        let dup_label = if multi { tl!("Duplicate Effects") } else { tl!("Duplicate Effect") };
-        let del_label = if multi { tl!("Delete Effects") } else { tl!("Delete Effect") };
-        if menu_item(ui, dup_label, true, false) {
-            duplicate_selected(app, ui, Some(n), sel);
-            ui.close();
-        }
-        if menu_item(ui, del_label, true, false) {
-            delete_selected(app, ui, Some(n), sel);
-            ui.close();
-        }
-        let vis_label = if e.visible { tl!("Hide Effect") } else { tl!("Show Effect") };
-        if menu_item(ui, vis_label, true, false) {
-            app.run("effect.setParams", aligned(app, json!({"item": item, "index": k, "visible": !e.visible}))).ok();
-            ui.close();
-        }
-    };
-    resp.context_menu(&mut menu);
-    name.context_menu(&mut menu);
-    icons::paint(ui, "dc-fx", Rect::from_center_size(r.right_center() - vec2(14.0, 0.0), vec2(16.0, 16.0)), t.icon);
-    if open {
-        effect_editor(app, ui, item, k, e);
-    }
-    (row_rect, resp)
 }
 
 /// Does the effect have a dialog (any parameters, or a Pathfinder effect's Pathfinder Options)?
@@ -1369,154 +1350,13 @@ fn has_options(id: &str) -> bool {
         || vectorcraft_effects::default_params(id).is_some_and(|d| d.as_object().is_some_and(|o| !o.is_empty()))
 }
 
-/// Inline editor for an applied effect's parameters, labeled as the effect dialogs' generic fields
-/// are: numbers, booleans, strings, colors, the values a parameter picks from as a dropdown
-/// ([`crate::dialogs::shown_choices`]), and Drop Shadow's Color or Darkness as radio buttons;
-/// edits go through `effect.setParams`.
-fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: usize, e: &Effect) {
-    let t = Tokens::get(ui.ctx());
-    let params = editor_params(e);
-    let mut change: Option<(String, Value)> = None;
-    let mut edit = false;
-    let built_in = built_in_effect(&e.id);
-    // A plug-in effect's parameters are labelled, measured and shown as its manifest says.
-    let plugin = vectorcraft_plugins::effect::installed(&e.id);
-    let manifest = plugin.as_ref().map(|p| p.manifest());
-    let visible = manifest.map(|m| m.visible(&params));
-    let (unit, relative) = (app.session.general_unit(), params.get("relative").and_then(Value::as_bool).unwrap_or(false));
-    let cmyk = app.session.active().is_some_and(|s| s.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk);
-    egui::Frame::NONE.fill(t.panel_darker).inner_margin(egui::Margin { left: (EYE_W + 12.0) as i8, right: 6, top: 4, bottom: 4 }).show(ui, |ui| {
-        ui.spacing_mut().item_spacing.y = 3.0;
-        if params.is_empty() {
-            widgets::dim_label(ui, tl!("No options"));
-        }
-        for (key, v) in &params {
-            if visible.as_ref().is_some_and(|v| !v.contains(key.as_str())) {
-                continue;
-            }
-            let ui_keys = manifest.and_then(|m| m.param(key)).map(|p| &p.ui);
-            ui.horizontal(|ui| {
-                let label = ui_keys.and_then(|u| u.label.clone()).unwrap_or_else(|| param_label(key, built_in));
-                let label_node =
-                    ui.add_sized(vec2(84.0, 22.0), egui::Label::new(egui::RichText::new(label.as_str()).size(11.5).color(t.text)).truncate());
-                let label_node = if let Some(help) = ui_keys.and_then(|u| u.help.as_deref()) { label_node.on_hover_text(help) } else { label_node };
-                // The row's actual label node names its fields, including a plug-in's plain text
-                // and number fields (egui 0.37's strict a11y gate).
-                ui.label_inputs_by(label_node.id, |ui| {
-                    if e.id == "stylize.dropShadow" && key == "shade" {
-                        let cur = v.as_str().unwrap_or_default();
-                        for (label, value) in crate::dialogs::SHADES {
-                            if widgets::radio(ui, label, cur.eq_ignore_ascii_case(value), true) && !cur.eq_ignore_ascii_case(value) {
-                                change = Some((key.clone(), json!(value)));
-                            }
-                        }
-                        return;
-                    }
-                    if let Some(options) = crate::dialogs::shown_choices(&e.id, key, &params, cmyk) {
-                        let cur = v.as_str().unwrap_or_default();
-                        let shown = options.iter().find(|(_, value)| value == cur).map_or(cur, |(label, _)| label.as_str());
-                        let labels: Vec<&str> = options.iter().map(|(label, _)| label.as_str()).collect();
-                        if let Some((_, value)) = widgets::dropdown_names(ui, ("fx-choice", item, k, key.as_str()), shown, &labels, 90.0)
-                            .and_then(|i| options.get(i))
-                            .filter(|(_, value)| value != cur)
-                        {
-                            change = Some((key.clone(), json!(value)));
-                        }
-                        return;
-                    }
-                    // A plug-in's number list is typed as its dialog's is: "45, 135".
-                    if let Some(spec) = manifest.and_then(|m| m.param(key)).map(|p| &p.spec)
-                        && matches!(spec, vectorcraft_plugins::manifest::ParamSpec::NumberList { .. })
-                    {
-                        let typed = widgets::exact_text_field(ui, ("fx", item, k, key.as_str()), &crate::dialogs::number_list_text(v), 90.0);
-                        if let Some(list) = typed.and_then(|text| crate::dialogs::read_number_list(&text, spec)) {
-                            change = Some((key.clone(), list));
-                        }
-                        if let Some(unit) = ui_keys.and_then(|u| u.unit.as_deref()) {
-                            widgets::dim_label(ui, unit);
-                        }
-                        return;
-                    }
-                    // A plug-in's color is the color button its dialog shows.
-                    if manifest.and_then(|m| m.param(key)).is_some_and(|p| matches!(p.spec, vectorcraft_plugins::manifest::ParamSpec::Color { .. })) {
-                        if let Some(c) = crate::dialogs::plugin_color_button(ui, ("fx-color", item, k, key.as_str()), v) {
-                            change = Some((key.clone(), c));
-                        }
-                        return;
-                    }
-                    // Only our own effects show a `mode` parameter as the blend mode dropdown; a plug-in's `mode` stays a plain field.
-                    if built_in && let Some(cur) = widgets::blend_param(key, v) {
-                        if let Some(m) = widgets::blend_param_dropdown(ui, ("fx-blend", item, k, key.as_str()), cur) {
-                            change = Some((key.clone(), m));
-                        }
-                        return;
-                    }
-                    match v {
-                        Value::Bool(b) => {
-                            if widgets::check_box(ui, &label, *b, true) {
-                                change = Some((key.clone(), json!(!b)));
-                            }
-                        }
-                        Value::Number(n) => {
-                            let (x, id) = (n.as_f64().unwrap_or(0.0), ("fx", item, k, key.as_str()));
-                            let suffix = ui_keys.and_then(|u| u.unit.as_deref()).map(crate::dialogs::unit_suffix).unwrap_or_default();
-                            let nx = if vectorcraft_effects::is_length(&e.id, key, relative) {
-                                widgets::num_field(ui, id, Some(x), unit, 70.0)
-                            } else if let Some(range) = vectorcraft_effects::raster_px_range(&e.id, key) {
-                                widgets::range_field_named(ui, id, None, x, range, &crate::dialogs::unit_suffix("px"), 2, 70.0)
-                            } else {
-                                widgets::plain_field(ui, id, x, &suffix, 2, 70.0)
-                            };
-                            if let Some(nx) = nx {
-                                change = Some((key.clone(), json!(nx)));
-                            }
-                        }
-                        // Glass's loaded texture shows its size; its dialog's Load Texture… replaces it.
-                        Value::String(s) if key == vectorcraft_effects::pixel::TEXTURE_IMAGE => {
-                            let size = vectorcraft_effects::pixel::texture(s).map(|t| t.size());
-                            widgets::dim_label(ui, &size.map_or_else(String::new, |(w, h)| format!("{w} × {h} px")));
-                        }
-                        Value::String(s) => {
-                            if let Some(typed) = widgets::exact_text_field(ui, ("fx", item, k, key.as_str()), s, 90.0) {
-                                change = Some((key.clone(), json!(typed)));
-                            }
-                        }
-                        // Free Distort's corners are dragged in its dialog.
-                        _ if e.id == crate::dialogs::free_distort::FREE_DISTORT => {
-                            edit |= widgets::flat_button(ui, tl!("Edit…"), 48.0).clicked();
-                        }
-                        other => {
-                            widgets::dim_label(ui, &other.to_string());
-                        }
-                    }
-                });
-            });
-        }
-    });
-    if let Some((key, v)) = change {
-        app.run("effect.setParams", aligned(app, json!({"item": item, "index": k, "params": {key: v}}))).ok();
-    }
-    if edit {
-        app.run("effect.dialog", aligned(app, json!({"effect": e.id, "index": k, "item": item}))).ok();
-    }
-}
-
-/// The values [`effect_editor`] lists: the effect's own values over its defaults, with earlier keys
+/// The values the inline editor lists: the effect's own values over its defaults, with earlier keys
 /// in their current form (Scribble's one `variation` as its Path Overlap and Spacing variations).
 fn editor_params(e: &Effect) -> serde_json::Map<String, Value> {
     match vectorcraft_effects::merged_params(&e.id, &e.params) {
         Value::Object(m) => m,
         _ => serde_json::Map::new(),
     }
-}
-
-/// The label of an effect's parameter `key` in [`effect_editor`]: the label the effect dialog's
-/// generic fields give it ([`crate::dialogs::humanize`]) without the ":" ("offsetX" → "Offset X",
-/// "maxRadius" → "Max. Radius"), in the UI language for one of our own effects (a plug-in's
-/// parameter names are shown as they are).
-fn param_label(key: &str, built_in: bool) -> String {
-    let label = crate::dialogs::humanize(key);
-    super::label_or_name(label.trim_end_matches(':'), built_in).to_string()
 }
 
 /// The paint a fill/stroke row's swatch sets: of the selection's fill/stroke row `index`, or, with
@@ -1527,292 +1367,420 @@ enum Painted {
     NewArt { fill: bool },
 }
 
-/// The swatch of fill/stroke row `r` showing `paint`: a click opens a popup of the document's
-/// swatches that sets the paint `target`; Shift-click opens the Color panel on it instead.
-fn swatch_button(app: &mut VectorcraftApp, ui: &mut Ui, r: Rect, paint: &Paint, target: Painted) {
-    let cr = Rect::from_min_size(pos2(r.left() + EYE_W + 76.0, r.center().y - 9.0), vec2(18.0, 18.0));
-    chip(ui, cr, paint, false);
-    let resp = ui
-        .interact(cr.expand(2.0), ui.scope_id().with(("ap-chip", target)), Sense::click())
-        .on_hover_text(tl!("Click to choose a swatch, Shift-click to mix a colour"));
-    let mixer = resp.clicked() && ui.input(|inp| inp.modifiers.shift);
-    if mixer {
-        match target {
-            Painted::Item(i) => {
-                select_row(app, ui.ctx(), Sel::Item(i));
-                super::set_row_keys(ui.ctx(), ROW_KEYS, true);
-            }
-            Painted::NewArt { fill } => {
-                app.run("paint.toggleActive", json!({ "fill": fill })).ok();
-            }
-        }
-        open_popup(app, ui.ctx(), "color");
-    }
-    egui::Popup::menu(&resp).open_memory((resp.clicked() && !mixer).then_some(egui::SetOpenCommand::Toggle)).show(|ui| {
-        widgets::menu_scroll(ui, |ui| swatch_picker(app, ui, target));
-    });
+/// The swatches of one version of a document: the swatch picker's presets.
+#[derive(MemoProps)]
+struct DocSwatches<'a> {
+    uid: u64,
+    revision: u64,
+    #[memo_props(covered_by = "revision", reason = "a document version's swatches are fixed")]
+    doc: &'a Document,
 }
 
-/// The weight of stroke row `r` (stroke `st`) and its notes after it: the Stroke panel's spinner
-/// (arrows, Units > Stroke, preset dropdown); a weight typed, stepped or picked goes to the stroke
-/// `target`, with nothing selected the next object drawn's (`stroke.set`).
-fn weight_field(app: &mut VectorcraftApp, ui: &mut Ui, r: Rect, st: &vectorcraft_doc::StrokeLayer, target: Painted) {
-    const W: f32 = 100.0;
-    let fr = Rect::from_min_size(pos2(r.left() + EYE_W + 104.0, r.center().y - 13.0), vec2(W, 26.0));
-    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(fr).layout(egui::Layout::left_to_right(egui::Align::Center)));
-    let unit = app.session.stroke_unit();
-    let presets = super::stroke::weight_presets(unit);
-    if let Some(w) = widgets::spin_field_stops_named(&mut child, ("ap-w", target), Some(tl!("Weight:")), Some(st.width), unit, W, 1.0, 0.0, &presets)
-    {
-        match target {
-            Painted::Item(index) => app.run("appearance.setItem", aligned(app, json!({"index": index, "weight": w}))),
-            Painted::NewArt { .. } => app.run("stroke.set", json!({ "weight": w })),
-        }
-        .ok();
-    }
-    stroke_notes(ui, Rect::from_min_max(pos2(fr.right() + 6.0, r.top()), pos2(r.right() - 4.0, r.bottom())), st);
+/// The document's swatches (its own, then its groups') with their paints.
+fn doc_swatches(doc: &Document) -> impl Iterator<Item = (&String, &Paint)> {
+    doc.swatches.iter().chain(doc.swatch_groups.iter().flat_map(|g| &g.swatches)).map(|s| (&s.name, &s.paint))
 }
 
-/// Small swatch grid inside the appearance chip popup; a pick paints `target`.
-fn swatch_picker(app: &mut VectorcraftApp, ui: &mut Ui, target: Painted) {
-    let Some(st) = app.session.active() else { return };
-    let mut all: Vec<(String, Paint)> = st.doc.swatches.iter().map(|s| (s.name.clone(), s.paint.clone())).collect();
-    for g in &st.doc.swatch_groups {
-        all.extend(g.swatches.iter().map(|s| (s.name.clone(), s.paint.clone())));
-    }
-    ui.set_max_width(12.0 * 17.0 + 8.0);
-    let mut chosen = None;
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing = vec2(1.5, 1.5);
-        for (name, p) in &all {
-            let (r, resp) = ui.allocate_exact_size(vec2(15.5, 15.5), Sense::click());
-            widgets::swatch_tile(ui, r, p, false, resp.hovered());
-            let resp = resp.on_hover_text(name);
-            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, name));
-            if resp.clicked() {
-                chosen = Some((name.clone(), p.is_none()));
-            }
-        }
-    });
-    if let Some((name, none)) = chosen {
-        let paint = if none { json!({"none": true}) } else { json!({ "swatch": name }) };
-        let (cmd, mut params) = match target {
-            Painted::Item(index) => ("appearance.setItem", json!({ "index": index })),
-            // With nothing selected these set up the next object drawn.
-            Painted::NewArt { fill: true } => ("paint.setFill", json!({})),
-            Painted::NewArt { fill: false } => ("paint.setStroke", json!({})),
-        };
-        if let (Some(p), Some(extra)) = (params.as_object_mut(), paint.as_object()) {
-            p.extend(extra.clone());
-        }
-        // On a mixed selection, the row is the first object's: each other one paints its equal one.
-        let params = if matches!(target, Painted::Item(_)) { aligned(app, params) } else { params };
-        app.run(cmd, params).ok();
-        ui.close();
-    }
-}
-
-/// The bottom bar: Add New Stroke, Add New Fill, Add New Effect, Clear Appearance, and Duplicate and Delete Selected Item, which also take dropped rows.
-fn bottom(app: &mut VectorcraftApp, ui: &mut Ui, node: Option<&Node>, sel: Sel) {
-    let has = node.is_some();
-    widgets::bottom_bar(ui, |ui| {
-        if widgets::icon_button_enabled(ui, "dc-new-stroke", tl!("Add New Stroke"), false, has, 24.0).clicked() {
-            app.run("appearance.addStroke", json!({})).ok();
-        }
-        if widgets::icon_button_enabled(ui, "dc-new-fill", tl!("Add New Fill"), false, has, 24.0).clicked() {
-            app.run("appearance.addFill", json!({})).ok();
-        }
-        let fx = widgets::icon_button_enabled(ui, "dc-fx", tl!("Add New Effect"), false, has, 24.0);
-        egui::Popup::menu(&fx).show(|ui| {
-            fx_menu(app, ui);
+/// The document's swatches (its own, then its groups') as chips; a pick paints `target`. Whether a
+/// swatch was picked.
+fn swatch_picker(app: &mut VectorcraftApp, ui: &mut Ui, target: Painted) -> bool {
+    // The source borrows the document until it drops, before the pick runs its command.
+    let (name, none) = {
+        let Some(st) = app.session.active() else { return false };
+        let fns = PresetFns::<DocSwatches<'_>, String>::new(|s, _| {
+            doc_swatches(s.doc)
+                .map(|(name, paint)| {
+                    PresetRow::item(name.clone(), name.clone(), 0).preview_face(ThumbAspect::SQUARE, paint_preview::rect_face(paint))
+                })
+                .collect()
         });
-        ui.add_space((ui.available_width() - 3.0 * 28.0).max(0.0));
-        let basic = node.is_none_or(|n| n.appearance.is_basic());
-        if widgets::icon_button_enabled(ui, "dc-clear", tl!("Clear Appearance"), false, has, 24.0).clicked() {
-            app.run("appearance.clear", json!({})).ok();
-        }
-        // A dragged fill/stroke or effect row can be dropped on them (not the Contents row), also
-        // with nothing selected: they light up while it is held.
-        let dragged = matches!(pstate::<Option<Dragged>>(ui.ctx(), "ap-drag"), Some(Dragged::Item(_) | Dragged::Effect(..)));
-        let can = has && (sel.editable() || dragged);
-        let duplicate = widgets::icon_button_enabled(ui, "dc-new-item", tl!("Duplicate Selected Item"), false, can, 24.0);
-        if duplicate.clicked() {
-            duplicate_selected(app, ui, node, sel);
-        }
-        let can_delete = can || (has && sel.deletable());
-        let delete = widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Selected Item"), false, can_delete, 24.0);
-        if delete.clicked() {
-            delete_selected(app, ui, node, sel);
-        }
-        drop_on_buttons(app, ui, node, sel, &duplicate, &delete);
-        let _ = basic;
-    });
+        let source = PresetSource::new(DocSwatches { uid: st.uid, revision: st.revision, doc: &st.doc }, fns);
+        let out = PresetBrowser::new(tl!("Swatches"), Bind::given(PresetState::default()), &source)
+            .tiles(PresetTiles::Chips)
+            .view_lock(PresetView::Grid)
+            .row_menu(PresetRowMenu::Off)
+            .columns(SWATCH_COLUMNS)
+            .max_rows(SWATCH_ROWS)
+            .show(ui);
+        let picked = out.events.into_iter().find_map(|event| match event {
+            PresetEvent::Select { key, .. } | PresetEvent::Activate { key, .. } => Some(key),
+            _ => None,
+        });
+        let Some(name) = picked else { return false };
+        let none = doc_swatches(&st.doc).any(|(n, p)| *n == name && p.is_none());
+        (name, none)
+    };
+    let paint = if none { json!({"none": true}) } else { json!({ "swatch": name }) };
+    let (cmd, mut params) = match target {
+        Painted::Item(index) => ("appearance.setItem", json!({ "index": index })),
+        // With nothing selected these set up the next object drawn.
+        Painted::NewArt { fill: true } => ("paint.setFill", json!({})),
+        Painted::NewArt { fill: false } => ("paint.setStroke", json!({})),
+    };
+    if let (Some(p), Some(extra)) = (params.as_object_mut(), paint.as_object()) {
+        p.extend(extra.clone());
+    }
+    // On a mixed selection, the row is the first object's: each other one paints its equal one.
+    let params = if matches!(target, Painted::Item(_)) { aligned(app, params) } else { params };
+    app.run(cmd, params).ok();
+    true
 }
 
-/// A stack row dragged onto Duplicate Selected Item or Delete Selected Item: the button is outlined
-/// while the row hangs over it, and on release the row is copied or removed, as rows dropped on
-/// the Layers panel's buttons are. The buttons take the row even when nothing is selected (the row
-/// names itself). Ends the row drag once the pointer is up.
-fn drop_on_buttons(app: &mut VectorcraftApp, ui: &Ui, node: Option<&Node>, sel: Sel, duplicate: &egui::Response, delete: &egui::Response) {
-    let ctx = ui.ctx();
-    let dragging: Option<Dragged> = pstate(ctx, "ap-drag");
-    if !ctx.input(|i| i.pointer.any_down()) {
-        set_pstate::<Option<Dragged>>(ctx, "ap-drag", None);
-    }
-    let (Some(what), Some(n), Some(p)) = (dragging, node, ctx.pointer_interact_pos()) else { return };
-    let items = selected_items(ctx, Some(n), sel);
-    let effects = selected_effects(ctx, Some(n), sel);
-    let released = ctx.input(|i| i.pointer.any_released());
-    for (button, copy) in [(duplicate, true), (delete, false)] {
-        let Some((cmd, params)) = button_drop_command(&items, effects.as_ref(), what, copy).filter(|_| button.rect.contains(p)) else { continue };
-        if !released {
-            widgets::drop_target_outline(ui, button.rect);
-            continue;
-        }
-        // The rows copied or removed with the dropped one (its highlighted list, when it is in it).
-        let gone: Vec<u64> = params["indices"].as_array().map(|a| a.iter().filter_map(Value::as_u64).collect()).unwrap_or_default();
-        let ran = app.run(cmd, aligned(app, params)).is_ok();
-        let removed = ran && !copy;
-        if ran && copy {
-            let rows = if let Dragged::Effect(item, _) = what { Rows::Effects(item) } else { Rows::Items };
-            let copied: Vec<usize> = gone.iter().map(|k| *k as usize).collect();
-            highlight_copies(app, ctx, n, sel, rows, &copied);
-        }
-        // When the active effect was among them, its fill/stroke (or nothing) is selected; the
-        // engine clears or renumbers the active fill/stroke itself.
-        let active_gone = match (what, sel) {
-            (Dragged::Effect(None, _), Sel::Effect(a)) => gone.contains(&(a as u64)),
-            (Dragged::Effect(Some(i), _), Sel::ItemEffect(j, a)) => i == j && gone.contains(&(a as u64)),
-            _ => false,
-        };
-        if removed
-            && active_gone
-            && let Dragged::Effect(item, _) = what
-        {
-            select_row(app, ctx, item.map_or(Sel::None, Sel::Item));
-        } else if removed {
-            let gone: Vec<usize> = gone.iter().map(|k| *k as usize).collect();
-            let rows = if let Dragged::Effect(item, _) = what { Rows::Effects(item) } else { Rows::Items };
-            highlight_after_removal(app, ctx, n, sel, rows, &gone);
-        }
-    }
+/// The footer: Add New Stroke, Add New Fill and Add New Effect at the start; Clear Appearance,
+/// Duplicate Selected Item and Delete Selected Item at the end, the last two taking rows of the
+/// list `list` dropped on them, also while disabled.
+fn footer_bar(has: bool, can: bool, can_delete: bool, list: egui::Id) -> FooterBar {
+    let icon = |name: &'static str| IconSpec::svg(IconId::new(name));
+    let drops = move |copy: bool| move |drag: &ListDrag<RowKey>| has && drag.list == list && button_drop_command(&drag.keys, copy).is_some();
+    FooterBar::actions([
+        FooterAction::new(icon("dc-new-stroke"), tl!("Add New Stroke")).enabled(has),
+        FooterAction::new(icon("dc-new-fill"), tl!("Add New Fill")).enabled(has),
+        FooterAction::new(icon("dc-fx"), tl!("Add New Effect")).enabled(has).popup(PopupKind::Menu),
+        FooterAction::new(icon("trash-2"), tl!("Delete Selected Item")).enabled(can_delete).takes_drops_disabled(true).accepts_drops(drops(false)),
+        FooterAction::new(icon("dc-new-item"), tl!("Duplicate Selected Item")).enabled(can).takes_drops_disabled(true).accepts_drops(drops(true)),
+        FooterAction::new(icon("dc-clear"), tl!("Clear Appearance")).enabled(has),
+    ])
+    .at_start(ADD_EFFECT + 1)
 }
 
-/// After the rows `gone` of kind `rows` were removed while the active row survived, the active row,
-/// the highlight and its anchor move up past the removed rows below them; removed rows drop out of
-/// the highlight. `n` is the object as it was before the removal.
-fn highlight_after_removal(app: &mut VectorcraftApp, ctx: &egui::Context, n: &Node, sel: Sel, rows: Rows, gone: &[usize]) {
-    let h = highlight(ctx, n, sel);
-    if h.rows != rows {
+/// Rows `keys` of `n` dropped on Duplicate Selected Item (`copy`) or Delete Selected Item are
+/// copied or removed, as rows dropped on the Layers panel's buttons are, and the selection follows
+/// ([`highlight_copies`], [`highlight_after_removal`]); `sel` is the active row.
+fn drop_on_footer(app: &mut VectorcraftApp, n: &Node, sel: Sel, keys: &[RowKey], copy: bool) {
+    let Some((cmd, params)) = button_drop_command(keys, copy) else { return };
+    let gone: Vec<usize> = params["indices"].as_array().map(|a| a.iter().filter_map(Value::as_u64).map(|k| k as usize).collect()).unwrap_or_default();
+    let rows = effects_of(keys).map_or(Rows::Items, |(list, _)| Rows::Effects(list));
+    if app.run(cmd, aligned(app, params)).is_err() {
         return;
     }
-    let shift = |k: usize| (!gone.contains(&k)).then(|| k - gone.iter().filter(|g| **g < k).count());
-    let order = h.order.iter().filter_map(|k| shift(*k)).collect();
-    let anchor = h.anchor.and_then(shift);
-    // A fill/stroke's Opacity row stays selected (renumbered) while its fill/stroke survives.
-    let active = match (sel, rows) {
-        (Sel::ItemOpacity(i), Rows::Items) => shift(i).map(Sel::ItemOpacity),
-        _ => sel.rows().filter(|(r, _)| *r == rows).and_then(|(_, a)| shift(a)).map(|a| rows.sel(a)),
+    if copy {
+        return highlight_copies(app, n, sel, rows, &gone);
+    }
+    // When the active effect was among them, its fill/stroke (or nothing) is selected; the engine
+    // clears or renumbers the active fill/stroke itself.
+    let active_gone = match (rows, sel) {
+        (Rows::Effects(None), Sel::Effect(a)) => gone.contains(&a),
+        (Rows::Effects(Some(i)), Sel::ItemEffect(j, a)) => i == j && gone.contains(&a),
+        _ => false,
     };
-    set_active(app, ctx, active.unwrap_or(Sel::None));
-    let active = active.and_then(|a| a.rows()).map(|(_, a)| a);
-    set_pstate(ctx, "ap-multi", Highlight { owner: Some(n.id), rows, order, anchor, active });
-}
-
-/// The command a stack row `what` dropped on Duplicate Selected Item (`copy`) or Delete Selected
-/// Item runs: a fill/stroke row acts on the highlighted rows `items` when it is one of them, an
-/// effect row on the highlighted `effects` (list, positions) when it is one of them, else either on
-/// itself alone. The Contents row is neither copied nor removed (None).
-fn button_drop_command(items: &[usize], effects: Option<&(Option<usize>, Vec<usize>)>, what: Dragged, copy: bool) -> Option<(&'static str, Value)> {
-    match what {
-        Dragged::Item(i) => {
-            let indices = if items.contains(&i) { items.to_vec() } else { vec![i] };
-            Some((if copy { "appearance.duplicateItem" } else { "appearance.removeItem" }, json!({ "indices": indices })))
-        }
-        Dragged::Effect(item, k) => {
-            let indices = match effects {
-                Some((list, ks)) if *list == item && ks.contains(&k) => ks.clone(),
-                _ => vec![k],
-            };
-            Some((if copy { "effect.duplicate" } else { "effect.remove" }, json!({"item": item, "indices": indices})))
-        }
-        Dragged::Contents => None,
+    match rows {
+        Rows::Effects(item) if active_gone => select_row(app, item.map_or(Sel::None, Sel::Item)),
+        _ => highlight_after_removal(app, n, sel, rows, &gone),
     }
 }
 
-/// Duplicate the highlighted fills/strokes or effects: each copy shows right above its row and the
-/// copies are highlighted ([`highlight_copies`]).
-fn duplicate_selected(app: &mut VectorcraftApp, ui: &Ui, node: Option<&Node>, sel: Sel) {
-    let (rows, indices) = match selected_effects(ui.ctx(), node, sel) {
+/// After the rows `gone` of kind `rows` were removed while the active row `sel` survived, the active
+/// row, the picked rows and the anchor move up past the removed rows below them; removed rows drop
+/// out. `n` is the object as it was before the removal.
+fn highlight_after_removal(app: &mut VectorcraftApp, n: &Node, sel: Sel, rows: Rows, gone: &[usize]) {
+    if sel.rows().is_some_and(|(r, _)| r != rows) {
+        return;
+    }
+    let held = list_selection(app, n, sel);
+    let shift = |k: usize| (!gone.contains(&k)).then(|| k - gone.iter().filter(|g| **g < k).count());
+    let moved = |key: &RowKey| key.sel().rows().filter(|(r, _)| *r == rows).and_then(|(_, k)| shift(k)).map(|k| rows.key(k));
+    // A fill/stroke's Opacity row stays selected (renumbered) while its fill/stroke survives.
+    let lead = match (sel, rows) {
+        (Sel::ItemOpacity(i), Rows::Items) => shift(i).map(RowKey::ItemOpacity),
+        _ => RowKey::of(sel).and_then(|key| moved(&key)),
+    };
+    let mut items: Vec<RowKey> = held.items.iter().filter_map(moved).collect();
+    if let Some(lead) = lead.filter(|lead| !items.contains(lead)) {
+        items.push(lead);
+    }
+    let anchor = held.anchor.and_then(|anchor| moved(&anchor)).or(lead);
+    set_active(app, lead.map_or(Sel::None, RowKey::sel));
+    app.ui.appearance_panel.selection = Selection::new(items, lead, anchor);
+}
+
+/// The fill/stroke rows of `keys`, ascending, when every one is one.
+fn items_of(keys: &[RowKey]) -> Option<Vec<usize>> {
+    let mut set = keys
+        .iter()
+        .map(|key| match key {
+            RowKey::Item(i) => Some(*i),
+            _ => None,
+        })
+        .collect::<Option<Vec<usize>>>()?;
+    set.sort_unstable();
+    (!set.is_empty()).then_some(set)
+}
+
+/// The effect list (`None`: the object's) and positions, ascending, of `keys`, when every one is
+/// an effect row of one list.
+fn effects_of(keys: &[RowKey]) -> Option<(Option<usize>, Vec<usize>)> {
+    let mut found = keys.iter().map(|key| key.effect());
+    let (list, first) = found.next()??;
+    let mut set = vec![first];
+    for effect in found {
+        let (other, k) = effect?;
+        if other != list {
+            return None;
+        }
+        set.push(k);
+    }
+    set.sort_unstable();
+    Some((list, set))
+}
+
+/// The command the rows `keys` dropped on Duplicate Selected Item (`copy`) or Delete Selected Item
+/// run: the dragged fills/strokes, or effects of one list. The Contents row and the other rows are
+/// neither copied nor removed (None).
+fn button_drop_command(keys: &[RowKey], copy: bool) -> Option<(&'static str, Value)> {
+    if let Some(indices) = items_of(keys) {
+        return Some((if copy { "appearance.duplicateItem" } else { "appearance.removeItem" }, json!({ "indices": indices })));
+    }
+    let (item, indices) = effects_of(keys)?;
+    Some((if copy { "effect.duplicate" } else { "effect.remove" }, json!({"item": item, "indices": indices})))
+}
+
+/// Duplicate the picked fills/strokes or effects of `node` with `sel` active: each copy shows right
+/// above its row and the copies are picked ([`highlight_copies`]).
+fn duplicate_selected(app: &mut VectorcraftApp, node: Option<&Node>, sel: Sel) -> Result<(), String> {
+    let Some(n) = node else { return Ok(()) };
+    let (rows, indices) = match selected_effects(app, n, sel) {
         Some((item, ks)) => (Rows::Effects(item), ks),
-        None if matches!(sel, Sel::Item(_)) => (Rows::Items, selected_items(ui.ctx(), node, sel)),
-        None => return,
+        None if matches!(sel, Sel::Item(_)) => (Rows::Items, selected_items(app, n, sel)),
+        None => return Ok(()),
     };
     let (cmd, params) = match rows {
         Rows::Effects(item) => ("effect.duplicate", json!({"item": item, "indices": indices})),
         Rows::Items => ("appearance.duplicateItem", json!({ "indices": indices })),
     };
-    if let (Ok(_), Some(n)) = (app.run(cmd, aligned(app, params)), node) {
-        highlight_copies(app, ui.ctx(), n, sel, rows, &indices);
-    }
+    app.run(cmd, aligned(app, params))?;
+    highlight_copies(app, n, sel, rows, &indices);
+    Ok(())
 }
 
-/// After the rows `dup` of kind `rows` were copied in place, the copies are highlighted, as the
-/// Layers panel highlights its duplicates: each shows right above its original, a fill/stroke's at
-/// the next paint index, an effect's where the original was (the original one below it). The copy of
-/// the active row becomes active (else the first copy), the copy of the anchor the anchor. `n` is
-/// the object as it was before the copy.
-fn highlight_copies(app: &mut VectorcraftApp, ctx: &egui::Context, n: &Node, sel: Sel, rows: Rows, dup: &[usize]) {
+/// After the rows `dup` of kind `rows` were copied in place, the copies are picked, as the Layers
+/// panel picks its duplicates: each shows right above its original, a fill/stroke's at the next
+/// paint index, an effect's where the original was (the original one below it). The copy of the
+/// active row `sel` becomes active (else the first copy), the copy of the anchor the anchor. `n`
+/// is the object as it was before the copy.
+fn highlight_copies(app: &mut VectorcraftApp, n: &Node, sel: Sel, rows: Rows, dup: &[usize]) {
     let below = |k: usize| dup.iter().filter(|d| **d < k).count();
     let copy = |k: usize| match rows {
         Rows::Items => k + below(k) + 1,
         Rows::Effects(_) => k + below(k),
     };
-    let h = highlight(ctx, n, sel);
-    let ours = |k: &usize| h.rows == rows && dup.contains(k);
-    // The copies of the highlighted rows in their highlight order, then any other copied row.
-    let mut order: Vec<usize> = h.order.iter().filter(|k| ours(k)).map(|k| copy(*k)).collect();
-    for c in dup.iter().map(|k| copy(*k)) {
-        if !order.contains(&c) {
-            order.push(c);
+    let held = list_selection(app, n, sel);
+    let copied = |key: &RowKey| key.sel().rows().filter(|(r, k)| *r == rows && dup.contains(k)).map(|(_, k)| rows.key(copy(k)));
+    // The copies of the picked rows in their order, then any other copied row.
+    let mut items: Vec<RowKey> = held.items.iter().filter_map(copied).collect();
+    for c in dup.iter().map(|k| rows.key(copy(*k))) {
+        if !items.contains(&c) {
+            items.push(c);
         }
     }
-    let active = sel.rows().filter(|(r, a)| *r == rows && dup.contains(a)).map(|(_, a)| copy(a)).or(order.first().copied());
-    let anchor = h.anchor.filter(|a| ours(a)).map(copy).or(active);
-    set_active(app, ctx, active.map_or(Sel::None, |a| rows.sel(a)));
-    set_pstate(ctx, "ap-multi", Highlight { owner: Some(n.id), rows, order, anchor, active });
+    let lead = RowKey::of(sel).and_then(|key| copied(&key)).or(items.first().copied());
+    let anchor = held.anchor.and_then(|anchor| copied(&anchor)).or(lead);
+    set_active(app, lead.map_or(Sel::None, RowKey::sel));
+    app.ui.appearance_panel.selection = Selection::new(items, lead, anchor);
 }
 
-/// Remove the highlighted fills/strokes or effects; a removed item effect leaves its fill/stroke
-/// selected. A selected Opacity row is set back to Default (100%, Normal) and stays selected.
-fn delete_selected(app: &mut VectorcraftApp, ui: &Ui, node: Option<&Node>, sel: Sel) {
+/// Remove the picked fills/strokes or effects of `node` with `sel` active; a removed item effect
+/// leaves its fill/stroke selected. A selected Opacity row is set back to Default (100%, Normal)
+/// and stays selected.
+fn delete_selected(app: &mut VectorcraftApp, node: Option<&Node>, sel: Sel) -> Result<(), String> {
+    let Some(n) = node else { return Ok(()) };
     match sel {
         Sel::Opacity => {
-            app.run("transparency.set", json!({"item": null, "opacity": 100, "blend": "Normal"})).ok();
-            return;
+            app.run("transparency.set", json!({"item": null, "opacity": 100, "blend": "Normal"}))?;
+            return Ok(());
         }
         Sel::ItemOpacity(i) => {
-            app.run("transparency.set", aligned(app, json!({"item": i, "opacity": 100, "blend": "Normal"}))).ok();
-            return;
+            app.run("transparency.set", aligned(app, json!({"item": i, "opacity": 100, "blend": "Normal"})))?;
+            return Ok(());
         }
         _ => {}
     }
-    let ok = match selected_effects(ui.ctx(), node, sel) {
-        Some((item, ks)) => app.run("effect.remove", aligned(app, json!({"item": item, "indices": ks}))).is_ok(),
-        None if matches!(sel, Sel::Item(_)) => {
-            app.run("appearance.removeItem", aligned(app, json!({"indices": selected_items(ui.ctx(), node, sel)}))).is_ok()
-        }
-        None => false,
+    match selected_effects(app, n, sel) {
+        Some((item, ks)) => app.run("effect.remove", aligned(app, json!({"item": item, "indices": ks})))?,
+        None if matches!(sel, Sel::Item(_)) => app.run("appearance.removeItem", aligned(app, json!({"indices": selected_items(app, n, sel)})))?,
+        None => return Ok(()),
     };
     // Removing the active item clears it in the engine; a removed item effect leaves its item
     // selected.
-    if ok {
-        select_row(app, ui.ctx(), if let Sel::ItemEffect(i, _) = sel { Sel::Item(i) } else { Sel::None });
-    }
+    select_row(app, if let Sel::ItemEffect(i, _) = sel { Sel::Item(i) } else { Sel::None });
+    Ok(())
 }
 
-/// The fx menu (Appearance panel, Properties): effects grouped by their Effect-menu submenu;
-/// opens the effect dialog.
+/// Whether the rows of `drag` may land before position `insert` of `order` (`over`: the row under
+/// the pointer, which takes them when it holds rows): a drop that moves or copies them
+/// ([`reorder_command`]).
+fn accepts(n: &Node, order: &[RowKey], drag: &ListDrag<RowKey>, over: Option<&RowKey>, insert: usize, copy: bool) -> bool {
+    let before = order.get(..insert).map_or(0, |rows| rows.iter().filter(|key| drag.keys.contains(key)).count());
+    let mv = ReorderMove::new(drag.grabbed, drag.keys.clone(), insert.saturating_sub(before), copy);
+    let into = over.copied().filter(|key| key.has_children()).map(|key| mv.clone().in_group(Some(key)));
+    reorder_command(n, order, &mv).is_some() || into.is_some_and(|mv| reorder_command(n, order, &mv).is_some())
+}
+
+/// Runs the reorder `mv` of the rows `order` of `n` and picks the moved rows (the copies), the
+/// grabbed one the lead; a moved Contents row keeps its selection.
+fn reorder(app: &mut VectorcraftApp, n: &Node, order: &[RowKey], mv: &ReorderMove<RowKey>) {
+    let Some((cmd, params)) = reorder_command(n, order, mv) else { return };
+    let Ok(result) = app.run(cmd, params.clone()) else { return };
+    let Some((kind, grabbed)) = mv.key.sel().rows() else { return };
+    let mut set: Vec<usize> = mv.keys.iter().filter_map(|key| key.sel().rows().map(|(_, k)| k)).collect();
+    set.sort_unstable();
+    let (rows, landed) = match kind {
+        Rows::Effects(_) => (Rows::Effects(result["item"].as_u64().map(|i| i as usize)), result["index"].as_u64()),
+        Rows::Items if mv.copy => (Rows::Items, params["to"].as_u64()),
+        Rows::Items => (Rows::Items, result["index"].as_u64().or_else(|| params["to"].as_u64())),
+    };
+    let Some(landed) = landed.map(|k| k as usize) else { return };
+    let keys: Vec<RowKey> = (0..set.len()).map(|at| rows.key(landed + at)).collect();
+    let lead = set.iter().position(|k| *k == grabbed).and_then(|at| keys.get(at).copied());
+    set_active(app, lead.map_or(Sel::None, RowKey::sel));
+    app.ui.appearance_panel.selection = Selection::new(keys, lead, lead);
+}
+
+/// The command the reorder `mv` of rows `order` of `n` runs, or None where it would change nothing
+/// or the rows can't go.
+///
+/// `mv.to` is a place between rows of `order` once the moved rows are taken out. Fill/strokes land
+/// as one block in their order there, on its side of the Contents row; dropped into a fill/stroke
+/// row (`mv.parent`), they land above it when they move up and below it when they move down; Alt
+/// copies them there. The Contents row moves the same way. Effects land in the list next to the
+/// place (an effect row's, else the object's beside the object's own rows), or at the end of the
+/// fill/stroke they are dropped into, or before the effect they are dropped into.
+// PLAN: the sheet's `reorder_command(node, &ReorderMove<RowKey>)` cannot place `ReorderMove::to`, a position in the shown rows: it also takes them (`order`).
+fn reorder_command(n: &Node, order: &[RowKey], mv: &ReorderMove<RowKey>) -> Option<(&'static str, Value)> {
+    if mv.parent.is_some_and(|parent| mv.keys.contains(&parent)) {
+        return None;
+    }
+    let remaining: Vec<RowKey> = order.iter().copied().filter(|key| !mv.keys.contains(key)).collect();
+    let gap = mv.to.min(remaining.len());
+    if mv.keys == [RowKey::Contents] {
+        return contents_move(n, &remaining, gap, mv.parent);
+    }
+    if let Some(set) = items_of(&mv.keys) {
+        return items_move(n, order, &remaining, gap, &set, mv);
+    }
+    let (from_item, set) = effects_of(&mv.keys)?;
+    effects_move(n, &remaining, gap, from_item, &set, mv)
+}
+
+/// The place in `remaining` a drop into fill/stroke row `j` stands for: above it for rows that
+/// move up to it, below it and its Opacity and effect rows for rows that move down.
+fn gap_at(remaining: &[RowKey], j: usize, up: bool) -> Option<usize> {
+    let row = remaining.iter().position(|key| *key == RowKey::Item(j))?;
+    if up {
+        return Some(row);
+    }
+    let under = remaining.get(row + 1..).map_or(0, |rest| rest.iter().take_while(|key| key.sel().item() == Some(j)).count());
+    Some(row + 1 + under)
+}
+
+/// How many fill/stroke rows are in `rows`.
+fn item_rows(rows: &[RowKey]) -> usize {
+    rows.iter().filter(|key| matches!(key, RowKey::Item(_))).count()
+}
+
+/// Whether the items `set` (ascending) stand together.
+fn contiguous(set: &[usize]) -> bool {
+    set.windows(2).all(|w| w.get(1).copied() == w.first().map(|a| a + 1))
+}
+
+/// The Contents row moved to `gap` of `remaining` (into fill/stroke `parent`): the items below it
+/// afterwards.
+fn contents_move(n: &Node, remaining: &[RowKey], gap: usize, parent: Option<RowKey>) -> Option<(&'static str, Value)> {
+    let k = n.appearance.contents_at();
+    let gap = match parent {
+        Some(RowKey::Item(j) | RowKey::ItemEffect(j, _)) => gap_at(remaining, j, j >= k)?,
+        _ => gap,
+    };
+    let to = remaining.get(gap..).map_or(0, item_rows);
+    (to != k).then(|| ("appearance.moveItem", json!({"from": "contents", "to": to})))
+}
+
+/// The fills/strokes `set` (ascending) moved or copied to `gap` of `remaining`.
+fn items_move(
+    n: &Node,
+    order: &[RowKey],
+    remaining: &[RowKey],
+    gap: usize,
+    set: &[usize],
+    mv: &ReorderMove<RowKey>,
+) -> Option<(&'static str, Value)> {
+    let grabbed = match mv.key {
+        RowKey::Item(g) => g,
+        _ => *set.first()?,
+    };
+    let gap = match mv.parent {
+        Some(RowKey::Item(j) | RowKey::ItemEffect(j, _)) => gap_at(remaining, j, j > grabbed)?,
+        _ => gap,
+    };
+    let unmoved = remaining.get(gap..).map_or(0, item_rows);
+    let k = n.appearance.contents_at();
+    let m = set.len();
+    let below_contents = remaining.iter().position(|key| *key == RowKey::Contents).is_some_and(|c| gap > c);
+    let has_contents = n.contents_label().is_some();
+    if mv.copy {
+        // The originals stay: those after the place count below the copies too.
+        let shown_at = |key: &RowKey| order.iter().position(|o| o == key);
+        let above = gap.checked_sub(1).and_then(|at| remaining.get(at)).and_then(shown_at);
+        let copied_below = set.iter().filter(|i| above.is_none_or(|a| shown_at(&RowKey::Item(**i)).is_some_and(|p| p > a))).count();
+        let to = unmoved + copied_below;
+        let params = match set {
+            [from] => json!({"index": from, "to": to}),
+            _ if has_contents => json!({"indices": set, "to": to, "contents": k + if below_contents { m } else { 0 }}),
+            _ => json!({"indices": set, "to": to}),
+        };
+        return Some(("appearance.duplicateItem", params));
+    }
+    let contents = has_contents.then(|| (0..k).filter(|i| !set.contains(i)).count() + if below_contents { m } else { 0 });
+    if contiguous(set) && set.first() == Some(&unmoved) && contents.is_none_or(|c| c == k) {
+        return None;
+    }
+    let mut params = match set {
+        [from] => json!({"from": from, "to": unmoved}),
+        _ => json!({"indices": set, "to": unmoved}),
+    };
+    if let Some(c) = contents {
+        params["contents"] = json!(c);
+    }
+    Some(("appearance.moveItem", params))
+}
+
+/// The effects `set` (ascending) of list `from_item` moved or copied to `gap` of `remaining`.
+fn effects_move(
+    n: &Node,
+    remaining: &[RowKey],
+    gap: usize,
+    from_item: Option<usize>,
+    set: &[usize],
+    mv: &ReorderMove<RowKey>,
+) -> Option<(&'static str, Value)> {
+    let (item, pos) = match mv.parent {
+        Some(RowKey::Item(i)) => (Some(i), n.appearance.effects_at(Some(i))?.len()),
+        Some(key) => key.effect()?,
+        None => {
+            let above = gap.checked_sub(1).and_then(|at| remaining.get(at)).copied();
+            let below = remaining.get(gap).copied();
+            match (above.and_then(RowKey::effect), below.and_then(RowKey::effect)) {
+                (_, Some(at)) => at,
+                (Some((list, k)), None) => (list, k + 1),
+                (None, None) if above.into_iter().chain(below).any(RowKey::object_level) => (None, n.appearance.effects.len()),
+                (None, None) => return None,
+            }
+        }
+    };
+    // Within their own list the effects leave their places first.
+    let same = item == from_item && !mv.copy;
+    let pos = if same { pos.saturating_sub(set.iter().filter(|s| **s < pos).count()) } else { pos };
+    if same && contiguous(set) && set.first() == Some(&pos) {
+        return None;
+    }
+    let from = match set {
+        [k] => json!(k),
+        _ => json!(set),
+    };
+    Some(("effect.move", json!({"from": from, "fromItem": from_item, "to": pos, "toItem": item, "copy": mv.copy})))
+}
+
+/// The fx menu (Appearance panel, Properties), the body of a framework `Menu`: effects grouped by
+/// their Effect-menu submenu; a pick opens the effect dialog.
 pub(crate) fn fx_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut groups: Vec<(String, Vec<(String, String)>)> = vec![];
     let plugins: Vec<_> = vectorcraft_effects::plugin_effects().into_iter().map(catalog_entry).collect();
@@ -1826,67 +1794,83 @@ pub(crate) fn fx_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             None => groups.push((g, vec![(id.clone(), label.to_string())])),
         }
     }
-    crate::widgets::menu_scroll(ui, |ui| {
-        for (g, items) in groups {
-            ui.menu_button(tl!(&g), |ui| {
-                crate::widgets::menu_scroll(ui, |ui| {
-                    for (id, label) in items {
-                        if ui.button(format!("{label}…")).clicked() {
-                            app.run("effect.dialog", json!({"effect": id})).ok();
-                            ui.close();
-                        }
-                    }
-                });
-            });
-        }
-    });
+    // A menu row reads `&` as its mnemonic marker: `&&` is the character ("Distort & Transform").
+    for (g, items) in groups {
+        Menu::submenu_row(ui, tl!(&g).replace('&', "&&"), |ui, _| {
+            for (id, label) in &items {
+                if MenuItem::new(format!("{}…", label.replace('&', "&&"))).show(ui).ran {
+                    app.run("effect.dialog", json!({ "effect": id })).ok();
+                }
+            }
+        });
+    }
 }
 
-pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
+/// The panel menu's New Art Has Basic Appearance row: the command turns the preference over.
+fn new_art_basic(app: &VectorcraftApp) -> CommandRef {
+    CommandRef::with_params("appearance.setNewArtBasic", json!({ "on": !app.session.prefs.new_art_basic }))
+}
+
+/// The panel menu's rows, in the reference app's order.
+pub(crate) fn menu_rows(app: &VectorcraftApp) -> Vec<PanelRow> {
+    let command = |id: &str| PanelRow::Command(CommandRef::new(id));
+    vec![
+        command("appearance.addFill"),
+        command("appearance.addStroke"),
+        PanelRow::Separator,
+        command(DUPLICATE_ITEM),
+        command(REMOVE_ITEM),
+        command("appearance.clear"),
+        command("appearance.reduceToBasic"),
+        PanelRow::Separator,
+        PanelRow::Command(new_art_basic(app)),
+        command(THUMBNAIL),
+        PanelRow::Separator,
+        command("graphicStyle.redefine"),
+        command("appearance.showAllHidden"),
+    ]
+}
+
+/// The enabled, checked and title states of the panel menu's rows.
+pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
     let node = first_subject(app);
     let has = node.is_some();
-    let sel = current_sel(app, ui.ctx(), node.as_deref());
-    if menu_item(ui, tl!("Add New Fill"), has, false) {
-        app.run("appearance.addFill", json!({})).ok();
-    }
-    if menu_item(ui, tl!("Add New Stroke"), has, false) {
-        app.run("appearance.addStroke", json!({})).ok();
-    }
-    ui.separator();
-    if menu_item(ui, tl!("Duplicate Item"), has && sel.editable(), false) {
-        duplicate_selected(app, ui, node.as_deref(), sel);
-    }
-    if menu_item(ui, tl!("Remove Item"), has && sel.deletable(), false) {
-        delete_selected(app, ui, node.as_deref(), sel);
-    }
-    if menu_item(ui, tl!("Clear Appearance"), has, false) {
-        app.run("appearance.clear", json!({})).ok();
-    }
-    let can_reduce = any_subject_needs_reduction(app);
-    if menu_item(ui, tl!("Reduce to Basic Appearance"), can_reduce, false) {
-        app.run("appearance.reduceToBasic", json!({})).ok();
-    }
-    ui.separator();
-    let basic = app.session.prefs.new_art_basic;
-    if menu_item(ui, tl!("New Art Has Basic Appearance"), true, basic) {
-        app.run("appearance.setNewArtBasic", json!({ "on": !basic })).ok();
-    }
-    let hide: bool = pstate(ui.ctx(), "ap-hide-thumb");
-    if menu_item(ui, if hide { tl!("Show Thumbnail") } else { tl!("Hide Thumbnail") }, true, false) {
-        set_pstate(ui.ctx(), "ap-hide-thumb", !hide);
-    }
-    ui.separator();
+    let sel = current_sel(app, node.as_deref());
+    let enabled = |on: bool| CommandState::new().enabled(on);
+    states.set("appearance.addFill", enabled(has));
+    states.set("appearance.addStroke", enabled(has));
+    states.set(DUPLICATE_ITEM, enabled(has && sel.editable()));
+    states.set(REMOVE_ITEM, enabled(has && sel.deletable()));
+    states.set("appearance.clear", enabled(has));
+    states.set("appearance.reduceToBasic", enabled(any_subject_needs_reduction(app)));
+    states.set(new_art_basic(app), enabled(true).checked(app.session.prefs.new_art_basic));
+    let thumbnail = if app.ui.appearance_panel.hide_thumb { tl!("Show Thumbnail") } else { tl!("Hide Thumbnail") };
+    states.set(THUMBNAIL, enabled(true).title(thumbnail));
     let style = app.session.selection_graphic_style().map(|(g, _)| g.name.clone());
+    // Translated around the style's name.
     let redefine = style
         .as_ref()
-        .map_or_else(|| tl!("Redefine Graphic Style").into(), |n| crate::i18n::fmt(tl!("Redefine Graphic Style “{name}”"), &[("name", n)]));
-    // Translated above, around the style's name.
-    if widgets::menu_item_name(ui, &redefine, style.is_some(), false) {
-        app.run("graphicStyle.redefine", json!({})).ok();
-    }
-    if menu_item(ui, tl!("Show All Hidden Attributes"), node.as_ref().is_some_and(|n| n.appearance.has_hidden()), false) {
-        app.run("appearance.showAllHidden", json!({})).ok();
-    }
+        .map_or_else(|| tl!("Redefine Graphic Style").to_string(), |n| crate::i18n::fmt(tl!("Redefine Graphic Style “{name}”"), &[("name", n)]));
+    states.set("graphicStyle.redefine", enabled(style.is_some()).title(redefine));
+    states.set("appearance.showAllHidden", enabled(node.as_ref().is_some_and(|n| n.appearance.has_hidden())));
+}
+
+/// Runs the panel's own menu commands (`ui.appearance.*`); `None` for any other id.
+pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option<Result<Value, String>> {
+    let done = match id {
+        DUPLICATE_ITEM | REMOVE_ITEM => {
+            let node = first_subject(app);
+            let sel = current_sel(app, node.as_deref());
+            if id == DUPLICATE_ITEM { duplicate_selected(app, node.as_deref(), sel) } else { delete_selected(app, node.as_deref(), sel) }
+        }
+        THUMBNAIL => {
+            let panel = &mut app.ui.appearance_panel;
+            panel.hide_thumb = !panel.hide_thumb;
+            Ok(())
+        }
+        _ => return None,
+    };
+    Some(done.map(|()| Value::Null))
 }
 
 #[cfg(test)]

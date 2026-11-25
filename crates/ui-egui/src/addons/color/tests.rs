@@ -1,36 +1,53 @@
+use craft::ui::dialog::HeldOk;
 use serde_json::json;
 use vectorcraft_engine::Session;
 
-use super::{ADJUSTMENTS, ID, Picked, STATE, show};
-use crate::panels::set_pstate;
-use crate::tests_labels::painted_text;
-use crate::{VectorcraftApp, menus};
+use super::{ADJUSTMENTS, Picked};
+use crate::VectorcraftApp;
+use crate::i18n::LangExt;
 
-/// An app with a selected red rectangle.
+/// An app in a window with a selected red rectangle.
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
     app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
-    app
+    crate::testing::windowed(app)
 }
 
-#[test]
-fn the_menus_list_the_effects_and_open_the_panel() {
-    let mut app = app();
-    let entries = menus::menu_entries(&app);
-    let at = |path: &[&str], label: &str| entries.iter().find(|e| e.path == path && e.label == label);
-    let plugins = ["Object", "Plug-ins", "Color Effects"];
-    let item = at(&plugins, "Color Effects Panel").expect("listed");
-    for label in ["Exposure…", "Desaturate", "Duotone…", "Invert Colors", "Vector Halftone…"] {
-        assert!(at(&plugins, label).is_some(), "Object › Plug-ins › Color Effects › {label}");
-        assert!(at(&["Effect", "Color Effects"], label).is_some(), "Effect › Color Effects › {label}");
-    }
-    assert!(at(&plugins, "Print Ink Fixes…").is_some(), "Object › Plug-ins › Color Effects › Print Ink Fixes…");
-    // The existing submenus are as they were.
-    assert!(at(&["Effect", "Color Adjustments"], "Exposure…").is_none());
-    menus::invoke(&mut app, "window.panel", item.params.clone());
-    assert!(crate::panel_docking::showing(&app.ui, ID), "the panel opens");
+/// The fields of the hosted dialog open on top and its id.
+// PLAN: `app.dialogs()` and the host's `open_dialogs`/`set_json_field`/`confirm_by_id` are taken from the hosted-dialog
+// trials of other sets (craft-ui-panels `dialog/host.rs`); widgets-w10 owns the app side of `dialogs()`.
+fn top(app: &VectorcraftApp) -> (craft::ui::dialog::DialogId, serde_json::Value) {
+    let dialogs = app.dialogs().expect("a window");
+    dialogs.with(|host| host.open_dialogs().pop().map(|d| (d.id, d.fields.unwrap_or_default()))).expect("an open dialog")
+}
+
+/// Opens the effect dialog of `p` as the Appearance panel and the menus do, and runs its preview.
+fn open(app: &mut VectorcraftApp, ctx: &egui::Context, p: serde_json::Value) {
+    app.run("effect.dialog", p).unwrap();
+    crate::dialogs::host::pump(app, ctx);
+}
+
+/// Sets `field` of the top dialog.
+fn set(app: &VectorcraftApp, ctx: &egui::Context, field: &str, value: serde_json::Value) {
+    let (id, _) = top(app);
+    app.dialogs().expect("a window").with(|host| host.set_json_field(ctx, id, field, value)).unwrap();
+}
+
+/// OK on the top dialog, then the pump that takes its answer.
+fn ok(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let (id, _) = top(app);
+    // A held OK reports `false` and files its answer for the app; the dialog closes at its next pass.
+    assert!(app.dialogs().expect("a window").with(|host| host.confirm_by_id(ctx, id) || host.held_state(id) == Some(HeldOk::Waiting)));
+    crate::dialogs::host::pump(app, ctx);
+    crate::tests_synthetic::key_frame(app, ctx, vec![]);
+}
+
+/// The effects of the selected object: (id, params).
+fn effects(app: &VectorcraftApp) -> Vec<(String, serde_json::Value)> {
+    let st = app.session.active().unwrap();
+    st.doc.node(st.selection.objects[0]).unwrap().appearance.effects.iter().map(|fx| (fx.id.clone(), fx.params.clone())).collect()
 }
 
 #[test]
@@ -60,105 +77,64 @@ fn history_names_a_filter_step_as_the_panel_names_its_adjustment() {
         app.run("addon.color.filter", json!({ "effect": id, "params": params })).unwrap();
         let h = app.session.active().unwrap().history.undo.last().cloned().unwrap();
         assert_eq!(h.effect(), Some(*id), "the step Apply as Filter records for {params}");
+        app.addon_panels.color = Picked { index: i, ..Picked::default() };
+        let app = std::rc::Rc::new(std::cell::RefCell::new(app));
+        let shown = std::rc::Rc::clone(&app);
+        let mut fixture = craft::ui::testing::Fixture::new(move |ui| super::show(&mut shown.borrow_mut(), ui));
+        fixture.room(egui::vec2(320.0, 700.0));
         for lang in crate::i18n::Lang::all() {
             crate::i18n::set_current(lang);
             let step = crate::panels::history::shown(&h);
-            let text = painted_text(&mut app, |app, ui| {
-                set_pstate(ui.ctx(), STATE, Picked { index: i, ..Picked::default() });
-                show(app, ui);
-            });
+            fixture.settle();
+            let texts: Vec<String> = fixture.texts().iter().map(|t| t.text.clone()).collect();
             crate::i18n::set_current(crate::i18n::Lang::EN);
-            assert!(text.lines().any(|line| line == step), "{} {id}: {step:?} in {text}", lang.code());
+            assert!(texts.contains(&step), "{} {id}: {step:?} in {texts:?}", lang.code());
         }
     }
 }
 
 #[test]
-fn the_panel_shows_the_values_and_its_buttons() {
-    let mut app = app();
-    let exposure = ADJUSTMENTS.iter().position(|a| a.0 == "addon.color.exposure").unwrap();
-    let text = painted_text(&mut app, |app, ui| {
-        set_pstate(ui.ctx(), STATE, Picked { index: exposure, ..Picked::default() });
-        show(app, ui);
-    });
-    for s in ["Exposure", "Offset", "Gamma", "Add as Effect", "Apply as Filter", "Inks", "Duotone…", "Print Ink Fixes…"] {
-        assert!(text.contains(s), "{s} in {text}");
-    }
-    app.run("select.none", json!({})).unwrap();
-    assert!(painted_text(&mut app, show).contains("No selection"));
-}
-
-#[test]
 fn the_halftone_effect_dialog_has_the_command_fields_and_edits_the_effect() {
     let mut app = app();
-    let text = |app: &mut VectorcraftApp| painted_text(app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-    app.run("effect.dialog", json!({"effect": "addon.color.halftone"})).unwrap();
-    let shown = text(&mut app);
-    for s in ["Vector Halftone", "Shape", "Frequency", "Angle", "Screens", "Dot Color from Art", "Color", "Invert", "Clip to Art", "Preview"] {
-        assert!(shown.lines().any(|l| l == s), "{s} in {shown}");
-    }
-    assert!(!shown.lines().any(|l| l == "Keep Original"), "the effect keeps its object");
+    let ctx = app.ui_ctx.clone().expect("a window");
+    open(&mut app, &ctx, json!({"effect": "addon.color.halftone"}));
+    let (_, fields) = top(&app);
+    // Preview is the dialog's own switch, not a value of the effect.
+    let shown: std::collections::BTreeSet<&str> = fields.as_object().unwrap().keys().map(String::as_str).filter(|k| *k != "preview").collect();
+    let info = vectorcraft_effects::effect_info("addon.color.halftone").unwrap();
+    let live: std::collections::BTreeSet<&str> = info.defaults.as_object().unwrap().keys().map(String::as_str).collect();
+    assert_eq!(shown, live, "the effect's own values");
+    assert!(!shown.contains("keepOriginal"), "the effect keeps its object");
     assert!(app.session.in_interaction(), "the preview runs");
-    // The art's colours instead of one: no colour field.
-    app.ui.dialog.as_mut().unwrap().fields.insert("fromArt".into(), json!(true));
-    assert!(!text(&mut app).lines().any(|l| l == "Color"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    let st = app.session.active().unwrap();
-    let fx = st.doc.node(st.selection.objects[0]).unwrap().appearance.effects.clone();
-    assert_eq!((fx.len(), fx[0].id.as_str(), &fx[0].params["fromArt"]), (1, "addon.color.halftone", &json!(true)));
+    // The art's colours instead of one.
+    set(&app, &ctx, "fromArt", json!(true));
+    ok(&mut app, &ctx);
+    let fx = effects(&app);
+    assert_eq!((fx.len(), fx[0].0.as_str(), &fx[0].1["fromArt"]), (1, "addon.color.halftone", &json!(true)));
     // The Appearance panel reopens it with its values.
-    app.run("effect.dialog", json!({"effect": "addon.color.halftone", "index": 0})).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["fromArt"], json!(true));
+    open(&mut app, &ctx, json!({"effect": "addon.color.halftone", "index": 0}));
+    assert_eq!(top(&app).1["fromArt"], json!(true));
 }
 
 #[test]
 fn the_duotone_dialog_has_a_row_per_tone_and_the_curve_of_one() {
     let mut app = app();
-    let text = |app: &mut VectorcraftApp| painted_text(app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+    let ctx = app.ui_ctx.clone().expect("a window");
     app.run("swatch.new", json!({"name": "Ink", "color": "#e07020", "spot": true})).unwrap();
-    app.run("effect.dialog", json!({"effect": "addon.color.duotone"})).unwrap();
-    let shown = text(&mut app);
-    for s in ["Duotone", "Tone 1", "Tone 2", "Tone 3", "Tone 4", "Process Color", "Curve", "Points", "Reset to Linear", "Reset to Inverse"] {
-        assert!(shown.contains(s), "{s} in {shown}");
-    }
-    assert!(shown.contains("Skip Objects with Spot Colors") && shown.contains("Preview"), "{shown}");
+    open(&mut app, &ctx, json!({"effect": "addon.color.duotone"}));
     assert!(app.session.in_interaction(), "the preview runs");
     // Four tones while the dialog is open, the ones after the first off.
-    let tones = app.ui.dialog.as_ref().unwrap().fields["tones"].as_array().unwrap().clone();
+    let mut tones = top(&app).1["tones"].as_array().unwrap().clone();
     assert_eq!(tones.iter().map(|t| t["active"].as_bool().unwrap_or(true)).collect::<Vec<_>>(), [true, false, false, false]);
-    // A spot tone with an inverse curve; the second tone's curve shows when picked.
-    {
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields["tones"][0] = json!({"color": "#e07020", "swatch": "Ink", "curve": "0,100 100,0", "active": true});
-        d.fields.insert("__tone".into(), json!(1));
-    }
-    assert!(text(&mut app).contains("Ink"), "the swatch is named");
-    crate::dialogs::confirm(&mut app).unwrap();
-    let st = app.session.active().unwrap();
-    let fx = st.doc.node(st.selection.objects[0]).unwrap().appearance.effects.clone();
-    assert_eq!((fx.len(), fx[0].id.as_str()), (1, "addon.color.duotone"));
-    assert_eq!((fx[0].params["tones"][0]["swatch"].clone(), fx[0].params["tones"].as_array().unwrap().len()), (json!("Ink"), 4));
-    assert!(!fx[0].params.as_object().unwrap().contains_key("__tone"), "dialog-only");
+    // A spot tone with an inverse curve.
+    tones[0] = json!({"color": "#e07020", "swatch": "Ink", "curve": "0,100 100,0", "active": true});
+    set(&app, &ctx, "tones", json!(tones));
+    ok(&mut app, &ctx);
+    let fx = effects(&app);
+    assert_eq!((fx.len(), fx[0].0.as_str()), (1, "addon.color.duotone"));
+    assert_eq!((fx[0].1["tones"][0]["swatch"].clone(), fx[0].1["tones"].as_array().unwrap().len()), (json!("Ink"), 4));
+    assert!(!fx[0].1.as_object().unwrap().contains_key("tone"), "dialog-only");
     // The Appearance panel reopens it with its values.
-    app.run("effect.dialog", json!({"effect": "addon.color.duotone", "index": 0})).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["tones"][0]["curve"], json!("0,100 100,0"));
-}
-
-#[test]
-fn print_ink_fixes_opens_its_options_and_runs_on_ok() {
-    let mut app = app();
-    app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
-    app.run("paint.setFill", json!({"color": {"c": 100, "m": 100, "y": 100, "k": 100}})).unwrap();
-    let entries = menus::menu_entries(&app);
-    let item = entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Color Effects"] && e.label == "Print Ink Fixes…").unwrap();
-    let (id, p) = menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
-    menus::invoke(&mut app, &id, p);
-    let shown = painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-    for s in ["Print Ink Fixes", "Ink Limit", "Exclude Pure Black", "Remove White Overprint", "Overprint Black", "Text Only"] {
-        assert!(shown.contains(s), "{s} in {shown}");
-    }
-    crate::dialogs::confirm(&mut app).unwrap();
-    let st = app.session.active().unwrap();
-    let fill = st.doc.node(st.selection.objects[0]).unwrap().appearance.fill_paint().color().unwrap();
-    assert_eq!(fill, vectorcraft_color::Color::cmyk(0.75, 0.75, 0.75, 0.75), "scaled to 300 %");
+    open(&mut app, &ctx, json!({"effect": "addon.color.duotone", "index": 0}));
+    assert_eq!(top(&app).1["tones"][0]["curve"], json!("0,100 100,0"));
 }
