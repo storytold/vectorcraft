@@ -539,30 +539,11 @@ fn private_data(pdf: &Pdf) -> Option<Vec<u8>> {
 
 /// [`private_data`], with why a private data stream can't be read ([`inflated`]).
 fn read_private_data(pdf: &Pdf) -> Result<Option<Vec<u8>>, String> {
-    let xref = pdf.xref();
-    let page_private = pdf
+    let Some(private) = pdf
         .pages()
         .first()
-        .and_then(|page| page.raw().get::<Dict<'_>>(b"PieceInfo")?.get::<Dict<'_>>(PRIVATE_DATA_OWNER)?.get::<Dict<'_>>(b"Private"));
-    let root_private = xref
-        .get::<Dict<'_>>(xref.root_id())
-        .and_then(|root| root.get::<Dict<'_>>(b"PieceInfo")?.get::<Dict<'_>>(PRIVATE_DATA_OWNER)?.get::<Dict<'_>>(b"Private"));
-    let has_supported_data = |dict: &Dict<'_>| dict.contains_key(b"AIPrivateData1") || dict.contains_key(b"AIPDFPrivateData1");
-    let private = match (page_private, root_private) {
-        (Some(page), Some(root)) => {
-            if has_supported_data(&page) {
-                Some(page)
-            } else if has_supported_data(&root) {
-                Some(root)
-            } else {
-                Some(page)
-            }
-        }
-        (Some(page), None) => Some(page),
-        (None, Some(root)) => Some(root),
-        (None, None) => None,
-    };
-    let Some(private) = private else {
+        .and_then(|page| page.raw().get::<Dict<'_>>(b"PieceInfo")?.get::<Dict<'_>>(PRIVATE_DATA_OWNER)?.get::<Dict<'_>>(b"Private"))
+    else {
         return Ok(None);
     };
     let key = if private.contains_key(b"AIPrivateData1") { "AIPrivateData" } else { "AIPDFPrivateData" };
@@ -583,9 +564,7 @@ pub fn has_illustrator_data(bytes: &[u8], password: Option<&str>) -> bool {
 
 /// [`has_illustrator_data`] of a parsed PDF.
 fn has_private_data_keys(pdf: &Pdf) -> bool {
-    let xref = pdf.xref();
     pdf.pages().first().is_some_and(|p| piece_info_has(p, &[b"AIPrivateData", b"AIPDFPrivateData"]))
-        || xref.get::<Dict<'_>>(xref.root_id()).is_some_and(|root| dict_piece_info_has(&root, &[b"AIPrivateData", b"AIPDFPrivateData"]))
 }
 
 /// `stream` decoded, up to `most` bytes: the decoder is run here rather than by the PDF reader's
@@ -640,12 +619,6 @@ pub(crate) fn has_private_data(page: &Page<'_>) -> bool {
     piece_info_has(page, &[b"AIPrivateData"])
 }
 
-/// Does `pdf` carry an editor's private data in its root document catalog (`AIPrivateData`)?
-pub(crate) fn has_private_data_doc(pdf: &Pdf) -> bool {
-    let xref = pdf.xref();
-    xref.get::<Dict<'_>>(xref.root_id()).is_some_and(|root| dict_piece_info_has(&root, &[b"AIPrivateData"]))
-}
-
 /// Does `page` state where its art is: an art, trim or bleed box (ISO 32000-1 §14.11.2, the
 /// extent of the page's meaningful content and of the finished page)? A page written from an
 /// artboard has them; the notice a file saved without its PDF part shows instead of its art is
@@ -654,46 +627,15 @@ pub(crate) fn states_art(page: &Page<'_>) -> bool {
     [&b"ArtBox"[..], b"TrimBox", b"BleedBox"].iter().any(|k| page.raw().get::<[f32; 4]>(*k).is_some())
 }
 
-/// Does dictionary `d`'s `PieceInfo` hold a key starting with one of `prefixes`, up to four dictionaries in?
-fn dict_has_piece_info_prefix(d: &Dict<'_>, prefixes: &[&[u8]]) -> bool {
-    if let Some(priv_dict) = d.get::<Dict<'_>>(PRIVATE_DATA_OWNER).and_then(|i| i.get::<Dict<'_>>(b"Private"))
-        && prefixes.iter().any(|p| priv_dict.keys().any(|k| k.starts_with(p)))
-    {
-        return true;
-    }
-    const MAX_VISITS: usize = 128;
-    fn walk(d: &Dict<'_>, prefixes: &[&[u8]], depth: u32, budget: &mut usize) -> bool {
-        if depth >= 4 || *budget == 0 {
-            return false;
-        }
-        for k in d.keys() {
-            if *budget == 0 {
-                return false;
-            }
-            *budget -= 1;
-            if prefixes.iter().any(|p| k.starts_with(p)) {
-                return true;
-            }
-            if let Some(sub) = d.get::<Dict<'_>>(k.as_ref())
-                && walk(&sub, prefixes, depth + 1, budget)
-            {
-                return true;
-            }
-        }
-        false
-    }
-    let mut budget = MAX_VISITS;
-    walk(d, prefixes, 0, &mut budget)
-}
-
 /// Does `page`'s `PieceInfo` hold a key starting with one of `prefixes`, up to four dictionaries in?
 fn piece_info_has(page: &Page<'_>, prefixes: &[&[u8]]) -> bool {
-    page.raw().get::<Dict<'_>>(b"PieceInfo").is_some_and(|d| dict_has_piece_info_prefix(&d, prefixes))
-}
-
-/// Does dictionary `d`'s `PieceInfo` hold a key starting with one of `prefixes`, up to four dictionaries in?
-fn dict_piece_info_has(d: &Dict<'_>, prefixes: &[&[u8]]) -> bool {
-    d.get::<Dict<'_>>(b"PieceInfo").is_some_and(|p| dict_has_piece_info_prefix(&p, prefixes))
+    fn walk(d: &Dict<'_>, prefixes: &[&[u8]], depth: u32) -> bool {
+        depth < 4
+            && d.keys().any(|k| {
+                prefixes.iter().any(|p| k.starts_with(p)) || d.get::<Dict<'_>>(k.as_ref()).is_some_and(|sub| walk(&sub, prefixes, depth + 1))
+            })
+    }
+    page.raw().get::<Dict<'_>>(b"PieceInfo").is_some_and(|d| walk(&d, prefixes, 0))
 }
 
 #[cfg(test)]

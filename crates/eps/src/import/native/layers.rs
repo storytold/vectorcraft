@@ -261,6 +261,35 @@ impl LockTree {
     }
 }
 
+/// Match unique names between visible nodes and private lock trees.
+fn unique_name_pairs<T: std::ops::Deref<Target = Node>>(vis_nodes: &[T], priv_nodes: &[LockTree]) -> Vec<(usize, usize)> {
+    let mut priv_names: std::collections::HashMap<&str, (usize, usize)> = std::collections::HashMap::new();
+    for (i, p) in priv_nodes.iter().enumerate() {
+        if let Some(name) = p.name.as_deref() {
+            let entry = priv_names.entry(name).or_insert((0, i));
+            entry.0 += 1;
+        }
+    }
+
+    let mut vis_names: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    for v in vis_nodes.iter() {
+        if let Some(name) = v.name.as_deref() {
+            *vis_names.entry(name).or_insert(0) += 1;
+        }
+    }
+
+    let mut pairs = Vec::new();
+    for (v_idx, vis) in vis_nodes.iter().enumerate() {
+        if let Some(name) = vis.name.as_deref()
+            && vis_names.get(name).copied() == Some(1)
+            && let Some(&(1, p_idx)) = priv_names.get(name)
+        {
+            pairs.push((v_idx, p_idx));
+        }
+    }
+    pairs
+}
+
 /// Apply lock states from private data layers to visible PDF layers.
 pub(crate) fn apply_private_layer_locks(visible_layers: &mut [Arc<Node>], private_layers: &[LockTree]) {
     if private_layers.is_empty() || visible_layers.is_empty() {
@@ -274,33 +303,7 @@ pub(crate) fn apply_private_layer_locks(visible_layers: &mut [Arc<Node>], privat
     }
 
     // Otherwise, match only layers with identifiable correspondence (matching unique names).
-    let mut priv_names: std::collections::HashMap<&str, (usize, usize)> = std::collections::HashMap::new();
-    for (i, p) in private_layers.iter().enumerate() {
-        if let Some(name) = p.name.as_deref() {
-            let entry = priv_names.entry(name).or_insert((0, i));
-            entry.0 += 1;
-        }
-    }
-
-    let mut vis_names: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
-    for v in visible_layers.iter() {
-        if let Some(name) = v.name.as_deref() {
-            *vis_names.entry(name).or_insert(0) += 1;
-        }
-    }
-
-    let mut pairs = Vec::new();
-    for (v_idx, vis) in visible_layers.iter().enumerate() {
-        if let Some(name) = vis.name.as_deref()
-            && vis_names.get(name).copied() == Some(1)
-            && let Some(&(1, p_idx)) = priv_names.get(name)
-        {
-            pairs.push((v_idx, p_idx));
-        }
-    }
-    drop(vis_names);
-
-    for (v_idx, p_idx) in pairs {
+    for (v_idx, p_idx) in unique_name_pairs(visible_layers, private_layers) {
         apply_node_locks(Arc::make_mut(&mut visible_layers[v_idx]), &private_layers[p_idx]);
     }
 }
@@ -314,36 +317,7 @@ fn apply_node_locks(vis: &mut Node, priv_: &LockTree) {
         return;
     }
 
-    // Index private children: name -> (count, first_index)
-    let mut priv_names: std::collections::HashMap<&str, (usize, usize)> = std::collections::HashMap::new();
-    for (i, p) in priv_.children.iter().enumerate() {
-        if let Some(name) = p.name.as_deref() {
-            let entry = priv_names.entry(name).or_insert((0, i));
-            entry.0 += 1;
-        }
-    }
-
-    // Index visible children: name -> count
-    let mut vis_names: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
-    for v in vis_kids.iter() {
-        if let Some(name) = v.name.as_deref() {
-            *vis_names.entry(name).or_insert(0) += 1;
-        }
-    }
-
-    // Resolve unique named matches without positional blind pairing
-    let mut pairs = Vec::new();
-    for (v_idx, v) in vis_kids.iter().enumerate() {
-        if let Some(v_name) = v.name.as_deref()
-            && vis_names.get(v_name).copied() == Some(1)
-            && let Some(&(1, p_idx)) = priv_names.get(v_name)
-        {
-            pairs.push((v_idx, p_idx));
-        }
-    }
-    drop(vis_names);
-
-    for (v_idx, p_idx) in pairs {
+    for (v_idx, p_idx) in unique_name_pairs(vis_kids.as_slice(), &priv_.children) {
         apply_node_locks(Arc::make_mut(&mut vis_kids[v_idx]), &priv_.children[p_idx]);
     }
 }

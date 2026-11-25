@@ -312,8 +312,7 @@ fn read_opened(
     b.taken = taken;
     b.warnings = notes;
     b.intent_cmyk = crate::import_image::output_intent_cmyk(pdf);
-    let doc_ai = crate::pages::has_private_data_doc(pdf);
-    b.colors.uncalibrated_rgb = opts.uncalibrated_rgb && (doc_ai || picked.iter().filter_map(|&n| pages.get(n)).any(crate::pages::has_private_data));
+    b.colors.uncalibrated_rgb = opts.uncalibrated_rgb && picked.iter().filter_map(|&n| pages.get(n)).any(crate::pages::has_private_data);
     let cache = InterpreterCache::new();
     let mut x = 0.0;
     // Where the next page's art may begin (a `.ai` page's art reaches past its artboard).
@@ -365,7 +364,7 @@ fn read_opened(
         }
         let mut parts = b.end_page();
         // A PDF-compatible `.ai` (the editor's private data next to the PDF art).
-        let ai = doc_ai || crate::pages::has_private_data(page);
+        let ai = crate::pages::has_private_data(page);
         if ai {
             drop_page_fill(&mut parts, xf.transform_rect_bbox(crate::pages::page_box(page, CropTo::Crop)));
             b.warn(OFF_ARTBOARD_NOTE);
