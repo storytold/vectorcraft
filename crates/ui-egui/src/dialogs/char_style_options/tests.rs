@@ -529,13 +529,25 @@ fn number_fields_take_field_arithmetic() {
         ("leading", "1 in", 72.0),
         ("baseline_shift", "\u{2212}2", -2.0),
         ("kerning", "12,5", 12.5),
+        ("h_scale", "12,5%", 12.5),
+        ("rotation", "12,5°", 12.5),
     ];
     for (key, text, want) in typed {
         let (mut d, _) = dialog_for(json!({}));
         put(&mut d, key, json!(text));
         assert_eq!(optional_number(&Values::new(&d), key), Ok(Some(json!(want))), "{key} {text}");
     }
-    for (key, text) in [("size", "12°"), ("leading", "50%"), ("tracking", "10%"), ("rotation", "45%"), ("h_scale", "1%2"), ("size", "1e3")] {
+    for (key, text) in [
+        ("size", "12°"),
+        ("leading", "50%"),
+        ("tracking", "10%"),
+        ("rotation", "45%"),
+        ("h_scale", "1%2"),
+        ("size", "1e3"),
+        ("h_scale", "1,000"),
+        ("h_scale", "1,000%"),
+        ("rotation", "1,000°"),
+    ] {
         let (mut d, _) = dialog_for(json!({}));
         put(&mut d, key, json!(text));
         assert!(optional_number(&Values::new(&d), key).is_err(), "{key} {text}");
