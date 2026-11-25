@@ -9,6 +9,7 @@ use craft::ui::contract::{Bind, CaptionInk, GlyphColon, LinkLabelInk, SectionRhy
 use craft::ui::docking::IconGroupSeparator;
 use craft::ui::list::CommandHighlight;
 use craft::ui::menu::MenuTitlePad;
+use craft::ui::patterns::form_dialogs::PresetCardLook;
 use craft::ui::runtime::env::{RootEnv, Scale, ScrubDrags, WindowKey};
 use craft::ui::runtime::frame::{FrameInput, FrameOutput};
 use craft::ui::runtime::toast::{self, Toast};
@@ -709,6 +710,8 @@ pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> Ro
     root.values.set(DocumentTabLook::Semibold);
     // A collapsed panel column's icon groups stand apart by a hairline, as production drew them.
     root.values.set(IconGroupSeparator::Rule);
+    // New Document's preset cards show blank paper on a flat card, as production drew them.
+    root.values.set(PresetCardLook::Page);
     // A bare Tab on the canvas, or with nothing focused, toggles the panels (`window.dock`) instead of moving focus.
     root.tab_toggles_chrome = true;
     // Escape in a text field gives up its focus, reverting any typing, so the next keys are the window's.

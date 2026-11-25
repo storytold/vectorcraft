@@ -44,6 +44,8 @@ pub(super) fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
         .layout(StartLayout::Column)
         .title(tl!("Welcome to VectorCraft"))
         .subtitle(tl!("Vector illustration — fast, open, scriptable."))
+        .new_label(tl!("New file"))
+        .open_label(tl!("Open"))
         .max_recent(6)
         .templates(&templates)
         .templates_title(tl!("Quickly start a new file"))

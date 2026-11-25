@@ -146,11 +146,18 @@ pub fn root_theme(prefs: &Prefs) -> (ThemeId, ModeChoice, Option<Rgba>) {
 }
 
 /// The app's sizes over the framework's size sets (`sizes.json`): push buttons have the app's 4-point corners
-/// where the sets give pills, the Home title is 26-point, and the compact set takes the reference app's metrics:
+/// where the sets give pills, the Home title is 26-point under 60 points of page margin with a 36-point call to
+/// action, and the compact set takes the reference app's metrics:
 /// 26-point fields and spinners, 10 points inside panels, 5 between rows, 13-point body type with 12.5-point labels
 /// and 11-point captions, 5-point control corners, 8-point menus and 10-point windows, and 33-point panel tabs.
 const SIZES: &[u8] = br#"{
-    "all": {"radius.button": 4, "typography.display.size": 26, "typography.display.line_height": 32},
+    "all": {
+        "radius.button": 4,
+        "typography.display.size": 26,
+        "typography.display.line_height": 32,
+        "size.page.margin": 60,
+        "size.page.action": 36
+    },
     "compact": {
         "size.control.md": 26,
         "size.panel_header": 33,
