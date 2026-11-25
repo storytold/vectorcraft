@@ -43,9 +43,14 @@
 //!   must be one of that document's that can be selected, or nothing changes.
 //! - Members the help pages list that are not here yet throw an error that says so.
 //! - Assigning `hidden`, `locked`, `opacity`, `position`, `left`, `top`, `width` or `height` to an
-//!   object in a hidden or locked layer throws `Cannot edit` and changes nothing; its `name` and
-//!   `note` still change. An object that is hidden or locked itself, or is in a hidden or locked
-//!   group, takes them.
+//!   object in a hidden or locked layer, and `zOrder()` on one, throw `Cannot edit` and change
+//!   nothing, even for the value the object has. The exception is `opacity` given the value the
+//!   object has when that changes nothing; on a graph's mark or label whose series or kind keeps
+//!   another opacity it would still change the graph, so it is refused too. Its `name` and `note`
+//!   still change. An object that is hidden or locked itself, or is in a hidden or locked group,
+//!   takes them.
+//! - `name` and `note` take a number or a Boolean as the text `String(value)` gives.
+//! - A compound path whose last path `move` or `remove()` takes out stays, empty.
 //! - An object with nothing in it, such as an empty group or a compound path whose paths moved out,
 //!   reads its bounds, `position`, `width` and `height` as zeros, and assigning them does nothing.
 
@@ -1263,21 +1268,28 @@ fn selection_of(h: &Host, uid: u64) -> Answer {
     if picked.len() > MAX_LISTED {
         return Err(HostError::Range(format!("the selection has more than {MAX_LISTED} objects")));
     }
-    let ids: Vec<NodeId> = if picked.is_empty() {
-        Vec::new()
-    } else {
-        let all = page_items(h, st);
-        h.charge_call(all.len() as u64)?;
-        let mut ids: Vec<NodeId> = all.iter().copied().filter(|i| picked.contains(i)).collect();
-        // A selected object that `pageItems` does not list still comes last, in the order it was
-        // selected.
-        if ids.len() < picked.len() {
-            let mut listed: HashSet<NodeId> = ids.iter().copied().collect();
-            ids.extend(st.selection.objects.iter().copied().filter(|i| picked.contains(i) && listed.insert(*i)));
+    // Only the selected objects are ordered, by their place in the tree, so the cost follows the
+    // size of the selection and not of the document. `pageItems` walks each list of children
+    // topmost first and puts a group before the objects in it: a higher index comes first, and an
+    // ancestor's path, a prefix of its descendants' paths, sorts before them.
+    let mut placed: Vec<(Vec<std::cmp::Reverse<usize>>, NodeId)> = Vec::with_capacity(picked.len());
+    let mut unplaced: Vec<NodeId> = Vec::new();
+    let mut seen: HashSet<NodeId> = HashSet::with_capacity(picked.len());
+    let mut steps = 0u64;
+    for id in st.selection.objects.iter().copied().filter(|i| picked.contains(i) && seen.insert(*i)) {
+        match st.doc.index_path(id) {
+            Some(path) => {
+                steps += path.len() as u64;
+                placed.push((path.into_iter().map(std::cmp::Reverse).collect(), id));
+            }
+            // A selected object outside the tree's walk still comes last, in the order it was
+            // selected.
+            None => unplaced.push(id),
         }
-        ids
-    };
-    h.charge_call(16 * ids.len() as u64)?;
+    }
+    placed.sort();
+    let ids: Vec<NodeId> = placed.into_iter().map(|(_, id)| id).chain(unplaced).collect();
+    h.charge_call(steps + 16 * ids.len() as u64)?;
     Ok(Data::Array(ids.iter().map(|i| item_ref(h, st, *i)).collect()))
 }
 
@@ -1482,15 +1494,20 @@ fn set_props(h: &Host, a: &[Data], unchanged: impl FnOnce(&crate::doc::Node) -> 
     Ok(Data::Undefined)
 }
 
+/// The text a string property such as `name` or `note` is given: a number or a Boolean becomes the
+/// text `String(value)` gives, and any other value that is not a string is refused.
+fn text_arg(v: &Data, what: &str) -> std::result::Result<String, HostError> {
+    match v {
+        Data::String(s) => Ok(s.clone()),
+        Data::Number(n) => Ok(vectorcraft_js::number_to_string(*n)),
+        Data::Bool(b) => Ok(b.to_string()),
+        _ => Err(HostError::Type(format!("{what} must be a string"))),
+    }
+}
+
 /// `name = value`: a number or a Boolean becomes the text `String(value)` gives.
 fn item_set_name(h: &Host, a: &[Data]) -> Answer {
-    let name = match arg(a, 1) {
-        Data::String(s) => s.clone(),
-        Data::Number(n) => vectorcraft_js::number_to_string(*n),
-        Data::Bool(b) => b.to_string(),
-        _ => return Err(HostError::Type("name must be a string".into())),
-    };
-    let name = &name;
+    let name = &text_arg(arg(a, 1), "name")?;
     if name.len() > MAX_TEXT_BYTES {
         return Err(HostError::Range("the name is too long".into()));
     }
@@ -1505,9 +1522,10 @@ fn item_note(h: &Host, a: &[Data]) -> Answer {
     read_item(h, a, |_, n| Ok(text(note_of(n))))
 }
 
-/// `note = text`: the Attributes panel's note, set with `attributes.set`, which trims it.
+/// `note = text`: the Attributes panel's note, set with `attributes.set`, which trims it. A number
+/// or a Boolean becomes the text `String(value)` gives.
 fn item_set_note(h: &Host, a: &[Data]) -> Answer {
-    let Data::String(note) = arg(a, 1) else { return Err(HostError::Type("note must be a string".into())) };
+    let note = &text_arg(arg(a, 1), "note")?;
     if note.len() > MAX_TEXT_BYTES {
         return Err(HostError::Range("the note is too long".into()));
     }
@@ -1565,14 +1583,21 @@ fn item_set_opacity(h: &Host, a: &[Data]) -> Answer {
     // A value the getter reports for the item's opacity sends the opacity it has, and
     // `object.setProps` finds the no-op itself: an opacity a graph mark or label already has still
     // replaces the one the graph keeps for its series or kind.
-    // The opacity the item already has may be assigned while its layer is hidden or locked.
+    // The opacity the item already has may be assigned while its layer is hidden or locked, unless
+    // it would still replace the opacity a graph keeps for the item's series or kind.
     let item = this_item(h, a)?;
-    let now = with_doc(h, item.doc, |_, st| st.doc.node(item.id).map(|n| f64::from(n.opacity) * 100.0));
-    let Some(v) = now.filter(|now| (now - v).abs() < 1e-4) else {
+    let (now, keeps_other) = with_doc(h, item.doc, |_, st| {
+        let d = &st.doc;
+        // Only the exact number the getter reports counts as the same opacity.
+        let now = d.node(item.id).map(|n| f64::from(n.opacity) * 100.0).filter(|now| (now * 1e4).round() / 1e4 == v);
+        let keeps_other =
+            crate::cmd::graph::series_object_opacity_differs(d, &[item.id]) || crate::cmd::graph::label_object_opacity_differs(d, &[item.id]);
+        (now, keeps_other)
+    });
+    if now.is_none() || keeps_other {
         refuse_in_closed_layer(h, item)?;
-        return set_props(h, a, |_| false, json!({"opacity": v}));
-    };
-    set_props(h, a, |_| false, json!({"opacity": v}))
+    }
+    set_props(h, a, |_| false, json!({"opacity": now.unwrap_or(v)}))
 }
 
 fn item_selected(h: &Host, a: &[Data]) -> Answer {
@@ -1731,7 +1756,7 @@ fn item_z_order_position(h: &Host, a: &[Data]) -> Answer {
 
 /// `remove()`: deletes the object. A hidden or locked object, one in a hidden or locked layer or
 /// group, a group holding one, or an object on a locked artboard is refused, as [`items_remove_all`]
-/// refuses it.
+/// refuses it. A compound path whose last path this is stays, empty.
 fn item_remove(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
     let (whole, on_locked) = with_doc(h, item.doc, |_, st| {
@@ -1743,7 +1768,8 @@ fn item_remove(h: &Host, a: &[Data]) -> Answer {
     if on_locked {
         return Err(HostError::Error(format!("{ON_LOCKED_ARTBOARD}: {}", item.id.0)));
     }
-    edit_item(h, item, "edit.clear", &json!({"ids": [item.id.0]}))?;
+    // A compound path whose last path this is stays, empty, as it does after `move`.
+    edit_item(h, item, "edit.clear", &json!({"ids": [item.id.0], "keepEmpty": true}))?;
     Ok(Data::Undefined)
 }
 

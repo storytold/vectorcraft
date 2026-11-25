@@ -2671,29 +2671,33 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   locked layer or group, or on a locked artboard throws `Cannot move` and moves nothing. `duplicate` on such an
   object, with or without a relative object, throws `Cannot duplicate` and makes no copy. Assigning `hidden`,
   `locked`, `opacity`, `position`, `left`, `top`, `width` or `height` to an object in a hidden or locked layer
-  throws `Cannot edit` and changes nothing, even when the value is the one the object has, except for `opacity`, and
-  `zOrder()` on such an object throws `Cannot edit` too. Its `name` and `note` still change, and an object that is
-  hidden or locked itself takes all of them (VectorCraft's own rule). `move` with the object itself as the relative object and
-  `PLACEBEFORE` or `PLACEAFTER` leaves it where it is and adds no undo step. When `move` takes the last path out of
-  a compound path, the compound path stays, empty, so a script that holds it can still read it. An object with
-  nothing in it, such as an empty group or that compound path, reads its bounds, `position`, `width` and `height`
-  as zeros, and assigning them does nothing (VectorCraft's own rule). `duplicate` on a path inside a compound path throws
+  throws `Cannot edit` and changes nothing, even when the value is the one the object has, and `zOrder()` on such
+  an object throws `Cannot edit` too. The one exception is `opacity` given the value the object already has, which
+  changes nothing and does not throw; on a graph's mark or label whose series or kind keeps another opacity, that
+  value would still change the graph, so it throws `Cannot edit` as well. Its `name` and `note` still change, and an
+  object that is hidden or locked itself takes all of them (VectorCraft's own rule). `move` with the object itself
+  as the relative object and `PLACEBEFORE` or `PLACEAFTER` leaves it where it is and adds no undo step. When `move`
+  or `remove()` takes the last path out of a compound path, the compound path stays, empty, so a script that holds
+  it can still read it (`remove()` runs `edit.clear` with `keepEmpty: true`). An object with nothing in it, such
+  as an empty group or that compound path, reads its bounds, `position`, `width` and `height` as zeros, and
+  assigning them does nothing (VectorCraft's own rule). `duplicate` on a path inside a compound path throws
   `Duplicating a path inside a compound path is not available yet`, and `zOrder` on one throws
-  `Reordering a path inside a compound path is not available yet` and leaves the document unchanged. A script that holds a placed image keeps the
-  same object when the image is embedded: the next read gives that object, now a `RasterItem`. The
-  enumerations `ElementPlacement`, `ZOrderMethod`, `RulerUnits`, `DocumentColorSpace`, `CoordinateSystem`,
+  `Reordering a path inside a compound path is not available yet` and leaves the document unchanged. A script that
+  holds a placed image keeps the same object when the image is embedded: the next read gives that object, now a
+  `RasterItem`. The enumerations `ElementPlacement`, `ZOrderMethod`, `RulerUnits`, `DocumentColorSpace`, `CoordinateSystem`,
   `DocumentArtboardLayout`, `DocumentPresetType`, `DocumentPreviewMode`, `DocumentRasterResolution` and
   `DocumentTransparencyGrid` hold strings such as `"ZOrderMethod.BRINGTOFRONT"`.
   `pageItems` lists the art topmost first, as the example on
   [CMYKColor](https://ai-scripting.docsforadobe.dev/jsobjref/CMYKColor/) reads the frontmost path as `pathItems[0]`,
   and a document's `selection` lists the selected objects in the same order, whatever order they were selected or
   made in. This is VectorCraft's own rule: the page cited below says the first object in a selection is the one last
-  added to the page, and VectorCraft does not follow that sentence. A collection read with a name, such as `pageItems["Logo"]` or
-  `documents["Untitled-1"]`, gives the object `getByName` gives, as
+  added to the page, and VectorCraft does not follow that sentence. A collection read with a name, such as
+  `pageItems["Logo"]` or `documents["Untitled-1"]`, gives the object `getByName` gives, as
   [Accessing and referencing objects](https://ai-scripting.docsforadobe.dev/scriptingJavascript/objectReferences/)
   shows. A read with a name that nothing has, a name the collection class lacks as a member included, throws
   `Not found`; `"name" in pageItems` is false then, and assigning to such a name throws `Not found` too
-  (VectorCraft's own rule). `JSON.stringify` does not read `toJSON` from a collection this way. `name` takes a number or a Boolean as the text `String(value)` gives. `String(object)` gives
+  (VectorCraft's own rule). `JSON.stringify` does not read `toJSON` from a collection this way. `name` and `note`
+  take a number or a Boolean as the text `String(value)` gives. `String(object)` gives
   `[PathItem Logo]` for a page item named `Logo` (`[PathItem ]` with no name), `[Document <name>]`,
   `[Layer <name>]`, `[Application]` and `[PageItems]` (VectorCraft's own rule).
   Documents are listed in tab order; the same page says `documents[0]` is always the active document, and
@@ -2706,11 +2710,12 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   for kinds the help pages give no class. Each change runs a command and joins the run's one undo step for each
   changed document. A value that changes nothing runs no command, and a change to another document leaves the active
   tab as it was. A command that selects the objects it changes leaves the current layer and the highlighted Layers
-  panel rows as they were before the change. A bad value throws an error and changes nothing. An object that was deleted, or that a named engine
-  kept from an earlier run, throws `Stale page item`. `remove()` on an object that is hidden or locked, is inside a
-  hidden or locked layer or group, or is a group that holds one, and `removeAll()` when any object is, throw
-  `cannot delete hidden or locked objects` and delete nothing. `remove()` on an object on a locked artboard, and `removeAll()`
-  when any object is on one, throw `cannot delete objects on a locked artboard` and delete nothing. Setting `width` or `height` scales the object along
+  panel rows as they were before the change. A bad value throws an error and changes nothing. An object that was
+  deleted, or that a named engine kept from an earlier run, throws `Stale page item`. `remove()` on an object that
+  is hidden or locked, is inside a hidden or locked layer or group, or is a group that holds one, and `removeAll()`
+  when any object is, throw `cannot delete hidden or locked objects` and delete nothing. `remove()` on an object on
+  a locked artboard, and `removeAll()` when any object is on one, throw `cannot delete objects on a locked artboard`
+  and delete nothing. Setting `width` or `height` scales the object along
   the page's axes, so a rotated object then reads back the size that was set. `index` and `getByName` throw
   `Not found`; and
   `app.activeDocument` with no document open throws `No active document`. `Document.selection` takes one page item,
@@ -2725,9 +2730,9 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `hasOwnProperty` and `propertyIsEnumerable` are false for those members and true for every other member of an
   object's class, so `item.hasOwnProperty("opacity")` is true on a page item, and `for (k in item)` lists the
   other properties but not the methods. `Object.keys`, `Object.getOwnPropertyNames` and
-  `Object.getOwnPropertyDescriptor` do not report those members. Assigning a member that a page item, a layer, a
-  document or the application does not have does not keep the value and does not throw; on a collection it throws `Not found`,
-  as described above. Other members
+  `Object.getOwnPropertyDescriptor` do not report any member of the class. Assigning a member that a page item, a
+  layer, a document or the application does not have does not keep the value; it does not throw, except in
+  strict-mode code, which throws a `TypeError`. On a collection it throws `Not found`, as described above. Other members
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
   themselves, such as a path's fill, are not defined yet and read as `undefined`.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
@@ -3381,7 +3386,8 @@ or unknown id leaves the document unchanged. An empty `ids` array does nothing. 
 are kept, and selecting an ancestor together with its descendants deletes that subtree once.
 Without `ids`, direct-selected anchors or selected ruler guides retain their usual Clear behavior.
 With `ids`, `guides: true` also deletes the selected ruler guides. The command rejects a `guides` value that is not a
-boolean.
+boolean. A compound path left with no paths is deleted too, unless `keepEmpty: true` is given, which keeps it, empty,
+also when the deleted parts are direct-selected anchors; a `keepEmpty` value that is not a boolean is rejected.
 
 `edit.copy` takes a compound-path member selected on its own (whole or in part, with Direct or Group Selection) as an
 ordinary path with the compound's paint, transparency, opacity mask and fill rule. The path is linked to the compound's
@@ -6992,7 +6998,9 @@ their facing handles are refitted so one cubic follows the two old segments; two
 The anchor after each removed one is then selected (the one before at an open path's end), so running
 `path.removeAnchors` again goes on along the path.
 `path.removeAnchor {id, subpath?, anchor}` (the Delete Anchor Point tool) removes one anchor the same way, and
-`path.deleteAnchors {}` (the Delete key) deletes the selected anchors with their segments, opening closed paths there.
+`path.deleteAnchors {keepEmpty?}` (the Delete key) deletes the selected anchors with their segments, opening closed paths
+there. A compound path left with no paths is deleted too, unless `keepEmpty: true` is given; `edit.clear` passes its
+`keepEmpty` on when it deletes direct-selected anchors.
 
 ```json
 {"name":"run_command","arguments":{"command":"select.anchors","params":{"id":12,"anchors":[[0,1],[0,3]]}}}

@@ -225,7 +225,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clear",
             ["Edit"],
             Some("Delete"),
-            "{ids?, guides?: bool (with ids: also delete the selected ruler guides)} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides; a compound-path member selected on its own is deleted alone, and a compound left with no members goes too); without ids, refused while an object of a symbol instance's art is selected",
+            "{ids?, guides?: bool (with ids: also delete the selected ruler guides), keepEmpty?: bool (keep a compound path left with no members)} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides; a compound-path member selected on its own is deleted alone, and a compound left with no members goes too unless keepEmpty); without ids, refused while an object of a symbol instance's art is selected",
             has_selection_or_guides,
             clear
         ),
@@ -1221,6 +1221,7 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
 
 fn clear(s: &mut Session, p: &Value) -> Result<Value> {
     let guides = switch_or(p, "guides", false, "edit.clear")?;
+    let keep_empty = switch_or(p, "keepEmpty", false, "edit.clear")?;
     let explicit = if p.get("ids").is_some() { Some(checked_ids_param(s, p, "ids", "edit.clear")?) } else { None };
     // An object of a symbol instance's art can't be removed from the instance alone.
     if explicit.is_none() && s.doc()?.selection.symbol_part.is_some() {
@@ -1252,8 +1253,11 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
         return ok();
     }
     s.edit("Clear", |d, sel| {
-        let parents: Vec<_> =
-            ids.iter().filter_map(|id| d.parent_of(*id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. })))).collect();
+        let parents: Vec<_> = if keep_empty {
+            Vec::new()
+        } else {
+            ids.iter().filter_map(|id| d.parent_of(*id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. })))).collect()
+        };
         d.remove_many(&ids)?;
         for p in parents {
             if d.node(p).is_some_and(|n| n.children().is_some_and(|c| c.is_empty())) {

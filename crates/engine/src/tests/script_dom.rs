@@ -242,6 +242,20 @@ fn an_opacity_a_graph_mark_already_has_replaces_the_one_its_series_keeps() {
     s.execute("object.setProps", &json!({"id": marks[0].0, "opacity": 50})).unwrap();
     assert_eq!(kept(&s), Some(0.5));
     s.execute("object.setProps", &json!({"id": series(&s)[1].0, "name": "mark"})).unwrap();
+    // In a hidden or locked layer the same assignment would still change the graph, so it is refused.
+    let layer = s.active().unwrap().doc.layers[0].id;
+    for (on, off) in [
+        (json!({"ids": [layer.0], "visible": false}), json!({"ids": [layer.0], "visible": true})),
+        (json!({"ids": [layer.0], "locked": true}), json!({"ids": [layer.0], "locked": false})),
+    ] {
+        s.execute("object.setProps", &on).unwrap();
+        let steps = undo_steps(&s);
+        let e = failure(&mut s, "var m = app.activeDocument.pageItems.getByName('mark'); m.opacity = m.opacity;");
+        assert!(e.contains("Cannot edit"), "{on}: {e}");
+        assert_eq!(kept(&s), Some(0.5), "{on}");
+        assert_eq!(undo_steps(&s), steps, "{on}");
+        s.execute("object.setProps", &off).unwrap();
+    }
     log(&mut s, "app.activeDocument.pageItems.getByName('mark').opacity = 100;");
     assert_eq!(kept(&s), None);
 }
@@ -256,6 +270,12 @@ fn assigning_the_reported_opacity_changes_nothing() {
     assert_eq!(out, vec![json!(33.3333)]);
     assert_eq!(s.active().unwrap().doc.node(a).unwrap().opacity, before);
     assert_eq!(undo_steps(&s), steps);
+    // A value close to the reported one but not equal to it is still applied.
+    s.execute("object.setProps", &json!({"id": a.0, "opacity": 50})).unwrap();
+    let (before, steps) = (s.active().unwrap().doc.node(a).unwrap().opacity, undo_steps(&s));
+    log(&mut s, "app.activeDocument.pageItems[1].opacity = 50.00005;");
+    assert!(s.active().unwrap().doc.node(a).unwrap().opacity > before, "the assigned opacity was applied");
+    assert_eq!(undo_steps(&s), steps + 1);
 }
 
 #[test]
@@ -522,6 +542,54 @@ fn moving_the_last_path_out_of_a_compound_path_keeps_the_compound_path() {
     assert_eq!(layer_order(&s), [compound, b, a]);
     assert!([a, b].iter().all(|id| doc.parent_of(*id) == Some(layer)));
     assert_eq!(undo_steps(&s), steps + 1, "the run is one undo step");
+}
+
+/// `remove()` on the last path of a compound path keeps the compound path, empty, as `move` does,
+/// and a document holding it saves, reopens, exports and releases it.
+#[test]
+fn removing_the_last_path_of_a_compound_path_keeps_the_compound_path() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    let compound = layer_order(&s)[0];
+    let steps = undo_steps(&s);
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, c = d.pageItems[0]; d.pageItems[2].remove(); d.pageItems[1].remove();\
+         vc.log([c.typename, d.pageItems.length, c === d.pageItems[0]]);",
+    );
+    assert_eq!(out, vec![json!(["CompoundPathItem", 1, true])]);
+    let doc = s.active().unwrap().doc.clone();
+    assert!(doc.node(compound).is_some_and(|n| n.children().is_some_and(|c| c.is_empty())), "the compound path stays, empty");
+    assert_eq!(undo_steps(&s), steps + 1, "the run is one undo step");
+    assert!(s.execute("edit.clear", &json!({"ids": [compound.0], "keepEmpty": 1})).is_err(), "keepEmpty must be a boolean");
+    // The native format keeps it, and the other writers and Release Compound Path accept it.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+    assert!(back.node(compound).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. }) && n.children().is_some_and(|c| c.is_empty())));
+    for format in ["svg", "pdf", "vectorcraft"] {
+        s.execute("document.export", &json!({"format": format})).unwrap_or_else(|e| panic!("{format}: {e}"));
+    }
+    s.execute("select.set", &json!({"ids": [compound.0]})).unwrap();
+    s.execute("object.compoundPath.release", &json!({})).unwrap();
+}
+
+/// Clear with `keepEmpty` keeps the emptied compound path also when it deletes direct-selected
+/// anchors, and without it deletes the compound path as before.
+#[test]
+fn clearing_anchors_with_keep_empty_keeps_the_compound_path() {
+    for keep in [true, false] {
+        let (mut s, a, b) = doc();
+        s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+        s.execute("object.compoundPath.make", &json!({})).unwrap();
+        let compound = layer_order(&s)[0];
+        for (id, mode) in [(a, "set"), (b, "add")] {
+            s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 0], [0, 1], [0, 2]], "mode": mode})).unwrap();
+        }
+        s.execute("edit.clear", &json!({"keepEmpty": keep})).unwrap();
+        let d = &s.active().unwrap().doc;
+        assert!(d.node(a).is_none() && d.node(b).is_none(), "keepEmpty {keep}: both paths are deleted");
+        assert_eq!(d.node(compound).is_some_and(|n| n.children().is_some_and(|c| c.is_empty())), keep, "keepEmpty {keep}");
+    }
 }
 
 #[test]
@@ -921,7 +989,12 @@ fn note_is_the_attributes_note() {
     assert_eq!(undo_steps(&s), steps + 1);
     log(&mut s, "app.activeDocument.pageItems[1].note = 'check bleed';");
     assert_eq!(undo_steps(&s), steps + 1, "the same note adds no step");
-    assert!(failure(&mut s, "app.activeDocument.pageItems[0].note = 5;").contains("note must be a string"));
+    // A number or a Boolean becomes its text, as it does for `name`.
+    let out = log(&mut s, "var i = app.activeDocument.pageItems[1]; i.note = 5; vc.log([typeof i.note, i.note]); i.note = true; vc.log(i.note);");
+    assert_eq!(out, vec![json!(["string", "5"]), json!("true")]);
+    for value in ["null", "undefined", "{}"] {
+        assert!(failure(&mut s, &format!("app.activeDocument.pageItems[0].note = {value};")).contains("note must be a string"), "{value}");
+    }
     assert!(failure(&mut s, "app.activeDocument.pageItems[0].note = new Array(5000).join('n');").contains("too long"));
 }
 
@@ -1332,24 +1405,20 @@ fn unsupported_members_say_so() {
     assert!(failure(&mut s, "app.activeDocument.layers;").contains("Document.layers is not available yet"));
 }
 
-/// A script that lowers each selected object's opacity by 10 points, checking each member with
-/// `hasOwnProperty` and the selection's `length` first, as scripts written for the object model do.
-const LOWER_OPACITY: &str = "\
-    var doc = app.activeDocument;\
-    var sel = doc.selection;\
-    if (sel.length === 0) { alert('Nothing selected.'); }\
-    else {\
-        var done = 0;\
-        for (var i = 0; i < sel.length; i++) {\
-            var item = sel[i];\
-            if (item.hasOwnProperty('opacity') && typeof item.opacity === 'number') {\
-                item.opacity = Math.max(0, item.opacity - 10);\
-                done++;\
-            }\
-            if (item.hasOwnProperty('blendingMode')) { item.blendingMode; }\
-        }\
-        if (done === 0) { alert('No object with an opacity.'); }\
-    }";
+/// A script that names each visible selected object after its place in `app.selection`, testing
+/// the members it uses with `hasOwnProperty` and `propertyIsEnumerable` first. A member that is not
+/// available yet, such as `blendingMode`, is read only when `hasOwnProperty` reports it, so it is
+/// never read.
+const NAME_PICKED: &str = "\
+    var picked = app.selection, k = picked.length, named = 0;\
+    if (!k) alert('Select something first.');\
+    while (k--) {\
+        var obj = picked[k];\
+        var usable = obj.propertyIsEnumerable('name') && obj.hasOwnProperty('hidden') && !obj.hidden;\
+        if (obj.hasOwnProperty('blendingMode') && obj.blendingMode) usable = false;\
+        if (usable) { obj.name = 'picked ' + k; named += 1; }\
+    }\
+    if (picked.length && named < picked.length) alert('Some objects were skipped.');";
 
 #[test]
 fn a_script_that_checks_has_own_property_changes_every_kind_of_selected_object() {
@@ -1364,20 +1433,40 @@ fn a_script_that_checks_has_own_property_changes_every_kind_of_selected_object()
     s.execute("select.set", &json!({"ids": [c1.0, c2.0]})).unwrap();
     s.execute("object.compoundPath.make", &json!({})).unwrap();
     let compound = s.active().unwrap().selection.objects[0];
-    s.execute("object.setProps", &json!({"ids": [group.0], "opacity": 55})).unwrap();
-    s.execute("object.setProps", &json!({"ids": [text.0], "opacity": 5})).unwrap();
     let objects = [path, group, text, compound];
     s.execute("select.set", &json!({"ids": objects.iter().map(|n| n.0).collect::<Vec<_>>()})).unwrap();
-    let opacities = |s: &Session| -> Vec<f64> {
+    let names = |s: &Session| -> Vec<Option<String>> {
         let d = &s.active().unwrap().doc;
-        objects.iter().map(|n| (f64::from(d.node(*n).unwrap().opacity) * 1000.0).round() / 10.0).collect()
+        objects.iter().map(|n| d.node(*n).unwrap().name.clone()).collect()
+    };
+    let before = names(&s);
+    let steps = undo_steps(&s);
+    // The run shows no alert: without an answer for one, it would stop there.
+    let r = run(&mut s, NAME_PICKED).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(r["dialogs"], json!([]), "{r}");
+    let after = names(&s);
+    assert!(after.iter().all(|n| n.as_deref().is_some_and(|n| n.starts_with("picked "))), "every kind was named: {after:?}");
+    assert_eq!(after.iter().collect::<std::collections::HashSet<_>>().len(), objects.len(), "each got its own name: {after:?}");
+    assert_eq!(undo_steps(&s), steps + 1, "the run is one undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(names(&s), before);
+    // Opacity reads and writes on every kind too: each object goes to its own value, read back from the script.
+    s.execute("select.set", &json!({"ids": objects.iter().map(|n| n.0).collect::<Vec<_>>()})).unwrap();
+    let opacities = |s: &Session| -> Vec<f32> {
+        let d = &s.active().unwrap().doc;
+        objects.iter().map(|n| d.node(*n).unwrap().opacity).collect()
     };
     let before = opacities(&s);
     let steps = undo_steps(&s);
-    // The run shows no alert: without an answer for one, it would stop there.
-    let r = run(&mut s, LOWER_OPACITY).unwrap_or_else(|e| panic!("{e}"));
-    assert_eq!(r["dialogs"], json!([]), "{r}");
-    assert_eq!(opacities(&s), vec![90.0, 45.0, 0.0, 90.0]);
+    let out = log(
+        &mut s,
+        "var sel = app.activeDocument.selection, read = [];\
+         for (var i = 0; i < sel.length; i++) { sel[i].opacity = 20 + 10 * i; read.push(sel[i].opacity); }\
+         vc.log(read);",
+    );
+    assert_eq!(out, vec![json!([20, 30, 40, 50])]);
+    let after = opacities(&s);
+    assert!(after.iter().zip(&before).all(|(a, b)| a < b), "every kind got a lower opacity: {before:?} -> {after:?}");
     assert_eq!(undo_steps(&s), steps + 1, "the run is one undo step");
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(opacities(&s), before);
@@ -1390,8 +1479,8 @@ fn the_selection_is_an_empty_list_when_nothing_is_selected() {
     let out = log(&mut s, "var d = app.activeDocument; vc.log([d.selection instanceof Array, d.selection.length, app.selection.length]);");
     assert_eq!(out, vec![json!([true, 0, 0])]);
     let steps = undo_steps(&s);
-    let r = s.execute("script.run", &json!({"source": LOWER_OPACITY, "name": "t.js", "answers": [{"kind": "alert", "value": "ok"}]})).unwrap();
-    assert_eq!(r["dialogs"][0]["message"], json!("Nothing selected."), "{r}");
+    let r = s.execute("script.run", &json!({"source": NAME_PICKED, "name": "t.js", "answers": [{"kind": "alert", "value": "ok"}]})).unwrap();
+    assert_eq!(r["dialogs"][0]["message"], json!("Select something first."), "{r}");
     assert_eq!(undo_steps(&s), steps);
 }
 
@@ -1482,6 +1571,41 @@ fn page_items_and_the_selection_list_the_topmost_object_first() {
          vc.log([d.selection[0].name, d.selection[1].name, d.pageItems[2].name]);",
     );
     assert_eq!(out, vec![json!(["top", "last", "last"])]);
+}
+
+/// The selection lists a group before the objects in it, in `pageItems`' order, and reading it
+/// costs as much in a large document as in a small one.
+#[test]
+fn the_selection_follows_page_items_and_costs_the_same_in_a_large_document() {
+    let (mut s, a, b) = doc();
+    let c = rect(&mut s, 200.0, 200.0, 20.0, 20.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let group = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, c.0, group]})).unwrap();
+    let source = "var d = app.activeDocument, want = [], got = [];\
+                  for (var i = 0; i < d.pageItems.length; i++) if (d.pageItems[i].selected) want.push(d.pageItems[i].typename + i);\
+                  for (var i = 0; i < d.pageItems.length; i++) for (var j = 0; j < d.selection.length; j++)\
+                    if (d.selection[j] === d.pageItems[i]) got[j] = d.pageItems[i].typename + i;\
+                  vc.log([want, got]);";
+    let out = log(&mut s, source);
+    assert_eq!(out[0][0], out[0][1], "the selection is in pageItems' order");
+    assert_eq!(out[0][0].as_array().map(Vec::len), Some(3));
+    // Each pass edits the document, so nothing kept from the last read can be reused.
+    let edits = "var d = app.activeDocument; for (var i = 0; i < 50; i++) d.selection[0].opacity = 50 + i % 2;";
+    s.execute("select.set", &json!({"ids": [c.0]})).unwrap();
+    let small = run(&mut s, edits).unwrap()["fuelUsed"].as_u64().unwrap();
+    // 3 objects doubled 11 times: 6,144.
+    s.execute("select.all", &json!({})).unwrap();
+    for _ in 0..11 {
+        s.execute("edit.duplicate", &json!({})).unwrap();
+        s.execute("select.all", &json!({})).unwrap();
+    }
+    s.execute("select.set", &json!({"ids": [c.0]})).unwrap();
+    crate::script::TEST_BRIDGE_BYTES.with(|b| b.set(Some(1 << 16)));
+    let large = run(&mut s, edits);
+    crate::script::TEST_BRIDGE_BYTES.with(|b| b.set(None));
+    let large = large.unwrap_or_else(|e| panic!("the reads in a large document went over: {e}"))["fuelUsed"].as_u64().unwrap();
+    assert_eq!(small, large);
 }
 
 /// A collection read with a name gives what `getByName` gives, and throws as it does for no match.
@@ -1632,6 +1756,11 @@ fn assigning_a_name_a_collection_lacks_throws() {
     }
     let out = log(&mut s, "var p = app.activeDocument.pageItems; p[0] = 3; vc.log(typeof p[0]);");
     assert_eq!(out, vec![json!("object")]);
+    // On a page item the value is not kept; strict-mode code throws instead.
+    let out = log(&mut s, "var i = app.activeDocument.pageItems[0]; i.qux = 4; vc.log(typeof i.qux);");
+    assert_eq!(out, vec![json!("undefined")]);
+    let e = failure(&mut s, "'use strict'; app.activeDocument.pageItems[0].qux = 4;");
+    assert!(e.contains("TypeError") && e.contains("qux"), "{e}");
     assert_eq!(undo_steps(&s), steps);
 }
 
