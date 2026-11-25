@@ -104,7 +104,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Revoke Script File Permissions",
             [],
             None,
-            "{script?: a script file's path, path?: an allowed file or folder's path, all?: true (exactly one of all and the other two)} remove the kept file access of that script, of that path, of both together, or every one; a path is matched as given and as script.grants lists it, after its links are followed (a path outside the automation read roots is matched as given only); refused with the busy error while a script runs, as the run keeps the grants it started with → {removed: how many}",
+            "{script?: a script file's path, path?: an allowed file or folder's path, all?: true (exactly one of all and the other two)} remove the kept file access of that script, of that path, of both together, or every one; a path is matched as given, as script.grants lists it, or after its links are followed when no grant holds it as given (a path outside the automation read roots is matched as given only); refused with the busy error while a script runs, as the run keeps the grants it started with → {removed: how many}",
             always,
             grants_revoke
         ),
@@ -384,8 +384,8 @@ fn grants(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn grants_revoke(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "script.grants.revoke";
-    // A path is matched as given, and also with its links followed, so a grant whose path a link
-    // has since taken the place of is still removed. A path the request may not read (outside the
+    // A path is matched as given, or with its links followed when no grant holds it as given, so a
+    // grant whose path a link has since taken the place of is still removed. A path the request may not read (outside the
     // automation read roots, a network path among them) is compared as written, without looking it up.
     let path_of = |key: &str| match p.get(key) {
         None => Ok(None),

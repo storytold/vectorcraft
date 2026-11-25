@@ -1079,15 +1079,29 @@ pub(crate) fn stored_grants(data_dir: &Path) -> std::io::Result<Vec<serde_json::
 }
 
 /// Removes from the grants file beside `data_dir` the grants of the script `script` and of the path
-/// `path` (each matched by any of its spellings), of both when both are given and of every grant
-/// when neither is (`script.grants.revoke`). → how many were removed.
+/// `path`, of both when both are given and of every grant when neither is (`script.grants.revoke`).
+/// The spellings of each are tried in order, the script's first, and the first pair that some grant
+/// holds is the one removed, so a grant kept under the spellings given first is removed without the
+/// grants of later ones. → how many were removed.
 pub(crate) fn revoke_grants(data_dir: &Path, script: Option<&[String]>, path: Option<&[String]>) -> std::io::Result<usize> {
     let store = data_dir.with_file_name(GRANTS_FILE);
     let _lock = lock_store(&store)?;
     let grants = try_read_store(&store)?;
     let before = grants.len();
-    let matches = |value: &serde_json::Value, names: Option<&[String]>| names.is_none_or(|names| names.iter().any(|n| value == n.as_str()));
-    let kept: Vec<serde_json::Value> = grants.into_iter().filter(|g| !(matches(&g["script"], script) && matches(&g["path"], path))).collect();
+    // `None` matches any value; `Some(name)` only that name.
+    fn spellings(names: Option<&[String]>) -> Vec<Option<&str>> {
+        match names {
+            None => vec![None],
+            Some(names) => names.iter().map(|n| Some(n.as_str())).collect(),
+        }
+    }
+    let matches = |g: &serde_json::Value, (script, path): (Option<&str>, Option<&str>)| {
+        script.is_none_or(|s| g["script"] == s) && path.is_none_or(|p| g["path"] == p)
+    };
+    let pairs = spellings(script).into_iter().flat_map(|s| spellings(path).into_iter().map(move |p| (s, p)));
+    let pair = pairs.into_iter().find(|&pair| grants.iter().any(|g| matches(g, pair)));
+    let Some(pair) = pair else { return Ok(0) };
+    let kept: Vec<serde_json::Value> = grants.into_iter().filter(|g| !matches(g, pair)).collect();
     let removed = before - kept.len();
     if removed > 0 {
         write_store(&store, kept)?;
