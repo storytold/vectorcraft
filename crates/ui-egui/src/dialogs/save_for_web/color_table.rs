@@ -196,30 +196,33 @@ fn delete(table: &mut Value, picked: &[String], shown: &[[u8; 3]]) -> Result<(),
 }
 
 /// Shift the source colour `from` to `to`, wherever it is in the image; it is no longer
-/// web-shifted. Shifting a colour to itself takes its shift away. A new source when 256 colours
-/// are already shifted is refused with the engine's limit error, and nothing changes. Entries the
+/// web-shifted. Shifting a colour to itself takes its shift away. A shift that would leave more
+/// than 256 colours shifted is refused with the engine's limit error, and nothing changes. Entries the
 /// engine drops (a colour shifted to itself, a deleted colour) do not count, and a new shift writes
 /// the map without them.
 pub(crate) fn shift(table: &mut Value, from: [u8; 3], to: [u8; 3]) -> Result<(), String> {
     let (source, to) = (hex(from), hex(to));
     let deleted: Vec<[u8; 3]> = list(table, "deleted").iter().filter_map(|c| parse(c)).collect();
     let map = shifts(table);
-    // Entries are dropped only from a map the engine accepts (every key and value a colour, no two
-    // keys naming one colour); any other map is kept whole for the engine to refuse.
+    // Entries are dropped only from a map the engine accepts (at most 256 entries, every key and
+    // value a colour, no two keys naming one colour); any other map is kept whole for the engine to
+    // refuse.
     let mut keys: Vec<[u8; 3]> = Vec::new();
-    let valid = map.iter().all(|(k, v)| match (parse(k), v.as_str().and_then(parse)) {
-        (Some(k), Some(_)) if !keys.contains(&k) => {
-            keys.push(k);
-            true
-        }
-        _ => false,
-    });
+    let valid = map.len() <= webexport::MAX_TABLE
+        && map.iter().all(|(k, v)| match (parse(k), v.as_str().and_then(parse)) {
+            (Some(k), Some(_)) if !keys.contains(&k) => {
+                keys.push(k);
+                true
+            }
+            _ => false,
+        });
     let live = |k: &str, v: &Value| {
         let (true, Some(key), Some(to)) = (valid, parse(k), v.as_str().and_then(parse)) else { return true };
         to != key && !deleted.contains(&key)
     };
     let count = map.iter().filter(|(k, v)| live(k, v)).count();
-    if to != source && count >= webexport::MAX_TABLE && !map.iter().any(|(k, v)| live(k, v) && same(k, &source)) {
+    let held = usize::from(map.iter().any(|(k, v)| live(k, v) && same(k, &source)));
+    if to != source && count - held >= webexport::MAX_TABLE {
         return Err(webexport::too_many("shifted"));
     }
     unshift(table, &source);

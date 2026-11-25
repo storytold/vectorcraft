@@ -148,6 +148,22 @@ fn a_shift_skips_entries_the_engine_drops() {
     }
 }
 
+/// A map with more than 256 entries is one the engine refuses, so none of its entries are dropped:
+/// with 257 colours shifted to themselves, a new shift and a new target for a shifted colour are
+/// refused with the limit error and nothing changes. Taking a shift away still works.
+#[test]
+fn a_shift_keeps_a_map_over_the_limit_whole() {
+    let over: serde_json::Map<String, Value> = (0..257).map(|i| (format!("#{i:06x}"), json!(format!("#{i:06x}")))).collect();
+    let mut t = json!({"shifted": over});
+    let before = t.clone();
+    let e = shift(&mut t, [0x12, 0x34, 0x56], A).unwrap_err();
+    assert_eq!((e, &t), (webexport::too_many("shifted"), &before));
+    let e = shift(&mut t, [0, 0, 5], [0x12, 0x34, 0x56]).unwrap_err();
+    assert_eq!((e, &t), (webexport::too_many("shifted"), &before));
+    shift(&mut t, [0, 0, 5], [0, 0, 5]).unwrap();
+    assert_eq!(t["shifted"].as_object().map(|m| m.len()), Some(256));
+}
+
 /// A key or list entry written another way (`#F00`, upper case, `blue`) still names its colour:
 /// a new shift replaces it, Unshift and the buttons take it out, the marks show it, and a
 /// spelling with alpha names no colour.
