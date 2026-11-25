@@ -260,8 +260,8 @@ fn artboard_files(format: &str, q: &mut Map<String, Value>) -> std::result::Resu
     Ok(())
 }
 
-/// Whether `r` is written as an artboard range, whatever artboards a document has: parts separated
-/// by commas, each a number from 1, or two of them joined by `-` or `–` with either one left out
+/// Whether `r` is written as an artboard range, whatever artboards a document has: one or more
+/// parts separated by commas, each a number from 1, or two of them joined by `-` or `–` with either one left out
 /// and the first no greater than the second.
 fn written_as_range(r: &str) -> bool {
     // A number of digits alone, from 1; past `u64` it counts as the largest.
@@ -273,14 +273,16 @@ fn written_as_range(r: &str) -> bool {
         let n = t.bytes().all(|b| b.is_ascii_digit()).then(|| t.parse::<u64>().unwrap_or(u64::MAX))?;
         (n >= 1).then_some(Some(n))
     };
-    r.split(',').map(str::trim).filter(|p| !p.is_empty()).all(|part| match part.replace('\u{2013}', "-").split_once('-') {
-        Some((a, b)) => match (num(a), num(b)) {
-            (Some(Some(a)), Some(Some(b))) => a <= b,
-            (Some(a), Some(b)) => a.is_some() || b.is_some(),
-            _ => false,
-        },
-        None => matches!(num(part), Some(Some(_))),
-    })
+    let mut parts = r.split(',').map(str::trim).filter(|p| !p.is_empty()).peekable();
+    parts.peek().is_some()
+        && parts.all(|part| match part.replace('\u{2013}', "-").split_once('-') {
+            Some((a, b)) => match (num(a), num(b)) {
+                (Some(Some(a)), Some(Some(b))) => a <= b,
+                (Some(a), Some(b)) => a.is_some() || b.is_some(),
+                _ => false,
+            },
+            None => matches!(num(part), Some(Some(_))),
+        })
 }
 
 const AI_KEPT: &[(&str, Default)] = &[
@@ -896,7 +898,7 @@ const NO_FILE_TO_SAVE: &str =
 /// `document.close(saveOptions?)`: `file.close` of the document. A document without unsaved
 /// changes closes with any `SaveOptions`. With unsaved changes, `SaveOptions.DONOTSAVECHANGES`
 /// closes it without them; `SaveOptions.SAVECHANGES` saves them to the document's file with
-/// `file.saveAs` in the format its extension names, after the write-access check `saveAs` makes of
+/// `file.saveAs` in the format the document was last saved in, after the write-access check `saveAs` makes of
 /// the path, and then closes it, and throws [`NO_FILE_TO_SAVE`]
 /// for a document that has no file, a converted or recovered one included; and
 /// `SaveOptions.PROMPTTOSAVECHANGES`, the default, throws [`UNSAVED_CHANGES`], since a script
@@ -907,7 +909,8 @@ fn doc_close(h: &Host, a: &[Data]) -> Answer {
         Some(d) => member(d, "SaveOptions", &["DONOTSAVECHANGES", "PROMPTTOSAVECHANGES", "SAVECHANGES"], "saveOptions")?,
         None => "PROMPTTOSAVECHANGES",
     };
-    let (dirty, file) = super::with_doc(h, doc, |_, st| (st.is_dirty(), st.path.clone().filter(|_| !st.converted && !st.recovered)));
+    let (dirty, file, format) =
+        super::with_doc(h, doc, |_, st| (st.is_dirty(), st.path.clone().filter(|_| !st.converted && !st.recovered), st.format));
     if dirty {
         match how {
             "DONOTSAVECHANGES" => {}
@@ -916,7 +919,7 @@ fn doc_close(h: &Host, a: &[Data]) -> Answer {
                 // A refusal names the document, as `fullName` does when the read roots hide its file.
                 let name = super::with_doc(h, doc, |_, st| st.title());
                 let real = h.disk.borrow().save_target(&path).map_err(|m| refused(m, &name))?;
-                let p = json!({"path": plain(real)});
+                let p = json!({"path": plain(real), "format": format});
                 exactly(h, || on_doc(h, doc.uid, false, |h| command(h, "file.saveAs", &p)))?;
             }
             _ => return Err(HostError::Error(UNSAVED_CHANGES.into())),

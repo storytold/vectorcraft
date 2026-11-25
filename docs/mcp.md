@@ -2751,8 +2751,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `Script file access denied`. Setting `saved` runs `document.setSaved`: `true` records the document as saved
   without saving it, so `close()` then closes it, and `false` records it as having unsaved changes; neither adds an
   undo step. With unsaved changes, `close` closes without them with `SaveOptions.DONOTSAVECHANGES`;
-  `SaveOptions.SAVECHANGES` first saves them to the document's file with `file.saveAs`, in the format its extension
-  names and after the same write-access check of the path as `saveAs`, and throws an error
+  `SaveOptions.SAVECHANGES` first saves them to the document's file with `file.saveAs`, in the format the document
+  was last saved in and after the same write-access check of the path as `saveAs`, and throws an error
   and leaves the document open when the document has no file (a converted or recovered document included); and
   `SaveOptions.PROMPTTOSAVECHANGES`, the default, throws an error and leaves the document open, since a script cannot
   show the prompt. A bad value throws an error before anything is written.

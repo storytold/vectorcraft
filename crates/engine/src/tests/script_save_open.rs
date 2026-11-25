@@ -696,6 +696,29 @@ fn a_document_without_unsaved_changes_closes_with_any_save_options() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `close(SaveOptions.SAVECHANGES)` saves in the format the document was last saved in, not the
+/// one its file's extension names.
+#[test]
+fn closing_with_save_changes_keeps_the_documents_format() {
+    let base = folder("closeformat");
+    let mut s = session(&base);
+    let dir = data_folder(&mut s, &base);
+    let d = quoted(&dir);
+    logged(
+        &mut s,
+        &base,
+        &format!(
+            "Folder.userData; var d = app.documents.add(DocumentColorSpace.RGB, 200, 100);\n\
+             vc.run('shape.rectangle', {{x: 10, y: 10, width: 50, height: 20}}); d.saveAs(new File({d} + '/p.svg'), new PDFSaveOptions());\n\
+             vc.run('shape.rectangle', {{x: 20, y: 20, width: 5, height: 5}}); d.close(SaveOptions.SAVECHANGES); vc.log(app.documents.length);"
+        ),
+    );
+    let bytes = std::fs::read(dir.join("p.svg")).unwrap_or_default();
+    assert!(bytes.starts_with(b"%PDF"), "the save on close keeps the PDF format");
+    assert!(s.documents().is_empty());
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// Setting `Document.saved` records the document's saved state without saving it: `true` lets
 /// `close()` close a document with edits, and `false` makes an untouched one ask.
 #[test]
@@ -867,7 +890,7 @@ fn save_multiple_artboards_writes_a_file_per_artboard() {
         ),
     );
     assert!(dir.join("aioff/c.ai").is_file(), "a range past the document's artboards is not used and does not stop the save");
-    for bad in ["'abc'", "'0-'", "'3-1'", "'-'", "-1", "2.5", "0"] {
+    for bad in ["'abc'", "'0-'", "'3-1'", "'-'", "','", "' , '", "-1", "2.5", "0"] {
         let e = failure(
             &mut s,
             &base,
