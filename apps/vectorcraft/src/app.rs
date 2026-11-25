@@ -1,5 +1,6 @@
 #[cfg(all(target_os = "macos", feature = "accessibility", feature = "wgpu"))]
 use super::gpu;
+use super::nightly_session;
 use super::prefs::{flush, save_tick};
 #[cfg(not(target_os = "macos"))]
 use super::single_instance;
@@ -95,10 +96,17 @@ impl eframe::App for App {
         // A ready update installs once the process has exited. The macOS exit below skips
         // dropping the app, so the helper is started here.
         self.app.start_pending_update();
+        // Every quit reaches this hook, including a macOS Cmd+Q, which ends the process inside
+        // AppKit's terminate before `run_native` returns: the nightly session record is finished
+        // here, and the return path after the event loop is then a no-op.
+        nightly_session::finish_once();
         // Dropping the app can wait for the clipboard handles to let go: the windows leave the
         // screen first (`quit_windows`).
         #[cfg(not(any(target_os = "macos", windows)))]
         super::quit_windows::before_teardown(self.winit_window.as_deref());
+        // Plug-ins still loading end before the launch marker does (the macOS exit below skips
+        // dropping the app).
+        self.app.session.cancel_plugin_loads();
         end_before_teardown(self.frames);
     }
 }
@@ -159,8 +167,9 @@ impl App {
         // dialog is open: what asked for it runs again on its document when it answers. They also
         // wait for the choice about a stopped plug-in, so they open after the plug-ins it loads, as
         // do the command line's files held back for it. Files later launches handed over before the
-        // choice ended in Safe Mode open in a new app with plug-ins.
-        if !self.app.file_dialog_open() && !safe_mode::choosing(&self.app) {
+        // choice ended in Safe Mode open in a new app with plug-ins. They wait while plug-ins load
+        // as well, since a plug-in may be what reads them.
+        if !self.app.file_dialog_open() && !safe_mode::choosing(&self.app) && !self.app.session.plugins_loading() {
             let held = std::mem::take(&mut self.held_files);
             #[cfg(target_os = "macos")]
             let files = open_documents::take();
@@ -210,9 +219,10 @@ pub(crate) fn bring_window_forward(ctx: &egui::Context) {
 }
 
 /// Open the command line's `files` now, or, while the choice about a stopped plug-in is up
-/// ([`safe_mode::choosing`]), return them to open once it is made, with the plug-ins it loads.
+/// ([`safe_mode::choosing`]) or plug-ins are still loading (a plug-in may be what reads one),
+/// return them to open once it is made and they have loaded.
 pub(crate) fn open_or_hold(app: &mut VectorcraftApp, files: Vec<String>) -> Vec<String> {
-    if safe_mode::choosing(app) {
+    if safe_mode::choosing(app) || app.session.plugins_loading() {
         return files;
     }
     open_files(app, files);
