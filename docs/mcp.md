@@ -2749,7 +2749,22 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   changed. A path in a compound path or compound shape reads the fill, stroke and overprint of that compound path or
   shape, which the paint commands paint in its place. A change to a path's paint or stroke leaves the paint for new
   art, the active Fill or Stroke proxy and Recent Colors as they were. `selectedPathPoints`, `PathPoint.selected`,
-  `transform`, `polarity`, the gradient stops and the document's default paint are not available yet.
+  `transform`, `polarity` and the gradient stops are not available yet.
+- A `Document`'s default paint members (https://ai-scripting.docsforadobe.dev/jsobjref/Document/) read and set what
+  the next object drawn gets, as `appearance.newArt` reports it, the same for every open document: `defaultFillColor`,
+  `defaultFilled`, `defaultFillOverprint`, `defaultStrokeColor`, `defaultStroked`, `defaultStrokeOverprint`,
+  `defaultStrokeWidth`, `defaultStrokeCap`, `defaultStrokeJoin`, `defaultStrokeMiterLimit`, `defaultStrokeDashes`
+  (`[]` or `{}` for a solid line) and `defaultStrokeDashOffset`. Assigning one runs `appearance.setNewArt`, which
+  leaves the selection, its art, the active Fill or Stroke proxy and Recent Colors as they were and adds no undo step.
+  A value that changes nothing runs no command, and a bad value throws an error with nothing changed. VectorCraft's
+  own rules: assigning a color also makes `defaultFilled` or `defaultStroked` true, and a `NoColor` makes it false;
+  `defaultFilled` or `defaultStroked` set to true with no fill or stroke gives black; an RGB color is stored in the
+  front document's color mode, as `paint.setFill` stores it; `defaultStrokeWidth` is 0 to 1000 points, a dash or gap 0
+  to 1,000,000 points (at most 64, not all 0), and `defaultStrokeDashOffset` -1,000,000 to 1,000,000 points, which
+  needs a dash pattern unless it is 0; while New Art Has Basic Appearance is off and an object is selected, assigning
+  a default throws an error, since new art then takes that object's appearance. `scaleFactor`
+  (https://www.indesignjs.de/indesignapi/illustrator/illustrator.d.ts lists it as read-only) is always 1, since
+  VectorCraft draws every document at its own size; after an assignment it still reads 1.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global
@@ -8810,6 +8825,12 @@ colorized) changes nothing. With the option off (`appearance.setNewArtBasic {on:
 whole appearance of the last selected object. `appearance.newArt` reports what the next object gets; `paint.default`
 resets it.
 `appearance.setNewArtBasic` rejects an `on` value that is not a boolean. Omitting `on` toggles the current preference.
+`appearance.setNewArt {fill?, stroke?, weight?, cap?, join?, miterLimit?, dash?, dashOffset?, fillOverprint?,
+strokeOverprint?}` sets new art's fill, stroke and stroke options whatever is selected, and leaves the selection, its
+art, the active proxy and Recent Colors as they were. `fill` and `stroke` take a paint as `paint.setFill` does; a
+stroke painted on new art without one gets a 1 pt weight unless `weight` is given. Every value is checked before
+anything changes, and any change while New Art Has Basic Appearance is off and an object is selected is an error. It
+returns `{changed}`, false when the next object would look the same.
 
 ```json
 {"name":"run_command","arguments":{"command":"select.none","params":{}}}

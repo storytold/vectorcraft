@@ -797,13 +797,15 @@ fn path_set_stroke_width(h: &super::Host, a: &[Data]) -> Answer {
     set_stroke_option(h, item, (look.width - w).abs() < 1e-9, json!({"weight": w}))
 }
 
-const CAPS: &[(LineCap, &str, &str)] = &[
+/// Each stroke cap, its `StrokeCap` value and its name in `stroke.set`.
+pub(super) const CAPS: &[(LineCap, &str, &str)] = &[
     (LineCap::Butt, "StrokeCap.BUTTENDCAP", "butt"),
     (LineCap::Round, "StrokeCap.ROUNDENDCAP", "round"),
     (LineCap::Square, "StrokeCap.PROJECTINGENDCAP", "square"),
 ];
 
-const JOINS: &[(LineJoin, &str, &str)] = &[
+/// Each stroke join, its `StrokeJoin` value and its name in `stroke.set`.
+pub(super) const JOINS: &[(LineJoin, &str, &str)] = &[
     (LineJoin::Bevel, "StrokeJoin.BEVELENDJOIN", "bevel"),
     (LineJoin::Round, "StrokeJoin.ROUNDENDJOIN", "round"),
     (LineJoin::Miter, "StrokeJoin.MITERENDJOIN", "miter"),
@@ -856,21 +858,27 @@ fn path_dashes(h: &super::Host, a: &[Data]) -> Answer {
     Ok(Data::Array(this_look(h, a)?.1.dashes.into_iter().map(num).collect()))
 }
 
-/// `strokeDashes = [lengths]`: at most [`MAX_DASHES`] finite lengths that are not negative and
-/// not all 0; `[]` or `{}` gives a solid line.
-fn path_set_dashes(h: &super::Host, a: &[Data]) -> Answer {
-    let lengths: Vec<f64> = match arg(a, 1) {
+/// The dash and gap lengths a script assigned to `what`: at most [`MAX_DASHES`] finite lengths
+/// that are not negative and not all 0; `[]` or `{}` gives a solid line.
+pub(super) fn dash_lengths(d: &Data, what: &str) -> std::result::Result<Vec<f64>, HostError> {
+    let lengths: Vec<f64> = match d {
         Data::Object(o) if o.is_empty() => Vec::new(),
-        Data::Array(list) if list.len() > MAX_DASHES => return Err(HostError::Range(format!("strokeDashes takes at most {MAX_DASHES} lengths"))),
+        Data::Array(list) if list.len() > MAX_DASHES => return Err(HostError::Range(format!("{what} takes at most {MAX_DASHES} lengths"))),
         Data::Array(list) => list.iter().map(|d| number(d, "each dash length")).collect::<std::result::Result<_, _>>()?,
-        _ => return Err(HostError::Type("strokeDashes must be an array of lengths".into())),
+        _ => return Err(HostError::Type(format!("{what} must be an array of lengths"))),
     };
     if lengths.iter().any(|l| !(0.0..=MAX_STROKE_WIDTH * 1000.0).contains(l)) {
         return Err(HostError::Range("each dash length must be from 0 to 1000000 points".into()));
     }
     if !lengths.is_empty() && lengths.iter().all(|l| *l == 0.0) {
-        return Err(HostError::Range("strokeDashes needs a length that is not 0".into()));
+        return Err(HostError::Range(format!("{what} needs a length that is not 0")));
     }
+    Ok(lengths)
+}
+
+/// `strokeDashes = [lengths]`, as [`dash_lengths`] takes them.
+fn path_set_dashes(h: &super::Host, a: &[Data]) -> Answer {
+    let lengths = dash_lengths(arg(a, 1), "strokeDashes")?;
     let (item, look) = this_look(h, a)?;
     let dash = if lengths.is_empty() { Value::Null } else { json!(lengths) };
     set_stroke_option(h, item, look.dashes == lengths, json!({"dash": dash}))

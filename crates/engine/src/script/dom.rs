@@ -39,6 +39,7 @@ use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current
 use crate::{DocState, Document, NodeId, NodeKind, Session};
 
 mod colors;
+mod defaults;
 mod paths;
 
 /// The error for a member read or called with no document open.
@@ -1928,6 +1929,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("selection", property(l, doc_selection, doc_set_selection)),
         ("pathItems", get(l, paths::doc_path_items)),
     ]);
+    document.extend(defaults::document_members(l));
     document.extend(
         ["layers", "artboards", "groupItems", "textFrames", "swatches", "symbols", "views", "activeLayer", "saveAs", "close"]
             .into_iter()

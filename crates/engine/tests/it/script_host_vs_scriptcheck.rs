@@ -97,9 +97,14 @@ const INSIDE: &[(&str, &str)] = &[
     ("Document.", "prototype"),
     (
         "Document.prototype.",
-        "activeLayer activeLayer= artboards artboards= close close= constructor convertCoordinate documentColorSpace \
+        "activeLayer activeLayer= artboards artboards= close close= constructor convertCoordinate defaultFillColor \
+         defaultFillColor= defaultFillOverprint defaultFillOverprint= defaultFilled defaultFilled= defaultStrokeCap \
+         defaultStrokeCap= defaultStrokeColor defaultStrokeColor= defaultStrokeDashOffset defaultStrokeDashOffset= \
+         defaultStrokeDashes defaultStrokeDashes= defaultStrokeJoin defaultStrokeJoin= defaultStrokeMiterLimit \
+         defaultStrokeMiterLimit= defaultStrokeOverprint defaultStrokeOverprint= defaultStrokeWidth defaultStrokeWidth= \
+         defaultStroked defaultStroked= documentColorSpace \
          groupItems groupItems= height layers layers= name pageItems parent pathItems rulerOrigin rulerOrigin= \
-         rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= textFrames textFrames= typename \
+         rulerUnits saveAs saveAs= scaleFactor selection selection= swatches swatches= symbols symbols= textFrames textFrames= typename \
          views views= width",
     ),
     ("Layer.", "prototype"),
