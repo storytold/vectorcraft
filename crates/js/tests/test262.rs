@@ -28,6 +28,11 @@
 //! `builtins-failures.txt`. The interpreter tests fail when the interpreter panics, when a harness
 //! or test file cannot be read, or when no ES5 test runs.
 //!
+//! A fifth test reads the ECMAScript 2015 subset that `Options::es2015` covers (`let`, `const`,
+//! arrow functions, templates, default and rest parameters, and from ECMAScript 2020 optional
+//! chains and `??`) without and with that option, and
+//! prints both counts; its failures with the option go to `es2015-failures.txt`.
+//!
 //! Two more tests read the Annex B trees, where tests name any edition's section: one parses every
 //! test under `test/annexB/language/` without a feature tag the same way as the ES5 parse subset
 //! (failures in `annexb-parse-failures.txt`), and one runs those tests and the tests under the
@@ -408,10 +413,20 @@ fn missing_builtins<'a>(provided: &[&str]) -> HashSet<&'a str> {
 /// in `this["Map"]`), and as a word in any string literal when one of the sources can run a string
 /// as code. Comments, and strings that only mention the name in a message, do not count.
 fn needs_missing_builtin(sources: &[&str], missing: &HashSet<&str>) -> bool {
+    needs_missing_builtin_in(sources, missing, &Options::default())
+}
+
+/// [`needs_missing_builtin`] for sources read with `options`. With [`Options::es2015`], a source
+/// that does not tokenize is left out of the check rather than skipping the test, so the run
+/// counts the tokenizer's error as a failure.
+fn needs_missing_builtin_in(sources: &[&str], missing: &HashSet<&str>, options: &Options) -> bool {
     let mut lists = Vec::with_capacity(sources.len());
     for source in sources {
-        let Ok(tokens) = tokenize(source, &Options::default()) else { return true };
-        lists.push(tokens);
+        match tokenize(source, options) {
+            Ok(tokens) => lists.push(tokens),
+            Err(_) if options.es2015 => {}
+            Err(_) => return true,
+        }
     }
     let strings_are_code = lists.iter().any(|tokens| runs_strings_as_code(tokens));
     lists.iter().flatten().any(|t| match &t.kind {
@@ -442,9 +457,9 @@ fn runs_strings_as_code(tokens: &[Token]) -> bool {
     })
 }
 
-/// Runs one test in a new realm; `Err` describes a failure.
-fn run_one(script: &str, negative_type: Option<&str>) -> Result<(), String> {
-    let mut realm = Realm::with_options(Options::default(), Limits { fuel: 20_000_000, heap_bytes: 256 << 20, ..Limits::default() });
+/// Runs one test in a new realm made with `options`; `Err` describes a failure.
+fn run_one(script: &str, negative_type: Option<&str>, options: &Options) -> Result<(), String> {
+    let mut realm = Realm::with_options(options.clone(), Limits { fuel: 20_000_000, heap_bytes: 256 << 20, ..Limits::default() });
     match (realm.run(script), negative_type) {
         (Ok(_), None) => Ok(()),
         (Ok(_), Some(t)) => Err(format!("completed; a {t} was expected")),
@@ -622,7 +637,7 @@ fn run_tests(dir: &Path, root: &Path, missing: &HashSet<&str>, later: bool) -> (
             let body = if has("raw") { source.clone() } else { format!("{prelude}{includes}{source}") };
             let script = if strict { format!("\"use strict\";\n{body}") } else { body };
             let negative_type = meta.negative_type.clone().filter(|_| meta.negative_phase.as_deref() == Some("runtime"));
-            let outcome = std::panic::catch_unwind(|| run_one(&script, negative_type.as_deref()));
+            let outcome = std::panic::catch_unwind(|| run_one(&script, negative_type.as_deref(), &Options::default()));
             match outcome {
                 Ok(Ok(())) => counts.passed += 1,
                 Ok(Err(why)) => {
@@ -638,6 +653,148 @@ fn run_tests(dir: &Path, root: &Path, missing: &HashSet<&str>, later: bool) -> (
         }
     }
     (es5_counts, later_counts)
+}
+
+/// The folders under `test/language/` that hold tests of the ECMAScript 2015 forms
+/// [`Options::es2015`] reads.
+const ES2015_FOLDERS: &[&str] = &[
+    "block-scope",
+    "statements/let",
+    "statements/const",
+    "expressions/arrow-function",
+    "expressions/template-literal",
+    "expressions/tagged-template",
+    "rest-parameters",
+    "expressions/optional-chaining",
+    "expressions/coalesce",
+];
+
+/// The feature tags of the forms [`Options::es2015`] reads.
+const ES2015_FEATURES: &[&str] =
+    &["let", "const", "arrow-function", "template", "default-parameters", "rest-parameters", "optional-chaining", "coalesce-expression"];
+
+#[test]
+fn es2015_subset_runs() {
+    let Some(dir) = suite_dir() else {
+        println!("test262 ES2015 subset: SKIPPED (no suite; run cargo xtask test262)");
+        return;
+    };
+    let handle = std::thread::Builder::new().stack_size(64 << 20).spawn(move || run_es2015(&dir)).unwrap();
+    handle.join().unwrap();
+}
+
+/// The counts of the ES2015 subset read with one setting of [`Options::es2015`].
+#[derive(Default)]
+struct Es2015Counts {
+    parse_passed: usize,
+    parse_failed: usize,
+    run_passed: usize,
+    run_failed: usize,
+    panicked: usize,
+    failures: String,
+}
+
+/// Runs the ES2015 subset: the tests under `test/language/` in [`ES2015_FOLDERS`] whose feature
+/// tags are all in [`ES2015_FEATURES`], and the tests elsewhere under `test/language/` with feature
+/// tags that are all in it. Negative parse tests must give a `SyntaxError`; the other tests run in a
+/// new realm after the harness, as [`run_tests`] runs them, skipping module and asynchronous tests
+/// and those that need a missing built-in. Each test is read twice, without and with
+/// [`Options::es2015`], and the counts of both are printed; the failures with it go to
+/// `es2015-failures.txt`.
+fn run_es2015(dir: &Path) {
+    let language = or_fail(inside(dir, "test/language"));
+    assert!(language.is_dir(), "{} is not a test262 checkout", dir.display());
+    // A harness file is named by the test's `includes:`, so it is read only inside `harness/`.
+    let harness = |name: &str| or_fail(inside(dir, &format!("harness/{name}")).and_then(|p| read_source(&p)));
+    let prelude = format!("{}\n{}\n", harness("assert.js"), harness("sta.js"));
+    let missing = missing_builtins(&[TEXT_BUILTINS]);
+    let modern = Options { es2015: true, ..Options::default() };
+    let editions = [Options::default(), modern.clone()];
+    let mut counts = [Es2015Counts::default(), Es2015Counts::default()];
+    let (mut selected, mut skipped, mut other_features) = (0usize, 0usize, 0usize);
+    for path in or_fail(test_files(&language)) {
+        let rel = path.strip_prefix(dir).unwrap_or(&path).display().to_string().replace('\\', "/");
+        let in_folder = ES2015_FOLDERS.iter().any(|f| rel.starts_with(&format!("test/language/{f}/")));
+        let source = or_fail(read_source(&path));
+        let meta = meta(&source);
+        let tags_in_set = meta.features.iter().all(|f| ES2015_FEATURES.contains(&f.as_str()));
+        if !(in_folder || !meta.features.is_empty()) {
+            continue;
+        }
+        if !tags_in_set {
+            if in_folder {
+                other_features += 1;
+            }
+            continue;
+        }
+        let has = |flag: &str| meta.flags.iter().any(|f| f == flag);
+        if has("module") || has("async") || meta.negative_phase.as_deref() == Some("resolution") {
+            skipped += 1;
+            continue;
+        }
+        let expect_error = meta.negative_phase.as_deref() == Some("parse");
+        let includes: String = meta.includes.iter().map(|i| harness(i) + "\n").collect();
+        if !expect_error && needs_missing_builtin_in(&[&source, &includes], &missing, &modern) {
+            skipped += 1;
+            continue;
+        }
+        selected += 1;
+        for (options, counts) in editions.iter().zip(counts.iter_mut()) {
+            for &strict in modes(&meta) {
+                let mode = if strict { "strict" } else { "sloppy" };
+                let outcome = if expect_error {
+                    let text = if strict { format!("\"use strict\";\n{source}") } else { source.clone() };
+                    let result = parse(&text, options);
+                    if result.is_err() {
+                        counts.parse_passed += 1;
+                        continue;
+                    }
+                    counts.parse_failed += 1;
+                    "parsed; a SyntaxError was expected".to_string()
+                } else {
+                    let body = if has("raw") { source.clone() } else { format!("{prelude}{includes}{source}") };
+                    let script = if strict { format!("\"use strict\";\n{body}") } else { body };
+                    let negative_type = meta.negative_type.clone().filter(|_| meta.negative_phase.as_deref() == Some("runtime"));
+                    match std::panic::catch_unwind(|| run_one(&script, negative_type.as_deref(), options)) {
+                        Ok(Ok(())) => {
+                            counts.run_passed += 1;
+                            continue;
+                        }
+                        Ok(Err(why)) => {
+                            counts.run_failed += 1;
+                            why
+                        }
+                        Err(_) => {
+                            counts.run_failed += 1;
+                            counts.panicked += 1;
+                            "PANIC".to_string()
+                        }
+                    }
+                };
+                counts.failures.push_str(&format!("{rel} ({mode}): {outcome}\n"));
+            }
+        }
+    }
+    assert!(selected > 0, "no ES2015 tests under {}", language.display());
+    let [before, after] = counts;
+    let report = dir.join("es2015-failures.txt");
+    if let Err(e) = std::fs::write(&report, &after.failures) {
+        println!("could not write {}: {e}", report.display());
+    }
+    let line = |c: &Es2015Counts| {
+        format!(
+            "negative parse runs {} passed, {} failed; other runs {} passed, {} failed ({} panicked)",
+            c.parse_passed, c.parse_failed, c.run_passed, c.run_failed, c.panicked
+        )
+    };
+    println!(
+        "test262 ES2015 subset: {selected} tests. Without Options::es2015: {}. With it: {}. Skipped {skipped} module, asynchronous \
+         or missing-built-in tests and {other_features} tests in the folders with other feature tags. Failures: {}",
+        line(&before),
+        line(&after),
+        report.display()
+    );
+    assert_eq!(before.panicked + after.panicked, 0, "the interpreter panicked; see {}", report.display());
 }
 
 #[test]
@@ -710,6 +867,19 @@ fn a_missing_name_in_a_message_string_does_not_skip() {
     assert!(!skips(&[r#"var r = /"Map'/; var s = "say \"Map\" and \'Set\'";"#]));
     // A string in an included harness file is a message too.
     assert!(!skips(&["var x = 1;", r#"function check(v) { if (!v) throw new Test262Error("no Symbol"); }"#]));
+}
+
+#[test]
+fn a_source_that_does_not_tokenize_as_es2015_is_run_and_not_skipped() {
+    // The ES5 runs skip a test whose ES2015 syntax they cannot read. In the ES2015 subset, a
+    // source that does not tokenize is run, so the tokenizer's error is counted as a failure.
+    let missing: HashSet<&str> = ["Map"].into_iter().collect();
+    let modern = Options { es2015: true, ..Options::default() };
+    let unreadable = "var s = `never closed";
+    assert!(needs_missing_builtin(&[unreadable], &missing));
+    assert!(!needs_missing_builtin_in(&[unreadable], &missing, &modern));
+    // A missing built-in in another source still skips.
+    assert!(needs_missing_builtin_in(&[unreadable, "var m = new Map();"], &missing, &modern));
 }
 
 #[test]

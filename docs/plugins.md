@@ -8,7 +8,8 @@ sandbox, same manifest and parameter schema), extended for vector documents.
 There are four kinds of plug-in:
 
 - **Object filters** read the selected paths and compound paths (geometry, fills, strokes, gradients, opacity)
-  and return the objects to keep, change or add. A run is one undo step. Use them for recolouring, path
+  and return the objects to keep, change or add. A run is one undo step, and a run that changes nothing records
+  none. Use them for recoloring, path
   clean-up, halftones, generative patterns and the like.
 - **Live effects** rewrite one object's geometry each time it is drawn, from its appearance stack, like the
   built-in Distort & Transform effects. The art stays editable: move or reshape it and the effect follows. A live
@@ -29,7 +30,7 @@ in `crates/engine/src/cmd/plugin.rs`).
 |---|---|---|
 | `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, commands?, commandAllowlist?, size, source, api, paintOutput?, permissions, hash, cacheBytes}], "folder": report}` (`api` is the manifest's [plug-in API level](#permissions); `budget: "heavy"` for a [heavy filter](#heavy-filters); `commands` lists its [commands](#commands); `commandAllowlist` lists the commands it may [call](#command-calls); `paintOutput: true` marks a [painted live effect](#painted-live-effects); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256; `cacheBytes` is the size of its [cache](#settings-and-cache)) |
 | `plugin.info` | `{"id"}` | One plug-in: the `plugin.list` entry plus `manifest`, `defaults` and `lastError` (a live effect's last failure). |
-| `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`; an `ids` that is not a list of object ids is an error). One undo step; the result is selected, except the objects it locked or made guides. |
+| `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`; an `ids` that is not a list of object ids is an error). One undo step; the result is selected, except the objects it locked or made guides. An output that changes no object and none of the data it keeps with the document ([`documentData`](#output)) records no undo step and leaves the document unmodified. |
 | `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace"?: bool`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A module with other bytes than the plug-in installed with its id, or, with none installed, one whose id has [settings and a cache](#settings-and-cache) in the `Plug-ins` folder, installs only with `replace: true`, once the user agreed; it takes that plug-in's place and gets its settings and cache. The same module installs again without `replace`, and `replace: false` refuses a module whose id is installed. A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, unless a grant is already recorded for a module with the same SHA-256. A request's `grant` and `allowHeavy` are refused except in a session started with `vectorcraft-cli --allow-plugin-grants`. With `hash`, a module whose SHA-256 differs is refused. A module whose `commandAllowlist` lists a command no plug-in may call is refused; ids no command has are listed as `unknownCommands` ([command calls](#command-calls)). |
 | `plugin.inspect` | as `plugin.install`: `{"path"}` or `{"dataBase64", "name"?}` | Validates a module without installing it; returns the `plugin.list` entry it would have, plus `needsApproval` (true when installing it needs a person's approval), `needsReplace` (true when `plugin.install` needs `replace: true`), and the `commandAllowlist` ids no command has (`unknownCommands`) and those no plug-in may call (`refusedCommands`). |
 | `plugin.remove` | `{"id"}` | Uninstalls, and deletes it from the `Plug-ins` folder with its [settings and cache](#settings-and-cache). |
@@ -88,22 +89,57 @@ replaced by a module without it.
 
 - **Menus.** A plug-in with commands is a submenu of **Object › Plug-ins** (a live effect: **Effect › Plug-ins**)
   named after the plug-in. The submenu holds the plug-in's own item, then its commands. A command with parameters has
-  an ellipsis and opens a dialog for them, with a live preview, as a filter's own item does. A manifest cannot put a
-  command in another menu: a `menu` key in a command is ignored.
-- **Keyboard Shortcuts.** Edit › Keyboard Shortcuts lists each command under its submenu, and the user can give it a
+  an ellipsis and opens a dialog for them, with a live preview, as a filter's own item does. A command whose manifest
+  gives a `menu` is listed in that menu instead ([below](#placing-a-command-in-another-menu)).
+- **Keyboard Shortcuts.** Edit › Keyboard Shortcuts lists each command under its menu, and the user can give it a
   shortcut. A manifest cannot give a command a shortcut.
 - **Actions and agents.** A command run is recorded in an action like any other command and plays back with its
   parameters. `run`, MCP and `command.batch` call it as `plugin.<id>.<command>` with `{"ids"?: [...], "params"?: {…}}`
   (its parameters may also be top-level keys). MCP's `command_list` and `list_commands` list it, and `plugin.list`
-  lists a plug-in's commands as `commands: [{id, command, label, params, paramsSchema}]`.
+  lists a plug-in's commands as `commands: [{id, command, label, params, paramsSchema, menu?}]`, with `menu` for a
+  command whose manifest places it in another menu.
 - **Runs.** The parameters are checked against the command's declarations before the plug-in runs. The plug-in runs
   through `vc_run` on the selection (or `ids`) as a filter run does, with `_context.mode` `"command"` and
   `_context.command` set to the command's id ([Parameters](#parameters)), under the plug-in's
   [permissions](#permissions): a live effect with commands may also hold `doc.write` and `state`, which only its
   commands use. `ids` left out or null means the selection; an `ids` that is not a list of object ids is an error. One run
-  is one undo step named after the command. A run that traps, runs out of its instruction budget or fails leaves the
+  is one undo step named after the command, and a run that changes nothing records none. A run that traps, runs out of its instruction budget or fails leaves the
   document and the undo history as they were, and the error starts with the plug-in's name and the command's label
   (`“Cmd Test” › Grow: …`).
+
+#### Placing a command in another menu
+
+At `api` 2 a command may name the menu it is listed in with `menu`: `{"path": [menu, …], "after"?: item}`. For
+example, `"menu": {"path": ["Select"], "after": "Inverse"}` lists the command in the Select menu right after
+Inverse.
+
+- `path` is one of these menus, by their English labels: `["Edit"]`, `["Edit", "Edit Colors"]`, `["Object"]`,
+  `["Object", "Transform"]`, `["Object", "Arrange"]`, `["Object", "Path"]`, `["Object", "Compound Path"]`,
+  `["Object", "Clipping Mask"]`, `["Type"]`, `["Select"]`, `["Select", "Same"]`, `["Select", "Object"]`, `["Effect"]`
+  and `["View"]`. The File, Window and Help menus, the application menu, Edit › Preferences and the submenus that list
+  files, fonts, panels or plug-ins cannot be named. Any other `path`, a `menu` that is not an object or is given twice,
+  a key other than `path` and `after`, and an `after` that is not 1–64 printable characters are refused when the
+  module is installed, and the error names the command.
+- `after` is the English label of a built-in item or submenu of that menu, with or without its closing ellipsis
+  (`"Inverse"`). The command is listed right after it. An item that switches between two labels is matched by either
+  of them (`"Show Edges"` and `"Hide Edges"`, `"Start Global Edit"` and `"Stop Global Edit"`). Without `after`, or when no
+  built-in item of the menu has that label, the command is listed at the end of the menu, and the module still
+  installs. Items of plug-ins are never matched.
+- The item's label is the command's label followed by the plug-in's name in parentheses (`Low Area Closed Paths
+  (Tidy)`). Keyboard Shortcuts, the command palette and `command_list` list the command under that menu with that
+  label.
+- A command stays in its plug-in's submenu, under its own label, when its label with the plug-in's name has the same
+  letters and digits, ignoring case, as a built-in item or submenu of that menu (`Paste (in Place)` and Edit › Paste
+  in Place, `Hide (Edges)` and View › Hide Edges; either label of one that switches between two), or as a command that
+  a plug-in with a lower id, or an earlier command of the same plug-in, places in that menu. The desktop app and
+  `vectorcraft-cli` give the same result. `plugin.list` then gives the command's `menu` with
+  `"placed": false`.
+- Commands of several plug-ins placed at the same spot are listed in plug-in id order, then in manifest order. A
+  plug-in whose commands all name another menu is listed in Object › Plug-ins (or Effect › Plug-ins) as a single item,
+  without a submenu. Commands without `menu` stay in the plug-in's submenu.
+- A placed command leaves the menus when its plug-in is removed or replaced by a module without the command. Turning
+  the plug-in off (`plugin.setEnabled`) removes it at the next launch.
+- At `api` 1 a `menu` key, repeated or not, is ignored and the command stays in the plug-in's submenu.
 
 **Preference folder.** Edit › Preferences › Plug-ins & Scratch Disks › *Additional Plug-ins Folder*: when set, every
 `*.wasm` in that folder (not recursive) is installed at startup and whenever the preference changes (desktop builds;
@@ -368,10 +404,30 @@ pointers are offsets into the module's memory.
 | Export | Signature | Meaning |
 |---|---|---|
 | `memory` | memory | The module's linear memory. |
-| `vc_abi_version` | `() -> i32` | Must return `1`. |
-| `vc_manifest` | `() -> i64` | `(len << 32) \| ptr` of the UTF-8 manifest JSON (≤ 64 KiB). |
+| `vc_abi_version` | `() -> i32` | Must return `1`. Needed only by a module without a `vc_manifest` custom section. |
+| `vc_manifest` | `() -> i64` | `(len << 32) \| ptr` of the UTF-8 manifest JSON (≤ 64 KiB). Needed only by a module without a `vc_manifest` custom section. |
 | `vc_alloc` | `(size) -> ptr` | A block of `size` bytes the host may write, or `0` on failure. Never freed: each run gets a fresh instance. |
 | `vc_run` | `(input, input_len, params, params_len) -> i64` | Runs the plug-in on the input JSON with the parameters JSON; returns `(len << 32) \| ptr` of the output JSON, or a negative error code. |
+
+### Manifest section
+
+A module may carry its [manifest](#manifest) in a [custom
+section](https://webassembly.github.io/spec/core/binary/modules.html#custom-section) named `vc_manifest`, holding the
+same UTF-8 JSON that the `vc_manifest` export returns, plus `"abi": 1`, the ABI version that `vc_abi_version` returns.
+The host then reads the manifest from the section and loads the module without instantiating it: no start function,
+`vc_abi_version`, `vc_manifest` or data segment initialization runs when the module is installed, inspected or loaded at
+startup. The host checks the imports against the manifest's permissions, the exports `memory`, `vc_alloc` and `vc_run`
+by their types, that the initial memory fits in the [linear memory limit](#the-sandbox), and that the module defines at
+most 4 tables of at most 100,000 elements each. The module is instantiated for the first time when it runs, and a start
+function then runs at the start of each run.
+
+- A module with more than one `vc_manifest` section, or one longer than 64 KiB, is refused before the section's contents
+  are decoded. A section that is not UTF-8, not JSON or not a valid manifest is refused too, and so is one whose
+  manifest does not give `"abi": 1`.
+- When a module has both the section and a `vc_manifest` export, the section is the manifest and the export is never
+  called. Keep both to load in versions of VectorCraft that read only the export.
+- A module without the section is loaded as before: the host instantiates it and calls `vc_abi_version` and
+  `vc_manifest`.
 
 ### Host imports (API level 2)
 
@@ -572,10 +628,12 @@ the module's start function, in a run that isn't a filter's run on a document, o
   list (`svg`): `document.export` then writes the exporter's format only when asked for by its format id, and
   `document.open` reads a file with the importer only when `importer` names it.
 - `commands` (filters and live effects; not heavy filters): up to 32 commands of the plug-in's own
-  ([Commands](#commands)), each `{"id": "grow", "label": "Grow", "params"?: {…}}`. An `id` is 1–32 characters from
-  `a-z 0-9 _` that starts with a letter, and appears once. A `label` is 1–64 printable characters; menus show it with
-  control and bidirectional characters escaped. `params` are declared as the plug-in's own `params` are. A malformed
-  entry is refused when the module is installed, and the error names the command by its id (or its place, `[0]`).
+  ([Commands](#commands)), each `{"id": "grow", "label": "Grow", "params"?: {…}, "menu"?: {…}}`. An `id` is 1–32
+  characters from `a-z 0-9 _` that starts with a letter, and appears once. A `label` is 1–64 printable characters;
+  menus show it with control and bidirectional characters escaped. `params` are declared as the plug-in's own `params`
+  are. `menu` (`api` 2 and later; ignored at `api` 1) places the command in [another menu](#placing-a-command-in-another-menu).
+  A malformed entry is refused when the module is installed, and the error names the command by its id (or its place,
+  `[0]`).
 - `commandAllowlist` (filters at `api` 2 with the usual budget, and only with the `commands` permission, which needs
   it): the ids of the commands the filter may [call](#command-calls), at most 256, each once (`"commandAllowlist":
   ["select.all", "object.move"]`). An id is 1–128 characters from `A-Z a-z 0-9 . _ -` that starts with a letter, with
@@ -842,6 +900,17 @@ For an **object filter**, the output is the new state of the input objects:
   the run locked or made guides are left out of the selection that follows. Hosts from before these keys ignore them.
 - A `path` returned as it was keeps a live shape live (a rectangle keeps its corner widgets); a changed one makes it a
   plain path.
+- A compound path whose `path` is returned as it was, or left out, keeps its members as they are, hidden and locked
+  ones included; a changed `path` replaces its members with one plain member per subpath. Each new member keeps only
+  the id of the old member in its place: its name, live shape, opacity, blending mode, appearance, opacity mask and
+  other settings of its own are reset to a new path's defaults. The host refuses a `path` with no anchor points, so return a
+  compound path that has none without `path`. While a member is hidden, locked or a guide, or is not a path (its
+  geometry is not in the input's `path`), the host refuses a changed `path` and `type: "path"` for it (a guide member
+  is allowed when the output also sets `guide`). `guide` applies to every member, so `guide: false` on a compound path
+  makes each of its guide members an ordinary path.
+- The host compares a returned `path` with the input coordinate by coordinate, exactly. A JSON parser that does not
+  read numbers back exactly as they were written (in Rust, `serde_json` without its `float_roundtrip` feature) can
+  change the last digit of a coordinate, so leave `path` out when the geometry does not change.
 
 The host validates everything before the document changes: coordinates must be finite and within ±4,000,000 pt, at
 most 100,000 objects and 4,000,000 anchors, 256 fills, strokes or gradient stops; colours, opacities and offsets are
@@ -934,10 +1003,15 @@ crates/plugins/example/build.sh      # cargo build --release --target wasm32-unk
 ```
 
 The script also refreshes `crates/plugins/tests/fixtures/desaturate.wasm`, the test fixture built from that source.
-The crate is not a workspace member. Any language that targets core WebAssembly works (C, Zig, AssemblyScript,
+The crate is not a workspace member. It puts its manifest in the [manifest section](#manifest-section) with a byte
+array static marked `#[unsafe(link_section = "vc_manifest")]` (the Rust Reference's
+[`link_section`](https://doc.rust-lang.org/reference/abi.html#the-link_section-attribute)), and keeps the
+`vc_manifest` export for older hosts. Any language that targets core WebAssembly works (C, Zig, AssemblyScript,
 WAT…), as long as the module imports nothing but the host imports: in Rust, `std` on `wasm32-unknown-unknown` is fine as
 long as it never touches WASI. `vectorcraft_plugins::wat::module` is the skeleton of a plug-in in WebAssembly text,
-which the tests build their plug-ins from; `wat::echo_exporter` is an exporter whose file is its input or its parameters
+which the tests build their plug-ins from, and `wat::sectioned` the same plug-in with its manifest in the [manifest
+section](#manifest-section) and no `vc_abi_version` or `vc_manifest` export (in WebAssembly text, a custom section is
+written `(@custom "vc_manifest" "…")`); `wat::echo_exporter` is an exporter whose file is its input or its parameters
 (with a base64 encoder written out in WebAssembly text), which the tests read back what the host hands a plug-in with,
 and `wat::when_given` a plug-in whose output depends on whether its input or parameters hold a given text, which shows
 in a live effect's geometry. `wat::reporting` and `wat::cooperating` build level 2 plug-ins that import the host

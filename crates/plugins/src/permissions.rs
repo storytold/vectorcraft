@@ -28,6 +28,10 @@ pub const INPUTS_API: u32 = 2;
 /// The API level that adds a filter's `writes`: the kinds among its `inputs` it may change.
 pub const WRITES_API: u32 = 3;
 
+/// The API level that reads a command's `menu` ([`crate::manifest::MenuPlace`]); below it the key
+/// is ignored.
+pub const MENU_API: u32 = 2;
+
 /// Most permissions a manifest may list.
 pub const MAX_PERMISSIONS: usize = 16;
 

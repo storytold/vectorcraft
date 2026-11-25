@@ -1072,12 +1072,40 @@ fn members(doc: &mut Document, old: &[Arc<Node>], path: PathData) -> Vec<Arc<Nod
         .collect()
 }
 
+/// Whether `returned`, a path from plug-in output, is `current` as it was: output has its empty
+/// subpaths dropped, so `current`'s are left out of the comparison.
+fn same_geometry(returned: &PathData, current: &PathData) -> bool {
+    returned.subpaths.iter().eq(current.subpaths.iter().filter(|sp| !sp.anchors.is_empty()))
+}
+
+/// Refuses an output that replaces the members of compound path `n` while one of them isn't a path
+/// (plug-ins aren't given its geometry), or is hidden, locked or (unless the output sets `guide`) a
+/// guide.
+fn check_members_replaceable(n: &Node, children: &[Arc<Node>], sets_guide: bool, at: &str) -> Result<()> {
+    let id = n.id.0;
+    if children.iter().any(|c| c.path_data().is_none()) {
+        return Err(out_err(at, format!("compound path {id} has a member that isn't a path, so its members can't be replaced")));
+    }
+    if children.iter().any(|c| !c.visible || c.locked || (!sets_guide && is_guide(c))) {
+        return Err(out_err(at, format!("compound path {id} has a hidden, locked or guide member, so its members can't be replaced")));
+    }
+    Ok(())
+}
+
 /// Writes `o` into `n` (an input object, or a fresh node for a new one); its effect records once
 /// `admit` lets them in.
 fn write(doc: &mut Document, n: &mut Node, o: OutObject, at: &str, admit: AdmitEffects) -> Result<()> {
     let (cur_path, cur_rule, cur_compound) = geometry(n).unwrap_or((PathData::default(), FillRule::NonZero, false));
     let compound = o.compound.unwrap_or(cur_compound);
     let rule = o.rule.unwrap_or(cur_rule);
+    // A compound path handed back with its path as it was keeps its members as they are.
+    let same_members = cur_compound && o.path.as_ref().is_none_or(|p| same_geometry(p, &cur_path));
+    if let NodeKind::Compound { children, .. } = &n.kind
+        && (!same_members || !compound)
+    {
+        let at = if compound { format!("{at}.path") } else { format!("{at}.type") };
+        check_members_replaceable(n, children, o.guide.is_some(), &at)?;
+    }
     match (&mut n.kind, compound) {
         (NodeKind::Path { path, rule: r, live, .. }, false) => {
             // A path handed back as it was stays the live shape it was.
@@ -1088,7 +1116,7 @@ fn write(doc: &mut Document, n: &mut Node, o: OutObject, at: &str, admit: AdmitE
             *r = rule;
         }
         (NodeKind::Compound { children, rule: r }, true) => {
-            if let Some(p) = o.path {
+            if let Some(p) = o.path.filter(|_| !same_members) {
                 *children = members(doc, children, p);
             }
             *r = rule;

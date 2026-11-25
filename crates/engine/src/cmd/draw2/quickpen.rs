@@ -1,9 +1,12 @@
-//! The Quick Pen tool's command (`path.quickPen`): a path of straight lines and circular arcs.
+//! The Quick Pen tool's commands: `path.quickPen` draws a path of straight lines and circular arcs,
+//! and `path.quickPenLength` makes the line or arc at an end of a path longer or shorter.
 
+use vectorcraft_tools::quickpen::length as qpl;
 use vectorcraft_tools::quickpen::{self as qp, Piece, Stroke};
 
 use super::common::{path_kind, path_mut, point_entry, usize_opt, within_input_bound};
 use super::{Color, Paint, PathData, Result, Session, SubPath, Value, add_look, bad, json, number_or, object_param, switch_or};
+use crate::cmd::f64_req;
 
 const C: &str = "path.quickPen";
 /// The most pieces one request takes.
@@ -93,4 +96,59 @@ pub(super) fn quick_pen(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(json!({ "id": id.0 }))
+}
+
+const L: &str = "path.quickPenLength";
+
+/// `path.quickPenLength`: the line or arc at an end of an open subpath made `length` long.
+pub(super) fn quick_pen_length(s: &mut Session, p: &Value) -> Result<Value> {
+    let Some(id) = object_param(p, "id", L)? else { return Err(bad(L, "missing `id`")) };
+    let si = usize_opt(p, "subpath", L)?.unwrap_or(0);
+    let at_start = match p.get("end") {
+        None | Some(Value::Null) => false,
+        Some(v) => match v.as_str() {
+            Some("end") => false,
+            Some("start") => true,
+            _ => {
+                let key = "end";
+                return Err(bad(L, format!("`{key}` must be one of {}", ["start", "end"].join(", "))));
+            }
+        },
+    };
+    let length = f64_req(p, "length", L)?;
+    let d = &s.doc()?.doc;
+    let path = d.node(id).and_then(|n| n.path_data()).ok_or_else(|| bad(L, "`id` is not a path"))?;
+    if !d.is_editable(id) {
+        return Err(bad(L, "the path is locked or hidden"));
+    }
+    let sp = path.subpaths.get(si).ok_or_else(|| bad(L, "no such subpath"))?;
+    if sp.closed {
+        return Err(bad(L, "the subpath is closed"));
+    }
+    let piece = qpl::end_piece(sp, at_start).ok_or_else(|| bad(L, "the end is not a straight line or a circular arc"))?;
+    let (key, lo, hi) = ("length", qpl::MIN_LENGTH, piece.max_length());
+    if !(lo..=hi).contains(&length) {
+        // An arc's limit, 359° of its circle, is given to the thousandth of a point, rounded down.
+        let hi = (hi * 1000.0).floor() / 1000.0;
+        return Err(bad(L, format!("`{key}` must be from {lo} to {hi}")));
+    }
+    let out = qpl::with_length(sp, at_start, length).ok_or_else(|| bad(L, "the end is not a straight line or a circular arc"))?;
+    if !qp::on_canvas(&out) {
+        return Err(bad(L, "result would exceed the canvas (coordinates out of range)"));
+    }
+    let kind = match piece.shape {
+        qpl::EndShape::Line => "line",
+        qpl::EndShape::Arc { .. } => "arc",
+    };
+    if (length - piece.length).abs() <= 1e-9 * length.max(1.0) {
+        return Ok(json!({ "id": id.0, "kind": kind, "length": piece.length }));
+    }
+    let top = super::super::path::compound_or_self(d, id);
+    s.edit("Quick Pen", |d, sel| {
+        let slot = path_mut(d, id)?.subpaths.get_mut(si).ok_or_else(|| crate::EngineError::Other("no such subpath".into()))?;
+        *slot = out;
+        sel.set([top]);
+        Ok(())
+    })?;
+    Ok(json!({ "id": id.0, "kind": kind, "length": length }))
 }
