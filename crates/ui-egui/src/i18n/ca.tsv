@@ -309,6 +309,7 @@
 	Anti-aliased Artwork	Art amb antialiàsing
 	Anti-aliasing:	Antialiàsing:
 	Anti-aliasing Method	Mètode d'antialiàsing
+@id	language.name	Català
 antiAlias	Sharp	Nítid
 	Crisp	Definit
 	Strong	Intens
@@ -1330,6 +1331,7 @@ arrowhead	Target	Diana
 	Direction:	Direcció:
 	Directives	Directrius
 	Disable Auto Add/Delete	Desactiva l’addició i la supressió automàtiques
+	Delete Removes Anchor Points and Keeps Paths Joined	Suprimir elimina els punts d’ancoratge i manté els camins units
 	Interpolate Control Points When Moving Anchors	Interpola les manetes de direcció en moure punts d’ancoratge
 	Disable Opacity Mask	Desactiva la màscara d’opacitat
 	Discard	Descarta
@@ -1360,11 +1362,6 @@ arrowhead	Target	Diana
 	Distribute Spacing:	Distribueix l’espaiat:
 	Dither	Tramatge
 	Dither:	Tramatge:
-	Transparency Dither	Tramatge de transparència
-	No Transparency Dither	Sense tramatge de transparència
-	Diffusion Transparency Dither	Tramatge de transparència per difusió
-	Pattern Transparency Dither	Tramatge de transparència per motiu
-	Noise Transparency Dither	Tramatge de transparència per soroll
 	Divide	Divideix
 	Divide and Outline Will Remove Unpainted Artwork	Divideix i contorneja eliminarà l’art no pintat
 	Divide Horizontally Into	Divideix horitzontalment en
@@ -3203,6 +3200,7 @@ digits	Malayalam	Malaiàlam
 	One Point Perspective Preset 5	Preajust 5 de perspectiva d’un punt
 	Only Web Colors	Només colors web
 	Opacity	Opacitat
+	Show Opacity	Mostra l’opacitat
 	Opacity & Mask Define Knockout Shape	L’opacitat i la màscara defineixen la forma d’exclusió
 	Opacity Mask	Màscara d’opacitat
 	Opacity Mask Info	Informació de la màscara d’opacitat
@@ -3439,6 +3437,12 @@ digits	Malayalam	Malaiàlam
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppp
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppp
+	resolution unavailable	resolució no disponible
+	estimated memory {memory}	memòria estimada {memory}
+	memory unavailable	memòria no disponible
+	Unknown format	Format desconegut
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -3796,6 +3800,9 @@ digits	Malayalam	Malaiàlam
 	Rearrange All	Reorganitza-ho tot
 	Rearrange All Artboards	Reorganitza tots els taulers
 	Rearrange All Artboards…	Reorganitza tots els taulers…
+	Rearrange…	Reorganitza…
+	Selected Artboards: {n}	Taulers seleccionats: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Fes clic al llenç per col·locar els taulers (Esc cancel·la)
 	Rearrange Artboards	Reorganitza els taulers
 	Recall Selection	Recupera la selecció
 	RECENT	RECENTS
@@ -4083,6 +4090,7 @@ digits	Malayalam	Malaiàlam
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un gest de rotació amb dos dits al trackpad gira la vista del llenç.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Mantenir premuda una tecla executa l’eina o l’ordre de la seva columna Mantén a Dreceres de teclat; una pulsació breu executa la seva drecera habitual.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Quants segons cal mantenir premuda una tecla perquè s’executi la seva drecera de pulsació llarga en lloc de la drecera habitual.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Suprimir elimina els punts d’ancoratge seleccionats i reajusta la corba al voltant de cadascun, en lloc d’obrir-hi el camí.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Quan moveu punts d’ancoratge, cada corba amb un extrem desplaçat conserva la forma respecte dels seus extrems.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Mantenir premuda la drecera d’una eina la tria fins que la deixeu anar, i després es torna a triar l’eina anterior.
 	Shows the bounding box while you move the selection or draw a shape.	Mostra el quadre delimitador mentre moveu la selecció o dibuixeu una forma.
@@ -7274,6 +7282,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	un efecte 3D al farciment o al traç d’un grup no dibuixa res
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un efecte 3D al farciment o al traç d’un grup no dibuixa res per exportar
 @msg	The 3D object is too complex to export	L’objecte 3D és massa complex per exportar-lo
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	La malla de l’objecte 3D és incompleta o conté un valor que no és un nombre
 @msg	give one <filter> element	indica un element <filter>
 @msg	the <filter> element needs an id, the filter's name	l’element <filter> necessita un id, el nom del filtre
 @msg	an SVG filter's id is at most {MAX_NAME} characters	l’id d’un filtre SVG té com a màxim {MAX_NAME} caràcters
@@ -7716,11 +7725,19 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	module is {_1} bytes (limit {_2})	el mòdul té {_1} bytes (límit {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	cal aprovació: demana {0}, que l’usuari concedeix en instal·lar-lo per separat
 @msg	not JSON: {e}	no és JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	no és un binari WebAssembly (falta la capçalera \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	no és un binari WebAssembly (falta la capçalera \\0asm)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	un tipus de funció supera el límit de {MAX_FUNC_TYPE_VALUES} paràmetres
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	un tipus de funció supera el límit de {MAX_FUNC_TYPE_VALUES} resultats
 @msg	parameter `{k}`: {what}	paràmetre `{k}`: {what}
 @msg	parameter `{name}`: {what}	paràmetre `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	els paràmetres del complement han de ser un objecte JSON
 @msg	the module must export its linear memory as `memory`	el mòdul ha d’exportar la seva memòria lineal com a `memory`
+@msg	the module must export `{name}` with the type {signature}	el mòdul ha d’exportar `{name}` amb el tipus {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	el mòdul té més d’una secció personalitzada `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	pressupost de memòria (la memòria inicial del mòdul és de {initial} bytes, límit {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	el manifest de la secció personalitzada `{MANIFEST_SECTION}` ha de donar `abi` com a {ABI_VERSION}, la versió de l’ABI que implementa aquest amfitrió
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	pressupost de taules (el mòdul defineix {count} taules, la més gran amb {largest} elements; límit {MAX_TABLES} taules de {MAX_TABLE_ELEMENTS} elements)
+@msg	the module's table section could not be read	no s’ha pogut llegir la secció de taules del mòdul
 @msg	the objects to change are no longer in the document	els objectes que calia canviar ja no són al document
 @msg	the runtime panicked	l’entorn d’execució ha fallat
 @msg	unexpected host trap	aturada inesperada (trap) de l’amfitrió
@@ -7748,6 +7765,11 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` i `maxItems` han de ser 0-{MAX_LIST}, `maxItems` com a mínim 1, i el valor predeterminat ha de tenir aquesta quantitat
 @msg	`name` must be a string	`name` ha de ser una cadena
 @msg	`opacity` must be a number	`opacity` ha de ser un nombre
+@msg	`opacity` must be a number from 0 to 100	`opacity` ha de ser un nombre del 0 al 100
+@msg	`opacity` must be true or false	`opacity` ha de ser true o false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	els caràcters de text no tenen opacitat pròpia: afegiu un farciment o un traç amb Afegeix un farciment nou o Afegeix un traç nou del tauler Aparença
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	un objecte seleccionat en una instància de símbol no té opacitat pròpia de farciment ni de traç
+@msg	no target has that fill or stroke to take the opacity	cap objectiu no té aquest farciment o traç per rebre l'opacitat
 @msg	`type` must be "path" or "compound"	`type` ha de ser "path" o "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` ha de tenir 1-{MAX_UNIT} caràcters imprimibles
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` ha d’indicar d’1 a {MAX_CONDITION_VALUES} valors per a `{other}`
@@ -7791,6 +7813,8 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	`plates` requires a stop linked to a spot swatch	`plates` requereix una parada vinculada a una mostra de color directe
 @msg	the output	la sortida
 @msg	the path has no anchor points	el traçat no té punts d’ancoratge
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	el traçat compost {id} té un membre ocult, bloquejat o guia, per tant no se’n poden substituir els membres
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	el traçat compost {id} té un membre que no és un traçat, per tant no se’n poden substituir els membres
 @msg	too many anchor points (limit {MAX_ANCHORS})	massa punts d’ancoratge (límit {MAX_ANCHORS})
 @msg	true or false	true o false
 @msg	a number >= {_1}	un nombre >= {_1}
