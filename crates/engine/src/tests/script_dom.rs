@@ -1394,6 +1394,19 @@ fn the_fit_to_artwork_menu_command_fits_the_artboard_to_the_art() {
     log(&mut s, "app.executeMenuCommand('Fit Artboard to artwork bounds');");
     let after = s.active().unwrap().doc.artboards[0].rect;
     assert!(after.width() < before.width() && after.height() < before.height(), "{before:?} -> {after:?}");
+    // An artboard that is locked, or has no art on it, leaves the menu item dimmed: it does nothing.
+    let (mut s, _, _) = doc();
+    s.execute("artboard.setProps", &json!({"index": 0, "locked": true})).unwrap();
+    let steps = undo_steps(&s);
+    assert_eq!(log(&mut s, "app.executeMenuCommand('Fit Artboard to artwork bounds'); vc.log(1);"), vec![json!(1)]);
+    assert_eq!(s.active().unwrap().doc.artboards[0].rect, before);
+    assert_eq!(undo_steps(&s), steps, "locked");
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let empty = s.active().unwrap().doc.artboards[0].rect;
+    assert_eq!(log(&mut s, "app.executeMenuCommand('Fit Artboard to artwork bounds'); vc.log(1);"), vec![json!(1)]);
+    assert_eq!(s.active().unwrap().doc.artboards[0].rect, empty);
+    assert_eq!(undo_steps(&s), 0, "no art");
 }
 
 #[test]

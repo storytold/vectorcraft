@@ -795,7 +795,10 @@ const MENU_COMMANDS: &[(&str, &str)] = &[
 /// <https://www.indesignjs.de/indesignapi/illustrator/illustrator.d.ts> describes the method. A
 /// name it does not list throws an error that names it. A menu item that is not available, with
 /// no document open or nothing selected that it acts on, does nothing, as a dimmed menu item does
-/// (VectorCraft's own rule). `Fit Artboard to artwork bounds` fits the active artboard.
+/// (VectorCraft's own rule). A menu item the menus show as available runs its command, and an error
+/// that command returns throws. `Fit Artboard to artwork bounds` fits the active artboard, and does
+/// nothing when that artboard is locked or has no art, as the canvas's right-click menu dims
+/// the item then ([`DocState::any_art_to_fit`]).
 fn app_menu_command(h: &Host, a: &[Data]) -> Answer {
     let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("executeMenuCommand needs a menu command, as a string".into())) };
     if name.len() > MAX_TEXT_BYTES {
@@ -811,7 +814,13 @@ fn app_menu_command(h: &Host, a: &[Data]) -> Answer {
             return Ok(Data::Undefined);
         }
         match (id, s.active()) {
-            ("artboard.fitToArt", Some(st)) => json!({"index": active_artboard(st)}),
+            ("artboard.fitToArt", Some(st)) => {
+                let index = active_artboard(st);
+                if !st.any_art_to_fit(&[index]) {
+                    return Ok(Data::Undefined);
+                }
+                json!({"index": index})
+            }
             _ => json!({}),
         }
     };

@@ -2678,7 +2678,9 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `Fit Artboard to artwork bounds` (https://gist.github.com/shalakolee/df3246659d4289eb99149b9ed00a00ee), which runs
   `artboard.fitToArt` on the active artboard. Names are matched exactly. Any other name throws an error that names
   it, and a name that is not a string throws a `TypeError`. VectorCraft's own rule: a menu item that is not
-  available, with no document open or nothing selected that it acts on, does nothing and adds no undo step. A script may name the application's members without `app.`, as
+  available, with no document open, nothing selected that it acts on, or a locked active artboard or one with no art
+  for `Fit Artboard to artwork bounds`, does nothing and adds no undo step. An available menu item runs its command,
+  and an error that command returns throws. A script may name the application's members without `app.`, as
   [Accessing and referencing objects](https://ai-scripting.docsforadobe.dev/scriptingJavascript/objectReferences/)
   describes; in VectorCraft that holds for `activeDocument`, `documents` and `selection`. VectorCraft's own rules:
   assigning `activeDocument` or `selection` without `app.` assigns the application's member. A top-level
