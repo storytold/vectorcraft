@@ -349,22 +349,19 @@ impl BulletsDialog {
 fn preset_row(ui: &mut Ui, label: &'static str, presets: &[Preset], current: Option<usize>) -> Option<usize> {
     let mut selection = current.map_or_else(Selection::default, Selection::single);
     let source = keyed(presets, |p: &Preset| p.at);
-    let _ = TileGrid::new(label).select(SelectMode::Single).caption(CaptionPlace::None).selection(Bind::bound(&mut selection)).show_items(
-        ui,
-        &source,
-        &mut |at, _| {
-            let Some(preset) = presets.get(*at) else { return Tile::new(String::new()) };
-            let face = preset.face.clone();
-            Tile::new(preset.name.clone()).thumb(ThumbAspect::SQUARE, move |cx, rect| {
-                cx.with_draw(|draw| match &face {
-                    Face::Glyph(glyph) => draw.icon(rect, &IconSpec::glyph(*glyph)),
-                    Face::Text(text) => {
-                        let _ = draw.text(rect, &TextRun::new(text.as_str()).align(HAlign::Center));
-                    }
-                })
+    let grid = TileGrid::new(label).select(SelectMode::Single).caption(CaptionPlace::None).natural_height(true);
+    let _ = grid.selection(Bind::bound(&mut selection)).show_items(ui, &source, &mut |at, _| {
+        let Some(preset) = presets.get(*at) else { return Tile::new(String::new()) };
+        let face = preset.face.clone();
+        Tile::new(preset.name.clone()).thumb(ThumbAspect::SQUARE, move |cx, rect| {
+            cx.with_draw(|draw| match &face {
+                Face::Glyph(glyph) => draw.icon(rect, &IconSpec::glyph(*glyph)),
+                Face::Text(text) => {
+                    let _ = draw.text(rect, &TextRun::new(text.as_str()).align(HAlign::Center));
+                }
             })
-        },
-    );
+        })
+    });
     selection.lead.filter(|at| Some(*at) != current)
 }
 

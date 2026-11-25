@@ -340,8 +340,9 @@ pub struct VectorcraftApp {
     pub(crate) pen_end: stylus::PenEnd,
     /// The window pass whose [`Self::tick`] ran last: work started in that pass, before its end, waits for the next.
     pub(crate) ticked_pass: Option<u64>,
-    /// A test's clock for [`Self::tick`], replacing the monotonic clock so idle scheduling can be
-    /// driven one simulated frame at a time (production always leaves this `None`).
+    /// A test's clock for [`Self::tick`] and the progress window's delay, replacing the monotonic
+    /// clock so idle scheduling can be driven one simulated frame at a time (production always
+    /// leaves this `None`).
     #[cfg(test)]
     pub(crate) now_override: Option<f64>,
     /// An error the next tool choice returns before the engine sees it ([`Self::try_select_tool`]),

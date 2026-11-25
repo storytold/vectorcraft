@@ -10,6 +10,7 @@ use craft::menu::Node;
 use craft::ui::buttons::Button;
 use craft::ui::contract::{Bind, Props as _, Show as _, ShowCollection as _, ShowContainer as _};
 use craft::ui::display::{Divider, Text};
+use craft::ui::layout_components::Row;
 use craft::ui::list::{List, ListRow};
 use craft::ui::sections::Section;
 use egui::Ui;
@@ -304,8 +305,8 @@ fn text_tools(ui: &mut Ui, selected: bool, editing: bool, action: &mut Option<Ac
         if let Some(h) = heading {
             Text::new(tl!(h).to_string()).show(ui);
         }
-        ui.horizontal(|ui| {
-            for (label, tip, id, p) in buttons {
+        Row::new().show(ui, |ui, _| {
+            for (label, tip, id, p) in buttons.clone() {
                 button(ui, label, tip, id, p);
             }
         });
@@ -330,7 +331,7 @@ fn results(ui: &mut Ui, r: &mut Results, action: &mut Option<Action>) {
     if !r.status.is_empty() {
         Text::new(r.status.clone()).show(ui);
     }
-    ui.horizontal(|ui| {
+    Row::new().show(ui, |ui, _| {
         let picked = r.picked_kinds();
         let show = push(ui, tl!("Show"), picked.len() == 1, None).is_some();
         if show && let [kind] = picked.as_slice() {

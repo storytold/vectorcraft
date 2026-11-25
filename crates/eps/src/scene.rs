@@ -630,7 +630,9 @@ impl<'a> Scene<'a> {
                     // (a plate's colors come from the separator, which has applied it already); a
                     // spot ink with a white color still overprints, as it is written as that ink.
                     Some(p @ Paint::Solid { .. }) if blob.is_none_or(|b| b.gray_source().is_some()) => {
-                        let discarded = !self.plate && self.doc.discards_white_overprint(p);
+                        let discarded = !self.plate
+                            && vectorcraft_doc::overprint::is_white(p)
+                            && vectorcraft_doc::overprint::DiscardWhite::of(self.doc).discards(p);
                         let on = self.overprint_on(n.colorize_overprints() && !discarded);
                         self.colorized_image(im, blob, p, on);
                         self.overprint_off(on);
