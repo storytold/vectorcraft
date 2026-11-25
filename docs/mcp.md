@@ -2589,7 +2589,9 @@ control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script,
   while 4,096 other `[` are open, assign a property in brackets whose name is a string literal of more than 256
   characters, assign properties of more than 1,000 different names on members (`o.d = …`, `o['d'] = …`), or
   assign or declare `Folder`; a variable whose name a member assignment writes counts as one that may hold a File
-  object), `filesOpened` (files opened in other apps), `network`,
+  object; the same objects left out are not counted for the File-only functions `open`, `read`, `readch`,
+  `readln`, `write`, `writeln`, `copy`, `createAlias`, `openDlg` and `saveDlg`, which a Folder object does not
+  have), `filesOpened` (files opened in other apps), `network`,
   `nativeCode`, `otherApps` (messages to other apps), `environment` (environment variables), `unseenCode` (`eval`,
   `new Function` and `$.evalFile`) and `preferences` (the reference app's preferences changed).
 - `problems` lists what would stop the script loading as written (strings, comments, regular expressions,
