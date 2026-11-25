@@ -2646,10 +2646,24 @@ not UTF-8. The language is ES5.1, except that identifiers take the characters Un
 `.js` (in any case) also reads these ECMAScript 2015 forms (https://262.ecma-international.org/6.0/): `let` and
 `const` with block scope and their temporal dead zone, a new `let` binding for each `for` loop iteration, function
 declarations scoped to their block, arrow functions, template literals and tagged templates, default and rest
-parameters, and spread in array literals, calls and `new`. Spread reads arrays by index, reading the length again
-before each element, strings and `String` objects by code point, and objects with a `length` property by index, and
-throws a `TypeError` for any other value; that rule is VectorCraft's own
-until iterators are added. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
+parameters, spread in array literals, calls and `new`, `for`-`of` loops, array and object destructuring in `var`,
+`let` and `const` declarations, assignments, parameters and `catch` clauses (with defaults, holes and rest elements),
+and shorthand and computed property names in object literals (https://262.ecma-international.org/11.0/). Spread,
+`for`-`of` and array patterns use the iterator protocol. A loop or pattern left early, by `break`, `return`, a
+`continue` to an outer loop or an exception, calls the iterator's `return` method when it has one. An iterator is not
+closed when its `next()` throws or gives a result that is not an object, when reading the result's `done` or `value`
+throws, or when the result says it is done. Destructuring `undefined` or `null` throws a `TypeError`. Object rest properties
+(`{ a, ...rest }`, ECMAScript 2018) are syntax errors. In an engine that `#targetengine` keeps and a `.jsx` script
+started, which has no `Symbol`, spread, `for`-`of` and array patterns read arrays, `arguments` objects and strings
+(by code point), by index, and throw a `TypeError` for any other value; that rule is VectorCraft's own. Object
+literals there also take methods (`{m() {}}`, `{[key]() {}}`), and `__proto__: value` sets the new object's
+prototype (https://262.ecma-international.org/6.0/, sections 14.3 and B.3.1). Functions get a `name` property
+(section 9.2.11): a declaration's or expression's own name, or else the name of the binding, parameter, default
+value, assignment target or property they are first given to, with `get ` or `set ` before an accessor's and a
+Symbol key's description in brackets; `bound ` before the target's name for `bind`; `anonymous` for `Function`; and
+an own empty `name` otherwise, as the 12th edition gives it (https://262.ecma-international.org/12.0/, section
+20.2.4.2). A function's `length` can be redefined. The built-in functions get their names the first time a run reads
+ECMAScript 2015, and keep them in later `.jsx` runs of an engine that `#targetengine` keeps. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
 an engine that `#targetengine` keeps reads each run the way that run's script does. A
 `.jsx` file and a `source` string read ES5.1 only, and the ECMAScript 2015 forms are syntax errors there. A `.js` file
 also reads two ECMAScript 2020 forms (https://262.ecma-international.org/11.0/): optional chains (`a?.b`, `a?.[key]`,
@@ -2683,6 +2697,16 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   open a dialog, described below. `vc.api.has("dialogs")` is true.
 - `vc.args` gives a read-only copy of the `args` object each time it is read.
 - `vc.api.version` is `"1.0"`, and `vc.api.has(feature)` says whether the API has a feature.
+
+The first run in an engine decides whether the engine has `Symbol` and the iterators of arrays, strings and
+`arguments` objects, and each run's script decides which syntax that run reads. The built-in functions' names follow
+the rule above. A `.jsx` script or a `source` string that starts a new engine has no `Symbol` and no iterators of arrays,
+strings and `arguments` objects: `typeof Symbol` is `"undefined"`, and `Array.prototype.values`, `keys` and `entries`
+are not defined. A `.js` script that starts a new engine has them, through the JavaScript engine's ECMAScript 2015 mode
+(`Options::es2015` in `vectorcraft-js`), as `docs/target-app-parity.md` describes. An engine that `#targetengine` keeps
+has them only when a `.js` script started it, and then a later `.jsx` run in it has them too while it reads ES5.1 only.
+In such a `.jsx` run, `Object.prototype.toString` gives the ES5.1 result, `[object Object]` or another class name,
+and does not read `Symbol.toStringTag`.
 
 Before any of the script runs, its preprocessor lines are read. The help page
 https://extendscript.docsforadobe.dev/extendscript-tools-features/preprocessor-directives/ describes these lines, and
