@@ -786,7 +786,7 @@ fn prepare(s: &Session, p: &Value) -> Result<PlaceJob> {
         (true, _) => return Err(bad(PLACE, "replace: select the one object to replace")),
     };
     let replaced = old.and_then(|id| st.doc.node(id)).cloned();
-    Ok(PlaceJob { doc: st.uid, params: p.clone(), old, replaced, target: board_at(&st.doc, at) })
+    Ok(PlaceJob { doc: st.uid, params: s.prefs.with_pdf_font_choice(p), old, replaced, target: board_at(&st.doc, at) })
 }
 
 /// Place the file `read` holds in the active document.
@@ -1188,8 +1188,8 @@ pub(crate) fn image_info(s: &mut Session, p: &Value) -> Result<Value> {
     let doc = super::links::with_brush_art(&st.doc);
     let n = doc.stored_node(id).map(|(n, _)| &**n).ok_or(EngineError::NoNode(id))?;
     let NodeKind::Image(im) = &n.kind else { return Err(bad(C, format!("object {} is not an image", id.0))) };
-    // Effective resolution, taken at the middle of a distorted image.
-    let ppi = effective_ppi(vectorcraft_doc::image_quad::nearest_affine(n).unwrap_or(im.xf));
+    // Effective resolution at the middle of a distorted image.
+    let xf = vectorcraft_doc::image_quad::nearest_affine(n).unwrap_or(im.xf);
     let size = n.geometric_bounds().unwrap_or_default();
     // A linked file outside the read roots of the caller asking now is left unnamed, as in Link Info.
     let doc_path = super::links::LinkBase::of(st).doc;
@@ -1201,7 +1201,7 @@ pub(crate) fn image_info(s: &mut Session, p: &Value) -> Result<Value> {
         "colorMode": st.doc.images.get(&im.key).map_or("RGB", |b| color_mode(&b.bytes)),
         "pixelWidth": im.width,
         "pixelHeight": im.height,
-        "ppi": ppi,
+        "ppi": effective_ppi(xf),
         "width": size.width(),
         "height": size.height(),
     }))
