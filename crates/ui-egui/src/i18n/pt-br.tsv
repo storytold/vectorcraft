@@ -854,6 +854,7 @@ antiAlias	Sharp	Nítido
 	Direct Selection Tool	Ferramenta Seleção Direta
 	Direction Handles	Alças de Direção
 	Disable Auto Add/Delete	Desativar Adicionar/Excluir Automático
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete Remove Pontos de Ancoragem e Mantém os Demarcadores Unidos
 	Interpolate Control Points When Moving Anchors	Interpolar Alças de Direção ao Mover Pontos de Ancoragem
 	Disable Opacity Mask	Desativar Máscara de Opacidade
 	Discard	Descartar
@@ -2016,6 +2017,12 @@ antiAlias	Sharp	Nítido
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppp
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppp
+	resolution unavailable	resolução indisponível
+	estimated memory {memory}	memória estimada {memory}
+	memory unavailable	memória indisponível
+	Unknown format	Formato desconhecido
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -2149,6 +2156,7 @@ antiAlias	Sharp	Nítido
 	One page per artboard.	Uma página por mesa de trabalho.
 	Only Web Colors	Apenas Cores da Web
 	Opacity	Opacidade
+	Show Opacity	Mostrar Opacidade
 	Opacity & Mask Define Knockout Shape	Opacidade e Máscara Definem Forma de Isolamento
 	Opacity Mask	Máscara de Opacidade
 	Opacity Mask Info	Informações da Máscara de Opacidade
@@ -2555,6 +2563,9 @@ digits	Malayalam	Malaiala
 	Scale Artwork with Artboard	Dimensionar Arte com a Mesa de Trabalho
 	Artboards: {n}	Mesas de Trabalho: {n}
 	Rearrange All Artboards…	Reorganizar Todas as Mesas de Trabalho…
+	Rearrange…	Reorganizar…
+	Selected Artboards: {n}	Mesas de Trabalho Selecionadas: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Clique na tela para posicionar as mesas de trabalho (Esc cancela)
 	Recall Selection	Relembrar Seleção
 	Recent Colors	Cores Recentes
 	Recent Files	Arquivos Recentes
@@ -2782,6 +2793,7 @@ digits	Malayalam	Malaiala
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Um gesto de rotação com dois dedos no trackpad gira a visualização da tela.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Manter uma tecla pressionada executa a ferramenta ou o comando da coluna Manter pressionado em Atalhos de Teclado; um toque rápido executa o atalho habitual.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Quantos segundos uma tecla precisa ficar pressionada até que seu atalho de pressionamento longo seja executado no lugar do atalho habitual.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete remove os pontos de ancoragem selecionados e reajusta a curva em torno de cada um, em vez de abrir o demarcador ali.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Ao mover pontos de ancoragem, cada curva com uma extremidade movida mantém sua forma em relação às extremidades.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Manter pressionado o atalho de uma ferramenta a escolhe até você soltar, e então a ferramenta anterior é escolhida de novo.
 	Shows the bounding box while you move the selection or draw a shape.	Mostra a caixa delimitadora enquanto você move a seleção ou desenha uma forma.
@@ -7224,6 +7236,8 @@ axis	Y Axis	Eixo Y
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	precisa de aprovação: pede {0}, que o usuário concede ao instalá-lo separadamente
 @msg	not JSON: {e}	não é JSON: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	não é um binário WebAssembly (falta o cabeçalho \\0asm)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	um tipo de função excede o limite de {MAX_FUNC_TYPE_VALUES} parâmetros
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	um tipo de função excede o limite de {MAX_FUNC_TYPE_VALUES} resultados
 @msg	parameter `{k}`: {what}	parâmetro `{k}`: {what}
 @msg	parameter `{name}`: {what}	parâmetro `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	os parâmetros do plug-in devem ser um objeto JSON
@@ -7260,6 +7274,11 @@ axis	Y Axis	Eixo Y
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` e `maxItems` devem ser 0-{MAX_LIST}, `maxItems` pelo menos 1, e o valor padrão deve ter essa quantidade
 @msg	`name` must be a string	`name` deve ser uma string
 @msg	`opacity` must be a number	`opacity` deve ser um número
+@msg	`opacity` must be a number from 0 to 100	`opacity` deve ser um número de 0 a 100
+@msg	`opacity` must be true or false	`opacity` deve ser true ou false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	os caracteres do texto não têm opacidade própria: adicione um preenchimento ou traçado com Adicionar Novo Preenchimento ou Adicionar Novo Traçado do painel Aparência
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	um objeto selecionado em uma instância de símbolo não tem opacidade própria de preenchimento ou traçado
+@msg	no target has that fill or stroke to take the opacity	nenhum destino tem esse preenchimento ou traçado para receber a opacidade
 @msg	`type` must be "path" or "compound"	`type` deve ser "path" ou "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` deve ter 1-{MAX_UNIT} caracteres imprimíveis
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` deve listar de 1 a {MAX_CONDITION_VALUES} valores para `{other}`
@@ -9749,6 +9768,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	give a pattern name or select an object painted with a pattern	informe o nome de um padrão ou selecione um objeto pintado com um padrão
 @msg	give at least one of clip, invert, disabled, linked	informe pelo menos um de clip, invert, disabled, linked
 @msg	give color, none, swatch or gradient	informe color, none, swatch ou gradient
+@msg	give color, none, swatch, gradient or opacity	informe color, none, swatch, gradient ou opacity
 @msg	give dataBase64	informe dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	informe at (um clique) ou area (um caminho desenhado em volta das sobreposições)
 @msg	give exactly one of `at`, `rect` and `points`	informe exatamente um de `at`, `rect` e `points`

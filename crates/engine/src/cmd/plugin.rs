@@ -44,6 +44,7 @@
 //! images or symbol instances of those kinds, to read only: its output must return each of them
 //! unchanged ([`objects::decode_output_with`]).
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 
 use serde_json::{Map, Value, json};
@@ -116,8 +117,19 @@ pub fn describe(p: &Plugin) -> Value {
             .iter()
             .map(|c| {
                 let run = m.for_command(c);
-                json!({"id": c.id, "command": command_id(&m.id, &c.id), "label": c.shown_label(), "params": run.params_doc(),
-                       "paramsSchema": serde_json::to_value(&run).ok().and_then(|v| v.get("params").cloned())})
+                let mut entry = json!({"id": c.id, "command": command_id(&m.id, &c.id), "label": c.shown_label(), "params": run.params_doc(),
+                       "paramsSchema": serde_json::to_value(&run).ok().and_then(|v| v.get("params").cloned())});
+                if let Some(place) = &c.place {
+                    let mut menu = json!({"path": place.path});
+                    if let Some(after) = &place.after {
+                        menu["after"] = json!(permissions::display_text(after, permissions::MAX_SHOWN_NAME));
+                    }
+                    if placed_menu(p, c).is_none() {
+                        menu["placed"] = json!(false);
+                    }
+                    entry["menu"] = menu;
+                }
+                entry
             })
             .collect();
         v["commands"] = json!(commands);
@@ -500,15 +512,278 @@ pub fn find_spec(id: &str) -> Option<&'static CommandSpec> {
     command_specs().into_iter().find(|c| c.id == id)
 }
 
+/// The letters and digits of `label`, lowercased. Two labels with the same key read alike in a menu
+/// (`Paste (in Place)` and `Paste in Place`).
+fn label_key(label: &str) -> String {
+    label.chars().filter(|ch| ch.is_alphanumeric()).flat_map(char::to_lowercase).collect()
+}
+
+/// The labels of engine commands whose menu item switches to the label of [`other_state`] (the
+/// desktop app's dynamic labels).
+pub const SWITCHING_LABELS: &[&str] = &[
+    "Preview",
+    "Outline",
+    "Show Rulers",
+    "Change to Global Rulers",
+    "Show Transparency Grid",
+    "Lock Guides",
+    "Hide Slices",
+    "Show Print Tiling",
+    "Lock Grid",
+    "Edit Envelope",
+    "Edit Contents",
+    "Start Global Edit",
+];
+
+/// The label of `label`'s other state, for a menu item that switches between two labels: `Show
+/// Edges` for `Hide Edges`, `Unlock Guides` for `Lock Guides`, `Stop Global Edit` for `Start Global
+/// Edit`, and the reverse.
+pub fn other_state(label: &str) -> Option<String> {
+    const PAIRS: &[(&str, &str)] = &[
+        ("Preview", "Outline"),
+        ("Change to Global Rulers", "Change to Artboard Rulers"),
+        ("Edit Envelope", "Edit Contents"),
+        ("Start Global Edit", "Stop Global Edit"),
+    ];
+    let paired = |&(a, b): &(&'static str, &'static str)| {
+        if label == a {
+            Some(b)
+        } else if label == b {
+            Some(a)
+        } else {
+            None
+        }
+    };
+    if let Some(other) = PAIRS.iter().find_map(paired) {
+        return Some(other.to_string());
+    }
+    [("Hide ", "Show "), ("Show ", "Hide "), ("Lock ", "Unlock "), ("Unlock ", "Lock ")]
+        .iter()
+        .find_map(|(from, to)| label.strip_prefix(from).map(|rest| format!("{to}{rest}")))
+}
+
+/// The menu that plug-in `p`'s command `c` is listed in when its manifest's `menu` places it in
+/// another menu: that menu's path, or `None` when `c` stays in its plug-in's submenu. It stays
+/// there when its menu label ([`Command::menu_label`]) has the same letters and digits, ignoring
+/// case, as an engine command listed in that menu (either label of one of [`SWITCHING_LABELS`]),
+/// an item of [`DESKTOP_MENU_ITEMS`] there, or a command that a plug-in with a lower id, or an
+/// earlier command of `p`, places in that menu. The result is the same with and without the
+/// desktop app. Results for installed plug-ins are kept until the registry changes.
+pub fn placed_menu(p: &Plugin, c: &Command) -> Option<&'static [&'static str]> {
+    type Placed = HashMap<String, Option<&'static [&'static str]>>;
+    static PLACED: Mutex<Option<(u64, Placed)>> = Mutex::new(None);
+    c.place.as_ref()?;
+    let m = p.manifest();
+    // Read before the registry, so a result found while the registry changes is kept under the
+    // revision before the change.
+    let revision = registry::revision();
+    // `plugin.inspect` describes a module that is not installed, or not yet in place of the
+    // installed one: never kept.
+    if !registry::get(&m.id).is_some_and(|q| std::ptr::eq(&*q, p)) {
+        return find_place(p, c);
+    }
+    let id = command_id(&m.id, &c.id);
+    if let Ok(placed) = PLACED.lock()
+        && let Some((at, known)) = placed.as_ref()
+        && *at == revision
+        && let Some(found) = known.get(&id)
+    {
+        return *found;
+    }
+    let found = find_place(p, c);
+    if let Ok(mut placed) = PLACED.lock() {
+        let (at, known) = placed.get_or_insert_with(|| (revision, HashMap::new()));
+        if *at != revision {
+            *at = revision;
+            known.clear();
+        }
+        known.insert(id, found);
+    }
+    found
+}
+
+/// [`placed_menu`], found again.
+fn find_place(p: &Plugin, c: &Command) -> Option<&'static [&'static str]> {
+    let place = c.place.as_ref()?;
+    let m = p.manifest();
+    let key = label_key(&c.menu_label(&m.name));
+    let reads_like =
+        |label: &str| label_key(label) == key || SWITCHING_LABELS.contains(&label) && other_state(label).is_some_and(|o| label_key(&o) == key);
+    if super::command_specs().iter().any(|s| s.menu == place.path && reads_like(s.label))
+        || DESKTOP_MENU_ITEMS.iter().any(|(path, label)| *path == place.path && label_key(label) == key)
+    {
+        return None;
+    }
+    let taken = |name: &str, d: &Command| d.place.as_ref().is_some_and(|e| e.path == place.path) && label_key(&d.menu_label(name)) == key;
+    // The registry lists plug-ins in id order. `p` itself may not be installed yet (`plugin.inspect`),
+    // or be replacing the installed module of its id, so its own commands come from `m`.
+    for q in registry::list() {
+        let qm = q.manifest();
+        if qm.id >= m.id {
+            break;
+        }
+        if qm.commands.iter().any(|d| taken(&qm.name, d)) {
+            return None;
+        }
+    }
+    for d in &m.commands {
+        if d.id == c.id {
+            return Some(place.path);
+        }
+        if taken(&m.name, d) {
+            return None;
+        }
+    }
+    Some(place.path)
+}
+
+/// The labels of the desktop app's own items (not engine commands) in the menus of
+/// [`vectorcraft_plugins::manifest::MENU_PLACES`], with both labels of an item that switches
+/// between two. [`placed_menu`] reads them, so its result is the same with and without the desktop
+/// app.
+pub const DESKTOP_MENU_ITEMS: &[(&[&str], &str)] = &[
+    (&["Edit"], "Spelling"),
+    (&["Edit"], "Edit Custom Dictionary…"),
+    (&["Edit"], "Edit Colors"),
+    (&["Edit"], "Edit Original"),
+    (&["Edit"], "Transparency Flattener Presets…"),
+    (&["Edit"], "Print Presets…"),
+    (&["Edit"], "PDF Presets…"),
+    (&["Edit"], "Tracing Presets…"),
+    (&["Edit"], "Perspective Grid Presets…"),
+    (&["Edit"], "Refresh Monitor Profile"),
+    (&["Edit"], "Keyboard Shortcuts…"),
+    (&["Edit"], "Preferences…"),
+    (&["Edit", "Edit Colors"], "Recolor with Preset"),
+    (&["Object"], "Transform"),
+    (&["Object"], "Arrange"),
+    (&["Object"], "Align"),
+    (&["Object"], "Distribute"),
+    (&["Object"], "Lock"),
+    (&["Object"], "Hide"),
+    (&["Object"], "Slice"),
+    (&["Object"], "Path"),
+    (&["Object"], "Shape"),
+    (&["Object"], "Pattern"),
+    (&["Object"], "Repeat"),
+    (&["Object"], "Intertwine"),
+    (&["Object"], "Objects on Path"),
+    (&["Object"], "Blend"),
+    (&["Object"], "Envelope Distort"),
+    (&["Object"], "Perspective"),
+    (&["Object"], "Live Paint"),
+    (&["Object"], "Image Trace"),
+    (&["Object"], "Text Wrap"),
+    (&["Object"], "Clipping Mask"),
+    (&["Object"], "Compound Path"),
+    (&["Object"], "Artboards"),
+    (&["Object"], "Graph"),
+    (&["Object"], "Collect for Export"),
+    (&["Object"], "Plug-ins"),
+    (&["Type"], "Font"),
+    (&["Type"], "Recent Fonts"),
+    (&["Type"], "Size"),
+    (&["Type"], "Bold"),
+    (&["Type"], "Italic"),
+    (&["Type"], "Glyphs"),
+    (&["Type"], "Insert Special Character"),
+    (&["Type"], "Insert Whitespace Character"),
+    (&["Type"], "Insert Break Character"),
+    (&["Type"], "Type on a Path"),
+    (&["Type"], "Dynamic Text Presets"),
+    (&["Type"], "Threaded Text"),
+    (&["Type"], "Find Font…"),
+    (&["Type"], "Change Case"),
+    (&["Type"], "Bullets and Numbering"),
+    (&["Type"], "Show Hidden Characters"),
+    (&["Type"], "Hide Hidden Characters"),
+    (&["Type"], "Type Orientation"),
+    (&["Select"], "Same"),
+    (&["Select"], "Object"),
+    (&["Select"], "Saved Selection"),
+    (&["Effect"], "Apply Last Effect"),
+    (&["Effect"], "Last Effect…"),
+    (&["Effect"], "3D and Materials"),
+    (&["Effect"], "Color Adjustments"),
+    (&["Effect"], "Color Effects"),
+    (&["Effect"], "Convert to Shape"),
+    (&["Effect"], "Crop Marks"),
+    (&["Effect"], "Distort & Transform"),
+    (&["Effect"], "Path"),
+    (&["Effect"], "Path Effects"),
+    (&["Effect"], "Pathfinder"),
+    (&["Effect"], "Rasterize…"),
+    (&["Effect"], "Stylize"),
+    (&["Effect"], "SVG Filters"),
+    (&["Effect"], "Warp"),
+    (&["Effect"], "Effect Gallery…"),
+    (&["Effect"], "Artistic"),
+    (&["Effect"], "Blur"),
+    (&["Effect"], "Brush Strokes"),
+    (&["Effect"], "Distort"),
+    (&["Effect"], "Pixelate"),
+    (&["Effect"], "Sharpen"),
+    (&["Effect"], "Sketch"),
+    (&["Effect"], "Texture"),
+    (&["Effect"], "Video"),
+    (&["Effect"], "Plug-ins"),
+    (&["View"], "Outline"),
+    (&["View"], "Preview"),
+    (&["View"], "Pixel Preview"),
+    (&["View"], "Trim View"),
+    (&["View"], "Presentation Mode"),
+    (&["View"], "Screen Mode"),
+    (&["View"], "Proof Setup"),
+    (&["View"], "Zoom In"),
+    (&["View"], "Zoom Out"),
+    (&["View"], "Fit Artboard in Window"),
+    (&["View"], "Fit All in Window"),
+    (&["View"], "Actual Size"),
+    (&["View"], "Rotate View"),
+    (&["View"], "Rotate View to Selection"),
+    (&["View"], "Reset Rotate View"),
+    (&["View"], "Hide Edges"),
+    (&["View"], "Show Edges"),
+    (&["View"], "Hide Artboards"),
+    (&["View"], "Show Artboards"),
+    (&["View"], "Hide Template"),
+    (&["View"], "Show Template"),
+    (&["View"], "Rulers"),
+    (&["View"], "Hide Bounding Box"),
+    (&["View"], "Show Bounding Box"),
+    (&["View"], "Hide Text Threads"),
+    (&["View"], "Show Text Threads"),
+    (&["View"], "Hide Gradient Annotator"),
+    (&["View"], "Show Gradient Annotator"),
+    (&["View"], "Hide Corner Widget"),
+    (&["View"], "Show Corner Widget"),
+    (&["View"], "Show Live Paint Gaps"),
+    (&["View"], "Hide Live Paint Gaps"),
+    (&["View"], "Guides"),
+    (&["View"], "Smart Guides"),
+    (&["View"], "Perspective Grid"),
+    (&["View"], "Show Grid"),
+    (&["View"], "Hide Grid"),
+    (&["View"], "Snap to Grid"),
+    (&["View"], "Snap to Pixel"),
+    (&["View"], "Snap to Point"),
+    (&["View"], "Snap to Glyph"),
+    (&["View"], "Saved View"),
+];
+
 /// The command spec of plug-in `p`'s command `c`: its id, its label as menus show it (escaped and
-/// capped), its menu (Object › Plug-ins › the plug-in's name, or Effect › Plug-ins › it for a live
-/// effect: never a menu the manifest names) and its params description.
+/// capped, and followed by the plug-in's name when it is listed in another menu), its menu
+/// ([`placed_menu`], else Object › Plug-ins › the plug-in's name, or Effect › Plug-ins › it for a
+/// live effect) and its params description.
 fn spec_of(p: &Plugin, c: &Command) -> &'static CommandSpec {
     let m = p.manifest();
     let id = command_id(&m.id, &c.id);
-    let label = c.shown_label();
+    let placed = placed_menu(p, c);
+    let label = if placed.is_some() { c.menu_label(&m.name) } else { c.shown_label() };
     let top = if m.kind == Kind::Effect { "Effect" } else { "Object" };
     let name = permissions::display_text(m.name.trim(), permissions::MAX_SHOWN_NAME);
+    let submenu = [top, "Plug-ins", name.as_str()];
+    let path: &[&str] = placed.unwrap_or(&submenu);
     let mut fields =
         String::from("ids?: [object id] (left out or null: the selection), params?: {…} (its parameters; or give them as top-level keys)");
     let doc = m.for_command(c).params_doc();
@@ -521,11 +796,14 @@ fn spec_of(p: &Plugin, c: &Command) -> &'static CommandSpec {
         m.id, c.id
     );
     let mut made = MADE.lock().unwrap_or_else(|e| e.into_inner());
-    let same = |s: &&&'static CommandSpec| s.id == id && s.label == label && s.menu == [top, "Plug-ins", name.as_str()] && s.params == params;
+    let same = |s: &&&'static CommandSpec| s.id == id && s.label == label && s.menu == path && s.params == params;
     if let Some(s) = made.iter().find(same) {
         return s;
     }
-    let menu: &'static [&'static str] = Box::leak(vec![top, "Plug-ins", registry::intern(&name)].into_boxed_slice());
+    let menu: &'static [&'static str] = match placed {
+        Some(path) => path,
+        None => Box::leak(vec![top, "Plug-ins", registry::intern(&name)].into_boxed_slice()),
+    };
     let spec: &'static CommandSpec = Box::leak(Box::new(CommandSpec {
         id: registry::intern(&id),
         label: registry::intern(&label),
@@ -1304,7 +1582,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Plug-ins",
             [],
             None,
-            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}], leftOut} | null (under automation read roots, a folder outside them is null, and a failed file and a plug-in's source outside them are named by their file name), safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
+            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema, menu?: {path: [menu label], after?: item label (escaped), placed?: false (it stays in its plug-in's submenu: its label reads like a built-in item or submenu of that menu or another plug-in command placed there)} (the menu its manifest places it in, see docs/plugins.md)}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}], leftOut} | null (under automation read roots, a folder outside them is null, and a failed file and a plug-in's source outside them are named by their file name), safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
             always,
             list
         ),
