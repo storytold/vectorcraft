@@ -78,12 +78,13 @@ impl View {
         }
     }
 
-    /// The thumbnail zoom that makes the browser's list rows small or large; `None` keeps the grid's own.
-    fn list_zoom(self) -> Option<f64> {
+    /// The thumbnail zoom of this view: the grid's tiles about 40 points, as production's, and the list rows small or
+    /// large.
+    fn zoom(self) -> f64 {
         match self {
-            View::Thumbnail => None,
-            View::SmallList => Some(0.5),
-            View::LargeList => Some(2.0),
+            View::Thumbnail => 5.0 / 6.0,
+            View::SmallList => 0.5,
+            View::LargeList => 2.0,
         }
     }
 }
@@ -468,9 +469,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut panel = std::mem::take(&mut app.ui.graphic_styles_panel);
     let looks = look_hashes(&mut panel, app);
     let view = app.ui.graphic_styles_view;
-    if let Some(zoom) = view.list_zoom() {
-        panel.state.zoom = zoom;
-    }
+    panel.state.zoom = view.zoom();
     let before = panel.selection.clone();
     let (alt, linked) = (alt_held(ui), app.session.selection_graphic_style().is_some());
     let thumbs = style_thumbs(app, &doc, &looks, panel.preview);

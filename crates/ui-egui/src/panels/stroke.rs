@@ -391,7 +391,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     arrow_rows(app, ui, st.as_ref());
     ui.separator();
     Field::new(tl!("Profile")).show(ui, |ui, _| {
-        Row::new().show(ui, |ui, _| {
+        Row::new().wrap(true).show(ui, |ui, _| {
             profile_select(app, ui);
             flip_buttons(app, ui, st.as_ref());
         });
