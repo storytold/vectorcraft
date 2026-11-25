@@ -833,6 +833,25 @@ fn script_file_access_shows_none_and_a_revoke_of_a_removed_row() {
     assert!(access_texts(&mut web).is_empty());
 }
 
+/// A kept grant with an empty script or path, which `script.grants` lists and `script.grants.revoke` does not take,
+/// has no row.
+#[test]
+fn script_file_access_leaves_out_a_grant_with_an_empty_script_or_path() {
+    let dir = std::env::temp_dir().join("vc-ui-prefs-grants-nowhere");
+    let (script, path) = (dir.join("a.jsx"), dir.join("out.txt"));
+    let grants = json!([
+        grant(&script, &path, "1", false, false),
+        grant(&script, "".as_ref(), "1", false, false),
+        grant("".as_ref(), &path, "1", false, false)
+    ]);
+    let (mut a, store) = app_with_grants("grants-empty", grants);
+    assert_eq!(a.session.execute("script.grants", &json!({})).unwrap()["grants"].as_array().map(Vec::len), Some(3));
+    open(&mut a, Some("General"));
+    let row = (script.to_string_lossy().into_owned(), path.to_string_lossy().into_owned(), "read".to_string(), 1);
+    assert_eq!(access_rows(&a), [row]);
+    let _ = std::fs::remove_dir_all(store.parent().unwrap());
+}
+
 /// Preferences opened with a read root in force shows a script and a path outside it by their file
 /// names alone, as `script.grants` lists them, and `ui.inspect` names them the same way; Revoke
 /// still removes that pair's kept grants, both with the root in force and without it.

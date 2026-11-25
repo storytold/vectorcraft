@@ -77,7 +77,8 @@ pub(super) fn load(app: &mut VectorcraftApp) -> Option<Access> {
 
 /// The rows for the grants `grants` lists: one for each script and path, sorted by script and then by path, with the
 /// widest access any kept version of the pair has (`folder`, then `write`, then `read`) and how many versions are
-/// kept. A grant without a script or a path is left out.
+/// kept. A grant without a script or a path, or with an empty one, which `script.grants.revoke` does not take, is
+/// left out.
 fn rows(grants: &Value) -> Vec<Grant> {
     let rank = |access: &str| match access {
         "folder" => 2,
@@ -87,6 +88,9 @@ fn rows(grants: &Value) -> Vec<Grant> {
     let mut pairs: BTreeMap<(&str, &str), (&'static str, usize)> = BTreeMap::new();
     for g in grants.as_array().into_iter().flatten() {
         let (Some(script), Some(path)) = (g["script"].as_str(), g["path"].as_str()) else { continue };
+        if script.is_empty() || path.is_empty() {
+            continue;
+        }
         let access = if g["folder"] == true {
             "folder"
         } else if g["write"] == true {
