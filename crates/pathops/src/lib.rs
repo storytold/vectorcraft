@@ -22,9 +22,9 @@ pub use boolean::{
     try_unite_all_with, unite_all, unite_all_with,
 };
 pub use edit::{
-    AverageAxis, SIMPLIFY_LEVEL, SMOOTH_AUTO_LEVEL, SimplifiedPart, SimplifyOptions, add_anchor_points, auto_simplify_level, average, join,
-    remove_anchor, remove_anchors, remove_redundant_points, simplify, simplify_level_tolerance, simplify_part, simplify_with, smooth, smooth_level,
-    smooth_options, split_into_grid,
+    AverageAxis, SIMPLIFY_LEVEL, SMOOTH_AUTO_LEVEL, START_SNAP, SimplifiedPart, SimplifyOptions, add_anchor_points, auto_simplify_level, average,
+    join, remove_anchor, remove_anchors, remove_redundant_points, simplify, simplify_level_tolerance, simplify_part, simplify_with, smooth,
+    smooth_level, smooth_options, split_into_grid, start_nearest,
 };
 pub use fit::{fit_cubics, fit_cubics_through};
 pub use offset::{Cap, Join, MAX_OFFSET_SEGMENT_PAIRS, offset_path, outline_stroke, stroke_region, try_offset_path};

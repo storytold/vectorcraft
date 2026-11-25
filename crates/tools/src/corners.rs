@@ -8,7 +8,8 @@
 //! picks, so a double-click opens Corners for all of them; dragging or Alt-clicking one that is
 //! not picked adds its corner to the edit. Alt-clicking a widget cycles their corner
 //! kind (round, inverted round, chamfer), as the Up and Down arrows do while one is dragged
-//! (#2898); double-clicking one opens the Corners dialog. The
+//! (#2898); double-clicking one opens the Corners dialog with Direct Selection and shows the
+//! Transform panel with the Selection tool. The
 //! Selection and Direct Selection tools share this, and the canvas draws the widgets from the same
 //! geometry.
 
@@ -267,8 +268,9 @@ pub fn widget_at(cx: &ToolContext, p: Point, any_path: bool) -> Option<(bool, Po
 }
 
 /// A double-click on a corner widget opens the Corners dialog for the picked corners of its path
-/// that show, or for the clicked widget's corner alone when it is not picked. With Direct
-/// Selection the double-click's first click has left the picks as they are on a picked widget,
+/// that show, or for the clicked widget's corner alone when it is not picked (Direct Selection;
+/// the Selection tool shows the Transform panel instead). With Direct Selection the
+/// double-click's first click has left the picks as they are on a picked widget,
 /// and picked that corner alone on one that is not (`CornerDrag::finish`).
 pub fn double_click(cx: &ToolContext, p: Point, any_path: bool) -> Option<Action> {
     double_click_unless(cx, p, any_path, |_| false)

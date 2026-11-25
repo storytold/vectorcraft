@@ -893,8 +893,11 @@ fn surface_meshes(
     }
     let (mesh, on) = vectorcraft_three_d::revolve_mesh_surface(path, rule, b, options)?;
     let (mut side, mut rest, mut art) = (vectorcraft_three_d::Mesh::default(), vectorcraft_three_d::Mesh::default(), vec![]);
-    for (t, points) in mesh.triangles.iter().zip(&on) {
-        let corner = |i: u32| mesh.positions.get(i as usize).copied().zip(mesh.normals.get(i as usize).copied());
+    for ((t, points), part) in mesh.triangles.iter().zip(&on).zip(&mesh.parts) {
+        let corner = |i: u32| {
+            let i = i as usize;
+            Some((*mesh.positions.get(i)?, *mesh.normals.get(i)?, *mesh.uvs.get(i)?))
+        };
         let Some(corners) = t.iter().map(|&i| corner(i)).collect::<Option<Vec<_>>>() else { continue };
         let into = match points {
             Some(points) => {
@@ -904,11 +907,13 @@ fn surface_meshes(
             None => &mut rest,
         };
         let base = into.positions.len() as u32;
-        for (p, n) in corners {
+        for (p, n, uv) in corners {
             into.positions.push(p);
             into.normals.push(n);
+            into.uvs.push(uv);
         }
         into.triangles.push([base, base + 1, base + 2]);
+        into.parts.push(*part);
     }
     let mut out = vec![];
     if !rest.is_empty() {

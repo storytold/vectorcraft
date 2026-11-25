@@ -11,8 +11,9 @@
 //! the side the path bends toward; with Shift held at the press, on the other side. On a straight
 //! stretch, at a cusp, at a corner, or where the circle would reach past the canvas, the pointer
 //! shows "Straight segment", "Cusp", "Corner" or "Circle too large" instead, and a click draws
-//! nothing. The pointer passes over the circles the tool drew until another tool is chosen or an
-//! edit, Undo or Redo is made outside the tool.
+//! nothing. The pointer passes over the circles the tool drew until the selection holds none of
+//! them, another tool is chosen, another document becomes active, or an edit, Undo or Redo is
+//! made outside the tool.
 
 use std::collections::HashSet;
 
@@ -58,8 +59,22 @@ pub struct CurvatureCircleTool {
     /// The press in progress, where the pointer was pressed: what a release draws.
     press: Option<(Hit, bool)>,
     from: Point,
-    /// The circles the tool drew since the history last moved outside it.
+    /// The circles the tool drew since the history last moved outside it or the selection last
+    /// held none of them.
     drawn: HashSet<NodeId>,
+}
+
+impl CurvatureCircleTool {
+    /// After Deselect or a selection made outside the tool, the selection holds none of the
+    /// circles the tool drew, and the pointer reaches them again.
+    /// Returns whether it forgot any.
+    fn forget_unselected(&mut self, cx: &ToolContext) -> bool {
+        if self.drawn.is_empty() || cx.selection.objects.iter().any(|id| self.drawn.contains(id)) {
+            return false;
+        }
+        self.drawn.clear();
+        true
+    }
 }
 
 /// The nearest point within reach of `p` on the paths a click can pick, guides and the paths in
@@ -118,6 +133,7 @@ impl Tool for CurvatureCircleTool {
         if !ev.pos.is_finite() {
             return vec![];
         }
+        self.forget_unselected(cx);
         match ev.kind {
             PointerKind::Move => {
                 self.hover = hit_at(cx, ev.pos, &self.drawn).map(|h| (h, ev.mods.shift));
@@ -183,6 +199,16 @@ impl Tool for CurvatureCircleTool {
         {
             self.drawn.insert(id);
         }
+    }
+
+    /// A command from outside the tool (Deselect, a pick in the Layers panel) may leave none of the
+    /// circles the tool drew selected. The circle shown under the pointer then waits for the next
+    /// hover.
+    fn after_command(&mut self, cx: &ToolContext) -> Vec<Action> {
+        if self.forget_unselected(cx) {
+            self.hover = None;
+        }
+        vec![]
     }
 
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
