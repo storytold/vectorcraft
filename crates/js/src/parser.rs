@@ -111,6 +111,10 @@ pub(crate) struct Parser<'s> {
     cover_ok: bool,
     /// The spread elements of array literals followed by a comma, which cannot end a pattern.
     rest_commas: HashSet<u32>,
+    /// Where each `__proto__: value` after the first in an object literal starts (ECMA-262 2015
+    /// section B.3.1). Each is also in `cover_inits`, so it is a `SyntaxError` unless the literal
+    /// is read as a destructuring pattern.
+    proto_twice: HashSet<u32>,
 }
 
 impl<'s> Parser<'s> {
@@ -138,6 +142,7 @@ impl<'s> Parser<'s> {
             cover_inits: Vec::new(),
             cover_ok: false,
             rest_commas: HashSet::new(),
+            proto_twice: HashSet::new(),
         };
         parser.tok = parser.next_significant()?;
         Ok(parser)
@@ -830,8 +835,11 @@ impl<'s> Parser<'s> {
             self.pop_scope();
             return result;
         }
+        let mark = self.cover_inits.len();
+        self.cover_ok = self.es2015;
         let expr = self.parse_expression(true)?;
-        self.check_target(expr, "invalid left-hand side in for each loop")?;
+        self.loop_target(expr, "invalid left-hand side in for each loop", false)?;
+        self.check_cover(mark)?;
         self.parse_for_in(ForInTarget::Expr(expr), start, true)
     }
 
@@ -1016,6 +1024,10 @@ impl<'s> Parser<'s> {
             self.ctx.labels.remove(&label.name);
         }
         let mut body = body?;
+        // A labelled function in a statement list is declared there as one without labels is.
+        if let Some(Stmt::FunctionDecl(fid)) = self.ast.stmt(body).filter(|_| in_list) {
+            self.declare_function(*fid)?;
+        }
         for (label, label_start) in labels.into_iter().rev() {
             let span = Span::new(label_start.start, self.ast.stmt_span(body).end);
             body = self.ast.push_stmt(Stmt::Labeled { label, body }, span);
@@ -1071,7 +1083,15 @@ impl<'s> Parser<'s> {
                 let default = if self.es2015 && self.eat(Punct::Eq)? { Some(self.parse_assignment(false)?) } else { None };
                 params.push(param);
                 defaults.push(default);
+                // A comma may follow the last parameter (ECMAScript 2017, section 14.1), except in
+                // a setter, which takes one parameter and no comma (section 14.3).
                 if !self.eat(Punct::Comma)? {
+                    break;
+                }
+                if self.at(Punct::RParen) {
+                    if kind == FunctionKind::Setter {
+                        return Err(self.error_at_token(&self.tok, "a setter must have exactly one parameter"));
+                    }
                     break;
                 }
             }
@@ -1179,14 +1199,14 @@ impl<'s> Parser<'s> {
     }
 
     /// The rules for a function's name and parameters. Strict mode code (Annex C): neither `eval`,
-    /// `arguments` nor a strict-mode reserved word, and no parameter name twice. An arrow function
-    /// or a function with a default or rest parameter has no parameter name twice either (ECMA-262
-    /// 2015 sections 14.1.2 and 14.2.1), and its body cannot start with `"use strict"`
-    /// (`body_strict`; ECMA-262 2016 section 14.1.2).
+    /// `arguments` nor a strict-mode reserved word, and no parameter name twice. An arrow function,
+    /// a method or a function with a default or rest parameter has no parameter name twice either
+    /// (ECMA-262 2015 sections 14.1.2, 14.2.1 and 14.3.1), and its body cannot start with
+    /// `"use strict"` (`body_strict`; ECMA-262 2016 section 14.1.2).
     fn check_params(&self, function: &Function, body_strict: bool) -> Result<()> {
         let names: Vec<Name> = function.params.iter().chain(&function.rest).flat_map(|p| self.ast.bound_names(p)).collect();
         let params = || names.iter();
-        let simple = function.simple_params() && function.kind != FunctionKind::Arrow;
+        let simple = function.simple_params() && !matches!(function.kind, FunctionKind::Arrow | FunctionKind::Method);
         if body_strict && !function.simple_params() {
             let at = function.body.first().map_or(function.span.start, |&s| self.ast.stmt_span(s).start);
             return Err(self.error_at_offset(at, "\"use strict\" is not allowed in a function with default, rest or destructured parameters"));
@@ -1324,29 +1344,50 @@ impl<'s> Parser<'s> {
         let mut ops: Vec<(BinKind, u8)> = Vec::new();
         while let Some((op, precedence)) = binary_op(&self.tok, no_in) {
             while ops.last().is_some_and(|&(_, top)| top >= precedence) {
-                self.reduce(&mut operands, &mut ops);
+                self.reduce(&mut operands, &mut ops)?;
             }
             self.bump()?;
             ops.push((op, precedence));
             operands.push(self.parse_unary()?);
         }
         while !ops.is_empty() {
-            self.reduce(&mut operands, &mut ops);
+            self.reduce(&mut operands, &mut ops)?;
         }
         operands.pop().ok_or_else(|| self.unexpected())
     }
 
     /// Joins the top two operands with the top operator.
-    fn reduce(&mut self, operands: &mut Vec<ExprId>, ops: &mut Vec<(BinKind, u8)>) {
+    fn reduce(&mut self, operands: &mut Vec<ExprId>, ops: &mut Vec<(BinKind, u8)>) -> Result<()> {
         let (Some((op, _)), Some(right), Some(left)) = (ops.pop(), operands.pop(), operands.pop()) else {
-            return;
+            return Ok(());
         };
         let span = self.ast.expr_span(left).to(self.ast.expr_span(right));
         let expr = match op {
             BinKind::Binary(op) => Expr::Binary { op, left, right },
-            BinKind::Logical(op) => Expr::Logical { op, left, right },
+            BinKind::Logical(op) => {
+                self.check_coalesce_mix(op, left, right)?;
+                Expr::Logical { op, left, right }
+            }
         };
         operands.push(self.ast.push_expr(expr, span));
+        Ok(())
+    }
+
+    /// `??` and `&&` or `||` written together without parentheses around one of them, which
+    /// ECMA-262 2020 section 12.13 does not allow (`a ?? b || c`, `a && b ?? c`).
+    fn check_coalesce_mix(&self, op: LogicalOp, left: ExprId, right: ExprId) -> Result<()> {
+        let coalesce = op == LogicalOp::Coalesce;
+        for operand in [left, right] {
+            if let Some(Expr::Logical { op: inner, .. }) = self.ast.expr(operand)
+                && (*inner == LogicalOp::Coalesce) != coalesce
+            {
+                return Err(self.error_at_offset(
+                    self.ast.expr_span(operand).start,
+                    "'??' cannot be used with '&&' or '||' without parentheses around one of them",
+                ));
+            }
+        }
+        Ok(())
     }
 
     /// Prefix operators, read with a loop and applied innermost first.
@@ -1432,6 +1473,12 @@ impl<'s> Parser<'s> {
                         None => self.ast.push_expr(Expr::Call { callee: expr, args }, span),
                     };
                 }
+                TokenKind::Punct(Punct::QuestionDot) => {
+                    if !news.is_empty() {
+                        return Err(self.error_at_token(&self.tok, "an optional chain cannot follow 'new' without parentheses around it"));
+                    }
+                    expr = self.parse_optional_chain(expr)?;
+                }
                 _ => break,
             }
         }
@@ -1440,6 +1487,63 @@ impl<'s> Parser<'s> {
             expr = self.ast.push_expr(Expr::New { callee: expr, args: Vec::new() }, span);
         }
         Ok(expr)
+    }
+
+    /// An optional chain (ECMA-262 2020 section 12.3.9), from the `?.` after `base` to the last
+    /// access or call that follows it. A `?.` inside it is a step of the same chain; a tagged
+    /// template and the E4X accesses (`..`, `.@`, `.(`) cannot follow one.
+    fn parse_optional_chain(&mut self, base: ExprId) -> Result<ExprId> {
+        let start = self.ast.expr_span(base).start;
+        let mut expr = base;
+        loop {
+            match &self.tok.kind {
+                TokenKind::Punct(Punct::QuestionDot) => {
+                    self.bump()?;
+                    let object = self.ast.push_expr(Expr::Optional(expr), self.ast.expr_span(expr));
+                    expr = match &self.tok.kind {
+                        TokenKind::Punct(Punct::LParen) => {
+                            let args = self.parse_arguments()?;
+                            self.ast.push_expr(Expr::Call { callee: object, args }, Span::new(start, self.prev_end))
+                        }
+                        TokenKind::Punct(Punct::LBracket) => self.optional_index(object, start)?,
+                        _ => self.optional_member(object, start)?,
+                    };
+                }
+                TokenKind::Punct(Punct::Dot) => {
+                    self.bump()?;
+                    if self.e4x && self.at_e4x_member() {
+                        return Err(self.error_at_token(&self.tok, "an E4X access cannot follow an optional chain"));
+                    }
+                    expr = self.optional_member(expr, start)?;
+                }
+                TokenKind::Punct(Punct::LBracket) => expr = self.optional_index(expr, start)?,
+                TokenKind::Punct(Punct::LParen) => {
+                    let args = self.parse_arguments()?;
+                    expr = self.ast.push_expr(Expr::Call { callee: expr, args }, Span::new(start, self.prev_end));
+                }
+                TokenKind::Template { .. } => return Err(self.error_at_token(&self.tok, "a tagged template cannot follow an optional chain")),
+                TokenKind::Punct(Punct::DotDot) => return Err(self.error_at_token(&self.tok, "an E4X access cannot follow an optional chain")),
+                _ => break,
+            }
+        }
+        Ok(self.ast.push_expr(Expr::OptionalChain(expr), Span::new(start, self.prev_end)))
+    }
+
+    /// `.name` in an optional chain, with the `.` (or `?.`) already read.
+    fn optional_member(&mut self, object: ExprId, start: u32) -> Result<ExprId> {
+        let Some(name) = self.tok.identifier_name().map(str::to_string) else {
+            return Err(self.error_at_token(&self.tok, format!("expected a property name but found {}", describe(&self.tok))));
+        };
+        let token = self.bump()?;
+        Ok(self.ast.push_expr(Expr::Member { object, property: Name { name, span: token.span } }, Span::new(start, token.span.end)))
+    }
+
+    /// `[index]` in an optional chain.
+    fn optional_index(&mut self, object: ExprId, start: u32) -> Result<ExprId> {
+        self.expect(Punct::LBracket)?;
+        let index = self.parse_expression(false)?;
+        let close = self.expect(Punct::RBracket)?;
+        Ok(self.ast.push_expr(Expr::Index { object, index }, Span::new(start, close.span.end)))
     }
 
     /// An element of an array literal or an argument list: an assignment expression, or with
@@ -1459,7 +1563,8 @@ impl<'s> Parser<'s> {
         if !self.at(Punct::RParen) {
             loop {
                 args.push(self.parse_element()?);
-                if !self.eat(Punct::Comma)? {
+                // A comma may follow the last argument (ECMAScript 2017, section 12.3).
+                if !self.eat(Punct::Comma)? || self.at(Punct::RParen) {
                     break;
                 }
             }
@@ -1632,7 +1737,8 @@ impl<'s> Parser<'s> {
     }
 
     /// `{a: 1, "b": 2, 3: c, get d() {…}, set d(v) {…}}`. A name may repeat, a later definition
-    /// replacing an earlier one (ECMA-262 2015 section 12.2.6.1).
+    /// replacing an earlier one (ECMA-262 2015 section 12.2.6.1). With [`crate::Options::es2015`],
+    /// also computed names, shorthand properties and methods ([`Self::parse_property_es2015`]).
     fn parse_object(&mut self) -> Result<ExprId> {
         let start = self.expect(Punct::LBrace)?.span;
         let mut properties = Vec::new();
@@ -1643,7 +1749,33 @@ impl<'s> Parser<'s> {
                 self.expect(Punct::Comma)?;
             }
         }
+        if self.es2015 {
+            self.note_proto_twice(&properties);
+        }
         Ok(self.ast.push_expr(Expr::Object(properties), self.span_from(start)))
+    }
+
+    /// Records each `__proto__: value` of `properties` after the first in `proto_twice` and, in
+    /// order, in `cover_inits`.
+    fn note_proto_twice(&mut self, properties: &[Property]) {
+        // The offsets rise along the properties, so they are merged into the sorted list in one
+        // pass.
+        let twice: Vec<u32> = properties.iter().filter(|p| p.is_proto_setter(&self.ast)).skip(1).map(|p| p.span.start).collect();
+        let Some(&lowest) = twice.first() else { return };
+        let first = self.cover_inits.partition_point(|&x| x < lowest);
+        let tail = self.cover_inits.split_off(first);
+        let (mut a, mut b) = (tail.into_iter().peekable(), twice.iter().copied().peekable());
+        while let (Some(&x), Some(&y)) = (a.peek(), b.peek()) {
+            if y <= x {
+                self.cover_inits.push(y);
+                b.next();
+            } else {
+                self.cover_inits.push(x);
+                a.next();
+            }
+        }
+        self.cover_inits.extend(b.chain(a));
+        self.proto_twice.extend(twice);
     }
 
     fn parse_property(&mut self) -> Result<Property> {
@@ -1728,6 +1860,7 @@ fn binary_op(token: &Token, no_in: bool) -> Option<(BinKind, u8)> {
         TokenKind::Keyword(Keyword::In) if !no_in => Some((B(BinaryOp::In), 7)),
         TokenKind::Punct(p) => Some(match p {
             Punct::PipePipe => (L(LogicalOp::Or), 1),
+            Punct::QuestionQuestion => (L(LogicalOp::Coalesce), 1),
             Punct::AmpAmp => (L(LogicalOp::And), 2),
             Punct::Pipe => (B(BinaryOp::BitOr), 3),
             Punct::Caret => (B(BinaryOp::BitXor), 4),

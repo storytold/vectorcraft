@@ -69,6 +69,8 @@ pub enum BinaryOp {
 pub enum LogicalOp {
     And,
     Or,
+    /// `??`: the right side only when the left is `undefined` or `null`.
+    Coalesce,
 }
 
 /// `=` (`None`) or a compound assignment's operator (`+=` is `Some(BinaryOp::Add)`).
@@ -102,6 +104,8 @@ pub enum PropertyValue {
     Init(ExprId),
     Get(FunctionId),
     Set(FunctionId),
+    /// A method (`m() {…}`, ECMA-262 2015 section 14.3).
+    Method(FunctionId),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -109,6 +113,18 @@ pub struct Property {
     pub key: PropertyKey,
     pub value: PropertyValue,
     pub span: Span,
+}
+
+impl Property {
+    /// The property is `__proto__: value`, which sets the new object's prototype (ECMA-262 2015
+    /// section B.3.1): a data property with a name written out, not computed and not shorthand
+    /// (`{__proto__}`, whose value starts where the property does).
+    pub fn is_proto_setter(&self, ast: &Ast) -> bool {
+        let PropertyValue::Init(value) = self.value else { return false };
+        ast.expr_span(value).start != self.span.start
+            && matches!(self.key, PropertyKey::Ident(_) | PropertyKey::String(_))
+            && self.key.to_utf16().into_iter().eq("__proto__".encode_utf16())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -222,6 +238,12 @@ pub enum Expr {
     /// `...expression` in an array literal or an argument list, and as the last of an arrow
     /// function's parenthesized parameters while they are read.
     Spread(ExprId),
+    /// An optional chain (`a?.b.c`, `a?.[k]`, `f?.()`): its accesses and calls, the
+    /// [`Expr::Optional`] steps among them included. It is `undefined` when one of those steps
+    /// finds `undefined` or `null`, and the rest of the chain is skipped.
+    OptionalChain(ExprId),
+    /// The object or function before `?.` in an [`Expr::OptionalChain`].
+    Optional(ExprId),
 }
 
 /// A piece of a template literal's text between its substitutions.
@@ -400,6 +422,8 @@ pub enum FunctionKind {
     Setter,
     /// An arrow function; one with an expression body has a body of one `return` statement.
     Arrow,
+    /// A method in an object literal.
+    Method,
 }
 
 #[derive(Clone, Debug, PartialEq)]

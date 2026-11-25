@@ -120,8 +120,10 @@ impl FnCompiler<'_> {
         Ok(())
     }
 
-    /// `value` → `value`, or the default value when the value is `undefined`.
-    fn default_value(&mut self, default: Option<ExprId>) -> CResult<()> {
+    /// `value` → `value`, or the default value when the value is `undefined`. An anonymous
+    /// function as the default value of a plain name gets that name (ECMA-262 2015 sections
+    /// 12.14.5.3, 12.14.5.4, 13.3.3.6 and 13.3.3.7).
+    fn default_value(&mut self, target: ExprId, default: Option<ExprId>) -> CResult<()> {
         let Some(default) = default else { return Ok(()) };
         let skip = self.new_label();
         self.emit(Op::Dup);
@@ -129,7 +131,10 @@ impl FnCompiler<'_> {
         self.emit(Op::Binary(crate::ast::BinaryOp::StrictEq));
         self.jump(Op::JumpIfFalse, skip);
         self.emit(Op::Pop);
-        self.expr(default)?;
+        match self.ast.expr(target) {
+            Some(Expr::Ident(name)) => self.named_expr(default, name)?,
+            _ => self.expr(default)?,
+        }
         self.bind(skip);
         Ok(())
     }
@@ -153,7 +158,7 @@ impl FnCompiler<'_> {
             let (target, default) = self.split_default(element);
             let under = self.target_refs(target, mode)?;
             self.emit(Op::IterValue(under));
-            self.default_value(default)?;
+            self.default_value(target, default)?;
             self.write_target(target, mode)?;
         }
         let end = self.pc();
@@ -174,7 +179,7 @@ impl FnCompiler<'_> {
     fn object_pattern(&mut self, properties: &[Property], mode: Mode) -> CResult<()> {
         self.emit(Op::RequireObjectCoercible);
         for p in properties {
-            let PropertyValue::Init(value) = p.value else { return internal("a getter or setter in a pattern") };
+            let PropertyValue::Init(value) = p.value else { return internal("a method, getter or setter in a pattern") };
             self.at(p.span.start);
             match &p.key {
                 PropertyKey::Computed(e) => {
@@ -189,7 +194,7 @@ impl FnCompiler<'_> {
             let (target, default) = self.split_default(value);
             let under = self.target_refs(target, mode)?;
             self.emit(Op::PatternGet(under));
-            self.default_value(default)?;
+            self.default_value(target, default)?;
             self.write_target(target, mode)?;
             self.emit(Op::Pop);
         }

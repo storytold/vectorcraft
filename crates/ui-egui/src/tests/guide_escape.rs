@@ -8,7 +8,7 @@ use vectorcraft_doc::{Document, Selection};
 use vectorcraft_engine::Session;
 use vectorcraft_geom::Point;
 
-use crate::{VectorcraftApp, canvas::Xf};
+use crate::VectorcraftApp;
 
 const SELECTION_TOOLS: [&str; 3] = ["selection", "directSelection", "groupSelection"];
 
@@ -61,7 +61,7 @@ impl GuideDrag {
         let (before, selection, undo) = (st.doc.clone(), st.selection.clone(), st.history.undo.len());
         let mut f = Self {
             app,
-            ctx: egui::Context::default(),
+            ctx: crate::testing::ui_context(),
             time: 0.0,
             vertical,
             copy,
@@ -85,10 +85,10 @@ impl GuideDrag {
         view.zoom = 1.0;
         view.rotation = 0.0;
         f.frame(vec![]);
-        let rect = f.app.canvas_rect.unwrap();
-        let xf = Xf::new(rect, f.app.view().unwrap());
+        let rect = f.app.view().unwrap().rect;
+        let view = f.app.canvas_view().unwrap();
         let point = |at| if vertical { Point::new(at, 60.0) } else { Point::new(60.0, at) };
-        (f.from, f.to, f.end) = (xf.to_screen(point(100.0)), xf.to_screen(point(140.0)), xf.to_screen(point(160.0)));
+        (f.from, f.to, f.end) = (view.to_screen(point(100.0)), view.to_screen(point(140.0)), view.to_screen(point(160.0)));
         assert!([f.from, f.to, f.end].into_iter().all(|p| rect.contains(p)));
         assert_eq!(vectorcraft_engine::cmd::guide_indexes(&f.before, &f.selection.guides), vec![0, 1]);
         f.app.session.active_mut().unwrap().mark_saved();
@@ -104,13 +104,8 @@ impl GuideDrag {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 850.0))),
             ..Default::default()
         };
-        let app = &mut self.app;
-        let mut out = self.ctx.run_ui(raw, |ui| {
-            app.logic(ui.ctx());
-            app.ui(ui);
-        });
-        out.textures_delta.clear();
-        assert!(!app.ui.status.starts_with("Internal error:"), "{}", app.ui.status);
+        crate::testing::app_frame(&mut self.app, &self.ctx, raw);
+        assert!(!self.app.ui.status.starts_with("Internal error:"), "{}", self.app.ui.status);
     }
 
     fn button(&self, pos: Pos2, pressed: bool) -> Event {

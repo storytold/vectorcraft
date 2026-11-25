@@ -55,7 +55,9 @@
 //! 12.3.7), default and rest parameters (section 14.1) and spread in array literals, calls and
 //! `new` (sections 12.2.5 and 12.3.6.1), `for … of` loops (section 13.7.5), array and object
 //! destructuring in declarations, assignments, parameters and `catch` clauses (sections 12.15.5
-//! and 13.3.3), and shorthand and computed property names in object literals (section 12.2.6).
+//! and 13.3.3), shorthand and computed property names, methods and `__proto__: value` in object
+//! literals (sections 12.2.6, 14.3 and B.3.1), and the `name` property of functions (section
+//! 9.2.11).
 //! Spread, `for … of` and array patterns use the iterator protocol of the 11th edition
 //! (<https://262.ecma-international.org/11.0/>, section 7.4), and a loop or pattern left early
 //! closes its iterator. In a realm made without the option and later given it with
@@ -101,6 +103,7 @@ mod regexp_vm;
 mod string_builtins;
 mod symbol;
 mod token;
+mod unit_value;
 mod value;
 mod xml;
 mod xml_builtins;
@@ -136,12 +139,15 @@ pub struct Options {
     /// Read and run the ECMAScript 2015 forms this engine has: `let` and `const`, arrow functions,
     /// template literals (tagged ones included), default and rest parameters, spread in array
     /// literals, calls and `new`, `for … of`, array and object destructuring, and shorthand and
-    /// computed property names. Off, they are syntax errors and the language is ES5.1's. Code a
+    /// computed property names, and from ECMAScript 2020 optional chains (`a?.b`, `a?.[k]`,
+    /// `f?.()`) and `??`. Off, they are syntax errors and the language is ES5.1's. Code a
     /// script evaluates at run time (`eval`, `Function`) is read the way the realm reads scripts.
-    /// On, a realm also has the later editions' built-ins this engine has: `Symbol` with
-    /// Symbol-keyed properties and the iterators of arrays, strings and `arguments` objects, with
-    /// `0b` and `0o` strings converting to numbers. Off, a realm has the ES5.1 built-ins only, as
-    /// the app's scripts expect.
+    /// A realm made with it on also has the later editions' built-ins this engine has: `Symbol`
+    /// with Symbol-keyed properties and the iterators of arrays, strings and `arguments` objects.
+    /// A realm made with it off has the ES5.1 built-ins only, as the app's scripts expect. Those
+    /// built-ins are chosen when the realm is made: turning the option on or off later with
+    /// [`Realm::set_es2015`] changes the language later runs read, and does not add or remove
+    /// them. Runs with it on also convert `0b` and `0o` strings to numbers.
     pub es2015: bool,
 }
 
@@ -246,7 +252,11 @@ impl LineTable {
 #[cfg(test)]
 mod builtins_tests;
 #[cfg(test)]
+mod es2015_object_tests;
+#[cfg(test)]
 mod es2015_tests;
+#[cfg(test)]
+mod es2020_tests;
 #[cfg(test)]
 mod extension_tests;
 #[cfg(test)]
@@ -259,5 +269,7 @@ mod symbol_tests;
 mod tests;
 #[cfg(test)]
 mod text_tests;
+#[cfg(test)]
+mod unit_value_tests;
 #[cfg(test)]
 mod xml_tests;

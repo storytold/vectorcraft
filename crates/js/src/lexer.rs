@@ -194,6 +194,8 @@ impl<'s> Lexer<'s> {
         self.line_start = start.saturating_sub(usize::try_from(token.column.saturating_sub(1)).unwrap_or(0));
         self.blank_line = false;
         let mut piece = self.template(start, token.line, token.column)?;
+        // A piece continued over a line ends on a new line, but not at its start.
+        self.blank_line = false;
         piece.newline_before = token.newline_before;
         Ok(piece)
     }
@@ -688,7 +690,11 @@ impl<'s> Lexer<'s> {
             if !self.e4x && matches!(punct, Punct::DotDot | Punct::ColonColon | Punct::At) {
                 continue;
             }
-            if !self.es2015 && matches!(punct, Punct::Arrow | Punct::Ellipsis) {
+            if !self.es2015 && matches!(punct, Punct::Arrow | Punct::Ellipsis | Punct::QuestionDot | Punct::QuestionQuestion) {
+                continue;
+            }
+            // `?.5` is `?` followed by the number `.5`.
+            if *punct == Punct::QuestionDot && rest.get(2).is_some_and(|&u| (u16::from(b'0')..=u16::from(b'9')).contains(&u)) {
                 continue;
             }
             let bytes = spelling.as_bytes();

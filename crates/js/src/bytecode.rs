@@ -105,6 +105,15 @@ pub(crate) enum Op {
     /// Jumps, keeping the top value, when it is falsy; otherwise pops it.
     JumpIfFalseKeep(u32),
     JumpIfTrueKeep(u32),
+    /// Jumps, keeping the top value, when it is neither `undefined` nor `null`; otherwise pops
+    /// it (`??`).
+    JumpIfNotNullishKeep(u32),
+    /// When the top value is `undefined` or `null`, pops `drop` values (the top one among them)
+    /// and jumps; otherwise goes on with the stack as it was (a step of an optional chain).
+    JumpIfNullish {
+        target: u32,
+        drop: u32,
+    },
     Return,
     /// Returns the value of the last expression statement (script and eval code).
     ReturnCompletion,
@@ -127,6 +136,15 @@ pub(crate) enum Op {
     /// `object function` → `object`.
     InitGetter(u32),
     InitSetter(u32),
+    /// `object value` → `object`: `__proto__: value` sets the object's prototype to the value
+    /// when it is an object or `null` (ECMA-262 2015 section B.3.1).
+    InitProto,
+    /// `function` → `function`: gives the new function the `name` `names[i]` (ECMA-262 2015
+    /// section 9.2.11).
+    SetFunctionName(u32),
+    /// `name function` → `name function`: gives the new function the computed `name` on the
+    /// stack, after the prefix.
+    SetFunctionNameKey(NamePrefix),
     /// Pushes a new function made from `functions[i]` and the current environment.
     Closure(u32),
     /// Pushes a new regular expression object for `regexps[i]`.
@@ -326,6 +344,46 @@ pub(crate) struct Code {
     /// parameters. A destructured parameter's own entry in `params` is a name no script can
     /// write.
     pub(crate) pattern_names: Vec<Key>,
+    /// The code was read with [`crate::Options::es2015`]: its function's `length` can be
+    /// redefined, as ECMA-262 2015 section 19.2.4.1 has it.
+    pub(crate) es2015: bool,
+    /// The `name` its function objects get when they are made (ECMA-262 2015 sections 14.1.19
+    /// and 14.1.20): a declaration's or a named function expression's name, with
+    /// [`crate::Options::es2015`].
+    pub(crate) own_name: Option<Key>,
+    /// The code is a method's, a getter's or a setter's, read with [`crate::Options::es2015`]:
+    /// its functions have no `prototype` and cannot be constructed (section 14.3.8).
+    pub(crate) method: bool,
+}
+
+/// What [`Op::SetFunctionNameKey`] puts before a computed name: `get ` and `set ` for accessors.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum NamePrefix {
+    None,
+    Get,
+    Set,
+}
+
+impl NamePrefix {
+    /// The prefix's code units, with the space that follows it.
+    pub(crate) fn units(self) -> &'static [u16] {
+        const GET: &[u16] = &[0x67, 0x65, 0x74, 0x20];
+        const SET: &[u16] = &[0x73, 0x65, 0x74, 0x20];
+        match self {
+            NamePrefix::None => &[],
+            NamePrefix::Get => GET,
+            NamePrefix::Set => SET,
+        }
+    }
+
+    /// The prefix with the space that follows it, as text.
+    pub(crate) fn text(self) -> &'static str {
+        match self {
+            NamePrefix::None => "",
+            NamePrefix::Get => "get ",
+            NamePrefix::Set => "set ",
+        }
+    }
 }
 
 impl Code {
@@ -379,7 +437,9 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
         Op::Neg | Op::Plus | Op::BitNot | Op::Not | Op::Typeof | Op::ToNumber | Op::ArrayHole | Op::ForInStart | Op::CheckObject => e(1, 1),
         Op::GetMemberThis(_) => e(1, 2),
         Op::SetMember(_) | Op::GetIndex | Op::DeleteIndex | Op::IncIndex { .. } | Op::Binary(_) => e(2, 1),
-        Op::ArrayPush | Op::InitProp(_) | Op::InitGetter(_) | Op::InitSetter(_) => e(2, 1),
+        Op::ArrayPush | Op::InitProp(_) | Op::InitGetter(_) | Op::InitSetter(_) | Op::InitProto => e(2, 1),
+        Op::SetFunctionName(_) => e(1, 1),
+        Op::SetFunctionNameKey(_) => e(2, 2),
         Op::GetIndexThis => e(2, 2),
         Op::SetIndex => e(3, 1),
         Op::Call(n) | Op::CallEval(n) => e(n.checked_add(2).ok_or("operand too large")?, 1),
@@ -387,7 +447,9 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
         Op::PopEnv => e(0, 0),
         Op::Jump(t) => Effect { pops: 0, next: None, jumps: vec![(t, 0)] },
         Op::JumpIfFalse(t) | Op::JumpIfTrue(t) => Effect { pops: 1, next: Some(0), jumps: vec![(t, 0)] },
-        Op::JumpIfFalseKeep(t) | Op::JumpIfTrueKeep(t) => Effect { pops: 1, next: Some(0), jumps: vec![(t, 1)] },
+        Op::JumpIfFalseKeep(t) | Op::JumpIfTrueKeep(t) | Op::JumpIfNotNullishKeep(t) => Effect { pops: 1, next: Some(0), jumps: vec![(t, 1)] },
+        Op::JumpIfNullish { drop: 0, .. } => return Err("a nullish jump that drops no values".into()),
+        Op::JumpIfNullish { target, drop } => Effect { pops: drop, next: Some(drop), jumps: vec![(target, 0)] },
         Op::Return | Op::Throw => end(1),
         Op::ReturnCompletion | Op::ThrowReferenceError(_) => end(0),
         Op::EndFinally(t) => {
@@ -440,6 +502,7 @@ fn check_indices(op: Op, code: &Code) -> Result<(), String> {
         | Op::InitProp(i)
         | Op::InitGetter(i)
         | Op::InitSetter(i)
+        | Op::SetFunctionName(i)
         | Op::PushCatch(i)
         | Op::InitVar(i)
         | Op::LoadParam(i)

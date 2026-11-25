@@ -29,7 +29,8 @@
 //! or test file cannot be read, or when no ES5 test runs.
 //!
 //! A fifth test reads the ECMAScript 2015 subset that `Options::es2015` covers (`let`, `const`,
-//! arrow functions, templates, default and rest parameters) without and with that option, and
+//! arrow functions, templates, default and rest parameters, and from ECMAScript 2020 optional
+//! chains and `??`) without and with that option, and
 //! prints both counts; its failures with the option go to `es2015-failures.txt`.
 //!
 //! Two more tests read the Annex B trees, where tests name any edition's section: one parses every
@@ -425,12 +426,17 @@ fn needs_missing_builtin(sources: &[&str], missing: &HashSet<&str>) -> bool {
     needs_missing_builtin_in(sources, missing, &Options::default())
 }
 
-/// [`needs_missing_builtin`] for sources read with `options`.
+/// [`needs_missing_builtin`] for sources read with `options`. With [`Options::es2015`], a source
+/// that does not tokenize is left out of the check rather than skipping the test, so the run
+/// counts the tokenizer's error as a failure.
 fn needs_missing_builtin_in(sources: &[&str], missing: &HashSet<&str>, options: &Options) -> bool {
     let mut lists = Vec::with_capacity(sources.len());
     for source in sources {
-        let Ok(tokens) = tokenize(source, options) else { return true };
-        lists.push(tokens);
+        match tokenize(source, options) {
+            Ok(tokens) => lists.push(tokens),
+            Err(_) if options.es2015 => {}
+            Err(_) => return true,
+        }
     }
     let strings_are_code = lists.iter().any(|tokens| runs_strings_as_code(tokens));
     lists.iter().flatten().any(|t| match &t.kind {
@@ -674,10 +680,37 @@ const ES2015_FOLDERS: &[&str] = &[
     "expressions/template-literal",
     "expressions/tagged-template",
     "rest-parameters",
+    "expressions/object",
+    "computed-property-names",
+    "expressions/optional-chaining",
+    "expressions/coalesce",
 ];
 
+/// The folders under `test/built-ins/` that [`run_es2015`] also reads: the `Function` tests hold
+/// those of the `name` and `length` properties of functions.
+const ES2015_BUILT_INS: &[&str] = &["Function"];
+
+/// The test files under `test/language/` that [`run_es2015`] also reads wherever they are: those
+/// of the `name` a function gets from its declaration or from the binding or property it is first
+/// assigned to.
+fn es2015_name_test(rel: &str) -> bool {
+    let file = rel.rsplit('/').next().unwrap_or(rel);
+    file.starts_with("fn-name-") || (file == "name.js" && (rel.contains("/function/") || rel.contains("/arrow-function/")))
+}
+
 /// The feature tags of the forms [`Options::es2015`] reads.
-const ES2015_FEATURES: &[&str] = &["let", "const", "arrow-function", "template", "default-parameters", "rest-parameters"];
+const ES2015_FEATURES: &[&str] = &[
+    "let",
+    "const",
+    "arrow-function",
+    "template",
+    "default-parameters",
+    "rest-parameters",
+    "computed-property-names",
+    "__proto__",
+    "optional-chaining",
+    "coalesce-expression",
+];
 
 #[test]
 fn es2015_subset_runs() {
@@ -700,7 +733,8 @@ struct Es2015Counts {
     failures: String,
 }
 
-/// Runs the ES2015 subset: the tests under `test/language/` in [`ES2015_FOLDERS`] whose feature
+/// Runs the ES2015 subset: the tests under `test/language/` in [`ES2015_FOLDERS`], under
+/// `test/built-ins/` in [`ES2015_BUILT_INS`] and those [`es2015_name_test`] picks, whose feature
 /// tags are all in [`ES2015_FEATURES`], and the tests elsewhere under `test/language/` with feature
 /// tags that are all in it. Negative parse tests must give a `SyntaxError`; the other tests run in a
 /// new realm after the harness, as [`run_tests`] runs them, skipping module and asynchronous tests
@@ -718,9 +752,15 @@ fn run_es2015(dir: &Path) {
     let editions = [Options::default(), modern.clone()];
     let mut counts = [Es2015Counts::default(), Es2015Counts::default()];
     let (mut selected, mut skipped, mut other_features) = (0usize, 0usize, 0usize);
-    for path in or_fail(test_files(&language)) {
+    let mut paths = or_fail(test_files(&language));
+    for folder in ES2015_BUILT_INS {
+        paths.extend(or_fail(inside(dir, &format!("test/built-ins/{folder}")).and_then(|d| test_files(&d))));
+    }
+    for path in paths {
         let rel = path.strip_prefix(dir).unwrap_or(&path).display().to_string().replace('\\', "/");
-        let in_folder = ES2015_FOLDERS.iter().any(|f| rel.starts_with(&format!("test/language/{f}/")));
+        let in_folder = ES2015_FOLDERS.iter().any(|f| rel.starts_with(&format!("test/language/{f}/")))
+            || ES2015_BUILT_INS.iter().any(|f| rel.starts_with(&format!("test/built-ins/{f}/")))
+            || es2015_name_test(&rel);
         let source = or_fail(read_source(&path));
         let meta = meta(&source);
         let tags_in_set = meta.features.iter().all(|f| ES2015_FEATURES.contains(&f.as_str()));
@@ -1085,6 +1125,19 @@ fn a_missing_name_in_a_message_string_does_not_skip() {
     assert!(!skips(&[r#"var r = /"Map'/; var s = "say \"Map\" and \'Set\'";"#]));
     // A string in an included harness file is a message too.
     assert!(!skips(&["var x = 1;", r#"function check(v) { if (!v) throw new Test262Error("no Symbol"); }"#]));
+}
+
+#[test]
+fn a_source_that_does_not_tokenize_as_es2015_is_run_and_not_skipped() {
+    // The ES5 runs skip a test whose ES2015 syntax they cannot read. In the ES2015 subset, a
+    // source that does not tokenize is run, so the tokenizer's error is counted as a failure.
+    let missing: HashSet<&str> = ["Map"].into_iter().collect();
+    let modern = Options { es2015: true, ..Options::default() };
+    let unreadable = "var s = `never closed";
+    assert!(needs_missing_builtin(&[unreadable], &missing));
+    assert!(!needs_missing_builtin_in(&[unreadable], &missing, &modern));
+    // A missing built-in in another source still skips.
+    assert!(needs_missing_builtin_in(&[unreadable, "var m = new Map();"], &missing, &modern));
 }
 
 #[test]

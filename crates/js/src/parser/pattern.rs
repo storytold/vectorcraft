@@ -18,10 +18,11 @@ impl Parser<'_> {
         self.es2015 && self.tok.ident() == Some("of") && !self.tok.escaped
     }
 
-    /// A shorthand property with an initializer (`{a = 1}`) read since `mark` that no pattern
-    /// took is a `SyntaxError`.
+    /// A shorthand property with an initializer (`{a = 1}`) or a second `__proto__: value` read
+    /// since `mark` that no pattern took is a `SyntaxError`.
     pub(super) fn check_cover(&self, mark: usize) -> Result<()> {
         match self.cover_inits.get(mark) {
+            Some(&at) if self.proto_twice.contains(&at) => Err(self.error_at_offset(at, "an object literal must not set '__proto__' twice")),
             Some(&at) => Err(self.error_at_offset(at, "a shorthand property cannot have an initializer outside a destructuring pattern")),
             None => Ok(()),
         }
@@ -140,8 +141,9 @@ impl Parser<'_> {
     }
 
     /// A property of an object literal with [`crate::Options::es2015`]: what ECMAScript 5.1 reads,
-    /// a computed name (`[k]: v`, `get [k]() {}`), a shorthand name (`a`, the value of `a`), and a
-    /// shorthand name with an initializer (`a = 1`), which only a pattern may hold.
+    /// a computed name (`[k]: v`, `get [k]() {}`), a shorthand name (`a`, the value of `a`), a
+    /// method (`m() {}`, `[k]() {}`; ECMA-262 2015 section 14.3), and a shorthand name with an
+    /// initializer (`a = 1`), which only a pattern may hold.
     pub(super) fn parse_property_es2015(&mut self) -> Result<Property> {
         let start = self.tok.span;
         // `get` and `set` start an accessor only when written without escapes and followed by a
@@ -186,8 +188,13 @@ impl Parser<'_> {
         self.cover_property_value(key, start)
     }
 
-    /// `: value` after a property name; the value may still turn out to be a pattern.
+    /// A method's parameters and body after its name, or `: value` after a property name, where
+    /// the value may still turn out to be a pattern.
     fn cover_property_value(&mut self, key: PropertyKey, start: Span) -> Result<Property> {
+        if self.at(Punct::LParen) {
+            let function = self.parse_function_rest(FunctionKind::Method, None, start)?;
+            return Ok(Property { key, value: PropertyValue::Method(function), span: self.span_from(start) });
+        }
         self.expect(Punct::Colon)?;
         self.cover_ok = true;
         let value = self.parse_assignment(false)?;
@@ -221,8 +228,8 @@ impl Parser<'_> {
     }
 
     /// The targets of the elements and property values of the pattern `id`, each with its default
-    /// value taken off. A rest element that is not last or has a comma after it, and a getter or
-    /// a setter, are errors.
+    /// value taken off. A rest element that is not last or has a comma after it, and a method, a
+    /// getter or a setter, are errors.
     fn pattern_targets(&self, id: ExprId) -> Result<Vec<ExprId>> {
         let mut out = Vec::new();
         match self.ast.expr(id) {
@@ -244,7 +251,7 @@ impl Parser<'_> {
                 for p in properties {
                     match p.value {
                         PropertyValue::Init(v) => out.push(self.without_default(v)),
-                        _ => return Err(self.error_at_offset(p.span.start, "a getter or setter cannot be a destructuring target")),
+                        _ => return Err(self.error_at_offset(p.span.start, "a method, getter or setter cannot be a destructuring target")),
                     }
                 }
             }
@@ -307,9 +314,14 @@ impl Parser<'_> {
 
     /// Adds to `gaps` where the `=` of each shorthand property with an initializer that the
     /// object pattern `id` holds itself lies: between the property's target and its default value.
+    /// A pattern may also name `__proto__` more than once, so where each `__proto__: target`
+    /// starts is added as well.
     fn cover_gaps(&self, id: ExprId, gaps: &mut Vec<(u32, u32)>) {
         let Some(Expr::Object(properties)) = self.ast.expr(id) else { return };
         for p in properties {
+            if p.is_proto_setter(&self.ast) {
+                gaps.push((p.span.start, p.span.start.saturating_add(1)));
+            }
             if let PropertyValue::Init(v) = p.value
                 && let Some(Expr::Assign { op: None, target, value }) = self.ast.expr(v)
             {
