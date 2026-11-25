@@ -41,6 +41,7 @@ use crate::{DocState, Document, NodeId, NodeKind, Session};
 mod clipboard;
 mod matrix;
 pub mod preferences;
+mod transform;
 
 /// The error for a member read or called with no document open.
 pub const NO_ACTIVE_DOCUMENT: &str = "No active document";
@@ -1834,6 +1835,7 @@ const ENUMS: &[(&str, &[&str])] = &[
     ("RulerUnits", &["Centimeters", "Qs", "Inches", "Pixels", "Millimeters", "Unknown", "Picas", "Points"]),
     ("DocumentColorSpace", &["CMYK", "RGB"]),
     ("CoordinateSystem", &["ARTBOARDCOORDINATESYSTEM", "DOCUMENTCOORDINATESYSTEM"]),
+    ("Transformation", &["BOTTOM", "BOTTOMLEFT", "BOTTOMRIGHT", "CENTER", "DOCUMENTORIGIN", "LEFT", "RIGHT", "TOP", "TOPLEFT", "TOPRIGHT"]),
     ("DocumentArtboardLayout", &["Column", "GridByCol", "GridByRow", "RLGridByCol", "RLGridByRow", "RLRow", "Row"]),
     ("DocumentPresetType", &["BasicCMYK", "BasicRGB", "Mobile", "Print", "Video", "Web"]),
     ("DocumentPreviewMode", &["DefaultPreview", "OverprintPreview", "PixelPreview"]),
@@ -1959,6 +1961,10 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("move", method(l, item_move)),
         ("remove", method(l, item_remove)),
         ("zOrder", method(l, item_z_order)),
+        ("translate", method(l, transform::translate)),
+        ("rotate", method(l, transform::rotate)),
+        ("resize", method(l, transform::resize)),
+        ("transform", method(l, transform::transform)),
     ]);
     page_item.extend(
         [
@@ -1976,10 +1982,6 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             "wrapOffset",
             "wrapped",
             "bringInPerspective",
-            "resize",
-            "rotate",
-            "transform",
-            "translate",
         ]
         .into_iter()
         .map(|m| later(l, "PageItem", m)),

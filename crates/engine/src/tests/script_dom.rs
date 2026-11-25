@@ -700,9 +700,11 @@ fn a_startup_preset_alone_gives_its_first_size() {
 #[test]
 fn page_item_members_not_built_yet_throw_on_read_and_assignment() {
     let (mut s, _, _) = doc();
-    for source in
-        ["app.activeDocument.pageItems[0].blendingMode;", "app.activeDocument.pageItems[0].uuid = 'x';", "app.activeDocument.pageItems[0].rotate(5);"]
-    {
+    for source in [
+        "app.activeDocument.pageItems[0].blendingMode;",
+        "app.activeDocument.pageItems[0].uuid = 'x';",
+        "app.activeDocument.pageItems[0].bringInPerspective(0, 0);",
+    ] {
         assert!(failure(&mut s, source).contains("is not available yet"), "{source}");
     }
     assert!(failure(&mut s, "app.activeDocument.layers = 1;").contains("Document.layers is not available yet"));

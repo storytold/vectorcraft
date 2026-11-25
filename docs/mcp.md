@@ -2657,8 +2657,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
   visible bounds together with the anchors and direction points of the paths in the object; a clipping group counts
   its clipping path only, and a blend, envelope or other live object gives its visible bounds), `editable`, `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
-  `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`
-  (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/). `move` runs `node.move`, and `duplicate` runs
+  `move(relativeObject, insertionLocation?)`, `remove()`, `zOrder(method)`, `translate`, `rotate`, `resize` and
+  `transform` (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/). `move` runs `node.move`, and `duplicate` runs
   `edit.duplicate` and then `node.move` on the copy. The relative object is a page item or a layer of the same
   document; `ElementPlacement.INSIDE` and `PLACEATBEGINNING` (the default) put the object on top of a layer's or a
   group's contents, `PLACEATEND` under them, `PLACEBEFORE` directly above the relative object and `PLACEAFTER`
@@ -2671,8 +2671,28 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `Reordering a path inside a compound path is not available yet` and leaves the document unchanged. A script that holds a placed image keeps the
   same object when the image is embedded: the next read gives that object, now a `RasterItem`. The
   enumerations `ElementPlacement`, `ZOrderMethod`, `RulerUnits`, `DocumentColorSpace`, `CoordinateSystem`,
-  `DocumentArtboardLayout`, `DocumentPresetType`, `DocumentPreviewMode`, `DocumentRasterResolution` and
-  `DocumentTransparencyGrid` hold strings such as `"ZOrderMethod.BRINGTOFRONT"`.
+  `Transformation`, `DocumentArtboardLayout`, `DocumentPresetType`, `DocumentPreviewMode`, `DocumentRasterResolution`
+  and `DocumentTransparencyGrid` hold strings such as `"ZOrderMethod.BRINGTOFRONT"`.
+  `translate(deltaX?, deltaY?, transformObjects?, transformFillPatterns?, transformFillGradients?,
+  transformStrokePatterns?)` moves the object by the offsets in points, `rotate(angle, changePositions?,
+  changeFillPatterns?, changeFillGradients?, changeStrokePattern?, rotateAbout?)` turns it by `angle` degrees,
+  `resize(scaleX, scaleY, changePositions?, changeFillPatterns?, changeFillGradients?, changeStrokePattern?,
+  changeLineWidths?, scaleAbout?)` scales it by the percentages, and `transform(transformationMatrix, changePositions?,
+  changeFillPatterns?, changeFillGradients?, changeStrokePattern?, changeLineWidths?, transformAbout?)` applies a
+  `Matrix` record (https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/). Each one runs `object.transform` on the
+  object. VectorCraft's own rules for them: offsets, angles and matrices have Y up whatever `app.coordinateSystem` is,
+  so `translate(0, 10)` moves the object up and a positive angle turns it counterclockwise. `rotate`, `resize` and
+  `transform` act about the center of the geometric bounds unless a `Transformation` value names another point of
+  them; `Transformation.DOCUMENTORIGIN` is the bottom-left corner of the first artboard. Positions and gradients
+  default to `true` and patterns to the Transform Pattern Tiles preference. Fill and stroke patterns with different
+  values, and gradients different from positions, counting the defaults of arguments left out, throw an error that
+  says they are not available yet.
+  `changeLineWidths` is 100 (the default; stroke weights stay) or the transformation's own scale in percent, the
+  square root of the area it scales by (stroke weights and effects scale with it); another value throws the same
+  error. A locked object, one inside a locked layer or group, a group that holds one, and an object on a locked
+  artboard throw `cannot transform locked objects` or `cannot transform objects on a locked artboard`. A scale of 0, a
+  matrix whose determinant is 0 and a transformation that would take the object past the canvas also throw an error.
+  In each of these cases the document does not change. A call that changes nothing runs no command.
   VectorCraft's own rules: documents are listed in tab order, and page items in paint order from the bottom, with the
   objects inside groups and compound paths after their group and without layers and ruler guides. Script coordinates
   are points with Y up from the bottom-left corner of the first artboard, or, with
@@ -2693,7 +2713,7 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   letter case is ignored and `\` matches `/`) and does not resolve the path it is given. A document counts only when
   the automation read roots allow its file, and that check can look the document's file up on disk. A path with
   `..`, a network path, a NUL character or more than 4,096 bytes throws an error. Some members the Application,
-  Document and PageItem pages list, such as `Document.layers`, `PageItem.blendingMode`, `PageItem.rotate` and
+  Document and PageItem pages list, such as `Document.layers`, `PageItem.blendingMode`, `PageItem.bringInPerspective` and
   `app.beep`, throw an error that says they are not available yet when they are read or assigned. Other members
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
   themselves, such as a path's fill, are not defined yet and read as `undefined`.

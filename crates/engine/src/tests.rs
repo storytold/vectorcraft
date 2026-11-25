@@ -174,6 +174,7 @@ mod script_dialogs;
 mod script_dollar;
 mod script_dom;
 mod script_dom_prefs;
+mod script_dom_transform;
 mod script_engines;
 mod script_folder;
 mod script_include;

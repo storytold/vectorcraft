@@ -82,7 +82,7 @@ const INSIDE: &[(&str, &str)] = &[
         "",
         "app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace DocumentPreset DocumentPresetType \
          DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid Documents ElementPlacement Layer PageItem \
-         PageItems Preferences RulerUnits ZOrderMethod",
+         PageItems Preferences RulerUnits Transformation ZOrderMethod",
     ),
     ("Application.", "prototype"),
     (
@@ -122,8 +122,8 @@ const INSIDE: &[(&str, &str)] = &[
         "artworkKnockout artworkKnockout= blendingMode blendingMode= bringInPerspective bringInPerspective= constructor \
          controlBounds duplicate editable geometricBounds height height= hidden hidden= isIsolated isIsolated= layer layer= \
          left left= locked locked= move name name= note note= opacity opacity= parent pixelAligned pixelAligned= position \
-         position= remove resize resize= rotate rotate= selected selected= sliced sliced= tags tags= top top= transform \
-         transform= translate translate= typename uRL uRL= uuid uuid= visibilityVariable visibilityVariable= visibleBounds \
+         position= remove resize rotate selected selected= sliced sliced= tags tags= top top= transform translate \
+         typename uRL uRL= uuid uuid= visibilityVariable visibilityVariable= visibleBounds \
          width width= wrapInside wrapInside= wrapOffset wrapOffset= wrapped wrapped= zOrder zOrderPosition",
     ),
     ("CoordinateSystem.", "ARTBOARDCOORDINATESYSTEM DOCUMENTCOORDINATESYSTEM"),
@@ -139,6 +139,7 @@ const INSIDE: &[(&str, &str)] = &[
     ),
     ("ElementPlacement.", "INSIDE PLACEAFTER PLACEATBEGINNING PLACEATEND PLACEBEFORE"),
     ("RulerUnits.", "Centimeters Inches Millimeters Picas Pixels Points Qs Unknown"),
+    ("Transformation.", "BOTTOM BOTTOMLEFT BOTTOMRIGHT CENTER DOCUMENTORIGIN LEFT RIGHT TOP TOPLEFT TOPRIGHT"),
     ("ZOrderMethod.", "BRINGFORWARD BRINGTOFRONT SENDBACKWARD SENDTOBACK"),
 ];
 

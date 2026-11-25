@@ -24,7 +24,7 @@ use vectorcraft_js::{Data, HostError, HostMember};
 use super::{Answer, Host, Link, arg, method, named, num, text};
 
 /// A matrix's six values: `[a, b, c, d, tx, ty]`.
-type Matrix = [f64; 6];
+pub(super) type Matrix = [f64; 6];
 
 const KEYS: [&str; 6] = ["mValueA", "mValueB", "mValueC", "mValueD", "mValueTX", "mValueTY"];
 
@@ -59,7 +59,7 @@ fn record(m: Matrix) -> Answer {
 }
 
 /// The matrix argument `d`.
-fn matrix(d: &Data, what: &str) -> std::result::Result<Matrix, HostError> {
+pub(super) fn matrix(d: &Data, what: &str) -> std::result::Result<Matrix, HostError> {
     let bad = || HostError::Type(format!("{what} must be a Matrix"));
     let Data::Object(items) = d else { return Err(bad()) };
     let mut m = [0.0; 6];
@@ -187,18 +187,18 @@ fn nearest(sums: &[Wide]) -> f64 {
     v
 }
 
-fn translate(dx: f64, dy: f64) -> Matrix {
+pub(super) fn translate(dx: f64, dy: f64) -> Matrix {
     [1.0, 0.0, 0.0, 1.0, dx, dy]
 }
 
 /// A scale by `sx` and `sy` percent.
-fn scaled(sx: f64, sy: f64) -> Matrix {
+pub(super) fn scaled(sx: f64, sy: f64) -> Matrix {
     [sx / 100.0, 0.0, 0.0, sy / 100.0, 0.0, 0.0]
 }
 
 /// A turn of `degrees` counterclockwise, exact at quarter turns. The remainder keeps the sign of
 /// `degrees` and is exact, so an angle next to a quarter turn is not rounded onto it.
-fn rotate(degrees: f64) -> Matrix {
+pub(super) fn rotate(degrees: f64) -> Matrix {
     let turn = degrees % 360.0;
     let (sin, cos) = match turn {
         0.0 => (0.0, 1.0),
@@ -357,7 +357,7 @@ fn determinant(m: Matrix) -> Wide {
     products_difference(m[0], m[3], m[1], m[2])
 }
 
-fn singular(m: Matrix) -> bool {
+pub(super) fn singular(m: Matrix) -> bool {
     determinant(m).m == 0.0
 }
 
