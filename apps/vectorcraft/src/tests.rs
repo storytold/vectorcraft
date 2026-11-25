@@ -50,7 +50,8 @@ fn command_line_files_wait_for_the_choice_about_a_stopped_plug_in() {
         ..Default::default()
     };
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), services);
-    app.ui.stopped_plugin = Some(serde_json::json!({"id": "test.held", "name": "Held"}));
+    let held = serde_json::json!({"id": "test.held", "name": "Held"});
+    app.ui.stopped_plugin = Some(serde_json::json!({"item": held, "items": [held]}));
     assert_eq!(open_or_hold(&mut app, files.clone()), files, "held while the choice is up");
     assert!(read.borrow().is_empty(), "nothing opened before the choice");
     app.ui.stopped_plugin = None;
