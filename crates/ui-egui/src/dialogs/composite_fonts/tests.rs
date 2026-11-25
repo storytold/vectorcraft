@@ -458,3 +458,19 @@ fn the_sample_draws_color_glyphs_in_their_colors() {
     let (_, tall) = sample::measure(&f, 36.0);
     assert!(tall.ascender.unwrap() > plain.ascender.unwrap() * 1.5, "{plain:?} {tall:?}");
 }
+
+/// With Custom on, the dialog draws the set's characters and its buttons.
+#[test]
+fn custom_character_sets_draw_their_characters_and_the_buttons() {
+    let mut p = crate::tests::panel_harness::Panel::new(app(), crate::tests::picks::dialogs);
+    open(&mut p.app()).unwrap();
+    new_font(&mut p.app());
+    dialog(&mut p.app(), |d| d.custom = true);
+    new_set(&mut p.app());
+    dialog(&mut p.app(), |d| d.entry = "AB".into());
+    edit(&mut p.app(), SetAction::AddChars).unwrap();
+    p.frame();
+    for name in ["A", "B", "OK", "Cancel"] {
+        assert!(p.shows(name), "{name} is drawn");
+    }
+}

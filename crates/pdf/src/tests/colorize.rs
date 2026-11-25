@@ -399,6 +399,16 @@ fn a_white_spot_ink_image_overprints_with_discard_white_overprint() {
             assert_eq!(p.layers[0].children().unwrap()[0].visible, name == "White Ink", "{name}");
         }
     }
+    // Printed as process inks, the white ink is paper white: the image knocks out on every plate.
+    let converted = serde_json::json!({"output": {"mode": "separations", "inks": [{"name": "White Ink", "convertToProcess": true}]}});
+    let settings: PrintSettings = serde_json::from_value(converted).unwrap();
+    for postscript in [true, false] {
+        let job = plan(&d, &PrintOptions { settings: settings.clone(), postscript, ..Default::default() }).unwrap();
+        assert!(!job.plates.is_empty());
+        for p in &job.plates {
+            assert!(p.layers[0].children().unwrap()[0].visible, "a converted white ink knocks out");
+        }
+    }
 }
 
 /// An overprinting colorized image whose pixels don't take its color (a color preview of its

@@ -653,6 +653,7 @@ pub(crate) mod testutil {
             path_only: false,
             type_path_only: false,
             double_click_isolate: true,
+            double_click_adds_anchor: false,
             select_behind: true,
             highlight_anchors: true,
             snap_tolerance: 2.0,

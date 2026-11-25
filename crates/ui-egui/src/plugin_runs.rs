@@ -43,7 +43,7 @@ pub struct Running {
     pub progress: Arc<Progress>,
     /// Continue in Background: the progress window no longer shows it.
     pub hidden: bool,
-    /// When it started, in seconds of the monotonic clock: the progress window's age.
+    /// [`export_progress::now`] when it started: the progress window's age.
     started: f64,
     done: Receiver<Done>,
 }
@@ -89,7 +89,7 @@ pub fn start(app: &mut VectorcraftApp, p: Value) -> Result<Value, String> {
     };
     app.host.jobs().spawn("vectorcraft-plugin", Box::new(job));
     let label = format!("Running {who}…");
-    let started = craft::platform::clock::monotonic_ms() / 1000.0;
+    let started = export_progress::now(app);
     let runs = &mut app.plugin_runs;
     runs.running.push(Running { label: label.clone(), who, params, progress: shown, hidden: false, started, done });
     app.status(label.clone());

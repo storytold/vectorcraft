@@ -5,8 +5,8 @@ use craft::menu::{Gate, ItemKind, LayoutOptions, MenuBar, NativeMenu, Node, mac,
 use craft::ui::runtime::commands::{FirePhase, FireSource, Fired, holder};
 
 use crate::VectorcraftApp;
-use crate::menus::TODO;
 use crate::menus::model::{APP_NAME, item_title, pressed_pass, recording_shortcut, refresh, state_key, translate_label};
+use crate::menus::unbound;
 
 /// The layout options every Mac layout of VectorCraft's menus uses: the app's name and its
 /// translation of the labels the layout writes itself.
@@ -63,7 +63,7 @@ fn stated(app: &VectorcraftApp) -> MenuBar {
     fn walk(app: &VectorcraftApp, lang: crate::i18n::Lang, nodes: &mut [Node]) {
         for node in nodes {
             match node {
-                Node::Item(it) if it.command.id == TODO => it.enabled = false,
+                Node::Item(it) if unbound(&it.command.id) => it.enabled = false,
                 Node::Item(it) => {
                     let (id, params) = (it.command.id.as_str(), &it.command.params);
                     if let Some((enabled, checked)) = crate::menus::shown_state(app, id, params) {

@@ -1,5 +1,5 @@
 use craft::behavior::{CanvasView, EditEvent};
-use craft::ui::canvas::{PageBorder, PageFrame, Pasteboard, PasteboardColor, PasteboardOutput};
+use craft::ui::canvas::{ArtboardEdge, PageBorder, PageFrame, Pasteboard, PasteboardColor, PasteboardOutput};
 use craft::ui::contract::{Rename, Show as _};
 use craft::ui::primitives::Checker;
 use craft::ui::style::DataColor;
@@ -98,7 +98,8 @@ pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &CanvasSp
     let outline = view.outline;
     let list = frames(app, st, view, outline);
     // The pasteboard's colour is the canvas's (`Canvas::pasteboard`).
-    let out = Pasteboard::new("Artboards", &list).border(border(outline)).shows_outside().show_at(ui, space.view.rect);
+    let out =
+        Pasteboard::new("Artboards", &list).border(border(outline)).artboard_edge(ArtboardEdge::Plain).shows_outside().show_at(ui, space.view.rect);
     match kind {
         BodyKind::Live => apply(app, &out),
         BodyKind::Pane => None,

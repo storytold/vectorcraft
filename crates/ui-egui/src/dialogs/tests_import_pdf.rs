@@ -492,3 +492,51 @@ fn the_text_choice_applies_to_embedded_places_only() {
     assert!(!matches!(placed.kind, NodeKind::PlacedDocument(_)), "embedded: {:?}", placed.kind);
     assert_eq!(type_objects(&app), before, "placed as outlines");
 }
+
+/// `file.place` reads an empty or null `password` as none: a place from a path with Link on stays
+/// linked with the PDF Text preference at Outlines, and only a password that is given embeds it.
+#[test]
+fn an_empty_password_keeps_a_place_linked() {
+    let mut app = app();
+    set_pdf_text(&mut app, "outlines");
+    let dir = vectorcraft_testkit::TempDir::new("import-pdf-empty-password");
+    let path = dir.join("one.pdf").to_string_lossy().into_owned();
+    std::fs::write(&path, text_pages(1)).unwrap();
+    for password in [json!(""), json!(null)] {
+        let mut p = json!({"path": path, "password": password});
+        import_pdf::place_with_preferred_text_as(&app, &mut p);
+        assert_eq!(p, json!({"path": path, "password": password}), "no textAs with password {password}");
+    }
+    let mut p = json!({"path": path, "password": "pw"});
+    import_pdf::place_with_preferred_text_as(&app, &mut p);
+    assert_eq!(p["textAs"], "outlines", "a password embeds the page");
+
+    crate::place::run_for_user(&mut app, &json!({"path": path, "password": ""})).unwrap();
+    opened(&mut app);
+    let st = app.session.active().unwrap();
+    let placed = st.doc.node(st.selection.objects[0]).unwrap();
+    assert!(matches!(placed.kind, NodeKind::PlacedDocument(_)), "linked: {:?}", placed.kind);
+}
+
+/// With Show Import Options off, an encrypted PDF placed with an empty `password` asks for its
+/// password, as one placed without `password` does; a password that is given goes to `file.place`.
+#[test]
+fn an_empty_password_still_asks_for_the_password() {
+    let mut app = app();
+    let bytes = pdf(&[PdfPage::new(120.0, 60.0, "1 0 0 rg 0 0 20 20 re f")], Some("pw"));
+    let data = vectorcraft_format::base64_encode(&bytes);
+    let close = |app: &VectorcraftApp| {
+        let id = dialog_id(app).expect("an Import PDF dialog");
+        assert!(app.dialogs().unwrap().with(|host| host.cancel_by_id(&ctx(app), id)));
+        assert!(!is_open(app));
+    };
+    for password in [json!(""), json!(null)] {
+        let p = json!({"name": "locked.pdf", "dataBase64": data, "password": password});
+        assert!(import_pdf::offer_place_password(&mut app, &p), "asks with password {password}");
+        assert_eq!((field(&app, "__locked"), field(&app, "__passwordOnly")), (json!(true), json!(true)));
+        close(&app);
+    }
+    let p = json!({"name": "locked.pdf", "dataBase64": data, "password": "pw"});
+    assert!(!import_pdf::offer_place_password(&mut app, &p), "a given password is placed with");
+    assert!(!is_open(&app));
+}
