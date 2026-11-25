@@ -16,16 +16,16 @@
 //!
 //! While an arc is drawn, by a drag or as the piece the next click adds, the tool shows a
 //! protractor around the arc's center: a tick across its circle every 15° from where the arc
-//! starts, a longer one every 90°, and one where it ends. The piece the next click adds shows its
-//! protractor only while the Pen tool's rubber band preference shows that piece. With Smart Guides
-//! on, the end of a continuous arc goes onto the nearest tick of that protractor when the tick lies
-//! within the snapping tolerance of the pointer, no other Smart Guide snaps the point, and neither
-//! the grid nor pixels snap drawn points. A sharp-corner arc, and a continuous arc that has no
-//! direction to follow, sweep the arc size, so their ends are not snapped to a tick. After a snap
-//! setting changes under a still pointer, the hover's preview, protractor, distance label and
-//! Smart Guides are hidden until the pointer moves; when the view, the document or the selection
-//! changes, the canvas hovers the still pointer again. Shift does not constrain Quick Pen points,
-//! so it does not change the snapping.
+//! starts, a longer one every 90°, and one where it ends, with a small cross at the center. The
+//! piece the next click adds shows its protractor only while the Pen tool's rubber band preference
+//! shows that piece. With Smart Guides on, the end of a continuous arc goes onto the nearest tick
+//! of that protractor when the tick lies within the snapping tolerance of the pointer, no other
+//! Smart Guide snaps the point, and neither the grid nor pixels snap drawn points. A sharp-corner
+//! arc, and a continuous arc that has no direction to follow, sweep the arc size, so their ends are
+//! not snapped to a tick. After a snap setting changes under a still pointer, the hover's preview,
+//! protractor, distance label and Smart Guides are hidden until the pointer moves; when the view,
+//! the document or the selection changes, the canvas hovers the still pointer again. Shift does
+//! not constrain Quick Pen points, so it does not change the snapping.
 
 mod edit;
 
@@ -57,6 +57,8 @@ pub const MAX_TURN: f64 = 359.0;
 pub const TICK_STEP: f64 = 15.0;
 /// Half the length (screen points) of a protractor tick; the ticks every 90° are twice as long.
 const TICK_PX: f64 = 4.0;
+/// Half the length (screen points) of each arm of the cross at an arc's center.
+const CROSS_PX: f64 = 4.0;
 /// Screen points the pointer moves after a press before the press drags.
 const DRAG_PX: f64 = 3.0;
 /// A continuous arc whose end lies within this angle (radians) of straight ahead, or of straight
@@ -970,6 +972,9 @@ impl Tool for QuickPenTool {
         };
         if let Some(arc) = arc {
             o.push(Overlay::Path { path: protractor(cx, &arc), color: FEEDBACK, width: 1.0, dashed: false });
+            let (c, arm) = (arc.center, cx.tol(CROSS_PX));
+            o.push(Overlay::Line { a: c - Vec2::new(arm, 0.0), b: c + Vec2::new(arm, 0.0), color: FEEDBACK, dashed: false });
+            o.push(Overlay::Line { a: c - Vec2::new(0.0, arm), b: c + Vec2::new(0.0, arm), color: FEEDBACK, dashed: false });
         }
         if self.press.is_none()
             && !self.hover_stale(cx)

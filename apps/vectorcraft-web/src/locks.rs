@@ -35,7 +35,7 @@ const REFRESH_MS: i32 = 10_000;
 const FRESH_MS: f64 = 60_000.0;
 
 /// Whether a snapshot asked for at `asked` can still be trusted at `now`, both in ms on
-/// [`vectorcraft_ui_egui::now_ms`]'s clock: it is at most [`FRESH_MS`] old, and not stamped later
+/// [`craft::platform::clock::monotonic_ms`]'s clock: it is at most [`FRESH_MS`] old, and not stamped later
 /// than `now`.
 fn trusted(asked: f64, now: f64) -> bool {
     (0.0..=FRESH_MS).contains(&(now - asked))
@@ -54,7 +54,7 @@ thread_local! {
 pub struct WebLocks {
     prefix: &'static str,
     /// The areas whose locks were held at the last snapshot, and when it was asked for (ms on
-    /// [`vectorcraft_ui_egui::now_ms`]'s monotonic clock, which a change to the system clock does
+    /// [`craft::platform::clock::monotonic_ms`]'s monotonic clock, which a change to the system clock does
     /// not move). `navigator.locks.query()` is asynchronous, so the snapshot is refreshed every
     /// [`REFRESH_MS`] and read from here.
     seen: Arc<Mutex<(f64, BTreeSet<String>)>>,
@@ -97,7 +97,7 @@ impl WebLocks {
     /// Take a new snapshot of the locks held.
     async fn refresh(&self) -> Option<()> {
         let m = manager()?;
-        let asked = vectorcraft_ui_egui::now_ms();
+        let asked = craft::platform::clock::monotonic_ms();
         let query: Promise = method(&m, "query")?.call0(&m).ok()?.dyn_into().ok()?;
         let snapshot = wasm_bindgen_futures::JsFuture::from(query).await.ok()?;
         let held = js_sys::Array::from(&Reflect::get(&snapshot, &"held".into()).ok()?);
@@ -113,7 +113,7 @@ impl WebLocks {
     /// Does a tab hold `area`'s lock? Yes when the last snapshot is too old to tell.
     pub fn held(&self, area: &str) -> bool {
         let seen = self.seen.lock().unwrap_or_else(|e| e.into_inner());
-        !trusted(seen.0, vectorcraft_ui_egui::now_ms()) || seen.1.contains(area)
+        !trusted(seen.0, craft::platform::clock::monotonic_ms()) || seen.1.contains(area)
     }
 
     /// Hold `area`'s lock until the returned hold is dropped (or the page goes).
