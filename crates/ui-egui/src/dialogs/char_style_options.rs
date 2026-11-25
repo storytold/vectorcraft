@@ -4,9 +4,11 @@
 //! Each field is unset (empty, absent, or a checkbox in its unset state) or set, and an unset field leaves
 //! its attribute out of the style. A field still as it opened keeps the style's stored value as it is.
 
+use std::ops::RangeInclusive;
 use std::sync::Arc;
 
 use craft::behavior::Mixed;
+use craft::text::ui::character::{AKI_PRESETS, DIACRITIC_PRESETS, TSUME_PRESETS};
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Entry, Outcome as _, Props as _, Show as _, ShowContainer as _};
 use craft::ui::dialog::{DialogResult, FieldRefusal};
@@ -15,7 +17,8 @@ use craft::ui::patterns::form_dialogs::{
     DialogFields, FieldValue, HostedPropertiesDialog, Param, ParamKind, PropertiesDialog, PropertiesTab, PropertyRow, TabLayout,
 };
 use craft::ui::pickers::Select;
-use craft::ui::runtime::env::Label;
+use craft::ui::runtime::env::{Env, Label};
+use craft::ui::text::{NumberField, NumberPick};
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::setup::DocSetup;
 
@@ -429,6 +432,24 @@ fn case_from_attrs(attrs: &Map<String, Value>) -> Option<&'static str> {
     }
 }
 
+/// The number the text typed into number field `key` reads as, with the arithmetic of the app's number
+/// fields (`6x2`, `10+4`, `200/2`) and a decimal comma: a length in points in the length fields (`1 in`),
+/// and a final `%` in the percent fields or `°` in Character Rotation.
+fn typed_number(key: &str, text: &str) -> Option<f64> {
+    let text = text.trim().replace('\u{2212}', "-");
+    let mark = match key {
+        "size" | "leading" | "baseline_shift" | "tcyUpDown" | "tcyLeftRight" | "stroke_width" => {
+            return vectorcraft_doc::Unit::Points.parse(&vectorcraft_doc::decimal_point(&text));
+        }
+        "h_scale" | "v_scale" | "tsume" | "fill_tint" | "stroke_tint" => Some('%'),
+        "rotation" => Some('°'),
+        _ => None,
+    };
+    // The suffix comes off before the comma is read, so `1,000%` is refused as `1,000` is.
+    let number = mark.and_then(|m| text.strip_suffix(m)).unwrap_or(&text);
+    vectorcraft_doc::parse_number(&vectorcraft_doc::decimal_point(number))
+}
+
 fn optional_number(d: &Values, key: &str) -> Result<Option<Value>, String> {
     let label = match key {
         "size" => tl!("Size"),
@@ -458,7 +479,7 @@ fn optional_number(d: &Values, key: &str) -> Result<Option<Value>, String> {
         Some(v) => {
             let n = v
                 .as_f64()
-                .or_else(|| v.as_str().and_then(|s| s.trim().parse::<f64>().ok()))
+                .or_else(|| v.as_str().and_then(|s| typed_number(key, s)))
                 .filter(|n| n.is_finite())
                 .ok_or_else(|| format!("{label} must be a number"))?;
             // Character Style fields use the Character panel's visible ranges.
@@ -898,7 +919,39 @@ fn basic_rows() -> Vec<PropertyRow> {
     ])
 }
 
-// PLAN: the Aki, Tsume and Diacritic rows are plain text rows: `Param::text` has no preset menu to carry the Character panel's presets.
+/// A number row over the text field `key` (empty for unset) whose menu offers `presets`, as the Character panel's field
+/// of the same name does. A typed value stays within `range`; automation sets the field's text, as for a text row.
+fn preset_number(key: &'static str, label: String, range: RangeInclusive<f64>, presets: &'static [f32]) -> Param {
+    let name = label.clone();
+    Param::custom(key, label, move |ui, fields, _| {
+        let value = fields.text(key).and_then(|text| text.trim().parse::<f64>().ok()).filter(|n| n.is_finite());
+        let units = Env::of(ui).units();
+        let rows: Vec<Entry<NumberPick>> = presets
+            .iter()
+            .map(|&p| {
+                let n = f64::from(p);
+                Entry::new(NumberPick::Number(n), units.number(n, 0..=2))
+            })
+            .collect();
+        let out = NumberField::new(name.clone(), Bind::given(value)).range(range.clone()).presets(&rows).id_salt(key).show(ui);
+        if let Some(picked) = out.edit.value() {
+            let text = picked.map(|n| n.to_string()).unwrap_or_default();
+            if fields.text(key) != Some(text.as_str()) {
+                fields.set(key, FieldValue::Text(text));
+            }
+        }
+        out.edit.response.clone()
+    })
+    // Set from outside: the field's text, as a text row takes it.
+    .on_set(|fields, key, value| match value {
+        Value::String(text) => {
+            fields.set(key, FieldValue::Text(text));
+            Ok(())
+        }
+        other => Err(FieldRefusal::Rejects(&other).message(key)),
+    })
+}
+
 fn advanced_rows() -> Vec<PropertyRow> {
     let mut params: Vec<Param> = [
         ("h_scale", tl!("Horizontal Scale"), "%"),
@@ -907,15 +960,20 @@ fn advanced_rows() -> Vec<PropertyRow> {
         ("tcyUpDown", tl!("Tate-chu-yoko Up/Down"), "pt"),
         ("tcyLeftRight", tl!("Tate-chu-yoko Left/Right"), "pt"),
         ("rotation", tl!("Character Rotation"), "°"),
-        ("akiLeft", tl!("Insert Aki Left"), ""),
-        ("akiRight", tl!("Insert Aki Right"), ""),
-        ("tsume", tl!("Tsume"), "%"),
-        ("diacriticHorizontal", tl!("Adjust Horizontal Diacritic Position"), ""),
-        ("diacriticVertical", tl!("Adjust Vertical Diacritic Position"), ""),
     ]
     .into_iter()
-    .map(|(key, caption, unit)| text(key, if unit.is_empty() { caption.to_string() } else { format!("{caption} ({unit})") }))
+    .map(|(key, caption, unit)| text(key, format!("{caption} ({unit})")))
     .collect();
+    let aki = 0.0..=vectorcraft_doc::text::MAX_AKI;
+    let tsume = 0.0..=vectorcraft_doc::text::MAX_TSUME;
+    let diacritic = -vectorcraft_doc::text::MAX_DIACRITIC_POSITION..=vectorcraft_doc::text::MAX_DIACRITIC_POSITION;
+    params.extend([
+        preset_number("akiLeft", tl!("Insert Aki Left").to_string(), aki.clone(), &AKI_PRESETS),
+        preset_number("akiRight", tl!("Insert Aki Right").to_string(), aki, &AKI_PRESETS),
+        preset_number("tsume", format!("{} (%)", tl!("Tsume")), tsume, &TSUME_PRESETS),
+        preset_number("diacriticHorizontal", tl!("Adjust Horizontal Diacritic Position").to_string(), diacritic.clone(), &DIACRITIC_PRESETS),
+        preset_number("diacriticVertical", tl!("Adjust Vertical Diacritic Position").to_string(), diacritic, &DIACRITIC_PRESETS),
+    ]);
     let languages: Vec<(&'static str, &'static str)> = vectorcraft_doc::setup::LANGUAGES.iter().map(|(name, _, _)| (*name, *name)).collect();
     params.push(select("language", tl!("Language:"), &languages));
     rows(params)
