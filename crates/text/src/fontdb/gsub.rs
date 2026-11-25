@@ -589,11 +589,23 @@ impl FontFace {
     }
 
     /// The name of glyph `gid` from the font's `post` or `CFF` table: `None` for a glyph past the
-    /// face's glyphs, or when the font has no names (the ids are then `gid12`).
+    /// face's glyphs, or when the font has no names (the ids are then `gid12`). The names are read
+    /// once for the face, in one pass over the table.
     pub fn glyph_name(&self, gid: u32) -> Option<String> {
-        let font = self.skrifa()?;
-        let name = font.glyph_names().get(skrifa::GlyphId::new(gid))?;
-        (!name.is_synthesized()).then(|| name.as_str().to_string())
+        let names = self.glyph_names.get_or_init(|| {
+            let Some(font) = self.skrifa() else { return Vec::new() };
+            let names = font.glyph_names();
+            let mut out = vec![None; names.num_glyphs() as usize];
+            for (id, name) in names.iter() {
+                if let Some(slot) = out.get_mut(id.to_u32() as usize)
+                    && !name.is_synthesized()
+                {
+                    *slot = Some(Box::from(name.as_str()));
+                }
+            }
+            out
+        });
+        names.get(usize::try_from(gid).ok()?)?.as_deref().map(str::to_string)
     }
 
     /// The kinds of glyph the face's `GSUB` table gives ([`GlyphCategoryKind`]), in the order of
@@ -649,6 +661,28 @@ mod tests {
         assert_eq!(db.add_font(half_form_font(false).expect("the test font builds")), 1);
         let face = db.face(HALF_FORM_FAMILY, "Regular").expect("the test face");
         assert!(face.glyph_categories().is_empty());
+    }
+
+    /// The names read in one pass are the names the font gives each glyph id, for every bundled
+    /// face, and a glyph past the face's glyphs has none.
+    #[test]
+    fn glyph_names_read_once_match_each_glyphs_own_name() {
+        let db = super::super::FontDb::with_font_dirs(vec![]);
+        let mut checked = 0;
+        for family in db.families() {
+            for style in db.styles(&family) {
+                let Some(face) = db.face(&family, &style) else { continue };
+                let Some(font) = face.skrifa() else { continue };
+                let names = font.glyph_names();
+                for gid in 0..face.glyph_count() {
+                    let own = names.get(skrifa::GlyphId::new(gid)).filter(|n| !n.is_synthesized()).map(|n| n.as_str().to_string());
+                    assert_eq!(face.glyph_name(gid), own, "{family} {style}: glyph {gid}");
+                    checked += 1;
+                }
+                assert_eq!(face.glyph_name(face.glyph_count()), None, "{family} {style}");
+            }
+        }
+        assert!(checked > 0, "the bundled faces have glyphs");
     }
 
     #[test]

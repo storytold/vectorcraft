@@ -472,6 +472,11 @@ impl RecoveryStore for FolderStore {
             Self::create_area(dir)?;
             Self::own_area(dir)?;
         }
+        // A read refuses a link (`read`), and a write must too: the atomic writer replaces the
+        // target of a link, which would put the copy over a file outside the store.
+        if std::fs::symlink_metadata(&f).is_ok_and(|m| m.file_type().is_symlink()) {
+            return Err(format!("{}: not a plain file", f.display()));
+        }
         vectorcraft_format::write_atomic(&f, bytes).map_err(|e| Self::file_error(&f, &e))
     }
     fn remove(&self, name: &str) -> std::result::Result<(), String> {
