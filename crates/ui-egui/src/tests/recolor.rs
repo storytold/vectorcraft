@@ -460,6 +460,107 @@ fn a_process_swatch_before_a_spot_one_of_its_color_shows_no_tint() {
     assert!(h.query_by_role_and_label(egui::accesskit::Role::Slider, "C").is_some(), "the CMYK sliders");
 }
 
+/// A row picked from a spot swatch shows Tint, but not with Limit to Library while the library's
+/// swatch of that color is a process color: `recolor.apply` gives the art the library's swatch,
+/// which links nothing.
+#[test]
+fn a_process_library_swatch_hides_the_tint_of_a_rows_own_spot_swatch() {
+    let mut app = app();
+    let lib = library_of(&mut app, &[json!({"name": "Mix Process", "color": {"c": 0, "m": 1, "y": 0, "k": 0}})]);
+    app.run("swatch.new", json!({"name": "Ink", "color": {"c": 0, "m": 1, "y": 0, "k": 0}, "spot": true})).unwrap();
+    art(&mut app, &["cmyk 0 100 0 0"]);
+    let mut h = assign_harness(app, json!({"library": lib}));
+    let mut rows = field(h.state(), "rows");
+    assert_eq!(rows[0]["to"], json!("cmyk 0 100 0 0"), "{rows}");
+    rows[0]["swatch"] = json!({"name": "Ink", "library": "document"});
+    set(h.state_mut(), "rows", rows);
+    set(h.state_mut(), "__sel", json!([0]));
+    h.run_steps(2);
+    assert!(h.query_by_role_and_label(egui::accesskit::Role::Slider, "T").is_none(), "no Tint for the library's process swatch");
+    assert!(h.query_by_role_and_label(egui::accesskit::Role::Slider, "C").is_some(), "the CMYK sliders");
+}
+
+/// A row picked from a spot swatch of the color group being edited shows Tint while OK leaves the
+/// swatch its color, and not once another row gives the swatch a new color: `recolor.apply` then
+/// links the row's art to nothing.
+#[test]
+fn a_rows_spot_swatch_rewritten_with_another_color_shows_no_tint() {
+    let mut app = app();
+    app.run("swatch.new", json!({"name": "Ink", "color": "cmyk 0 100 0 0", "spot": true})).unwrap();
+    app.run("swatch.new", json!({"name": "Other", "color": "cmyk 100 0 0 0", "spot": true})).unwrap();
+    app.run("swatch.newGroup", json!({"name": "Inks", "swatches": ["Ink", "Other"]})).unwrap();
+    art(&mut app, &["cmyk 0 100 0 0", "cmyk 100 0 0 0"]);
+    let mut h = assign_harness(app, json!({"group": "Inks"}));
+    let rows = field(h.state(), "rows");
+    let at = |k: &str| rows.as_array().unwrap().iter().position(|r| r["from"].as_array().is_some_and(|f| f.contains(&json!(k)))).unwrap();
+    let (magenta, cyan) = (at("cmyk 0 100 0 0"), at("cmyk 100 0 0 0"));
+    let mut rows = rows.clone();
+    rows[cyan]["to"] = json!("cmyk 0 100 0 0");
+    rows[cyan]["swatch"] = json!({"name": "Ink", "library": "document"});
+    set(h.state_mut(), "rows", rows.clone());
+    set(h.state_mut(), "__sel", json!([cyan]));
+    h.run_steps(2);
+    assert!(h.query_by_role_and_label(egui::accesskit::Role::Slider, "T").is_some(), "Ink keeps its color: Tint");
+    rows[magenta]["to"] = json!("rgb 0 255 0");
+    set(h.state_mut(), "rows", rows);
+    h.run_steps(2);
+    assert!(h.query_by_role_and_label(egui::accesskit::Role::Slider, "T").is_none(), "Ink takes green: no Tint");
+    assert!(h.query_by_role_and_label(egui::accesskit::Role::Slider, "C").is_some(), "the CMYK sliders");
+}
+
+/// With Limit to Library on the document's swatches, a row whose new color is a spot swatch of the
+/// color group being edited shows Tint while OK leaves the swatch its color, and not once another
+/// row gives the swatch a new color: `recolor.apply` then links the row's art to nothing.
+#[test]
+fn a_library_spot_swatch_rewritten_with_another_color_shows_no_tint() {
+    let mut app = app();
+    app.run("swatch.new", json!({"name": "Ink", "color": "cmyk 0 70 0 20", "spot": true})).unwrap();
+    app.run("swatch.new", json!({"name": "Other", "color": "cmyk 70 0 0 20", "spot": true})).unwrap();
+    app.run("swatch.newGroup", json!({"name": "Inks", "swatches": ["Ink", "Other"]})).unwrap();
+    art(&mut app, &["cmyk 0 70 0 20", "cmyk 70 0 0 20"]);
+    let mut h = assign_harness(app, json!({"group": "Inks"}));
+    set(h.state_mut(), "limitTo", json!("document"));
+    // The dialog reduces the art again for the library, which clears the selection.
+    h.run_steps(2);
+    let rows = field(h.state(), "rows");
+    let at = |k: &str| rows.as_array().unwrap().iter().position(|r| r["from"].as_array().is_some_and(|f| f.contains(&json!(k)))).unwrap();
+    let (magenta, cyan) = (at("cmyk 0 70 0 20"), at("cmyk 70 0 0 20"));
+    let mut rows = rows.clone();
+    rows[cyan]["to"] = json!("cmyk 0 70 0 20");
+    set(h.state_mut(), "rows", rows.clone());
+    set(h.state_mut(), "__sel", json!([cyan]));
+    h.run_steps(2);
+    assert!(h.query_by_role_and_label(egui::accesskit::Role::Slider, "T").is_some(), "Ink keeps its color: Tint");
+    rows[magenta]["to"] = json!("cmyk 70 0 0 20");
+    set(h.state_mut(), "rows", rows);
+    h.run_steps(2);
+    assert!(h.query_by_role_and_label(egui::accesskit::Role::Slider, "T").is_none(), "Ink takes cyan: no Tint");
+}
+
+/// A row picked from a library's spot swatch keeps Tint when the color group being edited gives a
+/// different document swatch of the same name another color: `recolor.apply` adds the library's
+/// swatch under a free name and links the row's art to it.
+#[test]
+fn a_library_swatch_named_like_a_rewritten_group_swatch_keeps_its_tint() {
+    let mut app = app();
+    let lib = library_of(&mut app, &[json!({"name": "Ink", "color": {"c": 0, "m": 1, "y": 0, "k": 0}, "spot": true})]);
+    app.run("swatch.new", json!({"name": "Ink", "color": "cmyk 0 0 100 0", "spot": true})).unwrap();
+    app.run("swatch.newGroup", json!({"name": "Inks", "swatches": ["Ink"]})).unwrap();
+    art(&mut app, &["cmyk 0 0 100 0", "cmyk 0 100 0 0"]);
+    let mut h = assign_harness(app, json!({"group": "Inks"}));
+    let rows = field(h.state(), "rows");
+    let at = |k: &str| rows.as_array().unwrap().iter().position(|r| r["from"].as_array().is_some_and(|f| f.contains(&json!(k)))).unwrap();
+    let (yellow, magenta) = (at("cmyk 0 0 100 0"), at("cmyk 0 100 0 0"));
+    let mut rows = rows.clone();
+    rows[yellow]["to"] = json!("rgb 0 255 0");
+    rows[magenta]["to"] = json!("cmyk 0 100 0 0");
+    rows[magenta]["swatch"] = json!({"name": "Ink", "library": lib});
+    set(h.state_mut(), "rows", rows);
+    set(h.state_mut(), "__sel", json!([magenta]));
+    h.run_steps(2);
+    assert!(h.query_by_role_and_label(egui::accesskit::Role::Slider, "T").is_some(), "the library's Ink still links: Tint");
+}
+
 /// Opened on a color group without art, a row whose new color is a spot color of the library shows
 /// the process modes and no Tint: OK saves only the group's colors, so a tint would be lost.
 #[test]

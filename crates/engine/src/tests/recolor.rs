@@ -947,6 +947,63 @@ fn a_rows_swatch_with_a_finer_color_than_its_key_still_links() {
     assert!(close(fill(&s, id), ink), "the swatch's own color: {:?}", fill(&s, id));
 }
 
+/// A row's `swatch` that is a global swatch of the group being rewritten with another color links
+/// nothing: the row's art takes the row's new color as with no swatch, in its own model and without
+/// the row's tint of the swatch. A swatch of the group that keeps its color still links the art.
+#[test]
+fn a_rows_swatch_in_the_rewritten_group_keeps_the_rows_new_color() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Red Ink", "color": "#ff0000", "global": true}));
+    run(&mut s, "swatch.new", json!({"name": "Blue Ink", "color": "#0000ff", "global": true}));
+    run(&mut s, "swatch.newGroup", json!({"name": "G", "swatches": ["Red Ink", "Blue Ink"]}));
+    let red = rect(&mut s, json!("#ff0000"));
+    let blue = rect(&mut s, json!("#0000ff"));
+    select_all(&mut s);
+    let map = |first: &str| {
+        json!([
+            {"from": ["#ff0000"], "to": first},
+            {"from": ["#0000ff"], "to": "#ff0000", "swatch": {"name": "Red Ink"}},
+        ])
+    };
+    run(&mut s, "recolor.apply", json!({"map": map("#00ff00"), "group": "G"}));
+    let ink = |s: &Session| s.doc().unwrap().doc.swatch("Red Ink").unwrap().paint.color().unwrap().to_hex();
+    assert_eq!(ink(&s), "#00ff00", "the group is rewritten");
+    assert_eq!(fill(&s, red).to_hex(), "#00ff00");
+    assert_eq!(fill(&s, blue).to_hex(), "#ff0000", "the blue art keeps its row's new color");
+    assert_eq!(paint_link(&s, blue), None);
+    run(&mut s, "edit.undo", json!({}));
+    select_all(&mut s);
+    // Also at a row tint of 0, where Red Ink's old and new colors both show white.
+    let mut zero = map("#00ff00");
+    zero[1]["tint"] = json!(0);
+    run(&mut s, "recolor.apply", json!({"map": zero, "group": "G"}));
+    assert_eq!(paint_link(&s, blue), None, "at a tint of 0");
+    assert_eq!(fill(&s, blue).to_hex(), "#ff0000", "the row's new color, as with no swatch");
+    run(&mut s, "edit.undo", json!({}));
+    select_all(&mut s);
+    // Red Ink is rewritten with its own color, so the blue art links to it.
+    run(&mut s, "recolor.apply", json!({"map": map("#ff0000"), "group": "G"}));
+    assert_eq!(ink(&s), "#ff0000");
+    assert_eq!(fill(&s, blue).to_hex(), "#ff0000");
+    assert_eq!(paint_link(&s, blue).as_deref(), Some("Red Ink"));
+    run(&mut s, "edit.undo", json!({}));
+    // A CMYK swatch of a group rewritten with another color: the RGB art takes the row's new color
+    // as the row without the swatch gives it, in the art's own model.
+    run(&mut s, "swatch.new", json!({"name": "Cyan Ink", "color": "cmyk 100 0 0 0", "global": true}));
+    run(&mut s, "swatch.newGroup", json!({"name": "C", "swatches": ["Cyan Ink"]}));
+    let result = |s: &mut Session, swatch: Value| {
+        select_all(s);
+        let map = json!([{"from": ["#0000ff"], "to": "cmyk 100 0 0 0", "swatch": swatch}]);
+        let r = run(s, "recolor.apply", json!({"map": map, "group": "C", "groupColors": ["#00ff00"]}));
+        let out = (fill(s, blue), paint_link(s, blue), r.get("note").cloned());
+        run(s, "edit.undo", json!({}));
+        out
+    };
+    let alone = result(&mut s, Value::Null);
+    assert!(alone.2.is_some(), "the RGB art keeps its model: {alone:?}");
+    assert_eq!(result(&mut s, json!({"name": "Cyan Ink"})), alone);
+}
+
 /// A row's `swatch` from a loaded library links the art to it and adds it to the document's
 /// swatches; of two library swatches with the same name, the one with the row's new color is used,
 /// and rows that pick the same one link to one added swatch; of a process and a spot swatch with

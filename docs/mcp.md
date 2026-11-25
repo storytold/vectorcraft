@@ -5573,7 +5573,10 @@ which round) is used. While it is a global or spot swatch and there is no Global
 row's art takes the swatch as it would with `limitTo`, linked to it at its tints (and its `tint` applies), and a library
 swatch joins the document's swatches. A process swatch, or a swatch or library that is not there (such as a swatch
 deleted after it was picked), links nothing, and the row recolors as its new color alone does; the result's
-`swatchesNotFound` lists the names of the swatches that are not there. A row whose new color is
+`swatchesNotFound` lists the names of the swatches that are not there. With `limitTo`, the library's swatch of the
+row's new color is used instead when the library has one, so a process swatch there links nothing. A global swatch of
+`group` that the group's rewrite gives another color links nothing either: the row's art keeps the row's new color, as
+other recolored art does. A row whose new color is
 picked from a global or spot swatch in the Color Picker's swatch list in Recolor Artwork carries it, so with no Limit to
 Library the art still takes the swatch picked; the dialog drops a row's `swatch` when the row's new color changes. A
 `swatch` that is not `{name, library?}` is an error. `recolor.randomize`
