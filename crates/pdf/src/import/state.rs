@@ -3,6 +3,7 @@ use super::{
     Affine, Arc, BezPath, BlendMode, Colors, Dash, Families, FillRule, FontNames, FunctionBudget, HashMap, HashSet, ImageBlob, LineCap, LineFacts,
     LineJoin, LumaData, MaskSpec, Node, NodeId, Paint, PathEl, PatternDef, Rect, Scan, StrokeLayer, StrokeProps, TextAs, TextLine, TypeStroke,
 };
+use crate::import_fonts::FileFontGlyphs;
 
 /// Decoded RGBA pixels, width, height and hayro's scale factors.
 pub(super) type Decoded = (Vec<u8>, u32, u32, (f32, f32));
@@ -127,6 +128,8 @@ pub(super) struct Builder<'p> {
     /// anything else drawn ([`Builder::flush_text`]).
     pub(super) lost: Option<crate::import_text::LostFills>,
     pub(super) text_as: TextAs,
+    /// Fonts the file embeds are kept (ImportOptions::embedded_fonts).
+    pub(super) embedded_fonts: bool,
     pub(super) actual: super::actual_text::ActualText,
     pub(super) images: HashMap<String, ImageBlob>,
     pub(super) image_keys: HashMap<u128, (String, u32, u32)>,
@@ -150,6 +153,11 @@ pub(super) struct Builder<'p> {
     pub(super) font_names: HashMap<u128, FontInfo>,
     pub(super) families: Option<Families>,
     pub(super) missing_fonts: Vec<String>,
+    /// The glyphs drawn in fonts the file carries for families that aren't available, for the
+    /// fonts kept with the document ([`crate::import_fonts`]).
+    pub(super) file_glyphs: FileFontGlyphs,
+    /// Font (cache key) → its font among `file_glyphs`; `None`: its type takes the font it names.
+    pub(super) file_fonts: HashMap<u128, Option<usize>>,
     /// Font (cache key) → its characters by glyph, for CID-keyed fonts embedded without a
     /// ToUnicode map.
     pub(super) cid_text: HashMap<u128, Option<Arc<CidText>>>,
@@ -205,8 +213,8 @@ pub(super) struct Builder<'p> {
     pub(super) lines: HashMap<NodeId, LineFacts>,
 }
 
-pub(super) fn blend(b: craft_pdf::interpret::BlendMode) -> BlendMode {
-    use craft_pdf::interpret::BlendMode as H;
+pub(super) fn blend(b: craft::pdf::interpret::BlendMode) -> BlendMode {
+    use craft::pdf::interpret::BlendMode as H;
     match b {
         H::Normal => BlendMode::Normal,
         H::Multiply => BlendMode::Multiply,
@@ -227,10 +235,10 @@ pub(super) fn blend(b: craft_pdf::interpret::BlendMode) -> BlendMode {
     }
 }
 
-pub(super) fn fill_rule(r: craft_pdf::interpret::FillRule) -> FillRule {
+pub(super) fn fill_rule(r: craft::pdf::interpret::FillRule) -> FillRule {
     match r {
-        craft_pdf::interpret::FillRule::NonZero => FillRule::NonZero,
-        craft_pdf::interpret::FillRule::EvenOdd => FillRule::EvenOdd,
+        craft::pdf::interpret::FillRule::NonZero => FillRule::NonZero,
+        craft::pdf::interpret::FillRule::EvenOdd => FillRule::EvenOdd,
     }
 }
 

@@ -96,6 +96,14 @@ fn variables_functions_and_closures() {
 }
 
 #[test]
+fn a_trailing_comma_adds_no_argument_or_parameter() {
+    assert_eq!(num("function f(a, b,) { return arguments.length * 10 + f.length; } f(1,)"), 12.0);
+    assert_eq!(num("function P(x,) { this.n = arguments.length; } new P(5,).n"), 1.0);
+    assert_eq!(num("var f = new Function('a,', 'return arguments.length'); f(1, 2) * 10 + f.length"), 21.0);
+    assert_eq!(num("Function('a', '', 'return a')(4)"), 4.0);
+}
+
+#[test]
 fn call_and_apply_set_this_and_arguments() {
     assert_eq!(num("function f(a, b) { return this.k + a + b; } f.call({k: 1}, 2, 3)"), 6.0);
     assert_eq!(num("function f(a, b) { return this.k + a + b; } f.apply({k: 1}, [2, 3])"), 6.0);
@@ -975,6 +983,14 @@ fn code(ops: Vec<Op>) -> Code {
         uses_arguments: false,
         source,
         span: (0, 0),
+        scopes: Vec::new(),
+        top_scope: None,
+        templates: Vec::new(),
+        rest: None,
+        length: 0,
+        arrow: false,
+        uses_this: false,
+        param_init: false,
     }
 }
 
