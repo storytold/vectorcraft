@@ -88,6 +88,7 @@ fn label(node: &Node) -> Option<String> {
 /// for a separator.
 fn shape(nodes: &[Node]) -> String {
     let one = |node: &Node| match node {
+        Node::Item(item) if item.command.id == menus::PLACEHOLDER => format!("({})", item.label),
         Node::Item(item) => item.label.clone(),
         Node::Submenu { label, children, .. } => format!("{label}/[{}]", shape(children)),
         Node::Heading(text) => format!("({text})"),
@@ -297,6 +298,10 @@ fn the_menu_notes_a_listing_that_stopped_and_a_folder_it_cannot_read() {
     std::fs::write(dir.join("Scripts"), "").unwrap();
     read(&app);
     assert_eq!(shape(&scripts()), format!("({}), -, {FIXED}", scripts_menu::UNREADABLE));
+    // The menu layout keeps the note.
+    let mut laid = scripts();
+    craft::menu::tidy(&mut laid);
+    assert_eq!(shape(&laid), format!("({}), -, {FIXED}", scripts_menu::UNREADABLE));
     let _ = std::fs::remove_dir_all(dir);
 }
 
