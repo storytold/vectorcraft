@@ -1361,7 +1361,9 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, keeps_tools: boo
         // Shift as the frame holds it: the window system sends a file drag no key events, and a second pass of the
         // frame reads the same state.
         let shift = ctx.input(|i| i.modifiers.shift);
-        crate::place::os_drop(app, output.window_files, crate::place::DropSpot::Unknown, shift);
+        // The panel each drop landed on is not a target here: every dropped file opens, as before.
+        let files = output.window_files.into_iter().flat_map(|drop| drop.files).collect();
+        crate::place::os_drop(app, files, crate::place::DropSpot::Unknown, shift);
     }
     if output.float_space.is_some() {
         app.dock_rt.space = output.float_space;
