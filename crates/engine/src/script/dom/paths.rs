@@ -67,9 +67,9 @@ use vectorcraft_js::{Data, HostClass, HostError, HostItem, HostMember, Realm, Ru
 use vectorcraft_tools::params::gradient_params;
 
 use super::{
-    Answer, Coords, Doc, Item, Link, NOT_FOUND, ON_LOCKED_ARTBOARD, STALE_ITEM, arg, boolean, class, colors, command, coordinate, doc_of, edit_item, editable, find_doc,
-    float, frame, get, given, handle_of, id_of, id_parts, item_of, item_rect, later, method, named, num, number, on_doc, pair, point, point_get,
-    point_method, point_property, property, this_doc, typename_of, whole, with_doc,
+    Answer, Coords, Doc, Item, Link, NOT_FOUND, ON_LOCKED_ARTBOARD, STALE_ITEM, arg, boolean, class, colors, command, coordinate, doc_of, edit_item,
+    editable, find_doc, float, frame, get, given, handle_of, id_of, id_parts, item_of, item_rect, later, method, named, num, number, on_doc, pair,
+    point, point_get, point_method, point_property, property, this_doc, typename_of, whole, with_doc,
 };
 use crate::{DocState, NodeId, NodeKind};
 
@@ -310,8 +310,15 @@ fn items_parent(h: &super::Host, a: &[Data]) -> Answer {
     Ok(host_ref("Document", &[float(h.run), float(doc.uid)]))
 }
 
+/// `pathItems[i]`, and `pathItems["name"]` as `getByName` reads it.
 fn items_at(h: &super::Host, a: &[Data]) -> Answer {
     let doc = items_doc(h, a)?;
+    if let Data::String(_) = arg(a, 1) {
+        return match items_by_name(h, a) {
+            Err(HostError::Error(e)) if e == NOT_FOUND && super::probing(a) => Ok(Data::Undefined),
+            r => r,
+        };
+    }
     let Data::Number(n) = arg(a, 1) else { return Ok(Data::Undefined) };
     let Some(i) = whole(*n).and_then(|i| usize::try_from(i).ok()) else { return Ok(Data::Undefined) };
     Ok(with_doc(h, doc, |_, st| path_items(h, st).get(i).map_or(Data::Undefined, |id| super::item_ref(h, st, *id))))

@@ -2803,7 +2803,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
   themselves, such as a text frame's `contents`, are not defined yet and read as `undefined`.
 - `Document.pathItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PathItems/) lists the document's paths in the
-  order of `pageItems`, paths inside groups and compound paths included, with `length`, `[i]`, `index(key)`,
+  order of `pageItems`, paths inside groups and compound paths included, with `length`, `[i]`, `[name]` (read as
+  `pageItems["name"]` is read), `index(key)`,
   `getByName(name)`, `removeAll()` (when any path is on a locked artboard, it throws
   `cannot delete objects on a locked artboard` and deletes nothing), `add()` (a path with no points, from `path.create`, painted as new art; when new
   art has no fill and no stroke, the path has neither), and the shape creators

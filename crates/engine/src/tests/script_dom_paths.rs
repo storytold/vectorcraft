@@ -97,6 +97,22 @@ fn path_items_remove_all_refuses_locked_paths_and_changes_nothing() {
     assert_eq!(log(&mut s, "vc.log(app.activeDocument.pathItems.length);"), vec![json!(0)]);
 }
 
+/// `pathItems` read with a name gives what `getByName` gives, and throws as it does for no match,
+/// as `pageItems` does.
+#[test]
+fn path_items_read_with_a_name_give_the_named_path() {
+    let (mut s, a, _) = doc();
+    s.execute("object.setProps", &json!({"ids": [a.0], "name": "n"})).unwrap();
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pathItems, m = [];\
+         vc.log([p['n'] === p.getByName('n'), p['n'].name, 'n' in p, 'nosuch' in p, p['length'] === p.length]);\
+         try { p['nosuch']; } catch (e) { m.push(e.message); }\
+         vc.log(m);",
+    );
+    assert_eq!(out, vec![json!([true, "n", true, false, true]), json!(["Not found"])]);
+}
+
 /// Paths on a locked artboard stay, a path in a group included: `removeAll()` throws and deletes
 /// nothing, as `pageItems.removeAll()` and `remove()` do.
 #[test]
