@@ -325,7 +325,7 @@ impl MeshEdit {
     }
 
     /// Pick the points a `meshPoints` option lists (see [`points_of`]), with none focused: the
-    /// points the Eyedropper held when the tool switched back.
+    /// points the tool chosen before (another mesh-point tool or the Eyedropper) held.
     pub fn set_options(&mut self, value: &Value) {
         if self.drag.is_some() {
             return;

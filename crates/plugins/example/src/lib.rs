@@ -12,12 +12,32 @@ const MANIFEST: &str = r#"{
   "name": "Desaturate",
   "version": "1.0.0",
   "kind": "filter",
+  "abi": 1,
   "author": "VectorCraft contributors",
   "description": "Moves the colours of the selected paths towards grey; an example of the plug-in ABI.",
   "params": {
     "amount": {"type": "number", "min": 0, "max": 100, "default": 100}
   }
 }"#;
+
+/// The manifest in the `vc_manifest` custom section, where the host reads it, with its `abi`
+/// version, without running any of the module's code. The `vc_manifest` export below returns the
+/// same text for hosts that read only the export.
+#[used]
+#[unsafe(link_section = "vc_manifest")]
+static MANIFEST_SECTION: [u8; MANIFEST.len()] = section_bytes();
+
+/// `MANIFEST` as a byte array, which `link_section` needs.
+const fn section_bytes<const N: usize>() -> [u8; N] {
+    let text = MANIFEST.as_bytes();
+    let mut out = [0; N];
+    let mut i = 0;
+    while i < N {
+        out[i] = text[i];
+        i += 1;
+    }
+    out
+}
 
 #[unsafe(no_mangle)]
 pub extern "C" fn vc_abi_version() -> u32 {
