@@ -592,11 +592,12 @@ fn listed(prompt: StandardPrompt, r: &Value) -> StandardPrompt {
         })
         .collect();
     let needs = list(r, "needs").iter().filter_map(Value::as_str).filter(|n| matches!(*n, "files" | "dialogs" | "hostOnly")).filter_map(need_label);
-    let mut lines: Vec<String> = Vec::new();
-    lines.extend(outside);
-    lines.extend(needs.map(str::to_string));
-    if !lines.is_empty() {
-        lines.insert(0, crate::i18n::colon(tl!("Outside the document")));
+    // The needs come first, each a sentence of its own; the heading names only what the script does
+    // outside the document.
+    let mut lines: Vec<String> = needs.map(str::to_string).collect();
+    if !outside.is_empty() {
+        lines.push(crate::i18n::colon(tl!("Outside the document")));
+        lines.extend(outside);
     }
     let includes = list(r, "includes");
     if !includes.is_empty() {

@@ -541,6 +541,20 @@ fn the_warning_lists_what_a_scripts_included_files_reach() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A script that opens a dialog and reaches nothing outside the document lists the need without the
+/// outside-the-document heading.
+#[test]
+fn the_warning_lists_a_need_without_the_outside_heading() {
+    let mut app = app();
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({"source": "var w = new Window('dialog', 'Title');", "name": "dialog.js"})).unwrap().unwrap();
+    assert_eq!(fields(&app, KIND)["reaches"]["outside"], json!([]));
+    let texts = dialog_texts(&mut app);
+    assert!(texts.iter().any(|t| t == script_check::need_label("dialogs").unwrap()), "{texts:?}");
+    assert!(!texts.iter().any(|t| t == "Outside the document:"), "{texts:?}");
+    cancel(&mut app, KIND);
+    finish(&mut app);
+}
+
 /// A script file that changes what it reaches while its warning is open does not run on Run: the
 /// warning opens again with the new report, and the next Run runs it.
 #[test]
