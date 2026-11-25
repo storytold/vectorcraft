@@ -3,24 +3,30 @@
 //! turns the live Contour into plain paths. It acts through `addon.contour.set` and
 //! `effect.expandAppearance`, so everything it does is a command with its own undo step.
 
-use serde_json::Value;
+use craft::behavior::overlay::{Align, Side};
+use craft::ui::bars::{Bar, BarKind};
+use craft::ui::buttons::Button;
+use craft::ui::canvas::CanvasSpace;
+use craft::ui::choice::Segmented;
+use craft::ui::contract::overlay::{Anchor, Dismiss, Outside, Overlay, Place};
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
+use craft::ui::display::Text;
+use craft::ui::popover::Popover;
+use craft::ui::runtime::env::Env;
+use craft::ui::style::SurfaceKind;
+use craft::ui::text::NumberField;
+use egui::{Ui, vec2};
+use serde_json::{Value, json};
 use vectorcraft_doc::{Node, NodeKind};
 
-use super::{CornerRadius, Stroke, Tokens, Ui, VectorcraftApp, Xf, json, pos2, vec2};
+use crate::VectorcraftApp;
 
 /// The live effect a Contour is made of.
 const EFFECT: &str = "path.offsetPath";
-
-fn bar_id() -> egui::Id {
-    egui::Id::unique("contour-bar")
-}
-
-/// Where the Contour bar was last drawn (none while it isn't shown).
-#[cfg(test)]
-pub(super) fn bar_rect(ctx: &egui::Context) -> Option<egui::Rect> {
-    let id = bar_id();
-    ctx.memory(|m| m.areas().is_visible(&egui::LayerId::new(egui::Order::Middle, id)).then(|| m.area_rect(id)).flatten())
-}
+/// The corner styles, as the Offset Path effect and the tool's `corners` option name them.
+const SHARP: &str = "sharp";
+const ROUND: &str = "round";
+const SQUARE: &str = "square";
 
 /// A selected Contour's distance and corner style, read from its Offset Path effect.
 struct Standing {
@@ -32,15 +38,15 @@ fn standing(n: &Node) -> Option<Standing> {
     let e = n.appearance.effects.iter().rev().find(|e| e.id == EFFECT)?;
     let offset = e.params.get("offset").and_then(Value::as_f64).unwrap_or(0.0);
     let corners = match e.params.get("joins").and_then(Value::as_str) {
-        Some("round") => "round",
-        Some("bevel") => "square",
-        _ => "sharp",
+        Some("round") => ROUND,
+        Some("bevel") => SQUARE,
+        _ => SHARP,
     };
     Some(Standing { offset, corners })
 }
 
 /// The Contour bar, over the selection's top edge (under it when the top is off the canvas).
-pub(super) fn contour_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
+pub(super) fn contour_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace) {
     if app.session.tool_id() != "contour" {
         return;
     }
@@ -58,61 +64,46 @@ pub(super) fn contour_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     }
     let stand = shapes.first().and_then(|n| standing(n));
     drop(shapes);
-    let tool_corners = app.session.tool_options().get("corners").and_then(Value::as_str).unwrap_or("sharp").to_string();
-    let corners = stand.as_ref().map_or(tool_corners.as_str(), |s| s.corners);
+    let tool_corners = app.session.tool_options().get("corners").and_then(Value::as_str).unwrap_or(SHARP).to_string();
+    let corners = stand.as_ref().map_or_else(|| [SHARP, ROUND, SQUARE].into_iter().find(|c| *c == tool_corners).unwrap_or(SHARP), |s| s.corners);
     let shown = stand.as_ref().map_or(0.0, |s| s.offset);
     // A grown Contour reaches past the outline it was made from: keep the bar clear of it.
     let b = b.inflate(shown.max(0.0), shown.max(0.0));
 
-    let t = Tokens::get(ui.ctx());
-    let quad = xf.quad(b);
-    let top = quad.iter().map(|c| c.y).fold(f32::INFINITY, f32::min);
-    let bottom = quad.iter().map(|c| c.y).fold(f32::NEG_INFINITY, f32::max);
-    let size = egui::AreaState::load(ui.ctx(), bar_id()).and_then(|s| s.size).unwrap_or(vec2(330.0, 40.0));
-    let area = xf.rect.shrink(8.0);
-    let above = top - size.y - 12.0;
-    let y = if above >= area.top() { above } else { bottom + 12.0 };
-    let at = pos2(xf.to_screen(b.center()).x - size.x / 2.0, y);
-    let at = at.clamp(area.min, (area.max - size).max(area.min));
+    let gap = Env::of(ui).tokens.space.gap.section;
+    let selection = egui::Rect::from_points(&space.view.quad(b));
+    // The gap is part of the anchor, so the bar keeps it above the selection and below it after a flip.
+    let hung = selection.expand2(vec2(0.0, gap));
+    let area = space.view.rect.shrink(gap);
+    let corner_entries = [Entry::new(SHARP, tl!("Sharp")), Entry::new(ROUND, tl!("Round")), Entry::new(SQUARE, tl!("Square"))];
 
     let mut run: Option<(&str, Value)> = None;
-    let mut corner_pick: Option<&str> = None;
-    egui::Area::new(bar_id()).order(egui::Order::Middle).fixed_pos(at).show(ui.ctx(), |ui| {
-        egui::Frame::NONE
-            .fill(t.panel)
-            .stroke(Stroke::new(1.0, t.tool_active))
-            .corner_radius(CornerRadius::same(5))
-            .inner_margin(egui::Margin::symmetric(8, 6))
-            .shadow(egui::epaint::Shadow { offset: [0, 3], blur: 10, spread: 0, color: egui::Color32::from_black_alpha(70) })
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 6.0;
-                    ui.label(egui::RichText::new(tl!("Contour")).color(t.text_strong));
-                    // The distance: a drag or typed value is applied when it ends, as one step.
-                    let key = egui::Id::unique("contour-bar-offset");
-                    let mut v = ui.data(|d| d.get_temp::<f64>(key)).unwrap_or(shown);
-                    let resp = ui.add(egui::DragValue::new(&mut v).speed(0.5).range(-1e5..=1e5).suffix(" pt"));
-                    if resp.dragged() || resp.has_focus() {
-                        ui.data_mut(|d| d.insert_temp(key, v));
-                    }
-                    if resp.drag_stopped() || resp.lost_focus() {
-                        ui.data_mut(|d| d.remove_temp::<f64>(key));
-                        if (v - shown).abs() > 1e-9 {
-                            run = Some(("addon.contour.set", json!({"offset": v, "corners": corners})));
-                        }
-                    }
-                    for (label, id) in [(tl!("Sharp"), "sharp"), (tl!("Round"), "round"), (tl!("Square"), "square")] {
-                        if ui.selectable_label(corners == id, label).clicked() {
-                            corner_pick = Some(id);
-                        }
-                    }
-                    let bake = ui.add_enabled(stand.is_some(), egui::Button::new(tl!("Bake")));
-                    if bake.on_hover_text(tl!("Turn the Contour into plain paths")).clicked() {
-                        run = Some(("effect.expandAppearance", json!({})));
-                    }
-                });
+    let mut corner_pick: Option<&'static str> = None;
+    let _ = Popover::new("Contour", Bind::given(true))
+        .content_surface()
+        .overlay(|_| {
+            Overlay::floating().modeless().bounds(area).place(Place::anchored(Anchor::Rect(hung), Side::Above, Align::Center).flipping_across())
+        })
+        .dismiss(Dismiss::new().outside(Outside::Keep))
+        .escape(false)
+        .show(ui, |ui, _| {
+            let _ = Bar::new("Contour", BarKind::Tool).surface(SurfaceKind::Floating).show(ui, |ui, _| {
+                let _ = Text::new(tl!("Contour")).show(ui);
+                // The distance applies when its edit ends, as one step.
+                let distance = NumberField::new(tl!("Distance"), Bind::given(Some(shown))).unit("pt").range(-1e5..=1e5).step(0.5).show(ui);
+                if let Some(Some(v)) = distance.edit.events.committed()
+                    && (v - shown).abs() > 1e-9
+                {
+                    run = Some(("addon.contour.set", json!({"offset": v, "corners": corners})));
+                }
+                let pick = Segmented::new(tl!("Corners"), Bind::given(corners), &corner_entries).show(ui);
+                corner_pick = pick.events.committed().copied();
+                let bake = Button::new(tl!("Bake")).enabled(stand.is_some()).tooltip(tl!("Turn the Contour into plain paths")).show(ui);
+                if bake.clicked() {
+                    run = Some(("effect.expandAppearance", json!({})));
+                }
             });
-    });
+        });
     if let Some(id) = corner_pick {
         // The tool keeps the style for the next Contour; a selected Contour changes now.
         let mut result = app.run("tool.setOption", json!({"key": "corners", "value": id}));

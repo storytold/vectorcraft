@@ -130,7 +130,7 @@ pub fn hash_reader_within(r: impl std::io::Read, max: u64) -> std::io::Result<(S
 impl ImageBlob {
     /// A blob of encoded image `bytes` of type `mime`, without a preview.
     pub fn new(mime: impl Into<String>, bytes: Vec<u8>) -> Self {
-        Self { mime: mime.into(), bytes: Arc::new(bytes), proxy: None }
+        Self { mime: mime.into(), bytes: Arc::new(bytes), proxy: None, file_font: Default::default() }
     }
 
     /// This blob with a preview of at most [`PROXY_SIZE`] pixels a side (PNG), when the image is

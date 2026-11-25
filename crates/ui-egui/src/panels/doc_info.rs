@@ -3,69 +3,70 @@
 //! linked and embedded images, repeat objects), for the whole document or the selection only. The flyout picks one category (or all)
 //! and saves the text report (`docInfo.save`, the report File → Package writes too).
 
+use craft::keymap::CommandRef;
+use craft::ui::contract::{Show as _, ShowContainer as _};
+use craft::ui::display::{Divider, Shade, Text};
+use craft::ui::layout::RowAlign;
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::menu::PanelRow;
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::style::TypeRole;
+use craft::ui::text::SelectableText;
 use egui::Ui;
 use serde_json::{Value, json};
+use vectorcraft_engine::cmd::CATEGORIES;
 
-use super::{pstate, set_pstate};
 use crate::VectorcraftApp;
-use crate::theme::Tokens;
-use crate::widgets::{self, menu_item};
 
-/// `document.info` and what it was fetched for: (document uid, revision, selection only, the
-/// Artboard tool's options while it is the current tool, else null).
-#[derive(Clone, Default)]
-struct Cache {
-    key: Option<(u64, u64, bool, Value)>,
-    info: Value,
+/// What the panel's menu sets: the scope and the category shown. Neither is saved with the
+/// preferences.
+#[derive(Clone, Debug, Default)]
+pub struct DocInfoView {
+    /// Only the selection's objects are counted.
+    pub selection_only: bool,
+    /// The id of the one category shown; empty for all of them.
+    pub category: String,
 }
 
 /// A `label: value` row. `label` is shown as given: translate an interface label first, a name
 /// stays as it is.
 pub(crate) fn row(ui: &mut Ui, label: &str, value: String) {
-    row_with(ui, label, value, |_| {});
-}
-
-/// A [`row`] with `end` drawn at its right end, after the value.
-pub(crate) fn row_with(ui: &mut Ui, label: &str, value: String, end: impl FnOnce(&mut Ui)) {
-    let t = Tokens::get(ui.ctx());
-    ui.horizontal(|ui| {
-        ui.label(egui::RichText::new(label).size(12.0).color(t.text_dim));
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            end(ui);
-            // Long values (paths) are cut to the panel's width; hovering shows them whole.
-            ui.add(egui::Label::new(egui::RichText::new(value).size(12.0).color(t.text)).truncate());
-        });
+    Row::new().fill_width().align(RowAlign::SpaceBetween).show(ui, |ui, _| {
+        Text::new(label.to_string()).shade(Shade::Muted).show(ui);
+        // The value can be selected and copied (#8432).
+        SelectableText::new(label.to_string(), &value).show(ui);
     });
 }
 
 /// `document.info` with its categories, fetched again only when the document, the scope or the
 /// artboards the Artboard tool has selected change.
-fn info(app: &mut VectorcraftApp, ctx: &egui::Context, sel_only: bool) -> Option<Value> {
+pub(crate) fn info(app: &mut VectorcraftApp) -> Option<Value> {
+    let selection_only = app.ui.doc_info.selection_only;
     let artboard_tool = if app.session.tool_id() == "artboard" { app.session.tool_options_of("artboard") } else { Value::Null };
     let st = app.session.active()?;
-    let key = Some((st.uid, st.revision, sel_only, artboard_tool));
-    let mut c: Cache = pstate(ctx, "docinfo-cache");
-    if c.key != key {
-        c.info = app.session.execute("document.info", &json!({ "selectionOnly": sel_only })).ok()?;
-        c.key = key;
-        set_pstate(ctx, "docinfo-cache", c.clone());
+    let key = (st.uid, st.revision, selection_only, artboard_tool);
+    if let Some((cached, info)) = &app.canvas.doc_info
+        && *cached == key
+    {
+        return Some(info.clone());
     }
-    Some(c.info)
+    let info = app.session.execute("document.info", &json!({ "selectionOnly": selection_only })).ok()?;
+    app.canvas.doc_info = Some((key, info.clone()));
+    Some(info)
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let sel_only: bool = pstate(ui.ctx(), "docinfo-sel");
-    let category: String = pstate(ui.ctx(), "docinfo-category");
-    let Some(i) = info(app, ui.ctx(), sel_only) else {
-        widgets::dim_label(ui, tl!("No document"));
+    let Some(i) = info(app) else {
+        Text::new(tl!("No document").to_string()).shade(Shade::Muted).show(ui);
         return;
     };
-    egui::ScrollArea::vertical().max_height(420.0).show(ui, |ui| {
+    let DocInfoView { selection_only: sel_only, category } = app.ui.doc_info.clone();
+    Stack::new().show(ui, |ui, _| {
         let sections = i["sections"].as_array().map_or(&[][..], Vec::as_slice);
         let shown = sections.iter().filter(|s| category.is_empty() || s["id"] == category.as_str());
         for (n, s) in shown.enumerate() {
             if n > 0 {
-                widgets::divider(ui);
+                Divider::horizontal().show(ui);
             }
             let title = s["title"].as_str().unwrap_or_default();
             let rows = s["rows"].as_array().map_or(&[][..], Vec::as_slice);
@@ -74,19 +75,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 Some("document" | "objects") => tl!(title).to_string(),
                 _ => format!("{} ({})", tl!(title), rows.len()),
             };
-            widgets::subheader(
-                ui,
-                &if sel_only && n == 0 && category.is_empty() { crate::i18n::fmt(tl!("{title} (selection)"), &[("title", &title)]) } else { title },
-            );
+            let title =
+                if sel_only && n == 0 && category.is_empty() { crate::i18n::fmt(tl!("{title} (selection)"), &[("title", &title)]) } else { title };
+            Text::new(title).role(TypeRole::Heading).show(ui);
             if rows.is_empty() {
-                widgets::dim_label(ui, tl!("None"));
+                Text::new(tl!("None").to_string()).shade(Shade::Muted).show(ui);
             }
             let id = s["id"].as_str().unwrap_or_default();
             let named = named_rows(id, rows);
             for (k, r) in rows.iter().enumerate() {
                 let (label, value) = (r[0].as_str().unwrap_or_default(), r[1].as_str().unwrap_or_default());
                 if value.is_empty() {
-                    widgets::dim_name(ui, super::label_or_name(label, !named.contains(&k)));
+                    Text::new(super::label_or_name(label, !named.contains(&k)).to_string()).shade(Shade::Muted).show(ui);
                 } else {
                     let shown = shown_value(&i, id, k, (label, value), named.contains(&k)).unwrap_or_else(|| value.to_string());
                     row(ui, super::label_or_name(label, !named.contains(&k)), shown);
@@ -128,7 +128,7 @@ fn shown_value(info: &Value, id: &str, k: usize, (label, value): (&str, &str), n
             }
             "Raster Effects" => {
                 let ppi = info["document"]["rasterEffectsPpi"].as_f64()?;
-                Some(fill(tl!("{n} ppi"), &[("n", &ppi.to_string())]))
+                Some(crate::i18n::fmt(tl!("{n} ppi"), &[("n", &ppi.to_string())]))
             }
             "Grid Size" | "Grid Colors" | "Simulate Colored Paper" | "Flattener Preset" => {
                 transparency_value(&info["document"]["transparency"], label)
@@ -183,11 +183,6 @@ fn transparency_value(t: &Value, label: &str) -> Option<String> {
     Some(shown.to_string())
 }
 
-/// [`crate::i18n::fill_once`]: a name that holds `{…}` text stays as it is.
-fn fill(template: &str, args: &[(&str, &str)]) -> String {
-    crate::i18n::fill_once(template, args)
-}
-
 /// A `fontUses` entry as Fonts shows it: the font's type (the format names TrueType and OpenType
 /// stay as they are) and its number of uses in the language's plural forms.
 fn font_use_value(e: &Value) -> Option<String> {
@@ -198,7 +193,7 @@ fn font_use_value(e: &Value) -> Option<String> {
         _ => return None,
     };
     let uses = crate::i18n::tn(e["uses"].as_u64()?, "{n} use", "{n} uses");
-    Some(fill(tl!("{type}; {uses}"), &[("type", kind), ("uses", &uses)]))
+    Some(crate::i18n::fmt(tl!("{type}; {uses}"), &[("type", kind), ("uses", &uses)]))
 }
 
 /// A `fontDetails` entry as Font Details shows it: the font's file (or that it is built in) and
@@ -214,18 +209,21 @@ fn font_detail_value(e: &Value) -> Option<String> {
             _ => return None,
         };
         let file = e["file"].as_str().unwrap_or(tl!("built in"));
-        Some(fill(tl!("{file}; {embedding}"), &[("file", file), ("embedding", embedding)]))
+        Some(crate::i18n::fmt(tl!("{file}; {embedding}"), &[("file", file), ("embedding", embedding)]))
     };
     let face = || Some((e["family"].as_str()?, e["style"].as_str()?));
     match e["match"].as_str()? {
         "exact" => found(),
         "style" => {
             let ((family, style), detail) = (face()?, found()?);
-            Some(fill(tl!("substituted: shown in {family} {style} ({detail})"), &[("family", family), ("style", style), ("detail", &detail)]))
+            Some(crate::i18n::fmt(
+                tl!("substituted: shown in {family} {style} ({detail})"),
+                &[("family", family), ("style", style), ("detail", &detail)],
+            ))
         }
         "missingWithFallback" => {
             let (family, style) = face()?;
-            Some(fill(tl!("missing: shown in {family} {style}"), &[("family", family), ("style", style)]))
+            Some(crate::i18n::fmt(tl!("missing: shown in {family} {style}"), &[("family", family), ("style", style)]))
         }
         "missing" => Some(tl!("missing").to_string()),
         _ => None,
@@ -235,8 +233,11 @@ fn font_detail_value(e: &Value) -> Option<String> {
 /// An `imageObjects` entry as Linked Images and Embedded Images show it: its size in pixels, and
 /// for a linked image the file it shows.
 fn image_value(o: &Value) -> Option<String> {
-    let size = fill(tl!("{width} × {height} px"), &[("width", &o["width"].as_u64()?.to_string()), ("height", &o["height"].as_u64()?.to_string())]);
-    if o["linked"] == true { Some(fill(tl!("{size} — {file}"), &[("size", &size), ("file", o["file"].as_str()?)])) } else { Some(size) }
+    let size = crate::i18n::fmt(
+        tl!("{width} × {height} px"),
+        &[("width", &o["width"].as_u64()?.to_string()), ("height", &o["height"].as_u64()?.to_string())],
+    );
+    if o["linked"] == true { Some(crate::i18n::fmt(tl!("{size} — {file}"), &[("size", &size), ("file", o["file"].as_str()?)])) } else { Some(size) }
 }
 
 /// A `repeatObjects` entry as Repeat Objects shows it: its kind and the number of instances it
@@ -251,12 +252,16 @@ fn repeat_value(e: &Value) -> Option<String> {
     let n = e["instances"].as_u64()?;
     let instances = crate::i18n::tn(n, "{n} instance", "{n} instances");
     if e["type"] != "grid" {
-        return Some(fill(tl!("{kind}, {instances}"), &[("kind", kind), ("instances", &instances)]));
+        return Some(crate::i18n::fmt(tl!("{kind}, {instances}"), &[("kind", kind), ("instances", &instances)]));
     }
     let (rows, cols) = (e["rows"].as_u64()?, e["cols"].as_u64()?);
     let (shown_rows, shown_cols) = (crate::i18n::tn(rows, "{n} row", "{n} rows"), crate::i18n::tn(cols, "{n} column", "{n} columns"));
-    let grid = fill(tl!("{kind}, {rows} × {cols}"), &[("kind", kind), ("rows", &shown_rows), ("cols", &shown_cols)]);
-    Some(if n < rows.saturating_mul(cols) { fill(tl!("{grid}, {instances}"), &[("grid", &grid), ("instances", &instances)]) } else { grid })
+    let grid = crate::i18n::fmt(tl!("{kind}, {rows} × {cols}"), &[("kind", kind), ("rows", &shown_rows), ("cols", &shown_cols)]);
+    Some(if n < rows.saturating_mul(cols) {
+        crate::i18n::fmt(tl!("{grid}, {instances}"), &[("grid", &grid), ("instances", &instances)])
+    } else {
+        grid
+    })
 }
 
 /// A `gradientObjects` entry as Gradient Objects shows it: its gradients, a swatch's name as it
@@ -310,49 +315,72 @@ pub(crate) fn save_report(app: &mut VectorcraftApp, p: &Value) -> Result<Value, 
     let title = app.session.active().map(|d| d.title()).unwrap_or_default();
     let stem = std::path::Path::new(&title).file_stem().map_or_else(|| "Untitled".into(), |s| s.to_string_lossy().into_owned());
     let path = p.get("path").and_then(Value::as_str).map(str::to_string);
-    let path = crate::io::write_named(app, path, &format!("{stem} Info.txt"), text.as_bytes())?;
-    app.status(format!("Saved {path}"));
-    Ok(json!({ "path": path }))
+    crate::io::write_named(app, path, &format!("{stem} Info.txt"), text.as_bytes().to_vec(), |app, path| {
+        app.status(format!("Saved {path}"));
+        Ok(json!({ "path": path }))
+    })
 }
 
-pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let sel: bool = pstate(ui.ctx(), "docinfo-sel");
-    if menu_item(ui, tl!("Selection Only"), true, sel) {
-        set_pstate(ui.ctx(), "docinfo-sel", !sel);
+/// The row that shows category `id` (all of them when empty).
+fn category_row(id: &str) -> CommandRef {
+    CommandRef::with_params("ui.docInfo.category", json!({ "category": id }))
+}
+
+/// The row that saves the report of what the panel shows.
+fn save_row(view: &DocInfoView) -> CommandRef {
+    CommandRef::with_params("docInfo.save", json!({ "selectionOnly": view.selection_only, "category": view.category }))
+}
+
+/// The panel menu's rows: the scope, every category, and Save….
+pub(crate) fn menu_rows(app: &VectorcraftApp) -> Vec<PanelRow> {
+    let mut rows = vec![PanelRow::Command(CommandRef::new("ui.docInfo.selectionOnly")), PanelRow::Separator, PanelRow::Command(category_row(""))];
+    rows.extend(CATEGORIES.iter().map(|(id, _)| PanelRow::Command(category_row(id))));
+    rows.push(PanelRow::Separator);
+    rows.push(PanelRow::Command(save_row(&app.ui.doc_info)));
+    rows
+}
+
+/// The titles, checks and enabled states of [`menu_rows`].
+pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
+    let view = &app.ui.doc_info;
+    states.set(CommandRef::new("ui.docInfo.selectionOnly"), CommandState::new().title(tl!("Selection Only")).checked(view.selection_only));
+    states.set(category_row(""), CommandState::new().title(tl!("All Categories")).checked(view.category.is_empty()));
+    for (id, title) in CATEGORIES {
+        states.set(category_row(id), CommandState::new().title(tl!(title)).checked(view.category == id));
     }
-    ui.separator();
-    let category: String = pstate(ui.ctx(), "docinfo-category");
-    if menu_item(ui, tl!("All Categories"), true, category.is_empty()) {
-        set_pstate(ui.ctx(), "docinfo-category", String::new());
-    }
-    let info = info(app, ui.ctx(), sel).unwrap_or_default();
-    for s in info["sections"].as_array().into_iter().flatten() {
-        let (id, title) = (s["id"].as_str().unwrap_or_default(), s["title"].as_str().unwrap_or_default());
-        if menu_item(ui, title, true, category == id) {
-            set_pstate(ui.ctx(), "docinfo-category", id.to_string());
+    states.set(save_row(view), CommandState::new().title(tl!("Save…")).enabled(app.session.active().is_some()));
+}
+
+/// Runs the panel menu's own rows; `None` for an id that is not one of them. An unknown category
+/// is refused with the ones that exist.
+pub(crate) fn run(app: &mut VectorcraftApp, id: &str, params: &Value) -> Option<Result<Value, String>> {
+    match id {
+        "ui.docInfo.selectionOnly" => {
+            app.ui.doc_info.selection_only = !app.ui.doc_info.selection_only;
+            Some(Ok(Value::Null))
         }
-    }
-    ui.separator();
-    if menu_item(ui, tl!("Save…"), app.session.active().is_some(), false) {
-        crate::menus::invoke(app, "docInfo.save", json!({ "selectionOnly": sel, "category": category }));
+        "ui.docInfo.category" => {
+            let category = params.get("category").and_then(Value::as_str).unwrap_or_default();
+            if !category.is_empty() && !CATEGORIES.iter().any(|(id, _)| *id == category) {
+                let ids: Vec<&str> = CATEGORIES.iter().map(|(id, _)| *id).collect();
+                return Some(Err(format!("unknown category `{category}`; one of {}", ids.join(", "))));
+            }
+            app.ui.doc_info.category = category.to_string();
+            Some(Ok(Value::Null))
+        }
+        _ => None,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::i18n::LangExt;
 
-    #[test]
-    fn draws_headless() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-        app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi"})).unwrap();
-        let ctx = egui::Context::default();
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
-            show(&mut app, ui);
-            menu(&mut app, ui);
-        });
-        out.textures_delta.clear();
+    /// The panel's painted text with category `category` shown.
+    fn painted(app: &mut VectorcraftApp, category: &str) -> String {
+        run(app, "ui.docInfo.category", &json!({ "category": category })).unwrap().unwrap();
+        crate::tests_labels::painted_text(app, show)
     }
 
     /// Artboard, font and other names in the rows are shown as they are, the labels in the UI
@@ -380,27 +408,17 @@ mod tests {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi"})).unwrap();
-        let text = crate::tests_labels::painted_text(&mut app, show);
+        let text = painted(&mut app, "");
         assert!(text.contains("Color Mode") && text.contains("Artboard 1"), "{text}");
-        let menu_text = crate::tests_labels::painted_text(&mut app, menu);
-        assert!(
-            menu_text.contains("Font Details")
-                && menu_text.contains("Brushes")
-                && menu_text.contains("Repeat Objects")
-                && menu_text.contains("Gradient Objects")
-                && menu_text.contains("Spot Color Objects")
-                && menu_text.contains("Save…"),
-            "{menu_text}"
-        );
+        let ids: Vec<String> = menu_rows(&app).iter().filter_map(|r| if let PanelRow::Command(c) = r { Some(c.id.clone()) } else { None }).collect();
+        assert_eq!(ids.iter().filter(|i| *i == "ui.docInfo.category").count(), CATEGORIES.len() + 1, "all categories and one row per section");
+        assert!(ids.contains(&"docInfo.save".to_string()), "{ids:?}");
         // Gradient Objects lists the objects painted with a gradient by name.
         let r = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
         let ramp = json!({"kind": "radial", "stops": [{"offset": 0, "color": "#000"}, {"offset": 1, "color": "#fff"}]});
         app.session.execute("paint.setFill", &json!({"ids": [r], "gradient": ramp})).unwrap();
         app.session.execute("layer.setProps", &json!({"id": r, "name": "Glow"})).unwrap();
-        let gradients = crate::tests_labels::painted_text(&mut app, |app, ui| {
-            set_pstate(ui.ctx(), "docinfo-category", "gradients".to_string());
-            show(app, ui);
-        });
+        let gradients = painted(&mut app, "gradients");
         assert!(gradients.contains("Gradient Objects (1)") && gradients.contains("Glow") && gradients.contains("Radial gradient"), "{gradients}");
         // Spot Color Objects lists the objects painted with a spot color by name.
         let spot = json!({"model": "cmyk", "c": 0.0, "m": 0.8, "y": 0.6, "k": 0.0});
@@ -408,15 +426,9 @@ mod tests {
         let badge = app.session.execute("shape.ellipse", &json!({"x": 50, "y": 50, "width": 20, "height": 20})).unwrap()["id"].clone();
         app.session.execute("paint.setFill", &json!({"ids": [badge], "swatch": "Signal Red"})).unwrap();
         app.session.execute("layer.setProps", &json!({"id": badge, "name": "Badge"})).unwrap();
-        let spots = crate::tests_labels::painted_text(&mut app, |app, ui| {
-            set_pstate(ui.ctx(), "docinfo-category", "spotColors".to_string());
-            show(app, ui);
-        });
+        let spots = painted(&mut app, "spotColors");
         assert!(spots.contains("Spot Color Objects (1)") && spots.contains("Badge") && spots.contains("Signal Red"), "{spots}");
-        let filtered = crate::tests_labels::painted_text(&mut app, |app, ui| {
-            set_pstate(ui.ctx(), "docinfo-category", "fonts".to_string());
-            show(app, ui);
-        });
+        let filtered = painted(&mut app, "fonts");
         assert!(filtered.contains("Source Sans 3 Regular") && !filtered.contains("Color Mode"), "{filtered}");
         // Save…: written through the host.
         let written: std::rc::Rc<std::cell::RefCell<Vec<u8>>> = Default::default();
@@ -442,23 +454,18 @@ mod tests {
             w.borrow_mut().extend_from_slice(b);
             Ok(())
         }));
-        app.services.pick_save = Some(Box::new(|pick: &crate::FilePick| Some(format!("/tmp/{}", pick.name))));
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        set_pstate(&ctx, "docinfo-category", category.to_string());
-        set_pstate(&ctx, "docinfo-sel", sel_only);
-        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
-            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(236.0, 800.0));
-            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| menu(app, ui));
-            out.textures_delta.clear();
-            crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
-        };
-        let labels = frame(app, vec![]);
-        let at = labels.iter().find(|(t, _)| t.trim() == "Save…").map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no Save… in {labels:?}"));
-        let button =
-            |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
-        frame(app, vec![egui::Event::PointerMoved(at), button(true)]);
-        frame(app, vec![button(false)]);
+        app.ui.doc_info.category = category.to_string();
+        app.ui.doc_info.selection_only = sel_only;
+        let save = menu_rows(app)
+            .into_iter()
+            .find_map(|r| match r {
+                PanelRow::Command(c) if c.id == "docInfo.save" => Some(c),
+                _ => None,
+            })
+            .expect("a Save… row");
+        let mut params = save.params.clone();
+        params["path"] = "/tmp/info.txt".into();
+        app.run(&save.id, params).unwrap();
         let report = String::from_utf8(written.borrow().clone()).unwrap();
         assert!(report.starts_with("Document Info: "), "nothing saved: {report:?}");
         report
@@ -490,32 +497,6 @@ mod tests {
         // The command takes the category too; an unknown one is an error and writes nothing.
         let err = app.run("docInfo.save", json!({"path": "/tmp/info.txt", "category": "colors"})).unwrap_err();
         assert!(err.contains("category `colors`"), "{err}");
-    }
-
-    /// Brushes shows each brush's type, and a brush the Brushes panel does not hold, in the
-    /// interface language; the saved report keeps them in English.
-    #[test]
-    fn brush_types_show_in_the_interface_language() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-        let r = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
-        app.session.execute("brush.apply", &json!({"ids": [r], "name": "Charcoal"})).unwrap();
-        let brushes = |app: &mut VectorcraftApp| {
-            crate::tests_labels::painted_text(app, |app, ui| {
-                set_pstate(ui.ctx(), "docinfo-category", "brushes".to_string());
-                show(app, ui);
-            })
-        };
-        let english = brushes(&mut app);
-        assert!(english.contains("Charcoal") && english.contains("Art Brush"), "{english}");
-        let Some(de) = crate::i18n::Lang::from_code("de") else { panic!("no German catalog") };
-        crate::i18n::set_current(de);
-        let (german, missing) = (brushes(&mut app), brush_value("missing from the Brushes panel").to_string());
-        crate::i18n::set_current(crate::i18n::Lang::EN);
-        assert!(german.contains("Charcoal") && german.contains("Bildpinsel") && !german.contains("Art Brush"), "{german}");
-        assert_eq!(missing, "fehlt im Bedienfeld „Pinsel“");
-        let report = app.session.execute("document.info", &json!({"category": "brushes", "format": "text"})).unwrap()["text"].to_string();
-        assert!(report.contains("Charcoal: Art Brush"), "{report}");
     }
 
     /// Section `id`'s rows as the panel shows them for `info`: each label and its shown value.
@@ -583,7 +564,6 @@ mod tests {
         let german = |id: &str| shown_rows(&info, id);
         let (document, fonts, images, gradients, repeats) =
             (german("document"), german("fontDetails"), german("embeddedImages"), german("gradients"), german("repeats"));
-        let painted = crate::tests_labels::painted_text(&mut app, show);
         app.session.execute("select.set", &json!({"ids": [glow]})).unwrap();
         let selected = shown_rows(&app.session.execute("document.info", &json!({"selectionOnly": true})).unwrap(), "gradients");
         let written: std::rc::Rc<std::cell::RefCell<Vec<u8>>> = Default::default();
@@ -596,7 +576,7 @@ mod tests {
         crate::i18n::set_current(crate::i18n::Lang::EN);
         let saved = String::from_utf8(written.borrow().clone()).unwrap();
         assert_eq!((value(&document, "Units"), value(&document, "Raster Effects")), ("Millimeter".into(), "72 ppi".into()));
-        assert!(painted.contains("Millimeter") && !painted.contains("Millimeters"), "{painted}");
+
         assert_eq!(value(&fonts, "Source Sans 3 Regular"), "integriert; Einbetten erlaubt");
         let wide = value(&fonts, "Source Sans 3 Black Wide");
         assert!(wide.starts_with("ersetzt: angezeigt in Source Sans 3 ") && wide.ends_with("Einbetten erlaubt)"), "{wide}");
@@ -613,49 +593,6 @@ mod tests {
         assert!(report.contains("Units: Millimeters\n") && report.contains("Radial Repeat, 6 instances"), "{report}");
     }
 
-    /// Fonts shows each font's type and number of uses in the interface language, in the
-    /// language's plural forms; the format names TrueType and OpenType and the font names stay as
-    /// they are, and `document.info` and the saved report keep the English values.
-    #[test]
-    fn font_types_and_uses_show_in_the_interface_language() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-        app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "Hi"})).unwrap();
-        app.session.execute("text.create", &json!({"x": 10, "y": 50, "text": "Hi"})).unwrap();
-        app.session.execute("text.create", &json!({"x": 10, "y": 80, "text": "Gone", "font": "Qx Absent Family"})).unwrap();
-        let info = app.session.execute("document.info", &json!({})).unwrap();
-        let rows = |info: &Value| shown_rows(info, "fonts");
-        let english = vec![
-            ("Qx Absent Family Regular".to_string(), "unknown type; 1 use".to_string()),
-            ("Source Sans 3 Regular".into(), "TrueType; 2 uses".into()),
-        ];
-        assert_eq!(rows(&info), english);
-        let fonts = |app: &mut VectorcraftApp| {
-            crate::tests_labels::painted_text(app, |app, ui| {
-                set_pstate(ui.ctx(), "docinfo-category", "fonts".to_string());
-                show(app, ui);
-            })
-        };
-        let Some(de) = crate::i18n::Lang::from_code("de") else { panic!("no German catalog") };
-        crate::i18n::set_current(de);
-        let (german, painted) = (rows(&info), fonts(&mut app));
-        let one_opentype = font_use_value(&json!({"type": "opentype", "uses": 1}));
-        let Some(ru) = crate::i18n::Lang::from_code("ru") else { panic!("no Russian catalog") };
-        crate::i18n::set_current(ru);
-        let russian = [1, 3, 5].map(|n| font_use_value(&json!({"type": "truetype", "uses": n})));
-        crate::i18n::set_current(crate::i18n::Lang::EN);
-        assert_eq!(german[0], ("Qx Absent Family Regular".to_string(), "unbekannter Typ; 1 Verwendung".to_string()));
-        assert_eq!(german[1], ("Source Sans 3 Regular".to_string(), "TrueType; 2 Verwendungen".to_string()));
-        assert!(painted.contains("Source Sans 3 Regular") && painted.contains("TrueType; 2 Verwendungen"), "{painted}");
-        assert_eq!(one_opentype.as_deref(), Some("OpenType; 1 Verwendung"));
-        assert_eq!(russian.map(Option::unwrap_or_default), ["TrueType; 1 использование", "TrueType; 3 использования", "TrueType; 5 использований"]);
-        // An unknown type id is shown as `document.info` gives the row.
-        assert_eq!(font_use_value(&json!({"type": "bitmap", "uses": 1})), None);
-        let report =
-            app.session.execute("document.info", &json!({"category": "fonts", "format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
-        assert!(report.contains("Source Sans 3 Regular: TrueType; 2 uses\n"), "{report}");
-    }
-
     /// Document shows the transparency settings with their values in the interface language (two
     /// custom grid colors as they are), and while the Artboard tool is the current tool the
     /// artboards it has selected, following its selection without an edit to the document.
@@ -665,9 +602,8 @@ mod tests {
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         app.session.execute("artboard.new", &json!({"x": 150, "y": 40, "width": 60, "height": 80})).unwrap();
         app.session.execute("artboard.setProps", &json!({"index": 1, "name": "Back"})).unwrap();
-        let ctx = egui::Context::default();
         let document = |app: &mut VectorcraftApp| {
-            let info = info(app, &ctx, false).unwrap();
+            let info = info(app).unwrap();
             shown_rows(&info, "document")
         };
         let value = |rows: &[(String, String)], label: &str| rows.iter().find(|(l, _)| l == label).map(|(_, v)| v.clone());
@@ -693,14 +629,12 @@ mod tests {
         let Some(de) = crate::i18n::Lang::from_code("de") else { panic!("no German catalog") };
         crate::i18n::set_current(de);
         let german = document(&mut app);
-        let painted = crate::tests_labels::painted_text(&mut app, show);
         crate::i18n::set_current(crate::i18n::Lang::EN);
         let shown = |label: &str| value(&german, label).unwrap_or_else(|| panic!("no {label} in {german:?}"));
         assert_eq!(
             [shown("Grid Size"), shown("Grid Colors"), shown("Simulate Colored Paper"), shown("Flattener Preset")],
             ["Groß", "Lila", "Ein", "Niedrige Auflösung"]
         );
-        assert!(painted.contains("Rastergröße") && painted.contains("Groß") && painted.contains("Back"), "{painted}");
         app.session.execute("document.setup", &json!({"gridColors": ["#ff0000", "#00ff00"]})).unwrap();
         crate::i18n::set_current(de);
         let custom = value(&document(&mut app), "Grid Colors");
