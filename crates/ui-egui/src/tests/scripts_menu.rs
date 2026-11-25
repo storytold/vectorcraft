@@ -526,6 +526,39 @@ fn with_run_startup_scripts_on_other_script_and_the_launch_run_the_startup_scrip
 }
 
 #[test]
+fn with_run_startup_scripts_on_a_chosen_script_still_replies_as_script_run() {
+    let dir = folder("startup-reply");
+    let mut app = app(&dir);
+    app.session.prefs.show_external_script_warning = false;
+    let off = menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    finish(&mut app);
+    assert_eq!(off, json!({"running": true, "name": "chosen"}));
+    let empty = dir.join("Startup Scripts");
+    std::fs::create_dir_all(&empty).unwrap();
+    app.session.attach_startup_scripts_dir(empty);
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    // An empty folder: the chosen script starts at once, named as its run is, by a #script line too.
+    let r = menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    finish(&mut app);
+    assert_eq!((&r["running"], &r["name"], &r["startup"]["queued"]), (&json!(true), &json!("chosen"), &json!(1)), "{r}");
+    let named = format!("#script \"Named\"\n{DRAW}");
+    let r = menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": named })).unwrap().unwrap();
+    finish(&mut app);
+    assert_eq!(r["name"], "Named", "{r}");
+    // A chosen script that cannot start gives its error, as script.run does.
+    let alone = app.run("script.run", json!({"source": "vc.log(("})).unwrap_err();
+    let e = menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": "vc.log((" })).unwrap().unwrap_err();
+    assert_eq!(e, alone);
+    // A startup script runs first: the chosen script is queued after it.
+    startup_folder(&mut app, &dir);
+    let r = menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    finish(&mut app);
+    assert_eq!((&r["running"], &r["queued"], &r["startup"]["queued"]), (&json!(true), &json!(true), &json!(2)), "{r}");
+    assert_eq!(started(&app).last().map(String::as_str), Some("chosen"));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
 fn a_stopped_startup_script_says_it_was_stopped_and_the_chosen_script_still_runs() {
     let dir = folder("startup-stop");
     let mut app = app(&dir);

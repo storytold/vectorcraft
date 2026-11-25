@@ -124,12 +124,30 @@ fn ask(app: &mut VectorcraftApp) -> bool {
 /// the startup scripts when General › Run Startup Scripts is on (`script.startup.run`). A startup
 /// script that cannot start, a listing of the Startup Scripts folder that was not read in full, and
 /// a folder that is there and cannot be read show in the status bar ([`reply_notes`]).
+/// → `script.run`'s reply, with `startup` holding `script.startup.run`'s when the startup scripts
+/// were run: the chosen script's own reply when it ran to its end at once, `{running: true, name}`
+/// when it is running, or `{running: true, queued: true}` while a startup script runs before it.
+/// A chosen script that could not start gives its error, as `script.run` does.
 pub(crate) fn run_chosen(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
     if app.session.startup_skip().is_some() {
         return app.run("script.run", params);
     }
-    let reply = app.run("script.startup.run", json!({"reason": "menu", "then": params}))?;
-    reply_notes(app, &reply);
+    let mut startup = app.run("script.startup.run", json!({"reason": "menu", "then": params}))?;
+    reply_notes(app, &startup);
+    let mut reply = match startup.as_object_mut().and_then(|o| o.remove("then")) {
+        Some(then) => then,
+        // Nothing runs and the chosen script gave no reply: it could not start, and it is the
+        // last of the runs that could not start.
+        None if !app.session.script_running() => {
+            let last = startup["failed"].as_array().and_then(|failed| failed.last());
+            return Err(last.and_then(|failed| failed["error"].as_str()).unwrap_or_default().to_string());
+        }
+        None if app.session.startup_script_running() => json!({"running": true, "queued": true}),
+        None => json!({"running": true, "name": app.session.script_name().unwrap_or_default()}),
+    };
+    if let Some(o) = reply.as_object_mut() {
+        o.insert("startup".to_string(), startup);
+    }
     Ok(reply)
 }
 
