@@ -1429,3 +1429,92 @@ fn an_artboard_name_stays_with_its_document() {
     assert_eq!(names(&app, 1), ["Artboard 1", "Artboard 2"]);
     assert!(log.borrow().is_empty(), "renaming must not export");
 }
+
+/// In a window of the default size and in one of the app's least size, every control of the dialog stays between its
+/// sides, the format rows stay in the right column, and in the default window the Formats heading's buttons end at
+/// the column's right edge.
+#[test]
+fn the_format_rows_fit_the_right_column_at_the_default_and_least_window_sizes() {
+    let rows = json!([
+        {"scale": "1x", "suffix": "", "format": "png"},
+        {"scale": "2x", "suffix": "@2x-long-suffix", "format": "jpg", "quality": 100},
+        {"scale": "100w", "format": "pdf"},
+    ]);
+    // The default window, then the least size the desktop app's window takes.
+    for (size, default) in [(egui::vec2(1280.0, 900.0), true), (egui::vec2(800.0, 500.0), false)] {
+        let (mut app, _) = app(2, false);
+        let ctx = app.ui_ctx.clone().expect("a test app has a window");
+        ctx.enable_accesskit();
+        let mut time = 0.0;
+        let mut frame = |app: &mut VectorcraftApp| {
+            time += 0.1;
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, size);
+            let input = egui::RawInput { time: Some(time), screen_rect: Some(screen), ..Default::default() };
+            let out = crate::testing::part_frame(app, &ctx, input, |app, ui| app.ui(ui));
+            super::host::pump(app, &ctx);
+            out
+        };
+        frame(&mut app);
+        open(&mut app);
+        set(&mut app, "formats", rows.clone());
+        frame(&mut app);
+        let out = frame(&mut app);
+        let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        let rect = |n: &egui::accesskit::Node| {
+            n.bounds().map(|b| egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32)))
+        };
+        let find = |label: &str, role: Role| {
+            nodes
+                .iter()
+                .find(|(_, n)| n.label() == Some(label) && n.role() == role)
+                .and_then(|(_, n)| rect(n))
+                .unwrap_or_else(|| panic!("no {role:?} {label:?}"))
+        };
+        let Some((dialog_id, dialog)) = nodes.iter().find(|(_, n)| n.role() == Role::Dialog) else { panic!("no dialog at {size:?}") };
+        let dialog = rect(dialog).expect("the dialog's bounds");
+        // The Export to: section spans the right column.
+        let column = find("Export to:", Role::Group);
+        let by_id: std::collections::HashMap<_, _> = nodes.iter().map(|(id, n)| (*id, n)).collect();
+        let mut under = vec![*dialog_id];
+        while let Some(id) = under.pop() {
+            let Some(n) = by_id.get(&id) else { continue };
+            under.extend(n.children().iter().copied());
+            if let Some(r) = rect(n) {
+                assert!(
+                    r.left() >= dialog.left() - 0.5 && r.right() <= dialog.right() + 0.5,
+                    "{:?} {:?} at {r:?} is outside the dialog at {dialog:?} in a {size:?} window",
+                    n.role(),
+                    n.label()
+                );
+            }
+        }
+        // Each control with how many of it the three rows show.
+        let format_rows = [
+            ("Formats:", Role::Label, 1),
+            ("iOS", Role::Button, 1),
+            ("Android", Role::Button, 1),
+            ("Format Presets", Role::Button, 1),
+            ("Format Settings", Role::Button, 1),
+            ("Scale", Role::ComboBox, 3),
+            ("Suffix", Role::TextInput, 3),
+            ("Format", Role::ComboBox, 3),
+            ("Remove", Role::Button, 3),
+            ("+ Add Scale", Role::Button, 1),
+        ];
+        for (label, role, count) in format_rows {
+            let shown: Vec<_> = nodes.iter().filter(|(_, n)| n.label() == Some(label) && n.role() == role).collect();
+            assert_eq!(shown.len(), count, "{role:?} {label:?} in a {size:?} window");
+            for (_, n) in shown {
+                let r = rect(n).expect("bounds");
+                assert!(
+                    r.left() >= column.left() - 0.5 && r.right() <= column.right() + 0.5,
+                    "{label} at {r:?} is outside the column at {column:?} in a {size:?} window"
+                );
+            }
+        }
+        if default {
+            let gear = find("Format Settings", Role::Button);
+            assert!((gear.right() - column.right()).abs() <= 0.5, "the gear at {gear:?} ends at the column's edge {column:?}");
+        }
+    }
+}
