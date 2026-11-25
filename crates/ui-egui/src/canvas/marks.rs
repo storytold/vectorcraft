@@ -484,8 +484,10 @@ impl HiddenMarks {
 pub struct ArtMarksStyle {
     #[style(metrics)]
     metrics: Metrics,
-    /// The artboards' bleed and marks.
-    line: StyleColor,
+    /// The artboards' bleed outline.
+    bleed: StyleColor,
+    /// The artboards' marks (cross hairs, centre mark, video-safe areas).
+    marks: StyleColor,
     /// The spelling waves.
     bad: StyleColor,
 }
@@ -546,7 +548,12 @@ impl Component for ArtMarks<'_> {
     type Output = Response;
 
     fn style(cx: &StyleCx<'_>, _: ArtMarksStyleKey) -> ArtMarksStyle {
-        ArtMarksStyle { metrics: Metrics::new(), line: cx.color(cx.tokens.color.overlay.line), bad: cx.tone(Tone::Bad) }
+        ArtMarksStyle {
+            metrics: Metrics::new(),
+            bleed: cx.color(cx.tokens.color.status.bad.solid),
+            marks: cx.color(cx.tokens.color.overlay.grid),
+            bad: cx.tone(Tone::Bad),
+        }
     }
 
     fn measure(&mut self, _: &MeasureCx<'_, Self>) -> Vec2 {
@@ -563,9 +570,10 @@ impl Component for ArtMarks<'_> {
         for quad in self.fade {
             draw.data_fill(&PaintShape::Polygon(quad.to_vec()), FADE_OUTSIDE);
         }
-        for path in self.bleed.iter().chain(self.artboard_marks) {
+        let bleed = self.bleed.iter().map(|path| (path, style.bleed));
+        for (path, color) in bleed.chain(self.artboard_marks.iter().map(|path| (path, style.marks))) {
             for (points, closed) in path_runs(&self.view, path) {
-                draw.stroke(&PaintShape::Path(ring(points, closed)), StrokeWidth::Thin, style.line);
+                draw.stroke(&PaintShape::Path(ring(points, closed)), StrokeWidth::Thin, color);
             }
         }
         draw.faded(BAND_SHARE, |d| {
