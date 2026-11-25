@@ -20,8 +20,33 @@ bundled-fonts = ["vectorcraft-engine/bundled-fonts"]
 interface-fonts = []
 
 [dependencies]
-craft-ui = { workspace = true }
-craft-keymap = { workspace = true, features = ["egui"] }
+craft = { workspace = true, features = [
+    "ui",
+    "automation",
+    "cms",
+    "color-ui",
+    "draw",
+    "font-catalog",
+    "font-catalog-system",
+    "font-manager",
+    "imaging",
+    "keymap",
+    "layers",
+    "menu",
+    "pages",
+    "pdf",
+    "platform",
+    "platform-clipboard",
+    "print",
+    "quit",
+    "settings",
+    "table",
+    "text",
+    "text-find",
+    "text-font-picker",
+    "tracked",
+    "window",
+] }
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }
@@ -44,7 +69,6 @@ egui = { workspace = true, features = ["bytemuck", "default_fonts", "monochrome_
 # reach our tests; `theme::install_fonts` starts from `FontDefinitions::default()`, which is empty
 # without them (production would lay out tofu, and the no-interface-fonts tests would bind nothing).
 bytemuck = { version = "1", features = ["extern_crate_alloc"] }
-egui_extras = { workspace = true }
 image = { workspace = true }
 craft-image-codecs = { workspace = true }
 serde = { workspace = true }
@@ -53,15 +77,15 @@ log = { workspace = true }
 
 # Floating panels open in OS windows of their own on the desktop; on the web they stay in the page.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-craft-ui = { workspace = true, features = ["native-windows"] }
-craft-update = { workspace = true }
+# The folder picker and the updater are native only (`craft/Cargo.toml`: rfd and getrandom have no wasm build).
+craft = { workspace = true, features = ["dialogs", "update"] }
 # The local date and time the status bar's Date and Time readout shows (`chrono::Local`). Already in
 # Cargo.lock with the time-zone crates `clock` uses.
 chrono = { workspace = true, features = ["clock"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-# `now_ms` (src/lib.rs) reads the page's `performance.now()` with this crate in the web build. It is
-# MIT OR Apache-2.0 and already in the build through eframe.
+# The status bar's Date and Time readout reads the page's clock with this crate in the web build. It
+# is MIT OR Apache-2.0 and already in the build through eframe.
 web-time = "1"
 
 # The current user's id (`geteuid`): Preview in Browser uses its temporary folder only when that
@@ -71,7 +95,10 @@ web-time = "1"
 rustix = { workspace = true, features = ["std", "process"] }
 
 [dev-dependencies]
+# `Fixture` and the stories sit behind craft-ui's `testing` feature.
+craft = { workspace = true, features = ["ui-testing"] }
 egui_kittest = { workspace = true, features = ["wgpu", "snapshot"] }
+egui_extras = { workspace = true }
 vectorcraft-apischema = { workspace = true }
 vectorcraft-testkit = { workspace = true }
 # A variable font built in code (no font file is committed).

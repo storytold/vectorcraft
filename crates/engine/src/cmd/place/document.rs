@@ -333,7 +333,7 @@ fn read_source(
     }
     let a = opened_document_art(name, (bytes, opened), path, page, bounding, page_box, cmd)?;
     let bytes = shared.cloned().unwrap_or_else(|| Arc::new(bytes.to_vec()));
-    let mut blob = ImageBlob { mime: mime(name, &bytes).into(), bytes, proxy: None };
+    let mut blob = ImageBlob { mime: mime(name, &bytes).into(), bytes, proxy: None, file_font: Default::default() };
     let shown = PlacedDocument {
         link: LinkInfo { page: Some(page), ..LinkInfo::new(path.unwrap_or(name)) },
         key: key.clone(),
@@ -468,7 +468,10 @@ pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
         let Some(blob) = out.images.get(&p.key) else { continue };
         match vectorcraft_doc::placed_document::full_bytes(&p, blob) {
             Some(bytes) => {
-                out.images.insert(p.key.clone(), ImageBlob { mime: mime(p.link.name(), &bytes).into(), bytes, proxy: blob.proxy.clone() });
+                out.images.insert(
+                    p.key.clone(),
+                    ImageBlob { mime: mime(p.link.name(), &bytes).into(), bytes, proxy: blob.proxy.clone(), file_font: Default::default() },
+                );
             }
             None => {
                 previews.insert(p.key);

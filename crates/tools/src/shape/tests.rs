@@ -968,6 +968,23 @@ fn corners_snap_to_smart_guides() {
     assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == &cx.segment_measure_label(from, to))));
 }
 
+/// The "anchor" label a hover shows goes when the pointer leaves the canvas, for every shape tool.
+#[test]
+fn leaving_the_canvas_drops_the_hover_label() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let label = |o: &[Overlay]| o.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "anchor"));
+    for id in ["rectangle", "roundedRectangle", "ellipse", "polygon", "star", "lineSegment"] {
+        let mut t = ShapeTool::new(id);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 98.0, 102.0));
+        assert!(label(&t.overlays(&cx)), "{id}");
+        t.hover_ended(&cx);
+        assert!(!label(&t.overlays(&cx)), "{id}: {:?}", t.overlays(&cx));
+    }
+}
+
 /// Line Segment Tool Options: Length and Angle are options (for a click's dialog), and Fill
 /// Line makes the drag's line take the current fill.
 #[test]
