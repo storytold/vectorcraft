@@ -315,11 +315,13 @@ fn links_stored_as_absolute_paths_are_found_in_the_documents_links_folder() {
         r"C:\Users\someone\Work\Flyer\Links\packaged.png".to_string(),
         "/Users/someone/Work/Flyer/Links/packaged.png".to_string(),
         r"C:\Users\someone\Work\Flyer\Links\absent.png".to_string(),
+        // A URL names another computer, whatever the case of its scheme.
+        "FILE:/Users/someone/Work/Flyer/Links/packaged.png".to_string(),
     ];
     let doc = save_linked(&dir, &stored);
 
     let mut s = Session::new();
     let r = s.execute("document.open", &json!({"path": doc})).unwrap();
-    // Only the file that isn't in the folder is missing.
-    assert_eq!(names(&r["missingLinks"]), vec![stored[2].as_str()], "{r}");
+    // Only the file that isn't in the folder and the URL are missing.
+    assert_eq!(names(&r["missingLinks"]), vec![stored[2].as_str(), stored[3].as_str()], "{r}");
 }

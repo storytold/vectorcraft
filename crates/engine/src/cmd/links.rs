@@ -420,7 +420,10 @@ const TAIL_FOLDERS: usize = 3;
 fn path_tails(link: &LinkInfo) -> Vec<String> {
     // A network path or a URL names another computer: its folders mean nothing beside the document.
     let p = link.path.as_str();
-    if p.starts_with(['/', '\\']) && p[1..].starts_with(['/', '\\']) || p.contains("://") || p.starts_with("file:") {
+    if p.starts_with(['/', '\\']) && p[1..].starts_with(['/', '\\'])
+        || p.contains("://")
+        || p.get(..5).is_some_and(|s| s.eq_ignore_ascii_case("file:"))
+    {
         return vec![];
     }
     let parts: Vec<&str> = link.path.split(path_separators(&link.path)).filter(|p| !p.is_empty()).collect();
