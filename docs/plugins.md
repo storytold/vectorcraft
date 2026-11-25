@@ -959,6 +959,10 @@ per change of their input, parameters or paints (results are cached), not per fr
 
 ## Not in v1
 
+For a proposed panel layout and drawing-surface contract, see
+[Plug-in panels proposal](plugin-panels-proposal.md). It is not implemented; the interfaces below
+are still unavailable in the current API.
+
 - Tool plug-ins (pointer events on the canvas, a guide line or rectangle, geometry back), panel plug-ins, and
   importers that place files (File › Place reads only the built-in formats) or make type, images, layers or
   artboards.
