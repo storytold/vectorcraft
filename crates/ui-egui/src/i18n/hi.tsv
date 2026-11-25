@@ -1746,6 +1746,7 @@ arrowhead	Feather	पंख
 	Direction:	दिशा:
 	Directives	निर्देश
 	Disable Auto Add/Delete	ऑटो जोड़ना/हटाना अक्षम करें
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete एंकर पॉइंट हटाता है और पाथ को जुड़ा रखता है
 	Interpolate Control Points When Moving Anchors	एंकर पॉइंट खिसकाते समय निर्देशन हैंडल इंटरपोलेट करें
 	Disable Opacity Mask	ओपेसिटी मास्क अक्षम करें
 	Discard	डिस्कर्ड
@@ -4720,6 +4721,7 @@ arrowhead	Feather	पंख
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	ट्रैकपैड पर दो उंगलियों से घुमाने का जेस्चर कैनवास के व्यू को घुमाता है।
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	किसी कुंजी को दबाए रखने पर कीबोर्ड शॉर्टकट में उसके होल्ड कॉलम का टूल या कमांड चलता है; जल्दी दबाने पर उसका सामान्य शॉर्टकट चलता है।
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	किसी कुंजी को कितने सेकंड दबाए रखना होगा, ताकि उसके सामान्य शॉर्टकट के बजाय उसका होल्ड शॉर्टकट चले।
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete चुने गए एंकर पॉइंट हटाता है और वहाँ पाथ खोलने के बजाय हर एक के आसपास वक्र को फिर से फिट करता है।
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	जब आप एंकर पॉइंट हिलाते हैं, तो एक हिले हुए सिरे वाला हर वक्र अपने सिरों के सापेक्ष अपना आकार बनाए रखता है।
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	किसी टूल की शॉर्टकट कुंजी दबाए रखने पर वह टूल छोड़ने तक चुना रहता है, फिर पिछला टूल दोबारा चुना जाता है।
 	Shows the bounding box while you move the selection or draw a shape.	सिलेक्शन खिसकाते या आकार ड्रॉ करते समय बाउंडिंग बॉक्स दिखाता है।

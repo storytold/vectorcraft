@@ -4599,6 +4599,7 @@ theme	Appearance	Tampilan
 	Data Recovery	Pemulihan data
 	Default Language	Bahasa standar
 	Disable Auto Add/Delete	Nonaktifkan tambah/hapus otomatis
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete menghapus titik jangkar dan menjaga jalur tetap tersambung
 	Interpolate Control Points When Moving Anchors	Interpolasikan gagang arah saat memindahkan titik jangkar
 	Display All Blacks Accurately	Tampilkan semua warna hitam secara akurat
 	Display All Blacks as Rich Black	Tampilkan semua warna hitam sebagai rich black
@@ -5157,6 +5158,7 @@ font-technology	Variable	Variabel
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gerakan putar dua jari pada trackpad memutar tampilan kanvas.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Menahan tombol menjalankan alat atau perintah di kolom Tahan pada Pintasan papan ketik; tekanan singkat menjalankan pintasan biasanya.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Berapa detik tombol harus ditahan sebelum pintasan tahannya berjalan sebagai ganti pintasan biasanya.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete menghapus titik jangkar yang dipilih dan menyesuaikan ulang kurva di sekitar masing-masing, alih-alih membuka jalur di sana.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Saat Anda memindahkan titik jangkar, setiap kurva dengan satu ujung yang dipindahkan mempertahankan bentuknya terhadap ujung-ujungnya.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Menahan tombol pintasan alat memilih alat itu sampai Anda melepasnya, lalu alat sebelumnya dipilih lagi.
 	Shows the bounding box while you move the selection or draw a shape.	Menampilkan kotak pembatas saat Anda memindahkan seleksi atau menggambar bentuk.

@@ -930,6 +930,7 @@ font-technology	Variable	Variables
 	Direct Selection Tool	Outil Sélection directe
 	Direction Handles	Poignées de direction
 	Disable Auto Add/Delete	Désactiver l’ajout/suppression automatique
+	Delete Removes Anchor Points and Keeps Paths Joined	Suppr supprime les points d’ancrage et garde les tracés joints
 	Interpolate Control Points When Moving Anchors	Interpoler les poignées de direction lors du déplacement des points d’ancrage
 	Disable Opacity Mask	Désactiver le masque d’opacité
 	Discard	Ignorer
@@ -3325,6 +3326,7 @@ digits	Malayalam	Malayalam
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un geste de rotation à deux doigts sur un pavé tactile fait pivoter la vue de la zone de travail.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Maintenir une touche exécute l’outil ou la commande de sa colonne Maintenir dans Raccourcis clavier. Un appui bref exécute son raccourci habituel.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Durée, en secondes, pendant laquelle une touche doit être maintenue pour que son raccourci de maintien s’exécute à la place de son raccourci habituel.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Suppr supprime les points d’ancrage sélectionnés et réajuste la courbe autour de chacun, au lieu d’ouvrir le tracé à cet endroit.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Quand vous déplacez des points d’ancrage, chaque courbe dont une extrémité bouge garde sa forme par rapport à ses extrémités.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Maintenir le raccourci d’un outil choisit cet outil jusqu’à ce que vous le relâchiez, puis l’outil précédent est de nouveau choisi.
 	Shows the bounding box while you move the selection or draw a shape.	Affiche le cadre de sélection pendant que vous déplacez la sélection ou dessinez une forme.

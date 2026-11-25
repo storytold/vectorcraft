@@ -1688,6 +1688,7 @@ antiAlias	Sharp	날카롭게
 	Dimensions	치수
 	Direct Selection Tool	직접 선택 도구
 	Disable Auto Add/Delete	자동 추가/삭제 사용 안 함
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete로 고정점을 제거하고 패스를 연결된 상태로 유지
 	Interpolate Control Points When Moving Anchors	앵커 포인트 이동 시 방향 핸들 보간
 	Disable Opacity Mask	불투명 마스크 사용 안 함
 	Discard	삭제
@@ -3343,6 +3344,7 @@ mark-style	Japanese	일본식
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	트랙패드에서 두 손가락으로 회전하는 동작을 하면 캔버스 보기가 회전합니다.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	키를 누르고 있으면 키보드 단축키의 누르고 있기 열에 있는 도구나 명령이 실행되고, 짧게 누르면 평소 단축키가 실행됩니다.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	평소 단축키 대신 길게 누르기 단축키가 실행되기 전까지 키를 누르고 있어야 하는 시간(초)입니다.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete는 선택한 고정점을 제거하고 각 점 주위의 곡선을 다시 맞추며, 그 위치에서 패스를 열지 않습니다.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	고정점을 이동하면 한쪽 끝이 이동한 각 곡선은 양 끝을 기준으로 모양을 유지합니다.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	도구의 바로 가기 키를 누르고 있는 동안 그 도구가 선택되고, 키를 놓으면 이전 도구가 다시 선택됩니다.
 	Shows the bounding box while you move the selection or draw a shape.	선택 영역을 이동하거나 모양을 그리는 동안 테두리 상자를 표시합니다.

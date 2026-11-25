@@ -3371,6 +3371,14 @@ are kept, and selecting an ancestor together with its descendants deletes that s
 Without `ids`, direct-selected anchors or selected ruler guides retain their usual Clear behavior.
 With `ids`, `guides: true` also deletes the selected ruler guides. The command rejects a `guides` value that is not a
 boolean.
+Without `ids`, `keepJoined: true` removes the direct-selected anchors of each path that has no selected segment as
+`path.removeAnchors` does (see Removing anchor points): the path stays joined, and the next anchor along is selected
+(the one before at an open path's end). When no subpath that lost an anchor keeps two anchors, the path stays selected
+whole, as `path.removeAnchors` leaves it, so the next Delete removes the whole path. Paths with a selected segment are
+cut there, and their selected anchors stay in the path, as with `keepJoined: false`; and objects selected whole are deleted, in the
+same undo step. `keepJoined` defaults to the `deleteKeepsPathsJoined` preference, and the value used joins the journal
+entry; a saved step without it opens the paths, as it did when it was recorded. With `ids`, `keepJoined` has no
+effect. A `keepJoined` value that is not a boolean is an error, with or without `ids`.
 
 `edit.copy` takes a compound-path member selected on its own (whole or in part, with Direct or Group Selection) as an
 ordinary path with the compound's paint, transparency, opacity mask and fill rule. The path is linked to the compound's
@@ -7042,6 +7050,8 @@ The anchor after each removed one is then selected (the one before at an open pa
 `path.removeAnchors` again goes on along the path.
 `path.removeAnchor {id, subpath?, anchor}` (the Delete Anchor Point tool) removes one anchor the same way, and
 `path.deleteAnchors {}` (the Delete key) deletes the selected anchors with their segments, opening closed paths there.
+With the `deleteKeepsPathsJoined` preference on, the Delete key (`edit.clear`) removes them as `path.removeAnchors`
+does instead.
 
 ```json
 {"name":"run_command","arguments":{"command":"select.anchors","params":{"id":12,"anchors":[[0,1],[0,3]]}}}
@@ -8497,6 +8507,12 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
   as it did when it was recorded. Align and
   Distribute, and the anchors of type paths and area type frames (`text.reshapePath`, `text.reshapeArea`), move as
   before. Off, the handles of a moved anchor move with it and the other handles stay where they are.
+- `deleteKeepsPathsJoined` (General › Delete Removes Anchor Points and Keeps Paths Joined, off by default): the
+  default of the `keepJoined` param of `edit.clear` (Delete, Backspace, Edit › Clear, and the Layers panel's Delete
+  button while no row is highlighted). On, Delete removes the direct-selected anchors of a path as `path.removeAnchors` does, refitting the curve
+  around each one, so a closed path stays closed and an open path stays in one piece; a path left with fewer than two
+  anchors is deleted. The next anchor along (the one before at an open path's end) is then selected, so the next
+  Delete goes on along the path. Off, Delete deletes the anchors with their segments and opens the path there.
 - `hideCornerWidgetAbove` (177° by default): corners wider than this show no Live Corners widget (a rectangle's right
   angles hide below 90°).
 - `transformPatternTiles` (off by default): the default of the transforms' `patterns` param (`object.transform`,

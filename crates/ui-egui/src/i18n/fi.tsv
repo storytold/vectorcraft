@@ -4173,6 +4173,7 @@ theme	Appearance	Ulkoasu
 	Data Recovery	Tietojen palautus
 	Default Language	Oletuskieli
 	Disable Auto Add/Delete	Poista automaattinen lisäys/poisto käytöstä
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete poistaa ankkuripisteet ja pitää polut yhtenäisinä
 	Interpolate Control Points When Moving Anchors	Interpoloi suuntakahvat siirrettäessä ankkuripisteitä
 	Display All Blacks Accurately	Näytä kaikki mustat tarkasti
 	Display All Blacks as Rich Black	Näytä kaikki mustat syvämustina
@@ -4737,6 +4738,7 @@ font-technology	Variable	Muuttuvat
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Kahden sormen kiertoele kosketuslevyllä kiertää piirtopinnan näkymää.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Näppäimen pitäminen painettuna suorittaa työkalun tai komennon sen Pidä pohjassa -sarakkeesta Pikanäppäimissä; lyhyt painallus suorittaa sen tavallisen pikanäppäimen.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Kuinka monta sekuntia näppäintä on pidettävä painettuna, ennen kuin tavallisen pikanäppäimen sijaan suoritetaan sen pitkän painalluksen pikanäppäin.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete poistaa valitut ankkuripisteet ja sovittaa käyrän uudelleen kunkin ympärille sen sijaan, että avaisi polun siitä kohdasta.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Kun siirrät ankkuripisteitä, jokainen käyrä, jonka toinen pää siirtyy, säilyttää muotonsa suhteessa päihinsä.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Työkalun pikanäppäimen pitäminen painettuna valitsee työkalun, kunnes päästät irti, ja sitten edellinen työkalu valitaan uudelleen.
 	Shows the bounding box while you move the selection or draw a shape.	Näyttää rajausruudun, kun siirrät valintaa tai piirrät muotoa.

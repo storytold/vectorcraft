@@ -930,6 +930,7 @@ font-technology	Variable	Variabili
 	Direct Selection Tool	Strumento Selezione diretta
 	Direction Handles	Maniglie di direzione
 	Disable Auto Add/Delete	Disattiva aggiunta/eliminazione automatica
+	Delete Removes Anchor Points and Keeps Paths Joined	Canc rimuove i punti di ancoraggio e mantiene i tracciati uniti
 	Interpolate Control Points When Moving Anchors	Interpola le maniglie di direzione durante lo spostamento dei punti di ancoraggio
 	Disable Opacity Mask	Disattiva maschera di opacità
 	Discard	Scarta
@@ -3386,6 +3387,7 @@ digits	Malayalam	Malayalam
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un gesto di rotazione con due dita sul trackpad ruota la vista dell'area di lavoro.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Tenere premuto un tasto esegue lo strumento o il comando della sua colonna Tieni premuto in Scelte rapide da tastiera; una pressione breve esegue la sua scorciatoia abituale.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Per quanti secondi va tenuto premuto un tasto prima che venga eseguita la sua scorciatoia a pressione prolungata invece di quella abituale.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Canc rimuove i punti di ancoraggio selezionati e riadatta la curva attorno a ciascuno, invece di aprire lì il tracciato.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Quando sposti i punti di ancoraggio, ogni curva con un’estremità spostata mantiene la propria forma rispetto alle sue estremità.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Tenere premuta la scorciatoia di uno strumento lo sceglie finché non la rilasci, poi viene scelto di nuovo lo strumento precedente.
 	Shows the bounding box while you move the selection or draw a shape.	Mostra il riquadro di delimitazione mentre sposti la selezione o disegni una forma.
