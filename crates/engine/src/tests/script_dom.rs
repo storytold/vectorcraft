@@ -263,8 +263,8 @@ fn an_opacity_a_graph_mark_already_has_replaces_the_one_its_series_keeps() {
 /// `app.redraw()` returns `undefined` and leaves the art and the undo history as they were.
 #[test]
 fn redraw_returns_and_changes_nothing() {
-    let (mut s, a, _) = doc();
-    let (art, steps, opacity) = (format!("{:?}", s.active().unwrap().doc.layers), undo_steps(&s), s.active().unwrap().doc.node(a).unwrap().opacity);
+    let (mut s, _, top) = doc();
+    let (art, steps) = (format!("{:?}", s.active().unwrap().doc.layers), undo_steps(&s));
     assert_eq!(log(&mut s, "vc.log(typeof app.redraw()); vc.log(app.redraw(1, 'x') === undefined);"), vec![json!("undefined"), json!(true)]);
     assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), art);
     assert_eq!(undo_steps(&s), steps);
@@ -274,7 +274,8 @@ fn redraw_returns_and_changes_nothing() {
     assert_eq!(s.execute("script.run", &json!({"source": source, "name": "t.js"})).unwrap()["running"], true);
     let ended = (0..10_000).find_map(|_| s.script_pump()).unwrap_or_else(|| panic!("the run did not end"));
     ended.unwrap();
-    assert!(s.active().unwrap().doc.node(a).unwrap().opacity < opacity);
+    // The edit after the first call landed too: the opacity is below the 40% set before it.
+    assert!(s.active().unwrap().doc.node(top).unwrap().opacity < 0.4);
     assert_eq!(undo_steps(&s), steps + 1);
 }
 
