@@ -582,6 +582,40 @@ fn fill_area_fills_an_l_whose_empty_corner_holds_a_left_out_path() {
     assert!((area(&s, id_of(&r)) - 70_000.0).abs() < 1.0, "{}", area(&s, id_of(&r)));
 }
 
+/// Draws a 100 pt square at the origin and, in front of it, an open path with too many segments
+/// that runs from x -20 to 120 at `y` and up to 0.1 pt above it, then clicks at `click` with
+/// `gap`. Gives the area of the new path, or None when the click finds no area.
+fn square_beside_a_huge_line(y: f64, gap: f64, click: (f64, f64)) -> Option<f64> {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let n = vectorcraft_pathops::SHAPE_BUILDER_MAX_SEGMENTS;
+    let pts: Vec<Point> = (0..=n).map(|k| Point::new(-20.0 + 140.0 * k as f64 / n as f64, y - (k % 2) as f64 * 0.1)).collect();
+    let look = vectorcraft_doc::Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+    insert_path(&mut s, PathData::single(vectorcraft_geom::SubPath::polyline(&pts, false)), look);
+    deselect(&mut s);
+    let r = s.execute("shapeBuilder.copyRegion", &json!({"point": [click.0, click.1], "gap": gap})).ok()?;
+    Some(area(&s, id_of(&r)))
+}
+
+/// With Gap Detection off, a path with too many segments 0.75 pt outside a square is left out and
+/// does not touch the square, so a click in the square fills it. One that crosses the square still
+/// stops the fill.
+#[test]
+fn fill_area_fills_a_square_a_left_out_path_passes_close_to() {
+    let a = square_beside_a_huge_line(-0.75, 0.0, (50.0, 50.0)).expect("the square");
+    assert!((a - 10_000.0).abs() < 1.0, "{a}");
+    assert_eq!(square_beside_a_huge_line(60.0, 0.0, (50.0, 25.0)), None);
+}
+
+/// With a gap, a path with too many segments farther from the square than the gap is left out and
+/// does not stop the square from being filled. One that crosses the square still stops the fill.
+#[test]
+fn fill_area_gap_fills_a_square_a_left_out_path_passes_beyond_the_gap() {
+    let a = square_beside_a_huge_line(-2.75, 2.0, (50.0, 50.0)).expect("the square");
+    assert!((a - 10_000.0).abs() < 1.0, "{a}");
+    assert_eq!(square_beside_a_huge_line(60.0, 2.0, (50.0, 25.0)), None);
+}
+
 /// A filled contour with too many segments on a higher layer surrounds a small square, its outline
 /// far from it: it is left out of the map, and the new path still goes above it, since it covers
 /// the area.

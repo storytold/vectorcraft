@@ -14082,7 +14082,9 @@ Objects on Path group, is a layer or group with a live effect or a clipping mask
 inside an envelope. A point in no enclosed area is the error "Fill Area: no enclosed area under the pointer" and records no undo
 step; a `gap` outside 0 to 72 is an error. It returns `{id, above}`. The command looks for the area among the paths
 near the point first. When the paths together have more than 65,536 segments and the paths near the point do not
-enclose it, the point counts as in no enclosed area.
+enclose it, the point counts as in no enclosed area. A path that this search leaves out to stay within that limit
+stops the command from finding the area only when it crosses the area or comes within the gap plus 0.05 pt of its
+outline.
 
 ```json
 {"name":"run_command","arguments":{"command":"shapeBuilder.copyRegion","params":{"point":[50,70],"gap":3}}}
