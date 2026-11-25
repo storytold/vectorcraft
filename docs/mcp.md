@@ -2784,8 +2784,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `FontSubstitutionPolicy`, `PageMarksTypes`, `PostScriptImageCompressionType` and `PrinterPostScriptLevelEnum` hold
   strings such as `"PrintTiling.TILEFULLPAGES"`. VectorCraft's own rules: `print` writes the file `jobOptions.file`
   names, checked as `saveAs` checks its file: PostScript when the name ends with `.ps` or `postScriptLevel` is
-  assigned, a print-ready PDF otherwise, also when that name is a link to a file with another extension. Without a
-  file it throws `Printing to a printer is not available to scripts yet`, and `app.printerList` throws an error
+  assigned, a print-ready PDF otherwise, also when that name is a link to a file with another extension. The
+  PostScript is level 2 when `postScriptLevel` is not assigned, the default it reads as. Without a file it throws `Printing to a printer is not available to scripts yet`, and `app.printerList` throws an error
   that says it is not available yet. `fitToPage` set to true wins over the scale factors and the tiling mode. With
   `printAllArtboards` false, `artboardRange` picks the artboards, and without a range every artboard prints. With
   `printAllArtboards` not assigned, an assigned `artboardRange` replaces the range of the settings `print` starts

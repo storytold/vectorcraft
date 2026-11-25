@@ -20,7 +20,8 @@
 //! VectorCraft's own rules, which the help pages do not state:
 //! - `print` writes a file: `jobOptions.file` names it, a `File` the script may write
 //!   ([`super::super::files`]). PostScript is written when the name ends with `.ps` or
-//!   `postScriptOptions.postScriptLevel` is set, a print-ready PDF otherwise. Printing to a printer
+//!   `postScriptOptions.postScriptLevel` is set, a print-ready PDF otherwise. The PostScript is
+//!   level 2 when `postScriptLevel` is not assigned, the default it reads as. Printing to a printer
 //!   from a script is not available yet, so `print` without a file throws an error.
 //! - Only the properties a script assigned apply; the others keep the settings `print` starts
 //!   from: the preset's when `printPreset` is assigned, otherwise the document's print settings
@@ -856,8 +857,9 @@ fn doc_print(h: &Host, a: &[Data]) -> Answer {
     // The format follows the name `jobOptions.file` gives, not the real path a link leads to.
     let postscript = job.level.is_some() || crate::cmd::fileio::extension(path) == "ps";
     p.insert("format".into(), json!(if postscript { "postscript" } else { "pdf" }));
-    if let Some(level) = job.level {
-        p.insert("level".into(), json!(level));
+    // PostScript prints at the level the options read as: an unassigned `postScriptLevel` is `PSLEVEL2`.
+    if postscript {
+        p.insert("level".into(), json!(job.level.unwrap_or(2)));
     }
     let settings = job.settings();
     if !settings.is_empty() {
