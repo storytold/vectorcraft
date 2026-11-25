@@ -287,7 +287,9 @@ signed and published. Every bundled asset is listed with its licence in [`ASSETS
 |---|---|---|
 | x64 (64-bit Intel/AMD) | `vectorcraft-<ver>-windows-x64.msi` | `vectorcraft-<ver>-windows-x64-portable.zip` |
 | arm64 (Snapdragon and other ARM PCs) | `vectorcraft-<ver>-windows-arm64.msi` | `vectorcraft-<ver>-windows-arm64-portable.zip` |
-| x86 (32-bit) | `vectorcraft-<ver>-windows-x86.msi` | `vectorcraft-<ver>-windows-x86-portable.zip` |
+
+For 32-bit Windows, [VectorCraft v0.22.0](https://github.com/storytold/vectorcraft/releases/tag/v0.22.0)
+was the last release with both an x86 MSI and portable ZIP.
 
 Installers and executables are code-signed.
 
@@ -306,13 +308,18 @@ Installers and executables are code-signed.
 | Flatpak | `vectorcraft-<ver>-linux-x86_64.flatpak` | `vectorcraft-<ver>-linux-aarch64.flatpak` | Sandboxed; `flatpak install --user <file>` |
 | Debian/Ubuntu | `vectorcraft-<ver>-linux-x86_64.deb` | `vectorcraft-<ver>-linux-aarch64.deb` | |
 | Fedora/RHEL/openSUSE | `vectorcraft-<ver>-linux-x86_64.rpm` | `vectorcraft-<ver>-linux-aarch64.rpm` | |
+| Arch Linux | `vectorcraft-<ver>-linux-x86_64.pkg.tar.zst` | `vectorcraft-<ver>-linux-aarch64.pkg.tar.zst` | |
 | Tarball | `vectorcraft-<ver>-linux-x86_64.tar.gz` | `vectorcraft-<ver>-linux-aarch64.tar.gz` | Unpack anywhere |
+
+RISC-V (riscv64) packages are `vectorcraft-<ver>-linux-riscv64.deb`,
+`vectorcraft-<ver>-linux-riscv64.rpm`, and `vectorcraft-<ver>-linux-riscv64.tar.gz`.
 
 ### FreeBSD
 
 | Build | File |
 |---|---|
 | x86_64 | `vectorcraft-<ver>-freebsd-x86_64.tar.gz` |
+| aarch64 (ARM64) | `vectorcraft-<ver>-freebsd-aarch64.tar.gz` |
 
 ### Web (WebAssembly)
 
