@@ -388,11 +388,23 @@ fn row_effects_of(fx: &[Effect]) -> Vec<Effect> {
 /// appearance, so the effects never pass round a symbol that holds itself. Without `doc`, no
 /// instance in the art takes them.
 pub(crate) fn add_instance_row_effects(doc: Option<&Document>, n: &Node, art: &mut Node) {
+    add_instance_rows(doc, n, art, true);
+}
+
+/// [`add_instance_row_effects`] for Direct Selection's parts of a symbol instance's art: live
+/// objects (blends, envelopes, repeats) are left as they are, without the effects, so that every
+/// object keeps its place in the art and the child indices that pick a part still lead to it.
+pub fn add_instance_row_effects_to_parts(doc: Option<&Document>, n: &Node, art: &mut Node) {
+    add_instance_rows(doc, n, art, false);
+}
+
+/// [`add_instance_row_effects`], evaluating live objects in the art only with `live`.
+fn add_instance_rows(doc: Option<&Document>, n: &Node, art: &mut Node, live: bool) {
     let NodeKind::SymbolInstance { symbol, .. } = &n.kind else { return };
     let fill = active_fill(n).map_or(vec![], |f| row_effects_of(&f.effects));
     let stroke = active_stroke(n).map_or(vec![], |s| row_effects_of(&s.effects));
     if !fill.is_empty() || !stroke.is_empty() {
-        add_row_effects(doc, symbol, art, &fill, &stroke);
+        add_row_effects(doc, symbol, art, &fill, &stroke, live);
     }
 }
 
@@ -413,8 +425,9 @@ fn places_symbol(doc: &Document, from: &str, to: &str, seen: &mut HashSet<String
 }
 
 /// [`add_instance_row_effects`] of `fill` and `stroke` to `n` and the art in it, the art of an
-/// instance of the symbol named `outer`.
-fn add_row_effects(doc: Option<&Document>, outer: &str, n: &mut Node, fill: &[Effect], stroke: &[Effect]) {
+/// instance of the symbol named `outer`. Without `live`, live objects are left as they are
+/// ([`add_instance_row_effects_to_parts`]).
+fn add_row_effects(doc: Option<&Document>, outer: &str, n: &mut Node, fill: &[Effect], stroke: &[Effect], live: bool) {
     match &n.kind {
         NodeKind::Path { clipping: true, .. } | NodeKind::Path { guide: true, .. } | NodeKind::RulerGuide { .. } => return,
         NodeKind::SymbolInstance { symbol, .. } => {
@@ -425,7 +438,12 @@ fn add_row_effects(doc: Option<&Document>, outer: &str, n: &mut Node, fill: &[Ef
             }
             return;
         }
-        _ if vectorcraft_doc::live::is_live(n) => *n = evaluated(doc, n),
+        _ if vectorcraft_doc::live::is_live(n) => {
+            if !live {
+                return;
+            }
+            *n = evaluated(doc, n);
+        }
         _ => {}
     }
     let takes = |i: &AppearanceItem| {
@@ -445,7 +463,7 @@ fn add_row_effects(doc: Option<&Document>, outer: &str, n: &mut Node, fill: &[Ef
     let clips = n.clips();
     for (i, c) in n.children_mut().into_iter().flatten().enumerate() {
         if !(clips && i == 0) {
-            add_row_effects(doc, outer, Arc::make_mut(c), fill, stroke);
+            add_row_effects(doc, outer, Arc::make_mut(c), fill, stroke, live);
         }
     }
 }
@@ -477,10 +495,9 @@ fn add_to_instance(n: &mut Node, fill: &[Effect], stroke: &[Effect]) {
 }
 
 /// Does effect `e` give an image's fill or stroke a shape to paint (a visible Convert to Shape or
-/// Outline Object)?
+/// Outline Object, [`Effect::gives_image_shape`])?
 fn gives_shape(e: &Effect) -> bool {
-    e.visible
-        && matches!(e.id.as_str(), "convertToShape.rectangle" | "convertToShape.roundedRectangle" | "convertToShape.ellipse" | "path.outlineObject")
+    e.gives_image_shape()
 }
 
 /// Does `item`, a fill or stroke of an image, paint something: does it paint and carry an effect
@@ -1259,6 +1276,7 @@ fn as_art_opts(
             {
                 let mut e = image.extras_mut();
                 e.colorize = n.extras().colorize.clone();
+                e.colorize_overprint = n.extras().colorize_overprint;
                 e.pixelated = n.extras().pixelated;
                 e.color_mask = n.extras().color_mask.clone();
                 e.image_quad = n.extras().image_quad.clone();
