@@ -133,6 +133,7 @@ impl VectorcraftApp {
                 find_font: None,
                 hidden_chars: Default::default(),
                 spelling: Default::default(),
+                text_nodes: Default::default(),
                 momentary: None,
                 selection_box: None,
                 selection_bounds: None,
@@ -144,6 +145,7 @@ impl VectorcraftApp {
                 plugin_keys: Default::default(),
                 placed_keys: Default::default(),
                 view_moved: None,
+                hover_object: None,
                 grab: None,
                 carry_target: None,
                 last_drag: None,
@@ -508,6 +510,18 @@ impl VectorcraftApp {
         crate::keymap::note_os(ctx);
         prefs_dialog::apply_runtime(self, ctx);
         self.run_control(ctx);
+        // Plug-ins loading on other threads since launch install as their loads finish; until then
+        // the host keeps coming back to look again, and once more when the last one installs, for
+        // what waits for them. They install after the control requests are drained, so the frame
+        // after the last one opens the files held for them (the desktop app does that before this
+        // pass) before a control request waiting for them runs.
+        if self.session.plugins_loading() {
+            if self.session.poll_plugin_loads() {
+                ctx.request_repaint_after(std::time::Duration::from_millis(50));
+            } else {
+                ctx.request_repaint();
+            }
+        }
         // In the next frame's first pass, as production's one-pass frames did: a second pass of the frame that asked
         // for it (one a background run's result can bring) doesn't open it early.
         if ctx.current_pass_index() == 0
