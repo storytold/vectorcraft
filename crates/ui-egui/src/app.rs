@@ -1,5 +1,6 @@
 use craft::automation::ControlChannel;
 use craft::host::{AppInfo, Host, Wake};
+use craft::layers::ui::filter::ObjectsSearch;
 use craft::platform::clipboard::{Clipboard, ClipboardProbe, EventClipboard};
 use craft::platform::clock::monotonic_ms;
 use craft::theme::variant::Tone;
@@ -713,6 +714,8 @@ pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> Ro
     root.values.set(QuietTitleRow::Text);
     // Layers rows stand as production's: the thumbnail with a tight gap, 14 points of indent per level.
     root.values.set(ThumbRows::Tight);
+    // The Layers Objects search field fills the filter bar up to its Filter button, as production's did.
+    root.values.set(ObjectsSearch::Fill);
     // The menu bar's titles stand as close as production's, which share the line with the bar's other controls.
     root.values.set(MenuTitlePad::Control);
     // Document tabs show their title and its `*` in the label's semibold face, as production drew them.
