@@ -204,6 +204,35 @@ fn the_circle_is_not_moved_onto_the_pixel_grid() {
     assert!(!node(&s, id).extras().pixel_aligned);
 }
 
+/// `anchors: "points"` puts an anchor exactly at each point, with one more on each half of a
+/// diameter's circle; the circle is a plain path, not pixel-aligned, and one undo step. Any other
+/// `anchors` value is an error and draws nothing.
+#[test]
+fn anchors_at_the_points_puts_an_anchor_at_each_point() {
+    let mut s = session();
+    s.execute("document.setup", &json!({"alignNewObjectsToPixelGrid": true})).unwrap();
+    let undo = undo_len(&s);
+    let points = [Point::new(0.3, 0.2), Point::new(80.6, 0.1), Point::new(0.4, 60.7)];
+    let pairs: Vec<Value> = points.iter().map(|p| json!([p.x, p.y])).collect();
+    let id = id_of(&s.execute(C, &json!({ "points": pairs, "anchors": "points" })).unwrap());
+    let n = node(&s, id);
+    let anchors: Vec<Point> = n.path_data().unwrap().subpaths[0].anchors.iter().map(|a| a.p).collect();
+    assert!(points.iter().all(|p| anchors.contains(p)), "{anchors:?}");
+    assert!(matches!(n.kind, NodeKind::Path { live: None, .. }), "{:?}", n.kind);
+    assert!(!n.extras().pixel_aligned);
+    assert_eq!(undo_len(&s), undo + 1);
+    let id = id_of(&s.execute(C, &json!({ "points": [[0, 0], [100, 0]], "anchors": "points" })).unwrap());
+    let anchors: Vec<Point> = node(&s, id).path_data().unwrap().subpaths[0].anchors.iter().map(|a| a.p).collect();
+    assert_eq!(anchors.len(), 4, "{anchors:?}");
+    assert_eq!((anchors[0], anchors[2]), (Point::new(0.0, 0.0), Point::new(100.0, 0.0)));
+    let (count, undo) = (object_count(&s), undo_len(&s));
+    for bad in [json!("corners"), json!(true), json!(4), Value::Null] {
+        let e = s.execute(C, &json!({ "points": [[0, 0], [100, 0]], "anchors": bad })).unwrap_err().to_string();
+        assert!(e.contains("`anchors` must be one of standard, points"), "{e}");
+    }
+    assert_eq!((object_count(&s), undo_len(&s)), (count, undo));
+}
+
 fn view() -> ViewInfo {
     ViewInfo { smart_guides: false, ..ViewInfo::default() }
 }

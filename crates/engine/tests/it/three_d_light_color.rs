@@ -719,7 +719,9 @@ fn alpha_against_supersampled(d: &Document) -> (usize, usize, u8, usize, Vec<Str
 /// underlay of its faces clipped to the surface's outline: at 1:1, no pixel inside the art lets the
 /// background through where a 3x render averaged down is opaque, none paints past the outline, and
 /// a surface's opacity, its gradient's transparent stops and its blending mode apply once. The same
-/// holds for the art read back from SVG and PDF and for Expand Appearance.
+/// holds for the art read back from SVG and PDF and for Expand Appearance. Inside the body, the alpha
+/// is 153 within 3 levels with a fill opacity of 60%, 214 within 3 levels with 60% gradient stops
+/// (front and back faces at 60% each), and 255 when opaque.
 #[test]
 fn colored_revolve_faces_leave_no_alpha_holes_at_one_to_one() {
     let gradient = |opacity: f64| {
@@ -764,6 +766,21 @@ fn colored_revolve_faces_leave_no_alpha_holes_at_one_to_one() {
         ] {
             let (measured, off, worst, past, first) = alpha_against_supersampled(&d);
             assert!(measured > 10_000, "{name} {of}: {measured} pixels inside");
+            // The 3x comparison passes when an opacity is lost or doubled at both scales, so the
+            // surface's alpha is also checked against the value it should have.
+            // With 60% gradient stops, each face takes the stops' opacity, so where the front and
+            // back of the body overlap the alpha is 1 - 0.4 * 0.4 of 255.
+            let alpha = render(&d).pixel(150, 200)[3];
+            let expected = if name.ends_with("fill at 60%") {
+                150..=156
+            } else if name.ends_with("gradient at 60%") {
+                211..=217
+            } else {
+                255..=255
+            };
+            if !expected.contains(&alpha) {
+                failures.push(format!("{name} {of}: surface alpha {alpha}, expected {expected:?}"));
+            }
             if off > 0 || past > 0 {
                 failures.push(format!("{name} {of}: of {measured} pixels, {off} off (at most {worst}), {past} past the outline: {first:?}"));
             }

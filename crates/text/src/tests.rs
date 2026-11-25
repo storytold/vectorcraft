@@ -875,7 +875,8 @@ fn on_path_align_takes_a_variable_font_instances_em_box() {
 }
 
 /// A variable font's instance takes its Windows character cell from the `usWinAscent` and
-/// `usWinDescent` its `MVAR` table varies: 200 units taller in Bold.
+/// `usWinDescent` its `MVAR` table varies: 200 units taller in Bold, 120 above the baseline and
+/// 80 below it.
 #[test]
 fn win_cell_height_takes_a_variable_font_instances_mvar() {
     use crate::test_fonts::{PATH_ALIGN_VARIABLE_FAMILY, path_align_font};
@@ -885,6 +886,10 @@ fn win_cell_height_takes_a_variable_font_instances_mvar() {
     let cell = |font_style: &str| db.style_face(&st(font_style)).and_then(|f| f.win_cell_height()).unwrap();
     let (regular, bold) = (cell("Regular"), cell("Bold"));
     assert!((bold - regular - 200.0).abs() < 1e-6, "Regular {regular}, Bold {bold}");
+    let split = |font_style: &str| db.style_face(&st(font_style)).and_then(|f| f.win_ascent_descent()).unwrap();
+    let ((ra, rd), (ba, bd)) = (split("Regular"), split("Bold"));
+    assert!((ba - ra - 120.0).abs() < 1e-6 && (bd - rd - 80.0).abs() < 1e-6, "Regular {ra}/{rd}, Bold {ba}/{bd}");
+    assert!((ra + rd - regular).abs() < 1e-6);
 }
 
 /// In vertical type, Align to Path moves the glyphs half an em, with their horizontal scale and not
@@ -1893,7 +1898,7 @@ fn a_list_paragraph_at_a_deeper_level_is_set_further_in_and_counts_on_its_own() 
 /// Are the Japanese craft-fonts faces built in? Tests of Japanese glyphs skip (and say so) when
 /// they aren't: the bundled fonts have none, and [`db`] reads no system fonts.
 fn japanese_fonts() -> bool {
-    let built_in = CRAFT_FONTS.iter().any(|f| f.is_japanese());
+    let built_in = CRAFT_FONTS.iter().any(|f| f.has_script("Jpan"));
     if !built_in {
         eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
     }
@@ -2588,7 +2593,7 @@ fn optical_margin_alignment_hangs_type_on_a_path_at_its_brackets() {
 /// boxes. Skipped when built without craft-fonts or with a checkout that has no Thai font.
 #[test]
 fn thai_without_installed_fonts_takes_the_craft_fonts_thai_font() {
-    if !crate::CRAFT_FONTS.iter().any(|f| f.is_thai()) {
+    if !crate::CRAFT_FONTS.iter().any(|f| f.has_script("Thai")) {
         eprintln!("skipping: no Thai font in craft-fonts (set CRAFT_FONTS_DIR to a checkout that has one)");
         return;
     }

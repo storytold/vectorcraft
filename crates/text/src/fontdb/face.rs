@@ -212,6 +212,16 @@ pub struct FontFace {
     pub(super) named_chars: std::sync::OnceLock<std::collections::HashMap<String, char>>,
 }
 
+impl vectorcraft_doc::FileFontFace for FontFace {
+    fn id(&self) -> u32 {
+        self.id
+    }
+
+    fn bytes(&self) -> &[u8] {
+        self.data()
+    }
+}
+
 /// Where the ideographic character face (ICF) lies inside the ideographic em box: its distance
 /// from each edge of the em box, in ems. `top` and `bottom` along a horizontal line, `right` and
 /// `left` across a vertical one.
@@ -372,6 +382,12 @@ impl FontFace {
     /// `usWinDescent`, at the face's location in a variable font), in font units; `None` when the
     /// font has no OS/2 table or the sum isn't positive.
     pub fn win_cell_height(&self) -> Option<f64> {
+        self.win_ascent_descent().map(|(a, d)| a + d)
+    }
+    /// The face's character cell on Windows above and below the baseline (the OS/2 table's
+    /// `usWinAscent` and `usWinDescent`, at the face's location in a variable font), in font
+    /// units; `None` when the font has no OS/2 table or the sum isn't positive.
+    pub fn win_ascent_descent(&self) -> Option<(f64, f64)> {
         use skrifa::raw::TableProvider;
         let f = self.skrifa()?;
         let o = f.os2().ok()?;
@@ -380,8 +396,8 @@ impl FontFace {
         let varied = |tag: &[u8; 4]| {
             f.mvar().ok().and_then(|m| m.metric_delta(skrifa::Tag::new(tag), self.location().coords()).ok()).map_or(0.0, |d| d.to_f64())
         };
-        let h = f64::from(o.us_win_ascent()) + varied(b"hcla") + f64::from(o.us_win_descent()) + varied(b"hcld");
-        (h > 0.0 && h.is_finite()).then_some(h)
+        let (a, d) = (f64::from(o.us_win_ascent()) + varied(b"hcla"), f64::from(o.us_win_descent()) + varied(b"hcld"));
+        (a + d > 0.0 && (a + d).is_finite()).then_some((a, d))
     }
     /// The average width of the face's characters (the OS/2 table's `xAvgCharWidth`), in font
     /// units; `None` when the font has no OS/2 table or gives no positive width.

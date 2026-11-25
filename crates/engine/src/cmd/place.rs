@@ -630,19 +630,7 @@ fn at_param(p: &Value) -> Result<Option<Point>> {
 /// `image_xf`), also for an image alone in a clip group when the new art is an image, clipped by
 /// its file's clipping path or not (`new_image`); other objects keep their centre.
 fn replace_xf(d: &Document, old: &Node, natural: Rect, image_xf: bool, new_image: bool) -> Affine {
-    // An image alone in a clip group (as a PSD or PSB file's clipping path places it,
-    // [`fileio::file_clipped`]) is measured as the image when the new art is an image; a DCS
-    // file's plates are not.
-    let image = match &old.kind {
-        NodeKind::Group { children, clip: true } if new_image => match &children[..] {
-            [path, image] if matches!(path.kind, NodeKind::Path { clipping: true, .. }) => match &image.kind {
-                NodeKind::Image(im) if d.images.get(&im.key).is_none_or(|b| b.separated().is_none()) => image,
-                _ => old,
-            },
-            _ => old,
-        },
-        _ => old,
-    };
+    let image = replace_measured(d, old, new_image);
     if image_xf && let NodeKind::Image(im) = &image.kind {
         let (sx, sy) = pt_per_px(d.images.get(&im.key).and_then(|b| fileio::ppi::resolution(&b.bytes)));
         let full = Affine::scale_non_uniform(sx, sy);
@@ -653,6 +641,22 @@ fn replace_xf(d: &Document, old: &Node, natural: Rect, image_xf: bool, new_image
     }
     let c = old.geometric_bounds_with(&d.symbol_boxes()).map_or(natural.center(), |b| b.center());
     Affine::translate(c - natural.center())
+}
+
+/// The object [`replace_xf`] measures when Replace swaps `old`: an image alone in a clip group (as
+/// a PSD or PSB file's clipping path places it, [`fileio::file_clipped`]) when the new art is an
+/// image (`new_image`), except a DCS file's plates; else `old` itself.
+fn replace_measured<'a>(d: &Document, old: &'a Node, new_image: bool) -> &'a Node {
+    match &old.kind {
+        NodeKind::Group { children, clip: true } if new_image => match &children[..] {
+            [path, image] if matches!(path.kind, NodeKind::Path { clipping: true, .. }) => match &image.kind {
+                NodeKind::Image(im) if d.images.get(&im.key).is_none_or(|b| b.separated().is_none()) => image,
+                _ => old,
+            },
+            _ => old,
+        },
+        _ => old,
+    }
 }
 
 /// `rect` fitted with `natural`'s aspect, centred.
@@ -782,7 +786,7 @@ fn prepare(s: &Session, p: &Value) -> Result<PlaceJob> {
         (true, _) => return Err(bad(PLACE, "replace: select the one object to replace")),
     };
     let replaced = old.and_then(|id| st.doc.node(id)).cloned();
-    Ok(PlaceJob { doc: st.uid, params: p.clone(), old, replaced, target: board_at(&st.doc, at) })
+    Ok(PlaceJob { doc: st.uid, params: s.prefs.with_pdf_font_choice(p), old, replaced, target: board_at(&st.doc, at) })
 }
 
 /// Place the file `read` holds in the active document.
@@ -814,6 +818,17 @@ fn apply(s: &mut Session, read: PlaceRead) -> Result<Value> {
         loaded.natural = Rect::from_origin_size(Point::ORIGIN, size);
     }
     let natural = loaded.natural;
+    // Replace keeps the transform of the image it measures (`replace_measured`), which a
+    // distortion's corners do not follow. Type, and any other object it measures, is placed by the
+    // bounds of what it replaces, so a distorted image there is not refused.
+    if let Some(o) = old_node
+        && !is_text
+    {
+        let image = replace_measured(&st.doc, o, matches!(loaded.art, Art::Image(..)));
+        if image.is_distorted_image() {
+            return Err(super::xform::distorted_image_error(PLACE, image.id));
+        }
+    }
     let m = match (old_node, rect) {
         (Some(o), _) => replace_xf(&st.doc, o, natural, !is_text, matches!(loaded.art, Art::Image(..))),
         (None, Some(r)) => fit(natural, r),
@@ -1173,6 +1188,8 @@ pub(crate) fn image_info(s: &mut Session, p: &Value) -> Result<Value> {
     let doc = super::links::with_brush_art(&st.doc);
     let n = doc.stored_node(id).map(|(n, _)| &**n).ok_or(EngineError::NoNode(id))?;
     let NodeKind::Image(im) = &n.kind else { return Err(bad(C, format!("object {} is not an image", id.0))) };
+    // Effective resolution at the middle of a distorted image.
+    let xf = vectorcraft_doc::image_quad::nearest_affine(n).unwrap_or(im.xf);
     let size = n.geometric_bounds().unwrap_or_default();
     // A linked file outside the read roots of the caller asking now is left unnamed, as in Link Info.
     let doc_path = super::links::LinkBase::of(st).doc;
@@ -1184,7 +1201,7 @@ pub(crate) fn image_info(s: &mut Session, p: &Value) -> Result<Value> {
         "colorMode": st.doc.images.get(&im.key).map_or("RGB", |b| color_mode(&b.bytes)),
         "pixelWidth": im.width,
         "pixelHeight": im.height,
-        "ppi": effective_ppi(im.xf),
+        "ppi": effective_ppi(xf),
         "width": size.width(),
         "height": size.height(),
     }))

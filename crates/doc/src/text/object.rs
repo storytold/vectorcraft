@@ -1,5 +1,6 @@
 use super::area::{AreaOptions, PathAlign, PathEffect};
 use super::char_style::CharStyle;
+use super::file_fonts::{FileFont, MAX_FILE_FONTS, text_hash};
 use super::para_style::{JustificationOptions, ParaStyle};
 use super::runs::{RubySpan, TextKind, TextRun, TypeAntiAlias, move_anchors, reverse_from_end};
 use super::tabs_lists::{ListCounts, ParaList};
@@ -126,6 +127,7 @@ impl TextObject {
             system_layout: false,
             fractional_widths: true,
             list_count: 0,
+            file_fonts: None,
             list_level_counts: Vec::new(),
             cached_bounds: None,
             cached_baselines: Vec::new(),
@@ -144,6 +146,17 @@ impl TextObject {
     pub fn plain_text(&self) -> String {
         self.runs.iter().map(|r| r.text.as_str()).collect()
     }
+    /// The fonts the file this type came from carried ([`FileFonts`]) while its text is still the
+    /// file's (at most [`MAX_FILE_FONTS`]); none once it was edited, and for other type.
+    pub fn file_fonts_in_use(&self) -> &[FileFont] {
+        match self.file_fonts.as_deref() {
+            Some(f) if f.text == text_hash(self.runs.iter().map(|r| r.text.as_str())) => {
+                f.fonts.get(..f.fonts.len().min(MAX_FILE_FONTS)).unwrap_or_default()
+            }
+            _ => &[],
+        }
+    }
+
     /// Does layout stack some of this type's characters as warichu ([`CharStyle::warichu`])? Not
     /// on a path, which sets them as they are. Exports that write live text write such type as
     /// outlines, as they do ruby: their text can't place the stacked lines.
@@ -451,12 +464,25 @@ impl TextObject {
     /// fractions of the path. False, changing nothing, for other type, when the anchor doesn't
     /// exist, a degenerate `xf` or a path that would not be finite.
     pub fn set_path_handle(&mut self, (si, ai): (usize, usize), out: bool, pos: Point, independent: bool) -> bool {
+        self.set_path_handle_with_symmetry((si, ai), out, pos, independent, false)
+    }
+    /// [`Self::set_path_handle`] with an optional mirror of the opposite handle about the anchor
+    /// in document space, preserving the anchor kind. `independent` takes precedence, and at an
+    /// open end of the path, where no segment leaves the anchor on that side, the handle moves as
+    /// it would without `symmetric`. Both handles are edited in one reshape, using the same validated
+    /// document-to-text map.
+    pub fn set_path_handle_with_symmetry(&mut self, (si, ai): (usize, usize), out: bool, pos: Point, independent: bool, symmetric: bool) -> bool {
         let xf = self.xf;
         matches!(self.kind, TextKind::OnPath { .. })
             && self.reshape_local(|path, to_text| {
+                let mirror = symmetric && !independent && path.subpaths.get(si).is_some_and(|sp| sp.has_segment(ai, !out));
                 let Some(a) = path.anchor_mut(si, ai) else { return false };
                 let mut drawn = a.transform(xf);
                 drawn.set_handle(out, pos, independent);
+                if mirror {
+                    let opposite = drawn.p - (pos - drawn.p);
+                    if out { drawn.h_in = opposite } else { drawn.h_out = opposite }
+                }
                 *a = drawn.transform(to_text);
                 true
             })

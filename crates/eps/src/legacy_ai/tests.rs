@@ -703,6 +703,25 @@ fn picture(doc: &mut Document, r: Rect) -> Node {
     )
 }
 
+/// A distorted image as deep as the writer goes, the art of the innermost of 8 nested symbols, is
+/// written as one image at the placement nearest its corners, with a warning, not left out.
+#[test]
+fn a_distorted_image_nested_as_deep_as_the_limit_is_written_as_its_nearest_placement() {
+    let mut doc = Document::new(200.0, 100.0);
+    let mut art = picture(&mut doc, Rect::new(10.0, 10.0, 90.0, 90.0));
+    art.set_image_corners([(40.0, 10.0), (60.0, 10.0), (90.0, 90.0), (10.0, 90.0)].map(|(x, y)| vectorcraft_geom::Point::new(x, y))).unwrap();
+    for i in 0..8 {
+        let name = format!("S{i}");
+        doc.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.clone(), art: Arc::new(art) });
+        art = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: name, xf: Affine::IDENTITY });
+    }
+    doc.insert(doc.default_layer(), usize::MAX, art).unwrap();
+    let out = write(&doc);
+    assert!(out.warnings.iter().any(|w| w == DEEP_DISTORTED), "{:?}", out.warnings);
+    let text = String::from_utf8(out.bytes).unwrap();
+    assert_eq!(text.lines().filter(|l| l.ends_with(" XI")).count(), 1, "the one image");
+}
+
 /// A layer `Below` holding a clipping group (a circle clipping an image, as in #2692), a group
 /// holding an image and an image; a layer `Above` holding an orange square. Without `images`,
 /// `Below` is empty.
@@ -1020,7 +1039,8 @@ fn colorized_images_keep_their_color() {
     // Each row is a byte: the black pixels are 0 bits.
     assert_eq!(data, &["%6996"], "{text}");
     let at = text.find("%AI5_File:\n").unwrap();
-    assert!(text[..at].ends_with("0 0.5 1 0 k\n"), "{text}");
+    // Its color, and its fill overprint off.
+    assert!(text[..at].ends_with("0 0.5 1 0 k\n0 O\n"), "{text}");
     assert!(out.warnings.is_empty(), "{:?}", out.warnings);
     let read = crate::import(&out.bytes).unwrap().document;
     let mut found = vec![];
@@ -1045,6 +1065,45 @@ fn colorized_images_keep_their_color() {
     assert!(xi.ends_with(" ] 0 0 2 1 2 1 8 3 0 0 0 0 XI"), "{xi}");
     assert_eq!(data, &["%FF0000FF8080"], "{text}");
     assert_eq!(out.warnings, [IMAGE_ALPHA]);
+}
+
+/// A colorized image mask takes the fill overprint in force: its own `O`, or without one the
+/// last `O` before it, as it takes the fill color.
+#[test]
+fn a_colorized_image_mask_takes_the_fill_overprint_in_force() {
+    let opened = |square_overprints: bool, image_overprints: bool, drop_own: bool| {
+        let mut doc = Document::new(200.0, 100.0);
+        doc.layers.clear();
+        let layer = doc.add_layer(Some("Art"));
+        let mut square = shape(&mut doc, shapes::rectangle(Rect::new(5.0, 5.0, 45.0, 30.0)), red(), Paint::None);
+        if let Some(f) = square.appearance.fill_mut() {
+            f.overprint = square_overprints;
+        }
+        doc.insert(Some(layer), usize::MAX, square).unwrap();
+        let paint = Paint::solid(Color::cmyk(0.0, 0.5, 1.0, 0.0));
+        let mask: Vec<u8> = "1001011001101001".bytes().map(|b| if b == b'1' { 0 } else { 255 }).collect();
+        let mut bitmap = colorized_image(&mut doc, (8, 2), mask, &paint, (10.0, 10.0));
+        bitmap.extras_mut().colorize_overprint = image_overprints;
+        doc.insert(Some(layer), usize::MAX, bitmap).unwrap();
+        let mut text = String::from_utf8(write(&doc).bytes).unwrap();
+        if drop_own {
+            let own = format!("0 0.5 1 0 k\n{} O\n", u8::from(image_overprints));
+            assert!(text.contains(&own), "{text}");
+            text = text.replace(&own, "0 0.5 1 0 k\n");
+        }
+        let read = crate::import(text.as_bytes()).unwrap().document;
+        let mut found = vec![];
+        read.walk(|n| {
+            if matches!(n.kind, NodeKind::Image(_)) {
+                found.push(n.colorize_overprints());
+            }
+        });
+        found
+    };
+    assert_eq!(opened(false, true, false), [true]);
+    assert_eq!(opened(true, false, false), [false]);
+    assert_eq!(opened(true, false, true), [true], "the square's overprint stays in force");
+    assert_eq!(opened(false, true, true), [false], "and so does the square's knockout");
 }
 
 /// The pieces of a colorized warped image work out the image's coverage once, and an image with
@@ -1675,6 +1734,119 @@ fn colliding_gradient_and_spot_names_are_numbered_as_before() {
         assert_eq!(text.matches(&format!("1 {name} ")).count(), if name == "(Gradient 3)" { 1 } else { 2 }, "{name}");
     }
     assert!(text.contains("%%DocumentCustomColors: (?)\n%%+ (? 2)\n%%+ (? 3)\n%%+ (? 2 2)\n"), "{text}");
+}
+
+/// `doc` written with its gradient definitions found by comparing each in turn (`scanned`) or
+/// through their index.
+fn export_scanned(doc: &Document, scanned: bool) -> LegacyAiOutput {
+    let o = LegacyAiOptions { created: Some(0), ..LegacyAiOptions::default() };
+    super::writer::SCANNED_DEFINITIONS.with(|s| s.set(scanned));
+    let out = export_legacy_ai(doc, &o);
+    super::writer::SCANNED_DEFINITIONS.with(|s| s.set(false));
+    out.unwrap()
+}
+
+/// A document of rectangles filled with gradients: one with a gradient swatch `Sky` of its own;
+/// `distinct` with gradients of their own; `reused` with one of `ramps` others in turn; one with a
+/// gradient swatch `Dawn` whose gradient is the first of those `ramps`; two whose gradients differ
+/// only in the sign of a zero offset; and two with the same gradient, whose midpoint is not a
+/// number.
+fn many_gradients(distinct: u16, reused: u16, ramps: u16) -> Document {
+    let mut doc = Document::new(1000.0, 1000.0);
+    let layer = doc.layers[0].id;
+    let shade = |i: u16, n: u16| f32::from(i) / f32::from(n.max(1));
+    let mut paints = vec![gradient_from(Color::rgb(0.1, 0.2, 0.3), Some("Sky"))];
+    for i in 0..distinct {
+        paints.push(gradient_from(Color::rgb(shade(i, distinct), 0.5, 0.0), None));
+    }
+    for i in 0..reused {
+        paints.push(gradient_from(Color::cmyk(0.0, shade(i % ramps.max(1), ramps), 0.5, 0.0), None));
+    }
+    paints.push(gradient_from(Color::cmyk(0.0, 0.0, 0.5, 0.0), Some("Dawn")));
+    let stops = |offset: f32, midpoint: f32| {
+        let mut first = GradientStop::new(offset, Color::rgb(0.2, 0.3, 0.4));
+        first.midpoint = midpoint;
+        let g = Gradient::new(GradientKind::Linear, vec![first, GradientStop::new(1.0, Color::BLACK)]);
+        Paint::Gradient(Box::new(GradientPaint::new(g)))
+    };
+    paints.extend([stops(0.0, 0.5), stops(-0.0, 0.5), stops(0.0, f32::NAN), stops(0.0, f32::NAN)]);
+    for (i, paint) in (0u16..).zip(paints) {
+        let (x, y) = (f64::from(i % 40) * 25.0, f64::from(i / 40 % 40) * 25.0);
+        let n = shape(&mut doc, shapes::rectangle(Rect::new(x, y, x + 20.0, y + 20.0)), paint, Paint::None);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    doc
+}
+
+/// Gradient definitions found through their index are those found by comparing each in turn: the
+/// file is the same, byte for byte, with the same warnings. An earlier definition of the same
+/// gradient serves a gradient swatch of another name; gradients that differ only in the sign of a
+/// zero share a definition; a gradient that is not equal to itself is defined each time.
+#[test]
+fn indexed_gradient_definitions_write_the_same_file() {
+    let doc = many_gradients(300, 300, 7);
+    let (indexed, scanned) = (export_scanned(&doc, false), export_scanned(&doc, true));
+    let differ = indexed.bytes.iter().zip(&scanned.bytes).position(|(a, b)| a != b);
+    assert!(indexed.bytes == scanned.bytes, "the files differ from byte {differ:?} ({} and {} bytes)", indexed.bytes.len(), scanned.bytes.len());
+    assert_eq!(indexed.warnings, scanned.warnings);
+    assert_eq!(indexed.setting_notes, scanned.setting_notes);
+    let text = String::from_utf8(indexed.bytes).unwrap();
+    let defined: Vec<&str> = text.lines().filter_map(|l| l.strip_suffix(" 0 2 Bd")).collect();
+    // `Sky`, 300 of their own, 7 reused, 1 for both signs of zero and 2 for the gradient that
+    // is not a number.
+    assert_eq!(defined.len(), 1 + 300 + 7 + 1 + 2, "{defined:?}");
+    assert_eq!(defined.first(), Some(&"(Sky)"));
+    assert!(!defined.contains(&"(Dawn)"), "{defined:?}");
+}
+
+/// A gradient is matched with the definitions of the same gradient, not with each definition:
+/// 1,000 gradients of their own and 1,000 of 10 others take a comparison or so each, where
+/// comparing each definition in turn takes hundreds of thousands.
+#[test]
+fn legacy_gradient_definitions_are_found_without_comparing_each() {
+    let doc = many_gradients(1000, 1000, 10);
+    let comparisons = |scanned: bool| {
+        super::writer::GRADIENT_COMPARISONS.with(|c| c.set(0));
+        export_scanned(&doc, scanned);
+        super::writer::GRADIENT_COMPARISONS.with(std::cell::Cell::get)
+    };
+    let (indexed, scanned) = (comparisons(false), comparisons(true));
+    assert!(indexed <= 2 * 2006, "{indexed} comparisons through the index");
+    assert!(scanned > 100 * indexed, "{scanned} comparisons scanning, {indexed} through the index");
+}
+
+/// The time to write 5,000 rectangles with gradients of their own and 5,000 with 50 others, with
+/// the definitions found by comparing each in turn and through their index: the median of 7 runs
+/// of each, alternating, with the files compared. Run with
+/// `cargo test --release -p vectorcraft-eps --lib -- --ignored --nocapture legacy_gradient_definitions_timing`.
+#[test]
+#[ignore = "timing"]
+fn legacy_gradient_definitions_timing() {
+    let doc = many_gradients(5000, 5000, 50);
+    let mut times = [vec![], vec![]];
+    let mut files: [Option<Vec<u8>>; 2] = [None, None];
+    let mut how = "";
+    for _ in 0..7 {
+        for (k, scanned) in [true, false].into_iter().enumerate() {
+            let (start, h) = thread_time();
+            let out = export_scanned(&doc, scanned);
+            times[k].push(thread_time().0.saturating_sub(start));
+            how = h;
+            files[k].get_or_insert(out.bytes);
+        }
+    }
+    assert_eq!(files[0], files[1]);
+    for t in &mut times {
+        t.sort();
+    }
+    let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.0;
+    println!("10,006 gradient fills, median of 7 runs ({how}):");
+    println!("| definitions found | median (ms) | runs (ms) |");
+    println!("|---|---:|---|");
+    for (k, label) in ["comparing each in turn", "through the index"].into_iter().enumerate() {
+        let runs: Vec<String> = times[k].iter().map(|d| format!("{:.1}", ms(*d))).collect();
+        println!("| {label} | {:.1} | {} |", ms(times[k][3]), runs.join(", "));
+    }
 }
 
 /// The time this thread has run, and how it was measured.

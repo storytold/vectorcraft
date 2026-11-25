@@ -134,6 +134,7 @@
 	Add to Selection	Додати до виділення
 	Add to Swatches	Додати до зразків
 	Add Used Colors	Додати використані кольори
+	Add Selected Colors	Додати вибрані кольори
 	Additional Plug-ins Folder	Папка додаткових модулів
 	Plug-in Instruction Budget	Бюджет інструкцій модулів
 	Additional Fonts Folder	Папка додаткових шрифтів
@@ -201,6 +202,7 @@
 	Anti-alias Rasters	Згладжувати растрові зображення
 	Anti-aliased Artwork	Згладжений малюнок
 	Anti-aliasing Method	Метод згладжування
+@id	language.name	Українська
 antiAlias	Sharp	Різке
 	Crisp	Чітке
 	Strong	Сильне
@@ -233,6 +235,10 @@ font-technology	Variable	Варіативні
 	Arc	Дуга
 	Arc Lower…	Дуга знизу…
 	Arc Tool	Інструмент «Дуга»
+	Three-Point Arc Tool	Інструмент «Дуга за трьома точками»
+	Three-Point Arc	Дуга за трьома точками
+	Arc too large	Дуга завелика
+	Third Point Sets Direction	Третя точка задає напрямок
 	Arc Upper…	Дуга зверху…
 	Arch…	Арка…
 	Arc…	Дуга…
@@ -498,6 +504,11 @@ font-technology	Variable	Варіативні
 	Cusp	Точка звороту
 	Straight segment	Прямий сегмент
 	Circle too large	Коло завелике
+	Show Radii	Показати радіуси
+	Show Diameter	Показати діаметр
+	Anchors at Standard Positions	Опорні точки в стандартних позиціях
+	Third Point by Dragging	Третя точка перетягуванням
+	Gray	Сірий
 	Classic Defaults	Класичні значення за промовчанням
 	Clean Up…	Очистити…
 	Clear	Очистити
@@ -601,9 +612,14 @@ font-technology	Variable	Варіативні
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Вигляд «Коло»
 	Box View	Вигляд «Квадрат»
+	Show Out-of-Gamut Colors	Показати кольори поза колірним охопленням
 	Box Channel	Канал квадрата
 	Color box	Колірний квадрат
 	Color Wheel Options	Параметри колірного кола
+	Show Document Colors	Показати кольори документа
+	Document Colors	Кольори документа
+	Selection Colors	Кольори виділення
+@plural	Used {n} time|Used {n} times	Використано {n} раз|Використано {n} рази|Використано {n} разів
 	Show Harmony	Показати гармонію
 	Harmony Rule	Правило гармонії
 	Harmony color	Колір гармонії
@@ -647,6 +663,8 @@ font-technology	Variable	Варіативні
 	Contextual Task Bar	Контекстна панель завдань
 	Pin Bar Position	Закріпити положення панелі
 	Reset Bar Position	Скинути положення панелі
+	Bar Actions	Дії панелі
+	Reset Bar Actions	Скинути дії панелі
 	Resize	Змінити розмір
 	Contrast	Контраст
 	Control	Панель керування
@@ -906,6 +924,7 @@ font-technology	Variable	Варіативні
 	Direct Selection Tool	Інструмент «Пряме виділення»
 	Direction Handles	Маркери напряму
 	Disable Auto Add/Delete	Вимкнути авто-додавання/видалення
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete вилучає опорні точки й залишає контури з’єднаними
 	Interpolate Control Points When Moving Anchors	Інтерполювати маркери напряму під час переміщення опорних точок
 	Disable Opacity Mask	Вимкнути маску непрозорості
 	Discard	Відкинути
@@ -1933,6 +1952,10 @@ file-filter	Templates	Шаблони
 	Rename Preset	Перейменувати набір
 	Save Image Trace Preset	Зберегти набір трасування зображення
 	Delete Image Trace Preset	Видалити набір трасування зображення
+	Tracing Presets…	Набори трасування…
+	Import Image Trace Presets	Імпортувати набори трасування зображення
+	Export Image Trace Presets	Експортувати набори трасування зображення
+	Replace the saved presets that have these names?	Замінити збережені набори з цими назвами?
 	Image Trace Presets	Набір трасування зображення
 	Image:	Зображення:
 	Images:	Зображення:
@@ -2067,6 +2090,11 @@ file-filter	Templates	Шаблони
 	Knife	Ніж
 	Knockout Group	Група з вирізуванням
 	Lab	Lab
+	OKLCH Sliders	Повзунки OKLCH
+	HSL Sliders	Повзунки HSL
+	Chroma	Хрома
+	The largest chroma sRGB holds at this lightness and hue	Найбільша хрома, яку вміщує sRGB за цієї світлоти й відтінку
+	OKLCH needs sRGB as the working RGB space	Для OKLCH робочим простором RGB має бути sRGB
 	Lab Spot Colors:	Плашкові кольори Lab:
 	Lab Values	Значення Lab
 	Landscape	Альбомна
@@ -2177,6 +2205,8 @@ file-filter	Templates	Шаблони
 	List Workspaces	Перелічити робочі середовища
 	Live Paint	Швидка заливка
 	Live Paint Bucket	Швидка заливка (відро)
+	Fill Area	Заливка області
+	Fill Area Tool	Інструмент «Заливка області»
 	Live Paint Bucket (Stroke)	Швидка заливка (обведення)
 	Live Paint Info	Відомості про швидку заливку
 	Live Paint Selection Tool	Інструмент «Виділення швидкої заливки»
@@ -2484,6 +2514,12 @@ file-filter	Templates	Шаблони
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	роздільна здатність недоступна
+	estimated memory {memory}	орієнтовна пам’ять {memory}
+	memory unavailable	пам’ять недоступна
+	Unknown format	Невідомий формат
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -2632,6 +2668,7 @@ file-filter	Templates	Шаблони
 	One Point Perspective Preset 5	Набір одноточкової перспективи 5
 	Only Web Colors	Тільки web-кольору
 	Opacity	Непрозорість
+	Show Opacity	Показати непрозорість
 	Opacity & Mask Define Knockout Shape	Непрозорість та маска визначають форму вирізування
 	Opacity Mask	Маска непрозорості
 	Opacity Mask Info	Відомості про маску непрозорості
@@ -2827,6 +2864,13 @@ file-filter	Templates	Шаблони
 	Pen Tool	Інструмент «Перо»
 	Quick Pen Tool	Інструмент «Швидке перо»
 	Quick Pen	Швидке перо
+	Quick Pen Toolbar	Панель швидкого пера
+	Continuous Arc	Неперервна дуга
+	Sharp Corner Arc	Дуга з гострим кутом
+	Flip Arc	Відобразити дугу
+	Hide Toolbar	Сховати панель інструментів
+	Pin Toolbar Position	Закріпити положення панелі інструментів
+	Reset Toolbar Position	Скинути положення панелі інструментів
 	Pencil	Олівець
 	Pencil Tool	Інструмент «Олівець»
 	per slice	на фрагмент
@@ -2907,6 +2951,11 @@ diagnostics	ui	інтерфейс
 	Preserve Alpha Transparency	Зберігати альфа-прозорість
 	Preserve Appearance and Overprints	Зберігати оформлення та накладення
 	Preserve CMYK Numbers	Зберігати значення CMYK
+	Preserve RGB Numbers	Зберігати значення RGB
+	Device to Simulate:	Імітований пристрій:
+	Simulate Paper Color	Імітувати колір паперу
+	Simulate Black Ink	Імітувати чорну фарбу
+	Load…	Завантажити…
 	Preserve Editing Capabilities	Зберігати можливості редагування
 	Preserve editing capabilities	Зберігати можливості редагування
 	Preserve Lightness	Зберігати світлоту
@@ -3074,6 +3123,9 @@ digits	Malayalam	Малаялам
 	Scale Artwork with Artboard	Масштабувати ілюстрацію разом із монтажною областю
 	Artboards: {n}	Монтажні області: {n}
 	Rearrange All Artboards…	Переставити всі монтажні області…
+	Rearrange…	Переставити…
+	Selected Artboards: {n}	Вибрані монтажні області: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Клацніть полотно, щоб розмістити монтажні області (Esc скасовує)
 	Recall Selection	Відновити виділення
 	RECENT	ОСТАННІ
 	Recent	Останні
@@ -3269,6 +3321,11 @@ digits	Malayalam	Малаялам
 	Edit Arrowheads	Редагувати стрілки
 	Edit Arrowheads…	Редагувати стрілки…
 	Reload Arrowheads	Перезавантажити стрілки
+	Bevels	Фаски
+	Edit Bevels	Редагувати фаски
+	Edit Bevels…	Редагувати фаски…
+	{name} (document)	{name} (документ)
+	Reload Bevels	Перезавантажити фаски
 	Rotate View	Повернути вид
 	Reset Rotate View	Скинути поворот виду
 	Rotate View to Selection	Повернути вид за виділенням
@@ -3322,6 +3379,7 @@ digits	Malayalam	Малаялам
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест обертання двома пальцями на трекпаді обертає вигляд полотна.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Утримання клавіші запускає інструмент або команду з її стовпця «Утримувати» в «Поєднаннях клавіш»; коротке натискання запускає її звичайне поєднання.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Скільки секунд потрібно утримувати клавішу, перш ніж замість її звичайного поєднання спрацює поєднання утримання.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete вилучає вибрані опорні точки й заново припасовує криву навколо кожної з них, замість розмикати контур у цьому місці.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Коли ви переміщуєте опорні точки, кожна крива з одним переміщеним кінцем зберігає форму відносно своїх кінців.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Поки ви утримуєте клавішу інструмента, його вибрано, а після відпускання знову вибирається попередній інструмент.
 	Shows the bounding box while you move the selection or draw a shape.	Показує обмежувальну рамку, поки ви переміщуєте виділення або малюєте фігуру.
@@ -3407,9 +3465,15 @@ digits	Malayalam	Малаялам
 	Edit type set in fonts that aren't available?	Редагувати текст, набраний недоступними шрифтами?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Показує на полотні номер кожного фрагмента в рамці в його лівому верхньому куті; коли параметр вимкнено, контури фрагментів і далі видно.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Колір контурів користувацьких і об’єктних фрагментів та рамок з їхніми номерами; автоматичні фрагменти використовують блідіший відтінок цього кольору.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Новий текст отримує цю мову, доки в «Параметрах документа» вибрано мову Англійська: США, а [Звичайний стиль символу] не задає мову; текст, який уже є в документі, зберігає свою мову.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	В абзацах з увімкненим параметром «Розставляти переноси» слово зі списку отримує знак переносу лише за введеними в ньому дефісами або ніколи, якщо їх немає, незалежно від мови й регістру.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	У настільній версії модулі .wasm з цієї папки завантажуються під час запуску і коли ОК задає нову папку, крім безпечного режиму; модуль, що запитує дозволи, завантажується лише після того, як ви їх надасте. Веб-версія не завантажує жодного.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	«Великий» дає кожному запуску модуля фільтра або команди щонайменше 250 мільйонів інструкцій з тим самим обмеженням часу; «Звичайний» зберігає власний бюджет модуля. Живі ефекти, експортери та імпортери зберігають свій.
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Новий текст отримує цю мову, доки в «Параметрах документа» вибрано мову Англійська: США; текст, який уже є в документі, зберігає свою мову.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	В абзацах з увімкненим параметром «Розставляти переноси» слово зі списку переноситься лише за введеними в ньому дефісами або ніде, якщо їх немає, незалежно від мови й регістру.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	У настільній версії модулі .wasm з цієї папки завантажуються під час запуску і коли ви натискаєте ОК з новою папкою тут, крім безпечного режиму; веб-версія їх не завантажує.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	«Звичайний» зберігає власні обмеження кожного модуля; з «Великий» фільтр або команда модуля може виконати щонайменше 250 мільйонів інструкцій понад ті, що потрібні для її вхідних даних. Обмеження часу не змінюється.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Скільки інструкцій може використати кожен запуск фільтра об’єктів із модуля; «Великий» дозволяє більше, ніж «Звичайний», з тим самим обмеженням у 60 секунд. Важкі фільтри зберігають власний бюджет.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Перший вибір робочого диска: Startup, None або шлях до папки; VectorCraft зберігає його, але поки не використовує робочі диски.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Другий вибір робочого диска: Startup, None або шлях до папки; VectorCraft зберігає його, але поки не використовує робочі диски.
 	How light or dark the interface is.	Наскільки світлим чи темним є інтерфейс.
@@ -3420,14 +3484,17 @@ digits	Malayalam	Малаялам
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Показує назву кожної групи інструментів над її інструментами на панелі інструментів; якщо вимкнено, групи йдуть одна за одною без проміжків.
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Відтепер документи, які ви відкриваєте або створюєте, відкриваються у вкладках; якщо вимкнено, кожен відкривається в плаваючому вікні. Уже відкриті документи лишаються на місці.
 	Makes the document tabs taller and their names larger.	Робить вкладки документів вищими, а їхні назви більшими.
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	З наступного запуску система малює рядок заголовка вікна там, де інакше VectorCraft малював би свій.
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	З наступного запуску VectorCraft малює рядок заголовка вікна навіть там, де його намалювало б робоче середовище, якщо не ввімкнено «Системний рядок заголовка».
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	З наступного запуску система малює рядок заголовка вікна там, де інакше VectorCraft малював би свій; у Linux і BSD пріоритет має змінна VECTORCRAFT_TITLEBAR.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	З наступного запуску VectorCraft малює рядок заголовка вікна навіть там, де його намалювало б робоче середовище, якщо не ввімкнено «Системний рядок заголовка» і його не вибирає змінна VECTORCRAFT_TITLEBAR.
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Збільшує або зменшує інтерфейс; графіка на полотні зберігає розмір за того самого масштабу.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Вказівники інструментів, які малює VectorCraft, ростуть і зменшуються разом із «Масштабом інтерфейсу»; якщо вимкнено, зберігають свій розмір.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Мова інтерфейсу; «Авто» використовує мову системи. Діалог перемикає мову, щойно ви її виберете.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Анімоване масштабування працює, лише поки це увімкнено; якщо вимкнено, Анімоване масштабування затінене і масштабування не анімується.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Масштабування коліщатком іде плавно, а Інструмент «Масштаб» масштабує, поки ви тягнете вбік або утримуєте його; якщо вимкнено, він масштабує до області, яку ви протягнули.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	З наступного запуску настільна версія показує полотно через цей тип графічного процесора; саму графіку завжди малює центральний процесор. «Автоматично» у Windows і macOS надає перевагу вбудованому. Веб-версія його не використовує.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	З наступного запуску вікно показує кожен кадр, не чекаючи оновлення дисплея, якщо графічний драйвер це дозволяє, не більше 240 кадрів на секунду.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	З наступного запуску настільна версія малює цим типом графічного процесора; «Автоматично» надає перевагу тому, що керує дисплеєм. Веб-версія його не використовує.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	З наступного запуску вікно показує кадри, не чекаючи оновлення дисплея, не більше 240 на секунду; якщо вимкнено, темп задає дисплей. Режим виведення, заданий під час запуску, має пріоритет.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Найбільша кількість кроків скасування, яку зберігає кожен документ; менше число видаляє найстаріші кроки, коли ви натискаєте ОК. Кроки можуть зникнути й раніше, якщо займають надто багато пам’яті.
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Показує, як змінюється графіка, поки ви тягнете; якщо вимкнено, за перетягуванням стежать контури, а графіка змінюється, коли ви відпускаєте. Напрямна з лінійки завжди рухається під час перетягування.
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Скільки робочих потоків малюють графіку; -1 використовує на один менше, ніж ядер, доступних VectorCraft, не більше 8, а 0 жодного. Веб-версія не використовує їх ніколи.
@@ -3444,6 +3511,9 @@ digits	Malayalam	Малаялам
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	«Відкрити останні файли» та екран «Додому» показують не більше стількох останніх файлів; 0 не показує жодного, а VectorCraft однаково пам’ятає до 30.
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	Під час відкриття документа пов’язане зображення EPS, що показує свій збережений перегляд, залишає його замість повторного читання файлу EPS; змінені файли й далі підлягають «Оновити зв’язки».
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	У «Перегляді пікселів» зображення малюються згладженими; якщо вимкнено, їхні пікселі мають різкі краї. Поза «Переглядом пікселів» зображення завжди згладжуються.
+	PDF Text	Текст PDF
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	Текст PDF, який ви відкриваєте або вбудовуєте, надходить як редагований текст або як контури, що виглядають так само на комп’ютері без його шрифтів.
+	Linked pages show the file's own text.	Пов’язані сторінки показують власний текст файлу.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Коли пов’язаний файл змінюється, «Автоматично» перечитує його, «Запитувати при зміні» спершу питає вас, а «Вручну» залишає його як є і показує примітку в рядку стану.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	У настільній версії папка, з якої починають «Створити із шаблону…» і «Зберегти як шаблон…»; залиште порожньою для VectorCraft Templates у вашій папці документів.
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	«Редагувати оригінал» відкриває пов’язаний файл у стандартній програмі системи для його типу; якщо вимкнено, пов’язане растрове зображення відкривається в PhotoCraft, якщо його встановлено.
@@ -3454,7 +3524,10 @@ digits	Malayalam	Малаялам
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft зберігає цей вибір, але Копіювати й Вирізати поки не використовують формат застарілого векторного буфера обміну.
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Зберігати контури або Зберігати оформлення та накладення для застарілого векторного буфера обміну; VectorCraft зберігає вибір, але поки не використовує його.
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Зберігати форматування зберігає стилі тексту, скопійованого з текстового об’єкта VectorCraft, під час вставлення в текстовий об’єкт; Зберігати простий текст дає йому стиль місця вставлення.
-	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Новий текст отримує цю мову, доки в «Параметрах документа» вибрано мову Англійська: США, а [Звичайний стиль символу] не задає мову; текст, який уже є в документі, зберігає свою мову.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	Відображати всі чорні як складові чорні показує чистий чорний CMYK (лише чорна фарба на 100%) на полотні як чорний RGB; Відображати всі чорні точно перетворює його через робочий простір CMYK.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Виводити всі чорні як складовий чорний малює чистий чорний CMYK як чорний RGB у растрових експортах RGB і у відтінках сірого та з «Друк як растрове зображення»; він не змінює векторні експорти, JPEG, TIFF і PSD у CMYK та інший друк.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	На сенсорному екрані переходить у сенсорне робоче середовище; вимкнення параметра або зникнення сенсорного екрана повертає робоче середовище, яке було до переходу.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Дотик двома пальцями до полотна скасовує дію, а в сенсорному робочому середовищі перемикає між інструментами виділення й малювання; дотик трьома пальцями повторює. У режимі презентації жоден не працює.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	В абзацах з увімкненим параметром «Розставляти переноси» слово зі списку переноситься лише за введеними в ньому дефісами або ніде, якщо їх немає, незалежно від регістру; корейські слова не отримують дефіса, а слова індійськими мовами не переносяться всередині групи символів.
 	Reset all preferences to their defaults?	Скинути всі налаштування до значень за промовчанням?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Значення за промовчанням застосовуються, коли ви натискаєте ОК у вікні «Налаштування». Скасувати там зберігає поточні налаштування.
@@ -3700,6 +3773,8 @@ digits	Malayalam	Малаялам
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} з {n} результату. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.
 	Recent Commands	Нещодавні команди
 	No recent commands	Немає нещодавніх команд
+	Type to search commands, tools, panels and effects	Почніть вводити для пошуку команд, інструментів, панелей та ефектів
+	Clear Recent Commands	Очистити список нещодавніх команд
 	Search commands	Пошук команд
 	Search Commands…	Пошук команд…
 	Secondary	Вторинний
@@ -5097,7 +5172,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	PDF settings are not an object	Параметри PDF не є об’єктом
 @msg	PDF security settings are not an object	Параметри безпеки PDF не є об’єктом
 @msg	PDF writer error: {0}	Помилка запису PDF: {0}
-@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Упаковано файли: {n} {folder} ({note})
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Упаковано файли: {n} {folder} ({note})|Упаковано файли: {n} {folder} ({note})|Упаковано файли: {n} {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Перегляд у браузері вимагає настільної програми (web-версія завантажує файли)
 @msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	укажіть `desiredK`, бажаний розмір файлу в K (1024 байти): число більше за 0 і не більше 1048576
 @msg	`startWith` is `current` or `auto`	`startWith` має значення `current` або `auto`
@@ -5119,6 +5194,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	Saved {path}	Збережено: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Виділіть текст або клацніть всередині тексту інструментом «Текст», щоб вставити гліфи
 @msg	Shape Builder: no region under the pointer	Створення фігур: під вказівником немає області
+@msg	Fill Area: no enclosed area under the pointer	Заливка області: під вказівником немає замкненої області
 @msg	Shape Builder: select all paths you want to merge	Створення фігур: виділіть усі контури, які потрібно об’єднати
 @msg	Shape Builder: select paths or compound paths	Створення фігур: виділіть контури або складені контури
 @msg	Show All Hidden Attributes: nothing is hidden	Показати всі приховані атрибути: нічого не приховано
@@ -5177,6 +5253,8 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` має бути grayscale, rgb, hsb, cmyk або websafe
 @msg	`view` must be wheel or box	`view` має бути wheel або box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` має бути hue, saturation, brightness, red, green або blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` має бути none, oklch або hsl
+@msg	OKLCH needs sRGB as the working RGB space	Для OKLCH робочим простором RGB має бути sRGB
 @msg	`{k}` must be [x, y]	`{k}` має бути [x, y]
 @msg	`{name}` has no options	`{name}` не має параметрів
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` - вбудоване робоче середовище; виберіть інше ім’я
@@ -5370,6 +5448,10 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	a guide has no curvature circle	напрямна не має кола кривини
 @msg	the circle that matches the path there would reach past the canvas	коло, що відповідає контуру в цьому місці, вийшло б за межі полотна
 @msg	no circle passes through these points: two are the same or all three lie on one line	через ці точки не проходить жодне коло: дві точки збігаються або всі три лежать на одній прямій
+@msg	`at` must be "start" or "end"	`at` має бути "start" або "end"
+@msg	give exactly one of `through` and `toward`	вкажіть рівно один із параметрів `through` і `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	жодна дуга не підходить до цих точок: дві точки збігаються або всі три лежать на одній прямій
+@msg	give `at` only with `toward`	вказуйте `at` лише разом із `toward`
 @msg	no app to open files here	тут немає програми для відкриття файлів
 @msg	no artboard	немає монтажної області
 @msg	no artboard {i} (0-based; the document has {_1})	немає монтажної області {i} (рахунок з 0; у документі {_1})
@@ -5415,6 +5497,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	no native format	немає власного формату
 @msg	no pages	немає сторінок
 @msg	no pattern `{name}`	немає візерунка `{name}`
+@msg	art painted with `{name}` can't be its tile	графіка, зафарбована візерунком `{name}`, не може бути його плиткою
 @msg	no perspective grid preset named `{name}`	немає набору сітки перспективи з ім’ям `{name}`
 @msg	no plug-in {0} is installed	модуль {0} не встановлений
 @msg	no plug-in {id} is installed	модуль {id} не встановлений
@@ -5582,6 +5665,10 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	це трасування створило б більше {max} опорних точок, що більше, ніж документ може плавно відобразити: збільште «Шум», зменште «Контури» або «Кольори» або виберіть набір з меншою точністю
 @msg	select an envelope	виділіть оболонку
 @msg	select an image	виділіть зображення
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	об’єкт {_1} — зображення, змінене за допомогою «Спотворення перспективи» або «Вільна деформація», і ця команда з ним не працює
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	зображення {_1} не можна так деформувати: його кути не утворять опуклої фігури
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	зображення {_1} не можна так деформувати: його кути перетнуть горизонт деформації
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	зображення {_1} не можна так деформувати: його кути будуть надто близько один до одного для перспективного відображення
 @msg	`background` must be edges, corners or colors	`background` має бути edges, corners або colors
 @msg	`match` must be distance or channels	`match` має бути distance або channels
 @msg	`{key}` must be from 0 to 100	`{key}` має бути від 0 до 100
@@ -6380,6 +6467,7 @@ lighting	Light	Світло
 @msg	a 3D effect on a group's fill or stroke draws nothing	3D-ефект на заливці або обведенні групи нічого не малює
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	3D-ефект на заливці або обведенні групи не малює нічого для експорту
 @msg	The 3D object is too complex to export	3D-об’єкт надто складний для експорту
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Сітка 3D-об’єкта неповна або містить значення, яке не є числом
 @msg	the <filter> element needs an id, the filter's name	елементу <filter> потрібен id, назва фільтра
 @msg	an SVG filter's id is at most {MAX_NAME} characters	id фільтра SVG містить не більше {MAX_NAME} символів
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> не є елементом фільтра SVG
@@ -6401,7 +6489,10 @@ lighting	Light	Світло
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	об’єкт не має 3D-ефекту (Видавлювання та фаска, Обертання, Надування або Повернути)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` має бути об’єктом лише з полем `mode` зі значенням shaded або wireframe
 @msg	its 3D effect builds no solid	його 3D-ефект не будує тіла
-@msg	bevel must be none or one of {_1}	bevel має бути none або одним з: {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel має бути none, одним з: {_1}, або custom з {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	для bevel custom потрібен {BEVEL_PROFILE}, точки фаски
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} має бути рядком
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} має містити від 2 до {most} точок [x, y], кожна частка від 0 до 1, від [0, 0] (край торця) до [1, 1] (бічна стінка)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: не вдається побудувати тіла з цієї ілюстрації: її екземпляри символів, переходи та відсічні групи містять забагато об’єктів
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}: не вдається побудувати тіло з екземпляра символу «{symbol}»: ілюстрація символу недоступна
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: відсічний контур надто складний, щоб обрізати ним ілюстрацію
@@ -6427,8 +6518,10 @@ lighting	Light	Світло
 @msg	`{GRAPHICS}` face must be front, back or side	face у `{GRAPHICS}` має бути front, back або side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} у `{GRAPHICS}` має бути числом від {lo} до {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` має бути масивом
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Графіка наноситься на об’єкти типів «Площина», «Видавлювання» та «Обертання»
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Графіка наноситься на об’єкти типів «Площина», «Видавлювання», «Обертання» та «Надування»
 @msg	Revolve maps graphics onto its side: map them onto the front	«Обертання» наносить графіку на свою бічну поверхню: розміщуйте її на передній стороні
+@msg	Inflate maps graphics onto its front and back, not onto a side	«Надування» наносить графіку на передній і задній боки, а не на бічну поверхню
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	об’єкт {_1}: задній бік «Надування» приймає графіку лише з увімкненими параметрами «З обох боків» і «Торці»
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Графіка надто складна для цієї поверхні: спростіть ілюстрації символів або зменште «Сегменти»
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` приймає не більше {MAX_GRAPHICS} графічних елементів
 @msg	A plane has one face: map its graphics onto the front	Площина має одну сторону: розміщуйте її графіку на передній стороні
@@ -6793,9 +6886,9 @@ lighting	Light	Світло
 	Slope:	Ухил:
 axis	X Axis	Вісь X
 axis	Y Axis	Вісь Y
-@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Упаковано файли: {n} {folder}
-@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Упаковано файли: {n} {note}
-@msgplural	Packaged {n} file|Packaged {n} files	Упаковано файли: {n}
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Упаковано файли: {n} {folder}|Упаковано файли: {n} {folder}|Упаковано файли: {n} {folder}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Упаковано файли: {n} {note}|Упаковано файли: {n} {note}|Упаковано файли: {n} {note}
+@msgplural	Packaged {n} file|Packaged {n} files	Упаковано файли: {n}|Упаковано файли: {n}|Упаковано файли: {n}
 @plural	Packaged {n} file|Packaged {n} files	Упаковано файли: {n}|Упаковано файли: {n}|Упаковано файли: {n}
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Упаковано файли: {n} {folder}|Упаковано файли: {n} {folder}|Упаковано файли: {n} {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Упаковано файли: {n} {note}|Упаковано файли: {n} {note}|Упаковано файли: {n} {note}
@@ -6847,11 +6940,19 @@ axis	Y Axis	Вісь Y
 @msg	module is {_1} bytes (limit {_2})	модуль займає {_1} байтів (межа {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	потрібне схвалення: він запитує {0}, що користувач дозволяє під час окремого встановлення
 @msg	not JSON: {e}	не JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	не двійковий файл WebAssembly (немає заголовка \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	не двійковий файл WebAssembly (немає заголовка \\0asm)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	тип функції має більше параметрів, ніж дозволяє межа ({MAX_FUNC_TYPE_VALUES})
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	тип функції має більше результатів, ніж дозволяє межа ({MAX_FUNC_TYPE_VALUES})
 @msg	parameter `{k}`: {what}	параметр `{k}`: {what}
 @msg	parameter `{name}`: {what}	параметр `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	параметри модуля мають бути об’єктом JSON
 @msg	the module must export its linear memory as `memory`	модуль має експортувати свою лінійну пам’ять як `memory`
+@msg	the module must export `{name}` with the type {signature}	модуль має експортувати `{name}` з типом {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	модуль має більше ніж один користувацький розділ `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	бюджет пам’яті (початкова пам’ять модуля становить {initial} байтів, межа {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	маніфест у користувацькому розділі `{MANIFEST_SECTION}` має вказувати `abi` як {ABI_VERSION}, версію ABI, яку реалізує цей хост
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	бюджет таблиць (модуль визначає {count} таблиць, найбільша містить {largest} елементів; межа {MAX_TABLES} таблиць по {MAX_TABLE_ELEMENTS} елементів)
+@msg	the module's table section could not be read	не вдалося прочитати розділ таблиць модуля
 @msg	the objects to change are no longer in the document	об’єктів, які треба змінити, більше немає в документі
 @msg	the runtime panicked	середовище виконання аварійно завершилося
 @msg	unexpected host trap	неочікувана пастка (trap) хоста
@@ -6878,6 +6979,11 @@ axis	Y Axis	Вісь Y
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` і `maxItems` мають бути 0-{MAX_LIST}, `maxItems` щонайменше 1, а типове значення має містити стільки елементів
 @msg	`name` must be a string	`name` має бути рядком
 @msg	`opacity` must be a number	`opacity` має бути числом
+@msg	`opacity` must be a number from 0 to 100	`opacity` має бути числом від 0 до 100
+@msg	`opacity` must be true or false	`opacity` має бути true або false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	символи тексту не мають власної непрозорості: додайте заливку або обведення командою «Додати нову заливку» або «Додати нове обведення» на панелі «Оформлення»
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	об’єкт, виділений в екземплярі символу, не має власної непрозорості заливки чи обведення
+@msg	no target has that fill or stroke to take the opacity	жодна ціль не має такої заливки чи обведення, щоб задати непрозорість
 @msg	`type` must be "path" or "compound"	`type` має бути "path" або "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` має містити 1-{MAX_UNIT} друкованих символів
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` має перелічувати від 1 до {MAX_CONDITION_VALUES} значень для `{other}`
@@ -6921,6 +7027,8 @@ axis	Y Axis	Вісь Y
 @msg	`plates` requires a stop linked to a spot swatch	для `plates` потрібна точка переходу, пов’язана зі зразком плашкового кольору
 @msg	the output	виведення
 @msg	the path has no anchor points	контур не має опорних точок
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	складений контур {id} має прихований, заблокований або напрямний елемент, тому його елементи не можна замінити
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	складений контур {id} має елемент, який не є контуром, тому його елементи не можна замінити
 @msg	too many anchor points (limit {MAX_ANCHORS})	забагато опорних точок (межа {MAX_ANCHORS})
 @msg	true or false	true або false
 @msg	a number >= {_1}	число >= {_1}
@@ -7945,6 +8053,7 @@ breakText	Glyphs	Гліфи
 	Remove Strokes	Забрати обведення
 	Place Brush Art	Розмістити малюнок пензля
 	Replace Brush Art	Замінити малюнок пензля
+	Replace Pattern Art	Замінити малюнок візерунка
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Обведення використовують цей пензель. Застосувати новий малюнок до цих обведень чи залишити їх як є і додати копію пензля з новим малюнком?
 	Apply to Strokes	Застосувати до обведень
 	Leave Strokes	Залишити обведення
@@ -8595,6 +8704,8 @@ breakText	Glyphs	Гліфи
 @msg	`dataBase64` is larger than the module limit	`dataBase64` перевищує обмеження модуля
 @msg	`dataBase64` is not valid base64	`dataBase64` не є припустимим base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` не можна поєднувати з `ids`, `reverse` або `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` не можна поєднувати з `ids`, `id` або `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` не можна поєднувати з `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` і `childLimit` обмежують зведення: передайте `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` — це назва дизайну або null для звичайних стовпців
 @msg	`design` is a design name, or null for the default marker	`design` — це назва дизайну або null для стандартного маркера
@@ -9216,6 +9327,7 @@ breakText	Glyphs	Гліфи
 @msg	give a pattern name or select an object painted with a pattern	укажіть ім’я візерунка або виділіть об’єкт, зафарбований візерунком
 @msg	give at least one of clip, invert, disabled, linked	укажіть принаймні одне з: clip, invert, disabled, linked
 @msg	give color, none, swatch or gradient	укажіть color, none, swatch або gradient
+@msg	give color, none, swatch, gradient or opacity	укажіть color, none, swatch, gradient або opacity
 @msg	give dataBase64	укажіть dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	укажіть at (клацання) або area (контур, намальований навколо перекриттів)
 @msg	give exactly one of `path`, `data` and `dataBase64`	укажіть рівно одне з: `path`, `data`, `dataBase64`
@@ -10374,6 +10486,39 @@ breakText	Glyphs	Гліфи
 @msg	A panel is not joined to the rest by a crease.	Панель не з’єднана з рештою жодною лінією біговки.
 @msg	A fold line is on a non-printing layer.	Лінія згину лежить на шарі, що не друкується.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панелі: {panels}, шарніри: {hinges}, помилки: {errors}, попередження: {warnings}
+	Nature Icons	Значки природи
+	Flower	Квітка
+	Tree	Дерево
+	Mountain	Гора
+	Ornamental	Орнаментальні
+	Scrollwork	Завиток
+	Filigree Arrow	Філігранна стріла
+	Petal Sweep	Пелюстковий розчерк
+	Twin Curl	Подвійний завиток
+	Vector Packs	Векторні набори
+	Compass Rose	Роза вітрів
+	Botanical Sprig	Ботанічна гілочка
+	Facet Diamond	Гранований діамант
+	Tide Crest	Гребінь хвилі
+	Leaf Vine	Листяна лоза
+	Blossom Chain	Квітковий ланцюжок
+	Pennant Garland	Гірлянда прапорців
+	Lantern String	Ланцюжок ліхтариків
+	Orbit Lines	Орбітальні лінії
+	Petal Garland	Гірлянда пелюсток
+	Lattice Braid	Ґратчасте плетіння
+	Facet Sweep	Гранований мазок
+	Artistic Brushes	Художні пензлі
+	Paint	Фарба
+	Flat Sweep	Плоский мазок
+	Dry Drag	Сухий протяг
+	Loaded Stroke	Густий мазок
+	Fan Sweep	Віяловий мазок
+	Engraving	Гравіювання
+	Fine Hatching	Тонке штрихування
+	Dense Hatching	Щільне штрихування
+	Tapered Hatching	Звужене штрихування
+	Broken Hatching	Переривчасте штрихування
 	Image Brush	Пензлі зображень
 	Soft Bloom	М’яке цвітіння
 	Halftone Field	Напівтонове поле

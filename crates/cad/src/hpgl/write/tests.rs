@@ -1179,6 +1179,25 @@ fn encoded_numbers_follow_the_reference_guide() {
     assert_eq!(out, [194, 191]);
 }
 
+/// The app adapter must preserve raw bytes and position across the one-based pen table.
+#[test]
+fn hpgl2_shared_writer_preserves_raw_bytes_and_pen_indices() {
+    let paths = vec![vec![vec![(32, -32)]], vec![], vec![vec![(33, -31)], vec![(34, -30)]]];
+    let pens = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+    assert_eq!(encoded(&paths, &pens), b"IN;NP4;PC1,1,2,3;PC2,4,5,6;PC3,7,8,9;PU;SP1;PE<=?\xc0@\xc0;PU;SP3;PE<\xc1\xc1<\xc1\xc1;PU;SP0;");
+}
+
+#[test]
+fn hpgl2_shared_writer_preserves_empty_and_last_admitted_pen() {
+    assert_eq!(encoded(&[], &[]), b"IN;PU;SP0;");
+    let pens = vec![[0, 0, 0]; MAX_PENS];
+    let mut paths = vec![vec![]; MAX_PENS];
+    paths[MAX_PENS - 1] = vec![vec![(0, 0)]];
+    let bytes = encoded(&paths, &pens);
+    assert!(bytes.starts_with(b"IN;NP256;PC1,0,0,0;"));
+    assert!(bytes.ends_with(b"PC255,0,0,0;PU;SP255;PE<=\xbf\xbf;PU;SP0;"));
+}
+
 #[test]
 fn hpgl2_writes_the_palette_and_encoded_polylines() {
     let out = plot(&three(), &HpglOptions { version: Version::Hpgl2, ..opts(&three()) });

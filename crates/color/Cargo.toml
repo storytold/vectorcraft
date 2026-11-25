@@ -9,6 +9,10 @@ description = "VectorCraft color"
 workspace = true
 
 [dependencies]
+craft-cms = { workspace = true }
+# The harmony rules, their settings and their colour math (`harmony`), and their colour type.
+craft-color-ui = { workspace = true }
+craft-theme = { workspace = true }
 kurbo = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

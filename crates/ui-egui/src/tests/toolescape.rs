@@ -6,14 +6,15 @@ use serde_json::json;
 use vectorcraft_engine::Session;
 use vectorcraft_tools::{PointerEvent, PointerKind};
 
+use super::synthetic::key_frame;
 use crate::VectorcraftApp;
 
-/// One frame pressing `key` through the shortcut handler.
+/// One app frame pressing `key`, after an empty frame that builds the board's keymap.
 fn press(app: &mut VectorcraftApp, key: Key) {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
+    key_frame(app, &ctx, vec![]);
     let ev = egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
-    let mut out = ctx.run_ui(egui::RawInput { events: vec![ev], ..Default::default() }, |ui| crate::shortcuts::handle(app, ui.ctx()));
-    out.textures_delta.clear();
+    key_frame(app, &ctx, vec![ev]);
 }
 
 #[test]

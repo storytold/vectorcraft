@@ -4,8 +4,8 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use craft_pdf::write::backend as krilla;
-use craft_pdf::write::{self, Metadata};
+use craft::pdf::write::backend as krilla;
+use craft::pdf::write::{self, Metadata};
 use krilla::color::separation::{Color as SepColor, SeparationColorant, SeparationSpace};
 use krilla::color::{cmyk, luma, rgb};
 use krilla::configure::{Archival, PdfVersion};
@@ -60,6 +60,9 @@ pub(crate) struct Exporter<'a> {
     images: HashMap<String, Option<Image>>,
     /// `Some` while opacity mask art is written: whether an image in it was left out.
     image_left_out: Option<bool>,
+    /// While the pieces of a distorted image whose opacity mask is its own pixel grid are written:
+    /// its image key and the image written with the mask as its alpha, which each piece draws.
+    piece_image: Option<(String, Image)>,
     /// While the pieces of a mesh-warped image are written: the size its pixels are resampled for
     /// ([`Exporter::warp_image_size`]).
     warp_size: Option<images::SharedSize>,
@@ -111,6 +114,9 @@ pub(crate) struct Exporter<'a> {
     /// Overprinting characters' fills and strokes are drawn with Darken, as a separation's plate
     /// draws its overprinting fills and strokes ([`vectorcraft_doc::overprint::darken_overprints`]).
     pub darken_overprints: bool,
+    /// Document Setup → Discard White Overprint as it applies to the document's paints, read from
+    /// the document on first use ([`Self::paper_white`]).
+    discard_white: Option<vectorcraft_doc::overprint::DiscardWhite>,
     /// An overprinting fill or stroke was drawn so.
     pub overprinted: bool,
     /// Characters with neither fill nor stroke, or whose fill is drawn as art (outlines filled

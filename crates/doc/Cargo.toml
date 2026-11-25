@@ -13,6 +13,8 @@ workspace = true
 spine-count = []
 # `vectorcraft_doc::symbols_read` for other crates' tests (dev-dependencies only).
 symbol-read-count = []
+# `vectorcraft_doc::locked_artboard_measures` for other crates' tests (dev-dependencies only).
+locked-artboard-count = []
 
 [dependencies]
 vectorcraft-geom = { workspace = true }

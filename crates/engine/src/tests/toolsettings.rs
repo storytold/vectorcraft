@@ -138,6 +138,86 @@ fn a_dropped_press_does_not_keep_what_its_drag_changed() {
     assert_eq!(s.prefs.tool_settings["polygon"]["sides"], json!(7), "and stores its sides");
 }
 
+/// An option set with `tool.setOption` while a press is held survives the dropped press, in the
+/// tool and in the stored options, while what the drag itself changed is put back in both.
+#[test]
+fn an_option_set_during_a_dropped_press_is_kept() {
+    let mut s = session();
+    select(&mut s, "rectangularGrid");
+    let v = ViewInfo { smart_guides: false, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 180.0), v).unwrap();
+    s.tool_key(ToolKey::Up, Mods::default(), v).unwrap();
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!((s.tool_options()["rows"].clone(), s.tool_options()["columns"].clone()), (json!(6), json!(6)));
+    s.set_tool_option_cmd(&json!({"key": "columns", "value": 9})).unwrap();
+    s.drop_tool_press(v).unwrap();
+    let o = s.tool_options();
+    assert_eq!((o["rows"].clone(), o["columns"].clone()), (json!(5), json!(9)), "the drag's rows go back; the set columns stay");
+    let saved = &s.prefs.tool_settings["rectangularGrid"];
+    assert_eq!((saved["rows"].clone(), saved["columns"].clone()), (json!(5), json!(9)), "the drag's rows are not stored; the set columns are");
+    select(&mut s, "selection");
+    select(&mut s, "rectangularGrid");
+    let o = s.tool_options();
+    assert_eq!((o["rows"].clone(), o["columns"].clone()), (json!(5), json!(9)), "a tool switch keeps the set columns");
+    // The same through the desktop app's setter.
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 180.0), v).unwrap();
+    s.tool_key(ToolKey::Up, Mods::default(), v).unwrap();
+    s.set_tool_option("columns", &json!(3));
+    s.drop_tool_press(v).unwrap();
+    let o = s.tool_options();
+    assert_eq!((o["rows"].clone(), o["columns"].clone()), (json!(5), json!(3)));
+    let saved = &s.prefs.tool_settings["rectangularGrid"];
+    assert_eq!((saved["rows"].clone(), saved["columns"].clone()), (json!(5), json!(3)));
+}
+
+/// A Corner Radius preference set while a Rounded Rectangle press is held survives the dropped
+/// press, in the tool and in the preference.
+#[test]
+fn a_corner_radius_set_during_a_dropped_press_is_kept() {
+    let mut s = session();
+    select(&mut s, "roundedRectangle");
+    let v = ViewInfo { smart_guides: false, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 180.0), v).unwrap();
+    let mut p = s.prefs.clone();
+    p.corner_radius = 30.0;
+    s.apply_prefs(p);
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.tool_options()["cornerRadius"].as_f64(), Some(30.0), "the tool keeps the new radius");
+    assert_eq!(s.prefs.corner_radius, 30.0, "the preference keeps it");
+}
+
+/// An option set with `tool.setOption` on a tool that lent a selection tool for a Cmd-drag
+/// survives the dropped press, in the tool and in the stored options. So does a Corner Radius
+/// preference set while the Rounded Rectangle lends one.
+#[test]
+fn an_option_set_on_a_lending_tool_during_a_dropped_press_is_kept() {
+    let mut s = session();
+    select(&mut s, "rectangularGrid");
+    let v = ViewInfo { smart_guides: false, ..Default::default() };
+    let cmd = Mods { cmd: true, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 180.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.lender.as_ref().map(|t| t.id()), Some("rectangularGrid"), "the press lent a selection tool");
+    s.set_tool_option_cmd(&json!({"tool": "rectangularGrid", "key": "columns", "value": 9})).unwrap();
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.tool_id(), "rectangularGrid", "the lending tool is back");
+    assert_eq!(s.tool_options()["columns"], json!(9), "the tool keeps the set columns");
+    assert_eq!(s.prefs.tool_settings["rectangularGrid"]["columns"], json!(9), "and stores them");
+    select(&mut s, "roundedRectangle");
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 180.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.lender.as_ref().map(|t| t.id()), Some("roundedRectangle"), "the press lent a selection tool");
+    let mut p = s.prefs.clone();
+    p.corner_radius = 30.0;
+    s.apply_prefs(p);
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.tool_options()["cornerRadius"].as_f64(), Some(30.0), "the tool keeps the new radius");
+    assert_eq!(s.prefs.corner_radius, 30.0, "the preference keeps it");
+}
+
 /// A dropped Pen press drops only the anchor it was placing: the path being drawn goes on with
 /// the next click.
 #[test]

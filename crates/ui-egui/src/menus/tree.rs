@@ -1,26 +1,65 @@
 use super::slots::{PERSPECTIVE_SLOTS, RECENT_FONT_IDS, RECENT_IDS, SAVED_SELECTION_IDS, SAVED_VIEW_IDS};
 use super::submenus::{INSERT_BREAK, INSERT_SPECIAL, INSERT_WHITESPACE, PATH_EFFECTS, TYPE_SIZES, effect_menu, font_items, insert_items};
-use super::{Item, Sep, c, cp, json, sub};
+use super::{Node, Sep, c, cp, json, sub};
+use craft::keymap::CommandRef;
+use craft::menu::{Item, ItemRole, Platforms};
+
+use crate::i18n::LangExt as _;
+
+/// `label` running `id`, and with Shift+Alt held as it is chosen, `id` within the selected object's group.
+fn within_group(label: &'static str, id: &'static str) -> Node {
+    let held = craft::keymap::Mods { cmd: false, ctrl: false, alt: true, shift: true };
+    let group = craft::ui::menu::Alternate::new(held, CommandRef::with_params(id, json!({ "scope": "group" })));
+    Node::Item(Item::new(CommandRef::with_params(id, serde_json::Value::Null), label).alternate(group))
+}
 
 /// The in-window and native menu tree. The in-window bar skips the VectorCraft menu (see
 /// `menu_bar`); the native Mac bar is composed from the whole tree (see `native_menu`).
 /// `english_names` is Preferences › Type › Show Font Names in English (the Type → Font labels
 /// follow it; tests use the default `true`).
-pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
-    menu_tree_named(true)
+/// The fixed rows only: none of the [`Listed`] names.
+pub fn menu_tree() -> Vec<(&'static str, Vec<Node>)> {
+    menu_tree_named(true, &Listed::default())
 }
 
-pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
+/// The names the menus list as rows of their own after their fixed rows.
+#[derive(Default, Hash)]
+pub struct Listed {
+    /// Window › Workspace: the saved workspaces.
+    pub workspaces: Vec<String>,
+    /// Window › Toolbars: the toolbars made with New Toolbar.
+    pub toolbars: Vec<String>,
+    /// Effect › SVG Filters: the active document's filters that are not a default's.
+    pub svg_filters: Vec<String>,
+}
+
+impl Listed {
+    /// The names `app` holds now.
+    pub fn of(app: &crate::VectorcraftApp) -> Listed {
+        Listed {
+            workspaces: app.ui.workspaces.set.saved.iter().map(|w| w.name.clone()).collect(),
+            toolbars: app.ui.custom_toolbars.iter().map(|b| b.name.clone()).collect(),
+            svg_filters: app.session.active().map(|st| crate::dialogs::svg_filter::own_names(&st.doc.svg_filters)).unwrap_or_default(),
+        }
+    }
+}
+
+pub fn menu_tree_named(english_names: bool, listed: &Listed) -> Vec<(&'static str, Vec<Node>)> {
+    let mut tree = built_in_tree(english_names, listed);
+    crate::dialogs::plugin::place_commands(&mut tree);
+    tree
+}
+
+/// The menus with each plug-in command in its plug-in's submenu, before
+/// [`crate::dialogs::plugin::place_commands`] moves those whose manifest names another menu.
+fn built_in_tree(english_names: bool, listed: &Listed) -> Vec<(&'static str, Vec<Node>)> {
     let panel = |label: &'static str, id: &'static str| cp(label, "window.panel", json!({ "panel": id, "toggle": true }));
     vec![
         (
-            // The application menu: About and Discord only. The in-window bar never shows it (File
-            // is first there); on macOS `native_menu::mac_layout` composes the
-            // App menu from this entry and the other menus (About from Help, Settings from Edit,
-            // Quit from File, Language and Appearance synthesized). It stays first: `from_tree`
-            // gives the first menu the App role.
+            // The application menu, shown on macOS only: the layout merges it with the items the
+            // other menus tag with a role (Settings, Quit). It stays first.
             "VectorCraft",
-            vec![c("About VectorCraft", "help.about"), c("Join Our Discord", "help.discord")],
+            app_menu(),
         ),
         (
             "File",
@@ -30,7 +69,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Open…", "file.open"),
                 sub("Open With", crate::dialogs::plugin::open_with_menu()),
                 sub("Open Recent Files", {
-                    let mut v: Vec<Item> = RECENT_IDS.iter().map(|id| c("Recent File", id)).collect();
+                    let mut v: Vec<Node> = RECENT_IDS.iter().map(|id| c("Recent File", id)).collect();
                     v.push(Sep);
                     v.push(c("Clear Recent Files", "file.clearRecent"));
                     v
@@ -76,7 +115,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 Sep,
                 c("Print…", "file.print"),
                 Sep,
-                c("Exit", "app.quit"),
+                c("Exit", "app.quit").role(ItemRole::Quit),
             ],
         ),
         (
@@ -137,6 +176,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Transparency Flattener Presets…", "ui.flattenerPresetsDialog"),
                 c("Print Presets…", "ui.printPresetsDialog"),
                 c("PDF Presets…", "ui.pdfPresetsDialog"),
+                c("Tracing Presets…", "ui.tracingPresetsDialog"),
                 c("Perspective Grid Presets…", "ui.perspectivePresetsDialog"),
                 Sep,
                 c("Color Settings…", "edit.colorSettings"),
@@ -144,7 +184,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Refresh Monitor Profile", "view.refreshMonitorProfile"),
                 Sep,
                 c("Keyboard Shortcuts…", "edit.keyboardShortcuts"),
-                c("Preferences…", "edit.preferences"),
+                c("Preferences…", "edit.preferences").role(ItemRole::Settings).platforms(not_mac()),
             ],
         ),
         (
@@ -195,7 +235,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                     "Lock",
                     vec![c("Selection", "object.lock"), c("All Artwork Above", "object.lock.above"), c("Other Layers", "object.lock.otherLayers")],
                 ),
-                c("Unlock All", "object.unlockAll"),
+                within_group("Unlock All", "object.unlockAll"),
                 sub(
                     "Hide",
                     vec![
@@ -205,7 +245,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         c("Unselected Artwork", "object.hide.unselected"),
                     ],
                 ),
-                c("Show All", "object.showAll"),
+                within_group("Show All", "object.showAll"),
                 Sep,
                 c("Expand…", "ui.expandDialog"),
                 c("Expand Appearance", "effect.expandAppearance"),
@@ -555,7 +595,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
             v.extend(SAVED_SELECTION_IDS.iter().map(|id| c("Saved Selection", id)));
             v
         }),
-        ("Effect", effect_menu()),
+        ("Effect", effect_menu(&listed.svg_filters)),
         ("View", {
             let mut v = vec![
                 c("Outline", "view.outline"),
@@ -572,9 +612,8 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                     ],
                 ),
                 Sep,
-                sub(
-                    "Proof Setup",
-                    vec![
+                sub("Proof Setup", {
+                    let mut v = vec![
                         cp("Working CMYK", "view.proofSetup", json!({"target": "workingCmyk", "proof": true})),
                         cp("Legacy Macintosh RGB (Gamma 1.8)", "view.proofSetup", json!({"target": "legacyMacRgb", "proof": true})),
                         cp("Internet Standard RGB (sRGB)", "view.proofSetup", json!({"target": "srgb", "proof": true})),
@@ -582,9 +621,16 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         cp("Color blindness – Protanopia-type", "view.proofSetup", json!({"target": "protanopia", "proof": true})),
                         cp("Color blindness – Deuteranopia-type", "view.proofSetup", json!({"target": "deuteranopia", "proof": true})),
                         cp("Color blindness – Tritanopia-type", "view.proofSetup", json!({"target": "tritanopia", "proof": true})),
-                        cp("Customize…", "window.panel", json!({"panel": "separations"})),
-                    ],
-                ),
+                        c("Customize…", "ui.proofSetupDialog"),
+                    ];
+                    // The setups saved in the Proof Setups folder.
+                    let saved = crate::dialogs::proof_setup::saved_items();
+                    if !saved.is_empty() {
+                        v.push(Sep);
+                        v.extend(saved);
+                    }
+                    v
+                }),
                 c("Proof Colors", "view.proofColors"),
                 Sep,
                 c("Zoom In", "view.zoomIn"),
@@ -673,13 +719,14 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                     ]);
                     arrange
                 }),
-                sub("Workspace", crate::workspaces::menu_items()),
+                sub("Workspace", crate::workspaces::menu_items(&listed.workspaces)),
                 Sep,
                 c("Control", "window.control"),
                 c("Help Bar", "window.helpBar"),
                 c("Contextual Task Bar", "window.taskBar"),
+                c("Quick Pen Toolbar", "window.quickPenToolbar"),
                 c("Tools", "window.toolbar"),
-                sub("Toolbars", crate::custom_toolbars::menu_items()),
+                sub("Toolbars", crate::custom_toolbars::menu_items(&listed.toolbars)),
                 Sep,
             ];
             let lang = crate::i18n::current();
@@ -767,14 +814,14 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Copy Troubleshooting Info", "help.copyTroubleshootingInfo"),
                 Sep,
                 c("Check for Updates…", "help.checkForUpdates"),
-                c("About VectorCraft", "help.about"),
+                c("About VectorCraft", "help.about").role(ItemRole::About).platforms(not_mac()),
             ],
         ),
     ]
 }
 
 /// Object → Transform (also in the canvas context menu).
-pub(super) fn transform_items() -> Vec<Item> {
+pub(super) fn transform_items() -> Vec<Node> {
     vec![
         c("Transform Again", "object.transformAgain"),
         Sep,
@@ -791,9 +838,8 @@ pub(super) fn transform_items() -> Vec<Item> {
     ]
 }
 
-/// Window → Arrange's Tile layouts, one `window.arrange.tile` `layout` each (also under the
-/// application bar's Arrange Documents button).
-fn tile_items() -> Vec<Item> {
+/// Window → Arrange's Tile layouts, one `window.arrange.tile` `layout` each.
+fn tile_items() -> Vec<Node> {
     vec![
         c("Tile", "window.arrange.tile"),
         cp("Tile All Vertically", "window.arrange.tile", json!({"layout": "vertical"})),
@@ -805,15 +851,8 @@ fn tile_items() -> Vec<Item> {
     ]
 }
 
-/// The application bar's Arrange Documents menu: Consolidate All Windows, then the Tile layouts.
-pub(crate) fn arrange_documents_items() -> Vec<Item> {
-    let mut items = vec![c("Consolidate All Windows", "window.arrange.consolidateAllWindows"), Sep];
-    items.extend(tile_items());
-    items
-}
-
 /// Object → Arrange (also in the canvas context menu).
-pub(super) fn arrange_items() -> Vec<Item> {
+pub(super) fn arrange_items() -> Vec<Node> {
     vec![
         c("Bring to Front", "object.arrange.bringToFront"),
         c("Bring Forward", "object.arrange.bringForward"),
@@ -826,19 +865,49 @@ pub(super) fn arrange_items() -> Vec<Item> {
 
 /// Sort menu items alphabetically by their display label in `lang`, folding Latin accents so
 /// panels and submenus appear in the expected alphabetical order in every interface language (#4143).
-fn sort_by_localized_label(items: &mut [Item], lang: crate::i18n::Lang) {
-    items.sort_by_cached_key(|it| {
-        let label = match it {
-            Item::Cmd(l, id, _) => crate::i18n::tr_id(lang, id, l),
-            Item::Sub(l, _) | Item::Todo(l, _) | Item::Header(l) => crate::i18n::tr(lang, l),
-            Item::Sep => "",
+fn sort_by_localized_label(items: &mut [Node], lang: crate::i18n::Lang) {
+    items.sort_by_cached_key(|node| {
+        let (shown, english) = match node {
+            Node::Item(it) => (crate::i18n::tr_id(lang, &it.command.id, &it.label), it.label.as_str()),
+            Node::Submenu { label, .. } | Node::Heading(label) => (crate::i18n::tr(lang, label), label.as_str()),
+            _ => ("", ""),
         };
-        (
-            crate::i18n::name_sort_key(label),
-            match it {
-                Item::Cmd(l, ..) | Item::Sub(l, ..) | Item::Todo(l, ..) | Item::Header(l) => *l,
-                Item::Sep => "",
-            },
-        )
+        (crate::i18n::name_sort_key(shown), english.to_string())
     });
+}
+
+/// The platforms with no application menu: the items the Mac layout moves there (About, Settings)
+/// are tagged for these in their own menus, and their Mac twins live in [`app_menu`].
+fn not_mac() -> Platforms {
+    Platforms::WINDOWS | Platforms::LINUX | Platforms::WEB
+}
+
+/// The application menu, shown on macOS only: About and Discord, and the Settings pages, Language
+/// and Appearance the Mac layout places by their roles.
+fn app_menu() -> Vec<Node> {
+    let settings: Vec<Node> = vectorcraft_engine::cmd::prefscmds::PREF_CATEGORIES
+        .iter()
+        .enumerate()
+        .map(|(i, page)| {
+            let mut item =
+                Item::new(CommandRef::with_params("edit.preferences", json!({ "category": page })), format!("{page}…")).role(ItemRole::Settings);
+            // Only the first page carries Preferences' shortcut.
+            if i == 0 {
+                item.shortcut = crate::shortcut_editor::default_command_shortcut("edit.preferences").and_then(crate::keymap::stored::parse_vc);
+            }
+            Node::Item(item)
+        })
+        .collect();
+    let mut language = vec![cp("Automatic", "app.language", json!({ "lang": "auto" })), Sep];
+    language.extend(crate::i18n::Lang::for_picker().into_iter().map(|l| super::named(l.name(), "app.language", json!({ "lang": l.code() }))));
+    let appearance: Vec<Node> =
+        crate::theme::Brightness::ALL.iter().map(|b| cp(b.label(), "window.brightness", json!({ "brightness": b.id() }))).collect();
+    let mac = Platforms::MAC;
+    vec![
+        c("About VectorCraft", "help.about").role(ItemRole::About).platforms(mac),
+        c("Join Our Discord", "help.discord").platforms(mac),
+        sub("Settings", settings).role(ItemRole::Settings).platforms(mac),
+        sub("Language", language).role(ItemRole::Language).platforms(mac),
+        sub("Appearance", appearance).role(ItemRole::Appearance).platforms(mac),
+    ]
 }

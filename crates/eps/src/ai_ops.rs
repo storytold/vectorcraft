@@ -3,8 +3,6 @@
 //! Format Specification, version 7.0, §5.3, §5.4 and §6), and the colors they write in place of
 //! the paint they can't hold.
 
-use std::fmt::Write;
-
 use vectorcraft_color::{Color, Gradient};
 use vectorcraft_doc::{LAYER_COLORS, LayerColor, LineCap, LineJoin, StrokeLayer};
 use vectorcraft_geom::{Affine, Anchor, AnchorKind, PathData, Point, Shape, SubPath};
@@ -184,25 +182,15 @@ pub(crate) fn window_samples(samples: &[u8], w: u32, channels: usize, [x0, y0, x
 /// The stroke's width, cap, join, miter limit and dashes: `w J j M d`.
 pub(crate) fn line_style(s: &mut String, st: &StrokeLayer) {
     let cap = match st.cap {
-        LineCap::Butt => 0,
-        LineCap::Round => 1,
-        LineCap::Square => 2,
+        LineCap::Butt => ps::LineCap::Butt,
+        LineCap::Round => ps::LineCap::Round,
+        LineCap::Square => ps::LineCap::Square,
     };
     let join = match st.join {
-        LineJoin::Miter => 0,
-        LineJoin::Round => 1,
-        LineJoin::Bevel => 2,
+        LineJoin::Miter => ps::LineJoin::Miter,
+        LineJoin::Round => ps::LineJoin::Round,
+        LineJoin::Bevel => ps::LineJoin::Bevel,
     };
-    ps::push_num(s, st.width);
-    let _ = write!(s, " w {cap} J {join} j ");
-    ps::push_num(s, if st.miter_limit.is_finite() { st.miter_limit.max(1.0) } else { 10.0 });
-    s.push_str(" M [");
-    let dash = st.dash.as_ref().filter(|d| d.is_dashed());
-    if let Some(d) = dash {
-        ps::push_nums(s, &d.pattern);
-        s.pop();
-    }
-    s.push_str("] ");
-    ps::push_num(s, dash.map_or(0.0, |d| d.offset));
-    s.push_str(" d\n");
+    let dash = st.dash.as_ref().filter(|d| d.is_dashed()).map(|d| (d.pattern.as_slice(), d.offset));
+    ps::push_line_style(s, st.width, cap, join, st.miter_limit, dash);
 }

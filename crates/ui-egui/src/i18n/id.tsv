@@ -22,6 +22,7 @@
 	Quit VectorCraft	Keluar dari VectorCraft
 # Artwork drag between document tabs.
 	Drop Artwork	Letakkan karya
+@id	language.name	Bahasa Indonesia
 @msg	{key} must be [x, y] with finite coordinates	{key} harus berupa [x, y] dengan koordinat berhingga
 @msg	ids must contain 1–10000 object ids	ids harus berisi 1–10000 ID objek
 
@@ -311,10 +312,14 @@
 @msg	a 3D effect on a group's fill or stroke draws nothing	efek 3D pada isian atau goresan grup tidak menggambar apa pun
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	efek 3D pada isian atau goresan grup tidak menggambar apa pun untuk diekspor
 @msg	The 3D object is too complex to export	Objek 3D terlalu rumit untuk diekspor
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Objek 3D memiliki mesh yang tidak lengkap atau berisi nilai yang bukan angka
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objek tidak memiliki efek 3D (Ekstrusi & bevel, Revolusi, Gelembungkan, atau Putar)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` harus berupa objek yang hanya berisi `mode`, bernilai shaded atau wireframe
 @msg	its 3D effect builds no solid	efek 3D-nya tidak membangun bentuk padat
-@msg	bevel must be none or one of {_1}	bevel harus none atau salah satu dari {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel harus none, salah satu dari {_1}, atau custom dengan {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom memerlukan {BEVEL_PROFILE}, yaitu titik-titik bevel
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} harus berupa string
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} harus berisi 2 sampai {most} titik [x, y], masing-masing bernilai antara 0 dan 1, dari [0, 0] (tepi tutup) hingga [1, 1] (dinding samping)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} tidak dapat membangun bentuk padat dari karya ini: instans simbol, blend, dan grup klipingnya berisi terlalu banyak objek
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} tidak dapat membangun bentuk padat dari instans simbol "{symbol}": karya simbol tidak tersedia
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: jalur kliping terlalu rumit untuk memotong karya
@@ -341,8 +346,10 @@
 @msg	`{GRAPHICS}` face must be front, back or side	face `{GRAPHICS}` harus front, back, atau side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} `{GRAPHICS}` harus berupa angka dari {lo} sampai {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` harus berupa larik
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafis dipetakan ke jenis objek Plane, Extrude, dan Revolve
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafis dipetakan ke jenis objek Bidang, Ekstrusi, Revolusi, dan Gelembungkan
 @msg	Revolve maps graphics onto its side: map them onto the front	Revolusi memetakan grafis ke sisinya: petakan ke bagian depan
+@msg	Inflate maps graphics onto its front and back, not onto a side	Gelembungkan memetakan grafis ke bagian depan dan belakangnya, bukan ke sisi
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	objek {_1}: bagian belakang Gelembungkan hanya menerima grafis saat Kedua sisi dan Ujung diaktifkan
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafis terlalu rumit untuk permukaan ini: sederhanakan karya simbol atau kurangi Segmen
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` menerima paling banyak {MAX_GRAPHICS} grafis
 @msg	A plane has one face: map its graphics onto the front	Bidang memiliki satu sisi: petakan grafisnya ke bagian depan
@@ -430,11 +437,19 @@
 @msg	module is {_1} bytes (limit {_2})	modul berukuran {_1} byte (batas {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	memerlukan persetujuan: plug-in meminta {0}, yang diberikan pengguna saat memasangnya sendiri
 @msg	not JSON: {e}	bukan JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	bukan biner WebAssembly (header \0asm tidak ada)
+@msg	not a WebAssembly binary (missing \\0asm header)	bukan biner WebAssembly (header \\0asm tidak ada)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	sebuah tipe fungsi melampaui batas {MAX_FUNC_TYPE_VALUES} parameter
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	sebuah tipe fungsi melampaui batas {MAX_FUNC_TYPE_VALUES} hasil
 @msg	parameter `{k}`: {what}	parameter `{k}`: {what}
 @msg	parameter `{name}`: {what}	parameter `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	parameter plug-in harus berupa objek JSON
 @msg	the module must export its linear memory as `memory`	modul harus mengekspor memori liniernya sebagai `memory`
+@msg	the module must export `{name}` with the type {signature}	modul harus mengekspor `{name}` dengan tipe {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	modul memiliki lebih dari satu bagian kustom `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	anggaran memori (memori awal modul {initial} byte, batas {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	manifes di bagian kustom `{MANIFEST_SECTION}` harus memberikan `abi` sebagai {ABI_VERSION}, versi ABI yang diterapkan host ini
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	anggaran tabel (modul mendefinisikan {count} tabel, yang terbesar dengan {largest} elemen; batas {MAX_TABLES} tabel dengan {MAX_TABLE_ELEMENTS} elemen)
+@msg	the module's table section could not be read	bagian tabel modul tidak dapat dibaca
 @msg	the objects to change are no longer in the document	objek yang akan diubah tidak lagi ada di dokumen
 @msg	the runtime panicked	runtime mengalami panik
 @msg	unexpected host trap	trap host yang tidak terduga
@@ -461,6 +476,11 @@
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` dan `maxItems` harus 0-{MAX_LIST}, `maxItems` setidaknya 1, dan nilai default sebanyak itu
 @msg	`name` must be a string	`name` harus berupa string
 @msg	`opacity` must be a number	`opacity` harus berupa angka
+@msg	`opacity` must be a number from 0 to 100	`opacity` harus berupa angka dari 0 sampai 100
+@msg	`opacity` must be true or false	`opacity` harus true atau false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	karakter teks tidak memiliki opasitas sendiri: tambahkan isian atau guratan dengan Tambahkan isian baru atau Tambahkan guratan baru di panel Tampilan
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	objek yang dipilih dalam instans simbol tidak memiliki opasitas isian atau guratan sendiri
+@msg	no target has that fill or stroke to take the opacity	tidak ada target yang memiliki isian atau guratan tersebut untuk menerima opasitas
 @msg	`type` must be "path" or "compound"	`type` harus "path" atau "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` harus berupa 1-{MAX_UNIT} karakter yang dapat dicetak
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` mencantumkan 1 sampai {MAX_CONDITION_VALUES} nilai untuk `{other}`
@@ -504,6 +524,8 @@
 @msg	`plates` requires a stop linked to a spot swatch	`plates` memerlukan perhentian yang ditautkan ke swatch warna spot
 @msg	the output	keluaran
 @msg	the path has no anchor points	jalur tidak memiliki titik jangkar
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	jalur majemuk {id} memiliki anggota yang tersembunyi, terkunci, atau garis panduan, sehingga anggotanya tidak dapat diganti
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	jalur majemuk {id} memiliki anggota yang bukan jalur, sehingga anggotanya tidak dapat diganti
 @msg	too many anchor points (limit {MAX_ANCHORS})	terlalu banyak titik jangkar (batas {MAX_ANCHORS})
 @msg	true or false	true atau false
 @msg	a number >= {_1}	angka >= {_1}
@@ -953,6 +975,9 @@
 	Artboards	Artboard
 	Convert to Artboards	Konversi ke artboard
 	Rearrange All Artboards…	Atur ulang semua artboard…
+	Rearrange…	Atur ulang…
+	Selected Artboards: {n}	Artboard terpilih: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Klik kanvas untuk menempatkan artboard (Esc membatalkan)
 	Fit to Artwork Bounds	Sesuaikan ke batas karya seni
 	Fit to Selected Art	Sesuaikan ke karya seni terseleksi
 	Graph	Grafik
@@ -1104,6 +1129,7 @@
 	Fill & Stroke	Isian & stroke
 	Fill Color	Warna isian
 	Opacity	Opasitas
+	Show Opacity	Tampilkan opasitas
 	Stroke Color	Warna stroke
 	Fill Gradient	Gradien isian
 	Stroke Gradient	Gradien stroke
@@ -1384,6 +1410,8 @@
 	Contextual Task Bar	Bilah tugas kontekstual
 	Pin Bar Position	Sematkan posisi bilah
 	Reset Bar Position	Atur ulang posisi bilah
+	Bar Actions	Tindakan bilah
+	Reset Bar Actions	Atur ulang tindakan bilah
 	Tools	Alat
 	Toolbars	Bilah alat
 	Advanced	Lanjutan
@@ -1403,9 +1431,14 @@
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Tampilan roda
 	Box View	Tampilan kotak
+	Show Out-of-Gamut Colors	Tampilkan warna di luar gamut
 	Box Channel	Saluran kotak
 	Color box	Kotak warna
 	Color Wheel Options	Opsi roda warna
+	Show Document Colors	Tampilkan warna dokumen
+	Document Colors	Warna dokumen
+	Selection Colors	Warna pilihan
+@plural	Used {n} time|Used {n} times	Dipakai {n} kali
 	Show Harmony	Tampilkan harmoni
 	Harmony Rule	Aturan harmoni
 	Harmony color	Warna harmoni
@@ -2061,6 +2094,10 @@ lighting	Light	Cahaya
 	Add Anchor Point Tool	Alat tambah titik jangkar
 	Anchor Point Tool	Alat titik jangkar
 	Arc Tool	Alat busur
+	Three-Point Arc Tool	Alat busur tiga titik
+	Three-Point Arc	Busur tiga titik
+	Arc too large	Busur terlalu besar
+	Third Point Sets Direction	Titik ketiga menentukan arah
 	Area Graph Tool	Alat grafik area
 	Area Type Tool	Alat teks area
 	Artboard Tool	Alat artboard
@@ -2565,6 +2602,10 @@ digits	Malayalam	Malayalam
 	Rename Preset	Ganti nama preset
 	Save Image Trace Preset	Simpan preset telusur gambar
 	Delete Image Trace Preset	Hapus preset telusur gambar
+	Tracing Presets…	Preset penelusuran…
+	Import Image Trace Presets	Impor preset telusur gambar
+	Export Image Trace Presets	Ekspor preset telusur gambar
+	Replace the saved presets that have these names?	Ganti preset tersimpan yang memiliki nama-nama ini?
 	Method:	Metode:
 	Pad	Perpanjang
 	Repeats	Jumlah ulangan
@@ -3504,6 +3545,11 @@ digits	Malayalam	Malayalam
 	Place the pages with the placement again	Tempatkan halaman lagi dengan penempatan tersebut
 	Placement:	Penempatan:
 	Preserve CMYK Numbers	Pertahankan angka CMYK
+	Preserve RGB Numbers	Pertahankan angka RGB
+	Device to Simulate:	Perangkat yang disimulasikan:
+	Simulate Paper Color	Simulasikan warna kertas
+	Simulate Black Ink	Simulasikan tinta hitam
+	Load…	Muat…
 	Previous page	Halaman sebelumnya
 	Print Layers:	Lapisan cetak:
 	Print Preset:	Preset cetak:
@@ -4100,6 +4146,12 @@ theme	Appearance	Tampilan
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	resolusi tidak tersedia
+	estimated memory {memory}	perkiraan memori {memory}
+	memory unavailable	memori tidak tersedia
+	Unknown format	Format tidak dikenal
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -4125,6 +4177,8 @@ theme	Appearance	Tampilan
 	Symbolism Tool	Alat simbolisme
 	Image Trace Presets	Preset telusur gambar
 	Live Paint Bucket	Ember Live Paint
+	Fill Area	Isi Area
+	Fill Area Tool	Alat Isi Area
 	Live Paint Bucket (Stroke)	Ember Live Paint (guratan)
 	Live Paint Info	Info Live Paint
 	Shape Builder	Pembangun bentuk
@@ -4545,6 +4599,7 @@ theme	Appearance	Tampilan
 	Data Recovery	Pemulihan data
 	Default Language	Bahasa standar
 	Disable Auto Add/Delete	Nonaktifkan tambah/hapus otomatis
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete menghapus titik jangkar dan menjaga jalur tetap tersambung
 	Interpolate Control Points When Moving Anchors	Interpolasikan gagang arah saat memindahkan titik jangkar
 	Display All Blacks Accurately	Tampilkan semua warna hitam secara akurat
 	Display All Blacks as Rich Black	Tampilkan semua warna hitam sebagai rich black
@@ -4628,6 +4683,13 @@ theme	Appearance	Tampilan
 	Pen Tool	Alat pena
 	Quick Pen Tool	Alat pena cepat
 	Quick Pen	Pena cepat
+	Quick Pen Toolbar	Bilah alat Pena cepat
+	Continuous Arc	Busur bersambung
+	Sharp Corner Arc	Busur sudut tajam
+	Flip Arc	Balik busur
+	Hide Toolbar	Sembunyikan bilah alat
+	Pin Toolbar Position	Sematkan posisi bilah alat
+	Reset Toolbar Position	Atur ulang posisi bilah alat
 	Picas	Pica
 	Portuguese	Portugis
 	Preserve Appearance and Overprints	Pertahankan tampilan dan overprint
@@ -4741,6 +4803,11 @@ theme	Appearance	Tampilan
 	Edit Arrowheads	Edit mata panah
 	Edit Arrowheads…	Edit mata panah…
 	Reload Arrowheads	Muat ulang mata panah
+	Bevels	Bentuk bevel
+	Edit Bevels	Edit bentuk bevel
+	Edit Bevels…	Edit bentuk bevel…
+	{name} (document)	{name} (dokumen)
+	Reload Bevels	Muat ulang bentuk bevel
 	Stroke Options	Opsi goresan
 	Width Profiles	Profil lebar
 	Apply Graphic Style	Terapkan gaya grafis
@@ -4762,6 +4829,7 @@ theme	Appearance	Tampilan
 	Add to Graphic Styles	Tambahkan ke gaya grafis
 	Graphic Style Library	Pustaka gaya grafis
 	Add Used Colors	Tambahkan warna yang digunakan
+	Add Selected Colors	Tambahkan warna terpilih
 	Delete Swatch	Hapus sampel
 	Duplicate Swatch	Duplikatkan sampel
 	Merge Swatches	Gabungkan sampel
@@ -4959,6 +5027,11 @@ axis	Both	Keduanya
 	Image	Gambar
 	Ink	Tinta
 	Lab	Lab
+	OKLCH Sliders	Penggeser OKLCH
+	HSL Sliders	Penggeser HSL
+	Chroma	Kroma
+	The largest chroma sRGB holds at this lightness and hue	Kroma terbesar yang dapat dimuat sRGB pada kecerahan dan rona ini
+	OKLCH needs sRGB as the working RGB space	OKLCH memerlukan sRGB sebagai ruang RGB kerja
 	Medium	Sedang
 	Name	Nama
 	None	Nihil
@@ -5049,6 +5122,8 @@ font-technology	Variable	Variabel
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} dari {n} hasil. Terus ketik untuk mempersempitnya.
 	Recent Commands	Perintah terbaru
 	No recent commands	Tidak ada perintah terbaru
+	Type to search commands, tools, panels and effects	Ketik untuk mencari perintah, alat, panel, dan efek
+	Clear Recent Commands	Kosongkan perintah terbaru
 	Dashed Line	Garis putus-putus
 	Panel menu	Menu panel
 	Unembed…	Lepaskan sematan…
@@ -5083,6 +5158,7 @@ font-technology	Variable	Variabel
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gerakan putar dua jari pada trackpad memutar tampilan kanvas.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Menahan tombol menjalankan alat atau perintah di kolom Tahan pada Pintasan papan ketik; tekanan singkat menjalankan pintasan biasanya.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Berapa detik tombol harus ditahan sebelum pintasan tahannya berjalan sebagai ganti pintasan biasanya.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete menghapus titik jangkar yang dipilih dan menyesuaikan ulang kurva di sekitar masing-masing, alih-alih membuka jalur di sana.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Saat Anda memindahkan titik jangkar, setiap kurva dengan satu ujung yang dipindahkan mempertahankan bentuknya terhadap ujung-ujungnya.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Menahan tombol pintasan alat memilih alat itu sampai Anda melepasnya, lalu alat sebelumnya dipilih lagi.
 	Shows the bounding box while you move the selection or draw a shape.	Menampilkan kotak pembatas saat Anda memindahkan seleksi atau menggambar bentuk.
@@ -5168,9 +5244,15 @@ font-technology	Variable	Variabel
 	Edit type set in fonts that aren't available?	Edit teks dengan font yang tidak tersedia?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Menampilkan nomor setiap irisan dalam kotak di sudut kiri atasnya di kanvas; saat nonaktif, garis tepi irisan tetap ditampilkan.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Warna garis tepi irisan pengguna dan objek serta kotak nomornya; irisan otomatis memakai nuansa yang lebih redup dari warna ini.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Teks baru mendapat bahasa ini selama bahasa di Pengaturan dokumen adalah Inggris: USA dan [Gaya karakter normal] tidak menetapkan bahasa; teks yang sudah ada di dokumen mempertahankan bahasanya sendiri.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	Di paragraf dengan Pemenggalan kata aktif, kata dalam daftar hanya diberi tanda penggal pada tanda hubung yang diketik di dalamnya, atau tidak pernah jika tidak ada, apa pun bahasa atau huruf besar-kecilnya.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	Di versi desktop, plug-in .wasm di folder ini dimuat saat memulai dan saat OK menetapkan folder baru, kecuali dalam Mode aman; plug-in yang meminta izin baru dimuat setelah Anda memberikannya. Versi web tidak memuat satu pun.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	Besar memberi setiap jalannya plug-in filter atau perintah setidaknya 250 juta instruksi, dengan batas waktu yang sama; Normal mempertahankan anggaran plug-in itu sendiri. Efek langsung, pengekspor, dan pengimpor mempertahankan milik mereka.
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Teks baru mendapat bahasa ini selama bahasa di Pengaturan dokumen adalah Inggris: USA; teks yang sudah ada di dokumen mempertahankan bahasanya sendiri.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Di paragraf dengan Pemenggalan kata aktif, kata dalam daftar hanya dipenggal pada tanda hubung yang diketik di dalamnya, atau tidak di mana pun jika tidak ada, apa pun bahasa atau huruf besar-kecilnya.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	Di versi desktop, plug-in .wasm di folder ini dimuat saat memulai dan saat Anda mengeklik OK dengan folder baru di sini, kecuali dalam Mode aman; versi web tidak memuatnya.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	Normal mempertahankan batas setiap plug-in sendiri; dengan Besar, filter atau perintah plug-in dapat menjalankan setidaknya 250 juta instruksi selain instruksi untuk masukannya. Batas waktu tetap sama.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Berapa banyak instruksi yang boleh dipakai setiap jalannya filter objek dari plug-in; Besar mengizinkan lebih banyak daripada Normal dengan batas 60 detik yang sama. Filter berat mempertahankan anggarannya sendiri.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Pilihan disk scratch pertama: Startup, None, atau jalur folder; VectorCraft menyimpannya, tetapi belum menggunakan disk scratch.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Pilihan disk scratch kedua: Startup, None, atau jalur folder; VectorCraft menyimpannya, tetapi belum menggunakan disk scratch.
 	How light or dark the interface is.	Seberapa terang atau gelap antarmuka.
@@ -5181,14 +5263,17 @@ font-technology	Variable	Variabel
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Menampilkan nama setiap grup alat di atas alat-alatnya di bilah alat; jika nonaktif, grup-grup berurutan tanpa apa pun di antaranya.
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Mulai sekarang, dokumen yang Anda buka atau buat terbuka sebagai tab; jika nonaktif, masing-masing terbuka di jendela mengambang. Dokumen yang sudah terbuka tetap di tempatnya.
 	Makes the document tabs taller and their names larger.	Membuat tab dokumen lebih tinggi dan namanya lebih besar.
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Mulai dari peluncuran berikutnya, sistem menggambar bilah judul jendela di tempat VectorCraft biasanya menggambar miliknya sendiri.
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	Mulai dari peluncuran berikutnya, VectorCraft menggambar bilah judul jendela bahkan di tempat desktop akan menggambarnya, kecuali Bilah judul sistem aktif.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	Mulai dari peluncuran berikutnya, sistem menggambar bilah judul jendela di tempat VectorCraft biasanya menggambar miliknya sendiri; di Linux dan BSD, variabel VECTORCRAFT_TITLEBAR lebih diutamakan.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	Mulai dari peluncuran berikutnya, VectorCraft menggambar bilah judul jendela bahkan di tempat desktop akan menggambarnya, kecuali Bilah judul sistem aktif atau variabel VECTORCRAFT_TITLEBAR memilihnya.
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Memperbesar atau memperkecil antarmuka; gambar di kanvas mempertahankan ukurannya pada zoom yang sama.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Penunjuk alat yang digambar VectorCraft membesar dan mengecil mengikuti Penskalaan UI; jika nonaktif, ukurannya tetap.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Bahasa antarmuka; Otomatis menggunakan bahasa sistem. Dialog berganti bahasa begitu Anda memilih salah satunya.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Zoom animasi hanya berfungsi selama ini aktif; jika nonaktif, Zoom animasi diredupkan dan zoom tidak dianimasikan.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Zoom dengan roda meluncur halus, dan Alat zoom memperbesar saat Anda menyeret ke samping atau menahannya; jika nonaktif, Alat zoom memperbesar ke area yang Anda seret.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	Mulai dari peluncuran berikutnya, versi desktop menampilkan kanvas melalui jenis prosesor grafis ini; karya seni selalu digambar di CPU. Otomatis mengutamakan prosesor terintegrasi di Windows dan macOS. Versi web tidak menggunakannya.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	Mulai dari peluncuran berikutnya, jendela menampilkan setiap bingkai tanpa menunggu penyegaran layar jika driver grafis mengizinkan, paling banyak 240 bingkai per detik.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Mulai dari peluncuran berikutnya, versi desktop menggambar dengan jenis prosesor grafis ini; Otomatis mengutamakan yang menjalankan layar. Versi web tidak menggunakannya.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Mulai dari peluncuran berikutnya, jendela menampilkan bingkai tanpa menunggu layar menyegarkan, paling banyak 240 per detik; jika nonaktif, layar mengatur lajunya. Mode presentasi yang diatur saat peluncuran menggantikannya.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Jumlah maksimum langkah urungkan yang disimpan setiap dokumen; angka yang lebih kecil menghapus langkah terlama saat Anda mengeklik OK. Langkah juga dapat hilang lebih awal jika memakai terlalu banyak memori.
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Menampilkan gambar yang berubah saat Anda menyeret; jika nonaktif, garis luar mengikuti seretan dan gambar berubah saat Anda melepas. Panduan penggaris selalu bergerak saat Anda menyeret.
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Berapa banyak thread pekerja yang menggambar; -1 memakai satu lebih sedikit dari inti yang boleh dipakai VectorCraft, paling banyak 8, dan 0 tidak memakai sama sekali. Versi web tidak pernah memakainya.
@@ -5205,6 +5290,9 @@ font-technology	Variable	Variabel
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	Buka berkas terbaru dan layar Home menampilkan paling banyak sejumlah ini berkas terbaru; 0 tidak menampilkan satu pun, dan VectorCraft tetap mengingat hingga 30.
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	Saat dokumen dibuka, gambar EPS tertaut yang menampilkan pratinjau tersimpannya mempertahankannya alih-alih membaca berkas EPS lagi; berkas yang berubah tetap mengikuti Perbarui tautan.
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	Dalam Pratinjau piksel, gambar digambar halus; jika nonaktif, pikselnya tampil dengan tepi tajam. Di luar Pratinjau piksel, gambar selalu dihaluskan.
+	PDF Text	Teks PDF
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	Teks PDF yang Anda buka atau sematkan masuk sebagai teks yang dapat diedit, atau sebagai outline yang tampak sama di komputer tanpa fontnya.
+	Linked pages show the file's own text.	Halaman tertaut menampilkan teks milik berkas itu sendiri.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Saat berkas tertaut berubah, Otomatis membacanya lagi, Tanya saat diubah bertanya dulu kepada Anda, dan Secara manual membiarkannya lalu menampilkan catatan di bilah status.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	Di versi desktop, folder tempat Baru dari templat… dan Simpan sebagai templat… dimulai; biarkan kosong untuk VectorCraft Templates di folder dokumen Anda.
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Edit asli membuka berkas tertaut di aplikasi bawaan sistem untuk jenisnya; jika nonaktif, gambar raster tertaut terbuka di PhotoCraft jika terpasang.
@@ -5215,7 +5303,10 @@ font-technology	Variable	Variabel
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft menyimpan pilihan ini, tetapi Salin dan Potong belum memakai format clipboard vektor lama.
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Pertahankan jalur atau Pertahankan tampilan dan overprint untuk clipboard vektor lama; VectorCraft menyimpan pilihan itu tetapi belum memakainya.
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Pertahankan pemformatan menjaga gaya teks yang disalin dari objek teks VectorCraft saat ditempel ke objek teks; Pertahankan teks polos memberinya gaya di tempat teks itu ditempel.
-	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Teks baru mendapat bahasa ini selama bahasa di Pengaturan dokumen adalah Inggris: USA dan [Gaya karakter normal] tidak menetapkan bahasa; teks yang sudah ada di dokumen mempertahankan bahasanya sendiri.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	Tampilkan semua warna hitam sebagai rich black menampilkan hitam CMYK murni (hanya tinta hitam 100%) sebagai hitam RGB di kanvas; Tampilkan semua warna hitam secara akurat mengonversinya melalui ruang CMYK kerja.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Keluarkan semua warna hitam sebagai rich black menggambar hitam CMYK murni sebagai hitam RGB dalam ekspor raster RGB dan skala abu-abu serta Cetak sebagai bitmap; opsi ini tidak mengubah ekspor vektor, JPEG, TIFF, dan PSD CMYK, atau pencetakan lain.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	Pada layar sentuh, beralih ke ruang kerja sentuh; mematikan opsi ini atau hilangnya layar sentuh mengembalikan ruang kerja sebelum peralihan.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Ketukan dua jari di kanvas mengurungkan, atau di ruang kerja sentuh beralih antara alat seleksi dan alat gambar, dan ketukan tiga jari mengulangi; keduanya tidak berfungsi dalam mode presentasi.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	Di paragraf dengan Pemenggalan kata aktif, kata dalam daftar hanya dipenggal pada tanda hubung yang diketik di dalamnya, atau tidak di mana pun jika tidak ada, apa pun huruf besar-kecilnya; kata Korea tidak diberi tanda hubung, dan kata dalam bahasa India tidak dipenggal di dalam satu gugus karakter.
 	Reset all preferences to their defaults?	Atur ulang semua preferensi ke defaultnya?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Nilai default diterapkan saat Anda mengklik OK di Preferensi. Batal di sana mempertahankan preferensi Anda saat ini.
@@ -5238,6 +5329,10 @@ font-technology	Variable	Variabel
 	Circle	Lingkaran
 	Circle Tool	Alat lingkaran
 	Circle too large	Lingkaran terlalu besar
+	Show Radii	Tampilkan jari-jari
+	Show Diameter	Tampilkan diameter
+	Anchors at Standard Positions	Titik jangkar di posisi standar
+	Third Point by Dragging	Titik ketiga dengan menyeret
 	Clip to Art	Pangkas ke karya seni
 	Colorize	Warnai
 	Gamma	Gamma
@@ -5535,6 +5630,7 @@ imageTrace	Outline	Kontur
 @msg	Saved {path}	Berhasil menyimpan {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Pilih teks atau klik di dalam teks dengan alat Teks untuk menyisipkan glif
 @msg	Shape Builder: no region under the pointer	Pembangun Bentuk: tidak ada area di bawah penunjuk
+@msg	Fill Area: no enclosed area under the pointer	Isi Area: tidak ada area tertutup di bawah penunjuk
 @msg	Shape Builder: select paths or compound paths	Pembangun Bentuk: pilih jalur atau jalur majemuk
 @msg	Show All Hidden Attributes: nothing is hidden	Tampilkan semua atribut tersembunyi: tidak ada yang tersembunyi
 @msg	Split Into Grid: select paths large enough for the grid	Bagi menjadi kisi: pilih jalur yang cukup besar untuk kisi
@@ -6880,6 +6976,8 @@ mark-style	Japanese	Jepang
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` harus grayscale, rgb, hsb, cmyk atau websafe
 @msg	`view` must be wheel or box	`view` harus wheel atau box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` harus hue, saturation, brightness, red, green atau blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` harus none, oklch, atau hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH memerlukan sRGB sebagai ruang RGB kerja
 @msg	the Color Picker is not open	Pemilih Warna tidak terbuka
 @msg	the screen color sampler is already open	pengambil warna layar sudah terbuka
 @msg	this system has no screen color sampler	sistem ini tidak memiliki pengambil warna layar
@@ -8151,6 +8249,7 @@ breakText	Glyphs	Glif
 	Remove Strokes	Hapus Stroke
 	Place Brush Art	Tempatkan karya seni kuas
 	Replace Brush Art	Ganti karya seni kuas
+	Replace Pattern Art	Ganti karya seni pola
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Stroke menggunakan kuas ini. Terapkan karya seni baru ke stroke tersebut, atau biarkan apa adanya dan tambahkan salinan kuas dengan karya seni baru?
 	Apply to Strokes	Terapkan ke Stroke
 	Leave Strokes	Biarkan Stroke
@@ -8566,6 +8665,43 @@ breakText	Glyphs	Glif
 @msg	A joint does not close by {gap} pt.	Sebuah sambungan tidak menutup sejauh {gap} pt.
 @msg	Two panels pass through each other.	Dua panel saling menembus.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"
+	Nature Icons	Ikon Alam
+	Flower	Bunga
+	Tree	Pohon
+	Mountain	Gunung
+	Ornamental	Ornamental
+	Scrollwork	Sulur Hias
+	Filigree Arrow	Panah Filigran
+	Petal Sweep	Sapuan Kelopak
+	Twin Curl	Sulur Ganda
+	Vector Packs	Paket Vektor
+	Compass Rose	Mawar Kompas
+	Botanical Sprig	Ranting Botani
+	Facet Diamond	Berlian Berfaset
+	Tide Crest	Puncak Gelombang
+	Leaf Vine	Sulur Daun
+	Blossom Chain	Rangkaian Bunga
+	Pennant Garland	Untaian Panji
+	Lantern String	Rangkaian Lentera
+	Orbit Lines	Garis Orbit
+	Petal Garland	Rangkaian Kelopak
+	Lattice Braid	Anyaman Kisi
+	Facet Sweep	Sapuan Berfaset
+	Artistic Brushes	Kuas Artistik
+	Paint	Cat
+	Flat Sweep	Sapuan Datar
+	Dry Drag	Tarikan Kering
+	Loaded Stroke	Sapuan Tebal
+	Fan Sweep	Sapuan Kipas
+@msg	`at` must be "start" or "end"	`at` harus "start" atau "end"
+@msg	give exactly one of `through` and `toward`	berikan tepat satu dari `through` dan `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	tidak ada busur yang cocok dengan titik-titik ini: dua titik sama atau ketiganya segaris
+@msg	give `at` only with `toward`	berikan `at` hanya bersama `toward`
+	Engraving	Ukiran
+	Fine Hatching	Arsiran halus
+	Dense Hatching	Arsiran rapat
+	Tapered Hatching	Arsiran meruncing
+	Broken Hatching	Arsiran terputus
 	Image Brush	Kuas gambar
 	Soft Bloom	Mekar lembut
 	Halftone Field	Bidang halftone
@@ -8980,3 +9116,7 @@ file-filter	Applications	Aplikasi
 @msg	the slices' descriptor has a reference of an unknown kind ({_1})	deskriptor irisan memiliki referensi dengan jenis yang tidak dikenal ({_1})
 @msg	the slices' descriptor has a value of an unknown type ({_1})	deskriptor irisan memiliki nilai dengan tipe yang tidak dikenal ({_1})
 @msg	the layers can't be read ({e}): the file was placed as its merged image	lapisan tidak dapat dibaca ({e}): berkas ditempatkan sebagai gambar gabungannya
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	objek {_1} adalah gambar yang diubah dengan Distorsi perspektif atau Distorsi bebas, dan perintah ini tidak dapat digunakan padanya
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	gambar {_1} tidak dapat didistorsi dengan cara ini: sudut-sudutnya tidak akan membentuk bangun cembung
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	gambar {_1} tidak dapat didistorsi dengan cara ini: sudut-sudutnya akan melewati cakrawala distorsi
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	gambar {_1} tidak dapat didistorsi dengan cara ini: sudut-sudutnya terlalu berdekatan untuk pemetaan perspektif

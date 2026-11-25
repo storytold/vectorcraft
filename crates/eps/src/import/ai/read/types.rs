@@ -244,6 +244,7 @@ pub(super) struct PatternHead {
 pub(super) struct SymbolHead {
     /// `AI13PatternRegistrationType` in the dictionary after the art.
     pub(super) registration: Option<f64>,
+    pub(super) dynamic: bool,
     /// Art the reader left out (type, a placed file, non-native art, an image it can't read or
     /// place, a gradient it can't read): the symbol isn't kept, and its instances come in as the
     /// page draws them, within the box of the rest.

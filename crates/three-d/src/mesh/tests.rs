@@ -174,6 +174,68 @@ fn a_bridge_through_another_corner_touches_it() {
 }
 
 #[test]
+fn flat_triangles_keep_corners_that_lie_along_an_edge() {
+    // A square with a hole, its edges carrying corners midway, as a cell shares with its finer
+    // neighbors: every corner is a corner of some triangle, and the triangles cover the face.
+    let p = |x: f64, y: f64| Point::new(x, y);
+    let outline = vec![p(5.0, 0.0), p(10.0, 0.0), p(10.0, 5.0), p(10.0, 10.0), p(5.0, 10.0), p(0.0, 10.0), p(0.0, 5.0), p(0.0, 0.0)];
+    let hole = vec![p(1.0, 4.0), p(1.0, 6.0), p(2.0, 6.0), p(2.0, 4.0)];
+    let mut work = 0;
+    let triangles = flat_triangles(&[outline.clone(), hole], &mut work, usize::MAX).unwrap();
+    let area = |t: &[Point; 3]| ((t[1].x - t[0].x) * (t[2].y - t[0].y) - (t[1].y - t[0].y) * (t[2].x - t[0].x)) / 2.0;
+    assert!(triangles.iter().all(|t| area(t) > 0.0));
+    assert!((triangles.iter().map(area).sum::<f64>() - 98.0).abs() < 1e-9);
+    for q in &outline {
+        assert!(triangles.iter().any(|t| t.contains(q)), "{q:?} is no triangle's corner");
+    }
+    assert!(work > 0);
+}
+
+#[test]
+fn flat_triangles_keep_corners_on_the_edge_an_ear_would_cut() {
+    // The first ear's new edge runs along the bottom, through its two middle corners.
+    let p = |x: f64, y: f64| Point::new(x, y);
+    let outline = vec![p(0.0, 3.0), p(0.0, 0.0), p(1.0, 0.0), p(2.0, 0.0), p(3.0, 0.0)];
+    let mut work = 0;
+    let triangles = flat_triangles(std::slice::from_ref(&outline), &mut work, usize::MAX).unwrap();
+    let area = |t: &[Point; 3]| ((t[1].x - t[0].x) * (t[2].y - t[0].y) - (t[1].y - t[0].y) * (t[2].x - t[0].x)) / 2.0;
+    assert!((triangles.iter().map(area).sum::<f64>() - 4.5).abs() < 1e-9);
+    for q in &outline {
+        assert!(triangles.iter().any(|t| t.contains(q)), "{q:?} is no triangle's corner");
+    }
+}
+
+#[test]
+fn flat_triangles_pass_over_an_ear_whose_new_edge_runs_through_a_dent() {
+    // The first ear's new edge, from (0, 4) to (4, 0), runs through the dent's corner at (2, 2).
+    let p = |x: f64, y: f64| Point::new(x, y);
+    let outline = vec![p(0.0, 0.0), p(4.0, 0.0), p(4.0, 4.0), p(2.0, 2.0), p(0.0, 4.0)];
+    let mut work = 0;
+    let triangles = flat_triangles(std::slice::from_ref(&outline), &mut work, usize::MAX).unwrap();
+    let area = |t: &[Point; 3]| ((t[1].x - t[0].x) * (t[2].y - t[0].y) - (t[1].y - t[0].y) * (t[2].x - t[0].x)) / 2.0;
+    assert!((triangles.iter().map(area).sum::<f64>() - 12.0).abs() < 1e-9);
+    for t in &triangles {
+        for (a, b) in [(t[0], t[1]), (t[1], t[2]), (t[2], t[0])] {
+            for q in &outline {
+                assert!(!super::touches((q.x, q.y), (a.x, a.y), (b.x, b.y)), "{q:?} lies inside the edge {a:?} to {b:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn flat_triangles_stop_at_their_budget() {
+    let p = |x: f64, y: f64| Point::new(x, y);
+    let outline = vec![p(0.0, 0.0), p(10.0, 0.0), p(10.0, 10.0), p(0.0, 10.0)];
+    let hole = vec![p(1.0, 4.0), p(1.0, 6.0), p(2.0, 6.0), p(2.0, 4.0)];
+    let mut all = 0;
+    assert!(flat_triangles(&[outline.clone(), hole.clone()], &mut all, usize::MAX).is_some());
+    let mut work = 0;
+    assert!(flat_triangles(&[outline, hole], &mut work, all - 1).is_none());
+    assert!(work >= all, "{work} of {all}");
+}
+
+#[test]
 fn a_beveled_extrusion_stays_closed() {
     let mut b = BezPath::new();
     square(&mut b, 0.0, 0.0, 100.0, false);
@@ -481,10 +543,32 @@ fn join_numbers_each_parts_corners_after_the_last() {
     square(&mut b, 0.0, 0.0, 10.0, false);
     let (p, r) = shape(&b);
     let one = plane_mesh(&p, FillRule::NonZero, r, front()).unwrap();
-    let both = Mesh::join([one.clone(), one.clone()]);
+    let both = Mesh::join([one.clone(), one.clone()]).unwrap();
     assert_eq!(both.triangles.len(), 2 * one.triangles.len());
     assert!(both.triangles.iter().all(|t| t.iter().all(|i| (*i as usize) < both.positions.len())));
     assert_eq!(both.triangles[one.triangles.len()][0], one.triangles[0][0] + one.positions.len() as u32);
+    assert!(both.is_consistent());
+    assert_eq!(both.uvs.len(), 2 * one.uvs.len());
+    assert_eq!(both.parts.len(), 2 * one.parts.len());
+}
+
+#[test]
+fn join_refuses_a_mesh_whose_lists_do_not_match() {
+    let mut b = BezPath::new();
+    square(&mut b, 0.0, 0.0, 10.0, false);
+    let (p, r) = shape(&b);
+    let one = plane_mesh(&p, FillRule::NonZero, r, front()).unwrap();
+    for broken in [
+        Mesh { uvs: vec![], ..one.clone() },
+        Mesh { parts: vec![], ..one.clone() },
+        Mesh { normals: vec![], ..one.clone() },
+        Mesh { uvs: vec![[f64::NAN, 0.0]; one.uvs.len()], ..one.clone() },
+        Mesh { positions: vec![[f64::INFINITY, 0.0, 0.0]; one.positions.len()], ..one.clone() },
+        Mesh { triangles: vec![[0, 1, u32::MAX]], parts: vec![MeshPart::Front], ..one.clone() },
+    ] {
+        assert!(!broken.is_consistent());
+        assert!(Mesh::join([one.clone(), broken]).is_err());
+    }
 }
 
 /// A mesh's positions and normals as bits, and its triangles.

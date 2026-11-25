@@ -386,6 +386,10 @@ impl Node {
                 .filter(|c| c.visible || !matches!(self.kind, NodeKind::Layer { .. }))
                 .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.geometric(symbols))),
             NodeKind::Text(t) => self.projected(t.bounds()),
+            // A distorted image is bounded by its corners.
+            NodeKind::Image(_) if self.is_distorted_image() => {
+                self.image_corners().map(|q| q[1..].iter().fold(Rect::from_points(q[0], q[0]), |r, p| r.union_pt(*p)))
+            }
             NodeKind::Image(im) => Some(im.xf.transform_rect_bbox(Rect::new(0.0, 0.0, im.width as f64, im.height as f64))),
             NodeKind::SymbolInstance { symbol, xf } => {
                 let art = symbols.and_then(|s| s.art(symbol)).map_or(SYMBOL_SQUARE, |a| a.geometric);
@@ -528,6 +532,9 @@ impl Node {
         }
         // The path the objects are attached to, before it is transformed.
         let on_path_before = self.on_path_data().cloned();
+        // A distorted image's placement nearest its corners, before they are transformed (`None`
+        // within when its stored corners are refused, and `None` for anything else).
+        let image_before = self.extras().image_quad.is_some().then(|| crate::image_quad::nearest_affine(self));
         if !self.is_layer() {
             self.bbox_angle = crate::orient::transformed_angle(self.bbox_angle, a);
         }
@@ -637,7 +644,8 @@ impl Node {
         {
             Arc::make_mut(&mut m.art).transform_scaled(a, sc);
         }
-        // The area where an Intertwine member is drawn over the others moves with it.
+        // The area where an Intertwine member is drawn over the others moves with it, and so do a
+        // distorted image's corners.
         if let Some(e) = self.extras_if_any() {
             if let Some(area) = e.intertwine.as_mut() {
                 area.transform(a);
@@ -645,6 +653,23 @@ impl Node {
             for area in &mut e.intertwine_tiers {
                 area.transform(a);
             }
+            if let Some(q) = e.image_quad.as_mut() {
+                for p in q.iter_mut() {
+                    *p = a * *p;
+                }
+            }
+        }
+        // Corners that a scale squeezes past what a perspective map can place (or that were
+        // refused already) leave the image placed by its transform: for valid corners, the
+        // placement that was nearest them, transformed, rather than the rectangle it had before
+        // it was distorted.
+        if let Some(before) = image_before
+            && self.image_quad().is_none()
+        {
+            if let (Some(near), NodeKind::Image(im)) = (before, &mut self.kind) {
+                im.xf = a * near;
+            }
+            self.extras_mut().image_quad = None;
         }
     }
 

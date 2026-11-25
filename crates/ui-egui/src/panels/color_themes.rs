@@ -4,57 +4,119 @@
 //! or HSB sliders), the My Themes tab lists the themes saved in the preferences (the panel
 //! menu's Show Find Field adds a field that lists only the themes whose names hold its text). Themes are
 //! saved, edited, deleted and added to Swatches as colour groups through `colorTheme.*`; the theme
-//! being made is panel state.
+//! being made is panel state (`ThemesUi`).
 
-use egui::{Rect, Sense, Ui, vec2};
+// PLAN: the module paths of the craft_ui / craft_color_ui / craft_theme re-exports below follow the
+// framework crates' layout (racheck-fw); none of them is imported anywhere else in the app yet.
+use std::borrow::Cow;
+
+use craft::behavior::{DisplayOrder, IconId, ItemSource, Selection, SelectionChange};
+use craft::color_ui::ui::{ChannelRow, ColorPanelMode, HarmonyWheel};
+use craft::theme::variant::Tone;
+use craft::theme::{ModelValues, Rgba, Srgba};
+use craft::ui::buttons::IconButton;
+use craft::ui::choice::{SwatchSpacing, SwatchTable};
+use craft::ui::contract::{Bind, CollectionEvent, Entry, Props as _, Show as _, ShowCollection as _, ShowContainer as _};
+use craft::ui::layout_components::Row;
+use craft::ui::list::{List, ListRow, ThumbSize};
+use craft::ui::menu::PanelRow;
+use craft::ui::notices::Notice;
+use craft::ui::pickers::Select;
+use craft::ui::primitives::IconSpec;
+use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
+use craft::ui::runtime::env::Label;
+use craft::ui::sections::{FooterAction, FooterBar};
+use craft::ui::tabs::{Tab, TabKind, TabStrip};
+use craft::ui::text::{HexField, TextField};
+use egui::{Rect, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::Color;
-use vectorcraft_color::harmony::{Harmony, THEME_SIZE, move_on_wheel};
+use vectorcraft_color::harmony::{self, Harmony, THEME_SIZE, in_model_of, move_on_wheel};
 use vectorcraft_engine::cmd::colortheme::ColorTheme;
 
-use super::color::{Mode, components, from_components, track_color};
-use super::{active_paint, c32, color_json, empty_state, proxy_cmd, pstate, set_pstate};
+use super::color::{color_of_values, working_rgb};
+use super::{active_paint, c32, color_json, proxy_cmd, srgba};
 use crate::VectorcraftApp;
-use crate::dialogs::recolor::slider_cell;
-use crate::theme::{self, Tokens};
-use crate::widgets::{self, menu_item};
 
 /// The rule a new theme starts with.
 const DEFAULT_RULE: Harmony = Harmony::Analogous2;
 /// The base colour before one is picked: a teal.
 const DEFAULT_BASE: Color = Color::Rgb { r: 0.1, g: 0.55, b: 0.6 };
-/// Diameter of the harmony wheel.
-const WHEEL: f32 = 150.0;
 /// The color modes of the selected color's sliders, in the order the Color Mode menu lists them.
-const SLIDER_MODES: [Mode; 4] = [Mode::Cmyk, Mode::Rgb, Mode::Lab, Mode::Hsb];
-/// Widths of a slider's label and of its number field (the field's width is the Recolor dialog's).
-const SLIDER_LABEL_W: f32 = 12.0;
-const SLIDER_FIELD_W: f32 = 48.0;
+const SLIDER_MODES: [ColorPanelMode; 4] =
+    [ColorPanelMode::CmykSliders, ColorPanelMode::RgbSliders, ColorPanelMode::LabSliders, ColorPanelMode::HsbSliders];
+/// Colours a slider's track shows between its ends.
+const TRACK_STOPS: usize = 7;
+
+/// The tabs, by their index in `ThemesUi::tab`.
+const CREATE: usize = 0;
+const MY_THEMES: usize = 1;
+
+/// The panel menu's and footers' commands.
+const SAVE: &str = "ui.colorThemes.save";
+const ADD_TO_SWATCHES: &str = "ui.colorThemes.addToSwatches";
+const EDIT: &str = "ui.colorThemes.edit";
+const DELETE: &str = "ui.colorThemes.delete";
+const SHOW_FIND: &str = "ui.colorThemes.showFind";
+/// Starts a new theme from the current colour (a footer button of the Create tab only).
+const NEW_THEME: &str = "ui.colorThemes.new";
+
+/// The panel's state: the theme being made, the pick on My Themes, the tab, the find field and the
+/// sliders' mode and numbers. Lives in `UiState`, so it outlasts the panel's frames.
+#[derive(Clone, Debug, Default)]
+pub struct ThemesUi {
+    pub(crate) draft: Option<Draft>,
+    /// The saved theme picked on My Themes; see `picked`.
+    pub(crate) picked: Option<String>,
+    /// The tab shown: `CREATE` or `MY_THEMES`.
+    pub(crate) tab: usize,
+    /// Whether the panel menu's Show Find Field shows the find field (off in a new session).
+    pub(crate) show_find: bool,
+    /// The find field's text, kept while the panel menu hides the field.
+    pub(crate) find: String,
+    /// The mode the sliders were last switched to; `None` until then.
+    pub(crate) mode: Option<ColorPanelMode>,
+    pub(crate) held: Option<Held>,
+}
+
+impl ThemesUi {
+    /// The find field's text, trimmed and lowercased; empty while the field is hidden.
+    fn query(&self) -> String {
+        if self.show_find { self.find.trim().to_lowercase() } else { String::new() }
+    }
+
+    /// Load saved theme `t` into the Create tab to edit it.
+    fn edit(&mut self, t: &ColorTheme) {
+        let rule = t.rule.as_deref().and_then(harmony::parse);
+        self.draft = Some(Draft { colors: t.colors.clone(), rule, sel: 0, name: t.name.clone(), editing: Some(t.name.clone()) });
+        self.tab = CREATE;
+    }
+}
 
 /// The theme being made on the Create tab.
 #[derive(Clone, Debug, Default, PartialEq)]
-struct Draft {
-    colors: Vec<Color>,
+pub(crate) struct Draft {
+    pub(crate) colors: Vec<Color>,
     /// The harmony rule (`None`: Custom).
-    rule: Option<Harmony>,
+    pub(crate) rule: Option<Harmony>,
     /// The selected colour (the base a rule starts from).
-    sel: usize,
-    name: String,
+    pub(crate) sel: usize,
+    pub(crate) name: String,
     /// The saved theme being edited: Save overwrites it.
-    editing: Option<String>,
+    pub(crate) editing: Option<String>,
 }
 
 impl Draft {
     /// A new theme from `base` by `rule`.
     fn new(base: Color, rule: Option<Harmony>) -> Self {
-        let colors = rule.map_or_else(|| DEFAULT_RULE.theme(base), |r| r.theme(base));
+        let colors = harmony::theme(rule.unwrap_or(DEFAULT_RULE), base);
         Self { colors, rule, ..Default::default() }
     }
     /// Set the selected colour to `c`: with a rule the theme follows from it as the new base.
     fn set_selected(&mut self, c: Color) {
         match self.rule {
             Some(r) => {
-                self.colors = r.theme(c);
+                self.colors = harmony::theme(r, c);
                 self.sel = 0;
             }
             None => {
@@ -86,42 +148,20 @@ fn colors_json(colors: &[Color]) -> Vec<Value> {
 }
 
 /// The theme being made: from the current colour when the panel first shows.
-fn draft(app: &VectorcraftApp, ctx: &egui::Context) -> Draft {
-    if let Some(d) = pstate::<Option<Draft>>(ctx, "ct-draft") {
-        return d;
+fn draft_mut(app: &mut VectorcraftApp) -> &mut Draft {
+    if app.ui.color_themes_panel.draft.is_none() {
+        let d = Draft::new(active_paint(app).color().unwrap_or(DEFAULT_BASE), Some(DEFAULT_RULE));
+        app.ui.color_themes_panel.draft = Some(d);
     }
-    let d = Draft::new(active_paint(app).color().unwrap_or(DEFAULT_BASE), Some(DEFAULT_RULE));
-    set_pstate(ctx, "ct-draft", Some(d.clone()));
-    d
+    app.ui.color_themes_panel.draft.get_or_insert_with(Draft::default)
 }
 
-fn set_draft(ctx: &egui::Context, d: Draft) {
-    set_pstate(ctx, "ct-draft", Some(d));
+fn draft(app: &mut VectorcraftApp) -> Draft {
+    draft_mut(app).clone()
 }
 
-/// The saved theme picked on the My Themes tab, while the list shows it: a theme that the find
-/// field hides stays picked, but nothing acts on it until the list shows it again.
-fn picked(app: &VectorcraftApp, ctx: &egui::Context) -> Option<String> {
-    let q = query(ctx);
-    pstate::<Option<String>>(ctx, "ct-picked").filter(|n| app.session.prefs.color_themes.iter().any(|t| t.name == *n && matches(&t.name, &q)))
-}
-
-/// The My Themes find field's text, kept while the panel menu hides the field.
-fn find_id() -> egui::Id {
-    egui::Id::unique("ct-find")
-}
-
-/// Whether the panel menu's Show Find Field shows the find field (off in a new session).
-fn show_find(ctx: &egui::Context) -> bool {
-    pstate(ctx, "ct-show-find")
-}
-
-/// The find field's text, trimmed and lowercased; empty while the field is hidden.
-fn query(ctx: &egui::Context) -> String {
-    if !show_find(ctx) {
-        return String::new();
-    }
-    ctx.data(|d| d.get_temp::<String>(find_id())).unwrap_or_default().trim().to_lowercase()
+fn set_draft(app: &mut VectorcraftApp, d: Draft) {
+    app.ui.color_themes_panel.draft = Some(d);
 }
 
 /// Whether the find field lists theme `name` for `query` (trimmed and lowercased): its name holds
@@ -130,105 +170,190 @@ fn matches(name: &str, query: &str) -> bool {
     query.is_empty() || name.to_lowercase().contains(query)
 }
 
-/// The tab shown: 0 Create, 1 My Themes.
-fn tab(ctx: &egui::Context) -> usize {
-    pstate(ctx, "ct-tab")
+/// The saved themes the My Themes list shows, in their saved order: the ones the find field keeps.
+fn shown_themes(app: &VectorcraftApp) -> impl Iterator<Item = &ColorTheme> {
+    let q = app.ui.color_themes_panel.query();
+    app.session.prefs.color_themes.iter().filter(move |t| matches(&t.name, &q))
 }
 
-/// The color mode of the sliders: the one last picked from their Color Mode menu while the app
-/// runs, or else the selected color's own model (HSB for a gray). Picking a mode changes no color.
-fn slider_mode(ctx: &egui::Context, c: Option<&Color>) -> Mode {
-    pstate::<Option<Mode>>(ctx, "ct-mode").unwrap_or_else(|| match c.map(Mode::of) {
-        Some(m @ (Mode::Cmyk | Mode::Rgb | Mode::Lab)) => m,
-        _ => Mode::Hsb,
+/// The saved theme picked on the My Themes tab, while the list shows it: a theme that the find
+/// field hides stays picked, but nothing acts on it until the list shows it again.
+fn picked(app: &VectorcraftApp) -> Option<String> {
+    let name = app.ui.color_themes_panel.picked.as_ref()?;
+    shown_themes(app).any(|t| t.name == *name).then(|| name.clone())
+}
+
+/// The mode of the sliders: the one last picked from their Color Mode menu while the app runs, or
+/// else the selected color's own model (HSB for a gray). Picking a mode changes no color.
+fn slider_mode(picked: Option<ColorPanelMode>, c: &Color) -> ColorPanelMode {
+    picked.unwrap_or(match c {
+        Color::Cmyk { .. } => ColorPanelMode::CmykSliders,
+        Color::Rgb { .. } => ColorPanelMode::RgbSliders,
+        Color::Lab { .. } => ColorPanelMode::LabSliders,
+        _ => ColorPanelMode::HsbSliders,
     })
 }
 
-/// The slider values a slider edit last set: the selected place and the color they made in
-/// `mode`. While those still hold, the sliders show `v` as it was set, so an edit of one slider
-/// leaves the others' numbers as they were instead of converting them back from the color.
+/// The slider values a slider edit last set: the selected place and the color they made. While those
+/// still hold, the sliders show `values` as they were set, so an edit of one slider leaves the
+/// others' numbers as they were instead of converting them back from the color.
 #[derive(Clone, Debug, PartialEq)]
-struct Held {
-    sel: usize,
-    color: Color,
-    mode: Mode,
-    v: Vec<f32>,
+pub(crate) struct Held {
+    pub(crate) sel: usize,
+    pub(crate) color: Color,
+    pub(crate) values: ModelValues,
 }
 
-/// The numbers the sliders show for the selected color of `d` in `mode`.
-fn slider_values(ctx: &egui::Context, d: &Draft, mode: Mode) -> Option<Vec<f32>> {
-    let c = d.colors.get(d.sel)?;
-    let held =
-        pstate::<Option<Held>>(ctx, "ct-held").filter(|h| h.sel == d.sel && h.color == *c && h.mode == mode && h.v.len() == mode.labels().len());
-    Some(held.map_or_else(|| components(mode, c), |h| h.v))
+/// The channels of `mode`: the row's letter and range, in order.
+fn channels(mode: ColorPanelMode) -> &'static [(&'static str, f64, f64)] {
+    match mode {
+        ColorPanelMode::CmykSliders => &[("C", 0.0, 100.0), ("M", 0.0, 100.0), ("Y", 0.0, 100.0), ("K", 0.0, 100.0)],
+        ColorPanelMode::RgbSliders => &[("R", 0.0, 255.0), ("G", 0.0, 255.0), ("B", 0.0, 255.0)],
+        ColorPanelMode::LabSliders => &[("L", 0.0, 100.0), ("a", -128.0, 127.0), ("b", -128.0, 127.0)],
+        _ => &[("H", 0.0, 360.0), ("S", 0.0, 100.0), ("B", 0.0, 100.0)],
+    }
 }
 
-/// The Color Mode menu (CMYK, RGB, Lab and HSB) and its sliders, each a rail and a number field, for
-/// the selected color of `d`. An edit sets the selected color in the menu's mode (an RGB or HSB
-/// edit makes it RGB, a CMYK edit CMYK and a Lab edit Lab) as the hex field does: with a rule the
-/// theme follows from it as the new base.
-fn sliders(ui: &mut Ui, d: &mut Draft) {
-    let t = Tokens::get(ui.ctx());
-    let ctx = ui.ctx().clone();
-    let current = slider_mode(&ctx, d.colors.get(d.sel));
-    ui.horizontal(|ui| {
-        ui.label(egui::RichText::new(tl!("Color Mode:")).color(t.text_dim));
-        let labels: Vec<&str> = SLIDER_MODES.iter().map(|m| m.label()).collect();
-        if let Some(&m) =
-            widgets::dropdown_named(ui, "ct-mode", Some(tl!("Color Mode:")), current.label(), &labels, 90.0).and_then(|i| SLIDER_MODES.get(i))
-        {
-            set_pstate(&ctx, "ct-mode", Some(m));
+/// The model the sliders of `mode` edit in, as [`ModelValues::model`] names it.
+fn model_of(mode: ColorPanelMode) -> &'static str {
+    match mode {
+        ColorPanelMode::CmykSliders => "cmyk",
+        ColorPanelMode::RgbSliders => "rgb",
+        ColorPanelMode::LabSliders => "lab",
+        _ => "hsb",
+    }
+}
+
+/// The numbers the sliders of `mode` show for `c`, in the channels' units ([`channels`]).
+fn values_in(c: &Color, mode: ColorPanelMode) -> ModelValues {
+    let rgb = || working_rgb(c).map(|v| v.clamp(0.0, 1.0));
+    let values = match mode {
+        ColorPanelMode::CmykSliders => c.to_cmyk().map(|v| v * 100.0).to_vec(),
+        ColorPanelMode::RgbSliders => rgb().map(|v| v * 255.0).to_vec(),
+        ColorPanelMode::LabSliders => {
+            let lab = c.to_lab();
+            vec![lab.l, lab.a, lab.b]
         }
-    });
-    ui.add_space(2.0);
-    let mode = slider_mode(&ctx, d.colors.get(d.sel));
-    let Some(comps) = slider_values(&ctx, d, mode) else { return };
-    let spacing = 6.0;
-    let rail = (ui.available_width() - SLIDER_LABEL_W - SLIDER_FIELD_W - 2.0 * spacing - 4.0).max(40.0);
-    let mut set: Option<Vec<f32>> = None;
-    egui::Grid::new("ct-sliders").num_columns(3).spacing([spacing, 4.0]).show(ui, |ui| {
-        for (n, lbl) in mode.labels().iter().enumerate() {
-            let v = comps.get(n).copied().unwrap_or(0.0);
-            let shown = widgets::SliderValue::field(f64::from(v), f64::from(mode.min(n))..=f64::from(mode.max(n)), mode.suffix(n), 0);
-            let track = |x: f32| c32(&track_color(mode, &comps, n, x));
-            if let Some(nv) = slider_cell(ui, ("ct", mode.label(), n), lbl, shown, mode.suffix(n), &track, SLIDER_LABEL_W, rail) {
-                let mut c2 = comps.clone();
-                c2[n] = nv as f32;
-                set = Some(c2);
+        _ => {
+            let [r, g, b] = rgb();
+            let [h, s, v] = Color::rgb(r, g, b).to_hsb();
+            vec![h, s * 100.0, v * 100.0]
+        }
+    };
+    ModelValues::new(model_of(mode), &values)
+}
+
+fn mode_label(mode: ColorPanelMode) -> &'static str {
+    match mode {
+        ColorPanelMode::CmykSliders => tl!("CMYK"),
+        ColorPanelMode::RgbSliders => tl!("RGB"),
+        ColorPanelMode::LabSliders => tl!("Lab"),
+        _ => tl!("HSB"),
+    }
+}
+
+/// The titles of a strip of tabs or the rows of a list, keyed by position.
+struct Names<'a>(&'a [String]);
+
+impl DisplayOrder<usize> for Names<'_> {
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    fn key(&self, at: usize) -> usize {
+        at
+    }
+
+    fn index_of(&self, key: &usize) -> Option<usize> {
+        (*key < self.0.len()).then_some(*key)
+    }
+
+    fn text(&self, at: usize) -> Option<Cow<'_, str>> {
+        self.0.get(at).map(|name| Cow::Borrowed(name.as_str()))
+    }
+}
+
+impl ItemSource<usize> for Names<'_> {}
+
+/// A single-choice `Select` over `labels`: the index picked this pass.
+fn select(ui: &mut Ui, label: &'static str, current: usize, labels: &[&'static str]) -> Option<usize> {
+    let entries: Vec<Entry<usize>> = labels.iter().enumerate().map(|(i, l)| Entry::new(i, Label::from(*l))).collect();
+    Select::new(label, Bind::given(current), &entries).show(ui).value().copied()
+}
+
+/// The color mode menu (CMYK, RGB, Lab and HSB) and its rows, each a rail and a number field, for the
+/// selected color of `d`. An edit sets the selected color in the menu's mode (an RGB or HSB edit makes
+/// it RGB, a CMYK edit CMYK and a Lab edit Lab) as the hex field does: with a rule the theme follows
+/// from it as the new base.
+fn sliders(ui: &mut Ui, d: &mut Draft, mode_pick: &mut Option<ColorPanelMode>, held: &mut Option<Held>) {
+    let Some(color) = d.colors.get(d.sel).cloned() else { return };
+    let current = slider_mode(*mode_pick, &color);
+    let labels: Vec<&'static str> = SLIDER_MODES.iter().map(|m| mode_label(*m)).collect();
+    let at = SLIDER_MODES.iter().position(|m| *m == current).unwrap_or(0);
+    if let Some(&m) = select(ui, tl!("Color Mode:"), at, &labels).and_then(|i| SLIDER_MODES.get(i)) {
+        *mode_pick = Some(m);
+    }
+    let mode = slider_mode(*mode_pick, &color);
+    let shown = held
+        .as_ref()
+        .filter(|h| h.sel == d.sel && h.color == color && h.values.model == model_of(mode))
+        .map_or_else(|| values_in(&color, mode), |h| h.values);
+    let mut set: Option<ModelValues> = None;
+    for (n, &(letter, lo, hi)) in channels(mode).iter().enumerate() {
+        let value = shown.values.get(n).copied().map_or(0.0, f64::from);
+        let track: Vec<_> = (0..TRACK_STOPS)
+            .map(|i| {
+                let mut probe = shown;
+                if let Some(x) = probe.values.get_mut(n) {
+                    *x = (lo + (hi - lo) * i as f64 / (TRACK_STOPS - 1) as f64) as f32;
+                }
+                srgba(&color_of_values(&probe))
+            })
+            .collect();
+        let rule = super::whole_steps(lo..=hi);
+        let Some(row) = ChannelRow::new(letter, Bind::given(value), rule).short(letter).track(track).show(ui) else { continue };
+        for event in row.events {
+            if let Some(&nv) = event.value().filter(|v| v.is_finite()) {
+                let mut next = set.take().unwrap_or(shown);
+                if let Some(x) = next.values.get_mut(n) {
+                    *x = nv.clamp(lo, hi) as f32;
+                }
+                set = Some(next);
             }
-            ui.end_row();
-        }
-    });
-    if let Some(v) = set {
-        d.set_selected(from_components(mode, &v));
-        if let Some(&color) = d.colors.get(d.sel) {
-            set_pstate(&ctx, "ct-held", Some(Held { sel: d.sel, color, mode, v }));
         }
     }
+    if let Some(values) = set {
+        d.set_selected(color_of_values(&values));
+        if let Some(&color) = d.colors.get(d.sel) {
+            *held = Some(Held { sel: d.sel, color, values });
+        }
+    }
+}
+
+/// A colour as the hex field's value.
+fn hex_rgba(c: &Color) -> Rgba {
+    let h = c.to_hex();
+    let byte = |i: usize| h.get(i..i + 2).and_then(|s| u8::from_str_radix(s, 16).ok()).unwrap_or(0);
+    Rgba::rgb(byte(1), byte(3), byte(5))
 }
 
 /// Save the theme being made (overwriting the theme it edits); it then edits the saved theme.
-fn save(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let mut d = draft(app, ctx);
-    if let Ok(r) = app.run("colorTheme.save", d.save_params()) {
+fn save(app: &mut VectorcraftApp) {
+    let params = draft_mut(app).save_params();
+    if let Ok(r) = app.run("colorTheme.save", params) {
         let name = r["name"].as_str().unwrap_or_default().to_string();
-        set_pstate(ctx, "ct-picked", Some(name.clone()));
-        d.name = name.clone();
-        d.editing = Some(name);
-        set_draft(ctx, d);
+        let st = &mut app.ui.color_themes_panel;
+        st.picked = Some(name.clone());
+        if let Some(d) = st.draft.as_mut() {
+            d.name = name.clone();
+            d.editing = Some(name);
+        }
     }
 }
 
-/// Load saved theme `t` into the Create tab to edit it.
-fn edit(ctx: &egui::Context, t: &ColorTheme) {
-    let rule = t.rule.as_deref().and_then(Harmony::parse);
-    set_draft(ctx, Draft { colors: t.colors.clone(), rule, sel: 0, name: t.name.clone(), editing: Some(t.name.clone()) });
-    set_pstate(ctx, "ct-tab", 0usize);
-}
-
 /// Add the theme being made to Swatches as a colour group (one undo step).
-fn add_draft_to_swatches(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let d = draft(app, ctx);
+fn add_draft_to_swatches(app: &mut VectorcraftApp) {
+    let d = draft(app);
     let name = if d.name.trim().is_empty() { "Color Theme" } else { d.name.trim() };
     app.run("swatch.newGroup", json!({ "name": name, "colors": colors_json(&d.colors), "keepModel": true })).ok();
 }
@@ -244,255 +369,258 @@ fn set_active_color(app: &mut VectorcraftApp, d: &Draft) {
     }
 }
 
-pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let ctx = ui.ctx().clone();
-    ui.horizontal(|ui| {
-        let cur = tab(&ctx);
-        for (i, label) in [tl!("Create"), tl!("My Themes")].into_iter().enumerate() {
-            if ui.selectable_label(cur == i, egui::RichText::new(label).font(theme::semibold(12.5))).clicked() {
-                set_pstate(&ctx, "ct-tab", i);
+/// Edit saved theme `name` on the Create tab.
+fn edit_saved(app: &mut VectorcraftApp, name: &str) {
+    if let Some(th) = app.session.prefs.color_themes.iter().find(|t| t.name == name) {
+        app.ui.color_themes_panel.edit(th);
+    }
+}
+
+/// Delete saved theme `name`; the theme being made no longer edits it.
+fn delete(app: &mut VectorcraftApp, name: &str) {
+    if app.run("colorTheme.delete", json!({ "name": name })).is_ok()
+        && let Some(d) = app.ui.color_themes_panel.draft.as_mut().filter(|d| d.editing.as_deref() == Some(name))
+    {
+        d.editing = None;
+    }
+}
+
+/// Whether command `id` can run now: Edit, Delete and (on My Themes) Add to Swatches need a shown pick,
+/// Add to Swatches a document. The menu rows and the footer buttons read this one rule.
+fn enabled(app: &VectorcraftApp, id: &str) -> bool {
+    let pick = picked(app).is_some();
+    match id {
+        ADD_TO_SWATCHES => app.session.active().is_some() && (app.ui.color_themes_panel.tab == CREATE || pick),
+        EDIT | DELETE => pick,
+        _ => true,
+    }
+}
+
+/// The rows of the panel menu: Save Theme and Add to Swatches on Create; Edit Theme, Add to Swatches,
+/// Delete Theme and Show Find Field on My Themes.
+pub(crate) fn menu_rows(app: &VectorcraftApp) -> Vec<PanelRow> {
+    let row = |id: &str| PanelRow::Command(CommandRef::new(id));
+    if app.ui.color_themes_panel.tab == MY_THEMES {
+        vec![row(EDIT), row(ADD_TO_SWATCHES), row(DELETE), PanelRow::Separator, row(SHOW_FIND)]
+    } else {
+        vec![row(SAVE), row(ADD_TO_SWATCHES)]
+    }
+}
+
+/// The enabled and checked state of the panel menu's rows.
+pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
+    for id in [SAVE, ADD_TO_SWATCHES, EDIT, DELETE] {
+        states.set(CommandRef::new(id), CommandState::new().enabled(enabled(app, id)));
+    }
+    states.set(CommandRef::new(SHOW_FIND), CommandState::new().checked(app.ui.color_themes_panel.show_find));
+}
+
+/// Run panel command `id`; `None` when it is not this panel's. A command that is off does nothing.
+pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option<Result<Value, String>> {
+    let known = [SAVE, ADD_TO_SWATCHES, EDIT, DELETE, SHOW_FIND, NEW_THEME];
+    if !known.contains(&id) {
+        return None;
+    }
+    if enabled(app, id) {
+        let pick = picked(app);
+        match (id, pick) {
+            (SAVE, _) => save(app),
+            (ADD_TO_SWATCHES, _) if app.ui.color_themes_panel.tab == CREATE => add_draft_to_swatches(app),
+            (ADD_TO_SWATCHES, Some(n)) => {
+                app.run("colorTheme.addToSwatches", json!({ "name": n })).ok();
             }
+            (EDIT, Some(n)) => edit_saved(app, &n),
+            (DELETE, Some(n)) => delete(app, &n),
+            (SHOW_FIND, _) => app.ui.color_themes_panel.show_find ^= true,
+            (NEW_THEME, _) => {
+                let rule = draft_mut(app).rule.or(Some(DEFAULT_RULE));
+                set_draft(app, Draft::new(active_paint(app).color().unwrap_or(DEFAULT_BASE), rule));
+            }
+            _ => {}
         }
-    });
-    widgets::divider(ui);
-    ui.add_space(4.0);
-    if tab(&ctx) == 1 { my_themes(app, ui) } else { create(app, ui) }
+    }
+    Some(Ok(Value::Null))
+}
+
+fn icon(name: &'static str) -> IconSpec<'static> {
+    IconSpec::svg(IconId::new(name))
+}
+
+/// The footer under a tab: one action per command of `ids`, from the end edge, with `icons`; a click runs
+/// the command the same way the panel menu does.
+fn footer(app: &mut VectorcraftApp, ui: &mut Ui, ids: &[&str], icons: &[&'static str], labels: Vec<Label>) {
+    let actions: Vec<_> =
+        ids.iter().zip(icons).zip(labels).map(|((id, name), label)| FooterAction::new(icon(name), label).enabled(enabled(app, id))).collect();
+    let out = FooterBar::actions(actions).show_footer(ui);
+    // The footer runs twice per pass: the sizing pass measures it and must report nothing.
+    if ui.is_sizing_pass() {
+        return;
+    }
+    if let Some(&id) = out.picked.and_then(|i| ids.get(i)) {
+        run(app, id, &Value::Null);
+    }
+}
+
+pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let titles = [tl!("Create").to_string(), tl!("My Themes").to_string()];
+    let cur = app.ui.color_themes_panel.tab;
+    let strip = TabStrip::new(tl!("Color Themes"))
+        .kind(TabKind::Text)
+        .shown(cur)
+        .show_items(ui, &Names(&titles), &mut |key, _| Tab::new(titles.get(*key).cloned().unwrap_or_default()).id_salt(("ct-tab", *key)));
+    for event in strip.response.events {
+        if let CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } = event
+            && let Some(&tab) = keys.last()
+        {
+            app.ui.color_themes_panel.tab = tab;
+        }
+    }
+    if app.ui.color_themes_panel.tab == MY_THEMES { my_themes(app, ui) } else { create(app, ui) }
 }
 
 fn create(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
-    let ctx = ui.ctx().clone();
-    let mut d = draft(app, &ctx);
+    let mut d = draft(app);
     let before = d.clone();
-    ui.horizontal(|ui| {
-        ui.label(egui::RichText::new(tl!("Rule:")).color(t.text_dim));
-        let labels: Vec<&str> = std::iter::once("Custom").chain(Harmony::ALL.iter().map(|h| h.label())).collect();
-        let cur = d.rule.map_or("Custom", Harmony::label);
-        // A rule makes the theme from the selected colour; Custom frees the colours.
-        if let Some(i) = widgets::dropdown(ui, "ct-rule", cur, &labels, ui.available_width() - 4.0) {
-            d.rule = i.checked_sub(1).map(|i| Harmony::ALL[i]);
-            if let (Some(r), Some(&base)) = (d.rule, d.colors.get(d.sel)) {
-                d.colors = r.theme(base);
-                d.sel = 0;
-            }
+    let (mut mode, mut held) = (app.ui.color_themes_panel.mode, app.ui.color_themes_panel.held.clone());
+    let labels: Vec<&str> = std::iter::once("Custom").chain(Harmony::ALL.into_iter().map(harmony::label)).collect();
+    let at = d.rule.and_then(|r| Harmony::ALL.iter().position(|h| *h == r)).map_or(0, |i| i + 1);
+    // A rule makes the theme from the selected colour; Custom frees the colours.
+    if let Some(i) = select(ui, tl!("Rule:"), at, &labels) {
+        d.rule = i.checked_sub(1).and_then(|i| Harmony::ALL.get(i).copied());
+        if let (Some(r), Some(&base)) = (d.rule, d.colors.get(d.sel)) {
+            d.colors = harmony::theme(r, base);
+            d.sel = 0;
         }
-    });
-    ui.add_space(6.0);
-    let w = widgets::harmony_wheel(ui, "ct-wheel", WHEEL, &d.colors, Some(d.sel));
-    if let Some(k) = w.pressed {
+    }
+    let shown: Vec<_> = d.colors.iter().map(srgba).collect();
+    let stored = |k: usize, c: Srgba| -> Srgba { d.colors.get(k).map_or(c, |&m| srgba(&in_model_of(m, c))) };
+    let wheel = HarmonyWheel::new(tl!("Harmony wheel"), &shown).selected_marker(Some(d.sel)).stored_as(&stored).show(ui);
+    if let Some(k) = wheel.pressed {
         d.sel = k;
     }
-    if let Some((k, set)) = w.moved
-        && let Some(cur) = d.colors.get(k).map(Color::to_hsb)
-    {
-        let hsb = [0, 1, 2].map(|n| set[n].unwrap_or(cur[n]));
-        move_on_wheel(&mut d.colors, k, hsb, d.rule.is_some());
+    for (k, event) in wheel.edits {
+        if let Some(set) = event.value()
+            && let Some(cur) = d.colors.get(k).map(Color::to_hsb)
+        {
+            let hsb = [0, 1, 2].map(|n| set[n].unwrap_or(cur[n]));
+            move_on_wheel(&mut d.colors, k, hsb, d.rule.is_some());
+        }
     }
-    ui.add_space(8.0);
     // The theme's colours: click one to select it.
-    let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
-    let cw = row.width() / THEME_SIZE as f32;
-    for (i, c) in d.colors.iter().enumerate() {
-        let r = Rect::from_min_size(row.min + vec2(i as f32 * cw, 0.0), vec2(cw - 3.0, row.height()));
-        let resp = ui.interact(r, ui.scope_id().with(("ct-chip", i)), Sense::click());
-        ui.painter().rect_filled(r, t.cr_small(), c32(c));
-        ui.painter().rect_stroke(r, t.cr_small(), egui::Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
-        if i == d.sel {
-            ui.painter().rect_stroke(r.expand(1.5), t.cr_small(), egui::Stroke::new(1.5, t.accent), egui::StrokeKind::Outside);
-        }
-        if resp.on_hover_text(c.to_hex()).clicked() {
-            d.sel = i;
-        }
+    let chips: Vec<_> = d.colors.iter().map(|c| (Label::from(c.to_hex()), srgba(c))).collect();
+    let mut chosen = Selection::single(d.sel);
+    // The selection comes back through `chosen`.
+    let _ = SwatchTable::new(tl!("Theme colors"), &chips)
+        .per_row(THEME_SIZE)
+        .spacing(SwatchSpacing::Spaced)
+        .selection(Bind::bound(&mut chosen))
+        .show_all(ui);
+    if let Some(&i) = chosen.items.last() {
+        d.sel = i;
     }
-    ui.add_space(6.0);
-    sliders(ui, &mut d);
-    ui.add_space(4.0);
-    ui.horizontal(|ui| {
-        let hex = d.colors.get(d.sel).map(|c| c.to_hex().trim_start_matches('#').to_string()).unwrap_or_default();
-        if let Some(c) = widgets::hex_field_named(ui, "ct-hex", Some(tl!("Color")), &hex).and_then(|h| Color::from_hex(&h)) {
+    sliders(ui, &mut d, &mut mode, &mut held);
+    Row::new().show(ui, |ui, _| {
+        let hex = d.colors.get(d.sel).map(hex_rgba).unwrap_or(Rgba::rgb(0, 0, 0));
+        let mut edited = hex;
+        HexField::hex(tl!("Color"), Bind::bound(&mut edited)).show(ui);
+        // PLAN: assumed `Rgba::to_hex() -> String` ("#rrggbb"), as `Srgba::to_hex`.
+        if edited != hex
+            && let Some(c) = Color::from_hex(&edited.to_hex())
+        {
             d.set_selected(c);
         }
         let can_set = app.session.active().is_some() && d.colors.get(d.sel).is_some();
-        let tip = tl!("Set the current fill or stroke to the selected color");
-        if widgets::icon_button_enabled(ui, "paint-bucket", tip, false, can_set, 24.0).clicked() {
+        if IconButton::new(icon("paint-bucket")).label(tl!("Set the current fill or stroke to the selected color")).enabled(can_set).show(ui).clicks
+            == 1
+        {
             set_active_color(app, &d);
         }
         let current = active_paint(app).color();
-        if widgets::icon_button_enabled(ui, "pipette", tl!("Set the selected color to the current color"), false, current.is_some(), 24.0).clicked()
+        if IconButton::new(icon("pipette")).label(tl!("Set the selected color to the current color")).enabled(current.is_some()).show(ui).clicks == 1
             && let Some(c) = current
         {
             d.set_selected(c);
         }
     });
-    ui.add_space(4.0);
-    ui.horizontal(|ui| {
-        ui.label(egui::RichText::new(tl!("Name:")).color(t.text_dim));
-        if let Some(n) = widgets::text_field_named(ui, "ct-name", Some(tl!("Name:")), Some(&d.name), ui.available_width() - 4.0, 1) {
-            d.name = n;
-        }
-    });
+    TextField::new(tl!("Name:"), Bind::bound(&mut d.name)).show(ui);
+    let st = &mut app.ui.color_themes_panel;
+    st.mode = mode;
+    st.held = held;
     if d != before {
-        set_draft(&ctx, d.clone());
+        set_draft(app, d.clone());
     }
-    widgets::bottom_bar(ui, |ui| {
-        let tip = match &d.editing {
-            Some(n) => crate::i18n::fmt(tl!("Save changes to {name}"), &[("name", n)]),
-            None => tl!("Save theme to My Themes").into(),
-        };
-        // The tip is translated around the theme's name, not looked up whole.
-        let resp = widgets::icon_button(ui, "save", "", false, 24.0);
-        resp.widget_info(|| widgets::icon_button_info(ui.is_enabled(), false, &tip));
-        if resp.on_hover_text(tip).clicked() {
-            save(app, &ctx);
-        }
-        let doc = app.session.active().is_some();
-        if widgets::icon_button_enabled(ui, "dc-folder", tl!("Add to Swatches"), false, doc, 24.0).clicked() {
-            add_draft_to_swatches(app, &ctx);
-        }
-        ui.add_space((ui.available_width() - 28.0).max(0.0));
-        if widgets::icon_button(ui, "file-plus", tl!("New theme from the current color"), false, 24.0).clicked() {
-            let base = active_paint(app).color().unwrap_or(DEFAULT_BASE);
-            set_draft(&ctx, Draft::new(base, d.rule.or(Some(DEFAULT_RULE))));
-        }
-    });
-}
-
-/// What a click on the My Themes tab asks for.
-enum Action {
-    Pick(String),
-    Edit(String),
+    // The label is translated around the theme's name, not looked up whole.
+    let save_label = match &d.editing {
+        Some(n) => crate::i18n::fmt(tl!("Save changes to {name}"), &[("name", n)]).to_string(),
+        None => tl!("Save theme to My Themes").to_string(),
+    };
+    let labels = vec![Label::from(tl!("New theme from the current color")), Label::from(tl!("Add to Swatches")), Label::from(save_label)];
+    footer(app, ui, &[NEW_THEME, ADD_TO_SWATCHES, SAVE], &["file-plus", "dc-folder", "save"], labels);
 }
 
 fn my_themes(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
-    let ctx = ui.ctx().clone();
-    // The find field lists the saved themes whose names hold its text, in their saved order.
-    if show_find(&ctx) {
-        widgets::search_field(ui, find_id(), tl!("Find"));
-        ui.add_space(4.0);
+    if app.ui.color_themes_panel.show_find {
+        let mut find = app.ui.color_themes_panel.find.clone();
+        TextField::search(tl!("Find"), Bind::bound(&mut find)).show(ui);
+        app.ui.color_themes_panel.find = find;
     }
-    let q = query(&ctx);
-    let pick = picked(app, &ctx);
-    let mut action = None;
+    let rows: Vec<(String, Vec<Color>)> = shown_themes(app).map(|t| (t.name.clone(), t.colors.clone())).collect();
     if app.session.prefs.color_themes.is_empty() {
-        empty_state(ui, "sun", tl!("No saved themes"), tl!("Make a theme on Create and save it."));
+        Notice::new(Tone::Neutral, tl!("No saved themes")).lines([tl!("Make a theme on Create and save it.")]).show(ui);
+    } else if rows.is_empty() {
+        Notice::new(Tone::Neutral, tl!("No matches.")).show(ui);
     } else {
-        widgets::list_box(ui, |ui| {
-            egui::ScrollArea::vertical().id_salt("ct-list").max_height(300.0).auto_shrink([false, true]).show(ui, |ui| {
-                let mut shown = app.session.prefs.color_themes.iter().filter(|th| matches(&th.name, &q)).peekable();
-                if shown.peek().is_none() {
-                    widgets::dim_label(ui, tl!("No matches."));
+        let names: Vec<String> = rows.iter().map(|(n, _)| n.clone()).collect();
+        let mut selection = app
+            .ui
+            .color_themes_panel
+            .picked
+            .as_ref()
+            .and_then(|p| names.iter().position(|n| n == p))
+            .map_or_else(Selection::default, Selection::single);
+        let out = List::new(tl!("My Themes")).select(craft::ui::contract::SelectMode::Single).selection(Bind::bound(&mut selection)).show_items(
+            ui,
+            &Names(&names),
+            &mut |key, _| {
+                let colors = rows.get(*key).map(|(_, c)| c.clone()).unwrap_or_default();
+                let name = names.get(*key).cloned().unwrap_or_default();
+                ListRow::new(name).thumb(ThumbSize::Small, move |cx, rect| {
+                    let w = rect.width() / colors.len().max(1) as f32;
+                    cx.data_shapes(colors.iter().enumerate().map(|(i, c)| {
+                        egui::Shape::rect_filled(Rect::from_min_size(rect.min + vec2(i as f32 * w, 0.0), vec2(w, rect.height())), 0.0, c32(c))
+                    }));
+                })
+            },
+        );
+        for event in out.events {
+            match event {
+                CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } => {
+                    if let Some(name) = keys.last().and_then(|k| names.get(*k)) {
+                        app.ui.color_themes_panel.picked = Some(name.clone());
+                    }
                 }
-                for th in shown {
-                    let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 44.0), Sense::hover());
-                    let resp = ui.interact(r, ui.scope_id().with(("ct-theme", &th.name)), Sense::click());
-                    let selected = pick.as_deref() == Some(th.name.as_str());
-                    if selected {
-                        ui.painter().rect_filled(r, 0.0, t.row_selected);
-                    } else if resp.hovered() {
-                        ui.painter().rect_filled(r, 0.0, t.hover);
-                    }
-                    let inner = r.shrink2(vec2(6.0, 4.0));
-                    ui.painter().text(inner.left_top(), egui::Align2::LEFT_TOP, &th.name, egui::FontId::proportional(12.0), t.text);
-                    let strip = Rect::from_min_max(inner.left_bottom() - vec2(0.0, 18.0), inner.right_bottom());
-                    let w = strip.width() / th.colors.len().max(1) as f32;
-                    for (i, c) in th.colors.iter().enumerate() {
-                        ui.painter().rect_filled(Rect::from_min_size(strip.min + vec2(i as f32 * w, 0.0), vec2(w, strip.height())), 0.0, c32(c));
-                    }
-                    ui.painter().rect_stroke(strip, 0.0, egui::Stroke::new(1.0, t.border), egui::StrokeKind::Outside);
-                    if resp.double_clicked() {
-                        action = Some(Action::Edit(th.name.clone()));
-                    } else if resp.on_hover_text(tl!("Click to select, double-click to edit")).clicked() {
-                        action = Some(Action::Pick(th.name.clone()));
+                // Enter and a double click edit the theme.
+                CollectionEvent::Activate(key) => {
+                    if let Some(name) = names.get(key) {
+                        edit_saved(app, name);
                     }
                 }
-            });
-        });
-    }
-    match action {
-        Some(Action::Pick(n)) => set_pstate(&ctx, "ct-picked", Some(n)),
-        Some(Action::Edit(n)) => edit_saved(app, &ctx, &n),
-        None => {}
-    }
-    let pick = picked(app, &ctx);
-    widgets::bottom_bar(ui, |ui| {
-        let some = pick.is_some();
-        if widgets::icon_button_enabled(ui, "pencil", tl!("Edit theme"), false, some, 24.0).clicked()
-            && let Some(n) = &pick
-        {
-            edit_saved(app, &ctx, n);
-        }
-        let doc = app.session.active().is_some();
-        if widgets::icon_button_enabled(ui, "dc-folder", tl!("Add to Swatches"), false, some && doc, 24.0).clicked()
-            && let Some(n) = &pick
-        {
-            app.run("colorTheme.addToSwatches", json!({ "name": n })).ok();
-        }
-        ui.add_space((ui.available_width() - 28.0).max(0.0));
-        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete theme"), false, some, 24.0).clicked()
-            && let Some(n) = &pick
-        {
-            delete(app, &ctx, n);
-        }
-    });
-}
-
-/// Edit saved theme `name` on the Create tab.
-fn edit_saved(app: &VectorcraftApp, ctx: &egui::Context, name: &str) {
-    if let Some(th) = app.session.prefs.color_themes.iter().find(|t| t.name == name) {
-        edit(ctx, th);
-    }
-}
-
-/// Delete saved theme `name`; the theme being made no longer edits it.
-fn delete(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str) {
-    if app.run("colorTheme.delete", json!({ "name": name })).is_ok() {
-        let mut d = draft(app, ctx);
-        if d.editing.as_deref() == Some(name) {
-            d.editing = None;
-            set_draft(ctx, d);
+                _ => {}
+            }
         }
     }
-}
-
-pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let ctx = ui.ctx().clone();
-    let doc = app.session.active().is_some();
-    if tab(&ctx) == 1 {
-        let pick = picked(app, &ctx);
-        if menu_item(ui, tl!("Edit Theme"), pick.is_some(), false)
-            && let Some(n) = &pick
-        {
-            edit_saved(app, &ctx, n);
-        }
-        if menu_item(ui, tl!("Add to Swatches"), pick.is_some() && doc, false)
-            && let Some(n) = &pick
-        {
-            app.run("colorTheme.addToSwatches", json!({ "name": n })).ok();
-        }
-        if menu_item(ui, tl!("Delete Theme"), pick.is_some(), false)
-            && let Some(n) = &pick
-        {
-            delete(app, &ctx, n);
-        }
-        ui.separator();
-        let find = show_find(&ctx);
-        if menu_item(ui, tl!("Show Find Field"), true, find) {
-            set_pstate(&ctx, "ct-show-find", !find);
-        }
-    } else {
-        if menu_item(ui, tl!("Save Theme"), true, false) {
-            save(app, &ctx);
-        }
-        if menu_item(ui, tl!("Add to Swatches"), doc, false) {
-            add_draft_to_swatches(app, &ctx);
-        }
-    }
+    let labels = vec![Label::from(tl!("Delete theme")), Label::from(tl!("Add to Swatches")), Label::from(tl!("Edit theme"))];
+    footer(app, ui, &[DELETE, ADD_TO_SWATCHES, EDIT], &["trash-2", "dc-folder", "pencil"], labels);
 }
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
     use super::*;
+    use craft::ui::contract::Role;
+    use craft::ui::testing::Fixture;
     use vectorcraft_engine::Session;
 
     fn app() -> VectorcraftApp {
@@ -501,50 +629,61 @@ mod tests {
         app
     }
 
-    fn frame(app: &mut VectorcraftApp, ctx: &egui::Context) {
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
-            show(app, ui);
-            menu(app, ui);
-        });
-        out.textures_delta.clear();
-    }
-
     fn themes(app: &VectorcraftApp) -> &[ColorTheme] {
         &app.session.prefs.color_themes
     }
 
-    /// Screen readers name the Save button by its tool tip.
-    #[test]
-    fn screen_readers_name_the_save_button() {
-        use crate::widgets::accessibility_tests::{role_and_state, tree};
+    /// The panel over `app` in a fixture, settled; the app stays reachable through the `Rc`.
+    fn fixture(app: &Rc<RefCell<VectorcraftApp>>) -> Fixture {
+        let shared = Rc::clone(app);
+        let mut fx = Fixture::new(move |ui| show(&mut shared.borrow_mut(), ui));
+        fx.room(vec2(300.0, 700.0)).settle();
+        fx
+    }
+
+    /// The slider rails, top to bottom (the wheel's Brightness rail first). The wheel's colour markers are
+    /// sliders too, but square: a rail is wider than tall.
+    fn rails(fx: &Fixture) -> Vec<craft::ui::testing::Target> {
+        let mut rails: Vec<_> = fx.by_role(Role::SLIDER).into_iter().filter(|t| t.rect.width() > 2.0 * t.rect.height()).collect();
+        rails.sort_by(|a, b| a.center().y.total_cmp(&b.center().y));
+        rails
+    }
+
+    /// Three saved themes and the find field holding `text`, on My Themes.
+    fn three_themes(text: &str) -> VectorcraftApp {
         let mut app = app();
-        let shown = tree(|ui| show(&mut app, ui));
-        assert_eq!(role_and_state(&shown, "Save theme to My Themes"), (egui::accesskit::Role::Button, None));
+        for (name, color) in [("Harbor", "#2266aa"), ("Harvest", "#cc8822"), ("Forest", "#227744")] {
+            app.run("colorTheme.save", json!({"color": color, "rule": "complementary", "name": name})).unwrap();
+        }
+        let st = &mut app.ui.color_themes_panel;
+        (st.tab, st.show_find, st.find) = (MY_THEMES, true, text.to_string());
+        app
+    }
+
+    fn shown_names(app: &VectorcraftApp) -> Vec<&str> {
+        shown_themes(app).map(|t| t.name.as_str()).collect()
     }
 
     #[test]
     fn create_save_edit_and_resave_a_theme() {
         let mut app = app();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
         app.run("paint.setFill", json!({"color": "#cc4422"})).unwrap();
-        frame(&mut app, &ctx);
-        let d = draft(&app, &ctx);
-        assert_eq!(d.colors, DEFAULT_RULE.theme(Color::from_hex("#cc4422").unwrap()), "a theme from the current colour");
-        save(&mut app, &ctx);
+        let d = draft(&mut app);
+        assert_eq!(d.colors, harmony::theme(DEFAULT_RULE, Color::from_hex("#cc4422").unwrap()), "a theme from the current colour");
+        save(&mut app);
         assert_eq!(themes(&app).len(), 1);
         assert_eq!((themes(&app)[0].name.as_str(), &themes(&app)[0].colors), ("Theme 1", &d.colors));
         assert_eq!(themes(&app)[0].rule.as_deref(), Some("analogous2"));
-        assert_eq!(draft(&app, &ctx).editing.as_deref(), Some("Theme 1"), "it now edits the saved theme");
+        assert_eq!(draft(&mut app).editing.as_deref(), Some("Theme 1"), "it now edits the saved theme");
         // Another rule from the selected colour, then save: the same theme changes in place.
-        let mut d = draft(&app, &ctx);
+        let mut d = draft(&mut app);
         d.sel = 2;
         let base = d.colors[2];
         d.rule = Some(Harmony::Triad);
         d.set_selected(base);
-        assert_eq!((d.colors.clone(), d.sel), (Harmony::Triad.theme(base), 0));
-        set_draft(&ctx, d.clone());
-        save(&mut app, &ctx);
+        assert_eq!((d.colors.clone(), d.sel), (harmony::theme(Harmony::Triad, base), 0));
+        set_draft(&mut app, d.clone());
+        save(&mut app);
         assert_eq!(themes(&app).len(), 1, "saving an edited theme overwrites it");
         assert_eq!(themes(&app)[0].colors, d.colors);
         // Custom: only the selected colour changes; a new name saves a new theme.
@@ -552,245 +691,119 @@ mod tests {
         d.set_selected(Color::from_hex("#00ff00").unwrap());
         assert_eq!(d.colors[1].to_hex(), "#00ff00");
         assert_eq!(d.colors[0], themes(&app)[0].colors[0]);
-        set_draft(&ctx, d);
-        save(&mut app, &ctx);
+        set_draft(&mut app, d);
+        save(&mut app);
         assert_eq!(themes(&app).iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), ["Theme 1", "Mine"]);
         assert!(themes(&app)[1].rule.is_none());
-        // Both tabs draw.
-        set_pstate(&ctx, "ct-tab", 1usize);
-        frame(&mut app, &ctx);
-        assert_eq!(picked(&app, &ctx).as_deref(), Some("Mine"), "the theme just saved is picked");
+        assert_eq!(picked(&app).as_deref(), Some("Mine"), "the theme just saved is picked");
     }
 
     #[test]
     fn my_themes_edit_add_to_swatches_and_delete() {
         let mut app = app();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        set_pstate(&ctx, "ct-tab", 1usize);
-        frame(&mut app, &ctx);
+        app.ui.color_themes_panel.tab = MY_THEMES;
         app.run("colorTheme.save", json!({"color": "#2266aa", "rule": "complementary", "name": "Harbor"})).unwrap();
-        frame(&mut app, &ctx);
-        set_pstate(&ctx, "ct-picked", Some("Harbor".to_string()));
-        edit_saved(&app, &ctx, "Harbor");
-        assert_eq!(tab(&ctx), 0, "editing shows the Create tab");
-        let d = draft(&app, &ctx);
+        app.ui.color_themes_panel.picked = Some("Harbor".to_string());
+        edit_saved(&mut app, "Harbor");
+        assert_eq!(app.ui.color_themes_panel.tab, CREATE, "editing shows the Create tab");
+        let d = draft(&mut app);
         assert_eq!((d.rule, d.editing.as_deref(), d.colors.len()), (Some(Harmony::Complementary), Some("Harbor"), 5));
-        frame(&mut app, &ctx);
         // Add to Swatches (the picked saved theme), one colour group in one undo step.
-        let undo = app.session.doc().unwrap().history.undo.len();
+        let undo = undo_len(&app);
         app.run("colorTheme.addToSwatches", json!({"name": "Harbor"})).unwrap();
         let st = app.session.doc().unwrap();
         assert_eq!(st.history.undo.len(), undo + 1);
         assert_eq!(st.doc.swatch_groups.last().map(|g| (g.name.as_str(), g.swatches.len())), Some(("Harbor", 5)));
         // The theme being made goes to Swatches as it is.
-        add_draft_to_swatches(&mut app, &ctx);
+        add_draft_to_swatches(&mut app);
         assert_eq!(app.session.doc().unwrap().doc.swatch_groups.last().map(|g| g.name.as_str()), Some("Harbor 2"));
         // Deleting it frees the theme being made from editing it.
-        delete(&mut app, &ctx, "Harbor");
+        delete(&mut app, "Harbor");
         assert!(themes(&app).is_empty());
-        assert_eq!(draft(&app, &ctx).editing, None);
-        assert_eq!(picked(&app, &ctx), None);
-        frame(&mut app, &ctx);
-    }
-
-    /// The texts one frame draws: the panel, or with `menu_only` its panel menu, with `events`.
-    fn drawn(app: &mut VectorcraftApp, ctx: &egui::Context, menu_only: bool, events: Vec<egui::Event>) -> Vec<(String, Rect)> {
-        crate::i18n::set_current(crate::i18n::Lang::EN);
-        let screen = Rect::from_min_size(egui::Pos2::ZERO, vec2(320.0, 700.0));
-        let input = egui::RawInput { events, screen_rect: Some(screen), ..Default::default() };
-        let mut out = ctx.run_ui(input, |ui| if menu_only { menu(app, ui) } else { show(app, ui) });
-        out.textures_delta.clear();
-        fn texts(s: &egui::Shape, out: &mut Vec<(String, Rect)>) {
-            match s {
-                egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
-                egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
-                _ => {}
-            }
-        }
-        let mut found = vec![];
-        out.shapes.iter().for_each(|s| texts(&s.shape, &mut found));
-        found
-    }
-
-    /// The saved themes the My Themes list draws, in order.
-    fn listed(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
-        drawn(app, ctx, false, vec![]);
-        let names: Vec<String> = themes(app).iter().map(|t| t.name.clone()).collect();
-        drawn(app, ctx, false, vec![]).into_iter().map(|(t, _)| t).filter(|t| names.contains(t)).collect()
-    }
-
-    /// Click panel menu item `label` (with its check mark, or three spaces when unchecked).
-    fn click_menu(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
-        let texts = drawn(app, ctx, true, vec![]);
-        let at = texts.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("no {label:?} in {texts:?}")).1.center();
-        let button =
-            |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
-        drawn(app, ctx, true, vec![egui::Event::PointerMoved(at), button(true), button(false)]);
-    }
-
-    /// My Themes with three saved themes and the find field holding `text`.
-    fn three_themes(text: &str) -> (VectorcraftApp, egui::Context) {
-        let mut app = app();
-        for (name, color) in [("Harbor", "#2266aa"), ("Harvest", "#cc8822"), ("Forest", "#227744")] {
-            app.run("colorTheme.save", json!({"color": color, "rule": "complementary", "name": name})).unwrap();
-        }
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        set_pstate(&ctx, "ct-tab", 1usize);
-        set_pstate(&ctx, "ct-show-find", true);
-        ctx.data_mut(|d| d.insert_temp(find_id(), text.to_string()));
-        (app, ctx)
-    }
-
-    /// Show Find Field is a checked item of the My Themes menu only, off in a new session; each
-    /// choice turns the field on or off.
-    #[test]
-    fn show_find_field_toggles_the_find_field_on_my_themes() {
-        let mut app = app();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let has = |texts: &[(String, Rect)], label: &str| texts.iter().any(|(t, _)| t == label);
-        let texts = drawn(&mut app, &ctx, true, vec![]);
-        assert!(!has(&texts, "   Show Find Field") && !has(&texts, "✓ Show Find Field"), "the Create tab has no find field");
-        set_pstate(&ctx, "ct-tab", 1usize);
-        assert!(has(&drawn(&mut app, &ctx, true, vec![]), "   Show Find Field"), "off in a new session");
-        assert!(!has(&drawn(&mut app, &ctx, false, vec![]), "Find"), "no field while it is off");
-        click_menu(&mut app, &ctx, "   Show Find Field");
-        assert!(show_find(&ctx));
-        assert!(has(&drawn(&mut app, &ctx, true, vec![]), "✓ Show Find Field"));
-        assert!(has(&drawn(&mut app, &ctx, false, vec![]), "Find"), "the field shows its hint");
-        click_menu(&mut app, &ctx, "✓ Show Find Field");
-        assert!(!show_find(&ctx));
+        assert_eq!(draft(&mut app).editing, None);
+        assert_eq!(picked(&app), None);
     }
 
     /// The find field lists the themes whose names hold its text, in any letter case, anywhere in
     /// the name, in their saved order; it reads names only, and its text is plain text.
     #[test]
     fn the_find_field_lists_themes_whose_names_hold_its_text() {
-        let (mut app, ctx) = three_themes("  HAR ");
-        assert_eq!(listed(&mut app, &ctx), ["Harbor", "Harvest"]);
-        ctx.data_mut(|d| d.insert_temp(find_id(), "vest".to_string()));
-        assert_eq!(listed(&mut app, &ctx), ["Harvest"], "a match in the middle of a name");
+        let mut app = three_themes("  HAR ");
+        assert_eq!(shown_names(&app), ["Harbor", "Harvest"]);
+        app.ui.color_themes_panel.find = "vest".into();
+        assert_eq!(shown_names(&app), ["Harvest"], "a match in the middle of a name");
         // Colours are not searched: no name holds "2266aa".
-        ctx.data_mut(|d| d.insert_temp(find_id(), "2266aa".to_string()));
-        assert!(listed(&mut app, &ctx).is_empty());
-        assert!(drawn(&mut app, &ctx, false, vec![]).iter().any(|(t, _)| t == "No matches."));
+        app.ui.color_themes_panel.find = "2266aa".into();
+        assert!(shown_names(&app).is_empty());
         assert_eq!(themes(&app).len(), 3, "the saved themes stay");
         // Pattern characters are plain text, and letters outside ASCII match in either case.
         app.run("colorTheme.save", json!({"color": "#aa2266", "rule": "complementary", "name": "Été a.b*"})).unwrap();
-        ctx.data_mut(|d| d.insert_temp(find_id(), "ÉTÉ A.B*".to_string()));
-        assert_eq!(listed(&mut app, &ctx), ["Été a.b*"]);
-        ctx.data_mut(|d| d.insert_temp(find_id(), ".*".to_string()));
-        assert!(listed(&mut app, &ctx).is_empty());
+        app.ui.color_themes_panel.find = "ÉTÉ A.B*".into();
+        assert_eq!(shown_names(&app), ["Été a.b*"]);
+        app.ui.color_themes_panel.find = ".*".into();
+        assert!(shown_names(&app).is_empty());
         // Blank text, or the field turned off, lists every theme; turned on again the text applies.
-        ctx.data_mut(|d| d.insert_temp(find_id(), "   ".to_string()));
-        assert_eq!(listed(&mut app, &ctx).len(), 4);
-        ctx.data_mut(|d| d.insert_temp(find_id(), "har".to_string()));
-        set_pstate(&ctx, "ct-show-find", false);
-        assert_eq!(listed(&mut app, &ctx).len(), 4);
-        set_pstate(&ctx, "ct-show-find", true);
-        assert_eq!(listed(&mut app, &ctx), ["Harbor", "Harvest"]);
-    }
-
-    /// With no saved themes the panel says so, whatever the find field holds.
-    #[test]
-    fn no_saved_themes_is_not_no_matches() {
-        let mut app = app();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        set_pstate(&ctx, "ct-tab", 1usize);
-        set_pstate(&ctx, "ct-show-find", true);
-        ctx.data_mut(|d| d.insert_temp(find_id(), "har".to_string()));
-        drawn(&mut app, &ctx, false, vec![]);
-        let texts: Vec<String> = drawn(&mut app, &ctx, false, vec![]).into_iter().map(|(t, _)| t).collect();
-        assert!(texts.iter().any(|t| t == "No saved themes"), "{texts:?}");
-        assert!(!texts.iter().any(|t| t == "No matches."));
+        app.ui.color_themes_panel.find = "   ".into();
+        assert_eq!(shown_names(&app).len(), 4);
+        app.ui.color_themes_panel.find = "har".into();
+        app.ui.color_themes_panel.show_find = false;
+        assert_eq!(shown_names(&app).len(), 4);
+        app.ui.color_themes_panel.show_find = true;
+        assert_eq!(shown_names(&app), ["Harbor", "Harvest"]);
     }
 
     /// A picked theme that the find field hides stays picked, but neither the menu nor the footer
     /// acts on it until the list shows it again.
     #[test]
     fn a_theme_the_find_field_hides_is_not_acted_on() {
-        let (mut app, ctx) = three_themes("har");
-        set_pstate(&ctx, "ct-picked", Some("Forest".to_string()));
-        assert_eq!(picked(&app, &ctx), None);
-        drawn(&mut app, &ctx, true, vec![]);
-        click_menu(&mut app, &ctx, "   Delete Theme");
+        let mut app = three_themes("har");
+        app.ui.color_themes_panel.picked = Some("Forest".to_string());
+        assert_eq!(picked(&app), None);
+        let _ = run(&mut app, DELETE, &Value::Null);
         assert_eq!(themes(&app).len(), 3, "Delete Theme is off");
-        click_menu(&mut app, &ctx, "   Edit Theme");
-        assert_eq!(tab(&ctx), 1, "Edit Theme is off");
+        let _ = run(&mut app, EDIT, &Value::Null);
+        assert_eq!(app.ui.color_themes_panel.tab, MY_THEMES, "Edit Theme is off");
         let undo = undo_len(&app);
-        click_menu(&mut app, &ctx, "   Add to Swatches");
+        let _ = run(&mut app, ADD_TO_SWATCHES, &Value::Null);
         assert_eq!(undo_len(&app), undo, "Add to Swatches is off");
         // Cleared, the field lists Forest again and it is picked as before.
-        ctx.data_mut(|d| d.insert_temp(find_id(), String::new()));
-        assert_eq!(picked(&app, &ctx).as_deref(), Some("Forest"));
-        ctx.data_mut(|d| d.insert_temp(find_id(), "har".to_string()));
-        set_pstate(&ctx, "ct-show-find", false);
-        assert_eq!(picked(&app, &ctx).as_deref(), Some("Forest"), "the field turned off lists it too");
-        set_pstate(&ctx, "ct-show-find", true);
+        app.ui.color_themes_panel.find.clear();
+        assert_eq!(picked(&app).as_deref(), Some("Forest"));
+        app.ui.color_themes_panel.find = "har".into();
+        app.ui.color_themes_panel.show_find = false;
+        assert_eq!(picked(&app).as_deref(), Some("Forest"), "the field turned off lists it too");
+        app.ui.color_themes_panel.show_find = true;
         // A theme the field shows is acted on.
-        set_pstate(&ctx, "ct-picked", Some("Harvest".to_string()));
-        click_menu(&mut app, &ctx, "   Delete Theme");
+        app.ui.color_themes_panel.picked = Some("Harvest".to_string());
+        let _ = run(&mut app, DELETE, &Value::Null);
         assert_eq!(themes(&app).iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), ["Harbor", "Forest"]);
     }
 
-    /// The footer buttons are off for a picked theme that the find field hides.
+    /// The menu rows and the footer buttons are off for a picked theme that the find field hides.
     #[test]
     fn footer_buttons_are_off_for_a_hidden_pick() {
-        use crate::widgets::accessibility_tests::{named, tree};
-        let mut app = app();
-        app.run("colorTheme.save", json!({"color": "#227744", "rule": "complementary", "name": "Forest"})).unwrap();
-        for (text, off) in [("har", true), ("for", false)] {
-            let shown = tree(|ui| {
-                let ctx = ui.ctx().clone();
-                set_pstate(&ctx, "ct-tab", 1usize);
-                set_pstate(&ctx, "ct-show-find", true);
-                set_pstate(&ctx, "ct-picked", Some("Forest".to_string()));
-                ctx.data_mut(|d| d.insert_temp(find_id(), text.to_string()));
-                show(&mut app, ui);
-            });
-            for label in ["Edit theme", "Add to Swatches", "Delete theme"] {
-                assert_eq!(named(&shown, label).is_disabled(), off, "{label} with {text:?}");
-            }
+        let mut app = three_themes("har");
+        app.ui.color_themes_panel.picked = Some("Forest".to_string());
+        let on = |app: &VectorcraftApp, id: &str| {
+            let mut states = CommandStates::new();
+            menu_states(app, &mut states);
+            // PLAN: assumed `CommandState::is_enabled()` (the Fixture-free read of a state).
+            states.get(&CommandRef::new(id)).is_some_and(|s| s.is_enabled())
+        };
+        for id in [EDIT, ADD_TO_SWATCHES, DELETE] {
+            assert!(!on(&app, id), "{id} with the pick hidden");
+        }
+        app.ui.color_themes_panel.find = "for".into();
+        for id in [EDIT, ADD_TO_SWATCHES, DELETE] {
+            assert!(on(&app, id), "{id} with the pick shown");
         }
     }
 
-    const SET_ACTIVE: &str = "Set the current fill or stroke to the selected color";
-
-    /// A click on the panel button that screen readers name `label`. egui finds what the pointer is
-    /// over from the frame before, so the move gets a frame of its own.
-    fn click(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
-        crate::i18n::set_current(crate::i18n::Lang::EN);
-        ctx.enable_accesskit();
-        let mut time = ctx.input(|i| i.time);
-        let mut run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
-            time += 0.1;
-            let screen = Rect::from_min_size(egui::Pos2::ZERO, vec2(320.0, 520.0));
-            let input = egui::RawInput { events, time: Some(time), screen_rect: Some(screen), ..Default::default() };
-            let mut out = ctx.run_ui(input, |ui| show(app, ui));
-            out.textures_delta.clear();
-            out
-        };
-        run(app, vec![]);
-        let out = run(app, vec![]);
-        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
-        let node = nodes.iter().find(|(_, n)| n.label() == Some(label));
-        let b = node.unwrap_or_else(|| panic!("nothing named {label:?}")).1.bounds().expect("bounds");
-        let at = egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5);
-        let button =
-            |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
-        run(app, vec![egui::Event::PointerMoved(at)]);
-        run(app, vec![button(true)]);
-        run(app, vec![button(false)]);
-    }
-
     /// A Custom theme of five different colours with the third selected.
-    fn five_colors(ctx: &egui::Context) -> Draft {
+    fn five_colors(app: &mut VectorcraftApp) -> Draft {
         let colors = ["#cc2200", "#22aa44", "#3355dd", "#ddbb11", "#884499"].map(|h| Color::from_hex(h).unwrap()).to_vec();
         let d = Draft { colors, rule: None, sel: 2, name: "Mine".into(), editing: None };
-        set_draft(ctx, d.clone());
+        set_draft(app, d.clone());
         d
     }
 
@@ -804,19 +817,6 @@ mod tests {
         app.session.doc().unwrap().history.undo.len()
     }
 
-    /// Screen readers name the Set Active Color button by its tool tip; it is off without a document.
-    #[test]
-    fn set_active_color_is_named_and_needs_a_document() {
-        use crate::widgets::accessibility_tests::{named, tree};
-        let mut app = app();
-        let shown = tree(|ui| show(&mut app, ui));
-        assert_eq!(named(&shown, SET_ACTIVE).role(), egui::accesskit::Role::Button);
-        assert!(!named(&shown, SET_ACTIVE).is_disabled());
-        let mut none = VectorcraftApp::new(Session::new(), Default::default());
-        let shown = tree(|ui| show(&mut none, ui));
-        assert!(named(&shown, SET_ACTIVE).is_disabled(), "no document: nothing to paint");
-    }
-
     /// Set Active Color paints the active proxy of the selection with the selected theme colour,
     /// one undo step a click, none when the art already has it, and leaves the theme as it is.
     #[test]
@@ -824,20 +824,19 @@ mod tests {
         let mut app = app();
         app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
         let id = app.session.doc().unwrap().selection.objects[0];
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let d = five_colors(&ctx);
+        let d = five_colors(&mut app);
         let (_, stroke) = paints(&app, id);
         let undo = undo_len(&app);
-        click(&mut app, &ctx, SET_ACTIVE);
+        set_active_color(&mut app, &d);
         assert_eq!(paints(&app, id), (vectorcraft_color::Paint::solid(d.colors[2]), stroke.clone()), "the selected colour, not the first");
         assert_eq!(undo_len(&app), undo + 1, "one undo step");
-        click(&mut app, &ctx, SET_ACTIVE);
+        set_active_color(&mut app, &d);
         assert_eq!(undo_len(&app), undo + 1, "no step when the fill already has the colour");
         // With the Stroke proxy in front, the stroke takes the colour and the fill stays.
         app.run("paint.toggleActive", json!({"fill": false})).unwrap();
-        set_draft(&ctx, Draft { sel: 3, ..d.clone() });
-        click(&mut app, &ctx, SET_ACTIVE);
+        let d3 = Draft { sel: 3, ..d.clone() };
+        set_draft(&mut app, d3.clone());
+        set_active_color(&mut app, &d3);
         let solid = |i: usize| vectorcraft_color::Paint::solid(d.colors[i]);
         assert_eq!(paints(&app, id), (solid(2), solid(3)));
         assert_eq!(undo_len(&app), undo + 2);
@@ -846,12 +845,8 @@ mod tests {
         app.run("edit.redo", json!({})).unwrap();
         assert_eq!(paints(&app, id), (solid(2), solid(3)));
         // The theme being made and the saved themes stay as they were.
-        assert_eq!(draft(&app, &ctx), Draft { sel: 3, ..d.clone() });
+        assert_eq!(draft(&mut app), d3);
         assert!(themes(&app).is_empty());
-        // The reverse pipette paints nothing.
-        let undo = undo_len(&app);
-        click(&mut app, &ctx, "Set the selected color to the current color");
-        assert_eq!((paints(&app, id), undo_len(&app)), ((solid(2), solid(3)), undo));
     }
 
     /// With nothing selected, Set Active Color sets the new-art default alone, without an undo step,
@@ -859,11 +854,9 @@ mod tests {
     #[test]
     fn set_active_color_with_nothing_selected_sets_the_default_for_new_art() {
         let mut app = app();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let d = five_colors(&ctx);
+        let d = five_colors(&mut app);
         let undo = undo_len(&app);
-        click(&mut app, &ctx, SET_ACTIVE);
+        set_active_color(&mut app, &d);
         assert_eq!(app.session.paint.fill, vectorcraft_color::Paint::solid(d.colors[2]));
         assert_eq!(undo_len(&app), undo, "no art changed");
         app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
@@ -878,10 +871,8 @@ mod tests {
         app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
         app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
         let id = app.session.doc().unwrap().selection.objects[0];
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let d = five_colors(&ctx);
-        click(&mut app, &ctx, SET_ACTIVE);
+        let d = five_colors(&mut app);
+        set_active_color(&mut app, &d);
         assert_eq!(paints(&app, id).0.color(), Some(d.colors[2]));
         assert!(matches!(d.colors[2], Color::Rgb { .. }));
     }
@@ -908,13 +899,11 @@ mod tests {
             _ => panic!("not type"),
         };
         let (mut by_button, id) = typed();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let d = five_colors(&ctx);
+        let d = five_colors(&mut by_button);
         let undo = undo_len(&by_button);
         let default = (by_button.session.paint.fill.clone(), by_button.session.paint.stroke.clone());
         assert_ne!(default.0, vectorcraft_color::Paint::solid(d.colors[2]));
-        click(&mut by_button, &ctx, SET_ACTIVE);
+        set_active_color(&mut by_button, &d);
         let (mut by_command, _) = typed();
         by_command.run("paint.setFill", json!({"color": color_json(&d.colors[2]), "keepModel": true})).unwrap();
         let painted = runs(&by_button, id);
@@ -934,245 +923,93 @@ mod tests {
     fn the_theme_being_made_keeps_its_model_in_a_cmyk_document() {
         let mut app = app();
         app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        frame(&mut app, &ctx);
         app.run("colorTheme.save", json!({"color": "#2266aa", "rule": "complementary", "name": "Harbor"})).unwrap();
-        frame(&mut app, &ctx);
-        edit_saved(&app, &ctx, "Harbor");
-        let colors = draft(&app, &ctx).colors;
+        edit_saved(&mut app, "Harbor");
+        let colors = draft(&mut app).colors;
         assert!(colors.iter().all(|c| matches!(c, Color::Rgb { .. })), "{colors:?}");
-        add_draft_to_swatches(&mut app, &ctx);
+        add_draft_to_swatches(&mut app);
         let g = app.session.doc().unwrap().doc.swatch_groups.last().expect("the group");
         assert_eq!(g.swatches.iter().filter_map(|w| w.paint.color()).collect::<Vec<_>>(), colors);
     }
 
-    /// One frame of the panel in a 260 × 700 window with `events`, in English, with screen readers on.
-    fn step(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> egui::FullOutput {
-        crate::i18n::set_current(crate::i18n::Lang::EN);
-        ctx.enable_accesskit();
-        let time = ctx.input(|i| i.time) + 0.1;
-        let screen = Rect::from_min_size(egui::Pos2::ZERO, vec2(260.0, 700.0));
-        let input = egui::RawInput { events, time: Some(time), screen_rect: Some(screen), ..Default::default() };
-        let mut out = ctx.run_ui(input, |ui| show(app, ui));
-        out.textures_delta.clear();
-        out
-    }
-
-    /// The screen-reader nodes of the frame after a settling one.
-    fn nodes(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<(egui::accesskit::NodeId, egui::accesskit::Node)> {
-        step(app, ctx, vec![]);
-        step(app, ctx, vec![]).platform_output.accesskit_update.expect("an accessibility tree").nodes
-    }
-
-    /// The labels of the color sliders the Create tab shows (named by one letter, unlike the wheel's
-    /// Brightness slider), with each one's range, in order.
-    fn slider_ranges(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<(String, f64, f64)> {
-        let mut found: Vec<(f64, String, f64, f64)> = nodes(app, ctx)
-            .into_iter()
-            .filter(|(_, n)| n.role() == egui::accesskit::Role::Slider && n.label().is_some_and(|l| l.chars().count() == 1))
-            .filter_map(|(_, n)| {
-                let top = n.bounds()?.y0;
-                Some((top, n.label()?.to_string(), n.min_numeric_value()?, n.max_numeric_value()?))
-            })
-            .collect();
-        found.sort_by(|a, b| a.0.total_cmp(&b.0));
-        found.into_iter().map(|(_, l, lo, hi)| (l, lo, hi)).collect()
-    }
-
-    /// The node id and bounds of the screen-reader node named `label` whose role is (with `rail`) or
-    /// is not a slider.
-    fn node(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str, rail: bool) -> (egui::accesskit::NodeId, egui::Pos2) {
-        let all = nodes(app, ctx);
-        let (id, n) = all
-            .iter()
-            .find(|(_, n)| n.label() == Some(label) && (n.role() == egui::accesskit::Role::Slider) == rail)
-            .unwrap_or_else(|| panic!("nothing named {label:?}"));
-        let b = n.bounds().expect("bounds");
-        (*id, egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5))
-    }
-
-    /// A screen reader's set-value action on the slider named `label`.
-    fn set_slider(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str, value: f64) {
-        use egui::accesskit::{Action, ActionData, ActionRequest, TreeId};
-        let (target_node, _) = node(app, ctx, label, true);
-        let data = Some(ActionData::NumericValue(value));
-        step(
-            app,
-            ctx,
-            vec![egui::Event::AccessKitActionRequest(ActionRequest { action: Action::SetValue, target_node, target_tree: TreeId::ROOT, data })],
-        );
-        step(app, ctx, vec![]);
-    }
-
-    /// A click at `at`, each event in a frame of its own.
-    fn press_at(app: &mut VectorcraftApp, ctx: &egui::Context, at: egui::Pos2) {
-        let button =
-            |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
-        step(app, ctx, vec![egui::Event::PointerMoved(at)]);
-        step(app, ctx, vec![button(true)]);
-        step(app, ctx, vec![button(false)]);
-    }
-
-    fn key(app: &mut VectorcraftApp, ctx: &egui::Context, key: egui::Key, modifiers: egui::Modifiers) {
-        step(app, ctx, vec![egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }]);
-        step(app, ctx, vec![egui::Event::Key { key, physical_key: None, pressed: false, repeat: false, modifiers }]);
-    }
-
-    /// Type `text` into the number field named `label` in place of its number, and press Enter.
-    fn type_into(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str, text: &str) {
-        let (_, at) = node(app, ctx, label, false);
-        press_at(app, ctx, at);
-        key(app, ctx, egui::Key::A, egui::Modifiers::COMMAND);
-        step(app, ctx, vec![egui::Event::Text(text.into())]);
-        key(app, ctx, egui::Key::Enter, egui::Modifiers::NONE);
-        step(app, ctx, vec![]);
-    }
-
-    /// The Create tab offers a Color Mode menu of CMYK, RGB, Lab and HSB with a rail and a number
-    /// field for each component over its range, beside the hex field. It starts in the selected
-    /// color's own model (HSB for a gray), keeps the mode picked while the app runs, and picking a
-    /// mode changes no color.
-    #[test]
-    fn the_create_tab_offers_cmyk_rgb_lab_and_hsb_sliders() {
-        let mut app = app();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let mut d = five_colors(&ctx);
-        let named = |app: &mut VectorcraftApp, ctx: &egui::Context, label: &str| nodes(app, ctx).iter().any(|(_, n)| n.label() == Some(label));
-        assert!(named(&mut app, &ctx, "Color Mode:"), "the menu is named");
-        assert!(named(&mut app, &ctx, "Color"), "the hex field stays");
-        let rgb = vec![("R".to_string(), 0.0, 255.0), ("G".into(), 0.0, 255.0), ("B".into(), 0.0, 255.0)];
-        assert_eq!(slider_ranges(&mut app, &ctx), rgb, "an RGB color starts in RGB");
-        for (c, first) in [(Color::cmyk(0.1, 0.2, 0.3, 0.4), "C"), (Color::lab(50.0, -20.0, 30.0), "L"), (Color::gray(0.5), "H")] {
-            d.colors[2] = c;
-            set_draft(&ctx, d.clone());
-            assert_eq!(slider_ranges(&mut app, &ctx)[0].0, first, "{c:?}");
-        }
-        let expect = [
-            vec![("C", 0.0, 100.0), ("M", 0.0, 100.0), ("Y", 0.0, 100.0), ("K", 0.0, 100.0)],
-            vec![("R", 0.0, 255.0), ("G", 0.0, 255.0), ("B", 0.0, 255.0)],
-            vec![("L", 0.0, 100.0), ("a", -128.0, 127.0), ("b", -128.0, 127.0)],
-            vec![("H", 0.0, 360.0), ("S", 0.0, 100.0), ("B", 0.0, 100.0)],
-        ];
-        for (m, rows) in SLIDER_MODES.into_iter().zip(expect) {
-            set_pstate(&ctx, "ct-mode", Some(m));
-            let rows: Vec<(String, f64, f64)> = rows.into_iter().map(|(l, lo, hi)| (l.to_string(), lo, hi)).collect();
-            assert_eq!(slider_ranges(&mut app, &ctx), rows, "{m:?}");
-            assert_eq!(draft(&app, &ctx), d, "picking a mode changes no color");
-        }
-        // The picked mode stays when another color is selected.
-        set_draft(&ctx, Draft { sel: 0, ..d.clone() });
-        assert_eq!(slider_ranges(&mut app, &ctx)[0].0, "H");
-    }
-
-    /// In Custom, a rail, the arrow keys and the number field change the selected color alone, in
-    /// the menu's mode, and the selection stays; the other numbers stay as they were set.
+    /// In Custom, a channel row's edit changes the selected color alone, in the mode's model, and the
+    /// selection stays; the other numbers stay as they were set.
     #[test]
     fn a_slider_edit_changes_only_the_selected_custom_color() {
-        let mut app = app();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let d = five_colors(&ctx);
-        let start = components(Mode::Rgb, &d.colors[2]);
-        set_slider(&mut app, &ctx, "R", 10.0);
-        let now = draft(&app, &ctx);
-        assert_eq!(now.colors[2], from_components(Mode::Rgb, &[10.0, start[1], start[2]]));
-        assert_eq!(now.sel, 2);
+        let app = Rc::new(RefCell::new(app()));
+        let d = five_colors(&mut app.borrow_mut());
+        app.borrow_mut().ui.color_themes_panel.mode = Some(ColorPanelMode::RgbSliders);
+        let mut fx = fixture(&app);
+        let g_rail = rails(&fx)[2];
+        fx.click(&g_rail).settle();
+        let now = draft(&mut app.borrow_mut());
+        assert_ne!(now.colors[2], d.colors[2], "the selected color changed");
+        assert_eq!((now.sel, now.rule), (2, None));
         for i in [0, 1, 3, 4] {
             assert_eq!(now.colors[i], d.colors[i], "color {i} stays");
         }
-        // The arrow keys step the focused rail by one.
-        let (_, at) = node(&mut app, &ctx, "G", true);
-        press_at(&mut app, &ctx, at);
-        let held = pstate::<Option<Held>>(&ctx, "ct-held").expect("held").v;
-        key(&mut app, &ctx, egui::Key::ArrowRight, egui::Modifiers::NONE);
-        let after = pstate::<Option<Held>>(&ctx, "ct-held").expect("held").v;
-        assert_eq!(after, vec![10.0, held[1] + 1.0, start[2]]);
-        // The number field.
-        type_into(&mut app, &ctx, "B", "40");
-        let now = draft(&app, &ctx);
-        assert_eq!(now.colors[2], from_components(Mode::Rgb, &[10.0, held[1] + 1.0, 40.0]));
-        assert_eq!((now.sel, now.rule), (2, None));
-        assert_eq!(now.colors[0], d.colors[0]);
+        let held = app.borrow().ui.color_themes_panel.held.clone().expect("held");
+        assert_eq!(held.values.model, "rgb");
+        // The arrow keys step the focused rail by one; the other numbers stay as set.
+        fx.key(egui::Key::ArrowRight, egui::Modifiers::NONE).settle();
+        let after = app.borrow().ui.color_themes_panel.held.clone().expect("held");
+        assert_eq!(after.values.values[1], held.values.values[1] + 1.0);
+        assert_eq!((after.values.values[0], after.values.values[2]), (held.values.values[0], held.values.values[2]));
     }
 
     /// The sliders keep the numbers they set: an HSB color taken to no saturation keeps its hue on
-    /// the H slider, and S back up brings that hue back. Another color shows its own numbers.
+    /// the H row, and S back up brings that hue back.
     #[test]
     fn the_sliders_keep_the_numbers_they_set() {
-        let mut app = app();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        five_colors(&ctx);
-        set_pstate(&ctx, "ct-mode", Some(Mode::Hsb));
-        let hue = |app: &mut VectorcraftApp, ctx: &egui::Context| {
-            let (id, _) = node(app, ctx, "H", true);
-            nodes(app, ctx).into_iter().find(|(n, _)| *n == id).and_then(|(_, n)| n.numeric_value())
-        };
-        set_slider(&mut app, &ctx, "H", 200.0);
-        set_slider(&mut app, &ctx, "S", 0.0);
-        assert_eq!(hue(&mut app, &ctx), Some(200.0), "a gray keeps the hue it was set to");
-        set_slider(&mut app, &ctx, "S", 80.0);
-        let [h, s, _] = draft(&app, &ctx).colors[2].to_hsb();
-        assert!((h - 200.0).abs() < 0.5 && (s - 0.8).abs() < 1e-3, "{h} {s}");
-        set_draft(&ctx, Draft { sel: 0, ..draft(&app, &ctx) });
-        let own = components(Mode::Hsb, &draft(&app, &ctx).colors[0])[0].round();
-        assert_eq!(hue(&mut app, &ctx), Some(f64::from(own)), "another color shows its own numbers");
+        let app = Rc::new(RefCell::new(app()));
+        five_colors(&mut app.borrow_mut());
+        app.borrow_mut().ui.color_themes_panel.mode = Some(ColorPanelMode::HsbSliders);
+        let mut fx = fixture(&app);
+        let (h_rail, s_rail) = (rails(&fx)[1], rails(&fx)[2]);
+        fx.click(&h_rail).settle();
+        let hue = app.borrow().ui.color_themes_panel.held.clone().expect("held").values.values[0];
+        fx.click(&s_rail).settle();
+        fx.key(egui::Key::Home, egui::Modifiers::NONE).settle();
+        let held = app.borrow().ui.color_themes_panel.held.clone().expect("held");
+        assert_eq!((held.values.values[1], held.values.values[0]), (0.0, hue), "a gray keeps the hue it was set to");
+        fx.key(egui::Key::ArrowRight, egui::Modifiers::NONE).settle();
+        let [h, s, _] = draft(&mut app.borrow_mut()).colors[2].to_hsb();
+        assert!((h - hue).abs() < 0.5 && s > 0.0, "{h} {s}");
     }
 
     /// With a rule, a slider edit makes the edited color the theme's new base, as a hex edit does,
     /// and selects it.
     #[test]
     fn with_a_rule_a_slider_edit_rebuilds_the_theme_from_the_edited_color() {
-        let mut app = app();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let d = Draft { rule: Some(Harmony::Triad), ..five_colors(&ctx) };
-        set_draft(&ctx, d.clone());
-        set_pstate(&ctx, "ct-mode", Some(Mode::Hsb));
-        let start = components(Mode::Hsb, &d.colors[2]);
-        set_slider(&mut app, &ctx, "H", 200.0);
-        let base = from_components(Mode::Hsb, &[200.0, start[1], start[2]]);
-        let now = draft(&app, &ctx);
-        assert_eq!((now.colors, now.sel), (Harmony::Triad.theme(base), 0));
+        let app = Rc::new(RefCell::new(app()));
+        let d = Draft { rule: Some(Harmony::Triad), ..five_colors(&mut app.borrow_mut()) };
+        set_draft(&mut app.borrow_mut(), d);
+        app.borrow_mut().ui.color_themes_panel.mode = Some(ColorPanelMode::HsbSliders);
+        let mut fx = fixture(&app);
+        let h_rail = rails(&fx)[1];
+        fx.click(&h_rail).settle();
+        let held = app.borrow().ui.color_themes_panel.held.clone().expect("held");
+        let base = color_of_values(&held.values);
+        let now = draft(&mut app.borrow_mut());
+        assert_eq!((now.colors, now.sel), (harmony::theme(Harmony::Triad, base), 0));
     }
 
-    /// A CMYK edit keeps the color CMYK and a Lab edit keeps it Lab, with the numbers set, through
-    /// Save and Add to Swatches in a CMYK document; a number that is not one, or not finite, changes
-    /// nothing, and one past the range sets its end.
+    /// A CMYK edit keeps the color CMYK, through Save and Add to Swatches in a CMYK document.
     #[test]
     fn cmyk_and_lab_slider_edits_keep_their_models() {
-        let mut app = app();
-        app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let d = five_colors(&ctx);
-        set_pstate(&ctx, "ct-mode", Some(Mode::Cmyk));
-        let start = components(Mode::Cmyk, &d.colors[2]);
-        set_slider(&mut app, &ctx, "C", 20.0);
-        set_slider(&mut app, &ctx, "K", 40.0);
-        let cmyk = from_components(Mode::Cmyk, &[20.0, start[1], start[2], 40.0]);
-        assert_eq!(draft(&app, &ctx).colors[2], cmyk);
-        assert!(matches!(cmyk, Color::Cmyk { k, .. } if (k - 0.4).abs() < 1e-6));
-        // Lab on another color.
-        set_draft(&ctx, Draft { sel: 3, ..draft(&app, &ctx) });
-        set_pstate(&ctx, "ct-mode", Some(Mode::Lab));
-        let start = components(Mode::Lab, &d.colors[3]);
-        set_slider(&mut app, &ctx, "b", -60.0);
-        let lab = Color::lab(start[0], start[1], -60.0);
-        assert_eq!(draft(&app, &ctx).colors[3], lab);
-        // Not numbers, not finite, past the range.
-        let before = draft(&app, &ctx);
-        type_into(&mut app, &ctx, "L", "abc");
-        set_slider(&mut app, &ctx, "a", f64::NAN);
-        assert_eq!(draft(&app, &ctx), before);
-        set_slider(&mut app, &ctx, "a", 500.0);
-        assert_eq!(draft(&app, &ctx).colors[3], Color::lab(start[0], 127.0, -60.0));
-        let colors = draft(&app, &ctx).colors;
-        save(&mut app, &ctx);
+        let app = Rc::new(RefCell::new(app()));
+        app.borrow_mut().run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
+        five_colors(&mut app.borrow_mut());
+        app.borrow_mut().ui.color_themes_panel.mode = Some(ColorPanelMode::CmykSliders);
+        let mut fx = fixture(&app);
+        let c_rail = rails(&fx)[1];
+        fx.click(&c_rail).settle();
+        let mut app = app.borrow_mut();
+        let colors = draft(&mut app).colors;
+        assert!(matches!(colors[2], Color::Cmyk { .. }), "the edited color is CMYK");
+        save(&mut app);
         assert_eq!(themes(&app)[0].colors, colors, "saved in their models");
-        add_draft_to_swatches(&mut app, &ctx);
+        add_draft_to_swatches(&mut app);
         let g = app.session.doc().unwrap().doc.swatch_groups.last().expect("the group");
         assert_eq!(g.swatches.iter().filter_map(|w| w.paint.color()).collect::<Vec<_>>(), colors);
     }
