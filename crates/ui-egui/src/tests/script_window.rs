@@ -636,8 +636,8 @@ fn an_unnamed_edit_field_is_called_by_the_static_text_before_it() {
     let name = |i: usize| script_window::screen_reader_name(&w.nodes[i], script_window::prompt_of(&w, i));
     assert_eq!(name(3), "Width:", "the static text before it in its group");
     assert_eq!(name(4), "height", "the name the script gave it");
-    assert_eq!(name(5), "", "the control before it is no static text");
-    assert_eq!(name(7), "", "a hidden static text is no prompt");
+    assert_eq!(name(5), "Text", "the control before it is no static text, and the script gave it no name");
+    assert_eq!(name(7), "Text", "a hidden static text is no prompt");
     assert_eq!(name(9), "Account", "the visible text before it goes before the name the script gave");
     app.session.script_request_stop();
     assert!(!until_window(&mut app));

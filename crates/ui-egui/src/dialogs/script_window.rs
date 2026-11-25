@@ -390,7 +390,7 @@ fn control(ui: &mut Ui, drafts: &mut BTreeMap<u64, String>, place: &Place, (i, n
     ui.push_id(n.id, |ui| {
         ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| match n.kind {
             UiKind::Dialog | UiKind::Group => {}
-            UiKind::Panel => panel(ui, rect, n),
+            UiKind::Panel => panel(ui, rect, n, enabled),
             UiKind::StaticText => {
                 Text::new(n.text.clone()).show(ui);
             }
@@ -460,10 +460,11 @@ fn control(ui: &mut Ui, drafts: &mut BTreeMap<u64, String>, place: &Place, (i, n
     shown
 }
 
-/// A panel's frame, with its text over the frame's top edge; screen readers read it as a group.
-fn panel(ui: &mut Ui, rect: egui::Rect, n: &UiNode) {
+/// A panel's frame, with its text over the frame's top edge; screen readers read it as a group,
+/// disabled when the panel is.
+fn panel(ui: &mut Ui, rect: egui::Rect, n: &UiNode, enabled: bool) {
     let frame = rect.shrink(1.0);
-    let (enabled, name) = (ui.is_enabled(), n.text.clone());
+    let (enabled, name) = (enabled && ui.is_enabled(), n.text.clone());
     let r = ui.interact(rect, ui.scope_id().with("panel"), egui::Sense::hover());
     r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Group, enabled, &name));
     let visuals = ui.visuals();
@@ -475,21 +476,31 @@ fn panel(ui: &mut Ui, rect: egui::Rect, n: &UiNode) {
 }
 
 /// The name screen readers call a list box or a drop-down list `n` by: the visible static text
-/// just before it, or else the name the script gave it. Empty for none.
+/// just before it, or else the name the script gave it, or else "Value".
 fn list_name(n: &UiNode, prompt: &str) -> String {
-    if prompt.is_empty() { n.name.clone() } else { prompt.to_string() }
+    match (prompt, n.name.as_str()) {
+        ("", "") => tl!("Value").to_string(),
+        ("", name) => name.to_string(),
+        (prompt, _) => prompt.to_string(),
+    }
 }
 
 /// The name screen readers call a control with no visible label of its own (an edit field, a
 /// slider or a progress bar) by: the visible static text just before it in its container, or else
-/// the name the script gave it, or else a slider's or progress bar's text. Empty for none.
+/// the name the script gave it, or else a slider's or progress bar's text, or else "Text" for an
+/// edit field and "Value" for the others.
 pub(crate) fn screen_reader_name(n: &UiNode, prompt: &str) -> String {
-    if !prompt.is_empty() {
-        prompt.to_string()
+    let name = if !prompt.is_empty() {
+        prompt
     } else if !n.name.is_empty() || n.kind == UiKind::EditText {
-        n.name.clone()
+        &n.name
     } else {
-        n.text.clone()
+        &n.text
+    };
+    match name {
+        "" if n.kind == UiKind::EditText => tl!("Text").to_string(),
+        "" => tl!("Value").to_string(),
+        name => name.to_string(),
     }
 }
 
