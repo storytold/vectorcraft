@@ -26,6 +26,7 @@ pub const MAX_FILE: usize = 64 << 10;
 /// The most setups `view.proofSetup.list` lists.
 pub const MAX_LISTED: usize = 100;
 /// The most folder entries `view.proofSetup.list` looks at, setup files or not.
+#[cfg(not(target_arch = "wasm32"))]
 const MAX_SCANNED: usize = 100_000;
 /// The longest `name`, in characters.
 const MAX_NAME: usize = 100;

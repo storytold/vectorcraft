@@ -52,6 +52,7 @@ impl Serialize for Node {
             e.live_paint_gaps.is_none(),
             e.objects_on_path.is_none(),
             e.colorize.is_none(),
+            is_default(&e.colorize_overprint),
             is_default(&e.compound_shape),
             is_default(&e.shape_mode),
             e.symbol_overrides.is_empty(),
@@ -103,6 +104,7 @@ impl Serialize for Node {
         field!("live_paint_gaps", &e.live_paint_gaps);
         field!("objects_on_path", &e.objects_on_path);
         field!("colorize", &e.colorize);
+        field!("colorize_overprint", &e.colorize_overprint);
         field!("compound_shape", &e.compound_shape);
         field!("shape_mode", &e.shape_mode);
         field!("symbol_overrides", &e.symbol_overrides);
@@ -248,6 +250,8 @@ pub(super) struct NodeWire {
     objects_on_path: Option<Box<crate::objects_on_path::ObjectsOnPath>>,
     #[serde(default)]
     colorize: Option<Box<vectorcraft_color::Paint>>,
+    #[serde(default)]
+    colorize_overprint: bool,
     #[serde(default)]
     compound_shape: bool,
     #[serde(default)]
@@ -490,6 +494,7 @@ impl From<NodeWire> for Node {
             live_paint_gaps: w.live_paint_gaps,
             objects_on_path: w.objects_on_path,
             colorize: w.colorize,
+            colorize_overprint: w.colorize_overprint,
             compound_shape: w.compound_shape,
             shape_mode: w.shape_mode,
             symbol_overrides: w.symbol_overrides,
