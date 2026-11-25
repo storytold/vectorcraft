@@ -2561,11 +2561,11 @@ script, and it does not change the document or the preferences. The reply's `kin
 top-level `import` or `export`, such as a React `.jsx` file), `notText` (a NUL byte, or more than one byte in ten a
 control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script, the reply holds these lists:
 
-- `needs` lists what the script needs from the app that runs it: `language` (the script language's own objects
-  and directives, such as `$`, `alert`, `UnitValue`, `#target` and `#targetengine`), `dom` (the reference app's
-  document model), `files`, `menuCommands`, `dialogs`, and `hostOnly` (features only the reference app has:
-  palettes, BridgeTalk, sockets, native code, XMP, the XML object and E4X, operator overloading, reflection, actions
-  and `selectTool`).
+- `needs` lists what the script needs from the app that runs it: `language` (the script language's own objects,
+  syntax and directives, such as `$`, `alert`, `UnitValue`, the XML object and E4X, `#target` and `#targetengine`),
+  `dom` (the reference app's document model), `files`, `menuCommands`, `dialogs`, and `hostOnly` (features only the
+  reference app has: palettes, BridgeTalk, sockets, native code, XMP, operator overloading, reflection, actions and
+  `selectTool`).
 - `directives` lists the `#include`, `#includepath`, `#script`, `#strict`, `#target` and `#targetengine` lines,
   and `targets` splits each `#target` line's application specifier into `app`, `instance`, `version` and
   `locale`. A directive is read where it starts a line, written `#name` or `//@name`.
@@ -2670,7 +2670,12 @@ also reads two ECMAScript 2020 forms (https://262.ecma-international.org/11.0/):
 `f?.(args)`), which give `undefined` and skip the rest of the chain when the value before `?.` is `undefined` or
 `null`, and `??`, which evaluates its right side only when its left side is `undefined` or `null`. Mixing `??` with `&&`
 or `||` without parentheses, and assigning to an optional chain, are syntax errors. In a `.jsx` file and a `source`
-string, `?.` and `??` are syntax errors. Which files read these forms is VectorCraft's own rule. The script reaches the
+string, `?.` and `??` are syntax errors. Which files read these forms is VectorCraft's own rule. Every script, `.js`,
+`.jsx` or `source`, also reads ECMAScript for XML (E4X, ECMA-357, 2nd edition,
+https://ecma-international.org/publications-and-standards/standards/ecma-357/): XML and XMLList literals, the `..`,
+`.@`, `.*`, `.()` and `::` selectors, `for each`, `default xml namespace`, and the global `XML`, `XMLList`,
+`Namespace`, `QName`, `isXMLName` and `setDefaultXMLNamespace`, as the XML object pages describe them
+(https://extendscript.docsforadobe.dev/integrating-xml/the-xml-object/). The script reaches the
 app through the global object `vc`, and writes to the Script Console and runs other files through `$`:
 
 - `vc.run(id, params)` runs a command and returns its result. A command that fails throws an error the script can
