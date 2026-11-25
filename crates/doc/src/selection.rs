@@ -12,6 +12,9 @@ pub type AnchorRef = (usize, usize);
 /// (subpath index, segment index) inside a path.
 pub type SegmentRef = (usize, usize);
 
+/// The most objects [`Selection::add_all`] adds by looking for each one in the selected objects.
+const FEW_TO_ADD: usize = 8;
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Selection {
     /// Selected objects in selection order.
@@ -20,8 +23,9 @@ pub struct Selection {
     /// `objects` with no entry here is fully selected; `segments` distinguishes segment picks.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub anchors: BTreeMap<NodeId, BTreeSet<AnchorRef>>,
-    /// Explicitly selected segments. Their endpoints in `anchors` move with them, but are not
-    /// selected anchor points: Delete cuts connections and their anchor squares stay hollow.
+    /// Explicitly selected segments. Their endpoints in `anchors` move with them (the arrow keys
+    /// bend a curved one instead), but are not selected anchor points: Delete cuts connections and
+    /// their anchor squares stay hollow.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub segments: BTreeMap<NodeId, BTreeSet<SegmentRef>>,
     /// Key object for Align, one object of a selection of two or more. [`Selection::prune`] clears
@@ -197,14 +201,24 @@ impl Selection {
     /// carry its current activation, so a removal drops every slot of the id at once.
     fn each(&mut self, ids: impl IntoIterator<Item = NodeId>, toggle: bool) {
         use std::collections::hash_map::{Entry, HashMap};
-        let mut ids = ids.into_iter().peekable();
-        if ids.peek().is_none() {
+        let ids: Vec<NodeId> = ids.into_iter().collect();
+        if ids.is_empty() {
             return;
         }
         self.target = None;
         self.slices.clear();
         self.symbol_part = None;
         self.on_path_member = None;
+        // Up to [`FEW_TO_ADD`] objects to add are each looked for in the selected objects; more go
+        // through a table of the selected objects.
+        if !toggle && ids.len() <= FEW_TO_ADD {
+            for id in ids {
+                if !self.objects.contains(&id) {
+                    self.objects.push(id);
+                }
+            }
+            return;
+        }
         let mut live: HashMap<NodeId, usize> = self.objects.iter().map(|id| (*id, 0)).collect();
         let mut added: Vec<(NodeId, usize)> = Vec::new();
         let mut removed = false;

@@ -1196,6 +1196,7 @@ arrowhead	Target	Céltábla
 	Direction Handles	Iránykezelő fogantyúk
 	Direction:	Irány:
 	Disable Auto Add/Delete	Automatikus hozzáadás és törlés kikapcsolása
+	Delete Removes Anchor Points and Keeps Paths Joined	A Delete eltávolítja a horgonypontokat, és egyben tartja az útvonalakat
 	Interpolate Control Points When Moving Anchors	Iránykezelő fogantyúk interpolálása horgonypontok mozgatásakor
 	Disable Opacity Mask	Átlátszósági maszk kikapcsolása
 	Discard	Elvetés
@@ -1803,6 +1804,9 @@ file-filter	Swatch libraries	Színminta-könyvtárak
 file-filter	Flattener presets	Lapítási előbeállítások
 file-filter	PDF presets	PDF-előbeállítások
 file-filter	Print presets	Nyomtatási előbeállítások
+file-filter	Tracing presets	Vektorizálási előbeállítások
+file-filter	Action sets	Műveletkészletek
+file-filter	Composite fonts	Összetett betűtípusok
 file-filter	Preferences	Beállítások
 file-filter	Export presets	Exportálási előbeállítások
 file-filter	SVG Compressed	Tömörített SVG
@@ -3107,6 +3111,7 @@ file-filter	Templates	Sablonok
 	One Point Perspective Preset 5	Egypontos perspektíva, 5. előbeállítás
 	Only Web Colors	Csak webes színek
 	Opacity	Átlátszatlanság
+	Show Opacity	Átlátszatlanság megjelenítése
 	Opacity & Mask Define Knockout Shape	Az átlátszatlanság és a maszk adja a kiütés alakját
 	Opacity Mask	Átlátszósági maszk
 	Opacity Mask Info	Átlátszósági maszk adatai
@@ -3317,6 +3322,12 @@ file-filter	Templates	Sablonok
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	a felbontás nem érhető el
+	estimated memory {memory}	becsült memória {memory}
+	memory unavailable	a memória nem érhető el
+	Unknown format	Ismeretlen formátum
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -3640,6 +3651,9 @@ mark-style	Japanese	Japán
 	Rearrange All	Összes átrendezése
 	Rearrange All Artboards	Összes rajztábla átrendezése
 	Rearrange All Artboards…	Összes rajztábla átrendezése…
+	Rearrange…	Átrendezés…
+	Selected Artboards: {n}	Kijelölt rajztáblák: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Kattints a vászonra a rajztáblák elhelyezéséhez (Esc: mégse)
 	Recall Selection	Kijelölés visszahívása
 	Recent	Legutóbbi
 	RECENT	LEGUTÓBBI
@@ -3915,6 +3929,7 @@ mark-style	Japanese	Japán
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Az érintőpadon végzett kétujjas forgató kézmozdulat elforgatja a vászon nézetét.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Egy billentyű nyomva tartása a Billentyűparancsok Nyomva tartás oszlopában lévő eszközt vagy parancsot futtatja; egy rövid lenyomás a szokásos billentyűparancsát futtatja.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Hány másodpercig kell nyomva tartani egy billentyűt, hogy a szokásos billentyűparancsa helyett a nyomva tartásos billentyűparancsa fusson.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	A Delete eltávolítja a kijelölt horgonypontokat, és mindegyik körül újraigazítja a görbét ahelyett, hogy ott megnyitná az útvonalat.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Horgonypontok mozgatásakor minden olyan görbe, amelynek egyik vége elmozdul, megtartja az alakját a végeihez képest.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Egy eszköz billentyűparancsát lenyomva tartva az eszköz a felengedésig ki van választva, utána ismét az előző eszköz lesz kiválasztva.
 	Shows the bounding box while you move the selection or draw a shape.	Megjeleníti a befoglaló keretet, miközben a kijelölést mozgatja vagy alakzatot rajzol.
@@ -7310,6 +7325,8 @@ axis	Y Axis	Y tengely
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	jóváhagyás szükséges: ezt kéri: {0}, amit a felhasználó a külön telepítéskor ad meg
 @msg	not JSON: {e}	nem JSON: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	nem WebAssembly bináris (hiányzik a \\0asm fejléc)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	egy függvénytípus paramétereinek száma meghaladja a korlátot ({MAX_FUNC_TYPE_VALUES})
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	egy függvénytípus eredményeinek száma meghaladja a korlátot ({MAX_FUNC_TYPE_VALUES})
 @msg	parameter `{k}`: {what}	`{k}` paraméter: {what}
 @msg	parameter `{name}`: {what}	`{name}` paraméter: {what}
 @msg	plug-in parameters must be a JSON object	a bővítmény paraméterei JSON-objektumot alkossanak
@@ -7327,6 +7344,10 @@ axis	Y Axis	Y tengely
 @msg	vc_alloc returned 0 (out of memory)	a vc_alloc 0-t adott vissza (elfogyott a memória)
 @msg	vc_alloc returned a block outside memory	a vc_alloc a memórián kívüli blokkot adott vissza
 @msg	vc_run returned error code {packed}	a vc_run {packed} hibakódot adott vissza
+@msg	did not finish loading within {secs} s	nem töltődött be {secs} másodpercen belül
+@msg	no thread was left to load it	nem maradt szál a betöltéséhez
+@msg	panicked while loading	összeomlott betöltés közben
+@msg	panicked while loading: {what}	összeomlott betöltés közben: {what}
 @msg	{_1} is not a file	nem fájl: {_1}
 @msg	{_1} is {_2} bytes (limit {_3})	{_1}: {_2} bájt (korlát: {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} objektum (korlát: {MAX_OBJECTS})
@@ -7346,6 +7367,11 @@ axis	Y Axis	Y tengely
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	a `minItems` és a `maxItems` 0-{MAX_LIST} legyen, a `maxItems` legalább 1, és az alapértelmezett érték ennyi elemből álljon
 @msg	`name` must be a string	`name`: karakterlánc kell
 @msg	`opacity` must be a number	`opacity`: szám kell
+@msg	`opacity` must be a number from 0 to 100	`opacity`: 0 és 100 közötti szám kell
+@msg	`opacity` must be true or false	`opacity`: true vagy false kell
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	a szöveg karaktereinek nincs saját átlátszatlansága: adjon hozzá kitöltést vagy körvonalat a Megjelenés panel Új kitöltés hozzáadása vagy Új körvonal hozzáadása parancsával
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	a szimbólumpéldányban kijelölt objektumnak nincs saját kitöltési vagy körvonal-átlátszatlansága
+@msg	no target has that fill or stroke to take the opacity	egyik célnak sincs olyan kitöltése vagy körvonala, amely felvehetné az átlátszatlanságot
 @msg	`type` must be "path" or "compound"	`type`: "path" vagy "compound" kell
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	a `unit` 1-{MAX_UNIT} nyomtatható karakter legyen
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	a `visibleWhen` 1-{MAX_CONDITION_VALUES} értéket adjon meg ehhez: `{other}`
@@ -7480,6 +7506,10 @@ axis	Y Axis	Y tengely
 @msg	`inputs` lists `{shown}` twice	az `inputs` kétszer sorolja fel ezt: `{shown}`
 @msg	`inputs` needs `api` 2 or later	az `inputs` használatához `api` 2 vagy újabb szükséges
 @msg	`inputs` needs the permission `doc.read`	az `inputs` használatához a(z) `doc.read` engedély szükséges
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Olvashatja a kapott objektumokat, valamint a dokumentum beállításait, rajztábláit, rétegeit és színmintáit
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	a `context` csak különböző szakaszokat sorolhat fel: settings, artboards, layers vagy swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	a `context` szűrőhöz vagy `commands` kulccsal rendelkező élő effektushoz való, `api` 3 vagy újabb mellett, a(z) `doc.read` engedéllyel
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	a bővítmény által kért dokumentumadatok túl nagyok az átadáshoz: legfeljebb {MAX_CONTEXT_ITEMS} rajztábla, réteg és színminta {MAX_CONTEXT_BYTES} bájtban
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	memóriakeret (a(z) {_1} objektumnak {size} bájt bemenet kell, {left} maradt)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	objektumkeret (több mint {MAX_OBJECTS} csak olvasható objektum)
 @msg	instruction budget	utasításkeret

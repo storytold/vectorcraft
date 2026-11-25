@@ -198,6 +198,18 @@ fn links_inside_a_symbol_are_left_out_of_selecting_by_status() {
 }
 
 #[test]
+fn the_dialog_draws_its_images_and_buttons() {
+    let dir = Folder::new("drawn");
+    let (app, ..) = app(&dir);
+    let mut p = crate::tests::panel_harness::Panel::new(app, crate::tests::picks::dialogs);
+    menus::invoke(&mut p.app(), COMMAND, Value::Null);
+    p.frame();
+    for name in ["river.png", "harbour.png", "Select", "Cancel"] {
+        assert!(p.shows(name), "{name} is drawn");
+    }
+}
+
+#[test]
 fn the_dialog_lists_filters_and_selects_with_zoom() {
     let dir = Folder::new("dialog");
     let (mut app, river, harbour, stamp) = app(&dir);

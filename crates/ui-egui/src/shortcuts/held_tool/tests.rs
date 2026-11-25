@@ -78,7 +78,9 @@ fn a_tool_key_let_go_behind_the_update_prompt_returns_after_it() {
     keys.release_s(&mut app, 1.0);
     assert_eq!(app.session.tool_id(), "scale", "Scale stays behind the prompt");
     crate::updates_ui::close_dialogs_for_test(&mut app);
+    // The prompt's layer is gone in the first frame after it closes, and the held tool returns in the next.
     keys.frame(&mut app, 1.1, vec![]);
+    keys.frame(&mut app, 1.15, vec![]);
     assert_eq!(app.session.tool_id(), "pen", "the Pen is back after the prompt");
 }
 

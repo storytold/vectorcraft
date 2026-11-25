@@ -33,6 +33,8 @@ pub const COMMAND: &str = "addon.select.byArtboards";
 pub const KIND: &str = "selectByArtboards";
 /// The relations the dialog offers: (value, label).
 const RELATIONS: [(&str, &str); 3] = [("overlap", "Overlapping"), ("inside", "Fully Inside"), ("outside", "Fully Outside")];
+/// The rows the artboard list shows before it scrolls.
+const LIST_ROWS: u16 = 9;
 
 /// Object › Plug-ins › Selection Tools.
 pub fn menu() -> Vec<Node> {
@@ -170,6 +172,7 @@ fn body(ui: &mut Ui, fields: &mut Fields, rows: &[(String, String)], go_to: &mut
         .allow_empty(true)
         .activate(ActivateOn::DoubleClick)
         .empty(label(tl!("No artboards match.")))
+        .max_rows(LIST_ROWS)
         .selection(Bind::bound(&mut selection))
         .show_items(ui, &source, &mut |&i, item| match rows.get(i) {
             Some((name, size)) => {

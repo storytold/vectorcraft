@@ -677,6 +677,19 @@ fn the_preserve_checkboxes_open_as_they_were_last_confirmed() {
     assert_eq!(preserve(&r), [json!(false), json!(false), json!(true)], "Cancel keeps what OK left");
 }
 
+#[test]
+fn with_every_color_preserved_the_colors_table_says_so_in_its_body() {
+    let mut app = app();
+    art(&mut app, &["#ffffff", "#000000"]);
+    let mut r = assign(app, json!({}));
+    assert!(r.rows().is_empty(), "White and Black are preserved");
+    let note = "No colors to recolor (preserved colors are left out).";
+    let inside = |r: &Recolor| rect(r, "Colors").contains_rect(rect(r, note));
+    assert!(inside(&r), "the note is drawn inside the Colors table, not above its empty rows");
+    r.frame();
+    assert!(inside(&r), "and stays there on the next frame");
+}
+
 fn new_hsb(r: &Recolor) -> Vec<[f32; 3]> {
     field(r, "rows").as_array().unwrap().iter().map(|row| vectorcraft_engine::cmd::color_value(&row["to"]).unwrap().to_hsb()).collect()
 }

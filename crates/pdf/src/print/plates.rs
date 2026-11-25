@@ -238,7 +238,7 @@ impl<'a> Separator<'a> {
 
     /// Overprinting fills and strokes of `a`'s subtree with a Normal blending mode, and
     /// overprinting character fills and strokes, that put none of ink `plate` down leave its plate
-    /// as it is: they are drawn as nothing on it (white ones that `discard_white` knocks out
+    /// as it is: they are drawn as nothing on it (paper white ones that `discard_white` knocks out
     /// aside, [`DiscardWhite::discards`]). A writer without blending modes (PostScript) then keeps the ink below them,
     /// where it would draw their Darken as a knockout. One that puts any ink down is drawn, and on
     /// a PostScript plate its ink replaces the ink below, as a nonzero component of an overprinting
@@ -296,7 +296,7 @@ impl<'a> Separator<'a> {
     /// ink the plate below shows through instead of being knocked out.
     pub fn plate(&self, plate: &str) -> Document {
         let mut d = self.doc.clone();
-        let discard_white = DiscardWhite::of(self.doc);
+        let discard_white = DiscardWhite::printing(&d, |n| !self.converts(n));
         let mut colorized = BTreeSet::new();
         let nodes = d.layers.iter_mut().chain(d.symbols.iter_mut().map(|s| &mut s.art)).chain(d.patterns.iter_mut().flat_map(|p| p.art.iter_mut()));
         for n in nodes {

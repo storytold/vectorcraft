@@ -8,14 +8,15 @@ use craft::ui::display::{Divider, Elide, Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::menu::Menu;
-use craft::ui::pickers::Select;
+use craft::ui::pickers::{Select, SelectLook};
 use craft::ui::style::TypeRole;
 use craft::ui::text::ZoomField;
 
 /// Shows the status bar: zoom, rotation, artboard navigator, the info field with its Show menu, the readouts, Stop,
 /// the background-work progress and last the message, so a narrow bar elides the message before anything else.
 pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let (info, next) = info_text(app);
+    let held = crate::canvas::held_mods(ui.ctx());
+    let (info, next) = info_text(app, &held);
     if let Some(secs) = next {
         ui.ctx().request_repaint_after(std::time::Duration::from_secs(secs));
     }
@@ -73,7 +74,7 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         Field::new(tl!("Rotation")).side(SideLabel::new().kind(LabelKind::Hidden)).show(ui, |ui, _| {
             // Entries are keyed by index: an angle is not a hashable value.
-            rotate_to = Select::new(tl!("Rotation"), Bind::given(turned), &angles).show(ui).value().copied();
+            rotate_to = Select::new(tl!("Rotation"), Bind::given(turned), &angles).look(SelectLook::Filled).show(ui).value().copied();
         });
         Divider::vertical().show(ui);
         for (icon, to, tip, enabled) in
@@ -84,7 +85,9 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
         Field::new(tl!("Artboard")).side(SideLabel::new().kind(LabelKind::Hidden)).show(ui, |ui, _| {
-            if let Some(i) = Select::new(tl!("Artboard"), Bind::given(cur), &boards).enabled(nab > 0).show(ui).value().copied() {
+            if let Some(i) =
+                Select::new(tl!("Artboard"), Bind::given(cur), &boards).look(SelectLook::Filled).enabled(nab > 0).show(ui).value().copied()
+            {
                 go = Some(json!(i));
             }
         });
@@ -228,12 +231,13 @@ pub fn set_status_bar_show(app: &mut VectorcraftApp, p: &serde_json::Value) -> R
 }
 
 /// The info field's text for the choice in the Show menu, and for Date and Time the seconds until
-/// the minute it shows ends (when the bar draws again).
-pub(super) fn info_text(app: &VectorcraftApp) -> (String, Option<u64>) {
+/// the minute it shows ends (when the bar draws again). Current Tool names the selection tool Cmd
+/// lends while it is held (`held`).
+pub(super) fn info_text(app: &VectorcraftApp, held: &vectorcraft_tools::Mods) -> (String, Option<u64>) {
     let st = app.session.active();
     match app.ui.status_bar_show {
         StatusBarShow::CurrentTool => {
-            let tool = vectorcraft_tools::tool_info(app.session.tool_id())
+            let tool = vectorcraft_tools::tool_info(app.session.shown_tool_id(held))
                 .map(|t| {
                     // The catalog keys carry the full label ("Selection Tool"); only English drops the suffix.
                     let shown = tl!(t.label);

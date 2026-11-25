@@ -1,6 +1,7 @@
 //! Commands that remove, insert or copy many objects, and an Alt-drag that copies them, each walk
 //! the document's tree a few times on one layer of 25,000 to 100,000 objects, and objects in two
-//! layers and inside a group keep their order and ids.
+//! layers and inside a group keep their order and ids. Selecting objects one at a time looks up
+//! only the added ones.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -695,4 +696,28 @@ fn copies_of_ids_listed_twice_or_inside_another_listed_id_keep_their_order_and_i
     assert_eq!(r["ids"], json!([n, n + 1]));
     assert_eq!(layers(&s), [json!([a, n + 1, n, b, c, [group, d, e, f]]), json!([g, h])]);
     undo_gives_back(&mut s, &before);
+}
+
+/// `select.add` run once for each of `n` objects, from nothing selected → the walks of the tree and
+/// the lookups by id it took.
+fn add_one_at_a_time(n: usize) -> (u64, u64) {
+    let mut s = session(n, square);
+    s.execute("select.none", &json!({})).unwrap();
+    let ids = layer(&s, 0);
+    let (walks, lookups) = (vectorcraft_doc::tree_walks(), vectorcraft_doc::path_lookups());
+    for id in &ids {
+        s.execute("select.add", &json!({"ids": [id.0]})).unwrap();
+    }
+    assert!(selected(&s, &ids));
+    (vectorcraft_doc::tree_walks() - walks, vectorcraft_doc::path_lookups() - lookups)
+}
+
+/// Selecting objects one at a time checks and reads only the object each `select.add` adds: twice
+/// as many objects take about twice as many lookups, and the tree is not walked for each one.
+#[test]
+fn selecting_objects_one_at_a_time_looks_up_only_the_added_objects() {
+    let (walks, lookups) = add_one_at_a_time(1_000);
+    let (more_walks, more_lookups) = add_one_at_a_time(2_000);
+    assert!(walks.max(more_walks) <= MOST_TREE_WALKS, "walked the tree {walks} and {more_walks} times");
+    assert!(more_lookups <= lookups * 5 / 2, "{lookups} lookups for 1,000 objects, {more_lookups} for 2,000");
 }

@@ -18,7 +18,7 @@ use craft::ui::runtime::windows::WindowHost;
 use serde_json::{Value, json};
 
 use super::labels::holds_plugin_commands;
-use super::{Listed, TODO, display_label, menu_tree_named, plugin_revision, shown_label, shown_state, why_off};
+use super::{Listed, PLACEHOLDER, TODO, display_label, menu_tree_named, plugin_revision, shown_label, shown_state, why_off};
 use crate::i18n::LangExt as _;
 use crate::{UiState, VectorcraftApp};
 
@@ -86,6 +86,9 @@ pub(crate) fn state_key(app: &VectorcraftApp, input: Option<u64>) -> u64 {
     let mut h = DefaultHasher::new();
     input.hash(&mut h);
     app.run_count.hash(&mut h);
+    // The window's keymap, which the panel rows read their shortcuts from (`Build::decorate`): the framework builds it
+    // after the first frame's menus, and builds a new one when the bindings or the catalog change.
+    app.ui_ctx.as_ref().and_then(craft::ui::runtime::commands::keymap).map(|k| std::sync::Arc::as_ptr(&k).addr()).hash(&mut h);
     let s = &app.session;
     (s.journal.len(), s.active_index(), s.clipboard.is_empty(), s.tool_composing()).hash(&mut h);
     if let Some(d) = s.active() {
@@ -225,6 +228,8 @@ fn rebuild(app: &mut VectorcraftApp, target: Target) {
     }
     // The Symbols panel menu's states read the selection's instances from the walk this keeps.
     crate::panels::symbols::cache_instances(app);
+    // The Glyphs panel menu's East Asian glyph forms read the faces that draw the selected text from the layout this keeps.
+    crate::panels::glyphs::refresh_form_faces(app);
     let listed = Listed::of(app);
     let mut build = Build { app, lang: crate::i18n::current(), states: CommandStates::new(), refs: Vec::new() };
     let menus: Vec<Menu> = menu_tree_named(app.session.prefs.font_names_in_english, &listed)
@@ -430,6 +435,16 @@ impl Build<'_> {
             let tip = crate::i18n::tr(self.lang, TODO_TOOLTIP).to_string();
             return Some(item.tooltip(tip));
         }
+        // A placeholder shows its text in the UI language, as a heading does, and runs nothing.
+        if command.id == PLACEHOLDER {
+            self.states.set(command, CommandState::new().enabled(false));
+            let mut item = item.enabled(false);
+            let shown = self.title(&item.label, true);
+            if shown != item.label {
+                item.english = Some(std::mem::replace(&mut item.label, shown));
+            }
+            return Some(item);
+        }
         let (id, params) = (command.id.as_str(), &command.params);
         let (enabled, checked) = shown_state(self.app, id, params)?;
         let mut state = CommandState::new().enabled(enabled).title(self.item_title(id, params, &item.label));
@@ -461,11 +476,18 @@ impl Build<'_> {
         item_title(self.app, self.lang, id, params, label)
     }
 
-    /// The alternates (a modifier held as the row is chosen) and the font sample of a row.
+    /// The alternates (a modifier held as the row is chosen), the font sample and the shortcut of a row.
     fn decorate(&self, item: Item, id: &str, params: &Value) -> Item {
         let run_with = |mods: Mods, p: Value| Alternate::new(mods, CommandRef::with_params(id, p));
         let held = |shift: bool, alt: bool| Mods { cmd: false, ctrl: false, alt, shift };
         match id {
+            // A panel row shows the chord of the panel's shortcut (`panel:<id>`), which binds `window.panel {panel}`;
+            // a Window row runs it with `toggle: true`, so the framework finds no chord for the row's own command.
+            "window.panel" => {
+                let mut item = item;
+                item.shortcut = super::labels::item_shortcut(self.app, id, params);
+                item
+            }
             "ui.expandDialog" => item.alternate(run_with(held(false, true), json!({ "immediate": true }))),
             crate::addons::select::link_status::COMMAND => {
                 item.alternate(run_with(held(true, false), crate::addons::select::link_status::with_shift(params.clone())))
