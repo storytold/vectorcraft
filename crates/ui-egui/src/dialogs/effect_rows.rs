@@ -6,7 +6,8 @@
 use std::ops::RangeInclusive;
 
 use craft::behavior::Mixed;
-use craft::ui::contract::{Bind, Entry, Props as _, Show as _};
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
+use craft::ui::layout_components::{Row, Stack};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamKind};
 use craft::ui::pickers::Select;
 use craft::ui::primitives::ContentPainterCx;
@@ -203,19 +204,20 @@ pub(super) fn textured(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> {
         let entries: Vec<Entry<String>> = table.iter().map(|(label, value)| Entry::new((*value).to_owned(), data_label(label))).collect();
         let current = fields.text("texture").unwrap_or_default();
         let current = table.iter().find(|(_, value)| value.eq_ignore_ascii_case(current)).map_or("", |(_, value)| *value).to_owned();
-        ui.horizontal(|ui| {
-            let picked = Select::new(lbl!("Texture"), Bind::given(current), &entries).show(ui);
-            if let Some(id) = picked.value().cloned() {
-                fields.set("texture", id);
-            }
-            // The pick is an edit of the rows, which the Appearance panel's editor applies.
-            cx.gesture(&picked.events);
+        let mut picked = None;
+        let shown = Row::new().show(ui, |ui, _| {
+            picked = Some(Select::new(lbl!("Texture"), Bind::given(current.clone()), &entries).show(ui));
             if let Some((w, h)) = size {
                 craft::ui::display::Text::new(format!("{w} × {h} px")).show(ui);
             }
-            picked.response
-        })
-        .inner
+        });
+        let Some(picked) = picked else { return shown.output };
+        if let Some(id) = picked.value().cloned() {
+            fields.set("texture", id);
+        }
+        // The pick is an edit of the rows, which the Appearance panel's editor applies.
+        cx.gesture(&picked.events);
+        picked.response
     })
     .companions([TEXTURE_IMAGE]);
     let own = ["texture", "texturePath", TEXTURE_IMAGE];
@@ -275,7 +277,7 @@ pub(super) fn radial_blur(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> {
         let zoom = fields.text("method").is_some_and(|m| m.eq_ignore_ascii_case("zoom"));
         let mut next = c;
         let unit: RangeInclusive<f64> = 0.0..=1.0;
-        let row = ui.horizontal(|ui| {
+        let row = Row::new().show(ui, |ui, _| {
             let picker = PointPicker::new(Bind::given([Mixed::Same(c[0]), Mixed::Same(c[1])]), unit.clone(), unit.clone())
                 .label(lbl!("Blur Center"))
                 .id_salt("point")
@@ -284,7 +286,7 @@ pub(super) fn radial_blur(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> {
             if let Some([Mixed::Same(x), Mixed::Same(y)]) = picker.value().cloned() {
                 next = [x, y];
             }
-            ui.vertical(|ui| {
+            Stack::new().show(ui, |ui, _| {
                 for (axis, label) in [lbl!("Horizontal"), lbl!("Vertical")].into_iter().enumerate() {
                     let shown = NumberField::new(label, Bind::given(Some(c[axis] * 100.0)))
                         .unit("%")
@@ -302,7 +304,7 @@ pub(super) fn radial_blur(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> {
             fields.set("centerX", center_round(next[0].clamp(0.0, 1.0)));
             fields.set("centerY", center_round(next[1].clamp(0.0, 1.0)));
         }
-        row.response
+        row.output
     })
     .companions(["centerX", "centerY"]);
     let rows = generic(cx, fields).into_iter().filter(|p| !matches!(p.key.as_str(), "centerX" | "centerY"));
