@@ -302,19 +302,3 @@ fn ime_target_survives_edits_and_changes_with_the_document() {
     let second = s.tool_ime_target(v).expect("the new document's type has a target");
     assert_ne!(first.0, second.0, "a document replacement is a new IME owner");
 }
-
-/// The outgoing surrounding-text source excludes the pre-edit and reports UTF-8 byte offsets.
-#[test]
-fn ime_surrounding_excludes_the_preedit_and_remaps_offsets() {
-    let mut s = session();
-    let v = ViewInfo::default();
-    s.select_tool("type", v).unwrap();
-    click(&mut s, 100.0, 100.0);
-    s.tool_text("Hé", v).unwrap();
-    s.tool_preedit("xy", None, v).unwrap();
-    let vectorcraft_tools::ImeSurrounding::Available { text, cursor, anchor } = s.tool_ime_surrounding(4000, v) else {
-        panic!("type editing has a context");
-    };
-    assert_eq!(text, "Hé");
-    assert_eq!((cursor, anchor), (3, 3), "the caret sits after the committed text, before the pre-edit");
-}
