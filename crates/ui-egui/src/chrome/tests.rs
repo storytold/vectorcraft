@@ -2678,6 +2678,28 @@ fn the_control_bar_align_to_menu_chooses_what_align_aligns_to() {
     assert_eq!(menu(&mut bar).1.as_deref(), Some("Align to Selection"));
 }
 
+/// The Control bar's Style picker is a swatch of the style the selection is linked to: it paints no style's name,
+/// and it keeps its width whether the selection is linked or not and when a style with a long name is added.
+#[test]
+fn the_control_bar_style_picker_is_a_swatch_of_the_linked_style() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 40, "height": 40})).unwrap();
+    let mut bar = control_shown(app);
+    bar.room(egui::vec2(2400.0, 300.0));
+    let width = |bar: &mut Shown| bar.settle().named("Graphic Styles").rect.width();
+    let unlinked = width(&mut bar);
+    let long = "A graphic style whose name is longer than any field on the bar";
+    bar.app().run("graphicStyle.new", json!({"name": long})).unwrap();
+    bar.app().run("graphicStyle.apply", json!({"name": long})).unwrap();
+    let linked = bar.app().session.selection_graphic_style().is_some_and(|(g, linked)| linked && g.name == long);
+    assert!(linked, "the rectangle is linked to the new style");
+    let shown = width(&mut bar);
+    assert!((shown - unlinked).abs() < 0.5, "the swatch keeps its width: {unlinked} unlinked, {shown} linked to {long:?}");
+    assert!(!bar.texts().iter().any(|t| t.text.contains(long)), "the swatch paints no style name: {:?}", bar.texts());
+}
+
 /// The Control bar shows the Global Edit Options dropdown while Start Global Edit can run. Its
 /// options are the session's, which the Properties panel's dropdown also sets: Match Size from
 /// the Control bar narrows the Results and the objects Start Global Edit takes. The dropdown is off
