@@ -157,6 +157,8 @@ fn svg_export_writes_width_height_with_the_requested_unit() {
     for p in [json!({"units": "px"}), json!({"svg": {"units": "px"}})] {
         assert_eq!(svg(&mut s, p), plain, "explicit pixels override physical document units");
     }
+    assert_eq!(svg(&mut s, json!({"units": "mm", "svg": {"units": "px"}})), plain, "nested units override flat units");
+    assert_eq!(svg(&mut s, json!({"units": null, "svg": {"units": "px"}})), plain, "nested units override flat null");
 }
 
 #[test]

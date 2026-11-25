@@ -792,7 +792,7 @@ fn the_document_info_report_has_every_category() {
         assert!(text.contains(&format!("\n{h}\n")), "{h}: {text}");
     }
     assert!(text.contains("Images: 3") && text.contains("Source Sans 3 Regular: built in; embedding allowed"), "{text}");
-    assert!(text.contains("red.png: 600 × 300 px — ") && text.contains("Color Mode: RGB") && text.contains("\nSwatches: "), "{text}");
+    assert!(text.contains("red.png: PNG; 600 × 300 px; 72 ppi — ") && text.contains("Color Mode: RGB") && text.contains("\nSwatches: "), "{text}");
     let fonts = run(&mut s, "document.info", json!({"format": "text", "category": "fonts"}))["text"].as_str().unwrap().to_string();
     assert!(fonts.contains("FONTS") && !fonts.contains("OBJECTS"), "{fonts}");
     let i = run(&mut s, "document.info", json!({"category": "linkedImages"}));
@@ -802,7 +802,7 @@ fn the_document_info_report_has_every_category() {
     // embedded one with no file.
     let linked: Vec<Value> = i["imageObjects"].as_array().unwrap().iter().filter(|o| o["linked"] == true).cloned().collect();
     for (o, r) in linked.iter().zip(i["sections"][0]["rows"].as_array().unwrap()) {
-        let shown = format!("{} × {} px — {}", o["width"], o["height"], o["file"].as_str().unwrap());
+        let shown = format!("PNG; {} × {} px; 72 ppi — {}", o["width"], o["height"], o["file"].as_str().unwrap());
         assert_eq!((&o["name"], shown.as_str()), (&r[0], r[1].as_str().unwrap()));
     }
     assert_eq!(linked.len(), 2);
@@ -1019,8 +1019,15 @@ fn package_copies_held_postscript_only_for_a_placed_document_with_a_postscript_n
         im.link.as_mut().unwrap().path = logo_ai.clone();
         im.link.as_mut().unwrap().relative = None;
         let key = im.key.clone();
-        d.images
-            .insert(key, vectorcraft_doc::ImageBlob { mime: "application/postscript".into(), bytes: std::sync::Arc::new(eps.to_vec()), proxy: None });
+        d.images.insert(
+            key,
+            vectorcraft_doc::ImageBlob {
+                mime: "application/postscript".into(),
+                bytes: std::sync::Arc::new(eps.to_vec()),
+                proxy: None,
+                file_font: Default::default(),
+            },
+        );
         Ok(())
     })
     .unwrap();

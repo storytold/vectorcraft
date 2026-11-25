@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use vectorcraft_color::Color;
-use vectorcraft_color::harmony::{Harmony, THEME_SIZE};
+use vectorcraft_color::harmony::{self, THEME_SIZE};
 use vectorcraft_color::recolor::ColorKey;
 use vectorcraft_tools::params::color_json;
 
@@ -98,7 +98,7 @@ fn next_name(s: &Session) -> String {
 fn save(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "colorTheme.save";
     let rule = match str_param(p, "rule") {
-        Some(r) => Some(Harmony::parse(r).ok_or_else(|| bad(C, format!("unknown rule `{r}` (see color.harmony)")))?),
+        Some(r) => Some(harmony::parse(r).ok_or_else(|| bad(C, format!("unknown rule `{r}` (see color.harmony)")))?),
         None => None,
     };
     let colors: Vec<Color> = match (p.get("colors"), p.get("color")) {
@@ -107,7 +107,7 @@ fn save(s: &mut Session, p: &Value) -> Result<Value> {
         }
         (None, Some(c)) => {
             let base = color_value(c).ok_or_else(|| bad(C, "invalid `color`"))?;
-            rule.ok_or_else(|| bad(C, "`color` needs a `rule` to make the theme from"))?.theme(base)
+            harmony::theme(rule.ok_or_else(|| bad(C, "`color` needs a `rule` to make the theme from"))?, base)
         }
         _ => return Err(bad(C, "give `colors`, or `color` and `rule`")),
     };
@@ -123,7 +123,7 @@ fn save(s: &mut Session, p: &Value) -> Result<Value> {
     if s.prefs.color_themes.iter().enumerate().any(|(i, t)| Some(i) != replace && t.name.eq_ignore_ascii_case(&name)) {
         return Err(bad(C, format!("a theme is already called {name} (replace: \"{name}\" overwrites it)")));
     }
-    let theme = ColorTheme { name: name.clone(), colors, rule: rule.map(Harmony::id) };
+    let theme = ColorTheme { name: name.clone(), colors, rule: rule.map(|h| h.id().to_owned()) };
     match replace {
         Some(i) => s.prefs.color_themes[i] = theme,
         None => s.prefs.color_themes.push(theme),
