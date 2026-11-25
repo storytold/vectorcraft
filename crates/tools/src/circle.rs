@@ -640,7 +640,8 @@ impl Tool for CircleTool {
         if let Some(switch) = self.options.switch(key) {
             *switch = on;
         }
-        if self.options.drag_third != was {
+        // A circle drawn from its center has no third point, so its center stays placed.
+        if self.options.drag_third != was && !self.centered {
             self.clear();
         }
     }

@@ -7396,7 +7396,7 @@ default except `fromCenter`, which is off, and `color` is `"blue"`:
   the opposite corner, with the diagonal as its radius. Shift keeps the second point at 45° steps from the center, and
   Alt rounds the diameter (twice the distance from the center) to the nearest ruler tick. The tool shows one radius, to
   the pointer. A second click on the center places nothing. The setting in force when the first point is placed applies
-  to that circle, and `dragThird` does not apply to it.
+  to that circle, and `dragThird` does not apply to it: switching `dragThird` keeps a placed center.
 
 `tool.setOption` returns an error and changes none of the options when a value is not one the option takes
 (`` `radii` must be true or false ``, `` `color` must be one of red, blue, magenta, green, black, gray ``) or the key is

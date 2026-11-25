@@ -857,6 +857,24 @@ fn from_center_holds_for_the_circle_being_drawn() {
     assert_eq!(t.options()["fromCenter"], json!(false), "a value that is not true or false is ignored");
 }
 
+/// Switching `dragThird` while a center is placed keeps the center: the circle from it is still
+/// drawn. Without From Center, the switch drops the point placed.
+#[test]
+fn switching_third_point_by_dragging_keeps_a_placed_center() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = from_center();
+    click(&mut t, &cx, (100.0, 100.0));
+    t.set_option("dragThird", &json!(false));
+    assert!(t.ends_on_escape(&cx), "the center is still placed");
+    assert_eq!(click(&mut t, &cx, (100.0, 150.0)), centered((100.0, 100.0), (100.0, 150.0)));
+    let mut t = CircleTool::default();
+    click(&mut t, &cx, (100.0, 100.0));
+    t.set_option("dragThird", &json!(false));
+    assert!(!t.ends_on_escape(&cx), "the first point is dropped");
+}
+
 /// `tool.setOption` takes `fromCenter` as true or false, and no other key.
 #[test]
 fn the_options_are_checked() {
