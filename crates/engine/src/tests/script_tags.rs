@@ -260,3 +260,26 @@ fn tags_survive_native_save_and_open_and_hostile_ones_are_trimmed() {
     ids.dedup();
     assert_eq!(ids.len(), MAX_TAGS);
 }
+
+#[test]
+fn a_file_with_a_tag_id_that_is_not_a_whole_number_opens_and_the_tag_gets_a_new_id() {
+    let (s, a, _) = doc();
+    let mut doc = (*s.active().unwrap().doc).clone();
+    doc.node_mut(a).unwrap().edit_attrs(|at| {
+        at.tags =
+            ["k0", "k1", "k2"].iter().enumerate().map(|(i, n)| ObjectTag { id: 424_240 + i as u64, name: (*n).into(), value: "v".into() }).collect();
+    });
+    let mut hostile = String::from_utf8(vectorcraft_format::save(&doc, false)).unwrap();
+    for (from, to) in [("\"id\":424240", "\"id\":-1"), ("\"id\":424241", "\"id\":1.5"), ("\"id\":424242", "\"id\":\"x\"")] {
+        assert!(hostile.contains(from), "{from}");
+        hostile = hostile.replace(from, to);
+    }
+    let back = vectorcraft_format::load(hostile.as_bytes()).unwrap();
+    let t = crate::cmd::tags::tags_of(back.node(a).unwrap());
+    assert_eq!(t.iter().map(|t| (t.name.as_str(), t.value.as_str())).collect::<Vec<_>>(), [("k0", "v"), ("k1", "v"), ("k2", "v")]);
+    let mut ids: Vec<u64> = t.iter().map(|t| t.id).collect();
+    assert!(ids.iter().all(|id| *id >= 1 && *id < back.peek_next_id()), "{ids:?}");
+    ids.sort_unstable();
+    ids.dedup();
+    assert_eq!(ids.len(), 3);
+}

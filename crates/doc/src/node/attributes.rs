@@ -58,12 +58,19 @@ pub struct ObjectTag {
     /// Distinct among the object's tags: a new tag takes an id from
     /// [`crate::Document::alloc_tag_id`], and deleting a tag raises the next node id above its id,
     /// so a deleted tag's id is not given out again.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "lenient_tag_id")]
     pub id: u64,
     #[serde(default)]
     pub name: String,
     #[serde(default)]
     pub value: String,
+}
+
+/// Reading a native file never fails over a tag id that is not a whole number from 0 to
+/// `u64::MAX` (a negative one, a fraction, text): it reads as 0, and
+/// [`crate::Document::tidy_tags`] gives the tag a new id.
+fn lenient_tag_id<'de, D: serde::Deserializer<'de>>(d: D) -> Result<u64, D::Error> {
+    Ok(serde_json::Value::deserialize(d)?.as_u64().unwrap_or(0))
 }
 
 impl ObjectAttributes {
