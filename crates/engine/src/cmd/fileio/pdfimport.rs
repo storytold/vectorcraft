@@ -159,7 +159,8 @@ impl LoadOptions {
             trust_editing_data,
             embedded_fonts,
             legacy_names,
-            native: true,
+            // The command's opt-out also skips the embedded VectorCraft document.
+            native: editing_data,
             link_pages,
         })
     }

@@ -137,7 +137,7 @@ impl Facts {
         let or_unknown = |v: &Option<String>| v.clone().unwrap_or_else(|| "unknown".to_string());
         format!(
             "VectorCraft {} on {} {}\nWindow system: {}; desktop: {}; session type: {}; Flatpak: {}\nGraphics: {}; {}\n",
-            env!("CARGO_PKG_VERSION"),
+            vectorcraft_ui_egui::os_window::version(),
             std::env::consts::OS,
             std::env::consts::ARCH,
             self.window_system,

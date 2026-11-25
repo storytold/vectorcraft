@@ -201,9 +201,21 @@ pub(crate) fn answer_path(app: &mut VectorcraftApp, dialog: DialogId, key: Strin
     });
 }
 
-/// The file types of `list`, `(label, extensions)` as the engine lists them, as a picker offers them.
+/// The file types of `list`, `(label, extensions)` as the engine lists them, as a picker offers them,
+/// named in the interface language.
 pub(crate) fn filters(list: &[(&str, &[&str])]) -> Vec<FileFilter> {
-    list.iter().map(|&(name, extensions)| FileFilter::new(name, extensions)).collect()
+    filters_in(crate::i18n::current(), list)
+}
+
+/// [`filters`] with the names in `lang`: a label's `file-filter` row, else its plain row, else the
+/// English label.
+pub(crate) fn filters_in(lang: crate::i18n::Lang, list: &[(&str, &[&str])]) -> Vec<FileFilter> {
+    list.iter().map(|&(name, extensions)| FileFilter::new(filter_name(lang, name), extensions)).collect()
+}
+
+/// The name a picker shows for the file type labeled `name` in `lang`.
+pub(crate) fn filter_name(lang: crate::i18n::Lang, name: &str) -> &str {
+    crate::i18n::tr_ctx(lang, "file-filter", name)
 }
 
 /// The first file of an Open answer as the params of an open command: `path`, or the bytes with the
