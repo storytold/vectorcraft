@@ -7531,9 +7531,36 @@ the path. The command returns an error and changes nothing when both or neither 
 an unknown `action`, a `turn` outside 1 to 359, a `flip` or `closed` that is not true or false, a `keep` outside 1 to
 the subpath's points, and for a closed subpath, a locked or hidden path or an `id` that is not a path.
 
+Dragging the handle at the start or end of the path makes the line or arc there longer or shorter, as
+[Draw with the Quick Pen tool](https://helpx.adobe.com/illustrator/web/add-and-edit-artwork/draw-and-edit-paths/draw-with-quick-pen-tool.html)
+describes. The tool shows a handle 20 screen points beyond each end of the path being drawn, along the direction the
+path leaves that end, where the end is a straight line or a circular arc; with no path being drawn, it shows them on
+each open subpath of the one editable path selected. A line keeps its other point and its direction. An arc keeps its
+other point, its circle and the way it turns, and its sweep follows the pointer around the circle, up to 359°. The
+dragged end stays on its line or circle and does not snap to Smart Guides, and a drag stops where the path would
+reach past the canvas. Each drag is one undo step, Escape during
+the drag takes it back, and the path being drawn goes on from the new end. The pieces of the path being drawn that the
+drag does not change stay pieces: C and `[` `]` still change the last one. The last piece, dragged by its end, stays
+that piece, and as an arc it keeps an arc size of at least 1°. C and `[` `]` do nothing until the drag ends, and the
+end goes where the pointer is let go. A click on a handle that does not drag is an ordinary
+click: it adds a point, closes the path or starts a new one. The handle's place, the 359° limit, the 1° minimum,
+Escape during a drag, the handles on a selected path and the dragged end not snapping are VectorCraft's own rules.
+
+`path.quickPenLength {id, subpath?, end?, length}` does the same for scripts and agents: it makes the line or arc at
+`end` (`"end"`, the default, or `"start"`) of the open subpath `subpath` (0 when left out) `length` points long,
+selects the path, as one undo step, and answers `{id, kind, length}`, where `kind` is `"line"` or `"arc"`. The arc at an
+end is the run of segments before it that lie on one circle and turn the same way, as the Quick Pen draws them. A
+`length` the line or arc already has changes nothing and records no undo step. The command returns an error and
+changes nothing when `id` or `length` is missing, when `length` is not a number, is under 0.001, or is over 1000000
+for a line or over 359° of its circle for an arc, for an `end` other than `"start"` or `"end"`, an end that is neither
+a straight line nor a circular arc (`the end is not a straight line or a circular arc`), a result that would reach past
+the canvas, a closed subpath, a locked or hidden path, and an `id` that is not a path. For an arc, the error gives the
+359° limit in points, rounded down to the thousandth.
+
 ```json
 {"name":"run_command","arguments":{"command":"path.quickPen","params":{"start":[100,100],"pieces":[{"x":200,"y":100},{"x":300,"y":200,"action":"continuousArc"},{"x":300,"y":300,"action":"sharpArc","turn":90,"flip":true}]}}}
 {"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"quickPen","key":"action","value":"sharpArc"}}}
+{"name":"run_command","arguments":{"command":"path.quickPenLength","params":{"id":12,"end":"start","length":40}}}
 ```
 
 ## Registration and trim marks
