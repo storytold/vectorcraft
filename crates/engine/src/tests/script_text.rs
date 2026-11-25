@@ -56,8 +56,8 @@ fn text_frames_add_point_area_and_path_type() {
     let out = log(
         &mut s,
         "var d = app.activeDocument, p = d.pageItems;\
-         var area = d.textFrames.areaText(p[0]); area.contents = 'Area';\
-         var path = d.textFrames.pathText(p[1]); path.contents = 'Path';\
+         var area = d.textFrames.areaText(p[1]); area.contents = 'Area';\
+         var path = d.textFrames.pathText(p[0]); path.contents = 'Path';\
          var pt = d.textFrames.add(); pt.contents = 'Point';\
          var at = d.textFrames.pointText([30, 40]); at.contents = 'At';\
          vc.log(d.textFrames.length); vc.log([area.kind, path.kind, pt.kind]);\
@@ -67,7 +67,7 @@ fn text_frames_add_point_area_and_path_type() {
     );
     assert_eq!(out[0], json!(4));
     assert_eq!(out[1], json!(["TextType.AREATEXT", "TextType.PATHTEXT", "TextType.POINTTEXT"]));
-    assert_eq!(out[2..], [json!("TextFrame"), json!(true), json!("At"), json!(true), json!("TextOrientation.HORIZONTAL"), json!("Document")]);
+    assert_eq!(out[2..], [json!("TextFrame"), json!(true), json!("Area"), json!(true), json!("TextOrientation.HORIZONTAL"), json!("Document")]);
     assert_eq!(undo_steps(&s), before + 1);
     // A path of another kind, or no path, is refused.
     assert!(failure(&mut s, "app.activeDocument.textFrames.areaText(app.activeDocument.textFrames[0]);").contains("PathItem"));
@@ -476,7 +476,7 @@ fn type_made_with_a_large_id_is_the_new_type() {
 fn text_members_refuse_objects_of_other_classes() {
     let (mut s, _) = doc_with("abc");
     s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
-    let e = failure(&mut s, "Object.getOwnPropertyDescriptor(TextFrame.prototype, 'contents').get.call(app.activeDocument.pageItems[1]);");
+    let e = failure(&mut s, "Object.getOwnPropertyDescriptor(TextFrame.prototype, 'contents').get.call(app.activeDocument.pageItems[0]);");
     assert!(e.contains("this is not a TextFrame"), "{e}");
     let e = failure(&mut s, "Object.getOwnPropertyDescriptor(TextRange.prototype, 'contents').get.call(app.activeDocument.textFrames[0]);");
     assert!(e.contains("this is not a TextRange"), "{e}");
