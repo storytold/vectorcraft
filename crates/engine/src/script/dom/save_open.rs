@@ -48,6 +48,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use serde_json::{Map, Value, json};
+use vectorcraft_doc::Unit;
 use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostMember};
 
 use super::{
@@ -548,14 +549,14 @@ fn autocad_map(name: &str, d: &Data, p: &mut Map<String, Value>) -> std::result:
         }
         "unit" => {
             let unit = match pick("AutoCADUnit")? {
-                "Points" => "pt",
-                "Picas" => "pc",
-                "Inches" => "in",
-                "Millimeters" => "mm",
-                "Centimeters" => "cm",
-                _ => "px",
+                "Points" => Unit::Points,
+                "Picas" => Unit::Picas,
+                "Inches" => Unit::Inches,
+                "Millimeters" => Unit::Millimeters,
+                "Centimeters" => Unit::Centimeters,
+                _ => Unit::Pixels,
             };
-            p.insert("unit".into(), json!(unit));
+            p.insert("unit".into(), json!(unit.key()));
         }
         "unitScaleRatio" => {
             let n = match d {

@@ -161,10 +161,30 @@ fn dxf_header(dxf: &str, name: &str) -> Option<String> {
 
 /// The largest x coordinate (group code 10) in the entities of a DXF.
 fn dxf_widest(dxf: &str) -> f64 {
+    dxf_xs(dxf).into_iter().fold(f64::MIN, f64::max)
+}
+
+/// The smallest x coordinate (group code 10) in the entities of a DXF.
+fn dxf_leftmost(dxf: &str) -> f64 {
+    dxf_xs(dxf).into_iter().fold(f64::MAX, f64::min)
+}
+
+/// The x coordinates (group code 10) of the polyline vertices in a DXF. A hatch's code 10 is its
+/// elevation point, so hatches are left out.
+fn dxf_xs(dxf: &str) -> Vec<f64> {
     let lines: Vec<&str> = dxf.lines().map(str::trim).collect();
     // The section's name is a value; the group codes start on the line after it.
     let start = lines.iter().position(|l| *l == "ENTITIES").map_or(0, |i| i + 1);
-    lines[start..].chunks(2).filter(|p| p.len() == 2 && p[0] == "10").filter_map(|p| p[1].parse::<f64>().ok()).fold(f64::MIN, f64::max)
+    let mut entity = "";
+    let mut xs = Vec::new();
+    for p in lines[start..].chunks(2).filter(|p| p.len() == 2) {
+        match p[0] {
+            "0" => entity = p[1],
+            "10" if entity == "LWPOLYLINE" => xs.extend(p[1].parse::<f64>().ok()),
+            _ => {}
+        }
+    }
+    xs
 }
 
 /// `exportFile` with `ExportType.AutoCAD` writes a DXF with the `ExportOptionsAutoCAD` options, and
@@ -187,6 +207,7 @@ fn an_autocad_export_writes_a_dxf_with_its_options() {
              o.unit = AutoCADUnit.Inches; o.unitScaleRatio = 25.4; o.colors = AutoCADColors.Max256Colors; o.rasterFormat = AutoCADRasterFormat.JPEG;\n\
              d.exportFile(new File(dir + '/a'), ExportType.AutoCAD, o);\n\
              o.unitScaleRatio = 1; d.exportFile(new File(dir + '/b.DXF'), ExportType.AUTOCAD, o);\n\
+             o.unit = AutoCADUnit.Picas; d.exportFile(new File(dir + '/p'), ExportType.AutoCAD, o);\n\
              var u = new ExportOptionsAutoCAD(); u.exportFileFormat = AutoCADExportFileFormat.DXF; u.version = undefined; d.exportFile(new File(dir + '/u'), ExportType.AutoCAD, u);\n\
              d.exportFile(new File(dir + '/c'), ExportType.AutoCAD, {{typename: 'ExportOptionsAutoCAD', exportFileFormat: AutoCADExportFileFormat.DXF, version: undefined}});"
         ),
@@ -203,7 +224,11 @@ fn an_autocad_export_writes_a_dxf_with_its_options() {
     for name in ["c.dxf", "u.dxf"] {
         let dxf = std::fs::read_to_string(dir.join(name)).unwrap();
         assert_eq!(dxf_header(&dxf, "$ACADVER").as_deref(), Some("AC1024"), "{name}: an option left out or undefined is AutoCADRelease24");
+        // The rectangle is 10 pt (3.5 mm) from the artboard's left edge.
+        assert!(dxf_leftmost(&dxf) < 1.0, "{name}: the origin is at the visible art's bounds: {}", dxf_leftmost(&dxf));
     }
+    let p = std::fs::read_to_string(dir.join("p.dxf")).unwrap();
+    assert!(dxf_widest(&p) > dxf_widest(&b) * 5.0, "a pica is a sixth of an inch: {} and {}", dxf_widest(&p), dxf_widest(&b));
     let _ = std::fs::remove_dir_all(base);
 }
 
