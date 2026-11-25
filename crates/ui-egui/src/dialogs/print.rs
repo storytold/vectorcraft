@@ -19,7 +19,9 @@
 use std::sync::{Arc, LazyLock, mpsc};
 
 use craft::behavior::{ColumnWidth, EditEvent, EditEvents, IconId, Mixed};
-use craft::print::ui::{Destination, HostedPrint, PrintAnswer, PrintFinish, PrintLayout, PrintMode, PrintSection, PrintSheet, Printer, State};
+use craft::print::ui::{
+    Destination, DriverControls, HostedPrint, PrintAnswer, PrintFinish, PrintLayout, PrintMode, PrintSection, PrintSheet, Printer, State,
+};
 use craft::ui::buttons::ToggleButton;
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
@@ -106,6 +108,8 @@ struct Open {
     art: Option<(ArtKey, egui::TextureHandle)>,
     /// `print.preview` of the settings and document it was run for.
     preview: Option<(Stamp, Arc<Result<Value, String>>)>,
+    /// The printer row's driver controls, as the dialog was last given them.
+    driver: DriverControls,
 }
 
 /// The document (uid, revision) and the settings a cached preview belongs to.
@@ -116,6 +120,8 @@ type ArtKey = (u64, u64, PrintLayers, [u64; 4], u32);
 
 /// What the pump took from the dialog this pass.
 struct Drained {
+    /// The printer row's driver controls for the printer chosen.
+    driver: DriverControls,
     refresh: bool,
     /// The preset editor's name.
     name: String,
@@ -197,9 +203,11 @@ fn start(
     };
     let taken: Vec<String> = taken_names(app);
     let named = editing.clone();
+    let driver = driver(has_setup(app), &state.settings.destination);
     let mut hosted = HostedPrint::new(state, fields, sections(&Lists::of(app)))
         .mode(mode)
         .layout(PrintLayout::Sections)
+        .driver(driver)
         .header(header)
         .json_form(|fields, out| out.extend(nested(form::json_of(&KEYS, fields))))
         .check_name(move |name: &str| refusal(&taken, &named, name).map(|_| PresetError::NameTaken))
@@ -209,7 +217,7 @@ fn start(
         hosted.set_json_field(&ctx, "name", json!(name))?;
     }
     let id = dialogs.with(|h| h.open(hosted));
-    app.print_dialog.open = Some(Open { id, mode, preset, editing, art: None, preview: None });
+    app.print_dialog.open = Some(Open { id, mode, preset, editing, art: None, preview: None, driver });
     Ok(Value::Null)
 }
 
@@ -280,6 +288,18 @@ fn destinations(app: &mut VectorcraftApp) -> (Vec<Printer>, bool) {
     (list, service)
 }
 
+/// Whether the print service can open a printer's settings (`print.printerSetup`).
+fn has_setup(app: &VectorcraftApp) -> bool {
+    app.services.print.as_ref().is_some_and(|s| s.has_setup())
+}
+
+/// The printer row's Setup…: shown when the print service can open printer settings (`setup`) and `destination`
+/// is a printer.
+fn driver(setup: bool, destination: &Destination) -> DriverControls {
+    let printer = matches!(destination, Destination::Printer(name) if name != PDF_FILE);
+    if setup && printer { DriverControls::Page } else { DriverControls::None }
+}
+
 /// The names a new preset may not take: [Default] and the saved presets.
 fn taken_names(app: &VectorcraftApp) -> Vec<String> {
     std::iter::once(DEFAULT_PRESET.to_string()).chain(app.session.prefs.print_presets.iter().map(|p| p.name.clone())).collect()
@@ -302,13 +322,13 @@ pub(super) fn settings(fields: &DialogFields) -> Value {
 
 /// The work of the open dialog, once per frame: the printer list, Setup…, the preview, the placement the preview was
 /// dragged to, the presets and OK.
-pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(mut open) = app.print_dialog.open.take() else { return };
     let Some(dialogs) = app.dialogs() else {
         app.print_dialog.open = Some(open);
         return;
     };
-    if serve(app, &dialogs, &mut open) {
+    if serve(app, ctx, &dialogs, &mut open) {
         app.print_dialog.open = Some(open);
     }
 }
@@ -319,22 +339,38 @@ fn on<R>(dialogs: &WindowDialogs, f: impl FnOnce(&mut HostedPrint) -> R) -> Opti
 }
 
 /// One pass of the pump over the open dialog; false once it has closed.
-fn serve(app: &mut VectorcraftApp, dialogs: &WindowDialogs, open: &mut Open) -> bool {
-    let Some(mut d) = on(dialogs, |p| Drained {
-        refresh: p.take_refresh(),
-        name: p.preset_name().to_string(),
-        // Print Settings… opens the driver's dialog of the printer chosen.
-        setup: if p.take_setup() { p.json_fields().and_then(|f| f["printer"].as_str().map(str::to_string)) } else { None },
-        moves: p.take_moves(),
-        events: p.take_preset_events(),
-        ok: p.take_ok(),
-        settings: settings(p.fields_mut()),
-        sheet: p.sheet_index(),
+fn serve(app: &mut VectorcraftApp, ctx: &egui::Context, dialogs: &WindowDialogs, open: &mut Open) -> bool {
+    let setup = has_setup(app);
+    let Some(mut d) = on(dialogs, |p| {
+        // The printer row shows Setup… for the printer chosen, and none for PDF File.
+        let driver = driver(setup, &p.state().settings.destination);
+        p.set_driver(driver);
+        Drained {
+            driver,
+            refresh: p.take_refresh(),
+            name: p.preset_name().to_string(),
+            // Setup… opens the settings of the printer chosen.
+            setup: if p.take_setup() && driver != DriverControls::None {
+                p.json_fields().and_then(|f| f["printer"].as_str().map(str::to_string))
+            } else {
+                None
+            },
+            moves: p.take_moves(),
+            events: p.take_preset_events(),
+            ok: p.take_ok(),
+            settings: settings(p.fields_mut()),
+            sheet: p.sheet_index(),
+        }
     }) else {
         // Closed: its answer was acted on when the OK was held.
         let _ = dialogs.with(|h| h.take_by_id::<HostedPrint>(open.id));
         return false;
     };
+    // The row was drawn this frame with the controls of the printer before: the next frame shows the new ones.
+    if d.driver != open.driver {
+        open.driver = d.driver;
+        ctx.request_repaint();
+    }
     if d.refresh {
         let (list, _) = destinations(app);
         let (tx, rx) = mpsc::channel();

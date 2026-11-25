@@ -15,9 +15,10 @@
 use std::sync::Arc;
 
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, Show as _, TooltipSpec};
+use craft::ui::contract::{Bind, Show as _, ShowContainer as _, TooltipSpec};
 use craft::ui::dialog::DialogId;
 use craft::ui::display::{Shade, Text};
+use craft::ui::layout_components::Row;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
 use craft::ui::style::TypeRole;
 use serde_json::{Map, Value, json};
@@ -78,14 +79,16 @@ fn rows(presets: &Arc<[(String, String)]>) -> Vec<Param> {
         Param::section(tl!("Transparency")),
         choice_param("overprints", tl!("Overprints:"), Overprint::ALL.iter().map(|o| (o.id(), o.label()))),
         Param::custom("flattenerPreset", tl!("Preset:"), move |ui, fields, cx| {
-            ui.horizontal(|ui| {
-                let custom = fields.contains("flattener");
+            let custom = fields.contains("flattener");
+            let mut pressed = false;
+            let shown = Row::new().show(ui, |ui, _| {
                 flatten::preset_picker(ui, fields, "flattenerPreset", &presets, custom);
-                if Button::new(tl!("Custom…")).show(ui).clicks > 0 {
-                    cx.request_action("custom");
-                }
-            })
-            .response
+                pressed = Button::new(tl!("Custom…")).show(ui).clicks > 0;
+            });
+            if pressed {
+                cx.request_action("custom");
+            }
+            shown.output
         })
         .resets(["flattener"]),
         Param::section(tl!("Fonts")),

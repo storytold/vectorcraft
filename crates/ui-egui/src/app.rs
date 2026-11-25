@@ -308,6 +308,15 @@ impl VectorcraftApp {
 /// eframe isn't a dependency of this crate (the host owns the event loop); these entry points are
 /// called from the host's `eframe::App` impl through `embed`'s hooks.
 impl VectorcraftApp {
+    /// Seconds on the app's clock: the monotonic clock, or the time a test set in `now_override`.
+    pub(crate) fn now(&self) -> f64 {
+        #[cfg(test)]
+        if let Some(now) = self.now_override {
+            return now;
+        }
+        now_secs()
+    }
+
     /// Applies the work that finished off the UI thread. It stays pending while a script runs, since
     /// every change to the documents ends in a busy error until the script ends.
     pub(crate) fn poll_finished_work(&mut self) {
@@ -415,10 +424,7 @@ impl VectorcraftApp {
         // Monotonic host time, never egui's `InputState::time`: a hidden window's `logic` replays
         // the last shown pass's time, freezing recovery, clipboard polling and deadlines. Tests
         // inject a clock to drive idle scheduling deterministically.
-        #[cfg(test)]
-        let now = self.now_override.unwrap_or_else(now_secs);
-        #[cfg(not(test))]
-        let now = now_secs();
+        let now = self.now();
         self.perf.fps = self.frame_rate.frame(now, self.perf.frame_ms / 1000.0);
         self.sync_views();
         self.refresh_replace_font_warning(false);

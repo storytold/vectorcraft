@@ -13,6 +13,7 @@
 //! resets new art when it opens such a document.
 
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Paint};
@@ -32,7 +33,9 @@ pub(crate) struct NewArtSource {
 }
 
 use super::gradient::unplaced;
+use super::paint::SelectionPaints;
 use super::{CommandSpec, Result, Session, always, cmd, switch_or};
+use crate::doc_state::{SelectionRecord, objects_only};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -267,9 +270,10 @@ impl Session {
         if !has_paint {
             return;
         }
-        let (fill_mixed, stroke_mixed) = self.proxy_mixed();
+        let read = self.read_selection_paints();
+        let (fill_mixed, stroke_mixed) = read.as_ref().map_or_else(|| self.proxy_mixed(), |p| (p.fill_mixed, p.stroke_mixed));
         let (fill, stroke) = self.proxy_paints();
-        let weight_mixed = self.active().is_some_and(|st| st.stroke_mixed().weight);
+        let weight_mixed = read.as_ref().map_or_else(|| self.active().is_some_and(|st| st.stroke_mixed().weight), |p| p.weight_mixed);
         let weight = self.shown_stroke().filter(|st| st.paint != Paint::None && !weight_mixed).map(|st| st.width);
         if !fill_mixed {
             self.paint.fill = unplaced(&fill);
@@ -280,6 +284,30 @@ impl Session {
         if let Some(width) = weight {
             self.paint.stroke_width = width;
         }
+    }
+
+    /// The [`SelectionPaints`] of the active document's selection, read now and kept in its
+    /// [`SelectionRecord`] when the record holds none. `None` when anything besides whole objects
+    /// is selected ([`objects_only`]), with an active Appearance item, when a selected object is in
+    /// a Live Paint group, and with gradient mesh points picked: the proxies then read the
+    /// selection with [`Session::proxy_mixed`] and [`crate::DocState::stroke_mixed`]. While the
+    /// Live Paint Bucket paints, [`Session::load_selection_paints`] returns before reading them.
+    fn read_selection_paints(&mut self) -> Option<SelectionPaints> {
+        if self.appearance_item().is_some() {
+            return None;
+        }
+        let st = self.active_mut()?;
+        if !objects_only(&st.selection) {
+            return None;
+        }
+        if st.selection_paints().is_none() {
+            let paints = SelectionPaints::of(&st.doc, &st.selection.objects);
+            let settled = st.selection_record().and_then(|r| r.settled);
+            st.selection_record =
+                Some(SelectionRecord { doc: Arc::downgrade(&st.doc), objects: st.selection.objects.clone(), settled, paints: Some(paints) });
+        }
+        let paints = st.selection_paints()?.clone();
+        (!paints.in_live_paint && self.fill_mesh_points().is_empty()).then_some(paints)
     }
 }
 

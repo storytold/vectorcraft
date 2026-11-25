@@ -18,7 +18,7 @@ use craft::ui::runtime::windows::WindowHost;
 use serde_json::{Value, json};
 
 use super::labels::holds_plugin_commands;
-use super::{Listed, TODO, display_label, menu_tree_named, plugin_revision, shown_label, shown_state, why_off};
+use super::{Listed, PLACEHOLDER, TODO, display_label, menu_tree_named, plugin_revision, shown_label, shown_state, why_off};
 use crate::i18n::LangExt as _;
 use crate::{UiState, VectorcraftApp};
 
@@ -225,6 +225,8 @@ fn rebuild(app: &mut VectorcraftApp, target: Target) {
     }
     // The Symbols panel menu's states read the selection's instances from the walk this keeps.
     crate::panels::symbols::cache_instances(app);
+    // The Glyphs panel menu's East Asian glyph forms read the faces that draw the selected text from the layout this keeps.
+    crate::panels::glyphs::refresh_form_faces(app);
     let listed = Listed::of(app);
     let mut build = Build { app, lang: crate::i18n::current(), states: CommandStates::new(), refs: Vec::new() };
     let menus: Vec<Menu> = menu_tree_named(app.session.prefs.font_names_in_english, &listed)
@@ -429,6 +431,16 @@ impl Build<'_> {
             self.refs.push((CommandRef::new(TODO), "Coming Soon".into(), false));
             let tip = crate::i18n::tr(self.lang, TODO_TOOLTIP).to_string();
             return Some(item.tooltip(tip));
+        }
+        // A placeholder shows its text in the UI language, as a heading does, and runs nothing.
+        if command.id == PLACEHOLDER {
+            self.states.set(command, CommandState::new().enabled(false));
+            let mut item = item.enabled(false);
+            let shown = self.title(&item.label, true);
+            if shown != item.label {
+                item.english = Some(std::mem::replace(&mut item.label, shown));
+            }
+            return Some(item);
         }
         let (id, params) = (command.id.as_str(), &command.params);
         let (enabled, checked) = shown_state(self.app, id, params)?;
