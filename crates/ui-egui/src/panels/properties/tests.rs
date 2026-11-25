@@ -1078,6 +1078,22 @@ fn a_whole_live_shape_with_direct_selection_shows_the_corners_link() {
     assert!(!panel.shows("Corner") && !panel.shows("Corners"));
 }
 
+/// A live rectangle with Relative rounding shows its radius as a document length in its Corner
+/// Radius field, as the Corners pop-up does, not as the fraction it stores.
+#[test]
+fn a_relative_live_rectangle_shows_its_radius_as_a_length() {
+    let mut app = new_app();
+    let r = rect(&mut app, 20.0, 20.0, 60.0, 40.0).as_u64().unwrap();
+    app.run("select.set", json!({"ids": [r]})).unwrap();
+    app.run("object.setLiveShape", json!({"ids": [r], "radius": 10})).unwrap();
+    app.run("object.setLiveShape", json!({"ids": [r], "relativeRadii": true})).unwrap();
+    let n = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(r)).unwrap().clone();
+    assert!(vectorcraft_doc::LiveCorners::of(&n).unwrap().radii_relative());
+    let shown = crate::panels::corner_radius(&app, &n).unwrap();
+    assert!((shown - 10.0).abs() < 1e-6, "the field shows {shown}");
+    assert_eq!(crate::panels::picked_corners(&app).unwrap().radius.map(|r| (r - 10.0).abs() < 1e-6), Some(true), "as the pop-up does");
+}
+
 /// A square path, not a live shape, its top-left corner at (`x`, 50) → its id.
 fn square_path(app: &mut VectorcraftApp, x: f64) -> u64 {
     let id = rect(app, x, 50.0, 100.0, 100.0);

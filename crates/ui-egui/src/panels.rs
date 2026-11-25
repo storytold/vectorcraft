@@ -103,10 +103,22 @@ pub(crate) fn corner_radius(app: &VectorcraftApp, n: &Node) -> Option<f64> {
     corner_style(app, n).0
 }
 
-/// The radius and kind of the corners [`corner_radius`] reads, each None when they differ.
+/// The radius and kind of the corners [`corner_radius`] reads, each None when they differ. The
+/// radius is a document length ([`corner_length`]).
 pub(crate) fn corner_style(app: &VectorcraftApp, n: &Node) -> (Option<f64>, Option<CornerKind>) {
     let partial = app.session.active().and_then(|d| d.selection.partial(n.id));
-    LiveCorners::of(n).map_or((None, None), |c| c.style(&c.picked(partial)))
+    let Some(c) = LiveCorners::of(n) else { return (None, None) };
+    let corners = c.picked(partial);
+    let mut radii = corners.iter().map(|k| corner_length(&c, *k));
+    let radius = radii.next().filter(|first| radii.all(|r| (r - first).abs() < 1e-9));
+    (radius, c.style(&corners).1)
+}
+
+/// The radius asked for at corner `k`, as a document length, even where it draws smaller. A
+/// relative radius is stored as a fraction of the corner's largest; the fields and
+/// `object.setLiveShape` take lengths.
+pub(crate) fn corner_length(c: &LiveCorners, k: usize) -> f64 {
+    if c.radii_relative() { c.radius(k) * c.corner(k).map_or(0.0, |c| c.max_radius()) } else { c.radius(k) }
 }
 
 /// One entry per corner kind, labelled as the Corners dialog labels them.
@@ -214,7 +226,7 @@ fn corner_fields(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node) {
         for (k, label, corner) in rectangle_corners() {
             Field::new(label).show(ui, |ui, _| {
                 Row::new().wrap(true).show(ui, |ui, _| {
-                    radii.push((k, NumberField::length(label, Bind::given(Some(lc.radius(k))), lengths).show(ui).edit));
+                    radii.push((k, NumberField::length(label, Bind::given(Some(corner_length(&lc, k))), lengths).show(ui).edit));
                     if let Some(kind) = corner_select(ui, corner, Some(lc.kind(k)), &entries) {
                         kinds.push((k, kind));
                     }
@@ -304,9 +316,7 @@ pub(crate) fn picked_corners(app: &VectorcraftApp) -> Option<PickedCorners> {
             continue;
         }
         for &k in &corners {
-            // The radius asked for, even where it draws smaller. A relative radius is stored as a
-            // fraction of the corner's largest; the field and `object.setLiveShape` take lengths.
-            radii.push(if lc.radii_relative() { lc.radius(k) * lc.corner(k).map_or(0.0, |c| c.max_radius()) } else { lc.radius(k) });
+            radii.push(corner_length(&lc, k));
             kinds.push(lc.kind(k));
         }
         relative.push(lc.radii_relative());
