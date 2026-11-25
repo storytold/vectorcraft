@@ -219,7 +219,7 @@ pub fn set_live_art(f: LiveArt, inputs: LiveInputs) {
 }
 
 /// The registered [`LiveInputs`] now, 0 while nothing is registered.
-fn live_inputs() -> u64 {
+pub fn live_inputs() -> u64 {
     LIVE_ART.get().map_or(0, |(_, inputs)| inputs())
 }
 

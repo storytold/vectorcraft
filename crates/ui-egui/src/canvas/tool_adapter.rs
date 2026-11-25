@@ -373,8 +373,12 @@ impl CanvasTool for SessionTool<'_> {
         let switched = follow == PointerKind::DoubleClick && before != "type" && self.app().session.tool_id() == "type";
         if switched {
             self.app().session.set_tool_option("prevTool", &json!(before));
-            self.send(PointerKind::Down, pointer, cx);
-            self.send(PointerKind::Up, pointer, cx);
+            for kind in [PointerKind::Down, PointerKind::Up] {
+                // Without Cmd, so the Type tool takes the click instead of lending a selection tool.
+                let mut ev = pointer_event(kind, pointer, cx);
+                ev.mods.cmd = false;
+                dispatch(&mut self.app(), &ev, self.view);
+            }
         }
     }
 
@@ -700,7 +704,7 @@ pub fn dispatch(app: &mut VectorcraftApp, ev: &PointerEvent, view: ViewInfo) {
         return;
     }
     // A press lent to a selection tool (Cmd/Ctrl held) does not use the tool of a held key.
-    if ev.kind == PointerKind::Down && app.session.lent_tool_id(&ev.mods).is_none() {
+    if ev.kind == PointerKind::Down && !app.session.press_lends_tool(ev, view) {
         crate::shortcuts::note_tool_use(app);
     }
     let r = app.session.pointer(ev, view);
