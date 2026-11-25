@@ -772,6 +772,53 @@ fn app_is_open(h: &Host, a: &[Data]) -> Answer {
     Ok(Data::Bool(open))
 }
 
+/// The menu command strings `app.executeMenuCommand` takes, each with the command it runs. The
+/// strings are the ones
+/// <https://community.adobe.com/questions-652/a-list-of-illustrator-menu-commands-we-can-call-from-javascript-769510>
+/// lists, and `Fit Artboard to artwork bounds` is the one
+/// <https://gist.github.com/shalakolee/df3246659d4289eb99149b9ed00a00ee> gives for Object ›
+/// Artboards › Fit to Artwork Bounds.
+const MENU_COMMANDS: &[(&str, &str)] = &[
+    ("selectall", "select.all"),
+    ("deselectall", "select.none"),
+    ("group", "object.group"),
+    ("ungroup", "object.ungroup"),
+    ("makeMask", "object.clippingMask.make"),
+    ("releaseMask", "object.clippingMask.release"),
+    ("compoundPath", "object.compoundPath.make"),
+    ("noCompoundPath", "object.compoundPath.release"),
+    ("Fit Artboard to artwork bounds", "artboard.fitToArt"),
+];
+
+/// `app.executeMenuCommand(name)`: runs the command of the menu item `name` names
+/// ([`MENU_COMMANDS`]) on the active document, as
+/// <https://www.indesignjs.de/indesignapi/illustrator/illustrator.d.ts> describes the method. A
+/// name it does not list throws an error that names it. A menu item that is not available, with
+/// no document open or nothing selected that it acts on, does nothing, as a dimmed menu item does
+/// (VectorCraft's own rule). `Fit Artboard to artwork bounds` fits the active artboard.
+fn app_menu_command(h: &Host, a: &[Data]) -> Answer {
+    let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("executeMenuCommand needs a menu command, as a string".into())) };
+    if name.len() > MAX_TEXT_BYTES {
+        return Err(HostError::Range("the menu command is too long".into()));
+    }
+    let Some(&(_, id)) = MENU_COMMANDS.iter().find(|(n, _)| n == name) else {
+        return Err(HostError::Error(format!("executeMenuCommand: unknown menu command \"{name}\"")));
+    };
+    let params = {
+        let s = h.session.borrow();
+        let Some(spec) = crate::find_command(id) else { return Err(HostError::Abort(format!("executeMenuCommand: no command {id}"))) };
+        if (spec.enabled)(&s).is_err() {
+            return Ok(Data::Undefined);
+        }
+        match (id, s.active()) {
+            ("artboard.fitToArt", Some(st)) => json!({"index": active_artboard(st)}),
+            _ => json!({}),
+        }
+    };
+    command(h, id, &params)?;
+    Ok(Data::Undefined)
+}
+
 // ---- Documents ----
 
 fn docs_length(h: &Host, _: &[Data]) -> Answer {
@@ -2085,6 +2132,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("selection", property(l, app_selection, app_set_selection)),
         ("coordinateSystem", property(l, app_coords, app_set_coords)),
         ("getIsFileOpen", method(l, app_is_open)),
+        ("executeMenuCommand", method(l, app_menu_command)),
         ("toString", class_text("Application")),
     ]);
     application.push(later(l, "Application", "beep"));
