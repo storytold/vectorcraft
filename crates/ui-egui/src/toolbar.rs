@@ -740,9 +740,14 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, footer: RailFooter) {
         (vectorcraft_engine::DrawMode::Behind, "dc-draw-behind", "Draw Behind", "behind"),
         (vectorcraft_engine::DrawMode::Inside, "dc-draw-inside", "Draw Inside", "inside"),
     ];
-    let mode_button = |ui: &mut Ui, icon: &'static str, name: &str, on: bool| {
+    // `on` is the pressed state of one of the three side-by-side buttons; the single one-column button has none.
+    let mode_button = |ui: &mut Ui, icon: &'static str, name: &str, on: Option<bool>| {
         let tip = format!("{} (Shift+D)", tl!(name));
-        let button = IconButton::new(IconId::new(icon)).label(tip.clone()).tooltip(tip).selected(on);
+        let button = IconButton::new(IconId::new(icon)).label(tip.clone()).tooltip(tip);
+        let button = match on {
+            Some(on) => button.selected(on),
+            None => button,
+        };
         // Small in two columns, where the three sit side by side in the rail's width.
         let button = if two { button.size(ControlSize::Sm) } else { button };
         button.show(ui).clicked()
@@ -754,15 +759,16 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, footer: RailFooter) {
                 // Side by side, each one a click away, a tight gap apart to fit the rail's width.
                 Row::new().gap(Gap::Tight).show(ui, |ui, _| {
                     for (mode, icon, name, id) in modes {
-                        if mode_button(ui, icon, name, app.session.draw_mode == mode) {
+                        if mode_button(ui, icon, name, Some(app.session.draw_mode == mode)) {
                             run = Some(("view.drawMode", json!({ "mode": id })));
                         }
                     }
                 });
-            } else if let Some((mode, icon, name, _)) = modes.into_iter().find(|m| m.0 == app.session.draw_mode)
-                && mode_button(ui, icon, name, mode != vectorcraft_engine::DrawMode::Normal)
+            } else if let Some((_, icon, name, _)) = modes.into_iter().find(|m| m.0 == app.session.draw_mode)
+                && mode_button(ui, icon, name, None)
             {
-                // One column: the current mode's button, which cycles them.
+                // One column: the current mode's button, named for it, which cycles them; it is always the
+                // current mode, so it has no pressed state.
                 run = Some(("view.drawMode", json!({})));
             }
         }

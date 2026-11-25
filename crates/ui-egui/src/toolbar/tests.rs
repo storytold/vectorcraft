@@ -1,4 +1,4 @@
-use egui::accesskit::{Node, Role};
+use egui::accesskit::{Node, Role, Toggled};
 use egui::{Event, PointerButton, Pos2};
 use serde_json::json;
 use vectorcraft_engine::Session;
@@ -304,6 +304,41 @@ fn the_paint_and_drawing_mode_buttons_fit_the_toolbar_width() {
     assert!(modes.iter().all(|r| (r.top() - modes[0].top()).abs() < 0.5), "side by side: {modes:?}");
     click(&mut app, &ctx, 20.0, modes[1].center(), 900.0);
     assert_eq!(app.session.draw_mode, vectorcraft_engine::DrawMode::Behind);
+}
+
+/// A screen reader reads the drawing-mode buttons' state as the rail shows it, in every mode: in two columns the
+/// current mode's button reads pressed and the other two not pressed; in one column the single button is named for the
+/// current mode and cycles the modes, so it reads as a plain button with no pressed state.
+#[test]
+fn the_drawing_mode_buttons_report_the_current_mode() {
+    let mut app = app_with(200, 200);
+    let ctx = reader();
+    // Draw Inside draws into one selected path.
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    let modes = [("normal", "Draw Normal (Shift+D)"), ("behind", "Draw Behind (Shift+D)"), ("inside", "Draw Inside (Shift+D)")];
+    let mut t0 = 0.0;
+    for double in [false, true] {
+        app.run("window.toolbarColumns", json!({ "double": double })).unwrap();
+        for (current, _) in modes {
+            app.run("view.drawMode", json!({ "mode": current })).unwrap();
+            let nodes = settled(&mut app, &ctx, t0, 900.0);
+            t0 += 10.0;
+            for (mode, label) in modes {
+                let node = nodes.iter().find(|n| n.label() == Some(label));
+                if double {
+                    let node = node.unwrap_or_else(|| panic!("two columns, {current:?}: {label} is drawn"));
+                    let pressed = if mode == current { Toggled::True } else { Toggled::False };
+                    assert_eq!(node.toggled(), Some(pressed), "two columns, {current:?}: {label}");
+                } else if mode == current {
+                    let node = node.unwrap_or_else(|| panic!("one column, {current:?}: {label} is drawn"));
+                    assert_eq!(node.role(), Role::Button, "one column, {current:?}: {label}");
+                    assert_eq!(node.toggled(), None, "one column, {current:?}: {label} has no pressed state");
+                } else {
+                    assert!(node.is_none(), "one column, {current:?}: {label} is not shown");
+                }
+            }
+        }
+    }
 }
 
 /// A Learn link's tool in a collapsed group of the Tools panel opens that group's flyout with the tool in it, and
