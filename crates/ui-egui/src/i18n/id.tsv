@@ -22,6 +22,7 @@
 	Quit VectorCraft	Keluar dari VectorCraft
 # Artwork drag between document tabs.
 	Drop Artwork	Letakkan karya
+@id	language.name	Bahasa Indonesia
 @msg	{key} must be [x, y] with finite coordinates	{key} harus berupa [x, y] dengan koordinat berhingga
 @msg	ids must contain 1–10000 object ids	ids harus berisi 1–10000 ID objek
 
@@ -311,6 +312,7 @@
 @msg	a 3D effect on a group's fill or stroke draws nothing	efek 3D pada isian atau goresan grup tidak menggambar apa pun
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	efek 3D pada isian atau goresan grup tidak menggambar apa pun untuk diekspor
 @msg	The 3D object is too complex to export	Objek 3D terlalu rumit untuk diekspor
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Objek 3D memiliki mesh yang tidak lengkap atau berisi nilai yang bukan angka
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objek tidak memiliki efek 3D (Ekstrusi & bevel, Revolusi, Gelembungkan, atau Putar)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` harus berupa objek yang hanya berisi `mode`, bernilai shaded atau wireframe
 @msg	its 3D effect builds no solid	efek 3D-nya tidak membangun bentuk padat
@@ -437,11 +439,19 @@
 @msg	module is {_1} bytes (limit {_2})	modul berukuran {_1} byte (batas {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	memerlukan persetujuan: plug-in meminta {0}, yang diberikan pengguna saat memasangnya sendiri
 @msg	not JSON: {e}	bukan JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	bukan biner WebAssembly (header \0asm tidak ada)
+@msg	not a WebAssembly binary (missing \\0asm header)	bukan biner WebAssembly (header \\0asm tidak ada)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	sebuah tipe fungsi melampaui batas {MAX_FUNC_TYPE_VALUES} parameter
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	sebuah tipe fungsi melampaui batas {MAX_FUNC_TYPE_VALUES} hasil
 @msg	parameter `{k}`: {what}	parameter `{k}`: {what}
 @msg	parameter `{name}`: {what}	parameter `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	parameter plug-in harus berupa objek JSON
 @msg	the module must export its linear memory as `memory`	modul harus mengekspor memori liniernya sebagai `memory`
+@msg	the module must export `{name}` with the type {signature}	modul harus mengekspor `{name}` dengan tipe {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	modul memiliki lebih dari satu bagian kustom `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	anggaran memori (memori awal modul {initial} byte, batas {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	manifes di bagian kustom `{MANIFEST_SECTION}` harus memberikan `abi` sebagai {ABI_VERSION}, versi ABI yang diterapkan host ini
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	anggaran tabel (modul mendefinisikan {count} tabel, yang terbesar dengan {largest} elemen; batas {MAX_TABLES} tabel dengan {MAX_TABLE_ELEMENTS} elemen)
+@msg	the module's table section could not be read	bagian tabel modul tidak dapat dibaca
 @msg	the objects to change are no longer in the document	objek yang akan diubah tidak lagi ada di dokumen
 @msg	the runtime panicked	runtime mengalami panik
 @msg	unexpected host trap	trap host yang tidak terduga
@@ -449,6 +459,10 @@
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc mengembalikan 0 (memori habis)
 @msg	vc_alloc returned a block outside memory	vc_alloc mengembalikan blok di luar memori
 @msg	vc_run returned error code {packed}	vc_run mengembalikan kode galat {packed}
+@msg	did not finish loading within {secs} s	tidak selesai dimuat dalam {secs} detik
+@msg	no thread was left to load it	tidak ada utas tersisa untuk memuatnya
+@msg	panicked while loading	mogok saat dimuat
+@msg	panicked while loading: {what}	mogok saat dimuat: {what}
 @msg	{_1} is not a file	{_1} bukan berkas
 @msg	{_1} is {_2} bytes (limit {_3})	{_1} berukuran {_2} byte (batas {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} objek (batas {MAX_OBJECTS})
@@ -468,6 +482,11 @@
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` dan `maxItems` harus 0-{MAX_LIST}, `maxItems` setidaknya 1, dan nilai default sebanyak itu
 @msg	`name` must be a string	`name` harus berupa string
 @msg	`opacity` must be a number	`opacity` harus berupa angka
+@msg	`opacity` must be a number from 0 to 100	`opacity` harus berupa angka dari 0 sampai 100
+@msg	`opacity` must be true or false	`opacity` harus true atau false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	karakter teks tidak memiliki opasitas sendiri: tambahkan isian atau guratan dengan Tambahkan isian baru atau Tambahkan guratan baru di panel Tampilan
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	objek yang dipilih dalam instans simbol tidak memiliki opasitas isian atau guratan sendiri
+@msg	no target has that fill or stroke to take the opacity	tidak ada target yang memiliki isian atau guratan tersebut untuk menerima opasitas
 @msg	`type` must be "path" or "compound"	`type` harus "path" atau "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` harus berupa 1-{MAX_UNIT} karakter yang dapat dicetak
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` mencantumkan 1 sampai {MAX_CONDITION_VALUES} nilai untuk `{other}`
@@ -511,6 +530,8 @@
 @msg	`plates` requires a stop linked to a spot swatch	`plates` memerlukan perhentian yang ditautkan ke swatch warna spot
 @msg	the output	keluaran
 @msg	the path has no anchor points	jalur tidak memiliki titik jangkar
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	jalur majemuk {id} memiliki anggota yang tersembunyi, terkunci, atau garis panduan, sehingga anggotanya tidak dapat diganti
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	jalur majemuk {id} memiliki anggota yang bukan jalur, sehingga anggotanya tidak dapat diganti
 @msg	too many anchor points (limit {MAX_ANCHORS})	terlalu banyak titik jangkar (batas {MAX_ANCHORS})
 @msg	true or false	true atau false
 @msg	a number >= {_1}	angka >= {_1}
@@ -581,6 +602,10 @@
 @msg	`inputs` lists `{shown}` twice	`inputs` mencantumkan `{shown}` dua kali
 @msg	`inputs` needs `api` 2 or later	`inputs` memerlukan `api` 2 atau lebih baru
 @msg	`inputs` needs the permission `doc.read`	`inputs` memerlukan izin `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Membaca objek yang diberikan kepadanya, serta pengaturan, artboard, lapisan, dan sampel warna dokumen
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` harus mencantumkan bagian yang berbeda: settings, artboards, layers, atau swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` untuk filter, atau efek langsung dengan `commands`, pada `api` 3 atau lebih baru dengan izin `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	informasi dokumen yang diminta plug-in terlalu besar untuk diserahkan: paling banyak {MAX_CONTEXT_ITEMS} artboard, lapisan, dan sampel warna dalam {MAX_CONTEXT_BYTES} byte
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	anggaran memori (objek {_1} memerlukan {size} byte masukan, tersisa {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	anggaran objek (lebih dari {MAX_OBJECTS} objek baca-saja)
 @msg	instruction budget	anggaran instruksi
@@ -960,6 +985,9 @@
 	Artboards	Artboard
 	Convert to Artboards	Konversi ke artboard
 	Rearrange All Artboards…	Atur ulang semua artboard…
+	Rearrange…	Atur ulang…
+	Selected Artboards: {n}	Artboard terpilih: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Klik kanvas untuk menempatkan artboard (Esc membatalkan)
 	Fit to Artwork Bounds	Sesuaikan ke batas karya seni
 	Fit to Selected Art	Sesuaikan ke karya seni terseleksi
 	Graph	Grafik
@@ -1111,6 +1139,7 @@
 	Fill & Stroke	Isian & stroke
 	Fill Color	Warna isian
 	Opacity	Opasitas
+	Show Opacity	Tampilkan opasitas
 	Stroke Color	Warna stroke
 	Fill Gradient	Gradien isian
 	Stroke Gradient	Gradien stroke
@@ -4127,6 +4156,12 @@ theme	Appearance	Tampilan
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	resolusi tidak tersedia
+	estimated memory {memory}	perkiraan memori {memory}
+	memory unavailable	memori tidak tersedia
+	Unknown format	Format tidak dikenal
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -4574,6 +4609,7 @@ theme	Appearance	Tampilan
 	Data Recovery	Pemulihan data
 	Default Language	Bahasa standar
 	Disable Auto Add/Delete	Nonaktifkan tambah/hapus otomatis
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete menghapus titik jangkar dan menjaga jalur tetap tersambung
 	Interpolate Control Points When Moving Anchors	Interpolasikan gagang arah saat memindahkan titik jangkar
 	Display All Blacks Accurately	Tampilkan semua warna hitam secara akurat
 	Display All Blacks as Rich Black	Tampilkan semua warna hitam sebagai rich black
@@ -5132,6 +5168,7 @@ font-technology	Variable	Variabel
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gerakan putar dua jari pada trackpad memutar tampilan kanvas.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Menahan tombol menjalankan alat atau perintah di kolom Tahan pada Pintasan papan ketik; tekanan singkat menjalankan pintasan biasanya.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Berapa detik tombol harus ditahan sebelum pintasan tahannya berjalan sebagai ganti pintasan biasanya.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete menghapus titik jangkar yang dipilih dan menyesuaikan ulang kurva di sekitar masing-masing, alih-alih membuka jalur di sana.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Saat Anda memindahkan titik jangkar, setiap kurva dengan satu ujung yang dipindahkan mempertahankan bentuknya terhadap ujung-ujungnya.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Menahan tombol pintasan alat memilih alat itu sampai Anda melepasnya, lalu alat sebelumnya dipilih lagi.
 	Shows the bounding box while you move the selection or draw a shape.	Menampilkan kotak pembatas saat Anda memindahkan seleksi atau menggambar bentuk.
@@ -6612,6 +6649,9 @@ file-filter	Swatch libraries	Pustaka swatch
 file-filter	Flattener presets	Preset perata
 file-filter	PDF presets	Preset PDF
 file-filter	Print presets	Preset cetak
+file-filter	Tracing presets	Preset penelusuran
+file-filter	Action sets	Set tindakan
+file-filter	Composite fonts	Font komposit
 file-filter	Preferences	Preferensi
 file-filter	Export presets	Preset ekspor
 file-filter	SVG Compressed	SVG terkompresi
@@ -8581,6 +8621,18 @@ breakText	Glyphs	Glif
 	Box	Kotak
 	Swatch	Sampel warna
 	Direction	Arah
+@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	`spacing` harus lebih dari 0 dan paling besar {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	`{key}` harus dari 0 sampai {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}` harus dari 0,01 sampai 1000 pt
+@msg	select the banner, or mark every artboard	seleksi spanduk, atau tandai setiap artboard
+@msg	the banner has no width or height	spanduk tidak memiliki lebar atau tinggi
+@msg	the grommet inset is too large for the banner	jarak mata ayam dari tepi terlalu besar untuk spanduk
+@msg	the hem is too deep for the banner	lipatan terlalu dalam untuk spanduk
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	spasi ini menghasilkan lebih dari {MAX_GROMMETS} mata ayam
+@msg	there is no banner to mark	tidak ada spanduk untuk ditandai
+@msg	turn on at least one side	aktifkan setidaknya satu sisi
+@msg	with no hem and no grommets there is nothing to mark	tanpa lipatan dan tanpa mata ayam tidak ada yang perlu ditandai
+@msg	{saving} failed: {e}	{saving} gagal: {e}
 	Banner Hems and Grommets…	Lipatan dan Mata Ayam Spanduk…
 	Banner Hems and Grommets	Lipatan dan Mata Ayam Spanduk
 	Hem	Lipatan

@@ -40,6 +40,7 @@
 	Quit VectorCraft	Zakończ VectorCraft
 # Artwork drag between document tabs.
 	Drop Artwork	Upuść kompozycję
+@id	language.name	Polski
 @msg	{key} must be [x, y] with finite coordinates	{key} musi mieć postać [x, y] ze skończonymi współrzędnymi
 @msg	ids must contain 1–10000 object ids	ids musi zawierać od 1 do 10000 identyfikatorów obiektów
 
@@ -310,6 +311,9 @@
 	Artboards	Obszary kompozycji
 	Convert to Artboards	Konwertuj na obszary kompozycji
 	Rearrange All Artboards…	Przestaw wszystkie obszary kompozycji…
+	Rearrange…	Przestaw…
+	Selected Artboards: {n}	Zaznaczone obszary kompozycji: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Kliknij obszar roboczy, aby umieścić obszary kompozycji (Esc anuluje)
 	Fit to Artwork Bounds	Dopasuj do granic kompozycji
 	Fit to Selected Art	Dopasuj do zaznaczonej kompozycji
 	Graph	Wykres
@@ -476,6 +480,7 @@
 	Fill & Stroke	Wypełnienie i obrys
 	Fill Color	Kolor wypełnienia
 	Opacity	Krycie
+	Show Opacity	Pokaż krycie
 	Stroke Color	Kolor obrysu
 	Fill Gradient	Gradient wypełnienia
 	Stroke Gradient	Gradient obrysu
@@ -3656,6 +3661,12 @@ theme	Appearance	Wygląd
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	rozdzielczość niedostępna
+	estimated memory {memory}	szacowana pamięć {memory}
+	memory unavailable	pamięć niedostępna
+	Unknown format	Nieznany format
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -4110,6 +4121,7 @@ theme	Appearance	Wygląd
 	Data Recovery	Odzyskiwanie danych
 	Default Language	Język domyślny
 	Disable Auto Add/Delete	Wyłącz automatyczne dodawanie/usuwanie
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete usuwa punkty kontrolne i zachowuje ścieżki połączone
 	Interpolate Control Points When Moving Anchors	Interpoluj uchwyty kierunkowe podczas przesuwania punktów kontrolnych
 	Display All Blacks Accurately	Wyświetlaj wszystkie czernie dokładnie
 	Display All Blacks as Rich Black	Wyświetlaj wszystkie czernie jako czerń głęboką
@@ -4659,6 +4671,7 @@ font-technology	Variable	Zmienne
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gest obrotu dwoma palcami na gładziku obraca widok obszaru roboczego.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Przytrzymanie klawisza uruchamia narzędzie lub polecenie z jego kolumny Przytrzymaj w Skrótach klawiaturowych; krótkie naciśnięcie uruchamia jego zwykły skrót.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Ile sekund trzeba przytrzymać klawisz, zanim zamiast zwykłego skrótu zostanie uruchomiony jego skrót przytrzymania.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete usuwa zaznaczone punkty kontrolne i ponownie dopasowuje krzywą wokół każdego z nich, zamiast otwierać tam ścieżkę.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Podczas przesuwania punktów kontrolnych każda krzywa z jednym przesuniętym końcem zachowuje kształt względem swoich końców.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Przytrzymanie skrótu narzędzia wybiera je do momentu puszczenia klawisza, a potem ponownie wybierane jest poprzednie narzędzie.
 	Shows the bounding box while you move the selection or draw a shape.	Pokazuje obwiednię podczas przesuwania zaznaczenia lub rysowania kształtu.
@@ -5280,7 +5293,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	PDF settings are not an object	Ustawienia PDF nie są obiektem
 @msg	PDF security settings are not an object	Ustawienia zabezpieczeń PDF nie są obiektem
 @msg	PDF writer error: {0}	Błąd zapisu PDF: {0}
-@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Spakowane pliki: {n} w {folder} ({note})
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Spakowane pliki: {n} w {folder} ({note})|Spakowane pliki: {n} w {folder} ({note})|Spakowane pliki: {n} w {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Podgląd w przeglądarce wymaga aplikacji desktopowej (wersja webowa zamiast tego pobiera pliki)
 @msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	podaj `desiredK`, żądany rozmiar pliku w K (1024 bajty): liczbę większą od 0 i najwyżej 1048576
 @msg	`startWith` is `current` or `auto`	`startWith` to `current` lub `auto`
@@ -6603,6 +6616,9 @@ file-filter	Swatch libraries	Biblioteki próbek
 file-filter	Flattener presets	Ustawienia spłaszczania
 file-filter	PDF presets	Ustawienia PDF
 file-filter	Print presets	Ustawienia drukowania
+file-filter	Tracing presets	Ustawienia obrysu
+file-filter	Action sets	Zestawy operacji
+file-filter	Composite fonts	Fonty złożone
 file-filter	Preferences	Preferencje
 file-filter	Export presets	Ustawienia eksportu
 file-filter	SVG Compressed	SVG skompresowany
@@ -6686,6 +6702,7 @@ mark-style	Japanese	Japońskie
 @msg	a 3D effect on a group's fill or stroke draws nothing	efekt 3D na wypełnieniu lub obrysie grupy niczego nie rysuje
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	efekt 3D na wypełnieniu lub obrysie grupy nie rysuje niczego do eksportu
 @msg	The 3D object is too complex to export	Obiekt 3D jest zbyt złożony, aby go wyeksportować
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Siatka obiektu 3D jest niekompletna lub zawiera wartość, która nie jest liczbą
 @msg	the <filter> element needs an id, the filter's name	element <filter> wymaga id, czyli nazwy filtra
 @msg	an SVG filter's id is at most {MAX_NAME} characters	id filtra SVG ma najwyżej {MAX_NAME} znaków
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> nie jest elementem filtra SVG
@@ -7126,9 +7143,9 @@ mark-style	Japanese	Japońskie
 	Slope:	Nachylenie:
 axis	X Axis	Oś X
 axis	Y Axis	Oś Y
-@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Spakowane pliki: {n} w {folder}
-@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Spakowane pliki: {n} {note}
-@msgplural	Packaged {n} file|Packaged {n} files	Spakowane pliki: {n}
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Spakowane pliki: {n} w {folder}|Spakowane pliki: {n} w {folder}|Spakowane pliki: {n} w {folder}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Spakowane pliki: {n} {note}|Spakowane pliki: {n} {note}|Spakowane pliki: {n} {note}
+@msgplural	Packaged {n} file|Packaged {n} files	Spakowane pliki: {n}|Spakowane pliki: {n}|Spakowane pliki: {n}
 @plural	Packaged {n} file|Packaged {n} files	Spakowane pliki: {n}|Spakowane pliki: {n}|Spakowane pliki: {n}
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Spakowane pliki: {n} w {folder}|Spakowane pliki: {n} w {folder}|Spakowane pliki: {n} w {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Spakowane pliki: {n} {note}|Spakowane pliki: {n} {note}|Spakowane pliki: {n} {note}
@@ -7179,11 +7196,19 @@ axis	Y Axis	Oś Y
 @msg	module is {_1} bytes (limit {_2})	moduł ma {_1} bajtów (limit {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	wymaga zatwierdzenia: prosi o {0}, na co użytkownik zezwala, instalując ją osobno
 @msg	not JSON: {e}	to nie jest JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	to nie jest plik binarny WebAssembly (brak nagłówka \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	to nie jest plik binarny WebAssembly (brak nagłówka \\0asm)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	typ funkcji ma więcej parametrów, niż pozwala limit ({MAX_FUNC_TYPE_VALUES})
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	typ funkcji ma więcej wyników, niż pozwala limit ({MAX_FUNC_TYPE_VALUES})
 @msg	parameter `{k}`: {what}	parametr `{k}`: {what}
 @msg	parameter `{name}`: {what}	parametr `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	parametry wtyczki muszą być obiektem JSON
 @msg	the module must export its linear memory as `memory`	moduł musi eksportować swoją pamięć liniową jako `memory`
+@msg	the module must export `{name}` with the type {signature}	moduł musi eksportować `{name}` z typem {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	moduł ma więcej niż jedną sekcję niestandardową `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	budżet pamięci (pamięć początkowa modułu ma {initial} bajtów, limit {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	manifest w sekcji niestandardowej `{MANIFEST_SECTION}` musi podawać `abi` równe {ABI_VERSION}, czyli wersję ABI implementowaną przez ten host
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	budżet tabel (moduł definiuje {count} tabel, największa ma {largest} elementów; limit {MAX_TABLES} tabel po {MAX_TABLE_ELEMENTS} elementów)
+@msg	the module's table section could not be read	nie można odczytać sekcji tabel modułu
 @msg	the objects to change are no longer in the document	obiektów do zmiany nie ma już w dokumencie
 @msg	the runtime panicked	środowisko uruchomieniowe uległo awarii
 @msg	unexpected host trap	nieoczekiwane przerwanie (trap) hosta
@@ -7191,6 +7216,10 @@ axis	Y Axis	Oś Y
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc zwróciła 0 (brak pamięci)
 @msg	vc_alloc returned a block outside memory	vc_alloc zwróciła blok poza pamięcią
 @msg	vc_run returned error code {packed}	vc_run zwróciła kod błędu {packed}
+@msg	did not finish loading within {secs} s	nie zakończył wczytywania w ciągu {secs} s
+@msg	no thread was left to load it	nie został żaden wątek, który mógłby go wczytać
+@msg	panicked while loading	uległ awarii podczas wczytywania
+@msg	panicked while loading: {what}	uległ awarii podczas wczytywania: {what}
 @msg	{_1} is not a file	{_1} nie jest plikiem
 @msg	{_1} is {_2} bytes (limit {_3})	{_1} ma {_2} bajtów (limit {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} obiektów (limit {MAX_OBJECTS})
@@ -7210,6 +7239,11 @@ axis	Y Axis	Oś Y
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` i `maxItems` muszą wynosić 0-{MAX_LIST}, `maxItems` co najmniej 1, a wartość domyślna musi mieć tyle elementów
 @msg	`name` must be a string	`name` musi być ciągiem znaków
 @msg	`opacity` must be a number	`opacity` musi być liczbą
+@msg	`opacity` must be a number from 0 to 100	`opacity` musi być liczbą od 0 do 100
+@msg	`opacity` must be true or false	`opacity` musi mieć wartość true lub false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	znaki tekstu nie mają własnego krycia: dodaj wypełnienie lub obrys poleceniem Dodaj nowe wypełnienie lub Dodaj nowy obrys w panelu Wygląd
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	obiekt zaznaczony w wystąpieniu symbolu nie ma własnego krycia wypełnienia ani obrysu
+@msg	no target has that fill or stroke to take the opacity	żaden cel nie ma tego wypełnienia ani obrysu, które przyjęłoby krycie
 @msg	`type` must be "path" or "compound"	`type` musi mieć wartość "path" lub "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` musi mieć 1-{MAX_UNIT} drukowalnych znaków
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` musi podawać od 1 do {MAX_CONDITION_VALUES} wartości dla `{other}`
@@ -7253,6 +7287,8 @@ axis	Y Axis	Oś Y
 @msg	`plates` requires a stop linked to a spot swatch	`plates` wymaga punktu koloru połączonego z próbką koloru dodatkowego
 @msg	the output	wyjście
 @msg	the path has no anchor points	ścieżka nie ma punktów kontrolnych
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	ścieżka złożona {id} ma ukryty, zablokowany lub będący linią pomocniczą element, więc jej elementów nie można zastąpić
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	ścieżka złożona {id} ma element, który nie jest ścieżką, więc jej elementów nie można zastąpić
 @msg	too many anchor points (limit {MAX_ANCHORS})	za dużo punktów kontrolnych (limit {MAX_ANCHORS})
 @msg	true or false	true lub false
 @msg	a number >= {_1}	liczbą >= {_1}
@@ -7342,6 +7378,10 @@ axis	Y Axis	Oś Y
 @msg	`inputs` lists `{shown}` twice	`inputs` wymienia `{shown}` dwa razy
 @msg	`inputs` needs `api` 2 or later	`inputs` wymaga `api` 2 lub nowszego
 @msg	`inputs` needs the permission `doc.read`	`inputs` wymaga uprawnienia `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Odczytywać obiekty, które otrzymuje, oraz ustawienia, obszary kompozycji, warstwy i próbki dokumentu
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` musi wymieniać różne sekcje: settings, artboards, layers lub swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` dotyczy filtra albo efektu na żywo z `commands`, z `api` 3 lub nowszym i z uprawnieniem `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	informacje o dokumencie, o które prosi wtyczka, są zbyt duże, aby je przekazać: najwyżej {MAX_CONTEXT_ITEMS} obszarów kompozycji, warstw i próbek w {MAX_CONTEXT_BYTES} bajtach
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	budżet pamięci (obiekt {_1} wymaga {size} bajtów danych wejściowych, pozostało {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	budżet obiektów (ponad {MAX_OBJECTS} obiektów tylko do odczytu)
 @msg	instruction budget	budżet instrukcji
@@ -9136,6 +9176,8 @@ breakText	Glyphs	Glify
 @msg	`dataBase64` is larger than the module limit	`dataBase64` przekracza limit rozmiaru modułu
 @msg	`dataBase64` is not valid base64	`dataBase64` nie jest prawidłowym kodem base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` nie można łączyć z `ids`, `reverse` ani `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` nie można łączyć z `ids`, `id` ani `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` nie można łączyć z `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` i `childLimit` ograniczają podsumowanie: przekaż `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` to nazwa wzoru albo null dla zwykłych kolumn
 @msg	`design` is a design name, or null for the default marker	`design` to nazwa wzoru albo null dla domyślnego znacznika
@@ -9623,6 +9665,7 @@ breakText	Glyphs	Glify
 @msg	give a pattern name or select an object painted with a pattern	podaj nazwę wzorka albo zaznacz obiekt pomalowany wzorkiem
 @msg	give at least one of clip, invert, disabled, linked	podaj co najmniej jedno z: clip, invert, disabled, linked
 @msg	give color, none, swatch or gradient	podaj color, none, swatch lub gradient
+@msg	give color, none, swatch, gradient or opacity	podaj color, none, swatch, gradient lub opacity
 @msg	give dataBase64	podaj dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	podaj at (kliknięcie) albo area (ścieżkę narysowaną wokół nakładających się obszarów)
 @msg	give formats or a preset, not both	podaj formats albo ustawienie, nie oba naraz

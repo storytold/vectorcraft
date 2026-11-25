@@ -1,7 +1,7 @@
 //! Heavy plug-in filters, run off the UI thread. A filter whose manifest asks for a heavy budget
 //! (`Budget::Heavy`: minutes rather than a minute, for routing, packing or simulation) would freeze
 //! the app while it computes, so the app runs it on a thread of its own ([`start`]) while editing
-//! goes on: the status bar shows it, and after [`DELAY`] a progress window with Cancel (also Esc,
+//! goes on: the status bar shows it, and after the export progress window's delay a progress window with Cancel (also Esc,
 //! `plugin.cancelRuns`) and Continue in Background (`plugin.hideRuns`). A thread of its own, not
 //! the background worker's queue ([`crate::background`]), so saves and exports don't wait behind it.
 //!
@@ -27,16 +27,13 @@ use vectorcraft_engine::cmd::plugin::FilterRun;
 use vectorcraft_plugins::{permissions, registry};
 
 use crate::VectorcraftApp;
-use crate::export_progress::{self, Pressed};
-
-pub use crate::export_progress::DELAY;
+use crate::export_progress;
 
 /// What a run's thread hands back: the run, and its output or why it has none.
 type Done = (FilterRun, Result<Vec<u8>, String>);
 
 /// A heavy filter running.
 pub struct Running {
-    id: u64,
     /// What the status bar and the progress window say: `Running “Route Paths”…`.
     pub label: String,
     /// The filter's name, quoted.
@@ -47,6 +44,8 @@ pub struct Running {
     pub progress: Arc<Progress>,
     /// Continue in Background: the progress window no longer shows it.
     pub hidden: bool,
+    /// [`export_progress::now`] when it started: the progress window's age.
+    started: f64,
     done: Receiver<Done>,
 }
 
@@ -61,7 +60,6 @@ impl Running {
 #[derive(Default)]
 pub struct PluginRuns {
     pub running: Vec<Running>,
-    next_id: u64,
 }
 
 /// Do heavy filters run off the UI thread here? Not on wasm (no threads).
@@ -83,20 +81,18 @@ pub fn start(app: &mut VectorcraftApp, p: Value) -> Result<Value, String> {
     let (tx, done) = channel();
     let shown = Progress::new();
     let reporting = Arc::clone(&shown);
-    std::thread::Builder::new()
-        .name("vectorcraft-plugin".into())
-        .spawn(move || {
-            let output = vectorcraft_engine::guard::catch_panic(|| progress::scope(&reporting, || run.run()))
-                .map_err(|msg| format!("internal error: {msg} (please report this bug)"))
-                .and_then(|r| r.map_err(|e| e.to_string()));
-            // The app may have quit meanwhile: nothing to hand it to.
-            let _ = tx.send((run, output));
-        })
-        .map_err(|e| e.to_string())?;
+    let job = move || {
+        let output = vectorcraft_engine::guard::catch_panic(|| progress::scope(&reporting, || run.run()))
+            .map_err(|msg| format!("internal error: {msg} (please report this bug)"))
+            .and_then(|r| r.map_err(|e| e.to_string()));
+        // The app may have quit meanwhile: nothing to hand it to.
+        let _ = tx.send((run, output));
+    };
+    app.host.jobs().spawn("vectorcraft-plugin", Box::new(job));
     let label = format!("Running {who}…");
+    let started = export_progress::now(app);
     let runs = &mut app.plugin_runs;
-    runs.next_id += 1;
-    runs.running.push(Running { id: runs.next_id, label: label.clone(), who, params, progress: shown, hidden: false, done });
+    runs.running.push(Running { label: label.clone(), who, params, progress: shown, hidden: false, started, done });
     app.status(label.clone());
     Ok(json!({ "background": true, "status": label }))
 }
@@ -104,7 +100,7 @@ pub fn start(app: &mut VectorcraftApp, p: Value) -> Result<Value, String> {
 /// Applies the runs that are done (each frame). Not while a dialog is open: its OK acts on the
 /// active document, which a run's result changes; the results wait until it is closed.
 pub fn poll(app: &mut VectorcraftApp) {
-    if app.ui.dialog.is_some() {
+    if app.any_dialog_open() {
         return;
     }
     let mut i = 0;
@@ -226,34 +222,18 @@ pub fn any_shown(app: &VectorcraftApp) -> bool {
     app.plugin_runs.running.iter().any(Running::shown)
 }
 
-/// The progress window of the first run it shows, once that has run for [`DELAY`]. Not while a
-/// dialog or the export progress window is open: never two modals at once.
-pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let Some(first) = app.plugin_runs.running.iter().find(|r| r.shown()) else { return };
-    let now = ctx.input(|i| i.time);
-    let since = ctx.data_mut(|m| {
-        let seen = m.get_temp_mut_or_insert_with(egui::Id::unique("plugin-run-seen"), || (first.id, now));
-        if seen.0 != first.id {
-            *seen = (first.id, now);
-        }
-        seen.1
-    });
-    let exporting = app.background.jobs.iter().any(|j| j.progress.is_some() && !j.hidden && !j.cancelled());
-    if now - since < DELAY || app.ui.dialog.is_some() || exporting {
-        return;
-    }
-    let heading = crate::i18n::msg(&first.label);
-    let reported = first.progress.fraction();
-    let pressed = export_progress::window(ctx, "plugin-run-progress", &heading, |ui| match reported {
-        Some(share) => export_progress::share(ui, tl!("The plug-in is computing…"), share as f32),
-        None => export_progress::busy(ui, tl!("The plug-in is computing…")),
-    });
-    let id = match pressed {
-        Some(Pressed::Cancel) => "plugin.cancelRuns",
-        Some(Pressed::Hide) => "plugin.hideRuns",
-        None => return,
-    };
-    if let Err(e) = app.run(id, json!({})) {
-        app.status(e);
-    }
+/// The progress window of the first run it shows. `export_progress::show` orders the job tables and
+/// decides when a window may appear.
+pub(crate) fn shown(app: &VectorcraftApp) -> Option<export_progress::Shown> {
+    let first = app.plugin_runs.running.iter().find(|r| r.shown())?;
+    Some(export_progress::Shown {
+        title: crate::i18n::msg(&first.label).to_string(),
+        step: tl!("The plug-in is computing…").to_string(),
+        fraction: first.progress.fraction().map(|f| f as f32),
+        counts: None,
+        queued: None,
+        started: first.started,
+        cancel: "plugin.cancelRuns",
+        hide: Some("plugin.hideRuns"),
+    })
 }

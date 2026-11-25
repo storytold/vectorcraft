@@ -1,8 +1,8 @@
 //! macOS: a drawing tablet's pen pressure (#852), tilt and barrel rotation (#764), and an airbrush
 //! pen's finger wheel. winit 0.30
 //! hands a pen to the window there as a mouse, without them, so the app reads them from AppKit
-//! itself and writes them into the UI's [`StylusFeed`] (`Services::stylus`), which the canvas
-//! reads, as on X11 ([`crate::tablet`]).
+//! itself and writes them into the framework's [`PenSource`], which the tool host reads, as on X11
+//! ([`crate::tablet`]).
 //!
 //! A local event monitor (`addLocalMonitorForEventsMatchingMask:handler:`, which AppKit calls "with
 //! each event it is about to dispatch" in this app:
@@ -10,8 +10,8 @@
 //! reads each mouse and tablet event on the main thread before winit's view handles it, and passes
 //! it on unchanged:
 //! - A mouse event whose `subtype` is `NSEventSubtypeTabletPoint` comes from a pen: its `pressure`
-//!   (0..1) goes into the feed, kept for the pointer move winit makes of the event
-//!   ([`StylusFeed::set_move`]), so each move of a fast stroke has its own pressure. Its `tilt`
+//!   (0..1) goes into the source, which queues every reading, so each move of a fast stroke has
+//!   its own pressure. Its `tilt`
 //!   (−1..1 on each axis, ±[`TILT_DEGREES`] at the ends) and its `rotation` go into the feed as the
 //!   pen's pose, kept for that move too. AppKit gives a rotation of 0 for a pen that does not read
 //!   one and a tilt of 0 for an upright pen, so one event cannot tell a pen without tilt or rotation
@@ -33,7 +33,8 @@
 //! works on plain values and is tested on every platform; the monitor reads them.
 #![cfg_attr(not(target_os = "macos"), allow(dead_code))]
 
-use vectorcraft_ui_egui::stylus::{PenPose, PenSample, StylusFeed};
+use craft::behavior::PointerSample;
+use craft::ui::runtime::pen::PenSource;
 
 use crate::tablet::TILT_DEGREES;
 
@@ -91,12 +92,12 @@ impl RawEvent {
         self.kind == event_type::TABLET_POINT || (self.mouse() && self.subtype == subtype::TABLET_POINT)
     }
 
-    /// The pen's tilt and rotation in [`PenPose`]'s units.
+    /// The pen's reading as a [`PointerSample`], tilt and rotation in radians.
     ///
     /// AppKit's `tilt` is −1.0..1.0 on each axis and 0.0 on both with the pen perpendicular to the
     /// tablet. A negative x is a tilt to the left and a positive x a tilt to the right; a negative y
     /// is a tilt to the top and a positive y a tilt to the bottom
-    /// (<https://developer.apple.com/documentation/appkit/nsevent/tilt>). [`PenPose`]'s x is positive
+    /// (<https://developer.apple.com/documentation/appkit/nsevent/tilt>). The sample's x is positive
     /// to the right and its y positive down the page, the same signs, so each axis keeps its sign.
     /// Apple gives the ends of the range as maximum tilt and does not give them in degrees
     /// (<https://developer.apple.com/documentation/coregraphics/cgeventfield/tableteventtiltx>), so
@@ -108,22 +109,29 @@ impl RawEvent {
     /// no direction for rotation; the Cocoa Event Handling Guide gives the `rotation` accessor's
     /// degrees as counterclockwise for the rotate gesture
     /// (<https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/EventOverview/HandlingTouchEvents/HandlingTouchEvents.html>),
-    /// and the pen's rotation is taken the same way. [`PenPose`]'s rotation runs clockwise, so the
-    /// angle is negated and brought into 0..360.
+    /// and the pen's rotation is taken the same way. The sample's rotation runs clockwise, so the
+    /// angle is negated and brought into 0..360 degrees.
     ///
     /// AppKit's `tangentialPressure` is −1.0..1.0, the finger wheel of an airbrush pen on the
     /// devices that have one (<https://developer.apple.com/documentation/appkit/nsevent/tangentialpressure>).
-    /// It becomes [`PenPose`]'s wheel of 0..1, −1.0 at 0 and 1.0 at 1; a value past either end is
+    /// It becomes the sample's wheel of 0..1, −1.0 at 0 and 1.0 at 1; a value past either end is
     /// clamped.
     ///
     /// The tilt is left out unless `read.tilts`, the rotation unless `read.turns`, and the wheel
     /// unless `read.wheels` ([`Pen`]).
-    fn pose(&self, read: Reads) -> PenPose {
-        let degrees = |v: f64| (v.clamp(-1.0, 1.0) * TILT_DEGREES) as f32;
-        // `0.0 - r` rather than `-r`: a rotation of 0 gives 0, not −0.
-        let rotation = read.turns.then(|| (0.0 - self.rotation).rem_euclid(360.0));
-        let wheel = read.wheels.then(|| (self.tangential.clamp(-1.0, 1.0) + 1.0) / 2.0);
-        PenPose { tilt: read.tilts.then(|| [degrees(self.tilt.0), degrees(self.tilt.1)]), rotation, wheel }
+    fn sample(&self, read: Reads, eraser: bool) -> PointerSample {
+        let radians = |v: f64| ((v.clamp(-1.0, 1.0) * TILT_DEGREES) as f32).to_radians();
+        let mut sample = PointerSample::new(self.pressure);
+        sample.eraser = eraser;
+        if read.tilts {
+            sample.tilt = [radians(self.tilt.0), radians(self.tilt.1)];
+        }
+        if read.turns {
+            // `0.0 - r` rather than `-r`: a rotation of 0 gives 0, not −0.
+            sample.rotation = (0.0 - self.rotation).rem_euclid(360.0).to_radians();
+        }
+        sample.wheel = read.wheels.then(|| (self.tangential.clamp(-1.0, 1.0) + 1.0) / 2.0);
+        sample
     }
 
     /// Whether the event reports a tilt other than 0, a rotation other than 0, and a tangential
@@ -161,17 +169,14 @@ enum Update {
     /// Nothing: an event the monitor doesn't map.
     Keep,
     /// The sample of a pen, or `None` for a mouse.
-    Set(Option<PenSample>),
-    /// A pen's sample that comes with a pointer move.
-    Move(PenSample),
+    Set(Option<PointerSample>),
 }
 
 impl Update {
-    fn apply(self, feed: &StylusFeed) {
+    fn apply(self, pen: &PenSource) {
         match self {
             Update::Keep => {}
-            Update::Set(sample) => feed.set_sample(sample),
-            Update::Move(sample) => feed.set_move(sample),
+            Update::Set(sample) => pen.set(sample),
         }
     }
 }
@@ -193,29 +198,25 @@ impl Pen {
             self.eraser = e.entering && e.device == device::ERASER;
             self.read = Reads::default();
             let pen = e.entering && e.device != device::CURSOR;
-            return Update::Set(pen.then_some(PenSample { pressure: 0.0, eraser: self.eraser, ..PenSample::default() }));
+            let mut near = PointerSample::new(0.0);
+            near.eraser = self.eraser;
+            return Update::Set(pen.then_some(near));
         }
         if e.point() {
             self.read.add(e.reads());
+            return Update::Set(Some(e.sample(self.read, self.eraser)));
         }
-        let sample = PenSample { pressure: e.pressure, eraser: self.eraser, pose: e.pose(self.read) };
-        match (e.point(), e.mouse()) {
-            (true, true) => Update::Move(sample),
-            (true, false) => Update::Set(Some(sample)),
-            (false, true) => Update::Set(None),
-            (false, false) => Update::Keep,
-        }
+        if e.mouse() { Update::Set(None) } else { Update::Keep }
     }
 }
 
-/// Start reading pen pressure: the feed the monitor writes into, or `None` (logged) when AppKit
+/// Start reading pen pressure: the source the monitor writes into, or `None` (logged) when AppKit
 /// refuses the monitor or this isn't the main thread.
 #[cfg(target_os = "macos")]
-pub fn start() -> Option<StylusFeed> {
-    // The monitor writes on the main thread before winit hands the event on: a press never waits.
-    let feed = StylusFeed::on_ui_thread();
-    match monitor::install(feed.clone()) {
-        Ok(()) => Some(feed),
+pub fn start() -> Option<PenSource> {
+    let pen = PenSource::default();
+    match monitor::install(pen.clone()) {
+        Ok(()) => Some(pen),
         Err(e) => {
             log::warn!("tablet pressure: {e}");
             None
@@ -229,14 +230,14 @@ mod monitor {
     use std::ptr::NonNull;
 
     use block2::RcBlock;
+    use craft::ui::runtime::pen::PenSource;
     use objc2::MainThreadMarker;
     use objc2_app_kit::{NSEvent, NSEventMask};
-    use vectorcraft_ui_egui::stylus::StylusFeed;
 
     use super::{Pen, RawEvent, event_mask};
 
     /// Install the monitor for the life of the app. Main thread only.
-    pub(super) fn install(feed: StylusFeed) -> Result<(), &'static str> {
+    pub(super) fn install(source: PenSource) -> Result<(), &'static str> {
         MainThreadMarker::new().ok_or("the event monitor can only be installed from the main thread")?;
         let pen = Cell::new(Pen::default());
         let handler = RcBlock::new(move |event: NonNull<NSEvent>| -> *mut NSEvent {
@@ -245,7 +246,7 @@ mod monitor {
             #[allow(unsafe_code)]
             let e = unsafe { event.as_ref() };
             let mut p = pen.get();
-            p.handle(&read(e)).apply(&feed);
+            p.handle(&read(e)).apply(&source);
             pen.set(p);
             event.as_ptr()
         });
@@ -298,20 +299,29 @@ mod tests {
     }
 
     /// A sample of the tip of a pen that has reported no tilt or rotation.
-    fn tip(pressure: f32) -> PenSample {
-        PenSample { pressure, eraser: false, pose: PenPose::default() }
+    fn tip(pressure: f32) -> PointerSample {
+        PointerSample::new(pressure)
     }
 
-    /// A sample of the pen near the tablet but not yet read: no pose.
-    fn near(eraser: bool) -> PenSample {
-        PenSample { pressure: 0.0, eraser, pose: PenPose::default() }
+    /// A sample of the pen near the tablet but not yet read: no tilt or rotation.
+    fn near(eraser: bool) -> PointerSample {
+        let mut sample = PointerSample::new(0.0);
+        sample.eraser = eraser;
+        sample
+    }
+
+    /// `sample` held as `tilt` and `rotation` (radians).
+    fn held(mut sample: PointerSample, tilt: [f32; 2], rotation: f32) -> PointerSample {
+        sample.tilt = tilt;
+        sample.rotation = rotation;
+        sample
     }
 
     #[test]
     fn a_pens_mouse_events_are_moves_with_its_pressure() {
         let mut p = Pen::default();
-        assert_eq!(p.handle(&pen(DRAG, 0.5)), Update::Move(tip(0.5)));
-        assert_eq!(p.handle(&pen(1, 0.25)), Update::Move(tip(0.25)), "a press");
+        assert_eq!(p.handle(&pen(DRAG, 0.5)), Update::Set(Some(tip(0.5))));
+        assert_eq!(p.handle(&pen(1, 0.25)), Update::Set(Some(tip(0.25))), "a press");
         assert_eq!(p.handle(&pen(event_type::TABLET_POINT, 0.8)), Update::Set(Some(tip(0.8))), "no move");
     }
 
@@ -332,11 +342,15 @@ mod tests {
     #[test]
     fn proximity_says_which_end_is_near() {
         let mut p = Pen::default();
-        let eraser = |pressure| PenSample { pressure, eraser: true, pose: PenPose::default() };
+        let eraser = |pressure| {
+            let mut sample = near(true);
+            sample.pressure = pressure;
+            sample
+        };
         assert_eq!(p.handle(&proximity(device::ERASER, true)), Update::Set(Some(near(true))));
-        assert_eq!(p.handle(&pen(DRAG, 0.4)), Update::Move(eraser(0.4)));
+        assert_eq!(p.handle(&pen(DRAG, 0.4)), Update::Set(Some(eraser(0.4))));
         assert_eq!(p.handle(&proximity(device::ERASER, false)), Update::Set(None), "it left");
-        assert_eq!(p.handle(&pen(DRAG, 0.4)), Update::Move(tip(0.4)));
+        assert_eq!(p.handle(&pen(DRAG, 0.4)), Update::Set(Some(tip(0.4))));
         assert_eq!(p.handle(&proximity(1, true)), Update::Set(Some(near(false))), "the tip");
         assert_eq!(p.handle(&proximity(0, true)), Update::Set(Some(near(false))), "an unknown tool draws as the tip");
         assert_eq!(p.handle(&proximity(device::CURSOR, true)), Update::Set(None), "a puck is a mouse");
@@ -345,42 +359,39 @@ mod tests {
     }
 
     /// #764: AppKit's tilt (−1..1, x positive to the right, y positive to the bottom) reaches the
-    /// feed in degrees with the same signs, and its rotation, taken as counterclockwise, reaches it
-    /// clockwise.
+    /// source in radians with the same signs, and its rotation, taken as counterclockwise, reaches
+    /// it clockwise.
     #[test]
     fn a_pens_tilt_and_rotation_go_into_the_feed() {
         let mut p = Pen::default();
-        let sample = |pressure, pose| PenSample { pressure, eraser: false, pose };
-        assert_eq!(p.handle(&pen(DRAG, 0.5)), Update::Move(tip(0.5)), "no tilt or rotation reported yet");
+        let deg = f32::to_radians;
+        assert_eq!(p.handle(&pen(DRAG, 0.5)), Update::Set(Some(tip(0.5))), "no tilt or rotation reported yet");
         let leaning = RawEvent { tilt: (0.5, -0.25), rotation: 30.0, ..pen(DRAG, 0.5) };
-        let pose = PenPose { tilt: Some([30.0, -15.0]), rotation: Some(330.0), wheel: None };
-        assert_eq!(p.handle(&leaning), Update::Move(sample(0.5, pose)));
+        assert_eq!(p.handle(&leaning), Update::Set(Some(held(tip(0.5), [deg(30.0), deg(-15.0)], deg(330.0)))));
         let past_the_ends = RawEvent { tilt: (-4.0, 1.5), rotation: 270.0, ..pen(event_type::TABLET_POINT, 0.8) };
-        let pose = PenPose { tilt: Some([-60.0, 60.0]), rotation: Some(90.0), wheel: None };
-        assert_eq!(p.handle(&past_the_ends), Update::Set(Some(sample(0.8, pose))), "clamped");
-        let pose = PenPose { tilt: Some([0.0, 0.0]), rotation: Some(0.0), wheel: None };
-        let Update::Move(upright) = p.handle(&pen(DRAG, 0.6)) else { panic!("a pen's drag is a move") };
-        assert_eq!(upright, sample(0.6, pose), "once reported, 0 is upright and unturned");
-        assert!(upright.pose.rotation.is_some_and(f32::is_sign_positive), "{upright:?}");
-        let feed = StylusFeed::default();
-        p.handle(&RawEvent { tilt: (f64::NAN, 0.0), rotation: -90.0, ..pen(DRAG, 0.3) }).apply(&feed);
-        assert_eq!(feed.pose(), Some(PenPose { rotation: Some(90.0), ..PenPose::default() }), "a tilt that is not a number is left out");
+        assert_eq!(p.handle(&past_the_ends), Update::Set(Some(held(tip(0.8), [deg(-60.0), deg(60.0)], deg(90.0)))), "clamped");
+        let Update::Set(Some(upright)) = p.handle(&pen(DRAG, 0.6)) else { panic!("a pen's drag is a sample") };
+        assert_eq!(upright, tip(0.6), "once reported, 0 is upright and unturned");
+        assert!(upright.rotation.is_sign_positive(), "{upright:?}");
+        let source = PenSource::default();
+        p.handle(&RawEvent { tilt: (f64::NAN, 0.0), rotation: -90.0, ..pen(DRAG, 0.3) }).apply(&source);
+        let sample = source.current().unwrap();
+        assert_eq!((sample.tilt, sample.rotation), ([0.0, 0.0], deg(90.0)), "a tilt that is not a number is left out");
         p.handle(&proximity(1, true));
         let tilted = RawEvent { tilt: (0.0, 0.5), ..pen(event_type::TABLET_POINT, 0.8) };
-        let pose = PenPose { tilt: Some([0.0, 30.0]), ..PenPose::default() };
-        assert_eq!(p.handle(&tilted), Update::Set(Some(sample(0.8, pose))), "no rotation reported since the pen came near");
-        p.handle(&RawEvent { kind: DRAG, ..Default::default() }).apply(&feed);
-        assert_eq!(feed.pose(), None, "a mouse moved");
+        assert_eq!(p.handle(&tilted), Update::Set(Some(held(tip(0.8), [0.0, deg(30.0)], 0.0))), "no rotation reported since the pen came near");
+        p.handle(&RawEvent { kind: DRAG, ..Default::default() }).apply(&source);
+        assert_eq!(source.current(), None, "a mouse moved");
     }
 
-    /// An airbrush pen's finger wheel (AppKit's `tangentialPressure`, −1..1) reaches the feed as
+    /// An airbrush pen's finger wheel (AppKit's `tangentialPressure`, −1..1) reaches the source as
     /// 0..1, once the pen has reported a value other than 0 since it came near.
     #[test]
     fn an_airbrush_wheel_goes_into_the_feed() {
         let mut p = Pen::default();
         let wheel = |p: &mut Pen, tangential: f32| match p.handle(&RawEvent { tangential, ..pen(DRAG, 0.5) }) {
-            Update::Move(s) => s.pose.wheel,
-            u => panic!("a pen's drag is a move: {u:?}"),
+            Update::Set(Some(s)) => s.wheel,
+            u => panic!("a pen's drag is a sample: {u:?}"),
         };
         assert_eq!(wheel(&mut p, 0.0), None, "no wheel reported yet");
         assert_eq!(wheel(&mut p, -1.0), Some(0.0));
@@ -393,15 +404,14 @@ mod tests {
 
     #[test]
     fn the_feed_gets_each_moves_pressure_within_0_to_1() {
-        let feed = StylusFeed::default();
+        let source = PenSource::default();
         let mut p = Pen::default();
-        for e in [pen(DRAG, f32::NAN), pen(DRAG, 4.0), pen(DRAG, -1.0), pen(event_type::TABLET_POINT, 0.3)] {
-            p.handle(&e).apply(&feed);
+        for (e, expected) in [(pen(DRAG, f32::NAN), 1.0), (pen(DRAG, 4.0), 1.0), (pen(DRAG, -1.0), 0.0), (pen(event_type::TABLET_POINT, 0.3), 0.3)] {
+            p.handle(&e).apply(&source);
+            assert_eq!(source.current().map(|s| s.pressure), Some(expected));
         }
-        let pressures: Vec<f32> = feed.take_moves().into_iter().map(|(p, _)| p).collect();
-        assert_eq!((pressures, feed.held()), (vec![1.0, 1.0, 0.0], Some(0.3)));
-        p.handle(&RawEvent { kind: DRAG, ..Default::default() }).apply(&feed);
-        assert_eq!(feed.held(), None, "a mouse moved");
+        p.handle(&RawEvent { kind: DRAG, ..Default::default() }).apply(&source);
+        assert_eq!(source.current(), None, "a mouse moved");
     }
 
     #[test]

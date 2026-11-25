@@ -43,17 +43,26 @@
 //! A filter whose manifest lists `inputs` (plug-in API level 2) is also given the selected type,
 //! images or symbol instances of those kinds, to read only: its output must return each of them
 //! unchanged ([`objects::decode_output_with`]).
+//!
+//! A filter, or a live effect's command, whose manifest lists `context` (plug-in API level 3) is
+//! also given the parts of the active document it names in `_context.document`, whether or not
+//! anything is selected: the settings, artboards, layers and swatches, as plain values
+//! ([`context`]).
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 
 use serde_json::{Map, Value, json};
-use vectorcraft_doc::{Effect, Node};
+use vectorcraft_doc::{Document, Effect, Node};
 use vectorcraft_plugins::{Budget, Command, Kind, Plugin, effect, export, objects, registry, safe_mode};
 
 use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, has_doc, ids_param, str_param, switch_or};
-use crate::store::StoreTurn;
+use crate::store::{PluginLoad, StoreTurn};
 
 use vectorcraft_plugins::permissions::{self, Grant, GrantToken, Permission};
+
+mod context;
+pub use context::{CONTEXT_FUEL_PER_ITEM, MAX_CONTEXT_BYTES, MAX_CONTEXT_ITEMS};
 
 /// What a plug-in error looks like to the user. A run the caller cancelled changed nothing.
 fn err(e: vectorcraft_plugins::Error) -> EngineError {
@@ -101,6 +110,9 @@ pub fn describe(p: &Plugin) -> Value {
     if !m.inputs.is_empty() {
         v["inputs"] = json!(m.inputs);
     }
+    if !m.context.is_empty() {
+        v["context"] = json!(m.context);
+    }
     if m.paint_output {
         v["paintOutput"] = json!(true);
     }
@@ -113,8 +125,19 @@ pub fn describe(p: &Plugin) -> Value {
             .iter()
             .map(|c| {
                 let run = m.for_command(c);
-                json!({"id": c.id, "command": command_id(&m.id, &c.id), "label": c.shown_label(), "params": run.params_doc(),
-                       "paramsSchema": serde_json::to_value(&run).ok().and_then(|v| v.get("params").cloned())})
+                let mut entry = json!({"id": c.id, "command": command_id(&m.id, &c.id), "label": c.shown_label(), "params": run.params_doc(),
+                       "paramsSchema": serde_json::to_value(&run).ok().and_then(|v| v.get("params").cloned())});
+                if let Some(place) = &c.place {
+                    let mut menu = json!({"path": place.path});
+                    if let Some(after) = &place.after {
+                        menu["after"] = json!(permissions::display_text(after, permissions::MAX_SHOWN_NAME));
+                    }
+                    if placed_menu(p, c).is_none() {
+                        menu["placed"] = json!(false);
+                    }
+                    entry["menu"] = menu;
+                }
+                entry
             })
             .collect();
         v["commands"] = json!(commands);
@@ -242,15 +265,25 @@ impl FilterRun {
             params["_context"]["mode"] = json!("command");
             params["_context"]["command"] = json!(cmd.id);
         }
+        // The parts of the document its manifest asks for (`context`), selection or not. Each row
+        // costs the run [`context::CONTEXT_FUEL_PER_ITEM`] instructions.
+        let sections = m.context_sections();
+        let mut charged = 0;
+        if !sections.is_empty() && may.contains(&Permission::DocRead) {
+            let given = context::document_context(st, &sections, c)?;
+            params["_context"]["document"] = given.value;
+            charged = (given.items as u64).saturating_mul(context::CONTEXT_FUEL_PER_ITEM);
+        }
         let params = serde_json::to_vec(&params).map_err(|e| bad(c, e.to_string()))?;
         // The input and the parameters may use half the plug-in's memory together.
         let capacity = (plugin.limits().max_memory_bytes / 2).min(i32::MAX as usize).saturating_sub(params.len());
         let (input, read_only) = objects::encode_input_with(&st.doc, &inputs, &kinds, capacity).map_err(err)?;
         let document = (st.uid, st.revision);
-        let limits = match s.prefs.plugin_instruction_budget {
+        let mut limits = match s.prefs.plugin_instruction_budget {
             crate::PluginBudget::Normal => plugin.limits().clone(),
             crate::PluginBudget::Large => plugin.large_limits(),
         };
+        limits.fuel_base = limits.fuel_base.saturating_sub(charged);
         Ok(FilterRun { plugin, command, input, params, inputs, read_only, parent, document, limits })
     }
 
@@ -284,9 +317,15 @@ impl FilterRun {
     }
 
     /// The limits it runs under: the plug-in's, with the Plug-in Instruction Budget in force when
-    /// it was made.
+    /// it was made, less what its document context costs.
     pub fn limits(&self) -> &vectorcraft_plugins::Limits {
         &self.limits
+    }
+
+    /// The parameters it hands the plug-in, `_context` included.
+    #[cfg(test)]
+    pub(crate) fn params_json(&self) -> Value {
+        serde_json::from_slice(&self.params).unwrap_or(Value::Null)
     }
 
     /// Does the plug-in call commands (its manifest's `commandAllowlist`)? Then it runs only in the
@@ -330,7 +369,8 @@ impl FilterRun {
     /// Applies the plug-in's `output` to the active document as one undo step: its objects, and what
     /// it keeps with the document from now on. An output its permissions don't allow, and one that
     /// changes or leaves out a read-only object it was given, is refused, and the document stays as
-    /// it was.
+    /// it was. An output that changes neither the objects nor the kept data records no undo step and
+    /// leaves the document unmodified; its objects are still selected.
     fn finish(self, s: &mut Session, output: &[u8]) -> Result<Value> {
         let m = self.plugin.manifest();
         let may = m.permissions();
@@ -343,18 +383,43 @@ impl FilterRun {
         let label = self.label();
         let (inputs, parent) = (self.inputs, self.parent);
         let notice = out.notice;
-        let ids = s.edit(&label, |d, sel| {
-            let before = (!may_write).then(|| d.layers.clone());
-            let ids = objects::apply_output(d, &inputs, out.objects, parent, &admit_effects).map_err(err)?;
-            if before.is_some_and(|b| b != d.layers) {
-                return Err(not_granted(&m.name, Permission::DocWrite));
+        // The output is applied to a copy of the document, as `colorcmds::edit_if_changed` applies
+        // its pass: only a copy whose objects or kept data differ becomes the document, as one undo
+        // step. Otherwise the document, its undo and redo steps and its saved state stay as they
+        // were, and only the selection is set.
+        if s.script_running() {
+            return Err(EngineError::Busy);
+        }
+        if !s.previewing && super::typing_in_progress(s) {
+            super::settle_interaction(s)?;
+        }
+        let now = s.doc()?.doc.clone();
+        let mut d = (*now).clone();
+        let before = (!may_write).then(|| d.layers.clone());
+        let ids = objects::apply_output(&mut d, &inputs, out.objects, parent, &admit_effects).map_err(err)?;
+        if before.is_some_and(|b| b != d.layers) {
+            return Err(not_granted(&m.name, Permission::DocWrite));
+        }
+        if let Some(data) = out.document_data {
+            d.set_plugin_data(&m.id, data);
+        }
+        let selectable = |d: &Document| ids.iter().copied().filter(|&id| d.node(id).is_some_and(objects::selectable)).collect::<Vec<_>>();
+        if same_art(&d.layers, &now.layers) && d.plugin_data(&m.id) == now.plugin_data(&m.id) {
+            let st = s.doc()?;
+            let mut sel = st.selection.clone();
+            sel.set(selectable(&st.doc));
+            if sel != st.selection {
+                s.select(|_, selection| *selection = sel)?;
             }
-            if let Some(data) = out.document_data {
-                d.set_plugin_data(&m.id, data);
-            }
-            sel.set(ids.iter().copied().filter(|&id| d.node(id).is_some_and(objects::selectable)));
-            Ok(ids)
-        })?;
+        } else {
+            // The document is shared with `now` no longer, so `s.edit` does not copy it again.
+            drop(now);
+            s.edit(&label, |doc, sel| {
+                *doc = d;
+                sel.set(selectable(doc));
+                Ok(())
+            })?;
+        }
         let mut out = json!({"plugin": m.id, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()});
         if let Some(cmd) = &self.command {
             out["command"] = json!(cmd.id);
@@ -366,6 +431,11 @@ impl FilterRun {
         }
         Ok(out)
     }
+}
+
+/// Whether layer lists `a` and `b` hold the same art: a layer that is shared is not compared again.
+fn same_art(a: &[Arc<Node>], b: &[Arc<Node>]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(x, y)| Arc::ptr_eq(x, y) || x == y)
 }
 
 /// The error of a filter `name` whose output needs `permission`, which it wasn't granted.
@@ -473,15 +543,278 @@ pub fn find_spec(id: &str) -> Option<&'static CommandSpec> {
     command_specs().into_iter().find(|c| c.id == id)
 }
 
+/// The letters and digits of `label`, lowercased. Two labels with the same key read alike in a menu
+/// (`Paste (in Place)` and `Paste in Place`).
+fn label_key(label: &str) -> String {
+    label.chars().filter(|ch| ch.is_alphanumeric()).flat_map(char::to_lowercase).collect()
+}
+
+/// The labels of engine commands whose menu item switches to the label of [`other_state`] (the
+/// desktop app's dynamic labels).
+pub const SWITCHING_LABELS: &[&str] = &[
+    "Preview",
+    "Outline",
+    "Show Rulers",
+    "Change to Global Rulers",
+    "Show Transparency Grid",
+    "Lock Guides",
+    "Hide Slices",
+    "Show Print Tiling",
+    "Lock Grid",
+    "Edit Envelope",
+    "Edit Contents",
+    "Start Global Edit",
+];
+
+/// The label of `label`'s other state, for a menu item that switches between two labels: `Show
+/// Edges` for `Hide Edges`, `Unlock Guides` for `Lock Guides`, `Stop Global Edit` for `Start Global
+/// Edit`, and the reverse.
+pub fn other_state(label: &str) -> Option<String> {
+    const PAIRS: &[(&str, &str)] = &[
+        ("Preview", "Outline"),
+        ("Change to Global Rulers", "Change to Artboard Rulers"),
+        ("Edit Envelope", "Edit Contents"),
+        ("Start Global Edit", "Stop Global Edit"),
+    ];
+    let paired = |&(a, b): &(&'static str, &'static str)| {
+        if label == a {
+            Some(b)
+        } else if label == b {
+            Some(a)
+        } else {
+            None
+        }
+    };
+    if let Some(other) = PAIRS.iter().find_map(paired) {
+        return Some(other.to_string());
+    }
+    [("Hide ", "Show "), ("Show ", "Hide "), ("Lock ", "Unlock "), ("Unlock ", "Lock ")]
+        .iter()
+        .find_map(|(from, to)| label.strip_prefix(from).map(|rest| format!("{to}{rest}")))
+}
+
+/// The menu that plug-in `p`'s command `c` is listed in when its manifest's `menu` places it in
+/// another menu: that menu's path, or `None` when `c` stays in its plug-in's submenu. It stays
+/// there when its menu label ([`Command::menu_label`]) has the same letters and digits, ignoring
+/// case, as an engine command listed in that menu (either label of one of [`SWITCHING_LABELS`]),
+/// an item of [`DESKTOP_MENU_ITEMS`] there, or a command that a plug-in with a lower id, or an
+/// earlier command of `p`, places in that menu. The result is the same with and without the
+/// desktop app. Results for installed plug-ins are kept until the registry changes.
+pub fn placed_menu(p: &Plugin, c: &Command) -> Option<&'static [&'static str]> {
+    type Placed = HashMap<String, Option<&'static [&'static str]>>;
+    static PLACED: Mutex<Option<(u64, Placed)>> = Mutex::new(None);
+    c.place.as_ref()?;
+    let m = p.manifest();
+    // Read before the registry, so a result found while the registry changes is kept under the
+    // revision before the change.
+    let revision = registry::revision();
+    // `plugin.inspect` describes a module that is not installed, or not yet in place of the
+    // installed one: never kept.
+    if !registry::get(&m.id).is_some_and(|q| std::ptr::eq(&*q, p)) {
+        return find_place(p, c);
+    }
+    let id = command_id(&m.id, &c.id);
+    if let Ok(placed) = PLACED.lock()
+        && let Some((at, known)) = placed.as_ref()
+        && *at == revision
+        && let Some(found) = known.get(&id)
+    {
+        return *found;
+    }
+    let found = find_place(p, c);
+    if let Ok(mut placed) = PLACED.lock() {
+        let (at, known) = placed.get_or_insert_with(|| (revision, HashMap::new()));
+        if *at != revision {
+            *at = revision;
+            known.clear();
+        }
+        known.insert(id, found);
+    }
+    found
+}
+
+/// [`placed_menu`], found again.
+fn find_place(p: &Plugin, c: &Command) -> Option<&'static [&'static str]> {
+    let place = c.place.as_ref()?;
+    let m = p.manifest();
+    let key = label_key(&c.menu_label(&m.name));
+    let reads_like =
+        |label: &str| label_key(label) == key || SWITCHING_LABELS.contains(&label) && other_state(label).is_some_and(|o| label_key(&o) == key);
+    if super::command_specs().iter().any(|s| s.menu == place.path && reads_like(s.label))
+        || DESKTOP_MENU_ITEMS.iter().any(|(path, label)| *path == place.path && label_key(label) == key)
+    {
+        return None;
+    }
+    let taken = |name: &str, d: &Command| d.place.as_ref().is_some_and(|e| e.path == place.path) && label_key(&d.menu_label(name)) == key;
+    // The registry lists plug-ins in id order. `p` itself may not be installed yet (`plugin.inspect`),
+    // or be replacing the installed module of its id, so its own commands come from `m`.
+    for q in registry::list() {
+        let qm = q.manifest();
+        if qm.id >= m.id {
+            break;
+        }
+        if qm.commands.iter().any(|d| taken(&qm.name, d)) {
+            return None;
+        }
+    }
+    for d in &m.commands {
+        if d.id == c.id {
+            return Some(place.path);
+        }
+        if taken(&m.name, d) {
+            return None;
+        }
+    }
+    Some(place.path)
+}
+
+/// The labels of the desktop app's own items (not engine commands) in the menus of
+/// [`vectorcraft_plugins::manifest::MENU_PLACES`], with both labels of an item that switches
+/// between two. [`placed_menu`] reads them, so its result is the same with and without the desktop
+/// app.
+pub const DESKTOP_MENU_ITEMS: &[(&[&str], &str)] = &[
+    (&["Edit"], "Spelling"),
+    (&["Edit"], "Edit Custom Dictionary…"),
+    (&["Edit"], "Edit Colors"),
+    (&["Edit"], "Edit Original"),
+    (&["Edit"], "Transparency Flattener Presets…"),
+    (&["Edit"], "Print Presets…"),
+    (&["Edit"], "PDF Presets…"),
+    (&["Edit"], "Tracing Presets…"),
+    (&["Edit"], "Perspective Grid Presets…"),
+    (&["Edit"], "Refresh Monitor Profile"),
+    (&["Edit"], "Keyboard Shortcuts…"),
+    (&["Edit"], "Preferences…"),
+    (&["Edit", "Edit Colors"], "Recolor with Preset"),
+    (&["Object"], "Transform"),
+    (&["Object"], "Arrange"),
+    (&["Object"], "Align"),
+    (&["Object"], "Distribute"),
+    (&["Object"], "Lock"),
+    (&["Object"], "Hide"),
+    (&["Object"], "Slice"),
+    (&["Object"], "Path"),
+    (&["Object"], "Shape"),
+    (&["Object"], "Pattern"),
+    (&["Object"], "Repeat"),
+    (&["Object"], "Intertwine"),
+    (&["Object"], "Objects on Path"),
+    (&["Object"], "Blend"),
+    (&["Object"], "Envelope Distort"),
+    (&["Object"], "Perspective"),
+    (&["Object"], "Live Paint"),
+    (&["Object"], "Image Trace"),
+    (&["Object"], "Text Wrap"),
+    (&["Object"], "Clipping Mask"),
+    (&["Object"], "Compound Path"),
+    (&["Object"], "Artboards"),
+    (&["Object"], "Graph"),
+    (&["Object"], "Collect for Export"),
+    (&["Object"], "Plug-ins"),
+    (&["Type"], "Font"),
+    (&["Type"], "Recent Fonts"),
+    (&["Type"], "Size"),
+    (&["Type"], "Bold"),
+    (&["Type"], "Italic"),
+    (&["Type"], "Glyphs"),
+    (&["Type"], "Insert Special Character"),
+    (&["Type"], "Insert Whitespace Character"),
+    (&["Type"], "Insert Break Character"),
+    (&["Type"], "Type on a Path"),
+    (&["Type"], "Dynamic Text Presets"),
+    (&["Type"], "Threaded Text"),
+    (&["Type"], "Find Font…"),
+    (&["Type"], "Change Case"),
+    (&["Type"], "Bullets and Numbering"),
+    (&["Type"], "Show Hidden Characters"),
+    (&["Type"], "Hide Hidden Characters"),
+    (&["Type"], "Type Orientation"),
+    (&["Select"], "Same"),
+    (&["Select"], "Object"),
+    (&["Select"], "Saved Selection"),
+    (&["Effect"], "Apply Last Effect"),
+    (&["Effect"], "Last Effect…"),
+    (&["Effect"], "3D and Materials"),
+    (&["Effect"], "Color Adjustments"),
+    (&["Effect"], "Color Effects"),
+    (&["Effect"], "Convert to Shape"),
+    (&["Effect"], "Crop Marks"),
+    (&["Effect"], "Distort & Transform"),
+    (&["Effect"], "Path"),
+    (&["Effect"], "Path Effects"),
+    (&["Effect"], "Pathfinder"),
+    (&["Effect"], "Rasterize…"),
+    (&["Effect"], "Stylize"),
+    (&["Effect"], "SVG Filters"),
+    (&["Effect"], "Warp"),
+    (&["Effect"], "Effect Gallery…"),
+    (&["Effect"], "Artistic"),
+    (&["Effect"], "Blur"),
+    (&["Effect"], "Brush Strokes"),
+    (&["Effect"], "Distort"),
+    (&["Effect"], "Pixelate"),
+    (&["Effect"], "Sharpen"),
+    (&["Effect"], "Sketch"),
+    (&["Effect"], "Texture"),
+    (&["Effect"], "Video"),
+    (&["Effect"], "Plug-ins"),
+    (&["View"], "Outline"),
+    (&["View"], "Preview"),
+    (&["View"], "Pixel Preview"),
+    (&["View"], "Trim View"),
+    (&["View"], "Presentation Mode"),
+    (&["View"], "Screen Mode"),
+    (&["View"], "Proof Setup"),
+    (&["View"], "Zoom In"),
+    (&["View"], "Zoom Out"),
+    (&["View"], "Fit Artboard in Window"),
+    (&["View"], "Fit All in Window"),
+    (&["View"], "Actual Size"),
+    (&["View"], "Rotate View"),
+    (&["View"], "Rotate View to Selection"),
+    (&["View"], "Reset Rotate View"),
+    (&["View"], "Hide Edges"),
+    (&["View"], "Show Edges"),
+    (&["View"], "Hide Artboards"),
+    (&["View"], "Show Artboards"),
+    (&["View"], "Hide Template"),
+    (&["View"], "Show Template"),
+    (&["View"], "Rulers"),
+    (&["View"], "Hide Bounding Box"),
+    (&["View"], "Show Bounding Box"),
+    (&["View"], "Hide Text Threads"),
+    (&["View"], "Show Text Threads"),
+    (&["View"], "Hide Gradient Annotator"),
+    (&["View"], "Show Gradient Annotator"),
+    (&["View"], "Hide Corner Widget"),
+    (&["View"], "Show Corner Widget"),
+    (&["View"], "Show Live Paint Gaps"),
+    (&["View"], "Hide Live Paint Gaps"),
+    (&["View"], "Guides"),
+    (&["View"], "Smart Guides"),
+    (&["View"], "Perspective Grid"),
+    (&["View"], "Show Grid"),
+    (&["View"], "Hide Grid"),
+    (&["View"], "Snap to Grid"),
+    (&["View"], "Snap to Pixel"),
+    (&["View"], "Snap to Point"),
+    (&["View"], "Snap to Glyph"),
+    (&["View"], "Saved View"),
+];
+
 /// The command spec of plug-in `p`'s command `c`: its id, its label as menus show it (escaped and
-/// capped), its menu (Object › Plug-ins › the plug-in's name, or Effect › Plug-ins › it for a live
-/// effect: never a menu the manifest names) and its params description.
+/// capped, and followed by the plug-in's name when it is listed in another menu), its menu
+/// ([`placed_menu`], else Object › Plug-ins › the plug-in's name, or Effect › Plug-ins › it for a
+/// live effect) and its params description.
 fn spec_of(p: &Plugin, c: &Command) -> &'static CommandSpec {
     let m = p.manifest();
     let id = command_id(&m.id, &c.id);
-    let label = c.shown_label();
+    let placed = placed_menu(p, c);
+    let label = if placed.is_some() { c.menu_label(&m.name) } else { c.shown_label() };
     let top = if m.kind == Kind::Effect { "Effect" } else { "Object" };
     let name = permissions::display_text(m.name.trim(), permissions::MAX_SHOWN_NAME);
+    let submenu = [top, "Plug-ins", name.as_str()];
+    let path: &[&str] = placed.unwrap_or(&submenu);
     let mut fields =
         String::from("ids?: [object id] (left out or null: the selection), params?: {…} (its parameters; or give them as top-level keys)");
     let doc = m.for_command(c).params_doc();
@@ -490,15 +823,18 @@ fn spec_of(p: &Plugin, c: &Command) -> &'static CommandSpec {
         fields.push_str(own);
     }
     let params = format!(
-        "{{{fields}}} run “{label}”, a command of plug-in {}, on the selected paths and compound paths as plugin.run runs a filter, with _context.command {:?}: one undo step → {{plugin, command, ids, notice?, pluginName?}} (pluginName, the plug-in's name, comes with notice)",
+        "{{{fields}}} run “{label}”, a command of plug-in {}, on the selected paths and compound paths as plugin.run runs a filter, with _context.command {:?}: one undo step, none when the run changes nothing → {{plugin, command, ids, notice?, pluginName?}} (pluginName, the plug-in's name, comes with notice)",
         m.id, c.id
     );
     let mut made = MADE.lock().unwrap_or_else(|e| e.into_inner());
-    let same = |s: &&&'static CommandSpec| s.id == id && s.label == label && s.menu == [top, "Plug-ins", name.as_str()] && s.params == params;
+    let same = |s: &&&'static CommandSpec| s.id == id && s.label == label && s.menu == path && s.params == params;
     if let Some(s) = made.iter().find(same) {
         return s;
     }
-    let menu: &'static [&'static str] = Box::leak(vec![top, "Plug-ins", registry::intern(&name)].into_boxed_slice());
+    let menu: &'static [&'static str] = match placed {
+        Some(path) => path,
+        None => Box::leak(vec![top, "Plug-ins", registry::intern(&name)].into_boxed_slice()),
+    };
     let spec: &'static CommandSpec = Box::leak(Box::new(CommandSpec {
         id: registry::intern(&id),
         label: registry::intern(&label),
@@ -708,12 +1044,16 @@ thread_local! {
     pub(crate) static BEFORE_GRANT_STORED: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
     /// Tests: runs once on this thread when [`hold_plugin_changes`] finds the lock held and waits.
     pub(crate) static WHILE_WAITING: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
+    /// Tests: runs once in the next `plugin.reload` on this thread after its load started and before
+    /// it installs, as another session loading a folder in between would.
+    pub(crate) static BEFORE_RELOAD_INSTALLS: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
 }
 
 /// Held by `plugin.install` from its first read of the grant until the store holds what it
-/// installed, and throughout by `plugin.remove`, by loads of the stored plug-ins
-/// ([`Session::load_stored_plugins`]) and by loads of a plug-ins folder: these run one after the
-/// other across sessions.
+/// installed, throughout by `plugin.remove`, and while the loads of the stored plug-ins
+/// ([`Session::load_stored_plugins`]) and of a plug-ins folder install what they loaded: these run
+/// one after the other across sessions. It is not held while the modules load, so a session's
+/// plug-in commands don't wait for another session's loads.
 static PLUGIN_CHANGES: Mutex<()> = Mutex::new(());
 
 /// Takes [`PLUGIN_CHANGES`], waiting while another session holds it.
@@ -729,6 +1069,21 @@ pub(crate) fn hold_plugin_changes() -> std::sync::MutexGuard<'static, ()> {
             PLUGIN_CHANGES.lock().unwrap_or_else(|e| e.into_inner())
         }
     }
+}
+
+/// Takes [`PLUGIN_CHANGES`] when no other session holds it, without waiting.
+pub(crate) fn try_hold_plugin_changes() -> Option<std::sync::MutexGuard<'static, ()>> {
+    match PLUGIN_CHANGES.try_lock() {
+        Ok(held) => Some(held),
+        Err(std::sync::TryLockError::Poisoned(e)) => Some(e.into_inner()),
+        Err(std::sync::TryLockError::WouldBlock) => None,
+    }
+}
+
+/// Tests: whether [`PLUGIN_CHANGES`] could be taken now.
+#[cfg(test)]
+pub(crate) fn plugin_changes_free() -> bool {
+    !matches!(PLUGIN_CHANGES.try_lock(), Err(std::sync::TryLockError::WouldBlock))
 }
 
 /// `plugin.install`: loads and checks the module, refuses `grant` and `allowHeavy` that neither an
@@ -980,31 +1335,61 @@ fn load_path(_: &str) -> Result<(Plugin, Vec<u8>)> {
     Err(EngineError::Other("installing from a path is not available on the web; pass the module as `dataBase64`".into()))
 }
 
-/// The plug-in folder last loaded, the plug-in store whose grants it was loaded with, and what
-/// happened.
-static FOLDER: Mutex<Option<(String, Option<std::path::PathBuf>, Value)>> = Mutex::new(None);
+/// The plug-in folder last loaded, the plug-in store whose grants it was loaded with, what
+/// happened, the load whose report it is ([`FOLDER_LOADS`]), and whether a file failed because no
+/// loader thread was left to load it ([`vectorcraft_plugins::loader::NO_THREAD`]), so that the next
+/// [`sync_prefs`] loads the folder again.
+type FolderRecord = (String, Option<std::path::PathBuf>, Value, u64, bool);
+
+/// The [`FolderRecord`] of the plug-in folder last loaded.
+static FOLDER: Mutex<Option<FolderRecord>> = Mutex::new(None);
+
+/// The number of the last folder load [`sync_prefs`] or `plugin.reload` started. [`sync_prefs`]
+/// keeps it in [`FOLDER`] while its load runs, so only that load replaces or clears the record, and
+/// a `plugin.reload` keeps its report only when no load started after it.
+static FOLDER_LOADS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// Loads the Additional Plug-ins Folder preference (`*.wasm`) when it is set and it, or the
 /// session's plug-in store, has changed since the last load. Runs whenever preferences are applied
-/// (startup, `prefs.set`). Native only.
-pub(crate) fn sync_prefs(s: &Session) {
-    let folder = s.prefs.plugins_folder.trim();
+/// (startup, `prefs.set`). With [`Session::load_plugins_in_background`] on, it returns while the
+/// modules load, and `plugin.list` reports the folder as loading until they are installed. Off, it
+/// returns once the folder's plug-ins are installed, also while another session is still loading
+/// the same folder. Native only.
+pub(crate) fn sync_prefs(s: &mut Session) {
+    let folder = s.prefs.plugins_folder.trim().to_string();
     // In Safe Mode nothing loads, and the folder is loaded once it ends ([`load_prefs_folder`]).
     if folder.is_empty() || safe_mode::active() {
         return;
     }
-    let mut last = FOLDER.lock().unwrap_or_else(|e| e.into_inner());
-    if last.as_ref().is_some_and(|(f, store, _)| f == folder && *store == s.plugin_dir) {
+    // This session's own load of the folder, still running, is waited for unless loads go on in the
+    // background.
+    if s.plugin_loads.iter().any(|l| matches!(l, PluginLoad::Folder(f) if f.loads(&folder, &s.plugin_dir))) {
+        if !s.plugin_loads_in_background {
+            s.finish_plugin_loads();
+        }
         return;
     }
-    *last = Some((folder.to_string(), s.plugin_dir.clone(), load_folder(s, folder)));
+    let token = {
+        let mut last = FOLDER.lock().unwrap_or_else(|e| e.into_inner());
+        // A folder another session is still loading is loaded here too: that load may end with its
+        // session, and this one returns once its own plug-ins are installed.
+        // A load in which a file found no thread to load it is tried again.
+        if last.as_ref().is_some_and(|(f, store, r, _, retry)| *f == folder && *store == s.plugin_dir && r["loading"] != true && !retry) {
+            return;
+        }
+        let token = FOLDER_LOADS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+        *last = Some((folder.clone(), s.plugin_dir.clone(), json!({"folder": folder, "loading": true}), token, false));
+        token
+    };
+    let load = start_folder(s, &folder, Some(token));
+    s.queue_plugin_load(PluginLoad::Folder(load));
 }
 
 /// The Additional Plug-ins Folder preference was cleared from `old`: when `old` is the folder last
 /// loaded, it is forgotten, so setting the preference to it again loads it again.
 pub(crate) fn forget_prefs_folder(old: &str) {
     let mut last = FOLDER.lock().unwrap_or_else(|e| e.into_inner());
-    if last.as_ref().is_some_and(|(f, _, _)| f == old.trim()) {
+    if last.as_ref().is_some_and(|(f, _, _, _, _)| f == old.trim()) {
         *last = None;
     }
 }
@@ -1024,42 +1409,232 @@ pub fn load_prefs_folder(s: &mut Session) {
     sync_prefs(s);
 }
 
-/// Loads the plug-ins in `folder`, those that list permissions only when `s` has them granted
-/// ([`Session::plugin_approved`], with the store's grants read once) → its report; saves the
-/// disabled list when loading changed it.
+/// The modules of a folder loading ([`registry::FolderLoad`]); the web build has none.
 #[cfg(not(target_arch = "wasm32"))]
-fn load_folder(s: &Session, folder: &str) -> Value {
-    if let Err(e) = crate::file_access::check_read(folder) {
-        return json!({"folder": folder, "error": e});
-    }
-    // A file in it may be a link to one elsewhere.
-    let allow = |f: &std::path::Path| match f.to_str() {
-        Some(f) => crate::file_access::check_read(f),
-        // A lossy name would check another file than the one loaded.
-        None if crate::file_access::current().is_none() => Ok(()),
-        None => Err(format!("automation path rejected: {} isn't valid text", f.display())),
-    };
-    // A `plugin.install` in another session or process finishes writing the store first. When the
-    // store can't be locked, the folder still loads, and the store isn't written.
-    let _held = hold_plugin_changes();
-    let turn = s.plugin_store_turn().unwrap_or_else(|_| StoreTurn::unheld());
-    match registry::load_folder_where(std::path::Path::new(folder), allow, s.plugin_folder_approver()) {
-        Ok(r) => {
-            for id in &r.loaded {
-                s.attach_plugin_storage(&turn, id);
-            }
-            if r.disabled_changed {
-                s.store_disabled_plugins_in(&turn);
-            }
-            json!({"folder": folder, "loaded": r.loaded, "failed": r.failed.iter().map(|(f, e)| json!({"file": f, "error": e})).collect::<Vec<_>>(), "leftOut": r.left_out})
+type FolderModules = registry::FolderLoad;
+#[cfg(target_arch = "wasm32")]
+type FolderModules = std::convert::Infallible;
+
+/// A load of the plug-ins in a folder ([`start_folder`]), which [`install_folder`] installs as the
+/// modules load and [`end_folder`] ends.
+pub(crate) struct FolderPending {
+    folder: String,
+    /// The plug-in store whose grants it loads with.
+    store: Option<std::path::PathBuf>,
+    /// The load's number in [`FOLDER`] when [`end_folder`] keeps its report as the folder last
+    /// loaded ([`sync_prefs`]).
+    record: Option<u64>,
+    /// A `plugin.reload`'s load: [`end_folder`] keeps its report as the folder last loaded unless a
+    /// load started after it.
+    reload: bool,
+    /// The modules loading, or the report of a folder that can't be loaded; `None` once ended.
+    load: Option<std::result::Result<FolderModules, Value>>,
+    /// Whether the modules not installed yet were dropped ([`FolderPending::cancel`]).
+    canceled: bool,
+}
+
+impl FolderPending {
+    /// Whether every module has been installed or reported.
+    pub(crate) fn done(&self) -> bool {
+        match &self.load {
+            #[cfg(not(target_arch = "wasm32"))]
+            Some(Ok(load)) => load.done(),
+            #[cfg(target_arch = "wasm32")]
+            Some(Ok(never)) => match *never {},
+            Some(Err(_)) | None => true,
         }
-        Err(e) => json!({"folder": folder, "error": e.to_string()}),
+    }
+
+    /// Starts the modules loading, unless they started already.
+    pub(crate) fn start(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(Ok(load)) = &mut self.load {
+            load.start();
+        }
+    }
+
+    /// The installs and removals its modules are checked against (`None`: the folder couldn't be
+    /// listed, or the load ended).
+    pub(crate) fn changes(&self) -> Option<&registry::LoadChanges> {
+        match &self.load {
+            #[cfg(not(target_arch = "wasm32"))]
+            Some(Ok(load)) => Some(load.changes()),
+            #[cfg(target_arch = "wasm32")]
+            Some(Ok(never)) => match *never {},
+            Some(Err(_)) | None => None,
+        }
+    }
+
+    /// [`FolderPending::changes`], to adopt an earlier load's.
+    pub(crate) fn changes_mut(&mut self) -> Option<&mut registry::LoadChanges> {
+        match &mut self.load {
+            #[cfg(not(target_arch = "wasm32"))]
+            Some(Ok(load)) => Some(load.changes_mut()),
+            #[cfg(target_arch = "wasm32")]
+            Some(Ok(never)) => match *never {},
+            Some(Err(_)) | None => None,
+        }
+    }
+
+    /// Whether something can be installed or reported now, without waiting.
+    pub(crate) fn ready(&mut self) -> bool {
+        match &mut self.load {
+            #[cfg(not(target_arch = "wasm32"))]
+            Some(Ok(load)) => load.ready(),
+            #[cfg(target_arch = "wasm32")]
+            Some(Ok(never)) => match *never {},
+            Some(Err(_)) | None => true,
+        }
+    }
+
+    /// Waits until the next module in file-name order has loaded or failed.
+    pub(crate) fn wait(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(Ok(load)) = &mut self.load {
+            load.wait();
+        }
+    }
+
+    /// Drops the modules not installed yet, leaving it [`FolderPending::done`]; [`end_folder`]
+    /// then keeps no report as the folder last loaded.
+    pub(crate) fn cancel(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(Ok(load)) = &mut self.load {
+            load.cancel();
+        }
+        self.canceled = true;
+    }
+
+    /// Whether it is a load of `folder` with the plug-in store `store`.
+    pub(crate) fn loads(&self, folder: &str, store: &Option<std::path::PathBuf>) -> bool {
+        self.folder == folder && self.store == *store
     }
 }
 
+impl Drop for FolderPending {
+    /// A load dropped before it ended (its session closed) leaves no folder reported as loading, so
+    /// the next session that applies the preference loads it.
+    fn drop(&mut self) {
+        if let Some(token) = self.record.filter(|_| self.load.is_some()) {
+            let mut last = FOLDER.lock().unwrap_or_else(|e| e.into_inner());
+            if last.as_ref().is_some_and(|(_, _, _, t, _)| *t == token) {
+                *last = None;
+            }
+        }
+    }
+}
+
+/// Starts loading the plug-ins in `folder` on worker threads ([`registry::FolderLoad`]); `record`:
+/// the load's number in [`FOLDER`], whose record [`end_folder`] replaces with the report.
+#[cfg(not(target_arch = "wasm32"))]
+fn start_folder(s: &Session, folder: &str, record: Option<u64>) -> FolderPending {
+    let pending =
+        |load| FolderPending { folder: folder.to_string(), store: s.plugin_dir.clone(), record, reload: false, load: Some(load), canceled: false };
+    if let Err(e) = crate::file_access::check_read(folder) {
+        return pending(Err(json!({"folder": folder, "error": e})));
+    }
+    // A file in it may be a link to one elsewhere. Each file is checked again on its worker
+    // thread, in the scope in force here (the automation roots and the script gate), as the
+    // folder itself was.
+    let scope = crate::file_access::ScopeHandle::capture_now();
+    let allow = move |f: &std::path::Path| {
+        scope.clone().run(|| match f.to_str() {
+            Some(f) => crate::file_access::check_read(f),
+            // A lossy name would check another file than the one loaded.
+            None if crate::file_access::current().is_none() => Ok(()),
+            None => Err(format!("automation path rejected: {} isn't valid text", f.display())),
+        })
+    };
+    // The modules start loading once the loads queued before them are done.
+    pending(registry::FolderLoad::list(std::path::Path::new(folder), allow).map_err(|e| json!({"folder": folder, "error": e.to_string()})))
+}
+
 #[cfg(target_arch = "wasm32")]
-fn load_folder(_: &Session, folder: &str) -> Value {
-    json!({"folder": folder, "error": "plug-in folders are not available on the web"})
+fn start_folder(s: &Session, folder: &str, record: Option<u64>) -> FolderPending {
+    let load = Err(json!({"folder": folder, "error": "plug-in folders are not available on the web"}));
+    FolderPending { folder: folder.to_string(), store: s.plugin_dir.clone(), record, reload: false, load: Some(load), canceled: false }
+}
+
+/// Installs what `load` has loaded so far, in file-name order up to the first module still
+/// loading, without waiting: those that list permissions only when `s` has them granted
+/// ([`Session::plugin_approved`], with the store's grants read once). Runs while
+/// [`hold_plugin_changes`] and `turn` are held, so a `plugin.install` in another session or process
+/// finishes writing the store first; when the store can't be locked, the folder still installs,
+/// and the store isn't written.
+pub(crate) fn install_folder(s: &mut Session, load: &mut FolderPending, turn: &StoreTurn) {
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(Ok(load)) = &mut load.load
+        && !load.done()
+    {
+        for id in load.install_ready(s.plugin_folder_approver()) {
+            s.attach_plugin_storage(turn, &id);
+        }
+        // A disabled plug-in's file matched by its id is saved in the same turn.
+        if load.disabled_changed() && s.store_disabled_plugins_in(turn) {
+            load.disabled_saved();
+        }
+    }
+    #[cfg(target_arch = "wasm32")]
+    let _ = (s, load, turn);
+}
+
+/// Ends `load` once [`FolderPending::done`], while [`hold_plugin_changes`] and `turn` are held, so
+/// the grants of ids whose module lists no permissions are forgotten while no `plugin.install` can
+/// record one for another module → its report; saves the disabled list when loading changed it.
+pub(crate) fn end_folder(s: &mut Session, mut load: FolderPending, turn: &StoreTurn) -> Value {
+    let (report, retry) = match load.load.take() {
+        #[cfg(not(target_arch = "wasm32"))]
+        Some(Ok(modules)) => {
+            let r = modules.finish();
+            if r.disabled_changed {
+                s.store_disabled_plugins_in(turn);
+            }
+            let failed = r.failed.iter().map(|(f, e)| json!({"file": f, "error": e})).collect::<Vec<_>>();
+            (json!({"folder": load.folder, "loaded": r.loaded, "failed": failed, "leftOut": r.left_out}), r.no_thread)
+        }
+        #[cfg(target_arch = "wasm32")]
+        Some(Ok(never)) => match never {},
+        Some(Err(report)) => (report, false),
+        None => (Value::Null, false),
+    };
+    if let Some(token) = load.record {
+        let mut last = FOLDER.lock().unwrap_or_else(|e| e.into_inner());
+        // A later load, or a `plugin.reload`, replaced it meanwhile. A canceled load leaves no
+        // folder reported, so the next session that applies the preference loads it. A
+        // `plugin.reload`'s report replaces the record unless a load started after it, or the
+        // folder couldn't be loaded.
+        let current = if load.reload {
+            FOLDER_LOADS.load(std::sync::atomic::Ordering::Relaxed) == token && report.get("error").is_none()
+        } else {
+            last.as_ref().is_some_and(|(_, _, _, t, _)| *t == token)
+        };
+        if current {
+            *last = if load.canceled { None } else { Some((load.folder.clone(), load.store.clone(), report.clone(), token, retry)) };
+        }
+    }
+    report
+}
+
+/// Loads the plug-ins in `folder` and installs them, waiting for every module → the report, which is
+/// kept as the folder last loaded unless a load started after this one.
+fn load_folder_now(s: &mut Session, folder: &str) -> Value {
+    let token = FOLDER_LOADS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+    let mut load = start_folder(s, folder, Some(token));
+    load.reload = true;
+    #[cfg(test)]
+    if let Some(between) = BEFORE_RELOAD_INSTALLS.take() {
+        between();
+    }
+    s.finish_plugin_load(PluginLoad::Folder(load))
+}
+
+/// Tests: the next [`sync_prefs`] treats the folder last loaded as one in which a file found no
+/// loader thread to load it.
+#[cfg(test)]
+pub(crate) fn folder_found_no_thread() {
+    if let Some(record) = FOLDER.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+        record.4 = true;
+    }
 }
 
 fn reload(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1071,11 +1646,12 @@ fn reload(s: &mut Session, p: &Value) -> Result<Value> {
     if folder.is_empty() {
         return Err(bad(C, "no folder: pass `path` or set Preferences › Plug-ins & Scratch Disks › Additional Plug-ins Folder"));
     }
-    let report = load_folder(s, &folder);
+    // Loads started earlier install first, so this one's plug-ins replace theirs.
+    s.finish_plugin_loads();
+    let report = load_folder_now(s, &folder);
     if let Some(e) = report.get("error").and_then(Value::as_str) {
         return Err(EngineError::Other(e.to_string()));
     }
-    *FOLDER.lock().unwrap_or_else(|e| e.into_inner()) = Some((folder, s.plugin_dir.clone(), report.clone()));
     Ok(report)
 }
 
@@ -1124,7 +1700,7 @@ fn shown_report(mut report: Value) -> Value {
 }
 
 fn list(_: &mut Session, _: &Value) -> Result<Value> {
-    let folder = FOLDER.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(_, _, r)| shown_report(r.clone()));
+    let folder = FOLDER.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(_, _, r, _, _)| shown_report(r.clone()));
     let disabled: Vec<Value> = safe_mode::disabled().iter().map(shown_item).collect();
     Ok(
         json!({"plugins": registry::list().iter().map(|p| describe_installed(p)).collect::<Vec<_>>(), "folder": folder, "safeMode": safe_mode::active(), "disabled": disabled}),
@@ -1132,13 +1708,15 @@ fn list(_: &mut Session, _: &Value) -> Result<Value> {
 }
 
 /// `plugin.safeMode`: whether Safe Mode is on and why, the plug-ins disabled for the next launch,
-/// and the plug-in the last launch was loading when it stopped while the user hasn't chosen yet.
+/// and the plug-ins the last launch was loading when it stopped while the user hasn't chosen yet.
 fn safe_mode_state(_: &mut Session, _: &Value) -> Result<Value> {
+    let pending: Vec<Value> = safe_mode::previous().iter().map(shown_item).collect();
     Ok(json!({
         "active": safe_mode::active(),
         "source": safe_mode::source().map(safe_mode::Source::name),
         "disabled": safe_mode::disabled().iter().map(shown_item).collect::<Vec<_>>(),
-        "pendingItem": safe_mode::previous().map(|i| shown_item(&i)),
+        "pendingItem": pending.first(),
+        "pendingItems": pending,
     }))
 }
 
@@ -1277,7 +1855,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Plug-ins",
             [],
             None,
-            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}], leftOut} | null (under automation read roots, a folder outside them is null, and a failed file and a plug-in's source outside them are named by their file name), safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
+            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), context?: [\"settings\"|\"artboards\"|\"layers\"|\"swatches\"] (the parts of the active document a filter's runs and its or a live effect's commands are given in _context.document, with or without a selection, see docs/plugins.md), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1, 2 or 3), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema, menu?: {path: [menu label], after?: item label (escaped), placed?: false (it stays in its plug-in's submenu: its label reads like a built-in item or submenu of that menu or another plug-in command placed there)} (the menu its manifest places it in, see docs/plugins.md)}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}], leftOut} | null (under automation read roots, a folder outside them is null, and a failed file and a plug-in's source outside them are named by their file name), safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
             always,
             list
         ),
@@ -1295,7 +1873,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Run Plug-in",
             [],
             None,
-            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [object id] (left out or null: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths, compound paths that clip a clip group and paths inside a group that clips one are left out): it may change, delete or add objects, as one undo step; the result is selected, except the objects it locked or made guides. A filter whose manifest lists inputs (type, image, symbolInstance; it lists doc.read in permissions, so plugin.install needs grant) is also given the selected objects of those kinds to read, in paint order from the bottom, with at most 16 MiB of pixels and 16 MiB of type runs per run (an object that doesn't fit what the objects before it left comes with pixelsOmitted or truncated; an image that reaches the decoder counts toward the pixels even when decoding fails); every object counts toward the input's half of the plug-in's memory cap, ids, bounds, transforms and names included, and an object whose fields besides its pixels and runs don't fit fails the run with a memory-budget error naming it and its size (a path or compound path fails it with the memory-budget error for a selection too large to hand over), and more than 100,000 of these objects fail it with an object-budget error: its output returns each as {id} or exactly as given, or the run is refused and nothing changes. With nothing selected it gets no objects (generators add theirs to the current layer). A filter with a commandAllowlist runs the commands it names while it runs (vc_call, see docs/plugins.md): its calls and its output are one undo step, and a run that fails or makes a call that fails changes nothing → {plugin, ids, notice?, pluginName?} (notice: the text the output reports in its notice key once applied, escaped and cut at 200 characters; pluginName: the plug-in's name, with it)",
+            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [object id] (left out or null: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths, compound paths that clip a clip group and paths inside a group that clips one are left out): it may change, delete or add objects, as one undo step (an output that changes no object and no kept data records none and leaves the document unmodified); the result is selected, except the objects it locked or made guides. A filter whose manifest lists inputs (type, image, symbolInstance; it lists doc.read in permissions, so plugin.install needs grant) is also given the selected objects of those kinds to read, in paint order from the bottom, with at most 16 MiB of pixels and 16 MiB of type runs per run (an object that doesn't fit what the objects before it left comes with pixelsOmitted or truncated; an image that reaches the decoder counts toward the pixels even when decoding fails); every object counts toward the input's half of the plug-in's memory cap, ids, bounds, transforms and names included, and an object whose fields besides its pixels and runs don't fit fails the run with a memory-budget error naming it and its size (a path or compound path fails it with the memory-budget error for a selection too large to hand over), and more than 100,000 of these objects fail it with an object-budget error: its output returns each as {id} or exactly as given, or the run is refused and nothing changes. With nothing selected it gets no objects (generators add theirs to the current layer). A filter with a commandAllowlist runs the commands it names while it runs (vc_call, see docs/plugins.md): its calls and its output are one undo step, and a run that fails or makes a call that fails changes nothing → {plugin, ids, notice?, pluginName?} (notice: the text the output reports in its notice key once applied, escaped and cut at 200 characters; pluginName: the plug-in's name, with it)",
             has_doc,
             run
         ),
@@ -1349,7 +1927,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Safe Mode",
             [],
             None,
-            "{} → {active: bool (no plug-in loads or runs: plugin.install, .run, .reload and exporters fail, live effects draw their object's geometry unchanged and the objects keep their effects), source: \"flag\" (started with --safe-mode) | \"startup\" (the user chose Safe Mode, or hasn't chosen yet, after a launch that stopped while a plug-in was loading) | null, disabled: [{id, file, name, label}] (turned off for the next launch; id is null for one known only by its file; under automation read roots, a file outside them is named by its file name here and in pendingItem, and plugin.setEnabled takes that name), pendingItem: {id, file, name, label} | null (the plug-in the last launch was loading when it stopped, until the user chooses; it may not be what stopped it)}. Safe Mode is chosen at launch, never by a command",
+            "{} → {active: bool (no plug-in loads or runs: plugin.install, .run, .reload and exporters fail, live effects draw their object's geometry unchanged and the objects keep their effects), source: \"flag\" (started with --safe-mode) | \"startup\" (the user chose Safe Mode, or hasn't chosen yet, after a launch that stopped while a plug-in was loading) | null, disabled: [{id, file, name, label}] (turned off for the next launch; id is null for one known only by its file; under automation read roots, a file outside them is named by its file name here and in pendingItem, and plugin.setEnabled takes that name), pendingItem: {id, file, name, label} | null (the first of pendingItems), pendingItems: [{id, file, name, label}] (the plug-ins the last launch was loading when it stopped, oldest first, until the user chooses; any of them, or none, may be what stopped it)}. Safe Mode is chosen at launch, never by a command",
             always,
             safe_mode_state
         ),

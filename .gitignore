@@ -7,3 +7,10 @@ plan/
 .DS_Store
 # A craft-fonts checkout for CRAFT_FONTS_DIR (CI and release workflows check it out here)
 /craft-fonts
+# The Python packaging helpers' bytecode: `nightly-archive.py` imports `nightly_paths`, and the
+# producer's clean-tree check runs after a local packaging run would have written it.
+__pycache__/
+# The shared nightly workflow's scratch checkouts and inputs: the producer requires a clean tree.
+/.nightly-tools
+/.nightly-input
+/craft-i18n
