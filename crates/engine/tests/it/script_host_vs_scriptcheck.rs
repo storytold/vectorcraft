@@ -84,7 +84,7 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "Application.prototype.",
         "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents getIsFileOpen \
-         selection typename",
+         selection showColorPicker typename",
     ),
     ("DocumentPreset.", "prototype"),
     (
