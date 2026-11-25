@@ -2385,6 +2385,12 @@ font-technology	Variable	Променливи
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	разделителната способност не е налична
+	estimated memory {memory}	приблизителна памет {memory}
+	memory unavailable	паметта не е налична
+	Unknown format	Неизвестен формат
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}

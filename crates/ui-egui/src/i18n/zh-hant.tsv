@@ -3806,6 +3806,12 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}；{size}；{detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	解析度無法使用
+	estimated memory {memory}	估計記憶體 {memory}
+	memory unavailable	記憶體無法使用
+	Unknown format	未知格式
 	{kind}, {instances}	{kind}，{instances}
 	{kind}, {rows} × {cols}	{kind}，{rows} × {cols}
 	{grid}, {instances}	{grid}，{instances}

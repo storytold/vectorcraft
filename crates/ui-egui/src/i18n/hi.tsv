@@ -3981,6 +3981,12 @@ arrowhead	Feather	पंख
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	रिज़ॉल्यूशन उपलब्ध नहीं
+	estimated memory {memory}	अनुमानित मेमोरी {memory}
+	memory unavailable	मेमोरी उपलब्ध नहीं
+	Unknown format	अज्ञात फ़ॉर्मेट
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}

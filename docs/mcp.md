@@ -10212,9 +10212,15 @@ type in a mask or in a symbol's or pattern's art once however many objects show 
 (`[{font, match, family, style, file, embedding}]`: each font of `fonts`, in order, as the fontDetails category's rows give it: `match` is `exact`, `style` (a style the family lacks, shown in
 `family` `style`), `missingWithFallback` (not installed, shown in `family` `style`) or `missing`; `file` is the face's
 file name, null for a built-in face; `embedding` is `allowed`, `editing`, `previewPrint` or `forbidden`, null when no
-face is found), `imageObjects` (`[{name, width, height, linked, file}]`: the image objects in the order the
-linkedImages and embeddedImages categories list them, with the file a linked image's row shows and null for an
-embedded one), `document.unitId` (the document's units as Preferences › Units names them, such as `millimeters`, beside
+face is found), `imageObjects` (`[{name, width, height, linked, file, format, effectivePpi, memoryBytes,
+storedBytes}]`: the image objects in the order the linkedImages and embeddedImages categories list them, with the file
+a linked image's row shows and null for an embedded one; `format` is a linked image's file format by its extension,
+else the format of the pixels the document holds, null when neither is known; `effectivePpi` is `[x, y]`, the pixels
+per inch at the size the image is placed at (a distorted image measured at its middle), null when it has no area;
+`memoryBytes` is, for an embedded image, width × height × 4, the bytes of the 8-bit RGBA pixels it is drawn from, and
+`storedBytes` is the bytes of the encoded image the document holds; both are null for a linked image; a linkedImages row reads
+`PNG; 1200 × 800 px; 150 ppi — /art/photo.png` and an embeddedImages row `PNG; 1200 × 800 px; estimated memory 3.7 MiB`,
+with `Unknown format`, `resolution unavailable` or `memory unavailable` for a value that is null), `document.unitId` (the document's units as Preferences › Units names them, such as `millimeters`, beside
 the English `document.units`), `document.transparency` (`{gridSize, gridColors, gridColorsName, simulatePaper,
 flattenerPreset}`: File › Document Setup's transparency settings, the grid's size (`small`, `medium` or `large`), its
 two colors as `#rrggbb`, their preset's name or `Custom`, Simulate Colored Paper and the flattener preset, which the

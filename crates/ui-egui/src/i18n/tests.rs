@@ -77,6 +77,17 @@ const UI_STRINGS: &[(&str, &[&str])] = &[
     ("nature icons library", &["Nature Icons", "Leaf", "Flower", "Tree", "Mountain", "Wave"]),
     ("objects on path", &["Detach", "Detach Object from Path"]),
     (
+        "document info image details",
+        &[
+            "{format}; {size}; {detail}",
+            "{x} × {y} ppi",
+            "resolution unavailable",
+            "estimated memory {memory}",
+            "memory unavailable",
+            "Unknown format",
+        ],
+    ),
+    (
         "type preferences",
         &[
             "Start Lists From Typed Markers",

@@ -2479,6 +2479,12 @@ font-technology	Variable	Variables
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppp
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppp
+	resolution unavailable	resolución no disponible
+	estimated memory {memory}	memoria estimada {memory}
+	memory unavailable	memoria no disponible
+	Unknown format	Formato desconocido
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}

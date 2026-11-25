@@ -2407,6 +2407,12 @@ font-technology	Variable	Variabla
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	upplösning inte tillgänglig
+	estimated memory {memory}	uppskattat minne {memory}
+	memory unavailable	minne inte tillgängligt
+	Unknown format	Okänt format
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}

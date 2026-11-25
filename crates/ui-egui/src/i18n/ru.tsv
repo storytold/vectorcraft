@@ -2505,6 +2505,12 @@ file-filter	Templates	Шаблоны
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	разрешение недоступно
+	estimated memory {memory}	оценка памяти {memory}
+	memory unavailable	память недоступна
+	Unknown format	Неизвестный формат
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}

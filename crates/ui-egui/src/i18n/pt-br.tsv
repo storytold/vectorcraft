@@ -2016,6 +2016,12 @@ antiAlias	Sharp	Nítido
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppp
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppp
+	resolution unavailable	resolução indisponível
+	estimated memory {memory}	memória estimada {memory}
+	memory unavailable	memória indisponível
+	Unknown format	Formato desconhecido
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}

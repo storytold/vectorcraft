@@ -3779,6 +3779,12 @@ theme	Appearance	Motiv
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	rozlišení není k dispozici
+	estimated memory {memory}	odhadovaná paměť {memory}
+	memory unavailable	paměť není k dispozici
+	Unknown format	Neznámý formát
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}

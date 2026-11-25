@@ -3318,6 +3318,12 @@ file-filter	Templates	Sablonok
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	a felbontás nem érhető el
+	estimated memory {memory}	becsült memória {memory}
+	memory unavailable	a memória nem érhető el
+	Unknown format	Ismeretlen formátum
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}

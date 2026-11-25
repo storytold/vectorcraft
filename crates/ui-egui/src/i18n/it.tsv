@@ -2521,6 +2521,12 @@ file-filter	Templates	Modelli
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	risoluzione non disponibile
+	estimated memory {memory}	memoria stimata {memory}
+	memory unavailable	memoria non disponibile
+	Unknown format	Formato sconosciuto
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}

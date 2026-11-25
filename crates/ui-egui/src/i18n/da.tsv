@@ -6277,6 +6277,12 @@ theme	Appearance	Udseende
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	opløsning ikke tilgængelig
+	estimated memory {memory}	anslået hukommelse {memory}
+	memory unavailable	hukommelse ikke tilgængelig
+	Unknown format	Ukendt format
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}

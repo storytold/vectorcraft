@@ -3141,6 +3141,12 @@ digits	Hindi	Hindi
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	không có độ phân giải
+	estimated memory {memory}	bộ nhớ ước tính {memory}
+	memory unavailable	không có thông tin bộ nhớ
+	Unknown format	Định dạng không xác định
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}

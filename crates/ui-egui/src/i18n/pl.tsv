@@ -3658,6 +3658,12 @@ theme	Appearance	Wygląd
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	rozdzielczość niedostępna
+	estimated memory {memory}	szacowana pamięć {memory}
+	memory unavailable	pamięć niedostępna
+	Unknown format	Nieznany format
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}

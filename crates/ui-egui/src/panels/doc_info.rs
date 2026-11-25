@@ -233,14 +233,39 @@ fn font_detail_value(e: &Value) -> Option<String> {
     }
 }
 
-/// An `imageObjects` entry as Linked Images and Embedded Images show it: its size in pixels, and
-/// for a linked image the file it shows.
+/// An `imageObjects` entry as Linked Images and Embedded Images show it: its format, its size in
+/// pixels, and for a linked image its resolution and the file it shows, for an embedded one the
+/// memory its pixels take. Format names and file names stay as they are.
 fn image_value(o: &Value) -> Option<String> {
+    use vectorcraft_engine::cmd::{byte_size, ppi_number};
+    let format = match &o["format"] {
+        Value::Null => tl!("Unknown format"),
+        f => f.as_str()?,
+    };
     let size = crate::i18n::fmt(
         tl!("{width} × {height} px"),
         &[("width", &o["width"].as_u64()?.to_string()), ("height", &o["height"].as_u64()?.to_string())],
     );
-    if o["linked"] == true { Some(crate::i18n::fmt(tl!("{size} — {file}"), &[("size", &size), ("file", o["file"].as_str()?)])) } else { Some(size) }
+    let detail = if o["linked"] == true {
+        match &o["effectivePpi"] {
+            Value::Null => tl!("resolution unavailable").to_string(),
+            ppi => {
+                let (x, y) = (ppi_number(ppi.get(0)?.as_f64()?), ppi_number(ppi.get(1)?.as_f64()?));
+                if x == y { crate::i18n::fmt(tl!("{n} ppi"), &[("n", &x)]) } else { crate::i18n::fmt(tl!("{x} × {y} ppi"), &[("x", &x), ("y", &y)]) }
+            }
+        }
+    } else {
+        match &o["memoryBytes"] {
+            Value::Null => tl!("memory unavailable").to_string(),
+            bytes => crate::i18n::fmt(tl!("estimated memory {memory}"), &[("memory", &byte_size(bytes.as_u64()?))]),
+        }
+    };
+    let shown = crate::i18n::fmt(tl!("{format}; {size}; {detail}"), &[("format", format), ("size", &size), ("detail", &detail)]);
+    if o["linked"] == true {
+        Some(crate::i18n::fmt(tl!("{size} — {file}"), &[("size", &shown), ("file", o["file"].as_str()?)]))
+    } else {
+        Some(shown)
+    }
 }
 
 /// A `repeatObjects` entry as Repeat Objects shows it: its kind and the number of instances it
@@ -586,7 +611,7 @@ mod tests {
         let gone = fonts.iter().find(|(l, _)| l.starts_with("Qx Absent Family")).unwrap_or_else(|| panic!("{fonts:?}")).1.clone();
         assert!(gone == "fehlt" || gone.starts_with("fehlt: angezeigt in "), "{gone}");
         assert_eq!(images.len(), 1);
-        assert!(images[0].1.ends_with(" px") && images[0].1.contains(" × "), "{images:?}");
+        assert!(images[0].1.contains(" × ") && images[0].1.contains(" px; geschätzter Speicher ") && images[0].1.ends_with(" B"), "{images:?}");
         // A swatch named like a kind keeps its name; the gradient named by its kind is translated.
         assert_eq!(value(&gradients, "Glow"), "Linear gradient, Radialer Verlauf");
         assert_eq!(value(&selected, "Glow"), "Linear gradient, Radialer Verlauf");
@@ -594,6 +619,54 @@ mod tests {
         assert!(saved.contains("(the selection only)") && saved.contains("\nGRADIENT OBJECTS\nGlow: Linear gradient, Radial gradient\n"), "{saved}");
         let report = app.session.execute("document.info", &json!({"format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
         assert!(report.contains("Units: Millimeters\n") && report.contains("Radial Repeat, 6 instances"), "{report}");
+    }
+
+    /// Linked Images and Embedded Images show each image's format, size, resolution or memory in
+    /// the interface language, the format and file names as they are; values that do not fit an
+    /// image entry are shown as `document.info` gives the row.
+    #[test]
+    fn image_details_show_in_the_interface_language() {
+        let linked = |format: Value, ppi: Value| json!({"name": "a.png", "width": 3, "height": 2, "linked": true, "file": "/art/a.png", "format": format, "effectivePpi": ppi});
+        let embedded =
+            |memory: Value| json!({"name": "Image", "width": 3, "height": 2, "linked": false, "file": null, "format": "PNG", "memoryBytes": memory});
+        let shown = || {
+            [
+                linked(json!("PNG"), json!([150.0, 150.0])),
+                linked(json!(null), json!([144.0, 72.0])),
+                linked(json!("TIFF"), json!(null)),
+                embedded(json!(1536)),
+                embedded(json!(null)),
+            ]
+            .map(|o| image_value(&o))
+        };
+        assert_eq!(
+            shown(),
+            [
+                "PNG; 3 × 2 px; 150 ppi — /art/a.png",
+                "Unknown format; 3 × 2 px; 144 × 72 ppi — /art/a.png",
+                "TIFF; 3 × 2 px; resolution unavailable — /art/a.png",
+                "PNG; 3 × 2 px; estimated memory 1.5 KiB",
+                "PNG; 3 × 2 px; memory unavailable",
+            ]
+            .map(|v| Some(v.to_string()))
+        );
+        let Some(de) = crate::i18n::Lang::from_code("de") else { panic!("no German catalog") };
+        crate::i18n::set_current(de);
+        let german = shown();
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(
+            german,
+            [
+                "PNG; 3 × 2 px; 150 ppi – /art/a.png",
+                "Unbekanntes Format; 3 × 2 px; 144 × 72 ppi – /art/a.png",
+                "TIFF; 3 × 2 px; Auflösung nicht verfügbar – /art/a.png",
+                "PNG; 3 × 2 px; geschätzter Speicher 1.5 KiB",
+                "PNG; 3 × 2 px; Speicher nicht verfügbar",
+            ]
+            .map(|v| Some(v.to_string()))
+        );
+        assert_eq!(image_value(&linked(json!("PNG"), json!([150.0]))), None);
+        assert_eq!(image_value(&embedded(json!("big"))), None);
     }
 
     /// Document shows the transparency settings with their values in the interface language (two

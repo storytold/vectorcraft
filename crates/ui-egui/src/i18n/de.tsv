@@ -2436,6 +2436,12 @@ file-filter	Templates	Vorlagen
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	Auflösung nicht verfügbar
+	estimated memory {memory}	geschätzter Speicher {memory}
+	memory unavailable	Speicher nicht verfügbar
+	Unknown format	Unbekanntes Format
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}

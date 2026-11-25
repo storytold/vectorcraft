@@ -2705,6 +2705,12 @@ antiAlias	Sharp	シャープ
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}、{size}、{detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	解像度を取得できません
+	estimated memory {memory}	推定メモリ {memory}
+	memory unavailable	メモリを取得できません
+	Unknown format	不明な形式
 	{kind}, {instances}	{kind}、{instances}
 	{kind}, {rows} × {cols}	{kind}、{rows} × {cols}
 	{grid}, {instances}	{grid}、{instances}

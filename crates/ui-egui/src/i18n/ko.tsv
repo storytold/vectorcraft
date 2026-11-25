@@ -2695,6 +2695,12 @@ antiAlias	Sharp	날카롭게
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	해상도를 알 수 없음
+	estimated memory {memory}	예상 메모리 {memory}
+	memory unavailable	메모리를 알 수 없음
+	Unknown format	알 수 없는 형식
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}

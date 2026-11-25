@@ -2089,6 +2089,12 @@ font-technology	Variable	Μεταβλητές
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}· {size}· {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	η ανάλυση δεν είναι διαθέσιμη
+	estimated memory {memory}	εκτιμώμενη μνήμη {memory}
+	memory unavailable	η μνήμη δεν είναι διαθέσιμη
+	Unknown format	Άγνωστη μορφή
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}

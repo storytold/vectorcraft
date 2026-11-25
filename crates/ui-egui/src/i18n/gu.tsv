@@ -5207,6 +5207,12 @@ antiAlias	Sharp	શાર્પ
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	રિઝોલ્યુશન ઉપલબ્ધ નથી
+	estimated memory {memory}	અંદાજિત મેમરી {memory}
+	memory unavailable	મેમરી ઉપલબ્ધ નથી
+	Unknown format	અજ્ઞાત ફોર્મેટ
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
