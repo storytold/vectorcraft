@@ -32,6 +32,7 @@ mod pen_rubber_band;
 mod ruler_guide_nodes;
 mod ruler_guide_perf;
 mod ruler_origin;
+mod script_host_vs_scriptcheck;
 mod selection_commands;
 mod stroke_visibility;
 mod text_stroke_scale;

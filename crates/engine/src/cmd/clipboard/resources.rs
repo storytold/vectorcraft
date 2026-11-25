@@ -14,13 +14,14 @@
 //! the document's Spot Colors option says. Pasting back into the document the objects came from
 //! uses its resources as they are now.
 
-use std::cell::OnceCell;
+use std::cell::{Cell, OnceCell};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 
 use serde_json::{Map, Value, json};
 use vectorcraft_brush::Brush;
 use vectorcraft_color::{Color, Paint, Swatch};
+use vectorcraft_doc::pattern::pattern_paint;
 use vectorcraft_doc::text::{KINSOKU_NAME_MAX, KINSOKU_SETS_MAX};
 use vectorcraft_doc::{
     Appearance, AppearanceItem, Document, Effect, GraphDesign, GraphicStyle, Kinsoku, KinsokuSet, Node, NodeKind, PatternDef, Symbol,
@@ -158,6 +159,10 @@ fn node_refs(n: &Node, f: Visit) {
                 }
                 for s in t.para_styles().filter_map(|pa| pa.style_name.as_ref()) {
                     f(Ref::Name(Res::ParaStyle, s));
+                }
+                // The fonts its file carried travel with it, as images do.
+                for ff in t.file_fonts.iter().flat_map(|ff| &ff.fonts) {
+                    f(Ref::Name(Res::Image, &ff.key));
                 }
             }
             NodeKind::Image(im) => f(Ref::Name(Res::Image, &im.key)),
@@ -606,6 +611,9 @@ pub(crate) enum SwatchChoice {
 pub(crate) struct SwatchChoices {
     all: SwatchChoice,
     by_name: BTreeMap<String, SwatchChoice>,
+    /// Names a swatch or pattern that comes in under a numbered name skips, each with the swatch
+    /// it is reserved for, which still comes in under it when the document does not use it.
+    reserved: Arc<BTreeMap<String, Swatch>>,
 }
 
 impl SwatchChoices {
@@ -617,16 +625,22 @@ impl SwatchChoices {
         };
         match p.get("swatchConflict") {
             None | Some(Value::Null) => Ok(Self::default()),
-            Some(Value::Object(m)) => {
-                Ok(Self { all: SwatchChoice::Merge, by_name: m.iter().map(|(k, v)| Ok((k.clone(), one(v)?))).collect::<Result<_>>()? })
-            }
-            Some(v) => Ok(Self { all: one(v)?, by_name: BTreeMap::new() }),
+            Some(Value::Object(m)) => Ok(Self {
+                all: SwatchChoice::Merge,
+                by_name: m.iter().map(|(k, v)| Ok((k.clone(), one(v)?))).collect::<Result<_>>()?,
+                reserved: Arc::default(),
+            }),
+            Some(v) => Ok(Self { all: one(v)?, ..Self::default() }),
         }
     }
     /// Add for every conflict: each pasted swatch whose name the document gives another color
     /// comes in renamed.
     pub(crate) fn add_all() -> Self {
-        Self { all: SwatchChoice::Add, by_name: BTreeMap::new() }
+        Self { all: SwatchChoice::Add, ..Self::default() }
+    }
+    /// These choices, with numbered names skipping the names of `names` ([`SwatchChoices::reserved`]).
+    pub(crate) fn reserving(self, names: &Arc<BTreeMap<String, Swatch>>) -> Self {
+        Self { reserved: Arc::clone(names), ..self }
     }
     fn of(&self, name: &str) -> SwatchChoice {
         self.by_name.get(name).copied().unwrap_or(self.all)
@@ -806,6 +820,9 @@ impl Relink {
                 }
                 if relaid {
                     refresh_bounds(t);
+                }
+                if let Some(fonts) = &mut t.file_fonts {
+                    fonts.map_keys(|key| self.name(Res::Image, key));
                 }
             }
             NodeKind::Image(im) => self.name(Res::Image, &mut im.key),
@@ -1134,6 +1151,8 @@ pub(crate) struct Imported {
     /// `{kind, from, to}` for every resource the pasted objects now know under another name: added
     /// renamed, or a copy added renamed by an earlier paste.
     pub renamed: Vec<Value>,
+    /// File-font resources refused while binding pasted type.
+    pub warnings: Vec<String>,
     /// The graph designs the pasted graphs draw with that the document has under the same name
     /// and that would draw them otherwise than the art they were pasted with: the document keeps
     /// its own, and the pasted graphs are drawn again with it.
@@ -1145,6 +1164,9 @@ pub(crate) struct Imported {
     pub added_designs: BTreeSet<String>,
     /// The global and spot colors that took the document's color (merged).
     merged_swatches: BTreeSet<String>,
+    /// Whether a name [`SwatchChoices::reserving`] reserves changed the name a swatch or pattern
+    /// came in under.
+    pub reserved_named: bool,
 }
 
 impl Imported {
@@ -1158,12 +1180,17 @@ impl Imported {
         }
     }
     /// Point a pasted copy at the document's resources. A pie's legend labels in wedges that now show a color of the
-    /// other darkness take the contrast a redraw sets there.
-    pub(crate) fn apply(&self, n: &mut Node) {
+    /// other darkness take the contrast a redraw sets there. Fonts the copy carries are bound to the faces `d` holds.
+    pub(crate) fn apply(&mut self, n: &mut Node, d: &Document) {
         if self.relinks {
             let shades = super::super::graph::wedge_shades(n);
             self.relink.node(n);
             super::super::graph::follow_wedge_shades(n, &shades);
+        }
+        for note in vectorcraft_text::FontDb::global().bind_node_file_fonts(n, &|key| d.images.get(key)) {
+            if !self.warnings.contains(&note) {
+                self.warnings.push(note);
+            }
         }
     }
 }
@@ -1411,9 +1438,39 @@ impl Clipboard {
                     let bare = |p: &PatternDef| PatternDef { name: String::new(), art: vec![], ..p.clone() };
                     let same = |n: &str| !fresh && d.pattern(n).is_some_and(|x| bare(x) == bare(def) && same_art(&out.relink, &x.art, &def.art));
                     let p = existing(&def.name, d.patterns.iter().map(|p| p.name.as_str()), same_doc, same).unwrap_or_else(|| {
-                        // Its swatch comes along under the same name.
-                        let name = unique_name(&def.name, |n| d.pattern(n).is_some() || d.swatch_name_taken(n));
+                        // Its swatch comes along under the same name, which skips the reserved swatch
+                        // names too, except its own name when that is reserved for a swatch of it.
+                        let skipped = Cell::new(false);
+                        let ours = |w: &Swatch| matches!(&w.paint, Paint::Pattern { pattern, .. } if *pattern == def.name);
+                        let name = unique_name(&def.name, |n| {
+                            let used = d.pattern(n).is_some() || d.swatch_name_taken(n);
+                            let held = !used && choices.reserved.get(n).is_some_and(|w| n != def.name || !ours(w));
+                            skipped.set(skipped.get() || held);
+                            used || held
+                        });
+                        out.reserved_named |= skipped.get();
                         add_pattern(d, PatternDef { name: name.clone(), ..def.clone() });
+                        // The name is left to a swatch it is reserved for that places the pattern
+                        // otherwise; the swatch the pattern comes with gets another.
+                        let placed = choices.reserved.get(&name).is_some_and(|w| ours(w) && w.paint != pattern_paint(&def.name));
+                        if placed && d.swatches.last().is_some_and(|w| w.name == name) {
+                            let other = unique_name(&name, |n| n == name || d.swatch_name_taken(n) || choices.reserved.contains_key(n));
+                            if let Some(w) = d.swatches.last_mut() {
+                                w.name = other;
+                            }
+                        }
+                        // A pattern that comes in under another name than the one reserved for its
+                        // swatch, because a pattern has that name, keeps that name for its swatch
+                        // when no swatch or color group uses it.
+                        let own = name != def.name
+                            && !d.swatch_name_taken(&def.name)
+                            && choices.reserved.get(&def.name).is_some_and(|w| w.paint == pattern_paint(&def.name));
+                        if own && d.swatches.last().is_some_and(|w| w.name == name) {
+                            if let Some(w) = d.swatches.last_mut() {
+                                w.name = def.name.clone();
+                            }
+                            out.reserved_named = true;
+                        }
                         Placed::added(&def.name, name)
                     });
                     added_patterns.extend(p.new_name(&def.name));
@@ -1462,6 +1519,7 @@ impl Clipboard {
             && out.relink.colors.is_empty()
             && out.relink.kinsoku.is_empty()
             && used.styles.is_empty());
+        out.warnings.extend(vectorcraft_text::FontDb::global().bind_document_file_fonts(d));
         Ok(out)
     }
 
@@ -1645,7 +1703,9 @@ impl Clipboard {
                 out.merged_swatches.insert(w.name.clone());
                 Placed::Existing
             } else {
-                add_swatch(d, w, same_doc)
+                let (p, reserved_named) = add_swatch(d, w, w, same_doc, &choices.reserved, &out.relink);
+                out.reserved_named |= reserved_named;
+                p
             };
             out.placed(Res::Swatch, &w.name, &p);
         }
@@ -1660,7 +1720,8 @@ impl Clipboard {
         for def in self.swatches.iter().filter(|w| !is_base(w) && used.carries(w)) {
             let mut w = def.clone();
             out.relink.paint(&mut w.paint);
-            let p = add_swatch(d, &w, same_doc);
+            let (p, reserved_named) = add_swatch(d, &w, def, same_doc, &choices.reserved, &out.relink);
+            out.reserved_named |= reserved_named;
             out.placed(Res::Swatch, &def.name, &p);
         }
     }
@@ -1862,13 +1923,62 @@ pub(crate) fn import_graph_designs(src: &Document, d: &mut Document, names: &[St
     clip.import_used(d, &used, &SwatchChoices::default(), false)
 }
 
+/// Whether `name` ends in a space and a number, as a numbered copy's name ("Ink 2") does.
+pub(crate) fn numbered_name(name: &str) -> bool {
+    name.rsplit_once(' ').is_some_and(|(_, k)| !k.is_empty() && k.bytes().all(|b| b.is_ascii_digit()))
+}
+
 /// Swatch `w` in `d` ([`existing`]), else added under a free name (swatches and colour groups
-/// share one namespace).
-fn add_swatch(d: &mut Document, w: &Swatch, same_doc: bool) -> Placed {
+/// share one namespace) → where it went, and whether `reserved` changed its name. `source` is the
+/// pasted swatch `w` stands for, before its links were relinked. A numbered name skips the names
+/// in `reserved`. A numbered name in `reserved` ("Ink 2") that `d` does not use is kept for the
+/// swatch it is reserved for: that swatch comes in under it, not as a numbered copy of it that `d`
+/// has, and another swatch of that name gets a number. A numbered copy in `d` whose name is
+/// reserved for another swatch, and that is that swatch with its links as `relink` gives them, is
+/// left to it, whether or not the import brings that swatch.
+fn add_swatch(d: &mut Document, w: &Swatch, source: &Swatch, same_doc: bool, reserved: &BTreeMap<String, Swatch>, relink: &Relink) -> (Placed, bool) {
     let same = |n: &str| d.swatch(n).is_some_and(|t| *t == Swatch { name: n.to_string(), ..w.clone() });
-    existing(&w.name, d.swatches_iter().map(|t| t.name.as_str()), same_doc, same).unwrap_or_else(|| {
-        let name = d.free_swatch_name(&w.name);
-        d.swatches.push(Swatch { name: name.clone(), ..w.clone() });
-        Placed::added(&w.name, name)
-    })
+    let kept = (!same_doc && numbered_name(&w.name) && !d.swatch_name_taken(&w.name)).then(|| reserved.get(&w.name)).flatten();
+    let (owns, held) = (kept.is_some_and(|o| o == source), kept.is_some_and(|o| o != source));
+    let is_owner = |t: &Swatch, o: &Swatch| {
+        let mut o = o.clone();
+        relink.paint(&mut o.paint);
+        *t == o
+    };
+    let theirs =
+        |n: &str| n != w.name && copy_of(&w.name, n) && reserved.get(n).is_some_and(|o| o != source && d.swatch(n).is_some_and(|t| is_owner(t, o)));
+    let names = || d.swatches_iter().map(|t| t.name.as_str());
+    let excluded = Cell::new(false);
+    let found = existing(
+        &w.name,
+        names().filter(|n| {
+            let t = theirs(n);
+            excluded.set(excluded.get() || t);
+            !t
+        }),
+        same_doc,
+        same,
+    );
+    let reused = |p: &Option<Placed>| match p {
+        Some(Placed::Reused(n)) => Some(n.clone()),
+        _ => None,
+    };
+    let passed_over = excluded.get() && reused(&found) != reused(&existing(&w.name, names(), same_doc, same));
+    let over_copy = match found {
+        Some(p) if !owns => return (p, passed_over),
+        found => found.is_some(),
+    };
+    let mut skipped = held;
+    let name = if d.swatch_name_taken(&w.name) || held {
+        let mut free = |n: &String| {
+            let taken = d.swatch_name_taken(n);
+            skipped |= !taken && reserved.contains_key(n);
+            !taken && !reserved.contains_key(n)
+        };
+        (2..).map(|i| format!("{} {i}", w.name)).find(&mut free).unwrap_or_else(|| d.free_swatch_name(&w.name))
+    } else {
+        w.name.clone()
+    };
+    d.swatches.push(Swatch { name: name.clone(), ..w.clone() });
+    (Placed::added(&w.name, name), over_copy || skipped || passed_over)
 }

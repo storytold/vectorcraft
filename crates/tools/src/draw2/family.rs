@@ -448,6 +448,10 @@ impl Tool for FamilyTool {
                 _ => self.grid_skew_key(key).is_some(),
             }
     }
+    /// The pointer left the canvas: the Smart Guide of the hover goes.
+    fn hover_ended(&mut self, _cx: &ToolContext) {
+        self.snap.clear();
+    }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut o = self.snap.guides().to_vec();
         if let Some(s) = self.start.filter(|_| self.began && cx.measurement_labels) {
@@ -489,19 +493,16 @@ impl Tool for FamilyTool {
             "lengthX" => self.length_x = arc_length(v, self.length_x),
             "lengthY" => self.length_y = arc_length(v, self.length_y),
             "reference" => self.reference = v.as_u64().unwrap_or(self.reference as u64).min(8) as usize,
-            "baseAlong" => {
-                if let Some(s) = v.as_str() {
-                    self.base_along = if s.eq_ignore_ascii_case("y") { "y" } else { "x" };
-                }
-            }
+            "baseAlong" => self.base_along = base_axis(v).unwrap_or(self.base_along),
             "slope" => self.slope = v.as_f64().filter(|n| n.is_finite()).map_or(self.slope, |n| n.clamp(-100.0, 100.0)),
             "fillArc" => self.fill_arc = v.as_bool().unwrap_or(self.fill_arc),
             // Report and persist the decay that shapes::spiral can actually draw.
             "decay" => self.decay = v.as_f64().unwrap_or(self.decay).clamp(5.0, 99.99),
-            "segments" => self.segments = v.as_u64().unwrap_or(10).clamp(2, 1000) as u32,
+            // A count that is not a whole number (a string, a fraction, a negative) keeps the current count.
+            "segments" => self.segments = v.as_u64().map_or(self.segments, |n| n.clamp(2, 1000) as u32),
             "clockwise" => self.clockwise = v.as_bool().unwrap_or(self.clockwise),
-            "rows" | "concentric" => self.rows = v.as_u64().unwrap_or(5).min(999) as u32,
-            "columns" | "radial" => self.columns = v.as_u64().unwrap_or(5).min(999) as u32,
+            "rows" | "concentric" => self.rows = v.as_u64().map_or(self.rows, |n| n.min(999) as u32),
+            "columns" | "radial" => self.columns = v.as_u64().map_or(self.columns, |n| n.min(999) as u32),
             "rowSkew" | "concentricSkew" => self.skew[0] = grid_skew(v, self.skew[0]),
             "columnSkew" | "radialSkew" => self.skew[1] = grid_skew(v, self.skew[1]),
             "frame" => self.frame = v.as_bool().unwrap_or(self.frame),
@@ -515,14 +516,15 @@ impl Tool for FamilyTool {
         // the match above ignores leaves the drag's starting value as it was.
         if let Some(b) = self.before_drag.as_mut() {
             let finite = v.as_f64().is_some_and(f64::is_finite);
+            let whole = v.as_u64().is_some();
             match key {
                 "slope" if finite => b.slope = self.slope,
                 "closed" if v.is_boolean() => b.closed = self.closed,
-                "baseAlong" if v.is_string() => b.base_along = self.base_along,
+                "baseAlong" if base_axis(v).is_some() => b.base_along = self.base_along,
                 "decay" if v.as_f64().is_some() => b.decay = self.decay,
-                "segments" => b.segments = self.segments,
-                "rows" | "concentric" => b.rows = self.rows,
-                "columns" | "radial" => b.columns = self.columns,
+                "segments" if whole => b.segments = self.segments,
+                "rows" | "concentric" if whole => b.rows = self.rows,
+                "columns" | "radial" if whole => b.columns = self.columns,
                 "rowSkew" | "concentricSkew" if finite => b.skew[0] = self.skew[0],
                 "columnSkew" | "radialSkew" if finite => b.skew[1] = self.skew[1],
                 _ => {}
@@ -548,6 +550,15 @@ impl Tool for FamilyTool {
             "rowSkew" | "concentricSkew" | "columnSkew" | "radialSkew" => c::number(key, v, -skew, skew),
             _ => c::boolean(key, v),
         }
+    }
+}
+
+/// An arc's base axis from option value `v`: `"x"` or `"y"` in either case, else `None`.
+fn base_axis(v: &Value) -> Option<&'static str> {
+    match v.as_str()? {
+        s if s.eq_ignore_ascii_case("x") => Some("x"),
+        s if s.eq_ignore_ascii_case("y") => Some("y"),
+        _ => None,
     }
 }
 
@@ -999,6 +1010,83 @@ mod tests {
         assert_eq!((o["slope"].clone(), o["closed"].clone(), o["baseAlong"].clone()), (json!(-20.0), json!(false), json!("x")));
     }
 
+    /// Values that are not whole numbers, as a damaged preferences file can hold them.
+    fn not_whole_numbers() -> [Value; 9] {
+        [json!("12"), json!("NaN"), json!(null), json!(true), json!(-3), json!(2.5), json!(1e300), json!({}), json!([7])]
+    }
+
+    /// A spiral's segments and a grid's dividers keep their current count for a value that is not a
+    /// whole number; a whole number still sets the count within its range.
+    #[test]
+    fn family_tools_keep_their_counts_for_a_value_that_is_not_a_whole_number() {
+        for (id, key, set, high) in [
+            ("spiral", "segments", 23, 1000),
+            ("rectangularGrid", "rows", 7, 999),
+            ("rectangularGrid", "columns", 8, 999),
+            ("polarGrid", "concentric", 7, 999),
+            ("polarGrid", "radial", 8, 999),
+        ] {
+            let mut t = FamilyTool::new(id);
+            t.set_option(key, &json!(set));
+            let before = t.options();
+            for v in not_whole_numbers() {
+                t.set_option(key, &v);
+                assert_eq!(t.options(), before, "{id} {key} {v}");
+            }
+            t.set_option(key, &json!(u64::MAX));
+            assert_eq!(t.options()[key], json!(high), "{id} {key}");
+        }
+        let mut t = FamilyTool::new("spiral");
+        t.set_option("segments", &json!(1));
+        assert_eq!(t.options()["segments"], json!(2));
+    }
+
+    /// The Arc tool keeps its base axis for a value other than x or y.
+    #[test]
+    fn arc_keeps_its_base_axis_for_a_value_other_than_x_or_y() {
+        let mut t = FamilyTool::new("arc");
+        t.set_option("baseAlong", &json!("Y"));
+        for v in [json!("z"), json!(""), json!("xy"), json!(null), json!(1)] {
+            t.set_option("baseAlong", &v);
+            assert_eq!(t.options()["baseAlong"], json!("y"), "{v}");
+        }
+        t.set_option("baseAlong", &json!("X"));
+        assert_eq!(t.options()["baseAlong"], json!("x"));
+    }
+
+    /// A count or base axis the option ignores while a shape is dragged out leaves the drag's
+    /// starting value for Escape.
+    #[test]
+    fn escape_puts_back_the_drag_start_counts_after_an_ignored_value() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        for (id, keys) in [
+            ("spiral", vec!["segments"]),
+            ("rectangularGrid", vec!["rows", "columns"]),
+            ("polarGrid", vec!["concentric", "radial"]),
+            ("arc", vec!["baseAlong"]),
+        ] {
+            let mut t = FamilyTool::new(id);
+            let start = t.options();
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0));
+            for k in [ToolKey::Up, ToolKey::Right, ToolKey::Letter('f')] {
+                t.key(&cx, k, Mods::default());
+            }
+            assert_ne!(t.options(), start, "{id}");
+            for k in &keys {
+                for v in not_whole_numbers().into_iter().chain([json!("z")]) {
+                    t.set_option(k, &v);
+                }
+            }
+            t.key(&cx, ToolKey::Escape, Mods::default());
+            assert_eq!(t.options(), start, "{id}");
+        }
+    }
+
     /// Alt adjusts the segment count in whole winds while keeping it within 2 to 1000.
     #[test]
     fn spiral_drag_alt_keeps_the_segments_within_2_to_1000() {
@@ -1252,6 +1340,23 @@ mod tests {
             "{a:?}"
         );
         assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "align")));
+    }
+
+    /// The "anchor" label a hover shows goes when the pointer leaves the canvas.
+    #[test]
+    fn leaving_the_canvas_drops_the_hover_label() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let label = |o: &[Overlay]| o.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "anchor"));
+        for id in ["arc", "spiral", "rectangularGrid", "polarGrid"] {
+            let mut t = FamilyTool::new(id);
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 98.0, 102.0));
+            assert!(label(&t.overlays(&cx)), "{id}");
+            t.hover_ended(&cx);
+            assert!(!label(&t.overlays(&cx)), "{id}: {:?}", t.overlays(&cx));
+        }
     }
 
     /// A grid's Default Size and Reference Point are options for a click's dialog; the drag
