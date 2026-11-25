@@ -41,7 +41,8 @@ fn settled(app: &mut VectorcraftApp, view: &CanvasView, ids: &[NodeId]) -> Vec<A
 /// An unchanged type object keeps its memo entry; an edit lays out only the object edited; a zoom
 /// reuses the entries (the marks are in document points); a new font generation lays everything out.
 /// Other tests change the fonts while this one runs, so the edit and the zoom are tried again on a
-/// new document until the fonts stay the same from the settled pass to the zoomed one.
+/// new document until the fonts stay the same from the settled pass through the edited one to the
+/// zoomed one.
 #[test]
 fn hidden_characters_lay_out_only_type_that_changed() {
     let zoomed = CanvasView::new(view().rect, Point::new(100.0, 100.0), 2.0);
@@ -54,10 +55,11 @@ fn hidden_characters_lay_out_only_type_that_changed() {
             let inputs = app.canvas.hidden_chars.inputs.clone();
             app.session.execute("text.setText", &json!({"id": ids[1].0, "text": "e f g"})).unwrap();
             marks_of(&mut app, &view());
+            let edited = app.canvas.hidden_chars.inputs == inputs;
             let after = kept_hidden(&app, &ids);
             marks_of(&mut app, &zoomed);
             let zoom = kept_hidden(&app, &ids);
-            (app.canvas.hidden_chars.inputs == inputs).then_some((app, ids, before, after, zoom))
+            (edited && app.canvas.hidden_chars.inputs == inputs).then_some((app, ids, before, after, zoom))
         })
         .expect("the fonts settle");
     assert!(Arc::ptr_eq(&before[0], &after[0]), "the object not edited is not laid out again");
