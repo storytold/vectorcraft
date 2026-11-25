@@ -91,6 +91,10 @@ pub struct CanvasCache {
     /// The view the canvas last drew and when it last changed (egui's input time): while it moves,
     /// the canvas doesn't hit-test the art under the pointer ([`canvas::hover_wait`], #2452).
     pub view_moved: Option<(canvas::ViewKey, f64)>,
+    /// The object the Eyedropper's click at the pointer would act on, which Object Highlighting
+    /// outlines, with what it was found for: finding it again, which can sample a color, waits
+    /// until one of those changes.
+    pub hover_object: Option<(canvas::HoverObjectKey, Option<vectorcraft_doc::NodeId>)>,
     /// Where the press of the gesture running on the canvas landed, in document points: a move carried out of the
     /// canvas drops its art there relative to the pointer (`canvas::drops`).
     pub grab: Option<Point>,
@@ -347,6 +351,14 @@ pub struct CacheKey {
     /// The paper under the art that translucent art is blended with before the conversion
     /// ([`crate::display_profile::convert_over`]). None without a display profile, and in Outline.
     pub backdrop: Option<std::sync::Arc<crate::display_profile::Backdrop>>,
+    /// The active color settings ([`vectorcraft_color::cms::active_settings`]), the working color
+    /// settings ([`vectorcraft_color::cms::working_settings`]) and the loaded profiles' generation
+    /// ([`vectorcraft_color::cms::profiles_generation`]) the frame's colors were converted with:
+    /// Edit › Color Settings, a profile loaded again under its name or removed, and the front
+    /// document's assigned profiles change them without changing the document. A proof of the
+    /// working CMYK space converts through the working settings, which can change while the active
+    /// settings stay the same.
+    pub color: (vectorcraft_color::cms::ColorSettings, vectorcraft_color::cms::ColorSettings, u64),
 }
 
 impl CacheKey {
