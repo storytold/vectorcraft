@@ -18,7 +18,7 @@ use craft::ui::runtime::windows::WindowHost;
 use serde_json::{Value, json};
 
 use super::labels::holds_plugin_commands;
-use super::{Listed, TODO, display_label, menu_tree_named, plugin_revision, shown_label, shown_state, why_off};
+use super::{Listed, PLACEHOLDER, TODO, display_label, menu_tree_named, plugin_revision, shown_label, shown_state, why_off};
 use crate::i18n::LangExt as _;
 use crate::{UiState, VectorcraftApp};
 
@@ -431,6 +431,16 @@ impl Build<'_> {
             self.refs.push((CommandRef::new(TODO), "Coming Soon".into(), false));
             let tip = crate::i18n::tr(self.lang, TODO_TOOLTIP).to_string();
             return Some(item.tooltip(tip));
+        }
+        // A placeholder shows its text in the UI language, as a heading does, and runs nothing.
+        if command.id == PLACEHOLDER {
+            self.states.set(command, CommandState::new().enabled(false));
+            let mut item = item.enabled(false);
+            let shown = self.title(&item.label, true);
+            if shown != item.label {
+                item.english = Some(std::mem::replace(&mut item.label, shown));
+            }
+            return Some(item);
         }
         let (id, params) = (command.id.as_str(), &command.params);
         let (enabled, checked) = shown_state(self.app, id, params)?;

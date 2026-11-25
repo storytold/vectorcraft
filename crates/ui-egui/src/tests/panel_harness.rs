@@ -306,6 +306,12 @@ impl Panel {
         self.fixture.tree().description_of(self.look(name).node).map(str::to_owned)
     }
 
+    /// The value texts of the latest frame's controls, in tree order.
+    pub(crate) fn values(&self) -> Vec<String> {
+        let tree = self.fixture.tree();
+        tree.keys().into_iter().filter_map(|key| tree.value_of(key)).map(str::to_owned).collect()
+    }
+
     /// Whether a control in the latest frame holds the value text `value`.
     pub(crate) fn shows_value(&self, value: &str) -> bool {
         self.shows_value_with(|shown| shown == value)

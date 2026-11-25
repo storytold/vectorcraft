@@ -212,8 +212,6 @@ const ARROW: ColumnKey = ColumnKey::new("arrow");
 const NEW: ColumnKey = ColumnKey::new("new");
 const HEX: ColumnKey = ColumnKey::new("hex");
 /// The arrow of a row that is recolored, and of one that is excluded (a dashed line without a head).
-// PLAN: assumed icons `dc-recolor-arrow` and `dc-recolor-arrow-off` (VectorCraft's own solid and dashed arrows);
-// the assets owner draws them and adds them to `assets/icons`, `icon_data.rs` and `ASSETS.md`.
 const ARROW_ON: &str = "dc-recolor-arrow";
 const ARROW_OFF: &str = "dc-recolor-arrow-off";
 

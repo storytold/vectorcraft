@@ -57,3 +57,8 @@ mod tab_reorder;
 pub(crate) mod taskbar;
 mod toolescape;
 mod trace_runs;
+
+/// Installed plug-ins are process-wide. Tests that install filter plug-ins under a name another
+/// test also installs, or that check how plug-ins sharing a name are told apart, hold this lock
+/// while their plug-ins are installed, so each sees only its own plug-ins under that name.
+pub(super) static SHARED_PLUGIN_NAMES: std::sync::Mutex<()> = std::sync::Mutex::new(());
