@@ -3,9 +3,9 @@
 //! its image, Ctrl/Cmd-click adds or removes it, and Shift-click selects the images of the rows
 //! from the last row clicked without Shift to it (with Ctrl/Cmd, adds them); the footer's buttons
 //! Relink, Go To, Update and Edit Original act on the selected rows (Relink through its dialog,
-//! with the Replace choice: `ui.relinkDialog`); Link Info shows the details of the first. The
-//! panel menu adds Relink to Folder, Find in Folder (Find Linked Files: `ui.findLinksInFolder`),
-//! Embed / Unembed, Placement Options, Select Linked / Embedded / Missing / Modified
+//! with the Replace choice: `ui.relinkDialog`); Link Info shows the details of the first, with a
+//! Show in Folder button on its Location row. The panel menu adds Relink to Folder, Find in
+//! Folder (Find Linked Files: `ui.findLinksInFolder`), Embed / Unembed, Placement Options, Select Linked / Embedded / Missing / Modified
 //! (`addon.select.byLinkStatus`, Shift adds), Show filters, Sort, Copy Info (the selected rows'
 //! file names to the clipboard: `links.copyInfo`), thumbnail size, Show in Folder and Show DCS
 //! Transparency Interactions (a warning on the rows of images placed from DCS files that are
@@ -25,9 +25,11 @@ use std::sync::Arc;
 use craft::behavior::{IconId, Selection, keyed};
 use craft::host::{PickKind, PickRequest};
 use craft::keymap::CommandRef;
+use craft::ui::buttons::IconButton;
 use craft::ui::contract::{Bind, CollectionEvent, Props as _, Show as _, ShowCollection as _, ShowContainer as _};
 use craft::ui::display::{Shade, Text};
 use craft::ui::form::Field;
+use craft::ui::layout_components::Row;
 use craft::ui::list::{List, ListRow, ThumbSize};
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::runtime::commands::{CommandState, CommandStates};
@@ -743,7 +745,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let ppp = ui.ctx().pixels_per_point();
 
     let mut footer_pick = None;
-    let (mut activated, mut menu_for, mut row_act) = (None, None, None);
+    let (mut activated, mut menu_for, mut row_act, mut info_reveal) = (None, None, None, None);
     Panel::new(tl!("Links"))
         .collection_body()
         .footer(|ui, _| {
@@ -797,7 +799,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 row_act = show_row_menu(ui, &out.response, view, &facts, r);
             }
             if o.info {
-                link_info(ui, cache.info.as_ref().map(|(_, i)| i), units);
+                info_reveal = link_info(ui, view, cache.info.as_ref().map(|(id, i)| (*id, i)), units);
             }
         });
 
@@ -811,6 +813,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if let Some(id) = activated {
         go_to(app, id);
+    }
+    if let Some(id) = info_reveal {
+        crate::menus::invoke(app, "links.reveal", json!({ "id": id }));
     }
     match footer_pick {
         Some(0) => app.ui.links.options.info = !o.info,
@@ -918,10 +923,12 @@ fn info_row(ui: &mut Ui, label: &'static str, value: String) {
     });
 }
 
-/// The Link Info section: the details of `info` (`links.info`), or a hint.
-fn link_info(ui: &mut Ui, info: Option<&Value>, units: vectorcraft_doc::Unit) {
+/// The Link Info section: the details of `info` (`links.info` of image `id`), or a hint. Returns
+/// the image whose file the Location row's Show in Folder button was clicked for.
+fn link_info(ui: &mut Ui, app: &VectorcraftApp, info: Option<(u64, &Value)>, units: vectorcraft_doc::Unit) -> Option<u64> {
+    let mut reveal = None;
     crate::panels::section(tl!("Link Info")).show(ui, |ui, _| {
-        let Some(i) = info else {
+        let Some((id, i)) = info else {
             Text::new(tl!("Select an image to see its Link Info.")).shade(Shade::Muted).show(ui);
             return;
         };
@@ -937,7 +944,17 @@ fn link_info(ui: &mut Ui, info: Option<&Value>, units: vectorcraft_doc::Unit) {
         info_row(ui, tl!("Format"), i["format"].as_str().unwrap_or_default().into());
         info_row(ui, tl!("Color Space"), i["colorMode"].as_str().unwrap_or_default().into());
         if let Some(l) = i["location"].as_str() {
-            info_row(ui, tl!("Location"), l.into());
+            // Show in Folder for the image shown here: off while its file is missing and without a
+            // file manager (the web).
+            let can_reveal = i["path"].is_string() && i["status"] != "missing" && app.services.reveal.is_some();
+            Field::new(tl!("Location")).value(l.to_string()).show(ui, |ui, _| {
+                Row::new().show(ui, |ui, _| {
+                    if IconButton::new(IconId::new("folder-open")).label(tl!("Show in Folder")).enabled(can_reveal).show(ui).clicked() {
+                        reveal = Some(id);
+                    }
+                    Text::new(l.to_string()).show(ui);
+                });
+            });
         }
         // A placed document has no resolution: its rows are left out.
         for (label, k) in [(tl!("PPI"), "ppi"), (tl!("Effective PPI"), "effectivePpi")] {
@@ -976,6 +993,7 @@ fn link_info(ui: &mut Ui, info: Option<&Value>, units: vectorcraft_doc::Unit) {
         };
         info_row(ui, tl!("Status"), status.into());
     });
+    reveal
 }
 
 /// A command row with the state its panel-menu row shows.
