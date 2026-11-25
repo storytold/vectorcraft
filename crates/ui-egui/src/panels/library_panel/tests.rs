@@ -76,6 +76,16 @@ pub(crate) fn menu_library_ids<K: LibraryKind>(app: &VectorcraftApp) -> Vec<Stri
     out
 }
 
+/// A view picked in the browser saves as the view it is: the thresholds of `saved_view` lie between the zooms
+/// `View::preset` gives, so retuning one without the other would save another view.
+#[test]
+fn every_view_saves_as_itself() {
+    for (view, _) in View::ALL {
+        let (shown, zoom) = view.preset();
+        assert_eq!(saved_view(shown, zoom), view);
+    }
+}
+
 fn undo_len(app: &VectorcraftApp) -> usize {
     app.session.doc().unwrap().history.undo.len()
 }
