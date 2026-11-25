@@ -207,6 +207,8 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `assets/icons/dc-graphic-styles.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-grid-view.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-group-select.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-guide-horizontal.svg` | VectorCraft contributors | Original work, drawn for VectorCraft (a ruler down the left with a line across) | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-guide-vertical.svg` | VectorCraft contributors | Original work, drawn for VectorCraft (a ruler along the top with a line down) | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-help.svg` | VectorCraft contributors | Original work, drawn for VectorCraft (a question mark in a circle) | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-join-bevel.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-join-miter.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
