@@ -4,6 +4,7 @@
 
 use std::sync::{Mutex, MutexGuard};
 
+use craft::ui::runtime::frame::take_output;
 use craft::ui::shell::embed;
 use egui::{Event, Rect, vec2};
 use serde_json::json;
@@ -99,7 +100,7 @@ impl Frames {
             },
             |ui| chrome::control_bar(app, ui),
         );
-        embed::before_input(&self.ctx, |out| app.frame_input(out));
+        let _ = app.frame_input(take_output(&self.ctx));
         let nodes =
             output.platform_output.accesskit_update.take().map(|update| update.nodes.into_iter().map(|(_, node)| node).collect()).unwrap_or_default();
         output.textures_delta.clear();
