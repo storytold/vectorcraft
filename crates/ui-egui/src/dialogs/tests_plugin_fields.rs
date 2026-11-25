@@ -34,9 +34,14 @@ type Harness = egui_kittest::Harness<'static, VectorcraftApp>;
 
 /// The dialog of plug-in `id` in a window running whole app frames.
 fn harness(id: &str) -> Harness {
+    harness_of(id, &manifest(id))
+}
+
+/// The dialog of plug-in `id`, installed from `manifest`, in a window running whole app frames.
+fn harness_of(id: &str, manifest: &str) -> Harness {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-    let wasm = wat::parse_str(tpl::module(&manifest(id), tpl::ECHO, "", 1)).unwrap();
+    let wasm = wat::parse_str(tpl::module(manifest, tpl::ECHO, "", 1)).unwrap();
     app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm)})).unwrap();
     let mut fonts = false;
     let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 800.0)).build_ui_state(
@@ -205,4 +210,35 @@ fn plugin_dialogs_show_the_plugins_text_in_the_ui_language() {
     assert_eq!(label(&shown("de", &grow), "by"), "Um");
     vectorcraft_plugins::registry::remove(id);
     assert_eq!(heading("de", None, "Tidy"), "Tidy", "the manifest's own name once the plug-in is gone");
+}
+
+/// A change of the UI language while a plug-in's dialog is open shows its rows in the new
+/// language, and the values set before stay.
+#[test]
+fn an_open_plugin_dialog_follows_a_change_of_language() {
+    use craft::ui::patterns::form_dialogs::HostedParamDialog;
+    let id = "test.ui.fields.relabel";
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Relabel","version":"1","kind":"filter","params":{{
+        "size":{{"type":"number","min":1,"max":9,"default":3,"label":"Size"}}}},
+        "translations":{{"de":{{"params":{{"size":{{"label":"Größe"}}}}}}}}}}"#
+    );
+    let mut h = harness_of(id, &manifest);
+    let labels = |h: &Harness| {
+        let dialog = h.get_by_role(egui::accesskit::Role::Dialog);
+        (dialog.query_all_by_label_contains("Size").count() > 0, dialog.query_all_by_label_contains("Größe").count() > 0)
+    };
+    assert_eq!(labels(&h), (true, false));
+    set(&mut h, "size", json!(7)).unwrap();
+    h.state_mut().session.prefs.interface_language = "de".into();
+    h.run_steps(2);
+    let shown = labels(&h);
+    let rows = super::form::plugin_params(vectorcraft_plugins::registry::get(id).unwrap().manifest(), &Map::new());
+    let dialogs = h.state().dialogs().unwrap();
+    let values = dialogs.with(|host| host.get::<HostedParamDialog>().map(|d| super::form::json_of(&rows, d.fields())));
+    h.state_mut().session.prefs.interface_language = "en".into();
+    h.run_steps(2);
+    remove(&mut h, id);
+    assert_eq!(shown, (false, true), "the label in German");
+    assert_eq!(values.unwrap()["size"].as_f64(), Some(7.0), "the value set before");
 }

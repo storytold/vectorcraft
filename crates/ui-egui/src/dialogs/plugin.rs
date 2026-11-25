@@ -381,9 +381,18 @@ pub(super) fn heading(plugin: &str, command: Option<&str>, gone: &str) -> String
 }
 
 /// The builder of a hosted plug-in dialog over its values: the rows of `all` whose parameter is
-/// shown for the values (`m.visible`), after the description.
+/// shown for the values (`m.visible`), after the description. The rows are made again in the UI
+/// language when it changes while the dialog is open; the field values stay as they are.
 fn build(key: &'static str, m: Manifest, all: Arc<[Param]>, look: Look) -> impl for<'b> Fn(&'b mut DialogFields) -> ParamDialog<'b> + Send + 'static {
+    let rows_in = std::sync::Mutex::new((lang(), all));
     move |fields| {
+        let all = {
+            let mut made = rows_in.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            if made.0 != lang() {
+                *made = (lang(), form::plugin_params(&m, &m.defaults()).into());
+            }
+            Arc::clone(&made.1)
+        };
         let shown = m.visible(&form::json_of(&all, fields));
         let mut rows = Vec::with_capacity(all.len() + 1);
         if !look.description.is_empty() {
