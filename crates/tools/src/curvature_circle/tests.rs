@@ -198,6 +198,27 @@ fn the_next_click_passes_over_the_circle_just_drawn() {
     assert_eq!(params(&click(&mut t, &cx, (302.0, 200.0), Mods::default()))["id"], json!(drawn.0));
 }
 
+/// Once the selection holds none of the circles the tool drew (after Deselect, or a pick of another
+/// object), the pointer reaches them again.
+#[test]
+fn a_selection_without_the_drawn_circles_makes_them_reachable() {
+    let line = PathData::from_bezpath(&vectorcraft_geom::BezPath::from_svg("M0 450 L400 450").unwrap());
+    let d = doc_with(&[circle(), circle(), line]);
+    let ids: Vec<NodeId> = d.layers[0].children().unwrap().iter().rev().map(|n| n.id).collect();
+    let (drawn, under, other) = (ids[0], ids[1], ids[2]);
+    let p = paint();
+    let holding = Selection { objects: vec![drawn], ..Selection::default() };
+    let both = Selection { objects: vec![drawn, other], ..Selection::default() };
+    let none = Selection::default();
+    let picked = Selection { objects: vec![other], ..Selection::default() };
+    for (after, want) in [(&holding, under), (&both, under), (&none, drawn), (&picked, drawn)] {
+        let mut t = CurvatureCircleTool::default();
+        t.notify(&ToolContext { smart_guides: false, ..cx(&d, &holding, &p) }, "created");
+        let cx = ToolContext { smart_guides: false, ..cx(&d, after, &p) };
+        assert_eq!(params(&click(&mut t, &cx, (302.0, 200.0), Mods::default()))["id"], json!(want.0), "{:?}", after.objects);
+    }
+}
+
 /// A press that a second finger or a canceled touch drops draws nothing on the release, and an
 /// edit made outside the tool drops what the pointer was over.
 #[test]

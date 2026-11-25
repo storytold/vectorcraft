@@ -122,7 +122,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Delete Anchor Points",
             [],
             None,
-            "{keepEmpty?: bool (keep a compound path left with no members)} delete the direct-selected anchors and their segments, opening closed paths there, and delete objects selected whole alongside them; what remains of a path stays selected, so a second Delete removes it (the Delete key)",
+            "{keepEmpty?: bool (keep a compound path left with no members)} delete the direct-selected anchors and their segments, opening closed paths there, and delete objects selected whole alongside them; what remains of a path stays selected, so a second Delete removes it (the Delete key, unless the deleteKeepsPathsJoined preference is on)",
             has_anchors,
             delete_anchors
         ),
@@ -1652,6 +1652,17 @@ fn convert_anchors(s: &mut Session, p: &Value) -> Result<Value> {
 /// Layers are retained, and an object removed with a selected ancestor is not removed twice.
 /// Returns JSON `null` on success; selection is replaced by the surviving object IDs.
 pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
+    delete_anchors_joined(s, p, false)
+}
+
+/// [`delete_anchors`], and with `keep_joined` (General › Delete Removes Anchor Points and Keeps
+/// Paths Joined) a path with direct-selected anchors and no selected segment loses those anchors
+/// as Remove Anchor Points takes them, without opening it, and stays selected with the next
+/// anchor along (the one before at an open subpath's end), so the next Delete goes on along the
+/// path. When no subpath it changed keeps two anchors, the path stays selected whole, as Remove
+/// Anchor Points leaves it. Paths with a selected segment are cut there, as without `keep_joined`
+/// (their selected anchors stay in the path), and objects selected whole are deleted, in the same undo step.
+pub(crate) fn delete_anchors_joined(s: &mut Session, p: &Value, keep_joined: bool) -> Result<Value> {
     // `guides: true` (Cut, #3226): the selected ruler guides go in the same undo step.
     let with_guides = switch_or(p, "guides", false, "path.deleteAnchors")?;
     let keep_empty = switch_or(p, "keepEmpty", false, "path.deleteAnchors")?;
@@ -1686,11 +1697,29 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
             d.remove_many(&whole_ids)?;
         }
         let mut survivors = vec![];
+        let mut following = vec![];
         let remaining: Vec<NodeId> = sel.keys().copied().filter(|id| d.node(*id).is_some()).collect();
         let mut emptied = Beside::replacing(d, &remaining);
         for (id, set) in &sel {
             // The path went with a fully selected group around it.
             if d.node(*id).is_none() {
+                continue;
+            }
+            if keep_joined
+                && !set.is_empty()
+                && !segments.contains_key(id)
+                && let Some(path) = d.node(*id).and_then(|n| match &n.kind {
+                    NodeKind::Path { path, .. } => Some(path),
+                    _ => None,
+                })
+            {
+                let shape: Vec<(usize, bool)> = path.subpaths.iter().map(|sp| (sp.anchors.len(), sp.closed)).collect();
+                let anchors: Vec<(usize, usize)> = set.iter().copied().collect();
+                let next = super::draw2::following_anchors(&shape, &anchors);
+                if !super::draw2::remove_anchors_of(d, selection, &mut emptied, *id, anchors, false)? {
+                    survivors.push(*id);
+                    following.push((*id, next));
+                }
                 continue;
             }
             let original = deletion_source(d, *id)?;
@@ -1736,6 +1765,11 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
         selection.set(survivors);
+        for (id, next) in following {
+            if !next.is_empty() {
+                selection.anchors.insert(id, next);
+            }
+        }
         Ok(())
     })?;
     ok()

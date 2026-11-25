@@ -355,13 +355,24 @@ fn alt_click_cycles_the_kind_and_double_click_opens_the_dialog() {
             assert_eq!(a, vec![Action::Exec("object.setLiveShape".into(), want.clone())], "{tool}");
         }
     }
-    // A double-click on a widget opens Corners for the shown corners; elsewhere it doesn't.
+    // With Direct Selection, a double-click on a widget opens Corners for the shown corners;
+    // elsewhere it doesn't.
     let cx1 = cx(&d, &part, &p);
     let a = crate::create("directSelection").pointer(&cx1, &PointerEvent::new(PointerKind::DoubleClick, 110.0, 110.0));
     assert_eq!(a, vec![Action::Dialog(DIALOG.into(), json!({"id": id.0, "corners": [0]}))]);
     let cx2 = cx(&d, &whole, &p);
-    let a = crate::create("selection").pointer(&cx2, &PointerEvent::new(PointerKind::DoubleClick, 190.0, 110.0));
+    let a = crate::create("directSelection").pointer(&cx2, &PointerEvent::new(PointerKind::DoubleClick, 190.0, 110.0));
     assert_eq!(a, vec![Action::Dialog(DIALOG.into(), json!({"id": id.0, "corners": [0, 1, 2, 3]}))]);
+    // With the Selection tool, it shows the Transform panel instead, on any of the widgets.
+    for at in [(110.0, 110.0), (190.0, 110.0), (190.0, 190.0), (110.0, 190.0)] {
+        let a = crate::create("selection").pointer(&cx2, &PointerEvent::new(PointerKind::DoubleClick, at.0, at.1));
+        assert_eq!(a, vec![Action::Panel("transform".into())], "{at:?}");
+    }
+    // With the shape widgets hidden, the same double-click isolates the shape, as off the widgets.
+    let mut hidden = cx(&d, &whole, &p);
+    hidden.shape_widgets = false;
+    let a = crate::create("selection").pointer(&hidden, &PointerEvent::new(PointerKind::DoubleClick, 190.0, 110.0));
+    assert_eq!(a, vec![Action::Exec("object.isolate".into(), json!({"id": id.0}))]);
     // Off the widgets, the Selection tool's double-click isolates the shape (Double Click To
     // Isolate) instead.
     let a = crate::create("selection").pointer(&cx2, &PointerEvent::new(PointerKind::DoubleClick, 150.0, 150.0));

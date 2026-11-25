@@ -3,11 +3,13 @@
 
 use std::sync::Arc;
 
+use craft::ui::dialog::{RecoveryDialog, StackDialog};
 use serde_json::json;
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::recovery::{MemoryStore, RecoveryStore};
 
-use crate::{Services, VectorcraftApp, background, dialogs, recovery, theme};
+use crate::dialogs::missing_links::MissingLinksDialog; // PLAN: assumed type name (files-w12)
+use crate::{Services, VectorcraftApp, background, dialogs, recovery};
 
 /// An app keeping its copies in `store`, with a modified document.
 fn app_with(store: &Arc<MemoryStore>, services: Services) -> VectorcraftApp {
@@ -21,12 +23,58 @@ fn copies(store: &MemoryStore) -> usize {
     store.list().unwrap().iter().filter(|n| n.ends_with(".vectorcraft")).count()
 }
 
-/// One headless frame of the dialog layer.
+/// An app launched over `store` with a window to show dialogs in.
+fn launch(store: &Arc<MemoryStore>) -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(Session::new(), Services { recovery_store: Some(store.clone()), ..Default::default() });
+    app.adopt_context(&crate::testing::ui_context());
+    app
+}
+
+/// One pass of the window's dialog layer, then the per-frame result pump.
 fn frame(app: &mut VectorcraftApp) {
-    let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
-    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| dialogs::show(app, ui.ctx()));
+    let (Some(ctx), Some(host)) = (app.ui_ctx.clone(), app.dialogs()) else { panic!("an app with a window") };
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| host.with(|h| h.run(ui)));
     out.textures_delta.clear();
+    dialogs::host::pump(app, &ctx);
+}
+
+/// Is a dialog of type `D` open?
+fn is_open<D: StackDialog>(app: &VectorcraftApp) -> bool {
+    app.dialogs().is_some_and(|d| d.with(|h| h.get::<D>().is_some()))
+}
+
+/// Sets the dialog's `choice` field when given, answers its accepting button, and pumps the answer.
+fn answer<D: StackDialog>(app: &mut VectorcraftApp, choice: Option<&str>) {
+    let (Some(ctx), Some(host)) = (app.ui_ctx.clone(), app.dialogs()) else { panic!("an app with a window") };
+    host.with(|h| {
+        let id = h.get::<D>().map(|d| d.id()).expect("the dialog is open");
+        if let Some(choice) = choice {
+            h.set_json_field(&ctx, id, "choice", json!(choice)).unwrap();
+        }
+        assert!(h.confirm_by_id(&ctx, id));
+    });
+    dialogs::host::pump(app, &ctx);
+}
+
+/// Escape on the open dialog of type `D`, and the pump.
+fn dismiss<D: StackDialog>(app: &mut VectorcraftApp) {
+    let (Some(ctx), Some(host)) = (app.ui_ctx.clone(), app.dialogs()) else { panic!("an app with a window") };
+    host.with(|h| {
+        let id = h.get::<D>().map(|d| d.id()).expect("the dialog is open");
+        assert!(h.cancel_by_id(&ctx, id));
+    });
+    dialogs::host::pump(app, &ctx);
+}
+
+/// Answers every copy the Recover Documents dialog asks about with `choice` (`None` is Recover).
+fn answer_each(app: &mut VectorcraftApp, choice: Option<&str>) {
+    loop {
+        frame(app);
+        if !is_open::<RecoveryDialog>(app) {
+            break;
+        }
+        answer::<RecoveryDialog>(app, choice);
+    }
 }
 
 #[test]
@@ -89,30 +137,34 @@ fn launching_after_a_crash_offers_the_copies() {
     crashed.run("file.recovery.save", json!({})).unwrap();
     drop(crashed);
 
-    // Restore.
-    let mut app = VectorcraftApp::new(Session::new(), Services { recovery_store: Some(store.clone()), ..Default::default() });
+    // Recover.
+    let mut app = launch(&store);
     recovery::frame(&mut app, 0.0);
-    let d = app.ui.dialog.clone().expect("the Recover Documents dialog");
-    assert_eq!((d.kind.as_str(), d.fields["copies"][0]["title"].as_str()), (recovery::KIND, Some("Untitled-1")));
+    assert_eq!(app.recovery.offered.len(), 1);
+    assert_eq!(app.recovery.offered[0]["title"].as_str(), Some("Untitled-1"));
     frame(&mut app);
-    assert!(app.ui.dialog.is_some(), "drawing keeps it open");
-    dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
+    assert!(is_open::<RecoveryDialog>(&app));
+    answer::<RecoveryDialog>(&mut app, None);
+    assert!(!is_open::<RecoveryDialog>(&app));
     let st = app.session.doc().unwrap();
     assert_eq!(st.title(), "Untitled-1 [Recovered]");
     assert!(st.is_dirty());
     assert_eq!(app.views.len(), 1);
     // Asked once per launch.
     recovery::frame(&mut app, 1.0);
-    assert!(app.ui.dialog.is_none());
-    // Closing it discards its copy; nothing is offered next time.
-    app.run("file.close", json!({})).unwrap();
-    app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
-    dialogs::confirm(&mut app).unwrap();
+    frame(&mut app);
+    assert!(!is_open::<RecoveryDialog>(&app));
+    // The copy is still there when the app crashes again; Discard deletes it, and nothing is offered next time.
+    drop(app);
+    let mut app = launch(&store);
+    recovery::frame(&mut app, 0.0);
+    answer_each(&mut app, Some("discard"));
     assert_eq!(copies(&store), 0);
-    let mut next = VectorcraftApp::new(Session::new(), Services { recovery_store: Some(store.clone()), ..Default::default() });
+    assert!(app.session.documents().is_empty());
+    let mut next = launch(&store);
     recovery::frame(&mut next, 0.0);
-    assert!(next.ui.dialog.is_none());
+    frame(&mut next);
+    assert!(!is_open::<RecoveryDialog>(&next));
 }
 
 /// A 40×30 PNG of one color.
@@ -181,13 +233,13 @@ fn crashed_with_lost_images(dir: &std::path::Path, n: u8) -> Arc<MemoryStore> {
     store
 }
 
-/// The app launched after the crash, with the Recover Documents dialog open → the app and the
-/// titles the restored documents get, in the dialog's order.
+/// The app launched after the crash, asking about every copy → the app and the titles the restored
+/// documents get, in the dialog's order.
 fn launched(store: &Arc<MemoryStore>) -> (VectorcraftApp, Vec<String>) {
-    let mut app = VectorcraftApp::new(Session::new(), Services { recovery_store: Some(store.clone()), ..Default::default() });
+    let mut app = launch(store);
     recovery::frame(&mut app, 0.0);
-    let d = app.ui.dialog.as_ref().expect("the Recover Documents dialog");
-    let titles = d.fields["copies"].as_array().unwrap().iter().map(|c| format!("{} [Recovered]", c["title"].as_str().unwrap())).collect();
+    assert!(!app.recovery.offered.is_empty(), "the copies are offered");
+    let titles = app.recovery.offered.iter().map(|c| format!("{} [Recovered]", c["title"].as_str().unwrap())).collect();
     (app, titles)
 }
 
@@ -204,7 +256,7 @@ fn restore_keeps_each_documents_notes_and_asks_about_its_links_in_turn() {
     let dir = scratch("restore-notes");
     let store = crashed_with_lost_images(&dir, 2);
     let (mut app, titles) = launched(&store);
-    dialogs::confirm(&mut app).unwrap();
+    answer_each(&mut app, None);
     let (status, notes) = app.ui.status_notes.clone().expect("the notes are kept");
     assert_eq!(status, app.ui.status);
     assert_eq!(notes.len(), 2, "{notes:?}");
@@ -215,13 +267,13 @@ fn restore_keeps_each_documents_notes_and_asks_about_its_links_in_turn() {
     assert_eq!(status, format!("Restored 2 recovered documents: save them to keep them. Opened with 2 notes: {}", notes[0]));
     // The first document's missing file is asked about first, and the second's waits.
     for title in &titles {
-        let d = app.ui.dialog.clone().expect("the missing file's question");
-        assert_eq!(d.kind, dialogs::missing_links::KIND);
+        frame(&mut app);
+        assert!(is_open::<MissingLinksDialog>(&app), "the missing file's question");
         assert_eq!(&app.session.doc().unwrap().title(), title);
-        app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
-        dialogs::confirm(&mut app).unwrap();
+        answer::<MissingLinksDialog>(&mut app, Some("ignore"));
     }
-    assert!(app.ui.dialog.is_none());
+    frame(&mut app);
+    assert!(!is_open::<MissingLinksDialog>(&app));
     assert_eq!(app.ui.status, status, "answering the questions keeps the line");
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -232,10 +284,10 @@ fn restoring_one_document_shows_its_notes_after_the_count() {
     let dir = scratch("restore-one");
     let store = crashed_with_lost_images(&dir, 1);
     let (mut app, _) = launched(&store);
-    dialogs::confirm(&mut app).unwrap();
+    answer_each(&mut app, None);
     let (status, notes) = app.ui.status_notes.clone().expect("the notes are kept");
     assert!(notes.len() == 1 && lost_image(&notes[0]), "{notes:?}");
-    assert_eq!(status, format!("Restored 1 recovered document: save it to keep it. Opened with 1 note: {}", notes[0]));
+    assert_eq!(status, format!("{}. Opened with 1 note: {}", recovery::recovered_status(false, 1), notes[0]));
     assert_eq!(app.ui.status, status);
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -247,17 +299,18 @@ fn a_failed_restore_keeps_the_notes_of_the_documents_restored_before_it() {
     let dir = scratch("restore-partial");
     let store = crashed_with_lost_images(&dir, 2);
     let (mut app, _) = launched(&store);
-    let second = app.ui.dialog.as_ref().unwrap().fields["copies"][1]["file"].as_str().unwrap().to_string();
+    let second = app.recovery.offered[1]["file"].as_str().unwrap().to_string();
     store.write(&format!("{second}.vectorcraft"), b"not a document").unwrap();
-    let e = dialogs::confirm(&mut app).unwrap_err();
+    answer_each(&mut app, None);
     assert_eq!(app.session.documents().len(), 1);
-    assert_eq!(app.ui.status, e);
+    let e = app.ui.status.clone();
     let (status, notes) = app.ui.status_notes.clone().expect("the notes are kept");
     assert_eq!(status, e);
     assert_eq!(notes.len(), 2, "{notes:?}");
-    assert_eq!(notes[0], "Restored 1 recovered document: save it to keep it");
+    assert_eq!(notes[0], recovery::recovered_status(false, 1));
     assert!(lost_image(&notes[1]), "{}", notes[1]);
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::missing_links::KIND), "its missing file is asked about");
+    frame(&mut app);
+    assert!(is_open::<MissingLinksDialog>(&app), "its missing file is asked about");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -267,16 +320,19 @@ fn discard_at_launch_deletes_the_copies_and_cancel_keeps_them() {
     let mut crashed = app_with(&store, Services::default());
     crashed.run("file.recovery.save", json!({})).unwrap();
     drop(crashed);
-    // Cancel: asked again next launch.
-    let mut app = VectorcraftApp::new(Session::new(), Services { recovery_store: Some(store.clone()), ..Default::default() });
+    // Escape: the copy stays, and nothing more is asked this launch; asked again next launch.
+    let mut app = launch(&store);
     assert!(recovery::offer(&mut app));
-    dialogs::cancel(&mut app);
+    frame(&mut app);
+    dismiss::<RecoveryDialog>(&mut app);
     assert_eq!(copies(&store), 1);
-    // Discard (as agents do: set discard, confirm).
-    let mut app = VectorcraftApp::new(Session::new(), Services { recovery_store: Some(store.clone()), ..Default::default() });
+    assert!(app.recovery.offered.is_empty());
+    frame(&mut app);
+    assert!(!is_open::<RecoveryDialog>(&app));
+    // Discard (as agents do: set the choice, confirm).
+    let mut app = launch(&store);
     assert!(recovery::offer(&mut app));
-    app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
-    dialogs::confirm(&mut app).unwrap();
+    answer_each(&mut app, Some("discard"));
     assert_eq!(copies(&store), 0);
     assert!(app.session.documents().is_empty());
 }
@@ -300,15 +356,17 @@ fn a_second_app_never_asks_about_a_running_apps_copies() {
     let mut a = app_with(&store, Services::default());
     a.run("file.recovery.save", json!({})).unwrap();
     // B launches while A runs: no Recover Documents dialog, A's copy untouched.
-    let mut b = VectorcraftApp::new(Session::new(), Services { recovery_store: Some(store.clone()), ..Default::default() });
+    let mut b = launch(&store);
     recovery::frame(&mut b, 0.0);
-    assert!(b.ui.dialog.is_none());
+    frame(&mut b);
+    assert!(!b.any_dialog_open());
     assert_eq!(copies(&store), 1);
     // A crashes: the next launch asks.
     drop(a);
-    let mut c = VectorcraftApp::new(Session::new(), Services { recovery_store: Some(store.clone()), ..Default::default() });
+    let mut c = launch(&store);
     recovery::frame(&mut c, 0.0);
-    assert_eq!(c.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(recovery::KIND));
+    frame(&mut c);
+    assert!(is_open::<RecoveryDialog>(&c));
 }
 
 #[test]
