@@ -1,6 +1,6 @@
 use super::writer::{Sheet, Writer, date_time};
 use super::{Affine, Document, ExportReport, Exporter, HashSet, PageBoxes, PdfError, PdfOptions, Rect, krilla, write};
-use crate::{Compatibility, PdfSettings, Standard};
+use crate::{ActiveProfiles, Compatibility, PdfSettings, Standard, page_bleed, printer_marks};
 
 /// Export `doc` as PDF bytes: one page per artboard (or the artboards chosen in `opts`).
 pub fn export(doc: &Document, opts: &PdfOptions) -> Result<Vec<u8>, PdfError> {
@@ -43,7 +43,8 @@ pub(crate) fn leaving_out_undecodable<T>(doc: &Document, mut write: impl FnMut(&
 
 fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut HashSet<String>) -> Result<ExportReport, PdfError> {
     let set = &opts.settings;
-    set.check()?;
+    let profiles = ActiveProfiles::default();
+    set.check(&profiles)?;
     vectorcraft_doc::cancel::check().map_err(|_| PdfError::Cancelled)?;
     // The pages come from the artboards, which baking leaves as they are. The version a long page
     // raises the file to decides whether the layers are written, so it is settled before baking.
@@ -75,7 +76,7 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
     let mut w = Writer::new(doc, set, &title, created_at, doc.color_mode == vectorcraft_doc::ColorMode::Cmyk)?;
     // Preserve Editing: the native document as an embedded file (`check` refused PDF/A with it).
     let mut warnings = vec![];
-    let mut settings = set.warnings();
+    let mut settings: Vec<String> = set.warnings(&profiles).into_iter().map(|w| w.message).collect();
     if raised.is_some() {
         settings.push(if opts.settings.compatibility == Compatibility::Pdf14 {
             "PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6".into()
@@ -100,8 +101,8 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
         settings.push("PDF layers can't be written with a knockout page group: every layer is plain page content".into());
     }
     ex.overprint = set.advanced.overprint == crate::Overprint::Preserve;
-    let bleed = set.bleed_of(doc);
-    let marks = set.marks.printer_marks();
+    let bleed = page_bleed(&set.bleed, doc);
+    let marks = printer_marks(&set.marks);
     let scales = writes_user_units(set);
     // PDF/X files have no annotations over the art (ISO 15930: only printer's mark and trap
     // network annotations, outside the bleed box): objects' URLs aren't written as links there.
@@ -187,7 +188,7 @@ fn pages(doc: &Document, opts: &PdfOptions) -> Result<Vec<(usize, PageBoxes)>, P
     if doc.artboards.is_empty() || indices.is_empty() {
         return Err(PdfError::NoArtboards);
     }
-    let (bleed, marks) = (opts.settings.bleed_of(doc), opts.settings.marks.printer_marks());
+    let (bleed, marks) = (page_bleed(&opts.settings.bleed, doc), printer_marks(&opts.settings.marks));
     indices.into_iter().map(|i| Ok((i, PageBoxes::new(doc.artboards.get(i).ok_or(PdfError::BadArtboard(i))?.rect, bleed, &marks)))).collect()
 }
 

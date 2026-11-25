@@ -309,6 +309,7 @@
 	Anti-aliased Artwork	Art amb antialiàsing
 	Anti-aliasing:	Antialiàsing:
 	Anti-aliasing Method	Mètode d'antialiàsing
+@id	language.name	Català
 antiAlias	Sharp	Nítid
 	Crisp	Definit
 	Strong	Intens
@@ -7271,6 +7272,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	un efecte 3D al farciment o al traç d’un grup no dibuixa res
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un efecte 3D al farciment o al traç d’un grup no dibuixa res per exportar
 @msg	The 3D object is too complex to export	L’objecte 3D és massa complex per exportar-lo
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	La malla de l’objecte 3D és incompleta o conté un valor que no és un nombre
 @msg	give one <filter> element	indica un element <filter>
 @msg	the <filter> element needs an id, the filter's name	l’element <filter> necessita un id, el nom del filtre
 @msg	an SVG filter's id is at most {MAX_NAME} characters	l’id d’un filtre SVG té com a màxim {MAX_NAME} caràcters
@@ -7713,11 +7715,17 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	module is {_1} bytes (limit {_2})	el mòdul té {_1} bytes (límit {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	cal aprovació: demana {0}, que l’usuari concedeix en instal·lar-lo per separat
 @msg	not JSON: {e}	no és JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	no és un binari WebAssembly (falta la capçalera \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	no és un binari WebAssembly (falta la capçalera \\0asm)
 @msg	parameter `{k}`: {what}	paràmetre `{k}`: {what}
 @msg	parameter `{name}`: {what}	paràmetre `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	els paràmetres del complement han de ser un objecte JSON
 @msg	the module must export its linear memory as `memory`	el mòdul ha d’exportar la seva memòria lineal com a `memory`
+@msg	the module must export `{name}` with the type {signature}	el mòdul ha d’exportar `{name}` amb el tipus {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	el mòdul té més d’una secció personalitzada `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	pressupost de memòria (la memòria inicial del mòdul és de {initial} bytes, límit {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	el manifest de la secció personalitzada `{MANIFEST_SECTION}` ha de donar `abi` com a {ABI_VERSION}, la versió de l’ABI que implementa aquest amfitrió
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	pressupost de taules (el mòdul defineix {count} taules, la més gran amb {largest} elements; límit {MAX_TABLES} taules de {MAX_TABLE_ELEMENTS} elements)
+@msg	the module's table section could not be read	no s’ha pogut llegir la secció de taules del mòdul
 @msg	the objects to change are no longer in the document	els objectes que calia canviar ja no són al document
 @msg	the runtime panicked	l’entorn d’execució ha fallat
 @msg	unexpected host trap	aturada inesperada (trap) de l’amfitrió
@@ -7788,6 +7796,8 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	`plates` requires a stop linked to a spot swatch	`plates` requereix una parada vinculada a una mostra de color directe
 @msg	the output	la sortida
 @msg	the path has no anchor points	el traçat no té punts d’ancoratge
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	el traçat compost {id} té un membre ocult, bloquejat o guia, per tant no se’n poden substituir els membres
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	el traçat compost {id} té un membre que no és un traçat, per tant no se’n poden substituir els membres
 @msg	too many anchor points (limit {MAX_ANCHORS})	massa punts d’ancoratge (límit {MAX_ANCHORS})
 @msg	true or false	true o false
 @msg	a number >= {_1}	un nombre >= {_1}
