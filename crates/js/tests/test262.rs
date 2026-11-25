@@ -354,7 +354,7 @@ fn parse_check(source: &str, meta: &Meta, strict: bool) -> Result<(), String> {
 
 /// Globals and method names the interpreter does not provide yet: a test that names one, in its
 /// own source or in a harness file it includes, is skipped.
-const MISSING_BUILTINS: &str = "String Number Boolean Date RegExp print $262 $DONE Symbol Proxy Reflect Promise Map Set WeakMap \
+const MISSING_BUILTINS: &str = "String Number Date RegExp print $262 $DONE Symbol Proxy Reflect Promise Map Set WeakMap \
     WeakSet ArrayBuffer DataView Int8Array Uint8Array Float64Array charAt charCodeAt fromCharCode substring substr split replace \
     match search exec test toUpperCase toLowerCase trim toFixed toPrecision toExponential now";
 
