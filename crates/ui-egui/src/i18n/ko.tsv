@@ -15,6 +15,7 @@
 	Anchors:	앵커:
 	Any Kind	모든 종류
 	Font Technology	글꼴 기술
+@id	language.name	한국어
 font-technology	Variable	가변
 	Ascender	어센더
 	Baseline	기준선
@@ -2337,8 +2338,8 @@ antiAlias	Sharp	날카롭게
 	Import Matches	가져오기 대응
 	Remember Import Matches	가져오기 대응 기억
 	Forget Import Matches	가져오기 대응 지우기
-@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	기본 단축키 {n}개와 일치|기본 단축키 {n}개와 일치
-@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	읽지 않은 파일 부분 {n}개|읽지 않은 파일 부분 {n}개
+@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	기본 단축키 {n}개와 일치
+@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	읽지 않은 파일 부분 {n}개
 	Import Transparency Flattener Presets	투명도 병합 프리셋 가져오기
 	Import…	가져오기…
 	In Tangent Handles	안쪽 접선 핸들
@@ -4713,21 +4714,21 @@ file-filter	Templates	템플릿
 	[Normal Character Style]	[기본 문자 스타일]
 	[Normal Paragraph Style]	[기본 단락 스타일]
 imageTrace	Outline	윤곽선
-@plural	Color Table ({n} color)|Color Table ({n} colors)	색상 표 ({n}색)|색상 표 ({n}색)
-@plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	그래픽 스타일 {n}개를 삭제하시겠습니까?|그래픽 스타일 {n}개를 삭제하시겠습니까?
-@plural	Delete this {n} brush?|Delete these {n} brushes?	브러시 {n}개를 삭제하시겠습니까?|브러시 {n}개를 삭제하시겠습니까?
+@plural	Color Table ({n} color)|Color Table ({n} colors)	색상 표 ({n}색)
+@plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	그래픽 스타일 {n}개를 삭제하시겠습니까?
+@plural	Delete this {n} brush?|Delete these {n} brushes?	브러시 {n}개를 삭제하시겠습니까?
 @plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	견본과 그룹 {n}개를 삭제하시겠습니까?
-@plural	{n} Layer|{n} Layers	레이어 {n}개|레이어 {n}개
-@plural	{n} Object|{n} Objects	개체 {n}개|개체 {n}개
-@plural	{n} area highlighted|{n} areas highlighted	강조된 영역 {n}개|강조된 영역 {n}개
-@plural	{n} color|{n} colors	색상 {n}개|색상 {n}개
-@plural	{n} fill|{n} fills	칠 {n}개|칠 {n}개
-@plural	{n} glyph|{n} glyphs	글리프 {n}개|글리프 {n}개
-@plural	{n} item|{n} items	항목 {n}개|항목 {n}개
-@plural	{n} object highlighted|{n} objects highlighted	강조된 개체 {n}개|강조된 개체 {n}개
-@plural	{n} star|{n} stars	별 {n}개|별 {n}개
-@plural	{n} step|{n} steps	단계 {n}개|단계 {n}개
-@plural	{n} stroke|{n} strokes	선 {n}개|선 {n}개
+@plural	{n} Layer|{n} Layers	레이어 {n}개
+@plural	{n} Object|{n} Objects	개체 {n}개
+@plural	{n} area highlighted|{n} areas highlighted	강조된 영역 {n}개
+@plural	{n} color|{n} colors	색상 {n}개
+@plural	{n} fill|{n} fills	칠 {n}개
+@plural	{n} glyph|{n} glyphs	글리프 {n}개
+@plural	{n} item|{n} items	항목 {n}개
+@plural	{n} object highlighted|{n} objects highlighted	강조된 개체 {n}개
+@plural	{n} star|{n} stars	별 {n}개
+@plural	{n} step|{n} steps	단계 {n}개
+@plural	{n} stroke|{n} strokes	선 {n}개
 	Delete Anchor Points	앵커 포인트 삭제
 	Edit Selection	선택 영역 편집
 	Saved Selection 1	저장된 선택 영역 1
@@ -4771,8 +4772,8 @@ imageTrace	Outline	윤곽선
 	Merged PRs	병합된 PR
 	PRs	PR
 	@{login}: {prs}, {commits}, +{added} / −{deleted} lines (Δ {delta}), +{binary_added} / −{binary_deleted} binary assets, {first} – {last}	@{login}: {prs}, {commits}, 줄 +{added} / −{deleted} (Δ {delta}), 바이너리 에셋 +{binary_added} / −{binary_deleted}, {first} – {last}
-@plural	{n} PR|{n} PRs	PR {n}개|PR {n}개
-@plural	{n} commit|{n} commits	커밋 {n}개|커밋 {n}개
+@plural	{n} PR|{n} PRs	PR {n}개
+@plural	{n} commit|{n} commits	커밋 {n}개
 	Commits	커밋
 	Lines added	추가된 줄
 	Lines deleted	삭제된 줄
@@ -6444,6 +6445,7 @@ lighting	Light	광원
 @msg	a 3D effect on a group's fill or stroke draws nothing	그룹의 칠이나 획에 있는 3D 효과는 아무것도 그리지 않습니다
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	그룹의 칠이나 획에 있는 3D 효과는 내보낼 것을 그리지 않습니다
 @msg	The 3D object is too complex to export	3D 개체가 너무 복잡하여 내보낼 수 없습니다
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D 개체의 메시가 불완전하거나 숫자가 아닌 값을 포함합니다
 @msg	the <filter> element needs an id, the filter's name	<filter> 요소에는 필터 이름인 id가 필요합니다
 @msg	an SVG filter's id is at most {MAX_NAME} characters	SVG 필터의 id는 최대 {MAX_NAME}자입니다
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}>은(는) SVG 필터의 요소가 아닙니다
@@ -6896,7 +6898,6 @@ axis	Y Axis	Y축
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}”은(는) 큰 계산 예산을 요청합니다(실행당 최대 {minutes}분, 평소의 {times}배 명령어). 데스크톱 앱에서 사람이 승인하거나 --allow-plugin-grants로 시작한 세션에서 `allowHeavy: true`를 전달하세요
 # Plug-in host messages: manifests, modules, runs and plug-in output
 @msg	`name` must be 1-64 printable characters	`name`은(는) 인쇄 가능한 문자 1-64자여야 합니다
-@msg	`{key}` must be 1-64 printable characters	`{key}`은(는) 인쇄 가능한 문자 1-64자여야 합니다
 @msg	`version`, `description` or `author` is too long	`version`, `description` 또는 `author`가 너무 깁니다
 @msg	`warnings` must be a list of strings	`warnings`는 문자열 목록이어야 합니다
 @msg	`{k}` must be one of {_1}	`{k}`은(는) {_1} 중 하나여야 합니다
@@ -6917,11 +6918,17 @@ axis	Y Axis	Y축
 @msg	module is {_1} bytes (limit {_2})	모듈이 {_1}바이트입니다(한도 {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	승인이 필요합니다. {0}을(를) 요청하며, 사용자가 따로 설치할 때 허용합니다
 @msg	not JSON: {e}	JSON이 아닙니다: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	WebAssembly 바이너리가 아닙니다(\0asm 헤더 없음)
+@msg	not a WebAssembly binary (missing \\0asm header)	WebAssembly 바이너리가 아닙니다(\\0asm 헤더 없음)
 @msg	parameter `{k}`: {what}	매개변수 `{k}`: {what}
 @msg	parameter `{name}`: {what}	매개변수 `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	플러그인 매개변수는 JSON 개체여야 합니다
 @msg	the module must export its linear memory as `memory`	모듈은 선형 메모리를 `memory`(으)로 내보내야 합니다
+@msg	the module must export `{name}` with the type {signature}	모듈은 `{name}`을(를) {signature} 형식으로 내보내야 합니다
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	모듈에 사용자 지정 섹션 `{MANIFEST_SECTION}`이(가) 둘 이상 있습니다
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	메모리 예산(모듈의 초기 메모리가 {initial}바이트, 한도 {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	사용자 지정 섹션 `{MANIFEST_SECTION}`의 매니페스트는 `abi`를 {ABI_VERSION}(으)로 지정해야 합니다. 이는 이 호스트가 구현하는 ABI 버전입니다
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	테이블 예산(모듈이 테이블 {count}개를 정의하며 가장 큰 테이블의 요소는 {largest}개, 한도는 테이블 {MAX_TABLES}개, 각 {MAX_TABLE_ELEMENTS}개 요소)
+@msg	the module's table section could not be read	모듈의 테이블 섹션을 읽을 수 없습니다
 @msg	the objects to change are no longer in the document	변경할 개체가 더 이상 문서에 없습니다
 @msg	the runtime panicked	런타임이 비정상 종료되었습니다
 @msg	unexpected host trap	호스트에서 예기치 않은 트랩이 발생했습니다
@@ -6991,6 +6998,8 @@ axis	Y Axis	Y축
 @msg	`plates` requires a stop linked to a spot swatch	`plates`에는 별색 견본에 연결된 정지점이 필요합니다
 @msg	the output	출력
 @msg	the path has no anchor points	패스에 앵커 포인트가 없습니다
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	컴파운드 패스 {id}에 숨겨졌거나 잠겼거나 안내선인 멤버가 있어 멤버를 바꿀 수 없습니다
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	컴파운드 패스 {id}에 패스가 아닌 멤버가 있어 멤버를 바꿀 수 없습니다
 @msg	too many anchor points (limit {MAX_ANCHORS})	앵커 포인트가 너무 많습니다(한도 {MAX_ANCHORS})
 @msg	true or false	true 또는 false
 @msg	a number >= {_1}	{_1} 이상인 숫자
@@ -8616,7 +8625,7 @@ breakText	Glyphs	글리프
 @msg	The {name} profile could not be read, so the new document has the default settings: {reason}	{name} 프로파일을 읽을 수 없어 새 문서에 기본 설정을 사용했습니다: {reason}
 @msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	트랩: 트랩할 만큼 가까운 개체 쌍이 {_1}개보다 많거나, 같은 가로 범위에 있는 개체가 너무 많습니다. 한 번에 더 적은 개체를 트랩하세요
 @msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	위딩 상자 및 선: 아트웍 바깥에 들어갈 위딩 선이 없고 위딩 상자가 꺼져 있습니다
-@msg	\ at end of pattern	패턴 끝에 \이(가) 있습니다
+@msg	\\ at end of pattern	패턴 끝에 \\이(가) 있습니다
 @msg	`alignOn` cannot be empty	`alignOn`은(는) 비워 둘 수 없습니다
 @msg	`alignOn` must be a string	`alignOn`은(는) 문자열이어야 합니다
 @msg	`align` is start, center or end	`align`은(는) start, center 또는 end입니다
@@ -8667,6 +8676,8 @@ breakText	Glyphs	글리프
 @msg	`dataBase64` is larger than the module limit	`dataBase64`이(가) 모듈 한도보다 큽니다
 @msg	`dataBase64` is not valid base64	`dataBase64`이(가) 올바른 base64가 아닙니다
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly`은(는) `ids`, `reverse` 또는 `append`와 함께 쓸 수 없습니다
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly`은(는) `ids`, `id` 또는 `item`과 함께 쓸 수 없습니다
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly`은(는) `brush`와 함께 쓸 수 없습니다
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth`와 `childLimit`은 요약을 잘라 냅니다: `summary: true`를 전달하세요
 @msg	`design` is a design name, or null for plain columns	`design`은(는) 디자인 이름이며, 일반 막대에는 null입니다
 @msg	`design` is a design name, or null for the default marker	`design`은(는) 디자인 이름이며, 기본 마커에는 null입니다
@@ -8942,7 +8953,7 @@ breakText	Glyphs	글리프
 @msg	a CMap has too many mappings	CMap에 매핑이 너무 많습니다
 @msg	a DXF drawing has one origin: pass useArtboards: true for one drawing per artboard	DXF 도면에는 원점이 하나입니다: 아트보드마다 도면을 하나씩 만들려면 useArtboards: true를 전달하세요
 @msg	a PDF presets file with over {_1} presets	사전 설정이 {_1}개를 넘는 PDF 사전 설정 파일입니다
-@msg	a \u escape needs four hexadecimal digits	\u 이스케이프에는 16진수 네 자리가 필요합니다
+@msg	a \\u escape needs four hexadecimal digits	\\u 이스케이프에는 16진수 네 자리가 필요합니다
 @msg	a batch preview cannot switch documents	일괄 처리 미리 보기에서는 문서를 전환할 수 없습니다
 @msg	a brush named `{nn}` exists	`{nn}` 브러시가 이미 있습니다
 @msg	a comma in an XPath expression must separate function arguments	XPath 식의 쉼표는 함수 인수를 구분해야 합니다
@@ -9667,7 +9678,7 @@ breakText	Glyphs	글리프
 @msg	not a regular expression	정규식이 아닙니다
 @msg	not a stored or deflated central record	저장 방식이나 deflate 방식의 중앙 레코드가 아닙니다
 @msg	not a valid SVGZ file: {e}	올바른 SVGZ 파일이 아닙니다: {e}
-@msg	not an RTF file: it doesn't start with {\rtf	RTF 파일이 아닙니다: {\rtf(으)로 시작하지 않습니다
+@msg	not an RTF file: it doesn't start with {\\rtf	RTF 파일이 아닙니다: {\\rtf(으)로 시작하지 않습니다
 @msg	not an action set: the text doesn't start with /version and a number	액션 세트가 아닙니다: 텍스트가 /version과 숫자로 시작하지 않습니다
 @msg	not an image VectorCraft reads (see document.formats)	VectorCraft가 읽는 이미지가 아닙니다(document.formats 참조)
 @msg	not area type (text in a frame) outside perspective	원근 밖의 영역 문자(프레임 안의 텍스트)가 아닙니다

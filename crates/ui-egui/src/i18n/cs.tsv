@@ -36,6 +36,7 @@
 	Quit VectorCraft	Ukončit VectorCraft
 # Artwork drag between document tabs.
 	Drop Artwork	Umístit grafiku
+@id	language.name	Čeština
 @msg	{key} must be [x, y] with finite coordinates	{key} musí být [x, y] s konečnými souřadnicemi
 @msg	ids must contain 1–10000 object ids	ids musí obsahovat 1–10000 identifikátorů objektů
 
@@ -6860,6 +6861,7 @@ mark-style	Japanese	Japonské
 @msg	a 3D effect on a group's fill or stroke draws nothing	3D efekt na výplni nebo tahu skupiny nic nekreslí
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	3D efekt na výplni nebo tahu skupiny nekreslí nic k exportu
 @msg	The 3D object is too complex to export	3D objekt je pro export příliš složitý
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Síť 3D objektu je neúplná nebo obsahuje hodnotu, která není číslo
 @msg	the <filter> element needs an id, the filter's name	prvek <filter> potřebuje id, název filtru
 @msg	an SVG filter's id is at most {MAX_NAME} characters	id filtru SVG má nejvýše {MAX_NAME} znaků
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> není prvkem filtru SVG
@@ -7302,7 +7304,6 @@ axis	Y Axis	osa Y
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	„{_1}“ žádá o velký výpočetní rozpočet (každé spuštění až {minutes} minut a {times}krát víc instrukcí než obvykle): musí ho schválit člověk v desktopové aplikaci, nebo předejte `allowHeavy: true` v relaci spuštěné s --allow-plugin-grants
 # Plug-in host messages: manifests, modules, runs and plug-in output
 @msg	`name` must be 1-64 printable characters	`name` musí mít 1-64 tisknutelných znaků
-@msg	`{key}` must be 1-64 printable characters	`{key}` musí mít 1-64 tisknutelných znaků
 @msg	`version`, `description` or `author` is too long	`version`, `description` nebo `author` je příliš dlouhé
 @msg	`warnings` must be a list of strings	`warnings` musí být seznam řetězců
 @msg	`{k}` must be one of {_1}	`{k}` musí být jedno z {_1}
@@ -7323,11 +7324,17 @@ axis	Y Axis	osa Y
 @msg	module is {_1} bytes (limit {_2})	modul má {_1} bajtů (limit {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	vyžaduje schválení: žádá o {0}, což uživatel povolí, když ho instaluje samostatně
 @msg	not JSON: {e}	není JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	není binární soubor WebAssembly (chybí hlavička \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	není binární soubor WebAssembly (chybí hlavička \\0asm)
 @msg	parameter `{k}`: {what}	parametr `{k}`: {what}
 @msg	parameter `{name}`: {what}	parametr `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	parametry zásuvného modulu musí být objekt JSON
 @msg	the module must export its linear memory as `memory`	modul musí exportovat svou lineární paměť jako `memory`
+@msg	the module must export `{name}` with the type {signature}	modul musí exportovat `{name}` s typem {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	modul má více než jednu vlastní sekci `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	rozpočet paměti (počáteční paměť modulu má {initial} bajtů, limit {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	manifest ve vlastní sekci `{MANIFEST_SECTION}` musí uvádět `abi` jako {ABI_VERSION}, verzi ABI, kterou tento hostitel implementuje
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	rozpočet tabulek (modul definuje {count} tabulek, největší s {largest} prvky; limit {MAX_TABLES} tabulek po {MAX_TABLE_ELEMENTS} prvcích)
+@msg	the module's table section could not be read	sekci tabulek modulu nelze přečíst
 @msg	the objects to change are no longer in the document	objekty ke změně už v dokumentu nejsou
 @msg	the runtime panicked	běhové prostředí havarovalo
 @msg	unexpected host trap	neočekávaná chyba (trap) hostitele
@@ -7397,6 +7404,8 @@ axis	Y Axis	osa Y
 @msg	`plates` requires a stop linked to a spot swatch	`plates` vyžaduje zarážku propojenou se vzorkem přímé barvy
 @msg	the output	výstup
 @msg	the path has no anchor points	cesta nemá žádné kotevní body
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	složená cesta {id} má skrytý, zamčený nebo vodítkový člen, takže její členy nelze nahradit
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	složená cesta {id} má člen, který není cestou, takže její členy nelze nahradit
 @msg	too many anchor points (limit {MAX_ANCHORS})	příliš mnoho kotevních bodů (limit {MAX_ANCHORS})
 @msg	true or false	true nebo false
 @msg	a number >= {_1}	číslo >= {_1}
@@ -8977,7 +8986,7 @@ breakText	Glyphs	Glyfy
 @msg	The {name} profile could not be read, so the new document has the default settings: {reason}	Profil {name} nešlo přečíst, takže nový dokument má výchozí nastavení: {reason}
 @msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	Přesah barev: více než {_1} dvojic objektů leží dost blízko pro přesah, nebo příliš mnoho objektů sdílí vodorovný rozsah; zpracujte najednou méně objektů
 @msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	Rámeček a linie pro vybírání: mimo kresbu se nevejde žádná linie pro vybírání a rámeček je vypnutý
-@msg	\ at end of pattern	\ na konci vzoru
+@msg	\\ at end of pattern	\\ na konci vzoru
 @msg	`alignOn` cannot be empty	`alignOn` nesmí být prázdné
 @msg	`alignOn` must be a string	`alignOn` musí být řetězec
 @msg	`align` is start, center or end	`align` je start, center nebo end
@@ -9028,6 +9037,8 @@ breakText	Glyphs	Glyfy
 @msg	`dataBase64` is larger than the module limit	`dataBase64` je větší než limit modulu
 @msg	`dataBase64` is not valid base64	`dataBase64` není platný base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` nelze kombinovat s `ids`, `reverse` ani `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` nelze kombinovat s `ids`, `id` ani `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` nelze kombinovat s `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` a `childLimit` omezují souhrn: předejte `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` je název návrhu, nebo null pro obyčejné sloupce
 @msg	`design` is a design name, or null for the default marker	`design` je název návrhu, nebo null pro výchozí značku
@@ -9302,7 +9313,7 @@ breakText	Glyphs	Glyfy
 @msg	a CMap has too many mappings	CMap má příliš mnoho mapování
 @msg	a DXF drawing has one origin: pass useArtboards: true for one drawing per artboard	výkres DXF má jeden počátek: předejte useArtboards: true pro jeden výkres na každou pracovní plochu
 @msg	a PDF presets file with over {_1} presets	soubor přednastavení PDF s více než {_1} přednastaveními
-@msg	a \u escape needs four hexadecimal digits	sekvence \u vyžaduje čtyři šestnáctkové číslice
+@msg	a \\u escape needs four hexadecimal digits	sekvence \\u vyžaduje čtyři šestnáctkové číslice
 @msg	a batch preview cannot switch documents	náhled dávky nemůže přepínat dokumenty
 @msg	a brush named `{nn}` exists	štětec s názvem `{nn}` už existuje
 @msg	a comma in an XPath expression must separate function arguments	čárka ve výrazu XPath musí oddělovat argumenty funkce
@@ -10027,7 +10038,7 @@ breakText	Glyphs	Glyfy
 @msg	not a regular expression	nejde o regulární výraz
 @msg	not a stored or deflated central record	nejde o uložený ani komprimovaný centrální záznam
 @msg	not a valid SVGZ file: {e}	nejde o platný soubor SVGZ: {e}
-@msg	not an RTF file: it doesn't start with {\rtf	nejde o soubor RTF: nezačíná na {\rtf
+@msg	not an RTF file: it doesn't start with {\\rtf	nejde o soubor RTF: nezačíná na {\\rtf
 @msg	not an action set: the text doesn't start with /version and a number	nejde o sadu akcí: text nezačíná na /version a číslo
 @msg	not an image VectorCraft reads (see document.formats)	nejde o obrázek, který VectorCraft čte (viz document.formats)
 @msg	not area type (text in a frame) outside perspective	nejde o text v oblasti (text v rámci) mimo perspektivu

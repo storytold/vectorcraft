@@ -2,51 +2,59 @@
 //!
 //! Object › Plug-ins lists the installed object filters (`plugin.dialog {id}`), then Install
 //! Plug-in… and Reload Plug-ins; Effect › Plug-ins lists the live-effect plug-ins, which open the
-//! effect dialog (`effect.dialog`). A filter with parameters opens dialog `plugin`: one field per
-//! declared parameter (fields named after them; `__plugin` is the plug-in id) with a live
-//! Preview, and OK keeps the run as one undo step (`plugin.run`). A filter without parameters runs
-//! at once. A heavy filter (its manifest's `budget`) has no Preview, since a run may take minutes:
-//! it runs in the background ([`crate::plugin_runs`]). A light filter that reports its progress
-//! (plug-in API level 2 with the `progress` permission) and calls no commands runs in the
-//! background too, with its progress and Cancel, when it runs at once or when OK runs it without a
-//! kept preview ([`in_background`]). A filter or live effect with commands of
-//! its own is a submenu named after it, holding its item and then its commands; a command with
-//! parameters opens the same dialog for them ([`open_command`]). A command whose manifest names
-//! another menu is listed in that menu instead ([`place_commands`]). Exporters are formats of File › Export ›
-//! Export As; one with parameters opens dialog `pluginExport` once the file is picked, and its
-//! Export button writes the file. Importers open the files File › Open finds no built-in format
-//! for, and File › Open With lists them, to open a file with one of them by name; one with
+//! effect dialog (`effect.dialog`). A filter with parameters opens a hosted dialog `plugin`: one row
+//! per declared parameter, shown while its `visibleWhen` holds, with a live Preview, and OK keeps the
+//! run as one undo step (`plugin.run`). A filter without parameters runs at once. A heavy filter (its
+//! manifest's `budget`) has no Preview, since a run may take minutes: it runs in the background
+//! ([`crate::plugin_runs`]). A light filter that reports its progress (plug-in API level 2 with the
+//! `progress` permission) and calls no commands runs in the background too, with its progress and
+//! Cancel, when it runs at once or when OK runs it without a kept preview ([`in_background`]). A
+//! filter or live effect with commands of its own is a submenu named after it, holding its item and
+//! then its commands; a command with parameters opens the same dialog for them ([`open_command`]).
+//! A command whose manifest names another menu is listed in that menu instead ([`place_commands`]).
+//! Exporters are formats of File › Export › Export As; one with parameters opens dialog
+//! `pluginExport` once the file is picked, and its Export button writes the file. Importers open the
+//! files File › Open finds no built-in format for, and File › Open With lists them; one with
 //! parameters opens dialog `pluginImport` once the file is picked, and its Open button opens it.
 //!
-//! Dialog `pluginInstall` asks a person to approve a plug-in's permissions or heavy budget. What it
-//! shows and installs is held by the app, not in its fields; a control request or synthetic input
-//! can't confirm it. Enter confirms it only when OK has the keyboard focus. OK takes no click, Enter
-//! or Space until the question has been on screen in the focused window for [`APPROVAL_DELAY`], and
-//! that time starts over for every new question and whenever the window loses the focus.
+//! The one open filter, export or import dialog is [`PluginDialog`]: what the hosted dialog cannot
+//! hold (the plug-in, the live preview, the export's or open's own parameters) lives there, and
+//! [`pump`] reads the dialog's values each frame and acts on its answer.
+//!
+//! [`InstallPrompt`] asks a person to approve a plug-in's permissions or heavy budget. What it
+//! shows and installs is held by the app, not by the prompt; it takes no programmatic answer, so a
+//! control request or synthetic input can't confirm it. Its OK takes no click, Enter or Space until
+//! the question has been on screen in the focused window for [`APPROVAL_DELAY`], and that time
+//! starts over for every new question and whenever the window loses the focus.
 
+use std::borrow::Cow;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
+use craft::menu::Node;
+use craft::ui::contract::Show as _;
+use craft::ui::dialog::{DialogId, DialogResult, DialogStack, Prompt, StackDialog, dialog_id};
+use craft::ui::display::{Shade, Text};
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog};
+use craft::ui::runtime::windows::WindowHost;
+use craft::ui::sections::{DialogRole, FooterButton};
+use egui::Ui;
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::cmd::plugin::InstallApproval;
 use vectorcraft_plugins::{Budget, Kind, Manifest, Plugin, permissions, registry};
 
-use super::{DialogAction, DialogSpec, form};
+use super::form;
+use super::preview::LivePreview;
 use crate::VectorcraftApp;
-use crate::menus::Item;
-use crate::state::Dialog;
-use crate::widgets;
+use crate::menus::{Sep, c, cp, heading, sub};
 
-/// The dialog kind of plug-in filters.
+/// The key of the hosted dialog of plug-in filters.
 pub const KIND: &str = "plugin";
 
 const CMD: &str = "plugin.run";
 
 /// Object › Plug-ins' header while no filter plug-in is installed.
 pub const NO_FILTERS: &str = "No filter plug-ins installed";
-
-/// Headed by the plug-in's name, as it is (plug-in text is never translated).
-pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |d| d.str("__label"), body, confirm, preview: true, max_width: Some(420.0), ..DialogSpec::FORM };
 
 /// A menu label for plug-in `name`: with an ellipsis when it opens a dialog.
 fn label(name: &str, has_params: bool) -> &'static str {
@@ -58,17 +66,17 @@ fn label(name: &str, has_params: bool) -> &'static str {
 /// with commands of its own, a submenu named after it holding `own` and then its commands. Each
 /// command runs its command id (`plugin.<id>.<command>`), with an ellipsis when it has parameters,
 /// whose dialog [`open_command`] opens.
-fn with_commands(plugin: &Plugin, own: Item) -> Item {
+fn with_commands(plugin: &Plugin, own: Node) -> Node {
     let m = plugin.manifest();
     if m.commands.is_empty() {
         return own;
     }
-    let mut items = vec![own, Item::Sep];
-    items.extend(m.commands.iter().map(|c| {
-        let id = registry::intern(&vectorcraft_engine::cmd::plugin::command_id(&m.id, &c.id));
-        Item::Cmd(label(&c.shown_label(), !c.params.is_empty()), id, Value::Null)
+    let mut items = vec![own, Sep];
+    items.extend(m.commands.iter().map(|command| {
+        let id = registry::intern(&vectorcraft_engine::cmd::plugin::command_id(&m.id, &command.id));
+        c(label(&command.shown_label(), !command.params.is_empty()), id)
     }));
-    Item::Sub(registry::intern(&permissions::display_text(m.name.trim(), permissions::MAX_SHOWN_NAME)), items)
+    sub(registry::intern(&permissions::display_text(m.name.trim(), permissions::MAX_SHOWN_NAME)), items)
 }
 
 /// Moves each plug-in command whose manifest's `menu` names another menu
@@ -79,16 +87,16 @@ fn with_commands(plugin: &Plugin, own: Item) -> Item {
 /// plug-in's submenu left with its own item alone becomes that item. A command whose menu `tree`
 /// doesn't have, or that [`vectorcraft_engine::cmd::plugin::placed_menu`] leaves in its plug-in's
 /// submenu, stays there.
-pub fn place_commands(tree: &mut [(&'static str, Vec<Item>)]) {
-    let mut spots: Vec<(&'static [&'static str], Option<String>, Vec<Item>)> = Vec::new();
+pub fn place_commands(tree: &mut [(&'static str, Vec<Node>)]) {
+    let mut spots: Vec<(&'static [&'static str], Option<String>, Vec<Node>)> = Vec::new();
     for p in registry::list() {
         let m = p.manifest();
         if !matches!(m.kind, Kind::Filter | Kind::Effect) {
             continue;
         }
-        for c in &m.commands {
-            let Some(place) = &c.place else { continue };
-            if vectorcraft_engine::cmd::plugin::placed_menu(&p, c).is_none() {
+        for command in &m.commands {
+            let Some(place) = &command.place else { continue };
+            if vectorcraft_engine::cmd::plugin::placed_menu(&p, command).is_none() {
                 continue;
             }
             // An `after` that names no built-in item of the menu means the end of it, as no `after` does.
@@ -97,8 +105,8 @@ pub fn place_commands(tree: &mut [(&'static str, Vec<Item>)]) {
                 let menu = menu_at(tree, place.path)?;
                 menu.iter().find(|it| is_anchor(it, anchor_key(a))).and_then(own_key).map(str::to_string)
             });
-            let id = registry::intern(&vectorcraft_engine::cmd::plugin::command_id(&m.id, &c.id));
-            let item = Item::Cmd(label(&c.menu_label(&m.name), !c.params.is_empty()), id, Value::Null);
+            let id = registry::intern(&vectorcraft_engine::cmd::plugin::command_id(&m.id, &command.id));
+            let item = c(label(&command.menu_label(&m.name), !command.params.is_empty()), id);
             match spots.iter_mut().find(|s| s.0 == place.path && s.1 == after) {
                 Some(s) => s.2.push(item),
                 None => spots.push((place.path, after, vec![item])),
@@ -109,11 +117,11 @@ pub fn place_commands(tree: &mut [(&'static str, Vec<Item>)]) {
     if spots.is_empty() {
         return;
     }
-    let placed: std::collections::HashSet<&str> = spots
+    let placed: std::collections::HashSet<String> = spots
         .iter()
         .flat_map(|s| s.2.iter())
         .filter_map(|it| match it {
-            Item::Cmd(_, id, _) => Some(*id),
+            Node::Item(i) => Some(i.command.id.clone()),
             _ => None,
         })
         .collect();
@@ -136,28 +144,28 @@ fn anchor_key(label: &str) -> &str {
 /// Is `it` the built-in item or submenu labeled `key` ([`anchor_key`])? An item of
 /// [`crate::menus::DYNAMIC_LABELS`] matches by the label of either of its states
 /// ([`vectorcraft_engine::cmd::plugin::other_state`]). Items that list a plug-in are never an anchor.
-fn is_anchor(it: &Item, key: &str) -> bool {
+fn is_anchor(it: &Node, key: &str) -> bool {
     let other = |l: &str| crate::menus::DYNAMIC_LABELS.contains(&l) && vectorcraft_engine::cmd::plugin::other_state(l).is_some_and(|o| o == key);
-    own_key(it).is_some_and(|own| own == key || matches!(it, Item::Cmd(l, _, _) if other(l)))
+    own_key(it).is_some_and(|own| own == key || matches!(it, Node::Item(i) if other(&i.label)))
 }
 
 /// The label of `it` as [`anchor_key`] reads it, when `it` is a built-in item or submenu that can be
 /// an anchor; `None` for an item that lists a plug-in.
-fn own_key(it: &Item) -> Option<&str> {
+fn own_key(it: &Node) -> Option<&str> {
     match it {
-        Item::Cmd(l, id, p) if !crate::menus::lists_plugin(id, p) => Some(anchor_key(l)),
-        Item::Sub(l, children) if !crate::menus::holds_plugin_commands(children) => Some(anchor_key(l)),
+        Node::Item(i) if !crate::menus::lists_plugin(&i.command.id, &i.command.params) => Some(anchor_key(&i.label)),
+        Node::Submenu { label, children, .. } if !crate::menus::holds_plugin_commands(children) => Some(anchor_key(label)),
         _ => None,
     }
 }
 
 /// The built-in menu of `tree` at `path`: a top-level menu, then its submenus by label.
-fn menu_at<'a>(tree: &'a mut [(&'static str, Vec<Item>)], path: &[&str]) -> Option<&'a mut Vec<Item>> {
+fn menu_at<'a>(tree: &'a mut [(&'static str, Vec<Node>)], path: &[&str]) -> Option<&'a mut Vec<Node>> {
     let (first, rest) = path.split_first()?;
     let mut menu = &mut tree.iter_mut().find(|(title, _)| title == first)?.1;
     for segment in rest {
         menu = menu.iter_mut().find_map(|it| match it {
-            Item::Sub(l, children) if l == segment && !crate::menus::holds_plugin_commands(children) => Some(children),
+            Node::Submenu { label, children, .. } if label.as_str() == *segment && !crate::menus::holds_plugin_commands(children) => Some(children),
             _ => None,
         })?;
     }
@@ -166,15 +174,15 @@ fn menu_at<'a>(tree: &'a mut [(&'static str, Vec<Item>)], path: &[&str]) -> Opti
 
 /// Takes the commands in `placed` out of the plug-in submenus under `items`; a submenu left with no
 /// command becomes its plug-in's own item.
-fn leave_out(items: &mut [Item], placed: &std::collections::HashSet<&str>) {
+fn leave_out(items: &mut [Node], placed: &std::collections::HashSet<String>) {
     for it in items.iter_mut() {
-        let Item::Sub(_, children) = it else { continue };
+        let Node::Submenu { children, .. } = it else { continue };
         if !crate::menus::holds_plugin_commands(children) {
             leave_out(children, placed);
             continue;
         }
-        children.retain(|c| !matches!(c, Item::Cmd(_, id, _) if placed.contains(id)));
-        if !children.iter().any(|c| matches!(c, Item::Cmd(_, id, _) if vectorcraft_engine::cmd::plugin::is_command_id(id)))
+        children.retain(|c| !matches!(c, Node::Item(i) if placed.contains(&i.command.id)));
+        if !children.iter().any(|c| matches!(c, Node::Item(i) if vectorcraft_engine::cmd::plugin::is_command_id(&i.command.id)))
             && let Some(own) = children.first().cloned()
         {
             *it = own;
@@ -184,20 +192,16 @@ fn leave_out(items: &mut [Item], placed: &std::collections::HashSet<&str>) {
 
 /// Object › Plug-ins: the installed object filters (each with its commands, if it has any), then
 /// Install Plug-in… and Reload Plug-ins.
-pub fn object_menu() -> Vec<Item> {
-    let mut items: Vec<Item> = registry::list()
+pub fn object_menu() -> Vec<Node> {
+    let mut items: Vec<Node> = registry::list()
         .iter()
         .filter(|p| p.manifest().kind == Kind::Filter)
-        .map(|p| with_commands(p, Item::Cmd(label(&p.manifest().name, !p.manifest().params.is_empty()), "plugin.dialog", json!({ "id": p.id() }))))
+        .map(|p| with_commands(p, cp(label(&p.manifest().name, !p.manifest().params.is_empty()), "plugin.dialog", json!({ "id": p.id() }))))
         .collect();
     if items.is_empty() {
-        items.push(Item::Header(NO_FILTERS));
+        items.push(heading(NO_FILTERS));
     }
-    items.extend([
-        Item::Sep,
-        Item::Cmd("Install Plug-in…", "ui.installPlugin", Value::Null),
-        Item::Cmd("Reload Plug-ins", "plugin.reload", Value::Null),
-    ]);
+    items.extend([Sep, c("Install Plug-in…", "ui.installPlugin"), c("Reload Plug-ins", "plugin.reload")]);
     items
 }
 
@@ -205,23 +209,23 @@ pub fn object_menu() -> Vec<Item> {
 pub const NO_IMPORTERS: &str = "No importer plug-ins installed";
 
 /// File › Open With: the installed importers (`file.openWith {importer}`), each by its name.
-pub fn open_with_menu() -> Vec<Item> {
-    let items: Vec<Item> = vectorcraft_plugins::import::installed()
+pub fn open_with_menu() -> Vec<Node> {
+    let items: Vec<Node> = vectorcraft_plugins::import::installed()
         .iter()
-        .map(|p| Item::Cmd(label(&p.manifest().name, true), "file.openWith", json!({ "importer": vectorcraft_plugins::export::format_id(p.id()) })))
+        .map(|p| cp(label(&p.manifest().name, true), "file.openWith", json!({ "importer": vectorcraft_plugins::export::format_id(p.id()) })))
         .collect();
-    if items.is_empty() { vec![Item::Header(NO_IMPORTERS)] } else { items }
+    if items.is_empty() { vec![heading(NO_IMPORTERS)] } else { items }
 }
 
 /// Effect › Plug-ins: the live-effect plug-ins, each with its commands if it has any (`None`
 /// while none is installed). Effects without options apply at once, as built-in ones do.
-pub fn effect_menu() -> Option<Item> {
-    let items: Vec<Item> = vectorcraft_effects::plugin_effects()
+pub fn effect_menu() -> Option<Node> {
+    let items: Vec<Node> = vectorcraft_effects::plugin_effects()
         .into_iter()
         .map(|e| {
             let own = match e.defaults.as_object().is_some_and(|o| o.is_empty()) {
-                true => Item::Cmd(e.label, "effect.apply", json!({ "effect": e.id })),
-                false => Item::Cmd(e.label, "effect.dialog", json!({ "effect": e.id })),
+                true => cp(e.label, "effect.apply", json!({ "effect": e.id })),
+                false => cp(e.label, "effect.dialog", json!({ "effect": e.id })),
             };
             match vectorcraft_plugins::effect::plugin_id(e.id).and_then(registry::get) {
                 Some(plugin) => with_commands(&plugin, own),
@@ -229,7 +233,130 @@ pub fn effect_menu() -> Option<Item> {
             }
         })
         .collect();
-    (!items.is_empty()).then_some(Item::Sub("Plug-ins", items))
+    (!items.is_empty()).then_some(sub("Plug-ins", items))
+}
+
+/// The open filter, export or import dialog: its id on the host and what the app keeps beside it.
+pub(crate) struct PluginDialog {
+    id: DialogId,
+    kind: Opened,
+}
+
+/// What a [`PluginDialog`] is for. `params` is every row the plug-in declares, hidden ones too: the
+/// dialog shows only those whose `visibleWhen` holds, and its values keep the rest.
+pub(crate) enum Opened {
+    /// A filter's own dialog (`command` is `None`), or the dialog of one of its commands.
+    Filter {
+        plugin: String,
+        command: Option<String>,
+        /// The undo step's name, as the preview and the commit report it.
+        label: String,
+        preview: LivePreview,
+        /// Whether the dialog has a Preview.
+        light: bool,
+        /// Whether the Preview check box was on at the last pass.
+        previewing: bool,
+        /// Whether the last preview failed.
+        refused: bool,
+        params: Arc<[Param]>,
+    },
+    /// An exporter's parameters, with Export As's own parameters (`format`, `path`, …) kept for Export.
+    Export { plugin: String, export: Value, params: Arc<[Param]> },
+    /// An importer's parameters, with Open With's own parameters (`path`, `importer`, `picked`) kept for Open.
+    Import { plugin: String, open: Value, params: Arc<[Param]> },
+}
+
+impl PluginDialog {
+    /// Whether the dialog is an importer's whose Open opens a file the picker chose, which is read off the UI thread
+    /// where the app can.
+    #[cfg(test)]
+    pub(crate) fn opens_picked(&self) -> bool {
+        matches!(&self.kind, Opened::Import { open, .. } if open["picked"] == true)
+    }
+}
+
+impl Opened {
+    fn plugin(&self) -> &str {
+        match self {
+            Opened::Filter { plugin, .. } | Opened::Export { plugin, .. } | Opened::Import { plugin, .. } => plugin,
+        }
+    }
+
+    fn params(&self) -> &Arc<[Param]> {
+        match self {
+            Opened::Filter { params, .. } | Opened::Export { params, .. } | Opened::Import { params, .. } => params,
+        }
+    }
+
+    /// Whether the plug-in, or the command the dialog is for, is no longer installed.
+    fn gone(&self) -> bool {
+        match self {
+            Opened::Filter { command: Some(c), .. } => vectorcraft_engine::cmd::plugin::command_of(c).is_none(),
+            other => registry::get(other.plugin()).is_none(),
+        }
+    }
+}
+
+/// How a hosted plug-in dialog looks.
+struct Look {
+    /// The heading: the plug-in's or command's label, as it is (plug-in text is never translated).
+    title: String,
+    /// The plug-in's description, drawn above the rows.
+    description: String,
+    /// The Preview check box.
+    previews: bool,
+    /// The note of a heavy filter that it runs in the background.
+    note: bool,
+    /// The accepting button's label when it is not OK.
+    ok: Option<&'static str>,
+}
+
+/// The builder of a hosted plug-in dialog over its values: the rows of `all` whose parameter is
+/// shown for the values (`m.visible`), after the description.
+fn build(key: &'static str, m: Manifest, all: Arc<[Param]>, look: Look) -> impl for<'b> Fn(&'b mut DialogFields) -> ParamDialog<'b> + Send + 'static {
+    move |fields| {
+        let shown = m.visible(&form::json_of(&all, fields));
+        let mut rows = Vec::with_capacity(all.len() + 1);
+        if !look.description.is_empty() {
+            rows.push(Param::read_only_text("description", "", look.description.clone()).full_width());
+        }
+        rows.extend(all.iter().filter(|p| shown.contains(p.key.as_str())).cloned());
+        let mut dialog = ParamDialog::new(key, look.title.clone(), Cow::Owned(rows)).previews(look.previews);
+        if let Some(ok) = look.ok {
+            dialog = dialog.ok_label(ok.into());
+        }
+        if look.note {
+            let note = tl!("It may take minutes, so it runs in the background, where you can cancel it.");
+            dialog = dialog.below(move |ui, _| {
+                Text::new(note).shade(Shade::Muted).show(ui);
+            });
+        }
+        dialog
+    }
+}
+
+/// Opens the hosted dialog `key` for plug-in manifest `m` (an instance per `instance`), closing the
+/// one open before → its id on the host and its rows.
+fn open_hosted(app: &mut VectorcraftApp, key: &'static str, instance: &str, m: Manifest, look: Look) -> Result<(DialogId, Arc<[Param]>), String> {
+    let (Some(ctx), Some(dialogs)) = (app.ui_ctx.clone(), app.dialogs()) else { return Err("no window".into()) };
+    close_open(app);
+    let defaults = m.defaults();
+    let all: Arc<[Param]> = form::plugin_params(&m, &defaults).into();
+    let fields = form::fields_of(&all, &defaults);
+    let dialog = HostedParamDialog::new(&ctx, key, fields, build(key, m, Arc::clone(&all), look)).instance(instance.to_string());
+    let id = dialogs.with(|host| host.open(dialog));
+    Ok((id, all))
+}
+
+/// Closes the open plug-in dialog, if any, rolling back its preview.
+fn close_open(app: &mut VectorcraftApp) {
+    let Some(old) = app.plugin_dialog.take() else { return };
+    if let (Some(ctx), Some(dialogs)) = (app.ui_ctx.clone(), app.dialogs()) {
+        dialogs.with(|host| host.cancel_by_id(&ctx, old.id));
+    }
+    if let Opened::Filter { preview, .. } = old.kind {
+        preview.cancel(app);
+    }
 }
 
 /// `plugin.dialog {id, params?}`: run filter `id` at once when it takes no parameters or `params`
@@ -248,72 +375,52 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     if m.params.is_empty() || given.is_some() {
         return run(app, &plugin, json!({"id": id, "params": given.cloned().unwrap_or(Value::Null)}));
     }
-    let mut fields = fields_for(m);
-    if m.budget == Budget::Light {
-        fields.insert("preview".into(), json!(true));
-    }
-    app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
+    open_filter(app, &plugin, m.clone(), None, m.name.trim_end_matches('…').to_string())?;
     Ok(Value::Null)
 }
 
-/// The fields of plug-in `m`'s dialog: its parameters at their defaults, `__plugin` (its id) and
-/// `__label` (its name, the heading).
-fn fields_for(m: &Manifest) -> Map<String, Value> {
-    let mut fields = m.defaults();
-    fields.insert("__plugin".into(), json!(m.id));
-    fields.insert("__label".into(), json!(m.name.trim_end_matches('…')));
-    fields
-}
-
-/// The plug-in dialog `d` is for, its description drawn above the fields. `None` once it was
-/// uninstalled, which closes the dialog.
-fn described(ui: &mut egui::Ui, d: &Dialog) -> Option<Arc<Plugin>> {
-    let plugin = registry::get(&d.str("__plugin"))?;
-    let m = plugin.manifest();
-    if !m.description.is_empty() {
-        ui.label(egui::RichText::new(&m.description).color(crate::theme::Tokens::get(ui.ctx()).text_dim));
-        ui.add_space(8.0);
-    }
-    Some(plugin)
+/// Opens the dialog of filter `plugin`, or of its command `command`, with `m` the manifest it runs
+/// with, headed `heading`: the rows at their defaults, with a live Preview for a light filter.
+fn open_filter(app: &mut VectorcraftApp, plugin: &Plugin, m: Manifest, command: Option<String>, heading: String) -> Result<(), String> {
+    let own = plugin.manifest();
+    let light = own.budget == Budget::Light;
+    let look = Look { title: heading.clone(), description: own.description.clone(), previews: light, note: !light, ok: None };
+    let instance = command.as_deref().unwrap_or(plugin.id()).to_string();
+    let (id, params) = open_hosted(app, KIND, &instance, m, look)?;
+    let kind = Opened::Filter {
+        plugin: plugin.id().to_string(),
+        command,
+        label: heading,
+        preview: Default::default(),
+        light,
+        previewing: light,
+        refused: false,
+        params,
+    };
+    app.plugin_dialog = Some(PluginDialog { id, kind });
+    Ok(())
 }
 
 /// Opens the dialog of plug-in command `id` (`plugin.<plug-in id>.<command id>`), given no params,
-/// when it has parameters and a document is open: its fields at their defaults (`__command` is the
-/// command id) with a live Preview, and OK keeps the run as one undo step. False for any other
-/// command, which then runs as it was given.
+/// when it has parameters and a document is open: its rows at their defaults with a live Preview, and
+/// OK keeps the run as one undo step. False for any other command, which then runs as it was given.
 pub fn open_command(app: &mut VectorcraftApp, id: &str) -> bool {
     let Some((plugin, c)) = vectorcraft_engine::cmd::plugin::command_of(id) else { return false };
     if c.params.is_empty() || app.session.active().is_none() {
         return false;
     }
-    let mut fields = fields_for(&plugin.manifest().for_command(&c));
-    fields.insert("__command".into(), json!(id));
-    fields.insert("__label".into(), json!(c.shown_label()));
-    fields.insert("preview".into(), json!(true));
-    app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
+    if let Err(e) = open_filter(app, &plugin, plugin.manifest().for_command(&c), Some(id.to_string()), c.shown_label().to_string()) {
+        app.status(e);
+    }
     true
 }
 
-/// The plug-in command dialog `d` is for (`__command`), and the manifest it runs with; `None` for
-/// a filter's own dialog.
-fn command_of(d: &Dialog) -> Option<Manifest> {
-    let (plugin, c) = vectorcraft_engine::cmd::plugin::command_of(&d.str("__command"))?;
-    Some(plugin.manifest().for_command(&c))
-}
-
-/// The command dialog `d` runs: its plug-in command, or `plugin.run`.
-fn command(d: &Dialog) -> String {
-    match d.str("__command") {
-        c if c.is_empty() => CMD.to_string(),
-        c => c,
-    }
-}
-
-/// The params of the command dialog `d` runs ([`command`]).
-fn params(d: &Dialog) -> Value {
-    match d.str("__command").is_empty() {
-        true => json!({"id": d.str("__plugin"), "params": form::params(d)}),
-        false => json!({"params": form::params(d)}),
+/// The command a filter dialog runs and its params: `plugin.run` for the filter's own dialog, else
+/// its plug-in command.
+fn command(plugin: &str, command: Option<&str>, values: Map<String, Value>) -> (String, Value) {
+    match command {
+        None => (CMD.to_string(), json!({"id": plugin, "params": values})),
+        Some(c) => (c.to_string(), json!({"params": values})),
     }
 }
 
@@ -333,124 +440,144 @@ fn run(app: &mut VectorcraftApp, plugin: &Plugin, p: Value) -> Result<Value, Str
     }
 }
 
-/// The plug-in's description and fields (a command's: its own parameters), then the live
-/// Preview; a heavy filter has a note instead that it runs in the background, since a run may take
-/// minutes. A command dialog closes once the plug-in no longer has the command.
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let Some(plugin) = described(ui, d) else { return true };
-    let run_with = command_of(d);
-    if run_with.is_none() && !d.str("__command").is_empty() {
-        return true;
-    }
-    form::schema_fields(app, ui, d, run_with.as_ref().unwrap_or(plugin.manifest()));
-    match plugin.manifest().budget {
-        Budget::Light => {
-            let (label, p) = (d.str("__label"), params(d));
-            form::preview(app, ui, d, &label, &command(d), p);
-        }
-        // No Preview: each run may take minutes.
-        Budget::Heavy => {
-            ui.add_space(8.0);
-            let note = tl!("It may take minutes, so it runs in the background, where you can cancel it.");
-            ui.label(egui::RichText::new(note).color(crate::theme::Tokens::get(ui.ctx()).text_dim));
-        }
-    }
-    false
-}
-
-/// OK: a filter keeps its previewed run as one undo step; a heavy one, which has no preview, and a
-/// light one that runs in the background ([`in_background`]) with Preview off or a failed preview,
-/// start in the background ([`run`]) and the dialog closes. A preview still shown when Preview was
-/// just turned off, or a preview that failed, is rolled back first.
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let own_run = d.str("__command").is_empty();
-    let kept = |plugin: &Plugin| {
-        plugin.manifest().budget == Budget::Light && d.bool("preview") && app.session.in_interaction() && !d.fields.contains_key(form::REFUSED)
-    };
-    match registry::get(&d.str("__plugin")) {
-        Some(plugin) if own_run && in_background(plugin.manifest()) && !kept(&plugin) => {
-            if d.fields.contains_key(form::PREVIEWED) && app.session.in_interaction() {
-                let _ = app.session.cancel_interaction();
-            }
-            let r = run(app, &plugin, params(d));
-            if r.is_ok() {
-                app.ui.dialog = None;
-            }
-            r
-        }
-        _ => form::commit_preview(app, &command(d), params(d)),
-    }
-}
-
-/// The dialog kind of an exporter's parameters, after Export As picked the file.
+/// The key of an exporter's parameters dialog, after Export As picked the file.
 pub const EXPORT_KIND: &str = "pluginExport";
 
-/// Headed by the plug-in's name, as it is; Export writes the file.
-pub(super) const EXPORT_SPEC: DialogSpec = DialogSpec {
-    heading: |d| d.str("__label"),
-    body: export_body,
-    confirm: export_confirm,
-    ok: Some("Export"),
-    max_width: Some(420.0),
-    ..DialogSpec::FORM
-};
-
-/// Export As with exporter `plugin`, which has parameters: its fields at their defaults, and
-/// `export`, the export's own parameters (`format`, `path`, …), kept for Export.
-pub fn open_export(app: &mut VectorcraftApp, plugin: &Plugin, export: Value) {
-    let mut fields = fields_for(plugin.manifest());
-    fields.insert("__export".into(), export);
-    app.ui.dialog = Some(Dialog { kind: EXPORT_KIND.into(), fields });
-}
-
-fn export_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let Some(plugin) = described(ui, d) else { return true };
-    form::schema_fields(app, ui, d, plugin.manifest());
-    false
-}
-
-/// Writes the file with the export's parameters and the plug-in's, as `params`.
-fn export_confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let mut p = d.fields.get("__export").cloned().filter(Value::is_object).ok_or("no format to export to")?;
-    p["params"] = form::params(d);
-    let format = p.get("format").and_then(Value::as_str).map(str::to_string);
-    let path = p.get("path").and_then(Value::as_str).map(str::to_string);
-    app.ui.dialog = None;
-    crate::io::export(app, format.as_deref(), path, &p)
-}
-
-/// The dialog kind of an importer's parameters, after Open With picked the file.
+/// The key of an importer's parameters dialog, after Open With picked the file.
 pub const IMPORT_KIND: &str = "pluginImport";
 
-/// Headed by the plug-in's name, as it is; Open opens the file.
-pub(super) const IMPORT_SPEC: DialogSpec = DialogSpec {
-    heading: |d| d.str("__label"),
-    body: export_body,
-    confirm: import_confirm,
-    ok: Some("Open"),
-    max_width: Some(420.0),
-    ..DialogSpec::FORM
-};
+/// Export As with exporter `plugin`, which has parameters: its rows at their defaults, and
+/// `export`, the export's own parameters (`format`, `path`, …), kept for Export.
+pub fn open_export(app: &mut VectorcraftApp, plugin: &Plugin, export: Value) {
+    let m = plugin.manifest();
+    let look = Look {
+        title: m.name.trim_end_matches('…').to_string(),
+        description: m.description.clone(),
+        previews: false,
+        note: false,
+        ok: Some(tl!("Export")),
+    };
+    match open_hosted(app, EXPORT_KIND, plugin.id(), m.clone(), look) {
+        Ok((id, params)) => app.plugin_dialog = Some(PluginDialog { id, kind: Opened::Export { plugin: plugin.id().to_string(), export, params } }),
+        Err(e) => app.status(e),
+    }
+}
 
-/// Open With with importer `plugin`, which has parameters: its fields at their defaults, and
+/// Open With with importer `plugin`, which has parameters: its rows at their defaults, and
 /// `open`, Open With's own parameters (`path`, `importer`, and `picked` for a file from the
 /// picker, which is read off the UI thread), kept for Open.
 pub fn open_import(app: &mut VectorcraftApp, plugin: &Plugin, open: Value) {
-    let mut fields = fields_for(plugin.manifest());
-    fields.insert("__open".into(), open);
-    app.ui.dialog = Some(Dialog { kind: IMPORT_KIND.into(), fields });
+    let m = plugin.manifest();
+    let look = Look {
+        title: m.name.trim_end_matches('…').to_string(),
+        description: m.description.clone(),
+        previews: false,
+        note: false,
+        ok: Some(tl!("Open")),
+    };
+    match open_hosted(app, IMPORT_KIND, plugin.id(), m.clone(), look) {
+        Ok((id, params)) => app.plugin_dialog = Some(PluginDialog { id, kind: Opened::Import { plugin: plugin.id().to_string(), open, params } }),
+        Err(e) => app.status(e),
+    }
+}
+
+/// Writes the file with the export's parameters and the plug-in's, as `params`.
+fn export_with(app: &mut VectorcraftApp, export: Value, values: Map<String, Value>) -> Result<Value, String> {
+    let mut p = Some(export).filter(Value::is_object).ok_or("no format to export to")?;
+    p["params"] = Value::Object(values);
+    let format = p.get("format").and_then(Value::as_str).map(str::to_string);
+    let path = p.get("path").and_then(Value::as_str).map(str::to_string);
+    crate::io::export(app, format.as_deref(), path, &p)
 }
 
 /// Opens the file with Open With's parameters and the plug-in's, as `params`.
-fn import_confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let mut p = d.fields.get("__open").cloned().filter(Value::is_object).ok_or("no file to open")?;
-    p["params"] = form::params(d);
-    app.ui.dialog = None;
+fn import_with(app: &mut VectorcraftApp, open: Value, values: Map<String, Value>) -> Result<Value, String> {
+    let mut p = Some(open).filter(Value::is_object).ok_or("no file to open")?;
+    p["params"] = Value::Object(values);
     let picked = p["picked"] == true;
     crate::io::open_with_on(app, &p, picked && crate::opening::available())
 }
 
-/// The dialog kind of the approval of a plug-in install.
+/// OK of a filter dialog: a filter keeps its previewed run as one undo step; a heavy one, which has
+/// no preview, and a light one that runs in the background ([`in_background`]) with Preview off or a
+/// failed preview, start in the background ([`run`]). A preview still shown when Preview was just
+/// turned off, or one that failed, is rolled back first.
+fn confirm_filter(app: &mut VectorcraftApp, kind: Opened, values: Map<String, Value>) -> Result<Value, String> {
+    let Opened::Filter { plugin, command: own, preview, light, previewing, refused, .. } = kind else { return Ok(Value::Null) };
+    let (cmd, p) = command(&plugin, own.as_deref(), values);
+    let kept = light && previewing && app.session.in_interaction() && !refused;
+    match registry::get(&plugin) {
+        Some(found) if own.is_none() && in_background(found.manifest()) && !kept => {
+            preview.cancel(app);
+            run(app, &found, p)
+        }
+        _ => preview.commit(app, &cmd, p),
+    }
+}
+
+/// Once per frame, after the shell pass: the plug-in install answer, then the open plug-in dialog,
+/// which previews with its values, closes when its plug-in is gone, and acts on its answer.
+pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    pump_install(app);
+    pump_dialog(app, ctx);
+}
+
+fn pump_dialog(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let Some(mut open) = app.plugin_dialog.take() else { return };
+    let Some(dialogs) = app.dialogs() else {
+        app.plugin_dialog = Some(open);
+        return;
+    };
+    let id = open.id;
+    let params = Arc::clone(open.kind.params());
+    let live = dialogs.with(|host| {
+        let d = host.get_mut_by_id::<HostedParamDialog>(id)?;
+        Some((d.take_help_link(), d.is_previewing(), form::json_of(&params, d.fields())))
+    });
+    if let Some((help, on, values)) = live {
+        if let Some(link) = help {
+            form::open_help(app, &link);
+        }
+        if open.kind.gone() {
+            dialogs.with(|host| host.cancel_by_id(ctx, id));
+            if let Opened::Filter { preview, .. } = open.kind {
+                preview.cancel(app);
+            }
+            return;
+        }
+        if let Opened::Filter { plugin, command: own, label, preview, previewing, refused, light, .. } = &mut open.kind {
+            *previewing = on;
+            if *light {
+                let (cmd, p) = command(plugin, own.as_deref(), values);
+                if let Some(answer) = preview.run(app, on, label, &cmd, &p) {
+                    *refused = answer.is_err();
+                }
+            }
+        }
+        app.plugin_dialog = Some(open);
+        return;
+    }
+    // The dialog is closed: answered, or cancelled from outside.
+    let answer = dialogs.with(|host| host.take_by_id::<HostedParamDialog>(id));
+    let Some(DialogResult::Ok(result)) = answer else {
+        if let Opened::Filter { preview, .. } = open.kind {
+            preview.cancel(app);
+        }
+        return;
+    };
+    let values = form::json_of(&params, &result.fields);
+    // The dialog is already closed, so a failure goes to the status line.
+    let done = match open.kind {
+        Opened::Filter { .. } => confirm_filter(app, open.kind, values),
+        Opened::Export { export, .. } => export_with(app, export, values),
+        Opened::Import { open, .. } => import_with(app, open, values),
+    };
+    if let Err(e) = done {
+        app.status(e);
+    }
+}
+
+/// The key of the approval of a plug-in install: the prompt's, and what [`ask_install`] answers.
 pub const INSTALL_KIND: &str = "pluginInstall";
 
 /// Who asked for a plug-in install, fixed when the request is made.
@@ -479,163 +606,142 @@ pub(crate) struct PendingInstall {
     pub approval: InstallApproval,
     /// Who asked; a question automation asked has no OK that installs.
     pub origin: InstallOrigin,
-    /// How long the question has been on screen; [`ask_install`] starts it over.
-    pub shown: Shown,
+    /// The question shown for it, once [`ask_install`] opened it: only its answer counts.
+    pub question: Option<DialogId>,
 }
 
 /// How long, in seconds, the approval's question stays on screen in the focused window, on every
 /// frame and unchanged, before its OK takes a click, Enter or Space.
 pub(crate) const APPROVAL_DELAY: f64 = 0.5;
 
-/// How long the approval's question has been on screen, from the frames that drew it.
-#[derive(Default)]
-pub(crate) struct Shown {
-    /// The time of the first frame of the current showing: drawn, visible, in the focused window,
-    /// right after a frame that drew it too. `None` while it isn't shown.
-    since: Option<f64>,
-    /// The pass number and time of the last frame that drew it.
-    pass: Option<u64>,
-    last: Option<f64>,
-    /// A pointer button, Enter or Space was down on a frame where OK was disabled, and they haven't
-    /// all been let go of since.
-    pressed_early: bool,
-    /// OK takes input: shown for [`APPROVAL_DELAY`], with no press from before that held.
-    ready: bool,
+/// What the approval says when automation asked for the install.
+fn automation_asked_note() -> &'static str {
+    tl!("Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.")
 }
 
-impl Shown {
-    /// Notes a frame that draws the question in `ui` → whether OK is enabled on it. The showing
-    /// starts over when the frame before didn't draw it, when time went back, when the window lost
-    /// the focus since the frame before, and on any frame that is a measuring pass, is invisible or
-    /// comes while the window doesn't have the focus.
-    fn drawn(&mut self, ui: &egui::Ui) -> bool {
-        let pass = ui.ctx().cumulative_pass_nr();
-        let (now, focused, left, pressed) = ui.input(|i| {
-            let left = i.events.iter().any(|e| matches!(e, egui::Event::WindowFocused(false)));
-            let pressed = i.pointer.any_pressed() || [egui::Key::Enter, egui::Key::Space].into_iter().any(|k| i.key_pressed(k));
-            (i.time, i.focused, left, pressed || Self::held(i))
-        });
-        let seen = focused && ui.is_visible() && !ui.is_sizing_pass() && now.is_finite();
-        let follows = self.pass.is_some_and(|p| p.checked_add(1) == Some(pass)) && self.last.is_some_and(|t| t <= now);
-        if !seen || !follows || left {
-            self.since = None;
-        }
-        if seen && self.since.is_none() {
-            self.since = Some(now);
-        }
-        (self.pass, self.last) = (Some(pass), Some(now));
-        let enabled = self.since.is_some_and(|s| now - s >= APPROVAL_DELAY);
-        if pressed && !enabled {
-            self.pressed_early = true;
-        }
-        self.ready = enabled && !self.pressed_early;
-        if let Some(s) = self.since.filter(|_| !enabled) {
-            ui.ctx().request_repaint_after_secs((s + APPROVAL_DELAY - now) as f32);
-        }
-        enabled
-    }
+/// The approval of a plug-in install: the question, the lines under it, OK, which waits
+/// [`APPROVAL_DELAY`] ([`FooterButton::armed_after`]), and Cancel, which never waits. When automation
+/// asked, a note says so and OK stays disabled. It takes no programmatic OK and sets no fields.
+pub(crate) struct InstallPrompt {
+    /// A new id for every question, so the OK's arming starts over for each.
+    id: DialogId,
+    message: String,
+    detail: String,
+    automated: bool,
+    /// Automation's injected input pressed OK since [`pump_install`] last looked: the question stays open.
+    refused: bool,
+}
 
-    /// After the frame's OK: a press from before OK took input stops counting once every pointer
-    /// button, Enter and Space are up.
-    fn released(&mut self, ui: &egui::Ui) {
-        if !ui.input(Self::held) {
-            self.pressed_early = false;
+impl InstallPrompt {
+    fn new(pending: &PendingInstall) -> Self {
+        static SERIAL: AtomicU64 = AtomicU64::new(0);
+        InstallPrompt {
+            id: dialog_id((INSTALL_KIND, SERIAL.fetch_add(1, Ordering::Relaxed))),
+            message: pending.message.clone(),
+            detail: pending.detail.clone(),
+            automated: pending.origin == InstallOrigin::Automation,
+            refused: false,
         }
-    }
-
-    /// Whether a pointer button, Enter or Space is down: what can click OK when it is let go of or
-    /// repeats.
-    fn held(i: &egui::InputState) -> bool {
-        i.pointer.any_down() || i.key_down(egui::Key::Enter) || i.key_down(egui::Key::Space)
-    }
-
-    /// Whether OK takes input: the question was shown for [`APPROVAL_DELAY`] on the last frame
-    /// that drew it.
-    pub(crate) fn ready(&self) -> bool {
-        self.ready
     }
 }
 
-/// No OK in the shared footer: the OK in its body is a `Sense::click` button, which Enter clicks
-/// only when it has the keyboard focus.
-pub(super) const INSTALL_SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("Install Plug-in…").trim_end_matches('…').to_string(),
-    body_with_actions: Some(install_body),
-    confirm: install_confirm,
-    ok: None,
-    max_width: Some(420.0),
-    ..DialogSpec::FORM
-};
+impl StackDialog for InstallPrompt {
+    type Result = ();
+
+    fn id(&self) -> DialogId {
+        self.id
+    }
+
+    fn key(&self) -> Option<&str> {
+        Some(INSTALL_KIND)
+    }
+
+    fn show(&mut self, ui: &mut Ui, _: &DialogStack) -> Option<DialogResult<()>> {
+        let mut prompt = Prompt::new(tl!("Install Plug-in"), self.message.clone()).paragraph(self.detail.clone());
+        if self.automated {
+            prompt = prompt.paragraph(automation_asked_note());
+        }
+        // An OK pressed by the pass's injected input is refused and leaves the question open.
+        let injected = WindowHost::of(ui.ctx()).injected_pass();
+        // `Other`: Enter answers only an accepting or destructive answer, and OK must not take it unfocused.
+        let shown = prompt
+            .answers([
+                FooterButton::new(tl!("OK"), DialogRole::Other).enabled(!self.automated).armed_after(APPROVAL_DELAY).stays_open(injected),
+                FooterButton::new(tl!("Cancel"), DialogRole::Cancel),
+            ])
+            .show(ui);
+        match shown.picked {
+            Some(0) if injected => {
+                self.refused = true;
+                None
+            }
+            Some(0) => Some(DialogResult::Ok(())),
+            Some(1) => Some(DialogResult::Cancel),
+            _ => None,
+        }
+    }
+}
 
 /// Asks a person whether to install what `pending` describes, its question not yet shown, even when
 /// it reads as the one it replaces. → `{pending}`, and `approval: "personMustStartInstall"` when
 /// automation asked.
 pub(crate) fn ask_install(app: &mut VectorcraftApp, mut pending: PendingInstall) -> Value {
-    pending.shown = Shown::default();
-    let automated = pending.origin == InstallOrigin::Automation;
+    let prompt = InstallPrompt::new(&pending);
+    let automated = prompt.automated;
+    pending.question = Some(prompt.id);
     app.pending_plugin_install = Some(pending);
-    app.ui.dialog = Some(Dialog::new(INSTALL_KIND, json!({})));
+    if let Some(dialogs) = app.dialogs() {
+        dialogs.with(|host| host.open(prompt));
+    }
     if automated {
         return json!({ "pending": INSTALL_KIND, "approval": PERSON_MUST_START_INSTALL });
     }
     json!({ "pending": INSTALL_KIND })
 }
 
-/// What the approval says when automation asked for the install; the error of its OK
-/// ([`install_confirm`]) is the same text.
-fn automation_asked_note() -> &'static str {
-    tl!("Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.")
-}
+/// What the status line says when automation pressed the approval's OK.
+const REFUSED: &str = "Only the person at the keyboard can approve installing a plug-in";
 
-/// The question, the lines under it, and OK, which is disabled until the question has been shown
-/// for [`APPROVAL_DELAY`] ([`Shown`]), and Cancel, which never waits. When automation asked, a note
-/// says so and OK stays disabled.
-fn install_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, _: &mut Dialog) -> DialogAction {
-    let Some(pending) = app.pending_plugin_install.as_mut() else { return DialogAction::Cancel };
-    let person = pending.origin == InstallOrigin::Person;
-    let enabled = pending.shown.drawn(ui) && person;
-    ui.label(egui::RichText::new(&pending.message).strong());
-    ui.add_space(8.0);
-    ui.label(egui::RichText::new(&pending.detail).color(crate::theme::Tokens::get(ui.ctx()).text_dim));
-    if !person {
-        ui.add_space(8.0);
-        ui.label(egui::RichText::new(automation_asked_note()).strong());
-    }
-    ui.add_space(16.0);
-    let mut action = DialogAction::None;
-    let row = egui::vec2(ui.min_rect().width(), ui.spacing().interact_size.y);
-    ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        if widgets::primary_button_enabled(ui, "OK", enabled).clicked() && person && pending.shown.ready() {
-            action = DialogAction::Confirm;
-        }
-        pending.shown.released(ui);
-        ui.add_space(8.0);
-        if widgets::secondary_button(ui, "Cancel").clicked() {
-            action = DialogAction::Cancel;
-        }
+/// The answer to the install question: Cancel drops it; OK installs the module the question showed,
+/// when a person pressed it. An OK automation's input pressed leaves the question open and says why.
+fn pump_install(app: &mut VectorcraftApp) {
+    let Some(dialogs) = app.dialogs() else { return };
+    let question = app.pending_plugin_install.as_ref().and_then(|p| p.question);
+    let (answer, refused) = dialogs.with(|host| {
+        let refused = question.and_then(|id| host.get_mut_by_id::<InstallPrompt>(id)).is_some_and(|p| std::mem::take(&mut p.refused));
+        let answer = question.and_then(|id| host.take_by_id::<InstallPrompt>(id));
+        // A question a newer one replaced was answered Cancel: that answer is not the pending install's.
+        while host.take::<InstallPrompt>().is_some() {}
+        (answer, refused)
     });
-    action
+    if refused {
+        app.status(REFUSED.to_string());
+    }
+    let Some(answer) = answer else { return };
+    match answer.ok() {
+        Some(()) => approve(app),
+        None => app.pending_plugin_install = None,
+    }
 }
 
-/// OK: installs the module the dialog showed, if a person pressed it; automation is refused and the
-/// dialog stays open, and so is any OK of a question automation asked. Before the question has been
-/// shown for [`APPROVAL_DELAY`] it installs nothing and the dialog stays open. → `{pending}`.
-fn install_confirm(app: &mut VectorcraftApp, _: &Dialog) -> Result<Value, String> {
-    if app.pending_plugin_install.as_ref().is_some_and(|p| p.origin == InstallOrigin::Automation) {
-        return Err("Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.".into());
+/// A person's OK of the install question. A question automation asked has no OK that installs, and
+/// a control request can't press one: either asks again, a new question that waits its delay.
+fn approve(app: &mut VectorcraftApp) {
+    let Some(pending) = app.pending_plugin_install.take() else { return };
+    if pending.origin == InstallOrigin::Automation {
+        ask_install(app, pending);
+        return;
     }
     if app.automation_is_acting() {
-        return Err("Only the person at the keyboard can approve installing a plug-in".into());
+        app.status(REFUSED.to_string());
+        ask_install(app, pending);
+        return;
     }
-    if app.pending_plugin_install.as_ref().is_some_and(|p| !p.shown.ready()) {
-        return Ok(json!({ "pending": INSTALL_KIND }));
-    }
-    app.ui.dialog = None;
-    let Some(pending) = app.pending_plugin_install.take() else { return Ok(Value::Null) };
     app.session.approve_plugin_install(pending.approval);
     let r = app.run("plugin.install", pending.params);
     app.session.clear_plugin_install_approval();
-    let r = r?;
-    crate::io::report_installed(app, &r);
-    Ok(r)
+    match r {
+        Ok(r) => crate::io::report_installed(app, &r),
+        Err(e) => app.status(e),
+    }
 }

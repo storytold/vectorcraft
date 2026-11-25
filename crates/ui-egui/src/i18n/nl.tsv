@@ -22,6 +22,7 @@
 	Quit VectorCraft	VectorCraft afsluiten
 # Artwork drag between document tabs.
 	Drop Artwork	Illustratie neerzetten
+@id	language.name	Nederlands
 @msg	{key} must be [x, y] with finite coordinates	{key} moet [x, y] met eindige coördinaten zijn
 @msg	ids must contain 1–10000 object ids	ids moet 1–10000 object-id’s bevatten
 
@@ -379,7 +380,6 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	an exporter always gets an export's budget: leave `budget` out	een exportplug-in krijgt altijd het budget van een export: laat `budget` weg
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	„{_1}” vraagt om een groot rekenbudget (elke uitvoering tot {minutes} minuten en {times} keer het gebruikelijke aantal instructies): een persoon moet dit goedkeuren in de desktop-app, of geef `allowHeavy: true` door in een sessie die is gestart met --allow-plugin-grants
 @msg	`name` must be 1-64 printable characters	`name` moet uit 1-64 afdrukbare tekens bestaan
-@msg	`{key}` must be 1-64 printable characters	`{key}` moet uit 1-64 afdrukbare tekens bestaan
 @msg	`version`, `description` or `author` is too long	`version`, `description` of `author` is te lang
 @msg	`warnings` must be a list of strings	`warnings` moet een lijst met strings zijn
 @msg	`{k}` must be one of {_1}	`{k}` moet een van {_1} zijn
@@ -400,11 +400,17 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	module is {_1} bytes (limit {_2})	de module telt {_1} bytes (limiet {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	goedkeuring nodig: de plug-in vraagt om {0}, wat de gebruiker toestaat wanneer hij die afzonderlijk installeert
 @msg	not JSON: {e}	geen JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	geen WebAssembly-binair bestand (de header \0asm ontbreekt)
+@msg	not a WebAssembly binary (missing \\0asm header)	geen WebAssembly-binair bestand (de header \\0asm ontbreekt)
 @msg	parameter `{k}`: {what}	parameter `{k}`: {what}
 @msg	parameter `{name}`: {what}	parameter `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	plug-in-parameters moeten een JSON-object zijn
 @msg	the module must export its linear memory as `memory`	de module moet haar lineaire geheugen exporteren als `memory`
+@msg	the module must export `{name}` with the type {signature}	de module moet `{name}` exporteren met het type {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	de module heeft meer dan één aangepaste sectie `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	geheugenbudget (het begingeheugen van de module is {initial} bytes, limiet {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	het manifest in de aangepaste sectie `{MANIFEST_SECTION}` moet `abi` opgeven als {ABI_VERSION}, de ABI-versie die deze host implementeert
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	tabelbudget (de module definieert {count} tabellen, de grootste met {largest} elementen; limiet {MAX_TABLES} tabellen van {MAX_TABLE_ELEMENTS} elementen)
+@msg	the module's table section could not be read	de tabelsectie van de module kon niet worden gelezen
 @msg	the objects to change are no longer in the document	de te wijzigen objecten staan niet meer in het document
 @msg	the runtime panicked	de runtime is vastgelopen
 @msg	unexpected host trap	onverwachte trap in de host
@@ -474,6 +480,8 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	`plates` requires a stop linked to a spot swatch	`plates` vereist een verloopstop die aan een steunkleurstaal is gekoppeld
 @msg	the output	de uitvoer
 @msg	the path has no anchor points	het pad heeft geen ankerpunten
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	het samengestelde pad {id} heeft een verborgen, vergrendeld of hulplijnlid, dus de leden kunnen niet worden vervangen
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	het samengestelde pad {id} heeft een lid dat geen pad is, dus de leden kunnen niet worden vervangen
 @msg	too many anchor points (limit {MAX_ANCHORS})	te veel ankerpunten (limiet {MAX_ANCHORS})
 @msg	true or false	true of false
 @msg	a number >= {_1}	een getal >= {_1}
@@ -6535,6 +6543,8 @@ imageTrace	Outline	Contour
 @msg	`dataBase64` is larger than the module limit	`dataBase64` is groter dan de modulelimiet
 @msg	`dataBase64` is not valid base64	`dataBase64` is geen geldige base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` kan niet worden gecombineerd met `ids`, `reverse` of `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` kan niet worden gecombineerd met `ids`, `id` of `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` kan niet worden gecombineerd met `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` en `childLimit` beperken de samenvatting: geef `summary: true` op
 @msg	`design` is a design name, or null for plain columns	`design` is de naam van een ontwerp, of null voor gewone kolommen
 @msg	`design` is a design name, or null for the default marker	`design` is de naam van een ontwerp, of null voor de standaardmarkering
@@ -8609,6 +8619,7 @@ mark-style	Japanese	Japans
 @msg	a 3D effect on a group's fill or stroke draws nothing	een 3D-effect op de vulling of contour van een groep tekent niets
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	een 3D-effect op de vulling of contour van een groep tekent niets om te exporteren
 @msg	The 3D object is too complex to export	Het 3D-object is te complex om te exporteren
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Het net van het 3D-object is onvolledig of bevat een waarde die geen getal is
 @msg	the <filter> element needs an id, the filter's name	het <filter>-element heeft een id nodig, de naam van het filter
 @msg	an SVG filter's id is at most {MAX_NAME} characters	de id van een SVG-filter is hoogstens {MAX_NAME} tekens lang
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> is geen element van een SVG-filter
