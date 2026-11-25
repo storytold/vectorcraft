@@ -24,8 +24,8 @@ pub(crate) mod rank {
     /// The inline X/Y/W/H fields and the Snapping menu.
     pub const FIELDS: u8 = 2;
     /// The type groups (Character, Paragraph and area type's vertical alignment) and the Align buttons after them:
-    /// they leave before the members ahead of them, so Opacity, the Style picker and Recolor Artwork show while type
-    /// is selected.
+    /// they leave after Select Similar, Snapping and the X/Y/W/H fields and before every other member, so Opacity,
+    /// the Style picker and Recolor Artwork show while type is selected.
     pub const TYPE: u8 = 3;
     /// The parts of a group that its other members work without: the width profile, Recolor Artwork, Global Edit
     /// Options, Document Setup, an image's Edit Original.
