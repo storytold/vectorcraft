@@ -2622,7 +2622,7 @@ app through the global object `vc`, and writes to the Script Console and runs ot
 - `vc.log(value)` adds a value to the report and a line to the Script Console.
 - `app` is the application object the help page https://ai-scripting.docsforadobe.dev/jsobjref/Application/
   describes: `app.documents`, `app.activeDocument` (assigning an open document makes it the active one),
-  `app.selection`, `app.coordinateSystem` and `app.getIsFileOpen(path)`. `app.documents`
+  `app.selection`, `app.coordinateSystem`, `app.getIsFileOpen(path)` and `app.redraw()`. `app.documents`
   (https://ai-scripting.docsforadobe.dev/jsobjref/Documents/) has `length`, `[i]`, `index(key)`, `getByName(name)`
   and `add(colorSpace?, width?, height?, numArtBoards?, artboardLayout?, artboardSpacing?, artboardRowsOrCols?)`,
   which runs `file.new` (`artboardRowsOrCols` is the number of rows for `GridByCol` and `RLGridByCol`, and of
@@ -2692,7 +2692,9 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   with `selected`. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
   letter case is ignored and `\` matches `/`) and does not resolve the path it is given. A document counts only when
   the automation read roots allow its file, and that check can look the document's file up on disk. A path with
-  `..`, a network path, a NUL character or more than 4,096 bytes throws an error. Some members the Application,
+  `..`, a network path, a NUL character or more than 4,096 bytes throws an error. `app.redraw()` returns `undefined`
+  and does not change the documents or add an undo step. In the app, the documents are drawn as they were before the
+  run until the run ends, with or without the call. Some members the Application,
   Document and PageItem pages list, such as `Document.layers`, `PageItem.blendingMode`, `PageItem.rotate` and
   `app.beep`, throw an error that says they are not available yet when they are read or assigned. Other members
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
