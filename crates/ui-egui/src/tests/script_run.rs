@@ -541,6 +541,28 @@ fn the_warning_lists_what_a_scripts_included_files_reach() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A script file that changes what it reaches while its warning is open does not run on Run: the
+/// warning opens again with the new report, and the next Run runs it.
+#[test]
+fn run_lists_a_script_again_when_it_changed_after_its_warning_opened() {
+    let mut app = app();
+    let dir = folder("changed");
+    let path = dir.join("changed.jsx");
+    std::fs::write(&path, DRAW).unwrap();
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({"path": path.to_string_lossy()})).unwrap().unwrap();
+    assert_eq!(fields(&app, KIND)["reaches"]["outside"], json!([]));
+    std::fs::write(&path, format!("{DRAW}\nvar s = new Socket();\n")).unwrap();
+    assert!(confirm(&mut app, KIND));
+    assert!(!app.session.script_running());
+    assert!(is_open::<RunQuestion>(&app));
+    assert_eq!(app.ui.status, script_run::CHANGED_SINCE_WARNING);
+    assert_eq!(fields(&app, KIND)["reaches"]["outside"][0]["id"], "network");
+    assert!(confirm(&mut app, KIND));
+    assert!(app.session.script_running());
+    finish(&mut app);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// A script with more includes than the warning lists gives the count of the rest.
 #[test]
 fn the_warning_counts_the_includes_it_does_not_list() {

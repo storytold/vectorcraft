@@ -2643,8 +2643,9 @@ files it opens in other apps, messages to other apps, the network, native code, 
 app's preferences and code the checker can't read), the files and dialogs it needs, features only the reference app
 has, and the files its `#include` lines name (the first 20, then the count of the rest; VectorCraft's own limit). It
 says when the script is too large to check, compiled or not a script, when the check failed, and when a list was cut
-short at its limit. The listing does not stop the run. A
-script from the Scripts folder runs without the warning.
+short at its limit. The listing does not stop the run. Run checks the script again, and when the report has changed
+since the warning opened, nothing runs and the warning opens again with the new report. A script from the Scripts
+folder runs without the warning.
 Pass exactly one of `path` and `source`. A `path` must end in `.js` or `.jsx`, in any
 case. A `.jsxbin` file or text that starts with `@JSXBIN@` is compiled and ends with an error, as does text that is
 not UTF-8. The language is ES5.1, except that identifiers take the characters Unicode's `ID_Start` and

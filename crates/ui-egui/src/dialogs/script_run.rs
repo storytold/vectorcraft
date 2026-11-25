@@ -15,7 +15,9 @@
 //! and dialogs it needs, features only the reference app has, and its includes (at most
 //! [`SHOWN_INCLUDES`], then the count of the rest). It says when the script is too large to check,
 //! compiled or not a script, when the check failed, and when a list was cut short at its limit.
-//! The listing is information: Run runs the script as before. The growth question
+//! The listing is information: Run runs the script as before, after checking it again. When the
+//! report has changed since the warning opened, nothing runs and the warning opens again with the
+//! new report. The growth question
 //! (`scriptGrowth`) and the question quitting asks (`scriptClose`) have the `choice` field alone.
 //!
 //! A script's dialog (kind `scriptDialog`) has the fields `kind` (alert, confirm or prompt),
@@ -522,8 +524,14 @@ pub(crate) fn chosen(app: &mut VectorcraftApp, params: Value) -> Result<Value, S
     if !app.session.prefs.show_external_script_warning {
         return app.run("script.run", params);
     }
-    let name = params.get("name").and_then(Value::as_str).or(path).map_or_else(|| "script".to_string(), vectorcraft_engine::cmd::fileio::file_name);
     let reaches = reaches(app, &params);
+    warn(app, params, reaches)
+}
+
+/// Opens the warning for the script `params` name, listing `reaches`.
+fn warn(app: &mut VectorcraftApp, params: Value, reaches: Value) -> Result<Value, String> {
+    let path = params.get("path").and_then(Value::as_str);
+    let name = params.get("name").and_then(Value::as_str).or(path).map_or_else(|| "script".to_string(), vectorcraft_engine::cmd::fileio::file_name);
     // The script's name is the message: it is what the person reads first.
     let prompt = StandardPrompt::custom(name)
         .title(tl!("Run Script"))
@@ -536,6 +544,10 @@ pub(crate) fn chosen(app: &mut VectorcraftApp, params: Value) -> Result<Value, S
     with_host(app, |host, _| host.open(RunQuestion(prompt))).ok_or_else(|| "there is no window to ask in".to_string())?;
     Ok(Value::Null)
 }
+
+/// The status when Run finds that the script's report changed since the warning opened: the
+/// warning opens again with the new report, and nothing runs.
+pub(crate) const CHANGED_SINCE_WARNING: &str = "The script changed after its warning opened: check the warning again";
 
 /// The most includes the warning lists; a line after them gives the count of the rest.
 pub(crate) const SHOWN_INCLUDES: usize = 20;
@@ -690,10 +702,19 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     }
     if let Some(DialogResult::Ok(mut answer)) = run
         && answer.choice == PromptChoice::Proceed
-        && let Some(RunWarning { params, .. }) = answer.take_tag::<RunWarning>()
+        && let Some(RunWarning { params, reaches: listed }) = answer.take_tag::<RunWarning>()
     {
-        let stored = if answer.skip { app.run("prefs.set", json!({"key": "showExternalScriptWarning", "value": false})).map(drop) } else { Ok(()) };
-        if let Err(e) = stored.and_then(|()| app.run("script.run", params).map(drop)) {
+        // A script whose report changed while the warning was open is listed again before it runs.
+        let now = reaches(app, &params);
+        let ran = if now == listed {
+            let stored =
+                if answer.skip { app.run("prefs.set", json!({"key": "showExternalScriptWarning", "value": false})).map(drop) } else { Ok(()) };
+            stored.and_then(|()| app.run("script.run", params).map(drop))
+        } else {
+            app.status(CHANGED_SINCE_WARNING);
+            warn(app, params, now).map(drop)
+        };
+        if let Err(e) = ran {
             app.status(e);
         }
     }
