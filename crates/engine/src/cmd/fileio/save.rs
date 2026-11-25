@@ -1071,15 +1071,13 @@ impl SaveJob {
             return Ok(stopped);
         }
         // Every path is checked against the file access in force before the first file is
-        // written. A refused file goes to `write` first, which refuses it with the error the
-        // caller gives (naming the path as the caller does), so none of the files is written.
+        // written. When one is refused, the save returns that error and `write` is not called, so
+        // none of the files is written, also by a writer that does not check the file access.
         #[cfg(not(target_arch = "wasm32"))]
         if files.len() > 1
-            && let Some((p, bytes)) = files.iter().find(|(p, _)| super::may_write(p).is_err())
+            && let Some(e) = files.iter().find_map(|(p, _)| super::may_write(p).err())
         {
-            write(p, bytes)?;
-            // A writer that does not check the file access writes none of the others.
-            return Err(super::may_write(p).err().unwrap_or_else(|| crate::EngineError::Other(format!("file access denied: {p}"))));
+            return Err(e);
         }
         for (i, (p, bytes)) in files.iter().enumerate() {
             if i == 0 {

@@ -208,7 +208,7 @@ fn a_save_writes_nothing_when_one_of_its_files_is_refused() {
 }
 
 /// When the writer a save is given does not check the file access itself, a save of several files
-/// still writes none of them after the refused one.
+/// with a refused one gives none of them to the writer.
 #[test]
 fn a_refused_file_stops_a_save_whose_writer_does_not_check() {
     use crate::cmd::fileio::{SaveMode, save_job, save_plan};
@@ -247,7 +247,7 @@ fn a_refused_file_stops_a_save_whose_writer_does_not_check() {
     });
     assert!(r.is_err(), "{r:?}");
     let refused = refused.unwrap();
-    assert_eq!(written, std::slice::from_ref(&refused), "only the refused file went to the writer");
+    assert!(written.is_empty(), "no file went to the writer: {written:?}");
     let mut perms = std::fs::metadata(&refused).unwrap().permissions();
     #[allow(clippy::permissions_set_readonly_false)]
     perms.set_readonly(false);
