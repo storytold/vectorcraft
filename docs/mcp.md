@@ -3011,8 +3011,9 @@ its own and no `capture` handler on a container stopped the click; `click` handl
 capture do not keep it from closing (VectorCraft's own rule). `onClose` runs before the dialog closes, and
 returning `false` keeps it open. The default button is `defaultElement`, else a button named or titled OK, and the
 cancel button is `cancelElement`, else a button named or titled Cancel, in any case. A `show()` inside a handler,
-or of a dialog that is showing, throws an `Error`, and so does one inside a callback of a built-in function. A
-shown dialog can be shown again after it closes.
+or of a dialog that is showing, throws an `Error`, and so does one inside a callback of a built-in function. In
+the app, `alert`, `confirm`, `prompt` and the file dialogs called from a handler also throw an `Error`; in a run with
+nobody to ask, `alert`, `confirm` and `prompt` in a handler take their answers from `answers`. A shown dialog can be shown again after it closes.
 
 `show()` checks the dialog: at most 512 controls, nested at most 16 deep, 1,024 list items in all and 16 KiB of
 text a control, past which it throws a `RangeError`, a size or a place that is not a finite number, which throws
