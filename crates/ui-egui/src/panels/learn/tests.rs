@@ -102,18 +102,6 @@ fn the_catalog_is_valid() {
     }
 }
 
-/// Explore tutorials at the right end of the app bar shows the Learn panel, and hides it again.
-#[test]
-fn explore_tutorials_on_the_app_bar_shows_and_hides_the_learn_panel() {
-    let mut app = app();
-    let ctx = app.ui_ctx.clone().expect("a window");
-    assert!(!shown(&app));
-    click_with(&mut app, "Explore tutorials", |app, events| shell_frame(app, &ctx, events));
-    assert!(shown(&app), "{}", app.ui.status);
-    click_with(&mut app, "Explore tutorials", |app, events| shell_frame(app, &ctx, events));
-    assert!(!shown(&app));
-}
-
 /// The command and params of Window › Learn.
 fn window_learn(app: &VectorcraftApp) -> (String, serde_json::Value) {
     let entry = crate::menus::menu_entries(app).into_iter().find(|e| e.path == ["Window"] && e.label == "Learn").expect("Window › Learn");
@@ -138,8 +126,8 @@ fn window_learn_shows_and_hides_the_panel() {
     assert!(!shown(&app));
 }
 
-/// With the dock hidden, Learn as the front panel is not visible: `window.learn`, Window › Learn
-/// and Explore tutorials show the dock instead of closing the panel.
+/// With the dock hidden, Learn as the front panel is not visible: `window.learn` and Window › Learn
+/// show the dock instead of closing the panel.
 #[test]
 fn window_learn_shows_a_hidden_dock() {
     let mut app = app();

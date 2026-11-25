@@ -43,7 +43,7 @@ use craft::ui::display::{Shade, Text};
 use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::{List, ListRow, ThumbAspect, ThumbSize, ToggleCell, ToggleState};
 use craft::ui::patterns::form_dialogs::{FormDialog, PathRow};
-use craft::ui::primitives::ContentPainterCx;
+use craft::ui::primitives::{ContentPainterCx, fit_rect};
 use craft::ui::runtime::env::Label;
 use craft::ui::tabs::{Tab, TabKind, TabStrip};
 use craft::ui::text::TextField;
@@ -601,8 +601,11 @@ impl ExportForScreensDialog {
         let items = Items(doc.artboards.iter().map(|a| (u64::from(a.id), a.name.clone())).collect());
         let caption = |at: usize| format!("{}  {}", at + 1, items.0.get(at).map_or("", |(_, name)| name.as_str()));
         let thumbs = &self.thumbs;
+        // The artboard keeps its proportions, centered in the tile or the row's thumbnail.
         let paint = |at: usize, cx: &ContentPainterCx, rect: egui::Rect| match thumbs.get(at).cloned().flatten() {
-            Some(tex) => cx.picture(tex.id(), rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), 0.0),
+            Some(tex) => {
+                cx.picture(tex.id(), fit_rect(rect, tex.size_vec2()), egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), 0.0)
+            }
             None => {
                 cx.painter.rect_filled(rect, 0.0, egui::Color32::WHITE);
             }

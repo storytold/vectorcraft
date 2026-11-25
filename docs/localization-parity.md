@@ -17,7 +17,7 @@ translation never fails a test or a build: the interface shows the English text 
 `cargo xtask ci` prints the untranslated report (`cargo xtask i18n-report` alone), which lists per language the
 strings missing from each catalog with the `complete_menus` flag and the messages missing from each language in
 the `COMPLETE_MESSAGES` list. Every non-English language marked "full" has the flag, and all of them except
-Bosnian and Bulgarian are in the list. No language has help content: there is no translated (or
+Bosnian are in the list. No language has help content: there is no translated (or
 English) in-app help, and the docs are English.
 
 **Native review:** every catalog was written clean-room from the English meaning, most of it by agents
@@ -66,7 +66,7 @@ plus review. Native-speaker review is human work and isn't in the hours.
 | Czech | `cs` | 9,761 rows, 3,742 of them `@msg` and 51 `@msgplural` (counted 2026-11-17 on `main` at `ee60c51fd9`): the untranslated report lists 222 missing Czech messages, and 15 messages that no checked language has a row for | catalog complete; render-site gaps reduced; native review pending |
 | Bosnian | `bs` | 7,227 rows, 1,205 of them `@msg` and 47 `@msgplural` (counted 2026-11-17 on `main` at `ee60c51fd9`): the untranslated report lists 113 missing menu strings, 66 `tl!` literals and 30 undo labels for it; not in `COMPLETE_MESSAGES`, so the report does not check its messages; one/few/other plurals | full; AI-assisted, native review pending |
 | Swedish | `sv` | 9,498 rows, 3,311 of them `@msg` and 51 `@msgplural` (counted 2026-11-17 on `main` at `ee60c51fd9`): the untranslated report lists 647 missing messages for it, and 31 menu strings, 14 `tl!` literals and 6 undo labels; one/other plurals | full; native review welcome |
-| Bulgarian | `bg` | 7,133 rows, 1,111 of them `@msg` and 47 `@msgplural` (counted 2026-11-17 on `main` at `ee60c51fd9`): the untranslated report lists 76 menu strings, 48 `tl!` literals, 16 undo labels and 45 swatch names for it; its messages are partial | full; AI-drafted, native review pending |
+| Bulgarian | `bg` | 8,940 rows, 2,143 of them `@msg` and 56 `@msgplural` (counted 2026-11-25 on `main` at `9d050d2b01`): in `COMPLETE_MESSAGES`, and the untranslated report lists 71 menu strings, 41 `tl!` literals, 13 undo labels, 45 swatch names and 1,933 messages for it; its messages are partial | full; AI-drafted, native review pending |
 | Greek | `el` | 8,003 rows, 1,972 of them `@msg` and 51 `@msgplural` (counted 2026-11-17 on `main` at `ee60c51fd9`): the untranslated report lists 1,974 missing messages for it | full; native review welcome |
 | Georgian | `ka` | 9,758 rows, 3,740 of them `@msg` and 49 `@msgplural` (counted 2026-11-15): menus, panels, dialogs and plurals (one count-neutral form); the untranslated report lists 1 missing Georgian message; reviewed by a native speaker | full |
 | Turkish | `tr` | 9,784 rows, 3,746 of them `@msg` and 51 `@msgplural` (counted 2026-11-17 on `main` at `ee60c51fd9`); 235 messages, 79 menu strings, 39 `tl!` literals, 16 undo labels and the default swatch names still fall back to English | full |

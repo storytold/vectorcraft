@@ -523,12 +523,11 @@ impl Exporter<'_> {
     }
 
     /// Draw image `im` of node `n` colorized with `p` ([`Self::colorized_image`]), overprinting
-    /// when its color does ([`Node::colorize_overprints`]). A white color that is not a spot ink
-    /// ([`Document::spot_ink`]) and overprints (Discard White Overprint off) puts no ink down, so
-    /// it paints nothing.
+    /// when its color does ([`Node::colorize_overprints`]). A paper white color ([`Self::paper_white`])
+    /// that overprints (Discard White Overprint off) puts no ink down, so it paints nothing.
     fn colorized(&mut self, s: &mut Surface, n: &Node, im: &vectorcraft_doc::ImageObject, p: &Paint) {
         let overprint = n.colorize_overprints() && self.overprint;
-        if overprint && !self.doc.setup.discard_white_overprint && !self.doc.spot_ink(p) && vectorcraft_doc::overprint::is_white(p) {
+        if overprint && !self.doc.setup.discard_white_overprint && self.paper_white(p) {
             return;
         }
         match self.colorized_image(im, p, !n.extras().pixelated, overprint) {
@@ -634,11 +633,10 @@ impl Exporter<'_> {
     }
 
     /// Draw a fill or stroke of `paint` with `draw`: as a form marked to overprint when it
-    /// `overprints`, paints and overprints are kept (but not a white one with Discard White
-    /// Overprint, [`Document::discards_white_overprint`]).
+    /// `overprints`, paints and overprints are kept (but not a paper white one with Discard White
+    /// Overprint, [`Self::discards_white`]).
     pub(super) fn overprinting(&mut self, s: &mut Surface, overprints: bool, paint: &Paint, draw: impl FnOnce(&mut Self, &mut Surface)) {
-        let white = || self.doc.discards_white_overprint(paint);
-        if overprints && self.overprint && !paint.is_none() && !white() {
+        if overprints && self.overprint && !paint.is_none() && !self.discards_white(paint) {
             self.overprinted = true;
             crate::forms::form(s, Mark::Overprint, |s| draw(self, s));
         } else {
@@ -647,17 +645,36 @@ impl Exporter<'_> {
     }
 
     /// [`Self::overprinting`] for a character fill or stroke, which has no blend mode of its own:
-    /// with [`Self::darken_overprints`] an overprinting one is drawn with Darken (not a white one
-    /// with Discard White Overprint).
+    /// with [`Self::darken_overprints`] an overprinting one is drawn with Darken (not a paper
+    /// white one with Discard White Overprint).
     pub(super) fn char_overprinting(&mut self, s: &mut Surface, overprints: bool, paint: &Paint, draw: impl FnOnce(&mut Self, &mut Surface)) {
-        let white = self.doc.discards_white_overprint(paint);
-        if overprints && self.darken_overprints && !paint.is_none() && !white {
+        if overprints && self.darken_overprints && !paint.is_none() && !self.discards_white(paint) {
             s.push_blend_mode(krilla::blend::BlendMode::Darken);
             self.overprinting(s, overprints, paint, draw);
             s.pop();
         } else {
             self.overprinting(s, overprints, paint, draw);
         }
+    }
+
+    /// Whether paint `p` knocks out where it overprints under Document Setup → Discard White
+    /// Overprint ([`vectorcraft_doc::overprint::DiscardWhite::discards`]).
+    fn discards_white(&mut self, p: &Paint) -> bool {
+        self.doc.setup.discard_white_overprint && self.paper_white(p)
+    }
+
+    /// Whether paint `p` is paper white ([`vectorcraft_doc::overprint::DiscardWhite::paper_white`]):
+    /// white, and not a tint above 0% of one of the document's spot inks. The spot ink names are
+    /// read only for a white linked to a swatch.
+    fn paper_white(&mut self, p: &Paint) -> bool {
+        if !vectorcraft_doc::overprint::is_white(p) {
+            return false;
+        }
+        if !matches!(p, Paint::Solid { swatch: Some(_), .. }) {
+            return true;
+        }
+        let doc = self.doc;
+        self.discard_white.get_or_insert_with(|| vectorcraft_doc::overprint::DiscardWhite::of(doc)).paper_white(p)
     }
 
     /// Is `p` a paint PDF has no paint for when it paints a fill (`fill`) or a stroke, which

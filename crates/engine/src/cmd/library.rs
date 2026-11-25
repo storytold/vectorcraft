@@ -1360,7 +1360,7 @@ fn use_pattern(s: &mut Session, data: &Value, stroke: bool, only: bool) -> Resul
     // or spot color the pattern's art links to keeps the library's color, as Add to Swatches brings
     // a library pattern's colors.
     let current = s.doc()?.doc.clone();
-    let (choices, probe, imported) = super::patternlib::probe_import(&current, &doc, &name, &clip)?;
+    let (choices, probe, imported) = super::patternlib::probe_import(&current, &doc, &name, &clip, &Default::default())?;
     drop(current);
     let target = super::patternlib::imported_name(&imported, &name);
     let paint = vectorcraft_doc::pattern::pattern_paint(&target);

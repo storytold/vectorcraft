@@ -22,8 +22,8 @@ use craft::behavior::{Axis, DockSide, IconId};
 use craft::ui::buttons::IconButton;
 use craft::ui::contract::{Bind, BodyCx, PlainData, Show as _, Tracked};
 use craft::ui::docking::{
-    DockCommands, DockConfig, DockEvent, DockGrid, DockPanels, DockScene, DockSizes, DockTo, DragUnit, FloatSpace, GroupAt, HidePanels, PanelKey,
-    PanelSpec, PanelSpecs, actions as command_actions, move_actions, request_actions,
+    ColumnCards, DockCommands, DockConfig, DockEvent, DockGrid, DockPanels, DockScene, DockSizes, DockTo, DragUnit, FloatSpace, GroupAt, HidePanels,
+    PanelKey, PanelSpec, PanelSpecs, actions as command_actions, move_actions, request_actions,
 };
 use craft::ui::menu::PanelRow;
 use craft::ui::patterns::dock::DockArea;
@@ -31,6 +31,7 @@ use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::commands::CommandRef;
 use craft::ui::runtime::frame::{ChromeToggle, request_chrome_toggle};
 use craft::ui::shell::chrome_state;
+use craft::ui::tabs::PanelTabLook;
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
@@ -1316,7 +1317,13 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, keeps_tools: boo
             Bind::bound(&mut workspace),
             &specs,
             &mut panels,
-            DockConfig::default().panel_menu_always(true).panel_menu_icon(IconId::new("menu")).rail_cards(true),
+            DockConfig::default()
+                .panel_menu_always(true)
+                .panel_menu_icon(IconId::new("menu"))
+                .floating_rounded_body(true)
+                .tab_look(PanelTabLook::Block)
+                .column_cards(ColumnCards::Stepped)
+                .flush_docks(true),
         )
         .hide(hide)
         .flyout(Bind::bound(&mut flyout));
@@ -1355,7 +1362,9 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, keeps_tools: boo
         // Shift as the frame holds it: the window system sends a file drag no key events, and a second pass of the
         // frame reads the same state.
         let shift = ctx.input(|i| i.modifiers.shift);
-        crate::place::os_drop(app, output.window_files, crate::place::DropSpot::Unknown, shift);
+        // The panel each drop landed on is not a target here: every dropped file opens, as before.
+        let files = output.window_files.into_iter().flat_map(|drop| drop.files).collect();
+        crate::place::os_drop(app, files, crate::place::DropSpot::Unknown, shift);
     }
     if output.float_space.is_some() {
         app.dock_rt.space = output.float_space;
