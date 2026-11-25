@@ -1,23 +1,60 @@
 //! Script Console panel (Window › Script Console): the lines of this session's script runs
 //! (`script.console`), each marked with its run's number and its script's name: a start, the
 //! script's `$.write` and `$.writeln` output and `vc.log` entries, its uncaught error, an end and a
-//! report of its time and host calls. The panel lays out only the rows in view. A click selects a
-//! line and Shift-click a range. Clear runs `script.console.clear`; Copy Selected and Copy All run
-//! `ui.copyScriptConsole`. Closing the panel only hides it: runs go on writing to the console.
+//! report of its time and host calls. The panel lays out only the rows in view and follows the newest
+//! line. A click selects a line, Shift-click a range and Ctrl-click adds one. Clear runs
+//! `script.console.clear`; Copy Selected runs `ui.scriptConsole.copySelected` (the first to the last
+//! selected line) and Copy All `ui.copyScriptConsole`. Closing the panel only hides it: runs go on
+//! writing to the console.
 
-use egui::{Sense, Ui, vec2};
+use std::hash::{DefaultHasher, Hash, Hasher};
+
+use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_engine::script::console::{Console, ConsoleLine, Ending, Entry};
 
+// PLAN: assumed paths of the framework items below, re-exported by craft-ui (behavior, theme and keymap types)
+use craft::behavior::{DisplayOrder, IconId, ItemSource};
+use craft::keymap::CommandRef;
+use craft::theme::variant::Tone;
+use craft::ui::contract::{Bind, ScrollAnchor, Show, ShowCollection};
+use craft::ui::list::{List, ListRow, RowInk};
+use craft::ui::menu::PanelRow;
+use craft::ui::notices::Notice;
+use craft::ui::primitives::IconSpec;
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::sections::FooterBar;
+use craft::ui::sections::{DialogRole, FooterButton};
+use craft::ui::style::TypeRole;
+
 use crate::VectorcraftApp;
-use crate::theme::Tokens;
 
 pub const ID: &str = "scriptConsole";
-/// Panel state: the selected lines, by their numbers ([`Console::first_number`]), first and last.
-const SELECTION: &str = "script-console-selection";
-/// Panel state: how many rows the last frame laid out.
-pub(crate) const DRAWN: &str = "script-console-drawn";
-const ROW_HEIGHT: f32 = 16.0;
+
+/// The commands of the panel's footer and menu, in their order: Clear, Copy Selected, Copy All.
+const COMMANDS: [&str; 3] = ["script.console.clear", "ui.scriptConsole.copySelected", "ui.copyScriptConsole"];
+
+/// The console's lines as the list's rows: the key of a line is its number ([`Console::first_number`]).
+struct Lines {
+    start: u64,
+    count: usize,
+}
+
+impl DisplayOrder<u64> for Lines {
+    fn len(&self) -> usize {
+        self.count
+    }
+
+    fn key(&self, at: usize) -> u64 {
+        self.start + at as u64
+    }
+
+    fn index_of(&self, key: &u64) -> Option<usize> {
+        key.checked_sub(self.start).map(|at| at as usize).filter(|&at| at < self.count)
+    }
+}
+
+impl ItemSource<u64> for Lines {}
 
 /// How a run ended, in the UI language.
 fn ending_label(e: Ending) -> &'static str {
@@ -95,100 +132,93 @@ pub(crate) fn copy(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
     Ok(json!({"lines": n}))
 }
 
+/// The first and last selected line that the console still holds, or `None` when none is selected.
+fn selected_range(app: &VectorcraftApp) -> Option<(u64, u64)> {
+    let c = app.session.script_console();
+    let start = c.first_number();
+    let end = start + c.lines().len() as u64;
+    let kept = app.ui.script_console_selection.items.iter().copied().filter(|k| (start..end).contains(k));
+    kept.fold(None, |range, k| Some(range.map_or((k, k), |(a, b)| (a.min(k), b.max(k)))))
+}
+
+/// `ui.scriptConsole.copySelected`: copy the lines from the first to the last selected one.
+fn copy_selected(app: &mut VectorcraftApp) -> Result<Value, String> {
+    match selected_range(app) {
+        Some((first, last)) => copy(app, &json!({"first": first, "last": last})),
+        // Null ends are refused by `copy`, which words the error.
+        None => copy(app, &json!({"first": Value::Null, "last": Value::Null})),
+    }
+}
+
+/// Runs the console's own UI commands: `Some` for `ui.scriptConsole.copySelected`, `None` for any other id.
+pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option<Result<Value, String>> {
+    (id == COMMANDS[1]).then(|| copy_selected(app))
+}
+
+/// The panel menu's rows: Clear, Copy Selected and Copy All.
+pub(crate) fn menu_rows(_app: &VectorcraftApp) -> Vec<PanelRow> {
+    COMMANDS.iter().map(|id| PanelRow::Command(CommandRef::new(*id))).collect()
+}
+
+/// The states of the panel's commands: Clear and Copy All while there are lines, Copy Selected while a
+/// selected line is still kept. The titles are the short ones of the footer.
+pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
+    let any = !app.session.script_console().lines().is_empty();
+    let selected = selected_range(app).is_some();
+    for (id, title, on) in [(COMMANDS[0], tl!("Clear"), any), (COMMANDS[1], tl!("Copy Selected"), selected), (COMMANDS[2], tl!("Copy All"), any)] {
+        states.set(CommandRef::new(id), CommandState::new().enabled(on).title(title));
+    }
+}
+
+/// What the panel's menu model depends on, for the menu cache's key.
+pub(crate) fn key(app: &VectorcraftApp) -> u64 {
+    let c = app.session.script_console();
+    let mut hasher = DefaultHasher::new();
+    (c.lines().len(), c.dropped_lines(), c.truncated_lines(), &app.ui.script_console_selection.items).hash(&mut hasher);
+    hasher.finish()
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
     let c = app.session.script_console();
     let start = c.first_number();
     let count = c.lines().len();
-    let mut selection: Option<(u64, u64)> = super::pstate(ui.ctx(), SELECTION);
+    let end = start + count as u64;
     // A selection whose lines were dropped or cleared is gone.
-    if selection.is_some_and(|(a, b)| a < start || b >= start + count as u64) {
-        selection = None;
-    }
+    let selection = &mut app.ui.script_console_selection;
+    let held = |k: &u64| (start..end).contains(k);
+    selection.items.retain(held);
+    selection.lead = selection.lead.take().filter(held);
+    selection.anchor = selection.anchor.take().filter(held);
     if let Some(n) = notice(c) {
-        crate::widgets::dim_label(ui, &n);
+        Notice::new(Tone::Info, n).show(ui);
     }
-    let mut clicked: Option<(u64, bool)> = None;
-    let mut drawn = 0usize;
-    let height = crate::widgets::panel_list_height(ui, 260.0, 0.0);
-    crate::widgets::list_box(ui, |ui| {
-        ui.spacing_mut().item_spacing.y = 0.0;
-        egui::ScrollArea::vertical().id_salt("script-console").max_height(height).stick_to_bottom(true).auto_shrink([false, true]).show_rows(
-            ui,
-            ROW_HEIGHT,
-            count,
-            |ui, range| {
-                drawn = range.len();
-                for (i, line) in c.lines().range(range.clone()).enumerate() {
-                    let number = start + (range.start + i) as u64;
-                    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_HEIGHT), Sense::click());
-                    if selection.is_some_and(|(a, b)| (a..=b).contains(&number)) {
-                        ui.painter().rect_filled(r, 0.0, t.row_selected);
-                    } else if resp.hovered() {
-                        ui.painter().rect_filled(r, 0.0, t.hover);
-                    }
-                    let color = match line.entry {
-                        Entry::Error(_) => t.error,
-                        Entry::Start | Entry::End(_) | Entry::Report { .. } => t.text_dim,
-                        Entry::Output(_) | Entry::Log(_) => t.text,
-                    };
-                    let text = shown(line);
-                    ui.painter().with_clip_rect(r).text(
-                        r.left_center() + vec2(4.0, 0.0),
-                        egui::Align2::LEFT_CENTER,
-                        &text,
-                        egui::FontId::monospace(11.5),
-                        color,
-                    );
-                    let resp = resp.on_hover_text(&text);
-                    if resp.clicked() {
-                        clicked = Some((number, ui.input(|i| i.modifiers.shift)));
-                    }
-                }
-            },
-        );
-    });
-    super::set_pstate(ui.ctx(), DRAWN, drawn);
-    if let Some((number, shift)) = clicked {
-        selection = Some(match (selection, shift) {
-            (Some((a, b)), true) => (a.min(number), b.max(number)),
-            _ => (number, number),
-        });
-    }
-    super::set_pstate(ui.ctx(), SELECTION, selection);
-    crate::widgets::bottom_bar(ui, |ui| {
-        if ui.add_enabled(count > 0, egui::Button::new(tl!("Clear"))).clicked() {
-            run(app, "script.console.clear", json!({}));
-        }
-        if ui.add_enabled(selection.is_some(), egui::Button::new(tl!("Copy Selected"))).clicked()
-            && let Some((first, last)) = selection
-        {
-            run(app, "ui.copyScriptConsole", json!({"first": first, "last": last}));
-        }
-        if ui.add_enabled(count > 0, egui::Button::new(tl!("Copy All"))).clicked() {
-            run(app, "ui.copyScriptConsole", json!({}));
-        }
-    });
-}
-
-/// The panel menu: Clear, Copy Selected and Copy All.
-pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let count = app.session.script_console().lines().len();
-    let selection: Option<(u64, u64)> = super::pstate(ui.ctx(), SELECTION);
-    if crate::widgets::menu_item(ui, tl!("Clear"), count > 0, false) {
-        run(app, "script.console.clear", json!({}));
-    }
-    if crate::widgets::menu_item(ui, tl!("Copy Selected"), selection.is_some(), false)
-        && let Some((first, last)) = selection
-    {
-        run(app, "ui.copyScriptConsole", json!({"first": first, "last": last}));
-    }
-    if crate::widgets::menu_item(ui, tl!("Copy All"), count > 0, false) {
-        run(app, "ui.copyScriptConsole", json!({}));
+    List::<u64>::new(tl!("Script Console")).scroll_anchor(ScrollAnchor::End).selection(Bind::bound(&mut app.ui.script_console_selection)).show_items(
+        ui,
+        &Lines { start, count },
+        &mut |key, icx| {
+            let line = key.checked_sub(start).and_then(|at| c.lines().get(at as usize));
+            let Some(line) = line else { return ListRow::new(String::new()) };
+            let row = ListRow::new(shown(line)).role(TypeRole::Mono).state(icx.row.clone());
+            match line.entry {
+                Entry::Error(_) => row.icon(IconSpec::svg(IconId::new("error"))).tone(Tone::Bad),
+                Entry::Start | Entry::End(_) | Entry::Report { .. } => row.ink(RowInk::Muted),
+                Entry::Output(_) | Entry::Log(_) => row,
+            }
+        },
+    );
+    let picked = FooterBar::buttons([
+        FooterButton::new(tl!("Clear"), DialogRole::Other).enabled(count > 0),
+        FooterButton::new(tl!("Copy Selected"), DialogRole::Other).enabled(selected_range(app).is_some()),
+        FooterButton::new(tl!("Copy All"), DialogRole::Other).enabled(count > 0),
+    ])
+    .show_footer(ui)
+    .picked;
+    if let Some(id) = picked.and_then(|at| COMMANDS.get(at)) {
+        run_ui(app, id, json!({}));
     }
 }
 
-fn run(app: &mut VectorcraftApp, id: &str, params: Value) {
+fn run_ui(app: &mut VectorcraftApp, id: &str, params: Value) {
     if let Err(e) = app.run(id, params) {
         app.ui.status = e;
     }

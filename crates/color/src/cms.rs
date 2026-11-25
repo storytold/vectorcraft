@@ -3,7 +3,7 @@
 //!
 //! * **RGB working spaces** are ICC matrix/shaper profiles via [`moxcms`] (sRGB, Wide Gamut RGB
 //!   (1998 primaries), Display P3, ProPhoto RGB) or user `.icc` files. Display output is sRGB;
-//!   the desktop canvas converts it into the display's own profile last ([`display`]).
+//!   the desktop canvas converts it into the display's own profile last, in the app.
 //! * **CMYK spaces:** [`GENERIC_CMYK`] is our own documented parametric press model
 //!   ([`generic`]); [`FOGRA51_CMYK`] and [`FOGRA52_CMYK`] are the same model computed from
 //!   Fogra's published characterization data ([`measured`]); [`DEVICE_CMYK`] is the old
@@ -15,7 +15,6 @@
 //!   thread, as for a document drawn through its own profiles ([`for_document`]). Code that needs
 //!   deterministic numbers builds its own [`Cms`] with [`Cms::new`].
 
-pub mod display;
 pub mod generic;
 pub mod icc;
 pub mod lab;
