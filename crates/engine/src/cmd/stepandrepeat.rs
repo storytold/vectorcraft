@@ -20,7 +20,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Step and Repeat…",
         ["Object", "Transform"],
         None,
-        "{rows?: n (default 1), columns?: n (default 1), fill?: bool (rows and columns are as many as fit the sheet, ignoring `rows` and `columns`; the first copy goes to the sheet's top-left corner plus `margin`), sheet?: {x, y, width, height} (pt; default the artboard that holds the selection's center, else the first), margin?: pt (fill only, default 0), gap?: pt (between neighbors, both axes), gapX?: pt, gapY?: pt (default `gap`, default 0; measured between the bounds of `cutPath`, else of the selection, not between centers), cutPath?: id (a selected object whose geometric bounds measure the spacing and the 180° turn; default the selection), rotate?: \"none\"|\"columns\"|\"rows\" (turn every other column or row by 180° about its cell's center, the same clockwise or counter-clockwise; default none), patterns?: bool} copy the selection into a grid of cells, left to right and top to bottom, the first cell being the selection itself (moved to the sheet's corner with fill); a selection of several objects is grouped first, so that a cut contour stays with its artwork in every copy; one undo step; the copies are selected → {ids: [id…], rows, columns, count}",
+        "{rows?: n (default 1), columns?: n (default 1), fill?: bool (rows and columns are as many as fit the sheet, ignoring `rows` and `columns`; the first copy goes to the sheet's top-left corner plus `margin`), sheet?: {x, y, width, height} (pt; default the artboard that holds the selection's center, else the first), margin?: pt (fill only, default 0), gap?: pt (between neighbors, both axes), gapX?: pt, gapY?: pt (default `gap`, default 0; measured between the bounds of `cutId`, else of the selection, not between centers), cutId?: id (a selected object whose geometric bounds measure the spacing and the 180° turn; default the selection), rotate?: \"none\"|\"columns\"|\"rows\" (turn every other column or row by 180° about its cell's center, the same clockwise or counter-clockwise; default none), patterns?: bool} copy the selection into a grid of cells, left to right and top to bottom, the first cell being the selection itself (moved to the sheet's corner with fill); a selection of several objects is grouped first, so that a cut contour stays with its artwork in every copy; one undo step; the copies are selected → {ids: [id…], rows, columns, count}",
         has_selection,
         step_and_repeat
     )]
@@ -126,17 +126,17 @@ fn step_and_repeat(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(EngineError::Other("nothing selected".into()));
     }
     let d = &s.doc()?.doc;
-    let cut = match p.get("cutPath").filter(|v| !v.is_null()) {
+    let cut = match p.get("cutId").filter(|v| !v.is_null()) {
         None => None,
         Some(v) => {
-            let id = NodeId(v.as_u64().ok_or_else(|| bad(CMD, "`cutPath` must be an object id"))?);
+            let id = NodeId(v.as_u64().ok_or_else(|| bad(CMD, "`cutId` must be an object id"))?);
             let held = roots.iter().filter_map(|r| d.node(*r)).any(|n| {
                 let mut found = false;
                 n.walk(&mut |c| found |= c.id == id);
                 found
             });
             if !held {
-                return Err(bad(CMD, "`cutPath` must be part of the selection"));
+                return Err(bad(CMD, "`cutId` must be part of the selection"));
             }
             Some(id)
         }

@@ -106,7 +106,7 @@ fn a_cut_contour_stays_grouped_with_its_artwork_in_every_copy() {
     let (mut s, art) = setup();
     let cut = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 30})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [art, cut]})).unwrap();
-    let r = s.execute(CMD, &json!({"rows": 1, "columns": 3, "gap": 2, "cutPath": cut})).unwrap();
+    let r = s.execute(CMD, &json!({"rows": 1, "columns": 3, "gap": 2, "cutId": cut})).unwrap();
     assert_eq!(r["count"], json!(3));
     let d = &s.doc().unwrap().doc;
     for id in r["ids"].as_array().unwrap() {
@@ -124,7 +124,7 @@ fn rejects_bad_params_and_a_selection_that_does_not_fit() {
     assert!(s.execute(CMD, &json!({"rows": 0})).is_err());
     assert!(s.execute(CMD, &json!({"rows": 1000, "columns": 1000})).is_err());
     assert!(s.execute(CMD, &json!({"rotate": "diagonal"})).is_err());
-    assert!(s.execute(CMD, &json!({"cutPath": 999999})).is_err());
+    assert!(s.execute(CMD, &json!({"cutId": 999999})).is_err());
     assert!(s.execute(CMD, &json!({"fill": true, "sheet": {"x": 0, "y": 0, "width": 40, "height": 40}})).is_err());
     let mut e = Session::new();
     e.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();

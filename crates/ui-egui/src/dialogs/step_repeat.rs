@@ -3,7 +3,7 @@
 //! previewed live on the canvas.
 //!
 //! Fields: `rows`, `columns`, `gapX`, `gapY` (pt), `margin` (pt), `fill` (as many as fit the
-//! artboard), `rotate` (`none`, `columns` or `rows`), `cutPath` (an object of the selection, or
+//! artboard), `rotate` (`none`, `columns` or `rows`), `cutId` (an object of the selection, or
 //! empty for the selection itself).
 
 use craft::ui::contract::Bind;
@@ -46,7 +46,7 @@ fn rows(lengths: LengthUnits, cuts: Vec<(String, Label)>) -> Vec<Param> {
         Param::new("columns", tl!("Columns"), ParamKind::int(Some(1), Some(500), 2)).enabled_when("fill", false),
         len("gapX", tl!("Horizontal Gap")),
         len("gapY", tl!("Vertical Gap")),
-        Param::new("cutPath", tl!("Cut Path"), ParamKind::choice(cuts, Some(String::new()))),
+        Param::new("cutId", tl!("Cut Path"), ParamKind::choice(cuts, Some(String::new()))),
         Param::new("fill", tl!("Fill the Artboard"), ParamKind::bool(false)),
         len("margin", tl!("Margin")).enabled_when("fill", true),
         Param::new(
@@ -72,7 +72,7 @@ pub fn fields() -> DialogFields {
         ("gapY", FieldValue::Number(12.0)),
         ("margin", FieldValue::Number(0.0)),
         ("fill", FieldValue::Bool(false)),
-        ("cutPath", FieldValue::Text(String::new())),
+        ("cutId", FieldValue::Text(String::new())),
         ("rotate", FieldValue::Text("none".into())),
     ])
 }
@@ -90,8 +90,8 @@ fn params(f: &DialogFields) -> Value {
     }
     p.insert("fill".into(), json!(f.bool("fill").unwrap_or(false)));
     p.insert("rotate".into(), json!(f.text("rotate").unwrap_or("none")));
-    if let Some(id) = f.text("cutPath").and_then(|t| t.parse::<u64>().ok()) {
-        p.insert("cutPath".into(), json!(id));
+    if let Some(id) = f.text("cutId").and_then(|t| t.parse::<u64>().ok()) {
+        p.insert("cutId".into(), json!(id));
     }
     Value::Object(p)
 }
@@ -143,8 +143,8 @@ mod tests {
     #[test]
     fn cut_path_is_sent_only_when_one_is_chosen() {
         let mut f = fields();
-        assert!(params(&f).get("cutPath").is_none());
-        f.set("cutPath", FieldValue::Text("42".into()));
-        assert_eq!(params(&f)["cutPath"], json!(42));
+        assert!(params(&f).get("cutId").is_none());
+        f.set("cutId", FieldValue::Text("42".into()));
+        assert_eq!(params(&f)["cutId"], json!(42));
     }
 }
