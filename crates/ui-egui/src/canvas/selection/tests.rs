@@ -331,6 +331,163 @@ fn hover_outlines_the_object_under_the_pointer_unless_something_hides_it() {
     assert!(!hovered(&app, true), "a tool that is not a selection tool");
 }
 
+fn held(shift: bool, alt: bool, cmd: bool, space: bool) -> Mods {
+    Mods { shift, alt, cmd, space, ..Mods::default() }
+}
+
+const NO_KEYS: Mods = Mods { shift: false, alt: false, cmd: false, ctrl: false, space: false };
+
+/// The box of the hover outline at `at` with `held` keys down, as the canvas finds it: the tool whose marks show
+/// (with Cmd, the selection tool a press there borrows), then that tool's outline.
+fn outline_box(app: &mut VectorcraftApp, at: Point, held: Mods) -> Option<vectorcraft_geom::Rect> {
+    let view = app.view_info();
+    let tool = app.session.hover_tool_at(Some(at), &held, view);
+    hover_target(app, tool, at, held, 1.0, true).map(|h| h.path.bounding_box())
+}
+
+/// Whether two boxes agree to within a point.
+fn same_box(a: Option<vectorcraft_geom::Rect>, b: vectorcraft_geom::Rect) -> bool {
+    a.is_some_and(|a| (a.x0 - b.x0).abs() < 1.0 && (a.y0 - b.y0).abs() < 1.0 && (a.x1 - b.x1).abs() < 1.0 && (a.y1 - b.y1).abs() < 1.0)
+}
+
+fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> vectorcraft_geom::Rect {
+    vectorcraft_geom::Rect::new(x0, y0, x1, y1)
+}
+
+/// A rectangle filled with `color`, its id.
+fn filled(app: &mut VectorcraftApp, x: f64, y: f64, w: f64, h: f64, color: &str) -> NodeId {
+    let id = id_of(&app.run("shape.rectangle", json!({"x": x, "y": y, "width": w, "height": h})).unwrap());
+    app.run("paint.setFill", json!({"ids": [id.0], "color": color})).unwrap();
+    id
+}
+
+/// With the Eyedropper, Smart Guides › Object Highlighting outlines the object under the pointer as the selection
+/// tools do, and nothing over empty canvas. While Space is held a press pans the view, so no tool outlines anything.
+#[test]
+fn eyedropper_hover_outlines_the_object_under_the_pointer() {
+    let mut app = hover_scene();
+    app.select_tool("eyedropper");
+    let over = Point::new(150.0, 150.0);
+    assert!(same_box(outline_box(&mut app, over, NO_KEYS), rect(100.0, 100.0, 200.0, 200.0)), "the rectangle under the pointer");
+    assert!(outline_box(&mut app, Point::new(300.0, 50.0), NO_KEYS).is_none(), "nothing over empty canvas");
+    for tool in ["eyedropper", "selection"] {
+        app.select_tool(tool);
+        assert!(outline_box(&mut app, over, NO_KEYS).is_some(), "{tool}: outlined");
+        assert!(outline_box(&mut app, over, held(false, false, false, true)).is_none(), "{tool}: Space held");
+        assert!(outline_box(&mut app, over, NO_KEYS).is_some(), "{tool}: Space let go");
+    }
+}
+
+/// The Eyedropper outlines a selected object too, since its click still acts on it. With Cmd held, a click selects
+/// with the selection tool lent to it, so the outline is that tool's: none on a selected object, and the object under
+/// the pointer otherwise. Hiding the object under the pointer, or arming Image Trace's Ignore Color pick (which acts on
+/// no object), removes the outline without the pointer moving.
+#[test]
+fn eyedropper_hover_outline_follows_the_selection_cmd_and_the_document() {
+    let mut app = blank();
+    let id = id_of(&app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap());
+    app.select_tool("eyedropper");
+    let (over, square) = (Point::new(150.0, 150.0), rect(100.0, 100.0, 200.0, 200.0));
+    assert!(app.session.active().unwrap().selection.contains(id));
+    assert!(same_box(outline_box(&mut app, over, NO_KEYS), square), "a selected object");
+    let cmd = held(false, false, true, false);
+    assert!(outline_box(&mut app, over, cmd).is_none(), "Cmd over a selected object");
+    app.run("select.none", json!({})).unwrap();
+    assert!(same_box(outline_box(&mut app, over, cmd), square), "Cmd over an unselected object");
+    assert!(outline_box(&mut app, over, NO_KEYS).is_some(), "Cmd let go");
+    app.session.set_tool_option("imageTraceIgnoreColor", &json!({"binding": 1}));
+    assert!(outline_box(&mut app, over, NO_KEYS).is_none(), "an armed Ignore Color pick");
+    app.session.set_tool_option("imageTraceIgnoreColor", &serde_json::Value::Null);
+    assert!(outline_box(&mut app, over, NO_KEYS).is_some(), "the pick disarmed");
+    app.run("object.hide", json!({"ids": [id.0]})).unwrap();
+    assert!(outline_box(&mut app, over, NO_KEYS).is_none(), "hidden art");
+}
+
+/// With a group member selected (as Group Selection leaves it), the Selection tool outlines nothing over that member,
+/// where a press keeps the selection, and the group over its other member, where a press selects the group.
+#[test]
+fn selection_hover_outline_skips_a_selected_group_member() {
+    let mut app = blank();
+    let a = id_of(&app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 50, "height": 50})).unwrap());
+    let b = id_of(&app.run("shape.rectangle", json!({"x": 200, "y": 100, "width": 50, "height": 50})).unwrap());
+    app.run("select.set", json!({"ids": [a.0, b.0]})).unwrap();
+    app.run("object.group", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [a.0]})).unwrap();
+    app.select_tool("selection");
+    assert!(outline_box(&mut app, Point::new(125.0, 125.0), NO_KEYS).is_none(), "the selected member");
+    let other = outline_box(&mut app, Point::new(225.0, 125.0), NO_KEYS);
+    assert!(same_box(other, rect(100.0, 100.0, 250.0, 150.0)), "the other member: {other:?}");
+}
+
+/// For a Shift-click the Eyedropper outlines the object whose color the click samples: the blend where one of its
+/// steps is drawn, and the rectangle below it in a gap between the steps.
+#[test]
+fn eyedropper_shift_hover_outlines_the_object_sampled() {
+    let mut app = blank();
+    filled(&mut app, 20.0, 50.0, 360.0, 150.0, "#00ff00");
+    let a = filled(&mut app, 100.0, 100.0, 20.0, 20.0, "#ff0000");
+    let b = filled(&mut app, 200.0, 100.0, 20.0, 20.0, "#0000ff");
+    app.run("object.blend.make", json!({"ids": [a.0, b.0], "steps": 1})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    app.select_tool("eyedropper");
+    let shift = held(true, false, false, false);
+    // One step, halfway: (150, 100) to (170, 120).
+    let step = outline_box(&mut app, Point::new(160.0, 110.0), shift);
+    assert!(same_box(step, rect(100.0, 100.0, 220.0, 120.0)), "a blend step: {step:?}");
+    let gap = outline_box(&mut app, Point::new(135.0, 110.0), shift);
+    assert!(same_box(gap, rect(20.0, 50.0, 380.0, 200.0)), "a gap between the steps: {gap:?}");
+}
+
+/// The Eyedropper's hover outline follows Smart Guides › Object Highlighting.
+#[test]
+fn eyedropper_hover_outline_follows_object_highlighting() {
+    let mut app = hover_scene();
+    app.select_tool("eyedropper");
+    let over = Point::new(150.0, 150.0);
+    app.run("prefs.set", json!({"key": "objectHighlighting", "value": false})).unwrap();
+    assert!(outline_box(&mut app, over, NO_KEYS).is_none(), "the option off");
+    app.run("prefs.set", json!({"key": "objectHighlighting", "value": true})).unwrap();
+    assert!(outline_box(&mut app, over, NO_KEYS).is_some(), "the option on");
+}
+
+/// The Eyedropper outlines the object its click there then acts on: the front object a plain click copies attributes
+/// from, a locked one included (the Eyedropper reads locked art), and with Alt the unlocked object below it that an
+/// Alt-click gives the selection's attributes to.
+#[test]
+fn eyedropper_hover_outline_is_the_object_the_click_acts_on() {
+    let mut app = blank();
+    let back = filled(&mut app, 100.0, 100.0, 100.0, 100.0, "#0000ff");
+    let front = filled(&mut app, 150.0, 150.0, 100.0, 100.0, "#ff0000");
+    let target = filled(&mut app, 20.0, 20.0, 40.0, 40.0, "#00ff00");
+    app.run("select.set", json!({"ids": [target.0]})).unwrap();
+    app.select_tool("eyedropper");
+    let fill = |app: &VectorcraftApp, id: NodeId| app.session.active().unwrap().doc.node(id).unwrap().appearance.fill_paint();
+    let click = |app: &mut VectorcraftApp, at: Point, mods: Mods| {
+        let view = app.view_info();
+        for kind in [vectorcraft_tools::PointerKind::Down, vectorcraft_tools::PointerKind::Up] {
+            let ev = vectorcraft_tools::PointerEvent { mods, ..vectorcraft_tools::PointerEvent::new(kind, at.x, at.y) };
+            crate::canvas::dispatch(app, &ev, view);
+        }
+    };
+    let over = Point::new(175.0, 175.0);
+    let alt = held(false, true, false, false);
+    let shown = outline_box(&mut app, over, NO_KEYS);
+    assert!(same_box(shown, rect(150.0, 150.0, 250.0, 250.0)), "the front rectangle: {shown:?}");
+    click(&mut app, over, NO_KEYS);
+    assert_eq!(fill(&app, target), fill(&app, front), "the click copied the outlined rectangle's fill");
+
+    app.run("object.lock", json!({"ids": [front.0]})).unwrap();
+    app.run("select.set", json!({"ids": [target.0]})).unwrap();
+    app.run("paint.setFill", json!({"ids": [target.0], "color": "#00ff00"})).unwrap();
+    let shown = outline_box(&mut app, over, NO_KEYS);
+    assert!(same_box(shown, rect(150.0, 150.0, 250.0, 250.0)), "the locked front rectangle is still the source: {shown:?}");
+    let shown = outline_box(&mut app, over, alt);
+    assert!(same_box(shown, rect(100.0, 100.0, 200.0, 200.0)), "with Alt, the unlocked rectangle below: {shown:?}");
+    click(&mut app, over, alt);
+    assert_eq!(fill(&app, back), fill(&app, target), "the Alt-click gave the outlined rectangle the selection's fill");
+    assert_ne!(fill(&app, front), fill(&app, target));
+}
+
 #[test]
 fn a_group_of_too_many_paths_has_no_hover_outline_and_a_key_outline_of_its_bounds() {
     let mut app = blank();
