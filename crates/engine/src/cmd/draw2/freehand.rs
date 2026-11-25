@@ -130,8 +130,9 @@ fn fit_from(a: Point, pts: &[Point], tol: Option<f64>, reach: f64) -> Vec<Anchor
 /// and the stroke behind it less and less, to not at all `reach` along it (Edit selected paths
 /// within), so a stroke that starts or ends near the path joins it smoothly instead of with a
 /// straight piece. A stroke shorter than `reach` bends over its own length, so each end still
-/// lands on its target and the other end's bend doesn't move it off.
-fn bend_ends(stroke: &mut [Point], a: Option<Point>, b: Option<Point>, reach: f64) {
+/// lands on its target and the other end's bend doesn't move it off. Where a bend stops between two
+/// points far apart, a point is added there, so the stroke beyond `reach` stays as drawn.
+fn bend_ends(stroke: &mut Vec<Point>, a: Option<Point>, b: Option<Point>, reach: f64) {
     let (Some(&first), Some(&last)) = (stroke.first(), stroke.last()) else { return };
     // How far along the stroke each point lies, measured before anything moves.
     let mut along = Vec::with_capacity(stroke.len());
@@ -153,6 +154,39 @@ fn bend_ends(stroke: &mut [Point], a: Option<Point>, b: Option<Point>, reach: f6
         }
         return;
     }
+    // A point where each bend stops, when that falls between two points (strokes sent by a script
+    // can have few, far apart): without it, the straight piece to the next point would tilt beyond
+    // `reach`.
+    let (mut c0, mut c1) = (a.map(|_| reach), b.map(|_| total - reach));
+    if let (Some(x), Some(y)) = (c0, c1)
+        && x > y
+    {
+        (c0, c1) = (Some(y), Some(x));
+    }
+    // Both bends stop at the same place (a stroke twice `reach` long): one point there.
+    if let (Some(x), Some(y)) = (c0, c1)
+        && (y - x).abs() < 1e-9
+    {
+        c1 = None;
+    }
+    let mut points = Vec::with_capacity(stroke.len() + 2);
+    let mut dists = Vec::with_capacity(stroke.len() + 2);
+    let mut before: Option<(Point, f64)> = None;
+    for (&p, &d) in stroke.iter().zip(&along) {
+        if let Some((q, e)) = before {
+            for c in [c0, c1].into_iter().flatten() {
+                if e + 1e-9 < c && c < d - 1e-9 {
+                    points.push(q.lerp(p, (c - e) / (d - e)));
+                    dists.push(c);
+                }
+            }
+        }
+        points.push(p);
+        dists.push(d);
+        before = Some((p, d));
+    }
+    *stroke = points;
+    let along = dists;
     let weight = |d: f64| (1.0 - d / reach).max(0.0);
     let (shift_a, shift_b) = (a.map(|a| a - first), b.map(|b| b - last));
     for (p, &d) in stroke.iter_mut().zip(&along) {
@@ -528,7 +562,7 @@ pub(crate) fn freehand_brushed(s: &mut Session, p: &Value, brush_name: Option<&s
     let keep_selected = switch_or(p, "keepSelected", true, C)?;
     // The Pencil's preview of a stroke that redraws a path draws it as a new path but leaves the
     // selection as it is: the path being redrawn stays selected until the release redraws it.
-    let leave_selection = switch_or(p, "leaveSelection", false, C)?;
+    let preview = switch_or(p, "preview", false, C)?;
     let filled = switch_or(p, "fill", false, C)?;
     let extend = p.get("extend").filter(|v| !v.is_null());
     if extend.is_none() && p.get("connect").is_some_and(|v| !v.is_null()) {
@@ -779,8 +813,13 @@ pub(crate) fn freehand_brushed(s: &mut Session, p: &Value, brush_name: Option<&s
             st.brush = Some(name.to_string());
         }
     }
-    let out = insert_look(s, label, path_kind(PathData::single(sp)), look, None, keep_selected)?;
-    if !keep_selected && !leave_selection {
+    // A preview goes on top as Draw Normal places it: Draw Inside would put it in the selected
+    // path's clip group, clipped, and Draw Behind behind the path.
+    let mode = if preview { std::mem::replace(&mut s.draw_mode, crate::DrawMode::Normal) } else { s.draw_mode };
+    let out = insert_look(s, label, path_kind(PathData::single(sp)), look, None, keep_selected && !preview);
+    s.draw_mode = mode;
+    let out = out?;
+    if !keep_selected && !preview {
         // A new stroke with Keep selected off leaves nothing selected: Illustrator starts the stroke
         // by dropping the earlier selection, it does not keep it (#5752).
         s.select(|_, sel| sel.clear())?;
@@ -974,5 +1013,24 @@ mod bend_tests {
         assert_eq!(pts[0], Point::new(40.0, 0.0), "{pts:?}");
         assert_eq!(pts[2], Point::new(48.0, 0.0), "{pts:?}");
         assert_eq!(pts[1], Point::new(44.0, 0.0), "halfway, half of each end's shift: {pts:?}");
+    }
+
+    /// With points far apart (a stroke sent by a script), the bend still stops `reach` along the
+    /// stroke: a point is added there, and the stroke beyond it stays as drawn.
+    #[test]
+    fn bend_ends_stops_at_the_reach_between_points_far_apart() {
+        let mut pts = vec![Point::new(0.0, 0.0), Point::new(100.0, 0.0), Point::new(200.0, 0.0)];
+        bend_ends(&mut pts, Some(Point::new(0.0, 10.0)), Some(Point::new(200.0, 0.0)), 40.0);
+        assert_eq!(pts.first(), Some(&Point::new(0.0, 10.0)), "{pts:?}");
+        assert!(pts.contains(&Point::new(40.0, 0.0)), "a point where the bend stops: {pts:?}");
+        assert!(pts.iter().filter(|p| p.x >= 40.0).all(|p| p.y == 0.0), "beyond the reach, as drawn: {pts:?}");
+    }
+
+    /// Where both bends stop at the same place, one point is added there, not two.
+    #[test]
+    fn bend_ends_adds_one_point_where_both_bends_stop() {
+        let mut pts = vec![Point::new(0.0, 0.0), Point::new(100.0, 0.0)];
+        bend_ends(&mut pts, Some(Point::new(0.0, 10.0)), Some(Point::new(100.0, 10.0)), 50.0);
+        assert_eq!(pts, [Point::new(0.0, 10.0), Point::new(50.0, 0.0), Point::new(100.0, 10.0)]);
     }
 }
