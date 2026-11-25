@@ -8,9 +8,10 @@
 
 use craft::theme::{Rgba, Srgba};
 use craft::ui::choice::Swatch;
-use craft::ui::contract::{Bind, Entry, Show as _};
+use craft::ui::contract::{Bind, Entry, Show as _, ShowContainer as _};
 use craft::ui::display::Text;
 use craft::ui::form::SliderField;
+use craft::ui::layout_components::Row;
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
 use craft::ui::pickers::Select;
 use craft::ui::runtime::env::UnitKind;
@@ -216,25 +217,28 @@ fn resolution_row() -> Param {
         let preset = RESOLUTIONS.iter().position(|p| *p == ppi).filter(|_| fields.bool("__otherPpi") != Some(true));
         let other = RESOLUTION_LABELS.len() - 1;
         let entries: Vec<Entry<usize>> = RESOLUTION_LABELS.iter().enumerate().map(|(i, label)| Entry::new(i, tl!(*label))).collect();
-        ui.horizontal(|ui| {
-            if let Some(i) = Select::new(tl!("Resolution:"), Bind::given(preset.unwrap_or(other)), &entries).show(ui).value().copied() {
-                if let Some(p) = RESOLUTIONS.get(i) {
-                    fields.set("ppi", *p);
-                }
-                fields.set("__otherPpi", i == other);
-            }
+        let (mut picked, mut typed) = (None, None);
+        let shown = Row::new().show(ui, |ui, _| {
+            picked = Select::new(tl!("Resolution:"), Bind::given(preset.unwrap_or(other)), &entries).show(ui).value().copied();
             if preset.is_none() {
                 let field = NumberField::new(tl!("Resolution:"), Bind::given(Some(ppi)))
                     .range(1.0..=4608.0)
                     .step(1.0)
                     .unit_kind(UnitKind::PixelsPerInch)
                     .show(ui);
-                if let Some(Some(v)) = field.edit.value().copied() {
-                    fields.set("ppi", v);
-                }
+                typed = field.edit.value().copied().flatten();
             }
-        })
-        .response
+        });
+        if let Some(i) = picked {
+            if let Some(p) = RESOLUTIONS.get(i) {
+                fields.set("ppi", *p);
+            }
+            fields.set("__otherPpi", i == other);
+        }
+        if let Some(v) = typed {
+            fields.set("ppi", v);
+        }
+        shown.output
     })
     .companions(["__otherPpi"])
     .opens_with(72.0)
@@ -263,18 +267,21 @@ fn color_choice(
         let at = ids.iter().position(|v| current.eq_ignore_ascii_case(v)).unwrap_or(ids.len());
         let start = first(fields);
         let entries: Vec<Entry<usize>> = labels.iter().enumerate().skip(start).map(|(i, l)| Entry::new(i, tl!(*l))).collect();
-        ui.horizontal(|ui| {
-            if let Some(i) = Select::new(tl!(label), Bind::given(at.max(start)), &entries).show(ui).value().copied() {
-                fields.set(key, ids.get(i).copied().unwrap_or(OTHER_COLOR));
+        let color = (at == ids.len()).then(|| Srgba::from(Rgba::from_hex(&current).unwrap_or(Rgba::rgb(128, 128, 128))));
+        let (mut picked, mut pick_color) = (None, false);
+        let shown = Row::new().show(ui, |ui, _| {
+            picked = Select::new(tl!(label), Bind::given(at.max(start)), &entries).show(ui).value().copied();
+            if let Some(color) = color {
+                pick_color = Swatch::new(tl!(label), color).show(ui).clicked;
             }
-            if at == ids.len() {
-                let color = Srgba::from(Rgba::from_hex(&current).unwrap_or(Rgba::rgb(128, 128, 128)));
-                if Swatch::new(tl!(label), color).show(ui).clicked {
-                    cx.pick_color(key, color);
-                }
-            }
-        })
-        .response
+        });
+        if let Some(i) = picked {
+            fields.set(key, ids.get(i).copied().unwrap_or(OTHER_COLOR));
+        }
+        if let Some(color) = color.filter(|_| pick_color) {
+            cx.pick_color(key, color);
+        }
+        shown.output
     })
 }
 
@@ -310,18 +317,17 @@ fn jpeg_rows(screens: bool) -> Vec<Param> {
 fn quality_row() -> Param {
     Param::custom("quality", tl!("Quality:"), |ui, fields, _| {
         let q = (fields.number("quality").unwrap_or(90.0) / 10.0).round().clamp(0.0, 10.0);
-        ui.horizontal(|ui| {
+        let mut slid = None;
+        let shown = Row::new().show(ui, |ui, _| {
             let out = SliderField::new(tl!("Quality:"), Bind::given(q), 0.0..=10.0).step(1.0).show(ui);
-            let q = match out.edit.value() {
-                Some(v) => {
-                    fields.set("quality", v.round() * 10.0);
-                    v.round()
-                }
-                None => q,
-            };
+            slid = out.edit.value().map(|v| v.round());
+            let q = slid.unwrap_or(q);
             Text::new(tl!(QUALITY_BANDS.get(q as usize).copied().unwrap_or_default())).show(ui);
-        })
-        .response
+        });
+        if let Some(v) = slid {
+            fields.set("quality", v * 10.0);
+        }
+        shown.output
     })
     .opens_with(90.0)
 }

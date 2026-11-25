@@ -991,11 +991,13 @@ fn is_tool(def: &CommandDef) -> bool {
     matches!(def.kind, CommandKind::Tool { .. })
 }
 
-/// The app's rule for the keys a command takes: a tool's shortcut is one key, alone or with Shift.
+/// The app's rule for the keys a command takes: a tool's shortcut is one key, alone or with Shift,
+/// or the tool's own default (the Quick Pen's Alt+P).
 fn accept(def: &CommandDef, binding: &Binding) -> Result<(), String> {
     let t = binding.trigger;
     let one_key = matches!(t.press, PressKind::Single) && !(t.chord.mods.cmd || t.chord.mods.ctrl || t.chord.mods.alt);
-    if is_tool(def) && !t.is_hold() && !one_key {
+    let own_default = def.defaults.iter().any(|d| d.trigger == t);
+    if is_tool(def) && !t.is_hold() && !one_key && !own_default {
         Err(tl!("tool shortcuts must be a single key (optionally with Shift)").to_string())
     } else {
         Ok(())
@@ -1685,6 +1687,22 @@ mod tests {
         }
     }
 
+    /// A tool whose default has a modifier takes that default back after it was cleared; other
+    /// modifier shortcuts for it, and its default for another tool, are still refused.
+    #[test]
+    fn a_tool_takes_back_its_own_default_with_alt() {
+        let (mut app, _ctx) = app();
+        app.run("shortcuts.set", json!({"id": "tool:quickPen", "shortcut": ""})).unwrap();
+        assert_eq!(row(&mut app, "tool:quickPen").unwrap()["shortcut"], Value::Null);
+        app.run("shortcuts.set", json!({"id": "tool:quickPen", "shortcut": "Alt+P"})).unwrap();
+        assert_eq!(row(&mut app, "tool:quickPen").unwrap()["shortcut"], spelled("Alt+P"));
+        for text in ["Alt+Q", "Cmd+P"] {
+            assert!(app.run("shortcuts.set", json!({"id": "tool:quickPen", "shortcut": text})).is_err(), "{text}");
+        }
+        assert!(app.run("shortcuts.set", json!({"id": "tool:pen", "shortcut": "Alt+P", "force": true})).is_err());
+        assert_eq!(row(&mut app, "tool:quickPen").unwrap()["shortcut"], spelled("Alt+P"));
+    }
+
     /// `shortcuts.export` writes the set in use as craft-keymap JSON, which `shortcuts.import`
     /// reads back to the same shortcuts; a set in the form earlier versions wrote imports too, and a
     /// file in neither form changes nothing.
@@ -1990,6 +2008,25 @@ mod tests {
     fn dialog_pass(app: &mut VectorcraftApp, ctx: &egui::Context) {
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
         out.textures_delta.clear();
+    }
+
+    /// Frames of the app with the dialog open ask for no rerun once its first frame has sized it: the commands of its
+    /// set row publish the state they had the frame before.
+    #[test]
+    fn an_open_dialog_asks_for_no_rerun_after_its_first_frame() {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+        let ctx = app.ui_ctx.clone().unwrap();
+        let raw =
+            || egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 1000.0))), ..Default::default() };
+        for _ in 0..3 {
+            crate::testing::app_frame(&mut app, &ctx, raw());
+        }
+        open(&mut app);
+        crate::testing::app_frame(&mut app, &ctx, raw());
+        for frame in 0..4 {
+            let out = crate::testing::app_frame(&mut app, &ctx, raw());
+            assert_eq!(out.platform_output.num_completed_passes, 1, "frame {frame} after the first is drawn again");
+        }
     }
 
     /// An open dialog lists a live-effect plug-in installed while it is open, with the shortcut its

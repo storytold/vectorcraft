@@ -24,7 +24,7 @@ use egui::{Color32, CornerRadius, Pos2, Rect, Response, Vec2, vec2};
 
 use super::model::{DocLayers, RowId};
 use super::rows::{TARGET_RADIUS, has_styled_target, shows_targeted, target_marks};
-use super::{NodeId, Value, json};
+use super::{Node, NodeId, Value, json};
 use crate::panel_drag::PanelDrag;
 
 /// The side of the square of a row whose art is selected.
@@ -193,8 +193,9 @@ impl Component for TargetCircle {
     }
 }
 
-/// A row's selection square: filled in its layer's colour while the row's art is selected, a small
-/// square while the row holds selected art. Without `id` it is only a mark (a ruler guide's row, a
+/// A row's selection square: filled in its layer's colour while the row's art is selected (for a
+/// layer or sublayer, all of its visible, unlocked art), a small square while the row holds
+/// selected art. Without `id` it is only a mark (a ruler guide's row, a
 /// spine's row) and takes no press.
 #[derive(Component, Props)]
 #[component(sample = SelectionSquare::sample)]
@@ -346,6 +347,19 @@ impl Component for Cells {
     }
 }
 
+/// The marks of node row `n`'s selection square in the panel over `tree`: whether it shows the
+/// full-sized square (the row is selected, or it is a layer or sublayer whose visible, unlocked art
+/// is all selected), and whether it shows the small one (it holds selected art otherwise).
+pub(super) fn square_marks(tree: &DocLayers<'_>, n: &Node) -> (bool, bool) {
+    let full = tree.is_selected(n.id) || tree.is_full(n.id);
+    let holds = !full && {
+        let mut any = false;
+        n.walk(&mut |c| any |= c.id != n.id && tree.is_selected(c.id));
+        any
+    };
+    (full, holds)
+}
+
 /// The cells of row `row` (shown as `info`) of the panel over `tree`.
 pub(super) fn build(tree: &DocLayers<'_>, row: &RowId, info: &LayerInfo) -> Cells {
     let st = tree.state();
@@ -355,15 +369,11 @@ pub(super) fn build(tree: &DocLayers<'_>, row: &RowId, info: &LayerInfo) -> Cell
         RowId::Node(id) => {
             let Some(n) = tree.doc().node(id) else { return Cells::new(None, SelectionSquare::new(None, false, false, color, vec![])) };
             let is_sel = selected(id);
-            let holds = !is_sel && {
-                let mut any = false;
-                n.walk(&mut |c| any |= c.id != id && selected(c.id));
-                any
-            };
-            let art = if is_sel || holds { st.selection.objects.clone() } else { vec![] };
+            let (full, holds) = square_marks(tree, n);
+            let art = if full || holds { st.selection.objects.clone() } else { vec![] };
             let circle = TargetCircle::new(id, shows_targeted(tree, n, is_sel), has_styled_target(n))
                 .label(crate::i18n::fmt(tl!("Target {row}"), &[("row", info.name.as_str())]));
-            let square = SelectionSquare::new(Some(id), is_sel, holds, color, art)
+            let square = SelectionSquare::new(Some(id), full, holds, color, art)
                 .label(crate::i18n::fmt(tl!("Select art of {row}"), &[("row", info.name.as_str())]));
             Cells::new(Some(circle), square)
         }

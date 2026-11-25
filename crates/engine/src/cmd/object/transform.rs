@@ -347,7 +347,10 @@ pub(super) fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
         if dx == 0.0 && dy == 0.0 {
             return ok();
         }
-        return crate::cmd::path::move_anchors(s, &json!({ "dx": dx, "dy": dy, "patterns": p.get("patterns"), "interpolate": p.get("interpolate") }));
+        return crate::cmd::path::nudge_anchors(
+            s,
+            &json!({ "dx": dx, "dy": dy, "patterns": p.get("patterns"), "interpolate": p.get("interpolate") }),
+        );
     }
     if objects && s.doc()?.selection.is_empty() {
         let copy = bool_or(p, "copy", false);
