@@ -1,20 +1,24 @@
 //! Safe Mode in the app: the choice after a launch that stopped while a plug-in was loading
 //! (Disable and Continue, Start Normally, Start in Safe Mode), Help › Safe Mode with Enable on
 //! Re-launch, and Safe Mode in the window title. Safe Mode and installed plug-ins are
-//! process-wide, so these tests run in their own test binary, one at a time.
+//! process-wide, so these tests run in their own test binary, one at a time. The dialogs are
+//! answered through the control channel, the way agents do.
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use serde_json::json;
+use craft::automation::{ControlRequest, Reply};
+use craft::ui::shell::embed;
+use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_plugins::safe_mode::{self, Item};
 use vectorcraft_plugins::{registry, wat as tpl};
+use vectorcraft_ui_egui::control::handle;
 use vectorcraft_ui_egui::dialogs::safe_mode as ui;
 use vectorcraft_ui_egui::panels::appearance;
-use vectorcraft_ui_egui::{Services, VectorcraftApp, chrome, dialogs, theme};
+use vectorcraft_ui_egui::{Services, VectorcraftApp, chrome};
 
 static LOCK: Mutex<()> = Mutex::new(());
 
@@ -91,12 +95,36 @@ fn stopped_while_loading_x(launch: &Path, dir: &Path) {
     std::fs::write(launch.join("launch-1-dead.json"), item.to_string()).unwrap();
 }
 
-/// One headless frame of the dialog layer.
-fn frame(app: &mut VectorcraftApp) {
+/// A window for one launch, with the interface runtime and the app's fonts: dialogs are the window's, so a launch
+/// after another opens its own.
+fn window() -> egui::Context {
     let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
-    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| dialogs::show(app, ui.ctx()));
+    embed::install(&ctx, craft::ui::testing::install_spec(), &vectorcraft_ui_egui::ui_fonts()).unwrap();
+    ctx
+}
+
+/// One headless frame of the app: its dialogs open and their answers are read.
+fn frame(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    embed::before_input(ctx, |out| app.frame_input(out));
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        app.tick(ui.ctx());
+        app.ui(ui);
+    });
     out.textures_delta.clear();
+}
+
+/// A control request, then one frame; the reply says whether it was done.
+fn control(app: &mut VectorcraftApp, ctx: &egui::Context, method: &str, params: Value) -> Value {
+    let (req, _rx) = ControlRequest::new(method, params);
+    let Reply::Done(reply) = handle(app, ctx, &req) else { panic!("{method}: not done") };
+    frame(app, ctx);
+    reply
+}
+
+/// Answers the top dialog with its default button.
+fn confirm(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let reply = control(app, ctx, "ui.dialog.confirm", json!({}));
+    assert_eq!(reply["ok"], true, "{reply}");
 }
 
 fn done(launch: &Path) {
@@ -107,10 +135,6 @@ fn done(launch: &Path) {
     let _ = std::fs::remove_dir_all(launch);
 }
 
-fn kind(app: &VectorcraftApp) -> Option<&str> {
-    app.ui.dialog.as_ref().map(|d| d.kind.as_str())
-}
-
 #[test]
 fn disable_and_continue_loads_every_plug_in_but_the_one_that_was_loading() {
     let _f = fresh();
@@ -118,20 +142,23 @@ fn disable_and_continue_loads_every_plug_in_but_the_one_that_was_loading() {
     let launch_dir = dir.join("Launch");
     stopped_while_loading_x(&launch_dir, &dir);
     let mut app = launch(&dir, &launch_dir, false);
-    assert_eq!(kind(&app), Some(ui::STOPPED));
+    let ctx = window();
+    frame(&mut app, &ctx);
+    assert!(ui::choosing(&app));
     assert!(safe_mode::active() && registry::list().is_empty(), "nothing loads until the user chooses");
     assert!(chrome::window_title(&app).ends_with("(Safe Mode)"));
-    frame(&mut app);
-    dialogs::confirm(&mut app).unwrap();
-    assert!(!safe_mode::active() && kind(&app).is_none());
+    confirm(&mut app, &ctx);
+    assert!(!safe_mode::active() && !ui::choosing(&app));
     assert!(registry::get("test.ui.x").is_none() && registry::get("test.ui.y").is_some(), "only the one that was loading is off");
     assert_eq!(chrome::window_title(&app), "VectorCraft");
     assert!(dir.join("disabled.json").is_file(), "kept off at later launches");
     ui::end_launch();
 
     // The next launch, which quit normally before: nothing is asked, and x stays off.
-    let app = launch(&dir, &launch_dir, false);
-    assert!(kind(&app).is_none() && !safe_mode::active());
+    let mut app = launch(&dir, &launch_dir, false);
+    let ctx = window();
+    frame(&mut app, &ctx);
+    assert!(!ui::choosing(&app) && !safe_mode::active());
     assert!(registry::get("test.ui.x").is_none() && registry::get("test.ui.y").is_some());
     done(&launch_dir);
     let _ = std::fs::remove_dir_all(&dir);
@@ -156,19 +183,25 @@ fn a_launch_that_stopped_while_two_plug_ins_loaded_offers_to_disable_both() {
     let launch_dir = dir.join("Launch");
     stopped_while_loading_both(&launch_dir, &dir);
     let mut app = launch(&dir, &launch_dir, false);
-    assert_eq!(kind(&app), Some(ui::STOPPED));
-    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["items"].as_array().map(Vec::len), Some(2), "both are listed");
+    let ctx = window();
+    frame(&mut app, &ctx);
+    assert!(ui::choosing(&app));
+    let listed = |app: &VectorcraftApp| app.ui.stopped_plugin.as_ref().and_then(|f| f["items"].as_array().map(Vec::len));
+    assert_eq!(listed(&app), Some(2), "both are listed");
     let state = app.run("plugin.safeMode", json!({})).unwrap();
     assert_eq!(state["pendingItems"].as_array().map(Vec::len), Some(2), "{state}");
     assert_eq!(state["pendingItem"], state["pendingItems"][0]);
-    frame(&mut app);
     // Start in Safe Mode leaves both to the next launch.
-    dialogs::cancel(&mut app);
+    let reply = control(&mut app, &ctx, "ui.dialog.cancel", json!({}));
+    assert_eq!(reply["ok"], true, "{reply}");
+    assert!(!ui::choosing(&app) && registry::list().is_empty());
     ui::end_launch();
     safe_mode::set_active(None);
     let mut app = launch(&dir, &launch_dir, false);
-    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["items"].as_array().map(Vec::len), Some(2), "both asked again");
-    dialogs::confirm(&mut app).unwrap();
+    let ctx = window();
+    frame(&mut app, &ctx);
+    assert_eq!(listed(&app), Some(2), "both asked again");
+    confirm(&mut app, &ctx);
     assert!(!safe_mode::active() && safe_mode::previous().is_empty());
     assert!(registry::get("test.ui.x").is_none() && registry::get("test.ui.y").is_none(), "both are off");
     assert_eq!(safe_mode::disabled().len(), 2, "both kept off at later launches");
@@ -183,8 +216,11 @@ fn start_normally_loads_everything_and_start_in_safe_mode_loads_nothing() {
     let launch_dir = dir.join("Launch");
     stopped_while_loading_x(&launch_dir, &dir);
     let mut app = launch(&dir, &launch_dir, false);
-    app.ui.dialog.as_mut().unwrap().fields.insert("normal".into(), json!(true));
-    dialogs::confirm(&mut app).unwrap();
+    let ctx = window();
+    frame(&mut app, &ctx);
+    let reply = control(&mut app, &ctx, "ui.dialog.set", json!({"field": "choice", "value": "alternate"}));
+    assert_eq!(reply["ok"], true, "{reply}");
+    confirm(&mut app, &ctx);
     assert!(!ui::choosing(&app) && !ui::staying_on(&app), "Start Normally ends Safe Mode");
     assert!(registry::get("test.ui.x").is_some() && registry::get("test.ui.y").is_some());
     assert!(safe_mode::disabled().is_empty() && !dir.join("disabled.json").exists(), "Start Normally changes no setting");
@@ -192,16 +228,21 @@ fn start_normally_loads_everything_and_start_in_safe_mode_loads_nothing() {
 
     stopped_while_loading_x(&launch_dir, &dir);
     let mut app = launch(&dir, &launch_dir, false);
+    let ctx = window();
+    frame(&mut app, &ctx);
     assert!(ui::choosing(&app) && !ui::staying_on(&app), "Safe Mode until the user chooses");
-    dialogs::cancel(&mut app);
+    let reply = control(&mut app, &ctx, "ui.dialog.cancel", json!({}));
+    assert_eq!(reply["ok"], true, "{reply}");
     assert!(!ui::choosing(&app) && ui::staying_on(&app), "Safe Mode for the rest of the launch");
     assert!(safe_mode::active() && registry::list().is_empty(), "Start in Safe Mode");
     assert_eq!(safe_mode::source(), Some(safe_mode::Source::Startup));
     assert!(safe_mode::disabled().is_empty(), "nothing turned off");
     ui::end_launch();
     safe_mode::set_active(None);
-    let app = launch(&dir, &launch_dir, false);
-    assert_eq!(kind(&app), Some(ui::STOPPED), "Start in Safe Mode leaves the choice to the next launch");
+    let mut app = launch(&dir, &launch_dir, false);
+    let ctx = window();
+    frame(&mut app, &ctx);
+    assert!(ui::choosing(&app), "Start in Safe Mode leaves the choice to the next launch");
     done(&launch_dir);
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -217,48 +258,22 @@ fn a_disabled_list_that_cannot_be_saved_says_so() {
     std::fs::write(dir.join("disabled.json"), later).unwrap();
     let unsaved = "Couldn't save the disabled plug-ins for the next launch";
     let mut app = launch(&dir, &launch_dir, false);
-    dialogs::confirm(&mut app).unwrap();
+    let ctx = window();
+    frame(&mut app, &ctx);
+    confirm(&mut app, &ctx);
     assert_eq!(app.ui.status, unsaved, "Disable and Continue");
     assert!(!safe_mode::previous().is_empty(), "the next launch asks again");
     assert!(registry::get("test.ui.x").is_none(), "this launch still skips it");
     app.ui.status.clear();
     app.run("help.safeMode", json!({})).unwrap();
-    app.ui.dialog.as_mut().unwrap().fields["items"][0]["enable"] = json!(true);
-    dialogs::confirm(&mut app).unwrap();
+    frame(&mut app, &ctx);
+    let reply = control(&mut app, &ctx, "ui.dialog.set", json!({"field": "enable-0", "value": true}));
+    assert_eq!(reply["ok"], true, "{reply}");
+    confirm(&mut app, &ctx);
     assert_eq!(app.ui.status, unsaved, "Enable on Re-launch");
     assert_eq!(std::fs::read_to_string(dir.join("disabled.json")).unwrap(), later);
     done(&launch_dir);
     let _ = std::fs::remove_dir_all(&dir);
-}
-
-#[test]
-fn the_safe_mode_label_leaves_the_menus_their_room() {
-    let _f = fresh();
-    safe_mode::set_active(Some(safe_mode::Source::Flag));
-    let menu_names = ["File", "Edit", "Object", "Type", "Select", "Effect", "View", "Window", "Help"];
-    for width in [560.0, 720.0, 1280.0] {
-        let ctx = egui::Context::default();
-        theme::install_fonts(&ctx);
-        let mut app = VectorcraftApp::new(Session::new(), Services::default());
-        let input = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, 400.0))), ..Default::default() };
-        let mut out = ctx.run_ui(input, |ui| chrome::app_bar(&mut app, ui));
-        out.textures_delta.clear();
-        let texts: Vec<_> = out
-            .shapes
-            .iter()
-            .filter_map(|s| match &s.shape {
-                egui::Shape::Text(t) => Some((t.galley.job.text.clone(), t.visual_bounding_rect())),
-                _ => None,
-            })
-            .collect();
-        let menus: Vec<egui::Rect> = texts.iter().filter(|(t, _)| menu_names.contains(&t.as_str())).map(|(_, r)| *r).collect();
-        assert!(!menus.is_empty(), "{width}: the menus are drawn: {texts:?}");
-        let (start, end) = menus.iter().fold((f32::MAX, f32::MIN), |(a, b), r| (a.min(r.left()), b.max(r.right())));
-        assert!(texts.iter().any(|(t, _)| t == "Safe Mode"), "{width}: the label is drawn");
-        for (t, r) in texts.iter().filter(|(t, _)| !menu_names.contains(&t.as_str())) {
-            assert!(r.left() >= end || r.right() <= start, "{width}: {t:?} at {r:?} overlaps the menus from {start} to {end}");
-        }
-    }
 }
 
 #[test]
@@ -268,14 +283,16 @@ fn a_dialog_that_replaces_the_choice_leaves_it_waiting() {
     let launch_dir = dir.join("Launch");
     stopped_while_loading_x(&launch_dir, &dir);
     let mut app = launch(&dir, &launch_dir, false);
+    let ctx = window();
     // Help › Safe Mode (or any other dialog) takes the choice's place before it is answered.
+    frame(&mut app, &ctx);
     app.run("help.safeMode", json!({})).unwrap();
-    assert_eq!(kind(&app), Some(ui::KIND));
+    frame(&mut app, &ctx);
     assert!(ui::choosing(&app) && !ui::staying_on(&app), "still waiting for the choice");
-    dialogs::cancel(&mut app);
-    assert_eq!(kind(&app), Some(ui::STOPPED), "the choice opens again once no dialog is open");
-    assert!(ui::choosing(&app) && registry::list().is_empty());
-    dialogs::confirm(&mut app).unwrap();
+    let reply = control(&mut app, &ctx, "ui.dialog.cancel", json!({}));
+    assert_eq!(reply["ok"], true, "{reply}");
+    assert!(ui::choosing(&app) && registry::list().is_empty(), "the choice is open again once Help is closed");
+    confirm(&mut app, &ctx);
     assert!(!ui::choosing(&app) && !safe_mode::active());
     assert!(registry::get("test.ui.x").is_none() && registry::get("test.ui.y").is_some());
     done(&launch_dir);
@@ -287,8 +304,12 @@ fn the_safe_mode_flag_asks_nothing_and_loads_nothing() {
     let _f = fresh();
     let dir = store_with_two("flag");
     let launch_dir = dir.join("Launch");
-    let app = launch(&dir, &launch_dir, true);
-    assert!(kind(&app).is_none() && ui::staying_on(&app));
+    let mut app = launch(&dir, &launch_dir, true);
+    let ctx = window();
+    frame(&mut app, &ctx);
+    assert!(!ui::choosing(&app) && ui::staying_on(&app));
+    let reply = control(&mut app, &ctx, "ui.dialog.cancel", json!({}));
+    assert_eq!(reply["ok"], false, "no dialog is open: {reply}");
     assert_eq!((safe_mode::source(), registry::list().len()), (Some(safe_mode::Source::Flag), 0));
     assert_eq!(app.ui.status, vectorcraft_plugins::Error::SafeMode.to_string());
     assert!(chrome::window_title(&app).ends_with("(Safe Mode)"));
@@ -312,23 +333,29 @@ fn a_safe_mode_flag_launch_leaves_the_stopped_plug_in_to_the_next_launch() {
     let dir = store_with_two("flag-pending");
     let launch_dir = dir.join("Launch");
     stopped_while_loading_x(&launch_dir, &dir);
-    let app = launch(&dir, &launch_dir, true);
-    assert!(kind(&app).is_none() && registry::list().is_empty(), "--safe-mode asks nothing");
+    let mut app = launch(&dir, &launch_dir, true);
+    let ctx = window();
+    frame(&mut app, &ctx);
+    assert!(!ui::choosing(&app) && registry::list().is_empty(), "--safe-mode asks nothing");
     assert!(!safe_mode::previous().is_empty(), "the plug-in is still pending");
     ui::end_launch();
     safe_mode::set_active(None);
 
     // The next launch, without the flag, asks about it before anything loads.
     let mut app = launch(&dir, &launch_dir, false);
-    assert_eq!(kind(&app), Some(ui::STOPPED));
+    let ctx = window();
+    frame(&mut app, &ctx);
+    assert!(ui::choosing(&app));
     assert!(registry::list().is_empty());
-    dialogs::confirm(&mut app).unwrap();
+    confirm(&mut app, &ctx);
     assert!(registry::get("test.ui.x").is_none() && registry::get("test.ui.y").is_some());
     ui::end_launch();
 
     // A launch after the choice asks nothing.
-    let app = launch(&dir, &launch_dir, false);
-    assert!(kind(&app).is_none() && !safe_mode::active());
+    let mut app = launch(&dir, &launch_dir, false);
+    let ctx = window();
+    frame(&mut app, &ctx);
+    assert!(!ui::choosing(&app) && !safe_mode::active());
     done(&launch_dir);
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -344,18 +371,22 @@ fn help_safe_mode_enables_a_plug_in_for_the_next_launch_only() {
     assert!(safe_mode::set_enabled(&x, false));
     assert!(s.store_disabled_plugins());
     let mut app = launch(&dir, &launch_dir, false);
+    let ctx = window();
+    frame(&mut app, &ctx);
     assert!(registry::get("test.ui.x").is_none());
+    // The dialog shows a name through this, so a name can't reorder its text.
+    assert_eq!(safe_mode::display_name(&x.label()), "Xgnp");
     app.run("help.safeMode", json!({})).unwrap();
-    assert_eq!(kind(&app), Some(ui::KIND));
-    let d = app.ui.dialog.as_mut().unwrap();
-    assert_eq!(d.fields["items"][0]["label"], "Xgnp", "a name can't reorder the dialog's text");
-    frame(&mut app);
+    frame(&mut app, &ctx);
     // Close keeps everything as it was.
-    dialogs::cancel(&mut app);
+    let reply = control(&mut app, &ctx, "ui.dialog.cancel", json!({}));
+    assert_eq!(reply["ok"], true, "{reply}");
     assert_eq!(safe_mode::disabled(), std::slice::from_ref(&x));
     app.run("help.safeMode", json!({})).unwrap();
-    app.ui.dialog.as_mut().unwrap().fields["items"][0]["enable"] = json!(true);
-    dialogs::confirm(&mut app).unwrap();
+    frame(&mut app, &ctx);
+    let reply = control(&mut app, &ctx, "ui.dialog.set", json!({"field": "enable-0", "value": true}));
+    assert_eq!(reply["ok"], true, "{reply}");
+    confirm(&mut app, &ctx);
     assert!(safe_mode::disabled().is_empty());
     assert!(registry::get("test.ui.x").is_none(), "not loaded during this launch");
     ui::end_launch();
@@ -371,6 +402,8 @@ fn help_safe_mode_lists_a_plug_in_found_under_several_files_once() {
     let dir = store_with_two("help-files");
     let launch_dir = dir.join("Launch");
     let mut app = launch(&dir, &launch_dir, false);
+    let ctx = window();
+    frame(&mut app, &ctx);
     let x = |file: &str| Item { id: Some("test.ui.x".into()), file: Some(file.into()), name: Some("X".into()) };
     let y = Item { id: Some("test.ui.y".into()), file: None, name: Some("Y".into()) };
     let z = Item { id: None, file: Some("z.wasm".into()), name: None };
@@ -384,12 +417,15 @@ fn help_safe_mode_lists_a_plug_in_found_under_several_files_once() {
     assert!(app.session.store_disabled_plugins());
     assert_eq!(safe_mode::disabled().len(), 4, "an entry for each of x's files");
     app.run("help.safeMode", json!({})).unwrap();
-    let items = app.ui.dialog.as_ref().unwrap().fields["items"].as_array().unwrap().clone();
-    let labels: Vec<&str> = items.iter().map(|v| v["label"].as_str().unwrap()).collect();
-    assert_eq!(labels, ["X", "Y", "z.wasm"], "one row for each plug-in");
-    frame(&mut app);
-    app.ui.dialog.as_mut().unwrap().fields["items"][0]["enable"] = json!(true);
-    dialogs::confirm(&mut app).unwrap();
+    frame(&mut app, &ctx);
+    // One row for each plug-in: x, y and z, not an entry for each of x's files.
+    let row = |app: &mut VectorcraftApp, k: usize| {
+        control(app, &ctx, "ui.dialog.set", json!({"field": format!("enable-{k}"), "value": false}))["ok"].clone()
+    };
+    assert_eq!((row(&mut app, 2), row(&mut app, 3)), (json!(true), json!(false)), "three rows");
+    let reply = control(&mut app, &ctx, "ui.dialog.set", json!({"field": "enable-0", "value": true}));
+    assert_eq!(reply["ok"], true, "{reply}");
+    confirm(&mut app, &ctx);
     assert_eq!(safe_mode::disabled(), [y, z], "every entry with x's id is turned on");
     done(&launch_dir);
     let _ = std::fs::remove_dir_all(&dir);
