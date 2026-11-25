@@ -298,19 +298,23 @@ fn the_line_and_the_stack_of_code_an_earlier_run_kept_are_at_that_runs_files() {
     };
     let r = call(&mut s, "vc.log(fromMain());");
     assert_eq!(r[0], 4, "{r}");
-    assert_eq!(short_stack(&r[1]), "[global]@caller.js:3\nfromMain@def.jsx:5\nfromInclude@inc.jsxinc:4\n");
-    assert_eq!(short_stack(&call(&mut s, "vc.log(fromText());")), "[global]@caller.js:3\nfromText@t.js:4\n");
+    assert_eq!(
+        short_stack(&r[1]),
+        "[caller.js]\n[global]@caller.js:3\nfromMain@def.jsx:5\nfromInclude@inc.jsxinc:4\n",
+        "the first line names the run that is calling, not the one that defined the function"
+    );
+    assert_eq!(short_stack(&call(&mut s, "vc.log(fromText());")), "[caller.js]\n[global]@caller.js:3\nfromText@t.js:4\n");
     assert_eq!(call(&mut s, "vc.log(eval('\\n\\n$.line'));"), 3);
-    assert_eq!(call(&mut s, "vc.log(eval('\\n$.stack'));"), "[global]@caller.js:3\n[global]@[eval]:2\n");
+    assert_eq!(call(&mut s, "vc.log(eval('\\n$.stack'));"), "[caller.js]\n[global]@caller.js:3\n[global]@[eval]:2\n");
     let r = call(&mut s, "vc.log(new Function('\\nreturn $.stack;')());");
-    assert_eq!(r, "[global]@caller.js:3\n[anonymous]@[eval]:4\n", "the line of the function source `Function` compiles");
+    assert_eq!(r, "[caller.js]\n[global]@caller.js:3\n[anonymous]@[eval]:4\n", "the line of the function source `Function` compiles");
     // A map larger than the budget is not kept.
     TEST_KEPT_MAP_BYTES.with(|b| b.set(Some(1)));
     let lost = run(&mut s, "#targetengine e\n\n\nfunction lost() {\n  return [$.line, $.stack];\n}");
     let r = lost.map(|_| call(&mut s, "vc.log(lost());"));
     TEST_KEPT_MAP_BYTES.with(|b| b.set(None));
     let r = r.unwrap();
-    assert_eq!(r, json!([0, "[global]@caller.js:3\nlost@[unknown]:0\n"]));
+    assert_eq!(r, json!([0, "[caller.js]\n[global]@caller.js:3\nlost@[unknown]:0\n"]));
     let _ = std::fs::remove_dir_all(base);
 }
 

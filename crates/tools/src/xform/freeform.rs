@@ -8,14 +8,15 @@
 //!
 //! Points mode (the Gradient panel's Draw toggle): a click inside the selected art adds a point
 //! there, coloured as the gradient is there. Lines mode: successive clicks draw a smooth line
-//! through the points they add, until Escape (or a click off the art) ends it; clicking an
-//! existing point first starts the line from it. Delete or Backspace removes the selected point.
+//! through the points they add, until Escape, a click off the art or moving the pointer out of
+//! the object ends it; clicking an existing point first starts the line from it. Delete or
+//! Backspace removes the selected point.
 
 use serde_json::{Value, json};
 use vectorcraft_color::freeform::LineHit;
 use vectorcraft_color::{Color, Freeform, FreeformMode, FreeformPoint};
 use vectorcraft_doc::NodeId;
-use vectorcraft_doc::hit::hit_test;
+use vectorcraft_doc::hit::{HitOptions, hit_test, hit_test_visible_skipping};
 use vectorcraft_geom::{Point, Shape, Vec2};
 
 use super::paint_owner;
@@ -183,6 +184,44 @@ fn on_art(cx: &ToolContext, p: Point) -> bool {
     hit_test(cx.doc, p, cx.hit_options()).is_some_and(|h| cx.selection.objects.contains(&paint_owner(cx.doc, h.leaf)))
 }
 
+/// Is `p` on object `id`: inside its path's area (where a dragged point stays) and every clipping
+/// mask above it, or on its own art where a click hits it with the art lying over it left out (a
+/// stroke, type's glyphs)?
+fn on_object(cx: &ToolContext, id: NodeId, p: Point) -> bool {
+    let Some(n) = cx.doc.node(id) else { return false };
+    let ancestry = cx.doc.ancestry(id).unwrap_or_default();
+    let contains = |shapes: &[(vectorcraft_geom::BezPath, vectorcraft_geom::FillRule)]| {
+        shapes.iter().any(|(bp, rule)| vectorcraft_geom::hit::fill_contains(bp, *rule, p))
+    };
+    // A mask with a live effect clips by the effect's result, which the hit test below measures.
+    let plain = |clip: &vectorcraft_doc::Node| {
+        let mut effects = false;
+        clip.walk(&mut |c| {
+            effects |= c.appearance.effects.iter().any(|e| e.visible) || c.appearance.items.iter().any(|i| i.effects().iter().any(|e| e.visible));
+        });
+        !effects
+    };
+    let unmasked = || {
+        ancestry.iter().filter_map(|a| cx.doc.node(*a)).filter(|a| a.clips()).all(|a| {
+            a.children()
+                .and_then(|c| c.first())
+                .is_none_or(|clip| clip.id == id || plain(clip) && contains(&vectorcraft_doc::hit::clip_regions(clip)))
+        })
+    };
+    if contains(&n.clip_shapes(None)) && unmasked() {
+        return true;
+    }
+    let mut keep = std::collections::HashSet::new();
+    n.walk(&mut |c| {
+        keep.insert(c.id);
+    });
+    keep.extend(ancestry);
+    // The art as painted, whatever the view, the layers' Preview and the path-only selection
+    // preferences.
+    let opt = HitOptions { outline: false, path_only: false, type_path_only: false, ignore_layer_preview: true, ..cx.hit_options() };
+    hit_test_visible_skipping(cx.doc, p, opt, &|n| !keep.contains(&n)).is_some_and(|h| h.leaf == id || h.ancestry.contains(&id))
+}
+
 pub(super) fn press(cx: &ToolContext, a: &Annotator, p: Point) -> (Vec<Action>, Gesture) {
     let mut out = vec![];
     let grab = if let Some(i) = a.point_at(cx, p) {
@@ -293,8 +332,13 @@ pub(super) fn double_click(cx: &ToolContext, a: &Annotator, p: Point) -> Vec<Act
 }
 
 /// Pointer moves: Lines mode's rubber band follows the pointer over the art (where a click
-/// extends the line).
+/// extends the line). Moving out of the object ends the line, so the next click on the object
+/// starts another; the object's own art counts (its fill, stroke or glyphs), also where other art
+/// lies over it.
 pub(super) fn hover(cx: &ToolContext, lines: &mut Lines, p: Point) {
+    if lines.open && Annotator::of(cx).is_some_and(|a| !on_object(cx, a.id, p)) {
+        lines.open = false;
+    }
     lines.hover = (lines.open && on_art(cx, p)).then_some(p);
 }
 
@@ -433,9 +477,7 @@ mod tests {
         t.pointer(&cx, &ev(PointerKind::Move, 170.0, 160.0));
         let dashed = |t: &GradientTool, cx: &ToolContext| t.overlays(cx).iter().filter(|o| matches!(o, Overlay::Path { dashed: true, .. })).count();
         assert_eq!(dashed(&t, &cx), 2, "the rubber band and the selected point's spread ring");
-        // Off the art (where a click ends the line) it goes.
-        t.pointer(&cx, &ev(PointerKind::Move, 400.0, 400.0));
-        assert_eq!(dashed(&t, &cx), 1);
+        // A click inside the object extends the line.
         assert_eq!(click(&mut t, &cx, 170.0, 160.0), vec![add(170.0, 160.0, true)]);
         // Escape ends the line: the next click starts another.
         assert!(t.key(&cx, ToolKey::Escape, Default::default()).is_empty());
@@ -450,6 +492,120 @@ mod tests {
         click(&mut t, &cx, 120.0, 120.0);
         assert_eq!(click(&mut t, &cx, 140.0, 150.0), vec![add(140.0, 150.0, false)]);
         assert!(!t.claims_key(&cx, ToolKey::Escape));
+    }
+
+    /// Moving the pointer out of the object and back ends Lines mode's line: the next click on
+    /// the object starts another. Moves inside the object, also over other art on top of it, keep
+    /// the line open.
+    #[test]
+    fn leaving_the_object_ends_the_line() {
+        let (mut d, s) = doc(FreeformMode::Lines);
+        // Unselected art over the object's lower right corner and past it.
+        let (l, top) = (d.layers[0].id, d.alloc_id());
+        let rect = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(160.0, 160.0, 230.0, 230.0));
+        d.insert(Some(l), 1, vectorcraft_doc::Node::path(top, rect, vectorcraft_doc::Appearance::default_art())).unwrap();
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        let mut t = GradientTool::default();
+        let add = |x: f64, y: f64, line: bool| Action::Exec("paint.freeform.addPoint".into(), json!({"at": [x, y], "line": line, "stroke": false}));
+        let dashed = |t: &GradientTool, cx: &ToolContext| t.overlays(cx).iter().filter(|o| matches!(o, Overlay::Path { dashed: true, .. })).count();
+        assert_eq!(click(&mut t, &cx, 140.0, 150.0), vec![add(140.0, 150.0, false)]);
+        cx.freeform_point = Some(2);
+        // Inside the object, over the other art as well, the line stays open.
+        t.pointer(&cx, &ev(PointerKind::Move, 130.0, 130.0));
+        t.pointer(&cx, &ev(PointerKind::Move, 180.0, 190.0));
+        assert!(t.claims_key(&cx, ToolKey::Escape));
+        assert_eq!(click(&mut t, &cx, 150.0, 140.0), vec![add(150.0, 140.0, true)]);
+        // Out of the object (here still over the other art) and back: the line has ended.
+        t.pointer(&cx, &ev(PointerKind::Move, 210.0, 210.0));
+        assert!(!t.claims_key(&cx, ToolKey::Escape), "no line is left for Escape to end");
+        t.pointer(&cx, &ev(PointerKind::Move, 170.0, 130.0));
+        assert_eq!(dashed(&t, &cx), 1, "only the spread ring: no rubber band");
+        assert_eq!(click(&mut t, &cx, 170.0, 130.0), vec![add(170.0, 130.0, false)]);
+        // The next click joins the new line.
+        assert_eq!(click(&mut t, &cx, 130.0, 170.0), vec![add(130.0, 170.0, true)]);
+        // Out past an edge with no other art there ends it too.
+        t.pointer(&cx, &ev(PointerKind::Move, 60.0, 150.0));
+        t.pointer(&cx, &ev(PointerKind::Move, 140.0, 160.0));
+        assert_eq!(click(&mut t, &cx, 140.0, 160.0), vec![add(140.0, 160.0, false)]);
+    }
+
+    /// The object's stroke is part of the object: moving onto it past the filled area keeps the
+    /// line open, and moving past the stroke ends it. The same holds on a layer with Preview off.
+    #[test]
+    fn the_stroke_counts_as_the_object() {
+        for preview in [true, false] {
+            let (mut d, s) = doc(FreeformMode::Lines);
+            let id = s.objects[0];
+            d.node_mut(id).unwrap().appearance.stroke_mut().unwrap().width = 20.0;
+            let l = d.layers[0].id;
+            if let vectorcraft_doc::NodeKind::Layer { preview: p, .. } = &mut d.node_mut(l).unwrap().kind {
+                *p = preview;
+            }
+            let p = paint();
+            let mut cx = cx(&d, &s, &p);
+            let mut t = GradientTool::default();
+            cx.freeform_point = Some(2);
+            // The line starts from the existing point.
+            assert!(click(&mut t, &cx, 150.0, 180.0).is_empty());
+            t.pointer(&cx, &ev(PointerKind::Move, 206.0, 150.0));
+            assert!(t.claims_key(&cx, ToolKey::Escape), "on the stroke the line stays open (Preview {preview})");
+            if preview {
+                let add = Action::Exec("paint.freeform.addPoint".into(), json!({"at": [160.0, 150.0], "line": true, "stroke": false}));
+                assert_eq!(click(&mut t, &cx, 160.0, 150.0), vec![add]);
+            }
+            t.pointer(&cx, &ev(PointerKind::Move, 230.0, 150.0));
+            assert!(!t.claims_key(&cx, ToolKey::Escape), "past the stroke the line has ended (Preview {preview})");
+        }
+    }
+
+    /// In a clipping mask, the part of the object the mask hides is outside it: moving there ends
+    /// the line.
+    #[test]
+    fn the_part_a_mask_hides_is_off_the_object() {
+        use std::sync::Arc;
+        use vectorcraft_doc::{Appearance, Node, NodeKind};
+        let (d0, s0) = doc(FreeformMode::Lines);
+        let mut obj = d0.node(s0.objects[0]).unwrap().clone();
+        let mut d = Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        let (group, clip, id) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        obj.id = id;
+        let mask =
+            Node::path(clip, vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(100.0, 100.0, 160.0, 200.0)), Appearance::default_art());
+        d.insert(Some(l), 0, Node::new(group, NodeKind::Group { children: vec![Arc::new(mask), Arc::new(obj)], clip: true })).unwrap();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        cx.freeform_point = Some(2);
+        let mut t = GradientTool::default();
+        assert!(click(&mut t, &cx, 150.0, 180.0).is_empty());
+        t.pointer(&cx, &ev(PointerKind::Move, 130.0, 150.0));
+        assert!(t.claims_key(&cx, ToolKey::Escape), "inside the mask the line stays open");
+        t.pointer(&cx, &ev(PointerKind::Move, 185.0, 150.0));
+        assert!(!t.claims_key(&cx, ToolKey::Escape), "where the mask hides the object the line has ended");
+    }
+
+    /// Outline view, a layer with Preview off and Object Selection by Path Only don't shrink the
+    /// object to its path: a line started from a point stays open over the object's fill.
+    #[test]
+    fn the_fill_counts_in_outline_view_and_with_path_only_selection() {
+        let (mut d, s) = doc(FreeformMode::Lines);
+        let l = d.layers[0].id;
+        if let vectorcraft_doc::NodeKind::Layer { preview, .. } = &mut d.node_mut(l).unwrap().kind {
+            *preview = false;
+        }
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        (cx.outline, cx.path_only, cx.type_path_only) = (true, true, true);
+        cx.freeform_point = Some(2);
+        let mut t = GradientTool::default();
+        assert!(click(&mut t, &cx, 150.0, 180.0).is_empty());
+        t.pointer(&cx, &ev(PointerKind::Move, 140.0, 150.0));
+        assert!(t.claims_key(&cx, ToolKey::Escape), "over the fill the line stays open");
+        t.pointer(&cx, &ev(PointerKind::Move, 240.0, 150.0));
+        assert!(!t.claims_key(&cx, ToolKey::Escape), "off the object the line has ended");
     }
 
     /// A dropped click adds no point and leaves the line being drawn open: the next click still

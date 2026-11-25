@@ -2,186 +2,100 @@
 //! artboard options and the gradient stop popover.
 
 use serde_json::{Value, json};
+use vectorcraft_geom::Point;
 
-use super::shapes::grid_pin_to_anchor;
+use super::shapes::Click;
+use super::{artboard_options, command, flare_options, gradient_stop, shapes, transform};
 use crate::VectorcraftApp;
-use crate::state::Dialog;
+
+/// Sends an opener's failure to the status line.
+pub(super) fn reported<T>(app: &mut VectorcraftApp, result: Result<T, String>) {
+    if let Err(e) = result {
+        app.status(e);
+    }
+}
+
+/// The click a tool request carries: `None` unless `x` and `y` are finite numbers.
+fn click_of(p: &Value) -> Option<Click> {
+    let coordinate = |key: &str| p.get(key).and_then(Value::as_f64).filter(|n| n.is_finite());
+    let alt = p.get("alt").and_then(Value::as_bool).unwrap_or(false);
+    Some(Click { at: Point::new(coordinate("x")?, coordinate("y")?), alt })
+}
 
 /// A click with a shape tool opens its size dialog.
 pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
-    let x = p.get("x").and_then(Value::as_f64).unwrap_or(0.0);
-    let y = p.get("y").and_then(Value::as_f64).unwrap_or(0.0);
-    let alt = p.get("alt").and_then(Value::as_bool).unwrap_or(false);
-    let d = match kind {
-        "rectangle" => Dialog::new(kind, json!({"x": x, "y": y, "alt": alt, "width": "100 pt", "height": "100 pt"})),
-        "ellipse" => Dialog::new(
-            kind,
-            json!({"x": x, "y": y, "alt": alt, "width": "100 pt", "height": "100 pt", "anchors": app.session.tool_options_of(kind)["anchors"]}),
-        ),
-        // The radius starts at General › Corner Radius, which OK sets to the radius typed.
-        "roundedRectangle" => {
-            let radius = format!("{} pt", app.session.prefs.corner_radius);
-            Dialog::new(kind, json!({"x": x, "y": y, "alt": alt, "width": "100 pt", "height": "100 pt", "radius": radius}))
-        }
-        "polygon" => Dialog::new(kind, json!({"x": x, "y": y, "radius": "50 pt", "sides": app.session.tool_options_of(kind)["sides"]})),
-        "star" => {
-            Dialog::new(kind, json!({"x": x, "y": y, "radius1": "50 pt", "radius2": "25 pt", "points": app.session.tool_options_of(kind)["points"]}))
-        }
-        // The Line Segment Tool Options: Length, Angle and Fill Line as the tool keeps them.
-        "lineSegment" => {
-            let o = app.session.tool_options_of(kind);
-            let fill = o.get("fillLine").and_then(Value::as_bool).unwrap_or(false);
-            Dialog::new(
-                kind,
-                json!({"x": x, "y": y, "length": pt(o.get("length")), "angle": o.get("angle").cloned().unwrap_or(json!(0)), "fillLine": fill}),
-            )
-        }
-        "spiral" => {
-            let options = app.session.tool_options_of(kind);
-            Dialog::new(
-                kind,
-                json!({
-                    "x": x,
-                    "y": y,
-                    "radius": "50 pt",
-                    "decay": options.get("decay").cloned().unwrap_or(json!(80.0)),
-                    "segments": options.get("segments").cloned().unwrap_or(json!(10)),
-                    "clockwise": options.get("clockwise").cloned().unwrap_or(json!(true)),
-                }),
-            )
-        }
-        "arc" => {
-            let opts = app.session.tool_options_of(kind);
-            let closed = opts.get("closed").and_then(Value::as_bool).unwrap_or(false);
-            let mut d = Dialog::new(
-                kind,
-                json!({
-                    "__anchorX": x,
-                    "__anchorY": y,
-                    "x": x,
-                    "y": y,
-                    "lengthX": opts.get("lengthX").cloned().unwrap_or(json!("100 pt")),
-                    "lengthY": opts.get("lengthY").cloned().unwrap_or(json!("100 pt")),
-                    "reference": opts.get("reference").cloned().unwrap_or(json!(0)),
-                    "arcType": if closed { "closed" } else { "open" },
-                    "baseAlong": opts.get("baseAlong").cloned().unwrap_or(json!("x")),
-                    "slope": opts.get("slope").cloned().unwrap_or(json!(50)),
-                    "fillArc": opts.get("fillArc").and_then(Value::as_bool).unwrap_or(false),
-                }),
-            );
-            super::shapes::arc_pin_to_anchor(&mut d);
-            d
-        }
-        // The grids: the tool's stored options (Default Size, Reference Point, divider counts and
-        // skews, switches).
-        "rectangularGrid" | "polarGrid" => {
-            let mut obj = match app.session.tool_options_of(kind) {
-                Value::Object(o) => o,
-                _ => serde_json::Map::new(),
-            };
-            obj.insert("__anchorX".into(), json!(x));
-            obj.insert("__anchorY".into(), json!(y));
-            // The Default Size in points, as typed lengths.
-            let (w, h) = (pt(obj.get("width")), pt(obj.get("height")));
-            obj.insert("width".into(), w);
-            obj.insert("height".into(), h);
-            obj.entry("reference").or_insert(json!(0));
-            let mut d = Dialog::new(kind, Value::Object(obj));
-            grid_pin_to_anchor(&mut d);
-            d
+    match kind {
+        "rectangle" | "ellipse" | "roundedRectangle" | "polygon" | "star" | "lineSegment" | "spiral" | "arc" | "rectangularGrid" | "polarGrid" => {
+            shapes::open(app, kind, click_of(&p));
         }
         // Graph tool click: the graph's size.
-        "graph" => Dialog::new(
-            "command",
-            json!({"__command": "graph.create", "__label": "Graph", "type": p.get("type").cloned().unwrap_or(json!("column")), "x": x, "y": y, "width": 200, "height": 150}),
-        ),
+        "graph" => {
+            let at = click_of(&p).map_or(Point::new(0.0, 0.0), |c| c.at);
+            let graph_type = p.get("type").cloned().unwrap_or(json!("column"));
+            let params = [("type", graph_type), ("x", json!(at.x)), ("y", json!(at.y)), ("width", json!(200)), ("height", json!(150))];
+            let params = params.into_iter().map(|(k, v)| (k.to_string(), v)).collect();
+            let r = command::open(app, "graph.create", "Graph", params);
+            reported(app, r);
+        }
         "graphData" => {
             // After drawing a graph: Graph Data, its worksheet.
-            if let Err(e) = super::graph_data::open(app) {
-                app.status(e);
-            }
-            return;
+            let r = super::graph_data::open(app);
+            reported(app, r);
         }
         // A Flare tool click: the Flare Tool Options, with the tool's values; OK draws a flare there.
         "flare" => {
-            super::flare_options::open(app, Some(vectorcraft_geom::Point::new(x, y)));
-            return;
+            flare_options::open(app, click_of(&p).map(|c| c.at));
         }
-        "rotate" | "reflect" | "scale" | "shear" | "artboardOptions" => {
-            let mut base = match kind {
-                "rotate" => json!({"angle": 0}),
-                "reflect" => json!({"axis": "vertical", "angle": 90}),
-                "scale" => json!({"sx": 100, "sy": 100, "uniform": true}),
-                "shear" => json!({"angle": 0, "axis": "horizontal", "axisAngle": 0}),
-                _ => json!({}),
-            };
-            if let (Some(b), Some(o)) = (base.as_object_mut(), p.as_object()) {
-                for (k, v) in o {
-                    b.insert(k.clone(), v.clone());
-                }
+        "rotate" | "reflect" | "scale" | "shear" => {
+            if let Some(k) = transform::Kind::of_tool(kind) {
+                transform::open(app, k, &p);
             }
-            Dialog::new(kind, base)
+        }
+        "artboardOptions" => {
+            let r = artboard_options::open(app);
+            reported(app, r);
         }
         // Double-clicking a stop on the gradient annotator: its popover, next to the stop's chip.
-        "gradientStop" => Dialog::new(kind, json!({"index": p.get("index").cloned().unwrap_or(json!(0)), "x": x, "y": y, "tab": "color"})),
-        // Image Trace's Ignore Color eyedropper updates the panel, not the document's paint.
-        "imageTraceIgnoreColor" => {
-            crate::panels::image_trace::apply_ignore_color_sample(app, &p);
-            return;
+        "gradientStop" => {
+            let index = p.get("index").and_then(Value::as_u64).unwrap_or(0) as usize;
+            let coordinate = |key: &str| p.get(key).and_then(Value::as_f64).unwrap_or(0.0);
+            gradient_stop::open_at(app, index, gradient_stop::Anchor::Chip(Point::new(coordinate("x"), coordinate("y"))));
         }
+        // Image Trace's Ignore Color eyedropper updates the panel, not the document's paint.
+        "imageTraceIgnoreColor" => crate::panels::image_trace::apply_ignore_color_sample(app, &p),
         // Brush Options › Key Color eyedropper: update the open dialog, do not replace it.
         "brushKeyColor" => {
             if let Some(c) = p.get("color") {
                 super::brush_art_options::apply_key_color_sample(app, c);
             }
-            return;
         }
         // Double-clicking a width point with the Width tool: Width Point Edit.
         super::width_point::KIND => {
-            if let Err(e) = super::width_point::open(app, &p) {
-                app.status(e);
-            }
-            return;
+            let r = super::width_point::open(app, &p);
+            reported(app, r);
         }
         // The Blend tool's double-click and Alt-click: Blend Options.
         super::blend_options::KIND => {
-            if let Err(e) = super::blend_options::open(app) {
-                app.status(e);
-            }
-            return;
+            let r = super::blend_options::open(app);
+            reported(app, r);
         }
         // Double-clicking a plane widget of the perspective grid: that plane's options.
         super::perspective_plane::KIND => {
-            if let Err(e) = super::perspective_plane::open(app, &p) {
-                app.status(e);
-            }
-            return;
+            let r = super::perspective_plane::open(app, &p);
+            reported(app, r);
         }
         // Double-clicking a Live Corners widget: Corners.
         super::corners::KIND => {
-            if let Err(e) = super::corners::open(app, &p) {
-                app.status(e);
-            }
-            return;
+            let r = super::corners::open(app, &p);
+            reported(app, r);
         }
         // Double-clicking a slice with the Slice Selection tool: Slice Options.
         super::slices::OPTIONS => {
-            if let Err(e) = super::slices::open_options(app) {
-                app.status(e);
-            }
-            return;
+            let r = super::slices::open_options(app);
+            reported(app, r);
         }
         // A click or double-click that would edit type set in fonts that aren't available.
-        vectorcraft_tools::text::MISSING_FONT_EDIT => {
-            super::confirm::ask_missing_font_edit(app, &p);
-            return;
-        }
-        _ => return,
-    };
-    app.ui.dialog = Some(d);
-}
-
-/// A stored length option (points) as a dialog's typed length, `"N pt"`; 100 pt when unset.
-fn pt(v: Option<&Value>) -> Value {
-    json!(format!("{} pt", v.and_then(Value::as_f64).filter(|n| n.is_finite()).unwrap_or(100.0)))
+        vectorcraft_tools::text::MISSING_FONT_EDIT => super::confirm::ask_missing_font_edit(app, &p),
+        _ => {}
+    }
 }

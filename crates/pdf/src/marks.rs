@@ -10,46 +10,34 @@ use vectorcraft_geom::Rect;
 
 use crate::{BleedSettings, MarkKind, MarkSettings, PdfSettings};
 
-impl MarkSettings {
-    /// These settings as the shared mark geometry.
-    pub fn printer_marks(&self) -> PrinterMarks {
-        PrinterMarks {
-            trim: self.trim,
-            registration: self.registration,
-            color_bars: self.color_bars,
-            page_info: self.page_info,
-            style: match self.kind {
-                MarkKind::Roman => MarkStyle::Roman,
-                MarkKind::Japanese => MarkStyle::Japanese,
-            },
-            weight: self.weight,
-            offset: self.offset,
-        }
+/// `marks` as the shared mark geometry.
+pub fn printer_marks(marks: &MarkSettings) -> PrinterMarks {
+    PrinterMarks {
+        trim: marks.trim,
+        registration: marks.registration,
+        color_bars: marks.color_bars,
+        page_info: marks.page_info,
+        style: match marks.kind {
+            MarkKind::Roman => MarkStyle::Roman,
+            MarkKind::Japanese => MarkStyle::Japanese,
+        },
+        weight: marks.weight,
+        offset: marks.offset,
     }
 }
 
-impl PdfSettings {
-    /// The bleed of `doc`'s pages, `[top, bottom, left, right]` in points: the document's (Document
-    /// Setup; one read from a file is kept to 0–[`MAX_BLEED`]) with Use Document Bleed, else the
-    /// settings' own.
-    pub fn bleed_of(&self, doc: &Document) -> [f64; 4] {
-        self.bleed.of(doc)
-    }
-
-    /// A PDF/X file of `doc` has no bleed on a side where the document's bleed (Document Setup) has
-    /// one.
-    pub fn leaves_out_bleed(&self, doc: &Document) -> bool {
-        self.standard.is_pdfx()
-            && self.bleed_of(doc).into_iter().zip(bleed_in_range(doc.setup.bleed)).any(|(page, document)| page <= 0.0 && document > 0.0)
-    }
+/// The bleed of `doc`'s pages, `[top, bottom, left, right]` in points: the document's with
+/// [`BleedSettings::use_document`] (Document Setup; one read from a file is kept to
+/// 0–[`MAX_BLEED`]), else the values of `bleed`.
+pub fn page_bleed(bleed: &BleedSettings, doc: &Document) -> [f64; 4] {
+    if bleed.use_document { doc.setup.bleed.map(|b| if b.is_finite() { b.clamp(0.0, MAX_BLEED) } else { 0.0 }) } else { bleed.values() }
 }
 
-impl BleedSettings {
-    /// The bleed of `doc`'s pages, `[top, bottom, left, right]` in points: the document's with
-    /// [`Self::use_document`] (kept to 0–[`MAX_BLEED`]), else these values.
-    pub fn of(&self, doc: &Document) -> [f64; 4] {
-        if self.use_document { doc.setup.bleed.map(|b| if b.is_finite() { b.clamp(0.0, MAX_BLEED) } else { 0.0 }) } else { self.values() }
-    }
+/// A PDF/X file of `doc` has no bleed on a side where the document's bleed (Document Setup) has
+/// one.
+pub fn leaves_out_bleed(set: &PdfSettings, doc: &Document) -> bool {
+    set.standard.is_pdfx()
+        && page_bleed(&set.bleed, doc).into_iter().zip(bleed_in_range(doc.setup.bleed)).any(|(page, document)| page <= 0.0 && document > 0.0)
 }
 
 /// The boxes of one page, in document coordinates.
