@@ -489,8 +489,10 @@ fn closing_a_palette_runs_on_close_which_can_keep_it_open() {
     .unwrap();
     r.run("Window.__vcPaletteEvent();").unwrap();
     assert!(!names(&calls).contains(&"paletteClose".to_string()), "the first onClose kept it open");
+    assert_eq!(r.run("p.visible").unwrap(), JsValue::Bool(true), "a palette onClose kept open stays visible");
     r.run("Window.__vcPaletteEvent(); Window.__vcPaletteEvent();").unwrap();
     assert_eq!(r.run("[asked, clicks].join()").unwrap(), JsValue::String("2,0".into()), "a close inside onClose does not run it again");
+    assert_eq!(r.run("p.visible").unwrap(), JsValue::Bool(false), "a closed palette is not visible");
     assert_eq!(calls.borrow().iter().filter(|(n, _)| n == "paletteClose").count(), 1);
     assert!(calls.borrow().contains(&("paletteClose".into(), 1.0)));
 }

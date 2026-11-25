@@ -1428,8 +1428,9 @@ fn set_palettes(i: &mut Interp, f: impl FnOnce(&mut Vec<ObjId>)) {
     }
 }
 
-/// Closes the palette `win` once its `onClose` allows it: the host no longer shows it and its
-/// handlers no longer run. A `close()` while its `onClose` runs does nothing more.
+/// Closes the palette `win` once its `onClose` allows it: the host no longer shows it, its
+/// `visible` is false and its handlers no longer run. A `close()` while its `onClose` runs does
+/// nothing more.
 fn close_palette(i: &mut Interp, win: ObjId) -> JsResult<()> {
     if slot(i, win, IN_CLOSE)?.truthy() {
         return Ok(());
@@ -1440,6 +1441,7 @@ fn close_palette(i: &mut Interp, win: ObjId) -> JsResult<()> {
     if let Value::Number(id) = slot(i, win, PALETTE_ID)? {
         set_slot(i, win, PALETTE_ID, Value::Undefined)?;
         set_slot(i, win, SHOWN, Value::Bool(false))?;
+        i.put(win, key("visible"), Value::Bool(false), true)?;
         set_palettes(i, |p| p.retain(|o| *o != win));
         let f = host_fn(i, "paletteClose")?;
         i.call(&f, &Value::Undefined, &[Value::Number(id)])?;
