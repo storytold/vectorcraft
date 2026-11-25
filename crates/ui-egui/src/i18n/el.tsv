@@ -3219,6 +3219,9 @@ file-filter	Flattener presets	Προεπιλογές ισοπέδωσης
 file-filter	PDF presets	Προεπιλογές PDF
 file-filter	PDF-compatible .ai	.ai συμβατό με PDF
 file-filter	Print presets	Προεπιλογές εκτύπωσης
+file-filter	Tracing presets	Προεπιλογές ανίχνευσης περιγραμμάτων
+file-filter	Action sets	Σύνολα ενεργειών
+file-filter	Composite fonts	Σύνθετες γραμματοσειρές
 file-filter	Preferences	Προτιμήσεις
 file-filter	Export presets	Προκαθορισμένα εξαγωγής
 file-filter	SVG Compressed	Συμπιεσμένο SVG
@@ -7345,6 +7348,10 @@ axis	Y Axis	Άξονας Y
 @msg	vc_alloc returned 0 (out of memory)	η vc_alloc επέστρεψε 0 (η μνήμη εξαντλήθηκε)
 @msg	vc_alloc returned a block outside memory	η vc_alloc επέστρεψε ένα μπλοκ εκτός μνήμης
 @msg	vc_run returned error code {packed}	η vc_run επέστρεψε τον κωδικό σφάλματος {packed}
+@msg	did not finish loading within {secs} s	δεν ολοκλήρωσε τη φόρτωση μέσα σε {secs} s
+@msg	no thread was left to load it	δεν έμεινε νήμα για να το φορτώσει
+@msg	panicked while loading	κατέρρευσε κατά τη φόρτωση
+@msg	panicked while loading: {what}	κατέρρευσε κατά τη φόρτωση: {what}
 @msg	{_1} is not a file	το {_1} δεν είναι αρχείο
 @msg	{_1} is {_2} bytes (limit {_3})	το {_1} έχει {_2} byte (όριο {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} αντικείμενα (όριο {MAX_OBJECTS})
@@ -7504,6 +7511,10 @@ axis	Y Axis	Άξονας Y
 @msg	`inputs` lists `{shown}` twice	το `inputs` αναφέρει το `{shown}` δύο φορές
 @msg	`inputs` needs `api` 2 or later	το `inputs` απαιτεί `api` 2 ή νεότερο
 @msg	`inputs` needs the permission `doc.read`	το `inputs` απαιτεί το δικαίωμα `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Ανάγνωση των αντικειμένων που του δίνονται, καθώς και των ρυθμίσεων, των πινάκων σχεδίασης, των επιπέδων και των δειγμάτων χρωμάτων του εγγράφου
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	το `context` πρέπει να απαριθμεί διαφορετικές ενότητες: settings, artboards, layers ή swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	το `context` ισχύει για φίλτρο ή ζωντανό εφέ με `commands`, με `api` 3 ή νεότερο και το δικαίωμα `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	οι πληροφορίες εγγράφου που ζητά το πρόσθετο είναι πολύ μεγάλες για να παραδοθούν: το πολύ {MAX_CONTEXT_ITEMS} πίνακες σχεδίασης, επίπεδα και δείγματα χρωμάτων σε {MAX_CONTEXT_BYTES} byte
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	προϋπολογισμός μνήμης (το αντικείμενο {_1} χρειάζεται {size} byte εισόδου, απομένουν {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	προϋπολογισμός αντικειμένων (περισσότερα από {MAX_OBJECTS} αντικείμενα μόνο για ανάγνωση)
 @msg	instruction budget	προϋπολογισμός εντολών
@@ -8826,6 +8837,18 @@ breakText	Glyphs	Γλύφοι
 	Margin	Περιθώριο
 	Box	Πλαίσιο
 	Swatch	Δείγμα χρώματος
+@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	το `spacing` πρέπει να είναι μεγαλύτερο από 0 και το πολύ {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	το `{key}` πρέπει να είναι από 0 έως {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0.01 to 1000 pt	το `{key}` πρέπει να είναι από 0,01 έως 1000 pt
+@msg	select the banner, or mark every artboard	επιλέξτε το πανό ή σημειώστε όλους τους πίνακες σχεδίασης
+@msg	the banner has no width or height	το πανό δεν έχει πλάτος ή ύψος
+@msg	the grommet inset is too large for the banner	η απόσταση των τρουκς από την άκρη είναι πολύ μεγάλη για το πανό
+@msg	the hem is too deep for the banner	το στρίφωμα είναι πολύ βαθύ για το πανό
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	το διάστημα δημιουργεί περισσότερα από {MAX_GROMMETS} τρουκς
+@msg	there is no banner to mark	δεν υπάρχει πανό για σήμανση
+@msg	turn on at least one side	ενεργοποιήστε τουλάχιστον μία πλευρά
+@msg	with no hem and no grommets there is nothing to mark	χωρίς στρίφωμα και χωρίς τρουκς δεν υπάρχει τίποτα για σήμανση
+@msg	{saving} failed: {e}	{saving}: απέτυχε: {e}
 	Banner Hems and Grommets…	Στριφώματα και τρουκς πανό…
 	Banner Hems and Grommets	Στριφώματα και τρουκς πανό
 	Hem	Στρίφωμα

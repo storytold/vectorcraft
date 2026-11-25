@@ -27,7 +27,8 @@ use craft::ui::patterns::presets::{
     PickerField, PresetBrowser, PresetDrop, PresetEvent, PresetFns, PresetPicker, PresetReorder, PresetRow, PresetSource, PresetState, PresetView,
 };
 use craft::ui::primitives::{
-    ContentPainterCx, IconSpec, PaintShape, Priority, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails,
+    ContentPainterCx, FacePaint, IconSpec, PaintShape, Priority, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions,
+    Thumbnails,
 };
 use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
 use craft::ui::runtime::env::Env;
@@ -77,12 +78,13 @@ impl View {
         }
     }
 
-    /// The thumbnail zoom that makes the browser's list rows small or large; `None` keeps the grid's own.
-    fn list_zoom(self) -> Option<f64> {
+    /// The thumbnail zoom of this view: the grid's tiles about 40 points, as production's, and the list rows small or
+    /// large.
+    fn zoom(self) -> f64 {
         match self {
-            View::Thumbnail => None,
-            View::SmallList => Some(0.5),
-            View::LargeList => Some(2.0),
+            View::Thumbnail => 5.0 / 6.0,
+            View::SmallList => 0.5,
+            View::LargeList => 2.0,
         }
     }
 }
@@ -467,9 +469,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut panel = std::mem::take(&mut app.ui.graphic_styles_panel);
     let looks = look_hashes(&mut panel, app);
     let view = app.ui.graphic_styles_view;
-    if let Some(zoom) = view.list_zoom() {
-        panel.state.zoom = zoom;
-    }
+    panel.state.zoom = view.zoom();
     let before = panel.selection.clone();
     let (alt, linked) = (alt_held(ui), app.session.selection_graphic_style().is_some());
     let thumbs = style_thumbs(app, &doc, &looks, panel.preview);
@@ -686,21 +686,40 @@ fn footer_drop(app: &mut VectorcraftApp, index: usize, grabbed: &str, alt: bool)
     }
 }
 
-/// The Control bar's Style picker: the styles in a popover, the field showing the style the selection is
-/// linked to (blank when it is not); picking one applies it to the selection, with Alt on top of its look.
+/// The Control bar's Style picker: the styles in a popover, the field a swatch of the style the selection is
+/// linked to (white when it is not, [`linked_face`]); picking one applies it to the selection, with Alt on top of its
+/// look.
 pub(crate) fn style_picker(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(doc) = app.session.active().map(|d| d.doc.clone()) else { return };
     let mut panel = std::mem::take(&mut app.ui.graphic_styles_panel);
     let looks = look_hashes(&mut panel, app);
     let mut linked: Option<StyleKey> = app.session.selection_graphic_style().filter(|(_, linked)| *linked).map(|(g, _)| g.name.clone());
-    let source = style_source(style_thumbs(app, &doc, &looks, panel.preview));
+    let thumbs = style_thumbs(app, &doc, &looks, panel.preview);
+    let face = linked_face(thumbs, &doc, &looks, linked.as_deref());
+    let source = style_source(thumbs);
     let out = PresetPicker::new(tl!("Graphic Styles").to_string(), Bind::bound(&mut linked), &source, Bind::bound(&mut panel.picker_state))
         .field(PickerField::Thumbnail)
+        .face_thumb(face)
         .show(ui);
     app.ui.graphic_styles_panel = panel;
     if let Some(name) = out.picked {
         run_status(app, "graphicStyle.apply", json!({ "name": name, "add": out.mods.alt }));
     }
+}
+
+/// The Style picker's field: the thumbnail of the style `linked` from the panel's thumbnails (`thumbs`, over the
+/// shared `doc` and `looks`), white while the selection is linked to no style, as production's Style chip showed it.
+fn linked_face(thumbs: StyleThumbs<'_>, doc: &Arc<Document>, looks: &Arc<Vec<u64>>, linked: Option<&str>) -> FacePaint {
+    use std::hash::{Hash, Hasher};
+    let StyleThumbs { uid, revision, look, .. } = thumbs;
+    let linked = linked.unwrap_or_default().to_owned();
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    (uid, revision, &linked, look.preview, look.override_chars).hash(&mut hasher);
+    let (doc, looks) = (Arc::clone(doc), Arc::clone(looks));
+    FacePaint::new(hasher.finish(), move |cx, rect| {
+        let thumbs = StyleThumbs { uid, revision, d: &doc, looks: &looks, look };
+        paint_thumb(cx, rect, &thumbnails(cx.painter.ctx(), "vc-style-thumbs"), &thumbs, &linked);
+    })
 }
 
 /// A new style from the selection, first asking for its name (`ask`) in Graphic Style Options.

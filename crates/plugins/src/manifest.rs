@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 use crate::dialog::ParamUi;
-use crate::permissions::{self, API_LEVEL, INPUTS_API, OUTPUT_KINDS_API, PROGRESS_API, Permission};
+use crate::permissions::{self, API_LEVEL, CONTEXT_API, INPUTS_API, OUTPUT_KINDS_API, PROGRESS_API, Permission};
 use crate::{Error, Result};
 
 /// Longest manifest the host reads.
@@ -198,6 +198,45 @@ impl OutputKind {
         OutputKind::ALL.into_iter().find(|k| k.name() == name)
     }
 }
+
+/// A part of the active document a filter or a plug-in command asks to be given in
+/// `_context.document`, with or without a selection (its manifest's `context`, plug-in API level 3):
+/// plain values to read, never objects.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ContextSection {
+    /// The document's name (never its path), color mode, units, the active artboard's size, the
+    /// bleed and the raster effects resolution.
+    Settings,
+    /// Every artboard's id, name and rectangle, and which one is active.
+    Artboards,
+    /// Every layer and sublayer: name, visibility, lock, nesting, and which one is current.
+    Layers,
+    /// Every swatch, as `swatch.list` lists it.
+    Swatches,
+}
+
+impl ContextSection {
+    /// Every section, in the order the docs list them.
+    pub const ALL: [ContextSection; 4] = [ContextSection::Settings, ContextSection::Artboards, ContextSection::Layers, ContextSection::Swatches];
+
+    /// Its name in `context`, which is also its key in `_context.document`.
+    pub fn name(self) -> &'static str {
+        match self {
+            ContextSection::Settings => "settings",
+            ContextSection::Artboards => "artboards",
+            ContextSection::Layers => "layers",
+            ContextSection::Swatches => "swatches",
+        }
+    }
+
+    /// The section named `name`.
+    pub fn parse(name: &str) -> Option<ContextSection> {
+        ContextSection::ALL.into_iter().find(|s| s.name() == name)
+    }
+}
+
+/// The error of a `context` that is not a list of distinct section names.
+const CONTEXT_LIST: &str = "`context` must list distinct sections: settings, artboards, layers or swatches";
 
 /// How much one run of a plug-in may compute.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -457,6 +496,12 @@ pub struct Manifest {
     /// returns paths and compound paths alone.
     #[serde(default, rename = "outputKinds", skip_serializing_if = "Vec::is_empty", deserialize_with = "output_kind_names")]
     pub output_kinds: Vec<String>,
+    /// The parts of the document a run is given in `_context.document`, by
+    /// [`ContextSection::name`]: only a filter, or a live effect with `commands` (for its command
+    /// runs), at `api` 3 or later whose `permissions` list `doc.read` lists them. Left out or empty,
+    /// a run is given none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty", deserialize_with = "context_names")]
+    pub context: Vec<String>,
     /// Parameters in declaration (dialog) order; a JSON object `{"name": spec, …}` in the manifest.
     #[serde(default, deserialize_with = "ordered_params", serialize_with = "params_as_object")]
     pub params: Vec<(String, Param)>,
@@ -510,6 +555,7 @@ impl Manifest {
             permissions: None,
             inputs: Vec::new(),
             output_kinds: Vec::new(),
+            context: Vec::new(),
             params: Vec::new(),
             extensions: Vec::new(),
             budget: Budget::Light,
@@ -581,6 +627,7 @@ impl Manifest {
         }
         self.validate_inputs()?;
         self.validate_output_kinds()?;
+        self.validate_context()?;
         if self.paint_output && (self.kind != Kind::Effect || self.api < 2) {
             return Err(Error::Manifest("`paintOutput` is only for a live effect (`kind` \"effect\") at `api` 2".into()));
         }
@@ -701,9 +748,36 @@ impl Manifest {
         Ok(())
     }
 
+    /// `context` names each [`ContextSection`] at most once, and only a filter, or a live effect
+    /// with commands, at `api` 3 or later lists any, with a `permissions` list that holds
+    /// `doc.read`: installing it then asks the user to grant it ([`Manifest::asks_permissions`]).
+    fn validate_context(&self) -> Result<()> {
+        if self.context.is_empty() {
+            return Ok(());
+        }
+        for (i, name) in self.context.iter().enumerate() {
+            if ContextSection::parse(name).is_none() || self.context.get(..i).is_some_and(|before| before.contains(name)) {
+                return Err(Error::Manifest(CONTEXT_LIST.into()));
+            }
+        }
+        let runs = self.kind == Kind::Filter || (self.kind == Kind::Effect && !self.commands.is_empty());
+        let reads = self.permissions.as_ref().is_some_and(|p| p.iter().any(|n| n == Permission::DocRead.name()));
+        if !runs || self.api < CONTEXT_API || !reads {
+            return Err(Error::Manifest(
+                "`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`".into(),
+            ));
+        }
+        Ok(())
+    }
+
     /// The kinds of content besides paths and compound paths an importer returns (`outputKinds`).
     pub fn output_kinds(&self) -> Vec<OutputKind> {
         self.output_kinds.iter().filter_map(|n| OutputKind::parse(n)).collect()
+    }
+
+    /// The parts of the document it asks to be given (`context`).
+    pub fn context_sections(&self) -> Vec<ContextSection> {
+        self.context.iter().filter_map(|n| ContextSection::parse(n)).collect()
     }
 
     /// A filter or a live effect lists at most [`MAX_COMMANDS`] commands, each with a distinct
@@ -929,6 +1003,18 @@ fn output_kind_names<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Res
         Value::Null => Ok(Vec::new()),
         Value::Array(names) => names.into_iter().map(|n| if let Value::String(s) = n { Ok(s) } else { Err(wrong()) }).collect(),
         _ => Err(wrong()),
+    }
+}
+
+/// Reads `context`: a list of names (`null`: none). Anything else is the error
+/// [`Manifest::validate_context`] gives a wrong entry.
+fn context_names<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Vec<String>, D::Error> {
+    match Value::deserialize(d)? {
+        Value::Null => Ok(Vec::new()),
+        Value::Array(names) => {
+            names.into_iter().map(|n| if let Value::String(s) = n { Ok(s) } else { Err(serde::de::Error::custom(CONTEXT_LIST)) }).collect()
+        }
+        _ => Err(serde::de::Error::custom(CONTEXT_LIST)),
     }
 }
 
@@ -1323,7 +1409,7 @@ mod tests {
             (r#"{"id":"a","name":"x","kind":"filter","api":1,"permissions":["progress"]}"#, "`progress` needs plug-in API level 2"),
             (r#"{"id":"a","name":"x","kind":"filter","permissions":["settings"]}"#, "`settings` needs plug-in API level 2"),
             (r#"{"id":"a","name":"x","kind":"filter","api":1,"permissions":["doc.read","cache"]}"#, "`cache` needs plug-in API level 2"),
-            (r#"{"id":"a","name":"x","kind":"filter","api":5}"#, "`api` is 5"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":5}"#, "`api` is 5; this host implements plug-in API levels 1 to 4"),
             (r#"{"id":"a","name":"x","kind":"filter","api":0}"#, "`api` is 0"),
             (r#"{"id":"a","name":"x","kind":"filter","api":-1}"#, "manifest"),
         ] {
@@ -1417,6 +1503,51 @@ mod tests {
         }
         let long = format!(r#"{{"id":"a","name":"x","kind":"filter","api":2,"inputs":[{}]}}"#, vec![r#""type""#; 1000].join(","));
         assert!(Manifest::parse(long.as_bytes()).unwrap_err().to_string().contains("twice"));
+    }
+
+    /// A filter, or a live effect with commands, at `api` 3 may ask for parts of the document
+    /// (`context`), each once, with a `permissions` list holding `doc.read`, so installing it asks
+    /// for approval. Left out or empty, it asks for none and isn't written back. Anything else is
+    /// refused naming `context`.
+    #[test]
+    fn a_level_3_plugin_lists_the_document_context_it_reads() {
+        let m = Manifest::parse(
+            br#"{"id":"a","name":"x","kind":"filter","api":3,"permissions":["doc.read"],"context":["settings","artboards","layers","swatches"]}"#,
+        )
+        .unwrap();
+        assert_eq!(m.context_sections(), ContextSection::ALL);
+        assert!(m.asks_permissions());
+        assert_eq!(serde_json::to_value(&m).unwrap()["context"], json!(["settings", "artboards", "layers", "swatches"]));
+        let effect = br#"{"id":"a","name":"x","kind":"effect","api":3,"permissions":["doc.read","effect.render"],"context":["layers"],"commands":[{"id":"c","label":"C"}]}"#;
+        assert_eq!(Manifest::parse(effect).unwrap().context_sections(), [ContextSection::Layers]);
+        for none in [r#"{"id":"a","name":"x","kind":"filter","context":[]}"#, r#"{"id":"a","name":"x","kind":"filter","api":3,"context":null}"#] {
+            let m = Manifest::parse(none.as_bytes()).unwrap();
+            assert!(m.context_sections().is_empty(), "{none}");
+            assert!(serde_json::to_value(&m).unwrap().get("context").is_none(), "{none}");
+        }
+        let list = "`context` must list distinct sections";
+        let needs = "`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`";
+        for (bad, says) in [
+            (r#"{"id":"a","name":"x","kind":"filter","api":3,"permissions":["doc.read"],"context":["paths"]}"#, list),
+            (r#"{"id":"a","name":"x","kind":"filter","api":3,"permissions":["doc.read"],"context":["Layers"]}"#, list),
+            (r#"{"id":"a","name":"x","kind":"filter","api":3,"permissions":["doc.read"],"context":["layers","layers"]}"#, list),
+            (r#"{"id":"a","name":"x","kind":"filter","api":3,"permissions":["doc.read"],"context":"layers"}"#, list),
+            (r#"{"id":"a","name":"x","kind":"filter","api":3,"permissions":["doc.read"],"context":[1]}"#, list),
+            (r#"{"id":"a","name":"x","kind":"filter","api":3,"permissions":["doc.read"],"context":{"layers":true}}"#, list),
+            (r#"{"id":"a","name":"x","kind":"filter","api":2,"permissions":["doc.read"],"context":["layers"]}"#, needs),
+            (r#"{"id":"a","name":"x","kind":"filter","permissions":["doc.read"],"context":["layers"]}"#, needs),
+            (r#"{"id":"a","name":"x","kind":"filter","api":3,"context":["layers"]}"#, needs),
+            (r#"{"id":"a","name":"x","kind":"filter","api":3,"permissions":["doc.write"],"context":["layers"]}"#, needs),
+            (r#"{"id":"a","name":"x","kind":"effect","api":3,"permissions":["doc.read","effect.render"],"context":["layers"]}"#, needs),
+            (
+                r#"{"id":"a","name":"x","kind":"exporter","extensions":["plt"],"api":3,"permissions":["doc.read","export.write"],"context":["layers"]}"#,
+                needs,
+            ),
+            (r#"{"id":"a","name":"x","kind":"importer","extensions":["plt"],"api":3,"permissions":["import.read"],"context":["layers"]}"#, needs),
+        ] {
+            let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
+            assert!(e.contains(says), "{bad}: {e}");
+        }
     }
 
     /// A live effect at `api` 2 may declare `"paintOutput": true`, and only that value; any other

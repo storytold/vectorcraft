@@ -6689,6 +6689,10 @@ arrowhead	Feather	पंख
 @msg	`inputs` lists `{shown}` twice	`inputs` में `{shown}` दो बार सूचीबद्ध है
 @msg	`inputs` needs `api` 2 or later	`inputs` के लिए `api` 2 या बाद का स्तर आवश्यक है
 @msg	`inputs` needs the permission `doc.read`	`inputs` के लिए अनुमति `doc.read` आवश्यक है
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	उसे दिए गए ऑब्जेक्ट्स, और डॉक्यूमेंट की सेटिंग्स, आर्टबोर्ड्स, लेयर्स और स्वॉचेस पढ़ना
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` में अलग-अलग सेक्शन होने चाहिए: settings, artboards, layers या swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` केवल फ़िल्टर, या `commands` वाले लाइव इफ़ेक्ट के लिए है, `api` 3 या उसके बाद और अनुमति `doc.read` के साथ
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	प्लग-इन जो डॉक्यूमेंट जानकारी माँगता है वह सौंपने के लिए बहुत बड़ी है: {MAX_CONTEXT_BYTES} बाइट्स में अधिकतम {MAX_CONTEXT_ITEMS} आर्टबोर्ड्स, लेयर्स और स्वॉचेस
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	मेमोरी बजट (ऑब्जेक्ट {_1} को इनपुट के {size} बाइट चाहिए, {left} शेष हैं)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	ऑब्जेक्ट बजट ({MAX_OBJECTS} से अधिक केवल-पठन ऑब्जेक्ट)
 @msg	the plug-in's grant can't be removed from the plug-in store	प्लग-इन की अनुमति प्लग-इन स्टोर से हटाई नहीं जा सकती
@@ -9819,6 +9823,10 @@ variable-list-end	{0}, {1}	{0} और {1}
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc ने 0 लौटाया (मेमोरी खत्म)
 @msg	vc_alloc returned a block outside memory	vc_alloc ने मेमोरी के बाहर का ब्लॉक लौटाया
 @msg	vc_run returned error code {packed}	vc_run ने त्रुटि कोड {packed} लौटाया
+@msg	did not finish loading within {secs} s	{secs} सेकंड के भीतर लोड होना पूरा नहीं हुआ
+@msg	no thread was left to load it	इसे लोड करने के लिए कोई थ्रेड नहीं बचा
+@msg	panicked while loading	लोड होते समय क्रैश हो गया
+@msg	panicked while loading: {what}	लोड होते समय क्रैश हो गया: {what}
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	वेक्टर क्रेफ्ट अन्य एप्लिकेशन या सिस्टम के फ़ोल्डर्स की खोज नहीं करता है: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	वेक्टर क्रेफ्ट उपयोगकर्ताओं में साझा या सार्वजनिक फ़ोल्डर की खोज नहीं करता है: {path}
 @msg	VectorCraft failed to start: {e}	वेक्टर क्रेफ्ट शुरू करने में विफल रहा: {e}
@@ -10018,9 +10026,11 @@ effect	Points	पॉइंट्स
 effect	Regular	सामान्य
 effect	Soft	सॉफ़्ट
 effect	Vertical	लंबवत
+file-filter	Action sets	एक्शन सेट्स
 file-filter	All placeable files	सभी प्लेसेबल फ़ाइलें
-file-filter	All readable files	सभी पठनीय फ़ाइलों
-file-filter	Export presets	प्रीसेट्स एक्सपोर्ट करें
+file-filter	All readable files	सभी पठनीय फ़ाइलें
+file-filter	Composite fonts	कंपोज़िट फ़ॉन्ट
+file-filter	Export presets	एक्सपोर्ट प्रीसेट्स
 file-filter	Flattener presets	फ़्लैटनर प्रीसेट्स
 file-filter	PDF presets	PDF प्रीसेट्स
 file-filter	PDF-compatible .ai	PDF-संगत .ai
@@ -10029,6 +10039,7 @@ file-filter	Preferences	प्रेफ़रेंसेज़
 file-filter	SVG Compressed	SVG संपीड़ित
 file-filter	Swatch libraries	स्वॉच लाइब्रेरीज़
 file-filter	Templates	टेम्पलेट्स
+file-filter	Tracing presets	ट्रेसिंग प्रीसेट्स
 file-filter	VectorCraft Template	वेक्टर क्राफ्ट टेम्पलेट
 font-script	Japanese	जापानी
 font-technology	Variable	वेरिएबल
@@ -10253,6 +10264,18 @@ theme	Appearance	अपीयरेंस
 	Margin	मार्जिन
 	Box	बॉक्स
 	Swatch	स्वॉच
+@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	`spacing` 0 से अधिक और अधिकतम {MAX_DISTANCE} pt होना चाहिए
+@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	`{key}` 0 से {MAX_DISTANCE} pt तक होना चाहिए
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}` 0.01 से 1000 pt तक होना चाहिए
+@msg	select the banner, or mark every artboard	बैनर चुनें, या हर आर्टबोर्ड को मार्क करें
+@msg	the banner has no width or height	बैनर की कोई चौड़ाई या ऊँचाई नहीं है
+@msg	the grommet inset is too large for the banner	बैनर के लिए किनारे से आईलेट की दूरी बहुत अधिक है
+@msg	the hem is too deep for the banner	बैनर के लिए हेम बहुत गहरा है
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	इस स्पेसिंग से {MAX_GROMMETS} से अधिक आईलेट बनते हैं
+@msg	there is no banner to mark	मार्क करने के लिए कोई बैनर नहीं है
+@msg	turn on at least one side	कम से कम एक साइड चालू करें
+@msg	with no hem and no grommets there is nothing to mark	बिना हेम और बिना आईलेट के मार्क करने के लिए कुछ नहीं है
+@msg	{saving} failed: {e}	{saving} विफल: {e}
 	Banner Hems and Grommets…	बैनर हेम और आईलेट…
 	Banner Hems and Grommets	बैनर हेम और आईलेट
 	Hem	हेम

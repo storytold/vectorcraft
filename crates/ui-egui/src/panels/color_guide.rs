@@ -664,11 +664,12 @@ fn set_base(app: &mut VectorcraftApp) {
     }
 }
 
-// The footer's actions, in order.
+// The footer's actions, in order: the limit at the start edge, the rest from the end edge, so they read Edit or
+// Apply, Save Selected, Save Group from left to right.
 const LIMIT: usize = 0;
-const EDIT: usize = 1;
+const SAVE_GROUP: usize = 1;
 const SAVE_SELECTED: usize = 2;
-const SAVE_GROUP: usize = 3;
+const EDIT: usize = 3;
 
 /// The Limit to Library popup's rows: None, Document Swatches, then the colour libraries. → the
 /// key of the row that ran.
@@ -722,11 +723,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         .footer(|ui, _| {
             let actions = [
                 FooterAction::new(icon("library"), tip.clone()).pressed(limited).popup(PopupKind::Menu),
-                FooterAction::new(icon("palette"), tl!("Edit or Apply Colors").to_string()).enabled(doc),
-                FooterAction::new(icon("dc-new-item"), tl!("Save selected colors as swatches").to_string()).enabled(has_cells),
                 FooterAction::new(icon("dc-folder"), tl!("Save color group to Swatch panel").to_string()),
+                FooterAction::new(icon("dc-new-item"), tl!("Save selected colors as swatches").to_string()).enabled(has_cells),
+                FooterAction::new(icon("palette"), tl!("Edit or Apply Colors").to_string()).enabled(doc),
             ];
-            let out = FooterBar::actions(actions).show_footer(ui);
+            let out = FooterBar::actions(actions).at_start(LIMIT + 1).show_footer(ui);
             footer_picked = out.picked;
             limit_picked = None;
             if let Some(button) = out.responses.get(LIMIT) {

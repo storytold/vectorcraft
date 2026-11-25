@@ -1554,6 +1554,18 @@ fn window_title_follows_the_active_file() {
     );
 }
 
+/// A nightly's window carries the nightly name, with and without a document, so the stable app's
+/// window and taskbar entry never read the same.
+#[test]
+fn a_nightly_window_title_carries_the_nightly_name() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let nightly = crate::os_window::name_for(crate::os_window::LaunchIdentity::NightlyV1);
+    assert_eq!(super::window_title_named(&app, nightly), "VectorCraft Nightly");
+    app.run("file.new", json!({"width": 100, "height": 100, "name": "foo.svg"})).unwrap();
+    let titled = super::window_title_named(&app, nightly);
+    assert!(titled.contains("foo.svg") && titled.ends_with("\u{2014} VectorCraft Nightly"), "{titled}");
+}
+
 /// The document tabs over `app`, with the same per-frame view synchronization as the app.
 fn tabs_with_views(app: &mut crate::VectorcraftApp, ui: &mut egui::Ui) {
     app.sync_views();
@@ -2738,6 +2750,113 @@ fn the_control_bar_align_to_menu_chooses_what_align_aligns_to() {
     assert_eq!(key(&bar), None, "the key object is let go");
     assert_eq!(bar.app().ui.align_to, crate::panels::align::AlignTo::Selection);
     assert_eq!(menu(&mut bar).1.as_deref(), Some("Align to Selection"));
+}
+
+/// What the latest frame paints in the Control bar's Style field.
+struct StyleFace {
+    /// The field's rect.
+    field: egui::Rect,
+    /// The rects of the textured meshes inside the field, each with the texel at its middle when the texture is known.
+    pictures: Vec<(egui::Rect, Option<egui::Color32>)>,
+    /// The rects the field fills, each with its fill, in paint order.
+    fills: Vec<(egui::Rect, egui::Color32)>,
+}
+
+/// The Style field of the settled bar. `textures` holds the textures the frames uploaded since the fixture began
+/// recording; the uploads of these frames are applied to it.
+fn style_face(bar: &mut Shown, textures: &mut std::collections::HashMap<egui::TextureId, egui::ColorImage>) -> StyleFace {
+    fn flat(shape: egui::Shape, out: &mut Vec<egui::Shape>) {
+        if let egui::Shape::Vec(shapes) = shape {
+            shapes.into_iter().for_each(|s| flat(s, out));
+        } else {
+            out.push(shape);
+        }
+    }
+    let field = bar.settle().named("Graphic Styles").rect;
+    let mut paint = bar.fixture.take_paint().expect("the fixture records what it paints");
+    for (id, delta) in paint.textures_delta.set.iter().flat_map(|(id, deltas)| deltas.iter().map(move |delta| (id, delta))) {
+        let egui::ImageData::Color(image) = &delta.image;
+        match delta.pos {
+            None => {
+                textures.insert(*id, egui::ColorImage::clone(image.as_ref()));
+            }
+            Some([x0, y0]) => {
+                let Some(page) = textures.get_mut(id) else { continue };
+                for (i, texel) in image.pixels.iter().enumerate() {
+                    let (x, y) = (x0 + i % image.size[0], y0 + i / image.size[0]);
+                    if x < page.size[0] && y < page.size[1] {
+                        page.pixels[y * page.size[0] + x] = *texel;
+                    }
+                }
+            }
+        }
+    }
+    // The uploads are applied to `textures`, not to a renderer.
+    paint.textures_delta.clear();
+    let mut shapes = Vec::new();
+    for clipped in std::mem::take(&mut paint.shapes) {
+        flat(clipped.shape, &mut shapes);
+    }
+    let mut face = StyleFace { field, pictures: Vec::new(), fills: Vec::new() };
+    for shape in shapes {
+        match shape {
+            egui::Shape::Mesh(mesh) if mesh.texture_id != egui::TextureId::default() => {
+                let rect = egui::Rect::from_points(&mesh.vertices.iter().map(|v| v.pos).collect::<Vec<_>>());
+                if !field.contains_rect(rect) {
+                    continue;
+                }
+                let uv = egui::Rect::from_points(&mesh.vertices.iter().map(|v| v.uv).collect::<Vec<_>>()).center();
+                let texel = textures.get(&mesh.texture_id).map(|image| {
+                    let x = ((uv.x * image.size[0] as f32) as usize).min(image.size[0] - 1);
+                    let y = ((uv.y * image.size[1] as f32) as usize).min(image.size[1] - 1);
+                    image.pixels[y * image.size[0] + x]
+                });
+                face.pictures.push((rect, texel));
+            }
+            egui::Shape::Rect(r) if field.contains_rect(r.rect) && r.fill != egui::Color32::TRANSPARENT => face.fills.push((r.rect, r.fill)),
+            _ => {}
+        }
+    }
+    face
+}
+
+/// The Control bar's Style picker is a swatch of the style the selection is linked to: the field shows that style's
+/// thumbnail, and white once the selection is linked to no style. It paints no style's name, and it keeps its width
+/// whether the selection is linked or not and when a style with a long name is added.
+#[test]
+fn the_control_bar_style_picker_is_a_swatch_of_the_linked_style() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 40, "height": 40})).unwrap();
+    let mut bar = control_shown(app);
+    bar.fixture.record_paint();
+    let mut textures = std::collections::HashMap::new();
+    bar.room(egui::vec2(2400.0, 300.0));
+    let unlinked = style_face(&mut bar, &mut textures).field.width();
+    let long = "A graphic style whose name is longer than any field on the bar";
+    bar.app().run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+    bar.app().run("graphicStyle.new", json!({"name": long})).unwrap();
+    bar.app().run("graphicStyle.apply", json!({"name": long})).unwrap();
+    let linked = bar.app().session.selection_graphic_style().is_some_and(|(g, linked)| linked && g.name == long);
+    assert!(linked, "the rectangle is linked to the new style");
+    let face = style_face(&mut bar, &mut textures);
+    let shown = face.field.width();
+    assert!((shown - unlinked).abs() < 0.5, "the swatch keeps its width: {unlinked} unlinked, {shown} linked to {long:?}");
+    assert!(!bar.texts().iter().any(|t| t.text.contains(long)), "the swatch paints no style name: {:?}", bar.texts());
+    let largest = |face: &StyleFace| face.pictures.iter().copied().max_by(|a, b| a.0.area().total_cmp(&b.0.area()));
+    let Some((thumb, Some(texel))) = largest(&face) else { panic!("the field shows the style's thumbnail: {:?}", face.pictures) };
+    assert!(texel.r() > 180 && texel.g() < 70 && texel.b() < 70, "the thumbnail shows the style's red fill: {texel:?}");
+
+    // Break Link to Graphic Style: the field turns white where the thumbnail was.
+    bar.app().run("graphicStyle.breakLink", json!({})).unwrap();
+    assert!(bar.app().session.selection_graphic_style().is_none_or(|(_, linked)| !linked), "the rectangle is linked to no style");
+    let face = style_face(&mut bar, &mut textures);
+    assert!((face.field.width() - unlinked).abs() < 0.5, "the swatch keeps its width once unlinked");
+    let middle = thumb.center();
+    assert!(!face.pictures.iter().any(|(r, _)| r.contains(middle)), "no thumbnail shows once unlinked: {:?}", face.pictures);
+    let top = face.fills.iter().rev().find(|(r, _)| r.contains(middle)).map(|(_, fill)| *fill);
+    assert_eq!(top, Some(egui::Color32::WHITE), "the unlinked swatch is white: {:?}", face.fills);
 }
 
 /// The Control bar shows the Global Edit Options dropdown while Start Global Edit can run. Its

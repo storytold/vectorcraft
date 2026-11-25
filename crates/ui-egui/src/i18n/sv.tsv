@@ -6863,6 +6863,9 @@ file-filter	Flattener presets	Förinställningar för plattning
 file-filter	PDF presets	PDF-förinställningar
 file-filter	PDF-compatible .ai	PDF-kompatibel .ai
 file-filter	Print presets	Utskriftsförinställningar
+file-filter	Tracing presets	Förinställningar för vektorisering
+file-filter	Action sets	Åtgärdsuppsättningar
+file-filter	Composite fonts	Sammansatta typsnitt
 file-filter	Preferences	Inställningar
 file-filter	Export presets	Exportförinställningar
 file-filter	SVG Compressed	SVG komprimerad
@@ -7518,6 +7521,10 @@ axis	Y Axis	Y-axel
 @msg	`inputs` lists `{shown}` twice	`inputs` anger `{shown}` två gånger
 @msg	`inputs` needs `api` 2 or later	`inputs` kräver `api` 2 eller senare
 @msg	`inputs` needs the permission `doc.read`	`inputs` kräver behörigheten `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Läsa objekten den får, och dokumentets inställningar, ritytor, lager och färgrutor
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` måste ange olika avsnitt: settings, artboards, layers eller swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` gäller ett filter eller en liveeffekt med `commands`, med `api` 3 eller senare och behörigheten `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	dokumentinformationen som pluginet begär är för stor för att lämnas över: högst {MAX_CONTEXT_ITEMS} ritytor, lager och färgrutor på {MAX_CONTEXT_BYTES} byte
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	minnesbudget (objekt {_1} behöver {size} byte indata, {left} återstår)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	objektbudget (fler än {MAX_OBJECTS} skrivskyddade objekt)
 @msg	the plug-in's grant can't be removed from the plug-in store	pluginets behörighet kan inte tas bort ur pluginlagret
@@ -10131,6 +10138,10 @@ digits	Hindi	Hindi
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc returnerade 0 (slut på minne)
 @msg	vc_alloc returned a block outside memory	vc_alloc returnerade ett block utanför minnet
 @msg	vc_run returned error code {packed}	vc_run returnerade felkoden {packed}
+@msg	did not finish loading within {secs} s	blev inte färdigläst inom {secs} s
+@msg	no thread was left to load it	ingen tråd fanns kvar som kunde läsa in den
+@msg	panicked while loading	kraschade under inläsningen
+@msg	panicked while loading: {what}	kraschade under inläsningen: {what}
 @msg	view is required	view krävs
 @msg	view must be one of {_1}	view måste vara något av {_1}
 @msg	warpStyle can only edit an applied Warp effect	warpStyle kan bara redigera en tillämpad Förvräng-effekt

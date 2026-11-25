@@ -7,6 +7,7 @@ mod contextmenu;
 mod cut;
 mod distortkeys;
 mod document_drag;
+mod drag_commands;
 pub(super) mod folder;
 mod font_menu;
 mod fonts;
