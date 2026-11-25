@@ -40,20 +40,29 @@ fn settled(app: &mut VectorcraftApp, view: &CanvasView, ids: &[NodeId]) -> Vec<A
 
 /// An unchanged type object keeps its memo entry; an edit lays out only the object edited; a zoom
 /// reuses the entries (the marks are in document points); a new font generation lays everything out.
+/// Other tests change the fonts while this one runs, so the edit and the zoom are tried again on a
+/// new document until the fonts stay the same from the settled pass to the zoomed one.
 #[test]
 fn hidden_characters_lay_out_only_type_that_changed() {
-    let mut app = app();
-    let ids = [text(&mut app, 20, 40, "a b\nc d"), text(&mut app, 20, 160, "e f")];
-    app.ui.view.hidden_chars = true;
-    let before = settled(&mut app, &view(), &ids);
-    app.session.execute("text.setText", &json!({"id": ids[1].0, "text": "e f g"})).unwrap();
-    marks_of(&mut app, &view());
-    let after = kept_hidden(&app, &ids);
+    let zoomed = CanvasView::new(view().rect, Point::new(100.0, 100.0), 2.0);
+    let (mut app, ids, before, after, zoom) = (0..100)
+        .find_map(|_| {
+            let mut app = app();
+            let ids = [text(&mut app, 20, 40, "a b\nc d"), text(&mut app, 20, 160, "e f")];
+            app.ui.view.hidden_chars = true;
+            let before = settled(&mut app, &view(), &ids);
+            let inputs = app.canvas.hidden_chars.inputs.clone();
+            app.session.execute("text.setText", &json!({"id": ids[1].0, "text": "e f g"})).unwrap();
+            marks_of(&mut app, &view());
+            let after = kept_hidden(&app, &ids);
+            marks_of(&mut app, &zoomed);
+            let zoom = kept_hidden(&app, &ids);
+            (app.canvas.hidden_chars.inputs == inputs).then_some((app, ids, before, after, zoom))
+        })
+        .expect("the fonts settle");
     assert!(Arc::ptr_eq(&before[0], &after[0]), "the object not edited is not laid out again");
     assert!(!Arc::ptr_eq(&before[1], &after[1]), "the edited object is");
-    let zoomed = CanvasView::new(view().rect, Point::new(100.0, 100.0), 2.0);
-    marks_of(&mut app, &zoomed);
-    assert!(kept_hidden(&app, &ids).iter().zip(&after).all(|(a, b)| Arc::ptr_eq(a, b)), "a zoom lays out no type");
+    assert!(zoom.iter().zip(&after).all(|(a, b)| Arc::ptr_eq(a, b)), "a zoom lays out no type");
     app.canvas.hidden_chars.inputs = (u64::MAX, String::new());
     marks_of(&mut app, &view());
     assert!(kept_hidden(&app, &ids).iter().zip(&after).all(|(a, b)| !Arc::ptr_eq(a, b)), "other fonts lay all type out again");
