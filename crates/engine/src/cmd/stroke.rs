@@ -11,7 +11,7 @@ use vectorcraft_geom::PathData;
 use vectorcraft_tools::builder::is_live_paint;
 
 use super::appearance::{ItemTarget, edit_items, item_target};
-use super::paint::{live_paint_covered, live_paint_parts_skipped, painted};
+use super::paint::{live_paint_parts_skipped, painted};
 use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, ok, str_param};
 use crate::DocState;
 use crate::inspect::{ALIGNS, CAPS, JOINS, StrokeMixed, node_stroke, scale_layer};
@@ -23,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Stroke Options",
             ["Window", "Stroke"],
             None,
-            "{weight?: pt, cap?: butt|round|square, join?: miter|round|bevel, miterLimit?, align?: center|inside|outside, dash?: [d,g,…]|null (a 0 dash with a round or projecting cap draws dots or squares; a new pattern keeps the current offset and alignment), dashOffset? (exact dashes only), alignDashes?: bool (true: dashes fitted to corners and path ends, every run between them holding whole periods with a dash centred on each corner and end; false, the default for a new pattern: exact lengths), startArrow?, endArrow?: Arrow|ArrowOpen|LineArrow|Barbed|Concave|DoubleArrow|HalfArrowLeft|HalfArrowRight|Chevron|Feather|Swallowtail|Triangle|TriangleOpen|TriangleReverse|TriangleBar|Kite|Leaf|Drop|Circle|CircleOpen|HalfCircle|Oval|Target|Square|SquareOpen|Tag|TagOpen|Diamond|DiamondOpen|Hexagon|HexagonOpen|Star|Cross|Plus|Bar|DoubleBar|DotOnBar|Slash|DoubleSlash|Bracket|Fork|null|{custom: name} (a custom arrowhead of the arrowheads file, stroke.arrowheads.list)|{Custom: {name, path, stop?}} (a custom head with its art, as document.inspect reports one; stop: where the stroke ends under the head, in head units back from the tip, 0..64 (otherwise, or without one, halfway along the head); refused when the path fills no area, parts thinner than a millionth of a head unit counting as none, or has more than 4096 anchors, more than 4096 subpaths or a point more than 64 head units from the tip) (HalfArrowLeft/Right: one barb, left or right of the direction the head points), arrowAlign?: \"extend\" (tip past the end point, default)|\"tip\" (tip on the end point; the stroke is shortened), profile?: \"uniform\"|\"lens\"|\"taperStart\"|\"taperEnd\"|\"pinch\"|\"teardrop\"|\"wave\"|a saved profile's name (stroke.widthProfile.list), widthPoints?, gradientMode? (as document.inspect reports them in strokeOptions, so those read back unchanged; ignored here: a custom profile is set with the Width tool, gradientMode with paint.editGradient), item?: stroke item index|null (omitted: the Appearance panel's active item if it is a stroke, else the top stroke, created when missing), ids?|id?, target?: \"object\"|\"contents\", aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md)} Without a stroke item, type takes weight, cap, join, miterLimit, align (around its glyph outlines; the type stays live) and the dash options as its characters' stroke (every run; text.setRangeStyle `strokeOptions` styles a range), and images and symbol instances (also in groups) are left alone; a Live Paint group takes them on its edges only. With nothing selected (and no ids) they set up the next object drawn (appearance.newArt; weight always does). On a path directly in a graph series, the graph also stores a weight it changes on the topmost visible stroke (docs/mcp.md); on a graph label's stroke row, the graph stores the label's topmost visible fill and stroke rows for every label of its kind, and on its characters the stroke options they take; on a graph's axis line, tick mark or radar ring, the graph stores the paint, weight, opacity and blend mode of its topmost visible fill and stroke rows that the edit changes, and the weight it writes to the topmost visible stroke, for every line of its kind, and not its caps, joins, dashes, alignment or arrowheads. While the Live Paint Bucket is the active tool and no ids, id or item are given (a null ids or id counts as none), only the stroke for new art changes (the bucket paints edges with its color and weight) → {objects: how many objects took the stroke options}",
+            "{weight?: pt, cap?: butt|round|square, join?: miter|round|bevel, miterLimit?, align?: center|inside|outside, dash?: [d,g,…]|null (a 0 dash with a round or projecting cap draws dots or squares; a new pattern keeps the current offset and alignment), dashOffset? (exact dashes only), alignDashes?: bool (true: dashes fitted to corners and path ends, every run between them holding whole periods with a dash centred on each corner and end; false, the default for a new pattern: exact lengths), startArrow?, endArrow?: Arrow|ArrowOpen|LineArrow|Barbed|Concave|DoubleArrow|HalfArrowLeft|HalfArrowRight|Chevron|Feather|Swallowtail|Triangle|TriangleOpen|TriangleReverse|TriangleBar|Kite|Leaf|Drop|Circle|CircleOpen|HalfCircle|Oval|Target|Square|SquareOpen|Tag|TagOpen|Diamond|DiamondOpen|Hexagon|HexagonOpen|Star|Cross|Plus|Bar|DoubleBar|DotOnBar|Slash|DoubleSlash|Bracket|Fork|null|{custom: name} (a custom arrowhead of the arrowheads file, stroke.arrowheads.list)|{Custom: {name, path, stop?}} (a custom head with its art, as document.inspect reports one; stop: where the stroke ends under the head, in head units back from the tip, 0..64 (otherwise, or without one, halfway along the head); refused when the path fills no area, parts thinner than a millionth of a head unit counting as none, or has more than 4096 anchors, more than 4096 subpaths or a point more than 64 head units from the tip) (HalfArrowLeft/Right: one barb, left or right of the direction the head points), arrowAlign?: \"extend\" (tip past the end point, default)|\"tip\" (tip on the end point; the stroke is shortened), profile?: \"uniform\"|\"lens\"|\"taperStart\"|\"taperEnd\"|\"pinch\"|\"teardrop\"|\"wave\"|a saved profile's name (stroke.widthProfile.list), widthPoints?, gradientMode? (as document.inspect reports them in strokeOptions, so those read back unchanged; ignored here: a custom profile is set with the Width tool, gradientMode with paint.editGradient), item?: stroke item index|null (omitted: the Appearance panel's active item if it is a stroke, else the top stroke, created when missing), ids?|id?, defaultsOnly?: bool, target?: \"object\"|\"contents\", aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md)} Without a stroke item, type takes weight, cap, join, miterLimit, align (around its glyph outlines; the type stays live) and the dash options as its characters' stroke (every run; text.setRangeStyle `strokeOptions` styles a range), and images and symbol instances (also in groups) are left alone; a Live Paint group takes them on its edges only. With nothing selected (and no ids) they set up the next object drawn (appearance.newArt; weight always does). On a path directly in a graph series, the graph also stores a weight it changes on the topmost visible stroke (docs/mcp.md); on a graph label's stroke row, the graph stores the label's topmost visible fill and stroke rows for every label of its kind, and on its characters the stroke options they take; on a graph's axis line, tick mark or radar ring, the graph stores the paint, weight, opacity and blend mode of its topmost visible fill and stroke rows that the edit changes, and the weight it writes to the topmost visible stroke, for every line of its kind, and not its caps, joins, dashes, alignment or arrowheads. While the Live Paint Bucket is the active tool and no ids, id or item are given (a null ids or id counts as none), or `defaultsOnly: true` is given (refused with ids, id or item), only the stroke for new art changes (the bucket paints edges with its color and weight) → {objects: how many objects took the stroke options}",
             has_doc,
             stroke_set
         ),
@@ -32,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Stroke Weight Up",
             [],
             Some("Cmd+Alt+."),
-            "{ids?|id?} raise each selected stroke's weight by one step of Units › Stroke (a quarter unit below one unit, then whole units; up to 1000 pt), each from its own weight: the selected objects' active or top stroke, type's stroked characters; objects without a stroke, and a Live Paint group's faces, are left alone. With nothing selected (and no ids), the weight of the next object drawn, and so while the Live Paint Bucket is the active tool and no ids or id are given (a null one counts as none). On a path directly in a graph series, the graph also stores the new weight of the topmost visible stroke, and on a graph label the new weight of its characters' stroke or its stroke row for every label of its kind, and on a graph's axis line, tick mark or radar ring its rows for every line of its kind (docs/mcp.md) → {objects}",
+            "{ids?|id?, defaultsOnly?: bool (as stroke.set)} raise each selected stroke's weight by one step of Units › Stroke (a quarter unit below one unit, then whole units; up to 1000 pt), each from its own weight: the selected objects' active or top stroke, type's stroked characters; objects without a stroke, and a Live Paint group's faces, are left alone. With nothing selected (and no ids), the weight of the next object drawn, and so while the Live Paint Bucket is the active tool and no ids or id are given (a null one counts as none), or `defaultsOnly: true` is given. On a path directly in a graph series, the graph also stores the new weight of the topmost visible stroke, and on a graph label the new weight of its characters' stroke or its stroke row for every label of its kind, and on a graph's axis line, tick mark or radar ring its rows for every line of its kind (docs/mcp.md) → {objects}",
             has_doc,
             |s, p| stroke_step(s, p, true)
         ),
@@ -41,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Stroke Weight Down",
             [],
             Some("Cmd+Alt+,"),
-            "{ids?|id?} lower each selected stroke's weight by one step, as stroke.weightUp raises it, down to a quarter unit (a thinner weight is kept) → {objects}",
+            "{ids?|id?, defaultsOnly?: bool (as stroke.set)} lower each selected stroke's weight by one step, as stroke.weightUp raises it, down to a quarter unit (a thinner weight is kept) → {objects}",
             has_doc,
             |s, p| stroke_step(s, p, false)
         ),
@@ -50,7 +50,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Stroke Options",
             [],
             None,
-            "{arrowScale?: [start %, end %], swapArrows?: bool, flipProfile?: \"along\"|\"across\", brush?: name|null, item?: stroke item index|null, aligned?: bool (as stroke.set), ids?|id?, target?: \"object\"|\"contents\"} Stroke panel extras (with nothing selected, all but brush set up the next object drawn, and so while the Live Paint Bucket is the active tool and no ids, id, item or brush are given, a null ids or id counting as none; without item, a Live Paint group's edges take them and its faces are left alone)",
+            "{arrowScale?: [start %, end %], swapArrows?: bool, flipProfile?: \"along\"|\"across\", brush?: name|null, item?: stroke item index|null, aligned?: bool (as stroke.set), ids?|id?, defaultsOnly?: bool (as stroke.set; refused with brush), target?: \"object\"|\"contents\"} Stroke panel extras (with nothing selected, all but brush set up the next object drawn, and so while the Live Paint Bucket is the active tool, or with `defaultsOnly: true`, and no ids, id, item or brush are given, a null ids or id counting as none; without item, a Live Paint group's edges take them and its faces are left alone)",
             has_doc,
             stroke_advanced
         ),
@@ -465,7 +465,7 @@ impl Session {
         // A Live Paint group without edges shows the next selected object's stroke; any other object
         // without a painted object shows none. A face or edge selected with its Live Paint group counts
         // with the group, wherever it is in the selection.
-        let covered = live_paint_covered(&st.doc, &st.selection.objects);
+        let covered = st.selection_live_paint_covered(&st.selection.objects);
         for id in st.selection.objects.iter().filter(|id| !covered.contains(*id)) {
             let Some(n) = st.doc.node(*id) else { continue };
             let mut nodes = vec![];
@@ -564,7 +564,7 @@ impl DocState {
         } else {
             let selected: Vec<&Node> = self.selection.objects.iter().filter_map(|id| self.doc.node(*id)).collect();
             // The faces and edges of the selected Live Paint groups: selected as well, they count with their group's.
-            let covered = live_paint_covered(&self.doc, &self.selection.objects);
+            let covered = self.selection_live_paint_covered(&self.selection.objects);
             for n in selected.into_iter().filter(|n| !covered.contains(&n.id)) {
                 painted(n, true, true, &mut nodes);
             }
@@ -642,7 +642,10 @@ fn stroke_advanced(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "nothing to change"));
     }
     // As stroke.set: the stroke the Live Paint Bucket paints with changes; the selection keeps its own.
-    // A brush still goes to the selection.
+    // A brush still goes to the selection, and new art has no brush for `defaultsOnly` to set.
+    if brush.is_some() && super::switch_or(p, "defaultsOnly", false, C)? {
+        return Err(bad(C, "`defaultsOnly` cannot be combined with `brush`"));
+    }
     let bucket_p = if brush.is_none() { super::paint::bucket_color_params(s, p, C)? } else { None };
     let bucket = bucket_p.is_some();
     let p = bucket_p.as_ref().unwrap_or(p);
