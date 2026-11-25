@@ -309,13 +309,17 @@ mod tests {
         assert!(Runtime::for_identity(LaunchIdentity::Stable).updater.is_some());
 
         let mut app = app_with_saved_object();
-        let ctx = crate::testing::ui_context();
+        // A nightly's runtime has no updater at all, so not even the frame that gives the app its
+        // dialog host may start a check (`dialogs()` is `None` before that frame runs).
         app.updates_rt.updater = None;
+        let ctx = crate::unsaved::ready_for_test(&mut app);
+        let opened = app.dialogs().expect("the frame gives the app its dialog host").with(|h| h.open_dialogs().len());
+        assert_eq!(opened, 0, "the first frame opens no update dialog in a nightly");
         // Neither a frame nor the exit hook does anything at all.
         tick(&mut app, &ctx);
         pump(&mut app, &ctx);
         app.start_pending_update();
-        let opened = app.dialogs().unwrap().with(|h| h.open_dialogs().len());
+        let opened = app.dialogs().expect("the dialog host").with(|h| h.open_dialogs().len());
         assert_eq!(opened, 0, "a nightly opens no update dialog on its own");
         // Asked to check, it says who manages its updates instead of asking about a release.
         check(&mut app).unwrap();
