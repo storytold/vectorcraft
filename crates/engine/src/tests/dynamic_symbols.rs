@@ -587,6 +587,186 @@ fn direct_selection_paints_one_object_of_one_dynamic_instance() {
     assert_eq!(pixel(&s, 80, 30), BLUE);
 }
 
+/// Instance `inst` with a new fill (`fill`) or stroke row without paint whose effect is `effect`
+/// with `params`.
+fn row_effect(s: &mut Session, inst: NodeId, fill: bool, effect: &str, params: Value) {
+    s.execute(if fill { "appearance.addFill" } else { "appearance.addStroke" }, &json!({"ids": [inst.0]})).unwrap();
+    let row = node(s, inst).appearance.items.len() - 1;
+    s.execute("appearance.setItem", &json!({"ids": [inst.0], "index": row, "none": true})).unwrap();
+    s.execute("effect.apply", &json!({"ids": [inst.0], "item": row, "effect": effect, "params": params})).unwrap();
+}
+
+/// The object of `inst`'s art that Direct Selection picks at (`x`, `y`) with `opt`.
+fn part_at(s: &Session, inst: NodeId, (x, y): (f64, f64), opt: vectorcraft_doc::hit::HitOptions) -> Option<Vec<u32>> {
+    let doc = &s.doc().unwrap().doc;
+    vectorcraft_doc::hit::symbol_part_at(doc, doc.node(inst).unwrap(), vectorcraft_geom::Point::new(x, y), opt)
+}
+
+/// The box of the outline of the object at `path` in `inst`'s art, as Direct Selection draws it.
+fn part_outline_box(s: &Session, inst: NodeId, path: &[u32]) -> Rect {
+    use vectorcraft_geom::kurbo::Shape;
+    let doc = &s.doc().unwrap().doc;
+    let outline = vectorcraft_doc::hit::symbol_part_outline_in_view(doc, doc.node(inst).unwrap(), path, Default::default()).unwrap();
+    outline.bounding_box()
+}
+
+/// A geometry effect on a dynamic instance's fill or stroke moves where the objects of its art
+/// are drawn: Direct Selection picks an object where it is drawn, not where its own shape no longer
+/// paints, and outlines it there; Outline view still takes the plain shapes.
+#[test]
+fn direct_selection_picks_a_part_where_the_instance_fill_and_stroke_effects_draw_it() {
+    use vectorcraft_doc::hit::HitOptions;
+    let opt = HitOptions { tol: 1.0, ..Default::default() };
+    let mut s = session();
+    let inst = pair(&mut s, "dynamic");
+    row_effect(&mut s, inst, true, "distort.transform", json!({"moveH": 100}));
+    // The squares are drawn at x 110..150 and 160..200.
+    assert_eq!(part_at(&s, inst, (130.0, 30.0), opt), Some(vec![0]), "the first square where it is drawn");
+    assert_eq!(part_at(&s, inst, (180.0, 30.0), opt), Some(vec![1]), "the second square where it is drawn");
+    assert_eq!(part_at(&s, inst, (80.0, 30.0), opt), None, "where the second square's own shape no longer paints");
+    assert_eq!(part_at(&s, inst, (60.5, 30.0), opt), None, "the plain edge of the second square");
+    assert_eq!(part_at(&s, inst, (60.5, 30.0), HitOptions { outline: true, ..opt }), Some(vec![1]), "Outline view draws the plain shapes");
+    let b = part_outline_box(&s, inst, &[0]);
+    assert!((b.x0 - 110.0).abs() < 0.5 && (b.x1 - 150.0).abs() < 0.5, "the outline follows the moved square: {b:?}");
+    direct(&mut s, (130.0, 30.0), (130.0, 30.0), Mods::default());
+    let sel = s.doc().unwrap().selection.clone();
+    assert_eq!(sel.objects, [inst]);
+    assert_eq!(sel.symbol_part, Some(vectorcraft_doc::SymbolPart { instance: inst, path: vec![0] }), "a press on the drawn square picks it");
+
+    // A stroke effect: Offset Path moves the first square's stroke out to x = 0.
+    let mut s = session();
+    let (a, b) = (square(&mut s, 10.0), square(&mut s, 60.0));
+    s.execute("paint.setStroke", &json!({"ids": [a.0, b.0], "color": "#00ff00"})).unwrap();
+    let inst = id(&s.execute("symbol.new", &json!({"name": "Pair", "ids": [a.0, b.0], "type": "dynamic"})).unwrap());
+    row_effect(&mut s, inst, false, "path.offsetPath", json!({"offset": 10}));
+    assert_eq!(part_at(&s, inst, (0.5, 30.0), opt), Some(vec![0]), "the moved stroke");
+    assert_eq!(part_at(&s, inst, (30.0, 30.0), opt), Some(vec![0]), "the fill keeps its shape");
+    let b = part_outline_box(&s, inst, &[0]);
+    assert!(b.x0 < 1.0 && b.x1 > 59.0, "the outline takes in the moved stroke: {b:?}");
+
+    // A symbol instance in the art takes the effect too: it is picked and outlined where its art is
+    // drawn, not in its box. The fill effect moves its square; its image has no fill and stays.
+    let mut s = session();
+    let a = square(&mut s, 10.0);
+    place_image(&mut s);
+    let img = top(&s);
+    let inner = id(&s.execute("symbol.new", &json!({"name": "Inner", "ids": [a.0, img.0]})).unwrap());
+    let b = square(&mut s, 60.0);
+    let inst = id(&s.execute("symbol.new", &json!({"name": "Outer", "ids": [inner.0, b.0], "type": "dynamic"})).unwrap());
+    row_effect(&mut s, inst, true, "distort.transform", json!({"moveH": 100}));
+    assert_eq!(part_at(&s, inst, (130.0, 30.0), opt), Some(vec![0]), "the nested instance's square where it is drawn");
+    assert_eq!(part_at(&s, inst, (65.0, 35.0), opt), Some(vec![0]), "the nested instance's image");
+    assert_eq!(part_at(&s, inst, (30.0, 30.0), opt), None, "the nested instance's own box");
+    let b = part_outline_box(&s, inst, &[0]);
+    assert!((b.x0 - 50.0).abs() < 0.5 && (b.x1 - 150.0).abs() < 0.5, "the outline takes in the moved square and the image: {b:?}");
+
+    // A nested instance with a geometry effect of its own is picked where both effects draw it.
+    let mut s = session();
+    let a = square(&mut s, 10.0);
+    let inner = id(&s.execute("symbol.new", &json!({"name": "Inner", "ids": [a.0]})).unwrap());
+    s.execute("effect.apply", &json!({"ids": [inner.0], "effect": "distort.transform", "params": {"moveV": 30}})).unwrap();
+    let b = square(&mut s, 60.0);
+    let inst = id(&s.execute("symbol.new", &json!({"name": "Outer", "ids": [inner.0, b.0], "type": "dynamic"})).unwrap());
+    row_effect(&mut s, inst, true, "distort.transform", json!({"moveH": 100}));
+    assert_eq!(part_at(&s, inst, (130.0, 60.0), opt), Some(vec![0]), "the nested square moved by both effects");
+    assert_eq!(part_at(&s, inst, (30.0, 30.0), opt), None, "the nested instance's own box");
+    let b = part_outline_box(&s, inst, &[0]);
+    assert!((b.x0 - 110.0).abs() < 0.5 && (b.y0 - 40.0).abs() < 0.5 && (b.y1 - 80.0).abs() < 0.5, "the outline follows both effects: {b:?}");
+
+    // Type with a fill of its own in the art is picked and outlined where the fill effect draws its
+    // glyphs, not in its own bounds.
+    let mut s = session();
+    let t = id(&s.execute("text.create", &json!({"x": 10, "y": 45, "size": 40, "text": "I"})).unwrap());
+    s.execute("appearance.addFill", &json!({"ids": [t.0]})).unwrap();
+    let plain = {
+        let doc = &s.doc().unwrap().doc;
+        doc.node(t).unwrap().geometric_bounds().unwrap()
+    };
+    let b = square(&mut s, 60.0);
+    let inst = id(&s.execute("symbol.new", &json!({"name": "Outer", "ids": [t.0, b.0], "type": "dynamic"})).unwrap());
+    row_effect(&mut s, inst, true, "distort.transform", json!({"moveH": 100}));
+    // The type's own color still paints the glyph in place; the new fill paints it 100 pt right.
+    let drawn = part_outline_box(&s, inst, &[0]);
+    assert!(drawn.x1 > plain.x1 + 90.0 && drawn.x1 < plain.x1 + 101.0, "the outline takes in the moved glyph: {drawn:?}, plain {plain:?}");
+    let glyph = drawn.x1 - 100.0 - drawn.x0;
+    let (x, y) = (drawn.x1 - glyph / 2.0, (drawn.y0 + drawn.y1) / 2.0);
+    assert_eq!(part_at(&s, inst, (x, y), opt), Some(vec![0]), "the type where the fill effect draws its glyph");
+    assert_eq!(part_at(&s, inst, (plain.x0 + 1.0, plain.y0 + 1.0), opt), None, "the type's own bounds, off its glyph");
+    let by_path = HitOptions { type_path_only: true, ..opt };
+    assert_eq!(part_at(&s, inst, (plain.x1 - 1.5, 45.0), by_path), Some(vec![0]), "Type Object Selection by Path Only takes the baseline");
+
+    // A nested instance whose own effect adds only pixels (a drop shadow) is still picked where the
+    // outer fill effect draws its art.
+    let mut s = session();
+    let a = square(&mut s, 10.0);
+    let inner = id(&s.execute("symbol.new", &json!({"name": "Inner", "ids": [a.0]})).unwrap());
+    s.execute("effect.apply", &json!({"ids": [inner.0], "effect": "stylize.dropShadow"})).unwrap();
+    let b = square(&mut s, 60.0);
+    let inst = id(&s.execute("symbol.new", &json!({"name": "Outer", "ids": [inner.0, b.0], "type": "dynamic"})).unwrap());
+    row_effect(&mut s, inst, true, "distort.transform", json!({"moveH": 100}));
+    assert_eq!(part_at(&s, inst, (130.0, 30.0), opt), Some(vec![0]), "the shadowed nested square where it is drawn");
+    assert_eq!(part_at(&s, inst, (30.0, 30.0), opt), None, "the shadowed nested instance's own box");
+
+    // An image whose fill has Convert to Shape is picked and outlined where the instance's fill
+    // effect moves that shape.
+    let mut s = session();
+    place_image(&mut s);
+    let img = top(&s);
+    let frame = node(&s, img).geometric_bounds().unwrap();
+    s.execute("appearance.addFill", &json!({"ids": [img.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [img.0], "color": "#00ff00", "item": 0})).unwrap();
+    s.execute("effect.apply", &json!({"ids": [img.0], "effect": "convertToShape.rectangle", "item": 0})).unwrap();
+    let b = square(&mut s, 200.0);
+    let inst = id(&s.execute("symbol.new", &json!({"name": "Outer", "ids": [img.0, b.0], "type": "dynamic"})).unwrap());
+    row_effect(&mut s, inst, true, "distort.transform", json!({"moveH": 100}));
+    let c = frame.center();
+    assert_eq!(part_at(&s, inst, (c.x + 100.0, c.y), opt), Some(vec![0]), "the image where its fill is drawn");
+    let o = part_outline_box(&s, inst, &[0]);
+    assert!(o.x1 > frame.x1 + 99.0, "the outline takes in the moved fill: {o:?}, frame {frame:?}");
+}
+
+/// A clipping path in a dynamic symbol's art with a geometry effect of its own is picked by its
+/// own geometry, and Direct Selection outlines that geometry, not the shape the effect draws.
+#[test]
+fn a_picked_clipping_path_is_outlined_by_its_own_geometry() {
+    let mut s = session();
+    let content = square(&mut s, 20.0);
+    let clip = square(&mut s, 10.0);
+    s.execute("object.clippingMask.make", &json!({"ids": [content.0, clip.0]})).unwrap();
+    s.execute("effect.apply", &json!({"ids": [clip.0], "effect": "path.offsetPath", "params": {"offset": 10}})).unwrap();
+    let group = top(&s);
+    assert!(node(&s, group).clips());
+    let inst = id(&s.execute("symbol.new", &json!({"name": "Clip", "ids": [group.0], "type": "dynamic"})).unwrap());
+    let b = part_outline_box(&s, inst, &[0]);
+    assert!((b.x0 - 10.0).abs() < 0.5 && (b.x1 - 50.0).abs() < 0.5, "the clipping path's own edge: {b:?}");
+}
+
+/// A symbol instance in a dynamic symbol's art whose own art is a clip group takes the instance's
+/// fill effect on the clip group's members, which the canvas draws moved: Direct Selection picks it
+/// where its member is drawn, not where the member's own shape is, and outlines it there.
+#[test]
+fn a_nested_instance_of_a_clip_group_is_picked_where_the_fill_effect_draws_its_art() {
+    use vectorcraft_doc::hit::HitOptions;
+    let opt = HitOptions { tol: 1.0, ..Default::default() };
+    let mut s = session();
+    let content = square(&mut s, 10.0);
+    let clip = id(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 200, "height": 60})).unwrap());
+    s.execute("object.clippingMask.make", &json!({"ids": [content.0, clip.0]})).unwrap();
+    let group = top(&s);
+    assert!(node(&s, group).clips());
+    let inner = id(&s.execute("symbol.new", &json!({"name": "Inner", "ids": [group.0]})).unwrap());
+    let b = square(&mut s, 160.0);
+    let inst = id(&s.execute("symbol.new", &json!({"name": "Outer", "ids": [inner.0, b.0], "type": "dynamic"})).unwrap());
+    row_effect(&mut s, inst, true, "distort.transform", json!({"moveH": 100}));
+    // The member is drawn at x 110..150, inside the clipping path.
+    assert_eq!(pixel(&s, 130, 30), BLUE, "the canvas draws the member moved");
+    assert_ne!(pixel(&s, 30, 30), BLUE, "and not in its own place");
+    assert_eq!(part_at(&s, inst, (130.0, 30.0), opt), Some(vec![0]), "the nested instance where its member is drawn");
+    assert_eq!(part_at(&s, inst, (30.0, 30.0), opt), None, "the member's own place");
+    let o = part_outline_box(&s, inst, &[0]);
+    assert!((o.x0 - 110.0).abs() < 0.5 && (o.x1 - 150.0).abs() < 0.5, "the outline follows the moved member: {o:?}");
+}
+
 #[test]
 fn a_drag_of_a_picked_object_moves_nothing_and_says_why() {
     let mut s = session();

@@ -1,340 +1,112 @@
 //! Colour harmony rules, the variation grid of the Color Guide panel and the five-colour themes of
-//! the Color Themes panel (our own colour math).
+//! the Color Themes panel, over document colours. The rules, their options and their colour math are
+//! the framework's (`craft_color_ui::harmony`); these keep every colour in the model of the colour
+//! it came from.
 
-use serde::{Deserialize, Serialize};
+use craft_color_ui::harmony as rules;
+pub use craft_color_ui::harmony::{GuideOptions, Harmony, THEME_SIZE, Variation};
+use craft_theme::Srgba;
 
 use crate::recolor::Palette;
 use crate::{Color, keep_model};
 
-/// A harmony rule: a group of colours built from a base colour, base first.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Harmony {
-    Complementary,
-    Complementary2,
-    SplitComplementary,
-    LeftComplement,
-    RightComplement,
-    Analogous,
-    Analogous2,
-    Monochromatic,
-    Shades,
-    Triad,
-    Triad2,
-    Triad3,
-    Tetrad,
-    Tetrad2,
-    Tetrad3,
-    Compound,
-    Compound2,
-    HighContrast,
-    HighContrast2,
-    HighContrast3,
-    Pentagram,
+/// The framework's colour for `c` (display sRGB).
+fn srgba(c: Color) -> Srgba {
+    let [r, g, b] = c.to_rgb();
+    Srgba::rgb(r, g, b)
 }
 
-/// One colour of a rule: the base turned by `turn` degrees of hue, its saturation scaled by `sat`
-/// and its brightness by `bright` (or flipped to the contrasting brightness).
-#[derive(Clone, Copy)]
-struct Tone {
-    turn: f32,
-    sat: f32,
-    bright: Bright,
+/// `c` in the model of `orig`: how [`move_on_wheel`] writes a moved colour.
+pub fn in_model_of(orig: Color, c: Srgba) -> Color {
+    keep_model(orig, Color::rgb(c.r, c.g, c.b))
 }
 
-#[derive(Clone, Copy)]
-enum Bright {
-    Times(f32),
-    /// Dark for a light base, light for a dark one ([`contrast`]).
-    Contrast,
-}
-
-const fn sv(turn: f32, sat: f32, bright: f32) -> Tone {
-    Tone { turn, sat, bright: Bright::Times(bright) }
-}
-/// The base's hue turned by `turn`.
-const fn t(turn: f32) -> Tone {
-    sv(turn, 1.0, 1.0)
-}
-/// A softer (half as saturated) partner.
-const fn soft(turn: f32) -> Tone {
-    sv(turn, 0.5, 1.0)
-}
-/// A deeper (darker) partner.
-const fn deep(turn: f32) -> Tone {
-    sv(turn, 1.0, 0.6)
-}
-/// A partner of contrasting brightness.
-const fn hc(turn: f32) -> Tone {
-    Tone { turn, sat: 1.0, bright: Bright::Contrast }
-}
-
-/// The brightness that contrasts with `v`.
-fn contrast(v: f32) -> f32 {
-    if v >= 0.5 { v * 0.3 } else { 0.7 + 0.3 * v }
-}
-
-impl Harmony {
-    pub const ALL: [Harmony; 21] = [
-        Harmony::Complementary,
-        Harmony::Complementary2,
-        Harmony::SplitComplementary,
-        Harmony::LeftComplement,
-        Harmony::RightComplement,
-        Harmony::Analogous,
-        Harmony::Analogous2,
-        Harmony::Monochromatic,
-        Harmony::Shades,
-        Harmony::Triad,
-        Harmony::Triad2,
-        Harmony::Triad3,
-        Harmony::Tetrad,
-        Harmony::Tetrad2,
-        Harmony::Tetrad3,
-        Harmony::Compound,
-        Harmony::Compound2,
-        Harmony::HighContrast,
-        Harmony::HighContrast2,
-        Harmony::HighContrast3,
-        Harmony::Pentagram,
-    ];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Harmony::Complementary => "Complementary",
-            Harmony::Complementary2 => "Complementary 2",
-            Harmony::SplitComplementary => "Split Complementary",
-            Harmony::LeftComplement => "Left Complement",
-            Harmony::RightComplement => "Right Complement",
-            Harmony::Analogous => "Analogous",
-            Harmony::Analogous2 => "Analogous 2",
-            Harmony::Monochromatic => "Monochromatic",
-            Harmony::Shades => "Shades",
-            Harmony::Triad => "Triad",
-            Harmony::Triad2 => "Triad 2",
-            Harmony::Triad3 => "Triad 3",
-            Harmony::Tetrad => "Tetrad",
-            Harmony::Tetrad2 => "Tetrad 2",
-            Harmony::Tetrad3 => "Tetrad 3",
-            Harmony::Compound => "Compound",
-            Harmony::Compound2 => "Compound 2",
-            Harmony::HighContrast => "High Contrast",
-            Harmony::HighContrast2 => "High Contrast 2",
-            Harmony::HighContrast3 => "High Contrast 3",
-            Harmony::Pentagram => "Pentagram",
-        }
-    }
-
-    /// The rule's id in commands: its label in camelCase ("splitComplementary", "triad2").
-    pub fn id(self) -> String {
-        let mut out = String::new();
-        for (i, w) in self.label().split(' ').enumerate() {
-            let mut c = w.chars();
-            if let Some(f) = c.next() {
-                if i == 0 {
-                    out.extend(f.to_lowercase());
-                } else {
-                    out.extend(f.to_uppercase());
-                }
-                out.push_str(c.as_str());
-            }
-        }
-        out
-    }
-
-    /// A rule from its id or label (case and spaces ignored).
-    pub fn parse(s: &str) -> Option<Self> {
-        let key = |x: &str| x.chars().filter(|c| !c.is_whitespace()).collect::<String>().to_ascii_lowercase();
-        let want = key(s);
-        Self::ALL.into_iter().find(|h| key(h.label()) == want)
-    }
-
-    fn tones(self) -> &'static [Tone] {
-        match self {
-            Harmony::Complementary => const { &[t(0.0), t(180.0)] },
-            Harmony::Complementary2 => const { &[t(0.0), soft(0.0), t(180.0), soft(180.0)] },
-            Harmony::SplitComplementary => const { &[t(0.0), t(150.0), t(210.0)] },
-            Harmony::LeftComplement => const { &[t(0.0), t(-30.0), t(150.0)] },
-            Harmony::RightComplement => const { &[t(0.0), t(30.0), t(210.0)] },
-            Harmony::Analogous => const { &[t(0.0), t(30.0), t(-30.0)] },
-            Harmony::Analogous2 => const { &[t(0.0), t(30.0), t(60.0), t(-30.0), t(-60.0)] },
-            Harmony::Monochromatic => const { &[t(0.0), sv(0.0, 0.5, 1.0), sv(0.0, 1.0, 0.6), sv(0.0, 0.25, 1.0), sv(0.0, 1.0, 0.35)] },
-            Harmony::Shades => const { &[t(0.0), sv(0.0, 1.0, 0.8), sv(0.0, 1.0, 0.6), sv(0.0, 1.0, 0.4), sv(0.0, 1.0, 0.2)] },
-            Harmony::Triad => const { &[t(0.0), t(120.0), t(240.0)] },
-            Harmony::Triad2 => const { &[t(0.0), t(120.0), soft(120.0), t(240.0), soft(240.0)] },
-            Harmony::Triad3 => const { &[t(0.0), t(120.0), deep(120.0), t(240.0), deep(240.0)] },
-            Harmony::Tetrad => const { &[t(0.0), t(60.0), t(180.0), t(240.0)] },
-            Harmony::Tetrad2 => const { &[t(0.0), t(90.0), t(180.0), t(270.0)] },
-            Harmony::Tetrad3 => const { &[t(0.0), t(30.0), t(180.0), t(210.0)] },
-            Harmony::Compound => const { &[t(0.0), t(40.0), t(160.0), t(200.0)] },
-            Harmony::Compound2 => const { &[t(0.0), t(-40.0), t(160.0), t(200.0)] },
-            Harmony::HighContrast => const { &[t(0.0), hc(180.0)] },
-            Harmony::HighContrast2 => const { &[t(0.0), hc(0.0), t(180.0), hc(180.0)] },
-            Harmony::HighContrast3 => const { &[t(0.0), hc(120.0), hc(240.0)] },
-            Harmony::Pentagram => const { &[t(0.0), t(72.0), t(144.0), t(216.0), t(288.0)] },
-        }
-    }
-
-    /// The rule's colours in the base colour's model, the base colour itself first.
-    pub fn apply(self, base: Color) -> Vec<Color> {
-        let rest = self.apply_hsb(base.to_hsb()).into_iter().skip(1);
-        std::iter::once(base).chain(rest.map(|[h, s, v]| keep_model(base, Color::from_hsb(h, s, v)))).collect()
-    }
-
-    /// The rule's colours as HSB from base HSB `hsb`, the base first: hue in degrees from 0 to 360,
-    /// saturation and brightness from 0 to 1. A gray base keeps its hue, so the colours keep their
-    /// places around a hue wheel.
-    pub fn apply_hsb(self, [h, s, v]: [f32; 3]) -> Vec<[f32; 3]> {
-        self.tones()
-            .iter()
-            .map(|tone| {
-                let b = match tone.bright {
-                    Bright::Times(f) => v * f,
-                    Bright::Contrast => contrast(v),
-                };
-                [(h + tone.turn).rem_euclid(360.0), (s * tone.sat).clamp(0.0, 1.0), b.clamp(0.0, 1.0)]
-            })
-            .collect()
-    }
-
-    /// Whether every colour of the rule has a hue of its own (Triad, but not Triad 2 or
-    /// Monochromatic), so that each can sit on a hue ring apart from the others.
-    pub fn hues_differ(self) -> bool {
-        let turns: Vec<f32> = self.tones().iter().map(|t| t.turn.rem_euclid(360.0)).collect();
-        turns.iter().enumerate().all(|(i, a)| turns[..i].iter().all(|b| a != b))
-    }
-
-    /// A [`THEME_SIZE`]-colour theme from `base`: the rule's colours, each followed by the lighter or
-    /// darker variations of it that fill the remaining places (the rule's first colours get them
-    /// first). The base colour comes first, every colour in its model.
-    pub fn theme(self, base: Color) -> Vec<Color> {
-        let colors = self.apply(base);
-        let n = colors.len();
-        let mut rows: Vec<Vec<Color>> = colors.iter().map(|c| vec![*c]).collect();
-        let opts = GuideOptions::default();
-        for k in 0..THEME_SIZE.saturating_sub(n) {
-            let (i, pass) = (k % n, k / n);
-            // Alternate lighter and darker along the rule and from one pass to the next.
-            let step = if (i + pass) % 2 == 0 { 3 } else { -3 };
-            rows[i].push(variation(colors[i], &opts, step));
-        }
-        rows.into_iter().flatten().take(THEME_SIZE).collect()
+/// The rule's name as the interface shows it.
+pub fn label(rule: Harmony) -> &'static str {
+    match rule {
+        Harmony::Complementary => "Complementary",
+        Harmony::Complementary2 => "Complementary 2",
+        Harmony::SplitComplementary => "Split Complementary",
+        Harmony::LeftComplement => "Left Complement",
+        Harmony::RightComplement => "Right Complement",
+        Harmony::Analogous => "Analogous",
+        Harmony::Analogous2 => "Analogous 2",
+        Harmony::Monochromatic => "Monochromatic",
+        Harmony::Shades => "Shades",
+        Harmony::Triad => "Triad",
+        Harmony::Triad2 => "Triad 2",
+        Harmony::Triad3 => "Triad 3",
+        Harmony::Tetrad => "Tetrad",
+        Harmony::Tetrad2 => "Tetrad 2",
+        Harmony::Tetrad3 => "Tetrad 3",
+        Harmony::Compound => "Compound",
+        Harmony::Compound2 => "Compound 2",
+        Harmony::HighContrast => "High Contrast",
+        Harmony::HighContrast2 => "High Contrast 2",
+        Harmony::HighContrast3 => "High Contrast 3",
+        Harmony::Pentagram => "Pentagram",
     }
 }
 
-/// The number of colours in a colour theme.
-pub const THEME_SIZE: usize = 5;
+/// A rule from its id or its label (case and spaces ignored).
+pub fn parse(s: &str) -> Option<Harmony> {
+    let key: String = s.chars().filter(|c| !c.is_whitespace()).collect();
+    Harmony::ALL.into_iter().find(|h| h.id().eq_ignore_ascii_case(&key))
+}
+
+/// The rule's colours in the base colour's model, the base colour itself first.
+pub fn apply(rule: Harmony, base: Color) -> Vec<Color> {
+    let rest = rule.apply(srgba(base)).into_iter().skip(1);
+    std::iter::once(base).chain(rest.map(|c| in_model_of(base, c))).collect()
+}
+
+/// A [`THEME_SIZE`]-colour theme from `base` (the framework's `Harmony::theme`): the base colour
+/// first, every colour in its model.
+pub fn theme(rule: Harmony, base: Color) -> Vec<Color> {
+    let rest = rule.theme(srgba(base)).into_iter().skip(1);
+    std::iter::once(base).chain(rest.map(|c| in_model_of(base, c))).collect()
+}
 
 /// Move colour `i` of a harmony on the hue and saturation wheel to `hsb` (hue in degrees,
-/// saturation and brightness 0..1), keeping its model. With `linked` the other colours keep their
-/// relation to it: they turn by the same hue, scale their saturation alike and shift their
-/// brightness by as much.
+/// saturation and brightness 0..1), as the framework's `move_on_wheel` does; each colour that moves
+/// keeps its model and the others keep their values.
 pub fn move_on_wheel(colors: &mut [Color], i: usize, hsb: [f32; 3], linked: bool) {
-    let Some(&old) = colors.get(i) else { return };
-    let [h0, s0, v0] = old.to_hsb();
-    let (dh, ratio, dv) = (hsb[0] - h0, if s0 > 0.01 { hsb[1] / s0 } else { 1.0 }, hsb[2] - v0);
-    for (j, c) in colors.iter_mut().enumerate() {
-        let new = if j == i {
-            hsb
-        } else if linked {
-            let [h, s, v] = c.to_hsb();
-            [h + dh, (s * ratio).clamp(0.0, 1.0), (v + dv).clamp(0.0, 1.0)]
-        } else {
-            continue;
-        };
-        *c = keep_model(*c, Color::from_hsb(new[0], new[1], new[2]));
-    }
-}
-
-/// What the variation grid varies: towards black and white, towards cool and warm, or towards
-/// grey and full saturation.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum Variation {
-    #[default]
-    TintsShades,
-    WarmCool,
-    VividMuted,
-}
-
-impl Variation {
-    pub const ALL: [Variation; 3] = [Variation::TintsShades, Variation::WarmCool, Variation::VividMuted];
-
-    pub fn id(self) -> &'static str {
-        match self {
-            Variation::TintsShades => "tintsShades",
-            Variation::WarmCool => "warmCool",
-            Variation::VividMuted => "vividMuted",
-        }
-    }
-    pub fn parse(s: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|v| v.id().eq_ignore_ascii_case(s))
-    }
-    /// The ends of the grid: (left, right).
-    pub fn sides(self) -> (&'static str, &'static str) {
-        match self {
-            Variation::TintsShades => ("Shades", "Tints"),
-            Variation::WarmCool => ("Cool", "Warm"),
-            Variation::VividMuted => ("Muted", "Vivid"),
+    let mut moved: Vec<Srgba> = colors.iter().map(|c| srgba(*c)).collect();
+    rules::move_on_wheel(&mut moved, i, hsb, linked);
+    for (c, m) in colors.iter_mut().zip(moved) {
+        if m != srgba(*c) {
+            *c = in_model_of(*c, m);
         }
     }
 }
 
-/// The Color Guide's options: variation kind, steps on each side and how far they reach.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct GuideOptions {
-    pub variation: Variation,
-    /// Variations on each side of the harmony colour (1..=20).
-    pub steps: u32,
-    /// How far the outermost variations go, 0..=100 (Less … More).
-    pub amount: f32,
-}
-
-impl Default for GuideOptions {
-    fn default() -> Self {
-        Self { variation: Variation::TintsShades, steps: 4, amount: 50.0 }
+/// The id of a variation in commands.
+fn variation_id(v: Variation) -> &'static str {
+    match v {
+        Variation::TintsShades => "tintsShades",
+        Variation::WarmCool => "warmCool",
+        Variation::VividMuted => "vividMuted",
     }
 }
 
-impl GuideOptions {
-    pub const MAX_STEPS: u32 = 20;
-
-    /// The options with `steps` and `amount` clamped to their ranges.
-    pub fn clamped(self) -> Self {
-        Self { steps: self.steps.clamp(1, Self::MAX_STEPS), amount: self.amount.clamp(0.0, 100.0), ..self }
-    }
-    /// The share of the way to the target that the outermost steps reach (10% … 90%).
-    fn reach(&self) -> f32 {
-        0.1 + 0.8 * self.amount.clamp(0.0, 100.0) / 100.0
-    }
+/// A variation from its id ("tintsShades", "warmCool" or "vividMuted"; case ignored).
+pub fn parse_variation(s: &str) -> Option<Variation> {
+    Variation::ALL.into_iter().find(|v| variation_id(*v).eq_ignore_ascii_case(s))
 }
 
 /// The share of the way to its target (black or white, cool or warm, gray or full color) that the
-/// variation at `step` goes: 0 at the center, the options' reach at the outermost steps.
+/// variation at `step` goes: 0 at the center, the options' reach (10% … 90%) at the outermost steps.
 pub fn step_fraction(opts: &GuideOptions, step: i32) -> f32 {
-    (step.unsigned_abs() as f32 / opts.steps.max(1) as f32).min(1.0) * opts.reach()
+    let reach = 0.1 + 0.8 * opts.amount.clamp(0.0, 100.0) / 100.0;
+    (step.unsigned_abs() as f32 / opts.steps.max(1) as f32).min(1.0) * reach
 }
 
-/// Variation of `c` at `step` (−steps..=steps: negative towards shades/cool/muted, positive towards
-/// tints/warm/vivid; 0 is `c` itself), in `c`'s model.
+/// Variation of `c` at `step` (the framework's `variation`), in `c`'s model; step 0 is `c` itself.
 pub fn variation(c: Color, opts: &GuideOptions, step: i32) -> Color {
     if step == 0 {
         return c;
     }
-    let f = step_fraction(opts, step);
-    let v = match opts.variation {
-        Variation::TintsShades => c.lerp(if step < 0 { &Color::BLACK } else { &Color::WHITE }, f),
-        Variation::WarmCool => {
-            let target = if step < 0 { Color::rgb(0.2, 0.45, 1.0) } else { Color::rgb(1.0, 0.55, 0.1) };
-            c.lerp(&target, f * 0.6)
-        }
-        Variation::VividMuted => {
-            let [h, s, b] = c.to_hsb();
-            let s2 = if step < 0 { s * (1.0 - f) } else { s + (1.0 - s) * f };
-            Color::from_hsb(h, s2.clamp(0.0, 1.0), b)
-        }
-    };
-    keep_model(c, v)
+    in_model_of(c, rules::variation(srgba(c), opts, step))
 }
 
 /// The Color Guide for a base colour: the harmony colours and, per colour, its row of variations
@@ -349,7 +121,7 @@ impl Guide {
     pub fn new(base: Color, rule: Harmony, opts: &GuideOptions) -> Self {
         let opts = opts.clamped();
         let n = opts.steps as i32;
-        let colors = rule.apply(base);
+        let colors = apply(rule, base);
         let grid = colors.iter().map(|c| (-n..=n).map(|step| variation(*c, &opts, step)).collect()).collect();
         Self { colors, grid }
     }
@@ -382,10 +154,10 @@ mod tests {
 
     #[test]
     fn complementary_red() {
-        let c = Harmony::Complementary.apply(Color::rgb(1.0, 0.0, 0.0));
+        let c = apply(Harmony::Complementary, Color::rgb(1.0, 0.0, 0.0));
         assert_eq!(c[1].to_hex(), "#00ffff");
-        assert_eq!(Harmony::Triad.apply(Color::rgb(1.0, 0.0, 0.0))[1].to_hex(), "#00ff00");
-        assert_eq!(Harmony::Pentagram.apply(Color::rgb(1.0, 0.0, 0.0))[1].to_hsb()[0].round(), 72.0);
+        assert_eq!(apply(Harmony::Triad, Color::rgb(1.0, 0.0, 0.0))[1].to_hex(), "#00ff00");
+        assert_eq!(apply(Harmony::Pentagram, Color::rgb(1.0, 0.0, 0.0))[1].to_hsb()[0].round(), 72.0);
     }
 
     #[test]
@@ -394,9 +166,9 @@ mod tests {
         assert_eq!(Harmony::ALL.len(), counts.len());
         for base in [Color::rgb8(230, 120, 40), Color::cmyk(0.1, 0.8, 0.3, 0.05), Color::gray(0.4)] {
             for (h, n) in Harmony::ALL.into_iter().zip(counts) {
-                let c = h.apply(base);
-                assert_eq!(c.len(), n, "{}", h.label());
-                assert_eq!(c[0], base, "{}: the base comes first, in its own model", h.label());
+                let c = apply(h, base);
+                assert_eq!(c.len(), n, "{}", label(h));
+                assert_eq!(c[0], base, "{}: the base comes first, in its own model", label(h));
             }
         }
     }
@@ -405,9 +177,9 @@ mod tests {
     fn harmonies_keep_the_base_model() {
         let base = Color::cmyk(0.0, 1.0, 1.0, 0.0);
         for h in Harmony::ALL {
-            assert!(h.apply(base).iter().all(|c| matches!(c, Color::Cmyk { .. })), "{}", h.label());
+            assert!(apply(h, base).iter().all(|c| matches!(c, Color::Cmyk { .. })), "{}", label(h));
         }
-        let Color::Cmyk { c, m, y, .. } = Harmony::Complementary.apply(base)[1] else { panic!("a CMYK complement") };
+        let Color::Cmyk { c, m, y, .. } = apply(Harmony::Complementary, base)[1] else { panic!("a CMYK complement") };
         assert!(c > m && c > y, "the complement of red is a cyan: {c} {m} {y}");
         let g = Guide::new(Color::gray(0.4), Harmony::Triad, &GuideOptions::default());
         assert!(g.grid.iter().flatten().all(|c| matches!(c, Color::Gray { .. })));
@@ -416,47 +188,19 @@ mod tests {
     #[test]
     fn rules_parse_by_id_and_label() {
         for h in Harmony::ALL {
-            assert_eq!(Harmony::parse(&h.id()), Some(h));
-            assert_eq!(Harmony::parse(h.label()), Some(h));
+            assert_eq!(parse(h.id()), Some(h));
+            assert_eq!(parse(label(h)), Some(h));
         }
         assert_eq!(Harmony::SplitComplementary.id(), "splitComplementary");
         assert_eq!(Harmony::HighContrast3.id(), "highContrast3");
-        assert_eq!(Harmony::parse("square"), None);
-    }
-
-    /// A rule's HSB colours match the colours `apply` gives, and a gray base keeps its hue, so its
-    /// colours turn around the hue ring from it.
-    #[test]
-    fn hsb_colours_match_and_keep_a_grays_hue() {
-        for h in Harmony::ALL {
-            let base = Color::rgb8(230, 120, 40);
-            let hsb = h.apply_hsb(base.to_hsb());
-            let colors = h.apply(base);
-            assert_eq!(hsb.len(), colors.len(), "{}", h.label());
-            for (a, c) in hsb.iter().zip(&colors).skip(1) {
-                assert_eq!(Color::from_hsb(a[0], a[1], a[2]).to_hex(), c.to_hex(), "{}", h.label());
-            }
-        }
-        let gray = Harmony::Triad.apply_hsb([40.0, 0.0, 0.5]);
-        assert_eq!(gray.iter().map(|c| c[0]).collect::<Vec<_>>(), [40.0, 160.0, 280.0]);
-        assert_eq!(Harmony::Analogous.apply_hsb([10.0, 1.0, 1.0])[2][0], 340.0, "hues wrap to 0..360");
-    }
-
-    /// Fifteen rules give every colour its own hue; the six that repeat a hue are left out.
-    #[test]
-    fn rules_whose_colours_all_have_their_own_hue() {
-        let differ: Vec<Harmony> = Harmony::ALL.into_iter().filter(|h| h.hues_differ()).collect();
-        assert_eq!(differ.len(), 15);
-        for h in [Harmony::Complementary2, Harmony::Monochromatic, Harmony::Shades, Harmony::Triad2, Harmony::Triad3, Harmony::HighContrast2] {
-            assert!(!h.hues_differ(), "{}", h.label());
-        }
+        assert_eq!(parse("square"), None);
     }
 
     #[test]
     fn high_contrast_flips_brightness() {
-        let light = Harmony::HighContrast.apply(Color::rgb(0.9, 0.8, 0.2));
+        let light = apply(Harmony::HighContrast, Color::rgb(0.9, 0.8, 0.2));
         assert!(light[1].to_hsb()[2] < 0.5);
-        let dark = Harmony::HighContrast.apply(Color::rgb(0.2, 0.1, 0.05));
+        let dark = apply(Harmony::HighContrast, Color::rgb(0.2, 0.1, 0.05));
         assert!(dark[1].to_hsb()[2] > 0.5);
     }
 
@@ -499,9 +243,9 @@ mod tests {
         let palette = Palette::new(lib);
         for rule in Harmony::ALL {
             let g = Guide::new(Color::rgb8(200, 60, 40), rule, &GuideOptions::default()).limited(&palette);
-            assert!(g.grid.iter().flatten().chain(&g.colors).all(|c| lib.contains(c)), "{}", rule.label());
+            assert!(g.grid.iter().flatten().chain(&g.colors).all(|c| lib.contains(c)), "{}", label(rule));
             for (row, c) in g.grid.iter().zip(&g.colors) {
-                assert_eq!(row[g.centre()], *c, "{}: the harmony colour stays in the centre", rule.label());
+                assert_eq!(row[g.centre()], *c, "{}: the harmony colour stays in the centre", label(rule));
             }
         }
         // The nearest colour wins: a pale yellow snaps to the cream and its darkest shade to the grey.
@@ -517,15 +261,15 @@ mod tests {
     fn themes_have_five_colours_base_first() {
         for base in [Color::rgb8(230, 120, 40), Color::cmyk(0.1, 0.8, 0.3, 0.05)] {
             for rule in Harmony::ALL {
-                let t = rule.theme(base);
-                assert_eq!(t.len(), THEME_SIZE, "{}", rule.label());
-                assert_eq!(t[0], base, "{}", rule.label());
-                assert!(t.iter().all(|c| c.model() == base.model()), "{}: colours keep the base model", rule.label());
+                let t = theme(rule, base);
+                assert_eq!(t.len(), THEME_SIZE, "{}", label(rule));
+                assert_eq!(t[0], base, "{}", label(rule));
+                assert!(t.iter().all(|c| c.model() == base.model()), "{}: colours keep the base model", label(rule));
             }
         }
         // A two-colour rule fills in variations next to the colour they vary.
         let red = Color::rgb(1.0, 0.0, 0.0);
-        let t = Harmony::Complementary.theme(red);
+        let t = theme(Harmony::Complementary, red);
         assert_eq!(t[3].to_hex(), "#00ffff", "the complement follows the base's variations");
         let l = |c: &Color| c.to_lab().l;
         assert!(l(&t[1]) > l(&t[0]) && l(&t[2]) < l(&t[0]), "the base, a lighter and a darker red");
@@ -534,7 +278,7 @@ mod tests {
             assert!(t[i + 1..].iter().all(|b| b.to_hex() != a.to_hex()), "{} repeats", a.to_hex());
         }
         // Five-colour rules are themes as they are.
-        assert_eq!(Harmony::Pentagram.theme(red), Harmony::Pentagram.apply(red));
+        assert_eq!(theme(Harmony::Pentagram, red), apply(Harmony::Pentagram, red));
     }
 
     #[test]
