@@ -91,7 +91,8 @@ fn select_stop(s: &mut Session, p: &Value) -> Result<Value> {
 /// ([`Session::gradient_owner`]).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct StopOwner {
-    doc: Option<usize>,
+    /// The active document's uid, which stays the same when its tab moves.
+    doc: Option<u64>,
     object: Option<NodeId>,
     /// The object whose paint the active proxy shows: a Live Paint group without faces (or edges)
     /// first in the selection shows the next object's.
@@ -106,7 +107,7 @@ impl StopOwner {
     pub(crate) fn of(s: &Session) -> Self {
         let st = s.active();
         Self {
-            doc: s.active,
+            doc: st.map(|d| d.uid),
             object: st.and_then(|d| d.selection.objects.first().copied()),
             source: s.proxy_source(!s.fill_active).map(|(n, _)| n.id),
             part: st.is_some_and(|d| d.selection.symbol_part.is_some()),

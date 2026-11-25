@@ -205,6 +205,28 @@ fn a_picked_diamond_stays_with_the_gradient_it_was_picked_on() {
     assert_eq!(mid(&rig), None, "the object's stroke");
 }
 
+/// Dragging the document's tab along the strip keeps its selected stop and its picked diamond
+/// selected: both stay with the document, not with the tab it was in.
+#[test]
+fn a_selected_stop_and_a_picked_diamond_stay_selected_when_the_document_tab_moves() {
+    let stops = json!([{"offset": 0, "color": "#ffffff", "midpoint": 0.3}, {"offset": 1, "color": "#000000"}]);
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    app.run("paint.setFill", json!({"gradient": {"stops": stops}})).unwrap();
+    app.run("gradient.selectStop", json!({"index": 1})).unwrap();
+    app.run("document.move", json!({"to": 0})).unwrap();
+    assert_eq!(app.session.selected_stop(), Some(1), "the stop stays selected in the moved tab");
+    let mut rig = Rig::new(app);
+    rig.click("Midpoint 1");
+    assert_eq!(selected_mid(&rig.app(), 2), Some(0), "the diamond is picked");
+    rig.app().run("document.move", json!({"to": 1})).unwrap();
+    rig.fixture.settle();
+    assert_eq!(selected_mid(&rig.app(), 2), Some(0), "the diamond stays picked in the moved tab");
+    assert_eq!(rig.number("Location"), Some(30.0), "Location still shows the midpoint");
+}
+
 /// A mirrored conic's Aspect Ratio field shows the extent's size, and a typed value keeps the
 /// sweep mirrored (the field's value times the mirror's sign).
 #[test]
