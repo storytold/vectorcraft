@@ -365,13 +365,13 @@ fn row_state(app: &VectorcraftApp, command: &CommandRef, label: &str) -> Command
     state
 }
 
-/// What the dimmed row `command`, named `label`, says: the engine's reason, the panels' in Presentation Mode, else that
-/// the command is not available right now.
+/// What the dimmed row `command`, named `label`, says in the interface language: the engine's reason, the panels' in
+/// Presentation Mode, else that the command is not available right now.
 pub(crate) fn off_reason(app: &VectorcraftApp, command: &CommandRef, label: &str) -> String {
     why_off(app, crate::keymap::state_id(command))
         .flatten()
         .or_else(|| crate::palette::refusal(app, command).filter(|_| command.id == "window.panel"))
-        .unwrap_or_else(|| crate::i18n::msg(&format!("command `{label}` is not available right now")))
+        .map_or_else(|| crate::i18n::msg(&format!("command `{label}` is not available right now")), |why| crate::i18n::msg(&why))
 }
 
 /// The title a row shows in `lang`: the Settings pages read `Page…`, the other rows their label as the menus draw it.
