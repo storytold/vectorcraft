@@ -5176,10 +5176,18 @@ printed plates an image whose pixels do not take its color (a preview of its fil
 pixels. Older files that listed Overprint Black objects in the document get the flags on load.
 PDF export writes them with `advanced.overprint: "preserve"` (the default): each overprinting fill and stroke sets a
 graphics state with `/OP true /op true /OPM 1` (`/OPM 0` in PDF/A). With `discardWhiteOverprint` (`document.setup`, on by
-default) white ones knock out instead, but not a tint above 0% of a spot swatch, which prints as that ink;
-`"discard"` writes none. EPS export (`overprints: "preserve"`, the default) turns
-overprinting on for a colorized image's color as it does for fills and strokes, except a white color with
-`discardWhiteOverprint` on, which knocks out unless it is such a spot tint. PDF export writes an overprinting
+default) paper white ones knock out instead; `"discard"` writes none. Paper white is solid white that is not a spot
+white. Spot white objects keep overprinting
+([white overprint](https://helpx.adobe.com/illustrator/desktop/manage-colors/apply-transparency-and-blending/white-overprint.html),
+[reference, White Overprint](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=650)).
+These are VectorCraft's own rules: a spot white is a white linked to a solid spot swatch at a tint above 0% (an opaque
+white ink, for example), so a 0% tint of a spot swatch is paper white, and so is a spot white that printed separations
+convert to process inks. A spot white's fills, strokes, characters and colorized image colors keep overprinting in PDF
+export, Overprint Preview, Separations Preview and printed separations, its fills, strokes and colorized image colors
+keep overprinting in composite print with Overprints set to Simulate, and Print Ink Fixes' `removeWhiteOverprint`
+leaves it overprinting. EPS export (`overprints: "preserve"`, the default) turns overprinting on for a colorized image's
+color as it does for fills and strokes, except a paper white color with `discardWhiteOverprint` on, which knocks out;
+EPS export applies `discardWhiteOverprint` to nothing else. PDF export writes an overprinting
 colorized image in a gray or CMYK color in only the process inks the color puts down, and EPS export does too (one
 DeviceN image at Level 3, one Separation image per ink at Level 2). The previews and printed separations show a
 colorized image knocking out when it has a visible effect of its own other than a warp or a geometry effect (a drop
@@ -15672,7 +15680,7 @@ document's inks for print, as one undo step:
 | `scope` | `selection`, `document` (the selection, or the document while nothing is selected) | What it fixes; `ids` stand for the selection |
 | `inkLimit` | total ink % 1…400, 0 off (off) | CMYK colours (solid, gradient stops, gradient meshes) with more ink than this are scaled down to it; colours of spot swatches and Registration stay |
 | `excludePureBlack` | bool (true) | Black-only CMYK and grey colours keep their ink |
-| `removeWhiteOverprint` | bool (false) | White fills and strokes, characters' and the white color of a colorized image stop overprinting |
+| `removeWhiteOverprint` | bool (false) | White fills and strokes, characters' and the white color of a colorized image stop overprinting; a white linked to a spot swatch at a tint above 0% is an ink and keeps overprinting |
 | `overprintBlack` | black % 1…100, 0 off (off) | Black-only and grey fills and strokes this dark or darker overprint, as `edit.colors.overprintBlack` sets it (not spot-linked or rich blacks) |
 | `textOnly` | bool (false) | Overprint Black on type only |
 | `fill`, `stroke` | bool (true) | Which paints the fixes reach |
