@@ -14,7 +14,8 @@
 //! An object of a host class and the class's constructor are described by the class's members
 //! ([`crate::HostClass::members`] and [`crate::HostClass::info`]), its parents' included. Any other
 //! object is described by its own properties: a property whose value is a function is a method,
-//! with the parameter names of a function written in JavaScript as its arguments; a data property
+//! with the parameters of a function written in JavaScript as its arguments (the rest parameter
+//! last, and a destructured parameter with `name` `undefined`); a data property
 //! is read-write when it is writable and gives the type of its value; an accessor is read-write
 //! when it has a setter and its type is `unknown`. A string, number or boolean is described by its
 //! prototype's own properties. No getter or other script code runs.
@@ -28,6 +29,7 @@ use crate::heap::{Class, ENUMERABLE, Func, Key, NativeKind, OBJECT_BYTES, ObjId,
 use crate::host::Data;
 use crate::host_classes::{Access, Reflected};
 use crate::interp::{ErrorType, Interp, JsResult};
+use crate::string_builtins::flat_charged;
 use crate::value::{Str, Value, array_index, index_key, number_to_str};
 
 /// The most members and arguments `reflect` describes for one object.
@@ -174,7 +176,9 @@ fn own_infos(interp: &mut Interp, id: ObjId) -> JsResult<(Vec<Info>, Vec<Info>)>
                 if let Some(params) = parameters(interp, &value)? {
                     for p in params {
                         count(interp, &mut total)?;
-                        info.arguments.push(Info::new(Value::String(Str::from_rc(p)), "parameter", "*"));
+                        // A destructured parameter has a compiler key that starts with U+0000.
+                        let name = if p.first() == Some(&0) { Value::Undefined } else { Value::String(Str::from_rc(p)) };
+                        info.arguments.push(Info::new(name, "parameter", "*"));
                     }
                 }
                 methods.push(info);
@@ -198,11 +202,12 @@ fn member_name(k: &Key) -> Value {
     }
 }
 
-/// The parameter names of the function `f` when it is written in JavaScript.
+/// The parameter names of the function `f` when it is written in JavaScript, its rest parameter
+/// last.
 fn parameters(interp: &Interp, f: &Value) -> JsResult<Option<Vec<Key>>> {
     let Some(id) = f.as_object() else { return Ok(None) };
     Ok(match &interp.object(id)?.class {
-        Class::Function(Func::Closure { code, .. }) => Some(code.params.clone()),
+        Class::Function(Func::Closure { code, .. }) => Some(code.params.iter().chain(&code.rest).cloned().collect()),
         _ => None,
     })
 }
@@ -306,8 +311,8 @@ fn info_object(interp: &mut Interp, info: &Info) -> JsResult<ObjId> {
 /// string, or a number for an array index), or `null`.
 fn find(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let wanted = match args.first() {
-        Some(Value::String(s)) => s.flat(),
-        Some(Value::Number(n)) => number_to_str(*n).flat(),
+        Some(Value::String(s)) => flat_charged(interp, s)?,
+        Some(Value::Number(n)) => flat_charged(interp, &number_to_str(*n))?,
         _ => return Err(interp.type_error("reflect.find: give the member's name, as a string or a number")),
     };
     let not_reflection = "reflect.find must be called on a reflection object";
@@ -321,8 +326,8 @@ fn find(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<V
             interp.use_fuel()?;
             let Some(Prop::Data { value: Value::Object(e), .. }) = interp.get_own_property(a, &index_key(i))? else { continue };
             let name = match interp.get_own_property(e, &key("name"))? {
-                Some(Prop::Data { value: Value::String(s), .. }) => s.flat(),
-                Some(Prop::Data { value: Value::Number(n), .. }) => number_to_str(n).flat(),
+                Some(Prop::Data { value: Value::String(s), .. }) => flat_charged(interp, &s)?,
+                Some(Prop::Data { value: Value::Number(n), .. }) => flat_charged(interp, &number_to_str(n))?,
                 _ => continue,
             };
             if *name == *wanted {

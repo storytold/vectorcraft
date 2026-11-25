@@ -75,6 +75,36 @@ fn find_and_names_look_up_properties_then_methods() {
 }
 
 #[test]
+fn find_charges_the_flattening_of_a_rope_name() {
+    // Three ropes of about 524,288 units, each 1 MiB once flat, with a 3 MiB heap.
+    let build = "var o = {a: 1}; var s = 'x'; for (var i = 0; i < 19; i++) s = s + s; var t = s + 'y', u = s + 'z';";
+    let limits = Limits { heap_bytes: 3 << 20, ..Limits::default() };
+    let mut r = Realm::with_options(Options::default(), limits);
+    r.add_script_extensions().unwrap();
+    match r.run(&format!("{build} o.reflect.find(s); o.reflect.find(t); o.reflect.find(u); 0")) {
+        Err(e) => assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{e:?}"),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn a_rest_parameter_is_listed_with_the_arguments() {
+    let mut r = Realm::with_options(Options { es2015: true, ..Options::default() }, Limits::default());
+    r.add_script_extensions().unwrap();
+    r.run(LIST).unwrap();
+    assert_eq!(text(&mut r, "var o = {f: function (first, ...rest) {}}; list(o.reflect.methods[0].arguments)"), "first:parameter:* rest:parameter:*");
+    assert_eq!(text(&mut r, "var g = {f: function (...all) {}}; list(g.reflect.find('f').arguments)"), "all:parameter:*");
+    // A destructured parameter has no name of its own.
+    assert_eq!(
+        text(
+            &mut r,
+            "var d = {f: function (a, [b, c], ...[e]) {}}; list(d.reflect.methods[0].arguments) + '|' + d.reflect.methods[0].arguments.length"
+        ),
+        "a:parameter:* undefined:parameter:* undefined:parameter:*|3"
+    );
+}
+
+#[test]
 fn a_reflection_info_has_every_field() {
     let mut r = realm();
     let fields = "var i = ({a: 1}).reflect.properties[0]; var k = []; for (var n in i) k.push(n); k.join(' ')";
