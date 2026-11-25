@@ -4,9 +4,11 @@
 
 use std::collections::HashMap;
 
-use craft::ui::contract::{Bind, Show as _};
+use craft::ui::contract::{Bind, Show as _, ShowContainer as _};
+use craft::ui::layout_components::Stack;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamKind, encode};
 use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
+use craft::ui::runtime::measure;
 use craft::ui::text::TextField;
 use craft::ui::value_drag::SliderScale;
 use serde_json::{Map, Value, json};
@@ -198,6 +200,25 @@ pub(crate) fn fields_of(params: &[Param], json: &Map<String, Value>) -> DialogFi
         }
     }
     fields
+}
+
+/// Shows `body` in a `Stack` as rows of a custom dialog row that edit `fields`. The stack may run its body more than
+/// once in a pass: every run edits a copy of the values as they stand here, and the copy of the run that is not a
+/// measuring run replaces them after the stack.
+pub(super) fn stacked(ui: &mut egui::Ui, fields: &mut DialogFields, mut body: impl FnMut(&mut egui::Ui, &mut DialogFields)) -> egui::Response {
+    let before = fields.clone();
+    let mut edited = None;
+    let shown = Stack::new().show(ui, |ui, _| {
+        let mut run = before.clone();
+        body(ui, &mut run);
+        if measure::effect(ui.ctx(), "dialog rows edit their values") {
+            edited = Some(run);
+        }
+    });
+    if let Some(edited) = edited {
+        *fields = edited;
+    }
+    shown.output
 }
 
 /// The command or effect parameters of the dialog values `fields`: the UI-only keys (`__*`, `preview`) are dropped.

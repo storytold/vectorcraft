@@ -580,12 +580,19 @@ pub fn offer_place(app: &mut VectorcraftApp, p: &Value) -> bool {
     offer(app, &name, &bytes, path, Some(p))
 }
 
+/// Whether the `file.place` params `p` give a password. `file.place` reads an empty or null
+/// `password` as none; a value that isn't text counts as given, for `file.place` to refuse.
+fn gives_password(p: &Value) -> bool {
+    p.get("password").is_some_and(|v| !v.is_null() && v.as_str() != Some(""))
+}
+
 /// [`offer_place`] when Show Import Options is off: asks (true) only for the password of an
-/// encrypted PDF given no `password` (or an empty one), which nothing else opens, and places its first page (or
-/// `page`) and crop box once it is unlocked; any other PDF is placed that way without asking.
+/// encrypted PDF given no password (see [`gives_password`]), which nothing else opens, and places
+/// its first page (or `page`) and crop box once it is unlocked; any other PDF is placed that way
+/// without asking.
 pub fn offer_place_password(app: &mut VectorcraftApp, p: &Value) -> bool {
     // A `page` that isn't a page number is left for `file.place` to refuse.
-    if password_given(p) || p.get("page").is_some_and(|v| v.as_u64().is_none_or(|n| n == 0)) {
+    if gives_password(p) || p.get("page").is_some_and(|v| v.as_u64().is_none_or(|n| n == 0)) {
         return false;
     }
     let Some((name, bytes, path)) = place_source(app, p, |ext| matches!(ext, "pdf" | "ai" | "ait")) else { return false };
@@ -593,11 +600,6 @@ pub fn offer_place_password(app: &mut VectorcraftApp, p: &Value) -> bool {
         return false;
     }
     offer_with(app, &name, &bytes, path, Some(p), true)
-}
-
-/// Do the `file.place` params `p` give a password: `file.place` reads an empty one as none.
-fn password_given(p: &Value) -> bool {
-    p.get("password").is_some_and(|v| !v.is_null() && v.as_str() != Some(""))
 }
 
 /// The `textAs` choice `id` (any case); anything else is editable text.
@@ -628,15 +630,16 @@ pub(crate) fn with_preferred_text_as(app: &VectorcraftApp, name: &str, bytes: &[
     p
 }
 
-/// The `file.place` params `p` of a PDF placed embedded (Link off, from bytes or with a non-empty password),
+/// The `file.place` params `p` of a PDF placed embedded (Link off, from bytes or with a password),
 /// by the user or as a command, get the `pdfTextAs` preference as their `textAs` when it is Outlines and they have no
 /// `textAs`. Bytes are a PDF by their content ([`places_pdf`]). A linked page shows the file's own
-/// text, and a `.ai` or `.ait` file is placed as it says.
+/// text, and a `.ai` or `.ait` file is placed as it says. An empty `password` is none, so a place
+/// from a path with Link on and an empty `password` stays linked.
 pub(crate) fn place_with_preferred_text_as(app: &VectorcraftApp, p: &mut Value) {
     let given = |k: &str| p.get(k).is_some_and(|v| !v.is_null());
     let path = p.get("path").and_then(Value::as_str);
     let name = path.or_else(|| p.get("name").and_then(Value::as_str)).unwrap_or_default();
-    let linked = path.is_some() && p.get("link").and_then(Value::as_bool) != Some(false) && !password_given(p);
+    let linked = path.is_some() && p.get("link").and_then(Value::as_bool) != Some(false) && !gives_password(p);
     if given("textAs") || linked || preferred_text_as(app) == TextAs::Text || !places_pdf(p, path, name) {
         return;
     }
