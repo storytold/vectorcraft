@@ -31,9 +31,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant, SystemTime};
 
-#[cfg(target_os = "macos")]
-use vectorcraft_ui_egui::hang_beacon::Activity;
-use vectorcraft_ui_egui::hang_beacon::{BEACON, Beacon, FrameTime, Sample, Stage};
+use vectorcraft_ui_egui::hang_beacon::{Activity, BEACON, Beacon, FrameTime, Sample, Stage};
 
 use super::logging::timestamp;
 
@@ -139,7 +137,7 @@ impl Facts {
         let or_unknown = |v: &Option<String>| v.clone().unwrap_or_else(|| "unknown".to_string());
         format!(
             "VectorCraft {} on {} {}\nWindow system: {}; desktop: {}; session type: {}; Flatpak: {}\nGraphics: {}; {}\n",
-            env!("CARGO_PKG_VERSION"),
+            vectorcraft_ui_egui::os_window::version(),
             std::env::consts::OS,
             std::env::consts::ARCH,
             self.window_system,
@@ -424,11 +422,9 @@ pub fn start(dir: Option<PathBuf>, shared: Arc<Shared>) {
         let mut held = None;
         loop {
             std::thread::sleep(POLL);
-            #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
             let mut sample = BEACON.sample();
             // An open menu of the menu bar waits for the user.
-            #[cfg(target_os = "macos")]
-            if super::mac_menu::is_tracking() {
+            if craft::window::native_menu::menu_tracking() {
                 sample.activity = Activity::Menu;
             }
             if let Some(event) = watch.check(shared.started.elapsed(), sample) {

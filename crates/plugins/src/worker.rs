@@ -477,6 +477,19 @@ mod tests {
         assert!(matches!(take(&got).as_slice(), [FromWorker::Checked(Err(Error::Trap(_)))]));
     }
 
+    /// A module that carries its manifest in its custom section, with neither `vc_abi_version` nor
+    /// `vc_manifest`, is checked in a worker and loads on the page from that section.
+    #[test]
+    fn a_module_with_a_manifest_section_loads_on_the_page_from_its_section() {
+        let (mut w, got) = worker();
+        let section = r#"{"id":"test.worker.section","name":"Sectioned","version":"1","kind":"filter","abi":1}"#;
+        let module = wat::parse_str(tpl::sectioned(section, tpl::ECHO, "", 1)).unwrap();
+        let manifest = checked(&mut w, &got, &module);
+        assert_eq!(manifest, section.as_bytes(), "the worker sends the section's manifest");
+        let page = Plugin::load_checked(&module, Limits::default(), &manifest).unwrap();
+        assert_eq!(page.manifest(), Plugin::load(&module, Limits::default()).unwrap().manifest());
+    }
+
     #[test]
     fn a_page_load_checks_the_manifest_it_is_given() {
         let module = caller();

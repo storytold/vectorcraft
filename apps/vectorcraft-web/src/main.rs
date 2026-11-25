@@ -6,8 +6,7 @@
 //!
 //! Differences from the desktop app:
 //! - no TCP control server (browsers can't listen on sockets);
-//! - File → Open uses the browser file picker; bytes arrive asynchronously through
-//!   `Services::picked_inbox`;
+//! - File → Open uses the browser file picker, through the host's file service (`BrowserFiles`);
 //! - Save / Export trigger a browser download;
 //! - plug-ins are checked when installed, and filters run, in Web Workers of their own
 //!   (`plugin_workers`, the `vectorcraft-plugin-worker` build), so a plug-in never runs on the page;
@@ -23,8 +22,6 @@
 
 #[cfg(target_arch = "wasm32")]
 mod api;
-#[cfg(any(target_arch = "wasm32", test))]
-mod demand;
 #[cfg(target_arch = "wasm32")]
 mod fonts;
 #[cfg(any(target_arch = "wasm32", test))]

@@ -1012,16 +1012,26 @@ fn swatch_list(s: &mut Session, p: &Value) -> Result<Value> {
         Some(g) => vec![d.swatch_groups.iter().find(|x| x.name == g).ok_or_else(|| bad("swatch.list", format!("no colour group `{g}`")))?],
         None => d.swatch_groups.iter().collect(),
     };
-    // The built-in Registration swatch lists after None, as the panel shows it.
-    let none = d.swatches.iter().take_while(|w| w.paint.is_none()).count();
-    let (specials, rest) = d.swatches.split_at(none);
-    let all = specials.iter().chain([vectorcraft_color::swatch::registration()]).chain(rest);
-    let ungrouped = all.filter(|_| only.is_none()).map(|w| swatch_json(w, None));
-    let grouped = groups.iter().flat_map(|g| g.swatches.iter().map(|w| swatch_json(w, Some(&g.name))));
-    let swatches: Vec<Value> = ungrouped.chain(grouped).collect();
+    let swatches: Vec<Value> = listed_swatches(d, only.is_none(), groups.clone()).map(|(w, g)| swatch_json(w, g)).collect();
     let groups: Vec<Value> =
         groups.iter().map(|g| json!({"name": g.name, "swatches": g.swatches.iter().map(|w| &w.name).collect::<Vec<_>>()})).collect();
     Ok(json!({"swatches": swatches, "groups": groups}))
+}
+
+/// The swatches `swatch.list` lists, in its order, each with the name of the colour group it is
+/// in: with `ungrouped`, the swatches outside groups (the built-in Registration swatch after None,
+/// as the panel shows it), then those of `groups`.
+pub(super) fn listed_swatches<'a>(
+    d: &'a Document,
+    ungrouped: bool,
+    groups: Vec<&'a SwatchGroup>,
+) -> impl Iterator<Item = (&'a Swatch, Option<&'a str>)> + 'a {
+    let none = d.swatches.iter().take_while(|w| w.paint.is_none()).count();
+    let (specials, rest) = d.swatches.split_at(none);
+    let all = specials.iter().chain([vectorcraft_color::swatch::registration()]).chain(rest);
+    let ungrouped = all.filter(move |_| ungrouped).map(|w| (w, None));
+    let grouped = groups.into_iter().flat_map(|g| g.swatches.iter().map(move |w| (w, Some(g.name.as_str()))));
+    ungrouped.chain(grouped)
 }
 
 fn swatch_sort(s: &mut Session, _: &Value) -> Result<Value> {
@@ -1252,7 +1262,7 @@ fn swatch_rename_group(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, format!("a swatch or color group named `{name}` already exists")));
     }
     // A drag still in progress is a step of its own, so canceling or undoing it leaves the rename.
-    if !s.previewing && s.batch_stash.is_none() && s.in_interaction() {
+    if !s.previewing && s.batch_stash.is_none() && (s.in_interaction() || s.holds_interaction()) {
         super::settle_interaction(s)?;
     }
     s.edit("Color Group Options", |d, _| {

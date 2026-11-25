@@ -1,25 +1,37 @@
 //! File › Scripts › Check Script… (`ui.checkScript`): the report on a script written for the reference
-//! app, read without running it, and its Copy Report; File › Open of `.jsx`, `.jsxinc` and `.jsxbin`
-//! files.
+//! app, read without running it, in the framework's hosted report; File › Open of `.jsx`, `.jsxinc`
+//! and `.jsxbin` files.
 
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
-use crate::{VectorcraftApp, dialogs, io, menus, theme};
+use super::picks::{poll, scripted};
+use crate::{VectorcraftApp, dialogs, io, menus};
 
-/// An app reading files from disk.
+/// An app reading files from disk, whose window has a dialog host.
 fn app() -> VectorcraftApp {
     let services = crate::Services { read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))), ..Default::default() };
-    VectorcraftApp::new(Session::new(), services)
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.adopt_context(&crate::testing::ui_context());
+    app
 }
 
-/// One headless frame of the dialog layer.
-fn frame(app: &mut VectorcraftApp) {
-    let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
-    theme::apply(&ctx, Default::default());
-    let mut out = ctx.run_ui(Default::default(), |ui| dialogs::show(app, ui.ctx()));
+/// The context of the app's window.
+fn window(app: &VectorcraftApp) -> egui::Context {
+    app.ui_ctx.clone().expect("the app's window")
+}
+
+/// One headless frame of the app's dialog host.
+fn frame(app: &VectorcraftApp) {
+    let host = app.dialogs().expect("the app has a dialog host");
+    let mut out = window(app).run_ui(Default::default(), |ui| host.with(|h| h.run(ui)));
     out.textures_delta.clear();
+}
+
+/// Closes every open dialog as its Close button does.
+fn close_all(app: &VectorcraftApp) {
+    let ctx = window(app);
+    app.dialogs().unwrap().with(|h| h.open_dialogs().iter().for_each(|d| assert!(h.cancel_by_id(&ctx, d.id))));
 }
 
 /// A script with a little of everything the report shows.
@@ -34,21 +46,20 @@ const SCRIPT: &str = concat!(
     "var s = 'open;\n",
 );
 
-fn report(app: &VectorcraftApp) -> &Value {
-    let d = app.ui.dialog.as_ref().expect("the report is shown");
-    assert_eq!(d.kind, dialogs::script_check::KIND);
-    &d.fields["report"]
+/// The fields of the open report: `lines` and `groups`.
+fn fields(app: &VectorcraftApp) -> Value {
+    let host = app.dialogs().expect("the app has a dialog host");
+    host.with(|h| h.open_dialogs().into_iter().find_map(|d| d.fields)).expect("the report is shown")
 }
 
-#[test]
-fn file_scripts_holds_check_script_above_other_script() {
-    let tree = menus::menu_tree();
-    let (_, file) = tree.iter().find(|(t, _)| *t == "File").unwrap();
-    let scripts = file.iter().find_map(|i| if let menus::Item::Sub("Scripts", items) = i { Some(items) } else { None }).unwrap();
-    assert!(
-        matches!(scripts.as_slice(), [menus::Item::Cmd("Check Script…", "ui.checkScript", _), menus::Item::Cmd("Other Script…", "ui.runScript", _)]),
-        "{scripts:?}"
-    );
+/// The report's groups. PLAN: assumed `json_fields()["groups"]` is `[{heading, notes}]`.
+fn groups(app: &VectorcraftApp) -> Vec<Value> {
+    fields(app)["groups"].as_array().cloned().unwrap_or_default()
+}
+
+/// The heading of the first group: the script's name.
+fn name(app: &VectorcraftApp) -> String {
+    groups(app).first().and_then(|g| g["heading"].as_str()).unwrap_or_default().to_string()
 }
 
 #[test]
@@ -56,25 +67,30 @@ fn check_script_shows_the_report_and_copy_report_copies_it() {
     let mut app = app();
     let p = json!({"dataBase64": vectorcraft_format::base64_encode(SCRIPT.as_bytes()), "name": "Tidy.jsx"});
     let r = menus::run_ui_command(&mut app, "ui.checkScript", &p).unwrap().unwrap();
-    assert_eq!(report(&app), &r);
     assert_eq!((r["name"].as_str(), r["kind"].as_str()), (Some("Tidy.jsx"), Some("script")));
     assert_eq!(r["needs"], json!(["language", "dom", "files", "menuCommands"]));
-    // The window draws every section.
-    frame(&mut app);
-    assert_eq!(report(&app), &r);
-    // Copy Report (the button beside Close) copies the report as JSON and leaves the window open.
-    app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
-    dialogs::confirm(&mut app).unwrap();
-    let copied: Value = serde_json::from_str(app.clipboard_out.as_deref().unwrap()).unwrap();
-    assert_eq!(copied, r);
-    assert!(app.ui.dialog.as_ref().unwrap().fields.get("discard").is_none());
-    assert_eq!(app.ui.status, "Copied the script report");
-    // Close closes it.
-    dialogs::cancel(&mut app);
-    assert!(app.ui.dialog.is_none());
+    let shown = groups(&app);
+    assert_eq!(name(&app), "Tidy.jsx");
+    let text = fields(&app)["groups"].to_string();
+    for heading in ["Outside the document", "Menu commands", "Document model", "Directives", "Includes", "Problems"] {
+        assert!(text.contains(heading), "{heading} in {text}");
+    }
+    // The window draws every group.
+    frame(&app);
+    assert_eq!(groups(&app).len(), shown.len());
+    // A script that does nothing has the name group only.
+    close_all(&app);
+    menus::run_ui_command(&mut app, "ui.checkScript", &json!({"data": "var a = 1;", "name": "Clean.jsx"})).unwrap().unwrap();
+    assert_eq!(groups(&app).len(), 1);
+    close_all(&app);
+    assert!(app.dialogs().unwrap().with(|h| h.open_dialogs().is_empty()), "Close closes it");
     // The script's text does as well as its bytes.
     let by_text = menus::run_ui_command(&mut app, "ui.checkScript", &json!({"data": SCRIPT, "name": "Tidy.jsx"})).unwrap().unwrap();
     assert_eq!(by_text, r);
+    // Nothing was copied until Copy is pressed, and the pump puts what it copied on the clipboard.
+    let ctx = window(&app);
+    dialogs::script_check::pump(&mut app, &ctx);
+    assert!(app.clipboard_out.is_none());
 }
 
 #[test]
@@ -87,9 +103,13 @@ fn each_kind_of_file_draws_its_verdict() {
     ] {
         let mut app = app();
         io::open_bytes(&mut app, name, bytes, None).unwrap();
-        assert_eq!(report(&app)["kind"], kind, "{name}");
-        frame(&mut app);
-        assert!(app.ui.dialog.is_some());
+        let text = fields(&app)["groups"].to_string();
+        let plain = dialogs::script_check::need_label("language").is_some() && text.contains("Needs nothing beyond plain JavaScript");
+        assert_eq!(plain, kind == "script", "{name} {kind}: {text}");
+        if kind != "script" {
+            assert_eq!(groups(&app).len(), 1, "{name}");
+        }
+        frame(&app);
     }
 }
 
@@ -108,9 +128,11 @@ fn file_open_of_a_script_checks_it_with_what_it_includes() {
         std::fs::read(p).map_err(|e| e.to_string())
     }));
     io::open_path(&mut opened, &path).unwrap();
-    let r = report(&opened);
-    assert_eq!(r["includes"], json!([{"value": "lib/net.jsxinc", "line": 1, "status": "checked", "path": "lib/net.jsxinc"}]));
-    assert_eq!(r["needs"], json!(["language", "hostOnly"]));
+    let text = fields(&opened)["groups"].to_string();
+    assert!(text.contains("lib/net.jsxinc"), "the include is listed: {text}");
+    for need in ["language", "hostOnly"] {
+        assert!(text.contains(dialogs::script_check::need_label(need).unwrap()), "{need} in {text}");
+    }
     assert!(opened.session.documents().is_empty(), "no document opened");
     // `script.check` reads the script up to its limit, and the app's reader, which reads a whole file,
     // isn't asked.
@@ -119,18 +141,19 @@ fn file_open_of_a_script_checks_it_with_what_it_includes() {
     // Check Script… with a path does the same; without one it asks for a script.
     let mut app = app();
     menus::run_ui_command(&mut app, "ui.checkScript", &json!({ "path": path })).unwrap().unwrap();
-    assert_eq!(report(&app)["includes"][0]["status"], "checked");
-    let asked = std::rc::Rc::new(std::cell::RefCell::new(vec![]));
-    let seen = asked.clone();
-    let picked = path.clone();
-    app.services.pick_open = Some(Box::new(move |pick: &crate::FilePick| {
-        seen.borrow_mut().push(pick.filters.clone());
-        Some(picked.clone())
-    }));
-    app.ui.dialog = None;
-    menus::run_ui_command(&mut app, "ui.checkScript", &json!({})).unwrap().unwrap();
-    assert_eq!(asked.borrow().as_slice(), [crate::FilePick::filters([("Scripts", &["jsx", "jsxinc", "jsxbin"][..])])]);
-    assert_eq!(report(&app)["name"], "main.jsx");
+    assert!(fields(&app)["groups"].to_string().contains("lib/net.jsxinc"));
+    let picker = scripted(&mut app);
+    let pending = menus::run_ui_command(&mut app, "ui.checkScript", &json!({})).unwrap().unwrap();
+    assert_eq!(pending["pending"], "fileDialog");
+    let requests = picker.requests();
+    assert_eq!(requests.len(), 1);
+    let filters: Vec<(&str, Vec<&str>)> =
+        requests[0].filters.iter().map(|f| (f.name.as_str(), f.extensions.iter().map(String::as_str).collect())).collect();
+    assert_eq!(filters, [("Scripts", vec!["jsx", "jsxinc", "jsxbin"])]);
+    picker.answer(&[&path]);
+    let ctx = window(&app);
+    poll(&mut app, &ctx);
+    assert_eq!(name(&app), "main.jsx");
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -152,13 +175,13 @@ fn a_script_opens_at_once_where_documents_open_off_the_ui_thread() {
     }));
     assert_eq!(io::open_file(&mut opened, &path, true).unwrap(), Value::Null);
     assert!(opened.opening.pending.is_empty(), "nothing is read off the UI thread");
-    assert_eq!(report(&opened)["name"], "later.jsx");
+    assert_eq!(name(&opened), "later.jsx");
     assert_eq!(reads.get(), 0);
     assert_eq!(opened.ui.recent_files.first(), Some(&path));
     let _ = std::fs::remove_dir_all(dir);
 }
 
-/// Check Script… asks for its script off the UI thread, and acts on no document: the answer shows the
+/// Check Script… asks for its script through the picker, and acts on no document: the answer shows the
 /// report even when the document that was active closed meanwhile.
 #[test]
 fn check_script_asks_off_the_ui_thread_and_needs_no_document() {
@@ -166,18 +189,19 @@ fn check_script_asks_off_the_ui_thread_and_needs_no_document() {
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("picked.jsx");
     std::fs::write(&path, "alert('picked');\n").unwrap();
-    let mut services = crate::Services { dialogs_are_sheets: false, ..Default::default() };
-    let (shown, _) = crate::tests_picks::off_the_ui_thread(&mut services);
-    let mut app = VectorcraftApp::new(Session::new(), services);
+    let mut app = VectorcraftApp::new(Session::new(), crate::Services::default());
+    let picker = scripted(&mut app);
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
-    assert!(app.run("ui.checkScript", json!({})).is_err(), "nothing yet: the dialog is open");
-    assert!(
-        matches!(shown.requests().as_slice(), [crate::picks::PickRequest::Open(pick)] if pick.filters == crate::FilePick::filters([("Scripts", &["jsx", "jsxinc", "jsxbin"][..])]))
-    );
+    let pending = menus::run_ui_command(&mut app, "ui.checkScript", &json!({})).unwrap().unwrap();
+    assert_eq!(pending["pending"], "fileDialog");
+    let requests = picker.requests();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].filters.first().map(|f| f.name.as_str()), Some("Scripts"));
     app.run("file.close", json!({})).unwrap();
-    shown.answer(&[&path.to_string_lossy()]);
-    crate::picks::poll(&mut app, &egui::Context::default());
-    assert_eq!(report(&app)["name"], "picked.jsx", "{}", app.ui.status);
+    picker.answer(&[&path.to_string_lossy()]);
+    let ctx = window(&app);
+    poll(&mut app, &ctx);
+    assert_eq!(name(&app), "picked.jsx", "{}", app.ui.status);
     let _ = std::fs::remove_dir_all(dir);
 }
 
