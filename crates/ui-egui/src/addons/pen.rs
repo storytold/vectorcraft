@@ -9,7 +9,6 @@ use craft::ui::buttons::Button;
 use craft::ui::choice::Segmented;
 use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
 use craft::ui::display::{Shade, Text};
-use craft::ui::sections::Section;
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_tools::addons::smart_pen;
@@ -48,7 +47,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut curved = shown;
     let mut action: Option<(&str, Value)> = None;
     let segments = [Entry::new(false, tl!("Straight")).icon(IconId::new("dc-line")), Entry::new(true, tl!("Curved")).icon(IconId::new("spline"))];
-    Section::fixed(tl!("Next Segment")).show(ui, |ui, _| {
+    crate::panels::section(tl!("Next Segment")).show(ui, |ui, _| {
         Segmented::new(tl!("Next Segment"), Bind::bound(&mut curved), &segments).show(ui);
     });
     if curved != shown {

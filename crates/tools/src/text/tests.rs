@@ -2158,7 +2158,8 @@ fn the_answer_to_the_missing_font_question_passes_the_option_check() {
 }
 
 /// Cancel starts no edit, and the edit in progress on other type goes on; an answer that names
-/// another question, or one given to a document changed since, starts nothing either.
+/// another question, or one given to a document changed since, starts nothing either. An answer
+/// naming another question leaves the open question as it was.
 #[test]
 fn cancel_or_a_stale_answer_starts_no_edit_in_missing_fonts() {
     let (mut d, first, mut tool) = editing("First");
@@ -2181,6 +2182,16 @@ fn cancel_or_a_stale_answer_starts_no_edit_in_missing_fonts() {
     assert!(tool.poll(&changed, false).is_empty());
     assert_eq!(tool.editing, Some(first));
     assert!(!tool.waiting());
+    // An answer naming another question leaves the open one answerable: its OK still starts the edit.
+    let (token, _) = asked(&click(&mut tool, &c, at.x, at.y));
+    tool.set_option("missingFontEdit", &json!({"token": token + 1, "ok": false}));
+    tool.set_option("missingFontEdit", &json!({"token": token + 1, "ok": true}));
+    assert!(!tool.waiting(), "another question's answer");
+    tool.set_option("missingFontEdit", &json!({"token": token, "ok": true}));
+    assert!(tool.waiting());
+    let acts = tool.poll(&c, false);
+    assert!(acts.contains(&Action::Exec("select.set".into(), json!({"ids": [other.0]}))), "{acts:?}");
+    assert_eq!((tool.editing, tool.caret), (Some(other), 2));
 }
 
 /// Every new edit of such type asks again, after an earlier OK too, and a style the family lacks

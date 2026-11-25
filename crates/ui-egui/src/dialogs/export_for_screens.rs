@@ -45,7 +45,6 @@ use craft::ui::list::{List, ListRow, ThumbAspect, ThumbSize, ToggleCell, ToggleS
 use craft::ui::patterns::form_dialogs::{FormDialog, PathRow};
 use craft::ui::primitives::ContentPainterCx;
 use craft::ui::runtime::env::Label;
-use craft::ui::sections::Section;
 use craft::ui::tabs::{Tab, TabKind, TabStrip};
 use craft::ui::text::TextField;
 use craft::ui::tile_grid::{Tile, TileGrid, TilePartEvent};
@@ -674,10 +673,10 @@ impl ExportForScreensDialog {
         }
         if text(fields, "tab") != "assets" {
             let n = self.doc.as_ref().map_or(0, |s| s.doc.artboards.len());
-            Section::fixed(tl!("Select:")).show(ui, |ui, _| select_options(ui, fields, n));
+            crate::panels::section(tl!("Select:")).show(ui, |ui, _| select_options(ui, fields, n));
         }
         let web = self.web;
-        Section::fixed(tl!("Export to:")).show(ui, |ui, _| destination(ui, fields, web));
+        crate::panels::section(tl!("Export to:")).show(ui, |ui, _| destination(ui, fields, web));
         pdf_mode(ui, fields);
         let presets = self.presets.as_array().map_or(&[][..], Vec::as_slice);
         let mut picked = None;

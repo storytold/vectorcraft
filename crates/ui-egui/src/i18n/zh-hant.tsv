@@ -6573,6 +6573,7 @@ lighting	Light	光源
 @msg	a 3D effect on a group's fill or stroke draws nothing	群組填色或筆畫上的 3D 效果不會繪製任何內容
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	群組填色或筆畫上的 3D 效果沒有可匯出的內容
 @msg	The 3D object is too complex to export	3D 物件過於複雜，無法匯出
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D 物件的網格不完整，或含有非數字的值
 @msg	the <filter> element needs an id, the filter's name	<filter> 元素需要 id，也就是濾鏡的名稱
 @msg	an SVG filter's id is at most {MAX_NAME} characters	SVG 濾鏡的 id 最多 {MAX_NAME} 個字元
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> 不是 SVG 濾鏡的元素
@@ -6981,6 +6982,12 @@ axis	Y Axis	Y 軸
 @msg	parameter `{name}`: {what}	參數 `{name}`：{what}
 @msg	plug-in parameters must be a JSON object	增效模組參數必須是 JSON 物件
 @msg	the module must export its linear memory as `memory`	模組必須將其線性記憶體匯出為 `memory`
+@msg	the module must export `{name}` with the type {signature}	模組必須以類型 {signature} 匯出 `{name}`
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	模組有多個 `{MANIFEST_SECTION}` 自訂區段
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	記憶體預算（模組的初始記憶體為 {initial} 位元組，上限 {max_memory_bytes}）
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	`{MANIFEST_SECTION}` 自訂區段中的資訊清單必須將 `abi` 設為 {ABI_VERSION}，即此主機實作的 ABI 版本
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	表格預算（模組定義了 {count} 個表格，最大的有 {largest} 個元素；上限為 {MAX_TABLES} 個表格，每個 {MAX_TABLE_ELEMENTS} 個元素）
+@msg	the module's table section could not be read	無法讀取模組的表格區段
 @msg	the objects to change are no longer in the document	要變更的物件已不在文件中
 @msg	the runtime panicked	執行階段當機
 @msg	unexpected host trap	主機發生非預期的 trap
@@ -7059,6 +7066,8 @@ axis	Y Axis	Y 軸
 @msg	`plates` requires a stop linked to a spot swatch	`plates` 需要連結到特別色色票的漸層色標
 @msg	the output	輸出
 @msg	the path has no anchor points	路徑沒有錨點
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	複合路徑 {id} 有隱藏、鎖定或參考線成員，因此無法取代其成員
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	複合路徑 {id} 有不是路徑的成員，因此無法取代其成員
 @msg	too many anchor points (limit {MAX_ANCHORS})	錨點過多（上限 {MAX_ANCHORS}）
 @msg	true or false	true 或 false
 @msg	a number >= {_1}	大於或等於 {_1} 的數字
@@ -9091,6 +9100,8 @@ breakText	Glyphs	字符
 @msg	`dataBase64` is larger than the module limit	`dataBase64` 大於模組上限
 @msg	`dataBase64` is not valid base64	`dataBase64` 不是有效的 base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` 不能與 `ids`、`reverse` 或 `append` 一起使用
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` 不能與 `ids`、`id` 或 `item` 一起使用
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` 不能與 `brush` 一起使用
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` 和 `childLimit` 用於裁切摘要：請傳入 `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` 是設計名稱，或以 null 表示一般直條
 @msg	`design` is a design name, or null for the default marker	`design` 是設計名稱，或以 null 表示預設標記

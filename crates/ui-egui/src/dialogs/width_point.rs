@@ -47,7 +47,7 @@ use craft::ui::notices::{Notice, NoticeLayout};
 use craft::ui::patterns::form_dialogs::{FormDialog, ResetFooter, ResetPick};
 use craft::ui::runtime::env::{Label, LengthUnits};
 use craft::ui::runtime::overlay::CloseReason;
-use craft::ui::sections::{DialogRole, FooterButton, Section};
+use craft::ui::sections::{DialogRole, FooterButton};
 use craft::ui::text::{NumberField, link_toggle};
 use serde_json::{Value, json};
 use vectorcraft_doc::{Unit, WidthProfile};
@@ -449,9 +449,9 @@ fn body(ui: &mut egui::Ui, form: &mut Form, lengths: LengthUnits, refusal: Optio
             };
             match out {
                 Some((_, out)) => {
-                    Section::fixed(titles[0].clone()).show(ui, |ui, _| rows(ui, &titles[0], sides));
-                    Section::fixed(titles[1].clone()).show(ui, |ui, _| rows(ui, &titles[1], out));
-                    Section::fixed(word(tl!("Single Width Only"))).show(ui, |ui, _| {
+                    crate::panels::section(titles[0].clone()).show(ui, |ui, _| rows(ui, &titles[0], sides));
+                    crate::panels::section(titles[1].clone()).show(ui, |ui, _| rows(ui, &titles[1], out));
+                    crate::panels::section(word(tl!("Single Width Only"))).show(ui, |ui, _| {
                         RadioGroup::new(word(tl!("Single Width Only")), Bind::bound(single)).show(ui, |ui, _| {
                             Row::new().show(ui, |ui, _| {
                                 for (choice, text) in
@@ -477,8 +477,8 @@ fn body(ui: &mut egui::Ui, form: &mut Form, lengths: LengthUnits, refusal: Optio
                 }
             };
             if *discontinuous {
-                Section::fixed(titles[0].clone()).show(ui, |ui, _| rows(ui, 0));
-                Section::fixed(titles[1].clone()).show(ui, |ui, _| rows(ui, 1));
+                crate::panels::section(titles[0].clone()).show(ui, |ui, _| rows(ui, 0));
+                crate::panels::section(titles[1].clone()).show(ui, |ui, _| rows(ui, 1));
             } else {
                 rows(ui, 0);
             }

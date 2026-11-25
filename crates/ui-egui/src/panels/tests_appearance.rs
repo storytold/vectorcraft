@@ -960,7 +960,7 @@ fn characters_opens_the_character_panel() {
     let t = run(&mut app, "text.create", json!({"x": 0, "y": 60, "text": "Hi"}))["id"].clone();
     run(&mut app, "select.set", json!({"ids": [t]}));
     let mut panel = Panel::new(app, appearance::show);
-    panel.click("Characters");
+    panel.click_role("Characters", Role::LINK);
     assert_eq!(panel.app().ui.transient_panel.as_deref(), Some("character"));
 }
 

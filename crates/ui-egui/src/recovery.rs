@@ -7,7 +7,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use craft::ui::dialog::{DialogResult, RecoveredDocument, RecoveryAnswer, RecoveryDialog, StartupStage};
+use craft::ui::dialog::{DialogResult, RecoveredDocument, RecoveryAnswer, RecoveryChoice, RecoveryDialog, StartupStage};
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::recovery::{self, RecoveryStore};
 
@@ -224,14 +224,14 @@ fn named(app: &mut VectorcraftApp, folder: &str) {
 /// Answers for the copy the open dialog asks about (`Timer::offered[0]`): Recover restores it, Discard deletes
 /// it, and Escape or the close action keeps it and every later copy for the next launch. The next copy is asked
 /// about after each answer, and [`finish`] reports once none is left.
-fn answered(app: &mut VectorcraftApp, answer: DialogResult<RecoveryAnswer>) {
+fn answered(app: &mut VectorcraftApp, answer: DialogResult<RecoveryChoice>) {
     if app.recovery.offered.is_empty() {
         return;
     }
     let copy = app.recovery.offered.remove(0);
     let discard = match answer {
-        DialogResult::Ok(RecoveryAnswer::Recover) => false,
-        DialogResult::Ok(RecoveryAnswer::Discard) => true,
+        DialogResult::Ok(RecoveryChoice { answer: RecoveryAnswer::Recover, .. }) => false,
+        DialogResult::Ok(RecoveryChoice { answer: RecoveryAnswer::Discard, .. }) => true,
         _ => {
             app.recovery.offered.clear();
             return finish(app);

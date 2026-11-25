@@ -8,7 +8,6 @@
 use craft::ui::buttons::Button;
 use craft::ui::contract::{Props as _, Show as _, ShowContainer as _};
 use craft::ui::layout_components::Row;
-use craft::ui::sections::Section;
 use egui::Ui;
 use vectorcraft_doc::{Document, GraphKind, MAX_GRAPH_SERIES, NodeId};
 
@@ -79,7 +78,7 @@ fn series_of(doc: &Document, graph: NodeId, id: NodeId) -> Option<usize> {
 /// The Graph section for the selection; nothing without a graph.
 pub(crate) fn section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(s) = shown(app) else { return };
-    Section::fixed(tl!("Graph")).show(ui, |ui, _| {
+    super::section(tl!("Graph")).show(ui, |ui, _| {
         Row::new().wrap(true).show(ui, |ui, _| {
             Button::command("graph.setType").label(tl!("Graph Type…")).show(ui);
             Button::command("graph.setData").label(tl!("Graph Data…")).show(ui);
