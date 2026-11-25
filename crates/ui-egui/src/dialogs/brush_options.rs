@@ -34,7 +34,7 @@ use craft::ui::layout_components::Row;
 use craft::ui::list::{ThumbAspect, ThumbSize};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::pickers::Select;
-use craft::ui::primitives::ContentPainterCx;
+use craft::ui::primitives::{ContentPainterCx, StrokeWidth};
 use craft::ui::runtime::env::{Label, UnitKind};
 use craft::ui::text::NumberField;
 use egui::{Color32, Rect, Stroke, pos2, vec2};
@@ -612,14 +612,26 @@ pub(super) fn stroke_preview(cx: &ContentPainterCx, rect: Rect, doc: Option<&Doc
     crate::panels::brushes::paint_definition(cx, rect, doc, &Value::Object(def));
 }
 
+/// The nib preview's paper, white like the brush previews'.
+const NIB_PAPER: Color32 = Color32::WHITE;
+/// The nib at the brush's values, black on the paper.
+const NIB_INK: Color32 = Color32::BLACK;
+/// The nib preview's center lines, a light gray on its white paper.
+const NIB_GUIDE: Color32 = Color32::from_gray(220);
+/// The nib preview's lightest and heaviest nibs, in a gray behind the black nib at the brush's values.
+const NIB_RANGE: Color32 = Color32::from_gray(200);
+/// The room the nib preview keeps between its largest nib and each edge, in points.
+const NIB_MARGIN: f32 = 6.0;
+
 /// The nib of `c` at its values (black), and — for values that vary — at their lightest and
 /// heaviest (grey), on white like the brush previews, its largest nib filling the box.
 fn nib_preview(cx: &ContentPainterCx, r: Rect, c: &Calligraphic) {
-    let p = &cx.painter;
-    p.rect_filled(r, 0.0, Color32::WHITE);
-    let guide = Stroke::new(1.0, Color32::from_gray(220));
-    p.line_segment([pos2(r.left(), r.center().y), pos2(r.right(), r.center().y)], guide);
-    p.line_segment([pos2(r.center().x, r.top()), pos2(r.center().x, r.bottom())], guide);
+    let guide = Stroke::new(cx.stroke_width(StrokeWidth::Thin), NIB_GUIDE);
+    cx.data_shapes([
+        egui::Shape::rect_filled(r, 0.0, NIB_PAPER),
+        egui::Shape::line_segment([pos2(r.left(), r.center().y), pos2(r.right(), r.center().y)], guide),
+        egui::Shape::line_segment([pos2(r.center().x, r.top()), pos2(r.center().x, r.bottom())], guide),
+    ]);
     let values = [c.angle, c.roundness, c.size];
     let at = |sign: f64| -> [f64; 3] {
         let mut v = values;
@@ -633,9 +645,10 @@ fn nib_preview(cx: &ContentPainterCx, r: Rect, c: &Calligraphic) {
     };
     let nibs = [at(-1.0), at(1.0), values];
     let largest = nibs.iter().map(|n| n[2]).fold(0.0, f64::max).max(1e-6);
-    let scale = (r.height().min(r.width()) - 12.0) / largest as f32;
+    let scale = (r.height().min(r.width()) - 2.0 * NIB_MARGIN) / largest as f32;
+    let mut shapes = Vec::with_capacity(nibs.len());
     for (k, [angle, round, size]) in nibs.into_iter().enumerate() {
-        let fill = if k < 2 { Color32::from_gray(200) } else { Color32::BLACK };
+        let fill = if k < 2 { NIB_RANGE } else { NIB_INK };
         let (a, b) = ((size as f32 * scale / 2.0).max(0.5), (size * round.clamp(1.0, 100.0) / 100.0) as f32 * scale / 2.0);
         let th = (angle as f32).to_radians();
         let (u, v) = (vec2(th.cos(), -th.sin()), vec2(th.sin(), th.cos()));
@@ -645,8 +658,9 @@ fn nib_preview(cx: &ContentPainterCx, r: Rect, c: &Calligraphic) {
                 r.center() + u * (a * s.cos()) + v * (b.max(0.5) * s.sin())
             })
             .collect();
-        p.add(egui::Shape::convex_polygon(pts, fill, Stroke::NONE));
+        shapes.push(egui::Shape::convex_polygon(pts, fill, Stroke::NONE));
     }
+    cx.data_shapes(shapes);
 }
 
 /// OK: edit the brush (and rename it). A name another brush has, or a new bristle brush name that

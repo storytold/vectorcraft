@@ -5,11 +5,10 @@ use std::cell::RefCell;
 
 use craft::behavior::IconId;
 use craft::menu::MenuBarUi;
-use craft::ui::buttons::{Button, CommandSearch, IconButton, PopupMark, ToggleButton};
-use craft::ui::contract::{Bind, BodyCx, Props, Show, ShowContainer, Trigger};
-use craft::ui::display::{Divider, Picture};
+use craft::ui::buttons::{Button, IconButton, ToggleButton};
+use craft::ui::contract::{Bind, BodyCx, Props, Show, ShowContainer};
+use craft::ui::display::Picture;
 use craft::ui::layout_components::Row;
-use craft::ui::menu::{Menu, MenuItem};
 use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::windows::WindowHost;
 use craft::ui::shell::{Frame, Title, TitleBar};
@@ -17,7 +16,6 @@ use craft::ui::style::{SurfaceKind, Variant};
 use egui::Ui;
 use serde_json::json;
 
-use crate::menus::Node;
 use crate::state::{ROTATE_VIEW_ANGLES, zoom_label};
 use crate::{VectorcraftApp, brand, menus};
 
@@ -55,11 +53,7 @@ enum Trailing {
     Safe,
     /// The community button.
     Discord,
-    /// Explore tutorials.
-    Learn,
-    /// Arrange Documents.
-    Arrange,
-    /// The search that opens the command palette.
+    /// The search icon that opens the command palette.
     Search,
     /// The workspace switcher.
     Switcher,
@@ -67,16 +61,14 @@ enum Trailing {
 
 impl Trailing {
     /// The controls in the order they are drawn.
-    const SHOWN: [Trailing; 6] = [Trailing::Discord, Trailing::Learn, Trailing::Search, Trailing::Arrange, Trailing::Safe, Trailing::Switcher];
+    const SHOWN: [Trailing; 4] = [Trailing::Discord, Trailing::Search, Trailing::Safe, Trailing::Switcher];
 
-    /// The rank the bar gives it up in, lowest first: Discord, tutorials, Arrange Documents, then the search. Each is
-    /// also in a menu, so a hidden one goes nowhere. Safe Mode and the switcher always show.
+    /// The rank the bar gives it up in, lowest first: Discord, then the search. Each is also in a menu, so a hidden one
+    /// goes nowhere. Safe Mode and the switcher always show.
     fn rank(self) -> Option<u8> {
         match self {
             Trailing::Discord => Some(1),
-            Trailing::Learn => Some(2),
-            Trailing::Arrange => Some(3),
-            Trailing::Search => Some(4),
+            Trailing::Search => Some(2),
             Trailing::Safe | Trailing::Switcher => None,
         }
     }
@@ -91,55 +83,13 @@ impl Trailing {
                 }
             }
             Trailing::Discord => crate::community::discord_button(app, ui),
-            Trailing::Learn => {
-                // PLAN: assumed `IconButton::command` is bound by a `&str` command id.
-                IconButton::command(IconId::new("graduation-cap"), "window.learn")
-                    .label(tl!("Explore tutorials"))
-                    .selected(crate::panels::learn::visible(app))
-                    .show(ui);
-            }
-            Trailing::Arrange => arrange_documents(app, ui),
-            // Named as production's field, not after the command's menu row.
+            // Named as production's search, not after the command's menu row.
             Trailing::Search => {
-                CommandSearch::new(PALETTE, tl!("Search commands")).show(ui);
+                IconButton::command(IconId::new("search"), PALETTE).label(tl!("Search commands")).show(ui);
             }
             // PLAN: assumed `crate::workspaces::switcher(app: &mut VectorcraftApp, ui: &mut Ui)` (chrome-w14's `WorkspaceSwitcher`).
             Trailing::Switcher => crate::workspaces::switcher(app, ui),
         }
-    }
-}
-
-/// Arrange Documents: Consolidate All Windows and the Tile layouts, each item as the Window menu shows it.
-fn arrange_documents(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let opener =
-        IconButton::new(IconId::new("layout_grid")).label(tl!("Arrange Documents")).selected(app.ui.tiled).popup_mark(PopupMark::Menu).show(ui);
-    let mut chosen = None;
-    let state = &*app;
-    // PLAN: the sheet names `Trigger::Manual`; `Trigger::Press` is the pop-up menu button's trigger and needs no open binding.
-    Menu::new(tl!("Arrange Documents")).opened_by(&opener.response, Trigger::Press).show(ui, |ui, _| {
-        for item in menus::arrange_documents_items() {
-            match item {
-                Node::Separator => {
-                    Divider::horizontal().show(ui);
-                }
-                Node::Item(item) => {
-                    let (id, params) = (item.command.id, item.command.params);
-                    let Some((enabled, checked)) = menus::shown_state(state, &id, &params) else { continue };
-                    let mut row = MenuItem::new(menus::shown_label(state, &id, &params, &item.label)).enabled(enabled);
-                    if let Some(checked) = checked {
-                        row = row.check(checked);
-                    }
-                    let row = row.show(ui);
-                    if row.ran {
-                        chosen = Some((id, if params.is_null() { json!({}) } else { params }));
-                    }
-                }
-                _ => {}
-            }
-        }
-    });
-    if let Some((id, params)) = chosen {
-        menus::invoke(app, &id, params);
     }
 }
 
@@ -178,7 +128,7 @@ fn trailing(ui: &mut Ui, app: &mut VectorcraftApp) {
 }
 
 /// The application bar, the body of the shell's title bar: brand mark, Home and menus, then Discord,
-/// tutorials, Arrange Documents, search and the workspace switcher at the end. The title bar draws
+/// the search and the workspace switcher at the end. The title bar draws
 /// the caption buttons and drags the window; it shows the title only while the menus are in the macOS
 /// menu bar, where the bar has the room the menus leave.
 pub fn app_bar(ui: &mut Ui, _cx: &mut BodyCx<'_>, app: &mut VectorcraftApp) {

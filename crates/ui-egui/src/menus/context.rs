@@ -237,8 +237,10 @@ fn artboard_items(app: &VectorcraftApp) -> Vec<Node> {
         }
     }
     v.push(Sep);
-    if n > 1 {
-        v.push(c("Rearrange", "artboard.rearrange"));
+    // Rearrange lays out the selected artboards: a click on the item opens its dialog
+    // (`menus::invoke`), whose OK waits for a click on the canvas.
+    if !sel.is_empty() {
+        v.push(cp("Rearrange", "artboard.rearrange", json!({ "indices": sel })));
     }
     if facts.map_or_else(|| boards::fit_has_art(app, &free), |f| f.any_art) {
         v.push(c("Fit to Artwork Bounds", "artboard.fitToArt"));
