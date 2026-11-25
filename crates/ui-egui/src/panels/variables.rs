@@ -522,6 +522,8 @@ fn variable_table(ui: &mut Ui, vars: &[VarRow], sort: VariableSort, states: &Row
                 }
             }
             CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } => acts.extend(keys.into_iter().next().map(Act::Click)),
+            // A click on the highlighted row changes no selection, and still selects what it drives.
+            CollectionEvent::Picked { key, .. } => acts.push(Act::Click(key)),
             CollectionEvent::Activate(name) if !states.locked => acts.push(Act::Options(name)),
             _ => {}
         }
@@ -954,6 +956,33 @@ mod tests {
         let sets = app.run("dataset.list", json!({})).unwrap();
         assert_eq!(sets["datasets"].as_array().unwrap().len(), 1);
         assert_eq!(sets["datasets"][0]["name"], "Data Set 2");
+    }
+
+    /// A click on the highlighted row selects what it drives again, as a click on any other row
+    /// does: after the art is deselected on the canvas, the row stays highlighted, and a second
+    /// click on it selects the bound object.
+    #[test]
+    fn a_click_on_the_highlighted_row_selects_its_bound_object_again() {
+        use egui::accesskit::Role;
+        let mut app = app_with_data();
+        let bound = app.session.doc().unwrap().doc.variables.objects_of("Name")[0];
+        let mut d = Driver::new();
+        let row = |d: &mut Driver, app: &mut VectorcraftApp| {
+            let nodes = d.nodes(app);
+            nodes.iter().find(|(_, n)| n.role() != Role::ColumnHeader && n.label() == Some("Name")).expect("the Name row").1.clone()
+        };
+        let selected = |app: &VectorcraftApp| app.session.doc().unwrap().selection.objects.clone();
+        app.session.execute("select.set", &json!({"ids": []})).unwrap();
+        let cell = row(&mut d, &mut app);
+        d.click(&mut app, &cell);
+        assert_eq!(highlighted_row(app.session.doc().unwrap()).as_deref(), Some("Name"));
+        assert_eq!(selected(&app), vec![bound], "the first click selects the bound object");
+        app.session.execute("select.set", &json!({"ids": []})).unwrap();
+        assert!(selected(&app).is_empty());
+        let cell = row(&mut d, &mut app);
+        d.click(&mut app, &cell);
+        assert_eq!(highlighted_row(app.session.doc().unwrap()).as_deref(), Some("Name"));
+        assert_eq!(selected(&app), vec![bound], "a click on the highlighted row selects the bound object again");
     }
 
     /// The rows as the panel built them on every frame before [`cached_rows`] kept them: the
