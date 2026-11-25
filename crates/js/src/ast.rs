@@ -69,6 +69,8 @@ pub enum BinaryOp {
 pub enum LogicalOp {
     And,
     Or,
+    /// `??`: the right side only when the left is `undefined` or `null`.
+    Coalesce,
 }
 
 /// `=` (`None`) or a compound assignment's operator (`+=` is `Some(BinaryOp::Add)`).
@@ -236,6 +238,12 @@ pub enum Expr {
     /// `...expression` in an array literal or an argument list, and as the last of an arrow
     /// function's parenthesized parameters while they are read.
     Spread(ExprId),
+    /// An optional chain (`a?.b.c`, `a?.[k]`, `f?.()`): its accesses and calls, the
+    /// [`Expr::Optional`] steps among them included. It is `undefined` when one of those steps
+    /// finds `undefined` or `null`, and the rest of the chain is skipped.
+    OptionalChain(ExprId),
+    /// The object or function before `?.` in an [`Expr::OptionalChain`].
+    Optional(ExprId),
 }
 
 /// A piece of a template literal's text between its substitutions.

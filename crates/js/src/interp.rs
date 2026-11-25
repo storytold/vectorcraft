@@ -279,6 +279,9 @@ pub(crate) struct Interp {
     pub(crate) install_error: Option<String>,
     /// `File` and `Folder`, once a host has added them ([`crate::Realm::define_file_classes`]).
     pub(crate) files: Option<crate::file_classes::Classes>,
+    /// `UnitValue`, once a host has added it ([`crate::Realm::add_unit_values`]). Until then the
+    /// operators take no object as a measurement.
+    pub(crate) unit_values: Option<crate::unit_value::Classes>,
     /// The clock and time zone `Date` reads.
     pub(crate) date_host: crate::date_builtins::DateHost,
     /// The bytes native code holds outside the heap's cells through [`HeldBytes`].
@@ -317,6 +320,8 @@ pub(crate) struct Interp {
     pub(crate) error_tag: u32,
     /// Where `$.line` and `$.stack` find the file and line of a compiled line.
     pub(crate) locator: Option<crate::realm::SourceLocator>,
+    /// The name of the running script, which `$.stack` writes as its first line.
+    pub(crate) script_name: Option<String>,
     /// The mark of the host error ([`crate::HostError::Marked`]) whose exception or limit is
     /// propagating.
     pub(crate) thrown_mark: Option<u32>,
@@ -478,6 +483,12 @@ fn scope_bytes(code: &Code, i: u32) -> usize {
     ENV_BYTES.saturating_add(funcs).saturating_add(names)
 }
 
+/// At least the bytes that the `arguments` object of a call with `args` arguments adds to the
+/// heap: the object, an element for each argument and its other properties.
+fn arguments_bytes(args: usize) -> usize {
+    OBJECT_BYTES.saturating_add(args.saturating_add(4).saturating_mul(binding_bytes(10)))
+}
+
 /// A call to a function written in JavaScript, ready to enter.
 struct Entry {
     callee: ObjId,
@@ -572,6 +583,7 @@ impl Interp {
             held_bytes: 0,
             install_error: None,
             files: None,
+            unit_values: None,
             date_host: crate::date_builtins::DateHost::default(),
             held: Rc::default(),
             flattened: std::cell::Cell::new(0),
@@ -589,6 +601,7 @@ impl Interp {
             code_observer: None,
             error_tag: crate::realm::UNKNOWN_SOURCE,
             locator: None,
+            script_name: None,
             thrown_mark: None,
             finally_marks: Vec::new(),
             finally_sites: Vec::new(),
@@ -759,6 +772,14 @@ impl Interp {
         self.heap.bytes = self.heap.bytes.saturating_sub(released).saturating_add(flattened);
     }
 
+    /// The heap's total with the released and flattened bytes taken into account, without a
+    /// collection.
+    #[cfg(test)]
+    pub(crate) fn settled_heap_bytes(&mut self) -> usize {
+        self.settle_held();
+        self.heap.bytes
+    }
+
     /// Collects garbage now and sets when the next collection runs.
     #[cfg(test)]
     pub(crate) fn collect_for_room(&mut self) {
@@ -838,6 +859,7 @@ impl Interp {
         roots.objects.extend(self.files.iter().flat_map(crate::file_classes::Classes::objects));
         roots.values.extend(self.symbols.root_values());
         roots.objects.extend(self.symbols.root_objects());
+        roots.objects.extend(self.unit_values.iter().map(crate::unit_value::Classes::object));
         roots.envs.push(self.global_env);
         roots.envs.push(self.global_lex);
         roots.envs.extend(self.temp_envs.iter().copied());
@@ -1091,6 +1113,21 @@ impl Interp {
             }
             Op::JumpIfFalse(t) | Op::JumpIfTrue(t) => self.op_branch(t, matches!(op, Op::JumpIfTrue(_)), false),
             Op::JumpIfFalseKeep(t) | Op::JumpIfTrueKeep(t) => self.op_branch(t, matches!(op, Op::JumpIfTrueKeep(_)), true),
+            Op::JumpIfNotNullishKeep(t) => {
+                if self.peek(0)?.is_nullish() {
+                    self.pop().map(drop)
+                } else {
+                    self.jump_to(t)
+                }
+            }
+            Op::JumpIfNullish { target, drop: count } => {
+                if self.peek(0)?.is_nullish() {
+                    self.drop_n(count as usize)?;
+                    self.jump_to(target)
+                } else {
+                    Ok(())
+                }
+            }
             Op::Throw => {
                 self.thrown_mark = None;
                 Err(Abrupt::Throw(self.pop()?))
@@ -2458,6 +2495,8 @@ impl Interp {
         self.frame_mut()?.var_env = var_env;
         let lex = self.top_env(&code, var_env)?;
         self.frame_mut()?.env = lex;
+        // The declarations are checked after the `let` and `const` environment has taken its room.
+        self.reserve_heap(declaration_bytes(&code))?;
         for (name, fi) in &code.fun_decls {
             self.use_fuel()?;
             let Some(fcode) = code.functions.get(*fi as usize).cloned() else { return internal("function out of range") };
@@ -2866,8 +2905,7 @@ impl Interp {
             return Err(Abrupt::Limit(LimitKind::Frames));
         }
         let params = code.params.iter().chain(&code.pattern_names).fold(0usize, |total, p| total.saturating_add(binding_bytes(p.len())));
-        let arguments =
-            if code.uses_arguments { OBJECT_BYTES.saturating_add(args.len().saturating_add(4).saturating_mul(binding_bytes(10))) } else { 0 };
+        let arguments = if code.uses_arguments { arguments_bytes(args.len()) } else { 0 };
         // The array a rest parameter gets: its binding and one property for each extra argument.
         let rest = match &code.rest {
             Some(name) => {
@@ -2982,6 +3020,10 @@ impl Interp {
         let has = |interp: &Self, name: &[u16]| matches!(interp.heap.env(env), Some(Env::Decl { bindings, .. }) if bindings.contains(name));
         let lex = self.top_env(code, env)?;
         self.temp_envs.push(lex);
+        // The call reserved room for the declarations and the `arguments` object before the `let`
+        // and `const` environment took some of it.
+        let arguments = if needs_arguments && !has(self, &key("arguments")) { arguments_bytes(args.len()) } else { 0 };
+        self.reserve_heap(declaration_bytes(code).saturating_add(arguments))?;
         for (name, fi) in &code.fun_decls {
             self.use_fuel()?;
             let Some(fcode) = code.functions.get(*fi as usize).cloned() else { return internal("function out of range") };
@@ -3320,6 +3362,10 @@ impl Interp {
             self.check_global_functions(code)?;
             self.check_global_vars(code)?;
         }
+        // The room for the names and the declarations is checked before any name is added, so a
+        // run that stops at the heap limit here adds no name to the global scope.
+        let names = lets.iter().fold(0usize, |total, (name, _)| total.saturating_add(binding_bytes(name.len())));
+        self.reserve_heap(names.saturating_add(declaration_bytes(code)))?;
         for (name, constant) in lets {
             let b = Binding::lexical(*constant);
             self.env_insert(lex, name.clone(), b)?;
@@ -3401,6 +3447,17 @@ impl Interp {
     /// environment of its `let` and `const` names. A script's `let` and `const` names go in the
     /// global scope ([`Self::declare_global_lexical`]).
     fn instantiate_global(&mut self, code: &Rc<Code>, env: EnvId, var_env: EnvId, is_eval: bool) -> JsResult<EnvId> {
+        // Strict eval code's own environment is in no frame yet, so it is a root while the
+        // declarations reserve heap.
+        let mark = self.temp_envs.len();
+        self.temp_envs.extend([env, var_env]);
+        let r = self.instantiate_global_rooted(code, env, var_env, is_eval);
+        self.temp_envs.truncate(mark);
+        r
+    }
+
+    /// [`Self::instantiate_global`] with `env` and `var_env` in [`Self::temp_envs`].
+    fn instantiate_global_rooted(&mut self, code: &Rc<Code>, env: EnvId, var_env: EnvId, is_eval: bool) -> JsResult<EnvId> {
         let configurable = if is_eval { CONFIGURABLE } else { 0 };
         if is_eval && !code.strict && self.options.es2015 {
             self.check_eval_vars(code, env, var_env)?;
@@ -3417,6 +3474,13 @@ impl Interp {
             Some(i) => self.block_env(code, i, env)?,
             None => env,
         };
+        // The caller reserved room for the declarations before the `let` and `const` names took
+        // some of it (a script's names in the global scope were checked with the declarations
+        // before they were added). Their environment stays reachable if the check collects.
+        self.temp_envs.push(lex);
+        let r = self.reserve_heap(declaration_bytes(code));
+        self.temp_envs.pop();
+        r?;
         // Functions close over the code's own environment with ES2015's scoping, and over its
         // variable environment otherwise (ECMA-262 5.1 section 13). When that is the global
         // object's, they close over the global scope inside it, which also holds the scripts'
@@ -3701,6 +3765,11 @@ impl Interp {
 
     fn op_unary(&mut self, op: Op) -> JsResult<()> {
         let v = self.peek(0)?;
+        if self.unit_values.is_some()
+            && let Some(r) = crate::unit_value::unary(self, op, &v)?
+        {
+            return self.replace(1, r);
+        }
         let r = match op {
             Op::Neg => Value::Number(-self.to_number(&v)?),
             Op::Plus | Op::ToNumber => Value::Number(self.to_number(&v)?),
@@ -3720,6 +3789,12 @@ impl Interp {
     }
 
     pub(crate) fn binary(&mut self, op: BinaryOp, a: &Value, b: &Value) -> JsResult<Value> {
+        if self.unit_values.is_some()
+            && (matches!(a, Value::Object(_)) || matches!(b, Value::Object(_)))
+            && let Some(r) = crate::unit_value::binary(self, op, a, b)?
+        {
+            return Ok(r);
+        }
         let num = |interp: &mut Self, f: fn(f64, f64) -> f64| -> JsResult<Value> {
             let x = interp.to_number(a)?;
             let y = interp.to_number(b)?;

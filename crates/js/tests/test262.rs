@@ -29,7 +29,8 @@
 //! or test file cannot be read, or when no ES5 test runs.
 //!
 //! A fifth test reads the ECMAScript 2015 subset that `Options::es2015` covers (`let`, `const`,
-//! arrow functions, templates, default and rest parameters) without and with that option, and
+//! arrow functions, templates, default and rest parameters, and from ECMAScript 2020 optional
+//! chains and `??`) without and with that option, and
 //! prints both counts; its failures with the option go to `es2015-failures.txt`.
 //!
 //! Two more tests read the Annex B trees, where tests name any edition's section: one parses every
@@ -681,6 +682,8 @@ const ES2015_FOLDERS: &[&str] = &[
     "rest-parameters",
     "expressions/object",
     "computed-property-names",
+    "expressions/optional-chaining",
+    "expressions/coalesce",
 ];
 
 /// The folders under `test/built-ins/` that [`run_es2015`] also reads: the `Function` tests hold
@@ -696,8 +699,18 @@ fn es2015_name_test(rel: &str) -> bool {
 }
 
 /// The feature tags of the forms [`Options::es2015`] reads.
-const ES2015_FEATURES: &[&str] =
-    &["let", "const", "arrow-function", "template", "default-parameters", "rest-parameters", "computed-property-names", "__proto__"];
+const ES2015_FEATURES: &[&str] = &[
+    "let",
+    "const",
+    "arrow-function",
+    "template",
+    "default-parameters",
+    "rest-parameters",
+    "computed-property-names",
+    "__proto__",
+    "optional-chaining",
+    "coalesce-expression",
+];
 
 #[test]
 fn es2015_subset_runs() {
