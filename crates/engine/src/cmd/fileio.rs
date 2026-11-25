@@ -112,8 +112,8 @@ pub use save::{
 };
 pub(crate) use screens::{
     PARAM_KEYS as SCREEN_PARAM_KEYS, ROW_KEYS as SCREEN_ROW_KEYS, UNWRITTEN_FORMATS as SCREEN_UNWRITTEN_FORMATS,
-    check_settings as check_screen_settings, export as export_screens, safe_file_name, store_settings as store_screen_settings,
-    with_export_preset as with_screen_export_preset,
+    check_settings as check_screen_settings, export as export_screens, safe_file_name, sharing_names as sharing_screen_names,
+    store_settings as store_screen_settings, with_export_preset as with_screen_export_preset,
 };
 pub use screens::{
     PRESET_FILE_EXTS as SCREEN_EXPORT_PRESET_EXTS, PRESET_FILE_FORMAT as SCREEN_EXPORT_PRESET_FORMAT, PRESET_KEYS as SCREEN_EXPORT_PRESET_KEYS,

@@ -195,6 +195,28 @@ fn item_to_export_picks_artboards_assets_and_the_document() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// An asset named as an artboard of the item's range gets a file of its own: the artboard's file
+/// keeps its name and the asset's is numbered, in place of writing over it.
+#[test]
+fn an_asset_named_as_an_artboard_does_not_overwrite_its_file() {
+    let base = folder("clash");
+    let mut s = session(&base);
+    let dir = data_folder(&mut s, &base);
+    logged(
+        &mut s,
+        &base,
+        &format!(
+            "{}vc.run('artboard.setProps', {{artboards: [{{index: 0, name: 'Logo'}}]}});\n\
+             var ids = vc.run('assets.add', {{name: 'Logo', multiple: false}}).assets;\n\
+             var both = new ExportForScreensItemToExport(); both.artboards = '1'; both.assets = ids;\n\
+             d.exportForScreens(new Folder(dir + '/both'), ExportForScreensType.SE_SVG, undefined, both);",
+            two_artboards(&dir)
+        ),
+    );
+    assert_eq!(names(&dir.join("both")), ["Logo-2.svg", "Logo.svg"]);
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// The prefix comes before each file's name, and a path character in it does not make a folder or
 /// reach out of the export folder.
 #[test]

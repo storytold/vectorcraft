@@ -638,6 +638,25 @@ fn fold(name: &str) -> String {
         .collect()
 }
 
+thread_local! {
+    /// The [`fold`]ed names the exports run by [`sharing_names`] on this thread have taken so far.
+    static SHARED_NAMES: std::cell::RefCell<Option<HashSet<String>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// `f`, with every `document.exportForScreens` it runs on this thread naming its files around
+/// the names the ones before it took, so a later export does not write over an earlier one's file
+/// (it numbers its own: `-2`, `-3`…).
+pub(crate) fn sharing_names<T>(f: impl FnOnce() -> T) -> T {
+    let outer = SHARED_NAMES.with(|n| n.borrow_mut().replace(HashSet::new()));
+    let r = f();
+    SHARED_NAMES.with(|n| *n.borrow_mut() = outer);
+    r
+}
+
+/// The key the names taken by an earlier export are held under in [`Output::taken`]: no file of
+/// this export has it.
+const EARLIER_EXPORT: &str = "\0earlier export";
+
 /// The file names (and bytes) an export wrote, or the files it returns.
 #[derive(Default)]
 struct Output {
@@ -1342,6 +1361,14 @@ fn encode_and_write(export: ScreenExport, writer: &mut dyn FnMut(&str, &[u8]) ->
         create_dir(dir)?;
     }
     let mut out = Output::default();
+    // The names earlier exports of a [`sharing_names`] run took into the same files.
+    if !o.zip {
+        SHARED_NAMES.with(|n| {
+            for name in n.borrow().iter().flatten() {
+                out.taken.insert(name.clone(), EARLIER_EXPORT.to_string());
+            }
+        });
+    }
     // The notes on the options, then the encoders' notes for every file, each once.
     let mut notes: Vec<Note> = Vec::new();
     for text in unused {
@@ -1416,6 +1443,13 @@ fn encode_and_write(export: ScreenExport, writer: &mut dyn FnMut(&str, &[u8]) ->
             out.put(folder, o.zip, name, bytes, writer)?;
             files += 1;
         }
+    }
+    if !o.zip {
+        SHARED_NAMES.with(|n| {
+            if let Some(shared) = n.borrow_mut().as_mut() {
+                shared.extend(out.taken.keys().cloned());
+            }
+        });
     }
     // A cancel that came while the last file was encoded returns no files. A folder export
     // without a ZIP has written every file by now, so it returns them.

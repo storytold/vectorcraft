@@ -461,12 +461,16 @@ fn doc_export_for_screens(h: &Host, a: &[Data]) -> Answer {
     if let Some(prefix) = prefix {
         base.insert("prefix".into(), json!(prefix));
     }
-    for items in exports {
-        let mut p = base.clone();
-        p.extend(items);
-        exactly(h, || on_doc(h, doc.uid, false, |h| command(h, "document.exportForScreens", &Value::Object(p))))?;
-    }
-    Ok(Data::Undefined)
+    // The artboards, the assets and the document are exported one after another into the folder:
+    // a later export numbers a file whose name an earlier one took instead of writing over it.
+    crate::cmd::fileio::sharing_screen_names(|| {
+        for items in exports {
+            let mut p = base.clone();
+            p.extend(items);
+            exactly(h, || on_doc(h, doc.uid, false, |h| command(h, "document.exportForScreens", &Value::Object(p))))?;
+        }
+        Ok(Data::Undefined)
+    })
 }
 
 /// The members these add to `Document`.
