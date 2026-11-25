@@ -231,13 +231,15 @@ pub(crate) fn mesh_warp_image_with(
     g.knockout = crate::Knockout::On;
     if let Some(e) = g.extras_if_any() {
         e.colorize = None;
+        e.colorize_overprint = false;
         e.image_quad = None;
     }
     if mesh_warp_cost(k) > MAX_GENERATED {
         return g;
     }
-    // A grayscale image's fill color colorizes each piece; the group of pieces takes none.
-    let colorize = n.extras().colorize.clone();
+    // A grayscale image's fill color colorizes each piece, overprinting as the image's does; the
+    // group of pieces takes none.
+    let (colorize, colorize_overprint) = (n.extras().colorize.clone(), n.extras().colorize_overprint);
     // Each piece shows what the image shows: its color mask's masked pixels.
     let color_mask = n.extras().color_mask.clone();
     let (pw, ph) = (im.width as f64, im.height as f64);
@@ -271,6 +273,7 @@ pub(crate) fn mesh_warp_image_with(
                 let mut image = Node::new(n.id, NodeKind::Image(Box::new(ImageObject { xf, ..im.clone() })));
                 image.extras_mut().pixelated = pixelated;
                 image.extras_mut().colorize = colorize.clone();
+                image.extras_mut().colorize_overprint = colorize_overprint;
                 image.extras_mut().color_mask = color_mask.clone();
                 if masked {
                     // Preserve Shape Using Transparency: the triangle is the piece's alpha (a

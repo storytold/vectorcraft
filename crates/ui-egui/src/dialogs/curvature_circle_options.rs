@@ -8,17 +8,17 @@
 //! `tool.setOption {tool: "curvatureCircle", values}`; they last across tool switches and are saved
 //! with the preferences.
 
-use serde_json::{Map, Value, json};
+use craft::ui::contract::Bind;
+use craft::ui::patterns::form_dialogs::{HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::env::UnitKind;
+use serde_json::{Value, json};
 use vectorcraft_tools::curvature_circle::{DEFAULT_SNAP, ID as TOOL, SNAP_RANGE};
 
-use super::{DialogSpec, form, run_and_close};
-use crate::state::Dialog;
-use crate::{VectorcraftApp, widgets};
+use super::{form, host, tool_options};
+use crate::VectorcraftApp;
 
 /// The dialog kind of Curvature Circle Tool Options.
 pub const KIND: &str = "curvatureCircleOptions";
-
-pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm, min_width: 320.0, ..DialogSpec::FORM };
 
 /// The switches the dialog edits, in the order it shows them, with their labels.
 const SWITCHES: [(&str, &str); 4] = [
@@ -28,46 +28,30 @@ const SWITCHES: [(&str, &str); 4] = [
     ("constantRadius", "Use the Radius of Circular Arcs"),
 ];
 
-/// Width of the label column.
-const LABEL_W: f32 = 100.0;
-
-fn heading(_: &Dialog) -> String {
-    let label = vectorcraft_tools::tool_info(TOOL).map_or("", |t| t.label);
-    crate::i18n::fmt(tl!("{tool} Options"), &[("tool", tl!(label))])
-}
-
-/// The option keys the dialog edits.
-fn keys() -> impl Iterator<Item = &'static str> {
-    ["snapTolerance"].into_iter().chain(SWITCHES.iter().map(|(key, _)| *key))
-}
-
-/// Open the tool's options with their current values.
-pub fn open(app: &mut VectorcraftApp) -> Value {
-    let o = app.session.tool_options_of(TOOL);
-    let fields: Map<String, Value> = keys().filter_map(|key| Some((key.to_string(), o.get(key)?.clone()))).collect();
-    app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
-    json!({ "dialog": KIND })
-}
-
-fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+/// The rows: Snap Tolerance, then the switches.
+fn params() -> Vec<Param> {
     let (min, max) = SNAP_RANGE;
-    let v = d.f64("snapTolerance", DEFAULT_SNAP);
-    widgets::label_row(ui, tl!("Snap Tolerance:"), LABEL_W, |ui| {
-        if let Some(x) = widgets::range_field(ui, "curvature-circle-snap", v, min..=max, "px", 1, 72.0) {
-            d.fields.insert("snapTolerance".into(), json!(x));
-        }
-    });
-    ui.add_space(6.0);
-    for (key, label) in SWITCHES {
-        form::check(ui, d, key, tl!(label));
-    }
-    false
+    let snap = Param::number("snapTolerance", tl!("Snap Tolerance:"), DEFAULT_SNAP, 1.0, 1).unit(UnitKind::Pixels).bounds(Some(min), Some(max));
+    std::iter::once(snap).chain(SWITCHES.iter().map(|(key, label)| Param::new(*key, tl!(*label), ParamKind::bool(true)))).collect()
 }
 
-/// OK: set the tool's options.
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let values: Map<String, Value> = keys().filter_map(|key| Some((key.to_string(), d.fields.get(key)?.clone()))).collect();
-    run_and_close(app, "tool.setOption", json!({ "tool": TOOL, "values": values }))
+/// Open the tool's options with their current values; an error when there is no window to show them in.
+pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
+    let params = params();
+    let options = app.session.tool_options_of(TOOL);
+    let fields = options.as_object().map(|m| form::fields_of(&params, m)).unwrap_or_default();
+    let (title, shown) = (tool_options::title(TOOL), params.clone());
+    let ok = move |app: &mut VectorcraftApp, result: &ParamResult| tool_options::set_options(app, TOOL, form::json_of(&params, &result.fields));
+    let opened = app.ui_ctx.clone().and_then(|ctx| {
+        let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |f| ParamDialog::new(KIND, title.clone(), shown.clone()).values(Bind::bound(f)));
+        host::open_held(app, dialog, ok)
+    });
+    if opened.is_none() {
+        let message = tl!("No window to show the dialog in.").to_string();
+        app.status(message.clone());
+        return Err(message);
+    }
+    Ok(json!({ "dialog": KIND }))
 }
 
 #[cfg(test)]
@@ -75,62 +59,11 @@ mod tests {
     use super::*;
     use vectorcraft_engine::Session;
 
-    fn app() -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
-        app
-    }
-
-    /// The labels the open dialog paints.
-    fn painted(app: &mut VectorcraftApp) -> String {
-        crate::tests_labels::painted_text(app, |app, ui| super::super::show(app, ui.ctx()))
-    }
-
-    #[test]
-    fn double_clicking_the_tool_opens_its_options_and_ok_sets_them() {
-        let mut app = app();
-        let r = app.run("tool.options", json!({"tool": TOOL})).unwrap();
-        assert_eq!(r["dialog"], json!(KIND));
-        let text = painted(&mut app);
-        for label in [
-            "Curvature Circle Tool Options",
-            "Snap Tolerance:",
-            "Snap with Smart Guides Off",
-            "Annotate Radius",
-            "Anchors at Standard Positions",
-            "Use the Radius of Circular Arcs",
-            "OK",
-            "Cancel",
-        ] {
-            assert!(text.contains(label), "{label} in {text}");
-        }
-        let d = app.ui.dialog.as_mut().unwrap();
-        for (key, _) in SWITCHES {
-            assert!(d.bool(key), "{key}");
-        }
-        let before = d.f64("snapTolerance", 0.0);
-        d.fields.insert("snapTolerance".into(), json!(before + 3.0));
-        for key in ["annotateRadius", "standardAnchors"] {
-            d.fields.insert(key.into(), json!(false));
-        }
-        super::super::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
-        let o = app.session.tool_options_of(TOOL);
-        assert_eq!(o["snapTolerance"], json!(before + 3.0));
-        assert_eq!((&o["annotateRadius"], &o["standardAnchors"], &o["constantRadius"]), (&json!(false), &json!(false), &json!(true)));
-        // They last while another tool is chosen, and the dialog opens on them again.
-        app.select_tool(TOOL);
-        app.select_tool("selection");
-        app.run("tool.options", json!({"tool": TOOL})).unwrap();
-        let d = app.ui.dialog.as_ref().unwrap();
-        assert!(!d.bool("standardAnchors") && d.bool("snapWithoutGuides"));
-        assert_eq!(d.f64("snapTolerance", 0.0), before + 3.0);
-    }
-
     /// `tool.setOption` takes only the values the options take, and an invalid one changes none.
     #[test]
     fn invalid_values_are_errors_and_change_nothing() {
-        let mut app = app();
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
         for values in [
             json!({"annotateRadius": false, "constantRadius": "no"}),
             json!({"annotateRadius": false, "snapTolerance": 0}),
@@ -139,5 +72,13 @@ mod tests {
             assert!(app.run("tool.setOption", json!({"tool": TOOL, "values": values})).is_err(), "{values}");
             assert_eq!(app.session.tool_options_of(TOOL)["annotateRadius"], json!(true));
         }
+    }
+
+    /// Without a window the dialog cannot open, and `tool.options` says so instead of reporting it open.
+    #[test]
+    fn without_a_window_opening_the_options_is_an_error() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        assert!(app.run("tool.options", json!({"tool": TOOL})).is_err());
     }
 }

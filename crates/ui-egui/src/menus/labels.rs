@@ -2,7 +2,8 @@ use super::slots::{perspective_grid, recent_slot, saved_selection_name, saved_se
 use super::state::{hidden_when_disabled, shortcut_of};
 use super::tree::menu_tree;
 use super::ui_commands::UI_COMMANDS;
-use super::{Item, Value, VectorcraftApp};
+use super::{Node, Value, VectorcraftApp, unbound};
+use craft::keymap::Chord;
 
 /// Label for toggles whose text flips (Outline/Preview, Hide/Show …).
 pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
@@ -18,7 +19,7 @@ fn view_toggle_label(app: &VectorcraftApp, id: &str) -> Option<String> {
     let v = &app.ui.view;
     let text: String = match id {
         "view.outline" => if app.outline_view() { "Preview" } else { "Outline" }.into(),
-        "window.workspace.reset" => format!("Reset {}", app.ui.workspace),
+        "window.workspace.reset" => format!("Reset {}", crate::workspaces::current_name(&app.ui)),
         "view.edges" => if v.edges { "Hide Edges" } else { "Show Edges" }.into(),
         "view.template" => if v.templates { "Hide Template" } else { "Show Template" }.into(),
         "view.cornerWidget" => if v.corner_widgets { "Hide Corner Widget" } else { "Show Corner Widget" }.into(),
@@ -150,7 +151,7 @@ pub(crate) fn shows_a_name(id: &str, label: &str) -> bool {
                 | crate::dialogs::proof_setup::LOAD
         )
         || vectorcraft_engine::cmd::plugin::is_command_id(id)
-        || (id == "window.workspace" && !crate::workspaces::is_builtin(label))
+        || (id == "window.workspace" && !crate::workspaces::builtins().iter().any(|w| w.name.eq_ignore_ascii_case(label.trim())))
         || (matches!(id, "effect.apply" | "effect.dialog") && vectorcraft_effects::plugin_effects().iter().any(|e| e.label == label))
 }
 
@@ -182,9 +183,11 @@ pub fn display_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
             }
         }
         "window.workspace.reset" => {
-            let name = &app.ui.workspace;
-            fmt(tl!("Reset {name}"), &[("name", if crate::workspaces::is_builtin(name) { tl!(name) } else { name })])
+            let name: &str = crate::workspaces::current_name(&app.ui);
+            fmt(tl!("Reset {name}"), &[("name", if crate::workspaces::is_builtin(&app.ui, name) { tl!(name) } else { name })])
         }
+        // Basic and Advanced share this command id, so the label, not the id, is what translates.
+        "window.toolbarAdvanced" => crate::i18n::tr(lang, label).to_string(),
         "effect.last" => match &app.last_effect {
             Some((e, _)) => {
                 let name = vectorcraft_effects::effect_info(e).map(|i| i.label).unwrap_or(e.as_str());
@@ -194,7 +197,10 @@ pub fn display_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
         },
         _ => {
             let shown = dynamic_label(app, id, label);
-            if shows_a_name(id, &shown) { shown } else { crate::i18n::tr_id(lang, id, &shown).to_string() }
+            // PLAN: is_builtin needs the UI state, which shows_a_name has no access to; a custom
+            // workspace's name is kept here, and other readers of shows_a_name must do the same.
+            let own_workspace = id == "window.workspace" && !crate::workspaces::is_builtin(&app.ui, &shown);
+            if own_workspace || shows_a_name(id, &shown) { shown } else { crate::i18n::tr_id(lang, id, &shown).to_string() }
         }
     }
 }
@@ -233,19 +239,21 @@ pub(super) fn spelling_item_label(id: &str, p: &Value) -> Option<String> {
 /// The shortcut a menu item shows: its command's (items without params), a panel's for the
 /// Window menu's `window.panel {panel}` items, an effect's for the Effect menu's items, or a filter
 /// plug-in's for Object › Plug-ins' `plugin.dialog {id}` items.
-pub fn item_shortcut(id: &str, p: &Value) -> Option<&'static str> {
-    match (id, p.get("panel").and_then(Value::as_str)) {
-        ("window.panel", Some(panel)) => crate::shortcut_editor::panel_shortcut(panel),
-        ("effect.dialog" | "effect.apply", _) => p.get("effect").and_then(Value::as_str).and_then(crate::shortcut_editor::effect_shortcut),
-        ("plugin.dialog", _) => p.get("id").and_then(Value::as_str).and_then(crate::shortcut_editor::filter_shortcut),
+pub fn item_shortcut(app: &VectorcraftApp, id: &str, p: &Value) -> Option<Chord> {
+    let field = |name: &str| p.get(name).and_then(Value::as_str);
+    let key = match (id, field("panel")) {
+        ("window.panel", Some(panel)) => format!("panel:{panel}"),
+        ("effect.dialog" | "effect.apply", _) => format!("effect:{}", field("effect")?),
+        ("plugin.dialog", _) => format!("plugin:{}", field("id")?),
         // The Artboard tool's canvas menu passes the point its Paste goes to.
-        ("edit.paste", _) => shortcut_of(id),
+        ("edit.paste", _) => id.to_string(),
         // That menu's Cut and Copy: with the tool chosen, the keys run `edit.cut` and `edit.copy`, which do the same.
-        ("artboard.cut", _) => shortcut_of("edit.cut"),
-        ("artboard.copy", _) => shortcut_of("edit.copy"),
-        _ if p.is_null() => shortcut_of(id),
-        _ => None,
-    }
+        ("artboard.cut", _) => "edit.cut".to_string(),
+        ("artboard.copy", _) => "edit.copy".to_string(),
+        _ if p.is_null() => id.to_string(),
+        _ => return None,
+    };
+    shortcut_of(app, &key)
 }
 
 /// Labels only the canvas context menu ([`context_items`]) shows, so the catalog tests can insist
@@ -332,11 +340,18 @@ pub const DYNAMIC_LABELS: &[&str] = &[
     "Redo",
     "Unlock Grid",
     "Lock Grid",
+    "Basic",
+    "Advanced",
 ];
 
-/// Is `children` a plug-in's submenu: does it hold a command the plug-in declares?
-pub(crate) fn holds_plugin_commands(children: &[Item]) -> bool {
-    children.iter().any(|c| matches!(c, Item::Cmd(_, id, _) if vectorcraft_engine::cmd::plugin::is_command_id(id)))
+/// Is `children` a plug-in's submenu: does it hold a command the plug-in declares, and only items
+/// that list plug-ins? A built-in submenu that a plug-in's manifest places a command in is not.
+pub(crate) fn holds_plugin_commands(children: &[Node]) -> bool {
+    children.iter().any(|c| matches!(c, Node::Item(i) if vectorcraft_engine::cmd::plugin::is_command_id(&i.command.id)))
+        && children.iter().all(|c| match c {
+            Node::Item(i) => lists_plugin(&i.command.id, &i.command.params),
+            _ => true,
+        })
 }
 
 /// Every English string the menus, the command palette, the panel registry, the toolbar and the
@@ -345,16 +360,22 @@ pub(crate) fn holds_plugin_commands(children: &[Item]) -> bool {
 /// of the Scripts folder, saved proof setups), the point sizes and the view angles are left out.
 pub fn menu_strings() -> std::collections::BTreeSet<String> {
     use std::collections::BTreeSet;
+
+    use crate::i18n::LangExt as _;
     fn user_data(id: &str, params: &Value) -> bool {
         hidden_when_disabled(id)
             || id.starts_with("type.recentFont")
             || lists_plugin(id, params)
             || matches!(id, crate::scripts_menu::COMMAND | crate::dialogs::proof_setup::LOAD)
     }
-    fn walk(items: &[Item], under: &str, out: &mut BTreeSet<String>) {
-        for it in items {
-            match it {
-                Item::Cmd(l, id, params) => {
+    fn walk(nodes: &[Node], under: &str, out: &mut BTreeSet<String>) {
+        for node in nodes {
+            match node {
+                Node::Item(it) if unbound(&it.command.id) => {
+                    out.insert(it.label.clone());
+                }
+                Node::Item(it) => {
+                    let (l, id, params) = (it.label.as_str(), it.command.id.as_str(), &it.command.params);
                     let size = l.strip_suffix(" pt").is_some_and(|n| n.chars().all(|c| c.is_ascii_digit()));
                     // View › Rotate View lists angles: an optional minus sign, digits and a degree sign.
                     let angle = l
@@ -362,24 +383,31 @@ pub fn menu_strings() -> std::collections::BTreeSet<String> {
                         .map(|n| n.strip_prefix('-').unwrap_or(n))
                         .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()));
                     // VectorCraft › Language lists each language by its own name.
-                    let language_name = *id == "app.language" && crate::i18n::Lang::all().any(|lang| lang.name() == *l);
-                    if !user_data(id, params) && !size && !angle && !language_name && *l != "—" {
+                    let language_name = id == "app.language" && crate::i18n::Lang::all().any(|lang| lang.name() == l);
+                    if !user_data(id, params) && !size && !angle && !language_name && l != "—" {
                         out.insert(l.to_string());
                     }
                 }
-                Item::Todo(l, _) | Item::Header(l) => {
-                    out.insert(l.to_string());
+                Node::Heading(l) => {
+                    out.insert(l.clone());
                 }
                 // A plug-in's submenu is named after the plug-in, and a subfolder's after the folder.
-                Item::Sub(_, children) if holds_plugin_commands(children) || crate::scripts_menu::is_folder(children) => walk(children, under, out),
-                Item::Sub(l, children) => {
-                    out.insert(l.to_string());
+                Node::Submenu { children, .. } if holds_plugin_commands(children) || crate::scripts_menu::is_folder(children) => {
+                    walk(children, under, out)
+                }
+                // The Mac application menu's own submenus (Settings pages, languages, appearances) are named
+                // by the labels the layout asks for ([`super::MAC_LABELS`]) and by the catalogs of their own.
+                Node::Submenu { label, role: Some(_), .. } => {
+                    out.insert(label.clone());
+                }
+                Node::Submenu { label, children, .. } => {
+                    out.insert(label.clone());
                     // Type › Font lists the installed families: names, not UI text.
-                    if !(under == "Type" && *l == "Font") {
-                        walk(children, l, out);
+                    if !(under == "Type" && label == "Font") {
+                        walk(children, label, out);
                     }
                 }
-                Item::Sep => {}
+                _ => {}
             }
         }
     }
@@ -388,7 +416,7 @@ pub fn menu_strings() -> std::collections::BTreeSet<String> {
         out.insert(title.to_string());
         walk(&items, title, &mut out);
     }
-    out.extend(crate::native_menu::MAC_LABELS.iter().map(|s| s.to_string()));
+    out.extend(super::MAC_LABELS.iter().map(|s| s.to_string()));
     out.extend(DYNAMIC_LABELS.iter().map(|s| s.to_string()));
     out.extend(CONTEXT_LABELS.iter().map(|s| s.to_string()));
     out.extend(crate::scripts_menu::LABELS.iter().map(|s| s.to_string()));
@@ -413,7 +441,7 @@ pub fn menu_strings() -> std::collections::BTreeSet<String> {
         }
     }
     out.extend(crate::prefs_dialog::UI_FIELDS.iter().map(|f| f.2.to_string()));
-    out.extend(crate::dialogs::button_labels().into_iter().map(str::to_string));
+
     out.extend(crate::dialogs::FILM_GRAIN_FIELDS.iter().map(|(_, label, _)| label.to_string()));
     out.extend(crate::dialogs::PAINT_DAUB_BRUSH_TYPE_LABELS.iter().map(|label| label.to_string()));
     out.extend(crate::chrome::hint_strings().into_iter().map(str::to_string));

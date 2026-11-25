@@ -206,6 +206,41 @@ fn twisted_bevel_pieces_meet_the_cap_at_sharp_joins() {
     }
 }
 
+/// For a mesh, a twist cuts the edges of a round outline's rounded bevel into pieces with their cut
+/// corners on the art's curve. The smoothed normal at each corner of a piece is the mean of the
+/// normals of the two faces that meet there, as they are built.
+#[test]
+fn a_twisted_round_bevels_smoothed_normals_follow_its_curved_pieces() {
+    let (p, b) = shape(&circle(Point::new(50.0, 50.0), 40.0));
+    let bevel = Bevel { shape: crate::BevelShape::Rounded, width: 6.0, height: 6.0, ..Bevel::default() };
+    let o = Extrude { depth: 12.0, twist: 10.0, bevel: Some(bevel), ..Extrude::default() };
+    let turned = View { rotation_x: 20.0, rotation_y: 30.0, ..front() };
+    for view in [turned, View { perspective: 60.0, ..turned }] {
+        let (_, faces, _) = build::extrude_faces(&p, FillRule::NonZero, b, o, view, build::Keep::Faces).unwrap();
+        let faces = faces.unwrap();
+        let bevels: Vec<&build::Face3> = faces.iter().filter(|f| f.part == crate::MeshPart::FrontBevel).collect();
+        let mut checked = 0;
+        for (x, f) in bevels.iter().enumerate() {
+            let (Some(contour), build::Attrs::Corners(list)) = (f.contours.first(), &f.attrs) else { continue };
+            let Some(corners) = list.first() else { continue };
+            for (v, (_, n)) in contour.iter().zip(corners) {
+                let Some(n) = n else { continue };
+                checked += 1;
+                // The faces of the other band at this corner give it the same normal.
+                let others: Vec<V3> = bevels
+                    .iter()
+                    .enumerate()
+                    .filter(|(y, g)| *y != x && g.corner(*v).1 == Some(*n))
+                    .map(|(_, g)| V3(f.normal.0 + g.normal.0, f.normal.1 + g.normal.1, f.normal.2 + g.normal.2).unit())
+                    .collect();
+                let off = others.iter().map(|m| m.sub(*n).dot(m.sub(*n)).sqrt()).fold(f64::INFINITY, f64::min);
+                assert!(off < 1e-12, "{off}: {v:?}");
+            }
+        }
+        assert!(checked > 100, "{checked}");
+    }
+}
+
 /// Inflate keeps the art's curves where its faces meet the outline: the flat back is the art
 /// turned, one cubic for each of its curves within 0.001 pt; every side facet has both its edges
 /// curved; and the front's cells along the outline are curved there, within the sampling
