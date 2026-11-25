@@ -62,6 +62,15 @@ impl Harness {
             .map(|b| Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32)))
     }
 
+    /// The centre of the text field named `label` in the last frame.
+    fn text_field(&self, label: &str) -> Option<Pos2> {
+        self.nodes
+            .iter()
+            .filter(|(_, n)| n.role() == egui::accesskit::Role::TextInput && n.label() == Some(label))
+            .find_map(|(_, n)| n.bounds())
+            .map(|b| pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32))
+    }
+
     fn tab(&self, panel: &str) -> Option<Rect> {
         self.named(panel, egui::accesskit::Role::Tab)
     }
@@ -679,6 +688,9 @@ fn ui_docking_reports_the_layout_and_the_dock_state() {
     h.frame(vec![]);
     let tab = h.tab("layers").unwrap();
     h.click(tab.center());
+    // A press on a tab leaves the keys where they were (the dock's TabStrip::keeps_focus); a click in the panel's
+    // search field gives the panel the keys.
+    h.click(h.text_field("Search layers").expect("the Layers panel's search field"));
     let report = inspect(&h.app, &h.ctx);
     assert_eq!(report["layout"], serde_json::to_value(h.layout()).unwrap());
     assert_eq!(report["focused"], json!("layers"));
@@ -814,13 +826,7 @@ fn other_function_keys_and_keyboard_guards_keep_their_routes() {
     // The Layers panel's search field, clicked once the dialog has gone: it has the keys until a click on the canvas
     // takes them.
     h.frames(2);
-    let field = h
-        .nodes
-        .iter()
-        .filter(|(_, n)| n.role() == egui::accesskit::Role::TextInput && n.label() == Some("Search layers"))
-        .find_map(|(_, n)| n.bounds())
-        .map(|b| pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32))
-        .expect("the Layers panel's search field");
+    let field = h.text_field("Search layers").expect("the Layers panel's search field");
     h.click(field);
     h.f7();
     assert!(showing(&h.app.ui, "layers"), "F7 does nothing while a text field has focus");
