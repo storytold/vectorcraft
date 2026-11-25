@@ -1,20 +1,21 @@
 use craft::automation::ControlChannel;
 use craft::host::{AppInfo, Host, Wake};
+use craft::layers::ui::filter::ObjectsSearch;
 use craft::platform::clipboard::{Clipboard, ClipboardProbe, EventClipboard};
 use craft::platform::clock::monotonic_ms;
 use craft::theme::variant::Tone;
 use craft::ui::buttons::{ActiveLook, PushButtonLook};
 use craft::ui::choice::ChoiceLook;
-use craft::ui::contract::{Bind, CaptionInk, GlyphColon, LinkLabelInk, SectionRhythm};
+use craft::ui::contract::{Bind, CaptionInk, GlyphColon, LinkLabelInk, LinkLabelUnderline, QuietHeader, SectionRhythm};
 use craft::ui::docking::IconGroupSeparator;
-use craft::ui::list::CommandHighlight;
+use craft::ui::list::{CommandHighlight, ThumbRows};
 use craft::ui::menu::MenuTitlePad;
 use craft::ui::patterns::form_dialogs::PresetCardLook;
 use craft::ui::runtime::env::{RootEnv, Scale, ScrubDrags, WindowKey};
 use craft::ui::runtime::frame::{FrameInput, FrameOutput};
 use craft::ui::runtime::toast::{self, Toast};
 use craft::ui::runtime::windows::WindowHost;
-use craft::ui::sections::DialogButtonLook;
+use craft::ui::sections::{DialogButtonLook, QuietTitleRow};
 use craft::ui::shell::embed::CloseDecision;
 use craft::ui::shell::{AppShell, CanvasPanel, Slot};
 use craft::ui::style::TrackFill;
@@ -692,6 +693,8 @@ pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> Ro
     // A field's label that opens its options ("Opacity:", "Stroke") reads in the normal ink, underlined, as production
     // drew it.
     root.values.set(LinkLabelInk::Neutral);
+    // Its underline stands inside the label's rect, under the text, as production drew it.
+    root.values.set(LinkLabelUnderline::Inside);
     // Other field labels ("X:", "Angle:", "Opacity") read in the normal ink of the values beside them, as production
     // drew them.
     root.values.set(CaptionInk::Normal);
@@ -704,6 +707,16 @@ pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> Ro
     root.values.set(DialogButtonLook::Filled);
     // Sections stand apart with production's room around their dividers.
     root.values.set(SectionRhythm::Spaced);
+    // The Properties kind line ("Ellipse") heads the sections under it, so the first draws no divider above it, as
+    // production's did.
+    root.values.set(QuietHeader::Heads);
+    // Quiet headings (the kind line, "Ellipse Properties:") stand a line of text high over their fields, as
+    // production's did.
+    root.values.set(QuietTitleRow::Text);
+    // Layers rows stand as production's: the thumbnail with a tight gap, 14 points of indent per level.
+    root.values.set(ThumbRows::Tight);
+    // The Layers Objects search field fills the filter bar up to its Filter button, as production's did.
+    root.values.set(ObjectsSearch::Fill);
     // The menu bar's titles stand as close as production's, which share the line with the bar's other controls.
     root.values.set(MenuTitlePad::Control);
     // Document tabs show their title and its `*` in the label's semibold face, as production drew them.
