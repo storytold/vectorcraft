@@ -212,6 +212,51 @@ fn bundled_catalogs_are_consistent() {
     }
 }
 
+/// A catalog column with its `\n`, `\t` and `\\` escapes read.
+fn unescaped(column: &str) -> String {
+    let mut out = String::with_capacity(column.len());
+    let mut chars = column.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => out.push('\n'),
+            Some('t') => out.push('\t'),
+            Some(other) => out.push(other),
+            None => out.push('\\'),
+        }
+    }
+    out
+}
+
+/// A translated message starts and ends with whitespace only where its English does, so a status
+/// message is not shown with a stray space.
+#[test]
+fn message_translations_keep_their_english_edges() {
+    let mut wrong = Vec::new();
+    for (code, _, catalog) in EMBEDDED {
+        for line in catalog.lines() {
+            let mut columns = line.splitn(3, '\t');
+            let (Some(ctx @ ("@msg" | "@msgplural")), Some(src), Some(tr)) = (columns.next(), columns.next(), columns.next()) else { continue };
+            let (src, tr) = (unescaped(src), unescaped(tr));
+            let plural = ctx == "@msgplural";
+            let sources: Vec<&str> = if plural { src.split('|').collect() } else { vec![src.as_str()] };
+            let forms: Vec<&str> = if plural { tr.split('|').collect() } else { vec![tr.as_str()] };
+            for (i, form) in forms.into_iter().enumerate() {
+                let english = sources.get(i).or(sources.last()).copied().unwrap_or_default();
+                let lead = form.starts_with(char::is_whitespace) && !english.starts_with(char::is_whitespace);
+                let trail = form.ends_with(char::is_whitespace) && !english.ends_with(char::is_whitespace);
+                if lead || trail {
+                    wrong.push(format!("{code}: {src:?} -> {form:?}"));
+                }
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{} message translations add whitespace at an edge:\n{}", wrong.len(), wrong.join("\n"));
+}
+
 /// The engine learns the language the UI is drawn in each frame: new type takes the Japanese
 /// defaults while it is Japanese (#432). A Japanese frame draws in Japanese on this test's thread
 /// only: the tests running beside it on other threads still draw in English.
@@ -1637,7 +1682,7 @@ fn command_ids(s: &str) -> Vec<&str> {
 /// the messages each one lacks.
 const COMPLETE_MESSAGES: &[&str] = &[
     "cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "zh-hant", "fi", "tr", "ca",
-    "nl", "da", "id",
+    "nl", "da", "id", "bg",
 ];
 
 /// Crates whose error and status messages reach the status bar, the crates whose errors the
