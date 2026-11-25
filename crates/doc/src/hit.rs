@@ -115,6 +115,36 @@ pub fn set_image_paint(f: ImagePaint) {
     let _ = IMAGE_PAINT.set(f);
 }
 
+/// Adds the geometry and raster effects of a symbol instance's active fill and stroke to the fills
+/// and strokes that paint in the art it is given, the instance's art in the symbol's coordinates,
+/// as the canvas adds them to the art it draws. Every object keeps its place in the art, so the
+/// child indices of [`symbol_part_at`] still lead to it. Effects are evaluated above this crate, so
+/// the engine registers one with [`set_instance_row_art`].
+pub type InstanceRowArt = fn(Option<&Document>, &Node, &mut Node);
+
+static INSTANCE_ROW_ART: OnceLock<InstanceRowArt> = OnceLock::new();
+
+/// Register how a symbol instance's art takes the effects of the instance's fill and stroke, for
+/// Direct Selection's parts (the first registration stays).
+pub fn set_instance_row_art(f: InstanceRowArt) {
+    // Already set: the same engine, registered by another session.
+    let _ = INSTANCE_ROW_ART.set(f);
+}
+
+/// Does a symbol instance's active fill or stroke carry a visible geometry effect, which the art it
+/// places takes on each of its fills and strokes ([`set_instance_row_art`])? Effects are classified
+/// above this crate, so the engine registers one with [`set_instance_reshapes`].
+pub type InstanceReshapes = fn(&Node) -> bool;
+
+static INSTANCE_RESHAPES: OnceLock<InstanceReshapes> = OnceLock::new();
+
+/// Register how Direct Selection tells whether a symbol instance's fill or stroke effects reshape
+/// its art (the first registration stays).
+pub fn set_instance_reshapes(f: InstanceReshapes) {
+    // Already set: the same engine, registered by another session.
+    let _ = INSTANCE_RESHAPES.set(f);
+}
+
 /// The shapes that [`ImagePaint`] gives for one object.
 type Painted = Vec<(BezPath, FillRule, AppearanceItem)>;
 
@@ -189,7 +219,7 @@ pub fn set_live_art(f: LiveArt, inputs: LiveInputs) {
 }
 
 /// The registered [`LiveInputs`] now, 0 while nothing is registered.
-fn live_inputs() -> u64 {
+pub fn live_inputs() -> u64 {
     LIVE_ART.get().map_or(0, |(_, inputs)| inputs())
 }
 
@@ -1575,10 +1605,65 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
 /// symbol instance) paint with their geometry effects ([`image_paint`]), the frontmost first: a
 /// stroke along its shape, a fill inside it except with Selection by Path Only.
 fn hit_painted(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Option<HitKind> {
-    image_paint(Some(symbols.document()), n).iter().rev().find_map(|(bp, rule, item)| match item {
+    painted_hit(&image_paint(Some(symbols.document()), n), p, opt)
+}
+
+/// What a click at `p` hits among `painted`, the shapes [`image_paint`] gives, as [`hit_painted`]
+/// tests them.
+fn painted_hit(painted: &Painted, p: Point, opt: HitOptions) -> Option<HitKind> {
+    painted.iter().rev().find_map(|(bp, rule, item)| match item {
         AppearanceItem::Stroke(s) => s.hits(bp, *rule, p, opt.tol).then_some(HitKind::Stroke),
         AppearanceItem::Fill(_) => (!opt.path_only && fill_contains(bp, *rule, p)).then_some(HitKind::Fill),
     })
+}
+
+/// Is `n` a symbol instance whose active fill or stroke has a visible geometry effect, which
+/// reshapes the art it draws ([`set_instance_reshapes`])? This holds whatever that art is, clip
+/// groups and type included. Callers ask [`own_effects_art`] first, which takes an instance whose
+/// own effects change what it draws; an instance whose own effects add only pixels (a drop shadow)
+/// is tested here. Never with `outline`, where the canvas draws no effects, nor while a
+/// [`DrawnOff`] guard lives, nor while nothing is registered.
+fn reshapes_instance_art(n: &Node, outline: bool) -> bool {
+    !outline
+        && !DRAWN_OFF.get()
+        && matches!(n.kind, NodeKind::SymbolInstance { .. })
+        && n.appearance.items.iter().any(|i| !i.effects().is_empty())
+        && INSTANCE_RESHAPES.get().is_some_and(|f| f(n))
+}
+
+/// How many objects `n` holds with its opacity masks' art ([`Node::count_with_masks`]), what
+/// testing or outlining it takes from the [`ArtWalk`] limit.
+fn walk_size(n: &Node) -> u64 {
+    u64::try_from(n.count_with_masks()).unwrap_or(u64::MAX)
+}
+
+/// The art that symbol instance `n` draws with a visible effect of its own, the effects of its
+/// fills and strokes and those of its symbol's art all applied, or that type `n` draws with the
+/// visible effects of its own and of its fills and strokes, as outlined paths ([`set_drawn_art`]).
+/// `None` for other objects, with `outline`, where the canvas draws no effects, for an instance or
+/// type without such an effect, while a [`DrawnOff`] guard lives, and when no geometry effect
+/// changes what it draws. Evaluating the art is work that walking it does not count, so the art
+/// takes its objects from the [`ArtWalk`] limit of the click or outline under way, and the walk of
+/// it takes them again. Once the limit is used up, the result is `Some` of an empty group, which
+/// hits and outlines nothing, and no more art is evaluated.
+fn own_effects_art(n: &Node, symbols: &SymbolBoxes, outline: bool) -> Option<Node> {
+    let has = match n.kind {
+        NodeKind::SymbolInstance { .. } => n.appearance.effects.iter().any(|e| e.visible),
+        NodeKind::Text(_) => has_own_effects(n),
+        _ => false,
+    };
+    if outline || DRAWN_OFF.get() || !has || DRAWN_ART.get().is_none() {
+        return None;
+    }
+    let nothing = || Some(Node::group(n.id, vec![]));
+    if ArtWalk::used_up() {
+        return nothing();
+    }
+    let art = DRAWN_ART.get()?(symbols, n)?;
+    if !ArtWalk::take(walk_size(&art)) {
+        return nothing();
+    }
+    Some(art)
 }
 
 /// Is `p` within `tol` of the type path of `t` (in `n`), what "Type Object Selection by Path
@@ -1690,6 +1775,41 @@ impl<'a> InstanceArt<'a> {
         Some(Self { art, map, xf: *xf, boxes })
     }
 
+    /// [`Self::of`] with the effects of the instance's active fill and stroke added to the fills and
+    /// strokes in the art ([`set_instance_row_art`]), so that each object of it is tested and
+    /// outlined where the canvas draws it. Not with `outline`, where the canvas draws no effects.
+    fn drawn(doc: &'a Document, inst: &Node, outline: bool) -> Option<Self> {
+        let mut art = Self::of(doc, inst)?;
+        #[cfg(test)]
+        ARTS_WALKED.with(|c| c.set(c.get() + 1));
+        if !outline && let Some(f) = INSTANCE_ROW_ART.get() {
+            f(Some(doc), inst, &mut art.art);
+        }
+        Some(art)
+    }
+
+    /// [`Self::drawn`] for symbol instance `inst` in the art of another instance, outside Outline.
+    /// Copying the art and adding the effects to it is work that walking it does not count, so the
+    /// art takes as many objects as placing it makes ([`Self::size`]) from the [`ArtWalk`] limit of
+    /// the click or outline under way before it is copied, as the marquee takes the art it places,
+    /// and the walk of it takes its objects again. `None` once fewer are left.
+    fn nested(doc: &'a Document, inst: &Node) -> Option<Self> {
+        if ArtWalk::used_up() {
+            return None;
+        }
+        let NodeKind::SymbolInstance { symbol, xf } = &inst.kind else { return None };
+        let boxes = doc.symbol_boxes().quick();
+        let source = boxes.symbol_art(symbol)?;
+        let size = match boxes.slice_map(symbol, *xf) {
+            Some(m) => m.most_placed_with(source, &boxes),
+            None => walk_size(source),
+        };
+        if !ArtWalk::take(size) {
+            return None;
+        }
+        Self::drawn(doc, inst, false)
+    }
+
     /// The map that the objects inside group or layer `n` are moved by as one piece: `whole`, the
     /// map of an object around `n` that is moved as one piece, or else the map of the 9-slice cell
     /// `n` lies in ([`crate::NineSliceMap::one_cell`]). `None` when `n` is placed through the guides
@@ -1751,15 +1871,18 @@ fn moved(n: &Node, xf: vectorcraft_geom::Affine) -> Node {
 /// [`HitOptions::skip_guides`]. Nothing is picked in art that placing through the symbol's 9-slice
 /// guides could make more than [`crate::MAX_SYMBOL_NODES`] objects of, which the canvas does not
 /// draw. Art in a layer of the symbol whose Preview is off, and the art of an instance below such a
-/// layer, is tested in outline ([`HitOptions::outline`]), as the canvas draws it. `None` when `inst` is not a symbol instance or
-/// no editable object of its art is under `p`.
+/// layer, is tested in outline ([`HitOptions::outline`]), as the canvas draws it. Elsewhere each
+/// object is tested where the geometry effects of the instance's active fill and stroke draw it
+/// ([`InstanceArt::drawn`]), and not where its own shape no longer paints. Live objects in the art
+/// (blends, envelopes, repeats) are tested without those effects. `None` when `inst` is not a
+/// symbol instance or no editable object of its art is under `p`.
 pub fn symbol_part_at(doc: &Document, inst: &Node, p: Point, opt: HitOptions) -> Option<Vec<u32>> {
     let _walk = ArtWalk::open();
-    let art = InstanceArt::of(doc, inst)?;
+    let outline = opt.outline || below_preview_off(doc, inst, opt.scope);
+    let art = InstanceArt::drawn(doc, inst, outline)?;
     let symbols = doc.kept_symbol_boxes();
     let mut path = vec![];
-    let outline = opt.outline || below_preview_off(doc, inst, opt.scope);
-    let find = FindPart { art: &art, p, opt, symbols: &symbols, whole_instance: false };
+    let find = FindPart { art: &art, p, opt, symbols: &symbols, whole_instance: false, drawn: true };
     find.find(&art.art, &mut path, None, outline).map(|_| path)
 }
 
@@ -1772,14 +1895,35 @@ struct FindPart<'a> {
     /// For [`instance_art_hit`]: locked and template objects of the art count, as the canvas draws
     /// them, and clipping paths are not picked by their outline.
     whole_instance: bool,
+    /// For [`symbol_part_at`] and [`drawn_instance_hit`]: the art carries the effects of the
+    /// instance's active fill and stroke ([`InstanceArt::drawn`]).
+    drawn: bool,
 }
 
 impl FindPart<'_> {
     /// What a click at `p` hits on object `n` of the art, placed. [`hit_any`] takes `n` and each
-    /// object it visits inside `n` from the [`ArtWalk`] limit.
+    /// object it visits inside `n` from the [`ArtWalk`] limit. In drawn art, a symbol instance with
+    /// geometry effects of its own, and type whose own effects or fill and stroke effects (its own,
+    /// or those the outer instance adds) reshape it, are hit only where the art they draw is
+    /// ([`own_effects_art`]), and an instance whose fill or stroke has geometry effects that reshape
+    /// its art (its own, or those the outer instance passes on) only where its art is drawn with
+    /// them ([`drawn_instance_hit`]); not anywhere in their bounds. With Type Object Selection by
+    /// Path Only ([`HitOptions::type_path_only`]), type is still picked by its type path.
     fn hit(&self, n: &Node, whole: Option<vectorcraft_geom::Affine>, opt: HitOptions) -> Option<HitKind> {
         let placed = self.art.place(n, whole)?;
         let _charged = ArtWalk::charge();
+        // Type Object Selection by Path Only picks type by its type path, whatever its effects draw.
+        let type_path = opt.type_path_only && matches!(placed.kind, NodeKind::Text(_));
+        if self.drawn && !type_path {
+            if let Some(art) = own_effects_art(&placed, self.symbols, opt.outline) {
+                let _off = DrawnOff::set();
+                let _art_only = ArtOnly::set();
+                return hit_any(&art, self.p, opt, self.symbols);
+            }
+            if reshapes_instance_art(&placed, opt.outline) {
+                return drawn_instance_hit(&placed, self.p, opt, self.symbols);
+            }
+        }
         hit_any(&placed, self.p, opt, self.symbols)
     }
 
@@ -1793,7 +1937,7 @@ impl FindPart<'_> {
         if !n.visible || !self.whole_instance && (n.locked || n.is_template()) || self.skips_guide(n) || ArtWalk::used_up() {
             return None;
         }
-        let outline = outline || previews_off(n);
+        let outline = outline || !self.opt.ignore_layer_preview && previews_off(n);
         let opt = HitOptions { outline, ..self.opt };
         let (NodeKind::Group { children, .. } | NodeKind::Layer { children, .. }) = &n.kind else { return self.hit(n, whole, opt) };
         if path.len() >= crate::symbol_overrides::MAX_PATH_DEPTH {
@@ -1858,7 +2002,26 @@ fn instance_art_hit(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) 
     ARTS_WALKED.with(|c| c.set(c.get() + 1));
     let opt = HitOptions { clip_outlines: false, ..opt };
     let _art_only = ArtOnly::set();
-    FindPart { art: &art, p, opt, symbols, whole_instance: true }.find(&art.art, &mut vec![], None, false)
+    FindPart { art: &art, p, opt, symbols, whole_instance: true, drawn: false }.find(&art.art, &mut vec![], None, false)
+}
+
+/// What a click at `p` hits of symbol instance `n`, an object of another instance's drawn art,
+/// where the canvas draws `n`'s art with the geometry effects of `n`'s active fill and stroke
+/// ([`InstanceArt::drawn`]): each object of that art where it is drawn, paths, images and type
+/// alike, and not anywhere in `n`'s box. Locked and template objects of the art count, as in
+/// [`instance_art_hit`]. `None` for an instance of a missing symbol, of a symbol that holds an
+/// instance of itself or nests too deep ([`SymbolBoxes::art`]), of art past the 9-slice object
+/// limit ([`InstanceArt::of`]), and once the click has visited as many objects of symbol art as
+/// [`ArtWalk`] allows.
+fn drawn_instance_hit(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Option<HitKind> {
+    let NodeKind::SymbolInstance { symbol, .. } = &n.kind else { return None };
+    if symbols.art(symbol).is_none() || ArtWalk::used_up() {
+        return None;
+    }
+    let art = InstanceArt::nested(symbols.document(), n)?;
+    let opt = HitOptions { clip_outlines: false, ..opt };
+    let _art_only = ArtOnly::set();
+    FindPart { art: &art, p, opt, symbols, whole_instance: true, drawn: true }.find(&art.art, &mut vec![], None, false)
 }
 
 thread_local! {
@@ -2008,15 +2171,21 @@ pub fn symbol_part_outline(doc: &Document, inst: &Node, path: &[u32]) -> Option<
 /// instance (the isolated container [`HitOptions::scope`] and the layers around it apart), the
 /// outlines are cut to the bounds of the plain clipping paths, without their live effects, as
 /// [`symbol_part_at`] counts them. The outline is empty when the effects of a clipping path around
-/// the object leave no region.
+/// the object leave no region. Elsewhere the outlines follow the geometry effects of the instance's
+/// active fill and stroke, as [`symbol_part_at`] does. Outlining visits at most as many objects of
+/// symbol art as one click does ([`ArtWalk`]), the art of the instances nested in the part included,
+/// and leaves out what is past that limit.
 pub fn symbol_part_outline_in_view(doc: &Document, inst: &Node, path: &[u32], opt: HitOptions) -> Option<BezPath> {
-    let art = InstanceArt::of(doc, inst)?;
-    let part = crate::symbol_overrides::part(&art.art, path)?;
+    let _walk = ArtWalk::open();
     let mut outline = opt.outline || below_preview_off(doc, inst, opt.scope);
+    let art = InstanceArt::drawn(doc, inst, outline)?;
+    let part = crate::symbol_overrides::part(&art.art, path)?;
+    let symbols = doc.kept_symbol_boxes();
     let mut out = BezPath::new();
     let mut limit = None;
     let mut whole = None;
     let mut n = &art.art;
+    let mut mask = false;
     for &i in path {
         let children = n.children()?;
         whole = art.whole(n, whole);
@@ -2028,9 +2197,12 @@ pub fn symbol_part_outline_in_view(doc: &Document, inst: &Node, path: &[u32], op
             let Some(within) = limit_within(&art.place_unclipped(first, whole)?, limit, outline) else { return Some(out) };
             limit = within;
         }
+        mask = i == 0 && n.clips();
         n = children.get(usize::try_from(i).ok()?)?;
     }
-    outline_within(&art.place(part, whole)?, limit, outline, &mut out);
+    // A clipping path is picked by its own geometry ([`FindPart::find`]), and outlined so.
+    let placed = art.place(part, whole)?;
+    plain(mask, || outline_within(&placed, &symbols, limit, outline, &mut out));
     Some(out)
 }
 
@@ -2052,9 +2224,42 @@ fn limit_within(clip: &Node, limit: Option<Rect>, outline: bool) -> Option<Optio
     }
 }
 
-/// [`symbol_part_outline_in_view`] for placed object `n`, cut to `limit` when there is one.
-fn outline_within(n: &Node, limit: Option<Rect>, outline: bool, out: &mut BezPath) {
+/// [`symbol_part_outline_in_view`] for placed object `n`, cut to `limit` when there is one. A path
+/// or compound path whose geometry effects reshape it is outlined as the art they draw
+/// ([`drawn_art`]), a symbol instance with geometry effects of its own and type whose effects
+/// reshape it as the art they draw ([`own_effects_art`]), and a symbol instance whose fill or
+/// stroke effects reshape its art as that art drawn with them ([`InstanceArt::drawn`]), as
+/// [`FindPart`] tests them, except with `outline` and while a [`DrawnOff`] guard lives. Each object
+/// visited takes one object of the [`ArtWalk`] limit, and nothing more is outlined once the limit
+/// is used up. A hidden object and what it holds are not outlined, as [`FindPart`] passes over them.
+fn outline_within(n: &Node, symbols: &SymbolBoxes, limit: Option<Rect>, outline: bool, out: &mut BezPath) {
     use vectorcraft_geom::kurbo::Shape;
+    if !n.visible || !ArtWalk::take(1) {
+        return;
+    }
+    if matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })
+        && let Some(art) = drawn_art(symbols, n, outline)
+    {
+        let _off = DrawnOff::set();
+        art.iter().for_each(|a| outline_within(a, symbols, limit, outline, out));
+        return;
+    }
+    if let Some(art) = own_effects_art(n, symbols, outline) {
+        let _off = DrawnOff::set();
+        outline_within(&art, symbols, limit, outline, out);
+        return;
+    }
+    if let NodeKind::SymbolInstance { symbol, .. } = &n.kind
+        && reshapes_instance_art(n, outline)
+    {
+        if symbols.art(symbol).is_some()
+            && let Some(art) = InstanceArt::nested(symbols.document(), n)
+            && let Some(placed) = art.place(&art.art, None)
+        {
+            outline_within(&placed, symbols, limit, outline, out);
+        }
+        return;
+    }
     if let Some(pd) = n.path_data() {
         match limit {
             Some(r) => push_cut(out, &pd.to_bezpath(), r),
@@ -2066,16 +2271,26 @@ fn outline_within(n: &Node, limit: Option<Rect>, outline: bool, out: &mut BezPat
     {
         out.extend(b.to_path(0.1));
     }
+    // An image is also outlined where its own fills and strokes paint with their effects, as
+    // [`hit_leaf`] picks it there ([`image_paint`]).
+    if !outline && matches!(n.kind, NodeKind::Image(_)) {
+        for (bp, ..) in image_paint(Some(symbols.document()), n).iter() {
+            match limit {
+                Some(r) => push_cut(out, bp, r),
+                None => out.extend(bp.iter()),
+            }
+        }
+    }
     let Some(children) = n.children() else { return };
     let outline = outline || previews_off(n);
     if n.clips()
         && let Some((first, rest)) = children.split_first()
     {
         let Some(inner) = limit_within(first, limit, outline) else { return };
-        rest.iter().for_each(|c| outline_within(c, inner, outline, out));
+        rest.iter().for_each(|c| outline_within(c, symbols, inner, outline, out));
         return;
     }
-    children.iter().for_each(|c| outline_within(c, limit, outline, out));
+    children.iter().for_each(|c| outline_within(c, symbols, limit, outline, out));
 }
 
 /// The overlap of `a` and `b` (`a` alone without `b`), `None` when they do not overlap.
