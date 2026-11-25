@@ -2649,7 +2649,10 @@ before each element, strings and `String` objects by code point, and objects wit
 throws a `TypeError` for any other value; that rule is VectorCraft's own
 until iterators are added. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
 an engine that `#targetengine` keeps reads each run the way that run's script does. A
-`.jsx` file and a `source` string read ES5.1 only, and the ECMAScript 2015 forms are syntax errors there. A `.js` file
+`.jsx` file and a `source` string read ES5.1 only, and the ECMAScript 2015 forms are syntax errors there. A script run from a
+`.js` file also has `Promise` (described below); a `.jsx` file and a script given as `source` do not, except that a
+named engine (`#targetengine`) has `Promise` from the first `.js` run that names it and keeps it for every later
+run, as it keeps its globals. A `.js` file
 also reads two ECMAScript 2020 forms (https://262.ecma-international.org/11.0/): optional chains (`a?.b`, `a?.[key]`,
 `f?.(args)`), which give `undefined` and skip the rest of the chain when the value before `?.` is `undefined` or
 `null`, and `??`, which evaluates its right side only when its left side is `undefined` or `null`. Mixing `??` with `&&`
@@ -2681,6 +2684,39 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   open a dialog, described below. `vc.api.has("dialogs")` is true.
 - `vc.args` gives a read-only copy of the `args` object each time it is read.
 - `vc.api.version` is `"1.0"`, and `vc.api.has(feature)` says whether the API has a feature.
+
+In a `.js` script, `Promise` follows ECMA-262 11th edition section 25.6
+(https://262.ecma-international.org/11.0/#sec-promise-objects): the constructor, `then`, `catch`, `finally`,
+`Promise.resolve`, `reject`, `all`, `allSettled` and `race`. `Promise.any` is not provided. These are VectorCraft's
+own rules:
+
+- The callbacks `then`, `catch` and `finally` register run as jobs, one at a time, in the order they were queued, after
+  the script's own code ends and before the run ends; a job a callback queues runs after the jobs already waiting.
+  A promise still pending when no job is left stays pending, and the run ends.
+- The jobs run on the run's fuel and limits, and each job takes 1 unit of fuel. A chain of callbacks that never ends
+  stops at the fuel limit. More than 1,048,576 jobs waiting at once end the run with the limit error
+  `limit reached: Jobs (more than 1048576 promise jobs were waiting to run)`. A run that ends with an error, a limit or
+  `script.stop` drops the jobs still waiting, and the documents go back as for any failed run.
+- `all`, `allSettled` and `race` take an array, another object whose `length` is a whole number, or a string (one
+  item per character); any other value rejects the promise they return with a `TypeError`. The promises `then` and the
+  statics make are always plain `Promise` objects; `Symbol.species` and subclasses are not read.
+- A promise rejected with no rejection handler that still has none when the run ends successfully is reported: the
+  report's `unhandledRejections` lists the first 20 as `{message, messageOrigin, line, column, file?}`, where it was
+  rejected (the `throw`, or the call of its reject function or of `Promise.reject`), `unhandledRejectionCount` counts
+  all of them, and the Script Console shows an error line for each, as in
+  `tidy.js:12:5: unhandled promise rejection: Error: not found`. Both fields are left out when there are none.
+
+A `.js` script also reads async functions and `await` as ECMA-262 2017 section 25.5 defines them
+(https://262.ecma-international.org/8.0/#sec-async-function-objects): `async function` declarations and expressions,
+async arrow functions and async methods in object literals. A call returns a `Promise` that the function's `return`
+resolves and an uncaught exception rejects. `await` suspends the function until its operand settles, and the function
+goes on in a promise job with the value, or with the rejection thrown at the `await`, so `try`, `catch` and `finally`
+work around it. Async functions cannot be called with `new` and have no `prototype` property. `AsyncFunction` is
+reached through `Object.getPrototypeOf(async function () {}).constructor` and is not a global. Outside an async
+function `await` is an ordinary name, and in a `.jsx` file or a `source` string `async` and `await` are ordinary
+names and an async function is a syntax error. These are VectorCraft's own rules: each time a function resumes
+counts as a job and takes 1 unit of fuel, and a function still waiting when no job is left stays suspended, and the
+run ends.
 
 Before any of the script runs, its preprocessor lines are read. The help page
 https://extendscript.docsforadobe.dev/extendscript-tools-features/preprocessor-directives/ describes these lines, and
@@ -2884,7 +2920,8 @@ VectorCraft sets these limits itself:
 In the app, a script past the growth limit stops at a question to continue or to stop and undo. Stop, Escape and
 `ui.dialog.cancel` all stop the run. A run with nobody to ask, such as a call over MCP or the command line, ends
 with an error at that limit. The headless reply is `{ok: true, name, changed, written, log, fuelUsed, hostCalls,
-runTimeMs, timingAvailable, hostCallCounts, slowestCommands, console, dialogs, dialogCount, dialogsTruncated}`. In
+runTimeMs, timingAvailable, hostCallCounts, slowestCommands, console, dialogs, dialogCount, dialogsTruncated}`, with
+`unhandledRejections` and `unhandledRejectionCount` as well when a `.js` script left rejected promises unhandled. In
 the app the reply is `{running: true, name}`, and the report appears later as `scriptReport` in `ui.inspect`. The
 report of a failed run has the same fields after `kind`, `message`, `messageOrigin`, `line`, `column`, `file` (when
 the error is in another file than the script) and `fuelLeft`. `messageOrigin` is `script` when `message` is text the

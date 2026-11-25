@@ -246,6 +246,12 @@ pub(crate) enum Class {
     },
     /// A `.( )` filter in progress.
     XmlFilter(Box<XmlFilterState>),
+    /// A promise (ECMA-262 11th edition, section 25.6) and its state.
+    Promise(Box<crate::builtins::promise::PromiseData>),
+    /// The state that the functions a promise operation makes share; scripts never see it.
+    PromiseRecord(Box<crate::builtins::promise::Record>),
+    /// An async function's frame waiting at `await`, until it is resumed; scripts never see it.
+    Activation(Option<Box<crate::interp::async_function::Activation>>),
     /// A `UnitValue` object and its measurement ([`crate::unit_value`]).
     UnitValue(Box<crate::unit_value::Measure>),
 }
@@ -311,7 +317,8 @@ impl Class {
             Class::XmlList(_) => "XMLList",
             Class::Namespace(_) => "Namespace",
             Class::QName { .. } => "QName",
-            Class::XmlFilter(_) => "Object",
+            Class::XmlFilter(_) | Class::PromiseRecord(_) | Class::Activation(_) => "Object",
+            Class::Promise(_) => "Promise",
             Class::Math => "Math",
             Class::Json => "JSON",
             Class::Ordinary | Class::ForIn(_) => "Object",
@@ -621,6 +628,7 @@ fn mark_code(code: &Code, strings: &mut StringSizes) {
             + code.functions.len()
             + code.params.len()
             + code.vars.len()
+            + code.annex_vars.len()
             + 2 * code.fun_decls.len()
             + code.scopes.iter().map(|s| 2 + s.lets.len() + 2 * s.funcs.len()).sum::<usize>()
             + code.templates.iter().map(|t| 2 + t.cooked.len() + t.raw.len()).sum::<usize>();
@@ -639,7 +647,7 @@ fn mark_code(code: &Code, strings: &mut StringSizes) {
             strings.add(pattern);
             strings.add(flags);
         }
-        let keys = code.names.iter().chain(&code.params).chain(&code.vars).chain(code.fun_decls.iter().map(|(k, _)| k));
+        let keys = code.names.iter().chain(&code.params).chain(&code.vars).chain(&code.annex_vars).chain(code.fun_decls.iter().map(|(k, _)| k));
         for k in keys.chain(&code.self_name).chain(&code.decl_name).chain(&code.rest) {
             strings.add_key(k);
         }
@@ -712,6 +720,31 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
         Class::XmlFilter(state) => {
             work.extend(state.input.iter().chain(&state.kept).map(|o| o.0));
             extra = XML_LIST_BYTES + XML_REF_BYTES * (state.input.len() + state.kept.len());
+        }
+        Class::Promise(p) => {
+            for v in p.values() {
+                mark_value(&v, work, strings);
+            }
+            if let Some((code, _)) = &p.site {
+                mark_code(code, strings);
+            }
+            extra = p.bytes();
+        }
+        Class::PromiseRecord(r) => {
+            for v in r.values() {
+                mark_value(&v, work, strings);
+            }
+            extra = crate::builtins::promise::RECORD_BYTES;
+        }
+        Class::Activation(Some(a)) => {
+            for v in a.values() {
+                mark_value(v, work, strings);
+            }
+            work.extend(a.ids());
+            for code in a.codes() {
+                mark_code(code, strings);
+            }
+            extra = a.bytes();
         }
         Class::UnitValue(_) => extra = UNIT_VALUE_BYTES,
         _ => {}

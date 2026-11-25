@@ -36,6 +36,21 @@ struct Context {
     breakables: u32,
     /// The current function body's directive prologue has a `"use strict"` directive.
     use_strict: bool,
+    /// The code is an async function's body: `await` is an operator, not an identifier.
+    in_async: bool,
+    /// The code is an async function's parameters: `await` is neither an operator nor an
+    /// identifier there (ECMA-262 2017 section 14.6.1).
+    async_params: bool,
+}
+
+/// What the parser noted about a parenthesized expression or a call to `async` that may turn out
+/// to be an arrow function's head.
+#[derive(Clone, Copy, Debug)]
+struct Head {
+    /// A line break comes between `async` and `(`.
+    line_break: bool,
+    /// The parentheses hold an `await` expression or the identifier `await`.
+    awaits: bool,
 }
 
 /// The names declared in a scope, for the early errors of ECMA-262 2015 about redeclarations
@@ -72,6 +87,8 @@ enum BinKind {
 enum Prefix {
     Unary(UnaryOp),
     Update(UpdateOp),
+    /// `await`, in an async function's body.
+    Await,
 }
 
 pub(crate) struct Parser<'s> {
@@ -101,11 +118,20 @@ pub(crate) struct Parser<'s> {
     es2015: bool,
     /// The scopes open around the current token, outermost first (only with `es2015`).
     scopes: Vec<Scope>,
+    /// Read async functions and `await` ([`crate::Options::es2017`]).
+    es2017: bool,
+    /// How many `await` expressions and `await` identifiers have been read.
+    awaits: u32,
+    /// The parenthesized expressions and calls to `async` read so far that may be arrow heads.
+    heads: HashMap<ExprId, Head>,
+    /// The last identifier expression read from an `async` written without escapes.
+    async_ident: Option<ExprId>,
 }
 
 impl<'s> Parser<'s> {
     pub(crate) fn new(src: &'s [u16], options: &crate::Options, keep_tokens: bool) -> Result<Self> {
-        let lex = Lexer::new(src, options.preprocessor_lines, options.max_depth).with_e4x(options.e4x).with_es2015(options.es2015);
+        let es2015 = options.modern();
+        let lex = Lexer::new(src, options.preprocessor_lines, options.max_depth).with_e4x(options.e4x).with_es2015(es2015);
         let placeholder =
             Token { kind: TokenKind::Eof, span: Span::default(), line: 1, column: 1, newline_before: false, escaped: false, legacy_octal: false };
         let mut parser = Self {
@@ -123,8 +149,12 @@ impl<'s> Parser<'s> {
             function_allowed: false,
             in_list: false,
             e4x: options.e4x,
-            es2015: options.es2015,
-            scopes: if options.es2015 { vec![Scope { function: true, ..Scope::default() }] } else { Vec::new() },
+            es2015,
+            scopes: if es2015 { vec![Scope { function: true, ..Scope::default() }] } else { Vec::new() },
+            es2017: options.es2017,
+            awaits: 0,
+            heads: HashMap::new(),
+            async_ident: None,
         };
         parser.tok = parser.next_significant()?;
         Ok(parser)
@@ -266,7 +296,21 @@ impl<'s> Parser<'s> {
         if self.ctx.strict && strict_reserved(name) {
             return Err(self.error_at_token(token, format!("'{name}' is a reserved word in strict mode")));
         }
+        if name == "await" && (self.ctx.in_async || self.ctx.async_params) {
+            return Err(self.error_at_token(token, "'await' cannot be an identifier in an async function"));
+        }
         Ok(())
+    }
+
+    /// The current token is `async` written without escapes, read as the start of an async
+    /// function or arrow function only with [`crate::Options::es2017`].
+    fn at_async(&self) -> bool {
+        self.es2017 && self.tok.ident() == Some("async") && !self.tok.escaped
+    }
+
+    /// The current token is `async` and `function` follows it on the same line: an async function.
+    fn at_async_function(&self) -> bool {
+        self.at_async() && self.peek().is_some_and(|t| t.is_keyword(Keyword::Function) && !t.newline_before)
     }
 
     /// Reads an identifier that a declaration binds: checked as [`Self::check_identifier`] does,
@@ -279,6 +323,9 @@ impl<'s> Parser<'s> {
         self.check_identifier(&self.tok, &name)?;
         if self.ctx.strict && is_eval_or_arguments(&name) {
             return Err(self.error_at_token(&self.tok, format!("'{name}' cannot be declared in strict mode")));
+        }
+        if name == "await" {
+            self.awaits = self.awaits.saturating_add(1);
         }
         let token = self.bump()?;
         Ok(Name { name, span: token.span })
@@ -341,7 +388,11 @@ impl<'s> Parser<'s> {
     /// Declares a function declaration that stands in a statement list: var-scoped in a function
     /// body or the script, lexical in a block.
     fn declare_function(&mut self, id: crate::ast::FunctionId) -> Result<()> {
-        let Some(name) = self.ast.function(id).and_then(|f| f.name.clone()) else { return Ok(()) };
+        let Some(f) = self.ast.function(id) else { return Ok(()) };
+        let Some(name) = f.name.clone() else { return Ok(()) };
+        // An async function in a block never repeats another name (Annex B.3.3.4 covers plain
+        // function declarations only).
+        let plain = !f.is_async;
         match self.scopes.last_mut() {
             Some(scope) if scope.function => {
                 if scope.lexical.contains_key(&name.name) {
@@ -350,7 +401,7 @@ impl<'s> Parser<'s> {
                 scope.vars.insert(name.name);
                 Ok(())
             }
-            Some(_) => self.declare_lexical(&name, true),
+            Some(_) => self.declare_lexical(&name, plain),
             None => Ok(()),
         }
     }
@@ -457,7 +508,7 @@ impl<'s> Parser<'s> {
 
     /// A source element: a function declaration or a statement.
     fn parse_statement_item(&mut self) -> Result<StmtId> {
-        if self.at_keyword(Keyword::Function) {
+        if self.at_keyword(Keyword::Function) || self.at_async_function() {
             self.enter()?;
             let result = self.parse_function_declaration();
             self.leave();
@@ -508,6 +559,9 @@ impl<'s> Parser<'s> {
                     return Err(self.error_at_token(&self.tok, message));
                 }
                 self.parse_function_declaration()
+            }
+            TokenKind::Ident(_) if self.at_async_function() => {
+                Err(self.error_at_token(&self.tok, "an async function declaration cannot stand here; put it in a block"))
             }
             TokenKind::Ident(_) if self.peek().is_some_and(|t| t.is_punct(Punct::Colon)) => self.parse_labeled(in_list),
             _ => self.plain_statement(start),
@@ -963,9 +1017,11 @@ impl<'s> Parser<'s> {
     // ---- functions ----
 
     fn parse_function_declaration(&mut self) -> Result<StmtId> {
-        let start = self.expect_keyword(Keyword::Function)?.span;
+        let is_async = self.at_async();
+        let start = if is_async { self.bump()?.span } else { self.tok.span };
+        self.expect_keyword(Keyword::Function)?;
         let name = self.function_name()?;
-        let id = self.parse_function_rest(FunctionKind::Declaration, Some(name), start)?;
+        let id = self.parse_function_rest(FunctionKind::Declaration, Some(name), start, is_async)?;
         Ok(self.ast.push_stmt(Stmt::FunctionDecl(id), self.span_from(start)))
     }
 
@@ -981,15 +1037,30 @@ impl<'s> Parser<'s> {
         Ok((Name { name, span: token.span }, token))
     }
 
-    /// The parameters and body of a function, from `(`.
-    fn parse_function_rest(&mut self, kind: FunctionKind, name: Option<(Name, Token)>, start: Span) -> Result<crate::ast::FunctionId> {
+    /// The parameters and body of a function, from `(`; with `is_async`, an async function's.
+    fn parse_function_rest(
+        &mut self,
+        kind: FunctionKind,
+        name: Option<(Name, Token)>,
+        start: Span,
+        is_async: bool,
+    ) -> Result<crate::ast::FunctionId> {
         self.enter()?;
-        let result = self.function_rest(kind, name, start);
+        // The parameters are read with `await` as the function has it, then the code around
+        // them goes on as it was.
+        // An `await` inside the function does not count for an arrow function's head around it.
+        let (in_async, async_params, awaits) = (self.ctx.in_async, self.ctx.async_params, self.awaits);
+        self.ctx.in_async = false;
+        self.ctx.async_params = is_async;
+        let result = self.function_rest(kind, name, start, is_async);
+        self.ctx.in_async = in_async;
+        self.ctx.async_params = async_params;
+        self.awaits = awaits;
         self.leave();
         result
     }
 
-    fn function_rest(&mut self, kind: FunctionKind, name: Option<(Name, Token)>, start: Span) -> Result<crate::ast::FunctionId> {
+    fn function_rest(&mut self, kind: FunctionKind, name: Option<(Name, Token)>, start: Span, is_async: bool) -> Result<crate::ast::FunctionId> {
         self.expect(Punct::LParen)?;
         let mut params: Vec<Name> = Vec::new();
         let mut defaults: Vec<Option<ExprId>> = Vec::new();
@@ -1037,7 +1108,7 @@ impl<'s> Parser<'s> {
         self.expect(Punct::LBrace)?;
         let names: Vec<String> = params.iter().chain(&rest).map(|p| p.name.clone()).collect();
         let outer_strict = self.ctx.strict;
-        let inner = Context { strict: outer_strict, in_function: true, ..Context::default() };
+        let inner = Context { strict: outer_strict, in_function: true, in_async: is_async, ..Context::default() };
         let outer = std::mem::replace(&mut self.ctx, inner);
         self.push_scope(true, names);
         let body = self.parse_body(true);
@@ -1046,13 +1117,18 @@ impl<'s> Parser<'s> {
         self.ctx = outer;
         let body = body?;
         self.expect(Punct::RBrace)?;
-        let function = Function { kind, name: name.map(|(n, _)| n), params, defaults, rest, body, strict, span: self.span_from(start) };
+        let span = self.span_from(start);
+        let function = Function { kind, name: name.map(|(n, _)| n), params, defaults, rest, body, strict, is_async, span };
+        // An async declaration or expression takes FormalParameters as a plain function does
+        // (ECMA-262 2017 section 14.6): repeated simple names are an error only in strict code.
+        // Arrow functions and async methods reject every repeat.
         self.check_params(&function, use_strict)?;
         Ok(self.ast.push_function(function))
     }
 
-    /// An arrow function's body and the function, from `=>`, with its parameters read.
-    fn parse_arrow(&mut self, start: Span, (params, defaults, rest): Params, no_in: bool) -> Result<ExprId> {
+    /// An arrow function's body and the function, from `=>`, with its parameters read; with
+    /// `is_async`, an async arrow function's.
+    fn parse_arrow(&mut self, start: Span, (params, defaults, rest): Params, no_in: bool, is_async: bool) -> Result<ExprId> {
         if self.tok.newline_before {
             return Err(self.error_at_token(&self.tok, "a line break cannot come before '=>'"));
         }
@@ -1060,8 +1136,10 @@ impl<'s> Parser<'s> {
         self.enter()?;
         let names: Vec<String> = params.iter().chain(&rest).map(|p| p.name.clone()).collect();
         let outer_strict = self.ctx.strict;
-        let inner = Context { strict: outer_strict, in_function: true, ..Context::default() };
+        let inner = Context { strict: outer_strict, in_function: true, in_async: is_async, ..Context::default() };
         let outer = std::mem::replace(&mut self.ctx, inner);
+        // An `await` in the body does not count for an async arrow function's head around it.
+        let awaits = self.awaits;
         self.push_scope(true, names);
         let block = self.at(Punct::LBrace);
         let body = if block {
@@ -1070,6 +1148,7 @@ impl<'s> Parser<'s> {
             self.parse_assignment(no_in).map(|e| vec![self.ast.push_stmt(Stmt::Return(Some(e)), self.ast.expr_span(e))])
         };
         self.pop_scope();
+        self.awaits = awaits;
         let (strict, use_strict) = (self.ctx.strict, self.ctx.use_strict);
         self.ctx = outer;
         self.leave();
@@ -1078,7 +1157,8 @@ impl<'s> Parser<'s> {
             self.expect(Punct::RBrace)?;
         }
         let defaults = if defaults.iter().all(Option::is_none) { Vec::new() } else { defaults };
-        let function = Function { kind: FunctionKind::Arrow, name: None, params, defaults, rest, body, strict, span: self.span_from(start) };
+        let function =
+            Function { kind: FunctionKind::Arrow, name: None, params, defaults, rest, body, strict, is_async, span: self.span_from(start) };
         self.check_params(&function, use_strict)?;
         let id = self.ast.push_function(function);
         Ok(self.ast.push_expr(Expr::Arrow(id), self.span_from(start)))
@@ -1093,6 +1173,13 @@ impl<'s> Parser<'s> {
             Some(Expr::Sequence(list)) => list.clone(),
             _ => vec![*inner],
         };
+        self.arrow_items(items)
+    }
+
+    /// The parameters the items of an arrow function's head give: names, names with `= default`,
+    /// and a last `...name`.
+    fn arrow_items(&self, items: Vec<ExprId>) -> Result<Params> {
+        let invalid = |at: ExprId| self.error_at_offset(self.ast.expr_span(at).start, "invalid arrow function parameters");
         let (mut params, mut defaults, mut rest) = (Vec::new(), Vec::new(), None);
         let name_of = |id: ExprId| match self.ast.expr(id) {
             Some(Expr::Ident(n)) => Some(Name { name: n.clone(), span: self.ast.expr_span(id) }),
@@ -1193,7 +1280,9 @@ impl<'s> Parser<'s> {
     fn assignment(&mut self, no_in: bool) -> Result<ExprId> {
         let mut targets: Vec<(ExprId, AssignOp)> = Vec::new();
         loop {
-            let mut expr = self.parse_conditional(no_in)?;
+            // `async` followed on its line by a name starts an async arrow function.
+            let async_name = self.at_async() && self.peek().is_some_and(|t| matches!(t.kind, TokenKind::Ident(_)) && !t.newline_before);
+            let mut expr = if async_name { self.parse_async_name_arrow(no_in)? } else { self.parse_conditional(no_in)? };
             if self.es2015 && self.at(Punct::Arrow) {
                 expr = self.arrow_from(expr, no_in)?;
             }
@@ -1215,12 +1304,39 @@ impl<'s> Parser<'s> {
     /// alone, or parameters in parentheses.
     fn arrow_from(&mut self, expr: ExprId, no_in: bool) -> Result<ExprId> {
         let start = self.ast.expr_span(expr);
-        let params = match self.ast.expr(expr) {
-            Some(Expr::Ident(name)) => (vec![Name { name: name.clone(), span: start }], vec![None], None),
-            Some(Expr::Paren(_)) => self.arrow_params(expr)?,
+        let head = self.heads.get(&expr).copied();
+        let (params, is_async) = match self.ast.expr(expr) {
+            Some(Expr::Ident(name)) => ((vec![Name { name: name.clone(), span: start }], vec![None], None), false),
+            Some(Expr::Paren(_)) => (self.arrow_params(expr)?, false),
+            // `async (…) =>` was read as a call to `async` (ECMA-262 2017 section 14.7).
+            Some(Expr::Call { args, .. }) if head.is_some() => {
+                if head.is_some_and(|h| h.line_break) {
+                    return Err(self.error_at_offset(start.start, "a line break cannot come after 'async' in an async arrow function"));
+                }
+                (self.arrow_items(args.clone())?, true)
+            }
             _ => return Err(self.unexpected()),
         };
-        self.parse_arrow(start, params, no_in)
+        // `await` cannot be an arrow function's parameter, or stand in one's default value,
+        // where it is an operator or in an async arrow function's head.
+        if head.is_some_and(|h| h.awaits) && (is_async || self.ctx.in_async) {
+            return Err(self.error_at_offset(start.start, "'await' cannot stand in an arrow function's parameters here"));
+        }
+        self.parse_arrow(start, params, no_in, is_async)
+    }
+
+    /// `async name => …` from `async` (ECMA-262 2017 section 14.7): the one parameter is read as
+    /// an async function's is.
+    fn parse_async_name_arrow(&mut self, no_in: bool) -> Result<ExprId> {
+        let start = self.bump()?.span;
+        let async_params = std::mem::replace(&mut self.ctx.async_params, true);
+        let param = self.binding_identifier();
+        self.ctx.async_params = async_params;
+        let param = param?;
+        if !self.at(Punct::Arrow) {
+            return Err(self.error_at_token(&self.tok, format!("expected '=>' but found {}", describe(&self.tok))));
+        }
+        self.parse_arrow(start, (vec![param], vec![None], None), no_in, true)
     }
 
     /// An assignment's, `++`'s, `--`'s or `for-in`'s target: an identifier (in strict code
@@ -1311,7 +1427,17 @@ impl<'s> Parser<'s> {
     /// Prefix operators, read with a loop and applied innermost first.
     fn parse_unary(&mut self) -> Result<ExprId> {
         let mut prefixes = Vec::new();
-        while let Some(prefix) = prefix_op(&self.tok) {
+        loop {
+            // In an async function's body, `await` is a prefix operator (ECMA-262 2017 section 14.6).
+            let prefix = if self.ctx.in_async && self.tok.ident() == Some("await") {
+                if self.tok.escaped {
+                    return Err(self.error_at_token(&self.tok, "keyword 'await' must not contain escaped characters"));
+                }
+                Prefix::Await
+            } else {
+                let Some(prefix) = prefix_op(&self.tok) else { break };
+                prefix
+            };
             prefixes.push((prefix, self.tok.span));
             self.bump()?;
         }
@@ -1328,6 +1454,10 @@ impl<'s> Parser<'s> {
                         return Err(self.error_at_offset(start.start, "delete of an unqualified identifier in strict mode"));
                     }
                     self.ast.push_expr(Expr::Unary { op, arg: expr }, span)
+                }
+                Prefix::Await => {
+                    self.awaits = self.awaits.saturating_add(1);
+                    self.ast.push_expr(Expr::Await(expr), span)
                 }
             };
         }
@@ -1384,12 +1514,18 @@ impl<'s> Parser<'s> {
                     expr = self.ast.push_expr(Expr::TaggedTemplate { tag: expr, quasis, exprs }, span);
                 }
                 TokenKind::Punct(Punct::LParen) => {
+                    let async_head = news.is_empty() && self.async_ident.is_some_and(|a| a == expr);
+                    let line_break = self.tok.newline_before;
+                    let awaits = self.awaits;
                     let args = self.parse_arguments()?;
                     let span = Span::new(self.ast.expr_span(expr).start, self.prev_end);
                     expr = match news.pop() {
                         Some(new) => self.ast.push_expr(Expr::New { callee: expr, args }, Span::new(new.start, self.prev_end)),
                         None => self.ast.push_expr(Expr::Call { callee: expr, args }, span),
                     };
+                    if async_head && self.at(Punct::Arrow) {
+                        self.heads.insert(expr, Head { line_break, awaits: self.awaits != awaits });
+                    }
                 }
                 TokenKind::Punct(Punct::QuestionDot) => {
                     if !news.is_empty() {
@@ -1506,9 +1642,20 @@ impl<'s> Parser<'s> {
             TokenKind::Keyword(Keyword::True) => Expr::Bool(true),
             TokenKind::Keyword(Keyword::False) => Expr::Bool(false),
             TokenKind::Keyword(Keyword::Function) => return self.parse_function_expression(),
+            TokenKind::Ident(_) if self.at_async_function() => return self.parse_function_expression(),
             TokenKind::Ident(name) => {
                 let name = name.clone();
                 self.check_identifier(&self.tok, &name)?;
+                if name == "await" {
+                    self.awaits = self.awaits.saturating_add(1);
+                }
+                // With E4X, `async::name` is a qualified name.
+                if self.at_async() && !(self.e4x && self.peek().is_some_and(|t| t.is_punct(Punct::ColonColon))) {
+                    let token = self.bump()?;
+                    let id = self.ast.push_expr(Expr::Ident(name), token.span);
+                    self.async_ident = Some(id);
+                    return Ok(id);
+                }
                 Expr::Ident(name)
             }
             TokenKind::Number(n) => {
@@ -1560,6 +1707,7 @@ impl<'s> Parser<'s> {
     /// function, which may also be `()` or end with `...name`; those two must come before `=>`.
     fn parse_paren_or_arrow_head(&mut self) -> Result<ExprId> {
         let start = self.expect(Punct::LParen)?.span;
+        let awaits = self.awaits;
         let mut items = Vec::new();
         let mut head_only = self.at(Punct::RParen);
         while !self.at(Punct::RParen) {
@@ -1590,7 +1738,11 @@ impl<'s> Parser<'s> {
                 self.ast.push_expr(Expr::Sequence(items), span)
             }
         };
-        Ok(self.ast.push_expr(Expr::Paren(inner), self.span_from(start)))
+        let paren = self.ast.push_expr(Expr::Paren(inner), self.span_from(start));
+        if self.at(Punct::Arrow) {
+            self.heads.insert(paren, Head { line_break: false, awaits: self.awaits != awaits });
+        }
+        Ok(paren)
     }
 
     /// A template literal from its first piece (the current token): its pieces and substitutions.
@@ -1619,9 +1771,20 @@ impl<'s> Parser<'s> {
     }
 
     fn parse_function_expression(&mut self) -> Result<ExprId> {
-        let start = self.expect_keyword(Keyword::Function)?.span;
-        let name = if matches!(self.tok.kind, TokenKind::Ident(_)) { Some(self.function_name()?) } else { None };
-        let id = self.parse_function_rest(FunctionKind::Expression, name, start)?;
+        let is_async = self.at_async();
+        let start = if is_async { self.bump()?.span } else { self.tok.span };
+        self.expect_keyword(Keyword::Function)?;
+        // A function expression's name is read as its own body reads names (ECMA-262 2017
+        // section 14.6): `await` is a name for an ordinary one, and not for an async one.
+        // Nor does the name count for an arrow function's head around it.
+        let (in_async, async_params, awaits) = (self.ctx.in_async, self.ctx.async_params, self.awaits);
+        self.ctx.in_async = is_async;
+        self.ctx.async_params = false;
+        let name = if matches!(self.tok.kind, TokenKind::Ident(_)) { self.function_name().map(Some) } else { Ok(None) };
+        self.ctx.in_async = in_async;
+        self.ctx.async_params = async_params;
+        self.awaits = awaits;
+        let id = self.parse_function_rest(FunctionKind::Expression, name?, start, is_async)?;
         Ok(self.ast.push_expr(Expr::Function(id), self.span_from(start)))
     }
 
@@ -1672,12 +1835,29 @@ impl<'s> Parser<'s> {
             let word = self.bump()?;
             if property_key(&self.tok).is_some() {
                 let (key, _) = self.parse_property_key()?;
-                let function = self.parse_function_rest(kind, None, start)?;
+                let function = self.parse_function_rest(kind, None, start, false)?;
                 let value = if kind == FunctionKind::Getter { PropertyValue::Get(function) } else { PropertyValue::Set(function) };
                 return Ok(Property { key, value, span: self.span_from(start) });
             }
             let key = PropertyKey::Ident(word.ident().unwrap_or_default().to_string());
             return self.property_value(key, start);
+        }
+        // `async name(…) {…}` (ECMA-262 2017 section 14.6): an async method, whose value is an
+        // async function that does not bind its own name.
+        if self.at_async() && self.peek().is_some_and(|t| !t.newline_before && property_key(&t).is_some()) {
+            self.bump()?;
+            let (key, _) = self.parse_property_key()?;
+            let function = self.parse_function_rest(FunctionKind::Expression, None, start, true)?;
+            // A method's parameters have distinct names (UniqueFormalParameters).
+            let mut seen = HashSet::new();
+            for p in self.ast.function(function).into_iter().flat_map(|f| f.params.iter().chain(&f.rest)) {
+                if !seen.insert(p.name.as_str()) {
+                    return Err(self.error_at_offset(p.span.start, format!("duplicate parameter name '{}'", p.name)));
+                }
+            }
+            let span = self.span_from(start);
+            let value = self.ast.push_expr(Expr::Function(function), span);
+            return Ok(Property { key, value: PropertyValue::Init(value), span });
         }
         let (key, _) = self.parse_property_key()?;
         self.property_value(key, start)

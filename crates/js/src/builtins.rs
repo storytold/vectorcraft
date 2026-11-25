@@ -10,11 +10,13 @@
 //! run past [`crate::Limits`].
 
 mod array;
+mod async_function;
 pub(crate) mod extensions;
 mod global;
 mod json;
 mod math;
 mod object;
+pub(crate) mod promise;
 
 use std::rc::Rc;
 
@@ -121,6 +123,7 @@ fn try_install(interp: &mut Interp) -> JsResult<()> {
     method(interp, object_proto, "propertyIsEnumerable", property_is_enumerable, 1)?;
 
     let function = native(interp, "Function", function_ctor, 1, NativeKind::Plain, true)?;
+    interp.intrinsics.function_ctor = function;
     constructor(interp, "Function", function, function_proto)?;
     let call = native(interp, "call", unreachable_native, 1, NativeKind::Call, false)?;
     data(interp, function_proto, "call", Value::Object(call), HIDDEN)?;
@@ -144,6 +147,9 @@ fn try_install(interp: &mut Interp) -> JsResult<()> {
     crate::date_builtins::install(interp)?;
     if interp.options.e4x {
         crate::xml_builtins::install(interp)?;
+    }
+    if interp.options.es2015 {
+        promise::install(interp)?;
     }
     Ok(())
 }
@@ -460,7 +466,16 @@ fn property_is_enumerable(interp: &mut Interp, this: Value, args: &[Value], _: b
 /// `Function(p1, …, body)` and `new Function(…)` (section 15.3.2.1): the source is read as
 /// `(function anonymous(p1,…\n) {\nbody\n})` and must be exactly that one function.
 fn function_ctor(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
-    const HEAD: &str = "(function anonymous(";
+    dynamic_function(interp, args, false)
+}
+
+/// The function `Function(p1, …, body)` makes, or with `is_async` the async function that
+/// `AsyncFunction(p1, …, body)` makes from `(async function anonymous(p1,…\n) {\nbody\n})`
+/// (ECMA-262 2017 section 25.5.1.1). An async function's source is read with
+/// [`crate::Options::es2017`] whatever the realm reads scripts with, since only an async function
+/// leads a script to `AsyncFunction`.
+pub(crate) fn dynamic_function(interp: &mut Interp, args: &[Value], is_async: bool) -> JsResult<Value> {
+    let head: &str = if is_async { "(async function anonymous(" } else { "(function anonymous(" };
     const MID: &str = "\n) {\n";
     const TAIL: &str = "\n})";
     let mut parts = Vec::with_capacity(args.len());
@@ -472,12 +487,12 @@ fn function_ctor(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsRe
     let total = parts
         .iter()
         .map(Str::len)
-        .chain([parts.len().saturating_sub(1), HEAD.len() + MID.len() + TAIL.len(), body.len()])
+        .chain([parts.len().saturating_sub(1), head.len() + MID.len() + TAIL.len(), body.len()])
         .fold(0usize, usize::saturating_add);
     interp.check_source_units(total).map_err(|e| interp.compile_error_to_abrupt(e))?;
     interp.prepare_source(total)?;
     let mut units = Vec::with_capacity(total);
-    units.extend(HEAD.encode_utf16());
+    units.extend(head.encode_utf16());
     for (i, p) in parts.iter().enumerate() {
         if i > 0 {
             units.push(u16::from(b','));
@@ -490,7 +505,8 @@ fn function_ctor(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsRe
     interp.observe_code(&units);
     interp.source_units = interp.source_units.saturating_add(units.len());
     let remaining = interp.options.max_source_units.saturating_sub(interp.source_units.saturating_sub(units.len()));
-    let options = crate::Options { strict: false, max_source_units: remaining, ..interp.options.clone() };
+    let es2017 = interp.options.es2017 || is_async;
+    let options = crate::Options { strict: false, max_source_units: remaining, es2017, ..interp.options.clone() };
     let program = match crate::parse_utf16(&units, &options) {
         Ok(p) => p,
         Err(e) => return Err(interp.throw(ErrorType::Syntax, &e.message)),

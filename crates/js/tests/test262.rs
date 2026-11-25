@@ -30,8 +30,8 @@
 //!
 //! A fifth test reads the ECMAScript 2015 subset that `Options::es2015` covers (`let`, `const`,
 //! arrow functions, templates, default and rest parameters, and from ECMAScript 2020 optional
-//! chains and `??`) without and with that option, and
-//! prints both counts; its failures with the option go to `es2015-failures.txt`.
+//! chains and `??`) without and with that option, and prints both counts; its failures with the
+//! option, and the runs without it that panicked, go to `es2015-failures.txt`.
 //!
 //! Two more tests read the Annex B trees, where tests name any edition's section: one parses every
 //! test under `test/annexB/language/` without a feature tag the same way as the ES5 parse subset
@@ -39,6 +39,12 @@
 //! folders [`ANNEX_B_BUILT_INS`] names through the interpreter (failures in
 //! `annexb-language-failures.txt` and `annexb-builtins-failures.txt`). A suite without
 //! `test/annexB/` skips them; a folder there with no test to parse or run fails them.
+//!
+//! Another test runs the tests under `test/built-ins/Promise` in realms with `Options::es2015`:
+//! those whose feature tags name only `Promise`, `Promise.allSettled` and
+//! `Promise.prototype.finally`, whose code parses and uses only the built-ins present. `async` tests
+//! run with the suite's `doneprintHandle.js` and pass when they print the completion line and no
+//! line that starts with the failure prefix. Its failures go to `promise-failures.txt`.
 //!
 //! The runner reads only regular files inside the suite: it does not follow symbolic links, refuses
 //! an `includes:` name that leaves the `harness/` folder, and refuses a file over
@@ -48,7 +54,6 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use vectorcraft_js::{JsValue, Limits, Options, Punct, Realm, RunErrorKind, Token, TokenKind, parse, tokenize};
-
 /// A test file's metadata, from its `/*--- … ---*/` block.
 #[derive(Default)]
 struct Meta {
@@ -694,13 +699,25 @@ struct Es2015Counts {
     failures: String,
 }
 
+impl Es2015Counts {
+    /// The failures of the run with the option, then each run without it that panicked, marked
+    /// with `without`.
+    fn report(after: &Es2015Counts, before: &Es2015Counts, without: &str) -> String {
+        let mut report = after.failures.clone();
+        for line in before.failures.lines().filter(|l| l.ends_with(": PANIC")) {
+            report.push_str(&format!("{line} ({without})\n"));
+        }
+        report
+    }
+}
+
 /// Runs the ES2015 subset: the tests under `test/language/` in [`ES2015_FOLDERS`] whose feature
 /// tags are all in [`ES2015_FEATURES`], and the tests elsewhere under `test/language/` with feature
 /// tags that are all in it. Negative parse tests must give a `SyntaxError`; the other tests run in a
 /// new realm after the harness, as [`run_tests`] runs them, skipping module and asynchronous tests
 /// and those that need a missing built-in. Each test is read twice, without and with
-/// [`Options::es2015`], and the counts of both are printed; the failures with it go to
-/// `es2015-failures.txt`.
+/// [`Options::es2015`], and the counts of both are printed; the failures with it, and the runs
+/// without it that panicked, go to `es2015-failures.txt`.
 fn run_es2015(dir: &Path) {
     let language = or_fail(inside(dir, "test/language"));
     assert!(language.is_dir(), "{} is not a test262 checkout", dir.display());
@@ -778,7 +795,7 @@ fn run_es2015(dir: &Path) {
     assert!(selected > 0, "no ES2015 tests under {}", language.display());
     let [before, after] = counts;
     let report = dir.join("es2015-failures.txt");
-    if let Err(e) = std::fs::write(&report, &after.failures) {
+    if let Err(e) = std::fs::write(&report, Es2015Counts::report(&after, &before, "without Options::es2015")) {
         println!("could not write {}: {e}", report.display());
     }
     let line = |c: &Es2015Counts| {
@@ -851,6 +868,262 @@ fn run_annex_b(dir: &Path) {
     }
     println!("test262 Annex B built-ins failures: {}", path.display());
     assert_eq!(panicked, 0, "the interpreter panicked; see the Annex B failure files in {}", dir.display());
+}
+
+/// The feature tags a `test/built-ins/Promise` test may carry and still run: `Promise`,
+/// `Promise.allSettled` and `Promise.prototype.finally`.
+const PROMISE_FEATURES: &[&str] = &["Promise", "Promise.allSettled", "Promise.prototype.finally"];
+
+#[test]
+fn promise_builtins_run() {
+    let Some(dir) = suite_dir() else {
+        println!("test262 Promise: SKIPPED (no suite; run cargo xtask test262)");
+        return;
+    };
+    let handle = std::thread::Builder::new().stack_size(64 << 20).spawn(move || run_promise(&dir)).unwrap();
+    handle.join().unwrap();
+}
+
+/// Runs one test that may be asynchronous in a new realm made with `options` and a global `print`
+/// that collects its output; an `async` test without a runtime negative passes when one `print`
+/// call gives exactly `Test262:AsyncTestComplete` and none gives a value that starts with
+/// `Test262:AsyncTestFailure:`, and one with a runtime negative must throw that error.
+fn run_promise_one(script: &str, negative_type: Option<&str>, asynchronous: bool, options: &Options) -> Result<(), String> {
+    let mut realm = Realm::with_options(options.clone(), Limits { fuel: 20_000_000, heap_bytes: 256 << 20, ..Limits::default() });
+    let printed = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let out = printed.clone();
+    realm.define_function("print", move |args| {
+        let line = match args.first() {
+            Some(JsValue::String(s)) => s.clone(),
+            Some(other) => format!("{other:?}"),
+            None => String::new(),
+        };
+        out.borrow_mut().push(line);
+        Ok(JsValue::Undefined)
+    });
+    let result = realm.run(script);
+    if asynchronous && result.is_ok() && negative_type.is_none() {
+        let printed = printed.borrow();
+        let complete = printed.iter().any(|l| l == "Test262:AsyncTestComplete");
+        let failed = printed.iter().any(|l| l.starts_with("Test262:AsyncTestFailure:"));
+        return if complete && !failed { Ok(()) } else { Err(format!("printed {:?}", printed.join("\n"))) };
+    }
+    match (result, negative_type) {
+        (Ok(_), None) => Ok(()),
+        (Ok(_), Some(t)) => Err(format!("completed; a {t} was expected")),
+        (Err(e), Some(t)) if e.kind == RunErrorKind::Thrown => {
+            realm.bind_last_thrown("__thrown");
+            match realm.run(&format!("typeof __thrown === 'object' && __thrown !== null && __thrown.constructor === {t}")) {
+                Ok(JsValue::Bool(true)) => Ok(()),
+                _ => Err(format!("threw {} (line {}); a {t} was expected", e.message, e.line)),
+            }
+        }
+        (Err(e), _) => Err(format!("{:?}: {} (line {}, column {})", e.kind, e.message, e.line, e.column)),
+    }
+}
+
+/// Runs the tests under `test/built-ins/Promise` whose feature tags are all in
+/// [`PROMISE_FEATURES`], whose code parses as ES5 and uses only the built-ins present, as sloppy
+/// and strict code as [`run_tests`] does, `async` tests included. Prints the counts and writes the
+/// failures to `promise-failures.txt` beside the suite.
+fn run_promise(dir: &Path) {
+    let root = or_fail(inside(dir, "test/built-ins/Promise"));
+    assert!(root.is_dir(), "{} is not a test262 checkout", dir.display());
+    // A harness file is named by the test's `includes:`, so it is read only inside `harness/`.
+    let harness = |name: &str| or_fail(inside(dir, &format!("harness/{name}")).and_then(|p| read_source(&p)));
+    let prelude = format!("{}\n{}\n", harness("assert.js"), harness("sta.js"));
+    let done = harness("doneprintHandle.js");
+    let missing: HashSet<&str> = missing_builtins(&[TEXT_BUILTINS, "Promise $DONE print"]);
+    let mut groups: std::collections::BTreeMap<String, RunCounts> = std::collections::BTreeMap::new();
+    let (mut files, mut other_features) = (0usize, 0usize);
+    for path in or_fail(test_files(&root)) {
+        files += 1;
+        let source = or_fail(read_source(&path));
+        let meta = meta(&source);
+        if meta.features.iter().any(|f| !PROMISE_FEATURES.contains(&f.as_str())) {
+            other_features += 1;
+            continue;
+        }
+        let asynchronous = meta.flags.iter().any(|f| f == "async");
+        let tags = if meta.features.is_empty() { "no feature tag".to_string() } else { meta.features.join(", ") };
+        let counts = groups.entry(format!("{tags}, {}", if asynchronous { "async" } else { "sync" })).or_default();
+        let negative_parse = matches!(meta.negative_phase.as_deref(), Some("parse" | "resolution"));
+        if negative_parse || meta.flags.iter().any(|f| f == "module") {
+            counts.skipped += 1;
+            continue;
+        }
+        let mut includes: String = meta.includes.iter().map(|i| harness(i) + "\n").collect();
+        if asynchronous {
+            includes.push_str(&done);
+            includes.push('\n');
+        }
+        if parse(&source, &Options::default()).is_err() || needs_missing_builtin(&[&source, &includes], &missing) {
+            counts.skipped += 1;
+            continue;
+        }
+        counts.tests += 1;
+        let has = |flag: &str| meta.flags.iter().any(|f| f == flag);
+        let rel = path.strip_prefix(dir).unwrap_or(&path).display().to_string().replace('\\', "/");
+        for &strict in modes(&meta) {
+            let mode = if strict { "strict" } else { "sloppy" };
+            let body = if has("raw") { source.clone() } else { format!("{prelude}{includes}{source}") };
+            let script = if strict { format!("\"use strict\";\n{body}") } else { body };
+            let negative_type = meta.negative_type.clone().filter(|_| meta.negative_phase.as_deref() == Some("runtime"));
+            let es2015 = Options { es2015: true, ..Options::default() };
+            match std::panic::catch_unwind(|| run_promise_one(&script, negative_type.as_deref(), asynchronous, &es2015)) {
+                Ok(Ok(())) => counts.passed += 1,
+                Ok(Err(why)) => {
+                    counts.failed += 1;
+                    counts.failures.push_str(&format!("{rel} ({mode}): {why}\n"));
+                }
+                Err(_) => {
+                    counts.failed += 1;
+                    counts.panicked += 1;
+                    counts.failures.push_str(&format!("{rel} ({mode}): PANIC\n"));
+                }
+            }
+        }
+    }
+    let mut all = RunCounts::default();
+    for (group, counts) in &groups {
+        println!("test262 built-ins/Promise, {group}: {}.", counts.summary());
+        all.tests += counts.tests;
+        all.skipped += counts.skipped;
+        all.passed += counts.passed;
+        all.failed += counts.failed;
+        all.panicked += counts.panicked;
+        all.failures.push_str(&counts.failures);
+    }
+    let report = dir.join("promise-failures.txt");
+    if let Err(e) = std::fs::write(&report, &all.failures) {
+        println!("could not write {}: {e}", report.display());
+    }
+    println!(
+        "test262 built-ins/Promise through the interpreter: {files} files, {other_features} with other feature tags left out; {}. Failures: {}",
+        all.summary(),
+        report.display()
+    );
+    assert!(all.tests > 0, "no Promise tests ran under {}", root.display());
+    assert_eq!(all.panicked, 0, "the interpreter panicked; see {}", report.display());
+}
+
+/// The folders under `test/language/` that hold tests of async functions and `await`.
+const ASYNC_FOLDERS: &[&str] = &["expressions/async-function", "statements/async-function", "expressions/await", "expressions/async-arrow-function"];
+
+/// The feature tags an async-function test may carry and still run: [`ES2015_FEATURES`],
+/// `async-functions` and `Promise`.
+const ASYNC_FEATURES: &[&str] = &["async-functions", "Promise"];
+
+#[test]
+fn async_functions_run() {
+    let Some(dir) = suite_dir() else {
+        println!("test262 async functions: SKIPPED (no suite; run cargo xtask test262)");
+        return;
+    };
+    let handle = std::thread::Builder::new().stack_size(64 << 20).spawn(move || run_async_functions(&dir)).unwrap();
+    handle.join().unwrap();
+}
+
+/// Runs the tests in [`ASYNC_FOLDERS`] whose feature tags are all in [`ES2015_FEATURES`] or
+/// [`ASYNC_FEATURES`], twice: with [`Options::es2015`] alone and with [`Options::es2017`]. Negative
+/// parse tests must not parse; the others run as [`run_promise`] runs them, `async` tests
+/// included, skipping module tests and those that need a missing built-in. Prints the counts of
+/// both and writes the failures with [`Options::es2017`], and the runs with [`Options::es2015`]
+/// alone that panicked, to `async-function-failures.txt`.
+fn run_async_functions(dir: &Path) {
+    let harness = |name: &str| or_fail(inside(dir, &format!("harness/{name}")).and_then(|p| read_source(&p)));
+    let prelude = format!("{}\n{}\n", harness("assert.js"), harness("sta.js"));
+    let done = harness("doneprintHandle.js");
+    let missing = missing_builtins(&[TEXT_BUILTINS, "Promise $DONE print"]);
+    let es2015 = Options { es2015: true, ..Options::default() };
+    let es2017 = Options { es2015: true, es2017: true, ..Options::default() };
+    let editions = [es2015, es2017.clone()];
+    let mut counts = [Es2015Counts::default(), Es2015Counts::default()];
+    let (mut selected, mut skipped, mut other_features) = (0usize, 0usize, 0usize);
+    for folder in ASYNC_FOLDERS {
+        let root = or_fail(inside(dir, &format!("test/language/{folder}")));
+        assert!(root.is_dir(), "{} is not a test262 checkout", dir.display());
+        for path in or_fail(test_files(&root)) {
+            let rel = path.strip_prefix(dir).unwrap_or(&path).display().to_string().replace('\\', "/");
+            let source = or_fail(read_source(&path));
+            let meta = meta(&source);
+            if meta.features.iter().any(|f| !ES2015_FEATURES.contains(&f.as_str()) && !ASYNC_FEATURES.contains(&f.as_str())) {
+                other_features += 1;
+                continue;
+            }
+            let has = |flag: &str| meta.flags.iter().any(|f| f == flag);
+            if has("module") || meta.negative_phase.as_deref() == Some("resolution") {
+                skipped += 1;
+                continue;
+            }
+            let asynchronous = has("async");
+            let expect_error = meta.negative_phase.as_deref() == Some("parse");
+            let mut includes: String = meta.includes.iter().map(|i| harness(i) + "\n").collect();
+            if asynchronous {
+                includes.push_str(&done);
+                includes.push('\n');
+            }
+            if !expect_error && needs_missing_builtin_in(&[&source, &includes], &missing, &es2017) {
+                skipped += 1;
+                continue;
+            }
+            selected += 1;
+            for (options, counts) in editions.iter().zip(counts.iter_mut()) {
+                for &strict in modes(&meta) {
+                    let mode = if strict { "strict" } else { "sloppy" };
+                    let outcome = if expect_error {
+                        let text = if strict { format!("\"use strict\";\n{source}") } else { source.clone() };
+                        if parse(&text, options).is_err() {
+                            counts.parse_passed += 1;
+                            continue;
+                        }
+                        counts.parse_failed += 1;
+                        "parsed; a SyntaxError was expected".to_string()
+                    } else {
+                        let body = if has("raw") { source.clone() } else { format!("{prelude}{includes}{source}") };
+                        let script = if strict { format!("\"use strict\";\n{body}") } else { body };
+                        let negative_type = meta.negative_type.clone().filter(|_| meta.negative_phase.as_deref() == Some("runtime"));
+                        match std::panic::catch_unwind(|| run_promise_one(&script, negative_type.as_deref(), asynchronous, options)) {
+                            Ok(Ok(())) => {
+                                counts.run_passed += 1;
+                                continue;
+                            }
+                            Ok(Err(why)) => {
+                                counts.run_failed += 1;
+                                why
+                            }
+                            Err(_) => {
+                                counts.run_failed += 1;
+                                counts.panicked += 1;
+                                "PANIC".to_string()
+                            }
+                        }
+                    };
+                    counts.failures.push_str(&format!("{rel} ({mode}): {outcome}\n"));
+                }
+            }
+        }
+    }
+    assert!(selected > 0, "no async-function tests under {}", dir.display());
+    let [before, after] = counts;
+    let report = dir.join("async-function-failures.txt");
+    if let Err(e) = std::fs::write(&report, Es2015Counts::report(&after, &before, "with Options::es2015 alone")) {
+        println!("could not write {}: {e}", report.display());
+    }
+    let line = |c: &Es2015Counts| {
+        format!(
+            "negative parse runs {} passed, {} failed; other runs {} passed, {} failed ({} panicked)",
+            c.parse_passed, c.parse_failed, c.run_passed, c.run_failed, c.panicked
+        )
+    };
+    println!(
+        "test262 async functions: {selected} tests. With Options::es2015 alone: {}. With Options::es2017: {}. Skipped {skipped} module \
+         or missing-built-in tests and {other_features} tests with other feature tags. Failures: {}",
+        line(&before),
+        line(&after),
+        report.display()
+    );
+    assert_eq!(before.panicked + after.panicked, 0, "the interpreter panicked; see {}", report.display());
 }
 
 /// `needs_missing_builtin` with `Map`, `Symbol` and `Set` missing.

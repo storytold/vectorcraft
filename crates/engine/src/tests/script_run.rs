@@ -332,6 +332,29 @@ fn a_js_script_reads_ecmascript_2015_and_a_jsx_script_does_not() {
 }
 
 #[test]
+fn a_js_script_runs_async_functions_and_a_jsx_script_does_not_read_them() {
+    let dir = fresh_folder("es2017");
+    let write = |name: &str, text: &str| {
+        let p = dir.join(name);
+        std::fs::write(&p, text).unwrap();
+        p.to_string_lossy().into_owned()
+    };
+    let mut s = two_docs();
+    let path = |p: &str| json!({"path": p});
+    let src = "async function twice(p) { return 2 * await p; }\nvar half = async x => x / 2;\n\
+               twice(Promise.resolve(3)).then(function (v) { vc.log(v); });\n\
+               (async function () { try { await Promise.reject(new Error('no')); } catch (e) { vc.log(await half(8) + e.message); } })();\n\
+               vc.log('sync');\n";
+    let r = s.execute("script.run", &path(&write("async.js", src))).unwrap();
+    assert_eq!(r["log"], json!(["sync", 6, "4no"]), "{r}");
+    for (name, text) in [("async.jsx", "async function f() {}"), ("arrow.jsx", "var f = async x => x;")] {
+        let e = s.execute("script.run", &path(&write(name, text))).unwrap_err().to_string();
+        assert!(e.contains("SyntaxError"), "{name}: {e}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn a_js_script_reads_optional_chains_and_coalescing_and_a_jsx_script_does_not() {
     let dir = fresh_folder("es2020");
     let write = |name: &str, text: &str| {

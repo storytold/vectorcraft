@@ -57,6 +57,17 @@
 //! before each element, strings and `String` objects by code point, and objects with a `length` by
 //! index; other values are a `TypeError`. Destructuring, `for … of`, classes,
 //! generators and modules stay syntax errors.
+//!
+//! With [`Options::es2015`], the realm also provides `Promise` (ECMA-262 11th edition, section
+//! 25.6, <https://262.ecma-international.org/11.0/#sec-promise-objects>): the constructor, `then`,
+//! `catch`, `finally`, `Promise.resolve`, `reject`, `all`, `allSettled` and `race`. The promise
+//! jobs a script queues run in order once its code has ended, before its run ends, on the run's
+//! limits; a promise still rejected with no handler at the end is reported by
+//! [`Realm::unhandled_rejections`].
+//!
+//! With [`Options::es2017`], the parser and the realm also read and run async functions and
+//! `await` (ECMA-262 2017 section 25.5, <https://262.ecma-international.org/8.0/#sec-async-function-objects>).
+//! An `await` suspends its function's frame until the value settles, and a promise job resumes it.
 #![forbid(unsafe_code)]
 
 pub mod ast;
@@ -95,7 +106,9 @@ pub use error::{SyntaxError, TOO_DEEP, TOO_LONG};
 pub use host::{Arg, CallSite, Data, DataLimits, HostError, HostFunction, HostItem, ScriptItem, SiteFunction};
 pub use lexer::{Goal, Lexer};
 pub use number::to_string as number_to_string;
-pub use realm::{Interrupt, JsValue, LimitKind, Limits, MAX_UNBROKEN_FUEL, Progress, Realm, RunError, RunErrorKind, SourceLocator, UNKNOWN_SOURCE};
+pub use realm::{
+    Interrupt, JsValue, LimitKind, Limits, MAX_UNBROKEN_FUEL, Progress, Realm, Rejection, RunError, RunErrorKind, SourceLocator, UNKNOWN_SOURCE,
+};
 pub use token::{Directive, DirectiveName, Keyword, Punct, Span, Token, TokenKind};
 
 /// How a script is read.
@@ -117,12 +130,32 @@ pub struct Options {
     /// literals, calls and `new`, and from ECMAScript 2020 optional chains (`a?.b`, `a?.[k]`,
     /// `f?.()`) and `??`. Off, they are syntax errors and the language is ES5.1's. Code a
     /// script evaluates at run time (`eval`, `Function`) is read the way the realm reads scripts.
+    /// Give a realm the later editions' built-ins this engine has: `Promise` and its job queue.
+    /// Off, a realm has the ES5.1 built-ins only, as ExtendScript scripts expect.
     pub es2015: bool,
+    /// Also read and run async functions and `await` (ECMAScript 2017). It turns on
+    /// [`Options::es2015`] too, whatever that field says. Off, `async` and `await` are identifiers.
+    pub es2017: bool,
+}
+
+impl Options {
+    /// [`Options::es2015`], which [`Options::es2017`] turns on too.
+    pub(crate) fn modern(&self) -> bool {
+        self.es2015 || self.es2017
+    }
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Self { strict: false, preprocessor_lines: false, max_depth: DEFAULT_MAX_DEPTH, max_source_units: 64 << 20, e4x: false, es2015: false }
+        Self {
+            strict: false,
+            preprocessor_lines: false,
+            max_depth: DEFAULT_MAX_DEPTH,
+            max_source_units: 64 << 20,
+            e4x: false,
+            es2015: false,
+            es2017: false,
+        }
     }
 }
 
@@ -219,6 +252,8 @@ impl LineTable {
 }
 
 #[cfg(test)]
+mod async_tests;
+#[cfg(test)]
 mod builtins_tests;
 #[cfg(test)]
 mod es2015_tests;
@@ -230,6 +265,8 @@ mod extension_tests;
 mod host_tests;
 #[cfg(test)]
 mod interp_tests;
+#[cfg(test)]
+mod promise_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

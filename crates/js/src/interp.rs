@@ -92,6 +92,9 @@ impl ErrorType {
 pub(crate) struct Intrinsics {
     pub(crate) object_proto: ObjId,
     pub(crate) function_proto: ObjId,
+    /// The built-in `Function`, which a script can replace as the global or as the prototype's
+    /// `constructor`.
+    pub(crate) function_ctor: ObjId,
     pub(crate) array_proto: ObjId,
     pub(crate) string_proto: ObjId,
     pub(crate) number_proto: ObjId,
@@ -115,6 +118,7 @@ impl Intrinsics {
         Self {
             object_proto: o,
             function_proto: o,
+            function_ctor: o,
             array_proto: o,
             string_proto: o,
             number_proto: o,
@@ -149,6 +153,7 @@ impl Intrinsics {
         let mut v = vec![
             self.object_proto,
             self.function_proto,
+            self.function_ctor,
             self.array_proto,
             self.string_proto,
             self.number_proto,
@@ -184,10 +189,18 @@ pub(crate) struct Frame {
     completion: Value,
     /// Returning from this frame returns from the Rust call that pushed it.
     boundary: bool,
+    /// The promise of the async function the frame runs: a return resolves it, an exception
+    /// that leaves the frame rejects it, and the call's value is the promise.
+    async_promise: Option<ObjId>,
+    /// The block functions of script or eval code ([`Code::annex_vars`]) whose variable was not
+    /// declared: [`Op::AnnexB`] leaves them alone.
+    annex_off: Vec<Key>,
 }
 
 /// Where the exception being thrown was raised: the code and the instruction.
 type ThrowSite = (Rc<Code>, usize);
+
+pub(crate) mod async_function;
 
 /// What [`crate::Realm::observe_code`] calls with each source evaluated at run time.
 pub(crate) type CodeObserver = Rc<dyn Fn(&[u16])>;
@@ -239,6 +252,10 @@ pub(crate) struct Interp {
     global_vars: std::collections::HashSet<Key>,
     /// The [`Options::es2015`] a host set while a run was going, for the runs after it.
     pub(crate) next_es2015: Option<bool>,
+    /// The [`Options::es2017`] a host set while a run was going, for the runs after it. It is
+    /// applied after [`Self::next_es2015`], and the setters keep the two consistent with the
+    /// order they were called in.
+    pub(crate) next_es2017: Option<bool>,
     /// The template objects tagged templates have made, by code and template index, each with
     /// its code (ECMA-262 2015 section 12.2.9.3 keeps one object for each site).
     pub(crate) template_objects: std::collections::HashMap<(usize, u32), (Rc<Code>, ObjId)>,
@@ -336,6 +353,8 @@ pub(crate) struct Interp {
     pub(crate) error_mark: Option<u32>,
     /// [`crate::bytecode::Source::strict_writes`] for the scripts the realm runs.
     pub(crate) strict_writes: bool,
+    /// `Promise` and the run's promise job queue ([`crate::builtins::promise`]).
+    pub(crate) promises: crate::builtins::promise::Promises,
 }
 
 /// The bytes all live [`HeldBytes`] hold, and the bytes dropped holders released that the heap's
@@ -465,7 +484,13 @@ fn declaration_bytes(code: &Code) -> usize {
         let closure = code.functions.get(*fi as usize).map_or(0, |f| closure_bytes(f));
         total.saturating_add(binding_bytes(name.len()) + closure)
     });
-    code.vars.iter().fold(funs, |total, v| total.saturating_add(binding_bytes(v.len())))
+    code.vars.iter().chain(&code.annex_vars).fold(funs, |total, v| total.saturating_add(binding_bytes(v.len())))
+}
+
+/// The bytes the `let` and `const` names at the top of a script add to the global scope.
+fn global_lexical_bytes(code: &Code) -> usize {
+    let lets: &[(Key, bool)] = code.top_scope.and_then(|i| code.scopes.get(i as usize)).map_or(&[], |s| &s.lets);
+    lets.iter().fold(0usize, |total, (name, _)| total.saturating_add(binding_bytes(name.len())))
 }
 
 /// At least the bytes that the `arguments` object of a call with `args` arguments adds to the
@@ -529,7 +554,8 @@ fn is(k: &[u16], s: &str) -> bool {
 }
 
 impl Interp {
-    pub(crate) fn new(options: Options, limits: Limits) -> Self {
+    pub(crate) fn new(mut options: Options, limits: Limits) -> Self {
+        options.es2015 = options.modern();
         let mut heap = Heap::default();
         let global = heap.alloc_object(Object::new(Class::Ordinary, None));
         let global_env = heap.alloc_env(Env::Obj { object: global, with_this: false, outer: None });
@@ -546,6 +572,7 @@ impl Interp {
             global_lex,
             global_vars: std::collections::HashSet::new(),
             next_es2015: None,
+            next_es2017: None,
             template_objects: std::collections::HashMap::new(),
             intrinsics: Intrinsics::placeholder(),
             fuel: u64::MAX,
@@ -591,6 +618,7 @@ impl Interp {
             finally_sites: Vec::new(),
             error_mark: None,
             strict_writes: false,
+            promises: crate::builtins::promise::Promises::default(),
         };
         crate::builtins::install(&mut interp);
         interp.fuel = limits.fuel;
@@ -817,6 +845,7 @@ impl Interp {
     pub(crate) fn collect_garbage(&mut self) {
         self.drop_left_finally_marks();
         self.drop_left_finally_sites(self.stack.len());
+        self.promises.forget_handled(&self.heap);
         let mut roots = Roots::default();
         roots.values.extend(self.stack.iter());
         roots.values.extend(self.temp_roots.iter());
@@ -830,7 +859,7 @@ impl Interp {
         for f in &self.frames {
             roots.values.push(&f.this);
             roots.values.push(&f.completion);
-            roots.objects.extend(f.callee.iter().chain(f.construct.iter()));
+            roots.objects.extend(f.callee.iter().chain(f.construct.iter()).chain(f.async_promise.iter()));
             roots.envs.push(f.env);
             roots.envs.push(f.var_env);
             roots.codes.push(&f.code);
@@ -850,11 +879,13 @@ impl Interp {
         }
         self.template_objects.retain(|(site, _), (code, _)| Rc::strong_count(code) > sites.get(site).copied().unwrap_or(0));
         roots.objects.extend(self.template_objects.values().map(|&(_, id)| id));
+        self.promises.add_roots(&mut roots);
         self.heap.collect(&roots);
         // The collection counts the live total again, so bytes already released are not in it.
         self.held.released.set(0);
         self.flattened.set(0);
-        self.heap.bytes = self.heap.bytes.saturating_add(self.held_bytes).saturating_add(self.held.now.get());
+        let queued = self.promises.queue_bytes();
+        self.heap.bytes = self.heap.bytes.saturating_add(self.held_bytes).saturating_add(self.held.now.get()).saturating_add(queued);
     }
 
     /// Runs frames until the boundary frame on top returns, and returns its value.
@@ -863,7 +894,11 @@ impl Interp {
             match self.step() {
                 Ok(Some(v)) => return Ok(v),
                 Ok(None) => {}
-                Err(Abrupt::Throw(v)) => self.unwind(v)?,
+                Err(Abrupt::Throw(v)) => {
+                    if let Some(v) = self.unwind_or_abort(v)? {
+                        return Ok(v);
+                    }
+                }
                 Err(other) => {
                     self.note_site();
                     self.abort_to_boundary();
@@ -882,7 +917,11 @@ impl Interp {
             match self.step() {
                 Ok(Some(v)) => return Ok(Some(v)),
                 Ok(None) => {}
-                Err(Abrupt::Throw(v)) => self.unwind(v)?,
+                Err(Abrupt::Throw(v)) => {
+                    if let Some(v) = self.unwind_or_abort(v)? {
+                        return Ok(Some(v));
+                    }
+                }
                 Err(other) => {
                     self.note_site();
                     self.abort_to_boundary();
@@ -917,7 +956,23 @@ impl Interp {
                 let v = self.frame()?.completion.clone();
                 self.return_value(v)
             }
+            Op::Await => {
+                let v = self.pop()?;
+                self.await_value(v)
+            }
             _ => self.exec(op).map(|()| None),
+        }
+    }
+
+    /// [`Self::unwind`], ending the frames down to the boundary frame when it fails with a limit
+    /// or an internal error, which leaves the frame it was in on top.
+    pub(crate) fn unwind_or_abort(&mut self, v: Value) -> JsResult<Option<Value>> {
+        match self.unwind(v) {
+            Err(e @ (Abrupt::Limit(_) | Abrupt::Internal(_))) => {
+                self.abort_to_boundary();
+                Err(e)
+            }
+            r => r,
         }
     }
 
@@ -931,7 +986,10 @@ impl Interp {
 
     /// Finds the handler for an exception: in the top frame, or in the frames below it up to the
     /// boundary frame. Returns the exception when no handler takes it before the boundary frame.
-    fn unwind(&mut self, v: Value) -> JsResult<()> {
+    /// An async function's frame without a handler rejects its promise with the exception and
+    /// returns the promise as a `return` would: `Some` with it when that frame was the boundary
+    /// frame.
+    fn unwind(&mut self, v: Value) -> JsResult<Option<Value>> {
         self.note_site();
         let passed = matches!((&v, std::mem::replace(&mut self.passing, Value::Undefined)), (Value::Object(a), Value::Object(b)) if *a == b);
         if !passed
@@ -967,10 +1025,25 @@ impl Interp {
                 if let (false, Some(site)) = (caught, site) {
                     self.finally_sites.push((site, target_len));
                 }
-                return Ok(());
+                return Ok(None);
+            }
+            // The promise is settled while the frame is still on top, so a limit reached doing it
+            // ends the frames the way any other limit does.
+            let promise = frame.async_promise;
+            if let Some(p) = promise {
+                self.settle_async(p, Err(v.clone()))?;
             }
             let Some(frame) = self.frames.pop() else { return Err(Abrupt::Throw(v)) };
             self.stack.truncate(frame.base);
+            if let Some(p) = promise {
+                self.drop_left_finally_marks();
+                self.drop_left_finally_sites(frame.base);
+                if frame.boundary {
+                    return Ok(Some(Value::Object(p)));
+                }
+                self.push(Value::Object(p))?;
+                return Ok(None);
+            }
             if frame.boundary {
                 self.passing = v.clone();
                 return Err(Abrupt::Throw(v));
@@ -994,6 +1067,15 @@ impl Interp {
     }
 
     fn return_value(&mut self, v: Value) -> JsResult<Option<Value>> {
+        // An async function's return resolves its promise, while the frame is still on top, and
+        // the call gives the promise.
+        let v = match self.async_promise() {
+            Some(p) => {
+                self.settle_async(p, Ok(v))?;
+                Value::Object(p)
+            }
+            None => v,
+        };
         let Some(frame) = self.frames.pop() else { return internal("return without a frame") };
         self.stack.truncate(frame.base);
         // A `return` in a finally block leaves the block, and the value takes its exception's slot.
@@ -1162,7 +1244,7 @@ impl Interp {
                 self.replace(1, Value::String(s))
             }
             Op::TemplateObject(i) => self.op_template_object(i),
-            Op::Return | Op::ReturnCompletion => internal("return reached the dispatcher"),
+            Op::Return | Op::ReturnCompletion | Op::Await => internal("return reached the dispatcher"),
         }
     }
 
@@ -2163,15 +2245,28 @@ impl Interp {
             Some(_) => self.heap.alloc_env(Env::Decl { bindings: PropMap::default(), outer: Some(env) }),
             None => env,
         };
-        let proto = self.intrinsics.function_proto;
+        let is_async = code.is_async;
+        let proto = match self.promises.async_function_proto {
+            Some(p) if is_async => p,
+            _ => self.intrinsics.function_proto,
+        };
         let length = code.length;
         let strict = code.strict;
         let arrow = code.arrow;
         let self_name = code.self_name.clone();
         let f = self.heap.alloc_object(Object::new(Class::Function(Func::Closure { code, env }), Some(proto)));
         self.define(f, key("length"), Prop::Data { value: Value::Number(f64::from(length)), flags: 0 })?;
-        // An arrow function has no `prototype` and cannot be constructed (section 14.2.16).
+        // An arrow function has no `prototype` and cannot be constructed (section 14.2.16), and
+        // neither has nor can an async function (ECMA-262 2017 section 25.5.4). An async function
+        // must not have own `caller` or `arguments` properties, restricted or not, in sloppy code
+        // too (section 16.2).
         if arrow {
+            return Ok(f);
+        }
+        if is_async {
+            if let Some(name) = self_name {
+                self.env_insert(env, name, Binding::new(Value::Object(f), false, false))?;
+            }
             return Ok(f);
         }
         let p = self.new_object();
@@ -2354,9 +2449,13 @@ impl Interp {
         Ok(())
     }
 
-    /// Assigns a function declared in a block to the variable of the same name.
+    /// Assigns a function declared in a block to the variable of the same name, unless the
+    /// variable of script or eval code was not declared.
     fn op_annex_b(&mut self, n: u32) -> JsResult<()> {
         let name = self.name(n)?;
+        if self.frame()?.annex_off.contains(&name) {
+            return self.pop().map(drop);
+        }
         let v = self.peek(0)?;
         let var_env = self.frame()?.var_env;
         match self.heap.env(var_env) {
@@ -2375,6 +2474,8 @@ impl Interp {
     /// object with a `length` by index. Any other value is a `TypeError`. Each element takes a
     /// unit of fuel and is counted against the heap as it is read, with its index name and a
     /// string's character, and a concatenated string's flattened copy is counted before it is made.
+    /// The strings a string's spread makes for its characters stay counted after the array holds
+    /// them.
     fn op_array_spread(&mut self) -> JsResult<()> {
         let v = self.peek(0)?;
         let Value::Object(a) = self.peek(1)? else { return internal("spread into something that is not an array") };
@@ -2392,6 +2493,8 @@ impl Interp {
         };
         // The most elements the array has room for.
         let room = u32::MAX.saturating_sub(current);
+        // The bytes of the strings a string's spread makes, which the array keeps once it holds them.
+        let mut made = 0usize;
         let items: Vec<Value> = match boxed.as_ref().unwrap_or(&v) {
             Value::String(s) => {
                 let units = crate::string_builtins::flat_charged(self, s)?;
@@ -2403,6 +2506,7 @@ impl Interp {
                     let pair = (0xD800..0xDC00).contains(&u) && units.get(i + 1).is_some_and(|n| (0xDC00..0xE000).contains(n));
                     let len = if pair { 2 } else { 1 };
                     held.add(self, element_bytes(current, out.len()).saturating_add(string_bytes(len)))?;
+                    made = made.saturating_add(string_bytes(len));
                     out.push(Value::String(Str::from_units(units.get(i..i + len).unwrap_or_default().to_vec())));
                     i += len;
                 }
@@ -2467,6 +2571,7 @@ impl Interp {
         for (i, item) in (start..end).zip(items) {
             self.define(a, index_key(i), Prop::Data { value: item, flags: OPEN })?;
         }
+        self.heap.bytes = self.heap.bytes.saturating_add(made);
         self.pop().map(drop)
     }
 
@@ -2855,6 +2960,7 @@ impl Interp {
         }
         match self.func_of(&f) {
             Some(Func::Closure { code, .. }) if code.arrow => Err(self.type_error("an arrow function is not a constructor")),
+            Some(Func::Closure { code, .. }) if code.is_async => Err(self.type_error("an async function is not a constructor")),
             Some(Func::Closure { code, env }) => {
                 let Some(callee) = f.as_object() else { return internal("callee is not an object") };
                 let proto = match self.get_from(callee, &key("prototype"), &f)? {
@@ -2924,6 +3030,7 @@ impl Interp {
         let r = instantiate();
         self.temp_roots.truncate(mark);
         let (this, fenv, var_env) = r?;
+        let code_is_async = code.is_async;
         let base = self.stack.len();
         self.frames.push(Frame {
             code,
@@ -2937,7 +3044,17 @@ impl Interp {
             construct,
             completion: Value::Undefined,
             boundary,
+            async_promise: None,
+            annex_off: Vec::new(),
         });
+        // An async function's call makes its promise first thing (section 25.5.5.2); the frame
+        // keeps what the function holds reachable while it is made.
+        if code_is_async && let Err(e) = self.start_async_call() {
+            if let Some(frame) = self.frames.pop() {
+                self.stack.truncate(frame.base);
+            }
+            return Err(e);
+        }
         Ok(())
     }
 
@@ -3156,6 +3273,21 @@ impl Interp {
         r
     }
 
+    /// Starts a call to `f` with no frame running, for a promise job: a native or host function
+    /// runs now and gives `Some` with its result, and a function written in JavaScript gets a
+    /// boundary frame that the caller runs, and gives `None`. A host function called here cannot
+    /// wait for its result, since no script code is running; a function written in JavaScript
+    /// runs as the script's own code does.
+    pub(crate) fn start_call(&mut self, f: Value, this: Value, args: Vec<Value>) -> JsResult<Option<Value>> {
+        self.reentry += 1;
+        let prepared = self.prepare_call(f, this, args);
+        self.reentry -= 1;
+        match prepared? {
+            Prepared::Done(v) => Ok(Some(v)),
+            Prepared::Closure(entry) => self.enter_function(entry, None, true).map(|()| None),
+        }
+    }
+
     fn call_rooted(&mut self, f: Value, this: Value, args: Vec<Value>, saved: usize) -> JsResult<Value> {
         match self.prepare_call(f, this, args)? {
             Prepared::Done(v) => Ok(v),
@@ -3244,14 +3376,16 @@ impl Interp {
             (caller_env, caller_var_env)
         };
         self.stack.truncate(start);
-        let env = self.instantiate_pending(&code, env, var_env, true)?;
-        self.push_code_frame(code, env, var_env, this, false)
+        let (env, annex_off) = self.instantiate_pending(&code, env, var_env, true)?;
+        self.push_code_frame(code, env, var_env, this, false)?;
+        self.frame_mut()?.annex_off = annex_off;
+        Ok(())
     }
 
     /// [`Self::instantiate_global`] with `code` and its environment `env` kept reachable, and the
     /// code counted against the heap, until its frame holds them: the scopes and functions it
     /// makes can collect.
-    fn instantiate_pending(&mut self, code: &Rc<Code>, env: EnvId, var_env: EnvId, is_eval: bool) -> JsResult<EnvId> {
+    fn instantiate_pending(&mut self, code: &Rc<Code>, env: EnvId, var_env: EnvId, is_eval: bool) -> JsResult<(EnvId, Vec<Key>)> {
         let mark = self.temp_envs.len();
         self.temp_envs.push(env);
         self.temp_codes.push(code.clone());
@@ -3277,9 +3411,15 @@ impl Interp {
         r
     }
 
-    /// Declares `code`'s variables and functions and pushes its boundary frame, ready to run.
+    /// Declares `code`'s variables and functions and pushes its boundary frame, ready to run. The
+    /// frame limit and the heap, with a script's `let` and `const` names, are checked before
+    /// anything is declared.
     pub(crate) fn enter_global(&mut self, code: Rc<Code>, is_eval: bool) -> JsResult<()> {
-        self.charge_code(&code, declaration_bytes(&code).saturating_add(ENV_BYTES))?;
+        if self.frames.len() >= self.limits.frames {
+            return Err(Abrupt::Limit(LimitKind::Frames));
+        }
+        let lexical = if is_eval { 0 } else { global_lexical_bytes(&code) };
+        self.charge_code(&code, declaration_bytes(&code).saturating_add(ENV_BYTES).saturating_add(lexical))?;
         let (scope, global) = (self.global_scope(), self.global);
         let (env, var_env) = if code.strict && is_eval {
             let e = self.heap.alloc_env(Env::Decl { bindings: PropMap::default(), outer: Some(scope) });
@@ -3287,8 +3427,10 @@ impl Interp {
         } else {
             (scope, self.global_env)
         };
-        let env = self.instantiate_pending(&code, env, var_env, is_eval)?;
-        self.push_code_frame(code, env, var_env, Value::Object(global), true)
+        let (env, annex_off) = self.instantiate_pending(&code, env, var_env, is_eval)?;
+        self.push_code_frame(code, env, var_env, Value::Object(global), true)?;
+        self.frame_mut()?.annex_off = annex_off;
+        Ok(())
     }
 
     /// The environment global code runs in: the one that holds the scripts' `let` and `const`
@@ -3297,9 +3439,16 @@ impl Interp {
         self.global_lex
     }
 
-    /// Sets [`Options::es2015`] for the next runs.
+    /// Sets [`Options::es2015`] for the next runs; turning it off turns [`Options::es2017`] off too.
     pub(crate) fn set_es2015(&mut self, es2015: bool) {
         self.options.es2015 = es2015;
+        self.options.es2017 &= es2015;
+    }
+
+    /// Sets [`Options::es2017`] for the next runs; turning it on turns [`Options::es2015`] on too.
+    pub(crate) fn set_es2017(&mut self, es2017: bool) {
+        self.options.es2017 = es2017;
+        self.options.es2015 |= es2017;
     }
 
     /// Declares a script's top-level `let` and `const` names in the global scope, uninitialized
@@ -3399,6 +3548,8 @@ impl Interp {
             construct: None,
             completion: Value::Undefined,
             boundary,
+            async_promise: None,
+            annex_off: Vec::new(),
         });
         Ok(())
     }
@@ -3408,8 +3559,9 @@ impl Interp {
     ///
     /// Gives the environment the code runs in: `env`, or with [`Options::es2015`] eval code's own
     /// environment of its `let` and `const` names. A script's `let` and `const` names go in the
-    /// global scope ([`Self::declare_global_lexical`]).
-    fn instantiate_global(&mut self, code: &Rc<Code>, env: EnvId, var_env: EnvId, is_eval: bool) -> JsResult<EnvId> {
+    /// global scope ([`Self::declare_global_lexical`]). Also gives the names of
+    /// [`Code::annex_vars`] that [`Self::annex_var_declarable`] did not declare.
+    fn instantiate_global(&mut self, code: &Rc<Code>, env: EnvId, var_env: EnvId, is_eval: bool) -> JsResult<(EnvId, Vec<Key>)> {
         // Strict eval code's own environment is in no frame yet, so it is a root while the
         // declarations reserve heap.
         let mark = self.temp_envs.len();
@@ -3420,7 +3572,7 @@ impl Interp {
     }
 
     /// [`Self::instantiate_global`] with `env` and `var_env` in [`Self::temp_envs`].
-    fn instantiate_global_rooted(&mut self, code: &Rc<Code>, env: EnvId, var_env: EnvId, is_eval: bool) -> JsResult<EnvId> {
+    fn instantiate_global_rooted(&mut self, code: &Rc<Code>, env: EnvId, var_env: EnvId, is_eval: bool) -> JsResult<(EnvId, Vec<Key>)> {
         let configurable = if is_eval { CONFIGURABLE } else { 0 };
         if is_eval && !code.strict && self.options.es2015 {
             self.check_eval_vars(code, env, var_env)?;
@@ -3472,7 +3624,47 @@ impl Interp {
                 self.global_vars.insert(v.clone());
             }
         }
-        Ok(lex)
+        let mut annex_off = Vec::new();
+        for v in &code.annex_vars {
+            self.use_fuel()?;
+            if !self.annex_var_declarable(v, env, var_env)? {
+                annex_off.push(v.clone());
+                continue;
+            }
+            self.declare(var_env, v, None, configurable)?;
+            if on_global {
+                self.global_vars.insert(v.clone());
+            }
+        }
+        Ok((lex, annex_off))
+    }
+
+    /// A block function's variable in script or eval code can be declared (Annex B.3.3.2 and
+    /// B.3.3.3, <https://tc39.es/ecma262/#sec-web-compat-globaldeclarationinstantiation>): no
+    /// `let`, `const` or block function from `env` out to `var_env` has the name, a `catch`
+    /// parameter does not count, and on the global object the name is its own property or the
+    /// object is extensible. Each environment passed takes a unit of fuel.
+    fn annex_var_declarable(&mut self, name: &Key, env: EnvId, var_env: EnvId) -> JsResult<bool> {
+        let mut cur = Some(env).filter(|&e| e != var_env);
+        while let Some(e) = cur {
+            self.use_fuel()?;
+            cur = match self.heap.env(e) {
+                Some(Env::Decl { bindings, outer }) => {
+                    if bindings.get(name).is_some_and(|b| b.lexical) {
+                        return Ok(false);
+                    }
+                    *outer
+                }
+                Some(Env::Obj { outer, .. }) => *outer,
+                None => return internal("environment out of range"),
+            }
+            .filter(|&o| o != var_env);
+        }
+        if var_env != self.global_env {
+            return Ok(true);
+        }
+        let global = self.global;
+        Ok(self.get_own_property(global, name)?.is_some() || self.object(global)?.extensible)
     }
 
     /// A `var` or function that eval code outside strict mode code declares must not take the name

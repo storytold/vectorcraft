@@ -139,6 +139,28 @@ fn a_block_function_inside_another_of_its_name_leaves_the_variable_alone() {
 }
 
 #[test]
+fn a_block_function_whose_variable_cannot_be_declared_stays_in_its_block() {
+    // A block function of a script or of eval code gets no variable when a `let`, a `const` or a
+    // block function out to the variable environment has its name, or when the global object
+    // cannot take it (Annex B.3.3.2 and B.3.3.3); its block still has it, and a `var` of the name
+    // is still a SyntaxError.
+    let mut realm = es();
+    assert_eq!(realm.run("let f = 1; 0"), Ok(JsValue::Number(0.0)));
+    assert_eq!(realm.run("var inner; { function f() { return 2; } inner = f(); } inner + f"), Ok(JsValue::Number(3.0)));
+    assert!(is_thrown(&realm.run("{ function f() {} } var f;"), "SyntaxError"));
+    assert_eq!(realm.run("(0, eval)('{ function f() { return 4; } }'); f"), Ok(JsValue::Number(1.0)));
+    truth("function t() { let h = 1; { eval('{ function h() { return 2; } }'); } return h; } t() === 1");
+    truth("function t() { let h = 1; eval('{ function h() {} }'); return h; } t() === 1");
+    // A `catch` parameter does not stop the variable (Annex B.3.5).
+    truth("try { throw 1; } catch (c) { eval('{ function c() { return 5; } }'); } c() === 5");
+    let mut realm = es();
+    assert_eq!(realm.run("var out; Object.preventExtensions(this); 0"), Ok(JsValue::Number(0.0)));
+    let kept = realm.run("{ function n() { return 6; } out = n(); } out + typeof n");
+    assert_eq!(kept, Ok(JsValue::String("6undefined".into())));
+    assert_eq!(realm.run("(0, eval)('{ function m() { return 7; } out = m(); }'); out + typeof m"), Ok(JsValue::String("7undefined".into())));
+}
+
+#[test]
 fn a_labelled_function_in_a_block_is_made_when_the_block_is_entered() {
     truth("let f = 0; { var value = f(); label: function f() { return 7; } } value === 7 && f === 0");
     truth("{ var early = g(); a: b: function g() { return 8; } } early === 8 && g() === 8");
@@ -315,6 +337,38 @@ fn a_global_var_that_cannot_be_declared_declares_nothing() {
     assert_eq!(realm.run("this.hasOwnProperty('y')"), Ok(JsValue::Bool(false)));
     // `x` was not declared, and a `var` the global object already has stays allowed.
     assert_eq!(realm.run("let x = 2; var kept; x + kept"), Ok(JsValue::Number(3.0)));
+}
+
+#[test]
+fn a_script_stopped_by_the_frame_limit_declares_no_let() {
+    let mut realm = Realm::with_options(es_options(), Limits { frames: 0, ..Limits::default() });
+    let stopped = realm.run("let early = 1; const fixed = 2;");
+    assert!(matches!(&stopped, Err(e) if e.kind == RunErrorKind::Limit(LimitKind::Frames)), "{stopped:?}");
+    realm.set_limits(Limits::default());
+    assert_eq!(realm.run("let early = 3; const fixed = 4; early + fixed"), Ok(JsValue::Number(7.0)));
+}
+
+#[test]
+fn a_script_stopped_by_the_heap_limit_declares_no_let() {
+    // The `let` and `const` names of a script go in before its functions are made; a heap too
+    // small for both stops the script before any name is declared.
+    let lets: String = (0..200).map(|i| format!("let a_long_lexical_name_{i} = {i}; ")).collect();
+    let decls: String = (0..40).map(|i| format!("function f{i}() {{ return {i}; }} ")).collect();
+    let src = format!("let early = 1; const fixed = 2; {lets}{decls}");
+    let mut stopped = 0;
+    for spare in (40_000..200_000).step_by(97) {
+        let mut realm = es();
+        let live = realm.collect_garbage();
+        realm.set_limits(Limits { heap_bytes: live + spare, ..Limits::default() });
+        match realm.run(&src) {
+            Ok(_) => continue,
+            Err(e) if e.kind == RunErrorKind::Limit(LimitKind::Heap) => stopped += 1,
+            Err(e) => panic!("{spare}: {e:?}"),
+        }
+        realm.set_limits(Limits::default());
+        assert_eq!(realm.run("let early = 3; const fixed = 4; early + fixed"), Ok(JsValue::Number(7.0)), "{spare}");
+    }
+    assert!(stopped > 0);
 }
 
 #[test]
@@ -735,6 +789,46 @@ fn spreading_a_rope_counts_its_flattened_length_first() {
     }
     let made = Realm::with_options(es_options(), limits).run(&format!("{build} mk(); 0"));
     assert_eq!(made, Ok(JsValue::Number(0.0)), "the rope is made within the fuel");
+}
+
+#[test]
+fn spreading_a_string_counts_the_string_it_makes_for_each_character() {
+    // Each of the 16,384 elements is a property and a one-character string of its own. The
+    // smaller heap has room for the properties alone but not for the strings as well, so the
+    // spread stops with the heap limit after about 83% of the characters, before the fuel for
+    // 90% of them runs out. The larger heap holds the array, its keys and the strings.
+    const N: usize = 16_384;
+    let property = crate::heap::PROP_BYTES;
+    let string = crate::heap::string_bytes(1);
+    let setup = "var s = 'x'; for (var i = 0; i < 14; i++) s = s + s; s[0]; 0";
+    let cases = [(property + string / 2, N * 9 / 10, Err(LimitKind::Heap)), (2 * (property + string) + 8, N * 2, Ok(N as f64))];
+    for (per_element, fuel, expected) in cases {
+        let mut r = es();
+        assert_eq!(r.run(setup), Ok(JsValue::Number(0.0)));
+        r.interp().collect_garbage();
+        let heap_bytes = r.interp().heap.bytes + N * per_element;
+        r.set_limits(Limits { heap_bytes, fuel: fuel as u64, ..Limits::default() });
+        match (r.run("var a = [...s]; a.length"), expected) {
+            (Ok(JsValue::Number(n)), Ok(m)) if n == m => {}
+            (Err(e), Err(kind)) if e.kind == RunErrorKind::Limit(kind) => {}
+            (result, expected) => panic!("{per_element} bytes for each element: {result:?}, expected {expected:?}"),
+        }
+    }
+}
+
+#[test]
+fn the_strings_a_string_spread_makes_stay_counted_while_the_array_holds_them() {
+    const N: u32 = 4096;
+    let mut r = es();
+    assert_eq!(r.run("var s = 'x'; for (var i = 0; i < 12; i++) s = s + s; s[0]; 0"), Ok(JsValue::Number(0.0)));
+    r.interp().collect_garbage();
+    let before = r.interp().heap.bytes;
+    assert_eq!(r.run("var a = [...s]; a.length"), Ok(JsValue::Number(f64::from(N))));
+    // Takes the bytes the spread held while it ran off the estimate.
+    r.interp().reserve_heap(0).unwrap();
+    let element = |i: u32| crate::heap::PROP_BYTES + crate::heap::string_bytes(i.to_string().len()) + crate::heap::string_bytes(1);
+    let least = before + (0..N).map(element).sum::<usize>();
+    assert!(r.interp().heap.bytes >= least, "{} < {least}", r.interp().heap.bytes);
 }
 
 #[test]

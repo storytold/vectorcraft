@@ -214,6 +214,9 @@ pub(crate) enum Op {
     ToStr,
     /// Pushes the template object of `templates[i]`, the same object for each evaluation.
     TemplateObject(u32),
+    /// `value` → its awaited value: suspends the running async function until the value settles,
+    /// and goes on with its fulfillment value or throws its rejection reason here.
+    Await,
 }
 
 /// The names a block declares, entered with [`Op::PushBlock`].
@@ -286,6 +289,11 @@ pub(crate) struct Code {
     pub(crate) vars: Vec<Key>,
     /// Function declarations to instantiate on entry: their names and indices in `functions`.
     pub(crate) fun_decls: Vec<(Key, u32)>,
+    /// In script and eval code, the variables of block functions (Annex B.3.3.2 and B.3.3.3) that
+    /// the code does not declare otherwise: each is declared, and its function assigned to it, only
+    /// when no `let`, `const` or block function between the code and its variable environment has
+    /// the name and the variable can be declared.
+    pub(crate) annex_vars: Vec<Key>,
     /// The body refers to `arguments` or calls `eval`.
     pub(crate) uses_arguments: bool,
     pub(crate) source: Rc<Source>,
@@ -308,6 +316,8 @@ pub(crate) struct Code {
     /// The function has default or rest parameters: its parameters start uninitialized, its
     /// code initializes them and then enters its body with [`Op::BodyEnv`].
     pub(crate) param_init: bool,
+    /// The code is an async function's: a call returns a promise, and it may run [`Op::Await`].
+    pub(crate) is_async: bool,
 }
 
 impl Code {
@@ -391,7 +401,7 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
         Op::LoadParam(_) | Op::TemplateObject(_) => e(0, 1),
         Op::ArraySpread | Op::NewSpread => e(2, 1),
         Op::CallSpread(_) => e(3, 1),
-        Op::ToStr => e(1, 1),
+        Op::ToStr | Op::Await => e(1, 1),
     })
 }
 
