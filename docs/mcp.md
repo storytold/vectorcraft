@@ -3883,10 +3883,10 @@ false, a tutorial whose sample was not opened, and a finished tutorial are error
 `learn.resetProgress {}` runs Reset progress and answers what `learn.list` answers; open documents, opened samples and
 the Learn view stay as they are.
 
-The Home screen has a Learn section between Recent Files and the new-file presets, as
+The Home screen has a Learn section after the new-file presets, as
 [the help page](https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/homescreen-overview.html)
-lists Learn, with in-app tutorials, among the Home screen's options. The section holds the Quick skill guide card,
-which runs `learn.skills`, and every tutorial of the Learn panel under its skill, each a button that runs
+lists Learn, with in-app tutorials, among the Home screen's options. Its heading row ends in the Quick skill guide
+link, which runs `learn.skills`, and a card per skill lists that skill's tutorials as links, each running
 `learn.show {tutorial}`. The panel shows beside the Home screen; no document is opened, closed or switched, and a
 second choice keeps the panel shown. The section's place, its layout and what a choice opens are VectorCraft's own
 rules.
