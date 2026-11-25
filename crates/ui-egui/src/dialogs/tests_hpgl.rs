@@ -160,8 +160,9 @@ fn pen_table_starts_from_the_art_s_pens_and_comes_back() {
     assert_eq!(pens(&fields(&app)), json!(automatic));
 }
 
-/// A press of Add adds one pen and a press of One Pen per Color sets the table aside, though the rows' body may run
-/// twice in the pass that reads the press.
+/// A press of Add adds one pen, a press of a pen's Remove removes that pen, a press of a pen's swatch opens one picker
+/// whose color that pen takes, and a press of One Pen per Color sets the table aside, though the rows' bodies run more
+/// than once in the pass that reads the press.
 #[test]
 fn pen_rows_apply_each_press_once() {
     let (mut app, _) = app(1);
@@ -171,11 +172,24 @@ fn pen_rows_apply_each_press_once() {
     press_control(&mut app, json!({"name": "Add", "role": "Button"}));
     frame(&mut app);
     assert_eq!(pens(&fields(&app)), json!(["#ff0000", "#000000", "#000000"]));
+    press_control(&mut app, json!({"name": "Remove", "role": "Button", "index": 0}));
+    frame(&mut app);
+    assert_eq!(pens(&fields(&app)), json!(["#000000", "#000000"]));
+    // The second pen's swatch opens the picker over the dialog; its OK colors that pen alone.
+    press_control(&mut app, json!({"name": "Pen color", "role": "ColorWell", "index": 1}));
+    frame(&mut app);
+    let open = |app: &VectorcraftApp| app.dialogs().map_or(0, |d| d.with(|h| h.open_dialogs().len()));
+    assert_eq!(open(&app), 2, "one picker opens on the dialog");
+    set(&mut app, "color", json!("#00ff00"));
+    confirm(&mut app);
+    frame(&mut app);
+    assert_eq!((open(&app), kind(&app).as_deref()), (1, Some("hpglOptions")));
+    assert_eq!(pens(&fields(&app)), json!(["#000000", "#00ff00"]));
     press_control(&mut app, json!({"name": "One Pen per Color", "role": "RadioButton"}));
     frame(&mut app);
     let d = fields(&app);
     assert!(pens(&d).is_null());
-    assert_eq!(serde_json::to_value(d.get("__pens")).unwrap(), json!(["#ff0000", "#000000", "#000000"]));
+    assert_eq!(serde_json::to_value(d.get("__pens")).unwrap(), json!(["#000000", "#00ff00"]));
 }
 
 /// Pen Table with options the export refuses keeps One Pen per Color and says why, rather than

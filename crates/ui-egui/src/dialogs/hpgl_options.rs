@@ -18,7 +18,7 @@ use craft::ui::choice::{Radio, RadioGroup, Swatch};
 use craft::ui::contract::{Bind, Props as _, Scroll, Show as _, ShowContainer as _};
 use craft::ui::dialog::DialogId;
 use craft::ui::layout_components::{Row, Stack};
-use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog};
 use craft::ui::runtime::env::Env;
 use craft::ui::style::rgba_color;
 use craft::ui::text::TextField;
@@ -143,18 +143,13 @@ fn pen_key(i: usize) -> String {
 fn pens_param() -> Param {
     Param::custom("pens", tl!("Pens:"), |ui, fields, cx| {
         take_picked_pens(fields);
-        // The rows draw from the values as they stand here and the edits apply after them: the stack's body may run
-        // twice in a pass.
-        let mut drawn = fields.clone();
+        // The stack's body may run more than once in a pass: every run draws from the values as they stand here, and
+        // what the last run asked for applies after the stack.
         let mut asked = PensAsked::default();
-        let shown = Stack::new().show(ui, |ui, _| {
-            asked = pens_ui(ui, &drawn, cx);
-            if let Some(p) = &asked.pens {
-                drawn.set("pens", FieldValue::Json(Value::Array(p.clone())));
-            }
-        });
-        // An edit of the rows in any run of the body is in `drawn`; a switch of Pen Table drops it.
-        let edited = table(&drawn).filter(|p| asked.table.is_none() && table(fields).as_ref() != Some(p));
+        let shown = Stack::new().show(ui, |ui, _| asked = pens_ui(ui, fields));
+        if let Some((i, color)) = asked.pick {
+            cx.pick_color(&pen_key(i), color);
+        }
         match asked.table {
             Some(true) => cx.request_action("penTable"),
             Some(false) => {
@@ -163,7 +158,7 @@ fn pens_param() -> Param {
             }
             None => {}
         }
-        if let Some(pens) = edited {
+        if let Some(pens) = asked.pens {
             fields.set("pens", FieldValue::Json(Value::Array(pens)));
         }
         shown.output
@@ -179,11 +174,13 @@ struct PensAsked {
     table: Option<bool>,
     /// The pen table after an edit of its rows.
     pens: Option<Vec<Value>>,
+    /// The pen whose swatch was pressed, with its color: the picker opens on it.
+    pick: Option<(usize, Srgba)>,
 }
 
 /// Writes the colors the picker answered into the pen table.
 fn take_picked_pens(fields: &mut DialogFields) {
-    let Some(mut pens) = table(fields).filter(|a| a.len() <= MAX_PENS) else { return };
+    let Some(mut pens) = table(fields) else { return };
     let mut changed = false;
     for (i, pen) in pens.iter_mut().enumerate() {
         if let Some([r, g, b]) = fields.color(&pen_key(i)) {
@@ -200,7 +197,7 @@ fn take_picked_pens(fields: &mut DialogFields) {
 
 /// The pens row. Switching to Pen Table asks the host (`penTable`): the table starts from the document's pens, which
 /// this draw cannot reach.
-fn pens_ui(ui: &mut egui::Ui, fields: &DialogFields, cx: &mut CustomContext) -> PensAsked {
+fn pens_ui(ui: &mut egui::Ui, fields: &DialogFields) -> PensAsked {
     let mut asked = PensAsked::default();
     let list = table(fields);
     let mut on = list.is_some();
@@ -219,29 +216,35 @@ fn pens_ui(ui: &mut egui::Ui, fields: &DialogFields, cx: &mut CustomContext) -> 
     let Some(mut pens) = list.filter(|a| asked.table.is_none() && a.len() <= MAX_PENS) else { return asked };
     let mut changed = false;
     let n = pens.len();
+    // What the rows asked for: a typed color per pen, the pen whose swatch or Remove was pressed. Each run of the
+    // stack's body starts them afresh from the same pens.
+    let mut typed: Vec<Option<String>> = vec![None; n];
     let mut remove = None;
     Stack::new().scroll(Scroll::vertical()).room_height(180.0).show(ui, |ui, _| {
-        for (i, pen) in pens.iter_mut().enumerate() {
+        typed.iter_mut().for_each(|t| *t = None);
+        (remove, asked.pick) = (None, None);
+        for (i, pen) in pens.iter().enumerate() {
             Row::new().id_salt(("hpgl-pen-row", i)).show(ui, |ui, _| {
                 ui.label((i + 1).to_string());
                 let mut color = pen.as_str().and_then(Rgba::from_hex).unwrap_or(Rgba::rgb(0, 0, 0));
                 if Swatch::new(tl!("Pen color"), Srgba::from(color)).show(ui).clicked {
-                    cx.pick_color(&pen_key(i), Srgba::from(color));
+                    asked.pick = Some((i, Srgba::from(color)));
                 }
                 let before = color;
                 TextField::hex(tl!("Pen color"), Bind::bound(&mut color)).id_salt(("hpgl-pen", i)).show(ui);
-                if color != before
-                    && let Some(typed) = pen_color(&color.to_hex())
-                {
-                    *pen = json!(typed);
-                    changed = true;
-                }
+                typed[i] = (color != before).then(|| pen_color(&color.to_hex())).flatten();
                 if IconButton::new(IconId::new("trash")).label(tl!("Remove")).enabled(n > 1).show(ui).clicks > 0 {
                     remove = Some(i);
                 }
             });
         }
     });
+    for (pen, typed) in pens.iter_mut().zip(typed) {
+        if let Some(typed) = typed {
+            *pen = json!(typed);
+            changed = true;
+        }
+    }
     if Button::new(tl!("Add")).enabled(n < MAX_PENS).show(ui).clicks > 0 {
         // A new pen starts as the last one's color, ready to be changed.
         pens.push(pens.last().cloned().unwrap_or_else(|| json!("#000000")));

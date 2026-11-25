@@ -14,6 +14,7 @@ use craft::ui::canvas::{CanvasSpace, canvas_space};
 use craft::ui::canvas_controls::SelectionOutline;
 use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
 use craft::ui::display::Picture;
+use craft::ui::layout_components::Row;
 use craft::ui::list::ThumbAspect;
 use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamKind};
 use craft::ui::pickers::Select;
@@ -288,7 +289,9 @@ fn navigator(count: usize, seen: Vec<bool>) -> Param {
     Param::custom(MAP_SURFACE, tl!("Surface"), move |ui, fields, _| {
         let current = shown_surface(fields, count);
         let mut next = None;
-        let row = ui.horizontal(|ui| {
+        let row = Row::new().show(ui, |ui, _| {
+            // The row's body may run more than once in a pass: the last run's step applies.
+            next = None;
             for (icon, tip, target, enabled) in [
                 ("chevrons_left", tl!("First Surface"), 1, current > 1),
                 ("chevron_left", tl!("Previous Surface"), current.saturating_sub(1), current > 1),
@@ -318,7 +321,7 @@ fn navigator(count: usize, seen: Vec<bool>) -> Param {
         if fields.number(MAP_SURFACE) != Some(shown as f64) {
             fields.set(MAP_SURFACE, shown as f64);
         }
-        row.response
+        row.output
     })
 }
 
@@ -428,21 +431,25 @@ fn map_actions(flat: Flat, has_map: bool, any_map: bool) -> Param {
     Param::custom("__mapActions", "", move |ui, fields, _| {
         let surface = surface_number(fields);
         let map = maps_of(fields).into_iter().find(|m| m.surface == surface);
-        ui.horizontal(|ui| {
-            let fit = Button::new(tl!("Scale to Fit")).enabled(has_map && flat.art.is_some()).show(ui);
-            if let (true, Some(m), Some(art)) = (fit.clicked(), map.as_ref(), flat.art) {
-                let art = vectorcraft_geom::Rect::new(0.0, 0.0, art.0, art.1);
-                let (scale_x, scale_y) = m.fitting_scales(art, (flat.width, flat.height)).unwrap_or((m.scale_x, m.scale_y));
-                store_map(fields, surface, Some(&SurfaceMap { x: 0.0, y: 0.0, scale_x, scale_y, ..m.clone() }));
-            }
-            if Button::new(tl!("Clear")).enabled(has_map).show(ui).clicked() {
-                store_map(fields, surface, None);
-            }
-            if Button::new(tl!("Clear All")).enabled(any_map).show(ui).clicked() {
-                fields.set(MAP_ART, FieldValue::Json(json!([])));
-            }
-        })
-        .response
+        // The row's body may run more than once in a pass: it reports the presses, which apply after it.
+        let (mut fit, mut clear, mut clear_all) = (false, false, false);
+        let row = Row::new().show(ui, |ui, _| {
+            fit = Button::new(tl!("Scale to Fit")).enabled(has_map && flat.art.is_some()).show(ui).clicked();
+            clear = Button::new(tl!("Clear")).enabled(has_map).show(ui).clicked();
+            clear_all = Button::new(tl!("Clear All")).enabled(any_map).show(ui).clicked();
+        });
+        if let (true, Some(m), Some(art)) = (fit, map.as_ref(), flat.art) {
+            let art = vectorcraft_geom::Rect::new(0.0, 0.0, art.0, art.1);
+            let (scale_x, scale_y) = m.fitting_scales(art, (flat.width, flat.height)).unwrap_or((m.scale_x, m.scale_y));
+            store_map(fields, surface, Some(&SurfaceMap { x: 0.0, y: 0.0, scale_x, scale_y, ..m.clone() }));
+        }
+        if clear {
+            store_map(fields, surface, None);
+        }
+        if clear_all {
+            fields.set(MAP_ART, FieldValue::Json(json!([])));
+        }
+        row.output
     })
     .full_width()
     // The page's maps: automation sets them whole, as the rows above edit them one surface at a time.
