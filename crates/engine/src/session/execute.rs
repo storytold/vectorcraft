@@ -59,6 +59,30 @@ impl Session {
 
     /// Execute a command by id. This is THE entry point for every frontend.
     pub fn execute(&mut self, id: &str, params: &Value) -> Result<Value> {
+        self.revealing(|s| s.execute_unwatched(id, params))
+    }
+
+    /// Run `f`, a top-level entry that changes the active document's rows, current layer or
+    /// selection, then ask the Layers panel to reveal what it changed ([`DocState::request_reveal`]).
+    /// Nothing is asked inside a command, while an interaction is open or while a tool is busy: the
+    /// entry that ends them asks.
+    pub(super) fn revealing<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        let before = (self.depth == 0 && !self.tool_busy()).then(|| self.active().map(crate::DocState::layers_view)).flatten();
+        let r = f(self);
+        if let Some(before) = before {
+            self.reveal_since(&before);
+        }
+        r
+    }
+
+    /// Ask the Layers panel of the active document to reveal what changed since `before`.
+    pub(super) fn reveal_since(&mut self, before: &crate::doc_state::LayersView) {
+        if let Some(st) = self.active_mut() {
+            st.request_reveal(before);
+        }
+    }
+
+    fn execute_unwatched(&mut self, id: &str, params: &Value) -> Result<Value> {
         let spec = find_command(id).ok_or_else(|| cmd::params::unknown_command(id))?;
         // A clipboard import is a query that replaces the clipboard, which the end of a run sets too.
         if self.depth == 0 && self.script_key.is_some() && (waits_for_tool_edit(id) || id.starts_with("clipboard.import")) {
@@ -161,6 +185,7 @@ impl Session {
             self.journal_note.clear();
             self.note_depth = 1;
             self.journal_query = false;
+            self.defaults_only_ran = None;
             self.batch_stash = None;
             self.batch_steps = None;
         }
@@ -263,8 +288,9 @@ impl Session {
     }
 
     /// Record `key: value` in the running top-level command's journal entry (or its interaction's
-    /// preview, or its step in a batch) unless its params give `key` (a null gives nothing): a value
-    /// it resolved from the preferences or the clock.
+    /// preview, or its step in a batch) unless its params give `key` (a null gives nothing, and a
+    /// noted `defaultsOnly` replaces the params' own): a value it resolved from the preferences or
+    /// the clock.
     pub fn note_journal(&mut self, key: &str, value: Value) {
         if self.depth == self.note_depth {
             self.journal_note.insert(key.to_string(), value);
@@ -359,10 +385,11 @@ impl Session {
         let mut note = std::mem::take(&mut self.journal_note);
         match params {
             // The params' own values win, except a null: it reads as a key left out, so the
-            // noted value is the one the command resolved.
+            // noted value is the one the command resolved. A noted `defaultsOnly` wins too: the
+            // Live Paint Bucket kept the command to the defaults although the params gave `false`.
             Value::Object(m) if !note.is_empty() => {
                 for (k, v) in m {
-                    if !v.is_null() || !note.contains_key(k) {
+                    if (!v.is_null() && k != "defaultsOnly") || !note.contains_key(k) {
                         note.insert(k.clone(), v.clone());
                     }
                 }

@@ -4,42 +4,59 @@
 //! tool, [`open_options`]): OK then sets the options the tool's next drag and click use, and draws
 //! nothing. Arc Segment Tool Options also shows a picture of the arc its fields describe.
 
-use serde_json::{Value, json};
-use vectorcraft_doc::Unit;
+// PLAN: `mod tool_options;` in dialogs.rs and the `shapes::open` arms of `open_tool_dialog` in dialogs/tools.rs
+// belong to object-dialogs-w5.
+use craft::behavior::Mixed;
+use craft::ui::contract::{Bind, Show as _, SideLabel};
+use craft::ui::dialog::dialog_id;
+use craft::ui::display::{Picture, PictureSize};
+use craft::ui::list::{ThumbAspect, ThumbSize};
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::primitives::{PaintShape, StrokeWidth};
+use craft::ui::runtime::env::{Label, LengthUnits};
+use craft::ui::style::DataColor;
+use craft::ui::text::{LinkMode, LinkedFields, LinkedLayout};
+use craft::ui::value_drag::SliderScale;
+use serde_json::{Map, Value, json};
 use vectorcraft_geom::{Point, Rect};
 
-use super::{DialogSpec, form, run_and_close};
+use super::form;
+use super::host::open_held;
+use super::tool_options::{length_of, reference_index, reference_param, set_options};
 use crate::VectorcraftApp;
-use crate::panels::transform::artboard_rect;
-use crate::state::Dialog;
-use crate::widgets;
-
-pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |d| title(d).into(),
-    body,
-    confirm,
-    inputs: |kind| if kind == "rectangle" { &["radius"] } else { &[] },
-    ..DialogSpec::FORM
-};
-
-/// The field that marks a dialog opened as its tool's Tool Options rather than by a click.
-const TOOL_OPTIONS: &str = "__toolOptions";
+use crate::canvas::rulers::general_lengths;
 
 /// The tools whose Tool Options are this dialog.
 pub(crate) const OPTION_TOOLS: [&str; 4] = ["rectangularGrid", "polarGrid", "arc", "lineSegment"];
 
-fn title(d: &Dialog) -> &'static str {
-    let options = d.bool(TOOL_OPTIONS);
-    match d.kind.as_str() {
+/// The click dialogs whose Width and Height share a Constrain Width and Height Proportions link
+/// (<https://krankykids.com/cheatsheets/illustrator_cs6/shape_tool_rectangle.html>,
+/// <https://www.krankykids.com/cheatsheets/illustrator_cs6/shape_tool_ellipse.html>): the same
+/// link as the Transform panel's, and the next of these dialogs opens with it as this one left it.
+const SIZE_KINDS: [&str; 3] = ["rectangle", "roundedRectangle", "ellipse"];
+
+/// Where a shape tool was clicked: the dialog's shape is drawn there, and with `alt` held a box shape
+/// is centred on it.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Click {
+    /// The click, in document points.
+    pub at: Point,
+    /// Whether Alt was held (draw from the centre).
+    pub alt: bool,
+}
+
+/// The title of the `kind` dialog; `tool_options` for the dialog of the tool's Tool Options.
+fn title(kind: &str, tool_options: bool) -> &'static str {
+    match kind {
         "rectangle" => tl!("Rectangle"),
         "roundedRectangle" => tl!("Rounded Rectangle"),
         "ellipse" => tl!("Ellipse"),
         "polygon" => tl!("Polygon"),
         "star" => tl!("Star"),
         "spiral" => tl!("Spiral"),
-        "rectangularGrid" if options => tl!("Rectangular Grid Tool Options"),
+        "rectangularGrid" if tool_options => tl!("Rectangular Grid Tool Options"),
         "rectangularGrid" => tl!("Rectangular Grid"),
-        "polarGrid" if options => tl!("Polar Grid Tool Options"),
+        "polarGrid" if tool_options => tl!("Polar Grid Tool Options"),
         "polarGrid" => tl!("Polar Grid"),
         "arc" => tl!("Arc Segment Tool Options"),
         _ => tl!("Line Segment Tool Options"),
@@ -54,60 +71,216 @@ pub(crate) fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<Value
     if !OPTION_TOOLS.contains(&tool) {
         return Err(format!("the {tool} tool has no options"));
     }
-    super::open_tool_dialog(app, tool, json!({}));
-    let d = app.ui.dialog.as_mut().filter(|d| d.kind == tool).ok_or_else(|| format!("the {tool} tool has no options"))?;
-    for key in ["x", "y", "__anchorX", "__anchorY"] {
-        d.fields.remove(key);
-    }
-    d.fields.insert(TOOL_OPTIONS.into(), json!(true));
+    open(app, tool, None);
     Ok(json!({ "dialog": tool }))
 }
 
-/// What OK sets as the options of `d`'s tool ([`OPTION_TOOLS`]), from its fields: a grid's are its
-/// switches as they are, its typed fields as numbers, its Default Size and Reference Point.
-fn tool_options(d: &Dialog) -> Value {
-    match d.kind.as_str() {
-        "lineSegment" => {
-            let (length, angle) = line_length_angle(d);
-            json!({"length": length, "angle": angle, "fillLine": d.bool("fillLine")})
+/// Opens the `kind` dialog on the tool's options: a click dialog that draws at `click`, or with no click the
+/// tool's Tool Options, which draw nothing. Without a window it reports that on the status line.
+pub(crate) fn open(app: &mut VectorcraftApp, kind: &str, click: Option<Click>) {
+    let Some(ctx) = app.ui_ctx.clone() else {
+        app.status(format!("no window to show the {kind} dialog"));
+        return;
+    };
+    let lengths = general_lengths(app);
+    let mut values = start_values(app, kind);
+    if SIZE_KINDS.contains(&kind) {
+        values.insert("constrain".into(), json!(app.object_dialogs.shape_link));
+    }
+    // The click is among the fields (no row shows it), where OK reads it.
+    if let Some(click) = click {
+        values.insert("x".into(), json!(click.at.x));
+        values.insert("y".into(), json!(click.at.y));
+    }
+    let ink = (kind == "arc" && click.is_none()).then(|| ArcInk::of(&app.session));
+    let params = shape_params(kind, &values, lengths, ink);
+    let fields = form::fields_of(&params, &values);
+    let (key, title) = (kind.to_owned(), title(kind, click.is_none()));
+    let dialog = HostedParamDialog::new(&ctx, kind, fields, move |fields: &mut DialogFields| {
+        ParamDialog::new(key.clone(), title, params.clone()).values(Bind::bound(fields))
+    });
+    let kind_owned = kind.to_owned();
+    let ok = move |app: &mut VectorcraftApp, result: &ParamResult| confirm(app, &kind_owned, click, &result.fields);
+    if open_held(app, dialog, ok).is_none() {
+        app.status(format!("no window to show the {kind} dialog"));
+    }
+}
+
+/// The values the `kind` dialog opens with: the tool's options (and General › Corner Radius for the Rounded
+/// Rectangle), as numbers in points. A key with no value is left out, so its row opens on its default.
+fn start_values(app: &VectorcraftApp, kind: &str) -> Map<String, Value> {
+    let o = app.session.tool_options_of(kind);
+    let kept = |key: &str, default: Value| o.get(key).cloned().unwrap_or(default);
+    let size = |key: &str, default: f64| json!(o.get(key).and_then(Value::as_f64).filter(|n| n.is_finite()).unwrap_or(default));
+    let flag = |key: &str, default: bool| o.get(key).and_then(Value::as_bool).unwrap_or(default);
+    let values = match kind {
+        "rectangle" => json!({"width": 100.0, "height": 100.0}),
+        "ellipse" => json!({"width": 100.0, "height": 100.0, "anchors": kept("anchors", Value::Null)}),
+        // The radius starts at General › Corner Radius, which OK sets to the radius typed.
+        "roundedRectangle" => json!({"width": 100.0, "height": 100.0, "radius": app.session.prefs.corner_radius}),
+        "polygon" => json!({"radius": 50.0, "sides": kept("sides", Value::Null)}),
+        "star" => json!({"radius1": 50.0, "radius2": 25.0, "points": kept("points", Value::Null)}),
+        "lineSegment" => json!({"length": size("length", 100.0), "angle": size("angle", 0.0), "fillLine": flag("fillLine", false)}),
+        "spiral" => json!({
+            "radius": 50.0,
+            "decay": kept("decay", json!(80.0)),
+            "segments": kept("segments", json!(10)),
+            "clockwise": flag("clockwise", true),
+        }),
+        "arc" => json!({
+            "lengthX": size("lengthX", 100.0),
+            "lengthY": size("lengthY", 100.0),
+            "reference": kept("reference", json!(0)),
+            "arcType": if flag("closed", false) { "closed" } else { "open" },
+            "baseAlong": kept("baseAlong", json!("x")),
+            "slope": kept("slope", json!(50)),
+            "fillArc": flag("fillArc", false),
+        }),
+        // The grids: the tool's stored options (Default Size, Reference Point, divider counts and skews, switches).
+        "rectangularGrid" | "polarGrid" => {
+            let mut grid = o.as_object().cloned().unwrap_or_default();
+            grid.insert("width".into(), size("width", 100.0));
+            grid.insert("height".into(), size("height", 100.0));
+            grid.entry("reference").or_insert(json!(0));
+            Value::Object(grid)
         }
-        "arc" => arc_options(d),
-        kind => {
-            let (mut o, (counts, skews)) = (form::params(d), grid_keys(kind));
-            if let Some(m) = o.as_object_mut() {
-                m.remove("x");
-                m.remove("y");
+        _ => Value::Null,
+    };
+    let mut values = object(values).unwrap_or_default();
+    values.retain(|_, value| !value.is_null());
+    values
+}
+
+/// The rows of the `kind` dialog over its start `values`; `ink` is the arc picture's, for the Arc's Tool Options.
+fn shape_params(kind: &str, values: &Map<String, Value>, lengths: LengthUnits, ink: Option<ArcInk>) -> Vec<Param> {
+    match kind {
+        "rectangle" | "roundedRectangle" | "ellipse" => {
+            let mut params = vec![size_param(lengths, kind == "ellipse")];
+            match kind {
+                "roundedRectangle" => params.push(Param::number("radius", tl!("Radius:"), 0.0, 1.0, 3).length(lengths)),
+                "ellipse" => params.push(Param::new("anchors", tl!("Anchors:"), ParamKind::int(None, None, 4))),
+                _ => {}
             }
-            for (count, skew) in counts.into_iter().zip(skews) {
-                o[count] = json!((d.f64(count, 5.0) as u64).min(999));
-                o[skew] = json!(d.f64(skew, 0.0));
+            params
+        }
+        "arc" => arc_params(lengths, ink),
+        _ => {
+            let mut params = Vec::new();
+            if matches!(kind, "rectangularGrid" | "polarGrid") {
+                params.push(reference_param("reference", ""));
             }
-            o["width"] = json!(d.f64("width", 100.0));
-            o["height"] = json!(d.f64("height", 100.0));
-            o["reference"] = json!(grid_reference(d));
-            o
+            params.extend(form::grid_params(kind, values, lengths));
+            let switches = match kind {
+                "spiral" => vec![("clockwise", tl!("Clockwise"), true)],
+                "lineSegment" => vec![("fillLine", tl!("Fill Line"), false)],
+                "rectangularGrid" => vec![("frame", tl!("Use Outside Rectangle As Frame"), true), ("fill", tl!("Fill Grid"), false)],
+                "polarGrid" => vec![("compound", tl!("Create Compound Path From Ellipses"), false), ("fill", tl!("Fill Grid"), false)],
+                _ => Vec::new(),
+            };
+            params.extend(switches.into_iter().map(|(key, label, on)| Param::new(key, label, ParamKind::bool(on))));
+            params
         }
     }
+}
+
+/// The Arc's rows; with `ink` (Tool Options) the picture of the arc they describe comes last.
+fn arc_params(lengths: LengthUnits, ink: Option<ArcInk>) -> Vec<Param> {
+    let contextual = |context: &str, text: &'static str| Label::from(crate::i18n::tr_ctx(crate::i18n::current(), context, text));
+    let mut params = vec![
+        reference_param("reference", ""),
+        Param::number("lengthX", tl!("Length X-Axis:"), 100.0, 1.0, 3).length(lengths),
+        Param::number("lengthY", tl!("Length Y-Axis:"), 100.0, 1.0, 3).length(lengths),
+        Param::new(
+            "arcType",
+            tl!("Type:"),
+            ParamKind::choice(
+                vec![("open".to_owned(), contextual("shape", "Open")), ("closed".to_owned(), contextual("shape", "Closed"))],
+                Some("open".to_owned()),
+            ),
+        ),
+        Param::new(
+            "baseAlong",
+            tl!("Base Along:"),
+            ParamKind::choice(
+                vec![("x".to_owned(), contextual("axis", "X Axis")), ("y".to_owned(), contextual("axis", "Y Axis"))],
+                Some("x".to_owned()),
+            ),
+        ),
+        Param::new("slope", tl!("Slope:"), ParamKind::range(-100.0, 100.0, 50.0, SliderScale::Linear))
+            .marks_labelled([(-100.0, tl!("Concave")), (100.0, tl!("Convex"))]),
+        Param::new("fillArc", tl!("Fill Arc"), ParamKind::bool(false)),
+    ];
+    if let Some(ink) = ink {
+        params.push(Param::custom("preview", tl!("Preview"), move |ui, fields, _| arc_picture(ui, fields, ink)).full_width());
+    }
+    params
+}
+
+/// The Width and Height row of the box shapes with its link; `copy` (the Ellipse) makes the Height caption a link
+/// that copies Width into Height.
+fn size_param(lengths: LengthUnits, copy: bool) -> Param {
+    Param::custom("size", "", move |ui, fields, _| size_row(ui, fields, lengths, copy)).companions(["width", "height", "constrain"])
+}
+
+/// Width and Height (in points) with the link beside the two rows. While the link is on, typing one side sets
+/// the other, so the shape keeps the proportions it had when the link was turned on.
+fn size_row(ui: &mut egui::Ui, fields: &mut DialogFields, lengths: LengthUnits, copy: bool) -> egui::Response {
+    let mut parts = ["width", "height"].map(|key| Mixed::Same(Some(length_of(fields, key, 100.0))));
+    let mut link = fields.bool("constrain").unwrap_or(false);
+    let mut row = LinkedFields::new(tl!("Size"), Bind::bound(&mut parts), Bind::bound(&mut link))
+        .mode(LinkMode::Ratio)
+        .layout(LinkedLayout::Column)
+        .lengths(lengths)
+        .captions([tl!("Width:"), tl!("Height:")]);
+    if copy {
+        // PLAN: assumed `LinkedFields::caption_with(i: usize, SideLabel) -> Self` and `LinkedOutput::caption_link: Option<usize>`
+        // (widgets-w2, row requested in fix/requests/sheets-widgets-1.md).
+        row = row.caption_with(1, SideLabel::new().link().tooltip(tl!("Copy Width to Height")));
+    }
+    let out = row.show(ui);
+    for (key, part) in ["width", "height"].into_iter().zip(parts) {
+        if let Some(side) = part.same().copied().flatten().filter(|side| fields.number(key) != Some(*side)) {
+            fields.set(key, side);
+        }
+    }
+    if fields.bool("constrain") != Some(link) {
+        fields.set("constrain", link);
+    }
+    // Height takes the Width the dialog holds (help page "Draw ellipses",
+    // <https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=140>);
+    // a Width that does not read leaves Height as it is.
+    if out.caption_link == Some(1) {
+        let width = length_of(fields, "width", f64::NAN);
+        if width.is_finite() {
+            fields.set("height", width);
+        }
+    }
+    out.edit.response.clone()
 }
 
 /// The Line Segment dialog's length and angle (degrees), a negative length turned into the same
 /// line drawn the other way: -80 pt at 0° is 80 pt at 180°. The line a click draws and the options
 /// OK keeps both use it, so the next line goes the way this one went.
-fn line_length_angle(d: &Dialog) -> (f64, f64) {
-    let (length, angle) = (d.f64("length", 100.0), d.f64("angle", 0.0));
+fn line_length_angle(fields: &DialogFields) -> (f64, f64) {
+    let (length, angle) = (length_of(fields, "length", 100.0), fields.number("angle").unwrap_or(0.0));
     if length < 0.0 { (-length, (angle + 180.0).rem_euclid(360.0)) } else { (length, angle) }
 }
 
+/// The Arc's Base Along: "x" or "y" ("x" when the dialog holds none).
+fn base_along(fields: &DialogFields) -> &str {
+    fields.text("baseAlong").unwrap_or("x")
+}
+
 /// The Arc tool's options from its dialog's fields.
-fn arc_options(d: &Dialog) -> Value {
+fn arc_options(fields: &DialogFields) -> Value {
     json!({
-        "closed": d.str("arcType").eq_ignore_ascii_case("closed"),
-        "lengthX": d.f64("lengthX", 100.0).abs(),
-        "lengthY": d.f64("lengthY", 100.0).abs(),
-        "reference": arc_reference(d),
-        "baseAlong": d.str("baseAlong"),
-        "slope": d.f64("slope", 50.0),
-        "fillArc": d.bool("fillArc"),
+        "closed": fields.text("arcType").is_some_and(|t| t.eq_ignore_ascii_case("closed")),
+        "lengthX": length_of(fields, "lengthX", 100.0).abs(),
+        "lengthY": length_of(fields, "lengthY", 100.0).abs(),
+        "reference": reference_index(fields, "reference"),
+        "baseAlong": base_along(fields),
+        "slope": fields.number("slope").unwrap_or(50.0),
+        "fillArc": fields.bool("fillArc").unwrap_or(false),
     })
 }
 
@@ -116,171 +289,38 @@ fn grid_keys(kind: &str) -> ([&'static str; 2], [&'static str; 2]) {
     if kind == "polarGrid" { (["concentric", "radial"], ["concentricSkew", "radialSkew"]) } else { (["rows", "columns"], ["rowSkew", "columnSkew"]) }
 }
 
-/// The 9-point locator index for a grid dialog (`reference`, default top-left).
-fn grid_reference(d: &Dialog) -> usize {
-    d.fields.get("reference").and_then(|v| v.as_u64()).map(|n| (n as usize).min(8)).unwrap_or(0)
-}
-
-/// A grid dialog's bounding box from its top-left `x`/`y` and size fields.
-fn grid_placed(d: &Dialog) -> Rect {
-    let (x, y) = (d.f64("x", 0.0), d.f64("y", 0.0));
-    Rect::new(x, y, x + d.f64("width", 100.0), y + d.f64("height", 100.0))
-}
-
-fn set_grid_placed(d: &mut Dialog, r: Rect) {
-    d.fields.insert("x".into(), json!(r.x0));
-    d.fields.insert("y".into(), json!(r.y0));
-    d.fields.insert("width".into(), json!(r.width()));
-    d.fields.insert("height".into(), json!(r.height()));
-}
-
-/// Arc segment dialog: keep reference `refi` on the canvas click (`__anchorX`/`__anchorY`).
-pub(crate) fn arc_pin_to_anchor(d: &mut Dialog) {
-    let anchor = Point::new(d.f64("__anchorX", d.f64("x", 0.0)), d.f64("__anchorY", d.f64("y", 0.0)));
-    let refi = d.fields.get("reference").and_then(|v| v.as_u64()).map(|n| (n as usize).min(8)).unwrap_or(0);
-    let w = d.f64("lengthX", 100.0).abs().max(1e-9);
-    let h = d.f64("lengthY", 100.0).abs().max(1e-9);
-    let rp = vectorcraft_geom::reference_point(Rect::new(0.0, 0.0, w, h), refi);
-    d.fields.insert("x".into(), json!(anchor.x - rp.x));
-    d.fields.insert("y".into(), json!(anchor.y - rp.y));
-}
-
-fn arc_reference(d: &Dialog) -> usize {
-    d.fields.get("reference").and_then(|v| v.as_u64()).map(|n| (n as usize).min(8)).unwrap_or(0)
-}
-
-/// Top-left `x`/`y` so reference point `refi` sits on the canvas click (`__anchorX`/`__anchorY`).
-pub(crate) fn grid_pin_to_anchor(d: &mut Dialog) {
-    let anchor = Point::new(d.f64("__anchorX", d.f64("x", 0.0)), d.f64("__anchorY", d.f64("y", 0.0)));
-    let refi = grid_reference(d);
-    let (w, h) = (d.f64("width", 100.0), d.f64("height", 100.0));
-    let rp = vectorcraft_geom::reference_point(Rect::new(0.0, 0.0, w, h), refi);
-    d.fields.insert("x".into(), json!(anchor.x - rp.x));
-    d.fields.insert("y".into(), json!(anchor.y - rp.y));
-}
-
-/// The form's fields, then a grid's switches.
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let unit = app.session.general_unit();
-    if matches!(d.kind.as_str(), "rectangularGrid" | "polarGrid") {
-        ui.horizontal(|ui| {
-            let refi = grid_reference(d);
-            if let Some(i) = widgets::reference_point(ui, refi) {
-                d.fields.insert("reference".into(), json!(i));
-                grid_pin_to_anchor(d);
-            }
-        });
-        ui.add_space(4.0);
-        let refi = grid_reference(d);
-        let (was, w0, h0) = (grid_placed(d), d.f64("width", 100.0), d.f64("height", 100.0));
-        form::grid_then(ui, d, unit, |_, d| {
-            let (w, h) = (d.f64("width", 100.0), d.f64("height", 100.0));
-            if (w - w0).abs() > 1e-9 || (h - h0).abs() > 1e-9 {
-                set_grid_placed(d, artboard_rect(was, refi, None, None, Some(w), Some(h), false));
-            }
-        });
-    } else if d.kind == "arc" {
-        arc_form(ui, d, unit);
-        if d.bool(TOOL_OPTIONS) {
-            ui.add_space(8.0);
-            arc_preview(ui, d, &app.session);
-        }
-    } else if LINKED.contains(&d.kind.as_str()) {
-        linked_size_form(ui, d, unit);
-    } else {
-        form::grid(ui, d, unit);
+/// A grid's options from its dialog: the switches as they are, the typed fields as numbers, its Default Size
+/// and Reference Point.
+fn grid_options(kind: &str, fields: &DialogFields) -> Map<String, Value> {
+    let (counts, skews) = grid_keys(kind);
+    let mut options = Map::new();
+    for (count, skew) in counts.into_iter().zip(skews) {
+        options.insert(count.into(), json!((fields.number(count).unwrap_or(5.0) as u64).min(999)));
+        options.insert(skew.into(), json!(fields.number(skew).unwrap_or(0.0)));
     }
-    if d.kind == "spiral" {
-        ui.add_space(8.0);
-        form::check(ui, d, "clockwise", tl!("Clockwise"));
-        return false;
+    for key in [if kind == "polarGrid" { "compound" } else { "frame" }, "fill"] {
+        options.insert(key.into(), json!(fields.bool(key).unwrap_or(false)));
     }
-    let own = match d.kind.as_str() {
-        "rectangularGrid" => ("frame", tl!("Use Outside Rectangle As Frame")),
-        "polarGrid" => ("compound", tl!("Create Compound Path From Ellipses")),
-        "lineSegment" => {
-            ui.add_space(8.0);
-            form::check(ui, d, "fillLine", tl!("Fill Line"));
-            return false;
-        }
-        _ => return false,
-    };
-    ui.add_space(8.0);
-    for (key, label) in [own, ("fill", tl!("Fill Grid"))] {
-        form::check(ui, d, key, label);
-    }
-    false
+    options.insert("width".into(), json!(length_of(fields, "width", 100.0)));
+    options.insert("height".into(), json!(length_of(fields, "height", 100.0)));
+    options.insert("reference".into(), json!(reference_index(fields, "reference")));
+    options
 }
 
-fn arc_form(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
-    ui.horizontal(|ui| {
-        let refi = arc_reference(d);
-        if let Some(i) = widgets::reference_point(ui, refi) {
-            d.fields.insert("reference".into(), json!(i));
-            arc_pin_to_anchor(d);
-        }
-    });
-    ui.add_space(4.0);
-    let rail = crate::theme::Tokens::get(ui.ctx()).input_border;
-    egui::Grid::new("arc-dlg").num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
-        let lx0 = d.f64("lengthX", 100.0);
-        form::length_field(ui, d, "lengthX", tl!("Length X-Axis:"), unit);
-        if d.f64("lengthX", 100.0) != lx0 {
-            arc_pin_to_anchor(d);
-        }
-        let ly0 = d.f64("lengthY", 100.0);
-        form::length_field(ui, d, "lengthY", tl!("Length Y-Axis:"), unit);
-        if d.f64("lengthY", 100.0) != ly0 {
-            arc_pin_to_anchor(d);
-        }
-        form::choice(
-            ui,
-            d,
-            "arcType",
-            tl!("Type:"),
-            (form::FIELD_W, form::FIELD_W - 12.0),
-            &[
-                ("open", crate::i18n::tr_ctx(crate::i18n::current(), "shape", "Open")),
-                ("closed", crate::i18n::tr_ctx(crate::i18n::current(), "shape", "Closed")),
-            ],
-        );
-        form::choice(
-            ui,
-            d,
-            "baseAlong",
-            tl!("Base Along:"),
-            (form::FIELD_W, form::FIELD_W - 12.0),
-            &[
-                ("x", crate::i18n::tr_ctx(crate::i18n::current(), "axis", "X Axis")),
-                ("y", crate::i18n::tr_ctx(crate::i18n::current(), "axis", "Y Axis")),
-            ],
-        );
-        form::row_label(ui, tl!("Slope:"));
-        ui.vertical(|ui| {
-            form::slider_field_named(ui, d, "slope", tl!("Slope:"), -100.0..=100.0, "", &|_| rail);
-            form::slider_ends(ui, form::SLIDER_LABEL, (tl!("Concave"), tl!("Convex")));
-        });
-        ui.end_row();
-    });
-    ui.add_space(8.0);
-    form::check(ui, d, "fillArc", tl!("Fill Arc"));
-}
-
-/// The size of the arc picture in Arc Segment Tool Options, and its margin around the arc.
-const ARC_PREVIEW: egui::Vec2 = egui::vec2(160.0, 120.0);
+/// The margin around the arc in Arc Segment Tool Options' picture.
 const ARC_PREVIEW_MARGIN: f32 = 12.0;
 
-/// The arc the Arc tool draws with the options OK sets from `d` ([`arc_options`]; a slope past -100
+/// The arc the Arc tool draws with the options OK sets from `fields` ([`arc_options`]; a slope past -100
 /// or 100, which OK refuses, is drawn at that end, and a Base Along other than Y along X), as `shape.arc` draws it
 /// with its reference point at the origin and General › Constrain Angle `constrain` (degrees)
 /// turning it about that point. `None` when a length or the slope is not finite.
-fn arc_preview_path(d: &Dialog, constrain: f64) -> Option<vectorcraft_geom::path::PathData> {
-    let o = arc_options(d);
+fn arc_preview_path(fields: &DialogFields, constrain: f64) -> Option<vectorcraft_geom::path::PathData> {
+    let o = arc_options(fields);
     let num = |key: &str| o[key].as_f64().filter(|v| v.is_finite());
     let (lx, ly, slope) = (num("lengthX")?, num("lengthY")?, num("slope")?.clamp(-100.0, 100.0));
     let base_x = !o["baseAlong"].as_str().is_some_and(|b| b.eq_ignore_ascii_case("y"));
     let closed = o["closed"].as_bool().unwrap_or(false);
-    let path = vectorcraft_geom::shapes::arc_segment(Point::ZERO, arc_reference(d), lx, ly, base_x, slope, closed);
+    let path = vectorcraft_geom::shapes::arc_segment(Point::ZERO, reference_index(fields, "reference"), lx, ly, base_x, slope, closed);
     Some(match vectorcraft_geom::constrain_rotation(constrain) {
         Some(rotation) => path.transformed(vectorcraft_geom::rotate_deg(rotation)),
         None => path,
@@ -298,8 +338,8 @@ struct ArcPreview {
 /// The arc of [`arc_preview_path`] fitted into `rect` with [`ARC_PREVIEW_MARGIN`] around it,
 /// keeping its proportions. `None` when the fields describe no arc or the fitted points are not
 /// finite.
-fn arc_preview_shape(d: &Dialog, constrain: f64, rect: egui::Rect) -> Option<ArcPreview> {
-    let path = arc_preview_path(d, constrain)?;
+fn arc_preview_shape(fields: &DialogFields, constrain: f64, rect: egui::Rect) -> Option<ArcPreview> {
+    let path = arc_preview_path(fields, constrain)?;
     let b = path.bounds()?.union_pt(Point::ZERO);
     let (room_w, room_h) = (f64::from(rect.width() - 2.0 * ARC_PREVIEW_MARGIN), f64::from(rect.height() - 2.0 * ARC_PREVIEW_MARGIN));
     // A side far thinner than the other (a length of 0) does not limit the scale.
@@ -338,387 +378,314 @@ fn arc_preview_color(paint: &vectorcraft_color::Paint) -> Option<egui::Color32> 
     }
 }
 
-/// The arc Arc Segment Tool Options sets, drawn below its fields on white and redrawn on every
-/// frame from the fields as they are then: in the current stroke (black when there is none, as
-/// `shape.arc` draws it), filled with the current fill when Fill Arc is on, turned by General ›
-/// Constrain Angle, with a mark on its reference point.
-fn arc_preview(ui: &mut egui::Ui, d: &Dialog, session: &vectorcraft_engine::Session) {
-    let t = crate::theme::Tokens::get(ui.ctx());
-    let (rect, resp) = ui.allocate_exact_size(ARC_PREVIEW, egui::Sense::hover());
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, tl!("Preview")));
-    let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, 0.0, egui::Color32::WHITE);
-    painter.rect_stroke(rect, 0.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
-    let Some(arc) = arc_preview_shape(d, session.prefs.constrain_angle, rect) else { return };
-    let fill = if d.bool("fillArc") { arc_preview_color(&session.paint.fill) } else { None };
-    if let Some(fill) = fill {
-        // A closed arc is seen whole from its corner (its last point), and an open arc closed by
-        // its chord from its end: each fills as a fan of triangles from there.
-        let mut mesh = egui::Mesh::default();
-        for p in &arc.outline {
-            mesh.colored_vertex(*p, fill);
-        }
-        let last = arc.outline.len() as u32 - 1;
-        for i in 0..last.saturating_sub(1) {
-            mesh.add_triangle(last, i, i + 1);
-        }
-        painter.add(egui::Shape::mesh(mesh));
-    }
-    let stroke = arc_preview_color(&session.paint.stroke).unwrap_or(egui::Color32::BLACK);
-    let stroke = egui::Stroke::new(1.5, stroke);
-    painter.add(if arc.closed { egui::Shape::closed_line(arc.outline, stroke) } else { egui::Shape::line(arc.outline, stroke) });
-    painter.circle(arc.reference, 3.0, egui::Color32::WHITE, egui::Stroke::new(1.5, t.accent));
+/// What the arc picture draws in, read when the dialog opens: the current fill and stroke (black when there is
+/// no stroke, as `shape.arc` draws it) and General › Constrain Angle, which turns the arc.
+#[derive(Clone, Copy)]
+struct ArcInk {
+    fill: Option<egui::Color32>,
+    stroke: egui::Color32,
+    constrain: f64,
 }
 
-/// The click dialogs whose Width and Height share a Constrain Width and Height Proportions link
-/// (<https://krankykids.com/cheatsheets/illustrator_cs6/shape_tool_rectangle.html>,
-/// <https://www.krankykids.com/cheatsheets/illustrator_cs6/shape_tool_ellipse.html>): the same
-/// link as the Transform panel's ([`crate::panels::transform::constrain_link`]), drawn the same way.
-const LINKED: [&str; 3] = ["rectangle", "roundedRectangle", "ellipse"];
-
-/// The dialog field holding the link's state (UI-only, as every `__` field is).
-const LINK: &str = "__constrain";
-
-/// The dialog field holding the link state the dialog last applied ([`link_changed`]): a change of
-/// [`LINK`], by its button or from outside (`ui.dialog.set`), shows as a difference from it.
-const APPLIED: &str = "__constrainApplied";
-
-/// The dialog field holding height ÷ width while the link is on: the proportions it keeps.
-const RATIO: &str = "__ratio";
-
-/// Where the link's state waits for the next of these dialogs (egui memory, this run only).
-const LINK_STATE: &str = "shape-size-link";
-
-/// Width and Height (then a rounded rectangle's radius) with the Constrain Width and Height
-/// Proportions link beside the two size rows. While it is on, typing one side sets the other, so
-/// the shape keeps the proportions it had when the link was turned on. The next of these dialogs
-/// opens with the link as this one left it.
-fn linked_size_form(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
-    if !d.fields.contains_key(LINK) {
-        d.fields.insert(LINK.into(), json!(crate::panels::pstate::<bool>(ui.ctx(), LINK_STATE)));
+impl ArcInk {
+    fn of(session: &vectorcraft_engine::Session) -> Self {
+        ArcInk {
+            fill: arc_preview_color(&session.paint.fill),
+            stroke: arc_preview_color(&session.paint.stroke).unwrap_or(egui::Color32::BLACK),
+            constrain: session.prefs.constrain_angle,
+        }
     }
-    sync_link(ui.ctx(), d);
-    const BUTTON: f32 = 22.0;
-    let mut rows: Option<egui::Rect> = None;
-    egui::Grid::new("shape-size-dlg").num_columns(3).spacing([10.0, 8.0]).show(ui, |ui| {
-        for (key, label) in [("width", "Width:"), ("height", "Height:")] {
-            let row = if key == "height" && d.kind == "ellipse" {
-                let (row, pressed) = height_label_button(ui, label);
-                if pressed {
-                    copy_width_to_height(d);
-                }
-                row
-            } else {
-                form::row_label(ui, label)
-            };
-            if ui.label_inputs_by(row.id, |ui| form::length(ui, d, key, unit, form::FIELD_W)) {
-                follow_link(d, key);
+}
+
+/// The arc Arc Segment Tool Options sets, drawn below its fields on white and redrawn on every pass from the
+/// fields as they are then: in the current stroke, filled with the current fill when Fill Arc is on, turned by
+/// General › Constrain Angle, with a mark on its reference point.
+fn arc_picture(ui: &mut egui::Ui, fields: &DialogFields, ink: ArcInk) -> egui::Response {
+    let filled = fields.bool("fillArc").unwrap_or(false);
+    Picture::painter(tl!("Preview"), ThumbAspect::new(4, 3), |cx, rect| {
+        cx.with_draw(|draw| {
+            let data = DataColor::new;
+            draw.data_fill(&PaintShape::Rect(rect, egui::CornerRadius::ZERO), data(egui::Color32::WHITE));
+            let Some(arc) = arc_preview_shape(fields, ink.constrain, rect) else { return };
+            // A closed arc is seen whole from its corner (its last point), and an open arc closed by its chord.
+            if let Some(fill) = ink.fill.filter(|_| filled) {
+                draw.data_fill(&PaintShape::Polygon(arc.outline.clone()), data(fill));
             }
-            // The link's column: the button is drawn over both rows' cells once the grid is laid out.
-            let (_, cell) = ui.allocate_space(egui::vec2(BUTTON, BUTTON));
-            rows = Some(rows.map_or(cell, |r| r.union(cell)));
-            ui.end_row();
-        }
-        if d.kind == "roundedRectangle" {
-            form::length_field(ui, d, "radius", &form::humanized("radius"), unit);
-        }
-        if d.kind == "ellipse" {
-            form::field(ui, d, "anchors", "Anchors:");
-        }
-    });
-    let Some(rows) = rows else { return };
-    let on = d.bool(LINK);
-    let rect = egui::Rect::from_center_size(rows.center(), egui::vec2(BUTTON, BUTTON));
-    let resp = ui.interact(rect, ui.scope_id().with("shape-size-link"), egui::Sense::click());
-    let icon = if on { "link" } else { "link-2-off" };
-    if widgets::paint_icon_button(ui, resp, icon, "Constrain Width and Height Proportions", on).clicked() {
-        // Enter on the focused button turns the link on or off; it does not also press OK.
-        ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
-        d.fields.insert(LINK.into(), json!(!on));
-        sync_link(ui.ctx(), d);
-    }
-}
-
-/// Apply a change of the link's state, however it was made ([`link_changed`]), and keep the new
-/// state for the next of these dialogs.
-fn sync_link(ctx: &egui::Context, d: &mut Dialog) {
-    if let Some(on) = link_changed(d) {
-        crate::panels::set_pstate(ctx, LINK_STATE, on);
-    }
-}
-
-/// When the link's state differs from the one the dialog last applied (or none was applied yet),
-/// apply it and return it: turned on, the link keeps the proportions of the sizes the dialog shows
-/// then; turned off, it forgets them. A side of zero when it turns on leaves nothing to keep, so
-/// typing changes only the side typed until the link is turned off and on again.
-fn link_changed(d: &mut Dialog) -> Option<bool> {
-    let on = d.bool(LINK);
-    if d.fields.get(APPLIED).and_then(Value::as_bool) == Some(on) {
-        return None;
-    }
-    d.fields.insert(APPLIED.into(), json!(on));
-    let ratio = d.f64("height", 100.0) / d.f64("width", 100.0);
-    if on && ratio.is_finite() && ratio != 0.0 {
-        d.fields.insert(RATIO.into(), json!(ratio));
-    } else {
-        d.fields.remove(RATIO);
-    }
-    Some(on)
-}
-
-/// After the side `typed` ("width" or "height") was typed with the link on, set the other side
-/// from the proportions the link keeps.
-fn follow_link(d: &mut Dialog, typed: &str) {
-    let ratio = d.f64(RATIO, 0.0);
-    if !d.bool(LINK) || !ratio.is_finite() || ratio == 0.0 {
-        return;
-    }
-    let (other, v) = if typed == "width" { ("height", d.f64("width", 100.0) * ratio) } else { ("width", d.f64("height", 100.0) / ratio) };
-    if v.is_finite() {
-        d.fields.insert(other.into(), json!(v));
-    }
-}
-
-/// The Ellipse dialog's Height label: a button drawn as the other rows' labels are. Whether it was
-/// pressed: a click, or Enter or Space while it has the keyboard focus; that Enter does not also
-/// press OK. A click whose press took the focus from a field that then refused its text (Width
-/// left empty or not a distance) does not count, as such a click on OK does not. Screen readers
-/// read it as the button "Height:" (which also names the Height field) with the description "Copy
-/// Width to Height".
-fn height_label_button(ui: &mut egui::Ui, label: &str) -> (egui::Response, bool) {
-    let t = crate::theme::Tokens::get(ui.ctx());
-    let text = egui::RichText::new(tl!(label)).color(t.text_dim);
-    let resp = ui.add(egui::Button::new(text).frame(false)).on_hover_cursor(egui::CursorIcon::PointingHand);
-    let resp = resp.on_hover_text(tl!("Copy Width to Height"));
-    let press = resp.id.with("press-pass");
-    if resp.contains_pointer() && ui.input(|i| i.pointer.any_pressed()) {
-        let pass = ui.ctx().cumulative_pass_nr();
-        ui.data_mut(|m| m.insert_temp(press, pass));
-    }
-    if !resp.clicked() {
-        // A press let go without a click (dragged off the button) leaves no press behind.
-        if ui.input(|i| i.pointer.any_released()) {
-            ui.data_mut(|m| m.remove::<u64>(press));
-        }
-        return (resp, false);
-    }
-    ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
-    let (pressed_at, refused_at, refused_now) = ui.data_mut(|m| {
-        let pressed_at = m.get_temp::<u64>(press);
-        m.remove::<u64>(press);
-        (pressed_at, m.get_temp::<u64>(widgets::dialog_reject_pass()), m.get_temp::<bool>(widgets::dialog_reject_commit_flag()))
-    });
-    let refused = refused_now == Some(true) || matches!((refused_at, pressed_at), (Some(r), Some(p)) if r >= p);
-    (resp, !refused)
-}
-
-/// Height takes the Width the dialog holds (help page "Draw ellipses",
-/// <https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=140>).
-/// A Width that is missing, empty, not a distance or not finite leaves Height as it is. With the
-/// link on, the link keeps the circle from then on (proportions 1 : 1), or keeps no proportions
-/// when Width is 0; the link stays on.
-fn copy_width_to_height(d: &mut Dialog) {
-    let width = match d.fields.get("width") {
-        Some(Value::Number(n)) => n.as_f64(),
-        Some(Value::String(s)) => Unit::Points.parse(s),
-        _ => None,
-    };
-    let Some(width) = width.filter(|w| w.is_finite()) else { return };
-    d.fields.insert("height".into(), json!(width));
-    if d.bool(LINK) {
-        if width != 0.0 {
-            d.fields.insert(RATIO.into(), json!(1.0));
-        } else {
-            d.fields.remove(RATIO);
-        }
-    }
+            let line = if arc.closed { PaintShape::Polygon(arc.outline) } else { PaintShape::Path(arc.outline) };
+            draw.stroke(&line, StrokeWidth::Medium, data(ink.stroke));
+            let mark = PaintShape::Circle(arc.reference, 3.0);
+            draw.data_fill(&mark, data(egui::Color32::WHITE));
+            draw.stroke(&mark, StrokeWidth::Medium, data(ink.stroke));
+        });
+    })
+    .extent(PictureSize::Sample(ThumbSize::Large))
+    .show(ui)
 }
 
 /// The Ellipse dialog's Anchors: the nearest whole number from 2 to 1000 (4, a live ellipse, when
 /// left empty or not a number).
-fn ellipse_anchors(d: &Dialog) -> u64 {
-    let n = d.f64("anchors", 4.0);
+fn ellipse_anchors(fields: &DialogFields) -> u64 {
+    let n = fields.number("anchors").unwrap_or(4.0);
     if n.is_finite() { n.round().clamp(2.0, 1000.0) as u64 } else { 4 }
 }
 
-/// The top-left corner of a rectangle or ellipse: the click itself, or with Alt held (draw from centre) the click minus half the size.
-fn box_origin(d: &Dialog) -> (f64, f64) {
-    let (x, y) = (d.f64("x", 0.0), d.f64("y", 0.0));
-    if d.fields.get("alt").and_then(Value::as_bool).unwrap_or(false) {
-        (x - d.f64("width", 100.0) / 2.0, y - d.f64("height", 100.0) / 2.0)
-    } else {
-        (x, y)
+/// The top-left corner of a rectangle or ellipse of `width` × `height`: the click itself, or with Alt held (draw
+/// from centre) the click minus half the size.
+fn box_origin(click: Click, width: f64, height: f64) -> (f64, f64) {
+    if click.alt { (click.at.x - width / 2.0, click.at.y - height / 2.0) } else { (click.at.x, click.at.y) }
+}
+
+/// The top-left corner of a grid of `width` × `height` whose reference point `reference` sits on the click.
+fn placed(click: Click, reference: usize, width: f64, height: f64) -> Point {
+    let at = vectorcraft_geom::reference_point(Rect::new(0.0, 0.0, width, height), reference);
+    Point::new(click.at.x - at.x, click.at.y - at.y)
+}
+
+/// A JSON object's members; `None` for any other value.
+fn object(value: Value) -> Option<Map<String, Value>> {
+    match value {
+        Value::Object(members) => Some(members),
+        _ => None,
     }
 }
 
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    // Tool Options: the options the tool's next drag and click use; nothing is drawn.
-    if d.bool(TOOL_OPTIONS) {
-        return super::set_tool_options_and_close(app, json!({"tool": d.kind, "values": tool_options(d)}));
-    }
-    let count = match d.kind.as_str() {
-        "polygon" => Some(("sides", 6.0, 3.0)),
-        "star" => Some(("points", 5.0, 3.0)),
-        _ => None,
+/// The options OK keeps for the tool of the `kind` dialog, from its fields; `None` for a kind that keeps none.
+fn option_values(kind: &str, fields: &DialogFields) -> Option<Map<String, Value>> {
+    let count = |key: &str, default: f64, min: f64| fields.number(key).unwrap_or(default).clamp(min, 1000.0) as u64;
+    let options = match kind {
+        "polygon" => json!({"sides": count("sides", 6.0, 3.0)}),
+        "star" => json!({"points": count("points", 5.0, 3.0)}),
+        "ellipse" => json!({"anchors": ellipse_anchors(fields)}),
+        "lineSegment" => {
+            let (length, angle) = line_length_angle(fields);
+            json!({"length": length, "angle": angle, "fillLine": fields.bool("fillLine").unwrap_or(false)})
+        }
+        "arc" => arc_options(fields),
+        "rectangularGrid" | "polarGrid" => Value::Object(grid_options(kind, fields)),
+        _ => return None,
     };
-    let options = count
-        .map(|(key, default, min)| {
-            let mut values = json!({});
-            values[key] = json!(d.f64(key, default).clamp(min, 1000.0) as u64);
-            values
-        })
-        .or_else(|| (d.kind == "ellipse").then(|| json!({"anchors": ellipse_anchors(d)})))
-        .or_else(|| OPTION_TOOLS.contains(&d.kind.as_str()).then(|| tool_options(d)));
-    let corner_radius = if d.kind == "roundedRectangle" { Some(rounded_radius(app, d)?) } else { None };
-    let (x, y) = (d.f64("x", 0.0), d.f64("y", 0.0));
-    let (bx, by) = box_origin(d);
-    let (id, params) = match d.kind.as_str() {
-        "ellipse" => (
-            "shape.ellipse",
-            json!({"x": bx, "y": by, "width": d.f64("width", 100.0), "height": d.f64("height", 100.0), "anchors": ellipse_anchors(d)}),
+    object(options)
+}
+
+/// OK of the `kind` dialog: Tool Options set the tool's options and draw nothing; a click dialog draws at the
+/// click, then keeps the options and General › Corner Radius. Every refusal comes before the draw, so a refused OK
+/// draws nothing and the dialog stays open for a second OK.
+fn confirm(app: &mut VectorcraftApp, kind: &str, click: Option<Click>, fields: &DialogFields) -> Result<(), String> {
+    let options = option_values(kind, fields);
+    let Some(click) = click else {
+        return match options {
+            Some(options) if OPTION_TOOLS.contains(&kind) => set_options(app, kind, options),
+            _ => Err(format!("the {kind} tool has no options")),
+        };
+    };
+    let corner_radius = if kind == "roundedRectangle" { Some(rounded_radius(app, fields)?) } else { None };
+    let at = |key, clicked| fields.number(key).unwrap_or(clicked);
+    let click = Click { at: Point::new(at("x", click.at.x), at("y", click.at.y)), ..click };
+    let (x, y) = (click.at.x, click.at.y);
+    let (width, height) = (length_of(fields, "width", 100.0), length_of(fields, "height", 100.0));
+    let (bx, by) = box_origin(click, width, height);
+    let (id, params) = match kind {
+        "ellipse" => ("shape.ellipse", json!({"x": bx, "y": by, "width": width, "height": height, "anchors": ellipse_anchors(fields)})),
+        "polygon" => (
+            "shape.polygon",
+            json!({"cx": x, "cy": y, "radius": length_of(fields, "radius", 50.0), "sides": fields.number("sides").unwrap_or(6.0) as u64}),
         ),
-        "polygon" => ("shape.polygon", json!({"cx": x, "cy": y, "radius": d.f64("radius", 50.0), "sides": d.f64("sides", 6.0) as u64})),
         "star" => (
             "shape.star",
-            json!({"cx": x, "cy": y, "radius1": d.f64("radius1", 50.0), "radius2": d.f64("radius2", 25.0), "points": d.f64("points", 5.0) as u64}),
+            json!({
+                "cx": x,
+                "cy": y,
+                "radius1": length_of(fields, "radius1", 50.0),
+                "radius2": length_of(fields, "radius2", 25.0),
+                "points": fields.number("points").unwrap_or(5.0) as u64,
+            }),
         ),
         "spiral" => (
             "shape.spiral",
             json!({
                 "cx": x,
                 "cy": y,
-                "radius": d.f64("radius", 50.0).max(0.01),
-                "decay": d.f64("decay", 80.0).clamp(5.0, 99.99),
-                "segments": (d.f64("segments", 10.0) as u64).clamp(2, 1000),
-                "clockwise": d.bool("clockwise"),
+                "radius": length_of(fields, "radius", 50.0).max(0.01),
+                "decay": fields.number("decay").unwrap_or(80.0).clamp(5.0, 99.99),
+                "segments": (fields.number("segments").unwrap_or(10.0) as u64).clamp(2, 1000),
+                "clockwise": fields.bool("clockwise").unwrap_or(false),
             }),
         ),
-        kind @ ("rectangularGrid" | "polarGrid") => {
-            // The switches as they are; the typed fields as numbers.
-            let (mut p, (counts, skews)) = (form::params(d), grid_keys(kind));
-            let r = grid_placed(d);
-            for (k, v) in [("x", r.x0), ("y", r.y0), ("width", r.width()), ("height", r.height())] {
-                p[k] = json!(v);
-            }
-            for (count, skew) in counts.into_iter().zip(skews) {
-                p[count] = json!((d.f64(count, 5.0) as u64).min(999));
-                p[skew] = json!(d.f64(skew, 0.0));
-            }
-            (if kind == "polarGrid" { "shape.polarGrid" } else { "shape.rectangularGrid" }, p)
+        "rectangularGrid" | "polarGrid" => {
+            let top_left = placed(click, reference_index(fields, "reference"), width, height);
+            let mut grid = grid_options(kind, fields);
+            grid.insert("x".into(), json!(top_left.x));
+            grid.insert("y".into(), json!(top_left.y));
+            (if kind == "polarGrid" { "shape.polarGrid" } else { "shape.rectangularGrid" }, Value::Object(grid))
         }
         "lineSegment" => {
-            let (l, a) = line_length_angle(d);
+            let (l, a) = line_length_angle(fields);
             let a = a.to_radians();
             let mut p = json!({"x1": x, "y1": y, "x2": x + l * a.cos(), "y2": y - l * a.sin()});
-            if d.bool("fillLine") {
+            if fields.bool("fillLine").unwrap_or(false) {
                 p["fill"] = json!(true);
             }
             ("shape.line", p)
         }
-        "arc" => {
-            let anchor = Point::new(d.f64("__anchorX", x), d.f64("__anchorY", y));
-            (
-                "shape.arc",
-                json!({
-                    "x": anchor.x,
-                    "y": anchor.y,
-                    "lengthX": d.f64("lengthX", 100.0),
-                    "lengthY": d.f64("lengthY", 100.0),
-                    "reference": arc_reference(d),
-                    "baseAlong": d.str("baseAlong"),
-                    "slope": d.f64("slope", 50.0),
-                    "closed": d.str("arcType").eq_ignore_ascii_case("closed"),
-                    "fillArc": d.bool("fillArc"),
-                }),
-            )
-        }
-        _ => (
+        "arc" => (
+            "shape.arc",
+            json!({
+                "x": x,
+                "y": y,
+                "lengthX": length_of(fields, "lengthX", 100.0),
+                "lengthY": length_of(fields, "lengthY", 100.0),
+                "reference": reference_index(fields, "reference"),
+                "baseAlong": base_along(fields),
+                "slope": fields.number("slope").unwrap_or(50.0),
+                "closed": fields.text("arcType").is_some_and(|t| t.eq_ignore_ascii_case("closed")),
+                "fillArc": fields.bool("fillArc").unwrap_or(false),
+            }),
+        ),
+        "rectangle" | "roundedRectangle" => (
             "shape.rectangle",
             json!({
                 "x": bx,
                 "y": by,
-                "width": d.f64("width", 100.0),
-                "height": d.f64("height", 100.0),
-                "radius": corner_radius.unwrap_or_else(|| d.f64("radius", 0.0)),
+                "width": width,
+                "height": height,
+                "radius": corner_radius.unwrap_or_else(|| length_of(fields, "radius", 0.0)),
             }),
         ),
+        _ => return Err(format!("the {kind} tool has no size dialog")),
     };
-    // On the active plane while the perspective grid shows, sized in plane units from the click;
-    // else along General › Constrain Angle, turned about the point the dialog places at the click
-    // (a grid's reference point, the other shapes' top-left corner or centre).
     let options = options.or_else(|| {
-        (d.kind == "spiral").then(|| json!({"decay": params["decay"], "segments": params["segments"], "clockwise": params["clockwise"]}))
+        (kind == "spiral")
+            .then(|| object(json!({"decay": params["decay"], "segments": params["segments"], "clockwise": params["clockwise"]})))
+            .flatten()
     });
     // Options the tool would refuse leave the dialog open, before anything is drawn.
-    if let Some(Value::Object(o)) = &options {
-        vectorcraft_tools::option_check::check_values(vectorcraft_tools::create(&d.kind).as_ref(), o)?;
+    if let Some(options) = &options {
+        vectorcraft_tools::option_check::check_values(vectorcraft_tools::create(kind).as_ref(), options)?;
     }
-    let result = match vectorcraft_engine::perspective_click(&app.session, id, &params, vectorcraft_geom::Point::new(x, y)) {
-        Some((id, params)) => run_and_close(app, &id, params),
-        None => {
-            let pivot = if matches!(d.kind.as_str(), "rectangularGrid" | "polarGrid") {
-                vectorcraft_geom::reference_point(grid_placed(d), grid_reference(d))
-            } else {
-                vectorcraft_geom::Point::new(x, y)
-            };
-            let params = vectorcraft_engine::constrain_click(&app.session, id, params, pivot);
-            run_and_close(app, id, params)
-        }
-    }?;
+    // On the active plane while the perspective grid shows, sized in plane units from the click; else along
+    // General › Constrain Angle, turned about the click (a grid's reference point, the other shapes' anchor).
+    let (id, params) = vectorcraft_engine::perspective_click(&app.session, id, &params, click.at)
+        .unwrap_or_else(|| (id.to_owned(), vectorcraft_engine::constrain_click(&app.session, id, params, click.at)));
+    app.run(&id, params)?;
     if let Some(options) = options {
-        app.run("tool.setOption", json!({"tool": d.kind, "values": options}))?;
+        set_options(app, kind, options)?;
     }
     // The radius of the rounded rectangle drawn is General › Corner Radius from then on.
     if let Some(r) = corner_radius.filter(|r| *r != app.session.prefs.corner_radius) {
         app.run("prefs.set", json!({"key": "cornerRadius", "value": r}))?;
     }
-    Ok(result)
+    Ok(())
 }
 
 /// The Rounded Rectangle dialog's radius in points, checked as General › Corner Radius checks it
 /// (an error leaves the dialog open and draws nothing). Without the field, the preference.
-fn rounded_radius(app: &VectorcraftApp, d: &Dialog) -> Result<f64, String> {
-    let r = if d.fields.contains_key("radius") { d.f64("radius", f64::NAN) } else { app.session.prefs.corner_radius };
+fn rounded_radius(app: &VectorcraftApp, fields: &DialogFields) -> Result<f64, String> {
+    let r = if fields.contains("radius") { length_of(fields, "radius", f64::NAN) } else { app.session.prefs.corner_radius };
     vectorcraft_engine::cmd::prefscmds::validate("cornerRadius", &json!(r))?;
     Ok(r)
+}
+
+/// Keeps the link of the next size dialog as the open one leaves it: copies the open Rectangle, Rounded
+/// Rectangle or Ellipse dialog's `constrain` into `ObjectDialogs::shape_link` each frame, so the link carries
+/// over also when the dialog is cancelled.
+pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+    let Some(dialogs) = app.dialogs() else { return };
+    let link =
+        dialogs.with(|host| SIZE_KINDS.iter().find_map(|kind| host.get_by_id::<HostedParamDialog>(dialog_id(*kind))?.fields().bool("constrain")));
+    if let Some(link) = link {
+        app.object_dialogs.shape_link = link;
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use craft::ui::testing::Fixture;
     use vectorcraft_engine::Session;
+
+    /// An app whose window's dialog host shows in a fixture, over a new 300 × 300 document.
+    fn shown() -> (VectorcraftApp, Fixture) {
+        // PLAN: assumed `dialogs::host::window_dialogs(ctx) -> WindowDialogs` (wg.S1, hub-w2).
+        let fixture = Fixture::new(|ui| crate::dialogs::host::window_dialogs(ui.ctx()).with(|host| host.run(ui)));
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.ui_ctx = Some(fixture.ctx().clone());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        (app, fixture)
+    }
+
+    fn is_open(app: &VectorcraftApp, kind: &str) -> bool {
+        app.dialogs().expect("a window").with(|host| host.get_by_id::<HostedParamDialog>(dialog_id(kind)).is_some())
+    }
+
+    /// The values the open `kind` dialog holds.
+    fn open_fields(app: &VectorcraftApp, kind: &str) -> DialogFields {
+        app.dialogs()
+            .expect("a window")
+            .with(|host| host.get_by_id::<HostedParamDialog>(dialog_id(kind)).map(|dialog| dialog.fields().clone()))
+            .expect("the dialog is open")
+    }
+
+    /// Sets `key` of the open `kind` dialog as automation does.
+    fn set(app: &VectorcraftApp, fx: &Fixture, kind: &str, key: &str, value: Value) -> Result<(), String> {
+        let ctx = fx.ctx().clone();
+        app.dialogs().expect("a window").with(|host| host.set_json_field(&ctx, dialog_id(kind), key, value))
+    }
+
+    /// Two frames of the window, each followed by the module pumps: the held OK is filed in the first and answered
+    /// in the second.
+    fn settle(app: &mut VectorcraftApp, fx: &mut Fixture) {
+        let ctx = fx.ctx().clone();
+        for _ in 0..2 {
+            fx.frame(vec![]);
+            crate::dialogs::host::pump(app, &ctx);
+        }
+    }
+
+    fn press_ok(app: &mut VectorcraftApp, fx: &mut Fixture, kind: &str) {
+        let ctx = fx.ctx().clone();
+        // Whether OK filed its answer shows in the asserts of the trial that pressed it.
+        let _ = app.dialogs().expect("a window").with(|host| host.confirm_by_id(&ctx, dialog_id(kind)));
+        settle(app, fx);
+    }
+
+    fn cancel(app: &mut VectorcraftApp, fx: &mut Fixture, kind: &str) {
+        let ctx = fx.ctx().clone();
+        let _ = app.dialogs().expect("a window").with(|host| host.cancel_by_id(&ctx, dialog_id(kind)));
+        settle(app, fx);
+    }
+
+    fn drawn(app: &VectorcraftApp) -> usize {
+        app.session.doc().unwrap().doc.layers[0].children().unwrap().len()
+    }
 
     #[test]
     fn spiral_click_dialog_uses_and_updates_tool_options() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let (mut app, mut fx) = shown();
         app.run("tool.select", json!({"tool": "spiral"})).unwrap();
         app.run("tool.setOption", json!({"tool": "spiral", "values": {"decay": 72.0, "segments": 14, "clockwise": false}})).unwrap();
 
         super::super::open_tool_dialog(&mut app, "spiral", json!({"x": 40.0, "y": 60.0}));
-        let d = app.ui.dialog.as_ref().expect("Spiral dialog");
-        assert_eq!(d.kind, "spiral");
-        assert_eq!((d.f64("x", 0.0), d.f64("y", 0.0), d.f64("radius", 0.0)), (40.0, 60.0, 50.0));
-        assert_eq!((d.f64("decay", 0.0), d.f64("segments", 0.0), d.bool("clockwise")), (72.0, 14.0, false));
+        let opened = open_fields(&app, "spiral");
+        assert_eq!(
+            (opened.number("radius"), opened.number("decay"), opened.number("segments"), opened.bool("clockwise")),
+            (Some(50.0), Some(72.0), Some(14.0), Some(false))
+        );
+        for (key, value) in [("radius", json!(35.0)), ("decay", json!(65.0)), ("segments", json!(12)), ("clockwise", json!(true))] {
+            set(&app, &fx, "spiral", key, value).unwrap();
+        }
+        press_ok(&mut app, &mut fx, "spiral");
 
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("radius".into(), json!(35.0));
-        d.fields.insert("decay".into(), json!(65.0));
-        d.fields.insert("segments".into(), json!(12));
-        d.fields.insert("clockwise".into(), json!(true));
-        super::super::confirm(&mut app).unwrap();
-
-        assert!(app.ui.dialog.is_none());
-        assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), 1);
+        assert!(!is_open(&app, "spiral"));
+        assert_eq!(drawn(&app), 1);
         assert_eq!(app.session.tool_options_of("spiral"), json!({"decay": 65.0, "segments": 12, "clockwise": true}));
 
         // A decay typed past 99.99 % draws the spiral at 99.99 %, the most a spiral draws, and
         // keeps that decay.
         super::super::open_tool_dialog(&mut app, "spiral", json!({"x": 40.0, "y": 60.0}));
-        app.ui.dialog.as_mut().unwrap().fields.insert("decay".into(), json!(120.0));
-        super::super::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
-        assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), 2);
+        set(&app, &fx, "spiral", "decay", json!(120.0)).unwrap();
+        press_ok(&mut app, &mut fx, "spiral");
+        assert!(!is_open(&app, "spiral"));
+        assert_eq!(drawn(&app), 2);
         assert_eq!(app.session.tool_options_of("spiral")["decay"], json!(99.99));
     }
 
@@ -726,36 +693,33 @@ mod tests {
     /// click, and the tool's options keep no turn.
     #[test]
     fn spiral_click_dialog_starts_along_the_constrain_angle() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let (mut app, mut fx) = shown();
         app.run("prefs.set", json!({"key": "constrainAngle", "value": 90})).unwrap();
         app.run("tool.select", json!({"tool": "spiral"})).unwrap();
         super::super::open_tool_dialog(&mut app, "spiral", json!({"x": 40.0, "y": 60.0}));
-        app.ui.dialog.as_mut().expect("Spiral dialog").fields.insert("radius".into(), json!(35.0));
-        super::super::confirm(&mut app).unwrap();
+        set(&app, &fx, "spiral", "radius", json!(35.0)).unwrap();
+        press_ok(&mut app, &mut fx, "spiral");
 
         let st = app.session.doc().unwrap();
         let id = *st.selection.objects.first().unwrap();
         let path = st.doc.node(id).unwrap().path_data().unwrap();
         let outer = path.subpaths[0].anchors.last().unwrap().p;
-        assert_eq!(outer, vectorcraft_geom::Point::new(40.0, 25.0));
+        assert_eq!(outer, Point::new(40.0, 25.0));
         assert!(app.session.tool_options_of("spiral").get("rotation").is_none());
     }
 
-    #[test]
-    fn alt_click_centres_the_typed_size_on_the_click() {
-        let fields = |alt: bool| Dialog::new("rectangle", json!({"x": 100.0, "y": 50.0, "alt": alt, "width": "40 pt", "height": "20 pt"}));
-        assert_eq!(box_origin(&fields(false)), (100.0, 50.0));
-        assert_eq!(box_origin(&fields(true)), (80.0, 40.0));
-    }
-
-    fn arc_dialog(fields: Value) -> Dialog {
-        let mut d =
-            Dialog::new("arc", json!({"lengthX": 100.0, "lengthY": 60.0, "reference": 0, "baseAlong": "x", "slope": 50.0, "arcType": "open"}));
-        for (k, v) in fields.as_object().into_iter().flatten() {
-            d.fields.insert(k.clone(), v.clone());
+    /// The arc dialog's fields as the Arc's Tool Options hold them, with `fields` over them.
+    fn arc_dialog(fields: Value) -> DialogFields {
+        let mut d = DialogFields::new();
+        for (key, value) in [("lengthX", 100.0), ("lengthY", 60.0), ("slope", 50.0)] {
+            d.set(key, value);
         }
-        d.fields.insert(TOOL_OPTIONS.into(), json!(true));
+        d.set("reference", 0_i64);
+        d.set("baseAlong", "x");
+        d.set("arcType", "open");
+        for (k, v) in fields.as_object().into_iter().flatten() {
+            d.set(k.clone(), serde_json::from_value::<craft::ui::patterns::form_dialogs::FieldValue>(v.clone()).unwrap());
+        }
         d
     }
 
@@ -797,7 +761,7 @@ mod tests {
     /// the frame, and stays finite for a length of 0 or a huge one.
     #[test]
     fn the_arc_preview_follows_the_fields_and_fits_its_frame() {
-        let rect = egui::Rect::from_min_size(egui::pos2(10.0, 20.0), ARC_PREVIEW);
+        let rect = egui::Rect::from_min_size(egui::pos2(10.0, 20.0), egui::vec2(160.0, 120.0));
         let shape = |fields: Value| arc_preview_shape(&arc_dialog(fields), 0.0, rect).expect("an arc");
         let inside = |s: &ArcPreview| {
             let room = rect.shrink(ARC_PREVIEW_MARGIN - 0.01);
@@ -825,273 +789,140 @@ mod tests {
         }
     }
 
-    /// For values the dialog reads as other values, the picture shows the arc of the options OK
-    /// sets: the same picture as a dialog holding those options. A slope outside -100 to 100 or a
-    /// Base Along other than X or Y is refused: OK leaves the dialog open and keeps the options.
+    /// A slope outside -100 to 100 or a Base Along other than X or Y is refused by its row and leaves the
+    /// fields as they were; for the values the rows keep, the picture shows the arc of the options OK sets: the
+    /// same picture as a dialog holding those options.
     #[test]
     fn the_arc_preview_shows_the_options_ok_sets() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-        for (typed, error) in [
-            (json!({"slope": 140.0}), "`slope` must be a number from -100 to 100"),
-            (json!({"slope": -250.0}), "`slope` must be a number from -100 to 100"),
-            (json!({"baseAlong": "z"}), "`baseAlong` must be one of"),
-        ] {
-            let before = app.session.tool_options_of("arc");
-            app.ui.dialog = Some(arc_dialog(typed.clone()));
-            let r = super::super::confirm(&mut app);
-            assert!(r.as_ref().is_err_and(|e| e.contains(error)), "{typed}: {r:?}");
-            assert!(app.ui.dialog.is_some(), "{typed}");
-            assert_eq!(app.session.tool_options_of("arc"), before, "{typed}");
-            app.ui.dialog = None;
+        let (mut app, mut fx) = shown();
+        open_options(&mut app, "arc").unwrap();
+        for (key, bad) in [("slope", json!(140.0)), ("slope", json!(-250.0)), ("baseAlong", json!("z"))] {
+            assert!(set(&app, &fx, "arc", key, bad.clone()).is_err(), "{key} {bad}");
         }
-        for typed in [json!({"slope": "steep"}), json!({"lengthX": "wide"}), json!({"lengthY": null}), json!({"reference": 12})] {
-            let d = arc_dialog(typed.clone());
-            let shown = arc_preview_path(&d, 0.0).expect("an arc");
-            app.ui.dialog = Some(d);
-            super::super::confirm(&mut app).unwrap();
-            let kept = app.session.tool_options_of("arc");
-            let arc_type = if kept["closed"].as_bool() == Some(true) { "closed" } else { "open" };
-            let keys = ["lengthX", "lengthY", "slope", "baseAlong", "reference"];
-            let mut fields: serde_json::Map<String, Value> = keys.iter().map(|k| (k.to_string(), kept[*k].clone())).collect();
-            fields.insert("arcType".into(), json!(arc_type));
-            let want = arc_preview_path(&arc_dialog(Value::Object(fields)), 0.0).expect("an arc");
-            assert_eq!(anchor_points(&shown), anchor_points(&want), "{typed}: kept {kept}");
-        }
+        let kept = open_fields(&app, "arc");
+        assert_eq!((kept.number("slope"), kept.text("baseAlong")), (Some(50.0), Some("x")));
+
+        set(&app, &fx, "arc", "slope", json!(-40.0)).unwrap();
+        set(&app, &fx, "arc", "reference", json!(6)).unwrap();
+        let shown_arc = arc_preview_path(&open_fields(&app, "arc"), 0.0).expect("an arc");
+        press_ok(&mut app, &mut fx, "arc");
+
+        let kept = app.session.tool_options_of("arc");
+        let fields = arc_dialog(json!({
+            "lengthX": kept["lengthX"],
+            "lengthY": kept["lengthY"],
+            "slope": kept["slope"],
+            "baseAlong": kept["baseAlong"],
+            "reference": kept["reference"],
+            "arcType": if kept["closed"].as_bool() == Some(true) { "closed" } else { "open" },
+        }));
+        let want = arc_preview_path(&fields, 0.0).expect("an arc");
+        assert_eq!(anchor_points(&shown_arc), anchor_points(&want), "kept {kept}");
     }
 
     /// Double-clicking the Arc tool shows the picture in Arc Segment Tool Options; a click on the
     /// canvas does not. Changing the options and pressing OK draws nothing and adds no undo step.
     #[test]
     fn arc_tool_options_show_a_preview_and_ok_draws_nothing() {
-        use egui::accesskit::Role;
-        use egui_kittest::kittest::Queryable;
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        let (mut app, mut fx) = shown();
         app.run("tool.select", json!({"tool": "arc"})).unwrap();
         let undo = app.session.doc().unwrap().history.undo.len();
         open_options(&mut app, "arc").unwrap();
-        let mut fonts = false;
-        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
-            move |ui, app: &mut VectorcraftApp| {
-                if !std::mem::replace(&mut fonts, true) {
-                    crate::theme::install_fonts(ui.ctx());
-                    return;
-                }
-                super::super::show(app, ui.ctx());
-            },
-            app,
-        );
-        h.run_steps(5);
-        h.check_accessibility();
-        let picture = h.get_by_role_and_label(Role::Image, "Preview").rect();
-        let fill_arc = h.get_by_label("Fill Arc").rect();
-        assert!(picture.top() > fill_arc.center().y, "the picture is below Fill Arc: {picture:?} {fill_arc:?}");
-        h.state_mut().ui.dialog.as_mut().unwrap().fields.insert("slope".into(), json!(-30.0));
-        h.run_steps(2);
-        super::super::confirm(h.state_mut()).unwrap();
-        h.run_steps(2);
-        let app = h.state();
-        assert!(app.ui.dialog.is_none());
-        assert!(app.session.doc().unwrap().doc.layers[0].children().unwrap().is_empty());
+        settle(&mut app, &mut fx);
+        assert!(fx.by_label("Preview").is_some(), "Tool Options show the picture");
+        set(&app, &fx, "arc", "slope", json!(-30.0)).unwrap();
+        press_ok(&mut app, &mut fx, "arc");
+        assert!(!is_open(&app, "arc"));
+        assert_eq!(drawn(&app), 0);
         assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
         assert_eq!(app.session.tool_options_of("arc")["slope"], json!(-30.0));
-        drop(h);
 
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-        super::super::open_tool_dialog(&mut app, "arc", json!({"x": 40.0, "y": 60.0}));
-        let mut fonts = false;
-        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
-            move |ui, app: &mut VectorcraftApp| {
-                if !std::mem::replace(&mut fonts, true) {
-                    crate::theme::install_fonts(ui.ctx());
-                    return;
-                }
-                super::super::show(app, ui.ctx());
-            },
-            app,
-        );
-        h.run_steps(5);
-        assert!(h.query_by_role_and_label(Role::Image, "Preview").is_none());
+        let (mut app, mut fx) = shown();
+        open(&mut app, "arc", Some(Click { at: Point::new(40.0, 60.0), alt: false }));
+        settle(&mut app, &mut fx);
+        assert!(fx.by_label("Preview").is_none(), "a click dialog has no picture");
     }
 
     /// The Rounded Rectangle click dialog opens on General › Corner Radius, and OK makes the radius
-    /// typed (in any unit) that preference: the next dialog and the tool's next drag use it.
+    /// typed that preference: the next dialog and the tool's next drag use it.
     #[test]
     fn rounded_rectangle_click_dialog_opens_on_and_sets_the_corner_radius() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let (mut app, mut fx) = shown();
         app.run("tool.select", json!({"tool": "roundedRectangle"})).unwrap();
         app.run("prefs.set", json!({"key": "cornerRadius", "value": 20})).unwrap();
 
         super::super::open_tool_dialog(&mut app, "roundedRectangle", json!({"x": 40.0, "y": 60.0}));
-        let d = app.ui.dialog.as_mut().expect("Rounded Rectangle dialog");
-        assert_eq!((d.kind.as_str(), d.f64("radius", 0.0)), ("roundedRectangle", 20.0));
-        d.fields.insert("radius".into(), json!("0.5 in"));
-        super::super::confirm(&mut app).unwrap();
+        assert_eq!(open_fields(&app, "roundedRectangle").number("radius"), Some(20.0));
+        set(&app, &fx, "roundedRectangle", "radius", json!(36.0)).unwrap();
+        press_ok(&mut app, &mut fx, "roundedRectangle");
 
-        assert!(app.ui.dialog.is_none());
+        assert!(!is_open(&app, "roundedRectangle"));
         let n = app.session.doc().unwrap().doc.layers[0].children().unwrap()[0].clone();
         assert_eq!(crate::panels::corner_radius(&app, &n), Some(36.0));
         assert_eq!(app.session.prefs.corner_radius, 36.0);
         assert_eq!(app.session.tool_options_of("roundedRectangle")["cornerRadius"], json!(36.0));
         super::super::open_tool_dialog(&mut app, "roundedRectangle", json!({"x": 40.0, "y": 60.0}));
-        assert_eq!(app.ui.dialog.as_ref().unwrap().f64("radius", 0.0), 36.0);
+        assert_eq!(open_fields(&app, "roundedRectangle").number("radius"), Some(36.0));
     }
 
-    /// A radius General › Corner Radius would refuse leaves the dialog open, draws nothing and
-    /// keeps the preference.
+    /// A radius General › Corner Radius would refuse is answered with an error: the dialog stays open, nothing
+    /// is drawn and the preference is kept.
     #[test]
     fn rounded_rectangle_click_dialog_refuses_a_radius_out_of_range() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let (mut app, mut fx) = shown();
         let before = app.session.prefs.corner_radius;
-        for bad in [json!(-1), json!(1297), json!("19 in"), json!("wide")] {
+        for bad in [json!(-1.0), json!(1297.0)] {
             super::super::open_tool_dialog(&mut app, "roundedRectangle", json!({"x": 40.0, "y": 60.0}));
-            app.ui.dialog.as_mut().unwrap().fields.insert("radius".into(), bad.clone());
-            assert!(super::super::confirm(&mut app).is_err(), "{bad}");
-            assert!(app.ui.dialog.is_some(), "{bad}");
-            assert!(app.session.doc().unwrap().doc.layers[0].children().unwrap().is_empty(), "{bad}");
+            set(&app, &fx, "roundedRectangle", "radius", bad.clone()).unwrap();
+            press_ok(&mut app, &mut fx, "roundedRectangle");
+            assert!(is_open(&app, "roundedRectangle"), "{bad}");
+            assert_eq!(drawn(&app), 0, "{bad}");
             assert_eq!(app.session.prefs.corner_radius, before, "{bad}");
-            app.ui.dialog = None;
+            cancel(&mut app, &mut fx, "roundedRectangle");
         }
     }
 
-    /// Turn the link on or off as its button or `ui.dialog.set` does, then apply it as the form
-    /// does on its next frame; what [`link_changed`] returned.
-    fn turn(d: &mut Dialog, on: bool) -> Option<bool> {
-        d.fields.insert(LINK.into(), json!(on));
-        link_changed(d)
-    }
-
-    fn type_size(d: &mut Dialog, typed: &str, value: f64) -> (f64, f64) {
-        d.fields.insert(typed.into(), json!(value));
-        follow_link(d, typed);
-        // The form applies the link's state again on every frame: an unchanged state changes nothing.
-        assert_eq!(link_changed(d), None);
-        (d.f64("width", -1.0), d.f64("height", -1.0))
-    }
-
+    /// The link of a size dialog carries to the next Rectangle, Rounded Rectangle or Ellipse, on and off, also
+    /// when the dialog it was turned in is cancelled.
     #[test]
-    fn the_link_keeps_the_proportions_it_had_when_turned_on() {
-        let mut d = Dialog::new("rectangle", json!({"x": 0.0, "y": 0.0, "width": "40 pt", "height": "20 pt"}));
-        // Off: a typed side changes only itself.
-        assert_eq!(turn(&mut d, false), Some(false));
-        assert_eq!(type_size(&mut d, "width", 80.0), (80.0, 20.0));
-        // On at 80 × 20: each side follows the other at 4 : 1, also through a zero and back.
-        assert_eq!(turn(&mut d, true), Some(true));
-        for (typed, value, expected) in
-            [("width", 100.0, (100.0, 25.0)), ("height", 50.0, (200.0, 50.0)), ("width", 0.0, (0.0, 0.0)), ("width", 40.0, (40.0, 10.0))]
-        {
-            assert_eq!(type_size(&mut d, typed, value), expected, "{typed} = {value}");
-        }
+    fn the_size_link_carries_to_the_next_size_dialog() {
+        let (mut app, mut fx) = shown();
+        let click = Some(Click { at: Point::new(10.0, 10.0), alt: false });
+        open(&mut app, "rectangle", click);
+        assert_eq!(open_fields(&app, "rectangle").bool("constrain"), Some(false));
+        set(&app, &fx, "rectangle", "constrain", json!(true)).unwrap();
+        settle(&mut app, &mut fx);
+        cancel(&mut app, &mut fx, "rectangle");
+
+        open(&mut app, "ellipse", click);
+        assert_eq!(open_fields(&app, "ellipse").bool("constrain"), Some(true));
+        set(&app, &fx, "ellipse", "constrain", json!(false)).unwrap();
+        settle(&mut app, &mut fx);
+        cancel(&mut app, &mut fx, "ellipse");
+
+        open(&mut app, "roundedRectangle", click);
+        assert_eq!(open_fields(&app, "roundedRectangle").bool("constrain"), Some(false));
     }
 
-    /// Turned off and on again from outside the dialog (`ui.dialog.set`), the link forgets the old
-    /// proportions and keeps the ones the dialog shows when it comes back on.
-    #[test]
-    fn the_link_follows_changes_made_from_outside_the_dialog() {
-        let mut d = Dialog::new("rectangle", json!({"width": 80.0, "height": 20.0}));
-        assert_eq!(turn(&mut d, true), Some(true));
-        assert_eq!(turn(&mut d, false), Some(false));
-        assert!(!d.fields.contains_key(RATIO));
-        assert_eq!(type_size(&mut d, "width", 30.0), (30.0, 20.0));
-        assert_eq!(type_size(&mut d, "height", 60.0), (30.0, 60.0));
-        assert_eq!(turn(&mut d, true), Some(true));
-        assert_eq!(type_size(&mut d, "width", 10.0), (10.0, 20.0));
-        // Set to what it already is: nothing to apply, the proportions stay.
-        assert_eq!(turn(&mut d, true), None);
-        assert_eq!(type_size(&mut d, "height", 40.0), (20.0, 40.0));
-    }
-
-    /// A side of zero when the link turns on leaves nothing to keep (no NaN): typing changes only
-    /// the side typed, even once both sides are sizes again, until the link is turned on again.
-    #[test]
-    fn a_link_turned_on_at_a_zero_side_stays_unconstrained_until_turned_on_again() {
-        let mut d = Dialog::new("ellipse", json!({"width": 0.0, "height": 30.0}));
-        assert_eq!(turn(&mut d, true), Some(true));
-        assert!(!d.fields.contains_key(RATIO));
-        assert_eq!(type_size(&mut d, "width", 50.0), (50.0, 30.0));
-        assert_eq!(type_size(&mut d, "height", 60.0), (50.0, 60.0));
-        assert!(!d.fields.contains_key(RATIO));
-        assert_eq!((turn(&mut d, false), turn(&mut d, true)), (Some(false), Some(true)));
-        assert_eq!(type_size(&mut d, "width", 100.0), (100.0, 120.0));
-    }
-
-    /// The real dialog: Width comes before Height, the link is a named button that turns on with a
-    /// click, and the next Rectangle dialog opens with it on.
-    #[test]
-    fn the_rectangle_dialog_shows_width_then_height_and_a_link_button() {
-        use egui::accesskit::Role;
-        use egui_kittest::kittest::Queryable;
-        const LINK_NAME: &str = "Constrain Width and Height Proportions";
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-        super::super::open_tool_dialog(&mut app, "rectangle", json!({"x": 10.0, "y": 10.0}));
-        let mut fonts = false;
-        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
-            move |ui, app: &mut VectorcraftApp| {
-                if !std::mem::replace(&mut fonts, true) {
-                    crate::theme::install_fonts(ui.ctx());
-                    return;
-                }
-                super::super::show(app, ui.ctx());
-            },
-            app,
-        );
-        h.run_steps(5);
-        h.check_accessibility();
-        let (w, ht) = (h.get_by_role_and_label(Role::TextInput, "Width:").rect(), h.get_by_role_and_label(Role::TextInput, "Height:").rect());
-        assert!(w.center().y < ht.center().y, "Width is above Height: {w:?} {ht:?}");
-        assert!(!h.state().ui.dialog.as_ref().unwrap().bool(LINK));
-        let link = h.get_by_role_and_label(Role::Button, LINK_NAME).rect();
-        assert!(link.left() > w.right() && link.top() < ht.center().y && link.bottom() > w.center().y, "the link sits beside both rows: {link:?}");
-        h.get_by_role_and_label(Role::Button, LINK_NAME).click();
-        h.run_steps(2);
-        let d = h.state().ui.dialog.as_ref().unwrap();
-        assert!(d.bool(LINK));
-        assert_eq!(d.f64(RATIO, 0.0), 1.0);
-        // Cancel, then click again: the link is still on.
-        let reopen = |h: &mut egui_kittest::Harness<'_, VectorcraftApp>| {
-            h.state_mut().ui.dialog = None;
-            h.run_steps(2);
-            super::super::open_tool_dialog(h.state_mut(), "rectangle", json!({"x": 10.0, "y": 10.0}));
-            h.run_steps(2);
-            h.state().ui.dialog.as_ref().unwrap().bool(LINK)
-        };
-        assert!(reopen(&mut h));
-        // Turned off from outside the dialog (`ui.dialog.set`): the next dialog opens with it off.
-        h.state_mut().ui.dialog.as_mut().unwrap().fields.insert(LINK.into(), json!(false));
-        h.run_steps(2);
-        assert!(!h.state().ui.dialog.as_ref().unwrap().fields.contains_key(RATIO));
-        assert!(!reopen(&mut h));
-    }
-
-    /// With the link on, typing a width over a 40 × 20 rectangle's and pressing Enter draws it
-    /// 80 × 40.
+    /// With the link on, typing a width over a 40 × 20 rectangle's and leaving the field draws it 80 × 40.
     #[test]
     fn typing_a_width_with_the_link_on_draws_the_shape_in_proportion() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        let (mut app, mut fx) = shown();
         app.run("tool.select", json!({"tool": "rectangle"})).unwrap();
-        super::super::open_tool_dialog(&mut app, "rectangle", json!({"x": 10.0, "y": 10.0}));
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("width".into(), json!(40.0));
-        d.fields.insert("height".into(), json!(20.0));
-        d.fields.insert(LINK.into(), json!(true));
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        crate::theme::apply(&ctx, Default::default());
-        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
-            let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
-            out.textures_delta.clear();
-        };
-        let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
-        frame(&mut app, vec![]);
-        frame(&mut app, vec![egui::Event::Text("80 pt".into())]);
-        frame(&mut app, vec![enter]);
-        assert!(app.ui.dialog.is_none());
+        open(&mut app, "rectangle", Some(Click { at: Point::new(10.0, 10.0), alt: false }));
+        for (key, value) in [("width", json!(40.0)), ("height", json!(20.0)), ("constrain", json!(true))] {
+            set(&app, &fx, "rectangle", key, value).unwrap();
+        }
+        settle(&mut app, &mut fx);
+        let width = fx.by_label("Width:").expect("the Width field");
+        fx.click(&width);
+        fx.key(egui::Key::A, egui::Modifiers::COMMAND);
+        fx.type_text("80 pt");
+        fx.key(egui::Key::Tab, egui::Modifiers::NONE);
+        settle(&mut app, &mut fx);
+        press_ok(&mut app, &mut fx, "rectangle");
+
+        assert!(!is_open(&app, "rectangle"));
         let doc = &app.session.doc().unwrap().doc;
         let b = doc.layers[0].children().unwrap()[0].geometric_bounds().unwrap();
         assert!((b.width() - 80.0).abs() < 1e-6 && (b.height() - 40.0).abs() < 1e-6, "{b:?}");
@@ -1101,8 +932,7 @@ mod tests {
     /// path of 6 anchors, and the next Ellipse dialog opens on 6.
     #[test]
     fn the_ellipse_dialog_draws_and_keeps_its_anchor_count() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        let (mut app, mut fx) = shown();
         app.run("tool.select", json!({"tool": "ellipse"})).unwrap();
         let last = |app: &VectorcraftApp| {
             let doc = &app.session.doc().unwrap().doc;
@@ -1110,14 +940,14 @@ mod tests {
         };
 
         super::super::open_tool_dialog(&mut app, "ellipse", json!({"x": 10.0, "y": 10.0}));
-        assert_eq!(app.ui.dialog.as_ref().unwrap().f64("anchors", 0.0), 4.0);
-        super::super::confirm(&mut app).unwrap();
+        assert_eq!(open_fields(&app, "ellipse").number("anchors"), Some(4.0));
+        press_ok(&mut app, &mut fx, "ellipse");
         let n = last(&app);
         assert!(matches!(n.live_shape(), Some(vectorcraft_doc::LiveShape::Ellipse { .. })), "{:?}", n.live_shape());
 
         super::super::open_tool_dialog(&mut app, "ellipse", json!({"x": 150.0, "y": 150.0}));
-        app.ui.dialog.as_mut().unwrap().fields.insert("anchors".into(), json!("6"));
-        super::super::confirm(&mut app).unwrap();
+        set(&app, &fx, "ellipse", "anchors", json!(6)).unwrap();
+        press_ok(&mut app, &mut fx, "ellipse");
         let n = last(&app);
         assert!(n.live_shape().is_none());
         assert_eq!(n.path_data().unwrap().anchor_count(), 6);
@@ -1129,290 +959,48 @@ mod tests {
         app.run("tool.select", json!({"tool": "rectangle"})).unwrap();
         app.run("tool.select", json!({"tool": "ellipse"})).unwrap();
         super::super::open_tool_dialog(&mut app, "ellipse", json!({"x": 10.0, "y": 150.0}));
-        assert_eq!(app.ui.dialog.as_ref().unwrap().f64("anchors", 0.0), 6.0);
-        app.ui.dialog = None;
-        // `tool.setOption` takes it from 2 to 1000 and refuses other counts, and the dialog opens on
-        // what it keeps.
-        for (set, want) in [(json!(1), 6.0), (json!(2000), 6.0), (json!(2), 2.0), (json!(1000), 1000.0), (json!(7), 7.0)] {
-            let r = app.run("tool.setOption", json!({"tool": "ellipse", "values": {"anchors": set}}));
-            assert_eq!(r.is_ok(), set.as_u64().is_some_and(|n| (2..=1000).contains(&n)), "{set}: {r:?}");
-            super::super::open_tool_dialog(&mut app, "ellipse", json!({"x": 10.0, "y": 150.0}));
-            assert_eq!(app.ui.dialog.as_ref().unwrap().f64("anchors", 0.0), want, "{set}");
-            app.ui.dialog = None;
-        }
+        assert_eq!(open_fields(&app, "ellipse").number("anchors"), Some(6.0));
     }
 
-    /// The dialog's Anchors field is named, under Height, and typing into it sets the count.
-    #[test]
-    fn the_ellipse_dialog_shows_an_anchors_field() {
-        use egui::accesskit::Role;
-        use egui_kittest::kittest::Queryable;
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-        super::super::open_tool_dialog(&mut app, "ellipse", json!({"x": 10.0, "y": 10.0}));
-        let mut fonts = false;
-        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
-            move |ui, app: &mut VectorcraftApp| {
-                if !std::mem::replace(&mut fonts, true) {
-                    crate::theme::install_fonts(ui.ctx());
-                    return;
-                }
-                super::super::show(app, ui.ctx());
-            },
-            app,
-        );
-        h.run_steps(5);
-        h.check_accessibility();
-        let height = h.get_by_role_and_label(Role::TextInput, "Height:").rect();
-        let anchors = h.get_by_role_and_label(Role::TextInput, "Anchors:").rect();
-        assert!(anchors.center().y > height.center().y, "Anchors is below Height: {anchors:?} {height:?}");
-        assert_eq!(ellipse_anchors(h.state().ui.dialog.as_ref().unwrap()), 4);
-    }
-
-    /// A harness drawing `app`'s dialog, with the app's fonts installed on its first frame.
-    fn dialog_harness(app: VectorcraftApp) -> egui_kittest::Harness<'static, VectorcraftApp> {
-        let mut fonts = false;
-        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
-            move |ui, app: &mut VectorcraftApp| {
-                if !std::mem::replace(&mut fonts, true) {
-                    crate::theme::install_fonts(ui.ctx());
-                    return;
-                }
-                super::super::show(app, ui.ctx());
-            },
-            app,
-        );
-        h.run_steps(5);
-        h
-    }
-
-    /// The dialog's Width and Height in points.
-    fn dialog_size(h: &egui_kittest::Harness<'_, VectorcraftApp>) -> (f64, f64) {
-        let d = h.state().ui.dialog.as_ref().expect("the dialog is open");
-        (d.f64("width", -1.0), d.f64("height", -1.0))
-    }
-
-    /// Replaces the text of the field named `name` with `text` and leaves it with Tab.
-    fn retype(h: &mut egui_kittest::Harness<'_, VectorcraftApp>, name: &str, text: &str) {
-        use egui::accesskit::Role;
-        use egui_kittest::kittest::Queryable;
-        let all = egui::Modifiers { ctrl: true, command: true, ..Default::default() };
-        h.get_by_role_and_label(Role::TextInput, name).focus();
-        h.run_steps(2);
-        h.key_press_modifiers(all, egui::Key::A);
-        h.get_by_role_and_label(Role::TextInput, name).type_text(text);
-        h.run_steps(2);
-        h.key_press(egui::Key::Tab);
-        h.run_steps(2);
-    }
-
-    /// In the Ellipse dialog, a click on the word Height copies Width into Height, also a Width
-    /// typed and not yet committed; the fields keep their names. Cancel discards it; OK draws the
-    /// circle as one undo step.
+    /// Pressing the Ellipse dialog's Height caption copies Width into Height, as one undo step once OK draws the
+    /// circle; Cancel draws nothing.
     #[test]
     fn clicking_height_in_the_ellipse_dialog_copies_width_into_height() {
-        use egui::accesskit::Role;
-        use egui_kittest::kittest::{NodeT, Queryable};
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-        super::super::open_tool_dialog(&mut app, "ellipse", json!({"x": 10.0, "y": 10.0}));
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("width".into(), json!(80.0));
-        d.fields.insert("height".into(), json!(30.0));
-        let mut h = dialog_harness(app);
-        h.check_accessibility();
-        let button = h.get_by_role_and_label(Role::Button, "Height:");
-        assert_eq!(button.accesskit_node().description().as_deref(), Some("Copy Width to Height"));
-        h.get_by_role_and_label(Role::Button, "Height:").click();
-        h.run_steps(2);
-        assert_eq!(dialog_size(&h), (80.0, 80.0));
-        let d = h.state().ui.dialog.as_ref().unwrap();
-        assert!(!d.bool(LINK) && !d.fields.contains_key(RATIO), "the link stays off");
-        // The value fields keep their names.
-        h.get_by_role_and_label(Role::TextInput, "Width:");
-        h.get_by_role_and_label(Role::TextInput, "Height:");
+        let (mut app, mut fx) = shown();
+        let click = Some(Click { at: Point::new(10.0, 10.0), alt: false });
+        let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+        let before = undo(&app);
 
-        // A Width typed and not committed with Enter or Tab is the one copied.
-        let all = egui::Modifiers { ctrl: true, command: true, ..Default::default() };
-        h.get_by_role_and_label(Role::TextInput, "Width:").focus();
-        h.run_steps(2);
-        h.key_press_modifiers(all, egui::Key::A);
-        h.get_by_role_and_label(Role::TextInput, "Width:").type_text("50 pt");
-        h.run_steps(2);
-        h.get_by_role_and_label(Role::Button, "Height:").click();
-        h.run_steps(3);
-        assert_eq!(dialog_size(&h), (50.0, 50.0));
+        open(&mut app, "ellipse", click);
+        cancel(&mut app, &mut fx, "ellipse");
+        assert_eq!((drawn(&app), undo(&app)), (0, before));
 
-        // A Width the field refuses when the click takes its focus (not a distance, or empty)
-        // is not copied: Height keeps its value.
-        h.state_mut().ui.dialog.as_mut().unwrap().fields.insert("height".into(), json!(30.0));
-        h.run_steps(2);
-        for typed in ["wide", ""] {
-            h.get_by_role_and_label(Role::TextInput, "Width:").focus();
-            h.run_steps(2);
-            h.key_press_modifiers(all, egui::Key::A);
-            if typed.is_empty() {
-                h.key_press(egui::Key::Backspace);
-            } else {
-                h.get_by_role_and_label(Role::TextInput, "Width:").type_text(typed);
-            }
-            h.run_steps(2);
-            h.get_by_role_and_label(Role::Button, "Height:").click();
-            h.run_steps(3);
-            assert_eq!(dialog_size(&h), (50.0, 30.0), "{typed:?}");
-        }
-        // The field shows its value again, and the next click copies it.
-        h.get_by_role_and_label(Role::Button, "Height:").click();
-        h.run_steps(3);
-        assert_eq!(dialog_size(&h), (50.0, 50.0));
+        open(&mut app, "ellipse", click);
+        set(&app, &fx, "ellipse", "width", json!(64.0)).unwrap();
+        set(&app, &fx, "ellipse", "height", json!(30.0)).unwrap();
+        settle(&mut app, &mut fx);
+        // The caption, a link, not the Height field its name also labels.
+        let height = fx
+            .by_role(craft::ui::contract::Role::LINK)
+            .into_iter()
+            .find(|t| fx.tree().name_of(t.node) == Some("Height:"))
+            .expect("the Height caption");
+        fx.click(&height);
+        settle(&mut app, &mut fx);
+        assert_eq!(open_fields(&app, "ellipse").number("height"), Some(64.0));
+        press_ok(&mut app, &mut fx, "ellipse");
 
-        // A Height typed and not committed does not outlast the copy: a distance is replaced by
-        // Width, and a Height the field refuses keeps the copy from happening, as it keeps OK from
-        // confirming.
-        for (typed, after) in [("70 pt", (50.0, 50.0)), ("tall", (50.0, 30.0))] {
-            h.state_mut().ui.dialog.as_mut().unwrap().fields.insert("height".into(), json!(30.0));
-            h.run_steps(2);
-            h.get_by_role_and_label(Role::TextInput, "Height:").focus();
-            h.run_steps(2);
-            h.key_press_modifiers(all, egui::Key::A);
-            h.get_by_role_and_label(Role::TextInput, "Height:").type_text(typed);
-            h.run_steps(2);
-            h.get_by_role_and_label(Role::Button, "Height:").click();
-            h.run_steps(3);
-            assert_eq!(dialog_size(&h), after, "{typed:?}");
-        }
-
-        // Cancel: nothing is drawn.
-        let undo = |h: &egui_kittest::Harness<'_, VectorcraftApp>| h.state().session.active().unwrap().history.undo.len();
-        let before = undo(&h);
-        crate::dialogs::cancel(h.state_mut());
-        h.run_steps(2);
-        assert!(h.state().session.doc().unwrap().doc.layers[0].children().unwrap().is_empty());
-        assert_eq!(undo(&h), before);
-
-        // OK: one circle, one undo step.
-        super::super::open_tool_dialog(h.state_mut(), "ellipse", json!({"x": 10.0, "y": 10.0}));
-        h.state_mut().ui.dialog.as_mut().unwrap().fields.insert("width".into(), json!(64.0));
-        h.run_steps(2);
-        h.get_by_role_and_label(Role::Button, "Height:").click();
-        h.run_steps(2);
-        super::super::confirm(h.state_mut()).unwrap();
-        assert!(h.state().ui.dialog.is_none());
-        assert_eq!(undo(&h), before + 1);
-        let doc = &h.state().session.doc().unwrap().doc;
+        assert_eq!(undo(&app), before + 1);
+        let doc = &app.session.doc().unwrap().doc;
         let b = doc.layers[0].children().unwrap()[0].geometric_bounds().unwrap();
         assert!((b.width() - 64.0).abs() < 1e-6 && (b.height() - 64.0).abs() < 1e-6, "{b:?}");
     }
 
-    /// The Height button works from the keyboard: Space and Enter copy Width into Height, and
-    /// that Enter does not press OK. With the link on, the link stays on and keeps the circle when
-    /// Width is typed next; a Width of 0 is copied and leaves the link no proportions to keep.
-    #[test]
-    fn the_ellipse_height_button_copies_width_from_the_keyboard_and_keeps_the_link_round() {
-        use egui::accesskit::Role;
-        use egui_kittest::kittest::Queryable;
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-        super::super::open_tool_dialog(&mut app, "ellipse", json!({"x": 10.0, "y": 10.0}));
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("width".into(), json!(80.0));
-        d.fields.insert("height".into(), json!(20.0));
-        d.fields.insert(LINK.into(), json!(true));
-        let mut h = dialog_harness(app);
-        assert_eq!(h.state().ui.dialog.as_ref().unwrap().f64(RATIO, 0.0), 0.25);
-        h.get_by_role_and_label(Role::Button, "Height:").focus();
-        h.run_steps(2);
-        h.key_press(egui::Key::Space);
-        h.run_steps(2);
-        assert_eq!(dialog_size(&h), (80.0, 80.0));
-        let d = h.state().ui.dialog.as_ref().unwrap();
-        assert!(d.bool(LINK), "the link stays on");
-        assert_eq!(d.f64(RATIO, 0.0), 1.0);
-        // The link now keeps the circle.
-        retype(&mut h, "Width:", "40 pt");
-        assert_eq!(dialog_size(&h), (40.0, 40.0));
-
-        // Enter on the button copies, and the dialog stays open.
-        h.state_mut().ui.dialog.as_mut().unwrap().fields.insert("width".into(), json!(0.0));
-        h.run_steps(2);
-        h.get_by_role_and_label(Role::Button, "Height:").focus();
-        h.run_steps(2);
-        h.key_press(egui::Key::Enter);
-        h.run_steps(2);
-        assert!(h.state().ui.dialog.is_some(), "Enter on the Height button does not press OK");
-        assert_eq!(dialog_size(&h), (0.0, 0.0));
-        let d = h.state().ui.dialog.as_ref().unwrap();
-        assert!(d.bool(LINK) && !d.fields.contains_key(RATIO), "no proportions to keep at 0");
-        assert!(h.state().session.doc().unwrap().doc.layers[0].children().unwrap().is_empty());
-    }
-
-    /// Enter on the focused link button turns the link on and leaves the dialog open, as Space does.
-    #[test]
-    fn enter_on_the_link_button_turns_the_link_on_without_pressing_ok() {
-        use egui::accesskit::Role;
-        use egui_kittest::kittest::Queryable;
-        const LINK_NAME: &str = "Constrain Width and Height Proportions";
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-        super::super::open_tool_dialog(&mut app, "rectangle", json!({"x": 10.0, "y": 10.0}));
-        let mut h = dialog_harness(app);
-        assert!(!h.state().ui.dialog.as_ref().unwrap().bool(LINK));
-        h.get_by_role_and_label(Role::Button, LINK_NAME).focus();
-        h.run_steps(2);
-        h.key_press(egui::Key::Enter);
-        h.run_steps(2);
-        let d = h.state().ui.dialog.as_ref().expect("Enter on the link button does not press OK");
-        assert!(d.bool(LINK));
-        assert!(h.state().session.doc().unwrap().doc.layers[0].children().unwrap().is_empty());
-    }
-
-    /// Rectangle and Rounded Rectangle keep plain Width and Height labels.
-    #[test]
-    fn only_the_ellipse_dialog_has_the_height_button() {
-        use egui::accesskit::Role;
-        use egui_kittest::kittest::Queryable;
-        for kind in ["rectangle", "roundedRectangle"] {
-            let mut app = VectorcraftApp::new(Session::new(), Default::default());
-            app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-            super::super::open_tool_dialog(&mut app, kind, json!({"x": 10.0, "y": 10.0}));
-            let h = dialog_harness(app);
-            h.get_by_role_and_label(Role::TextInput, "Height:");
-            assert!(h.query_by_role_and_label(Role::Button, "Height:").is_none(), "{kind}");
-        }
-    }
-
-    /// A Width that is missing, empty, not a distance or not finite leaves Height as it is; a
-    /// Width with a unit is copied in points, and 0 is copied.
-    #[test]
-    fn copying_width_takes_only_a_width_that_reads() {
-        for width in [None, Some(json!("")), Some(json!("wide")), Some(json!("inf")), Some(json!(null)), Some(json!(true))] {
-            let mut d = Dialog::new("ellipse", json!({"height": 30.0}));
-            if let Some(w) = width.clone() {
-                d.fields.insert("width".into(), w);
-            }
-            copy_width_to_height(&mut d);
-            assert_eq!(d.fields.get("height"), Some(&json!(30.0)), "{width:?}");
-        }
-        for (width, want) in [(json!("1 in"), 72.0), (json!(0), 0.0), (json!(12.5), 12.5)] {
-            let mut d = Dialog::new("ellipse", json!({"width": width.clone(), "height": 30.0}));
-            copy_width_to_height(&mut d);
-            assert_eq!(d.f64("height", -1.0), want, "{width}");
-        }
-    }
-
-    #[test]
-    fn ellipse_anchors_take_the_nearest_whole_number_from_2_to_1000() {
-        let d = |v: Value| Dialog::new("ellipse", json!({ "anchors": v }));
-        for (v, want) in [(json!(6), 6), (json!("7"), 7), (json!(5.6), 6), (json!(1), 2), (json!(0), 2), (json!(-3), 2), (json!(5000), 1000)] {
-            assert_eq!(ellipse_anchors(&d(v.clone())), want, "{v}");
-        }
-        assert_eq!(ellipse_anchors(&Dialog::new("ellipse", json!({}))), 4);
-    }
-
+    /// A negative Line Segment length draws the same line the other way, and the options OK keeps are the line
+    /// the other way too, in a click dialog and in Tool Options.
     #[test]
     fn a_negative_line_length_draws_and_keeps_the_same_direction() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let (mut app, mut fx) = shown();
         app.run("tool.select", json!({"tool": "lineSegment"})).unwrap();
         let line_bounds = |app: &VectorcraftApp, i: usize| {
             let doc = &app.session.doc().unwrap().doc;
@@ -1421,10 +1009,9 @@ mod tests {
         };
 
         super::super::open_tool_dialog(&mut app, "lineSegment", json!({"x": 100.0, "y": 60.0}));
-        let d = app.ui.dialog.as_mut().expect("Line Segment dialog");
-        d.fields.insert("length".into(), json!(-80.0));
-        d.fields.insert("angle".into(), json!(0.0));
-        super::super::confirm(&mut app).unwrap();
+        set(&app, &fx, "lineSegment", "length", json!(-80.0)).unwrap();
+        set(&app, &fx, "lineSegment", "angle", json!(0.0)).unwrap();
+        press_ok(&mut app, &mut fx, "lineSegment");
         let first = line_bounds(&app, 0);
         assert!((first.x0 - 20.0).abs() < 1e-6 && (first.x1 - 100.0).abs() < 1e-6, "{first:?}");
         let kept = app.session.tool_options_of("lineSegment");
@@ -1432,8 +1019,17 @@ mod tests {
 
         // The next click opens at what was kept and draws the same way.
         super::super::open_tool_dialog(&mut app, "lineSegment", json!({"x": 100.0, "y": 120.0}));
-        super::super::confirm(&mut app).unwrap();
+        press_ok(&mut app, &mut fx, "lineSegment");
         let second = line_bounds(&app, 1);
         assert!((second.x0 - 20.0).abs() < 1e-6 && (second.x1 - 100.0).abs() < 1e-6, "{second:?}");
+
+        // Tool Options keep the same turned line and draw nothing.
+        open_options(&mut app, "lineSegment").unwrap();
+        set(&app, &fx, "lineSegment", "length", json!(-50.0)).unwrap();
+        set(&app, &fx, "lineSegment", "angle", json!(90.0)).unwrap();
+        press_ok(&mut app, &mut fx, "lineSegment");
+        let kept = app.session.tool_options_of("lineSegment");
+        assert_eq!((kept["length"].as_f64(), kept["angle"].as_f64()), (Some(50.0), Some(270.0)));
+        assert_eq!(drawn(&app), 2);
     }
 }

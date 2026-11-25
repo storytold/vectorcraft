@@ -1,7 +1,9 @@
 //! The Dimension tool. Hover a segment (linear), a corner (angular) or a circle or perfect arc
 //! (radial) and drag outwards: releasing places the linked dimension. Plain clicks pick what to
 //! measure instead: two points (linear) or two straight lines (angular), then a click places it;
-//! a click on a circle or arc gives its radius. Escape cancels without leaving any artwork.
+//! a click on a circle or arc gives its radius. With Alt (Option on macOS) held, a Linear click or
+//! drag on a path measures the whole path's width or height instead. Escape cancels without
+//! leaving any artwork.
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -39,12 +41,26 @@ impl Kind {
     }
 }
 
-/// What the pointer is over.
+/// What the pointer is over. `Extent` is a path hovered with Alt held: its overall width or height.
 #[derive(Clone, Debug, PartialEq)]
 enum Target {
     Segment(SegmentRef),
     Corner { first: SegmentRef, second: SegmentRef, at: Point },
     Radial { source: DimensionSource, center: Point, radius: f64 },
+    Extent { node: NodeId },
+}
+
+/// A path and the document its outermost points ([`dimension::extents`]) were read from
+/// ([`whole_box_source`]), with the points.
+type WholeBox = ((NodeId, (u64, u64, usize)), Option<[(Point, Point); 2]>);
+
+/// The document a path's box is read from, with what identifies it: while an interaction is in
+/// progress, the document as it began; otherwise the document `cx` shows, at its revision.
+fn whole_box_source<'a>(cx: &ToolContext<'a>, node: NodeId) -> (&'a vectorcraft_doc::Document, (NodeId, (u64, u64, usize))) {
+    match cx.interaction_doc {
+        Some(began) => (began, (node, (cx.revision.0, 0, std::ptr::from_ref(began).addr()))),
+        None => (cx.doc, (node, (cx.revision.0, cx.revision.1, 0))),
+    }
 }
 
 #[derive(Default)]
@@ -106,6 +122,15 @@ pub struct DimensionTool {
     /// The document's next object id at the dimension's first preview: the id its preview takes
     /// (`dimension.create` gives the dimension the next id). The preview is not a level.
     preview_id: u64,
+    /// A path's outermost points, for the path and the document they were read from: a path
+    /// hovered with Alt held, or a dimension of a whole path being placed.
+    whole_box: Option<WholeBox>,
+    /// The dimension drawn already under the press under way, when a drag from there moves it
+    /// ([`dimension_under`]).
+    grab: Option<NodeId>,
+    /// While a dimension drawn already is dragged: its id, where the press was and its recipe
+    /// then. `pending` holds it where the pointer puts it.
+    moving: Option<(NodeId, Point, Dimension)>,
 }
 
 /// What a linear dimension between `a` and `b` measures with the pointer at `p` while it is
@@ -140,6 +165,37 @@ fn orientation_at(a: Point, b: Point, p: Point) -> Orientation {
         .map_or(Orientation::Aligned, |(_, orientation)| orientation)
 }
 
+/// The box through a path's outermost points ([`dimension::extents`]): left, top, right and
+/// bottom.
+fn extent_box([(left, right), (top, bottom)]: [(Point, Point); 2]) -> Rect {
+    Rect::new(left.x, top.y, right.x, bottom.y)
+}
+
+/// What a dimension of a whole path whose outermost points span `b` ([`extent_box`]) measures
+/// with the pointer at `p` while it is placed (VectorCraft's own rule): above or below the box,
+/// the path's width (horizontal); to the left or right of it, its height (vertical); past a
+/// corner, the side the pointer is farther out on. Inside the box, or as far out on both sides,
+/// it keeps `current`. A path with no height gives its width, and one with no width its height.
+fn extent_orientation(b: Option<Rect>, p: Point, current: Orientation) -> Orientation {
+    let current = if current == Orientation::Aligned { Orientation::Horizontal } else { current };
+    let Some(b) = b else { return current };
+    match (b.width() > 1e-9, b.height() > 1e-9) {
+        (true, false) => return Orientation::Horizontal,
+        (false, true) => return Orientation::Vertical,
+        (false, false) => return current,
+        (true, true) => {}
+    }
+    let out_x = (b.x0 - p.x).max(p.x - b.x1).max(0.0);
+    let out_y = (b.y0 - p.y).max(p.y - b.y1).max(0.0);
+    if out_x > out_y {
+        Orientation::Vertical
+    } else if out_y > out_x {
+        Orientation::Horizontal
+    } else {
+        current
+    }
+}
+
 /// How near an anchor (screen pixels) a pick snaps to it.
 const ANCHOR_REACH: f64 = 8.0;
 
@@ -151,6 +207,11 @@ fn constrained(cx: &ToolContext, last: Point, at: Point) -> Point {
 
 /// Nearest editable segment, with bounded work and no snapping to dimension artwork itself.
 pub fn pick(cx: &ToolContext, p: Point) -> Option<SegmentRef> {
+    pick_among(cx, p, cx.doc.layers.iter().rev().map(|n| n.as_ref()))
+}
+
+/// [`pick`] among `roots`, topmost first, and what they hold.
+fn pick_among<'a>(cx: &ToolContext, p: Point, roots: impl Iterator<Item = &'a Node>) -> Option<SegmentRef> {
     let mut best = None;
     let mut dist = cx.tol(8.0);
     let mut budget = 20_000usize;
@@ -180,7 +241,7 @@ pub fn pick(cx: &ToolContext, p: Point) -> Option<SegmentRef> {
             }
         }
     }
-    for n in cx.doc.layers.iter().rev() {
+    for n in roots {
         visit(n, p, &mut budget, &mut dist, &mut best);
     }
     best
@@ -536,6 +597,117 @@ fn on_dimensions(cx: &ToolContext, p: Point) -> Option<(Point, bool)> {
     best.end.map(|(_, q)| (q, true)).or_else(|| best.line.map(|(_, q)| (q, false)))
 }
 
+/// The dimension drawn already that a drag from `p` moves, and how far `p` lies from its lines
+/// and label (0 inside the label's bounds): the dimension holding the topmost object the canvas
+/// hits within 8 pixels of `p`, when it can be edited. The hit takes in what the dimension paints
+/// (stroke widths and arrowheads), the clipping masks over it and isolation mode. A dimension that
+/// a geometry effect on it, on a part of it or on a group around it draws elsewhere is not taken
+/// where effects are drawn.
+fn dimension_under(cx: &ToolContext, p: Point) -> Option<(NodeId, f64)> {
+    use vectorcraft_geom::kurbo::ParamCurveNearest;
+    fn art(n: &Node, p: Point, budget: &mut usize, near: &mut f64) {
+        if *budget == 0 || !n.visible {
+            return;
+        }
+        *budget -= 1;
+        if let NodeKind::Text(_) = &n.kind
+            && let Some(r) = n.geometric_bounds()
+        {
+            let (dx, dy) = ((r.x0 - p.x).max(p.x - r.x1).max(0.0), (r.y0 - p.y).max(p.y - r.y1).max(0.0));
+            *near = near.min(dx.hypot(dy));
+        }
+        if let Some(path) = n.path_data() {
+            for sp in &path.subpaths {
+                for i in 0..sp.segment_count() {
+                    if *budget == 0 {
+                        return;
+                    }
+                    *budget -= 1;
+                    let d = sp.segment(i).nearest(p, 1e-4).distance_sq.sqrt();
+                    if d.is_finite() {
+                        *near = near.min(d);
+                    }
+                }
+            }
+        }
+        for c in n.children().into_iter().flatten() {
+            art(c, p, budget, near);
+        }
+    }
+    if !cx.doc.dimensions {
+        return None;
+    }
+    let opt = vectorcraft_doc::hit::HitOptions { tol: cx.tol(8.0), ..cx.hit_options() };
+    let hit = vectorcraft_doc::hit::hit_test(cx.doc, p, opt)?;
+    let chain: Vec<NodeId> = hit.ancestry.iter().copied().chain([hit.leaf]).collect();
+    // The innermost dimension holding the object hit: the one that draws it.
+    let at = chain.iter().rposition(|id| cx.doc.node(*id).is_some_and(|n| n.extras().dimension.is_some()))?;
+    let id = *chain.get(at)?;
+    // In isolation mode only a dimension at or inside the isolated object is moved: one around an
+    // isolated part of it is outside the editing scope.
+    let scope_at = opt.scope.and_then(|s| chain.iter().position(|a| *a == s));
+    if scope_at.is_some_and(|i| i > at) {
+        return None;
+    }
+    // Where a geometry effect on the dimension, on a part of it or on a group around it draws it is
+    // not where its recipe puts it, so a drag there could not follow the pointer. In outline, and
+    // below a layer whose Preview is off, the canvas draws no effects and the recipe is what it
+    // hits.
+    let nodes: Vec<&Node> = chain.iter().filter_map(|id| cx.doc.node(*id)).collect();
+    let below = scope_at.map_or(0, |i| i + 1);
+    let outline = opt.outline || nodes.iter().skip(below).any(|n| matches!(n.kind, NodeKind::Layer { preview: false, .. }));
+    let item_geometry = |n: &Node| n.appearance.items.iter().any(|item| item.visible() && vectorcraft_effects::has_geometry(item.effects()));
+    let displaced = nodes.iter().enumerate().any(|(i, n)| vectorcraft_effects::has_geometry(&n.appearance.effects) || (i >= at && item_geometry(n)));
+    // The parts of the dimension the press did not land on count too: a geometry effect on any of
+    // them is drawn elsewhere as well.
+    let parts_displaced = cx.doc.node(id).is_some_and(|d| {
+        d.try_walk(&mut |n| {
+            if vectorcraft_effects::has_geometry(&n.appearance.effects) || item_geometry(n) {
+                std::ops::ControlFlow::Break(())
+            } else {
+                std::ops::ControlFlow::Continue(())
+            }
+        })
+        .is_break()
+    });
+    if !outline && (displaced || parts_displaced) {
+        return None;
+    }
+    let n = cx.doc.node(id).filter(|_| cx.doc.is_editable(id))?;
+    let (mut budget, mut near) = (20_000usize, f64::INFINITY);
+    art(n, p, &mut budget, &mut near);
+    Some((id, near))
+}
+
+/// Where [`Dimension::place`] puts dimension `d`, grabbed at `start`, for the pointer at `p`: the
+/// line of a linear dimension moves as far across as the pointer moved, the arc of an angular one
+/// grows or shrinks by as much as the pointer moved away from or toward the vertex, and a radius
+/// or diameter line turns about the center by the angle the pointer turned through, so the part
+/// grabbed stays under the pointer wherever it was grabbed.
+fn grabbed_to(d: &Dimension, start: Point, p: Point) -> Point {
+    let handle = d.handle();
+    match d.mode {
+        DimensionMode::Linear => handle + (p - start),
+        DimensionMode::Angular => {
+            let out = handle - d.vertex;
+            let r = out.hypot() + p.distance(d.vertex) - start.distance(d.vertex);
+            if out.hypot() > 1e-9 { d.vertex + out / out.hypot() * r.max(12.0) } else { handle }
+        }
+        DimensionMode::Radius | DimensionMode::Diameter => {
+            let (from, to) = (start - d.a, p - d.a);
+            if to.hypot() <= 1e-9 {
+                return handle;
+            }
+            // Grabbed at the center: the line turns toward the pointer.
+            if from.hypot() <= 1e-9 {
+                return p;
+            }
+            let v = handle - d.a;
+            d.a + Vec2::from_angle(v.atan2() + to.atan2() - from.atan2()) * v.hypot()
+        }
+    }
+}
+
 /// The line of a linear dimension already drawn: its ends and its direction.
 type DimensionLine = ((Point, Point), Vec2);
 
@@ -757,9 +929,27 @@ impl DimensionTool {
         };
         Some(now.or(self.first_pick).unwrap_or(*at))
     }
-    fn target(&self, cx: &ToolContext, p: Point) -> Option<Target> {
+    /// The outermost points of `node` ([`dimension::extents`]), read again only when the path or
+    /// the document changes. While an interaction is in progress they are read from the document
+    /// as the interaction began, which each preview starts again from (as the levels in
+    /// [`Self::preview`] are), so the previews themselves do not make the tool read the path again.
+    fn whole_box(&mut self, cx: &ToolContext, node: NodeId) -> Option<[(Point, Point); 2]> {
+        let (from, key) = whole_box_source(cx, node);
+        if let Some((kept, ends)) = self.whole_box
+            && kept == key
+        {
+            return ends;
+        }
+        let ends = dimension::extents(from, node);
+        self.whole_box = Some((key, ends));
+        ends
+    }
+    /// What the pointer at `p` is over. A Linear path hovered with `alt` held, before any point
+    /// is picked, is the whole path.
+    fn target(&self, cx: &ToolContext, p: Point, alt: bool) -> Option<Target> {
         let edge = pick(cx, p)?;
         match self.kind {
+            Kind::Linear if alt && self.points.is_empty() => Some(Target::Extent { node: edge.node }),
             Kind::Linear => Some(Target::Segment(edge)),
             Kind::Angular => {
                 let (anchor, at) = anchor_near(cx, &edge, p)?;
@@ -811,6 +1001,12 @@ impl DimensionTool {
                 let mode = if p.distance(*center) >= *radius { DimensionMode::Radius } else { DimensionMode::Diameter };
                 self.recipe(mode, *center, p, Point::ZERO, Some(source.clone()))
             }
+            Target::Extent { node } => {
+                let mut d =
+                    self.recipe(DimensionMode::Linear, Point::ZERO, Point::new(1.0, 0.0), Point::ZERO, Some(DimensionSource::Extent { node: *node }));
+                d.orientation = Orientation::Horizontal;
+                d
+            }
         };
         d.offset = 30.0;
         Some(d)
@@ -826,14 +1022,23 @@ impl DimensionTool {
         p
     }
     fn preview(&mut self, cx: &ToolContext, p: Point) -> Vec<Action> {
+        if self.moving.is_some() {
+            return self.reposition(cx, p);
+        }
         self.level_guide = None;
+        let whole = match self.pending.as_ref().and_then(|d| d.source.as_ref()) {
+            Some(DimensionSource::Extent { node }) => Some(self.whole_box(cx, *node)),
+            _ => None,
+        };
         let Some(d) = &mut self.pending else { return vec![] };
         if matches!(d.mode, DimensionMode::Radius | DimensionMode::Diameter)
             && let Some(Target::Radial { center, radius, .. }) = self.press.as_ref().and_then(|(_, t)| t.as_ref())
         {
             d.mode = if p.distance(*center) >= *radius { DimensionMode::Radius } else { DimensionMode::Diameter };
         }
-        if d.mode == DimensionMode::Linear {
+        if let Some(ends) = whole {
+            d.orientation = extent_orientation(ends.map(extent_box), p, d.orientation);
+        } else if d.mode == DimensionMode::Linear {
             // The points the dimension measures: a dragged segment's ends, read from the art.
             let ends = match &d.source {
                 Some(DimensionSource::Segment { edge }) => edge.endpoints(cx.doc),
@@ -851,7 +1056,17 @@ impl DimensionTool {
         if !matches!(d.mode, DimensionMode::Radius | DimensionMode::Diameter) {
             d.offset = 0.0;
         }
-        if d.resolve(cx.doc).is_err() {
+        // A dimension of a whole path takes the outermost points already read for it.
+        let read = match whole {
+            Some(Some(ends)) => {
+                (d.a, d.b) = ends[usize::from(d.orientation == Orientation::Vertical)];
+                d.length = d.measured();
+                d.validate()
+            }
+            Some(None) => Err(String::new()),
+            None => d.resolve(cx.doc),
+        };
+        if read.is_err() {
             return vec![];
         }
         // With Smart Guides on, a linear dimension's line lands on the level of a parallel
@@ -866,15 +1081,10 @@ impl DimensionTool {
             if !self.began {
                 self.preview_id = cx.doc.peek_next_id();
             }
-            let (from, at) = match cx.interaction_doc {
-                Some(began) => (began, (cx.revision.0, 0, std::ptr::from_ref(began).addr())),
-                None => (cx.doc, (cx.revision.0, cx.revision.1, 0)),
-            };
-            if !self.began || (cx.smart_guides && self.levels_at != at) {
-                self.levels = dimension_lines(from, (self.preview_id, [d.a, d.b]));
-                self.levels_at = at;
-            }
+            let points = [d.a, d.b];
+            self.read_levels(cx, (self.preview_id, points));
         }
+        let Some(d) = &mut self.pending else { return vec![] };
         let level = if cx.smart_guides { line_level(&self.levels, d, p, cx.snap_tol()) } else { None };
         d.place(level.map_or(p, |(on_level, _)| on_level));
         if d.validate().is_err() {
@@ -887,6 +1097,51 @@ impl DimensionTool {
             self.began = true;
         }
         actions.push(Action::Preview("dimension.create".into(), Self::params(d)));
+        actions
+    }
+    /// Reads `levels` at the first preview and, with Smart Guides on, again when the document they
+    /// come from has changed since: while an interaction is in progress, the document as it began.
+    /// `skip` names the dimension being placed or moved, which is not a level: its id and the
+    /// points it measures.
+    fn read_levels(&mut self, cx: &ToolContext, skip: (u64, [Point; 2])) {
+        let (from, at) = match cx.interaction_doc {
+            Some(began) => (began, (cx.revision.0, 0, std::ptr::from_ref(began).addr())),
+            None => (cx.doc, (cx.revision.0, cx.revision.1, 0)),
+        };
+        if !self.began || (cx.smart_guides && self.levels_at != at) {
+            self.levels = dimension_lines(from, skip);
+            self.levels_at = at;
+        }
+    }
+    /// Moves the dimension drawn already that a drag picked up ([`Self::moving`]) as
+    /// [`grabbed_to`] says, and what it measures stays. With Smart Guides on, a linear
+    /// dimension's line lands on the level of a parallel dimension line, as when it is placed.
+    fn reposition(&mut self, cx: &ToolContext, p: Point) -> Vec<Action> {
+        self.level_guide = None;
+        let Some((id, start, from)) = self.moving.clone() else { return vec![] };
+        let at = grabbed_to(&from, start, p);
+        if from.mode == DimensionMode::Linear {
+            self.read_levels(cx, (id.0, [from.a, from.b]));
+        }
+        // The levels are measured across from the line through `at` and, along it, from the
+        // pointer, which may be far from the line's middle.
+        let dir = from.direction();
+        let along = at + dir * (p - at).dot(dir);
+        let level = if cx.smart_guides { line_level(&self.levels, &from, along, cx.snap_tol()) } else { None };
+        let at = level.map_or(at, |(on_level, _)| on_level);
+        let mut d = from;
+        d.place(at);
+        if d.validate().is_err() {
+            return vec![];
+        }
+        self.pending = Some(d);
+        self.level_guide = level.map(|(_, ends)| ends);
+        let mut actions = vec![];
+        if !self.began {
+            actions.push(Action::Begin("Update Dimensions".into()));
+            self.began = true;
+        }
+        actions.push(Action::Preview("dimension.update".into(), json!({"ids":[id.0],"at":[at.x,at.y]})));
         actions
     }
     /// Places the pending dimension at `p` and commits it.
@@ -916,11 +1171,22 @@ impl DimensionTool {
         self.second = None;
         self.level_guide = None;
         self.levels.clear();
+        // Alt may no longer be held: the box shows again only when the next move finds it is.
+        if matches!(self.hover, Some(Target::Extent { .. })) {
+            self.hover = None;
+        }
+        self.grab = None;
+        self.moving = None;
     }
-    /// A plain click: picks a point or a line, or measures a circle's radius.
+    /// A plain click: picks a point or a line, or measures a circle's radius. A click on a path
+    /// that Alt made the whole path starts placing its width or height.
     fn click(&mut self, cx: &ToolContext, p: Point, target: Option<Target>, mods: Mods) -> Vec<Action> {
         match self.kind {
             Kind::Linear => {
+                if let Some(target @ Target::Extent { .. }) = target {
+                    self.pending = self.dimension_for(&target, p).filter(|d| d.clone().resolve(cx.doc).is_ok());
+                    return vec![];
+                }
                 let (mut at, mut reference) = self.snap_linear(cx, p);
                 let mut corner = self.corner;
                 if mods.shift
@@ -1028,8 +1294,15 @@ impl Tool for DimensionTool {
                     self.snapped = None;
                     return self.preview(cx, ev.pos);
                 }
-                self.hover = self.target(cx, ev.pos);
-                self.snapped = (self.kind == Kind::Linear && self.lines.is_empty()).then(|| self.snap_linear(cx, ev.pos));
+                self.hover = self.target(cx, ev.pos, ev.mods.alt);
+                let whole = match self.hover {
+                    Some(Target::Extent { node }) => {
+                        self.whole_box(cx, node);
+                        true
+                    }
+                    _ => false,
+                };
+                self.snapped = (self.kind == Kind::Linear && self.lines.is_empty() && !whole).then(|| self.snap_linear(cx, ev.pos));
                 if self.snapped.is_none() {
                     self.snap.clear();
                 }
@@ -1048,12 +1321,41 @@ impl Tool for DimensionTool {
                     && (anchor_under(cx, ev.pos).is_some()
                         || preview_corner(cx, ev.pos, &mut self.preview_boxes).is_some()
                         || on_dimensions(cx, ev.pos).is_some_and(|(_, end)| end));
-                self.press = Some((ev.pos, self.target(cx, ev.pos)));
+                let target = self.target(cx, ev.pos, ev.mods.alt);
+                // A press on a dimension drawn already, nearer to its lines and label than to any
+                // segment of the art, moves that dimension when it drags. A click there still
+                // picks a point.
+                self.grab = None;
+                if self.points.is_empty()
+                    && self.lines.is_empty()
+                    && let Some((id, d)) = dimension_under(cx, ev.pos)
+                {
+                    // In isolation mode only art inside the isolated object competes for the press.
+                    let edge = match cx.hit_options().scope.and_then(|s| cx.doc.node(s)) {
+                        Some(isolated) => pick_among(cx, ev.pos, std::iter::once(isolated)),
+                        None => pick(cx, ev.pos),
+                    };
+                    let art = edge.and_then(|e| nearest_on(cx, &e, ev.pos)).map(|q| q.distance(ev.pos));
+                    if art.is_none_or(|a| d < a) {
+                        self.grab = Some(id);
+                    }
+                }
+                self.press = Some((ev.pos, target));
                 vec![]
             }
             PointerKind::Drag => {
                 if self.pending.is_some() && !self.dragging && self.press.is_some() {
                     return self.preview(cx, ev.pos);
+                }
+                if self.pending.is_none()
+                    && let (Some((start, _)), Some(id)) = (self.press.as_ref(), self.grab)
+                    && start.distance(ev.pos) > cx.tol(if self.press_on_anchor { ANCHOR_REACH } else { 3.0 })
+                    && let Some(d) = cx.doc.node(id).and_then(|n| n.extras().dimension.as_deref())
+                {
+                    self.moving = Some((id, *start, d.clone()));
+                    self.pending = Some(d.clone());
+                    self.dragging = true;
+                    self.grab = None;
                 }
                 if self.pending.is_none()
                     && let Some((start, Some(target))) = self.press.clone()
@@ -1132,7 +1434,7 @@ impl Tool for DimensionTool {
                         if cx.measurement_labels
                             && let Ok(text) = self.style.label(a.distance(b), false)
                         {
-                            out.push(Overlay::Measure { p: self.at + Vec2::new(12.0, 12.0), text });
+                            out.push(Overlay::Measure { p: self.at + Vec2::new(cx.tol(12.0), cx.tol(12.0)), text });
                         }
                     }
                 }
@@ -1146,6 +1448,29 @@ impl Tool for DimensionTool {
                     let toward = self.at - *center;
                     if toward.hypot() > 1e-9 {
                         out.push(Overlay::Line { a: *center, b: *center + toward / toward.hypot() * *radius, color, dashed: true });
+                    }
+                }
+                Some(Target::Extent { node }) => {
+                    // The box through the path's outermost points: a Smart Guide, or with Smart
+                    // Guides off a line in the tool's own color.
+                    // Read again when the path changed since the pointer last moved.
+                    let (from, at) = whole_box_source(cx, *node);
+                    let b = match self.whole_box {
+                        Some((key, ends)) if key == at => ends,
+                        _ => dimension::extents(from, *node),
+                    }
+                    .map(extent_box);
+                    if let Some(b) = b {
+                        let line = if cx.smart_guides { cx.smart_guide_color } else { color };
+                        let corners = [Point::new(b.x0, b.y0), Point::new(b.x1, b.y0), Point::new(b.x1, b.y1), Point::new(b.x0, b.y1)];
+                        for (i, a) in corners.iter().enumerate() {
+                            out.push(Overlay::Line { a: *a, b: corners[(i + 1) % 4], color: line, dashed: false });
+                        }
+                        if cx.measurement_labels
+                            && let (Ok(w), Ok(h)) = (self.style.label(b.width(), false), self.style.label(b.height(), false))
+                        {
+                            out.push(Overlay::Measure { p: self.at + Vec2::new(cx.tol(12.0), cx.tol(12.0)), text: format!("W: {w}\nH: {h}") });
+                        }
                     }
                 }
                 None => {}
@@ -2283,6 +2608,86 @@ mod tests {
                 assert_eq!(at(a, b, p), Aligned, "{a:?} to {b:?}, pointer at {p:?}");
             }
         }
+    }
+
+    /// With Alt held, hovering a path shows the box through its outermost points as a Smart Guide,
+    /// and a click starts placing a dimension of the whole path: above or below it, its width;
+    /// beside it, its height. A drag places it on release. Without Alt the same click picks a point.
+    #[test]
+    fn an_alt_click_or_drag_on_a_path_places_its_overall_width_or_height() {
+        let (d, id) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let alt = Mods { alt: true, ..Mods::default() };
+        let held = |kind, x: f64, y: f64| PointerEvent::new(kind, x, y).with_mods(alt);
+        let preview = |acts: Vec<Action>| match acts.last() {
+            Some(Action::Preview(_, params)) => params.clone(),
+            other => panic!("{other:?}"),
+        };
+        let mut t = DimensionTool::default();
+        t.pointer(&c, &held(PointerKind::Move, 150.0, 100.0));
+        assert_eq!(t.hover, Some(Target::Extent { node: id }));
+        assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Line { color, .. } if *color == c.smart_guide_color)));
+        // With Smart Guides off the box is not a Smart Guide, and at a high zoom the size stays by
+        // the pointer.
+        let mut zoomed = cx(&d, &s, &p);
+        (zoomed.smart_guides, zoomed.measurement_labels, zoomed.zoom) = (false, true, 16.0);
+        let o = t.overlays(&zoomed);
+        assert!(
+            o.iter().any(|o| matches!(o, Overlay::Line { .. }))
+                && !o.iter().any(|o| matches!(o, Overlay::Line { color, .. } if *color == c.smart_guide_color))
+        );
+        let near = |o: &Overlay| matches!(o, Overlay::Measure { p, text } if p.distance(Point::new(150.0, 100.0)) < zoomed.tol(20.0) && text.starts_with("W: "));
+        assert!(o.iter().any(near), "{o:?}");
+        t.pointer(&c, &held(PointerKind::Down, 150.0, 100.0));
+        t.pointer(&c, &held(PointerKind::Up, 150.0, 100.0));
+        assert!(t.pending.is_some() && t.points.is_empty());
+        let above = preview(t.pointer(&c, &PointerEvent::new(PointerKind::Move, 150.0, 60.0)));
+        assert_eq!(above["source"], json!({"kind":"extent","node":id}));
+        assert_eq!(above["orientation"], json!("horizontal"));
+        // Past a corner, the side the pointer is farther out on decides.
+        let corner = preview(t.pointer(&c, &PointerEvent::new(PointerKind::Move, 280.0, 70.0)));
+        assert_eq!(corner["orientation"], json!("vertical"));
+        let corner = preview(t.pointer(&c, &PointerEvent::new(PointerKind::Move, 230.0, 40.0)));
+        assert_eq!(corner["orientation"], json!("horizontal"));
+        let beside = preview(t.pointer(&c, &PointerEvent::new(PointerKind::Move, 260.0, 150.0)));
+        assert_eq!(beside["orientation"], json!("vertical"));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 260.0, 150.0));
+        let placed = t.pointer(&c, &PointerEvent::new(PointerKind::Up, 260.0, 150.0));
+        assert!(matches!(placed.last(), Some(Action::Commit)), "{placed:?}");
+        // Placed with Alt let go: the box does not show again.
+        assert!(!t.overlays(&c).iter().any(|o| matches!(o, Overlay::Line { color, .. } if *color == c.smart_guide_color)));
+
+        let mut t = DimensionTool::default();
+        t.pointer(&c, &held(PointerKind::Down, 200.0, 150.0));
+        let dragged = preview(t.pointer(&c, &held(PointerKind::Drag, 150.0, 240.0)));
+        assert_eq!((dragged["source"]["kind"].clone(), dragged["orientation"].clone()), (json!("extent"), json!("horizontal")));
+        assert!(matches!(t.pointer(&c, &held(PointerKind::Up, 150.0, 240.0)).last(), Some(Action::Commit)));
+
+        let mut t = DimensionTool::default();
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 100.0));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 150.0, 100.0));
+        assert!(t.pending.is_none() && t.points.len() == 1, "a plain click picks a point");
+        // After the first point, Alt does not make the path whole: the second click picks a point.
+        t.pointer(&c, &held(PointerKind::Move, 100.0, 150.0));
+        assert!(matches!(t.hover, Some(Target::Segment(_))), "{:?}", t.hover);
+        t.pointer(&c, &held(PointerKind::Down, 100.0, 150.0));
+        t.pointer(&c, &held(PointerKind::Up, 100.0, 150.0));
+        let d = t.pending.as_ref().expect("the second click starts placing a dimension between the two points");
+        assert!(
+            !matches!(d.source, Some(DimensionSource::Extent { .. }))
+                && d.a.distance(Point::new(150.0, 100.0)) < 1e-6
+                && d.b.distance(Point::new(100.0, 150.0)) < 1e-6,
+            "{d:?}"
+        );
+
+        // A hovered segment's length also stays by the pointer at a high zoom.
+        let mut t = DimensionTool::default();
+        t.pointer(&zoomed, &PointerEvent::new(PointerKind::Move, 150.0, 100.0));
+        assert!(matches!(t.hover, Some(Target::Segment(_))), "{:?}", t.hover);
+        let o = t.overlays(&zoomed);
+        let near = |o: &Overlay| matches!(o, Overlay::Measure { p, .. } if p.distance(Point::new(150.0, 100.0)) < zoomed.tol(20.0));
+        assert!(o.iter().any(near), "{o:?}");
     }
 
     /// A point that Smart Guides leave where the pointer already is (the pointer right in line

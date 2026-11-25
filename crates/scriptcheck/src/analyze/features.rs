@@ -66,7 +66,8 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                     self.menu(None, l);
                 }
             }
-            Pending::MenuString(l, s) => self.menu(t.is(")").then_some(s), l),
+            Pending::MenuString(l, s) if t.is(",") => self.pending = Pending::MenuStringComma(l, s),
+            Pending::MenuString(l, s) | Pending::MenuStringComma(l, s) => self.menu(t.is(")").then_some(s), l),
             Pending::Open(l) => {
                 if t.kind == T::Str {
                     self.open_mode(&unquote(t.text, 2), l);
@@ -124,7 +125,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         }
         match pending {
             Pending::Window(l) | Pending::WindowType(l) => self.acc.feature(FeatureId::ScriptuiWindow, l),
-            Pending::Menu(l) | Pending::MenuString(l, _) => self.menu(None, l),
+            Pending::Menu(l) | Pending::MenuString(l, _) | Pending::MenuStringComma(l, _) => self.menu(None, l),
             Pending::Setter(l, true) => self.file_setter(l),
             Pending::Open(_) | Pending::Setter(_, false) | Pending::Name(..) | Pending::None => {}
         }
@@ -411,12 +412,13 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     }
 
     /// What [`Self::file_receiver`] finds: `Some(true)` for a Folder object whatever the path names
-    /// ([`Sig::folder`], [`Analyzer::folder`]), `Some(false)` for an object that may be a File object,
-    /// and `None` for anything else.
+    /// ([`Sig::folder`], [`Analyzer::folder`]), unless the file gives names values the analysis
+    /// doesn't read ([`Analyzer::unsure`]), `Some(false)` for an object that may be a File object, and
+    /// `None` for anything else.
     fn held_file(&self, receiver: Option<Sig<'s>>, before: Option<Sig<'s>>) -> Option<bool> {
         let r = receiver?;
         if r.file {
-            Some(r.folder)
+            Some(r.folder && !self.unsure)
         } else if r.kind == T::Ident && !member_mark(before) && self.alias(&r) {
             Some(self.folder(r.text))
         } else {

@@ -24,7 +24,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New…",
             ["File"],
             None,
-            "{preset?: a name from file.newPresets (start from it; the other params change it), name?|title?: document name (default Untitled-N), width?: pt=612|\"210 mm\", height?: pt=792 (each more than 0 and at most 3,999,856 pt, as artboard.new takes them), units?: \"Pixels\"|\"Points\"|\"Picas\"|\"Inches\"|\"Millimeters\"|\"Centimeters\"|\"Feet\"|\"Yards\"|\"Meters\"|\"Feet & Inches\" (default: prefs unitsGeneral, as print presets; screen presets: Pixels), orientation?: \"portrait\"|\"landscape\" (swaps width and height to match), artboards?: n (1–1000), artboardLayout?: {layout?: \"gridByRow\"|\"gridByColumn\"|\"row\"|\"column\", columns?: n (default: all in one row), rows?: n (gridByColumn only, an error with another layout: that many rows, in place of columns; a preset keeps them until columns without rows or another layout is given), spacing?: pt=20, rightToLeft?: bool}, bleed?: pt|[top, bottom, left, right]|{top?, …} (0–72 pt), backgroundContents?: \"transparent\"|\"white\" (a white artboard background, not an object), colorMode?: \"rgb\"|\"cmyk\" (a CMYK document starts with CMYK swatches and stores the colours applied to it as CMYK), rasterEffectsPpi?: 72|150|300 (1–2400), previewMode?: \"default\"|\"pixel\"|\"overprint\" (overprint turns Overprint Preview on, pixel Pixel Preview in the app; default leaves both), alignNewObjectsToPixelGrid?: bool (Advanced Options › Align New Objects to Pixel Grid: paths drawn in the document are pixel-aligned; default on for the Mobile and Web presets, else off; document.setup changes it later), profile?: a category of file.newPresets|null (the New Document profile the document starts from, see file.newProfiles; default: a built-in preset's category, kept by the saved and Recent presets made from it; null or no preset: the defaults), created?: Unix seconds|null (File Info's created date; default now, recorded in the journal so a replay matches), size?: a preset's size label (a preset file.newPresets lists can be passed back; ignored)} → {index, previewMode, profile?: the profile applied, warnings?: [text] (a color profile the profile's file carries that can't be used), profileError?: {profile, reason} (its file could not be read, was larger than 64 MiB or is not a native document, or the request may not read the profiles folder, a reason that leaves out the folder's path: the document has the defaults)}; the size is remembered in file.newPresets' Recent",
+            "{preset?: a name from file.newPresets (start from it; the other params change it), name?|title?: document name (default Untitled-N), width?: pt=612|\"210 mm\", height?: pt=792 (each more than 0 and at most 3,999,856 pt, as artboard.new takes them), units?: \"Pixels\"|\"Points\"|\"Picas\"|\"Inches\"|\"Millimeters\"|\"Centimeters\"|\"Feet\"|\"Yards\"|\"Meters\"|\"Feet & Inches\" (default: prefs unitsGeneral, as print presets; screen presets: Pixels), orientation?: \"portrait\"|\"landscape\" (swaps width and height to match), artboards?: n (1–1000), artboardLayout?: {layout?: \"gridByRow\"|\"gridByColumn\"|\"row\"|\"column\", columns?: n (default: all in one row), rows?: n (gridByColumn only, an error with another layout: that many rows, in place of columns; a preset keeps them until columns without rows or another layout is given), spacing?: pt=20, rightToLeft?: bool}, bleed?: pt|[top, bottom, left, right]|{top?, …} (0–72 pt), backgroundContents?: \"transparent\"|\"white\" (a white artboard background, not an object), colorMode?: \"rgb\"|\"cmyk\" (a CMYK document starts with CMYK swatches and stores the colours applied to it as CMYK), rasterEffectsPpi?: 72|150|300 (1–2400), previewMode?: \"default\"|\"pixel\"|\"overprint\" (overprint turns Overprint Preview on, pixel Pixel Preview in the app; default leaves both), alignNewObjectsToPixelGrid?: bool (Advanced Options › Align New Objects to Pixel Grid: paths drawn in the document are pixel-aligned; default on for the Mobile and Web presets, else off; document.setup changes it later), profile?: a category of file.newPresets|null (the New Document profile the document starts from, see file.newProfiles; default: a built-in preset's category, kept by the saved and Recent presets made from it; null or no preset: the defaults), created?: Unix seconds|null (File Info's created date; default now, recorded in the journal so a replay matches), size?: a preset's size label (a preset file.newPresets lists can be passed back; ignored)} → {index, previewMode, profile?: the profile applied, warnings?: [text] (a color profile the profile's file carries that can't be used), profileError?: {profile, reason} (its file is a link or a folder, could not be read, was larger than 64 MiB or is not a native document, or the request may not read the profiles folder, a reason that leaves out the folder's path: the document has the defaults)}; the size is remembered in file.newPresets' Recent",
             always,
             super::newdoc::file_new
         ),
@@ -234,7 +234,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clear",
             ["Edit"],
             Some("Delete"),
-            "{ids?, guides?: bool (with ids: also delete the selected ruler guides)} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides; a compound-path member selected on its own is deleted alone, and a compound left with no members goes too); without ids, refused while an object of a symbol instance's art is selected",
+            "{ids?, guides?: bool (with ids: also delete the selected ruler guides), keepJoined?: bool (without ids: the direct-selected anchors of a path with no selected segment are removed as path.removeAnchors removes them, without opening the path, and the next anchor along is selected (the one before at an open path's end); default: prefs deleteKeepsPathsJoined), keepEmpty?: bool (keep a compound path left with no members)} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides; a compound-path member selected on its own is deleted alone, and a compound left with no members goes too unless keepEmpty); without ids, refused while an object of a symbol instance's art is selected",
             has_selection_or_guides,
             clear
         ),
@@ -1250,6 +1250,8 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
 
 fn clear(s: &mut Session, p: &Value) -> Result<Value> {
     let guides = switch_or(p, "guides", false, "edit.clear")?;
+    let keep_empty = switch_or(p, "keepEmpty", false, "edit.clear")?;
+    switch_or(p, "keepJoined", false, "edit.clear")?;
     let explicit = if p.get("ids").is_some() { Some(checked_ids_param(s, p, "ids", "edit.clear")?) } else { None };
     // An object of a symbol instance's art can't be removed from the instance alone.
     if explicit.is_none() && s.doc()?.selection.symbol_part.is_some() {
@@ -1257,7 +1259,8 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // Direct-selected anchors or segments: remove those, and any objects selected whole with them.
     if explicit.is_none() && (!s.doc()?.selection.anchors.is_empty() || !s.doc()?.selection.segments.is_empty()) {
-        return super::path::delete_anchors(s, p);
+        let keep_joined = keeps_paths_joined(s, p)?;
+        return super::path::delete_anchors_joined(s, p, keep_joined);
     }
     // Selected ruler guides (selected on their own).
     if explicit.is_none() && s.doc()?.selection.is_empty() {
@@ -1281,8 +1284,11 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
         return ok();
     }
     s.edit("Clear", |d, sel| {
-        let parents: Vec<_> =
-            ids.iter().filter_map(|id| d.parent_of(*id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. })))).collect();
+        let parents: Vec<_> = if keep_empty {
+            Vec::new()
+        } else {
+            ids.iter().filter_map(|id| d.parent_of(*id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. })))).collect()
+        };
         d.remove_many(&ids)?;
         for p in parents {
             if d.node(p).is_some_and(|n| n.children().is_some_and(|c| c.is_empty())) {
@@ -1302,6 +1308,17 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     ok()
+}
+
+/// Does Clear remove direct-selected anchors without opening their paths (`keepJoined` param, else
+/// General › Delete Removes Anchor Points and Keeps Paths Joined)? Noted in the journal, so a
+/// replay removes them the same way whatever the preference is at the time. A saved step without `keepJoined`
+/// was recorded before the preference existed, so it opens the paths as it did then.
+fn keeps_paths_joined(s: &mut Session, p: &Value) -> Result<bool> {
+    let default = s.prefs.delete_keeps_paths_joined && !s.replaying();
+    let on = switch_or(p, "keepJoined", default, "edit.clear")?;
+    s.note_journal("keepJoined", json!(on));
+    Ok(on)
 }
 
 /// Document ids scope node ids: two tabs may contain objects with the same node id.
@@ -1581,7 +1598,7 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
     let (ids, imported, artboards, into) = s.edit(mode.label(), |d, sel| {
         // Converted colors are compared with the document's resources, as another document's are
         // (`Clipboard::import_into`); its images are still the document's own.
-        let imported = clip.import_into(d, choices, same_doc)?;
+        let mut imported = clip.import_into(d, choices, same_doc)?;
         // Draw Inside: the clip group of the object drawn into, made on the first paste.
         let into = inside.map(|t| super::create::draw_inside_group(d, t)).transpose()?;
         let artboards: Vec<usize> = boards
@@ -1599,7 +1616,7 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
                 let mut c = d.reid(n);
                 // A pasted symbol set packs from the density recorded for it at Copy.
                 d.carry_set_densities(n, &c, &clip.set_densities);
-                imported.apply(&mut c);
+                imported.apply(&mut c, d);
                 let sc = vectorcraft_doc::Scaling { patterns: mode == PasteMode::Drag, ..Default::default() };
                 if xf != Affine::IDENTITY {
                     // A cross-document drag carries the graphic's appearance with it,
@@ -1727,6 +1744,7 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         "added": imported.added,
         "merged": imported.merged,
         "renamed": imported.renamed,
+        "warnings": imported.warnings,
     }))
 }
 

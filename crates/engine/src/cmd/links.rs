@@ -328,7 +328,12 @@ impl<'a> LinkBase<'a> {
 
     /// The open document `st`'s. One with no file of its own looks beside the file it was read from.
     pub(crate) fn of(st: &'a crate::DocState) -> Self {
-        let (path, from) = (st.path.as_deref(), st.links_from.as_deref());
+        Self::of_files(st.path.as_deref(), st.links_from.as_deref())
+    }
+
+    /// An open document's, by its own file `path` and the file it was read from, `from`
+    /// ([`crate::DocState::links_from`]), as [`Self::of`] gives them.
+    pub(crate) fn of_files(path: Option<&'a str>, from: Option<&'a str>) -> Self {
         Self { doc: path.or(from), relative: from.or(path) }
     }
 }
@@ -399,6 +404,29 @@ fn locate(link: &LinkInfo, base: LinkBase) -> Option<Found> {
         Path::new(&from).parent().and_then(|dir| relative_path(Path::new(&f.path), dir))
     });
     Some(f)
+}
+
+/// The files the links of `d` (a document looking from `base`) lead to now: where [`locate`]
+/// finds each linked image's and placed document's file from `base` and from no document (as
+/// output reads them, [`full_linked_images`]), the plate files of their own of images placed from
+/// DCS files, and the image files its data sets name. The commands a script runs may read these
+/// for the documents open when the run began, as the person left them
+/// ([`crate::file_access::ScriptGate::linked`]).
+pub(crate) fn files_linked(d: &Document, base: LinkBase) -> Vec<String> {
+    let mut out = vec![];
+    for g in groups(d, None) {
+        for from in [base, LinkBase::default()] {
+            let Some(f) = locate(&g.link, from) else { continue };
+            out.extend(g.plate_files.iter().filter_map(|p| super::place::dcs::plate_file_path(&f.path, &p.name)));
+            out.push(f.path);
+        }
+    }
+    let values = d.variables.datasets.iter().flat_map(|set| set.values.values());
+    out.extend(values.filter_map(|v| match v {
+        DataValue::Image(path) => fileio::document_path(path, base.doc).ok(),
+        _ => None,
+    }));
+    out
 }
 
 /// The place `stored` names from the file `from`, as `resolve` ([`fileio::document_path`]) follows
@@ -563,7 +591,7 @@ pub(crate) fn full_linked_images<'a>(d: &'a Document, base: LinkBase) -> (Cow<'a
             Some(f) if img.blob.bytes.as_slice() == bytes.as_slice() => f.mime.to_string(),
             _ => img.blob.mime.clone(),
         };
-        out.images.insert(key, ImageBlob { mime, bytes: img.blob.bytes, proxy: preview });
+        out.images.insert(key, ImageBlob { mime, bytes: img.blob.bytes, proxy: preview, file_font: Default::default() });
     }
     let mut warnings = vec![];
     match previews.len() {

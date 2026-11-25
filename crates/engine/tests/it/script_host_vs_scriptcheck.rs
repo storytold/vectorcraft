@@ -49,8 +49,10 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
 /// `SaveOptions.SAVECHANGES`, which has its row above. `Document.fullName` and
 /// `Document.path` only name its file and folder. `app.open` reads the file it is given.
 const INSIDE: &[(&str, &str)] = &[
-    ("", "$ File Folder alert confirm localize prompt toSource"),
+    ("", "$ File Folder UnitValue alert confirm localize prompt toSource"),
     ("Object.prototype.", "toSource"),
+    ("UnitValue.", "baseUnit baseUnit= length prototype"),
+    ("UnitValue.prototype.", "as baseUnit baseUnit= constructor convert toString type type= value value="),
     ("localize.", "length"),
     ("toSource.", "length"),
     (
@@ -63,7 +65,7 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "File.prototype.",
         "absoluteURI alias changePath close constructor created creator displayName encoding encoding= eof error error= \
-         exists fsName fullName getRelativeURI hidden length lineFeed lineFeed= modified name openDlg parent path read \
+         exists fsName fullName getRelativeURI hidden length lineFeed lineFeed= localizedName modified name openDlg parent path read \
          readch readln readonly relativeURI resolve saveDlg seek tell toString type",
     ),
     (
@@ -74,19 +76,19 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "Folder.prototype.",
         "absoluteURI alias changePath constructor created displayName error error= exists fsName fullName getFiles \
-         getRelativeURI modified name parent path relativeURI resolve selectDlg toString",
+         getRelativeURI localizedName modified name parent path relativeURI resolve selectDlg toString",
     ),
     (
         "",
-        "app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace DocumentPreset DocumentPresetType \
-         DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid Documents ElementPlacement Layer PageItem \
-         PageItems RulerUnits ZOrderMethod",
+        "activeDocument activeDocument= app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace \
+         DocumentPreset DocumentPresetType DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid documents \
+         Documents ElementPlacement Layer PageItem PageItems RulerUnits selection selection= ZOrderMethod",
     ),
     ("Application.", "prototype"),
     (
         "Application.prototype.",
         "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents getIsFileOpen \
-         open selection typename userInteractionLevel userInteractionLevel=",
+         open selection selection= toString typename userInteractionLevel userInteractionLevel=",
     ),
     ("DocumentPreset.", "prototype"),
     (
@@ -94,29 +96,29 @@ const INSIDE: &[(&str, &str)] = &[
         "artboardLayout artboardLayout= artboardRowsOrCols artboardRowsOrCols= artboardSpacing artboardSpacing= colorMode \
          colorMode= constructor documentBleedLink documentBleedLink= documentBleedOffsetRect documentBleedOffsetRect= height \
          height= numArtboards numArtboards= previewMode previewMode= rasterResolution rasterResolution= title title= \
-         transparencyGrid transparencyGrid= typename units units= width width=",
+         toString transparencyGrid transparencyGrid= typename units units= width width=",
     ),
     ("Documents.", "prototype"),
-    ("Documents.prototype.", "add addDocument constructor getByName index length parent typename"),
+    ("Documents.prototype.", "add addDocument constructor getByName index length parent toString typename"),
     ("Document.", "prototype"),
     (
         "Document.prototype.",
         "activeLayer activeLayer= artboards artboards= close constructor convertCoordinate documentColorSpace fullName \
          groupItems groupItems= height layers layers= name pageItems parent path pathItems pathItems= rulerOrigin rulerOrigin= \
-         rulerUnits saved saved= selection selection= swatches swatches= symbols symbols= textFrames textFrames= typename \
-         views views= width",
+         rulerUnits saved saved= selection selection= swatches swatches= symbols symbols= textFrames textFrames= toString \
+         typename views views= width",
     ),
     ("Layer.", "prototype"),
-    ("Layer.prototype.", "constructor name typename"),
+    ("Layer.prototype.", "constructor name toString typename"),
     ("PageItems.", "prototype"),
-    ("PageItems.prototype.", "constructor getByName index length parent removeAll typename"),
+    ("PageItems.prototype.", "constructor getByName index length parent removeAll toString typename"),
     ("PageItem.", "prototype"),
     (
         "PageItem.prototype.",
         "artworkKnockout artworkKnockout= blendingMode blendingMode= bringInPerspective bringInPerspective= constructor \
          controlBounds duplicate editable geometricBounds height height= hidden hidden= isIsolated isIsolated= layer layer= \
          left left= locked locked= move name name= note note= opacity opacity= parent pixelAligned pixelAligned= position \
-         position= remove resize resize= rotate rotate= selected selected= sliced sliced= tags tags= top top= transform \
+         position= remove resize resize= rotate rotate= selected selected= sliced sliced= tags tags= toString top top= transform \
          transform= translate translate= typename uRL uRL= uuid uuid= visibilityVariable visibilityVariable= visibleBounds \
          width width= wrapInside wrapInside= wrapOffset wrapOffset= wrapped wrapped= zOrder zOrderPosition",
     ),
@@ -180,6 +182,9 @@ const LIST: &str = r#"(function () {
     var globals = Object.getOwnPropertyNames(g);
     add(g, "");
     for (var i = 0; i < globals.length; i++) {
+        // A global with a getter, such as `activeDocument`, is not read: it throws with no document open.
+        var gd = Object.getOwnPropertyDescriptor(g, globals[i]);
+        if (gd && gd.get) continue;
         var v = g[globals[i]];
         if (v !== null && (typeof v == "object" || typeof v == "function")) {
             add(v, globals[i] + ".");

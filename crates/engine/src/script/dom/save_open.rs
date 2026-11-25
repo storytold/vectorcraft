@@ -667,9 +667,10 @@ fn plain(real: std::path::PathBuf) -> String {
 }
 
 /// The built-in preset names scripts use that VectorCraft's built-in presets name otherwise, and the
-/// preset each one names here.
+/// preset each one names here (`Default` is VectorCraft's default preset, as
+/// [`vectorcraft_pdf::builtin_preset`] reads it).
 const PRESET_ALIASES: &[(&str, &str)] = &[
-    ("Illustrator Default", vectorcraft_pdf::DEFAULT_PRESET), // brand-ok: the preset name scripts use
+    ("Illustrator Default", "Default"), // brand-ok: the preset name scripts use
     ("PDF/X-4:2008", "PDF/X-4:2010"),
 ];
 
@@ -685,7 +686,7 @@ fn builtin_preset_name(h: &Host, q: &mut Map<String, Value>) {
     }
     let Some(inside) = name.trim().strip_prefix('[').and_then(|n| n.strip_suffix(']')) else { return };
     let inside = PRESET_ALIASES.iter().find(|(alias, _)| alias.eq_ignore_ascii_case(inside.trim())).map_or(inside, |(_, to)| to);
-    let Some(builtin) = vectorcraft_pdf::builtin_preset(inside) else { return };
+    let Some(builtin) = vectorcraft_pdf::builtin_preset(inside, vectorcraft_pdf::APP) else { return };
     q.insert("preset".into(), json!(builtin.name));
 }
 

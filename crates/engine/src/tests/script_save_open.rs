@@ -221,7 +221,14 @@ fn a_refused_file_stops_a_save_whose_writer_does_not_check() {
     let params = json!({"path": dir.join("a.eps").to_string_lossy(), "format": "eps", "useArtboards": true});
     let plan = save_plan(&s, SaveMode::SaveAs, &params).unwrap();
     let job = save_job(&mut s, plan).unwrap();
-    let gate = ScriptGate { read: ScriptScope::default(), write: ScriptScope::of_folder(&dir), documents: vec![], held: vec![], also: None };
+    let gate = ScriptGate {
+        read: ScriptScope::default(),
+        write: ScriptScope::of_folder(&dir),
+        documents: vec![],
+        held: vec![],
+        linked: Default::default(),
+        also: None,
+    };
     let (mut refused, mut written) = (None, vec![]);
     let make_read_only = |paths: &[&str]| {
         let last = paths.last().map(|p| p.to_string()).unwrap();
