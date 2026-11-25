@@ -59,6 +59,13 @@ impl Session {
 
     /// Execute a command by id. This is THE entry point for every frontend.
     pub fn execute(&mut self, id: &str, params: &Value) -> Result<Value> {
+        // Plug-ins still loading on other threads ([`Session::load_plugins_in_background`]) are
+        // installed before a plug-in command, its own commands included, and before a command that
+        // may edit, as they would have been before the window showed; a step of a batch waits for
+        // the plug-ins an earlier step started loading.
+        if self.plugins_loading() && crate::waits_for_plugin_loads(id) {
+            self.finish_plugin_loads();
+        }
         self.revealing(|s| s.execute_unwatched(id, params))
     }
 

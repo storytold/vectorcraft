@@ -106,6 +106,8 @@ impl Session {
             profile_dir: None,
             color_settings_file: None,
             plugin_dir: None,
+            plugin_loads: Default::default(),
+            plugin_loads_in_background: false,
             scripts_dir: None,
             metadata_templates_dir: None,
             new_doc_profile_dir: None,

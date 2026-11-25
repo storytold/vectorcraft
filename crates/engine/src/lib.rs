@@ -203,6 +203,11 @@ pub struct Session {
     /// Where the plug-ins `plugin.install` installs are kept; `None`: only for the process
     /// ([`Session::attach_plugin_store`]).
     plugin_dir: Option<std::path::PathBuf>,
+    /// Plug-in loads running on worker threads, oldest first ([`Session::poll_plugin_loads`]).
+    plugin_loads: std::collections::VecDeque<store::PluginLoad>,
+    /// Whether the loads of the stored plug-ins and of the plug-ins folder go on after the call
+    /// that starts them ([`Session::load_plugins_in_background`]).
+    plugin_loads_in_background: bool,
     /// The Scripts folder, whose scripts File › Scripts lists; `None`: no folder
     /// ([`Session::attach_scripts_dir`]).
     scripts_dir: Option<std::path::PathBuf>,
@@ -463,7 +468,7 @@ mod session;
 pub(crate) use command_sets::SELECTS_GIVEN_IDS;
 #[cfg(test)]
 use command_sets::given_ids;
-pub use command_sets::{DRAWS_SHAPE, FIT_ACTIVE_ARTBOARD, ON_ACTIVE_ARTBOARD, waits_for_tool_edit};
+pub use command_sets::{DRAWS_SHAPE, FIT_ACTIVE_ARTBOARD, ON_ACTIVE_ARTBOARD, waits_for_plugin_loads, waits_for_tool_edit};
 pub use doc_state::{DocState, LayersReveal, OpenRows, RecalledSelection};
 pub use error::{EngineError, READ_ONLY_LOCATION, Result, SCRIPT_BUSY};
 #[cfg(test)]
