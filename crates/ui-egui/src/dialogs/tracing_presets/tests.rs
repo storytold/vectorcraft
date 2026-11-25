@@ -66,9 +66,17 @@ fn finish(app: &mut VectorcraftApp, ctx: &egui::Context, ok: bool) {
 
 /// The texts the dialogs paint, once they have faded in (each frame is a quarter second on).
 fn frame_texts(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
-    fn walk(s: &egui::Shape, out: &mut Vec<String>) {
+    frame_runs(app, ctx).into_iter().map(|(text, _, _)| text).collect()
+}
+
+/// The texts the dialogs paint with where each is drawn and its font, once they have faded in.
+fn frame_runs(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<(String, egui::Rect, Option<egui::FontId>)> {
+    fn walk(s: &egui::Shape, out: &mut Vec<(String, egui::Rect, Option<egui::FontId>)>) {
         match s {
-            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            egui::Shape::Text(t) => {
+                let font = t.galley.job.sections.first().map(|section| section.format.font_id.clone());
+                out.push((t.galley.text().to_string(), t.galley.rect.translate(t.pos.to_vec2()), font));
+            }
             egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
             _ => {}
         }
@@ -143,6 +151,22 @@ fn new_and_edit_save_through_the_editor_and_cancel_saves_nothing() {
     // New… from a saved preset starts from its settings.
     press(&mut app, &ctx, Action::New);
     assert_eq!((field(&app, "name"), field(&app, "params")), (json!("Tracing Preset 1"), edited));
+}
+
+#[test]
+fn the_selected_preset_shows_beside_the_list_under_a_strong_name() {
+    let (mut app, ctx) = windowed(Default::default());
+    app.run("ui.tracingPresetsDialog", json!({})).unwrap();
+    pass(&mut app, &ctx);
+    let runs = frame_runs(&app, &ctx);
+    let rect = |names: &[&str]| runs.iter().find(|r| names.contains(&r.0.as_str())).map(|r| r.1);
+    let (Some(export), Some(mode)) = (rect(&["Export…"]), rect(&["Mode", "Mode:"])) else { panic!("Export… and Mode: {runs:?}") };
+    // The settings column starts right of the list's buttons and level with the list, not under it.
+    assert!(mode.left() >= export.right() && mode.top() < export.top(), "Mode {mode:?}, Export… {export:?}");
+    // The selected preset's name over its settings is set apart from its row in the list.
+    let names: Vec<_> = runs.iter().filter(|r| r.0 == "[Default]").collect();
+    assert_eq!(names.len(), 2, "{runs:?}");
+    assert_ne!(names[0].2, names[1].2, "the list row and the name: {names:?}");
 }
 
 #[test]

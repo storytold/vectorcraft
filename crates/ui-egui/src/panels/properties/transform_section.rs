@@ -39,7 +39,7 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         groups.size = true;
         transform::object_fields(app, ui, groups);
         Row::new().show(ui, |ui, _| {
-            transform::rotate_field(app, ui);
+            transform::rotate_field(app, ui, &[]);
             // The icons are named for their mirror line: `flip-vertical-2` draws a vertical line, the
             // left-right flip, which the Properties panel calls Flip Along Horizontal Axis (#1910).
             IconButton::command(IconId::new("flip-vertical-2"), "ui.transform.flipHorizontal").label(tl!("Flip Along Horizontal Axis")).show(ui);

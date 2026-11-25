@@ -482,6 +482,13 @@ fn discard_white_overprint_keeps_white_overprints_in_overprint_preview() {
     s.execute("document.setup", &json!({"discardWhiteOverprint": false})).unwrap();
     let [r, g, b, _] = centre(&s);
     assert!(r > 200 && g < 60 && b < 60, "a white overprint vanishes: {:?}", [r, g, b]);
+    // A white spot ink is an ink: it overprints with the option on too.
+    s.execute("document.setup", &json!({"discardWhiteOverprint": true})).unwrap();
+    s.execute("swatch.new", &json!({"name": "Opaque White", "color": {"c": 0, "m": 0, "y": 0, "k": 0}, "spot": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [white]})).unwrap();
+    s.execute("paint.setFill", &json!({"swatch": "Opaque White"})).unwrap();
+    let [r, g, b, _] = centre(&s);
+    assert!(r > 200 && g < 60 && b < 60, "the spot white overprints: {:?}", [r, g, b]);
 }
 
 #[test]

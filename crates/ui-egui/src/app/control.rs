@@ -75,8 +75,9 @@ impl VectorcraftApp {
             }
         }
         // A capture is issued only after passes settle it, and an idle window runs none; a hidden
-        // one runs only this logic unless asked to paint.
-        if self.channel.as_ref().is_some_and(|channel| channel.captures.any_unissued()) {
+        // one runs only this logic unless asked to paint. Its readback finishes only in a later frame,
+        // so frames keep coming until it is answered, as production's did.
+        if self.channel.as_ref().is_some_and(|channel| channel.captures.any_pending()) {
             if self.viewport_hidden(ctx) {
                 host.paint_while_hidden();
             }

@@ -10,8 +10,9 @@ use craft::draw::ui::stroke::{self as draw, StrokeEditor, StrokeField, StrokeSec
 use craft::keymap::CommandRef;
 use craft::ui::buttons::IconButton;
 use craft::ui::choice::Segmented;
-use craft::ui::contract::{Bind, Entry, FieldLabelRole, Props as _, Show as _, ShowContainer as _, SideLabel, TooltipSpec};
+use craft::ui::contract::{Bind, Entry, FieldLabelRole, Props as _, Show as _, ShowContainer as _, SideLabel, Sizing, TooltipSpec};
 use craft::ui::form::Field;
+use craft::ui::layout_components::Row;
 use craft::ui::menu::PanelRow;
 use craft::ui::pickers::Select;
 use craft::ui::popover::Popover;
@@ -348,7 +349,7 @@ pub(crate) fn apply_weight(app: &mut VectorcraftApp, out: &NumberOutput, target:
 /// The weight field in a row labelled `label` with the side label `side`: the output of the number field, none when
 /// the row's body did not run.
 fn weight_row(app: &VectorcraftApp, ui: &mut Ui, label: &'static str, side: SideLabel, weight: Option<f64>) -> Option<NumberOutput> {
-    Field::new(label).side(side).id_salt("weight").show(ui, |ui, _| weight_number(app, weight).show(ui)).inner
+    Field::new(label).side(side).id_salt("weight").sizing(Sizing::Content).show(ui, |ui, _| weight_number(app, weight).show(ui)).inner
 }
 
 /// The weight field whose link side label (`label`: the Control bar's "Stroke:", the Properties panel's "Stroke")
@@ -390,7 +391,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     arrow_rows(app, ui, st.as_ref());
     ui.separator();
     Field::new(tl!("Profile")).show(ui, |ui, _| {
-        ui.horizontal(|ui| {
+        Row::new().show(ui, |ui, _| {
             profile_select(app, ui);
             flip_buttons(app, ui, st.as_ref());
         });
@@ -410,11 +411,14 @@ fn arrow_rows(app: &mut VectorcraftApp, ui: &mut Ui, st: Option<&StrokeLayer>) {
         (st.and_then(|s| s.end_arrow.clone()), false, tl!("End arrowhead"), "endArrow"),
     ];
     Field::new(tl!("Arrowheads")).show(ui, |ui, _| {
-        ui.horizontal(|ui| {
+        // The two heads share the width the Swap button leaves; a field too narrow for all three puts Swap on a
+        // new line.
+        Row::new().fill_width().wrap(true).show(ui, |ui, _| {
             for (head, start, label, key) in &heads {
                 let (start, key) = (*start, *key);
                 let out = Select::new(*label, Bind::given(head.clone()), &entries)
                     .picture(move |a, cx, rect| arrow_thumb(cx, rect, a.as_ref(), start))
+                    .sizing(Sizing::FillWidth)
                     .show(ui);
                 // A custom head goes with its art, as document.inspect reports it.
                 if let Some(a) = out.events.landed() {
