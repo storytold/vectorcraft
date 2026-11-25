@@ -2010,6 +2010,25 @@ mod tests {
         out.textures_delta.clear();
     }
 
+    /// Frames of the app with the dialog open ask for no rerun once its first frame has sized it: the commands of its
+    /// set row publish the state they had the frame before.
+    #[test]
+    fn an_open_dialog_asks_for_no_rerun_after_its_first_frame() {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+        let ctx = app.ui_ctx.clone().unwrap();
+        let raw =
+            || egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 1000.0))), ..Default::default() };
+        for _ in 0..3 {
+            crate::testing::app_frame(&mut app, &ctx, raw());
+        }
+        open(&mut app);
+        crate::testing::app_frame(&mut app, &ctx, raw());
+        for frame in 0..4 {
+            let out = crate::testing::app_frame(&mut app, &ctx, raw());
+            assert_eq!(out.platform_output.num_completed_passes, 1, "frame {frame} after the first is drawn again");
+        }
+    }
+
     /// An open dialog lists a live-effect plug-in installed while it is open, with the shortcut its
     /// set gives it, and drops the row while the plug-in is removed, keeping that shortcut in the
     /// set.
