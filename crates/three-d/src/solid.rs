@@ -25,9 +25,9 @@ mod side;
 pub(crate) use build::EXTRUDED;
 #[cfg(test)]
 pub(crate) use build::PLANES;
+pub(crate) use build::{Attrs, Face3, Keep, PlaneUv, extrude_faces, plane_faces, rings_bounds};
 #[cfg(test)]
 use build::{Camera, cuts, edge_distance, newell, section};
-pub(crate) use build::{Face3, Keep, extrude_faces, plane_faces};
 pub use build::{extrude, extrude_side_size, extrude_surfaces, plane};
 pub use face_map::{FaceMap, MeshFace, extrude_face_map, extrude_mesh_face, plane_face_map, plane_mesh_face};
 pub(crate) use inflate::inflate_faces;
@@ -575,3 +575,6 @@ mod tests_inflate_shading;
 
 #[cfg(test)]
 mod tests_limits;
+
+#[cfg(test)]
+mod tests_curves;
