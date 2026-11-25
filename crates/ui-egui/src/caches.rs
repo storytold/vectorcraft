@@ -1,4 +1,12 @@
-use super::{canvas, cursors, render_worker};
+use std::rc::Rc;
+use std::sync::Arc;
+use std::time::SystemTime;
+
+use serde_json::Value;
+use vectorcraft_doc::NodeId;
+use vectorcraft_geom::{Point, Vec2};
+
+use super::{canvas, render_worker};
 
 /// Cached canvas raster.
 pub struct CanvasCache {
@@ -48,16 +56,17 @@ pub struct CanvasCache {
     pub find_font: Option<FindFontCache>,
     /// The marks Type → Show Hidden Characters drew on each text object in the last frame. A frame
     /// that does not draw them drops them ([`canvas::show`]).
-    pub hidden_chars: canvas::HiddenChars,
+    pub hidden_chars: canvas::marks::HiddenChars,
     /// The words Edit › Spelling › Auto Spell Check underlined on each text object in the last
     /// frame; dropped while it is off.
-    pub spelling: canvas::SpellingMarks,
-    /// The selected objects' outlines, anchors and handles as drawn in the last frame. A frame that
-    /// does not draw them drops them ([`canvas::show`]).
-    pub selection_marks: canvas::SelectionMarks,
-    /// The meshes the tools' shared paths (a long Blob Brush or Eraser drag's settled outline) were
-    /// drawn with in the last frame. A frame that does not draw them drops them ([`canvas::show`]).
-    pub shared_paths: canvas::SharedPaths,
+    pub spelling: canvas::marks::SpellingMarks,
+    /// The active document's visible text objects for (document uid, revision), which Show Hidden
+    /// Characters and Auto Spell Check draw over. A pass that draws neither drops them
+    /// ([`canvas::marks::marks_of`]).
+    pub text_nodes: canvas::marks::TextNodes,
+    /// The Hand, Zoom and Rotate View tools the Space key and its chords lend the canvas, between
+    /// passes; the tool adapter takes it out for its call and puts it back.
+    pub momentary: Option<craft::ui::canvas::Momentary>,
     /// [`VectorcraftApp::selection_box`] for (document uid, revision, Use Preview Bounds and
     /// Measure Type by Glyph Bounds).
     pub selection_box: Option<((u64, u64, vectorcraft_effects::preview::Measure), Option<vectorcraft_doc::OrientedBox>)>,
@@ -77,27 +86,117 @@ pub struct CanvasCache {
     /// [`CacheKey::plugins`] by document uid, with the plug-in revision
     /// ([`vectorcraft_render::effects::plugin_revision`]) it was last checked at.
     pub plugin_keys: std::collections::HashMap<u64, (u64, u64)>,
-    /// [`CacheKey::placed`] by document uid ([`canvas::placed_key`]).
+    /// [`CacheKey::placed`] by document uid ([`canvas::raster::placed_key`]).
     pub placed_keys: std::collections::HashMap<u64, PlacedKey>,
-    /// The tools' cursors as OS cursor bitmaps.
-    pub cursors: cursors::Images,
     /// The view the canvas last drew and when it last changed (egui's input time): while it moves,
     /// the canvas doesn't hit-test the art under the pointer ([`canvas::hover_wait`], #2452).
     pub view_moved: Option<(canvas::ViewKey, f64)>,
-    /// The cursor the active tool last gave over the canvas, with the tool and the modifier keys
-    /// it was for: kept while the view moves.
-    pub hover_cursor: Option<(&'static str, vectorcraft_tools::Mods, vectorcraft_tools::Cursor)>,
-    /// In Presentation Mode, the canvas rect the active artboard was last fitted to: it is fitted
-    /// again when the rect changes (the window going full screen).
-    pub presented: Option<egui::Rect>,
-    /// The canvas a document's opening view was fitted to, with the view the fit gave. The window's
-    /// layout can still move the canvas's edges over the next frames, so until the view is moved or
-    /// the user acts, the opening view is fitted again when the canvas changes ([`canvas::show`]).
-    pub opening_fit: Option<canvas::ViewKey>,
+    /// Where the press of the gesture running on the canvas landed, in document points: a move carried out of the
+    /// canvas drops its art there relative to the pointer (`canvas::drops`).
+    pub grab: Option<Point>,
+    /// The uid of the document a tab rest showed while art carried off the canvas waits over it: only its canvas takes
+    /// the art, so a target closed or left by other means carries nothing (`canvas::drops`).
+    pub carry_target: Option<u64>,
+    /// The last drag the tool was sent and the screen point it was at: when the view scrolls under the held
+    /// pointer, the drag goes on at that point in the scrolled view.
+    pub last_drag: Option<(egui::Pos2, vectorcraft_tools::PointerEvent)>,
+    /// Escape cancelled the tool's press while the button is still down: its release still sends the tool its Up,
+    /// which gives back a selection tool Cmd lent.
+    pub escaped_press: bool,
+    /// A press on the canvas committed a panel field's running preview before the tool took the press, as the field's
+    /// commit came first in production: the field's own commit later in the pass has nothing left to run.
+    pub committed_preview: bool,
     /// Window › Arrange › Tile: the renders the panes of the other documents draw.
     pub panes: canvas::Panes,
     /// Window › Arrange › Float in Window: what the floating document windows keep between frames.
     pub windows: crate::doc_windows::Windows,
+    /// Whether the selection holds images beside other art, for (document uid, revision): the
+    /// Contextual Task Bar reads it every frame.
+    pub images_with_other_art: Option<((u64, u64), bool)>,
+    /// Whether the Smooth tool can work on the selection's paths, for (document uid, revision).
+    pub smooth_paths: Option<((u64, u64), bool)>,
+    /// Whether the selection mixes colours, for (document uid, revision): the Properties panel's
+    /// Recolor row reads it.
+    pub multi_color: Option<((u64, u64), bool)>,
+    /// How many objects Start Global Edit would edit, for the key the Properties panel builds.
+    pub(crate) global_edit_count: Option<(crate::panels::properties::GlobalEditKey, usize)>,
+    /// The selected live shape's angle, for (document uid, revision, kind of shape).
+    pub shape_angle: Option<ShapeAngleCache>,
+    /// The Image Trace presets, for the session's preset revision.
+    pub(crate) trace_presets: Option<(u64, Arc<crate::panels::image_trace::PresetList>)>,
+    /// What the Image Trace panel traces, for (document uid, revision).
+    pub(crate) trace_target: Option<((u64, u64), Arc<crate::panels::image_trace::Target>)>,
+    /// The Attributes panel's values and whether they apply, for the panel's key.
+    pub(crate) attributes_info: Option<(crate::panels::attributes::AttrKey, (vectorcraft_engine::cmd::AttributesInfo, bool))>,
+    /// The SVG Interactivity panel's values, for the panel's key.
+    pub(crate) svg_info: Option<(crate::panels::svg_interactivity::SelKey, crate::panels::svg_interactivity::Info)>,
+    /// The CSS Properties panel's code, for the panel's key.
+    pub(crate) css_shown: Option<(crate::panels::css_properties::CssKey, Arc<crate::panels::css_properties::Shown>)>,
+    /// The SVG Options dialog's SVG code, for every input it reads (compared with `==`).
+    pub(crate) svg_code: Option<(crate::dialogs::svg_options::SvgCodeKey, Arc<str>)>,
+    /// The Export for Screens dialog's artboard thumbnails, for (document uid, revision).
+    pub artboard_thumbs: Option<ArtboardThumbsCache>,
+    /// The families the document uses, for the document's fonts key.
+    pub document_families: Option<(FontsKey, Arc<[String]>)>,
+    /// The families installed lately: the font generation, when it was asked, the families and
+    /// the newest install time among them.
+    pub recently_added: Option<RecentlyAddedCache>,
+    /// The kerning at the Type tool's caret, for (document uid, revision, text object, byte).
+    pub caret_kerning: Option<((u64, u64, NodeId, usize), f64)>,
+    /// The alternates the Glyphs panel found at the selection.
+    pub(crate) glyphs_found: crate::panels::glyphs::Found,
+    /// The faces the Glyphs panel's positional forms come from: (document uid, revision, font
+    /// generation, the selection's object and range, the selected objects).
+    pub glyph_form_faces: Option<GlyphFormFacesCache>,
+    /// The selected characters' outlines on the page for the alternates row: (document uid,
+    /// revision, text object, range) to the quads and whether they are cut.
+    pub character_quads: Option<CharacterQuadsCache>,
+    /// The Tabs panel's guide line, for (document uid, text object, paragraph, revision): layout is
+    /// too slow to run on every frame of a stop's drag.
+    pub tabs_guide_axis: Option<TabsGuideAxisCache>,
+    /// The Appearance panel's summary of the selection, which holds the document, revision and
+    /// subjects it was made for.
+    pub(crate) appearance_summary: Option<Arc<crate::panels::appearance::Summary>>,
+    /// The Transparency panel's values of the selection and its first object, for the panel's key.
+    pub(crate) transparency_state:
+        Option<(crate::panels::transparency::StateKey, vectorcraft_engine::cmd::TransparencyInfo, Option<Arc<vectorcraft_doc::Node>>)>,
+    /// The Navigator's view region, for (document uid, revision, View Artboard Contents Only).
+    pub nav_region: Option<((u64, u64, bool), vectorcraft_geom::Rect)>,
+    /// The Document Info panel's values, for (document uid, revision, selection only, options).
+    pub doc_info: Option<DocInfoCache>,
+    /// The Variables panel's rows, for the panel's key.
+    pub(crate) variable_rows: Option<(crate::panels::variables::RowsKey, Rc<crate::panels::variables::Rows>)>,
+    /// The Map Art surfaces of the 3D dialog's object.
+    pub map_surfaces: Option<MapSurfacesCache>,
+    /// The command palette's built rows, for the palette's build key.
+    pub(crate) palette: Option<(crate::palette::BuildKey, Arc<crate::palette::Built>)>,
+}
+
+/// [`CanvasCache::doc_info`]: (document uid, revision, selection only, the Artboard tool's options)
+/// and the `document.info` result fetched for them.
+pub type DocInfoCache = ((u64, u64, bool, Value), Arc<Value>);
+
+/// [`CanvasCache::map_surfaces`]: the surfaces and what they were computed for.
+pub type MapSurfacesCache = (MapSurfacesKey, Arc<Vec<vectorcraft_effects::MapSurface>>);
+
+/// What the Map Art surfaces depend on: the document's version, the 3D object and the appearance
+/// item, the effect and its parameters. Compared with `==`, never hashed.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MapSurfacesKey {
+    /// The document's uid.
+    pub uid: u64,
+    /// The document's revision.
+    pub revision: u64,
+    /// The 3D object.
+    pub object: NodeId,
+    /// The appearance item the effect is on, when not the object's own.
+    pub item: Option<usize>,
+    /// The effect's index in its list.
+    pub index: Option<usize>,
+    /// The effect's id.
+    pub effect: String,
+    /// The effect's parameters.
+    pub params: Value,
 }
 
 /// [`CanvasCache::placed_keys`]: a document's [`CacheKey::placed`] and the placed-document bitmap
@@ -166,6 +265,29 @@ pub struct SymbolInstances {
 /// [`CanvasCache::print_tiling`]: the print tiling of (document uid, revision).
 pub type PrintTilingCache = ((u64, u64), std::sync::Arc<Vec<vectorcraft_pdf::TilingPage>>);
 
+/// [`CanvasCache::shape_angle`]: the selected live shape's angle, for (document uid, revision, kind
+/// of shape).
+pub type ShapeAngleCache = ((u64, u64, std::mem::Discriminant<vectorcraft_doc::LiveShape>), Option<f64>);
+
+/// [`CanvasCache::artboard_thumbs`]: the artboard thumbnails of (document uid, revision).
+pub type ArtboardThumbsCache = ((u64, u64), Vec<Option<egui::TextureHandle>>);
+
+/// [`CanvasCache::recently_added`]: the font generation, when it was asked, the families and the
+/// newest install time among them.
+pub type RecentlyAddedCache = (u64, SystemTime, Arc<[String]>, Option<SystemTime>);
+
+/// [`CanvasCache::glyph_form_faces`]: the faces, for (document uid, revision, font generation, the
+/// selection's object and range, the selected objects).
+pub type GlyphFormFacesCache = ((u64, u64, u64, Option<(NodeId, usize, usize)>, Vec<NodeId>), Vec<u32>);
+
+/// [`CanvasCache::character_quads`]: the quads and whether they are cut, for (document uid,
+/// revision, text object, range).
+pub type CharacterQuadsCache = ((u64, u64, NodeId, usize, usize), (Vec<[Point; 4]>, bool));
+
+/// [`CanvasCache::tabs_guide_axis`]: the guide line, for (document uid, text object, paragraph,
+/// revision).
+pub type TabsGuideAxisCache = ((u64, NodeId, usize, u64), Option<(Point, Point, Vec2)>);
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct CacheKey {
     pub doc: usize,
@@ -195,7 +317,7 @@ pub struct CacheKey {
     /// Type › Highlight Substituted Fonts.
     pub highlight_substituted_fonts: bool,
     /// A [`vectorcraft_render::placed_document::generation`] that changes when the frame may show a
-    /// newly made bitmap of a placed document ([`canvas::placed_key`]). Bitmaps of files that only
+    /// newly made bitmap of a placed document ([`canvas::raster::placed_key`]). Bitmaps of files that only
     /// other documents hold leave it as it is, unless more bitmaps were made since the last check
     /// than are recorded and the document shows a placed document.
     pub placed: u64,

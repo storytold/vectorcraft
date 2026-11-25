@@ -7,9 +7,9 @@ use serde_json::{Value, json};
 use vectorcraft_engine::{EngineError, READ_ONLY_LOCATION, Session};
 
 use super::{fileio, save};
-use crate::control::ControlRequest;
-use crate::tests::picks::off_the_ui_thread;
-use crate::{Services, VectorcraftApp, background, dialogs, picks};
+use crate::dialogs::confirm;
+use crate::tests::picks::{self, answer_dialog, answer_replace, open_dialogs, scripted};
+use crate::{Services, VectorcraftApp, background};
 
 const DOCUMENTS: &str = "/home/artist/Documents";
 
@@ -48,7 +48,7 @@ fn app(format: &str, kind: ErrorKind) -> (VectorcraftApp, Arc<Mutex<Files>>) {
         })),
         ..Default::default()
     };
-    let mut app = VectorcraftApp::new(Session::new(), services);
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
     app.run("file.new", json!({"width": 40, "height": 40})).unwrap();
     app.run("shape.rectangle", json!({"x": 1, "y": 1, "width": 10, "height": 10})).unwrap();
     let st = app.session.doc_mut().unwrap();
@@ -71,15 +71,20 @@ fn state(app: &VectorcraftApp) -> (Option<String>, bool, &'static str, Value) {
 }
 
 fn poll(app: &mut VectorcraftApp) {
-    picks::poll(app, &egui::Context::default());
+    let ctx = app.ui_ctx.clone().expect("a window context");
+    picks::poll(app, &ctx);
 }
 
 fn normal_error(app: &VectorcraftApp) {
-    let d = app.ui.dialog.as_ref().expect("a persistent error dialog");
-    assert_eq!(d.kind, dialogs::confirm::MESSAGE);
-    assert!(d.str("detail").contains("injected refusal"));
-    assert!(!d.str("detail").contains(READ_ONLY_LOCATION));
-    assert!(app.ui.told.is_empty(), "no duplicate error dialog");
+    let (_, detail) = confirm::open_message(app).expect("a persistent error dialog");
+    assert!(detail.contains("injected refusal"));
+    assert!(!detail.contains(READ_ONLY_LOCATION));
+    assert_eq!(app.told.0.len(), 1, "no duplicate error dialog");
+}
+
+/// The fields of the open dialog with `key`, as automation lists them.
+fn fields_of(app: &VectorcraftApp, key: &str) -> Option<Value> {
+    open_dialogs(app).into_iter().rfind(|d| d.key.as_deref() == Some(key)).and_then(|d| d.fields)
 }
 
 #[test]
@@ -87,22 +92,23 @@ fn readonly_fallback_prefills_save_as_and_cancel_keeps_the_failed_save_state() {
     for kind in [ErrorKind::PermissionDenied, ErrorKind::ReadOnlyFilesystem] {
         let (mut app, files) = app("svg", kind);
         let before = state(&app);
-        let (shown, _) = off_the_ui_thread(&mut app.services);
+        let picker = scripted(&mut app);
         let r = save::save_current_in(&mut app, &json!({"modified": null}), Some(DOCUMENTS.into())).unwrap();
         assert_eq!(r["pending"], "fileDialog");
-        let requests = shown.requests();
-        let [picks::PickRequest::Save(pick)] = requests.as_slice() else { panic!("expected one save panel: {requests:?}") };
-        assert_eq!(pick.name, "Poster.svg");
-        assert_eq!(pick.folder.as_deref(), Some(DOCUMENTS));
-        assert_eq!(pick.filters.first(), crate::FilePick::filters(fileio::save_filters("svg")).first());
+        let requests = picker.requests();
+        assert_eq!(requests.len(), 1, "expected one save panel");
+        let request = &requests[0];
+        assert_eq!(request.file_name.as_deref(), Some("Poster.svg"));
+        assert_eq!(request.directory.as_deref(), Some(std::path::Path::new(DOCUMENTS)));
+        assert!(request.filters.first().is_some_and(|f| f.extensions.iter().any(|e| e == "svg")));
         assert!(app.ui.status.contains("choose where to save it"));
         assert_eq!(state(&app), before);
-        assert!(app.ui.dialog.is_none());
-        shown.answer(&[]);
+        assert!(!app.any_dialog_open());
+        picker.cancel();
         poll(&mut app);
         assert_eq!(state(&app), before);
         assert_eq!(files.lock().unwrap().attempts, ["/locked/Poster.svg"]);
-        assert!(!app.picks.is_waiting());
+        assert!(!app.file_dialog_open());
     }
 }
 
@@ -111,7 +117,7 @@ fn readonly_save_as_retargets_only_after_write_and_keeps_options() {
     let (mut app, files) = app("svg", ErrorKind::PermissionDenied);
     let before = state(&app);
     let uid = app.session.doc().unwrap().uid;
-    let (shown, _) = off_the_ui_thread(&mut app.services);
+    let picker = scripted(&mut app);
     assert_eq!(app.run("file.save", json!({})).unwrap()["pending"], "fileDialog");
     // Hold the second write after the picker answers: the chosen path is not yet the document's.
     let (entered, writing) = mpsc::channel();
@@ -125,7 +131,7 @@ fn readonly_save_as_retargets_only_after_write_and_keeps_options() {
     }));
     app.services.write_shared = Some(Arc::new(|_, _| panic!("typed saves must use their own writer")));
     app.session.prefs.background_save = true;
-    shown.answer(&["/home/artist/Documents/Poster.svg"]);
+    picker.answer_saved("/home/artist/Documents/Poster.svg", None);
     poll(&mut app);
     writing.recv().unwrap();
     assert_eq!(state(&app), before);
@@ -137,7 +143,7 @@ fn readonly_save_as_retargets_only_after_write_and_keeps_options() {
     assert_eq!(st.format, before.2);
     assert_eq!(json!(st.save_options), before.3);
     assert_eq!(files.lock().unwrap().attempts, ["/locked/Poster.svg", "/home/artist/Documents/Poster.svg"]);
-    assert!(shown.requests().is_empty() && app.ui.dialog.is_none());
+    assert!(picker.requests().len() == 1 && !app.any_dialog_open());
 }
 
 #[test]
@@ -145,13 +151,13 @@ fn readonly_second_failure_shows_one_dialog_without_reopening_the_picker() {
     let (mut app, files) = app("svg", ErrorKind::PermissionDenied);
     files.lock().unwrap().fail_second = true;
     let before = state(&app);
-    let (shown, _) = off_the_ui_thread(&mut app.services);
-    app.run("file.save", json!({})).unwrap();
-    shown.answer(&["/elsewhere/Poster.svg"]);
+    let picker = scripted(&mut app);
+    let _ = app.run("file.save", json!({}));
+    picker.answer_saved("/elsewhere/Poster.svg", None);
     poll(&mut app);
     normal_error(&app);
     assert_eq!(state(&app), before);
-    assert!(shown.requests().is_empty() && !app.picks.is_waiting());
+    assert!(picker.requests().len() == 1 && !app.file_dialog_open());
     assert_eq!(files.lock().unwrap().attempts, ["/locked/Poster.svg", "/elsewhere/Poster.svg"]);
 }
 
@@ -168,11 +174,11 @@ fn readonly_other_errors_and_explicit_destinations_keep_the_dialog() {
     ] {
         let (mut app, _) = app("svg", kind);
         let before = state(&app);
-        // A fallback would return pending, so no inline/native dialog is necessary here.
-        app.services.pick_save = Some(Box::new(move |_| panic!("{command}: no fallback")));
+        let picker = scripted(&mut app);
         assert!(app.run(command, params).is_err(), "{command}");
         normal_error(&app);
         assert_eq!(state(&app), before);
+        assert!(picker.requests().is_empty(), "{command}: no fallback");
     }
 }
 
@@ -180,15 +186,15 @@ fn readonly_other_errors_and_explicit_destinations_keep_the_dialog() {
 fn readonly_control_returns_the_prefix_and_never_opens_a_panel_even_after_completion() {
     for wait in [true, false] {
         let (mut app, _) = app("svg", ErrorKind::PermissionDenied);
-        app.services.pick_save = Some(Box::new(|_| panic!("automation never picks")));
+        let picker = scripted(&mut app);
         app.services.write_shared = Some(Arc::new(|_, _| panic!("typed writer required")));
         app.session.prefs.background_save = true;
         let before = state(&app);
         let (tx, rx) = mpsc::channel();
         app = app.with_control(rx);
-        let (req, reply) = ControlRequest::new("app.save", json!({"wait": wait}));
+        let (req, reply) = craft::automation::ControlRequest::new("app.save", json!({"wait": wait}));
         tx.send(req).unwrap();
-        app.drain_control(&egui::Context::default());
+        app.run_control(&crate::testing::ui_context());
         let reply = reply.try_recv().unwrap();
         if wait {
             assert_eq!(reply["ok"], false);
@@ -200,7 +206,8 @@ fn readonly_control_returns_the_prefix_and_never_opens_a_panel_even_after_comple
             assert!(app.ui.status.contains("READ_ONLY_LOCATION: "));
         }
         assert_eq!(state(&app), before);
-        assert!(app.ui.dialog.is_none() && app.ui.told.is_empty() && !app.picks.is_waiting());
+        assert!(!app.any_dialog_open() && app.told.0.is_empty() && !app.file_dialog_open());
+        assert!(picker.requests().is_empty(), "automation never picks");
     }
 }
 
@@ -208,14 +215,17 @@ fn readonly_control_returns_the_prefix_and_never_opens_a_panel_even_after_comple
 fn readonly_automation_continuation_keeps_the_prefix_and_never_opens_a_panel() {
     let (mut app, files) = app("svg", ErrorKind::PermissionDenied);
     let before = state(&app);
-    app.services.pick_save = Some(Box::new(|_| panic!("automation never picks")));
+    let picker = scripted(&mut app);
     assert!(!app.automation_is_acting());
-    let r = picks::as_automated(&mut app, true, |app| app.run("file.save", json!({})));
+    // PLAN: assumed `answering_control` is what `automation_is_acting` reads while a command runs for automation
+    app.ui.answering_control = true;
+    let r = app.run("file.save", json!({}));
+    app.ui.answering_control = false;
     assert!(r.unwrap_err().starts_with("READ_ONLY_LOCATION: "));
     assert_eq!(state(&app), before);
     assert_eq!(files.lock().unwrap().attempts, ["/locked/Poster.svg"]);
-    assert!(app.ui.dialog.is_none() && app.ui.told.is_empty() && !app.picks.is_waiting());
-    assert!(!app.automation_asked());
+    assert!(!app.any_dialog_open() && app.told.0.is_empty() && !app.file_dialog_open());
+    assert!(picker.requests().is_empty(), "automation never picks");
 }
 
 #[test]
@@ -225,7 +235,7 @@ fn readonly_background_completion_resumes_the_original_uid_without_repeating_sav
         let (mut app, files) = app(format, ErrorKind::ReadOnlyFilesystem);
         let original = files.lock().unwrap().original.clone();
         let uid = app.session.doc().unwrap().uid;
-        let (shown, _) = off_the_ui_thread(&mut app.services);
+        let picker = scripted(&mut app);
         if streamed {
             let f = files.clone();
             app.services.save_stream = Some(Arc::new(move |path, fill| {
@@ -242,11 +252,11 @@ fn readonly_background_completion_resumes_the_original_uid_without_repeating_sav
         let other = app.session.doc().unwrap().uid;
         background::wait_all(&mut app);
         assert_eq!(app.session.doc().unwrap().uid, uid);
-        assert_eq!(shown.requests().len(), 1);
+        assert_eq!(picker.requests().len(), 1);
         // Switch again while the native panel is open: its answer belongs to the original uid.
         app.run("document.activate", json!({"index": 1})).unwrap();
         let chosen = format!("/elsewhere/Poster.{format}");
-        shown.answer(&[&chosen]);
+        picker.answer_saved(&chosen, None);
         poll(&mut app);
         background::wait_all(&mut app);
         assert_eq!(app.session.doc().unwrap().uid, uid);
@@ -254,27 +264,33 @@ fn readonly_background_completion_resumes_the_original_uid_without_repeating_sav
         assert!(!app.session.doc().unwrap().is_dirty());
         assert!(app.session.document_mut(other).unwrap().path.is_none());
         assert_eq!(files.lock().unwrap().attempts, [original, chosen]);
-        assert!(shown.requests().is_empty());
+        assert_eq!(picker.requests().len(), 1);
     }
 }
 
 #[test]
 fn readonly_busy_picker_and_save_changes_keep_the_existing_error_flow() {
-    let (mut app, _) = app("svg", ErrorKind::PermissionDenied);
-    let (shown, _) = off_the_ui_thread(&mut app.services);
-    app.run("file.saveAs", json!({})).unwrap_err();
-    assert_eq!(shown.requests().len(), 1);
-    assert!(app.run("file.save", json!({})).is_err());
-    normal_error(&app);
-    assert_eq!(shown.requests().len(), 1);
-    shown.answer(&[]);
+    let (mut app, files) = app("svg", ErrorKind::PermissionDenied);
+    let picker = scripted(&mut app);
+    let _ = app.run("file.saveAs", json!({}));
+    assert_eq!(picker.requests().len(), 1);
+    // The document's save is waiting on its picker (one save flow per document): Save is refused
+    // as in progress, writes nothing and opens no second panel or dialog.
+    let busy = app.run("file.save", json!({})).unwrap_err();
+    assert_eq!(busy, craft::dialogs::save::SAVE_IN_PROGRESS.english);
+    assert!(files.lock().unwrap().attempts.is_empty());
+    assert!(!app.any_dialog_open() && app.told.0.is_empty());
+    assert_eq!(picker.requests().len(), 1);
+    picker.cancel();
     poll(&mut app);
-    app.ui.dialog = None;
-    let st = app.session.doc().unwrap();
-    app.ui.dialog = Some(crate::state::Dialog::new(crate::unsaved::KIND, json!({"index": 0, "uid": st.uid, "then": "close"})));
-    assert!(crate::unsaved::confirm(&mut app).is_err());
-    normal_error(&app);
-    assert!(shown.requests().is_empty());
+    assert!(!app.any_dialog_open());
+    let ctx = crate::testing::ui_context();
+    let _ = crate::unsaved::close(&mut app, 0);
+    let save = open_dialogs(&app).pop().expect("the unsaved-changes question").id;
+    answer_dialog(&mut app, save, &[], true);
+    crate::unsaved::pump(&mut app, &ctx);
+    assert!(app.ui.status.contains("injected refusal"), "{}", app.ui.status);
+    assert_eq!(picker.requests().len(), 1);
     assert_eq!(app.session.documents().len(), 1);
     assert!(app.session.doc().unwrap().is_dirty());
 }
@@ -283,13 +299,13 @@ fn readonly_busy_picker_and_save_changes_keep_the_existing_error_flow() {
 fn readonly_changed_format_asks_for_its_options_before_writing() {
     let (mut app, files) = app("svg", ErrorKind::PermissionDenied);
     let before = state(&app);
-    let (shown, _) = off_the_ui_thread(&mut app.services);
+    let picker = scripted(&mut app);
     assert_eq!(app.run("file.save", json!({})).unwrap()["pending"], "fileDialog");
-    shown.answer(&["/elsewhere/Poster.pdf"]);
+    picker.answer_saved("/elsewhere/Poster.pdf", None);
     poll(&mut app);
-    let dialog = app.ui.dialog.as_ref().expect("the picked format's Save dialog");
-    assert_eq!(dialog.kind, "savePdf");
-    assert_eq!(dialog.str("path"), "/elsewhere/Poster.pdf");
+    assert!(fields_of(&app, "pdf-export").is_some(), "the picked format's Save dialog");
+    let job = app.save_pdf.as_ref().and_then(|open| open.job.as_ref());
+    assert_eq!(job.and_then(|job| job.path.as_deref()), Some("/elsewhere/Poster.pdf"));
     assert_eq!(state(&app), before);
     assert_eq!(files.lock().unwrap().attempts, ["/locked/Poster.svg"]);
 }
@@ -307,39 +323,37 @@ fn readonly_typed_save_checks_sidecars_before_writing_and_after_retry() {
         app.services.exists = Some(Arc::new(move |path| there.contains(&path)));
         app.services.write_shared = Some(Arc::new(|_, _| panic!("typed writer required")));
         app.session.prefs.background_save = in_background;
-        let (shown, _) = off_the_ui_thread(&mut app.services);
+        let picker = scripted(&mut app);
 
         app.run("file.save", json!({})).unwrap();
         background::wait_all(&mut app);
-        let d = app.ui.dialog.as_ref().expect("ask before writing the existing artboard file");
-        assert_eq!(d.kind, dialogs::confirm::REPLACE_FILES);
-        assert_eq!(d.fields["files"], json!(["/locked/Poster-B.vectorcraft"]));
+        let asked = confirm::open_replace_files(&app).expect("ask before writing the existing artboard file");
+        assert_eq!(asked, ["/locked/Poster-B.vectorcraft"]);
         assert!(files.lock().unwrap().attempts.is_empty());
-        assert!(shown.requests().is_empty());
+        assert!(picker.requests().is_empty());
         assert_eq!(state(&app), before);
-        dialogs::cancel(&mut app);
+        answer_replace(&mut app, false);
         assert_eq!(state(&app), before);
         assert!(files.lock().unwrap().attempts.is_empty());
 
         app.run("file.save", json!({})).unwrap();
         background::wait_all(&mut app);
-        dialogs::confirm(&mut app).unwrap();
+        answer_replace(&mut app, true);
         background::wait_all(&mut app);
         assert_eq!(files.lock().unwrap().attempts, ["/locked/Poster.vectorcraft"]);
         assert_eq!(state(&app), before);
-        let requests = shown.requests();
-        let [picks::PickRequest::Save(pick)] = requests.as_slice() else { panic!("expected one fallback panel: {requests:?}") };
-        assert_eq!(pick.name, "Poster.vectorcraft");
+        let requests = picker.requests();
+        assert_eq!(requests.len(), 1, "expected one fallback panel");
+        assert_eq!(requests[0].file_name.as_deref(), Some("Poster.vectorcraft"));
 
-        shown.answer(&["/elsewhere/Poster.vectorcraft"]);
+        picker.answer_saved("/elsewhere/Poster.vectorcraft", None);
         poll(&mut app);
         background::wait_all(&mut app);
-        let d = app.ui.dialog.as_ref().expect("the retry also checks its destination's artboard file");
-        assert_eq!(d.kind, dialogs::confirm::REPLACE_FILES);
-        assert_eq!(d.fields["files"], json!(["/elsewhere/Poster-B.vectorcraft"]));
+        let asked = confirm::open_replace_files(&app).expect("the retry also checks its destination's artboard file");
+        assert_eq!(asked, ["/elsewhere/Poster-B.vectorcraft"]);
         assert_eq!(files.lock().unwrap().attempts, ["/locked/Poster.vectorcraft"]);
         assert_eq!(state(&app), before);
-        dialogs::confirm(&mut app).unwrap();
+        answer_replace(&mut app, true);
         background::wait_all(&mut app);
         assert_eq!(
             files.lock().unwrap().attempts,
@@ -352,6 +366,6 @@ fn readonly_typed_save_checks_sidecars_before_writing_and_after_retry() {
         );
         assert_eq!(app.session.doc().unwrap().path.as_deref(), Some("/elsewhere/Poster.vectorcraft"));
         assert!(!app.session.doc().unwrap().is_dirty());
-        assert!(shown.requests().is_empty() && app.ui.dialog.is_none());
+        assert!(picker.requests().len() == 1 && !app.any_dialog_open());
     }
 }

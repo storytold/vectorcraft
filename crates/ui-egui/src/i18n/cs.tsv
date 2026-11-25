@@ -36,6 +36,7 @@
 	Quit VectorCraft	Ukončit VectorCraft
 # Artwork drag between document tabs.
 	Drop Artwork	Umístit grafiku
+@id	language.name	Čeština
 @msg	{key} must be [x, y] with finite coordinates	{key} musí být [x, y] s konečnými souřadnicemi
 @msg	ids must contain 1–10000 object ids	ids musí obsahovat 1–10000 identifikátorů objektů
 
@@ -350,6 +351,9 @@
 	Artboards	Pracovní plochy
 	Convert to Artboards	Převést na pracovní plochy
 	Rearrange All Artboards…	Přeuspořádat všechny pracovní plochy…
+	Rearrange…	Přeuspořádat…
+	Selected Artboards: {n}	Vybrané pracovní plochy: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Kliknutím na plátno umístíte pracovní plochy (Esc zruší)
 	Fit to Artwork Bounds	Přizpůsobit hranicím kresby
 	Fit to Selected Art	Přizpůsobit vybrané kresbě
 	Graph	Graf
@@ -517,6 +521,7 @@
 	Fill & Stroke	Výplň a tah
 	Fill Color	Barva výplně
 	Opacity	Krytí
+	Show Opacity	Zobrazit krytí
 	Stroke Color	Barva tahu
 	Fill Gradient	Přechod výplně
 	Stroke Gradient	Přechod tahu
@@ -3739,14 +3744,6 @@ theme	Appearance	Motiv
 	Delete Color	Odstranit barvu
 	Restore Generated Table	Obnovit vygenerovanou tabulku
 	Unshift All Colors	Zrušit posun všech barev
-	Load Color Table…	Načíst tabulku barev…
-	Load Color Table	Načíst tabulku barev
-	Save Color Table…	Uložit tabulku barev…
-	Save Color Table	Uložit tabulku barev
-@msg	`{format}` has no color table: use gif or png8	`{format}` nemá tabulku barev: použijte gif nebo png8
-@msg	not a color table: an .act file is 768 or 772 bytes long and uses 1 to 256 colors	není tabulka barev: soubor .act má 768 nebo 772 bajtů a používá 1 až 256 barev
-@msg	give exactly one of `path` and `dataBase64`	zadejte právě jedno z `path` a `dataBase64`
-@msg	`slice` is a slice number from `slice.list`	`slice` je číslo řezu ze `slice.list`
 	Delete Symbol	Odstranit symbol
 	Delete the selected symbol?	Odstranit vybraný symbol?
 	Delete the selected symbols?	Odstranit vybrané symboly?
@@ -3785,6 +3782,12 @@ theme	Appearance	Motiv
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	rozlišení není k dispozici
+	estimated memory {memory}	odhadovaná paměť {memory}
+	memory unavailable	paměť není k dispozici
+	Unknown format	Neznámý formát
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -4239,6 +4242,7 @@ theme	Appearance	Motiv
 	Data Recovery	Obnovení dat
 	Default Language	Výchozí jazyk
 	Disable Auto Add/Delete	Vypnout automatické přidávání/odstraňování
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete odstraní kotevní body a ponechá cesty spojené
 	Interpolate Control Points When Moving Anchors	Interpolovat směrové úchyty při přesouvání kotevních bodů
 	Display All Blacks Accurately	Zobrazovat všechny černé přesně
 	Display All Blacks as Rich Black	Zobrazovat všechny černé jako sytou černou
@@ -4824,6 +4828,7 @@ font-technology	Variable	Variabilní
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gesto otočení dvěma prsty na trackpadu otáčí zobrazení plátna.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Podržení klávesy spustí nástroj nebo příkaz ze sloupce Podržení v Klávesových zkratkách; krátký stisk spustí její obvyklou zkratku.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Jak dlouho v sekundách je nutné klávesu podržet, než se místo obvyklé zkratky spustí její zkratka podržením.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete odstraní vybrané kotevní body a znovu přizpůsobí křivku kolem každého z nich, místo aby tam cestu otevřel.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Když přesouváte kotvové body, každá křivka s jedním přesunutým koncem si zachová tvar vůči svým koncům.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Podržení zkratky nástroje vybere nástroj, dokud ji nepustíte, a pak se znovu vybere předchozí nástroj.
 	Shows the bounding box while you move the selection or draw a shape.	Zobrazí ohraničovací rámeček, když přesouváte výběr nebo kreslíte tvar.
@@ -6782,6 +6787,9 @@ file-filter	Swatch libraries	Knihovny vzorníků
 file-filter	Flattener presets	Přednastavení sloučení průhlednosti
 file-filter	PDF presets	Přednastavení PDF
 file-filter	Print presets	Přednastavení tisku
+file-filter	Tracing presets	Přednastavení vektorizace
+file-filter	Action sets	Sady akcí
+file-filter	Composite fonts	Složená písma
 file-filter	Preferences	Předvolby
 file-filter	Export presets	Přednastavení exportu
 file-filter	SVG Compressed	Komprimované SVG
@@ -6868,6 +6876,7 @@ mark-style	Japanese	Japonské
 @msg	a 3D effect on a group's fill or stroke draws nothing	3D efekt na výplni nebo tahu skupiny nic nekreslí
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	3D efekt na výplni nebo tahu skupiny nekreslí nic k exportu
 @msg	The 3D object is too complex to export	3D objekt je pro export příliš složitý
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Síť 3D objektu je neúplná nebo obsahuje hodnotu, která není číslo
 @msg	the <filter> element needs an id, the filter's name	prvek <filter> potřebuje id, název filtru
 @msg	an SVG filter's id is at most {MAX_NAME} characters	id filtru SVG má nejvýše {MAX_NAME} znaků
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> není prvkem filtru SVG
@@ -7330,11 +7339,19 @@ axis	Y Axis	osa Y
 @msg	module is {_1} bytes (limit {_2})	modul má {_1} bajtů (limit {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	vyžaduje schválení: žádá o {0}, což uživatel povolí, když ho instaluje samostatně
 @msg	not JSON: {e}	není JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	není binární soubor WebAssembly (chybí hlavička \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	není binární soubor WebAssembly (chybí hlavička \\0asm)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	typ funkce má více parametrů, než dovoluje limit ({MAX_FUNC_TYPE_VALUES})
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	typ funkce má více výsledků, než dovoluje limit ({MAX_FUNC_TYPE_VALUES})
 @msg	parameter `{k}`: {what}	parametr `{k}`: {what}
 @msg	parameter `{name}`: {what}	parametr `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	parametry zásuvného modulu musí být objekt JSON
 @msg	the module must export its linear memory as `memory`	modul musí exportovat svou lineární paměť jako `memory`
+@msg	the module must export `{name}` with the type {signature}	modul musí exportovat `{name}` s typem {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	modul má více než jednu vlastní sekci `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	rozpočet paměti (počáteční paměť modulu má {initial} bajtů, limit {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	manifest ve vlastní sekci `{MANIFEST_SECTION}` musí uvádět `abi` jako {ABI_VERSION}, verzi ABI, kterou tento hostitel implementuje
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	rozpočet tabulek (modul definuje {count} tabulek, největší s {largest} prvky; limit {MAX_TABLES} tabulek po {MAX_TABLE_ELEMENTS} prvcích)
+@msg	the module's table section could not be read	sekci tabulek modulu nelze přečíst
 @msg	the objects to change are no longer in the document	objekty ke změně už v dokumentu nejsou
 @msg	the runtime panicked	běhové prostředí havarovalo
 @msg	unexpected host trap	neočekávaná chyba (trap) hostitele
@@ -7342,6 +7359,10 @@ axis	Y Axis	osa Y
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc vrátila 0 (nedostatek paměti)
 @msg	vc_alloc returned a block outside memory	vc_alloc vrátila blok mimo paměť
 @msg	vc_run returned error code {packed}	vc_run vrátila chybový kód {packed}
+@msg	did not finish loading within {secs} s	nedokončil načítání do {secs} s
+@msg	no thread was left to load it	nezbylo žádné vlákno, které by ho načetlo
+@msg	panicked while loading	při načítání došlo k panice
+@msg	panicked while loading: {what}	při načítání došlo k panice: {what}
 @msg	{_1} is not a file	{_1} není soubor
 @msg	{_1} is {_2} bytes (limit {_3})	{_1} má {_2} bajtů (limit {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} objektů (limit {MAX_OBJECTS})
@@ -7361,6 +7382,11 @@ axis	Y Axis	osa Y
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` a `maxItems` musí být 0-{MAX_LIST}, `maxItems` alespoň 1 a výchozí hodnota musí mít tolik položek
 @msg	`name` must be a string	`name` musí být řetězec
 @msg	`opacity` must be a number	`opacity` musí být číslo
+@msg	`opacity` must be a number from 0 to 100	`opacity` musí být číslo od 0 do 100
+@msg	`opacity` must be true or false	`opacity` musí být true nebo false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	znaky textu nemají vlastní krytí: přidejte výplň nebo tah příkazem Přidat novou výplň nebo Přidat nový tah v panelu Vzhled
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	objekt vybraný v instanci symbolu nemá vlastní krytí výplně ani tahu
+@msg	no target has that fill or stroke to take the opacity	žádný cíl nemá tuto výplň nebo tah, který by převzal krytí
 @msg	`type` must be "path" or "compound"	`type` musí být "path" nebo "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` musí mít 1-{MAX_UNIT} tisknutelných znaků
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` musí uvádět 1 až {MAX_CONDITION_VALUES} hodnot pro `{other}`
@@ -7404,6 +7430,8 @@ axis	Y Axis	osa Y
 @msg	`plates` requires a stop linked to a spot swatch	`plates` vyžaduje zarážku propojenou se vzorkem přímé barvy
 @msg	the output	výstup
 @msg	the path has no anchor points	cesta nemá žádné kotevní body
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	složená cesta {id} má skrytý, zamčený nebo vodítkový člen, takže její členy nelze nahradit
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	složená cesta {id} má člen, který není cestou, takže její členy nelze nahradit
 @msg	too many anchor points (limit {MAX_ANCHORS})	příliš mnoho kotevních bodů (limit {MAX_ANCHORS})
 @msg	true or false	true nebo false
 @msg	a number >= {_1}	číslo >= {_1}
@@ -7493,6 +7521,10 @@ axis	Y Axis	osa Y
 @msg	`inputs` lists `{shown}` twice	`inputs` uvádí `{shown}` dvakrát
 @msg	`inputs` needs `api` 2 or later	`inputs` vyžaduje `api` 2 nebo vyšší
 @msg	`inputs` needs the permission `doc.read`	`inputs` vyžaduje oprávnění `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Číst objekty, které dostane, a nastavení, pracovní plochy, vrstvy a vzorky dokumentu
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` musí uvádět různé oddíly: settings, artboards, layers nebo swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` je pro filtr nebo živý efekt s `commands`, s `api` 3 nebo vyšším a s oprávněním `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	informace o dokumentu, které zásuvný modul požaduje, jsou příliš velké na předání: nejvýše {MAX_CONTEXT_ITEMS} pracovních ploch, vrstev a vzorků v {MAX_CONTEXT_BYTES} bajtech
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	rozpočet paměti (objekt {_1} potřebuje {size} bajtů vstupu, zbývá {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	rozpočet objektů (více než {MAX_OBJECTS} objektů jen pro čtení)
 @msg	instruction budget	rozpočet instrukcí
@@ -8984,7 +9016,7 @@ breakText	Glyphs	Glyfy
 @msg	The {name} profile could not be read, so the new document has the default settings: {reason}	Profil {name} nešlo přečíst, takže nový dokument má výchozí nastavení: {reason}
 @msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	Přesah barev: více než {_1} dvojic objektů leží dost blízko pro přesah, nebo příliš mnoho objektů sdílí vodorovný rozsah; zpracujte najednou méně objektů
 @msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	Rámeček a linie pro vybírání: mimo kresbu se nevejde žádná linie pro vybírání a rámeček je vypnutý
-@msg	\ at end of pattern	\ na konci vzoru
+@msg	\\ at end of pattern	\\ na konci vzoru
 @msg	`alignOn` cannot be empty	`alignOn` nesmí být prázdné
 @msg	`alignOn` must be a string	`alignOn` musí být řetězec
 @msg	`align` is start, center or end	`align` je start, center nebo end
@@ -9035,6 +9067,8 @@ breakText	Glyphs	Glyfy
 @msg	`dataBase64` is larger than the module limit	`dataBase64` je větší než limit modulu
 @msg	`dataBase64` is not valid base64	`dataBase64` není platný base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` nelze kombinovat s `ids`, `reverse` ani `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` nelze kombinovat s `ids`, `id` ani `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` nelze kombinovat s `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` a `childLimit` omezují souhrn: předejte `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` je název návrhu, nebo null pro obyčejné sloupce
 @msg	`design` is a design name, or null for the default marker	`design` je název návrhu, nebo null pro výchozí značku
@@ -9309,7 +9343,7 @@ breakText	Glyphs	Glyfy
 @msg	a CMap has too many mappings	CMap má příliš mnoho mapování
 @msg	a DXF drawing has one origin: pass useArtboards: true for one drawing per artboard	výkres DXF má jeden počátek: předejte useArtboards: true pro jeden výkres na každou pracovní plochu
 @msg	a PDF presets file with over {_1} presets	soubor přednastavení PDF s více než {_1} přednastaveními
-@msg	a \u escape needs four hexadecimal digits	sekvence \u vyžaduje čtyři šestnáctkové číslice
+@msg	a \\u escape needs four hexadecimal digits	sekvence \\u vyžaduje čtyři šestnáctkové číslice
 @msg	a batch preview cannot switch documents	náhled dávky nemůže přepínat dokumenty
 @msg	a brush named `{nn}` exists	štětec s názvem `{nn}` už existuje
 @msg	a comma in an XPath expression must separate function arguments	čárka ve výrazu XPath musí oddělovat argumenty funkce
@@ -9662,6 +9696,7 @@ breakText	Glyphs	Glyfy
 @msg	give a pattern name or select an object painted with a pattern	zadejte název vzorku nebo vyberte objekt vybarvený vzorkem
 @msg	give at least one of clip, invert, disabled, linked	zadejte alespoň jedno z clip, invert, disabled, linked
 @msg	give color, none, swatch or gradient	zadejte color, none, swatch nebo gradient
+@msg	give color, none, swatch, gradient or opacity	zadejte color, none, swatch, gradient nebo opacity
 @msg	give dataBase64	zadejte dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	zadejte buď at (kliknutí), nebo area (cestu nakreslenou kolem překryvů)
 @msg	give exactly one of `at`, `rect` and `points`	zadejte právě jedno z `at`, `rect` a `points`
@@ -10034,7 +10069,7 @@ breakText	Glyphs	Glyfy
 @msg	not a regular expression	nejde o regulární výraz
 @msg	not a stored or deflated central record	nejde o uložený ani komprimovaný centrální záznam
 @msg	not a valid SVGZ file: {e}	nejde o platný soubor SVGZ: {e}
-@msg	not an RTF file: it doesn't start with {\rtf	nejde o soubor RTF: nezačíná na {\rtf
+@msg	not an RTF file: it doesn't start with {\\rtf	nejde o soubor RTF: nezačíná na {\\rtf
 @msg	not an action set: the text doesn't start with /version and a number	nejde o sadu akcí: text nezačíná na /version a číslo
 @msg	not an image VectorCraft reads (see document.formats)	nejde o obrázek, který VectorCraft čte (viz document.formats)
 @msg	not area type (text in a frame) outside perspective	nejde o text v oblasti (text v rámci) mimo perspektivu
