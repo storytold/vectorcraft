@@ -26,12 +26,12 @@ fn rect(s: &mut Session, x: f64, y: f64, w: f64, h: f64) -> NodeId {
     NodeId(s.execute("shape.rectangle", &json!({"x": x, "y": y, "width": w, "height": h})).unwrap()["id"].as_u64().unwrap())
 }
 
-/// A 400 × 300 pt document with two rectangles.
+/// A 400 × 300 pt document with two rectangles, `a` on top, so `pathItems[0]` is `a`.
 fn doc() -> (Session, NodeId, NodeId) {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
-    let a = rect(&mut s, 10.0, 20.0, 30.0, 40.0);
     let b = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    let a = rect(&mut s, 10.0, 20.0, 30.0, 40.0);
     s.execute("select.none", &json!({})).unwrap();
     (s, a, b)
 }
@@ -93,6 +93,47 @@ fn path_items_remove_all_refuses_locked_paths_and_changes_nothing() {
     assert!(e.contains("hidden or locked paths"), "{e}");
     assert_eq!(art(&s), before);
     s.execute("object.setProps", &json!({"ids": [a.0], "locked": false})).unwrap();
+    log(&mut s, "app.activeDocument.pathItems.removeAll();");
+    assert_eq!(log(&mut s, "vc.log(app.activeDocument.pathItems.length);"), vec![json!(0)]);
+}
+
+/// `pathItems` read with a name gives what `getByName` gives, and throws as it does for no match,
+/// as `pageItems` does.
+#[test]
+fn path_items_read_with_a_name_give_the_named_path() {
+    let (mut s, a, _) = doc();
+    s.execute("object.setProps", &json!({"ids": [a.0], "name": "n"})).unwrap();
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pathItems, m = [];\
+         vc.log([p['n'] === p.getByName('n'), p['n'].name, 'n' in p, 'nosuch' in p, p['length'] === p.length]);\
+         try { p['nosuch']; } catch (e) { m.push(e.message); }\
+         vc.log(m);",
+    );
+    assert_eq!(out, vec![json!([true, "n", true, false, true]), json!(["Not found"])]);
+}
+
+/// Paths on a locked artboard stay, a path in a group included: `removeAll()` throws and deletes
+/// nothing, as `pageItems.removeAll()` and `remove()` do.
+#[test]
+fn path_items_remove_all_refuses_paths_on_a_locked_artboard() {
+    let (mut s, a, b) = doc();
+    s.execute("object.group", &json!({"ids": [b.0]})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let lock = |s: &mut Session, locked: bool| {
+        s.edit("Lock Artboard", |d, _| {
+            d.artboards[0].locked = locked;
+            Ok(())
+        })
+        .unwrap();
+    };
+    lock(&mut s, true);
+    let (before, steps) = (art(&s), undo_steps(&s));
+    let e = failure(&mut s, "app.activeDocument.pathItems.removeAll();");
+    assert!(e.contains("cannot delete objects on a locked artboard") && e.contains(&a.0.to_string()) && e.contains(&b.0.to_string()), "{e}");
+    assert_eq!(art(&s), before);
+    assert_eq!(undo_steps(&s), steps);
+    lock(&mut s, false);
     log(&mut s, "app.activeDocument.pathItems.removeAll();");
     assert_eq!(log(&mut s, "vc.log(app.activeDocument.pathItems.length);"), vec![json!(0)]);
 }
@@ -807,7 +848,7 @@ fn locked_paths_and_wrong_objects_are_refused() {
     }
     assert_eq!(art(&s), before);
     s.execute("text.create", &json!({"x": 10, "y": 250, "text": "hi"})).unwrap();
-    let e = failure(&mut s, "var t = app.activeDocument.pageItems[2]; Object.getOwnPropertyDescriptor(PathItem.prototype, 'closed').get.call(t);");
+    let e = failure(&mut s, "var t = app.activeDocument.pageItems[0]; Object.getOwnPropertyDescriptor(PathItem.prototype, 'closed').get.call(t);");
     assert!(e.contains("not a PathItem"), "{e}");
     let e = failure(&mut s, "Object.getOwnPropertyDescriptor(PathPoint.prototype, 'anchor').get.call({});");
     assert!(e.contains("not a PathPoint"), "{e}");

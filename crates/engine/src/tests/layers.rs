@@ -157,6 +157,13 @@ fn clicking_rows_at_any_depth_highlights_them_and_sets_the_current_layer() {
     let n = rect(&mut s, 50.0);
     assert_eq!(parent(&s, n), Some(sub));
     assert!(s.execute("layer.setCurrent", &json!({"id": 9999})).is_err());
+    // `keepRows` makes the layer current and leaves the highlighted rows.
+    run(&mut s, "layer.setCurrent", json!({"id": b.0}));
+    run(&mut s, "layer.setCurrent", json!({"id": c.0, "keepRows": true}));
+    let st = s.doc().unwrap();
+    assert_eq!((st.highlighted_rows(), st.current_layer()), (vec![b], Some(layer)));
+    assert!(s.execute("layer.setCurrent", &json!({"id": a.0, "keepRows": 1})).is_err());
+    assert_eq!(s.doc().unwrap().current_layer(), Some(layer), "a bad keepRows changes nothing");
     // Shift/Ctrl: several rows.
     run(&mut s, "layer.highlight", json!({"ids": [a.0, g.0], "mode": "set"}));
     run(&mut s, "layer.highlight", json!({"ids": [c.0], "mode": "add"}));
