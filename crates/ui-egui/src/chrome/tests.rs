@@ -544,6 +544,12 @@ fn plugin_notice_shows_after_the_plug_in_s_name_and_is_never_translated() {
     app.run("command.batch", run_and_remove).unwrap();
     assert!(vectorcraft_plugins::registry::get(id).is_none());
     assert_eq!(app.ui.status, format!("Plug-in “Test {id}”: invalid array length"));
+    // A name's closing ellipsis is dropped, and a name that is only an ellipsis shows the plug-in's id.
+    for (name, shown) in [("Resize…", "Resize"), (" … ", id)] {
+        let r = json!({"plugin": id, "ids": [], "notice": "done", "pluginName": name});
+        crate::plugin_runs::show_notice(&mut app, "plugin.run", &r);
+        assert_eq!(app.ui.status, format!("Plug-in “{shown}”: done"));
+    }
     app.run("plugin.remove", json!({"id": bad})).unwrap();
 }
 

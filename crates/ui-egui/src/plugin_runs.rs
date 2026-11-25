@@ -174,7 +174,9 @@ pub fn show_notice(app: &mut VectorcraftApp, cmd: &str, r: &Value) {
         .and_then(Value::as_str)
         .map(str::to_string)
         .or_else(|| registry::get(id).map(|p| p.manifest().name.clone()))
-        .map_or_else(|| id.to_string(), |name| name.trim().trim_end_matches('…').to_string());
+        .map(|name| name.trim().trim_end_matches('…').trim_end().to_string())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| id.to_string());
     let name = permissions::display_text(&name, permissions::MAX_SHOWN_NAME);
     let status = format!("Plug-in “{name}”: {notice}");
     let before = status.strip_suffix(notice).unwrap_or_default().to_string();
