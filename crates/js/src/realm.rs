@@ -218,7 +218,8 @@ impl Realm {
     /// Sets [`Options::es2015`] for the next runs, and for the code they evaluate. The `let` and
     /// `const` names earlier runs declared stay visible when it is turned off. A run begun with
     /// [`Realm::start`] that is still going keeps the language it started with for the code it
-    /// evaluates; the new one applies once it ends.
+    /// evaluates; the new one applies once it ends. A realm made without the option gets `Proxy`
+    /// and `Reflect` at its first run with it, and keeps them when it is turned off.
     pub fn set_es2015(&mut self, es2015: bool) {
         if self.is_running() || self.interp.waiting {
             self.interp.next_es2015 = Some(es2015);
@@ -274,6 +275,18 @@ impl Realm {
         interp.finally_marks.clear();
         interp.finally_sites.clear();
         interp.error_mark = None;
+        // A realm made without `Options::es2015` gets `Proxy` and `Reflect` at its first run with it.
+        if interp.options.es2015
+            && let Err(e) = crate::builtins::install_es2015(interp)
+        {
+            interp.temp_roots.clear();
+            let (kind, message) = match e {
+                Abrupt::Limit(kind) => (RunErrorKind::Limit(kind), format!("limit reached: {kind:?}")),
+                Abrupt::Throw(v) => (RunErrorKind::Internal, format!("Proxy and Reflect could not be installed: {}", interp.describe(&v))),
+                Abrupt::Internal(m) => (RunErrorKind::Internal, format!("Proxy and Reflect could not be installed: {m}")),
+            };
+            return Err(RunError { kind, message, line: 0, column: 0, authored: false });
+        }
         let strict = interp.options.strict;
         interp.evaluated = next_tag(interp.evaluated);
         self.script_tag = interp.evaluated;

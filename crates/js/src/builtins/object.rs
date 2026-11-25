@@ -7,6 +7,7 @@
 use super::{ELEMENT_BYTES, arg, create_at, method, new_array};
 use crate::heap::{CONFIGURABLE, ENUMERABLE, Key, OBJECT_BYTES, OPEN, ObjId, Object, Prop, WRITABLE, key};
 use crate::interp::{Desc, Interp, JsResult};
+use crate::proxy::desc_values;
 use crate::value::{Str, Value};
 
 pub(super) fn install(interp: &mut Interp, object: ObjId) -> JsResult<()> {
@@ -32,16 +33,8 @@ fn require_object(interp: &mut Interp, v: &Value, function: &str) -> JsResult<Ob
     }
 }
 
-/// The values a descriptor holds, to keep them reachable while more JavaScript runs.
-fn desc_values(desc: &Desc) -> Vec<Value> {
-    let mut out: Vec<Value> = desc.value.iter().cloned().collect();
-    out.extend(desc.get.flatten().map(Value::Object));
-    out.extend(desc.set.flatten().map(Value::Object));
-    out
-}
-
 /// ToPropertyDescriptor (section 8.10.5).
-pub(super) fn to_desc(interp: &mut Interp, v: &Value) -> JsResult<Desc> {
+pub(crate) fn to_desc(interp: &mut Interp, v: &Value) -> JsResult<Desc> {
     let Value::Object(o) = v else { return Err(interp.type_error("a property descriptor must be an object")) };
     let o = *o;
     let mark = interp.temp_roots.len();
@@ -87,8 +80,41 @@ fn read_desc(interp: &mut Interp, o: ObjId) -> JsResult<Desc> {
     Ok(desc)
 }
 
-/// FromPropertyDescriptor (section 8.10.4).
-fn from_prop(interp: &mut Interp, prop: &Prop) -> JsResult<Value> {
+/// FromPropertyDescriptor (ECMA-262 2020 section 6.2.5.4) of a descriptor that may leave fields
+/// out: an object with the fields `desc` has, in the order `value`, `writable`, `get`, `set`,
+/// `enumerable`, `configurable`.
+pub(crate) fn from_desc(interp: &mut Interp, desc: &Desc) -> JsResult<Value> {
+    let roots = desc_values(desc);
+    interp.rooted(&roots, |interp| interp.reserve_heap(OBJECT_BYTES + 6 * ELEMENT_BYTES))?;
+    let o = interp.new_object();
+    let fields = [
+        ("value", desc.value.clone()),
+        ("writable", desc.writable.map(Value::Bool)),
+        ("get", desc.get.map(|g| g.map_or(Value::Undefined, Value::Object))),
+        ("set", desc.set.map(|s| s.map_or(Value::Undefined, Value::Object))),
+        ("enumerable", desc.enumerable.map(Value::Bool)),
+        ("configurable", desc.configurable.map(Value::Bool)),
+    ];
+    for (name, v) in fields {
+        if let Some(v) = v {
+            interp.define(o, key(name), Prop::Data { value: v, flags: OPEN })?;
+        }
+    }
+    Ok(Value::Object(o))
+}
+
+/// FromPropertyDescriptor (section 8.10.4). The property's values stay rooted while the
+/// descriptor object is made, since a proxy's trap can give values no other object holds.
+pub(crate) fn from_prop(interp: &mut Interp, prop: &Prop) -> JsResult<Value> {
+    let roots: Vec<Value> = match prop {
+        Prop::Data { value, .. } => vec![value.clone()],
+        Prop::Accessor { get, set, .. } => get.iter().chain(set).map(|f| Value::Object(*f)).collect(),
+    };
+    interp.rooted(&roots, |interp| descriptor_object(interp, prop))
+}
+
+/// The descriptor object of `prop`, whose values the caller keeps rooted.
+fn descriptor_object(interp: &mut Interp, prop: &Prop) -> JsResult<Value> {
     interp.reserve_heap(OBJECT_BYTES + 4 * ELEMENT_BYTES)?;
     let o = interp.new_object();
     let flags = prop.flags();
@@ -108,7 +134,7 @@ fn from_prop(interp: &mut Interp, prop: &Prop) -> JsResult<Value> {
 }
 
 /// An array of the names, kept reachable while it is filled.
-fn names_array(interp: &mut Interp, names: Vec<Key>) -> JsResult<Value> {
+pub(crate) fn names_array(interp: &mut Interp, names: Vec<Key>) -> JsResult<Value> {
     let a = new_array(interp, 0)?;
     interp.rooted(&[Value::Object(a)], |interp| {
         for (i, k) in names.into_iter().enumerate() {
@@ -122,7 +148,7 @@ fn names_array(interp: &mut Interp, names: Vec<Key>) -> JsResult<Value> {
 /// `Object.getPrototypeOf` (section 15.2.3.2).
 fn get_prototype_of(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let o = interp.to_object(&arg(args, 0))?;
-    Ok(interp.heap.object(o).and_then(|o| o.proto).map_or(Value::Null, Value::Object))
+    Ok(interp.rooted(&[Value::Object(o)], |interp| interp.get_prototype_of(o))?.map_or(Value::Null, Value::Object))
 }
 
 /// `Object.getOwnPropertyDescriptor` (section 15.2.3.3).
@@ -210,31 +236,27 @@ fn define_all(interp: &mut Interp, o: ObjId, props: &Value) -> JsResult<()> {
     r
 }
 
-/// Makes every own property non-configurable, and with `freeze` every data property read-only,
-/// then makes the object non-extensible (sections 15.2.3.8 and 15.2.3.9).
+/// SetIntegrityLevel (ECMA-262 2020 section 7.3.14): makes the object non-extensible, then every
+/// own property non-configurable, and with `freeze` every data property read-only (sections
+/// 15.2.3.8 and 15.2.3.9). A proxy that does not become non-extensible is a `TypeError`.
 fn lock(interp: &mut Interp, v: Value, freeze: bool) -> JsResult<Value> {
     let Value::Object(o) = v else { return Ok(v) };
+    if !interp.prevent_extensions(o)? {
+        let what = if freeze { "frozen" } else { "sealed" };
+        return Err(interp.type_error(&format!("the object cannot be {what}: it did not stop being extensible")));
+    }
     for k in interp.own_keys(o)? {
         interp.use_fuel()?;
-        let Some(prop) = interp.get_own_property(o, &k)? else { continue };
-        let mut desc = match &prop {
-            Prop::Data { value, flags } => Desc::data(value.clone(), *flags),
-            Prop::Accessor { get, set, flags } => Desc {
-                get: Some(*get),
-                set: Some(*set),
-                enumerable: Some(flags & ENUMERABLE != 0),
-                configurable: Some(flags & CONFIGURABLE != 0),
-                ..Desc::default()
-            },
+        let desc = if freeze {
+            let Some(prop) = interp.get_own_property(o, &k)? else { continue };
+            match prop {
+                Prop::Data { .. } => Desc { configurable: Some(false), writable: Some(false), ..Desc::default() },
+                Prop::Accessor { .. } => Desc { configurable: Some(false), ..Desc::default() },
+            }
+        } else {
+            Desc { configurable: Some(false), ..Desc::default() }
         };
-        desc.configurable = Some(false);
-        if freeze && desc.is_data() {
-            desc.writable = Some(false);
-        }
         interp.define_own_property(o, k, &desc, true)?;
-    }
-    if let Some(obj) = interp.heap.object_mut(o) {
-        obj.extensible = false;
     }
     Ok(Value::Object(o))
 }
@@ -251,18 +273,22 @@ fn freeze(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Va
 fn prevent_extensions(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let v = arg(args, 0);
     if let Value::Object(o) = v
-        && let Some(obj) = interp.heap.object_mut(o)
+        && !interp.prevent_extensions(o)?
     {
-        obj.extensible = false;
+        return Err(interp.type_error("Object.preventExtensions: the proxy did not stop being extensible"));
     }
     Ok(v)
 }
 
-/// Whether no own property is configurable (and with `frozen`, no data property is writable)
-/// and the object is not extensible (sections 15.2.3.11 and 15.2.3.12).
+/// TestIntegrityLevel (ECMA-262 2020 section 7.3.15): whether the object is not extensible and no
+/// own property is configurable (and with `frozen`, no data property is writable) (sections
+/// 15.2.3.11 and 15.2.3.12).
 fn locked(interp: &mut Interp, v: &Value, frozen: bool) -> JsResult<Value> {
     let Value::Object(o) = v else { return Ok(Value::Bool(true)) };
     let o = *o;
+    if interp.is_extensible(o)? {
+        return Ok(Value::Bool(false));
+    }
     for k in interp.own_keys(o)? {
         interp.use_fuel()?;
         let Some(prop) = interp.get_own_property(o, &k)? else { continue };
@@ -270,7 +296,7 @@ fn locked(interp: &mut Interp, v: &Value, frozen: bool) -> JsResult<Value> {
             return Ok(Value::Bool(false));
         }
     }
-    Ok(Value::Bool(!interp.heap.object(o).is_some_and(|o| o.extensible)))
+    Ok(Value::Bool(true))
 }
 
 fn is_sealed(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
@@ -284,7 +310,7 @@ fn is_frozen(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult
 /// `Object.isExtensible` (section 15.2.3.13).
 fn is_extensible(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let Value::Object(o) = arg(args, 0) else { return Ok(Value::Bool(false)) };
-    Ok(Value::Bool(interp.heap.object(o).is_some_and(|o| o.extensible)))
+    interp.is_extensible(o).map(Value::Bool)
 }
 
 /// `Object.keys` (section 15.2.3.14).

@@ -33,6 +33,10 @@
 //! chains and `??`) without and with that option, and
 //! prints both counts; its failures with the option go to `es2015-failures.txt`.
 //!
+//! A sixth test runs the tests under `test/built-ins/Proxy` and `test/built-ins/Reflect` whose
+//! feature tags are all in [`PROXY_REFLECT_FEATURES`], without and with `Options::es2015`, and
+//! prints both counts; its failures with the option go to `proxy-reflect-failures.txt`.
+//!
 //! Two more tests read the Annex B trees, where tests name any edition's section: one parses every
 //! test under `test/annexB/language/` without a feature tag the same way as the ES5 parse subset
 //! (failures in `annexb-parse-failures.txt`), and one runs those tests and the tests under the
@@ -683,6 +687,15 @@ fn es2015_subset_runs() {
     handle.join().unwrap();
 }
 
+/// The runs that panicked, one line each with the setting of [`Options::es2015`], the test's path
+/// and its mode, taken from the failures without the option and with it.
+fn panic_lines(before: &str, after: &str) -> String {
+    [("without Options::es2015", before), ("with Options::es2015", after)]
+        .into_iter()
+        .flat_map(|(edition, failures)| failures.lines().filter(|l| l.ends_with(": PANIC")).map(move |l| format!("{edition}: {l}\n")))
+        .collect()
+}
+
 /// The counts of the ES2015 subset read with one setting of [`Options::es2015`].
 #[derive(Default)]
 struct Es2015Counts {
@@ -794,7 +807,96 @@ fn run_es2015(dir: &Path) {
         line(&after),
         report.display()
     );
-    assert_eq!(before.panicked + after.panicked, 0, "the interpreter panicked; see {}", report.display());
+    assert_eq!(before.panicked + after.panicked, 0, "the interpreter panicked:\n{}", panic_lines(&before.failures, &after.failures));
+}
+
+/// The feature tags of the `Proxy` and `Reflect` tests [`run_proxy_reflect`] runs: the two
+/// objects and the forms [`Options::es2015`] reads. A test with any other tag (`Symbol`, `class`
+/// and the like) is counted as skipped.
+const PROXY_REFLECT_FEATURES: &[&str] =
+    &["Proxy", "Reflect", "Reflect.construct", "let", "const", "arrow-function", "template", "default-parameters", "rest-parameters"];
+
+#[test]
+fn proxy_and_reflect_run() {
+    let Some(dir) = suite_dir() else {
+        println!("test262 Proxy and Reflect: SKIPPED (no suite; run cargo xtask test262)");
+        return;
+    };
+    let handle = std::thread::Builder::new().stack_size(64 << 20).spawn(move || run_proxy_reflect(&dir)).unwrap();
+    handle.join().unwrap();
+}
+
+/// Runs the tests under `test/built-ins/Proxy` and `test/built-ins/Reflect` whose feature tags
+/// are all in [`PROXY_REFLECT_FEATURES`], each in a new realm after the harness as [`run_tests`]
+/// runs them, once without and once with [`Options::es2015`]. Module, asynchronous and negative
+/// parse tests, and those that need another missing built-in, are counted as skipped. The counts
+/// of both runs are printed, and the failures with the option go to `proxy-reflect-failures.txt`.
+fn run_proxy_reflect(dir: &Path) {
+    let harness = |name: &str| or_fail(inside(dir, &format!("harness/{name}")).and_then(|p| read_source(&p)));
+    let prelude = format!("{}\n{}\n", harness("assert.js"), harness("sta.js"));
+    let missing = missing_builtins(&[TEXT_BUILTINS, "Proxy Reflect"]);
+    let modern = Options { es2015: true, ..Options::default() };
+    let editions = [Options::default(), modern.clone()];
+    let mut counts = [RunCounts::default(), RunCounts::default()];
+    let (mut skipped, mut other_features) = (0usize, 0usize);
+    for folder in ["test/built-ins/Proxy", "test/built-ins/Reflect"] {
+        let root = or_fail(inside(dir, folder));
+        assert!(root.is_dir(), "{} is not a test262 checkout", dir.display());
+        for path in or_fail(test_files(&root)) {
+            let rel = path.strip_prefix(dir).unwrap_or(&path).display().to_string().replace('\\', "/");
+            let source = or_fail(read_source(&path));
+            let meta = meta(&source);
+            if !meta.features.iter().all(|f| PROXY_REFLECT_FEATURES.contains(&f.as_str())) {
+                other_features += 1;
+                continue;
+            }
+            let has = |flag: &str| meta.flags.iter().any(|f| f == flag);
+            let includes: String = meta.includes.iter().map(|i| harness(i) + "\n").collect();
+            if has("module")
+                || has("async")
+                || meta.negative_phase.as_deref() == Some("parse")
+                || needs_missing_builtin_in(&[&source, &includes], &missing, &modern)
+            {
+                skipped += 1;
+                continue;
+            }
+            for (options, counts) in editions.iter().zip(counts.iter_mut()) {
+                counts.tests += 1;
+                for &strict in modes(&meta) {
+                    let mode = if strict { "strict" } else { "sloppy" };
+                    let body = if has("raw") { source.clone() } else { format!("{prelude}{includes}{source}") };
+                    let script = if strict { format!("\"use strict\";\n{body}") } else { body };
+                    let negative_type = meta.negative_type.clone().filter(|_| meta.negative_phase.as_deref() == Some("runtime"));
+                    match std::panic::catch_unwind(|| run_one(&script, negative_type.as_deref(), options)) {
+                        Ok(Ok(())) => counts.passed += 1,
+                        Ok(Err(why)) => {
+                            counts.failed += 1;
+                            counts.failures.push_str(&format!("{rel} ({mode}): {why}\n"));
+                        }
+                        Err(_) => {
+                            counts.failed += 1;
+                            counts.panicked += 1;
+                            counts.failures.push_str(&format!("{rel} ({mode}): PANIC\n"));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let [before, after] = counts;
+    assert!(after.tests > 0, "no Proxy or Reflect tests under {}", dir.display());
+    let report = dir.join("proxy-reflect-failures.txt");
+    if let Err(e) = std::fs::write(&report, &after.failures) {
+        println!("could not write {}: {e}", report.display());
+    }
+    println!(
+        "test262 Proxy and Reflect: without Options::es2015 {}; with it {}. Skipped {skipped} module, asynchronous, negative \
+         parse or missing-built-in tests and {other_features} tests with other feature tags. Failures: {}",
+        before.summary(),
+        after.summary(),
+        report.display()
+    );
+    assert_eq!(before.panicked + after.panicked, 0, "the interpreter panicked:\n{}", panic_lines(&before.failures, &after.failures));
 }
 
 #[test]
@@ -1079,4 +1181,12 @@ fn a_file_over_the_limit_is_refused_before_it_is_read() {
     std::fs::File::create(&path).unwrap().set_len(4).unwrap();
     assert_eq!(read_source(&path), Ok("\0\0\0\0".to_string()));
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn a_panic_without_the_option_is_named_with_its_test_and_mode() {
+    let before = "test/a.js (sloppy): PANIC\ntest/b.js (strict): expected 1\n";
+    let after = "test/c.js (strict): PANIC\n";
+    assert_eq!(panic_lines(before, after), "without Options::es2015: test/a.js (sloppy): PANIC\nwith Options::es2015: test/c.js (strict): PANIC\n");
+    assert_eq!(panic_lines("test/b.js (strict): expected 1\n", ""), "");
 }

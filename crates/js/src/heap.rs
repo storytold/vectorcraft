@@ -246,8 +246,21 @@ pub(crate) enum Class {
     },
     /// A `.( )` filter in progress.
     XmlFilter(Box<XmlFilterState>),
+    /// A proxy (ECMA-262 2020 section 9.5), made by `Proxy` in a realm with
+    /// [`crate::Options::es2015`].
+    Proxy(Box<ProxyData>),
     /// A `UnitValue` object and its measurement ([`crate::unit_value`]).
     UnitValue(Box<crate::unit_value::Measure>),
+}
+
+/// A proxy's target and handler, `None` once it is revoked, and whether it can be called and
+/// constructed, which its target decided when it was made.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ProxyData {
+    pub(crate) target: Option<ObjId>,
+    pub(crate) handler: Option<ObjId>,
+    pub(crate) callable: bool,
+    pub(crate) constructor: bool,
 }
 
 /// What an XML value is.
@@ -324,6 +337,8 @@ impl Class {
             Class::String(_) => "String",
             Class::RegExp(_) => "RegExp",
             Class::Date(_) => "Date",
+            Class::Proxy(p) if p.callable => "Function",
+            Class::Proxy(_) => "Object",
             Class::UnitValue(_) => "UnitValue",
         }
     }
@@ -418,6 +433,8 @@ pub(crate) const XML_LIST_BYTES: usize = 96;
 pub(crate) const XML_REF_BYTES: usize = 8;
 /// The estimated bytes of a namespace an XML node holds.
 pub(crate) const XML_NS_BYTES: usize = 48;
+/// The estimated bytes of a proxy's target, handler and flags.
+pub(crate) const PROXY_BYTES: usize = 32;
 /// The estimated bytes of the measurement a `UnitValue` object holds.
 pub(crate) const UNIT_VALUE_BYTES: usize = 32;
 /// The estimated bytes of a piece of code without its instructions, tables and strings.
@@ -437,8 +454,8 @@ pub(crate) struct Heap {
     /// How many collections have run.
     pub(crate) collections: usize,
     /// Counts the properties whose names start with a digit (the array indices among them) added
-    /// to any object, so an operation that lists the indices an object has can tell whether a
-    /// script added one since.
+    /// to any object, and the prototypes changed, so an operation that lists the indices an object
+    /// and its prototypes have can tell whether a script added one since.
     pub(crate) index_epoch: u64,
 }
 
@@ -712,6 +729,10 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
         Class::XmlFilter(state) => {
             work.extend(state.input.iter().chain(&state.kept).map(|o| o.0));
             extra = XML_LIST_BYTES + XML_REF_BYTES * (state.input.len() + state.kept.len());
+        }
+        Class::Proxy(p) => {
+            work.extend(p.target.iter().chain(&p.handler).map(|o| o.0));
+            extra = PROXY_BYTES;
         }
         Class::UnitValue(_) => extra = UNIT_VALUE_BYTES,
         _ => {}

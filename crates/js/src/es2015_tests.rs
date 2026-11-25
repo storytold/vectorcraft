@@ -226,6 +226,22 @@ fn a_function_eval_declares_on_the_global_object_sees_global_lexical_bindings() 
 }
 
 #[test]
+fn eval_without_the_option_cannot_redeclare_an_earlier_runs_let() {
+    // An earlier run's `let` stays a `let` when the option is turned off: an eval `var` or
+    // function of the same name is a `SyntaxError`, and the binding keeps its value.
+    let mut realm = es();
+    assert_eq!(realm.run("let x = 1; 0"), Ok(JsValue::Number(0.0)));
+    realm.set_es2015(false);
+    for src in ["eval('var x = 2')", "eval('function x() {}')", "(0, eval)('var x = 2')"] {
+        let r = realm.run(src);
+        assert!(matches!(&r, Err(RunError { message, .. }) if message.starts_with("SyntaxError")), "{src}: {r:?}");
+    }
+    assert_eq!(realm.run("x === 1 && !this.hasOwnProperty('x')"), Ok(JsValue::Bool(true)));
+    // A name no `let` holds is still declared.
+    assert_eq!(realm.run("eval('var y = 3'); y"), Ok(JsValue::Number(3.0)));
+}
+
+#[test]
 fn a_global_var_makes_its_own_property_over_an_inherited_one() {
     // ECMA-262 2015 section 8.1.1.4.17 reads the global object's own property, so `var` makes a
     // new one even when the global object inherits the name.

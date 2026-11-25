@@ -2648,7 +2648,12 @@ parameters, and spread in array literals, calls and `new`. Spread reads arrays b
 before each element, strings and `String` objects by code point, and objects with a `length` property by index, and
 throws a `TypeError` for any other value; that rule is VectorCraft's own
 until iterators are added. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
-an engine that `#targetengine` keeps reads each run the way that run's script does. A
+an engine that `#targetengine` keeps reads each run the way that run's script does. A `.js` script also has the
+globals `Proxy`, with `Proxy.revocable`, and `Reflect` (https://262.ecma-international.org/11.0/, sections 9.5, 26.1
+and 26.2), with string property names. A trap is a script call: it takes fuel and counts against the limit on nested calls, and
+a trap result that breaks one of the proxy invariants, or any operation on a revoked proxy, throws a `TypeError`. A
+proxy in a command's params throws a `TypeError` without running its traps. An engine that `#targetengine` keeps gets
+`Proxy` and `Reflect` at its first `.js` run and keeps them for later `.jsx` runs. A
 `.jsx` file and a `source` string read ES5.1 only, and the ECMAScript 2015 forms are syntax errors there. A `.js` file
 also reads two ECMAScript 2020 forms (https://262.ecma-international.org/11.0/): optional chains (`a?.b`, `a?.[key]`,
 `f?.(args)`), which give `undefined` and skip the rest of the chain when the value before `?.` is `undefined` or

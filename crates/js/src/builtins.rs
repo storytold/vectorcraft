@@ -3,7 +3,8 @@
 //! `Array`, the error constructors, `Math`, `JSON`, the global functions and constants, Annex
 //! B's `escape` and `unescape`, and the prototypes primitive values look properties up on, with
 //! `Boolean.prototype`'s `toString` and `valueOf`. `String`, `Number`, `RegExp` and `Date` are in
-//! their own modules.
+//! their own modules. A realm with [`crate::Options::es2015`] also has `Proxy` and `Reflect` (in
+//! `reflect`).
 //!
 //! Every loop in a built-in takes a unit of fuel for each step, and every string, array, object
 //! or property it makes is checked against the heap limit before it is made, so no built-in can
@@ -14,7 +15,8 @@ pub(crate) mod extensions;
 mod global;
 mod json;
 mod math;
-mod object;
+pub(crate) mod object;
+mod reflect;
 
 use std::rc::Rc;
 
@@ -78,6 +80,13 @@ pub(crate) fn install(interp: &mut Interp) {
     }
 }
 
+/// Adds `Proxy` and `Reflect` to a realm that does not have them yet, for a run with
+/// [`crate::Options::es2015`] in a realm made without it. A `Proxy` or `Reflect` global that an
+/// earlier run defined stays as it is.
+pub(crate) fn install_es2015(interp: &mut Interp) -> JsResult<()> {
+    if interp.es2015_installed { Ok(()) } else { reflect::install(interp, true) }
+}
+
 fn try_install(interp: &mut Interp) -> JsResult<()> {
     let object_proto = alloc(interp, Class::Ordinary, None);
     interp.intrinsics.object_proto = object_proto;
@@ -112,6 +121,7 @@ fn try_install(interp: &mut Interp) -> JsResult<()> {
     data(interp, global, "eval", Value::Object(eval), HIDDEN)?;
 
     let object = native(interp, "Object", object_ctor, 1, NativeKind::Plain, true)?;
+    interp.intrinsics.object_ctor = object;
     constructor(interp, "Object", object, object_proto)?;
     method(interp, object_proto, "toString", object_to_string, 0)?;
     method(interp, object_proto, "toLocaleString", object_to_locale_string, 0)?;
@@ -144,6 +154,9 @@ fn try_install(interp: &mut Interp) -> JsResult<()> {
     crate::date_builtins::install(interp)?;
     if interp.options.e4x {
         crate::xml_builtins::install(interp)?;
+    }
+    if interp.options.es2015 {
+        reflect::install(interp, false)?;
     }
     Ok(())
 }
@@ -382,6 +395,15 @@ fn object_to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> J
     let class = match &this {
         Value::Undefined => "Undefined",
         Value::Null => "Null",
+        // A proxy reads as an array when its target is one, and a revoked proxy is a
+        // `TypeError` (ECMA-262 2020 section 19.1.3.6).
+        Value::Object(o) if interp.is_proxy(*o) => {
+            if interp.is_array(&this)? {
+                "Array"
+            } else {
+                interp.heap.object(*o).map_or("Object", |o| o.class.name())
+            }
+        }
         _ => {
             let o = interp.to_object(&this)?;
             interp.heap.object(o).map_or("Object", |o| o.class.name())
@@ -436,17 +458,33 @@ fn has_own_property(interp: &mut Interp, this: Value, args: &[Value], _: bool) -
     Ok(Value::Bool(interp.get_own_property(o, &k)?.is_some()))
 }
 
+/// `Object.prototype.isPrototypeOf` (section 15.2.4.6). The chain is read with
+/// [[GetPrototypeOf]], so a proxy on it answers with its trap; the object being read and `this`
+/// stay rooted.
 fn is_prototype_of(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let Value::Object(mut v) = arg(args, 0) else { return Ok(Value::Bool(false)) };
     let o = interp.to_object(&this)?;
-    while let Some(p) = interp.heap.object(v).and_then(|v| v.proto) {
+    let slot = interp.temp_roots.len();
+    interp.temp_roots.extend([Value::Object(o), Value::Object(v)]);
+    let r = loop {
+        let p = match interp.get_prototype_of(v) {
+            Ok(Some(p)) => p,
+            Ok(None) => break Ok(Value::Bool(false)),
+            Err(e) => break Err(e),
+        };
         if p == o {
-            return Ok(Value::Bool(true));
+            break Ok(Value::Bool(true));
         }
         v = p;
-        interp.use_fuel()?;
-    }
-    Ok(Value::Bool(false))
+        if let Some(root) = interp.temp_roots.get_mut(slot + 1) {
+            *root = Value::Object(v);
+        }
+        if let Err(e) = interp.use_fuel() {
+            break Err(e);
+        }
+    };
+    interp.temp_roots.truncate(slot);
+    r
 }
 
 fn property_is_enumerable(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
@@ -526,6 +564,7 @@ fn function_to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) ->
         Some(Func::Native { name, .. } | Func::Pausable { name, .. }) => format!("function {name}() {{ [native code] }}"),
         Some(Func::Host { name, .. } | Func::Data { name, .. } | Func::Eval { name, .. }) => format!("function {name}() {{ [native code] }}"),
         Some(Func::Bound { .. }) => "function () { [native code] }".to_string(),
+        None if interp.is_callable(&this) => "function () { [native code] }".to_string(),
         None => return Err(interp.type_error("Function.prototype.toString was called on a value that is not a function")),
     };
     Ok(Value::str(&text))

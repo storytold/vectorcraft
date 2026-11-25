@@ -101,6 +101,8 @@ pub(crate) struct Intrinsics {
     pub(crate) error_protos: [ObjId; 7],
     pub(crate) eval: ObjId,
     pub(crate) throw_type_error: ObjId,
+    /// The `Object` constructor, which makes a new object for a different `newTarget`.
+    pub(crate) object_ctor: ObjId,
     /// The `XML` constructor, which holds the XML settings.
     pub(crate) xml_ctor: ObjId,
     pub(crate) xml_proto: ObjId,
@@ -124,6 +126,7 @@ impl Intrinsics {
             error_protos: [o; 7],
             eval: o,
             throw_type_error: o,
+            object_ctor: o,
             xml_ctor: o,
             xml_proto: o,
             xml_list_proto: o,
@@ -157,6 +160,7 @@ impl Intrinsics {
             self.date_proto,
             self.eval,
             self.throw_type_error,
+            self.object_ctor,
             self.xml_ctor,
             self.xml_proto,
             self.xml_list_proto,
@@ -239,6 +243,9 @@ pub(crate) struct Interp {
     global_vars: std::collections::HashSet<Key>,
     /// The [`Options::es2015`] a host set while a run was going, for the runs after it.
     pub(crate) next_es2015: Option<bool>,
+    /// Whether the realm has `Proxy` and `Reflect`. A run with [`Options::es2015`] in a realm
+    /// made without it adds them.
+    pub(crate) es2015_installed: bool,
     /// The template objects tagged templates have made, by code and template index, each with
     /// its code (ECMA-262 2015 section 12.2.9.3 keeps one object for each site).
     pub(crate) template_objects: std::collections::HashMap<(usize, u32), (Rc<Code>, ObjId)>,
@@ -391,7 +398,7 @@ const MIN_GC_BYTES: usize = 1 << 20;
 pub(crate) const MAX_APPLY_ARGS: usize = 1 << 16;
 
 /// The estimated bytes of a name's entries in the list and the set `for-in` builds.
-const KEY_ENTRY_BYTES: usize = 32;
+pub(crate) const KEY_ENTRY_BYTES: usize = 32;
 
 /// The most units of a computed property name an error about a property of `null` or `undefined`
 /// names; a longer name is left out of the message.
@@ -546,6 +553,7 @@ impl Interp {
             global_lex,
             global_vars: std::collections::HashSet::new(),
             next_es2015: None,
+            es2015_installed: false,
             template_objects: std::collections::HashMap::new(),
             intrinsics: Intrinsics::placeholder(),
             fuel: u64::MAX,
@@ -1448,9 +1456,17 @@ impl Interp {
         self.heap.object_mut(id).ok_or_else(|| Abrupt::Internal("object out of range".into()))
     }
 
-    /// [[GetOwnProperty]] (section 8.12.1, with the special cases of arrays, strings and
-    /// arguments objects).
-    pub(crate) fn get_own_property(&self, id: ObjId, k: &[u16]) -> JsResult<Option<Prop>> {
+    /// [[GetOwnProperty]] (section 8.12.1), through a proxy's trap when `id` is a proxy.
+    pub(crate) fn get_own_property(&mut self, id: ObjId, k: &[u16]) -> JsResult<Option<Prop>> {
+        if self.is_proxy(id) {
+            return self.proxy_get_own_property(id, k);
+        }
+        self.ordinary_own_property(id, k)
+    }
+
+    /// [[GetOwnProperty]] of an object that is not a proxy (section 8.12.1, with the special cases
+    /// of arrays, strings and arguments objects). A proxy has no own properties here.
+    pub(crate) fn ordinary_own_property(&self, id: ObjId, k: &[u16]) -> JsResult<Option<Prop>> {
         let o = self.object(id)?;
         match &o.class {
             Class::Array { length, length_writable } if is(k, "length") => {
@@ -1506,13 +1522,17 @@ impl Interp {
         Ok(o.props.get(k).cloned())
     }
 
-    /// [[GetProperty]]: the property found on the object or its prototype chain.
-    pub(crate) fn find_property(&self, id: ObjId, k: &[u16]) -> JsResult<Option<Prop>> {
+    /// The property found on the object or its prototype chain, without running a proxy's traps:
+    /// the search stops at a proxy, which it reports.
+    pub(crate) fn lookup(&self, id: ObjId, k: &[u16]) -> JsResult<Lookup> {
         let mut cur = Some(id);
         let mut steps = 0usize;
         while let Some(o) = cur {
-            if let Some(p) = self.get_own_property(o, k)? {
-                return Ok(Some(p));
+            if self.is_proxy(o) {
+                return Ok(Lookup::Proxy(o));
+            }
+            if let Some(p) = self.ordinary_own_property(o, k)? {
+                return Ok(Lookup::Found(p));
             }
             cur = self.object(o)?.proto;
             steps += 1;
@@ -1520,19 +1540,65 @@ impl Interp {
                 return internal("prototype chain too long");
             }
         }
-        Ok(None)
+        Ok(Lookup::Missing)
     }
 
-    pub(crate) fn has_property(&self, id: ObjId, k: &[u16]) -> JsResult<bool> {
-        Ok(self.find_property(id, k)?.is_some())
+    /// [[GetProperty]]: the property found on the object or its prototype chain, through the
+    /// `getOwnPropertyDescriptor` and `getPrototypeOf` traps of the proxies on it.
+    pub(crate) fn find_property(&mut self, id: ObjId, k: &[u16]) -> JsResult<Option<Prop>> {
+        // One root slot holds the prototype the walk has reached; each hop replaces it.
+        let mark = self.temp_roots.len();
+        self.temp_roots.push(Value::Undefined);
+        let r = (|| {
+            let mut cur = id;
+            loop {
+                match self.lookup(cur, k)? {
+                    Lookup::Found(p) => return Ok(Some(p)),
+                    Lookup::Missing => return Ok(None),
+                    Lookup::Proxy(p) => {
+                        if let Some(prop) = self.get_own_property(p, k)? {
+                            return Ok(Some(prop));
+                        }
+                        let Some(next) = self.get_prototype_of(p)? else { return Ok(None) };
+                        if let Some(root) = self.temp_roots.get_mut(mark) {
+                            *root = Value::Object(next);
+                        }
+                        self.use_fuel()?;
+                        cur = next;
+                    }
+                }
+            }
+        })();
+        self.temp_roots.truncate(mark);
+        r
     }
 
-    /// [[Get]] starting at `start`, with `receiver` as `this` for a getter.
+    /// The property found on the object or its prototype chain, running no script: a proxy on the
+    /// chain ends the search.
+    pub(crate) fn find_ordinary_property(&self, id: ObjId, k: &[u16]) -> JsResult<Option<Prop>> {
+        Ok(match self.lookup(id, k)? {
+            Lookup::Found(p) => Some(p),
+            Lookup::Missing | Lookup::Proxy(_) => None,
+        })
+    }
+
+    /// [[HasProperty]], through the `has` trap of a proxy on the prototype chain.
+    pub(crate) fn has_property(&mut self, id: ObjId, k: &[u16]) -> JsResult<bool> {
+        match self.lookup(id, k)? {
+            Lookup::Found(_) => Ok(true),
+            Lookup::Missing => Ok(false),
+            Lookup::Proxy(p) => self.proxy_has(p, k),
+        }
+    }
+
+    /// [[Get]] starting at `start`, with `receiver` as `this` for a getter, through the `get` trap
+    /// of a proxy on the prototype chain.
     pub(crate) fn get_from(&mut self, start: ObjId, k: &[u16], receiver: &Value) -> JsResult<Value> {
-        match self.find_property(start, k)? {
-            None | Some(Prop::Accessor { get: None, .. }) => Ok(Value::Undefined),
-            Some(Prop::Data { value, .. }) => Ok(value),
-            Some(Prop::Accessor { get: Some(g), .. }) => self.call(&Value::Object(g), receiver, &[]),
+        match self.lookup(start, k)? {
+            Lookup::Missing | Lookup::Found(Prop::Accessor { get: None, .. }) => Ok(Value::Undefined),
+            Lookup::Found(Prop::Data { value, .. }) => Ok(value),
+            Lookup::Found(Prop::Accessor { get: Some(g), .. }) => self.call(&Value::Object(g), receiver, &[]),
+            Lookup::Proxy(p) => self.proxy_get(p, k, receiver),
         }
     }
 
@@ -1597,6 +1663,13 @@ impl Interp {
     /// arguments object rules of section 10.6). Returns whether the property was defined; with
     /// `throw` a rejection throws a `TypeError` instead.
     pub(crate) fn define_own_property(&mut self, id: ObjId, k: Key, desc: &Desc, throw: bool) -> JsResult<bool> {
+        if self.is_proxy(id) {
+            let defined = self.proxy_define_own_property(id, &k, desc)?;
+            if !defined {
+                return self.reject_bool(throw, &k, "the proxy's defineProperty trap returned false");
+            }
+            return Ok(true);
+        }
         match &self.object(id)?.class {
             Class::Array { length, length_writable } => {
                 let (length, length_writable) = (*length, *length_writable);
@@ -1760,8 +1833,11 @@ impl Interp {
     /// The names of an object's own properties (section 15.2.3.4): a String object's indices and
     /// `length` first, then the rest in the order they were added, which is the order `for-in`
     /// visits them, then an array's `length`. Each name takes a unit of fuel, and the heap for the
-    /// list is checked first.
+    /// list is checked first. A proxy's names come from its `ownKeys` trap.
     pub(crate) fn own_keys(&mut self, id: ObjId) -> JsResult<Vec<Key>> {
+        if self.is_proxy(id) {
+            return self.proxy_own_keys(id);
+        }
         let o = self.object(id)?;
         let string_len = if let Class::String(s) = &o.class { s.len() } else { 0 };
         let is_string = matches!(o.class, Class::String(_));
@@ -1803,9 +1879,16 @@ impl Interp {
         Ok(())
     }
 
-    /// [[Put]] (section 8.12.5).
+    /// [[Put]] (section 8.12.5). On a proxy, or past a proxy on the prototype chain, it is the
+    /// proxy's [[Set]] with the object as the receiver (ECMA-262 2020 sections 9.1.9 and 9.5.9).
     pub(crate) fn put(&mut self, id: ObjId, k: Key, v: Value, throw: bool) -> JsResult<()> {
-        match self.get_own_property(id, &k)? {
+        if self.is_proxy(id) {
+            if !self.set_with_receiver(id, k.clone(), v, &Value::Object(id))? {
+                return self.reject(throw, &k, "the proxy did not set it");
+            }
+            return Ok(());
+        }
+        match self.ordinary_own_property(id, &k)? {
             Some(Prop::Data { flags, .. }) => {
                 if flags & WRITABLE == 0 {
                     return self.reject(throw, &k, "it is read-only");
@@ -1817,10 +1900,16 @@ impl Interp {
             None => {}
         }
         let proto = self.object(id)?.proto;
-        match proto.map(|p| self.find_property(p, &k)).transpose()?.flatten() {
-            Some(Prop::Accessor { set: Some(s), .. }) => return self.call(&Value::Object(s), &Value::Object(id), &[v]).map(drop),
-            Some(Prop::Accessor { set: None, .. }) => return self.reject(throw, &k, "it has only a getter"),
-            Some(Prop::Data { flags, .. }) if flags & WRITABLE == 0 => return self.reject(throw, &k, "it is read-only"),
+        match proto.map(|p| self.lookup(p, &k)).transpose()? {
+            Some(Lookup::Found(Prop::Accessor { set: Some(s), .. })) => return self.call(&Value::Object(s), &Value::Object(id), &[v]).map(drop),
+            Some(Lookup::Found(Prop::Accessor { set: None, .. })) => return self.reject(throw, &k, "it has only a getter"),
+            Some(Lookup::Found(Prop::Data { flags, .. })) if flags & WRITABLE == 0 => return self.reject(throw, &k, "it is read-only"),
+            Some(Lookup::Proxy(p)) => {
+                if !self.set_with_receiver(p, k.clone(), v, &Value::Object(id))? {
+                    return self.reject(throw, &k, "the proxy did not set it");
+                }
+                return Ok(());
+            }
             _ => {}
         }
         let o = self.object(id)?;
@@ -1880,7 +1969,15 @@ impl Interp {
 
     /// [[Delete]] (section 8.12.7).
     pub(crate) fn delete(&mut self, id: ObjId, k: &[u16], throw: bool) -> JsResult<bool> {
-        match self.get_own_property(id, k)? {
+        if self.is_proxy(id) {
+            let deleted = self.proxy_delete(id, k)?;
+            if !deleted && throw {
+                let key = String::from_utf16_lossy(k);
+                return Err(self.type_error(&format!("cannot delete property '{key}': the proxy's deleteProperty trap returned false")));
+            }
+            return Ok(deleted);
+        }
+        match self.ordinary_own_property(id, k)? {
             None => Ok(true),
             Some(p) if p.configurable() => {
                 // A deleted global variable no longer stops a `let` or `const` of its name
@@ -1925,8 +2022,17 @@ impl Interp {
             _ => {
                 let proto = self.primitive_proto(base, &k)?;
                 let own = matches!(base, Value::String(s) if is(&k, "length") || array_index(&k).is_some_and(|i| (i as usize) < s.len()));
-                if !own && let Some(Prop::Accessor { set: Some(s), .. }) = self.find_property(proto, &k)? {
-                    return self.call(&Value::Object(s), base, &[v]).map(drop);
+                if !own {
+                    match self.lookup(proto, &k)? {
+                        Lookup::Found(Prop::Accessor { set: Some(s), .. }) => return self.call(&Value::Object(s), base, &[v]).map(drop),
+                        Lookup::Proxy(p) => {
+                            if !self.set_with_receiver(p, k.clone(), v, base)? {
+                                return self.reject(strict, &k, "the proxy did not set it");
+                            }
+                            return Ok(());
+                        }
+                        _ => {}
+                    }
                 }
                 self.reject(strict, &k, "the value is a primitive")
             }
@@ -2392,6 +2498,9 @@ impl Interp {
         };
         // The most elements the array has room for.
         let room = u32::MAX.saturating_sub(current);
+        // An array, or a proxy of one, is tested before any trap runs, since a trap may revoke
+        // the proxy. Its `length` is read without asking whether it has one.
+        let array = boxed.is_none() && self.is_array(&v)?;
         let items: Vec<Value> = match boxed.as_ref().unwrap_or(&v) {
             Value::String(s) => {
                 let units = crate::string_builtins::flat_charged(self, s)?;
@@ -2408,16 +2517,16 @@ impl Interp {
                 }
                 out
             }
-            Value::Object(o) if self.has_property(*o, &key("length"))? => {
+            Value::Object(o) if array || self.has_property(*o, &key("length"))? => {
                 let o = *o;
                 let len = self.get_from(o, &key("length"), &v)?;
                 // ToLength (ECMA-262 2015 section 7.1.15): a negative or NaN length reads nothing.
                 let n = crate::string_builtins::to_integer(self.to_number(&len)?).max(0.0);
                 // An array's iterator reads its length again before each element (ECMA-262 2015
                 // section 22.1.5.2.1), so a getter that shrinks or grows the array changes the count,
-                // and the room is checked as each element is read. Any other object, and an array
+                // and the room is checked as each element is read. A proxy of an array is read
+                // the same way, its `length` through its traps. Any other object, and an array
                 // whose elements no getter reads, is checked against the length it has now.
-                let array = matches!(self.object(o)?.class, Class::Array { .. });
                 if n >= f64::from(room) && !(array && self.has_index_getter(o)?) {
                     return Err(self.throw(ErrorType::Range, "array literal too long"));
                 }
@@ -2429,8 +2538,17 @@ impl Interp {
                 let mut read = || -> JsResult<()> {
                     let mut i = 0;
                     loop {
-                        let end = match &self.object(o)?.class {
-                            Class::Array { length, .. } if array => *length,
+                        let stored = match &self.object(o)?.class {
+                            Class::Array { length, .. } => Some(*length),
+                            _ => None,
+                        };
+                        let end = match stored {
+                            Some(length) if array => length,
+                            None if array && i > 0 => {
+                                let len = self.get_from(o, &key("length"), &v)?;
+                                let len = crate::string_builtins::to_integer(self.to_number(&len)?).max(0.0);
+                                if len >= f64::from(u32::MAX) { u32::MAX } else { len as u32 }
+                            }
                             _ => n,
                         };
                         if i >= end {
@@ -2472,7 +2590,8 @@ impl Interp {
 
     /// Whether reading the elements of `o` by index can run code: `o` or an object it inherits
     /// from has an accessor property with a getter and an index name, and no object before it
-    /// in the chain has an own property of that name, which an indexed read would find first.
+    /// in the chain has an own property of that name, which an indexed read would find first;
+    /// or a proxy, whose traps answer the reads that reach it, is on its prototype chain.
     /// Each object, each property inspected and each earlier object a getter is looked up in
     /// takes a unit of fuel.
     fn has_index_getter(&mut self, o: ObjId) -> JsResult<bool> {
@@ -2480,6 +2599,10 @@ impl Interp {
         let mut before: Vec<ObjId> = Vec::new();
         let mut cur = Some(o);
         while let Some(id) = cur {
+            if self.is_proxy(id) {
+                self.use_fuel()?;
+                return Ok(true);
+            }
             // The scan stops where the fuel would run out.
             let budget = usize::try_from(self.fuel).unwrap_or(usize::MAX);
             let object = self.object(id)?;
@@ -2501,7 +2624,8 @@ impl Interp {
                         break;
                     }
                     used = used.saturating_add(1);
-                    if self.get_own_property(earlier, k)?.is_some() {
+                    // `before` holds no proxy: the scan stops at the first one.
+                    if self.ordinary_own_property(earlier, k)?.is_some() {
                         shadowed = true;
                         break;
                     }
@@ -2617,10 +2741,40 @@ impl Interp {
         if self.options.e4x && self.is_xml(&Value::Object(id)) {
             return self.xml_enumerate(id);
         }
+        let slot = self.temp_roots.len();
+        self.temp_roots.push(Value::Undefined);
+        let r = self.enumerable_keys_from(id, slot);
+        self.temp_roots.truncate(slot);
+        r
+    }
+
+    /// [`Self::enumerable_keys`] after the XML case. A proxy on the chain gives its names with its
+    /// `ownKeys` trap, whether each is enumerable with its `getOwnPropertyDescriptor` trap and the
+    /// next object with its `getPrototypeOf` trap, which `temp_roots[slot]` keeps reachable. A name
+    /// whose descriptor trap gives `undefined` does not hide the same name further up the chain.
+    fn enumerable_keys_from(&mut self, id: ObjId, slot: usize) -> JsResult<Vec<Key>> {
         let mut seen = std::collections::HashSet::new();
         let mut out = Vec::new();
         let mut cur = Some(id);
         while let Some(o) = cur {
+            if self.is_proxy(o) {
+                for k in self.own_keys(o)? {
+                    self.use_fuel()?;
+                    if seen.contains(&k) {
+                        continue;
+                    }
+                    let Some(p) = self.get_own_property(o, &k)? else { continue };
+                    seen.insert(k.clone());
+                    if p.enumerable() {
+                        out.push(k);
+                    }
+                }
+                cur = self.get_prototype_of(o)?;
+                if let Some(root) = self.temp_roots.get_mut(slot) {
+                    *root = cur.map_or(Value::Undefined, Value::Object);
+                }
+                continue;
+            }
             let obj = self.object(o)?;
             let string_len = if let Class::String(s) = &obj.class { Some(s.len()) } else { None };
             let is_array = matches!(obj.class, Class::Array { .. });
@@ -2682,18 +2836,74 @@ impl Interp {
             let Some(k) = state.keys.get(state.pos).cloned() else { return self.jump_to(target) };
             state.pos += 1;
             let object = state.object;
-            if let Some(o) = object
-                && self.scope_has(o, &k)?
-            {
+            let Some(o) = object else { continue };
+            let visit = if self.options.e4x && self.is_xml(&Value::Object(o)) { self.scope_has(o, &k)? } else { self.for_in_still_has(o, &k)? };
+            if visit {
                 return self.push(Value::String(Str::from_rc(k)));
             }
+        }
+    }
+
+    /// Whether `for-in` over `o` still visits `k` (section 12.6.4; ECMA-262 2020 section
+    /// 13.7.5.15): the property found first on the chain, on an ordinary object or through a
+    /// proxy's `getOwnPropertyDescriptor` trap, is enumerable. After a proxy without the property,
+    /// the objects that follow it are searched. A name deleted or made non-enumerable after the
+    /// names were listed is skipped, on an ordinary object as on a proxy. A proxy's `has` trap is
+    /// not asked. Each proxy on the chain takes a unit of fuel.
+    fn for_in_still_has(&mut self, o: ObjId, k: &[u16]) -> JsResult<bool> {
+        // One root slot holds the prototype the walk has reached; each hop replaces it.
+        let mark = self.temp_roots.len();
+        self.temp_roots.push(Value::Undefined);
+        let r = self.for_in_still_has_rooted(o, k, mark);
+        self.temp_roots.truncate(mark);
+        r
+    }
+
+    fn for_in_still_has_rooted(&mut self, mut cur: ObjId, k: &[u16], slot: usize) -> JsResult<bool> {
+        loop {
+            let p = match self.lookup(cur, k)? {
+                Lookup::Found(prop) => return Ok(prop.enumerable()),
+                Lookup::Missing => return Ok(false),
+                Lookup::Proxy(p) => p,
+            };
+            self.use_fuel()?;
+            if let Some(prop) = self.get_own_property(p, k)? {
+                return Ok(prop.enumerable());
+            }
+            let Some(next) = self.get_prototype_of(p)? else { return Ok(false) };
+            if let Some(root) = self.temp_roots.get_mut(slot) {
+                *root = Value::Object(next);
+            }
+            cur = next;
         }
     }
 
     // ---- calls ----
 
     pub(crate) fn is_callable(&self, v: &Value) -> bool {
-        v.as_object().and_then(|o| self.heap.object(o)).is_some_and(|o| matches!(o.class, Class::Function(_)))
+        v.as_object().and_then(|o| self.heap.object(o)).is_some_and(|o| match &o.class {
+            Class::Function(_) => true,
+            Class::Proxy(p) => p.callable,
+            _ => false,
+        })
+    }
+
+    /// IsConstructor (ECMA-262 2020 section 7.2.4): a function written in JavaScript other than
+    /// an arrow function, a built-in constructor, a bound function whose target is one, or a
+    /// proxy made with one.
+    pub(crate) fn is_constructor(&self, v: &Value) -> bool {
+        let mut cur = v.as_object();
+        // A chain of bound functions is as long as the heap allows; the steps are bounded by it.
+        while let Some(o) = cur.and_then(|o| self.heap.object(o)) {
+            match &o.class {
+                Class::Function(Func::Closure { code, .. }) => return !code.arrow,
+                Class::Function(Func::Native { constructor, .. }) => return *constructor,
+                Class::Function(Func::Bound { target, .. }) => cur = Some(*target),
+                Class::Proxy(p) => return p.constructor,
+                _ => return false,
+            }
+        }
+        false
     }
 
     fn func_of(&self, v: &Value) -> Option<Func> {
@@ -2707,7 +2917,19 @@ impl Interp {
     /// JavaScript comes back to be entered by the caller.
     fn prepare_call(&mut self, mut f: Value, mut this: Value, mut args: Vec<Value>) -> JsResult<Prepared> {
         loop {
-            let Some(func) = self.func_of(&f) else { return Err(self.type_error("the value is not a function")) };
+            let Some(func) = self.func_of(&f) else {
+                if let Some(p) = f.as_object().filter(|&p| self.is_proxy(p)) {
+                    // A proxy without an `apply` trap calls its target, which the loop takes next.
+                    match self.proxy_call(p, &this, &args)? {
+                        ProxyCall::Target(target) => {
+                            f = Value::Object(target);
+                            continue;
+                        }
+                        ProxyCall::Done(v) => return Ok(Prepared::Done(v)),
+                    }
+                }
+                return Err(self.type_error("the value is not a function"));
+            };
             match func {
                 Func::Closure { code, env } => {
                     let callee = f.as_object().ok_or_else(|| Abrupt::Internal("callee is not an object".into()))?;
@@ -2726,7 +2948,7 @@ impl Interp {
                     let list = args.get(1).cloned().unwrap_or(Value::Undefined);
                     f = this;
                     this = args.first().cloned().unwrap_or(Value::Undefined);
-                    args = self.list_from_array_like(&list)?;
+                    args = self.list_from_array_like(&list, false)?;
                 }
                 Func::Bound { target, this: bound_this, args: bound_args } => {
                     self.use_fuel()?;
@@ -2784,8 +3006,10 @@ impl Interp {
         }
     }
 
-    /// The elements of an array-like `apply` argument (section 15.3.4.3).
-    fn list_from_array_like(&mut self, list: &Value) -> JsResult<Vec<Value>> {
+    /// The elements of an array-like `apply` argument (section 15.3.4.3). With `to_length`, the
+    /// length is read with ToLength (ECMA-262 2020 sections 7.1.20 and 7.3.17), so a negative
+    /// length gives no elements; otherwise it is read with ToUint32.
+    pub(crate) fn list_from_array_like(&mut self, list: &Value, to_length: bool) -> JsResult<Vec<Value>> {
         let Value::Object(o) = list else {
             if list.is_nullish() {
                 return Ok(Vec::new());
@@ -2793,7 +3017,16 @@ impl Interp {
             return Err(self.type_error("the argument list is not an object"));
         };
         let len = self.get_from(*o, &key("length"), list)?;
-        let n = to_uint32(self.to_number(&len)?) as usize;
+        let len = self.to_number(&len)?;
+        let n = if !to_length {
+            to_uint32(len) as usize
+        } else if len.is_nan() || len <= 0.0 {
+            0
+        } else if len.trunc() > MAX_APPLY_ARGS as f64 {
+            MAX_APPLY_ARGS + 1
+        } else {
+            to_uint32(len) as usize
+        };
         if n > MAX_APPLY_ARGS {
             return Err(self.throw(ErrorType::Range, "too many arguments"));
         }
@@ -2842,39 +3075,151 @@ impl Interp {
         let n = argc as usize;
         let start =
             self.stack.len().checked_sub(n + 1).filter(|&s| s >= self.base()).ok_or_else(|| Abrupt::Internal("new below the stack".into()))?;
-        let mut f = self.stack.get(start).cloned().unwrap_or(Value::Undefined);
-        let mut args: Vec<Value> = self.stack.get(start + 1..).map(<[Value]>::to_vec).unwrap_or_default();
-        // A bound function constructs its target with its arguments first (section 15.3.4.5.2);
-        // the bound function on the stack keeps them reachable.
-        while let Some(Func::Bound { target, args: bound_args, .. }) = self.func_of(&f) {
-            self.use_fuel()?;
-            let mut all = bound_args.to_vec();
-            all.append(&mut args);
-            args = all;
-            f = Value::Object(target);
-        }
-        match self.func_of(&f) {
-            Some(Func::Closure { code, .. }) if code.arrow => Err(self.type_error("an arrow function is not a constructor")),
-            Some(Func::Closure { code, env }) => {
-                let Some(callee) = f.as_object() else { return internal("callee is not an object") };
-                let proto = match self.get_from(callee, &key("prototype"), &f)? {
-                    Value::Object(p) => p,
-                    _ => self.intrinsics.object_proto,
-                };
-                let obj = self.heap.alloc_object(Object::new(Class::Ordinary, Some(proto)));
-                self.stack.truncate(start);
-                self.enter_function(Entry { callee, code, env, this: Value::Object(obj), args }, Some(obj), false)
-            }
-            Some(Func::Native { f: native, constructor: true, .. }) => {
-                let held = self.held_bytes;
-                let r = native(self, Value::Undefined, &args, true);
-                self.held_bytes = held;
-                let v = r?;
+        let f = self.stack.get(start).cloned().unwrap_or(Value::Undefined);
+        let args: Vec<Value> = self.stack.get(start + 1..).map(<[Value]>::to_vec).unwrap_or_default();
+        match self.prepare_construct(f.clone(), args, f)? {
+            Prepared::Done(v) => {
                 self.stack.truncate(start);
                 self.push(v)
             }
-            _ => Err(self.type_error("the value is not a constructor")),
+            Prepared::Closure(entry) => {
+                let obj = entry.this.as_object();
+                self.stack.truncate(start);
+                self.enter_function(entry, obj, false)
+            }
         }
+    }
+
+    /// [[Construct]] of `f` with `args`, `new_target` giving the new object's prototype: runs a
+    /// built-in constructor or a proxy's `construct` trap, or gives the frame a constructor written
+    /// in JavaScript enters with the new object as `this`. A bound function constructs its target
+    /// with its arguments first (section 15.3.4.5.2), and a proxy without a `construct` trap its
+    /// target (ECMA-262 2020 section 9.5.13). The values stay rooted while the steps run script.
+    fn prepare_construct(&mut self, f: Value, args: Vec<Value>, new_target: Value) -> JsResult<Prepared> {
+        let mark = self.temp_roots.len();
+        self.temp_roots.push(f.clone());
+        self.temp_roots.push(new_target.clone());
+        self.temp_roots.extend(args.iter().cloned());
+        let r = self.prepare_construct_rooted(f, args, new_target);
+        self.temp_roots.truncate(mark);
+        r
+    }
+
+    fn prepare_construct_rooted(&mut self, mut f: Value, mut args: Vec<Value>, mut new_target: Value) -> JsResult<Prepared> {
+        loop {
+            if let Some(p) = f.as_object().filter(|&p| self.is_proxy(p)) {
+                match self.proxy_construct(p, &args, &new_target)? {
+                    ProxyCall::Target(target) => {
+                        f = Value::Object(target);
+                        self.temp_roots.push(f.clone());
+                        continue;
+                    }
+                    ProxyCall::Done(v) => return Ok(Prepared::Done(v)),
+                }
+            }
+            match self.func_of(&f) {
+                // The bound function, reachable from the rooted `f`, keeps its target and
+                // arguments reachable.
+                Some(Func::Bound { target, args: bound_args, .. }) => {
+                    self.use_fuel()?;
+                    let mut all = bound_args.to_vec();
+                    all.append(&mut args);
+                    args = all;
+                    if same_value(&f, &new_target) {
+                        new_target = Value::Object(target);
+                    }
+                    f = Value::Object(target);
+                }
+                Some(Func::Closure { code, .. }) if code.arrow => return Err(self.type_error("an arrow function is not a constructor")),
+                Some(Func::Closure { code, env }) => {
+                    let Some(callee) = f.as_object() else { return internal("callee is not an object") };
+                    let proto = match self.get_value(&new_target, &key("prototype"))? {
+                        Value::Object(p) => p,
+                        _ => self.intrinsics.object_proto,
+                    };
+                    let obj = self.heap.alloc_object(Object::new(Class::Ordinary, Some(proto)));
+                    return Ok(Prepared::Closure(Entry { callee, code, env, this: Value::Object(obj), args }));
+                }
+                Some(Func::Native { f: native, constructor: true, name, .. }) => {
+                    // With a different `newTarget` (`Reflect.construct`), the new object takes
+                    // its `prototype` when that is an object (ECMA-262 2020 section 9.1.14). An
+                    // argument given back and a proxy keep their own. `Object` makes a new object
+                    // instead of converting its argument (section 19.1.1.1). `Number`, `String`,
+                    // `Date` and `Function` convert their arguments before `prototype` is read
+                    // (sections 20.1.1.1, 21.1.1.1, 20.4.2 and 19.2.1.1.1), so a conversion that
+                    // throws reads nothing from `newTarget`. `Proxy` does not read it (section
+                    // 26.2.1.1).
+                    let other_target = !same_value(&f, &new_target) && name != "Proxy";
+                    let converts_first = other_target && {
+                        let i = &self.intrinsics;
+                        let own = [i.number_proto, i.string_proto, i.date_proto, i.function_proto];
+                        match f.as_object().map(|c| self.ordinary_own_property(c, &key("prototype"))).transpose()?.flatten() {
+                            Some(Prop::Data { value: Value::Object(p), .. }) => own.contains(&p),
+                            _ => false,
+                        }
+                    };
+                    let mut proto = None;
+                    if other_target && !converts_first {
+                        proto = self.prototype_of_new_target(&new_target)?;
+                    }
+                    if other_target && f.as_object() == Some(self.intrinsics.object_ctor) {
+                        let proto = proto.unwrap_or(self.intrinsics.object_proto);
+                        self.reserve_heap(OBJECT_BYTES)?;
+                        let obj = self.heap.alloc_object(Object::new(Class::Ordinary, Some(proto)));
+                        return Ok(Prepared::Done(Value::Object(obj)));
+                    }
+                    let held = self.held_bytes;
+                    let r = native(self, Value::Undefined, &args, true);
+                    self.held_bytes = held;
+                    let v = r?;
+                    if converts_first {
+                        // The new object stays reachable while `prototype` is read.
+                        self.temp_roots.push(v.clone());
+                        proto = self.prototype_of_new_target(&new_target)?;
+                    }
+                    if let (Some(p), Value::Object(o)) = (proto, &v)
+                        && !self.is_proxy(*o)
+                        && !args.iter().any(|a| same_value(a, &v))
+                        && let Some(obj) = self.heap.object_mut(*o)
+                    {
+                        obj.proto = Some(p);
+                    }
+                    return Ok(Prepared::Done(v));
+                }
+                _ => return Err(self.type_error("the value is not a constructor")),
+            }
+        }
+    }
+
+    /// The `prototype` of `newTarget` when it is an object, kept reachable in `temp_roots`
+    /// (ECMA-262 2020 section 9.1.14).
+    fn prototype_of_new_target(&mut self, new_target: &Value) -> JsResult<Option<ObjId>> {
+        Ok(match self.get_value(new_target, &key("prototype"))? {
+            Value::Object(p) => {
+                self.temp_roots.push(Value::Object(p));
+                Some(p)
+            }
+            _ => None,
+        })
+    }
+
+    /// Construct (ECMA-262 2020 section 7.3.13) from Rust: runs a constructor written in
+    /// JavaScript to its end.
+    pub(crate) fn construct(&mut self, f: &Value, args: &[Value], new_target: &Value) -> JsResult<Value> {
+        if self.reentry >= self.limits.reentry {
+            return Err(Abrupt::Limit(LimitKind::Reentry));
+        }
+        self.reentry += 1;
+        let r = match self.prepare_construct(f.clone(), args.to_vec(), new_target.clone()) {
+            Ok(Prepared::Done(v)) => Ok(v),
+            Ok(Prepared::Closure(entry)) => {
+                let obj = entry.this.as_object();
+                self.enter_function(entry, obj, true).and_then(|()| self.execute())
+            }
+            Err(e) => Err(e),
+        };
+        self.reentry -= 1;
+        r
     }
 
     /// Pushes a frame for a call to a function written in JavaScript, its operands already off
@@ -3408,7 +3753,9 @@ impl Interp {
     ///
     /// Gives the environment the code runs in: `env`, or with [`Options::es2015`] eval code's own
     /// environment of its `let` and `const` names. A script's `let` and `const` names go in the
-    /// global scope ([`Self::declare_global_lexical`]).
+    /// global scope ([`Self::declare_global_lexical`]). Eval code outside strict mode code is
+    /// checked against the `let` and `const` names around it ([`Self::check_eval_vars`]) with the
+    /// option on or off, so it also meets the names that earlier runs of a kept realm declared.
     fn instantiate_global(&mut self, code: &Rc<Code>, env: EnvId, var_env: EnvId, is_eval: bool) -> JsResult<EnvId> {
         // Strict eval code's own environment is in no frame yet, so it is a root while the
         // declarations reserve heap.
@@ -3422,9 +3769,9 @@ impl Interp {
     /// [`Self::instantiate_global`] with `env` and `var_env` in [`Self::temp_envs`].
     fn instantiate_global_rooted(&mut self, code: &Rc<Code>, env: EnvId, var_env: EnvId, is_eval: bool) -> JsResult<EnvId> {
         let configurable = if is_eval { CONFIGURABLE } else { 0 };
-        if is_eval && !code.strict && self.options.es2015 {
+        if is_eval && !code.strict {
             self.check_eval_vars(code, env, var_env)?;
-            if var_env == self.global_env {
+            if self.options.es2015 && var_env == self.global_env {
                 self.check_global_functions(code)?;
                 self.check_global_vars(code)?;
             }
@@ -3460,7 +3807,13 @@ impl Interp {
             self.use_fuel()?;
             let Some(fcode) = code.functions.get(*fi as usize).cloned() else { return internal("function out of range") };
             let f = self.make_closure(fcode, scope)?;
-            self.declare(var_env, name, Some(Value::Object(f)), configurable)?;
+            // Declaring it can run a proxy's traps on the global object's prototype chain, and
+            // their script can collect, so the new function is a root until it is declared.
+            let mark = self.temp_roots.len();
+            self.temp_roots.push(Value::Object(f));
+            let declared = self.declare(var_env, name, Some(Value::Object(f)), configurable);
+            self.temp_roots.truncate(mark);
+            declared?;
             if on_global {
                 self.global_vars.insert(name.clone());
             }
@@ -3854,17 +4207,34 @@ impl Interp {
             return Err(self.type_error("the function's prototype is not an object"));
         };
         let mut steps = 0usize;
-        while let Some(p) = self.object(o)?.proto {
+        // A proxy's `getPrototypeOf` trap can give an object nothing else refers to, so the object
+        // being read stays rooted, as does the prototype compared with.
+        let slot = self.temp_roots.len();
+        self.temp_roots.push(Value::Object(proto));
+        self.temp_roots.push(Value::Object(o));
+        // Past a proxy the chain can be a cycle, which the fuel each trap takes ends.
+        let mut proxied = false;
+        let r = loop {
+            proxied |= self.is_proxy(o);
+            let next = match self.get_prototype_of(o) {
+                Ok(next) => next,
+                Err(e) => break Err(e),
+            };
+            let Some(p) = next else { break Ok(false) };
             if p == proto {
-                return Ok(true);
+                break Ok(true);
             }
             o = p;
-            steps += 1;
-            if steps > 1_000_000 {
-                return internal("prototype chain too long");
+            if let Some(root) = self.temp_roots.get_mut(slot + 1) {
+                *root = Value::Object(o);
             }
-        }
-        Ok(false)
+            steps += 1;
+            if steps > 1_000_000 && !proxied {
+                break internal("prototype chain too long");
+            }
+        };
+        self.temp_roots.truncate(slot);
+        r
     }
 
     // ---- host values ----
@@ -3904,7 +4274,7 @@ impl Interp {
     /// the text of a primitive.
     pub(crate) fn describe(&mut self, v: &Value) -> String {
         let Value::Object(o) = v else { return self.primitive_to_str(v).to_rust_string() };
-        let data = |interp: &Self, k: &str| match interp.find_property(*o, &key(k)) {
+        let data = |interp: &Self, k: &str| match interp.find_ordinary_property(*o, &key(k)) {
             Ok(Some(Prop::Data { value: Value::String(s), .. })) => Some(s.to_rust_string()),
             _ => None,
         };
@@ -3921,6 +4291,24 @@ impl Interp {
 pub(crate) enum CompileError {
     Syntax(crate::SyntaxError),
     Internal(String),
+}
+
+/// What [`Interp::lookup`] found for a name on a prototype chain.
+pub(crate) enum Lookup {
+    /// The property, on an object before any proxy.
+    Found(Prop),
+    /// A proxy, before the property was found: the rest of the search is the proxy's to answer.
+    Proxy(ObjId),
+    /// No object on the chain has the property.
+    Missing,
+}
+
+/// What a proxy's [[Call]] or [[Construct]] did.
+pub(crate) enum ProxyCall {
+    /// The proxy has no trap for it: the target is called or constructed instead.
+    Target(ObjId),
+    /// The trap ran and gave this value.
+    Done(Value),
 }
 
 /// A property descriptor (section 8.10): each field is `None` when it is absent. `get` and `set`
@@ -3956,7 +4344,7 @@ impl Desc {
     }
 
     /// The attribute flags the descriptor gives, each absent one taken from `default`.
-    fn flags_or(&self, default: u8) -> u8 {
+    pub(crate) fn flags_or(&self, default: u8) -> u8 {
         let pick = |field: Option<bool>, bit: u8| match field {
             Some(true) => bit,
             Some(false) => 0,
@@ -3976,7 +4364,7 @@ pub(crate) fn same_value(a: &Value, b: &Value) -> bool {
 
 /// Steps 5 to 12 of [[DefineOwnProperty]] (section 8.12.9) for an existing property: the
 /// property after `desc` is applied, or `None` when the change is not allowed.
-fn merge_desc(current: &Prop, desc: &Desc) -> Option<Prop> {
+pub(crate) fn merge_desc(current: &Prop, desc: &Desc) -> Option<Prop> {
     let flags = current.flags();
     let configurable = flags & CONFIGURABLE != 0;
     if !configurable {

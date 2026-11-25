@@ -56,7 +56,9 @@
 //! `new` (sections 12.2.5 and 12.3.6.1). Spread reads arrays by index, reading the length again
 //! before each element, strings and `String` objects by code point, and objects with a `length` by
 //! index; other values are a `TypeError`. Destructuring, `for … of`, classes,
-//! generators and modules stay syntax errors.
+//! generators and modules stay syntax errors. A realm made with the option also has `Proxy`, with
+//! `Proxy.revocable`, and `Reflect`, as ECMAScript 2020 defines them (sections 26.1 and 26.2 and
+//! 9.5, <https://262.ecma-international.org/11.0/>), with string property names.
 #![forbid(unsafe_code)]
 
 pub mod ast;
@@ -74,6 +76,7 @@ mod lexer;
 mod number;
 mod number_builtins;
 mod parser;
+mod proxy;
 mod realm;
 mod regexp;
 mod regexp_builtins;
@@ -117,6 +120,9 @@ pub struct Options {
     /// literals, calls and `new`, and from ECMAScript 2020 optional chains (`a?.b`, `a?.[k]`,
     /// `f?.()`) and `??`. Off, they are syntax errors and the language is ES5.1's. Code a
     /// script evaluates at run time (`eval`, `Function`) is read the way the realm reads scripts.
+    /// A realm made with it also has the globals `Proxy` and `Reflect`. A realm made without it
+    /// gets them at its first run with the option on, and keeps them when later runs turn it off.
+    /// A `Proxy` or `Reflect` global that an earlier run defined stays as it is.
     pub es2015: bool,
 }
 
@@ -230,6 +236,8 @@ mod extension_tests;
 mod host_tests;
 #[cfg(test)]
 mod interp_tests;
+#[cfg(test)]
+mod proxy_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

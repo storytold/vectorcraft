@@ -265,6 +265,9 @@ impl Interp {
                 }
                 Shape::Plain(o.props.iter().filter(|(_, p)| p.enumerable()).map(|(k, p)| (k.clone(), p.clone())).collect())
             }
+            // A host reads plain data without running script, so a proxy, whose traps are script,
+            // is refused, as is any other object that is not plain data.
+            Class::Proxy(_) => return Err(self.data_error(r, ErrorType::Type, "is a proxy, not plain data")),
             other => {
                 let what = format!("is a {}, not plain data", other.name());
                 return Err(self.data_error(r, ErrorType::Type, &what));

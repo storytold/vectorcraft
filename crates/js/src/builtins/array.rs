@@ -97,26 +97,32 @@ fn numeric_index(k: &[u16]) -> Option<u64> {
 }
 
 /// The objects of the prototype chain from `obj`, with how many properties (and String object
-/// indices) each holds.
-fn chain(interp: &Interp, obj: ObjId) -> Vec<(ObjId, usize)> {
+/// indices) each holds, or `None` when a proxy is on the chain: its traps decide which indices it
+/// has, so every index is visited.
+fn chain(interp: &Interp, obj: ObjId) -> Option<Vec<(ObjId, usize)>> {
     let mut out = Vec::new();
     let mut cur = Some(obj);
     while let Some(id) = cur {
+        if interp.is_proxy(id) {
+            return None;
+        }
         let Some(o) = interp.heap.object(id) else { break };
         let string_len = if let Class::String(s) = &o.class { s.len() } else { 0 };
         out.push((id, o.props.len().saturating_add(string_len)));
         cur = o.proto;
     }
-    out
+    Some(out)
 }
 
 impl Indices {
     fn new(interp: &mut Interp, obj: ObjId, lo: u64, hi: u64, ascending: bool, maps: Vec<Map>) -> JsResult<Self> {
         let mut it = Indices { obj, lo, hi, ascending, maps, sparse: None };
-        if hi.saturating_sub(lo) > DENSE_SPAN {
-            let present: usize = chain(interp, obj).iter().map(|(_, n)| *n).fold(0, usize::saturating_add);
+        if hi.saturating_sub(lo) > DENSE_SPAN
+            && let Some(links) = chain(interp, obj)
+        {
+            let present: usize = links.iter().map(|(_, n)| *n).fold(0, usize::saturating_add);
             if hi - lo > (present as u64).saturating_mul(8) {
-                it.sparse = Some(it.gather(interp)?);
+                it.sparse = it.gather(interp)?;
             }
         }
         Ok(it)
@@ -130,12 +136,13 @@ impl Indices {
         Self::new(interp, obj, lo, hi, false, vec![Map::Shift(0)])
     }
 
-    /// Lists the indices left to visit from the properties of the object and its prototypes.
-    /// Each property takes a unit of fuel.
-    fn gather(&self, interp: &mut Interp) -> JsResult<Sparse> {
+    /// Lists the indices left to visit from the properties of the object and its prototypes, or
+    /// gives `None` when a proxy is on the chain. Each property takes a unit of fuel.
+    fn gather(&self, interp: &mut Interp) -> JsResult<Option<Sparse>> {
         let epoch = interp.heap.index_epoch;
         let mut list: Vec<u64> = Vec::new();
-        for (id, n) in chain(interp, self.obj) {
+        let Some(links) = chain(interp, self.obj) else { return Ok(None) };
+        for (id, n) in links {
             for _ in 0..n {
                 interp.use_fuel()?;
             }
@@ -164,7 +171,7 @@ impl Indices {
             list.sort_unstable_by(|a, b| b.cmp(a));
         }
         list.dedup();
-        Ok(Sparse { list, pos: 0, epoch })
+        Ok(Some(Sparse { list, pos: 0, epoch }))
     }
 
     /// The next index to visit; it takes a unit of fuel.
@@ -173,7 +180,7 @@ impl Indices {
             return Ok(None);
         }
         if self.sparse.as_ref().is_some_and(|s| s.epoch != interp.heap.index_epoch) {
-            self.sparse = Some(self.gather(interp)?);
+            self.sparse = self.gather(interp)?;
         }
         let k = match &mut self.sparse {
             None if self.ascending => self.lo,
@@ -244,10 +251,10 @@ fn array_ctor(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResul
     })
 }
 
-/// `Array.isArray` (section 15.4.3.2).
+/// `Array.isArray` (section 15.4.3.2). A proxy whose target is an array is one, and a revoked
+/// proxy is a `TypeError` (ECMA-262 2020 section 7.2.2).
 fn is_array(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
-    let a = arg(args, 0).as_object().and_then(|o| interp.heap.object(o)).is_some_and(|o| matches!(o.class, Class::Array { .. }));
-    Ok(Value::Bool(a))
+    interp.is_array(&arg(args, 0)).map(Value::Bool)
 }
 
 // ---- conversions ----
@@ -355,7 +362,8 @@ fn concat(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult
             let mut n = 0u64;
             for e in std::iter::once(Value::Object(o)).chain(args.iter().cloned()) {
                 interp.use_fuel()?;
-                let spread = e.as_object().filter(|&id| interp.heap.object(id).is_some_and(|x| matches!(x.class, Class::Array { .. })));
+                // A proxy whose target is an array is spread too (ECMA-262 2020 section 22.1.3.1.1).
+                let spread = if interp.is_array(&e)? { e.as_object() } else { None };
                 let Some(e) = spread else {
                     create_at(interp, a, n as f64, e)?;
                     n += 1;
