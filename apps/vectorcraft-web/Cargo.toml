@@ -27,7 +27,7 @@ log = { workspace = true }
 # `wgpu` pulls egui-wgpu's defaults: WebGPU plus the WebGL2 fallback.
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit"] }
 # The page command API (storytold/craft-libs#413): the request plumbing behind window.vectorcraft.
-craft-web-api = { git = "https://github.com/storytold/craft-libs", rev = "4bed21baaa41d2b47bef90879c04df521f6f6043", version = "0.1.0" }
+craft-web-api = { git = "https://github.com/storytold/craft-libs", rev = "5442cfb97f906330f49bc9f81fe13128448df4a2", version = "0.1.0" }
 
 wasm-bindgen = "0.2"
 serde_json = { workspace = true }
