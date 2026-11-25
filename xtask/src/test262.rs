@@ -4,7 +4,9 @@
 //! runs `vectorcraft-js`'s `test262` tests, which parse the ES5 parse subset, run the ES5
 //! `test/language` tests and the tests of the ES5 built-ins under `test/built-ins` and
 //! `test/annexB/built-ins` that need only the interpreter's built-ins, run the `test/built-ins`
-//! tests for `String`, `Number`, `RegExp` and `Date`, and print each one's counts.
+//! tests for `String`, `Number`, `RegExp` and `Date`, parse and run the `test/annexB/language`
+//! tests and run the other `test/annexB/built-ins` tests (`String`, `Date`, `RegExp` and
+//! `Function`), and print each one's counts.
 //!
 //! It also fetches `json2.js`, Douglas Crockford's public-domain JSON polyfill
 //! (https://github.com/douglascrockford/JSON-js), at a pinned commit, checks it against its SHA-256

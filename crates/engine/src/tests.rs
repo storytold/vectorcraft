@@ -3493,6 +3493,65 @@ fn flare_counts_are_whole_numbers() {
     assert!(s.execute("shape.flare", &json!({"cx": 100, "cy": 100, "rays": 2.5})).is_err());
 }
 
+/// `shape.flare` given only one of `x2` and `y2`, the other left out or null, refuses the call
+/// naming the missing one, draws nothing and adds no undo step.
+#[test]
+fn flare_requires_both_endpoint_coordinates() {
+    let mut s = session();
+    let state = |s: &Session| {
+        let st = s.doc().unwrap();
+        (st.doc.node_count(), st.history.undo.len(), st.history.redo.len())
+    };
+    let before = state(&s);
+    for (p, key) in [
+        (json!({"cx": 100, "cy": 100, "x2": 300}), "y2"),
+        (json!({"cx": 100, "cy": 100, "x2": 300, "y2": null}), "y2"),
+        (json!({"cx": 100, "cy": 100, "y2": 300}), "x2"),
+        (json!({"cx": 100, "cy": 100, "x2": null, "y2": 300}), "x2"),
+    ] {
+        let err = s.execute("shape.flare", &p).expect_err(&p.to_string()).to_string();
+        assert_eq!(err, format!("invalid parameters for `shape.flare`: missing number `{key}`"), "{p}");
+        assert_eq!(state(&s), before, "{p}");
+    }
+}
+
+/// `shape.flare` with neither `x2` nor `y2` (left out or null) places the rings' end point from
+/// `pathLength` and `direction`; with both it uses them.
+#[test]
+fn flare_omitted_or_null_endpoint_coordinates_use_path_fallback() {
+    let mut s = session();
+    let mut end = |p: serde_json::Value| {
+        let id = NodeId(s.execute("shape.flare", &p).unwrap()["id"].as_u64().unwrap());
+        let spec = flare_settings(&s.doc().unwrap().doc, id).expect("a flare");
+        Point::new(spec.params["x2"].as_f64().unwrap(), spec.params["y2"].as_f64().unwrap())
+    };
+    for p in [
+        json!({"cx": 100, "cy": 100, "pathLength": 200, "direction": 0}),
+        json!({"cx": 100, "cy": 100, "pathLength": 200, "direction": 0, "x2": null}),
+        json!({"cx": 100, "cy": 100, "pathLength": 200, "direction": 0, "y2": null}),
+        json!({"cx": 100, "cy": 100, "pathLength": 200, "direction": 0, "x2": null, "y2": null}),
+    ] {
+        let e = end(p.clone());
+        assert!((e.x - 300.0).abs() < 1e-9 && (e.y - 100.0).abs() < 1e-9, "{p}: {e:?}");
+    }
+    assert_eq!(end(json!({"cx": 100, "cy": 100, "pathLength": 200, "direction": 0, "x2": 40, "y2": 70})), Point::new(40.0, 70.0));
+}
+
+/// Settings a file holds with only one of `x2` and `y2` are not a flare's: the group stays as art,
+/// but is not a flare that can be edited.
+#[test]
+fn flare_settings_with_a_lone_endpoint_coordinate_are_not_a_flare() {
+    let mut s = session();
+    let id = NodeId(s.execute("shape.flare", &json!({"cx": 100, "cy": 100, "rings": 2})).unwrap()["id"].as_u64().unwrap());
+    let mut d = (*s.doc().unwrap().doc).clone();
+    assert!(flare_settings(&d, id).is_some());
+    let mut extras = d.node_mut(id).unwrap().extras_mut();
+    let spec = extras.flare.as_deref_mut().expect("flare settings");
+    spec.params.as_object_mut().unwrap().remove("y2");
+    drop(extras);
+    assert!(flare_settings(&d, id).is_none());
+}
+
 /// `shape.editFlare` on a flare scaled far down: a `pathLength`, an end point or a center that,
 /// taken back to where the flare was drawn, is not a finite number is an error, and the flare keeps
 /// its settings.

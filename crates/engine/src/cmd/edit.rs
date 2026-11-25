@@ -1556,7 +1556,7 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
     let (ids, imported, artboards, into) = s.edit(mode.label(), |d, sel| {
         // Converted colors are compared with the document's resources, as another document's are
         // (`Clipboard::import_into`); its images are still the document's own.
-        let imported = clip.import_into(d, choices, same_doc)?;
+        let mut imported = clip.import_into(d, choices, same_doc)?;
         // Draw Inside: the clip group of the object drawn into, made on the first paste.
         let into = inside.map(|t| super::create::draw_inside_group(d, t)).transpose()?;
         let artboards: Vec<usize> = boards
@@ -1574,7 +1574,7 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
                 let mut c = d.reid(n);
                 // A pasted symbol set packs from the density recorded for it at Copy.
                 d.carry_set_densities(n, &c, &clip.set_densities);
-                imported.apply(&mut c);
+                imported.apply(&mut c, d);
                 let sc = vectorcraft_doc::Scaling { patterns: mode == PasteMode::Drag, ..Default::default() };
                 if xf != Affine::IDENTITY {
                     // A cross-document drag carries the graphic's appearance with it,
@@ -1702,6 +1702,7 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         "added": imported.added,
         "merged": imported.merged,
         "renamed": imported.renamed,
+        "warnings": imported.warnings,
     }))
 }
 
@@ -1832,7 +1833,19 @@ fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {
 /// Duplicate `roots` directly above each original, transform the copies, select them
 /// ([`copy_above`]).
 pub(crate) fn duplicate_in(d: &mut Document, sel: &mut vectorcraft_doc::Selection, roots: &[NodeId], xf: Affine) -> Result<Vec<NodeId>> {
-    let out = copy_above(d, roots, |_, _, c| {
+    duplicate_beside(d, sel, roots, xf, false)
+}
+
+/// [`duplicate_in`], with each copy directly below its original when `below` is true
+/// ([`copy_beside`]).
+pub(crate) fn duplicate_beside(
+    d: &mut Document,
+    sel: &mut vectorcraft_doc::Selection,
+    roots: &[NodeId],
+    xf: Affine,
+    below: bool,
+) -> Result<Vec<NodeId>> {
+    let out = copy_beside(d, roots, below, |_, _, c| {
         c.transform(xf, true);
         super::object::keep_pixel_aligned(c, true.into());
     })?;
@@ -1845,20 +1858,42 @@ pub(crate) fn duplicate_in(d: &mut Document, sel: &mut vectorcraft_doc::Selectio
 /// tree as it is. The copies take new ids in the order of `roots`. Roots listed twice, or inside
 /// another root, are copied one at a time: each copy is made from the document as the copies
 /// before it left it. Copied type whose layout caches [`Document::reid`] dropped has them again.
-pub(crate) fn copy_above(d: &mut Document, roots: &[NodeId], mut change: impl FnMut(&mut Document, &Node, &mut Node)) -> Result<Vec<NodeId>> {
+pub(crate) fn copy_above(d: &mut Document, roots: &[NodeId], change: impl FnMut(&mut Document, &Node, &mut Node)) -> Result<Vec<NodeId>> {
+    copy_beside(d, roots, false, change)
+}
+
+/// [`copy_above`], with each copy directly below its original, in the same parent, when `below`
+/// is true. The clipping path of a clip group or a clipping layer stays the bottom child: its copy
+/// goes directly above it.
+pub(crate) fn copy_beside(
+    d: &mut Document,
+    roots: &[NodeId],
+    below: bool,
+    mut change: impl FnMut(&mut Document, &Node, &mut Node),
+) -> Result<Vec<NodeId>> {
     let paths = d.index_paths(roots.iter().copied());
     let mut found: Vec<_> = roots.iter().filter_map(|id| paths.get(id)).collect();
     found.sort_unstable();
+    // The bottom child of a parent that clips is its clipping path.
+    let clips_at = |d: &Document, up: &[usize], i: usize| i == 0 && !up.is_empty() && d.node_at(up).is_some_and(Node::clips);
     let out = if found.windows(2).all(|w| !w[1].starts_with(w[0])) {
-        let mut copies = Vec::with_capacity(roots.len());
+        let (mut copies, mut above) = (Vec::with_capacity(roots.len()), vec![]);
+        let mut out = Vec::with_capacity(roots.len());
         for id in roots {
-            let Some(n) = paths.get(id).and_then(|p| d.node_at(p)).cloned() else { continue };
+            let Some(p) = paths.get(id) else { continue };
+            let Some(n) = d.node_at(p).cloned() else { continue };
             let mut c = d.reid(&n);
             change(d, &n, &mut c);
-            copies.push((*id, vec![c]));
+            out.push(c.id);
+            let on_floor = below && p.split_last().is_some_and(|(i, up)| clips_at(d, up, *i));
+            if !below || on_floor { above.push((*id, vec![c])) } else { copies.push((*id, vec![c])) }
         }
-        let out: Vec<NodeId> = copies.iter().flat_map(|(_, c)| c.iter().map(|n| n.id)).collect();
-        d.insert_beside(copies, false)?;
+        if !copies.is_empty() {
+            d.insert_below(copies)?;
+        }
+        if !above.is_empty() {
+            d.insert_beside(above, false)?;
+        }
         out
     } else {
         let mut out = vec![];
@@ -1867,7 +1902,8 @@ pub(crate) fn copy_above(d: &mut Document, roots: &[NodeId], mut change: impl Fn
             let Some(n) = d.node(*id).cloned() else { continue };
             let mut c = d.reid(&n);
             change(d, &n, &mut c);
-            out.push(d.insert(par, idx + 1, c)?);
+            let floor = usize::from(par.and_then(|p| d.node(p)).is_some_and(Node::clips));
+            out.push(d.insert(par, if below { idx.max(floor) } else { idx + 1 }, c)?);
         }
         out
     };

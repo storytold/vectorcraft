@@ -481,6 +481,23 @@ impl Renderer {
 
     /// What [`Self::draw_object_fx`] draws inside the object's transparency group.
     fn draw_object_fx_art(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>, cache: bool) {
+        // A placed document whose effects make no art of their own (raster effects and color
+        // adjustments, which Outline mode does not draw) shows its box crossed as without effects
+        // ([`Self::draw_placed`]). Effects that change geometry (plug-in effects among them,
+        // [`effects::is_geometry`]), 3D and Pathfinder make art from
+        // the file's art, which is drawn; Crop Marks and Vector Halftone draw the placed document
+        // itself among their art.
+        if let NodeKind::PlacedDocument(p) = &a.kind
+            && self.crosses_placed(f)
+            && !effects::has_geometry(&a.appearance.effects)
+            && !effects::has_revolve(a)
+            && !effects::has_solid(a)
+            && !effects::has_pathfinder(a)
+            && !effects::has_crop_marks(a)
+            && !effects::addons::halftone::has_halftone(a)
+        {
+            return self.draw_crossed_placed(ctx, f, p);
+        }
         if !self.charge_fx_instance(f.symbols, a) {
             return;
         }
