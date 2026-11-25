@@ -78,6 +78,14 @@ impl FileAsks {
     pub(crate) fn asking(&self) -> bool {
         !self.waiting.is_empty() || !self.replacing.is_empty()
     }
+
+    /// Whether the newest open replace question goes on confined to automation roots, and whether
+    /// as automation.
+    #[cfg(test)]
+    pub(crate) fn replace_access(&self) -> Option<(bool, bool)> {
+        let r = self.replacing.last()?;
+        Some((r.scope.clone().run(vectorcraft_engine::file_access::current).is_some(), r.automated))
+    }
 }
 
 // PLAN: callers use the function form of `BUSY` and `CLOSED`; `tl!` is a runtime lookup, so they are not consts.

@@ -302,6 +302,31 @@ fn a_replaced_extension_asks_before_replacing_a_file_there() {
     }
 }
 
+/// A save that automation confined to a folder started: its panel answers in a later frame, outside
+/// the request, and the question before replacing a file the panel did not ask about goes on under
+/// that folder and as automation.
+#[test]
+fn a_replace_question_after_a_save_panel_goes_on_under_the_access_of_the_request() {
+    let (mut app, picker, w) = saving_app();
+    let inside = vectorcraft_testkit::TempDir::new("save-replace-scope");
+    let typed = inside.join("card.png").to_string_lossy().into_owned();
+    let there = inside.join("card.vectorcraft").to_string_lossy().into_owned();
+    let t = there.clone();
+    app.services.exists = Some(Arc::new(move |p: &str| p == t));
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[inside.as_path()], &[inside.as_path()]).unwrap();
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+        crate::file_asks::as_automated(&mut app, true, |app| {
+            let _ = app.run("file.save", json!({}));
+        })
+    });
+    picker.answer_saved(&typed, None);
+    poll(&mut app);
+    assert_eq!(replace_asked(&app).as_deref(), Some("card.vectorcraft"));
+    assert_eq!(app.file_asks.replace_access(), Some((true, true)), "(confined, as automation)");
+    answer_replace(&mut app, true);
+    assert_eq!(*w.borrow(), [there]);
+}
+
 /// Save As to the type picked asks for that format's options: the .ai options (Version first),
 /// not VectorCraft's.
 #[test]

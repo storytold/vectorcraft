@@ -42,6 +42,9 @@ struct SaveDone {
     retry: Option<super::read_only_save::Retry>,
     /// The changed-on-disk question, while it is open.
     question: Option<DialogId>,
+    /// The file-access scope and automation flag of the request that started the save: the steps
+    /// [`pump`] runs once the flow answers run under them, not under the desktop's access of that frame.
+    asked: (ScopeHandle, bool),
     then: Option<Done>,
 }
 
@@ -136,8 +139,14 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
             app.saves.watch.forget(&uid);
             continue;
         }
-        let Some(step) = next_step(app, uid) else { continue };
-        if let Err(e) = run_step(app, uid, step)
+        let (scope, automated) = app.saves.done.get(&uid).map_or_else(|| (ScopeHandle::capture(), app.automation_asked()), |d| d.asked.clone());
+        let r = scope.run(|| {
+            file_asks::as_automated(app, automated, |app| {
+                let step = next_step(app, uid)?;
+                Some(run_step(app, uid, step))
+            })
+        });
+        if let Some(Err(e)) = r
             && e != "cancelled"
         {
             app.status(e);
@@ -279,6 +288,7 @@ fn start_flow(app: &mut VectorcraftApp, first: &SavePlan, s: Start<'_>) -> Resul
         retrying: s.retrying,
         retry: s.retry,
         question: None,
+        asked: (ScopeHandle::capture(), app.automation_asked()),
         then,
     };
     app.saves.done.insert(uid, done);
