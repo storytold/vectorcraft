@@ -182,6 +182,7 @@ mod script_include;
 mod script_io;
 mod script_run;
 mod scripts;
+mod segment_nudge;
 mod select_effects;
 mod select_ids_first;
 mod shaper;
