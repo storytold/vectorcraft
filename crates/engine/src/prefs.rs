@@ -55,6 +55,15 @@ pub struct Prefs {
     /// re-mapped by the turn, scale and move that take its old ends to its new ends. Off (the
     /// default), the handles of a moved anchor move with it and the other handles stay.
     pub interpolate_control_points: bool,
+    /// General › Delete Removes Anchor Points and Keeps Paths Joined: the default of the
+    /// `keepJoined` param of `edit.clear` (the Delete and Backspace keys and Edit › Clear). On,
+    /// Clear removes the direct-selected anchors of a path as Remove Anchor Points does, refitting
+    /// the curve around each one, instead of deleting them with their segments. Off (the default),
+    /// Clear opens the path there.
+    pub delete_keeps_paths_joined: bool,
+    /// General › Double-Click Adds Anchor Points: on, a plain double-click on a path segment with
+    /// Direct Selection adds an anchor there. Off (the default), the double-click adds nothing.
+    pub double_click_adds_anchor_points: bool,
     pub use_precise_cursors: bool,
     pub show_tool_tips: bool,
     /// General › Show Tool Cards: with tool tips on, a tool button's tool tip is a card with what the
@@ -283,6 +292,10 @@ pub struct Prefs {
     pub recovery_off_for_complex: bool,
     pub recent_files_count: u32,
     pub low_res_proxy_eps: bool,
+    /// File Handling › Use fonts embedded in imported PDFs: type in a font a PDF embeds and this
+    /// machine lacks is drawn in the file's own glyphs (on by default); off, it is set in the
+    /// fallback font with the missing-font warning (#4568).
+    pub pdf_import_embedded_fonts: bool,
     pub anti_aliased_bitmaps: bool,
     pub update_links: String,
     /// PDF Text: what the text of a PDF, `.ai` or `.ait` file opened or placed from the app
@@ -448,6 +461,17 @@ pub const KEY_HOLD_DELAY: f64 = 0.35;
 pub const KEY_HOLD_DELAY_RANGE: (f64, f64) = (0.2, 1.0);
 
 impl Prefs {
+    /// The `document.open` / place params `p` with `embeddedFonts: false` added when Preferences
+    /// › File Handling › Use fonts embedded in imported PDFs is off and `p` gives no choice of its own.
+    pub fn with_pdf_font_choice(&self, p: &serde_json::Value) -> serde_json::Value {
+        if self.pdf_import_embedded_fonts || p.get("embeddedFonts").is_some_and(|v| !v.is_null()) {
+            return p.clone();
+        }
+        let mut out = if p.is_object() { p.clone() } else { serde_json::json!({}) };
+        out["embeddedFonts"] = serde_json::json!(false);
+        out
+    }
+
     /// The Hold Shortcut Delay in seconds, inside its range. A restored settings file is not
     /// checked against the range, so a value outside it is brought inside, and one that is not a
     /// number gives the default.
@@ -466,6 +490,8 @@ impl Default for Prefs {
             corner_radius: 12.0,
             disable_auto_add_delete: false,
             interpolate_control_points: false,
+            delete_keeps_paths_joined: false,
+            double_click_adds_anchor_points: false,
             use_precise_cursors: false,
             show_tool_tips: true,
             show_tool_cards: false,
@@ -594,6 +620,7 @@ impl Default for Prefs {
             recovery_off_for_complex: false,
             recent_files_count: 20,
             low_res_proxy_eps: false,
+            pdf_import_embedded_fonts: true,
             anti_aliased_bitmaps: false,
             update_links: s("askWhenModified"),
             pdf_text_as: s("text"),

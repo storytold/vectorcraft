@@ -231,7 +231,7 @@ fn persp_edit(
         let d = &s.doc()?.doc;
         fallback.filter(|_| ids.iter().any(|id| g.attachment_of(d, *id).is_none()))
     };
-    let kept = if copy && !stores_attachments(&s.doc()?.doc) { crate::cmd::object::preview_copies(s, ids, false)? } else { None };
+    let kept = if copy && !stores_attachments(&s.doc()?.doc) { crate::cmd::object::preview_copies(s, ids, false, false)? } else { None };
     let edited = s.edit(label, |d, sel| {
         g.adopt_stored_attachments(d);
         let targets = match &kept {
@@ -502,7 +502,7 @@ pub(super) fn plane_move(s: &mut Session, p: &Value) -> Result<Value> {
     // lists attachments of its own (`stores_attachments`).
     let kept = if objects == "copy" && s.in_interaction() && !stores_attachments(&s.doc()?.doc) {
         let on = on_plane(&s.doc()?.doc);
-        crate::cmd::object::preview_copies(s, &on, false)?
+        crate::cmd::object::preview_copies(s, &on, false, false)?
     } else {
         None
     };

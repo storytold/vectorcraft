@@ -343,18 +343,27 @@ impl Document {
     /// tree order where `id` appears.
     pub fn index_path(&self, id: NodeId) -> Option<Vec<usize>> {
         crate::id_index::note_path_lookup();
+        // No cache yet: build it, and answer from it (an id it doesn't have is not in the tree; one
+        // that appears more than once is walked to, as below).
+        let Some(cached) = self.index.get() else {
+            let fresh = self.index.rebuild(&self.layers);
+            return match fresh.get(&id) {
+                Some(Some(p)) => Some(p),
+                _ if fresh.contains_key(&id) => self.walk_index_path(id),
+                _ => None,
+            };
+        };
         // The cached path, while the node there still has the id ([`id_index`]).
-        let cached = self.index.get();
-        match cached.as_ref().and_then(|m| m.get(&id)) {
+        match cached.get(&id) {
             Some(Some(p)) if self.node_at(&p).is_some_and(|n| n.id == id) => return Some(p),
             Some(None) => return self.walk_index_path(id),
             _ => {}
         }
-        // A stale path (the tree changed), an id the cache doesn't have (deleted or added since),
-        // or no cache yet: walk, and rebuild now and then.
+        // A stale path (the tree changed) or an id the cache doesn't have (deleted or added
+        // since): walk, and rebuild now and then.
         let found = self.walk_index_path(id);
-        let stale = cached.as_ref().is_some_and(|m| m.contains_key(&id));
-        if cached.is_none() || ((stale || found.is_some()) && self.index.missed()) {
+        let stale = cached.contains_key(&id);
+        if (stale || found.is_some()) && self.index.missed() {
             self.index.rebuild(&self.layers);
         }
         found
@@ -551,13 +560,19 @@ impl Document {
     }
 
     /// Insert `node` into `parent` at `index` (clamped; `usize::MAX` = top). In a layer, art goes
-    /// below the layer's ruler guides and a ruler guide among them ([`Node::insert_index`]).
+    /// below the layer's ruler guides and a ruler guide among them ([`Node::insert_index`]). A
+    /// node that is or holds a dimension (a pasted one) sets [`Document::dimensions`].
     pub fn insert(&mut self, parent: Option<NodeId>, index: usize, node: Node) -> Result<NodeId, DocError> {
+        fn holds_dimension(n: &Node) -> bool {
+            n.extras().dimension.is_some() || n.children().into_iter().flatten().any(|c| holds_dimension(c))
+        }
         let id = node.id;
         self.check_ruler_guide_place(&node, parent)?;
+        let dimension = !self.dimensions && holds_dimension(&node);
         let ch = self.children_mut(parent)?;
         let i = Node::insert_index(ch, index, &node);
         ch.insert(i, Arc::new(node));
+        self.dimensions |= dimension;
         Ok(id)
     }
 
@@ -612,10 +627,38 @@ impl Document {
     /// children of each parent. Each id is listed once and none lies inside another listed node, as
     /// in a list of top-level objects. For an id that is not in the tree, is listed twice or lies
     /// inside another listed node, it fails with `NoNode` and leaves the document as it was.
+    ///
+    /// The lookup cache ([`id_index`]) is kept, with the listed nodes taken out of it, while it has
+    /// each listed node where it is, until the nodes removed since it was built are half its
+    /// entries; otherwise it is cleared.
     pub fn remove_many(&mut self, ids: &[NodeId]) -> Result<Vec<Arc<Node>>, DocError> {
         let places = self.places(ids)?;
+        // Each listed node's place in the cache's table, while the cache has it where it is.
+        let gone = self.index.get().and_then(|cache| {
+            let listed = places.iter().flat_map(|(up, kids)| kids.iter().map(move |&(i, k)| (up, i, k)));
+            listed
+                .map(|(up, i, k)| {
+                    let id = ids.get(k)?;
+                    let path = cache.get(id)??;
+                    (path.split_last() == Some((&i, up.as_slice()))).then(|| cache.table_place(id)).flatten()
+                })
+                .collect::<Option<Vec<_>>>()
+        });
         let removed = self.take(places, ids.len())?;
-        self.index.clear();
+        // The removed nodes, as the cache counts them (ruler guides included), up to `limit`.
+        let count = |limit: usize| {
+            let mut n = 0usize;
+            let mut each = |_: &Node| {
+                n += 1;
+                if n >= limit { std::ops::ControlFlow::Break(()) } else { std::ops::ControlFlow::Continue(()) }
+            };
+            let _ = removed.iter().try_for_each(|r| r.try_walk(&mut each));
+            n
+        };
+        match gone {
+            Some(gone) if !self.index.removed(count) => self.index.take_out(&gone),
+            _ => self.index.clear(),
+        }
         Ok(removed)
     }
 
@@ -654,6 +697,21 @@ impl Document {
             }
             let nodes = lists.get_mut(k).map(std::mem::take).unwrap_or_default();
             children.extend(nodes.into_iter().map(Arc::new));
+        })?;
+        self.index.clear();
+        Ok(())
+    }
+
+    /// Put each list of nodes in `items` directly below its anchor, in list order, in one pass over
+    /// the children of each parent. It fails as [`Document::insert_beside`] does.
+    pub fn insert_below(&mut self, items: Vec<(NodeId, Vec<Node>)>) -> Result<(), DocError> {
+        let anchors: Vec<NodeId> = items.iter().map(|(id, _)| *id).collect();
+        let places = self.places(&anchors)?;
+        let mut lists: Vec<Vec<Node>> = items.into_iter().map(|(_, nodes)| nodes).collect();
+        self.edit_children(places, |k, anchor, children| {
+            let nodes = lists.get_mut(k).map(std::mem::take).unwrap_or_default();
+            children.extend(nodes.into_iter().map(Arc::new));
+            children.push(anchor);
         })?;
         self.index.clear();
         Ok(())

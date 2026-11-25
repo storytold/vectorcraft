@@ -1,16 +1,14 @@
 //! Window › Arrange › Float in Window, Float All in Windows and Cascade: documents in floating
-//! windows of their own, out of the tab strip, until Consolidate All Windows. On the desktop each
-//! window is an OS window; on the web, on Wayland and wherever egui draws every viewport inside
-//! the main window, it is a window inside the app's window, as floating panels are
-//! ([`crate::panel_docking`]). The current document's window holds the canvas
-//! ([`crate::canvas::show`]); each other window draws its document as a Tile pane does
-//! ([`crate::canvas::pane`]), and a press in it makes its document the current one. In a window
-//! inside the app's window, a Selection drag released over that pane drops the dragged artwork into
-//! its document ([`crate::canvas::release_on_noted`]); an OS window's pane does not take it.
+//! windows of their own, out of the tab strip, until Consolidate All Windows. Each is a
+//! [`DocumentWindow`]: an OS window on the desktop, a window inside the app's window on the web, on
+//! Wayland and wherever the framework draws every viewport inside the main window. The current
+//! document's window holds the canvas ([`crate::canvas::show_document`]); each other window draws
+//! its document as a Tile pane does ([`crate::canvas::pane`]), and a press in it makes its
+//! document the current one.
 //!
-//! A document tab dragged off the tab strip floats its document in a window under the pointer,
-//! and a document window dragged onto the tab strip by its title bar (an OS window by the tab at
-//! its top) goes back under the tabs.
+//! A document tab dragged off the tab strip floats its document in a window under the pointer
+//! (`DocumentTabs` reports the tear-off), and a window's own tab dropped on the main strip puts it
+//! back under the tabs ([`crate::chrome`]).
 //!
 //! With Preferences › User Interface › Open Documents As Tabs cleared, each document opened or
 //! created afterwards opens in a floating window ([`opened`]).
@@ -18,9 +16,13 @@
 //! Each view of a document that Window › New Window opened ([`views`]) is a window of its own
 //! here: it has its own tab, pane or floating window.
 
+use craft::ui::contract::{Props as _, ShowContainer as _};
+use craft::ui::runtime::windows::WindowHost;
+use craft::ui::shell::DocumentWindow;
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
+use crate::canvas::{BodyKind, show_document};
 
 mod views;
 pub(crate) use views::{
@@ -28,15 +30,13 @@ pub(crate) use views::{
 };
 use views::{find, key, window_param};
 
-/// How far above or below the tab strip, in points, a dragged document tab must be released to
-/// float its document.
-pub(crate) const TEAR_OFF: f32 = 24.0;
 /// Where a torn-off document's window opens: this far up and left of the pointer, so the pointer
 /// is over its title bar.
 pub(crate) const GRAB: egui::Vec2 = egui::vec2(40.0, 12.0);
 /// How far apart Cascade sets the windows, down and to the right, in points.
 pub(crate) const CASCADE_STEP: f32 = 30.0;
-/// How far the first cascaded window is from the document area's top-left corner, in points.
+/// How far the first cascaded window sits from the document area's top-left corner, clear of the
+/// tab strip.
 const CASCADE_MARGIN: f32 = 24.0;
 /// The smallest size of a document window, in points.
 const MIN_SIZE: egui::Vec2 = egui::vec2(240.0, 180.0);
@@ -55,19 +55,8 @@ pub struct DocWindow {
     number: u32,
     /// Counts the moves Cascade gives the window after it opened.
     generation: u32,
-    /// The OS window's position on the screen when it opened or last moved, and the generation of
-    /// that move. Repeated each frame, so egui sees an unchanged window.
-    screen: Option<(egui::Pos2, u32)>,
     /// Its OS window had the keyboard focus in the last frame.
     focused: bool,
-    /// Where the last frame drew its document, in its window's coordinates.
-    pub(crate) body: Option<egui::Rect>,
-    /// The size of the body its document was last fitted to, and the zoom and center that fit
-    /// gave: a window resized while its view is still there fits its document again.
-    fit: Option<Fit>,
-    /// While its OS window's tab is dragged: where the pointer is from the window's top-left
-    /// corner, on the screen.
-    grab: Option<egui::Vec2>,
     /// The density of the display that shows its OS window ([`crate::services::screen_ppi_at`]),
     /// while the window is on a display the host listed; `None` before that, while it is on none
     /// of them, and inside the main window, where the window counts the main window's density.
@@ -78,26 +67,9 @@ pub struct DocWindow {
     was_read: bool,
 }
 
-/// [`DocWindow::fit`]: a body size, and a view's zoom and center.
-type Fit = (egui::Vec2, f64, vectorcraft_geom::Point);
-
 impl DocWindow {
     fn new((uid, view): (u64, u32), place: egui::Rect) -> Self {
-        Self {
-            uid,
-            view,
-            place,
-            number: 0,
-            generation: 0,
-            screen: None,
-            focused: false,
-            body: None,
-            fit: None,
-            grab: None,
-            ppi: None,
-            os: false,
-            was_read: false,
-        }
+        Self { uid, view, place, number: 0, generation: 0, focused: false, ppi: None, os: false, was_read: false }
     }
 }
 
@@ -151,18 +123,16 @@ pub struct Windows {
     current: Option<(u64, u32)>,
     /// While Presentation Mode is on: the floating windows ([`views::key`]) it has shown.
     presented: Option<Vec<(u64, u32)>>,
-    /// The main window's tab strip in its last frame, while it was drawn.
-    pub(crate) strip: Option<egui::Rect>,
     /// Counts the windows opened ([`DocWindow::number`]).
     opened: u32,
     /// The open documents (their uids) when [`opened`] last ran, or when the app started.
     known: Vec<u64>,
     /// The documents' views beyond the one each shows ([`views`]).
     pub(crate) views: Views,
-    /// The panes the last frame drew outside Tile that a Selection drag's artwork can be released
-    /// in ([`crate::canvas::note_drop`]): each window's view ([`views::key`]), the part of its pane
-    /// inside its rulers and scroll bars in the main window's points, and the layer it drew in.
-    pub(crate) drops: Vec<((u64, u32), egui::Rect, egui::LayerId)>,
+    /// The panes drawn outside Tile in this frame so far (the floating windows', the main window's while the current
+    /// window floats), back to front, with the art area each takes drops in; and those of the last frame.
+    pub(crate) noted: Vec<(Win, egui::Rect)>,
+    pub(crate) last_noted: Vec<(Win, egui::Rect)>,
     /// The main window's density and the floating windows' ([`floating_ppi`]) when the views were
     /// last settled each frame ([`VectorcraftApp::settle_screen_ppi_if_changed`]).
     pub(crate) settled: Option<(crate::ScreenPpi, Vec<FloatingPpi>)>,
@@ -179,11 +149,6 @@ impl Windows {
     pub(crate) fn new(known: Vec<u64>) -> Self {
         Self { known, ..Default::default() }
     }
-}
-
-/// Whether a document tab dragged from `strip` to `p` has left it far enough to float.
-pub(crate) fn torn_off(strip: egui::Rect, p: egui::Pos2) -> bool {
-    p.y > strip.bottom() + TEAR_OFF || p.y < strip.top() - TEAR_OFF
 }
 
 /// Whether window `w` is in a floating window.
@@ -239,19 +204,20 @@ fn presenting(app: &VectorcraftApp) -> bool {
     app.ui.screen_mode >= 3
 }
 
-/// The places Cascade gives `n` windows in `area`: each the same size, the first near the area's
-/// top-left corner and each next one [`CASCADE_STEP`] further down and to the right, starting
-/// again at the corner when the next one would leave the area. Every place lies inside `area`.
-pub(crate) fn cascade_places(area: egui::Rect, n: usize) -> Vec<egui::Rect> {
-    let size = (area.size() * 0.6).max(MIN_SIZE).min(area.size());
-    let room = (area.size() - size).min_elem().max(0.0);
-    let steps = if room > CASCADE_MARGIN { ((room - CASCADE_MARGIN) / CASCADE_STEP).floor() as usize + 1 } else { 1 };
-    (0..n)
-        .map(|k| {
-            let offset = (CASCADE_MARGIN + (k % steps) as f32 * CASCADE_STEP).min(room);
-            egui::Rect::from_min_size(area.min + egui::vec2(offset, offset), size)
-        })
-        .collect()
+/// The size of a document window in `area`.
+fn window_size(area: egui::Rect) -> egui::Vec2 {
+    (area.size() * 0.6).max(MIN_SIZE).min(area.size())
+}
+
+/// The places Cascade gives `n` windows in `area`: each the same size, stepped [`CASCADE_STEP`]
+/// down and to the right, starting again at the corner when the next would leave the area.
+fn cascade_windows(area: egui::Rect, n: usize) -> Vec<egui::Rect> {
+    // PLAN: needs `craft-behavior` in crates/ui-egui/Cargo.toml (not in this set's files)
+    let size = window_size(area);
+    // The margin shrinks where the area has no room for it.
+    let margin = CASCADE_MARGIN.min((area.size() - size).min_elem()).max(0.0);
+    let inside = egui::Rect::from_min_max(area.min + egui::Vec2::splat(margin), area.max);
+    craft::behavior::placement::cascade_rects(inside, size, n, CASCADE_STEP)
 }
 
 /// The document area windows open in: the main window's last one, else a 1200 × 800 area.
@@ -286,7 +252,7 @@ pub(crate) fn opened(app: &mut VectorcraftApp) {
 /// [`float`] for windows whose views exist.
 fn place(app: &mut VectorcraftApp, wins: &[Win]) {
     let first = app.ui.floating.len();
-    let places = cascade_places(area(app), first + wins.len());
+    let places = cascade_windows(area(app), first + wins.len());
     for (k, w) in wins.iter().enumerate() {
         let Some(key) = key(app, *w) else { continue };
         if floats(app, *w) {
@@ -374,7 +340,7 @@ pub(crate) fn cascade(app: &mut VectorcraftApp) -> Result<Value, String> {
     float(app, &docked);
     let order: Vec<(u64, u32)> = windows(app).into_iter().filter_map(|w| key(app, w)).collect();
     app.ui.floating.sort_by_key(|w| order.iter().position(|k| *k == (w.uid, w.view)));
-    let places = cascade_places(area(app), app.ui.floating.len());
+    let places = cascade_windows(area(app), app.ui.floating.len());
     for (w, place) in app.ui.floating.iter_mut().zip(places) {
         w.place = place;
         w.generation += 1;
@@ -396,69 +362,25 @@ pub(crate) fn dock_all(app: &mut VectorcraftApp) {
     app.ui.floating.clear();
 }
 
-/// Whether the floating windows are OS windows: egui runs viewports of their own, the session is
-/// not Wayland, where the main window cannot learn where its other windows are (craft-ui's docking
-/// floats panels by the same rule), and no control channel is attached. With a control channel the
-/// windows stay inside the main window, where `ui.click`, `ui.drag` and `ui.screenshot` reach them
-/// and `canvasRect` is in the main window's coordinates.
-pub(crate) fn native(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
-    if ctx.embed_viewports() || app.control_rx.is_some() {
-        return false;
-    }
-    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
-    {
-        let set = |name: &str| std::env::var_os(name).is_some_and(|v| !v.is_empty());
-        if set("WAYLAND_DISPLAY") || set("WAYLAND_SOCKET") {
-            // Under XWayland the main window reports where it is.
-            return ctx.input_for(egui::ViewportId::ROOT, |i| i.viewport().outer_rect.is_some());
-        }
-    }
-    true
-}
-
 /// Gives the main window the keyboard when a floating document's OS window has it.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn focus_main_window(app: &VectorcraftApp, ctx: &egui::Context) {
-    if native(app, ctx) && app.ui.floating.iter().any(|w| w.focused) {
+    if WindowHost::of(ctx).viewports_available() && app.ui.floating.iter().any(|w| w.focused) {
         ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Focus);
     }
 }
 
-/// The OS window of document window `w`.
-fn viewport_id(w: &DocWindow) -> egui::ViewportId {
-    egui::ViewportId::from_hash_of(("vectorcraft-document-window", w.uid, w.number))
+/// Draw the floating document windows, after the main window's canvas, then the drop catcher of the main window's
+/// pane, which waited for the current window's body. Call once per frame from the main window. Art released over a
+/// pane in the frame the pointer reached it drops there then.
+pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+    show_windows(app, ui);
+    crate::canvas::panes::catch_waiting(app, ui);
+    crate::canvas::panes::drop_released(app);
 }
 
-/// The id of document window `w` inside the main window: a new one for each window and each
-/// Cascade move, so egui opens it at its new place and size.
-fn window_id(w: &DocWindow) -> egui::Id {
-    egui::Id::unique(("vectorcraft-document-window", w.uid, w.number, w.generation))
-}
-
-/// What happened in a document window this frame.
-#[derive(Default)]
-struct Shown {
-    /// Its close button was pressed.
-    close: bool,
-    /// Its document asks to become the current one.
-    activate: bool,
-    /// It is being dragged over the main window's tab strip.
-    over_strip: bool,
-    /// It was dropped on the main window's tab strip: its document goes back under the tabs.
-    dock: bool,
-    /// Its OS window has the keyboard focus.
-    focused: bool,
-    /// Where it drew its document.
-    body: Option<egui::Rect>,
-    /// [`DocWindow::fit`] after this frame.
-    fit: Option<Fit>,
-    /// The density of the display that shows its OS window, when it was found on one.
-    ppi: Option<crate::ScreenPpi>,
-}
-
-/// Draw the floating document windows, after the main window's canvas. Call once per frame from
-/// the main window.
-pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
+/// [`show`]'s windows.
+fn show_windows(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let live: Vec<(u64, u32)> = windows(app).into_iter().filter_map(|w| key(app, w)).collect();
     app.ui.floating.retain(|w| live.contains(&(w.uid, w.view)));
     let current = current(app).and_then(|w| key(app, w));
@@ -476,7 +398,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             shown.push(k);
             if let Some(v) = app.session.active_index().and_then(|i| app.views.get_mut(i)) {
                 v.fitted = false;
-                ctx.request_repaint();
+                ui.ctx().request_repaint();
             }
         }
     } else if let Some(shown) = app.canvas.windows.presented.take() {
@@ -484,6 +406,8 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         for w in wins {
             if let Some(v) = view_mut(app, w) {
                 v.fitted = false;
+                // The area it last showed its art in is the main window's: it fits its window's.
+                v.rect = egui::Rect::NOTHING;
             }
         }
     }
@@ -497,78 +421,64 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         return;
     }
     let raise = current.filter(|u| app.canvas.windows.current != Some(*u));
-    let native = native(app, ctx);
-    // Windows inside the main window that come back (after Presentation Mode) all go to the front
-    // in their old order, so the raise waits for the next frame.
-    let returning = !native
-        && app.ui.floating.iter().any(|w| {
-            let layer = egui::LayerId::new(egui::Order::Middle, window_id(w));
-            ctx.memory(|m| m.area_rect(layer.id).is_some() && !m.areas().visible_last_frame(&layer))
-        });
-    if raise.is_some() && returning {
-        ctx.request_repaint();
+    app.canvas.windows.current = current;
+    let ctx = ui.ctx().clone();
+    let os_windows = WindowHost::of(&ctx).viewports_available();
+    // An OS window's place is in desktop points: the main window's own origin shifts it.
+    let origin = if os_windows {
+        ctx.input(|i| i.viewport().inner_rect.map(|r| r.min)).filter(|p| p.is_finite()).unwrap_or(egui::Pos2::ZERO).to_vec2()
     } else {
-        app.canvas.windows.current = current;
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    if native {
-        input::register(ctx, app.services.native_input_hook.clone(), app.ui.floating.iter().map(viewport_id).collect());
-    }
-    // While a dialog or other modal is open the windows take no input, as the main window behind
-    // it takes none: each draws its document as a pane, the current one included.
-    let blocked = crate::panel_docking::modal_open(app, ctx);
+        egui::Vec2::ZERO
+    };
     let mut close = None;
     let mut activate = None;
-    let mut dock = None;
-    let mut over_strip = false;
     for w in app.ui.floating.clone() {
         let Some(win) = find(app, (w.uid, w.view)) else { continue };
-        let raised = raise == Some((w.uid, w.view));
-        let mut shown = if native { os_window(app, ctx, &w, (win, blocked), raised) } else { app_window(app, ctx, &w, (win, blocked), raised) };
-        take_window_fit(app, ctx, ((w.uid, w.view), native), win, &mut shown);
-        if blocked {
-            continue;
-        }
+        let title = crate::chrome::document_window_title(app, win).unwrap_or_default();
         let is_current = views::current(app) == Some(win);
-        if let Some(x) = app.ui.floating.iter_mut().find(|x| x.uid == w.uid && x.view == w.view) {
-            // The OS window took the keyboard: its view becomes the current window.
-            if shown.focused && !x.focused && !is_current {
-                activate = Some(win);
+        let live = is_current && !crate::menus::home_showing(app);
+        let mut pressed = false;
+        let mut found = (None, None, false);
+        let window = DocumentWindow::new(title).id_salt((w.uid, w.number, w.generation)).first_placed(w.place.translate(origin));
+        let window = if raise == Some((w.uid, w.view)) { window.raise() } else { window };
+        let out = window.show(ui, |ui, _| {
+            // A press anywhere on the window, its title bar and tab included, makes its document current.
+            pressed = pressed_on_layer(ui);
+            crate::chrome::window_tab(app, ui, win);
+            let areas = [(win, ui.available_rect_before_wrap())];
+            let unfitted = crate::canvas::panes::refit_resized(app, &areas);
+            // The display that shows the window, the size of its body and whether its view fits it in this frame.
+            let ppi = if os_windows { crate::services::screen_ppi_at(&app.services.screens, ui.ctx()) } else { None };
+            found = (ppi, Some(areas[0].1.size()), unfitted.first().copied().unwrap_or(false));
+            if live {
+                // The canvas fills the area below the tab, as a pane's does.
+                let mut body = ui.new_child(egui::UiBuilder::new().max_rect(areas[0].1));
+                show_document(app, &mut body, win, BodyKind::Live);
+            } else {
+                pressed |= crate::canvas::pane(app, ui, win, areas[0].1);
             }
-            x.focused = shown.focused;
-            x.body = shown.body;
+            crate::canvas::panes::note_fits(app, &areas, &unfitted);
+        });
+        take_window_ppi(app, &ctx, ((w.uid, w.view), os_windows), win, found);
+        if let Some(x) = app.ui.floating.iter_mut().find(|x| x.uid == w.uid && x.view == w.view) {
+            x.focused = out.focused;
+            // A move or resize of the fallback layer is where the window opens from now on.
+            if let Some(placed) = out.placed {
+                x.place = placed.translate(-origin);
+            }
         }
-        over_strip |= shown.over_strip;
-        if shown.close {
+        if out.close_requested.is_some() {
             close = Some(win);
-        } else if shown.dock {
-            dock = Some(win);
-        } else if shown.activate && !is_current {
+        } else if (out.focus_gained || pressed) && !is_current && !app.any_dialog_open() {
             activate = Some(win);
         }
-    }
-    // After every canvas, which sets the cursor of the drag it holds.
-    crate::canvas::noted_cursor(app, ctx);
-    // The tab strip a dragged window would go back under shows where it lands.
-    if let Some(strip) = app.canvas.windows.strip.filter(|_| over_strip) {
-        let t = crate::theme::Tokens::get(ctx);
-        let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("vectorcraft-document-dock")));
-        painter.rect_filled(strip, 0.0, t.accent.gamma_multiply(0.12));
-        painter.rect_stroke(strip, 0.0, egui::Stroke::new(2.0, t.accent), egui::StrokeKind::Inside);
     }
     if let Some(win) = close {
         // The save prompt opens in the main window.
         if let Err(e) = close_window(app, win) {
             app.status(e);
         }
-        if native && app.ui.dialog.is_some() {
-            ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Focus);
-        }
-    } else if let Some((i, n)) = dock {
-        if let Err(e) = app.run("window.arrange.consolidateAllWindows", json!({ "index": i, "view": n })) {
-            app.status(e);
-        }
-        if native {
+        if os_windows && app.any_dialog_open() {
             ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Focus);
         }
     } else if let Some(win) = activate {
@@ -577,62 +487,23 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
 }
 
-/// Window `win`'s body in `ui`: the canvas for the current window, else (and while `blocked` by a
-/// modal) a pane. The view fits the body again when the body changed size since `fit` and the view
-/// has not moved. With `drops`, a pane drawn while no modal blocks it is noted as a place a Selection
-/// drag's artwork can be released in ([`crate::canvas::note_drop`]). → whether a press in the pane
-/// asks for its window to become the current one, the body's rect and the fit after this frame.
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, (win, blocked): (Win, bool), fit: Option<Fit>, drops: bool) -> (bool, egui::Rect, Option<Fit>) {
-    let t = crate::theme::Tokens::get(ui.ctx());
-    let rect = ui.available_rect_before_wrap();
-    ui.painter().rect_filled(rect, 0.0, t.pasteboard);
-    if let (Some(v), Some((size, zoom, center))) = (view_mut(app, win), fit)
-        && size != rect.size()
-        && zoom == v.zoom
-        && center == v.center
-    {
-        v.fitted = false;
-    }
-    let was_fitted = view(app, win).is_some_and(|v| v.fitted);
-    let pressed = if !blocked && views::current(app) == Some(win) && !crate::menus::home_showing(app) {
-        crate::canvas::show(app, ui);
-        false
-    } else {
-        let pressed = crate::canvas::pane(app, ui, win, rect);
-        if drops && !blocked {
-            crate::canvas::note_drop(app, ui, win, rect);
-        }
-        pressed
-    };
-    ui.advance_cursor_after_rect(rect);
-    let fit = match view(app, win) {
-        Some(v) if v.fitted && !was_fitted => Some((rect.size(), v.zoom, v.center)),
-        _ => fit,
-    };
-    (pressed, rect, fit)
-}
-
-/// Takes the density of the display that `shown`, floating window `key`'s window `win`, was found on
-/// ([`take_window_ppi`]), and keeps the fit `shown` holds after it as the window's fit, also while a
-/// modal blocks the window.
-fn take_window_fit(app: &mut VectorcraftApp, ctx: &egui::Context, ((uid, number), os): ((u64, u32), bool), win: Win, shown: &mut Shown) {
-    take_window_ppi(app, ctx, ((uid, number), os), win, shown);
-    if let Some(x) = app.ui.floating.iter_mut().find(|x| x.uid == uid && x.view == number) {
-        x.fit = shown.fit;
-    }
-}
-
-/// Takes the density of the display that `shown`, floating window `key`'s ([`views::key`]) window
-/// `win`, was found on, and whether it is an OS window of its own (`os`), and settles the views
-/// when the density changed ([`VectorcraftApp::settle_window_ppi`]). A view that still has the
-/// zoom its window fitted it to at the window's present size keeps that zoom, and keeps fitting
-/// the window.
-fn take_window_ppi(app: &mut VectorcraftApp, ctx: &egui::Context, ((uid, number), os): ((u64, u32), bool), win: Win, shown: &mut Shown) {
+/// Takes `ppi`, the density of the display that floating window `key`'s ([`views::key`]) window
+/// `win` was found on (`None` when it was found on none), whether it is an OS window of its own
+/// (`os`), the size of its body and whether its view fitted the body in this frame, and settles
+/// the window's view when the density changed ([`VectorcraftApp::settle_window_ppi`]). A view that
+/// still has the zoom its window fitted it to at the window's present size keeps that zoom at its
+/// first reading, and keeps fitting the window.
+fn take_window_ppi(
+    app: &mut VectorcraftApp,
+    ctx: &egui::Context,
+    ((uid, number), os): ((u64, u32), bool),
+    win: Win,
+    (ppi, size, fitted_now): (Option<crate::ScreenPpi>, Option<egui::Vec2>, bool),
+) {
     let Some(x) = app.ui.floating.iter_mut().find(|x| x.uid == uid && x.view == number) else { return };
     x.os = os;
     // Drawn inside the main window, it counts the main window's density.
     if !os {
-        shown.ppi = None;
         if x.ppi.take().is_some() {
             app.settle_window_ppi(win, true);
         }
@@ -640,217 +511,37 @@ fn take_window_ppi(app: &mut VectorcraftApp, ctx: &egui::Context, ((uid, number)
     }
     // Off every display the host listed (moved past their edges, or its display went), it is
     // unread: its view counts from the density it was shown at until a display is found again.
-    if shown.ppi.is_none() {
+    if ppi.is_none() {
         if x.ppi.take().is_some() {
             app.settle_window_ppi(win, true);
             ctx.request_repaint();
         }
         return;
     }
-    if x.ppi == shown.ppi {
+    if x.ppi == ppi {
         return;
     }
     // Its first reading, or a fit made this frame, is a baseline; a move from a display read
     // before keeps the zoom percentage.
     let first = !x.was_read;
-    let fitted_now = shown.fit.is_some() && shown.fit != x.fit;
-    x.ppi = shown.ppi;
-    x.was_read |= matches!(shown.ppi, Some(crate::ScreenPpi::Read(_)));
-    let size = shown.body.map(|b| b.size());
-    let following = view(app, win).is_some_and(|v| v.fitted && shown.fit.is_some_and(|(s, z, c)| Some(s) == size && z == v.zoom && c == v.center));
+    x.ppi = ppi;
+    x.was_read |= matches!(ppi, Some(crate::ScreenPpi::Read(_)));
+    let following = crate::canvas::panes::follows_fit(app, win, size);
     // A zoom set as a percentage (View › Zoom, Actual Size) is not a fit, and the first reading
     // keeps its percentage.
     let fit = following && view(app, win).is_some_and(|v| v.fit_zoom == Some(v.zoom));
     app.settle_window_ppi(win, !(fit && (first || fitted_now)));
     // A view that still fits its window keeps fitting it at the zoom the new density gave it.
-    if following && let (Some((s, _, _)), Some(v)) = (shown.fit, view(app, win)) {
-        shown.fit = Some((s, v.zoom, v.center));
+    if following {
+        crate::canvas::panes::refollow_fit(app, win);
     }
     ctx.request_repaint();
 }
 
-/// Window `win`'s floating window `w` as an OS window of its own, `blocked` by a modal or not;
-/// `raise` brings it to the front. Its tab is at the top of the window, above its body.
-fn os_window(app: &mut VectorcraftApp, ctx: &egui::Context, w: &DocWindow, (win, blocked): (Win, bool), raise: bool) -> Shown {
-    let vid = viewport_id(w);
-    let origin = ctx.input(|inp| inp.viewport().inner_rect.map(|r| r.min)).filter(|p| p.is_finite()).unwrap_or(egui::Pos2::ZERO);
-    let screen = match w.screen {
-        Some((pos, generation)) if generation == w.generation => pos,
-        moved => {
-            let pos = origin + w.place.min.to_vec2();
-            if moved.is_some() {
-                ctx.send_viewport_cmd_to(vid, egui::ViewportCommand::OuterPosition(pos));
-                ctx.send_viewport_cmd_to(vid, egui::ViewportCommand::InnerSize(w.place.size()));
-            }
-            if let Some(x) = app.ui.floating.iter_mut().find(|x| x.uid == w.uid && x.view == w.view) {
-                x.screen = Some((pos, w.generation));
-            }
-            pos
-        }
-    };
-    if raise {
-        ctx.send_viewport_cmd_to(vid, egui::ViewportCommand::Focus);
-    }
-    let title = crate::chrome::document_window_title(app, win).unwrap_or_default();
-    let builder =
-        egui::ViewportBuilder::default().with_title(title).with_position(screen).with_inner_size(w.place.size()).with_min_inner_size(MIN_SIZE);
-    let mut forwarded = (Vec::new(), None);
-    // The main window's tab strip on the screen.
-    let strip = app.canvas.windows.strip.map(|s| s.translate(origin.to_vec2()));
-    let shown = ctx.show_viewport_immediate(vid, builder, |ui, _| {
-        let (close, focused) = ui.input(|inp| (inp.viewport().close_requested(), inp.viewport().focused == Some(true)));
-        if close {
-            // The OS window stays until its document closes, which stops drawing it: a save prompt
-            // or a modal can keep the document open.
-            ui.ctx().send_viewport_cmd(egui::ViewportCommand::CancelClose);
-        }
-        let tab = crate::chrome::window_tab(app, ui, win);
-        let (over_strip, dock) = if blocked { (false, false) } else { drag_tab(app, ui, ((w.uid, w.view), origin), &tab, strip) };
-        // The OS window's points are not the main window's: its pane takes no artwork.
-        let (pressed, rect, fit) = body(app, ui, (win, blocked), w.fit, false);
-        let activate = pressed || (!blocked && (tab.clicked() || tab.drag_started()));
-        // Keys the window's widgets left over run the main window's shortcuts and tool keys, as a
-        // floating panel's do.
-        if !blocked && !ui.memory(|m| m.focused().is_some()) {
-            forwarded = ui.input(|inp| {
-                let events: Vec<egui::Event> = inp
-                    .events
-                    .iter()
-                    .filter(|e| {
-                        matches!(e, egui::Event::Key { .. } | egui::Event::Text(_) | egui::Event::Copy | egui::Event::Cut | egui::Event::Paste(_))
-                    })
-                    .cloned()
-                    .collect();
-                (events, Some(inp.modifiers))
-            });
-        }
-        let ppi = crate::services::screen_ppi_at(&app.services.screens, ui.ctx());
-        Shown { close, activate, over_strip, dock, focused, body: Some(rect), fit, ppi }
-    });
-    if !forwarded.0.is_empty() {
-        crate::panel_docking::forward_keys(app, ctx, forwarded.0, forwarded.1);
-    }
-    shown
-}
-
-/// A drag of floating window `key`'s ([`views::key`]) OS window by the `tab` at its top: the window
-/// follows the pointer, and its view goes back under the tabs when the tab is released over the
-/// main window's tab `strip` (on the screen). `origin` is the main window's top-left corner on the
-/// screen. → whether the pointer is over the strip, and whether the tab was released there.
-fn drag_tab(
-    app: &mut VectorcraftApp,
-    ui: &egui::Ui,
-    ((uid, view), origin): ((u64, u32), egui::Pos2),
-    tab: &egui::Response,
-    strip: Option<egui::Rect>,
-) -> (bool, bool) {
-    let Some(win) = app.ui.floating.iter_mut().find(|x| x.uid == uid && x.view == view) else {
-        return (false, false);
-    };
-    if !tab.dragged() && !tab.drag_stopped() {
-        win.grab = None;
-        return (false, false);
-    }
-    let (inner, outer, pointer) = ui.input(|inp| (inp.viewport().inner_rect, inp.viewport().outer_rect, inp.pointer.latest_pos()));
-    let (Some(inner), Some(outer), Some(pointer)) = (inner, outer, pointer) else {
-        return (false, false);
-    };
-    let at = inner.min + pointer.to_vec2();
-    // The pointer stays where it pressed the tab, relative to the window.
-    let pressed = ui.input(|inp| inp.pointer.press_origin()).map_or(at, |p| inner.min + p.to_vec2());
-    let grab = *win.grab.get_or_insert(pressed - outer.min);
-    let over = strip.is_some_and(|s| s.contains(at));
-    if tab.drag_stopped() {
-        win.grab = None;
-        return (over, over);
-    }
-    let pos = at - grab;
-    if pos != outer.min {
-        win.screen = Some((pos, win.generation));
-        win.place = egui::Rect::from_min_size(pos - origin.to_vec2(), win.place.size());
-    }
-    (over, false)
-}
-
-/// Window `win`'s floating window `w` as a window inside the main window, `blocked` by a modal or
-/// not; `raise` brings it to the front.
-fn app_window(app: &mut VectorcraftApp, ctx: &egui::Context, w: &DocWindow, (win, blocked): (Win, bool), raise: bool) -> Shown {
-    let id = window_id(w);
-    if raise {
-        ctx.move_to_top(egui::LayerId::new(egui::Order::Middle, id));
-    }
-    let title = crate::chrome::document_window_title(app, win).unwrap_or_default();
-    let mut open = true;
-    let (mut activate, mut rect, mut fit) = (false, None, w.fit);
-    let frame = egui::Frame::window(&ctx.global_style()).inner_margin(0.0);
-    let shown = egui::Window::new(title)
-        .id(id)
-        .default_rect(w.place)
-        .min_size(MIN_SIZE)
-        .collapsible(false)
-        .resizable(true)
-        .constrain_to(ctx.content_rect())
-        .frame(frame)
-        .open(&mut open)
-        .show(ctx, |ui| {
-            let (pressed, r, f) = body(app, ui, (win, blocked), fit, true);
-            (activate, rect, fit) = (pressed, Some(r), f);
-        });
-    // A press on its title bar or edges, which brings the window to the front, also makes its
-    // document the current one.
-    activate |= shown.as_ref().is_some_and(|s| s.response.contains_pointer()) && ctx.input(|inp| inp.pointer.any_pressed());
-    // Moved by its title bar onto the main window's tab strip, it goes back under the tabs.
-    // egui moves a window by the drag of its title bar's own widget, or, where it moves windows by
-    // a drag anywhere (after touch input), by the drag of the window itself.
-    let mover = ctx.read_response(id.with("__title_click")).or_else(|| shown.as_ref().map(|s| s.response.clone()));
-    let moved = mover.map_or((false, false), |r| (r.dragged(), r.drag_stopped()));
-    let pointer = ctx.input(|inp| inp.pointer.latest_pos());
-    let over_strip = !blocked && (moved.0 || moved.1) && app.canvas.windows.strip.zip(pointer).is_some_and(|(strip, p)| strip.contains(p));
-    Shown { close: !open, activate, over_strip, dock: over_strip && moved.1, focused: false, body: rect, fit, ppi: None }
-}
-
-/// The host's rewrites of raw input ([`crate::services::Services::native_input_hook`]) for the
-/// document windows' OS windows: eframe runs the host's hook for the main window only.
-#[cfg(not(target_arch = "wasm32"))]
-mod input {
-    use std::collections::HashSet;
-
-    use crate::services::NativeInputHook;
-
-    /// Runs the hook on the input of the document windows' OS windows.
-    #[derive(Default)]
-    struct DocumentWindowInput {
-        hook: Option<NativeInputHook>,
-        windows: HashSet<egui::ViewportId>,
-    }
-
-    impl egui::Plugin for DocumentWindowInput {
-        fn debug_name(&self) -> &'static str {
-            "vectorcraft document windows input"
-        }
-
-        fn input_hook(&mut self, ctx: &egui::Context, input: &mut egui::RawInput) {
-            if self.windows.contains(&input.viewport_id) {
-                if let Some(hook) = &self.hook {
-                    hook(input);
-                }
-                crate::font_menu::take_raw_wheel(ctx, input);
-            }
-        }
-    }
-
-    /// Run `hook` on the input of `windows` from their next frame on.
-    pub(super) fn register(ctx: &egui::Context, hook: Option<NativeInputHook>, windows: HashSet<egui::ViewportId>) {
-        if windows.is_empty() && ctx.with_plugin(|_: &mut DocumentWindowInput| ()).is_none() {
-            return;
-        }
-        crate::font_menu::ensure_native_wheel_layers(ctx);
-        ctx.add_plugin(DocumentWindowInput::default());
-        ctx.with_plugin(|p: &mut DocumentWindowInput| {
-            p.hook = hook;
-            p.windows = windows;
-        });
-    }
+/// Whether the primary button went down over `ui`'s layer in this pass.
+fn pressed_on_layer(ui: &egui::Ui) -> bool {
+    let at = ui.ctx().input(|i| i.pointer.primary_pressed().then_some(i.pointer.interact_pos()).flatten());
+    at.is_some_and(|at| ui.ctx().layer_id_at(at) == Some(ui.layer_id()))
 }
 
 #[cfg(test)]
