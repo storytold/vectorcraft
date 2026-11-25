@@ -477,6 +477,13 @@ impl Manifest {
             return Err(Error::Manifest(format!("manifest is {} bytes (limit {MAX_MANIFEST_BYTES})", bytes.len())));
         }
         let text = std::str::from_utf8(bytes).map_err(|_| Error::Manifest("manifest is not UTF-8".into()))?;
+        Manifest::parse_text(text)
+    }
+
+    /// [`Manifest::parse`] without its size limit, for JSON that holds other keys besides the
+    /// manifest's (a JavaScript plug-in's `source`), whose caller checks the manifest's size. Keys
+    /// the manifest doesn't declare are ignored, and `params` keep the order the text gives them.
+    pub(crate) fn parse_text(text: &str) -> Result<Manifest> {
         if serde_json::from_str::<Value>(text).is_ok_and(|v| v.get("paintOutput").is_some_and(|p| *p != Value::Bool(true))) {
             return Err(Error::Manifest("`paintOutput` may only be true".into()));
         }

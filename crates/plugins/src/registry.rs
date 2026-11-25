@@ -219,7 +219,7 @@ fn read_js_package_with(
     use serde_json::Value;
     let manifest_limits = Limits { max_module_bytes: crate::manifest::MAX_MANIFEST_BYTES, ..Limits::default() };
     let bytes = read_module(path, &manifest_limits, || {})?;
-    let mut map: serde_json::Map<String, Value> = serde_json::from_slice(&bytes).map_err(|e| Error::Manifest(format!("{}: {e}", path.display())))?;
+    let map: serde_json::Map<String, Value> = serde_json::from_slice(&bytes).map_err(|e| Error::Manifest(format!("{}: {e}", path.display())))?;
     if !crate::js::is_js(&map) {
         return Err(Error::Manifest(crate::js::NOT_JS.into()));
     }
@@ -232,8 +232,17 @@ fn read_js_package_with(
     let script_limits = Limits { max_module_bytes: crate::js::MAX_SCRIPT_BYTES, ..Limits::default() };
     let source = read_module(&file, &script_limits, opening)?;
     let source = String::from_utf8(source).map_err(|_| Error::Module("the script is not UTF-8 text".into()))?;
-    map.insert("source".into(), Value::String(source));
-    serde_json::to_vec(&map).map_err(|e| Error::Manifest(e.to_string()))
+    // `source` is added to the manifest's own text, so its keys keep their order. The text parsed as
+    // an object that has `runtime`, so its last character other than white space is its closing `}`.
+    let end = bytes.iter().rposition(|b| !b.is_ascii_whitespace()).filter(|&i| bytes[i] == b'}');
+    let end = end.ok_or_else(|| Error::Manifest(format!("{}: not a JSON object", path.display())))?;
+    let source = serde_json::to_vec(&Value::String(source)).map_err(|e| Error::Manifest(e.to_string()))?;
+    let mut out = Vec::with_capacity(bytes.len() + source.len() + 12);
+    out.extend_from_slice(&bytes[..end]);
+    out.extend_from_slice(b",\"source\":");
+    out.extend_from_slice(&source);
+    out.push(b'}');
+    Ok(out)
 }
 
 /// The bytes of the module file at `path`. A path that doesn't name a regular file is refused
@@ -702,6 +711,28 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
         assert!(matches!(&read, Err(Error::Module(e)) if e.contains(&format!("limit {}", crate::js::MAX_SCRIPT_BYTES))), "{read:?}");
         assert!(!opened.get(), "the script was opened");
+    }
+
+    /// A manifest file's parameters keep their declaration order through the package it is read
+    /// into, which is its own text with `source` added.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn a_javascript_package_keeps_the_manifest_s_order() {
+        let dir = test_dir("js-order");
+        let num = r#"{"type": "number", "min": 0, "max": 10, "default": 1}"#;
+        let text = format!(
+            "{{\"id\": \"order\", \"name\": \"JS\", \"kind\": \"filter\", \"runtime\": \"js\", \"script\": \"f.js\", \"params\": {{\"z\": {num}, \"a\": {num}}}}}\n"
+        );
+        let path = dir.join("order.vcplugin");
+        std::fs::write(&path, &text).unwrap();
+        std::fs::write(dir.join("f.js"), "function run(i) { return i; }").unwrap();
+        let bytes = read_js_package(&path, &|_| Ok(()));
+        std::fs::remove_dir_all(&dir).unwrap();
+        let bytes = bytes.unwrap();
+        let expected = format!("{},\"source\":\"function run(i) {{ return i; }}\"}}", text.trim_end().strip_suffix('}').unwrap());
+        assert_eq!(String::from_utf8_lossy(&bytes), expected);
+        let (manifest, _) = crate::js::read_bundle(&bytes).unwrap();
+        assert_eq!(manifest.params.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>(), ["z", "a"]);
     }
 
     /// A folder load reports a subfolder, a named pipe and a link to a named pipe with `.wasm`

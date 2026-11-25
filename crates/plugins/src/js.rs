@@ -30,7 +30,7 @@ use serde_json::{Map, Value};
 use vectorcraft_js::{Data, HostError, HostItem, JsValue, LimitKind, Progress, Realm, RunError, RunErrorKind};
 
 use crate::host::{Deadline, LOG_BAD_LEVEL, LOG_DROPPED, LOG_WRITTEN, Report, Run};
-use crate::manifest::{Manifest, Runtime};
+use crate::manifest::{MAX_MANIFEST_BYTES, Manifest, Runtime};
 use crate::permissions::{self, Permission};
 use crate::runtime::SELECTION_TOO_LARGE;
 use crate::{Error, Limits, Result};
@@ -134,8 +134,14 @@ pub(crate) fn read_bundle(bytes: &[u8]) -> Result<(Manifest, Script)> {
     if source.len() > MAX_SCRIPT_BYTES {
         return Err(Error::Module(format!("{} is {} bytes (limit {})", name, source.len(), MAX_SCRIPT_BYTES)));
     }
-    let manifest = serde_json::to_vec(&map).map_err(|e| Error::Manifest(e.to_string()))?;
-    let manifest = Manifest::parse(&manifest)?;
+    // The manifest is read from `bytes`, so `params` keep their order; its size is counted
+    // without `script` and `source`.
+    let size = serde_json::to_vec(&map).map_err(|e| Error::Manifest(e.to_string()))?.len();
+    if size > MAX_MANIFEST_BYTES {
+        return Err(Error::Manifest(format!("manifest is {size} bytes (limit {MAX_MANIFEST_BYTES})")));
+    }
+    let text = std::str::from_utf8(bytes).map_err(|_| Error::Manifest("manifest is not UTF-8".into()))?;
+    let manifest = Manifest::parse_text(text)?;
     if let Err(e) = vectorcraft_js::parse(&source, &options()) {
         let named = Named { id: &manifest.id, script: &name };
         return Err(Error::Module(located(&permissions::display_text(&e.message, MAX_ERROR_TEXT), &named, Some((e.line, e.column)))));
@@ -479,6 +485,22 @@ mod tests {
         let a = load(&bundle("test.js.hash", "function run() { return {objects: []}; }", json!({}))).unwrap();
         let b = load(&bundle("test.js.hash", "function run() { return {objects: [] }; }", json!({}))).unwrap();
         assert_ne!(a.hash(), b.hash());
+    }
+
+    /// The parameters, and a command's, keep the order the plug-in's JSON declares them in.
+    #[test]
+    fn params_keep_their_declaration_order() {
+        let num = r#"{"type": "number", "min": 0, "max": 10, "default": 1}"#;
+        let text = format!(
+            r#"{{"id": "test.js.order", "name": "JS test", "kind": "filter", "runtime": "js", "script": "test.js",
+                "params": {{"z": {num}, "a": {num}, "m": {num}}},
+                "commands": [{{"id": "go", "label": "Go", "params": {{"y": {num}, "b": {num}}}}}],
+                "source": "function run(i) {{ return i; }}"}}"#
+        );
+        let (manifest, _) = super::read_bundle(text.as_bytes()).unwrap();
+        let names = |p: &[(String, crate::manifest::Param)]| p.iter().map(|(k, _)| k.clone()).collect::<Vec<_>>();
+        assert_eq!(names(&manifest.params), ["z", "a", "m"]);
+        assert_eq!(names(&manifest.commands[0].params), ["y", "b"]);
     }
 
     #[test]
