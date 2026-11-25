@@ -7,7 +7,7 @@ use craft::ui::buttons::{ActiveLook, PushButtonLook};
 use craft::ui::choice::ChoiceLook;
 use craft::ui::contract::{Bind, CaptionInk, GlyphColon, LinkLabelInk, LinkLabelUnderline, QuietHeader, SectionRhythm};
 use craft::ui::docking::IconGroupSeparator;
-use craft::ui::list::CommandHighlight;
+use craft::ui::list::{CommandHighlight, ThumbRows};
 use craft::ui::menu::MenuTitlePad;
 use craft::ui::runtime::env::{RootEnv, Scale, ScrubDrags, WindowKey};
 use craft::ui::runtime::frame::{FrameInput, FrameOutput};
@@ -711,6 +711,8 @@ pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> Ro
     // Quiet headings (the kind line, "Ellipse Properties:") stand a line of text high over their fields, as
     // production's did.
     root.values.set(QuietTitleRow::Text);
+    // Layers rows stand as production's: the thumbnail with a tight gap, 14 points of indent per level.
+    root.values.set(ThumbRows::Tight);
     // The menu bar's titles stand as close as production's, which share the line with the bar's other controls.
     root.values.set(MenuTitlePad::Control);
     // Document tabs show their title and its `*` in the label's semibold face, as production drew them.
