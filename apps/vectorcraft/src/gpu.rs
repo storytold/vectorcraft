@@ -683,7 +683,7 @@ impl Startup {
                 return LeftOut::default();
             }
         };
-        let (record, crash) = StartRecord::begin(previous, env!("CARGO_PKG_VERSION"), preference_name(preference));
+        let (record, crash) = StartRecord::begin(previous, vectorcraft_ui_egui::os_window::version(), preference_name(preference));
         let left_out = record.left_out(crash.clone(), explicit);
         match &crash {
             Some(Crash::Adapter { key, name }) => {
