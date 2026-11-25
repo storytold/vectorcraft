@@ -120,7 +120,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Smooth",
             [],
             None,
-            "{points: [[x,y]…] (pen values after x and y are checked as path.freehand checks them and do not change the smoothing), radius?: pt (12), fidelity?: pt (2.5; kept within 0.000078125 and about 3195, the Smooth tool's 0.05 to 100 px at the highest and the lowest zoom: the tool sends its Fidelity in screen pixels divided by the zoom)} smooth selected paths near the drag, keeping a corner where the path turns by more than 57.5° at the anchor and over radius and twice radius on either side → {ids, before, after}",
+            "{points: [[x,y]…] (pen values after x and y are checked as path.freehand checks them and do not change the smoothing), radius?: pt (12; from 0.001 to 1000), fidelity?: pt (2.5; from 0.000078125 to about 3195, the Smooth tool's 0.05 to 100 px at the highest and the lowest zoom: the tool sends its Fidelity in screen pixels divided by the zoom, kept within the range)} smooth selected paths near the drag, keeping a corner where the path turns by more than 57.5° at the anchor and over radius and twice radius on either side, and leaving a subpath as it is when the result would not be smoother (docs/mcp.md) → {ids, before, after}. A radius or fidelity outside its range is refused with an error, and nothing changes",
             has_selection,
             smooth_region
         ),
@@ -129,7 +129,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Join",
             [],
             None,
-            "{points: [[x,y]…] (pen values after x and y are checked as path.freehand checks them and do not change the join), tolerance?: pt (12)} join the open-path endpoints scrubbed over, or trim two crossing open paths whose overhanging ends are scrubbed and join them at the crossing → {id}",
+            "{points: [[x,y]…] (pen values after x and y are checked as path.freehand checks them and do not change the join), tolerance?: pt (12; from 0.001 to 1000)} join the open-path endpoints scrubbed over, or trim two crossing open paths whose overhanging ends are scrubbed and join them at the crossing → {id}. A tolerance outside 0.001 to 1000 is refused with an error, and nothing changes",
             has_doc,
             join_scrub
         ),
