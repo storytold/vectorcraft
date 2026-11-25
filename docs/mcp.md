@@ -10955,7 +10955,7 @@ are written as lowercase `#rrggbb`. A `#rrggbbaa` spelling names no table color.
 right, with the lock mark, and Lock stays on until the color is unshifted. Web Shift replaces a shift by hand, and
 Unshift All Colors in the table's menu clears `shifted` and `webShift`. Only Web Colors in the picker starts off.
 
-Save Color Table… in the table's menu is `document.exportForWeb.saveColorTable {path?, slice?, …settings}`. It writes
+Save Color Table is `document.exportForWeb.saveColorTable {path?, slice?, …settings}`. It writes
 the GIF or PNG-8 color table the preview shows as a color table file (`.act`) in the layout the file format
 specification gives (https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/): 256 entries of three bytes (red,
 green, blue) in file order, with zero bytes after the colors used, then the number of colors used and the index of the
@@ -10965,7 +10965,7 @@ the file holds the whole image's table, also when `slices` is `selected` and no 
 up among the slices `slices` names. `.act` is added to
 a `path` without an extension, and without `path` the file comes back as `dataBase64`. The reply is `{path, colors,
 transparentIndex, bytes, warnings}` (`transparentIndex` is null when there is none). JPEG and PNG-24 are errors, and the
-document and the settings do not change. Load Color Table… is `webExport.loadColorTable {path | dataBase64,
+document and the settings do not change. Load Color Table is `webExport.loadColorTable {path | dataBase64,
 …settings}`. It reads a 768-byte file (256 colors, no transparent entry) or a 772-byte one (the number of colors used,
 1 to 256, and the transparent entry's index; an index past the colors used names no entry) and returns
 `{colors, transparentIndex, settings}`: the settings with the file's colors other than its transparent entry as
@@ -10974,10 +10974,8 @@ document and the settings do not change. Load Color Table… is `webExport.loadC
 color is written as it is, in the file's order, and none is locked. A file whose only color is its
 transparent entry loads that color. Another file size (base64 text included), a count of 0 or above 256, both or
 neither of `path` and `dataBase64`, and JPEG or PNG-24 are errors; the command reads at most 773 bytes of a file and
-remembers nothing. In
-the dialog Load Color Table… puts the loaded settings into its fields (`__loadColorTable: true`), and Save Color Table…
-writes the file picked in a save panel (`__saveColorTable: true`), or downloads it on the web, where Load Color Table…
-is disabled. The help page describes both entries
+remembers nothing. The Save for Web dialog's color table menu does not list Save Color Table… or Load Color
+Table… yet; both commands run through the engine and MCP. The help page describes both entries
 (https://help.adobe.com/archive/en_US/illustrator/cs4/illustrator_cs4_help.pdf#page=404).
 
 ```json
