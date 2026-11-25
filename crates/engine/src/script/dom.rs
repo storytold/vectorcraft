@@ -1236,7 +1236,7 @@ fn selection_of(h: &Host, uid: u64) -> Answer {
 /// `[]`. Every one must be an object of that document that can be selected.
 fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId>, HostError> {
     let list: Vec<&Data> = match v {
-        Data::Null | Data::Undefined => Vec::new(),
+        Data::Null => Vec::new(),
         Data::Array(a) if a.len() > MAX_LISTED => return Err(HostError::Range(format!("a selection takes at most {MAX_LISTED} objects"))),
         Data::Array(a) => a.iter().collect(),
         d => vec![d],
