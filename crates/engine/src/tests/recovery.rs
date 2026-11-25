@@ -571,6 +571,22 @@ fn the_folder_store_reads_no_linked_entries() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
+/// A write to an entry that is a link (the copy's metadata names it) must not follow it out of the
+/// store: the file behind the link keeps its bytes.
+#[cfg(unix)]
+#[test]
+fn the_folder_store_writes_no_linked_entries() {
+    let base = std::env::temp_dir().join(format!("vc-recovery-write-links-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let store = FolderStore::new(&base);
+    store.write("1-1/Untitled-1-1.vectorcraft", b"copy").unwrap();
+    std::fs::write(base.join("outside"), b"private").unwrap();
+    std::os::unix::fs::symlink(base.join("outside"), base.join("1-1").join("img")).unwrap();
+    assert!(store.write("1-1/img", b"copy").is_err());
+    assert_eq!(std::fs::read(base.join("outside")).unwrap(), b"private");
+    let _ = std::fs::remove_dir_all(&base);
+}
+
 /// A file where a folder of the store's path should be: the error names that file, not the area
 /// folder or the copy below it, for a write, a lock, a read, a listing, a removal and a recovery
 /// save.
