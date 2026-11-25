@@ -7951,6 +7951,9 @@ file-filter	Flattener presets	Preajustos de l’aplanador
 file-filter	PDF presets	Preajustos de PDF
 file-filter	PDF-compatible .ai	.ai compatible amb PDF
 file-filter	Print presets	Preajustos d’impressió
+file-filter	Tracing presets	Preajustos de traçat
+file-filter	Action sets	Conjunts d’accions
+file-filter	Composite fonts	Tipus de lletra compostos
 file-filter	Preferences	Preferències
 file-filter	Export presets	Preajustos d’exportació
 file-filter	SVG Compressed	SVG comprimit

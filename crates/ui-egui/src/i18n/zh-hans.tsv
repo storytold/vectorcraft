@@ -1428,6 +1428,9 @@ file-filter	Swatch libraries	色板库
 file-filter	Flattener presets	拼合预设
 file-filter	PDF presets	PDF 预设
 file-filter	Print presets	打印预设
+file-filter	Tracing presets	描摹预设
+file-filter	Action sets	动作组
+file-filter	Composite fonts	复合字体
 file-filter	Preferences	首选项
 file-filter	Export presets	导出预设
 file-filter	SVG Compressed	压缩 SVG

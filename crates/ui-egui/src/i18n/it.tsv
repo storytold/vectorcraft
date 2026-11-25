@@ -1500,6 +1500,9 @@ file-filter	Swatch libraries	Librerie campioni
 file-filter	Flattener presets	Preset di appiattimento
 file-filter	PDF presets	Preset PDF
 file-filter	Print presets	Preset di stampa
+file-filter	Tracing presets	Preset di ricalco
+file-filter	Action sets	Set di azioni
+file-filter	Composite fonts	Font compositi
 file-filter	Preferences	Preferenze
 file-filter	Export presets	Predefiniti di esportazione
 file-filter	SVG Compressed	SVG compresso

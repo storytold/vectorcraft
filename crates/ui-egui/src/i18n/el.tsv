@@ -3219,6 +3219,9 @@ file-filter	Flattener presets	Προεπιλογές ισοπέδωσης
 file-filter	PDF presets	Προεπιλογές PDF
 file-filter	PDF-compatible .ai	.ai συμβατό με PDF
 file-filter	Print presets	Προεπιλογές εκτύπωσης
+file-filter	Tracing presets	Προεπιλογές ανίχνευσης περιγραμμάτων
+file-filter	Action sets	Σύνολα ενεργειών
+file-filter	Composite fonts	Σύνθετες γραμματοσειρές
 file-filter	Preferences	Προτιμήσεις
 file-filter	Export presets	Προκαθορισμένα εξαγωγής
 file-filter	SVG Compressed	Συμπιεσμένο SVG

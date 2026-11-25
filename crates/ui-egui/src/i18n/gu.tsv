@@ -5275,16 +5275,20 @@ antiAlias	Sharp	શાર્પ
 anchor	Points:	પોઇન્ટ્સ:
 diagnostics	render	રેન્ડર
 diagnostics	ui	ઇન્ટરફેસ
+file-filter	Action sets	ઍક્શન સેટ
 file-filter	All placeable files	પ્લેસ કરી શકાય તેવી બધી ફાઇલો
 file-filter	All readable files	વાંચી શકાય તેવી બધી ફાઇલો
+file-filter	Composite fonts	કમ્પોઝિટ ફોન્ટ્સ
 file-filter	Export presets	એક્સપોર્ટ પ્રીસેટ્સ
 file-filter	Flattener presets	ફ્લેટનર પ્રીસેટ્સ
 file-filter	PDF presets	PDF પ્રીસેટ્સ
 file-filter	PDF-compatible .ai	PDF-સુસંગત .ai
+file-filter	Perspective grid presets	પરસ્પેક્ટિવ ગ્રિડ પ્રીસેટ્સ
 file-filter	Print presets	પ્રિન્ટ પ્રીસેટ્સ
 file-filter	SVG Compressed	સંકુચિત SVG
 file-filter	Swatch libraries	સ્વેચ લાઇબ્રેરીઓ
 file-filter	Templates	ટેમ્પ્લેટ્સ
+file-filter	Tracing presets	ટ્રેસિંગ પ્રીસેટ્સ
 file-filter	VectorCraft Template	VectorCraft ટેમ્પ્લેટ
 gradient-kind	Radial	રેડિયલ
 lighting	Light	લાઇટ

@@ -8847,6 +8847,9 @@ file-filter	Swatch libraries	Farveprøvebiblioteker
 file-filter	Flattener presets	Flattener-forudindstillinger
 file-filter	PDF presets	PDF-forudindstillinger
 file-filter	Print presets	Printforudindstillinger
+file-filter	Tracing presets	Vektoriseringsforudindstillinger
+file-filter	Action sets	Handlingssæt
+file-filter	Composite fonts	Sammensatte skrifttyper
 file-filter	Preferences	Præferencer
 file-filter	Export presets	Eksportforudindstillinger
 file-filter	SVG Compressed	Komprimeret SVG

@@ -4358,6 +4358,9 @@ file-filter	Swatch libraries	スウォッチライブラリ
 file-filter	Flattener presets	分割・統合プリセット
 file-filter	PDF presets	PDF プリセット
 file-filter	Print presets	プリントプリセット
+file-filter	Tracing presets	トレースプリセット
+file-filter	Action sets	アクションセット
+file-filter	Composite fonts	合成フォント
 file-filter	Preferences	環境設定
 file-filter	Export presets	書き出しプリセット
 file-filter	SVG Compressed	SVG 圧縮

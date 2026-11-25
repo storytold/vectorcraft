@@ -1463,6 +1463,9 @@ file-filter	Swatch libraries	Farbfeldbibliotheken
 file-filter	Flattener presets	Reduzierungsvorgaben
 file-filter	PDF presets	PDF-Vorgaben
 file-filter	Print presets	Druckvorgaben
+file-filter	Tracing presets	Nachzeichnervorgaben
+file-filter	Action sets	Aktionssätze
+file-filter	Composite fonts	Zusammengesetzte Schriften
 file-filter	Preferences	Voreinstellungen
 file-filter	Export presets	Exportvorgaben
 file-filter	SVG Compressed	SVG komprimiert

@@ -6689,6 +6689,9 @@ file-filter	Swatch libraries	Värimallikirjastot
 file-filter	Flattener presets	Litistyksen esiasetukset
 file-filter	PDF presets	PDF-esiasetukset
 file-filter	Print presets	Tulostuksen esiasetukset
+file-filter	Tracing presets	Jäljityksen esiasetukset
+file-filter	Action sets	Toimintosarjat
+file-filter	Composite fonts	Yhdistelmäfontit
 file-filter	Preferences	Asetukset
 file-filter	Export presets	Vientiesiasetukset
 file-filter	SVG Compressed	Pakattu SVG

@@ -1716,6 +1716,9 @@ file-filter	Swatch libraries	Thư viện mẫu màu
 file-filter	Flattener presets	Thiết lập sẵn làm phẳng
 file-filter	PDF presets	Thiết lập sẵn PDF
 file-filter	Print presets	Thiết lập sẵn in
+file-filter	Tracing presets	Thiết lập sẵn vector hóa
+file-filter	Action sets	Bộ hành động
+file-filter	Composite fonts	Phông chữ tổ hợp
 file-filter	Preferences	Tùy chọn
 file-filter	Export presets	Cài đặt sẵn xuất
 file-filter	SVG Compressed	SVG nén

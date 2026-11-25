@@ -6639,6 +6639,9 @@ file-filter	Swatch libraries	Pustaka swatch
 file-filter	Flattener presets	Preset perata
 file-filter	PDF presets	Preset PDF
 file-filter	Print presets	Preset cetak
+file-filter	Tracing presets	Preset penelusuran
+file-filter	Action sets	Set tindakan
+file-filter	Composite fonts	Font komposit
 file-filter	Preferences	Preferensi
 file-filter	Export presets	Preset ekspor
 file-filter	SVG Compressed	SVG terkompresi

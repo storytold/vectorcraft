@@ -6787,6 +6787,9 @@ file-filter	Swatch libraries	Knihovny vzorníků
 file-filter	Flattener presets	Přednastavení sloučení průhlednosti
 file-filter	PDF presets	Přednastavení PDF
 file-filter	Print presets	Přednastavení tisku
+file-filter	Tracing presets	Přednastavení vektorizace
+file-filter	Action sets	Sady akcí
+file-filter	Composite fonts	Složená písma
 file-filter	Preferences	Předvolby
 file-filter	Export presets	Přednastavení exportu
 file-filter	SVG Compressed	Komprimované SVG

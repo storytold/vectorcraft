@@ -1494,6 +1494,9 @@ file-filter	Swatch libraries	Бібліотеки зразків
 file-filter	Flattener presets	Набори зведення
 file-filter	PDF presets	Набори PDF
 file-filter	Print presets	Набори друку
+file-filter	Tracing presets	Набори трасування
+file-filter	Action sets	Набори дій
+file-filter	Composite fonts	Складені шрифти
 file-filter	Preferences	Налаштування
 file-filter	Export presets	Набори параметрів експорту
 file-filter	SVG Compressed	Стиснутий SVG

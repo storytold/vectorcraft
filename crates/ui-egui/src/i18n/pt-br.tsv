@@ -6666,6 +6666,9 @@ file-filter	Swatch libraries	Bibliotecas de amostras
 file-filter	Flattener presets	Predefinidos de achatamento
 file-filter	PDF presets	Predefinidos de PDF
 file-filter	Print presets	Predefinidos de impressão
+file-filter	Tracing presets	Predefinições de vetorização
+file-filter	Action sets	Conjuntos de ações
+file-filter	Composite fonts	Fontes compostas
 file-filter	Preferences	Preferências
 file-filter	Export presets	Predefinições de exportação
 file-filter	SVG Compressed	SVG Compactado

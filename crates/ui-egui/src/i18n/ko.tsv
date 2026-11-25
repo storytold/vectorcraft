@@ -4348,6 +4348,9 @@ file-filter	Swatch libraries	견본 라이브러리
 file-filter	Flattener presets	병합 프리셋
 file-filter	PDF presets	PDF 프리셋
 file-filter	Print presets	인쇄 프리셋
+file-filter	Tracing presets	추적 프리셋
+file-filter	Action sets	액션 세트
+file-filter	Composite fonts	합성 글꼴
 file-filter	Preferences	환경 설정
 file-filter	Export presets	내보내기 사전 설정
 file-filter	SVG Compressed	압축된 SVG

@@ -6702,8 +6702,10 @@ effect	Horizontal	Yatay
 effect	Points	Noktalar
 effect	Regular	Düzenli
 effect	Vertical	Dikey
+file-filter	Action sets	Eylem setleri
 file-filter	All placeable files	Yerleştirilebilir tüm dosyalar
 file-filter	All readable files	Okunabilir tüm dosyalar
+file-filter	Composite fonts	Bileşik fontlar
 file-filter	Export presets	Dışa aktarma önayarları
 file-filter	Flattener presets	Düzleştirici önayarları
 file-filter	PDF presets	PDF önayarları
@@ -6713,6 +6715,7 @@ file-filter	Preferences	Tercihler
 file-filter	SVG Compressed	Sıkıştırılmış SVG
 file-filter	Swatch libraries	Renk örneği kitaplıkları
 file-filter	Templates	Şablonlar
+file-filter	Tracing presets	İzleme önayarları
 file-filter	VectorCraft Template	VectorCraft Şablonu
 gradient-kind	Radial	Radyal
 mark-style	Japanese	Japon

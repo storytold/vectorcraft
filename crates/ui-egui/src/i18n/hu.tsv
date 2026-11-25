@@ -1804,6 +1804,9 @@ file-filter	Swatch libraries	Színminta-könyvtárak
 file-filter	Flattener presets	Lapítási előbeállítások
 file-filter	PDF presets	PDF-előbeállítások
 file-filter	Print presets	Nyomtatási előbeállítások
+file-filter	Tracing presets	Vektorizálási előbeállítások
+file-filter	Action sets	Műveletkészletek
+file-filter	Composite fonts	Összetett betűtípusok
 file-filter	Preferences	Beállítások
 file-filter	Export presets	Exportálási előbeállítások
 file-filter	SVG Compressed	Tömörített SVG

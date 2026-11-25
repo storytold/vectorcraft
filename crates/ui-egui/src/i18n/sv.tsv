@@ -6863,6 +6863,9 @@ file-filter	Flattener presets	Förinställningar för plattning
 file-filter	PDF presets	PDF-förinställningar
 file-filter	PDF-compatible .ai	PDF-kompatibel .ai
 file-filter	Print presets	Utskriftsförinställningar
+file-filter	Tracing presets	Förinställningar för vektorisering
+file-filter	Action sets	Åtgärdsuppsättningar
+file-filter	Composite fonts	Sammansatta typsnitt
 file-filter	Preferences	Inställningar
 file-filter	Export presets	Exportförinställningar
 file-filter	SVG Compressed	SVG komprimerad

@@ -6952,6 +6952,9 @@ file-filter	Flattener presets	Paramètres prédéfinis d’aplatissement
 file-filter	PDF presets	Paramètres prédéfinis PDF
 file-filter	PDF-compatible .ai	.ai compatible PDF
 file-filter	Print presets	Paramètres prédéfinis d’impression
+file-filter	Tracing presets	Paramètres prédéfinis de vectorisation
+file-filter	Action sets	Jeux de scripts
+file-filter	Composite fonts	Polices composites
 file-filter	Preferences	Préférences
 file-filter	Export presets	Paramètres prédéfinis d’export
 file-filter	SVG Compressed	SVG compressé

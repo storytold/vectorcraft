@@ -1464,6 +1464,9 @@ file-filter	Swatch libraries	色票資料庫
 file-filter	Flattener presets	平面化預設集
 file-filter	PDF presets	PDF 預設集
 file-filter	Print presets	列印預設集
+file-filter	Tracing presets	描圖預設集
+file-filter	Action sets	動作組
+file-filter	Composite fonts	複合字體
 file-filter	Preferences	偏好設定
 file-filter	Export presets	轉存預設集
 file-filter	SVG Compressed	壓縮 SVG

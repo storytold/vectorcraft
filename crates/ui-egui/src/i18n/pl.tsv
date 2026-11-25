@@ -6616,6 +6616,9 @@ file-filter	Swatch libraries	Biblioteki próbek
 file-filter	Flattener presets	Ustawienia spłaszczania
 file-filter	PDF presets	Ustawienia PDF
 file-filter	Print presets	Ustawienia drukowania
+file-filter	Tracing presets	Ustawienia obrysu
+file-filter	Action sets	Zestawy operacji
+file-filter	Composite fonts	Fonty złożone
 file-filter	Preferences	Preferencje
 file-filter	Export presets	Ustawienia eksportu
 file-filter	SVG Compressed	SVG skompresowany
