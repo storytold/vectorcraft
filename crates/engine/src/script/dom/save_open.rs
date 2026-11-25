@@ -766,6 +766,19 @@ fn doc_export_file(h: &Host, a: &[Data]) -> Answer {
             None => return Err(HostError::Error(format!("options for {} are not available yet", kind.format))),
         },
     };
+    // A DXF version before 2004 holds no true color: with `colors` left out it takes 256 indexed
+    // colors, and `AutoCADColors.TrueColors` with it throws.
+    if kind.format == "dxf" && matches!(p.get("version").and_then(Value::as_str), Some("R13" | "R14" | "2000")) {
+        match p.get("colors") {
+            None => {
+                p.insert("colors".into(), json!(256));
+            }
+            Some(c) if c.as_str() == Some("true") => {
+                return Err(HostError::Error("AutoCADColors.TrueColors needs AutoCADRelease18 or a later version".into()));
+            }
+            Some(_) => {}
+        }
+    }
     let svgz = p.remove("_svgz").and_then(|v| v.as_bool()).unwrap_or(false);
     let clip = p.remove("_clip").and_then(|v| v.as_bool()).unwrap_or(false);
     let (hs, vs) = (p.remove("_h").and_then(|v| v.as_f64()).unwrap_or(100.0), p.remove("_v").and_then(|v| v.as_f64()).unwrap_or(100.0));

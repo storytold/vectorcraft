@@ -2717,6 +2717,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `exportOption`, `alterPathsForAppearance`, `convertTextToOutlines`, `exportSelectedArtOnly` and `scaleLineweights`.
   An option the object leaves out takes its help page's default; `colors`, `rasterFormat`, `unit` and
   `unitScaleRatio`, which have none there, default to true colors, PNG, millimeters and 1, VectorCraft's own values.
+  `AutoCADRelease13`, `14` and `15` hold no true color: with them `colors` defaults to `Max256Colors`, and
+  `AutoCADColors.TrueColors` throws an error.
   `AutoCADExportFileFormat.DWG`, the help page's default, throws an error that says DWG is not available, so an
   AutoCAD export sets `exportFileFormat` to `AutoCADExportFileFormat.DXF`. The enumerations `AutoCADColors`,
   `AutoCADCompatibility`, `AutoCADExportFileFormat`, `AutoCADExportOption`, `AutoCADRasterFormat` and `AutoCADUnit`

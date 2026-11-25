@@ -601,6 +601,12 @@ fn bad_arguments_are_refused_with_an_error() {
             ),
             "ExportOptionsAutoCAD has no option unitScale",
         ),
+        (
+            format!(
+                "var o = new ExportOptionsAutoCAD(); o.exportFileFormat = AutoCADExportFileFormat.DXF; o.version = AutoCADCompatibility.AutoCADRelease14; o.colors = AutoCADColors.TrueColors; app.activeDocument.exportFile({f}, ExportType.AutoCAD, o);"
+            ),
+            "TrueColors needs AutoCADRelease18",
+        ),
         (format!("app.open({f}, 'RGB');"), "DocumentColorSpace"),
         (format!("app.open({f}, undefined, {{pageToOpen: 0}});"), "from 1"),
         (format!("app.open({f}, undefined, {{pDFCropToBox: 'art'}});"), "PDFBoxType"),
