@@ -1470,6 +1470,8 @@ fn review_597048_coalesced_pair(sampler_prefix: bool) {
     );
     assert!(frame_event(&ctx, |i| i.pointer.button_double_clicked(PointerButton::Primary)));
     assert_eq!(frame_event(&ctx, |i| i.pointer.button_triple_clicked(PointerButton::Primary)), sampler_prefix);
+    // The canvas gets the second release in the frame after the second press, which the framework asks for.
+    frame_at(&mut app, &ctx, start + 3.0 * step, vec![]);
     assert_eq!(app.session.active().unwrap().isolation, Some(group), "two ordinary clicks isolate after an earlier-frame prefix");
     app.run("object.exitIsolation", json!({"all": true})).unwrap();
     review_gesture_press(&mut app, &ctx, at, start + 5.0 * step);

@@ -141,6 +141,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("disableAutoAddDelete", "General", "Options", "Disable Auto Add/Delete", bool),
     p!("interpolateControlPoints", "General", "Options", "Interpolate Control Points When Moving Anchors", bool),
     p!("deleteKeepsPathsJoined", "General", "Options", "Delete Removes Anchor Points and Keeps Paths Joined", bool),
+    p!("doubleClickAddsAnchorPoints", "General", "Options", "Double-Click Adds Anchor Points", bool),
     p!("usePreciseCursors", "General", "Options", "Use Precise Cursors", bool),
     p!("showToolTips", "General", "Options", "Show Tool Tips", bool),
     p!("showToolCards", "General", "Options", "Show Tool Cards", bool),

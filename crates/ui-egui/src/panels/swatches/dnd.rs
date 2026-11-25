@@ -112,21 +112,38 @@ pub(super) enum FooterTarget {
 /// the button does. Other drags are left to their own targets.
 pub(super) fn on_footer_drop(app: &mut VectorcraftApp, target: FooterTarget, drag: &PanelDrag) {
     let PanelDrag::Paint { rows: Some(r), .. } = drag else { return };
+    let rows = footer_rows(app, r);
     match target {
         FooterTarget::Delete => {
-            let names = super::actions::deletable(app, &r.names);
+            let names = super::actions::deletable(app, &rows);
             if !names.is_empty() {
                 super::actions::delete(app, names, false);
             }
         }
         FooterTarget::New => {
             let Some(st) = app.session.active() else { return };
-            let names: Vec<String> = r.names.iter().filter(|n| st.doc.swatch(n).is_some_and(|w| !w.is_reserved())).cloned().collect();
+            let names: Vec<String> = rows.iter().filter(|n| st.doc.swatch(n).is_some_and(|w| !w.is_reserved())).cloned().collect();
             if !names.is_empty() {
                 super::actions::duplicate(app, &names);
             }
         }
     }
+}
+
+/// The rows a drop on a footer button takes. A grabbed row that is part of the panel's selection
+/// carries every selected row of its kind (swatches or color groups), also those that the find
+/// field or the kind filter hides, in panel order, as a click on the button takes the whole
+/// selection. Any other grabbed row carries the rows `r` holds.
+fn footer_rows(app: &VectorcraftApp, r: &SwatchRows) -> Vec<String> {
+    let sel = super::selected(app);
+    if !sel.contains(&r.grabbed) {
+        return r.names.clone();
+    }
+    super::shown_keys(&super::groups(app, super::Kind::All, ""))
+        .iter()
+        .filter(|k| matches!(k, SwatchKey::Group(_)) == r.groups && sel.iter().any(|s| s == name_of(k)))
+        .map(|k| name_of(k).to_string())
+        .collect()
 }
 
 /// The colour group `name` is, or the one swatch `name` belongs to.

@@ -76,6 +76,8 @@ const IMPORT: &str = "type.compositeFonts.import";
 
 /// The purpose of the file picks, which keeps their last folder.
 const PURPOSE: &str = "compositeFonts";
+/// The rows of a custom set's characters shown before they scroll.
+const CHAR_ROWS: u16 = 5;
 
 /// The table's columns: the class (or the custom set's name) is the row's label.
 const CLASS: ColumnKey = ColumnKey::new("class");
@@ -656,6 +658,7 @@ impl CompositeFontsDialog {
         let out = TileGrid::<usize>::new(tl!("Characters"))
             .select(SelectMode::Single)
             .thumb_size(ThumbSize::Small)
+            .max_rows(CHAR_ROWS)
             .selection(Bind::given(selection))
             .show_items(ui, &keyed(&keys, |k: &usize| *k), &mut |key, _| {
                 let c = chars.get(*key).copied().unwrap_or_default();

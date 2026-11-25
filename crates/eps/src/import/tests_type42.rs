@@ -111,6 +111,22 @@ fn the_fonts_own_widths_space_its_type_and_move_the_point() {
     check("newpath 10 20 moveto (\\001) true charpath pathbbox exch pop sub abs 25 gt exch 10 sub abs 8 lt and".into());
 }
 
+/// Type in a Type 42 font the file carries, whose family (Plain42) isn't available, is drawn
+/// with the file's glyphs kept with the document, spaced by their own widths, as a Type 1 font's
+/// is (see `tests_type1`).
+#[test]
+fn type_in_a_carried_type42_font_draws_with_the_files_glyphs() {
+    let (h, wh) = glyph('H');
+    let (i, _) = glyph('I');
+    let r = read(&format!("{} /Plain42 findfont 50 scalefont setfont 10 20 moveto (\\001\\002) show", font(&[h, i])));
+    let t = &texts(&r)[0];
+    assert!(t.file_fonts.is_some(), "{:?}", r.warnings);
+    let db = vectorcraft_text::FontDb::global();
+    assert!(vectorcraft_text::layout(db, t).glyphs.iter().all(|g| db.is_file_font(g.font_id)));
+    let o = origins(t);
+    assert!((o[1] - o[0] - 50.0 * wh).abs() < 0.05, "{o:?}");
+}
+
 /// `xshow` and `ashow` put each character where they say: the type's tracking makes up the
 /// difference from its font's advances.
 #[test]
