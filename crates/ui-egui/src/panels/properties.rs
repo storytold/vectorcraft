@@ -116,7 +116,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, first: Option<&Node>, n_sel: usiz
     }
     appearance_section::appearance_section(app, ui);
     section(tl!("Align")).show(ui, |ui, _| {
-        Row::new().show(ui, |ui, _| {
+        Row::new().wrap(true).show(ui, |ui, _| {
             super::align::align_buttons(app, ui);
             // The rest (Distribute Objects, Distribute Spacing, Align To) is the Align panel's.
             more_options(ui, "align", tl!("More Align options"));
