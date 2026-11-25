@@ -139,11 +139,17 @@ pub fn app_bar(ui: &mut Ui, _cx: &mut BodyCx<'_>, app: &mut VectorcraftApp) {
     let end = |ui: &mut Ui, _: &mut BodyCx<'_>| trailing(ui, &mut app.borrow_mut());
     // A nightly's window and Dock entry carry its own name, so they never read as the stable app's.
     let title = if crate::os_window::stable_services_allowed() { tl!("VectorCraft") } else { crate::os_window::name() };
-    let _ = if titled {
+    let out = if titled {
         TitleBar::new().surface(SurfaceKind::Background).show_titled(ui, Title::new(title), start, end)
     } else {
         TitleBar::new().surface(SurfaceKind::Background).show_fitted(ui, start, end)
     };
+    // The title bar reports a caption Close click in its output and never acts on it; acting here
+    // keeps the click from being dropped (the unsaved-changes prompt runs from the close request
+    // the command raises, as an OS close does).
+    if out.close_requested {
+        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+    }
 }
 
 /// The OS window title: the active document's name suffixed with the app name (a `*` prefix
