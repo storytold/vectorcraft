@@ -127,6 +127,51 @@ fn a_dashed_line_with_far_ends_keeps_its_part_on_the_canvas() {
     assert!(run.iter().all(|p| (p.y - p.x - 72.35).abs() < 1e-2 && clip.expand(1e-2).contains(*p)), "{run:?}");
 }
 
+/// The line segments in `shapes`, with nested shape lists opened.
+fn segments(shapes: &[egui::Shape]) -> Vec<[Pos2; 2]> {
+    let mut out = Vec::new();
+    for s in shapes {
+        match s {
+            egui::Shape::LineSegment { points, .. } => out.push(*points),
+            egui::Shape::Vec(inner) => out.extend(segments(inner)),
+            other => panic!("{other:?}"),
+        }
+    }
+    out
+}
+
+/// A long dashed line overlay painted through `paint` gives only the dashes near the canvas, each on the line.
+#[test]
+fn a_long_dashed_line_overlay_paints_only_its_dashes_on_the_canvas() {
+    use craft::i18n::Direction;
+    use craft::theme::{Contrast, Mode};
+    use craft::ui::style::Ink;
+    use craft::ui::testing::Frames;
+    use craft::ui::testing::style::{paint_frame, tokens};
+
+    let view = view();
+    let tokens = tokens(Mode::Light, Contrast::Standard);
+    let style = ToolMarksStyle {
+        metrics: Metrics::new(),
+        dark: StyleColor(Color32::BLACK),
+        ink: StyleColor(Color32::WHITE),
+        accent: StyleColor(Color32::BLUE),
+        pad: Vec2::ZERO,
+        radius: CornerRadius::ZERO,
+        handle: 3.0,
+    };
+    let line = Overlay::Line { a: Point::new(-1000.0, 100.0), b: Point::new(1900.0, 100.0), color: [255, 0, 255], dashed: true };
+    let mut frames = Frames::new();
+    let (shapes, _) = paint_frame(&mut frames, &tokens, Direction::Ltr, Ink::OnPanel, |draw| {
+        paint(draw, &view, std::slice::from_ref(&line), &PathOptionsSettings::default(), &style);
+    });
+    let drawn = segments(&shapes);
+    assert!(!drawn.is_empty(), "the part on the canvas is drawn");
+    assert!(drawn.len() <= 40, "only the dashes near the canvas: {}", drawn.len());
+    let near = view.rect.expand(32.0);
+    assert!(drawn.iter().flatten().all(|p| near.contains(*p) && (p.y - 100.0).abs() < 1e-3), "{drawn:?}");
+}
+
 /// A turned view clips the line to the canvas too, and a line off the canvas or with an end that is not finite draws
 /// nothing.
 #[test]
