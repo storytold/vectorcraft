@@ -221,6 +221,37 @@ fn page_item_properties_join_one_undo_step() {
     }
 }
 
+/// `app.undo()` and `app.redo()` step through the run's own edits, and the run still ends as one
+/// undo step. They change nothing past the run's first edit or its last undone one.
+#[test]
+fn app_undo_and_redo_step_through_the_runs_edits() {
+    let (mut s, a, b) = doc();
+    let steps = undo_steps(&s);
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument; var i = d.pageItems[0]; var unnamed = i.name;\
+         app.undo(); app.redo();\
+         i.name = 'first'; i.opacity = 40;\
+         app.undo(); vc.log([i.name, i.opacity]);\
+         app.redo(); vc.log(i.opacity);\
+         app.redo(); vc.log(i.opacity);\
+         app.undo(); app.undo(); app.undo(); vc.log([i.name === unnamed, i.opacity]);\
+         vc.log(typeof app.undo());\
+         d.pageItems[1].name = 'kept';",
+    );
+    assert_eq!(out, vec![json!(["first", 100]), json!(40), json!(40), json!([true, 100]), json!("undefined")]);
+    assert_eq!(undo_steps(&s), steps + 1, "one undo step for the run");
+    let st = s.active().unwrap();
+    let names: Vec<_> = [a, b].iter().map(|id| st.doc.node(*id).unwrap().name.clone()).collect();
+    assert!(names.contains(&Some("kept".to_string())) && !names.contains(&Some("first".to_string())), "{names:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let st = s.active().unwrap();
+    assert!(st.doc.node(a).is_some_and(|n| n.name.is_none()) && st.doc.node(b).is_some_and(|n| n.name.is_none()), "undoing the run");
+    let mut s = Session::new();
+    assert!(failure(&mut s, "app.undo();").contains("No active document"));
+    assert!(failure(&mut s, "app.redo();").contains("No active document"));
+}
+
 /// An opacity a graph mark already has still replaces the opacity another mark of its series left on
 /// the graph, as `object.setProps` does.
 #[test]

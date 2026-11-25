@@ -23,6 +23,9 @@
 //!   the active artboard (`ARTBOARDCOORDINATESYSTEM`), as `app.coordinateSystem` says for the run.
 //! - Enumerated values are strings such as `"ZOrderMethod.BRINGTOFRONT"`.
 //! - `app.activeDocument` with no document open throws `No active document`.
+//! - `app.undo()` and `app.redo()` act on the active document and reach only the steps the run
+//!   made; with no such step they change nothing, and with no document open they throw
+//!   `No active document`.
 //! - Assigning `Document.selection` takes one object, a list of them, `null` or `[]`; every object
 //!   must be one of that document's that can be selected, or nothing changes.
 //! - Members the help pages list that are not here yet throw an error that says so.
@@ -686,6 +689,28 @@ fn app_set_active(h: &Host, a: &[Data]) -> Answer {
         command(h, "document.activate", &json!({"index": doc.index}))?;
     }
     Ok(Data::Undefined)
+}
+
+/// `app.undo()` and `app.redo()`: `edit.undo` or `edit.redo` in the active document, which reach
+/// only the steps the run made. With no step to undo or redo they change nothing.
+fn app_history(h: &Host, id: &str, redo: bool) -> Answer {
+    let has_step = {
+        let s = h.session.borrow();
+        let st = s.active().ok_or_else(|| HostError::Error(NO_ACTIVE_DOCUMENT.into()))?;
+        if redo { !st.history.redo.is_empty() } else { !st.history.undo.is_empty() }
+    };
+    if has_step {
+        command(h, id, &json!({}))?;
+    }
+    Ok(Data::Undefined)
+}
+
+fn app_undo(h: &Host, _: &[Data]) -> Answer {
+    app_history(h, "edit.undo", false)
+}
+
+fn app_redo(h: &Host, _: &[Data]) -> Answer {
+    app_history(h, "edit.redo", true)
 }
 
 fn app_selection(h: &Host, _: &[Data]) -> Answer {
@@ -1948,6 +1973,8 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("selection", get(l, app_selection)),
         ("coordinateSystem", property(l, app_coords, app_set_coords)),
         ("getIsFileOpen", method(l, app_is_open)),
+        ("undo", method(l, app_undo)),
+        ("redo", method(l, app_redo)),
     ]);
     application.push(later(l, "Application", "beep"));
     let preset = {

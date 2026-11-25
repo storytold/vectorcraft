@@ -2622,7 +2622,10 @@ app through the global object `vc`, and writes to the Script Console and runs ot
 - `vc.log(value)` adds a value to the report and a line to the Script Console.
 - `app` is the application object the help page https://ai-scripting.docsforadobe.dev/jsobjref/Application/
   describes: `app.documents`, `app.activeDocument` (assigning an open document makes it the active one),
-  `app.selection`, `app.coordinateSystem` and `app.getIsFileOpen(path)`. `app.documents`
+  `app.selection`, `app.coordinateSystem`, `app.getIsFileOpen(path)`, and `app.undo()` and `app.redo()`, which
+  run `edit.undo` and `edit.redo` in the active document and so reach only the steps the run made. The run still
+  ends as one undo step. `app.undo()` and `app.redo()` with no such step change nothing, and with no document open
+  they throw `No active document` (VectorCraft's own rules). `app.documents`
   (https://ai-scripting.docsforadobe.dev/jsobjref/Documents/) has `length`, `[i]`, `index(key)`, `getByName(name)`
   and `add(colorSpace?, width?, height?, numArtBoards?, artboardLayout?, artboardSpacing?, artboardRowsOrCols?)`,
   which runs `file.new` (`artboardRowsOrCols` is the number of rows for `GridByCol` and `RLGridByCol`, and of
