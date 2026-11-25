@@ -139,7 +139,8 @@ pub fn missing_fonts_of(st: &DocState, rules: Option<&findfiles::Rules>) -> Valu
                 &system
             }
         };
-        if std::fs::canonicalize(&dir).is_ok_and(|c| rules.refusal_unlisted(&c).is_none()) {
+        // A confined caller isn't told of a folder outside the folders it may read.
+        if std::fs::canonicalize(&dir).is_ok_and(|c| rules.refusal_unlisted(&c).is_none()) && crate::file_access::check_read(&dir).is_ok() {
             out["fontsNextToDocument"] = json!(dir);
         }
     }
