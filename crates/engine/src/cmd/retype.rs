@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Retype",
         ["Type"],
         None,
-        "{fonts?: [family…], tolerance?: 0..0.05 (default 0: exact matches only)} turn the selected outlined text (glyph paths and compound paths, inside groups too) back into live type: each shape is matched against the glyphs of the fonts the app has loaded, the document's fonts and the families in fonts, the same up to uniform scale, rotation and translation; with a tolerance above 0, a shape that is no glyph exactly may nearly be one (an outline simplified, a curve split in two, contours in another order, start or direction) when its leftover distance from the glyph, relative to the shape's outline spread (the root mean square distance of its sampled outline points from their center), is at most the tolerance (VectorCraft's own measure; shapes of at most 8 contours); a compound path holding several glyphs (a word outlined as one path, at most 256 contour groups, 512 contours and 65,536 path elements, and 16,384 contours per command) is split into them (a part matching exactly also with its contours the other way round, or with only some of them so, as an o's counter alone in an even-odd compound), and becomes type only when every one of them matches; matched glyphs become point text in that font and size at the same baseline, one object per line unless lines stack into one (below), with the first glyph's fill, stroke, opacity and blend mode, in one undo step; a line of three or more exactly matched glyphs takes the spacing most of its gaps share as its tracking (pair kerning left out) when tracked type draws all of it in place, or more of it than untracked type (when untracked type also draws it, untracked type is kept if the tracking is under one unit or the tracked type would drop a gap one space wide (a b c keeps its spaces), and the tracked type otherwise), and negative tracking only when the line is opaque, Normal, with a solid fill or none and no stroke (its glyphs may overlap); lines that follow each other in paint order with the same group, paint, font, size, turn and tracking (an untracked line of one or two glyphs takes the others' tracking), each one the same leading (0.25 to 3 times the size) below the one before, and lined up at their starts, ends or centers become one area type object with that leading (Auto when Auto gives it) and left, right or center alignment, or one multi-line point type object when area type (after Text Wrap) would not draw the outlines' glyphs in their places or when checking the Text Wrap objects on the changed layers would copy more than 2,000,000 anchors, subpaths and shapes; where even that type would move a glyph, the lines before that glyph's line stay one object and the rest are joined again from that line; lines with an opacity below 100%, a blend mode other than Normal, a gradient or pattern fill or a stroke stay one object each; a line splits where its type would not draw the outlines' glyphs in their places (uneven spacing, manual kerning, font substitutions; with a tolerance, within it), and before a near-matched glyph the line's size and turn would draw further from its shape than the tolerance; a glyph must also paint the area the shape paints under its fill rule (a nonzero compound whose inner contour runs the same way as its outer one paints its center, so a ring glyph does not replace it; a counter narrower than three times the outline tolerance across in some direction, an outline too large to check, or parts of a split compound that overlap where its fill rule leaves the overlap unpainted, or that overlap at all when the compound has an opacity below 100%, a blend mode other than Normal, a gradient or pattern fill or a stroke, also keep the shape an outline); shapes that match no font, glyphs type cannot draw as they are, and shapes with their own opacity mask stay as they are → {ids (the new type), texts (lines joined by \\n), fonts: [{family, style, size, tracking (1/1000 em), leading (pt, null for Auto or one line), area (bool), score (how closely the line's least close glyph fits, 1 for exact, 0 at a leftover distance of 0.05)}], unmatched: [id…] (shapes that stayed as they are when another shape became type), truncated (shapes past the limits of 2048 shapes or 16 nested groups were left out)}; an error, with no unmatched list, when no shape becomes type, or when tolerance is not a number from 0 to 0.05",
+        "{fonts?: [family…], tolerance?: 0..0.05 (default 0: exact matches only)} turn the selected outlined text (glyph paths and compound paths, inside groups too) back into live type: each shape is matched against the glyphs of the fonts the app has loaded, the document's fonts and the families in fonts, the same up to uniform scale, rotation and translation; with a tolerance above 0, a shape that is no glyph exactly may nearly be one (an outline simplified, a curve split in two, contours in another order, start or direction) when its leftover distance from the glyph, relative to the shape's outline spread (the root mean square distance of its sampled outline points from their center), is at most the tolerance (VectorCraft's own measure; shapes of at most 8 contours); a compound path holding several glyphs (a word outlined as one path, at most 256 contour groups, 512 contours and 65,536 path elements, and 16,384 contours per command) is split into them (a part matching exactly also with its contours the other way round, or with only some of them so, as an o's counter alone in an even-odd compound), and becomes type only when every one of them matches; matched glyphs become point text in that font and size at the same baseline, one object per line unless lines stack into one (below), with the first glyph's fill, stroke, opacity and blend mode, in one undo step; a line of three or more exactly matched glyphs takes the spacing most of its gaps share as its tracking (pair kerning left out) when tracked type draws all of it in place, or more of it than untracked type (when untracked type also draws it, untracked type is kept if the tracking is under one unit or the tracked type would drop a gap one space wide (a b c keeps its spaces), and the tracked type otherwise), and negative tracking only when the line is opaque, Normal, with a solid fill or none and no stroke (its glyphs may overlap); lines that follow each other in paint order with the same group, paint, font, size, turn and tracking (an untracked line of one or two glyphs takes the others' tracking), each one the same leading (0.25 to 3 times the size) below the one before, and lined up at their starts, ends or centers become one area type object with that leading (Auto when Auto gives it) and left, right or center alignment, or one multi-line point type object when area type (after Text Wrap) would not draw the outlines' glyphs in their places or when checking the Text Wrap objects on the changed layers would copy more than 2,000,000 anchors, subpaths and shapes; where even that type would move a glyph, the lines before that glyph's line stay one object and the rest are joined again from that line; lines with an opacity below 100%, a blend mode other than Normal, a gradient or pattern fill or a stroke stay one object each; a line splits where its type would not draw the outlines' glyphs in their places (uneven spacing, manual kerning, font substitutions; with a tolerance, within it), and before a near-matched glyph the line's size and turn would draw further from its shape than the tolerance; a glyph must also paint the area the shape paints under its fill rule (a nonzero compound whose inner contour runs the same way as its outer one paints its center, so a ring glyph does not replace it; a counter narrower than three times the outline tolerance across in some direction, an outline too large to check, or parts of a split compound that overlap where its fill rule leaves the overlap unpainted, or that overlap at all when the compound has an opacity below 100%, a blend mode other than Normal, a gradient or pattern fill or a stroke, also keep the shape an outline); shapes that match no font, a combining mark that would start a line (a shape whose first 16 matched glyphs include another character's starts it as that character), glyphs type cannot draw as they are, and shapes with their own opacity mask stay as they are → {ids (the new type), texts (lines joined by \\n), fonts: [{family, style, size, tracking (1/1000 em), leading (pt, null for Auto or one line), area (bool), score (how closely the line's least close glyph fits, 1 for exact, 0 at a leftover distance of 0.05)}], unmatched: [id…] (shapes that stayed as they are when another shape became type), truncated (shapes past the limits of 2048 shapes or 16 nested groups were left out)}; an error, with no unmatched list, when no shape becomes type, or when tolerance is not a number from 0 to 0.05",
         has_selected_path,
         retype
     )]
@@ -777,10 +777,24 @@ fn set_apart(t: &TextObject, g: &vectorcraft_text::PositionedGlyph, m: &GlyphMat
 /// The most glyphs [`verified`] measures the tracking of after a split.
 const MEASURE_SPAN: usize = 32;
 
+/// One part of shape `id`, by the glyph it matched (face, glyph, origin, turn and scale): the parts
+/// of a compound path share its id.
+type PartKey = (NodeId, u32, u32, [u64; 4]);
+
+fn part_key(id: NodeId, m: &GlyphMatch) -> PartKey {
+    (id, m.face.id(), m.gid, [m.origin.x.to_bits(), m.origin.y.to_bits(), m.angle.to_bits(), m.scale.to_bits()])
+}
+
 /// `lines` checked against their own layout: a line splits where its type stops drawing the
 /// outlines, and a glyph its type cannot draw even on its own stays an outline (`unmatched`).
-/// The glyphs laid out are bounded by a multiple of the number of glyphs.
-fn verified(lines: Vec<Line>, system_layout: bool, unmatched: &mut Vec<NodeId>) -> Vec<Line> {
+/// `spacing` holds, for a part of a shape read as a combining mark, the other character that part
+/// is. The glyphs laid out are bounded by a multiple of the number of glyphs.
+fn verified(
+    lines: Vec<Line>,
+    system_layout: bool,
+    spacing: &std::collections::HashMap<PartKey, GlyphMatch>,
+    unmatched: &mut Vec<NodeId>,
+) -> Vec<Line> {
     // Glyphs laid out in all, at most: past it, the glyphs left unchecked stay outlines.
     let mut budget = lines.iter().map(|l| l.pieces.len()).sum::<usize>().saturating_mul(16).saturating_add(256);
     // Measuring the tracking of the glyphs after a split has a budget of its own, so it cannot
@@ -796,6 +810,44 @@ fn verified(lines: Vec<Line>, system_layout: bool, unmatched: &mut Vec<NodeId>) 
     let mut out = vec![];
     while let Some(l) = todo.pop_front() {
         let n = l.pieces.len();
+        // A combining mark goes with the character before it: a mark that a split left first on
+        // a line becomes the other character its shape is (`spacing`), alone on a line, or else
+        // stays an outline, and the line goes on from the glyph after it ([`new_line`] starts no
+        // line with one).
+        if l.matches.first().is_some_and(|m| vectorcraft_text::retype::is_combining_mark(m.ch)) {
+            let first = l.pieces.first().copied();
+            let alone = first.zip(l.matches.first()).and_then(|(id, mark)| spacing.get(&part_key(id, mark)).map(|m| reposed(&l, id, m)));
+            if alone.is_none() {
+                unmatched.extend(first);
+            }
+            if n > 1 {
+                // The tracking was measured with the mark's gap in it: the rest is measured again
+                // without it, from the same budgets as the rest after a split. A rest that starts
+                // with a mark too is not measured here: its own pass leaves that mark out and
+                // measures the glyphs after it.
+                let measurable = n > 3 && remeasured >= (n - 1).saturating_mul(6) && track_budget >= (n - 1).saturating_mul(6);
+                let rest = if l.matches.get(1).is_some_and(|m| vectorcraft_text::retype::is_combining_mark(m.ch)) {
+                    l.part(1, n)
+                } else if measurable {
+                    remeasured = remeasured.saturating_sub((n - 1).saturating_mul(6));
+                    track_budget = track_budget.saturating_sub(n - 1);
+                    l.respaced(1, n, 0.0).map(|r| r.tracked(system_layout, &mut track_budget))
+                } else if l.tracking == 0.0 {
+                    l.part(1, n)
+                } else {
+                    l.respaced(1, n, 0.0)
+                };
+                match rest {
+                    Some(rest) => todo.push_front(rest),
+                    None => unmatched.extend(l.pieces.get(1..).unwrap_or_default().iter().copied()),
+                }
+            }
+            // Checked before the rest, so the lines keep the outlines' order.
+            if let Some(alone) = alone {
+                todo.push_front(alone);
+            }
+            continue;
+        }
         // The line's type is laid out over a window from its start that doubles while the type
         // draws the window's glyphs as the outlines do, so finding where it stops costs about
         // twice the glyphs before that point, not the whole rest of the line each time.
@@ -1244,6 +1296,8 @@ fn join(l: &mut Line, pc: &Piece, cands: &[GlyphMatch]) -> bool {
         .iter()
         .flat_map(|c| c.poses())
         .filter(|fp| !(fp.gid == current.gid && fp.face.id() == current.face.id() && fp.angle == current.angle))
+        // No line starts with a combining mark (see [`new_line`]).
+        .filter(|fp| !vectorcraft_text::retype::is_combining_mark(fp.ch))
         .collect();
     for fp in others {
         let mut turned = reposed(l, id, &fp);
@@ -1278,10 +1332,11 @@ fn reposed(l: &Line, id: NodeId, m: &GlyphMatch) -> Line {
     }
 }
 
-/// A new line of shape `pc` alone, as the first of its candidate glyphs `cands` (none: `None`),
-/// with near matches taken at tolerance `slack`.
+/// A new line of shape `pc` alone, as the first of its candidate glyphs `cands` that is not a
+/// combining mark (none: `None`), with near matches taken at tolerance `slack`. No line starts
+/// with a mark: a mark combines with the character before it.
 fn new_line(pc: &Piece, cands: &[GlyphMatch], slack: f64) -> Option<Line> {
-    let m = cands.first()?;
+    let m = cands.iter().find(|m| !vectorcraft_text::retype::is_combining_mark(m.ch))?;
     let dir = Vec2::new(m.angle.cos(), m.angle.sin());
     Some(Line {
         pieces: vec![pc.id],
@@ -1755,6 +1810,7 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
         let mut unmatched = vec![];
         // An unmatched shape between glyphs ends the line: the type after it is painted after it.
         let mut open = false;
+        let mut spacing: std::collections::HashMap<PartKey, GlyphMatch> = std::collections::HashMap::new();
         // How many glyphs each shape is: a shape of several becomes type only when all of them do.
         let mut glyphs_of: std::collections::HashMap<NodeId, usize> = std::collections::HashMap::new();
         for (pc, parts) in pieces.iter().zip(&found) {
@@ -1775,8 +1831,40 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
                     Some(l) if open => join(l, pc, &cands),
                     _ => false,
                 };
+                // A part that joined a line, perhaps as a mark, that is also another character, in
+                // that face or else in the face most shapes fit of those it is a character in: the
+                // character, should a split leave the part first on a line ([`verified`]). Kept by
+                // the glyph the part joined as, since the parts of a compound path share its id.
+                let is_mark = |m: &GlyphMatch| vectorcraft_text::retype::is_combining_mark(m.ch);
+                if joined
+                    && cands.iter().any(is_mark)
+                    && let Some(m) = cands
+                        .iter()
+                        .find(|m| !is_mark(m))
+                        .or_else(|| ms.iter().enumerate().filter(|(_, m)| !is_mark(m)).max_by(ranked).map(|(_, m)| m))
+                    && let Some(at) = lines.last().and_then(|l| l.matches.last())
+                {
+                    spacing.insert(part_key(pc.id, at), m.clone());
+                }
                 if !joined {
-                    lines.extend(new_line(pc, &cands, tolerance));
+                    // A part that is only marks in that face may be another character in a face
+                    // fewer shapes fit: it starts its line in the one of those most shapes fit.
+                    let started = new_line(pc, &cands, tolerance).or_else(|| {
+                        let face = ms.iter().enumerate().filter(|(_, m)| !is_mark(m)).max_by(ranked).map(|(_, m)| m.face.id());
+                        let cands: Vec<GlyphMatch> = ms.iter().filter(|m| Some(m.face.id()) == face).cloned().collect();
+                        new_line(pc, &cands, tolerance)
+                    });
+                    match started {
+                        Some(l) => lines.push(l),
+                        // Only combining marks: no line starts with one, so the shape stays an
+                        // outline (a shape of several glyphs then is not whole type, see
+                        // `partial_lines`) and the glyph after it starts the next line.
+                        None => {
+                            unmatched.push(pc.id);
+                            open = false;
+                            continue;
+                        }
+                    }
                 }
                 open = true;
             }
@@ -1795,7 +1883,7 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
             lines.iter().map(|l| l.text.chars().count().saturating_add(l.pieces.len().saturating_mul(393))).fold(256usize, usize::saturating_add);
         let mut lines: Vec<Line> = lines.into_iter().map(|l| l.tracked(system_layout, &mut budget)).collect();
         share_tracking(&mut lines, system_layout);
-        let mut lines = verified(lines, system_layout, &mut unmatched);
+        let mut lines = verified(lines, system_layout, &spacing, &mut unmatched);
         if pieces.len() > 1 || glyphs_of.values().any(|n| *n > 1) {
             lines.retain(|l| {
                 let lone = matches!(l.pieces.as_slice(), [id] if lone_pieces.contains(id));

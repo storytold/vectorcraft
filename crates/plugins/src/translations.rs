@@ -330,6 +330,17 @@ impl Manifest {
         permissions::display_text(label.trim(), MAX_SHOWN_NAME)
     }
 
+    /// The label command `c`'s menu item shows in language `lang` ([`Command::menu_label`]):
+    /// [`Manifest::shown_command_label`], and for a command placed in another menu, followed by
+    /// [`Manifest::shown_name`] in parentheses.
+    pub fn shown_command_menu_label(&self, c: &Command, lang: &str) -> String {
+        let label = self.shown_command_label(c, lang);
+        match c.place {
+            None => label,
+            Some(_) => format!("{label} ({})", self.shown_name(lang)),
+        }
+    }
+
     /// Parameter `k`'s label in language `lang`: its translation, else its `label` (`None`: it
     /// has neither).
     pub fn param_label_in(&self, k: &str, lang: &str) -> Option<&str> {
@@ -418,6 +429,24 @@ mod tests {
         assert_eq!(m.shown_command_label(shrink, "pt-br"), "Encolher", "from pt");
         let grow = m.command("grow").unwrap();
         assert_eq!(m.shown_command_label(grow, "pt-br"), "Grow", "from the manifest");
+    }
+
+    /// A command placed in another menu names its plug-in after its label, both in the language
+    /// shown; one in its plug-in's submenu shows its label alone.
+    #[test]
+    fn a_placed_command_names_its_plugin_in_the_language_shown() {
+        let m = Manifest::parse(
+            r#"{"id":"org.example.ridge","name":"Ridge","api":2,"kind":"filter",
+                "commands":[{"id":"low","label":"Low Area","menu":{"path":["Select"]}},{"id":"stay","label":"Stay"}],
+                "translations":{"de":{"name":"Grat","commands":{"low":{"label":"Tiefe Fläche"},"stay":{"label":"Bleiben"}}}}}"#
+                .as_bytes(),
+        )
+        .unwrap();
+        let (low, stay) = (m.command("low").unwrap(), m.command("stay").unwrap());
+        assert_eq!(m.shown_command_menu_label(low, "de"), "Tiefe Fläche (Grat)");
+        assert_eq!(m.shown_command_menu_label(low, "fr"), "Low Area (Ridge)");
+        assert_eq!(m.shown_command_menu_label(low, "en"), low.menu_label(&m.name), "the manifest's own text as before");
+        assert_eq!((m.shown_command_menu_label(stay, "de"), m.shown_command_menu_label(stay, "en")), ("Bleiben".into(), "Stay".into()));
     }
 
     #[test]

@@ -3,17 +3,30 @@
 //! artboard). With the Artboard tool chosen, the buttons align and distribute the artboards the
 //! tool has selected.
 
+use craft::behavior::IconId;
+use craft::keymap::CommandRef;
+use craft::ui::bars::{BarItem, BarItems};
+use craft::ui::buttons::{IconButton, PopupMark, ToggleButton};
+use craft::ui::contract::{Bind, Gap, PopupKind, Props as _, Show as _, ShowContainer as _, Trigger};
+use craft::ui::display::Divider;
+use craft::ui::layout_components::Row;
+use craft::ui::menu::{Menu, MenuItem, PanelRow};
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::text::NumberField;
 use egui::Ui;
 use serde::Serialize;
 use serde_json::{Value, json};
 
-use super::{pstate, selection_len, set_pstate};
+// PLAN: assumed `part_hidden(app, key)` and `set_part_hidden(app, key, on)` (op.A5, hub-w2) live in `panels.rs`.
+use super::{part_hidden, selection_len, set_part_hidden};
 use crate::VectorcraftApp;
-use crate::widgets::{self, menu_item};
+
+/// The `hidden_parts` key of the Align panel's Hide Options state; `panel_docking/sizes.rs` reads it too.
+const HIDE_OPTIONS: &str = "align-hide-options";
 
 /// What Align aligns to. The Align To choice kept with the UI state ([`crate::UiState::align_to`])
 /// is Selection or Artboard: Align to Key Object stores no choice.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AlignTo {
     #[default]
@@ -87,6 +100,24 @@ pub const ALIGN: [(&str, &str, &str, &str); 6] = [
     ("dc-al-vcenter", "Vertical Align Center", "vertical", "center"),
     ("dc-al-bottom", "Vertical Align Bottom", "vertical", "bottom"),
 ];
+
+/// The glyphs of [`ALIGN`]'s buttons, in its order, in the Control bar and the Properties panel: the reference app drew
+/// them there with Lucide's align glyphs, and only the Align panel with its own.
+const BAR_ALIGN: [&str; 6] = [
+    "align-start-vertical",
+    "align-center-vertical",
+    "align-end-vertical",
+    "align-start-horizontal",
+    "align-center-horizontal",
+    "align-end-horizontal",
+];
+
+/// The glyph of align button `b` in the Control bar and the Properties panel ([`BAR_ALIGN`]); `None` for the other
+/// buttons, which draw the panel's glyph there too.
+pub(crate) fn bar_glyph(b: Button) -> Option<&'static str> {
+    let Button::Align(axis, v) = b else { return None };
+    ALIGN.iter().position(|r| r.2 == axis && r.3 == v).map(|i| BAR_ALIGN[i])
+}
 
 pub const DISTRIBUTE: [(&str, &str, &str, &str); 6] = [
     ("dc-dist-top", "Vertical Distribute Top", "vertical", "top"),
@@ -240,38 +271,87 @@ fn spacing_min(app: &VectorcraftApp) -> f64 {
     if on_artboards(app) { f64::NEG_INFINITY } else { 0.0 }
 }
 
-/// The six align buttons of the Control bar and the Properties panel, `size` points square.
-/// They align to what the Align panel's Align To says (the key object while there is one), as
-/// its own buttons do (#789), and the selected artboards with the Artboard tool chosen.
-pub fn align_buttons(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
-    for (i, (icon, tip, axis, v)) in [
-        ("align-start-vertical", "Horizontal Align Left", "horizontal", "left"),
-        ("align-center-vertical", "Horizontal Align Center", "horizontal", "center"),
-        ("align-end-vertical", "Horizontal Align Right", "horizontal", "right"),
-        ("align-start-horizontal", "Vertical Align Top", "vertical", "top"),
-        ("align-center-horizontal", "Vertical Align Center", "vertical", "center"),
-        ("align-end-horizontal", "Vertical Align Bottom", "vertical", "bottom"),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        if i == 3 && widgets::icon_button(ui, "dc-al-center", tl!("Horizontal & Vertical Align Center"), false, size).clicked() {
-            run_button(app, Button::AlignCenters).ok();
-        }
-        if widgets::icon_button(ui, icon, tl!(tip), false, size).clicked() {
-            run_button(app, Button::Align(axis, v)).ok();
-        }
+/// The command id of button `b`: [`COMMANDS`] is the one table of them.
+fn command_id(b: Button) -> Option<&'static str> {
+    COMMANDS.iter().find(|c| c.1 == b).map(|c| c.0)
+}
+
+/// The Align Objects buttons in the panel's order, the Horizontal & Vertical Align Center button
+/// after the third: (icon, button).
+fn align_icons() -> impl Iterator<Item = (&'static str, Button)> {
+    ALIGN.iter().enumerate().flat_map(|(i, (icon, _, axis, v))| {
+        let centers = (i == 3).then_some(("dc-al-center", Button::AlignCenters));
+        centers.into_iter().chain([(*icon, Button::Align(axis, v))])
+    })
+}
+
+/// The Distribute Objects buttons in the panel's order: (icon, button).
+fn distribute_icons() -> impl Iterator<Item = (&'static str, Button)> {
+    DISTRIBUTE.iter().map(|(icon, _, axis, v)| (*icon, Button::Distribute(axis, v)))
+}
+
+/// An icon button that runs the command of `b`; its label, state and click come from the command.
+fn command_button(ui: &mut Ui, icon: &'static str, b: Button) {
+    if let Some(id) = command_id(b) {
+        IconButton::command(IconId::new(icon), CommandRef::new(id)).show(ui);
     }
 }
 
-/// The six Distribute Objects buttons of the Control bar, `size` points square. They distribute
-/// what the Align panel's buttons do, to what its Align To says.
-pub(crate) fn distribute_buttons(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
-    for (icon, tip, axis, v) in DISTRIBUTE {
-        if widgets::icon_button(ui, icon, tl!(tip), false, size).clicked() {
-            run_button(app, Button::Distribute(axis, v)).ok();
+/// A strip of the commands of `buttons`.
+fn bar_items(buttons: impl Iterator<Item = Button>) -> BarItems {
+    BarItems::new(buttons.filter_map(command_id).map(|id| BarItem::new(CommandRef::new(id))).collect())
+}
+
+/// The seven align buttons of the Control bar and the Properties panel. They align to what the
+/// Align panel's Align To says (the key object while there is one), as its own buttons do (#789),
+/// and the selected artboards with the Artboard tool chosen.
+pub(crate) fn align_buttons(_app: &mut VectorcraftApp, ui: &mut Ui) {
+    Row::new().show(ui, |ui, _| {
+        for (icon, b) in align_icons() {
+            command_button(ui, bar_glyph(b).unwrap_or(icon), b);
         }
+    });
+}
+
+/// Whether the Align or Distribute button `b` can run now: the one rule of the panel, the Control
+/// bar and Properties (`menus/state.rs` asks it for the command of each button). With the
+/// Artboard tool chosen the buttons act on the artboards it has selected.
+pub(crate) fn button_enabled(app: &VectorcraftApp, b: &Button) -> bool {
+    let boards = on_artboards(app).then(|| artboards_selected(app));
+    let n = selection_len(app) + selected_guides(app);
+    match b {
+        Button::Align(..) | Button::AlignCenters => boards.map_or(n >= 1, |b| b >= 1),
+        // Two or more objects and ruler guides (#1597), or anchor points, which may all be on one
+        // path; or the artboards [`artboards_distribute`] asks for.
+        Button::Distribute(..) | Button::Spacing(_) => boards.map_or(n >= 2 || has_anchors(app), |_| artboards_distribute(app)),
     }
+}
+
+/// The Control bar's Align content: the align buttons, the Align To menu button showing the choice
+/// of [`shown_align_to`], and the Distribute buttons while they can act (the artboards the Artboard
+/// tool has selected, else two or more objects). The bar's row decides what leaves when it is
+/// narrow.
+pub(crate) fn control_bar_strip(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let (icon, name) = align_to_icon_name(shown_align_to(app), key_is_anchor(app));
+    let distributes = if on_artboards(app) { artboards_distribute(app) } else { objects_aligned(app) > 1 };
+    Row::new().show(ui, |ui, _| {
+        bar_items(align_icons().map(|(_, b)| b)).show(ui);
+        let button = IconButton::new(IconId::new(icon))
+            .label(tl!("Align To:"))
+            .choice(name)
+            .tooltip(name)
+            .popup(PopupKind::Menu)
+            .popup_mark(PopupMark::Menu)
+            .show(ui);
+        Menu::new(tl!("Align To")).opened_by(&button.response, Trigger::Press).show(ui, |ui, _| {
+            for (id, _) in ALIGN_TO_COMMANDS {
+                MenuItem::command(CommandRef::new(id)).show(ui);
+            }
+        });
+        if distributes {
+            bar_items(distribute_icons().map(|(_, b)| b)).show(ui);
+        }
+    });
 }
 
 /// Whether the selection has a key object or a key guide.
@@ -305,9 +385,6 @@ fn topmost(app: &VectorcraftApp) -> Option<vectorcraft_doc::NodeId> {
 fn align_to(app: &VectorcraftApp) -> AlignTo {
     if has_key(app) { AlignTo::Key } else { app.ui.align_to }
 }
-
-/// The Align To choices of the Align panel and of the Control bar's Align To menu, in their order.
-const ALIGN_TO: [AlignTo; 3] = [AlignTo::Selection, AlignTo::Key, AlignTo::Artboard];
 
 /// The icon and the translated name of Align To choice `v`; `anchor`: the key is an anchor point
 /// (Direct Selection), and the key choice is named Align to Key Anchor.
@@ -417,165 +494,126 @@ pub(crate) fn run_align_to(app: &mut VectorcraftApp, v: AlignTo) -> Result<Value
     Ok(json!({"alignTo": shown_align_to(app).param()}))
 }
 
-/// The width of the Control bar's Align To menu ([`align_to_menu`]) for buttons `size` points
-/// square: the icon of the choice and the arrow after it.
-pub(crate) fn align_to_menu_width(size: f32) -> f32 {
-    size + ALIGN_TO_ARROW
-}
-
-/// The width of the arrow of the Control bar's Align To menu.
-const ALIGN_TO_ARROW: f32 = 14.0;
-
-/// The Control bar's Align To menu, next to its Align buttons: the icon of the choice that the
-/// Align panel's Align To shows ([`shown_align_to`]) and an arrow, `size` points tall. Its menu
-/// lists Align to Selection, Align to Key Object and Align to Artboard with that choice checked,
-/// and a pick chooses it as the Align panel does ([`choose_align_to`]). Align to Key Object is off
-/// while no key object can be made. Screen readers get a combo box named "Align To:" whose value
-/// is the choice.
-pub(crate) fn align_to_menu(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
-    let t = crate::theme::Tokens::get(ui.ctx());
-    let shown = shown_align_to(app);
-    let anchor = key_is_anchor(app);
-    let (icon, name) = align_to_icon_name(shown, anchor);
-    let (rect, resp) = ui.allocate_exact_size(egui::vec2(align_to_menu_width(size), size), egui::Sense::click());
-    if resp.hovered() {
-        ui.painter().rect_filled(rect, egui::CornerRadius::same(5), t.hover);
-    }
-    let square = egui::Rect::from_min_size(rect.min, egui::vec2(size, size));
-    crate::icons::paint(ui, icon, square.shrink((size * 0.2).round()), t.icon);
-    let arrow = egui::Rect::from_center_size(egui::pos2(square.right() + ALIGN_TO_ARROW / 2.0, rect.center().y), egui::vec2(10.0, 10.0));
-    crate::icons::paint(ui, "chevron-down", arrow, t.text_dim);
-    resp.widget_info(|| egui::WidgetInfo {
-        current_text_value: Some(name.to_owned()),
-        ..egui::WidgetInfo::labeled(egui::Role::ComboBox, ui.is_enabled(), tl!("Align To:"))
-    });
-    let resp = resp.on_hover_text(name);
-    let picked = egui::Popup::menu(&resp).show(|ui| {
-        let mut picked = None;
-        for v in ALIGN_TO {
-            if menu_item(ui, align_to_icon_name(v, anchor).1, can_choose(app, v), shown == v) {
-                picked = Some(v);
-            }
-        }
-        picked
-    });
-    if let Some(v) = picked.and_then(|r| r.inner) {
-        choose_align_to(app, v);
-    }
-}
-
+/// The Align panel: Align Objects, Distribute Objects and, unless Hide Options is on, Distribute
+/// Spacing with its value and Align To. The buttons are commands, so their state and clicks come
+/// from the command layer ([`button_enabled`], [`run_button`]).
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let n = selection_len(app);
-    let guides = selected_guides(app);
-    // With the Artboard tool chosen, the buttons act on the artboards it has selected.
-    let boards = on_artboards(app).then(|| artboards_selected(app));
-    let can_align = boards.map_or(n + guides >= 1, |b| b >= 1);
-    // `spacing` is the Distribute Spacing value. The Distribute Objects and Distribute Spacing
-    // buttons send it while there is a key object or a key guide (#2143), or for artboards while
-    // Align to Artboard is chosen.
-    let spacing = app.ui.align_spacing;
-    let key = spacing_sent(app).is_some();
-    // Two or more objects and ruler guides (#1597), or anchor points, which may all be on one
-    // path; or the artboards [`artboards_distribute`] asks for.
-    let distributes = boards.map_or(n + selected_guides(app) >= 2 || has_anchors(app), |_| artboards_distribute(app));
-    let (unit, min_spacing) = (app.session.general_unit(), spacing_min(app));
-    widgets::subheader(ui, tl!("Align Objects:"));
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 5.0;
-        for (i, (icon, tip, axis, v)) in ALIGN.iter().enumerate() {
-            if i == 3 {
-                ui.add_space(6.0);
-                if widgets::icon_button_enabled(ui, "dc-al-center", tl!("Horizontal & Vertical Align Center"), false, can_align, 32.0).clicked() {
-                    run_button(app, Button::AlignCenters).ok();
-                }
-                ui.add_space(6.0);
-            }
-            if widgets::icon_button_enabled(ui, icon, tl!(tip), false, can_align, 32.0).clicked() {
-                run_button(app, Button::Align(axis, v)).ok();
-            }
-        }
-    });
-    widgets::divider(ui);
-    widgets::subheader(ui, tl!("Distribute Objects:"));
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 5.0;
-        for (i, (icon, tip, axis, v)) in DISTRIBUTE.iter().enumerate() {
-            if i == 3 {
-                ui.add_space(6.0);
-            }
-            if widgets::icon_button_enabled(ui, icon, tl!(tip), false, distributes, 32.0).clicked() {
-                run_button(app, Button::Distribute(axis, v)).ok();
-            }
-        }
-    });
-    if pstate::<bool>(ui.ctx(), "align-hide-options") {
+    // The reference app set the buttons apart in groups: left / centre / right of Align Objects
+    // around the both-axes button, and the vertical and horizontal halves of Distribute Objects.
+    let align: Vec<_> = align_icons().collect();
+    crate::panels::subheading(tl!("Align Objects:")).show(ui, |ui, _| button_groups(ui, &[&align[..3], &align[3..4], &align[4..]]));
+    Divider::horizontal().show(ui);
+    let distribute: Vec<_> = distribute_icons().collect();
+    crate::panels::subheading(tl!("Distribute Objects:")).show(ui, |ui, _| button_groups(ui, &[&distribute[..3], &distribute[3..]]));
+    if part_hidden(app, HIDE_OPTIONS) {
         return;
     }
-    widgets::divider(ui);
-    ui.horizontal(|ui| {
-        ui.vertical(|ui| {
-            widgets::subheader(ui, tl!("Distribute Spacing:"));
-            ui.horizontal(|ui| {
-                let on = distributes;
-                if widgets::icon_button_enabled(ui, "dc-dist-vspace", tl!("Vertical Distribute Space"), false, on, 28.0).clicked() {
-                    run_button(app, Button::Spacing("vertical")).ok();
-                }
-                if widgets::icon_button_enabled(ui, "dc-dist-hspace", tl!("Horizontal Distribute Space"), false, on, 28.0).clicked() {
-                    run_button(app, Button::Spacing("horizontal")).ok();
-                }
-                ui.add_enabled_ui(key, |ui| {
-                    if let Some(v) = widgets::spin_field(ui, "align-spacing", Some(spacing), unit, 70.0, 1.0, min_spacing, &[]) {
-                        app.ui.align_spacing = v;
-                    }
-                });
+    Divider::horizontal().show(ui);
+    // The Distribute Spacing value is sent while there is a key object or a key guide (#2143), or
+    // for artboards while Align to Artboard is chosen.
+    let spacing = app.ui.align_spacing;
+    let sent = spacing_sent(app).is_some();
+    // PLAN: assumed `crate::canvas::general_lengths(app) -> LengthUnits` (cv.B5b, canvas-w15).
+    let lengths = crate::canvas::general_lengths(app);
+    let min_spacing = spacing_min(app);
+    let mut edited = None;
+    // With one object selected the buttons align it to the artboard, and Align To shows Artboard.
+    let anchor = key_is_anchor(app);
+    // Distribute Spacing and Align To share a line, a rule between them, as the reference app had them.
+    Row::new().gap(Gap::Section).show(ui, |ui, _| {
+        crate::panels::subheading(tl!("Distribute Spacing:")).show(ui, |ui, _| {
+            Row::new().show(ui, |ui, _| {
+                command_button(ui, "dc-dist-vspace", Button::Spacing("vertical"));
+                command_button(ui, "dc-dist-hspace", Button::Spacing("horizontal"));
+                // The value is UI state, not a document edit: a landed value is assigned.
+                let field = NumberField::length(tl!("Distribute Spacing"), Bind::given(Some(spacing)), lengths)
+                    .step(1.0)
+                    .range(min_spacing..=f64::INFINITY)
+                    .enabled(sent);
+                edited = field.show(ui).edit.events.landed().cloned().flatten();
             });
         });
-        ui.separator();
-        ui.vertical(|ui| {
-            widgets::subheader(ui, tl!("Align To:"));
-            // With one object selected the buttons align it to the artboard, and Align To shows Artboard.
-            let shown = shown_align_to(app);
-            let anchor = key_is_anchor(app);
-            ui.horizontal(|ui| {
-                for v in ALIGN_TO {
-                    let (icon, tip) = align_to_icon_name(v, anchor);
-                    if widgets::icon_button_enabled(ui, icon, tip, shown == v, can_choose(app, v), 28.0).clicked() {
-                        choose_align_to(app, v);
-                    }
+        Divider::vertical().show(ui);
+        crate::panels::subheading(tl!("Align To:")).show(ui, |ui, _| {
+            Row::new().show(ui, |ui, _| {
+                for (id, v) in ALIGN_TO_COMMANDS {
+                    let (icon, _) = align_to_icon_name(v, anchor);
+                    ToggleButton::command(CommandRef::new(id)).icon(IconId::new(icon)).icon_only().show(ui);
                 }
             });
         });
     });
+    if let Some(v) = edited {
+        app.ui.align_spacing = v;
+    }
 }
 
-pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let hidden: bool = pstate(ui.ctx(), "align-hide-options");
-    if menu_item(ui, if hidden { tl!("Show Options") } else { tl!("Hide Options") }, true, false) {
-        set_pstate(ui.ctx(), "align-hide-options", !hidden);
-    }
-    let pb = app.session.prefs.use_preview_bounds;
-    if menu_item(ui, tl!("Use Preview Bounds"), true, pb) {
-        super::transform::set_pref(app, "usePreviewBounds", !pb);
-    }
-    // Cancel Key Object clears the key, and Align To shows its stored choice again.
-    if menu_item(ui, tl!("Cancel Key Object"), align_to(app) == AlignTo::Key, false) {
-        app.run("select.key", json!({})).ok();
-    }
-    // Indented like the items beside it (their check column).
-    ui.menu_button(format!("   {}", tl!("Align to Glyph Bounds")), |ui| glyph_bounds_items(app, ui));
-}
-
-/// The Align to Glyph Bounds submenu: Point Text and Area Text, each checked while Align and
-/// Distribute measure that kind of type by the ink of its glyphs.
-fn glyph_bounds_items(app: &mut VectorcraftApp, ui: &mut Ui) {
-    for (label, key, on) in [
-        (tl!("Point Text"), "alignGlyphBoundsPoint", app.session.prefs.align_glyph_bounds_point),
-        (tl!("Area Text"), "alignGlyphBoundsArea", app.session.prefs.align_glyph_bounds_area),
-    ] {
-        if menu_item(ui, label, true, on) {
-            super::transform::set_pref(app, key, !on);
+/// The command buttons of `groups` on one line, a section gap between the groups.
+fn button_groups(ui: &mut Ui, groups: &[&[(&'static str, Button)]]) {
+    Row::new().gap(Gap::Section).show(ui, |ui, _| {
+        for group in groups {
+            Row::new().show(ui, |ui, _| {
+                for (icon, b) in *group {
+                    command_button(ui, icon, *b);
+                }
+            });
         }
+    });
+}
+
+/// The rows of the Align panel's menu.
+pub(crate) fn menu_rows(_app: &VectorcraftApp) -> Vec<PanelRow> {
+    vec![
+        PanelRow::Command(CommandRef::new("ui.align.hideOptions")),
+        PanelRow::Command(CommandRef::new("ui.align.usePreviewBounds")),
+        // Cancel Key Object clears the key, and Align To shows its stored choice again.
+        PanelRow::Command(CommandRef::new("ui.align.cancelKeyObject")),
+        PanelRow::Submenu(
+            tl!("Align to Glyph Bounds").into(),
+            vec![PanelRow::Command(CommandRef::new("ui.align.glyphBoundsPoint")), PanelRow::Command(CommandRef::new("ui.align.glyphBoundsArea"))],
+        ),
+    ]
+}
+
+/// The state of the panel menu's rows: Hide Options reads Show Options while the options are
+/// hidden, Use Preview Bounds and the two glyph-bounds rows are checked while their preference is
+/// on, and Cancel Key Object is on while there is a key.
+pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
+    let hidden = part_hidden(app, HIDE_OPTIONS);
+    let prefs = &app.session.prefs;
+    states.set(CommandRef::new("ui.align.hideOptions"), CommandState::new().title(if hidden { tl!("Show Options") } else { tl!("Hide Options") }));
+    states.set(CommandRef::new("ui.align.usePreviewBounds"), CommandState::new().checked(prefs.use_preview_bounds));
+    states.set(CommandRef::new("ui.align.cancelKeyObject"), CommandState::new().enabled(align_to(app) == AlignTo::Key));
+    // The key choice is named for what the key is: Align to Key Anchor while it is an anchor point.
+    let key = CommandState::new().enabled(can_choose(app, AlignTo::Key)).checked(shown_align_to(app) == AlignTo::Key);
+    states.set(CommandRef::new("align.toKeyObject"), key.title(align_to_icon_name(AlignTo::Key, key_is_anchor(app)).1));
+    states.set(CommandRef::new("ui.align.glyphBoundsPoint"), CommandState::new().checked(prefs.align_glyph_bounds_point));
+    states.set(CommandRef::new("ui.align.glyphBoundsArea"), CommandState::new().checked(prefs.align_glyph_bounds_area));
+}
+
+/// Runs the Align panel menu command `id`; `None` when `id` is not one of them. The glyph-bounds
+/// rows make Align and Distribute measure point or area text by the ink of its glyphs.
+pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option<Result<Value, String>> {
+    let prefs = &app.session.prefs;
+    let pref = match id {
+        "ui.align.usePreviewBounds" => Some(("usePreviewBounds", prefs.use_preview_bounds)),
+        "ui.align.glyphBoundsPoint" => Some(("alignGlyphBoundsPoint", prefs.align_glyph_bounds_point)),
+        "ui.align.glyphBoundsArea" => Some(("alignGlyphBoundsArea", prefs.align_glyph_bounds_area)),
+        _ => None,
+    };
+    if let Some((key, on)) = pref {
+        super::transform::set_pref(app, key, !on);
+        return Some(Ok(Value::Null));
     }
+    match id {
+        "ui.align.hideOptions" => {
+            let hidden = part_hidden(app, HIDE_OPTIONS);
+            set_part_hidden(app, HIDE_OPTIONS, !hidden);
+        }
+        "ui.align.cancelKeyObject" => return Some(app.run("select.key", json!({}))),
+        _ => return None,
+    }
+    Some(Ok(Value::Null))
 }
 
 #[cfg(test)]
