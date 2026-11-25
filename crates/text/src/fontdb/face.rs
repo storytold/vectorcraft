@@ -210,6 +210,8 @@ pub struct FontFace {
     pub(super) char_list: std::sync::OnceLock<Arc<[(char, u32)]>>,
     /// [`Self::name_owner`]'s glyph names to characters, read once.
     pub(super) named_chars: std::sync::OnceLock<std::collections::HashMap<String, char>>,
+    /// [`Self::glyph_name`]'s names by glyph id, read once.
+    pub(super) glyph_names: std::sync::OnceLock<Vec<Option<Box<str>>>>,
 }
 
 impl vectorcraft_doc::FileFontFace for FontFace {

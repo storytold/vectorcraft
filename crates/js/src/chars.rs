@@ -123,7 +123,7 @@ pub fn hex_value(c: u32) -> Option<u32> {
     }
 }
 
-/// The value of the digit values `digits` in `radix` (8 or 16), rounded once to the nearest number
+/// The value of the digit values `digits` in `radix` (2, 8 or 16), rounded once to the nearest number
 /// with ties to even (sections 7.8.3 and 9.3.1), or `None` when there are no digits. Digits are
 /// kept exactly in a `u128` while they fit; past that, each later digit counts only for its
 /// position and for whether any of the dropped bits is set.
