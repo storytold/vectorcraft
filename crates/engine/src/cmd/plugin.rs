@@ -394,29 +394,52 @@ impl FilterRun {
         if s.script_running() {
             return Err(EngineError::Busy);
         }
-        // Typing in progress is kept first, as `s.edit` keeps it, so the copy below holds it.
-        if !s.previewing && super::typing_in_progress(s) {
+        // Typing whose text Real-time Drawing off left out of the document isn't in what the
+        // plug-in was given, and the output would replace it ([`keep_unapplied_typing`] keeps it
+        // before the run is prepared).
+        if unapplied_typing(s) {
+            return Err(err(vectorcraft_plugins::Error::Output(
+                "typing in progress isn't in what the plug-in was given: nothing was changed".into(),
+            )));
+        }
+        let data = out.document_data;
+        // The output applied to `now`, with the checks that refuse it.
+        let build = |now: &Document, objects: Vec<objects::OutObject>| -> Result<(Document, Vec<NodeId>)> {
+            let mut d = now.clone();
+            let before = (!may_write).then(|| d.layers.clone());
+            let ids = objects::apply_output(&mut d, &inputs, objects, parent, &admit_effects).map_err(err)?;
+            if before.is_some_and(|b| b != d.layers) {
+                return Err(not_granted(&m.name, Permission::DocWrite));
+            }
+            // Type whose text the output changed is laid out again.
+            let retyped: Vec<NodeId> = ids
+                .iter()
+                .copied()
+                .filter(|&id| match (d.node(id).map(|n| &n.kind), now.node(id).map(|n| &n.kind)) {
+                    (Some(NodeKind::Text(new)), Some(NodeKind::Text(old))) => new.runs != old.runs || new.paras != old.paras || new.para != old.para,
+                    _ => false,
+                })
+                .collect();
+            super::typecmd::refresh_bounds_of(&mut d, &retyped);
+            if let Some(data) = data.clone() {
+                d.set_plugin_data(&m.id, data);
+            }
+            Ok((d, ids))
+        };
+        // Typing in progress, its text already in the document, is kept as `s.edit` keeps it once
+        // nothing can refuse the output, so a refused output leaves it in progress. Keeping it can
+        // change the document, and the output is then applied to the document as kept.
+        let typing = !s.previewing && super::typing_in_progress(s);
+        let again = typing.then(|| out.objects.clone());
+        let mut now = s.doc()?.doc.clone();
+        let (mut d, mut ids) = build(&now, out.objects)?;
+        if let Some(objects) = again {
             super::settle_interaction(s)?;
-        }
-        let now = s.doc()?.doc.clone();
-        let mut d = (*now).clone();
-        let before = (!may_write).then(|| d.layers.clone());
-        let ids = objects::apply_output(&mut d, &inputs, out.objects, parent, &admit_effects).map_err(err)?;
-        if before.is_some_and(|b| b != d.layers) {
-            return Err(not_granted(&m.name, Permission::DocWrite));
-        }
-        // Type whose text the output changed is laid out again.
-        let retyped: Vec<NodeId> = ids
-            .iter()
-            .copied()
-            .filter(|&id| match (d.node(id).map(|n| &n.kind), now.node(id).map(|n| &n.kind)) {
-                (Some(NodeKind::Text(new)), Some(NodeKind::Text(old))) => new.runs != old.runs || new.paras != old.paras || new.para != old.para,
-                _ => false,
-            })
-            .collect();
-        super::typecmd::refresh_bounds_of(&mut d, &retyped);
-        if let Some(data) = out.document_data {
-            d.set_plugin_data(&m.id, data);
+            let kept = s.doc()?.doc.clone();
+            if !Arc::ptr_eq(&kept, &now) {
+                now = kept;
+                (d, ids) = build(&now, objects)?;
+            }
         }
         let selectable = |d: &Document| ids.iter().copied().filter(|&id| d.node(id).is_some_and(objects::selectable)).collect::<Vec<_>>();
         if same_art(&d.layers, &now.layers) && d.plugin_data(&m.id) == now.plugin_data(&m.id) {
@@ -454,6 +477,23 @@ fn not_granted(name: &str, permission: Permission) -> EngineError {
     err(vectorcraft_plugins::Error::Output(format!("“{name}” wasn't granted `{p}`, which its output needs: nothing was changed")))
 }
 
+/// Is typing in progress whose text Real-time Drawing off left out of the document (not in a
+/// preview's run)? A run prepared now isn't given that text.
+pub fn unapplied_typing(s: &Session) -> bool {
+    !s.previewing && super::typing_in_progress(s) && s.unapplied_interaction_preview().is_some()
+}
+
+/// Keeps typing in progress whose text Real-time Drawing off left out of the document
+/// ([`super::settle_interaction`]) → whether there was any. A run prepared after it is given the
+/// typed text; one prepared before it is prepared again.
+pub fn keep_unapplied_typing(s: &mut Session) -> Result<bool> {
+    if !unapplied_typing(s) {
+        return Ok(false);
+    }
+    super::settle_interaction(s)?;
+    Ok(true)
+}
+
 /// `plugin.run`: runs filter `id` on `ids` (else the selected paths and compound paths) with its
 /// parameters and `_context` (what it keeps with the document included), and applies its output as
 /// one undo step ([`objects::apply_output`]; effect records as [`admit_effects`] admits them), with
@@ -470,6 +510,8 @@ fn run(s: &mut Session, p: &Value) -> Result<Value> {
         let r = if super::plugin_call::settle(s)? { FilterRun::prepare(s, p)? } else { r };
         return r.run_with_calls(s);
     }
+    // Typing Real-time Drawing off left out of the document is kept first, so the plug-in is given it.
+    let r = if keep_unapplied_typing(s)? { FilterRun::prepare(s, p)? } else { r };
     // Handed in for this very run (the app ran it in the background), it is what running the
     // plug-in again would return.
     let handed = handed.filter(|h| (h.serial, &h.input, &h.params) == (r.plugin.serial(), &r.input, &r.params));
@@ -893,6 +935,13 @@ pub(crate) fn run_command(s: &mut Session, id: &str, p: &Value) -> Result<Value>
         };
         return r.run_with_calls(s).map_err(failed);
     }
+    let r = match keep_unapplied_typing(s)? {
+        true => {
+            let (plugin, command) = command_of(id).ok_or_else(|| EngineError::UnknownCommand(id.into()))?;
+            FilterRun::prepare_with(s, plugin, Some(command), id, p)?
+        }
+        false => r,
+    };
     let output = r.run().map_err(&failed)?;
     r.finish(s, &output).map_err(failed)
 }

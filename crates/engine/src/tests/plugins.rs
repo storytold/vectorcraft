@@ -4903,6 +4903,73 @@ fn the_document_context_is_capped_and_its_rows_cost_instructions() {
     refused(&mut s);
 }
 
+/// A filter that writes type, run while typing is in progress: the plug-in is given the typed
+/// text, so an echo keeps it, with Real-time Drawing on and off. An output that is refused leaves
+/// the document and the history as they were; with Real-time Drawing on the typing stays in
+/// progress, and off it is kept as its own step before the plug-in is given its input.
+#[test]
+fn a_filter_that_writes_type_is_given_the_typing_in_progress() {
+    use vectorcraft_doc::NodeKind;
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let manifest = |id: &str| {
+        format!(
+            r#"{{"id":"{id}","name":"Retype","kind":"filter","api":3,"permissions":["doc.read","doc.write"],"inputs":["type"],"writes":["type"]}}"#
+        )
+    };
+    let put = |s: &mut Session, src: &str| {
+        let data = vectorcraft_format::base64_encode(&wat::parse_str(src).unwrap());
+        run(s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read", "doc.write"], "replace": true}))
+    };
+    let plain = |s: &Session, t: NodeId| match &node(s, t).kind {
+        NodeKind::Text(x) => x.plain_text(),
+        _ => panic!("type"),
+    };
+    let labels = |s: &Session| s.doc().unwrap().history.undo.iter().map(|e| e.label.clone()).collect::<Vec<_>>();
+    let typing = |real_time: bool| {
+        let mut s = session();
+        s.prefs.real_time_drawing = real_time;
+        let v = ViewInfo::default();
+        let t = NodeId(run(&mut s, "text.create", json!({"x": 100, "y": 100, "text": "A", "size": 20}))["id"].as_u64().unwrap());
+        s.select_tool("type", v).unwrap();
+        let b = s.doc().unwrap().doc.bounds_of(&[t], false).unwrap();
+        for k in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(k, b.x1 - 1.0, b.center().y), v).unwrap();
+        }
+        s.tool_text("B", v).unwrap();
+        assert_eq!(plain(&s, t), if real_time { "AB" } else { "A" }, "real time {real_time}");
+        (s, t)
+    };
+    let bang = "test.engine.writes.typing.bang";
+    let bad = "test.engine.writes.typing.bad";
+    for real_time in [false, true] {
+        // The plug-in adds "!" to the text it is given: "AB" or, given only "A", "A".
+        let (mut s, t) = typing(real_time);
+        let style = match &node(&s, t).kind {
+            NodeKind::Text(x) => serde_json::to_value(&x.runs[0].style).unwrap(),
+            _ => panic!("type"),
+        };
+        let retyped = |text: &str| json!({"objects": [{"id": t.0, "text": {"runs": [{"text": text, "style": style}]}}]}).to_string();
+        put(&mut s, &tpl::when_given_else(&manifest(bang), tpl::Given::Input, r#""AB""#, &retyped("AB!"), &retyped("A!")));
+        run(&mut s, "plugin.run", json!({"id": bang, "ids": [t.0]}));
+        assert_eq!(plain(&s, t), "AB!", "real time {real_time}: the plug-in is given the typed text");
+        let steps = labels(&s);
+        assert_eq!(steps[steps.len() - 2..], ["Typing", "Retype"], "real time {real_time}");
+
+        let (mut s, t) = typing(real_time);
+        put(&mut s, &tpl::returning(&manifest(bad), &json!({"objects": [{"id": t.0, "transform": [0, 0, 0, 0, 0, 0]}]}).to_string()));
+        let undo = labels(&s);
+        let e = s.execute("plugin.run", &json!({"id": bad, "ids": [t.0]})).unwrap_err().to_string();
+        assert!(e.contains("transform: flattens the object to a line or a point"), "{e}");
+        assert_eq!(plain(&s, t), "AB", "real time {real_time}");
+        if real_time {
+            assert_eq!(labels(&s), undo, "the refused output leaves the history as it was");
+            assert!(s.in_interaction(), "and the typing in progress");
+        } else {
+            assert_eq!(labels(&s)[undo.len()..], ["Typing"], "only the typing is kept");
+        }
+    }
+}
+
 /// A run past its memory budget fails before the plug-in starts, with the document and undo
 /// history as they were: a read-only object whose other fields don't fit, a path and a compound
 /// path that don't fit, and parameters past the input's half of the cap, with objects selected or
