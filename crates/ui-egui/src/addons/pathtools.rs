@@ -1,6 +1,6 @@
 //! Path Precision Tools in the interface: its submenu (Object › Plug-ins › Path Precision Tools),
 //! which selects its tools, opens its panels and runs Split / Add Points at Crossings, Set Corners… ([`set_corners`]), Divide into
-//! Dashes ([`dashes`]), Expand Dashes into Paths, Smooth Bridge ([`bridge`]), Convert to Parametric Shape, Tangent Circle… ([`tangent_circle`]), Add Bounding Rectangle… and Add Bounding Circle…; the Anchor Inspector panel (the selected
+//! Dashes ([`dashes`]), Expand Dashes into Paths, Smooth Bridge ([`bridge`]), Convert to Parametric Shape, Tangent Circle… ([`tangent_circle`]), Add Bounding Rectangle…, Add Bounding Circle… and Add Inscribed Circle; the Anchor Inspector panel (the selected
 //! anchor's position and handles as numbers, the add-on's anchor edits, the Corner Tool's values,
 //! [`corner`], and the Shared Edge Merge Tool's, [`shared_edge`]); the Parametric Shape panel
 //! ([`shape`]); and its tools' options dialog (a double-click on the tool). Everything acts through `addon.pathtools.*` and
@@ -49,6 +49,8 @@ pub const TANGENT_KINDS: &[(&str, &str)] = &[("All", "all"), ("External", "exter
 /// dialog (Offset, One per Object) with a Preview.
 pub const BOUNDING_RECTANGLE: &str = "addon.pathtools.boundingRectangle";
 pub const BOUNDING_CIRCLE: &str = "addon.pathtools.boundingCircle";
+/// Add Inscribed Circle's command, whose menu item runs it with no dialog.
+pub const INSCRIBED_CIRCLE: &str = "addon.pathtools.inscribedCircle";
 /// The close modes, as `addon.pathtools.close` names them, and their labels.
 const CLOSE_MODES: [(&str, &str); 3] = [("handles", "Keep Handles"), ("straight", "Straight"), ("smooth", "Smooth")];
 /// The Anchor Inspector's anchor edits: X and Y, and each handle's length and angle, label and field side by side.
@@ -135,6 +137,7 @@ pub fn menu() -> Vec<Node> {
         cp("Common Tangents…", COMMON_TANGENTS, json!({ "tangents": "all", "centerline": false })),
         cp("Add Bounding Rectangle…", BOUNDING_RECTANGLE, json!({ "offset": 0, "each": false })),
         cp("Add Bounding Circle…", BOUNDING_CIRCLE, json!({ "offset": 0, "each": false })),
+        cp("Add Inscribed Circle", INSCRIBED_CIRCLE, json!({})),
     ]
 }
 

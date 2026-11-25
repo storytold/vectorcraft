@@ -37,10 +37,28 @@ fn layer(app: &VectorcraftApp, id: u64) -> DataColor {
     data_color(app.session.active().unwrap().doc.layer_color(vectorcraft_doc::NodeId(id)))
 }
 
-fn marks(app: &mut VectorcraftApp) -> Vec<Mark> {
-    let shown = bounding_box(app, NONE);
+/// The tool whose widgets show with `held` and the pointer off the canvas: while Cmd is held, the selection tool it
+/// lends.
+fn shown(app: &VectorcraftApp, held: egui::Modifiers) -> &'static str {
+    app.session.hover_tool_id(&super::super::mods(held, false))
+}
+
+/// The bounding box on show with `held`.
+fn boxed(app: &mut VectorcraftApp, held: egui::Modifiers) -> Option<ShownBox> {
+    let tool = shown(app, held);
+    bounding_box(app, tool)
+}
+
+/// The shape widgets on show with `held`.
+fn marks_with(app: &mut VectorcraftApp, held: egui::Modifiers) -> Vec<Mark> {
+    let tool = shown(app, held);
+    let shown = bounding_box(app, tool);
     let zoom = app.view_info().zoom;
-    ShapeWidgets::of(app, true, shown.as_ref(), zoom, 0.0).marks
+    ShapeWidgets::of(app, tool, true, shown.as_ref(), zoom, 0.0).marks
+}
+
+fn marks(app: &mut VectorcraftApp) -> Vec<Mark> {
+    marks_with(app, NONE)
 }
 
 fn count(marks: &[Mark], form: Form, radius: f32) -> usize {
@@ -49,7 +67,7 @@ fn count(marks: &[Mark], form: Form, radius: f32) -> usize {
 
 fn corner_count(app: &VectorcraftApp) -> usize {
     let zoom = app.view_info().zoom;
-    corners(app, zoom).map_or(0, |groups| groups.iter().flat_map(|(_, targets)| targets).map(|t| t.corners.len()).sum())
+    corners(app, app.session.tool_id(), zoom).map_or(0, |groups| groups.iter().flat_map(|(_, targets)| targets).map(|t| t.corners.len()).sum())
 }
 
 #[test]
@@ -59,9 +77,9 @@ fn real_time_drawing_off_moves_the_bounding_box_with_a_move_drag() {
         let mut app = new_app(&[("realTimeDrawing", json!(real_time)), ("boundingBoxWhileMovingAndDrawing", json!(while_moving))]);
         make(&mut app, "shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 60}));
         app.select_tool("selection");
-        assert!(bounding_box(&mut app, NONE).is_some(), "{what}: at rest");
+        assert!(boxed(&mut app, NONE).is_some(), "{what}: at rest");
         drag(&mut app, (150.0, 130.0), (250.0, 230.0));
-        let during = bounding_box(&mut app, NONE);
+        let during = boxed(&mut app, NONE);
         if real_time && !while_moving {
             assert!(during.is_none(), "{what}: hidden while the art moves");
         } else {
@@ -69,7 +87,7 @@ fn real_time_drawing_off_moves_the_bounding_box_with_a_move_drag() {
             assert_eq!((rect.x0, rect.y0), (200.0, 200.0), "{what}: where the drag carries the selection");
         }
         pointer(&mut app, PointerKind::Up, (250.0, 230.0));
-        assert_eq!(bounding_box(&mut app, NONE).unwrap().obox.rect.x0, 200.0, "{what}: at rest after the release");
+        assert_eq!(boxed(&mut app, NONE).unwrap().obox.rect.x0, 200.0, "{what}: at rest after the release");
     }
 }
 
@@ -80,7 +98,7 @@ fn corner_widgets_hide_above_the_preference_angle() {
     app.select_tool("selection");
     assert_eq!(corner_count(&app), 4);
     app.session.execute("prefs.set", &json!({"key": "hideCornerWidgetAbove", "value": 80})).unwrap();
-    assert!(corners(&app, app.view_info().zoom).is_none());
+    assert!(corners(&app, app.session.tool_id(), app.view_info().zoom).is_none());
 }
 
 #[test]
@@ -89,12 +107,12 @@ fn a_resize_drag_keeps_the_bounding_box_at_the_new_bounds() {
         let mut app = new_app(&[("realTimeDrawing", json!(real_time))]);
         make(&mut app, "shape.ellipse", json!({"x": 100, "y": 100, "width": 100, "height": 60}));
         app.select_tool("selection");
-        let before = bounding_box(&mut app, NONE).unwrap();
+        let before = boxed(&mut app, NONE).unwrap();
         drag(&mut app, (200.0, 160.0), (263.0, 211.0));
         assert!(app.session.tool_resizing(), "real time {real_time}: the handle was hit");
-        let during = bounding_box(&mut app, NONE).unwrap();
+        let during = boxed(&mut app, NONE).unwrap();
         pointer(&mut app, PointerKind::Up, (263.0, 211.0));
-        let after = bounding_box(&mut app, NONE).unwrap();
+        let after = boxed(&mut app, NONE).unwrap();
         assert_ne!(after.obox.rect, before.obox.rect, "real time {real_time}: the drag resized the ellipse");
         assert_eq!(during.obox.rect, after.obox.rect, "real time {real_time}: the box followed the drag");
     }
@@ -106,13 +124,13 @@ fn a_move_drag_keeps_the_bounding_box_where_the_drag_carries_the_selection() {
     make(&mut app, "shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100}));
     app.select_tool("selection");
     drag(&mut app, (150.0, 150.0), (170.0, 160.0));
-    let rect = bounding_box(&mut app, NONE).unwrap().obox.rect;
+    let rect = boxed(&mut app, NONE).unwrap().obox.rect;
     assert_eq!((rect.x0, rect.y0), (120.0, 110.0));
     app.ui.view.bounding_box = false;
-    assert!(bounding_box(&mut app, NONE).is_none(), "View › Hide Bounding Box");
+    assert!(boxed(&mut app, NONE).is_none(), "View › Hide Bounding Box");
     app.ui.view.bounding_box = true;
     app.session.execute("prefs.set", &json!({"key": "boundingBoxWhileMovingAndDrawing", "value": false})).unwrap();
-    assert!(bounding_box(&mut app, NONE).is_none(), "off: hidden while the selection moves");
+    assert!(boxed(&mut app, NONE).is_none(), "off: hidden while the selection moves");
 }
 
 #[test]
@@ -124,12 +142,12 @@ fn a_shape_being_drawn_shows_its_bounding_box() {
             app.select_tool(tool);
             drag(&mut app, (150.0, 120.0), (180.0, 140.0));
             assert!(app.session.draws_new_shape_box(), "{what}");
-            let first = bounding_box(&mut app, NONE).unwrap_or_else(|| panic!("{what}: no box")).obox;
+            let first = boxed(&mut app, NONE).unwrap_or_else(|| panic!("{what}: no box")).obox;
             pointer(&mut app, PointerKind::Drag, (210.0, 170.0));
-            let during = bounding_box(&mut app, NONE).unwrap().obox;
+            let during = boxed(&mut app, NONE).unwrap().obox;
             assert_ne!(first.rect, during.rect, "{what}: the box follows the drag");
             app.session.execute("prefs.set", &json!({"key": "boundingBoxWhileMovingAndDrawing", "value": false})).unwrap();
-            assert!(bounding_box(&mut app, NONE).is_none(), "{what}: off, no box while drawing");
+            assert!(boxed(&mut app, NONE).is_none(), "{what}: off, no box while drawing");
         }
     }
 }
@@ -141,12 +159,12 @@ fn a_failed_preview_of_a_shape_being_drawn_shows_no_bounding_box() {
         make(&mut app, "shape.rectangle", json!({"x": 20, "y": 20, "width": 30, "height": 30}));
         app.select_tool("rectangle");
         drag(&mut app, (150.0, 120.0), (180.0, 140.0));
-        assert!(bounding_box(&mut app, NONE).is_some(), "real time {real_time}: the box of the shape being drawn");
+        assert!(boxed(&mut app, NONE).is_some(), "real time {real_time}: the box of the shape being drawn");
         assert!(app.session.preview("shape.rectangle", &json!({"x": "left"})).is_err());
         assert!(app.session.draws_new_shape_box() && app.session.interaction_unapplied());
-        assert!(bounding_box(&mut app, NONE).is_none(), "real time {real_time}: not the old selection's box");
+        assert!(boxed(&mut app, NONE).is_none(), "real time {real_time}: not the old selection's box");
         pointer(&mut app, PointerKind::Drag, (210.0, 170.0));
-        assert!(bounding_box(&mut app, NONE).is_some(), "real time {real_time}: the next preview shows it again");
+        assert!(boxed(&mut app, NONE).is_some(), "real time {real_time}: the next preview shows it again");
     }
 }
 
@@ -161,7 +179,7 @@ fn a_shape_being_drawn_has_its_box_in_its_own_layers_color() {
         assert_ne!(old_color, new_color);
         app.select_tool("rectangle");
         drag(&mut app, (150.0, 120.0), (180.0, 140.0));
-        assert_eq!(bounding_box(&mut app, NONE).unwrap().color, new_color, "real time {real_time}");
+        assert_eq!(boxed(&mut app, NONE).unwrap().color, new_color, "real time {real_time}");
     }
 }
 
@@ -174,7 +192,7 @@ fn a_shape_being_drawn_has_no_type_widget() {
     assert_eq!(count(&marks(&mut app), Form::Disc, typewidget::RADIUS_PX), 1, "the selected type's widget");
     app.select_tool("rectangle");
     drag(&mut app, (150.0, 120.0), (210.0, 170.0));
-    assert!(bounding_box(&mut app, NONE).is_some(), "the box of the shape being drawn");
+    assert!(boxed(&mut app, NONE).is_some(), "the box of the shape being drawn");
     assert_eq!(count(&marks(&mut app), Form::Disc, typewidget::RADIUS_PX), 0, "no type widget beside it");
 }
 
@@ -189,7 +207,7 @@ fn freehand_and_pen_drawing_show_no_bounding_box() {
             pointer(&mut app, PointerKind::Drag, at);
         }
         assert!(!app.session.draws_new_shape_box(), "{tool}");
-        assert!(bounding_box(&mut app, NONE).is_none(), "{tool}: no box while it draws");
+        assert!(boxed(&mut app, NONE).is_none(), "{tool}: no box while it draws");
         pointer(&mut app, PointerKind::Up, (210.0, 170.0));
     }
 }
@@ -216,10 +234,10 @@ fn a_move_rotate_or_corner_radius_drag_hides_the_bounding_box() {
                 ((corner.x, corner.y), (corner.x + 10.0, corner.y + 10.0))
             }
         };
-        assert!(bounding_box(&mut app, NONE).is_some(), "{what}: at rest");
+        assert!(boxed(&mut app, NONE).is_some(), "{what}: at rest");
         drag(&mut app, from, to);
         assert!(app.session.tool_transforming(), "{what}");
-        assert!(bounding_box(&mut app, NONE).is_none(), "{what}: hidden during the drag");
+        assert!(boxed(&mut app, NONE).is_none(), "{what}: hidden during the drag");
         pointer(&mut app, PointerKind::Up, to);
     }
 }
@@ -229,9 +247,9 @@ fn direct_selection_shows_the_bounding_box_while_cmd_is_held() {
     let mut app = new_app(&[]);
     make(&mut app, "shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 50}));
     app.select_tool("directSelection");
-    assert!(bounding_box(&mut app, NONE).is_none(), "Direct Selection alone shows no box");
-    assert!(bounding_box(&mut app, egui::Modifiers::COMMAND).is_some(), "Cmd held shows the Selection tool's box");
-    assert!(bounding_box(&mut app, NONE).is_none(), "gone once Cmd is released");
+    assert!(boxed(&mut app, NONE).is_none(), "Direct Selection alone shows no box");
+    assert!(boxed(&mut app, egui::Modifiers::COMMAND).is_some(), "Cmd held shows the Selection tool's box");
+    assert!(boxed(&mut app, NONE).is_none(), "gone once Cmd is released");
     assert!(app.ui.view.bounding_box, "View › Show Bounding Box is unchanged");
 }
 
@@ -279,6 +297,39 @@ fn a_selected_ellipse_shows_its_pie_widgets() {
     assert_eq!(count(&marks(&mut app), Form::Disc, pie::RADIUS_PX), 0, "no bounding box, no widgets");
 }
 
+/// With a shape tool, Cmd held lends the selection tool chosen last; when that is Direct Selection, which does not
+/// press them, a selected live ellipse's pie widgets hide while the key is down.
+#[test]
+fn pie_widgets_hide_while_cmd_lends_direct_selection() {
+    let mut app = new_app(&[]);
+    make(&mut app, "shape.ellipse", json!({"x": 100, "y": 100, "width": 200, "height": 100}));
+    app.session.execute("object.setLiveShape", &json!({"pieStart": 0, "pieEnd": 90})).unwrap();
+    app.select_tool("directSelection");
+    app.select_tool("ellipse");
+    let pies = |app: &mut VectorcraftApp, held| count(&marks_with(app, held), Form::Disc, pie::RADIUS_PX);
+    assert_eq!(pies(&mut app, NONE), 2, "the Ellipse tool shows them");
+    assert_eq!(pies(&mut app, egui::Modifiers::COMMAND), 0, "hidden while Cmd lends Direct Selection");
+    assert_eq!(pies(&mut app, NONE), 2, "back when the key is let go");
+}
+
+/// With the Selection tool, Cmd held lends Direct Selection away from the selection, and a selected blend's widgets,
+/// which only the Selection and Blend tools press, hide while the key is down.
+#[test]
+fn blend_widgets_hide_while_cmd_lends_direct_selection() {
+    let mut app = new_app(&[]);
+    let a = make(&mut app, "shape.rectangle", json!({"x": 90, "y": 190, "width": 20, "height": 20}));
+    let b = make(&mut app, "shape.rectangle", json!({"x": 290, "y": 190, "width": 20, "height": 20}));
+    app.session.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    let blend = make(&mut app, "object.blend.make", json!({}));
+    app.select_tool("selection");
+    app.session.execute("select.set", &json!({"ids": [blend]})).unwrap();
+    let widgets = |app: &mut VectorcraftApp, held| count(&marks_with(app, held), Form::Disc, blendwidget::RADIUS_PX);
+    let plain = widgets(&mut app, NONE);
+    assert!(plain >= 1, "the Appearance widget: {plain}");
+    assert_eq!(widgets(&mut app, egui::Modifiers::COMMAND), 0, "hidden while Cmd lends Direct Selection");
+    assert_eq!(widgets(&mut app, NONE), plain, "back when the key is let go");
+}
+
 #[test]
 fn a_selected_polygon_shows_its_side_widget() {
     let mut app = new_app(&[]);
@@ -310,7 +361,7 @@ fn hidden_shape_widgets_leave_the_bounding_box() {
     let drawn = |app: &mut VectorcraftApp, id: u64| {
         app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
         let m = marks(app);
-        (corner_count(app), count(&m, Form::Diamond, sidewidget::RADIUS_PX), count(&m, Form::Disc, pie::RADIUS_PX), bounding_box(app, NONE).is_some())
+        (corner_count(app), count(&m, Form::Diamond, sidewidget::RADIUS_PX), count(&m, Form::Disc, pie::RADIUS_PX), boxed(app, NONE).is_some())
     };
     for tool in ["selection", "polygon", "rectangle"] {
         app.select_tool(tool);
@@ -363,7 +414,7 @@ fn a_selected_objects_on_path_group_shows_its_rotate_all_widget() {
     app.run("select.set", json!({"ids": [group]})).unwrap();
     let zoom = app.view_info().zoom;
     app.select_tool("selection");
-    assert_eq!(count(&ShapeWidgets::of(&app, false, None, zoom, 0.0).marks, Form::Disc, r), 1);
+    assert_eq!(count(&ShapeWidgets::of(&app, "selection", false, None, zoom, 0.0).marks, Form::Disc, r), 1);
 }
 
 #[test]

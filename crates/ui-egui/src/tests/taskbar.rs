@@ -849,7 +849,7 @@ fn tools_offer_their_bar_or_none() {
     let labels = |app: &mut VectorcraftApp| offer(app).map(|o| o.actions.iter().map(|a| a.0).collect::<Vec<_>>()).unwrap_or_default();
     app.select_tool("artboard");
     crate::panels::artboards::select(&mut app, 1);
-    assert_eq!(labels(&mut app), ["Resize", "Duplicate", "Rearrange All", "Export"]);
+    assert_eq!(labels(&mut app), ["Resize", "Duplicate", "Rearrange", "Export"]);
     let b = app.session.active().unwrap().doc.artboards[1].rect;
     let o = offer(&mut app).unwrap();
     assert!(
@@ -860,9 +860,266 @@ fn tools_offer_their_bar_or_none() {
     app.select_tool("selection");
     app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 40, "height": 40})).unwrap();
     assert_eq!(labels(&mut app), ["Edit Path", "Offset Path", "Simplify", "Duplicate"]);
+    // One artboard, selected: Rearrange places it.
     app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
     app.select_tool("artboard");
-    assert_eq!(labels(&mut app), ["Resize", "Duplicate", "Export"]);
+    assert_eq!(labels(&mut app), ["Resize", "Duplicate", "Rearrange", "Export"]);
+}
+
+/// Three 200 by 100 pt artboards with the Artboard tool, `selected` selected.
+fn rearrange_app(selected: serde_json::Value) -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+    app.select_tool("artboard");
+    app.session.set_tool_option("selected", &selected);
+    app
+}
+
+fn artboard_rects(app: &VectorcraftApp) -> Vec<vectorcraft_geom::Rect> {
+    app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect()
+}
+
+fn undo_steps(app: &VectorcraftApp) -> usize {
+    app.session.active().unwrap().history.undo.len()
+}
+
+/// Opens Rearrange for the selected artboards and presses OK with one row 10 pt apart, inside `rig`.
+fn confirm_rearrange(rig: &mut Rig) {
+    use crate::dialogs::rearrange_artboards::{PLACE_HINT, RearrangeArtboardsDialog};
+    rig.run_fired();
+    let mut app = rig.app();
+    crate::panels::artboards::open_rearrange_selected(&mut app);
+    let id = app.dialogs().and_then(|d| d.with(|h| h.open_dialogs().last().map(|o| o.id))).expect("Rearrange opens");
+    assert!(app.dialogs().unwrap().with(|h| h.is_open::<RearrangeArtboardsDialog>()));
+    crate::tests::picks::answer_dialog(&mut app, id, &[("layout", json!("row")), ("spacing", json!(10))], true);
+    assert!(app.ui.rearrange_placement.is_some() && app.ui.status == PLACE_HINT, "{}", app.ui.status);
+}
+
+/// Rearrange for the selected artboards, confirmed, waits for a click: the grid's outline follows
+/// the pointer, and a press on the canvas puts the selected artboards' grid there with its top-left
+/// at the press, as one undo step, leaving the other artboards and giving the tool no press. Esc
+/// cancels a waiting one, and so does another tool, with nothing moved.
+#[test]
+fn rearrange_places_the_selected_artboards_where_the_canvas_is_clicked() {
+    use crate::dialogs::rearrange_artboards::{PLACE_HINT, placement_overlays};
+    let mut app = rearrange_app(json!([0, 2]));
+    let (before, steps) = (artboard_rects(&app), undo_steps(&app));
+    on_canvas(&mut app, |rig| {
+        rig.fx.settle();
+        let view = rig.app().canvas_view().expect("the canvas is laid out");
+        let at = view.rect.center() + vec2(-150.0, -120.0);
+        let doc = view.to_doc(at);
+
+        // Esc: nothing moves.
+        confirm_rearrange(rig);
+        rig.fx.frame(vec![egui::Event::PointerMoved(at)]);
+        rig.fx.key(Key::Escape, Modifiers::NONE);
+        rig.run_fired();
+        assert!(rig.app().ui.rearrange_placement.is_none(), "Esc cancels");
+        assert_ne!(rig.app().ui.status, PLACE_HINT);
+        // Another tool: nothing moves.
+        confirm_rearrange(rig);
+        rig.app().select_tool("selection");
+        rig.fx.frame(vec![egui::Event::PointerMoved(at)]);
+        assert!(rig.app().ui.rearrange_placement.is_none(), "another tool cancels");
+        {
+            let app = rig.app();
+            assert_eq!((artboard_rects(&app), undo_steps(&app)), (before.clone(), steps));
+        }
+
+        rig.app().select_tool("artboard");
+        rig.app().session.set_tool_option("selected", &json!([0, 2]));
+        confirm_rearrange(rig);
+        rig.fx.frame(vec![egui::Event::PointerMoved(at)]);
+        let outline = placement_overlays(&rig.app());
+        assert_eq!(outline.len(), 2, "an outline for each selected artboard");
+        rig.fx.click_at(at);
+        rig.run_fired();
+        let app = rig.app();
+        let after = artboard_rects(&app);
+        assert_eq!(after.len(), 3, "the Artboard tool made no artboard");
+        assert_eq!(after[1], before[1], "artboard 2 is not selected");
+        let near = |a: f64, b: f64| (a - b).abs() < 1e-3;
+        assert!(near(after[0].x0, doc.x) && near(after[0].y0, doc.y), "{:?} at {doc:?}", after[0]);
+        assert!(near(after[2].x0, doc.x + 210.0) && near(after[2].y0, doc.y), "{:?}", after[2]);
+        assert_eq!(undo_steps(&app), steps + 1);
+        assert!(app.ui.rearrange_placement.is_none() && app.ui.status != PLACE_HINT);
+    });
+}
+
+/// A waiting Rearrange takes Enter from the keyboard: with the pointer off the canvas, the grid
+/// starts at the first selected artboard's top-left, in one undo step. A press with Space held
+/// pans and places nothing.
+#[test]
+fn rearrange_places_the_selected_artboards_with_enter_and_lets_space_pan() {
+    let mut app = rearrange_app(json!([2, 0]));
+    let (before, steps) = (artboard_rects(&app), undo_steps(&app));
+    on_canvas(&mut app, |rig| {
+        rig.fx.settle();
+        confirm_rearrange(rig);
+        // Space held: the press pans.
+        let at = rig.app().canvas_view().expect("the canvas is laid out").rect.center();
+        let origin = |rig: &Rig| rig.app().canvas_view().unwrap().to_screen(Point::ZERO);
+        let start = origin(rig);
+        let key = |key, pressed| egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers: Modifiers::NONE };
+        let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+        let end = at + vec2(30.0, 20.0);
+        for ev in [
+            key(Key::Space, true),
+            egui::Event::PointerMoved(at),
+            button(at, true),
+            egui::Event::PointerMoved(at.lerp(end, 0.5)),
+            egui::Event::PointerMoved(end),
+            button(end, false),
+        ] {
+            rig.fx.frame(vec![ev]);
+        }
+        rig.fx.frame(vec![key(Key::Space, false)]);
+        rig.run_fired();
+        assert!(origin(rig) != start, "the Space-drag pans the view");
+        {
+            let app = rig.app();
+            assert!(app.ui.rearrange_placement.is_some(), "a Space-drag places nothing");
+            assert_eq!((artboard_rects(&app), undo_steps(&app)), (before.clone(), steps));
+        }
+        rig.fx.frame(vec![egui::Event::PointerGone]);
+        rig.fx.key(Key::Enter, Modifiers::NONE);
+        rig.run_fired();
+    });
+    let after = artboard_rects(&app);
+    assert!(app.ui.rearrange_placement.is_none());
+    assert_eq!((after[0], after[1]), (before[0], before[1]));
+    assert_eq!((after[2].x0, after[2].y0), (before[0].x0 + 210.0, before[0].y0));
+    assert_eq!(undo_steps(&app), steps + 1);
+}
+
+/// Once a pen has been seen, a finger press on the canvas navigates and does not place a waiting
+/// Rearrange: the finger's drag pans the view while the artboards and the history stay as they
+/// were. A mouse click then places it.
+#[test]
+fn rearrange_is_not_placed_by_a_finger_once_a_pen_was_seen() {
+    use crate::touch::{Source, set_pen_seen, set_source};
+    let mut app = rearrange_app(json!([1]));
+    let (before, steps) = (artboard_rects(&app), undo_steps(&app));
+    let (touched, panned) = on_canvas(&mut app, |rig| {
+        rig.fx.settle();
+        confirm_rearrange(rig);
+        let at = rig.app().canvas_view().expect("the canvas is laid out").rect.center() + vec2(40.0, 30.0);
+        let origin = |rig: &Rig| rig.app().canvas_view().unwrap().to_screen(Point::ZERO);
+        let start = origin(rig);
+        let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+        let end = at + vec2(60.0, 40.0);
+        // The platform says a finger drives the pointer once a pen has been seen.
+        set_source(Source::Pen);
+        set_source(Source::Finger);
+        for ev in [
+            egui::Event::PointerMoved(at),
+            button(at, true),
+            egui::Event::PointerMoved(at.lerp(end, 0.5)),
+            egui::Event::PointerMoved(end),
+            button(end, false),
+        ] {
+            rig.fx.frame(vec![ev]);
+        }
+        rig.run_fired();
+        let touched = {
+            let app = rig.app();
+            (app.ui.rearrange_placement.is_some(), artboard_rects(&app), undo_steps(&app))
+        };
+        let panned = origin(rig) != start;
+        // The mouse, with the pen still seen.
+        set_source(Source::Mouse);
+        rig.fx.click_at(at);
+        rig.run_fired();
+        set_pen_seen(false);
+        (touched, panned)
+    });
+    assert_eq!(touched, (true, before.clone(), steps), "the finger navigates");
+    assert!(panned, "the finger pans the view");
+    assert!(app.ui.rearrange_placement.is_none(), "the mouse places it");
+    assert_ne!(artboard_rects(&app), before);
+    assert_eq!(undo_steps(&app), steps + 1);
+}
+
+/// A waiting Rearrange is dropped when its artboards change places in the list before the click,
+/// so the click moves no artboard the tool did not select.
+#[test]
+fn rearrange_waiting_for_a_click_is_dropped_when_its_artboards_are_reordered() {
+    use crate::dialogs::rearrange_artboards::PLACE_HINT;
+    let mut app = rearrange_app(json!([0]));
+    on_canvas(&mut app, |rig| {
+        rig.fx.settle();
+        confirm_rearrange(rig);
+        rig.app().run("artboard.reorder", json!({"index": 2, "to": 0})).unwrap();
+        let before = artboard_rects(&rig.app());
+        let at = rig.app().canvas_view().unwrap().rect.center();
+        rig.fx.click_at(at);
+        rig.run_fired();
+        let app = rig.app();
+        assert!(app.ui.rearrange_placement.is_none() && app.ui.status != PLACE_HINT);
+        assert_eq!(artboard_rects(&app), before);
+    });
+}
+
+/// A Rearrange placement that moves nothing says the artboard is locked only when every selected
+/// artboard is locked; a locked artboard beside one already in its cell leaves no such message.
+#[test]
+fn rearrange_says_locked_only_when_every_selected_artboard_is_locked() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let layout = json!({"layout": "row", "spacing": 10});
+    app.run("file.new", json!({"width": 200, "height": 100, "artboards": 3, "artboardLayout": layout})).unwrap();
+    app.run("artboard.setProps", json!({"index": 0, "locked": true})).unwrap();
+    app.select_tool("artboard");
+    for (selected, status) in [(json!([0, 1]), ""), (json!([0]), "the artboard is locked")] {
+        app.session.set_tool_option("selected", &selected);
+        // The status the placement leaves as the canvas takes Enter.
+        let placed = on_canvas(&mut app, |rig| {
+            rig.fx.settle();
+            confirm_rearrange(rig);
+            rig.fx.frame(vec![egui::Event::PointerGone]);
+            rig.fx.key(Key::Enter, Modifiers::NONE);
+            let placed = rig.app().ui.status.clone();
+            rig.run_fired();
+            placed
+        });
+        assert!(app.ui.rearrange_placement.is_none(), "{selected}");
+        assert_eq!(placed, status, "{selected}");
+    }
+}
+
+/// Where [`rearrange_is_not_placed_by_a_press_on_a_panel_over_the_canvas`] floats its panel.
+const PANEL_OVER_CANVAS: Rect = Rect::from_min_max(Pos2::new(300.0, 250.0), Pos2::new(420.0, 370.0));
+
+/// A press on a panel floating over the canvas does not place a waiting Rearrange; a press on the
+/// open canvas does.
+#[test]
+fn rearrange_is_not_placed_by_a_press_on_a_panel_over_the_canvas() {
+    let mut app = rearrange_app(json!([0]));
+    let (before, steps) = (artboard_rects(&app), undo_steps(&app));
+    let show = |app: &mut VectorcraftApp, ui: &mut Ui| {
+        canvas::show(app, ui);
+        egui::Area::new(egui::Id::unique("panel over the canvas")).fixed_pos(PANEL_OVER_CANVAS.min).show(ui.ctx(), |ui| {
+            ui.allocate_exact_size(PANEL_OVER_CANVAS.size(), egui::Sense::click_and_drag());
+        });
+    };
+    let on_panel = driven(&mut app, CANVAS_ROOM, show, |rig| {
+        rig.fx.settle();
+        confirm_rearrange(rig);
+        assert!(rig.app().canvas_view().expect("the canvas is laid out").rect.contains_rect(PANEL_OVER_CANVAS));
+        rig.fx.click_at(PANEL_OVER_CANVAS.center());
+        rig.run_fired();
+        let on_panel = {
+            let app = rig.app();
+            (app.ui.rearrange_placement.is_some(), artboard_rects(&app), undo_steps(&app))
+        };
+        rig.fx.click_at(PANEL_OVER_CANVAS.left_top() - vec2(40.0, 40.0));
+        rig.run_fired();
+        on_panel
+    });
+    assert_eq!(on_panel, (true, before.clone(), steps), "the press is the panel's");
+    assert!(app.ui.rearrange_placement.is_none(), "placed on the open canvas");
+    assert_ne!(artboard_rects(&app), before);
+    assert_eq!(undo_steps(&app), steps + 1);
 }
 
 #[test]
@@ -1130,6 +1387,8 @@ fn the_shape_properties_popup_changes_a_rectangle_corner_type() {
         assert_eq!(rig.count_text("Chamfer"), 2);
         assert!(rig.has_text("Inverted Round"));
         rig.click_text("Chamfer", true);
+        // The closed list fades out on the clock.
+        rig.fx.advance(1.0);
         assert!(!rig.has_text("Inverted Round"), "the pick closes the list");
         assert_eq!(steps(&rig.app()), before + 1, "the same kind adds no undo step");
 

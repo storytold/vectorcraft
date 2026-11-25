@@ -199,12 +199,11 @@ fn track(key: &str, x: f32) -> Srgba {
 
 /// The channel rows of the current mode.
 fn channels(ui: &mut egui::Ui, fields: &mut DialogFields, _cx: &mut CustomContext) -> egui::Response {
-    ui.vertical(|ui| {
+    super::form::stacked(ui, fields, |ui, fields| {
         for (key, label) in mode(fields).channels {
             percent_row(ui, fields, key, label, |x| track(key, x));
         }
     })
-    .response
 }
 
 fn rows() -> Vec<Param> {
