@@ -410,6 +410,10 @@ struct Chain {
     group: Option<usize>,
 }
 
+/// Characters a member chain holds at least, more than the longest chain the checks compare
+/// (`app.documents.addDocumentNoUI().print()` has 39).
+const CHAIN_CHARS: usize = 64;
+
 impl Chain {
     fn new(root: String, bare: bool, line: usize) -> Self {
         let (chars, cut) = (root.chars().count(), root.ends_with('…'));
@@ -779,10 +783,16 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
 
     // ---------- member chains ----------
 
+    /// The most characters a member chain holds while it is read: [`crate::Limits::echo`], and at least
+    /// [`CHAIN_CHARS`], so a short echo limit cuts only the chains the report lists.
+    fn chain_cap(&self) -> usize {
+        self.acc.limits.echo.max(CHAIN_CHARS)
+    }
+
     /// Whether the active chain takes `t` (a `.`, a member's name, `[` or `(`); any other token ends
     /// it.
     fn continue_chain(&mut self, t: &Sig<'s>) -> bool {
-        let cap = self.acc.limits.echo;
+        let cap = self.chain_cap();
         let Some(c) = self.active.as_mut() else { return false };
         if c.after_dot {
             c.after_dot = false;

@@ -291,8 +291,31 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     /// set aside until its `)` is one of [`catalog::DOM_DOCUMENTS`] followed by `called`, the method
     /// as the chain writes it (`.print()`, or `[]()` when brackets name it).
     fn document_print(&self, called: &str) -> bool {
+        self.called_on(called).is_some_and(|receiver| catalog::DOM_DOCUMENTS.contains(&receiver))
+    }
+
+    /// Whether this `(` calls a method of the application object: `receiver`, which `before` comes
+    /// before, is the application object ([`Self::app_receiver`]), or the document-model member chain
+    /// the `(` has just set aside until its `)` is `app` followed by `called`. The chain starts at `app`
+    /// or at a variable that holds it, never at a property named `app` or at an `app` the script declared.
+    fn app_call(&self, called: &str, receiver: Option<Sig<'s>>, before: Option<Sig<'s>>) -> bool {
+        self.app_receiver(receiver, before) || self.called_on(called) == Some(catalog::DOM_ROOTS[0])
+    }
+
+    /// Whether the method `name`, which a string literal in brackets named, gives a document: the
+    /// member chain this `(` has just set aside, with `name` called on its receiver, is one of
+    /// [`catalog::DOM_DOCUMENTS`].
+    fn gives_document(&self, name: &str) -> bool {
+        let named =
+            |receiver: &str, d: &str| d.strip_prefix(receiver).and_then(|m| m.strip_prefix('.')).and_then(|m| m.strip_suffix("()")) == Some(name);
+        self.called_on("[]()").is_some_and(|receiver| catalog::DOM_DOCUMENTS.iter().any(|d| named(receiver, d)))
+    }
+
+    /// What the document-model member chain that this `(` has just set aside until its `)` holds before
+    /// `called`, when the chain ends with `called`.
+    fn called_on(&self, called: &str) -> Option<&str> {
         let chain = self.suspended.last().filter(|c| c.wait.saturating_add(1) == self.depth());
-        chain.and_then(|c| c.path.strip_suffix(called)).is_some_and(|receiver| catalog::DOM_DOCUMENTS.contains(&receiver))
+        chain.and_then(|c| c.path.strip_suffix(called))
     }
 
     /// `(` after a name: a call.
@@ -306,10 +329,13 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             if catalog::DOM_FILE_WRITES.contains(&name.as_str()) || (name == catalog::DOM_PRINT && self.document_print("[]()")) {
                 self.acc.feature(FeatureId::FileWrite, line);
                 self.acc.outside(OutsideId::FilesWritten, line, None);
-            } else if catalog::DOM_FILE_READS.contains(&name.as_str()) && self.app_receiver(h3, self.h4) {
+            } else if catalog::DOM_FILE_READS.contains(&name.as_str()) && self.app_call("[]()", h3, self.h4) {
                 self.acc.feature(FeatureId::FileRead, line);
-                // `app['open'](f)` gives a document, as `app.open(f)` does.
-                let (depth, cap) = (self.depth(), self.acc.limits.echo);
+            }
+            // `app['open'](f)` and `app.documents['index'](0)` give a document, as `app.open(f)` and
+            // `app.documents.index(0)` do.
+            if self.gives_document(&name) {
+                let (depth, cap) = (self.depth(), self.chain_cap());
                 if let Some(c) = self.suspended.last_mut().filter(|c| c.wait.saturating_add(1) == depth) {
                     c.name_call(&name, cap);
                 }
@@ -330,7 +356,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 self.acc.feature(FeatureId::FileDialog, line);
             } else if catalog::FOLDER_READS.contains(&n)
                 || (file && catalog::FILE_READS.contains(&n))
-                || (catalog::DOM_FILE_READS.contains(&n) && self.app_receiver(h2, h3))
+                || (catalog::DOM_FILE_READS.contains(&n) && self.app_call(&format!(".{n}()"), h2, h3))
             {
                 self.acc.feature(FeatureId::FileRead, line);
             } else if (file && catalog::FILE_WRITES.contains(&n))

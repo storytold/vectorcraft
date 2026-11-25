@@ -559,8 +559,8 @@ fn save_as_and_export_file_in_brackets_write_a_file() {
 }
 
 /// `app.open` reads the file it is given, called by name or with its name as a string literal in
-/// brackets; a document has no `open` method, and a property or a variable named `app` is not the
-/// application.
+/// brackets, also through a variable that holds the application; a document has no `open` method, and
+/// a property or a variable named `app` is not the application.
 #[test]
 fn app_open_reads_a_file() {
     let r = report(concat!(
@@ -570,16 +570,28 @@ fn app_open_reads_a_file() {
         "app.activeDocument['open'](f);\n",
         "x.app.open(f);\n",
         "x.app['open'](f);\n",
+        "var a = app; a.open(f);\n",
+        "a['open'](f);\n",
+        "var b = x.app; b.open(f); b['open'](f);\n",
     ));
-    assert_eq!(feature(&r, "file.read").map(|f| f.lines.as_slice()), Some(&[2, 3][..]));
+    assert_eq!(feature(&r, "file.read").map(|f| f.lines.as_slice()), Some(&[2, 3, 7, 8][..]));
     assert!(r.outside.is_empty());
     let r = report("var app = {};\napp.open(f);\napp['open'](f);\n");
     assert!(feature(&r, "file.read").is_none());
+    // A short echo limit cuts the member chains the report lists, not what the check finds.
+    let short = Limits { echo: 4, ..Limits::default() };
+    let src =
+        "app.open(f);\napp['open'](f);\nvar a = app; a.open(f);\nvar d = app['open'](f); d.print(o);\napp.documents.addDocumentNoUI('P').print(o);\n";
+    let r = check("t.jsx", src.as_bytes(), None, &short);
+    assert_eq!(feature(&r, "file.read").map(|f| f.lines.as_slice()), Some(&[1, 2, 3, 4][..]));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4, 5][..]));
+    assert!(!r.members.is_empty());
+    assert!(r.members.iter().all(|m| m.name.chars().count() <= short.echo));
 }
 
 /// A document's `print` writes the file its options' `jobOptions.file` names, called with a dot or
-/// with its name in brackets, on a document (also one `add`, `addDocument`, `addDocumentNoUI` or
-/// `app.open`, with or without brackets, returns) or a variable that holds one; reading the method without
+/// with its name in brackets, on a document (also one `add`, `addDocument`, `addDocumentNoUI`, `getByName`,
+/// `index` or `app.open`, with or without brackets, returns) or a variable that holds one; reading the method without
 /// calling it, and a `print` method of another object, do not.
 #[test]
 fn print_writes_a_file() {
@@ -600,8 +612,14 @@ fn print_writes_a_file() {
         "app.documents.addDocumentNoUI('Print').print(o);\n",
         "var g = app['open'](new File(p)); g.print(o);\n",
         "var h = app['activeDocument'](new File(p)); h.print(o);\n",
+        "app.documents.index(0).print(o);\n",
+        "documents.index('Print')['print'](o);\n",
+        "var i = app.documents.index(1); i.print(o);\n",
+        "app.documents['index'](0).print(o);\n",
+        "var j = documents['getByName']('Print'); j['print'](o);\n",
+        "app.documents['length'](0).print(o);\n",
     ));
-    let lines = &[2, 3, 5, 9, 10, 11, 12, 13, 14, 15][..];
+    let lines = &[2, 3, 5, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21][..];
     assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(lines));
     assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", lines)]);
 }

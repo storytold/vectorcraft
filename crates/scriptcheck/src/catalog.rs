@@ -86,7 +86,8 @@ pub(crate) const DOM_PRINT: &str = "print";
 // The member chains that give a document, whole and as the chains are written (`[]` for an index,
 // `()` for a call): https://ai-scripting.docsforadobe.dev/jsobjref/Application/ (`activeDocument`,
 // `documents`, `open`) and https://ai-scripting.docsforadobe.dev/jsobjref/Documents/ (`add`, `addDocument`,
-// `addDocumentNoUI`, `getByName`).
+// `addDocumentNoUI`, `getByName`). `index` is not on that page; it comes from VectorCraft's own binding of
+// the collection (`crates/engine/src/script/dom.rs`), which returns the document at a position or with a name.
 pub(crate) const DOM_DOCUMENTS: &[&str] = &[
     "activeDocument",
     "app.activeDocument",
@@ -100,6 +101,8 @@ pub(crate) const DOM_DOCUMENTS: &[&str] = &[
     "app.documents.addDocumentNoUI()",
     "documents.getByName()",
     "app.documents.getByName()",
+    "documents.index()",
+    "app.documents.index()",
     "app.open()",
 ];
 
