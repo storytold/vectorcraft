@@ -960,6 +960,20 @@ fn a_path_in_a_selected_group_or_compound_path_is_selected_as_a_whole() {
 }
 
 #[test]
+fn a_path_in_a_selected_group_reads_as_a_whole_when_its_own_anchors_are_also_picked() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    let group = s.active().unwrap().doc.parent_of(a).unwrap();
+    s.execute("select.set", &json!({"ids": [group.0, a.0]})).unwrap();
+    s.execute("select.anchorsMany", &json!({"items": [{"id": a.0, "anchors": [[0, 1]]}], "mode": "subtract"})).unwrap();
+    assert!(s.active().unwrap().selection.contains(group), "the group stays selected");
+    assert!(s.active().unwrap().selection.partial(a).is_some(), "the path has its own anchor selection");
+    let out = log(&mut s, "var p = app.activeDocument.pathItems[0]; vc.log([p.selectedPathPoints.length, p.pathPoints[1].selected]);");
+    assert_eq!(out, vec![json!([4, "PathPointSelection.ANCHORPOINT"])]);
+}
+
+#[test]
 fn reading_selected_while_moving_points_writes_the_path_once() {
     let (mut s, a, _) = doc();
     s.execute("select.set", &json!({"ids": [a.0]})).unwrap();

@@ -1384,10 +1384,10 @@ fn pt_parent(h: &super::Host, a: &[Data]) -> Answer {
     Ok(path_ref(h, item))
 }
 
-/// Whether the path `id` is not selected itself but a group or compound path that holds it is,
-/// which selects the path as a whole.
+/// Whether a group or compound path that holds the path `id` is selected, which selects the path
+/// as a whole whatever the path's own selection is.
 fn held_selected(d: &crate::Document, sel: &crate::doc::Selection, id: NodeId) -> bool {
-    !sel.contains(id) && d.ancestry(id).is_some_and(|a| a.iter().any(|i| *i != id && sel.contains(*i) && d.node(*i).is_some_and(|n| !n.is_layer())))
+    d.ancestry(id).is_some_and(|a| a.iter().any(|i| *i != id && sel.contains(*i) && d.node(*i).is_some_and(|n| !n.is_layer())))
 }
 
 /// The point at index `i` of `subs` is a selected anchor point of the path `id` in `sel`: every
