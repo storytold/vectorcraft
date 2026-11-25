@@ -511,8 +511,12 @@ fn shown_columns(s: &DocSettings) -> u32 {
 }
 
 /// Picks the artboard layout. A preset's rows are dropped, and a grid by column made with them
-/// keeps the column count Columns showed.
+/// keeps the column count Columns showed. Choosing the layout that is already selected keeps the
+/// rows.
 fn set_layout(s: &mut DocSettings, l: ArtboardLayout) {
+    if l == s.layout {
+        return;
+    }
     if s.layout == ArtboardLayout::GridByColumn && s.rows > 0 {
         s.columns = shown_columns(s);
     }
@@ -884,7 +888,7 @@ mod tests {
     /// showed. Under a grid by row the dialog shows the stored columns, and they stay.
     #[test]
     fn a_new_layout_keeps_the_columns_a_presets_rows_showed() {
-        for to in ArtboardLayout::ALL.iter() {
+        for to in ArtboardLayout::ALL.iter().filter(|l| **l != ArtboardLayout::GridByColumn) {
             for rows in [json!(4), json!(4.0), json!(3.6)] {
                 let mut s = settings(json!({"artboards": 9, "artboardLayout": {"layout": "gridByColumn", "columns": 2, "rows": rows}}));
                 assert_eq!(super::shown_columns(&s), 3, "9 artboards in rows {rows}");
@@ -895,6 +899,23 @@ mod tests {
         let mut s = settings(json!({"artboards": 9, "artboardLayout": {"layout": "gridByRow", "columns": 2}}));
         super::set_layout(&mut s, ArtboardLayout::GridByColumn);
         assert_eq!((s.rows, s.columns, super::shown_columns(&s)), (0, 2, 2));
+    }
+
+    /// Choosing the grid by column that is already selected keeps a preset's rows, so Create puts
+    /// as many artboards in each column as before.
+    #[test]
+    fn choosing_the_selected_layout_keeps_a_presets_rows() {
+        let mut s = settings(json!({"artboards": 5, "artboardLayout": {"layout": "gridByColumn", "columns": 2, "rows": 4, "spacing": 10}}));
+        let before = s.to_json();
+        super::set_layout(&mut s, ArtboardLayout::GridByColumn);
+        assert_eq!(s.to_json(), before);
+        assert_eq!((s.rows, super::shown_columns(&s)), (4, 2));
+        let mut app = app();
+        app.run("file.new", s.to_json()).unwrap();
+        let st = app.session.active().unwrap();
+        assert_eq!(st.doc.artboards.len(), 5);
+        let first: Vec<_> = st.doc.artboards.iter().filter(|a| a.rect.x0 == 0.0).map(|a| a.rect.y0).collect();
+        assert_eq!(first.len(), 4, "four artboards in the first column: {first:?}");
     }
 
     /// Columns shows what a preset's rows give the current number of artboards, also after

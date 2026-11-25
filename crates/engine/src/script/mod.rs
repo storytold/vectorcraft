@@ -1075,7 +1075,7 @@ impl Host {
         }
         let bridge = self.bridge.get().saturating_add(bytes);
         self.bridge.set(bridge);
-        if bridge > MAX_BRIDGE_BYTES {
+        if bridge > bridge_bytes() {
             return Err(self.over(OVER_BRIDGE));
         }
         let n = self.calls_this_slice.get() + 1;
@@ -2563,6 +2563,15 @@ fn growth_objects() -> u64 {
     GROWTH_OBJECTS
 }
 
+/// The data a run may pass to and from commands.
+fn bridge_bytes() -> u64 {
+    #[cfg(test)]
+    if let Some(n) = TEST_BRIDGE_BYTES.with(Cell::get) {
+        return n;
+    }
+    MAX_BRIDGE_BYTES
+}
+
 /// The limits of a command's result on its way to the script.
 fn result_limits() -> DataLimits {
     #[cfg(test)]
@@ -2580,6 +2589,8 @@ thread_local! {
     pub(crate) static PANIC_IN_SLICE: Cell<bool> = const { Cell::new(false) };
     /// Tests: the objects a run may add in place of [`GROWTH_OBJECTS`].
     pub(crate) static TEST_GROWTH: Cell<Option<u64>> = const { Cell::new(None) };
+    /// Tests: the data a run may pass to and from commands in place of [`MAX_BRIDGE_BYTES`].
+    pub(crate) static TEST_BRIDGE_BYTES: Cell<Option<u64>> = const { Cell::new(None) };
     /// Tests: the heap of a named engine in place of [`ENGINE_HEAP_BYTES`].
     pub(crate) static TEST_ENGINE_HEAP: Cell<Option<usize>> = const { Cell::new(None) };
     /// Tests: the bytes of source maps a named engine keeps, in place of [`KEPT_MAP_BYTES`].
