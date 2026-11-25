@@ -14,6 +14,9 @@ pub(super) struct Sig<'s> {
     /// name in `Folder.temp` and the other places of [`catalog::FOLDER_PLACES`], or the `)` of
     /// grouping parentheses that hold only such an object or a variable holding one (`(f)`).
     pub(super) file: bool,
+    /// The object that [`Sig::file`] marks the end of is a Folder object whatever the path names:
+    /// `new Folder(…)`, a place of [`catalog::FOLDER_PLACES`], or grouping parentheses that hold one.
+    pub(super) folder: bool,
     /// A statement may start at the token ([`crate::lex::Token::stmt`]).
     pub(super) stmt: bool,
     /// An expression may start at the token ([`crate::lex::Token::expr`]).
@@ -25,7 +28,7 @@ pub(super) struct Sig<'s> {
 impl<'s> Sig<'s> {
     /// The significant token `t`, after a line break when `nl` is set.
     pub(super) fn of(t: &Token<'s>, nl: bool) -> Self {
-        Sig { kind: t.kind, text: t.text, line: t.line, nl, file: false, stmt: t.stmt, expr: t.expr, start: t.start }
+        Sig { kind: t.kind, text: t.text, line: t.line, nl, file: false, folder: false, stmt: t.stmt, expr: t.expr, start: t.start }
     }
 
     pub(super) fn is(&self, punct: &str) -> bool {

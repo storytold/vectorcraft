@@ -8,14 +8,15 @@
 //! It needs a thread-safe writer from the host ([`crate::Services::write_shared`], desktop);
 //! without one (the web, which downloads) the work runs at once, as with the preference off.
 
-use std::sync::Arc;
+use std::collections::VecDeque;
 use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::fileio::progress::Progress;
 use vectorcraft_engine::file_access::ScopeHandle;
 
-use crate::VectorcraftApp;
+use crate::{VectorcraftApp, export_progress};
 
 /// Writes a file; callable from any thread.
 pub type SharedWriteFn = std::sync::Arc<dyn Fn(&str, &[u8]) -> Result<(), String> + Send + Sync>;
@@ -38,12 +39,57 @@ type Then = Box<dyn FnOnce(&mut VectorcraftApp, Result<Value, String>) -> Result
 /// A job's id and the work's result, back from the worker.
 type Done = (u64, Result<Value, String>);
 
-struct Task {
-    id: u64,
-    work: Work,
-    write: SharedWriteFn,
-    /// The automation roots in force where the work was started, in force where it runs.
-    scope: ScopeHandle,
+/// Work waiting on a [`Lane`].
+type Task = Box<dyn FnOnce() + Send>;
+
+/// What a [`Lane`] shares with the job that drains it.
+#[derive(Default)]
+struct LaneState {
+    queue: VecDeque<Task>,
+    /// A drain job was spawned and has not found the queue empty yet.
+    running: bool,
+}
+
+/// Work that runs one task at a time in the order it was pushed, on one job of the host's
+/// [`craft::host::Jobs`]. `Jobs::spawn` runs jobs side by side and a `JobQueue` runs the newest
+/// first among equals, but a save's result is applied in start order and a batch of large
+/// pictures is decoded in turn.
+#[derive(Default)]
+pub(crate) struct Lane {
+    state: Arc<Mutex<LaneState>>,
+}
+
+impl Lane {
+    /// Queues `task`; when no job drains the lane, spawns one named `name`.
+    pub(crate) fn push(&self, jobs: &dyn craft::host::Jobs, name: &'static str, task: Task) {
+        let spawn = {
+            let Ok(mut state) = self.state.lock() else { return };
+            state.queue.push_back(task);
+            !std::mem::replace(&mut state.running, true)
+        };
+        if spawn {
+            let state = self.state.clone();
+            jobs.spawn(name, Box::new(move || drain(&state)));
+        }
+    }
+}
+
+/// Runs the lane's tasks until none is left; the lock is not held while one runs, so a task may push
+/// another and an inline `Jobs` may run this inside `push`.
+fn drain(state: &Mutex<LaneState>) {
+    loop {
+        let task = {
+            let Ok(mut state) = state.lock() else { return };
+            match state.queue.pop_front() {
+                Some(task) => task,
+                None => {
+                    state.running = false;
+                    return;
+                }
+            }
+        };
+        task();
+    }
 }
 
 /// What a job that shows in the progress window does: its Cancel and Continue in Background act on
@@ -70,6 +116,9 @@ pub struct Job {
     pub progress: Option<Arc<Progress>>,
     /// Continue in Background: the progress dialog no longer shows this job.
     pub hidden: bool,
+    /// [`export_progress::now`] when the job started, which the progress window waits
+    /// [`export_progress::DELAY`] from.
+    pub(crate) started: f64,
     /// [`crate::state::UiState::status_sets`] before the job set its status line.
     sets: u64,
     /// The status line the job set ("<label>…"); empty when it set none.
@@ -88,11 +137,13 @@ impl Job {
     }
 }
 
-/// The worker and the jobs it has not finished.
+/// The lane the work runs on and the jobs it has not finished.
 #[derive(Default)]
 pub struct Background {
-    worker: Option<(Sender<Task>, Receiver<Done>)>,
-    /// Jobs in the order they were started (the worker runs them in that order).
+    /// The results' channel, made with the first job.
+    results: Option<(Sender<Done>, Receiver<Done>)>,
+    lane: Lane,
+    /// Jobs in the order they were started (the lane runs them in that order).
     pub jobs: Vec<Job>,
     next_id: u64,
     /// Work started while this is set runs at once, whatever the preferences ([`in_foreground`]).
@@ -103,32 +154,6 @@ pub struct Background {
 }
 
 impl Background {
-    /// The worker's channels, started on first use (`None` on wasm, which has no threads).
-    fn worker(&mut self) -> Option<&Sender<Task>> {
-        if cfg!(target_arch = "wasm32") {
-            return None;
-        }
-        if self.worker.is_none() {
-            let (tx, tasks) = channel::<Task>();
-            let (done_tx, done) = channel();
-            std::thread::Builder::new()
-                .name("vectorcraft-save".into())
-                .spawn(move || {
-                    while let Ok(Task { id, work, write, scope }) = tasks.recv() {
-                        let r = scope
-                            .run(|| vectorcraft_engine::guard::catch_panic(|| work(&mut |p: &str, b: &[u8]| write(p, b))))
-                            .unwrap_or_else(|msg| Err(format!("internal error: {msg} (please report this bug)")));
-                        if done_tx.send((id, r)).is_err() {
-                            break;
-                        }
-                    }
-                })
-                .ok()?;
-            self.worker = Some((tx, done));
-        }
-        self.worker.as_ref().map(|(tx, _)| tx)
-    }
-
     /// Is a job reading document `uid` still running?
     pub fn busy_with(&self, uid: u64) -> bool {
         self.jobs.iter().any(|j| j.doc == Some(uid))
@@ -232,31 +257,36 @@ fn start(
     work: impl FnOnce(Writer) -> Result<Value, String> + Send + 'static,
     then: impl FnOnce(&mut VectorcraftApp, Result<Value, String>) -> Result<Value, String> + 'static,
 ) -> Result<Value, String> {
-    let mut work: Work = Box::new(work);
+    let work: Work = Box::new(work);
     let shared = app.services.write_shared.clone().filter(|_| enabled && !app.background.foreground && app.services.download.is_none());
     if let Some(write) = shared {
         let id = app.background.next_id;
-        if let Some(tx) = app.background.worker() {
-            match tx.send(Task { id, work, write, scope: ScopeHandle::capture() }) {
-                Ok(()) => {
-                    let (sets, status) = (app.ui.status_sets, if label.is_empty() { String::new() } else { format!("{label}…") });
-                    let bg = &mut app.background;
-                    bg.next_id += 1;
-                    let line = status.clone();
-                    bg.jobs.push(Job { id, kind, label: label.clone(), doc, progress, hidden: false, sets, line, then: Box::new(then) });
-                    if label.is_empty() {
-                        return Ok(json!({ "background": true }));
-                    }
-                    app.status(status.clone());
-                    return Ok(json!({ "background": true, "status": status }));
-                }
-                // The worker stopped: start a new one next time, and do this one now.
-                Err(e) => {
-                    app.background.worker = None;
-                    work = e.0.work;
-                }
-            }
+        let jobs = app.jobs();
+        let (sets, status) = (app.ui.status_sets, if label.is_empty() { String::new() } else { format!("{label}…") });
+        let started = export_progress::now(app);
+        let bg = &mut app.background;
+        bg.next_id += 1;
+        let tx = bg.results.get_or_insert_with(channel).0.clone();
+        // The automation roots in force here are in force there.
+        let scope = ScopeHandle::capture();
+        bg.lane.push(
+            &*jobs,
+            "vectorcraft-save",
+            Box::new(move || {
+                let r = scope
+                    .run(|| vectorcraft_engine::guard::catch_panic(|| work(&mut |p: &str, b: &[u8]| write(p, b))))
+                    .unwrap_or_else(|msg| Err(format!("internal error: {msg} (please report this bug)")));
+                // The app may have quit meanwhile: nothing to hand it to.
+                let _ = tx.send((id, r));
+            }),
+        );
+        let line = status.clone();
+        bg.jobs.push(Job { id, kind, label: label.clone(), doc, progress, hidden: false, started, sets, line, then: Box::new(then) });
+        if label.is_empty() {
+            return Ok(json!({ "background": true }));
         }
+        app.status(status.clone());
+        return Ok(json!({ "background": true, "status": status }));
     }
     let services = &mut app.services;
     let r = work(&mut |p: &str, b: &[u8]| crate::io::write_to(services, p, b));
@@ -290,7 +320,7 @@ pub fn in_foreground<T>(app: &mut VectorcraftApp, f: impl FnOnce(&mut Vectorcraf
 
 /// Apply the results that arrived (each frame).
 pub fn poll(app: &mut VectorcraftApp) {
-    while let Some(done) = app.background.worker.as_ref().and_then(|(_, rx)| rx.try_recv().ok()) {
+    while let Some(done) = app.background.results.as_ref().and_then(|(_, rx)| rx.try_recv().ok()) {
         finish(app, done);
     }
 }
@@ -305,12 +335,12 @@ pub fn wait_all(app: &mut VectorcraftApp) {
 /// or no job is left.
 pub fn wait_until(app: &mut VectorcraftApp, ready: impl Fn(&VectorcraftApp) -> bool) {
     while !ready(app) && !app.background.jobs.is_empty() {
-        let Some(done) = app.background.worker.as_ref().and_then(|(_, rx)| rx.recv().ok()) else {
-            // The worker is gone: its jobs can't finish.
+        let Some(done) = app.background.results.as_ref().and_then(|(_, rx)| rx.recv().ok()) else {
+            // No result can arrive: the jobs can't finish.
             for job in std::mem::take(&mut app.background.jobs) {
                 apply(app, job, Err("the background worker stopped".into()));
             }
-            app.background.worker = None;
+            app.background.results = None;
             return;
         };
         finish(app, done);
@@ -346,4 +376,53 @@ fn apply(app: &mut VectorcraftApp, job: Job, r: Result<Value, String>) {
     {
         app.status(format!("{label} failed: {e}"));
     }
+}
+
+/// The progress window's entry for the first export or save it shows.
+pub(crate) fn shown(app: &VectorcraftApp) -> Option<export_progress::Shown> {
+    let live: Vec<&Job> = app.background.jobs.iter().filter(|j| !j.hidden && !j.cancelled() && j.progress.is_some()).collect();
+    let first = *live.first()?;
+    let progress = first.progress.as_ref()?;
+    let more = live.iter().filter(|j| j.kind == first.kind).count().saturating_sub(1) as u64;
+    let (done, total) = progress.counts();
+    let share = progress.fraction().unwrap_or(0.0) as f32;
+    let (fraction, counts, queued, cancel, hide) = match first.kind {
+        // A save counts no steps: a moving bar.
+        Kind::Save => (
+            None,
+            None,
+            (more > 0).then(|| crate::i18n::tn(more, "{n} more save waiting", "{n} more saves waiting").to_string()),
+            "file.cancelSave",
+            "file.saveInBackground",
+        ),
+        Kind::Export => {
+            let (fraction, counts) = if progress.counts_share() && total > 0 {
+                (Some(share), None)
+            } else if total > 1 {
+                // One step says nothing a spinner doesn't: the bar would sit at 0 % until the file is written.
+                let step = if progress.counts_files() { tl!("File {n} of {total}") } else { tl!("Artboard {n} of {total}") };
+                let counts = crate::i18n::fmt(step, &[("n", &(done + 1).min(total).to_string()), ("total", &total.to_string())]);
+                (Some(share), Some(counts.to_string()))
+            } else {
+                (None, None)
+            };
+            (
+                fraction,
+                counts,
+                (more > 0).then(|| crate::i18n::tn(more, "{n} more export waiting", "{n} more exports waiting").to_string()),
+                "file.cancelExport",
+                "file.exportInBackground",
+            )
+        }
+    };
+    Some(export_progress::Shown {
+        title: format!("{}…", crate::i18n::msg(&first.label)),
+        step: tl!("Encoding and writing the file…").to_string(),
+        fraction,
+        counts,
+        queued,
+        started: first.started,
+        cancel,
+        hide: Some(hide),
+    })
 }

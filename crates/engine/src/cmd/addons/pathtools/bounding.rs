@@ -49,7 +49,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
 
 /// Enabled with a selection that is not an object of a symbol instance's art, which
 /// [`selected_roots_to_transform`] refuses.
-fn whole_objects(s: &Session) -> std::result::Result<(), String> {
+pub(super) fn whole_objects(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
     no_symbol_part(s)
 }

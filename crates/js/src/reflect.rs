@@ -95,6 +95,7 @@ fn reflect(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<V
         Value::String(_) => (interp.intrinsics.string_proto, Some("String")),
         Value::Number(_) => (interp.intrinsics.number_proto, Some("Number")),
         Value::Bool(_) => (interp.intrinsics.boolean_proto, Some("Boolean")),
+        Value::Symbol(_) => (interp.symbols.objects.map_or(interp.intrinsics.object_proto, |o| o.symbol_proto), Some("Symbol")),
         Value::Object(o) => (*o, None),
     };
     let (name, properties, methods) = match interp.host_class_members(id)? {
@@ -214,6 +215,7 @@ fn value_type(interp: &Interp, v: &Value) -> JsResult<String> {
         Value::Bool(_) => "boolean".into(),
         Value::Number(_) => "number".into(),
         Value::String(_) => "string".into(),
+        Value::Symbol(_) => "symbol".into(),
         Value::Object(o) => match interp.host_class_name(*o)? {
             Some(name) => name.to_string(),
             None => interp.object(*o)?.class.name().into(),
