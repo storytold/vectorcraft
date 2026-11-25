@@ -20,17 +20,20 @@
 //! <https://ai-scripting.docsforadobe.dev/scriptingJavascript/objectReferences/> describes; here
 //! that holds for `activeDocument`, `documents` and `selection`.
 //!
-//! VectorCraft's own rules, which the help pages do not state:
+//! VectorCraft's own rules:
 //! - A document's selection lists the selected objects topmost first, as `pageItems` does, whatever
-//!   order they were selected or made in.
+//!   order they were selected or made in. The objectReferences page above says instead that the
+//!   first object is the one last added to the page; VectorCraft does not follow that sentence.
 //! - A collection read with a name that nothing has throws `Not found`, and `"name" in pageItems` is
 //!   false then. Assigning to such a name throws the same error.
 //! - Assigning `activeDocument` or `selection` without `app.` assigns `app.activeDocument` or the
-//!   active document's selection. Assigning `documents` keeps its value.
-//! - Collections list documents in tab order. `pageItems` lists every object, with the objects
-//!   inside groups and compound paths after the group or compound path, and leaves out layers and
-//!   ruler guides. An index out of range gives `undefined`; `index` and `getByName` throw
-//!   `Not found` when nothing matches.
+//!   active document's selection. A top-level `var selection = ...` does the same and does
+//!   not make a variable of the script. Assigning `documents` keeps its value.
+//! - Collections list documents in tab order. The objectReferences page says `documents[0]` is
+//!   always the active document; VectorCraft does not follow that yet.
+//! - `pageItems` lists every object, with the objects inside groups and compound paths after the
+//!   group or compound path, and leaves out layers and ruler guides. An index out of range gives
+//!   `undefined`; `index` and `getByName` throw `Not found` when nothing matches.
 //! - Script coordinates are points with Y up from the bottom of the first artboard
 //!   (`DOCUMENTCOORDINATESYSTEM`, the default) or points with Y down from the top-left corner of
 //!   the active artboard (`ARTBOARDCOORDINATESYSTEM`), as `app.coordinateSystem` says for the run.
@@ -1265,7 +1268,14 @@ fn selection_of(h: &Host, uid: u64) -> Answer {
     } else {
         let all = page_items(h, st);
         h.charge_call(all.len() as u64)?;
-        all.iter().copied().filter(|i| picked.contains(i)).collect()
+        let mut ids: Vec<NodeId> = all.iter().copied().filter(|i| picked.contains(i)).collect();
+        // A selected object that `pageItems` does not list still comes last, in the order it was
+        // selected.
+        if ids.len() < picked.len() {
+            let mut listed: HashSet<NodeId> = ids.iter().copied().collect();
+            ids.extend(st.selection.objects.iter().copied().filter(|i| picked.contains(i) && listed.insert(*i)));
+        }
+        ids
     };
     h.charge_call(16 * ids.len() as u64)?;
     Ok(Data::Array(ids.iter().map(|i| item_ref(h, st, *i)).collect()))
@@ -1509,8 +1519,8 @@ fn item_set_note(h: &Host, a: &[Data]) -> Answer {
     Ok(Data::Undefined)
 }
 
-/// Refuses a change to the item's appearance, place or size while a layer it is in is hidden or
-/// locked. Its name and note may still change.
+/// Refuses a change to the item's appearance, place, stacking order or size while a layer it is in
+/// is hidden or locked. Its name and note may still change.
 fn refuse_in_closed_layer(h: &Host, item: Item) -> std::result::Result<(), HostError> {
     let refused = with_doc(h, item.doc, |_, st| {
         let d = &st.doc;
@@ -1555,10 +1565,13 @@ fn item_set_opacity(h: &Host, a: &[Data]) -> Answer {
     // A value the getter reports for the item's opacity sends the opacity it has, and
     // `object.setProps` finds the no-op itself: an opacity a graph mark or label already has still
     // replaces the one the graph keeps for its series or kind.
+    // The opacity the item already has may be assigned while its layer is hidden or locked.
     let item = this_item(h, a)?;
-    refuse_in_closed_layer(h, item)?;
     let now = with_doc(h, item.doc, |_, st| st.doc.node(item.id).map(|n| f64::from(n.opacity) * 100.0));
-    let v = now.filter(|now| (now - v).abs() < 1e-4).unwrap_or(v);
+    let Some(v) = now.filter(|now| (now - v).abs() < 1e-4) else {
+        refuse_in_closed_layer(h, item)?;
+        return set_props(h, a, |_| false, json!({"opacity": v}));
+    };
     set_props(h, a, |_| false, json!({"opacity": v}))
 }
 
@@ -1923,7 +1936,7 @@ fn item_duplicate(h: &Host, a: &[Data]) -> Answer {
 }
 
 /// `zOrder(method)`: one of the four Object › Arrange commands for the item. A path inside a
-/// compound path is refused.
+/// compound path is refused, and so is an object in a hidden or locked layer.
 fn item_z_order(h: &Host, a: &[Data]) -> Answer {
     let id = match arg(a, 1) {
         Data::String(s) if s == "ZOrderMethod.BRINGTOFRONT" => "object.arrange.bringToFront",
@@ -1936,6 +1949,7 @@ fn item_z_order(h: &Host, a: &[Data]) -> Answer {
     if in_compound(h, item) {
         return Err(HostError::Error(COMPOUND_MEMBER_ORDER.into()));
     }
+    refuse_in_closed_layer(h, item)?;
     let (before, after) = with_doc(h, item.doc, |_, st| {
         let at = st.doc.position(item.id);
         let count = at.and_then(|(p, ..)| st.doc.children(p).map(Vec::len)).unwrap_or(0);

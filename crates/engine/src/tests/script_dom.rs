@@ -1509,6 +1509,7 @@ fn setters_refuse_art_in_a_hidden_or_locked_layer() {
     let (mut s, a, b) = doc();
     let layer = NodeId(s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap());
     let c = rect(&mut s, 200.0, 200.0, 20.0, 20.0);
+    rect(&mut s, 300.0, 200.0, 20.0, 20.0);
     for (id, name) in [(a, "locked"), (b, "free"), (c, "closed")] {
         s.execute("object.setProps", &json!({"ids": [id.0], "name": name})).unwrap();
     }
@@ -1517,7 +1518,20 @@ fn setters_refuse_art_in_a_hidden_or_locked_layer() {
         (json!({"ids": [layer.0], "locked": true}), json!({"ids": [layer.0], "locked": false})),
     ] {
         s.execute("object.setProps", &on).unwrap();
-        for set in ["opacity = 50", "hidden = true", "locked = true", "left = 5", "top = 5", "position = [5, 5]", "width = 10", "height = 10"] {
+        // `hidden` and `locked` are refused even when the value is the one the object has.
+        for set in [
+            "opacity = 50",
+            "hidden = true",
+            "hidden = false",
+            "locked = true",
+            "locked = false",
+            "left = 5",
+            "top = 5",
+            "position = [5, 5]",
+            "width = 10",
+            "height = 10",
+            "zOrder(ZOrderMethod.BRINGTOFRONT)",
+        ] {
             let (before, steps) = (format!("{:?}", s.active().unwrap().doc.layers), undo_steps(&s));
             // The change made before the refusal is put back with the rest of the run.
             let e = failure(&mut s, &format!("var p = app.activeDocument.pageItems; p.getByName('free').opacity = 20; p.getByName('closed').{set};"));
@@ -1527,10 +1541,10 @@ fn setters_refuse_art_in_a_hidden_or_locked_layer() {
         }
         let out = log(
             &mut s,
-            "var c = app.activeDocument.pageItems.getByName('closed'); c.note = 'n'; c.name = 'renamed'; vc.log([c.name, c.note]);\
-             c.name = 'closed'; c.note = '';",
+            "var c = app.activeDocument.pageItems.getByName('closed'); c.note = 'n'; c.name = 'renamed'; c.opacity = c.opacity;\
+             vc.log([c.name, c.note, c.opacity]); c.name = 'closed'; c.note = '';",
         );
-        assert_eq!(out, vec![json!(["renamed", "n"])], "{on}");
+        assert_eq!(out, vec![json!(["renamed", "n", 100])], "{on}");
         s.execute("object.setProps", &off).unwrap();
     }
     s.execute("object.setProps", &json!({"ids": [a.0], "locked": true})).unwrap();
@@ -1595,8 +1609,13 @@ fn the_application_members_can_be_named_without_app() {
     );
     assert_eq!(out, vec![json!(0), json!(2), json!([1, true]), json!([1, "object"])]);
     assert_eq!(s.active().unwrap().selection.objects, vec![b]);
+    // A top-level `var selection = []` clears the selection; a push goes to a list nobody keeps.
+    let out = log(&mut s, "var selection = []; selection.push(app.activeDocument.pageItems[0]); vc.log(selection.length);");
+    assert_eq!(out, vec![json!(0)]);
+    assert!(s.active().unwrap().selection.objects.is_empty());
     assert!(failure(&mut s, "activeDocument = 5;").contains("not a Document"));
-    failure(&mut s, "'use strict'; documents = 5;");
+    let e = failure(&mut s, "'use strict'; documents = 5;");
+    assert!(e.contains("TypeError") && e.contains("cannot assign to property 'documents': it has only a getter"), "{e}");
     // With no document open, reading `activeDocument` throws as `app.activeDocument` does.
     let mut s = Session::new();
     assert!(failure(&mut s, "activeDocument;").contains("No active document"));

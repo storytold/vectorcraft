@@ -2625,9 +2625,10 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `app.selection` (assigning it sets the active document's selection), `app.coordinateSystem` and
   `app.getIsFileOpen(path)`. A script may name the application's members without `app.`, as
   [Accessing and referencing objects](https://ai-scripting.docsforadobe.dev/scriptingJavascript/objectReferences/)
-  describes; in VectorCraft that holds for `activeDocument`, `documents` and `selection`. Assigning `activeDocument` or `selection` without `app.`, as `var selection = ...` at the top level also
-  does, assigns the application's member, and assigning `documents` keeps its value (VectorCraft's own rule).
-  `app.documents`
+  describes; in VectorCraft that holds for `activeDocument`, `documents` and `selection`. VectorCraft's own rules:
+  assigning `activeDocument` or `selection` without `app.` assigns the application's member. A top-level
+  `var selection = ...` does the same and does not make a variable of the script. Assigning `documents` keeps its
+  value. `app.documents`
   (https://ai-scripting.docsforadobe.dev/jsobjref/Documents/) has `length`, `[i]`, `index(key)`, `getByName(name)`
   and `add(colorSpace?, width?, height?, numArtBoards?, artboardLayout?, artboardSpacing?, artboardRowsOrCols?)`,
   which runs `file.new` (`artboardRowsOrCols` is the number of rows for `GridByCol` and `RLGridByCol`, and of
@@ -2670,8 +2671,9 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   locked layer or group, or on a locked artboard throws `Cannot move` and moves nothing. `duplicate` on such an
   object, with or without a relative object, throws `Cannot duplicate` and makes no copy. Assigning `hidden`,
   `locked`, `opacity`, `position`, `left`, `top`, `width` or `height` to an object in a hidden or locked layer
-  throws `Cannot edit` and changes nothing, while its `name` and `note` still change; an object that is hidden or
-  locked itself takes them (VectorCraft's own rule). `move` with the object itself as the relative object and
+  throws `Cannot edit` and changes nothing, even when the value is the one the object has, except for `opacity`, and
+  `zOrder()` on such an object throws `Cannot edit` too. Its `name` and `note` still change, and an object that is
+  hidden or locked itself takes all of them (VectorCraft's own rule). `move` with the object itself as the relative object and
   `PLACEBEFORE` or `PLACEAFTER` leaves it where it is and adds no undo step. When `move` takes the last path out of
   a compound path, the compound path stays, empty, so a script that holds it can still read it. An object with
   nothing in it, such as an empty group or that compound path, reads its bounds, `position`, `width` and `height`
@@ -2685,7 +2687,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `pageItems` lists the art topmost first, as the example on
   [CMYKColor](https://ai-scripting.docsforadobe.dev/jsobjref/CMYKColor/) reads the frontmost path as `pathItems[0]`,
   and a document's `selection` lists the selected objects in the same order, whatever order they were selected or
-  made in (VectorCraft's own rule). A collection read with a name, such as `pageItems["Logo"]` or
+  made in. This is VectorCraft's own rule: the page cited below says the first object in a selection is the one last
+  added to the page, and VectorCraft does not follow that sentence. A collection read with a name, such as `pageItems["Logo"]` or
   `documents["Untitled-1"]`, gives the object `getByName` gives, as
   [Accessing and referencing objects](https://ai-scripting.docsforadobe.dev/scriptingJavascript/objectReferences/)
   shows. A read with a name that nothing has, a name the collection class lacks as a member included, throws
@@ -2693,7 +2696,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   (VectorCraft's own rule). `JSON.stringify` does not read `toJSON` from a collection this way. `name` takes a number or a Boolean as the text `String(value)` gives. `String(object)` gives
   `[PathItem Logo]` for a page item named `Logo` (`[PathItem ]` with no name), `[Document <name>]`,
   `[Layer <name>]`, `[Application]` and `[PageItems]` (VectorCraft's own rule).
-  VectorCraft's own rules: documents are listed in tab order, and page items with the
+  Documents are listed in tab order; the same page says `documents[0]` is always the active document, and
+  VectorCraft does not follow that yet. VectorCraft's own rules: page items are listed with the
   objects inside groups and compound paths after their group and without layers and ruler guides. A document's
   `selection`, and `app.selection` while a document is open, is an empty list when nothing is selected. Script coordinates
   are points with Y up from the bottom-left corner of the first artboard, or, with
@@ -2721,8 +2725,9 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `hasOwnProperty` and `propertyIsEnumerable` are false for those members and true for every other member of an
   object's class, so `item.hasOwnProperty("opacity")` is true on a page item, and `for (k in item)` lists the
   other properties but not the methods. `Object.keys`, `Object.getOwnPropertyNames` and
-  `Object.getOwnPropertyDescriptor` do not report those members. Assigning a member that an object's class does not
-  have does not keep the value and does not throw. Other members
+  `Object.getOwnPropertyDescriptor` do not report those members. Assigning a member that a page item, a layer, a
+  document or the application does not have does not keep the value and does not throw; on a collection it throws `Not found`,
+  as described above. Other members
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
   themselves, such as a path's fill, are not defined yet and read as `undefined`.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
