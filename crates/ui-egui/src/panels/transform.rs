@@ -16,7 +16,7 @@ use craft::keymap::CommandRef;
 use craft::ui::buttons::IconButton;
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Entry, GlyphLabel, LabelKind, LabelPress, Props, Show, ShowContainer, SideLabel, Sizing};
-use craft::ui::display::{Shade, Text};
+use craft::ui::display::{Divider, Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::menu::PanelRow;
@@ -576,18 +576,21 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         IconButton::command(IconId::new("flip-vertical-2"), FLIP_HORIZONTAL).show(ui);
         IconButton::command(IconId::new("flip-horizontal-2"), FLIP_VERTICAL).show(ui);
     });
-    // Live shape properties (a path with live corners is no shape).
+    // Live shape properties (a path with live corners is no shape), ruled off from the fields as the options are.
     if let Some(n) = first_selected(app)
         && let NodeKind::Path { live: Some(live), .. } = &n.kind
         && !matches!(**live, LiveShape::Path { .. })
-        && !live_shape_rows(app, ui, &n, live, true)
     {
-        Text::new(tl!("Shape Properties:")).show(ui);
-        Text::new(tl!(n.kind_label())).shade(Shade::Muted).show(ui);
+        Divider::horizontal().show(ui);
+        if !live_shape_rows(app, ui, &n, live, true) {
+            Text::new(tl!("Shape Properties:")).show(ui);
+            Text::new(tl!(n.kind_label())).shade(Shade::Muted).show(ui);
+        }
     }
     if part_hidden(app, HIDE_OPTIONS_KEY) {
         return;
     }
+    Divider::horizontal().show(ui);
     let (sc, ss) = (app.session.prefs.scale_corners, app.session.prefs.scale_strokes);
     option_check(app, ui, tl!("Scale Corners"), "scaleCorners", sc);
     option_check(app, ui, tl!("Scale Strokes & Effects"), "scaleStrokes", ss);

@@ -1,9 +1,17 @@
 use proptest::prelude::*;
 
 use crate::{
-    BinaryOp, Expr, ExprId, ForInTarget, FunctionKind, Options, Program, PropertyValue, Stmt, StmtId, SyntaxError, TOO_DEEP, TokenKind, parse,
-    tokenize,
+    BinaryOp, Binding, Expr, ExprId, ForInTarget, FunctionKind, Options, Program, PropertyValue, Stmt, StmtId, SyntaxError, TOO_DEEP, TokenKind,
+    VarDecl, parse, tokenize,
 };
+
+/// The name a declaration binds; a pattern fails the test.
+fn decl_name(d: &VarDecl) -> &str {
+    match &d.target {
+        Binding::Name(n) => &n.name,
+        Binding::Pattern(_) => panic!("a pattern where a name was expected"),
+    }
+}
 
 fn ok(src: &str) -> Program {
     match parse(src, &Options::default()) {
@@ -382,7 +390,7 @@ fn string_literals_and_escapes() {
 fn identifiers_with_unicode_and_escapes() {
     let p = ok("var caf\\u00e9 = 1, \u{3b1}\u{3b2} = 2, $_x1 = 3, a\u{300} = 4;");
     let Stmt::Var(decls) = stmt(&p, p.body[0]) else { panic!() };
-    let names: Vec<&str> = decls.iter().map(|d| d.name.name.as_str()).collect();
+    let names: Vec<&str> = decls.iter().map(decl_name).collect();
     assert_eq!(names, ["caf\u{e9}", "\u{3b1}\u{3b2}", "$_x1", "a\u{300}"]);
     let p = ok("\\u{61}b;");
     assert!(matches!(expr(&p, first_expr(&p)), Expr::Ident(n) if n == "ab"));
@@ -427,7 +435,7 @@ fn identifiers_take_the_other_id_start_and_continue_characters() {
         for src in [format!("var {ch} = 1;"), format!("var a{ch} = 1;"), format!("var \\u{c:04X}\\u{{{c:X}}} = 1;")] {
             let p = ok(&src);
             let Stmt::Var(decls) = stmt(&p, p.body[0]) else { panic!("{src:?}") };
-            assert!(decls[0].name.name.contains(ch), "{src:?}");
+            assert!(decl_name(&decls[0]).contains(ch), "{src:?}");
         }
     }
     // Other_ID_Continue: may follow the first character, but cannot start a name.
@@ -456,7 +464,7 @@ fn identifiers_take_the_characters_unicode_17_assigned() {
     ] {
         let p = ok(src);
         let Stmt::Var(decls) = stmt(&p, p.body[0]) else { panic!("{src:?}") };
-        assert_eq!(decls[0].name.name, name, "{src:?}");
+        assert_eq!(decl_name(&decls[0]), name, "{src:?}");
     }
     assert!(err("var \u{1ACF} = 1;").message.contains("unexpected character"));
     assert!(err("var \\u1ACF = 1;").message.contains("identifier escape"));
@@ -480,7 +488,7 @@ fn identifiers_refuse_pattern_syntax_surrogates_and_bad_escapes() {
     // A supplementary letter is one identifier character, at the start and after a number.
     let p = ok("var \u{10000}\u{1D7CE} = 1;");
     let Stmt::Var(decls) = stmt(&p, p.body[0]) else { panic!() };
-    assert_eq!(decls[0].name.name, "\u{10000}\u{1D7CE}");
+    assert_eq!(decl_name(&decls[0]), "\u{10000}\u{1D7CE}");
     assert!(err("1\u{10000};").message.contains("immediately after numeric literal"));
 }
 
