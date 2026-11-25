@@ -13469,7 +13469,9 @@ need a new approval. A refused install keeps the grant. A failed write of the mo
 grant in the store. A stored module that is disabled, or not read in Safe Mode, keeps the grant for its id. When
 `plugin.remove` can't remove the grant from the plug-in store, it returns an error and the plug-in stays installed;
 so does a `plugin.remove` while the system key store can't be reached, also when `grants.json` is missing or doesn't
-name the plug-in. For an id that isn't installed, `plugin.remove` also deletes the module stored for it that didn't
+name the plug-in. When `plugin.remove` can't delete an installed plug-in's stored module, it returns an error naming
+the file, and the plug-in stays installed with its grant kept in the store. For an id that isn't installed,
+`plugin.remove` also deletes the module stored for it that didn't
 load and returns `{removed}`. When the plug-in's settings and cache can't be moved back from their `.removed` folder
 then either, the error names that folder, and the next load, install or `plugin.remove` of the plug-in moves them back. A
 filter without `doc.write` or `state` that returns output needing them gets an error and the document is unchanged.

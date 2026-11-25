@@ -876,6 +876,13 @@ impl Session {
         })
     }
 
+    /// The grant the attached plug-in store's signed grants file holds for the plug-in `id` (`None`
+    /// without a folder, and when the file grants nothing: unsigned, unreadable or without an entry
+    /// for `id`).
+    pub(crate) fn stored_plugin_grant(&self, id: &str) -> Option<vectorcraft_plugins::permissions::Grant> {
+        self.plugin_dir.as_deref().and_then(|dir| stored_grants(dir).remove(id))
+    }
+
     /// Does the attached plug-in store hold a module file for the plug-in `id`, loaded or not (one
     /// that no grant covers is skipped at startup and stays in the folder)?
     pub(crate) fn holds_stored_plugin(&self, id: &str) -> bool {

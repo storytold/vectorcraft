@@ -1252,18 +1252,31 @@ fn remove(s: &mut Session, p: &Value) -> Result<Value> {
     // A module stored for an id that isn't installed (one no grant covers is skipped at startup)
     // counts as removed once its file is gone.
     let module = !installed && vectorcraft_plugins::manifest::valid_id(id) && s.holds_stored_plugin(id);
+    // An installed plug-in's stored module is deleted with its grant too, so that one that can't be
+    // deleted leaves the plug-in installed. Without a plug-in folder it has none.
+    let unstore = module || (installed && s.plugin_dir.is_some());
+    // The grant the store keeps for an installed plug-in, which may differ from the one the session
+    // holds (an update whose module couldn't be stored): written back when its module can't be
+    // deleted, so that the stored module still loads at the next launch.
+    let kept_grant = if installed { s.stored_plugin_grant(id) } else { None };
     let module_left = std::cell::Cell::new(false);
     let cant_delete = || format!("plugin.remove: can't delete {}", s.stored_plugin_file(id).unwrap_or_default());
     // Installed again, it asks again. A grant that can't be removed may still approve the module, and
     // so may a grants file that can't be opened or read, or a signed copy of the file put back when
     // the generation couldn't be raised (the key store can't be reached). Without a plug-in folder
-    // nothing keeps a grant. The stored module of an id that isn't installed is deleted next, while
-    // its settings and cache can still be moved back.
+    // nothing keeps a grant. The stored module is deleted next, while its settings and cache can
+    // still be moved back.
     let forget = || {
         if !s.store_grant_in(&turn, id, None) && s.plugin_dir.is_some() {
             return false;
         }
-        let deleted = !module || s.unstore_plugin(&turn, id);
+        let deleted = !unstore || s.unstore_plugin(&turn, id);
+        if !deleted
+            && let Some(grant) = kept_grant.clone()
+            && !s.store_grant_in(&turn, id, Some(grant))
+        {
+            log::warn!("plugin.remove: can't keep the grant of {id}, whose module stays: it asks again at the next launch");
+        }
         module_left.set(!deleted);
         deleted
     };
@@ -1366,7 +1379,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Remove Plug-in",
             [],
             None,
-            "{id} uninstall a plug-in (its live effects then leave the geometry as it is) and delete the settings and cache it kept (when their folder can't be moved aside, or its grant can't be removed from the plug-in store, the command fails and the plug-in stays installed, as it does when the system key store can't be reached to make sure no earlier copy of grants.json grants it again; when the settings can't be moved back either, the error names the folder they stay in, and the next load, install or removal of the plug-in moves them back); for an id that isn't installed, deletes the settings and cache the plug-in store still keeps for it and the module stored for it that didn't load, and reports it removed; it waits while another window or process changes the plug-in store, and when the store's disabled.lock can't be locked, the command fails and nothing is removed → {removed}",
+            "{id} uninstall a plug-in (its live effects then leave the geometry as it is) and delete the settings and cache it kept (when their folder can't be moved aside, or its grant can't be removed from the plug-in store, or its stored module can't be deleted, the command fails and the plug-in stays installed, as it does when the system key store can't be reached to make sure no earlier copy of grants.json grants it again; when the settings can't be moved back either, the error names the folder they stay in, and the next load, install or removal of the plug-in moves them back); for an id that isn't installed, deletes the settings and cache the plug-in store still keeps for it and the module stored for it that didn't load, and reports it removed; it waits while another window or process changes the plug-in store, and when the store's disabled.lock can't be locked, the command fails and nothing is removed → {removed}",
             always,
             remove
         ),

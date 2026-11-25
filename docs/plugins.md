@@ -286,7 +286,8 @@ capability model proposed for PhotoCraft plug-ins
   hexadecimal digits covers nothing. `plugin.remove` forgets the grant, and so does a successful `plugin.install` of a
   module that lists no permissions under that id, so the earlier bytes need a new approval. When `plugin.remove` can't
   remove the grant from `grants.json`, it returns an error, the plug-in stays installed, and a second `plugin.remove`
-  tries again. A refused install leaves the grant, the plug-in installed with the id, the `Plug-ins` folder and the
+  tries again. The same happens when it can't delete the plug-in's stored module, and the grant stays in `grants.json`.
+  A refused install leaves the grant, the plug-in installed with the id, the `Plug-ins` folder and the
   list of disabled plug-ins as they are. When another session installs a plug-in with the id or changes its grant
   while `plugin.install` checks a module, the install is refused, before anything is written to the `Plug-ins` folder,
   if the other plug-in would need `replace: true` or the changed grant no longer approves the module. A

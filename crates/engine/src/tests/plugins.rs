@@ -4789,6 +4789,45 @@ fn removing_a_stored_plugin_that_did_not_load_reports_it_removed() {
     assert_eq!(kept_generation(&keys, &folder.0), Some(2), "a valid id's removal still retires signed copies");
 }
 
+/// Removing an installed plug-in whose stored module can't be deleted fails, and the plug-in stays
+/// installed with its settings and its stored grant; a second removal, once the module can be
+/// deleted, removes it.
+#[test]
+fn removing_an_installed_plugin_whose_module_cant_be_deleted_keeps_it_installed() {
+    let keys = std::sync::Arc::new(crate::store::grant_keys::MemoryGrantKeys::with_key(crate::store::grant_keys::GrantKey::from_bytes([5; 32])));
+    let _keys = ThreadKeys::using(SharedKeys::new(&keys));
+    let folder = crate::tests_links::Folder::new("plugin-store-installed-remove-held");
+    let id = "test.engine.permissions.installedremoveheld";
+    let data = vectorcraft_format::base64_encode(&asking(id, r#"["doc.read"]"#, &json!({"objects": []})));
+    let module = folder.0.join(format!("{}.wasm", crate::store::file_stem(id)));
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
+    assert!(module.is_file(), "the module is stored");
+    assert!(s.holds_plugin_grant(id), "and its grant");
+    let stored_grant = s.stored_plugin_grant(id);
+    assert!(stored_grant.is_some(), "in the signed grants file");
+    let data_dir = crate::store::plugin_data_dir(&folder.0, id);
+    std::fs::create_dir_all(&data_dir).unwrap();
+    let setting = data_dir.join("settings.json");
+    std::fs::write(&setting, b"{}").unwrap();
+
+    // A folder in the module's place can't be deleted as a file.
+    std::fs::remove_file(&module).unwrap();
+    std::fs::create_dir_all(module.join("held")).unwrap();
+    let refused = s.execute("plugin.remove", &json!({"id": id})).unwrap_err().to_string();
+    assert!(refused.contains("can't delete"), "{refused}");
+    assert!(vectorcraft_plugins::registry::get(id).is_some(), "the plug-in stays installed");
+    assert!(module.exists());
+    assert!(s.stored_plugin_grant(id) == stored_grant, "the stored grant is kept for the next launch");
+    assert_eq!(std::fs::read(&setting).ok().as_deref(), Some(&b"{}"[..]), "the settings are moved back");
+
+    std::fs::remove_dir_all(&module).unwrap();
+    assert_eq!(s.execute("plugin.remove", &json!({"id": id})).ok(), Some(json!({"removed": id})), "a second removal removes it");
+    assert!(vectorcraft_plugins::registry::get(id).is_none() && !module.exists() && !data_dir.exists());
+    assert!(!s.holds_plugin_grant(id), "and its grant");
+}
+
 /// A MAC is made over the generation, the grants and the folder, and only the whole MAC of the same
 /// key, generation, grants and folder verifies. A key's bytes are never printed.
 #[test]
