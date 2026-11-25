@@ -182,6 +182,10 @@ pub(super) struct LayerRows {
     /// The selected objects.
     #[plain_data(assume = "node ids are integers")]
     selected: HashSet<NodeId>,
+    /// The layers and sublayers whose visible, unlocked art ([`Node::layer_art`]) is all selected
+    /// and not empty.
+    #[plain_data(assume = "node ids are integers")]
+    full: HashSet<NodeId>,
     /// The selected blends, in selection order.
     #[plain_data(assume = "node ids are integers")]
     blends: Vec<NodeId>,
@@ -228,6 +232,7 @@ impl LayerRows {
         let ruler = doc.ruler_guides();
         let guide_rows = ruler.iter().enumerate().filter_map(|(i, g)| Some((g.id?, i))).collect();
         let blends = st.selection.objects.iter().copied().filter(|id| doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Blend { .. })));
+        let selected: HashSet<NodeId> = st.selection.objects.iter().copied().collect();
         Self {
             doc: doc.clone(),
             opts: app.ui.layers_panel.clone(),
@@ -239,7 +244,8 @@ impl LayerRows {
             guides: vectorcraft_engine::cmd::guide_indexes(doc, &st.selection.guides),
             ruler,
             guide_rows,
-            selected: st.selection.objects.iter().copied().collect(),
+            full: super::rows::full_layers(doc, &selected),
+            selected,
             blends: blends.collect(),
             root: st.isolation.and_then(|i| isolated_root(doc, i)).map(|(n, ..)| n.id),
         }
@@ -289,6 +295,12 @@ impl LayerRows {
     /// Whether object `id` is selected.
     pub(super) fn is_selected(&self, id: NodeId) -> bool {
         self.selected.contains(&id)
+    }
+
+    /// Whether `id` is a layer or sublayer whose visible, unlocked art is all selected and not
+    /// empty.
+    pub(super) fn is_full(&self, id: NodeId) -> bool {
+        self.full.contains(&id)
     }
 
     /// The node ids a row menu's command acts on: every highlighted row when the menu's row is one of

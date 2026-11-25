@@ -413,6 +413,9 @@ digits	Malayalam	マラヤーラム数字
 	Artboards	アートボード
 	Convert to Artboards	アートボードに変換
 	Rearrange All Artboards…	すべてのアートボードを再配置…
+	Rearrange…	再配置…
+	Selected Artboards: {n}	選択したアートボード: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	キャンバスをクリックしてアートボードを配置します (Esc でキャンセル)
 	Fit to Artwork Bounds	アートワーク境界に合わせる
 	Fit to Selected Art	選択オブジェクトに合わせる
 	Graph	グラフ
@@ -583,6 +586,7 @@ digits	Malayalam	マラヤーラム数字
 	Side Length:	辺の長さ:
 	Make Sides Equal	辺の長さをそろえる
 	Opacity	不透明度
+	Show Opacity	不透明度を表示
 	Pie End Angle:	扇形の終了角度:
 	Pie Start Angle:	扇形の開始角度:
 	Stroke Color	カラー (線)
@@ -1694,6 +1698,7 @@ antiAlias	Sharp	シャープ
 	Dimensions	寸法
 	Direct Selection Tool	ダイレクト選択ツール
 	Disable Auto Add/Delete	自動追加/削除機能を使用しない
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete でアンカーポイントを削除してパスをつなげたままにする
 	Interpolate Control Points When Moving Anchors	アンカーポイントの移動時に方向線ハンドルを補間
 	Disable Opacity Mask	不透明マスクを無効にする
 	Discard	破棄
@@ -2704,6 +2709,12 @@ antiAlias	Sharp	シャープ
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}、{size}、{detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	解像度を取得できません
+	estimated memory {memory}	推定メモリ {memory}
+	memory unavailable	メモリを取得できません
+	Unknown format	不明な形式
 	{kind}, {instances}	{kind}、{instances}
 	{kind}, {rows} × {cols}	{kind}、{rows} × {cols}
 	{grid}, {instances}	{grid}、{instances}
@@ -3344,6 +3355,7 @@ mark-style	Japanese	日本式
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	トラックパッドで 2 本指の回転ジェスチャーをすると、カンバスの表示が回転します。
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	キーを長押しすると、キーボードショートカットの長押し列にあるツールまたはコマンドを実行します。短く押すと通常のショートカットを実行します。
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	通常のショートカットの代わりに長押しショートカットを実行するまで、キーを押し続ける秒数です。
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete キーで選択したアンカーポイントを削除し、パスをそこで開かずに、各ポイントの周りの曲線を合わせ直します。
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	アンカーポイントを移動すると、一方の端が移動した各曲線は、両端に対する形状を保ちます。
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	ツールのショートカットキーを押している間はそのツールを選び、離すと前のツールに戻ります。
 	Shows the bounding box while you move the selection or draw a shape.	選択範囲の移動中や図形の描画中にバウンディングボックスを表示します。
@@ -7024,6 +7036,8 @@ axis	Y Axis	Y 軸
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	承認が必要です: {0} を要求しています。これはユーザーが単独でインストールするときに許可します
 @msg	not JSON: {e}	JSON ではありません: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	WebAssembly バイナリではありません (\\0asm ヘッダーがありません)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	関数型のパラメーター数が上限の {MAX_FUNC_TYPE_VALUES} 個を超えています
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	関数型の結果の数が上限の {MAX_FUNC_TYPE_VALUES} 個を超えています
 @msg	parameter `{k}`: {what}	パラメーター `{k}`: {what}
 @msg	parameter `{name}`: {what}	パラメーター `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	プラグインのパラメーターは JSON オブジェクトにしてください
@@ -7060,6 +7074,11 @@ axis	Y Axis	Y 軸
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` と `maxItems` は 0-{MAX_LIST}、`maxItems` は 1 以上にし、デフォルト値の項目数をその範囲にしてください
 @msg	`name` must be a string	`name` は文字列にしてください
 @msg	`opacity` must be a number	`opacity` には数値を指定してください
+@msg	`opacity` must be a number from 0 to 100	`opacity` には 0 から 100 までの数値を指定してください
+@msg	`opacity` must be true or false	`opacity` には true または false を指定してください
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	文字には独自の不透明度がありません。アピアランスパネルの「新規塗りを追加」または「新規線を追加」で塗りまたは線を追加してください
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	シンボルインスタンス内で選択したオブジェクトには、塗りや線の独自の不透明度がありません
+@msg	no target has that fill or stroke to take the opacity	不透明度を適用できる塗りまたは線を持つ対象がありません
 @msg	`type` must be "path" or "compound"	`type` は "path" または "compound" にしてください
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` は印刷可能な 1-{MAX_UNIT} 文字にしてください
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` には `{other}` の値を 1 から {MAX_CONDITION_VALUES} 個指定してください

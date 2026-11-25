@@ -138,8 +138,136 @@ fn type_in_fonts_that_arent_available_is_named_in_a_warning() {
          /Nowhere-Bold 12 selectfont 10 80 moveto (x) show /Inter-Regular 12 selectfont 10 90 moveto (y) show",
     );
     assert_eq!(texts(&r).iter().map(|t| t.runs[0].style.font_family.as_str()).collect::<Vec<_>>(), ["Test One", "Test One", "Nowhere", "Inter"]);
-    // PDF import's words.
-    assert_eq!(r.warnings, ["fonts that aren't available show in the fallback font until they are: Test One, Nowhere"]);
+    // PDF import's words: the font the file carries draws its type, the one it only names doesn't.
+    assert_eq!(
+        r.warnings,
+        [
+            "fonts that aren't available show as the file draws them, in the fonts it carries, until their text is edited (then in the fallback font): Test One",
+            "fonts that aren't available show in the fallback font until they are: Nowhere",
+        ]
+    );
+    // A font found by name keeps no glyphs of the file's: it shows in the fallback font, as before.
+    assert!(texts(&r).iter().filter(|t| t.runs[0].style.font_family != "Test One").all(|t| t.file_fonts.is_none()));
+}
+
+/// The glyphs of type laid out in the document's fonts: each one's outline (text space) and origin,
+/// and whether a font the file carries draws it.
+fn laid_out(t: &TextObject) -> Vec<(vectorcraft_geom::Rect, f64, bool)> {
+    use kurbo::Shape;
+    let db = vectorcraft_text::FontDb::global();
+    vectorcraft_text::layout(db, t).glyphs.iter().map(|g| (g.outline.bounding_box(), g.origin.x, db.is_file_font(g.font_id))).collect()
+}
+
+/// Type in a Type 1 font the file carries, whose family isn't available, is drawn with the file's
+/// glyphs, as PDF import keeps a PDF's fonts (#4568): A the square and B the triangle, at the
+/// font's own advances (no tracking makes up for a stand-in's), not in the fallback font.
+#[test]
+fn embedded_type1_type_draws_with_the_files_glyphs() {
+    let r = program(OWN, false, "/TestOne findfont 50 scalefont setfont 10 20 moveto (AB) show");
+    let t = &texts(&r)[0];
+    assert!(t.file_fonts.is_some(), "{:?}", r.warnings);
+    let glyphs = laid_out(t);
+    assert_eq!(glyphs.len(), 2);
+    assert!(glyphs.iter().all(|g| g.2), "every glyph the file's: {glyphs:?}");
+    // The square is 400 by 500 units, the triangle 500 by 400, at 50 points an em.
+    let (a, b) = (glyphs[0].0, glyphs[1].0);
+    assert!((a.width() - 20.0).abs() < 0.05 && (a.height() - 25.0).abs() < 0.05, "{a:?}");
+    assert!((b.width() - 25.0).abs() < 0.05 && (b.height() - 20.0).abs() < 0.05, "{b:?}");
+    // B starts where A's 600 units end, with no tracking.
+    assert!((glyphs[1].1 - glyphs[0].1 - 30.0).abs() < 0.05, "{glyphs:?}");
+    assert!(t.runs.iter().all(|r| r.style.tracking == 0.0), "{:?}", t.runs);
+}
+
+/// A family whose regular style the file carries but whose bold it only names: the regular is
+/// drawn in the kept font and the bold in the fallback font, and the warning says both.
+#[test]
+fn a_carried_style_leaves_a_named_style_of_its_family_in_the_fallback_warning() {
+    let r = program(OWN, false, "/TestOne findfont 50 scalefont setfont 10 20 moveto (A) show /TestOne-Bold 12 selectfont 10 80 moveto (x) show");
+    assert_eq!(texts(&r).iter().map(|t| t.runs[0].style.font_style.as_str()).collect::<Vec<_>>(), ["Regular", "Bold"]);
+    assert_eq!(
+        r.warnings,
+        [
+            "fonts that aren't available show as the file draws them, in the fonts it carries, until their text is edited (then in the fallback font): Test One",
+            "fonts that aren't available show in the fallback font until they are: Test One",
+        ]
+    );
+}
+
+/// Type in a font the file only names keeps the fallback font, and the spacing set for it, also
+/// when its family and style are those of a font the file carries (`TestOne-Roman` beside the
+/// embedded `TestOne`): only type shown in the carried font gets the font kept from it.
+#[test]
+fn a_named_font_in_a_carried_family_and_style_keeps_the_fallback_font() {
+    let r = program(OWN, false, "/TestOne findfont 50 scalefont setfont 10 20 moveto (A) show /TestOne-Roman 50 selectfont 10 60 moveto (AA) show");
+    let t = texts(&r);
+    assert_eq!(t.len(), 2, "{:?}", all(&r.document));
+    assert_eq!((t[1].runs[0].style.font_family.as_str(), t[1].runs[0].style.font_style.as_str()), ("Test One", "Regular"));
+    assert!(t[0].file_fonts.is_some());
+    assert!(t[1].file_fonts.is_none(), "the named font's type isn't drawn in the carried font");
+    // The warning says so for each: one drawn as the file draws it, one in the fallback font.
+    assert_eq!(
+        r.warnings,
+        [
+            "fonts that aren't available show as the file draws them, in the fonts it carries, until their text is edited (then in the fallback font): Test One",
+            "fonts that aren't available show in the fallback font until they are: Test One",
+        ]
+    );
+}
+
+/// A character the file draws with a different glyph from the one the kept font already has for
+/// it (here a second font of the same name whose A is a narrower square) can't go in that font:
+/// that string comes in as outlines, the first stays type in the file's glyphs.
+#[test]
+fn a_second_glyph_for_a_character_keeps_its_type_as_outlines() {
+    let narrow = cs(&[(&[0, 600], 13), (&[100, 0], 21), (&[200, 0], 5), (&[0, 500], 5), (&[-200, 0], 5), (&[], 9), (&[], 14)]);
+    let head = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n".to_vec();
+    let file = [
+        head,
+        font(OWN, false),
+        b"/TestOne findfont 50 scalefont setfont 10 20 moveto (A) show\n".to_vec(),
+        font_with(OWN, false, &[], Some(narrow)),
+        b"/TestOne findfont 50 scalefont setfont 10 60 moveto (A) show\nshowpage\n%%EOF\n".to_vec(),
+    ]
+    .concat();
+    let r = import(&file).unwrap();
+    let t = texts(&r);
+    assert_eq!(t.len(), 1, "{:?}", all(&r.document));
+    assert!(laid_out(&t[0]).iter().all(|g| g.2));
+    let paths: Vec<_> = all(&r.document).iter().filter(|n| matches!(n.kind, NodeKind::Path { .. })).map(|n| bounds(n)).collect();
+    assert!(paths.iter().any(|b| (b.width() - 10.0).abs() < 0.05 && (b.height() - 25.0).abs() < 0.05), "the narrow A as outlines: {paths:?}");
+}
+
+/// The type opened in the app keeps the file's glyphs through a save and a reopen, takes the
+/// fallback font once its text is edited, and gets the file's glyphs back on undo, as PDF type in
+/// a font the file carries does.
+#[test]
+fn kept_type1_glyphs_survive_saving_and_go_when_the_text_is_edited() {
+    use vectorcraft_testkit::{Session, json};
+    let head = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n".to_vec();
+    let file = [head, font(OWN, false), b"/TestOne findfont 50 scalefont setfont 10 20 moveto (AB) show\nshowpage\n%%EOF\n".to_vec()].concat();
+    let mut s = Session::new();
+    let opened = s.execute("document.open", &json!({"name": "kept.eps", "dataBase64": vectorcraft_testkit::format::base64_encode(&file)})).unwrap();
+    assert!(opened["warnings"].to_string().contains("until their text is edited"), "{opened}");
+    let carried = |s: &Session| {
+        let (mut glyphs, mut id) = (vec![], None);
+        s.doc().unwrap().doc.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                glyphs.extend(laid_out(t).into_iter().map(|g| g.2));
+                id = Some(n.id);
+            }
+        });
+        (glyphs, id)
+    };
+    let (glyphs, id) = carried(&s);
+    assert_eq!(glyphs, [true, true]);
+    let native = s.execute("document.serialize", &json!({"format": "vectorcraft"})).unwrap()["dataBase64"].as_str().unwrap().to_string();
+    s.execute("document.open", &json!({"name": "kept.vectorcraft", "dataBase64": native})).unwrap();
+    assert_eq!(carried(&s).0, [true, true], "saved and opened again");
+    let id = carried(&s).1.or(id).unwrap();
+    s.execute("text.setText", &json!({"id": id, "text": "ABA"})).unwrap();
+    assert!(carried(&s).0.iter().all(|g| !g), "edited: the fallback font");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(carried(&s).0, [true, true], "undone: the file's glyphs again");
 }
 
 #[test]

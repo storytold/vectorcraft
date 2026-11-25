@@ -403,6 +403,8 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	goedkeuring nodig: de plug-in vraagt om {0}, wat de gebruiker toestaat wanneer hij die afzonderlijk installeert
 @msg	not JSON: {e}	geen JSON: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	geen WebAssembly-binair bestand (de header \\0asm ontbreekt)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	een functietype overschrijdt de limiet van {MAX_FUNC_TYPE_VALUES} parameters
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	een functietype overschrijdt de limiet van {MAX_FUNC_TYPE_VALUES} resultaten
 @msg	parameter `{k}`: {what}	parameter `{k}`: {what}
 @msg	parameter `{name}`: {what}	parameter `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	plug-in-parameters moeten een JSON-object zijn
@@ -439,6 +441,11 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` en `maxItems` moeten 0-{MAX_LIST} zijn, `maxItems` minstens 1, en de standaardwaarde zoveel items
 @msg	`name` must be a string	`name` moet een string zijn
 @msg	`opacity` must be a number	`opacity` moet een getal zijn
+@msg	`opacity` must be a number from 0 to 100	`opacity` moet een getal van 0 tot 100 zijn
+@msg	`opacity` must be true or false	`opacity` moet true of false zijn
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	tekens van tekst hebben geen eigen dekking: voeg een vulling of streek toe met Nieuwe vulling toevoegen of Nieuwe streek toevoegen in het deelvenster Uiterlijk
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	een object dat in een symboolinstantie is geselecteerd, heeft geen eigen dekking voor vulling of streek
+@msg	no target has that fill or stroke to take the opacity	geen enkel doel heeft die vulling of streek om de dekking te krijgen
 @msg	`type` must be "path" or "compound"	`type` moet "path" of "compound" zijn
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` moet uit 1-{MAX_UNIT} afdrukbare tekens bestaan
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` noemt 1 tot {MAX_CONDITION_VALUES} waarden voor `{other}`
@@ -956,6 +963,9 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Artboards	Tekengebieden
 	Convert to Artboards	Converteren naar tekengebieden
 	Rearrange All Artboards…	Alle tekengebieden herschikken…
+	Rearrange…	Herschikken…
+	Selected Artboards: {n}	Geselecteerde tekengebieden: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Klik op het canvas om de tekengebieden te plaatsen (Esc annuleert)
 	Fit to Artwork Bounds	Op artworkgrenzen passend maken
 	Fit to Selected Art	Op geselecteerd artwork passend maken
 	Graph	Grafiek
@@ -1107,6 +1117,7 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Fill & Stroke	Vulling en contour
 	Fill Color	Vulkleur
 	Opacity	Dekking
+	Show Opacity	Dekking tonen
 	Stroke Color	Contourkleur
 	Fill Gradient	Vulverloop
 	Stroke Gradient	Contourverloop
@@ -4134,6 +4145,12 @@ theme	Appearance	Vormgeving
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	resolutie niet beschikbaar
+	estimated memory {memory}	geschat geheugen {memory}
+	memory unavailable	geheugen niet beschikbaar
+	Unknown format	Onbekend formaat
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -4581,6 +4598,7 @@ theme	Appearance	Vormgeving
 	Data Recovery	Gegevensherstel
 	Default Language	Standaardtaal
 	Disable Auto Add/Delete	Automatisch toevoegen/verwijderen uitschakelen
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete verwijdert ankerpunten en houdt paden verbonden
 	Interpolate Control Points When Moving Anchors	Richtingsgrepen interpoleren bij het verplaatsen van ankerpunten
 	Display All Blacks Accurately	Alle zwarttinten nauwkeurig weergeven
 	Display All Blacks as Rich Black	Alle zwarttinten weergeven als rijk zwart
@@ -5141,6 +5159,7 @@ font-technology	Variable	Variabel
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Een draaigebaar met twee vingers op een trackpad draait de weergave van het canvas.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Als u een toets vasthoudt, wordt het gereedschap of de opdracht uit de kolom Houd in Sneltoetsen uitgevoerd; kort drukken voert de gewone sneltoets uit.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Hoeveel seconden u een toets moet vasthouden voordat de vasthoudsneltoets wordt uitgevoerd in plaats van de gewone sneltoets.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete verwijdert de geselecteerde ankerpunten en past de curve rond elk ervan opnieuw aan, in plaats van het pad daar te openen.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Als u ankerpunten verplaatst, behoudt elke curve met één verplaatst uiteinde zijn vorm ten opzichte van zijn uiteinden.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Als u de sneltoets van een gereedschap ingedrukt houdt, is dat gereedschap gekozen tot u loslaat, en daarna wordt het vorige gereedschap weer gekozen.
 	Shows the bounding box while you move the selection or draw a shape.	Toont het begrenzingskader terwijl u de selectie verplaatst of een vorm tekent.
