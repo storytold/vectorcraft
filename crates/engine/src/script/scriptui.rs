@@ -566,6 +566,10 @@ fn layout(d: &mut ScriptUiDialog) {
             let [l, t, r, b] = node.margins;
             let (mut main, mut cross, mut count, mut reach) = (0.0f32, 0.0f32, 0usize, [0.0f32; 2]);
             for &k in &kids[i] {
+                // A hidden control, and everything in it, takes no room.
+                if !d.nodes[k].visible {
+                    continue;
+                }
                 if let Some(bounds) = d.nodes[k].bounds {
                     reach = [reach[0].max(bounds.x + bounds.w), reach[1].max(bounds.y + bounds.h)];
                     continue;
@@ -617,7 +621,9 @@ fn layout(d: &mut ScriptUiDialog) {
         let mut cursor = 0.0f32;
         for &k in &kids[i] {
             let kid = &d.nodes[k];
-            let rect = if let Some(bounds) = kid.bounds {
+            let rect = if !kid.visible {
+                UiRect { x, y, w: 0.0, h: 0.0 }
+            } else if let Some(bounds) = kid.bounds {
                 UiRect { x: node.rect.x + bounds.x, y: node.rect.y + bounds.y, w: bounds.w, h: bounds.h }
             } else {
                 let [w, h] = size[k];

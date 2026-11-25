@@ -3021,7 +3021,8 @@ too, and a slider's minimum above its maximum. When a getter changes a list's it
 reads the dialog again, and throws an `Error` when a list changes again. It lays the controls out from each container's `orientation`,
 `alignChildren`, `spacing` and `margins` and each control's `alignment`, `preferredSize` (each side of `size` that
 is above 0 takes the place of `preferredSize`'s), `minimumSize`, `maximumSize` and `bounds`, which places it in its
-container. Sizes and places are kept within 8,192 pixels. These limits are VectorCraft's own.
+container. A control whose `visible` is false, and every control in it, takes no room in the layout. Sizes and places
+are kept within 8,192 pixels. These limits are VectorCraft's own.
 
 In the app, the dialog (kind `scriptWindow`) draws the controls where they were laid out and has a Stop button,
 which ends the run as `script.stop` does. It stays open while one of its handlers runs and closes when `show()`
@@ -3034,7 +3035,8 @@ dialog again with those events and the text typed in its fields. An event that w
 it was given to, and a typed text stays in its field, also after a handler adds controls before that one.
 `ui.dialog.set` with `event` (`click`, `change` or `close`), `control` (a control's index in the dialog, its name, or
 the text of a control without a name) and `value`, then `ui.dialog.confirm`, gives the script that event; a click or a close first gives the
-script the text still typed in the dialog's fields. When one of those texts is longer than 16 KiB, the script gets
+script the text still typed in the dialog's fields. When the dialog holds events the script has not taken yet, the
+confirmed event goes after them. When one of those texts is longer than 16 KiB, the script gets
 no event and every field keeps its text: `ui.dialog.confirm`, `ui.dialog.cancel` and `ui.dialog.set` with `action`
 return an error, and Escape shows it in the status bar. Such a text stays in its field when the field loses the
 focus too, with the error in the status bar. A disabled or hidden control, a value out of a list's range, a

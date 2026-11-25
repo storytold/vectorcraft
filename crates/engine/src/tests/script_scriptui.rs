@@ -347,6 +347,21 @@ fn sizes_and_places_are_clamped_and_the_layout_follows_the_containers() {
 }
 
 #[test]
+fn a_hidden_control_and_what_it_holds_take_no_room() {
+    let dialog = with(node("dialog", -1.0), "orientation", Data::String("row".into()));
+    let pair = |w: f64, h: f64| Data::Array(vec![Data::Number(w), Data::Number(h)]);
+    let a = with(node("button", 0.0), "size", pair(100.0, 20.0));
+    let hidden = with(node("group", 0.0), "visible", Data::Bool(false));
+    let inside = with(node("button", 2.0), "size", pair(400.0, 300.0));
+    let b = with(node("button", 0.0), "size", pair(50.0, 20.0));
+    let d: ScriptUiDialog = scriptui::parse(&description(vec![dialog.clone(), a.clone(), hidden, inside, b.clone()])).unwrap();
+    let shown: ScriptUiDialog = scriptui::parse(&description(vec![dialog, a, b])).unwrap();
+    assert_eq!(d.size(), shown.size(), "the hidden group and the button in it leave the dialog's size as it is");
+    assert_eq!(d.nodes[4].rect.x, shown.nodes[2].rect.x, "the next control takes the hidden group's place");
+    assert!(!d.nodes[3].visible, "the button in the hidden group is hidden too");
+}
+
+#[test]
 fn a_control_s_size_keeps_within_its_minimum_and_maximum() {
     let dialog = node("dialog", -1.0);
     let pair = |w: f64, h: f64| Data::Array(vec![Data::Number(w), Data::Number(h)]);

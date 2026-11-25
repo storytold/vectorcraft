@@ -669,7 +669,18 @@ fn give(app: &mut VectorcraftApp, w: &ScriptUiDialog, event: UiEvent) -> Result<
 pub(crate) fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
     let Some(w) = app.session.script_window() else { return Err("no script dialog waits".into()) };
     let event = with_window(app, |d| event_of(&w, d)).ok_or("no script dialog waits")??;
-    give(app, &w, event)?;
+    if with_window(app, |d| d.queue.is_empty()).unwrap_or(true) {
+        give(app, &w, event)?;
+    } else {
+        // Events the script has not had yet come first; this one, and the typed texts before a
+        // click or a close, go after them.
+        let mut events = vec![check_event(&w, event)?];
+        if matches!(events[0], UiEvent::Click(_) | UiEvent::Close) {
+            with_window(app, |d| d.commit_drafts(&w, &mut events)).unwrap_or(Ok(()))?;
+        }
+        let later: Vec<Queued> = events.iter().filter_map(|e| queued(&w, e)).collect();
+        with_window(app, |d| d.queue.extend(later));
+    }
     with_window(app, |d| (d.event, d.control, d.value) = (None, None, None));
     Ok(Value::Null)
 }

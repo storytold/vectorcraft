@@ -277,8 +277,8 @@ fn quitting_while_a_handler_runs_keeps_the_events_still_queued() {
     let mut app = app();
     start(&mut app, &format!("{DRAW} {FORM} name.onChange = function () {{ name.text = name.text + '!'; }}; vc.log([w.show(), name.text]);"));
     assert!(until_window(&mut app));
-    with_window(&app, |d| d.queue(&UiEvent::Click(3))).unwrap();
     give(&mut app, json!({"event": "change", "control": "name", "value": "Ann"})).unwrap();
+    with_window(&app, |d| d.queue(&UiEvent::Click(3))).unwrap();
     crate::dialogs::script_run::ask_to_close(&mut app);
     assert!(is_open::<CloseQuestion>(&app));
     script_runs::poll(&mut app);
@@ -533,6 +533,24 @@ fn queued_clicks_reach_their_buttons_after_a_handler_removes_a_control_before_th
     give(&mut app, json!({"event": "close"})).unwrap();
     assert!(!until_window(&mut app));
     assert_eq!(log(&app), json!([[0, ["x", "y"]]]), "the click on the removed x is dropped and the click on y reaches y");
+}
+
+#[test]
+fn a_click_from_ui_dialog_confirm_waits_behind_the_events_still_queued() {
+    let mut app = app();
+    start(
+        &mut app,
+        "var w = new Window('dialog'); var g = w.add('group'); var x = g.add('button', undefined, 'x'); var y = g.add('button', undefined, 'y'); \
+         var hit = []; x.onClick = function () { hit.push('x'); }; y.onClick = function () { hit.push('y'); w.close(); }; \
+         vc.log([w.show(), hit]);",
+    );
+    assert!(until_window(&mut app));
+    let ids: Vec<u64> = app.session.script_window().unwrap().nodes.iter().map(|n| n.id).collect();
+    with_window(&app, |d| d.queue(&UiEvent::Click(2))).unwrap();
+    give(&mut app, json!({"event": "click", "control": "y"})).unwrap();
+    assert_eq!(queued(&app), vec![Queued::Click(ids[2]), Queued::Click(ids[3])], "the confirmed click goes after the queued one");
+    run_to_end(&mut app);
+    assert_eq!(log(&app)[0][1], json!(["x", "y"]), "the handlers ran in the order the clicks were made");
 }
 
 #[test]
