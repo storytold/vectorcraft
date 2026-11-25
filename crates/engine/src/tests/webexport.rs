@@ -1137,6 +1137,8 @@ fn save_color_table_writes_the_path_and_refuses_bad_params() {
         (json!({"format": "jpg"}), "`jpg` has no color table"),
         (json!({"format": "png24"}), "`png24` has no color table"),
         (json!({"path": 5}), "`path` must be a string"),
+        (json!({"path": ""}), "`path` is empty"),
+        (json!({"path": "  "}), "`path` is empty"),
         (json!({"slice": "1"}), "`slice` is a slice number"),
         (json!({"slice": 0}), "`slice` is a slice number"),
     ] {

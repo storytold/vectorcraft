@@ -10964,7 +10964,8 @@ transparent entry, two bytes each with the most significant byte first. The file
 the file holds the whole image's table, also when `slices` is `selected` and no slice is selected; a `slice` is looked
 up among the slices `slices` names. `.act` is added to
 a `path` without an extension, and without `path` the file comes back as `dataBase64`. The reply is `{path, colors,
-transparentIndex, bytes, warnings}` (`transparentIndex` is null when there is none). JPEG and PNG-24 are errors, and the
+transparentIndex, bytes, warnings}` (`transparentIndex` is null when there is none). An empty `path`, JPEG and PNG-24
+are errors, and the
 document and the settings do not change. Load Color Table is `webExport.loadColorTable {path | dataBase64,
 …settings}`. It reads a 768-byte file (256 colors, no transparent entry) or a 772-byte one (the number of colors used,
 1 to 256, and the transparent entry's index; an index past the colors used names no entry) and returns

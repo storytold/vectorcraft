@@ -50,7 +50,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save Color Table",
             [],
             None,
-            "{path?: the .act file (.act is added to a name without an extension), …the settings of document.exportForWeb (preset?, format?: gif|png8…), slice?: n (1-based, from slice.list, among the slices `slices` names; default the whole image, whatever `slices` is)} write the GIF or PNG-8 color table the preview shows as a color table file: 772 bytes, the colors as written (red, green, blue) in file order, zero bytes up to 256 colors, then the number of colors and the transparent entry's index (65535 for none), two bytes each, most significant byte first → {path, colors (how many), transparentIndex (null for none), bytes, warnings}; no path → {dataBase64, colors, transparentIndex, bytes, warnings}. jpg and png24 are an error; the document and the settings do not change",
+            "{path?: the .act file (.act is added to a name without an extension), …the settings of document.exportForWeb (preset?, format?: gif|png8…), slice?: n (1-based, from slice.list, among the slices `slices` names; default the whole image, whatever `slices` is)} write the GIF or PNG-8 color table the preview shows as a color table file: 772 bytes, the colors as written (red, green, blue) in file order, zero bytes up to 256 colors, then the number of colors and the transparent entry's index (65535 for none), two bytes each, most significant byte first → {path, colors (how many), transparentIndex (null for none), bytes, warnings}; no path → {dataBase64, colors, transparentIndex, bytes, warnings}. An empty path, jpg and png24 are an error; the document and the settings do not change",
             has_doc,
             save_color_table
         ),
@@ -1419,9 +1419,11 @@ fn save_color_table(s: &mut Session, p: &Value) -> Result<Value> {
     if !settings.format.palette() {
         return Err(no_table(P, settings.format));
     }
-    let path = text_param(p, "path", P)?
-        .filter(|p| !p.trim().is_empty())
-        .map(|p| if std::path::Path::new(p).extension().is_none() { format!("{p}.{COLOR_TABLE_EXT}") } else { p.to_string() });
+    let path = text_param(p, "path", P)?;
+    if path.is_some_and(|p| p.trim().is_empty()) {
+        return Err(bad(P, "`path` is empty: give a file path, or leave it out for `dataBase64`"));
+    }
+    let path = path.map(|p| if std::path::Path::new(p).extension().is_none() { format!("{p}.{COLOR_TABLE_EXT}") } else { p.to_string() });
     let Shown { o, warnings, .. } = shown(s, &settings, p, P, false)?;
     let bytes = act_bytes(&o.colors);
     let mut out = json!({
