@@ -523,7 +523,9 @@ pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
 /// Copy Color As: put `color.format`'s text in `notation` of the color the panel shows on the
 /// clipboard, with the opacity of what the row of Show Opacity edits when it has one, and say in
 /// the status bar what was copied. Without a solid color nothing is copied and the answer is
-/// null; an error of `color.format` goes to the status bar. → `{text}`.
+/// null; an error of `color.format` goes to the status bar. Without a window to copy through,
+/// nothing is copied and the status bar stays as it was, and the answer still holds the text.
+/// → `{text}`.
 pub(crate) fn copy_color_as(app: &mut VectorcraftApp, notation: &str) -> Result<Value, String> {
     let tgt = target_now(app);
     let Some(color) = tgt.color() else { return Ok(Value::Null) };
@@ -535,9 +537,8 @@ pub(crate) fn copy_color_as(app: &mut VectorcraftApp, notation: &str) -> Result<
     match app.run("color.format", p) {
         Ok(r) => {
             let text = r["text"].as_str().unwrap_or_default().to_string();
-            if let Some(ctx) = &app.ui_ctx {
-                ctx.copy_text(text.clone());
-            }
+            let Some(ctx) = &app.ui_ctx else { return Ok(json!({ "text": text })) };
+            ctx.copy_text(text.clone());
             app.status(format!("Copied the color as {text}"));
             Ok(json!({ "text": text }))
         }

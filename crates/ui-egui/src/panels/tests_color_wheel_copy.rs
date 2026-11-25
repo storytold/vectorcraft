@@ -71,6 +71,17 @@ fn css_rgb_copies_the_color_and_the_opacity() {
     assert_eq!(undo_count(&app), before, "copying records no undo step");
 }
 
+/// Without a window to copy through, an item answers its text and the status bar does not say it
+/// was copied.
+#[test]
+fn without_a_window_the_text_is_answered_and_not_reported_as_copied() {
+    let mut app = app(50.0);
+    app.ui_ctx = None;
+    app.ui.status.clear();
+    assert_eq!(run(&mut app, "ui.colorWheel.copy.hex", &json!({})), Some(Ok(json!({"text": "#336699"}))));
+    assert_eq!(app.ui.status, "");
+}
+
 /// Hex and CMYK Values never carry the opacity; Hex with Alpha always does, as `ff` at 100 %; CSS
 /// adds it only under 100 %.
 #[test]

@@ -769,7 +769,8 @@ rgb(), CSS hsl(), CSS oklch() or CMYK Values, the six `color.format` notations, 
 edits when it has one (whether or not that row shows), and the status bar shows what was copied. Its items are the
 menu commands `ui.colorWheel.copy.hex`, `ui.colorWheel.copy.hexAlpha`, `ui.colorWheel.copy.rgb`,
 `ui.colorWheel.copy.hsl`, `ui.colorWheel.copy.oklch` and `ui.colorWheel.copy.cmyk`, which answer `{text}`, or null without a solid color. They are gray without a solid color, and CSS oklch() is also gray
-while the working RGB space is not sRGB.
+while the working RGB space is not sRGB. Without a window to copy through, an item puts nothing on the clipboard and
+leaves the status bar as it was, and still answers `{text}`.
 
 In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's
 screen color sampler and returns `null` before a color is picked: the system's sampler on macOS, the XDG desktop
