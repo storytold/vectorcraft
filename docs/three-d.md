@@ -95,6 +95,37 @@ pages describe it.
   rotation and light rings on the artboard are part of the options dialog only. The panel's Lighting tab has the
   lighting widget instead ([Lighting widget](#lighting-widget)).
 
+## 3D meshes
+
+The meshes that Export 3D Object writes come from the `three-d` crate's `Mesh`, built from the same faces the effect
+draws. The vector facets on the canvas and in SVG and PDF do not change with what follows. Besides positions,
+normals and triangles, a mesh carries:
+
+- **Normals.** A corner takes its face's normal. Where two bands of one bevel meet, the shared corners take the mean of
+  the two bands' normals, unless the bevel turns there by 60° or more (a Step profile's turns) or one of the bands lies
+  flat toward the front or back; caps, walls and the edges between a bevel and a cap or wall stay hard. On Inflate's
+  puffed front and back each corner takes the surface's own normal. The bevel settings shape its profile into a
+  rounded curve or an ornamental one ([the help page](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/3d-materials-panel-options.html));
+  the smoothing rule and the 60° crease are VectorCraft's own.
+- **Texture coordinates** for every corner, each from 0 to 1, u to the right and v down, as glTF 2.0 places
+  `TEXCOORD_0` (<https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html>). Caps, Rotate's plane and Inflate's
+  front and back take each corner's art point, before any twist or taper, in the bounds of the whole object, which all
+  of its parts share; the back is not mirrored. Extrude & Bevel's bevels and walls and Inflate's walls take u along each contour of the outline from its
+  first point, as the distance over the contour's length, so the seam at the first point has corners at both 0 and 1,
+  and v across the side from the front cap's edge to the back cap's. Revolve's side takes u around the sweep from its
+  start and v along each contour of the profile; its end caps span the disk they close, and its cut sides take each
+  corner's profile point in the profile's bounds. An axis with no extent takes 0.5. These layouts are VectorCraft's
+  own.
+- **A part for each triangle**: `Front` (a front cap, Rotate's plane, Inflate's front), `Back`, `Side` (walls and
+  Revolve's swept side), `FrontBevel`, `BackBevel`, `Cap` (Revolve's end caps) and `Cut` (the flat sides of a Revolve
+  of less than 360°).
+
+The exported files write the normals and the texture coordinates of every corner: OBJ's `vt` (up from the bottom),
+glTF's `TEXCOORD_0` and USD's `primvars:st` (up from the bottom). A face with mapped graphics writes the coordinates
+of its texture instead, laid out as the graphics are ([Graphics](#graphics)). The files do not write the parts. A
+mesh whose lists do not match, or that holds a value that is not a number, stops the export with an error before any
+file is written.
+
 ## Extrude & Bevel
 
 The art is the front face; its outline is extruded backwards by **Depth** (0–2,000 pt), so seen straight on the

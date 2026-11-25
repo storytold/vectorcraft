@@ -2,6 +2,7 @@ use super::{
     Affine, Arc, BezPath, Document, FillRule, Frame, HashMap, Ink, Node, NodeKind, Pixmap, Rect, RenderContext, Renderer, Shape, blob_key,
     blob_pixmap, fill_rule, image_mip, ink, lookup, mip_level, peniko, proof, vello_cpu,
 };
+use vectorcraft_geom::Point;
 use vello_cpu::peniko::{BlendMode, Compose, Mix};
 
 use crate::images;
@@ -21,6 +22,46 @@ pub(super) fn image_tint(doc: &Document, n: &Node, ink: Ink) -> Option<[u8; 3]> 
 }
 
 impl Renderer {
+    /// Document Setup → Show Images in Outline Mode for the art `f` draws: the setting of the
+    /// document whose placed documents are being drawn, else of `f`'s document.
+    pub(crate) fn shows_outline_images(&self, f: &Frame) -> bool {
+        self.host_outline_images.unwrap_or(f.doc.setup.outline_images)
+    }
+
+    /// Cross image node `n` from corner to corner of its frame ([`Node::image_cross`]) as a
+    /// hairline when it is linked and `f` draws in Outline mode without Show Images in Outline Mode
+    /// ([`Self::shows_outline_images`]). An embedded image shows its frame alone, and so does a
+    /// piece of a mesh-warped image's copy of the image ([`vectorcraft_doc::NodeExtras::warp_piece`]).
+    pub(crate) fn cross_linked_image(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node) {
+        if let NodeKind::Image(im) = &n.kind
+            && im.link.is_some()
+            && !self.in_warp_piece
+            && !n.extras().warp_piece
+            && f.opts.outline
+            && !self.shows_outline_images(f)
+            && let Some(cross) = n.image_cross()
+        {
+            self.hairline(ctx, f, &cross, [0, 0, 0, 255]);
+        }
+    }
+
+    /// Draw the box with corners `q` (top left, top right, bottom right, bottom left) crossed from
+    /// corner to corner, as a hairline: a placed document in Outline mode without Show Images in
+    /// Outline Mode.
+    pub(crate) fn draw_crossed_box(&mut self, ctx: &mut RenderContext, f: &Frame, q: [Point; 4]) {
+        let mut bp = BezPath::new();
+        bp.move_to(q[0]);
+        for p in &q[1..] {
+            bp.line_to(*p);
+        }
+        bp.close_path();
+        bp.move_to(q[0]);
+        bp.line_to(q[2]);
+        bp.move_to(q[1]);
+        bp.line_to(q[3]);
+        self.hairline(ctx, f, &bp, [0, 0, 0, 255]);
+    }
+
     /// Draw an image, colorized with `tint` when given ([`image_tint`]).
     pub(crate) fn draw_image(&mut self, ctx: &mut RenderContext, f: &Frame, im: &vectorcraft_doc::ImageObject, tint: Option<[u8; 3]>) {
         self.draw_image_in(ctx, f, im, None, tint, false);
@@ -28,13 +69,15 @@ impl Renderer {
 
     /// Distorted image `n` in outline mode: with Document Setup's Show Images in Outline Mode its
     /// pixels, each piece of its mesh at the view's scale ([`Self::distorted_art`]) painted into
-    /// its triangle inside its corners, then its frame through its corners as a hairline. The
+    /// its triangle inside its corners, then its frame through its corners as a hairline, crossed
+    /// from corner to corner when it is linked and its pixels are not shown
+    /// ([`Self::cross_linked_image`]). The
     /// pieces knock out as the mesh's knockout group does ([`Self::draw_knockout`]): each first
     /// erases the pieces below it inside its triangle, so a partly transparent image paints once
     /// where pieces overlap.
     pub(crate) fn draw_distorted_frame(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Arc<Node>, cache: bool) {
         let frame = n.image_frame();
-        if f.doc.setup.outline_images
+        if self.shows_outline_images(f)
             && let Some(edge) = &frame
             && let Some(art) = self.distorted_art(n, f.view, cache)
         {
@@ -65,6 +108,7 @@ impl Renderer {
         if let Some(bp) = &frame {
             self.hairline(ctx, f, bp, [0, 0, 0, 255]);
         }
+        self.cross_linked_image(ctx, f, n);
     }
 
     /// Draw an image, or with `area` (a region in the document inside the image's frame, see
@@ -81,7 +125,7 @@ impl Renderer {
     ) {
         let rect = Rect::new(0.0, 0.0, im.width as f64, im.height as f64);
         // Outline mode draws the image's frame, and with Document Setup → Show Images in Outline
-        // Mode its pixels in greyscale under the frame.
+        // Mode ([`Self::shows_outline_images`]) its pixels in grayscale under the frame.
         let outline = f.opts.outline;
         // With mips the full pixels are only looked at (not marked used) until they're drawn, and
         // a mip the store holds is drawn without them: they may have been dropped (#2820). A
@@ -93,7 +137,7 @@ impl Renderer {
         // With `kept_images_only`, an image still to be decoded: it draws as a light box, not as
         // an undecoded image.
         let mut pending = false;
-        let shown = if outline && !f.doc.setup.outline_images {
+        let shown = if outline && !self.shows_outline_images(f) {
             None
         } else if f.opts.kept_images_only {
             let kept = self.nearest_kept(f, &im.key, im.pixels.as_deref(), outline, tint, unit);
@@ -174,7 +218,7 @@ impl Renderer {
                     }
                 }
             }
-        } else if f.opts.mark_undecoded_images && !pending && (!outline || f.doc.setup.outline_images) {
+        } else if f.opts.mark_undecoded_images && !pending && (!outline || self.shows_outline_images(f)) {
             self.draw_undecoded_mark(ctx, f, im, area);
         } else if !pending && !outline {
             self.image_left_out = self.image_left_out.map(|_| true);

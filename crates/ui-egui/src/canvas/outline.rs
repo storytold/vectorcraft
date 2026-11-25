@@ -1,39 +1,8 @@
-use super::{BezPath, Color32, Node, NodeKind, PathEl, Point, Pos2, Shape, Stroke, SymbolBoxes, VectorcraftApp, Xf, pos2};
+use egui::Color32;
+use vectorcraft_doc::{Node, NodeKind, SymbolBoxes};
+use vectorcraft_geom::{BezPath, Point};
 
-pub(super) fn to_screen_path(bp: &BezPath, xf: &Xf) -> Vec<Vec<Pos2>> {
-    // Flatten for drawing: a polyline per subpath (tolerance ~0.25 screen px).
-    let mut out: Vec<Vec<Pos2>> = vec![];
-    let a = xf.affine();
-    let mut t = bp.clone();
-    t.apply_affine(a);
-    let mut cur: Vec<Pos2> = vec![];
-    kurbo_flatten(&t, 0.25, &mut |el| match el {
-        PathEl::MoveTo(p) => {
-            if cur.len() > 1 {
-                out.push(std::mem::take(&mut cur));
-            }
-            cur.clear();
-            cur.push(pos2(p.x as f32, p.y as f32));
-        }
-        PathEl::LineTo(p) => cur.push(pos2(p.x as f32, p.y as f32)),
-        PathEl::ClosePath => {
-            if let Some(f) = cur.first().copied() {
-                cur.push(f);
-            }
-        }
-        _ => {}
-    });
-    if cur.len() > 1 {
-        out.push(cur);
-    }
-    out
-}
-
-pub(super) fn stroke_path(p: &egui::Painter, bp: &BezPath, xf: &Xf, s: Stroke) {
-    for line in to_screen_path(bp, xf) {
-        p.add(Shape::line(line, s));
-    }
-}
+use super::VectorcraftApp;
 
 pub(super) fn c32(rgb: [u8; 3]) -> Color32 {
     Color32::from_rgb(rgb[0], rgb[1], rgb[2])
@@ -102,34 +71,28 @@ fn is_linked(n: &Node) -> bool {
     }
 }
 
-/// The corners (top left, top right, bottom right, bottom left) of a linked image's frame or of a
-/// placed document's box. `None` for an embedded image and for anything else.
-fn linked_corners(n: &Node) -> Option<[Point; 4]> {
-    match &n.kind {
-        NodeKind::Image(_) if is_linked(n) => n.image_corners(),
-        NodeKind::PlacedDocument(p) => Some(p.corners()),
-        _ => None,
-    }
-}
-
 /// The lines that cross each linked image and placed document of `n` that [`walk_drawn`] visits,
 /// from corner to corner of its frame or box (#9080). The selection marks draw them; the hover
 /// highlight does not.
 pub(super) fn linked_crosses(n: &Node) -> BezPath {
     let mut bp = BezPath::new();
-    walk_drawn(n, &mut |c| {
-        if let Some([tl, tr, br, bl]) = linked_corners(c) {
+    walk_drawn(n, &mut |c| match &c.kind {
+        NodeKind::Image(_) if is_linked(c) => {
+            if let Some(cross) = c.image_cross() {
+                bp.extend(cross);
+            }
+        }
+        NodeKind::PlacedDocument(p) => {
+            let [tl, tr, br, bl] = p.corners();
             bp.move_to(tl);
             bp.line_to(br);
             bp.move_to(tr);
             bp.line_to(bl);
         }
+        _ => {}
     });
     bp
 }
-
-/// The width of the key object's outline (Align to Key Object), thicker than the selection's.
-pub(super) const KEY_OUTLINE: f32 = 2.5;
 
 /// The most points ([`overlay_points`]) the selection's outlines and anchors, and the hover
 /// highlight, are drawn for: an Image Trace of a photo selects hundreds of thousands of paths at
@@ -246,10 +209,4 @@ pub(super) fn hit_with<T>(
         ..Default::default()
     };
     test(&app.session.active()?.doc, p, opt)
-}
-
-fn kurbo_flatten(p: &BezPath, tol: f64, f: &mut impl FnMut(PathEl)) {
-    // Bounded per curve: a document's far-out handles, zoomed onto the screen, made kurbo
-    // reserve gigabytes for the selection outline.
-    vectorcraft_geom::flatten(p.elements().iter().copied(), tol, f);
 }

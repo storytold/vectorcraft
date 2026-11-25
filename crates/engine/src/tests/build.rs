@@ -3331,6 +3331,182 @@ fn live_paint_bucket_paint_and_stroke_commands_leave_the_selection_unpainted() {
     assert!(failed.is_empty(), "{failed:#?}");
 }
 
+/// A paint or stroke command that the Live Paint Bucket kept to its own colors is journaled with
+/// `defaultsOnly: true`, also when its params gave `false`. Replaying the entry with the Selection
+/// tool active changes the same defaults and leaves the selection's paint as it was, also with New
+/// Art Has Basic Appearance off. Every command that fails is listed.
+#[test]
+fn live_paint_bucket_commands_replay_from_the_journal_with_another_tool() {
+    let blue = Color::from_hex("#0000ff").unwrap();
+    // A Live Paint group and a rectangle, both selected, a library with a fill color, a radial
+    // gradient as the default fill and a 2 pt default weight.
+    let setup = |s: &mut Session, basic: bool| {
+        s.execute("appearance.setNewArtBasic", &json!({"on": basic})).unwrap();
+        let g = live(s);
+        let art = rect(s, 300.0, 300.0, 40.0, 40.0);
+        s.execute("paint.setFill", &json!({"color": "#00ff00", "ids": [art.0]})).unwrap();
+        let lib = s.execute("library.create", &json!({})).unwrap()["id"].as_str().unwrap().to_string();
+        s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
+        let item = s.execute("library.add", &json!({"library": lib, "kind": "fillColor"})).unwrap()["name"].as_str().unwrap().to_string();
+        s.execute("select.set", &json!({"ids": [g.0, art.0]})).unwrap();
+        s.execute("paint.setFill", &json!({"gradient": {"kind": "radial"}, "defaultsOnly": true})).unwrap();
+        s.paint.stroke_width = 2.0;
+        s.last_solid = blue;
+        (g, art, lib, item)
+    };
+    let cases: Vec<(&str, Value)> = vec![
+        ("paint.setFill", json!({"color": "#00ffff"})),
+        ("paint.setFill", json!({"color": "#00ffff", "defaultsOnly": false})),
+        ("paint.setStroke", json!({"color": "#00ffff"})),
+        ("paint.none", json!({})),
+        ("paint.swap", json!({})),
+        ("paint.default", json!({})),
+        ("paint.lastColor", json!({"stroke": false})),
+        ("paint.lastGradient", json!({"stroke": true})),
+        ("paint.invert", json!({"stroke": false})),
+        ("paint.complement", json!({"stroke": false})),
+        ("paint.sampleColor", json!({"color": "#00ffff", "stroke": true})),
+        ("paint.sampleColor", json!({"color": "#00ffff", "stroke": false, "stop": 0})),
+        ("paint.editGradient", json!({"stroke": false, "angle": 45})),
+        ("gradient.presets.apply", json!({"name": "vignette"})),
+        ("stroke.set", json!({"weight": 5})),
+        ("stroke.weightUp", json!({})),
+        ("stroke.weightDown", json!({})),
+        ("stroke.setAdvanced", json!({"arrowScale": [150, 200]})),
+        ("swatch.library.add", json!({"library": "web-safe-216", "names": ["#FF6600"], "apply": "fill"})),
+        ("library.use", json!({"kind": "fillColor"})),
+    ];
+    let mut failed = vec![];
+    for basic in [true, false] {
+        for (cmd, params) in &cases {
+            let mut params = params.clone();
+            let mut a = session();
+            let (_, _, lib, item) = setup(&mut a, basic);
+            if *cmd == "library.use" {
+                params["library"] = json!(lib);
+                params["item"] = json!(item);
+            }
+            a.select_tool("livePaintBucket", ViewInfo::default()).unwrap();
+            let start = a.journal.len();
+            if let Err(e) = a.execute(cmd, &params) {
+                failed.push(format!("{cmd} {params} (basic {basic}): {e}"));
+                continue;
+            }
+            let Some((id, recorded)) = a.journal.since(start).last().cloned() else {
+                failed.push(format!("{cmd} {params} (basic {basic}): not journaled"));
+                continue;
+            };
+            if recorded.get("defaultsOnly") != Some(&json!(true)) {
+                failed.push(format!("{cmd} {params} (basic {basic}): the journal entry {recorded} does not keep the change to the defaults"));
+            }
+            let mut b = session();
+            let (g, art, _, _) = setup(&mut b, basic);
+            let (group, painted) = (node(&b, g), node(&b, art));
+            if let Err(e) = b.replay(&id, &recorded) {
+                failed.push(format!("{cmd} {params} (basic {basic}): the replay failed: {e}"));
+                continue;
+            }
+            if node(&b, g) != group || node(&b, art) != painted {
+                failed.push(format!("{cmd} {params} (basic {basic}): the replay painted the selection"));
+            }
+            if (&b.paint.fill, &b.paint.stroke, b.paint.stroke_width, b.new_art_stroke())
+                != (&a.paint.fill, &a.paint.stroke, a.paint.stroke_width, a.new_art_stroke())
+            {
+                failed.push(format!("{cmd} {params} (basic {basic}): the replay left other defaults"));
+            }
+        }
+    }
+    assert!(failed.is_empty(), "{failed:#?}");
+    // In a batch with New Art Has Basic Appearance off, a selection change after a `defaultsOnly`
+    // step still gives new art the new selection's appearance; without one, the defaults stay.
+    let cyan = Paint::solid(Color::from_hex("#00ffff").unwrap());
+    let set_cyan = json!({"command": "paint.setFill", "params": {"color": "#00ffff", "defaultsOnly": true}});
+    let mut s = session();
+    let (_, art, ..) = setup(&mut s, false);
+    s.execute("command.batch", &json!({"commands": [set_cyan.clone()]})).unwrap();
+    assert_eq!(s.paint.fill, cyan, "the defaults keep the batch's fill");
+    s.execute("paint.setFill", &json!({"color": "#ff0000", "defaultsOnly": true})).unwrap();
+    s.execute("command.batch", &json!({"commands": [set_cyan.clone(), {"command": "select.key", "params": {"id": art.0}}]})).unwrap();
+    assert_eq!(s.paint.fill, cyan, "a new key object leaves the objects new art takes its appearance from");
+    s.execute("command.batch", &json!({"commands": [set_cyan.clone(), {"command": "select.set", "params": {"ids": [art.0]}}]})).unwrap();
+    assert_eq!(s.paint.fill, Paint::solid(Color::from_hex("#00ff00").unwrap()), "new art takes the newly selected fill");
+    // A later step that changes the selected object's appearance gives new art that appearance.
+    s.execute("command.batch", &json!({"commands": [set_cyan, {"command": "transparency.set", "params": {"opacity": 40, "ids": [art.0]}}]})).unwrap();
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    assert_eq!((&s.paint.fill, s.paint.opacity), (&green, 0.4), "new art takes the selection's new opacity, and its fill");
+    // `defaultsOnly: true` with the Selection tool: a canceled preview puts the defaults back, and
+    // each preview starts from the defaults the interaction began with.
+    let mut s = session();
+    let (g, art, ..) = setup(&mut s, true);
+    let (group, painted, fill) = (node(&s, g), node(&s, art), s.paint.fill.clone());
+    s.begin_interaction("Fill Color").unwrap();
+    s.preview("paint.setFill", &json!({"color": "#123456", "defaultsOnly": true})).unwrap();
+    assert_eq!(s.paint.fill, Paint::solid(Color::from_hex("#123456").unwrap()));
+    s.cancel_interaction().unwrap();
+    assert_eq!(s.paint.fill, fill, "the canceled color is not kept");
+    s.begin_interaction("Stroke Weight").unwrap();
+    for _ in 0..3 {
+        s.preview("stroke.weightUp", &json!({"defaultsOnly": true})).unwrap();
+    }
+    assert_eq!(s.paint.stroke_width, 3.0, "each preview starts from 2 pt");
+    s.cancel_interaction().unwrap();
+    assert_eq!(s.paint.stroke_width, 2.0);
+    // A preview with `defaultsOnly: true` after one that set the defaults with the selection
+    // starts from the defaults the interaction began with too.
+    s.begin_interaction("Stroke Weight").unwrap();
+    s.preview("stroke.set", &json!({"weight": 7})).unwrap();
+    assert_eq!(s.paint.stroke_width, 7.0);
+    s.preview("paint.setFill", &json!({"color": "#123456", "defaultsOnly": true})).unwrap();
+    assert_eq!(s.paint.stroke_width, 2.0, "the discarded preview's weight is not kept");
+    s.cancel_interaction().unwrap();
+    assert_eq!((s.paint.fill.clone(), s.paint.stroke_width), (fill.clone(), 2.0));
+    assert_eq!((node(&s, g), node(&s, art)), (group, painted), "the selection keeps its paint");
+    // A later preview without `defaultsOnly` leaves the interaction one that changed the defaults:
+    // canceling puts them back.
+    s.begin_interaction("Stroke Weight").unwrap();
+    s.preview("stroke.weightUp", &json!({"defaultsOnly": true})).unwrap();
+    s.preview("stroke.set", &json!({"weight": 7})).unwrap();
+    s.cancel_interaction().unwrap();
+    assert_eq!(s.paint.stroke_width, 2.0, "the canceled interaction's weight is not kept");
+    // With New Art Has Basic Appearance off and an object selected, canceling such an interaction
+    // keeps the defaults it began with, not the selection's appearance.
+    let mut s = session();
+    let (_, art, ..) = setup(&mut s, false);
+    s.execute("paint.setFill", &json!({"color": "#ff0000", "defaultsOnly": true})).unwrap();
+    let (red, selected) = (s.paint.fill.clone(), node(&s, art));
+    s.begin_interaction("Fill Color").unwrap();
+    s.preview("paint.setFill", &json!({"color": "#00ffff", "defaultsOnly": true})).unwrap();
+    s.preview("stroke.set", &json!({"weight": 7})).unwrap();
+    s.cancel_interaction().unwrap();
+    assert_eq!((s.paint.fill.clone(), s.paint.stroke_width), (red, 2.0), "the defaults the interaction began with stay");
+    assert_eq!(node(&s, art), selected, "the selection keeps its paint");
+    // The same when the defaults-only step was inside a batch that a later preview replaced.
+    s.begin_interaction("Fill Color").unwrap();
+    let step = json!({"command": "paint.setFill", "params": {"color": "#00ffff", "defaultsOnly": true}});
+    s.preview("command.batch", &json!({"commands": [step]})).unwrap();
+    s.preview("stroke.set", &json!({"weight": 7})).unwrap();
+    s.cancel_interaction().unwrap();
+    assert_eq!(s.paint.fill, Paint::solid(Color::from_hex("#ff0000").unwrap()), "a batch's defaults-only step is put back");
+    // `defaultsOnly` is a bool, and names no objects or brush.
+    let (g, ..) = setup(&mut s, true);
+    for (cmd, params) in [
+        ("paint.none", json!({"defaultsOnly": true, "ids": [g.0]})),
+        ("paint.none", json!({"defaultsOnly": true, "id": g.0})),
+        ("paint.none", json!({"defaultsOnly": true, "item": null})),
+        ("paint.sampleColor", json!({"color": "#00ffff", "defaultsOnly": true, "id": g.0})),
+        ("paint.sampleColor", json!({"color": "#00ffff", "defaultsOnly": true, "item": null})),
+        ("paint.setFill", json!({"color": "#00ffff", "defaultsOnly": "yes"})),
+        ("paint.setFill", json!({"color": "#00ffff", "defaultsOnly": true, "ids": [g.0]})),
+        ("stroke.set", json!({"weight": 3, "defaultsOnly": true, "item": 0})),
+        ("paint.sampleColor", json!({"color": "#00ffff", "defaultsOnly": true, "ids": [g.0]})),
+        ("paint.none", json!({"defaultsOnly": 1})),
+        ("stroke.setAdvanced", json!({"brush": null, "defaultsOnly": true})),
+        ("stroke.setAdvanced", json!({"brush": "3 pt. Round", "defaultsOnly": true})),
+    ] {
+        assert!(s.execute(cmd, &params).is_err(), "{cmd} {params}");
+    }
+}
+
 /// `paint.editGradient` with an `aspect` and no object to edit (the Live Paint Bucket's gradient,
 /// nothing selected, or a fill edit of a Live Paint group without faces) is an error that leaves the default gradient as it was, since a gradient
 /// fitted to each object has no aspect of its own. Named objects still take the aspect.
