@@ -2902,8 +2902,17 @@ https://extendscript.docsforadobe.dev/user-interface-tools/control-objects/ and
 https://extendscript.docsforadobe.dev/user-interface-tools/types-of-controls/ describe ScriptUI's `Window` and its
 controls. `vc.api.has("scriptui")` is true. A script builds a modal dialog and shows it:
 
-- `new Window("dialog"[, title, bounds, properties])` makes a dialog. Another type (`palette`, `window`) or a
-  resource string throws an `Error` that says it is not available yet.
+- `new Window("dialog"[, title, bounds, properties])` makes a dialog. Another type (`palette`, `window`) throws
+  an `Error` that says it is not available yet.
+- `new Window` and `add` also take a resource specification in place of the type, as
+  https://extendscript.docsforadobe.dev/user-interface-tools/resource-specifications/ describes it:
+  `"dialog { text: 'Settings', g: Group { label: StaticText { text: 'Name:' }, ok: Button { text: 'OK' } } }"`, or
+  `"[name:] Class { ... }"` for `add`. The other arguments are not read. Inside the braces, `properties` gives the
+  creation properties, each `name: Class { ... }` adds that control through `add`, with its limits, and sets it as
+  the container's property `name`, a list's `items` gives its item texts, and every other `name: value` sets that
+  property. A value is `null`, `true`, `false`, a quoted string, a number, an inline array or an inline object,
+  and the commas between properties may be left out. A malformed specification throws a `SyntaxError`, and one longer than 1 MiB or nested more than 64
+  deep throws a `RangeError` (VectorCraft's own limits).
 - `container.add(type[, bounds, ...])` adds a control to the dialog, a `group` or a `panel` and returns it. The
   types are `group`, `panel`, `statictext`, `edittext`, `button`, `checkbox`, `radiobutton`, `dropdownlist`,
   `listbox`, `slider` and `progressbar`. After `bounds`, a text control takes its text and `properties` (`name`,

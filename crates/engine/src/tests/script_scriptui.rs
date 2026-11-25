@@ -81,6 +81,19 @@ fn a_run_with_nobody_to_ask_takes_the_steps_of_its_window_answer() {
 }
 
 #[test]
+fn a_dialog_from_a_resource_specification_takes_the_steps_of_its_window_answer() {
+    let mut s = one_doc();
+    let source = "var w = new Window(\"dialog { text: 'Settings', \
+        g: Group { label: StaticText { text: 'Name:' }, field: EditText { text: 'first', properties: {name: 'field'} } }, \
+        ok: Button { text: 'OK' } }\"); vc.log([w.show(), w.g.field.text]);";
+    let steps = json!([{"control": "field", "event": "change", "value": "typed"}, {"control": "OK", "event": "click"}]);
+    let r = headless(&mut s, source, window(steps)).unwrap();
+    assert_eq!(r["log"], json!([[1, "typed"]]), "{r}");
+    assert_eq!(r["dialogs"][0]["title"], "Settings");
+    assert_eq!(r["dialogs"][0]["controls"], 4);
+}
+
+#[test]
 fn a_missing_wrong_or_unused_step_ends_the_run_and_rolls_it_back() {
     let mut s = one_doc();
     let before = art(&s);

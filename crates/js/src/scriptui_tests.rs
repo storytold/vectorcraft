@@ -233,7 +233,8 @@ fn a_dialog_can_be_shown_again_after_it_closed() {
 fn types_that_are_not_available_yet_throw_errors_that_say_so() {
     for (source, want) in [
         ("new Window('palette')", "Window: a window of type palette is not available yet; use dialog"),
-        ("new Window('dialog { b: Button {} }')", "Window: resource specifications are not available yet; build the dialog with add()"),
+        ("new Window('palette { b: Button {} }')", "Window: a window of type palette is not available yet; use dialog"),
+        ("new Window('dialog').add('p: TabbedPanel {}')", "add: the control type tabbedpanel is not available yet"),
         ("new Window('dialog').add('tabbedpanel')", "add: the control type tabbedpanel is not available yet"),
         ("new Window('dialog').add('wobble')", "add: there is no control type wobble"),
         ("new Window('dialog').add('button').add('button')", "add: a button holds no controls"),
@@ -246,6 +247,119 @@ fn types_that_are_not_available_yet_throw_errors_that_say_so() {
         let e = r.run(&format!("try {{ {source}; 'made' }} catch (e) {{ e.message }}")).unwrap();
         assert_eq!(e, JsValue::String(want.into()), "{source}");
     }
+}
+
+/// A dialog built from a resource specification: 0 is the dialog, 1 the panel, 2 its group, 3 the
+/// static text, 4 the edit field, 5 the button group, 6 OK and 7 Cancel.
+const RESOURCE_FORM: &str = r#"
+    var w = new Window("dialog { text: 'Form', ignored: 1, \
+        msg: Panel { orientation: 'column', alignChildren: ['right', 'top'], text: 'Messages', \
+            title: Group { st: StaticText { text: 'Title:' }, et: EditText { text: 'Sample', characters: 35 } } \
+        } \
+        buttons: Group { \
+            ok: Button { text: 'Build', properties: {name: 'ok'} }, \
+            no: Button { text: 'Cancel', properties: {name: 'cancel'} } \
+        } \
+    }", "not read", [0, 0, 10, 10]);
+"#;
+
+#[test]
+fn a_resource_specification_builds_the_controls_it_names() {
+    let (mut r, seen, _) = realm(vec![change(4, Data::String("typed".into())), click(6)]);
+    let rest = r#"
+        var t = w.msg.title;
+        var shape = [w.text, w.bounds === undefined, w.children.length, w.msg.type, w.msg.text, w.msg.orientation, w.msg.alignChildren.join(),
+            t.parent === w.msg, t.st.type, t.st.text, t.et.type, t.et.characters, w.buttons.ok.name, w.buttons.no.name, w.ignored].join('|');
+        var p = w.add("more: Panel { text: 'More', e: EditText { properties: {multiline: true}, text: 'x' }, l: DropDownList { properties: {items: ['a', 'b']} } }");
+        var added = [p.parent === w, w.more === undefined, p.e.properties.multiline, p.l.items.length, p.l.items[1].text].join('|');
+        p.parent.remove(p);
+        [shape, added, w.show(), t.et.text].join('#')
+    "#;
+    let source = format!("{RESOURCE_FORM} {rest}");
+    assert_eq!(
+        r.run(&source).unwrap(),
+        JsValue::String(
+            "Form|true|2|panel|Messages|column|right,top|true|statictext|Title:|edittext|35|ok|cancel|1#true|true|true|2|b#1#typed".into()
+        )
+    );
+    let seen = seen.borrow();
+    assert_eq!(nodes(&seen.descriptions[0]).len(), 8, "the dialog lists the controls the specification names");
+}
+
+#[test]
+fn a_resource_slider_and_progress_bar_take_their_creation_properties_and_values() {
+    let (mut r, _, _) = realm(Vec::new());
+    let source = "var w = new Window(\"dialog { \
+        s: Slider { properties: {name: 'size'}, minvalue: 2, maxvalue: 20, value: 7 }, \
+        p: ProgressBar { properties: {name: 'done', alignment: 'fill'}, maxvalue: 50, value: 5 } }\"); \
+        [w.s.name, w.s.minvalue, w.s.maxvalue, w.s.value, w.findElement('size') === w.s, w.p.name, w.p.alignment, w.p.maxvalue, w.p.value].join('|')";
+    assert_eq!(r.run(source).unwrap(), JsValue::String("size|2|20|7|true|done|fill|50|5".into()));
+}
+
+#[test]
+fn a_resource_list_s_items_are_the_items_the_dialog_shows() {
+    let (mut r, _, _) = realm(vec![change(1, Data::Number(2.0)), click(2)]);
+    let source = "var w = new Window(\"dialog { l: DropDownList { items: ['a', 'b', 'c'], selection: 1 }, ok: Button { text: 'OK' } }\"); \
+        var before = [w.l.items.length, w.l.selection.text].join(); [before, w.show(), w.l.selection.text].join('|')";
+    assert_eq!(r.run(source).unwrap(), JsValue::String("3,b|1|c".into()));
+    let (mut r, _, _) = realm(Vec::new());
+    let both =
+        r.run("try { new Window(\"dialog { l: ListBox { items: ['a'], properties: {items: ['b']} } }\"); 'made' } catch (e) { e.name }").unwrap();
+    assert_eq!(both, JsValue::String("TypeError".into()), "items given both ways");
+}
+
+#[test]
+fn a_malformed_resource_specification_throws_a_syntax_error() {
+    for source in [
+        "new Window('dialog { b: Button { text: } }')",
+        "new Window('dialog { b: Button {} ')",
+        "new Window('dialog {} trailing')",
+        "new Window('dialog').add('g: Group { v: orange }')",
+        "new Window('dialog').add('g: Group { o: { b: Button {} } }')",
+    ] {
+        let (mut r, _, _) = realm(Vec::new());
+        let e = r.run(&format!("try {{ {source}; 'made' }} catch (e) {{ e.name }}")).unwrap();
+        assert_eq!(e, JsValue::String("SyntaxError".into()), "{source}");
+    }
+    let (mut r, _, _) = realm(Vec::new());
+    let unknown = r.run("try { new Window('dialog { b: Wobble {} }'); 'made' } catch (e) { e.message }").unwrap();
+    assert_eq!(unknown, JsValue::String("add: there is no control type wobble".into()));
+}
+
+#[test]
+fn a_resource_specification_keeps_to_the_dialog_limits() {
+    let (mut r, _, _) = realm(Vec::new());
+    let many = r
+        .run(&format!(
+            "var s = 'dialog {{'; for (var i = 0; i <= {}; i++) s += ' b' + i + ': Button {{}}'; s += ' }}'; \
+             try {{ new Window(s); 'made' }} catch (e) {{ e.name }}",
+            scriptui::MAX_CONTROLS
+        ))
+        .unwrap();
+    assert_eq!(many, JsValue::String("RangeError".into()));
+    let fits = r
+        .run(&format!(
+            "var s = 'dialog {{'; for (var i = 0; i < {}; i++) s += ' b' + i + ': Button {{}}'; s += ' }}'; new Window(s).children.length",
+            scriptui::MAX_CONTROLS
+        ))
+        .unwrap();
+    assert_eq!(fits, JsValue::Number(scriptui::MAX_CONTROLS as f64));
+    let added = r
+        .run(&format!(
+            "var w = new Window('dialog'); for (var i = 0; i < {}; i++) w.add('button'); \
+             var e = ''; try {{ w.add('g: Group {{ a: Button {{}}, b: Button {{}} }}'); }} catch (x) {{ e = x.name; }} [e, w.children.length].join()",
+            scriptui::MAX_CONTROLS - 2
+        ))
+        .unwrap();
+    assert_eq!(added, JsValue::String(format!("RangeError,{}", scriptui::MAX_CONTROLS - 1)), "the group took a place before its second button");
+    let nested = |depth: usize| {
+        format!(
+            "var s = ''; for (var d = 0; d < {depth}; d++) s += 'g: Group {{ '; for (d = 0; d < {depth}; d++) s += '}} '; \
+             try {{ var c = new Window('dialog {{ ' + s + '}}'); while (c.g) c = c.g; 'made ' + c.type }} catch (e) {{ e.name }}"
+        )
+    };
+    assert_eq!(r.run(&nested(scriptui::MAX_DEPTH)).unwrap(), JsValue::String("made group".into()));
+    assert_eq!(r.run(&nested(scriptui::MAX_DEPTH + 1)).unwrap(), JsValue::String("RangeError".into()));
 }
 
 #[test]

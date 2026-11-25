@@ -68,6 +68,7 @@ mod regexp;
 mod regexp_builtins;
 mod regexp_vm;
 pub mod scriptui;
+mod scriptui_resource;
 mod string_builtins;
 mod token;
 mod value;

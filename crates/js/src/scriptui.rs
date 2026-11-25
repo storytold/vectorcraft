@@ -3,8 +3,15 @@
 //! drawing a host does ([`crate::Realm::define_script_ui`]).
 //!
 //! `new Window("dialog"[, title, bounds, properties])` makes a dialog, with or without `new`. A
-//! window of type `palette` or `window`, and a resource specification in place of the type, throw
-//! an `Error` that says they are not available yet. `add(type[, bounds, text, properties])` adds a
+//! window of type `palette` or `window` throws an `Error` that says it is not available yet.
+//! `new Window` and `add` also take a resource specification in place of the type, as the help
+//! page <https://extendscript.docsforadobe.dev/user-interface-tools/resource-specifications/>
+//! describes it (read by [`crate::scriptui_resource`]), and then read no other argument: the
+//! window or control is made with the creation properties given in `properties`. Then, in order,
+//! each control listed in its braces is added to it through `add`, with `add`'s limits, and
+//! assigned to the container's property of that name, a list's `items` gives its item texts as
+//! `add`'s third argument does, and each other value is assigned to the property of its name. A
+//! malformed specification throws a `SyntaxError`. `add(type[, bounds, text, properties])` adds a
 //! control to a dialog, a `group` or a `panel` and returns it: `statictext`, `edittext`, `button`,
 //! `checkbox`, `radiobutton`, `dropdownlist`, `listbox` (whose third argument is an array of item
 //! texts), `slider` (third to fifth: value, minimum, maximum) and `progressbar` (value, maximum).
@@ -62,6 +69,7 @@ use crate::builtins::{arg, constructor, data, method, native, pausable_method};
 use crate::heap::{Class, ENUMERABLE, HIDDEN, NativeKind, OBJECT_BYTES, OPEN, ObjId, Object, PROP_BYTES, Prop, key};
 use crate::host::Data;
 use crate::interp::{Abrupt, ErrorType, Interp, JsResult, Pause};
+use crate::scriptui_resource::{self, Fault, Res, Spec};
 use crate::value::{Value, index_key};
 
 /// The most controls a dialog holds, its groups and panels included.
@@ -422,10 +430,8 @@ fn dimension(i: &mut Interp, width: f64, height: f64) -> JsResult<Value> {
 /// `new Window(type[, title, bounds, properties])`.
 fn window_ctor(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let kind = i.to_str(&arg(args, 0))?.to_rust_string();
-    if kind.contains('{') {
-        return Err(error(i, "Window: resource specifications are not available yet; build the dialog with add()"));
-    }
-    let lower = kind.to_lowercase();
+    let spec = if kind.contains('{') { Some(resource(i, &kind, "Window")?) } else { None };
+    let lower = spec.as_ref().map_or(kind.as_str(), |s| s.class.as_str()).to_lowercase();
     if lower == "palette" || lower == "window" {
         return Err(error(i, &format!("Window: a window of type {lower} is not available yet; use dialog")));
     }
@@ -435,13 +441,131 @@ fn window_ctor(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Va
     let proto = classes(i)?.window_proto;
     let mark = i.temp_roots.len();
     let r = (|| {
-        let o = new_element(i, proto, "dialog", None, None, 0, [&arg(args, 2), &arg(args, 1), &arg(args, 3)])?;
+        // A resource specification gives everything; the other arguments are not read.
+        let o = match &spec {
+            Some(spec) => {
+                let creation = creation_properties(i, spec)?;
+                new_element(i, proto, "dialog", None, None, 0, [&Value::Undefined, &Value::Undefined, &creation])?
+            }
+            None => new_element(i, proto, "dialog", None, None, 0, [&arg(args, 2), &arg(args, 1), &arg(args, 3)])?,
+        };
         set_slot(i, o, COUNT, Value::Number(0.0))?;
         set_slot(i, o, ITEM_COUNT, Value::Number(0.0))?;
+        if let Some(spec) = &spec {
+            apply_resource(i, o, spec, false)?;
+        }
         Ok(Value::Object(o))
     })();
     i.temp_roots.truncate(mark);
     r
+}
+
+/// The resource specification `text` given to `what`, or a `SyntaxError` or `RangeError` naming
+/// `what`.
+fn resource(i: &mut Interp, text: &str, what: &str) -> JsResult<Spec> {
+    match scriptui_resource::parse(text) {
+        Ok(spec) => Ok(spec),
+        Err(Fault::Syntax(m)) => Err(i.throw(ErrorType::Syntax, &format!("{what}: {m}"))),
+        Err(Fault::Limit(m)) => Err(range(i, &format!("{what}: {m}"))),
+    }
+}
+
+/// The value of a resource specification's `properties`, its creation properties, kept in the
+/// temporary roots; `undefined` when it has none.
+fn creation_properties(i: &mut Interp, spec: &Spec) -> JsResult<Value> {
+    let Some((_, v)) = spec.props.iter().rev().find(|(name, _)| name == "properties") else { return Ok(Value::Undefined) };
+    if matches!(v, Res::Control(_)) {
+        return Err(i.type_error("properties: give the creation properties as an object"));
+    }
+    let v = resource_value(i, v)?;
+    i.temp_roots.push(v.clone());
+    Ok(v)
+}
+
+/// A new value for the resource value `v`, built in the temporary roots.
+fn resource_value(i: &mut Interp, v: &Res) -> JsResult<Value> {
+    Ok(match v {
+        Res::Null => Value::Null,
+        Res::Bool(b) => Value::Bool(*b),
+        Res::Number(n) => Value::Number(*n),
+        Res::String(s) => Value::str(s),
+        Res::Array(items) => {
+            let mut values = Vec::with_capacity(items.len());
+            for item in items {
+                let v = resource_value(i, item)?;
+                i.temp_roots.push(v.clone());
+                values.push(v);
+            }
+            let a = list(i, &values, true)?;
+            i.temp_roots.push(Value::Object(a));
+            Value::Object(a)
+        }
+        Res::Object(props) => {
+            i.reserve_heap(OBJECT_BYTES)?;
+            let o = i.new_object();
+            i.temp_roots.push(Value::Object(o));
+            for (name, v) in props {
+                let v = resource_value(i, v)?;
+                set_open(i, o, name, v)?;
+            }
+            Value::Object(o)
+        }
+        Res::Control(_) => return Err(i.type_error("a control is not a value")),
+    })
+}
+
+/// Adds the control `spec` describes to the container `parent`, as `add` does, with the controls
+/// and properties it lists.
+fn add_resource(i: &mut Interp, parent: ObjId, spec: &Spec) -> JsResult<Value> {
+    let creation = creation_properties(i, spec)?;
+    // `add` reads a slider's and a progress bar's later arguments as numbers; their creation
+    // properties are set after `add` makes them.
+    let class = spec.class.to_lowercase();
+    let numeric = matches!(class.as_str(), "slider" | "progressbar");
+    // A list's `items` gives its item texts, as `add`'s third argument does.
+    let list_kind = matches!(class.as_str(), "dropdownlist" | "listbox");
+    let items = match spec.props.iter().rev().find(|(name, _)| name == "items") {
+        Some((_, v)) if list_kind => {
+            let v = resource_value(i, v)?;
+            i.temp_roots.push(v.clone());
+            v
+        }
+        _ => Value::Undefined,
+    };
+    let args = if numeric { vec![Value::str(&spec.class)] } else { vec![Value::str(&spec.class), Value::Undefined, items, creation.clone()] };
+    let c = add(i, Value::Object(parent), &args, false)?;
+    i.temp_roots.push(c.clone());
+    let Some(o) = c.as_object() else { return Err(Abrupt::Internal("add gave no control".into())) };
+    if numeric && creation.as_object().is_some() {
+        set_open(i, o, "properties", creation.clone())?;
+        let name = i.get_value(&creation, &key("name"))?;
+        let name = text_arg(i, &name)?;
+        set_open(i, o, "name", name)?;
+        let alignment = i.get_value(&creation, &key("alignment"))?;
+        if !matches!(alignment, Value::Undefined) {
+            set_open(i, o, "alignment", alignment)?;
+        }
+    }
+    apply_resource(i, o, spec, list_kind)?;
+    Ok(c)
+}
+
+/// Sets the properties `spec` lists on the element `o`, in order, leaving out `properties`, and
+/// `items` for a list (`list`): a control is added to `o` and assigned to `o`'s property of that
+/// name, and any other value is assigned to the property of its name.
+fn apply_resource(i: &mut Interp, o: ObjId, spec: &Spec, list: bool) -> JsResult<()> {
+    for (name, v) in &spec.props {
+        if name == "properties" || (list && name == "items") {
+            continue;
+        }
+        let value = match v {
+            Res::Control(child) => add_resource(i, o, child)?,
+            v => resource_value(i, v)?,
+        };
+        i.temp_roots.push(value.clone());
+        i.put(o, key(name), value, true)?;
+    }
+    Ok(())
 }
 
 fn number_arg(i: &mut Interp, v: &Value, what: &str) -> JsResult<f64> {
@@ -467,7 +591,11 @@ fn add(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> 
         return Err(error(i, &format!("add: a {kind} holds no controls")));
     }
     if ty.contains('{') {
-        return Err(error(i, "add: resource specifications are not available yet; add each control by its type"));
+        let spec = resource(i, &ty, "add")?;
+        let mark = i.temp_roots.len();
+        let r = add_resource(i, o, &spec);
+        i.temp_roots.truncate(mark);
+        return r;
     }
     let ty = ty.to_lowercase();
     if LATER.contains(&ty.as_str()) {
