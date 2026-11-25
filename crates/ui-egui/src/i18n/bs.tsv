@@ -28,6 +28,7 @@
 	Light	Svijetlo
 	Quit VectorCraft	Zatvori VectorCraft
 	Drop Artwork	Ispusti crtež
+@id	language.name	Bosanski
 @msg	{key} must be [x, y] with finite coordinates	{key} mora biti [x, y] s konačnim koordinatama
 @msg	ids must contain 1–10000 object ids	ids mora sadržavati 1–10000 ID-ova objekata
 	File	Datoteka
@@ -64,8 +65,6 @@
 	Check Script	Provjeri skriptu
 	Some scripts were not listed	Neke skripte nisu navedene
 	The Scripts folder cannot be read	Folder Scripts se ne može pročitati
-@msg	The Startup Scripts folder cannot be read	Folder Startup Scripts se ne može pročitati
-@msg	The Startup Scripts folder was not read in full	Folder Startup Scripts nije pročitan u potpunosti
 	Loading scripts…	Učitavanje skripti…
 	The Scripts folder is still being read	Folder Scripts se još čita
 	Other Script…	Druga skripta…
@@ -345,6 +344,9 @@
 	Artboards	Radne ploče
 	Convert to Artboards	Pretvori u radne ploče
 	Rearrange All Artboards…	Preuredi sve radne ploče…
+	Rearrange…	Preuredi…
+	Selected Artboards: {n}	Odabrane radne ploče: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Kliknite na platno da postavite radne ploče (Esc otkazuje)
 	Fit to Artwork Bounds	Uklopi u granice crteža
 	Fit to Selected Art	Uklopi u odabrani crtež
 	Graph	Grafikon
@@ -505,6 +507,7 @@
 	Fill & Stroke	Ispuna i potez
 	Fill Color	Boja ispune
 	Opacity	Neprozirnost
+	Show Opacity	Prikaži neprozirnost
 	Stroke Color	Boja poteza
 	Fill Gradient	Gradijent ispune
 	Stroke Gradient	Gradijent poteza
@@ -3678,6 +3681,12 @@ theme	Appearance	Izgled
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	rezolucija nije dostupna
+	estimated memory {memory}	procijenjena memorija {memory}
+	memory unavailable	memorija nije dostupna
+	Unknown format	Nepoznat format
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -4128,6 +4137,7 @@ theme	Appearance	Izgled
 	Data Recovery	Oporavak podataka
 	Default Language	Zadani jezik
 	Disable Auto Add/Delete	Onemogući automatsko dodavanje/brisanje
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete uklanja sidrene tačke i zadržava putanje spojenim
 	Interpolate Control Points When Moving Anchors	Interpoliraj ručke smjera pri pomjeranju sidrenih tačaka
 	Display All Blacks Accurately	Prikaži sve crne tačno
 	Display All Blacks as Rich Black	Prikaži sve crne kao bogatu crnu
@@ -4694,7 +4704,6 @@ font-technology	Variable	Varijabilni
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Alati za crtanje prikazuju pokazivač u obliku krstića umjesto svoje ikone; Caps Lock čini isto dok je uključen.
 	Shows a tip when the pointer rests on a button or field that has one.	Prikazuje savjet kada se pokazivač zadrži na dugmetu ili polju koje ga ima.
 	Shows a warning before a script you choose runs.	Prikazuje upozorenje prije nego što se pokrene skripta koju odaberete.
-	Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.	Pokreće skripte iz mape Startup Scripts kada se VectorCraft pokrene i prije svake skripte iz Datoteka › Skripte; ne u sigurnom načinu rada.
 	Smooths the edges of artwork on the canvas.	Izglađuje rubove grafike na platnu.
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Odabir › Isto › Boja ispune, Boja poteza i Ispuna i potez pronalaze samo istu nijansu globalnog ili spot uzorka, a ne bilo koju njegovu nijansu.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Prikazuje početni ekran kada nijedan dokument nije otvoren; kada je isključeno, prozor ostaje prazan dok ne kliknete Početna.
@@ -4710,6 +4719,7 @@ font-technology	Variable	Varijabilni
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Pokret rotacije s dva prsta na dodirnoj podlozi rotira prikaz platna.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Držanje tipke pokreće alat ili naredbu iz njene kolone „Zadrži“ u Prečicama na tastaturi; kratki pritisak pokreće njenu uobičajenu prečicu.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Koliko sekundi tipka mora biti pritisnuta prije nego što se umjesto uobičajene prečice pokrene njena prečica zadržavanjem.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete uklanja odabrane sidrene tačke i ponovo prilagođava krivu oko svake od njih, umjesto da tamo otvori putanju.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Kada pomjerate sidrene tačke, svaka kriva s jednim pomjerenim krajem zadržava svoj oblik u odnosu na svoje krajeve.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Držanje prečice alata bira taj alat dok je ne pustite, a zatim se ponovo bira prethodni alat.
 	Shows the bounding box while you move the selection or draw a shape.	Prikazuje granični okvir dok pomjerate odabir ili crtate oblik.
@@ -5110,7 +5120,6 @@ imageTrace	Outline	Obris
 	Run Script	Pokreni skriptu
 	Stop Script	Zaustavi skriptu
 	Show External Script Warning	Prikaži upozorenje za vanjske skripte
-	Run Startup Scripts	Pokreni skripte pri pokretanju
 	A Script Is Running	Skripta se izvršava
 	Script Alert	Upozorenje skripte
 	Script File Access	Pristup skripte datotekama
@@ -5174,7 +5183,7 @@ imageTrace	Outline	Obris
 @msg	PDF settings are not an object	PDF postavke nisu objekat
 @msg	PDF security settings are not an object	PDF sigurnosne postavke nisu objekat
 @msg	PDF writer error: {0}	greška PDF zapisivača: {0}
-@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Upakovano datoteka u {folder}: {n} ({note})
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Upakovano datoteka u {folder}: {n} ({note})|Upakovano datoteka u {folder}: {n} ({note})|Upakovano datoteka u {folder}: {n} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Pregledaj u pregledniku zahtijeva desktop aplikaciju (web umjesto toga preuzima datoteke)
 @msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	navedite `desiredK`, željenu veličinu datoteke u K (1024 bajta): broj veći od 0 i najviše 1048576
 @msg	`startWith` is `current` or `auto`	`startWith` je `current` ili `auto`
@@ -6307,6 +6316,9 @@ file-filter	Swatch libraries	Biblioteke uzoraka boja
 file-filter	Flattener presets	Predlošci spljoštavanja
 file-filter	PDF presets	PDF predlošci
 file-filter	Print presets	Predlošci štampanja
+file-filter	Tracing presets	Predlošci praćenja
+file-filter	Action sets	Skupovi akcija
+file-filter	Composite fonts	Kompozitni fontovi
 file-filter	Preferences	Postavke
 file-filter	Export presets	Predlošci izvoza
 file-filter	SVG Compressed	Komprimirani SVG
@@ -6679,9 +6691,9 @@ mark-style	Japanese	Japanski
 	Slope:	Nagib:
 axis	X Axis	X osa
 axis	Y Axis	Y osa
-@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Upakovano datoteka u {folder}: {n}
-@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Upakovano datoteka: {n} {note}
-@msgplural	Packaged {n} file|Packaged {n} files	Upakovano datoteka: {n}
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Upakovano datoteka u {folder}: {n}|Upakovano datoteka u {folder}: {n}|Upakovano datoteka u {folder}: {n}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Upakovano datoteka: {n} {note}|Upakovano datoteka: {n} {note}|Upakovano datoteka: {n} {note}
+@msgplural	Packaged {n} file|Packaged {n} files	Upakovano datoteka: {n}|Upakovano datoteka: {n}|Upakovano datoteka: {n}
 @plural	Packaged {n} file|Packaged {n} files	Upakovano datoteka: {n}|Upakovano datoteka: {n}|Upakovano datoteka: {n}
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Upakovano datoteka u {folder}: {n}|Upakovano datoteka u {folder}: {n}|Upakovano datoteka u {folder}: {n}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Upakovano datoteka: {n} {note}|Upakovano datoteka: {n} {note}|Upakovano datoteka: {n} {note}
@@ -6715,6 +6727,7 @@ axis	Y Axis	Y osa
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}” je drugi modul od dodatka s ID-om {_1} i dobio bi postavke i predmemoriju sačuvane za njega: instalirajte ga s `replace: true` kada korisnik pristane
 	File SHA-256: {hash}	SHA-256 datoteke: {hash}
 	Read the objects it is given	Čitati objekte koje dobije
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Čitati objekte koje dobije, kao i postavke, radne ploče, slojeve i uzorke boja dokumenta
 	Change, add and delete objects in the document	Mijenjati, dodavati i brisati objekte u dokumentu
 	Keep data of its own with the document	Čuvati vlastite podatke uz dokument
 	Change how the objects its effect is applied to are drawn	Mijenjati kako se crtaju objekti na koje je primijenjen njegov efekt

@@ -230,7 +230,7 @@ fn in_the_app_the_runs_are_queued_and_the_launch_marker_names_the_running_startu
     big.push_str(&"x".repeat(vectorcraft_engine::script::MAX_SOURCE_BYTES));
     write(&dir, "bb.jsx", &big);
     write(&dir, "c.jsx", "vc.log(3);");
-    assert!(safe_mode::begin_launch(&launch).is_none());
+    assert!(safe_mode::begin_launch(&launch).is_empty());
     let mut s = session(&dir);
     s.script_frames = true;
     let r = s.execute("script.startup.run", &json!({"reason": "menu", "then": {"source": "vc.log(4);", "name": "chosen"}})).unwrap();
@@ -244,7 +244,8 @@ fn in_the_app_the_runs_are_queued_and_the_launch_marker_names_the_running_startu
             .unwrap();
         safe_mode::parse_marker(&std::fs::read(file).unwrap())
     };
-    assert_eq!(marker().and_then(|i| i.name), Some("a.jsx".to_string()), "the marker names the running startup script");
+    let names = |items: Vec<safe_mode::Item>| items.into_iter().map(|i| i.name).collect::<Vec<_>>();
+    assert_eq!(names(marker()), [Some("a.jsx".to_string())], "the marker names the running startup script");
     let mut results = vec![];
     for _ in 0..10_000 {
         if !s.script_running() {
@@ -260,7 +261,7 @@ fn in_the_app_the_runs_are_queued_and_the_launch_marker_names_the_running_startu
     let too_large = vectorcraft_engine::cmd::scripts::TOO_LARGE.to_string();
     assert_eq!(s.take_startup_failures(), [("bb.jsx".to_string(), too_large)], "the one that could not start is kept for the app");
     assert!(s.take_startup_failures().is_empty());
-    assert_eq!(marker(), None, "the marker names nothing once they have run");
+    assert!(marker().is_empty(), "the marker names nothing once they have run");
 }
 
 #[test]
