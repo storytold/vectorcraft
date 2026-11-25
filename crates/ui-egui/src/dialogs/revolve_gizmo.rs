@@ -22,7 +22,7 @@ use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDia
 use craft::ui::primitives::{ContentPainterCx, TextRun};
 use craft::ui::runtime::focus::KeyUse;
 use craft::ui::style::{ComponentStyle, StyleColor, StyleCx, TypeRole};
-use egui::{Painter, Pos2, Rect, Response, Stroke, Ui, Vec2, vec2};
+use egui::{Pos2, Rect, Response, Stroke, Ui, Vec2, vec2};
 use serde_json::json;
 use vectorcraft_effects::{CLASSIC_REVOLVE, REVOLVE};
 use vectorcraft_geom::Point;
@@ -572,7 +572,6 @@ impl Component for RevolveGizmo<'_> {
         let content = ui.content_painter(cx);
         let paint = Paint {
             content: &content,
-            painter: &content.painter,
             style: cx.style,
             view: &space.view,
             subject: self.subject,
@@ -610,9 +609,8 @@ fn light_position(g: Geometry, options: Revolve) -> Pos2 {
 
 /// What a pass draws with.
 struct Paint<'a> {
-    /// The content painter, which lays out and paints the labels.
+    /// The content painter: its `painter` draws the rings and plates, and its `Draw` lays out and paints the labels.
     content: &'a ContentPainterCx<'a>,
-    painter: &'a Painter,
     style: &'a RevolveGizmoStyle,
     view: &'a CanvasView,
     subject: &'a Subject,
@@ -626,7 +624,7 @@ struct Paint<'a> {
 
 impl Paint<'_> {
     fn rotation(&self) {
-        let (g, s, painter) = (self.g, self.style, self.painter);
+        let (g, s, painter) = (self.g, self.style, &self.content.painter);
         for (axis, ring) in g.rings.iter().enumerate() {
             let hot = self.active == Some(axis);
             let ink = if hot { s.hot } else { s.axis(axis) };
@@ -668,7 +666,7 @@ impl Paint<'_> {
     }
 
     fn light(&self) {
-        let (g, s, painter) = (self.g, self.style, self.painter);
+        let (g, s, painter) = (self.g, self.style, &self.content.painter);
         let options = light_options(&self.subject.fields);
         let radius = g.radius * 1.4;
         painter.circle_stroke(g.center, radius, Stroke::new(1.0, s.muted.egui().gamma_multiply(0.3)));
@@ -732,7 +730,7 @@ impl Paint<'_> {
 
     /// `text` on a plate centred at `at`.
     fn readout(&self, text: &str, at: Pos2) {
-        let (s, painter) = (self.style, self.painter);
+        let (s, painter) = (self.style, &self.content.painter);
         self.text(text, s.ink, |size| {
             painter.rect_filled(Rect::from_center_size(at, size + vec2(14.0, 8.0)), 4.0, s.plate.egui());
             at - size * 0.5

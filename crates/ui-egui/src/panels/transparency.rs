@@ -25,6 +25,7 @@ use craft::ui::primitives::{
 use craft::ui::primitives::{Revision, ThumbPaint};
 use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
 use craft::ui::runtime::env::UnitKind;
+use craft::ui::style::DataColor;
 use craft::ui::text::NumberField;
 use egui::{Color32, Ui};
 use serde_json::{Value, json};
@@ -193,7 +194,7 @@ fn mask_row(
                 store.paint(cx, rect, s, paper);
             }
             if disabled {
-                let red = craft::ui::style::DataColor::new(super::swatches::OFF_MARK);
+                let red = DataColor::new(super::swatches::OFF_MARK);
                 cx.with_draw(|draw| {
                     for line in [[rect.left_top(), rect.right_bottom()], [rect.right_top(), rect.left_bottom()]] {
                         draw.stroke(&PaintShape::Path(line.to_vec()), StrokeWidth::Thick, red);
