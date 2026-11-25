@@ -349,7 +349,7 @@ pub(crate) fn apply_weight(app: &mut VectorcraftApp, out: &NumberOutput, target:
 /// The weight field in a row labelled `label` with the side label `side`: the output of the number field, none when
 /// the row's body did not run.
 fn weight_row(app: &VectorcraftApp, ui: &mut Ui, label: &'static str, side: SideLabel, weight: Option<f64>) -> Option<NumberOutput> {
-    Field::new(label).side(side).id_salt("weight").show(ui, |ui, _| weight_number(app, weight).show(ui)).inner
+    Field::new(label).side(side).id_salt("weight").sizing(Sizing::Content).show(ui, |ui, _| weight_number(app, weight).show(ui)).inner
 }
 
 /// The weight field whose link side label (`label`: the Control bar's "Stroke:", the Properties panel's "Stroke")
@@ -391,7 +391,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     arrow_rows(app, ui, st.as_ref());
     ui.separator();
     Field::new(tl!("Profile")).show(ui, |ui, _| {
-        Row::new().show(ui, |ui, _| {
+        Row::new().wrap(true).show(ui, |ui, _| {
             profile_select(app, ui);
             flip_buttons(app, ui, st.as_ref());
         });

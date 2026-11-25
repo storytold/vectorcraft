@@ -48,14 +48,11 @@ pub(super) fn window(app: VectorcraftApp) -> Window {
 /// commands the pass fired run as the next frame begins.
 pub(super) fn app_step(h: &mut Window) {
     let ctx = h.ctx.clone();
-    let input = |h: &mut Window| {
-        let app = h.state_mut();
-        app.adopt_context(&ctx);
-        craft::ui::shell::embed::before_input(&ctx, |out| app.frame_input(out));
-    };
-    input(h);
+    let app = h.state_mut();
+    app.adopt_context(&ctx);
+    craft::ui::shell::embed::before_input(&ctx, |out| app.frame_input(out));
     h.step();
-    input(h);
+    crate::testing::run_fired(h.state_mut(), &ctx);
 }
 
 /// Draws a frame of `h` at `time` seconds.

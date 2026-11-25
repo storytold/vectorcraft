@@ -298,6 +298,8 @@ pub(crate) struct Scene<'a> {
     /// The gradient being painted overprints on a plate: where it is paper white it puts none of
     /// the plate's ink down, and the plate below it is left as it is ([`Self::inked_spans`]).
     keep_below: bool,
+    /// Overprinting is on in the page's graphics state ([`Self::overprint_on`]).
+    overprinting: bool,
     /// The print job's fonts: type in a solid fill is shown through them (`None`: drawn as
     /// outlines).
     fonts: Option<&'a RefCell<FontJob>>,
@@ -336,6 +338,7 @@ impl<'a> Scene<'a> {
             nest: 0,
             plate: false,
             keep_below: false,
+            overprinting: false,
             fonts: None,
             used: UsedGlyphs::new(),
             used_order: vec![],
@@ -535,11 +538,30 @@ impl<'a> Scene<'a> {
         }
     }
 
-    /// Turn overprinting on for one paint (when overprints are preserved); `false` when it stays off.
+    /// Whether a fill or stroke of `paint` marked to overprint (`overprint`) does: not when it is
+    /// paper white with Discard White Overprint in Output (Document Setup); a spot white still
+    /// overprints ([`Self::spot_ink`]). On a plate the colors are already the plate's coverage, and
+    /// the plate's document has already turned overprinting off for each white the setting knocks
+    /// out, so white is not checked there.
+    fn overprints(&self, overprint: bool, paint: &Paint) -> bool {
+        let discarded = !self.plate && self.doc.setup.discard_white_overprint && vectorcraft_doc::overprint::is_white(paint) && !self.spot_ink(paint);
+        overprint && !discarded
+    }
+
+    /// Whether `paint` is a tint above 0% of a spot swatch with a solid color, which the page writes
+    /// as a Separation ink of its own ([`Self::spot_space`]); a link is judged by the first swatch of
+    /// its name.
+    fn spot_ink(&self, paint: &Paint) -> bool {
+        matches!(paint, Paint::Solid { swatch: Some(name), tint, .. } if *tint > 0.0 && self.doc.swatch(name).is_some_and(|s| s.spot && s.paint.color().is_some()))
+    }
+
+    /// Turn overprinting on for one paint (when overprints are preserved); `false` when it stays off
+    /// or is already on (a pattern's tiles inside an overprinting pattern fill).
     fn overprint_on(&mut self, overprint: bool) -> bool {
-        let on = overprint && self.o.overprint == Overprint::Preserve;
+        let on = overprint && self.o.overprint == Overprint::Preserve && !self.overprinting;
         if on {
             self.line("true op");
+            self.overprinting = true;
         }
         on
     }
@@ -547,6 +569,7 @@ impl<'a> Scene<'a> {
     fn overprint_off(&mut self, on: bool) {
         if on {
             self.line("false op");
+            self.overprinting = false;
         }
     }
 
@@ -611,7 +634,9 @@ impl<'a> Scene<'a> {
                             && vectorcraft_doc::overprint::is_white(p)
                             && vectorcraft_doc::overprint::DiscardWhite::of(self.doc).discards(p);
                         let on = self.overprint_on(n.colorize_overprints() && !discarded);
-                        self.colorized_image(im, blob, p, on);
+                        // Inside an overprinting pattern fill the image overprints with its tiles.
+                        let overprinting = self.overprinting;
+                        self.colorized_image(im, blob, p, overprinting);
                         self.overprint_off(on);
                     }
                     _ => self.image(&im.key, blob, im.width, im.height, im.xf),
@@ -729,7 +754,8 @@ impl<'a> Scene<'a> {
             match item {
                 AppearanceItem::Fill(fl) if fl.visible && !fl.paint.is_none() => {
                     self.note_item(fl.opacity, fl.blend);
-                    self.fill(bp, rule, &fl.paint, bounds, fl.overprint);
+                    let overprint = self.overprints(fl.overprint, &fl.paint);
+                    self.fill(bp, rule, &fl.paint, bounds, overprint);
                 }
                 AppearanceItem::Stroke(st) if st.visible && !st.paint.is_none() && st.width > 0.0 && st.width.is_finite() => {
                     self.stroke(bp, rule, st, bounds);
@@ -812,6 +838,7 @@ impl<'a> Scene<'a> {
             return;
         }
         self.note_item(st.opacity, st.blend);
+        let overprint = self.overprints(st.overprint, &st.paint);
         let paint_bounds = st.paint_bounds(bounds);
         let area_paint = match &st.paint {
             Paint::Pattern { .. } => true,
@@ -822,7 +849,7 @@ impl<'a> Scene<'a> {
             // The area the stroke paints, as Outline Stroke makes it, painted with the pattern's
             // tiles or the freeform's image.
             let region = stroke::outline_region(&PathData::from_bezpath(bp), rule, st).to_bezpath();
-            self.fill(&region, FillRule::NonZero, &st.paint, paint_bounds, st.overprint);
+            self.fill(&region, FillRule::NonZero, &st.paint, paint_bounds, overprint);
             return;
         }
         let w = stroke::for_writer(bp, st);
@@ -847,7 +874,7 @@ impl<'a> Scene<'a> {
         };
         match &w.shape {
             WrittenShape::Stroke { width } => {
-                let on = self.overprint_on(st.overprint);
+                let on = self.overprint_on(overprint);
                 self.line_style(st, *width);
                 match &st.paint {
                     Paint::Solid { color, swatch, tint } => {
@@ -861,7 +888,7 @@ impl<'a> Scene<'a> {
                         self.line("q");
                         push_path(&mut self.body, bp);
                         self.line("strokepath W");
-                        self.paint_overprinting(st.overprint, p, paint_bounds, w.reach(st, bounds));
+                        self.paint_overprinting(overprint, p, paint_bounds, w.reach(st, bounds));
                         self.line("Q");
                     }
                 }
@@ -874,14 +901,14 @@ impl<'a> Scene<'a> {
                     push_path(&mut self.body, &ws.clip);
                     self.body.push_str(clip_op(FillRule::NonZero));
                     for (shape, paint) in &ws.slices {
-                        self.fill(shape, FillRule::NonZero, paint, shape.bounding_box(), st.overprint);
+                        self.fill(shape, FillRule::NonZero, paint, shape.bounding_box(), overprint);
                     }
                     self.line("Q");
                 }
             }
             WrittenShape::Fill(outlines) => {
                 for o in outlines {
-                    self.fill(o, FillRule::NonZero, &st.paint, paint_bounds, st.overprint);
+                    self.fill(o, FillRule::NonZero, &st.paint, paint_bounds, overprint);
                 }
             }
         }
@@ -989,12 +1016,13 @@ impl<'a> Scene<'a> {
             if bp.elements().is_empty() {
                 continue;
             }
+            let overprint = self.overprints(run.style.overprint_fill, &run.style.fill);
             if fonts.is_none() {
-                self.fill(&bp, FillRule::NonZero, &run.style.fill, layout.bounds, run.style.overprint_fill);
+                self.fill(&bp, FillRule::NonZero, &run.style.fill, layout.bounds, overprint);
             } else {
-                self.show(&shown, &run.style.fill, run.style.overprint_fill);
+                self.show(&shown, &run.style.fill, overprint);
                 if !art.elements().is_empty() {
-                    self.fill(&art, FillRule::NonZero, &run.style.fill, layout.bounds, run.style.overprint_fill);
+                    self.fill(&art, FillRule::NonZero, &run.style.fill, layout.bounds, overprint);
                 }
             }
             if run.style.has_stroke() {
@@ -1014,7 +1042,8 @@ impl<'a> Scene<'a> {
             match item {
                 AppearanceItem::Fill(fl) if fl.visible && !fl.paint.is_none() => {
                     self.note_item(fl.opacity, fl.blend);
-                    self.fill(bp, FillRule::NonZero, &fl.paint, tb, fl.overprint);
+                    let overprint = self.overprints(fl.overprint, &fl.paint);
+                    self.fill(bp, FillRule::NonZero, &fl.paint, tb, overprint);
                 }
                 AppearanceItem::Stroke(st) if st.visible && !st.paint.is_none() && st.width > 0.0 && st.width.is_finite() => {
                     self.stroke(bp, FillRule::NonZero, st, tb);

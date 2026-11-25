@@ -936,7 +936,7 @@ fn device_settings_are_accepted_and_change_nothing() {
 /// `warnings` without the note naming fonts that aren't available: which those are depends on the
 /// fonts installed where the tests run, not on the program.
 pub(super) fn program_warnings(warnings: &[String]) -> Vec<&String> {
-    warnings.iter().filter(|w| !w.starts_with(super::MISSING_FONTS_NOTE)).collect()
+    warnings.iter().filter(|w| !w.starts_with(super::MISSING_FONTS_NOTE) && !w.starts_with(super::CARRIED_FONTS_NOTE)).collect()
 }
 
 fn blue(body: &str) {

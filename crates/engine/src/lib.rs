@@ -203,6 +203,11 @@ pub struct Session {
     /// Where the plug-ins `plugin.install` installs are kept; `None`: only for the process
     /// ([`Session::attach_plugin_store`]).
     plugin_dir: Option<std::path::PathBuf>,
+    /// Plug-in loads running on worker threads, oldest first ([`Session::poll_plugin_loads`]).
+    plugin_loads: std::collections::VecDeque<store::PluginLoad>,
+    /// Whether the loads of the stored plug-ins and of the plug-ins folder go on after the call
+    /// that starts them ([`Session::load_plugins_in_background`]).
+    plugin_loads_in_background: bool,
     /// The Scripts folder, whose scripts File › Scripts lists; `None`: no folder
     /// ([`Session::attach_scripts_dir`]).
     scripts_dir: Option<std::path::PathBuf>,
@@ -341,6 +346,9 @@ pub struct Session {
     /// The warnings of the previews that settling an interaction applied, while a top-level command
     /// or the tool's actions collect them ([`Session::collect_settled_warnings`]).
     settled_warnings: Option<Vec<String>>,
+    /// The interaction a command from outside the tool set aside while it runs
+    /// ([`Session::outside_interaction`]).
+    held_interaction: Option<HeldInteraction>,
     /// While [`Session::preview`] runs its command: its edits are the interaction's own.
     previewing: bool,
     /// The images Remove Background decoded during the interaction's preview steps, emptied when
@@ -453,13 +461,13 @@ mod session;
 pub(crate) use command_sets::SELECTS_GIVEN_IDS;
 #[cfg(test)]
 use command_sets::given_ids;
-pub use command_sets::{DRAWS_SHAPE, FIT_ACTIVE_ARTBOARD, ON_ACTIVE_ARTBOARD, waits_for_tool_edit};
+pub use command_sets::{DRAWS_SHAPE, FIT_ACTIVE_ARTBOARD, ON_ACTIVE_ARTBOARD, waits_for_plugin_loads, waits_for_tool_edit};
 pub use doc_state::{DocState, LayersReveal, OpenRows, RecalledSelection};
 pub use error::{EngineError, READ_ONLY_LOCATION, Result, SCRIPT_BUSY};
 #[cfg(test)]
 use history::history_budget_for;
 pub use history::{History, HistoryEntry, NamedStep, default_history_budget};
-pub(crate) use interaction::PreviewCopies;
+pub(crate) use interaction::{HeldInteraction, PreviewCopies};
 pub use interaction::{Interaction, LastTransform, UndoGroup, UndoScope};
 pub use prefs::{DrawMode, KEY_HOLD_DELAY, KEY_HOLD_DELAY_RANGE, PluginBudget, Prefs};
 pub use sanity::TOO_DEEP;
