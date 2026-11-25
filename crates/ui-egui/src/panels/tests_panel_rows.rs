@@ -60,6 +60,7 @@ fn floated(panel: &str, lang: &str, width: f32, names: &[&str]) -> (egui::Rect, 
         .filter(|(_, n)| n.role() == Role::TabPanel)
         .find_map(|(_, n)| rect(n).filter(|r| (r.left() - AT).abs() < 1.0))
         .unwrap_or_else(|| panic!("{panel} does not float at x {AT}"));
+    assert!(body.width() <= width + 1.0, "{panel}'s body {body:?} is wider than the {width} the float asked for");
     let controls = shown
         .into_iter()
         .map(|name| {
