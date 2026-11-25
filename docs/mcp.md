@@ -2690,14 +2690,15 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `app.activeDocument` with no document open throws `No active document`. `Document.selection` takes one page item,
   a list of at most 10,000, `null` or `[]`, and an object that cannot be selected throws `Cannot select` with
   nothing changed. While View › Guides › Lock Guides is on, a path made into a guide cannot be selected this way or
-  with `selected`. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
+  with `selected`. Assigning a page item's `selected` leaves the direct-selected anchors and segments of the other
+  selected objects selected. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
   letter case is ignored and `\` matches `/`) and does not resolve the path it is given. A document counts only when
   the automation read roots allow its file, and that check can look the document's file up on disk. A path with
   `..`, a network path, a NUL character or more than 4,096 bytes throws an error. Some members the Application,
   Document and PageItem pages list, such as `Document.views`, `PageItem.blendingMode`, `PageItem.rotate` and
   `app.beep`, throw an error that says they are not available yet when they are read or assigned. Other members
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
-  themselves, such as a path's fill, are not defined yet and read as `undefined`.
+  themselves, such as a text frame's `contents`, are not defined yet and read as `undefined`.
 - A document also has `layers`, `activeLayer`, `groupItems`, `compoundPathItems` and `artboards`.
   `layers` (https://ai-scripting.docsforadobe.dev/jsobjref/Layers/) and a layer's own `layers` have `length`, `[i]`,
   `index(key)`, `getByName(name)`, `add()` and `removeAll()`. On the document, `add()` runs `layer.new` and makes a
@@ -2766,6 +2767,68 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   gives up its own paint, and an empty compound path takes the paint the first path that goes in was drawn with. A
   path that `node.move` takes out of a compound path into a layer or a group takes the compound path's paint and pixel
   alignment.
+- `Document.pathItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PathItems/) lists the document's paths in the
+  order of `pageItems`, paths inside groups and compound paths included, with `length`, `[i]`, `index(key)`,
+  `getByName(name)`, `removeAll()`, `add()` (a path with no points, from `path.create`, painted as new art; when new
+  art has no fill and no stroke, the path has neither), and the shape creators
+  `rectangle(top, left, width, height, reversed?)`, `roundedRectangle(top, left, width, height, horizontalRadius = 15,
+  verticalRadius = 20, reversed?)`, `ellipse(top = 100, left = 100, width = 50, height = 100, reversed?, inscribed?)`,
+  `polygon(centerX = 200, centerY = 300, radius = 50, sides = 8, reversed?)` and `star(centerX = 200, centerY = 300,
+  radius = 50, innerRadius = 20, points = 5, reversed?)`, which run `shape.rectangle`, `path.create`,
+  `shape.ellipse`, `shape.polygon` and `shape.star` (and `path.reverse` for `reversed`) and paint the new path as new
+  art is painted. `add()` and the shape creators put the new path on top of the active layer whatever the drawing
+  mode, which stays as it was. A `PathItem` (https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/) adds to the page item
+  members `pathPoints`, `closed`, `evenodd`, `area` (negative for a path that runs counterclockwise), `length`,
+  `guides`, `clipping`, `setEntirePath(points)`, `filled`, `fillColor`, `fillOverprint`, `stroked`, `strokeColor`,
+  `strokeOverprint`, `strokeWidth`, `strokeCap`, `strokeJoin`, `strokeMiterLimit` (1 to 500), `strokeDashes`,
+  `strokeDashOffset`, `translate(deltaX?, deltaY?, ...)`, `rotate(angle, ..., rotateAbout?)` (counterclockwise for a
+  positive angle) and `resize(scaleX, scaleY, ..., changeLineWidths?, scaleAbout?)`. The geometry changes through
+  `path.setAnchors`, the fill and stroke through `paint.setFill` and `paint.setStroke`, the stroke options through
+  `stroke.set`, the fill rule through `path.setFillRule`, overprint through `object.setOverprint` and the transforms
+  through `object.move`, `object.rotate` and `object.scale`. Changes to the points of a path (`closed`,
+  `setEntirePath`, `pathPoints` and each `PathPoint`) are written together with one `path.setAnchors` before the
+  script uses any other member or command, or the points of another path, and when the script ends; a path aligned
+  to the pixel grid, or in an object that is, is written at each change, so its points read as the grid snaps them.
+  `pathPoints`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/PathPoints/) has `length`, `[i]`, `index(i)`, `add()` and
+  `removeAll()`, and each `PathPoint` (https://ai-scripting.docsforadobe.dev/jsobjref/PathPoint/) has `anchor`,
+  `leftDirection` (the handle into the point), `rightDirection` (the handle out of it), `pointType`, `parent` and
+  `remove()`. `new RGBColor()` (0 to 255), `new CMYKColor()` (0 to 100), `new GrayColor()` (0 to 100, 0 black and 100
+  white, as https://ai-scripting.docsforadobe.dev/jsobjref/GrayColor/ gives it), `new LabColor()` and `new NoColor()`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/NoColor/) make plain color objects; assigning a `NoColor` removes
+  the fill or stroke. The enumerations `PointType`, `PathPointSelection`, `StrokeCap`, `StrokeJoin`, `PolarityValues`
+  and `Transformation` hold strings such as `"StrokeCap.ROUNDENDCAP"`.
+  VectorCraft's own rules: a point's index counts across the path's subpaths; `closed` is true when every subpath is
+  closed, and assigning it opens or closes them all; `setEntirePath` takes at most 100,000 points and gives corner
+  points with no handles, keeping the path closed when it was; moving `anchor` leaves its handles where they are, and
+  `pointType` changes only the type; `PathPoints.add()` adds a corner point at the last point, or at `[0, 0]`; a point
+  whose index is past the end of its path throws `Stale path point`, and so does a point read before the script removed
+  a point of its path (`remove()`, `removeAll()`) or replaced its points (`setEntirePath`), or before anything other
+  than the object model changed the path's points (a command run with `vc.run`, such as `path.setAnchors`,
+  `object.move` or `edit.undo`); points stay valid through the object model's other changes to the path or to an
+  object that holds it, such as `translate()`. Color components left out
+  count as 0, `new
+  cmykColor()` makes a `CMYKColor`, `LabColor.l` is 0 to 100 and `a` and `b` are -128 to 128, and a component out of
+  range throws a `RangeError` when the color is assigned, with nothing changed. A component reads with the fewest
+  decimals, at least 4, that give the stored value back, so assigning a color read from a path leaves the path as it
+  was. Reading `fillColor` or `strokeColor` gives a new object each time, a `GradientColor`, `SpotColor` or `PatternColor` among them (a color linked to a
+  global or spot swatch reads as a `SpotColor` with its `tint`); assigning one of those throws an error that says it is not available yet. `filled = true` on a path without a fill gives it the fill new
+  art gets (a color, gradient or pattern), or black when new art has none, and `stroked = true` does the same with the
+  stroke; a new-art gradient goes on the bounds of the path, or of the compound path or compound shape whose paint
+  it shows, and a new-art pattern with a placement of its own, or one missing from the document, throws an error.
+  `fillOverprint` and `strokeOverprint` read and change the top fill or stroke only. Sizes and
+  radii are finite and not negative, `sides` is a whole number from 3 to 1000, `points` one from 2 to 1000,
+  `strokeWidth` 0 to 1000 points (a `changeLineWidths` that would scale it past 1000 throws), `strokeDashes` at most
+  64 lengths that are not all 0 (`[]` or `{}` for a solid line), and `rotateAbout` and `scaleAbout` default to
+  `Transformation.CENTER`. A transform that leaves the path where it is, such as `rotate(360)` or
+  `resize(100, 100)`, checks its arguments and runs no command, on a path with no points too. The transforms take one setting for fill and stroke patterns, so `changeFillPatterns` and
+  `changeStrokePattern` given as different values throw an error, and `changeFillGradients` false and `ellipse` with
+  `inscribed` true throw an error that says they are not available yet. A change to the geometry or paint of a path
+  that is hidden or locked, or that is in a hidden or locked layer or group, throws `Cannot edit` with nothing
+  changed. A path in a compound path or compound shape reads the fill, stroke and overprint of that compound path or
+  shape, which the paint commands paint in its place. A change to a path's paint or stroke leaves the paint for new
+  art, the active Fill or Stroke proxy and Recent Colors as they were. `selectedPathPoints`, `PathPoint.selected`,
+  `transform`, `polarity`, the gradient stops and the document's default paint are not available yet.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global
@@ -8944,7 +9007,7 @@ and goes back to Document Setup, whose OK runs `document.setup`; its Cancel goes
 
 `file.new` takes everything New Document sets: `preset` (a name from `file.newPresets`), `name`, `width`/`height`
 (points, or lengths such as `"210 mm"`), `units`, `orientation`, `artboards` with `artboardLayout {layout, columns,
-rows, spacing, rightToLeft}` (`rows` gives a `gridByColumn` layout that many rows, at most one for each artboard, in place of `columns`, and is
+rows, spacing, rightToLeft}` (`rows`, a whole number from 1 to 1000, gives a `gridByColumn` layout that many rows, at most one for each artboard, in place of `columns`, and is
 an error with another layout; a preset keeps the rows, and `file.newPresets` lists them as set even when there are
 fewer artboards, until `columns` without `rows`, or another layout, is given; New Document's Columns shows the columns
 the rows give the current number of artboards, and New Document drops the rows when Columns or the layout changes),

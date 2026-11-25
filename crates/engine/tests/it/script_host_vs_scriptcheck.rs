@@ -75,8 +75,9 @@ const INSIDE: &[(&str, &str)] = &[
         "",
         "app Application Artboard Artboards CompoundPathItem CompoundPathItems CoordinateSystem Document \
          DocumentArtboardLayout DocumentColorSpace DocumentPreset DocumentPresetType DocumentPreviewMode DocumentRasterResolution \
-         DocumentTransparencyGrid Documents ElementPlacement GroupItem GroupItems Layer Layers PageItem PageItems RulerUnits \
-         ZOrderMethod",
+         DocumentTransparencyGrid Documents ElementPlacement GroupItem GroupItems Layer Layers PageItem PageItems PathItem \
+         PathItems PathPoint PathPointSelection PathPoints PointType PolarityValues RulerUnits StrokeCap StrokeJoin \
+         Transformation ZOrderMethod",
     ),
     ("Application.", "prototype"),
     (
@@ -98,7 +99,7 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "Document.prototype.",
         "activeLayer activeLayer= artboards close close= compoundPathItems constructor convertCoordinate \
-         documentColorSpace groupItems height layers name pageItems parent pathItems pathItems= rulerOrigin rulerOrigin= \
+         documentColorSpace groupItems height layers name pageItems parent pathItems rulerOrigin rulerOrigin= \
          rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= textFrames textFrames= typename \
          views views= width",
     ),
@@ -149,6 +150,25 @@ const INSIDE: &[(&str, &str)] = &[
          transform= translate translate= typename uRL uRL= uuid uuid= visibilityVariable visibilityVariable= visibleBounds \
          width width= wrapInside wrapInside= wrapOffset wrapOffset= wrapped wrapped= zOrder zOrderPosition",
     ),
+    ("PathItems.", "prototype"),
+    ("PathItems.prototype.", "add constructor ellipse getByName index length parent polygon rectangle removeAll roundedRectangle star typename"),
+    ("PathItem.", "prototype"),
+    (
+        "PathItem.prototype.",
+        "area clipping closed closed= constructor evenodd evenodd= fillColor fillColor= fillOverprint fillOverprint= filled \
+         filled= guides length pathPoints polarity polarity= resize resolution resolution= rotate selectedPathPoints \
+         selectedPathPoints= setEntirePath strokeCap strokeCap= strokeColor strokeColor= strokeDashOffset strokeDashOffset= \
+         strokeDashes strokeDashes= strokeJoin strokeJoin= strokeMiterLimit strokeMiterLimit= strokeOverprint strokeOverprint= \
+         strokeWidth strokeWidth= stroked stroked= translate",
+    ),
+    ("PathPoints.", "prototype"),
+    ("PathPoints.prototype.", "add constructor index length parent removeAll typename"),
+    ("PathPoint.", "prototype"),
+    (
+        "PathPoint.prototype.",
+        "anchor anchor= constructor leftDirection leftDirection= parent pointType pointType= remove rightDirection \
+         rightDirection= selected selected= typename",
+    ),
     ("CoordinateSystem.", "ARTBOARDCOORDINATESYSTEM DOCUMENTCOORDINATESYSTEM"),
     ("DocumentArtboardLayout.", "Column GridByCol GridByRow RLGridByCol RLGridByRow RLRow Row"),
     ("DocumentColorSpace.", "CMYK RGB"),
@@ -161,14 +181,21 @@ const INSIDE: &[(&str, &str)] = &[
          TransparencyGridNone TransparencyGridOrange TransparencyGridPurple TransparencyGridRed",
     ),
     ("ElementPlacement.", "INSIDE PLACEAFTER PLACEATBEGINNING PLACEATEND PLACEBEFORE"),
+    ("PathPointSelection.", "ANCHORPOINT LEFTDIRECTION LEFTRIGHTPOINT NOSELECTION RIGHTDIRECTION"),
+    ("PointType.", "CORNER SMOOTH"),
+    ("PolarityValues.", "NEGATIVE POSITIVE"),
     ("RulerUnits.", "Centimeters Inches Millimeters Picas Pixels Points Qs Unknown"),
+    ("StrokeCap.", "BUTTENDCAP PROJECTINGENDCAP ROUNDENDCAP"),
+    ("StrokeJoin.", "BEVELENDJOIN MITERENDJOIN ROUNDENDJOIN"),
+    ("Transformation.", "BOTTOM BOTTOMLEFT BOTTOMRIGHT CENTER DOCUMENTORIGIN LEFT RIGHT TOP TOPLEFT TOPRIGHT"),
     ("ZOrderMethod.", "BRINGFORWARD BRINGTOFRONT SENDBACKWARD SENDTOBACK"),
 ];
 
 /// The classes the host adds with nothing but a prototype and its constructor: the page item types
-/// that have no members of their own.
-const BARE_CLASSES: &str = "BlendItem EnvelopeItem GraphItem IntertwineItem MeshItem PathItem PlacedDocumentItem \
-     PlacedItem RasterItem RepeatItem SymbolItem TextFrame";
+/// that have no members of their own, and the color classes.
+const BARE_CLASSES: &str = "BlendItem CMYKColor EnvelopeItem GradientColor GraphItem GrayColor IntertwineItem LabColor \
+     MeshItem NoColor PatternColor PlacedDocumentItem PlacedItem RGBColor RasterItem RepeatItem SpotColor SymbolItem TextFrame \
+     cmykColor";
 
 /// The name the checker does not read, which also stands for its members: `vc` is VectorCraft's
 /// own API, and what `vc.run` does depends on the command it runs.
