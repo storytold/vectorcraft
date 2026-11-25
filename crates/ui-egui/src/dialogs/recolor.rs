@@ -1807,10 +1807,7 @@ impl RecolorDialog {
         let mut preview = self.fields.bool("preview");
         let footer = ResetFooter::new(ui, None, true);
         let RecolorDialog { fields, feed, filed, ends, row_menu, .. } = self;
-        // PLAN: Enter is not OK here: a form whose OK stays open closes on Enter without reporting it as its OK
-        // (form_dialogs/form.rs:429, :534), which would close a held dialog unanswered; the forms owner makes
-        // `FormDialog` report Enter as the pick of OK when `accept_stays_open` is on.
-        let mut form = FormDialog::new(tl!(TITLE), Bind::bound(fields)).accept_stays_open(true).enter_confirms(false).ok_enabled(!waiting);
+        let mut form = FormDialog::new(tl!(TITLE), Bind::bound(fields)).accept_stays_open(true).ok_enabled(!waiting);
         if art {
             form = form.preview(Some(Bind::bound(&mut preview)));
         }
