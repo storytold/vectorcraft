@@ -347,6 +347,14 @@ pub struct CacheKey {
     /// The paper under the art that translucent art is blended with before the conversion
     /// ([`crate::display_profile::convert_over`]). None without a display profile, and in Outline.
     pub backdrop: Option<std::sync::Arc<crate::display_profile::Backdrop>>,
+    /// The active color settings ([`vectorcraft_color::cms::active_settings`]), the working color
+    /// settings ([`vectorcraft_color::cms::working_settings`]) and the loaded profiles' generation
+    /// ([`vectorcraft_color::cms::profiles_generation`]) the frame's colors were converted with:
+    /// Edit › Color Settings, a profile loaded again under its name or removed, and the front
+    /// document's assigned profiles change them without changing the document. A proof of the
+    /// working CMYK space converts through the working settings, which can change while the active
+    /// settings stay the same.
+    pub color: (vectorcraft_color::cms::ColorSettings, vectorcraft_color::cms::ColorSettings, u64),
 }
 
 impl CacheKey {
