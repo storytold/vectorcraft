@@ -1055,16 +1055,34 @@ fn result(app: &VectorcraftApp, closed: Vec<String>) -> Value {
 }
 
 /// Where a command floats a panel, group or column it gives no rect: inside the dock area as last
-/// drawn, else inside [`HEADLESS_AREA`] at the theme's float size.
+/// drawn, else inside [`HEADLESS_AREA`]. Each Window-menu panel floats at its [`floating_size`],
+/// also one the area never drew; a tool rail floats at the theme's float size.
 fn command_space(app: &VectorcraftApp) -> FloatSpace<String> {
-    if let Some(space) = &app.dock_rt.space {
-        return space.clone();
-    }
-    let sizes = match &app.ui_ctx {
-        Some(ctx) => DockSizes::of(ctx),
-        None => DockSizes::of(&egui::Context::default()),
+    let space = match &app.dock_rt.space {
+        Some(space) => space.clone(),
+        None => {
+            let sizes = match &app.ui_ctx {
+                Some(ctx) => DockSizes::of(ctx),
+                None => DockSizes::of(&egui::Context::default()),
+            };
+            FloatSpace::new(HEADLESS_AREA, &sizes)
+        }
     };
-    FloatSpace::new(HEADLESS_AREA, &sizes)
+    crate::state::all_panels().fold(space, |space, (id, _)| space.with_panel_size(id.to_owned(), floating_size(id)))
+}
+
+/// The size a Window-menu panel opens at when a command floats it.
+pub(crate) fn floating_size(panel: &str) -> egui::Vec2 {
+    match panel {
+        "properties" | "layers" | "libraries" => egui::vec2(300.0, 420.0),
+        // Tall enough to show its Corners and Shared Edges sections, last in it, which the Corner
+        // Tool's and Shared Edge Merge Tool's menu items open.
+        crate::addons::pathtools::ID => egui::vec2(260.0, 660.0),
+        // Tall enough to show every control above its Advanced section, and that section's heading.
+        "imageTrace" => egui::vec2(260.0, 420.0),
+        crate::addons::packaging::preview::ID => egui::vec2(520.0, 440.0),
+        _ => egui::vec2(260.0, 360.0),
+    }
 }
 
 /// The height of `panel`'s window while it floats, else the height [`place_floating`] gives a new one.

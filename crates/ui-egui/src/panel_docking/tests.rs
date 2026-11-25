@@ -905,6 +905,48 @@ fn cycle_options_steps_through_the_sizes_and_returns_to_the_largest() {
     assert!(!crate::panels::part_hidden(&h.app, "tr-hide-thumbs"), "the largest size shows the thumbnails");
 }
 
+/// A panel the Window menu floats opens tall enough for its content: every control of Asset Export,
+/// and every Image Trace control down to the top of its Advanced section, lies between the body's
+/// top and bottom, none scrolled or clipped away.
+#[test]
+fn window_menu_floats_open_tall_enough_for_their_content() {
+    for (panel, title, until) in [("assetExport", "Asset Export", None), ("imageTrace", "Image Trace", Some("Advanced"))] {
+        let mut h = Harness::new();
+        h.app.run("window.panel", json!({"panel": panel})).unwrap();
+        assert!(floating_window(&h.layout(), panel).is_some(), "{panel} floats");
+        h.frames(3);
+        let nodes: HashMap<_, _> = h.nodes.iter().map(|(id, node)| (*id, node)).collect();
+        let rect =
+            |node: &egui::accesskit::Node| node.bounds().map(|b| Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32)));
+        let (body_id, body) = h
+            .nodes
+            .iter()
+            .find(|(_, node)| node.role() == egui::accesskit::Role::TabPanel && node.label() == Some(title))
+            .and_then(|(id, node)| Some((*id, rect(node)?)))
+            .unwrap_or_else(|| panic!("{panel}'s body is drawn"));
+        // Every node drawn under the panel's body; its controls are the ones without children.
+        let mut drawn = Vec::new();
+        let mut stack = vec![body_id];
+        while let Some(id) = stack.pop() {
+            let Some(node) = nodes.get(&id) else { continue };
+            stack.extend(node.children().iter().copied());
+            if let Some(r) = rect(node).filter(|r| r.is_positive()) {
+                drawn.push((node, r));
+            }
+        }
+        let limit = until.map_or(f32::INFINITY, |section| {
+            let found = drawn.iter().find(|(node, _)| node.role() == egui::accesskit::Role::Group && node.label() == Some(section));
+            found.unwrap_or_else(|| panic!("{panel} draws its {section} section")).1.top()
+        });
+        let outside: Vec<_> = drawn
+            .iter()
+            .filter(|(node, r)| node.children().is_empty() && r.top() <= limit && (r.top() < body.top() - 0.5 || r.bottom() > body.bottom() + 0.5))
+            .map(|(node, r)| (node.role(), node.label().map(str::to_owned), *r))
+            .collect();
+        assert!(outside.is_empty(), "{panel}: controls outside its body {body:?}: {outside:?}");
+    }
+}
+
 /// An unknown panel, a panel without display sizes or a missing `panel` is an error, and the
 /// panels keep their sizes.
 #[test]
