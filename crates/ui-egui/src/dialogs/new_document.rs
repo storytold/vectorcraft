@@ -469,6 +469,31 @@ fn advanced(ui: &mut egui::Ui, s: &mut DocSettings) {
     }
 }
 
+/// The columns Columns shows: those a grid by column made with `file.new`'s `rows` gives the
+/// current number of artboards, otherwise the stored count, at least 1 and at most the artboards.
+fn shown_columns(s: &DocSettings) -> u32 {
+    if s.layout == ArtboardLayout::GridByColumn && s.rows > 0 {
+        return u32::try_from(s.grid_columns()).unwrap_or(MAX_ARTBOARDS);
+    }
+    s.columns.max(1).min(s.artboards.max(1))
+}
+
+/// Sets the artboard layout. A new layout replaces the rows of a preset made with `file.new`'s
+/// `rows` with the column count Columns showed for them.
+fn set_layout(s: &mut DocSettings, layout: ArtboardLayout) {
+    if s.rows > 0 {
+        s.columns = shown_columns(s);
+        s.rows = 0;
+    }
+    s.layout = layout;
+}
+
+/// Sets the column count, which replaces the rows of a preset made with `file.new`'s `rows`.
+fn set_columns(s: &mut DocSettings, columns: u32) {
+    s.rows = 0;
+    s.columns = columns;
+}
+
 /// More Settings' pop-up: the artboard layout, spacing and columns. All three are off with one
 /// artboard, Columns also for the row and column layouts; columns stay within the artboards.
 fn more_settings(ui: &mut egui::Ui, s: &mut DocSettings, lengths: LengthUnits) {
@@ -479,7 +504,7 @@ fn more_settings(ui: &mut egui::Ui, s: &mut DocSettings, lengths: LengthUnits) {
     Field::new(layout.clone()).show(ui, |ui, _| {
         let entries: Vec<Entry<ArtboardLayout>> = ArtboardLayout::ALL.iter().map(|l| Entry::new(*l, text(tl!(l.label())))).collect();
         if let Some(l) = Segmented::new(layout.clone(), Bind::given(s.layout), &entries).enabled(several).show(ui).value().copied() {
-            s.layout = l;
+            set_layout(s, l);
         }
     });
     let rtl = Checkbox::new(Bind::given(s.right_to_left)).label(right_to_left).enabled(several).show(ui);
@@ -494,10 +519,10 @@ fn more_settings(ui: &mut egui::Ui, s: &mut DocSettings, lengths: LengthUnits) {
     });
     Field::new(columns.clone()).show(ui, |ui, _| {
         let n = f64::from(s.artboards.max(1));
-        let shown = f64::from(s.columns.max(1)).min(n);
+        let shown = f64::from(shown_columns(s));
         let field = NumberField::new(columns.clone(), Bind::given(Some(shown))).range(1.0..=n).step(1.0).commit_decimals(0).enabled(several && grid);
         if let Some(v) = field.show(ui).value().copied().flatten().filter(|v| v.is_finite()) {
-            s.columns = v.round().clamp(1.0, n) as u32;
+            set_columns(s, v.round().clamp(1.0, n) as u32);
         }
     });
 }
@@ -1004,5 +1029,27 @@ mod tests {
         assert!(!profile_action(&mut app, "profile.reset:Print"), "Reset leaves the dialog open");
         assert!(!dir.join("Print.vectorcraft").exists());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A preset made with `file.new`'s `rows`: Columns shows the columns those rows give the
+    /// current artboards, and a new layout keeps them while a new column count replaces the rows.
+    #[test]
+    fn columns_follow_a_presets_rows_until_the_layout_or_columns_change() {
+        let made = |layout, artboards| DocSettings { layout, artboards, columns: 2, rows: 4, ..DocSettings::default() };
+        for (artboards, shown) in [(5, 2), (9, 3), (2, 1)] {
+            assert_eq!(shown_columns(&made(ArtboardLayout::GridByColumn, artboards)), shown, "{artboards} artboards");
+        }
+        assert_eq!(shown_columns(&made(ArtboardLayout::GridByRow, 9)), 2, "a grid by row shows the stored columns");
+        for to in [ArtboardLayout::GridByRow, ArtboardLayout::Row, ArtboardLayout::Column] {
+            let mut s = made(ArtboardLayout::GridByColumn, 9);
+            set_layout(&mut s, to);
+            assert_eq!((s.layout, s.columns, s.rows), (to, 3, 0), "{to:?}");
+        }
+        let mut s = made(ArtboardLayout::GridByRow, 9);
+        set_layout(&mut s, ArtboardLayout::GridByColumn);
+        assert_eq!((s.columns, s.rows, shown_columns(&s)), (2, 0, 2), "the columns a grid by row showed stay");
+        let mut s = made(ArtboardLayout::GridByColumn, 9);
+        set_columns(&mut s, 5);
+        assert_eq!((s.columns, s.rows, shown_columns(&s)), (5, 0, 5));
     }
 }
