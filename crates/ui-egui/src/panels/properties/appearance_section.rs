@@ -5,7 +5,7 @@ use craft::behavior::IconId;
 use craft::keymap::CommandRef;
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _, Sizing, Trigger, clicked};
+use craft::ui::contract::{Bind, LabelScheme, Props as _, Show as _, ShowContainer as _, Sizing, Trigger, clicked};
 use craft::ui::display::{Elide, Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
@@ -41,7 +41,7 @@ fn panel_button<'a>(icon: &'static str, panel: &str, label: &'static str) -> Ico
 
 /// The Opacity field, and the icon that shows the Transparency panel.
 fn opacity_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node) {
-    Row::new().show(ui, |ui, _| {
+    Row::new().labels(LabelScheme::Inspector).show(ui, |ui, _| {
         let shown = Some(n.opacity as f64 * 100.0);
         let out = Field::new(tl!("Opacity"))
             .sizing(Sizing::Content)
@@ -118,7 +118,7 @@ pub(super) fn fill_stroke_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
         panels::paint_chip(app, ui, false);
         Text::new(tl!("Fill")).show(ui);
     });
-    Row::new().show(ui, |ui, _| {
+    Row::new().labels(LabelScheme::Inspector).show(ui, |ui, _| {
         panels::paint_chip(app, ui, true);
         stroke::link_field(app, ui, tl!("Stroke"), weight);
     });

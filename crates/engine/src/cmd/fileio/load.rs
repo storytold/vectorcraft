@@ -849,6 +849,13 @@ impl ReadFile {
         r
     }
 
+    /// Is part of the read still to do ([`Self::finish_read`]): the policies and the color mode of a
+    /// file that stopped for its profile question, or the linked files and the type of an answered
+    /// one?
+    pub fn read_left(&self) -> bool {
+        self.rest.is_some() || self.links_left.is_some()
+    }
+
     /// The rest of [`read_for_open_asking`], once: the color management policies with the profile
     /// answer (or as the policy says without one), the color mode `colorMode` asks for, the linked
     /// files and the type. The app runs it off the UI thread once the question is answered.

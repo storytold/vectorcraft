@@ -47,7 +47,7 @@ fn revisions(seen: &Seen) -> Vec<u64> {
 }
 
 fn marks(app: &VectorcraftApp) -> Anchors {
-    anchors(app, app.session.active().unwrap(), false)
+    anchors(app, app.session.active().unwrap(), app.session.tool_id(), false)
 }
 
 fn all_selected(selection: &PathSelection) -> usize {
@@ -290,12 +290,12 @@ fn point_type_hover_shows_baseline_only_and_selection_shows_both_box_and_baselin
     app.select_tool("selection");
     let over = Point::new(220.0, 140.0);
     let st = app.session.active().unwrap();
-    let hovered = hover(&app, st, over, 1.0, true).expect("the type under the pointer is outlined");
+    let hovered = hover(&app, st, app.session.tool_id(), over, 1.0, true).expect("the type under the pointer is outlined");
     let line = hovered.path.bounding_box();
     assert!((line.y0 - 150.0).abs() < 0.5 && line.height() < 0.5, "the baseline only, not the box: {line:?}");
     app.run("select.set", json!({"ids": [id.0]})).unwrap();
     let st = app.session.active().unwrap();
-    assert!(hover(&app, st, over, 1.0, true).is_none(), "a selected object has no hover outline");
+    assert!(hover(&app, st, app.session.tool_id(), over, 1.0, true).is_none(), "a selected object has no hover outline");
     assert_eq!(outlines(&app, st)[0].paths.len(), 1, "the selection outlines the baseline; the box is the bounding box's");
 }
 
@@ -308,7 +308,7 @@ fn hover_scene() -> VectorcraftApp {
 }
 
 fn hovered(app: &VectorcraftApp, still: bool) -> bool {
-    hover(app, app.session.active().unwrap(), Point::new(150.0, 150.0), 1.0, still).is_some()
+    hover(app, app.session.active().unwrap(), app.session.tool_id(), Point::new(150.0, 150.0), 1.0, still).is_some()
 }
 
 #[test]
@@ -340,7 +340,7 @@ fn a_group_of_too_many_paths_has_no_hover_outline_and_a_key_outline_of_its_bound
     app.run("select.none", json!({})).unwrap();
     app.select_tool("selection");
     let st = app.session.active().unwrap();
-    assert!(hover(&app, st, Point::new(20.0, 20.0), 1.0, true).is_none(), "no hover outline for what is too big");
+    assert!(hover(&app, st, app.session.tool_id(), Point::new(20.0, 20.0), 1.0, true).is_none(), "no hover outline for what is too big");
     // A key object stays while another selected object lies outside it.
     let other = id_of(&app.run("shape.rectangle", json!({"x": 300, "y": 20, "width": 20, "height": 20})).unwrap());
     app.run("select.set", json!({"ids": [huge.0, other.0]})).unwrap();
@@ -356,9 +356,9 @@ fn curvature_marks_existing_paths_as_circles_and_leaves_a_drafts_points_to_the_t
     app.run("select.set", json!({"ids": [curve.0]})).unwrap();
     app.select_tool("curvature");
     let st = app.session.active().unwrap();
-    let existing = anchors(&app, st, false);
+    let existing = anchors(&app, st, app.session.tool_id(), false);
     assert_eq!((existing.shown, existing.paths.len()), (AnchorsShown::Curvature, 1), "one circle per point of the existing path");
-    assert!(anchors(&app, st, true).paths.is_empty(), "while the tool draws its own points, none are drawn twice");
+    assert!(anchors(&app, st, app.session.tool_id(), true).paths.is_empty(), "while the tool draws its own points, none are drawn twice");
     app.select_tool("directSelection");
     assert_eq!(marks(&app).shown, AnchorsShown::All);
     assert!(!marks(&app).paths.is_empty(), "other tools keep their anchors whatever `tool_points` says");

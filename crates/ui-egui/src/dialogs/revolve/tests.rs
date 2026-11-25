@@ -158,6 +158,35 @@ fn map_art_maps_a_symbol_onto_a_surface_of_extrude_and_bevel_classic() {
     assert!(params.get("__mapArt").is_none() && params.get("__mapSurface").is_none(), "the dialog's own state stays out of the effect");
 }
 
+/// The theme's plot size, as a pass of the app's interface resolves it.
+fn plot_size() -> egui::Vec2 {
+    let mut plot = None;
+    crate::testing::ui_context()
+        .run_ui(Default::default(), |ui| {
+            let size = craft::ui::runtime::env::Env::of(ui).tokens.size.plot;
+            plot = Some(vec2(size.width, size.height));
+        })
+        .textures_delta
+        .clear();
+    plot.expect("the pass ran")
+}
+
+#[test]
+fn map_art_surface_preview_takes_the_themes_plot_size() {
+    let mut h = opened(with_symbol("M50 50L150 50L150 150L50 150Z"), json!({"effect":CLASSIC_EXTRUDE,"item":null}));
+    h.set("__page", json!("mapArt"));
+    let plot = plot_size();
+    let tree = h.fixture.tree();
+    let surface = h
+        .fixture
+        .by_role(craft::ui::contract::Role::CANVAS)
+        .into_iter()
+        .find(|t| tree.name_of(t.node) == Some("Surface"))
+        .expect("Map Art shows the surface canvas");
+    assert_eq!(surface.rect.height(), plot.y, "the preview is as tall as the theme's plot: {:?}", surface.rect);
+    assert!(surface.rect.width() >= plot.x, "the preview is at least as wide as the theme's plot: {:?}", surface.rect);
+}
+
 #[test]
 fn map_art_maps_no_more_surfaces_than_an_object_takes() {
     let max = vectorcraft_effects::MAX_MAPS;

@@ -223,6 +223,59 @@ impl PrintService for UprightQueue {
     }
 }
 
+/// The printers whose settings the setup service was asked to open.
+type Setups = Rc<RefCell<Vec<Option<String>>>>;
+
+/// A print service that opens printer settings, recording each printer it was asked for.
+struct SetupPrint(Jobs, Setups);
+
+impl PrintService for SetupPrint {
+    fn printers(&mut self) -> Vec<Printer> {
+        MockPrint(self.0.clone()).printers()
+    }
+
+    fn print(&mut self, job: &PrintJob) -> Result<String, String> {
+        MockPrint(self.0.clone()).print(job)
+    }
+
+    fn has_setup(&self) -> bool {
+        true
+    }
+
+    fn setup(&mut self, printer: Option<&str>) -> Result<(), String> {
+        self.1.borrow_mut().push(printer.map(str::to_string));
+        Ok(())
+    }
+}
+
+#[test]
+fn setup_opens_the_settings_of_the_printer_chosen() {
+    let setups = Setups::default();
+    let services = Services { print: Some(Box::new(SetupPrint(Jobs::default(), setups.clone()))), ..Default::default() };
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
+    app.run("file.new", json!({"width": 120, "height": 90})).unwrap();
+    app.run("file.print", json!({})).unwrap();
+    pump(&mut app);
+    press(&mut app, "Setup…");
+    set(&mut app, "printer", json!("Office"));
+    press(&mut app, "Setup…");
+    assert_eq!(*setups.borrow(), [Some("Proofer".to_string()), Some("Office".to_string())], "the default printer, then the one chosen");
+    // PDF File has no printer settings.
+    set(&mut app, "printer", json!("PDF File"));
+    // The frame after the change draws the row with PDF File's controls.
+    pump(&mut app);
+    pump(&mut app);
+    let r = call_raw(&mut app, "ui.click", json!({"control": {"name": "Setup…"}}));
+    assert_eq!(r["ok"], false, "{r}");
+    assert_eq!(setups.borrow().len(), 2);
+    // A service without printer settings shows no Setup….
+    let (mut app, _) = self::app();
+    app.run("file.print", json!({})).unwrap();
+    pump(&mut app);
+    let r = call_raw(&mut app, "ui.click", json!({"control": {"name": "Setup…"}}));
+    assert_eq!(r["ok"], false, "{r}");
+}
+
 #[test]
 fn a_landscape_job_goes_upright_to_a_queue_that_does_not_turn_it() {
     let sizes = |pdf: &[u8]| vectorcraft_pdf::info(pdf, None).unwrap().pages.iter().map(|p| (p.width, p.height)).collect::<Vec<_>>();

@@ -251,10 +251,9 @@ fn grid_path(key: u64, points: impl Iterator<Item = Point>, color: Color32) -> E
 /// The anchors and handles of the selection. An object selected whole has every anchor selected, and so do the
 /// paths inside a group, compound path or clip group selected whole; with Direct Selection's partial selection only
 /// the chosen anchors are, and a selected segment hollows the others. `tool_points` is whether the tool draws its own
-/// points (the Curvature tool while it draws), which leaves nothing here. Nothing too big to outline, and nothing
-/// during Halftone Preview.
-pub(super) fn anchors(app: &VectorcraftApp, st: &DocState, tool_points: bool) -> Anchors {
-    let tool = app.session.tool_id();
+/// points (the Curvature tool while it draws), which leaves nothing here. `tool` is the tool whose marks show
+/// ([`super::shown_tool`]). Nothing too big to outline, and nothing during Halftone Preview.
+pub(super) fn anchors(app: &VectorcraftApp, st: &DocState, tool: &str, tool_points: bool) -> Anchors {
     let curvature = tool == "curvature";
     let prefs = &app.session.prefs;
     let mut out = Anchors {
@@ -326,13 +325,13 @@ pub(super) fn anchors(app: &VectorcraftApp, st: &DocState, tool_points: bool) ->
 /// The outline of the object under the pointer at document point `at`, at view `zoom`, for Smart Guides › Object
 /// Highlighting: the object a click of the selection tools would pick, unless it is selected or has too many points.
 /// None while the view moves (`still` false), under Snap to Grid or Pixel Preview, with a tool that is busy or is not
-/// a selection tool, and with the preference off.
-pub(super) fn hover(app: &VectorcraftApp, st: &DocState, at: Point, zoom: f64, still: bool) -> Option<Hovered> {
+/// a selection tool, and with the preference off. `tool` is the tool whose marks show ([`super::shown_tool`]): while
+/// Cmd is held, the selection tool a press borrows.
+pub(super) fn hover(app: &VectorcraftApp, st: &DocState, tool: &str, at: Point, zoom: f64, still: bool) -> Option<Hovered> {
     let (view, prefs) = (&app.ui.view, &app.session.prefs);
     if !still || !view.smart_guides || !prefs.object_highlighting || view.snap_to_grid || view.pixel_preview {
         return None;
     }
-    let tool = app.session.tool_id();
     if app.session.tool_busy() || !matches!(tool, "selection" | "directSelection" | "groupSelection") {
         return None;
     }
@@ -467,10 +466,12 @@ pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &CanvasSp
         }
         wait.is_none()
     };
+    // While Cmd is held, the marks of the selection tool a press borrows.
+    let tool = super::shown_tool(app, ui.ctx());
     let Some(st) = app.session.active() else { return };
     let hovered = match (kind, app.hover_doc) {
         (BodyKind::Pane, _) | (_, None) => None,
-        (_, Some(at)) => hover(app, st, at, space.view.zoom, still),
+        (_, Some(at)) => hover(app, st, tool, at, space.view.zoom, still),
     };
     if let Some(h) = hovered {
         HoverOutline::new("Object highlight", Some(HoverShape::Path(h.path))).color(DataColor::new(h.color)).show_at(ui, rect);
@@ -482,7 +483,7 @@ pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &CanvasSp
         }
         outline.show_at(ui, rect);
     }
-    let marks = anchors(app, st, tool_points);
+    let marks = anchors(app, st, tool, tool_points);
     if !marks.paths.is_empty() {
         let mut paths = marks.paths;
         // The marks only show the selection: the tools make the edits.

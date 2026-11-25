@@ -991,11 +991,13 @@ fn is_tool(def: &CommandDef) -> bool {
     matches!(def.kind, CommandKind::Tool { .. })
 }
 
-/// The app's rule for the keys a command takes: a tool's shortcut is one key, alone or with Shift.
+/// The app's rule for the keys a command takes: a tool's shortcut is one key, alone or with Shift,
+/// or the tool's own default (the Quick Pen's Alt+P).
 fn accept(def: &CommandDef, binding: &Binding) -> Result<(), String> {
     let t = binding.trigger;
     let one_key = matches!(t.press, PressKind::Single) && !(t.chord.mods.cmd || t.chord.mods.ctrl || t.chord.mods.alt);
-    if is_tool(def) && !t.is_hold() && !one_key {
+    let own_default = def.defaults.iter().any(|d| d.trigger == t);
+    if is_tool(def) && !t.is_hold() && !one_key && !own_default {
         Err(tl!("tool shortcuts must be a single key (optionally with Shift)").to_string())
     } else {
         Ok(())
@@ -1683,6 +1685,22 @@ mod tests {
         for text in ["K", "Shift+K"] {
             assert!(accepts(&pen, text), "{text}");
         }
+    }
+
+    /// A tool whose default has a modifier takes that default back after it was cleared; other
+    /// modifier shortcuts for it, and its default for another tool, are still refused.
+    #[test]
+    fn a_tool_takes_back_its_own_default_with_alt() {
+        let (mut app, _ctx) = app();
+        app.run("shortcuts.set", json!({"id": "tool:quickPen", "shortcut": ""})).unwrap();
+        assert_eq!(row(&mut app, "tool:quickPen").unwrap()["shortcut"], Value::Null);
+        app.run("shortcuts.set", json!({"id": "tool:quickPen", "shortcut": "Alt+P"})).unwrap();
+        assert_eq!(row(&mut app, "tool:quickPen").unwrap()["shortcut"], spelled("Alt+P"));
+        for text in ["Alt+Q", "Cmd+P"] {
+            assert!(app.run("shortcuts.set", json!({"id": "tool:quickPen", "shortcut": text})).is_err(), "{text}");
+        }
+        assert!(app.run("shortcuts.set", json!({"id": "tool:pen", "shortcut": "Alt+P", "force": true})).is_err());
+        assert_eq!(row(&mut app, "tool:quickPen").unwrap()["shortcut"], spelled("Alt+P"));
     }
 
     /// `shortcuts.export` writes the set in use as craft-keymap JSON, which `shortcuts.import`
