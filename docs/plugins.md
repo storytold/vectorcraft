@@ -89,14 +89,15 @@ replaced by a module without it.
 
 - **Menus.** A plug-in with commands is a submenu of **Object › Plug-ins** (a live effect: **Effect › Plug-ins**)
   named after the plug-in. The submenu holds the plug-in's own item, then its commands. A command with parameters has
-  an ellipsis and opens a dialog for them, with a live preview, as a filter's own item does. A manifest cannot put a
-  command in another menu: a `menu` key in a command is ignored.
-- **Keyboard Shortcuts.** Edit › Keyboard Shortcuts lists each command under its submenu, and the user can give it a
+  an ellipsis and opens a dialog for them, with a live preview, as a filter's own item does. A command whose manifest
+  gives a `menu` is listed in that menu instead ([below](#placing-a-command-in-another-menu)).
+- **Keyboard Shortcuts.** Edit › Keyboard Shortcuts lists each command under its menu, and the user can give it a
   shortcut. A manifest cannot give a command a shortcut.
 - **Actions and agents.** A command run is recorded in an action like any other command and plays back with its
   parameters. `run`, MCP and `command.batch` call it as `plugin.<id>.<command>` with `{"ids"?: [...], "params"?: {…}}`
   (its parameters may also be top-level keys). MCP's `command_list` and `list_commands` list it, and `plugin.list`
-  lists a plug-in's commands as `commands: [{id, command, label, params, paramsSchema}]`.
+  lists a plug-in's commands as `commands: [{id, command, label, params, paramsSchema, menu?}]`, with `menu` for a
+  command whose manifest places it in another menu.
 - **Runs.** The parameters are checked against the command's declarations before the plug-in runs. The plug-in runs
   through `vc_run` on the selection (or `ids`) as a filter run does, with `_context.mode` `"command"` and
   `_context.command` set to the command's id ([Parameters](#parameters)), under the plug-in's
@@ -105,6 +106,40 @@ replaced by a module without it.
   is one undo step named after the command, and a run that changes nothing records none. A run that traps, runs out of its instruction budget or fails leaves the
   document and the undo history as they were, and the error starts with the plug-in's name and the command's label
   (`“Cmd Test” › Grow: …`).
+
+#### Placing a command in another menu
+
+At `api` 2 a command may name the menu it is listed in with `menu`: `{"path": [menu, …], "after"?: item}`. For
+example, `"menu": {"path": ["Select"], "after": "Inverse"}` lists the command in the Select menu right after
+Inverse.
+
+- `path` is one of these menus, by their English labels: `["Edit"]`, `["Edit", "Edit Colors"]`, `["Object"]`,
+  `["Object", "Transform"]`, `["Object", "Arrange"]`, `["Object", "Path"]`, `["Object", "Compound Path"]`,
+  `["Object", "Clipping Mask"]`, `["Type"]`, `["Select"]`, `["Select", "Same"]`, `["Select", "Object"]`, `["Effect"]`
+  and `["View"]`. The File, Window and Help menus, the application menu, Edit › Preferences and the submenus that list
+  files, fonts, panels or plug-ins cannot be named. Any other `path`, a `menu` that is not an object or is given twice,
+  a key other than `path` and `after`, and an `after` that is not 1–64 printable characters are refused when the
+  module is installed, and the error names the command.
+- `after` is the English label of a built-in item or submenu of that menu, with or without its closing ellipsis
+  (`"Inverse"`). The command is listed right after it. An item that switches between two labels is matched by either
+  of them (`"Show Edges"` and `"Hide Edges"`, `"Start Global Edit"` and `"Stop Global Edit"`). Without `after`, or when no
+  built-in item of the menu has that label, the command is listed at the end of the menu, and the module still
+  installs. Items of plug-ins are never matched.
+- The item's label is the command's label followed by the plug-in's name in parentheses (`Low Area Closed Paths
+  (Tidy)`). Keyboard Shortcuts, the command palette and `command_list` list the command under that menu with that
+  label.
+- A command stays in its plug-in's submenu, under its own label, when its label with the plug-in's name has the same
+  letters and digits, ignoring case, as a built-in item or submenu of that menu (`Paste (in Place)` and Edit › Paste
+  in Place, `Hide (Edges)` and View › Hide Edges; either label of one that switches between two), or as a command that
+  a plug-in with a lower id, or an earlier command of the same plug-in, places in that menu. The desktop app and
+  `vectorcraft-cli` give the same result. `plugin.list` then gives the command's `menu` with
+  `"placed": false`.
+- Commands of several plug-ins placed at the same spot are listed in plug-in id order, then in manifest order. A
+  plug-in whose commands all name another menu is listed in Object › Plug-ins (or Effect › Plug-ins) as a single item,
+  without a submenu. Commands without `menu` stay in the plug-in's submenu.
+- A placed command leaves the menus when its plug-in is removed or replaced by a module without the command. Turning
+  the plug-in off (`plugin.setEnabled`) removes it at the next launch.
+- At `api` 1 a `menu` key, repeated or not, is ignored and the command stays in the plug-in's submenu.
 
 **Preference folder.** Edit › Preferences › Plug-ins & Scratch Disks › *Additional Plug-ins Folder*: when set, every
 `*.wasm` in that folder (not recursive) is installed at startup and whenever the preference changes (desktop builds;
@@ -587,10 +622,12 @@ the module's start function, in a run that isn't a filter's run on a document, o
   list (`svg`): `document.export` then writes the exporter's format only when asked for by its format id, and
   `document.open` reads a file with the importer only when `importer` names it.
 - `commands` (filters and live effects; not heavy filters): up to 32 commands of the plug-in's own
-  ([Commands](#commands)), each `{"id": "grow", "label": "Grow", "params"?: {…}}`. An `id` is 1–32 characters from
-  `a-z 0-9 _` that starts with a letter, and appears once. A `label` is 1–64 printable characters; menus show it with
-  control and bidirectional characters escaped. `params` are declared as the plug-in's own `params` are. A malformed
-  entry is refused when the module is installed, and the error names the command by its id (or its place, `[0]`).
+  ([Commands](#commands)), each `{"id": "grow", "label": "Grow", "params"?: {…}, "menu"?: {…}}`. An `id` is 1–32
+  characters from `a-z 0-9 _` that starts with a letter, and appears once. A `label` is 1–64 printable characters;
+  menus show it with control and bidirectional characters escaped. `params` are declared as the plug-in's own `params`
+  are. `menu` (`api` 2 and later; ignored at `api` 1) places the command in [another menu](#placing-a-command-in-another-menu).
+  A malformed entry is refused when the module is installed, and the error names the command by its id (or its place,
+  `[0]`).
 - `commandAllowlist` (filters at `api` 2 with the usual budget, and only with the `commands` permission, which needs
   it): the ids of the commands the filter may [call](#command-calls), at most 256, each once (`"commandAllowlist":
   ["select.all", "object.move"]`). An id is 1–128 characters from `A-Z a-z 0-9 . _ -` that starts with a letter, with

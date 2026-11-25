@@ -138,6 +138,34 @@ fn a_release_ends_the_image_trace_hold_without_the_panel() {
     frame(&mut app, &ctx, vec![press(false)]);
 }
 
+/// The canvas decides which tool's marks and widgets to show for the pointer where it is in the same frame: over the
+/// selected blend a Cmd press selects behind, so the Selection tool's stay; moved away in the next frame, where Cmd
+/// lends Direct Selection, they are Direct Selection's in that frame.
+#[test]
+fn the_shown_tool_follows_the_pointer_in_the_frame_it_moves() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+    // Behind the blend, an object to select behind.
+    app.session.execute("shape.rectangle", &json!({"x": 20, "y": 120, "width": 360, "height": 160})).unwrap();
+    let a = id(app.session.execute("shape.rectangle", &json!({"x": 60, "y": 160, "width": 80, "height": 80})).unwrap());
+    let b = id(app.session.execute("shape.rectangle", &json!({"x": 260, "y": 160, "width": 80, "height": 80})).unwrap());
+    app.session.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    let blend = id(app.session.execute("object.blend.make", &json!({})).unwrap());
+    app.select_tool("selection");
+    app.session.execute("select.set", &json!({"ids": [blend]})).unwrap();
+    let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![]);
+    let xf = app.canvas_view().unwrap();
+    let cmd_frame = |app: &mut VectorcraftApp, at: Point| {
+        frame(app, &ctx, vec![egui::Event::ModifiersChanged(egui::Modifiers::COMMAND), egui::Event::PointerMoved(xf.to_screen(at))]);
+        app.session.hover_tool_id(&Mods { cmd: true, ..Default::default() })
+    };
+    // Inside the first key object, away from its anchors and the spine.
+    assert_eq!(cmd_frame(&mut app, Point::new(80.0, 175.0)), "selection", "over the selected blend, the press selects behind");
+    assert_eq!(cmd_frame(&mut app, Point::new(200.0, 380.0)), "directSelection", "away from it, in the same frame");
+}
+
 /// A click with the Selection tool inside an artboard makes it the active one, and Paste in
 /// Place then pastes onto it, where the objects were on their own artboard (#693).
 #[test]
@@ -520,7 +548,8 @@ fn halftone_preview_hides_dot_outlines_and_keeps_selection_bounds() {
     app.ui_ctx = Some(ctx.clone());
     // Whether the selection shows its objects' outlines; the box around it shows throughout.
     let outlined = |app: &mut VectorcraftApp| {
-        assert!(super::widgets::bounding_box(app, egui::Modifiers::NONE).is_some(), "the selection box is still drawn");
+        let tool = app.session.tool_id();
+        assert!(super::widgets::bounding_box(app, tool).is_some(), "the selection box is still drawn");
         let app = &*app;
         let st = app.session.active().unwrap();
         !super::selection::outlines(app, st).is_empty()
@@ -4235,9 +4264,9 @@ fn task_bar_actions(app: &mut VectorcraftApp) -> Vec<&'static str> {
 }
 
 /// The Artboard tool's Contextual Task Bar buttons act on its selected artboards: Resize opens
-/// Artboard Options for the active one, Rearrange All opens Rearrange All Artboards, Export opens
-/// Export for Screens with the selected artboards checked, and Duplicate copies each selected
-/// artboard in one undo step and selects the copies.
+/// Artboard Options for the active one, Rearrange opens Rearrange for the selected artboards,
+/// Export opens Export for Screens with the selected artboards checked, and Duplicate copies each
+/// selected artboard in one undo step and selects the copies.
 #[test]
 fn the_artboard_tools_task_bar_buttons_act_on_the_selected_artboards() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -4253,8 +4282,8 @@ fn the_artboard_tools_task_bar_buttons_act_on_the_selected_artboards() {
     }
     click(&mut app, "Resize");
     assert_eq!(fields_then_cancel::<crate::dialogs::artboard_options::ArtboardOptionsDialog>(&mut app)["index"], json!(2), "Artboard Options");
-    click(&mut app, "Rearrange All");
-    fields_then_cancel::<crate::dialogs::rearrange_artboards::RearrangeArtboardsDialog>(&mut app);
+    click(&mut app, "Rearrange");
+    assert_eq!(fields_then_cancel::<crate::dialogs::rearrange_artboards::RearrangeArtboardsDialog>(&mut app)["indices"], json!([0, 2]), "Rearrange");
     click(&mut app, "Export");
     assert_eq!(fields_then_cancel::<crate::dialogs::ExportForScreensDialog>(&mut app)["boards"], json!([true, false, true]), "Export for Screens");
 

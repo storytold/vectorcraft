@@ -4,9 +4,9 @@ use vectorcraft_engine::Session;
 use vectorcraft_tools::addons::parametric_shape::ShapeKind;
 
 use super::{ID, KIND, readout};
-use crate::VectorcraftApp;
 use crate::addons::dialogs::tests as host;
 use crate::tests::panel_harness::Panel;
+use crate::{VectorcraftApp, menus};
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -318,4 +318,42 @@ fn a_bare_number_in_a_panels_picas_field_follows_numbers_without_units_are_point
     let (points, picas) = (radius_typed(true), radius_typed(false));
     assert!((points - 12.0).abs() < 1e-6, "on: {points} pt");
     assert!((picas - 144.0).abs() < 1e-6, "off: {picas} pt");
+}
+
+#[test]
+fn add_inscribed_circle_draws_its_circles_without_a_dialog() {
+    let mut app = app_with_window();
+    let find = |app: &VectorcraftApp| {
+        let entries = menus::menu_entries(app);
+        entries
+            .into_iter()
+            .find(|e| e.path == ["Object", "Plug-ins", "Path Precision Tools"] && e.label == "Add Inscribed Circle")
+            .expect("Add Inscribed Circle")
+    };
+    let item = find(&app);
+    assert_eq!((item.command.as_deref(), &item.params), (Some(super::INSCRIBED_CIRCLE), &json!({})));
+    assert!(!item.enabled, "with nothing selected");
+    let a = app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 30, "height": 40})).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 100, "y": 20, "width": 20, "height": 40})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let (steps, nodes) = (app.session.doc().unwrap().history.undo.len(), app.session.doc().unwrap().doc.node_count());
+    let item = find(&app);
+    assert!(item.enabled);
+    let (cmd, p) = menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
+    menus::invoke(&mut app, &cmd, p);
+    assert!(held(&app, |d| d.is_none()), "no dialog opens");
+    let st = app.session.doc().unwrap();
+    assert_eq!((st.history.undo.len(), st.doc.node_count()), (steps + 1, nodes + 2), "a circle in each rectangle, one undo step");
+    let made = &st.selection.objects;
+    assert_eq!(made.len(), 2, "the two circles are selected: {made:?}");
+    for (id, inside) in made.iter().zip([[10.0, 20.0, 40.0, 60.0], [100.0, 20.0, 120.0, 60.0]]) {
+        assert!(id.0 != a && id.0 != b, "{id:?} is a new object");
+        let live = match &st.doc.node(*id).unwrap().kind {
+            vectorcraft_doc::NodeKind::Path { live, .. } => live.as_deref(),
+            _ => None,
+        };
+        assert!(matches!(live, Some(vectorcraft_doc::LiveShape::Ellipse { w, h, .. }) if w == h), "{id:?} is a live circle");
+        let r = st.doc.bounds_of(&[*id], false).unwrap();
+        assert!(r.x0 >= inside[0] && r.y0 >= inside[1] && r.x1 <= inside[2] && r.y1 <= inside[3], "{r:?} inside {inside:?}");
+    }
 }
