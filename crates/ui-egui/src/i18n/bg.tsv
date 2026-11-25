@@ -194,6 +194,7 @@
 	Anti-alias Rasters	Заглаждане на растери
 	Anti-aliased Artwork	Загладено произведение
 	Anti-aliasing Method	Метод на заглаждане
+@id	language.name	Български
 antiAlias	Sharp	Остро
 	Crisp	Четко
 	Strong	Силно
@@ -489,7 +490,6 @@ font-technology	Variable	Променливи
 	Circle	Кръг
 	Circle Tool	Инструмент Кръг
 	Circle too large	Кръгът е твърде голям
-	From Center	От центъра
 	Show Radii	Показване на радиуси
 	Show Diameter	Показване на диаметър
 	Anchors at Standard Positions	Опорни точки в стандартни позиции
