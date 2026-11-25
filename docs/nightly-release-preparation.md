@@ -133,3 +133,13 @@ enabled, so no `app.ron` is written anywhere); if it is ever turned on, its stat
 `apps/vectorcraft/src/profile_root.rs` fences it off stable's folders, a portable copy and the
 installation on every platform, and `apps/vectorcraft/src/profile.rs` (`install_data_root`) is the
 one hook every data path follows.
+
+## Activation prerequisite: the Sonar issue scope
+
+The pinned candidate validator requires every entry in `candidate_policy.sonar.issue_types` to map
+from a reviewed `accepted_conditions` row, and it requires the gate condition set to equal
+`accepted_conditions` plus `required_conditions`. The installed policy lists `VULNERABILITY` with no
+accepted condition, so it fails that contract before SonarCloud is read. Correct the policy in this
+app's activation review with Skylar, together with the live gate conditions, before the first run:
+the callers cannot run before that review anyway, because their `producer_workflow_id` stays null
+until `nightly.yml` is registered on `main` and the signer is promoted to `release`.
