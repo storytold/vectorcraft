@@ -9819,6 +9819,10 @@ variable-list-end	{0}, {1}	{0} और {1}
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc ने 0 लौटाया (मेमोरी खत्म)
 @msg	vc_alloc returned a block outside memory	vc_alloc ने मेमोरी के बाहर का ब्लॉक लौटाया
 @msg	vc_run returned error code {packed}	vc_run ने त्रुटि कोड {packed} लौटाया
+@msg	did not finish loading within {secs} s	{secs} सेकंड के भीतर लोड होना पूरा नहीं हुआ
+@msg	no thread was left to load it	इसे लोड करने के लिए कोई थ्रेड नहीं बचा
+@msg	panicked while loading	लोड होते समय क्रैश हो गया
+@msg	panicked while loading: {what}	लोड होते समय क्रैश हो गया: {what}
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	वेक्टर क्रेफ्ट अन्य एप्लिकेशन या सिस्टम के फ़ोल्डर्स की खोज नहीं करता है: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	वेक्टर क्रेफ्ट उपयोगकर्ताओं में साझा या सार्वजनिक फ़ोल्डर की खोज नहीं करता है: {path}
 @msg	VectorCraft failed to start: {e}	वेक्टर क्रेफ्ट शुरू करने में विफल रहा: {e}

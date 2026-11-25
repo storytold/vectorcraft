@@ -77,6 +77,8 @@ pub fn start(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>) -> Value {
 
 /// [`start`] with the `document.open` options in `params` (`importer` and its `params`).
 pub fn start_with(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>, params: Value) -> Value {
+    // A plug-in still loading may be the importer that reads the file.
+    app.session.finish_plugin_loads();
     let (tx, done) = channel();
     let name = path.to_string();
     // Update Links (Preferences › File Handling) applies there as it is set now.

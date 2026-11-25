@@ -390,6 +390,8 @@ fn open_dialog_folder(app: &VectorcraftApp) -> Option<String> {
 
 /// File → Open…: `{pending: "fileDialog"}` while its picker is open.
 pub fn open_dialog(app: &mut VectorcraftApp) -> Result<Value, String> {
+    // The picker lists the extensions of the importer plug-ins the launch is still loading too.
+    app.session.finish_plugin_loads();
     let request = open_request("document", open_dialog_folder(app), fileio::open_filters());
     ask_open(app, request, Owner::Free, |app, path| open_reporting(app, &path))
 }
@@ -558,6 +560,11 @@ pub(crate) fn open_file(app: &mut VectorcraftApp, path: &str, background: bool) 
 /// [`open_file`], a document opening with `document.open`'s params `p`.
 fn open_file_with(app: &mut VectorcraftApp, path: &str, background: bool, p: &Value) -> Result<Value, String> {
     // Automation confined to some folders reaches no file outside them, open in a tab or not.
+    vectorcraft_engine::file_access::check_read(path)?;
+    // A plug-in still loading may be the importer that reads the file, or what installs it.
+    app.session.finish_plugin_loads();
+    // The path is checked again after the wait, so a link replaced while the plug-ins loaded
+    // doesn't lead the read outside the folders.
     vectorcraft_engine::file_access::check_read(path)?;
     // File › Open, Open Recent, the Home screen, a drop and the Finder all focus a document that
     // is already open, or still being read, instead of opening a second copy. While a dialog or

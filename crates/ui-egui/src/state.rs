@@ -871,8 +871,9 @@ pub struct UiState {
     /// show first.
     #[serde(skip)]
     pub pending_fonts: Vec<u64>,
-    /// The plug-in (`{id, file, name, label}`) the last launch was loading when it stopped, while
-    /// the user has not chosen what to do about it.
+    /// The plug-ins the last launch was loading when it stopped (`{item, items}`, each
+    /// `{id, file, name, label}`, `item` the first of `items`), while the user has not chosen what
+    /// to do about them.
     #[serde(skip)]
     pub stopped_plugin: Option<Value>,
     /// The open Proof Setup dialog's record: the proof view it found and the one its preview

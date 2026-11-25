@@ -10134,6 +10134,10 @@ digits	Hindi	Hindi
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc returnerade 0 (slut på minne)
 @msg	vc_alloc returned a block outside memory	vc_alloc returnerade ett block utanför minnet
 @msg	vc_run returned error code {packed}	vc_run returnerade felkoden {packed}
+@msg	did not finish loading within {secs} s	blev inte färdigläst inom {secs} s
+@msg	no thread was left to load it	ingen tråd fanns kvar som kunde läsa in den
+@msg	panicked while loading	kraschade under inläsningen
+@msg	panicked while loading: {what}	kraschade under inläsningen: {what}
 @msg	view is required	view krävs
 @msg	view must be one of {_1}	view måste vara något av {_1}
 @msg	warpStyle can only edit an applied Warp effect	warpStyle kan bara redigera en tillämpad Förvräng-effekt

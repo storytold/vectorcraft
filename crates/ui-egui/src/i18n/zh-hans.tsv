@@ -7191,6 +7191,10 @@ axis	Y Axis	Y 轴
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc 返回了 0（内存不足）
 @msg	vc_alloc returned a block outside memory	vc_alloc 返回了内存之外的块
 @msg	vc_run returned error code {packed}	vc_run 返回了错误代码 {packed}
+@msg	did not finish loading within {secs} s	未在 {secs} 秒内完成加载
+@msg	no thread was left to load it	没有剩余的线程来加载它
+@msg	panicked while loading	加载时崩溃
+@msg	panicked while loading: {what}	加载时崩溃：{what}
 @msg	{_1} is not a file	{_1} 不是文件
 @msg	{_1} is {_2} bytes (limit {_3})	{_1} 为 {_2} 字节（上限 {_3}）
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} 个对象（上限 {MAX_OBJECTS}）
