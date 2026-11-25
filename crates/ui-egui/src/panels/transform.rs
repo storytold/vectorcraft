@@ -436,24 +436,23 @@ fn angle_field(
         .side(SideLabel::new().kind(LabelKind::Glyph(GlyphLabel::icon(IconId::new(icon)))).tooltip(label).scrub(true))
         .enabled(enabled)
         .show(ui, |ui, _| {
-            NumberField::new(label, Bind::given(Some(shown)))
-                .unit("°")
-                .commit_decimals(2)
-                .range(range.clone())
-                .step_arrows(StepArrows::Leading)
-                .presets(&entries)
-                .stepper(stops_stepper(15.0, presets, |v| format!("{v:.2}")))
-                .show(ui)
+            let field = NumberField::new(label, Bind::given(Some(shown))).unit("°").commit_decimals(2).range(range.clone());
+            // No presets: the plain field production's Properties panel shows.
+            if presets.is_empty() {
+                field.show(ui)
+            } else {
+                field.step_arrows(StepArrows::Leading).presets(&entries).stepper(stops_stepper(15.0, presets, |v| format!("{v:.2}"))).show(ui)
+            }
         })
         .inner
 }
 
 /// Rotate: the bounding box's angle, and a new value turns the selection to it about the reference point
-/// (Alt+Enter turns a copy).
-pub(crate) fn rotate_field(app: &mut VectorcraftApp, ui: &mut Ui) {
+/// (Alt+Enter turns a copy). With no `presets` the field is plain: no step arrows and no preset list.
+pub(crate) fn rotate_field(app: &mut VectorcraftApp, ui: &mut Ui, presets: &[f64]) {
     let bx = app.selection_box();
     let angle = bx.as_ref().map_or(0.0, |b| b.angle);
-    let Some(out) = angle_field(ui, tl!("Rotate"), "rotate-ccw", angle, -360.0..=f64::INFINITY, &ANGLE_PRESETS, bx.is_some()) else { return };
+    let Some(out) = angle_field(ui, tl!("Rotate"), "rotate-ccw", angle, -360.0..=f64::INFINITY, presets, bx.is_some()) else { return };
     let copy = out.edit.submit_mods.alt && app.session.active().is_some_and(|st| st.selection.anchors.is_empty());
     apply_edits(app, &out.edit, EditPath::Preview, |app, v, live| {
         // The angle shown is the preview's while the gesture runs: its release keeps it.
@@ -568,7 +567,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     object_fields(app, ui, panel_groups());
     Row::new().show(ui, |ui, _| {
-        rotate_field(app, ui);
+        rotate_field(app, ui, &ANGLE_PRESETS);
         shear_field(app, ui);
     });
     // Lucide's flip icons are named for their mirror line: flip-vertical-2 draws a vertical

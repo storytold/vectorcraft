@@ -140,7 +140,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Anchor Point",
             [],
             None,
-            "{id, subpath?, segment, t: 0..1} add an anchor at t on the segment → {anchor}; the direct-selected anchors and selected segments keep the same points (a selected segment it splits stays selected as its two halves), and a path that isn't selected becomes the selection with the new anchor direct-selected",
+            "{id, subpath?, segment, t: 0..1, selectAnchor?: bool (the path becomes the selection with only the new anchor direct-selected, also when it is selected)} add an anchor at t on the segment → {anchor}; the direct-selected anchors and selected segments keep the same points (a selected segment it splits stays selected as its two halves), and a path that isn't selected becomes the selection with the new anchor direct-selected",
             has_doc,
             insert_anchor
         ),
@@ -2155,6 +2155,7 @@ fn insert_anchor(s: &mut Session, p: &Value) -> Result<Value> {
     let si = usize_opt(p, "subpath", "path.insertAnchor")?.unwrap_or(0);
     let seg = index_opt(p, "segment", "path.insertAnchor")?.ok_or_else(|| bad("path.insertAnchor", "missing segment"))?;
     let t = number_or(p, "t", 0.5, "path.insertAnchor")?.clamp(0.0, 1.0);
+    let select_anchor = switch_or(p, "selectAnchor", false, "path.insertAnchor")?;
     let idx = s.edit("Add Anchor Point", |d, sel| {
         let path = path_mut(d, id)?;
         let sp = path.subpaths.get_mut(si).ok_or_else(|| EngineError::Other("no such subpath".into()))?;
@@ -2164,8 +2165,9 @@ fn insert_anchor(s: &mut Session, p: &Value) -> Result<Value> {
         let idx = sp.insert_anchor(seg, t);
         renumber_after_insert(sel, id, si, idx);
         // A path that wasn't selected becomes the selection, its new anchor direct-selected, so
-        // the point added shows and can be edited at once (#4237).
-        if !sel.contains(id) {
+        // the point added shows and can be edited at once (#4237). `selectAnchor` does the same
+        // for a path that is selected.
+        if select_anchor || !sel.contains(id) {
             sel.clear();
             sel.add(id);
             sel.anchors.entry(id).or_default().insert((si, idx));
