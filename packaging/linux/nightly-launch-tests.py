@@ -17,7 +17,7 @@ LAUNCHER = HERE / "nightly-launch.sh"
 # The plain tar's entrypoint is craft-common-actions' template rendered for this app; these are its bytes.
 TAR_LAUNCHER = HERE / "nightly-tar-launch.sh"
 TAR_PROFILE = "ai.storyteller.vectorcraft.nightly"
-TAR_LAUNCHER_SHA256 = "c9046d6336057485b3c1346ba489fac957d02cfff8899f6b2cb501b5d780c1a9"
+TAR_LAUNCHER_SHA256 = "bf00f60a1644c1fd0ce440f4c992cd009f812e539c729a4b63638b1b8aed0c01"
 
 RECORDER = """#!/bin/sh
 printf 'config=<%s>\n' "${VECTORCRAFT_CONFIG_DIR:-}"
@@ -224,6 +224,12 @@ class TarLauncher(unittest.TestCase):
                 self.assertEqual(self.lines(launcher, query),
                                  ["config=<>", "<--launch-profile>", "<nightly-v1>", "<--profile-root>",
                                   f"<{root}>", "<--version>"])
+
+    def test_a_launcher_profile_argv_passes_through_unchanged(self):
+        launcher = self.place()
+        argv = ["--launch-profile", "nightly-v1", "--profile-root", str(self.root / "launcher root"), "--", "drawing.svg"]
+        self.assertEqual(self.lines(launcher, *argv, env=self.env),
+                         ["config=<>", *[f"<{arg}>" for arg in argv]])
 
     def test_a_missing_gui_fails_rather_than_starting_another_binary(self):
         launcher = self.place()
