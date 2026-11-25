@@ -18,7 +18,6 @@ use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
-use craft::ui::sections::Section;
 use craft::ui::text::NumberField;
 use egui::Ui;
 use serde_json::json;
@@ -183,7 +182,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 
     let mut side = conv.side;
     let (mut read, mut set) = (false, false);
-    Section::fixed(tl!("Selection")).show(ui, |ui, _| {
+    crate::panels::section(tl!("Selection")).show(ui, |ui, _| {
         RadioGroup::new(tl!("Side"), Bind::bound(&mut side)).nav(NavShape::Spatial).show(ui, |ui, _| {
             Radio::new(Side::Width).label(tl!("Width")).show(ui);
             Radio::new(Side::Height).label(tl!("Height")).show(ui);

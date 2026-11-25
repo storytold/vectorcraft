@@ -47,7 +47,7 @@
 use std::sync::{Arc, Mutex, RwLock};
 
 use serde_json::{Map, Value, json};
-use vectorcraft_doc::{Effect, Node};
+use vectorcraft_doc::{Document, Effect, Node};
 use vectorcraft_plugins::{Budget, Command, Kind, Plugin, effect, export, objects, registry, safe_mode};
 
 use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, has_doc, ids_param, str_param, switch_or};
@@ -330,7 +330,8 @@ impl FilterRun {
     /// Applies the plug-in's `output` to the active document as one undo step: its objects, and what
     /// it keeps with the document from now on. An output its permissions don't allow, and one that
     /// changes or leaves out a read-only object it was given, is refused, and the document stays as
-    /// it was.
+    /// it was. An output that changes neither the objects nor the kept data records no undo step and
+    /// leaves the document unmodified; its objects are still selected.
     fn finish(self, s: &mut Session, output: &[u8]) -> Result<Value> {
         let m = self.plugin.manifest();
         let may = m.permissions();
@@ -342,24 +343,54 @@ impl FilterRun {
         // A command's undo step is named after the command.
         let label = self.label();
         let (inputs, parent) = (self.inputs, self.parent);
-        let ids = s.edit(&label, |d, sel| {
-            let before = (!may_write).then(|| d.layers.clone());
-            let ids = objects::apply_output(d, &inputs, out.objects, parent, &admit_effects).map_err(err)?;
-            if before.is_some_and(|b| b != d.layers) {
-                return Err(not_granted(&m.name, Permission::DocWrite));
+        // The output is applied to a copy of the document, as `colorcmds::edit_if_changed` applies
+        // its pass: only a copy whose objects or kept data differ becomes the document, as one undo
+        // step. Otherwise the document, its undo and redo steps and its saved state stay as they
+        // were, and only the selection is set.
+        if s.script_running() {
+            return Err(EngineError::Busy);
+        }
+        if !s.previewing && super::typing_in_progress(s) {
+            super::settle_interaction(s)?;
+        }
+        let now = s.doc()?.doc.clone();
+        let mut d = (*now).clone();
+        let before = (!may_write).then(|| d.layers.clone());
+        let ids = objects::apply_output(&mut d, &inputs, out.objects, parent, &admit_effects).map_err(err)?;
+        if before.is_some_and(|b| b != d.layers) {
+            return Err(not_granted(&m.name, Permission::DocWrite));
+        }
+        if let Some(data) = out.document_data {
+            d.set_plugin_data(&m.id, data);
+        }
+        let selectable = |d: &Document| ids.iter().copied().filter(|&id| d.node(id).is_some_and(objects::selectable)).collect::<Vec<_>>();
+        if same_art(&d.layers, &now.layers) && d.plugin_data(&m.id) == now.plugin_data(&m.id) {
+            let st = s.doc()?;
+            let mut sel = st.selection.clone();
+            sel.set(selectable(&st.doc));
+            if sel != st.selection {
+                s.select(|_, selection| *selection = sel)?;
             }
-            if let Some(data) = out.document_data {
-                d.set_plugin_data(&m.id, data);
-            }
-            sel.set(ids.iter().copied().filter(|&id| d.node(id).is_some_and(objects::selectable)));
-            Ok(ids)
-        })?;
+        } else {
+            // The document is shared with `now` no longer, so `s.edit` does not copy it again.
+            drop(now);
+            s.edit(&label, |doc, sel| {
+                *doc = d;
+                sel.set(selectable(doc));
+                Ok(())
+            })?;
+        }
         let mut out = json!({"plugin": m.id, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()});
         if let Some(cmd) = &self.command {
             out["command"] = json!(cmd.id);
         }
         Ok(out)
     }
+}
+
+/// Whether layer lists `a` and `b` hold the same art: a layer that is shared is not compared again.
+fn same_art(a: &[Arc<Node>], b: &[Arc<Node>]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(x, y)| Arc::ptr_eq(x, y) || x == y)
 }
 
 /// The error of a filter `name` whose output needs `permission`, which it wasn't granted.
@@ -483,7 +514,7 @@ fn spec_of(p: &Plugin, c: &Command) -> &'static CommandSpec {
         fields.push_str(own);
     }
     let params = format!(
-        "{{{fields}}} run “{label}”, a command of plug-in {}, on the selected paths and compound paths as plugin.run runs a filter, with _context.command {:?}: one undo step → {{plugin, command, ids}}",
+        "{{{fields}}} run “{label}”, a command of plug-in {}, on the selected paths and compound paths as plugin.run runs a filter, with _context.command {:?}: one undo step, none when the run changes nothing → {{plugin, command, ids}}",
         m.id, c.id
     );
     let mut made = MADE.lock().unwrap_or_else(|e| e.into_inner());
@@ -1308,7 +1339,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Run Plug-in",
             [],
             None,
-            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [object id] (left out or null: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths, compound paths that clip a clip group and paths inside a group that clips one are left out): it may change, delete or add objects, as one undo step; the result is selected, except the objects it locked or made guides. A filter whose manifest lists inputs (type, image, symbolInstance; it lists doc.read in permissions, so plugin.install needs grant) is also given the selected objects of those kinds to read, in paint order from the bottom, with at most 16 MiB of pixels and 16 MiB of type runs per run (an object that doesn't fit what the objects before it left comes with pixelsOmitted or truncated; an image that reaches the decoder counts toward the pixels even when decoding fails); every object counts toward the input's half of the plug-in's memory cap, ids, bounds, transforms and names included, and an object whose fields besides its pixels and runs don't fit fails the run with a memory-budget error naming it and its size (a path or compound path fails it with the memory-budget error for a selection too large to hand over), and more than 100,000 of these objects fail it with an object-budget error: its output returns each as {id} or exactly as given, or the run is refused and nothing changes. With nothing selected it gets no objects (generators add theirs to the current layer). A filter with a commandAllowlist runs the commands it names while it runs (vc_call, see docs/plugins.md): its calls and its output are one undo step, and a run that fails or makes a call that fails changes nothing → {plugin, ids}",
+            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [object id] (left out or null: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths, compound paths that clip a clip group and paths inside a group that clips one are left out): it may change, delete or add objects, as one undo step (an output that changes no object and no kept data records none and leaves the document unmodified); the result is selected, except the objects it locked or made guides. A filter whose manifest lists inputs (type, image, symbolInstance; it lists doc.read in permissions, so plugin.install needs grant) is also given the selected objects of those kinds to read, in paint order from the bottom, with at most 16 MiB of pixels and 16 MiB of type runs per run (an object that doesn't fit what the objects before it left comes with pixelsOmitted or truncated; an image that reaches the decoder counts toward the pixels even when decoding fails); every object counts toward the input's half of the plug-in's memory cap, ids, bounds, transforms and names included, and an object whose fields besides its pixels and runs don't fit fails the run with a memory-budget error naming it and its size (a path or compound path fails it with the memory-budget error for a selection too large to hand over), and more than 100,000 of these objects fail it with an object-budget error: its output returns each as {id} or exactly as given, or the run is refused and nothing changes. With nothing selected it gets no objects (generators add theirs to the current layer). A filter with a commandAllowlist runs the commands it names while it runs (vc_call, see docs/plugins.md): its calls and its output are one undo step, and a run that fails or makes a call that fails changes nothing → {plugin, ids}",
             has_doc,
             run
         ),

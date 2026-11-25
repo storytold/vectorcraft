@@ -8,7 +8,8 @@ sandbox, same manifest and parameter schema), extended for vector documents.
 There are four kinds of plug-in:
 
 - **Object filters** read the selected paths and compound paths (geometry, fills, strokes, gradients, opacity)
-  and return the objects to keep, change or add. A run is one undo step. Use them for recolouring, path
+  and return the objects to keep, change or add. A run is one undo step, and a run that changes nothing records
+  none. Use them for recoloring, path
   clean-up, halftones, generative patterns and the like.
 - **Live effects** rewrite one object's geometry each time it is drawn, from its appearance stack, like the
   built-in Distort & Transform effects. The art stays editable: move or reshape it and the effect follows. A live
@@ -29,7 +30,7 @@ in `crates/engine/src/cmd/plugin.rs`).
 |---|---|---|
 | `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, commands?, commandAllowlist?, size, source, api, paintOutput?, permissions, hash, cacheBytes}], "folder": report}` (`api` is the manifest's [plug-in API level](#permissions); `budget: "heavy"` for a [heavy filter](#heavy-filters); `commands` lists its [commands](#commands); `commandAllowlist` lists the commands it may [call](#command-calls); `paintOutput: true` marks a [painted live effect](#painted-live-effects); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256; `cacheBytes` is the size of its [cache](#settings-and-cache)) |
 | `plugin.info` | `{"id"}` | One plug-in: the `plugin.list` entry plus `manifest`, `defaults` and `lastError` (a live effect's last failure). |
-| `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`; an `ids` that is not a list of object ids is an error). One undo step; the result is selected, except the objects it locked or made guides. |
+| `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`; an `ids` that is not a list of object ids is an error). One undo step; the result is selected, except the objects it locked or made guides. An output that changes no object and none of the data it keeps with the document ([`documentData`](#output)) records no undo step and leaves the document unmodified. |
 | `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace"?: bool`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A module with other bytes than the plug-in installed with its id, or, with none installed, one whose id has [settings and a cache](#settings-and-cache) in the `Plug-ins` folder, installs only with `replace: true`, once the user agreed; it takes that plug-in's place and gets its settings and cache. The same module installs again without `replace`, and `replace: false` refuses a module whose id is installed. A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, unless a grant is already recorded for a module with the same SHA-256. A request's `grant` and `allowHeavy` are refused except in a session started with `vectorcraft-cli --allow-plugin-grants`. With `hash`, a module whose SHA-256 differs is refused. A module whose `commandAllowlist` lists a command no plug-in may call is refused; ids no command has are listed as `unknownCommands` ([command calls](#command-calls)). |
 | `plugin.inspect` | as `plugin.install`: `{"path"}` or `{"dataBase64", "name"?}` | Validates a module without installing it; returns the `plugin.list` entry it would have, plus `needsApproval` (true when installing it needs a person's approval), `needsReplace` (true when `plugin.install` needs `replace: true`), and the `commandAllowlist` ids no command has (`unknownCommands`) and those no plug-in may call (`refusedCommands`). |
 | `plugin.remove` | `{"id"}` | Uninstalls, and deletes it from the `Plug-ins` folder with its [settings and cache](#settings-and-cache). |
@@ -101,7 +102,7 @@ replaced by a module without it.
   `_context.command` set to the command's id ([Parameters](#parameters)), under the plug-in's
   [permissions](#permissions): a live effect with commands may also hold `doc.write` and `state`, which only its
   commands use. `ids` left out or null means the selection; an `ids` that is not a list of object ids is an error. One run
-  is one undo step named after the command. A run that traps, runs out of its instruction budget or fails leaves the
+  is one undo step named after the command, and a run that changes nothing records none. A run that traps, runs out of its instruction budget or fails leaves the
   document and the undo history as they were, and the error starts with the plug-in's name and the command's label
   (`“Cmd Test” › Grow: …`).
 
@@ -430,10 +431,30 @@ pointers are offsets into the module's memory.
 | Export | Signature | Meaning |
 |---|---|---|
 | `memory` | memory | The module's linear memory. |
-| `vc_abi_version` | `() -> i32` | Must return `1`. |
-| `vc_manifest` | `() -> i64` | `(len << 32) \| ptr` of the UTF-8 manifest JSON (≤ 64 KiB). |
+| `vc_abi_version` | `() -> i32` | Must return `1`. Needed only by a module without a `vc_manifest` custom section. |
+| `vc_manifest` | `() -> i64` | `(len << 32) \| ptr` of the UTF-8 manifest JSON (≤ 64 KiB). Needed only by a module without a `vc_manifest` custom section. |
 | `vc_alloc` | `(size) -> ptr` | A block of `size` bytes the host may write, or `0` on failure. Never freed: each run gets a fresh instance. |
 | `vc_run` | `(input, input_len, params, params_len) -> i64` | Runs the plug-in on the input JSON with the parameters JSON; returns `(len << 32) \| ptr` of the output JSON, or a negative error code. |
+
+### Manifest section
+
+A module may carry its [manifest](#manifest) in a [custom
+section](https://webassembly.github.io/spec/core/binary/modules.html#custom-section) named `vc_manifest`, holding the
+same UTF-8 JSON that the `vc_manifest` export returns, plus `"abi": 1`, the ABI version that `vc_abi_version` returns.
+The host then reads the manifest from the section and loads the module without instantiating it: no start function,
+`vc_abi_version`, `vc_manifest` or data segment initialization runs when the module is installed, inspected or loaded at
+startup. The host checks the imports against the manifest's permissions, the exports `memory`, `vc_alloc` and `vc_run`
+by their types, that the initial memory fits in the [linear memory limit](#the-sandbox), and that the module defines at
+most 4 tables of at most 100,000 elements each. The module is instantiated for the first time when it runs, and a start
+function then runs at the start of each run.
+
+- A module with more than one `vc_manifest` section, or one longer than 64 KiB, is refused before the section's contents
+  are decoded. A section that is not UTF-8, not JSON or not a valid manifest is refused too, and so is one whose
+  manifest does not give `"abi": 1`.
+- When a module has both the section and a `vc_manifest` export, the section is the manifest and the export is never
+  called. Keep both to load in versions of VectorCraft that read only the export.
+- A module without the section is loaded as before: the host instantiates it and calls `vc_abi_version` and
+  `vc_manifest`.
 
 ### Host imports (API level 2)
 
@@ -839,6 +860,17 @@ For an **object filter**, the output is the new state of the input objects:
   the run locked or made guides are left out of the selection that follows. Hosts from before these keys ignore them.
 - A `path` returned as it was keeps a live shape live (a rectangle keeps its corner widgets); a changed one makes it a
   plain path.
+- A compound path whose `path` is returned as it was, or left out, keeps its members as they are, hidden and locked
+  ones included; a changed `path` replaces its members with one plain member per subpath. Each new member keeps only
+  the id of the old member in its place: its name, live shape, opacity, blending mode, appearance, opacity mask and
+  other settings of its own are reset to a new path's defaults. The host refuses a `path` with no anchor points, so return a
+  compound path that has none without `path`. While a member is hidden, locked or a guide, or is not a path (its
+  geometry is not in the input's `path`), the host refuses a changed `path` and `type: "path"` for it (a guide member
+  is allowed when the output also sets `guide`). `guide` applies to every member, so `guide: false` on a compound path
+  makes each of its guide members an ordinary path.
+- The host compares a returned `path` with the input coordinate by coordinate, exactly. A JSON parser that does not
+  read numbers back exactly as they were written (in Rust, `serde_json` without its `float_roundtrip` feature) can
+  change the last digit of a coordinate, so leave `path` out when the geometry does not change.
 
 The host validates everything before the document changes: coordinates must be finite and within ±4,000,000 pt, at
 most 100,000 objects and 4,000,000 anchors, 256 fills, strokes or gradient stops; colours, opacities and offsets are
@@ -931,10 +963,15 @@ crates/plugins/example/build.sh      # cargo build --release --target wasm32-unk
 ```
 
 The script also refreshes `crates/plugins/tests/fixtures/desaturate.wasm`, the test fixture built from that source.
-The crate is not a workspace member. Any language that targets core WebAssembly works (C, Zig, AssemblyScript,
+The crate is not a workspace member. It puts its manifest in the [manifest section](#manifest-section) with a byte
+array static marked `#[unsafe(link_section = "vc_manifest")]` (the Rust Reference's
+[`link_section`](https://doc.rust-lang.org/reference/abi.html#the-link_section-attribute)), and keeps the
+`vc_manifest` export for older hosts. Any language that targets core WebAssembly works (C, Zig, AssemblyScript,
 WAT…), as long as the module imports nothing but the host imports: in Rust, `std` on `wasm32-unknown-unknown` is fine as
 long as it never touches WASI. `vectorcraft_plugins::wat::module` is the skeleton of a plug-in in WebAssembly text,
-which the tests build their plug-ins from; `wat::echo_exporter` is an exporter whose file is its input or its parameters
+which the tests build their plug-ins from, and `wat::sectioned` the same plug-in with its manifest in the [manifest
+section](#manifest-section) and no `vc_abi_version` or `vc_manifest` export (in WebAssembly text, a custom section is
+written `(@custom "vc_manifest" "…")`); `wat::echo_exporter` is an exporter whose file is its input or its parameters
 (with a base64 encoder written out in WebAssembly text), which the tests read back what the host hands a plug-in with,
 and `wat::when_given` a plug-in whose output depends on whether its input or parameters hold a given text, which shows
 in a live effect's geometry. `wat::reporting` and `wat::cooperating` build level 2 plug-ins that import the host

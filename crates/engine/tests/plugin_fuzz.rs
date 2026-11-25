@@ -1,6 +1,6 @@
-//! Untrusted plug-ins never crash the app: mutated and garbage modules handed to `plugin.install`,
-//! and plug-ins returning hostile output (random JSON in the object model's shape: huge or
-//! malformed coordinates, unknown ids, broken paints and gradients, junk of every type) as object
+//! Untrusted plug-ins never crash the app: mutated and garbage modules, and modules whose
+//! `vc_manifest` custom section holds garbage, handed to `plugin.install`, and plug-ins returning
+//! hostile output (random JSON in the object model's shape: huge or malformed coordinates, unknown ids, broken paints and gradients, junk of every type) as object
 //! filters (`plugin.run`) or live effects (`effect.apply`), and plug-ins running bulk memory
 //! instructions (`memory.fill`, `memory.copy`, `memory.init`, `data.drop`) on ranges in, at and past
 //! the ends of memory and the data segment, under small and default budgets. Each run must end as
@@ -620,7 +620,11 @@ proptest! {
         }
         let mut s = rich_session();
         s.execute("select.all", &json!({})).unwrap();
-        for module in [bytes, [b"\0asm\x01\0\0\0".as_slice(), &garbage].concat(), garbage.clone()] {
+        // A module whose `vc_manifest` custom section holds the garbage.
+        let section = tpl::custom_section(vectorcraft_plugins::manifest::MANIFEST_SECTION, &garbage);
+        let sectioned = tpl::with_field(&tpl::module(&tpl::manifest("fuzz.section", "filter", "{}"), tpl::ECHO, "", 1), &section).unwrap();
+        let sectioned = wat::parse_str(sectioned).unwrap();
+        for module in [bytes, [b"\0asm\x01\0\0\0".as_slice(), &garbage].concat(), garbage.clone(), sectioned] {
             let r = catch_quiet(|| {
                 if let Ok(info) = install(&mut s, &module) {
                     let _ = s.execute("plugin.run", &json!({"id": info["id"]}));

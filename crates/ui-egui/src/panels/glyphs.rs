@@ -458,9 +458,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // scrolls freely meanwhile.
     let reveal = (marked != app.ui.glyphs_marked).then_some(marked).flatten();
     app.ui.glyphs_marked = marked;
-    if app.session.prefs.show_east_asian_options {
-        refresh_form_faces(app);
-    }
     let source = VcGlyphs::of(app);
     let (mut family, mut style) = {
         let (family, style) = source.font();
@@ -1297,10 +1294,13 @@ fn form_face_ids(app: &VectorcraftApp) -> Vec<u32> {
     ids
 }
 
-/// Read the faces of the selection again when the document, the selection or the fonts changed:
-/// laying the text out is too much to do for each menu state. The shown panel does it, and a panel
-/// menu opens only from a shown panel.
-fn refresh_form_faces(app: &mut VectorcraftApp) {
+/// Read the faces of the selection again when the document, the selection or the fonts changed,
+/// for the readers that only borrow the app ([`form_faces`]): laying the text out is too much to
+/// do for each menu state. The menu model does it before it reads the panel menus' states.
+pub(crate) fn refresh_form_faces(app: &mut VectorcraftApp) {
+    if !app.session.prefs.show_east_asian_options {
+        return;
+    }
     let Some(key) = faces_key(app) else {
         app.canvas.glyph_form_faces = None;
         return;
@@ -1312,11 +1312,18 @@ fn refresh_form_faces(app: &mut VectorcraftApp) {
     app.canvas.glyph_form_faces = Some((key, ids));
 }
 
-/// The faces [`refresh_form_faces`] read, when they are those of the selection now.
-fn form_faces(app: &VectorcraftApp) -> Option<Vec<Arc<FontFace>>> {
-    let key = faces_key(app)?;
-    let (cached, ids) = app.canvas.glyph_form_faces.as_ref()?;
-    (*cached == key).then(|| ids.iter().filter_map(|id| FontDb::global().face_by_id(*id)).collect())
+/// The faces of the selection: those [`refresh_form_faces`] read when they are still current, else
+/// read now.
+fn form_faces(app: &VectorcraftApp) -> Vec<Arc<FontFace>> {
+    let read;
+    let ids = match (&app.canvas.glyph_form_faces, faces_key(app)) {
+        (Some((cached, ids)), Some(key)) if *cached == key => ids,
+        _ => {
+            read = form_face_ids(app);
+            &read
+        }
+    };
+    ids.iter().filter_map(|id| FontDb::global().face_by_id(*id)).collect()
 }
 
 /// The value `f` gives every character the glyph form rows act on: the Type tool's selected
@@ -1386,8 +1393,7 @@ pub(crate) fn menu_rows(app: &VectorcraftApp) -> Vec<PanelRow> {
 }
 
 /// The row titles of a category, which are the panel's words, with the check on the shown one. A
-/// form a face of the selection has no feature for is disabled, once the shown panel has read the
-/// faces ([`refresh_form_faces`]).
+/// form no face of the selection has a feature for is disabled ([`form_faces`]).
 pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
     let (_, _, face) = browsed_face(app);
     let cats = categories(face.as_deref());
@@ -1409,12 +1415,9 @@ pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
     for form in GlyphForm::ALL {
         // A width form may be drawn with other widths for the same glyphs (`GPOS`) instead of
         // other glyphs.
-        let enabled = match (form.feature(), &faces) {
-            (Some(tag), Some(faces)) => {
-                faces.iter().any(|f| f.has_substitution_feature(*tag) || (form.is_width() && f.has_positioning_feature(*tag)))
-            }
-            (Some(_), None) => true,
-            (None, _) => has,
+        let enabled = match form.feature() {
+            Some(tag) => faces.iter().any(|f| f.has_substitution_feature(*tag) || (form.is_width() && f.has_positioning_feature(*tag))),
+            None => has,
         };
         let checked = form != GlyphForm::Default && shared == Some(form);
         states.set(form_ref(form), CommandState::new().title(tl!(glyph_form_label(form))).enabled(enabled).checked(checked));

@@ -264,7 +264,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(mut s) = app.three_d_dialog.take() else { return };
     // A dialog that closed is finished by the held drain (OK or Cancel), which owns the session's end.
     let Some((fields, previewing)) = dialog_of(app, s.id, |d| {
-        match d.take_footer_action().as_deref() {
+        match d.take_action().as_deref() {
             Some(revolve::RESET_ALL) => revolve::reset_all(d, &s.effect),
             Some(super::three_d_classic::MAP_DONE) => super::three_d_classic::map_done(d, &s.effect),
             _ => {}

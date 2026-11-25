@@ -31,7 +31,7 @@ use craft::ui::form::Field;
 use craft::ui::list::{List, ListRow, ThumbSize};
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::runtime::commands::{CommandState, CommandStates};
-use craft::ui::sections::{FooterAction, FooterBar, Panel, Section};
+use craft::ui::sections::{FooterAction, FooterBar, Panel};
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeId;
@@ -586,8 +586,8 @@ fn mask_name(app: &VectorcraftApp, doc: &vectorcraft_doc::Document, cache: &Cach
 /// The icon of a row's status mark.
 fn status_icon(status: &str) -> &'static str {
     match status {
-        "missing" => "circle-help",
-        "modified" => "triangle-alert",
+        "missing" => "dc-help",
+        "modified" => "warning",
         "embedded" => "image",
         _ => "link",
     }
@@ -782,7 +782,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     row = row.trailing(page.to_string());
                 }
                 if r["dcsTransparency"] == true {
-                    row = row.trailing_icon(IconId::new("triangle-alert"), tip.clone());
+                    row = row.trailing_icon(IconId::new("warning"), tip.clone());
                 }
                 row.trailing_icon(IconId::new(status_icon(r["status"].as_str().unwrap_or_default())), tip)
             });
@@ -920,7 +920,7 @@ fn info_row(ui: &mut Ui, label: &'static str, value: String) {
 
 /// The Link Info section: the details of `info` (`links.info`), or a hint.
 fn link_info(ui: &mut Ui, info: Option<&Value>, units: vectorcraft_doc::Unit) {
-    Section::fixed(tl!("Link Info")).show(ui, |ui, _| {
+    crate::panels::section(tl!("Link Info")).show(ui, |ui, _| {
         let Some(i) = info else {
             Text::new(tl!("Select an image to see its Link Info.")).shade(Shade::Muted).show(ui);
             return;

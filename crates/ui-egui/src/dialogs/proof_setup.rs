@@ -185,7 +185,7 @@ fn seen(app: &VectorcraftApp, id: DialogId) -> Option<Seen> {
     app.dialogs()?.with(|host| {
         let top = host.stack().is_top(id);
         let dialog = host.get_mut_by_id::<HostedParamDialog>(id)?;
-        Some(Seen { top, previewing: dialog.is_previewing(), fields: dialog.fields().clone(), action: dialog.take_footer_action() })
+        Some(Seen { top, previewing: dialog.is_previewing(), fields: dialog.fields().clone(), action: dialog.take_action() })
     })
 }
 
@@ -426,7 +426,7 @@ pub fn refresh_saved(app: &VectorcraftApp) {
     let mut saved = saved();
     let queue = saved.queue.get_or_insert_with(|| {
         let wake = app.ui_ctx.clone().map_or_else(Wake::none, |ctx| Wake::new(move || ctx.request_repaint()));
-        JobQueue::new(app.host.jobs_shared().clone(), wake, QueueOptions { lanes: 1, name: "vectorcraft-proof-setups" })
+        JobQueue::new(app.host.jobs_shared().clone(), wake, QueueOptions { lanes: 1, name: "vectorcraft-proof-setups", ..QueueOptions::default() })
     });
     queue.submit((), Priority::BACKGROUND, move |_| listing(&dir));
 }

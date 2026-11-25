@@ -129,6 +129,11 @@ pub struct DocState {
     /// paths the document links to are looked at within them later too, when the Links panel
     /// asks about a link outside any caller's scope.
     pub opened_by: Option<Arc<file_access::AutomationRoots>>,
+    /// What the commands scripts ran did to the document since the person last opened or saved it:
+    /// `None` when they did nothing. The commands a script runs read and write the document's file,
+    /// and read the files it links to, only as the person left them ([`DocState::as_person_left`]).
+    /// Not saved.
+    pub(crate) by_script: Option<ByScript>,
     /// The live-effect plug-in stages deferred while the document is drawn on screen, and the time
     /// budget of its first view ([`vectorcraft_plugins::deferred`]). Not saved.
     pub plugin_effects: vectorcraft_plugins::deferred::Deferrals,
@@ -145,6 +150,50 @@ pub struct DocState {
     /// measured: the next refresh checks only the layer trees that differ from it
     /// ([`cmd::inline::refresh`]). Not saved.
     pub(crate) inline_resolved: Option<cmd::inline::Resolved>,
+    /// The selected objects as [`crate::Session::select`] last checked them or the proxies last
+    /// read them, with the document they were checked in ([`SelectionRecord`]). Not saved.
+    pub(crate) selection_record: Option<SelectionRecord>,
+}
+
+/// A selection of objects alone ([`objects_only`]) with the document it was checked or read in:
+/// while the document and the selected objects stay the same, a command that adds objects checks
+/// and reads only the added ones.
+#[derive(Clone, Debug)]
+pub(crate) struct SelectionRecord {
+    /// The document, held as [`EmptyArtboards::doc`] holds it.
+    pub(crate) doc: std::sync::Weak<Document>,
+    pub(crate) objects: Vec<NodeId>,
+    /// Lock Guides as it was when [`crate::Session::select`] left these objects selected; `None`
+    /// when it did not.
+    pub(crate) settled: Option<bool>,
+    /// What the proxies read from these objects; `None` when they were not read.
+    pub(crate) paints: Option<cmd::SelectionPaints>,
+}
+
+/// Whether `sel` holds selected objects and nothing else: no anchors, segments, key, target,
+/// slices, ruler guides, object of a symbol instance's art or object on a path.
+pub(crate) fn objects_only(sel: &Selection) -> bool {
+    sel.anchors.is_empty()
+        && sel.segments.is_empty()
+        && sel.key.is_none()
+        && sel.target.is_none()
+        && sel.slices.is_empty()
+        && sel.guides.is_empty()
+        && sel.key_guide.is_none()
+        && sel.key_anchor.is_none()
+        && sel.symbol_part.is_none()
+        && sel.on_path_member.is_none()
+}
+
+/// What the commands scripts ran did to an open document since the person last opened or saved it
+/// ([`DocState::by_script`]).
+#[derive(Clone, Debug)]
+pub(crate) enum ByScript {
+    /// A command a script ran opened it (or made it).
+    Opened,
+    /// A command a script ran changed it or gave it another file: the document, its file and the
+    /// file it was read from as they were before the first such command.
+    Changed { doc: Arc<Document>, path: Option<String>, links_from: Option<String> },
 }
 
 /// Whether a document has an artboard for Delete Empty Artboards to delete, with the document that
@@ -385,11 +434,77 @@ impl DocState {
             links_from: None,
             last_perspective: None,
             opened_by: file_access::current(),
+            by_script: None,
             empty_artboards: Default::default(),
             plugin_effects: Default::default(),
             art_to_fit: Default::default(),
             measured_in_own: None,
             inline_resolved: None,
+            selection_record: None,
+        }
+    }
+    /// The [`SelectionRecord`] of the selection now: `None` when the document or the selected
+    /// objects changed since it was made, or when anything besides whole objects is selected
+    /// ([`objects_only`]). Only a new [`Document`] makes the record stale: the document's new art
+    /// is the one state that changes in place and matters to it, and [`crate::Session::select`]
+    /// checks the whole selection while there is new art.
+    pub(crate) fn selection_record(&self) -> Option<&SelectionRecord> {
+        self.selection_record
+            .as_ref()
+            .filter(|r| std::ptr::eq(r.doc.as_ptr(), Arc::as_ptr(&self.doc)) && objects_only(&self.selection) && r.objects == self.selection.objects)
+    }
+    /// What the proxies read from the selected objects, when the [`SelectionRecord`] of the
+    /// selection now holds it.
+    pub(crate) fn selection_paints(&self) -> Option<&cmd::SelectionPaints> {
+        self.selection_record().and_then(|r| r.paints.as_ref())
+    }
+    /// Keep the [`SelectionRecord`] of the selection that [`crate::Session::select`] left, with
+    /// Lock Guides `guides_locked`. `record` is the record of the selection before: when the
+    /// selected objects start with its objects, the added objects are read into its paints.
+    pub(crate) fn record_selection(&mut self, record: Option<SelectionRecord>, guides_locked: bool) {
+        if !objects_only(&self.selection) {
+            self.selection_record = None;
+            return;
+        }
+        let objects = &self.selection.objects;
+        self.selection_record = Some(match record {
+            Some(mut r) if objects.starts_with(&r.objects) => {
+                let added = &objects[r.objects.len()..];
+                if let Some(p) = &mut r.paints {
+                    p.add(&self.doc, added);
+                }
+                r.objects.extend_from_slice(added);
+                r.settled = Some(guides_locked);
+                r
+            }
+            _ => SelectionRecord { doc: Arc::downgrade(&self.doc), objects: objects.clone(), settled: Some(guides_locked), paints: None },
+        });
+    }
+
+    /// The document, its file and the file it was read from as the person last left them, for the
+    /// commands scripts run ([`DocState::by_script`]): `None` for a document a script's command
+    /// opened.
+    pub(crate) fn as_person_left(&self) -> Option<(&Arc<Document>, Option<&str>, Option<&str>)> {
+        match &self.by_script {
+            None => Some((&self.doc, self.path.as_deref(), self.links_from.as_deref())),
+            Some(ByScript::Opened) => None,
+            Some(ByScript::Changed { doc, path, links_from }) => Some((doc, path.as_deref(), links_from.as_deref())),
+        }
+    }
+
+    /// Notes what a command a script ran did to the document, which was `was` (the document, its
+    /// file and the file it was read from) before the command ran, or not open when `was` is
+    /// `None`. The first change is kept until the person saves the document.
+    pub(crate) fn note_script_command(&mut self, was: Option<(&Arc<Document>, &Option<String>, &Option<String>)>) {
+        if self.by_script.is_some() {
+            return;
+        }
+        let Some((doc, path, links_from)) = was else {
+            self.by_script = Some(ByScript::Opened);
+            return;
+        };
+        if !Arc::ptr_eq(doc, &self.doc) || *path != self.path || *links_from != self.links_from {
+            self.by_script = Some(ByScript::Changed { doc: doc.clone(), path: path.clone(), links_from: links_from.clone() });
         }
     }
     /// `measure`'s answer for the document now. `measure` runs once for each version of the document,

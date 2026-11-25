@@ -28,7 +28,6 @@ use craft::ui::patterns::presets::{PresetPicker, PresetRow, PresetSource, Preset
 use craft::ui::pickers::Select;
 use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
 use craft::ui::runtime::overlay::CloseReason;
-use craft::ui::sections::Section;
 use craft::ui::style::TypeRole;
 use craft::ui::text::{NumberField, TextField};
 use serde_json::{Value, json};
@@ -263,8 +262,8 @@ impl Pass<'_> {
     /// The rows; whether the draft can be accepted. `save` is set when Save Preset… was pressed.
     fn body(&self, ui: &mut egui::Ui, draft: &mut GridDraft, picker: &mut PresetState<String>, save: &mut bool) -> bool {
         self.name(ui, draft, picker, save);
-        Section::fixed(word("Perspective Grid Settings")).id_salt("settings").show(ui, |ui, _| self.settings(ui, draft));
-        Section::fixed(word("Grid Color & Opacity")).id_salt("colors").show(ui, |ui, _| colors(ui, draft));
+        crate::panels::section(word("Perspective Grid Settings")).id_salt("settings").show(ui, |ui, _| self.settings(ui, draft));
+        crate::panels::section(word("Grid Color & Opacity")).id_salt("colors").show(ui, |ui, _| colors(ui, draft));
         let valid = draft.def.validate();
         if let Err(why) = &valid {
             Text::new(why.clone()).role(TypeRole::Caption).tone(Tone::Bad).show(ui);

@@ -320,7 +320,9 @@ fn dimmed_rows_follow_the_settings_they_depend_on() {
         if let Some((enabled, help)) = row_state(&mut a, "appTitleBar") {
             let label = format!("variable {from_env}, system {system}");
             assert_eq!(enabled, !from_env && !system, "app title bar: {label}");
-            assert_eq!(help.is_some_and(|h| h.contains("VECTORCRAFT_TITLEBAR")), from_env, "app title bar note: {label}");
+            // The note, not the setting's sentence, which names the variable too.
+            let note = help.is_some_and(|h| h.contains("VECTORCRAFT_TITLEBAR environment variable"));
+            assert_eq!(note, from_env, "app title bar note: {label}");
         }
         if let Some((enabled, _)) = row_state(&mut a, "systemTitleBar") {
             assert_eq!(enabled, !from_env, "system title bar: variable {from_env}");
