@@ -3,16 +3,13 @@
 //! shows it with a Stop button; a run that has added a great deal, or that opened a dialog with
 //! `alert`, `confirm`, `prompt` or a `File` or `Folder` file dialog, waits for the person's answer.
 
-use serde_json::json;
 use vectorcraft_engine::WindowView;
 
 use crate::VectorcraftApp;
-use crate::dialogs::script_run;
-use crate::state::Dialog;
+use crate::dialogs::script_run::{self, GrowthQuestion, ScriptFiles, ScriptNotice};
 
 /// Advances the running script by one slice, or asks what its growth needs asked.
 pub fn poll(app: &mut VectorcraftApp) {
-    script_run::drain(app);
     if !app.session.script_running() {
         return;
     }
@@ -21,7 +18,6 @@ pub fn poll(app: &mut VectorcraftApp) {
         return;
     }
     let name = app.session.script_name().unwrap_or_default();
-    let cursor_settings = (app.session.caps_lock, app.session.prefs.use_precise_cursors);
     let shared = share_views(app);
     let pumped = app.session.script_pump();
     take_views(app, &shared);
@@ -30,12 +26,7 @@ pub fn poll(app: &mut VectorcraftApp) {
         ask(app);
         return;
     };
-    if cursor_settings != (app.session.caps_lock, app.session.prefs.use_precise_cursors) {
-        app.canvas.hover_cursor = None;
-    }
-    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == script_run::GROWTH_KIND) {
-        app.ui.dialog = None;
-    }
+    script_run::forget::<GrowthQuestion>(app);
     script_run::settle_close(app);
     match result {
         // The commands it ran are journaled now: a recording they no longer fit in names its limit.
@@ -99,27 +90,23 @@ pub(crate) fn take_views(app: &mut VectorcraftApp, shared: &[(u64, WindowView)])
 /// → true while the run waits.
 fn ask(app: &mut VectorcraftApp) -> bool {
     if let Some(picker) = app.session.script_picker() {
-        if app.ui.dialog.is_none() {
-            script_run::open_picker(app, &picker);
+        if !script_run::busy(app) {
+            script_run::open_picker(app, picker);
         }
         return true;
     }
-    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == script_run::PICKER_KIND) {
-        app.ui.dialog = None;
-    }
+    script_run::forget::<ScriptFiles>(app);
     if let Some(dialog) = app.session.script_dialog() {
-        if app.ui.dialog.is_none() {
+        if !script_run::busy(app) {
             script_run::open_notice(app, &dialog);
         }
         return true;
     }
     // A run asked to stop no longer waits at its dialog.
-    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == script_run::NOTICE_KIND) {
-        app.ui.dialog = None;
-    }
+    script_run::forget::<ScriptNotice>(app);
     if app.session.script_waiting() {
-        if app.ui.dialog.is_none() {
-            app.ui.dialog = Some(Dialog::new(script_run::GROWTH_KIND, json!({})));
+        if !script_run::busy(app) {
+            script_run::open_growth(app);
         }
         return true;
     }

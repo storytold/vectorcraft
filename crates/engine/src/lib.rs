@@ -75,8 +75,9 @@ pub struct Session {
     /// back as it was at the release ([`Session::pointer`]).
     pub(crate) lender: Option<Box<dyn Tool>>,
     /// Set while tool actions that end by switching back to the Live Paint Bucket are applied (the
-    /// Eyedropper's sample into a stop of the bucket's gradient): their paint commands change the
-    /// colors the bucket paints with ([`Session::bucket_paints`]).
+    /// Eyedropper's sample into a stop of the bucket's gradient), and while a tool the bucket lent
+    /// is deactivated as it goes back: their paint commands change the colors the bucket paints
+    /// with ([`Session::bucket_paints`]).
     pub(crate) back_to_bucket: bool,
     /// Pointer and key input that came while the tool computed an edit on another thread, each with
     /// its number and view, made in order once the edit is applied.
@@ -106,6 +107,19 @@ pub struct Session {
     /// The selection tool chosen last (Selection, Direct Selection or Group Selection): the one Cmd
     /// lends the other tools. None until one is chosen.
     pub(crate) last_selection_tool: Option<&'static str>,
+    /// Direct Selection or Group Selection, whichever was chosen last: the one Cmd lends the
+    /// Selection tool. None until one is chosen.
+    pub(crate) last_part_selection_tool: Option<&'static str>,
+    /// The selection tool Cmd lent the last press, which also takes the double-click or
+    /// triple-click that follows it, with the uid of the document and the id of the tool it was
+    /// lent from: a follow-up in another document, after a tool switch (also one back to the same
+    /// tool) or after the tool starts afresh is not lent. None when the press was not lent.
+    pub(crate) press_lent: Option<(Option<u64>, &'static str, &'static str)>,
+    /// The selection tool a Cmd press would borrow at the pointer, as [`Session::hover_tool_at`]
+    /// or [`Session::cursor`] last found it with Cmd held (None inside when it found none), with
+    /// the document state, active tool and keys it was found for. None when it was last asked
+    /// without Cmd.
+    pub(crate) hover_lent: Option<(tooling::HoverKey, Option<&'static str>)>,
     pub(crate) last_view: ViewInfo,
     /// The selection tools' measurements for the active document as it is: a pointer move or a
     /// cursor asked for again over an unchanged document and selection measures nothing again.
@@ -234,6 +248,11 @@ pub struct Session {
     /// The running top-level query command changed the selection and is journaled like any other
     /// command ([`Session::journal_query`]).
     journal_query: bool,
+    /// The running top-level command changed only the paint defaults, as the Live Paint Bucket
+    /// or `defaultsOnly: true` has a paint command do, when new art would have taken this
+    /// appearance (none: nothing selected): unless a later batch step changes it, the selection's
+    /// appearance does not replace the defaults afterwards ([`Session::inherit_new_art`]).
+    pub(crate) defaults_only_ran: Option<Option<cmd::newart::NewArtSource>>,
     /// From `edit.undoGroup.begin` to `edit.undoGroup.end`: the name of the undo step (`None`: after
     /// its first edit). Each document opened or created meanwhile opens an undo group of its own
     /// ([`Session::add_document`]). `None` otherwise.
@@ -437,7 +456,7 @@ pub(crate) use command_sets::SELECTS_GIVEN_IDS;
 #[cfg(test)]
 use command_sets::given_ids;
 pub use command_sets::{DRAWS_SHAPE, FIT_ACTIVE_ARTBOARD, ON_ACTIVE_ARTBOARD, waits_for_tool_edit};
-pub use doc_state::{DocState, OpenRows, RecalledSelection, WindowView};
+pub use doc_state::{DocState, LayersReveal, OpenRows, RecalledSelection, WindowView};
 pub use error::{EngineError, READ_ONLY_LOCATION, Result, SCRIPT_BUSY};
 #[cfg(test)]
 use history::history_budget_for;
