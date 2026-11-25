@@ -417,23 +417,36 @@ fn presentation_mode_shows_the_floating_current_document_in_the_main_window() {
 
 #[test]
 fn a_document_made_current_in_presentation_mode_comes_to_the_front_after_it() {
-    let mut app = app_with(2);
-    let ctx = crate::testing::ui_context();
-    frame(&mut app, &ctx, vec![]);
-    app.run("window.arrange.floatAllInWindows", json!({})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    frame(&mut app, &ctx, vec![]);
-    // Where the two windows overlap: document 1's title bar, over document 0's body.
-    let overlap = app.ui.floating[1].place.min + vec2(60.0, 10.0);
-    app.run("view.presentation", json!({})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    app.run("document.activate", json!({"index": 0})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    app.run("view.presentation", json!({})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    frame(&mut app, &ctx, vec![]);
-    click(&mut app, &ctx, overlap);
-    assert_eq!(app.session.active_index(), Some(0), "document 0's window is in front where they overlap");
+    for change_during_presentation in [false, true] {
+        let mut app = app_with(2);
+        let ctx = crate::testing::ui_context();
+        frame(&mut app, &ctx, vec![]);
+        app.run("window.arrange.floatAllInWindows", json!({})).unwrap();
+        frame(&mut app, &ctx, vec![]);
+        frame(&mut app, &ctx, vec![]);
+        // Where the two windows overlap: document 1's title bar, over document 0's body.
+        let overlap = app.ui.floating[1].place.min + vec2(60.0, 10.0);
+        // Cover both an unchanged current document and one chosen while the windows are hidden.
+        if !change_during_presentation {
+            app.run("document.activate", json!({"index": 0})).unwrap();
+            frame(&mut app, &ctx, vec![]);
+        }
+        app.run("view.presentation", json!({})).unwrap();
+        frame(&mut app, &ctx, vec![]);
+        if change_during_presentation {
+            app.run("document.activate", json!({"index": 0})).unwrap();
+            frame(&mut app, &ctx, vec![]);
+        }
+        app.run("view.presentation", json!({})).unwrap();
+        frame(&mut app, &ctx, vec![]);
+        frame(&mut app, &ctx, vec![]);
+        click(&mut app, &ctx, overlap);
+        assert_eq!(
+            app.session.active_index(),
+            Some(0),
+            "document 0's window is in front (changed during presentation: {change_during_presentation})"
+        );
+    }
 }
 
 /// A stand-in for the window system of the documents' OS windows: it runs each one's frame and asks
