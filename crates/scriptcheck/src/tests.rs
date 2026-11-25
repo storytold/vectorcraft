@@ -1557,6 +1557,13 @@ fn application_methods_are_features_not_members() {
 }
 
 #[test]
+fn e4x_and_the_xml_object_need_only_the_language() {
+    let r = report("var x = <a><b/></a>;\nvar y = new XML(s);\nfor each (var v in x.b) {}\n");
+    assert!(feature(&r, "e4x").is_some() && feature(&r, "xml").is_some());
+    assert_eq!(r.needs, [Need::Language]);
+}
+
+#[test]
 fn type_names_compared_or_created_are_listed() {
     let r = report(concat!(
         "if (item.typename == 'AcmeShape') {}\n",

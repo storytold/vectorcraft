@@ -2561,10 +2561,10 @@ script, and it does not change the document or the preferences. The reply's `kin
 top-level `import` or `export`, such as a React `.jsx` file), `notText` (a NUL byte, or more than one byte in ten a
 control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script, the reply holds these lists:
 
-- `needs` lists what the script needs from the app that runs it: `language` (the script language's own objects
-  and directives, such as `$`, `alert`, `UnitValue`, `#target` and `#targetengine`), `dom` (the reference app's
-  document model), `files`, `menuCommands`, `dialogs` (dialogs and palettes), and `hostOnly` (features only the
-  reference app has: BridgeTalk, sockets, native code, XMP, the XML object and E4X, operator overloading,
+- `needs` lists what the script needs from the app that runs it: `language` (the script language's own objects,
+  syntax and directives, such as `$`, `alert`, `UnitValue`, the XML object and E4X, `#target` and `#targetengine`),
+  `dom` (the reference app's document model), `files`, `menuCommands`, `dialogs` (dialogs and palettes), and
+  `hostOnly` (features only the reference app has: BridgeTalk, sockets, native code, XMP, operator overloading,
   reflection, actions and `selectTool`).
 - `directives` lists the `#include`, `#includepath`, `#script`, `#strict`, `#target` and `#targetengine` lines,
   and `targets` splits each `#target` line's application specifier into `app`, `instance`, `version` and
@@ -2670,7 +2670,12 @@ also reads two ECMAScript 2020 forms (https://262.ecma-international.org/11.0/):
 `f?.(args)`), which give `undefined` and skip the rest of the chain when the value before `?.` is `undefined` or
 `null`, and `??`, which evaluates its right side only when its left side is `undefined` or `null`. Mixing `??` with `&&`
 or `||` without parentheses, and assigning to an optional chain, are syntax errors. In a `.jsx` file and a `source`
-string, `?.` and `??` are syntax errors. Which files read these forms is VectorCraft's own rule. The script reaches the
+string, `?.` and `??` are syntax errors. Which files read these forms is VectorCraft's own rule. Every script, `.js`,
+`.jsx` or `source`, also reads ECMAScript for XML (E4X, ECMA-357, 2nd edition,
+https://ecma-international.org/publications-and-standards/standards/ecma-357/): XML and XMLList literals, the `..`,
+`.@`, `.*`, `.()` and `::` selectors, `for each`, `default xml namespace`, and the global `XML`, `XMLList`,
+`Namespace`, `QName`, `isXMLName` and `setDefaultXMLNamespace`, as the XML object pages describe them
+(https://extendscript.docsforadobe.dev/integrating-xml/the-xml-object/). The script reaches the
 app through the global object `vc`, and writes to the Script Console and runs other files through `$`:
 
 - `vc.run(id, params)` runs a command and returns its result. A command that fails throws an error the script can
@@ -4058,10 +4063,10 @@ false, a tutorial whose sample was not opened, and a finished tutorial are error
 `learn.resetProgress {}` runs Reset progress and answers what `learn.list` answers; open documents, opened samples and
 the Learn view stay as they are.
 
-The Home screen has a Learn section between Recent Files and the new-file presets, as
+The Home screen has a Learn section after the new-file presets, as
 [the help page](https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/homescreen-overview.html)
-lists Learn, with in-app tutorials, among the Home screen's options. The section holds the Quick skill guide card,
-which runs `learn.skills`, and every tutorial of the Learn panel under its skill, each a button that runs
+lists Learn, with in-app tutorials, among the Home screen's options. Its heading row ends in the Quick skill guide
+link, which runs `learn.skills`, and a card per skill lists that skill's tutorials as links, each running
 `learn.show {tutorial}`. The panel shows beside the Home screen; no document is opened, closed or switched, and a
 second choice keeps the panel shown. The section's place, its layout and what a choice opens are VectorCraft's own
 rules.
@@ -10664,7 +10669,10 @@ without `useArtboards` (no central file when no art shows). `level: 3` (default)
 shadings and masks transparent image pixels out; `level: 2` writes gradients as bands of colour (as does
 `compatibleGradients`) and transparent pixels white. Type is always glyph outlines, so no fonts are needed (`embedFonts`
 is accepted); spot colours are Separation colour spaces, and overprinting fills and strokes overprint unless
-`overprints: "discard"`. RGB documents are written in CMYK unless `cmykPostScript: false`. A freeform gradient is
+`overprints: "discard"`. With `discardWhiteOverprint` (`document.setup`, on by default) paper white ones knock out
+instead; a white linked to a spot swatch that has a color, at a tint above 0%, still overprints. RGB documents are
+written in CMYK unless
+`cmykPostScript: false`. A freeform gradient is
 written as an image, in CMYK when every point is CMYK or when every point is Gray in a file written in CMYK. When the file would hold an
 image that can't be decoded, the image is left out, and `warnings` carries "an image couldn't be decoded and is missing
 from the picture" once for all such images.

@@ -2076,7 +2076,7 @@ impl Session {
         // A `.js` script reads ECMAScript 2015; `eval`, `Function`, includes and `$.evalFile` read
         // code the way the script does.
         let es2015 = include::es2015_script(request.file.as_deref());
-        let options = Options { max_source_units: include::MAX_TOTAL_BYTES.saturating_mul(2), es2015, ..Options::default() };
+        let options = Options { max_source_units: include::MAX_TOTAL_BYTES.saturating_mul(2), es2015, e4x: true, ..Options::default() };
         let strict = options.strict;
         // A kept engine reads each run's code the way that run's script does.
         let mut realm = match realm {
