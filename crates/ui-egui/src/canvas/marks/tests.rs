@@ -122,6 +122,33 @@ fn hidden_characters_off_and_a_closed_document_release_the_text_nodes() {
     assert!(app.canvas.text_nodes.list.is_none(), "no list of the closed document's text objects is kept");
 }
 
+/// Closing the last document drops the memos' text nodes on the canvas's next frame, whether it
+/// shows the Home screen or, with Show The Home Screen When No Documents Are Open off, an empty window.
+#[test]
+fn a_canvas_frame_without_a_document_releases_the_text_nodes() {
+    let frame = |app: &mut VectorcraftApp| {
+        let ctx = crate::testing::ui_context();
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, Vec2::new(800.0, 600.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| crate::canvas::show(app, ui));
+        out.textures_delta.clear();
+    };
+    for home in [true, false] {
+        let mut app = app();
+        app.session.execute("prefs.set", &json!({"key": "showHomeScreen", "value": home})).unwrap();
+        text(&mut app, 20, 60, "one\ttwo qzxv\nthree");
+        app.ui.view.hidden_chars = true;
+        app.ui.view.auto_spell_check = true;
+        frame(&mut app);
+        assert!(app.canvas.text_nodes.list.is_some() && !app.canvas.hidden_chars.marks.is_empty(), "home {home}: the canvas keeps the memos");
+        app.session.execute("file.close", &json!({})).unwrap();
+        assert_eq!(crate::menus::home_showing(&app), home);
+        frame(&mut app);
+        assert!(app.canvas.text_nodes.list.is_none(), "home {home}: no list of the closed document's text objects is kept");
+        assert!(app.canvas.hidden_chars.marks.is_empty(), "home {home}: no hidden-character marks of the closed document are kept");
+        assert!(app.canvas.spelling.lines.is_empty(), "home {home}: no spelling marks of the closed document are kept");
+    }
+}
+
 /// `paths` small rectangles and three point type objects with hidden characters and words no
 /// dictionary knows: the first on the first layer, the second in a group on that layer and the
 /// third on a second layer. Show Hidden Characters and Auto Spell Check are on. Returns the type

@@ -108,6 +108,10 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.ui.home.is_some_and(|k| k != crate::menus::home_key(app)) {
         app.ui.home = None;
     }
+    // The Home screen and the empty window show no marks: a closed document's text nodes are not kept.
+    if app.session.active().is_none() {
+        marks::release_text_marks(app);
+    }
     let full = ui.available_rect_before_wrap();
     if crate::menus::home_showing(app) {
         // No type editor shows to lose the keys: the marked text stays as typed.
