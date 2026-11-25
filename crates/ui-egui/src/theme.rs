@@ -148,10 +148,11 @@ pub fn root_theme(prefs: &Prefs) -> (ThemeId, ModeChoice, Option<Rgba>) {
 /// The app's sizes over the framework's size sets (`sizes.json`): push buttons have the app's 4-point corners
 /// where the sets give pills, the Home title is 26-point under 60 points of page margin with a 36-point call to
 /// action, and the compact set takes the reference app's metrics:
-/// 26-point fields and spinners, 24-point push buttons, 10 points inside panels, 5 between rows, 13-point body type
-/// with 12.5-point labels and 11-point captions, 16-point glyphs in icon buttons, 5-point control corners, 8-point
-/// menus and 10-point windows, 33-point panel tabs, 310-point dock columns with 14-point column bars and 38-point
-/// icon columns.
+/// 26-point fields and spinners, 24-point push buttons, 10 points inside panels, 5 between rows, 16-point glyphs in
+/// icon buttons, 5-point control corners, 8-point menus and 10-point windows, 33-point panel tabs, 310-point dock
+/// columns with 14-point column bars and 38-point icon columns, and dialog buttons at least 72 points wide.
+/// Its type is the size the reference app draws: it set Inter at 92% of its nominal 13-point body, 12.5-point labels
+/// and 11.5-point captions, so they read at 12, 11.5 and 10.5 points, on the rows those nominal sizes gave.
 const SIZES: &[u8] = br#"{
     "all": {
         "radius.button": 4,
@@ -175,13 +176,14 @@ const SIZES: &[u8] = br#"{
         "radius.control": 5,
         "radius.surface": 8,
         "radius.window": 10,
-        "typography.body.size": 13,
+        "size.dialog.button": 72,
+        "typography.body.size": 12,
         "typography.body.line_height": 17,
-        "typography.body_strong.size": 13,
+        "typography.body_strong.size": 12,
         "typography.body_strong.line_height": 17,
-        "typography.label.size": 12.5,
+        "typography.label.size": 11.5,
         "typography.label.line_height": 17,
-        "typography.caption.size": 11,
+        "typography.caption.size": 10.5,
         "typography.caption.line_height": 15
     }
 }"#;
