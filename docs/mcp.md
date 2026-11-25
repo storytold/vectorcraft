@@ -5913,23 +5913,40 @@ same extension and bytes as one there, loads as that User Defined library (categ
 is refused before it is read.
 From a document, such as a `.ai` or `.eps` swatch library, it reads the colors, tints, gradients and pattern swatches
 in the document's order and color groups; `swatch.library.add` brings a pattern swatch's pattern, with its tile and
-art, into the document as a pattern swatch under the library swatch's name and in its color group. A global or spot
+art, into the document as a pattern swatch under the library swatch's name. The swatch goes into its color group when
+`names` is left out or when the first entry of `names` that covers the swatch is its group; when that first entry is
+the swatch's own name, the swatch comes in ungrouped. A library swatch named after its
+pattern instead takes the name the pattern comes in under, when the pattern comes in under another name that no
+library swatch has and the swatch does not keep a free numbered name as described below. For such a swatch, when the
+document already has a swatch under any name that paints that pattern placed the same way, that swatch is used and
+nothing is added. Otherwise, when a
+swatch or color group of the document already uses that name, the swatch comes in under a numbered copy of it
+("Tiles 2 2"). A global or spot
 color the pattern's art links to keeps the library's color: when the document gives its name another color, it comes
-in under a numbered name ("Ink 2") and the pattern links to that. That numbered name skips the names the library
-gives its other swatches. A library color whose name the document gives
-another color is the document's numbered copy of the same color when it has one, so adding the pattern and its color
-again adds nothing. A pattern the document already holds with its art linked to the document's own color of that name
-is used as it is. A library tint or gradient whose global or spot color comes in under a numbered name, or is in the
-document as such a numbered copy, links to that copy, whether the color is picked before or after it, was added
-earlier or came with a pattern's art. A library global color is not the document's process color of the same name and
-paint: it comes in numbered. A global or spot color that a library tint or gradient links to and the document lacks
-comes in with the tint or gradient, under a numbered name when the document gives its name another swatch. The
-document's tint or gradient of the library one's name is that swatch when it links to the copy of the color that the
-art of a pattern picked with it takes; a numbered copy that the library also names stands for that library swatch
-otherwise. When the document's tint or gradient links to a color the document no longer has (deleted without
-unlinking), that color comes back under its own name. A pattern is found again when it was pasted with Add or Merge for all of its colors; one pasted
-with Merge for some colors and Add for others is added again as a copy. `added` lists the colors the pattern's art, a
-tint or a gradient brings too. A document with
+in under a numbered name ("Ink 2") and the pattern links to that. That numbered name, and the numbered names of a
+pattern swatch and of a pattern the art is painted with, skip the names the library gives its other swatches. A swatch
+of a numbered library name, such as a color or tint "Ink 2", that the pattern's art brings keeps that name when the
+document does not use it. Of two library swatches with one numbered name, the first one in the library keeps the name
+when the other is a swatch the pattern's art brings or a pattern swatch. A pattern the art is painted with keeps a
+numbered name; when the library's swatch of that name places the pattern otherwise, the swatch that comes with the
+pattern gets another name. When the document gives that name to another pattern, the pattern comes in under a new
+number, and its swatch keeps the library swatch's name when no swatch or color group uses it. A library color whose
+name the document gives another color is the document's numbered copy of the same color when it has one, so adding the
+pattern and its color again adds nothing; a numbered copy whose name the library gives another swatch, and which is
+that swatch, is not a copy of another color, whether or not the pattern's art uses that swatch. A pattern the document
+already holds with its art linked to the document's own color of that name, or to a numbered copy of the color as
+pasting leaves it, is used as it is, unless using it would give another swatch a name the library uses. A library
+tint or gradient whose global or spot color comes in under a numbered name, or is in the document as such a numbered
+copy, links to that copy, whether the color is picked before or after it, was added earlier or came with a pattern's
+art. A library global or spot color is not the document's color of the same name and paint when that color is of
+another kind (process, global or spot): it comes in numbered. A global or spot color that a library tint or gradient
+links to and the document lacks comes in with the tint or gradient, under a numbered name when the document gives its
+name another swatch. The document's tint or gradient of the library one's name is that swatch when it links to the
+copy of the color that the art of a pattern picked with it takes; a numbered copy that the library also names stands
+for that library swatch otherwise. When the document's tint or gradient links to a color the document no longer has
+(deleted without unlinking), that color comes back under its own name. A pattern is found again when it was pasted
+with Add or Merge for all of its colors; one pasted with Merge for some colors and Add for others is added again as a
+copy. `added` lists the colors the pattern's art, a tint or a gradient brings too. A document with
 no swatches, and a `.ai`, `.eps` or PostScript file whose swatches are only the default ones, are refused with
 "`<file>` has no swatches of its own", unless the document has graph designs: it then loads with no swatches. The
 Swatch Libraries filter of Other Library… lists `.ai`, `.ait` and `.eps` (`.epsf`) files as well as the library files.
