@@ -1464,6 +1464,9 @@ file-filter	Swatch libraries	色票資料庫
 file-filter	Flattener presets	平面化預設集
 file-filter	PDF presets	PDF 預設集
 file-filter	Print presets	列印預設集
+file-filter	Tracing presets	描圖預設集
+file-filter	Action sets	動作組
+file-filter	Composite fonts	複合字體
 file-filter	Preferences	偏好設定
 file-filter	Export presets	轉存預設集
 file-filter	SVG Compressed	壓縮 SVG
@@ -7011,6 +7014,10 @@ axis	Y Axis	Y 軸
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc 傳回了 0（記憶體不足）
 @msg	vc_alloc returned a block outside memory	vc_alloc 傳回了記憶體之外的區塊
 @msg	vc_run returned error code {packed}	vc_run 傳回了錯誤代碼 {packed}
+@msg	did not finish loading within {secs} s	未在 {secs} 秒內完成載入
+@msg	no thread was left to load it	沒有剩餘的執行緒可以載入它
+@msg	panicked while loading	載入時當機
+@msg	panicked while loading: {what}	載入時當機：{what}
 @msg	{_1} is not a file	{_1} 不是檔案
 @msg	{_1} is {_2} bytes (limit {_3})	{_1} 為 {_2} 位元組（上限 {_3}）
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} 個物件（上限 {MAX_OBJECTS}）
@@ -7169,6 +7176,10 @@ axis	Y Axis	Y 軸
 @msg	`inputs` lists `{shown}` twice	`inputs` 列出了兩次 `{shown}`
 @msg	`inputs` needs `api` 2 or later	`inputs` 需要 `api` 2 或更高
 @msg	`inputs` needs the permission `doc.read`	`inputs` 需要權限 `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	讀取交給它的物件，以及文件的設定、工作區域、圖層和色票
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` 必須列出互不相同的部分：settings、artboards、layers 或 swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` 僅適用於 `api` 3 或更高、具有權限 `doc.read` 的濾鏡或帶 `commands` 的即時效果
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	增效模組要求的文件資訊太大，無法傳遞：工作區域、圖層和色票合計最多 {MAX_CONTEXT_ITEMS} 個，最多 {MAX_CONTEXT_BYTES} 位元組
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	記憶體預算（物件 {_1} 需要 {size} 位元組的輸入，剩餘 {left}）
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	物件預算（超過 {MAX_OBJECTS} 個唯讀物件）
 @msg	instruction budget	指令預算

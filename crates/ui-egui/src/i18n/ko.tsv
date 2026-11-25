@@ -4350,6 +4350,9 @@ file-filter	Swatch libraries	견본 라이브러리
 file-filter	Flattener presets	병합 프리셋
 file-filter	PDF presets	PDF 프리셋
 file-filter	Print presets	인쇄 프리셋
+file-filter	Tracing presets	추적 프리셋
+file-filter	Action sets	액션 세트
+file-filter	Composite fonts	합성 글꼴
 file-filter	Preferences	환경 설정
 file-filter	Export presets	내보내기 사전 설정
 file-filter	SVG Compressed	압축된 SVG
@@ -6952,6 +6955,10 @@ axis	Y Axis	Y축
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc이 0을 반환했습니다(메모리 부족)
 @msg	vc_alloc returned a block outside memory	vc_alloc이 메모리 밖의 블록을 반환했습니다
 @msg	vc_run returned error code {packed}	vc_run이 오류 코드 {packed}을(를) 반환했습니다
+@msg	did not finish loading within {secs} s	{secs}초 안에 로드를 마치지 못했습니다
+@msg	no thread was left to load it	로드할 스레드가 남아 있지 않았습니다
+@msg	panicked while loading	로드하는 중에 비정상 종료되었습니다
+@msg	panicked while loading: {what}	로드하는 중에 비정상 종료되었습니다: {what}
 @msg	{_1} is not a file	{_1}은(는) 파일이 아닙니다
 @msg	{_1} is {_2} bytes (limit {_3})	{_1}이(가) {_2}바이트입니다(한도 {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	개체 {_1}개(한도 {MAX_OBJECTS})
@@ -7110,6 +7117,10 @@ axis	Y Axis	Y축
 @msg	`inputs` lists `{shown}` twice	`inputs`에 `{shown}`이(가) 두 번 나열되어 있습니다
 @msg	`inputs` needs `api` 2 or later	`inputs`에는 `api` 2 이상이 필요합니다
 @msg	`inputs` needs the permission `doc.read`	`inputs`에는 `doc.read` 권한이 필요합니다
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	전달받은 개체와 문서의 설정, 아트보드, 레이어, 견본 읽기
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context`에는 서로 다른 섹션을 나열해야 합니다: settings, artboards, layers 또는 swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context`는 `api` 3 이상이고 `doc.read` 권한이 있는 필터 또는 `commands`가 있는 라이브 효과에만 쓸 수 있습니다
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	플러그인이 요청한 문서 정보가 너무 커서 넘길 수 없습니다: 아트보드, 레이어, 견본은 {MAX_CONTEXT_BYTES}바이트 안에서 최대 {MAX_CONTEXT_ITEMS}개입니다
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	메모리 예산(개체 {_1}에 입력 {size}바이트가 필요하지만 {left}바이트 남음)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	개체 예산(읽기 전용 개체 {MAX_OBJECTS}개 초과)
 @msg	instruction budget	명령어 예산

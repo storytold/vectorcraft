@@ -618,6 +618,7 @@ impl Session {
             path_only: self.prefs.object_selection_by_path_only,
             type_path_only: self.prefs.type_selection_by_path_only,
             double_click_isolate: self.prefs.double_click_to_isolate,
+            double_click_adds_anchor: self.prefs.double_click_adds_anchor_points,
             select_behind: self.prefs.ctrl_click_selects_behind,
             highlight_anchors: self.prefs.highlight_anchors_on_hover,
             snap_tolerance: self.prefs.snap_to_point_tolerance,
@@ -1462,6 +1463,16 @@ impl Session {
         }
     }
 
+    /// The object a click of the active tool at `p` with `mods` would act on
+    /// ([`vectorcraft_tools::Tool::hover_object`]), for Smart Guides › Object Highlighting. None
+    /// while Cmd lends a selection tool to the press ([`Self::lent_tool_at`]).
+    pub fn hover_object(&mut self, p: Point, mods: Mods, view: ViewInfo) -> Option<NodeId> {
+        if mods.cmd && self.lender.is_none() && !self.tool_editing() && self.lent_tool_at(p, &mods, view).is_some() {
+            return None;
+        }
+        self.with_tool_cx(view, |t, cx| t.hover_object(cx, p, mods))
+    }
+
     pub fn tool_options(&self) -> Value {
         self.tool.options()
     }
@@ -1727,6 +1738,10 @@ impl Session {
 
     /// Apply tool actions. Errors from previews are reported but keep the interaction alive.
     pub fn apply_actions(&mut self, acts: Vec<Action>) -> Result<Vec<UiRequest>> {
+        // The tool acts on its own interaction, which a command from outside it may have set aside.
+        if !acts.is_empty() {
+            self.put_back_interaction();
+        }
         let outer = std::mem::replace(&mut self.in_tool_actions, true);
         let outer_bucket = self.back_to_bucket;
         // The Eyedropper's sample into a stop of the Live Paint Bucket's gradient, which switches back to the bucket.
@@ -1752,7 +1767,16 @@ impl Session {
         let mut ui = vec![];
         for a in acts {
             match a {
-                Action::Begin(label) => self.begin_interaction(&label)?,
+                Action::Begin(label) => {
+                    // The snapshot of the interaction open before, which the tool's drag then joins.
+                    let open = self.active().and_then(|st| st.interaction.as_ref()).map(|it| std::sync::Arc::as_ptr(&it.doc));
+                    self.begin_interaction(&label)?;
+                    if let Some(it) = self.active_mut().and_then(|st| st.interaction.as_mut())
+                        && open != Some(std::sync::Arc::as_ptr(&it.doc))
+                    {
+                        it.tool = true;
+                    }
+                }
                 Action::Preview(cmd, p) => {
                     // Performance › Real-time Drawing and Editing (#394): off, remember the latest
                     // params and apply them once on Commit instead of every move. A ruler guide

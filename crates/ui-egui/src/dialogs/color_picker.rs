@@ -6,7 +6,8 @@
 //! `artboard.setProps {index, color}`.
 //!
 //! A command dialog's colour row raises a `ColorRequest`; [`pump`] opens a picker over that dialog
-//! and answers the row with its OK.
+//! and answers the row with its OK. The OK for a Save for Web colour table cell shifts the cell's
+//! colour in the table instead ([`super::save_for_web::take_palette_pick`]).
 //!
 //! Fields agents set with `ui.dialog.set`: the framework picker's (`color`, `mode`, `webColors`,
 //! `swatches`, `library`). `stroke`, `artboard` and `color` come from the opener.
@@ -253,7 +254,11 @@ fn finish(
 ) {
     let preview = std::mem::take(&mut open.preview);
     match (result, &open.target) {
-        (Some(DialogResult::Ok(r)), Target::Answer { parent, key }) => dialogs.with(|h| h.answer_color(*parent, key, r.picked.color)),
+        (Some(DialogResult::Ok(r)), Target::Answer { parent, key }) => {
+            if !super::save_for_web::take_palette_pick(app, *parent, key, open.start, r.picked.color) {
+                dialogs.with(|h| h.answer_color(*parent, key, r.picked.color));
+            }
+        }
         (Some(DialogResult::Ok(r)), _) => {
             if let Err(e) = commit(app, open, preview, &r.picked) {
                 app.status(e);
