@@ -3795,13 +3795,12 @@ not included.
 
 ## Learn panel
 
-Window › Learn and the Explore tutorials button beside the search field at the right end of the app bar show and hide
-the Learn panel. Its For you tab holds a Get started section with a Quick skill guide card; choosing the card opens
+Window › Learn shows and hides the Learn panel. Its For you tab holds a Get started section with a Quick skill guide card; choosing the card opens
 the Skills tab. The Skills tab lists VectorCraft's own skills, each with a progress ring and the count of its tutorials
 finished of all its tutorials. Choosing a skill lists its tutorials, choosing a tutorial shows its numbered steps, and
 Back goes up one level.
 The tutorial text is English. `window.learn {show?}` shows the panel (`show: true`), hides it (`show: false`) or
-toggles it (`show` omitted or null), and answers whether it shows; Window › Learn and Explore tutorials run it.
+toggles it (`show` omitted or null), and answers whether it shows; Window › Learn runs it.
 The panel counts as hidden while the dock is hidden or a full screen mode hides the panels. Showing it shows a hidden
 dock; in a full screen mode it makes Learn the front panel, which shows when the mode ends, and answers false. Any
 other value of `show` is an error and changes nothing. `learn.list {}` →
@@ -9106,7 +9105,7 @@ area, in a grid of as many columns as the square root of the number of windows, 
 its pane. Each view of a document counts as a window (see `window.newWindow` below). With fewer than two windows open it
 leaves the view, `tiled` and the layout as they are. It returns
 `{tiled, panes, layout}`. `window.arrange.tile {layout}` picks another layout, as the other Tile items of Window ›
-Arrange and of the application bar's Arrange Documents button do: `grid` (the default), `vertical` (Tile All
+Arrange do: `grid` (the default), `vertical` (Tile All
 Vertically: side by side in one row), `horizontal` (Tile All Horizontally: stacked in one column), and `2up`, `3up`,
 `4up` and `6up`, which show at most that many windows (2-Up and 3-Up side by side, 4-Up two by two, 6-Up three by
 two) and leave the others under their tabs. Those layouts show the first windows in tab order, and the current

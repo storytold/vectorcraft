@@ -1241,17 +1241,17 @@ fn show_rows(app: &mut VectorcraftApp, panel: &mut WheelUi, ui: &mut Ui, cx: &Pi
         }
     });
     if set.opacity {
-        ui.add_space(4.0);
+        let (color, tgt) = (cx.color, cx.tgt);
         let shown = color.unwrap_or(app.session.last_solid);
-        let owner = color.map(|c| Owner::of(app, &tgt, c));
-        opacity_row(app, panel, ui, &tgt, &shown, &cms);
+        let owner = color.map(|c| Owner::of(app, tgt, c));
+        opacity_row(app, panel, ui, tgt, &shown, cx.cms);
         // An opacity edit of a gradient stop or point changes the gradient its owner holds, and the
         // HSB picked last stays with the new gradient.
         if let (Some(c), Some(was)) = (color, owner)
             && let Some((remembered, ..)) = &mut panel.hsb
             && *remembered == was
         {
-            *remembered = Owner::of(app, &tgt, c);
+            *remembered = Owner::of(app, tgt, c);
         }
     } else {
         end_opacity_drag(app, panel);
