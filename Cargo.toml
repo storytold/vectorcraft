@@ -213,3 +213,42 @@ eframe = { git = "https://github.com/storytold/egui.git", rev = "b15ffe9bfc2c8e6
 egui_demo_lib = { git = "https://github.com/storytold/egui.git", rev = "b15ffe9bfc2c8e6748533b32b708e10abaf2afec" }
 egui_inspection = { git = "https://github.com/storytold/egui.git", rev = "b15ffe9bfc2c8e6748533b32b708e10abaf2afec" }
 winit = { git = "https://github.com/storytold/winit.git", rev = "a517b3846ee8457d84ee4975110bfda6797c44dc" }
+
+
+[patch."https://github.com/storytold/craft-libs"]
+# The title bar's move band keeps the arrow over a window it moves, as an OS title bar does
+# (craft-libs fix/move-band-arrow). Drop once the pinned rev moves past the fix.
+craft = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-affinity = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-cdr = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-cms = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-codepage = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-color-ui = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-docpath = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-dxf = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-eps = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-fonts-build = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-gif = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-gzip = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-image-codecs = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-jxl = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-metafile = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-mime = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-pdf = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-plotter = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-proof = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-ps = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-psd = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-stream-codecs = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-svg = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-theme = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-tiff = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-vectorcraft-format = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+craft-xml = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+hayro-cmap = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+hayro-interpret = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+hayro-jbig2 = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+hayro-postscript = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+hayro-syntax = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+krilla = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
+linesweeper = { git = "https://github.com/Cyb3rDudu/craft-libs", rev = "b6dd4cd994205a54bb6ac70862a51ad4cba0616f" }
