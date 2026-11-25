@@ -885,7 +885,7 @@ mod tests {
         let rows = DocSettings { artboards: 9, layout: ArtboardLayout::GridByColumn, columns: 2, rows: 4, ..DocSettings::default() };
         let mut s = rows.clone();
         set_columns(&mut s, 3);
-        assert_eq!((s.columns, s.rows), (3, 4), "3 is what the rows show");
+        assert_eq!(s, rows, "3 is what the rows show");
         set_columns(&mut s, 2);
         assert_eq!((s.layout, s.columns, s.rows), (ArtboardLayout::GridByColumn, 2, 0));
         assert_eq!(s.grid_columns(), 2);
