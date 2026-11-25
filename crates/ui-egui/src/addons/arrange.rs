@@ -3,226 +3,248 @@
 //! which preview on the canvas and run their `addon.arrange.*` command on OK; Group Overlapping
 //! Objects; and Zoom to Selection ([`ZOOM`]), which fits the active view to the selection.
 
-use egui::Ui;
+use std::borrow::Cow;
+
+use craft::menu::Node;
+use craft::ui::canvas::ViewCommands;
+use craft::ui::patterns::form_dialogs::{DialogFields, Param, ParamDialog, ParamKind};
+use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use serde_json::{Value, json};
 
+use super::dialogs::Spec;
 use crate::VectorcraftApp;
-use crate::dialogs::{DialogSpec, form};
-use crate::menus::Item;
-use crate::state::Dialog;
-use crate::widgets;
+use crate::canvas::rulers::general_lengths;
+use crate::dialogs::form;
+use crate::dialogs::tool_options::reference_param;
+use crate::menus::{Sep, c, cp};
 
 /// Zoom to Selection: a view command, since the view is the interface's.
 pub const ZOOM: &str = "addon.arrange.zoomSelection";
-/// The dialogs' kinds.
-pub const GRID: &str = "arrangeGrid";
-pub const REPLACE: &str = "arrangeReplace";
-pub const SIZE: &str = "arrangeSize";
-pub const OPACITY: &str = "arrangeOpacity";
-pub const SORT: &str = "arrangeSort";
-/// Each dialog's kind, command and heading.
-const DIALOGS: [(&str, &str, &str); 5] = [
-    (GRID, "addon.arrange.grid", "Arrange in Grid"),
-    (REPLACE, "addon.arrange.replace", "Replace with Top Object"),
-    (SIZE, "addon.arrange.size", "Set Size of Each"),
-    (OPACITY, "addon.arrange.randomizeOpacity", "Randomize Opacity"),
-    (SORT, "addon.arrange.sort", "Sort Objects"),
+const GRID: &str = "addon.arrange.grid";
+const REPLACE: &str = "addon.arrange.replace";
+const SIZE: &str = "addon.arrange.size";
+const OPACITY: &str = "addon.arrange.randomizeOpacity";
+const SORT: &str = "addon.arrange.sort";
+/// Each dialog's command and heading.
+const DIALOGS: [(&str, &str); 5] = [
+    (GRID, "Arrange in Grid"),
+    (REPLACE, "Replace with Top Object"),
+    (SIZE, "Set Size of Each"),
+    (OPACITY, "Randomize Opacity"),
+    (SORT, "Sort Objects"),
 ];
 /// The widths and heights Set Size of Each takes (pt), and the gaps Arrange in Grid takes.
 const SIZES: std::ops::RangeInclusive<f64> = 0.001..=1e6;
 const GAPS: std::ops::RangeInclusive<f64> = -1e6..=1e6;
 /// The seeds the Randomize Opacity dialog offers.
 const SEEDS: u64 = 1_000_000;
-const LABEL_W: f32 = 110.0;
-const FIELD_W: f32 = 90.0;
+/// The units a command's params are in; a row's shown unit does not change them.
+const POINTS: LengthUnits = LengthUnits::new(UnitKind::Points, UnitKind::Points, 72.0);
+/// The attributes Sort Objects sorts by and applies.
+const ATTRIBUTES: [(&str, &str); 7] = [
+    ("width", "Width"),
+    ("height", "Height"),
+    ("area", "Area"),
+    ("x", "X Position"),
+    ("y", "Y Position"),
+    ("opacity", "Opacity"),
+    ("stacking", "Stacking Order"),
+];
 
 /// Object › Plug-ins › Arrange Tools.
-pub fn menu() -> Vec<Item> {
+pub fn menu() -> Vec<Node> {
     vec![
-        Item::Cmd("Arrange in Grid…", "addon.arrange.grid", Value::Null),
-        Item::Cmd("Swap Objects", "addon.arrange.swap", json!({})),
-        Item::Cmd("Swap Objects and Sizes", "addon.arrange.swap", json!({ "size": true })),
-        Item::Cmd("Replace with Top Object…", "addon.arrange.replace", Value::Null),
-        Item::Cmd("Set Size of Each…", "addon.arrange.size", Value::Null),
-        Item::Cmd("Group Overlapping Objects", "addon.arrange.groupOverlapping", json!({})),
-        Item::Cmd("Randomize Opacity…", "addon.arrange.randomizeOpacity", Value::Null),
-        Item::Cmd("Sort Objects…", "addon.arrange.sort", Value::Null),
-        Item::Sep,
-        Item::Cmd("Zoom to Selection", ZOOM, json!({})),
+        c("Arrange in Grid…", GRID),
+        cp("Swap Objects", "addon.arrange.swap", json!({})),
+        cp("Swap Objects and Sizes", "addon.arrange.swap", json!({ "size": true })),
+        c("Replace with Top Object…", REPLACE),
+        c("Set Size of Each…", SIZE),
+        cp("Group Overlapping Objects", "addon.arrange.groupOverlapping", json!({})),
+        c("Randomize Opacity…", OPACITY),
+        c("Sort Objects…", SORT),
+        Sep,
+        cp("Zoom to Selection", ZOOM, json!({})),
     ]
 }
 
-/// The dialog (kind, fields) the menu item of command `id` opens; `None` for other commands and
-/// without a document.
-pub(crate) fn dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static str, Value)> {
-    let &(kind, ..) = DIALOGS.iter().find(|(_, cmd, _)| *cmd == id)?;
+static GRID_SPEC: Spec = Spec { command: GRID, params: grid_params, found: None };
+static REPLACE_SPEC: Spec = Spec { command: REPLACE, params: replace_params, found: None };
+static SIZE_SPEC: Spec = Spec { command: SIZE, params: size_params, found: None };
+static OPACITY_SPEC: Spec = Spec { command: OPACITY, params: opacity_params, found: None };
+static SORT_SPEC: Spec = Spec { command: SORT, params: sort_params, found: None };
+
+/// The dialog over `rows`, titled by the heading of `command`.
+fn dialog<'a>(command: &str, rows: Vec<Param>) -> ParamDialog<'a> {
+    let heading = DIALOGS.iter().find(|(c, _)| *c == command).map_or("", |&(_, h)| h);
+    ParamDialog::new(command, tl!(heading), Cow::Owned(rows)).previews(true)
+}
+
+fn choice(key: &str, label: &'static str, options: &[(&str, &'static str)], default: &str) -> Param {
+    let options = options.iter().map(|&(id, text)| (id.to_string(), tl!(text).into())).collect();
+    Param::new(key, tl!(label), ParamKind::choice(options, Some(default.into())))
+}
+
+fn check(key: &str, label: &'static str, default: bool) -> Param {
+    Param::new(key, tl!(label), ParamKind::bool(default))
+}
+
+fn length(key: &str, label: &'static str, default: f64, bounds: std::ops::RangeInclusive<f64>, lengths: LengthUnits) -> Param {
+    Param::number(key, tl!(label), default, 1.0, 2).bounds(Some(*bounds.start()), Some(*bounds.end())).length(lengths)
+}
+
+fn percent(key: &str, label: &'static str, default: f64) -> Param {
+    Param::number(key, tl!(label), default, 1.0, 0).bounds(Some(0.0), Some(100.0)).unit(UnitKind::Percent)
+}
+
+fn seed() -> Param {
+    Param::new("seed", tl!("Seed:"), ParamKind::int(Some(0), Some(SEEDS as i64 - 1), 0))
+}
+
+fn scale_strokes() -> Param {
+    check("scaleStrokes", "Scale Strokes & Effects", false)
+}
+
+fn grid_rows(lengths: LengthUnits) -> Vec<Param> {
+    let layouts = [("grid", "Grid by Row"), ("row", "Arrange by Row"), ("column", "Arrange by Column")];
+    vec![
+        choice("layout", "Layout:", &layouts, "grid"),
+        Param::new("columns", tl!("Columns:"), ParamKind::int(Some(1), Some(10_000), 1)).enabled_when("layout", "grid"),
+        length("gapX", "H Spacing:", 10.0, GAPS, lengths),
+        length("gapY", "V Spacing:", 10.0, GAPS, lengths),
+        check("centerOnArtboard", "Center on Artboard", false),
+    ]
+}
+
+fn replace_rows() -> Vec<Param> {
+    let fits = [("keep", "Actual Size"), ("bounds", "Bounds"), ("proportional", "Bounds (Fit Proportionally)")];
+    vec![choice("fit", "Size:", &fits, "keep"), check("keep", "Keep Original", false), scale_strokes()]
+}
+
+fn size_rows(lengths: LengthUnits) -> Vec<Param> {
+    vec![
+        check("widthOn", "Width:", true),
+        length("width", "", 100.0, SIZES, lengths).enabled_when("widthOn", true),
+        check("heightOn", "Height:", true),
+        length("height", "", 100.0, SIZES, lengths).enabled_when("heightOn", true),
+        // Only one size given: the other can follow it.
+        check("proportional", "Constrain Width and Height Proportions", false).enabled_when_differs("widthOn", "heightOn"),
+        reference_param("reference", tl!("Reference Point")),
+        scale_strokes(),
+    ]
+}
+
+fn opacity_rows() -> Vec<Param> {
+    vec![percent("min", "Minimum:", 30.0), percent("max", "Maximum:", 100.0), seed()]
+}
+
+fn sort_rows() -> Vec<Param> {
+    let orders = [("ascending", "Small to Large"), ("descending", "Large to Small"), ("random", "Random")];
+    // Stacking order only trades places; only sizes scale strokes.
+    let sizes = ["width", "height", "area"];
+    let placed = ATTRIBUTES.iter().map(|a| a.0).filter(|key| *key != "stacking");
+    vec![
+        choice("by", "Sort By:", &ATTRIBUTES, "area"),
+        choice("apply", "Apply To:", &ATTRIBUTES, "stacking"),
+        choice("order", "Order:", &orders, "ascending"),
+        check("distribute", "Distribute Evenly", false).enabled_when_in("apply", placed),
+        scale_strokes().enabled_when_in("apply", sizes),
+    ]
+}
+
+fn grid_params(fields: &DialogFields) -> Value {
+    Value::Object(form::json_of(&grid_rows(POINTS), fields))
+}
+
+fn replace_params(fields: &DialogFields) -> Value {
+    Value::Object(form::json_of(&replace_rows(), fields))
+}
+
+/// Of Set Size of Each's width and height, those ticked.
+fn size_params(fields: &DialogFields) -> Value {
+    let mut params = form::json_of(&size_rows(POINTS), fields);
+    for side in ["width", "height"] {
+        let tick = format!("{side}On");
+        params.remove(&tick);
+        if fields.bool(&tick) != Some(true) {
+            params.remove(side);
+        }
+    }
+    Value::Object(params)
+}
+
+fn opacity_params(fields: &DialogFields) -> Value {
+    Value::Object(form::json_of(&opacity_rows(), fields))
+}
+
+fn sort_params(fields: &DialogFields) -> Value {
+    Value::Object(form::json_of(&sort_rows(), fields))
+}
+
+/// Opens the dialog of command `id` on the active document; `None` for another command and without a document.
+pub(crate) fn open(app: &mut VectorcraftApp, id: &str) -> Option<Result<Value, String>> {
+    let &(command, _) = DIALOGS.iter().find(|(command, _)| *command == id)?;
     let st = app.session.active()?;
     let strokes = app.session.prefs.scale_strokes;
-    let fields = match kind {
+    let lengths = general_lengths(app);
+    let (rows, opening) = match command {
         // A square grid to start with: as many columns as the square root of the count.
-        GRID => json!({
-            "layout": "grid", "columns": (st.selection.objects.len().max(1) as f64).sqrt().ceil() as u64,
-            "gapX": 10, "gapY": 10, "centerOnArtboard": false,
-        }),
-        REPLACE => json!({ "fit": "keep", "keep": false, "scaleStrokes": strokes }),
+        GRID => (
+            grid_rows(lengths),
+            json!({
+                "layout": "grid", "columns": (st.selection.objects.len().max(1) as f64).sqrt().ceil() as u64,
+                "gapX": 10, "gapY": 10, "centerOnArtboard": false,
+            }),
+        ),
+        REPLACE => (replace_rows(), json!({ "fit": "keep", "keep": false, "scaleStrokes": strokes })),
         // A new seed each time the document has changed, so running it again varies the result.
-        OPACITY => json!({ "min": 30, "max": 100, "seed": st.revision % SEEDS }),
+        OPACITY => (opacity_rows(), json!({ "min": 30, "max": 100, "seed": st.revision % SEEDS })),
         // The random order's seed (not shown): new whenever the document has changed, so each run
         // shuffles anew while Preview and OK agree.
-        SORT => json!({
-            "by": "area", "apply": "stacking", "order": "ascending", "distribute": false, "seed": st.revision % SEEDS, "scaleStrokes": strokes,
-        }),
+        SORT => (
+            sort_rows(),
+            json!({
+                "by": "area", "apply": "stacking", "order": "ascending", "distribute": false, "seed": st.revision % SEEDS, "scaleStrokes": strokes,
+            }),
+        ),
         // The first selected object's size, as the command measures it (a side it lacks: the least).
         _ => {
-            let b = st.selection.objects.first().and_then(|id| app.session.transform_box(&[*id])).map_or((100.0, 100.0), |b| {
+            let (w, h) = st.selection.objects.first().and_then(|id| app.session.transform_box(&[*id])).map_or((100.0, 100.0), |b| {
                 (b.rect.width().clamp(*SIZES.start(), *SIZES.end()), b.rect.height().clamp(*SIZES.start(), *SIZES.end()))
             });
-            json!({
-                "width": b.0, "height": b.1, "__width": true, "__height": true, "proportional": false, "reference": 4, "scaleStrokes": strokes,
-            })
+            (
+                size_rows(lengths),
+                json!({
+                    "width": w, "height": h, "widthOn": true, "heightOn": true, "proportional": false, "reference": 4, "scaleStrokes": strokes,
+                }),
+            )
         }
     };
-    Some((kind, fields))
-}
-
-pub(crate) const SPEC: DialogSpec = DialogSpec {
-    heading: |d| tl!(command(d).1).to_string(),
-    body,
-    confirm,
-    preview: true,
-    min_width: 320.0,
-    ok_enabled: Some(|_, d| match d.kind.as_str() {
-        SIZE => d.bool("__width") || d.bool("__height"),
-        OPACITY => d.f64("min", 0.0) <= d.f64("max", 100.0),
-        _ => true,
-    }),
-    ..DialogSpec::FORM
-};
-
-/// The command and heading of dialog `d`.
-fn command(d: &Dialog) -> (&'static str, &'static str) {
-    DIALOGS.iter().find(|(kind, ..)| *kind == d.kind).map_or(("", ""), |&(_, cmd, label)| (cmd, label))
-}
-
-/// The command's params: the fields, and of Set Size of Each's width and height those ticked.
-fn params(d: &Dialog) -> Value {
-    let mut p = form::params(d);
-    if let Some(o) = p.as_object_mut() {
-        for side in ["width", "height"] {
-            if !d.bool(&format!("__{side}")) {
-                o.remove(side);
-            }
-        }
-    }
-    p
-}
-
-fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
-    let unit = app.session.general_unit();
-    let widths = (LABEL_W, 150.0);
-    match d.kind.as_str() {
-        GRID => {
-            let layouts = [("grid", "Grid by Row"), ("row", "Arrange by Row"), ("column", "Arrange by Column")];
-            form::choice(ui, d, "layout", tl!("Layout:"), widths, &layouts);
-            ui.add_enabled_ui(d.str("layout") == "grid", |ui| {
-                widgets::label_row(ui, tl!("Columns:"), LABEL_W, |ui| {
-                    if let Some(v) = widgets::range_field(ui, ("arrange", "columns"), d.f64("columns", 1.0), 1.0..=10_000.0, "", 0, FIELD_W) {
-                        d.fields.insert("columns".into(), json!(v as u64));
-                    }
-                });
-            });
-            widgets::label_row(ui, tl!("H Spacing:"), LABEL_W, |ui| {
-                form::length_within(ui, d, "gapX", unit, FIELD_W, Some(GAPS));
-            });
-            widgets::label_row(ui, tl!("V Spacing:"), LABEL_W, |ui| {
-                form::length_within(ui, d, "gapY", unit, FIELD_W, Some(GAPS));
-            });
-            form::check(ui, d, "centerOnArtboard", tl!("Center on Artboard"));
-        }
-        REPLACE => {
-            let fits = [("keep", "Actual Size"), ("bounds", "Bounds"), ("proportional", "Bounds (Fit Proportionally)")];
-            form::choice(ui, d, "fit", tl!("Size:"), widths, &fits);
-            form::check(ui, d, "keep", tl!("Keep Original"));
-            form::check(ui, d, "scaleStrokes", tl!("Scale Strokes & Effects"));
-        }
-        OPACITY => {
-            for (key, label) in [("min", tl!("Minimum:")), ("max", tl!("Maximum:"))] {
-                widgets::label_row(ui, label, LABEL_W, |ui| {
-                    if let Some(v) = widgets::range_field(ui, ("arrange", key), d.f64(key, 0.0), 0.0..=100.0, "%", 0, FIELD_W) {
-                        d.fields.insert(key.into(), json!(v));
-                    }
-                });
-            }
-            widgets::label_row(ui, tl!("Seed:"), LABEL_W, |ui| {
-                if let Some(v) = widgets::range_field(ui, ("arrange", "seed"), d.f64("seed", 0.0), 0.0..=(SEEDS - 1) as f64, "", 0, FIELD_W) {
-                    d.fields.insert("seed".into(), json!(v as u64));
-                }
-            });
-        }
-        SORT => {
-            let attributes = [
-                ("width", "Width"),
-                ("height", "Height"),
-                ("area", "Area"),
-                ("x", "X Position"),
-                ("y", "Y Position"),
-                ("opacity", "Opacity"),
-                ("stacking", "Stacking Order"),
-            ];
-            form::choice(ui, d, "by", tl!("Sort By:"), widths, &attributes);
-            form::choice(ui, d, "apply", tl!("Apply To:"), widths, &attributes);
-            let orders = [("ascending", "Small to Large"), ("descending", "Large to Small"), ("random", "Random")];
-            form::choice(ui, d, "order", tl!("Order:"), widths, &orders);
-            // Stacking order only trades places; only sizes scale strokes.
-            let apply = d.str("apply");
-            ui.add_enabled_ui(apply != "stacking", |ui| form::check(ui, d, "distribute", tl!("Distribute Evenly")));
-            ui.add_enabled_ui(matches!(apply.as_str(), "width" | "height" | "area"), |ui| {
-                form::check(ui, d, "scaleStrokes", tl!("Scale Strokes & Effects"));
-            });
-        }
-        _ => {
-            egui::Grid::new("arrange-size").num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
-                for (side, tick, label) in [("width", "__width", tl!("Width:")), ("height", "__height", tl!("Height:"))] {
-                    form::check(ui, d, tick, label);
-                    let on = d.bool(tick);
-                    ui.add_enabled_ui(on, |ui| {
-                        form::length_within(ui, d, side, unit, FIELD_W, Some(SIZES));
-                    });
-                    ui.end_row();
-                }
-            });
-            // Only one size given: the other can follow it.
-            let one = d.bool("__width") != d.bool("__height");
-            if widgets::check(ui, tl!("Constrain Width and Height Proportions"), d.bool("proportional"), one) {
-                let on = !d.bool("proportional");
-                d.fields.insert("proportional".into(), json!(on));
-            }
-            ui.horizontal(|ui| {
-                if let Some(i) = widgets::reference_point(ui, d.f64("reference", 4.0).clamp(0.0, 8.0) as usize) {
-                    d.fields.insert("reference".into(), json!(i));
-                }
-                widgets::dim_label(ui, tl!("Reference Point"));
-            });
-            form::check(ui, d, "scaleStrokes", tl!("Scale Strokes & Effects"));
-        }
-    }
-    let (cmd, label) = command(d);
-    form::preview(app, ui, d, label, cmd, params(d));
-    false
-}
-
-/// OK: run the command (keep its preview) and close.
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    form::commit_preview(app, command(d).0, params(d))
+    let fields = form::fields_of(&rows, opening.as_object()?);
+    let opened = match command {
+        GRID => super::dialogs::open(app, &GRID_SPEC, fields, move |_| dialog(GRID, grid_rows(lengths))),
+        REPLACE => super::dialogs::open(app, &REPLACE_SPEC, fields, |_| dialog(REPLACE, replace_rows())),
+        OPACITY => super::dialogs::open(app, &OPACITY_SPEC, fields, |fields| {
+            let (min, max) = (fields.number("min").unwrap_or(0.0), fields.number("max").unwrap_or(100.0));
+            dialog(OPACITY, opacity_rows()).ok_enabled(min <= max)
+        }),
+        SORT => super::dialogs::open(app, &SORT_SPEC, fields, |_| dialog(SORT, sort_rows())),
+        _ => super::dialogs::open(app, &SIZE_SPEC, fields, move |fields| {
+            let either = fields.bool("widthOn").unwrap_or(true) || fields.bool("heightOn").unwrap_or(true);
+            dialog(SIZE, size_rows(lengths)).ok_enabled(either).ok_reason(tl!("Tick Width or Height.").into())
+        }),
+    };
+    Some(opened)
 }
 
 /// Zoom to Selection: the active view zooms and centres so the selection's bounds fill the
 /// window, with a margin. An error with nothing selected.
 pub(crate) fn zoom(app: &mut VectorcraftApp) -> Result<Value, String> {
-    if app.session.active().is_none_or(|st| st.selection.objects.is_empty()) {
+    let Some(st) = app.session.active().filter(|st| !st.selection.objects.is_empty()) else {
         return Err("nothing selected".into());
-    }
-    crate::canvas::fit(app, ZOOM);
+    };
+    let bounds = st.doc.bounds_of(&st.selection.objects, true);
+    // At once, as production fitted: a dialog's OK that selects and zooms shows the fit without another frame.
+    app.view_now(ViewCommands::FitLayers, bounds);
     Ok(Value::Null)
 }
 

@@ -1065,3 +1065,36 @@ fn a_double_click_on_a_corner_widget_with_a_shape_tool_asks_for_the_transform_pa
     assert!(st.interaction.is_none());
     assert_eq!(s.tool_id(), "rectangle");
 }
+
+/// A double-click on a corner widget of a selected live rectangle with the Selection tool asks
+/// the frontend for the Transform panel, and leaves the document, its undo history, the
+/// selection and the tool as they were; with Direct Selection it still opens Corners.
+#[test]
+fn a_double_click_on_a_corner_widget_with_the_selection_tool_asks_for_the_transform_panel() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+    let (mut s, id) = session();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let v = ViewInfo::default();
+    let st = s.doc().unwrap();
+    let w = vectorcraft_tools::corners::CornerWidgets::showing(&st.doc, &st.selection, v.zoom, false, true, 180.0).expect("corner widgets show");
+    let at = w.visible().next().expect("a widget");
+    let (doc, selection, steps) = (st.doc.clone(), st.selection.clone(), st.history.undo.len());
+    let double_click = |s: &mut Session, tool: &str| {
+        s.select_tool(tool, v).unwrap();
+        let mut asked = vec![];
+        for kind in [PointerKind::Down, PointerKind::Up, PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick] {
+            asked.extend(s.pointer(&PointerEvent::new(kind, at.x, at.y).with_mods(Mods::default()), v).unwrap());
+        }
+        asked
+    };
+    assert_eq!(double_click(&mut s, "selection"), vec![UiRequest::Panel("transform".into())]);
+    let st = s.doc().unwrap();
+    assert!(*st.doc == *doc, "the document is unchanged");
+    assert_eq!(st.selection, selection);
+    assert_eq!(st.history.undo.len(), steps, "no undo step");
+    assert!(st.interaction.is_none());
+    assert_eq!(s.tool_id(), "selection");
+    // Direct Selection opens Corners for the corner it picked with the first click.
+    let asked = double_click(&mut s, "directSelection");
+    assert!(matches!(asked.as_slice(), [UiRequest::Dialog(k, _)] if k == vectorcraft_tools::corners::DIALOG), "{asked:?}");
+}

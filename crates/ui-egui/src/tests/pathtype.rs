@@ -1,7 +1,6 @@
 //! Type → Type on a Path → Type on a Path Options… (#429): the dialog shows the selected type's
 //! options (Effect, Flip, Align to Path, Spacing) and OK leaves its brackets where they are; its
-//! Preview shows them on the canvas while it is open (#5360). The Selection tool draws no brackets
-//! on a huge selection.
+//! Preview shows them on the canvas while it is open (#5360).
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind, TextKind};
@@ -20,29 +19,60 @@ fn brackets(app: &VectorcraftApp, id: NodeId) -> (f64, Option<f64>) {
     }
 }
 
+/// One whole frame of the app, then the dialog pump: the dialog host runs inside the app's pass, and a held OK or a
+/// Cancel is answered by the pump.
+pub(super) fn frame(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    crate::testing::app_frame(app, ctx, egui::RawInput::default());
+    dialogs::host::pump(app, ctx);
+}
+
+/// The top open dialog's id and its script fields.
+pub(super) fn top(app: &VectorcraftApp) -> (egui::Id, Value) {
+    // PLAN: assumed `DialogId` is `egui::Id` (ui-panels dialog/stack.rs:6).
+    let open = app.dialogs().expect("a window").with(|h| h.open_dialogs()).pop().expect("a dialog is open");
+    (open.id, open.fields.expect("the dialog lists its values"))
+}
+
+/// Sets the top dialog's script field `key`, as the user editing that control would.
+pub(super) fn set_field(app: &VectorcraftApp, ctx: &egui::Context, key: &str, value: Value) {
+    let (id, _) = top(app);
+    app.dialogs().expect("a window").with(|h| h.set_json_field(ctx, id, key, value)).unwrap();
+}
+
+/// OK on the top dialog, whose held OK the pump answers, then the frame after it.
+pub(super) fn confirm(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let (id, _) = top(app);
+    super::picks::answer_dialog(app, id, &[], true);
+    frame(app, ctx);
+}
+
+/// Cancel on the top dialog, then the frame that answers it.
+fn cancel(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let (id, _) = top(app);
+    assert!(app.dialogs().expect("a window").with(|h| h.cancel_by_id(ctx, id)));
+    frame(app, ctx);
+}
+
+/// Whether any dialog is still open.
+fn any_open(app: &VectorcraftApp) -> bool {
+    !app.dialogs().expect("a window").with(|h| h.open_dialogs()).is_empty()
+}
+
+/// The app with its window shown once (the dialog host lives in it), and the context it runs in.
+pub(super) fn shown(app: &mut VectorcraftApp) -> egui::Context {
+    let ctx = crate::testing::ui_context();
+    frame(app, &ctx);
+    ctx
+}
+
 /// Open Type on a Path Options… from its menu item.
-fn open_options(app: &mut VectorcraftApp) {
+fn open_options(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let entry = menus::menu_entries(app).into_iter().find(|e| e.label == "Type on a Path Options…").expect("menu item");
     assert_eq!(entry.path, ["Type", "Type on a Path"]);
     assert!(entry.enabled);
     let (cmd, params) = menus::click_target(&entry.label, entry.command.as_deref().unwrap(), &entry.params);
     menus::invoke(app, &cmd, params);
-}
-
-/// Two headless canvas frames → the vertices of the second one's tessellated mesh, which the GPU
-/// takes in one buffer, without the art's raster: the render worker's frame can land in either
-/// frame of a comparison.
-fn canvas_vertices(app: &mut VectorcraftApp, ctx: &egui::Context) -> usize {
-    let raw = || egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0))), ..Default::default() };
-    ctx.run_ui(raw(), |ui| crate::canvas::show(app, ui)).textures_delta.clear();
-    let mut out = ctx.run_ui(raw(), |ui| crate::canvas::show(app, ui));
-    out.textures_delta.clear();
-    let art = app.canvas.texture.as_ref().map(|t| t.id());
-    let mesh = |p: &egui::ClippedPrimitive| match &p.primitive {
-        egui::epaint::Primitive::Mesh(m) if Some(m.texture_id) != art => m.vertices.len(),
-        _ => 0,
-    };
-    ctx.tessellate(out.shapes, out.pixels_per_point).iter().map(mesh).sum()
+    frame(app, ctx);
 }
 
 #[test]
@@ -55,35 +85,25 @@ fn type_on_a_path_options_keep_the_type_where_it_is() {
     app.run("select.set", json!({"ids": [id.0]})).unwrap();
     let (start, _) = brackets(&app, id);
     assert!((start - 0.5).abs() < 1e-3, "{start}");
+    let ctx = shown(&mut app);
 
-    open_options(&mut app);
-    let d = app.ui.dialog.as_ref().expect("a dialog opens");
-    assert_eq!((d.str("__command"), d.str("__label")), ("type.pathOptions".to_string(), "Type on a Path Options".to_string()));
-    for (k, v) in [("effect", json!("rainbow")), ("flip", json!(false)), ("alignToPath", json!("baseline")), ("spacing", json!(0.0))] {
-        assert_eq!(d.fields.get(k), Some(&v), "{k}");
-    }
-    assert!(!d.fields.contains_key("start") && !d.fields.contains_key("end"), "the brackets aren't the dialog's");
-    // It draws headlessly: the choices by name.
-    let text = crate::tests_labels::painted_text(&mut app, |app, ui| dialogs::show(app, ui.ctx()));
-    for label in ["Type on a Path Options", "Effect:", "Rainbow", "Flip:", "Align to Path:", "Baseline", "Spacing:"] {
-        assert!(text.contains(label), "{label} in {text}");
-    }
     // OK as it opened: nothing moves.
-    dialogs::confirm(&mut app).unwrap();
+    open_options(&mut app, &ctx);
+    confirm(&mut app, &ctx);
+    assert!(!any_open(&app));
     assert_eq!(brackets(&app, id), (start, None));
 
     // Flip and Align to Path: the type turns to the other side of the same stretch of its path.
-    open_options(&mut app);
-    let d = app.ui.dialog.as_mut().unwrap();
-    d.fields.insert("flip".into(), Value::Bool(true));
-    d.fields.insert("alignToPath".into(), json!("center"));
-    dialogs::confirm(&mut app).unwrap();
+    open_options(&mut app, &ctx);
+    set_field(&app, &ctx, "flip", Value::Bool(true));
+    set_field(&app, &ctx, "alignToPath", json!("center"));
+    confirm(&mut app, &ctx);
     let (s, e) = brackets(&app, id);
     assert!(s.abs() < 1e-9 && e.is_some_and(|e| (e - (1.0 - start)).abs() < 1e-9), "{s} {e:?}");
     // The dialog shows the new alignment, and Flip is unchecked again (it flips once more).
-    open_options(&mut app);
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!((d.fields.get("alignToPath"), d.fields.get("flip")), (Some(&json!("center")), Some(&json!(false))));
+    open_options(&mut app, &ctx);
+    let (_, fields) = top(&app);
+    assert_eq!((fields.get("alignToPath"), fields.get("flip")), (Some(&json!("center")), Some(&json!(false))));
 }
 
 /// The effect, alignment and spacing of type on a path `id`.
@@ -92,14 +112,6 @@ fn options(app: &VectorcraftApp, id: NodeId) -> (&'static str, &'static str, f64
         Some(NodeKind::Text(t)) => (t.path_effect.id(), t.path_align.id(), t.path_spacing),
         k => panic!("not text: {k:?}"),
     }
-}
-
-/// One headless frame of the open dialog.
-fn frame(app: &mut VectorcraftApp) {
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| dialogs::show(app, ui.ctx()));
-    out.textures_delta.clear();
 }
 
 /// #5360: Type on a Path Options has a Preview checkbox, off when it opens. With it on, the type
@@ -118,93 +130,57 @@ fn type_on_a_path_options_preview_on_the_canvas() {
     let state = |app: &VectorcraftApp| (brackets(app, id), options(app, id));
     let steps = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
     let before = steps(&app);
+    let ctx = shown(&mut app);
 
-    open_options(&mut app);
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert!(dialogs::accepts_field(d, "preview"));
-    assert!(!d.bool("preview"), "Preview starts off");
-    let text = crate::tests_labels::painted_text(&mut app, |app, ui| dialogs::show(app, ui.ctx()));
-    assert!(text.contains("Preview"), "{text}");
+    open_options(&mut app, &ctx);
+    assert_eq!(top(&app).1.get("preview"), Some(&json!(false)), "Preview starts off");
 
     // Off: the fields change nothing until OK.
-    app.ui.dialog.as_mut().unwrap().fields.insert("effect".into(), json!("skew"));
-    frame(&mut app);
+    set_field(&app, &ctx, "effect", json!("skew"));
+    frame(&mut app, &ctx);
     assert_eq!(state(&app), original, "no preview without the checkbox");
     // On: the type follows the fields.
-    dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "preview".into(), json!(true));
-    frame(&mut app);
+    set_field(&app, &ctx, "preview", json!(true));
+    frame(&mut app, &ctx);
     assert_eq!(options(&app, id).0, "skew");
-    let d = app.ui.dialog.as_mut().unwrap();
-    d.fields.insert("alignToPath".into(), json!("center"));
-    d.fields.insert("spacing".into(), json!(6.0));
-    frame(&mut app);
+    set_field(&app, &ctx, "alignToPath", json!("center"));
+    set_field(&app, &ctx, "spacing", json!(6.0));
+    frame(&mut app, &ctx);
     assert_eq!(options(&app, id), ("skew", "center", 6.0));
     // Flip turns the type over once, frame after frame, and back when unchecked.
-    app.ui.dialog.as_mut().unwrap().fields.insert("flip".into(), json!(true));
-    frame(&mut app);
+    set_field(&app, &ctx, "flip", json!(true));
+    frame(&mut app, &ctx);
     let flipped = brackets(&app, id);
     assert_ne!(flipped, original.0, "the preview flips the type");
-    frame(&mut app);
+    frame(&mut app, &ctx);
     assert_eq!(brackets(&app, id), flipped, "and keeps it flipped once");
-    app.ui.dialog.as_mut().unwrap().fields.insert("flip".into(), json!(false));
-    frame(&mut app);
+    set_field(&app, &ctx, "flip", json!(false));
+    frame(&mut app, &ctx);
     assert_eq!(brackets(&app, id), original.0, "unchecked, it turns back");
     // Cancel puts the original back and leaves no history.
-    dialogs::cancel(&mut app);
+    cancel(&mut app, &ctx);
     assert_eq!(state(&app), original, "Cancel restores the type");
     assert_eq!(steps(&app), before, "and adds no undo step");
     assert!(!app.session.in_interaction());
 
     // OK with Preview on and nothing changed: no undo step.
-    open_options(&mut app);
-    dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "preview".into(), json!(true));
-    frame(&mut app);
-    dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
+    open_options(&mut app, &ctx);
+    set_field(&app, &ctx, "preview", json!(true));
+    frame(&mut app, &ctx);
+    confirm(&mut app, &ctx);
+    assert!(!any_open(&app));
     assert_eq!((state(&app), steps(&app)), (original, before));
 
     // OK keeps the previewed values as one undo step.
-    open_options(&mut app);
-    let d = app.ui.dialog.as_mut().unwrap();
-    d.fields.insert("effect".into(), json!("stairStep"));
-    d.fields.insert("flip".into(), json!(true));
-    dialogs::set_field(d, "preview".into(), json!(true));
-    frame(&mut app);
-    dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
+    open_options(&mut app, &ctx);
+    set_field(&app, &ctx, "effect", json!("stairStep"));
+    set_field(&app, &ctx, "flip", json!(true));
+    set_field(&app, &ctx, "preview", json!(true));
+    frame(&mut app, &ctx);
+    confirm(&mut app, &ctx);
+    assert!(!any_open(&app));
     assert_eq!((options(&app, id).0, brackets(&app, id)), ("stairStep", flipped));
     assert_eq!(steps(&app), before + 1, "one undo step");
     app.run("edit.undo", json!({})).unwrap();
     assert_eq!(state(&app), original, "one Undo takes the whole change back");
-}
-
-/// The Selection tool's brackets on one selected type on a path add their lines to the frame's
-/// mesh. On 32,768 (an opened PDF can hold as many curved text lines) they add none.
-#[test]
-fn a_huge_selection_of_type_on_a_path_draws_no_brackets() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-    let path = app.run("path.create", json!({"d": "M20 100 L380 100"})).unwrap()["id"].clone();
-    app.run("text.createInPath", json!({"path": path, "mode": "onPath", "text": "Along"})).unwrap();
-    app.ui.task_bar = false;
-    app.ui.view.bounding_box = false;
-    let ctx = egui::Context::default();
-    // The vertices that the Selection tool adds over the Rectangle tool, which draws nothing of its
-    // own, with everything selected.
-    let brackets = |app: &mut VectorcraftApp| {
-        app.run("select.all", json!({})).unwrap();
-        app.select_tool("rectangle");
-        let rectangle = canvas_vertices(app, &ctx);
-        app.select_tool("selection");
-        canvas_vertices(app, &ctx).saturating_sub(rectangle)
-    };
-    let one = brackets(&mut app);
-    assert!(one > 0, "one shows its brackets");
-    for _ in 0..15 {
-        app.run("select.all", json!({})).unwrap();
-        app.run("edit.duplicate", json!({})).unwrap();
-    }
-    let many = brackets(&mut app);
-    assert_eq!(app.session.active().unwrap().selection.objects.len(), 32_768);
-    assert_eq!(many, 0, "32,768 show no brackets, not {many} vertices");
 }

@@ -176,6 +176,13 @@ fn click(s: &mut Session, mods: Mods, x: f64, y: f64) {
     }
 }
 
+/// The path the last `shape.curvatureCircle` drew on.
+fn drawn_on(s: &Session) -> NodeId {
+    let (cmd, p) = s.journal.last().unwrap().clone();
+    assert_eq!(cmd, C);
+    id_of(&p)
+}
+
 /// With the Curvature Circle tool, a click on a path draws the circle that matches it there, in
 /// one undo step; with Shift, on the other side. A click on a straight line or away from every
 /// path draws nothing.
@@ -223,4 +230,27 @@ fn the_next_click_passes_over_the_circle_the_tool_drew() {
     assert_eq!(object_count(&s), count + 1, "the circle drawn first is within reach again");
     let third = *s.doc().unwrap().selection.objects.first().unwrap();
     assert!(bounds_are(&s, third, Rect::new(100.0, 200.0, 300.0, 400.0)), "the click drew the first circle's own circle");
+    assert_eq!(drawn_on(&s), first, "the click hit the first circle");
+}
+
+/// After Deselect, the pointer reaches the circle the tool drew again, with no edit in between,
+/// and still does when the circle is selected again before the pointer moves.
+#[test]
+fn after_deselect_the_pointer_reaches_the_circle_the_tool_drew() {
+    for reselect in [false, true] {
+        let mut s = session();
+        let path = parabola(&mut s);
+        s.select_tool("curvatureCircle", view()).unwrap();
+        click(&mut s, Mods::default(), 200.0, 200.0);
+        let first = *s.doc().unwrap().selection.objects.first().unwrap();
+        assert_eq!(drawn_on(&s), path);
+        let undo = undo_len(&s);
+        s.execute("select.none", &json!({})).unwrap();
+        if reselect {
+            s.execute("select.set", &json!({"ids": [first.0]})).unwrap();
+        }
+        assert_eq!(undo_len(&s), undo, "Deselect is not an edit");
+        click(&mut s, Mods::default(), 280.0, 236.0);
+        assert_eq!(drawn_on(&s), first, "the click hit the circle drawn first ({reselect})");
+    }
 }
