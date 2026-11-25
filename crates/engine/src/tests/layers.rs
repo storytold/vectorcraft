@@ -1326,11 +1326,11 @@ fn locate_layer_highlights_the_layer_holding_the_object() {
     let r = run(&mut s, "layer.locate", json!({"layersOnly": true}));
     assert_eq!(r, json!({"id": sub.0, "objectId": b.0, "ancestry": [layer.0, sub.0]}), "the group's sublayer");
     assert_eq!(s.doc().unwrap().highlighted_rows(), vec![sub]);
-    assert_eq!(s.doc().unwrap().locate_reveal, Some(sub), "the Layers panel reveals the located row");
-    s.doc_mut().unwrap().locate_reveal = None;
+    assert_eq!(s.doc().unwrap().layers_reveal, Some(crate::LayersReveal::Row(sub)), "the Layers panel reveals the located row");
+    s.doc_mut().unwrap().layers_reveal = None;
     let undo = s.doc().unwrap().history.undo.len();
     run(&mut s, "layer.locate", json!({"layersOnly": true}));
-    assert_eq!(s.doc().unwrap().locate_reveal, Some(sub), "again for a row already highlighted");
+    assert_eq!(s.doc().unwrap().layers_reveal, Some(crate::LayersReveal::Row(sub)), "again for a row already highlighted");
     assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
     assert_eq!(run(&mut s, "layer.locate", json!({"id": c.0, "layersOnly": true}))["id"], layer.0, "art directly in a layer");
     assert_eq!(s.doc().unwrap().highlighted_rows(), vec![layer]);
@@ -1342,10 +1342,58 @@ fn locate_layer_highlights_the_layer_holding_the_object() {
     for p in [json!({"id": b.0, "layersOnly": "yes"}), json!({"id": 999_999, "layersOnly": true})] {
         assert!(s.execute("layer.locate", &p).is_err(), "{p}");
         assert_eq!(s.doc().unwrap().highlighted_rows(), vec![g], "{p}");
-        assert_eq!(s.doc().unwrap().locate_reveal, Some(g), "{p}");
+        assert_eq!(s.doc().unwrap().layers_reveal, Some(crate::LayersReveal::Row(g)), "{p}");
     }
     run(&mut s, "select.none", json!({}));
     assert!(s.execute("layer.locate", &json!({"layersOnly": true})).is_err(), "nothing selected");
+}
+
+/// The session asks the Layers panel to reveal what a top-level command changed: isolation, then
+/// the highlighted rows, the last selected object and the current layer. An open interaction asks
+/// for nothing, and a failed command changes nothing.
+#[test]
+fn the_layers_panel_is_asked_to_reveal_what_a_command_changed() {
+    use crate::LayersReveal::{Current, Row, Selected};
+    let mut s = session();
+    let (layer, sub, _, g, b, c) = tree(&mut s);
+    let take = |s: &mut Session| s.doc_mut().unwrap().layers_reveal.take();
+    take(&mut s);
+    run(&mut s, "layer.highlight", highlight_params([c], "set"));
+    take(&mut s);
+    run(&mut s, "layer.highlight", highlight_params([g], "set"));
+    assert_eq!(take(&mut s), Some(Row(g)), "a highlighted row");
+    // The current layer changes with the selection of art in another layer: the new selection asks
+    // for its object, and the panel falls back to the current layer when it does not locate it.
+    s.doc_mut().unwrap().active_layer = Some(sub);
+    run(&mut s, "select.set", json!({"ids": [c.0]}));
+    assert_eq!(take(&mut s), Some(Selected(c)), "a new selection wins over a new current layer");
+    // A new current layer alone asks for it: the highlighted row made current again.
+    run(&mut s, "layer.highlight", highlight_params([c], "set"));
+    take(&mut s);
+    s.doc_mut().unwrap().active_layer = Some(sub);
+    run(&mut s, "layer.setCurrent", json!({"id": c.0}));
+    assert_eq!(take(&mut s), Some(Current(layer)), "a new current layer alone");
+    // Within the current layer only the last selected object changes.
+    s.doc_mut().unwrap().active_layer = Some(sub);
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    take(&mut s);
+    run(&mut s, "select.set", json!({"ids": [g.0]}));
+    assert_eq!(take(&mut s), Some(Selected(g)), "the last selected object");
+    // Isolation entered and left reveals the isolated row.
+    run(&mut s, "object.isolate", json!({"id": g.0}));
+    assert_eq!(take(&mut s), Some(Row(g)), "isolation entered");
+    run(&mut s, "object.exitIsolation", json!({}));
+    assert_eq!(take(&mut s), Some(Row(g)), "isolation left");
+    // A failed command asks for nothing.
+    assert!(s.execute("layer.locate", &json!({"id": 999_999})).is_err());
+    assert_eq!(take(&mut s), None);
+    // A command inside an open interaction asks for nothing either.
+    run(&mut s, "select.set", json!({"ids": [g.0]}));
+    take(&mut s);
+    s.begin_interaction("Drag").unwrap();
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    assert_eq!(take(&mut s), None, "a preview");
+    s.cancel_interaction().unwrap();
 }
 
 #[test]

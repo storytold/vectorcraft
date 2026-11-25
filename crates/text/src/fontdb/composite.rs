@@ -91,6 +91,8 @@ impl FontDb {
     /// guard's thread uses the fonts it lends and not this one.
     pub fn set_composite_font(&self, font: &CompositeFont) -> bool {
         let key = font.name.to_lowercase();
+        #[cfg(any(test, feature = "test-fonts"))]
+        let _change = crate::test_fonts::font_change();
         {
             let mut map = self.composites.write().unwrap_or_else(|e| e.into_inner());
             if map.get(&key).is_some_and(|f| **f == *font) {
@@ -104,6 +106,8 @@ impl FontDb {
 
     /// Forget the composite font named `name` (any case). Whether there was one.
     pub fn remove_composite_font(&self, name: &str) -> bool {
+        #[cfg(any(test, feature = "test-fonts"))]
+        let _change = crate::test_fonts::font_change();
         let removed = self.composites.write().unwrap_or_else(|e| e.into_inner()).remove(&name.to_lowercase()).is_some();
         if removed {
             self.changed();
@@ -348,7 +352,7 @@ impl FontDb {
             }
             // Each lent font is the database's; with as many, none it holds is left out.
             same &= lent.len() == map.len();
-            self.generation.load(Ordering::Relaxed)
+            self.own_generation()
         };
         let number = NEXT_LOAN.fetch_add(1, Ordering::Relaxed);
         let loan = Loan { db: self.id, number, fonts: lent, same_at: same.then_some(generation), print: h.finish() };
@@ -391,8 +395,11 @@ impl FontDb {
         if !self.lends() && self.composites.read().unwrap_or_else(|e| e.into_inner()).is_empty() {
             return None;
         }
-        let fonts: Vec<Option<Arc<CompositeFont>>> =
-            t.runs.iter().map(|r| if r.inline.is_some() { None } else { self.composite_font(&r.style.font_family) }).collect();
+        let fonts: Vec<Option<Arc<CompositeFont>>> = t
+            .runs
+            .iter()
+            .map(|r| if r.inline.is_some() || r.style.file_font_id.is_some() { None } else { self.composite_font(&r.style.font_family) })
+            .collect();
         if fonts.iter().all(Option::is_none) {
             return None;
         }
