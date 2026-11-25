@@ -7,7 +7,8 @@
 //! <https://ai-scripting.docsforadobe.dev/jsobjref/PDFSaveOptions/>,
 //! <https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsPNG24/>,
 //! <https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsJPEG/>,
-//! <https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsSVG/> and
+//! <https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsSVG/>,
+//! <https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsAutoCAD/> and
 //! <https://ai-scripting.docsforadobe.dev/jsobjref/PDFFileOptions/> describe.
 //!
 //! Each method runs a command (`file.saveAs`, `document.export`, `document.open`) inside the run's
@@ -25,6 +26,12 @@
 //!   one file: the active artboard with `artBoardClipping`, otherwise the bounds of the visible art.
 //!   An SVG with `embedRasterImages` false also writes the document's embedded images beside it,
 //!   and when one of those files may not be written, none of them is.
+//! - `ExportType.AUTOCAD` is the same value as `ExportType.AutoCAD`. An AutoCAD export writes DXF
+//!   (`.dxf`) only: `AutoCADExportFileFormat.DWG`, the default, throws an error that says DWG is not
+//!   available. An option an `ExportOptionsAutoCAD` object leaves out takes the default its help page
+//!   gives; `colors`, `rasterFormat`, `unit` and `unitScaleRatio`, which have none there, default to
+//!   true colors, PNG, millimeters and 1. `unitScaleRatio` is the number of drawing units for one
+//!   `unit`, more than 0 and at most 1000.
 //! - An option the classes here map is applied; a listed option that is not mapped is accepted at
 //!   the default its help page gives and throws an error that says it is not available yet at any
 //!   other value; a property the help pages do not list throws an error that names it, unless it is
@@ -63,6 +70,15 @@ pub(in crate::script) struct State {
 /// The enumerations these members use, as `dom`'s are made.
 pub(super) const ENUMS: &[(&str, &[&str])] = &[
     ("ExportType", &["AutoCAD", "FLASH", "GIF", "JPEG", "PNG24", "PNG8", "SVG", "TIFF"]),
+    ("AutoCADColors", &["Max8Colors", "Max16Colors", "Max256Colors", "TrueColors"]),
+    (
+        "AutoCADCompatibility",
+        &["AutoCADRelease13", "AutoCADRelease18", "AutoCADRelease14", "AutoCADRelease21", "AutoCADRelease15", "AutoCADRelease24"],
+    ),
+    ("AutoCADExportFileFormat", &["DXF", "DWG"]),
+    ("AutoCADExportOption", &["PreserveAppearance", "MaximizeEditability"]),
+    ("AutoCADRasterFormat", &["PNG", "JPEG"]),
+    ("AutoCADUnit", &["Points", "Picas", "Inches", "Millimeters", "Centimeters", "Pixels"]),
     (
         "Compatibility",
         &[
@@ -87,6 +103,10 @@ pub(super) const ENUMS: &[(&str, &[&str])] = &[
     ("PDFOverprint", &["DISCARDPDFOVERPRINT", "PRESERVEPDFOVERPRINT"]),
     ("UserInteractionLevel", &["DISPLAYALERTS", "DONTDISPLAYALERTS"]),
 ];
+
+/// Other names of enumeration members: `(enumeration, name, member)` makes `enumeration.name` the
+/// same value as `enumeration.member`.
+pub(super) const ALIASES: &[(&str, &str, &str)] = &[("ExportType", "AUTOCAD", "AutoCAD")];
 
 const DISPLAY: &str = "UserInteractionLevel.DISPLAYALERTS";
 const QUIET: &str = "UserInteractionLevel.DONTDISPLAYALERTS";
@@ -482,9 +502,118 @@ fn svg_starts() -> Vec<(&'static str, Data)> {
     ]
 }
 
+/// The members of the enumeration `name` in [`ENUMS`].
+fn members_of(name: &str) -> &'static [&'static str] {
+    ENUMS.iter().find(|(n, _)| *n == name).map_or(&[][..], |(_, m)| *m)
+}
+
+fn autocad_map(name: &str, d: &Data, p: &mut Map<String, Value>) -> std::result::Result<bool, HostError> {
+    let what = format!("ExportOptionsAutoCAD.{name}");
+    let pick = |enumeration: &str| member(d, enumeration, members_of(enumeration), &what);
+    match name {
+        "alterPathsForAppearance" => {
+            p.insert("alterPaths".into(), json!(boolean(d, &what)?));
+        }
+        "colors" => {
+            let colors = match pick("AutoCADColors")? {
+                "Max8Colors" => json!(8),
+                "Max16Colors" => json!(16),
+                "Max256Colors" => json!(256),
+                _ => json!("true"),
+            };
+            p.insert("colors".into(), colors);
+        }
+        "convertTextToOutlines" => {
+            p.insert("outlineText".into(), json!(boolean(d, &what)?));
+        }
+        "exportFileFormat" => {
+            if pick("AutoCADExportFileFormat")? == "DWG" {
+                return Err(HostError::Error(
+                    "AutoCADExportFileFormat.DWG is not available: set exportFileFormat to AutoCADExportFileFormat.DXF".into(),
+                ));
+            }
+        }
+        "exportOption" => {
+            let preserve = if pick("AutoCADExportOption")? == "PreserveAppearance" { "appearance" } else { "editability" };
+            p.insert("preserve".into(), json!(preserve));
+        }
+        "exportSelectedArtOnly" => {
+            p.insert("selectedOnly".into(), json!(boolean(d, &what)?));
+        }
+        "rasterFormat" => {
+            p.insert("rasterFormat".into(), json!(if pick("AutoCADRasterFormat")? == "JPEG" { "jpeg" } else { "png" }));
+        }
+        "scaleLineweights" => {
+            p.insert("scaleLineweights".into(), json!(boolean(d, &what)?));
+        }
+        "unit" => {
+            let unit = match pick("AutoCADUnit")? {
+                "Points" => "pt",
+                "Picas" => "pc",
+                "Inches" => "in",
+                "Millimeters" => "mm",
+                "Centimeters" => "cm",
+                _ => "px",
+            };
+            p.insert("unit".into(), json!(unit));
+        }
+        "unitScaleRatio" => {
+            let n = match d {
+                Data::Number(n) if n.is_finite() => *n,
+                _ => return Err(HostError::Type(format!("{what} must be a finite number"))),
+            };
+            if !(n > 0.0 && n <= 1000.0) {
+                return Err(HostError::Range(format!("{what} must be more than 0 and at most 1000")));
+            }
+            p.insert("scale".into(), json!(n));
+        }
+        "version" => {
+            let version = match pick("AutoCADCompatibility")? {
+                "AutoCADRelease13" => "R13",
+                "AutoCADRelease14" => "R14",
+                "AutoCADRelease15" => "2000",
+                "AutoCADRelease18" => "2004",
+                "AutoCADRelease21" => "2007",
+                _ => "2010",
+            };
+            p.insert("version".into(), json!(version));
+        }
+        _ => return Ok(false),
+    }
+    Ok(true)
+}
+
+fn autocad_starts() -> Vec<(&'static str, Data)> {
+    vec![
+        ("alterPathsForAppearance", Data::Bool(false)),
+        ("convertTextToOutlines", Data::Bool(false)),
+        ("exportFileFormat", text("AutoCADExportFileFormat.DWG")),
+        ("exportOption", text("AutoCADExportOption.MaximizeEditability")),
+        ("exportSelectedArtOnly", Data::Bool(false)),
+        ("scaleLineweights", Data::Bool(false)),
+        ("version", text("AutoCADCompatibility.AutoCADRelease24")),
+    ]
+}
+
+/// The options object `d` with the options of a new `class` object it leaves out, or holds as
+/// `undefined`, added.
+fn with_starts(class: &OptionClass, d: &Data) -> Data {
+    let Data::Object(items) = d else { return d.clone() };
+    let mut items = items.clone();
+    for (k, v) in (class.starts)() {
+        match items.iter_mut().find(|(n, _)| n == k) {
+            Some((_, held)) if matches!(held, Data::Undefined) => *held = v,
+            Some(_) => {}
+            None => items.push((k.to_string(), v)),
+        }
+    }
+    Data::Object(items)
+}
+
 const PNG24: OptionClass = OptionClass { name: "ExportOptionsPNG24", map: png24_map, kept: PNG24_KEPT, starts: png24_starts };
 const JPEG: OptionClass = OptionClass { name: "ExportOptionsJPEG", map: jpeg_map, kept: JPEG_KEPT, starts: jpeg_starts };
 const SVG: OptionClass = OptionClass { name: "ExportOptionsSVG", map: svg_map, kept: SVG_KEPT, starts: svg_starts };
+const AUTOCAD: OptionClass = OptionClass { name: "ExportOptionsAutoCAD", map: autocad_map, kept: &[], starts: autocad_starts };
 
 /// An `ExportType`: the format `document.export` writes, the extensions a file name may already
 /// end with (the first is added), and its option class (`None`: no options are taken).
@@ -495,9 +624,9 @@ struct ExportKind {
 }
 
 fn export_kind(d: &Data) -> std::result::Result<ExportKind, HostError> {
-    let all = ENUMS.iter().find(|(n, _)| *n == "ExportType").map_or(&[][..], |(_, m)| *m);
     let raster = |format, extensions| ExportKind { format, extensions, options: None };
-    Ok(match member(d, "ExportType", all, "exportType")? {
+    Ok(match member(d, "ExportType", members_of("ExportType"), "exportType")? {
+        "AutoCAD" => ExportKind { format: "dxf", extensions: &["dxf"], options: Some(&AUTOCAD) },
         "PNG24" => ExportKind { format: "png", extensions: &["png"], options: Some(&PNG24) },
         "JPEG" => ExportKind { format: "jpg", extensions: &["jpg", "jpeg"], options: Some(&JPEG) },
         "SVG" => ExportKind { format: "svg", extensions: &["svg"], options: Some(&SVG) },
@@ -631,6 +760,8 @@ fn doc_export_file(h: &Host, a: &[Data]) -> Answer {
             None => Map::new(),
         },
         Some(o) => match kind.options {
+            // An AutoCAD option left out takes its help page's default, not the DXF writer's.
+            Some(class) if class.name == AUTOCAD.name => options_params(class, &with_starts(class, o))?,
             Some(class) => options_params(class, o)?,
             None => return Err(HostError::Error(format!("options for {} are not available yet", kind.format))),
         },
@@ -642,7 +773,8 @@ fn doc_export_file(h: &Host, a: &[Data]) -> Answer {
         return Err(HostError::Error("different horizontalScale and verticalScale are not available yet".into()));
     }
     // A raster file has one pixel per point at 100%, whatever the document's raster effects resolution.
-    if kind.format != "svg" {
+    // A DXF's `scale` is its drawing units per unit, from `unitScaleRatio`.
+    if !matches!(kind.format, "svg" | "dxf") {
         p.insert("scale".into(), json!(hs / 100.0));
     }
     let format = if svgz { "svgz" } else { kind.format };
@@ -740,7 +872,7 @@ pub(super) fn document_members(l: &Link) -> Vec<(String, HostMember)> {
 /// The option classes: each `new Name()` gives a record with its `typename` and the defaults its
 /// help page gives for the options mapped here.
 pub(super) fn classes(link: &Link) -> Vec<HostClass> {
-    let all = SAVE_CLASSES.iter().map(|(c, _)| c).chain([&PNG24, &JPEG, &SVG]);
+    let all = SAVE_CLASSES.iter().map(|(c, _)| c).chain([&PNG24, &JPEG, &SVG, &AUTOCAD]);
     all.map(|c| {
         let l = link.clone();
         let f: HostFunction = Rc::new(move |_: Vec<Data>| {

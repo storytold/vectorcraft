@@ -1808,7 +1808,9 @@ const ENUMS: &[(&str, &[&str])] = &[
 /// holds.
 pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(), RunError> {
     for (name, members) in ENUMS.iter().chain(save_open::ENUMS) {
-        let items = members.iter().map(|m| (m.to_string(), HostItem::Value(text(format!("{name}.{m}"))))).collect();
+        let mut items: Vec<_> = members.iter().map(|m| (m.to_string(), HostItem::Value(text(format!("{name}.{m}"))))).collect();
+        let aliases = save_open::ALIASES.iter().filter(|(e, _, _)| e == name);
+        items.extend(aliases.map(|(_, alias, m)| (alias.to_string(), HostItem::Value(text(format!("{name}.{m}"))))));
         realm.define_host_object(name, items)?;
     }
     let l = link;

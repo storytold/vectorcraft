@@ -153,6 +153,60 @@ fn a_raster_export_at_100_percent_has_a_pixel_per_point() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// The value of the DXF header variable `name` (the group after its name).
+fn dxf_header(dxf: &str, name: &str) -> Option<String> {
+    let lines: Vec<&str> = dxf.lines().map(str::trim).collect();
+    lines.iter().position(|l| *l == name).and_then(|i| lines.get(i + 2)).map(|v| v.to_string())
+}
+
+/// The largest x coordinate (group code 10) in the entities of a DXF.
+fn dxf_widest(dxf: &str) -> f64 {
+    let lines: Vec<&str> = dxf.lines().map(str::trim).collect();
+    // The section's name is a value; the group codes start on the line after it.
+    let start = lines.iter().position(|l| *l == "ENTITIES").map_or(0, |i| i + 1);
+    lines[start..].chunks(2).filter(|p| p.len() == 2 && p[0] == "10").filter_map(|p| p[1].parse::<f64>().ok()).fold(f64::MIN, f64::max)
+}
+
+/// `exportFile` with `ExportType.AutoCAD` writes a DXF with the `ExportOptionsAutoCAD` options, and
+/// DWG, the help page's default format, throws without writing a file.
+#[test]
+fn an_autocad_export_writes_a_dxf_with_its_options() {
+    let base = folder("autocad");
+    let mut s = session(&base);
+    let dir = data_folder(&mut s, &base);
+    let d = quoted(&dir);
+    let out = logged(
+        &mut s,
+        &base,
+        &format!(
+            "Folder.userData; var dir = {d}, d = app.documents.add(DocumentColorSpace.RGB, 200, 100);\n\
+             vc.run('shape.rectangle', {{x: 10, y: 10, width: 50, height: 20}});\n\
+             var o = new ExportOptionsAutoCAD(); vc.log([o.typename, o.exportFileFormat, o.version, ExportType.AUTOCAD === ExportType.AutoCAD]);\n\
+             try {{ d.exportFile(new File(dir + '/w'), ExportType.AutoCAD, o); }} catch (e) {{ vc.log(String(e)); }}\n\
+             o.exportFileFormat = AutoCADExportFileFormat.DXF; o.version = AutoCADCompatibility.AutoCADRelease15;\n\
+             o.unit = AutoCADUnit.Inches; o.unitScaleRatio = 25.4; o.colors = AutoCADColors.Max256Colors; o.rasterFormat = AutoCADRasterFormat.JPEG;\n\
+             d.exportFile(new File(dir + '/a'), ExportType.AutoCAD, o);\n\
+             o.unitScaleRatio = 1; d.exportFile(new File(dir + '/b.DXF'), ExportType.AUTOCAD, o);\n\
+             var u = new ExportOptionsAutoCAD(); u.exportFileFormat = AutoCADExportFileFormat.DXF; u.version = undefined; d.exportFile(new File(dir + '/u'), ExportType.AutoCAD, u);\n\
+             d.exportFile(new File(dir + '/c'), ExportType.AutoCAD, {{typename: 'ExportOptionsAutoCAD', exportFileFormat: AutoCADExportFileFormat.DXF, version: undefined}});"
+        ),
+    );
+    assert_eq!(out[0], json!(["ExportOptionsAutoCAD", "AutoCADExportFileFormat.DWG", "AutoCADCompatibility.AutoCADRelease24", true]));
+    assert!(out[1].as_str().is_some_and(|e| e.contains("DWG is not available")), "{}", out[1]);
+    assert!(!dir.join("w.dxf").exists() && !dir.join("w.dwg").exists() && !dir.join("w").exists(), "DWG writes nothing");
+    let a = std::fs::read_to_string(dir.join("a.dxf")).unwrap();
+    let b = std::fs::read_to_string(dir.join("b.DXF")).unwrap();
+    assert!(!dir.join("b.DXF.dxf").exists(), "a name that ends with the extension keeps it");
+    assert_eq!(dxf_header(&a, "$ACADVER").as_deref(), Some("AC1015"), "AutoCADRelease15 is the 2000 format");
+    assert_eq!(dxf_header(&b, "$INSUNITS").as_deref(), Some("1"), "inches, one drawing unit each");
+    assert!(dxf_widest(&a) > dxf_widest(&b) * 20.0, "unitScaleRatio scales the drawing: {} and {}", dxf_widest(&a), dxf_widest(&b));
+    for name in ["c.dxf", "u.dxf"] {
+        let dxf = std::fs::read_to_string(dir.join(name)).unwrap();
+        assert_eq!(dxf_header(&dxf, "$ACADVER").as_deref(), Some("AC1024"), "{name}: an option left out or undefined is AutoCADRelease24");
+    }
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// With `pDFPreset` named, the options left at a new object's defaults keep the preset's values, and
 /// an option the script changes applies over the preset.
 #[test]
@@ -518,6 +572,35 @@ fn bad_arguments_are_refused_with_an_error() {
             "from 0 to 100",
         ),
         (format!("app.activeDocument.exportFile({f}, ExportType.GIF, {{}});"), "not available yet"),
+        (format!("app.activeDocument.exportFile({f}, ExportType.AutoCAD);"), "DWG is not available"),
+        (
+            format!("var o = new ExportOptionsAutoCAD(); o.exportFileFormat = undefined; app.activeDocument.exportFile({f}, ExportType.AUTOCAD, o);"),
+            "DWG is not available",
+        ),
+        (
+            format!(
+                "var o = new ExportOptionsAutoCAD(); o.exportFileFormat = AutoCADExportFileFormat.DXF; o.unitScaleRatio = 2000; app.activeDocument.exportFile({f}, ExportType.AutoCAD, o);"
+            ),
+            "at most 1000",
+        ),
+        (
+            format!(
+                "var o = new ExportOptionsAutoCAD(); o.exportFileFormat = AutoCADExportFileFormat.DXF; o.version = 'AutoCADCompatibility.AutoCADRelease99'; app.activeDocument.exportFile({f}, ExportType.AutoCAD, o);"
+            ),
+            "AutoCADCompatibility",
+        ),
+        (
+            format!(
+                "var o = new ExportOptionsAutoCAD(); o.exportFileFormat = AutoCADExportFileFormat.DXF; o.colors = 256; app.activeDocument.exportFile({f}, ExportType.AutoCAD, o);"
+            ),
+            "AutoCADColors",
+        ),
+        (
+            format!(
+                "var o = new ExportOptionsAutoCAD(); o.exportFileFormat = AutoCADExportFileFormat.DXF; o.unitScale = 2; app.activeDocument.exportFile({f}, ExportType.AutoCAD, o);"
+            ),
+            "ExportOptionsAutoCAD has no option unitScale",
+        ),
         (format!("app.open({f}, 'RGB');"), "DocumentColorSpace"),
         (format!("app.open({f}, undefined, {{pageToOpen: 0}});"), "from 1"),
         (format!("app.open({f}, undefined, {{pDFCropToBox: 'art'}});"), "PDFBoxType"),

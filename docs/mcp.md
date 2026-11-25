@@ -2709,7 +2709,18 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   with `antiAliasing`, `artBoardClipping`, `horizontalScale` and `verticalScale` (the same value, from 1 to
   776.19; 100 writes one pixel per point whatever the raster effects resolution), `transparency` (PNG24), `qualitySetting` (0 to 100) and `optimization` (JPEG), and
   `coordinatePrecision` (1 to 7), `embedRasterImages`, `compressed`, `preserveEditability` and
-  `includeVariablesAndDatasets` (SVG); `PNG8`, `GIF` and `TIFF` take no options. `app.open`'s
+  `includeVariablesAndDatasets` (SVG); `PNG8`, `GIF` and `TIFF` take no options. `AutoCAD` (also written
+  `ExportType.AUTOCAD`) takes `new ExportOptionsAutoCAD()` (https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsAutoCAD/)
+  and writes a DXF file, as `document.export {format: dxf}` does, with `exportFileFormat`, `version`
+  (`AutoCADRelease13`, `14`, `15`, `18`, `21` and `24` as the R13, R14, 2000, 2004, 2007 and 2010 formats), `unit`,
+  `unitScaleRatio` (the drawing units for one `unit`, more than 0 and at most 1000), `colors`, `rasterFormat`,
+  `exportOption`, `alterPathsForAppearance`, `convertTextToOutlines`, `exportSelectedArtOnly` and `scaleLineweights`.
+  An option the object leaves out takes its help page's default; `colors`, `rasterFormat`, `unit` and
+  `unitScaleRatio`, which have none there, default to true colors, PNG, millimeters and 1, VectorCraft's own values.
+  `AutoCADExportFileFormat.DWG`, the help page's default, throws an error that says DWG is not available, so an
+  AutoCAD export sets `exportFileFormat` to `AutoCADExportFileFormat.DXF`. The enumerations `AutoCADColors`,
+  `AutoCADCompatibility`, `AutoCADExportFileFormat`, `AutoCADExportOption`, `AutoCADRasterFormat` and `AutoCADUnit`
+  hold the members the scripting constants page lists. `app.open`'s
   `options` is a `PDFFileOptions` record (https://ai-scripting.docsforadobe.dev/jsobjref/PDFFileOptions/) with
   `pageToOpen` and `pDFCropToBox`. `app.userInteractionLevel` is `UserInteractionLevel.DISPLAYALERTS` at the start of
   each run. The enumerations `ExportType`, `Compatibility`, `PDFCompatibility`, `PDFBoxType`, `EPSPreview`,
@@ -2722,11 +2733,11 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   files a command reads or writes besides the one named, such as an SVG's linked files, are
   read and written only where the script's folders allow. `userInteractionLevel` does not change what a command
   does or where it may read and write, since a command a script runs never shows a dialog. `exportFile` adds the
-  format's extension unless the name already ends with it (`.jpg` or `.jpeg`, `.tif` or `.tiff`, `.svgz` with
+  format's extension unless the name already ends with it (`.jpg` or `.jpeg`, `.tif` or `.tiff`, `.dxf`, `.svgz` with
   `compressed`), and writes one file: the active artboard with `artBoardClipping`, otherwise the bounds of the
   visible art. An SVG with `embedRasterImages` false also writes the document's embedded images beside it, and
   when one of those files may not be written, none of them is. A listed option that is not mapped is accepted at its help page's default, and any other value throws
-  an error that says it is not available yet, as do `ExportType.FLASH` and `ExportType.AutoCAD`. A property the help
+  an error that says it is not available yet, as does `ExportType.FLASH`. A property the help
   pages do not list throws an error that names it (`PDFFileOptions` also accepts its read-only `typename` and
   `parent`), and an `undefined` one is left out. With `pDFPreset` named, a `PDFSaveOptions` option still at a new object's default
   keeps the preset's value. A bad value throws an error before anything is written.
