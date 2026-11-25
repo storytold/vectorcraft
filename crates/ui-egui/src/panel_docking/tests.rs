@@ -711,6 +711,30 @@ fn window_menu_panels_without_a_place_open_in_their_icon_group_or_float() {
     assert!(h.tab("openType").is_some());
 }
 
+/// The tab in front of the docked group that holds `panel`.
+fn front_of_group(layout: &Layout<String>, panel: &str) -> Option<String> {
+    dock_columns(layout).into_iter().flat_map(|c| &c.groups).find(|g| g.panels.iter().any(|p| p == panel)).and_then(|g| g.active_panel()).cloned()
+}
+
+#[test]
+fn a_panel_that_opens_floating_leaves_the_docked_tabs_as_they_were() {
+    let mut h = Harness::new();
+    assert_eq!(front_of_group(&h.layout(), "properties").as_deref(), Some("properties"));
+    for panel in ["openType", "docInfo", "attributes", "imageTrace"] {
+        h.app.run("window.panel", json!({"panel": panel})).unwrap();
+        h.frame(vec![]);
+        let layout = h.layout();
+        assert!(floating_window(&layout, panel).is_some(), "{panel} floats");
+        assert_eq!(main_panels(&layout), ["properties", "layers", "libraries"], "after {panel}");
+        assert_eq!(front_of_group(&layout, "properties").as_deref(), Some("properties"), "Properties stays in front after {panel}");
+    }
+    // A panel placed in a window of its own at a point leaves them as well.
+    place_floating(&mut h.app, "magicWand", pos2(200.0, 200.0), 0.0).unwrap();
+    let layout = h.layout();
+    assert!(floating_window(&layout, "magicWand").is_some());
+    assert_eq!(front_of_group(&layout, "properties").as_deref(), Some("properties"), "Properties stays in front after a placed panel");
+}
+
 #[test]
 fn f7_restores_only_tabs_hidden_with_the_group() {
     let mut h = Harness::new();
