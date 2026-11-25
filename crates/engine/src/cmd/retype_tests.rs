@@ -123,11 +123,13 @@ fn a_mark_in_one_font_starts_its_line_as_another_fonts_character() {
 #[test]
 fn a_combining_mark_starts_no_line() {
     // A combining mark on its own (a drawn dot, bar or ring is the same shape) stays an outline.
+    // The calls that leave a shape an outline leave the installed fonts out, so what this machine
+    // has installed does not change the result.
     let mut s = session();
     let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "\u{312}", "size": 40, "font": "Source Sans 3", "style": "Regular"}));
     s.execute("select.set", &json!({"ids": [g]})).unwrap();
     let before = s.doc().unwrap().doc.clone();
-    let e = s.execute("type.retype", &json!({})).unwrap_err().to_string();
+    let e = s.execute("type.retype", &json!({"installed": false})).unwrap_err().to_string();
     assert!(e.contains("no selected shape matches"), "{e}");
     assert!(s.doc().unwrap().doc == before, "nothing changes");
     // A shape that is both a mark (tilde below) and a character (small tilde) starts its line as
@@ -145,7 +147,7 @@ fn a_combining_mark_starts_no_line() {
     let g = outlined(&mut s, json!({"x": 40, "y": 200, "text": "\u{312}ab", "size": 40, "font": "Source Sans 3", "style": "Regular"}));
     let mark = s.doc().unwrap().doc.children(Some(NodeId(g))).unwrap()[0].id.0;
     s.execute("select.set", &json!({"ids": [g]})).unwrap();
-    let r = s.execute("type.retype", &json!({})).unwrap();
+    let r = s.execute("type.retype", &json!({"installed": false})).unwrap();
     assert_eq!(r["texts"], json!(["ab"]), "{r}");
     assert_eq!(r["unmatched"], json!([mark]));
     // After a base, the mark is retyped with it.
@@ -160,7 +162,7 @@ fn a_combining_mark_starts_no_line() {
     s.execute("select.set", &json!({"ids": [mark]})).unwrap();
     s.execute("object.move", &json!({"dx": 3, "dy": 0})).unwrap();
     s.execute("select.set", &json!({"ids": [g]})).unwrap();
-    let r = s.execute("type.retype", &json!({})).unwrap();
+    let r = s.execute("type.retype", &json!({"installed": false})).unwrap();
     assert_eq!((&r["texts"], &r["unmatched"]), (&json!(["x", "yz"]), &json!([mark])), "{r}");
     // A mark that is also another character (dot below, dot above) becomes that character there.
     let g = outlined(&mut s, json!({"x": 300, "y": 120, "text": "x\u{323}yz", "size": 40, "font": "Source Sans 3", "style": "Regular"}));
@@ -183,7 +185,7 @@ fn a_combining_mark_starts_no_line() {
     s.execute("select.set", &json!({"ids": [mark]})).unwrap();
     s.execute("object.move", &json!({"dx": 3, "dy": 0})).unwrap();
     s.execute("select.set", &json!({"ids": [g]})).unwrap();
-    let r = s.execute("type.retype", &json!({})).unwrap();
+    let r = s.execute("type.retype", &json!({"installed": false})).unwrap();
     assert_eq!((&r["texts"], &r["unmatched"]), (&json!(["x", "yzw"]), &json!([mark])), "{r}");
     assert_eq!(r["fonts"][1]["tracking"], json!(50.0), "{r}");
     // A one-contour glyph after a mark that stays an outline (a bar, then a dot) is alone, and
@@ -193,7 +195,7 @@ fn a_combining_mark_starts_no_line() {
     pair.sort_unstable();
     let word = outlined(&mut s, json!({"x": 40, "y": 380, "text": "ab", "size": 40, "font": "Source Sans 3", "style": "Regular"}));
     s.execute("select.set", &json!({"ids": [dot, word]})).unwrap();
-    let r = s.execute("type.retype", &json!({})).unwrap();
+    let r = s.execute("type.retype", &json!({"installed": false})).unwrap();
     assert_eq!(r["texts"], json!(["ab"]), "{r}");
     let mut left: Vec<u64> = r["unmatched"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
     left.sort_unstable();
@@ -246,7 +248,8 @@ fn marks_first_after_a_split_leave_other_lines_their_tracking() {
     s.execute("select.set", &json!({"ids": moved})).unwrap();
     s.execute("object.move", &json!({"dx": 3, "dy": 0})).unwrap();
     s.execute("select.set", &json!({"ids": [marks, tracked]})).unwrap();
-    let r = s.execute("type.retype", &json!({})).unwrap();
+    // The installed fonts left out: what this machine has installed does not change the result.
+    let r = s.execute("type.retype", &json!({"installed": false})).unwrap();
     let texts = r["texts"].as_array().unwrap();
     let at = texts.iter().position(|t| t == "yzw").unwrap_or_else(|| panic!("yzw in {r}"));
     assert_eq!(r["fonts"][at]["tracking"], json!(50.0), "{r}");
@@ -488,7 +491,8 @@ fn a_glyph_painted_beyond_what_type_takes_stays_an_outline() {
     })
     .unwrap();
     s.execute("select.set", &json!({"ids": [g]})).unwrap();
-    let r = s.execute("type.retype", &json!({})).unwrap();
+    // The installed fonts left out: what this machine has installed does not change the result.
+    let r = s.execute("type.retype", &json!({"installed": false})).unwrap();
     assert_eq!(r["texts"], json!(["B"]), "two fills: A stays an outline: {r}");
     assert_eq!(r["unmatched"], json!([a]));
 }
@@ -755,7 +759,8 @@ fn simplified_outlines_retype_only_with_a_tolerance_and_report_their_score() {
     simplify_every_path(&mut s, 0.05);
     s.execute("select.set", &json!({"ids": [g]})).unwrap();
     let before = s.doc().unwrap().doc.clone();
-    let e = s.execute("type.retype", &json!({})).unwrap_err().to_string();
+    // The installed fonts left out: what this machine has installed does not change the result.
+    let e = s.execute("type.retype", &json!({"installed": false})).unwrap_err().to_string();
     assert!(e.contains("no selected shape matches"), "no exact match: {e}");
     for bad in [json!(-0.01), json!(0.06), json!("0.02"), json!(true), json!(null)] {
         let e = s.execute("type.retype", &json!({"tolerance": bad})).unwrap_err().to_string();
@@ -1365,7 +1370,8 @@ fn a_lone_period_in_a_compound_selected_alone_stays_an_outline() {
     let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [c]})).unwrap();
     let before = s.doc().unwrap().doc.clone();
-    let e = match s.execute("type.retype", &json!({})) {
+    // The installed fonts left out: what this machine has installed does not change the result.
+    let e = match s.execute("type.retype", &json!({"installed": false})) {
         Ok(r) => panic!("the period became type: {r}"),
         Err(e) => e.to_string(),
     };
@@ -1425,7 +1431,8 @@ fn a_compound_whose_parts_are_not_all_glyphs_stays_whole() {
     let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [c]})).unwrap();
     let before = s.doc().unwrap().doc.clone();
-    let e = s.execute("type.retype", &json!({})).unwrap_err().to_string();
+    // The installed fonts left out: what this machine has installed does not change the result.
+    let e = s.execute("type.retype", &json!({"installed": false})).unwrap_err().to_string();
     assert!(e.contains("(1 checked)"), "reported once: {e}");
     assert!(s.doc().unwrap().doc == before, "nothing changes");
 }
@@ -1442,7 +1449,8 @@ fn glyphs_that_overlap_in_an_even_odd_compound_stay_an_outline() {
     let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [c]})).unwrap();
     let before = s.doc().unwrap().doc.clone();
-    let e = match s.execute("type.retype", &json!({})) {
+    // The installed fonts left out: what this machine has installed does not change the result.
+    let e = match s.execute("type.retype", &json!({"installed": false})) {
         Ok(r) => panic!("the overlapping o's became type: {r}"),
         Err(e) => e.to_string(),
     };
@@ -1483,7 +1491,8 @@ fn a_translucent_compound_whose_glyphs_overlap_stays_an_outline() {
         })
         .unwrap();
         s.execute("select.set", &json!({"ids": [c]})).unwrap();
-        let r = s.execute("type.retype", &json!({}));
+        // The installed fonts left out: what this machine has installed does not change the result.
+        let r = s.execute("type.retype", &json!({"installed": false}));
         if opacity == 1.0 {
             let r = r.unwrap();
             assert_eq!(r["texts"], json!(["i", "i"]), "opaque, the two lines become type: {r}");
@@ -1504,8 +1513,9 @@ fn overlapping_exact_glyphs_stay_an_outline_when_near_matches_are_allowed() {
         s.execute("select.set", &json!({"ids": kids})).unwrap();
         let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
         s.execute("select.set", &json!({"ids": [c]})).unwrap();
+        // The installed fonts left out: what this machine has installed does not change the result.
         for tolerance in [0.0, 0.05] {
-            if let Ok(r) = s.execute("type.retype", &json!({"tolerance": tolerance})) {
+            if let Ok(r) = s.execute("type.retype", &json!({"tolerance": tolerance, "installed": false})) {
                 panic!("the overlapping o's became type at dx {dx}, tolerance {tolerance}: {r}");
             }
         }
@@ -1566,7 +1576,8 @@ fn a_glyph_with_only_some_contours_turned_in_an_even_odd_compound_still_becomes_
         })
         .unwrap();
         s.execute("select.set", &json!({"ids": [c]})).unwrap();
-        assert!(s.execute("type.retype", &json!({})).is_err(), "nonzero, contour {turned} turned paints the counter");
+        // The installed fonts left out: what this machine has installed does not change the result.
+        assert!(s.execute("type.retype", &json!({"installed": false})).is_err(), "nonzero, contour {turned} turned paints the counter");
         s.execute("path.setFillRule", &json!({"rule": "evenOdd", "ids": [c]})).unwrap();
         let r = s.execute("type.retype", &json!({})).unwrap();
         assert_eq!(r["texts"], json!(["do"]), "contour {turned} turned: {r}");
@@ -1593,7 +1604,8 @@ fn a_compound_whose_glyph_stays_an_outline_keeps_its_other_glyphs_too() {
     let r = s.execute("shape.rectangle", &json!({"x": 300, "y": 300, "width": 40, "height": 20})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [c, r]})).unwrap();
     let before = s.doc().unwrap().doc.clone();
-    let e = match s.execute("type.retype", &json!({})) {
+    // The installed fonts left out: what this machine has installed does not change the result.
+    let e = match s.execute("type.retype", &json!({"installed": false})) {
         Ok(r) => panic!("the A became type without its period: {r}"),
         Err(e) => e.to_string(),
     };
