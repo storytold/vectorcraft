@@ -150,7 +150,8 @@ pub fn root_theme(prefs: &Prefs) -> (ThemeId, ModeChoice, Option<Rgba>) {
 /// action, and the compact set takes the reference app's metrics:
 /// 26-point fields and spinners, 24-point push buttons, 10 points inside panels, 5 between rows, 16-point glyphs in
 /// icon buttons, 5-point control corners, 8-point menus and 10-point windows, 33-point panel tabs, 310-point dock
-/// columns with 14-point column bars and 38-point icon columns, and dialog buttons at least 72 points wide.
+/// columns with 14-point column bars and 38-point icon columns, 29-point menu rows, and dialogs 22 points inside their
+/// edge with 28-point buttons at least 72 points wide.
 /// Its type is the size the reference app draws: it set Inter at 92% of its nominal 13-point body, 12.5-point labels
 /// and 11.5-point captions, so they read at 12, 11.5 and 10.5 points, on the rows those nominal sizes gave.
 const SIZES: &[u8] = br#"{
@@ -177,6 +178,9 @@ const SIZES: &[u8] = br#"{
         "radius.surface": 8,
         "radius.window": 10,
         "size.dialog.button": 72,
+        "size.dialog.button_height": 28,
+        "size.row.menu": 29,
+        "space.pad.dialog": 22,
         "typography.body.size": 12,
         "typography.body.line_height": 17,
         "typography.body_strong.size": 12,
