@@ -13,8 +13,7 @@
 //! one tutorial, `learn.back` goes up one level, `learn.locateTool` shows where a tool is,
 //! `learn.openSample`, `learn.markStep`, `learn.finish` and `learn.next` run the practice controls,
 //! `learn.resetProgress` clears the progress, and `window.learn` shows or hides the panel. The Home
-//! screen's Learn section shows the same card ([`guide_card`]) and the tutorials, which open the
-//! panel.
+//! screen's Learn section links to the list of skills and to each tutorial, which open the panel.
 
 pub mod catalog;
 pub mod locate;
@@ -109,9 +108,8 @@ fn for_you(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// The Quick skill guide card, as one button: a click, or Enter or Space while it has the keyboard
-/// focus, shows the panel's list of skills (`learn.skills`). The For you tab and the Home screen's
-/// Learn section show it.
-pub(crate) fn guide_card(app: &mut VectorcraftApp, ui: &mut Ui) {
+/// focus, shows the panel's list of skills (`learn.skills`). The For you tab shows it.
+fn guide_card(app: &mut VectorcraftApp, ui: &mut Ui) {
     // PLAN: assumed `Button::detail(impl Into<Label>)` (dp.R3, document-panels-w4).
     let card = Button::new(tl!("Quick skill guide"))
         .icon(IconSpec::svg(IconId::new("graduation-cap")))

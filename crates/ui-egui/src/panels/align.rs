@@ -306,7 +306,7 @@ fn bar_items(buttons: impl Iterator<Item = Button>) -> BarItems {
 /// Align panel's Align To says (the key object while there is one), as its own buttons do (#789),
 /// and the selected artboards with the Artboard tool chosen.
 pub(crate) fn align_buttons(_app: &mut VectorcraftApp, ui: &mut Ui) {
-    Row::new().show(ui, |ui, _| {
+    Row::new().wrap(true).show(ui, |ui, _| {
         for (icon, b) in align_icons() {
             command_button(ui, bar_glyph(b).unwrap_or(icon), b);
         }
