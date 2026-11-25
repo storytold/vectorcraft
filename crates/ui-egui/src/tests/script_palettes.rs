@@ -165,6 +165,24 @@ fn a_typed_text_stays_in_its_field_when_a_run_adds_a_control_before_it() {
 }
 
 #[test]
+fn a_click_given_before_a_run_removes_a_control_before_it_reaches_its_button() {
+    let mut app = app();
+    let source = "#targetengine moves\nvar p = new Window('palette'); var a = p.add('button', undefined, 'A'); \
+                  var b = p.add('button', undefined, 'B'); a.onClick = function () { vc.log('a'); }; \
+                  b.onClick = function () { vc.log('b'); }; p.show();";
+    let id = shown(&mut app, source);
+    give(&app, id, UiEvent::Click(2));
+    // A run removes A before the app takes the click, so B is now the palette's first control.
+    start(&mut app, "#targetengine moves\np.remove(a);");
+    run_to_end(&mut app);
+    follow(&mut app);
+    assert_eq!(app.session.script_palette_events_waiting(), 1, "the click waits for its run");
+    script_runs::poll(&mut app);
+    run_to_end(&mut app);
+    assert_eq!(app.session.script_report().unwrap()["log"], json!(["b"]), "the click reaches the button it was given to");
+}
+
+#[test]
 fn a_typed_text_the_full_line_refuses_stays_in_its_field() {
     use vectorcraft_engine::script::palettes::MAX_WAITING;
     let mut app = app();

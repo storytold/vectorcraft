@@ -22,7 +22,7 @@ use vectorcraft_engine::script::{ScriptPalette, ScriptUiDialog, UiEvent, UiValue
 
 use crate::VectorcraftApp;
 use crate::dialogs::script_run::with_host;
-use crate::dialogs::script_window;
+use crate::dialogs::script_window::{self, Queued};
 
 /// The dialog kind of a ScriptUI palette.
 pub const KIND: &str = "scriptPalette";
@@ -38,8 +38,10 @@ pub(crate) struct PaletteWindow {
     palette: ScriptPalette,
     /// The text typed in each edit field that the script has not had yet, by the field's id.
     drafts: BTreeMap<u64, String>,
-    /// The events the person gave since the app last took them.
-    given: Vec<UiEvent>,
+    /// The events the person gave since the app last took them, each with its control by its id,
+    /// and a list's change with the items the person saw, so a run that changes the palette before
+    /// the app takes them leaves each with its own control.
+    given: Vec<Queued>,
     open: bool,
 }
 
@@ -72,7 +74,7 @@ impl PaletteWindow {
     /// Gives `event`, as the person does in the palette.
     #[cfg(test)]
     pub(crate) fn give(&mut self, event: UiEvent) {
-        self.given.push(event);
+        self.given.extend(script_window::queued(&self.palette.dialog, &event));
     }
 }
 
@@ -102,12 +104,12 @@ impl StackDialog for PaletteWindow {
         let shown = Dialog::new(heading).modeless().initial_focus(Initial::Keep).opened(Bind::bound(open)).show(ui, |ui, _| {
             events = script_window::controls(ui, &palette.dialog, drafts, true).events;
         });
-        given.extend(events);
+        given.extend(events.iter().filter_map(|e| script_window::queued(&palette.dialog, e)));
         // The close box gives the script the close; the palette stays open until the script closes
         // it.
         if shown.output.closed.is_some() {
             self.open = true;
-            self.given.push(UiEvent::Close);
+            self.given.push(Queued::Close);
         }
         None
     }
@@ -141,8 +143,11 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         taken
     })
     .unwrap_or_default();
-    for (id, mut drafts, mut events) in taken {
+    for (id, mut drafts, given) in taken {
         let Some(p) = shown.iter().find(|p| p.id == id) else { continue };
+        // Each event goes to its control as the palette is now; one whose control is gone, or whose
+        // list's items changed since the person chose, is dropped.
+        let mut events: Vec<UiEvent> = given.into_iter().filter_map(|q| script_window::resolved(&p.dialog, q)).collect();
         drafted(app, &p.dialog, &mut drafts, &mut events);
         give(app, ctx, p, &mut drafts, events);
         with_host(app, |host, _| {

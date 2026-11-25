@@ -259,7 +259,7 @@ pub(crate) fn keep_refused(w: &ScriptUiDialog, drafts: &mut BTreeMap<u64, String
 }
 
 /// `event` in the dialog `w`, with its control by its id.
-fn queued(w: &ScriptUiDialog, event: &UiEvent) -> Option<Queued> {
+pub(crate) fn queued(w: &ScriptUiDialog, event: &UiEvent) -> Option<Queued> {
     let id = |i: usize| w.nodes.get(i).map(|n| n.id);
     Some(match event {
         UiEvent::Click(i) => Queued::Click(id(*i)?),
@@ -274,7 +274,7 @@ fn queued(w: &ScriptUiDialog, event: &UiEvent) -> Option<Queued> {
 /// The queued event `q` in the dialog `w`, with `control` the index its control has in `w` now.
 /// `None` when `w` no longer has the control, or for a list's change, when the list's items are no
 /// longer those the person chose from: other texts, or the same texts added again.
-fn resolved(w: &ScriptUiDialog, q: Queued) -> Option<UiEvent> {
+pub(crate) fn resolved(w: &ScriptUiDialog, q: Queued) -> Option<UiEvent> {
     match q {
         Queued::Click(id) => Some(UiEvent::Click(index_of(w, id)?)),
         Queued::Change(id, v, list) => {
