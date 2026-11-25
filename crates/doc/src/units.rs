@@ -96,6 +96,18 @@ impl Unit {
             _ => None,
         }
     }
+    /// The SVG length unit an export writes this unit's sizes in: the unit itself when SVG has it,
+    /// else an SVG unit of the same kind (inches for feet and yards, centimeters for meters,
+    /// millimeters for Q and Ha). `None` for points and pixels.
+    pub fn svg_unit(self) -> Option<Unit> {
+        match self {
+            Unit::Millimeters | Unit::Centimeters | Unit::Inches | Unit::Picas => Some(self),
+            Unit::FeetInches | Unit::Feet | Unit::Yards => Some(Unit::Inches),
+            Unit::Meters => Some(Unit::Centimeters),
+            Unit::Q | Unit::Ha => Some(Unit::Millimeters),
+            Unit::Points | Unit::Pixels => None,
+        }
+    }
     pub const fn label(self) -> &'static str {
         match self {
             Unit::Points => "Points",
