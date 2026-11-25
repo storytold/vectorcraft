@@ -293,7 +293,7 @@ fn get_at(interp: &mut Interp, o: ObjId, k: f64) -> JsResult<Value> {
 }
 
 fn has_at(interp: &mut Interp, o: ObjId, k: f64) -> JsResult<bool> {
-    interp.has_property(o, &key_of(k))
+    interp.has_property_indexed(o, &key_of(k))
 }
 
 /// The estimated bytes a new element adds.

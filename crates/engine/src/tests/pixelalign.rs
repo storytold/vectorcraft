@@ -478,6 +478,25 @@ fn paths_added_to_or_moved_in_an_aligned_compound_path_keep_it_aligned() {
     assert!(halves(&pts), "slice: {pts:?}");
 }
 
+/// A path that `node.move` puts into a pixel-aligned compound path snaps with it, though neither
+/// the path nor where it came from was pixel-aligned.
+#[test]
+fn a_path_node_move_puts_into_an_aligned_compound_path_snaps() {
+    let mut s = new_doc();
+    let a = path(&mut s, "M100 100 L110 100 L110 110 L100 110 Z", 1.0);
+    let b = path(&mut s, "M200 100 L210 100 L210 110 L200 110 Z", 1.0);
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+    s.execute("object.setPixelAligned", &json!({"ids": [c]})).unwrap();
+    let loose = path(&mut s, "M300.25 100 L310 100 L310 110 L300.25 110 Z", 1.0);
+    assert!(!aligned(&s, loose));
+    s.execute("node.move", &json!({"id": loose, "parent": c, "index": 99})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.parent_of(NodeId(loose)), Some(NodeId(c)));
+    let pts = compound_points(&s, c);
+    assert_eq!(pts.len(), 12);
+    assert!(halves(&pts), "{pts:?}");
+}
+
 /// Art moved by Artboard Options with Move Artwork with Artboard, and the art copies of an
 /// artboard copied with its art, stay on the pixel grid.
 #[test]

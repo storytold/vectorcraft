@@ -157,6 +157,13 @@ fn clicking_rows_at_any_depth_highlights_them_and_sets_the_current_layer() {
     let n = rect(&mut s, 50.0);
     assert_eq!(parent(&s, n), Some(sub));
     assert!(s.execute("layer.setCurrent", &json!({"id": 9999})).is_err());
+    // `keepRows` makes the layer current and leaves the highlighted rows.
+    run(&mut s, "layer.setCurrent", json!({"id": b.0}));
+    run(&mut s, "layer.setCurrent", json!({"id": c.0, "keepRows": true}));
+    let st = s.doc().unwrap();
+    assert_eq!((st.highlighted_rows(), st.current_layer()), (vec![b], Some(layer)));
+    assert!(s.execute("layer.setCurrent", &json!({"id": a.0, "keepRows": 1})).is_err());
+    assert_eq!(s.doc().unwrap().current_layer(), Some(layer), "a bad keepRows changes nothing");
     // Shift/Ctrl: several rows.
     run(&mut s, "layer.highlight", json!({"ids": [a.0, g.0], "mode": "set"}));
     run(&mut s, "layer.highlight", json!({"ids": [c.0], "mode": "add"}));
@@ -884,6 +891,31 @@ fn moves_are_validated() {
     assert!(s.execute("node.move", &json!({"id": layer.0, "parent": sub.0, "index": 0})).is_err());
     run(&mut s, "node.move", json!({"id": sub.0, "index": 5}));
     assert_eq!(parent(&s, sub), None);
+}
+
+/// `node.move` keeps a clip group's clipping path at its bottom: the path does not leave the group
+/// or move up in it, and a row moved to index 0 goes directly above it.
+#[test]
+fn node_move_keeps_a_clip_groups_clipping_path_at_the_bottom() {
+    let mut s = session();
+    let (a, b, c) = (rect(&mut s, 0.0), rect(&mut s, 30.0), rect(&mut s, 60.0));
+    let layer = parent(&s, a).unwrap();
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0, c.0]}));
+    let g = id(&run(&mut s, "object.clippingMask.make", json!({})));
+    let before = children(&s, g);
+    let mask = before[0];
+    for p in [json!({"id": mask.0, "parent": layer.0, "index": 0}), json!({"id": mask.0, "parent": g.0, "index": 2})] {
+        let err = s.execute("node.move", &p).unwrap_err().to_string();
+        assert!(err.contains("clipping path stays at the bottom"), "{p}: {err}");
+        assert_eq!(children(&s, g), before, "{p}");
+    }
+    let _ = s.execute("node.move", &json!({"id": mask.0, "parent": g.0, "index": 0}));
+    assert_eq!(children(&s, g), before, "the clipping path stays where it is");
+    let d = rect(&mut s, 90.0);
+    run(&mut s, "node.move", json!({"id": d.0, "parent": g.0, "index": 0}));
+    assert_eq!(children(&s, g)[..2], [mask, d], "the row goes directly above the clipping path");
+    run(&mut s, "node.move", json!({"id": before[2].0, "parent": g.0, "index": 0}));
+    assert_eq!(children(&s, g)[..2], [mask, before[2]]);
 }
 
 /// The Layers panel's commands refuse a switch given as text or as another value that is not true

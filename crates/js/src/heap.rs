@@ -264,6 +264,8 @@ pub(crate) enum Class {
     },
     /// A `.( )` filter in progress.
     XmlFilter(Box<XmlFilterState>),
+    /// An object of a class a host defined ([`crate::host_classes`]).
+    Host(crate::host_classes::HostObj),
     /// A `UnitValue` object and its measurement ([`crate::unit_value`]).
     UnitValue(Box<crate::unit_value::Measure>),
 }
@@ -332,7 +334,7 @@ impl Class {
             Class::XmlFilter(_) => "Object",
             Class::Math => "Math",
             Class::Json => "JSON",
-            Class::Ordinary | Class::ForIn(_) | Class::Symbol(_) | Class::Iterator(_) | Class::IterRecord(_) => "Object",
+            Class::Ordinary | Class::ForIn(_) | Class::Host(_) | Class::Symbol(_) | Class::Iterator(_) | Class::IterRecord(_) => "Object",
             Class::Array { .. } => "Array",
             Class::Function(_) => "Function",
             Class::Error(_) => "Error",
@@ -442,6 +444,9 @@ pub(crate) const XML_NS_BYTES: usize = 48;
 pub(crate) const SYMBOL_BYTES: usize = 48;
 /// The estimated bytes of the measurement a `UnitValue` object holds.
 pub(crate) const UNIT_VALUE_BYTES: usize = 32;
+/// The bytes of each part of the handle of an object of a host class: the part itself and its
+/// copy in the key that finds the object again ([`crate::host_classes`]).
+pub(crate) const HOST_PART_BYTES: usize = 16;
 /// The estimated bytes of a piece of code without its instructions, tables and strings.
 const CODE_BYTES: usize = 384;
 
@@ -777,6 +782,7 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
             extra = XML_LIST_BYTES + XML_REF_BYTES * (state.input.len() + state.kept.len());
         }
         Class::UnitValue(_) => extra = UNIT_VALUE_BYTES,
+        Class::Host(h) => extra = HOST_PART_BYTES * h.handle.len(),
         _ => {}
     }
     OBJECT_BYTES + PROP_BYTES * (o.props.len() + syms) + extra

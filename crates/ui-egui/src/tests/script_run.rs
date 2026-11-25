@@ -145,6 +145,36 @@ fn stop_puts_the_document_back_and_says_so() {
 }
 
 #[test]
+fn set_active_artboard_index_shows_the_artboard_in_the_view() {
+    let mut app = app();
+    app.session.prefs.show_external_script_warning = false;
+    app.run("artboard.new", json!({"x": 1000, "y": 0, "width": 100, "height": 100})).unwrap();
+    app.views[0].artboard = 0;
+    let source = "app.activeDocument.artboards.setActiveArtboardIndex(1);";
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": source })).unwrap().unwrap();
+    finish(&mut app);
+    assert_eq!(app.views[0].artboard, 1);
+}
+
+#[test]
+fn the_artboard_tool_follows_the_artboard_a_script_makes_active() {
+    let mut app = app();
+    app.session.prefs.show_external_script_warning = false;
+    app.run("artboard.new", json!({"x": 1000, "y": 0, "width": 100, "height": 100})).unwrap();
+    app.run("artboard.new", json!({"x": 2000, "y": 0, "width": 100, "height": 100})).unwrap();
+    app.select_tool("artboard");
+    crate::panels::artboards::select(&mut app, 2);
+    // A run starts the tool afresh; it keeps the view's active artboard, then the one the script chose.
+    for (source, active) in [("vc.log(1);", 2), ("app.activeDocument.artboards.setActiveArtboardIndex(1);", 1)] {
+        menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": source })).unwrap().unwrap();
+        finish(&mut app);
+        assert_eq!(app.views[0].artboard, active, "{source}");
+        assert_eq!(app.session.tool_options()["active"], json!(active), "{source}");
+        assert_eq!(app.session.tool_options()["selected"], json!([active]), "{source}");
+    }
+}
+
+#[test]
 fn a_canceled_pick_does_not_take_a_dropped_script() {
     let mut app = app();
     let picker = scripted(&mut app);

@@ -479,7 +479,7 @@ fn more_settings(ui: &mut egui::Ui, s: &mut DocSettings, lengths: LengthUnits) {
     Field::new(layout.clone()).show(ui, |ui, _| {
         let entries: Vec<Entry<ArtboardLayout>> = ArtboardLayout::ALL.iter().map(|l| Entry::new(*l, text(tl!(l.label())))).collect();
         if let Some(l) = Segmented::new(layout.clone(), Bind::given(s.layout), &entries).enabled(several).show(ui).value().copied() {
-            s.layout = l;
+            choose_layout(s, l);
         }
     });
     let rtl = Checkbox::new(Bind::given(s.right_to_left)).label(right_to_left).enabled(several).show(ui);
@@ -494,12 +494,47 @@ fn more_settings(ui: &mut egui::Ui, s: &mut DocSettings, lengths: LengthUnits) {
     });
     Field::new(columns.clone()).show(ui, |ui, _| {
         let n = f64::from(s.artboards.max(1));
-        let shown = f64::from(s.columns.max(1)).min(n);
-        let field = NumberField::new(columns.clone(), Bind::given(Some(shown))).range(1.0..=n).step(1.0).commit_decimals(0).enabled(several && grid);
+        let field = NumberField::new(columns.clone(), Bind::given(Some(shown_columns(s))))
+            .range(1.0..=n)
+            .step(1.0)
+            .commit_decimals(0)
+            .enabled(several && grid);
         if let Some(v) = field.show(ui).value().copied().flatten().filter(|v| v.is_finite()) {
-            s.columns = v.round().clamp(1.0, n) as u32;
+            choose_columns(s, v);
         }
     });
+}
+
+/// Sets the column count, kept within the artboards. It replaces the rows of a preset made with
+/// `file.new`'s `rows`.
+fn choose_columns(s: &mut DocSettings, v: f64) {
+    s.columns = v.round().clamp(1.0, f64::from(s.artboards.max(1))) as u32;
+    s.rows = 0;
+}
+
+/// Whether `s` is a grid by column laid out by the rows of a preset made with `file.new`'s `rows`.
+fn by_rows(s: &DocSettings) -> bool {
+    s.layout == ArtboardLayout::GridByColumn && s.rows > 0
+}
+
+/// The column count More Settings shows: for a grid by column with rows, the columns those rows
+/// give the current number of artboards, as `file.new` lays them out.
+fn shown_columns(s: &DocSettings) -> f64 {
+    let n = f64::from(s.artboards.max(1));
+    if by_rows(s) { s.grid_columns() as f64 } else { f64::from(s.columns.max(1)).min(n) }
+}
+
+/// Chooses an artboard layout. A new layout replaces a preset's rows and keeps the column count
+/// those rows showed; choosing the layout that is already selected keeps the rows.
+fn choose_layout(s: &mut DocSettings, l: ArtboardLayout) {
+    if l == s.layout {
+        return;
+    }
+    if by_rows(s) {
+        s.columns = shown_columns(s) as u32;
+    }
+    s.rows = 0;
+    s.layout = l;
 }
 
 /// Manage Profiles' pop-up: a row per New Document profile with Edit, which opens the profile as a
@@ -866,6 +901,63 @@ mod tests {
         let ctx = ctx(&app);
         crate::dialogs::host::pump(&mut app, &ctx);
         assert!(app.session.documents().is_empty(), "no document was made");
+    }
+
+    /// A grid by column with a preset's rows of 4 over `artboards` artboards and 2 stored columns.
+    fn by_four_rows(artboards: u32) -> DocSettings {
+        DocSettings { artboards, layout: ArtboardLayout::GridByColumn, columns: 2, rows: 4, ..DocSettings::default() }
+    }
+
+    /// Columns shows what a preset's rows give the current number of artboards; without rows it
+    /// shows the stored count.
+    #[test]
+    fn columns_follow_a_presets_rows_as_artboards_change() {
+        for (artboards, shown) in [(5, 2.0), (9, 3.0), (2, 1.0)] {
+            assert_eq!(shown_columns(&by_four_rows(artboards)), shown, "{artboards} artboards");
+        }
+        let by_row = DocSettings { layout: ArtboardLayout::GridByRow, ..by_four_rows(9) };
+        assert_eq!(shown_columns(&by_row), 2.0);
+    }
+
+    /// A new column count replaces a preset's rows.
+    #[test]
+    fn a_new_column_count_replaces_a_presets_rows() {
+        let mut s = by_four_rows(9);
+        choose_columns(&mut s, 3.0);
+        assert_eq!((s.columns, s.rows, s.grid_columns()), (3, 0, 3));
+    }
+
+    /// A new layout replaces a preset's rows and keeps the columns they showed, so Create lays out
+    /// what the dialog showed.
+    #[test]
+    fn a_new_layout_keeps_the_columns_a_presets_rows_showed() {
+        for to in [ArtboardLayout::GridByRow, ArtboardLayout::Row, ArtboardLayout::Column] {
+            let mut s = by_four_rows(9);
+            choose_layout(&mut s, to);
+            assert_eq!((s.layout, s.columns, s.rows), (to, 3, 0), "{to:?}");
+        }
+        // Under a grid by row the dialog shows the stored columns, and they stay.
+        let mut s = DocSettings { layout: ArtboardLayout::GridByRow, rows: 0, ..by_four_rows(9) };
+        choose_layout(&mut s, ArtboardLayout::GridByColumn);
+        assert_eq!((s.columns, s.rows, shown_columns(&s)), (2, 0, 2.0));
+    }
+
+    /// Choosing the grid by column that is already selected keeps a preset's rows, so Create puts
+    /// as many artboards in each column as before.
+    #[test]
+    fn choosing_the_selected_layout_keeps_a_presets_rows() {
+        let mut s = by_four_rows(5);
+        choose_layout(&mut s, ArtboardLayout::GridByColumn);
+        assert_eq!((s.columns, s.rows), (2, 4));
+        let mut app = app();
+        open(&mut app);
+        set(&app, "artboards", json!(5)).unwrap();
+        set(&app, "artboardLayout", json!({"layout": "gridByColumn", "columns": 2, "rows": 4, "spacing": 10})).unwrap();
+        create(&mut app);
+        let st = app.session.active().unwrap();
+        assert_eq!(st.doc.artboards.len(), 5);
+        let first: Vec<_> = st.doc.artboards.iter().filter(|a| a.rect.x0 == 0.0).map(|a| a.rect.y0).collect();
+        assert_eq!(first.len(), 4, "four artboards in the first column: {first:?}");
     }
 
     /// The preset keeps the artboard layout, spacing and columns More Settings set (#4893); an empty

@@ -620,7 +620,7 @@ change nothing; an omitted or null `id` keeps the default. Commands that need an
 `path` keys of `appearance.transfer`, `appearance.copyFrom`, `layer.move`, the `livePaint.*` commands and
 `text.createInPath`) refuse a value that is not a non-negative integer with "`id` must be a whole number", naming the
 key, and report a key left out or null as missing. The optional `group` of `livePaint.fill` and `parent` of
-`node.move` are refused the same way when given; left out, they keep their defaults. `livePaint.info` reads `id` when
+`node.move` and `text.create` are refused the same way when given; left out, they keep their defaults. `livePaint.info` reads `id` when
 `group` is left out or null, and reports a missing group only when both are left out. A command that needs a number
 (`x` of `shape.rectangle`, `pos` of `guide.add`, `index`, `x` and `y` of the `object.mesh.*` and
 `object.envelope.setMeshPoint` point commands, and the others like them) refuses a value that is not a number with
@@ -2686,6 +2686,222 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   throws a `RangeError`.
 - `vc.commands` lists the commands a script may run.
 - `vc.log(value)` adds a value to the report and a line to the Script Console.
+- `app` is the application object the help page https://ai-scripting.docsforadobe.dev/jsobjref/Application/
+  describes: `app.documents`, `app.activeDocument` (assigning an open document makes it the active one),
+  `app.selection`, `app.coordinateSystem` and `app.getIsFileOpen(path)`. `app.documents`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Documents/) has `length`, `[i]`, `index(key)`, `getByName(name)`
+  and `add(colorSpace?, width?, height?, numArtBoards?, artboardLayout?, artboardSpacing?, artboardRowsOrCols?)`,
+  which runs `file.new` (`artboardRowsOrCols` is the number of rows for `GridByCol` and `RLGridByCol`, and of
+  columns for the other layouts), and `addDocument(startupPreset, presetSettings?, showOptionsDialog?)`, which runs `file.new`
+  with the New Document profile `startupPreset` names (`Print`, `Web`, `Mobile`, `Video`, another profile of
+  `file.newPresets`, or `Basic CMYK` and `Basic RGB` for no profile), starting from the first preset
+  `file.newPresets` lists for that profile, and the settings of a `new DocumentPreset()`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/DocumentPreset/) in place of the preset's. A `DocumentPreset`
+  starts with the defaults that page gives. Its `documentBleedLink`, `documentBleedOffsetRect` and
+  `transparencyGrid` can be assigned, but `addDocument` throws an error that says they are not available yet when
+  the preset it is given holds one of them with a value other than `null`, and makes no document. A
+  `presetSettings` that is not a `DocumentPreset` (a plain object such as `{width: 500}` included) throws a
+  `TypeError`. A script's `file.new` reads the profile's file in the profiles folder as the person's does, under the
+  automation roots in force; when `file.new` reports a `profileError`, `addDocument` throws an error that names the
+  profile and the reason, and makes no document. Each warning from reading the profile's file (a color profile in it
+  that cannot be used, for example) goes to the Script Console as a line `addDocument: <warning>`. A `previewMode` of
+  `DocumentPreviewMode.PixelPreview` throws an error that says it is not available yet, and no document is made.
+  `showOptionsDialog` true throws `Dialog unavailable` with no document made. A `Document` (https://ai-scripting.docsforadobe.dev/jsobjref/Document/) has `name`,
+  `width`, `height`, `rulerUnits`, `documentColorSpace`, `rulerOrigin`, `convertCoordinate(point, source,
+  destination)`, `pageItems` and `selection`. `pageItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PageItems/)
+  lists every object in the document's layers, the objects inside groups, compound paths, blends, envelopes, repeats
+  and intertwines included, and has `length`, `[i]`, `index(key)`, `getByName(name)` and `removeAll()`; `i in` either
+  collection is true for each
+  entry `[i]` gives. Each page item
+  (https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/) has `typename`, `parent`, `name`, `note` (the
+  Attributes panel's note, trimmed as `attributes.set` trims it), `hidden`, `locked`, `selected` (assigning it adds
+  or removes only that object, as `select.add` and `select.toggle` do, and the other objects stay selected as they
+  were), `opacity` (0 to
+  100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
+  visible bounds with the anchors and direction handles of the shown paths in the item), `editable` (false for an object that is hidden or locked, in a hidden or locked layer or group,
+  or on a locked artboard), `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
+  `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/). `move` runs `node.move`, and `duplicate` runs
+  `edit.duplicate` and then `node.move` on the copy. The relative object is a page item or a layer of the same
+  document; `ElementPlacement.INSIDE` and `PLACEATBEGINNING` (the default) put the object on top of a layer's, a
+  group's or a compound path's contents, `PLACEATEND` under them (a compound path takes only paths), `PLACEBEFORE`
+  directly above the relative object and `PLACEAFTER` directly below it. An object of another document throws `Cross-document placement is not available`, and when
+  `node.move` refuses the place of a copy, `duplicate` throws that error and leaves the documents, the selection and
+  the undo history as they were before the call. `move` on an object that is hidden or locked, inside a hidden or
+  locked layer or group, or on a locked artboard throws `Cannot move` and moves nothing. `duplicate` on such an
+  object, with or without a relative object, throws `Cannot duplicate` and makes no copy. When `move` takes the last
+  path out of a compound path, the empty compound path is deleted in the same undo step. `duplicate` on a path inside a compound path throws
+  `Duplicating a path inside a compound path is not available yet`, and `zOrder` on one throws
+  `Reordering a path inside a compound path is not available yet` and leaves the document unchanged. A script that holds a placed image keeps the
+  same object when the image is embedded: the next read gives that object, now a `RasterItem`. The
+  enumerations `ElementPlacement`, `ZOrderMethod`, `RulerUnits`, `DocumentColorSpace`, `CoordinateSystem`,
+  `DocumentArtboardLayout`, `DocumentPresetType`, `DocumentPreviewMode`, `DocumentRasterResolution` and
+  `DocumentTransparencyGrid` hold strings such as `"ZOrderMethod.BRINGTOFRONT"`.
+  VectorCraft's own rules: documents are listed in tab order, and the document's page items in paint order from the
+  bottom, with the objects inside groups and compound paths after their group and without layers and ruler guides
+  (the layers paragraph below gives the order of a layer's, a group's and a compound path's lists). Script coordinates
+  are points with Y up from the bottom-left corner of the first artboard, or, with
+  `CoordinateSystem.ARTBOARDCOORDINATESYSTEM`, Y down from the top-left corner of the active artboard. `typename`
+  is `TextFrame` for type, and `BlendItem`, `EnvelopeItem`, `RepeatItem`, `PlacedDocumentItem` and `IntertwineItem`
+  for kinds the help pages give no class. Each change runs a command and joins the run's one undo step for each
+  changed document. A value that changes nothing runs no command, and a change to another document leaves the active
+  tab as it was. A command that selects the objects it changes leaves the current layer and the highlighted Layers
+  panel rows as they were before the change. A bad value throws an error and changes nothing. An object that was deleted, or that a named engine
+  kept from an earlier run, throws `Stale page item`. `remove()` on an object that is hidden or locked, is inside a
+  hidden or locked layer or group, or is a group that holds one, and `removeAll()` when any object is, throw
+  `cannot delete hidden or locked objects` and delete nothing. `remove()` on an object on a locked artboard, and `removeAll()`
+  when any object is on one, throw `cannot delete objects on a locked artboard` and delete nothing. Setting `width` or `height` scales the object along
+  the page's axes, so a rotated object then reads back the size that was set. `index` and `getByName` throw
+  `Not found`; and
+  `app.activeDocument` with no document open throws `No active document`. `Document.selection` takes one page item,
+  a list of at most 10,000, `null` or `[]`, and an object that cannot be selected throws `Cannot select` with
+  nothing changed. While View › Guides › Lock Guides is on, a path made into a guide cannot be selected this way or
+  with `selected`. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
+  letter case is ignored and `\` matches `/`) and does not resolve the path it is given. A document counts only when
+  the automation read roots allow its file, and that check can look the document's file up on disk. A path with
+  `..`, a network path, a NUL character or more than 4,096 bytes throws an error. Some members the Application,
+  Document and PageItem pages list, such as `Document.views`, `PageItem.blendingMode`, `PageItem.rotate` and
+  `app.beep`, throw an error that says they are not available yet when they are read or assigned. Other members
+  those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
+  themselves, such as a path's fill, are not defined yet and read as `undefined`.
+- A document also has `layers`, `activeLayer`, `groupItems`, `compoundPathItems` and `artboards`.
+  `layers` (https://ai-scripting.docsforadobe.dev/jsobjref/Layers/) and a layer's own `layers` have `length`, `[i]`,
+  `index(key)`, `getByName(name)`, `add()` and `removeAll()`. On the document, `add()` runs `layer.new` and makes a
+  layer above every top-level layer; on a layer it runs `layer.newSublayer` and makes a sublayer on top of that
+  layer's contents. The new layer becomes the current one. `removeAll()` runs `layer.delete`; on the document's
+  layers it throws, since a document keeps at least one layer. Assigning a layer to `activeLayer` runs
+  `layer.setCurrent`. A `Layer` (https://ai-scripting.docsforadobe.dev/jsobjref/Layer/) has `typename`, `name`,
+  `visible`, `locked`, `printable`, `preview`, `dimPlacedImages`, `opacity` (0 to 100), `color`, `parent`,
+  `layers`, `pageItems`, `groupItems`, `compoundPathItems`, `zOrderPosition`, `hasSelectedArtwork`, `isIsolated`,
+  `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`. Its properties run
+  `layer.setProps`, and `opacity` runs `object.setProps`. `move` and `zOrder` run `node.move`; a layer goes into
+  another layer, to the top level of the document, or directly above or below another layer. Every page item has
+  `layer`, the layer it is in. A `GroupItem` (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/) also has
+  `clipped`, `pageItems`, `groupItems` and `compoundPathItems`, and a `CompoundPathItem`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/CompoundPathItem/) has `pathItems`. `groupItems`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItems/) and `compoundPathItems` have `length`, `[i]`,
+  `index(key)`, `getByName(name)`, `add()` and `removeAll()`. `groupItems.add()` runs `object.newGroup`.
+  `clipped` runs `layer.clippingMask.toggle`. `artboards` (https://ai-scripting.docsforadobe.dev/jsobjref/Artboards/)
+  has `length`, `[i]`, `index(key)`, `getByName(name)`, `add(artboardRect)` (runs `artboard.new`),
+  `insert(artboardRect, index)` (runs `artboard.new` and `artboard.reorder`), `remove(index)` (runs
+  `artboard.delete`), `getActiveArtboardIndex()` and `setActiveArtboardIndex(index)`. An `Artboard`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Artboard/) has `typename`, `parent`, `artboardRect`, `name`,
+  `rulerOrigin`, `rulerPAR` (0.1 to 10), `showCenter`, `showCrossHairs`, `showSafeAreas` and `remove()`; its
+  properties run `artboard.setProps`, and `rulerOrigin` runs `document.setRulerOrigin`. One document always keeps
+  one artboard.
+  VectorCraft's own rules: `layers` lists layers top first, as the Layers panel shows them. A layer's or group's
+  `pageItems`, `groupItems` and `compoundPathItems`, and a compound path's `pathItems`, list the objects directly in
+  it, topmost first. The document's `groupItems` and `compoundPathItems` hold every group or compound path at any
+  depth, in the order of the document's `pageItems`. A layer's `pageItems` leave out its sublayers, and a compound
+  path's `pathItems` have the typename `PathItems`. A layer's or artboard's `name` takes a number or a boolean as
+  `String()` writes it. `locked` true means the layer is locked. `color` is an object `{red, green, blue}` of whole
+  numbers from 0 to 255. A layer's name is from 1 to 512 characters. A layer's `zOrderPosition` counts the layers
+  beside it from 1 at the bottom, leaving out art, and `zOrder` with `BRINGFORWARD` or `SENDBACKWARD` moves it past
+  the next layer beside it and any art between them.
+  `hasSelectedArtwork = true` adds the layer's shown, unlocked art to the selection (`select.add`), and `false`
+  deselects only the layer's art (`select.toggle`); the rest of the selection, ruler guides included, stays. A layer
+  with nothing to add or deselect runs no command.
+  `clipped = true` makes the group's topmost object, which must be a path, a compound path or type, its clipping
+  path; `false` releases the mask; the group keeps its id. `groupItems.add()` makes an empty group on top of the
+  layer's or group's contents, or of the current layer's for the document's collection, and `compoundPathItems.add()`
+  makes an empty compound path in the same place
+  (https://ai-scripting.docsforadobe.dev/jsobjref/CompoundPathItems/). A path that `move` or `duplicate` puts into a
+  compound path becomes one of its paths and gives up its own paint, as Make Compound Path leaves its paths. The
+  compound path becomes pixel-aligned when the path was, or when the compound path it leaves was. An empty
+  compound path takes the paint the first path that goes in was drawn with: the path's own, or the paint of the
+  compound path it leaves. Other objects are refused. A path that `move` takes out of a compound path into a layer or
+  a group takes the compound path's paint and pixel alignment, as Release Compound Path gives them to its paths.
+  `artboards.add` and `insert` stop at 100 artboards in a document, the limit `Documents.add` uses. An artboard's rectangle is
+  `[left, top, right, bottom]` in script coordinates, with its right side right of its left side, its bottom below
+  its top, each side from 1 to 3,999,856 points and every edge at most 4,000,000 points from the document origin.
+  Artboard names are trimmed, an empty name gives the artboard its default name (`Artboard N` for the Nth artboard),
+  and two artboards may have the same name. `add` and `insert` name the new artboard `Artboard N`, with N the first number from one past the artboard count that no other artboard's
+  name uses. `rulerOrigin` is `[x, y]` from the artboard's top-left corner with Y down.
+  `setActiveArtboardIndex` changes the view's active artboard with no undo step, and `script.run`'s report lists the
+  change in `activeArtboards` (`[{document, artboard}]`, both indexes, with each document's active artboard as the
+  run leaves it). The report also lists a document whose active artboard has another index when the run ends because
+  artboards were inserted, removed or reordered before it. An index outside the list throws a
+  `RangeError`. A layer that was deleted throws `Stale layer`, and an artboard that was deleted throws
+  `Stale artboard`. `Layer.pathItems`, `blendingMode`, `artworkKnockout` and `sliced`, `GroupItem.pathItems` and
+  `GroupItems.createFromFile` throw an error that says they are not available yet.
+- `object.newGroup {parent?, index?, compound?}` adds an empty group to a shown, unlocked layer or group (`parent`;
+  default: the current layer), on top of its contents or at `index` (0 is the bottom; in a clipping layer or group,
+  index 0 puts it directly above the clipping path), as one undo step named Group, and
+  gives `{id}`. With `compound: true` it adds an empty compound path instead, as one undo step named Compound Path.
+  The selection stays as it is. `node.move` also puts a path into a shown, unlocked compound path, where the path
+  gives up its own paint, and an empty compound path takes the paint the first path that goes in was drawn with. A
+  path that `node.move` takes out of a compound path into a layer or a group takes the compound path's paint and pixel
+  alignment, and a pixel-aligned compound path snaps a path it takes to the pixel grid. `node.move` leaves the
+  clipping path of a clip group or clipping layer at its bottom: it refuses to move the clipping path until the mask
+  is released, and puts a row given index 0 there directly above the clipping path.
+- `Document.textFrames` (https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItems/) lists the document's type
+  objects in paint order, those inside groups included, with `length`, `[i]`, `index(key)`, `getByName(name)` and
+  `removeAll()`. `add()` makes empty point type at the origin and `pointText(anchor, orientation?)` at `anchor`, both
+  with `text.create`; `areaText(path, orientation?)` and `pathText(path, startTValue?, endTValue?, orientation?)` turn
+  a `PathItem` into area type or type on a path with `text.createInPath`, the orientation being a `TextOrientation`
+  value; a `startTValue`, `endTValue`, `baseFrame` or `postFix` that is given throws an error that says it is not
+  available yet. A `Layer` and a `GroupItem` have `textFrames` with the same members. VectorCraft's own rules for
+  them: they list the type objects directly in the layer or group, topmost first, and their `add()`, `pointText`,
+  `areaText` and `pathText` put the new type on top of the layer's or group's contents, whatever the current layer.
+  Point type goes there with `text.create`'s `parent`, which takes a shown, unlocked layer or group and ignores the
+  drawing mode, and area type and type on a path go there with `node.move`, in the same undo step. A hidden or
+  locked layer or group throws an error and changes nothing. `removeAll()` deletes every type object the collection
+  lists with `edit.clear` in one step; when one is hidden or locked, in a hidden or locked layer or group, or on a
+  locked artboard, it throws an error and deletes nothing. A `TextFrame`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItem/) is a page item with `kind` (`TextType.POINTTEXT`,
+  `AREATEXT` or `PATHTEXT`), `contents`, `orientation`, `textRange`, `characters`, `words`, `paragraphs`,
+  `createOutline()` (Type › Create Outlines, giving the group of outlines, or `null` when the type has nothing to
+  outline and the command removes it), `convertPointObjectToAreaObject()` and
+  `convertAreaObjectToPointObject()`. A `TextRange` (https://ai-scripting.docsforadobe.dev/jsobjref/TextRange/) has
+  `contents`, `start`, `end`, `characterOffset` (the same as `start`), `length`, `parent` (its frame), `characters`,
+  `words`, `paragraphs`, `characterAttributes`, `paragraphAttributes`, `getParagraphLength()`, `getTextRunLength()` and
+  `remove()`, and the character and paragraph attributes themselves. `contents` takes a string, or a number as
+  `String(number)` writes it. Setting `length` to a whole number from 0 to the units left in the frame moves the range's
+  end and leaves the text as it is. The `characters`, `words` and `paragraphs` collections
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Words/) have `length`, `parent`, `[i]`,
+  `add(contents, relativeObject?, insertionLocation?)` and `addBefore(contents)`, which insert the text and give its
+  range, as one `text.editRange`. Character attributes are `size` (0.1 to 1296 pt), `leading` (0.1 to
+  5000 pt), `autoLeading`, `tracking` (-1000 to 10000), `baselineShift` (-1296 to 1296 pt), `horizontalScale` and
+  `verticalScale` (1 to 10000 percent), `rotation` (-360 to 360 degrees), `underline`, `strikeThrough` and `textFont`,
+  set with `text.setRangeStyle`; sizes are document points, as the Character panel shows them. Paragraph attributes are
+  `justification` (a `Justification` value, set with `text.setStyle`; the Auto alignment new type has reads as `LEFT`,
+  or `RIGHT` in a right-to-left paragraph, and setting a value replaces it), `firstLineIndent`, `leftIndent`, `rightIndent`,
+  `spaceBefore` and `spaceAfter` (-1296 to 1296 pt, set with `text.setFormat`). `app.textFonts`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/TextFonts/) lists every style of every family in the font menu, with
+  `length`, `[i]`, `index(key)` and `getByName(name)`, which takes the PostScript name of a bundled or installed font, or
+  the family and style joined by a space; a `TextFont` has `name` (its PostScript name), `family` and `style`. The enumerations `TextType`,
+  `TextOrientation` and `Justification` hold strings such as `"Justification.CENTER"`.
+  VectorCraft's own rules: offsets and lengths count UTF-16 code units, as a JavaScript string does, and an offset
+  inside a surrogate pair takes in its whole character; one item of `characters` is one code point. `contents` gives a
+  paragraph break as `\r` and a forced line break as `\u0003`, and takes `\r`, `\n` or `\r\n` for a paragraph break. A
+  word is a run of characters that are not white space; a range's `words` and `paragraphs` are the whole words and
+  paragraphs it touches, a paragraph's break belonging to it; the empty paragraph after a break at the end of the text
+  belongs only to an empty range there. A range keeps its place while the script edits the frame
+  through these objects: an edit before it moves it, an edit over one of its ends takes that end to the edge of the
+  edit's new text, so a range the edit covers holds the new text, and an insertion at one of its ends joins it. When a
+  member finds the frame's text different from the text these objects last saw, because `vc.run` or an undo changed
+  it, a range made before throws `Stale text range`, and so does its `typename`; a change that was reversed before
+  that read leaves the text as the range knew it, and the range keeps working. After `file.revert`, a range made
+  before throws `Stale text range` even when the file read back holds the same text. These objects keep a record of the
+  frame's last 100,000 edits, and a range made before an edit that is no longer in that record throws
+  `Stale text range` too. A character attribute
+  read on characters that differ gives the first one's value, and set on an empty range it changes nothing. Setting
+  `autoLeading` to false gives each character with auto leading the leading it is set with at that moment, from its
+  own size and its paragraph's auto leading percentage, with one `text.setRangeStyle` for each stretch of characters
+  that take the same leading; when one of those values is outside 0.1 to 5000 pt, it throws
+  and changes nothing. A paragraph attribute reads the first paragraph the range touches and sets every one of them. A value a range already
+  has runs no command; a `leading` set on characters with auto leading turns their auto leading off even when it equals
+  the auto leading. A bad value throws an error and changes nothing. Setting `textFont` sets the font, then throws
+  when `text.setRangeStyle` warns that the font is not available, or when Missing Glyph Protection keeps characters the
+  font has no glyph for in their font, giving how many. A `TextFont` from an earlier run throws
+  `Stale text font`. Each read of a member that gives a range gives a new object, so setting one range's `length`
+  leaves the others as they are. `add` without a relative object inserts after the collection's last item, and
+  `addBefore` before its first; with one, a text range or the text frame of the same frame, `PLACEBEFORE` and
+  `PLACEATBEGINNING` insert at its start and `PLACEAFTER`, `PLACEATEND` or no location at its end. An added word is
+  kept apart from the characters next to it by a space, and an added paragraph by a paragraph break; adding an empty
+  string runs no command. Members the help pages list that are not here, such as `TextFrame.lines`, `TextFrame.story`
+  and `TextRange.changeCaseTo`, throw an error that says they are not available yet, and `start`, `end`,
+  `characterOffset` and `orientation` cannot be set yet.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global
@@ -6501,8 +6717,9 @@ itself, and each sublayer has its own colour for the selection highlight. `docum
 report `color`, `template`, `printable`, `preview`, `dimImages` and `clip`), the `currentLayer` (where new art goes)
 and `layerRows`, the rows highlighted in the panel.
 
-- **Clicking rows** (not undo steps): `layer.setCurrent {id}` is a plain click on any row: it alone is highlighted
-  and its layer (the row itself when it is a layer or sublayer) becomes current. `layer.highlight {ids, mode?:
+- **Clicking rows** (not undo steps): `layer.setCurrent {id, keepRows?}` is a plain click on any row: it alone is
+  highlighted and its layer (the row itself when it is a layer or sublayer) becomes current; with `keepRows` true the
+  highlighted rows stay as they are. `layer.highlight {ids, mode?:
   set|add|toggle}` is Shift-click (a range) and Ctrl/Cmd-click (toggle). Selecting art makes its layer current.
   Without `ids`, the panel commands below act on the highlighted rows, else on the current layer.
 - **Selection column**: `layer.selectAll {id, add?}` selects a row's visible, unlocked art (a layer's sublayers'
@@ -6529,7 +6746,8 @@ and `layerRows`, the rows highlighted in the panel.
   bottom layer's into the empty space under the list) places them, unless objects are copied with a top-level layer
   that is the target, which would put them inside it (#8237). Dragging the
   selected-art square is `layer.move` with the selected objects. `node.move {id, parent?, index}` is the low-level
-  form with the same nesting rules; unlike `layer.move`, it also moves a row into a locked layer or group. A row that
+  form with the same nesting rules; unlike `layer.move`, it also moves a row into a locked layer or group, and it puts
+  a path into a shown, unlocked compound path (see `object.newGroup` for the paint the path keeps or takes). A row that
   either command puts into a Live Paint group from elsewhere (inside it, or above or below one of its rows) joins the
   group's paths as `livePaint.merge` adds them, in one "Merge Live Paint" undo step, and the group is selected and
   listed in `layer.move`'s `ids` in its place; paths, compound paths, groups of them and Live Paint groups can join,
@@ -9110,7 +9328,11 @@ and goes back to Document Setup, whose OK runs `document.setup`; its Cancel goes
 
 `file.new` takes everything New Document sets: `preset` (a name from `file.newPresets`), `name`, `width`/`height`
 (points, or lengths such as `"210 mm"`), `units`, `orientation`, `artboards` with `artboardLayout {layout, columns,
-spacing, rightToLeft}`, `bleed`, `backgroundContents`, `colorMode`, `rasterEffectsPpi` (1 to 2,400; a saved preset's
+rows, spacing, rightToLeft}` (`rows` gives a `gridByColumn` layout that many rows, at most one for each artboard, in place of `columns`, and is
+an error with another layout; a preset keeps the rows, and `file.newPresets` lists them as set even when there are
+fewer artboards, until `columns` without `rows`, or another layout, is given; New Document's Columns shows the columns
+the rows give the current number of artboards, and New Document drops the rows when Columns or the layout changes),
+`bleed`, `backgroundContents`, `colorMode`, `rasterEffectsPpi` (1 to 2,400; a saved preset's
 value outside that range is read as the nearer end), `previewMode` and `alignNewObjectsToPixelGrid` (see
 [Align New Objects to Pixel Grid](#align-new-objects-to-pixel-grid)).
 `file.newPresets {category?}` lists the categories and presets (Recent: the last sizes used; Saved: the user's presets,
@@ -9293,9 +9515,11 @@ with the defaults.
 
 The profile is read on every `file.new`, so a replayed journal or a recorded action uses the profile as it is when it
 runs, as `document.open` reads its file when it runs. A file larger than 64 MiB (VectorCraft's own limit) is not read.
-When the file cannot be read, is too large or is not a native document, or the request's read roots leave out the
-folder (whether or not the file exists), the document starts with the defaults and
-`file.new`'s result carries `profileError: {profile, reason}`; the desktop app shows the reason in the status bar. The
+When the file is a link or a folder, cannot be read, is too large or is not a native document, or the request's read
+roots leave out the folder (whether or not the file exists), the document starts with the defaults and
+`file.new`'s result carries `profileError: {profile, reason}`; the desktop app shows the reason in the status bar, and
+a script's `app.documents.addDocument` throws it. A script's file access limits do not apply to reading the profile's
+file. The
 reason given when the read roots leave out the folder does not name the folder's path. Color profiles the profile's
 file carries are installed when they are missing, as `document.open` installs them, and each one that can't be used
 adds a line to `file.new`'s `warnings`. The new document's links find their files through relative paths from the
