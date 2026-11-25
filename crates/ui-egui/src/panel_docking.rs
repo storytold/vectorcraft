@@ -934,7 +934,7 @@ fn show_actions(ws: &Workspace<String>, space: &FloatSpace<String>, panel: &str,
         (None, true) => vec![Action::open(id, first_dock_panel(layout, panel))],
         (None, false) => {
             let rect = space.place(space.size_of(&DragUnit::Panel(id.clone()), None));
-            vec![Action::open(id.clone(), None), Action::float(id, rect)]
+            vec![Action::float(id, rect)]
         }
     }
 }
@@ -1088,7 +1088,9 @@ pub(crate) fn place_floating(app: &mut VectorcraftApp, panel: &str, pos: egui::P
     let rect = egui::Rect::from_min_size(pos, egui::vec2(width, floating_height(app, &id)));
     let layout = layout_of(&app.ui);
     let mut actions = Vec::new();
-    if !layout.contains(&id) {
+    // A hidden panel goes back to its place first, so Dock Panel returns it there; any other panel floats without joining a
+    // docked group, which would change that group's front tab.
+    if !layout.contains(&id) && app.ui.dock_workspace.hidden().iter().any(|(p, _)| p == &id) {
         actions.push(Action::open(id.clone(), None));
     }
     // A rail's window is a stepped column, which the dock fits to the rail's grid; it keeps the steps it had.
