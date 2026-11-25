@@ -18,7 +18,8 @@ pub fn tool_icon(name: &str) -> &'static str {
         "tool-direct" => "dc-direct",
         "tool-group-select" => "dc-group-select",
         "tool-magic-wand" => "wand_sparkles",
-        "tool-lasso" => "lasso",
+        "tool-lasso" => "dc-lasso",
+        "tool-lasso-enclosing" => "dc-lasso-enclosing",
         "tool-pen" => "pen-tool",
         "tool-pen-add" => "pen-tool-add",
         "tool-pen-delete" => "pen-tool-delete",
@@ -79,7 +80,7 @@ pub fn tool_icon(name: &str) -> &'static str {
         "tool-fill-area" => "dc-fill-area",
         "tool-live-select" => "dc-live-select",
         "tool-perspective" => "dc-perspective",
-        "tool-perspective-select" => "dc-perspective",
+        "tool-perspective-select" => "dc-perspective-select",
         "tool-mesh" => "dc-mesh",
         "tool-gradient" => "dc-gradient",
         "tool-eyedropper" => "eyedropper",
@@ -89,9 +90,25 @@ pub fn tool_icon(name: &str) -> &'static str {
         "tool-blend" => "dc-blend",
         "tool-objects-on-path" => "dc-objects-on-path",
         "tool-symbol" => "dc-symbol-sprayer",
-        "tool-graph" => "chart-column",
+        "tool-symbol-shifter" => "dc-symbol-shifter",
+        "tool-symbol-scruncher" => "dc-symbol-scruncher",
+        "tool-symbol-sizer" => "dc-symbol-sizer",
+        "tool-symbol-spinner" => "dc-symbol-spinner",
+        "tool-symbol-stainer" => "dc-symbol-stainer",
+        "tool-symbol-screener" => "dc-symbol-screener",
+        "tool-symbol-styler" => "dc-symbol-styler",
+        "tool-graph" => "dc-graph-column",
+        "tool-graph-stacked-column" => "dc-graph-stacked-column",
+        "tool-graph-bar" => "dc-graph-bar",
+        "tool-graph-stacked-bar" => "dc-graph-stacked-bar",
+        "tool-graph-line" => "dc-graph-line",
+        "tool-graph-area" => "dc-graph-area",
+        "tool-graph-scatter" => "dc-graph-scatter",
+        "tool-graph-pie" => "dc-graph-pie",
+        "tool-graph-radar" => "dc-graph-radar",
         "tool-artboard" => "artboard",
-        "tool-slice" => "slice_knife",
+        "tool-slice" => "dc-slice",
+        "tool-slice-select" => "dc-slice-select",
         "tool-hand" => "hand",
         "tool-rotate-view" => "dc-rotate-view",
         "tool-print-tiling" => "printer",
@@ -161,6 +178,20 @@ mod tests {
             assert!(name.starts_with("dc-"), "{name} is drawn for VectorCraft");
             assert!(resolves(name), "{name}");
         }
+    }
+
+    /// Every cataloged tool, the add-ons' included, maps to an existing icon that is not the
+    /// dashed placeholder and that no other tool uses.
+    #[test]
+    fn every_tool_has_an_icon_no_other_tool_uses() {
+        let mut users: std::collections::BTreeMap<&str, Vec<&str>> = std::collections::BTreeMap::new();
+        for tool in vectorcraft_tools::catalog::all_tools() {
+            let name = tool_icon(tool.icon);
+            assert!(resolves(name) && name != "rect_dashed", "{} maps to {name}, which isn't an icon of its own", tool.id);
+            users.entry(name).or_default().push(tool.id);
+        }
+        let shared: Vec<_> = users.iter().filter(|(_, tools)| tools.len() > 1).collect();
+        assert!(shared.is_empty(), "tools that share an icon: {shared:?}");
     }
 
     /// An unresolved name draws the fallback square silently, and the registration only logs a refused
