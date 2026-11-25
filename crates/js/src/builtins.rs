@@ -503,7 +503,7 @@ fn function_ctor(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsRe
         Err(CompileFail::Internal(m)) => return Err(Abrupt::Internal(m)),
     };
     interp.charge_code(&code, 0)?;
-    let env = interp.global_env;
+    let env = interp.global_scope();
     interp.make_closure(code, env).map(Value::Object)
 }
 

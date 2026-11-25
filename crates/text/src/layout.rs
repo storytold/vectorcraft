@@ -63,7 +63,7 @@ fn continues_cluster(prev: Option<&SGlyph>, g: Option<&SGlyph>) -> bool {
 /// ([`upright_extent`]) as a share of `upright`, the length in font units its own width runs down.
 /// Empty for a glyph of one character.
 fn ligature_carets(text: &str, g: &SGlyph, rtl: bool, upright: Option<f64>) -> Vec<(usize, f64)> {
-    craft_font_catalog::ligature_caret_stops(text, g.byte, g.len, |count| {
+    craft::font_catalog::ligature_caret_stops(text, g.byte, g.len, |count| {
         if let Some(length) = upright {
             let (cell, top) = upright_extent(g);
             g.face
