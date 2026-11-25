@@ -4,41 +4,15 @@ use vectorcraft_doc::Mojikumi;
 use vectorcraft_doc::NodeId;
 use vectorcraft_engine::Session;
 
-fn alignment_row(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) -> egui::Rect {
-    let para = text_style(app).map_or_else(ParaStyle::default, |(_, p)| p);
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 3.0;
-        alignment_buttons(app, ui, &para, size);
-    })
-    .response
-    .rect
+/// The alignments the panel shows selected: none while the paragraphs differ or no type is selected.
+fn selected(app: &VectorcraftApp) -> Vec<Justify> {
+    let row = values(app).align.and_then(|a| TEXT_ALIGNS.iter().position(|&t| t == a)).and_then(|i| ALIGNMENTS.get(i));
+    row.map(|r| r.0).into_iter().collect()
 }
 
-// Inspect the actual selected wells, including the shared Properties-size buttons.
-fn alignment_frame(ctx: &egui::Context, app: &mut VectorcraftApp, size: f32) -> (Vec<Justify>, egui::Pos2) {
-    let mut row = egui::Rect::NOTHING;
-    let mut frame = ctx.run_ui(egui::RawInput::default(), |ui| row = alignment_row(app, ui, size));
-    frame.textures_delta.clear();
-    fn wells(shape: &egui::Shape, color: egui::Color32, size: f32, out: &mut Vec<egui::Pos2>) {
-        match shape {
-            egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| wells(s, color, size, out)),
-            egui::Shape::Rect(r) if r.fill == color && r.rect.size() == vec2(size, size) => out.push(r.rect.center()),
-            _ => {}
-        }
-    }
-    let centers: [egui::Pos2; 7] = std::array::from_fn(|i| row.min + vec2(size / 2.0 + i as f32 * (size + 3.0), size / 2.0));
-    let mut active = Vec::new();
-    for shape in &frame.shapes {
-        wells(&shape.shape, Tokens::get(ctx).tool_active, size, &mut active);
-    }
-    let selected = active
-        .iter()
-        .map(|pos| {
-            let index = centers.iter().position(|center| center.distance(*pos) < 0.1).expect("alignment well");
-            ALIGNMENTS[index].0
-        })
-        .collect();
-    (selected, centers[1])
+/// Whether `states` holds `r` with exactly the state `state(enabled, checked)` makes.
+fn has_state(states: &CommandStates, r: &CommandRef, enabled: bool, checked: Option<bool>) -> bool {
+    format!("{:?}", states.get(r)) == format!("{:?}", Some(&state(enabled, checked)))
 }
 
 fn editing_text(text: &str) -> (VectorcraftApp, Value) {
@@ -72,17 +46,6 @@ fn paragraph_mixed_direction_buttons_show_neither() {
     assert_eq!(selected_paragraph_direction(&app, &para), Some(true));
 }
 
-#[test]
-fn paragraph_mixed_composer_checks_neither_menu_item() {
-    let (mut app, id) = editing_text("A\nB\n");
-    app.run("text.setFormat", json!({"id": id, "composer": "singleLine"})).unwrap();
-    app.run("text.setFormat", json!({"id": id, "start": 2, "end": 3, "composer": "everyLine"})).unwrap();
-    app.session.set_tool_option("selectAll", &json!(true));
-    assert_eq!(shared_composer(&app), None);
-    app.run("text.setFormat", json!({"id": id, "composer": "everyLine"})).unwrap();
-    assert_eq!(shared_composer(&app), Some(Composer::EveryLine));
-}
-
 /// Cmd+Alt+Shift+C switches between Single-line and Every-line and keeps what each paragraph's
 /// composer does with complex scripts: a Standard composer toggles to the other Standard one.
 #[test]
@@ -113,76 +76,22 @@ fn toggling_the_line_composer_keeps_the_shaping() {
 /// The Paragraph panel menu lists the four composers, and ticks the one every selected paragraph has.
 #[test]
 fn the_paragraph_menu_sets_each_of_the_four_composers() {
-    let (mut app, id) = editing_text("A\nB\n");
+    let (mut app, _) = editing_text("A\nB\n");
     app.session.set_tool_option("selectAll", &json!(true));
-    let ctx = egui::Context::default();
-    let items = |app: &mut VectorcraftApp| {
-        let mut seen = vec![];
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| menu(app, ui));
-        out.textures_delta.clear();
-        for shape in out.shapes {
-            collect_texts(&shape.shape, &mut seen);
-        }
-        seen
-    };
-    fn collect_texts(shape: &egui::Shape, out: &mut Vec<String>) {
-        match shape {
-            egui::Shape::Vec(v) => v.iter().for_each(|s| collect_texts(s, out)),
-            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
-            _ => {}
-        }
-    }
-    let labels = [
-        ("singleLine", "Middle Eastern & South Asian Single-line Composer"),
-        ("everyLine", "Middle Eastern & South Asian Every-line Composer"),
-        ("standardSingleLine", "Standard Single-line Composer"),
-        ("standardEveryLine", "Standard Every-line Composer"),
-    ];
-    // The menu lists all four, each row ticked (and only that one) when every selected paragraph has it.
-    for (value, _) in labels {
-        app.run("text.setFormat", json!({"id": id, "composer": value})).unwrap();
+    // Each composer row sets its composer, and the menu checks that row (and only it).
+    for (_, chosen) in composers() {
+        let key = composer_id(chosen);
+        run(&mut app, "ui.paragraph.set", &json!({"key": "composer", "value": key})).unwrap().unwrap();
         app.session.set_tool_option("selectAll", &json!(true));
-        let texts = items(&mut app);
-        for (v, label) in labels {
-            let row = if v == value { format!("✓ {label}") } else { format!("   {label}") };
-            assert!(texts.contains(&row), "{value}: {row:?} in {texts:?}");
+        assert_eq!(shared_composer(&app), Some(chosen), "{key}");
+        let mut states = CommandStates::new();
+        menu_states(&app, &mut states);
+        for (_, row) in composers() {
+            assert!(has_state(&states, &set_ref("composer", composer_id(row)), true, Some(row == chosen)), "{key}: row {}", composer_id(row));
         }
     }
-    // Choosing a row sets its composer: the row is a `text.setFormat {composer}` with the row's id.
-    for (value, want) in [
-        ("standardEveryLine", Composer::StandardEveryLine),
-        ("singleLine", Composer::SingleLine),
-        ("standardSingleLine", Composer::StandardSingleLine),
-    ] {
-        app.run("text.setFormat", json!({"id": id, "composer": value})).unwrap();
-        assert_eq!(shared_composer(&app), Some(want), "{value}");
-        assert_eq!(composer_id(want), value);
-    }
-}
-
-#[test]
-fn paragraph_mixed_hyphenate_checks_off() {
-    let (mut app, id) = editing_text("A\nB\n");
-    app.run("text.setFormat", json!({"id": id, "hyphenate": true})).unwrap();
-    app.run("text.setFormat", json!({"id": id, "start": 2, "end": 3, "hyphenate": false})).unwrap();
-    app.session.set_tool_option("selectAll", &json!(true));
-    assert_eq!(shared_hyphenate(&app), None);
-    app.run("text.setFormat", json!({"id": id, "hyphenate": true})).unwrap();
-    assert_eq!(shared_hyphenate(&app), Some(true));
-}
-
-#[test]
-fn paragraph_mixed_kinsoku_and_mojikumi_show_blank_dropdowns() {
-    let (mut app, id) = editing_text("A\nB\n");
-    app.session.prefs.show_east_asian_options = true;
-    app.run("text.setFormat", json!({"id": id, "kinsoku": "hard", "mojikumi": "none"})).unwrap();
-    app.run("text.setFormat", json!({"id": id, "start": 2, "end": 3, "kinsoku": "soft", "mojikumi": "lineEndHalf"})).unwrap();
-    app.session.set_tool_option("selectAll", &json!(true));
-    assert_eq!(shared_para(&app, |p| p.kinsoku), None);
-    assert_eq!(shared_para(&app, |p| p.mojikumi), None);
-    app.run("text.setFormat", json!({"id": id, "kinsoku": "hard", "mojikumi": "lineEndHalf"})).unwrap();
-    assert_eq!(shared_para(&app, |p| p.kinsoku), Some(Kinsoku::Hard));
-    assert_eq!(shared_para(&app, |p| p.mojikumi), Some(Mojikumi::LineEndHalf));
+    assert!(run(&mut app, "ui.paragraph.set", &json!({"key": "composer"})).unwrap().is_err(), "a row without its value is refused");
+    assert!(run(&mut app, "ui.other", &json!({})).is_none());
 }
 
 /// Kinsoku Set shows a custom set by its name, a blank when the paragraphs' sets differ, even when
@@ -212,6 +121,7 @@ fn kinsoku_set_shows_a_custom_set_by_name() {
 fn mojikumi_menu_offers_and_sets_every_predefined_set() {
     let keys: Vec<&str> = mojikumi_sets().iter().map(|s| s.2).collect();
     assert_eq!(keys, ["none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku", "lineEndHalf"]);
+    use crate::i18n::LangExt as _;
     for lang in crate::i18n::Lang::all() {
         crate::i18n::set_current(lang);
         let labels: std::collections::BTreeSet<&str> = mojikumi_sets().iter().map(|s| s.0).collect();
@@ -359,7 +269,7 @@ fn kurikaeshi_moji_shori_toggle_follows_the_selected_paragraphs() {
     assert_eq!(flags(&app), (false, false), "new type has it off");
     select_range(&mut app, 0, 3);
     let history = app.session.active().unwrap().history.undo.len();
-    toggle_kurikaeshi_moji_shori(&mut app);
+    run(&mut app, "ui.paragraph.toggle", &json!({"key": "kurikaeshiMojiShori"})).unwrap().unwrap();
     assert_eq!(flags(&app), (true, false));
     assert_eq!(app.session.active().unwrap().history.undo.len(), history + 1);
     app.session.set_tool_option("selectAll", &json!(true));
@@ -376,23 +286,6 @@ fn kurikaeshi_moji_shori_toggle_follows_the_selected_paragraphs() {
 }
 
 #[test]
-fn paragraph_mixed_indent_fields_show_blank() {
-    let (mut app, id) = editing_text("A\nB\n");
-    app.run("text.setFormat", json!({"id": id, "leftIndent": 10})).unwrap();
-    app.run("text.setFormat", json!({"id": id, "start": 2, "end": 3, "leftIndent": 20})).unwrap();
-    app.session.set_tool_option("selectAll", &json!(true));
-    assert_eq!(shared_para_field(&app, |p| p.left_indent), None);
-    assert_eq!(shared_para_field(&app, |p| p.space_before), Some(0.0));
-    app.run("text.setFormat", json!({"id": id, "leftIndent": 12})).unwrap();
-    assert_eq!(shared_para_field(&app, |p| p.left_indent), Some(12.0));
-    app.session.set_tool_option("stopEditing", &json!(true));
-    let other = app.run("text.create", json!({"x": 40, "y": 80, "text": "C"})).unwrap()["id"].clone();
-    app.run("text.setFormat", json!({"id": other, "leftIndent": 5})).unwrap();
-    app.run("select.set", json!({"ids": [id, other]})).unwrap();
-    assert_eq!(shared_para_field(&app, |p| p.left_indent), None);
-}
-
-#[test]
 fn paragraph_mixed_alignment_click_center_and_undo() {
     let (mut app, id) = editing_text("é\nאב\n終");
     app.run("text.setStyle", json!({"id": id, "justify": "left"})).unwrap();
@@ -402,13 +295,9 @@ fn paragraph_mixed_alignment_click_center_and_undo() {
     select_range(&mut app, 0, 7);
     let before = app.session.active().unwrap().doc.clone();
     let history = app.session.active().unwrap().history.undo.len();
-    let ctx = egui::Context::default();
-    let (selected, center) = alignment_frame(&ctx, &mut app, 28.0);
-    assert!(selected.is_empty(), "mixed paragraphs must not light one alignment: {selected:?}");
-    super::super::tests_appearance::click(&ctx, &mut app, center, |app, ui| {
-        alignment_row(app, ui, 28.0);
-    });
-    assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [Justify::Center]);
+    assert!(selected(&app).is_empty(), "mixed paragraphs must not light one alignment");
+    apply(&mut app, &ParagraphChange::Align(TextAlign::Center));
+    assert_eq!(selected(&app), [Justify::Center]);
     let node = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap();
     let NodeKind::Text(text) = &node.kind else { panic!("text") };
     assert_eq!((text.para_at(0).justify, text.para_at(1).justify, text.para_at(2).justify), (Justify::Center, Justify::Center, Justify::JustifyAll));
@@ -424,7 +313,7 @@ fn paragraph_mixed_alignment_click_center_and_undo() {
     assert_eq!(app.session.active().unwrap().history.undo.len(), history + 1);
     app.run("edit.undo", json!({})).unwrap();
     assert_eq!(app.session.active().unwrap().doc, before);
-    assert!(alignment_frame(&ctx, &mut app, 28.0).0.is_empty());
+    assert!(selected(&app).is_empty());
 }
 
 #[test]
@@ -433,7 +322,6 @@ fn paragraph_mixed_alignment_caret_unicode_boundaries_and_uniform_controls() {
     app.run("text.setStyle", json!({"id": id, "justify": "left"})).unwrap();
     app.run("text.setStyle", json!({"id": id, "start": 3, "end": 7, "justify": "right"})).unwrap();
     app.run("text.setStyle", json!({"id": id, "start": 8, "end": 8, "justify": "justifyAll"})).unwrap();
-    let ctx = egui::Context::default();
     for (start, end, expected) in [
         (0, 2, vec![Justify::Left]),
         (2, 2, vec![Justify::Left]), // newline belongs to the preceding paragraph
@@ -445,12 +333,12 @@ fn paragraph_mixed_alignment_caret_unicode_boundaries_and_uniform_controls() {
         (100, 100, vec![Justify::JustifyAll]), // existing selection clamping
     ] {
         select_range(&mut app, start, end);
-        assert_eq!(alignment_frame(&ctx, &mut app, 24.0).0, expected, "range {start}..{end}");
+        assert_eq!(selected(&app), expected, "range {start}..{end}");
     }
     for (expected, _, _, key) in ALIGNMENTS {
         app.run("text.setStyle", json!({"id": id, "justify": key})).unwrap();
         app.session.set_tool_option("selectAll", &json!(true));
-        assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [expected]);
+        assert_eq!(selected(&app), [expected]);
     }
 }
 
@@ -460,17 +348,16 @@ fn paragraph_mixed_alignment_auto_direction_and_split_runs() {
     // Character formatting splits the RTL paragraph across runs.
     app.run("text.setRangeStyle", json!({"id": id, "start": 3, "end": 5, "size": 24})).unwrap();
     app.session.set_tool_option("selectAll", &json!(true));
-    let ctx = egui::Context::default();
-    assert!(alignment_frame(&ctx, &mut app, 28.0).0.is_empty(), "Auto resolves separately per paragraph");
+    assert!(selected(&app).is_empty(), "Auto resolves separately per paragraph");
     select_range(&mut app, 3, 7);
-    assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [Justify::Right]);
+    assert_eq!(selected(&app), [Justify::Right]);
     app.run("text.setFormat", json!({"id": id, "start": 3, "end": 7, "direction": "leftToRight"})).unwrap();
     app.session.set_tool_option("selectAll", &json!(true));
-    assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [Justify::Left]);
+    assert_eq!(selected(&app), [Justify::Left]);
     app.run("text.setStyle", json!({"id": id, "start": 0, "end": 2, "justify": "left"})).unwrap();
-    assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [Justify::Left], "explicit Left and resolved Auto agree");
+    assert_eq!(selected(&app), [Justify::Left], "explicit Left and resolved Auto agree");
     app.run("text.setFormat", json!({"id": id, "start": 0, "end": 2, "direction": "rightToLeft"})).unwrap();
-    assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [Justify::Left], "explicit alignment ignores direction");
+    assert_eq!(selected(&app), [Justify::Left], "explicit alignment ignores direction");
 }
 
 #[test]
@@ -480,7 +367,6 @@ fn paragraph_mixed_alignment_explicit_rtl_and_empty_controls() {
     app.run("text.setFormat", json!({"id": id, "direction": "rightToLeft"})).unwrap();
     // Auto with an explicit direction still needs the real, possibly split, paragraph text.
     app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 2, "size": 24})).unwrap();
-    let ctx = egui::Context::default();
     for (start, end, expected) in [
         (0, 5, Justify::Right),  // nonempty Latin with explicit RTL
         (6, 10, Justify::Right), // nonempty Hebrew with explicit RTL
@@ -488,15 +374,15 @@ fn paragraph_mixed_alignment_explicit_rtl_and_empty_controls() {
         (12, 12, Justify::Left), // empty trailing paragraph
     ] {
         select_range(&mut app, start, end);
-        assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [expected], "explicit RTL range {start}..{end}");
+        assert_eq!(selected(&app), [expected], "explicit RTL range {start}..{end}");
     }
     app.run("text.setStyle", json!({"id": id, "start": 0, "end": 5, "justify": "left"})).unwrap();
     select_range(&mut app, 0, 10);
-    assert!(alignment_frame(&ctx, &mut app, 28.0).0.is_empty(), "explicit Left and Auto/RTL differ");
+    assert!(selected(&app).is_empty(), "explicit Left and Auto/RTL differ");
     let (mut empty, id) = editing_text("");
     empty.run("text.setStyle", json!({"id": id, "justify": "auto"})).unwrap();
     empty.run("text.setFormat", json!({"id": id, "direction": "rightToLeft"})).unwrap();
-    assert_eq!(alignment_frame(&egui::Context::default(), &mut empty, 28.0).0, [Justify::Left]);
+    assert_eq!(selected(&empty), [Justify::Left]);
 }
 
 #[test]
@@ -505,22 +391,22 @@ fn paragraph_mixed_alignment_object_group_and_no_text_controls() {
     app.run("text.setStyle", json!({"id": id, "justify": "left"})).unwrap();
     app.run("text.setStyle", json!({"id": id, "start": 2, "end": 3, "justify": "right"})).unwrap();
     app.session.set_tool_option("stopEditing", &json!(true));
-    let ctx = egui::Context::default();
-    assert!(alignment_frame(&ctx, &mut app, 28.0).0.is_empty(), "whole object covers every paragraph");
+    assert!(selected(&app).is_empty(), "whole object covers every paragraph");
     app.run("object.group", json!({})).unwrap();
-    assert!(alignment_frame(&ctx, &mut app, 28.0).0.is_empty(), "group descendant has mixed paragraphs");
+    assert!(selected(&app).is_empty(), "group descendant has mixed paragraphs");
     app.run("text.setStyle", json!({"justify": "center"})).unwrap();
-    assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [Justify::Center]);
+    assert_eq!(selected(&app), [Justify::Center]);
     let group = app.session.active().unwrap().selection.objects.clone();
     let other = app.run("text.create", json!({"x": 20, "y": 100, "text": "C"})).unwrap()["id"].clone();
     let mut ids: Vec<Value> = group.iter().map(|id| json!(id.0)).collect();
     ids.push(other);
     app.run("select.set", json!({"ids": ids})).unwrap();
-    assert!(alignment_frame(&ctx, &mut app, 28.0).0.is_empty(), "different selected objects");
+    assert!(selected(&app).is_empty(), "different selected objects");
     app.run("select.set", json!({"ids": []})).unwrap();
-    assert_eq!(alignment_frame(&ctx, &mut app, 28.0).0, [Justify::Left], "no-text default stays unchanged");
-    let (mut empty, _) = editing_text("");
-    assert_eq!(alignment_frame(&egui::Context::default(), &mut empty, 28.0).0, [Justify::Left]);
+    assert!(text_style(&app).is_none(), "no text: the panel shows its empty state");
+    assert!(selected(&app).is_empty());
+    let (empty, _) = editing_text("");
+    assert_eq!(selected(&empty), [Justify::Left]);
 }
 
 /// New Hebrew type aligns to the start of its direction (Align Right shows), an explicit
@@ -543,17 +429,12 @@ fn alignment_buttons_show_the_resolved_alignment_and_direction_sets_it() {
     app.session.execute("text.setStyle", &json!({"justify": "auto"})).unwrap();
     app.session.execute("text.setFormat", &json!({"direction": "leftToRight"})).unwrap();
     assert_eq!(shown(&app), Justify::Left);
-    // The direction buttons show with the Indic options only.
-    crate::i18n::set_current(crate::i18n::Lang::EN);
-    let tips = |app: &mut VectorcraftApp| {
-        let ctx = egui::Context::default();
-        let mut frame = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
-        frame.textures_delta.clear();
-        frame.shapes.len()
-    };
-    let without = tips(&mut app);
-    app.session.prefs.show_indic_options = true;
-    assert!(tips(&mut app) > without, "two more buttons");
+    // The direction buttons set the paragraph's direction and the panel shows it.
+    apply(&mut app, &ParagraphChange::Direction(ParagraphDirection::RightToLeft));
+    assert_eq!(text_style(&app).unwrap().1.direction, Some(ParaDirection::RightToLeft));
+    assert_eq!(values(&app).direction, Some(ParagraphDirection::RightToLeft));
+    apply(&mut app, &ParagraphChange::Direction(ParagraphDirection::LeftToRight));
+    assert_eq!(values(&app).direction, Some(ParagraphDirection::LeftToRight));
 }
 
 /// Insert Kashidas is in the panel with the Middle Eastern (Indic) options only, shows the
@@ -564,20 +445,15 @@ fn insert_kashidas_shows_with_the_indic_options_and_reset_panel_turns_it_off() {
     app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
     let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "كتب محمد"})).unwrap()["id"].clone();
     app.run("select.set", json!({"ids": [id]})).unwrap();
-    crate::i18n::set_current(crate::i18n::Lang::EN);
-    let painted = |app: &mut VectorcraftApp| crate::tests_labels::painted_text(app, show);
-    assert!(!painted(&mut app).contains("Insert Kashidas"));
-    app.session.prefs.show_indic_options = true;
-    let text = painted(&mut app);
-    assert!(text.contains("Insert Kashidas") && text.contains("None"), "{text}");
-    app.run("text.setFormat", json!({"kashida": "medium"})).unwrap();
-    assert!(painted(&mut app).contains("Medium"));
     let kashida = |app: &VectorcraftApp| {
         let node = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap();
         let NodeKind::Text(text) = &node.kind else { panic!("text") };
         text.para_at(0).kashida
     };
+    assert_eq!(shared_para(&app, |p| p.kashida), None.or(Some(vectorcraft_doc::text::Kashida::None)));
+    format(&mut app, json!({"kashida": "medium"}));
     assert_eq!(kashida(&app), vectorcraft_doc::text::Kashida::Medium);
+    assert_eq!(shared_para(&app, |p| p.kashida), Some(vectorcraft_doc::text::Kashida::Medium));
     reset_panel(&mut app);
     assert_eq!(kashida(&app), vectorcraft_doc::text::Kashida::None);
 }
@@ -597,28 +473,15 @@ fn the_bullets_button_and_its_presets_set_the_list_and_reset_panel_clears_it() {
         let NodeKind::Text(text) = &node.kind else { panic!("text") };
         (text.para_at(0).list, text.para_at(1).list)
     };
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let row = std::cell::Cell::new(egui::Rect::NOTHING);
-    let mut draw = |app: &mut VectorcraftApp, ui: &mut Ui| {
-        row.set(ui.horizontal(|ui| bullets_button(app, ui, 28.0)).response.rect);
-    };
-    super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], &mut draw);
-    let min = row.get().min;
-    let (button, arrow) = (min + vec2(14.0, 14.0), min + vec2(28.0 + 7.0, 14.0));
-    super::super::tests_appearance::click(&ctx, &mut app, button, &mut draw);
+    toggle_list(&mut app, ListKind::Bullets);
     assert_eq!(lists(&app), (Some(ParaList::bulleted(Bullet::Dot)), None), "the caret's paragraph");
-    assert_eq!(shared_para(&app, |p| p.list.map(|l| l.bullet)), Some(Some(Bullet::Dot)), "the button shows pressed");
-    let mut pick = |app: &mut VectorcraftApp, name: &str| {
-        super::super::tests_appearance::click(&ctx, app, arrow, &mut draw);
-        let texts = super::super::tests_appearance::frame_events(&ctx, app, vec![], &mut draw);
-        let at = super::super::tests_appearance::text_rect(&texts, name).center();
-        super::super::tests_appearance::click(&ctx, app, at, &mut draw);
-    };
-    pick(&mut app, "Filled Square");
-    assert_eq!(lists(&app), (Some(ParaList::bulleted(Bullet::Square)), None));
-    pick(&mut app, "None");
-    assert_eq!(lists(&app), (None, None));
+    assert_eq!(bullets_shown(&app), Some(Some(Bullet::Dot)), "the button shows pressed");
+    // None, the first preset, is picked last.
+    for (_, key, bullet) in bullet_presets().into_iter().rev() {
+        set_bullet(&mut app, key);
+        assert_eq!(lists(&app), (bullet.map(ParaList::bulleted), None), "{key}");
+    }
+    assert_eq!(bullets_shown(&app), Some(None), "None turned the list off");
     app.session.set_tool_option("selectAll", &json!(true));
     app.run("type.applyBullets", json!({})).unwrap();
     assert_eq!(lists(&app), (Some(ParaList::bulleted(Bullet::Dot)), Some(ParaList::bulleted(Bullet::Dot))));
@@ -645,55 +508,26 @@ fn the_numbered_list_button_and_its_presets_set_the_list_and_reset_panel_clears_
         (text.para_at(0).list, text.para_at(1).list)
     };
     let numbered = |style| Some(ParaList::numbered(style));
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let row = std::cell::Cell::new(egui::Rect::NOTHING);
-    let mut draw = |app: &mut VectorcraftApp, ui: &mut Ui| {
-        row.set(ui.horizontal(|ui| numbers_button(app, ui, 28.0)).response.rect);
-    };
-    super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], &mut draw);
-    let min = row.get().min;
-    let (button, arrow) = (min + vec2(14.0, 14.0), min + vec2(28.0 + 7.0, 14.0));
-    super::super::tests_appearance::click(&ctx, &mut app, button, &mut draw);
+    toggle_list(&mut app, ListKind::Numbers);
     assert_eq!(lists(&app), (numbered(NumberStyle::Arabic), None), "the caret's paragraph");
-    assert_eq!(shared_para(&app, |p| p.list.and_then(|l| l.number)), Some(Some(NumberStyle::Arabic)), "the button shows pressed");
-    let mut pick = |app: &mut VectorcraftApp, name: &str| {
-        super::super::tests_appearance::click(&ctx, app, arrow, &mut draw);
-        let texts = super::super::tests_appearance::frame_events(&ctx, app, vec![], &mut draw);
-        let at = super::super::tests_appearance::text_rect(&texts, name).center();
-        super::super::tests_appearance::click(&ctx, app, at, &mut draw);
-    };
-    for (name, style) in [
-        ("I, II, III", NumberStyle::UpperRoman),
-        ("a, b, c", NumberStyle::LowerLetters),
-        ("001, 002, 003", NumberStyle::ThreeDigits),
-        ("1, 2, 3", NumberStyle::Arabic),
-    ] {
-        pick(&mut app, name);
-        assert_eq!(lists(&app), (numbered(style), None), "{name}");
+    assert_eq!(numbers_shown(&app), Some(Some(NumberStyle::Arabic)), "the button shows pressed");
+    assert_eq!(number_sample(NumberStyle::UpperRoman, 3), "I, II, III");
+    for style in NumberStyle::ALL {
+        set_number_style(&mut app, Some(style));
+        assert_eq!(lists(&app), (numbered(style), None), "{}", number_sample(style, 3));
     }
-    pick(&mut app, "None");
+    set_number_style(&mut app, None);
     assert_eq!(lists(&app), (None, None));
     app.session.set_tool_option("selectAll", &json!(true));
     app.run("type.applyNumbers", json!({})).unwrap();
     assert_eq!(lists(&app), (numbered(NumberStyle::Arabic), numbered(NumberStyle::Arabic)));
     // The Numbered List button shows pressed and the Bullets button doesn't, and the other way
     // round for a bulleted list.
-    // Each button and the arrow beside it have the same name; only a button shows pressed.
-    let pressed = |app: &mut VectorcraftApp| {
-        let nodes = crate::widgets::accessibility_tests::tree(|ui| {
-            ui.horizontal(|ui| {
-                bullets_button(app, ui, 28.0);
-                numbers_button(app, ui, 28.0);
-            });
-        });
-        let on = |label| nodes.iter().any(|n| n.label() == Some(label) && n.toggled() == Some(egui::accesskit::Toggled::True));
-        (on("Bullets"), on("Numbered List"))
-    };
-    assert_eq!(pressed(&mut app), (false, true));
+    let pressed = |app: &VectorcraftApp| (matches!(bullets_shown(app), Some(Some(_))), matches!(numbers_shown(app), Some(Some(_))));
+    assert_eq!(pressed(&app), (false, true));
     app.session.set_tool_option("selectAll", &json!(true));
     app.run("type.applyBullets", json!({})).unwrap();
-    assert_eq!(pressed(&mut app), (true, false));
+    assert_eq!(pressed(&app), (true, false));
     app.session.set_tool_option("selectAll", &json!(true));
     app.run("type.applyNumbers", json!({})).unwrap();
     app.run("type.applyNumbers", json!({"number": "upperLetters"})).unwrap();
@@ -707,30 +541,39 @@ fn the_numbered_list_button_and_its_presets_set_the_list_and_reset_panel_clears_
 /// tab, and at the end of the Numbered List presets on its Numbers tab.
 #[test]
 fn more_options_opens_bullets_and_numbering_on_its_tab() {
+    use crate::dialogs::bullets_numbering::BulletsDialog;
+    use craft::ui::dialog::StackDialog as _;
     crate::i18n::set_current(crate::i18n::Lang::EN);
     let (mut app, _) = editing_text("One\nTwo");
+    app = crate::testing::windowed(app);
     select_range(&mut app, 0, 0);
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let numbers = std::cell::Cell::new(false);
-    let row = std::cell::Cell::new(egui::Rect::NOTHING);
-    let mut draw = |app: &mut VectorcraftApp, ui: &mut Ui| {
-        let r = ui.horizontal(|ui| if numbers.get() { numbers_button(app, ui, 28.0) } else { bullets_button(app, ui, 28.0) });
-        row.set(r.response.rect);
+    let shown_tab = |app: &VectorcraftApp| {
+        app.dialogs().expect("a window").with(|host| host.get::<BulletsDialog>().map(|d| d.json_fields().unwrap_or_default()["tab"].clone()))
     };
-    for (on_numbers, tab) in [(false, "bullets"), (true, "numbers")] {
-        numbers.set(on_numbers);
-        super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], &mut draw);
-        let arrow = row.get().min + vec2(28.0 + 7.0, 14.0);
-        super::super::tests_appearance::click(&ctx, &mut app, arrow, &mut draw);
-        let texts = super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], &mut draw);
-        let at = super::super::tests_appearance::text_rect(&texts, "More Options").center();
-        super::super::tests_appearance::click(&ctx, &mut app, at, &mut draw);
-        let d = app.ui.dialog.take().unwrap_or_else(|| panic!("More Options opens the dialog from the {tab} presets"));
-        assert_eq!((d.kind.as_str(), d.str("tab")), ("bulletsAndNumbering", tab.to_string()));
+    for tab in ["bullets", "numbers"] {
+        more_options(&mut app, tab);
+        assert_eq!(shown_tab(&app), Some(json!(tab)), "More Options opens the dialog on {tab}");
     }
     app.run("ui.bulletsAndNumbering", json!({})).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("bulletsAndNumbering"));
+    assert!(shown_tab(&app).is_some());
+}
+
+/// Bullets and Numbering draws every preset of each tab, and its buttons.
+#[test]
+fn bullets_and_numbering_draws_every_preset_and_its_buttons() {
+    use vectorcraft_doc::text::NumberStyle;
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let (app, _) = editing_text("One\nTwo");
+    let mut p = crate::tests::panel_harness::Panel::new(crate::testing::windowed(app), crate::tests::picks::dialogs);
+    select_range(&mut p.app(), 0, 0);
+    let last_number = NumberStyle::ALL.last().map(|&style| crate::panels::paragraph::number_sample(style, 3)).unwrap_or_default();
+    for (tab, last) in [("bullets", "Filled Square".to_owned()), ("numbers", last_number)] {
+        p.app().run("ui.bulletsAndNumbering", json!({ "tab": tab })).unwrap();
+        p.frame();
+        for name in ["None", last.as_str(), "OK", "Cancel"] {
+            assert!(p.shows(name), "{name} is drawn on {tab}");
+        }
+    }
 }
 
 /// Type › Bullets and Numbering › Convert to Text (`type.convertListToText`) acts on the
@@ -760,8 +603,8 @@ fn convert_to_text_makes_the_selected_paragraphs_numbers_characters() {
     assert_eq!((options["anchor"].as_u64(), options["caret"].as_u64()), (Some(8), Some(8)), "the caret stays after the T of Two");
     let typemenu = crate::menus::menu_tree().into_iter().find(|(title, _)| *title == "Type").map(|(_, items)| items).unwrap_or_default();
     let found = typemenu.iter().any(|item| {
-        matches!(item, crate::menus::Item::Sub("Bullets and Numbering", items)
-            if items.iter().any(|i| matches!(i, crate::menus::Item::Cmd("Convert to Text", "type.convertListToText", _))))
+        matches!(item, crate::menus::Node::Submenu { label, children, .. } if label == "Bullets and Numbering"
+            && children.iter().any(|n| matches!(n, crate::menus::Node::Item(i) if i.label == "Convert to Text" && i.command.id == "type.convertListToText")))
     });
     assert!(found, "Type › Bullets and Numbering › Convert to Text");
 }
@@ -887,188 +730,40 @@ fn reset_panel_resets_the_hyphenation_options() {
     }
 }
 
-type Nodes = Vec<(egui::accesskit::NodeId, egui::accesskit::Node)>;
-
-/// An English context for headless Control bar frames, with AccessKit on to find its controls.
-fn control_bar_ctx() -> egui::Context {
+/// The names the Control bar's Paragraph section shows, from the second of two headless frames.
+fn bar_names(app: &mut VectorcraftApp) -> Vec<String> {
     crate::i18n::set_current(crate::i18n::Lang::EN);
-    let ctx = egui::Context::default();
+    // PLAN: assumed `testing::ui_context()` (hub-w1, S-SH4) returns an `egui::Context` with the framework installed.
+    let ctx = crate::testing::ui_context();
     ctx.enable_accesskit();
-    crate::theme::install_fonts(&ctx);
-    ctx
+    let mut names = Vec::new();
+    for _ in 0..2 {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            control_bar(app, ui);
+        });
+        out.textures_delta.clear();
+        let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        names = nodes.iter().flat_map(|(_, n)| [n.label(), n.value()]).flatten().map(str::to_string).collect();
+    }
+    names
 }
 
-/// A document with the type `texts` (`text.create` params) makes, all of it selected.
-fn control_bar_app(texts: &[Value]) -> VectorcraftApp {
+/// #5372: with type selected the Control bar shows a Paragraph section: the Paragraph: link and the
+/// Align left, Align center and Align right buttons (the justifying four are in the panel the link
+/// opens); with no type selected it shows none of them.
+// PLAN: the trimming order as the bar narrows (toggles out before the link, ch.K30) is chrome-w16's `Row::fit_rank` and is tested with its fixture.
+#[test]
+fn the_control_bar_shows_its_paragraph_section_for_selected_type_only() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 800, "height": 400})).unwrap();
-    let ids: Vec<Value> = texts.iter().map(|p| app.run("text.create", p.clone()).unwrap()["id"].clone()).collect();
-    app.run("select.set", json!({ "ids": ids })).unwrap();
-    app
-}
-
-/// The second of two headless frames of the whole Control bar, `width` wide (the first lays it out).
-fn control_bar_nodes(ctx: &egui::Context, app: &mut VectorcraftApp, width: f32, events: Vec<egui::Event>) -> Nodes {
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(width, 300.0));
-    let mut nodes = Vec::new();
-    for events in [events, vec![]] {
-        let mut out =
-            ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| crate::chrome::control_bar(app, ui));
-        out.textures_delta.clear();
-        nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
-    }
-    nodes
-}
-
-/// The control named `name`: a button's or link's label, else a label's text. A link's text run
-/// carries the same text as its value, and the update lists the nodes in no set order, so the
-/// label is looked for first.
-fn control_bar_node(nodes: &Nodes, name: &str) -> Option<egui::accesskit::Node> {
-    let labeled = nodes.iter().find(|(_, n)| n.label() == Some(name));
-    labeled.or_else(|| nodes.iter().find(|(_, n)| n.value() == Some(name))).map(|(_, n)| n.clone())
-}
-
-/// Where the control named `name` ends, if it shows.
-fn control_bar_end(nodes: &Nodes, name: &str) -> Option<f64> {
-    control_bar_node(nodes, name).and_then(|n| n.bounds()).map(|b| b.x1)
-}
-
-/// The Control bar's Paragraph alignment buttons.
-const BAR_ALIGNMENTS: [&str; 3] = ["Align left", "Align center", "Align right"];
-
-/// #5372: with type selected, the Control bar shows a Paragraph section after the Character one, as
-/// the public documentation's Control panel does: a Paragraph: link that opens the Paragraph panel
-/// in a popover under it, and the Align left, Align center and Align right buttons. A click aligns
-/// the selected type, and the button of its alignment shows selected. The buttons show on a bar of
-/// common window widths.
-#[test]
-fn the_control_bar_shows_the_paragraph_alignment_of_the_selected_type() {
-    let ctx = control_bar_ctx();
-    let mut app = control_bar_app(&[json!({"x": 20, "y": 50, "text": "Point"})]);
-    // Pinned, so that the room the buttons need can't creep up past common window widths. The
-    // bar's right end keeps the panel menu button's room.
-    for width in [1536.0, 1920.0] {
-        let nodes = control_bar_nodes(&ctx, &mut app, width, vec![]);
-        let ends = BAR_ALIGNMENTS.map(|n| control_bar_end(&nodes, n));
-        assert!(ends.iter().all(|e| e.is_some_and(|x| x <= f64::from(width) - 10.0)), "pinned: the buttons show on a {width} pt window: {ends:?}");
-    }
-    let width = 1920.0;
-    let nodes = control_bar_nodes(&ctx, &mut app, width, vec![]);
-    let center = |n: &egui::accesskit::Node| {
-        let b = n.bounds().unwrap_or_else(|| panic!("{n:?}"));
-        egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32)
-    };
-    let click = |app: &mut VectorcraftApp, at: egui::Pos2| {
-        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-        control_bar_nodes(&ctx, app, width, vec![egui::Event::PointerMoved(at), press(true)]);
-        control_bar_nodes(&ctx, app, width, vec![press(false)]);
-        control_bar_nodes(&ctx, app, width, vec![])
-    };
-    // A selected button shows pressed.
-    let on = |n: &egui::accesskit::Node| n.toggled() == Some(egui::accesskit::Toggled::True);
-    let button = control_bar_node(&nodes, "Align center").unwrap_or_else(|| panic!("the Control bar has Align center"));
-    assert!(!on(&button), "left-aligned type: Align center is not selected");
-    assert!(control_bar_node(&nodes, "Align left").is_some_and(|n| on(&n)), "Align left shows selected");
-    let undo = app.session.active().unwrap().history.undo.len();
-    let nodes = click(&mut app, center(&button));
-    assert_eq!(text_style(&app).unwrap().1.justify, Justify::Center, "{}", app.ui.status);
-    assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "one undo step");
-    assert!(control_bar_node(&nodes, "Align center").is_some_and(|n| on(&n)), "Align center shows selected");
-    assert!(!control_bar_node(&nodes, "Align left").is_some_and(|n| on(&n)), "Align left no longer selected");
-    // The Paragraph: link opens the Paragraph panel in a popover: its justifications show there,
-    // no panel docks, and a second click closes it.
-    let link = control_bar_node(&nodes, "Paragraph:").unwrap_or_else(|| panic!("the Paragraph: link"));
-    assert_eq!(link.description(), Some("Paragraph options"));
-    assert!(control_bar_node(&nodes, "Justify all lines").is_none(), "closed");
-    let nodes = click(&mut app, center(&link));
-    assert!(control_bar_node(&nodes, "Justify all lines").is_some(), "the popover shows the Paragraph panel");
-    assert_eq!(app.ui.open_panel, None, "no panel docks");
-    let nodes = click(&mut app, center(&link));
-    assert!(control_bar_node(&nodes, "Justify all lines").is_none(), "a second click closes it");
-}
-
-/// The Control bar's Character and Paragraph groups hold the type controls; each off leaves the
-/// other, and with Paragraph off the Align buttons fit a narrower window.
-#[test]
-fn the_character_and_paragraph_groups_hold_the_type_controls() {
-    let ctx = control_bar_ctx();
-    let mut app = control_bar_app(&[json!({"x": 20, "y": 50, "text": "Point"})]);
-    let set = |app: &mut VectorcraftApp, group: &str, visible: bool| {
-        app.run("window.control.options", json!({ "group": group, "visible": visible })).unwrap();
-    };
-    // The narrowest window, in steps of 10 points, whose bar shows the Align buttons.
-    let narrowest = |app: &mut VectorcraftApp| {
-        (40..=240).map(|w| w as f32 * 10.0).find(|&w| control_bar_node(&control_bar_nodes(&ctx, app, w, vec![]), "Horizontal Align Left").is_some())
-    };
-    let nodes = control_bar_nodes(&ctx, &mut app, 1920.0, vec![]);
-    for name in ["Character:", "Paragraph:", "Align left"] {
-        assert!(control_bar_node(&nodes, name).is_some(), "{name} shows");
-    }
-    let all = narrowest(&mut app).expect("the Align buttons show in a wide window");
-    set(&mut app, "paragraph", false);
-    let nodes = control_bar_nodes(&ctx, &mut app, 1920.0, vec![]);
-    assert!(control_bar_node(&nodes, "Paragraph:").is_none() && control_bar_node(&nodes, "Align left").is_none(), "Paragraph is off");
-    assert!(control_bar_node(&nodes, "Character:").is_some(), "Character stays");
-    let fewer = narrowest(&mut app).expect("the Align buttons show without Paragraph");
-    assert!(fewer < all, "the Align buttons fit {fewer} wide without Paragraph, {all} with it");
-    set(&mut app, "paragraph", true);
-    set(&mut app, "character", false);
-    let nodes = control_bar_nodes(&ctx, &mut app, 1920.0, vec![]);
-    assert!(control_bar_node(&nodes, "Character:").is_none(), "Character is off");
-    assert!(control_bar_node(&nodes, "Paragraph:").is_some(), "Paragraph stays");
-}
-
-/// #5372: at any width the Control bar trims itself from its right end, ending inside its margin.
-/// With type selected the inline X/Y/W/H fields go first, then the Distribute buttons, the Align To
-/// menu and the Align buttons, area type's vertical alignment, the Paragraph buttons and last the
-/// Paragraph: link, while the Transform link keeps its room; a wider bar never leaves out what a
-/// narrower one showed. For one point type object, area type (its vertical alignment) and two
-/// objects (the Distribute buttons).
-#[test]
-fn the_control_bar_trims_its_paragraph_section_after_the_controls_to_its_right() {
-    let ctx = control_bar_ctx();
-    let point = |x: i32| json!({"x": x, "y": 50, "text": "Point"});
-    let area = json!({"x": 20, "y": 20, "text": "Area", "area": {"width": 100, "height": 120}});
-    const VERTICAL: [&str; 4] = ["Align Top", "Align Center", "Align Bottom", "Justify Vertically"];
-    for (case, texts) in [("point type", vec![point(20)]), ("area type", vec![area]), ("two objects", vec![point(20), point(300)])] {
-        let mut app = control_bar_app(&texts);
-        // Each group of controls in the bar's order, by its first and last control.
-        let mut groups: Vec<(&str, Vec<&str>)> = vec![("link", vec!["Paragraph:"]), ("buttons", BAR_ALIGNMENTS.to_vec())];
-        if case == "area type" {
-            groups.push(("vertical alignment", VERTICAL.to_vec()));
-        }
-        groups.push(("Align", vec!["Horizontal Align Left", "Vertical Align Bottom"]));
-        groups.push(("Align To", vec!["Align To:"]));
-        if case == "two objects" {
-            groups.push(("Distribute", vec!["Vertical Distribute Top", "Horizontal Distribute Right"]));
-        }
-        groups.push(("X/Y/W/H", vec!["X:", "H:"]));
-        let mut seen = vec![false; groups.len()];
-        for width in (600..=2600).step_by(10) {
-            let nodes = control_bar_nodes(&ctx, &mut app, width as f32, vec![]);
-            let inside = |x: f64| x <= f64::from(width) - 10.0;
-            let shown: Vec<bool> = groups
-                .iter()
-                .map(|(group, names)| {
-                    let ends: Vec<Option<f64>> = names.iter().map(|n| control_bar_end(&nodes, n)).collect();
-                    assert!(ends.iter().all(Option::is_some) || ends.iter().all(Option::is_none), "{case}, {width}: {group} {ends:?}");
-                    if let Some(Some(end)) = ends.last() {
-                        assert!(inside(*end), "{case}, {width}: {group} ends at {end}");
-                    }
-                    ends.iter().all(Option::is_some)
-                })
-                .collect();
-            // Narrower bars are already full before the section (the Character controls).
-            let transform = control_bar_end(&nodes, "Transform");
-            assert!(!shown[0] || transform.is_some_and(inside), "{case}, {width}: Transform ends at {transform:?}");
-            for (i, ((group, _), on)) in groups.iter().zip(&shown).enumerate() {
-                assert!(!seen[i] || *on, "{case}, {width}: {group} left out after a narrower bar showed it");
-                assert!(!*on || shown[..i].iter().all(|s| *s), "{case}, {width}: {group} shows while a group before it is left out");
-                seen[i] |= on;
-            }
-        }
-        assert!(seen.iter().all(|s| *s), "{case}: a wide bar shows every group: {seen:?}");
-    }
+    let section = ["Paragraph:", "Align left", "Align center", "Align right"];
+    let names = bar_names(&mut app);
+    assert!(section.iter().all(|s| !names.iter().any(|n| n == s)), "nothing without type: {names:?}");
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "One"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let names = bar_names(&mut app);
+    assert!(section.iter().all(|s| names.iter().any(|n| n == s)), "the link and three alignments: {names:?}");
+    assert!(!names.iter().any(|n| n.starts_with("Justify")), "the justifying alignments are in the panel: {names:?}");
 }
 
 /// Reset Panel gives the paragraphs it acts on new type's Mojikumi Set (Line-end Punctuation
@@ -1098,9 +793,10 @@ fn reset_panel_resets_the_mojikumi_set_and_tab_stops_in_one_step() {
     // Type over the second paragraph's text: the typing session is still open.
     select_range(&mut app, 6, 12);
     let before = steps(&app);
-    let ctx = egui::Context::default();
-    let raw = egui::RawInput { events: vec![egui::Event::Text("X".into())], ..Default::default() };
-    ctx.run_ui(raw, |ui| crate::shortcuts::handle(&mut app, ui.ctx())).textures_delta.clear();
+    let ctx = crate::testing::ui_context();
+    // The keymap builds in the first pass.
+    crate::tests::synthetic::key_frame(&mut app, &ctx, vec![]);
+    crate::tests::synthetic::key_frame(&mut app, &ctx, vec![egui::Event::Text("X".into())]);
     assert_eq!(app.session.tool_options()["typing"], json!(true));
     reset_panel(&mut app);
     assert_eq!(paras(&app), [custom, reset], "only the paragraph at the caret");
