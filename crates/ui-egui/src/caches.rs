@@ -91,6 +91,10 @@ pub struct CanvasCache {
     /// The view the canvas last drew and when it last changed (egui's input time): while it moves,
     /// the canvas doesn't hit-test the art under the pointer ([`canvas::hover_wait`], #2452).
     pub view_moved: Option<(canvas::ViewKey, f64)>,
+    /// The object the Eyedropper's click at the pointer would act on, which Object Highlighting
+    /// outlines, with what it was found for: finding it again, which can sample a color, waits
+    /// until one of those changes.
+    pub hover_object: Option<(canvas::HoverObjectKey, Option<vectorcraft_doc::NodeId>)>,
     /// Where the press of the gesture running on the canvas landed, in document points: a move carried out of the
     /// canvas drops its art there relative to the pointer (`canvas::drops`).
     pub grab: Option<Point>,

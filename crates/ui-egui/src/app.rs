@@ -145,6 +145,7 @@ impl VectorcraftApp {
                 plugin_keys: Default::default(),
                 placed_keys: Default::default(),
                 view_moved: None,
+                hover_object: None,
                 grab: None,
                 carry_target: None,
                 last_drag: None,
