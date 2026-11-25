@@ -541,8 +541,8 @@ impl<'a> Scene<'a> {
     /// Whether a fill or stroke of `paint` marked to overprint (`overprint`) does: not when it is
     /// paper white with Discard White Overprint in Output (Document Setup); a spot white still
     /// overprints ([`Self::spot_ink`]). On a plate the colors are already the plate's coverage, and
-    /// the plate's document already left out or kept each overprinting paint by that setting, so
-    /// white is not checked there.
+    /// the plate's document has already turned overprinting off for each white the setting knocks
+    /// out, so white is not checked there.
     fn overprints(&self, overprint: bool, paint: &Paint) -> bool {
         let discarded = !self.plate && self.doc.setup.discard_white_overprint && vectorcraft_doc::overprint::is_white(paint) && !self.spot_ink(paint);
         overprint && !discarded
@@ -634,7 +634,9 @@ impl<'a> Scene<'a> {
                             && vectorcraft_doc::overprint::is_white(p)
                             && vectorcraft_doc::overprint::DiscardWhite::of(self.doc).discards(p);
                         let on = self.overprint_on(n.colorize_overprints() && !discarded);
-                        self.colorized_image(im, blob, p, on);
+                        // Inside an overprinting pattern fill the image overprints with its tiles.
+                        let overprinting = self.overprinting;
+                        self.colorized_image(im, blob, p, overprinting);
                         self.overprint_off(on);
                     }
                     _ => self.image(&im.key, blob, im.width, im.height, im.xf),

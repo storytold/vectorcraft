@@ -1353,6 +1353,27 @@ fn an_overprinting_colorized_image_writes_only_its_process_inks() {
     assert!(ps.contains("VCdn0 setcolorspace") && ps.contains("/DeviceCMYK setcolorspace"), "{ps}");
 }
 
+/// An overprinting colorized image in the tile of an overprinting pattern fill is written in only
+/// the process inks it puts down, as it is outside a pattern, so the inks below it stay.
+#[test]
+fn an_overprinting_colorized_image_in_an_overprinting_pattern_writes_only_its_process_inks() {
+    let mut d = overprinting_colorized_doc(vec![0, 128, 255], Color::cmyk(1.0, 0.0, 0.0, 0.0), true);
+    let id = d.layers[0].children().unwrap()[0].id;
+    let image = d.remove(id).unwrap();
+    d.patterns.push(vectorcraft_doc::PatternDef::new("tile", vec![image]));
+    let mut n = red_rect(&mut d);
+    if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first_mut() {
+        f.paint = Paint::Pattern { pattern: "tile".into(), xf: Affine::IDENTITY };
+        f.overprint = true;
+    }
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, n).unwrap();
+    for level in Level::ALL {
+        let ps = page_of(&d, &EpsOptions { level, ..opts(&d) });
+        assert!(ps.contains("true op") && ps.contains("VCdn0 setcolorspace") && !ps.contains("/DeviceCMYK setcolorspace"), "{level:?}: {ps}");
+    }
+}
+
 /// On a separation plate, an overprinting colorized image whose color puts none of the plate's ink
 /// down is drawn as nothing, so the ink below stays; one that knocks out, or whose overprint is
 /// discarded, is drawn as paper. (The plate's colors come from the separator, which has already

@@ -10461,7 +10461,8 @@ shadings and masks transparent image pixels out; `level: 2` writes gradients as 
 `compatibleGradients`) and transparent pixels white. Type is always glyph outlines, so no fonts are needed (`embedFonts`
 is accepted); spot colours are Separation colour spaces, and overprinting fills and strokes overprint unless
 `overprints: "discard"`. With `discardWhiteOverprint` (`document.setup`, on by default) paper white ones knock out
-instead; a white linked to a spot swatch at a tint above 0% still overprints. RGB documents are written in CMYK unless
+instead; a white linked to a spot swatch that has a color, at a tint above 0%, still overprints. RGB documents are
+written in CMYK unless
 `cmykPostScript: false`. A freeform gradient is
 written as an image, in CMYK when every point is CMYK or when every point is Gray in a file written in CMYK. When the file would hold an
 image that can't be decoded, the image is left out, and `warnings` carries "an image couldn't be decoded and is missing
