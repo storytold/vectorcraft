@@ -69,6 +69,9 @@ impl Session {
             selection_at_lend: None,
             lent_selection: None,
             last_selection_tool: None,
+            last_part_selection_tool: None,
+            press_lent: None,
+            hover_lent: None,
             last_view: ViewInfo::default(),
             preview_memo: Default::default(),
             depth: 0,
@@ -103,6 +106,8 @@ impl Session {
             profile_dir: None,
             color_settings_file: None,
             plugin_dir: None,
+            plugin_loads: Default::default(),
+            plugin_loads_in_background: false,
             scripts_dir: None,
             metadata_templates_dir: None,
             new_doc_profile_dir: None,
@@ -118,6 +123,7 @@ impl Session {
             journal_note: Default::default(),
             note_depth: 1,
             journal_query: false,
+            defaults_only_ran: None,
             explicit_undo_group: None,
             batch_stash: None,
             batch_steps: None,
@@ -137,6 +143,7 @@ impl Session {
             recovery: Default::default(),
             in_tool_actions: false,
             settled_warnings: None,
+            held_interaction: None,
             previewing: false,
             decoded_images: Default::default(),
             envelope_defaults: None,
@@ -210,6 +217,7 @@ impl Session {
             return;
         }
         self.press_type_selection = None;
+        self.press_lent = None;
         let view = self.last_view;
         // The edit the tool computes on another thread and the input held for it belong to the
         // document being left. The switch goes on whatever they did, as for the deactivation.
@@ -218,9 +226,14 @@ impl Session {
         let _ = self.give_back_tool(view);
         let _ = self.deactivate_tool(view);
         // A batch leaves its interaction open in the document it leaves, to keep or roll back with
-        // the rest of the batch; anything else in progress (a drag) is cancelled.
+        // the rest of the batch; one that keeps on a switch is kept; anything else in progress (a
+        // drag) is cancelled.
         if self.batch_stash.is_none() {
-            let _ = self.cancel_interaction();
+            let _ = if self.active().and_then(|st| st.interaction.as_ref()).is_some_and(|it| it.keep_on_switch) {
+                self.commit_interaction()
+            } else {
+                self.cancel_interaction()
+            };
         }
         self.keep_tool_settings();
         self.tool = self.make_tool(self.tool.id());
@@ -411,6 +424,8 @@ impl Session {
         st.opened_as_tab = old.opened_as_tab;
         st.revision = old.revision + 1;
         st.format = old.format;
+        // What scripts' commands did to the document stays until the person saves it.
+        st.by_script = old.by_script.clone();
         st.save_options = old.save_options.clone();
         // The remembered artboard pick follows the artboards it named when the file read back has
         // the artboards the document had at the save, in the same order and with the same ids (a

@@ -756,7 +756,7 @@ pub(crate) fn shape_runs(
         // Split into segments by font coverage (and case, for Small Caps).
         let mut seg = Segment { db, range: a..a, runs, source_runs, st, face: primary.clone(), small: false, level: level_at(a) };
         let mut cache: std::collections::HashMap<&str, Arc<FontFace>> = std::collections::HashMap::new();
-        let mut boundary = craft_font_catalog::SegmentBoundary::new(primary.id(), level_at(a));
+        let mut boundary = craft::font_catalog::SegmentBoundary::new(primary.id(), level_at(a));
         // A grapheme cluster (a letter and its marks, an emoji sequence) is set in one face.
         for (i, cluster) in text[a..b].grapheme_indices(true) {
             let i = a + i;
@@ -1384,7 +1384,7 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
 /// `digits`: not what the layout handles itself (tab, line and paragraph breaks), joiners or
 /// variation selectors.
 fn drawn_chars(cluster: &str, digits: Digits) -> impl Iterator<Item = char> + '_ {
-    craft_font_catalog::drawable_characters(cluster, move |c| digits.map(c))
+    craft::font_catalog::drawable_characters(cluster, move |c| digits.map(c))
 }
 
 /// Does the face with charmap `map` have a glyph for `c` (any face does when it has no charmap)?
@@ -1396,7 +1396,7 @@ fn in_face(map: Option<&Charmap<'_>>, c: char) -> bool {
 /// first fallback face with all of them, so that a letter's marks are shaped with it and attach to
 /// it (#4491); when there is none, the face its first character takes on its own.
 fn fallback_face(db: &FontDb, primary: &Arc<FontFace>, pmap: Option<&Charmap<'_>>, cluster: &str, digits: Digits) -> Arc<FontFace> {
-    craft_font_catalog::cluster_face(
+    craft::font_catalog::cluster_face(
         cluster,
         primary,
         |c| digits.map(c),
@@ -1689,7 +1689,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             let along_features = with_more(&|s| feats.resolve(s));
             // gid, cluster, x and y advance, x and y offset.
             let shape = |feats: &[Feature], direction: Direction| {
-                let input = craft_font_catalog::RunInput {
+                let input = craft::font_catalog::RunInput {
                     text: text_seg,
                     source_start: range.start,
                     pre_context: text.get(context.start..range.start).unwrap_or_default(),
@@ -1700,7 +1700,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
                     character_clusters: char_level.get(),
                     uppercase: upper,
                 };
-                craft_font_catalog::shape_run(
+                craft::font_catalog::shape_run(
                     &shaper,
                     &input,
                     |c| st.digits.map(c),
