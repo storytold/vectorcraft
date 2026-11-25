@@ -374,7 +374,7 @@ fn settle(app: &mut VectorcraftApp, Answer { act, mut state }: Answer) {
         Act::Search => start_search(app, &mut state, &search_folder).map(|()| true),
         // The app asks for the folder, as Type › Find Font's Find in Folder… does; the dialog comes back
         // searching it. A question that is cancelled leaves the dialog closed.
-        Act::Pick => find_in_folder_command(app, None).map(|_| false),
+        Act::Pick => find_in_folder_for(app, state.uid, None).map(|_| false),
         Act::Stop => app.run("text.findFontFiles", json!({ "stop": true })).map(|_| {
             if let Ok(r) = app.session.execute("text.findFontFiles", &json!({})) {
                 let error = follow(&mut state, &r);
@@ -473,6 +473,12 @@ fn show_for(app: &mut VectorcraftApp, uid: u64, dialog: MissingFontsDialog) {
 /// `folder`), then open the dialog for the active document, searching it.
 pub(crate) fn find_in_folder_command(app: &mut VectorcraftApp, folder: Option<String>) -> Result<Value, String> {
     let uid = app.session.active().map(|d| d.uid).ok_or("no document open")?;
+    find_in_folder_for(app, uid, folder)
+}
+
+/// [`find_in_folder_command`] for the document `uid`, which a dialog left open may not be the
+/// active one.
+fn find_in_folder_for(app: &mut VectorcraftApp, uid: u64, folder: Option<String>) -> Result<Value, String> {
     // Nothing to look for: no folder is asked for.
     dialog_for(app, uid).ok_or(NOTHING_MISSING)?;
     match folder {
