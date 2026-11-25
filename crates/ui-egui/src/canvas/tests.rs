@@ -2357,6 +2357,157 @@ fn appearance_of_black_on_screen_shows_pure_black_as_rgb_black() {
     assert!(near(middle(&mut app).expect("re-rendered"), accurate), "accurate again");
 }
 
+/// A change of the color settings, and a profile in use loaded again under its name, re-render the
+/// canvas through the new conversion. They raise the documents' revisions but leave the art as it
+/// is, so [`super::raster::changed_pixels`] finds no part of the frame shown that changed: the
+/// frame's key holds the color settings and the loaded profiles' generation. A frame with nothing
+/// changed renders nothing.
+#[test]
+fn color_settings_and_a_reloaded_profile_render_the_canvas_again() {
+    const CHILD: &str = "VECTORCRAFT_TEST_CANVAS_COLOR_SETTINGS";
+    if std::env::var_os(CHILD).is_none() {
+        // Color settings and loaded profiles are process-wide: change them in a separate test process.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "canvas::tests::color_settings_and_a_reloaded_profile_render_the_canvas_again", "--nocapture"])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated canvas color test failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
+    use vectorcraft_color::cms;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300, "colorMode": "cmyk"})).unwrap();
+    app.canvas.worker_started = true; // render on this thread
+    // Larger than the view: the middle of the art's raster is its fill.
+    let id = app.run("shape.rectangle", json!({"x": -5000, "y": -5000, "width": 10000, "height": 10000})).unwrap()["id"].clone();
+    app.run("paint.setFill", json!({"ids": [id], "color": {"c": 60, "m": 10, "y": 80, "k": 0}})).unwrap();
+    let ctx = crate::testing::ui_context();
+    // The middle pixel of the art's raster uploaded by one frame, None when it was not re-rendered.
+    let middle = |app: &mut VectorcraftApp| -> Option<[u8; 4]> {
+        let (_, mut delta) = frame_output(app, &ctx);
+        let art = app.canvas.texture.as_ref().unwrap().id();
+        let px = delta.set.iter().find(|e| e.0.eq(&art)).and_then(|e| e.1.last()).map(|d| {
+            let egui::ImageData::Color(img) = &d.image;
+            let [w, h] = img.size;
+            img.pixels[h / 2 * w + w / 2].to_array()
+        });
+        delta.clear();
+        px
+    };
+    let ink = vectorcraft_color::Color::cmyk(0.6, 0.1, 0.8, 0.0);
+    let through = |cmyk: &str| {
+        let c = cms::Cms::new(&cms::ColorSettings { cmyk: cmyk.into(), ..cms::working_settings() }).unwrap().display_rgb(&ink);
+        c.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8)
+    };
+    let near = |a: [u8; 4], b: [u8; 3]| a[..3].iter().zip(b).all(|(x, y)| x.abs_diff(y) <= 3);
+    let (generic, device) = (through(cms::GENERIC_CMYK), through(cms::DEVICE_CMYK));
+    assert!(!near([generic[0], generic[1], generic[2], 255], device), "the two CMYK spaces draw the ink differently: {generic:?}, {device:?}");
+
+    let first = middle(&mut app).expect("the first frame renders the art");
+    assert!(near(first, generic), "through the working CMYK space: {first:?}, not {generic:?}");
+    assert_eq!(middle(&mut app), None, "nothing changed: no re-render");
+    app.run("edit.colorSettings", json!({"cmyk": cms::DEVICE_CMYK})).unwrap();
+    let shown = middle(&mut app).expect("Color Settings re-render the canvas");
+    assert!(near(shown, device), "through the new working CMYK space: {shown:?}, not {device:?}");
+    assert_eq!(middle(&mut app), None, "nothing changed since: no re-render");
+    app.run("edit.colorSettings", json!({"cmyk": cms::GENERIC_CMYK})).unwrap();
+    assert!(near(middle(&mut app).expect("re-rendered"), generic), "back to the first working space");
+
+    // A built-in CMYK profile's file renamed `name`: padded with spaces, which names drop.
+    let renamed = |builtin: &str, name: &str| {
+        let utf16 = |s: &str| s.encode_utf16().flat_map(u16::to_be_bytes).collect::<Vec<u8>>();
+        let mut bytes = cms::icc_bytes(builtin).unwrap().to_vec();
+        let (from, to) = (utf16(builtin), utf16(&format!("{name:<width$}", width = builtin.len())));
+        let at = bytes.windows(from.len()).position(|w| w == from).unwrap();
+        bytes[at..at + to.len()].copy_from_slice(&to);
+        bytes
+    };
+    let name = "Canvas Reload CMYK";
+    let dir = vectorcraft_testkit::temp_dir("canvas-reload-cmyk");
+    let load = |app: &mut VectorcraftApp, builtin: &str| {
+        let path = dir.join(format!("{}.icc", builtin.len()));
+        std::fs::write(&path, renamed(builtin, name)).unwrap();
+        let r = app.run("color.loadProfile", json!({"path": path.to_str().unwrap()})).unwrap();
+        assert_eq!(r["name"], name);
+    };
+    load(&mut app, cms::GENERIC_CMYK);
+    app.run("edit.assignProfile", json!({"cmyk": name})).unwrap();
+    let assigned = middle(&mut app).expect("assigning a profile re-renders the canvas");
+    assert!(near(assigned, generic), "through the assigned copy of the working space: {assigned:?}, not {generic:?}");
+    assert_eq!(middle(&mut app), None, "nothing changed: no re-render");
+    // The same name, the settings as they were: only the profile's file is new.
+    load(&mut app, cms::DEVICE_CMYK);
+    let reloaded = middle(&mut app).expect("the profile loaded again re-renders the canvas");
+    assert!(near(reloaded, device), "through the profile's new file: {reloaded:?}, not {device:?}");
+    assert_eq!(middle(&mut app), None, "nothing changed since: no re-render");
+
+    // A proof of the working CMYK space converts through the working settings. With the document's
+    // assigned profile in place of the working CMYK space, a new working CMYK space leaves the
+    // active settings as they were and changes only the proof.
+    app.run("view.proofSetup", json!({"target": "workingCmyk"})).unwrap();
+    app.run("view.proofColors", json!({"on": true})).unwrap();
+    let proofed = middle(&mut app).expect("Proof Colors re-renders the canvas");
+    assert_eq!(middle(&mut app), None, "nothing changed: no re-render");
+    let active = cms::active_settings();
+    app.run("edit.colorSettings", json!({"cmyk": cms::DEVICE_CMYK})).unwrap();
+    let reproofed = middle(&mut app).expect("a new working CMYK space re-renders the proof");
+    assert_eq!(cms::active_settings(), active, "the assigned profile keeps the active settings");
+    assert!(!near(reproofed, [proofed[0], proofed[1], proofed[2]]), "the proof through the new working CMYK space: {reproofed:?}, not {proofed:?}");
+    assert_eq!(middle(&mut app), None, "nothing changed since: no re-render");
+}
+
+/// A frame from the render worker whose color key is not the current one is not shown, and the
+/// canvas asks for the frame again. The worker converts colors with the settings in force while it
+/// renders, so a frame asked for before a change of the color settings may hold colors of the new
+/// settings under the old key, and a return to the old settings would keep it.
+#[test]
+fn a_worker_frame_of_other_color_settings_is_not_shown() {
+    keeping_color_settings(a_worker_frame_of_other_color_settings);
+}
+
+fn a_worker_frame_of_other_color_settings() {
+    use vectorcraft_color::cms;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.canvas.worker_started = true;
+    let (worker, jobs, done_tx) = crate::render_worker::Worker::test_channel();
+    app.canvas.worker = Some(worker);
+    let ctx = crate::testing::ui_context();
+    let frame = |app: &mut VectorcraftApp| {
+        let raw =
+            egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), time: Some(1.0), ..Default::default() };
+        ctx.run_ui(raw, |ui| show(app, ui)).textures_delta.clear();
+    };
+    frame(&mut app);
+    done_tx.send(finished(&jobs.try_recv().expect("the first frame"))).unwrap();
+    frame(&mut app);
+    let first = app.canvas.key.clone().expect("the first frame is shown");
+
+    // A pan's frame goes to the worker, and the color settings change before it is finished.
+    app.view_mut().unwrap().center.x += 5.0;
+    frame(&mut app);
+    let pan = jobs.try_recv().expect("the pan's frame goes to the worker");
+    let settings = cms::ColorSettings { cmyk: cms::DEVICE_CMYK.into(), ..cms::active_settings() };
+    assert_ne!(settings, cms::active_settings(), "other color settings");
+    cms::with_active(std::sync::Arc::new(cms::Cms::new(&settings).unwrap()), || {
+        done_tx.send(finished(&pan)).unwrap();
+        frame(&mut app);
+        assert_eq!(app.canvas.key.as_ref(), Some(&first), "the pan's frame, of other color settings, is not shown");
+        let again = jobs.try_recv().expect("the pan's frame is asked for with the current color settings");
+        assert_ne!(again.key.color, pan.key.color);
+    });
+    // Back to the settings in the pan's key: the pan's frame is asked for again.
+    frame(&mut app);
+    let back = jobs.try_recv().expect("the pan's frame is asked for again");
+    assert_eq!(back.key, pan.key);
+}
+
 #[test]
 fn top_bounding_box_handle_scales_a_default_mirror_repeat() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());

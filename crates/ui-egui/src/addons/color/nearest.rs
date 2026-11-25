@@ -31,6 +31,8 @@ pub const KIND: &str = "nearestSwatch";
 /// The query that lists the matches, and how many of each colour's the dialog shows.
 const FIND: &str = "addon.color.nearestSwatch";
 const MATCHES: u64 = 3;
+/// The rows the match list shows before it scrolls.
+const LIST_ROWS: u16 = 12;
 
 /// What the query read: the document and its revision, the library, Fill and Stroke. An answer
 /// stands while these are what the dialog shows now.
@@ -155,7 +157,8 @@ fn body(ui: &mut Ui, fields: &mut Fields, libraries: &[Entry<String>], selected:
     let lines = lines(found);
     let keys: Vec<usize> = (0..lines.len()).collect();
     let source = keyed(&keys, |i| *i);
-    List::<usize>::new(label(tl!("Find Nearest Swatch"))).select(SelectMode::None).show_items(ui, &source, &mut |&i, item| match lines.get(i) {
+    let list = List::<usize>::new(label(tl!("Find Nearest Swatch"))).select(SelectMode::None).max_rows(LIST_ROWS);
+    list.show_items(ui, &source, &mut |&i, item| match lines.get(i) {
         Some(line) => {
             let face = SwatchFace::new(line.color);
             let row = ListRow::new(line.text.clone())
@@ -266,5 +269,21 @@ mod tests {
         assert_eq!(listed(&app), None, "no query without a selection");
         assert!(!host(&app, |h| h.confirm_by_id(&ctx, id)), "Apply is off");
         assert!(host(&app, |h| h.is_open::<NearestDialog>()));
+    }
+
+    #[test]
+    fn find_nearest_swatch_draws_its_matches_and_buttons() {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("swatch.new", json!({"name": "Brand", "color": "#ff8000", "global": true})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+        app.run("paint.setFill", json!({"color": "#ff8010"})).unwrap();
+        let mut p = crate::tests::panel_harness::Panel::new(app, crate::tests::picks::dialogs);
+        menus::invoke(&mut p.app(), COMMAND, serde_json::Value::Null);
+        p.frame();
+        p.frame();
+        for name in ["Brand", "Apply", "Cancel"] {
+            assert!(p.shows(name), "{name} is drawn");
+        }
     }
 }
