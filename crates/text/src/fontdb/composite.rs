@@ -352,7 +352,7 @@ impl FontDb {
             }
             // Each lent font is the database's; with as many, none it holds is left out.
             same &= lent.len() == map.len();
-            self.generation.load(Ordering::Relaxed)
+            self.own_generation()
         };
         let number = NEXT_LOAN.fetch_add(1, Ordering::Relaxed);
         let loan = Loan { db: self.id, number, fonts: lent, same_at: same.then_some(generation), print: h.finish() };
@@ -395,8 +395,11 @@ impl FontDb {
         if !self.lends() && self.composites.read().unwrap_or_else(|e| e.into_inner()).is_empty() {
             return None;
         }
-        let fonts: Vec<Option<Arc<CompositeFont>>> =
-            t.runs.iter().map(|r| if r.inline.is_some() { None } else { self.composite_font(&r.style.font_family) }).collect();
+        let fonts: Vec<Option<Arc<CompositeFont>>> = t
+            .runs
+            .iter()
+            .map(|r| if r.inline.is_some() || r.style.file_font_id.is_some() { None } else { self.composite_font(&r.style.font_family) })
+            .collect();
         if fonts.iter().all(Option::is_none) {
             return None;
         }

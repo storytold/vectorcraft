@@ -18,34 +18,11 @@ use md5::Md5;
 use sha2::{Digest, Sha256, Sha384, Sha512};
 
 use crate::lab_spot::{find, rfind, xref_offset};
-use crate::settings::choice;
-use crate::{Changes, Compatibility, PdfError, PdfSettings, Printing, SecuritySettings, Standard};
+use crate::{Compatibility, Encryption, PdfError, PdfSettings, SecuritySettings};
 
 mod lexer;
 
 pub(crate) use lexer::{Lexer, Obj, Spanned, Tok, int, is_white};
-
-choice! {
-    /// The encryption algorithm, which follows the PDF version (Compatibility).
-    Encryption {
-        Rc440 = "rc440", "40-bit RC4";
-        Rc4 = "rc4", "128-bit RC4";
-        Aes128 = "aes128", "128-bit AES";
-        Aes256 = "aes256", "256-bit AES";
-    } default Aes256
-}
-
-impl Encryption {
-    /// The algorithm a file of PDF version `c` is encrypted with.
-    pub fn for_compatibility(c: Compatibility) -> Self {
-        match c {
-            Compatibility::Pdf13 => Self::Rc440,
-            Compatibility::Pdf14 | Compatibility::Pdf15 => Self::Rc4,
-            Compatibility::Pdf16 => Self::Aes128,
-            Compatibility::Pdf17 | Compatibility::Pdf20 => Self::Aes256,
-        }
-    }
-}
 
 /// The standard security handler revision written for PDF version `c`: 3 (RC4, metadata always
 /// encrypted), 4 (crypt filters: RC4 or AES-128) or 6 (AES-256).
@@ -56,114 +33,6 @@ fn revision(c: Compatibility) -> u8 {
         Compatibility::Pdf15 | Compatibility::Pdf16 => 4,
         Compatibility::Pdf17 | Compatibility::Pdf20 => 6,
     }
-}
-
-/// The longest password (in bytes) revisions 2–4 use: longer ones are cut to this.
-const MAX_LEGACY_PASSWORD: usize = 32;
-/// The longest password (UTF-8 bytes) revision 6 uses.
-const MAX_PASSWORD: usize = 127;
-
-impl SecuritySettings {
-    /// A password is set: the file is encrypted.
-    pub fn protected(&self) -> bool {
-        !self.open_password.is_empty() || !self.permissions_password.is_empty()
-    }
-
-    /// Some permission is withheld (only a permissions password applies them).
-    pub fn restricts(&self) -> bool {
-        self.printing != Printing::High || self.changes != Changes::Any || !self.copy || !self.screen_reader
-    }
-
-    /// The encryption dictionary's `P` entry: the permission bits (1-based bit numbers of the PDF
-    /// reference's user access permissions). Everything is allowed without a permissions password.
-    pub fn permission_bits(&self) -> i32 {
-        if self.permissions_password.is_empty() {
-            return !3;
-        }
-        let bit = |n: u32| 1u32 << (n - 1);
-        // Bits 1–2 are clear; the reserved bits 7–8 and 13–32 are set.
-        let mut p = 0xFFFF_F0C0u32;
-        p |= match self.printing {
-            Printing::None => 0,
-            Printing::Low => bit(3),
-            Printing::High => bit(3) | bit(12),
-        };
-        p |= match self.changes {
-            Changes::None => 0,
-            Changes::Pages => bit(11),
-            Changes::Forms => bit(9),
-            Changes::Comments => bit(6) | bit(9),
-            Changes::Any => bit(4) | bit(6) | bit(9) | bit(11),
-        };
-        if self.copy {
-            p |= bit(5);
-        }
-        // Content copied may always be read out by screen readers.
-        if self.copy || self.screen_reader {
-            p |= bit(10);
-        }
-        p as i32
-    }
-
-    /// Refuse passwords the file can't carry: with a PDF standard (PDF/A and PDF/X forbid
-    /// encryption), two equal passwords, or passwords the algorithm of `c` can't take.
-    pub(crate) fn check(&self, standard: Standard, c: Compatibility) -> Result<(), PdfError> {
-        if !self.protected() {
-            return Ok(());
-        }
-        if standard != Standard::None {
-            return Err(PdfError::BadSetting(format!(
-                "{} files can't be password-protected: remove the passwords or choose no standard",
-                standard.label()
-            )));
-        }
-        // Revision 2 has one printing bit: it can't say "low resolution only".
-        if revision(c) == 2 && self.printing == Printing::Low && !self.permissions_password.is_empty() {
-            return Err(PdfError::BadSetting(format!(
-                "{} can't limit printing to low resolution: choose PDF 1.4 or later, or allow high-resolution printing",
-                c.label()
-            )));
-        }
-        if self.open_password == self.permissions_password {
-            return Err(PdfError::BadSetting("the open and permissions passwords must differ".into()));
-        }
-        for pw in [&self.open_password, &self.permissions_password] {
-            if revision(c) < 6 {
-                if !pw.is_ascii() || pw.len() > MAX_LEGACY_PASSWORD {
-                    return Err(PdfError::BadSetting(format!(
-                        "{} passwords can have up to {MAX_LEGACY_PASSWORD} ASCII characters (PDF 1.7 and later take any)",
-                        c.label()
-                    )));
-                }
-            } else if pw.len() > MAX_PASSWORD {
-                return Err(PdfError::BadSetting(format!("passwords can have up to {MAX_PASSWORD} bytes")));
-            }
-        }
-        Ok(())
-    }
-}
-
-impl PdfSettings {
-    /// The algorithm the file is encrypted with; `None` without a password.
-    pub fn encryption(&self) -> Option<Encryption> {
-        self.security.protected().then(|| Encryption::for_compatibility(self.compatibility))
-    }
-}
-
-/// The security options that are accepted but have no effect, one warning each.
-pub(crate) fn warnings(set: &PdfSettings) -> Vec<String> {
-    let s = &set.security;
-    let mut out = vec![];
-    if s.protected() && s.plaintext_metadata && revision(set.compatibility) <= 3 {
-        out.push(format!("{} encryption covers the metadata too: plaintext metadata needs PDF 1.5 or later", set.compatibility.label()));
-    }
-    if s.protected() && set.compatibility == Compatibility::Pdf13 {
-        out.push(format!(
-            "{} encrypts with a 40-bit key, which can be searched in minutes: choose PDF 1.6 or later for stronger protection",
-            set.compatibility.label()
-        ));
-    }
-    out
 }
 
 // ---------- cryptography ----------

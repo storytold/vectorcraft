@@ -158,6 +158,10 @@ fn generator_methods_and_the_generator_objects() {
     truth("var o = { *'s'() { yield 1; }, *2() { yield 2; } }; o.s().next().value + o[2]().next().value === 3");
     throws("function* g() {} new g();", "TypeError");
     throws("var o = { *m() {} }; new o.m();", "TypeError");
+    // A generator method has a `prototype` that its generator objects inherit from, unlike other
+    // methods, and takes a computed name and the method's `name`.
+    truth("var o = { *m() {} }; var it = o.m(); Object.getPrototypeOf(it) === o.m.prototype && !o.m.prototype.hasOwnProperty('constructor')");
+    truth("var k = 'c'; var o = { *[k + 'd']() { yield 4; } }; o.cd().next().value === 4 && o.cd.name === 'cd'");
     truth("function* g() {} var GP = Object.getPrototypeOf(g); GP === Object.getPrototypeOf(function* () {}) && GP !== Function.prototype");
     truth("function* g() {} Object.getPrototypeOf(g.prototype) === Object.getPrototypeOf(g).prototype && !g.prototype.hasOwnProperty('constructor')");
     truth("function* g() {} var it = g(); it[Symbol.iterator]() === it && Object.prototype.toString.call(it) === '[object Generator]'");

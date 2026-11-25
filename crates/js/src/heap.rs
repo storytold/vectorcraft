@@ -85,6 +85,16 @@ impl<T> PropMap<T> {
         }
     }
 
+    /// Sets the value under `k` like [`Self::insert`], but puts a new `k` right after `after`
+    /// when that is there.
+    pub(crate) fn insert_after(&mut self, after: &[u16], k: Key, v: T) {
+        let Some(at) = self.position(after).filter(|_| !self.contains(&k)) else { return self.insert(k, v) };
+        self.entries.insert(at + 1, Some((k, v)));
+        self.live += 1;
+        self.index = None;
+        self.rebuild_index();
+    }
+
     pub(crate) fn remove(&mut self, k: &[u16]) -> Option<T> {
         let i = self.position(k)?;
         let (_, v) = self.entries.get_mut(i)?.take()?;
@@ -180,11 +190,12 @@ pub(crate) enum NativeKind {
 /// `Data` is a host function given [`crate::Data`], its arguments read as `read` says. `Eval` is a
 /// host function that gives source to run as global code ([`crate::HostItem::Evaluator`]); `end`
 /// is called when that code ends. `Pausable` is a built-in that may ask the host for a value the
-/// run to wait for ([`crate::interp::Pause`]).
+/// run to wait for ([`crate::interp::Pause`]). A `Native`'s `prefix` is `get ` or `set ` for a
+/// built-in accessor's function and empty otherwise; its ECMAScript 2015 `name` starts with it.
 #[derive(Clone)]
 pub(crate) enum Func {
     Closure { code: Rc<Code>, env: EnvId },
-    Native { f: NativeFn, kind: NativeKind, constructor: bool, name: &'static str },
+    Native { f: NativeFn, kind: NativeKind, constructor: bool, name: &'static str, prefix: &'static str },
     Pausable { f: crate::interp::PausableFn, name: &'static str },
     Host { f: Rc<HostFn>, name: Rc<str> },
     Data { f: DataFn, name: Rc<str>, read: crate::host::ArgRead },
@@ -233,6 +244,9 @@ pub(crate) enum Class {
     Symbol(crate::symbol::Sym),
     /// An Array Iterator or a String Iterator and how far it has gone (sections 22.1.5 and 21.1.5).
     Iterator(Box<crate::builtins::iterator::IterState>),
+    /// The Iterator Record of a `for-of` loop, an array pattern or a spread in progress, on the
+    /// operand stack only.
+    IterRecord(Box<crate::iteration::IterRecord>),
     /// A generator object and its state (ECMA-262 11th edition, section 25.4).
     Generator(Box<crate::generator::GenState>),
     ForIn(Box<ForIn>),
@@ -254,6 +268,8 @@ pub(crate) enum Class {
     },
     /// A `.( )` filter in progress.
     XmlFilter(Box<XmlFilterState>),
+    /// A `UnitValue` object and its measurement ([`crate::unit_value`]).
+    UnitValue(Box<crate::unit_value::Measure>),
 }
 
 /// What an XML value is.
@@ -320,7 +336,7 @@ impl Class {
             Class::XmlFilter(_) => "Object",
             Class::Math => "Math",
             Class::Json => "JSON",
-            Class::Ordinary | Class::ForIn(_) | Class::Symbol(_) | Class::Iterator(_) | Class::Generator(_) => "Object",
+            Class::Ordinary | Class::ForIn(_) | Class::Symbol(_) | Class::Iterator(_) | Class::IterRecord(_) | Class::Generator(_) => "Object",
             Class::Array { .. } => "Array",
             Class::Function(_) => "Function",
             Class::Error(_) => "Error",
@@ -330,6 +346,7 @@ impl Class {
             Class::String(_) => "String",
             Class::RegExp(_) => "RegExp",
             Class::Date(_) => "Date",
+            Class::UnitValue(_) => "UnitValue",
         }
     }
 }
@@ -427,6 +444,8 @@ pub(crate) const XML_REF_BYTES: usize = 8;
 pub(crate) const XML_NS_BYTES: usize = 48;
 /// The estimated bytes of a Symbol without its description.
 pub(crate) const SYMBOL_BYTES: usize = 48;
+/// The estimated bytes of the measurement a `UnitValue` object holds.
+pub(crate) const UNIT_VALUE_BYTES: usize = 32;
 /// The estimated bytes of a piece of code without its instructions, tables and strings.
 const CODE_BYTES: usize = 384;
 
@@ -498,6 +517,12 @@ impl Heap {
             Some(Cell::Env(e)) => Some(e),
             _ => None,
         }
+    }
+
+    /// The objects in the heap, in the order of their cells.
+    pub(crate) fn object_ids(&self) -> Vec<ObjId> {
+        let ids = self.cells.iter().enumerate().filter(|(_, c)| matches!(c, Cell::Object(_)));
+        ids.filter_map(|(i, _)| u32::try_from(i).ok().map(ObjId)).collect()
     }
 
     /// Live cells, for tests.
@@ -645,6 +670,7 @@ fn mark_code(code: &Code, strings: &mut StringSizes) {
             + code.names.len()
             + code.functions.len()
             + code.params.len()
+            + code.pattern_names.len()
             + code.vars.len()
             + 2 * code.fun_decls.len()
             + code.scopes.iter().map(|s| 2 + s.lets.len() + 2 * s.funcs.len()).sum::<usize>()
@@ -664,7 +690,7 @@ fn mark_code(code: &Code, strings: &mut StringSizes) {
             strings.add(pattern);
             strings.add(flags);
         }
-        let keys = code.names.iter().chain(&code.params).chain(&code.vars).chain(code.fun_decls.iter().map(|(k, _)| k));
+        let keys = code.names.iter().chain(&code.params).chain(&code.pattern_names).chain(&code.vars).chain(code.fun_decls.iter().map(|(k, _)| k));
         for k in keys.chain(&code.self_name).chain(&code.decl_name).chain(&code.rest) {
             strings.add_key(k);
         }
@@ -717,6 +743,15 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
             strings.bytes += state.keys.iter().map(|k| string_bytes(k.len())).sum::<usize>();
         }
         Class::Symbol(s) => strings.add_symbol(s),
+        Class::IterRecord(r) => {
+            mark_value(&r.iterator, work, strings);
+            mark_value(&r.next, work, strings);
+            match &r.walk {
+                Some(crate::iteration::Walk::Array(a, _)) => work.push(a.0),
+                Some(crate::iteration::Walk::String(s, _)) => strings.add(s),
+                None => {}
+            }
+        }
         Class::Iterator(state) => match &**state {
             crate::builtins::iterator::IterState::Array { target, .. } => work.extend(target.iter().map(|o| o.0)),
             crate::builtins::iterator::IterState::String { text, .. } => text.iter().for_each(|s| strings.add(s)),
@@ -763,6 +798,7 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
             work.extend(state.input.iter().chain(&state.kept).map(|o| o.0));
             extra = XML_LIST_BYTES + XML_REF_BYTES * (state.input.len() + state.kept.len());
         }
+        Class::UnitValue(_) => extra = UNIT_VALUE_BYTES,
         _ => {}
     }
     OBJECT_BYTES + PROP_BYTES * (o.props.len() + syms) + extra

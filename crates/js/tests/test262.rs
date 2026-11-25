@@ -29,7 +29,8 @@
 //! or test file cannot be read, or when no ES5 test runs.
 //!
 //! A fifth test reads the ECMAScript 2015 subset that `Options::es2015` covers (`let`, `const`,
-//! arrow functions, templates, default and rest parameters) without and with that option, and
+//! arrow functions, templates, default and rest parameters, and from ECMAScript 2020 optional
+//! chains and `??`) without and with that option, and
 //! prints both counts; its failures with the option go to `es2015-failures.txt`.
 //!
 //! Two more tests read the Annex B trees, where tests name any edition's section: one parses every
@@ -42,11 +43,16 @@
 //! Another test runs the tests of `Symbol`, `Object.getOwnPropertySymbols` and the iterators of
 //! arrays and strings (the folders [`SYMBOL_BUILT_INS`] names) in a realm with
 //! [`Options::es2015`]: tests of any edition whose feature tags are all in [`SYMBOL_FEATURES`] and
-//! that parse as ES5. Its failures go to `symbol-failures.txt`.
+//! that parse with that option. Its failures go to `symbol-failures.txt`.
 //!
-//! Another reads and runs the tests of generator functions, `yield` and the generator objects (the
-//! folders [`GENERATOR_FOLDERS`] names) in a realm with [`Options::es2015`], negative parse tests
-//! included. Its failures go to `generators-failures.txt`.
+//! Another test reads the tests of `for-of` and destructuring (the folders
+//! [`FOR_OF_AND_PATTERN_FOLDERS`] names) with [`Options::es2015`]: tests of any edition whose
+//! feature tags are all in [`FOR_OF_AND_PATTERN_FEATURES`]. Negative parse tests must give a
+//! `SyntaxError`; the others run as the Symbol tests run. Its failures go to `for-of-failures.txt`.
+//!
+//! The last test reads and runs the tests of generator functions, `yield` and the generator objects
+//! (the folders [`GENERATOR_FOLDERS`] names) the same way, with the `generators` tag and the tags of
+//! the two tests before it. Its failures go to `generators-failures.txt`.
 //!
 //! The runner reads only regular files inside the suite: it does not follow symbolic links, refuses
 //! an `includes:` name that leaves the `harness/` folder, and refuses a file over
@@ -424,12 +430,17 @@ fn needs_missing_builtin(sources: &[&str], missing: &HashSet<&str>) -> bool {
     needs_missing_builtin_in(sources, missing, &Options::default())
 }
 
-/// [`needs_missing_builtin`] for sources read with `options`.
+/// [`needs_missing_builtin`] for sources read with `options`. With [`Options::es2015`], a source
+/// that does not tokenize is left out of the check rather than skipping the test, so the run
+/// counts the tokenizer's error as a failure.
 fn needs_missing_builtin_in(sources: &[&str], missing: &HashSet<&str>, options: &Options) -> bool {
     let mut lists = Vec::with_capacity(sources.len());
     for source in sources {
-        let Ok(tokens) = tokenize(source, options) else { return true };
-        lists.push(tokens);
+        match tokenize(source, options) {
+            Ok(tokens) => lists.push(tokens),
+            Err(_) if options.es2015 => {}
+            Err(_) => return true,
+        }
     }
     let strings_are_code = lists.iter().any(|tokens| runs_strings_as_code(tokens));
     lists.iter().flatten().any(|t| match &t.kind {
@@ -458,6 +469,11 @@ fn runs_strings_as_code(tokens: &[Token]) -> bool {
         }
         _ => false,
     })
+}
+
+/// Runs one test in a new realm made with `options`; `Err` describes a failure.
+fn run_one_with(options: &Options, script: &str, negative_type: Option<&str>) -> Result<(), String> {
+    run_one(script, negative_type, options)
 }
 
 /// Runs one test in a new realm made with `options`; `Err` describes a failure.
@@ -668,10 +684,37 @@ const ES2015_FOLDERS: &[&str] = &[
     "expressions/template-literal",
     "expressions/tagged-template",
     "rest-parameters",
+    "expressions/object",
+    "computed-property-names",
+    "expressions/optional-chaining",
+    "expressions/coalesce",
 ];
 
+/// The folders under `test/built-ins/` that [`run_es2015`] also reads: the `Function` tests hold
+/// those of the `name` and `length` properties of functions.
+const ES2015_BUILT_INS: &[&str] = &["Function"];
+
+/// The test files under `test/language/` that [`run_es2015`] also reads wherever they are: those
+/// of the `name` a function gets from its declaration or from the binding or property it is first
+/// assigned to.
+fn es2015_name_test(rel: &str) -> bool {
+    let file = rel.rsplit('/').next().unwrap_or(rel);
+    file.starts_with("fn-name-") || (file == "name.js" && (rel.contains("/function/") || rel.contains("/arrow-function/")))
+}
+
 /// The feature tags of the forms [`Options::es2015`] reads.
-const ES2015_FEATURES: &[&str] = &["let", "const", "arrow-function", "template", "default-parameters", "rest-parameters"];
+const ES2015_FEATURES: &[&str] = &[
+    "let",
+    "const",
+    "arrow-function",
+    "template",
+    "default-parameters",
+    "rest-parameters",
+    "computed-property-names",
+    "__proto__",
+    "optional-chaining",
+    "coalesce-expression",
+];
 
 #[test]
 fn es2015_subset_runs() {
@@ -694,7 +737,8 @@ struct Es2015Counts {
     failures: String,
 }
 
-/// Runs the ES2015 subset: the tests under `test/language/` in [`ES2015_FOLDERS`] whose feature
+/// Runs the ES2015 subset: the tests under `test/language/` in [`ES2015_FOLDERS`], under
+/// `test/built-ins/` in [`ES2015_BUILT_INS`] and those [`es2015_name_test`] picks, whose feature
 /// tags are all in [`ES2015_FEATURES`], and the tests elsewhere under `test/language/` with feature
 /// tags that are all in it. Negative parse tests must give a `SyntaxError`; the other tests run in a
 /// new realm after the harness, as [`run_tests`] runs them, skipping module and asynchronous tests
@@ -712,9 +756,15 @@ fn run_es2015(dir: &Path) {
     let editions = [Options::default(), modern.clone()];
     let mut counts = [Es2015Counts::default(), Es2015Counts::default()];
     let (mut selected, mut skipped, mut other_features) = (0usize, 0usize, 0usize);
-    for path in or_fail(test_files(&language)) {
+    let mut paths = or_fail(test_files(&language));
+    for folder in ES2015_BUILT_INS {
+        paths.extend(or_fail(inside(dir, &format!("test/built-ins/{folder}")).and_then(|d| test_files(&d))));
+    }
+    for path in paths {
         let rel = path.strip_prefix(dir).unwrap_or(&path).display().to_string().replace('\\', "/");
-        let in_folder = ES2015_FOLDERS.iter().any(|f| rel.starts_with(&format!("test/language/{f}/")));
+        let in_folder = ES2015_FOLDERS.iter().any(|f| rel.starts_with(&format!("test/language/{f}/")))
+            || ES2015_BUILT_INS.iter().any(|f| rel.starts_with(&format!("test/built-ins/{f}/")))
+            || es2015_name_test(&rel);
         let source = or_fail(read_source(&path));
         let meta = meta(&source);
         let tags_in_set = meta.features.iter().all(|f| ES2015_FEATURES.contains(&f.as_str()));
@@ -914,6 +964,78 @@ fn run_symbol_built_ins(dir: &Path) {
     assert_eq!(all.panicked, 0, "the interpreter panicked; see {}", path.display());
 }
 
+/// The folders of the tests of `for-of` and destructuring, which are read in a realm with
+/// [`Options::es2015`].
+const FOR_OF_AND_PATTERN_FOLDERS: &[&str] = &[
+    "language/statements/for-of",
+    "language/expressions/assignment/destructuring",
+    "language/expressions/assignment/dstr",
+    "language/statements/variable/dstr",
+    "language/statements/let/dstr",
+    "language/statements/const/dstr",
+    "language/statements/function/dstr",
+    "language/expressions/function/dstr",
+    "language/expressions/arrow-function/dstr",
+    "language/statements/try/dstr",
+    "language/statements/for/dstr",
+    "language/statements/for-in/dstr",
+];
+
+/// The feature tags of the tests under [`FOR_OF_AND_PATTERN_FOLDERS`] that are read; a test with
+/// any other tag is skipped.
+const FOR_OF_AND_PATTERN_FEATURES: &[&str] = &[
+    "let",
+    "const",
+    "arrow-function",
+    "template",
+    "default-parameters",
+    "rest-parameters",
+    "destructuring-binding",
+    "destructuring-assignment",
+    "computed-property-names",
+    "Symbol",
+    "Symbol.iterator",
+];
+
+#[test]
+fn es2015_for_of_and_destructuring_run() {
+    let Some(dir) = suite_dir() else {
+        println!("test262 for-of and destructuring: SKIPPED (no suite; run cargo xtask test262)");
+        return;
+    };
+    let handle = std::thread::Builder::new().stack_size(64 << 20).spawn(move || run_for_of_and_patterns(&dir)).unwrap();
+    handle.join().unwrap();
+}
+
+/// Reads the tests under each folder [`FOR_OF_AND_PATTERN_FOLDERS`] names whose feature tags are
+/// all in [`FOR_OF_AND_PATTERN_FEATURES`] with [`Options::es2015`]: a negative parse test must give
+/// a `SyntaxError`, and the others run as [`run_tagged_tests`] runs them. Prints the counts of each
+/// folder and writes the failures to `for-of-failures.txt` beside the suite.
+fn run_for_of_and_patterns(dir: &Path) {
+    let options = Options { es2015: true, ..Options::default() };
+    let missing: HashSet<&str> = missing_builtins(&[TEXT_BUILTINS, "Symbol"]);
+    let mut all = RunCounts::default();
+    let mut report = String::new();
+    for folder in FOR_OF_AND_PATTERN_FOLDERS {
+        let Some(root) = or_fail(present(dir, &format!("test/{folder}"))) else {
+            println!("test262 {folder}: SKIPPED (not in this suite)");
+            continue;
+        };
+        let mut counts = run_parse_negatives(dir, &root, &options, FOR_OF_AND_PATTERN_FEATURES);
+        counts.add(run_tagged_tests(dir, &root, &missing, &options, FOR_OF_AND_PATTERN_FEATURES));
+        println!("test262 {folder} with Options::es2015: {}.", counts.summary());
+        report.push_str(&format!("# {folder}\n{}\n", counts.failures));
+        all.add(counts);
+    }
+    assert!(all.tests > 0, "no for-of or destructuring tests ran under {}", dir.display());
+    let path = dir.join("for-of-failures.txt");
+    if let Err(e) = std::fs::write(&path, &report) {
+        println!("could not write {}: {e}", path.display());
+    }
+    println!("test262 for-of and destructuring with Options::es2015: {}. Failures: {}", all.summary(), path.display());
+    assert_eq!(all.panicked, 0, "the interpreter panicked; see {}", path.display());
+}
+
 /// The folders of the tests of generator functions, `yield` and the generator objects, which run
 /// in a realm with [`Options::es2015`].
 const GENERATOR_FOLDERS: &[&str] = &[
@@ -934,69 +1056,25 @@ fn es2015_generators_run() {
     handle.join().unwrap();
 }
 
-/// Runs the tests under each folder [`GENERATOR_FOLDERS`] names in a realm with
-/// [`Options::es2015`]: those whose feature tags are all `generators` or in [`ES2015_FEATURES`] or
-/// [`SYMBOL_FEATURES`]. A negative parse test must give a `SyntaxError`; the others run as
-/// [`run_tagged_tests`] runs them. Prints the counts of each folder and writes the failures to
-/// `generators-failures.txt` beside the suite.
+/// Reads the tests under each folder [`GENERATOR_FOLDERS`] names whose feature tags are all
+/// `generators` or in [`FOR_OF_AND_PATTERN_FEATURES`] or [`SYMBOL_FEATURES`] with
+/// [`Options::es2015`], as [`run_for_of_and_patterns`] reads its tests. Prints the counts of each
+/// folder and writes the failures to `generators-failures.txt` beside the suite.
 fn run_generators(dir: &Path) {
     let options = Options { es2015: true, ..Options::default() };
     let missing: HashSet<&str> = missing_builtins(&[TEXT_BUILTINS, "Symbol"]);
-    let harness = |name: &str| or_fail(inside(dir, &format!("harness/{name}")).and_then(|p| read_source(&p)));
-    let prelude = format!("{}\n{}\n", harness("assert.js"), harness("sta.js"));
-    let allowed = |f: &str| f == "generators" || ES2015_FEATURES.contains(&f) || SYMBOL_FEATURES.contains(&f);
+    let mut features: Vec<&str> = vec!["generators"];
+    features.extend(FOR_OF_AND_PATTERN_FEATURES);
+    features.extend(SYMBOL_FEATURES);
     let mut all = RunCounts::default();
     let mut report = String::new();
     for folder in GENERATOR_FOLDERS {
-        let root = or_fail(inside(dir, &format!("test/{folder}")));
-        assert!(root.is_dir(), "{} is not a test262 checkout", dir.display());
-        let mut counts = RunCounts::default();
-        for path in or_fail(test_files(&root)) {
-            let source = or_fail(read_source(&path));
-            let meta = meta(&source);
-            let has = |flag: &str| meta.flags.iter().any(|f| f == flag);
-            let expect_error = meta.negative_phase.as_deref() == Some("parse");
-            let includes: String = meta.includes.iter().map(|i| harness(i) + "\n").collect();
-            if has("module")
-                || has("async")
-                || meta.negative_phase.as_deref() == Some("resolution")
-                || !meta.features.iter().all(|f| allowed(f))
-                || (!expect_error && needs_missing_builtin_in(&[&source, &includes], &missing, &options))
-            {
-                counts.skipped += 1;
-                continue;
-            }
-            counts.tests += 1;
-            let rel = path.strip_prefix(dir).unwrap_or(&path).display().to_string().replace('\\', "/");
-            for &strict in modes(&meta) {
-                let mode = if strict { "strict" } else { "sloppy" };
-                if expect_error {
-                    let text = if strict { format!("\"use strict\";\n{source}") } else { source.clone() };
-                    if parse(&text, &options).is_ok() {
-                        counts.failed += 1;
-                        counts.failures.push_str(&format!("{rel} ({mode}): parsed; a SyntaxError was expected\n"));
-                    } else {
-                        counts.passed += 1;
-                    }
-                    continue;
-                }
-                let body = if has("raw") { source.clone() } else { format!("{prelude}{includes}{source}") };
-                let script = if strict { format!("\"use strict\";\n{body}") } else { body };
-                let negative_type = meta.negative_type.clone().filter(|_| meta.negative_phase.as_deref() == Some("runtime"));
-                match std::panic::catch_unwind(|| run_one(&script, negative_type.as_deref(), &options)) {
-                    Ok(Ok(())) => counts.passed += 1,
-                    Ok(Err(why)) => {
-                        counts.failed += 1;
-                        counts.failures.push_str(&format!("{rel} ({mode}): {why}\n"));
-                    }
-                    Err(_) => {
-                        counts.failed += 1;
-                        counts.panicked += 1;
-                        counts.failures.push_str(&format!("{rel} ({mode}): PANIC\n"));
-                    }
-                }
-            }
-        }
+        let Some(root) = or_fail(present(dir, &format!("test/{folder}"))) else {
+            println!("test262 {folder}: SKIPPED (not in this suite)");
+            continue;
+        };
+        let mut counts = run_parse_negatives(dir, &root, &options, &features);
+        counts.add(run_tagged_tests(dir, &root, &missing, &options, &features));
         println!("test262 {folder} with Options::es2015: {}.", counts.summary());
         report.push_str(&format!("# {folder}\n{}\n", counts.failures));
         all.add(counts);
@@ -1008,6 +1086,42 @@ fn run_generators(dir: &Path) {
     }
     println!("test262 generators with Options::es2015: {}. Failures: {}", all.summary(), path.display());
     assert_eq!(all.panicked, 0, "the interpreter panicked; see {}", path.display());
+}
+
+/// Parses the negative parse tests under `root` whose feature tags are all in `features`, in
+/// each mode the test names, with `options`; each must give a `SyntaxError`.
+fn run_parse_negatives(dir: &Path, root: &Path, options: &Options, features: &[&str]) -> RunCounts {
+    let mut counts = RunCounts::default();
+    for path in or_fail(test_files(root)) {
+        let source = or_fail(read_source(&path));
+        let meta = meta(&source);
+        if meta.flags.iter().any(|f| f == "module") || meta.negative_phase.as_deref() != Some("parse") {
+            continue;
+        }
+        if meta.features.iter().any(|f| !features.contains(&f.as_str())) {
+            counts.skipped += 1;
+            continue;
+        }
+        counts.tests += 1;
+        let rel = path.strip_prefix(dir).unwrap_or(&path).display().to_string().replace('\\', "/");
+        for &strict in modes(&meta) {
+            let text = if strict { format!("\"use strict\";\n{source}") } else { source.clone() };
+            match std::panic::catch_unwind(|| parse(&text, options).is_err()) {
+                Ok(true) => counts.passed += 1,
+                Ok(false) => {
+                    counts.failed += 1;
+                    let mode = if strict { "strict" } else { "sloppy" };
+                    counts.failures.push_str(&format!("{rel} ({mode}): parsed; a SyntaxError was expected\n"));
+                }
+                Err(_) => {
+                    counts.failed += 1;
+                    counts.panicked += 1;
+                    counts.failures.push_str(&format!("{rel}: PANIC\n"));
+                }
+            }
+        }
+    }
+    counts
 }
 
 /// Runs the script tests under `root` of any edition whose feature tags are all in `features`,
@@ -1025,7 +1139,7 @@ fn run_tagged_tests(dir: &Path, root: &Path, missing: &HashSet<&str>, options: &
         }
         let tagged_elsewhere = meta.features.iter().any(|f| !features.contains(&f.as_str()));
         let includes: String = meta.includes.iter().map(|i| harness(i) + "\n").collect();
-        if tagged_elsewhere || meta.flags.iter().any(|f| f == "async") || needs_missing_builtin(&[&source, &includes], missing) {
+        if tagged_elsewhere || meta.flags.iter().any(|f| f == "async") || needs_missing_builtin_in(&[&source, &includes], missing, options) {
             counts.skipped += 1;
             continue;
         }
@@ -1036,7 +1150,7 @@ fn run_tagged_tests(dir: &Path, root: &Path, missing: &HashSet<&str>, options: &
             let body = if meta.flags.iter().any(|f| f == "raw") { source.clone() } else { format!("{prelude}{includes}{source}") };
             let script = if strict { format!("\"use strict\";\n{body}") } else { body };
             let negative_type = meta.negative_type.clone().filter(|_| meta.negative_phase.as_deref() == Some("runtime"));
-            match std::panic::catch_unwind(|| run_one(&script, negative_type.as_deref(), options)) {
+            match std::panic::catch_unwind(|| run_one_with(options, &script, negative_type.as_deref())) {
                 Ok(Ok(())) => counts.passed += 1,
                 Ok(Err(why)) => {
                     counts.failed += 1;
@@ -1067,6 +1181,19 @@ fn a_missing_name_in_a_message_string_does_not_skip() {
     assert!(!skips(&[r#"var r = /"Map'/; var s = "say \"Map\" and \'Set\'";"#]));
     // A string in an included harness file is a message too.
     assert!(!skips(&["var x = 1;", r#"function check(v) { if (!v) throw new Test262Error("no Symbol"); }"#]));
+}
+
+#[test]
+fn a_source_that_does_not_tokenize_as_es2015_is_run_and_not_skipped() {
+    // The ES5 runs skip a test whose ES2015 syntax they cannot read. In the ES2015 subset, a
+    // source that does not tokenize is run, so the tokenizer's error is counted as a failure.
+    let missing: HashSet<&str> = ["Map"].into_iter().collect();
+    let modern = Options { es2015: true, ..Options::default() };
+    let unreadable = "var s = `never closed";
+    assert!(needs_missing_builtin(&[unreadable], &missing));
+    assert!(!needs_missing_builtin_in(&[unreadable], &missing, &modern));
+    // A missing built-in in another source still skips.
+    assert!(needs_missing_builtin_in(&[unreadable, "var m = new Map();"], &missing, &modern));
 }
 
 #[test]

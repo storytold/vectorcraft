@@ -69,6 +69,8 @@ pub enum BinaryOp {
 pub enum LogicalOp {
     And,
     Or,
+    /// `??`: the right side only when the left is `undefined` or `null`.
+    Coalesce,
 }
 
 /// `=` (`None`) or a compound assignment's operator (`+=` is `Some(BinaryOp::Add)`).
@@ -80,15 +82,19 @@ pub enum PropertyKey {
     Ident(String),
     String(Vec<u16>),
     Number(f64),
+    /// `[expression]` with [`crate::Options::es2015`]: the key is the expression's value.
+    Computed(ExprId),
 }
 
 impl PropertyKey {
-    /// The key as the string a property is stored under (a number through ToString).
+    /// The key as the string a property is stored under (a number through ToString); empty for
+    /// a computed key, whose string is known only at run time.
     pub fn to_utf16(&self) -> Vec<u16> {
         match self {
             PropertyKey::Ident(name) => name.encode_utf16().collect(),
             PropertyKey::String(s) => s.clone(),
             PropertyKey::Number(n) => crate::number::to_string(*n).encode_utf16().collect(),
+            PropertyKey::Computed(_) => Vec::new(),
         }
     }
 }
@@ -98,6 +104,8 @@ pub enum PropertyValue {
     Init(ExprId),
     Get(FunctionId),
     Set(FunctionId),
+    /// A method (`m() {…}`, ECMA-262 2015 section 14.3).
+    Method(FunctionId),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -105,6 +113,18 @@ pub struct Property {
     pub key: PropertyKey,
     pub value: PropertyValue,
     pub span: Span,
+}
+
+impl Property {
+    /// The property is `__proto__: value`, which sets the new object's prototype (ECMA-262 2015
+    /// section B.3.1): a data property with a name written out, not computed and not shorthand
+    /// (`{__proto__}`, whose value starts where the property does).
+    pub fn is_proto_setter(&self, ast: &Ast) -> bool {
+        let PropertyValue::Init(value) = self.value else { return false };
+        ast.expr_span(value).start != self.span.start
+            && matches!(self.key, PropertyKey::Ident(_) | PropertyKey::String(_))
+            && self.key.to_utf16().into_iter().eq("__proto__".encode_utf16())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -218,6 +238,12 @@ pub enum Expr {
     /// `...expression` in an array literal or an argument list, and as the last of an arrow
     /// function's parenthesized parameters while they are read.
     Spread(ExprId),
+    /// An optional chain (`a?.b.c`, `a?.[k]`, `f?.()`): its accesses and calls, the
+    /// [`Expr::Optional`] steps among them included. It is `undefined` when one of those steps
+    /// finds `undefined` or `null`, and the rest of the chain is skipped.
+    OptionalChain(ExprId),
+    /// The object or function before `?.` in an [`Expr::OptionalChain`].
+    Optional(ExprId),
     /// `yield`, `yield expression` or (`delegate`) `yield* expression` in a generator function's
     /// body (ECMA-262 2015 section 14.4).
     Yield {
@@ -275,20 +301,33 @@ pub enum XmlNamePart {
     Computed(ExprId),
 }
 
+/// What a declaration, a parameter or a catch clause binds: a name, or with
+/// [`crate::Options::es2015`] a destructuring pattern (ECMA-262 11th edition, section 13.3.3).
+///
+/// A pattern is an [`Expr::Array`] or an [`Expr::Object`] whose targets are [`Expr::Ident`]
+/// names or nested patterns; an [`Expr::Assign`] with no operator gives a target its default
+/// value, and an [`Expr::Spread`] as the last element of an array pattern is its rest element.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Binding {
+    Name(Name),
+    Pattern(ExprId),
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct VarDecl {
-    pub name: Name,
+    pub target: Binding,
     pub init: Option<ExprId>,
 }
 
-/// What a `for (… in …)` statement assigns each property name to.
+/// What a `for (… in …)` or `for (… of …)` statement assigns each property name or value to.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ForInTarget {
     /// `for (var x in o)`, with the declaration's initializer if it has one.
     Var(VarDecl),
+    /// An assignment target, or with [`crate::Options::es2015`] an assignment pattern.
     Expr(ExprId),
     /// `for (let x in o)` or `for (const x in o)`: a new binding for each name.
-    Lexical(LexKind, Name),
+    Lexical(LexKind, Binding),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -310,7 +349,7 @@ pub struct SwitchCase {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CatchClause {
-    pub param: Name,
+    pub param: Binding,
     pub body: Vec<StmtId>,
 }
 
@@ -349,6 +388,12 @@ pub enum Stmt {
         body: StmtId,
         each: bool,
     },
+    /// `for (… of …)` with [`crate::Options::es2015`] (ECMA-262 11th edition, section 13.7.5).
+    ForOf {
+        target: ForInTarget,
+        iterable: ExprId,
+        body: StmtId,
+    },
     /// `default xml namespace = expression;`.
     DefaultXmlNamespace(ExprId),
     Continue(Option<Name>),
@@ -383,6 +428,8 @@ pub enum FunctionKind {
     Setter,
     /// An arrow function; one with an expression body has a body of one `return` statement.
     Arrow,
+    /// A method in an object literal.
+    Method,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -390,11 +437,11 @@ pub struct Function {
     pub kind: FunctionKind,
     pub name: Option<Name>,
     /// The parameters before a rest parameter.
-    pub params: Vec<Name>,
+    pub params: Vec<Binding>,
     /// Each parameter's default value, in the order of `params` (empty when none has one).
     pub defaults: Vec<Option<ExprId>>,
-    /// The rest parameter (`...name`).
-    pub rest: Option<Name>,
+    /// The rest parameter (`...name` or `...[pattern]`).
+    pub rest: Option<Binding>,
     pub body: Vec<StmtId>,
     /// The function's code is strict mode code: its own directive prologue holds `"use strict"`,
     /// or the code around it is strict.
@@ -405,9 +452,9 @@ pub struct Function {
 }
 
 impl Function {
-    /// The parameters are plain names: no default value and no rest parameter.
+    /// The parameters are plain names: no pattern, no default value and no rest parameter.
     pub fn simple_params(&self) -> bool {
-        self.rest.is_none() && self.defaults.iter().all(Option::is_none)
+        self.rest.is_none() && self.defaults.iter().all(Option::is_none) && self.params.iter().all(|p| matches!(p, Binding::Name(_)))
     }
 }
 
@@ -438,6 +485,34 @@ impl Ast {
 
     pub fn function(&self, id: FunctionId) -> Option<&Function> {
         self.functions.get(id.0 as usize)
+    }
+
+    /// The names a binding binds, in source order.
+    pub fn bound_names(&self, binding: &Binding) -> Vec<Name> {
+        match binding {
+            Binding::Name(n) => vec![n.clone()],
+            Binding::Pattern(p) => self.pattern_names(*p),
+        }
+    }
+
+    /// The names a destructuring pattern binds, in source order, walked without recursion.
+    pub fn pattern_names(&self, pattern: ExprId) -> Vec<Name> {
+        let mut out = Vec::new();
+        let mut work = vec![pattern];
+        while let Some(id) = work.pop() {
+            match self.expr(id) {
+                Some(Expr::Ident(n)) => out.push(Name { name: n.clone(), span: self.expr_span(id) }),
+                Some(Expr::Array(elements)) => work.extend(elements.iter().rev().flatten().copied()),
+                Some(Expr::Object(props)) => work.extend(props.iter().rev().filter_map(|p| match p.value {
+                    PropertyValue::Init(e) => Some(e),
+                    _ => None,
+                })),
+                Some(Expr::Assign { target, .. }) => work.push(*target),
+                Some(Expr::Spread(arg)) => work.push(*arg),
+                _ => {}
+            }
+        }
+        out
     }
 
     /// The expression with any parentheses around it removed.

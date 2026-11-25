@@ -10,7 +10,7 @@
 //! object once it is done.
 
 use super::{create_at, data, native, new_array, new_string};
-use crate::heap::{CONFIGURABLE, Class, HIDDEN, OBJECT_BYTES, OPEN, ObjId, Object, PROP_BYTES, Prop, key};
+use crate::heap::{CONFIGURABLE, Class, HIDDEN, OBJECT_BYTES, OPEN, ObjId, Object, PROP_BYTES, Prop, key, string_bytes};
 use crate::interp::{Interp, JsResult};
 use crate::value::{Str, Value, number_to_str};
 
@@ -77,9 +77,15 @@ fn return_this(_: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Va
     Ok(this)
 }
 
+/// The bytes of an iterator result: the object and its `value` and `done` properties with their
+/// keys, as [`Interp::define`] counts them.
+fn iter_result_bytes() -> usize {
+    OBJECT_BYTES + 2 * PROP_BYTES + string_bytes("value".len()) + string_bytes("done".len())
+}
+
 /// CreateIterResultObject (section 7.4.7): `{ value, done }`.
 pub(crate) fn iter_result(interp: &mut Interp, value: Value, done: bool) -> JsResult<Value> {
-    interp.rooted(std::slice::from_ref(&value), |i| i.reserve_heap(OBJECT_BYTES + 2 * PROP_BYTES))?;
+    interp.rooted(std::slice::from_ref(&value), |i| i.reserve_heap(iter_result_bytes()))?;
     let proto = interp.intrinsics.object_proto;
     let o = interp.heap.alloc_object(Object::new(Class::Ordinary, Some(proto)));
     interp.define(o, key("value"), Prop::Data { value, flags: OPEN })?;

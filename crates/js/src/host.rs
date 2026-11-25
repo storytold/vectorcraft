@@ -169,7 +169,9 @@ pub enum ScriptItem {
     Line,
     /// The running frames of the script's code, outermost first, one a line as `name:line`: the
     /// global code is `[global]` and a function without a name `[anonymous]`. At most 64 frames
-    /// are listed, the innermost ones, after a line `…` when some are left out.
+    /// are listed, the innermost ones, after a line `…` when some are left out. A first line
+    /// `[name]` names the running script when the realm has its name
+    /// ([`crate::Realm::set_script_name`]).
     Stack,
 }
 
@@ -611,7 +613,7 @@ impl Interp {
             HostItem::Script(item) => match crate::builtins::extensions::getter(item) {
                 None => Prop::Data { value: Value::Object(self.global), flags: ENUMERABLE },
                 Some((name, f)) => {
-                    let get = crate::builtins::native(self, name, f, 0, crate::heap::NativeKind::Plain, false)?;
+                    let get = crate::builtins::accessor_native(self, "get ", name, f, 0)?;
                     Prop::Accessor { get: Some(get), set: None, flags: ENUMERABLE }
                 }
             },

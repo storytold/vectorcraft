@@ -526,8 +526,13 @@ impl Interp {
     }
 
     /// Steps 2 and 3 of ToPrimitive (section 7.1.1): the result of the object's
-    /// `@@toPrimitive` method called with the hint, or `None` when it has none.
+    /// `@@toPrimitive` method called with the hint, or `None` when it has none. Code run without
+    /// [`crate::Options::es2015`] reads no such method, even in a realm that has the well-known
+    /// Symbols from an earlier run.
     pub(crate) fn exotic_to_primitive(&mut self, o: ObjId, v: &Value, hint: Hint) -> JsResult<Option<Value>> {
+        if !self.options.es2015 {
+            return Ok(None);
+        }
         let Some(sym) = self.well_known(|w| &w.to_primitive) else { return Ok(None) };
         let f = self.get_sym_from(o, &sym, v)?;
         if f.is_nullish() {
@@ -549,8 +554,13 @@ impl Interp {
     }
 
     /// Steps 2 to 4 of InstanceofOperator (section 12.10.4): the answer of `f`'s
-    /// `@@hasInstance` method, or `None` when `f` is not an object or has none.
+    /// `@@hasInstance` method, or `None` when `f` is not an object or has none. Code run without
+    /// [`crate::Options::es2015`] reads no such method, so `instanceof` keeps the ECMAScript 5.1
+    /// check that the right side is a function.
     pub(crate) fn has_instance_hook(&mut self, v: &Value, f: &Value) -> JsResult<Option<bool>> {
+        if !self.options.es2015 {
+            return Ok(None);
+        }
         let Some(sym) = self.well_known(|w| &w.has_instance) else { return Ok(None) };
         let Value::Object(fid) = f else { return Ok(None) };
         let handler = self.get_sym_from(*fid, &sym, f)?;
@@ -577,9 +587,12 @@ impl Interp {
         }
     }
 
-    /// `target[@@hasInstance]` when it is callable, `None` when it is absent; anything else
-    /// throws a `TypeError`.
+    /// `target[@@hasInstance]` when it is callable, `None` when it is absent or the code runs
+    /// without [`crate::Options::es2015`]; anything else throws a `TypeError`.
     fn has_instance_handler(&mut self, target: ObjId) -> JsResult<Option<ObjId>> {
+        if !self.options.es2015 {
+            return Ok(None);
+        }
         let Some(sym) = self.well_known(|w| &w.has_instance) else { return Ok(None) };
         let handler = self.get_sym_from(target, &sym, &Value::Object(target))?;
         match handler {
@@ -589,8 +602,13 @@ impl Interp {
         }
     }
 
-    /// The `@@toStringTag` of `o` when it is a string (section 19.1.3.6, steps 15 and 16).
+    /// The `@@toStringTag` of `o` when it is a string (section 19.1.3.6, steps 15 and 16). Code
+    /// run without [`crate::Options::es2015`] reads no tag, so it gets the ECMAScript 5.1 result
+    /// even in a realm that has the well-known Symbols from an earlier run.
     pub(crate) fn string_tag_of(&mut self, o: ObjId) -> JsResult<Option<Str>> {
+        if !self.options.es2015 {
+            return Ok(None);
+        }
         let Some(sym) = self.well_known(|w| &w.to_string_tag) else { return Ok(None) };
         match self.get_sym_from(o, &sym, &Value::Object(o))? {
             Value::String(s) => Ok(Some(s)),

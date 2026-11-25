@@ -332,8 +332,8 @@ impl Interp {
         Ok(Some(f))
     }
 
-    /// [`Op::GetIterator`](crate::bytecode::Op::GetIterator): `value` → `iterator next`.
-    pub(crate) fn op_get_iterator(&mut self) -> JsResult<()> {
+    /// [`Op::DelegateIterator`](crate::bytecode::Op::DelegateIterator): `value` → `iterator next`.
+    pub(crate) fn op_delegate_iterator(&mut self) -> JsResult<()> {
         let v = self.peek(0)?;
         let Some(sym) = self.well_known(|w| &w.iterator) else { return internal("no Symbol.iterator in this realm") };
         let method = self.get_value_sym(&v, &sym)?;
