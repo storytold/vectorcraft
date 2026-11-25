@@ -2845,6 +2845,9 @@ digits	Malayalam	Malayalam
 	Scale Artwork with Artboard	Çalışma Yüzeyi ile Resmi Ölçeklendirin
 	Artboards: {n}	Çalışma yüzeyleri: {n}
 	Rearrange All Artboards…	Tüm Çalışma Yüzeylerini Yeniden Düzenleme…
+	Rearrange…	Yeniden Düzenle…
+	Selected Artboards: {n}	Seçili çalışma yüzeyleri: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Çalışma yüzeylerini yerleştirmek için tuvale tıklayın (Esc iptal eder)
 	Recall Selection	Seçimi Geri Çağır
 	RECENT	SON
 	Recent	Son

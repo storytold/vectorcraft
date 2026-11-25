@@ -3045,6 +3045,9 @@ digits	Malayalam	Malayalam
 	Scale Artwork with Artboard	Grafik mit Zeichenfläche skalieren
 	Artboards: {n}	Zeichenflächen: {n}
 	Rearrange All Artboards…	Alle Zeichenflächen neu anordnen…
+	Rearrange…	Neu anordnen…
+	Selected Artboards: {n}	Ausgewählte Zeichenflächen: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Klicken Sie auf die Arbeitsfläche, um die Zeichenflächen zu platzieren (Esc bricht ab)
 	Recall Selection	Auswahl abrufen
 	RECENT	ZULETZT VERWENDET
 	Recent	Zuletzt verwendet

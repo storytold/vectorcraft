@@ -3647,6 +3647,9 @@ mark-style	Japanese	Japán
 	Rearrange All	Összes átrendezése
 	Rearrange All Artboards	Összes rajztábla átrendezése
 	Rearrange All Artboards…	Összes rajztábla átrendezése…
+	Rearrange…	Átrendezés…
+	Selected Artboards: {n}	Kijelölt rajztáblák: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Kattints a vászonra a rajztáblák elhelyezéséhez (Esc: mégse)
 	Recall Selection	Kijelölés visszahívása
 	Recent	Legutóbbi
 	RECENT	LEGUTÓBBI

@@ -3003,6 +3003,9 @@ digits	Malayalam	Malayalam
 	Scale Artwork with Artboard	Skala grafik med rityta
 	Artboards: {n}	Ritytor: {n}
 	Rearrange All Artboards…	Ordna om alla ritytor…
+	Rearrange…	Ordna om…
+	Selected Artboards: {n}	Markerade ritytor: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Klicka på arbetsytan för att placera ritytorna (Esc avbryter)
 	Recall Selection	Hämta markering
 	RECENT	SENASTE
 	Recent	Senaste

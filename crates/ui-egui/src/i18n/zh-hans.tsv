@@ -2974,6 +2974,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Scale Artwork with Artboard	随画板缩放图稿
 	Artboards: {n}	画板：{n}
 	Rearrange All Artboards…	重新排列所有画板…
+	Rearrange…	重新排列…
+	Selected Artboards: {n}	选定的画板：{n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	单击画布以放置画板 (Esc 取消)
 	Recall Selection	召回选区
 	RECENT	最近使用
 	Recent	最近使用

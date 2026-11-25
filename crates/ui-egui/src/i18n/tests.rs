@@ -97,6 +97,7 @@ const UI_STRINGS: &[(&str, &[&str])] = &[
             "Low-Latency Drawing",
         ],
     ),
+    ("rearrange selected artboards", &["Rearrange…", "Selected Artboards: {n}"]),
 ];
 
 #[test]
@@ -115,6 +116,7 @@ fn strings_the_ui_shows_are_in_every_complete_catalog() {
 const MESSAGES: &[(&str, &[&str], &str, &str)] = &[
     ("Packaged 1 file in /out/card Folder", &[], "/out/card", "Packaged"),
     ("Packaged 3 files", &[], "", "Packaged"),
+    (crate::dialogs::rearrange_artboards::PLACE_HINT, &[], "", "Click on the canvas"),
     ("Packaged 1 file (fonts not copied: Mono) in /out/card (draft) v2", &[], "Mono", "Packaged"),
     ("command `object.group` is not available right now: nothing selected", &["es"], "`object.group`", "nothing selected"),
 ];

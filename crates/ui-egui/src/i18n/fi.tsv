@@ -358,6 +358,9 @@
 	Artboards	Piirtoalustat
 	Convert to Artboards	Muunna piirtoalustoiksi
 	Rearrange All Artboards…	Järjestä kaikki piirtoalustat uudelleen…
+	Rearrange…	Järjestä uudelleen…
+	Selected Artboards: {n}	Valitut piirtoalustat: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Sijoita piirtoalustat napsauttamalla kangasta (Esc peruuttaa)
 	Fit to Artwork Bounds	Sovita kuvituksen rajoihin
 	Fit to Selected Art	Sovita valittuun kuvitukseen
 	Graph	Kaavio

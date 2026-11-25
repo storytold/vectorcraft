@@ -406,6 +406,9 @@ digits	Malayalam	말라얄람어
 	Artboards	아트보드
 	Convert to Artboards	아트보드로 변환
 	Rearrange All Artboards…	모든 아트보드 재정렬…
+	Rearrange…	재정렬…
+	Selected Artboards: {n}	선택한 아트보드: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	캔버스를 클릭하여 아트보드를 배치하세요(Esc로 취소)
 	Fit to Artwork Bounds	아트워크 경계에 맞추기
 	Fit to Selected Art	선택한 아트에 맞추기
 	Graph	그래프

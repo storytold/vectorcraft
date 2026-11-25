@@ -344,6 +344,9 @@
 	Artboards	Radne ploče
 	Convert to Artboards	Pretvori u radne ploče
 	Rearrange All Artboards…	Preuredi sve radne ploče…
+	Rearrange…	Preuredi…
+	Selected Artboards: {n}	Odabrane radne ploče: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Kliknite na platno da postavite radne ploče (Esc otkazuje)
 	Fit to Artwork Bounds	Uklopi u granice crteža
 	Fit to Selected Art	Uklopi u odabrani crtež
 	Graph	Grafikon

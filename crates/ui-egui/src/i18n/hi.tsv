@@ -4397,6 +4397,9 @@ arrowhead	Feather	पंख
 	Rearrange All	सभी को फिर से व्यवस्थित करें
 	Rearrange All Artboards	सभी आर्टबोर्ड को फिर से व्यवस्थित करें
 	Rearrange All Artboards…	सभी आर्टबोर्ड को पुनर्व्यवस्थित करें…
+	Rearrange…	फिर से व्यवस्थित करें…
+	Selected Artboards: {n}	चुने गए आर्टबोर्ड: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	आर्टबोर्ड प्लेस करने के लिए कैनवास पर क्लिक करें (Esc से कैंसल करें)
 	Rearrange Artboards	रीरेंज आर्टबोर्ड
 	Recall Selection	सिलेक्शन वापस लाएँ
 	Recent	हाल के

@@ -3100,6 +3100,9 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Artboards	Tegneflader
 	Convert to Artboards	Konvertér til tegneflader
 	Rearrange All Artboards…	Omarrangér alle tegneflader…
+	Rearrange…	Omarrangér…
+	Selected Artboards: {n}	Markerede tegneflader: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Klik på lærredet for at placere tegnefladerne (Esc annullerer)
 	Fit to Artwork Bounds	Tilpas til grafikkens grænser
 	Fit to Selected Art	Tilpas til valgt grafik
 	Graph	Diagram

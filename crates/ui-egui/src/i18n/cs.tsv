@@ -351,6 +351,9 @@
 	Artboards	Pracovní plochy
 	Convert to Artboards	Převést na pracovní plochy
 	Rearrange All Artboards…	Přeuspořádat všechny pracovní plochy…
+	Rearrange…	Přeuspořádat…
+	Selected Artboards: {n}	Vybrané pracovní plochy: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Kliknutím na plátno umístíte pracovní plochy (Esc zruší)
 	Fit to Artwork Bounds	Přizpůsobit hranicím kresby
 	Fit to Selected Art	Přizpůsobit vybrané kresbě
 	Graph	Graf

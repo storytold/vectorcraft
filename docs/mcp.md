@@ -9573,21 +9573,48 @@ page in the page's order, and no entries for objects or the view: Cut (`artboard
 (`edit.paste`), Undo, Redo, New Artboard (`artboard.new`), Duplicate Artboards (`artboard.duplicate`), Rename
 (`artboard.rename`), Delete Artboards (`artboard.delete` with `indices`), Delete Empty Artboards
 (`artboard.deleteEmpty`), Select All Artboards (`artboard.selectAll`), Lock Artboards and Unlock Artboards
-(`artboard.setProps` with `locked`), Rearrange (`artboard.rearrange`), Fit to Artwork Bounds (`artboard.fitToArt`),
-Switch Orientation (`artboard.switchOrientation`), Artboard Options (`tool.options {tool: "artboard"}`) and Export
-(`file.exportForScreens`). Exit Isolation Mode and the Unlock submenu for locked objects under the pointer follow them.
-Cut, Copy, Duplicate Artboards, Rename, Delete Artboards, Lock Selected, Unlock Selected, Fit to Artwork Bounds, Switch
-Orientation and Export act on the artboards the tool has selected, else the active one. Artboard Options opens on the
-active artboard. New Artboard, Paste, Undo, Redo, Delete Empty Artboards, Select All Artboards and Rearrange do not act on
-the selected artboards. Lock All and Unlock All act on every artboard, and Lock All Except Selected acts on the artboards
-that are not selected. A right-click on an artboard that is not selected first selects it alone. An entry that cannot
-run is left out: Cut with a locked artboard or every artboard selected, Delete Artboards with no artboard to delete, Select All Artboards with every artboard selected, Rearrange with
-one artboard, Fit to Artwork Bounds with no art on a selected unlocked artboard, Switch Orientation with no selected
-artboard to change, and a lock entry with no artboard to change. The menu measures the art for Delete Empty Artboards and
+(`artboard.setProps` with `locked`), Rearrange (`artboard.rearrange` with `indices`), Fit to Artwork Bounds
+(`artboard.fitToArt`), Switch Orientation (`artboard.switchOrientation`), Artboard Options
+(`tool.options {tool: "artboard"}`) and Export (`file.exportForScreens`). Exit Isolation Mode and the Unlock submenu
+for locked objects under the pointer follow them. Cut, Copy, Duplicate Artboards, Rename, Delete Artboards, Lock
+Selected, Unlock Selected, Rearrange, Fit to Artwork Bounds, Switch Orientation and Export act on the artboards the tool
+has selected, else the active one. Artboard Options opens on the active artboard. New Artboard, Paste, Undo, Redo,
+Delete Empty Artboards and Select All Artboards do not act on the selected artboards. Lock All and Unlock All act on
+every artboard, and Lock All Except Selected acts on the artboards that are not selected. A right-click on an artboard
+that is not selected first selects it alone. An entry that cannot run is left out: Cut with a locked artboard or every
+artboard selected, Delete Artboards with no artboard to delete, Select All Artboards with every artboard selected, Fit
+to Artwork Bounds with no art on a selected unlocked artboard, Switch Orientation with no selected artboard to change,
+and a lock entry with no artboard to change. The menu measures the art for Delete Empty Artboards and
 Fit to Artwork Bounds once, at the right-click. Paste centers copied artboards on the right-click's point
 (`edit.paste {artboardsAt: [x, y]}`) and centers copied objects there too (`center`). Chosen from a menu or the command
 palette with the tool in use, `artboard.new` makes the new artboard active, `artboard.duplicate` selects the copies,
 and `artboard.delete` and `artboard.deleteEmpty` make a remaining artboard active.
+
+Rearrange for selected artboards: the
+[Rearrange artboards](https://helpx.adobe.com/illustrator/desktop/create-manage-artboards/organize-manage-artboards/rearrange-artboards.html)
+help page describes rearranging only the artboards picked with the Artboard tool, with the same layout, order, count,
+spacing and move-artwork choices as for all artboards, and a click on the canvas that puts the arrangement in place.
+`artboard.rearrange {indices: [n…]}` lays out only those artboards (zero-based, sorted, an index given twice counts once),
+in document order, and leaves every other artboard, its art and its guides where they are; `at: [x, y]` puts the
+grid's top-left there, else at the first listed artboard's top-left. A listed locked artboard stays where it is and
+keeps its cell. With `moveArtwork`, an object moves with the listed artboard its center is on; an object whose center
+is on another artboard stays. `indices` that is not a list, an empty list, an entry that is not a whole number and an
+`at` that is not [x, y] are refused before anything moves, and an index past the last artboard is `no such artboard`.
+The reply adds `indices` and `moved`, the number of artboards that moved; with none moved (every listed artboard
+locked, or already in place) no undo step is recorded. Without `indices` the command lays out every artboard, and its
+reply is `{artboards, rows, columns}`; `at` there puts the grid's top-left at `at` too. In the desktop app, the
+Artboard tool's canvas menu and Contextual Task Bar (Rearrange), and while the Artboard tool is in use the Artboards
+panel's menu (Rearrange…), open the Rearrange dialog (kind `rearrangeArtboards` with field `indices`) for the
+artboards the tool has selected, showing their count. With another tool Rearrange… is off. The panel's Rearrange
+button stays Rearrange All Artboards. Its OK changes nothing yet: the grid's outline follows the pointer, and the
+next press on the canvas runs `artboard.rearrange` with `indices` and `at` at the press, as one undo step. Enter, when
+no other control has the keyboard focus, runs it with `at` at the pointer over the canvas, else without `at` (the grid at the first selected artboard's top-left).
+A press with Space held pans or zooms as usual and places nothing. Esc, another tool or another document cancels it
+without an edit. The status bar reads "Click on the canvas to place the
+artboards (Esc cancels)" meanwhile. The top-left reference point, the outline, the fallback to the first artboard's
+corner and the rules for locked artboards and art on other artboards are VectorCraft's own. Object › Artboards ›
+Rearrange All Artboards…, the Artboards panel's Rearrange All Artboards… and the Properties panel's Rearrange All still
+lay out every artboard at once.
 
 Locked artboards: `artboard.setProps {index, locked: true}` locks an artboard and `{index, locked: false}` unlocks it,
 each in one undo step. The Artboards panel's lock column, left of a row's options icon, shows a lock on a locked

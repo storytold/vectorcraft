@@ -3070,6 +3070,9 @@ digits	Malayalam	Malayalam
 	Scale Artwork with Artboard	Mettre à l’échelle l’illustration avec le plan de travail
 	Artboards: {n}	Plans de travail : {n}
 	Rearrange All Artboards…	Réorganiser tous les plans de travail…
+	Rearrange…	Réorganiser…
+	Selected Artboards: {n}	Plans de travail sélectionnés ({n})
+@msg	Click on the canvas to place the artboards (Esc cancels)	Cliquez sur la zone de travail pour placer les plans de travail (Échap pour annuler)
 	Recall Selection	Rappeler la sélection
 	RECENT	RÉCENTS
 	Recent	Récents

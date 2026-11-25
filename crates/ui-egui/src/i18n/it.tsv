@@ -3130,6 +3130,9 @@ digits	Malayalam	Malayalam
 	Scale Artwork with Artboard	Scala la grafica con la tavola da disegno
 	Artboards: {n}	Tavole da disegno: {n}
 	Rearrange All Artboards…	Ridisponi tutte le tavole da disegno…
+	Rearrange…	Ridisponi…
+	Selected Artboards: {n}	Tavole da disegno selezionate: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Fai clic sull'area di lavoro per posizionare le tavole da disegno (Esc annulla)
 	Recall Selection	Richiama selezione
 	RECENT	RECENTI
 	Recent	Recenti

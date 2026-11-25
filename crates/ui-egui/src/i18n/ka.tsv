@@ -2496,6 +2496,9 @@
 	Artboards	სამუშაო დაფები
 	Convert to Artboards	სამუშაო დაფებად გარდაქმნა
 	Rearrange All Artboards…	ყველა სამუშაო დაფის გადალაგება…
+	Rearrange…	გადალაგება…
+	Selected Artboards: {n}	მონიშნული სამუშაო დაფები: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	დაწკაპეთ ტილოზე სამუშაო დაფების განსათავსებლად (Esc აუქმებს)
 	Fit to Artwork Bounds	ნახატის საზღვრებზე მორგება
 	Fit to Selected Art	მონიშნულ ნახატზე მორგება
 	Graph	დიაგრამა

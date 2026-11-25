@@ -2562,6 +2562,9 @@ digits	Malayalam	Malaiala
 	Scale Artwork with Artboard	Dimensionar Arte com a Mesa de Trabalho
 	Artboards: {n}	Mesas de Trabalho: {n}
 	Rearrange All Artboards…	Reorganizar Todas as Mesas de Trabalho…
+	Rearrange…	Reorganizar…
+	Selected Artboards: {n}	Mesas de Trabalho Selecionadas: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Clique na tela para posicionar as mesas de trabalho (Esc cancela)
 	Recall Selection	Relembrar Seleção
 	Recent Colors	Cores Recentes
 	Recent Files	Arquivos Recentes

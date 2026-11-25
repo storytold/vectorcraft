@@ -3947,6 +3947,9 @@ digits	Malayalam	Μαλαγιάλαμ
 	Scale Artwork with Artboard	Κλιμάκωση σχεδίου μαζί με τον πίνακα σχεδίασης
 	Artboards: {n}	Πίνακες σχεδίασης: {n}
 	Rearrange All Artboards…	Αναδιάταξη όλων των πινάκων σχεδίασης…
+	Rearrange…	Αναδιάταξη…
+	Selected Artboards: {n}	Επιλεγμένοι πίνακες σχεδίασης: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Κάντε κλικ στον καμβά για να τοποθετήσετε τους πίνακες σχεδίασης (Esc για ακύρωση)
 	Recall Selection	Ανάκληση επιλογής
 	RECENT	ΠΡΟΣΦΑΤΑ
 	Recent Colors	Πρόσφατα χρώματα

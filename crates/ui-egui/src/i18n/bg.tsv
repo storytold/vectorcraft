@@ -2977,6 +2977,9 @@ digits	Malayalam	Малаялам
 	Scale Artwork with Artboard	Мащабиране на графиката заедно с работната област
 	Artboards: {n}	Работни области: {n}
 	Rearrange All Artboards…	Пренареждане на всички работни области…
+	Rearrange…	Пренареждане…
+	Selected Artboards: {n}	Избрани работни области: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Кликнете върху платното, за да поставите работните области (Esc отменя)
 	Recall Selection	Възстановяване на селекцията
 	RECENT	СКОРОШНИ
 	Recent	Скорошни

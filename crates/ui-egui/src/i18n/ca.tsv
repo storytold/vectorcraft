@@ -3799,6 +3799,9 @@ digits	Malayalam	Malaiàlam
 	Rearrange All	Reorganitza-ho tot
 	Rearrange All Artboards	Reorganitza tots els taulers
 	Rearrange All Artboards…	Reorganitza tots els taulers…
+	Rearrange…	Reorganitza…
+	Selected Artboards: {n}	Taulers seleccionats: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Fes clic al llenç per col·locar els taulers (Esc cancel·la)
 	Rearrange Artboards	Reorganitza els taulers
 	Recall Selection	Recupera la selecció
 	RECENT	RECENTS

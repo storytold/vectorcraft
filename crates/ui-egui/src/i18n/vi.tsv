@@ -3439,6 +3439,9 @@ mark-style	Japanese	Kiểu Nhật
 	Rearrange All	Sắp xếp lại tất cả
 	Rearrange All Artboards	Sắp xếp lại tất cả bảng vẽ
 	Rearrange All Artboards…	Sắp xếp lại tất cả bảng vẽ…
+	Rearrange…	Sắp xếp lại…
+	Selected Artboards: {n}	Bảng vẽ đã chọn: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Bấm vào khung vẽ để đặt các bảng vẽ (Esc để hủy)
 	Recall Selection	Khôi phục vùng chọn
 	RECENT	GẦN ĐÂY
 	Recent	Gần đây

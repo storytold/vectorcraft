@@ -3112,6 +3112,9 @@ digits	Malayalam	Малаялам
 	Scale Artwork with Artboard	Масштабировать иллюстрацию вместе с монтажной областью
 	Artboards: {n}	Монтажные области: {n}
 	Rearrange All Artboards…	Переставить все монтажные области…
+	Rearrange…	Переставить…
+	Selected Artboards: {n}	Выбранные монтажные области: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Щёлкните холст, чтобы разместить монтажные области (Esc отменяет)
 	Recall Selection	Восстановить выделение
 	RECENT	ПОСЛЕДНИЕ
 	Recent	Последние

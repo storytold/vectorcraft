@@ -3082,6 +3082,9 @@
 	Rearrange All	બધું ફરીથી ગોઠવો
 	Rearrange All Artboards	બધા આર્ટબોર્ડ ફરીથી ગોઠવો
 	Rearrange All Artboards…	બધા આર્ટબોર્ડ ફરીથી ગોઠવો…
+	Rearrange…	ફરીથી ગોઠવો…
+	Selected Artboards: {n}	પસંદ કરેલા આર્ટબોર્ડ: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	આર્ટબોર્ડ મૂકવા કેનવાસ પર ક્લિક કરો (Esc રદ કરે છે)
 	Rearrange Artboards	આર્ટબોર્ડ ફરીથી ગોઠવો
 	Recall Selection	પસંદગી યાદ કરો
 	Recent Colors	તાજેતરના રંગો

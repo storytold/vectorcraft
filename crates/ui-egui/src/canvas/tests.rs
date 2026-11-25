@@ -4227,9 +4227,9 @@ fn task_bar_actions(app: &mut VectorcraftApp) -> Vec<&'static str> {
 }
 
 /// The Artboard tool's Contextual Task Bar buttons act on its selected artboards: Resize opens
-/// Artboard Options for the active one, Rearrange All opens Rearrange All Artboards, Export opens
-/// Export for Screens with the selected artboards checked, and Duplicate copies each selected
-/// artboard in one undo step and selects the copies.
+/// Artboard Options for the active one, Rearrange opens Rearrange for the selected artboards,
+/// Export opens Export for Screens with the selected artboards checked, and Duplicate copies each
+/// selected artboard in one undo step and selects the copies.
 #[test]
 fn the_artboard_tools_task_bar_buttons_act_on_the_selected_artboards() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -4245,8 +4245,8 @@ fn the_artboard_tools_task_bar_buttons_act_on_the_selected_artboards() {
     }
     click(&mut app, "Resize");
     assert_eq!(fields_then_cancel::<crate::dialogs::artboard_options::ArtboardOptionsDialog>(&mut app)["index"], json!(2), "Artboard Options");
-    click(&mut app, "Rearrange All");
-    fields_then_cancel::<crate::dialogs::rearrange_artboards::RearrangeArtboardsDialog>(&mut app);
+    click(&mut app, "Rearrange");
+    assert_eq!(fields_then_cancel::<crate::dialogs::rearrange_artboards::RearrangeArtboardsDialog>(&mut app)["indices"], json!([0, 2]), "Rearrange");
     click(&mut app, "Export");
     assert_eq!(fields_then_cancel::<crate::dialogs::ExportForScreensDialog>(&mut app)["boards"], json!([true, false, true]), "Export for Screens");
 

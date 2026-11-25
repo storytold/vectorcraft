@@ -961,6 +961,9 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Artboards	Tekengebieden
 	Convert to Artboards	Converteren naar tekengebieden
 	Rearrange All Artboards…	Alle tekengebieden herschikken…
+	Rearrange…	Herschikken…
+	Selected Artboards: {n}	Geselecteerde tekengebieden: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Klik op het canvas om de tekengebieden te plaatsen (Esc annuleert)
 	Fit to Artwork Bounds	Op artworkgrenzen passend maken
 	Fit to Selected Art	Op geselecteerd artwork passend maken
 	Graph	Grafiek

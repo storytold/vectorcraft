@@ -413,6 +413,9 @@ digits	Malayalam	マラヤーラム数字
 	Artboards	アートボード
 	Convert to Artboards	アートボードに変換
 	Rearrange All Artboards…	すべてのアートボードを再配置…
+	Rearrange…	再配置…
+	Selected Artboards: {n}	選択したアートボード: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	キャンバスをクリックしてアートボードを配置します (Esc でキャンセル)
 	Fit to Artwork Bounds	アートワーク境界に合わせる
 	Fit to Selected Art	選択オブジェクトに合わせる
 	Graph	グラフ

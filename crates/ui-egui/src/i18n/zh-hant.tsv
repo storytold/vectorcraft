@@ -4420,6 +4420,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Scale Artwork with Artboard	隨工作區域縮放圖稿
 	Artboards: {n}	工作區域：{n}
 	Rearrange All Artboards…	重新排列所有工作區域…
+	Rearrange…	重新排列…
+	Selected Artboards: {n}	選取的工作區域：{n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	按一下畫布以放置工作區域 (Esc 取消)
 	Recall Selection	叫出選取範圍
 	RECENT	最近使用
 	Recent	最近使用

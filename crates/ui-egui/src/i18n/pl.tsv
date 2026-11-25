@@ -311,6 +311,9 @@
 	Artboards	Obszary kompozycji
 	Convert to Artboards	Konwertuj na obszary kompozycji
 	Rearrange All Artboards…	Przestaw wszystkie obszary kompozycji…
+	Rearrange…	Przestaw…
+	Selected Artboards: {n}	Zaznaczone obszary kompozycji: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Kliknij obszar roboczy, aby umieścić obszary kompozycji (Esc anuluje)
 	Fit to Artwork Bounds	Dopasuj do granic kompozycji
 	Fit to Selected Art	Dopasuj do zaznaczonej kompozycji
 	Graph	Wykres

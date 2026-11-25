@@ -975,6 +975,9 @@
 	Artboards	Artboard
 	Convert to Artboards	Konversi ke artboard
 	Rearrange All Artboards…	Atur ulang semua artboard…
+	Rearrange…	Atur ulang…
+	Selected Artboards: {n}	Artboard terpilih: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Klik kanvas untuk menempatkan artboard (Esc membatalkan)
 	Fit to Artwork Bounds	Sesuaikan ke batas karya seni
 	Fit to Selected Art	Sesuaikan ke karya seni terseleksi
 	Graph	Grafik

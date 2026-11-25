@@ -3082,6 +3082,9 @@ digits	Malayalam	Malayálam
 	Scale Artwork with Artboard	Escalar la ilustración con la mesa de trabajo
 	Artboards: {n}	Mesas de trabajo: {n}
 	Rearrange All Artboards…	Reorganizar todas las mesas de trabajo…
+	Rearrange…	Reorganizar…
+	Selected Artboards: {n}	Mesas de trabajo seleccionadas: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Haz clic en el lienzo para colocar las mesas de trabajo (Esc cancela)
 	Recall Selection	Recuperar selección
 	RECENT	RECIENTES
 	Recent	Recientes
