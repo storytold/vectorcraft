@@ -64,7 +64,7 @@ fn run_frame(
         }
     });
     // The commands the frame fired run as the host's next frame begins (`testing::app_frame`).
-    craft::ui::shell::embed::before_input(ctx, |output| app.frame_input(output));
+    crate::testing::run_fired(app, ctx);
     out.textures_delta.clear();
     (passes, out.platform_output.ime)
 }

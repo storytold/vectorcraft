@@ -125,10 +125,7 @@ impl Mac {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 850.0))),
             ..Default::default()
         };
-        let app = &mut self.app;
-        craft::ui::shell::embed::before_input(&self.ctx, |out| app.frame_input(out));
-
-        crate::testing::app_frame(app, &self.ctx, raw)
+        crate::testing::app_frame(&mut self.app, &self.ctx, raw)
     }
 
     /// AppKit chose an item by its key equivalent `sc`. A paste the menu asks the host for
