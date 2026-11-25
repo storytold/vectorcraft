@@ -398,6 +398,31 @@ pub fn adapter_order(
     order.into_iter().map(|(i, _)| i).collect()
 }
 
+/// [`adapter_order`] without the adapters a restart left out after they failed (`skip`) and those
+/// that crashed an earlier start (`crashed`), and `true` when that left none and the ones that
+/// crashed are tried again. A crash record can't stop a start that has no other adapter to try:
+/// the record may be from a start ended from outside before its first frame (#9183), which looks
+/// the same as a crash in the driver. An adapter in `skip` failed in this run of the app and
+/// stays left out.
+pub fn order_leaving_out(
+    candidates: &[Candidate],
+    power: PowerPreference,
+    displays: &[DisplayGpu],
+    compositor: Option<(u32, u32)>,
+    named: Option<&str>,
+    skip: &[String],
+    crashed: &[String],
+) -> (Vec<usize>, bool) {
+    let left_out: Vec<String> = skip.iter().chain(crashed).cloned().collect();
+    let order = adapter_order(candidates, power, displays, compositor, named, &left_out);
+    if !order.is_empty() || crashed.is_empty() {
+        return (order, false);
+    }
+    let again = adapter_order(candidates, power, displays, compositor, named, skip);
+    let retried = !again.is_empty();
+    (again, retried)
+}
+
 /// wgpu's own ranking for a power preference: the preferred kind of GPU, the other kind, unknown,
 /// virtual, software.
 fn power_rank(t: DeviceType, power: PowerPreference) -> u8 {
@@ -683,7 +708,7 @@ impl Startup {
                 return LeftOut::default();
             }
         };
-        let (record, crash) = StartRecord::begin(previous, env!("CARGO_PKG_VERSION"), preference_name(preference));
+        let (record, crash) = StartRecord::begin(previous, vectorcraft_ui_egui::os_window::version(), preference_name(preference));
         let left_out = record.left_out(crash.clone(), explicit);
         match &crash {
             Some(Crash::Adapter { key, name }) => {
@@ -845,10 +870,9 @@ pub fn selector(
 ) -> NativeAdapterSelectorMethod {
     let named = std::env::var(NAME_ENV).ok();
     let skip = skipped();
-    let left_out: Vec<String> = skip.iter().chain(&crashed).cloned().collect();
     Arc::new(move |adapters, surface| {
         let candidates: Vec<Candidate> = adapters.iter().map(|a| Candidate::new(a, surface)).collect();
-        let order = adapter_order(&candidates, power, &displays, compositor, named.as_deref(), &left_out);
+        let (order, retried) = order_leaving_out(&candidates, power, &displays, compositor, named.as_deref(), &skip, &crashed);
         let listed: Vec<String> = candidates
             .iter()
             .map(|c| {
@@ -872,6 +896,9 @@ pub fn selector(
             })
             .collect();
         log::info!("graphics adapters: {}", listed.join("; "));
+        if retried {
+            log::warn!("every graphics adapter that can show the window crashed an earlier start: trying them again");
+        }
         let first = order.first().and_then(|&i| adapters.get(i).zip(candidates.get(i)));
         let Some((adapter, chosen)) = first else {
             startup.none_left();

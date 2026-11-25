@@ -148,6 +148,14 @@ fn nine_slice_painted_effects_are_raster_effects() {
     }
 }
 
+/// The effects that leave a colorized image overprinting as a whole are the geometry effects.
+#[test]
+fn image_overprint_reshaping_effects_are_the_geometry_effects() {
+    for id in crate::catalog::catalog_index().keys() {
+        assert_eq!(vectorcraft_doc::overprint::reshapes_only(id), is_geometry(id), "{id}");
+    }
+}
+
 #[test]
 fn open_paths_stay_open() {
     let line = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(50.0, 20.0), Point::new(100.0, 0.0)], false));
@@ -701,21 +709,22 @@ fn a_nested_groups_gradient_follows_its_warped_image() {
 }
 
 /// An image under a geometry effect other than a Warp draws as the image does: colorized by
-/// a grayscale image's fill color, and smoothed or not.
+/// a grayscale image's fill color, overprinting as it does, and smoothed or not.
 #[test]
 fn an_image_under_a_geometry_effect_keeps_its_color_and_smoothing() {
     let mut n = (*warp_test_image(1)).clone();
     n.appearance.effects = vec![fx("distort.roughen", json!({"size": 5, "detail": 10}))];
     n.extras_mut().colorize = Some(Box::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0))));
+    n.extras_mut().colorize_overprint = true;
     n.extras_mut().pixelated = true;
     let art = crate::reshape::reshape(None, &n, None).unwrap();
     let mut seen = vec![];
     art.walk(&mut |c| {
         if matches!(c.kind, NodeKind::Image(_)) {
-            seen.push((c.extras().colorize.clone(), c.extras().pixelated));
+            seen.push((c.extras().colorize.clone(), c.colorize_overprints(), c.extras().pixelated));
         }
     });
-    assert_eq!(seen, vec![(n.extras().colorize.clone(), true)]);
+    assert_eq!(seen, vec![(n.extras().colorize.clone(), true, true)]);
 }
 
 /// What `effects` make of `path` within `budget`.

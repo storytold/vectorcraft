@@ -59,6 +59,37 @@ impl Session {
 
     /// Execute a command by id. This is THE entry point for every frontend.
     pub fn execute(&mut self, id: &str, params: &Value) -> Result<Value> {
+        // Plug-ins still loading on other threads ([`Session::load_plugins_in_background`]) are
+        // installed before a plug-in command, its own commands included, and before a command that
+        // may edit, as they would have been before the window showed; a step of a batch waits for
+        // the plug-ins an earlier step started loading.
+        if self.plugins_loading() && crate::waits_for_plugin_loads(id) {
+            self.finish_plugin_loads();
+        }
+        self.revealing(|s| s.execute_unwatched(id, params))
+    }
+
+    /// Run `f`, a top-level entry that changes the active document's rows, current layer or
+    /// selection, then ask the Layers panel to reveal what it changed ([`DocState::request_reveal`]).
+    /// Nothing is asked inside a command, while an interaction is open or while a tool is busy: the
+    /// entry that ends them asks.
+    pub(super) fn revealing<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        let before = (self.depth == 0 && !self.tool_busy()).then(|| self.active().map(crate::DocState::layers_view)).flatten();
+        let r = f(self);
+        if let Some(before) = before {
+            self.reveal_since(&before);
+        }
+        r
+    }
+
+    /// Ask the Layers panel of the active document to reveal what changed since `before`.
+    pub(super) fn reveal_since(&mut self, before: &crate::doc_state::LayersView) {
+        if let Some(st) = self.active_mut() {
+            st.request_reveal(before);
+        }
+    }
+
+    fn execute_unwatched(&mut self, id: &str, params: &Value) -> Result<Value> {
         let spec = find_command(id).ok_or_else(|| cmd::params::unknown_command(id))?;
         // A clipboard import is a query that replaces the clipboard, which the end of a run sets too.
         if self.depth == 0 && self.script_key.is_some() && (waits_for_tool_edit(id) || id.starts_with("clipboard.import")) {
@@ -75,10 +106,17 @@ impl Session {
             self.finish_tool_edit_later()?;
         }
         let outer = std::mem::replace(&mut self.reading, !spec.journal || JOURNALED_READS.contains(&id));
+        // A command from outside the tool, while the tool's drag is in progress, is a step of its
+        // own before the drag's ([`Session::outside_interaction`]). Find Objects with `select` is
+        // journaled (`Session::journal_query`), so it is one too.
+        let find_selects = id == "document.find" && params.get("select").and_then(Value::as_bool) == Some(true);
+        let outside = (spec.journal || find_selects) && !self.previewing && !self.in_tool_actions;
         // A preview that a top-level command applied first (a drag with Real-time Drawing off, kept
         // before Undo) reports its warning in the command's result.
         let r = if self.depth == 0 {
-            let (r, settled) = self.collect_settled_warnings(|s| s.execute_spec(spec, id, params));
+            let (r, settled) = self.collect_settled_warnings(|s| {
+                if outside { s.outside_interaction(id, params, |s| s.execute_spec(spec, id, params)) } else { s.execute_spec(spec, id, params) }
+            });
             r.map(|v| with_settled_warnings(v, &settled))
         } else {
             self.execute_spec(spec, id, params)
@@ -161,6 +199,7 @@ impl Session {
             self.journal_note.clear();
             self.note_depth = 1;
             self.journal_query = false;
+            self.defaults_only_ran = None;
             self.batch_stash = None;
             self.batch_steps = None;
         }
@@ -263,8 +302,9 @@ impl Session {
     }
 
     /// Record `key: value` in the running top-level command's journal entry (or its interaction's
-    /// preview, or its step in a batch) unless its params give `key` (a null gives nothing): a value
-    /// it resolved from the preferences or the clock.
+    /// preview, or its step in a batch) unless its params give `key` (a null gives nothing, and a
+    /// noted `defaultsOnly` replaces the params' own): a value it resolved from the preferences or
+    /// the clock.
     pub fn note_journal(&mut self, key: &str, value: Value) {
         if self.depth == self.note_depth {
             self.journal_note.insert(key.to_string(), value);
@@ -359,9 +399,10 @@ impl Session {
         let mut note = std::mem::take(&mut self.journal_note);
         match params {
             // The params' own values win, except a null: it reads as a key left out, so the
-            // noted value is the one the command resolved. An object noted for an object the params
-            // give (`effect.apply`'s `params`) is merged by the same rule, so the keys the command
-            // filled in stay.
+            // noted value is the one the command resolved. A noted `defaultsOnly` wins too: the
+            // Live Paint Bucket kept the command to the defaults although the params gave `false`.
+            // An object noted for an object the params give (`effect.apply`'s `params`) is merged
+            // by the same rule, so the keys the command filled in stay.
             Value::Object(m) if !note.is_empty() => {
                 for (k, v) in m {
                     if let (Some(Value::Object(resolved)), Value::Object(given)) = (note.get_mut(k), v) {
@@ -372,7 +413,7 @@ impl Session {
                         }
                         continue;
                     }
-                    if !v.is_null() || !note.contains_key(k) {
+                    if (!v.is_null() && k != "defaultsOnly") || !note.contains_key(k) {
                         note.insert(k.clone(), v.clone());
                     }
                 }

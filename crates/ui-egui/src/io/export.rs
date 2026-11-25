@@ -66,6 +66,9 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     let params = &if params.is_object() { params.clone() } else { json!({}) };
     let (selection, params) = take_selection(params)?;
     let params = &params;
+    // An exporter plug-in, or a live effect's, that the launch is still loading is installed
+    // before the format is looked up and the document drawn.
+    app.session.finish_plugin_loads();
     let f = fileio::writable_format(format, path.as_deref())?;
     // A Shape Builder merge still being computed for a click is exported with the document.
     let r = app.session.finish_tool_edit();
@@ -90,7 +93,25 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     let own_title = fileio::has_own_title(&doc);
     let doc = fileio::titled_for_export(&doc, st.path.as_deref(), f.id).map_or(doc, std::sync::Arc::new);
     let uid = st.uid;
-    let path = export_path(app, path, f)?;
+    let export = Export { f, selection, params: params.clone(), doc, own_title, uid };
+    export_path(app, path, f, move |app, path| write_export(app, export, path))
+}
+
+/// What an [`export`] has made ready before it knows the file.
+struct Export {
+    f: &'static super::Format,
+    selection: bool,
+    params: Value,
+    doc: std::sync::Arc<vectorcraft_doc::Document>,
+    own_title: bool,
+    uid: u64,
+}
+
+/// The rest of an [`export`] once its file is known: the questions about replacing files, then
+/// the write.
+fn write_export(app: &mut VectorcraftApp, export: Export, path: String) -> Result<Value, String> {
+    let Export { f, selection, params, doc, own_title, uid } = export;
+    let params = &params;
     let mut again = params.clone();
     if let Some(o) = again.as_object_mut() {
         o.insert("format".into(), json!(f.id));
@@ -207,22 +228,38 @@ pub(crate) fn exported_with_notes(what: &str, n: usize, first: &str) -> String {
 
 /// Run an engine command that returns `{dataBase64}` and write the bytes to a picked path
 /// (Export Selection, Save for Office Documents, Text Export Options and the presets dialogs'
-/// Export…), reported with the command's warnings ([`report_saved`]).
-pub fn save_command_output(app: &mut VectorcraftApp, id: &str, ext: &str, params: Value) -> Result<String, String> {
-    let (path, v) = run_to_file(app, id, ext, params)?;
-    report_saved(app, &path, &v);
-    Ok(path)
+/// Export…), reported with the command's warnings ([`report_saved`]); `then` gets where they went.
+// PLAN: callers outside io (print.rs, dialogs/office_export.rs, text_export.rs, the presets dialogs, menus/run.rs,
+// composite_fonts.rs) get the path from this synchronously; their owners move the code after it into `then`.
+pub fn save_command_output(
+    app: &mut VectorcraftApp,
+    id: &str,
+    ext: &str,
+    params: Value,
+    then: impl FnOnce(&mut VectorcraftApp, String) -> Result<Value, String> + 'static,
+) -> Result<Value, String> {
+    run_to_file(app, id, ext, params, move |app, path, v| {
+        report_saved(app, &path, &v);
+        then(app, path)
+    })
 }
 
 /// Run an engine command that returns `{data}` or `{dataBase64}` and write the bytes to a file
-/// picked with file name `name` suggested next to the document (the web downloads them as `name`)
-/// → where they went.
-pub(crate) fn save_command_output_named(app: &mut VectorcraftApp, id: &str, name: &str, params: Value) -> Result<String, String> {
+/// picked with file name `name` suggested next to the document (the web downloads them as `name`);
+/// `then` gets where they went.
+pub(crate) fn save_command_output_named(
+    app: &mut VectorcraftApp,
+    id: &str,
+    name: &str,
+    params: Value,
+    then: impl FnOnce(&mut VectorcraftApp, String) -> Result<Value, String> + 'static,
+) -> Result<Value, String> {
     let mut v = app.session.execute(id, &params).map_err(|e| e.to_string())?;
     let bytes = take_output(&mut v)?;
-    let path = write_named(app, None, name, &bytes)?;
-    app.status(format!("Saved {path}"));
-    Ok(path)
+    write_named(app, None, name, bytes, move |app, path| {
+        app.status(format!("Saved {path}"));
+        then(app, path)
+    })
 }
 
 /// The bytes a command returned, taken out of its result `v`, which keeps the rest: binary output
@@ -239,37 +276,66 @@ fn take_output(v: &mut Value) -> Result<Vec<u8>, String> {
 
 /// The file an Export Selection writes, picked in a save panel (the web: the suggested name): a
 /// typed extension of any format is kept, and names the format.
-pub(crate) fn selection_path(app: &mut VectorcraftApp) -> Result<String, String> {
-    target_path_keeping(app, None, "png", |_| true)
+pub(crate) fn selection_path(
+    app: &mut VectorcraftApp,
+    then: impl FnOnce(&mut VectorcraftApp, String) -> Result<Value, String> + 'static,
+) -> Result<Value, String> {
+    target_path_keeping(app, None, "png", |_| true, then)
 }
 
 /// Run an engine command that returns `{dataBase64}` without its `path` and write the bytes to
 /// that path (else a picked or suggested name) → (path, the command's result without the data).
 /// The command runs before a path is asked for, so bad params never open a save dialog, except
 /// for Export Selection without a `format`, which takes it from the picked path. Export Selection
-/// with a `format` picks a file with that format's extension in place of `ext`.
-pub(crate) fn run_to_file(app: &mut VectorcraftApp, id: &str, ext: &str, mut params: Value) -> Result<(String, Value), String> {
-    let mut path = params.as_object_mut().and_then(|o| o.remove("path")).and_then(|p| p.as_str().map(str::to_string));
+/// with a `format` picks a file with that format's extension in place of `ext`. `then` gets the
+/// path and the command's result; while a save panel is open the reply is `{pending: "fileDialog"}`.
+pub(crate) fn run_to_file(
+    app: &mut VectorcraftApp,
+    id: &str,
+    ext: &str,
+    mut params: Value,
+    then: impl FnOnce(&mut VectorcraftApp, String, Value) -> Result<Value, String> + 'static,
+) -> Result<Value, String> {
+    let path = params.as_object_mut().and_then(|o| o.remove("path")).and_then(|p| p.as_str().map(str::to_string));
     let selection = id == "document.exportSelection";
     let given = params.get("format").and_then(Value::as_str).and_then(fileio::format).filter(|_| selection);
-    let ext = given.map_or(ext, |f| f.extensions[0]);
-    if let Some(o) = params.as_object_mut()
-        && o.get("format").is_none()
-        && selection
-    {
-        let picked = target_path_keeping(app, path, ext, |_| true)?;
-        let e = Some(fileio::extension(&picked)).filter(|e| !e.is_empty()).unwrap_or_else(|| ext.into());
-        o.insert("format".into(), serde_json::json!(e));
-        path = Some(picked);
+    let ext = given.map_or(ext, |f| f.extensions.first().copied().unwrap_or_default());
+    if selection && params.as_object().is_some_and(|o| o.get("format").is_none()) {
+        let (id, own_ext) = (id.to_string(), ext.to_string());
+        return target_path_keeping(
+            app,
+            path,
+            ext,
+            |_| true,
+            move |app, picked| {
+                let e = Some(fileio::extension(&picked)).filter(|e| !e.is_empty()).unwrap_or_else(|| own_ext.clone());
+                params["format"] = serde_json::json!(e);
+                write_output(app, &id, &own_ext, params, Some(picked), then)
+            },
+        );
     }
+    write_output(app, id, ext, params, path, then)
+}
+
+/// Runs `id` with `params` and writes its bytes to `path`, else to a picked or suggested file.
+fn write_output(
+    app: &mut VectorcraftApp,
+    id: &str,
+    ext: &str,
+    params: Value,
+    path: Option<String>,
+    then: impl FnOnce(&mut VectorcraftApp, String, Value) -> Result<Value, String> + 'static,
+) -> Result<Value, String> {
     let mut v = app.session.execute(id, &params).map_err(|e| e.to_string())?;
     let bytes = take_output(&mut v)?;
-    let path = match path {
-        Some(p) => p,
-        None => target_path(app, None, ext)?,
+    let write = move |app: &mut VectorcraftApp, path: String| {
+        write_reporting(app, &path, &bytes)?;
+        then(app, path, v)
     };
-    write_reporting(app, &path, &bytes)?;
-    Ok((path, v))
+    match path {
+        Some(p) => write(app, p),
+        None => target_path(app, None, ext, write),
+    }
 }
 
 /// File → Save as PDF: `document.exportPdf` with `params` (the Save PDF dialog's options), written
@@ -288,23 +354,24 @@ pub fn export_pdf(app: &mut VectorcraftApp, mut params: Value) -> Result<Value, 
     let given = params.as_object_mut().and_then(|o| o.remove("path")).and_then(|p| p.as_str().map(str::to_string));
     let mut v = app.session.execute("document.exportPdf", &params).map_err(|e| e.to_string())?;
     let bytes = take_output(&mut v)?;
-    let path = match given {
-        Some(p) => p,
-        None => {
-            let picked = target_path(app, None, "pdf")?;
+    let finish = move |app: &mut VectorcraftApp, path: String| {
+        write_reporting(app, &path, &bytes)?;
+        if view {
+            view_file(app, &path);
+        }
+        report_saved(app, &path, &v);
+        v["path"] = Value::String(path);
+        Ok(v)
+    };
+    match given {
+        Some(p) => finish(app, p),
+        None => target_path(app, None, "pdf", move |app, picked| {
             if let Some(r) = ask_before_losing(app, &picked, "file.export.pdf", &params) {
                 return Ok(r);
             }
-            picked
-        }
-    };
-    write_reporting(app, &path, &bytes)?;
-    if view {
-        view_file(app, &path);
+            finish(app, picked)
+        }),
     }
-    report_saved(app, &path, &v);
-    v["path"] = Value::String(path);
-    Ok(v)
 }
 
 /// `path` as an absolute `file://` URL for the system opener (bytes other than letters, digits and

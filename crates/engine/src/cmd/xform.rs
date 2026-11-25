@@ -30,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Sample Color",
             [],
             None,
-            "{color (#rrggbbaa and #rgba are refused), stroke?: bool (default: whichever proxy is active), ids?, stop?: index, clearStroke?: bool} sample a color into the active fill/stroke (and the selection; `ids: []` changes only the paint default, and so does a sample without ids while the Live Paint Bucket is the active tool, `stop` included); `clearStroke: true` requires `stroke: false`, `ids: []` and no `stop`, and clears the default stroke after sampling an image into the fill; with `stop`, recolor that stop of the gradient behind the proxy instead (paint.editGradient); with `stop` and objects in `ids`, whatever tool is active, the stops come from the topmost fill (or stroke) of the first object that paint.editGradient edits for those ids (a compound path for its member); in a CMYK document an RGB color is stored as CMYK through the color settings, as paint.setFill stores it",
+            "{color (#rrggbbaa and #rgba are refused), stroke?: bool (default: whichever proxy is active), ids?, defaultsOnly?: bool, stop?: index, clearStroke?: bool} sample a color into the active fill/stroke (and the selection; `ids: []` changes only the paint default, and so does a sample without ids while the Live Paint Bucket is the active tool or with `defaultsOnly: true` (refused with ids), `stop` included); `clearStroke: true` requires `stroke: false`, `ids: []` and no `stop`, and clears the default stroke after sampling an image into the fill; with `stop`, recolor that stop of the gradient behind the proxy instead (paint.editGradient); with `stop` and objects in `ids`, whatever tool is active, the stops come from the topmost fill (or stroke) of the first object that paint.editGradient edits for those ids (a compound path for its member); in a CMYK document an RGB color is stored as CMYK through the color settings, as paint.setFill stores it",
             has_doc,
             sample_color
         ),
@@ -523,6 +523,10 @@ fn sample_color(s: &mut Session, p: &Value) -> Result<Value> {
     if clear_stroke && (stroke || p.get("stroke") != Some(&Value::Bool(false)) || p.get("ids") != Some(&json!([])) || p.get("stop").is_some()) {
         return Err(bad(C, "`clearStroke` requires `stroke: false`, `ids: []` and no `stop`"));
     }
+    let only = super::switch_or(p, "defaultsOnly", false, C)?;
+    if only && p.get("ids").is_some_and(|v| !v.is_null()) {
+        return Err(bad(C, "`defaultsOnly` cannot be combined with `ids`, `id` or `item`"));
+    }
     let c = p.get("color").ok_or_else(|| bad(C, "missing color"))?;
     let (id, mut q) = match p.get("stop") {
         None | Some(Value::Null) => (if stroke { "paint.setStroke" } else { "paint.setFill" }, json!({ "color": c })),
@@ -532,7 +536,9 @@ fn sample_color(s: &mut Session, p: &Value) -> Result<Value> {
             let (paint, source) = match given_stop_paint(s, p, stroke)? {
                 Some(paint) => (paint, "the paint of the first object in `ids`"),
                 None => {
-                    let (fill, stroke_paint) = s.proxy_paints();
+                    // The default's gradient with `defaultsOnly`, as the proxies show it while the Live
+                    // Paint Bucket paints.
+                    let (fill, stroke_paint) = if only { (s.paint.fill.clone(), s.paint.stroke.clone()) } else { s.proxy_paints() };
                     (if stroke { stroke_paint } else { fill }, "the paint behind the proxy")
                 }
             };
@@ -548,6 +554,7 @@ fn sample_color(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(ids) = p.get("ids") {
         q["ids"] = ids.clone();
     }
+    let q = super::paint::with_defaults_only(q, only);
     let spec = find_command(id).ok_or_else(|| EngineError::UnknownCommand(id.into()))?;
     let result = super::run_checked(s, spec, &q)?;
     if clear_stroke {
