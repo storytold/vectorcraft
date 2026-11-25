@@ -101,7 +101,7 @@ Read on 2026-11-24; re-read anything that may have moved before `nightly-signer`
 - Manual actors match the reviewed release-managers list in both `nightly.yml` and `.github/nightly-signing-policy.json`, with `automatic_signer_actors` empty.
 - Both callers pin the same immutable `craft-common-actions` commit in `uses` and `tooling-revision`.
 - No nightly schedule is registered, no cache actions or secrets appear in the app callers, and `nightly-sign.yml` retains its literal root `concurrency` block (`group: vectorcraft-nightly-release`, `cancel-in-progress: false`, `queue: max`).
-- Policy v3 schema, platform rows, bounds, required main-push CI workflow, and SonarCloud project identity match `sonar-project.properties`.
+- Policy v3 schema, platform rows, bounds, required main-push CI workflow, and SonarCloud project identity match `sonar-project.properties`, and the Sonar gate shape keeps every live condition once with accepted failures inside the reviewed issue scope.
 - The signer guards `refs/heads/nightly-signer`, passes `app-name: vectorcraft`, and the policy's
   `release_branch` names it.
 - A trust-closure scan reads every workflow: nothing binds an `environment`, only `nightly-sign.yml`
@@ -174,13 +174,14 @@ enabled, so no `app.ron` is written anywhere); if it is ever turned on, its stat
 installation on every platform, and `apps/vectorcraft/src/profile.rs` (`install_data_root`) is the
 one hook every data path follows.
 
-## Activation prerequisite: the Sonar issue scope
+## The Sonar issue scope
 
 The pinned candidate validator requires every entry in `candidate_policy.sonar.issue_types` to map
 from a reviewed `accepted_conditions` row, and it requires the gate condition set to equal
-`accepted_conditions` plus `required_conditions`. The installed policy lists `VULNERABILITY` with no
-accepted condition, so it fails that contract before SonarCloud is read. Correct the policy in this
-app's activation review with Skylar, together with the live gate conditions, before the first run.
-`producer_workflow_id` is now populated and the signer runs on `nightly-signer`, so this policy
-correction - with the registry's Windows and macOS targets - is what still stands between this tree
+`accepted_conditions` plus `required_conditions`. The installed policy lists `VULNERABILITY` with
+`new_security_rating` accepted (max 5) and the other five gate conditions required - the same shape
+PhotoCraft and WordCraft ship - so it satisfies that contract before SonarCloud is read. `debt` stays
+empty, so any unresolved vulnerability on `main` is still refused, and the live gate is still compared
+condition by condition against the policy. `producer_workflow_id` is now populated and the signer runs
+on `nightly-signer`; the registry's Windows and macOS targets are what still stand between this tree
 and a first signed nightly.
