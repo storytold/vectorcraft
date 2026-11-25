@@ -558,3 +558,34 @@ fn an_empty_selection_has_no_marks() {
     let st = app.session.active().unwrap();
     assert_eq!(dots(&app, st).centers.len() + dots(&app, st).origins.len(), 0);
 }
+
+/// A path key that counts the comparisons made with it.
+#[derive(Clone, Copy, Debug)]
+struct Counted<'a>(u64, &'a std::cell::Cell<usize>);
+
+impl PartialEq for Counted<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.1.set(self.1.get() + 1);
+        self.0 == other.0
+    }
+}
+
+impl Eq for Counted<'_> {}
+
+impl Hash for Counted<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+// Grouping the selected anchors of 2,000 paths compares each key a bounded number of times, not once per path listed
+// before it, and joins a repeated path's anchors where the path first appears, as `PathSelection::also` does.
+#[test]
+fn grouping_selected_anchors_by_path_compares_each_path_a_bounded_number_of_times() {
+    let compared = std::cell::Cell::new(0);
+    let listed = (0..2000u64).map(|key| (Counted(key, &compared), vec![key])).chain([(Counted(5, &compared), vec![9])]);
+    let grouped = by_key(listed);
+    assert_eq!(grouped.iter().map(|(key, _)| key.0).collect::<Vec<_>>(), (0..2000).collect::<Vec<_>>());
+    assert_eq!(grouped[5].1, vec![5, 9]);
+    assert!(compared.get() < 2 * 2001, "{} comparisons for 2,001 entries", compared.get());
+}
