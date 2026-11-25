@@ -82,7 +82,7 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "Application.prototype.",
         "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents getIsFileOpen \
-         selection typename",
+         selection textFonts typename",
     ),
     ("DocumentPreset.", "prototype"),
     (
@@ -99,7 +99,7 @@ const INSIDE: &[(&str, &str)] = &[
         "Document.prototype.",
         "activeLayer activeLayer= artboards close close= compoundPathItems constructor convertCoordinate \
          documentColorSpace groupItems height layers name pageItems parent pathItems pathItems= rulerOrigin rulerOrigin= \
-         rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= textFrames textFrames= typename \
+         rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= textFrames typename \
          views views= width",
     ),
     ("Layer.", "prototype"),
@@ -163,12 +163,69 @@ const INSIDE: &[(&str, &str)] = &[
     ("ElementPlacement.", "INSIDE PLACEAFTER PLACEATBEGINNING PLACEATEND PLACEBEFORE"),
     ("RulerUnits.", "Centimeters Inches Millimeters Picas Pixels Points Qs Unknown"),
     ("ZOrderMethod.", "BRINGFORWARD BRINGTOFRONT SENDBACKWARD SENDTOBACK"),
+    (
+        "",
+        "CharacterAttributes Characters Justification ParagraphAttributes Paragraphs TextFont TextFonts TextFrame TextFrames \
+         TextOrientation TextRange TextType Words",
+    ),
+    ("TextFrames.", "prototype"),
+    ("TextFrames.prototype.", "add areaText constructor getByName index length parent pathText pointText removeAll typename"),
+    ("TextFrame.", "prototype"),
+    (
+        "TextFrame.prototype.",
+        "anchor anchor= antialias antialias= characters columnCount columnCount= columnGutter columnGutter= constructor \
+         contents contents= convertAreaObjectToPointObject convertPointObjectToAreaObject createOutline endTValue endTValue= \
+         insertionPoints insertionPoints= kind lines lines= matrix matrix= nextFrame nextFrame= opticalAlignment \
+         opticalAlignment= orientation orientation= paragraphs previousFrame previousFrame= rowCount rowCount= rowGutter \
+         rowGutter= startTValue startTValue= story story= textPath textPath= textRange textRanges textRanges= textSelection \
+         textSelection= words",
+    ),
+    ("TextRange.", "prototype"),
+    (
+        "TextRange.prototype.",
+        "autoLeading autoLeading= baselineShift baselineShift= changeCaseTo changeCaseTo= characterAttributes characterOffset \
+         characterOffset= characterStyles characterStyles= characters constructor contents contents= deSelect deSelect= \
+         duplicate duplicate= end end= firstLineIndent firstLineIndent= getLocalCharOverridesJSON getLocalCharOverridesJSON= \
+         getLocalParaOverridesJSON getLocalParaOverridesJSON= getParagraphLength getTextRunLength horizontalScale \
+         horizontalScale= insertionPoints insertionPoints= justification justification= kerning kerning= leading leading= \
+         leftIndent leftIndent= length length= lines lines= move move= paragraphAttributes paragraphStyles paragraphStyles= \
+         paragraphs parent remove rightIndent rightIndent= rotation rotation= select select= size size= spaceAfter spaceAfter= \
+         spaceBefore spaceBefore= start start= story story= strikeThrough strikeThrough= textFont textFont= textRanges \
+         textRanges= textSelection textSelection= tracking tracking= typename underline underline= verticalScale \
+         verticalScale= words",
+    ),
+    ("Characters.", "prototype"),
+    ("Characters.prototype.", "add addBefore constructor length parent typename"),
+    ("Words.", "prototype"),
+    ("Words.prototype.", "add addBefore constructor length parent typename"),
+    ("Paragraphs.", "prototype"),
+    ("Paragraphs.prototype.", "add addBefore constructor length parent typename"),
+    ("CharacterAttributes.", "prototype"),
+    (
+        "CharacterAttributes.prototype.",
+        "autoLeading autoLeading= baselineShift baselineShift= constructor horizontalScale horizontalScale= leading leading= \
+         rotation rotation= size size= strikeThrough strikeThrough= textFont textFont= tracking tracking= typename underline \
+         underline= verticalScale verticalScale=",
+    ),
+    ("ParagraphAttributes.", "prototype"),
+    (
+        "ParagraphAttributes.prototype.",
+        "constructor firstLineIndent firstLineIndent= justification justification= leftIndent leftIndent= rightIndent \
+         rightIndent= spaceAfter spaceAfter= spaceBefore spaceBefore= typename",
+    ),
+    ("TextFonts.", "prototype"),
+    ("TextFonts.prototype.", "constructor getByName index length parent typename"),
+    ("TextFont.", "prototype"),
+    ("TextFont.prototype.", "constructor family name parent style typename"),
+    ("Justification.", "CENTER FULLJUSTIFY FULLJUSTIFYLASTLINECENTER FULLJUSTIFYLASTLINELEFT FULLJUSTIFYLASTLINERIGHT LEFT RIGHT"),
+    ("TextOrientation.", "HORIZONTAL VERTICAL"),
+    ("TextType.", "AREATEXT PATHTEXT POINTTEXT"),
 ];
 
 /// The classes the host adds with nothing but a prototype and its constructor: the page item types
 /// that have no members of their own.
 const BARE_CLASSES: &str = "BlendItem EnvelopeItem GraphItem IntertwineItem MeshItem PathItem PlacedDocumentItem \
-     PlacedItem RasterItem RepeatItem SymbolItem TextFrame";
+     PlacedItem RasterItem RepeatItem SymbolItem";
 
 /// The name the checker does not read, which also stands for its members: `vc` is VectorCraft's
 /// own API, and what `vc.run` does depends on the command it runs.
