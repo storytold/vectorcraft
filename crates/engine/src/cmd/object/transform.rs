@@ -1,7 +1,7 @@
 use super::align::choice;
 use super::{
     Affine, Arc, Document, EngineError, LastTransform, Node, NodeId, NodeKind, OrientedBox, Point, Rect, Result, Scaling, Session, Value, Vec2, bad,
-    bool_or, check_numbers, check_switches, duplicate_in, effects, f64_or, f64_req, ids_param, json, matrix_param, ok, outermost, point_param,
+    bool_or, check_numbers, check_switches, duplicate_beside, effects, f64_or, f64_req, ids_param, json, matrix_param, ok, outermost, point_param,
     selected_roots_to_transform,
 };
 
@@ -91,12 +91,22 @@ pub(crate) fn transform_node(n: &mut Node, xf: Affine, sc: Scaling, objects: boo
 /// `anchors` (`ids` being the selection): with anchors selected with Direct Selection and no
 /// copy, only those anchors transform, their handles with them, and the objects selected whole.
 pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf: Affine, p: &Value, anchors: bool) -> Result<Value> {
-    apply_transform_moving_guides(s, label, ids, xf, p, anchors, None)
+    apply_transform_moving_guides(s, label, ids, xf, p, anchors, Placing::default())
 }
 
-/// [`apply_transform`], with the selected ruler guides moved by `guides` instead of by the
+/// Where [`apply_transform_moving_guides`] puts the selected ruler guides and the copies.
+#[derive(Clone, Copy, Default)]
+struct Placing {
+    /// The selected ruler guides move by this instead of by the transform's translation.
+    guides: Option<Vec2>,
+    /// Each copy goes directly below its original instead of above it.
+    below: bool,
+}
+
+/// [`apply_transform`], with the selected ruler guides moved by `placing.guides` instead of by the
 /// translation `xf` when given (a nudge along a turned Constrain Angle moves the art along it and
-/// the guides along the page's axes).
+/// the guides along the page's axes), and with each copy directly below its original with
+/// `placing.below`.
 fn apply_transform_moving_guides(
     s: &mut Session,
     label: &str,
@@ -104,8 +114,9 @@ fn apply_transform_moving_guides(
     xf: Affine,
     p: &Value,
     anchors: bool,
-    guides: Option<Vec2>,
+    placing: Placing,
 ) -> Result<Value> {
+    let Placing { guides, below } = placing;
     let copy = bool_or(p, "copy", false);
     let areas = bool_or(p, "typeAreas", false);
     let objects = transforms_objects(p);
@@ -138,7 +149,7 @@ fn apply_transform_moving_guides(
     } else if none || (!copy && xf == Affine::IDENTITY) {
         if copy { vec![] } else { ids }
     } else {
-        let kept = if copy { preview_copies(s, &ids, with_guides)? } else { None };
+        let kept = if copy { preview_copies(s, &ids, with_guides, below)? } else { None };
         s.edit(label, |d, sel| {
             let targets = match &kept {
                 // The document becomes the snapshot with the kept copies, untransformed, and the
@@ -155,7 +166,7 @@ fn apply_transform_moving_guides(
                     } else {
                         None
                     };
-                    let new_ids = duplicate_in(d, sel, &ids, Affine::IDENTITY)?;
+                    let new_ids = duplicate_beside(d, sel, &ids, Affine::IDENTITY, below)?;
                     if let Some(copies) = guide_copies {
                         sel.guides = copies.iter().map(|g| d.add_ruler_guide(g)).collect();
                     }
@@ -212,11 +223,12 @@ fn apply_transform_moving_guides(
 /// Returns the copies of `roots` for a transform or a perspective edit with `copy` in an interaction
 /// whose document is still its snapshot, as in a preview ([`Session::preview`] puts the snapshot
 /// back first). These are the copies the interaction keeps when they were made of that snapshot for
-/// the same `roots`; otherwise this copies `roots` with [`duplicate_in`] in a clone of the snapshot,
-/// untransformed, and the interaction keeps that clone. It returns `None` outside an interaction,
+/// the same `roots` on the same side (`below`: directly below each original); otherwise this copies
+/// `roots` with [`duplicate_beside`] in a clone of the snapshot, untransformed, and the interaction
+/// keeps that clone. It returns `None` outside an interaction,
 /// and when the document is no longer the snapshot, as for a command run in a typing session or a
 /// script batch after an earlier edit there: the command then copies the current document.
-pub(crate) fn preview_copies(s: &mut Session, roots: &[NodeId], with_guides: bool) -> Result<Option<Arc<crate::PreviewCopies>>> {
+pub(crate) fn preview_copies(s: &mut Session, roots: &[NodeId], with_guides: bool, below: bool) -> Result<Option<Arc<crate::PreviewCopies>>> {
     let st = s.doc_mut()?;
     let Some(it) = &mut st.interaction else { return Ok(None) };
     if !Arc::ptr_eq(&st.doc, &it.doc) {
@@ -226,19 +238,20 @@ pub(crate) fn preview_copies(s: &mut Session, roots: &[NodeId], with_guides: boo
     if let Some(k) = &it.copies
         && Arc::ptr_eq(&k.from, &it.doc)
         && k.roots == roots
+        && k.below == below
         && (k.selection.guides.is_empty() != has_guide_copies)
     {
         return Ok(Some(k.clone()));
     }
     let mut doc = it.doc.clone();
     let mut selection = st.selection.clone();
-    let ids = duplicate_in(Arc::make_mut(&mut doc), &mut selection, roots, Affine::IDENTITY)?;
+    let ids = duplicate_beside(Arc::make_mut(&mut doc), &mut selection, roots, Affine::IDENTITY, below)?;
     if has_guide_copies {
         let d = Arc::make_mut(&mut doc);
         let copies: Vec<_> = st.selection.guides.iter().filter_map(|&i| d.ruler_guide(i)).collect();
         selection.guides = copies.iter().map(|g| d.add_ruler_guide(g)).collect();
     }
-    let k = Arc::new(crate::PreviewCopies { from: it.doc.clone(), roots: roots.to_vec(), doc, selection, ids });
+    let k = Arc::new(crate::PreviewCopies { from: it.doc.clone(), roots: roots.to_vec(), below, doc, selection, ids });
     it.copies = Some(k.clone());
     Ok(Some(k))
 }
@@ -256,7 +269,9 @@ fn resize_type_area(n: &mut Node, xf: Affine) -> bool {
 
 pub(super) fn transform(s: &mut Session, p: &Value) -> Result<Value> {
     check_switches(p, &TRANSFORM_SWITCHES, "object.transform")?;
-    check_switches(p, &["anchors", "releaseOutside", "interpolate"], "object.transform")?;
+    check_switches(p, &["anchors", "releaseOutside", "interpolate", "drawBehind"], "object.transform")?;
+    // An Alt-drag copy in Draw Behind goes directly below its original.
+    let below = bool_or(p, "drawBehind", false) && bool_or(p, "copy", false) && s.draw_mode == crate::DrawMode::Behind;
     let m = matrix_param(p, "matrix").ok_or_else(|| bad("object.transform", "missing matrix [a,b,c,d,e,f]"))?;
     // An object selected in a symbol instance's art stays where the symbol puts it: the selection
     // is left as it is, and the reply's warning goes to the status bar.
@@ -280,7 +295,7 @@ pub(super) fn transform(s: &mut Session, p: &Value) -> Result<Value> {
     if grouped {
         s.begin_named_undo_group(None);
     }
-    let r = apply_transform(s, "Transform", ids, m, p, anchors);
+    let r = apply_transform_moving_guides(s, "Transform", ids, m, p, anchors, Placing { guides: None, below });
     let released = match &r {
         Ok(_) if !moved.is_empty() => crate::cmd::shaper::release_outside(s, &moved),
         _ => Ok(false),
@@ -332,7 +347,10 @@ pub(super) fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
         if dx == 0.0 && dy == 0.0 {
             return ok();
         }
-        return crate::cmd::path::move_anchors(s, &json!({ "dx": dx, "dy": dy, "patterns": p.get("patterns"), "interpolate": p.get("interpolate") }));
+        return crate::cmd::path::nudge_anchors(
+            s,
+            &json!({ "dx": dx, "dy": dy, "patterns": p.get("patterns"), "interpolate": p.get("interpolate") }),
+        );
     }
     if objects && s.doc()?.selection.is_empty() {
         let copy = bool_or(p, "copy", false);
@@ -358,7 +376,7 @@ pub(super) fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
             return ok();
         }
     }
-    apply_transform_moving_guides(s, "Move", ids, Affine::translate((dx, dy)), p, true, Some(Vec2::new(gx, gy)))
+    apply_transform_moving_guides(s, "Move", ids, Affine::translate((dx, dy)), p, true, Placing { guides: Some(Vec2::new(gx, gy)), below: false })
 }
 
 pub(super) fn about(o: Point, a: Affine) -> Affine {
