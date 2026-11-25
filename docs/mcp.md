@@ -2682,7 +2682,7 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   or removes only that object, as `select.add` and `select.toggle` do, and the other objects stay selected as they
   were), `opacity` (0 to
   100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
-  visible bounds), `editable` (false for an object that is hidden or locked, in a hidden or locked layer or group,
+  visible bounds grown to take in the paths' direction handles), `editable` (false for an object that is hidden or locked, in a hidden or locked layer or group,
   or on a locked artboard), `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
   `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`
   (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/). `move` runs `node.move`, and `duplicate` runs
@@ -2757,8 +2757,9 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   VectorCraft's own rules: `layers` lists layers top first, as the Layers panel shows them. A layer's or group's
   `pageItems`, `groupItems` and `compoundPathItems`, and a compound path's `pathItems`, list the objects directly in
   it, topmost first. The document's `groupItems` and `compoundPathItems` hold every group or compound path at any
-  depth, in the order of the document's `pageItems`. A layer's `pageItems` leave out its sublayers, and a compound
-  path's `pathItems` have the typename `PathItems`. A layer's or artboard's `name` takes a number or a boolean as
+  depth, in the order of the document's `pageItems`. A layer's `pageItems` leave out its sublayers. A compound
+  path's `pathItems` are a `PathItems` collection: `add()` and its shape methods make the new path inside the
+  compound path. A layer's or artboard's `name` takes a number or a boolean as
   `String()` writes it. `locked` true means the layer is locked. `color` is an object `{red, green, blue}` of whole
   numbers from 0 to 255. A layer's name is from 1 to 512 characters. A layer's `zOrderPosition` counts the layers
   beside it from 1 at the bottom, leaving out art, and `zOrder` with `BRINGFORWARD` or `SENDBACKWARD` moves it past

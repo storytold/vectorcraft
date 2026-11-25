@@ -131,20 +131,79 @@ fn path_ref(h: &super::Host, item: Item) -> Data {
     host_ref("PathItem", &[float(h.run), float(item.doc.uid), high, low])
 }
 
-/// How many points a path with the subpaths `subs` has.
-fn point_count(subs: &[SubPath]) -> usize {
-    subs.iter().map(|sp| sp.anchors.len()).sum()
+/// The subpaths a [`PointIndex`] was made from.
+enum PointSource {
+    /// The path's node as its document held it, kept so that the node compared with is the same
+    /// one: any change to the path's points makes a new node.
+    Node(Arc<crate::doc::Node>),
+    /// The path's waiting point changes, after this many changes to them
+    /// ([`super::State`]'s `pending_changes`).
+    Pending(u64),
 }
 
-/// The subpath and the place in it of point `i`, among the subpaths `subs`.
-fn locate(subs: &[SubPath], mut i: usize) -> Option<(usize, usize)> {
-    for (s, sp) in subs.iter().enumerate() {
-        if i < sp.anchors.len() {
-            return Some((s, i));
+/// Where the points of a path start, by subpath, so that a point is found by its index without a
+/// pass over the subpaths before it.
+pub(super) struct PointIndex {
+    /// The document uid and the id of the path.
+    key: (u64, u64),
+    source: PointSource,
+    /// The number of points before each subpath.
+    starts: Vec<usize>,
+    /// The number of points in all.
+    count: usize,
+}
+
+impl PointIndex {
+    fn new(key: (u64, u64), source: PointSource, subs: &[SubPath]) -> Self {
+        let mut starts = Vec::with_capacity(subs.len());
+        let mut count = 0;
+        for sp in subs {
+            starts.push(count);
+            count += sp.anchors.len();
         }
-        i -= sp.anchors.len();
+        PointIndex { key, source, starts, count }
     }
-    None
+
+    /// The subpath and the place in it of point `i`.
+    fn locate(&self, i: usize) -> Option<(usize, usize)> {
+        if i >= self.count {
+            return None;
+        }
+        // The last subpath that starts at or before `i`: a subpath with no points starts where the
+        // next one does, so it is never the one found.
+        let s = self.starts.partition_point(|&start| start <= i).checked_sub(1)?;
+        Some((s, i - self.starts[s]))
+    }
+}
+
+/// The number of points of the path of `item`, its waiting point changes included, and the subpath
+/// and the place in it of point `i` when `i` is given and in the path. The index of the path's
+/// subpaths is kept in [`super::State`] until the path's points change.
+fn point_place(h: &super::Host, item: Item, i: Option<usize>) -> std::result::Result<(usize, Option<(usize, usize)>), HostError> {
+    let key = (item.doc.uid, item.id.0);
+    let source = match &*h.dom.pending.borrow() {
+        Some((waiting, _)) if same_path(*waiting, item) => PointSource::Pending(h.dom.pending_changes.get()),
+        _ => {
+            let s = h.session.borrow();
+            let node = s.documents().iter().find(|d| d.uid == key.0).and_then(|st| node_arc(&st.doc, item.id).cloned());
+            PointSource::Node(node.ok_or_else(|| HostError::Error(STALE_ITEM.into()))?)
+        }
+    };
+    let fresh = h.dom.point_index.borrow().as_ref().is_some_and(|x| {
+        x.key == key
+            && match (&x.source, &source) {
+                (PointSource::Node(a), PointSource::Node(b)) => Arc::ptr_eq(a, b),
+                (PointSource::Pending(a), PointSource::Pending(b)) => a == b,
+                _ => false,
+            }
+    });
+    if !fresh {
+        let index = read_points(h, item, |subs| PointIndex::new(key, source, subs))?;
+        *h.dom.point_index.borrow_mut() = Some(index);
+    }
+    let kept = h.dom.point_index.borrow();
+    let Some(index) = kept.as_ref() else { return Err(HostError::Error(STALE_ITEM.into())) };
+    Ok((index.count, i.and_then(|i| index.locate(i))))
 }
 
 fn anchor_json(a: &Anchor) -> Value {
@@ -171,6 +230,7 @@ fn read_points<T>(h: &super::Host, item: Item, f: impl FnOnce(&[SubPath]) -> T) 
 /// locked, unless it changes nothing. A path that is aligned to the pixel grid, or is in an object
 /// that is, is written at once, so that its points read as the grid snaps them.
 fn edit_points<T>(h: &super::Host, item: Item, f: impl FnOnce(&mut Vec<SubPath>) -> T) -> std::result::Result<T, HostError> {
+    h.dom.pending_changes.set(h.dom.pending_changes.get().wrapping_add(1));
     if let Some((waiting, subs)) = &mut *h.dom.pending.borrow_mut()
         && same_path(*waiting, item)
     {
@@ -320,7 +380,8 @@ pub(super) fn held_path_items(h: &super::Host, uid: u64, id: NodeId) -> Data {
     host_ref("PathItems", &[float(h.run), float(uid), high, low])
 }
 
-/// The document of a `PathItems` object, and the layer or group it lists the paths of, if any.
+/// The document of a `PathItems` object, and the layer, group or compound path it lists the paths
+/// of, if any.
 fn items_scope(h: &super::Host, a: &[Data]) -> std::result::Result<(Doc, Option<NodeId>), HostError> {
     let Some(handle) = handle_of(arg(a, 0), "PathItems") else { return Err(HostError::Type("this is not a PathItems".into())) };
     match handle.as_slice() {
@@ -328,7 +389,9 @@ fn items_scope(h: &super::Host, a: &[Data]) -> std::result::Result<(Doc, Option<
         [run, uid, high, low] => {
             let doc = find_doc(h, *run, *uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
             let id = id_of(*high, *low).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
-            let holds = with_doc(h, doc, |_, st| st.doc.node(id).is_some_and(|n| matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. })));
+            let holds = with_doc(h, doc, |_, st| {
+                st.doc.node(id).is_some_and(|n| matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. } | NodeKind::Compound { .. }))
+            });
             if !holds {
                 return Err(HostError::Error(STALE_ITEM.into()));
             }
@@ -432,7 +495,9 @@ fn make_in(
         return Err(HostError::Error(CONTAINER_LOCKED.into()));
     }
     let made = match container {
-        None => on_doc(h, doc.uid, true, make)?,
+        // Making a path can take more than one command (a stroke, a reversal): a failure of a later
+        // one undoes the path too.
+        None => super::atomically(h, |h| on_doc(h, doc.uid, true, make))?,
         Some(c) => super::atomically(h, |h| {
             let id = on_doc(h, doc.uid, true, |h| {
                 command(h, "layer.setCurrent", &json!({"id": c.0, "keepRows": true}))?;
@@ -1124,17 +1189,21 @@ fn path_resize(h: &super::Host, a: &[Data]) -> Answer {
     if new_width.is_some_and(|w| w > MAX_STROKE_WIDTH) {
         return Err(HostError::Range("changeLineWidths would make the stroke weight more than 1000 points".into()));
     }
-    if sx != 100.0 || sy != 100.0 {
-        let (r, _) = item_rect(h, item, false)?;
-        let origin = about(h, item, place, r)?;
-        params["origin"] = json!([origin.x, origin.y]);
-        edit_path(h, item, "object.scale", params)?;
-    }
-    if let Some(w) = new_width
-        && (w - width).abs() > 1e-9
-    {
-        edit_path(h, item, "stroke.set", json!({"weight": w}))?;
-    }
+    // The scale and the new stroke weight are one edit: a failure of either undoes both.
+    super::atomically(h, |h| {
+        if sx != 100.0 || sy != 100.0 {
+            let (r, _) = item_rect(h, item, false)?;
+            let origin = about(h, item, place, r)?;
+            params["origin"] = json!([origin.x, origin.y]);
+            edit_path(h, item, "object.scale", params)?;
+        }
+        if let Some(w) = new_width
+            && (w - width).abs() > 1e-9
+        {
+            edit_path(h, item, "stroke.set", json!({"weight": w}))?;
+        }
+        Ok(())
+    })?;
     Ok(Data::Undefined)
 }
 
@@ -1148,7 +1217,8 @@ fn points_path(h: &super::Host, a: &[Data]) -> std::result::Result<Item, HostErr
 
 fn points_length(h: &super::Host, a: &[Data]) -> Answer {
     let item = points_path(h, a)?;
-    read_points(h, item, |subs| num(float(point_count(subs) as u64)))
+    let (n, _) = point_place(h, item, None)?;
+    Ok(num(float(n as u64)))
 }
 
 fn points_parent(h: &super::Host, a: &[Data]) -> Answer {
@@ -1272,7 +1342,7 @@ fn points_at(h: &super::Host, a: &[Data]) -> Answer {
     let item = points_path(h, a)?;
     let Data::Number(n) = arg(a, 1) else { return Ok(Data::Undefined) };
     let Some(i) = whole(*n).and_then(|i| usize::try_from(i).ok()) else { return Ok(Data::Undefined) };
-    let n = read_points(h, item, point_count)?;
+    let (n, _) = point_place(h, item, None)?;
     Ok(if i < n { point_ref(h, item, i) } else { Data::Undefined })
 }
 
@@ -1290,7 +1360,8 @@ fn points_index(h: &super::Host, a: &[Data]) -> Answer {
 fn points_add(h: &super::Host, a: &[Data]) -> Answer {
     let item = points_path(h, a)?;
     let origin = with_doc(h, item.doc, |_, st| frame(st).map(|f| f.to_document(h.dom.coords.get(), [0.0, 0.0])));
-    let (n, last) = read_points(h, item, |subs| (point_count(subs), subs.iter().rev().find_map(|sp| sp.anchors.last()).map(|a| a.p)))?;
+    let (n, _) = point_place(h, item, None)?;
+    let last = read_points(h, item, |subs| subs.iter().rev().find_map(|sp| sp.anchors.last()).map(|a| a.p))?;
     if n >= MAX_POINTS {
         return Err(HostError::Range(format!("PathPoints.add takes a path to at most {MAX_POINTS} points")));
     }
@@ -1324,20 +1395,29 @@ pub(super) fn this_point(h: &super::Host, a: &[Data]) -> std::result::Result<(It
         return Err(HostError::Error(STALE_POINT.into()));
     }
     let i = whole(*i).and_then(|i| usize::try_from(i).ok()).ok_or_else(|| HostError::Error(STALE_POINT.into()))?;
-    let n = read_points(h, item, point_count)?;
+    let (n, _) = point_place(h, item, None)?;
     if i >= n {
         return Err(HostError::Error(STALE_POINT.into()));
     }
     Ok((item, i))
 }
 
+/// [`this_point`] with the subpath and the place in it of the point.
+fn this_point_place(h: &super::Host, a: &[Data]) -> std::result::Result<(Item, usize, usize), HostError> {
+    let (item, i) = this_point(h, a)?;
+    match point_place(h, item, Some(i))? {
+        (_, Some((s, j))) => Ok((item, s, j)),
+        (_, None) => Err(HostError::Error(STALE_POINT.into())),
+    }
+}
+
 /// Reads the anchor `this` names with `f`, given the frame and the coordinate system.
 fn read_point(h: &super::Host, a: &[Data], f: impl FnOnce(&super::Frame, Coords, &Anchor) -> Data) -> Answer {
-    let (item, i) = this_point(h, a)?;
+    let (item, s, j) = this_point_place(h, a)?;
     let c = h.dom.coords.get();
     let fr = with_doc(h, item.doc, |_, st| frame(st))?;
     read_points(h, item, |subs| {
-        let anchor = locate(subs, i).and_then(|(s, j)| subs.get(s).and_then(|sp| sp.anchors.get(j)));
+        let anchor = subs.get(s).and_then(|sp| sp.anchors.get(j));
         anchor.map(|an| f(&fr, c, an)).ok_or_else(|| HostError::Error(STALE_POINT.into()))
     })?
 }
@@ -1345,11 +1425,9 @@ fn read_point(h: &super::Host, a: &[Data], f: impl FnOnce(&super::Frame, Coords,
 /// Changes the anchor `this` names with `f`, given the point the script assigned in document
 /// coordinates (for a point property) or the value itself.
 fn edit_point(h: &super::Host, a: &[Data], f: impl FnOnce(&mut Anchor)) -> Answer {
-    let (item, i) = this_point(h, a)?;
+    let (item, s, j) = this_point_place(h, a)?;
     edit_points(h, item, |subs| {
-        if let Some((s, j)) = locate(subs, i)
-            && let Some(an) = subs.get_mut(s).and_then(|sp| sp.anchors.get_mut(j))
-        {
+        if let Some(an) = subs.get_mut(s).and_then(|sp| sp.anchors.get_mut(j)) {
             f(an);
         }
     })?;
@@ -1411,10 +1489,10 @@ fn pt_parent(h: &super::Host, a: &[Data]) -> Answer {
 
 /// `remove()`: deletes the point; a subpath left with no points goes too.
 fn pt_remove(h: &super::Host, a: &[Data]) -> Answer {
-    let (item, i) = this_point(h, a)?;
+    let (item, s, j) = this_point_place(h, a)?;
     edit_points(h, item, |subs| {
-        if let Some((s, j)) = locate(subs, i)
-            && let Some(sp) = subs.get_mut(s)
+        if let Some(sp) = subs.get_mut(s)
+            && j < sp.anchors.len()
         {
             sp.anchors.remove(j);
             if sp.anchors.is_empty() {

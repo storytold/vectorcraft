@@ -702,9 +702,18 @@ fn set_anchors(s: &mut Session, p: &Value) -> Result<Value> {
             })
             .collect::<Result<Vec<_>>>()?,
     );
-    s.edit("Reshape", |d, _| {
-        *path_mut(d, id)? = data;
+    s.edit("Reshape", |d, sel| {
+        let counts = |pd: &PathData| pd.subpaths.iter().map(|sp| sp.anchors.len()).collect::<Vec<_>>();
+        let path = path_mut(d, id)?;
+        let reshaped = counts(path) != counts(&data);
+        *path = data;
         super::object::resnap(d, id);
+        // Direct-selected anchors and segments are kept by index: when anchors were added or
+        // removed, the path is deselected rather than left with other anchors selected.
+        if reshaped && (sel.anchors.remove(&id).is_some() | sel.segments.remove(&id).is_some()) {
+            sel.objects.retain(|o| *o != id);
+            sel.prune(d);
+        }
         Ok(())
     })?;
     ok()

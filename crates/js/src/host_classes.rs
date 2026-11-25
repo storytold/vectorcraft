@@ -215,7 +215,8 @@ pub(crate) fn install(i: &mut Interp, classes: Vec<HostClass>, instances: Vec<(S
         let global = i.global;
         i.define(global, key(&name), Prop::Data { value: v, flags: 0 })?;
     }
-    Ok(())
+    // The prototypes, constructors and members are made without a reservation of their own.
+    i.reserve_heap(0)
 }
 
 fn install_class(i: &mut Interp, class: HostClass) -> JsResult<()> {

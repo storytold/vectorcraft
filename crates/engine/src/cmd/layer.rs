@@ -956,7 +956,8 @@ fn move_node(s: &mut Session, p: &Value) -> Result<Value> {
         }
         // A path in a compound path keeps no paint, live shape or pixel alignment of its own, as
         // Make Compound Path leaves its paths; the compound path becomes pixel-aligned instead when
-        // the path was, or when the compound path it leaves was.
+        // the path was, or when the compound path it leaves was. A compound path that is
+        // pixel-aligned snaps the path it takes in.
         if let Some(c) = into {
             let mut aligned = from_aligned;
             if let Some(m) = d.node_mut(id) {
@@ -966,9 +967,12 @@ fn move_node(s: &mut Session, p: &Value) -> Result<Value> {
                     *live = None;
                 }
             }
-            if aligned && let Some(cn) = d.node_mut(c) {
-                cn.extras_mut().pixel_aligned = true;
-                super::object::snap_if_aligned(cn);
+            if let Some(cn) = d.node_mut(c) {
+                aligned |= cn.extras().pixel_aligned;
+                if aligned {
+                    cn.extras_mut().pixel_aligned = true;
+                    super::object::snap_if_aligned(cn);
+                }
             }
         }
         if let Some((appearance, aligned)) = out_of

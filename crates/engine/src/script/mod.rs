@@ -2227,6 +2227,16 @@ impl Session {
                     RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line: 0, column: 0, authored: false };
                 return Some(self.script_failed(job, &e));
             }
+            // What the script added must fit the allowance the last answer gave: past it, the
+            // person is asked again, as a running script is at its next charge.
+            if let Err(e) = job.host.charge_growth(0, 0) {
+                return Some(self.script_failed(job, &end_flush_error(e)));
+            }
+            if job.host.waiting.get() {
+                JOBS.with(|jobs| jobs.borrow_mut().insert(key.id, job));
+                self.script_key = Some(key);
+                return None;
+            }
             return Some(self.script_ended(job));
         }
         // A stop while a dialog waits ends the run there; the interpreter cannot go on from the call.

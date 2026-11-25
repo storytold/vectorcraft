@@ -931,6 +931,19 @@ fn note_is_the_attributes_note() {
 }
 
 #[test]
+fn add_document_starts_from_the_built_in_preset_when_a_saved_one_has_its_name() {
+    let mut s = Session::new();
+    s.execute("file.newPresets.save", &json!({"name": "Letter", "width": 100, "height": 50, "colorMode": "rgb"})).unwrap();
+    let out = log(&mut s, "var d = app.documents.addDocument('Print'); vc.log([d.width, d.height, d.documentColorSpace]);");
+    assert_eq!(out[0], json!([612, 792, "DocumentColorSpace.CMYK"]));
+    // Recent keeps the built-in preset's name, as it does when no saved preset has it.
+    assert_eq!(s.prefs.recent_new_docs[0].name, "Letter");
+    let out = log(&mut s, "var p = new DocumentPreset(); p.width = 300; var e = app.documents.addDocument('Print', p); vc.log([e.width, e.height]);");
+    assert_eq!(out[0], json!([300, 792]));
+    assert_eq!(s.prefs.recent_new_docs[0].name, "Custom");
+}
+
+#[test]
 fn document_preset_applies_only_its_given_fields() {
     let mut s = Session::new();
     let out = log(
@@ -1317,8 +1330,9 @@ fn get_is_file_open_cannot_probe_outside_script_scope() {
     let (mut s, _, _) = doc();
     let path = std::env::temp_dir().join(format!("vc-dom-open-{}.svg", std::process::id()));
     s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
-    let p = path.to_string_lossy().replace('\\', "\\\\");
-    let query = format!("vc.log(app.getIsFileOpen('{p}')); vc.log(app.getIsFileOpen('{p}.other'));");
+    let p = path.to_string_lossy();
+    let (p, other) = (json!(p), json!(format!("{p}.other")));
+    let query = format!("vc.log(app.getIsFileOpen({p})); vc.log(app.getIsFileOpen({other}));");
     let out = log(&mut s, &query);
     assert_eq!(out, vec![json!(true), json!(false)]);
     // Read roots that leave out the document's file: the same path does not count.
@@ -1612,12 +1626,12 @@ fn a_layers_and_a_groups_path_items_list_only_the_paths_directly_in_them_topmost
          vc.log(P.length); vc.log(P[0].width); vc.log(P.typename); vc.log(P.parent.typename);\
          vc.log(G.length); vc.log(G[0].width); vc.log(G[1].width); vc.log(G.parent.typename); vc.log(d.pathItems.length);\
          var sub = L.layers.add(); sub.pathItems.rectangle(10, 10, 5, 5); vc.log(L.pathItems.length); vc.log(sub.pathItems.length);\
-         vc.log(G.getByName === undefined); vc.log(P[1] === undefined);",
+         G[1].name = 'B'; vc.log(G.getByName('B') === G[1]); vc.log(G.index('B') === G[1]); vc.log(P[1] === undefined);",
     );
     let expected =
         [json!(1), json!(30), json!("PathItems"), json!("Layer"), json!(2), json!(70), json!(50), json!("GroupItem"), json!(3), json!(1), json!(1)];
     assert_eq!(out[..11], expected);
-    assert_eq!(out[11..], [json!(false), json!(true)]);
+    assert_eq!(out[11..], [json!(true), json!(true), json!(true)]);
 }
 
 #[test]
@@ -1917,6 +1931,29 @@ fn a_path_moved_between_compound_paths_keeps_its_pixel_alignment() {
     assert!(!d.node(a).unwrap().extras().pixel_aligned);
 }
 
+/// A pixel-aligned compound path snaps a path that was not aligned when it takes it in.
+#[test]
+fn a_pixel_aligned_compound_path_snaps_a_path_moved_into_it() {
+    let (mut s, a, _) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    s.execute("object.setPixelAligned", &json!({"on": true})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let cid = s.active().unwrap().doc.parent_of(a).unwrap();
+    let loose = rect(&mut s, 200.25, 20.5, 30.0, 40.0);
+    s.execute("select.none", &json!({})).unwrap();
+    assert!(!s.active().unwrap().doc.node(loose).unwrap().extras().pixel_aligned);
+    s.execute("node.move", &json!({"id": loose.0, "parent": cid.0, "index": 0})).unwrap();
+    let d = &s.active().unwrap().doc;
+    assert_eq!(d.parent_of(loose), Some(cid));
+    // Both paths have a 1 pt stroke, so the grid puts their edges where it put the aligned path's.
+    let (b, at) = (d.node(loose).unwrap().geometric_bounds().unwrap(), d.node(a).unwrap().geometric_bounds().unwrap());
+    assert_ne!(b.x0, 200.25);
+    for (v, w) in [(b.x0, at.x0), (b.y0, at.y0), (b.x1, at.x1), (b.y1, at.y1)] {
+        assert_eq!(v.fract(), w.fract(), "{b:?} is on the pixel grid as {at:?} is");
+    }
+}
+
 #[test]
 fn a_compound_paths_path_items_are_path_items() {
     let (mut s, a, b) = doc();
@@ -1928,6 +1965,23 @@ fn a_compound_paths_path_items_are_path_items() {
          vc.log(p[0].typename); vc.log(d.layers[0].pageItems.typename);",
     );
     assert_eq!(out, [json!("PathItems"), json!(2), json!("PathItem"), json!("PageItems")]);
+}
+
+#[test]
+fn a_compound_paths_path_items_add_makes_the_path_inside_it() {
+    let (mut s, _, _) = doc();
+    let steps = undo_steps(&s);
+    let out = log(
+        &mut s,
+        "var c = app.activeDocument.layers[0].compoundPathItems.add(); var p = c.pathItems.add(); p.setEntirePath([[0, 0], [10, 0], [10, 10]]);\
+         var r = c.pathItems.rectangle(50, 20, 10, 10); vc.log(c.pathItems.length); vc.log(p.parent.typename); vc.log(r.parent.typename);\
+         vc.log(c.pathItems[0].width);",
+    );
+    assert_eq!(out, [json!(2), json!("CompoundPathItem"), json!("CompoundPathItem"), json!(10)]);
+    let d = &s.active().unwrap().doc;
+    let compound = d.layers[0].children().unwrap().iter().find(|n| matches!(n.kind, NodeKind::Compound { .. })).unwrap();
+    assert_eq!(compound.children().unwrap().len(), 2);
+    assert!(undo_steps(&s) > steps);
 }
 
 #[test]
@@ -1964,6 +2018,18 @@ fn a_loop_over_groups_and_their_items_lists_each_collection_once() {
     let (a, b) = (run(&mut s, nested).unwrap(), run(&mut s, in_order).unwrap());
     assert_eq!((a["log"].clone(), b["log"].clone()), (json!([10]), json!([10])));
     assert_eq!(a["hostCalls"], b["hostCalls"], "{a}\n{b}");
+}
+
+#[test]
+fn layer_lists_follow_edits_between_reads() {
+    let (mut s, _, _) = doc();
+    let out = log(
+        &mut s,
+        "var L = app.activeDocument.layers, n = L.length; for (var i = 0; i < L.length; i++) L[i];\
+         var made = L.add(); made.name = 'Top'; vc.log(L.length - n); vc.log(L[0].name); vc.log(L.getByName('Top').name);\
+         made.remove(); vc.log(L.length - n);",
+    );
+    assert_eq!(out, [json!(1), json!("Top"), json!("Top"), json!(0)]);
 }
 
 #[test]

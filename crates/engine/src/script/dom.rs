@@ -109,6 +109,11 @@ pub(super) struct State {
     /// A path and its subpaths with the point changes the run has made to it and not written yet
     /// ([`flush`]).
     pending: RefCell<Option<(Item, Vec<vectorcraft_geom::path::SubPath>)>>,
+    /// How many times [`paths`] changed the waiting point changes, which makes a
+    /// [`paths::PointIndex`] of them stale.
+    pending_changes: Cell<u64>,
+    /// Where the points of the path the run last read points of start, by subpath ([`paths`]).
+    point_index: RefCell<Option<paths::PointIndex>>,
     /// How many times the points the run read of each path went stale, by document uid and path id
     /// ([`paths`]).
     point_cuts: RefCell<std::collections::HashMap<(u64, u64), u64>>,
@@ -125,6 +130,9 @@ pub(super) struct State {
     /// The last [`layers::ART_LISTS`] lists of art [`layers`]' collections gave, least recently
     /// used first, each kept while its document is unchanged.
     art: RefCell<Vec<layers::ArtList>>,
+    /// The last [`layers::LAYER_LISTS`] lists of layers `layers` gave, least recently used first,
+    /// each kept while its document is unchanged.
+    layer_lists: RefCell<Vec<layers::LayerList>>,
     /// The uids of the documents whose active artboard `setActiveArtboardIndex` changed.
     pub(super) active_artboards: RefCell<Vec<u64>>,
     /// Each open document's uid and the index of its active artboard when the run started.
@@ -716,11 +724,11 @@ fn on_doc_layer<T>(
     keep_layer: bool,
     f: impl FnOnce(&Host) -> std::result::Result<T, HostError>,
 ) -> std::result::Result<T, HostError> {
-    let (index, active, before, layer) = {
+    let (index, active, mut before, layer, old) = {
         let s = h.session.borrow();
         let index = s.documents().iter().position(|d| d.uid == uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
         let st = &s.documents()[index];
-        (index, s.active_index(), st.selection.clone(), (st.active_layer, st.highlighted_rows()))
+        (index, s.active_index(), st.selection.clone(), (st.active_layer, st.highlighted_rows()), st.doc.clone())
     };
     let switch = active != Some(index);
     if switch {
@@ -737,7 +745,28 @@ fn on_doc_layer<T>(
     if keep_selection {
         let doc = {
             let s = h.session.borrow();
-            s.active().filter(|st| st.uid == uid && st.selection != before).map(|st| st.doc.clone())
+            s.active().filter(|st| st.uid == uid).map(|st| st.doc.clone())
+        };
+        // Anchors and segments are selected by index: a path that gained or lost anchors is not
+        // selected again, so that other anchors of it are not selected in their place.
+        if let Some(doc) = &doc {
+            let counts = |d: &Document, id: NodeId| {
+                d.node(id).and_then(|n| n.path_data()).map(|p| p.subpaths.iter().map(|sp| sp.anchors.len()).collect::<Vec<_>>())
+            };
+            let partial: Vec<NodeId> = before.anchors.keys().chain(before.segments.keys()).copied().collect();
+            for id in partial {
+                if counts(&old, id) != counts(doc, id) {
+                    before.anchors.remove(&id);
+                    before.segments.remove(&id);
+                    before.objects.retain(|o| *o != id);
+                    before.key_anchor = before.key_anchor.filter(|(k, _)| *k != id);
+                    before.key = before.key.filter(|k| *k != id);
+                }
+            }
+        }
+        let doc = {
+            let s = h.session.borrow();
+            doc.filter(|_| s.active().is_some_and(|st| st.selection != before))
         };
         if let Some(doc) = doc {
             restored = restore_selection(h, &doc, &before);
@@ -1104,8 +1133,21 @@ fn docs_add_document(h: &Host, a: &[Data]) -> Answer {
     }
     // The document starts from the first preset of the profile's category (Print: Letter).
     let first = profile.and_then(|n| crate::cmd::newdoc::category(&h.session.borrow(), n)?.into_iter().next());
+    let mut shadowed_by = None;
     if let Some(first) = first {
-        p.insert("preset".into(), json!(first.name));
+        let shadowed = h.session.borrow().prefs.new_doc_presets.iter().any(|q| q.name.trim().eq_ignore_ascii_case(first.name.trim()));
+        if shadowed {
+            shadowed_by = Some(first.clone());
+            // `file.new` would find the saved preset of that name first: the built-in preset's
+            // settings go as params instead, under the ones `presetSettings` gives.
+            if let Value::Object(base) = first.to_json() {
+                for (k, v) in base.into_iter().filter(|(k, _)| !matches!(k.as_str(), "name" | "size" | "orientation" | "profile")) {
+                    p.entry(k).or_insert(v);
+                }
+            }
+        } else {
+            p.insert("preset".into(), json!(first.name));
+        }
     }
     p.insert("profile".into(), profile.map_or(Value::Null, |n| json!(n)));
     if let Some(m) = mode {
@@ -1119,6 +1161,15 @@ fn docs_add_document(h: &Host, a: &[Data]) -> Answer {
             let profile = e["profile"].as_str().unwrap_or_default();
             let reason = e["reason"].as_str().unwrap_or_default();
             return Err(HostError::Error(format!("the New Document profile {profile} could not be read: {reason}")));
+        }
+        // The built-in preset's settings went as params: Recent keeps its name, as `file.new`
+        // keeps a preset's name, unless its size changed (turning it doesn't count).
+        if let Some(first) = &shadowed_by {
+            let sorted = |d: &crate::cmd::newdoc::DocSettings| (d.width.min(d.height), d.width.max(d.height), d.units);
+            let mut s = h.session.borrow_mut();
+            if let Some(r) = s.prefs.recent_new_docs.first_mut().filter(|r| sorted(r) == sorted(first)) {
+                r.name.clone_from(&first.name);
+            }
         }
         // Each warning from reading the profile's file goes to the console.
         for w in value.get("warnings").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str) {
@@ -1346,6 +1397,7 @@ fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId
         d => vec![d],
     };
     let mut ids: Vec<NodeId> = Vec::with_capacity(list.len());
+    let mut seen: HashSet<NodeId> = HashSet::with_capacity(list.len());
     // The document is read once for every object: nothing changes it while the list is checked.
     let (d, isolation, guides_locked) = with_doc(h, doc, |s, st| (st.doc.clone(), st.isolation, s.guides_locked()));
     let locks = d.locked_artboards();
@@ -1360,7 +1412,7 @@ fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId
             let name = with_doc(h, item.doc, |_, st| st.doc.node(item.id).and_then(typename).unwrap_or("page item"));
             return Err(HostError::Error(format!("Cannot select {name} {}", item.id.0)));
         }
-        if !ids.contains(&item.id) {
+        if seen.insert(item.id) {
             ids.push(item.id);
         }
     }
@@ -1648,6 +1700,30 @@ fn item_geometric(h: &Host, a: &[Data]) -> Answer {
 
 fn item_visible(h: &Host, a: &[Data]) -> Answer {
     bounds(h, a, true)
+}
+
+/// The box of the anchors and direction handles of the paths in `n` that its visible bounds take
+/// in: a clipping group or layer gives only its clipping path's, and the source art a Shaper Group
+/// or a tracing keeps is left out, as are hidden objects.
+fn handles_box(n: &vectorcraft_doc::Node) -> Option<Rect> {
+    let children = n.editing_children();
+    match &n.kind {
+        NodeKind::Path { path, .. } => path.control_bounds(),
+        _ if n.clips() => children.first().and_then(|c| handles_box(c)),
+        _ => children.iter().filter(|c| c.visible).fold(None, |acc, c| vectorcraft_geom::union_opt(acc, handles_box(c))),
+    }
+}
+
+/// The item's visible bounds grown to take in the direction handles of its paths.
+fn item_control(h: &Host, a: &[Data]) -> Answer {
+    let item = this_item(h, a)?;
+    let (r, f) = with_doc(h, item.doc, |_, st| {
+        let visible = st.doc.bounds_of(&[item.id], true);
+        let handles = st.doc.node(item.id).and_then(handles_box);
+        let r = vectorcraft_geom::union_opt(visible, handles).ok_or_else(|| HostError::Error("the object has no bounds".into()))?;
+        Ok::<_, HostError>((r, frame(st)?))
+    })?;
+    Ok(f.bounds(h.dom.coords.get(), r))
 }
 
 fn item_position(h: &Host, a: &[Data]) -> Answer {
@@ -2140,7 +2216,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("height", property(l, item_height, item_set_height)),
         ("geometricBounds", get(l, item_geometric)),
         ("visibleBounds", get(l, item_visible)),
-        ("controlBounds", get(l, item_visible)),
+        ("controlBounds", get(l, item_control)),
         ("editable", get(l, item_editable)),
         ("zOrderPosition", get(l, item_z_order_position)),
         ("duplicate", method(l, item_duplicate)),

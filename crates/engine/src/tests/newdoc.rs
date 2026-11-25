@@ -423,6 +423,22 @@ fn align_new_objects_to_pixel_grid_follows_the_preset() {
 }
 
 #[test]
+fn saved_rows_past_the_limit_read_as_the_limit_and_others_stay() {
+    let mut s = Session::new();
+    let saved = json!({"newDocPresets": [
+        {"name": "Many", "width": 100, "height": 100, "artboards": 2, "layout": "gridByColumn", "rows": 1001},
+        {"name": "Four", "width": 100, "height": 100, "artboards": 2, "layout": "gridByColumn", "rows": 4},
+    ]});
+    s.apply_prefs(serde_json::from_value(saved).unwrap());
+    for (name, rows) in [("Many", 1000), ("Four", 4)] {
+        let layout = presets(&mut s, "Saved").iter().find(|p| p["name"] == name).unwrap()["artboardLayout"].clone();
+        assert_eq!(layout["rows"], json!(rows), "{name}");
+        // `file.new` takes the layout `file.newPresets` lists.
+        s.execute("file.new", &json!({"preset": name, "artboardLayout": layout})).unwrap();
+    }
+}
+
+#[test]
 fn rearrange_keeps_its_grid() {
     let mut s = new_doc(json!({"width": 100, "height": 50, "artboards": 3}));
     s.execute("artboard.rearrange", &json!({"columns": 2, "spacing": 5})).unwrap();

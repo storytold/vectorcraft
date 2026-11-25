@@ -155,6 +155,72 @@ fn shape_creators_reject_bad_sizes_without_change() {
 }
 
 #[test]
+fn removing_a_point_deselects_a_path_with_direct_selected_anchors() {
+    // `pathItems[1]` is `b`.
+    let (mut s, a, b) = doc();
+    s.execute("select.anchors", &json!({"id": b.0, "anchors": [[0, 1]], "mode": "set"})).unwrap();
+    s.execute("select.add", &json!({"ids": [a.0]})).unwrap();
+    log(&mut s, "app.activeDocument.pathItems[1].pathPoints[0].remove();");
+    let st = s.active().unwrap();
+    assert_eq!(st.doc.node(b).and_then(|n| n.path_data()).map(|p| p.anchors().count()), Some(3));
+    let sel = &st.selection;
+    assert!(!sel.objects.contains(&b) && !sel.anchors.contains_key(&b), "{sel:?}");
+    assert!(sel.objects.contains(&a));
+    // Moving a point keeps the anchors selected.
+    s.execute("select.anchors", &json!({"id": b.0, "anchors": [[0, 1]], "mode": "set"})).unwrap();
+    log(&mut s, "var p = app.activeDocument.pathItems[1].pathPoints[0]; p.anchor = [p.anchor[0] + 1, p.anchor[1]];");
+    assert_eq!(s.active().unwrap().selection.anchors[&b].len(), 1);
+}
+
+#[test]
+fn set_anchors_with_other_anchor_counts_deselects_the_paths_anchors() {
+    let (mut s, a, b) = doc();
+    s.execute("select.anchors", &json!({"id": b.0, "anchors": [[0, 1]], "mode": "set"})).unwrap();
+    s.execute("select.add", &json!({"ids": [a.0]})).unwrap();
+    let pt = |x: f64, y: f64| json!({"x": x, "y": y, "in": [x, y], "out": [x, y], "smooth": false});
+    let three = json!([{"anchors": [pt(0.0, 0.0), pt(9.0, 0.0), pt(9.0, 9.0)], "closed": true}]);
+    s.execute("path.setAnchors", &json!({"id": b.0, "subpaths": three})).unwrap();
+    let sel = &s.active().unwrap().selection;
+    assert!(!sel.objects.contains(&b) && !sel.anchors.contains_key(&b), "{sel:?}");
+    assert!(sel.objects.contains(&a));
+    // The same number of anchors keeps them selected.
+    s.execute("select.anchors", &json!({"id": b.0, "anchors": [[0, 1]], "mode": "set"})).unwrap();
+    let moved = json!([{"anchors": [pt(1.0, 0.0), pt(9.0, 0.0), pt(9.0, 9.0)], "closed": true}]);
+    s.execute("path.setAnchors", &json!({"id": b.0, "subpaths": moved})).unwrap();
+    assert_eq!(s.active().unwrap().selection.anchors[&b].len(), 1);
+}
+
+/// Points are found by their index across subpaths, through changes that wait to be written and
+/// removals that change how many points a subpath has or remove a subpath.
+#[test]
+fn points_are_found_across_subpaths_as_their_counts_change() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let a = rect(&mut s, 10.0, 20.0, 30.0, 40.0);
+    let pt = |x: f64| json!({"x": x, "y": 0, "in": [x, 0], "out": [x, 0], "smooth": false});
+    let subs = json!([
+        {"anchors": [pt(0.0), pt(1.0)], "closed": false},
+        {"anchors": [pt(2.0)], "closed": false},
+        {"anchors": [pt(3.0), pt(4.0), pt(5.0)], "closed": false},
+    ]);
+    s.execute("path.setAnchors", &json!({"id": a.0, "subpaths": subs})).unwrap();
+    let out = log(
+        &mut s,
+        "var q = app.activeDocument.pathItems[0].pathPoints; vc.log(q.length);\
+         for (var i = 0; i < q.length; i++) q[i].anchor = [i * 10, 7];\
+         vc.log(q[2].anchor); vc.log(q[5].anchor);\
+         q[1].remove(); vc.log(q.length); vc.log(q[1].anchor); vc.log(q[4].anchor);\
+         q[0].remove(); vc.log(q.length); vc.log(q[0].anchor); vc.log(q[3].anchor); vc.log(q[4] === undefined);",
+    );
+    let want =
+        [json!(6), json!([20, 7]), json!([50, 7]), json!(5), json!([20, 7]), json!([50, 7]), json!(4), json!([20, 7]), json!([50, 7]), json!(true)];
+    assert_eq!(out, want);
+    let n = node(&s, a);
+    let counts: Vec<usize> = n.path_data().unwrap().subpaths.iter().map(|sp| sp.anchors.len()).collect();
+    assert_eq!(counts, vec![1, 3]);
+}
+
+#[test]
 fn set_entire_path_replaces_points_and_keeps_closed() {
     let (mut s, a, _) = doc();
     let out = log(
@@ -171,6 +237,34 @@ fn set_entire_path_replaces_points_and_keeps_closed() {
     assert_eq!(pd.subpaths.len(), 1);
     assert!(pd.subpaths[0].closed);
     assert!(pd.subpaths[0].anchors.iter().all(|an| an.h_in == an.p && an.h_out == an.p && an.kind == AnchorKind::Corner));
+}
+
+#[test]
+fn control_bounds_take_in_direction_handles() {
+    let (mut s, _, _) = doc();
+    let out = log(
+        &mut s,
+        "var r = app.activeDocument.pathItems[0]; vc.log(r.controlBounds); vc.log(r.visibleBounds);\
+         var n = app.activeDocument.pathItems.add(); n.setEntirePath([[0, 0], [100, 0]]);\
+         n.pathPoints[0].rightDirection = [50, 80]; vc.log(n.controlBounds); vc.log(n.visibleBounds);",
+    );
+    assert_eq!(out[0], out[1], "a rectangle has no handles outside its visible bounds");
+    let edges = |v: &Value| (0..4).map(|i| v[i].as_f64().unwrap()).collect::<Vec<_>>();
+    let (control, visible) = (edges(&out[2]), edges(&out[3]));
+    assert!(control[1].max(control[3]) >= 80.0 - 1e-9, "{control:?}");
+    assert!(visible[1].max(visible[3]) < 80.0, "{visible:?}");
+    assert!(control[0] <= visible[0] && control[2] >= visible[2], "{control:?} holds {visible:?}");
+}
+
+/// A clipping group's control bounds are its clipping path's: art outside the clip is left out, as
+/// it is from the visible bounds.
+#[test]
+fn a_clipping_groups_control_bounds_leave_out_the_clipped_art() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.clippingMask.make", &json!({})).unwrap();
+    let out = log(&mut s, "var g = app.activeDocument.groupItems[0]; vc.log(g.controlBounds); vc.log(g.visibleBounds);");
+    assert_eq!(out[0], out[1]);
 }
 
 #[test]

@@ -474,6 +474,39 @@ fn layer_list(d: &Document, parent: Option<NodeId>) -> Vec<NodeId> {
     list.into_iter().flatten().rev().filter(|n| n.is_layer()).map(|n| n.id).collect()
 }
 
+/// A document's uid, the document as it was, a parent layer (`None`: the top level) and its layers.
+pub(super) type LayerList = (u64, Arc<Document>, Option<NodeId>, Rc<Vec<NodeId>>);
+
+/// How many lists of layers [`super::State`] keeps at once.
+pub(super) const LAYER_LISTS: usize = 4;
+
+/// [`layer_list`], kept while the document is unchanged for the last [`LAYER_LISTS`] parents, so a
+/// loop over `layers` builds the list once. Each new list is charged by the objects it looks at.
+fn layer_ids(h: &Host, st: &DocState, parent: Option<NodeId>) -> Result<Rc<Vec<NodeId>>> {
+    {
+        let mut lists = h.dom.layer_lists.borrow_mut();
+        if let Some(at) = lists.iter().position(|(uid, doc, p, _)| *uid == st.uid && Arc::ptr_eq(doc, &st.doc) && *p == parent) {
+            let list = lists.remove(at);
+            let ids = list.3.clone();
+            lists.push(list);
+            return Ok(ids);
+        }
+    }
+    let looked = match parent {
+        None => st.doc.layers.len(),
+        Some(p) => st.doc.children(Some(p)).map_or(0, Vec::len),
+    };
+    h.charge_call(looked as u64)?;
+    let ids = Rc::new(layer_list(&st.doc, parent));
+    let mut lists = h.dom.layer_lists.borrow_mut();
+    lists.retain(|(uid, doc, ..)| *uid != st.uid || Arc::ptr_eq(doc, &st.doc));
+    if lists.len() >= LAYER_LISTS {
+        lists.remove(0);
+    }
+    lists.push((st.uid, st.doc.clone(), parent, ids.clone()));
+    Ok(ids)
+}
+
 fn layers_of(h: &Host, a: &[Data]) -> Answer {
     let (doc, id) = this_layer(h, a)?;
     let [high, low] = id_parts(id);
@@ -482,7 +515,7 @@ fn layers_of(h: &Host, a: &[Data]) -> Answer {
 
 fn layers_length(h: &Host, a: &[Data]) -> Answer {
     let (doc, parent) = layers_scope(h, arg(a, 0))?;
-    Ok(num(float(with_doc(h, doc, |_, st| layer_list(&st.doc, parent).len()) as u64)))
+    Ok(num(float(with_doc(h, doc, |_, st| layer_ids(h, st, parent).map(|l| l.len()))? as u64)))
 }
 
 fn layers_parent(h: &Host, a: &[Data]) -> Answer {
@@ -499,14 +532,14 @@ fn layers_at(h: &Host, a: &[Data]) -> Answer {
     let (doc, parent) = layers_scope(h, arg(a, 0))?;
     let Data::Number(n) = arg(a, 1) else { return Ok(Data::Undefined) };
     let Some(i) = whole(*n).and_then(|i| usize::try_from(i).ok()) else { return Ok(Data::Undefined) };
-    Ok(with_doc(h, doc, |_, st| layer_list(&st.doc, parent).get(i).map_or(Data::Undefined, |id| layer_ref(h, st.uid, *id))))
+    with_doc(h, doc, |_, st| Ok(layer_ids(h, st, parent)?.get(i).map_or(Data::Undefined, |id| layer_ref(h, st.uid, *id))))
 }
 
 fn layers_by_name(h: &Host, a: &[Data]) -> Answer {
     let (doc, parent) = layers_scope(h, arg(a, 0))?;
     let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("give a name, as a string".into())) };
     with_doc(h, doc, |_, st| {
-        let ids = layer_list(&st.doc, parent);
+        let ids = layer_ids(h, st, parent)?;
         h.charge_call(ids.len() as u64)?;
         let id = ids.iter().find(|i| st.doc.node(**i).and_then(|n| n.name.as_deref()) == Some(name.as_str()));
         id.map(|id| layer_ref(h, st.uid, *id)).ok_or_else(|| HostError::Error(NOT_FOUND.into()))
@@ -659,6 +692,8 @@ fn art_by_name(h: &Host, a: &[Data], kind: Kind) -> Answer {
     let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("give a name, as a string".into())) };
     with_doc(h, doc, |_, st| {
         let ids = art_list(h, st, kind, c)?;
+        // The scan is charged by itself: a list kept from an earlier read was charged once.
+        h.charge_call(ids.len() as u64)?;
         let id = ids.iter().find(|i| st.doc.node(**i).and_then(|n| n.name.as_deref()) == Some(name.as_str()));
         id.map(|id| item_ref(h, st, *id)).ok_or_else(|| HostError::Error(NOT_FOUND.into()))
     })
@@ -767,10 +802,8 @@ fn compounds_remove_all(h: &Host, a: &[Data]) -> Answer {
 }
 
 fn art_typename(h: &Host, a: &[Data], kind: Kind) -> Answer {
-    let (doc, c) = art_scope(h, arg(a, 0), kind.class())?;
-    // A compound path's `pathItems` are its `PageItems`: it holds only paths.
-    let compound = c.is_some_and(|c| with_doc(h, doc, |_, st| st.doc.node(c).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. }))));
-    Ok(text(if compound && kind == Kind::Any { "PathItems" } else { kind.class() }))
+    art_scope(h, arg(a, 0), kind.class())?;
+    Ok(text(kind.class()))
 }
 
 pub(super) fn scoped_typename(h: &Host, a: &[Data]) -> Answer {
@@ -856,6 +889,13 @@ fn held_paths(h: &Host, a: &[Data]) -> Answer {
     Ok(super::paths::held_path_items(h, item.doc.uid, item.id))
 }
 
+/// A compound path's `pathItems`: its paths, which `add()` and the shape methods make inside it
+/// ([`super::paths`]).
+fn compound_paths(h: &Host, a: &[Data]) -> Answer {
+    let item = this_item_of(h, a, "CompoundPathItem")?;
+    Ok(super::paths::held_path_items(h, item.doc.uid, item.id))
+}
+
 // ---- GroupItem and CompoundPathItem ----
 
 fn this_item_of(h: &Host, a: &[Data], what: &str) -> Result<Item> {
@@ -913,7 +953,7 @@ pub(super) fn members(class: &str, l: &Link) -> Vec<(String, HostMember)> {
             m.extend(["textFrames", "symbolItems", "placedItems", "rasterItems"].map(|m| later(l, "GroupItem", m)));
             m
         }
-        "CompoundPathItem" => named(vec![("pathItems", get(l, held_page_items))]),
+        "CompoundPathItem" => named(vec![("pathItems", get(l, compound_paths))]),
         _ => Vec::new(),
     }
 }

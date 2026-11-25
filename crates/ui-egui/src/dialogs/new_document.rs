@@ -820,6 +820,22 @@ mod tests {
         assert_eq!(shown_columns(&s), 2.0);
     }
 
+    /// The dialog reads rows as `file.new` does: a whole number from 1 to the artboard limit,
+    /// `4.0` included, and a fractional, zero or larger count is refused with nothing changed.
+    #[test]
+    fn the_dialog_reads_rows_as_file_new_does() {
+        let mut app = app();
+        open(&mut app);
+        set(&app, "artboards", json!(5)).unwrap();
+        set(&app, "artboardLayout", json!({"layout": "gridByColumn", "rows": 4.0})).unwrap();
+        assert_eq!(fields(&app)["artboardLayout"]["rows"], json!(4));
+        for rows in [json!(3.5), json!(MAX_ARTBOARDS + 1), json!(0)] {
+            let e = set(&app, "artboardLayout", json!({"layout": "gridByColumn", "rows": rows})).unwrap_err();
+            assert!(e.contains("can't take"), "{rows}: {e}");
+            assert_eq!(fields(&app)["artboardLayout"]["rows"], json!(4), "{rows}");
+        }
+    }
+
     /// Press Create: the dialog files its answer and the pump runs `file.new` with it.
     fn create(app: &mut VectorcraftApp) {
         let ctx = ctx(app);
