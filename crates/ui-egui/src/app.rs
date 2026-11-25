@@ -48,8 +48,12 @@ pub(crate) mod view;
 
 pub use fonts::MAX_RECENT_FONTS;
 
-/// VectorCraft as the framework's services know it: the settings folder, the name and the version.
-const APP_INFO: AppInfo = AppInfo { id: "vectorcraft", name: "VectorCraft", version: env!("CARGO_PKG_VERSION") };
+/// VectorCraft as the framework's services know it: the settings id, the name and the version.
+/// A nightly build gives its own name and feed version; the id stays the stable one, since the
+/// runtime keys a theme's `[apps.<id>]` pins on it.
+fn app_info() -> AppInfo {
+    AppInfo { id: crate::os_window::SETTINGS_APP_ID, name: crate::os_window::name(), version: crate::os_window::version() }
+}
 
 /// Monotonic seconds of the app's clock, which recovery, the clipboard look and the frame rate
 /// count in.
@@ -98,7 +102,7 @@ impl VectorcraftApp {
             }
         };
         // PLAN: the hosts (hub-w3) replace `host` with the one they build (files, settings, jobs); every frame installs it through `frame_input`.
-        let host = Arc::new(Host::builder(APP_INFO).i18n(i18n::shared()).build());
+        let host = Arc::new(Host::builder(app_info()).i18n(i18n::shared()).build());
         Self {
             session,
             ui: UiState::default(),
@@ -504,6 +508,18 @@ impl VectorcraftApp {
         crate::keymap::note_os(ctx);
         prefs_dialog::apply_runtime(self, ctx);
         self.run_control(ctx);
+        // Plug-ins loading on other threads since launch install as their loads finish; until then
+        // the host keeps coming back to look again, and once more when the last one installs, for
+        // what waits for them. They install after the control requests are drained, so the frame
+        // after the last one opens the files held for them (the desktop app does that before this
+        // pass) before a control request waiting for them runs.
+        if self.session.plugins_loading() {
+            if self.session.poll_plugin_loads() {
+                ctx.request_repaint_after(std::time::Duration::from_millis(50));
+            } else {
+                ctx.request_repaint();
+            }
+        }
         // In the next frame's first pass, as production's one-pass frames did: a second pass of the frame that asked
         // for it (one a background run's result can bring) doesn't open it early.
         if ctx.current_pass_index() == 0
