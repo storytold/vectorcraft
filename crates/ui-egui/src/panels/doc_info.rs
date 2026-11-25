@@ -33,7 +33,7 @@ pub struct DocInfoView {
 /// A `label: value` row. `label` is shown as given: translate an interface label first, a name
 /// stays as it is.
 pub(crate) fn row(ui: &mut Ui, label: &str, value: String) {
-    Row::new().fill_width().align(RowAlign::SpaceBetween).show(ui, |ui, _| {
+    Row::new().fill_width().align(RowAlign::SpaceBetween).wrap(true).show(ui, |ui, _| {
         Text::new(label.to_string()).shade(Shade::Muted).show(ui);
         // The value can be selected and copied (#8432).
         SelectableText::new(label.to_string(), &value).show(ui);
