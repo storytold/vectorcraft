@@ -10,6 +10,9 @@ use crate::{Error, Result};
 
 /// Longest manifest the host reads.
 pub const MAX_MANIFEST_BYTES: usize = 64 * 1024;
+/// The name of the custom section a module may carry its manifest in, so the host reads it
+/// without running any of the module's code.
+pub const MANIFEST_SECTION: &str = "vc_manifest";
 /// Most parameters a plug-in may declare.
 pub const MAX_PARAMS: usize = 256;
 /// Most parameters outside groups (`group`): a dialog of more is sorted into sections.
@@ -334,7 +337,8 @@ impl ParamSpec {
     }
 }
 
-/// The manifest a plug-in returns from `vc_manifest` (UTF-8 JSON).
+/// The manifest a plug-in carries in its [`MANIFEST_SECTION`] custom section or returns from
+/// `vc_manifest` (UTF-8 JSON).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Manifest {

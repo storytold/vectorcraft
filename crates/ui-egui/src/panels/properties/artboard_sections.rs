@@ -13,7 +13,6 @@ use craft::ui::layout_components::{Grid, Row};
 use craft::ui::menu::{Menu, MenuItem};
 use craft::ui::pickers::Select;
 use craft::ui::primitives::IconSpec;
-use craft::ui::sections::Section;
 use craft::ui::text::TextField;
 use egui::Ui;
 use serde_json::json;
@@ -36,13 +35,13 @@ pub(super) fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     let i = artboards::selected(app, n);
     let ab = app.session.active().and_then(|d| d.doc.artboards.get(i)).cloned();
     if let Some(ab) = &ab {
-        Section::fixed(tl!("Transform")).show(ui, |ui, _| {
+        super::section(tl!("Transform")).show(ui, |ui, _| {
             transform::artboard_fields(app, ui, i, ab.rect);
             artboard_size_row(app, ui, i, ab.rect.width(), ab.rect.height());
             artboards::art_options(app, ui);
         });
     }
-    Section::fixed(tl!("Artboards")).show(ui, |ui, _| {
+    super::section(tl!("Artboards")).show(ui, |ui, _| {
         if let Some(ab) = &ab {
             Field::new(tl!("Name:")).show(ui, |ui, _| {
                 Row::new().show(ui, |ui, _| {
@@ -72,7 +71,7 @@ pub(super) fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     });
-    Section::fixed(tl!("Quick Actions")).show(ui, |ui, _| {
+    super::section(tl!("Quick Actions")).show(ui, |ui, _| {
         Grid::new(&HALVES).show(ui, |ui, _| {
             rearrange_button(ui, n);
             Button::command(CommandRef::with_params("tool.select", json!({ "tool": "selection" })))

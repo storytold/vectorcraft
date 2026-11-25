@@ -302,7 +302,7 @@ impl Live<'_> {
         step: f64,
         unit: Option<UnitKind>,
         to_value: fn(f64) -> Value,
-    ) {
+    ) -> bool {
         let label = spec(key).map_or("", |s| tl!(s.label));
         let old = self.num_of(key).unwrap_or(*range.start());
         let mut value = old;
@@ -311,9 +311,11 @@ impl Live<'_> {
             field = field.unit_kind(unit);
         }
         field.show(ui);
-        if value != old {
+        let changed = value != old;
+        if changed {
             let _ = self.w.put(key, &to_value(value));
         }
+        changed
     }
 }
 
@@ -337,13 +339,14 @@ impl PreferencesModel for Live<'_> {
         let _ = self.w.put(key, &value);
     }
 
-    fn custom_row(&mut self, ui: &mut egui::Ui, key: &str) {
+    fn custom_row(&mut self, ui: &mut egui::Ui, key: &str) -> bool {
         match key {
             "uiScaling" => self.slider(ui, key, 0.75..=2.0, 0.05, Some(UnitKind::Times), |v| json!(v)),
             "anchorSize" => self.slider(ui, key, 1.0..=7.0, 1.0, None, |v| json!(v.round() as i64)),
             "editOriginal" => {
                 let enabled = self.enabled(key);
                 crate::original_editor::show(self.app, ui, enabled);
+                false
             }
             "prefsFile" => {
                 let (mut export, mut import, mut reset) = (false, false, false);
@@ -364,17 +367,21 @@ impl PreferencesModel for Live<'_> {
                 if reset {
                     super::ask(self.w);
                 }
+                false
             }
             _ => {
                 // The folder rows: typed, or picked with Browse….
-                let Some(sp) = spec(key) else { return };
-                PathSetting::new(tl!(sp.label), key, &mut self.w.draft, PickRequest::folder(key)).show(ui);
+                let Some(sp) = spec(key) else { return false };
+                let changed = PathSetting::new(tl!(sp.label), key, &mut self.w.draft, PickRequest::folder(key)).show(ui).changed;
                 self.w.sync_strings();
+                changed
             }
         }
     }
 
-    fn custom_page(&mut self, _ui: &mut egui::Ui, _page: &str) {}
+    fn custom_page(&mut self, _ui: &mut egui::Ui, _page: &str) -> bool {
+        false
+    }
 
     fn reset_page(&mut self, page: &str) {
         let keys: Vec<&str> = PREF_SPECS.iter().filter(|s| s.category == page).map(|s| s.key).collect();

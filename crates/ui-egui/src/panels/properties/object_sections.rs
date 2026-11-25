@@ -10,7 +10,6 @@ use craft::ui::form::Field;
 use craft::ui::layout_components::Grid;
 use craft::ui::pickers::{ReferencePoint, ReferencePointLook};
 use craft::ui::runtime::env::UnitKind;
-use craft::ui::sections::Section;
 use craft::ui::style::TypeRole;
 use craft::ui::text::{NumberField, NumberPick};
 use egui::Ui;
@@ -28,7 +27,7 @@ pub(super) fn image_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(i) = crate::place::selected_image_info(app) else { return };
     let (name, details) = crate::place::image_summary(i);
     let (Some(id), linked) = (i["id"].as_u64(), i["linked"] == true) else { return };
-    Section::fixed(if linked { tl!("Linked File") } else { tl!("Embedded Image") }).show(ui, |ui, _| {
+    super::section(if linked { tl!("Linked File") } else { tl!("Embedded Image") }).show(ui, |ui, _| {
         Text::new(name.clone()).elide(Elide::Middle).role(TypeRole::BodyStrong).show(ui);
         Text::new(details.clone()).shade(Shade::Muted).show(ui);
         Grid::new(&HALVES).show(ui, |ui, _| {
@@ -52,7 +51,7 @@ pub(super) fn image_section(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// The one selected Image Trace object: its preset (choosing another traces it again with that
 /// one), view, a button to reveal the tracing controls, Expand and Release.
 pub(super) fn trace_section(app: &mut VectorcraftApp, ui: &mut Ui, preset: &str, view: vectorcraft_doc::TraceView) {
-    Section::fixed(tl!("Image Trace")).show(ui, |ui, _| {
+    super::section(tl!("Image Trace")).show(ui, |ui, _| {
         Field::new(tl!("Preset")).show(ui, |ui, _| crate::panels::image_trace::preset_dropdown(app, ui, preset));
         crate::panels::image_trace::view_row(app, ui, view);
         crate::panels::image_trace::split_row(app, ui);
@@ -118,7 +117,7 @@ pub(super) fn objects_on_path_section(app: &mut VectorcraftApp, ui: &mut Ui, oop
             app.status(e);
         }
     };
-    Section::fixed(tl!("Objects on Path Options")).show(ui, |ui, _| {
+    super::section(tl!("Objects on Path Options")).show(ui, |ui, _| {
         Field::new(tl!("Pivot")).show(ui, |ui, _| {
             // Mixed while the groups' pivots differ: no square is chosen.
             let shown = oop.pivot.map_or(Mixed::Mixed, |p| Mixed::Same(Anchor9::ALL.get(usize::from(p)).copied()));

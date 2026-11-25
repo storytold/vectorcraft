@@ -2,17 +2,17 @@
 
 use craft::behavior::{ColumnWidth, IconId};
 use craft::ui::buttons::{Button, IconButton};
-use craft::ui::contract::{Props as _, Show as _, ShowContainer as _};
-use craft::ui::layout_components::{Grid, Row};
+use craft::ui::contract::{LabelScheme, Props as _, Show as _, ShowContainer as _};
+use craft::ui::layout_components::{Grid, Row, Stack};
 use craft::ui::patterns::panels::Inspector;
 
 use craft::ui::runtime::commands::CommandRef;
-use craft::ui::sections::Section;
+use craft::ui::sections::HeaderStrength;
 use egui::Ui;
 use serde_json::json;
 use vectorcraft_doc::{LiveShape, Node, NodeKind};
 
-use super::first_selected;
+use super::{first_selected, section};
 use crate::VectorcraftApp;
 
 /// Run-only state of the Properties panel.
@@ -38,7 +38,7 @@ pub(crate) struct QuickAction {
 /// The panel for what is selected: the selection's kind as its heading, then its sections (Edit
 /// Artboards' with the Artboard tool, the document's with nothing selected).
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let inspector = Inspector::new(tl!("Properties")).empty(tl!("No document open"));
+    let inspector = Inspector::new(tl!("Properties")).title_strength(HeaderStrength::Quiet).empty(tl!("No document open"));
     let Some(key) = target_key(app) else {
         inspector.show(ui, |_, _| {});
         return;
@@ -52,16 +52,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let guides = super::transform::selected_guides(app);
     let header = heading(first.as_deref(), n_sel, editing_artboards, guides.is_some());
     inspector.target(key).header(header).show(ui, |ui, _| {
-        if editing_artboards {
-            artboard_sections::artboard_sections(app, ui);
-        } else if first.is_none() {
-            match guides {
-                Some(guides) => transform_section::guide_sections(app, ui, guides),
-                None => document_sections::document_sections(app, ui),
+        // The reference panel's labels end in a colon beside fields that keep their own width.
+        Stack::new().fill_width().labels(LabelScheme::Form).show(ui, |ui, _| {
+            if editing_artboards {
+                artboard_sections::artboard_sections(app, ui);
+            } else if first.is_none() {
+                match guides {
+                    Some(guides) => transform_section::guide_sections(app, ui, guides),
+                    None => document_sections::document_sections(app, ui),
+                }
+            } else {
+                body(app, ui, first.as_deref(), n_sel, anchors);
             }
-        } else {
-            body(app, ui, first.as_deref(), n_sel, anchors);
-        }
+        });
     });
 }
 
@@ -89,7 +92,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, first: Option<&Node>, n_sel: usiz
     transform_section::corner_rows(app, ui);
     // The Gradient tool: the gradient's type and, for a freeform one, how clicks add points (#921).
     if app.session.tool_id() == "gradient" {
-        Section::fixed(tl!("Gradient")).show(ui, |ui, _| {
+        section(tl!("Gradient")).show(ui, |ui, _| {
             super::gradient::type_row(app, ui);
             super::gradient::draw_radios(app, ui);
         });
@@ -112,7 +115,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, first: Option<&Node>, n_sel: usiz
         crate::dialogs::dimension::properties_section(app, ui);
     }
     appearance_section::appearance_section(app, ui);
-    Section::fixed(tl!("Align")).show(ui, |ui, _| {
+    section(tl!("Align")).show(ui, |ui, _| {
         Row::new().show(ui, |ui, _| {
             super::align::align_buttons(app, ui);
             // The rest (Distribute Objects, Distribute Spacing, Align To) is the Align panel's.
@@ -120,7 +123,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, first: Option<&Node>, n_sel: usiz
         });
     });
     if n_sel > 1 {
-        Section::fixed(tl!("Pathfinder")).show(ui, |ui, _| {
+        section(tl!("Pathfinder")).show(ui, |ui, _| {
             Row::new().show(ui, |ui, _| {
                 for (icon, tip, op) in [
                     ("squares-unite", tl!("Unite"), "unite"),
@@ -135,10 +138,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, first: Option<&Node>, n_sel: usiz
         });
     }
     if anchors != crate::chrome::AnchorControls::None {
-        Section::fixed(tl!("Anchor Point")).show(ui, |ui, _| crate::chrome::anchor_buttons(app, ui, anchors));
+        section(tl!("Anchor Point")).show(ui, |ui, _| crate::chrome::anchor_buttons(app, ui, anchors));
     }
     let actions = quick_actions(app);
-    Section::fixed(tl!("Quick Actions")).show(ui, |ui, _| {
+    section(tl!("Quick Actions")).show(ui, |ui, _| {
         if is_image {
             crate::panels::image_trace::trace_button(app, ui);
         }

@@ -31,7 +31,6 @@ use craft::ui::patterns::form_dialogs::FormDialog;
 use craft::ui::pickers::Select;
 use craft::ui::primitives::{Glyph, IconSpec};
 use craft::ui::runtime::env::Label;
-use craft::ui::sections::Section;
 use craft::ui::style::UiTokens;
 use craft::ui::text::{NumberField, TextField};
 use egui::{Context, Ui};
@@ -810,7 +809,7 @@ fn text_row(ui: &mut Ui, v: &mut GraphTypeValues, key: &str, label: &'static str
 
 fn options_page(ui: &mut Ui, v: &mut GraphTypeValues, s: &GraphSubject) {
     let kind = graph_kind(v, s);
-    Section::fixed(tl!("Type")).show(ui, |ui, _| {
+    crate::panels::section(tl!("Type")).show(ui, |ui, _| {
         type_row(ui, v, s);
         let sides: &[(&str, &str)] = if s.series.is_empty() { &SIDES } else { &SERIES_SIDES };
         let enabled = active(v, s, "valueAxis");
@@ -818,7 +817,7 @@ fn options_page(ui: &mut Ui, v: &mut GraphTypeValues, s: &GraphSubject) {
         let enabled = active(v, s, "separateScales");
         check(ui, v, "separateScales", tl!("Separate Scales"), enabled);
     });
-    Section::fixed(tl!("Style")).show(ui, |ui, _| {
+    crate::panels::section(tl!("Style")).show(ui, |ui, _| {
         Grid::new(TWO).show(ui, |ui, _| {
             let rows = [
                 ("dropShadow", tl!("Add Drop Shadow")),
@@ -844,7 +843,7 @@ fn type_options(ui: &mut Ui, v: &mut GraphTypeValues, s: &GraphSubject, kind: Gr
     if !(columns || lines || pie) {
         return;
     }
-    Section::fixed(tl!("Options")).show(ui, |ui, _| {
+    crate::panels::section(tl!("Options")).show(ui, |ui, _| {
         if columns {
             let width = if matches!(kind, GraphKind::Bar | GraphKind::StackedBar) { tl!("Bar Width") } else { tl!("Column Width") };
             for (key, label) in [("columnWidth", width), ("clusterWidth", tl!("Cluster Width"))] {
@@ -884,7 +883,7 @@ fn type_options(ui: &mut Ui, v: &mut GraphTypeValues, s: &GraphSubject, kind: Gr
 fn value_page(ui: &mut Ui, v: &mut GraphTypeValues, s: &GraphSubject, right: bool) {
     let (scale, side) = page_axes(v, s, right);
     let own_scale = scale_used(v, s, right);
-    Section::fixed(tl!("Tick Values")).show(ui, |ui, _| {
+    crate::panels::section(tl!("Tick Values")).show(ui, |ui, _| {
         let (drawn, (lo, hi), count) = shown_scale(v, s, right);
         check(ui, v, drawn.overridden, tl!("Override Calculated Values"), own_scale);
         let enabled = own_scale && v.bool(scale.overridden);
@@ -893,7 +892,7 @@ fn value_page(ui: &mut Ui, v: &mut GraphTypeValues, s: &GraphSubject, right: boo
         number_row(ui, v, scale.ticks, tl!("Divisions"), count as f64, &DIVISION_COUNT, enabled);
     });
     tick_marks(ui, v, side.length, side.marks);
-    Section::fixed(tl!("Add Labels")).show(ui, |ui, _| {
+    crate::panels::section(tl!("Add Labels")).show(ui, |ui, _| {
         text_row(ui, v, side.prefix, tl!("Prefix"));
         text_row(ui, v, side.suffix, tl!("Suffix"));
     });
@@ -928,7 +927,7 @@ fn category_page(ui: &mut Ui, v: &mut GraphTypeValues, s: &GraphSubject) {
 
 /// Tick Marks: the length, and the tick marks per division while there are tick marks to draw.
 fn tick_marks(ui: &mut Ui, v: &mut GraphTypeValues, length: &str, marks: &str) {
-    Section::fixed(tl!("Tick Marks")).show(ui, |ui, _| {
+    crate::panels::section(tl!("Tick Marks")).show(ui, |ui, _| {
         choice(ui, v, length, tl!("Length"), &TICK_LENGTHS, true);
         let shown = number(v, marks).unwrap_or(1.0);
         let enabled = v.str(length) != "none";
