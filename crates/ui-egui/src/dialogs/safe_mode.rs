@@ -5,7 +5,7 @@
 //! dialogs live on the dialog host; [`pump`] reads their answers.
 
 use craft::ui::contract::Bind;
-use craft::ui::dialog::{DialogResult, PromptChoice, StandardPrompt, StartupStage, dialog_id};
+use craft::ui::dialog::{DialogResult, PromptChoice, StandardPrompt, dialog_id};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
 use serde_json::{Value, json};
 use vectorcraft_plugins::safe_mode::{self, Item};
@@ -239,9 +239,10 @@ fn pump_stopped(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
     let answered = dialogs.with(|h| {
         let answered = h.take::<StandardPrompt>();
-        // An empty host has neither an open dialog nor a queued one: otherwise the choice waits.
+        // An empty host has neither an open dialog nor a queued one: otherwise the choice waits. It opens now rather
+        // than through the startup queue, which the host drains only in its next pass: a frame may have no other.
         if answered.is_none() && h.is_empty() {
-            h.enqueue(StartupStage::Warning, stopped_prompt(&fields));
+            h.open(stopped_prompt(&fields));
             ctx.request_repaint();
         }
         answered
