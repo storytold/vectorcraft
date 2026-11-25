@@ -164,7 +164,7 @@ features! {
     DollarEnv "dollar.env" Files,
     DollarEvalFile "dollar.evalFile" Files,
     DynamicCode "dynamicCode" Language,
-    E4x "e4x" HostOnly,
+    E4x "e4x" Language,
     ExternalObject "externalObject" HostOnly,
     FileDialog "file.dialog" Files,
     FileExecute "file.execute" Files,
@@ -186,6 +186,6 @@ features! {
     SelectTool "selectTool" HostOnly,
     Socket "socket" HostOnly,
     UnitValue "unitValue" Language,
-    Xml "xml" HostOnly,
+    Xml "xml" Language,
     Xmp "xmp" HostOnly,
 }

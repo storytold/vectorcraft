@@ -198,6 +198,49 @@ fn files_opened_together_ask_in_turn(app: &mut VectorcraftApp, tagged: &[u8]) {
     assert!(!is_open::<ProfileMismatchDialog>(app) && app.pending_profile_open.is_none());
 }
 
+/// A file opened while another dialog is open (a message here) waits for it to close and then asks
+/// its question; the other dialog stays. `tagged` asks with the settings in force.
+fn a_question_waits_for_an_open_dialog(app: &mut VectorcraftApp, tagged: &[u8]) {
+    let docs = app.session.documents().len();
+    crate::dialogs::confirm::tell(app, "Waiting", "");
+    let r = crate::io::open_bytes(app, "tagged.vectorcraft", tagged, None).unwrap();
+    assert_eq!(r, json!({ "dialog": OPEN_KIND, "queued": true }));
+    assert!(is_open::<crate::dialogs::confirm::Message>(app), "the message stays");
+    assert!(!is_open::<ProfileMismatchDialog>(app) && app.pending_profile_open.is_none());
+    let id = open_id::<crate::dialogs::confirm::Message>(app);
+    answer_cancel(app, id);
+    assert!(is_open::<ProfileMismatchDialog>(app) && app.pending_profile_open.is_some(), "then it asks");
+    let id = open_id::<ProfileMismatchDialog>(app);
+    answer_ok(app, id);
+    assert_eq!(app.session.documents().len(), docs + 1);
+}
+
+/// A file read off the UI thread waits for another file's question, and Color Settings change so
+/// that it has none any more: once the first question closes, the rest of its read is done off the
+/// UI thread too, and it opens when that is done. `tagged` asks with the settings in force, which
+/// Ask When Opening for a mismatch is one of.
+fn a_background_open_whose_question_is_gone_finishes_off_the_ui_thread(app: &mut VectorcraftApp, tagged: &[u8]) {
+    let docs = app.session.documents().len();
+    assert_eq!(crate::io::open_bytes(app, "first.vectorcraft", tagged, None).unwrap(), json!({ "dialog": OPEN_KIND }));
+    let path = "/tmp/background.vectorcraft".to_string();
+    let file = fileio::read_for_open_asking("background.vectorcraft", tagged, Some(path.clone()), &json!({}), false, false, true).unwrap();
+    assert!(file.read_left());
+    let r = open_or_ask(app, file, Some(path.clone()), true).unwrap();
+    assert_eq!(r, json!({ "dialog": OPEN_KIND, "queued": true }));
+    app.run("edit.colorSettings", json!({"askMismatchOpen": false})).unwrap();
+    let id = open_id::<ProfileMismatchDialog>(app);
+    crate::opening::tests::with_threads(|| {
+        answer_cancel(app, id);
+        assert!(app.queued_profile_opens.is_empty());
+        assert_eq!(app.opening.pending.len(), 1, "read off the UI thread");
+        assert_eq!(app.session.documents().len(), docs, "not open before its read is done");
+        crate::opening::tests::open_ready(app);
+    });
+    assert_eq!(app.session.documents().len(), docs + 1);
+    assert_eq!(app.ui.recent_files.first(), Some(&path));
+    app.run("edit.colorSettings", json!({"askMismatchOpen": true})).unwrap();
+}
+
 /// Color Settings change the open question while it is open: OK asks the question as it is now
 /// (another working space) instead of opening, and opens by the policy once there is no question
 /// (the working space is the file's profile). `tagged` (Wide Gamut RGB) asks with the settings in
@@ -391,6 +434,8 @@ fn opening_and_pasting_ask_about_profiles() {
     open_confirmed_under_roots(&mut app, &tagged);
     links_read_under_the_roots_of_the_open(&mut app);
     files_opened_together_ask_in_turn(&mut app, &tagged);
+    a_question_waits_for_an_open_dialog(&mut app, &tagged);
+    a_background_open_whose_question_is_gone_finishes_off_the_ui_thread(&mut app, &tagged);
 
     // Missing Profiles: Ask When Opening, and a profile the list doesn't offer.
     app.run("edit.colorSettings", json!({"askMismatchOpen": false, "askMissingOpen": true, "rgbPolicy": "preserveEmbedded"})).unwrap();

@@ -509,7 +509,7 @@ pub(super) fn suggested(app: &VectorcraftApp, ext: &str) -> (String, Option<Stri
 
 /// The save panel's file type, `(label, extensions)`, for the files `write_named` and
 /// `target_path` write that are not a document format (`fileio::format` has those).
-const FILE_TYPES: &[(&str, &[&str])] = &[
+pub(crate) const FILE_TYPES: &[(&str, &[&str])] = &[
     ("Swatch libraries", &["vcswatches"]),
     ("Swatch libraries", &["gpl"]),
     ("Swatch libraries", &["ase"]),
