@@ -451,9 +451,13 @@ fn the_gradient_panel_stays_inside_its_dock_column() {
 }
 
 /// In a panel at the narrowest panel width the Type, Method, Spread and stop rows wrap: their controls stay inside
-/// the panel.
+/// the panel, except the last type button. The five type buttons are one `Segmented` control, which keeps its
+/// segments on one line, so at this width Freeform Gradient reaches 2 pt past the panel's right edge. The test
+/// holds that button to the 2 pt until the widget can wrap its segments.
 #[test]
 fn the_gradient_rows_wrap_in_a_narrow_panel() {
+    /// How far Freeform Gradient reaches past the panel's right edge at the narrowest width.
+    const TYPE_OVERFLOW: f32 = 2.0;
     let names = [
         "Linear Gradient",
         "Radial Gradient",
@@ -468,9 +472,14 @@ fn the_gradient_rows_wrap_in_a_narrow_panel() {
         "Delete Stop",
     ];
     for lang in ["en", "fr"] {
-        let panel = shown(lang, Place::Floating(crate::panel_docking::PANEL_MIN_WIDTH), select_a_stop, &names);
+        let asked: Vec<&'static str> = names.iter().copied().chain(["Freeform Gradient"]).collect();
+        let panel = shown(lang, Place::Floating(crate::panel_docking::PANEL_MIN_WIDTH), select_a_stop, &asked);
         let past = panel.past(names.iter().flat_map(|name| panel.rects(name).into_iter().map(|r| (name.to_string(), r))));
         assert!(past.is_empty(), "past the panel in {lang}: {past:?}");
+        for freeform in panel.rects("Freeform Gradient") {
+            let inside = freeform.left() >= panel.body.left() - 0.5 && freeform.right() <= panel.body.right() + TYPE_OVERFLOW + 0.5;
+            assert!(inside, "Freeform Gradient at {freeform:?} is more than {TYPE_OVERFLOW} pt past {:?} in {lang}", panel.body);
+        }
     }
 }
 
