@@ -223,7 +223,7 @@ fn print(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let postscript = to_postscript(p)?;
     let max_pages = match p.get("maxPages") {
-        None | Some(Value::Null) => None,
+        None => None,
         Some(_) => Some(u64_req(p, "maxPages", PRINT)?),
     };
     let too_many = |pages: usize| max_pages.is_some_and(|m| pages as u64 > m);

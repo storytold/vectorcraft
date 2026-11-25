@@ -359,6 +359,7 @@ fn file_print_max_pages_composes_only_what_fits() {
         json!({"maxPages": 0, "settings": {"advanced": {"flattenerPreset": "nope"}}}),
         json!({"maxPages": -1}),
         json!({"maxPages": "2"}),
+        json!({"maxPages": null}),
     ] {
         assert!(s.execute("file.print", &bad).is_err(), "{bad}");
     }
