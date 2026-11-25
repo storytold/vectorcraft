@@ -3,10 +3,11 @@
 //! drag, the Zoom tool's magnification, the Paintbrush's brush) and the selection's fill and
 //! stroke colour values.
 
+use craft::behavior::ColumnWidth;
 use craft::keymap::CommandRef;
 use craft::ui::contract::{Show as _, ShowContainer as _};
 use craft::ui::display::{Divider, Picture, Shade, Text};
-use craft::ui::layout_components::{Row, Stack};
+use craft::ui::layout_components::{Grid, Row, Stack};
 use craft::ui::list::ThumbAspect;
 use craft::ui::menu::PanelRow;
 use craft::ui::runtime::commands::{CommandState, CommandStates};
@@ -231,9 +232,13 @@ pub(crate) fn lines(app: &mut VectorcraftApp, ctx: &egui::Context) -> InfoLines 
     }
 }
 
+/// The panel's two columns of numbers: two equal halves of its width.
+const HALVES: &[ColumnWidth] = &[ColumnWidth::fill(1.0); 2];
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let l = lines(app, ui.ctx());
-    Row::new().show(ui, |ui, _| {
+    // Two equal halves of the panel, as the reference app's columns were.
+    let _ = Grid::new(HALVES).show(ui, |ui, _| {
         for column in [&l.left, &l.right] {
             Stack::new().show(ui, |ui, _| {
                 for s in column {
