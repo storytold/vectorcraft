@@ -391,7 +391,7 @@ fn grid_colors_row(setup: DocSetup) -> Param {
                 for (i, color) in resolved.iter().enumerate() {
                     let name = format!("{} {}", tl!("Grid Colors:"), i + 1);
                     let [r, g, b, _] = color.to_rgba8(1.0);
-                    let srgb = Srgba::rgb(f32::from(r) / 255.0, f32::from(g) / 255.0, f32::from(b) / 255.0);
+                    let srgb = box_color(color);
                     wells[i] = Swatch::new(name.clone(), srgb).well().show(ui).clicked.then_some(srgb);
                     edits[i] = HexField::hex(name, Bind::given(Rgba::rgb(r, g, b))).show(ui).value().copied();
                 }
@@ -412,14 +412,27 @@ fn grid_colors_row(setup: DocSetup) -> Param {
     })
 }
 
-/// Takes the colors the Color Picker answered into their entries of the pair.
+/// Takes the colors the Color Picker answered into their entries of the pair. When the dialog holds
+/// two colors and the answer is the color the entry's box showed (the picker's OK left it
+/// unchanged), the entry stays as it is: a Lab or CMYK color keeps its own model, and a hex code
+/// stays that hex code.
 fn fold_picked(fields: &mut DialogFields, setup: &DocSetup) {
     for (i, key) in GRID_KEYS.iter().enumerate() {
         if let Some([r, g, b]) = fields.color(key) {
             fields.remove(key);
-            set_grid_entry(fields, setup, i, &Color::rgb(r, g, b));
+            let map = json_map(fields);
+            let shown = grid_colors(&map, setup).get(i).map(box_color).map(|s| [s.r, s.g, s.b]);
+            if pending_grid_pair(&map).is_none() || shown != Some([r, g, b]) {
+                set_grid_entry(fields, setup, i, &Color::rgb(r, g, b));
+            }
         }
     }
+}
+
+/// The color grid color `c`'s box shows, which the Color Picker it opens starts on.
+fn box_color(c: &Color) -> Srgba {
+    let [r, g, b, _] = c.to_rgba8(1.0);
+    Srgba::rgb(f32::from(r) / 255.0, f32::from(g) / 255.0, f32::from(b) / 255.0)
 }
 
 /// Sets entry `i` of the dialog's `gridColors` to `c`, the other entry staying as it is. A field
@@ -995,6 +1008,31 @@ mod tests {
         settle(&app, &ctx);
         answer(&app, &ctx, 1, "#123456");
         assert_eq!(super::json_map(&fields(&app))["gridColors"], json!(["lab 55 60 40", "#123456"]));
+    }
+
+    /// The Color Picker's OK on a grid color it opened on, unchanged, keeps that color in its own
+    /// model: a Lab or CMYK color stays Lab or CMYK through Document Setup's OK, and a hex color
+    /// stays that hex color. The other color stays as it was.
+    #[test]
+    fn an_unchanged_grid_color_picker_ok_keeps_the_colors_own_model() {
+        for (index, grid) in
+            [(0, json!(["lab 55 60 40", "#cccccc"])), (1, json!(["#ffffff", "cmyk 0 50 100 0"])), (1, json!(["lab 55 60 40", "#123456"]))]
+        {
+            let (mut app, ctx) = new_app();
+            app.run("document.setup", json!({ "gridColors": grid })).unwrap();
+            app.run("file.documentSetup", json!({})).unwrap();
+            set(&app, &ctx, "tab", json!("Transparency"));
+            settle(&app, &ctx);
+            let before = app.session.active().unwrap().doc.setup.grid_colors;
+            let entries = super::json_map(&fields(&app))["gridColors"].clone();
+            // The picker opens on the color the box shows, and an unchanged OK answers that color.
+            let shown = super::box_color(&before[index]);
+            app.dialogs().unwrap().with(|h| h.answer_color(id(), super::GRID_KEYS[index], shown));
+            settle(&app, &ctx);
+            assert_eq!(super::json_map(&fields(&app))["gridColors"], entries, "{grid}");
+            assert!(press_ok(&mut app, &ctx));
+            assert_eq!(app.session.active().unwrap().doc.setup.grid_colors, before, "{grid}");
+        }
     }
 
     /// The Grid Colors menu names a preset only when the pair is that preset's colors, as

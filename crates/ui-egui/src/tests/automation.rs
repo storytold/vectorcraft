@@ -1121,8 +1121,9 @@ fn a_screenshot_is_issued_by_the_apps_frames_and_written() {
     let path = base.join("out/shot.png");
     let (req, reply) = ControlRequest::new("ui.screenshot", json!({"path": s(path.clone()), "focus": false}));
     tx.send(req).unwrap();
-    // The settle delay runs on the wall clock: frames come until it is over, as an idle window's do.
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    // The settle delay runs on the wall clock: frames come until it is over, as an idle window's do. The
+    // request's own deadline (`craft::automation::screenshot::DEADLINE`) answers it with an error when no
+    // frame issues it in time, so the loop ends on the reply.
     let callback = loop {
         let out = crate::testing::app_frame(&mut app, &ctx, raw());
         let sent = out.viewport_output.get(&egui::ViewportId::ROOT).and_then(|root| {
@@ -1131,8 +1132,9 @@ fn a_screenshot_is_issued_by_the_apps_frames_and_written() {
         if let Some(callback) = sent {
             break callback;
         }
-        assert!(reply.try_recv().is_err(), "the screenshot was answered before it was taken");
-        assert!(std::time::Instant::now() < deadline, "no frame issued the screenshot");
+        if let Ok(r) = reply.try_recv() {
+            panic!("the screenshot was answered before it was taken: {r}");
+        }
     };
     callback.complete(std::sync::Arc::new(egui::ColorImage::filled([800, 600], egui::Color32::WHITE)));
     crate::testing::app_frame(&mut app, &ctx, raw());
