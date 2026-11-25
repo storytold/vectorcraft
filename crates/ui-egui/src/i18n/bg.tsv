@@ -194,6 +194,7 @@
 	Anti-alias Rasters	Заглаждане на растери
 	Anti-aliased Artwork	Загладено произведение
 	Anti-aliasing Method	Метод на заглаждане
+@id	language.name	Български
 antiAlias	Sharp	Остро
 	Crisp	Четко
 	Strong	Силно
@@ -7047,7 +7048,7 @@ theme	Appearance	Външен вид
 @msg	module is {_1} bytes (limit {_2})	модулът е {_1} байта (ограничение {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	изисква одобрение: иска {0}, което потребителят разрешава, когато я инсталира самостоятелно
 @msg	not JSON: {e}	не е JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	не е двоичен файл WebAssembly (липсва заглавка \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	не е двоичен файл WebAssembly (липсва заглавка \\0asm)
 @msg	parameter `{k}`: {what}	параметър `{k}`: {what}
 @msg	parameter `{name}`: {what}	параметър `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	параметрите на приставката трябва да са обект JSON

@@ -170,7 +170,8 @@ fn round_step(least: f64) -> f64 {
 /// Draw circle `c`: through three points spread around it, with `shape.circleThroughPoints`, which
 /// leaves it where it is with Align New Objects to Pixel Grid on, so that it stays tangent. None
 /// when the three points do not give the circle back to within `tol` (a circle too small for its
-/// distance from the origin, or too large, in floating point).
+/// distance from the origin, or too large, in floating point), or when the circle would reach past
+/// the canvas ([`crate::circle::circle_of`]), which the command refuses.
 fn draw(c: &SegmentCircle, tol: f64) -> Option<Action> {
     let (at, r) = (c.circle.center, c.circle.radius);
     let points: Vec<Point> = [90.0f64, 210.0, 330.0]
@@ -180,7 +181,7 @@ fn draw(c: &SegmentCircle, tol: f64) -> Option<Action> {
             Point::new(at.x + r * k, at.y + r * s)
         })
         .collect();
-    let (back, rb) = vectorcraft_geom::shapes::circle_through(points[0], points[1], points[2])?;
+    let (back, rb) = crate::circle::circle_of(&points)?;
     if !(back.distance(at) <= tol && (rb - r).abs() <= tol) {
         return None;
     }
@@ -462,7 +463,7 @@ impl Tool for TangentCircleTool {
 mod tests {
     use super::*;
     use crate::testutil::*;
-    use vectorcraft_doc::{Appearance, Document, Node, Selection};
+    use vectorcraft_doc::{Appearance, Document, MAX_COORD, Node, Selection};
     use vectorcraft_geom::{PathData, SubPath};
 
     /// Two open lines, (100, 100)–(300, 100) and (100, 140)–(300, 140), and an L from (100, 300)
@@ -809,5 +810,41 @@ mod tests {
             })
             .collect();
         assert!(matches!(segments[..], [n] if n < 100), "{segments:?}");
+    }
+
+    #[test]
+    fn a_circle_that_would_reach_past_the_canvas_is_not_offered() {
+        // Two lines 40 pt apart ending at the canvas edge, x = 4,000,000: a click at x the first gives
+        // the circle of radius 20 around (x, 120), whose right side is at x + 20.
+        let mut d = Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        for y in [100.0, 140.0] {
+            let id = d.alloc_id();
+            let pts = [Point::new(MAX_COORD - 100.0, y), Point::new(MAX_COORD, y)];
+            d.insert(Some(l), 0, Node::path(id, PathData::single(SubPath::polyline(&pts, false)), Appearance::default_art())).unwrap();
+        }
+        let (sel, p) = (Selection::default(), paint());
+        let cx = cx(&d, &sel, &p);
+        let mut t = TangentCircleTool::default();
+        // Past the edge by 5 pt: the note shows, and a click draws nothing.
+        let x = MAX_COORD - 15.0;
+        t.pointer(&cx, &ev(PointerKind::Down, x, 100.0));
+        t.pointer(&cx, &ev(PointerKind::Up, x, 100.0));
+        t.pointer(&cx, &ev(PointerKind::Move, x, 140.0));
+        assert!(t.found.is_none() && t.looked, "{:?}", t.found);
+        assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == NO_CIRCLE)));
+        t.pointer(&cx, &ev(PointerKind::Down, x, 140.0));
+        assert!(t.pointer(&cx, &ev(PointerKind::Up, x, 140.0)).is_empty(), "nothing drawn");
+        assert!(t.first.is_some(), "the first segment stays for another try");
+        // Its right side 1 pt inside the edge: drawn.
+        let x = MAX_COORD - 21.0;
+        t.key(&cx, ToolKey::Escape, Mods::default());
+        t.pointer(&cx, &ev(PointerKind::Down, x, 100.0));
+        t.pointer(&cx, &ev(PointerKind::Up, x, 100.0));
+        t.pointer(&cx, &ev(PointerKind::Down, x, 140.0));
+        let released = up(&mut t, &cx, &ev(PointerKind::Up, x, 140.0));
+        let (bx, by, w, h) = drawn(&released);
+        assert!((bx - (x - 20.0)).abs() < 1e-3 && (by - 100.0).abs() < 1e-3 && (w - 40.0).abs() < 1e-3 && (h - 40.0).abs() < 1e-3, "{released:?}");
+        assert!(bx + w <= MAX_COORD, "{released:?}");
     }
 }

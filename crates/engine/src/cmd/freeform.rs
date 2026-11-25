@@ -19,7 +19,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Freeform Point",
             [],
             None,
-            "{at: [x,y] (document coordinates), color? (default: the gradient's colour there; #rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), opacity?: 0..1 (or 0..100), spread?: 0..1 (or 0..100 %; the radius of pure colour around the point, a fraction of half the object's larger side; default 0), line?: true (join it to the selected point: extends the line ending there, else starts one), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind; without one, a Live Paint group's faces take a fill edit and its edges take a stroke edit), aligned?: bool (as paint.editGradient), target?: \"object\"|\"contents\"} add a point to the freeform gradient (an unplaced one keeps its automatic points first) and select it. On a path directly in a graph series, the graph also stores the edited gradient when it is on the topmost visible fill or stroke, as for the other paint.freeform edits (docs/mcp.md); on a graph label's row, or on a graph's axis line, tick mark or radar ring, the graph stores that object's topmost visible fill and stroke rows for every label or line of its kind (a line's gradient without its points); the points on a label's characters are not stored → {index}",
+            "{at: [x,y] (document coordinates), color? (default: the gradient's colour there; #rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), opacity?: 0..1 (or 0..100), spread?: 0..1 (or 0..100 %; the radius of pure colour around the point, a fraction of half the object's larger side; default 0), line?: true (join it to the selected point: extends the line ending there, else starts one), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind; without one, a Live Paint group's faces take a fill edit and its edges take a stroke edit), aligned?: bool (as paint.editGradient), target?: \"object\"|\"contents\"} add a point to the freeform gradient (an unplaced one keeps its automatic points first) and select it. On a path directly in a graph series, the graph also stores the edited gradient when it is on the topmost visible fill or stroke, as for the other paint.freeform edits (docs/mcp.md); on a graph label's row, or on a graph's axis line, tick mark or radar ring, the graph stores that object's topmost visible fill and stroke rows for every label or line of its kind (a line's gradient without its points); the points on a label's characters are not stored; an error while the proxies show the Live Paint Bucket's colors and no ids, id or item are given → {index}",
             has_doc,
             add_point
         ),
@@ -28,7 +28,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Freeform Point",
             [],
             None,
-            "{index? (default: the selected point), at?: [x,y] (document coordinates), color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), opacity?: 0..1 (or 0..100), spread?: 0..1 (or 0..100 %), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind; without one, a Live Paint group's faces take a fill edit and its edges take a stroke edit), aligned?: bool (as paint.editGradient), target?: \"object\"|\"contents\"} move or recolour a point of the freeform gradient → {index}",
+            "{index? (default: the selected point), at?: [x,y] (document coordinates), color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), opacity?: 0..1 (or 0..100), spread?: 0..1 (or 0..100 %), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind; without one, a Live Paint group's faces take a fill edit and its edges take a stroke edit), aligned?: bool (as paint.editGradient), target?: \"object\"|\"contents\"} move or recolour a point of the freeform gradient; an error while the proxies show the Live Paint Bucket's colors and no ids, id or item are given → {index}",
             has_doc,
             set_point
         ),
@@ -37,7 +37,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Delete Freeform Point",
             [],
             None,
-            "{index? (default: the selected point), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind; without one, a Live Paint group's faces take a fill edit and its edges take a stroke edit), aligned?: bool (as paint.editGradient), target?: \"object\"|\"contents\"} remove a point (never the last one); lines through it close up around it and lines left with one point go → {index}",
+            "{index? (default: the selected point), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind; without one, a Live Paint group's faces take a fill edit and its edges take a stroke edit), aligned?: bool (as paint.editGradient), target?: \"object\"|\"contents\"} remove a point (never the last one); lines through it close up around it and lines left with one point go; an error while the proxies show the Live Paint Bucket's colors and no ids, id or item are given → {index}",
             has_doc,
             delete_point
         ),
@@ -46,7 +46,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Freeform Line",
             [],
             None,
-            "{points: [index, …] (at least two), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind; without one, a Live Paint group's faces take a fill edit and its edges take a stroke edit), aligned?: bool (as paint.editGradient), target?: \"object\"|\"contents\"} join points with a smooth line through them, in order → {line}",
+            "{points: [index, …] (at least two), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind; without one, a Live Paint group's faces take a fill edit and its edges take a stroke edit), aligned?: bool (as paint.editGradient), target?: \"object\"|\"contents\"} join points with a smooth line through them, in order; an error while the proxies show the Live Paint Bucket's colors and no ids, id or item are given → {line}",
             has_doc,
             add_line
         ),
@@ -55,7 +55,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Split Freeform Line",
             [],
             None,
-            "{line: line index, segment: the segment from the line's point `segment` to the next, t?: 0..1 along it (default 0.5), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind; without one, a Live Paint group's faces take a fill edit and its edges take a stroke edit), aligned?: bool (as paint.editGradient), target?: \"object\"|\"contents\"} add a point on a line there (colour, opacity and spread between the segment's ends) and select it → {index}",
+            "{line: line index, segment: the segment from the line's point `segment` to the next, t?: 0..1 along it (default 0.5), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind; without one, a Live Paint group's faces take a fill edit and its edges take a stroke edit), aligned?: bool (as paint.editGradient), target?: \"object\"|\"contents\"} add a point on a line there (colour, opacity and spread between the segment's ends) and select it; an error while the proxies show the Live Paint Bucket's colors and no ids, id or item are given → {index}",
             has_doc,
             split_line
         ),
@@ -64,7 +64,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select Freeform Point",
             [],
             None,
-            "{index: point index | null to clear} select a point of the freeform gradient behind the active proxy (the first selected object's): the point the Gradient tool, the Gradient and Color panels and Delete act on → {index}",
+            "{index: point index | null to clear} select a point of the freeform gradient behind the active proxy (the first selected object's; an index is an error while the proxies show the Live Paint Bucket's colors): the point the Gradient tool, the Gradient and Color panels and Delete act on → {index}",
             has_doc,
             select_point
         ),
@@ -73,7 +73,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Freeform Gradient",
             [],
             None,
-            "{stroke?: bool (default: the active proxy)} the freeform gradient behind the proxy of the first selected object → {mode: points|lines, points: [{at: [x,y] (document coordinates), color, opacity, spread}], lines: [[index, …]], selected: index|null}",
+            "{stroke?: bool (default: the active proxy)} the freeform gradient behind the proxy of the first selected object (an error while the proxies show the Live Paint Bucket's colors) → {mode: points|lines, points: [{at: [x,y] (document coordinates), color, opacity, spread}], lines: [[index, …]], selected: index|null}",
             has_doc,
             get
         ),
@@ -81,6 +81,14 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 const NOT_FREEFORM: &str = "the paint is not a freeform gradient (apply one with paint.editGradient {kind: \"freeform\"})";
+const BUCKET_NOT_FREEFORM: &str = "the Live Paint Bucket's colors have no freeform points (give ids, id or item to edit an object's)";
+const BUCKET_NO_POINTS: &str = "the Live Paint Bucket's colors have no freeform points";
+
+/// The error of `paint.freeform.get` and `paint.freeform.selectPoint` when the active proxy shows no freeform gradient:
+/// while the Live Paint Bucket paints, the proxies show its colors, which have none.
+fn no_proxy_freeform(s: &Session) -> &'static str {
+    if s.bucket_paints() { BUCKET_NO_POINTS } else { NOT_FREEFORM }
+}
 
 impl Session {
     /// The selected freeform point (`paint.freeform.selectPoint`), while the gradient it was
@@ -179,6 +187,14 @@ pub(crate) fn parse_mode(m: &str) -> std::result::Result<FreeformMode, String> {
 /// as one undo step; returns what it returned for the first. An unplaced gradient gets the
 /// automatic points it shows first, and the stops follow the points' colours.
 fn edit<R>(s: &mut Session, p: &Value, cmd: &str, mut f: impl FnMut(&mut Freeform, Space) -> std::result::Result<R, String>) -> Result<R> {
+    // While the Live Paint Bucket paints, the proxies show its colors, which have no freeform points
+    // (paint.freeform.get finds none): an edit that names no target is refused. A bad `aligned` or
+    // `target` is refused first, as it is without the bucket.
+    if super::paint::for_bucket(s, p) {
+        super::appearance::aligned(p, cmd)?;
+        super::appearance::targets_contents(p)?;
+        return Err(bad(cmd, BUCKET_NOT_FREEFORM));
+    }
     let item = item_target(s, p, cmd)?;
     let stroke = edits_stroke(s, p, item, !s.fill_active, cmd)?;
     let item = item.of_kind(s, !stroke);
@@ -331,7 +347,7 @@ fn select_point(s: &mut Session, p: &Value) -> Result<Value> {
         Some(Value::Null) => None,
         Some(v) => {
             let i = v.as_u64().map(index).ok_or_else(|| bad(C, "`index` must be a whole number or null"))?;
-            let (f, _) = s.proxy_freeform(!s.fill_active).ok_or_else(|| bad(C, NOT_FREEFORM))?;
+            let (f, _) = s.proxy_freeform(!s.fill_active).ok_or_else(|| bad(C, no_proxy_freeform(s)))?;
             check_index(&f, i).map_err(|e| bad(C, e))?;
             Some(i)
         }
@@ -343,7 +359,7 @@ fn select_point(s: &mut Session, p: &Value) -> Result<Value> {
 fn get(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "paint.freeform.get";
     let stroke = switch_or(p, "stroke", !s.fill_active, C)?;
-    let (f, _) = s.proxy_freeform(stroke).ok_or_else(|| bad(C, NOT_FREEFORM))?;
+    let (f, _) = s.proxy_freeform(stroke).ok_or_else(|| bad(C, no_proxy_freeform(s)))?;
     let selected = if stroke != s.fill_active { s.selected_freeform_point().filter(|i| *i < f.points.len()) } else { None };
     let mut v = vectorcraft_tools::params::freeform_json(&f);
     v["selected"] = json!(selected);
