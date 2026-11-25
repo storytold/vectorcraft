@@ -215,6 +215,19 @@ impl Realm {
         self.interp.reset_gc_threshold();
     }
 
+    /// Sets [`Options::es2015`] for the next runs, and for the code they evaluate. The `let` and
+    /// `const` names earlier runs declared stay visible when it is turned off. A run begun with
+    /// [`Realm::start`] that is still going keeps the language it started with for the code it
+    /// evaluates; the new one applies once it ends.
+    pub fn set_es2015(&mut self, es2015: bool) {
+        if self.is_running() || self.interp.waiting {
+            self.interp.next_es2015 = Some(es2015);
+        } else {
+            self.interp.next_es2015 = None;
+            self.interp.set_es2015(es2015);
+        }
+    }
+
     /// The realm's interrupt flag. Setting it stops a running script, or the next one to start.
     pub fn interrupt(&self) -> Interrupt {
         Interrupt(self.interp.interrupt.clone())
@@ -293,6 +306,9 @@ impl Realm {
         interp.waiting = false;
         interp.resuming = None;
         interp.passing = Value::Undefined;
+        if let Some(es2015) = interp.next_es2015.take() {
+            interp.set_es2015(es2015);
+        }
         match result {
             Ok(v) => Ok(interp.to_js_value(&v)),
             Err(Abrupt::Throw(v)) => {
@@ -429,6 +445,12 @@ impl Realm {
         self.interp.locator = Some(locate);
     }
 
+    /// Has `$.stack` start with a line `[name]` that names the running script, before its frames;
+    /// `None` leaves the line out.
+    pub fn set_script_name(&mut self, name: Option<String>) {
+        self.interp.script_name = name;
+    }
+
     /// Which source the last error's `line` and `column` are in: 0 for the script last given to
     /// [`Realm::run`] or [`Realm::start`], `n` for the `n`th source a
     /// [`crate::HostItem::Evaluator`] gave since then, and [`UNKNOWN_SOURCE`] otherwise, which
@@ -491,10 +513,10 @@ impl Realm {
     /// Adds the global constructors `File` and `Folder`, whose file system work the host functions
     /// in `items` do: `parse`, `relative`, `tempName`, `stat`, `open`, `close`, `read`, `readln`,
     /// `readch`, `seek`, `tell`, `eof`, `encoding`, `setEncoding`, `list`, `resolve`, `execute`,
-    /// `write`, `copy`, `remove`, `rename`, `create`, `setLength`, `setReadonly`, `pick` (the file
-    /// dialogs, where a run may wait), `encode`, `decode`, `encodingAvailable`, `current` and
-    /// `locations`, with the values `system` and `lineFeed` and the messages `text.notOpen`,
-    /// `text.badMode`, `text.noAlias` and `text.noHidden`. Each object keeps its path, its `error`
+    /// `write`, `copy`, `remove`, `rename`, `create`, `setLength`, `setReadonly`, `setHidden`,
+    /// `createAlias`, `pick` (the file dialogs, where a run may wait), `encode`, `decode`,
+    /// `encodingAvailable`, `current` and `locations`, with the values `system` and `lineFeed` and
+    /// the messages `text.notOpen` and `text.badMode`. Each object keeps its path, its `error`
     /// text, its open file's id, its encoding and its line feed in properties that are not
     /// enumerable.
     pub fn define_file_classes(&mut self, items: Vec<(String, crate::HostItem)>) -> Result<(), RunError> {
@@ -524,6 +546,18 @@ impl Realm {
     /// and the localized `Object.prototype.toString` while [`crate::Localization::enabled`].
     pub fn add_script_extensions(&mut self) -> Result<(), RunError> {
         match crate::builtins::extensions::install(&mut self.interp) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Adds the global constructor `UnitValue`, measurements with a magnitude and a unit, and has
+    /// the arithmetic, comparison and unary operators calculate with its objects
+    /// ([`crate::unit_value`]). A realm without it keeps the standard operators. A second call
+    /// after one that succeeded changes nothing; after one that failed, it installs everything
+    /// again.
+    pub fn add_unit_values(&mut self) -> Result<(), RunError> {
+        match crate::unit_value::install(&mut self.interp) {
             Ok(()) => Ok(()),
             Err(e) => self.outcome(Err(e)).map(drop),
         }
