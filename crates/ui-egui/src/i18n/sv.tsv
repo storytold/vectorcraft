@@ -196,6 +196,7 @@
 	Anti-alias Rasters	Kantutjämna rasterbilder
 	Anti-aliased Artwork	Kantutjämnad grafik
 	Anti-aliasing Method	Kantutjämningsmetod
+@id	language.name	Svenska
 antiAlias	Sharp	Skarp
 	Crisp	Klar
 	Strong	Kraftig
@@ -496,6 +497,10 @@ font-technology	Variable	Variabla
 	Cusp	Spets
 	Straight segment	Rakt segment
 	Circle too large	Cirkeln är för stor
+	Show Radii	Visa radier
+	Show Diameter	Visa diameter
+	Anchors at Standard Positions	Ankarpunkter på standardpositioner
+	Third Point by Dragging	Tredje punkt genom att dra
 	Classic Defaults	Klassiska standardvärden
 	Clean Up…	Rensa upp…
 	Clear	Rensa
@@ -593,9 +598,14 @@ font-technology	Variable	Variabla
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Hjulvy
 	Box View	Rutvy
+	Show Out-of-Gamut Colors	Visa färger utanför färgomfånget
 	Box Channel	Rutans kanal
 	Color box	Färgruta
 	Color Wheel Options	Alternativ för färghjulet
+	Show Document Colors	Visa dokumentfärger
+	Document Colors	Dokumentfärger
+	Selection Colors	Markeringens färger
+@plural	Used {n} time|Used {n} times	Används {n} gång|Används {n} gånger
 	Show Harmony	Visa harmoni
 	Harmony Rule	Harmoniregel
 	Harmony color	Harmonifärg
@@ -900,6 +910,7 @@ font-technology	Variable	Variabla
 	Direct Selection Tool	Direktmarkeringsverktyg
 	Direction Handles	Riktningshandtag
 	Disable Auto Add/Delete	Inaktivera Lägg till/radera automatiskt
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete tar bort ankarpunkter och håller banor sammanhängande
 	Interpolate Control Points When Moving Anchors	Interpolera riktningshandtag vid flyttning av ankarpunkter
 	Disable Opacity Mask	Inaktivera opacitetsmask
 	Discard	Släng
@@ -1854,6 +1865,10 @@ font-technology	Variable	Variabla
 	Rename Preset	Byt namn på förinställning
 	Save Image Trace Preset	Spara förinställning för bildkalkering
 	Delete Image Trace Preset	Radera förinställning för bildkalkering
+	Tracing Presets…	Förinställningar för vektorisering…
+	Import Image Trace Presets	Importera förinställningar för bildkalkering
+	Export Image Trace Presets	Exportera förinställningar för bildkalkering
+	Replace the saved presets that have these names?	Ersätta sparade förinställningar med dessa namn?
 	Image Trace Presets	Förinställningar för bildkalkering
 	Image:	Bild:
 	Images:	Bilder:
@@ -1982,6 +1997,11 @@ font-technology	Variable	Variabla
 	Knife	Kniv
 	Knockout Group	Utsparningsgrupp
 	Lab	Lab
+	OKLCH Sliders	OKLCH-reglage
+	HSL Sliders	HSL-reglage
+	Chroma	Kroma
+	The largest chroma sRGB holds at this lightness and hue	Den största kroma som sRGB rymmer vid denna ljushet och nyans
+	OKLCH needs sRGB as the working RGB space	OKLCH kräver sRGB som RGB-arbetsfärgrymd
 	Lab Spot Colors:	Lab-dekorfärger:
 	Lab Values	Lab-värden
 	Landscape	Liggande
@@ -2079,6 +2099,8 @@ font-technology	Variable	Variabla
 	List Workspaces	Lista arbetslayouter
 	Live Paint	Direktmålning
 	Live Paint Bucket	Direktmålningshink
+	Fill Area	Fyll område
+	Fill Area Tool	Verktyget Fyll område
 	Live Paint Bucket (Stroke)	Direktmålningshink (kontur)
 	Live Paint Info	Direktmålningsinfo
 	Live Paint Selection Tool	Markeringsverktyg för direktmålning
@@ -2386,6 +2408,12 @@ font-technology	Variable	Variabla
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	upplösning inte tillgänglig
+	estimated memory {memory}	uppskattat minne {memory}
+	memory unavailable	minne inte tillgängligt
+	Unknown format	Okänt format
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -2534,6 +2562,7 @@ font-technology	Variable	Variabla
 	One Point Perspective Preset 5	Förinställning 5 för enpunktsperspektiv
 	Only Web Colors	Endast webbfärger
 	Opacity	Opacitet
+	Show Opacity	Visa opacitet
 	Opacity & Mask Define Knockout Shape	Opacitet och mask definierar utsparningsform
 	Opacity Mask	Opacitetsmask
 	Opacity Mask Info	Info om opacitetsmask
@@ -2720,6 +2749,13 @@ font-technology	Variable	Variabla
 	Pen Tool	Pennverktyg
 	Quick Pen Tool	Snabbpennverktyg
 	Quick Pen	Snabbpenna
+	Quick Pen Toolbar	Snabbpennans verktygsfält
+	Continuous Arc	Kontinuerlig båge
+	Sharp Corner Arc	Båge med skarpt hörn
+	Flip Arc	Vänd båge
+	Hide Toolbar	Dölj verktygsfältet
+	Pin Toolbar Position	Fäst verktygsfältets position
+	Reset Toolbar Position	Återställ verktygsfältets position
 	Pencil	Blyertspenna
 	Pencil Tool	Blyertsverktyg
 	per slice	per skiva
@@ -2968,6 +3004,9 @@ digits	Malayalam	Malayalam
 	Scale Artwork with Artboard	Skala grafik med rityta
 	Artboards: {n}	Ritytor: {n}
 	Rearrange All Artboards…	Ordna om alla ritytor…
+	Rearrange…	Ordna om…
+	Selected Artboards: {n}	Markerade ritytor: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Klicka på arbetsytan för att placera ritytorna (Esc avbryter)
 	Recall Selection	Hämta markering
 	RECENT	SENASTE
 	Recent	Senaste
@@ -3162,6 +3201,11 @@ digits	Malayalam	Malayalam
 	Edit Arrowheads	Redigera pilspetsar
 	Edit Arrowheads…	Redigera pilspetsar…
 	Reload Arrowheads	Läs in pilspetsar igen
+	Bevels	Fasningar
+	Edit Bevels	Redigera fasningar
+	Edit Bevels…	Redigera fasningar…
+	{name} (document)	{name} (dokument)
+	Reload Bevels	Läs in fasningar igen
 	Reset Rotate View	Återställ Rotera vy
 	Rotate View to Selection	Rotera vyn efter markeringen
 	Reset the rows to the artwork's colors	Återställ raderna till teckningens färger
@@ -3214,6 +3258,7 @@ digits	Malayalam	Malayalam
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	En rotationsgest med två fingrar på en styrplatta roterar arbetsytans vy.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Om du håller ned en tangent körs verktyget eller kommandot i dess Håll-kolumn i Kortkommandon; ett kort tryck kör dess vanliga kortkommando.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Hur många sekunder en tangent måste hållas ned innan dess hållkortkommando körs i stället för dess vanliga kortkommando.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete tar bort de markerade ankarpunkterna och anpassar om kurvan runt var och en i stället för att öppna banan där.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	När du flyttar ankarpunkter behåller varje kurva med en flyttad ände sin form i förhållande till sina ändar.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	När du håller ned ett verktygs kortkommando är verktyget valt tills du släpper, och sedan väljs det föregående verktyget igen.
 	Shows the bounding box while you move the selection or draw a shape.	Visar avgränsningsramen medan du flyttar markeringen eller ritar en form.
@@ -3299,9 +3344,14 @@ digits	Malayalam	Malayalam
 	Edit type set in fonts that aren't available?	Redigera text i typsnitt som inte är tillgängliga?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Visar varje skivas nummer i en ruta i dess övre vänstra hörn på arbetsytan; när det är avstängt visas skivornas konturer fortfarande.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Färgen på konturerna för användar- och objektskivor och på deras nummerrutor; automatiska skivor använder en blekare nyans av den.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	I stycken med Avstava på får ett listat ord avstavningsstreck bara vid bindestrecken som skrivits in i det, eller aldrig om det saknar sådana, oavsett språk och skiftläge.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	I skrivbordsversionen läses .wasm-plugins i den här mappen in vid start och när OK anger en ny mapp, utom i felsäkert läge; en plugin som begär behörigheter läses in först när du har gett dem. Webbversionen läser inte in någon.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	Stor ger varje körning av en filter- eller kommandoplugin minst 250 miljoner instruktioner med samma tidsgräns; Normal behåller pluginens egen budget. Liveeffekter, exportörer och importörer behåller sin.
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Ny text får det här språket så länge språket i Dokumentinställningar är Engelska: USA; text som redan finns i ett dokument behåller sitt eget språk.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Ny text får det här språket så länge språket i Dokumentinställningar är Engelska: USA och [Normal teckenstil] inte anger något språk; text som redan finns i ett dokument behåller sitt eget språk.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	I stycken med Avstava på avstavas ett listat ord bara vid bindestrecken som skrivits in i det, eller inte alls om det saknar sådana, oavsett språk och skiftläge.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	I skrivbordsversionen läses .wasm-plugins i den här mappen in vid start och när du klickar på OK med en ny mapp här, utom i felsäkert läge; webbversionen läser inte in dem.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	Normal behåller varje plugins egna gränser; med Stor får ett pluginfilter eller ett pluginkommando köra minst 250 miljoner instruktioner utöver dem för sin indata. Tidsgränsen förblir densamma.
 	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Hur många instruktioner varje körning av ett objektfilter från ett plugin får använda; Stor tillåter fler än Normal med samma gräns på 60 sekunder. Tunga filter behåller sin egen budget.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Det första valet av arbetsdisk: Startup, None eller en mappsökväg; VectorCraft sparar det men använder ännu inte arbetsdiskar.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Det andra valet av arbetsdisk: Startup, None eller en mappsökväg; VectorCraft sparar det men använder ännu inte arbetsdiskar.
@@ -3313,13 +3363,15 @@ digits	Malayalam	Malayalam
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Visar varje verktygsgrupps namn ovanför dess verktyg i verktygsfältet; avstängt följer grupperna på varandra utan något emellan.
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Från och med nu öppnas dokument som du öppnar eller skapar som flikar; avstängt öppnas vart och ett i ett flytande fönster. Dokument som redan är öppna stannar där de är.
 	Makes the document tabs taller and their names larger.	Gör dokumentflikarna högre och deras namn större.
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Från nästa start ritar systemet fönstrets namnlist där VectorCraft annars skulle rita sin egen.
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	Från nästa start ritar VectorCraft fönstrets namnlist även där skrivbordsmiljön skulle rita den, om inte Systemets namnlist är på.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	Från nästa start ritar systemet fönstrets namnlist där VectorCraft annars skulle rita sin egen; på Linux och BSD-systemen har variabeln VECTORCRAFT_TITLEBAR företräde.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	Från nästa start ritar VectorCraft fönstrets namnlist även där skrivbordsmiljön skulle rita den, om inte Systemets namnlist är på eller variabeln VECTORCRAFT_TITLEBAR väljer den.
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Gör gränssnittet större eller mindre; bilder på arbetsytan behåller sin storlek vid samma zoom.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Verktygspekarna som VectorCraft ritar växer och krymper med Gränssnittsskalning; avstängt behåller de sin storlek.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Gränssnittets språk; Auto använder systemets språk. Dialogrutan byter språk så fort du väljer ett.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Animerad zoom fungerar bara medan detta är på; avstängt är Animerad zoom nedtonad och zoomningen animeras inte.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Zoom med hjulet glider in mjukt, och Zoomverktyget zoomar medan du drar åt sidan eller håller det nedtryckt; avstängt zoomar Zoomverktyget till området du drar över.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	Från nästa start visar skrivbordsversionen arbetsytan genom den här typen av grafikprocessor; teckningen ritas alltid på processorn (CPU). Automatisk föredrar den integrerade på Windows och macOS. Webbversionen använder den inte.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	Från nästa start visar fönstret varje bildruta utan att vänta på skärmens uppdatering där grafikdrivrutinen tillåter det, högst 240 bildrutor per sekund.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Från nästa start ritar skrivbordsversionen med den här typen av grafikprocessor; Automatisk föredrar den som driver skärmen. Webbversionen använder den inte.
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Från nästa start visar fönstret bildrutor utan att vänta på att skärmen uppdateras, högst 240 per sekund; avstängt styr skärmen takten. Ett presentationsläge som anges vid start går före.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Det högsta antalet ångra-steg som varje dokument behåller; ett lägre tal tar bort de äldsta stegen när du klickar på OK. Steg kan också försvinna tidigare när de använder för mycket minne.
@@ -3338,6 +3390,9 @@ digits	Malayalam	Malayalam
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	Öppna senaste filer och startskärmen listar högst så här många senaste filer; 0 listar inga, och VectorCraft minns ändå upp till 30.
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	När ett dokument öppnas behåller en länkad EPS-bild som visar sin sparade förhandsvisning den i stället för att läsa EPS-filen igen; ändrade filer följer fortfarande Uppdatera länkar.
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	I Pixelförhandsgranskning ritas bilder utjämnade; avstängt visar deras pixlar skarpa kanter. Utanför Pixelförhandsgranskning utjämnas bilder alltid.
+	PDF Text	PDF-text
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	Texten i en PDF som du öppnar eller bäddar in kommer in som redigerbar text eller som konturlinjer som ser likadana ut på en dator utan dess teckensnitt.
+	Linked pages show the file's own text.	Länkade sidor visar filens egen text.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	När en länkad fil ändras läser Automatiskt in den igen, Fråga vid ändring frågar dig först, och Manuellt låter den vara och visar en notis i statusfältet.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	I skrivbordsversionen mappen som Ny från mall… och Spara som mall… börjar i; lämna tom för VectorCraft Templates i din dokumentmapp.
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Redigera original öppnar en länkad fil i systemets standardapp för dess typ; avstängt öppnas en länkad rasterbild i PhotoCraft om det är installerat.
@@ -3352,7 +3407,6 @@ digits	Malayalam	Malayalam
 	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Återge all svart som djupsvart ritar ren CMYK-svart som RGB-svart i RGB- och gråskale-rasterexporter och med Skriv ut som bitmapp; den ändrar inte vektorexporter, CMYK-JPEG, -TIFF och -PSD eller annan utskrift.
 	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	På en pekskärm växlar detta till arbetslayouten för pekskärm; när inställningen stängs av eller pekskärmen försvinner återgår den till arbetslayouten från före bytet.
 	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Ett tryck med två fingrar på arbetsytan ångrar eller växlar i arbetslayouten för pekskärm mellan markerings- och ritverktyg, och ett tryck med tre fingrar gör om; inget av dem fungerar i presentationsläge.
-	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Ny text får det här språket så länge språket i Dokumentinställningar är Engelska: USA och [Normal teckenstil] inte anger något språk; text som redan finns i ett dokument behåller sitt eget språk.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	I stycken med Avstava på avstavas ett listat ord bara vid bindestrecken som skrivits in i det, eller inte alls om det saknar sådana, oavsett skiftläge; koreanska ord får inget avstavningstecken, och ord på indiska språk avstavas inte inuti en teckengrupp.
 	Reset all preferences to their defaults?	Återställa alla inställningar till standard?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Standardvärdena verkställs när du klickar på OK i Inställningar. Avbryt där behåller dina nuvarande inställningar.
@@ -3583,6 +3637,7 @@ digits	Malayalam	Malayalam
 	Recent Commands	Senaste kommandon
 	No recent commands	Inga senaste kommandon
 	Type to search commands, tools, panels and effects	Skriv för att söka efter kommandon, verktyg, paneler och effekter
+	Clear Recent Commands	Rensa senaste kommandon
 	Search commands	Sök kommandon
 	Search Commands…	Sök kommandon…
 	Secondary	Sekundär
@@ -5025,6 +5080,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	Saved {path}	Sparade {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Markera text eller klicka i text med textverktyget för att infoga glyfer
 @msg	Shape Builder: no region under the pointer	Formbyggare: inget område under pekaren
+@msg	Fill Area: no enclosed area under the pointer	Fyll område: inget slutet område under pekaren
 @msg	Shape Builder: select all paths you want to merge	Formbyggare: markera alla banor du vill sammanfoga
 @msg	Shape Builder: select paths or compound paths	Formbyggare: markera banor eller sammansatta banor
 @msg	Show All Hidden Attributes: nothing is hidden	Visa alla dolda attribut: ingenting är dolt
@@ -5476,6 +5532,10 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	spårningen skulle ge fler än {max} ankarpunkter, fler än dokumentet kan visa smidigt: höj Brus, sänk Banor eller Färger, eller välj en förinställning med lägre återgivning
 @msg	select an envelope	markera ett kuvert
 @msg	select an image	markera en bild
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	objekt {_1} är en bild som ändrats med Perspektivförvrängning eller Fri förvrängning, och det här kommandot fungerar inte på den
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	bild {_1} kan inte förvrängas så: dess hörn skulle inte bilda en konvex form
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	bild {_1} kan inte förvrängas så: dess hörn skulle korsa förvrängningens horisont
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	bild {_1} kan inte förvrängas så: dess hörn skulle ligga för nära varandra för en perspektivavbildning
 @msg	`background` must be edges, corners or colors	`background` måste vara edges, corners eller colors
 @msg	`match` must be distance or channels	`match` måste vara distance eller channels
 @msg	`{key}` must be from 0 to 100	`{key}` måste vara från 0 till 100
@@ -6290,6 +6350,7 @@ lighting	Light	Ljus
 @msg	a 3D effect on a group's fill or stroke draws nothing	en 3D-effekt på en grupps fyllning eller linje ritar ingenting
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	en 3D-effekt på en grupps fyllning eller linje ritar ingenting att exportera
 @msg	The 3D object is too complex to export	3D-objektet är för komplext för att exporteras
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D-objektets nät är ofullständigt eller innehåller ett värde som inte är ett tal
 @msg	give one <filter> element	ange ett <filter>-element
 @msg	the <filter> element needs an id, the filter's name	<filter>-elementet behöver ett id, filtrets namn
 @msg	an SVG filter's id is at most {MAX_NAME} characters	ett SVG-filters id har högst {MAX_NAME} tecken
@@ -6312,7 +6373,10 @@ lighting	Light	Ljus
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektet har ingen 3D-effekt (Extrudera och fasa, Rotera runt axel, Blås upp eller Rotera)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` måste vara ett objekt som bara innehåller `mode`, med värdet shaded eller wireframe
 @msg	its 3D effect builds no solid	dess 3D-effekt bygger ingen solid
-@msg	bevel must be none or one of {_1}	bevel måste vara none eller något av {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel måste vara none, något av {_1} eller custom med {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom kräver {BEVEL_PROFILE}, fasningens punkter
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} måste vara en sträng
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} måste vara 2 till {most} punkter [x, y], varje andel mellan 0 och 1, från [0, 0] (ändytans kant) till [1, 1] (sidoväggen)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} kan inte bygga solider av den här teckningen: dess symbolinstanser, blandningar och urklippsgrupper innehåller för många objekt
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} kan inte bygga en solid av instansen av symbolen ”{symbol}”: symbolens teckning är inte tillgänglig
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: urklippsbanan är för komplex för att klippa teckningen med
@@ -6338,9 +6402,11 @@ lighting	Light	Ljus
 @msg	`{GRAPHICS}` face must be front, back or side	face i `{GRAPHICS}` måste vara front, back eller side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} i `{GRAPHICS}` måste vara ett tal från {lo} till {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` måste vara en matris
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafik placeras på objekttyperna Plan, Extrudera och Rotera runt axel
-	Graphics map onto the Plane, Extrude and Revolve object types.	Grafik placeras på objekttyperna Plan, Extrudera och Rotera runt axel.
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafik placeras på objekttyperna Plan, Extrudera, Rotera runt axel och Blås upp
+	Graphics map onto the Plane, Extrude, Revolve and Inflate object types.	Grafik placeras på objekttyperna Plan, Extrudera, Rotera runt axel och Blås upp.
 @msg	Revolve maps graphics onto its side: map them onto the front	Rotera runt axel placerar grafik på sin mantelyta: placera den på framsidan
+@msg	Inflate maps graphics onto its front and back, not onto a side	Blås upp placerar grafik på framsidan och baksidan, inte på en sida
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	objekt {_1}: baksidan av Blås upp tar emot grafik bara när Båda sidor och Lock är på
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafiken är för komplex för den här ytan: förenkla symbolernas teckning eller minska Segment
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` tar högst {MAX_GRAPHICS} grafiker
 @msg	A plane has one face: map its graphics onto the front	Ett plan har en sida: placera dess grafik på framsidan
@@ -6971,6 +7037,8 @@ theme	Appearance	Utseende
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` måste vara grayscale, rgb, hsb, cmyk eller websafe
 @msg	`view` must be wheel or box	`view` måste vara wheel eller box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` måste vara hue, saturation, brightness, red, green eller blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` måste vara none, oklch eller hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH kräver sRGB som RGB-arbetsfärgrymd
 @msg	`{key}` must be an array of these names: {_1}	`{key}` måste vara en lista med dessa namn: {_1}
 @msg	choose a destination folder	välj en målmapp
 @msg	choose a source folder	välj en källmapp
@@ -7311,6 +7379,11 @@ axis	Y Axis	Y-axel
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` och `maxItems` måste vara 0-{MAX_LIST}, `maxItems` minst 1, och standardvärdet måste ha så många poster
 @msg	`name` must be a string	`name` måste vara en sträng
 @msg	`opacity` must be a number	`opacity` måste vara ett tal
+@msg	`opacity` must be a number from 0 to 100	`opacity` måste vara ett tal från 0 till 100
+@msg	`opacity` must be true or false	`opacity` måste vara true eller false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	tecken i text har ingen egen opacitet: lägg till en fyllning eller kontur med Lägg till ny fyllning eller Lägg till ny kontur i panelen Utseende
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	ett objekt som är markerat i en symbolinstans har ingen egen opacitet för fyllning eller kontur
+@msg	no target has that fill or stroke to take the opacity	inget mål har den fyllningen eller konturen som kan ta emot opaciteten
 @msg	`type` must be "path" or "compound"	`type` måste vara "path" eller "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` måste ha 1-{MAX_UNIT} utskrivbara tecken
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` måste ange 1 till {MAX_CONDITION_VALUES} värden för `{other}`
@@ -7354,6 +7427,8 @@ axis	Y Axis	Y-axel
 @msg	`plates` requires a stop linked to a spot swatch	`plates` kräver ett gradientstopp som är länkat till en dekorfärgruta
 @msg	the output	utdata
 @msg	the path has no anchor points	banan har inga ankarpunkter
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	den sammansatta banan {id} har en dold, låst eller stödlinjemedlem, så dess medlemmar kan inte ersättas
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	den sammansatta banan {id} har en medlem som inte är en bana, så dess medlemmar kan inte ersättas
 @msg	too many anchor points (limit {MAX_ANCHORS})	för många ankarpunkter (gräns {MAX_ANCHORS})
 @msg	true or false	true eller false
 @msg	a number >= {_1}	ett tal >= {_1}
@@ -8815,6 +8890,8 @@ digits	Hindi	Hindi
 @msg	`dataBase64` is larger than the module limit	`dataBase64` är större än modulgränsen
 @msg	`dataBase64` is not valid base64	`dataBase64` är inte giltig base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` kan inte kombineras med `ids`, `reverse` eller `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` kan inte kombineras med `ids`, `id` eller `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` kan inte kombineras med `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` och `childLimit` begränsar sammanfattningen: ange `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` är ett designnamn, eller null för vanliga kolumner
 @msg	`design` is a design name, or null for the default marker	`design` är ett designnamn, eller null för standardmarkören
@@ -9267,6 +9344,7 @@ digits	Hindi	Hindi
 @msg	give a pattern name or select an object painted with a pattern	ange ett mönsternamn eller markera ett objekt som är målat med ett mönster
 @msg	give at least one of clip, invert, disabled, linked	ange minst en av clip, invert, disabled, linked
 @msg	give color, none, swatch or gradient	ange color, none, swatch eller gradient
+@msg	give color, none, swatch, gradient or opacity	ange color, none, swatch, gradient eller opacity
 @msg	give dataBase64	ange dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	ange antingen at (ett klick) eller area (en bana ritad runt överlappningarna)
 @msg	give formats or a preset, not both	ange formats eller en förinställning, inte båda
@@ -9562,7 +9640,9 @@ digits	Hindi	Hindi
 @msg	not a print presets file: {e}	inte en fil med utskriftsförinställningar: {e}
 @msg	not a stored or deflated central record	inte en central katalogpost av typen stored eller deflated
 @msg	not a valid SVGZ file: {e}	inte en giltig SVGZ-fil: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	inte en WebAssembly-binärfil (huvudet \0asm saknas)
+@msg	not a WebAssembly binary (missing \\0asm header)	inte en WebAssembly-binärfil (huvudet \\0asm saknas)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	en funktionstyp överskrider gränsen på {MAX_FUNC_TYPE_VALUES} parametrar
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	en funktionstyp överskrider gränsen på {MAX_FUNC_TYPE_VALUES} resultat
 @msg	not a Word document: its compound file has no WordDocument stream	inte ett Word-dokument: dess sammansatta fil saknar WordDocument-ström
 @msg	not a Word document: its main part is not a WordprocessingML document	inte ett Word-dokument: dess huvuddel är inte ett WordprocessingML-dokument
 @msg	not a Word document: its package has no main document part	inte ett Word-dokument: dess paket saknar huvuddokumentdel
@@ -9861,6 +9941,12 @@ digits	Hindi	Hindi
 @msg	the library holds {MAX_GROUPS} groups already	biblioteket innehåller redan {MAX_GROUPS} grupper
 @msg	the library holds {MAX_ITEMS} items of this kind already	biblioteket innehåller redan {MAX_ITEMS} objekt av den här typen
 @msg	the module must export its linear memory as `memory`	modulen måste exportera sitt linjära minne som `memory`
+@msg	the module must export `{name}` with the type {signature}	modulen måste exportera `{name}` med typen {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	modulen har mer än ett anpassat avsnitt `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	minnesbudget (modulens startminne är {initial} byte, gräns {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	manifestet i det anpassade avsnittet `{MANIFEST_SECTION}` måste ange `abi` som {ABI_VERSION}, den ABI-version som den här värden implementerar
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	tabellbudget (modulen definierar {count} tabeller, den största med {largest} element; gräns {MAX_TABLES} tabeller med {MAX_TABLE_ELEMENTS} element)
+@msg	the module's table section could not be read	modulens tabellavsnitt kunde inte läsas
 @msg	the name is empty	namnet är tomt
 @msg	the object has no fill, stroke or effect	objektet har ingen fyllning, kontur eller effekt
 @msg	the object has no graphic style (pass `name`)	objektet har ingen grafikstil (ange `name`)
@@ -10841,6 +10927,24 @@ digits	Hindi	Hindi
 @msg	A joint does not close by {gap} pt.	En fog sluter inte med {gap} pt.
 @msg	Two panels pass through each other.	Två paneler går igenom varandra.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen
+	Nature Icons	Naturikoner
+	Flower	Blomma
+	Tree	Träd
+	Mountain	Berg
+	Ornamental	Ornament
+	Scrollwork	Snirkel
+	Filigree Arrow	Filigranpil
+	Petal Sweep	Kronbladssvep
+	Twin Curl	Dubbel snirkel
+	Vector Packs	Vektorpaket
+	Compass Rose	Kompassros
+	Botanical Sprig	Botanisk kvist
+	Facet Diamond	Fasetterad diamant
+	Tide Crest	Vågkam
+	Leaf Vine	Bladranka
+	Blossom Chain	Blomkedja
+	Pennant Garland	Vimpelgirlang
+	Lantern String	Lyktgirlang
 	Orbit Lines	Banlinjer
 	Petal Garland	Kronbladsgirlang
 	Lattice Braid	Gallerfläta

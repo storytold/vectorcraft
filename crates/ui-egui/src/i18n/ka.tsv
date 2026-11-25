@@ -43,6 +43,7 @@
 	Select Object on Path	ტრაექტორიაზე ობიექტის მონიშვნა
 	Weather Icons	ამინდის ხატულები
 	Media Controls	მედია მართვის საშუალებები
+@id	language.name	ქართული
 @msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	'caller', 'callee' და 'arguments' მკაცრი რეჟიმის ფუნქციებში ვერ გამოიყენება
 @msg	3D effects require finite coordinates within 100 million points	3D ეფექტებს სჭირდება სასრული კოორდინატები 100 მილიონი პუნქტის ფარგლებში
 @msg	3D effects require one to ten lights	3D ეფექტებს სჭირდება ერთიდან ათამდე სინათლის წყარო
@@ -217,6 +218,8 @@
 @msg	`dataBase64` is larger than the module limit	`dataBase64` მოდულის ლიმიტზე დიდია
 @msg	`dataBase64` is not valid base64	`dataBase64` სწორი base64 არ არის
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` ვერ გამოიყენება `ids`-თან, `reverse`-თან ან `append`-თან ერთად
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` ვერ გამოიყენება `ids`-თან, `id`-თან ან `item`-თან ერთად
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` ვერ გამოიყენება `brush`-თან ერთად
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` და `childLimit` შეჯამებას ზღუდავს: გადაეცით `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` არის დიზაინის სახელი, ან null — ჩვეულებრივი სვეტებისთვის
 @msg	`design` is a design name, or null for the default marker	`design` არის დიზაინის სახელი, ან null — ნაგულისხმევი მარკერისთვის
@@ -2493,6 +2496,9 @@
 	Artboards	სამუშაო დაფები
 	Convert to Artboards	სამუშაო დაფებად გარდაქმნა
 	Rearrange All Artboards…	ყველა სამუშაო დაფის გადალაგება…
+	Rearrange…	გადალაგება…
+	Selected Artboards: {n}	მონიშნული სამუშაო დაფები: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	დაწკაპეთ ტილოზე სამუშაო დაფების განსათავსებლად (Esc აუქმებს)
 	Fit to Artwork Bounds	ნახატის საზღვრებზე მორგება
 	Fit to Selected Art	მონიშნულ ნახატზე მორგება
 	Graph	დიაგრამა
@@ -2647,6 +2653,7 @@
 	Fill & Stroke	შევსება და კონტური
 	Fill Color	შევსების ფერი
 	Opacity	გაუმჭვირვალობა
+	Show Opacity	გაუმჭვირვალობის ჩვენება
 	Stroke Color	კონტურის ფერი
 	Fill Gradient	შევსების გრადიენტი
 	Stroke Gradient	კონტურის გრადიენტი
@@ -2941,9 +2948,14 @@
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	წრის ხედი
 	Box View	კვადრატის ხედი
+	Show Out-of-Gamut Colors	ფერთა გამის გარეთ მყოფი ფერების ჩვენება
 	Box Channel	კვადრატის არხი
 	Color box	ფერის კვადრატი
 	Color Wheel Options	ფერთა წრის პარამეტრები
+	Show Document Colors	დოკუმენტის ფერების ჩვენება
+	Document Colors	დოკუმენტის ფერები
+	Selection Colors	მონიშნულის ფერები
+@plural	Used {n} time|Used {n} times	გამოყენებულია {n}-ჯერ|გამოყენებულია {n}-ჯერ
 	Show Harmony	ჰარმონიის ჩვენება
 	Harmony Rule	ჰარმონიის წესი
 	Harmony color	ჰარმონიის ფერი
@@ -2957,7 +2969,7 @@
 	Layers	შრეები
 	Libraries	ბიბლიოთეკა
 	Links	ბმულები
-@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	დისკზე შეიცვალა დაკავშირებული გამოსახულებები ({n}). ვაჩვენო ახალი ვერსიები?
+@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	დისკზე შეიცვალა დაკავშირებული გამოსახულებები ({n}). ვაჩვენო ახალი ვერსიები?|დისკზე შეიცვალა დაკავშირებული გამოსახულებები ({n}). ვაჩვენო ახალი ვერსიები?
 	Update Changed Links	შეცვლილი ბმულების განახლება
 	Magic Wand	ჯადოსნური ჯოხი
 	Navigator	ნავიგატორი
@@ -3959,8 +3971,8 @@ digits	Malayalam	მალაიალამური
 	Select objects to see their CSS, or Generate CSS for the whole document.	მონიშნეთ ობიექტები მათი CSS-ის სანახავად, ან შექმენით CSS მთელი დოკუმენტისთვის.
 	The selected objects have no CSS of their own (see below).	მონიშნულ ობიექტებს საკუთარი CSS არ აქვს (იხ. ქვემოთ).
 	Units: {units}	ერთეულები: {units}
-@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	კიდევ წესები: {n}. ექსპორტი ყველას ჩაწერს.
-@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	გამოტოვებულია უსახელო ობიექტები: {n}. დაარქვით მათ სახელი ან პანელის მენიუში ჩართეთ „უსახელო ობიექტები“.
+@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	კიდევ წესები: {n}. ექსპორტი ყველას ჩაწერს.|კიდევ წესები: {n}. ექსპორტი ყველას ჩაწერს.
+@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	გამოტოვებულია უსახელო ობიექტები: {n}. დაარქვით მათ სახელი ან პანელის მენიუში ჩართეთ „უსახელო ობიექტები“.|გამოტოვებულია უსახელო ობიექტები: {n}. დაარქვით მათ სახელი ან პანელის მენიუში ჩართეთ „უსახელო ობიექტები“.
 	All Categories	ყველა კატეგორია
 	Repeat Objects	გამეორების ობიექტები
 	Save…	შენახვა…
@@ -4076,6 +4088,10 @@ digits	Malayalam	მალაიალამური
 	Rename Preset	პრესეტის სახელის შეცვლა
 	Save Image Trace Preset	გამოსახულების ვექტორიზაციის პრესეტის შენახვა
 	Delete Image Trace Preset	გამოსახულების ვექტორიზაციის პრესეტის წაშლა
+	Tracing Presets…	ვექტორიზაციის პრესეტები…
+	Import Image Trace Presets	გამოსახულების ვექტორიზაციის პრესეტების იმპორტირება
+	Export Image Trace Presets	გამოსახულების ვექტორიზაციის პრესეტების ექსპორტირება
+	Replace the saved presets that have these names?	ჩავანაცვლოთ ამ სახელების მქონე შენახული პრესეტები?
 	Cancel Image Trace	გამოსახულების ვექტორიზაციის გაუქმება
 	Method:	მეთოდი:
 	Pad	გაგრძელება
@@ -4835,20 +4851,20 @@ digits	Malayalam	მალაიალამური
 	Searching…	ძიება…
 	Not found	ვერ მოიძებნა
 	{folders} and {files} searched	მოიძებნა: {folders}, {files}
-@plural	{n} folder|{n} folders	{n} საქაღალდე
-@plural	{n} file|{n} files	{n} ფაილი
-@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	გამოტოვებული საქაღალდეები: {n} — მაგ. სხვა აპლიკაციების, სისტემის და დამალული საქაღალდეები
-@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	საქაღალდეების ან ფაილების წაკითხვა ვერ მოხერხდა: {n}
+@plural	{n} folder|{n} folders	{n} საქაღალდე|{n} საქაღალდე
+@plural	{n} file|{n} files	{n} ფაილი|{n} ფაილი
+@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	გამოტოვებული საქაღალდეები: {n} — მაგ. სხვა აპლიკაციების, სისტემის და დამალული საქაღალდეები|გამოტოვებული საქაღალდეები: {n} — მაგ. სხვა აპლიკაციების, სისტემის და დამალული საქაღალდეები
+@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	საქაღალდეების ან ფაილების წაკითხვა ვერ მოხერხდა: {n}|საქაღალდეების ან ფაილების წაკითხვა ვერ მოხერხდა: {n}
 	The search stopped at its limit: search a smaller folder.	ძიება ზღვარზე შეჩერდა: მოძებნეთ უფრო პატარა საქაღალდეში.
 	Copy only fonts you own or are licensed to install.	დააკოპირეთ მხოლოდ ის შრიფტები, რომლებიც გეკუთვნით ან რომელთა დაყენების ლიცენზია გაქვთ.
 	VectorCraft copies the fonts to {folder}.	VectorCraft შრიფტებს აკოპირებს აქ: {folder}.
-@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	ყველაზე გამოყენება (კიდევ დაკარგული: {n})
+@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	ყველაზე გამოყენება (კიდევ დაკარგული: {n})|ყველაზე გამოყენება (კიდევ დაკარგული: {n})
 	Ignore	უგულებელყოფა
 	Linked File Not Found	დაკავშირებული ფაილი ვერ მოიძებნა
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	ჩაანაცვლეთ სხვა ფაილით ან უგულებელყავით: მისი გამოსახულებები დოკუმენტთან შენახულ წინასწარ ხედს აჩვენებს.
 	Replace…	ჩანაცვლება…
 	Update Modified Links	შეცვლილი ბმულების განახლება
-@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	დოკუმენტის შენახვის შემდეგ შეიცვალა დაკავშირებული გამოსახულებები: {n}. ვაჩვენოთ ახალი ვერსიები?
+@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	დოკუმენტის შენახვის შემდეგ შეიცვალა დაკავშირებული გამოსახულებები: {n}. ვაჩვენოთ ახალი ვერსიები?|დოკუმენტის შენახვის შემდეგ შეიცვალა დაკავშირებული გამოსახულებები: {n}. ვაჩვენოთ ახალი ვერსიები?
 	Dialog	დიალოგი
 	Convert Process to Global	პროცესულის გლობალურად გარდაქმნა
 	Create From:	შექმნის წყარო:
@@ -4884,14 +4900,14 @@ digits	Malayalam	მალაიალამური
 	Fonts whose licence doesn't allow embedding are not copied.	შრიფტები, რომელთა ლიცენზია ჩაშენების უფლებას არ იძლევა, არ კოპირდება.
 	Package collects a saved document with its linked files and fonts.	შეფუთვა აგროვებს შენახულ დოკუმენტს მის დაკავშირებულ ფაილებთან და შრიფტებთან ერთად.
 	Package created	შეფუთვა შეიქმნა
-@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	შეიფუთა ფაილები: {n}, ადგილი: {folder} {note}
+@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	შეიფუთა ფაილები: {n}, ადგილი: {folder} {note}|შეიფუთა ფაილები: {n}, ადგილი: {folder} {note}
 	Relink Linked Files to the Document	დაკავშირებული ფაილების დოკუმენტთან ხელახლა დაკავშირება
 	Save the document first?	ჯერ შევინახოთ დოკუმენტი?
-@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	ფაილები: {n}, ადგილი: {folder} {note}. ვაჩვენოთ შეფუთვის საქაღალდე?
-@plural	{n} linked file not found|{n} linked files not found	ვერ მოიძებნა დაკავშირებული ფაილები: {n}
-@msgplural	{n} linked file not found|{n} linked files not found	ვერ მოიძებნა დაკავშირებული ფაილები: {n}
+@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	ფაილები: {n}, ადგილი: {folder} {note}. ვაჩვენოთ შეფუთვის საქაღალდე?|ფაილები: {n}, ადგილი: {folder} {note}. ვაჩვენოთ შეფუთვის საქაღალდე?
+@plural	{n} linked file not found|{n} linked files not found	ვერ მოიძებნა დაკავშირებული ფაილები: {n}|ვერ მოიძებნა დაკავშირებული ფაილები: {n}
+@msgplural	{n} linked file not found|{n} linked files not found	ვერ მოიძებნა დაკავშირებული ფაილები: {n}|ვერ მოიძებნა დაკავშირებული ფაილები: {n}
 @msg	fonts not copied: {fonts}	არ დაკოპირდა შრიფტები: {fonts}
-@msgplural	({n} linked file not found)|({n} linked files not found)	(ვერ მოიძებნა დაკავშირებული ფაილები: {n})
+@msgplural	({n} linked file not found)|({n} linked files not found)	(ვერ მოიძებნა დაკავშირებული ფაილები: {n})|(ვერ მოიძებნა დაკავშირებული ფაილები: {n})
 @msg	(fonts not copied: {fonts})	(არ დაკოპირდა შრიფტები: {fonts})
 @msg	({note}) ({more})	({note}) ({more})
 @msg	{note}) ({more}	{note}) ({more}
@@ -5519,13 +5535,19 @@ theme	Appearance	იერსახე
 	{file}; {embedding}	{file}; {embedding}
 	unknown type	უცნობი ტიპი
 	{type}; {uses}	{type}; {uses}
-@plural	{n} use|{n} uses	{n} გამოყენება
+@plural	{n} use|{n} uses	{n} გამოყენება|{n} გამოყენება
 	substituted: shown in {family} {style} ({detail})	ჩანაცვლებულია: ნაჩვენებია შრიფტით {family} {style} ({detail})
 	missing: shown in {family} {style}	აკლია: ნაჩვენებია შრიფტით {family} {style}
 	missing	აკლია
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	გარჩევადობა მიუწვდომელია
+	estimated memory {memory}	სავარაუდო მეხსიერება {memory}
+	memory unavailable	მეხსიერება მიუწვდომელია
+	Unknown format	უცნობი ფორმატი
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -5534,9 +5556,9 @@ theme	Appearance	იერსახე
 	Conic gradient	კონუსური გრადიენტი
 	Diamond gradient	რომბისებრი გრადიენტი
 	Freeform gradient	თავისუფალი ფორმის გრადიენტი
-@plural	{n} instance|{n} instances	{n} ეგზემპლარი
-@plural	{n} row|{n} rows	{n} მწკრივი
-@plural	{n} column|{n} columns	{n} სვეტი
+@plural	{n} instance|{n} instances	{n} ეგზემპლარი|{n} ეგზემპლარი
+@plural	{n} row|{n} rows	{n} მწკრივი|{n} მწკრივი
+@plural	{n} column|{n} columns	{n} სვეტი|{n} სვეტი
 	Select art to make a scatter, art or pattern brush.	მონიშნეთ ნახატი გაფანტვის, მხატვრული ან პატერნის ფუნჯის შესაქმნელად.
 	Brush Art	ფუნჯის ნახატი
 	New Symbol	ახალი სიმბოლო
@@ -5551,6 +5573,8 @@ theme	Appearance	იერსახე
 	Symbolism Tool	სიმბოლოების ხელსაწყო
 	Image Trace Presets	გამოსახულების ვექტორიზაციის პრესეტები
 	Live Paint Bucket	ცოცხალი შეღებვის სათლი
+	Fill Area	არის შევსება
+	Fill Area Tool	არის შევსების ხელსაწყო
 	Live Paint Bucket (Stroke)	ცოცხალი შეღებვის სათლი (კონტური)
 	Live Paint Info	ცოცხალი შეღებვის ინფორმაცია
 	Shape Builder	ფიგურების კონსტრუქტორი
@@ -5972,6 +5996,7 @@ theme	Appearance	იერსახე
 	Data Recovery	მონაცემების აღდგენა
 	Default Language	ნაგულისხმევი ენა
 	Disable Auto Add/Delete	ავტომატური დამატება/წაშლის გამორთვა
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete შლის ღუზის წერტილებს და ინარჩუნებს კონტურებს შეერთებულად
 	Interpolate Control Points When Moving Anchors	სახელურების ინტერპოლაცია საყრდენი წერტილების გადაადგილებისას
 	Display All Blacks Accurately	ყველა შავის ზუსტად ჩვენება
 	Display All Blacks as Rich Black	ყველა შავის მდიდარ შავად ჩვენება
@@ -6055,6 +6080,13 @@ theme	Appearance	იერსახე
 	Pen Tool	კალმის ხელსაწყო
 	Quick Pen Tool	სწრაფი კალმის ხელსაწყო
 	Quick Pen	სწრაფი კალამი
+	Quick Pen Toolbar	სწრაფი კალმის ხელსაწყოთა ზოლი
+	Continuous Arc	უწყვეტი რკალი
+	Sharp Corner Arc	მახვილკუთხიანი რკალი
+	Flip Arc	რკალის არეკვლა
+	Hide Toolbar	ხელსაწყოთა ზოლის დამალვა
+	Pin Toolbar Position	ხელსაწყოთა ზოლის პოზიციის ჩამაგრება
+	Reset Toolbar Position	ხელსაწყოთა ზოლის პოზიციის ჩამოყრა
 	Picas	პიკები
 	Portuguese	პორტუგალიური
 	Preserve Appearance and Overprints	იერსახისა და ზედდაბეჭდვების შენარჩუნება
@@ -6169,6 +6201,11 @@ theme	Appearance	იერსახე
 	Edit Arrowheads	ისრის წვერების რედაქტირება
 	Edit Arrowheads…	ისრის წვერების რედაქტირება…
 	Reload Arrowheads	ისრის წვერების ხელახლა ჩატვირთვა
+	Bevels	წაკვეთები
+	Edit Bevels	წაკვეთების რედაქტირება
+	Edit Bevels…	წაკვეთების რედაქტირება…
+	{name} (document)	{name} (დოკუმენტი)
+	Reload Bevels	წაკვეთების ხელახლა ჩატვირთვა
 	Stroke Options	კონტურის პარამეტრები
 	Width Profiles	სიგანის პროფილები
 	Apply Graphic Style	გრაფიკული სტილის გამოყენება
@@ -6365,6 +6402,11 @@ axis	Both	ორივე
 	Image	გამოსახულება
 	Ink	მელანი
 	Lab	Lab
+	OKLCH Sliders	OKLCH სლაიდერები
+	HSL Sliders	HSL სლაიდერები
+	Chroma	ქრომა
+	The largest chroma sRGB holds at this lightness and hue	უდიდესი ქრომა, რომელსაც sRGB იტევს ამ სიღიავესა და ფერის ტონზე
+	OKLCH needs sRGB as the working RGB space	OKLCH-ს სამუშაო RGB სივრცედ sRGB სჭირდება
 	Medium	საშუალო
 	Name	სახელი
 	None	არცერთი
@@ -6449,11 +6491,12 @@ font-technology	Variable	ცვლადი
 	In the menu bar: {path}	მენიუს ზოლში: {path}
 	In the {group} group: press and hold to open it	ჯგუფში {group}: გასახსნელად დააჭირეთ და გეჭიროთ
 	{home}, not shown now	{home}, ახლა არ ჩანს
-@plural	{n} result|{n} results	{n} შედეგი
-@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} შედეგიდან {shown}. გააგრძელეთ აკრეფა მათ შესამცირებლად.
+@plural	{n} result|{n} results	{n} შედეგი|{n} შედეგი
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} შედეგიდან {shown}. გააგრძელეთ აკრეფა მათ შესამცირებლად.|{n} შედეგიდან {shown}. გააგრძელეთ აკრეფა მათ შესამცირებლად.
 	Recent Commands	ბოლოდროინდელი ბრძანებები
 	No recent commands	ბოლოდროინდელი ბრძანებები არ არის
 	Type to search commands, tools, panels and effects	აკრიფეთ ბრძანებების, ხელსაწყოების, პანელებისა და ეფექტების მოსაძებნად
+	Clear Recent Commands	ბოლო ბრძანებების სიის გასუფთავება
 	Dashed Line	ტირეებიანი ხაზი
 	Panel menu	პანელის მენიუ
 	Unembed…	ჩაშენების მოხსნა…
@@ -6489,6 +6532,7 @@ font-technology	Variable	ცვლადი
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	ტრეკპადზე ორი თითით მობრუნების ჟესტი ტილოს ხედს აბრუნებს.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	კლავიშის ხანგრძლივი დაჭერა უშვებს ხელსაწყოს ან ბრძანებას კლავიატურის მალსახმობების დაჭერის სვეტიდან; მოკლე დაჭერა უშვებს მის ჩვეულ მალსახმობს.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	რამდენი წამი უნდა იყოს კლავიში დაჭერილი, სანამ ჩვეული მალსახმობის ნაცვლად მისი ხანგრძლივი დაჭერის მალსახმობი გაეშვება.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete შლის არჩეულ ღუზის წერტილებს და თითოეულის გარშემო მრუდს ხელახლა არგებს, ნაცვლად იმისა, რომ იქ კონტური გახსნას.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	როცა ღუზის წერტილებს გადაადგილებთ, ყოველი მრუდი, რომლის ერთი ბოლოც გადაადგილდა, ინარჩუნებს ფორმას თავის ბოლოებთან მიმართებით.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	სანამ ხელსაწყოს მალსახმობ კლავიშს დაჭერილს გიჭირავთ, ეს ხელსაწყოა არჩეული; კლავიშის აშვების შემდეგ ისევ წინა ხელსაწყო აირჩევა.
 	Shows the bounding box while you move the selection or draw a shape.	აჩვენებს შემომსაზღვრელ ჩარჩოს, სანამ მონიშნულს გადაადგილებთ ან ფიგურას ხატავთ.
@@ -6574,9 +6618,14 @@ font-technology	Variable	ცვლადი
 	Edit type set in fonts that aren't available?	დავარედაქტიროთ მიუწვდომელი შრიფტებით აწყობილი ტექსტი?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	ტილოზე თითოეული ნაჭრის ნომერს აჩვენებს ჩარჩოში მის ზედა მარცხენა კუთხეში; გამორთულისას ნაჭრების კონტურები კვლავ ჩანს.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	მომხმარებლისა და ობიექტის ნაჭრების კონტურებისა და მათი ნომრების ჩარჩოების ფერი; ავტომატური ნაჭრები ამ ფერის უფრო მკრთალ ელფერს იყენებს.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	აბზაცებში, სადაც სიტყვების გადატანა ჩართულია, სიაში მოცემული სიტყვა გადატანის დეფისს მხოლოდ მასში აკრეფილ დეფისებთან იღებს, ან არასდროს, თუ ისინი არ აქვს, მიუხედავად ენისა და რეგისტრისა.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	დესკტოპზე ამ საქაღალდის .wasm პლაგინები იტვირთება გაშვებისას და ახალი საქაღალდის OK-ით დაყენებისას, უსაფრთხო რეჟიმის გარდა; ნებართვების მომთხოვნი კი მათი მიცემის შემდეგ. ვებში არ იტვირთება.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	დიდი ფილტრის ან ბრძანების პლაგინის გაშვებას მინიმუმ 250 მილიონ ინსტრუქციას აძლევს, იგივე დროის ლიმიტით; ჩვეულებრივი ბიუჯეტს ტოვებს. ცოცხალი ეფექტები, ექსპორტერები და იმპორტერები არ იცვლება.
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	ახალი ტექსტი იღებს ამ ენას, სანამ დოკუმენტის პარამეტრების ენაა ინგლისური: აშშ; დოკუმენტში უკვე არსებული ტექსტი ინარჩუნებს თავის ენას.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	ახალი ტექსტი იღებს ამ ენას, სანამ დოკუმენტის პარამეტრების ენაა ინგლისური: აშშ და [ჩვეულებრივი სიმბოლოს სტილი] ენას არ ადგენს; დოკუმენტში უკვე არსებული ტექსტი ინარჩუნებს თავის ენას.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	აბზაცებში, სადაც სიტყვების გადატანა ჩართულია, სიაში მოცემული სიტყვა მხოლოდ მასში აკრეფილ დეფისებთან გადაიტანება, ან არსად, თუ ისინი არ აქვს, მიუხედავად ენისა და რეგისტრისა.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	დესკტოპის ვერსიაში ამ საქაღალდის .wasm პლაგინები იტვირთება გაშვებისას და როცა აქ ახალი საქაღალდით OK-ს დააწკაპუნებთ, გარდა უსაფრთხო რეჟიმისა; ვებ-ვერსია მათ არ ტვირთავს.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	ჩვეულებრივი ინარჩუნებს თითოეული პლაგინის საკუთარ ლიმიტებს; დიდით პლაგინის ფილტრს ან ბრძანებას შეუძლია შეასრულოს მინიმუმ 250 მილიონი ინსტრუქცია მისი შეყვანისთვის საჭირო ინსტრუქციების გარდა. დროის ლიმიტი იგივე რჩება.
 	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	რამდენი ინსტრუქციის გამოყენება შეუძლია პლაგინის ობიექტების ფილტრის თითოეულ გაშვებას; დიდი ჩვეულებრივზე მეტს უშვებს, იმავე 60-წამიანი ლიმიტით. მძიმე ფილტრები საკუთარ ბიუჯეტს ინარჩუნებენ.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	სამუშაო დისკის პირველი არჩევანი: Startup, None ან საქაღალდის მისამართი; VectorCraft მას ინახავს, მაგრამ სამუშაო დისკებს ჯერ არ იყენებს.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	სამუშაო დისკის მეორე არჩევანი: Startup, None ან საქაღალდის მისამართი; VectorCraft მას ინახავს, მაგრამ სამუშაო დისკებს ჯერ არ იყენებს.
@@ -6588,13 +6637,15 @@ font-technology	Variable	ცვლადი
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	ხელსაწყოთა ზოლში თითოეული ხელსაწყოების ჯგუფის სახელს მისი ხელსაწყოების ზემოთ აჩვენებს; გამორთულისას ჯგუფები ერთმანეთს მიჰყვება და მათ შორის არაფერია.
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	ამიერიდან თქვენ მიერ გახსნილი ან შექმნილი დოკუმენტები ჩანართებად იხსნება; გამორთულისას თითოეული მცურავ ფანჯარაში იხსნება. უკვე გახსნილი დოკუმენტები თავის ადგილას რჩება.
 	Makes the document tabs taller and their names larger.	დოკუმენტების ჩანართებს უფრო მაღალს, მათ სახელებს კი უფრო დიდს ხდის.
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	შემდეგი გაშვებიდან სისტემა ხატავს ფანჯრის სათაურის ზოლს იქ, სადაც VectorCraft სხვა შემთხვევაში საკუთარს დახატავდა.
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	შემდეგი გაშვებიდან VectorCraft ფანჯრის სათაურის ზოლს იქაც ხატავს, სადაც მას სამუშაო გარემო დახატავდა, თუ სისტემის სათაურის ზოლი არ არის ჩართული.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	შემდეგი გაშვებიდან სისტემა ხატავს ფანჯრის სათაურის ზოლს იქ, სადაც VectorCraft სხვა შემთხვევაში საკუთარს დახატავდა; Linux-სა და BSD-ზე უპირატესობა VECTORCRAFT_TITLEBAR ცვლადს აქვს.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	შემდეგი გაშვებიდან VectorCraft ფანჯრის სათაურის ზოლს იქაც ხატავს, სადაც მას სამუშაო გარემო დახატავდა, თუ სისტემის სათაურის ზოლი არ არის ჩართული და მას VECTORCRAFT_TITLEBAR ცვლადი არ ირჩევს.
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	ინტერფეისს ადიდებს ან ამცირებს; ტილოზე არსებული ნახატი იმავე მასშტაბზე ზომას ინარჩუნებს.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft-ის მიერ დახატული ხელსაწყოების მაჩვენებლები ინტერფეისის მასშტაბირებასთან ერთად იზრდება და მცირდება; გამორთულისას ზომას ინარჩუნებს.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	ინტერფეისის ენა; ავტომატური სისტემის ენას იყენებს. დიალოგი ენას იცვლის, როგორც კი რომელიმეს აირჩევთ.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	ანიმირებული მასშტაბირება მუშაობს მხოლოდ მაშინ, როცა ეს ჩართულია; გამორთულისას ანიმირებული მასშტაბირება მკრთალია და მასშტაბირება არ ანიმირდება.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	ბორბლით მასშტაბირება რბილად სრიალებს, მასშტაბის ხელსაწყო კი ადიდებს, როცა გვერდზე გადაათრევთ ან დაჭერილს გაჩერებთ; გამორთულისას ის ადიდებს არეს, რომელზეც გადაათრევთ.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	შემდეგი გაშვებიდან დესკტოპის ვერსია ტილოს აჩვენებს ამ ტიპის გრაფიკული პროცესორით; ნამუშევარი ყოველთვის CPU-ზე იხატება. ავტომატური Windows-სა და macOS-ზე ინტეგრირებულს ანიჭებს უპირატესობას. ვებ-ვერსია მას არ იყენებს.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	შემდეგი გაშვებიდან ფანჯარა აჩვენებს თითოეულ კადრს ეკრანის განახლების მოლოდინის გარეშე, სადაც გრაფიკული დრაივერი ამის საშუალებას იძლევა, წამში არაუმეტეს 240 კადრისა.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	შემდეგი გაშვებიდან დესკტოპის ვერსია ხატავს ამ ტიპის გრაფიკული პროცესორით; ავტომატური უპირატესობას ანიჭებს ეკრანის მმართველს. ვებ-ვერსია მას არ იყენებს.
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	შემდეგი გაშვებიდან ფანჯარა აჩვენებს კადრებს ეკრანის განახლების მოლოდინის გარეშე, წამში არაუმეტეს 240-ისა; გამორთულისას ტემპს ეკრანი განსაზღვრავს. უპირატესობა აქვს გაშვებისას დაყენებულ ჩვენების რეჟიმს.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	გაუქმების ნაბიჯების მაქსიმალური რაოდენობა თითო დოკუმენტში; მცირე რიცხვი OK-ზე დაწკაპუნებისას შლის უძველეს ნაბიჯებს. ნაბიჯები შეიძლება ადრეც წაიშალოს, თუ ბევრ მეხსიერებას იკავებს.
@@ -6613,6 +6664,9 @@ font-technology	Variable	ცვლადი
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	„ბოლოს გახსნილი ფაილების გახსნა“ და „საწყისი ეკრანი“ აჩვენებს მაქსიმუმ ამდენ ბოლო ფაილს; 0 არცერთს არ აჩვენებს, VectorCraft კი მაინც იმახსოვრებს 30-მდე ფაილს.
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	დოკუმენტის გახსნისას მიბმული EPS გამოსახულება, რომელიც თავის შენახულ გადახედვას აჩვენებს, ინარჩუნებს მას EPS ფაილის ხელახლა წაკითხვის ნაცვლად; შეცვლილი ფაილები კვლავ „ბმულების განახლებას“ მისდევს.
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	„პიქსელების წინასწარ ნახვაში“ გამოსახულებები გლუვად იხატება; გამორთულისას მათი პიქსელები მკვეთრი კიდეებით ჩანს. მის გარეთ გამოსახულებები ყოველთვის გლუვდება.
+	PDF Text	PDF-ის ტექსტი
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	PDF-ის ტექსტი, რომელსაც ხსნით ან ჩაშენებთ, შემოდის რედაქტირებად ტექსტად ან კონტურებად, რომლებიც ერთნაირად ჩანს კომპიუტერზე მისი შრიფტების გარეშე.
+	Linked pages show the file's own text.	მიბმული გვერდები ფაილის საკუთარ ტექსტს აჩვენებს.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	როცა მიბმული ფაილი იცვლება, „ავტომატურად“ მას ხელახლა კითხულობს, „შეკითხვა ცვლილებისას“ ჯერ გეკითხებათ, „ხელით“ კი უცვლელად ტოვებს და სტატუსის ზოლში შენიშვნას აჩვენებს.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	დესკტოპის ვერსიაში საქაღალდე, საიდანაც „შაბლონიდან შექმნა…“ და „შაბლონად შენახვა…“ იწყება; დატოვეთ ცარიელი თქვენი დოკუმენტების საქაღალდეში არსებული VectorCraft Templates-ისთვის.
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	„ორიგინალის რედაქტირება“ მიბმულ ფაილს მისი ტიპისთვის სისტემის ნაგულისხმევ აპში ხსნის; გამორთულისას მიბმული რასტრული გამოსახულება PhotoCraft-ში იხსნება, თუ ის დაინსტალირებულია.
@@ -6627,7 +6681,6 @@ font-technology	Variable	ცვლადი
 	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	ყველა შავის მდიდარ შავად გამოტანა სუფთა CMYK შავს RGB შავად ხატავს RGB და ნაცრისფერი გრადაციების რასტრულ ექსპორტებში და ბიტმაპად ბეჭდვისას; ის არ ცვლის ვექტორულ ექსპორტებს, CMYK JPEG-ს, TIFF-სა და PSD-ს ან სხვა ბეჭდვას.
 	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	სენსორულ ეკრანზე გადადის სენსორულ სამუშაო სივრცეზე; პარამეტრის გამორთვისას ან სენსორული ეკრანის დაკარგვისას ბრუნდება წინა სამუშაო სივრცეზე.
 	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	ტილოზე ორი თითით შეხება აბრუნებს მოქმედებას, სენსორულ სამუშაო სივრცეში კი მონიშვნისა და ხატვის ხელსაწყოებს შორის გადართავს; სამი თითით შეხება ხელახლა ასრულებს. პრეზენტაციის რეჟიმში არცერთი არ მუშაობს.
-	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	ახალი ტექსტი იღებს ამ ენას, სანამ დოკუმენტის პარამეტრების ენაა ინგლისური: აშშ და [ჩვეულებრივი სიმბოლოს სტილი] ენას არ ადგენს; დოკუმენტში უკვე არსებული ტექსტი ინარჩუნებს თავის ენას.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	გადატანის ჩართვისას სიის სიტყვა მხოლოდ აკრეფილ დეფისებთან გადაიტანება, ან არსად, თუ არ აქვს, რეგისტრის მიუხედავად; კორეულ სიტყვებს დეფისი არ ემატება, ინდური ენების სიტყვები კი სიმბოლოთა ჯგუფის შიგნით არ გადაიტანება.
 	Reset all preferences to their defaults?	დავაბრუნოთ ყველა პარამეტრი ნაგულისხმევ მნიშვნელობებზე?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	ნაგულისხმევი მნიშვნელობები გამოიყენება, როცა პარამეტრებში OK-ს დააჭერთ. იქ გაუქმება ინარჩუნებს თქვენს მიმდინარე პარამეტრებს.
@@ -6650,6 +6703,10 @@ font-technology	Variable	ცვლადი
 	Cusp	წვეტი
 	Straight segment	სწორი სეგმენტი
 	Circle too large	წრე ზედმეტად დიდია
+	Show Radii	რადიუსების ჩვენება
+	Show Diameter	დიამეტრის ჩვენება
+	Anchors at Standard Positions	საყრდენი წერტილები სტანდარტულ პოზიციებზე
+	Third Point by Dragging	მესამე წერტილი გადათრევით
 	Clip to Art	ნახატზე მოჭრა
 	Colorize	გაფერადება
 	Gamma	გამა
@@ -6804,21 +6861,21 @@ font-technology	Variable	ცვლადი
 	Stroke Direction	შტრიხის მიმართულება
 	Stroke Width	კონტურის სისქე
 	Stroke Pressure	შტრიხის დაწოლა
-@plural	{n} item|{n} items	ელემენტი: {n}
-@plural	Color Table ({n} color)|Color Table ({n} colors)	ფერების ცხრილი (ფერი: {n})
-@plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	წაიშალოს გრაფიკული სტილები ({n})?
-@plural	Delete this {n} brush?|Delete these {n} brushes?	წაიშალოს ეს ფუნჯი ({n})?
-@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	წაიშალოს ეს ფერის ნიმუშები და ჯგუფები ({n})?
-@plural	{n} Layer|{n} Layers	შრე: {n}
-@plural	{n} Object|{n} Objects	ობიექტი: {n}
-@plural	{n} area highlighted|{n} areas highlighted	გამოკვეთილი არე: {n}
-@plural	{n} color|{n} colors	ფერი: {n}
-@plural	{n} fill|{n} fills	შევსება: {n}
-@plural	{n} glyph|{n} glyphs	გლიფი: {n}
-@plural	{n} object highlighted|{n} objects highlighted	გამოკვეთილი ობიექტი: {n}
-@plural	{n} star|{n} stars	ვარსკვლავი: {n}
-@plural	{n} step|{n} steps	ნაბიჯი: {n}
-@plural	{n} stroke|{n} strokes	კონტური: {n}
+@plural	{n} item|{n} items	ელემენტი: {n}|ელემენტი: {n}
+@plural	Color Table ({n} color)|Color Table ({n} colors)	ფერების ცხრილი (ფერი: {n})|ფერების ცხრილი (ფერი: {n})
+@plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	წაიშალოს გრაფიკული სტილები ({n})?|წაიშალოს გრაფიკული სტილები ({n})?
+@plural	Delete this {n} brush?|Delete these {n} brushes?	წაიშალოს ეს ფუნჯი ({n})?|წაიშალოს ეს ფუნჯი ({n})?
+@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	წაიშალოს ეს ფერის ნიმუშები და ჯგუფები ({n})?|წაიშალოს ეს ფერის ნიმუშები და ჯგუფები ({n})?
+@plural	{n} Layer|{n} Layers	შრე: {n}|შრე: {n}
+@plural	{n} Object|{n} Objects	ობიექტი: {n}|ობიექტი: {n}
+@plural	{n} area highlighted|{n} areas highlighted	გამოკვეთილი არე: {n}|გამოკვეთილი არე: {n}
+@plural	{n} color|{n} colors	ფერი: {n}|ფერი: {n}
+@plural	{n} fill|{n} fills	შევსება: {n}|შევსება: {n}
+@plural	{n} glyph|{n} glyphs	გლიფი: {n}|გლიფი: {n}
+@plural	{n} object highlighted|{n} objects highlighted	გამოკვეთილი ობიექტი: {n}|გამოკვეთილი ობიექტი: {n}
+@plural	{n} star|{n} stars	ვარსკვლავი: {n}|ვარსკვლავი: {n}
+@plural	{n} step|{n} steps	ნაბიჯი: {n}|ნაბიჯი: {n}
+@plural	{n} stroke|{n} strokes	კონტური: {n}|კონტური: {n}
 @msg	no library `{id}`	ბიბლიოთეკა `{id}` არ არსებობს
 @msg	the library has another item of that kind named `{name}`	ბიბლიოთეკას უკვე აქვს ამ ტიპის სხვა ელემენტი სახელით `{name}`
 @msg	select some type first	ჯერ მონიშნეთ ტექსტი
@@ -6905,7 +6962,7 @@ font-technology	Variable	ცვლადი
 @msg	PDF settings are not an object	PDF-ის პარამეტრები ობიექტი არ არის
 @msg	PDF security settings are not an object	PDF-ის უსაფრთხოების პარამეტრები ობიექტი არ არის
 @msg	PDF writer error: {0}	PDF-ის ჩამწერის შეცდომა: {0}
-@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	შეფუთულია ფაილი ({n}) საქაღალდეში {folder} ({note})
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	შეფუთულია ფაილი ({n}) საქაღალდეში {folder} ({note})|შეფუთულია ფაილი ({n}) საქაღალდეში {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	ბრაუზერში წინასწარ ნახვას დესკტოპის აპი სჭირდება (ვებში ფაილები ჩამოიტვირთება)
 @msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	მიუთითეთ `desiredK`, სასურველი ფაილის ზომა K-ში (1024 ბაიტი): 0-ზე მეტი და არაუმეტეს 1048576 რიცხვი
 @msg	`startWith` is `current` or `auto`	`startWith` არის `current` ან `auto`
@@ -6925,6 +6982,7 @@ font-technology	Variable	ცვლადი
 @msg	Saved {path}	შენახულია: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	გლიფების ჩასასმელად მონიშნეთ ტექსტი ან ტექსტის ხელსაწყოთი დაწკაპეთ ტექსტში
 @msg	Shape Builder: no region under the pointer	ფიგურების კონსტრუქტორი: მაჩვენებლის ქვეშ არე არ არის
+@msg	Fill Area: no enclosed area under the pointer	არის შევსება: მაჩვენებლის ქვეშ დახურული არე არ არის
 @msg	Shape Builder: select all paths you want to merge	ფიგურების კონსტრუქტორი: მონიშნეთ ყველა ტრაექტორია, რომლის გაერთიანებაც გსურთ
 @msg	Shape Builder: select paths or compound paths	ფიგურების კონსტრუქტორი: მონიშნეთ ტრაექტორიები ან შედგენილი ტრაექტორიები
 @msg	Show All Hidden Attributes: nothing is hidden	ყველა დამალული ატრიბუტის ჩვენება: დამალული არაფერია
@@ -7223,8 +7281,8 @@ font-technology	Variable	ცვლადი
 @msg	the action sets changed; nothing was deleted	მოქმედებების ნაკრებები შეიცვალა; არაფერი წაშლილა
 @msg	no action set to save	შესანახი მოქმედებების ნაკრები არ არის
 @msg	the action set file can't be read in full	მოქმედებების ნაკრების ფაილის სრულად წაკითხვა შეუძლებელია
-@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	ჩაიტვირთა „{name}“; გამოტოვებული ნაბიჯები: {n}
-@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	ჩაიტვირთა „{name}“; შენახული ნაბიჯები უცნობი ბრძანებით: {n}; პირველი: „{action}“, ნაბიჯი {step}, `{command}`
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	ჩაიტვირთა „{name}“; გამოტოვებული ნაბიჯები: {n}|ჩაიტვირთა „{name}“; გამოტოვებული ნაბიჯები: {n}
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	ჩაიტვირთა „{name}“; შენახული ნაბიჯები უცნობი ბრძანებით: {n}; პირველი: „{action}“, ნაბიჯი {step}, `{command}`|ჩაიტვირთა „{name}“; შენახული ნაბიჯები უცნობი ბრძანებით: {n}; პირველი: „{action}“, ნაბიჯი {step}, `{command}`
 @msg	not an action set file	ეს არ არის მოქმედებების ნაკრების ფაილი
 @msg	the action set file is larger than 8 MiB	მოქმედებების ნაკრების ფაილი 8 MiB-ზე დიდია
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: ცნობარი {MAX_BYTES} ბაიტზე დიდი იქნებოდა
@@ -7341,6 +7399,10 @@ font-technology	Variable	ცვლადი
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	ეს ვექტორიზაცია {max}-ზე მეტ საყრდენ წერტილს შექმნიდა, რასაც დოკუმენტი შეუფერხებლად ვერ აჩვენებს: გაზარდეთ ხმაური, შეამცირეთ ტრაექტორიები ან ფერები, ან აირჩიეთ ნაკლები სიზუსტის პრესეტი
 @msg	select an envelope	მონიშნეთ გარსი
 @msg	select an image	მონიშნეთ გამოსახულება
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	ობიექტი {_1} არის პერსპექტიული დეფორმაციით ან თავისუფალი დეფორმაციით შეცვლილი გამოსახულება, რომელზეც ეს ბრძანება არ მუშაობს
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	გამოსახულება {_1} ასე ვერ დეფორმირდება: მისი კუთხეები ამოზნექილ ფორმას ვერ შექმნის
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	გამოსახულება {_1} ასე ვერ დეფორმირდება: მისი კუთხეები დეფორმაციის ჰორიზონტს გადაკვეთს
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	გამოსახულება {_1} ასე ვერ დეფორმირდება: მისი კუთხეები პერსპექტიული ასახვისთვის ერთმანეთთან ძალიან ახლოს იქნება
 @msg	`background` must be edges, corners or colors	`background` უნდა იყოს edges, corners ან colors
 @msg	`match` must be distance or channels	`match` უნდა იყოს distance ან channels
 @msg	`{key}` must be from 0 to 100	`{key}` უნდა იყოს 0-დან 100-მდე
@@ -7536,40 +7598,40 @@ font-technology	Variable	ცვლადი
 @msg	Placing {_1}	თავსდება: {_1}
 @msg	Pasting	ჩასმა
 @msg	Saving recovery data for {_1}	{_1}-ის აღდგენის მონაცემების შენახვა
-@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	უარყოფილია აღდგენილი დოკუმენტები: {n}
-@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	აღდგენილია დოკუმენტები: {n}: შესანარჩუნებლად შეინახეთ ისინი
-@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	გაიხსნა, შენიშვნები: {n}: {first}
-@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	კოპირებულია, შენიშვნები: {n}: {first}
-@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	ამოჭრილია, შენიშვნები: {n}: {first}
-@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	გამოსახულება ვექტორიზებულია, შენიშვნები: {n}: {first}
-@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. გაიხსნა, შენიშვნები: {n}: {first}
-@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	შენახულია {path}, შენიშვნები: {n}: {first}
-@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	ჩაშენებულია გამოსახულებები: {n}; აკლია {missing}: ჯერ ხელახლა დააკავშირეთ
-@msgplural	Embedded {n} image|Embedded {n} images	ჩაშენებულია გამოსახულებები: {n}
-@msgplural	Relinked {n} image|Relinked {n} images	ხელახლა მიბმულია გამოსახულებები: {n}
-@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	ხელახლა მიბმულია გამოსახულებები: {n}; იმ საქაღალდეში არ არის: {names}
-@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	ხელახლა დაკავშირდა გამოსახულება: {n}; {name} ვერ დაკავშირდა: {reason}
-@msgplural	Updated {n} image|Updated {n} images	განახლებულია გამოსახულებები: {n}
-@msgplural	Replaced {n} image|Replaced {n} images	ჩანაცვლებულია გამოსახულებები: {n}
-@msgplural	Broke {n} link|Broke {n} links	გაწყვეტილია ბმულები: {n}
-@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	გაწყვეტილია ბმულები: {n}; ვერ იკითხება {missing}: ჯერ ხელახლა დააკავშირეთ ან განაახლეთ
-@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	დაკავშირებული ფაილების წაკითხვა აქ ვერ ხერხდება ({n}): ჩანს მათი გადახედვა
-@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	სურათების დეკოდირება ვერ მოხერხდა ({n}): ისინი ჯვრით გადახაზული ჩარჩოებით ჩანს
-@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	დაკავშირებული გამოსახულებები შეიცვალა დისკზე ({n}): ბმულების განახლება აჩვენებს ახალ ვერსიებს
-@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	განახლდა დისკზე შეცვლილი დაკავშირებული ფაილები: {n}
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	უარყოფილია აღდგენილი დოკუმენტები: {n}|უარყოფილია აღდგენილი დოკუმენტები: {n}
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	აღდგენილია დოკუმენტები: {n}: შესანარჩუნებლად შეინახეთ ისინი|აღდგენილია დოკუმენტები: {n}: შესანარჩუნებლად შეინახეთ ისინი
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	გაიხსნა, შენიშვნები: {n}: {first}|გაიხსნა, შენიშვნები: {n}: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	კოპირებულია, შენიშვნები: {n}: {first}|კოპირებულია, შენიშვნები: {n}: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	ამოჭრილია, შენიშვნები: {n}: {first}|ამოჭრილია, შენიშვნები: {n}: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	გამოსახულება ვექტორიზებულია, შენიშვნები: {n}: {first}|გამოსახულება ვექტორიზებულია, შენიშვნები: {n}: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. გაიხსნა, შენიშვნები: {n}: {first}|{notice}. გაიხსნა, შენიშვნები: {n}: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	შენახულია {path}, შენიშვნები: {n}: {first}|შენახულია {path}, შენიშვნები: {n}: {first}
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	ჩაშენებულია გამოსახულებები: {n}; აკლია {missing}: ჯერ ხელახლა დააკავშირეთ|ჩაშენებულია გამოსახულებები: {n}; აკლია {missing}: ჯერ ხელახლა დააკავშირეთ
+@msgplural	Embedded {n} image|Embedded {n} images	ჩაშენებულია გამოსახულებები: {n}|ჩაშენებულია გამოსახულებები: {n}
+@msgplural	Relinked {n} image|Relinked {n} images	ხელახლა მიბმულია გამოსახულებები: {n}|ხელახლა მიბმულია გამოსახულებები: {n}
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	ხელახლა მიბმულია გამოსახულებები: {n}; იმ საქაღალდეში არ არის: {names}|ხელახლა მიბმულია გამოსახულებები: {n}; იმ საქაღალდეში არ არის: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	ხელახლა დაკავშირდა გამოსახულება: {n}; {name} ვერ დაკავშირდა: {reason}|ხელახლა დაკავშირდა გამოსახულება: {n}; {name} ვერ დაკავშირდა: {reason}
+@msgplural	Updated {n} image|Updated {n} images	განახლებულია გამოსახულებები: {n}|განახლებულია გამოსახულებები: {n}
+@msgplural	Replaced {n} image|Replaced {n} images	ჩანაცვლებულია გამოსახულებები: {n}|ჩანაცვლებულია გამოსახულებები: {n}
+@msgplural	Broke {n} link|Broke {n} links	გაწყვეტილია ბმულები: {n}|გაწყვეტილია ბმულები: {n}
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	გაწყვეტილია ბმულები: {n}; ვერ იკითხება {missing}: ჯერ ხელახლა დააკავშირეთ ან განაახლეთ|გაწყვეტილია ბმულები: {n}; ვერ იკითხება {missing}: ჯერ ხელახლა დააკავშირეთ ან განაახლეთ
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	დაკავშირებული ფაილების წაკითხვა აქ ვერ ხერხდება ({n}): ჩანს მათი გადახედვა|დაკავშირებული ფაილების წაკითხვა აქ ვერ ხერხდება ({n}): ჩანს მათი გადახედვა
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	სურათების დეკოდირება ვერ მოხერხდა ({n}): ისინი ჯვრით გადახაზული ჩარჩოებით ჩანს|სურათების დეკოდირება ვერ მოხერხდა ({n}): ისინი ჯვრით გადახაზული ჩარჩოებით ჩანს
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	დაკავშირებული გამოსახულებები შეიცვალა დისკზე ({n}): ბმულების განახლება აჩვენებს ახალ ვერსიებს|დაკავშირებული გამოსახულებები შეიცვალა დისკზე ({n}): ბმულების განახლება აჩვენებს ახალ ვერსიებს
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	განახლდა დისკზე შეცვლილი დაკავშირებული ფაილები: {n}|განახლდა დისკზე შეცვლილი დაკავშირებული ფაილები: {n}
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	დოკუმენტი ადგენს ჭრისპირა არეს, რომელსაც ეს PDF/X ფაილი გამოტოვებს: ჩართეთ „დოკუმენტის ჭრისპირა არის პარამეტრების გამოყენება“
-@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	ობიექტები, რომლებიც ჭრის კიდეს აღწევს, მაგრამ ჭრისპირა არემდე ვერა: {n}
-@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	ექსპორტირებულია {what}, შენიშვნები: {n}: {first}
-@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}
-@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}; ვერ დაემატა {failed}: {reason}
-@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	შრიფტები ({n}) აქ მიუწვდომელია: მათი ტექსტი სხვა შრიფტით ჩანს
-@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	კოპირებულია ობიექტის CSS ({n})
-@msgplural	Downloaded {n} file|Downloaded {n} files	ჩამოტვირთულია ფაილი ({n})
-@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	ექსპორტირებულია ფაილი ({n}) საქაღალდეში {folder}
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	ობიექტები, რომლებიც ჭრის კიდეს აღწევს, მაგრამ ჭრისპირა არემდე ვერა: {n}|ობიექტები, რომლებიც ჭრის კიდეს აღწევს, მაგრამ ჭრისპირა არემდე ვერა: {n}
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	ექსპორტირებულია {what}, შენიშვნები: {n}: {first}|ექსპორტირებულია {what}, შენიშვნები: {n}: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}|შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}; ვერ დაემატა {failed}: {reason}|შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}; ვერ დაემატა {failed}: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	შრიფტები ({n}) აქ მიუწვდომელია: მათი ტექსტი სხვა შრიფტით ჩანს|შრიფტები ({n}) აქ მიუწვდომელია: მათი ტექსტი სხვა შრიფტით ჩანს
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	კოპირებულია ობიექტის CSS ({n})|კოპირებულია ობიექტის CSS ({n})
+@msgplural	Downloaded {n} file|Downloaded {n} files	ჩამოტვირთულია ფაილი ({n})|ჩამოტვირთულია ფაილი ({n})
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	ექსპორტირებულია ფაილი ({n}) საქაღალდეში {folder}|ექსპორტირებულია ფაილი ({n}) საქაღალდეში {folder}
 @msg	All colors are within the CMYK gamut	ყველა ფერი CMYK-ის გამის ფარგლებშია
-@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	CMYK-ის გამის ფარგლებს გარეთაა ფერი ({n})
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	CMYK-ის გამის ფარგლებს გარეთაა ფერი ({n})|CMYK-ის გამის ფარგლებს გარეთაა ფერი ({n})
 @msg	Unembedded to {_1}	ჩაშენება მოხსნილია: {_1}
-@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	ჩაშენება მოხსნილია, გამოსახულებები: {n}, საქაღალდე: {folder}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	ჩაშენება მოხსნილია, გამოსახულებები: {n}, საქაღალდე: {folder}|ჩაშენება მოხსნილია, გამოსახულებები: {n}, საქაღალდე: {folder}
 @msg	every numbered name for {name} is taken in that folder	იმ საქაღალდეში {name}-ის ყველა დანომრილი სახელი დაკავებულია
 @msg	Reset {_1}	ჩამოყრილია: {_1}
 @msg	Sent to {_1}	გაგზავნილია: {_1}
@@ -7842,7 +7904,7 @@ font-technology	Variable	ცვლადი
 	Imported. Press OK to keep the imported set.	შემოტანილია. შემოტანილი ნაკრების შესანარჩუნებლად დააჭირეთ OK-ს.
 	⚠ {chord} was already used by {names} — it has been removed there.	{chord} უკვე გამოიყენებოდა აქ: {names} — იქიდან მოცილებულია.
 	VectorCraft Defaults	VectorCraft-ის ნაგულისხმევი
-@plural	{n} shortcut is assigned more than once|{n} shortcuts are assigned more than once	ერთზე მეტჯერ მინიჭებული მალსახმობები: {n}
+@plural	{n} shortcut is assigned more than once|{n} shortcuts are assigned more than once	ერთზე მეტჯერ მინიჭებული მალსახმობები: {n}|ერთზე მეტჯერ მინიჭებული მალსახმობები: {n}
 	Simulate prints overprints as Overprint Preview shows them; separations always keep them. A preset flattens transparency before printing (PostScript files always flatten it).	„სიმულაცია“ ბეჭდავს ზედდაბეჭდვებს ისე, როგორც ზედდაბეჭდვის გადახედვა აჩვენებს; სეპარაცია მათ ყოველთვის ინარჩუნებს. პრესეტი ბეჭდვამდე აბრტყელებს გამჭვირვალობას (PostScript ფაილები მას ყოველთვის აბრტყელებს).
 	Preserve	შენარჩუნება
 	Simulate	სიმულაცია
@@ -8151,13 +8213,17 @@ arrowhead	Feather	ბუმბული
 @msg	a 3D effect on a group's fill or stroke draws nothing	ჯგუფის შევსებაზე ან კონტურზე 3D ეფექტი არაფერს ხატავს
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ჯგუფის შევსებაზე ან კონტურზე 3D ეფექტი ექსპორტისთვის არაფერს ხატავს
 @msg	The 3D object is too complex to export	3D ობიექტი ზედმეტად რთულია ექსპორტისთვის
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D ობიექტის ბადე არასრულია ან შეიცავს მნიშვნელობას, რომელიც რიცხვი არ არის
 @msg	feConvolveMatrix's order	feConvolveMatrix-ის order
 @msg	feMorphology's radius	feMorphology-ის radius
 @msg	a blur's stdDeviation	გაბუნდოვნების stdDeviation
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	ობიექტს არ აქვს 3D ეფექტი (ამოწევა და წაკვეთა, ბრუნვა, გაბერვა ან შემობრუნება)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` უნდა იყოს ობიექტი, რომელიც შეიცავს მხოლოდ `mode`-ს, მნიშვნელობით shaded ან wireframe
 @msg	its 3D effect builds no solid	მისი 3D ეფექტი სხეულს არ ქმნის
-@msg	bevel must be none or one of {_1}	bevel უნდა იყოს none ან ერთ-ერთი: {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel უნდა იყოს none, ერთ-ერთი: {_1}, ან custom და {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom მოითხოვს {BEVEL_PROFILE}, წაკვეთის წერტილები
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} უნდა იყოს სტრიქონი
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} უნდა შეიცავდეს 2-დან {most}-მდე [x, y] წერტილს, თითოეული წილი 0-სა და 1-ს შორის, [0, 0]-დან (ბოლო წახნაგის კიდე) [1, 1]-მდე (გვერდითი კედელი)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: ამ ნახატიდან სხეულების შექმნა შეუძლებელია: მისი სიმბოლოს ეგზემპლარები, გადასვლები და მომჭრელი ჯგუფები ზედმეტად ბევრ ობიექტს შეიცავს
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}: სიმბოლოს „{symbol}“ ეგზემპლარიდან სხეულის შექმნა შეუძლებელია: სიმბოლოს ნახატი მიუწვდომელია
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: მომჭრელი ტრაექტორია ზედმეტად რთულია ნახატის მოსაჭრელად
@@ -8183,8 +8249,10 @@ arrowhead	Feather	ბუმბული
 @msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}`-ის face უნდა იყოს front, back ან side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`-ის {key} უნდა იყოს რიცხვი {lo}-დან {hi}-მდე
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` უნდა იყოს მასივი
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	გრაფიკა თავსდება ობიექტის ტიპებზე „სიბრტყე“, „ამოწევა“ და „ბრუნვა“
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	გრაფიკა თავსდება ობიექტის ტიპებზე „სიბრტყე“, „ამოწევა“, „ბრუნვა“ და „გაბერვა“
 @msg	Revolve maps graphics onto its side: map them onto the front	ბრუნვა გრაფიკას თავის გვერდით ზედაპირზე ათავსებს: განათავსეთ ისინი წინა მხარეზე
+@msg	Inflate maps graphics onto its front and back, not onto a side	გაბერვა გრაფიკას წინა და უკანა მხარეზე ათავსებს და არა გვერდით ზედაპირზე
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	ობიექტი {_1}: გაბერვის უკანა მხარე გრაფიკას იღებს მხოლოდ ჩართული „ორივე მხარე“ და „თავსახური“ პარამეტრებით
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	გრაფიკა ზედმეტად რთულია ამ ზედაპირისთვის: გაამარტივეთ სიმბოლოების ნახატი ან შეამცირეთ სეგმენტები
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` იღებს მაქსიმუმ {MAX_GRAPHICS} გრაფიკას
 @msg	A plane has one face: map its graphics onto the front	სიბრტყეს ერთი მხარე აქვს: მისი გრაფიკა წინა მხარეზე განათავსეთ
@@ -8238,8 +8306,8 @@ diagnostics	ui	ინტერფეისი
 	Preset {number}	პრესეტი {number}
 	PRs	PR-ები
 	@{login}: {prs}, {commits}, +{added} / −{deleted} lines (Δ {delta}), +{binary_added} / −{binary_deleted} binary assets, {first} – {last}	@{login}: {prs}, {commits}, +{added} / −{deleted} სტრიქონი (Δ {delta}), +{binary_added} / −{binary_deleted} ბინარული რესურსი, {first} – {last}
-@plural	{n} PR|{n} PRs	PR: {n}
-@plural	{n} commit|{n} commits	კომიტი: {n}
+@plural	{n} PR|{n} PRs	PR: {n}|PR: {n}
+@plural	{n} commit|{n} commits	კომიტი: {n}|კომიტი: {n}
 gradient-kind	Radial	რადიალური
 mark-style	Japanese	იაპონური
 	2-Up	2 ხედი
@@ -8506,8 +8574,8 @@ imageTrace	Outline	კონტური
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: დიალოგი ვერ გაიხსნება ჩაშენებული ფუნქციის უკუძახილში, getter-ში, გარდაქმნაში ან ფაილში, რომელსაც $.evalFile უშვებს; გამოიძახეთ ის სკრიპტის საკუთარი კოდიდან
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: შემდეგი პასუხი `answers`-ში არის {_1}-ისთვის და არა {name}-ისთვის
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers`-ში ამ დიალოგისთვის პასუხი აღარ დარჩა
-@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers`-ში დარჩა {n} პასუხი, რომელიც სკრიპტს არ გამოუყენებია
-@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	ხელსაწყომ „{_1}“ ფუნჯის ქვეშ {n} ობიექტი უცვლელად დატოვა ({_2}): ის მხოლოდ ტრაექტორიების ფორმას ცვლის
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers`-ში დარჩა {n} პასუხი, რომელიც სკრიპტს არ გამოუყენებია|`answers`-ში დარჩა {n} პასუხი, რომელიც სკრიპტს არ გამოუყენებია
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	ხელსაწყომ „{_1}“ ფუნჯის ქვეშ {n} ობიექტი უცვლელად დატოვა ({_2}): ის მხოლოდ ტრაექტორიების ფორმას ცვლის|ხელსაწყომ „{_1}“ ფუნჯის ქვეშ {n} ობიექტი უცვლელად დატოვა ({_2}): ის მხოლოდ ტრაექტორიების ფორმას ცვლის
 liquify-tool	Warp	გაღუნვა
 liquify-tool	Twirl	დახვევა
 liquify-tool	Pucker	შეკუმშვა
@@ -8776,6 +8844,8 @@ liquify-list-end	{0}, {1}	{0} და {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` უნდა იყოს grayscale, rgb, hsb, cmyk ან websafe
 @msg	`view` must be wheel or box	`view` უნდა იყოს wheel ან box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` უნდა იყოს hue, saturation, brightness, red, green ან blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` უნდა იყოს none, oklch ან hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH-ს სამუშაო RGB სივრცედ sRGB სჭირდება
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	ეს PostScript ფაილია (ძველ ფორმატში ან PDF-თან თავსებადობის გარეშე შენახული .ai, ან EPS ფაილი) და არა PDF: ფაილი › გახსნა და ფაილი › განთავსება მას EPS-ად კითხულობს
 # Upstream sync 2026-10-16 (3): Intertwine, symbol registration, gradient span, data sets, Batch.
 	Intertwine	გადახლართვა
@@ -9183,10 +9253,10 @@ variable-list-end	{0}, {1}	{0} და {1}
 @msg	{id} opens another app: only the person at the keyboard can run it	{id} სხვა აპს ხსნის: მისი გაშვება მხოლოდ კლავიატურასთან მყოფ ადამიანს შეუძლია
 @msg	“{name}” is not a file	„{name}“ ფაილი არ არის
 	Cancel Export	ექსპორტირების გაუქმება
-@plural	{n} more export waiting|{n} more exports waiting	რიგში მომლოდინე სხვა ექსპორტირება: {n}
+@plural	{n} more export waiting|{n} more exports waiting	რიგში მომლოდინე სხვა ექსპორტირება: {n}|რიგში მომლოდინე სხვა ექსპორტირება: {n}
 @msg	Export cancelled	ექსპორტირება გაუქმდა
 	Cancel Save	შენახვის გაუქმება
-@plural	{n} more save waiting|{n} more saves waiting	რიგში მომლოდინე სხვა შენახვა: {n}
+@plural	{n} more save waiting|{n} more saves waiting	რიგში მომლოდინე სხვა შენახვა: {n}|რიგში მომლოდინე სხვა შენახვა: {n}
 @msg	Save canceled	შენახვა გაუქმდა
 	Clear History	ისტორიის გასუფთავება
 	New Document from State	ახალი დოკუმენტი მდგომარეობიდან
@@ -9315,13 +9385,13 @@ variable-list-end	{0}, {1}	{0} და {1}
 	Slope:	დახრა:
 axis	X Axis	X ღერძი
 axis	Y Axis	Y ღერძი
-@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	შეფუთულია ფაილი ({n}) საქაღალდეში {folder}
-@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	შეფუთულია ფაილი ({n}) {note}
-@msgplural	Packaged {n} file|Packaged {n} files	შეფუთულია ფაილი ({n})
-@plural	Packaged {n} file|Packaged {n} files	შეფუთულია ფაილი ({n})
-@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	შეფუთულია ფაილი ({n}) საქაღალდეში {folder}
-@plural	Packaged {n} file {note}|Packaged {n} files {note}	შეფუთულია ფაილი ({n}) {note}
-@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	ფაილები: {n}, ადგილი: {folder}. ვაჩვენოთ შეფუთვის საქაღალდე?
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	შეფუთულია ფაილი ({n}) საქაღალდეში {folder}|შეფუთულია ფაილი ({n}) საქაღალდეში {folder}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	შეფუთულია ფაილი ({n}) {note}|შეფუთულია ფაილი ({n}) {note}
+@msgplural	Packaged {n} file|Packaged {n} files	შეფუთულია ფაილი ({n})|შეფუთულია ფაილი ({n})
+@plural	Packaged {n} file|Packaged {n} files	შეფუთულია ფაილი ({n})|შეფუთულია ფაილი ({n})
+@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	შეფუთულია ფაილი ({n}) საქაღალდეში {folder}|შეფუთულია ფაილი ({n}) საქაღალდეში {folder}
+@plural	Packaged {n} file {note}|Packaged {n} files {note}	შეფუთულია ფაილი ({n}) {note}|შეფუთულია ფაილი ({n}) {note}
+@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	ფაილები: {n}, ადგილი: {folder}. ვაჩვენოთ შეფუთვის საქაღალდე?|ფაილები: {n}, ადგილი: {folder}. ვაჩვენოთ შეფუთვის საქაღალდე?
 	Create PDF layers from top-level layers	PDF-ის ფენების შექმნა ზედა დონის ფენებიდან
 @msg	this kind of brush has no options dialog yet	ამ ტიპის ფუნჯს პარამეტრების დიალოგი ჯერ არ აქვს
 	Drag art, colors and text styles here to reuse them across documents. Libraries are stored on this machine — no account required.	გადმოათრიეთ აქ გრაფიკა, ფერები და ტექსტის სტილები, რომ სხვა დოკუმენტებშიც გამოიყენოთ. ბიბლიოთეკები ამ კომპიუტერზე ინახება — ანგარიში არ არის საჭირო.
@@ -9370,11 +9440,19 @@ axis	Y Axis	Y ღერძი
 @msg	module is {_1} bytes (limit {_2})	მოდული {_1} ბაიტია (ლიმიტი {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	საჭიროებს დამტკიცებას: ითხოვს {0}-ს, რასაც მომხმარებელი მისი ცალკე დაყენებისას აძლევს
 @msg	not JSON: {e}	არ არის JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	არ არის WebAssembly-ის ბინარული ფაილი (აკლია \0asm სათაური)
+@msg	not a WebAssembly binary (missing \\0asm header)	არ არის WebAssembly-ის ბინარული ფაილი (აკლია \\0asm სათაური)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	ფუნქციის ტიპი აჭარბებს {MAX_FUNC_TYPE_VALUES} პარამეტრის ლიმიტს
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	ფუნქციის ტიპი აჭარბებს {MAX_FUNC_TYPE_VALUES} შედეგის ლიმიტს
 @msg	parameter `{k}`: {what}	პარამეტრი `{k}`: {what}
 @msg	parameter `{name}`: {what}	პარამეტრი `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	პლაგინის პარამეტრები JSON ობიექტი უნდა იყოს
 @msg	the module must export its linear memory as `memory`	მოდულმა თავისი წრფივი მეხსიერების ექსპორტი `memory` სახელით უნდა გააკეთოს
+@msg	the module must export `{name}` with the type {signature}	მოდულმა `{name}`-ის ექსპორტი {signature} ტიპით უნდა გააკეთოს
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	მოდულს ერთზე მეტი `{MANIFEST_SECTION}` მორგებული სექცია აქვს
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	მეხსიერების ბიუჯეტი (მოდულის საწყისი მეხსიერება {initial} ბაიტია, ზღვარი {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	`{MANIFEST_SECTION}` მორგებული სექციის მანიფესტში `abi` უნდა იყოს {ABI_VERSION}, ABI-ის ვერსია, რომელსაც ეს ჰოსტი ახორციელებს
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	ცხრილების ბიუჯეტი (მოდული განსაზღვრავს {count} ცხრილს, უდიდესი {largest} ელემენტით; ზღვარი {MAX_TABLES} ცხრილი, თითოეულში {MAX_TABLE_ELEMENTS} ელემენტი)
+@msg	the module's table section could not be read	მოდულის ცხრილების სექციის წაკითხვა ვერ მოხერხდა
 @msg	the objects to change are no longer in the document	შესაცვლელი ობიექტები დოკუმენტში აღარ არის
 @msg	the runtime panicked	გაშვების გარემო ავარიულად შეჩერდა
 @msg	unexpected host trap	ჰოსტის მოულოდნელი ავარიული შეჩერება (trap)
@@ -9402,6 +9480,11 @@ axis	Y Axis	Y ღერძი
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` და `maxItems` უნდა იყოს 0-{MAX_LIST}, `maxItems` მინიმუმ 1, ხოლო ნაგულისხმევ მნიშვნელობაში უნდა იყოს ამდენი ელემენტი
 @msg	`name` must be a string	`name` უნდა იყოს სტრიქონი
 @msg	`opacity` must be a number	`opacity` უნდა იყოს რიცხვი
+@msg	`opacity` must be a number from 0 to 100	`opacity` უნდა იყოს რიცხვი 0-დან 100-მდე
+@msg	`opacity` must be true or false	`opacity` უნდა იყოს true ან false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	ტექსტის სიმბოლოებს საკუთარი გაუმჭვირვალობა არ აქვთ: დაამატეთ შევსება ან კონტური იერსახის პანელის ბრძანებით ახალი შევსების დამატება ან ახალი კონტურის დამატება
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	სიმბოლოს ეგზემპლარში არჩეულ ობიექტს შევსების ან კონტურის საკუთარი გაუმჭვირვალობა არ აქვს
+@msg	no target has that fill or stroke to take the opacity	არცერთ სამიზნეს არ აქვს ის შევსება ან კონტური, რომელიც გაუმჭვირვალობას მიიღებს
 @msg	`type` must be "path" or "compound"	`type` უნდა იყოს "path" ან "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` უნდა შედგებოდეს 1-{MAX_UNIT} დასაბეჭდი სიმბოლოსგან
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen`-ში `{other}`-ისთვის უნდა იყოს 1-დან {MAX_CONDITION_VALUES}-მდე მნიშვნელობა
@@ -9445,6 +9528,8 @@ axis	Y Axis	Y ღერძი
 @msg	`plates` requires a stop linked to a spot swatch	`plates` მოითხოვს გადასვლის წერტილს, რომელიც სპოტ-ფერის ნიმუშთანაა დაკავშირებული
 @msg	the output	გამოტანა
 @msg	the path has no anchor points	ტრაექტორიას საყრდენი წერტილები არ აქვს
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	შედგენილ ტრაექტორიას {id} აქვს დამალული, ჩაკეტილი ან დამხმარე ხაზის წევრი, ამიტომ მისი წევრების ჩანაცვლება შეუძლებელია
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	შედგენილ ტრაექტორიას {id} აქვს წევრი, რომელიც ტრაექტორია არ არის, ამიტომ მისი წევრების ჩანაცვლება შეუძლებელია
 @msg	too many anchor points (limit {MAX_ANCHORS})	ძალიან ბევრი საყრდენი წერტილი (ლიმიტი {MAX_ANCHORS})
 @msg	true or false	true ან false
 @msg	a number >= {_1}	რიცხვი >= {_1}
@@ -9640,7 +9725,7 @@ axis	Y Axis	Y ღერძი
 	On Artboards	სამუშაო დაფებზე
 	All Artboards	ყველა სამუშაო დაფა
 	Include Objects On Canvas	ტილოზე არსებული ობიექტების გათვალისწინება
-@plural	Result: {n}|Results: {n}	შედეგი: {n}
+@plural	Result: {n}|Results: {n}	შედეგი: {n}|შედეგი: {n}
 @msg	select one object	მონიშნეთ ერთი ობიექტი
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	გლობალური რედაქტირება მუშაობს ტრაექტორიებზე, შედგენილ ტრაექტორიებზე, სიმბოლოს ეგზემპლარებსა და მათ ჯგუფებზე
 @msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	მსგავსი ობიექტები ვერ მოიძებნა (არეკლილი ასლები არ ემთხვევა); შეცვალეთ გლობალური რედაქტირების პარამეტრები და სცადეთ ხელახლა
@@ -10640,13 +10725,13 @@ breakText	Glyphs	გლიფები
 	Export All Open Documents as PDF	ყველა ღია დოკუმენტის ექსპორტი PDF-ად
 	Export All Open Documents as SVG	ყველა ღია დოკუმენტის ექსპორტი SVG-ად
 	Export All Open Documents	ყველა ღია დოკუმენტის ექსპორტირება
-@msgplural	Exported {n} document|Exported {n} documents	ექსპორტირებულია დოკუმენტი ({n})
-@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	ექსპორტირებულია დოკუმენტი ({n}); {title} არ ჩაიწერა: {error}
+@msgplural	Exported {n} document|Exported {n} documents	ექსპორტირებულია დოკუმენტი ({n})|ექსპორტირებულია დოკუმენტი ({n})
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	ექსპორტირებულია დოკუმენტი ({n}); {title} არ ჩაიწერა: {error}|ექსპორტირებულია დოკუმენტი ({n}); {title} არ ჩაიწერა: {error}
 # Document Tools add-on: Batch Trace Folder (#4921).
 	Batch Trace Folder	საქაღალდის პაკეტური ვექტორიზაცია
-@msgplural	Traced {n} image|Traced {n} images	ვექტორიზებულია გამოსახულება ({n})
-@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	ვერ მოხერხდა გამოსახულების ვექტორიზაცია ({n})
-@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	ვექტორიზებულია გამოსახულება ({n}); ვერ მოხერხდა: {failed}
+@msgplural	Traced {n} image|Traced {n} images	ვექტორიზებულია გამოსახულება ({n})|ვექტორიზებულია გამოსახულება ({n})
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	ვერ მოხერხდა გამოსახულების ვექტორიზაცია ({n})|ვერ მოხერხდა გამოსახულების ვექტორიზაცია ({n})
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	ვექტორიზებულია გამოსახულება ({n}); ვერ მოხერხდა: {failed}|ვექტორიზებულია გამოსახულება ({n}); ვერ მოხერხდა: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	სიმბოლოს ტიპი:
 	Dynamic Symbol	დინამიკური სიმბოლო
@@ -10812,15 +10897,15 @@ font-script	Japanese	იაპონური
 	Select by Link Status…	კავშირის მდგომარეობით არჩევა…
 	Search images	გამოსახულებების ძებნა
 	No images match.	შესაბამისი გამოსახულება არ არის.
-@msgplural	Selected {n} linked image|Selected {n} linked images	არჩეულია დაკავშირებული გამოსახულებები: {n}
-@msgplural	Selected {n} embedded image|Selected {n} embedded images	არჩეულია ჩაშენებული გამოსახულებები: {n}
-@msgplural	Selected {n} missing image|Selected {n} missing images	არჩეულია დაკარგული გამოსახულებები: {n}
-@msgplural	Selected {n} modified image|Selected {n} modified images	არჩეულია შეცვლილი გამოსახულებები: {n}
-@msgplural	Selected {n} image|Selected {n} images	არჩეულია გამოსახულებები: {n}
-@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; დამალული ან ჩაკეტილია კიდევ: {n}
-@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; შაბლონის ფენაზეა კიდევ: {n}
-@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; იზოლირებული ჯგუფის გარეთაა კიდევ: {n}
-@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; ახლა ვერ აირჩევა კიდევ: {n}
+@msgplural	Selected {n} linked image|Selected {n} linked images	არჩეულია დაკავშირებული გამოსახულებები: {n}|არჩეულია დაკავშირებული გამოსახულებები: {n}
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	არჩეულია ჩაშენებული გამოსახულებები: {n}|არჩეულია ჩაშენებული გამოსახულებები: {n}
+@msgplural	Selected {n} missing image|Selected {n} missing images	არჩეულია დაკარგული გამოსახულებები: {n}|არჩეულია დაკარგული გამოსახულებები: {n}
+@msgplural	Selected {n} modified image|Selected {n} modified images	არჩეულია შეცვლილი გამოსახულებები: {n}|არჩეულია შეცვლილი გამოსახულებები: {n}
+@msgplural	Selected {n} image|Selected {n} images	არჩეულია გამოსახულებები: {n}|არჩეულია გამოსახულებები: {n}
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; დამალული ან ჩაკეტილია კიდევ: {n}|{selected}; დამალული ან ჩაკეტილია კიდევ: {n}
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; შაბლონის ფენაზეა კიდევ: {n}|{selected}; შაბლონის ფენაზეა კიდევ: {n}
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; იზოლირებული ჯგუფის გარეთაა კიდევ: {n}|{selected}; იზოლირებული ჯგუფის გარეთაა კიდევ: {n}
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; ახლა ვერ აირჩევა კიდევ: {n}|{selected}; ახლა ვერ აირჩევა კიდევ: {n}
 
 # Compound Shapes add-on
 	Compound Shapes	შედგენილი ფიგურები
@@ -10907,9 +10992,9 @@ font-script	Japanese	იაპონური
 	{time}, {calls}	{time}, {calls}
 	slowest: {commands}	ყველაზე ნელი: {commands}
 	{dropped}, {cut}	{dropped}, {cut}
-@plural	{n} host call|{n} host calls	ჰოსტის {n} გამოძახება
-@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} ძველი სტრიქონი წაიშალა
-@plural	{n} line cut|{n} lines cut	{n} სტრიქონი შემოკლდა
+@plural	{n} host call|{n} host calls	ჰოსტის {n} გამოძახება|ჰოსტის {n} გამოძახება
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} ძველი სტრიქონი წაიშალა|{n} ძველი სტრიქონი წაიშალა
+@plural	{n} line cut|{n} lines cut	{n} სტრიქონი შემოკლდა|{n} სტრიქონი შემოკლდა
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` და `last` უნდა იყოს კონსოლში შენახული სტრიქონების ნომრები და `first` უნდა იყოს `last`-ზე წინ
 
 # Learn panel
@@ -10953,7 +11038,7 @@ font-script	Japanese	იაპონური
 	Refresh Deferred Effects	გადადებული ეფექტების განახლება
 	Deferred Effects	გადადებული ეფექტები
 @msg	no plug-in effect is deferred	პლაგინის ეფექტი არ არის გადადებული
-@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	გაიხსნა, გადადებული პლაგინის ეფექტები: {n}. ეფექტი › გადადებული ეფექტების განახლება მათ გაუშვებს.
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	გაიხსნა, გადადებული პლაგინის ეფექტები: {n}. ეფექტი › გადადებული ეფექტების განახლება მათ გაუშვებს.|გაიხსნა, გადადებული პლაგინის ეფექტები: {n}. ეფექტი › გადადებული ეფექტების განახლება მათ გაუშვებს.
 
 # Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
 	Cutting Tools	ჭრის ხელსაწყოები
@@ -11034,6 +11119,24 @@ font-script	Japanese	იაპონური
 @msg	A joint does not close by {gap} pt.	შეერთება არ იხურება {gap} pt-ით.
 @msg	Two panels pass through each other.	ორი პანელი ერთმანეთში გადის.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
+	Nature Icons	ბუნების ხატულები
+	Flower	ყვავილი
+	Tree	ხე
+	Mountain	მთა
+	Ornamental	ორნამენტული
+	Scrollwork	ხვეული
+	Filigree Arrow	ფილიგრანული ისარი
+	Petal Sweep	ფურცლების რკალი
+	Twin Curl	ორმაგი ხვეული
+	Vector Packs	ვექტორული პაკეტები
+	Compass Rose	კომპასის ვარდი
+	Botanical Sprig	ბოტანიკური ტოტი
+	Facet Diamond	წახნაგოვანი ბრილიანტი
+	Tide Crest	ტალღის ქედი
+	Leaf Vine	ფოთლების ვაზი
+	Blossom Chain	ყვავილების ჯაჭვი
+	Pennant Garland	ალმების გირლანდა
+	Lantern String	ფარნების ჯაჭვი
 	Orbit Lines	ორბიტული ხაზები
 	Petal Garland	ფურცლების გირლანდა
 	Lattice Braid	ბადის ნაწნავი

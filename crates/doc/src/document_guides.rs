@@ -500,11 +500,73 @@ impl Document {
         self.patterns.iter_mut().find(|p| p.name == name)
     }
 
+    /// The [`Self::unknown`] key that holds each symbol set's Symbol Set Density, `{set id: density}`.
+    /// [`Self::reid`] gives a copy of a set in this document the density recorded for its source, and
+    /// [`Self::carry_set_densities`] gives a pasted set the density recorded for it at Copy.
+    pub const SYMBOL_SET_DENSITY_KEY: &'static str = "symbolSetDensity";
+
+    /// The Symbol Set Densities recorded for `nodes` and their descendants, by id.
+    pub fn set_densities_of(&self, nodes: &[Node]) -> std::collections::BTreeMap<NodeId, serde_json::Value> {
+        let Some(serde_json::Value::Object(record)) = self.unknown.get(Self::SYMBOL_SET_DENSITY_KEY) else { return Default::default() };
+        let mut out = std::collections::BTreeMap::new();
+        let mut stack: Vec<&Node> = nodes.iter().collect();
+        while let Some(n) = stack.pop() {
+            if let Some(v) = record.get(&n.id.0.to_string()) {
+                out.insert(n.id, v.clone());
+            }
+            stack.extend(n.children().into_iter().flatten().map(|c| &**c));
+        }
+        out
+    }
+
+    /// Record for `copy`, a [`Self::reid`] copy of `source`, and its descendants the Symbol Set
+    /// Densities that `densities` holds for `source` and its descendants, and none for those it
+    /// holds none for (whatever [`Self::reid`] recorded).
+    pub fn carry_set_densities(&mut self, source: &Node, copy: &Node, densities: &std::collections::BTreeMap<NodeId, serde_json::Value>) {
+        if densities.is_empty() && !self.unknown.contains_key(Self::SYMBOL_SET_DENSITY_KEY) {
+            return;
+        }
+        let mut pairs = vec![(source, copy)];
+        while let Some((s, c)) = pairs.pop() {
+            match densities.get(&s.id) {
+                Some(v) => {
+                    if let serde_json::Value::Object(m) =
+                        self.unknown.entry(Self::SYMBOL_SET_DENSITY_KEY).or_insert_with(|| serde_json::Value::Object(Default::default()))
+                    {
+                        m.insert(c.id.0.to_string(), v.clone());
+                    }
+                }
+                None => {
+                    if let Some(serde_json::Value::Object(m)) = self.unknown.get_mut(Self::SYMBOL_SET_DENSITY_KEY) {
+                        m.remove(&c.id.0.to_string());
+                    }
+                }
+            }
+            if let (Some(sc), Some(cc)) = (s.children(), c.children()) {
+                pairs.extend(sc.iter().zip(cc.iter()).map(|(a, b)| (&**a, &**b)));
+            }
+        }
+    }
+
     /// Deep-clone `node` with fresh ids for it and all descendants, its images' own pixels taken
     /// in ([`Self::adopt_pixels`]).
     pub fn reid(&mut self, node: &Node) -> Node {
         let mut n = node.clone();
         n.id = self.alloc_id();
+        // A copy of a symbol set keeps the Symbol Set Density recorded for its source, when the source
+        // is this document's node with that id; a node from another document may share the id of an
+        // unrelated set here.
+        let density = self
+            .unknown
+            .get(Self::SYMBOL_SET_DENSITY_KEY)
+            .and_then(|m| m.get(node.id.0.to_string()))
+            .filter(|_| self.node(node.id) == Some(node))
+            .cloned();
+        if let Some(v) = density
+            && let Some(serde_json::Value::Object(m)) = self.unknown.get_mut(Self::SYMBOL_SET_DENSITY_KEY)
+        {
+            m.insert(n.id.0.to_string(), v);
+        }
         if let NodeKind::Image(im) = &mut n.kind {
             self.adopt_image_pixels(im);
         }

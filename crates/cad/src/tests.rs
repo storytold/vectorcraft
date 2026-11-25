@@ -880,7 +880,7 @@ fn image_and_fill_doc(fill: Paint) -> Document {
             Node::new(d.alloc_id(), NodeKind::Image(Box::new(im))),
         ]
     });
-    d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None });
+    d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None, file_font: Default::default() });
     d
 }
 
@@ -974,7 +974,10 @@ fn images_can_be_left_out_with_their_files() {
     assert_eq!(out.setting_notes, [IMAGES_OFF]);
     // An image that can't be decoded is not read when images are left out.
     let mut broken = d.clone();
-    broken.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(b"not a png".to_vec()), proxy: None });
+    broken.images.insert(
+        "raster-1".into(),
+        ImageBlob { mime: "image/png".into(), bytes: Arc::new(b"not a png".to_vec()), proxy: None, file_font: Default::default() },
+    );
     let left_out = export(&broken, &DxfOptions { include_images: false, ..opts(&broken) }).unwrap();
     assert!(left_out.warnings.is_empty(), "{:?}", left_out.warnings);
     assert_eq!(left_out.setting_notes, [IMAGES_OFF]);
@@ -982,6 +985,37 @@ fn images_can_be_left_out_with_their_files() {
     // R12 has no images anyway: its own note alone.
     let r12 = export(&d, &DxfOptions { version: DxfVersion::R12, include_images: false, ..opts(&d) }).unwrap();
     assert!(r12.warnings.iter().any(|w| w.contains("no images")) && r12.setting_notes.is_empty());
+}
+
+/// DXF does not clip, so an image changed by Perspective Distort is written as one image at the
+/// placement nearest its corners, with a warning; an undistorted image gets no warning.
+#[test]
+fn a_distorted_image_is_written_as_its_nearest_parallelogram_with_a_warning() {
+    let mut d = image_and_fill_doc(Paint::None);
+    let warned = |o: &DxfOutput| o.warnings.iter().any(|w| w.contains("Perspective Distort or Free Distort"));
+    assert!(!warned(&export(&d, &opts(&d)).unwrap()));
+    let id = d.layers[0].children().unwrap()[1].id;
+    let q = [(12.0, 20.0), (28.0, 20.0), (30.0, 30.0), (10.0, 30.0)].map(|(x, y)| Point::new(x, y));
+    d.node_mut(id).unwrap().set_image_corners(q).unwrap();
+    let out = export(&d, &opts(&d)).unwrap();
+    assert!(warned(&out), "{:?}", out.warnings);
+    assert_eq!(kinds(&out).iter().filter(|k| *k == "IMAGE").count(), 1, "{:?}", kinds(&out));
+    // Placed as an undistorted image with the nearest affine placement as its transform would be.
+    let near = vectorcraft_doc::image_quad::nearest_affine(d.node(id).unwrap()).unwrap();
+    let mut plain = d.clone();
+    let n = plain.node_mut(id).unwrap();
+    n.extras_mut().image_quad = None;
+    if let NodeKind::Image(im) = &mut n.kind {
+        im.xf = near;
+    }
+    let placement = |o: &DxfOutput| {
+        let e = entities(o).into_iter().find(|e| kind(e) == "IMAGE").expect("an IMAGE");
+        [10, 20, 11, 21, 12, 22].map(|c| all(&e, c))
+    };
+    assert_eq!(placement(&out), placement(&export(&plain, &opts(&plain)).unwrap()));
+    // With images left out, no IMAGE is written and the distortion warning does not appear.
+    let left_out = export(&d, &DxfOptions { include_images: false, ..opts(&d) }).unwrap();
+    assert!(!warned(&left_out), "{:?}", left_out.warnings);
 }
 
 #[test]
@@ -1348,7 +1382,7 @@ fn images_link_png_or_jpeg_files() {
         };
         vec![Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)))]
     });
-    d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None });
+    d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None, file_font: Default::default() });
     let out = export(&d, &opts(&d)).unwrap();
     let e = entities(&out);
     assert_eq!(kind(&e[0]), "IMAGE");
@@ -1391,7 +1425,7 @@ fn images_without_pixels_are_left_out_with_one_note() {
             })
             .collect()
     });
-    d.images.insert("raster-2".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(vec![]), proxy: None });
+    d.images.insert("raster-2".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(vec![]), proxy: None, file_font: Default::default() });
     let out = export(&d, &opts(&d)).unwrap();
     assert!(entities(&out).is_empty() && out.images.is_empty());
     assert_eq!(out.warnings, ["an image has no pixels and was left out"]);
@@ -1552,7 +1586,7 @@ fn drawings_doc() -> Document {
     });
     let art = path(&mut d, shapes::rectangle(Rect::new(10.0, 40.0, 30.0, 60.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
     d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Moved".into(), art: Arc::new(moved_by(art, 20.0)) });
-    d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None });
+    d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None, file_font: Default::default() });
     d
 }
 

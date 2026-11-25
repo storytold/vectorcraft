@@ -57,11 +57,11 @@ pub use envelope::{
     envelope_content_boxes, envelope_content_boxes_with, envelope_expand, envelope_frame, envelope_grid, envelope_mapper, envelope_of,
     envelope_overlay, envelope_stroke_margin, set_type_ink, smooth_handles, warp_grid,
 };
-pub(crate) use expand::max_outset;
 pub use expand::{
     Hooks, MAX_GENERATED, Outliner, PatternTiles, affine_near, expand_deep, expand_deep_hooks, expand_live, expand_live_hooks, expand_live_with,
-    expanded_group, expanded_group_hooks, is_live, mesh_quad_nodes, mesh_warp_cost, mesh_warp_image, subtree_has_live,
+    expanded_group, expanded_group_hooks, is_drawn_live, is_live, mesh_quad_nodes, mesh_warp_cost, mesh_warp_image, subtree_has_live,
 };
+pub(crate) use expand::{max_outset, mesh_warp_image_with};
 #[cfg(test)]
 use mesh::grid_eval;
 pub use mesh::{Coons, GradientMesh, MeshAppearance, MeshPiece, MeshPoint, MeshQuad, default_fidelity, grid_points, nodes_bounds};
@@ -1338,6 +1338,33 @@ mod tests {
         let piece = Arc::make_mut(&mut children[0]);
         piece.extras_mut().warp_piece = false;
         assert!(piece.knockout_outline().is_none());
+    }
+
+    /// Each piece of a mesh-warped colorized image keeps its color and whether it overprints.
+    #[test]
+    fn mesh_warp_image_pieces_keep_an_overprinting_color() {
+        let im = crate::ImageObject {
+            key: "pic".into(),
+            width: 4,
+            height: 4,
+            xf: Affine::scale(10.0),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        let mut n = Node::new(NodeId(3), NodeKind::Image(Box::new(im.clone())));
+        n.extras_mut().colorize = Some(Box::new(Paint::solid(Color::BLACK)));
+        n.extras_mut().colorize_overprint = true;
+        for masked in [false, true] {
+            let g = mesh_warp_image(&n, &im, &|p| p, 2, false, masked);
+            let mut pieces = vec![];
+            g.walk(&mut |c| {
+                if matches!(c.kind, NodeKind::Image(_)) {
+                    pieces.push(c.colorize_overprints());
+                }
+            });
+            assert_eq!(pieces, [true; 8], "masked {masked}");
+        }
     }
 
     /// More cells than the objects live art may make cut no pieces (the count overflowed).

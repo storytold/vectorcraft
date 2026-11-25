@@ -3,6 +3,7 @@ use super::kind::NodeKind;
 use super::live_shape::LiveShape;
 use super::opacity::OpacityMask;
 use super::{Node, PathData};
+use vectorcraft_geom::Point;
 
 /// The parts of a [`Node`] that few objects have: kept out of line, so that the nodes without
 /// them stay small ([`Node::extras`]).
@@ -62,6 +63,10 @@ pub struct NodeExtras {
     /// colorizes it. Each pixel is drawn in this color, as opaque as the pixel is dark, so white
     /// pixels are transparent. `None`: the image shows its own pixels.
     pub colorize: Option<Box<vectorcraft_color::Paint>>,
+    /// Attributes panel › Overprint Fill on a colorized image: its color prints over the inks
+    /// below instead of knocking them out. It counts only while [`Self::colorize`] is set
+    /// ([`crate::Node::colorize_overprints`]).
+    pub colorize_overprint: bool,
     /// Pathfinder panel › Make Compound Shape: this group is a compound shape
     /// ([`Node::is_compound_shape`], [`crate::compound_shape`]).
     pub compound_shape: bool,
@@ -87,6 +92,10 @@ pub struct NodeExtras {
     /// are applied, one path or compound path per fill and stroke: as the clipping path of a clip group it paints
     /// those pieces as the path paints its fills and strokes ([`Node::clip_paint`]).
     pub clip_pieces: bool,
+    /// As an image after Perspective Distort or Free Distort, where its pixel rectangle's corners
+    /// (top left, top right, bottom right, bottom left in pixel space) stand on the page when they
+    /// do not make a parallelogram, which its transform alone could place ([`crate::image_quad`]).
+    pub image_quad: Option<Box<[Point; 4]>>,
 }
 
 /// No extras: what [`Node::extras`] gives for a node without any.
@@ -110,6 +119,7 @@ pub(super) static NO_EXTRAS: NodeExtras = NodeExtras {
     live_paint_gaps: None,
     objects_on_path: None,
     colorize: None,
+    colorize_overprint: false,
     compound_shape: false,
     shape_mode: crate::ShapeMode::Add,
     symbol_overrides: Vec::new(),
@@ -118,6 +128,7 @@ pub(super) static NO_EXTRAS: NodeExtras = NodeExtras {
     color_mask: None,
     warp_piece: false,
     clip_pieces: false,
+    image_quad: None,
 };
 
 /// A node's [`NodeExtras`], if it has any ([`Node::extras`]). Extras that are all unset equal

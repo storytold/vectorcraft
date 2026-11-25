@@ -1,29 +1,25 @@
-//! Icon lookup and drawing (SVGs rasterized by egui_extras, tinted with theme colours).
+//! The app's own icon set, registered beside the framework's catalog, and the map from tool names to icons.
 
-use std::sync::OnceLock;
+use craft::ui::primitives::{AppIcons, icon_names};
 
-use craft_ui::icons::{SvgIconSet, SvgStyle};
-use egui::{Color32, ImageSource, Rect, Ui, Vec2};
+use crate::icon_data::{DC_ARROW_FILL, ICONS};
 
-fn table() -> &'static SvgIconSet {
-    static T: OnceLock<SvgIconSet> = OnceLock::new();
-    T.get_or_init(|| {
-        SvgIconSet::new(crate::icon_data::ICONS, SvgStyle { current_color: "white", stroke_width: Some("1.6") }, "bytes://icon/", "square-dashed")
-    })
-}
+/// The fills of the Selection and Direct Selection arrows: black and white whatever the theme, as users
+/// know them, under an outline in the theme's colour.
+const FILLS: &[(&str, &[u8], [u8; 4])] = &[("dc-selection", DC_ARROW_FILL, [0, 0, 0, 255]), ("dc-direct", DC_ARROW_FILL, [255, 255, 255, 255])];
 
-pub fn exists(name: &str) -> bool {
-    table().contains(name)
-}
+/// The app's icons, for `register_app_icons`.
+pub static APP_ICONS: AppIcons = AppIcons::new("vectorcraft", Some(1.6), ICONS).with_fills(FILLS);
 
-/// Map tool-catalogue icon names to SVG files.
+/// Map tool-catalogue icon names to the names of icons that resolve.
 pub fn tool_icon(name: &str) -> &'static str {
     match name {
         "tool-selection" => "dc-selection",
         "tool-direct" => "dc-direct",
         "tool-group-select" => "dc-group-select",
-        "tool-magic-wand" => "wand-sparkles",
-        "tool-lasso" => "lasso",
+        "tool-magic-wand" => "wand_sparkles",
+        "tool-lasso" => "dc-lasso",
+        "tool-lasso-enclosing" => "dc-lasso-enclosing",
         "tool-pen" => "pen-tool",
         "tool-pen-add" => "pen-tool-add",
         "tool-pen-delete" => "pen-tool-delete",
@@ -64,7 +60,7 @@ pub fn tool_icon(name: &str) -> &'static str {
         "tool-mirror-cut" => "dc-mirror-cut",
         "tool-line-cut" => "dc-line-cut",
         "tool-rect-cut" => "dc-rect-cut",
-        "tool-rotate" => "rotate-ccw",
+        "tool-rotate" => "rotate_ccw",
         "tool-reflect" => "flip-horizontal-2",
         "tool-scale" => "scaling",
         "tool-shear" => "dc-shear",
@@ -81,107 +77,124 @@ pub fn tool_icon(name: &str) -> &'static str {
         "tool-puppet" => "dc-puppet",
         "tool-shape-builder" => "dc-shape-builder",
         "tool-bucket" => "dc-live-bucket",
+        "tool-fill-area" => "dc-fill-area",
         "tool-live-select" => "dc-live-select",
         "tool-perspective" => "dc-perspective",
-        "tool-perspective-select" => "dc-perspective",
+        "tool-perspective-select" => "dc-perspective-select",
         "tool-mesh" => "dc-mesh",
         "tool-gradient" => "dc-gradient",
-        "tool-eyedropper" => "pipette",
+        "tool-eyedropper" => "eyedropper",
         "tool-measure" => "dc-measure",
         "tool-dimension" => "dc-dimension",
         "tool-contour" => "dc-contour",
         "tool-blend" => "dc-blend",
         "tool-objects-on-path" => "dc-objects-on-path",
         "tool-symbol" => "dc-symbol-sprayer",
-        "tool-graph" => "chart-column",
-        "tool-artboard" => "frame",
-        "tool-slice" => "slice",
+        "tool-symbol-shifter" => "dc-symbol-shifter",
+        "tool-symbol-scruncher" => "dc-symbol-scruncher",
+        "tool-symbol-sizer" => "dc-symbol-sizer",
+        "tool-symbol-spinner" => "dc-symbol-spinner",
+        "tool-symbol-stainer" => "dc-symbol-stainer",
+        "tool-symbol-screener" => "dc-symbol-screener",
+        "tool-symbol-styler" => "dc-symbol-styler",
+        "tool-graph" => "dc-graph-column",
+        "tool-graph-stacked-column" => "dc-graph-stacked-column",
+        "tool-graph-bar" => "dc-graph-bar",
+        "tool-graph-stacked-bar" => "dc-graph-stacked-bar",
+        "tool-graph-line" => "dc-graph-line",
+        "tool-graph-area" => "dc-graph-area",
+        "tool-graph-scatter" => "dc-graph-scatter",
+        "tool-graph-pie" => "dc-graph-pie",
+        "tool-graph-radar" => "dc-graph-radar",
+        "tool-artboard" => "artboard",
+        "tool-slice" => "dc-slice",
+        "tool-slice-select" => "dc-slice-select",
         "tool-hand" => "hand",
         "tool-rotate-view" => "dc-rotate-view",
         "tool-print-tiling" => "printer",
-        "tool-zoom" => "zoom-in",
-        other => {
-            if exists(other) {
-                table().canonical_name(other).unwrap_or("square-dashed")
-            } else {
-                "square-dashed"
-            }
-        }
+        "tool-zoom" => "zoom_in",
+        // A name that is already an icon maps to itself, as the `'static` name of the set that has it.
+        other => icon_names().iter().copied().chain(APP_ICONS.icons.iter().map(|(n, _)| *n)).find(|n| *n == other).unwrap_or("rect_dashed"),
     }
-}
-
-pub fn source(name: &str) -> ImageSource<'static> {
-    table().source(name)
-}
-
-/// Paint icon `name` into `rect` tinted with `tint`. The Selection and Direct Selection arrows are
-/// black and white whatever the theme, as users know them (a light theme colour would make the
-/// Selection arrow look like Direct Selection's): their fill is painted first, then their outline
-/// in `tint`.
-pub fn paint(ui: &Ui, name: &str, rect: Rect, tint: Color32) {
-    let fill = match name {
-        "dc-selection" => Some(Color32::BLACK),
-        "dc-direct" => Some(Color32::WHITE),
-        _ => None,
-    };
-    if let Some(fill) = fill {
-        egui::Image::new(source("dc-arrow-fill")).tint(fill).fit_to_exact_size(rect.size()).paint_at(ui, rect);
-    }
-    egui::Image::new(source(name)).tint(tint).fit_to_exact_size(rect.size()).paint_at(ui, rect);
-}
-
-/// An icon widget of `size` points.
-pub fn icon(ui: &mut Ui, name: &str, size: f32, tint: Color32) -> egui::Response {
-    let (rect, resp) = ui.allocate_exact_size(Vec2::splat(size), egui::Sense::hover());
-    paint(ui, name, rect, tint);
-    resp
 }
 
 #[cfg(test)]
 mod tests {
+    use craft::ui::primitives::{has_icon, register_app_icons};
+    // PLAN: assumed the `craft` facade is a dependency of vectorcraft-ui-egui (Cargo.toml is not in this set's files; craft-ui does not re-export IconId)
+    use craft::behavior::IconId;
+
     use super::*;
 
-    /// The tints of the images `name` paints, bottom first.
-    fn tints(name: &str, tint: Color32) -> Vec<Color32> {
-        let ctx = egui::Context::default();
-        egui_extras::install_image_loaders(&ctx);
-        let draw = |ui: &mut Ui| paint(ui, name, Rect::from_min_size(egui::Pos2::ZERO, Vec2::splat(24.0)), tint);
-        // The first frame loads the images; the second draws them.
-        ctx.run_ui(egui::RawInput::default(), draw).textures_delta.clear();
-        let mut out = ctx.run_ui(egui::RawInput::default(), draw);
-        out.textures_delta.clear();
-        out.shapes
-            .iter()
-            .filter_map(|s| match &s.shape {
-                egui::Shape::Mesh(m) => m.vertices.first().map(|v| v.color),
-                egui::Shape::Rect(r) if r.brush.is_some() => Some(r.fill),
-                _ => None,
-            })
-            .collect()
+    fn resolves(name: &'static str) -> bool {
+        register_app_icons(&APP_ICONS);
+        has_icon(&IconId::new(name))
     }
 
-    /// The Selection arrow is black and Direct Selection's white in every theme (a reported swap
-    /// in the dark themes), under an outline in the theme's colour; other icons are one layer.
-    #[test]
-    fn the_selection_arrows_are_black_and_white_under_the_theme_outline() {
-        let light = Color32::from_gray(220);
-        assert_eq!(tints("dc-selection", light), [Color32::BLACK, light]);
-        assert_eq!(tints("dc-direct", light), [Color32::WHITE, light]);
-        assert_eq!(tints("dc-group-select", light), [light]);
-    }
+    /// The ways a source line writes an icon id as a literal; a `const` that holds one is read by `const_icon`.
+    const FORMS: [&str; 3] = ["IconId::new(\"", "icon(\"", "icon = \""];
 
-    /// Characterize the pre-extraction loader against every embedded asset, including custom
-    /// icons. A shared-crate update must not silently change our stroke weight or cache keys.
-    #[test]
-    fn shared_catalog_preserves_existing_icons() {
-        for (name, original) in crate::icon_data::ICONS {
-            let expected = String::from_utf8_lossy(original).replace("currentColor", "white").replace("stroke-width=\"2\"", "stroke-width=\"1.6\"");
-            let ImageSource::Bytes { uri, bytes } = source(name) else { panic!("expected SVG bytes") };
-            assert_eq!(uri.as_ref(), format!("bytes://icon/{name}.svg"));
-            assert_eq!(bytes.as_ref(), expected.as_bytes(), "{name}");
-            assert!(exists(name));
-            assert_eq!(tool_icon(name), *name);
+    /// The id a `const NAME: &str = "<id>"` line declares, when `NAME` ends in `ICON` or `code` passes it to
+    /// `IconId::new(NAME)`.
+    fn const_icon<'a>(line: &'a str, code: &str) -> Option<&'a str> {
+        let rest = line.trim_start().trim_start_matches("pub ").trim_start_matches("pub(crate) ").strip_prefix("const ")?;
+        let (name, after) = rest.split_once(':')?;
+        if name.is_empty() || !name.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_') {
+            return None;
         }
+        if !name.ends_with("ICON") && !code.contains(&format!("IconId::new({name})")) {
+            return None;
+        }
+        after.trim_start().strip_prefix("&str")?.split_once("= \"")?.1.split('"').next()
+    }
+
+    /// An id that no set has draws nothing and raises no error at build time. Every icon id this crate's code
+    /// writes as a literal or a `const`, and every icon panel's and dock tab's icon, resolves in the catalog or the
+    /// app's set. Other ids built in match arms and tuple tables are not scanned.
+    #[test]
+    fn every_icon_id_literal_and_panel_icon_resolves() {
+        register_app_icons(&APP_ICONS);
+        let resolves = |id: &str| has_icon(&IconId::from(std::borrow::Cow::Owned(id.to_owned())));
+        let (mut seen, mut unknown) = (0, Vec::new());
+        let mut stack = vec![std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src")];
+        while let Some(dir) = stack.pop() {
+            let entries = std::fs::read_dir(&dir).unwrap_or_else(|e| panic!("{}: {e}", dir.display()));
+            for entry in entries {
+                let path = entry.unwrap_or_else(|e| panic!("{}: {e}", dir.display())).path();
+                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if path.is_dir() {
+                    if name != "tests" {
+                        stack.push(path);
+                    }
+                    continue;
+                }
+                if !name.ends_with(".rs") || name.starts_with("tests") {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+                // Code up to the test module: a test harness's `icon("..")` names a panel, not an icon.
+                let code = text.find("#[cfg(test)]\nmod ").map_or(text.as_str(), |at| &text[..at]);
+                for (number, line) in code.lines().enumerate().filter(|(_, l)| !l.trim_start().starts_with("//")) {
+                    let literal = |form: &&str| {
+                        line.match_indices(*form).filter_map(|(at, form)| line[at + form.len()..].split('"').next()).collect::<Vec<_>>()
+                    };
+                    for id in FORMS.iter().flat_map(literal).chain(const_icon(line, code)) {
+                        seen += 1;
+                        if !resolves(id) {
+                            unknown.push(format!("{}:{}: {id:?}", path.display(), number + 1));
+                        }
+                    }
+                }
+            }
+        }
+        assert!(seen > 50, "the source scan found only {seen} icon ids");
+        let tabs = crate::state::DockTab::ALL.map(crate::state::DockTab::info);
+        for (panel, _, icon) in crate::state::ICON_PANELS.iter().chain(tabs.iter()) {
+            if !resolves(icon) {
+                unknown.push(format!("panel {panel}: {icon:?}"));
+            }
+        }
+        assert!(unknown.is_empty(), "icon ids that no set has: {unknown:#?}");
     }
 
     /// Appearance (effects) and Pathfinder both lived in the icon column; they used the same
@@ -224,23 +237,40 @@ mod tests {
     #[test]
     fn every_type_tool_has_its_own_icon_with_the_same_t() {
         let tools = ["type", "areaType", "typeOnPath", "verticalType", "verticalAreaType", "verticalTypeOnPath", "touchType"];
-        let names: Vec<&str> = tools.iter().map(|id| tool_icon(vectorcraft_tools::catalog::tool_info(id).unwrap().icon)).collect();
+        let names: Vec<&'static str> = tools.iter().map(|id| tool_icon(vectorcraft_tools::catalog::tool_info(id).unwrap().icon)).collect();
         let unique: std::collections::BTreeSet<_> = names.iter().collect();
         assert_eq!(unique.len(), tools.len(), "{names:?}");
         for name in &names {
             assert!(name.starts_with("dc-"), "{name} is drawn for VectorCraft");
-            assert!(exists(name), "{name}");
+            assert!(resolves(name), "{name}");
         }
     }
 
+    /// Every cataloged tool, the add-ons' included, maps to an existing icon that is not the
+    /// dashed placeholder and that no other tool uses.
     #[test]
-    fn shared_catalog_preserves_fallback_and_tool_aliases() {
-        let ImageSource::Bytes { uri, bytes } = source("missing-icon") else { panic!("expected SVG bytes") };
-        let ImageSource::Bytes { bytes: fallback, .. } = source("square-dashed") else { panic!("expected SVG bytes") };
-        assert_eq!(uri.as_ref(), "bytes://icon/missing-icon.svg");
-        assert_eq!(bytes.as_ref(), fallback.as_ref());
-        assert!(!exists("missing-icon"));
-        assert_eq!(tool_icon("missing-icon"), "square-dashed");
-        assert_eq!(tool_icon("tool-selection"), "dc-selection");
+    fn every_tool_has_an_icon_no_other_tool_uses() {
+        let mut users: std::collections::BTreeMap<&str, Vec<&str>> = std::collections::BTreeMap::new();
+        for tool in vectorcraft_tools::catalog::all_tools() {
+            let name = tool_icon(tool.icon);
+            assert!(resolves(name) && name != "rect_dashed", "{} maps to {name}, which isn't an icon of its own", tool.id);
+            users.entry(name).or_default().push(tool.id);
+        }
+        let shared: Vec<_> = users.iter().filter(|(_, tools)| tools.len() > 1).collect();
+        assert!(shared.is_empty(), "tools that share an icon: {shared:?}");
+    }
+
+    /// An unresolved name draws the fallback square silently, and the registration only logs a refused
+    /// icon: this is what notices either.
+    #[test]
+    fn every_name_tool_icon_returns_resolves_and_no_app_icon_is_refused() {
+        for tool in vectorcraft_tools::catalog::all_tools() {
+            let name = tool_icon(tool.icon);
+            assert!(resolves(name), "{} maps to {name}, which no icon set has", tool.icon);
+        }
+        let catalog = icon_names();
+        for (name, _) in APP_ICONS.icons {
+            assert!(!catalog.contains(name), "{name} is in the catalog: the app's copy is refused");
+        }
     }
 }

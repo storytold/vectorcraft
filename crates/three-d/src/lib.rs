@@ -12,9 +12,9 @@ pub mod fold;
 mod solid;
 mod visibility;
 pub use solid::{
-    Bevel, BevelShape, DepthPlane, Extrude, FaceMap, Facet, Inflate, MapCell, MeshFace, PlanarFace, SolidSurface, SurfaceKind, TOO_COMPLEX_SOLID,
-    View, extrude, extrude_face_map, extrude_mesh_face, extrude_side_size, extrude_surfaces, inflate, inflate_each, inflate_together, plane,
-    plane_face_map, plane_mesh_face,
+    Bevel, BevelProfile, BevelShape, DepthPlane, Extrude, FaceMap, Facet, Inflate, MapCell, MeshFace, PlanarFace, SolidSurface, SurfaceKind,
+    TOO_COMPLEX_SOLID, View, extrude, extrude_face_map, extrude_mesh_face, extrude_side_size, extrude_surfaces, inflate, inflate_each,
+    inflate_together, plane, plane_face_map, plane_mesh_face,
 };
 pub use visibility::{VisibleFace, visible_faces};
 mod shading;
@@ -23,7 +23,9 @@ mod lights;
 pub use lights::{Light, Lights, MAX_LIGHTS};
 mod caps;
 mod mesh;
-pub use mesh::{Mesh, MeshedSolid, extrude_mesh, extrude_meshed, inflate_meshed, inflate_meshes, plane_mesh, revolve_mesh, revolve_mesh_surface};
+pub use mesh::{
+    Mesh, MeshPart, MeshedSolid, extrude_mesh, extrude_meshed, inflate_meshed, inflate_meshes, plane_mesh, revolve_mesh, revolve_mesh_surface,
+};
 mod shadow;
 pub use shadow::{
     MAX_SHADOW_FACES, Shadow, ShadowCaster, ShadowPlane, ShadowPosition, SolidFaces, TOO_COMPLEX_SHADOW, extrude_shadowed, inflate_shadowed,
@@ -1071,9 +1073,21 @@ fn keep_profile(
     turn: f64,
     caps: &[usize],
     surface: Option<SurfaceLayout<'_>>,
-    mut keep: impl FnMut(Vec<V3>, V3, Option<[Point; 4]>) -> Result<(), String>,
+    mut keep: impl FnMut(Vec<V3>, V3, Option<[Point; 4]>, MeshPart, solid::Attrs) -> Result<(), String>,
 ) -> Result<(), String> {
     let (o, steps) = (at.o, at.steps);
+    // For the mesh's texture, the side runs around the sweep (0 to 1 from its start) and along the
+    // profile (0 to 1 from its first point); each end cap spans its disk.
+    let mut profile = Vec::with_capacity(s.points.len());
+    let mut length = 0.0;
+    for (k, p) in s.points.iter().enumerate() {
+        if let Some(q) = k.checked_sub(1).and_then(|k| s.points.get(k)) {
+            length += q.distance(*p);
+        }
+        profile.push(length);
+    }
+    let along = |k: usize| if length > 1e-12 { (profile.get(k).copied().unwrap_or(0.0) / length).clamp(0.0, 1.0) } else { 0.5 };
+    let around = |j: usize| j as f64 / steps.max(1) as f64;
     for (i, (pair, hole)) in s.points.windows(2).zip(&s.holes).enumerate() {
         let [a, b] = pair else { continue };
         let turn = if *hole { -turn } else { turn };
@@ -1088,7 +1102,9 @@ fn keep_profile(
             let (sin, cos) = (at.sweep * (j as f64 + 0.5) / steps as f64).sin_cos();
             // The corners on the side surface, as the drawn faces place them.
             let uv = surface.map(|(along, angle)| surface_corners(*a, *b, at.axis, along.get(i).copied().unwrap_or_default(), angle(j)));
-            keep(vec![v0, v1, v2, v3], o.rotate(V3(dy * cos, -dr, dy * sin)), uv)?;
+            let (u0, u1, w0, w1) = (around(j), around(j + 1), along(i), along(i + 1));
+            let texture = solid::Attrs::Corners(vec![vec![([u0, w0], None), ([u0, w1], None), ([u1, w1], None), ([u1, w0], None)]]);
+            keep(vec![v0, v1, v2, v3], o.rotate(V3(dy * cos, -dr, dy * sin)), uv, MeshPart::Side, texture)?;
         }
     }
     for &index in caps {
@@ -1099,7 +1115,14 @@ fn keep_profile(
         } else {
             cap.insert(0, o.rotate(V3(0.0, end.y - at.center_y, 0.0)));
         }
-        keep(cap, o.rotate(V3(0.0, outward, 0.0)), None)?;
+        let r = (end.x - at.axis).abs();
+        let plane = solid::PlaneUv {
+            origin: o.rotate(V3(0.0, end.y - at.center_y, 0.0)),
+            x: o.rotate(V3(1.0, 0.0, 0.0)),
+            y: o.rotate(V3(0.0, 0.0, 1.0)),
+            area: Rect::new(-r, -r, r, r),
+        };
+        keep(cap, o.rotate(V3(0.0, outward, 0.0)), None, MeshPart::Cap, solid::Attrs::Planar(plane))?;
     }
     Ok(())
 }
@@ -1324,8 +1347,8 @@ impl CutRegions {
         let (draw, mesh, lost) = kept;
         let result = match mesh.as_deref_mut() {
             Some(m) => cut_loops(&self.kept, rule, axis).and_then(|loops| {
-                keep_cuts(at, &loops, |contours, normal| {
-                    m.push((contours, normal));
+                keep_cuts(at, &loops, |contours, normal, attrs| {
+                    m.push(solid::Face3 { contours, normal, part: MeshPart::Cut, attrs });
                     if m.len() > face_limit { Err(TOO_COMPLEX_SURFACE.to_string()) } else { Ok(()) }
                 })
             }),
@@ -1343,14 +1366,19 @@ impl CutRegions {
 
 /// Keep for a mesh the two cut sides of a partial sweep: the loops `loops` of their regions
 /// ([`cut_loops`]) turned to each side. Outlines run one way round and holes the other, so the mesh
-/// leaves the holes open. `keep` keeps one face with its outward normal.
-fn keep_cuts(at: &Sweeping, loops: &[Vec<Point>], mut keep: impl FnMut(Vec<Vec<V3>>, V3) -> Result<(), String>) -> Result<(), String> {
+/// leaves the holes open. `keep` keeps one face with its outward normal and where its corners lie
+/// on its texture: each corner's profile point in the bounds of the loops.
+fn keep_cuts(at: &Sweeping, loops: &[Vec<Point>], mut keep: impl FnMut(Vec<Vec<V3>>, V3, solid::Attrs) -> Result<(), String>) -> Result<(), String> {
     if loops.is_empty() {
         return Ok(());
     }
+    let area = solid::rings_bounds(loops.iter().map(Vec::as_slice));
     for (step, normal) in cut_sides(at) {
         let contours = loops.iter().map(|r| r.iter().map(|p| at.vertex(*p, step)).collect()).collect();
-        keep(contours, at.o.rotate(normal))?;
+        // A profile point goes to view space by one affine map at each step.
+        let origin = at.vertex(Point::ZERO, step);
+        let (x, y) = (at.vertex(Point::new(1.0, 0.0), step).sub(origin), at.vertex(Point::new(0.0, 1.0), step).sub(origin));
+        keep(contours, at.o.rotate(normal), solid::Attrs::Planar(solid::PlaneUv { origin, x, y, area }))?;
     }
     Ok(())
 }
@@ -1399,8 +1427,8 @@ fn revolve_sweep(
     }
     let face_limit = revolve_face_limit(o);
     // A face kept for a mesh: its normal follows from its corners.
-    let keep = |mesh: &mut Vec<solid::Face3>, face: Vec<V3>, normal: V3| {
-        mesh.push((vec![face], normal));
+    let keep = |mesh: &mut Vec<solid::Face3>, face: Vec<V3>, normal: V3, part: MeshPart, attrs: solid::Attrs| {
+        mesh.push(solid::Face3 { contours: vec![face], normal, part, attrs });
         if mesh.len() > face_limit { Err(TOO_COMPLEX_SURFACE.to_string()) } else { Ok(()) }
     };
     if ![bounds.x0, bounds.y0, bounds.x1, bounds.y1].iter().all(|v| v.is_finite() && v.abs() <= 1e8) {
@@ -1584,8 +1612,8 @@ fn revolve_sweep(
             let caps: Vec<usize> = rings.iter().enumerate().filter_map(|(i, r)| r.as_ref().map(|_| i)).collect();
             let along = (surface.is_some() && surface_contour == Some(contour)).then(|| along_profile(&kept.points, axis, sp.closed));
             let layout = along.as_deref().map(|along| (along, &surface_angle as &dyn Fn(usize) -> [f64; 2]));
-            let kept = keep_profile(&at, &kept, turn, &caps, layout, |face, normal, uv| {
-                keep(m, face, normal)?;
+            let kept = keep_profile(&at, &kept, turn, &caps, layout, |face, normal, uv, part, attrs| {
+                keep(m, face, normal, part, attrs)?;
                 if let (Some(uv), Some(s)) = (uv, surface.as_deref_mut()) {
                     s.push((m.len() - 1, uv));
                 }

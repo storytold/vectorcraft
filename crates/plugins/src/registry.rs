@@ -182,18 +182,73 @@ pub fn intern(s: &str) -> &'static str {
 /// and loads it.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_file(path: &std::path::Path, limits: Limits) -> Result<Plugin> {
-    use std::io::Read;
-    let meta = std::fs::metadata(path).map_err(|e| Error::Io(format!("{}: {e}", path.display())))?;
-    if !meta.is_file() {
-        return Err(Error::Io(format!("{} is not a file", path.display())));
-    }
-    if meta.len() > limits.max_module_bytes as u64 {
-        return Err(Error::Module(format!("{} is {} bytes (limit {})", path.display(), meta.len(), limits.max_module_bytes)));
-    }
-    let f = std::fs::File::open(path).map_err(|e| Error::Io(format!("{}: {e}", path.display())))?;
-    let mut bytes = Vec::new();
-    f.take(limits.max_module_bytes as u64 + 1).read_to_end(&mut bytes).map_err(|e| Error::Io(format!("{}: {e}", path.display())))?;
+    let bytes = read_module(path, &limits, || {})?;
     Ok(Plugin::load(&bytes, limits)?.with_source(path.display().to_string()))
+}
+
+/// The bytes of the module file at `path`. A path that doesn't name a regular file is refused
+/// before it is opened, and so is one over the module limit. On Unix the file is opened without
+/// waiting, so a named pipe put in its place after that check doesn't hold the load until something
+/// writes to it; what was opened is checked again and refused the same way. `opening` runs between
+/// the first check and the open.
+#[cfg(not(target_arch = "wasm32"))]
+fn read_module(path: &std::path::Path, limits: &Limits, opening: impl FnOnce()) -> Result<Vec<u8>> {
+    use std::io::Read;
+    let io = |e: std::io::Error| Error::Io(format!("{}: {e}", path.display()));
+    let regular = |meta: std::fs::Metadata| {
+        if !meta.is_file() {
+            return Err(Error::Io(format!("{} is not a file", path.display())));
+        }
+        if meta.len() > limits.max_module_bytes as u64 {
+            return Err(Error::Module(format!("{} is {} bytes (limit {})", path.display(), meta.len(), limits.max_module_bytes)));
+        }
+        Ok(())
+    };
+    regular(std::fs::metadata(path).map_err(io)?)?;
+    opening();
+    let f = open_module(path).map_err(io)?;
+    regular(f.metadata().map_err(io)?)?;
+    let mut bytes = Vec::new();
+    f.take(limits.max_module_bytes as u64 + 1).read_to_end(&mut bytes).map_err(io)?;
+    Ok(bytes)
+}
+
+/// Opens the module file at `path` for reading. On Unix the open doesn't wait for a writer when
+/// the path names a named pipe, and doesn't make a terminal device the controlling terminal.
+#[cfg(not(target_arch = "wasm32"))]
+fn open_module(path: &std::path::Path) -> std::io::Result<std::fs::File> {
+    let mut open = std::fs::OpenOptions::new();
+    open.read(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::custom_flags(&mut open, (rustix::fs::OFlags::NONBLOCK | rustix::fs::OFlags::NOCTTY).bits() as i32);
+    open.open(path)
+}
+
+/// The most `.wasm` files one [`load_folder`] reads.
+#[cfg(not(target_arch = "wasm32"))]
+const MAX_FOLDER_FILES: usize = 1000;
+
+/// The first [`MAX_FOLDER_FILES`] `*.wasm` paths directly in `dir` by file name, sorted, and how
+/// many more there are. Only that many paths are held while the folder is listed. An error while
+/// the folder is listed is returned, as one opening it is.
+#[cfg(not(target_arch = "wasm32"))]
+fn folder_files(dir: &std::path::Path) -> Result<(Vec<std::path::PathBuf>, usize)> {
+    let io = |e: std::io::Error| Error::Io(format!("{}: {e}", dir.display()));
+    let rd = std::fs::read_dir(dir).map_err(io)?;
+    let mut kept = std::collections::BinaryHeap::new();
+    let mut more = 0;
+    for entry in rd {
+        let p = entry.map_err(io)?.path();
+        if !p.extension().is_some_and(|x| x.eq_ignore_ascii_case("wasm")) {
+            continue;
+        }
+        kept.push(p);
+        if kept.len() > MAX_FOLDER_FILES {
+            kept.pop();
+            more += 1;
+        }
+    }
+    Ok((kept.into_sorted_vec(), more))
 }
 
 /// What [`load_folder`] reports for a plug-in the user disabled.
@@ -204,18 +259,22 @@ pub const DISABLED: &str = "disabled: turn it on again in Help › Safe Mode, fo
 pub struct FolderReport {
     /// Ids of the plug-ins installed.
     pub loaded: Vec<String>,
-    /// `(file, error)` for each `.wasm` that failed to load.
+    /// `(file, error)` for each `.wasm` that failed to load, including one that isn't a regular file.
     pub failed: Vec<(String, String)>,
+    /// How many `.wasm` files were not tried because the folder holds more than a load reads.
+    pub left_out: usize,
     /// The disabled items saved for the next launch changed: a plug-in disabled by its id alone was
     /// found in a file, which is now disabled too ([`crate::safe_mode::disable_file_of`]). The app
     /// saves the list again.
     pub disabled_changed: bool,
 }
 
-/// Installs every `*.wasm` directly in `dir` (not recursive), in file-name order. A bad module is
-/// reported and skipped, the others still load; so is a heavy one ([`crate::Budget::Heavy`]),
-/// which installs only once the user agrees, and one that lists permissions the user has not
-/// granted this very module ([`approved`]).
+/// Installs every `*.wasm` directly in `dir` (not recursive), in file-name order, up to the first
+/// 1,000 by file name; the report counts the files left out ([`FolderReport::left_out`]). Anything
+/// that isn't a regular file, such as a named pipe, is reported and skipped without waiting on it
+/// ([`load_file`]). A bad module is reported and skipped, the others still load; so is a heavy one
+/// ([`crate::Budget::Heavy`]), which installs only once the user agrees, and one that lists
+/// permissions the user has not granted this very module ([`approved`]).
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_folder(dir: &std::path::Path) -> Result<FolderReport> {
     load_folder_where(dir, |_| Ok(()), approved)
@@ -237,12 +296,8 @@ pub fn load_folder_where(
 ) -> Result<FolderReport> {
     use crate::safe_mode::{self, Item};
     safe_mode::check()?;
-    let rd = std::fs::read_dir(dir).map_err(|e| Error::Io(format!("{}: {e}", dir.display())))?;
-    let mut files: Vec<std::path::PathBuf> =
-        rd.filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("wasm"))).collect();
-    files.sort();
-    files.truncate(1000);
-    let mut report = FolderReport::default();
+    let (files, left_out) = folder_files(dir)?;
+    let mut report = FolderReport { left_out, ..FolderReport::default() };
     for f in files {
         if let Err(why) = allow(&f) {
             report.failed.push((f.display().to_string(), why));
@@ -452,5 +507,115 @@ mod tests {
         install_checked(load(&plain), GrantUpdate::Revoke, |_, _| Ok(()), || {}, same).unwrap();
         assert!(granted(id).is_none(), "a module without permissions forgets the grant");
         assert!(remove(id));
+    }
+
+    /// An empty folder for one test, with anything an earlier run left there removed.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn test_dir(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("vc-registry-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// Makes a named pipe at `path`.
+    #[cfg(unix)]
+    fn make_pipe(path: &std::path::Path) {
+        assert!(std::process::Command::new("mkfifo").arg(path).status().unwrap().success(), "mkfifo {}", path.display());
+    }
+
+    /// Limits that let a test go past the module size with a few bytes.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn small_limits() -> Limits {
+        Limits { max_module_bytes: 16, ..Limits::default() }
+    }
+
+    /// A module file is opened so that a named pipe in its place doesn't make the open wait for a
+    /// writer. The test holds the pipe open for reading and writing itself, so the open returns
+    /// either way.
+    #[cfg(unix)]
+    #[test]
+    fn a_module_file_is_opened_without_waiting_for_a_writer() {
+        let dir = test_dir("open");
+        let pipe = dir.join("x.wasm");
+        make_pipe(&pipe);
+        let held = std::fs::OpenOptions::new().read(true).write(true).open(&pipe).unwrap();
+        let opened = open_module(&pipe).unwrap();
+        let flags = rustix::fs::fcntl_getfl(&opened).unwrap();
+        drop((opened, held));
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(flags.contains(rustix::fs::OFlags::NONBLOCK), "the open would wait for a writer: {flags:?}");
+    }
+
+    /// A `.wasm` that a named pipe replaces after it was checked is refused as not a file, even
+    /// when the pipe holds more bytes than the module limit allows.
+    #[cfg(unix)]
+    #[test]
+    fn a_file_replaced_by_a_pipe_is_refused() {
+        use std::io::Write;
+        let dir = test_dir("pipe");
+        let path = dir.join("x.wasm");
+        let pipe = dir.join("pipe");
+        std::fs::write(&path, b"\0asm").unwrap();
+        make_pipe(&pipe);
+        let mut held = std::fs::OpenOptions::new().read(true).write(true).open(&pipe).unwrap();
+        held.write_all(&[0; 32]).unwrap();
+        let read = read_module(&path, &small_limits(), || std::fs::rename(&pipe, &path).unwrap());
+        drop(held);
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(matches!(&read, Err(Error::Io(e)) if e.ends_with("is not a file")), "{read:?}");
+    }
+
+    /// A `.wasm` that grows past the module limit after it was checked is refused by its size.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn a_file_that_grows_after_the_check_is_refused() {
+        let dir = test_dir("grow");
+        let path = dir.join("x.wasm");
+        std::fs::write(&path, b"\0asm").unwrap();
+        let read = read_module(&path, &small_limits(), || std::fs::write(&path, [0; 32]).unwrap());
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(matches!(&read, Err(Error::Module(e)) if e.contains("limit 16")), "{read:?}");
+    }
+
+    /// A folder load reports a subfolder, a named pipe and a link to a named pipe with `.wasm`
+    /// names as not files, and goes on.
+    #[cfg(unix)]
+    #[test]
+    fn a_folder_reports_entries_that_are_not_files() {
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        crate::safe_mode::set_active(None);
+        let dir = test_dir("special");
+        std::fs::create_dir(dir.join("a.wasm")).unwrap();
+        make_pipe(&dir.join("b.wasm"));
+        std::os::unix::fs::symlink(dir.join("b.wasm"), dir.join("c.wasm")).unwrap();
+        let r = load_folder_where(&dir, |_| Ok(()), |_| false);
+        std::fs::remove_dir_all(&dir).unwrap();
+        let r = r.unwrap();
+        let failed: Vec<(String, bool)> = r.failed.iter().map(|(f, e)| (f.clone(), e.ends_with("is not a file"))).collect();
+        let expected: Vec<(String, bool)> = ["a", "b", "c"].iter().map(|n| (dir.join(format!("{n}.wasm")).display().to_string(), true)).collect();
+        assert_eq!(failed, expected, "{r:?}");
+        assert!(r.loaded.is_empty() && r.left_out == 0, "{r:?}");
+    }
+
+    /// A folder with more `.wasm` files than a load reads tries the first ones by file name and
+    /// counts the files it left out.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn a_folder_over_the_file_limit_reports_the_files_left_out() {
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        crate::safe_mode::set_active(None);
+        let dir = test_dir("limit");
+        // Written last first, so the listing's order is not the file-name order.
+        for i in (0..MAX_FOLDER_FILES + 2).rev() {
+            std::fs::write(dir.join(format!("{i:05}.wasm")), b"").unwrap();
+        }
+        let r = load_folder_where(&dir, |_| Ok(()), |_| false).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(r.loaded.is_empty(), "{r:?}");
+        assert_eq!(r.left_out, 2, "{r:?}");
+        let tried: Vec<String> = r.failed.iter().map(|(f, _)| f.clone()).collect();
+        let first: Vec<String> = (0..MAX_FOLDER_FILES).map(|i| dir.join(format!("{i:05}.wasm")).display().to_string()).collect();
+        assert_eq!(tried, first, "the first files by name, in that order");
     }
 }

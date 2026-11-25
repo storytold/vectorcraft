@@ -44,6 +44,7 @@
 	Quit VectorCraft	Lopeta VectorCraft
 # Artwork drag between document tabs.
 	Drop Artwork	Pudota kuvitus
+@id	language.name	Suomi
 @msg	{key} must be [x, y] with finite coordinates	{key} on annettava muodossa [x, y] äärellisillä koordinaateilla
 @msg	ids must contain 1–10000 object ids	ids-arvon on sisällettävä 1–10000 objektitunnusta
 
@@ -357,6 +358,9 @@
 	Artboards	Piirtoalustat
 	Convert to Artboards	Muunna piirtoalustoiksi
 	Rearrange All Artboards…	Järjestä kaikki piirtoalustat uudelleen…
+	Rearrange…	Järjestä uudelleen…
+	Selected Artboards: {n}	Valitut piirtoalustat: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Sijoita piirtoalustat napsauttamalla kangasta (Esc peruuttaa)
 	Fit to Artwork Bounds	Sovita kuvituksen rajoihin
 	Fit to Selected Art	Sovita valittuun kuvitukseen
 	Graph	Kaavio
@@ -514,6 +518,7 @@
 	Fill & Stroke	Täyttö ja viiva
 	Fill Color	Täyttöväri
 	Opacity	Peittävyys
+	Show Opacity	Näytä peittävyys
 	Stroke Color	Viivan väri
 	Fill Gradient	Täytön liukuväri
 	Stroke Gradient	Viivan liukuväri
@@ -817,9 +822,14 @@
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Ympyränäkymä
 	Box View	Ruutunäkymä
+	Show Out-of-Gamut Colors	Näytä väriavaruuden ulkopuoliset värit
 	Box Channel	Ruudun kanava
 	Color box	Väriruutu
 	Color Wheel Options	Väriympyrän asetukset
+	Show Document Colors	Näytä asiakirjan värit
+	Document Colors	Asiakirjan värit
+	Selection Colors	Valinnan värit
+@plural	Used {n} time|Used {n} times	Käytetty {n} kerran|Käytetty {n} kertaa
 	Show Harmony	Näytä harmonia
 	Harmony Rule	Harmoniasääntö
 	Harmony color	Harmonian väri
@@ -2096,6 +2106,10 @@ digits	Malayalam	Malajalam
 	Rename Preset	Nimeä esiasetus uudelleen
 	Save Image Trace Preset	Tallenna kuvan jäljityksen esiasetus
 	Delete Image Trace Preset	Poista kuvan jäljityksen esiasetus
+	Tracing Presets…	Jäljityksen esiasetukset…
+	Import Image Trace Presets	Tuo kuvan jäljityksen esiasetukset
+	Export Image Trace Presets	Vie kuvan jäljityksen esiasetukset
+	Replace the saved presets that have these names?	Korvataanko tallennetut esiasetukset, joilla on nämä nimet?
 	Method:	Menetelmä:
 	Pad	Jatka
 	Repeats	Toistokerrat
@@ -3705,6 +3719,12 @@ theme	Appearance	Ulkoasu
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	tarkkuus ei saatavilla
+	estimated memory {memory}	arvioitu muisti {memory}
+	memory unavailable	muisti ei saatavilla
+	Unknown format	Tuntematon muoto
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -3730,6 +3750,8 @@ theme	Appearance	Ulkoasu
 	Symbolism Tool	Symbolityökalu
 	Image Trace Presets	Kuvan jäljityksen esiasetukset
 	Live Paint Bucket	Elävän maalauksen ämpäri
+	Fill Area	Täytä alue
+	Fill Area Tool	Alueen täyttötyökalu
 	Live Paint Bucket (Stroke)	Elävän maalauksen ämpäri (viiva)
 	Live Paint Info	Elävän maalauksen tiedot
 	Shape Builder	Muodonmuodostin
@@ -4151,6 +4173,7 @@ theme	Appearance	Ulkoasu
 	Data Recovery	Tietojen palautus
 	Default Language	Oletuskieli
 	Disable Auto Add/Delete	Poista automaattinen lisäys/poisto käytöstä
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete poistaa ankkuripisteet ja pitää polut yhtenäisinä
 	Interpolate Control Points When Moving Anchors	Interpoloi suuntakahvat siirrettäessä ankkuripisteitä
 	Display All Blacks Accurately	Näytä kaikki mustat tarkasti
 	Display All Blacks as Rich Black	Näytä kaikki mustat syvämustina
@@ -4234,6 +4257,13 @@ theme	Appearance	Ulkoasu
 	Pen Tool	Kynätyökalu
 	Quick Pen Tool	Pikakynätyökalu
 	Quick Pen	Pikakynä
+	Quick Pen Toolbar	Pikakynän työkalurivi
+	Continuous Arc	Jatkuva kaari
+	Sharp Corner Arc	Terävän kulman kaari
+	Flip Arc	Käännä kaari
+	Hide Toolbar	Piilota työkalurivi
+	Pin Toolbar Position	Kiinnitä työkalurivin sijainti
+	Reset Toolbar Position	Palauta työkalurivin sijainti
 	Picas	Picat
 	Portuguese	Portugali
 	Preserve Appearance and Overprints	Säilytä ulkoasu ja päällepainatukset
@@ -4349,6 +4379,11 @@ theme	Appearance	Ulkoasu
 	Edit Arrowheads	Muokkaa nuolenkärkiä
 	Edit Arrowheads…	Muokkaa nuolenkärkiä…
 	Reload Arrowheads	Lataa nuolenkärjet uudelleen
+	Bevels	Viisteet
+	Edit Bevels	Muokkaa viisteitä
+	Edit Bevels…	Muokkaa viisteitä…
+	{name} (document)	{name} (asiakirja)
+	Reload Bevels	Lataa viisteet uudelleen
 	Stroke Options	Viivan asetukset
 	Width Profiles	Leveysprofiilit
 	Apply Graphic Style	Käytä grafiikkatyyliä
@@ -4570,6 +4605,11 @@ axis	Both	Molemmat
 	Image	Kuva
 	Ink	Muste
 	Lab	Lab
+	OKLCH Sliders	OKLCH-liukusäätimet
+	HSL Sliders	HSL-liukusäätimet
+	Chroma	Kroma
+	The largest chroma sRGB holds at this lightness and hue	Suurin kroma, jonka sRGB sisältää tällä vaaleudella ja sävyllä
+	OKLCH needs sRGB as the working RGB space	OKLCH vaatii sRGB:n RGB-työväriavaruudeksi
 	Medium	Keskitaso
 	Name	Nimi
 	None	Ei mitään
@@ -4663,6 +4703,7 @@ font-technology	Variable	Muuttuvat
 	Recent Commands	Viimeisimmät komennot
 	No recent commands	Ei viimeisimpiä komentoja
 	Type to search commands, tools, panels and effects	Kirjoita hakeaksesi komentoja, työkaluja, paneeleita ja tehosteita
+	Clear Recent Commands	Tyhjennä viimeisimmät komennot
 	Dashed Line	Katkoviiva
 	Panel menu	Paneelivalikko
 	Unembed…	Poista upotus…
@@ -4697,6 +4738,7 @@ font-technology	Variable	Muuttuvat
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Kahden sormen kiertoele kosketuslevyllä kiertää piirtopinnan näkymää.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Näppäimen pitäminen painettuna suorittaa työkalun tai komennon sen Pidä pohjassa -sarakkeesta Pikanäppäimissä; lyhyt painallus suorittaa sen tavallisen pikanäppäimen.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Kuinka monta sekuntia näppäintä on pidettävä painettuna, ennen kuin tavallisen pikanäppäimen sijaan suoritetaan sen pitkän painalluksen pikanäppäin.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete poistaa valitut ankkuripisteet ja sovittaa käyrän uudelleen kunkin ympärille sen sijaan, että avaisi polun siitä kohdasta.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Kun siirrät ankkuripisteitä, jokainen käyrä, jonka toinen pää siirtyy, säilyttää muotonsa suhteessa päihinsä.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Työkalun pikanäppäimen pitäminen painettuna valitsee työkalun, kunnes päästät irti, ja sitten edellinen työkalu valitaan uudelleen.
 	Shows the bounding box while you move the selection or draw a shape.	Näyttää rajausruudun, kun siirrät valintaa tai piirrät muotoa.
@@ -4782,9 +4824,14 @@ font-technology	Variable	Muuttuvat
 	Edit type set in fonts that aren't available?	Muokataanko tekstiä, jonka fontit eivät ole käytettävissä?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Näyttää piirtopinnalla kunkin viipaleen numeron ruudussa sen vasemmassa yläkulmassa; kun asetus on pois päältä, viipaleiden ääriviivat näkyvät edelleen.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Käyttäjä- ja objektiviipaleiden ääriviivojen ja niiden numeroruutujen väri; automaattiset viipaleet käyttävät siitä himmeämpää sävyä.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Uusi teksti saa tämän kielen, kun Asiakirjan asetusten kieli on Englanti: USA eikä [Normaali merkkityyli] määritä kieltä; asiakirjassa jo oleva teksti säilyttää oman kielensä.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	Kappaleissa, joissa Tavuta on käytössä, luettelon sana saa tavuviivan vain siihen kirjoitettujen yhdysmerkkien kohdalle tai ei koskaan, jos niitä ei ole, kielestä ja kirjainkoosta riippumatta.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	Työpöytäversiossa tämän kansion .wasm-laajennukset ladataan käynnistettäessä ja kun OK asettaa uuden kansion, paitsi vikasietotilassa; käyttöoikeuksia pyytävä laajennus ladataan vasta, kun myönnät ne. Verkkoversio ei lataa yhtään.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	Suuri antaa suodatin- tai komentolaajennuksen jokaiselle ajolle vähintään 250 miljoonaa käskyä samalla aikarajalla; Normaali säilyttää laajennuksen oman budjetin. Live-tehosteet, viejät ja tuojat säilyttävät omansa.
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Uusi teksti saa tämän kielen, kun Asiakirjan asetusten kieli on Englanti: USA; asiakirjassa jo oleva teksti säilyttää oman kielensä.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Kappaleissa, joissa Tavuta on käytössä, luettelon sana tavutetaan vain siihen kirjoitettujen yhdysmerkkien kohdalta tai ei lainkaan, jos niitä ei ole, kielestä ja kirjainkoosta riippumatta.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	Työpöytäversiossa tämän kansion .wasm-laajennukset ladataan käynnistettäessä ja kun napsautat OK uuden kansion kanssa tässä, paitsi vikasietotilassa; verkkoversio ei lataa niitä.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	Normaali säilyttää kunkin laajennuksen omat rajat; Suuri-asetuksella laajennuksen suodin tai komento voi suorittaa vähintään 250 miljoonaa käskyä syötteensä käskyjen lisäksi. Aikaraja pysyy samana.
 	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Kuinka monta käskyä laajennuksen objektisuotimen kukin suorituskerta saa käyttää; Suuri sallii enemmän kuin Normaali samalla 60 sekunnin rajalla. Raskaat suotimet säilyttävät oman budjettinsa.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Ensimmäinen työlevyvalinta: Startup, None tai kansiopolku; VectorCraft tallentaa sen, mutta ei vielä käytä työlevyjä.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Toinen työlevyvalinta: Startup, None tai kansiopolku; VectorCraft tallentaa sen, mutta ei vielä käytä työlevyjä.
@@ -4796,13 +4843,15 @@ font-technology	Variable	Muuttuvat
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Näyttää kunkin työkaluryhmän nimen sen työkalujen yläpuolella työkalurivissä; pois päältä ryhmät seuraavat toisiaan ilman mitään välissä.
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Tästä lähtien avaamasi tai luomasi asiakirjat avautuvat välilehtinä; pois päältä kukin avautuu kelluvaan ikkunaan. Jo avoinna olevat asiakirjat pysyvät paikoillaan.
 	Makes the document tabs taller and their names larger.	Tekee asiakirjojen välilehdistä korkeampia ja niiden nimistä suurempia.
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Seuraavasta käynnistyksestä alkaen järjestelmä piirtää ikkunan otsikkorivin siellä, missä VectorCraft muuten piirtäisi omansa.
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	Seuraavasta käynnistyksestä alkaen VectorCraft piirtää ikkunan otsikkorivin silloinkin, kun työpöytä piirtäisi sen, ellei Järjestelmän otsikkorivi ole päällä.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	Seuraavasta käynnistyksestä alkaen järjestelmä piirtää ikkunan otsikkorivin siellä, missä VectorCraft muuten piirtäisi omansa; Linuxissa ja BSD-järjestelmissä VECTORCRAFT_TITLEBAR-muuttuja menee edelle.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	Seuraavasta käynnistyksestä alkaen VectorCraft piirtää ikkunan otsikkorivin silloinkin, kun työpöytä piirtäisi sen, ellei Järjestelmän otsikkorivi ole päällä tai VECTORCRAFT_TITLEBAR-muuttuja valitse sitä.
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Suurentaa tai pienentää käyttöliittymää; kankaalla oleva kuvitus säilyttää kokonsa samalla zoomauksella.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraftin piirtämät työkaluosoittimet kasvavat ja pienenevät Käyttöliittymän skaalauksen mukana; pois päältä ne säilyttävät kokonsa.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Käyttöliittymän kieli; Automaattinen käyttää järjestelmän kieltä. Valintaikkuna vaihtaa kielen heti, kun valitset sellaisen.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Animoitu zoomaus toimii vain, kun tämä on päällä; pois päältä Animoitu zoomaus on himmennetty eikä zoomausta animoida.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Rullalla zoomaus liukuu pehmeästi, ja Zoomaustyökalu zoomaa, kun vedät sivulle tai pidät sitä painettuna; pois päältä Zoomaustyökalu zoomaa alueeseen, jonka yli vedät.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	Seuraavasta käynnistyksestä alkaen työpöytäversio näyttää piirtoalueen tämän tyyppisen grafiikkasuorittimen kautta; kuvitus piirretään joka tapauksessa suorittimella. Automaattinen suosii integroitua Windowsissa ja macOS:ssä. Verkkoversio ei käytä sitä.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	Seuraavasta käynnistyksestä alkaen ikkuna näyttää jokaisen kuvan odottamatta näytön virkistystä, kun grafiikkaohjain sallii sen, enintään 240 kuvaa sekunnissa.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Seuraavasta käynnistyksestä alkaen työpöytäversio piirtää tämän tyyppisellä grafiikkasuorittimella; Automaattinen suosii näyttöä ohjaavaa. Verkkoversio ei käytä sitä.
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Seuraavasta käynnistyksestä alkaen ikkuna näyttää kuvat odottamatta näytön virkistystä, enintään 240 sekunnissa; pois päältä näyttö tahdittaa ne. Käynnistettäessä asetettu esitystila ohittaa sen.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Kumoamisvaiheiden enimmäismäärä, jonka kukin asiakirja säilyttää; pienempi luku poistaa vanhimmat vaiheet, kun napsautat OK. Vaiheita voi poistua aiemmin, jos ne vievät liikaa muistia.
@@ -4821,6 +4870,9 @@ font-technology	Variable	Muuttuvat
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	Avaa viimeisimmät tiedostot ja Aloitus-näkymä luettelevat enintään näin monta viimeisintä tiedostoa; 0 ei luettele yhtään, ja VectorCraft muistaa silti enintään 30.
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	Kun asiakirja avataan, linkitetty EPS-kuva, joka näyttää tallennetun esikatselunsa, säilyttää sen eikä lue EPS-tiedostoa uudelleen; muuttuneet tiedostot noudattavat silti Päivitä linkit -asetusta.
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	Pikseliesikatselussa kuvat piirretään pehmennettyinä; pois päältä niiden pikseleillä on terävät reunat. Pikseliesikatselun ulkopuolella kuvat pehmennetään aina.
+	PDF Text	PDF-teksti
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	Avaamasi tai upottamasi PDF:n teksti tuodaan muokattavana tekstinä tai ääriviivoina, jotka näyttävät samalta tietokoneella, jossa sen fontteja ei ole.
+	Linked pages show the file's own text.	Linkitetyt sivut näyttävät tiedoston oman tekstin.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Kun linkitetty tiedosto muuttuu, Automaattisesti lukee sen uudelleen, Kysy, kun muokattu kysyy ensin, ja Manuaalisesti jättää sen ennalleen ja näyttää ilmoituksen tilarivillä.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	Työpöytäversiossa kansio, josta Uusi mallipohjasta… ja Tallenna mallipohjana… alkavat; jätä tyhjäksi, niin käytetään asiakirjakansiosi VectorCraft Templates -kansiota.
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Muokkaa alkuperäistä avaa linkitetyn tiedoston järjestelmän oletussovelluksessa sen tyypin mukaan; pois päältä linkitetty rasterikuva avautuu PhotoCraftissa, jos se on asennettu.
@@ -4835,7 +4887,6 @@ font-technology	Variable	Muuttuvat
 	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Tulosta kaikki mustat syvämustina piirtää puhtaan CMYK-mustan RGB-mustana RGB- ja harmaasävyrasterivienneissä ja Tulosta bittikarttana -asetuksella; se ei muuta vektorivientejä, CMYK-JPEG-, -TIFF- ja -PSD-tiedostoja eikä muuta tulostusta.
 	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	Kosketusnäytöllä vaihtaa kosketustyötilaan; asetuksen poistaminen käytöstä tai kosketusnäytön katoaminen palauttaa työtilan, josta vaihdettiin.
 	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Kahden sormen napautus piirtopinnalla kumoaa tai vaihtaa kosketustyötilassa valinta- ja piirtotyökalujen välillä, ja kolmen sormen napautus tekee uudelleen; kumpikaan ei toimi esitystilassa.
-	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Uusi teksti saa tämän kielen, kun Asiakirjan asetusten kieli on Englanti: USA eikä [Normaali merkkityyli] määritä kieltä; asiakirjassa jo oleva teksti säilyttää oman kielensä.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	Kappaleissa, joissa Tavuta on käytössä, luettelon sana tavutetaan vain siihen kirjoitettujen yhdysmerkkien kohdalta tai ei lainkaan, jos niitä ei ole, kirjainkoosta riippumatta; korealaisiin sanoihin ei tule tavuviivaa, eikä intialaisten kielten sanoja tavuteta merkkiryhmän sisältä.
 	Reset all preferences to their defaults?	Palautetaanko kaikki asetukset oletuksiin?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Oletukset otetaan käyttöön, kun valitset Asetuksissa OK. Peruuta siellä säilyttää nykyiset asetuksesi.
@@ -4858,6 +4909,10 @@ font-technology	Variable	Muuttuvat
 	Cusp	Kärki
 	Straight segment	Suora segmentti
 	Circle too large	Ympyrä on liian suuri
+	Show Radii	Näytä säteet
+	Show Diameter	Näytä halkaisija
+	Anchors at Standard Positions	Ankkuripisteet vakiokohdissa
+	Third Point by Dragging	Kolmas piste vetämällä
 	Clip to Art	Rajaa kuvitukseen
 	Colorize	Väritä
 	Gamma	Gamma
@@ -5369,6 +5424,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	Saved {path}	Tallennettiin {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Valitse tekstiä tai napsauta tekstiin tekstityökalulla, niin voit lisätä merkkejä
 @msg	Shape Builder: no region under the pointer	Muodonmuodostin: osoittimen alla ei ole aluetta
+@msg	Fill Area: no enclosed area under the pointer	Täytä alue: osoittimen alla ei ole suljettua aluetta
 @msg	Shape Builder: select all paths you want to merge	Muodonmuodostin: valitse kaikki polut, jotka haluat yhdistää
 @msg	Shape Builder: select paths or compound paths	Muodonmuodostin: valitse polkuja tai yhdistelmäpolkuja
 @msg	Show All Hidden Attributes: nothing is hidden	Näytä kaikki piilotetut attribuutit: mitään ei ole piilotettu
@@ -5825,6 +5881,10 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	tämä jäljitys tuottaisi yli {max} ankkuripistettä, enemmän kuin asiakirja näyttää sujuvasti: nosta kohinaa, vähennä polkuja tai värejä tai valitse epätarkempi esiasetus
 @msg	select an envelope	valitse vääristyskuori
 @msg	select an image	valitse kuva
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	objekti {_1} on kuva, jota on muutettu Perspektiivivääristyksellä tai Vapaalla vääristyksellä, eikä tämä komento toimi sille
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	kuvaa {_1} ei voi vääristää näin: sen kulmat eivät muodostaisi kuperaa muotoa
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	kuvaa {_1} ei voi vääristää näin: sen kulmat ylittäisivät vääristyksen horisontin
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	kuvaa {_1} ei voi vääristää näin: sen kulmat olisivat liian lähellä toisiaan perspektiivikuvausta varten
 @msg	`background` must be edges, corners or colors	`background`-arvon on oltava edges, corners tai colors
 @msg	`match` must be distance or channels	`match`-arvon on oltava distance tai channels
 @msg	`{key}` must be from 0 to 100	`{key}`-arvon on oltava väliltä 0–100
@@ -6713,6 +6773,7 @@ mark-style	Japanese	Japanilainen
 @msg	a 3D effect on a group's fill or stroke draws nothing	ryhmän täytön tai viivan 3D-tehoste ei piirrä mitään
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ryhmän täytön tai viivan 3D-tehoste ei piirrä mitään vietävää
 @msg	The 3D object is too complex to export	3D-objekti on liian monimutkainen vietäväksi
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D-objektin verkko on puutteellinen tai sisältää arvon, joka ei ole luku
 @msg	give one <filter> element	anna yksi <filter>-elementti
 @msg	the <filter> element needs an id, the filter's name	<filter>-elementti tarvitsee id:n, suotimen nimen
 @msg	an SVG filter's id is at most {MAX_NAME} characters	SVG-suotimen id on enintään {MAX_NAME} merkkiä
@@ -6735,7 +6796,10 @@ mark-style	Japanese	Japanilainen
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektilla ei ole 3D-tehostetta (Pursota ja viistä, Pyöräytä, Täytä ilmalla tai Kierrä)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` on oltava objekti, jossa on vain `mode` arvolla shaded tai wireframe
 @msg	its 3D effect builds no solid	sen 3D-tehoste ei muodosta kappaletta
-@msg	bevel must be none or one of {_1}	bevel-arvon on oltava none tai jokin seuraavista: {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel-arvon on oltava none, jokin seuraavista: {_1}, tai custom yhdessä arvon {BEVEL_PROFILE} kanssa
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom tarvitsee arvon {BEVEL_PROFILE}, viisteen pisteet
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} on oltava merkkijono
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	arvossa {BEVEL_PROFILE} on oltava vähintään 2 ja enintään {most} pistettä [x, y], kukin osuus väliltä 0 ja 1, pisteestä [0, 0] (päätypinnan reuna) pisteeseen [1, 1] (sivuseinä)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} ei voi muodostaa kappaleita tästä kuvituksesta: sen symbolien esiintymät, sulautukset ja leikkausryhmät sisältävät liikaa objekteja
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} ei voi muodostaa kappaletta symbolin ”{symbol}” esiintymästä: symbolin kuvitus ei ole käytettävissä
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: leikkauspolku on liian monimutkainen kuvituksen leikkaamiseen
@@ -6761,8 +6825,10 @@ mark-style	Japanese	Japanilainen
 @msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}`-kohteen face-arvon on oltava front, back tai side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`-kohteen {key}-arvon on oltava luku, joka on vähintään {lo} ja enintään {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` on oltava taulukko
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafiikat sijoitetaan objektityypeille Taso, Pursota ja Pyöräytä
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafiikat sijoitetaan objektityypeille Taso, Pursota, Pyöräytä ja Täytä ilmalla
 @msg	Revolve maps graphics onto its side: map them onto the front	Pyöräytä sijoittaa grafiikat kylkeensä: sijoita ne etupuolelle
+@msg	Inflate maps graphics onto its front and back, not onto a side	Täytä ilmalla sijoittaa grafiikat etu- ja takapuolelle, ei kylkeen
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	objekti {_1}: Täytä ilmalla -tehosteen takapuoli ottaa grafiikoita vain, kun Molemmat puolet ja Pääty ovat käytössä
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafiikat ovat liian monimutkaisia tälle pinnalle: yksinkertaista symbolien kuvitusta tai pienennä Segmentit-arvoa
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` hyväksyy enintään {MAX_GRAPHICS} grafiikkaa
 @msg	A plane has one face: map its graphics onto the front	Tasolla on yksi puoli: sijoita sen grafiikat etupuolelle
@@ -6990,6 +7056,8 @@ mark-style	Japanese	Japanilainen
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode`-arvon on oltava grayscale, rgb, hsb, cmyk tai websafe
 @msg	`view` must be wheel or box	`view`-arvon on oltava wheel tai box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel`-arvon on oltava hue, saturation, brightness, red, green tai blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` on oltava none, oklch tai hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH vaatii sRGB:n RGB-työväriavaruudeksi
 @msg	`{key}` must be an array of these names: {_1}	`{key}`-arvon on oltava taulukko, jossa on näitä nimiä: {_1}
 @msg	choose a destination folder	valitse kohdekansio
 @msg	choose a source folder	valitse lähdekansio
@@ -7334,11 +7402,19 @@ axis	Y Axis	Y-akseli
 @msg	module is {_1} bytes (limit {_2})	moduuli on {_1} tavua (raja {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	vaatii hyväksynnän: se pyytää {0}, jotka käyttäjä myöntää asentaessaan sen erikseen
 @msg	not JSON: {e}	ei JSON-muotoa: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	ei WebAssembly-binääri (\0asm-otsake puuttuu)
+@msg	not a WebAssembly binary (missing \\0asm header)	ei WebAssembly-binääri (\\0asm-otsake puuttuu)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	funktiotyyppi ylittää {MAX_FUNC_TYPE_VALUES} parametrin rajan
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	funktiotyyppi ylittää {MAX_FUNC_TYPE_VALUES} tuloksen rajan
 @msg	parameter `{k}`: {what}	parametri `{k}`: {what}
 @msg	parameter `{name}`: {what}	parametri `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	laajennuksen parametrien on oltava JSON-objekti
 @msg	the module must export its linear memory as `memory`	moduulin on vietävä lineaarinen muistinsa nimellä `memory`
+@msg	the module must export `{name}` with the type {signature}	moduulin on vietävä `{name}` tyypillä {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	moduulissa on useampi kuin yksi mukautettu osio `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	muistibudjetti (moduulin alkumuisti on {initial} tavua, raja {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	mukautetun osion `{MANIFEST_SECTION}` manifestin on annettava `abi` arvona {ABI_VERSION}, ABI-versio, jonka tämä isäntä toteuttaa
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	taulukkobudjetti (moduuli määrittää {count} taulukkoa, suurin {largest} alkiolla; raja {MAX_TABLES} taulukkoa, kussakin enintään {MAX_TABLE_ELEMENTS} alkiota)
+@msg	the module's table section could not be read	moduulin taulukko-osiota ei voitu lukea
 @msg	the objects to change are no longer in the document	muutettavia objekteja ei enää ole asiakirjassa
 @msg	the runtime panicked	suoritusympäristö kaatui
 @msg	unexpected host trap	odottamaton keskeytys (trap) isännässä
@@ -7366,6 +7442,11 @@ axis	Y Axis	Y-akseli
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` ja `maxItems` on oltava 0-{MAX_LIST}, `maxItems` vähintään 1, ja oletusarvossa on oltava niin monta kohdetta
 @msg	`name` must be a string	`name` on oltava merkkijono
 @msg	`opacity` must be a number	`opacity` on oltava luku
+@msg	`opacity` must be a number from 0 to 100	`opacity` on oltava luku 0:sta 100:aan
+@msg	`opacity` must be true or false	`opacity` on oltava true tai false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	tekstin merkeillä ei ole omaa peittävyyttä: lisää täyttö tai viiva Ulkoasu-paneelin komennolla Lisää uusi täyttö tai Lisää uusi viiva
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	symbolin ilmentymästä valitulla objektilla ei ole omaa täytön tai viivan peittävyyttä
+@msg	no target has that fill or stroke to take the opacity	millään kohteella ei ole tätä täyttöä tai viivaa, joka ottaisi peittävyyden
 @msg	`type` must be "path" or "compound"	`type` on oltava "path" tai "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit`-kentässä on oltava 1-{MAX_UNIT} tulostettavaa merkkiä
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen`-kentässä on lueteltava 1-{MAX_CONDITION_VALUES} arvoa parametrille `{other}`
@@ -7409,6 +7490,8 @@ axis	Y Axis	Y-akseli
 @msg	`plates` requires a stop linked to a spot swatch	`plates` vaatii väripisteen, joka on linkitetty spottivärin värimalliin
 @msg	the output	tuloste
 @msg	the path has no anchor points	polulla ei ole ankkuripisteitä
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	yhdistelmäpolulla {id} on piilotettu, lukittu tai apuviivana oleva jäsen, joten sen jäseniä ei voi korvata
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	yhdistelmäpolulla {id} on jäsen, joka ei ole polku, joten sen jäseniä ei voi korvata
 @msg	too many anchor points (limit {MAX_ANCHORS})	liian monta ankkuripistettä (raja {MAX_ANCHORS})
 @msg	true or false	true tai false
 @msg	a number >= {_1}	luku >= {_1}
@@ -8980,6 +9063,24 @@ breakText	Glyphs	Merkit
 @msg	A joint does not close by {gap} pt.	Liitos ei sulkeudu, rako {gap} pt.
 @msg	Two panels pass through each other.	Kaksi paneelia kulkee toistensa läpi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"
+	Nature Icons	Luontokuvakkeet
+	Flower	Kukka
+	Tree	Puu
+	Mountain	Vuori
+	Ornamental	Koristekuviot
+	Scrollwork	Kiemura
+	Filigree Arrow	Filigraanin nuoli
+	Petal Sweep	Terälehtipyyhkäisy
+	Twin Curl	Kaksoiskiemura
+	Vector Packs	Vektoripaketit
+	Compass Rose	Kompassiruusu
+	Botanical Sprig	Kasvinoksa
+	Facet Diamond	Särmätty timantti
+	Tide Crest	Aallonharja
+	Leaf Vine	Lehtiköynnös
+	Blossom Chain	Kukkaketju
+	Pennant Garland	Viiririvistö
+	Lantern String	Lyhtyketju
 	Orbit Lines	Kiertoradan viivat
 	Petal Garland	Terälehtiköynnös
 	Lattice Braid	Ristikkopunos

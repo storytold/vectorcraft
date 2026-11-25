@@ -225,6 +225,7 @@
 	Anti-alias Rasters	Khử răng cưa ảnh raster
 	Anti-aliased Artwork	Tác phẩm khử răng cưa
 	Anti-aliasing Method	Phương pháp khử răng cưa
+@id	language.name	Tiếng Việt
 antiAlias	Sharp	Sắc nét
 	Crisp	Rõ nét
 	Strong	Đậm
@@ -587,6 +588,11 @@ font-technology	Variable	Biến thiên
 	Cusp	Điểm lùi
 	Straight segment	Đoạn thẳng
 	Circle too large	Hình tròn quá lớn
+	Show Radii	Hiện bán kính
+	Show Diameter	Hiện đường kính
+	Anchors at Standard Positions	Điểm neo ở vị trí chuẩn
+	Third Point by Dragging	Điểm thứ ba bằng cách kéo
+	Gray	Xám
 	Classic	Cổ điển
 	Classic Defaults	Mặc định cổ điển
 	Clean Up…	Dọn dẹp…
@@ -725,9 +731,14 @@ font-technology	Variable	Biến thiên
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Hiển thị bánh xe
 	Box View	Hiển thị hộp
+	Show Out-of-Gamut Colors	Hiện màu ngoài dải màu
 	Box Channel	Kênh của hộp
 	Color box	Hộp màu
 	Color Wheel Options	Tùy chọn bánh xe màu
+	Show Document Colors	Hiện màu của tài liệu
+	Document Colors	Màu của tài liệu
+	Selection Colors	Màu của vùng chọn
+@plural	Used {n} time|Used {n} times	Dùng {n} lần
 	Show Harmony	Hiện hài hòa màu
 	Harmony Rule	Quy tắc hài hòa màu
 	Harmony color	Màu hài hòa
@@ -1078,6 +1089,7 @@ font-technology	Variable	Biến thiên
 	Direction Handles	Tay nắm hướng
 	Direction:	Hướng:
 	Disable Auto Add/Delete	Tắt tự động thêm/xóa
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete xóa điểm neo và giữ các đường dẫn liền mạch
 	Interpolate Control Points When Moving Anchors	Nội suy tay nắm hướng khi di chuyển điểm neo
 	Disable Opacity Mask	Tắt mặt nạ độ mờ
 	Discard	Loại bỏ
@@ -2372,6 +2384,11 @@ digits	Hindi	Hindi
 	Knife	Dao
 	Knockout Group	Nhóm Knockout
 	Lab	Lab
+	OKLCH Sliders	Thanh trượt OKLCH
+	HSL Sliders	Thanh trượt HSL
+	Chroma	Độ tươi màu
+	The largest chroma sRGB holds at this lightness and hue	Độ tươi màu lớn nhất mà sRGB chứa được ở độ sáng và sắc độ này
+	OKLCH needs sRGB as the working RGB space	OKLCH cần sRGB làm không gian RGB làm việc
 	Lab Spot Colors:	Màu đặc Lab:
 	Lab Values	Giá trị Lab
 	Landscape	Ngang
@@ -2504,6 +2521,8 @@ digits	Hindi	Hindi
 	List Workspaces	Liệt kê không gian làm việc
 	Live Paint	Tô trực tiếp
 	Live Paint Bucket	Xô Tô trực tiếp
+	Fill Area	Tô vùng
+	Fill Area Tool	Công cụ Tô vùng
 	Live Paint Bucket (Stroke)	Xô Tô trực tiếp (Nét)
 	Live Paint Info	Thông tin Tô trực tiếp
 	Live Paint Selection Tool	Công cụ Chọn Tô trực tiếp
@@ -2914,6 +2933,7 @@ digits	Hindi	Hindi
 	One Point Perspective Preset 5	Thiết lập sẵn phối cảnh một điểm 5
 	Only Web Colors	Chỉ màu web
 	Opacity	Độ mờ
+	Show Opacity	Hiện độ mờ
 	Opacity & Mask Define Knockout Shape	Độ mờ & Mặt nạ xác định hình dạng Knockout
 	Opacity Mask	Mặt nạ độ mờ
 	Opacity Mask Info	Thông tin mặt nạ độ mờ
@@ -3122,6 +3142,12 @@ digits	Hindi	Hindi
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	không có độ phân giải
+	estimated memory {memory}	bộ nhớ ước tính {memory}
+	memory unavailable	không có thông tin bộ nhớ
+	Unknown format	Định dạng không xác định
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -3151,6 +3177,13 @@ digits	Hindi	Hindi
 	Pen Tool	Công cụ Bút
 	Quick Pen Tool	Công cụ Bút nhanh
 	Quick Pen	Bút nhanh
+	Quick Pen Toolbar	Thanh công cụ Bút nhanh
+	Continuous Arc	Cung liên tục
+	Sharp Corner Arc	Cung góc nhọn
+	Flip Arc	Lật cung
+	Hide Toolbar	Ẩn thanh công cụ
+	Pin Toolbar Position	Ghim vị trí thanh công cụ
+	Reset Toolbar Position	Đặt lại vị trí thanh công cụ
 	Pencil	Bút chì
 	Pencil Tool	Công cụ Bút chì
 	per slice	mỗi lát cắt
@@ -3407,6 +3440,9 @@ mark-style	Japanese	Kiểu Nhật
 	Rearrange All	Sắp xếp lại tất cả
 	Rearrange All Artboards	Sắp xếp lại tất cả bảng vẽ
 	Rearrange All Artboards…	Sắp xếp lại tất cả bảng vẽ…
+	Rearrange…	Sắp xếp lại…
+	Selected Artboards: {n}	Bảng vẽ đã chọn: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Bấm vào khung vẽ để đặt các bảng vẽ (Esc để hủy)
 	Recall Selection	Khôi phục vùng chọn
 	RECENT	GẦN ĐÂY
 	Recent	Gần đây
@@ -3592,6 +3628,11 @@ mark-style	Japanese	Kiểu Nhật
 	Edit Arrowheads	Chỉnh sửa đầu mũi tên
 	Edit Arrowheads…	Chỉnh sửa đầu mũi tên…
 	Reload Arrowheads	Tải lại đầu mũi tên
+	Bevels	Các kiểu vát
+	Edit Bevels	Chỉnh sửa kiểu vát
+	Edit Bevels…	Chỉnh sửa kiểu vát…
+	{name} (document)	{name} (tài liệu)
+	Reload Bevels	Tải lại kiểu vát
 	Rotate View	Xoay chế độ xem
 	Reset Rotate View	Đặt lại xoay chế độ xem
 	Rotate View to Selection	Xoay chế độ xem theo vùng chọn
@@ -3658,6 +3699,7 @@ mark-style	Japanese	Kiểu Nhật
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Cử chỉ xoay bằng hai ngón trên bàn di chuột sẽ xoay khung nhìn của khung vẽ.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Giữ một phím sẽ chạy công cụ hoặc lệnh trong cột Giữ của Phím tắt; nhấn nhanh sẽ chạy phím tắt thông thường của phím đó.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Số giây phải giữ một phím trước khi phím tắt nhấn giữ của nó chạy thay cho phím tắt thông thường.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete xóa các điểm neo đã chọn và khớp lại đường cong quanh từng điểm, thay vì mở đường dẫn tại đó.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Khi bạn di chuyển điểm neo, mỗi đường cong có một đầu bị di chuyển sẽ giữ hình dạng so với các đầu của nó.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Giữ phím tắt của một công cụ sẽ chọn công cụ đó cho đến khi bạn thả ra, rồi công cụ trước đó được chọn lại.
 	Shows the bounding box while you move the selection or draw a shape.	Hiển thị hộp giới hạn khi bạn di chuyển vùng chọn hoặc vẽ một hình.
@@ -3743,9 +3785,14 @@ mark-style	Japanese	Kiểu Nhật
 	Edit type set in fonts that aren't available?	Chỉnh sửa văn bản dùng phông chữ không có sẵn?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Hiển thị trên khung vẽ số của mỗi lát cắt trong một ô ở góc trên bên trái của nó; khi tắt, đường viền của các lát cắt vẫn hiện.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Màu của đường viền lát cắt người dùng và lát cắt đối tượng cùng các ô số của chúng; lát cắt tự động dùng một sắc độ nhạt hơn của màu này.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Văn bản mới nhận ngôn ngữ này khi ngôn ngữ trong Thiết lập tài liệu là Tiếng Anh: Mỹ và [Kiểu ký tự thường] không đặt ngôn ngữ; văn bản đã có trong tài liệu giữ ngôn ngữ của nó.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	Trong các đoạn bật Gạch nối, một từ trong danh sách chỉ được thêm gạch nối tại các dấu gạch nối đã gõ trong từ, hoặc không bao giờ nếu không có, bất kể ngôn ngữ hay chữ hoa thường.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	Trong phiên bản máy tính, các plug-in .wasm trong thư mục này được tải khi khởi động và khi OK đặt một thư mục mới, trừ trong Chế độ an toàn; plug-in yêu cầu quyền chỉ được tải sau khi bạn cấp quyền. Phiên bản web không tải plug-in nào.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	Lớn cho mỗi lần chạy plug-in bộ lọc hoặc lệnh ít nhất 250 triệu lệnh máy, với cùng giới hạn thời gian; Thường giữ ngân sách riêng của plug-in. Hiệu ứng trực tiếp, trình xuất và trình nhập giữ ngân sách của chúng.
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Văn bản mới nhận ngôn ngữ này khi ngôn ngữ trong Thiết lập tài liệu là Tiếng Anh: Mỹ; văn bản đã có trong tài liệu giữ ngôn ngữ của nó.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Trong các đoạn bật Gạch nối, một từ trong danh sách chỉ được ngắt tại các dấu gạch nối đã gõ trong từ, hoặc không ngắt ở đâu nếu không có, bất kể ngôn ngữ hay chữ hoa thường.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	Trong phiên bản máy tính, các plug-in .wasm trong thư mục này được tải khi khởi động và khi bạn bấm OK với một thư mục mới ở đây, trừ trong Chế độ an toàn; phiên bản web không tải chúng.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	Thường giữ giới hạn riêng của từng plug-in; với Lớn, một bộ lọc hoặc lệnh của plug-in có thể chạy ít nhất 250 triệu lệnh ngoài các lệnh cho dữ liệu đầu vào của nó. Giới hạn thời gian vẫn giữ nguyên.
 	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Số lệnh mà mỗi lần chạy bộ lọc đối tượng của plug-in được dùng; Lớn cho phép nhiều hơn Thường với cùng giới hạn 60 giây. Bộ lọc nặng giữ ngân sách riêng.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Lựa chọn đĩa tạm thứ nhất: Startup, None hoặc đường dẫn thư mục; VectorCraft lưu lựa chọn này nhưng chưa dùng đĩa tạm.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Lựa chọn đĩa tạm thứ hai: Startup, None hoặc đường dẫn thư mục; VectorCraft lưu lựa chọn này nhưng chưa dùng đĩa tạm.
@@ -3757,13 +3804,15 @@ mark-style	Japanese	Kiểu Nhật
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Hiện tên của từng nhóm công cụ phía trên các công cụ của nhóm trong thanh công cụ; khi tắt, các nhóm nối tiếp nhau mà không có gì ở giữa.
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Từ giờ, tài liệu bạn mở hoặc tạo sẽ mở dưới dạng tab; khi tắt, mỗi tài liệu mở trong một cửa sổ nổi. Tài liệu đã mở vẫn ở nguyên chỗ.
 	Makes the document tabs taller and their names larger.	Làm cho tab tài liệu cao hơn và tên của chúng lớn hơn.
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Từ lần khởi động tới, hệ thống vẽ thanh tiêu đề của cửa sổ ở nơi mà nếu không thì VectorCraft sẽ tự vẽ.
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	Từ lần khởi động tới, VectorCraft vẽ thanh tiêu đề của cửa sổ ngay cả ở nơi môi trường màn hình nền sẽ vẽ nó, trừ khi Thanh tiêu đề hệ thống đang bật.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	Từ lần khởi động tới, hệ thống vẽ thanh tiêu đề của cửa sổ ở nơi mà nếu không thì VectorCraft sẽ tự vẽ; trên Linux và BSD, biến VECTORCRAFT_TITLEBAR được ưu tiên.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	Từ lần khởi động tới, VectorCraft vẽ thanh tiêu đề của cửa sổ ngay cả ở nơi môi trường màn hình nền sẽ vẽ nó, trừ khi Thanh tiêu đề hệ thống đang bật hoặc biến VECTORCRAFT_TITLEBAR chọn nó.
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Phóng to hoặc thu nhỏ giao diện; hình vẽ trên vùng vẽ giữ nguyên kích thước ở cùng mức thu phóng.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Con trỏ công cụ do VectorCraft vẽ to lên và nhỏ lại theo Tỷ lệ giao diện; khi tắt, chúng giữ nguyên kích thước.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Ngôn ngữ của giao diện; Tự động dùng ngôn ngữ của hệ thống. Hộp thoại đổi ngôn ngữ ngay khi bạn chọn một ngôn ngữ.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Thu phóng có hiệu ứng chỉ hoạt động khi mục này bật; khi tắt, Thu phóng có hiệu ứng bị làm mờ và việc thu phóng không có hiệu ứng.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Thu phóng bằng con lăn trượt mượt mà, và Công cụ thu phóng phóng to khi bạn kéo sang ngang hoặc giữ nó; khi tắt, Công cụ thu phóng phóng to vùng bạn kéo qua.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	Từ lần khởi động tới, phiên bản máy tính hiển thị khung vẽ qua loại bộ xử lý đồ họa này; tác phẩm luôn được vẽ trên CPU. Tự động ưu tiên bộ xử lý tích hợp trên Windows và macOS. Phiên bản web không dùng nó.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	Từ lần khởi động tới, cửa sổ hiển thị từng khung hình mà không chờ màn hình làm mới khi trình điều khiển đồ họa cho phép, tối đa 240 khung hình mỗi giây.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Từ lần khởi động tới, phiên bản máy tính vẽ bằng loại bộ xử lý đồ họa này; Tự động ưu tiên bộ xử lý điều khiển màn hình. Phiên bản web không dùng nó.
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Từ lần khởi động tới, cửa sổ hiển thị khung hình mà không chờ màn hình làm mới, tối đa 240 mỗi giây; khi tắt, màn hình quyết định nhịp. Chế độ trình chiếu đặt khi khởi động sẽ được ưu tiên.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Số bước hoàn tác tối đa mà mỗi tài liệu giữ; số nhỏ hơn sẽ xóa các bước cũ nhất khi bạn bấm OK. Các bước cũng có thể bị xóa sớm hơn khi chúng dùng quá nhiều bộ nhớ.
@@ -3782,6 +3831,9 @@ mark-style	Japanese	Kiểu Nhật
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	Mở tệp gần đây và màn hình Trang chủ liệt kê tối đa chừng này tệp gần đây; 0 không liệt kê tệp nào, và VectorCraft vẫn nhớ đến 30 tệp.
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	Khi mở tài liệu, ảnh EPS được liên kết đang hiển thị bản xem trước đã lưu sẽ giữ nó thay vì đọc lại tệp EPS; tệp đã thay đổi vẫn theo Cập nhật các liên kết.
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	Trong Xem trước pixel, ảnh được vẽ làm mịn; khi tắt, pixel của chúng hiện với cạnh sắc. Ngoài Xem trước pixel, ảnh luôn được làm mịn.
+	PDF Text	Văn bản PDF
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	Văn bản của PDF bạn mở hoặc nhúng được đưa vào dưới dạng văn bản có thể chỉnh sửa, hoặc dưới dạng đường bao trông giống hệt trên máy tính không có phông chữ của nó.
+	Linked pages show the file's own text.	Các trang liên kết hiển thị văn bản riêng của tệp.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Khi một tệp liên kết thay đổi, Tự động đọc lại nó, Hỏi khi đã sửa đổi hỏi bạn trước, còn Thủ công giữ nguyên và hiện ghi chú trên thanh trạng thái.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	Trên phiên bản máy tính, thư mục mà Mới từ mẫu… và Lưu thành mẫu… bắt đầu; để trống để dùng VectorCraft Templates trong thư mục tài liệu của bạn.
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Chỉnh sửa bản gốc mở tệp liên kết trong ứng dụng mặc định của hệ thống cho loại của nó; khi tắt, ảnh raster liên kết mở trong PhotoCraft nếu đã cài.
@@ -3796,7 +3848,6 @@ mark-style	Japanese	Kiểu Nhật
 	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Xuất tất cả màu đen là đen phong phú vẽ màu đen CMYK thuần thành đen RGB trong các bản xuất raster RGB và thang xám và với In dưới dạng bitmap; tùy chọn này không thay đổi các bản xuất vector, JPEG, TIFF và PSD CMYK hay việc in khác.
 	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	Trên màn hình cảm ứng, chuyển sang không gian làm việc cảm ứng; tắt tùy chọn này hoặc mất màn hình cảm ứng sẽ trở về không gian làm việc trước khi chuyển.
 	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Chạm hai ngón trên khung vẽ sẽ hoàn tác, hoặc trong không gian làm việc cảm ứng sẽ chuyển giữa công cụ chọn và công cụ vẽ, còn chạm ba ngón sẽ làm lại; cả hai không hoạt động trong chế độ trình bày.
-	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Văn bản mới nhận ngôn ngữ này khi ngôn ngữ trong Thiết lập tài liệu là Tiếng Anh: Mỹ và [Kiểu ký tự thường] không đặt ngôn ngữ; văn bản đã có trong tài liệu giữ ngôn ngữ của nó.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	Trong các đoạn bật Gạch nối, một từ trong danh sách chỉ được ngắt tại các dấu gạch nối đã gõ trong từ, hoặc không ngắt ở đâu nếu không có, bất kể chữ hoa thường; từ tiếng Hàn không được thêm gạch nối, và từ trong các ngôn ngữ Ấn Độ không bị ngắt bên trong một cụm ký tự.
 	Reset all preferences to their defaults?	Đặt lại tất cả tùy chọn về mặc định?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Giá trị mặc định được áp dụng khi bạn nhấn OK trong Tùy chọn. Hủy ở đó giữ nguyên các tùy chọn hiện tại của bạn.
@@ -4073,6 +4124,7 @@ mark-style	Japanese	Kiểu Nhật
 	Recent Commands	Lệnh gần đây
 	No recent commands	Không có lệnh gần đây
 	Type to search commands, tools, panels and effects	Nhập để tìm kiếm lệnh, công cụ, bảng và hiệu ứng
+	Clear Recent Commands	Xóa lệnh gần đây
 	Search commands	Tìm kiếm lệnh
 	Search Commands…	Tìm kiếm lệnh…
 	Search Fonts Folder	Tìm kiếm thư mục phông chữ
@@ -4794,6 +4846,10 @@ mark-style	Japanese	Kiểu Nhật
 	Rename Preset	Đổi tên thiết lập sẵn
 	Save Image Trace Preset	Lưu thiết lập sẵn vector hóa ảnh
 	Delete Image Trace Preset	Xóa thiết lập sẵn vector hóa ảnh
+	Tracing Presets…	Thiết lập sẵn vector hóa…
+	Import Image Trace Presets	Nhập thiết lập sẵn vector hóa ảnh
+	Export Image Trace Presets	Xuất thiết lập sẵn vector hóa ảnh
+	Replace the saved presets that have these names?	Thay thế các thiết lập sẵn đã lưu có những tên này?
 	Tracing Result	Kết quả vector hóa
 	Tracing Result with Outlines	Kết quả vector hóa với đường bao
 	Tracking	Giãn chữ
@@ -5194,6 +5250,8 @@ theme	Appearance	Giao diện
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` phải là grayscale, rgb, hsb, cmyk hoặc websafe
 @msg	`view` must be wheel or box	`view` phải là wheel hoặc box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` phải là hue, saturation, brightness, red, green hoặc blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` phải là none, oklch hoặc hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH cần sRGB làm không gian RGB làm việc
 @msg	`{k}` must be [x, y]	`{k}` phải là [x, y]
 @msg	`{name}` has no options	`{name}` không có tùy chọn
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` là không gian làm việc tích hợp sẵn; hãy chọn tên khác
@@ -6072,6 +6130,10 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	a symbol can't hold an instance of itself	ký hiệu không thể chứa đối tượng của chính nó
 @msg	select an envelope	hãy chọn một Envelope
 @msg	select an image	hãy chọn ảnh
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	đối tượng {_1} là ảnh đã được thay đổi bằng Làm méo phối cảnh hoặc Làm méo tự do, lệnh này không dùng được với ảnh đó
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	không thể làm méo ảnh {_1} theo cách này: các góc của ảnh sẽ không tạo thành hình lồi
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	không thể làm méo ảnh {_1} theo cách này: các góc của ảnh sẽ vượt qua đường chân trời của phép làm méo
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	không thể làm méo ảnh {_1} theo cách này: các góc của ảnh sẽ quá gần nhau để ánh xạ phối cảnh
 @msg	`background` must be edges, corners or colors	`background` phải là edges, corners hoặc colors
 @msg	`match` must be distance or channels	`match` phải là distance hoặc channels
 @msg	`{key}` must be from 0 to 100	`{key}` phải nằm trong khoảng 0 đến 100
@@ -6122,6 +6184,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	shadings of more than 4096 patches or triangles were left out	các vùng tô có hơn 4096 mảnh hoặc tam giác đã bị bỏ qua
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	các vùng tô có hàm loại không xác định được tô bằng màu giữa
 @msg	Shape Builder: no region under the pointer	Xây dựng hình dạng: không có vùng nào dưới con trỏ
+@msg	Fill Area: no enclosed area under the pointer	Tô vùng: không có vùng kín nào dưới con trỏ
 @msg	Shape Builder: select all paths you want to merge	Xây dựng hình dạng: chọn tất cả đường dẫn bạn muốn hợp nhất
 @msg	Shape Builder: select paths or compound paths	Xây dựng hình dạng: chọn đường dẫn hoặc đường dẫn phức
 @msg	shortcut for `{k}` must be a string	phím tắt cho `{k}` phải là chuỗi
@@ -6155,6 +6218,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	hiệu ứng 3D trên phần tô hoặc nét của nhóm không vẽ gì
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	hiệu ứng 3D trên phần tô hoặc nét của nhóm không vẽ gì để xuất
 @msg	The 3D object is too complex to export	Đối tượng 3D quá phức tạp để xuất
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Lưới của đối tượng 3D chưa đầy đủ hoặc chứa giá trị không phải là số
 @msg	give one <filter> element	hãy chỉ định một phần tử <filter>
 @msg	the <filter> element needs an id, the filter's name	phần tử <filter> cần có id, là tên của bộ lọc
 @msg	an SVG filter's id is at most {MAX_NAME} characters	id của bộ lọc SVG có tối đa {MAX_NAME} ký tự
@@ -6177,7 +6241,10 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	đối tượng không có hiệu ứng 3D (Kéo dài & vát, Xoay tròn, Phình hoặc Xoay)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` phải là một đối tượng chỉ chứa `mode`, với giá trị shaded hoặc wireframe
 @msg	its 3D effect builds no solid	hiệu ứng 3D của nó không tạo ra khối nào
-@msg	bevel must be none or one of {_1}	bevel phải là none hoặc một trong {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel phải là none, một trong {_1}, hoặc custom kèm {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom cần {BEVEL_PROFILE}, các điểm của kiểu vát
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} phải là một chuỗi
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} phải có từ 2 đến {most} điểm [x, y], mỗi tỷ lệ từ 0 đến 1, từ [0, 0] (cạnh của mặt đầu) đến [1, 1] (thành bên)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} không thể tạo khối từ hình vẽ này: các phiên bản ký hiệu, hòa trộn và nhóm cắt của nó chứa quá nhiều đối tượng
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} không thể tạo khối từ phiên bản của ký hiệu “{symbol}”: không có hình vẽ của ký hiệu
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: đường dẫn cắt quá phức tạp để cắt hình vẽ
@@ -6203,8 +6270,10 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	`{GRAPHICS}` face must be front, back or side	face của `{GRAPHICS}` phải là front, back hoặc side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} của `{GRAPHICS}` phải là số từ {lo} đến {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` phải là một mảng
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Đồ họa được đặt lên các loại đối tượng Mặt phẳng, Kéo dài và Xoay tròn
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Đồ họa được đặt lên các loại đối tượng Mặt phẳng, Kéo dài, Xoay tròn và Phình
 @msg	Revolve maps graphics onto its side: map them onto the front	Xoay tròn đặt đồ họa lên mặt bên của nó: hãy đặt chúng lên mặt trước
+@msg	Inflate maps graphics onto its front and back, not onto a side	Phình đặt đồ họa lên mặt trước và mặt sau, không đặt lên mặt bên
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	đối tượng {_1}: mặt sau của Phình chỉ nhận đồ họa khi bật Cả hai mặt và Nắp
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Đồ họa quá phức tạp cho bề mặt này: hãy đơn giản hóa hình vẽ của các ký hiệu hoặc giảm Đoạn
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` nhận tối đa {MAX_GRAPHICS} đồ họa
 @msg	A plane has one face: map its graphics onto the front	Mặt phẳng chỉ có một mặt: hãy đặt đồ họa của nó lên mặt trước
@@ -6917,11 +6986,19 @@ axis	Y Axis	Trục Y
 @msg	module is {_1} bytes (limit {_2})	mô-đun có {_1} byte (giới hạn {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	cần phê duyệt: plug-in yêu cầu {0}, quyền mà người dùng cấp khi cài đặt riêng plug-in đó
 @msg	not JSON: {e}	không phải JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	không phải tệp nhị phân WebAssembly (thiếu phần đầu \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	không phải tệp nhị phân WebAssembly (thiếu phần đầu \\0asm)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	một kiểu hàm vượt quá giới hạn {MAX_FUNC_TYPE_VALUES} tham số
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	một kiểu hàm vượt quá giới hạn {MAX_FUNC_TYPE_VALUES} kết quả
 @msg	parameter `{k}`: {what}	tham số `{k}`: {what}
 @msg	parameter `{name}`: {what}	tham số `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	tham số plug-in phải là một đối tượng JSON
 @msg	the module must export its linear memory as `memory`	mô-đun phải export bộ nhớ tuyến tính của nó dưới tên `memory`
+@msg	the module must export `{name}` with the type {signature}	mô-đun phải export `{name}` với kiểu {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	mô-đun có nhiều hơn một phần tùy chỉnh `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	ngân sách bộ nhớ (bộ nhớ ban đầu của mô-đun là {initial} byte, giới hạn {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	tệp kê khai trong phần tùy chỉnh `{MANIFEST_SECTION}` phải đặt `abi` là {ABI_VERSION}, phiên bản ABI mà máy chủ này triển khai
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	ngân sách bảng (mô-đun định nghĩa {count} bảng, bảng lớn nhất có {largest} phần tử; giới hạn {MAX_TABLES} bảng, mỗi bảng {MAX_TABLE_ELEMENTS} phần tử)
+@msg	the module's table section could not be read	không thể đọc phần bảng của mô-đun
 @msg	the objects to change are no longer in the document	các đối tượng cần thay đổi không còn trong tài liệu
 @msg	the runtime panicked	môi trường chạy bị lỗi nghiêm trọng
 @msg	unexpected host trap	máy chủ gặp trap không mong muốn
@@ -6949,6 +7026,11 @@ axis	Y Axis	Trục Y
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` và `maxItems` phải là 0-{MAX_LIST}, `maxItems` ít nhất là 1, và giá trị mặc định phải có đúng số mục đó
 @msg	`name` must be a string	`name` phải là một chuỗi
 @msg	`opacity` must be a number	`opacity` phải là một số
+@msg	`opacity` must be a number from 0 to 100	`opacity` phải là một số từ 0 đến 100
+@msg	`opacity` must be true or false	`opacity` phải là true hoặc false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	ký tự văn bản không có độ mờ riêng: hãy thêm tô hoặc nét bằng Thêm tô mới hoặc Thêm nét mới trong bảng Diện mạo
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	đối tượng được chọn trong một phiên bản biểu tượng không có độ mờ tô hoặc nét riêng
+@msg	no target has that fill or stroke to take the opacity	không đối tượng nào có tô hoặc nét đó để nhận độ mờ
 @msg	`type` must be "path" or "compound"	`type` phải là "path" hoặc "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` phải có 1-{MAX_UNIT} ký tự in được
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` phải liệt kê 1 đến {MAX_CONDITION_VALUES} giá trị cho `{other}`
@@ -6992,6 +7074,8 @@ axis	Y Axis	Trục Y
 @msg	`plates` requires a stop linked to a spot swatch	`plates` cần một điểm dừng chuyển sắc liên kết với mẫu màu đặc biệt
 @msg	the output	đầu ra
 @msg	the path has no anchor points	đường dẫn không có điểm neo
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	đường dẫn phức {id} có thành phần bị ẩn, bị khóa hoặc là đường căn, nên không thể thay thế các thành phần của nó
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	đường dẫn phức {id} có thành phần không phải là đường dẫn, nên không thể thay thế các thành phần của nó
 @msg	too many anchor points (limit {MAX_ANCHORS})	quá nhiều điểm neo (giới hạn {MAX_ANCHORS})
 @msg	true or false	true hoặc false
 @msg	a number >= {_1}	một số >= {_1}
@@ -8596,6 +8680,24 @@ breakText	Glyphs	Glyph
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} điểm ảnh quá lớn cho Targa (tối đa 65535 điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} điểm ảnh quá lớn cho PSD (tối đa {MAX_SIDE} điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer phải là "singleLine", "everyLine", "standardSingleLine" hoặc "standardEveryLine"
+	Nature Icons	Biểu tượng thiên nhiên
+	Flower	Hoa
+	Tree	Cây
+	Mountain	Núi
+	Ornamental	Hoa văn
+	Scrollwork	Nét cuộn
+	Filigree Arrow	Mũi tên hoa văn
+	Petal Sweep	Nét cánh hoa
+	Twin Curl	Nét cuộn đôi
+	Vector Packs	Bộ cọ véc-tơ
+	Compass Rose	Hoa la bàn
+	Botanical Sprig	Cành cây
+	Facet Diamond	Kim cương nhiều mặt
+	Tide Crest	Đỉnh sóng
+	Leaf Vine	Dây leo lá
+	Blossom Chain	Chuỗi hoa
+	Pennant Garland	Dây cờ tam giác
+	Lantern String	Dây đèn lồng
 	Orbit Lines	Đường quỹ đạo
 	Petal Garland	Vòng hoa cánh
 	Lattice Braid	Bện lưới

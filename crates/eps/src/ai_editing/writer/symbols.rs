@@ -14,7 +14,27 @@ use crate::ps;
 
 pub(in crate::ai_editing) const SYMBOL_ART: &str = "symbol instances with a fill, appearance changes, isolation, knockout or knockout shape of their own, instances of symbols with 9-slice guides or pattern paint, instances in pattern tiles or in art cut to a clipping object, instances scaled almost flat, instances that turn, mirror or scale symbols holding type, live objects, instances written as their art, shapes with rounded live corners or strokes written as outlines or brush art, instances that scale their symbol more than 100 times, instances on the layers of a large canvas and instances of symbols past 4,096 are written as their art in the editing data for other apps";
 pub(in crate::ai_editing) const SYMBOL_OPTIONS: &str =
-    "the 9-slice guides, export types and dynamic type of symbols are left out of the editing data for other apps";
+    "the 9-slice guides and export types of symbols are left out of the editing data for other apps";
+pub(in crate::ai_editing) const SYMBOL_CHANGES: &str =
+    "the changes of dynamic symbol instances are kept in dictionary entries of their own, which other apps leave out";
+pub(crate) const DYNAMIC_KEY: &str = "VectorCraftDynamicSymbol";
+pub(crate) const OVERRIDES_KEY: &str = "VectorCraftSymbolOverrides";
+const MAX_OVERRIDES_BYTES: usize = 1 << 20;
+
+pub(crate) fn hex_decode(s: &str) -> Option<Vec<u8>> {
+    if !s.len().is_multiple_of(2) || s.len() / 2 > MAX_OVERRIDES_BYTES {
+        return None;
+    }
+    s.as_bytes().chunks(2).map(|c| u8::from_str_radix(std::str::from_utf8(c).ok()?, 16).ok()).collect()
+}
+
+fn hex_encode(b: &[u8]) -> String {
+    b.iter().fold(String::with_capacity(b.len() * 2), |mut s, v| {
+        let _ = write!(s, "{v:02x}");
+        s
+    })
+}
+
 pub(in crate::ai_editing) const MISSING_SYMBOL: &str =
     "symbol instances of symbols the document doesn't have are written as empty groups in the editing data for other apps";
 /// The most an instance may scale its symbol's art, nested instances' scales included: the art's
@@ -55,7 +75,8 @@ impl Writer<'_> {
     /// that keeps the art's area as it is written and scales it as the definition allows
     /// ([`Self::keeps_scale`]).
     pub(super) fn live_instance(&mut self, n: &Node, symbol: &str, xf: Affine) -> bool {
-        let own = vectorcraft_brush::stain(n).is_some() || !n.extras().symbol_overrides.is_empty();
+        let dynamic = self.symbol_doc.symbols.iter().any(|s| s.name == symbol && s.dynamic);
+        let own = vectorcraft_brush::stain(n).is_some() || (!dynamic && !n.extras().symbol_overrides.is_empty());
         let group_state = n.isolate || n.knockout != Knockout::Neutral || n.knockout_shape;
         // The matrix as written (to ten decimals) must still keep the art's area.
         let m = Affine::new((self.instance_space * xf).as_coeffs().map(|v| (v * 1e10).round() / 1e10));
@@ -153,7 +174,16 @@ impl Writer<'_> {
     /// canvas's space turned y up about art space's origin there) as `a b c d tx ty
     /// /RTransformMatrix` (to ten decimals), `;`, then its state block as a group's: `Xy`, `0 0 Xd`
     /// and `6 () XW` when it has transparency, else `9 () XW`. Its dictionary goes between the two.
-    pub(super) fn symbol_instance(&mut self, symbol: &str, xf: Affine, xy: Xy) {
+    pub(super) fn symbol_instance(&mut self, n: &Node, symbol: &str, xf: Affine, xy: Xy) {
+        let o = &n.extras().symbol_overrides;
+        if !o.is_empty()
+            && let Ok(json) = serde_json::to_vec(o)
+            && json.len() <= MAX_OVERRIDES_BYTES
+        {
+            let e = format!("%_{} /String ({OVERRIDES_KEY}) ,\n", ps::bytes(hex_encode(&json).as_bytes()));
+            self.instance_entries = Some((n.id, e));
+            self.warn(SYMBOL_CHANGES);
+        }
         let m = self.instance_space * xf;
         let _ = write!(self.body, "/SymbolInstance :\n{} /SymbolRef ,\n", ps::bytes(symbol.as_bytes()));
         for v in m.as_coeffs() {
@@ -201,7 +231,7 @@ impl Writer<'_> {
             self.warn(SYMBOL_COUNT);
             return false;
         }
-        if sym.dynamic || doc.symbol_export_type(name) != SymbolExportType::default() || doc.symbol_nine_slice(name).is_some() {
+        if doc.symbol_export_type(name) != SymbolExportType::default() || doc.symbol_nine_slice(name).is_some() {
             self.warn(SYMBOL_OPTIONS);
         }
         // The art's effects are its own, not those of a drawn look that first places it, and its
@@ -260,7 +290,10 @@ impl Writer<'_> {
         (self.to_art, self.grad_space, self.canvas, self.instance_space) = (Affine::IDENTITY, about_origin, Affine::IDENTITY, about_origin);
         self.block_end = usize::MAX;
         let registration = u16::from(doc.symbol_registration(name).0.min(8)) + 1;
-        let entries = format!("%_{registration} /Int (AI13PatternRegistrationType) ,\n");
+        let mut entries = format!("%_{registration} /Int (AI13PatternRegistrationType) ,\n");
+        if sym.dynamic {
+            let _ = writeln!(entries, "%_1 /Int ({DYNAMIC_KEY}) ,");
+        }
         // The canvas draws a symbol's art even when its root is hidden, so the root is written shown.
         let shown;
         let root: &Node = if sym.art.visible {

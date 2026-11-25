@@ -24,6 +24,10 @@ impl Session {
         });
         // Clicks find an image's own fills and strokes where their effects draw them.
         vectorcraft_doc::hit::set_image_paint(vectorcraft_render::effects::image_paint);
+        // Direct Selection picks and outlines the parts of a dynamic symbol's instance where the
+        // effects of the instance's fill and stroke draw them.
+        vectorcraft_doc::hit::set_instance_row_art(vectorcraft_render::effects::add_instance_row_effects_to_parts);
+        vectorcraft_doc::hit::set_instance_reshapes(vectorcraft_render::effects::has_item_geometry);
         // Clicks inside a clip group fall in the region its clipping path's effects give it.
         vectorcraft_doc::hit::set_clip_region(vectorcraft_render::effects::reshaped_clip_outline);
         // Clicks and marquees find paths, compound paths, groups and layers where their geometry
@@ -55,6 +59,7 @@ impl Session {
             histories_seen: None,
             tool: vectorcraft_tools::create("selection"),
             lender: None,
+            back_to_bucket: false,
             held_input: Default::default(),
             input_count: 0,
             edit_started_by: None,
@@ -64,6 +69,9 @@ impl Session {
             selection_at_lend: None,
             lent_selection: None,
             last_selection_tool: None,
+            last_part_selection_tool: None,
+            press_lent: None,
+            hover_lent: None,
             last_view: ViewInfo::default(),
             preview_memo: Default::default(),
             depth: 0,
@@ -84,11 +92,13 @@ impl Session {
             recent_colors: vec![],
             pending_paint: None,
             swatch_libraries: Default::default(),
+            graph_design_libraries: Default::default(),
             freeform_point: None,
             style_libraries: Default::default(),
             symbol_libraries: Default::default(),
             brush_libraries: Default::default(),
             arrowheads: Default::default(),
+            bevels: Default::default(),
             shown_library_ids: Default::default(),
             libraries: Default::default(),
             pdf_preset_dir: None,
@@ -111,6 +121,7 @@ impl Session {
             journal_note: Default::default(),
             note_depth: 1,
             journal_query: false,
+            defaults_only_ran: None,
             explicit_undo_group: None,
             batch_stash: None,
             batch_steps: None,
@@ -137,6 +148,7 @@ impl Session {
             plane_widget_press: false,
             pointer_held: false,
             press_options: None,
+            press_options_stored: false,
             press_type_selection: None,
             press_point: None,
             ruler_guide: None,
@@ -202,6 +214,7 @@ impl Session {
             return;
         }
         self.press_type_selection = None;
+        self.press_lent = None;
         let view = self.last_view;
         // The edit the tool computes on another thread and the input held for it belong to the
         // document being left. The switch goes on whatever they did, as for the deactivation.
@@ -210,9 +223,14 @@ impl Session {
         let _ = self.give_back_tool(view);
         let _ = self.deactivate_tool(view);
         // A batch leaves its interaction open in the document it leaves, to keep or roll back with
-        // the rest of the batch; anything else in progress (a drag) is cancelled.
+        // the rest of the batch; one that keeps on a switch is kept; anything else in progress (a
+        // drag) is cancelled.
         if self.batch_stash.is_none() {
-            let _ = self.cancel_interaction();
+            let _ = if self.active().and_then(|st| st.interaction.as_ref()).is_some_and(|it| it.keep_on_switch) {
+                self.commit_interaction()
+            } else {
+                self.cancel_interaction()
+            };
         }
         self.keep_tool_settings();
         self.tool = self.make_tool(self.tool.id());
@@ -285,7 +303,9 @@ impl Session {
     /// what is fitted to type's bounds (an envelope warping it) would come out differently. That
     /// holds for the type in symbol definitions, pattern tiles, graph designs and opacity masks too,
     /// not only in the layers (#1738).
-    pub(crate) fn refresh_text_bounds(doc: &mut Document) {
+    pub(crate) fn refresh_text_bounds(doc: &mut Document) -> Vec<String> {
+        // The fonts files carried for their type draw it ([`vectorcraft_doc::FileFonts`]).
+        let warnings = vectorcraft_text::FontDb::global().bind_document_file_fonts(doc);
         // Inline graphics in text take their size from their symbols' art (not saved either).
         doc.resolve_inline_art();
         let mut uncached = |t: &TextObject| t.cached_bounds.is_none();
@@ -295,6 +315,7 @@ impl Session {
         // The symbols' type is measured now: the inline graphics showing those symbols take their
         // art's measured size, a symbol's type before the type that shows that symbol inline.
         doc.resolve_inline_art_with(&mut cmd::typecmd::refresh_bounds_for_first_frame);
+        warnings
     }
 
     /// Measure the type in open document `index` that `stale` picks (in its trees as
@@ -336,6 +357,8 @@ impl Session {
         // (importers and the native reader have seen to theirs already, with a warning).
         doc.limit_depth();
         cmd::compositefonts::filter_loaded(&mut doc);
+        // Importers report binding failures; programmatic additions still need owned resources.
+        let _ = vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut doc);
         // Inline graphics in text take their size from their symbols' art (not saved).
         doc.resolve_inline_art();
         // Ruler guides a reader left in the saved list become nodes on their layers.
@@ -398,6 +421,8 @@ impl Session {
         st.opened_as_tab = old.opened_as_tab;
         st.revision = old.revision + 1;
         st.format = old.format;
+        // What scripts' commands did to the document stays until the person saves it.
+        st.by_script = old.by_script.clone();
         st.save_options = old.save_options.clone();
         // The remembered artboard pick follows the artboards it named when the file read back has
         // the artboards the document had at the save, in the same order and with the same ids (a

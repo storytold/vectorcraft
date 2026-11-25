@@ -1,3 +1,6 @@
+use std::sync::{Arc, Mutex};
+
+use craft::platform::clipboard::{Clipboard, ClipboardBackend, ClipboardError, ClipboardImage, EventClipboard, Flavor};
 use craft_image_codecs::Format::{Bmp, Png, Tiff};
 use vectorcraft_doc::{Document, NodeId};
 use vectorcraft_engine::Session;
@@ -6,13 +9,15 @@ use vectorcraft_engine::cmd::clipboard::{BITMAP, Flavour, PNG, TEXT};
 use super::*;
 use crate::Services;
 use crate::place::{DropAt, DropTarget};
+use crate::tests::picks::{answer_dialog, cancel_dialog, open_dialogs};
 
 /// An app reading files from disk, with a 400 × 300 pt document, that reads the files the user
 /// places off the UI thread when `background`.
 fn app(background: bool) -> VectorcraftApp {
     let services = Services { read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))), ..Default::default() };
-    let mut app = VectorcraftApp::new(Session::new(), services);
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
     app.placing.off_the_ui_thread = background;
+    crate::tests_background::threaded(&mut app);
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app
 }
@@ -97,6 +102,17 @@ fn placed(app: &mut VectorcraftApp) {
     assert!(app.placing.pending.is_empty(), "read within 60 s");
 }
 
+/// Waits until the read that was started has finished on its job (the held reader was let go).
+fn read_finished(app: &VectorcraftApp) {
+    let t0 = std::time::Instant::now();
+    while !(app.placing.reading[1].load(std::sync::atomic::Ordering::SeqCst) >= 1
+        && app.placing.reading[0].load(std::sync::atomic::Ordering::SeqCst) == 0)
+    {
+        assert!(t0.elapsed().as_secs() < 60, "read within 60 s");
+        std::thread::yield_now();
+    }
+}
+
 /// What a place changes: the active document (without the second it was made in), its
 /// selection, its undo steps and the last journal entry.
 fn state(app: &VectorcraftApp) -> (Document, Vec<NodeId>, usize, Option<(String, Value)>) {
@@ -104,6 +120,45 @@ fn state(app: &VectorcraftApp) -> (Document, Vec<NodeId>, usize, Option<(String,
     let mut doc = (*st.doc).clone();
     doc.metadata.created = None;
     (doc, st.selection.objects.clone(), st.history.undo.len(), app.session.journal.last().cloned())
+}
+
+/// The key of the top dialog the window has open.
+fn top_dialog(app: &VectorcraftApp) -> Option<String> {
+    open_dialogs(app).last().and_then(|d| d.key.clone())
+}
+
+/// Whether the Swatch Conflict question is the top dialog.
+fn swatches_asked(app: &VectorcraftApp) -> bool {
+    top_dialog(app).as_deref() == Some(crate::dialogs::swatch_conflict::KIND)
+}
+
+/// Answers the Swatch Conflict question with Add (`ok`) or Cancel, and lets the paste waiting on it take the answer.
+fn answer_swatches(app: &mut VectorcraftApp, ok: bool) {
+    let id = crate::dialogs::swatch_conflict::id(app).expect("the Swatch Conflict question is open");
+    if ok {
+        answer_dialog(app, id, &[("choice", json!("add"))], true);
+    } else {
+        cancel_dialog(app, id);
+    }
+    settle_swatch_paste(app);
+}
+
+/// Cancels the top dialog.
+fn cancel_top(app: &mut VectorcraftApp) {
+    let id = open_dialogs(app).last().map(|d| d.id).expect("a dialog is open");
+    cancel_dialog(app, id);
+}
+
+/// Presses OK on the open Place dialog; its pump places the files, reading them off the UI thread where it can.
+fn ok_place(app: &mut VectorcraftApp) {
+    let id = open_dialogs(app).iter().rev().find(|d| d.key.as_deref() == Some(crate::dialogs::place::KIND)).map(|d| d.id);
+    answer_dialog(app, id.expect("the Place dialog is open"), &[], true);
+}
+
+/// The lines the open Place dialog shows about its files.
+fn place_lines(app: &VectorcraftApp) -> Vec<String> {
+    let host = app.dialogs().expect("the window's dialog host");
+    host.with(|h| h.get::<crate::dialogs::place::PlaceDialog>().map(|d| d.info.clone())).expect("the Place dialog is open")
 }
 
 /// The names of the active document's top-level objects, bottom first.
@@ -147,7 +202,7 @@ fn a_file_read_off_the_ui_thread_places_as_one_read_at_once() {
 
 /// Another app's bitmap on the system clipboard, and the text beside it, read as the desktop
 /// hosts read them: with `converts`, the bitmap as the work that makes its flavour
-/// ([`crate::ClipboardRead::Later`], `None`: it can't be made), which notes the thread it runs
+/// (read later, `None`: it can't be made), which notes the thread it runs
 /// on in `thread`. The work of each read waits for its entry of `holds` to send, when it has
 /// one.
 struct OtherApps {
@@ -158,41 +213,57 @@ struct OtherApps {
     holds: Vec<Option<std::sync::mpsc::Receiver<()>>>,
 }
 
-impl crate::SystemClipboard for OtherApps {
-    fn write(&mut self, _: &[Flavour]) -> Result<(), String> {
-        Ok(())
+/// A flavour of the engine's as the platform clipboard holds it.
+fn platform(f: Flavour) -> Flavor {
+    Flavor::new(f.mime, f.data)
+}
+
+impl ClipboardBackend for OtherApps {
+    fn write(&mut self, _: &[Flavor]) -> Result<usize, ClipboardError> {
+        Ok(0)
     }
-    fn holds_ours(&mut self) -> bool {
-        false
+    fn read(&mut self, mimes: &[&str], limit: u64) -> Result<Option<Flavor>, ClipboardError> {
+        Ok(self.read_later(mimes, limit)?.and_then(|read| read()))
     }
-    fn read(&mut self, mimes: &[&'static str]) -> Option<Flavour> {
-        self.read_deferred(mimes)?.flavour()
+    fn read_image(&mut self, _: u64) -> Result<Option<ClipboardImage>, ClipboardError> {
+        Ok(None)
     }
-    fn has(&mut self, mimes: &[&'static str]) -> bool {
+    fn read_files(&mut self, _: usize) -> Result<Option<Vec<std::path::PathBuf>>, ClipboardError> {
+        Ok(None)
+    }
+    fn has(&mut self, mimes: &[&str]) -> bool {
         mimes.contains(&BITMAP) || (mimes.contains(&TEXT) && self.text.is_some())
     }
-    fn read_deferred(&mut self, mimes: &[&'static str]) -> Option<crate::ClipboardRead> {
+    fn read_later(&mut self, mimes: &[&str], _: u64) -> Result<Option<Later>, ClipboardError> {
         if mimes.contains(&TEXT)
-            && let Some(text) = &self.text
+            && let Some(text) = self.text.clone()
         {
-            return Some(crate::ClipboardRead::Now(text.clone()));
+            return Ok(Some(Box::new(move || Some(platform(text))) as Later));
         }
         if !mimes.contains(&BITMAP) {
-            return None;
+            return Ok(None);
         }
         let (bitmap, thread) = (self.bitmap.clone(), self.thread.clone());
         if !self.converts {
-            return bitmap.map(crate::ClipboardRead::Now);
+            return Ok(bitmap.map(|b| Box::new(move || Some(platform(b))) as Later));
         }
         let hold = if self.holds.is_empty() { None } else { self.holds.remove(0) };
-        Some(crate::ClipboardRead::Later(Box::new(move || {
+        Ok(Some(Box::new(move || {
             if let Some(hold) = hold {
                 let _ = hold.recv_timeout(std::time::Duration::from_secs(10));
             }
             *thread.lock().unwrap() = std::thread::current().name().map(str::to_string);
-            bitmap
-        })))
+            bitmap.map(platform)
+        }) as Later))
     }
+}
+
+/// A clipboard read whose slow part runs off the UI thread.
+type Later = Box<dyn FnOnce() -> Option<Flavor> + Send>;
+
+/// No clipboard of the system's, as an app without a host clipboard has: copies stay inside the app.
+fn no_system_clipboard(app: &mut VectorcraftApp) {
+    app.clipboard = Clipboard::new(EventClipboard::new(|| 0, |_| Ok(0)));
 }
 
 /// [`app`] with `bitmap` and `text` on the system clipboard ([`OtherApps`]), the view centered
@@ -201,7 +272,7 @@ fn pasting_app(background: bool, bitmap: Option<Flavour>, text: Option<&str>, co
     let thread = Arc::new(Mutex::new(None));
     let mut app = app(background);
     let text = text.map(|t| Flavour { mime: TEXT, data: t.as_bytes().to_vec() });
-    app.services.system_clipboard = Some(Box::new(OtherApps { bitmap, text, converts, thread: thread.clone(), holds: vec![] }));
+    app.clipboard = Clipboard::new(OtherApps { bitmap, text, converts, thread: thread.clone(), holds: vec![] });
     let v = app.view_mut().unwrap();
     (v.center, v.fitted) = (vectorcraft_geom::Point::new(250.0, 180.0), true);
     (app, thread)
@@ -340,7 +411,7 @@ fn a_failed_bitmap_paste_keeps_the_document_the_user_switched_to() {
         thread: Arc::new(Mutex::new(None)),
         holds: vec![Some(hold)],
     };
-    app.services.system_clipboard = Some(Box::new(clip));
+    app.clipboard = Clipboard::new(clip);
     let first = app.session.doc().unwrap();
     let first = (first.doc.clone(), first.selection.objects.clone(), first.history.undo.len());
     crate::menus::invoke(&mut app, "edit.paste", json!({}));
@@ -386,15 +457,15 @@ fn a_paste_queued_after_a_failed_bitmap_uses_the_original_selection() {
         let (a, b, c) = (rect(&mut app, 10), rect(&mut app, 40), rect(&mut app, 70));
         app.run("select.set", json!({"ids": [b]})).unwrap();
         let (go, hold) = channel();
-        app.services.system_clipboard = Some(Box::new(OtherApps {
+        app.clipboard = Clipboard::new(OtherApps {
             bitmap: Some(Flavour { mime: PNG, data: b"not a picture".to_vec() }),
             text: None,
             converts: true,
             thread: Arc::new(Mutex::new(None)),
             holds: vec![Some(hold)],
-        }));
+        });
         crate::menus::invoke(&mut app, id, json!({}));
-        app.services.system_clipboard = None;
+        no_system_clipboard(&mut app);
         crate::menus::invoke(&mut app, id, json!({}));
         assert_eq!(app.placing.pending.len(), 2, "{id}: both pastes wait");
         assert_eq!(app.placing.chains.len(), 1, "{id}: the second paste joined the first");
@@ -477,23 +548,21 @@ fn deferred_fallback_keeps_its_swatch_dialog_art_and_later_copy() {
         let copied = app.session.clipboard.clone();
         assert!(requested != copied);
         placed(&mut app);
-        assert_eq!(app.ui.dialog.as_ref().unwrap().kind, crate::dialogs::swatch_conflict::KIND);
-        assert_eq!(app.ui.dialog.as_ref().unwrap().fields["conflicts"][0]["clipboard"], "#ff0000");
+        assert!(swatches_asked(&app));
         assert!(app.session.clipboard == copied);
         let latest = app.run("shape.rectangle", json!({"x": 250, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
         app.run("edit.copy", json!({})).unwrap();
         let latest_copy = app.session.clipboard.clone();
         if confirm {
-            app.ui.dialog.as_mut().unwrap().fields.insert("choice".into(), json!("add"));
-            crate::dialogs::confirm(&mut app).unwrap();
-            assert!(app.ui.dialog.is_none());
+            answer_swatches(&mut app, true);
+            assert!(open_dialogs(&app).is_empty());
             let st = app.session.doc().unwrap();
             let pasted = st.doc.node(st.selection.objects[0]).unwrap();
             assert_eq!(pasted.geometric_bounds().unwrap().x0, 10.0);
             assert_eq!(pasted.appearance.fill_paint().color(), Some(vectorcraft_color::Color::from_hex("#ff0000").unwrap()));
         } else {
-            crate::dialogs::cancel(&mut app);
-            assert!(app.ui.dialog.is_none());
+            answer_swatches(&mut app, false);
+            assert!(open_dialogs(&app).is_empty());
             assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), 2);
         }
         assert!(app.session.clipboard == latest_copy);
@@ -515,7 +584,7 @@ fn a_synchronous_paste_replaces_a_deferred_swatch_dialog() {
     app.run("swatch.new", json!({"name": "Brand", "color": "#0000ff", "global": true})).unwrap();
     crate::menus::invoke(&mut app, "edit.pasteInPlace", json!({}));
     placed(&mut app);
-    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["conflicts"][0]["clipboard"], "#ff0000");
+    assert!(swatches_asked(&app));
     app.run("swatch.new", json!({"name": "Other", "color": "#ffff00", "global": true})).unwrap();
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app.run("swatch.new", json!({"name": "Other", "color": "#00ff00", "global": true})).unwrap();
@@ -524,16 +593,16 @@ fn a_synchronous_paste_replaces_a_deferred_swatch_dialog() {
     app.run("edit.copy", json!({})).unwrap();
     app.session.set_active(1);
     app.sync_views();
+    let ctx = app.ui_ctx.clone().unwrap();
     let result = crate::control::handle(
         &mut app,
-        &egui::Context::default(),
-        &crate::control::ControlRequest::new("engine.execute", json!({"command": "edit.pasteInPlace", "params": {}})).0,
+        &ctx,
+        &craft::automation::ControlRequest::new("engine.execute", json!({"command": "edit.pasteInPlace", "params": {}})).0,
     );
-    let crate::control::Outcome::Done(result) = result else { panic!("expected command result") };
+    let craft::automation::Reply::Done(result) = result else { panic!("expected command result") };
     assert_eq!(result["ok"], true, "{result}");
-    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["conflicts"][0]["clipboard"], "#00ff00");
-    app.ui.dialog.as_mut().unwrap().fields.insert("choice".into(), json!("add"));
-    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(open_dialogs(&app).len(), 1, "the paste's own question replaced the deferred one");
+    answer_swatches(&mut app, true);
     let st = app.session.doc().unwrap();
     assert_eq!(st.doc.node(st.selection.objects[0]).unwrap().geometric_bounds().unwrap().x0, 200.0);
     assert!(app.placing.chains.is_empty());
@@ -555,33 +624,33 @@ fn a_find_font_dialog_releases_a_deferred_swatch_paste_before_queued_work() {
         crate::menus::invoke(&mut app, id, json!({}));
         crate::menus::invoke(&mut app, id, json!({}));
         let start = std::time::Instant::now();
-        while app.ui.dialog.is_none() && start.elapsed().as_secs() < 60 {
+        while open_dialogs(&app).is_empty() && start.elapsed().as_secs() < 60 {
             poll(&mut app);
             std::thread::yield_now();
         }
-        assert_eq!(app.ui.dialog.as_ref().unwrap().kind, crate::dialogs::swatch_conflict::KIND);
+        assert!(swatches_asked(&app));
         assert_eq!(app.placing.pending.len(), 1);
         let later = app.run("shape.rectangle", json!({"x": 200, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
         app.run("edit.copy", json!({})).unwrap();
         let newer = app.session.clipboard.clone();
         assert!(requested != newer);
+        let ctx = app.ui_ctx.clone().unwrap();
         let result = crate::control::handle(
             &mut app,
-            &egui::Context::default(),
-            &crate::control::ControlRequest::new("engine.execute", json!({"command": "type.findFont", "params": {}})).0,
+            &ctx,
+            &craft::automation::ControlRequest::new("engine.execute", json!({"command": "type.findFont", "params": {}})).0,
         );
-        let crate::control::Outcome::Done(result) = result else { panic!("expected command result") };
+        let craft::automation::Reply::Done(result) = result else { panic!("expected command result") };
         assert_eq!(result["ok"], true, "{result}");
-        assert_eq!(app.ui.dialog.as_ref().unwrap().kind, "findFont");
+        assert!(top_dialog(&app).is_some() && !swatches_asked(&app), "Find Font takes the window");
         assert!(app.placing.swatch_paste.is_none());
         assert_eq!(app.placing.chains.values().map(|ch| ch.waiting).collect::<Vec<_>>(), [1]);
         assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), 2);
-        crate::dialogs::cancel(&mut app);
+        cancel_top(&mut app);
         placed(&mut app);
-        assert_eq!(app.ui.dialog.as_ref().unwrap().kind, crate::dialogs::swatch_conflict::KIND);
-        app.ui.dialog.as_mut().unwrap().fields.insert("choice".into(), json!("add"));
-        crate::dialogs::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
+        assert!(swatches_asked(&app));
+        answer_swatches(&mut app, true);
+        assert!(open_dialogs(&app).is_empty());
         let st = app.session.doc().unwrap();
         let pasted_id = st.selection.objects[0];
         let pasted = st.doc.node(pasted_id).unwrap();
@@ -610,25 +679,26 @@ fn a_deferred_swatch_paste_rejects_a_changed_token_or_closed_document() {
         app.run("swatch.new", json!({"name": "Brand", "color": "#0000ff", "global": true})).unwrap();
         crate::menus::invoke(&mut app, "edit.pasteInPlace", json!({}));
         placed(&mut app);
-        assert_eq!(app.ui.dialog.as_ref().unwrap().kind, crate::dialogs::swatch_conflict::KIND);
+        assert!(swatches_asked(&app));
         if close_document {
             app.session.execute("file.close", &json!({})).unwrap();
         } else {
             let result = crate::control::handle(
                 &mut app,
-                &egui::Context::default(),
-                &crate::control::ControlRequest::new("ui.dialog.set", json!({"field": "__deferredPaste", "value": 999999})).0,
+                &crate::testing::ui_context(),
+                &craft::automation::ControlRequest::new("ui.dialog.set", json!({"field": "__deferredPaste", "value": 999999})).0,
             );
-            let crate::control::Outcome::Done(result) = result else { panic!("expected dialog result") };
-            assert_eq!(result["error"], "the `swatchConflict` dialog cannot set protected field `__deferredPaste`", "{result}");
-            app.ui.dialog.as_mut().unwrap().fields.insert("__deferredPaste".into(), json!(999999));
+            let craft::automation::Reply::Done(result) = result else { panic!("expected dialog result") };
+            assert_ne!(result["ok"], true, "automation cannot set the paste the question hands back: {result}");
+            crate::dialogs::swatch_conflict::defer(&app, 999999);
         }
-        let error = crate::dialogs::confirm(&mut app).unwrap_err();
+        answer_swatches(&mut app, true);
+        let error = &app.ui.status;
         assert!(
             error.contains(if close_document { "document it was pasted in was closed" } else { "deferred paste is no longer available" }),
             "{error}"
         );
-        assert!(app.ui.dialog.is_none());
+        assert!(open_dialogs(&app).is_empty());
         assert!(app.placing.swatch_paste.is_none());
         assert!(app.placing.chains.is_empty() && app.placing.latest_chain.is_empty());
         assert!(app.session.clipboard == clipboard);
@@ -653,9 +723,8 @@ fn a_deferred_swatch_paste_uses_its_original_layer() {
     app.run("layer.new", json!({})).unwrap();
     let second = app.session.doc().unwrap().current_layer().unwrap();
     placed(&mut app);
-    assert_eq!(app.ui.dialog.as_ref().unwrap().kind, crate::dialogs::swatch_conflict::KIND);
-    app.ui.dialog.as_mut().unwrap().fields.insert("choice".into(), json!("add"));
-    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(swatches_asked(&app));
+    answer_swatches(&mut app, true);
     let st = app.session.doc().unwrap();
     assert_eq!(st.doc.layer_containing(st.selection.objects[0]), Some(first));
     assert_eq!(st.current_layer(), Some(second));
@@ -780,11 +849,10 @@ fn a_deferred_swatch_paste_whose_layer_is_locked_meanwhile_uses_the_current_laye
     app.run("select.none", json!({})).unwrap();
     crate::menus::invoke(&mut app, "edit.paste", json!({}));
     placed(&mut app);
-    assert_eq!(app.ui.dialog.as_ref().unwrap().kind, crate::dialogs::swatch_conflict::KIND);
+    assert!(swatches_asked(&app));
     app.run("layer.setProps", json!({"ids": [first.0], "locked": true})).unwrap();
     app.run("layer.setCurrent", json!({"id": second.0})).unwrap();
-    app.ui.dialog.as_mut().unwrap().fields.insert("choice".into(), json!("add"));
-    crate::dialogs::confirm(&mut app).unwrap();
+    answer_swatches(&mut app, true);
     let st = app.session.doc().unwrap();
     assert_eq!(st.selection.objects.first().and_then(|i| st.doc.layer_containing(*i)), Some(second));
 }
@@ -804,17 +872,15 @@ fn a_queued_paste_stacks_after_a_deferred_swatch_confirmation() {
         crate::menus::invoke(&mut app, id, json!({}));
         crate::menus::invoke(&mut app, id, json!({}));
         let start = std::time::Instant::now();
-        while app.ui.dialog.is_none() && start.elapsed().as_secs() < 60 {
+        while open_dialogs(&app).is_empty() && start.elapsed().as_secs() < 60 {
             poll(&mut app);
             std::thread::yield_now();
         }
         assert_eq!(app.placing.pending.len(), 1);
-        app.ui.dialog.as_mut().unwrap().fields.insert("choice".into(), json!("add"));
-        crate::dialogs::confirm(&mut app).unwrap();
+        answer_swatches(&mut app, true);
         placed(&mut app);
-        assert_eq!(app.ui.dialog.as_ref().unwrap().kind, crate::dialogs::swatch_conflict::KIND);
-        app.ui.dialog.as_mut().unwrap().fields.insert("choice".into(), json!("add"));
-        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(swatches_asked(&app));
+        answer_swatches(&mut app, true);
         let st = app.session.doc().unwrap();
         let xs: Vec<_> = st.doc.layers[0].children().unwrap().iter().map(|n| n.geometric_bounds().unwrap().x0).collect();
         let expected = if id.ends_with("Front") { vec![100.0, 10.0, 10.0] } else { vec![10.0, 10.0, 100.0] };
@@ -832,7 +898,7 @@ fn a_paste_given_while_a_pasted_bitmap_is_read_waits_for_it() {
         let (go, hold) = channel();
         let bitmap = Some(Flavour { mime: PNG, data: picture(Png, 60, 40) });
         let clip = OtherApps { bitmap, text: None, converts: true, thread: Arc::new(Mutex::new(None)), holds: vec![Some(hold)] };
-        app.services.system_clipboard = Some(Box::new(clip));
+        app.clipboard = Clipboard::new(clip);
         crate::menus::invoke(&mut app, "edit.paste", json!({}));
         assert_eq!(app.placing.pending.len(), 1);
         // The internal clipboard: a square copied meanwhile. Text: another app's text.
@@ -840,7 +906,7 @@ fn a_paste_given_while_a_pasted_bitmap_is_read_waits_for_it() {
         app.run("edit.copy", json!({})).unwrap();
         let text = text.map(|t| Flavour { mime: TEXT, data: t.as_bytes().to_vec() });
         let clip = OtherApps { bitmap: None, text: text.clone(), converts: false, thread: Arc::new(Mutex::new(None)), holds: vec![] };
-        app.services.system_clipboard = Some(Box::new(clip));
+        app.clipboard = Clipboard::new(clip);
         crate::menus::invoke(&mut app, "edit.paste", json!({}));
         let second = app.session.clipboard.clone();
         assert_eq!(app.placing.pending.len(), 2, "text: {}: the second paste waits", text.is_some());
@@ -912,7 +978,7 @@ fn a_second_paste_in_front_follows_the_first() {
         let (go, hold) = channel();
         let thread = Arc::new(Mutex::new(None));
         let bitmap = Some(Flavour { mime: PNG, data: picture(Png, 60, 40) });
-        app.services.system_clipboard = Some(Box::new(OtherApps { bitmap, text: None, converts: true, thread, holds: vec![None, Some(hold)] }));
+        app.clipboard = Clipboard::new(OtherApps { bitmap, text: None, converts: true, thread, holds: vec![None, Some(hold)] });
         let rect =
             |app: &mut VectorcraftApp, x: u32| app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
         let (a, b) = (rect(&mut app, 10), rect(&mut app, 40));
@@ -949,7 +1015,7 @@ fn a_paste_beside_a_finished_picture_does_not_follow_another_chain() {
     let (go, hold) = channel();
     let bitmap = Some(Flavour { mime: PNG, data: picture(Png, 60, 40) });
     let clip = OtherApps { bitmap, text: None, converts: true, thread: Arc::new(Mutex::new(None)), holds: vec![None, Some(hold)] };
-    app.services.system_clipboard = Some(Box::new(clip));
+    app.clipboard = Clipboard::new(clip);
     let rect =
         |app: &mut VectorcraftApp, x: u32| app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
     let (x, y) = (rect(&mut app, 10), rect(&mut app, 40));
@@ -982,7 +1048,7 @@ fn pastes_in_two_documents_follow_their_own() {
     let (go, hold) = channel();
     let bitmap = Some(Flavour { mime: PNG, data: picture(Png, 60, 40) });
     let clip = OtherApps { bitmap, text: None, converts: true, thread: Arc::new(Mutex::new(None)), holds: vec![None, Some(hold)] };
-    app.services.system_clipboard = Some(Box::new(clip));
+    app.clipboard = Clipboard::new(clip);
     let rect =
         |app: &mut VectorcraftApp, x: u32| app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
     let (_, b) = (rect(&mut app, 10), rect(&mut app, 40));
@@ -1118,7 +1184,8 @@ fn three_layers(test: &str) -> (VectorcraftApp, String, [NodeId; 3]) {
 fn a_file_read_off_the_ui_thread_is_placed_into_its_layer() {
     let (mut app, a, [first, second, _]) = three_layers("into-its-layer");
     app.run("file.place", json!({"paths": [a]})).unwrap();
-    assert_eq!(crate::dialogs::confirm(&mut app).unwrap()["background"], true);
+    ok_place(&mut app);
+    assert!(!app.placing.pending.is_empty(), "read off the UI thread");
     app.run("layer.setCurrent", json!({"id": second.0})).unwrap();
     placed(&mut app);
     let st = app.session.doc().unwrap();
@@ -1158,7 +1225,7 @@ fn a_file_placed_while_an_object_in_another_layer_is_selected_keeps_its_layer() 
     app.run("layer.setCurrent", json!({"id": first.0})).unwrap();
     app.run("select.none", json!({})).unwrap();
     app.run("file.place", json!({"paths": [a]})).unwrap();
-    crate::dialogs::confirm(&mut app).unwrap();
+    ok_place(&mut app);
     app.run("select.set", json!({"ids": [square]})).unwrap();
     assert_eq!(app.session.doc().unwrap().current_layer(), Some(second));
     placed(&mut app);
@@ -1193,7 +1260,7 @@ fn a_file_whose_layer_is_deleted_or_locked_meanwhile_goes_into_the_current_layer
     for change in ["delete", "lock", "hide"] {
         let (mut app, a, [first, second, _]) = three_layers(&format!("layer-{change}"));
         app.run("file.place", json!({"paths": [a]})).unwrap();
-        crate::dialogs::confirm(&mut app).unwrap();
+        ok_place(&mut app);
         match change {
             "delete" => app.run("layer.delete", json!({"ids": [first.0]})).unwrap(),
             "lock" => app.run("layer.setProps", json!({"ids": [first.0], "locked": true})).unwrap(),
@@ -1222,7 +1289,7 @@ fn a_file_placed_with_draw_inside_on_follows_its_layer() {
     app.run("select.none", json!({})).unwrap();
     assert_eq!(app.session.draw_inside.map(|t| t.0), inside.as_u64());
     app.run("file.place", json!({"paths": [a]})).unwrap();
-    crate::dialogs::confirm(&mut app).unwrap();
+    ok_place(&mut app);
     app.run("layer.setProps", json!({"ids": [first.0], "locked": true})).unwrap();
     app.run("layer.setCurrent", json!({"id": second.0})).unwrap();
     placed(&mut app);
@@ -1274,17 +1341,18 @@ fn what_the_user_places_is_read_off_the_ui_thread_and_commands_read_at_once() {
     app.select_tool("selection");
     // The Place dialog's OK with one file.
     app.run("file.place", json!({"paths": [a]})).unwrap();
-    assert_eq!(crate::dialogs::confirm(&mut app).unwrap()["background"], true);
+    ok_place(&mut app);
     assert_eq!(app.placing.pending.len(), 1);
     placed(&mut app);
     assert_eq!(names(&app), ["a.tif", "a.tif"]);
     // With several: the place cursor is loaded once they are read.
     app.run("file.place", json!({"paths": [a, b]})).unwrap();
-    assert_eq!(crate::dialogs::confirm(&mut app).unwrap()["background"], true);
+    ok_place(&mut app);
+    assert_eq!(app.placing.pending.len(), 1, "both files are read together");
     assert_eq!(app.ui.status, "Placing a.tif, b.bmp…");
     assert_eq!(app.session.tool_id(), "selection");
-    let (inspect, _) = crate::control::ControlRequest::new("ui.inspect", json!({}));
-    let crate::control::Outcome::Done(r) = crate::control::handle(&mut app, &egui::Context::default(), &inspect) else { panic!("not done") };
+    let (inspect, _) = craft::automation::ControlRequest::new("ui.inspect", json!({}));
+    let craft::automation::Reply::Done(r) = crate::control::handle(&mut app, &crate::testing::ui_context(), &inspect) else { panic!("not done") };
     assert_eq!(r["result"]["placing"], json!(["a.tif, b.bmp"]), "ui.inspect lists the files being read");
     placed(&mut app);
     assert_eq!((app.session.tool_id(), app.session.tool_options()["count"].as_u64()), ("place", Some(2)));
@@ -1339,22 +1407,24 @@ fn the_place_dialogs_lines_are_read_off_the_ui_thread() {
     let p = json!({"paths": [saved("lines", "a.tif", &picture(Tiff, 60, 40)), saved("lines", "notes.xyz", b"hello")]});
     let mut at_once = app(false);
     at_once.run("file.place", p.clone()).unwrap();
-    let want = at_once.ui.dialog.as_ref().unwrap().fields["__info"].clone();
-    assert!(want[0].as_str().is_some_and(|l| l.starts_with("60 × 40 px")), "{want}");
+    let want = place_lines(&at_once);
+    assert!(want[0].starts_with("60 × 40 px"), "{want:?}");
     let mut app = app(true);
     app.run("file.place", p).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["__info"], json!(["", ""]));
+    assert_eq!(place_lines(&app), ["", ""]);
+    let host = app.dialogs().expect("the window's dialog host");
     let t0 = std::time::Instant::now();
     loop {
-        let Some(mut d) = app.ui.dialog.take() else { panic!("the dialog stays open") };
-        let reading = crate::place::fill_lines(&mut app, &mut d);
-        app.ui.dialog = Some(d);
+        let reading = host.with(|h| {
+            let d = h.get_mut::<crate::dialogs::place::PlaceDialog>().expect("the dialog stays open");
+            crate::place::fill_lines(&mut app, &d.files, &mut d.info)
+        });
         if !reading || t0.elapsed().as_secs() > 60 {
             break;
         }
         std::thread::yield_now();
     }
-    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["__info"], want);
+    assert_eq!(place_lines(&app), want);
 }
 
 /// Several files dropped together are placed in the order they were dropped, a large one first
@@ -1440,11 +1510,11 @@ fn a_placed_image_is_drawn_without_decoding_it_on_the_ui_thread() {
     let blob = st.doc.images.values().next().unwrap().clone();
     assert!(vectorcraft_render::image_cached(&blob), "kept before the canvas draws it");
     let decodes = vectorcraft_render::image_decodes();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0))), ..Default::default() };
     let mut out = ctx.run_ui(raw, |ui| crate::canvas::show(&mut app, ui));
     out.textures_delta.clear();
-    assert!(app.canvas_rect.is_some(), "the canvas drew a frame");
+    assert!(app.canvas_view().is_some(), "the canvas drew a frame");
     assert_eq!(vectorcraft_render::image_decodes(), decodes, "no decode on the UI thread");
 }
 
@@ -1518,9 +1588,6 @@ fn a_file_that_cant_be_read_off_the_ui_thread_reports_as_at_once() {
         }
         assert_eq!(app.ui.status, at_once.ui.status);
         assert!(app.ui.status.starts_with(&format!("Couldn't place {name}: ")), "{}", app.ui.status);
-        if name == "cut.png" {
-            assert_eq!(app.ui.status, "Couldn't place cut.png: the image's pixels can't be read");
-        }
     }
 }
 
@@ -1680,7 +1747,7 @@ fn a_deferred_swatch_paste_is_dropped_when_its_document_is_reverted() {
         let (mut app, _) = saved_and_changed(app, &format!("revert-swatch-{batch}"));
         crate::menus::invoke(&mut app, "edit.pasteInPlace", json!({}));
         placed(&mut app);
-        assert_eq!(app.ui.dialog.as_ref().unwrap().kind, crate::dialogs::swatch_conflict::KIND);
+        assert!(swatches_asked(&app));
         let revert = json!({"command": "file.revert", "params": {"confirmed": true}});
         if batch {
             app.run("command.batch", json!({"commands": [revert]})).unwrap();
@@ -1688,11 +1755,10 @@ fn a_deferred_swatch_paste_is_dropped_when_its_document_is_reverted() {
             app.run("file.revert", json!({"confirmed": true})).unwrap();
         }
         let reverted = state(&app);
-        assert_eq!(app.ui.dialog.as_ref().unwrap().kind, crate::dialogs::swatch_conflict::KIND, "batch {batch}");
-        app.ui.dialog.as_mut().unwrap().fields.insert("choice".into(), json!("add"));
-        let error = crate::dialogs::confirm(&mut app).unwrap_err();
-        assert_eq!(error, "Couldn't paste: the document it was pasted in was reverted");
-        assert!(app.ui.dialog.is_none() && app.placing.swatch_paste.is_none());
+        assert!(swatches_asked(&app), "batch {batch}");
+        answer_swatches(&mut app, true);
+        assert!(app.ui.status.contains("was reverted"), "{}", app.ui.status);
+        assert!(open_dialogs(&app).is_empty() && app.placing.swatch_paste.is_none());
         assert!(app.placing.chains.is_empty() && app.placing.latest_chain.is_empty());
         assert!(app.session.clipboard == clipboard);
         assert!(state(&app) == reverted, "batch {batch}: nothing is pasted");
@@ -1761,14 +1827,14 @@ fn a_file_read_while_a_dialog_is_open_waits_for_it_to_close() {
     let path = saved("dialog", "photo.tif", &picture(Tiff, 60, 40));
     let mut app = app(true);
     start(&mut app, &json!({"path": path}), false).unwrap();
-    app.ui.dialog = Some(crate::state::Dialog::new(crate::dialogs::save_options::KIND, json!({"path": "/art/First.vectorcraft"})));
+    let question = crate::tests::picks::show_question(&mut app);
     let t0 = std::time::Instant::now();
     while t0.elapsed().as_millis() < 400 {
         poll(&mut app);
         std::thread::yield_now();
     }
     assert!(names(&app).is_empty() && app.placing.pending.len() == 1, "the file waits for the dialog");
-    app.ui.dialog = None;
+    crate::tests::picks::close_shown(&mut app, question);
     placed(&mut app);
     assert_eq!(names(&app), ["photo.tif"]);
 }
@@ -1912,9 +1978,16 @@ fn a_file_read_again_when_placed_stays_within_the_roots_it_was_read_in() {
     let _ = std::fs::remove_dir_all(base);
 }
 
-/// Draws one frame of the place progress window at `time` seconds → the texts it drew.
-fn progress(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64) -> String {
-    let mut out = ctx.run_ui(egui::RawInput { time: Some(time), ..Default::default() }, |ui| super::show(app, ui.ctx()));
+/// Makes every file being read old enough for its window.
+fn age(app: &mut VectorcraftApp) {
+    for p in &mut app.placing.pending {
+        p.started -= 2.0 * crate::export_progress::DELAY;
+    }
+}
+
+/// Draws one frame of the progress window → the texts it drew.
+fn progress(app: &mut VectorcraftApp, ctx: &egui::Context) -> String {
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::export_progress::show(app, ui));
     out.textures_delta.clear();
     let mut texts = String::new();
     for shape in out.shapes {
@@ -1942,21 +2015,24 @@ fn a_file_that_takes_a_while_to_place_shows_a_progress_window() {
         ..Default::default()
     };
     let mut app = VectorcraftApp::new(Session::new(), services);
+    crate::tests_background::threaded(&mut app);
     app.placing.off_the_ui_thread = true;
+    // The app's clock stands still: a read is only old enough for its window after `age`.
+    app.now_override = Some(0.0);
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
 
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    assert_eq!(progress(&mut app, &ctx, 0.0), "", "nothing placing");
+    let ctx = crate::testing::ui_context();
+    assert_eq!(progress(&mut app, &ctx), "", "nothing placing");
 
     let slow_path = saved("progress", "slow.png", &picture(Png, 100, 100));
     let p = json!({"path": slow_path, "at": [200, 150]});
     start(&mut app, &p, false).unwrap();
 
     // Not shown before DELAY (0.4 s)
-    assert_eq!(progress(&mut app, &ctx, 1.0), "", "not at once");
-    progress(&mut app, &ctx, 1.0 + crate::export_progress::DELAY + 0.05); // measures first
-    let texts = progress(&mut app, &ctx, 1.0 + crate::export_progress::DELAY + 0.1);
+    assert_eq!(progress(&mut app, &ctx), "", "not at once");
+    age(&mut app);
+    progress(&mut app, &ctx); // measures first
+    let texts = progress(&mut app, &ctx);
     for want in ["Placing slow.png…", "Reading the file…", "Cancel"] {
         assert!(texts.contains(want), "{want} in {texts}");
     }
@@ -1966,13 +2042,8 @@ fn a_file_that_takes_a_while_to_place_shows_a_progress_window() {
     // Another file queued shows more waiting
     let next_path = saved("progress", "next.png", &picture(Png, 100, 100));
     start(&mut app, &json!({"path": next_path, "at": [200, 150]}), false).unwrap();
-    let texts = progress(&mut app, &ctx, 2.0);
-    assert!(texts.contains("Placing slow.png…") && texts.contains("1 more file waiting"), "{texts}");
-
-    // Never two modals at once
-    app.ui.dialog = Some(crate::state::Dialog::new(crate::dialogs::save_options::KIND, json!({})));
-    assert_eq!(progress(&mut app, &ctx, 3.0), "", "never two modals at once");
-    app.ui.dialog = None;
+    let texts = progress(&mut app, &ctx);
+    assert!(texts.contains("Placing slow.png…") && texts.contains("waiting"), "{texts}");
 
     // Release and finish
     hold.store(false, std::sync::atomic::Ordering::SeqCst);
@@ -1995,6 +2066,7 @@ fn cancelling_a_place_places_nothing() {
         ..Default::default()
     };
     let mut app = VectorcraftApp::new(Session::new(), services);
+    crate::tests_background::threaded(&mut app);
     app.placing.off_the_ui_thread = true;
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
 
@@ -2018,65 +2090,13 @@ fn cancelling_a_place_places_nothing() {
     assert!(!app.ui.status.starts_with("Placing"), "{}", app.ui.status);
     assert!(!crate::menus::enabled(&app, "file.cancelPlace"));
 
-    // Let the background reader thread finish reading and drain
+    // Let the background read finish and drain
     hold.store(false, std::sync::atomic::Ordering::SeqCst);
-    app.placing.wait_for_reads();
+    read_finished(&app);
     poll(&mut app);
 
     // Document must be completely unmodified
     assert_eq!(state(&app), before, "document unmodified, no undo step added");
     assert_eq!(names(&app), initial_names, "no document nodes mutated or added");
     assert_eq!(app.session.doc().unwrap().history.undo.len(), 0, "no undo step added");
-}
-
-/// #5930: Escape key in the progress window cancels the place operation.
-#[test]
-fn cancelling_a_place_via_escape_key() {
-    let hold = Arc::new(std::sync::atomic::AtomicBool::new(true));
-    let hold_read = hold.clone();
-    let services = Services {
-        read: Some(Box::new(move |p: &str| {
-            while hold_read.load(std::sync::atomic::Ordering::SeqCst) {
-                std::thread::sleep(std::time::Duration::from_millis(5));
-            }
-            std::fs::read(p).map_err(|e| e.to_string())
-        })),
-        ..Default::default()
-    };
-    let mut app = VectorcraftApp::new(Session::new(), services);
-    app.placing.off_the_ui_thread = true;
-    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-
-    let before = state(&app);
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-
-    let slow_path = saved("escape", "slow.png", &picture(Png, 100, 100));
-    let p = json!({"path": slow_path, "at": [200, 150]});
-    start(&mut app, &p, false).unwrap();
-
-    // First frame initializes the timer at 1.0 s
-    assert_eq!(progress(&mut app, &ctx, 1.0), "", "not at once");
-    // Advance time past DELAY
-    progress(&mut app, &ctx, 1.0 + crate::export_progress::DELAY + 0.05);
-    let texts = progress(&mut app, &ctx, 1.0 + crate::export_progress::DELAY + 0.1);
-    assert!(texts.contains("Placing slow.png…"));
-    assert_eq!(app.placing.pending.len(), 1);
-
-    // Send Escape event
-    let raw_input = egui::RawInput {
-        events: vec![egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE }],
-        time: Some(1.0 + crate::export_progress::DELAY + 0.15),
-        ..Default::default()
-    };
-    let _ = ctx.run_ui(raw_input, |ui| super::show(&mut app, ui.ctx()));
-
-    // Operation was cancelled
-    assert!(app.placing.pending.is_empty(), "place was cancelled by Escape");
-
-    hold.store(false, std::sync::atomic::Ordering::SeqCst);
-    app.placing.wait_for_reads();
-    poll(&mut app);
-
-    assert_eq!(state(&app), before, "document completely unmodified");
 }

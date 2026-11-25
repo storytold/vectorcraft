@@ -355,6 +355,7 @@
 	Anti-alias Rasters	रास्टर एंटी-एलियास करें
 	Anti-aliased Artwork	एंटी-एलियास किया आर्टवर्क
 	Anti-aliasing Method	एंटी-एलियासिंग विधि
+@id	language.name	हिन्दी
 antiAlias	Sharp	शार्प
 	Crisp	क्रिस्प
 	Strong	स्ट्रॉन्ग
@@ -1108,6 +1109,10 @@ arrowhead	Feather	पंख
 	Cusp	नुकीला बिंदु
 	Straight segment	सीधा सेगमेंट
 	Circle too large	वृत्त बहुत बड़ा है
+	Show Radii	त्रिज्याएँ दिखाएँ
+	Show Diameter	व्यास दिखाएँ
+	Anchors at Standard Positions	मानक स्थानों पर एंकर पॉइंट्स
+	Third Point by Dragging	खींचकर तीसरा बिंदु
 	Circle (open)	सर्किल (ओपन)
 	Circle:	वृत्त:
 	Classic	क्लासिक
@@ -1273,9 +1278,14 @@ arrowhead	Feather	पंख
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	व्हील व्यू
 	Box View	बॉक्स व्यू
+	Show Out-of-Gamut Colors	गैमट से बाहर के रंग दिखाएँ
 	Box Channel	बॉक्स चैनल
 	Color box	कलर बॉक्स
 	Color Wheel Options	कलर व्हील ऑप्शन्स
+	Show Document Colors	डॉक्यूमेंट के रंग दिखाएँ
+	Document Colors	डॉक्यूमेंट के रंग
+	Selection Colors	चयन के रंग
+@plural	Used {n} time|Used {n} times	{n} बार उपयोग किया गया|{n} बार उपयोग किया गया
 	Show Harmony	सद्भाव दिखाएँ
 	Harmony Rule	सद्भाव नियम
 	Harmony color	सद्भाव रंग
@@ -1640,6 +1650,10 @@ arrowhead	Feather	पंख
 	Delete Guide	गाइड हटाएँ
 	Delete Guides	गाइड्स हटाएँ
 	Delete Image Trace Preset	डिलीट इमेज ट्रेस प्रीसेट
+	Tracing Presets…	ट्रेसिंग प्रीसेट…
+	Import Image Trace Presets	आयात इमेज ट्रेस प्रीसेट्स
+	Export Image Trace Presets	निर्यात इमेज ट्रेस प्रीसेट्स
+	Replace the saved presets that have these names?	इन नामों वाले सेव किए गए प्रीसेट बदलें?
 	Delete Instances	इंस्टेंस हटाएँ
 	Delete Layer	लेयर हटाएँ
 	Delete Library	लाइब्रेरी हटाएँ
@@ -1732,6 +1746,7 @@ arrowhead	Feather	पंख
 	Direction:	दिशा:
 	Directives	निर्देश
 	Disable Auto Add/Delete	ऑटो जोड़ना/हटाना अक्षम करें
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete एंकर पॉइंट हटाता है और पाथ को जुड़ा रखता है
 	Interpolate Control Points When Moving Anchors	एंकर पॉइंट खिसकाते समय निर्देशन हैंडल इंटरपोलेट करें
 	Disable Opacity Mask	ओपेसिटी मास्क अक्षम करें
 	Discard	डिस्कर्ड
@@ -3001,6 +3016,11 @@ arrowhead	Feather	पंख
 	Knife	चाकू
 	Knockout Group	नॉकआउट समूह
 	Lab	Lab
+	OKLCH Sliders	OKLCH स्लाइडर्स
+	HSL Sliders	HSL स्लाइडर्स
+	Chroma	क्रोमा
+	The largest chroma sRGB holds at this lightness and hue	इस लाइटनेस और ह्यू पर sRGB में आने वाला सबसे अधिक क्रोमा
+	OKLCH needs sRGB as the working RGB space	OKLCH के लिए वर्किंग RGB स्पेस sRGB होना चाहिए
 	Lab Spot Colors	लैब स्पॉट रंग
 	Lab Spot Colors:	लैब स्पॉट रंग:
 	Lab Values	लैब मूल्य
@@ -3177,6 +3197,8 @@ arrowhead	Feather	पंख
 	Live curve fitting	लाइव वक्र फिटिंग
 	Live Paint	लाइव पेंट
 	Live Paint Bucket	लाइव पेंट बकेट
+	Fill Area	क्षेत्र भरें
+	Fill Area Tool	क्षेत्र भरें टूल
 	Live Paint Bucket (Stroke)	लाइव पेंट बाल्टी (स्ट्रोक)
 	Live Paint Info	लाइव पेंट जानकारी
 	Live Paint Selection Tool	लाइव पेंट सिलेक्शन टूल
@@ -3713,6 +3735,7 @@ arrowhead	Feather	पंख
 	One Point Perspective Preset 5	एक बिंदु पर्सपेक्टिव पूर्व निर्धारित 5
 	Only Web Colors	केवल वेब रंग
 	Opacity	ओपेसिटी
+	Show Opacity	ओपेसिटी दिखाएँ
 	Opacity & Mask Define Knockout Shape	ओपेसिटी एंड मास्क डिफ़ाइन नॉकआउट शेप
 	Opacity Mask	ओपेसिटी मास्क
 	Opacity Mask Info	ओपेसिटी मास्क की जानकारी
@@ -3959,6 +3982,12 @@ arrowhead	Feather	पंख
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	रिज़ॉल्यूशन उपलब्ध नहीं
+	estimated memory {memory}	अनुमानित मेमोरी {memory}
+	memory unavailable	मेमोरी उपलब्ध नहीं
+	Unknown format	अज्ञात फ़ॉर्मेट
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -3999,6 +4028,13 @@ arrowhead	Feather	पंख
 	Pen Tool	पेन टूल
 	Quick Pen Tool	क्विक पेन टूल
 	Quick Pen	क्विक पेन
+	Quick Pen Toolbar	क्विक पेन टूलबार
+	Continuous Arc	सतत आर्क
+	Sharp Corner Arc	तीखे कोने वाला आर्क
+	Flip Arc	आर्क पलटें
+	Hide Toolbar	टूलबार छिपाएँ
+	Pin Toolbar Position	टूलबार स्थिति पिन करें
+	Reset Toolbar Position	टूलबार स्थिति रीसेट करें
 	Pencil	पेंसिल
 	Pencil Tool	पेंसिल टूल
 	Pentagram	पेंटाग्राम
@@ -4362,6 +4398,9 @@ arrowhead	Feather	पंख
 	Rearrange All	सभी को फिर से व्यवस्थित करें
 	Rearrange All Artboards	सभी आर्टबोर्ड को फिर से व्यवस्थित करें
 	Rearrange All Artboards…	सभी आर्टबोर्ड को पुनर्व्यवस्थित करें…
+	Rearrange…	फिर से व्यवस्थित करें…
+	Selected Artboards: {n}	चुने गए आर्टबोर्ड: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	आर्टबोर्ड प्लेस करने के लिए कैनवास पर क्लिक करें (Esc से कैंसल करें)
 	Rearrange Artboards	रीरेंज आर्टबोर्ड
 	Recall Selection	सिलेक्शन वापस लाएँ
 	Recent	हाल के
@@ -4605,6 +4644,11 @@ arrowhead	Feather	पंख
 	Edit Arrowheads	एरोहेड्स संपादित करें
 	Edit Arrowheads…	एरोहेड्स संपादित करें…
 	Reload Arrowheads	एरोहेड्स फिर से लोड करें
+	Bevels	बेवल्स
+	Edit Bevels	बेवल्स संपादित करें
+	Edit Bevels…	बेवल्स संपादित करें…
+	{name} (document)	{name} (दस्तावेज़)
+	Reload Bevels	बेवल्स फिर से लोड करें
 	Reset Rotate View	व्यू घुमाएँ रीसेट करें
 	Reset Ruler Origin	रूलर ओरिजिन रीसेट करें
 	Reset Symbol Instance	सिंबल इंस्टेंस रीसेट करें
@@ -4677,6 +4721,7 @@ arrowhead	Feather	पंख
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	ट्रैकपैड पर दो उंगलियों से घुमाने का जेस्चर कैनवास के व्यू को घुमाता है।
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	किसी कुंजी को दबाए रखने पर कीबोर्ड शॉर्टकट में उसके होल्ड कॉलम का टूल या कमांड चलता है; जल्दी दबाने पर उसका सामान्य शॉर्टकट चलता है।
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	किसी कुंजी को कितने सेकंड दबाए रखना होगा, ताकि उसके सामान्य शॉर्टकट के बजाय उसका होल्ड शॉर्टकट चले।
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete चुने गए एंकर पॉइंट हटाता है और वहाँ पाथ खोलने के बजाय हर एक के आसपास वक्र को फिर से फिट करता है।
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	जब आप एंकर पॉइंट हिलाते हैं, तो एक हिले हुए सिरे वाला हर वक्र अपने सिरों के सापेक्ष अपना आकार बनाए रखता है।
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	किसी टूल की शॉर्टकट कुंजी दबाए रखने पर वह टूल छोड़ने तक चुना रहता है, फिर पिछला टूल दोबारा चुना जाता है।
 	Shows the bounding box while you move the selection or draw a shape.	सिलेक्शन खिसकाते या आकार ड्रॉ करते समय बाउंडिंग बॉक्स दिखाता है।
@@ -4762,9 +4807,13 @@ arrowhead	Feather	पंख
 	Edit type set in fonts that aren't available?	जो फ़ॉन्ट उपलब्ध नहीं हैं, उनमें सेट टेक्स्ट एडिट करें?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	कैनवास पर हर स्लाइस का नंबर उसके ऊपरी बाएँ कोने में एक बॉक्स में दिखाता है; बंद होने पर भी स्लाइस की आउटलाइन दिखती रहती हैं।
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	यूज़र और ऑब्जेक्ट स्लाइस की आउटलाइन और उनके नंबर बॉक्स का रंग; ऑटो स्लाइस इसकी हल्की छाया इस्तेमाल करते हैं।
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	जिन पैराग्राफ़ में हाइफ़नेशन चालू है, उनमें सूची के शब्द पर हाइफ़न केवल उसमें टाइप किए गए हाइफ़न पर लगता है, या कोई न हो तो कभी नहीं, उसकी भाषा या केस चाहे जो हो।
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	डेस्कटॉप संस्करण में, इस फ़ोल्डर के .wasm प्लग-इन शुरू होने पर और ठीक है से नया फ़ोल्डर सेट होने पर लोड होते हैं, सुरक्षित मोड को छोड़कर; अनुमतियाँ माँगने वाला प्लग-इन आपके उन्हें देने के बाद ही लोड होता है। वेब संस्करण कोई लोड नहीं करता।
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	बड़ा फ़िल्टर या कमांड प्लग-इन के हर रन को उसी समय सीमा के साथ कम से कम 25 करोड़ निर्देश देता है; सामान्य प्लग-इन का अपना बजट रखता है। लाइव इफ़ेक्ट, एक्सपोर्टर और इंपोर्टर अपना बजट रखते हैं।
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	जब तक डॉक्यूमेंट सेटअप की भाषा अंग्रेज़ी: USA है, नए टेक्स्ट को यह भाषा मिलती है; डॉक्यूमेंट में पहले से मौजूद टेक्स्ट अपनी भाषा रखता है।
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	जिन पैराग्राफ़ में हाइफ़नेशन चालू है, उनमें सूची का शब्द केवल उसमें टाइप किए गए हाइफ़न पर टूटता है, या कोई न हो तो कहीं नहीं, उसकी भाषा या केस चाहे जो हो।
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	डेस्कटॉप संस्करण में, इस फ़ोल्डर के .wasm प्लग-इन शुरू होने पर और यहाँ नया फ़ोल्डर देकर ठीक है पर क्लिक करने पर लोड होते हैं, सुरक्षित मोड को छोड़कर; वेब संस्करण उन्हें लोड नहीं करता।
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	सामान्य हर प्लग-इन की अपनी सीमाएँ रखता है; बड़ा के साथ, प्लग-इन फ़िल्टर या कमांड अपने इनपुट के निर्देशों के अलावा कम से कम 250 मिलियन निर्देश चला सकता है। समय सीमा वही रहती है।
 	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	प्लग-इन के ऑब्जेक्ट फ़िल्टर का हर रन कितने निर्देश इस्तेमाल कर सकता है; बड़ा सामान्य से अधिक की अनुमति देता है, 60 सेकंड की उसी सीमा के साथ। भारी फ़िल्टर अपना बजट रखते हैं।
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	पहला स्क्रैच डिस्क विकल्प: Startup, None या फ़ोल्डर पाथ; VectorCraft इसे सहेजता है, पर अभी स्क्रैच डिस्क का उपयोग नहीं करता।
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	दूसरा स्क्रैच डिस्क विकल्प: Startup, None या फ़ोल्डर पाथ; VectorCraft इसे सहेजता है, पर अभी स्क्रैच डिस्क का उपयोग नहीं करता।
@@ -4776,13 +4825,15 @@ arrowhead	Feather	पंख
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	टूलबार में हर टूल ग्रुप का नाम उसके टूल्स के ऊपर दिखाता है; बंद होने पर, ग्रुप बिना किसी अंतर के एक के बाद एक आते हैं।
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	अब से आप जो डॉक्यूमेंट ओपन करते या बनाते हैं, वे टैब के रूप में खुलते हैं; बंद होने पर, हर एक फ़्लोटिंग विंडो में खुलता है। पहले से खुले डॉक्यूमेंट जहाँ हैं वहीं रहते हैं।
 	Makes the document tabs taller and their names larger.	डॉक्यूमेंट टैब को ऊँचा और उनके नाम बड़े बनाता है।
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	अगली शुरुआत से, जहाँ VectorCraft अन्यथा अपना टाइटल बार बनाता, वहाँ सिस्टम विंडो का टाइटल बार बनाता है।
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	अगली शुरुआत से, VectorCraft विंडो का टाइटल बार वहाँ भी बनाता है जहाँ डेस्कटॉप उसे बनाता, जब तक सिस्टम टाइटल बार चालू न हो।
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	अगली शुरुआत से, जहाँ VectorCraft अन्यथा अपना टाइटल बार बनाता, वहाँ सिस्टम विंडो का टाइटल बार बनाता है; Linux और BSD पर VECTORCRAFT_TITLEBAR वेरिएबल को प्राथमिकता मिलती है।
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	अगली शुरुआत से, VectorCraft विंडो का टाइटल बार वहाँ भी बनाता है जहाँ डेस्कटॉप उसे बनाता, जब तक सिस्टम टाइटल बार चालू न हो या VECTORCRAFT_TITLEBAR वेरिएबल उसे न चुने।
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	इंटरफ़ेस को बड़ा या छोटा करता है; उसी ज़ूम पर कैनवास का आर्टवर्क अपना आकार बनाए रखता है।
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft जो टूल पॉइंटर बनाता है, वे यूआई स्केलिंग के साथ बड़े और छोटे होते हैं; बंद होने पर, वे अपना आकार बनाए रखते हैं।
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	इंटरफ़ेस की भाषा; स्वचालित सिस्टम की भाषा इस्तेमाल करता है। आप कोई भाषा चुनते ही डायलॉग उस भाषा में बदल जाता है।
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	एनिमेटेड ज़ूम केवल तभी काम करता है जब यह चालू हो; बंद होने पर, एनिमेटेड ज़ूम धुंधला हो जाता है और ज़ूम एनिमेट नहीं होता।
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	व्हील से ज़ूम सहजता से सरकता है, और ज़ूम टूल बगल में खींचने या दबाए रखने पर ज़ूम करता है; बंद होने पर, ज़ूम टूल उस क्षेत्र पर ज़ूम करता है जिस पर आप खींचते हैं।
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	अगली शुरुआत से, डेस्कटॉप संस्करण इस प्रकार के ग्राफ़िक्स प्रोसेसर के ज़रिए कैनवास दिखाता है; आर्टवर्क हमेशा CPU पर बनता है। स्वचालित Windows और macOS पर इंटीग्रेटेड प्रोसेसर को प्राथमिकता देता है। वेब संस्करण इसका उपयोग नहीं करता।
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	अगली शुरुआत से, जहाँ ग्राफ़िक्स ड्राइवर अनुमति देता है, विंडो डिस्प्ले के रीफ़्रेश की प्रतीक्षा किए बिना हर फ़्रेम दिखाती है, अधिकतम 240 फ़्रेम प्रति सेकंड।
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	अगली शुरुआत से, डेस्कटॉप संस्करण इस प्रकार के ग्राफ़िक्स प्रोसेसर से बनाता है; स्वचालित उस प्रोसेसर को प्राथमिकता देता है जो डिस्प्ले चलाता है। वेब संस्करण इसका उपयोग नहीं करता।
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	अगली शुरुआत से, विंडो डिस्प्ले रीफ़्रेश का इंतज़ार किए बिना फ़्रेम दिखाती है, एक सेकंड में अधिकतम 240; बंद होने पर गति डिस्प्ले तय करता है। शुरुआत पर सेट किया गया प्रेज़ेंट मोड प्राथमिकता रखता है।
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	हर दस्तावेज़ अधिकतम जितने पूर्ववत चरण रखता है; कम संख्या ठीक है पर क्लिक करने पर सबसे पुराने चरण हटा देती है। ज़्यादा मेमोरी लेने पर चरण पहले भी हट सकते हैं।
@@ -4801,6 +4852,9 @@ arrowhead	Feather	पंख
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	रीसेंट फ़ाइल्स मेनू व होम स्क्रीन अधिकतम इतनी हाल की फ़ाइलें दिखाते हैं; 0 कोई नहीं दिखाता, फिर भी VectorCraft 30 तक याद रखता है।
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	डॉक्यूमेंट खुलने पर, अपना सेव किया प्रीव्यू दिखाने वाली लिंक की गई EPS इमेज EPS फ़ाइल को फिर से पढ़ने के बजाय वही प्रीव्यू रखती है; बदली हुई फ़ाइलें फिर भी अद्यतन लिंक के अनुसार चलती हैं।
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	पिक्सेल प्रीव्यू में, इमेज स्मूद बनाई जाती हैं; बंद होने पर, उनके पिक्सेल के किनारे तीखे दिखते हैं। पिक्सेल प्रीव्यू के बाहर, इमेज हमेशा स्मूद होती हैं।
+	PDF Text	PDF टेक्स्ट
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	आप जो PDF खोलते या एम्बेड करते हैं, उसका टेक्स्ट संपादन योग्य टेक्स्ट के रूप में आता है, या रूपरेखा के रूप में, जो उसके फ़ॉन्ट के बिना वाले कंप्यूटर पर भी वैसी ही दिखती है।
+	Linked pages show the file's own text.	लिंक किए गए पृष्ठ फ़ाइल का अपना टेक्स्ट दिखाते हैं।
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	जब कोई लिंक की गई फ़ाइल बदलती है, अपने-आप उसे फिर से पढ़ता है, बदलाव होने पर पूछें पहले आपसे पूछता है, व मैन्युअल उसे वैसे ही छोड़कर स्टेटस बार में एक नोट दिखाता है।
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	डेस्कटॉप संस्करण में, वह फ़ोल्डर जिसमें टेम्पलेट से नया… व टेम्पलेट के रूप में सेव करें… शुरू होते हैं; अपने डॉक्यूमेंट फ़ोल्डर में VectorCraft Templates के लिए इसे खाली छोड़ें।
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	मूल एडिट करें लिंक की गई फ़ाइल को उसके प्रकार के लिए सिस्टम के डिफ़ॉल्ट ऐप में खोलता है; बंद होने पर, लिंक की गई रास्टर इमेज PhotoCraft इंस्टॉल होने पर उसमें खुलती है।
@@ -5127,6 +5181,7 @@ arrowhead	Feather	पंख
 	Recent Commands	हाल के आदेश
 	No recent commands	कोई हाल का आदेश नहीं
 	Type to search commands, tools, panels and effects	आदेश, टूल, पैनल्स और इफ़ेक्ट्स खोजने के लिए टाइप करें
+	Clear Recent Commands	हाल के आदेश साफ़ करें
 	Search commands	आदेश खोजें
 	Search Commands…	कमांड खोजें…
 	Search Fonts Folder	खोज फ़ॉन्ट फ़ोल्डर
@@ -6495,6 +6550,11 @@ arrowhead	Feather	पंख
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` और `maxItems` 0-{MAX_LIST} होने चाहिए, `maxItems` कम से कम 1, और डिफ़ॉल्ट में उतने ही आइटम होने चाहिए
 @msg	`name` must be a string	`name` एक स्ट्रिंग होना चाहिए
 @msg	`opacity` must be a number	`opacity` एक संख्या होना चाहिए
+@msg	`opacity` must be a number from 0 to 100	`opacity` 0 से 100 तक की संख्या होना चाहिए
+@msg	`opacity` must be true or false	`opacity` true या false होना चाहिए
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	टेक्स्ट के कैरेक्टर्स की अपनी ओपेसिटी नहीं होती: अपीयरेंस पैनल के नया फ़िल जोड़ें या नया स्ट्रोक जोड़ें से फ़िल या स्ट्रोक जोड़ें
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	सिंबल इंस्टेंस में सिलेक्ट किए गए ऑब्जेक्ट की अपनी फ़िल या स्ट्रोक ओपेसिटी नहीं होती
+@msg	no target has that fill or stroke to take the opacity	किसी भी टारगेट में वह फ़िल या स्ट्रोक नहीं है जो ओपेसिटी ले सके
 @msg	`type` must be "path" or "compound"	`type` "path" या "compound" होना चाहिए
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` में 1-{MAX_UNIT} प्रिंट करने योग्य वर्ण होने चाहिए
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` में `{other}` के लिए 1 से {MAX_CONDITION_VALUES} मान होने चाहिए
@@ -6538,6 +6598,8 @@ arrowhead	Feather	पंख
 @msg	`plates` requires a stop linked to a spot swatch	`plates` के लिए स्पॉट रंग स्वॉच से जुड़ा स्टॉप आवश्यक है
 @msg	the output	आउटपुट
 @msg	the path has no anchor points	पाथ में कोई एंकर पॉइंट नहीं है
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	कंपाउंड पाथ {id} का कोई सदस्य छिपा हुआ, बंद या गाइड है, इसलिए इसके सदस्य बदले नहीं जा सकते
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	कंपाउंड पाथ {id} का कोई सदस्य पाथ नहीं है, इसलिए इसके सदस्य बदले नहीं जा सकते
 @msg	too many anchor points (limit {MAX_ANCHORS})	बहुत अधिक एंकर पॉइंट (सीमा {MAX_ANCHORS})
 @msg	true or false	true या false
 @msg	a number >= {_1}	एक संख्या >= {_1}
@@ -6762,7 +6824,7 @@ arrowhead	Feather	पंख
 @msg	{label}: select paths, compound paths, groups or text	{label}: चुनें पाथ, यौगिक पाथ, समूह या टेक्स्ट
 @msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	कोई रेखा या अन्य खुला पाथ जो कोई क्षेत्र नहीं घेरता, परिणाम के आकार को नहीं बदलता; इसे शामिल करने के लिए पहले उस पर ऑब्जेक्ट › पाथ › स्ट्रोक को आउटलाइन में बदलें लागू करें
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} ने खाली परिणाम का उत्पादन किया: कोई रेखा या अन्य खुला पाथ कोई क्षेत्र नहीं घेरता; इसे शामिल करने के लिए पहले उस पर ऑब्जेक्ट › पाथ › स्ट्रोक को आउटलाइन में बदलें लागू करें
-@msg	{label}…	{label}...
+@msg	{label}…	{label}…
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name} बनाया गया है और इसे हटाया नहीं जा सकता है।
 @msg	{name} must be {range} (got {v})	{name} को {range} होना चाहिए ({v} मिला)
@@ -6968,6 +7030,8 @@ arrowhead	Feather	पंख
 @msg	`dataBase64` is not valid base64	`dataBase64` मान्य नहीं है base64
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` होना चाहिए `fileNumber`, `fileDataSetName` या `dataSetName`
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` को `ids`, `reverse` या `append` के साथ उपयोग नहीं कर सकते
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` को `ids`, `id` या `item` के साथ उपयोग नहीं कर सकते
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` को `brush` के साथ उपयोग नहीं कर सकते
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` और `childLimit` सारांश के हिस्से चुनते हैं: `summary: true` दें
 @msg	`design` is a design name, or null for plain columns	`design` एक डिजाइन नाम है, या सादे स्तंभों के लिए null है
 @msg	`design` is a design name, or null for the default marker	`design` एक डिजाइन नाम है, या डिफ़ॉल्ट मार्कर के लिए null है
@@ -7066,6 +7130,8 @@ arrowhead	Feather	पंख
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` को grayscale, rgb, hsb, cmyk या websafe होना चाहिए
 @msg	`view` must be wheel or box	`view` को wheel या box होना चाहिए
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` को hue, saturation, brightness, red, green या blue होना चाहिए
+@msg	`sliders` must be none, oklch or hsl	`sliders` none, oklch या hsl होना चाहिए
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH के लिए वर्किंग RGB स्पेस sRGB होना चाहिए
 @msg	`mode` must be one of {_1}	`mode` को {_1} में से एक होना चाहिए
 @msg	`mojikumi` must be "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" or "lineEndHalf"	`mojikumi` "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" या "lineEndHalf" होना चाहिए।
 @msg	`name` is empty	`name` खाली है
@@ -7940,6 +8006,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	give at least one of clip, invert, disabled, linked	कम से कम एक क्लिप, उलटा, विकलांग, लिंक्ड देना
 @msg	give both `start` and `end` [x, y] (or neither)	`start` और `end` दोनों [x, y] दें (या दोनों न दें)
 @msg	give color, none, swatch or gradient	color, none, swatch या gradient दें
+@msg	give color, none, swatch, gradient or opacity	color, none, swatch, gradient या opacity दें
 @msg	give corners of the path: anchors between two straight sides	पाथ के कोने: दो सीधे पक्षों के बीच एंकर
 @msg	give corners of the path: anchors where its sides meet at an angle	पाथ के कोने: एंकर जहां इसके पक्ष एक कोण पर मिलते हैं
 @msg	give dataBase64	dataBase64 दें
@@ -8154,7 +8221,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	Live Paint: select paths or compound paths	लाइव पेंट: पाथ या यौगिक पाथ सिलेक्ट करें
 @msg	Live Paint: these paths are too degenerate to paint	लाइव पेंट: इन पाथ को पेंट करने के लिए बहुत अलग किया जाता है
 @msg	loading profiles from disk isn't available in the browser	डिस्क से लोडिंग प्रोफ़ाइल ब्राउज़र में उपलब्ध नहीं है
-@msg	Loading VectorCraft…	वेक्टर क्रेफ्ट लोड हो रहा है ...
+@msg	Loading VectorCraft…	वेक्टर क्रेफ्ट लोड हो रहा है …
 @msg	Lock Workspace is not available in VectorCraft	लॉक वर्कस्पेस VectorCraft में उपलब्ध नहीं है
 @msg	Make Guides: select paths	गाइड बनाना: पाथ सिलेक्ट करें
 @msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	मैनिफ़ेस्ट {_1} बाइट्स का है (सीमा {MAX_MANIFEST_BYTES})
@@ -8582,7 +8649,9 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	not a valid SVGZ file: {e}	एक मान्य SVGZ फ़ाइल नहीं: {e}
 @msg	not a VectorCraft file: {0}	एक वेक्टर क्रेफ्ट फ़ाइल नहीं: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	एक VectorCraft शॉर्टकट सेट नहीं है ( `overrides`)
-@msg	not a WebAssembly binary (missing \0asm header)	WebAssembly बाइनरी नहीं है (\0asm हेडर नहीं है)
+@msg	not a WebAssembly binary (missing \\0asm header)	WebAssembly बाइनरी नहीं है (\\0asm हेडर नहीं है)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	एक फ़ंक्शन टाइप में {MAX_FUNC_TYPE_VALUES} पैरामीटर की सीमा से अधिक पैरामीटर हैं
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	एक फ़ंक्शन टाइप में {MAX_FUNC_TYPE_VALUES} परिणामों की सीमा से अधिक परिणाम हैं
 @msg	not a Word document: its compound file has no WordDocument stream	एक वर्ड डॉक्यूमेंट नहीं: इसकी यौगिक फ़ाइल में WordDocument स्ट्रीम नहीं है
 @msg	not a Word document: its main part is not a WordprocessingML document	वर्ड डॉक्यूमेंट नहीं: इसका मुख्य हिस्सा वर्डप्रोसेसिंगएमएल डॉक्यूमेंट नहीं है
 @msg	not a Word document: its package has no main document part	नहीं एक वर्ड डॉक्यूमेंट: इसके पैकेज में कोई मुख्य डॉक्यूमेंट हिस्सा नहीं है
@@ -8598,7 +8667,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	not an export presets file (format `{_1}`)	यह एक्सपोर्ट प्रीसेट फ़ाइल नहीं है (फ़ॉर्मैट `{_1}`)
 @msg	not an export presets file: {e}	एक निर्यात प्रीसेट फ़ाइल नहीं: {e}
 @msg	not an image VectorCraft reads (see document.formats)	यह ऐसी इमेज नहीं है जिसे VectorCraft पढ़ सके (document.formats देखें)
-@msg	not an RTF file: it doesn't start with {{\\rtf	RTF फ़ाइल नहीं: यह {{\rtf के साथ शुरू नहीं होता है
+@msg	not an RTF file: it doesn't start with {{\\rtf	RTF फ़ाइल नहीं: यह {{\\rtf के साथ शुरू नहीं होता है
 @msg	not area type (text in a frame) outside perspective	पर्सपेक्टिव के बाहर का एरिया टाइप (फ़्रेम में टेक्स्ट) नहीं है
 @msg	not editing an opacity mask	ओपेसिटी मास्क संपादित नहीं किया जा रहा है
 @msg	not found	नहीं मिला
@@ -8843,7 +8912,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	rows and cols must be 1..50	पंक्तियां और कॉल 1..50 होना चाहिए
 @msg	rows and columns must be 1..500	rows और columns को 1..500 होना चाहिए
 @msg	rows of objects whose appearances differ can't be reordered together	उन ऑब्जेक्ट्स की पंक्तियाँ जिनकी उपस्थिति भिन्न होती हैं, उन्हें एक साथ फिर से व्यवस्थित नहीं किया जा सकता है
-@msg	Running “{name}”…	"{name}"...
+@msg	Running “{name}”…	"{name}"…
 @msg	Save for Web: the image is empty	वेब के लिए सेव करें: इमेज खाली है
 @msg	save the document first: copy puts the file in its folder	पहले डॉक्यूमेंट को सेव करना: प्रतिलिपि फ़ाइल को अपने फ़ोल्डर में डालती है
 @msg	save the document first: Package collects a saved document	पहले डॉक्यूमेंट को सेव करना: पैकेज एक सेव किए गए डॉक्यूमेंट एकत्र करता है
@@ -8896,6 +8965,10 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	select a text object	एक टेक्स्ट ऑब्जेक्ट चुनें
 @msg	select an envelope	एक लिफाफे सिलेक्ट करें
 @msg	select an image	एक इमेज चुनें
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	ऑब्जेक्ट {_1} पर्सपेक्टिव या फ़्री डिस्टॉर्ट से बदली गई इमेज है, जिस पर यह कमांड काम नहीं करता
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	इमेज {_1} को इस तरह डिस्टॉर्ट नहीं किया जा सकता: इसके कोने उत्तल आकार नहीं बनाएँगे
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	इमेज {_1} को इस तरह डिस्टॉर्ट नहीं किया जा सकता: इसके कोने डिस्टॉर्ट के क्षितिज को पार कर जाएँगे
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	इमेज {_1} को इस तरह डिस्टॉर्ट नहीं किया जा सकता: इसके कोने पर्सपेक्टिव मैपिंग के लिए एक-दूसरे के बहुत पास होंगे
 @msg	`background` must be edges, corners or colors	`background` edges, corners या colors होना चाहिए
 @msg	`match` must be distance or channels	`match` distance या channels होना चाहिए
 @msg	`{key}` must be from 0 to 100	`{key}` 0 से 100 तक होना चाहिए
@@ -9044,6 +9117,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	shadings of more than 4096 patches or triangles were left out	4096 से अधिक पैच या त्रिकोणों के छायांकन को छोड़ दिया गया था
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	छायांकन जिसका कार्य अज्ञात प्रकार के होते हैं, उनके मध्य रंग से भरे होते हैं
 @msg	Shape Builder: no region under the pointer	आकृति बिल्डर: सूचक के तहत कोई क्षेत्र नहीं
+@msg	Fill Area: no enclosed area under the pointer	क्षेत्र भरें: सूचक के तहत कोई बंद क्षेत्र नहीं
 @msg	Shape Builder: select all paths you want to merge	आकृति बिल्डर: वे सभी पाथ सिलेक्ट करें जिन्हें आप मर्ज करना चाहते हैं
 @msg	Shape Builder: select paths or compound paths	आकृति बिल्डर: पाथ या मिश्रित पाथ सिलेक्ट करें
 @msg	Shaper needs 1–64 source paths	शेपर के लिए 1–64 स्रोत पाथ चाहिए
@@ -9125,6 +9199,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	ग्रुप के फ़िल या स्ट्रोक पर 3D इफ़ेक्ट कुछ नहीं बनाता
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ग्रुप के फ़िल या स्ट्रोक पर 3D इफ़ेक्ट एक्सपोर्ट करने लायक कुछ नहीं बनाता
 @msg	The 3D object is too complex to export	3D ऑब्जेक्ट एक्सपोर्ट करने के लिए बहुत जटिल है
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D ऑब्जेक्ट का मेश अधूरा है या उसमें ऐसा मान है जो संख्या नहीं है
 @msg	give one <filter> element	एक <filter> एलिमेंट दें
 @msg	the <filter> element needs an id, the filter's name	<filter> एलिमेंट को एक id चाहिए, जो फ़िल्टर का नाम है
 @msg	an SVG filter's id is at most {MAX_NAME} characters	SVG फ़िल्टर की id अधिकतम {MAX_NAME} वर्णों की होती है
@@ -9147,7 +9222,10 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	ऑब्जेक्ट पर कोई 3D इफ़ेक्ट नहीं है (एक्सट्रूडेड और बेवेल, रिवॉल्व, फुलाएँ या घुमाव)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` केवल `mode` वाला ऑब्जेक्ट होना चाहिए, जिसका मान shaded या wireframe हो
 @msg	its 3D effect builds no solid	इसका 3D इफ़ेक्ट कोई ठोस नहीं बनाता
-@msg	bevel must be none or one of {_1}	bevel को none या {_1} में से एक होना चाहिए
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel को none, {_1} में से एक, या {BEVEL_PROFILE} के साथ custom होना चाहिए
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom के लिए {BEVEL_PROFILE} चाहिए, यानी बेवल के बिंदु
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} एक स्ट्रिंग होना चाहिए
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} में 2 से {most} [x, y] बिंदु होने चाहिए, हर हिस्सा 0 और 1 के बीच, [0, 0] (सिरे की सतह का किनारा) से [1, 1] (बगल की दीवार) तक
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} इस आर्ट से ठोस नहीं बना सकता: इसके सिंबल इंस्टेंस, ब्लेंड और क्लिपिंग ग्रुप में बहुत अधिक ऑब्जेक्ट हैं
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} सिंबल "{symbol}" के इंस्टेंस से ठोस नहीं बना सकता: सिंबल का आर्ट उपलब्ध नहीं है
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: क्लिपिंग पाथ आर्ट को काटने के लिए बहुत जटिल है
@@ -9173,8 +9251,10 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}` का face, front, back या side होना चाहिए
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` का {key}, {lo} से {hi} तक की संख्या होना चाहिए
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` एक ऐरे होना चाहिए
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	ग्राफ़िक्स समतल, एक्सट्रूड और रिवॉल्व ऑब्जेक्ट प्रकारों पर लगते हैं
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	ग्राफ़िक्स समतल, एक्सट्रूड, रिवॉल्व और फुलाएँ ऑब्जेक्ट प्रकारों पर लगते हैं
 @msg	Revolve maps graphics onto its side: map them onto the front	रिवॉल्व ग्राफ़िक्स को अपनी बगल वाली सतह पर लगाता है: उन्हें सामने वाले फ़ेस पर लगाएँ
+@msg	Inflate maps graphics onto its front and back, not onto a side	फुलाएँ ग्राफ़िक्स को सामने और पिछले फ़ेस पर लगाता है, बगल वाली सतह पर नहीं
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	ऑब्जेक्ट {_1}: फुलाएँ का पिछला फ़ेस ग्राफ़िक्स तभी लेता है जब दोनों तरफ़ और कैप चालू हों
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	ग्राफ़िक्स इस सतह के लिए बहुत जटिल हैं: सिंबल्स के आर्ट को सरल बनाएँ या सेगमेंट कम करें
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` अधिकतम {MAX_GRAPHICS} ग्राफ़िक्स लेता है
 @msg	A plane has one face: map its graphics onto the front	समतल का एक ही फ़ेस होता है: उसके ग्राफ़िक्स को सामने वाले फ़ेस पर लगाएँ
@@ -9342,6 +9422,12 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	the library holds {MAX_ITEMS} items of this kind already	लाइब्रेरी पहले से ही इस तरह के {MAX_ITEMS} आइटम रखता है
 @msg	the library item is damaged	लाइब्रेरी आइटम क्षतिग्रस्त है
 @msg	the module must export its linear memory as `memory`	मॉड्यूल को अपनी रैखिक मेमोरी `memory` के रूप में एक्सपोर्ट करनी चाहिए
+@msg	the module must export `{name}` with the type {signature}	मॉड्यूल को `{name}` को {signature} प्रकार के साथ एक्सपोर्ट करना चाहिए
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	मॉड्यूल में एक से अधिक `{MANIFEST_SECTION}` कस्टम सेक्शन हैं
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	मेमोरी बजट (मॉड्यूल की प्रारंभिक मेमोरी {initial} बाइट है, सीमा {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	`{MANIFEST_SECTION}` कस्टम सेक्शन के मैनिफ़ेस्ट में `abi` का मान {ABI_VERSION} होना चाहिए, वह ABI संस्करण जिसे यह होस्ट लागू करता है
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	टेबल बजट (मॉड्यूल {count} टेबल परिभाषित करता है, सबसे बड़ी में {largest} एलिमेंट; सीमा {MAX_TABLES} टेबल, प्रत्येक में {MAX_TABLE_ELEMENTS} एलिमेंट)
+@msg	the module's table section could not be read	मॉड्यूल का टेबल सेक्शन पढ़ा नहीं जा सका
 @msg	the name is empty	नाम खाली है
 @msg	the object already has an opacity mask	ऑब्जेक्ट पहले से ही एक अपारदर्शिता मास्क है
 @msg	the object has no fill, stroke or effect	ऑब्जेक्ट में कोई भराव, स्ट्रोक या इफ़ेक्ट नहीं होता है
@@ -10354,6 +10440,24 @@ theme	Appearance	अपीयरेंस
 @msg	A panel is not joined to the rest by a crease.	कोई पैनल किसी क्रीज़ लाइन से बाकी से जुड़ा नहीं है।
 @msg	A fold line is on a non-printing layer.	एक फ़ोल्ड लाइन नॉन-प्रिंटिंग लेयर पर है।
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	पैनल: {panels}, हिंज: {hinges}, एरर: {errors}, वॉर्निंग: {warnings}
+	Nature Icons	प्रकृति चिह्न
+	Flower	फूल
+	Tree	पेड़
+	Mountain	पर्वत
+	Ornamental	अलंकरण
+	Scrollwork	अलंकारी घुमाव
+	Filigree Arrow	जालीदार तीर
+	Petal Sweep	पंखुड़ियों का घुमाव
+	Twin Curl	दोहरा घुमाव
+	Vector Packs	वेक्टर पैक
+	Compass Rose	दिशासूचक गुलाब
+	Botanical Sprig	वनस्पति टहनी
+	Facet Diamond	पहलूदार हीरा
+	Tide Crest	लहर की चोटी
+	Leaf Vine	पत्तों की बेल
+	Blossom Chain	फूलों की शृंखला
+	Pennant Garland	झंडियों की माला
+	Lantern String	लालटेन की शृंखला
 	Orbit Lines	कक्षीय रेखाएँ
 	Petal Garland	पंखुड़ी माला
 	Lattice Braid	जाली चोटी

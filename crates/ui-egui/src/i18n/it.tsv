@@ -208,6 +208,7 @@
 	Anti-alias Rasters	Anti-aliasing per immagini raster
 	Anti-aliased Artwork	Grafica con anti-aliasing
 	Anti-aliasing Method	Metodo di anti-aliasing
+@id	language.name	Italiano
 antiAlias	Sharp	Nitido
 	Crisp	Definito
 	Strong	Forte
@@ -509,6 +510,11 @@ font-technology	Variable	Variabili
 	Cusp	Cuspide
 	Straight segment	Segmento diritto
 	Circle too large	Cerchio troppo grande
+	Show Radii	Mostra raggi
+	Show Diameter	Mostra diametro
+	Anchors at Standard Positions	Punti di ancoraggio in posizioni standard
+	Third Point by Dragging	Terzo punto trascinando
+	Gray	Grigio
 	Classic Defaults	Valori predefiniti classici
 	Clean Up…	Pulisci…
 	Clear	Cancella
@@ -612,9 +618,14 @@ font-technology	Variable	Variabili
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Vista ruota
 	Box View	Vista riquadro
+	Show Out-of-Gamut Colors	Mostra colori fuori gamma
 	Box Channel	Canale del riquadro
 	Color box	Riquadro colore
 	Color Wheel Options	Opzioni ruota dei colori
+	Show Document Colors	Mostra colori del documento
+	Document Colors	Colori del documento
+	Selection Colors	Colori della selezione
+@plural	Used {n} time|Used {n} times	Usato {n} volta|Usato {n} volte
 	Show Harmony	Mostra armonia
 	Harmony Rule	Regola di armonia
 	Harmony color	Colore dell’armonia
@@ -919,6 +930,7 @@ font-technology	Variable	Variabili
 	Direct Selection Tool	Strumento Selezione diretta
 	Direction Handles	Maniglie di direzione
 	Disable Auto Add/Delete	Disattiva aggiunta/eliminazione automatica
+	Delete Removes Anchor Points and Keeps Paths Joined	Canc rimuove i punti di ancoraggio e mantiene i tracciati uniti
 	Interpolate Control Points When Moving Anchors	Interpola le maniglie di direzione durante lo spostamento dei punti di ancoraggio
 	Disable Opacity Mask	Disattiva maschera di opacità
 	Discard	Scarta
@@ -1946,6 +1958,10 @@ file-filter	Templates	Modelli
 	Rename Preset	Rinomina preset
 	Save Image Trace Preset	Salva preset ricalco immagine
 	Delete Image Trace Preset	Elimina preset ricalco immagine
+	Tracing Presets…	Preset di ricalco…
+	Import Image Trace Presets	Importa preset ricalco immagine
+	Export Image Trace Presets	Esporta preset ricalco immagine
+	Replace the saved presets that have these names?	Sostituire i preset salvati con questi nomi?
 	Image Trace Presets	Preset ricalco immagine
 	Image:	Immagine:
 	Images:	Immagini:
@@ -2080,6 +2096,11 @@ file-filter	Templates	Modelli
 	Knife	Coltello
 	Knockout Group	Gruppo con foratura
 	Lab	Lab
+	OKLCH Sliders	Cursori OKLCH
+	HSL Sliders	Cursori HSL
+	Chroma	Croma
+	The largest chroma sRGB holds at this lightness and hue	Il croma più alto che sRGB contiene con questa luminosità e tonalità
+	OKLCH needs sRGB as the working RGB space	OKLCH richiede sRGB come spazio di lavoro RGB
 	Lab Spot Colors:	Colori spot Lab:
 	Lab Values	Valori Lab
 	Landscape	Orizzontale
@@ -2190,6 +2211,8 @@ file-filter	Templates	Modelli
 	List Workspaces	Elenca aree di lavoro
 	Live Paint	Pittura dinamica
 	Live Paint Bucket	Secchiello pittura dinamica
+	Fill Area	Riempi area
+	Fill Area Tool	Strumento Riempi area
 	Live Paint Bucket (Stroke)	Secchiello pittura dinamica (traccia)
 	Live Paint Info	Informazioni pittura dinamica
 	Live Paint Selection Tool	Strumento Selezione pittura dinamica
@@ -2499,6 +2522,12 @@ file-filter	Templates	Modelli
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	risoluzione non disponibile
+	estimated memory {memory}	memoria stimata {memory}
+	memory unavailable	memoria non disponibile
+	Unknown format	Formato sconosciuto
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -2647,6 +2676,7 @@ file-filter	Templates	Modelli
 	One Point Perspective Preset 5	Preset prospettiva a un punto 5
 	Only Web Colors	Solo colori web
 	Opacity	Opacità
+	Show Opacity	Mostra opacità
 	Opacity & Mask Define Knockout Shape	Opacità e maschera definiscono la forma di foratura
 	Opacity Mask	Maschera di opacità
 	Opacity Mask Info	Informazioni maschera di opacità
@@ -2842,6 +2872,13 @@ file-filter	Templates	Modelli
 	Pen Tool	Strumento Penna
 	Quick Pen Tool	Strumento Penna rapida
 	Quick Pen	Penna rapida
+	Quick Pen Toolbar	Barra degli strumenti Penna rapida
+	Continuous Arc	Arco continuo
+	Sharp Corner Arc	Arco ad angolo vivo
+	Flip Arc	Capovolgi arco
+	Hide Toolbar	Nascondi barra degli strumenti
+	Pin Toolbar Position	Fissa posizione barra degli strumenti
+	Reset Toolbar Position	Ripristina posizione barra degli strumenti
 	Pencil	Matita
 	Pencil Tool	Strumento Matita
 	per slice	per sezione
@@ -3094,6 +3131,9 @@ digits	Malayalam	Malayalam
 	Scale Artwork with Artboard	Scala la grafica con la tavola da disegno
 	Artboards: {n}	Tavole da disegno: {n}
 	Rearrange All Artboards…	Ridisponi tutte le tavole da disegno…
+	Rearrange…	Ridisponi…
+	Selected Artboards: {n}	Tavole da disegno selezionate: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Fai clic sull'area di lavoro per posizionare le tavole da disegno (Esc annulla)
 	Recall Selection	Richiama selezione
 	RECENT	RECENTI
 	Recent	Recenti
@@ -3289,6 +3329,11 @@ digits	Malayalam	Malayalam
 	Edit Arrowheads	Modifica punte di freccia
 	Edit Arrowheads…	Modifica punte di freccia…
 	Reload Arrowheads	Ricarica punte di freccia
+	Bevels	Smussi
+	Edit Bevels	Modifica smussi
+	Edit Bevels…	Modifica smussi…
+	{name} (document)	{name} (documento)
+	Reload Bevels	Ricarica smussi
 	Rotate View	Ruota vista
 	Reset Rotate View	Reimposta rotazione vista
 	Rotate View to Selection	Ruota vista in base alla selezione
@@ -3342,6 +3387,7 @@ digits	Malayalam	Malayalam
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un gesto di rotazione con due dita sul trackpad ruota la vista dell'area di lavoro.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Tenere premuto un tasto esegue lo strumento o il comando della sua colonna Tieni premuto in Scelte rapide da tastiera; una pressione breve esegue la sua scorciatoia abituale.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Per quanti secondi va tenuto premuto un tasto prima che venga eseguita la sua scorciatoia a pressione prolungata invece di quella abituale.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Canc rimuove i punti di ancoraggio selezionati e riadatta la curva attorno a ciascuno, invece di aprire lì il tracciato.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Quando sposti i punti di ancoraggio, ogni curva con un’estremità spostata mantiene la propria forma rispetto alle sue estremità.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Tenere premuta la scorciatoia di uno strumento lo sceglie finché non la rilasci, poi viene scelto di nuovo lo strumento precedente.
 	Shows the bounding box while you move the selection or draw a shape.	Mostra il riquadro di delimitazione mentre sposti la selezione o disegni una forma.
@@ -3427,9 +3473,14 @@ digits	Malayalam	Malayalam
 	Edit type set in fonts that aren't available?	Modificare il testo in font non disponibili?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Mostra sull’area di lavoro il numero di ogni sezione in un riquadro nel suo angolo in alto a sinistra; se è disattivata, i contorni delle sezioni restano visibili.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Il colore dei contorni delle sezioni utente e oggetto e dei riquadri con il loro numero; le sezioni automatiche usano una tonalità più tenue di questo colore.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Il nuovo testo prende questa lingua finché la lingua di Imposta documento è Inglese: Stati Uniti e [Stile carattere normale] non ne imposta una; il testo già presente in un documento mantiene la propria lingua.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	Nei paragrafi con Sillaba attivo, una parola dell'elenco riceve il trattino di sillabazione solo ai trattini digitati al suo interno, o mai se non ne ha, qualunque sia la sua lingua o l'uso delle maiuscole.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	Nella versione desktop, i plug-in .wasm di questa cartella vengono caricati all'avvio e quando OK imposta una nuova cartella, tranne in modalità provvisoria; uno che chiede autorizzazioni viene caricato solo dopo che le hai concesse. La versione web non ne carica nessuno.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	Grande dà a ogni esecuzione di un plug-in di filtro o di comando almeno 250 milioni di istruzioni, con lo stesso limite di tempo; Normale mantiene il budget proprio del plug-in. Effetti dinamici, esportatori e importatori mantengono il loro.
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Il nuovo testo prende questa lingua finché la lingua di Imposta documento è Inglese: Stati Uniti; il testo già presente in un documento mantiene la propria lingua.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Nei paragrafi con Sillaba attivo, una parola dell'elenco va a capo solo ai trattini digitati al suo interno, o in nessun punto se non ne ha, qualunque sia la sua lingua o l'uso delle maiuscole.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	Nella versione desktop, i plug-in .wasm di questa cartella vengono caricati all'avvio e quando fai clic su OK con una nuova cartella qui, tranne in modalità provvisoria; la versione web non li carica.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	Normale mantiene i limiti propri di ogni plug-in; con Grande, un filtro o un comando di un plug-in può eseguire almeno 250 milioni di istruzioni oltre a quelle per il suo input. Il limite di tempo resta invariato.
 	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Quante istruzioni può usare ogni esecuzione di un filtro di oggetti di un plug-in; Grande ne consente più di Normale con lo stesso limite di 60 secondi. I filtri pesanti mantengono il proprio budget.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	La prima scelta del disco di memoria virtuale: Startup, None o il percorso di una cartella; VectorCraft la memorizza, ma non usa ancora dischi di memoria virtuale.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	La seconda scelta del disco di memoria virtuale: Startup, None o il percorso di una cartella; VectorCraft la memorizza, ma non usa ancora dischi di memoria virtuale.
@@ -3441,13 +3492,15 @@ digits	Malayalam	Malayalam
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Mostra il nome di ogni gruppo di strumenti sopra i suoi strumenti nella barra degli strumenti; se disattivata, i gruppi si susseguono senza nulla tra loro.
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	D'ora in poi i documenti che apri o crei si aprono come schede; se disattivata, ognuno si apre in una finestra mobile. I documenti già aperti restano dove sono.
 	Makes the document tabs taller and their names larger.	Rende le schede dei documenti più alte e i loro nomi più grandi.
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Dal prossimo avvio, il sistema disegna la barra del titolo della finestra dove altrimenti VectorCraft disegnerebbe la propria.
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	Dal prossimo avvio, VectorCraft disegna la barra del titolo della finestra anche dove la disegnerebbe il desktop, a meno che Barra del titolo di sistema sia attiva.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	Dal prossimo avvio, il sistema disegna la barra del titolo della finestra dove altrimenti VectorCraft disegnerebbe la propria; su Linux e sui BSD ha la precedenza la variabile VECTORCRAFT_TITLEBAR.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	Dal prossimo avvio, VectorCraft disegna la barra del titolo della finestra anche dove la disegnerebbe il desktop, a meno che Barra del titolo di sistema sia attiva o la variabile VECTORCRAFT_TITLEBAR la scelga.
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Ingrandisce o rimpicciolisce l'interfaccia; la grafica nell'area di disegno mantiene le sue dimensioni allo stesso zoom.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	I puntatori degli strumenti disegnati da VectorCraft crescono e si riducono con la Scala interfaccia; se disattivata, mantengono le loro dimensioni.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	La lingua dell'interfaccia; Auto usa la lingua del sistema. La finestra di dialogo cambia lingua appena ne scegli una.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Lo Zoom animato funziona solo mentre questa opzione è attiva; se disattivata, lo Zoom animato è attenuato e lo zoom non è animato.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Lo zoom con la rotellina scorre in modo fluido, e lo Strumento Zoom ingrandisce mentre trascini di lato o lo tieni premuto; se disattivata, lo Strumento Zoom ingrandisce l'area che trascini.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	Dal prossimo avvio, la versione desktop mostra la tela tramite questo tipo di processore grafico; la grafica viene sempre disegnata sulla CPU. Automatico preferisce quello integrato su Windows e macOS. La versione web non lo usa.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	Dal prossimo avvio, la finestra mostra ogni fotogramma senza attendere l’aggiornamento dello schermo dove il driver grafico lo consente, al massimo 240 fotogrammi al secondo.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Dal prossimo avvio, la versione desktop disegna con questo tipo di processore grafico; Automatico preferisce quello che gestisce lo schermo. La versione web non lo usa.
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Dal prossimo avvio, la finestra mostra i fotogrammi senza attendere l'aggiornamento dello schermo, al massimo 240 al secondo; disattivato, è lo schermo a scandirli. Una modalità di presentazione impostata all'avvio ha la precedenza.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Il numero massimo di passaggi di annullamento che ogni documento conserva; un numero più basso rimuove i passaggi più vecchi quando fai clic su OK. I passaggi possono sparire anche prima se occupano troppa memoria.
@@ -3466,6 +3519,9 @@ digits	Malayalam	Malayalam
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	Apri file recenti e la schermata Home elencano al massimo questo numero di file recenti; 0 non ne elenca nessuno, e VectorCraft ne ricorda comunque fino a 30.
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	All’apertura di un documento, un’immagine EPS collegata che mostra la sua anteprima salvata la mantiene invece di rileggere il file EPS; i file modificati seguono comunque Aggiorna collegamenti.
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	In Anteprima pixel, le immagini sono disegnate smussate; se disattivata, i loro pixel hanno bordi netti. Fuori da Anteprima pixel, le immagini sono sempre smussate.
+	PDF Text	Testo PDF
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	Il testo di un PDF che apri o incorpori arriva come testo modificabile o come contorni che appaiono uguali su un computer senza i suoi font.
+	Linked pages show the file's own text.	Le pagine collegate mostrano il testo del file stesso.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Quando un file collegato cambia, Automaticamente lo rilegge, Chiedi se modificato te lo chiede prima, e Manualmente lo lascia com’è e mostra un avviso nella barra di stato.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	Nella versione desktop, la cartella da cui partono Nuovo da modello… e Salva come modello…; lasciala vuota per VectorCraft Templates nella tua cartella dei documenti.
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Modifica originale apre un file collegato nell’app predefinita del sistema per il suo tipo; se disattivata, un’immagine raster collegata si apre in PhotoCraft, se installato.
@@ -3480,7 +3536,6 @@ digits	Malayalam	Malayalam
 	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Riproduci tutti i neri come nero ricco disegna il nero CMYK puro come nero RGB nelle esportazioni raster RGB e in scala di grigi e con Stampa come bitmap; non cambia le esportazioni vettoriali, i JPEG, TIFF e PSD CMYK né le altre stampe.
 	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	Su uno schermo touch passa all'area di lavoro touch; disattivando l'opzione o se lo schermo touch non è più rilevato, torna all'area di lavoro precedente.
 	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Un tocco con due dita sull'area di lavoro annulla o, nell'area di lavoro touch, alterna tra strumenti di selezione e di disegno, e un tocco con tre dita ripete; nessuno dei due funziona in modalità presentazione.
-	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Il nuovo testo prende questa lingua finché la lingua di Imposta documento è Inglese: Stati Uniti e [Stile carattere normale] non ne imposta una; il testo già presente in un documento mantiene la propria lingua.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	Nei paragrafi con Sillaba attivo, una parola dell'elenco va a capo solo ai trattini digitati al suo interno, o in nessun punto se non ne ha, qualunque sia l'uso delle maiuscole; le parole coreane non prendono trattino e le parole in lingue indiane non vanno a capo all'interno di un gruppo di caratteri.
 	Reset all preferences to their defaults?	Ripristinare tutte le preferenze ai valori predefiniti?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	I valori predefiniti vengono applicati quando fai clic su OK in Preferenze. Annulla lì mantiene le preferenze attuali.
@@ -3727,6 +3782,7 @@ digits	Malayalam	Malayalam
 	Recent Commands	Comandi recenti
 	No recent commands	Nessun comando recente
 	Type to search commands, tools, panels and effects	Digita per cercare comandi, strumenti, pannelli ed effetti
+	Clear Recent Commands	Cancella comandi recenti
 	Search commands	Cerca comandi
 	Search Commands…	Cerca comandi…
 	Secondary	Secondario
@@ -5132,7 +5188,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	PDF settings are not an object	Le impostazioni PDF non sono un oggetto
 @msg	PDF security settings are not an object	Le impostazioni di sicurezza PDF non sono un oggetto
 @msg	PDF writer error: {0}	Errore del generatore PDF: {0}
-@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Pacchetto creato con {n} file in {folder} ({note})
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Pacchetto creato con {n} file in {folder} ({note})|Pacchetto creato con {n} file in {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Anteprima nel browser richiede l'app desktop (sul web i file vengono invece scaricati)
 @msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	indica `desiredK`, la dimensione del file desiderata in K (1024 byte): un numero maggiore di 0 e al massimo 1048576
 @msg	`startWith` is `current` or `auto`	`startWith` è `current` o `auto`
@@ -5154,6 +5210,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	Saved {path}	Salvato {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Seleziona del testo o fai clic nel testo con lo strumento Testo per inserire glifi
 @msg	Shape Builder: no region under the pointer	Generatore forme: nessuna regione sotto il puntatore
+@msg	Fill Area: no enclosed area under the pointer	Riempi area: nessuna area chiusa sotto il puntatore
 @msg	Shape Builder: select all paths you want to merge	Generatore forme: seleziona tutti i tracciati da unire
 @msg	Shape Builder: select paths or compound paths	Generatore forme: seleziona tracciati o tracciati composti
 @msg	Show All Hidden Attributes: nothing is hidden	Mostra tutti gli attributi nascosti: non c'è nulla di nascosto
@@ -5212,6 +5269,8 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` deve essere grayscale, rgb, hsb, cmyk o websafe
 @msg	`view` must be wheel or box	`view` deve essere wheel o box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` deve essere hue, saturation, brightness, red, green o blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` deve essere none, oklch o hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH richiede sRGB come spazio di lavoro RGB
 @msg	`{k}` must be [x, y]	`{k}` deve essere [x, y]
 @msg	`{name}` has no options	`{name}` non ha opzioni
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` è un'area di lavoro integrata; scegli un altro nome
@@ -5622,6 +5681,10 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	questo ricalco creerebbe più di {max} punti di ancoraggio, più di quanti il documento possa mostrare in modo fluido: aumenta Disturbo, riduci Tracciati o Colori, oppure scegli un preset a fedeltà inferiore
 @msg	select an envelope	seleziona un involucro
 @msg	select an image	seleziona un'immagine
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	l'oggetto {_1} è un'immagine modificata con Distorsione prospettica o Distorsione libera, su cui questo comando non funziona
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	l'immagine {_1} non può essere distorta così: i suoi angoli non formerebbero una forma convessa
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	l'immagine {_1} non può essere distorta così: i suoi angoli supererebbero l'orizzonte della distorsione
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	l'immagine {_1} non può essere distorta così: i suoi angoli sarebbero troppo vicini per una proiezione prospettica
 @msg	`background` must be edges, corners or colors	`background` deve essere edges, corners o colors
 @msg	`match` must be distance or channels	`match` deve essere distance o channels
 @msg	`{key}` must be from 0 to 100	`{key}` deve essere compreso tra 0 e 100
@@ -6424,6 +6487,7 @@ lighting	Light	Luce
 @msg	a 3D effect on a group's fill or stroke draws nothing	un effetto 3D sul riempimento o sulla traccia di un gruppo non disegna nulla
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un effetto 3D sul riempimento o sulla traccia di un gruppo non disegna nulla da esportare
 @msg	The 3D object is too complex to export	L'oggetto 3D è troppo complesso per essere esportato
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	La mesh dell'oggetto 3D è incompleta o contiene un valore che non è un numero
 @msg	the <filter> element needs an id, the filter's name	l'elemento <filter> richiede un id, il nome del filtro
 @msg	an SVG filter's id is at most {MAX_NAME} characters	l'id di un filtro SVG ha al massimo {MAX_NAME} caratteri
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> non è un elemento di un filtro SVG
@@ -6445,7 +6509,10 @@ lighting	Light	Luce
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l'oggetto non ha alcun effetto 3D (Estrusione e smusso, Rivoluzione, Gonfia o Ruota)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` deve essere un oggetto che contiene solo `mode`, con valore shaded o wireframe
 @msg	its 3D effect builds no solid	il suo effetto 3D non costruisce alcun solido
-@msg	bevel must be none or one of {_1}	bevel deve essere none o uno dei seguenti: {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel deve essere none, uno dei seguenti: {_1}, oppure custom con {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom richiede {BEVEL_PROFILE}, i punti dello smusso
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} deve essere una stringa
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} deve contenere da 2 a {most} punti [x, y], ogni proporzione tra 0 e 1, da [0, 0] (il bordo della faccia) a [1, 1] (la parete laterale)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} non può costruire solidi da questo disegno: le sue istanze di simbolo, fusioni e gruppi di ritaglio contengono troppi oggetti
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} non può costruire un solido dall'istanza del simbolo «{symbol}»: il disegno del simbolo non è disponibile
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: il tracciato di ritaglio è troppo complesso per ritagliare il disegno
@@ -6471,8 +6538,10 @@ lighting	Light	Luce
 @msg	`{GRAPHICS}` face must be front, back or side	face di `{GRAPHICS}` deve essere front, back o side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} di `{GRAPHICS}` deve essere un numero da {lo} a {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` deve essere un array
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Le grafiche si applicano ai tipi di oggetto Piano, Estrusione e Rivoluzione
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Le grafiche si applicano ai tipi di oggetto Piano, Estrusione, Rivoluzione e Gonfia
 @msg	Revolve maps graphics onto its side: map them onto the front	Rivoluzione applica le grafiche sul suo lato: applicatele sulla faccia anteriore
+@msg	Inflate maps graphics onto its front and back, not onto a side	Gonfia applica le grafiche sulla faccia anteriore e sul retro, non su un lato
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	oggetto {_1}: il retro di Gonfia accetta grafiche solo con Entrambi i lati e Chiusura attivi
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Le grafiche sono troppo complesse per questa superficie: semplificate il disegno dei simboli o riducete Segmenti
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` accetta al massimo {MAX_GRAPHICS} grafiche
 @msg	A plane has one face: map its graphics onto the front	Un piano ha una sola faccia: applicate le sue grafiche sulla faccia anteriore
@@ -6835,9 +6904,9 @@ lighting	Light	Luce
 	Slope:	Pendenza:
 axis	X Axis	Asse X
 axis	Y Axis	Asse Y
-@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Pacchetto creato con {n} file in {folder}
-@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Pacchetto creato con {n} file {note}
-@msgplural	Packaged {n} file|Packaged {n} files	Pacchetto creato con {n} file
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Pacchetto creato con {n} file in {folder}|Pacchetto creato con {n} file in {folder}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Pacchetto creato con {n} file {note}|Pacchetto creato con {n} file {note}
+@msgplural	Packaged {n} file|Packaged {n} files	Pacchetto creato con {n} file|Pacchetto creato con {n} file
 @plural	Packaged {n} file|Packaged {n} files	Pacchetto creato con {n} file|Pacchetto creato con {n} file
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Pacchetto creato con {n} file in {folder}|Pacchetto creato con {n} file in {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Pacchetto creato con {n} file {note}|Pacchetto creato con {n} file {note}
@@ -6889,11 +6958,19 @@ axis	Y Axis	Asse Y
 @msg	module is {_1} bytes (limit {_2})	il modulo occupa {_1} byte (limite {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	richiede approvazione: chiede {0}, che l’utente concede installandolo da solo
 @msg	not JSON: {e}	non è JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	non è un binario WebAssembly (manca l’intestazione \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	non è un binario WebAssembly (manca l’intestazione \\0asm)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	un tipo di funzione supera il limite di {MAX_FUNC_TYPE_VALUES} parametri
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	un tipo di funzione supera il limite di {MAX_FUNC_TYPE_VALUES} risultati
 @msg	parameter `{k}`: {what}	parametro `{k}`: {what}
 @msg	parameter `{name}`: {what}	parametro `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	i parametri del plug-in devono essere un oggetto JSON
 @msg	the module must export its linear memory as `memory`	il modulo deve esportare la sua memoria lineare come `memory`
+@msg	the module must export `{name}` with the type {signature}	il modulo deve esportare `{name}` con il tipo {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	il modulo ha più di una sezione personalizzata `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	budget di memoria (la memoria iniziale del modulo è di {initial} byte, limite {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	il manifesto nella sezione personalizzata `{MANIFEST_SECTION}` deve indicare `abi` come {ABI_VERSION}, la versione dell’ABI che questo host implementa
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	budget delle tabelle (il modulo definisce {count} tabelle, la più grande con {largest} elementi; limite {MAX_TABLES} tabelle da {MAX_TABLE_ELEMENTS} elementi)
+@msg	the module's table section could not be read	impossibile leggere la sezione delle tabelle del modulo
 @msg	the objects to change are no longer in the document	gli oggetti da modificare non sono più nel documento
 @msg	the runtime panicked	l’ambiente di esecuzione si è bloccato
 @msg	unexpected host trap	interruzione imprevista (trap) dell’host
@@ -6920,6 +6997,11 @@ axis	Y Axis	Asse Y
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` e `maxItems` devono essere 0-{MAX_LIST}, `maxItems` almeno 1, e il valore predefinito deve averne altrettanti
 @msg	`name` must be a string	`name` deve essere una stringa
 @msg	`opacity` must be a number	`opacity` deve essere un numero
+@msg	`opacity` must be a number from 0 to 100	`opacity` deve essere un numero compreso tra 0 e 100
+@msg	`opacity` must be true or false	`opacity` deve essere true o false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	i caratteri del testo non hanno un'opacità propria: aggiungi un riempimento o una traccia con Aggiungi nuovo riempimento o Aggiungi nuova traccia del pannello Aspetto
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	un oggetto selezionato in un'istanza di simbolo non ha un'opacità propria di riempimento o di traccia
+@msg	no target has that fill or stroke to take the opacity	nessuna destinazione ha quel riempimento o quella traccia per ricevere l'opacità
 @msg	`type` must be "path" or "compound"	`type` deve essere "path" o "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` deve avere 1-{MAX_UNIT} caratteri stampabili
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` deve elencare da 1 a {MAX_CONDITION_VALUES} valori per `{other}`
@@ -6963,6 +7045,8 @@ axis	Y Axis	Asse Y
 @msg	`plates` requires a stop linked to a spot swatch	`plates` richiede un cursore colore collegato a un campione di colore spot
 @msg	the output	l’output
 @msg	the path has no anchor points	il tracciato non ha punti di ancoraggio
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	il tracciato composto {id} ha un membro nascosto, bloccato o guida, quindi i suoi membri non possono essere sostituiti
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	il tracciato composto {id} ha un membro che non è un tracciato, quindi i suoi membri non possono essere sostituiti
 @msg	too many anchor points (limit {MAX_ANCHORS})	troppi punti di ancoraggio (limite {MAX_ANCHORS})
 @msg	true or false	true o false
 @msg	a number >= {_1}	un numero >= {_1}
@@ -8871,6 +8955,8 @@ breakText	Glyphs	Glifi
 @msg	`dataBase64` is larger than the module limit	`dataBase64` supera il limite del modulo
 @msg	`dataBase64` is not valid base64	`dataBase64` non è un base64 valido
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` non può essere combinato con `ids`, `reverse` o `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` non può essere combinato con `ids`, `id` o `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` non può essere combinato con `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` e `childLimit` riducono il riepilogo: passa `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` è il nome di un design, o null per colonne semplici
 @msg	`design` is a design name, or null for the default marker	`design` è il nome di un design, o null per il marcatore predefinito
@@ -9359,6 +9445,7 @@ breakText	Glyphs	Glifi
 @msg	give a pattern name or select an object painted with a pattern	indica il nome di un motivo o seleziona un oggetto dipinto con un motivo
 @msg	give at least one of clip, invert, disabled, linked	indica almeno uno tra clip, invert, disabled, linked
 @msg	give color, none, swatch or gradient	indica color, none, swatch o gradient
+@msg	give color, none, swatch, gradient or opacity	indica color, none, swatch, gradient o opacity
 @msg	give dataBase64	indica dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	indica at (un clic) o area (un tracciato disegnato attorno alle sovrapposizioni)
 @msg	give formats or a preset, not both	indica formats o un predefinito, non entrambi
@@ -10423,6 +10510,24 @@ breakText	Glyphs	Glifi
 @msg	A panel is not joined to the rest by a crease.	Un pannello non è unito al resto da alcuna linea di cordonatura.
 @msg	A fold line is on a non-printing layer.	Una linea di piega si trova su un livello non stampabile.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Pannelli: {panels}, cerniere: {hinges}, errori: {errors}, avvisi: {warnings}
+	Nature Icons	Icone della natura
+	Flower	Fiore
+	Tree	Albero
+	Mountain	Montagna
+	Ornamental	Ornamentale
+	Scrollwork	Voluta
+	Filigree Arrow	Freccia filigranata
+	Petal Sweep	Tratto a petali
+	Twin Curl	Doppia voluta
+	Vector Packs	Pacchetti vettoriali
+	Compass Rose	Rosa dei venti
+	Botanical Sprig	Rametto botanico
+	Facet Diamond	Diamante sfaccettato
+	Tide Crest	Cresta dell'onda
+	Leaf Vine	Tralcio di foglie
+	Blossom Chain	Catena di fiori
+	Pennant Garland	Ghirlanda di bandierine
+	Lantern String	Fila di lanterne
 	Orbit Lines	Linee orbitali
 	Petal Garland	Ghirlanda di petali
 	Lattice Braid	Intreccio a reticolo

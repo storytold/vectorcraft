@@ -86,8 +86,9 @@ pub(super) fn spacing(density: f64) -> f64 {
 }
 
 /// The document key that holds each symbol set's Symbol Set Density: `{set id: density}`, written
-/// when the Symbol Sprayer creates a set and when `symbol.setDensity` spaces it.
-const SET_DENSITY_KEY: &str = "symbolSetDensity";
+/// when the Symbol Sprayer creates a set and when `symbol.setDensity` spaces it, and copied to a
+/// copy of a set by [`Document::reid`].
+const SET_DENSITY_KEY: &str = Document::SYMBOL_SET_DENSITY_KEY;
 
 /// The Symbol Set Density symbol set `set` was created at or last given (None when not recorded).
 fn set_density_of(d: &Document, set: NodeId) -> Option<f64> {
@@ -261,7 +262,10 @@ pub(super) fn mean(looks: &[&Look], at: Point, with_gap: bool) -> Option<Mean> {
         cos += l.angle.cos();
         opacity += l.opacity;
         middle += l.center.to_vec2();
-        if let Some((p, o)) = &l.fill {
+        // A fill at no opacity shows nothing: it is no stain or style, and its paint is not taken.
+        if let Some((p, o)) = &l.fill
+            && *o > 0.0
+        {
             amount += o;
             let far = l.center.distance(at);
             if paint.is_none_or(|(_, nearest)| far < nearest) {

@@ -254,6 +254,170 @@ fn canceling_an_alt_drag_leaves_the_document_as_it_was() {
     assert!(s.doc().unwrap().interaction.is_none());
 }
 
+/// Returns the ids of the children of the document's layer `layer` (0 is the bottom one).
+fn layer_kids(s: &Session, layer: usize) -> Vec<NodeId> {
+    s.doc().unwrap().doc.layers[layer].children().unwrap().iter().map(|n| n.id).collect()
+}
+
+/// Returns a session with three squares side by side, `a`, `b` and `c` from the bottom of the
+/// stack up, and `b` selected; and their ids.
+fn three_squares() -> (Session, [NodeId; 3]) {
+    let mut s = session();
+    let ids = [100.0, 200.0, 300.0].map(|x| rect(&mut s, x, 100.0, 40.0, 40.0));
+    s.execute("select.set", &json!({"ids": [ids[1].0]})).unwrap();
+    (s, ids)
+}
+
+/// Alt-drags the selection 80 pt down with `tool`, pressing at `press`.
+fn alt_drag(s: &mut Session, tool: &str, press: (f64, f64)) {
+    s.select_tool(tool, ViewInfo::default()).unwrap();
+    drag_at(s, PointerKind::Down, press, true);
+    for dy in [20.0, 50.0, 80.0] {
+        drag_at(s, PointerKind::Drag, (press.0, press.1 + dy), true);
+    }
+    drag_at(s, PointerKind::Up, (press.0, press.1 + 80.0), true);
+}
+
+/// In Draw Behind, an Alt-drag with the Selection tool, or with Direct Selection on an object
+/// selected whole, puts the copy directly below its original, selected, in one undo step. In Draw
+/// Normal and Draw Inside the copy goes directly above it, as before.
+#[test]
+fn an_alt_drag_in_draw_behind_puts_the_copy_directly_below_its_original() {
+    for (tool, press) in [("selection", (220.0, 120.0)), ("directSelection", (200.0, 100.0))] {
+        for mode in ["behind", "normal", "inside"] {
+            let (mut s, [a, b, c]) = three_squares();
+            s.execute("view.drawMode", &json!({"mode": mode})).unwrap();
+            let (before, undo) = (s.doc().unwrap().doc.clone(), undo_len(&s));
+            alt_drag(&mut s, tool, press);
+            let what = format!("{tool}, {mode}");
+            let kids = layer_kids(&s, 0);
+            let copy = s.doc().unwrap().selection.objects.clone();
+            assert_eq!(copy.len(), 1, "{what}: the copy is selected");
+            let want = if mode == "behind" { vec![a, copy[0], b, c] } else { vec![a, b, copy[0], c] };
+            assert_eq!(kids, want, "{what}");
+            assert!(close(bounds(&s, copy[0]), Rect::new(200.0, 180.0, 240.0, 220.0)), "{what}: {:?}", bounds(&s, copy[0]));
+            assert!(close(bounds(&s, b), Rect::new(200.0, 100.0, 240.0, 140.0)), "{what}: the original stays");
+            assert_eq!(undo_len(&s), undo + 1, "{what}");
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert!(*s.doc().unwrap().doc == *before, "{what}: Undo gives back the document");
+        }
+    }
+}
+
+/// In Draw Behind, an Alt-drag of several objects puts each copy directly below its own original,
+/// in the original's group or layer: objects side by side in one layer, a group (copied whole) and
+/// an object in another layer.
+#[test]
+fn an_alt_drag_in_draw_behind_puts_each_copy_below_its_own_original() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 40.0, 40.0);
+    let x = rect(&mut s, 200.0, 100.0, 40.0, 40.0);
+    let y = rect(&mut s, 260.0, 100.0, 40.0, 40.0);
+    s.execute("select.set", &json!({"ids": [x.0, y.0]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let c = rect(&mut s, 400.0, 100.0, 40.0, 40.0);
+    s.execute("layer.new", &json!({})).unwrap();
+    let d = rect(&mut s, 500.0, 100.0, 40.0, 40.0);
+    assert_eq!(layer_kids(&s, 0), vec![a, g, c]);
+    assert_eq!(layer_kids(&s, 1), vec![d]);
+    s.execute("select.set", &json!({"ids": [a.0, g.0, c.0, d.0]})).unwrap();
+    s.execute("view.drawMode", &json!({"mode": "behind"})).unwrap();
+    let undo = undo_len(&s);
+    alt_drag(&mut s, "selection", (120.0, 120.0));
+    let (bottom, top) = (layer_kids(&s, 0), layer_kids(&s, 1));
+    assert_eq!(bottom.len(), 6, "{bottom:?}");
+    assert_eq!([bottom[1], bottom[3], bottom[5], top[1]], [a, g, c, d], "the originals keep their order");
+    let copies = [bottom[0], bottom[2], bottom[4], top[0]];
+    let mut selected = s.doc().unwrap().selection.objects.clone();
+    selected.sort_unstable();
+    let mut want = copies.to_vec();
+    want.sort_unstable();
+    assert_eq!(selected, want, "the copies are selected");
+    let group_copy = s.doc().unwrap().doc.node(copies[1]).unwrap().children().map(Vec::len);
+    assert_eq!(group_copy, Some(2), "the group is copied whole, once");
+    assert_eq!(undo_len(&s), undo + 1);
+}
+
+/// `drawBehind` puts the copies of an interaction's previews below their originals only in Draw
+/// Behind and only with `copy`: a later preview without it does not reuse the copies made below,
+/// and a transform with `copy` but without `drawBehind`, `object.move` with `copy`, and Transform
+/// Again after an Alt-drag in Draw Behind put their copies above. A `drawBehind` that is not true or
+/// false is refused, and the document and its undo history stay as they were.
+#[test]
+fn only_an_alt_drag_copy_follows_draw_behind() {
+    let (mut s, [a, b, c]) = three_squares();
+    s.execute("view.drawMode", &json!({"mode": "behind"})).unwrap();
+    s.begin_interaction("Copy").unwrap();
+    let below = json!({"matrix": [1, 0, 0, 1, 0, 80], "copy": true, "drawBehind": true});
+    s.preview("object.transform", &below).unwrap();
+    let first = s.doc().unwrap().selection.objects.clone();
+    assert_eq!(layer_kids(&s, 0), vec![a, first[0], b, c]);
+    s.preview("object.transform", &json!({"matrix": [1, 0, 0, 1, 0, 90], "copy": true})).unwrap();
+    let second = s.doc().unwrap().selection.objects.clone();
+    assert_eq!(layer_kids(&s, 0), vec![a, b, second[0], c], "a copy without `drawBehind` goes above");
+    s.preview("object.transform", &json!({"matrix": [1, 0, 0, 1, 0, 90], "copy": false, "drawBehind": true})).unwrap();
+    assert_eq!(layer_kids(&s, 0), vec![a, b, c], "without `copy`, nothing is copied");
+    s.cancel_interaction().unwrap();
+
+    let (mut s, [a, b, c]) = three_squares();
+    s.execute("view.drawMode", &json!({"mode": "behind"})).unwrap();
+    for (cmd, params) in
+        [("object.transform", json!({"matrix": [1, 0, 0, 1, 0, 80], "copy": true})), ("object.move", json!({"dx": 0, "dy": 80, "copy": true}))]
+    {
+        s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+        let copy = ids_of(&s.execute(cmd, &params).unwrap());
+        assert_eq!(layer_kids(&s, 0), vec![a, b, copy[0], c], "{cmd}");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    // An object listed twice is copied twice, each copy directly below it in turn.
+    let twice =
+        ids_of(&s.execute("object.transform", &json!({"matrix": [1, 0, 0, 1, 0, 80], "copy": true, "drawBehind": true, "ids": [b.0, b.0]})).unwrap());
+    assert_eq!(layer_kids(&s, 0), vec![a, twice[0], twice[1], b, c]);
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    alt_drag(&mut s, "selection", (220.0, 120.0));
+    let copy = s.doc().unwrap().selection.objects.clone();
+    assert_eq!(layer_kids(&s, 0), vec![a, copy[0], b, c]);
+    let Some(LastTransform::Matrix(_, options)) = s.doc().unwrap().last_transform.clone() else { panic!("the drag is kept for Transform Again") };
+    assert!(options.get("drawBehind").is_none(), "{options}");
+    let again = ids_of(&s.execute("object.transformAgain", &json!({})).unwrap());
+    assert_eq!(layer_kids(&s, 0), vec![a, copy[0], again[0], b, c], "Transform Again copies above");
+
+    let (before, undo) = (s.doc().unwrap().doc.clone(), undo_len(&s));
+    let e = s.execute("object.transform", &json!({"matrix": [1, 0, 0, 1, 0, 80], "copy": true, "drawBehind": "yes"})).unwrap_err();
+    assert!(e.to_string().contains("`drawBehind` must be true or false"), "{e}");
+    assert!(Arc::ptr_eq(&s.doc().unwrap().doc, &before));
+    assert_eq!(undo_len(&s), undo);
+}
+
+/// In Draw Behind, the copy of a clip group's clipping path goes directly above it, so the clipping
+/// path stays the group's bottom child; the copy of the clipped art goes below that art.
+#[test]
+fn a_copy_in_draw_behind_leaves_the_clipping_path_at_the_bottom() {
+    let mut s = session();
+    let art = rect(&mut s, 100.0, 100.0, 80.0, 80.0);
+    rect(&mut s, 110.0, 110.0, 40.0, 40.0);
+    s.execute("select.all", &json!({})).unwrap();
+    let g = NodeId(s.execute("object.clippingMask.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let kids = |s: &Session| -> Vec<NodeId> { s.doc().unwrap().doc.node(g).unwrap().children().unwrap().iter().map(|n| n.id).collect() };
+    let [mask, clipped] = kids(&s)[..] else { panic!("{:?}", kids(&s)) };
+    assert_eq!(clipped, art);
+    s.execute("view.drawMode", &json!({"mode": "behind"})).unwrap();
+    let params = |ids: [NodeId; 2]| json!({"matrix": [1, 0, 0, 1, 0, 80], "copy": true, "drawBehind": true, "ids": [ids[0].0, ids[1].0]});
+    let copies = ids_of(&s.execute("object.transform", &params([mask, art])).unwrap());
+    assert_eq!(kids(&s), vec![mask, copies[0], copies[1], art]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    // An object listed twice is copied one at a time, over the clipping path too.
+    let copies = ids_of(&s.execute("object.transform", &params([mask, mask])).unwrap());
+    assert_eq!(kids(&s), vec![mask, copies[1], copies[0], art]);
+}
+
+/// Returns the `ids` of a command's reply.
+fn ids_of(r: &Value) -> Vec<NodeId> {
+    r["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect()
+}
+
 /// Returns a session with the grid and the square of [`persp_session`], the grid shown with its
 /// right plane active, and a group of two squares attached to the right plane beside the square,
 /// with the square and the group selected; and the square's id.
@@ -752,6 +916,399 @@ fn distort_perspective_midpoint_is_projective() {
     let c = bounds(&s, probe).center();
     assert!((c.x - 50.0).abs() < 1e-6);
     assert!((c.y - 100.0 / 6.0).abs() < 1e-3, "{c:?}");
+}
+
+/// A 2 × 2 px image placed at (0, 0)–(100, 100), selected.
+fn placed_image(s: &mut Session) -> NodeId {
+    s.edit("Place", |d, sel| {
+        d.images.insert("pic".into(), vectorcraft_doc::ImageBlob::png(vec![]));
+        let id = d.alloc_id();
+        let im = vectorcraft_doc::ImageObject {
+            key: "pic".into(),
+            width: 2,
+            height: 2,
+            xf: vectorcraft_geom::Affine::scale(50.0),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        d.insert(d.default_layer(), 0, Node::new(id, vectorcraft_doc::NodeKind::Image(Box::new(im))))?;
+        sel.set([id]);
+        Ok(id)
+    })
+    .unwrap()
+}
+
+fn corners(s: &Session, id: NodeId) -> [Point; 4] {
+    s.doc().unwrap().doc.node(id).unwrap().image_corners().unwrap()
+}
+
+fn assert_corners(got: [Point; 4], want: [(f64, f64); 4]) {
+    for (g, (x, y)) in got.iter().zip(want) {
+        assert!(g.distance(Point::new(x, y)) < 1e-9, "{got:?} against {want:?}");
+    }
+}
+
+/// Perspective Distort and Free Distort put an image's corners exactly on the handles, in one
+/// undo step; the image is bounded and clicked by its corners, and a move takes them along.
+#[test]
+fn distort_puts_an_images_corners_on_the_handles() {
+    for want in [[(40.0, 0.0), (60.0, 0.0), (100.0, 100.0), (0.0, 100.0)], [(10.0, 5.0), (90.0, 0.0), (120.0, 110.0), (0.0, 100.0)]] {
+        let mut s = session();
+        let img = placed_image(&mut s);
+        let undo = undo_len(&s);
+        let corners_json: Vec<[f64; 2]> = want.iter().map(|(x, y)| [*x, *y]).collect();
+        s.execute("object.distort", &json!({ "corners": corners_json })).unwrap();
+        assert_eq!(undo_len(&s), undo + 1);
+        assert_corners(corners(&s, img), want);
+        assert!(s.doc().unwrap().doc.node(img).unwrap().is_distorted_image());
+        let b = bounds(&s, img);
+        let xs = want.map(|c| c.0);
+        let ys = want.map(|c| c.1);
+        let near = |a: f64, b: f64| (a - b).abs() < 1e-9;
+        assert!(near(b.x0, xs.iter().copied().fold(f64::MAX, f64::min)) && near(b.x1, xs.iter().copied().fold(f64::MIN, f64::max)), "{b:?}");
+        assert!(near(b.y0, ys.iter().copied().fold(f64::MAX, f64::min)) && near(b.y1, ys.iter().copied().fold(f64::MIN, f64::max)), "{b:?}");
+        s.execute("object.move", &json!({"dx": 10, "dy": 20})).unwrap();
+        assert_corners(corners(&s, img), want.map(|(x, y)| (x + 10.0, y + 20.0)));
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_corners(corners(&s, img), [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)]);
+        assert!(!s.doc().unwrap().doc.node(img).unwrap().is_distorted_image());
+    }
+    // Clicks: inside the trapezoid hits the image; inside its old square but outside the
+    // trapezoid does not.
+    let mut s = session();
+    let img = placed_image(&mut s);
+    s.execute("object.distort", &json!({ "corners": [[40, 0], [60, 0], [100, 100], [0, 100]] })).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let opt = vectorcraft_doc::hit::HitOptions::default();
+    assert_eq!(vectorcraft_doc::hit::hit_test(doc, Point::new(50.0, 50.0), opt).map(|h| h.leaf), Some(img));
+    assert_eq!(vectorcraft_doc::hit::hit_test(doc, Point::new(5.0, 10.0), opt).map(|h| h.leaf), None);
+}
+
+/// Distorted together with a path, the image's corners and the path's anchors follow one warp.
+#[test]
+fn distort_moves_an_image_and_a_path_as_one() {
+    let mut s = session();
+    let img = placed_image(&mut s);
+    let path = rect(&mut s, 100.0, 0.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [img.0, path.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[0, 0], [200, 0], [200, 100], [50, 100]]})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let anchors: Vec<Point> = d.node(path).unwrap().path_data().unwrap().anchors().map(|(_, _, a)| a.p).collect();
+    let q = corners(&s, img);
+    // The image's right edge and the path's left edge were one line, and stay one where the warp
+    // moves it.
+    assert!(q[2].distance(Point::new(100.0, 100.0)) > 1.0, "{q:?}");
+    for p in [q[1], q[2]] {
+        assert!(anchors.iter().any(|a| a.distance(p) < 1e-9), "{p:?} not in {anchors:?}");
+    }
+}
+
+/// Corners that would fold an image over are refused: nothing changes and no undo step is kept.
+/// A distorted image keeps its distortion where commands that cannot keep it are asked to work.
+#[test]
+fn distort_refuses_a_folded_image_and_crop_and_trace_refuse_a_distorted_one() {
+    let mut s = session();
+    let img = placed_image(&mut s);
+    let (before, undo) = (s.doc().unwrap().doc.clone(), undo_len(&s));
+    let e = s.execute("object.distort", &json!({"corners": [[0, 0], [100, 0], [0, 100], [100, 100]]})).unwrap_err().to_string();
+    assert!(e.contains("convex"), "{e}");
+    assert_eq!(undo_len(&s), undo);
+    assert_eq!(s.doc().unwrap().doc, before);
+    // Three corners on one line give no perspective map at all.
+    let e = s.execute("object.distort", &json!({"corners": [[0, 0], [200, 0], [100, 50], [0, 100]]})).unwrap_err().to_string();
+    assert!(e.contains("convex"), "{e}");
+    assert_eq!(s.doc().unwrap().doc, before);
+    // A convex shape too small for a perspective map: the corners could not reach the handles.
+    let e = s.execute("object.distort", &json!({"corners": [[0, 0], [1e-7, 0], [8e-8, 1e-7], [0, 1e-7]]})).unwrap_err().to_string();
+    assert!(e.contains("too close together"), "{e}");
+    // The same shape far from the origin: its distance from it does not hide the missed corner.
+    let x = 1_000_000.0;
+    let e = s.execute("object.distort", &json!({"corners": [[x, 0], [x + 1e-7, 0], [x + 8e-8, 1e-7], [x, 1e-7]]})).unwrap_err().to_string();
+    assert!(e.contains("too close together"), "{e}");
+    // A long, thin shape with one side all but gone.
+    let e = s.execute("object.distort", &json!({"corners": [[0, 0], [1_000_000, 0], [1_000_000, 1e-19], [0, 1]]})).unwrap_err().to_string();
+    assert!(e.contains("too close together"), "{e}");
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(undo_len(&s), undo);
+    // A small shape near the edge of the canvas is still distorted.
+    let o = vectorcraft_doc::MAX_COORD - 2.0;
+    let far = [[o, o], [o + 1.0, o], [o + 0.2130712, o + 1.0], [o, o + 1.0]];
+    s.execute("object.distort", &json!({ "from": [0, 0, 100, 100], "corners": far })).unwrap();
+    assert!(s.doc().unwrap().doc.node(img).unwrap().is_distorted_image());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(undo_len(&s), undo);
+    s.execute("object.distort", &json!({ "corners": [[40, 0], [60, 0], [100, 100], [0, 100]] })).unwrap();
+    for (cmd, params) in [
+        ("object.cropImage", json!({})),
+        ("imageTrace.make", json!({})),
+        ("object.createObjectMosaic", json!({})),
+        ("object.mesh.create", json!({})),
+        (
+            "file.place",
+            json!({"replace": true, "name": "b.png", "dataBase64": vectorcraft_format::base64_encode(&crate::tests_links::png(2, 2, [0, 0, 255]))}),
+        ),
+    ] {
+        let e = s.execute(cmd, &params).unwrap_err().to_string();
+        // Every command gives the one shared refusal, which the complete-message catalogs translate.
+        assert!(e.contains("is an image changed by Perspective Distort or Free Distort, which this command does not work on"), "{cmd}: {e}");
+    }
+    assert!(s.doc().unwrap().doc.node(img).unwrap().is_distorted_image());
+    assert_eq!(undo_len(&s), undo + 1);
+    // Type replaces a distorted image by its bounds, which the corners give: not refused.
+    let text = json!({"replace": true, "name": "note.txt", "dataBase64": vectorcraft_format::base64_encode(b"Hello")});
+    let out = s.execute("file.place", &text).unwrap();
+    let id = NodeId(out["ids"][0].as_u64().unwrap());
+    assert!(matches!(s.doc().unwrap().doc.node(id).unwrap().kind, vectorcraft_doc::NodeKind::Text(_)));
+}
+
+/// Create Gradient Mesh on a path and a distorted image converts the path and names the image it
+/// left as it is, with the shared refusal.
+#[test]
+fn mesh_create_reports_the_distorted_image_it_skips() {
+    let mut s = session();
+    let img = placed_image(&mut s);
+    s.execute("object.distort", &json!({ "corners": [[40, 0], [60, 0], [100, 100], [0, 100]] })).unwrap();
+    let path = rect(&mut s, 200.0, 0.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [img.0, path.0]})).unwrap();
+    let out = s.execute("object.mesh.create", &json!({"rows": 1, "cols": 1})).unwrap();
+    assert_eq!(out["ids"].as_array().map(Vec::len), Some(1), "{out}");
+    let skipped = out["skipped"].as_array().expect("the skipped image");
+    assert_eq!(skipped.len(), 1, "{out}");
+    assert_eq!(skipped[0]["id"], json!(img.0));
+    assert!(skipped[0]["reason"].as_str().unwrap().contains("Perspective Distort or Free Distort"), "{out}");
+    assert!(s.doc().unwrap().doc.node(img).unwrap().is_distorted_image());
+    // Without a distorted image, no `skipped`.
+    let other = rect(&mut s, 400.0, 0.0, 100.0, 100.0);
+    let out = s.execute("object.mesh.create", &json!({"ids": [other.0], "rows": 1, "cols": 1})).unwrap();
+    assert!(out.get("skipped").is_none(), "{out}");
+}
+
+/// A blend takes the warp's affine approximation whole, so an image inside it does not stop a
+/// distort whose corners an image could not follow.
+#[test]
+fn distort_of_a_blend_holding_an_image_is_not_refused() {
+    let mut s = session();
+    let img = placed_image(&mut s);
+    let r = rect(&mut s, 200.0, 0.0, 100.0, 100.0);
+    let out = s.execute("object.blend.make", &json!({"ids": [img.0, r.0]})).unwrap();
+    let blend = NodeId(out["id"].as_u64().unwrap());
+    let undo = undo_len(&s);
+    s.execute("object.distort", &json!({"ids": [blend.0], "corners": [[0, 0], [300, 0], [100, 50], [0, 100]]})).unwrap();
+    assert_eq!(undo_len(&s), undo + 1);
+    assert!(!s.doc().unwrap().doc.node(img).unwrap().is_distorted_image());
+}
+
+/// The Control bar's Mask clips a distorted image to the shape between its corners.
+#[test]
+fn mask_on_a_distorted_image_follows_its_corners() {
+    let mut s = session();
+    let img = placed_image(&mut s);
+    let want = [(40.0, 0.0), (60.0, 0.0), (100.0, 100.0), (0.0, 100.0)];
+    s.execute("object.distort", &json!({ "corners": [[40, 0], [60, 0], [100, 100], [0, 100]] })).unwrap();
+    let out = s.execute("object.maskImage", &json!({})).unwrap();
+    let path = NodeId(out["path"].as_u64().unwrap());
+    let d = &s.doc().unwrap().doc;
+    let anchors: Vec<Point> = d.node(path).unwrap().path_data().unwrap().anchors().map(|(_, _, a)| a.p).collect();
+    assert_eq!(anchors.len(), 4, "{anchors:?}");
+    for (x, y) in want {
+        assert!(anchors.iter().any(|a| a.distance(Point::new(x, y)) < 1e-9), "{x},{y} not in {anchors:?}");
+    }
+    assert!(d.node(img).unwrap().is_distorted_image());
+}
+
+/// A Transform effect moves a distorted image's corners with it: expanded, the image stands
+/// where the effect drew it.
+#[test]
+fn a_transform_effect_moves_a_distorted_images_corners() {
+    let mut s = session();
+    let img = placed_image(&mut s);
+    s.execute("object.distort", &json!({ "corners": [[40, 0], [60, 0], [100, 100], [0, 100]] })).unwrap();
+    s.execute("effect.apply", &json!({"ids": [img.0], "effect": "distort.transform", "params": {"moveH": 200}})).unwrap();
+    s.execute("select.set", &json!({"ids": [img.0]})).unwrap();
+    s.execute("effect.expandAppearance", &json!({})).unwrap();
+    let mut found = vec![];
+    for layer in &s.doc().unwrap().doc.layers {
+        layer.walk(&mut |n| {
+            if let Some(q) = n.image_corners() {
+                found.push(q);
+            }
+        });
+    }
+    let want = [(240.0, 0.0), (260.0, 0.0), (300.0, 100.0), (200.0, 100.0)];
+    assert!(found.iter().any(|q| q.iter().zip(want).all(|(p, (x, y))| p.distance(Point::new(x, y)) < 1e-6)), "{found:?}");
+}
+
+/// A Transform effect after a Warp effect moves a distorted image's warped pixels once: the art
+/// stands where the Warp alone draws it, moved by the Transform.
+#[test]
+fn a_transform_after_a_warp_moves_a_distorted_image_once() {
+    let expanded_bounds = |transform: bool| {
+        let mut s = session();
+        let img = placed_image(&mut s);
+        s.execute("object.distort", &json!({ "corners": [[40, 0], [60, 0], [100, 100], [0, 100]] })).unwrap();
+        s.execute("effect.apply", &json!({"ids": [img.0], "effect": "warp.bulge", "params": {"bend": 50}})).unwrap();
+        if transform {
+            s.execute("effect.apply", &json!({"ids": [img.0], "effect": "distort.transform", "params": {"moveH": 200}})).unwrap();
+        }
+        s.execute("select.set", &json!({"ids": [img.0]})).unwrap();
+        s.execute("effect.expandAppearance", &json!({})).unwrap();
+        let mut images = None;
+        for layer in &s.doc().unwrap().doc.layers {
+            layer.walk(&mut |n| {
+                if let vectorcraft_doc::NodeKind::Image(im) = &n.kind {
+                    let r = im.xf.transform_rect_bbox(vectorcraft_geom::Rect::new(0.0, 0.0, f64::from(im.width), f64::from(im.height)));
+                    images = Some(images.map_or(r, |b: vectorcraft_geom::Rect| b.union(r)));
+                }
+            });
+        }
+        images.expect("the warped pieces")
+    };
+    let (alone, moved) = (expanded_bounds(false), expanded_bounds(true));
+    assert!((moved.x0 - alone.x0 - 200.0).abs() < 1e-6 && (moved.x1 - alone.x1 - 200.0).abs() < 1e-6, "{alone:?} {moved:?}");
+    assert!((moved.y0 - alone.y0).abs() < 1e-6 && (moved.y1 - alone.y1).abs() < 1e-6, "{alone:?} {moved:?}");
+}
+
+/// A raster effect's baked pixels already show the distortion: the image that replaces a
+/// distorted one is placed by its own transform.
+#[test]
+fn baked_raster_effect_pixels_replace_a_distortion() {
+    let mut s = session();
+    let img = placed_image(&mut s);
+    s.execute("object.distort", &json!({ "corners": [[40, 0], [60, 0], [100, 100], [0, 100]] })).unwrap();
+    let v = s.doc().unwrap().doc.node(img).unwrap().clone();
+    let baked = Node::new(NodeId(99), v.kind.clone());
+    let out = crate::cmd::rasterfx::replace_with_image(v, baked);
+    assert!(!out.is_distorted_image());
+    assert!(out.extras().image_quad.is_none());
+}
+
+/// A distorted image is saved with its corners and reads back the same.
+#[test]
+fn a_distorted_image_saves_and_reads_back() {
+    let mut s = session();
+    let img = placed_image(&mut s);
+    s.execute("object.distort", &json!({ "corners": [[40, 0], [60, 0], [100, 100], [0, 100]] })).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let bytes = vectorcraft_format::save(doc, false);
+    let back = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(back.node(img).unwrap().image_corners(), doc.node(img).unwrap().image_corners());
+    assert!(back.node(img).unwrap().is_distorted_image());
+    assert!(String::from_utf8_lossy(&bytes).contains("image_quad"));
+    // An image without a distortion is saved without the field, and opens as it was.
+    let mut plain = session();
+    let img = placed_image(&mut plain);
+    let doc = &plain.doc().unwrap().doc;
+    let bytes = vectorcraft_format::save(doc, false);
+    assert!(!String::from_utf8_lossy(&bytes).contains("image_quad"));
+    let back = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(back.node(img), doc.node(img));
+    // Corners in a file that fold the image over leave it placed by its transform.
+    let mut bad = (**doc).clone();
+    bad.node_mut(img).unwrap().extras_mut().image_quad =
+        Some(Box::new([(0.0, 0.0), (100.0, 0.0), (0.0, 100.0), (100.0, 100.0)].map(|(x, y)| Point::new(x, y))));
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&bad, false)).unwrap();
+    assert!(!back.node(img).unwrap().is_distorted_image());
+    assert_corners(back.node(img).unwrap().image_corners().unwrap(), [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)]);
+}
+
+/// A distort whose corners cross the warp's horizon at the image is refused with that reason, and
+/// a distort that leaves a distorted image where it is records nothing.
+#[test]
+fn distort_names_the_horizon_and_an_unchanged_distort_of_a_distorted_image_records_nothing() {
+    let mut s = session();
+    let img = placed_image(&mut s);
+    let (before, undo) = (s.doc().unwrap().doc.clone(), undo_len(&s));
+    // The box (0, 0)-(10, 10) widens toward its bottom so fast that the warp's horizon lies at
+    // y = 15, inside the image.
+    let e = s.execute("object.distort", &json!({"from": [0, 0, 10, 10], "corners": [[0, 0], [10, 0], [20, 10], [-10, 10]]})).unwrap_err().to_string();
+    assert!(e.contains("horizon"), "{e}");
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(undo_len(&s), undo);
+    s.execute("object.distort", &json!({ "corners": [[40, 0], [60, 0], [100, 100], [0, 100]] })).unwrap();
+    let (before, undo) = (s.doc().unwrap().doc.clone(), undo_len(&s));
+    let b = bounds(&s, img);
+    let at = [[b.x0, b.y0], [b.x1, b.y0], [b.x1, b.y1], [b.x0, b.y1]];
+    s.execute("object.distort", &json!({ "from": [b.x0, b.y0, b.x1, b.y1], "corners": at })).unwrap();
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(undo_len(&s), undo);
+}
+
+/// Image info gives a distorted image's resolution at its middle, not the resolution it had
+/// before the distort.
+#[test]
+fn image_info_measures_a_distorted_image_at_its_middle() {
+    let mut s = session();
+    placed_image(&mut s);
+    // 2 pixels across 100 pt: 1.44 ppi.
+    let ppi = |s: &mut Session| {
+        let out = s.execute("image.info", &json!({})).unwrap();
+        [out["ppi"][0].as_f64().unwrap(), out["ppi"][1].as_f64().unwrap()]
+    };
+    assert!((ppi(&mut s)[0] - 1.44).abs() < 1e-9);
+    // The top squeezed to half the width: the middle of the pixels spans less than 100 pt across,
+    // so the resolution across there is higher.
+    s.execute("object.distort", &json!({ "corners": [[25, 0], [75, 0], [100, 100], [0, 100]] })).unwrap();
+    let [x, _] = ppi(&mut s);
+    assert!(x > 1.44 * 1.1, "{x}");
+}
+
+/// Rasterize draws a distorted image's pixels between its corners, and the image it makes is a
+/// plain one.
+#[test]
+fn rasterize_draws_a_distorted_image_between_its_corners() {
+    let mut s = session();
+    let img = placed_image(&mut s);
+    let mut png = std::io::Cursor::new(vec![]);
+    image::RgbaImage::from_pixel(2, 2, image::Rgba([255, 0, 0, 255])).write_to(&mut png, image::ImageFormat::Png).unwrap();
+    s.edit("Pixels", |d, _| {
+        d.images.insert("pic".into(), vectorcraft_doc::ImageBlob::png(png.into_inner()));
+        Ok(())
+    })
+    .unwrap();
+    s.execute("object.distort", &json!({ "corners": [[40, 0], [60, 0], [100, 100], [0, 100]] })).unwrap();
+    s.execute("select.set", &json!({ "ids": [img.0] })).unwrap();
+    let out = s.execute("object.rasterize", &json!({ "ppi": 72, "background": "transparent", "addAround": 0 })).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let id = NodeId(out["id"].as_u64().unwrap());
+    let n = d.node(id).unwrap();
+    assert!(!n.is_distorted_image());
+    let vectorcraft_doc::NodeKind::Image(im) = &n.kind else { panic!("an image") };
+    // The raster covers the corners' bounds.
+    let b = n.geometric_bounds().unwrap();
+    assert!([b.x0, b.y0, b.x1 - 100.0, b.y1 - 100.0].iter().all(|v| v.abs() <= 1.0), "{b:?}");
+    let px = craft_image_codecs::decode(&d.images[&im.key].bytes).unwrap();
+    let (w, h) = px.dimensions();
+    let rgba = px.to_rgba8();
+    let alpha = |x: f64, y: f64| {
+        let p = im.xf.inverse() * Point::new(x, y);
+        assert!(p.x >= 0.0 && p.y >= 0.0 && p.x < f64::from(w) && p.y < f64::from(h), "({x}, {y}) is outside the raster: {p:?}");
+        let (i, j) = (p.x as u32, p.y as u32);
+        rgba[((j * w + i) * 4 + 3) as usize]
+    };
+    assert_eq!(alpha(50.0, 90.0), 255, "inside the corners");
+    assert_eq!(alpha(10.0, 10.0), 0, "inside the old rectangle, outside the corners");
+}
+
+/// A Free Transform drag in Free Distort mode on an image puts the dragged corner where the drag
+/// ends, in one undo step, also when a position on the way would have folded the image.
+#[test]
+fn free_transform_distort_drag_on_an_image_is_one_undo_step() {
+    let mut s = session();
+    let img = placed_image(&mut s);
+    let undo = undo_len(&s);
+    let v = ViewInfo::default();
+    s.select_tool("freeTransform", v).unwrap();
+    s.set_tool_option("mode", &json!("distort"));
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+    // Past the top left corner: the image would fold over.
+    s.pointer(&PointerEvent::new(PointerKind::Drag, -50.0, -50.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 130.0, 120.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 130.0, 120.0), v).unwrap();
+    assert_corners(corners(&s, img), [(0.0, 0.0), (100.0, 0.0), (130.0, 120.0), (0.0, 100.0)]);
+    assert!(s.doc().unwrap().doc.node(img).unwrap().is_distorted_image());
+    assert_eq!(undo_len(&s), undo + 1);
 }
 
 #[test]
