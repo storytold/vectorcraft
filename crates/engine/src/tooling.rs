@@ -618,6 +618,7 @@ impl Session {
             path_only: self.prefs.object_selection_by_path_only,
             type_path_only: self.prefs.type_selection_by_path_only,
             double_click_isolate: self.prefs.double_click_to_isolate,
+            double_click_adds_anchor: self.prefs.double_click_adds_anchor_points,
             select_behind: self.prefs.ctrl_click_selects_behind,
             highlight_anchors: self.prefs.highlight_anchors_on_hover,
             snap_tolerance: self.prefs.snap_to_point_tolerance,

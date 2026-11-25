@@ -36,6 +36,8 @@ fn the_print_dialog_saves_and_loads_presets() {
     set(&mut app, "copies", json!(4));
     set(&mut app, "media", json!("a4"));
     super::tests_print::press(&mut app, "New…");
+    // The name field takes the keyboard in the frame after the press.
+    pump(&mut app);
     call(&mut app, "ui.text", json!({"text": "Proofs"}));
     call(&mut app, "ui.key", json!({"key": "Enter"}));
     pump(&mut app);

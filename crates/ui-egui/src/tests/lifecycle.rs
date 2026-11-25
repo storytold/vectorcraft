@@ -86,6 +86,27 @@ fn a_discarded_rerun_runs_a_duplicate_once() {
     assert_eq!(undo(&app), before_undo + 1, "one undo step");
 }
 
+/// While the selection moves every frame, as in a drag, each frame runs its UI once: the canvas's overlays are placed
+/// over the canvas and keep the layout its measuring run recorded, so no frame is discarded and run again.
+#[test]
+fn a_moving_selection_runs_each_frame_once() {
+    let mut app = app();
+    let ctx = crate::testing::ui_context();
+    for _ in 0..3 {
+        run_frame(&mut app, &ctx, vec![], |_| {}, false);
+    }
+    let frames = 8;
+    let passes: usize = (0..frames)
+        .map(|_| {
+            let step = |app: &mut VectorcraftApp| {
+                app.session.execute("object.move", &json!({"dx": 2, "dy": 1})).unwrap();
+            };
+            run_frame(&mut app, &ctx, vec![], step, false).0
+        })
+        .sum();
+    assert_eq!(passes, frames, "{passes} passes for {frames} frames");
+}
+
 /// One frame with an optional command applied between the tick and the draw (as a control request drained by `tick`
 /// does); returns the IME descriptor of the last pass.
 fn ime_frame(
