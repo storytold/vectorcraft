@@ -1463,6 +1463,16 @@ impl Session {
         }
     }
 
+    /// The object a click of the active tool at `p` with `mods` would act on
+    /// ([`vectorcraft_tools::Tool::hover_object`]), for Smart Guides › Object Highlighting. None
+    /// while Cmd lends a selection tool to the press ([`Self::lent_tool_at`]).
+    pub fn hover_object(&mut self, p: Point, mods: Mods, view: ViewInfo) -> Option<NodeId> {
+        if mods.cmd && self.lender.is_none() && !self.tool_editing() && self.lent_tool_at(p, &mods, view).is_some() {
+            return None;
+        }
+        self.with_tool_cx(view, |t, cx| t.hover_object(cx, p, mods))
+    }
+
     pub fn tool_options(&self) -> Value {
         self.tool.options()
     }

@@ -109,7 +109,8 @@ impl Kind {
 /// A kind of help a script needs from the app that runs it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Need {
-    /// The script language's own objects and directives (`$`, `alert`, `UnitValue`, `#target`).
+    /// The script language's own objects, syntax and directives (`$`, `alert`, `UnitValue`, E4X
+    /// with the `XML` object, `#target`).
     Language,
     /// The reference app's document model (`app.activeDocument…`).
     Dom,
@@ -120,7 +121,7 @@ pub enum Need {
     /// Dialogs and windows of its own.
     Dialogs,
     /// Features only the reference app has (palettes, messages to other apps, network
-    /// connections, native code, E4X, actions).
+    /// connections, native code, actions).
     HostOnly,
 }
 
