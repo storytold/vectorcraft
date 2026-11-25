@@ -33,7 +33,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Gradient Preset",
             [],
             None,
-            "{name: a preset's name (gradient.presets.list), stroke?, item?, ids?|id?, target? (as paint.editGradient)} give the gradient behind the active proxy (or the targeted fill or stroke) the preset's type, stops, method, spread and repeats (a freeform preset's: the first three), and a fill its dither, keeping its placement; a solid or no paint becomes the gradient. One undo step, as paint.editGradient (while the Live Paint Bucket, or for a fill the Shape Builder, is the active tool and no ids, id or item are given (a null ids or id counts as none), only the default changes, by the active proxy) → {name, ids: the objects painted (none: only the default changed)}",
+            "{name: a preset's name (gradient.presets.list), stroke?, item?, ids?|id?, defaultsOnly?, target? (as paint.editGradient)} give the gradient behind the active proxy (or the targeted fill or stroke) the preset's type, stops, method, spread and repeats (a freeform preset's: the first three), and a fill its dither, keeping its placement; a solid or no paint becomes the gradient. One undo step, as paint.editGradient (while the Live Paint Bucket, or for a fill the Shape Builder, is the active tool and no ids, id or item are given (a null ids or id counts as none), or `defaultsOnly: true` is given, only the default changes, by the active proxy) → {name, ids: the objects painted (none: only the default changed)}",
             has_doc,
             apply
         ),
