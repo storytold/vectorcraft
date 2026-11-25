@@ -90,11 +90,11 @@ impl MenuPlace {
         let after = match o.get("after") {
             None => None,
             Some(Value::String(s)) => {
-                let s = s.trim();
-                if s.is_empty() || s.chars().count() > 64 || s.chars().any(char::is_control) {
+                let trimmed = s.trim();
+                if trimmed.is_empty() || s.chars().count() > 64 || s.chars().any(char::is_control) {
                     return Err(format!("`{key}` must be 1-64 printable characters"));
                 }
-                Some(s.to_string())
+                Some(trimmed.to_string())
             }
             Some(_) => return Err(format!("`{key}` must be a string")),
         };
@@ -1442,6 +1442,7 @@ mod tests {
         }
 
         let long = format!(r#"{{"path":["Select"],"after":"{}"}}"#, "x".repeat(65));
+        let padded = format!(r#"{{"path":["Select"],"after":" {} "}}"#, "x".repeat(64));
         for (menu, says) in [
             (r#"{"path":["File"]}"#, "`menu.path` must be one of"),
             (r#"{"path":["Help"]}"#, "`menu.path` must be one of"),
@@ -1461,7 +1462,9 @@ mod tests {
             (r#"{"path":["Select"],"after":null}"#, "`menu.after` must be a string"),
             (r#"{"path":["Select"],"after":"  "}"#, "`menu.after` must be 1-64 printable characters"),
             (r#"{"path":["Select"],"after":"In\u0007verse"}"#, "`menu.after` must be 1-64 printable characters"),
+            (r#"{"path":["Select"],"after":"\nInverse\n"}"#, "`menu.after` must be 1-64 printable characters"),
             (long.as_str(), "`menu.after` must be 1-64 printable characters"),
+            (padded.as_str(), "`menu.after` must be 1-64 printable characters"),
             (r#"{"path":["Select"]},"menu":{"path":["Edit"]}"#, "duplicate field `menu`"),
         ] {
             let e = Manifest::parse(with(2, menu).as_bytes()).unwrap_err().to_string();
