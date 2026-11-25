@@ -42,6 +42,7 @@
 use std::path::Path;
 
 use craft::host::{PickRequest, Picked};
+use craft::keymap::Key;
 use craft::theme::variant::Tone;
 use craft::ui::buttons::Button;
 use craft::ui::contract::{Bind, Outcome as _, Show as _};
@@ -49,6 +50,7 @@ use craft::ui::dialog::{
     DialogHost, DialogId, DialogResult, DialogStack, FieldRefusal, Prompt, PromptChoice, StackDialog, StandardPrompt, dialog_id,
 };
 use craft::ui::display::Text;
+use craft::ui::runtime::keys;
 use craft::ui::sections::{DialogRole, FooterButton};
 use craft::ui::text::TextField;
 use egui::Ui;
@@ -793,11 +795,18 @@ impl StackDialog for ScriptPrint {
     /// is not the dialog's default: Enter never prints, also on the focused button.
     fn show(&mut self, ui: &mut Ui, _: &DialogStack) -> Option<DialogResult<PrintAnswer>> {
         let now = ui.input(|i| i.time);
+        // A focused button takes Enter as a click: an Enter held, or pressed in this pass and let go in it too, refuses Print.
+        let pressed = |e: &egui::Event| matches!(e, egui::Event::Key { key: egui::Key::Enter, pressed: true, .. });
+        let enter = keys::held(ui.ctx()).contains(&Key::Enter) || ui.input(|i| i.raw.events.iter().any(pressed));
         let wait = (*self.shown_at.get_or_insert(now) + PRINT_ENABLE_DELAY_SECS - now).max(0.0);
         if wait > 0.0 {
             ui.ctx().request_repaint_after_secs(wait as f32);
         }
-        let buttons = [FooterButton::new(tl!("Print"), DialogRole::Other).enabled(wait <= 0.0), FooterButton::new(tl!("Cancel"), DialogRole::Cancel)];
+        // Print pressed with Enter is refused and leaves the question open.
+        let buttons = [
+            FooterButton::new(tl!("Print"), DialogRole::Other).enabled(wait <= 0.0).stays_open(enter),
+            FooterButton::new(tl!("Cancel"), DialogRole::Cancel),
+        ];
         let jobs = &self.jobs;
         let prompt =
             Prompt::new(tl!("Print"), tl!("The script asks to print these jobs. Its changes to the documents are kept whether or not you print."))
@@ -819,7 +828,7 @@ impl StackDialog for ScriptPrint {
                     });
                 });
         match prompt.show(ui).picked? {
-            0 if wait <= 0.0 && !ui.input(|i| i.key_pressed(egui::Key::Enter)) => Some(DialogResult::Ok(PrintAnswer { print: true })),
+            0 if wait <= 0.0 && !enter => Some(DialogResult::Ok(PrintAnswer { print: true })),
             0 => None,
             _ => Some(DialogResult::Cancel),
         }

@@ -103,16 +103,21 @@ fn button(texts: &[(String, Rect)], label: &str) -> Pos2 {
     texts.iter().rev().find(|(t, _)| t.trim() == label).unwrap_or_else(|| panic!("no `{label}` in {texts:?}")).1.center()
 }
 
-/// A press and release of the primary button at `pos`.
-fn click(pos: Pos2) -> Vec<egui::Event> {
+/// A click of the primary button at `pos` from `time`: hover, press and release in frames of their
+/// own, as a person's click comes.
+fn click(app: &mut VectorcraftApp, time: f64, pos: Pos2) {
     let press = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    vec![egui::Event::PointerMoved(pos), press(true), press(false)]
+    for (i, event) in [egui::Event::PointerMoved(pos), press(true), press(false)].into_iter().enumerate() {
+        frame(app, time + 0.01 * i as f64, vec![event]);
+    }
 }
 
-/// A press and release of `key` with no modifiers.
-fn key(key: egui::Key) -> Vec<egui::Event> {
+/// A press of `key` with no modifiers at `time`, let go in a frame of its own, as a person lets go
+/// of it.
+fn key(app: &mut VectorcraftApp, time: f64, key: egui::Key) {
     let event = |pressed| egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
-    vec![event(true), event(false)]
+    frame(app, time, vec![event(true)]);
+    frame(app, time + 0.01, vec![event(false)]);
 }
 
 /// Draws the open question from `time` until it settles, then clicks its `label` button once
@@ -122,7 +127,7 @@ fn click_after_delay(app: &mut VectorcraftApp, time: f64, label: &str) {
     frame(app, time + 0.1, vec![]);
     let later = time + PRINT_ENABLE_DELAY_SECS + 0.1;
     let pos = button(&frame(app, later, vec![]), label);
-    frame(app, later + 0.1, click(pos));
+    click(app, later + 0.1, pos);
 }
 
 /// The job is sent after the run's changes are kept, once, and only when the person at the
@@ -178,22 +183,31 @@ fn enter_or_an_early_click_does_not_print() {
     run(&mut app, PRINT_TO_LAB);
     assert!(asking(&app));
     frame(&mut app, 10.0, vec![]);
+    frame(&mut app, 10.05, vec![]);
     let pos = button(&frame(&mut app, 10.1, vec![]), "Print");
-    for (time, events) in [(10.2, click(pos)), (10.3, key(egui::Key::Enter)), (10.4, key(egui::Key::Enter))] {
-        frame(&mut app, time, events);
+    click(&mut app, 10.2, pos);
+    assert!(asking(&app), "an early click");
+    for time in [10.3, 10.4] {
+        key(&mut app, time, egui::Key::Enter);
         assert!(asking(&app), "at {time}");
     }
     let later = 10.0 + PRINT_ENABLE_DELAY_SECS + 0.1;
-    for (time, events) in [(later, key(egui::Key::Enter)), (later + 0.1, key(egui::Key::Enter))] {
-        frame(&mut app, time, events);
+    for time in [later, later + 0.1] {
+        key(&mut app, time, egui::Key::Enter);
         assert!(asking(&app), "Enter at {time}");
     }
     // Tab gives a button the keyboard focus: Enter on it does not print either.
-    frame(&mut app, later + 0.15, key(egui::Key::Tab));
-    frame(&mut app, later + 0.16, key(egui::Key::Enter));
+    key(&mut app, later + 0.15, egui::Key::Tab);
+    key(&mut app, later + 0.17, egui::Key::Enter);
     assert!(asking(&app), "Enter on the focused button");
+    // Nor does an Enter pressed and let go within one frame.
+    let enter = |pressed| egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    frame(&mut app, later + 0.185, vec![enter(true), enter(false)]);
+    assert!(asking(&app), "Enter pressed and let go in one frame");
     assert!(sent.borrow().is_empty(), "nothing is sent");
-    frame(&mut app, later + 0.2, click(pos));
+    // The question has settled where it stays; Print is clicked there.
+    let pos = button(&frame(&mut app, later + 0.19, vec![]), "Print");
+    click(&mut app, later + 0.2, pos);
     assert!(!asking(&app));
     assert_eq!(sent.borrow().len(), 1);
 }
@@ -256,11 +270,14 @@ fn cancel_drops_a_scripts_print_jobs_and_keeps_its_changes() {
     assert!(asking(&app));
     frame(&mut app, 10.0, vec![]);
     let pos = button(&frame(&mut app, 10.1, vec![]), "Cancel");
-    frame(&mut app, 10.2, click(pos));
+    click(&mut app, 10.2, pos);
     assert!(!asking(&app));
     assert!(!app.session.script_prints_waiting());
     assert_eq!(app.ui.status, PRINTS_DROPPED);
+    // The app draws on: the closed question's layer is gone by the next frame.
+    frame(&mut app, 10.3, vec![]);
     run(&mut app, PRINT_TO_LAB);
+    assert!(asking(&app));
     click_after_delay(&mut app, 20.0, "Cancel");
     assert!(!asking(&app));
     assert!(!app.session.script_prints_waiting());
@@ -319,8 +336,8 @@ fn space_on_the_focused_print_button_prints() {
     frame(&mut app, 10.0, vec![]);
     let later = 10.0 + PRINT_ENABLE_DELAY_SECS + 0.1;
     frame(&mut app, later, vec![]);
-    frame(&mut app, later + 0.1, key(egui::Key::Tab));
-    frame(&mut app, later + 0.2, key(egui::Key::Space));
+    key(&mut app, later + 0.1, egui::Key::Tab);
+    key(&mut app, later + 0.2, egui::Key::Space);
     assert!(!asking(&app));
     assert_eq!(sent.borrow().len(), 1);
 }
