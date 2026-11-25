@@ -6787,6 +6787,9 @@ file-filter	Swatch libraries	Knihovny vzorníků
 file-filter	Flattener presets	Přednastavení sloučení průhlednosti
 file-filter	PDF presets	Přednastavení PDF
 file-filter	Print presets	Přednastavení tisku
+file-filter	Tracing presets	Přednastavení vektorizace
+file-filter	Action sets	Sady akcí
+file-filter	Composite fonts	Složená písma
 file-filter	Preferences	Předvolby
 file-filter	Export presets	Přednastavení exportu
 file-filter	SVG Compressed	Komprimované SVG
@@ -7356,6 +7359,10 @@ axis	Y Axis	osa Y
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc vrátila 0 (nedostatek paměti)
 @msg	vc_alloc returned a block outside memory	vc_alloc vrátila blok mimo paměť
 @msg	vc_run returned error code {packed}	vc_run vrátila chybový kód {packed}
+@msg	did not finish loading within {secs} s	nedokončil načítání do {secs} s
+@msg	no thread was left to load it	nezbylo žádné vlákno, které by ho načetlo
+@msg	panicked while loading	při načítání došlo k panice
+@msg	panicked while loading: {what}	při načítání došlo k panice: {what}
 @msg	{_1} is not a file	{_1} není soubor
 @msg	{_1} is {_2} bytes (limit {_3})	{_1} má {_2} bajtů (limit {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} objektů (limit {MAX_OBJECTS})
@@ -7543,6 +7550,10 @@ axis	Y Axis	osa Y
 @msg	expected {count} paragraph styles, one per paragraph	očekáváno {count} stylů odstavců, jeden na každý odstavec
 @msg	the document has no Kinsoku set named '{shown}'	dokument nemá sadu Kinsoku s názvem '{shown}'
 @msg	must be 1-{MAX_FAMILY} printable characters	musí mít 1-{MAX_FAMILY} tisknutelných znaků
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Číst objekty, které dostane, a nastavení, pracovní plochy, vrstvy a vzorky dokumentu
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` musí uvádět různé oddíly: settings, artboards, layers nebo swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` je pro filtr nebo živý efekt s `commands`, s `api` 3 nebo vyšším a s oprávněním `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	informace o dokumentu, které zásuvný modul požaduje, jsou příliš velké na předání: nejvýše {MAX_CONTEXT_ITEMS} pracovních ploch, vrstev a vzorků v {MAX_CONTEXT_BYTES} bajtech
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	rozpočet paměti (objekt {_1} potřebuje {size} bajtů vstupu, zbývá {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	rozpočet objektů (více než {MAX_OBJECTS} objektů jen pro čtení)
 @msg	instruction budget	rozpočet instrukcí

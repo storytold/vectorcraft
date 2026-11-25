@@ -6616,6 +6616,9 @@ file-filter	Swatch libraries	Biblioteki próbek
 file-filter	Flattener presets	Ustawienia spłaszczania
 file-filter	PDF presets	Ustawienia PDF
 file-filter	Print presets	Ustawienia drukowania
+file-filter	Tracing presets	Ustawienia obrysu
+file-filter	Action sets	Zestawy operacji
+file-filter	Composite fonts	Fonty złożone
 file-filter	Preferences	Preferencje
 file-filter	Export presets	Ustawienia eksportu
 file-filter	SVG Compressed	SVG skompresowany
@@ -7211,6 +7214,10 @@ axis	Y Axis	Oś Y
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc zwróciła 0 (brak pamięci)
 @msg	vc_alloc returned a block outside memory	vc_alloc zwróciła blok poza pamięcią
 @msg	vc_run returned error code {packed}	vc_run zwróciła kod błędu {packed}
+@msg	did not finish loading within {secs} s	nie zakończył wczytywania w ciągu {secs} s
+@msg	no thread was left to load it	nie został żaden wątek, który mógłby go wczytać
+@msg	panicked while loading	uległ awarii podczas wczytywania
+@msg	panicked while loading: {what}	uległ awarii podczas wczytywania: {what}
 @msg	{_1} is not a file	{_1} nie jest plikiem
 @msg	{_1} is {_2} bytes (limit {_3})	{_1} ma {_2} bajtów (limit {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} obiektów (limit {MAX_OBJECTS})
@@ -7398,6 +7405,10 @@ axis	Y Axis	Oś Y
 @msg	expected {count} paragraph styles, one per paragraph	oczekiwano {count} stylów akapitowych, po jednym na akapit
 @msg	the document has no Kinsoku set named '{shown}'	dokument nie ma zestawu kinsoku o nazwie '{shown}'
 @msg	must be 1-{MAX_FAMILY} printable characters	musi mieć 1-{MAX_FAMILY} drukowalnych znaków
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Odczytywać obiekty, które otrzymuje, oraz ustawienia, obszary kompozycji, warstwy i próbki dokumentu
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` musi wymieniać różne sekcje: settings, artboards, layers lub swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` dotyczy filtra albo efektu na żywo z `commands`, z `api` 3 lub nowszym i z uprawnieniem `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	informacje o dokumencie, o które prosi wtyczka, są zbyt duże, aby je przekazać: najwyżej {MAX_CONTEXT_ITEMS} obszarów kompozycji, warstw i próbek w {MAX_CONTEXT_BYTES} bajtach
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	budżet pamięci (obiekt {_1} wymaga {size} bajtów danych wejściowych, pozostało {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	budżet obiektów (ponad {MAX_OBJECTS} obiektów tylko do odczytu)
 @msg	instruction budget	budżet instrukcji
