@@ -30,7 +30,8 @@ use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::notices::{Notice, NoticeAction, NoticeLayout};
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
 use craft::ui::pickers::Select;
-use craft::ui::primitives::{ContentPainterCx, IconSpec, Revision, TextureStore, TextureStoreOptions, fit_rect};
+use craft::ui::primitives::textures::{Priority, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails};
+use craft::ui::primitives::{ContentPainterCx, IconSpec};
 use craft::ui::runtime::access::PopupKind;
 use craft::ui::runtime::commands::{CommandState, CommandStates};
 use craft::ui::runtime::memory::Remember as _;
@@ -38,7 +39,7 @@ use craft::ui::sections::{DropAction, FooterAction, FooterBar, Panel, Section, S
 use craft::ui::style::DataColor;
 use craft::ui::text::TextField;
 use craft::ui::tile_grid::{CaptionPlace, Tile, TileGrid};
-use egui::{Color32, ColorImage, CornerRadius, Pos2, Rect, Response, Shape, Ui, pos2};
+use egui::{Color32, ColorImage, CornerRadius, Rect, Response, Shape, Ui};
 use serde_json::{Value, json};
 use vectorcraft_color::{GradientPaint, Paint};
 use vectorcraft_doc::resample::{Resample, fitted};
@@ -894,26 +895,49 @@ fn paint_gradient(cx: &ContentPainterCx<'_>, rect: Rect, paint: &GradientPaint) 
     cx.ramp(rect, CornerRadius::ZERO, &ramp, Axis::X);
 }
 
-/// The PNG thumbnail `png` (base64) of a graphic or pattern on white in `rect`, stored as a
-/// texture under `key` (the library and the item's kind and key) at the size it shows.
-// PLAN: a tile's and a row's thumbnail take a painter, not a component, so the picture goes through `Picture`'s own store here rather than `Picture::new`.
+/// The largest side of a graphic or pattern thumbnail, in pixels.
+const MAX_THUMB_PX: u32 = 256;
+
+/// A graphic's or pattern's thumbnail: the library, the item's kind and key, and the side in pixels
+/// it is asked at, so a tile and a row of the same item each keep their own picture.
+type GraphicThumb = (String, String, u32);
+
+/// Makes the picture of one item's PNG thumbnail `png` (base64).
+struct GraphicPicture<'a> {
+    png: &'a str,
+}
+
+impl ThumbSource<GraphicThumb> for GraphicPicture<'_> {
+    /// A changed item has another thumbnail length.
+    fn revision(&self, _: &GraphicThumb, _: &ThumbRequest) -> Revision {
+        Revision::of(&self.png.len())
+    }
+
+    /// Decoded on the UI thread, which the store limits to a few decodes a pass.
+    fn render(&self, _: &GraphicThumb, request: &ThumbRequest) -> ThumbRender {
+        ThumbRender::Ready(thumbnail_image(self.png, request.side))
+    }
+}
+
+/// The PNG thumbnail `png` (base64) of a graphic or pattern on white in `rect`, from the panel's
+/// store of thumbnails under `key` (the library and the item's kind and key) at the size it shows.
 fn paint_graphic(cx: &ContentPainterCx<'_>, rect: Rect, key: &(String, String), png: &str) {
-    let ctx = cx.painter.ctx().clone();
-    // As many pixels as the tile shows.
-    let px = rect.width().max(rect.height()) * cx.painter.pixels_per_point();
-    let px = if px.is_finite() { px.ceil().clamp(8.0, 256.0) as u32 } else { 256 };
-    let store = TextureStore::<(String, String, u32)>::in_context(&ctx, "library-thumbnails", TextureStoreOptions::thumbnails());
-    // A changed item has another thumbnail length.
-    let texture = store.get_or_put(&ctx, (key.0.clone(), key.1.clone(), px), Revision::of(&png.len()), || thumbnail_image(png, px));
+    let ctx = cx.painter.ctx();
+    let thumbs = Thumbnails::<GraphicThumb>::in_context(ctx, "library-thumbnails", ThumbnailOptions::new().max_side(MAX_THUMB_PX));
+    let request = ThumbRequest::for_cell(rect.width().max(rect.height()), cx.pixels_per_point());
+    let key = (key.0.clone(), key.1.clone(), request.side.min(MAX_THUMB_PX));
+    let state = thumbs.state(ctx, &GraphicPicture { png }, &key, &request, Priority::VISIBLE);
+    // The whole cell is white, around a picture of another shape too.
     cx.data_shapes([Shape::rect_filled(rect, 0.0, Color32::WHITE)]);
-    let whole = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0));
-    cx.picture(texture.id, fit_rect(rect, texture.size_vec2()), whole, 0.0);
+    thumbs.paint(cx, rect, &state, &ThumbPaint::default().paper(DataColor::new(Color32::WHITE)));
 }
 
 /// The PNG thumbnail `png` (base64) at most `px` pixels a side, shrunk smoothly: the GPU draws it
 /// without mipmaps, so a texture much larger than its tile would break thin strokes up. One clear
 /// pixel when it does not decode.
 fn thumbnail_image(png: &str, px: u32) -> ColorImage {
+    #[cfg(test)]
+    counters::DECODED.with(|c| c.set(c.get() + 1));
     vectorcraft_format::base64_decode(png)
         .and_then(|png| craft_image_codecs::decode_as(craft_image_codecs::Format::Png, &png).ok())
         .and_then(|img| image::RgbaImage::from_raw(img.width(), img.height(), img.to_rgba8()).map(image::DynamicImage::ImageRgba8))
@@ -929,6 +953,14 @@ fn thumbnail_image(png: &str, px: u32) -> ColorImage {
 fn shrunk_thumbnail(img: image::DynamicImage, px: u32) -> image::RgbaImage {
     let img = if img.width().max(img.height()) > px { fitted(img, px, px, Resample::Filter(image::imageops::FilterType::Triangle)) } else { img };
     img.into_rgba8()
+}
+
+/// Graphic and pattern thumbnails decoded on this test thread.
+#[cfg(test)]
+pub(crate) mod counters {
+    thread_local! {
+        pub(crate) static DECODED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
 }
 
 /// Import a library file (`library.import`'s params), saying so in the status bar.

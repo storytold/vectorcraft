@@ -249,9 +249,11 @@ enum Pending<'s> {
     /// `Window`: `(` and a string literal with the window's type may follow.
     Window(Option<usize>),
     WindowType(Option<usize>),
-    /// `.executeMenuCommand(`: a string literal and `)` may follow.
+    /// `.executeMenuCommand(`: a string literal and `)` may follow, with a trailing comma
+    /// between them.
     Menu(Option<usize>),
     MenuString(Option<usize>, &'s str),
+    MenuStringComma(Option<usize>, &'s str),
     /// `.open(`: a string literal with the open mode may follow.
     Open(Option<usize>),
     /// A File object's `length`, `hidden` or `readonly` (`f.length`, `f['length']`): an assignment
