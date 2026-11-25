@@ -10920,7 +10920,11 @@ of a color shifted by hand. More than 256 entries, a key or value that is not a 
 included), and two keys that name one color are errors. Presets and `webExport.settings` keep the map. In the dialog a double-click on an
 opaque swatch opens the Color Picker on the color shown (on the source color for a color already shifted; an agent
 sets `__editColor: "#source"`). Its OK shifts the color (picking the source color takes the shift away), and Cancel
-leaves the table as it was. A shifted swatch shows the source color at its upper left and the new color at its lower
+leaves the table as it was. An OK that would shift a 257th color changes nothing, and the status bar shows the
+limit; a key shifted to itself or a deleted color does not count, and a new shift writes `shifted` without them. A key
+written another way (`#F00`) still names its color, so a new shift or Unshift replaces it. A list entry written another
+way also names its color: the table marks it, Lock, Transparent, Web Shift and Delete Color act on it, and new entries
+are written as lowercase `#rrggbb`. A `#rrggbbaa` spelling names no table color. A shifted swatch shows the source color at its upper left and the new color at its lower
 right, with the lock mark, and Lock stays on until the color is unshifted. Web Shift replaces a shift by hand, and
 Unshift All Colors in the table's menu clears `shifted` and `webShift`. Only Web Colors in the picker starts off.
 
