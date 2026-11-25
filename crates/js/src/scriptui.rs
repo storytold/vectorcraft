@@ -8,7 +8,8 @@
 //! control to a dialog, a `group` or a `panel` and returns it: `statictext`, `edittext`, `button`,
 //! `checkbox`, `radiobutton`, `dropdownlist`, `listbox` (whose third argument is an array of item
 //! texts), `slider` (third to fifth: value, minimum, maximum) and `progressbar` (value, maximum).
-//! The other documented control types throw an `Error` that says they are not available yet. A
+//! The other documented control types throw an `Error` that says they are not available yet, and
+//! `show()` throws one for an `edittext` whose `properties` have `noecho`. A
 //! group takes its creation properties as the third argument (or the fourth when the third is not
 //! an object), and a list takes them there in place of its items, with the items in
 //! `properties.items`. A list's `add("item", text)` adds an item, `find(text)` finds one and
@@ -52,8 +53,9 @@
 //! container that holds it; it is read with a loop, and a dialog with more than [`MAX_CONTROLS`]
 //! controls, nested more than [`MAX_DEPTH`] deep, with more than [`MAX_ITEMS`] list items, or with a
 //! text longer than [`MAX_TEXT_BYTES`] throws a `RangeError`. These and [`MAX_LISTENERS`] are
-//! VectorCraft's own limits. A getter that changes a list's items after the list was read makes
-//! `show()` read the dialog again, and a list that changes again throws an `Error`. A `text` getter
+//! VectorCraft's own limits. A getter that changes a list's items after the list was read, or adds
+//! or removes a control after the dialog's controls were read, makes `show()` read the dialog
+//! again, and a dialog that changes again throws an `Error`. A `text` getter
 //! that changes a list or a container while `remove(text)` looks for an item or a control makes
 //! `remove` throw an `Error`.
 
@@ -557,10 +559,12 @@ fn add(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> 
                     if length > MAX_ITEMS.saturating_sub(number_slot(i, win, ITEM_COUNT)? as usize) {
                         return Err(range(i, &format!("add: a dialog's lists hold at most {MAX_ITEMS} items in all")));
                     }
-                    let values = list_values(i, a)?;
-                    i.temp_roots.extend(values.iter().cloned());
-                    for item in &values {
-                        let text = text_arg(i, item)?;
+                    // Each item is read as a script reads it, so an index getter gives its value.
+                    for n in 0..length {
+                        let n = u32::try_from(n).map_err(|_| Abrupt::Internal("a list is too long".into()))?;
+                        let item = i.get_value(&Value::Object(a), &index_key(n))?;
+                        i.temp_roots.push(item.clone());
+                        let text = text_arg(i, &item)?;
                         new_item(i, c, text)?;
                         staged += 1;
                     }
@@ -569,8 +573,9 @@ fn add(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> 
             }
         }
         // A getter or a conversion above may have added controls or items itself, or removed the
-        // container from its dialog.
-        window_of(i, o, "add")?;
+        // container from its dialog. An object made to look like a container is not in the dialog,
+        // so it charges nothing to the dialog's controls.
+        window_in(i, o, "add")?;
         let count = number_slot(i, win, COUNT)?;
         if count as usize >= MAX_CONTROLS {
             return Err(range(i, &format!("add: a dialog can hold at most {MAX_CONTROLS} controls")));
@@ -593,7 +598,7 @@ fn add_item(i: &mut Interp, o: ObjId, text: &Value) -> JsResult<Value> {
     // The conversion runs first: it may add or remove items itself.
     let text = text_arg(i, text)?;
     i.rooted(std::slice::from_ref(&text), |i| {
-        let win = window_of(i, o, "add")?;
+        let win = window_in(i, o, "add")?;
         let count = number_slot(i, win, ITEM_COUNT)?;
         if count as usize >= MAX_ITEMS {
             return Err(range(i, &format!("add: a dialog's lists hold at most {MAX_ITEMS} items in all")));
@@ -725,17 +730,50 @@ fn kids_of(i: &Interp, o: ObjId) -> JsResult<Vec<Value>> {
 fn find_element(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let (o, _) = element(i, &this, "findElement")?;
     let want = i.to_str(&arg(args, 0))?;
-    let mut stack: Vec<Value> = kids_of(i, o)?.into_iter().rev().collect();
-    while let Some(v) = stack.pop() {
-        i.use_fuel()?;
-        let Some(c) = v.as_object() else { continue };
-        let name = i.get_value(&v, &key("name"))?;
-        if matches!(&name, Value::String(s) if *s == want) {
-            return Ok(v);
+    let mark = i.temp_roots.len();
+    let r = (|| {
+        // The controls still to look at stay rooted while a `name` getter runs, and each one is
+        // looked at only while the element still holds it.
+        let mut stack: Vec<Value> = kids_of(i, o)?.into_iter().rev().collect();
+        i.temp_roots.extend(stack.iter().cloned());
+        while let Some(v) = stack.pop() {
+            i.use_fuel()?;
+            let Some(c) = v.as_object() else { continue };
+            if !holds(i, o, c)? {
+                continue;
+            }
+            let name = i.get_value(&v, &key("name"))?;
+            if !holds(i, o, c)? {
+                continue;
+            }
+            if matches!(&name, Value::String(s) if *s == want) {
+                return Ok(v);
+            }
+            let kids = kids_of(i, c)?;
+            i.temp_roots.extend(kids.iter().cloned());
+            stack.extend(kids.into_iter().rev());
         }
-        stack.extend(kids_of(i, c)?.into_iter().rev());
+        Ok(Value::Null)
+    })();
+    i.temp_roots.truncate(mark);
+    r
+}
+
+/// Does the element `top` hold the control `c`: does each container from `c`'s up to `top` hold
+/// the one below?
+fn holds(i: &Interp, top: ObjId, c: ObjId) -> JsResult<bool> {
+    let mut at = c;
+    for _ in 0..=MAX_DEPTH {
+        let Some(p) = object_slot(i, at, PARENT)? else { return Ok(false) };
+        if !kids_of(i, p)?.iter().any(|k| same(k, &Value::Object(at))) {
+            return Ok(false);
+        }
+        if p == top {
+            return Ok(true);
+        }
+        at = p;
     }
-    Ok(Value::Null)
+    Ok(false)
 }
 
 /// Calls the element's handler `name` when it has one. → its result, or `None` without one.
@@ -1261,9 +1299,14 @@ fn finish(i: &mut Interp, win: ObjId, result: f64) -> JsResult<Value> {
     Ok(Value::Number(result))
 }
 
-/// Runs `onClose`. → false when it returned `false`.
+/// Runs `onClose`. → false when it returned `false`. A `close()` that `onClose` calls belongs to
+/// the close it decides on, so after `false` the dialog waits for the next event.
 fn may_close(i: &mut Interp, win: ObjId) -> JsResult<bool> {
-    Ok(!matches!(handler(i, win, "onClose")?, Some(Value::Bool(false))))
+    let closes = !matches!(handler(i, win, "onClose")?, Some(Value::Bool(false)));
+    if !closes {
+        set_slot(i, win, CLOSING, Value::Undefined)?;
+    }
+    Ok(closes)
 }
 
 /// Closes the dialog when a handler asked to, or asks the host's `wait` what happens next.
@@ -1480,8 +1523,9 @@ fn margins(i: &mut Interp, v: &Value) -> JsResult<Data> {
 /// The dialog's description: its elements in order, each after the container that holds it, as
 /// [`Data`] for the host's `open` and `wait`, with the elements in that order, and the indices of
 /// its default and cancel elements (-1 for none), and each element's array of list items as it
-/// was described (`undefined` for an element that is not a list). When a getter changes a list
-/// after it was read, the dialog is read again once; a list that changes again throws an `Error`.
+/// was described (`undefined` for an element that is not a list). When a getter changes a list,
+/// or adds or removes a control, after it was read, the dialog is read again once; a dialog that
+/// changes again throws an `Error`.
 fn describe(i: &mut Interp, win: ObjId) -> JsResult<Described> {
     for _ in 0..2 {
         let mark = i.temp_roots.len();
@@ -1491,7 +1535,7 @@ fn describe(i: &mut Interp, win: ObjId) -> JsResult<Described> {
             return Ok(d);
         }
     }
-    Err(error(i, "show: a list's items changed while the dialog was read"))
+    Err(error(i, "show: a list's items or a container's controls changed while the dialog was read"))
 }
 
 /// A description, the elements in its order, the default and cancel elements, and the lists' items.
@@ -1507,8 +1551,20 @@ fn lists_unchanged(i: &Interp, order: &[(ObjId, String, f64)], snapshot: &[Value
     Ok(true)
 }
 
+/// Has each element in `order` the array of controls it had when the dialog was read?
+fn tree_unchanged(i: &Interp, order: &[(ObjId, String, f64)], tree: &[Value]) -> JsResult<bool> {
+    for ((o, ..), kept) in order.iter().zip(tree) {
+        let now = slot(i, *o, KIDS)?;
+        if !(same(&now, kept) || matches!((&now, kept), (Value::Undefined, Value::Undefined))) {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<Option<Described>> {
     let mut order: Vec<(ObjId, String, f64)> = Vec::new();
+    let mut tree = Vec::new();
     let mut seen = std::collections::HashSet::new();
     let mut stack: Vec<(Value, f64, usize)> = vec![(Value::Object(win), -1.0, 0)];
     while let Some((v, parent, depth)) = stack.pop() {
@@ -1525,6 +1581,11 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<Option<Described>> {
         }
         let index = order.len() as f64;
         order.push((o, kind, parent));
+        // Each container's array of controls as it is read; a change to it means a later getter
+        // added or removed a control.
+        let held = slot(i, o, KIDS)?;
+        i.temp_roots.push(held.clone());
+        tree.push(held);
         for kid in kids_of(i, o)?.into_iter().rev() {
             stack.push((kid, index, depth + 1));
         }
@@ -1595,6 +1656,10 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<Option<Described>> {
                     Value::Object(_) => (i.get_value(&props, &key("multiline"))?.truthy(), i.get_value(&props, &key("readonly"))?.truthy()),
                     _ => (false, false),
                 };
+                // The dialog cannot hide what is typed, so a field meant to hide it is refused before it shows.
+                if props.as_object().is_some() && i.get_value(&props, &key("noecho"))?.truthy() {
+                    return Err(error(i, "show: an edit field that hides its text (noecho) is not available yet"));
+                }
                 d.push(("multiline".into(), Data::Bool(multiline)));
                 d.push(("readonly".into(), Data::Bool(readonly)));
             }
@@ -1634,7 +1699,7 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<Option<Described>> {
     };
     let def = target(i, "defaultElement", "ok")?;
     let cancel = target(i, "cancelElement", "cancel")?;
-    if !lists_unchanged(i, &order, &snapshot)? {
+    if !lists_unchanged(i, &order, &snapshot)? || !tree_unchanged(i, &order, &tree)? {
         return Ok(None);
     }
     let desc = Data::Object(vec![

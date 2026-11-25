@@ -3000,7 +3000,8 @@ controls. `vc.api.has("scriptui")` is true. A script builds a modal dialog and s
   and a container's `orientation`, `alignChildren`, `spacing` and `margins` there, are the control's first values
   (VectorCraft's own rule). A `listbox` with `multiselect` and the other control types (`tabbedpanel`, `tab`,
   `scrollbar`, `image`, `iconbutton`, `treeview` and the rest) throw that they are not available yet, and an
-  unknown type throws too.
+  unknown type throws too. An `edittext` with `noecho` in its `properties` makes `show()` throw that a field that
+  hides its text is not available yet, before the dialog opens.
 - A list's `add("item", text)` adds an item, `find(text)` gives the first item with that text or `null`,
   `remove(what)` removes the item given by its index, the item itself or its text, `removeAll()` removes them all,
   `items` lists them and `selection` is the selected item or `null`; setting it to an item or an index selects it.
@@ -3058,8 +3059,9 @@ nobody to ask, `alert`, `confirm` and `prompt` in a handler take their answers f
 
 `show()` checks the dialog: at most 512 controls, nested at most 16 deep, 1,024 list items in all and 16 KiB of
 text a control, past which it throws a `RangeError`, a size or a place that is not a finite number, which throws
-too, and a slider's minimum above its maximum. When a getter changes a list's items after the list was read, it
-reads the dialog again, and throws an `Error` when a list changes again. It lays the controls out from each container's `orientation`,
+too, and a slider's minimum above its maximum. When a getter changes a list's items after the list was read, or
+adds or removes a control after the controls were read, it reads the dialog again, and throws an `Error` when the
+dialog changes again. It lays the controls out from each container's `orientation`,
 `alignChildren`, `spacing` and `margins` and each control's `alignment`, `preferredSize` (each side of `size` that
 is above 0 takes the place of `preferredSize`'s), `minimumSize`, `maximumSize` and `bounds`, which places it in its
 container. A control whose `visible` is false, and every control in it, takes no room in the layout. Sizes and places

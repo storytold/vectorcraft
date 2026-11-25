@@ -131,6 +131,13 @@ fn a_step_names_a_control_by_its_text_only_when_it_has_no_name() {
     let go = "var w = new Window('dialog'); w.add('button', undefined, 'Go', {name: 'go'}); w.show();";
     let e = headless(&mut s, go, window(json!([{"control": "Go", "event": "click"}]))).unwrap_err().to_string();
     assert!(e.contains("the dialog has no control named Go"), "{e}");
+    let help = "var w = new Window('dialog'); w.add('button', undefined, 'Help').onClick = function () { vc.log('help'); }; w.show();";
+    let e = headless(&mut s, help, window(json!([{"control": "", "event": "click"}]))).unwrap_err().to_string();
+    assert!(e.contains("the dialog has no control named"), "an empty step names no control without a name: {e}");
+    let blank = "var w = new Window('dialog'); w.add('button', undefined, 'Help').onClick = function () { vc.log('help'); }; \
+        w.add('button', undefined, '').onClick = function () { vc.log('blank'); }; w.add('button', undefined, 'OK'); w.show();";
+    headless(&mut s, blank, window(json!([{"control": "", "event": "click"}, {"control": "OK", "event": "click"}]))).unwrap();
+    assert_eq!(s.script_report().unwrap()["log"], json!(["blank"]), "an empty step names the unnamed control whose text is empty");
 }
 
 #[test]

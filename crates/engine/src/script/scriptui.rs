@@ -198,7 +198,7 @@ impl ScriptUiDialog {
     /// whose text is `control`.
     pub fn find(&self, control: &str) -> Option<usize> {
         let by = |name: bool| {
-            let hit = |n: &UiNode| if name { n.name == control } else { n.name.is_empty() && n.text == control };
+            let hit = |n: &UiNode| if name { !control.is_empty() && n.name == control } else { n.name.is_empty() && n.text == control };
             self.nodes.iter().enumerate().skip(1).find(|(_, n)| hit(n)).map(|(i, _)| i)
         };
         by(true).or_else(|| by(false))

@@ -414,6 +414,28 @@ fn a_typed_text_the_script_refuses_stays_in_its_field_when_a_click_on_a_button_t
 }
 
 #[test]
+fn an_edit_field_takes_at_most_its_draft_limit_while_it_is_typed() {
+    let mut app = app();
+    start(&mut app, "var w = new Window('dialog'); w.add('edittext', undefined, ''); w.add('button', undefined, 'OK'); vc.log(w.show());");
+    assert!(until_window(&mut app));
+    step(&mut app, Vec::new());
+    access_nodes(&app);
+    let nodes = access_nodes(&app);
+    let b = nodes.iter().map(|(_, n)| n).find(|n| n.role() == egui::accesskit::Role::TextInput).and_then(egui::accesskit::Node::bounds);
+    let b = b.unwrap_or_else(|| panic!("no edit field"));
+    let at = egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5);
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    step(&mut app, vec![egui::Event::PointerMoved(at)]);
+    step(&mut app, vec![button(true)]);
+    step(&mut app, vec![button(false)]);
+    step(&mut app, vec![egui::Event::Paste("x".repeat(script_window::DRAFT_CHARS + 100))]);
+    let typed_now = typed(&app, 1).expect("the pasted text is kept while the field has the focus");
+    assert_eq!(typed_now.chars().count(), script_window::DRAFT_CHARS, "the draft stops at its limit");
+    app.session.script_request_stop();
+    assert!(!until_window(&mut app));
+}
+
+#[test]
 fn a_queued_click_reaches_its_button_after_a_handler_adds_a_control_before_it() {
     let mut app = app();
     start(

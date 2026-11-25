@@ -35,7 +35,7 @@ use craft::ui::value_drag::Slider;
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_engine::script::dialogs::{cut_to, shown_text};
-use vectorcraft_engine::script::scriptui::{UiNode, check_event, list_index};
+use vectorcraft_engine::script::scriptui::{MAX_TEXT_BYTES, UiNode, check_event, list_index};
 use vectorcraft_engine::script::{ScriptUiDialog, UiEvent, UiKind, UiValue};
 
 use super::script_run::with_host;
@@ -533,12 +533,16 @@ pub(crate) fn screen_reader_name(n: &UiNode, prompt: &str) -> String {
     }
 }
 
+/// The most characters an edit field takes while it is typed: twice the longest text a script
+/// accepts, so that a text that is too long can still be typed, refused and shortened.
+pub(crate) const DRAFT_CHARS: usize = 2 * MAX_TEXT_BYTES;
+
 /// An edit field: its text is kept in the dialog while it is typed and given to the script when
 /// the field loses the focus, or at Enter in a one-line field.
 fn edit(ui: &mut Ui, drafts: &mut BTreeMap<u64, String>, enabled: bool, (i, n, prompt): (usize, &UiNode, &str)) -> Shown {
     let mut text = drafts.get(&n.id).cloned().unwrap_or_else(|| n.text.clone());
     let mut field = TextField::new(screen_reader_name(n, prompt), Bind::bound(&mut text))
-        .limit(None)
+        .limit(DRAFT_CHARS)
         .id_salt((KIND, n.id))
         .enabled(enabled)
         .read_only(n.readonly);
