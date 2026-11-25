@@ -1540,7 +1540,7 @@ fn item_set_opacity(h: &Host, a: &[Data]) -> Answer {
     // replaces the one the graph keeps for its series or kind.
     let item = this_item(h, a)?;
     let now = with_doc(h, item.doc, |_, st| st.doc.node(item.id).map(|n| f64::from(n.opacity) * 100.0));
-    let v = now.filter(|now| (now - v).abs() < 1e-4).unwrap_or(v);
+    let v = now.filter(|now| (now * 1e4).round() / 1e4 == v).unwrap_or(v);
     set_props(h, a, |_| false, json!({"opacity": v}))
 }
 
@@ -1584,6 +1584,33 @@ fn item_geometric(h: &Host, a: &[Data]) -> Answer {
 
 fn item_visible(h: &Host, a: &[Data]) -> Answer {
     bounds(h, a, true)
+}
+
+/// `controlBounds`: the visible bounds, taking in the anchors and direction handles of the paths
+/// in the item.
+fn item_control(h: &Host, a: &[Data]) -> Answer {
+    let item = this_item(h, a)?;
+    let (r, f) = item_rect(h, item, true)?;
+    let r = with_doc(h, item.doc, |_, st| st.doc.node(item.id).map_or(r, |n| take_in_handles(n, r)));
+    Ok(f.bounds(h.dom.coords.get(), r))
+}
+
+/// `r` with the anchors and direction handles of the shown paths in `n`. Hidden objects, the
+/// objects in them and guides are left out, as the visible bounds leave them out, and a clip group
+/// or clipping layer gives only its clipping path's.
+fn take_in_handles(n: &crate::doc::Node, mut r: Rect) -> Rect {
+    if !n.visible || matches!(n.kind, NodeKind::Path { guide: true, .. }) {
+        return r;
+    }
+    for a in n.path_data().iter().flat_map(|p| p.subpaths.iter()).flat_map(|s| s.anchors.iter()) {
+        r = r.union_pt(a.p).union_pt(a.h_in).union_pt(a.h_out);
+    }
+    let children = n.children().map_or(&[][..], Vec::as_slice);
+    let children = if n.clips() { &children[..children.len().min(1)] } else { children };
+    for c in children {
+        r = take_in_handles(c, r);
+    }
+    r
 }
 
 fn item_position(h: &Host, a: &[Data]) -> Answer {
@@ -1823,7 +1850,13 @@ fn place(h: &Host, doc: Doc, id: NodeId, to: &Destination) -> std::result::Resul
                 {
                     i -= 1;
                 }
-                if how == Placement::Above { i + 1 } else { i }
+                let at = if how == Placement::Above { i + 1 } else { i };
+                // A place behind a clipping path is refused; an object put into the clip group
+                // itself goes directly above the clipping path.
+                if clips && at == 0 {
+                    return Err(HostError::Error("an object cannot go behind a clipping path".into()));
+                }
+                at
             }
             (_, None) => count,
         };
@@ -2078,7 +2111,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("height", property(l, item_height, item_set_height)),
         ("geometricBounds", get(l, item_geometric)),
         ("visibleBounds", get(l, item_visible)),
-        ("controlBounds", get(l, item_visible)),
+        ("controlBounds", get(l, item_control)),
         ("editable", get(l, item_editable)),
         ("zOrderPosition", get(l, item_z_order_position)),
         ("duplicate", method(l, item_duplicate)),

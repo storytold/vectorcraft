@@ -120,7 +120,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reorder",
             [],
             None,
-            "{id, parent?: id (null = top level), index} put a row at `index` (0 = bottom) of `parent` (layers only at the top level or in layers; a path also goes into a shown, unlocked compound path and gives up its own paint (the compound path becomes pixel-aligned when the path or the compound path it leaves was), and an empty compound path takes the paint the first path that goes in was drawn with; a path that leaves a compound path for a layer or a group takes its paint and pixel alignment; an Intertwine group takes and gives up members as layer.move does), deselecting every selected object left hidden or locked (the key object too); a Live Paint group or its paths take a row as layer.move does",
+            "{id, parent?: id (null = top level), index} put a row at `index` (0 = bottom) of `parent` (layers only at the top level or in layers; the clipping path of a clip group or clipping layer stays at its bottom: it does not move until the mask is released, and a row put below it goes just above it; a path also goes into a shown, unlocked compound path and gives up its own paint (the compound path becomes pixel-aligned when the path or the compound path it leaves was), and an empty compound path takes the paint the first path that goes in was drawn with; a path that leaves a compound path for a layer or a group takes its paint and pixel alignment; an Intertwine group takes and gives up members as layer.move does), deselecting every selected object left hidden or locked (the key object too); a Live Paint group or its paths take a row as layer.move does",
             has_doc,
             move_node
         ),
@@ -930,6 +930,14 @@ fn move_node(s: &mut Session, p: &Value) -> Result<Value> {
     } else if !accepts(d, parent, n) {
         return Err(bad(C, "layers go only at the top level or in layers, objects in layers and groups"));
     }
+    // The clipping path stays at the bottom of its clip group or clipping layer.
+    let from = d.parent_of(id);
+    let clips = |p: Option<NodeId>| p.and_then(|p| d.node(p)).filter(|p| p.clips());
+    let is_mask = clips(from).and_then(Node::children).and_then(|c| c.first()).is_some_and(|c| c.id == id);
+    if is_mask && (parent != from || index != 0) {
+        return Err(bad(C, "the clipping path stays at the bottom of its clip group; release the clipping mask first"));
+    }
+    let index = if !is_mask && clips(parent).and_then(Node::children).is_some_and(|c| c.iter().any(|c| c.id != id)) { index.max(1) } else { index };
     // An empty compound path takes the paint of the first path that goes into it: the path's own,
     // or the paint of the compound path it leaves, which is what painted it.
     let from_compound = d.parent_of(id).and_then(|p| d.node(p)).filter(|p| matches!(p.kind, NodeKind::Compound { .. }));
@@ -945,7 +953,6 @@ fn move_node(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let live_paint = LivePaintMove::plan(d, &[id], parent, false)?;
     let label = if live_paint.joins() { "Merge Live Paint" } else { "Reorder" };
-    let from = d.parent_of(id);
     let left = super::intertwine::groups_of(d, &[id]);
     s.edit(label, |d, sel| {
         d.move_node(id, parent, index)?;

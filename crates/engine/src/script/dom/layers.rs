@@ -486,7 +486,8 @@ fn layers_of(h: &Host, a: &[Data]) -> Answer {
 
 fn layers_length(h: &Host, a: &[Data]) -> Answer {
     let (doc, parent) = layers_scope(h, arg(a, 0))?;
-    Ok(num(float(with_doc(h, doc, |_, st| layer_list(&st.doc, parent).len()) as u64)))
+    let n = with_doc(h, doc, |_, st| layer_ids(h, st, parent).map(|l| l.len()))?;
+    Ok(num(float(n as u64)))
 }
 
 fn layers_parent(h: &Host, a: &[Data]) -> Answer {
@@ -503,14 +504,14 @@ fn layers_at(h: &Host, a: &[Data]) -> Answer {
     let (doc, parent) = layers_scope(h, arg(a, 0))?;
     let Data::Number(n) = arg(a, 1) else { return Ok(Data::Undefined) };
     let Some(i) = whole(*n).and_then(|i| usize::try_from(i).ok()) else { return Ok(Data::Undefined) };
-    Ok(with_doc(h, doc, |_, st| layer_list(&st.doc, parent).get(i).map_or(Data::Undefined, |id| layer_ref(h, st.uid, *id))))
+    with_doc(h, doc, |_, st| Ok(layer_ids(h, st, parent)?.get(i).map_or(Data::Undefined, |id| layer_ref(h, st.uid, *id))))
 }
 
 fn layers_by_name(h: &Host, a: &[Data]) -> Answer {
     let (doc, parent) = layers_scope(h, arg(a, 0))?;
     let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("give a name, as a string".into())) };
     with_doc(h, doc, |_, st| {
-        let ids = layer_list(&st.doc, parent);
+        let ids = layer_ids(h, st, parent)?;
         h.charge_call(ids.len() as u64)?;
         let id = ids.iter().find(|i| st.doc.node(**i).and_then(|n| n.name.as_deref()) == Some(name.as_str()));
         id.map(|id| layer_ref(h, st.uid, *id)).ok_or_else(|| HostError::Error(NOT_FOUND.into()))
@@ -583,8 +584,8 @@ fn art_scope(h: &Host, d: &Data, class: &str) -> Result<(Doc, Option<NodeId>)> {
     }
 }
 
-/// A document's uid, the document as it was, the [`Kind`] and the container of an art collection,
-/// and the ids it listed then.
+/// A document's uid, the document as it was, the [`Kind`] (or [`LAYER_LIST`]) and the container of
+/// an art or layer collection, and the ids it listed then.
 pub(super) type ArtList = (u64, Arc<Document>, u8, Option<NodeId>, Rc<Vec<NodeId>>);
 
 /// How many lists of art [`super::State`] keeps at once.
@@ -595,9 +596,44 @@ pub(super) const ART_LISTS: usize = 4;
 /// their documents are unchanged, so a loop over groups that reads each group's `pageItems` builds
 /// each list once. Each new list is charged by the objects it looks at.
 fn art_list(h: &Host, st: &DocState, kind: Kind, container: Option<NodeId>) -> Result<Rc<Vec<NodeId>>> {
+    kept_list(h, st, kind as u8, container, || {
+        Ok(match container {
+            None => {
+                let all = page_items(h, st);
+                h.charge_call(all.len() as u64)?;
+                all.iter().copied().filter(|i| st.doc.node(*i).is_some_and(|n| kind.holds(n))).collect()
+            }
+            Some(c) => {
+                let children: &[Arc<crate::doc::Node>] = st.doc.node(c).and_then(|n| n.children()).map_or(&[], Vec::as_slice);
+                h.charge_call(children.len() as u64)?;
+                children.iter().rev().filter(|n| kind.holds(n)).map(|n| n.id).collect()
+            }
+        })
+    })
+}
+
+/// The tag of a list of layers among the kept lists of art.
+const LAYER_LIST: u8 = u8::MAX;
+
+/// The layers of `parent` (`None`: the top level), top first, kept as [`art_list`] keeps its
+/// lists. Each new list is charged by the rows it looks at.
+fn layer_ids(h: &Host, st: &DocState, parent: Option<NodeId>) -> Result<Rc<Vec<NodeId>>> {
+    kept_list(h, st, LAYER_LIST, parent, || {
+        let rows = match parent {
+            None => Some(&st.doc.layers),
+            Some(p) => st.doc.children(Some(p)),
+        };
+        h.charge_call(rows.map_or(0, Vec::len) as u64)?;
+        Ok(layer_list(&st.doc, parent))
+    })
+}
+
+/// The list kept for `tag` and `container` while the document is unchanged, else the one `build`
+/// makes, which is kept in place of the least recently used one.
+fn kept_list(h: &Host, st: &DocState, tag: u8, container: Option<NodeId>, build: impl FnOnce() -> Result<Vec<NodeId>>) -> Result<Rc<Vec<NodeId>>> {
     {
         let mut lists = h.dom.art.borrow_mut();
-        let at = lists.iter().position(|(uid, doc, k, c, _)| *uid == st.uid && Arc::ptr_eq(doc, &st.doc) && *k == kind as u8 && *c == container);
+        let at = lists.iter().position(|(uid, doc, k, c, _)| *uid == st.uid && Arc::ptr_eq(doc, &st.doc) && *k == tag && *c == container);
         if let Some(at) = at {
             let list = lists.remove(at);
             let ids = list.4.clone();
@@ -605,25 +641,13 @@ fn art_list(h: &Host, st: &DocState, kind: Kind, container: Option<NodeId>) -> R
             return Ok(ids);
         }
     }
-    let ids: Vec<NodeId> = match container {
-        None => {
-            let all = page_items(h, st);
-            h.charge_call(all.len() as u64)?;
-            all.iter().copied().filter(|i| st.doc.node(*i).is_some_and(|n| kind.holds(n))).collect()
-        }
-        Some(c) => {
-            let children: &[Arc<crate::doc::Node>] = st.doc.node(c).and_then(|n| n.children()).map_or(&[], Vec::as_slice);
-            h.charge_call(children.len() as u64)?;
-            children.iter().rev().filter(|n| kind.holds(n)).map(|n| n.id).collect()
-        }
-    };
-    let ids = Rc::new(ids);
+    let ids = Rc::new(build()?);
     let mut lists = h.dom.art.borrow_mut();
     lists.retain(|(uid, doc, ..)| *uid != st.uid || Arc::ptr_eq(doc, &st.doc));
     if lists.len() >= ART_LISTS {
         lists.remove(0);
     }
-    lists.push((st.uid, st.doc.clone(), kind as u8, container, ids.clone()));
+    lists.push((st.uid, st.doc.clone(), tag, container, ids.clone()));
     Ok(ids)
 }
 
@@ -663,6 +687,7 @@ fn art_by_name(h: &Host, a: &[Data], kind: Kind) -> Answer {
     let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("give a name, as a string".into())) };
     with_doc(h, doc, |_, st| {
         let ids = art_list(h, st, kind, c)?;
+        h.charge_call(ids.len() as u64)?;
         let id = ids.iter().find(|i| st.doc.node(**i).and_then(|n| n.name.as_deref()) == Some(name.as_str()));
         id.map(|id| item_ref(h, st, *id)).ok_or_else(|| HostError::Error(NOT_FOUND.into()))
     })

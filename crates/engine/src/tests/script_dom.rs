@@ -133,6 +133,46 @@ fn page_item_geometry_uses_document_coordinates_with_y_up() {
     assert_eq!(out[4], json!([20, 250, 80, 210]));
 }
 
+/// `controlBounds` takes in the direction handles of a curve, which reach past its visible bounds.
+#[test]
+fn control_bounds_take_in_the_direction_handles() {
+    let (mut s, _, _) = doc();
+    let id = s.execute("path.create", &json!({"d": "M100 200 C100 100 200 100 200 200"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let out = log(&mut s, "var i = app.activeDocument.selection[0]; vc.log(i.visibleBounds); vc.log(i.controlBounds);");
+    let top = |v: &Value| v[1].as_f64().unwrap();
+    assert!(top(&out[0]) < 180.0, "{out:?}");
+    assert_eq!(top(&out[1]), 200.0, "{out:?}");
+    assert_eq!(out[1][2].as_f64().unwrap(), out[0][2].as_f64().unwrap(), "{out:?}");
+}
+
+/// The `controlBounds` of a group leave out the handles of a hidden curve in it.
+#[test]
+fn control_bounds_leave_out_hidden_paths() {
+    let (mut s, a, _) = doc();
+    let id = s.execute("path.create", &json!({"d": "M100 200 C100 -400 200 -400 200 200"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, id]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("object.setProps", &json!({"id": id, "visible": false})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let out = log(&mut s, "var g = app.activeDocument.selection[0].parent; vc.log(g.visibleBounds); vc.log(g.controlBounds);");
+    assert_eq!(out[1], out[0], "{out:?}");
+}
+
+/// The `controlBounds` of a clip group leave out the handles of the clipped art past the clipping
+/// path.
+#[test]
+fn control_bounds_of_a_clip_group_come_from_its_clipping_path() {
+    let (mut s, _, _) = doc();
+    let id = s.execute("path.create", &json!({"d": "M100 200 C100 -400 200 -400 200 200"})).unwrap()["id"].as_u64().unwrap();
+    let mask = rect(&mut s, 100.0, 150.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [id, mask.0]})).unwrap();
+    s.execute("object.clippingMask.make", &json!({})).unwrap();
+    let out = log(&mut s, "var g = app.activeDocument.groupItems[0]; vc.log(g.clipped); vc.log(g.visibleBounds); vc.log(g.controlBounds);");
+    assert_eq!(out[0], json!(true), "{out:?}");
+    assert_eq!(out[2], out[1], "{out:?}");
+}
+
 #[test]
 fn page_item_size_setters_on_a_rotated_object_give_the_page_aligned_size() {
     let (mut s, a, b) = doc();
@@ -255,6 +295,15 @@ fn assigning_the_reported_opacity_changes_nothing() {
     assert_eq!(out, vec![json!(33.3333)]);
     assert_eq!(s.active().unwrap().doc.node(a).unwrap().opacity, before);
     assert_eq!(undo_steps(&s), steps);
+}
+
+/// An opacity near the one an item has, but not the one it reports, is set.
+#[test]
+fn an_opacity_close_to_the_current_one_is_set() {
+    let (mut s, a, _) = doc();
+    s.execute("object.setProps", &json!({"id": a.0, "opacity": 50})).unwrap();
+    let out = log(&mut s, "var i = app.activeDocument.pageItems[0]; i.opacity = 50.00009; vc.log(i.opacity);");
+    assert_eq!(out, vec![json!(50.0001)]);
 }
 
 #[test]
@@ -389,6 +438,27 @@ fn move_and_duplicate_place_by_element_placement() {
     rect(&mut s, 0.0, 0.0, 5.0, 5.0);
     let e = failure(&mut s, "var p = app.activeDocument.pageItems; p[p.length - 1].move(p[0], ElementPlacement.INSIDE);");
     assert!(e.contains("hidden or locked"), "{e}");
+}
+
+/// An object cannot go behind a clip group's clipping path; one put at the end of the group goes
+/// directly above the clipping path.
+#[test]
+fn an_object_cannot_go_behind_a_clipping_path() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let g = NodeId(s.execute("object.clippingMask.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let kids = |s: &Session| s.active().unwrap().doc.node(g).unwrap().children().unwrap().iter().map(|n| n.id).collect::<Vec<_>>();
+    let before = kids(&s);
+    s.execute("object.setProps", &json!({"id": before[0].0, "name": "mask"})).unwrap();
+    s.execute("object.setProps", &json!({"id": before[1].0, "name": "art"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let e = failure(&mut s, "var p = app.activeDocument.pageItems; p.getByName('art').move(p.getByName('mask'), ElementPlacement.PLACEAFTER);");
+    assert!(e.contains("behind a clipping path"), "{e}");
+    assert_eq!(kids(&s), before);
+    let c = rect(&mut s, 300.0, 10.0, 5.0, 5.0);
+    s.execute("object.setProps", &json!({"id": c.0, "name": "c"})).unwrap();
+    log(&mut s, "var p = app.activeDocument.pageItems; p.getByName('c').move(p.getByName('art').parent, ElementPlacement.PLACEATEND);");
+    assert_eq!(kids(&s), [before[0], c, before[1]]);
 }
 
 #[test]
@@ -1300,8 +1370,9 @@ fn get_is_file_open_cannot_probe_outside_script_scope() {
     let (mut s, _, _) = doc();
     let path = std::env::temp_dir().join(format!("vc-dom-open-{}.svg", std::process::id()));
     s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
-    let p = path.to_string_lossy().replace('\\', "\\\\");
-    let query = format!("vc.log(app.getIsFileOpen('{p}')); vc.log(app.getIsFileOpen('{p}.other'));");
+    let p = path.to_string_lossy();
+    let (same, other) = (serde_json::to_string(&p).unwrap(), serde_json::to_string(&format!("{p}.other")).unwrap());
+    let query = format!("vc.log(app.getIsFileOpen({same})); vc.log(app.getIsFileOpen({other}));");
     let out = log(&mut s, &query);
     assert_eq!(out, vec![json!(true), json!(false)]);
     // Read roots that leave out the document's file: the same path does not count.
@@ -1830,6 +1901,8 @@ fn a_loop_over_groups_and_their_items_lists_each_collection_once() {
     let (a, b) = (run(&mut s, nested).unwrap(), run(&mut s, in_order).unwrap());
     assert_eq!((a["log"].clone(), b["log"].clone()), (json!([10]), json!([10])));
     assert_eq!(a["hostCalls"], b["hostCalls"], "{a}\n{b}");
+    // A list built again for each lookup would add a host call to both.
+    assert_eq!(a["hostCalls"], json!(50), "{a}");
 }
 
 #[test]

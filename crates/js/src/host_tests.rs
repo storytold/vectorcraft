@@ -661,6 +661,25 @@ fn the_answer_to_a_waiting_member_of_a_host_class_is_an_object_of_its_class() {
     assert_eq!(finish(&mut r, 1_000).0.unwrap(), JsValue::String("true,2,true,false".into()));
 }
 
+/// The handles of the objects of a host class count toward the heap limit.
+#[test]
+fn host_class_handles_count_toward_the_heap_limit() {
+    let mut r = Realm::new();
+    r.set_limits(Limits { heap_bytes: 64 << 20, ..Limits::default() });
+    let n = Rc::new(Cell::new(0.0));
+    let big: HostFunction = Rc::new(move |_| {
+        n.set(n.get() + 1.0);
+        Ok(host_ref("Thing", &vec![n.get(); 100_000]))
+    });
+    let class =
+        HostClass { name: "Thing".into(), parent: None, members: vec![("big".to_string(), HostMember::Method(big))], index: None, construct: None };
+    r.define_host_classes(vec![class], vec![("thing".into(), host_ref("Thing", &[0.0]))]).unwrap();
+    match r.run("var a = []; for (var i = 0; i < 100; i++) a.push(thing.big()); a.length") {
+        Err(RunError { kind: RunErrorKind::Limit(k), .. }) => assert_eq!(k, LimitKind::Heap),
+        other => panic!("{other:?}"),
+    }
+}
+
 #[test]
 fn a_host_class_constructor_called_with_new_cannot_wait() {
     let mut r = realm(1_000_000);

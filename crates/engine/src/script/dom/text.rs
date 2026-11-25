@@ -59,6 +59,10 @@ pub const STALE_RANGE: &str = "Stale text range";
 /// The most edits a frame keeps for moving its ranges; a range made before the oldest kept edit
 /// is stale.
 const MAX_EDITS: usize = 100_000;
+/// The most bytes the offset tables of the frames' indexes hold in a run. Past it the tables of
+/// the other frames are given up; their text, generations and edits stay, and each frame's tables
+/// are made again when it is next read.
+const INDEX_BUDGET: usize = 64 << 20;
 
 /// A frame's text with the offsets of its characters, words and paragraphs, in UTF-16 units.
 pub(super) struct Index {
@@ -102,6 +106,22 @@ impl Index {
         Self { text, chars, bytes, words, paras }
     }
 
+    /// The text alone, without its offset tables, for a frame whose tables were given up under
+    /// [`INDEX_BUDGET`]; [`observe`] makes them again before the index is read.
+    fn bare(text: String) -> Self {
+        Self { text, chars: Vec::new(), bytes: Vec::new(), words: Vec::new(), paras: Vec::new() }
+    }
+
+    fn is_bare(&self) -> bool {
+        self.chars.is_empty()
+    }
+
+    /// The bytes the offset tables hold.
+    fn table_bytes(&self) -> usize {
+        let pairs = self.words.capacity() + self.paras.capacity();
+        (self.chars.capacity() + self.bytes.capacity()) * size_of::<usize>() + pairs * size_of::<(usize, usize)>()
+    }
+
     fn len(&self) -> usize {
         self.chars.last().copied().unwrap_or(0)
     }
@@ -126,6 +146,13 @@ impl Index {
 
     fn char_span(&self, i: usize) -> Option<(usize, usize)> {
         Some((*self.chars.get(i)?, *self.chars.get(i + 1)?))
+    }
+
+    /// UTF-16 offset `u` on a character boundary: inside a surrogate pair, the start of its
+    /// character, or with `up` the end of it.
+    fn boundary(&self, u: usize, up: bool) -> usize {
+        let b = self.byte(u, up);
+        self.chars.get(self.bytes.partition_point(|&x| x < b)).copied().unwrap_or_else(|| self.len())
     }
 }
 
@@ -201,6 +228,28 @@ pub(in crate::script) struct TextState {
     made: Cell<u64>,
     /// The span of each range object, by its number, whose `length` the script set.
     resized: RefCell<HashMap<u64, (usize, usize, u64)>>,
+    /// The bytes the offset tables of the frames' indexes hold ([`INDEX_BUDGET`]).
+    table_bytes: Cell<usize>,
+}
+
+/// Puts `index` in the log of frame `key` and keeps the offset tables of all the frames within
+/// [`INDEX_BUDGET`], giving up the tables of other frames first.
+fn set_index(state: &TextState, frames: &mut HashMap<(u64, u64), Log>, key: (u64, u64), index: Index) {
+    let mut total = state.table_bytes.get() + index.table_bytes();
+    if let Some(l) = frames.get_mut(&key) {
+        total -= l.index.table_bytes();
+        l.index = Rc::new(index);
+    }
+    for (k, l) in frames.iter_mut() {
+        if total <= INDEX_BUDGET {
+            break;
+        }
+        if *k != key && !l.index.is_bare() {
+            total -= l.index.table_bytes();
+            l.index = Rc::new(Index::bare(l.index.text.clone()));
+        }
+    }
+    state.table_bytes.set(total);
 }
 
 fn text_of(st: &DocState, id: NodeId) -> Option<&TextObject> {
@@ -228,29 +277,36 @@ fn observe(h: &Host, st: &DocState, id: NodeId) -> std::result::Result<(Rc<Index
     let mut frames = h.dom.text.frames.borrow_mut();
     let key = (st.uid, id.0);
     let now = Arc::as_ptr(&st.doc);
-    match frames.get_mut(&key) {
-        Some(l) if std::ptr::eq(l.doc.as_ptr(), now) && l.reverts == st.reverts => {}
+    let fresh = match frames.get_mut(&key) {
+        Some(l) if std::ptr::eq(l.doc.as_ptr(), now) && l.reverts == st.reverts => None,
         Some(l) => {
-            if l.reverts != st.reverts || !same_text(t, &l.index.text) {
+            let changed = l.reverts != st.reverts || !same_text(t, &l.index.text);
+            if changed {
                 l.stamp += 1;
                 l.floor = l.stamp;
                 l.edits.clear();
-                l.index = Rc::new(Index::new(t.plain_text()));
             }
             l.doc = Arc::downgrade(&st.doc);
             l.reverts = st.reverts;
+            changed.then(|| t.plain_text())
         }
         None => {
             let l = Log {
                 doc: Arc::downgrade(&st.doc),
                 reverts: st.reverts,
-                index: Rc::new(Index::new(t.plain_text())),
+                index: Rc::new(Index::bare(String::new())),
                 stamp: 0,
                 floor: 0,
                 edits: VecDeque::new(),
             };
             frames.insert(key, l);
+            Some(t.plain_text())
         }
+    };
+    // Tables given up under the budget are made again from the text the log keeps.
+    let fresh = fresh.or_else(|| frames.get(&key).filter(|l| l.index.is_bare()).map(|l| l.index.text.clone()));
+    if let Some(text) = fresh {
+        set_index(&h.dom.text, &mut frames, key, Index::new(text));
     }
     let l = frames.get(&key).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     Ok((l.index.clone(), l.stamp))
@@ -320,9 +376,9 @@ fn record(h: &Host, item: Item, before: &Index, at: usize, removed: usize, inser
             l.floor = l.stamp;
             l.edits.clear();
         }
-        l.index = Rc::new(Index::new(now));
         l.doc = Arc::downgrade(&st.doc);
         l.reverts = st.reverts;
+        set_index(&h.dom.text, &mut frames, (st.uid, item.id.0), Index::new(now));
         Ok(())
     })
 }
@@ -718,16 +774,16 @@ fn part_add(h: &Host, a: &[Data], before: bool) -> Answer {
     let (r, part) = this_part(h, a)?;
     let contents = contents_of(arg(a, 1))?;
     let (index, s, e, _) = resolve(h, r)?;
-    let at = if before || matches!(arg(a, 2), Data::Undefined) {
+    let (at, after) = if before || matches!(arg(a, 2), Data::Undefined) {
         let (items, spans) = part_spans(&index, part, s, e);
         let span = |k: usize| match spans {
             None => index.char_span(k),
             Some(list) => list.get(k).copied(),
         };
         if before {
-            items.clone().next().and_then(span).map_or(s, |(x, _)| x)
+            (items.clone().next().and_then(span).map_or(s, |(x, _)| x), false)
         } else {
-            items.clone().next_back().and_then(span).map_or(e, |(_, y)| y)
+            (items.clone().next_back().and_then(span).map_or(e, |(_, y)| y), true)
         }
     } else {
         let rel = arg(a, 2);
@@ -740,13 +796,16 @@ fn part_add(h: &Host, a: &[Data], before: bool) -> Answer {
             return Err(HostError::Error("relativeObject must be text of the same text frame".into()));
         }
         let (_, ts, te, _) = resolve(h, target)?;
-        if text_placement(arg(a, 3))? { te } else { ts }
+        if text_placement(arg(a, 3))? { (te, true) } else { (ts, false) }
     };
+    // An offset inside a character goes to its end for an insertion after, else to its start, for
+    // the edit, the edit log and the range returned alike.
+    let at = index.boundary(at, after);
     if contents.is_empty() {
         let (_, stamp) = with_doc(h, r.item.doc, |_, st| observe(h, st, r.item.id))?;
         return Ok(range_ref(h, r.item, at, at, stamp, "TextRange"));
     }
-    let b = index.byte(at, false);
+    let b = index.byte(at, after);
     let (prev, next) = (index.text[..b].chars().next_back(), index.text[b..].chars().next());
     let (lead, trail) = match part {
         Part::Characters => ("", ""),
@@ -1379,18 +1438,24 @@ fn frames_path_text(h: &Host, a: &[Data]) -> Answer {
 }
 
 /// `removeAll()`: deletes every type object the collection lists in one command; a hidden or
-/// locked one stops it first.
+/// locked one, or one on a locked artboard, stops it first.
 fn frames_remove_all(h: &Host, a: &[Data]) -> Answer {
     let (doc, c) = frames_scope(h, a)?;
-    let (ids, refused) = with_doc(h, doc, |_, st| {
+    let (ids, refused, on_locked) = with_doc(h, doc, |_, st| {
         let ids = listed(h, st, c)?;
         let ok = |id: &NodeId| editable(&st.doc, *id) && st.doc.node(*id).is_some_and(all_editable);
         let refused: Vec<u64> = ids.iter().filter(|i| !ok(i)).map(|i| i.0).take(20).collect();
-        Ok::<_, HostError>((ids, refused))
+        let locks = st.doc.locked_artboards();
+        let on_locked: Vec<u64> = ids.iter().filter(|i| locks.holds_id(**i)).map(|i| i.0).take(20).collect();
+        Ok::<_, HostError>((ids, refused, on_locked))
     })?;
     if !refused.is_empty() {
         let list = refused.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
         return Err(HostError::Error(format!("cannot delete hidden or locked type: {list}")));
+    }
+    if !on_locked.is_empty() {
+        let list = on_locked.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
+        return Err(HostError::Error(format!("{}: {list}", super::ON_LOCKED_ARTBOARD)));
     }
     if !ids.is_empty() {
         on_doc(h, doc.uid, true, |h| command(h, "edit.clear", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})))?;

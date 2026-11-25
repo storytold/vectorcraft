@@ -2682,7 +2682,7 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   or removes only that object, as `select.add` and `select.toggle` do, and the other objects stay selected as they
   were), `opacity` (0 to
   100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
-  visible bounds), `editable` (false for an object that is hidden or locked, in a hidden or locked layer or group,
+  visible bounds with the anchors and direction handles of the shown paths in the item), `editable` (false for an object that is hidden or locked, in a hidden or locked layer or group,
   or on a locked artboard), `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
   `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`
   (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/). `move` runs `node.move`, and `duplicate` runs
@@ -2795,7 +2795,9 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   The selection stays as it is. `node.move` also puts a path into a shown, unlocked compound path, where the path
   gives up its own paint, and an empty compound path takes the paint the first path that goes in was drawn with. A
   path that `node.move` takes out of a compound path into a layer or a group takes the compound path's paint and pixel
-  alignment.
+  alignment, and a pixel-aligned compound path snaps a path it takes to the pixel grid. `node.move` leaves the
+  clipping path of a clip group or clipping layer at its bottom: it refuses to move the clipping path until the mask
+  is released, and puts a row given index 0 there directly above the clipping path.
 - `Document.textFrames` (https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItems/) lists the document's type
   objects in paint order, those inside groups included, with `length`, `[i]`, `index(key)`, `getByName(name)` and
   `removeAll()`. `add()` makes empty point type at the origin and `pointText(anchor, orientation?)` at `anchor`, both
@@ -2807,7 +2809,9 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `areaText` and `pathText` put the new type on top of the layer's or group's contents, whatever the current layer.
   Point type goes there with `text.create`'s `parent`, which takes a shown, unlocked layer or group and ignores the
   drawing mode, and area type and type on a path go there with `node.move`, in the same undo step. A hidden or
-  locked layer or group throws an error and changes nothing. A `TextFrame`
+  locked layer or group throws an error and changes nothing. `removeAll()` deletes every type object the collection
+  lists with `edit.clear` in one step; when one is hidden or locked, in a hidden or locked layer or group, or on a
+  locked artboard, it throws an error and deletes nothing. A `TextFrame`
   (https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItem/) is a page item with `kind` (`TextType.POINTTEXT`,
   `AREATEXT` or `PATHTEXT`), `contents`, `orientation`, `textRange`, `characters`, `words`, `paragraphs`,
   `createOutline()` (Type › Create Outlines, giving the group of outlines, or `null` when the type has nothing to

@@ -893,6 +893,31 @@ fn moves_are_validated() {
     assert_eq!(parent(&s, sub), None);
 }
 
+/// `node.move` keeps a clip group's clipping path at its bottom: the path does not leave the group
+/// or move up in it, and a row moved to index 0 goes directly above it.
+#[test]
+fn node_move_keeps_a_clip_groups_clipping_path_at_the_bottom() {
+    let mut s = session();
+    let (a, b, c) = (rect(&mut s, 0.0), rect(&mut s, 30.0), rect(&mut s, 60.0));
+    let layer = parent(&s, a).unwrap();
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0, c.0]}));
+    let g = id(&run(&mut s, "object.clippingMask.make", json!({})));
+    let before = children(&s, g);
+    let mask = before[0];
+    for p in [json!({"id": mask.0, "parent": layer.0, "index": 0}), json!({"id": mask.0, "parent": g.0, "index": 2})] {
+        let err = s.execute("node.move", &p).unwrap_err().to_string();
+        assert!(err.contains("clipping path stays at the bottom"), "{p}: {err}");
+        assert_eq!(children(&s, g), before, "{p}");
+    }
+    let _ = s.execute("node.move", &json!({"id": mask.0, "parent": g.0, "index": 0}));
+    assert_eq!(children(&s, g), before, "the clipping path stays where it is");
+    let d = rect(&mut s, 90.0);
+    run(&mut s, "node.move", json!({"id": d.0, "parent": g.0, "index": 0}));
+    assert_eq!(children(&s, g)[..2], [mask, d], "the row goes directly above the clipping path");
+    run(&mut s, "node.move", json!({"id": before[2].0, "parent": g.0, "index": 0}));
+    assert_eq!(children(&s, g)[..2], [mask, before[2]]);
+}
+
 /// The Layers panel's commands refuse a switch given as text or as another value that is not true
 /// or false, and leave the document, the selection, the highlighted rows and the undo history as
 /// they were; true, false and null still work.

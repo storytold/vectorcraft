@@ -432,7 +432,7 @@ fn text_fonts_list_and_assign_fonts_by_name() {
         &format!(
             "var f = app.textFonts, m = '';\
              try {{ f.getByName('No Such Font Anywhere'); }} catch (e) {{ m = e.message; }} vc.log(m);\
-             try {{ f.index('No Such Font Anywhere'); }} catch (e) {{ m = e.message; }} vc.log(m);\
+             m = ''; try {{ f.index('No Such Font Anywhere'); }} catch (e) {{ m = e.message; }} vc.log(m);\
              vc.log(f.length > 0); var r = app.activeDocument.textFrames[0].textRange, k = f[{pos}];\
              vc.log([k.family, k.style]); r.textFont = k; vc.log(r.textFont.family === k.family && r.textFont.style === k.style);\
              vc.log(f.getByName(k.family + ' ' + k.style).family === k.family); vc.log(f[f.length] === undefined);"
@@ -506,6 +506,20 @@ fn collections_of_text_add_words_characters_and_paragraphs() {
     }
     assert_eq!(undo_steps(&s), before);
     assert_eq!(plain(&s, id), "ab");
+}
+
+/// Text added after a range that ends inside a character goes after the whole character, and the
+/// range returned holds the added text.
+#[test]
+fn text_added_after_half_a_character_goes_after_it() {
+    let (mut s, id) = doc_with("a\u{1F600}b");
+    let out = log(
+        &mut s,
+        "var t = app.activeDocument.textFrames[0], r = t.characters[0]; r.length = 2;\
+         var x = t.characters.add('X', r, ElementPlacement.PLACEAFTER); vc.log([x.start, x.contents]);",
+    );
+    assert_eq!(out, vec![json!([3, "X"])]);
+    assert_eq!(plain(&s, id), "a\u{1F600}Xb");
 }
 
 #[test]
@@ -646,6 +660,22 @@ fn text_frames_of_a_layer_or_group_put_new_type_in_it() {
     assert!(e.contains("hidden or locked"), "{e}");
     let e = failure(&mut s, &format!("{NESTED_TYPE} g.hidden = true; g.textFrames.pointText([5, 5]);"));
     assert!(e.contains("hidden or locked"), "{e}");
+    assert_eq!(undo_steps(&s), before);
+}
+
+/// `textFrames.removeAll()` deletes nothing when a type object it lists is on a locked artboard.
+#[test]
+fn text_frames_remove_all_refuses_type_on_a_locked_artboard() {
+    let (mut s, id) = doc_with("abc");
+    s.edit("Lock Artboard", |d, _| {
+        d.artboards[0].locked = true;
+        Ok(())
+    })
+    .unwrap();
+    let before = undo_steps(&s);
+    let e = failure(&mut s, "app.activeDocument.textFrames.removeAll();");
+    assert!(e.contains(&format!("cannot delete objects on a locked artboard: {}", id.0)), "{e}");
+    assert!(s.active().unwrap().doc.node(id).is_some());
     assert_eq!(undo_steps(&s), before);
 }
 
