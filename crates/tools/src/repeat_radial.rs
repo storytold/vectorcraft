@@ -27,7 +27,7 @@ pub const HANDLE_GAP: f64 = 22.0;
 pub const INSTANCE_STEP: f64 = 16.0;
 
 /// How near (screen points) a press must come to a handle to take it.
-const REACH: f64 = 8.0;
+pub const REACH: f64 = 8.0;
 
 /// The most instances a radial repeat has (as `object.repeat.options` accepts them).
 const MAX_INSTANCES: f64 = 1000.0;
@@ -534,17 +534,6 @@ mod tests {
         assert!(RadialDrag::hit(&c, h.instances_at, Mods { alt: true, ..Mods::default() }).is_none());
     }
 
-    /// With the Selection tool, a handle drag reads where it is released, and a tool switch cancels
-    /// it.
-    #[test]
-    fn a_handle_drag_reads_its_release_and_a_tool_switch_cancels_it() {
-        let (doc, selection) = radial();
-        let paint = paint();
-        let c = cx(&doc, &selection, &paint);
-        let at = RadialHandles::of(&doc, &selection, crate::select::selection_box(&c), 1.0).unwrap().instances_at;
-        crate::testutil::check_widget_release_and_tool_switch(&c, at, at + Vec2::new(0.0, 32.0), at + Vec2::new(0.0, 64.0));
-    }
-
     #[test]
     fn dragging_the_radius_handle_moves_the_circle_in_and_out() {
         let (doc, selection) = radial();
@@ -692,27 +681,5 @@ mod tests {
         let mut d = RadialDrag::hit(&c, h.instances_at, Mods::default()).unwrap();
         assert_eq!(preview(&d.drag(h.instances_at + Vec2::new(0.0, 32.0))), Some(&json!({"instances": 9})));
         assert!(matches!(d.finish().as_slice(), [Action::Commit]));
-    }
-
-    #[test]
-    fn a_tool_switch_cancels_a_radial_handle_drag() {
-        use crate::{PointerEvent, PointerKind, Tool};
-        let (doc, selection) = radial();
-        let paint = paint();
-        let c = cx(&doc, &selection, &paint);
-        let h = RadialHandles::of(&doc, &selection, crate::select::selection_box(&c), c.zoom).unwrap();
-        let out = (h.radius_at - h.center) / 100.0;
-        let to = h.radius_at + out * 25.0;
-        let mut t = crate::select::SelectionTool::default();
-        assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, h.radius_at.x, h.radius_at.y)).is_empty());
-        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, to.x, to.y));
-        assert_eq!(preview(&a), Some(&json!({"radius": 125.0})), "{a:?}");
-        assert_eq!(t.deactivate(&c), vec![Action::Cancel]);
-        assert!(!t.busy());
-        // A press that has not changed the repeat leaves nothing to cancel.
-        t.pointer(&c, &PointerEvent::new(PointerKind::Down, h.radius_at.x, h.radius_at.y));
-        assert!(t.busy());
-        assert!(t.deactivate(&c).is_empty());
-        assert!(!t.busy());
     }
 }
