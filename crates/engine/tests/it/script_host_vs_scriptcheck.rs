@@ -44,8 +44,10 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
 /// outside it. The document model (`app`, its classes and the enumerations) acts on the open
 /// documents; `Document.saveAs` and `close` throw "not available yet".
 const INSIDE: &[(&str, &str)] = &[
-    ("", "$ File Folder alert confirm localize prompt toSource"),
+    ("", "$ File Folder UnitValue alert confirm localize prompt toSource"),
     ("Object.prototype.", "toSource"),
+    ("UnitValue.", "baseUnit baseUnit= length prototype"),
+    ("UnitValue.prototype.", "as baseUnit baseUnit= constructor convert toString type type= value value="),
     ("localize.", "length"),
     ("toSource.", "length"),
     (
@@ -58,7 +60,7 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "File.prototype.",
         "absoluteURI alias changePath close constructor created creator displayName encoding encoding= eof error error= \
-         exists fsName fullName getRelativeURI hidden length lineFeed lineFeed= modified name openDlg parent path read \
+         exists fsName fullName getRelativeURI hidden length lineFeed lineFeed= localizedName modified name openDlg parent path read \
          readch readln readonly relativeURI resolve saveDlg seek tell toString type",
     ),
     (
@@ -69,7 +71,7 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "Folder.prototype.",
         "absoluteURI alias changePath constructor created displayName error error= exists fsName fullName getFiles \
-         getRelativeURI modified name parent path relativeURI resolve selectDlg toString",
+         getRelativeURI localizedName modified name parent path relativeURI resolve selectDlg toString",
     ),
     (
         "",

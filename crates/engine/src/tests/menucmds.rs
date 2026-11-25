@@ -4621,6 +4621,38 @@ fn locked_guides_lock_guide_paths() {
     assert_eq!(selected(&s), vec![b]);
 }
 
+/// A guide path added to the selection after another object stays unselected while Lock Guides is
+/// on, and is selected once it is off.
+#[test]
+fn a_guide_path_added_after_another_object_stays_unselected_while_guides_are_locked() {
+    let mut s = session();
+    let b = rect(&mut s, 20.0, 20.0, 10.0, 10.0);
+    let g = guide_path(&mut s, 0.0);
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    for id in [b, g] {
+        s.execute("select.add", &json!({"ids": [id.0]})).unwrap();
+    }
+    assert_eq!(selected(&s), vec![b]);
+    s.execute("view.guides.lock", &json!({"locked": false})).unwrap();
+    s.execute("select.add", &json!({"ids": [g.0]})).unwrap();
+    assert_eq!(selected(&s), vec![b, g]);
+}
+
+/// An id that names no object and a ruler guide's id, added to a selection after another object,
+/// leave the selection as a whole new selection of the same ids would.
+#[test]
+fn a_missing_object_and_a_ruler_guide_added_after_another_object_stay_unselected() {
+    let mut s = session();
+    let (b, c) = (rect(&mut s, 20.0, 20.0, 10.0, 10.0), rect(&mut s, 40.0, 20.0, 10.0, 10.0));
+    s.execute("guide.add", &json!({"vertical": true, "pos": 100})).unwrap();
+    let guide = s.doc().unwrap().doc.ruler_guides()[0].id.unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("select.add", &json!({"ids": [b.0]})).unwrap();
+    let missing = NodeId(u64::MAX);
+    s.select(|_, sel| sel.objects.extend([missing, guide, c])).unwrap();
+    assert_eq!(selected(&s), vec![b, c]);
+}
+
 /// A rectangle at (`x`, 0), 10 pt wide, made into a guide; nothing is selected after.
 fn guide_path(s: &mut Session, x: f64) -> NodeId {
     let g = rect(s, x, 0.0, 10.0, 10.0);
