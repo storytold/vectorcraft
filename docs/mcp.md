@@ -766,8 +766,10 @@ every notation but `cmyk` back to the same `#rrggbb`. `opacity` is 0 to 100, and
 
 The Color Wheel panel menu's Copy Color As puts the panel's color on the clipboard as Hex, Hex with Alpha, CSS
 rgb(), CSS hsl(), CSS oklch() or CMYK Values, the six `color.format` notations, with the opacity that Show Opacity
-edits when it has one (whether or not that row shows), and the status bar shows what was copied. CSS oklch() is gray
-while the working RGB space is not sRGB, and Copy Color As is gray without a solid color.
+edits when it has one (whether or not that row shows), and the status bar shows what was copied. Its items are the
+menu commands `ui.colorWheel.copy.hex`, `ui.colorWheel.copy.hexAlpha`, `ui.colorWheel.copy.rgb`,
+`ui.colorWheel.copy.hsl`, `ui.colorWheel.copy.oklch` and `ui.colorWheel.copy.cmyk`, which answer `{text}`, or null without a solid color. They are gray without a solid color, and CSS oklch() is also gray
+while the working RGB space is not sRGB.
 
 In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's
 screen color sampler and returns `null` before a color is picked: the system's sampler on macOS, the XDG desktop

@@ -1,33 +1,25 @@
 //! The Color Wheel panel's Copy Color As: the text each item puts on the clipboard, the opacity it
 //! carries, the status bar message, and that `color.parse` reads each text back.
 
-use egui::vec2;
-use egui_kittest::Harness;
-use egui_kittest::kittest::{NodeT, Queryable};
-use serde_json::json;
+use craft::keymap::CommandRef;
+use craft::ui::menu::PanelRow;
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use serde_json::{Value, json};
 use vectorcraft_color::cms;
 use vectorcraft_engine::Session;
 
-use super::color_wheel::{copy_color_as, copy_menu, menu};
+use super::color_wheel::{menu_rows, menu_states, run};
 use crate::VectorcraftApp;
 
-/// A harness that draws `draw` with the app's fonts installed.
-fn harness(app: VectorcraftApp, draw: fn(&mut VectorcraftApp, &mut egui::Ui)) -> Harness<'static, VectorcraftApp> {
-    let mut fonts = false;
-    let mut h = Harness::builder().with_size(vec2(260.0, 320.0)).build_ui_state(
-        move |ui, app: &mut VectorcraftApp| {
-            if !fonts {
-                crate::theme::install_fonts(ui.ctx());
-                fonts = true;
-                return;
-            }
-            draw(app, ui);
-        },
-        app,
-    );
-    h.run_steps(3);
-    h
-}
+/// The command ids of Copy Color As's items, in the menu's order.
+const ITEMS: [&str; 6] = [
+    "ui.colorWheel.copy.hex",
+    "ui.colorWheel.copy.hexAlpha",
+    "ui.colorWheel.copy.rgb",
+    "ui.colorWheel.copy.hsl",
+    "ui.colorWheel.copy.oklch",
+    "ui.colorWheel.copy.cmyk",
+];
 
 /// An app with a selected rectangle filled with #336699 at `opacity` %.
 fn app(opacity: f64) -> VectorcraftApp {
@@ -38,25 +30,43 @@ fn app(opacity: f64) -> VectorcraftApp {
     app
 }
 
-/// The texts Copy Color As › `notation` puts on the clipboard in one frame.
-fn copy(app: &mut VectorcraftApp, notation: &str) -> Vec<String> {
+/// Run Copy Color As › `notation` in one frame: its answer and the texts it put on the clipboard.
+fn copy(app: &mut VectorcraftApp, notation: &str) -> (Result<Value, String>, Vec<String>) {
     let ctx = egui::Context::default();
-    let mut out = ctx.run_ui(Default::default(), |ui| copy_color_as(app, ui, notation));
+    app.ui_ctx = Some(ctx.clone());
+    let mut answer = None;
+    let mut out = ctx.run_ui(Default::default(), |_| answer = run(app, &format!("ui.colorWheel.copy.{notation}"), &json!({})));
     out.textures_delta.clear();
-    out.platform_output.commands.iter().filter_map(|c| if let egui::OutputCommand::CopyText(t) = c { Some(t.clone()) } else { None }).collect()
+    let copied =
+        out.platform_output.commands.iter().filter_map(|c| if let egui::OutputCommand::CopyText(t) = c { Some(t.clone()) } else { None }).collect();
+    (answer.expect("a Copy Color As item"), copied)
+}
+
+/// The texts Copy Color As › `notation` puts on the clipboard.
+fn copied(app: &mut VectorcraftApp, notation: &str) -> Vec<String> {
+    copy(app, notation).1
 }
 
 fn undo_count(app: &VectorcraftApp) -> usize {
     app.session.doc().unwrap().history.undo.len()
 }
 
+/// Whether the panel menu's command `id` is enabled.
+fn enabled(app: &VectorcraftApp, id: &str) -> bool {
+    let mut states = CommandStates::new();
+    menu_states(app, &mut states);
+    states.get(&CommandRef::new(id.to_string())).is_some_and(CommandState::is_enabled)
+}
+
 /// Copy Color As › CSS rgb() puts CSS Color 4's space-separated form on the clipboard, with the
-/// opacity after a slash, and says what it copied; the document does not change.
+/// opacity after a slash, answers it and says what it copied; the document does not change.
 #[test]
 fn css_rgb_copies_the_color_and_the_opacity() {
     let mut app = app(50.0);
     let before = undo_count(&app);
-    assert_eq!(copy(&mut app, "rgb"), ["rgb(51 102 153 / 50%)"]);
+    let (answer, texts) = copy(&mut app, "rgb");
+    assert_eq!(texts, ["rgb(51 102 153 / 50%)"]);
+    assert_eq!(answer, Ok(json!({"text": "rgb(51 102 153 / 50%)"})));
     assert_eq!(app.ui.status, "Copied the color as rgb(51 102 153 / 50%)");
     assert_eq!(undo_count(&app), before, "copying records no undo step");
 }
@@ -66,16 +76,16 @@ fn css_rgb_copies_the_color_and_the_opacity() {
 #[test]
 fn each_item_writes_its_notation() {
     let mut half = app(50.0);
-    assert_eq!(copy(&mut half, "hex"), ["#336699"]);
-    assert_eq!(copy(&mut half, "hexAlpha"), ["#33669980"]);
-    assert_eq!(copy(&mut half, "hsl"), ["hsl(210 50% 40% / 50%)"]);
-    let oklch = copy(&mut half, "oklch");
+    assert_eq!(copied(&mut half, "hex"), ["#336699"]);
+    assert_eq!(copied(&mut half, "hexAlpha"), ["#33669980"]);
+    assert_eq!(copied(&mut half, "hsl"), ["hsl(210 50% 40% / 50%)"]);
+    let oklch = copied(&mut half, "oklch");
     assert!(oklch[0].starts_with("oklch(") && oklch[0].ends_with(" / 50%)"), "{oklch:?}");
     let mut full = app(100.0);
-    assert_eq!(copy(&mut full, "hexAlpha"), ["#336699ff"]);
-    assert_eq!(copy(&mut full, "rgb"), ["rgb(51 102 153)"]);
-    let cmyk = copy(&mut full, "cmyk");
-    assert_eq!(copy(&mut half, "cmyk"), cmyk, "CMYK Values leaves the opacity out");
+    assert_eq!(copied(&mut full, "hexAlpha"), ["#336699ff"]);
+    assert_eq!(copied(&mut full, "rgb"), ["rgb(51 102 153)"]);
+    let cmyk = copied(&mut full, "cmyk");
+    assert_eq!(copied(&mut half, "cmyk"), cmyk, "CMYK Values leaves the opacity out");
     // The working CMYK numbers through the color settings, as color.convert gives them.
     let r = full.run("color.convert", json!({"color": "#336699", "to": "cmyk"})).unwrap();
     let pct: Vec<f64> = r["values"].as_array().unwrap().iter().map(|v| (v.as_f64().unwrap() * 100.0).round() + 0.0).collect();
@@ -87,7 +97,7 @@ fn each_item_writes_its_notation() {
 fn a_cmyk_fill_copies_its_own_values() {
     let mut app = app(100.0);
     app.run("paint.setFill", json!({"color": {"c": 10, "m": 20, "y": 30, "k": 0}})).unwrap();
-    assert_eq!(copy(&mut app, "cmyk"), ["C=10 M=20 Y=30 K=0"]);
+    assert_eq!(copied(&mut app, "cmyk"), ["C=10 M=20 Y=30 K=0"]);
 }
 
 /// `color.parse` reads every copied text but CMYK Values back to the color the hex field shows,
@@ -96,7 +106,7 @@ fn a_cmyk_fill_copies_its_own_values() {
 fn color_parse_reads_each_copied_text_back() {
     let mut app = app(25.0);
     for notation in ["hex", "hexAlpha", "rgb", "hsl", "oklch"] {
-        let text = copy(&mut app, notation).pop().unwrap();
+        let text = copied(&mut app, notation).pop().unwrap();
         let r = app.run("color.parse", json!({"text": text})).unwrap();
         assert_eq!(r["hex"], "#336699", "{notation}: {text}");
         let opacity = r["opacity"].as_f64();
@@ -116,29 +126,53 @@ fn with_nothing_selected_the_color_for_new_art_is_copied_without_an_opacity() {
     let mut app = app(50.0);
     app.run("select.none", json!({})).unwrap();
     app.run("paint.setFill", json!({"color": "#336699"})).unwrap();
-    assert_eq!(copy(&mut app, "hexAlpha"), ["#336699ff"]);
-    assert_eq!(copy(&mut app, "rgb"), ["rgb(51 102 153)"]);
+    assert_eq!(copied(&mut app, "hexAlpha"), ["#336699ff"]);
+    assert_eq!(copied(&mut app, "rgb"), ["rgb(51 102 153)"]);
 }
 
-/// Without a solid color (a fill of None) nothing is copied.
+/// Without a solid color (a fill of None) nothing is copied, the status bar stays as it was and
+/// the item answers null.
 #[test]
 fn nothing_is_copied_without_a_solid_color() {
     let mut app = app(100.0);
     app.run("paint.setFill", json!({"none": true})).unwrap();
     app.ui.status.clear();
-    assert!(copy(&mut app, "hex").is_empty());
+    let (answer, texts) = copy(&mut app, "hex");
+    assert!(texts.is_empty());
+    assert_eq!(answer, Ok(Value::Null));
     assert_eq!(app.ui.status, "");
 }
 
-/// Panel menu › Copy Color As is gray without a solid color and available with one.
+/// The panel menu ends with a separator and the Copy Color As submenu, which holds the six items in
+/// order; another `copy.` row is not one of the panel's.
+#[test]
+fn the_menu_ends_with_copy_color_as() {
+    let mut app = app(100.0);
+    let rows = menu_rows(&app);
+    let [.., PanelRow::Separator, PanelRow::Submenu(_, items)] = &rows[..] else { panic!("Copy Color As last: {} rows", rows.len()) };
+    let ids: Vec<String> = items
+        .iter()
+        .map(|row| match row {
+            PanelRow::Command(c) => c.key().to_string(),
+            _ => panic!("a command row"),
+        })
+        .collect();
+    assert_eq!(ids, ITEMS);
+    assert!(run(&mut app, "ui.colorWheel.copy.lab", &json!({})).is_none());
+}
+
+/// The items of Copy Color As are gray without a solid color and available with one.
 #[test]
 fn copy_color_as_is_gray_without_a_solid_color() {
-    let h = harness(app(100.0), menu);
-    assert!(!h.get_by_label("   Copy Color As").accesskit_node().is_disabled());
-    let mut none = app(100.0);
+    let app = app(100.0);
+    for id in ITEMS {
+        assert!(enabled(&app, id), "{id}");
+    }
+    let mut none = self::app(100.0);
     none.run("paint.setFill", json!({"none": true})).unwrap();
-    let h = harness(none, menu);
-    assert!(h.get_by_label("   Copy Color As").accesskit_node().is_disabled());
+    for id in ITEMS {
+        assert!(!enabled(&none, id), "{id}");
+    }
 }
 
 /// While the working RGB space is not sRGB, Copy Color As › CSS oklch() is gray, the other items are
@@ -161,15 +195,15 @@ fn css_oklch_is_gray_while_the_working_space_is_not_srgb() {
         );
         return;
     }
-    let h = harness(app(100.0), copy_menu);
-    assert!(!h.get_by_label("   CSS oklch()").accesskit_node().is_disabled(), "sRGB");
     let mut app = app(100.0);
+    assert!(enabled(&app, "ui.colorWheel.copy.oklch"), "sRGB");
     app.run("edit.colorSettings", json!({"rgb": cms::DISPLAY_P3})).unwrap();
-    assert!(copy(&mut app, "oklch").is_empty());
+    let (answer, texts) = copy(&mut app, "oklch");
+    assert!(texts.is_empty());
+    assert!(answer.is_err(), "{answer:?}");
     assert!(app.ui.status.ends_with("OKLCH needs sRGB as the working RGB space"), "{}", app.ui.status);
-    let h = harness(app, copy_menu);
-    assert!(h.get_by_label("   CSS oklch()").accesskit_node().is_disabled());
-    for label in ["   Hex", "   Hex with Alpha", "   CSS rgb()", "   CSS hsl()", "   CMYK Values"] {
-        assert!(!h.get_by_label(label).accesskit_node().is_disabled(), "{label}");
+    assert!(!enabled(&app, "ui.colorWheel.copy.oklch"));
+    for id in ITEMS.into_iter().filter(|id| !id.ends_with("oklch")) {
+        assert!(enabled(&app, id), "{id}");
     }
 }
