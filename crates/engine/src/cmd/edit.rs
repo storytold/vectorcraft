@@ -695,6 +695,7 @@ fn undo_group_end(s: &mut Session, p: &Value) -> Result<Value> {
 /// goes to the running command's result or the tool's status messages, as the tool's own commit
 /// reports it ([`Session::note_settled_warning`]).
 pub(crate) fn settle_interaction(s: &mut Session) -> Result<()> {
+    s.put_back_interaction();
     let typing = typing_in_progress(s);
     match s.unapplied_interaction_preview().filter(|_| !s.previewing) {
         Some((cmd, p)) => match s.preview(&cmd, &p) {
@@ -894,8 +895,10 @@ fn clear_history(s: &mut Session, _: &Value) -> Result<Value> {
 fn new_document_from_state(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "edit.newDocumentFromState";
     let created = date_param(p, "created", C)?;
+    // The row as the panel lists it now, with a drag in progress on show: keeping it below
+    // changes the rows.
+    s.put_back_interaction();
     let st = s.doc()?;
-    // The row as the panel lists it now: keeping an edit in progress below changes the rows.
     let chosen = match super::index_opt(p, "index", C)? {
         None => None,
         Some(row) => {

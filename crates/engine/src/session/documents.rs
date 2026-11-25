@@ -141,6 +141,7 @@ impl Session {
             recovery: Default::default(),
             in_tool_actions: false,
             settled_warnings: None,
+            held_interaction: None,
             previewing: false,
             decoded_images: Default::default(),
             envelope_defaults: None,

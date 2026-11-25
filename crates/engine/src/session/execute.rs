@@ -99,10 +99,17 @@ impl Session {
             self.finish_tool_edit_later()?;
         }
         let outer = std::mem::replace(&mut self.reading, !spec.journal || JOURNALED_READS.contains(&id));
+        // A command from outside the tool, while the tool's drag is in progress, is a step of its
+        // own before the drag's ([`Session::outside_interaction`]). Find Objects with `select` is
+        // journaled (`Session::journal_query`), so it is one too.
+        let find_selects = id == "document.find" && params.get("select").and_then(Value::as_bool) == Some(true);
+        let outside = (spec.journal || find_selects) && !self.previewing && !self.in_tool_actions;
         // A preview that a top-level command applied first (a drag with Real-time Drawing off, kept
         // before Undo) reports its warning in the command's result.
         let r = if self.depth == 0 {
-            let (r, settled) = self.collect_settled_warnings(|s| s.execute_spec(spec, id, params));
+            let (r, settled) = self.collect_settled_warnings(|s| {
+                if outside { s.outside_interaction(id, params, |s| s.execute_spec(spec, id, params)) } else { s.execute_spec(spec, id, params) }
+            });
             r.map(|v| with_settled_warnings(v, &settled))
         } else {
             self.execute_spec(spec, id, params)

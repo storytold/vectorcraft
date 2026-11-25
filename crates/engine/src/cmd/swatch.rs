@@ -1252,7 +1252,7 @@ fn swatch_rename_group(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, format!("a swatch or color group named `{name}` already exists")));
     }
     // A drag still in progress is a step of its own, so canceling or undoing it leaves the rename.
-    if !s.previewing && s.batch_stash.is_none() && s.in_interaction() {
+    if !s.previewing && s.batch_stash.is_none() && (s.in_interaction() || s.holds_interaction()) {
         super::settle_interaction(s)?;
     }
     s.edit("Color Group Options", |d, _| {

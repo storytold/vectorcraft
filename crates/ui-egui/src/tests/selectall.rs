@@ -478,11 +478,12 @@ fn panel_text_copied_before_the_art_formats_are_written_stays_on_the_clipboard()
             a.focused = false;
             let copy = a.menu(id);
             a.focused = true;
-            copy
+            // A fired command reaches the field in the next pass.
+            [copied(&copy), copied(&a.frame(vec![]))].concat()
         } else {
-            clipboard_chord(&mut a, event).0
+            copied(&clipboard_chord(&mut a, event).0)
         };
-        assert_eq!(copied(&copy), [length], "{id} copies the selected value (menu: {menu})");
+        assert_eq!(copy, [length], "{id} copies the selected value (menu: {menu})");
         assert_eq!(a.selected(), 1, "{id} leaves the art (menu: {menu})");
         drop(hold);
         crate::background::wait_all(&mut a.app);

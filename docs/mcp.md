@@ -763,7 +763,7 @@ ends the wait, so the sampler can be shown again. The BSDs and headless sessions
 | `transform` | `{ids?, dx?, dy?, rotate?, scale?, scaleX?, scaleY?, reflect?, shear?, origin?, copy?}` | Runs move, rotate, scale, reflect, shear in that order. `rotate` is in degrees counter-clockwise; a positive `shear` moves the top to the right. With `copy`, the first step duplicates. A `scale`, `reflect` or `shear` that its command would refuse returns that error before any step runs; nothing changes and no undo step is recorded. The same holds for a step that is neither a number nor null, a `reflect` that is not a string, a `copy` that is not true or false, and an `origin` that is not two numbers. A null `rotate`, `scale`, `scaleX`, `scaleY`, `shear`, `reflect`, `copy` or `origin` is left out; a null `dx` or `dy` counts as 0, so it still runs the move. |
 | `create_graph` | `{type?, x, y, width, height, csv? \| series?, categories?, rows?}` | The nine Illustrator graph types: column, stacked column, bar, stacked bar, line, area, scatter, pie and radar. An empty CSV cell or a `null` in `rows` is a blank value; a number in straight quotes is a label. Edit later with `graph.setData` / `graph.setType` via `run_command`. `graph.column {design, columnType: vertical\|uniform\|repeating\|sliding, each, fractions: chop\|scale}` draws the columns or bars of the series picked with Group Selection (or `seriesIndexes`, or all of them) with a graph design saved by `graph.design`; with no `design` it returns the series' current design and options. Type in the design that holds a `%` followed by two digits shows each column's value, with at least the first digit's places before the decimal point and the second digit's places after it. |
 | `text_wrap` | `{ids?, offset?, invert?, release?}` | Area type below the objects (same layer) flows around them. `offset` is in points, from -1000 to 1000 (default 6). An offset outside that range or not a number, or an `invert` or `release` that is not true or false, is an error and changes nothing; `object.textWrap.make` and `object.textWrap.options` refuse the same values. |
-| `undo` / `redo` | `{}` | Many calls that change nothing record no undo step, for example `object.align` with nothing to move, `object.move` by 0 without `copy` and `object.showAll` with nothing hidden. `undo` (`edit.undo`) after such a call undoes the step before it. Settings that change without an undo step stay as they are when `undo` or `redo` brings back a step that did not change them: the perspective grid's view options and active plane, the grid preferences (`gridlineEvery`, `gridSubdivisions`), the export settings (`assets.settings.set`), and the current brush and symbol. A step that changed one of them, such as a perspective grid preset that shows the grid, takes that change back. The point Automatic Plane Positioning holds comes back with the step, and is let go when the active plane kept is another one. `inspect_document` lists the undo steps as `history`. `run_command` with `edit.clearHistory` removes every undo and redo step of the active document and returns `{cleared}`, the number of steps removed; the document stays as it is, and the command records no undo step. `run_command` with `edit.newDocumentFromState` and `{index?, created?}` makes a new document holding the art as it was at that state and makes it the active document, and returns `{index, title}`. `index` is a row of the History panel, with 0 the oldest state kept, and an omitted or null `index` uses the current state. An `index` that names no state fails with `no history state N`, one that is not a whole number with `` `index` must be a whole number ``, and either changes nothing. `created` is File Info's created date in Unix seconds or null, and defaults to now. The new document takes the next `Untitled-N` name, is marked unsaved, has nothing selected and has no steps to undo or redo. It is out of symbol, opacity-mask and pattern editing, and the art drawn in a pattern's tile is stored in the pattern, as `object.pattern.done` stores it. The source document and its steps stay as they are, except that typing or a drag in progress is first kept as a step. When a command keeps a drag whose preview Real-time Drawing off had not applied yet (`edit.undo`, `edit.redo`, `edit.clearHistory`, `edit.newDocumentFromState` and the other commands that end a drag first), and applying that preview gives a warning, the command's result carries it as `previewWarning`, and as `warning` too when the command gives no warning of its own; the app's status bar shows `warning`. While the Type tool edits type, `undo` and `redo` put its caret, with no characters selected, at the end of the text the step changed: after the text it puts back or retypes, or where the text it takes out was. A step that changes no characters, such as a formatting change, leaves the caret and the selection where they are. |
+| `undo` / `redo` | `{}` | Many calls that change nothing record no undo step, for example `object.align` with nothing to move, `object.move` by 0 without `copy` and `object.showAll` with nothing hidden. `undo` (`edit.undo`) after such a call undoes the step before it. Settings that change without an undo step stay as they are when `undo` or `redo` brings back a step that did not change them: the perspective grid's view options and active plane, the grid preferences (`gridlineEvery`, `gridSubdivisions`), the export settings (`assets.settings.set`), and the current brush and symbol. A step that changed one of them, such as a perspective grid preset that shows the grid, takes that change back. The point Automatic Plane Positioning holds comes back with the step, and is let go when the active plane kept is another one. `inspect_document` lists the undo steps as `history`. `run_command` with `edit.clearHistory` removes every undo and redo step of the active document and returns `{cleared}`, the number of steps removed; the document stays as it is, and the command records no undo step. `run_command` with `edit.newDocumentFromState` and `{index?, created?}` makes a new document holding the art as it was at that state and makes it the active document, and returns `{index, title}`. `index` is a row of the History panel, with 0 the oldest state kept, and an omitted or null `index` uses the current state. An `index` that names no state fails with `no history state N`, one that is not a whole number with `` `index` must be a whole number ``, and either changes nothing. `created` is File Info's created date in Unix seconds or null, and defaults to now. The new document takes the next `Untitled-N` name, is marked unsaved, has nothing selected and has no steps to undo or redo. It is out of symbol, opacity-mask and pattern editing, and the art drawn in a pattern's tile is stored in the pattern, as `object.pattern.done` stores it. The source document and its steps stay as they are, except that typing or a drag in progress is first kept as a step. When a command keeps a drag whose preview Real-time Drawing off had not applied yet (`edit.undo`, `edit.redo`, `edit.clearHistory`, `edit.newDocumentFromState` and the other commands that end a drag first), and applying that preview gives a warning, the command's result carries it as `previewWarning`, and as `warning` too when the command gives no warning of its own; the app's status bar shows `warning`. Any other command that changes the document during a tool's drag, from `run_command`, a panel or a menu, records its own undo step before the drag's. The command acts on the document without the drag's preview, and the drag then continues from the command's result: with Real-time Drawing on, the drag's preview is applied again at once, and with it off, the release applies it as before. The release records the drag's step after the command's, `undo` takes back the drag first and the command next, and Escape cancels only the drag. The drag acts on the objects it started with, so a selection the command makes (`select.all`, `edit.duplicate`) does not change what the drag moves, and the drag's release and Escape set the selection as they do without the command (with Real-time Drawing on, so does each move of the drag); a command that records no undo step, such as `select.none`, adds no step. When the command deletes or changes the art being dragged, the drag continues with the art the command left, and a drag left with nothing to change records no step. A warning or an error from the drag's preview applied again after the command is in the command's result as `previewWarning`. Typing in progress is kept as a step of its own before the command. Two cases run the command inside the drag, which then keeps the command's edit as part of its own step: a press of the Quick Pen (an edit to its path ends the path), and `object.transform` with `copy` during an Alt-drag, which copies the art as the drag's move left it. A command run while a dialog's or a panel's preview is open runs inside that preview. While the Type tool edits type, `undo` and `redo` put its caret, with no characters selected, at the end of the text the step changed: after the text it puts back or retypes, or where the text it takes out was. A step that changes no characters, such as a formatting change, leaves the caret and the selection where they are. |
 
 For example, create editable Japanese area type with the engine's vertical writing mode:
 
@@ -3941,13 +3941,12 @@ not included.
 
 ## Learn panel
 
-Window › Learn and the Explore tutorials button beside the search field at the right end of the app bar show and hide
-the Learn panel. Its For you tab holds a Get started section with a Quick skill guide card; choosing the card opens
+Window › Learn shows and hides the Learn panel. Its For you tab holds a Get started section with a Quick skill guide card; choosing the card opens
 the Skills tab. The Skills tab lists VectorCraft's own skills, each with a progress ring and the count of its tutorials
 finished of all its tutorials. Choosing a skill lists its tutorials, choosing a tutorial shows its numbered steps, and
 Back goes up one level.
 The tutorial text is English. `window.learn {show?}` shows the panel (`show: true`), hides it (`show: false`) or
-toggles it (`show` omitted or null), and answers whether it shows; Window › Learn and Explore tutorials run it.
+toggles it (`show` omitted or null), and answers whether it shows; Window › Learn runs it.
 The panel counts as hidden while the dock is hidden or a full screen mode hides the panels. Showing it shows a hidden
 dock; in a full screen mode it makes Learn the front panel, which shows when the mode ends, and answers false. Any
 other value of `show` is an error and changes nothing. `learn.list {}` →
@@ -7273,7 +7272,8 @@ same way for a blend's spine point; without `handle` it is refused. These rules 
 `path.insertAnchor` keeps the direct-selected anchors and selected segments of the path on the same points: those
 after the new anchor on its subpath are numbered one higher, and a selected segment that the new anchor splits stays
 selected as its two halves, with the new anchor as an end of both that moves with them. Undo restores the path and
-the selection in one step.
+the selection in one step. With `selectAnchor: true` the path becomes the selection with only the new anchor
+direct-selected, also when the path was selected; a `selectAnchor` value that is not a boolean is an error.
 `path.close {id, subpath?, at?, in?, out?, independent?}` closes an open subpath (by default the last open one). `at`
 moves the first anchor to `[x, y]`, its handles with it, before `in` and `out` are placed. `in` places
 the first anchor's incoming handle as `path.setHandle` places a handle: a smooth anchor turns its outgoing handle to
@@ -8664,9 +8664,18 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
 - `deleteKeepsPathsJoined` (General › Delete Removes Anchor Points and Keeps Paths Joined, off by default): the
   default of the `keepJoined` param of `edit.clear` (Delete, Backspace, Edit › Clear, and the Layers panel's Delete
   button while no row is highlighted). On, Delete removes the direct-selected anchors of a path as `path.removeAnchors` does, refitting the curve
-  around each one, so a closed path stays closed and an open path stays in one piece; a path left with fewer than two
-  anchors is deleted. The next anchor along (the one before at an open path's end) is then selected, so the next
-  Delete goes on along the path. Off, Delete deletes the anchors with their segments and opens the path there.
+  around each one, so a closed path stays closed and an open path stays in one piece. The next anchor along (the one
+  before at an open path's end) is then selected, so the next Delete goes on along the path. When no subpath that lost
+  an anchor keeps two anchors, the path stays selected whole, and the next Delete removes it. Off, Delete deletes the anchors with their segments and opens the path there.
+- `doubleClickAddsAnchorPoints` (General › Double-Click Adds Anchor Points, off by default): on, a double-click
+  without modifier keys on a path segment with Direct Selection adds an anchor at the
+  clicked point (`path.insertAnchor` with `selectAnchor: true`): the curve keeps its shape, the new anchor alone is
+  selected, and the change is one undo step. The double-click takes the path whose stroke or outline is under the
+  pointer, selected or not, in a group or in isolation mode, a clipping path included, and the path's own line must
+  pass within the Selection & Anchor Display tolerance of the pointer. A double-click on an anchor, a direction
+  handle, a center point, a mesh point or a blend's spine point, on a fill, or on a wide stroke or an effect's outline
+  farther from the path, adds nothing and does what it did before. Group Selection is unchanged. Off, a Direct
+  Selection double-click on a segment adds nothing.
 - `hideCornerWidgetAbove` (177° by default): corners wider than this show no Live Corners widget (a rectangle's right
   angles hide below 90°).
 - `transformPatternTiles` (off by default): the default of the transforms' `patterns` param (`object.transform`,
@@ -9256,7 +9265,7 @@ area, in a grid of as many columns as the square root of the number of windows, 
 its pane. Each view of a document counts as a window (see `window.newWindow` below). With fewer than two windows open it
 leaves the view, `tiled` and the layout as they are. It returns
 `{tiled, panes, layout}`. `window.arrange.tile {layout}` picks another layout, as the other Tile items of Window ›
-Arrange and of the application bar's Arrange Documents button do: `grid` (the default), `vertical` (Tile All
+Arrange do: `grid` (the default), `vertical` (Tile All
 Vertically: side by side in one row), `horizontal` (Tile All Horizontally: stacked in one column), and `2up`, `3up`,
 `4up` and `6up`, which show at most that many windows (2-Up and 3-Up side by side, 4-Up two by two, 6-Up three by
 two) and leave the others under their tabs. Those layouts show the first windows in tab order, and the current
@@ -11063,7 +11072,11 @@ of a color shifted by hand. More than 256 entries, a key or value that is not a 
 included), and two keys that name one color are errors. Presets and `webExport.settings` keep the map. In the dialog a double-click on an
 opaque swatch opens the Color Picker on the color shown (on the source color for a color already shifted; an agent
 sets `__editColor: "#source"`). Its OK shifts the color (picking the source color takes the shift away), and Cancel
-leaves the table as it was. A shifted swatch shows the source color at its upper left and the new color at its lower
+leaves the table as it was. An OK that would shift a 257th color changes nothing, and the status bar shows the
+limit; a key shifted to itself or a deleted color does not count, and a new shift writes `shifted` without them. A key
+written another way (`#F00`) still names its color, so a new shift or Unshift replaces it. A list entry written another
+way also names its color: the table marks it, Lock, Transparent, Web Shift and Delete Color act on it, and new entries
+are written as lowercase `#rrggbb`. A `#rrggbbaa` spelling names no table color. A shifted swatch shows the source color at its upper left and the new color at its lower
 right, with the lock mark, and Lock stays on until the color is unshifted. Web Shift replaces a shift by hand, and
 Unshift All Colors in the table's menu clears `shifted` and `webShift`. Only Web Colors in the picker starts off.
 
@@ -13503,7 +13516,10 @@ dialog exposes `name`, `font_family`, `font_style`, `size`, `leading`, `kerning`
 `tcyLeftRight`, `rotation`, `akiLeft`, `akiRight`, `tsume`, `diacriticHorizontal`, `diacriticVertical`, `language`, `fill`, `fill_tint`, `stroke`, `stroke_tint`, `stroke_width`, `overprint_fill`, `overprint_stroke`,
 `ot_figure`, `ot_position`, `ot_liga`, `ot_calt`, `ot_dlig`, `ot_swsh`, `ot_salt`, `ot_titl`, `ot_ordn`, `ot_frac`,
 `ot_sets`, `section` (`general`, `basic`, `advanced`, `color` or `opentype`), and `preview`. An empty field leaves its
-attribute unset. `leading` and `kerning` also accept `Auto` to store an explicit automatic value.
+attribute unset. `leading` and `kerning` also accept `Auto` to store an explicit automatic value. A number field
+given as text takes the arithmetic of the app's number fields (`"6x2"`, `"10+4"`) and a decimal comma; `size`, `leading`,
+`baseline_shift`, `tcyUpDown`, `tcyLeftRight` and `stroke_width` also read a unit (`"1 in"`), a final `%` is read only
+in `h_scale`, `v_scale`, `tsume`, `fill_tint` and `stroke_tint`, and a final `°` only in `rotation`.
 Advanced Character Formats holds `h_scale` and `v_scale` (percent, 1 to 10000),
 `baseline_shift` (points, -1296 to 1296), the Tate-chu-yoko Settings `tcyUpDown` and `tcyLeftRight` (points,
 -1296 to 1296, as `text.setRangeStyle` takes them; an explicit 0 stays distinct from unset), `rotation` (degrees, stored from -180 to 180), Insert Aki Left and Right `akiLeft` and `akiRight` (thousandths of
