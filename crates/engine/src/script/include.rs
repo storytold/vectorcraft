@@ -88,6 +88,13 @@ impl SourceMap {
         let name = self.files.get(seg.file).cloned().unwrap_or_else(|| Arc::from(""));
         (seg.file, name, seg.line.saturating_add(line - seg.out_line), column)
     }
+
+    /// The memory the map holds, in bytes: its lists and its file names, each name counted in full
+    /// even when another map shares it.
+    pub(crate) fn bytes(&self) -> usize {
+        let names: usize = self.files.iter().map(|f| f.len() + 2 * size_of::<usize>()).sum();
+        self.files.capacity() * size_of::<Arc<str>>() + self.segments.capacity() * size_of::<Segment>() + names
+    }
 }
 
 /// How a preprocessor failure ends the run.
@@ -210,6 +217,15 @@ pub(crate) struct Files {
     levels: usize,
     /// The files `$.evalFile` is running, the script first.
     frames: Vec<Frame>,
+    /// The run reads ECMAScript 2015 ([`es2015_script`]): its files are parsed that way.
+    es2015: bool,
+}
+
+/// A script at `path` runs with [`vectorcraft_js::Options::es2015`] when its file name ends in
+/// `.js` (in any letter case); a `.jsx` script, any other file and a script given as text run as
+/// ECMAScript 5.1 with the ExtendScript extensions.
+pub(crate) fn es2015_script(path: Option<&str>) -> bool {
+    path.and_then(|p| Path::new(p).extension()).is_some_and(|e| e.eq_ignore_ascii_case("js"))
 }
 
 /// The output being built: its UTF-16 text, the line it is on, the units since that line began,
@@ -288,12 +304,14 @@ fn display(path: &Path) -> Arc<str> {
 
 impl Files {
     /// The files of a run of the script at `path` (`None` for a script given as text), with the
-    /// `JSINCLUDE` folders `jsinclude`.
-    pub(crate) fn new(path: Option<&str>, jsinclude: Vec<PathBuf>) -> Self {
-        let real = path.and_then(|p| std::fs::canonicalize(p).ok());
+    /// `JSINCLUDE` folders `jsinclude`. `checked` is the script's real path when the read of its text
+    /// found it, which the run's folder then comes from; without it, `path` is looked up.
+    pub(crate) fn new(path: Option<&str>, checked: Option<PathBuf>, jsinclude: Vec<PathBuf>) -> Self {
+        let scope_of_checked = checked.as_deref().and_then(Path::parent).map(|d| ScriptScope::of_real_folder(d.to_path_buf()));
+        let real = checked.or_else(|| path.and_then(|p| std::fs::canonicalize(p).ok()));
         let dir = real.as_deref().and_then(folder_of);
         Self {
-            scope: dir.as_deref().map(ScriptScope::of_folder).unwrap_or_default(),
+            scope: scope_of_checked.or_else(|| dir.as_deref().map(ScriptScope::of_folder)).unwrap_or_default(),
             jsinclude,
             include_path: Vec::new(),
             files: 0,
@@ -302,7 +320,13 @@ impl Files {
             chain: real.into_iter().collect(),
             levels: 0,
             frames: vec![Frame { shown: Arc::from(path.unwrap_or_default()), dir }],
+            es2015: es2015_script(path),
         }
+    }
+
+    /// The options a file of this run is parsed with, preprocessor lines aside.
+    pub(crate) fn options(&self) -> Options {
+        Options { max_source_units: MAX_TOTAL_BYTES, es2015: self.es2015, ..Options::default() }
     }
 
     /// The `JSINCLUDE` folders of this process: absolute folders separated by `;`.
@@ -314,7 +338,8 @@ impl Files {
         std::env::var("JSINCLUDE").map(|v| v.split(';').map(str::trim).filter(|p| !p.is_empty()).map(PathBuf::from).collect()).unwrap_or_default()
     }
 
-    /// The file being run now, as `$.fileName` gives it (empty for a script given as text).
+    /// The file being run now: the script, or the file `$.evalFile` is running (empty for a script
+    /// given as text). `$.fileName` gives it to code that `eval` or `Function` compiled.
     pub(crate) fn file_name(&self) -> String {
         self.frames.last().map(|f| f.shown.to_string()).unwrap_or_default()
     }
@@ -446,7 +471,7 @@ impl Files {
             return Ok(());
         }
         let fail = |kind, message: String, line, column| Failure { kind, message, index, file: shown.clone(), line, column };
-        let options = Options { preprocessor_lines: true, max_source_units: MAX_TOTAL_BYTES, ..Options::default() };
+        let options = Options { preprocessor_lines: true, ..self.options() };
         let program = vectorcraft_js::parse_utf16(&units, &options).map_err(|e| fail(FailKind::Syntax, e.message, e.line, e.column))?;
         let mut cursor = 0usize;
         for d in &program.directives {

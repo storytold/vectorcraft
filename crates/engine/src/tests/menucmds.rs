@@ -1588,6 +1588,235 @@ fn crop_image_to_a_rect_between_pixels_keeps_the_rect() {
     assert!(close(b.x0, 21.0) && close(b.y0, 11.0) && close(b.width(), 60.0) && close(b.height(), 40.0), "{b:?}");
 }
 
+/// Crop Image's `ppi` resamples the cut pixels to that resolution; the image keeps the box's size.
+#[test]
+fn crop_image_resamples_the_cut_to_the_resolution_asked_for() {
+    let (mut s, img, px) = busy_image_at_two_points_a_pixel();
+    // The image is 36 ppi (2 pt a pixel); 18 ppi halves the cut's 30 × 20 pixels.
+    let r = s.execute("object.cropImage", &json!({"rect": [20, 10, 60, 40], "ppi": 18})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (15, 10), "{r}");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 20.0) && close(b.y0, 10.0) && close(b.width(), 60.0) && close(b.height(), 40.0), "{b:?}");
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    let out = image::load_from_memory(&s.doc().unwrap().doc.images[&im.key].bytes).unwrap().to_rgba8();
+    let cut = image::imageops::crop_imm(&px, 10, 5, 30, 20).to_image();
+    // Resampled in 16 bits a channel: within a level of the 8-bit resampling.
+    let want = image::imageops::resize(&cut, 15, 10, image::imageops::FilterType::Lanczos3);
+    assert_eq!(out.dimensions(), want.dimensions());
+    assert!(out.as_raw().iter().zip(want.as_raw()).all(|(a, b)| a.abs_diff(*b) <= 1));
+}
+
+/// Resampling weights colors by their alpha: the color hidden in fully transparent pixels does not
+/// tint the partly transparent edge of what is opaque.
+#[test]
+fn crop_image_resampling_keeps_hidden_colors_out_of_the_edges() {
+    // Opaque white on the left half, fully transparent red on the right.
+    let px = image::RgbaImage::from_fn(40, 20, |x, _| if x < 20 { image::Rgba([255, 255, 255, 255]) } else { image::Rgba([255, 0, 0, 0]) });
+    let mut png = Vec::new();
+    px.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "edge.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let img = selected(&s)[0];
+    s.execute("object.scale", &json!({"sx": 200, "origin": [0, 0]})).unwrap();
+    // 36 ppi to 15 ppi over pixels 5 to 35 across: the edge pixels mix white and clear.
+    s.execute("object.cropImage", &json!({"rect": [10, 0, 60, 40], "ppi": 15})).unwrap();
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    let out = image::load_from_memory(&s.doc().unwrap().doc.images[&im.key].bytes).unwrap().to_rgba8();
+    assert!(out.pixels().any(|p| p[3] > 0 && p[3] < 255), "the edge is partly transparent");
+    for p in out.pixels().filter(|p| p[3] > 0) {
+        assert!(p[1] >= 250 && p[2] >= 250, "white, not tinted red: {p:?}");
+    }
+}
+
+/// Resampling keeps the color of pixels that are nearly transparent: a uniform color at the lowest
+/// alpha comes out as that color, not black.
+#[test]
+fn crop_image_resampling_keeps_the_color_of_nearly_transparent_pixels() {
+    let px = image::RgbaImage::from_pixel(100, 80, image::Rgba([100, 50, 25, 1]));
+    let mut png = Vec::new();
+    px.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "faint.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let img = selected(&s)[0];
+    s.execute("object.scale", &json!({"sx": 200, "origin": [0, 0]})).unwrap();
+    s.execute("object.cropImage", &json!({"rect": [20, 10, 60, 40], "ppi": 18})).unwrap();
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    let out = image::load_from_memory(&s.doc().unwrap().doc.images[&im.key].bytes).unwrap().to_rgba8();
+    for p in out.pixels() {
+        let near = |a: u8, b: u8| a.abs_diff(b) <= 1;
+        assert!(p[3] == 1 && near(p[0], 100) && near(p[1], 50) && near(p[2], 25), "{p:?}");
+    }
+}
+
+/// A box between pixels drawn at a resolution asked for holds what is inside the box only, at its
+/// place: the edge of the image's content lands where it was in the box.
+#[test]
+fn crop_image_between_pixels_keeps_the_content_at_its_place() {
+    // White pixels 0 to 49 across, black from 50: at 2 pt a pixel, the edge is at x = 100 pt.
+    let px = image::RgbaImage::from_fn(100, 80, |x, _| if x < 50 { image::Rgba([255, 255, 255, 255]) } else { image::Rgba([0, 0, 0, 255]) });
+    let mut png = Vec::new();
+    px.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "edge.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let img = selected(&s)[0];
+    s.execute("object.scale", &json!({"sx": 200, "origin": [0, 0]})).unwrap();
+    // 101 × 31 pt from (21, 11), off the pixel grid, at 35 ppi: 49 × 15 px. The edge is 79 pt into
+    // the 101 pt box, so each row holds 49 × 79 / 101 pixels' worth of white.
+    let r = s.execute("object.cropImage", &json!({"rect": [21, 11, 101, 31], "ppi": 35})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (49, 15), "{r}");
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    let out = image::load_from_memory(&s.doc().unwrap().doc.images[&im.key].bytes).unwrap().to_rgba8();
+    let white: f64 = out.pixels().map(|p| f64::from(p[1]) / 255.0).sum::<f64>() / f64::from(out.height());
+    let want = 49.0 * 79.0 / 101.0;
+    assert!((white - want).abs() < 0.1, "{white} pixels of white a row, want {want}");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 21.0) && close(b.y0, 11.0) && close(b.width(), 101.0) && close(b.height(), 31.0), "{b:?}");
+}
+
+/// A box between pixels is drawn at the resolution asked for, and lands on the box.
+#[test]
+fn crop_image_between_pixels_draws_at_the_resolution_asked_for() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    let r = s.execute("object.cropImage", &json!({"rect": [21, 11, 60, 40], "ppi": 18})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (15, 10), "{r}");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 21.0) && close(b.y0, 11.0) && close(b.width(), 60.0) && close(b.height(), 40.0), "{b:?}");
+    // 100 × 30 pt at 20 ppi is 27.8 × 8.3 px: the 28 × 8 px drawn are fitted to the box.
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    let r = s.execute("object.cropImage", &json!({"rect": [21, 11, 100, 30], "ppi": 20})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (28, 8), "{r}");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 21.0) && close(b.y0, 11.0) && close(b.width(), 100.0) && close(b.height(), 30.0), "{b:?}");
+}
+
+/// A box over the whole image with a new resolution resamples it; with the image's own there is
+/// nothing to do.
+#[test]
+fn crop_image_over_the_whole_image_only_resamples_it() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    let before = undo_len(&s);
+    let r = s.execute("object.cropImage", &json!({"rect": [0, 0, 200, 160], "ppi": 36}));
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == "nothing to crop"), "{r:?}");
+    assert_eq!(undo_len(&s), before);
+    let r = s.execute("object.cropImage", &json!({"rect": [0, 0, 200, 160], "ppi": 9})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (25, 20), "{r}");
+    assert_eq!(undo_len(&s), before + 1, "one undo step");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 0.0) && close(b.y0, 0.0) && close(b.width(), 200.0) && close(b.height(), 160.0), "{b:?}");
+}
+
+/// An image scaled more down than across is resampled on both sides at the resolution of its denser
+/// side, so its pixels come out square.
+#[test]
+fn crop_image_resamples_pixels_that_are_not_square() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    // 2 pt a pixel across (36 ppi) and 1 pt a pixel down (72 ppi), 200 × 80 pt.
+    s.execute("object.scale", &json!({"sx": 100, "sy": 50, "origin": [0, 0]})).unwrap();
+    let r = s.execute("object.cropImage", &json!({"rect": [0, 0, 200, 80], "ppi": 72})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (200, 80), "{r}");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 0.0) && close(b.y0, 0.0) && close(b.width(), 200.0) && close(b.height(), 80.0), "{b:?}");
+}
+
+/// Crop Image refuses a resolution that isn't a positive number, one above the image's own, and one
+/// with trim; the image stays as it was.
+#[test]
+fn crop_image_refuses_a_resolution_it_cannot_give() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    let before = (undo_len(&s), node(&s, img));
+    let refused = |s: &mut Session, p: Value, want: &str| {
+        let r = s.execute("object.cropImage", &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == want), "{p}: {r:?}");
+    };
+    for v in [json!(0), json!(-72), json!("high"), json!(true)] {
+        refused(&mut s, json!({"rect": [20, 10, 60, 40], "ppi": v}), &format!("ppi must be a positive number, not {v}"));
+    }
+    for v in [0.5, 1e-310, 2401.0] {
+        refused(&mut s, json!({"rect": [20, 10, 60, 40], "ppi": v}), "ppi must be between 1 and 2400");
+    }
+    refused(&mut s, json!({"rect": [20, 10, 60, 40], "ppi": 72}), "ppi can't be more than 36 for this image");
+    refused(&mut s, json!({"trim": true, "ppi": 18}), "trim keeps the image's pixels as they are: leave out ppi");
+    assert_eq!((undo_len(&s), node(&s, img)), before);
+    // A null ppi keeps the image's own, as a missing one does.
+    let r = s.execute("object.cropImage", &json!({"rect": [20, 10, 60, 40], "ppi": null})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (30, 20), "{r}");
+}
+
+/// A turned image keeps its own resolution as the limit (not the density across its bounding box),
+/// and its drawn cut is resampled to the box's size at the resolution asked for.
+#[test]
+fn crop_image_of_a_turned_image_resamples_its_drawing() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    let b = bounds(&s, img);
+    let r = s.execute("object.cropImage", &json!({"rect": [b.x0 + 40.0, b.y0 + 40.0, 72, 36], "ppi": 37}));
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == "ppi can't be more than 36 for this image"), "{r:?}");
+    let r = s.execute("object.cropImage", &json!({"rect": [b.x0 + 40.0, b.y0 + 40.0, 72, 36], "ppi": 18})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (18, 9), "{r}");
+    let c = bounds(&s, img);
+    assert!(close(c.x0, b.x0 + 40.0) && close(c.y0, b.y0 + 40.0) && close(c.width(), 72.0) && close(c.height(), 36.0), "{c:?}");
+}
+
+/// A turned image cropped at its own resolution, asked for, gets that resolution, not the lower
+/// density of the box around it.
+#[test]
+fn crop_image_of_a_turned_image_at_its_own_resolution_keeps_it() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    s.execute("object.rotate", &json!({"angle": 45})).unwrap();
+    let b = bounds(&s, img);
+    let r = s.execute("object.cropImage", &json!({"rect": [b.x0 + 40.0, b.y0 + 40.0, 72, 36], "ppi": 36})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (36, 18), "{r}");
+    // Over the whole box around it, its own resolution draws it square to the page.
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    s.execute("object.rotate", &json!({"angle": 45})).unwrap();
+    let b = bounds(&s, img);
+    let r = s.execute("object.cropImage", &json!({"rect": [b.x0, b.y0, b.width(), b.height()], "ppi": 36})).unwrap();
+    assert_eq!(r["width"].as_u64().unwrap(), (b.width() / 2.0).round() as u64, "{r}");
+    let r = s.execute("object.cropImage", &json!({"rect": [b.x0, b.y0, b.width(), b.height()]}));
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == "nothing to crop"), "{r:?}");
+}
+
+/// A linked image can be cropped to up to 300 ppi, even above its own; the crop embeds it.
+#[test]
+fn crop_image_takes_a_linked_image_up_to_300_ppi() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    s.edit("Link", |d, _| {
+        let NodeKind::Image(im) = &mut d.node_mut(img).unwrap().kind else { panic!("not an image") };
+        im.link = Some(vectorcraft_doc::LinkInfo::new("art.png"));
+        Ok(())
+    })
+    .unwrap();
+    let r = s.execute("object.cropImage", &json!({"rect": [20, 10, 60, 40], "ppi": 301}));
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == "ppi can't be more than 300 for this image"), "{r:?}");
+    // 72 ppi: a pixel a point.
+    let r = s.execute("object.cropImage", &json!({"rect": [20, 10, 60, 40], "ppi": 72})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (60, 40), "{r}");
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    assert!(im.link.is_none());
+}
+
+/// `tool.setOption` refuses a Crop Image resolution, reference point or link it can't use, and
+/// changes nothing.
+#[test]
+fn crop_image_tool_options_refuse_values_they_cannot_use() {
+    let (mut s, _, _) = busy_image_at_two_points_a_pixel();
+    s.select_tool("cropImage", ViewInfo::default()).unwrap();
+    s.set_tool_option_cmd(&json!({"values": {"ppi": 18, "reference": 0, "linked": true}})).unwrap();
+    // 72 ppi is above the selected 36 ppi image's own.
+    for (key, value) in
+        [("ppi", json!("high")), ("ppi", json!(-1)), ("ppi", json!(0.5)), ("ppi", json!(72)), ("reference", json!(9)), ("linked", json!(1))]
+    {
+        assert!(s.set_tool_option_cmd(&json!({"key": key, "value": value})).is_err(), "{key}: {value}");
+    }
+    let o = s.tool_options();
+    assert_eq!((o["ppi"].clone(), o["reference"].clone(), o["linked"].clone()), (json!(18.0), json!(0), json!(true)), "{o}");
+    s.set_tool_option_cmd(&json!({"key": "ppi", "value": null})).unwrap();
+    assert!(s.tool_options().get("ppi").is_none());
+}
+
 /// Crop Image refuses a `rect` that is not an array, such as text, and the image stays as it was; a
 /// null `rect` crops to the artboard as a missing one does.
 #[test]
@@ -1855,6 +2084,38 @@ fn convert_to_artboards_names_by_the_artboards_the_document_has() {
     assert_eq!(name_after(&|s| _ = s.execute("edit.undo", &json!({})).unwrap()), "Artboard 3");
 }
 
+/// Convert to Artboards on several objects gives each new artboard an id above the ids given out
+/// before and the deleted artboard's, and names it one past the highest id the artboards have,
+/// counting the artboards it has just added. With an artboard whose id is `u32::MAX` (a damaged
+/// file), each new artboard takes the smallest free id and the name stays at `u32::MAX`.
+#[test]
+fn convert_to_artboards_gives_each_object_the_next_id_and_name() {
+    let convert = |s: &mut Session| {
+        let ids: Vec<NodeId> = (0..3).map(|i| rect(s, 3000.0 + 300.0 * f64::from(i), 0.0, 200.0, 100.0)).collect();
+        sel(s, &ids);
+        assert_eq!(s.execute("artboard.convertToArtboards", &json!({})).unwrap()["artboards"], 3);
+        let d = &s.doc().unwrap().doc;
+        d.artboards.iter().map(|a| (a.id, a.name.clone())).collect::<Vec<_>>()
+    };
+    let named = |pairs: &[(u32, &str)]| pairs.iter().map(|&(id, n)| (id, n.to_string())).collect::<Vec<_>>();
+
+    // Artboards 1 and 2 are left after artboard 3 is deleted, so its id stays given out.
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    s.execute("artboard.new", &json!({})).unwrap();
+    s.execute("artboard.delete", &json!({"index": 2})).unwrap();
+    let ids: Vec<u32> = s.doc().unwrap().doc.artboards.iter().map(|a| a.id).collect();
+    assert_eq!(ids, [1, 2]);
+    let got = convert(&mut s);
+    assert_eq!(got, named(&[(1, "Artboard 1"), (2, "Artboard 2"), (4, "Artboard 3"), (5, "Artboard 5"), (6, "Artboard 6")]));
+
+    let mut s = session();
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).artboards[0].id = u32::MAX;
+    let got = convert(&mut s);
+    let top = format!("Artboard {}", u32::MAX);
+    assert_eq!(got, named(&[(u32::MAX, "Artboard 1"), (1, &top), (2, &top), (3, &top)]));
+}
+
 /// Rearrange All Artboards refuses `columns` that are not a whole number (a fraction, a negative number or a string),
 /// and the artboards stay where they were; 1.0, as the Rearrange All Artboards dialog sends a count, is one column.
 #[test]
@@ -1947,9 +2208,10 @@ fn fit_to_artwork_bounds_fits_each_artboard_to_its_own_art() {
     assert_eq!(boards(&s), [Rect::new(100.0, 100.0, 1050.0, 280.0), was[1], was[2]], "the first artboard by default");
 }
 
-/// Artboard Options and Fit to Selected Art fail with `no such artboard` on an `index` that names
-/// no artboard (past the last, negative, fractional, a string or null), and the artboards stay as
-/// they were. Artboard Options needs an `index`; Fit to Selected Art without one fits the first
+/// Artboard Options and Fit to Selected Art fail with `no such artboard` on a whole-number `index`
+/// past the last artboard, with "`index` must be a whole number" on one that is negative,
+/// fractional or a string, and with `missing index` on a null one, and the artboards stay as they
+/// were. Artboard Options needs an `index`; Fit to Selected Art without one fits the first
 /// artboard.
 #[test]
 fn artboard_options_and_fit_to_selected_art_refuse_an_index_that_names_no_artboard() {
@@ -1960,9 +2222,16 @@ fn artboard_options_and_fit_to_selected_art_refuse_an_index_that_names_no_artboa
     s.execute("paint.setStroke", &json!({"none": true})).unwrap();
     let boards = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
     let (was, n) = (boards(&s), undo_len(&s));
-    for index in [json!(99), json!(-1), json!(1.5), json!("1"), Value::Null] {
+    for (index, error) in [
+        (json!(99), None),
+        (json!(-1), Some("`index` must be a whole number")),
+        (json!(1.5), Some("`index` must be a whole number")),
+        (json!("1"), Some("`index` must be a whole number")),
+        (Value::Null, Some("missing index")),
+    ] {
         for (cmd, p) in [("artboard.setProps", json!({"index": index, "width": 300})), ("artboard.fitToSelection", json!({"index": index}))] {
-            assert_eq!(s.execute(cmd, &p).unwrap_err().to_string(), "no such artboard", "{cmd} {p}");
+            let want = error.map_or_else(|| "no such artboard".to_string(), |e| format!("invalid parameters for `{cmd}`: {e}"));
+            assert_eq!(s.execute(cmd, &p).unwrap_err().to_string(), want, "{cmd} {p}");
         }
     }
     let e = s.execute("artboard.setProps", &json!({"width": 300})).unwrap_err().to_string();
@@ -2108,7 +2377,8 @@ fn find_and_replace_leaves_type_on_a_locked_artboard() {
 
 /// Find and Replace that replaces each match with the text it is (`CAT` found in `cat`, ignoring
 /// case, and replaced by `cat`) records no undo step: the step to redo stays and the document stays
-/// unmodified. It still replies with the count. A replacement that changes the text is one undo step.
+/// unmodified. It still replies with the count, and with no match replaced. A replacement that
+/// changes the text is one undo step.
 #[test]
 fn find_and_replace_that_changes_nothing_records_no_undo_step() {
     let mut s = session();
@@ -2116,9 +2386,9 @@ fn find_and_replace_that_changes_nothing_records_no_undo_step() {
     select_with_a_step_to_redo(&mut s, &[a]);
     let before = history(&s);
     assert_eq!((before.1, before.2), (1, false), "a step to redo, and nothing unsaved");
-    assert_eq!(s.execute("edit.findReplace", &json!({"find": "CAT", "replace": "cat"})).unwrap(), json!({"count": 2}));
+    assert_eq!(s.execute("edit.findReplace", &json!({"find": "CAT", "replace": "cat"})).unwrap(), json!({"count": 2, "replaced": 0}));
     assert_eq!((history(&s), plain(&s, a)), (before, "cat cat".to_string()));
-    assert_eq!(s.execute("edit.findReplace", &json!({"find": "cat", "replace": "dog"})).unwrap(), json!({"count": 2}));
+    assert_eq!(s.execute("edit.findReplace", &json!({"find": "cat", "replace": "dog"})).unwrap(), json!({"count": 2, "replaced": 2}));
     assert_eq!((history(&s), plain(&s, a)), ((before.0 + 1, 0, true), "dog dog".to_string()));
 }
 
@@ -2155,10 +2425,188 @@ fn find_next_cycles_through_text_objects() {
     let _ = text(&mut s, "banana");
     let c = text(&mut s, "pineapple");
     s.execute("select.none", &json!({})).unwrap();
-    assert_eq!(id_of(&s.execute("edit.findNext", &json!({"find": "APPLE"})).unwrap()), a);
+    // From the top of the stacking order down, then round again.
+    assert_eq!(id_of(&s.execute("edit.findNext", &json!({"find": "APPLE"})).unwrap()), c);
+    assert_eq!(id_of(&s.execute("edit.findNext", &json!({"find": "apple"})).unwrap()), a);
     assert_eq!(id_of(&s.execute("edit.findNext", &json!({"find": "apple"})).unwrap()), c);
+    // A selection that starts with a shape goes on after its first type object.
+    let shape = rect(&mut s, 300.0, 300.0, 20.0, 20.0);
+    sel(&mut s, &[shape, c]);
     assert_eq!(id_of(&s.execute("edit.findNext", &json!({"find": "apple"})).unwrap()), a);
     assert!(s.execute("edit.findNext", &json!({"find": "zzz"})).unwrap()["id"].is_null());
+}
+
+/// The match `r` (an `edit.findNext` result) as (object, start, end, index, count).
+fn found(r: &Value) -> (u64, u64, u64, u64, u64) {
+    let n = |k: &str| r[k].as_u64().unwrap_or_else(|| panic!("no `{k}` in {r}"));
+    (n("id"), n("start"), n("end"), n("index"), n("count"))
+}
+
+/// Find Next steps through the matches one by one when each call is given the match before it:
+/// the objects from the top of the stacking order down, each object's matches in reading order,
+/// and round again after the last. Search Backwards visits them the other way. Each match is
+/// returned with its bytes and its object is selected; nothing is recorded for undo.
+#[test]
+fn find_next_steps_through_the_matches_in_both_directions() {
+    let mut s = session();
+    let bottom = text(&mut s, "cat éa cat");
+    let _ = text(&mut s, "dog");
+    let top = text(&mut s, "a cat");
+    s.execute("select.none", &json!({})).unwrap();
+    let before = history(&s);
+    let step = |s: &mut Session, from: &Value, backwards: bool| {
+        let from = if from.is_null() { Value::Null } else { json!({"id": from["id"], "start": from["start"], "end": from["end"]}) };
+        s.execute("edit.findNext", &json!({"find": "cat", "from": from, "backwards": backwards})).unwrap()
+    };
+    // "é" is two bytes, so the second match of the bottom object is at bytes 8..11.
+    let forward = [(top.0, 2, 5, 1, 3), (bottom.0, 0, 3, 2, 3), (bottom.0, 8, 11, 3, 3), (top.0, 2, 5, 1, 3)];
+    let mut at = Value::Null;
+    for want in forward {
+        at = step(&mut s, &at, false);
+        assert_eq!((found(&at), selected(&s), at["selected"].clone()), (want, vec![NodeId(want.0)], json!(true)));
+    }
+    let backward = [(bottom.0, 8, 11, 3, 3), (bottom.0, 0, 3, 2, 3), (top.0, 2, 5, 1, 3), (bottom.0, 8, 11, 3, 3)];
+    s.execute("select.none", &json!({})).unwrap();
+    let mut at = Value::Null;
+    for want in backward {
+        at = step(&mut s, &at, true);
+        assert_eq!((found(&at), selected(&s)), (want, vec![NodeId(want.0)]));
+    }
+    assert_eq!(history(&s), before, "finding is no undo step");
+    // A `from` in an object the search does not visit starts at the first match.
+    let r = s.execute("edit.findNext", &json!({"find": "cat", "from": {"id": 999_999, "start": 0, "end": 0}})).unwrap();
+    assert_eq!(found(&r), (top.0, 2, 5, 1, 3));
+    // So does a null `from`, with a type object selected.
+    sel(&mut s, &[top]);
+    let r = s.execute("edit.findNext", &json!({"find": "cat", "from": null})).unwrap();
+    assert_eq!(found(&r), (top.0, 2, 5, 1, 3));
+    // Nothing found: no match, and the selection stays.
+    let r = s.execute("edit.findNext", &json!({"find": "zebra"})).unwrap();
+    assert_eq!((r, selected(&s)), (json!({"id": null, "count": 0}), vec![top]));
+}
+
+/// Check Hidden Layers and Check Locked Layers: Find Next and Find and Replace leave the type of
+/// a hidden layer and of a locked layer alone unless the switch for it is on. A match on such a
+/// layer is returned without being selected. A hidden or locked object keeps its type out with
+/// the switches on.
+#[test]
+fn find_and_replace_reach_hidden_and_locked_layers_only_when_asked() {
+    for (prop, switch, other) in [("visible", "hiddenLayers", "lockedLayers"), ("locked", "lockedLayers", "hiddenLayers")] {
+        let mut s = session();
+        let open = text(&mut s, "cat one");
+        let layer = id_of(&s.execute("layer.new", &json!({})).unwrap());
+        let closed = text(&mut s, "cat two");
+        let object = text(&mut s, "cat three");
+        let off = |id: NodeId| if prop == "visible" { json!({"id": id.0, "visible": false}) } else { json!({"id": id.0, "locked": true}) };
+        s.execute("object.setProps", &off(object)).unwrap();
+        s.execute("layer.setProps", &off(layer)).unwrap();
+        sel(&mut s, &[open]);
+        // Without the switch, and with only the other one, the one reachable match is found.
+        for p in [json!({"find": "cat"}), json!({"find": "cat", other: true})] {
+            let r = s.execute("edit.findNext", &p).unwrap();
+            assert_eq!(found(&r), (open.0, 0, 3, 1, 1), "{prop} {p}");
+        }
+        // With it, the layer's type is searched (it is above, so it comes first) and not selected.
+        s.execute("select.none", &json!({})).unwrap();
+        let r = s.execute("edit.findNext", &json!({"find": "cat", switch: true})).unwrap();
+        assert_eq!((found(&r), r["selected"].clone(), selected(&s)), ((closed.0, 0, 3, 1, 2), json!(false), vec![]), "{prop}");
+        let r = s.execute("edit.findNext", &json!({"find": "cat", switch: true, "from": {"id": closed.0, "start": 0, "end": 3}})).unwrap();
+        assert_eq!((found(&r), r["selected"].clone(), selected(&s)), ((open.0, 0, 3, 2, 2), json!(true), vec![open]), "{prop}");
+        // Replace All: the same reach.
+        let n = undo_len(&s);
+        assert_eq!(
+            s.execute("edit.findReplace", &json!({"find": "cat", "replace": "dog", other: true})).unwrap(),
+            json!({"count": 1, "replaced": 1}),
+            "{prop}"
+        );
+        assert_eq!((plain(&s, open), plain(&s, closed), plain(&s, object)), ("dog one".into(), "cat two".into(), "cat three".into()), "{prop}");
+        assert_eq!(
+            s.execute("edit.findReplace", &json!({"find": "cat", "replace": "dog", switch: true})).unwrap(),
+            json!({"count": 1, "replaced": 1}),
+            "{prop}"
+        );
+        assert_eq!((plain(&s, closed), plain(&s, object), undo_len(&s)), ("dog two".into(), "cat three".into(), n + 2), "{prop}");
+    }
+}
+
+/// Replace changes one match, the bytes Find Next returned, as one undo step, and returns the
+/// replacement's bytes to go on from. Bytes that are no match are refused, and a match that
+/// already reads as the replacement is left with no undo step.
+#[test]
+fn replace_match_replaces_the_one_match_found() {
+    let mut s = session();
+    let t = text(&mut s, "cat cat Cat");
+    s.execute("select.none", &json!({})).unwrap();
+    let first = s.execute("edit.findNext", &json!({"find": "cat"})).unwrap();
+    assert_eq!(found(&first), (t.0, 0, 3, 1, 3));
+    let n = undo_len(&s);
+    let r = s.execute("edit.replaceMatch", &json!({"find": "cat", "replace": "horse", "id": t.0, "start": 0, "end": 3})).unwrap();
+    assert_eq!(r, json!({"id": t.0, "start": 0, "end": 5, "replaced": true}));
+    assert_eq!((plain(&s, t), undo_len(&s)), ("horse cat Cat".to_string(), n + 1));
+    // Replace & Find: on from the replacement, so text put in is not searched again.
+    let r = s.execute("edit.replaceMatch", &json!({"find": "cat", "replace": "a cat", "id": t.0, "start": 6, "end": 9})).unwrap();
+    let next = s.execute("edit.findNext", &json!({"find": "cat", "from": {"id": r["id"], "start": r["start"], "end": r["end"]}})).unwrap();
+    assert_eq!((plain(&s, t), found(&next)), ("horse a cat Cat".to_string(), (t.0, 12, 15, 2, 2)));
+    // Match Case decides what a match is.
+    let shape = rect(&mut s, 300.0, 300.0, 20.0, 20.0);
+    s.execute("select.none", &json!({})).unwrap();
+    let before = (history(&s), plain(&s, t));
+    for (p, want) in [
+        (json!({"find": "cat", "replace": "x", "matchCase": true, "id": t.0, "start": 12, "end": 15}), "at bytes 12..15 of object"),
+        (json!({"find": "cat", "replace": "x", "id": t.0, "start": 1, "end": 4}), "at bytes 1..4 of object"),
+        (json!({"find": "cat", "replace": "x", "id": t.0, "start": 4, "end": 1}), "at bytes 1..4 of object"),
+        (json!({"find": "cat", "replace": "x", "id": t.0, "start": 0}), "missing `end`"),
+        (json!({"find": "cat", "replace": "x", "start": 0, "end": 3}), "missing `id`"),
+        (json!({"find": "cat", "replace": "x", "id": t.0, "start": "0", "end": 3}), "`start` must be a whole number"),
+        (json!({"find": "", "replace": "x", "id": t.0, "start": 0, "end": 3}), "missing `find`"),
+        (json!({"find": "cat", "replace": 5, "id": t.0, "start": 8, "end": 11}), "`replace` must be a string"),
+        (json!({"find": "cat", "replace": "x", "id": shape.0, "start": 0, "end": 3}), "is not text"),
+    ] {
+        let r = s.execute("edit.replaceMatch", &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg.contains(want)), "{p}: {r:?}");
+        assert_eq!((history(&s), plain(&s, t)), before, "{p}");
+    }
+    let r = s.execute("edit.replaceMatch", &json!({"find": "cat", "replace": "x", "id": 999_999, "start": 0, "end": 3}));
+    assert!(matches!(r, Err(EngineError::NoNode(NodeId(999_999)))), "{r:?}");
+    // A match that already reads as the replacement: nothing to undo.
+    let r = s.execute("edit.replaceMatch", &json!({"find": "CAT", "replace": "Cat", "id": t.0, "start": 12, "end": 15})).unwrap();
+    assert_eq!((r, history(&s)), (json!({"id": t.0, "start": 12, "end": 15, "replaced": false}), before.0));
+    // Find Next refuses a `from` that is not a match.
+    for (from, want) in [
+        (json!(5), "missing `id`"),
+        (json!({"id": t.0, "start": 2}), "missing `end`"),
+        (json!({"id": "x", "start": 0, "end": 1}), "`id` must be a whole number"),
+    ] {
+        let r = s.execute("edit.findNext", &json!({"find": "cat", "from": from}));
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg.contains(want)), "{from}: {r:?}");
+    }
+    for key in ["backwards", "hiddenLayers", "lockedLayers"] {
+        let r = s.execute("edit.findNext", &json!({"find": "cat", key: "yes"}));
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == format!("`{key}` must be true or false")), "{key}: {r:?}");
+    }
+    for key in ["hiddenLayers", "lockedLayers"] {
+        let r = s.execute("edit.findReplace", &json!({"find": "cat", key: 1}));
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == format!("`{key}` must be true or false")), "{key}: {r:?}");
+    }
+}
+
+/// Ruby over text after a replaced match moves with the text, for Replace and for Replace All, as
+/// it does when the text is typed.
+#[test]
+fn find_and_replace_moves_the_ruby_after_a_match() {
+    for all in [false, true] {
+        let mut s = session();
+        let t = text(&mut s, "ab 漢字");
+        sel(&mut s, &[t]);
+        s.execute("type.ruby", &json!({"text": "かんじ", "start": 3, "end": 9})).unwrap();
+        if all {
+            s.execute("edit.findReplace", &json!({"find": "ab", "replace": "abcd"})).unwrap();
+        } else {
+            s.execute("edit.replaceMatch", &json!({"find": "ab", "replace": "abcd", "id": t.0, "start": 0, "end": 2})).unwrap();
+        }
+        let NodeKind::Text(tt) = &node(&s, t).kind else { panic!() };
+        assert_eq!((tt.plain_text().as_str(), tt.ruby.first().map(|r| (r.start, r.end))), ("abcd 漢字", Some((5, 11))), "all: {all}");
+    }
 }
 
 /// The Type menu's commands and Find and Replace and Find Next refuse a param of the wrong type, or
@@ -2194,6 +2642,10 @@ fn type_menu_and_find_commands_refuse_a_param_of_the_wrong_type() {
         ("type.smartPunctuation", json!({"dashes": "false"}), switch("dashes")),
         ("type.smartPunctuation", json!({"ellipsis": 0}), switch("ellipsis")),
         ("type.smartPunctuation", json!({"quotes": "no"}), switch("quotes")),
+        ("type.smartPunctuation", json!({"fiLigatures": 1}), switch("fiLigatures")),
+        ("type.smartPunctuation", json!({"flLigatures": "true"}), switch("flLigatures")),
+        ("type.smartPunctuation", json!({"spaces": "on"}), switch("spaces")),
+        ("type.smartPunctuation", json!({"fractions": [true]}), switch("fractions")),
         ("type.smartPunctuation", json!({"scope": 5}), scope.clone()),
         ("type.smartPunctuation", json!({"scope": "page"}), scope),
         ("type.changeCase", json!({"case": 5}), string("case")),
@@ -2745,6 +3197,73 @@ fn select_same_fill_keeps_live_paint_faces_to_their_group() {
     }
 }
 
+/// Select Similar Objects (`select.similar`) runs the Select > Same command of the attribute it is
+/// given and keeps that attribute for its next run without one; `all`, the attribute until one is
+/// given, matches the fill and stroke colours, the stroke weight, the opacity and the blending mode
+/// together. An unknown attribute is an error that keeps the selection and the kept attribute.
+#[test]
+fn select_similar_selects_by_the_kept_attribute() {
+    let mut s = session();
+    let [a, b, faded, heavy, multiplied, blue] = [0.0, 20.0, 40.0, 60.0, 80.0, 100.0].map(|x| rect(&mut s, x, 0.0, 10.0, 10.0));
+    for id in [a, b, faded, heavy, multiplied] {
+        fill(&mut s, id, "#ff0000");
+    }
+    fill(&mut s, blue, "#0000ff");
+    s.execute("transparency.set", &json!({"ids": [faded.0], "opacity": 50, "item": null})).unwrap();
+    s.execute("transparency.set", &json!({"ids": [multiplied.0], "blend": "multiply", "item": null})).unwrap();
+    sel(&mut s, &[heavy]);
+    s.execute("stroke.set", &json!({"weight": 3})).unwrap();
+    let similar = |s: &mut Session, p: Value| {
+        sel(s, &[a]);
+        let r = s.execute("select.similar", &p).unwrap();
+        let mut v = selected(s);
+        v.sort();
+        assert_eq!(r["count"], v.len(), "{p}");
+        (r["by"].as_str().unwrap().to_string(), v)
+    };
+    assert_eq!(s.select_similar, "all");
+    assert_eq!(similar(&mut s, json!({})), ("all".into(), vec![a, b]));
+    assert_eq!(similar(&mut s, json!({"by": "fillColor"})), ("fillColor".into(), vec![a, b, faded, heavy, multiplied]));
+    assert_eq!(similar(&mut s, json!({})), ("fillColor".into(), vec![a, b, faded, heavy, multiplied]));
+    // The journal, and an action recorded around it, keep the attribute used.
+    let last = s.journal.last().unwrap();
+    assert_eq!((last.0.as_str(), &last.1), ("select.similar", &json!({"by": "fillColor"})));
+    assert_eq!(similar(&mut s, json!({"by": "opacity"})), ("opacity".into(), vec![a, b, heavy, multiplied, blue]));
+    assert_eq!(similar(&mut s, json!({"by": "blendingMode"})), ("blendingMode".into(), vec![a, b, faded, heavy, blue]));
+    assert_eq!(similar(&mut s, json!({"by": "strokeWeight"})), ("strokeWeight".into(), vec![a, b, faded, multiplied, blue]));
+    assert_eq!(similar(&mut s, json!({"by": "all"})).1, vec![a, b]);
+    // Select > Reselect repeats `all`, whichever attribute is kept by then.
+    s.select_similar = "fillColor";
+    s.execute("select.reselect", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![a, b]);
+    // Every attribute names a command that runs. A path with no graphic style has none to match,
+    // which is an error that keeps the attribute as it was.
+    for (by, _) in crate::cmd::SIMILAR {
+        sel(&mut s, &[a]);
+        let was = s.select_similar;
+        let r = s.execute("select.similar", &json!({ "by": by }));
+        if by == "graphicStyle" {
+            assert!(r.is_err(), "{r:?}");
+            assert_eq!(s.select_similar, was);
+        } else {
+            r.unwrap_or_else(|e| panic!("{by}: {e:?}"));
+            assert_eq!(s.select_similar, by);
+        }
+    }
+    // An unknown or malformed attribute changes nothing.
+    s.select_similar = "opacity";
+    for bad in [json!("color"), json!(""), json!("FillColor"), json!(3), json!(true), json!(["all"])] {
+        sel(&mut s, &[a]);
+        let r = s.execute("select.similar", &json!({ "by": bad }));
+        assert!(matches!(r, Err(EngineError::BadParams { .. })), "{bad}: {r:?}");
+        assert_eq!((selected(&s), s.select_similar), (vec![a], "opacity"), "{bad}");
+    }
+    // With nothing selected it does not run, and keeps the attribute.
+    sel(&mut s, &[]);
+    assert!(s.execute("select.similar", &json!({"by": "fillColor"})).is_err());
+    assert_eq!(s.select_similar, "opacity");
+}
+
 /// Select by Color needs no object to start from: it matches fills and strokes as
 /// `document.inspect` reports them, `#rrggbb`.
 #[test]
@@ -2818,6 +3337,27 @@ fn direction_handles_leave_out_hidden_and_locked_paths() {
     sel(&mut s, &[g]);
     assert_eq!(s.execute("select.object.directionHandles", &json!({})).unwrap()["anchors"], 4);
     assert_eq!(selected(&s), vec![a]);
+}
+
+#[test]
+fn direction_handles_select_many_paths_in_groups_and_layers_in_paint_order() {
+    let mut s = session();
+    let mut paths: Vec<NodeId> = (0..60).map(|i| rect(&mut s, (i % 20) as f64 * 12.0, (i / 20) as f64 * 12.0, 10.0, 10.0)).collect();
+    sel(&mut s, &paths[10..40]);
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("layer.new", &json!({})).unwrap();
+    paths.extend((0..60).map(|i| rect(&mut s, (i % 20) as f64 * 12.0, 100.0 + (i / 20) as f64 * 12.0, 10.0, 10.0)));
+    s.execute("select.all", &json!({})).unwrap();
+    assert_eq!(s.execute("select.object.directionHandles", &json!({})).unwrap()["anchors"], 4 * paths.len());
+    let st = s.doc().unwrap();
+    let mut want = vectorcraft_doc::Selection::default();
+    for id in st.doc.paint_order(paths.iter().copied()) {
+        want.add(id);
+        want.anchors.insert(id, (0..4).map(|i| (0, i)).collect());
+    }
+    want.new_art = st.selection.new_art.clone();
+    assert_eq!(st.selection.objects.len(), paths.len());
+    assert_eq!(st.selection, want);
 }
 
 #[test]
@@ -3188,6 +3728,32 @@ fn select_all_on_artboard_refuses_an_artboard_past_u32() {
     assert!(selected(&s).is_empty());
 }
 
+/// All on Active Artboard refuses an `artboard` that is not a whole number, naming the parameter,
+/// and leaves the selection as it was; a whole number past the last artboard is `no such
+/// artboard`. Left out or null, it takes the first artboard.
+#[test]
+fn select_all_on_artboard_refuses_an_artboard_that_is_not_a_whole_number() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100, "artboards": 2, "artboardLayout": {"layout": "row", "spacing": 0}})).unwrap();
+    let (first, second) = (rect(&mut s, 10.0, 10.0, 20.0, 20.0), rect(&mut s, 110.0, 10.0, 20.0, 20.0));
+    for bad in [json!("1"), json!(-1), json!(1.5), json!(true), json!([1]), json!({})] {
+        s.execute("select.none", &json!({})).unwrap();
+        let err = s.execute("select.allOnArtboard", &json!({"artboard": bad})).unwrap_err().to_string();
+        assert_eq!(err, "invalid parameters for `select.allOnArtboard`: `artboard` must be a whole number", "{bad}");
+        assert!(selected(&s).is_empty(), "{bad}");
+    }
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(s.execute("select.allOnArtboard", &json!({"artboard": 9})).unwrap_err().to_string(), "no such artboard");
+    assert!(selected(&s).is_empty());
+    for p in [json!({}), json!({"artboard": null}), json!({"artboard": 0})] {
+        s.execute("select.none", &json!({})).unwrap();
+        s.execute("select.allOnArtboard", &p).unwrap();
+        assert_eq!(selected(&s), vec![first], "{p}");
+    }
+    s.execute("select.allOnArtboard", &json!({"artboard": 1})).unwrap();
+    assert_eq!(selected(&s), vec![second]);
+}
+
 #[test]
 fn save_and_recall_selection() {
     let mut s = session();
@@ -3523,10 +4089,152 @@ fn smart_punctuation_with_nothing_to_change_records_no_undo_step() {
     for id in [t, r] {
         select_with_a_step_to_redo(&mut s, &[id]);
         let before = history(&s);
-        assert_eq!(s.execute("type.smartPunctuation", &json!({})).unwrap(), json!({"changed": 0}), "{id:?}");
+        let r = s.execute("type.smartPunctuation", &json!({})).unwrap();
+        assert_eq!(r["changed"], 0, "{id:?}");
+        assert!(r["replaced"].as_object().unwrap().values().all(|n| n == 0), "{id:?}: {r}");
         assert_eq!(history(&s), before, "{id:?}");
     }
     assert_eq!(plain(&s, t), "“Hi” it’s 1–2 and 3—4…");
+}
+
+/// Does the face text `font` draws with have a glyph for every character of `chars`?
+fn font_covers(font: &str, chars: &str) -> bool {
+    let face = vectorcraft_text::FontDb::global().face(font, "Regular");
+    face.is_some_and(|f| chars.chars().all(|c| f.covers(c)))
+}
+
+/// Every option on: the ligatures, Smart Spaces and Expert Fractions, each counted on its own, in
+/// one undo step. Fractions next to a digit, a slash or a decimal part are left as they are.
+#[test]
+fn smart_punctuation_ligatures_spaces_and_fractions_are_counted() {
+    let mut s = session();
+    assert!(font_covers("Source Sans 3", "\u{FB00}\u{FB01}\u{FB02}\u{FB03}\u{FB04}½¾"), "Source Sans 3 draws the ligatures and fractions");
+    let words = "An office's fluffy flow.  Then 1/2 and 3/4, not 1/25, 1/2/26 or 1/2.5.";
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": words, "font": "Source Sans 3"})).unwrap());
+    sel(&mut s, &[t]);
+    let undo = history(&s).0;
+    let all = json!({"fiLigatures": true, "flLigatures": true, "quotes": true, "spaces": true, "dashes": true, "ellipsis": true, "fractions": true});
+    let r = s.execute("type.smartPunctuation", &all).unwrap();
+    assert_eq!(plain(&s, t), "An o\u{FB03}ce’s \u{FB02}u\u{FB00}y \u{FB02}ow. Then ½ and ¾, not 1/25, 1/2/26 or 1/2.5.");
+    let replaced = json!({"fiLigatures": 2, "flLigatures": 2, "quotes": 1, "spaces": 1, "dashes": 0, "ellipses": 0, "fractions": 2});
+    assert_eq!(r, json!({"changed": 1, "replaced": replaced}));
+    assert_eq!(history(&s).0, undo + 1);
+}
+
+/// The ff, fl, ffl option alone leaves fi and ffi as letters (ffi keeps its ff ligature, counted
+/// with this option), and the other options are off unless asked for.
+#[test]
+fn smart_punctuation_fl_ligatures_alone() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": "office fit baffle.  1/2", "font": "Source Sans 3"})).unwrap());
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"flLigatures": true})).unwrap();
+    assert_eq!(plain(&s, t), "o\u{FB00}ice fit ba\u{FB04}e.  1/2");
+    assert_eq!(r["replaced"], json!({"fiLigatures": 0, "flLigatures": 2, "quotes": 0, "spaces": 0, "dashes": 0, "ellipses": 0, "fractions": 0}));
+}
+
+/// A ligature or a fraction the run's font has no glyph for stays as its letters, while the run's
+/// other replacements still happen.
+#[test]
+fn smart_punctuation_skips_ligatures_and_fractions_the_font_lacks() {
+    let mut s = session();
+    let mono = "JetBrains Mono";
+    assert!(!font_covers(mono, "\u{FB01}") && !font_covers(mono, "⅐"), "{mono} has no fi ligature or one-seventh");
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": "fit 1/7 a--b", "font": mono})).unwrap());
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"fiLigatures": true, "fractions": true})).unwrap();
+    assert_eq!(plain(&s, t), "fit 1/7 a–b");
+    let counts = (&r["replaced"]["fiLigatures"], &r["replaced"]["fractions"], &r["replaced"]["dashes"]);
+    assert_eq!(counts, (&json!(0), &json!(0), &json!(1)));
+}
+
+/// A fraction at the end of a run is checked against the start of the next run: 1/25 and 1/2.5
+/// split after their 1/2 stay as they are, and a 1/2 the next run's space ends is replaced.
+#[test]
+fn expert_fractions_look_past_the_end_of_a_run() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": "1/25 1/2.5 1/2 x", "font": "Source Sans 3"})).unwrap());
+    for (start, end) in [(0, 3), (5, 8), (11, 14)] {
+        s.execute("text.setRangeStyle", &json!({"id": t.0, "start": start, "end": end, "size": 30})).unwrap();
+    }
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"fractions": true})).unwrap();
+    assert_eq!(plain(&s, t), "1/25 1/2.5 ½ x");
+    assert_eq!(r["replaced"]["fractions"], 1);
+}
+
+/// An inline graphic separates the text on either side of it: the space after it is not a second
+/// space after the period before it, and the digit before it does not stop a fraction after it.
+#[test]
+fn an_inline_graphic_separates_smart_spaces_and_fractions() {
+    let mut s = session();
+    let r = rect(&mut s, 600.0, 500.0, 10.0, 10.0);
+    sel(&mut s, &[r]);
+    s.execute("symbol.new", &json!({"name": "Mark"})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": "A.  B 71/2", "font": "Source Sans 3"})).unwrap());
+    s.execute("text.insertInline", &json!({"id": t.0, "at": 7, "symbol": "Mark"})).unwrap();
+    s.execute("text.insertInline", &json!({"id": t.0, "at": 3, "symbol": "Mark"})).unwrap();
+    let texts = |s: &Session| match node(s, t).kind {
+        NodeKind::Text(o) => o.runs.iter().map(|r| if r.inline.is_some() { "[g]".to_string() } else { r.text.clone() }).collect::<String>(),
+        _ => String::new(),
+    };
+    assert_eq!(texts(&s), "A. [g] B 7[g]1/2");
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"spaces": true, "fractions": true})).unwrap();
+    assert_eq!(texts(&s), "A. [g] B 7[g]½");
+    assert_eq!((&r["replaced"]["spaces"], &r["replaced"]["fractions"]), (&json!(0), &json!(1)));
+}
+
+/// Smart Spaces keeps one space after each period, also when the spaces start in the next run,
+/// and leaves single spaces and spaces after other characters alone.
+#[test]
+fn smart_spaces_keeps_one_space_after_a_period() {
+    let mut s = session();
+    let t = text(&mut s, "A.   B. C.  D  E");
+    // "C." is in a run of its own, and the spaces after it start the next one.
+    s.execute("text.setRangeStyle", &json!({"id": t.0, "start": 8, "end": 10, "size": 30})).unwrap();
+    assert!(matches!(node(&s, t).kind, NodeKind::Text(ref o) if o.runs.len() > 1));
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"spaces": true, "quotes": false, "dashes": false, "ellipsis": false})).unwrap();
+    assert_eq!(plain(&s, t), "A. B. C. D  E");
+    assert_eq!(r["replaced"]["spaces"], 2);
+}
+
+/// Ruby stays on the characters it was set on when Smart Punctuation makes the text before them
+/// longer (curly quotes) or shorter (Smart Spaces), and no replacement takes in characters on both
+/// sides of a ruby span's end: the fi with ruby on its i stays as letters, and a second space after
+/// a period with ruby of its own stays.
+#[test]
+fn smart_punctuation_keeps_ruby_on_its_characters() {
+    let mut s = session();
+    let spans = |s: &Session, t| match node(s, t).kind {
+        NodeKind::Text(o) => o.ruby.iter().map(|r| (r.start, r.end)).collect::<Vec<_>>(),
+        _ => vec![],
+    };
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": "'A'.  base fit X.  Y", "font": "Source Sans 3"})).unwrap());
+    sel(&mut s, &[t]);
+    for (start, end) in [(1, 2), (6, 10), (12, 13), (18, 19)] {
+        s.execute("type.ruby", &json!({"text": "r", "start": start, "end": end})).unwrap();
+    }
+    let r = s.execute("type.smartPunctuation", &json!({"spaces": true, "fiLigatures": true})).unwrap();
+    assert_eq!(plain(&s, t), "‘A’. base fit X.  Y");
+    assert_eq!((&r["replaced"]["spaces"], &r["replaced"]["fiLigatures"]), (&json!(1), &json!(0)));
+    let text = plain(&s, t);
+    let on: Vec<&str> = spans(&s, t).into_iter().map(|(a, b)| &text[a..b]).collect();
+    assert_eq!(on, ["A", "base", "i", " "]);
+}
+
+/// Expert Fractions leaves a fraction next to a digit of another script as it is.
+#[test]
+fn expert_fractions_skip_fractions_next_to_digits_of_any_script() {
+    let mut s = session();
+    let words = "\u{662}1/2 1/2\u{662} 1/2.\u{662} 1/2";
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": words, "font": "Source Sans 3"})).unwrap());
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"fractions": true})).unwrap();
+    assert_eq!(plain(&s, t), "\u{662}1/2 1/2\u{662} 1/2.\u{662} ½");
+    assert_eq!(r["replaced"]["fractions"], 1);
 }
 
 #[test]
@@ -3580,6 +4288,17 @@ fn area_to_point_turns_wraps_into_breaks() {
     assert_eq!(txt.replace('\n', " "), "one two three four five six");
 }
 
+/// Convert To Point Type keeps the lines that a paragraph return or a forced line break (U+2028)
+/// starts as they are: neither gets a paragraph return added after it.
+#[test]
+fn area_to_point_keeps_forced_line_breaks() {
+    let mut s = session();
+    let a = id_of(&s.execute("text.create", &json!({"x": 0, "y": 0, "text": "ab\u{2028}c\nd", "area": {"width": 300, "height": 200}})).unwrap());
+    sel(&mut s, &[a]);
+    s.execute("type.convertToPointType", &json!({})).unwrap();
+    assert_eq!(plain(&s, a), "ab\u{2028}c\nd");
+}
+
 #[test]
 fn placeholder_and_insert_characters() {
     let mut s = session();
@@ -3593,6 +4312,76 @@ fn placeholder_and_insert_characters() {
     s.execute("type.insert", &json!({"text": "z"})).unwrap();
     assert_eq!(plain(&s, t), "A—©z");
     assert!(s.execute("type.insert", &json!({"char": "nope"})).is_err());
+}
+
+/// Type › Insert Break Character › Forced Line Break (`type.insert {char: "forcedLineBreak"}`)
+/// starts a new line in the same paragraph (U+2028, as Shift+Enter types it), so the paragraph's
+/// space before does not come between the two lines; `paragraphReturn` starts a new paragraph.
+/// Each insert is one undo step.
+#[test]
+fn insert_forced_line_break_differs_from_paragraph_return() {
+    fn second_line_gap(s: &Session, id: NodeId) -> f64 {
+        let NodeKind::Text(t) = &node(s, id).kind else { panic!("not text") };
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        assert_eq!(lay.lines.len(), 2, "{:?}", t.plain_text());
+        lay.lines[1].baseline - lay.lines[0].baseline
+    }
+    let mut s = session();
+    let mut gaps = Vec::new();
+    for (c, want) in [("forcedLineBreak", "ab\u{2028}c"), ("paragraphReturn", "ab\nc")] {
+        let t = text(&mut s, "ab");
+        sel(&mut s, &[t]);
+        s.execute("text.setFormat", &json!({"ids": [t.0], "spaceBefore": 30})).unwrap();
+        let steps = undo_len(&s);
+        s.execute("type.insert", &json!({"char": c})).unwrap();
+        assert_eq!(undo_len(&s), steps + 1, "{c}");
+        s.execute("type.insert", &json!({"text": "c"})).unwrap();
+        assert_eq!(plain(&s, t), want, "{c}");
+        gaps.push(second_line_gap(&s, t));
+    }
+    assert!(gaps[1] - gaps[0] > 29.0, "space before only at the paragraph return: {gaps:?}");
+    // The same character by `unicode` and by `text`.
+    let t = text(&mut s, "");
+    sel(&mut s, &[t]);
+    s.execute("type.insert", &json!({"unicode": "2028"})).unwrap();
+    s.execute("type.insert", &json!({"text": "\u{2028}"})).unwrap();
+    assert_eq!(plain(&s, t), "\u{2028}\u{2028}");
+}
+
+/// While the Type tool edits text, the Insert Special, Whitespace and Break menu items
+/// (`type.insert` without `ids`) insert at its caret or replace its selection, as one undo step,
+/// and the caret goes after the insertion; `ids` still appends to those objects.
+#[test]
+fn insert_character_goes_to_the_type_tool_caret() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    for k in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(k, 50.0, 300.0), v).unwrap();
+    }
+    let t = s.doc().unwrap().selection.objects[0];
+    s.tool_text("abcd", v).unwrap();
+    for _ in 0..2 {
+        s.tool_key(ToolKey::Left, Mods::default(), v).unwrap();
+    }
+    let steps = undo_len(&s);
+    s.execute("type.insert", &json!({"text": ""})).unwrap();
+    assert_eq!(undo_len(&s), steps, "an empty insert changes nothing");
+    s.execute("type.insert", &json!({"char": "forcedLineBreak"})).unwrap();
+    assert_eq!(plain(&s, t), "ab\u{2028}cd");
+    assert_eq!(s.tool_options()["caret"], json!(5));
+    s.tool_text("X", v).unwrap();
+    assert_eq!(plain(&s, t), "ab\u{2028}Xcd");
+    s.tool_key(ToolKey::Left, Mods { shift: true, ..Mods::default() }, v).unwrap();
+    s.execute("type.insert", &json!({"char": "paragraphReturn"})).unwrap();
+    assert_eq!(plain(&s, t), "ab\u{2028}\ncd");
+    s.execute("type.insert", &json!({"ids": [t.0], "text": "!"})).unwrap();
+    assert_eq!(plain(&s, t), "ab\u{2028}\ncd!");
+    s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(plain(&s, t), "ab\u{2028}Xcd", "the replacement is one undo step");
 }
 
 /// `type.insert` by code (#5108): `code` as a Windows Alt+0 code types (Windows-1252 for
@@ -3832,6 +4621,38 @@ fn locked_guides_lock_guide_paths() {
     assert_eq!(selected(&s), vec![b]);
 }
 
+/// A guide path added to the selection after another object stays unselected while Lock Guides is
+/// on, and is selected once it is off.
+#[test]
+fn a_guide_path_added_after_another_object_stays_unselected_while_guides_are_locked() {
+    let mut s = session();
+    let b = rect(&mut s, 20.0, 20.0, 10.0, 10.0);
+    let g = guide_path(&mut s, 0.0);
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    for id in [b, g] {
+        s.execute("select.add", &json!({"ids": [id.0]})).unwrap();
+    }
+    assert_eq!(selected(&s), vec![b]);
+    s.execute("view.guides.lock", &json!({"locked": false})).unwrap();
+    s.execute("select.add", &json!({"ids": [g.0]})).unwrap();
+    assert_eq!(selected(&s), vec![b, g]);
+}
+
+/// An id that names no object and a ruler guide's id, added to a selection after another object,
+/// leave the selection as a whole new selection of the same ids would.
+#[test]
+fn a_missing_object_and_a_ruler_guide_added_after_another_object_stay_unselected() {
+    let mut s = session();
+    let (b, c) = (rect(&mut s, 20.0, 20.0, 10.0, 10.0), rect(&mut s, 40.0, 20.0, 10.0, 10.0));
+    s.execute("guide.add", &json!({"vertical": true, "pos": 100})).unwrap();
+    let guide = s.doc().unwrap().doc.ruler_guides()[0].id.unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("select.add", &json!({"ids": [b.0]})).unwrap();
+    let missing = NodeId(u64::MAX);
+    s.select(|_, sel| sel.objects.extend([missing, guide, c])).unwrap();
+    assert_eq!(selected(&s), vec![b, c]);
+}
+
 /// A rectangle at (`x`, 0), 10 pt wide, made into a guide; nothing is selected after.
 fn guide_path(s: &mut Session, x: f64) -> NodeId {
     let g = rect(s, x, 0.0, 10.0, 10.0);
@@ -3861,6 +4682,69 @@ fn exit_isolation_leaves_a_locked_guide_path_deselected() {
     s.execute("object.isolate", &json!({"id": g.0})).unwrap();
     s.execute("object.exitIsolation", &json!({})).unwrap();
     assert_eq!(selected(&s), vec![g]);
+}
+
+/// A ruler guide is not isolated, and isolation mode stays as it was.
+#[test]
+fn ruler_guides_are_not_isolated() {
+    let mut s = session();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 50})).unwrap();
+    let guide = s.doc().unwrap().doc.ruler_guides()[0].id.unwrap();
+    let err = s.execute("object.isolate", &json!({"id": guide.0})).unwrap_err();
+    assert!(err.to_string().contains("ruler guides can't be isolated"), "{err}");
+    assert_eq!(s.doc().unwrap().isolation, None);
+}
+
+/// Exit Isolation Mode on an isolated sublayer isolates its parent layer and selects the sublayer, one
+/// layer per call, without an undo step; from the top-level layer it leaves isolation mode. `all: true`
+/// leaves from any depth, a hidden parent layer is not isolated (the call leaves), and a group in a
+/// sublayer still leaves in one call.
+#[test]
+fn exit_isolation_goes_up_one_layer_from_a_sublayer() {
+    let mut s = session();
+    let top = s.doc().unwrap().doc.layers[0].id;
+    let mid = id_of(&s.execute("layer.newSublayer", &json!({"parent": top.0})).unwrap());
+    let deep = id_of(&s.execute("layer.newSublayer", &json!({"parent": mid.0})).unwrap());
+    s.execute("layer.setCurrent", &json!({"id": deep.0})).unwrap();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    let isolation = |s: &Session| s.doc().unwrap().isolation;
+    let exit = |s: &mut Session, p: Value| s.execute("object.exitIsolation", &p).unwrap();
+
+    s.execute("object.isolate", &json!({"id": deep.0})).unwrap();
+    let before = history(&s);
+    exit(&mut s, json!({}));
+    assert_eq!((isolation(&s), selected(&s)), (Some(mid), vec![deep]), "up from the deepest sublayer");
+    exit(&mut s, json!({}));
+    assert_eq!((isolation(&s), selected(&s)), (Some(top), vec![mid]), "up from the middle sublayer");
+    exit(&mut s, json!({}));
+    assert_eq!((isolation(&s), selected(&s)), (None, vec![top]), "out from the top-level layer");
+    assert_eq!(history(&s), before, "no undo step");
+
+    s.execute("object.isolate", &json!({"id": deep.0})).unwrap();
+    exit(&mut s, json!({"all": true}));
+    assert_eq!((isolation(&s), selected(&s)), (None, vec![deep]), "all: true");
+    s.execute("object.isolate", &json!({"id": deep.0})).unwrap();
+    exit(&mut s, json!({"all": false}));
+    assert_eq!(isolation(&s), Some(mid), "all: false");
+    for bad in [json!({"all": 1}), json!({"all": "yes"}), json!({"all": null})] {
+        let e = s.execute("object.exitIsolation", &bad).unwrap_err().to_string();
+        assert!(e.contains("`all` must be true or false"), "{bad}: {e}");
+        assert_eq!(isolation(&s), Some(mid), "{bad}: still isolated");
+    }
+
+    // A parent layer hidden while its sublayer is isolated isn't isolated: the call leaves.
+    s.execute("object.isolate", &json!({"id": deep.0})).unwrap();
+    s.execute("layer.setProps", &json!({"id": mid.0, "visible": false})).unwrap();
+    exit(&mut s, json!({}));
+    assert_eq!(isolation(&s), None, "hidden parent layer");
+    s.execute("layer.setProps", &json!({"id": mid.0, "visible": true})).unwrap();
+
+    sel(&mut s, &[a, b]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    exit(&mut s, json!({}));
+    assert_eq!((isolation(&s), selected(&s)), (None, vec![g]), "a group in a sublayer");
 }
 
 /// Undo and Redo bring back a selection without the guides, ruler guides or guide paths, that
@@ -4008,9 +4892,11 @@ fn ruler_guides_select_move_and_delete() {
     assert!(selected(&s).is_empty());
     assert_eq!(s.execute("guide.select", &json!({"indexes": [1], "toggle": true})).unwrap()["selected"], json!([0, 1]));
     let layer = s.doc().unwrap().current_layer().unwrap().0;
+    let id = s.doc().unwrap().doc.ruler_guides()[1].id.unwrap().0;
     assert_eq!(
         s.execute("guide.list", &json!({})).unwrap()[1],
-        json!({"index": 1, "vertical": false, "pos": 50.0, "selected": true, "layer": layer, "shown": true, "editable": true})
+        json!({"index": 1, "id": id, "vertical": false, "pos": 50.0, "selected": true, "layer": layer,
+               "hidden": false, "locked": false, "shown": true, "editable": true})
     );
     assert!(s.execute("guide.select", &json!({"indexes": [7]})).is_err());
     // A move takes each selected guide along its own axis, in one undo step.
@@ -4291,11 +5177,14 @@ fn artboard_guides_go_with_their_artboard() {
     s.execute("guide.add", &json!({"vertical": false, "pos": 100})).unwrap();
     let list = |s: &mut Session| s.execute("guide.list", &json!({})).unwrap();
     let layer = s.doc().unwrap().current_layer().unwrap().0;
+    let ids: Vec<u64> = s.doc().unwrap().doc.ruler_guides().iter().map(|g| g.id.unwrap().0).collect();
     assert_eq!(
         list(&mut s),
         json!([
-            {"index": 0, "vertical": true, "pos": 1000.0, "selected": false, "artboard": 1, "layer": layer, "shown": true, "editable": true},
-            {"index": 1, "vertical": false, "pos": 100.0, "selected": false, "layer": layer, "shown": true, "editable": true},
+            {"index": 0, "id": ids[0], "vertical": true, "pos": 1000.0, "selected": false, "artboard": 1, "layer": layer,
+             "hidden": false, "locked": false, "shown": true, "editable": true},
+            {"index": 1, "id": ids[1], "vertical": false, "pos": 100.0, "selected": false, "layer": layer,
+             "hidden": false, "locked": false, "shown": true, "editable": true},
         ])
     );
     let spans = |s: &Session| {
@@ -4336,7 +5225,8 @@ fn artboard_guides_go_with_their_artboard() {
     assert_eq!((guides(&s).len(), selected_guides(&s)), (3, vec![0, 1]));
     assert_eq!(
         list(&mut s)[0],
-        json!({"index": 0, "vertical": false, "pos": 100.0, "selected": true, "layer": layer, "shown": true, "editable": true})
+        json!({"index": 0, "id": ids[1], "vertical": false, "pos": 100.0, "selected": true, "layer": layer,
+               "hidden": false, "locked": false, "shown": true, "editable": true})
     );
     assert_eq!(undo_len(&s), n + 1);
     s.execute("edit.undo", &json!({})).unwrap();
@@ -4344,6 +5234,27 @@ fn artboard_guides_go_with_their_artboard() {
     // Cut, too.
     s.execute("artboard.cut", &json!({"index": 0})).unwrap();
     assert_eq!((guides(&s).len(), selected_guides(&s)), (3, vec![0, 1]));
+}
+
+/// `guide.add` refuses an `artboard` that is not a whole number, naming the parameter, and adds no
+/// guide; a whole number past the last artboard is `no such artboard`. Null makes a canvas guide,
+/// and a whole number an artboard guide.
+#[test]
+fn guide_add_refuses_an_artboard_that_is_not_a_whole_number() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({"x": 900, "y": 0, "width": 400, "height": 300})).unwrap();
+    let add = |s: &mut Session, artboard: Value| s.execute("guide.add", &json!({"vertical": true, "pos": 10, "artboard": artboard}));
+    for bad in [json!("1"), json!(-1), json!(1.5), json!(true), json!([1]), json!({})] {
+        let err = add(&mut s, bad.clone()).unwrap_err().to_string();
+        assert_eq!(err, "invalid parameters for `guide.add`: `artboard` must be a whole number", "{bad}");
+    }
+    assert_eq!(add(&mut s, json!(9)).unwrap_err().to_string(), "no such artboard");
+    assert!(s.doc().unwrap().doc.ruler_guides().is_empty());
+    add(&mut s, Value::Null).unwrap();
+    add(&mut s, json!(1)).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let boards: Vec<_> = d.ruler_guides().iter().map(|g| g.artboard).collect();
+    assert_eq!(boards, [None, Some(d.artboards[1].id)]);
 }
 
 /// #451: a guide dragged out of a ruler snaps (to the art's corners, side midpoints and anchors,
@@ -4380,9 +5291,11 @@ fn guides_dragged_out_of_a_ruler_snap_and_take_the_artboard_tool_s_artboard() {
     s.ruler_guide(false, &ev(PointerKind::Drag, 1000.0, 50.0), true, v).unwrap();
     s.ruler_guide(false, &ev(PointerKind::Up, 1000.0, 50.0), true, v).unwrap();
     let layer = s.doc().unwrap().current_layer().unwrap().0;
+    let id = s.doc().unwrap().doc.ruler_guides()[1].id.unwrap().0;
     assert_eq!(
         s.execute("guide.list", &json!({})).unwrap()[1],
-        json!({"index": 1, "vertical": false, "pos": 50.0, "selected": false, "artboard": 1, "layer": layer, "shown": true, "editable": true})
+        json!({"index": 1, "id": id, "vertical": false, "pos": 50.0, "selected": false, "artboard": 1, "layer": layer,
+               "hidden": false, "locked": false, "shown": true, "editable": true})
     );
 }
 
@@ -4457,6 +5370,41 @@ fn cmd_ruler_drags_make_guides_of_the_active_artboard_when_the_preference_is_on(
     assert_eq!(owners(&mut s)[4..], [Value::Null, json!(1)]);
 }
 
+/// The rulers' origin dragged out of their corner snaps as a drawn point does: onto a shape's
+/// corner and edge, the artboard's centre, and with Snap to Point along a ruler guide; with
+/// nothing on it stays at the pointer. The drag changes nothing, and its guides go when it ends.
+#[test]
+fn the_ruler_origin_dragged_from_the_corner_snaps_as_a_drawn_point() {
+    use vectorcraft_geom::Point;
+    let mut s = session();
+    rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    s.execute("guide.add", &json!({"vertical": true, "pos": 300})).unwrap();
+    let (n, doc) = (undo_len(&s), s.doc().unwrap().doc.clone());
+    let v = ViewInfo::default();
+    let at = |s: &mut Session, x, y| s.ruler_origin_drag(Some(Point::new(x, y)), v).unwrap();
+    assert_eq!(at(&mut s, 101.5, 98.5), Point::new(100.0, 100.0), "the corner");
+    assert!(!s.overlays(v).is_empty(), "the guide showing it");
+    assert_eq!(at(&mut s, 130.0, 202.0), Point::new(130.0, 200.0), "the bottom edge");
+    assert_eq!(at(&mut s, 398.0, 301.5), Point::new(400.0, 300.0), "the artboard's centre");
+    assert_eq!(at(&mut s, 302.0, 50.0).x, 300.0, "along the ruler guide");
+    assert_eq!(s.ruler_origin_drag(None, v), None, "off the canvas");
+    assert!(s.overlays(v).is_empty());
+    assert_eq!(at(&mut s, 101.5, 98.5), Point::new(100.0, 100.0));
+    s.end_ruler_origin_drag();
+    assert!(s.overlays(v).is_empty());
+    assert_eq!((undo_len(&s), &*s.doc().unwrap().doc), (n, &*doc), "nothing changed");
+    // Nothing on: it stays at the pointer.
+    let off = ViewInfo { smart_guides: false, snap_to_point: false, ..v };
+    assert_eq!(s.ruler_origin_drag(Some(Point::new(101.5, 98.5)), off), Some(Point::new(101.5, 98.5)));
+    s.end_ruler_origin_drag();
+    // Snap to Grid: onto a gridline crossing.
+    let grid = ViewInfo { snap_to_grid: true, ..v };
+    let p = s.ruler_origin_drag(Some(Point::new(101.5, 98.5)), grid).unwrap();
+    s.end_ruler_origin_drag();
+    assert_eq!(p, Point::new(p.x.round(), p.y.round()), "{p:?}");
+    assert_ne!(p, Point::new(101.5, 98.5));
+}
+
 /// Guides saved before guides had layers are put on a layer when the document opens.
 #[test]
 fn guides_from_older_files_are_put_on_a_layer() {
@@ -4502,6 +5450,12 @@ fn ruler_guides_live_on_layers() {
     assert!(s.doc().unwrap().doc.ruler_guides().iter().all(|g| g.layer == Some(first)));
     s.execute("guide.setLayer", &json!({"indexes": [1], "layer": second.0})).unwrap();
     assert!(s.execute("guide.setLayer", &json!({"indexes": [7], "layer": first.0})).is_err());
+    // `indexes` that is not a list, or given with `index`, is an error; an index given twice counts once.
+    assert!(s.execute("guide.setLayer", &json!({"indexes": 0, "layer": first.0})).is_err());
+    assert!(s.execute("guide.setLayer", &json!({"index": 0, "indexes": [1], "layer": first.0})).is_err());
+    assert!(s.doc().unwrap().doc.ruler_guides().iter().map(|g| g.layer).eq([Some(first), Some(second)]));
+    assert_eq!(s.execute("guide.setLayer", &json!({"indexes": [1, 1], "layer": first.0})).unwrap()["count"], 1);
+    s.execute("guide.setLayer", &json!({"indexes": [1], "layer": second.0})).unwrap();
     // Deleting a layer deletes its guides; undo brings them back.
     s.execute("layer.delete", &json!({"ids": [second.0]})).unwrap();
     assert_eq!(guides(&s), [(true, 200.0)]);
@@ -4536,6 +5490,122 @@ fn guides_on_hidden_or_locked_layers_are_left_alone() {
     // The current layer locked: the new guide goes on the top shown, unlocked layer.
     s.execute("guide.add", &json!({"vertical": true, "pos": 20})).unwrap();
     assert_eq!(s.doc().unwrap().doc.ruler_guides()[2].layer, Some(first));
+    assert_eq!(guides(&s).len(), 3);
+}
+
+/// A guide hidden or locked on its own can't be moved, deleted or moved to another layer, and the
+/// error names the guide, not its layer; a guide on a hidden or locked layer names the layer.
+#[test]
+fn a_guide_hidden_or_locked_on_its_own_is_named_in_the_error() {
+    let mut s = session();
+    let first = s.doc().unwrap().current_layer().unwrap();
+    for pos in [100.0, 200.0] {
+        s.execute("guide.add", &json!({"vertical": true, "pos": pos})).unwrap();
+    }
+    let second = id_of(&s.execute("layer.new", &json!({})).unwrap());
+    let ids: Vec<u64> = s.doc().unwrap().doc.ruler_guides().iter().map(|g| g.id.unwrap().0).collect();
+    s.execute("layer.setProps", &json!({"ids": [ids[0]], "locked": true})).unwrap();
+    s.execute("layer.setProps", &json!({"ids": [ids[1]], "visible": false})).unwrap();
+    let own = "the guide is hidden or locked";
+    for i in [0, 1] {
+        assert_eq!(s.execute("guide.move", &json!({"index": i, "pos": 50})).unwrap_err().to_string(), own, "{i}");
+        assert_eq!(s.execute("guide.remove", &json!({"index": i})).unwrap_err().to_string(), own, "{i}");
+        assert_eq!(s.execute("guide.remove", &json!({"indexes": [i]})).unwrap_err().to_string(), own, "{i}");
+        let p = json!({"index": i, "layer": second.0});
+        assert_eq!(s.execute("guide.setLayer", &p).unwrap_err().to_string(), own, "{i}");
+    }
+    // Shown and unlocked, but on a locked layer: the error names the layer.
+    s.execute("layer.setProps", &json!({"ids": [ids[0]], "locked": false})).unwrap();
+    s.execute("layer.setProps", &json!({"ids": [first.0], "locked": true})).unwrap();
+    let e = s.execute("guide.move", &json!({"index": 0, "pos": 50})).unwrap_err().to_string();
+    assert_eq!(e, "the guide is on a hidden or locked layer");
+}
+
+/// Object › Lock › Selection and Hide › Selection lock and hide a selected ruler guide on its own,
+/// with the selected art, in one undo step; Unlock All and Show All unlock and show it again and
+/// select it as a guide. While Lock Guides is on nothing selects it, and in isolation mode Lock
+/// leaves it alone.
+#[test]
+fn lock_hide_unlock_and_show_all_reach_ruler_guides() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    for pos in [100.0, 200.0] {
+        s.execute("guide.add", &json!({"vertical": true, "pos": pos})).unwrap();
+    }
+    let flags = |s: &Session| s.doc().unwrap().doc.ruler_guides().iter().map(|g| (g.hidden, g.locked)).collect::<Vec<_>>();
+    let undo = |s: &Session| s.doc().unwrap().history.undo.len();
+    let clear = (false, false);
+    // A guide selected on its own: Lock locks it alone and deselects it.
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    let n = undo(&s);
+    s.execute("object.lock", &json!({})).unwrap();
+    assert_eq!((flags(&s), undo(&s)), (vec![(false, true), clear], n + 1));
+    assert!(selected_guides(&s).is_empty());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((flags(&s), selected_guides(&s)), (vec![clear, clear], vec![0]));
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(flags(&s)[0], (false, true));
+    // A guide and art selected together: Hide hides both, in one step.
+    sel(&mut s, &[a]);
+    s.execute("guide.select", &json!({"indexes": [1], "toggle": true})).unwrap();
+    let n = undo(&s);
+    s.execute("object.hide", &json!({})).unwrap();
+    assert_eq!((flags(&s), undo(&s)), (vec![(false, true), (true, false)], n + 1));
+    assert!(!s.doc().unwrap().doc.node(a).unwrap().visible);
+    // Unlock All and Show All reach the guides and select them as guides.
+    assert_eq!(s.execute("object.unlockAll", &json!({})).unwrap()["count"], 1);
+    assert_eq!((flags(&s)[0], selected_guides(&s), selected(&s)), (clear, vec![0], vec![]));
+    assert_eq!(s.execute("object.showAll", &json!({})).unwrap()["count"], 2);
+    assert_eq!((flags(&s), selected_guides(&s), selected(&s)), (vec![clear, clear], vec![1], vec![a]));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(flags(&s)[1], (true, false), "Show All is one undo step");
+    s.execute("edit.redo", &json!({})).unwrap();
+    // With Lock Guides on, Unlock All unlocks a guide but leaves it unselected.
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    s.execute("object.lock", &json!({})).unwrap();
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    s.execute("object.unlockAll", &json!({})).unwrap();
+    assert_eq!((flags(&s)[0], selected_guides(&s)), (clear, vec![]));
+    s.execute("view.guides.lock", &json!({"locked": false})).unwrap();
+    // In isolation mode Lock takes only the objects inside the isolated group.
+    let b = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[a, b]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    sel(&mut s, &[a]);
+    let _ = s.execute("guide.select", &json!({"indexes": [0], "toggle": true}));
+    s.execute("object.lock", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(a).unwrap().locked);
+    assert_eq!(flags(&s)[0], clear);
+}
+
+/// `guide.remove` with `indexes` deletes those guides in one undo step, an index given twice
+/// once; a locked guide among them, or an unknown index, deletes nothing.
+#[test]
+fn guide_remove_takes_several_indexes() {
+    let mut s = session();
+    for pos in [100.0, 200.0, 300.0] {
+        s.execute("guide.add", &json!({"vertical": true, "pos": pos})).unwrap();
+    }
+    let id = s.doc().unwrap().doc.ruler_guides()[2].id.unwrap();
+    s.execute("layer.setProps", &json!({"ids": [id.0], "locked": true})).unwrap();
+    assert!(s.execute("guide.remove", &json!({"indexes": [0, 2]})).is_err());
+    assert!(s.execute("guide.remove", &json!({"indexes": [0, 7]})).is_err());
+    assert!(s.execute("guide.remove", &json!({"indexes": 0})).is_err());
+    assert!(s.execute("guide.remove", &json!({"index": 0, "indexes": [1]})).is_err());
+    // A list longer than 10,000 entries is refused by every guide command that takes one.
+    let long = json!(vec![0; 10_001]);
+    assert!(s.execute("guide.remove", &json!({"indexes": long})).is_err());
+    assert!(s.execute("guide.select", &json!({"indexes": long})).is_err());
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    assert!(s.execute("guide.setLayer", &json!({"indexes": long, "layer": layer.0})).is_err());
+    assert_eq!(s.execute("guide.select", &json!({"indexes": vec![0; 10_000]})).unwrap()["selected"], json!([0]));
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(guides(&s).len(), 3);
+    let n = s.doc().unwrap().history.undo.len();
+    assert_eq!(s.execute("guide.remove", &json!({"indexes": [1, 0, 1]})).unwrap()["count"], 2);
+    assert_eq!((guides(&s), s.doc().unwrap().history.undo.len()), (vec![(true, 300.0)], n + 1));
+    s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(guides(&s).len(), 3);
 }
 
@@ -4867,6 +5937,22 @@ fn crop_image_trim_checks_the_rgba_size_before_decoding() {
 }
 
 #[test]
+fn crop_image_resampling_is_held_to_the_raster_allowance() {
+    use crate::cmd::menucmds::check_resample_size;
+    let max = crate::cmd::fileio::MAX_RASTER_ALLOC;
+    // 40 bytes a pixel resampled to the same size (12 + 16 + 12).
+    let side = ((max / 40) as f64).sqrt() as u32;
+    assert!(check_resample_size(side, side, side, side).is_ok());
+    let e = check_resample_size(side + 1, side + 1, side + 1, side + 1).unwrap_err().to_string();
+    assert!(e.contains(&format!("an image of {0} × {0} pixels is too large to resample", side + 1)), "{e}");
+    // A large source counts even when the result is small.
+    let wide = ((max / 12) as f64).sqrt() as u32 + 1;
+    assert!(check_resample_size(wide, wide, 1, 1).is_err());
+    assert!(check_resample_size(u32::MAX, u32::MAX, u32::MAX, u32::MAX).is_err());
+    assert!(check_resample_size(100, 100, 50, 50).is_ok());
+}
+
+#[test]
 fn crop_image_trim_leaves_a_cmyk_image_alone() {
     // CMYK images keep their ink amounts and have no alpha: nothing to cut, and not an error.
     let inks = vectorcraft_doc::cmyk::Inks::new(4, 2, [255, 0, 0, 0].repeat(8)).unwrap();
@@ -4876,4 +5962,21 @@ fn crop_image_trim_leaves_a_cmyk_image_alone() {
     s.execute("select.all", &json!({})).unwrap();
     let r = s.execute("object.cropImage", &json!({"trim": true})).unwrap();
     assert_eq!((r["trimmed"].as_bool(), r["width"].as_u64(), r["height"].as_u64()), (Some(false), Some(4), Some(2)), "{r}");
+}
+
+/// Lock Guides is not an undo step: it adds none, and undo and redo of the steps before it leave
+/// the guides locked.
+#[test]
+fn lock_guides_is_not_an_undo_step() {
+    let mut s = session();
+    let g = rect(&mut s, 200.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[g]);
+    s.execute("view.guides.make", &json!({})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.guides_locked());
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(s.guides_locked());
 }

@@ -69,6 +69,8 @@ pub enum BinaryOp {
 pub enum LogicalOp {
     And,
     Or,
+    /// `??`: the right side only when the left is `undefined` or `null`.
+    Coalesce,
 }
 
 /// `=` (`None`) or a compound assignment's operator (`+=` is `Some(BinaryOp::Add)`).
@@ -187,7 +189,8 @@ pub enum Expr {
         qualifier: Option<XmlQualifier>,
         name: XmlNamePart,
     },
-    /// An E4X name standing alone (`@a` in a filter): looked up on the nearest XML value in scope.
+    /// An E4X name standing alone (`@a` in a filter): looked up on the nearest XML value in scope
+    /// that holds it, and also an assignment, update or `delete` target.
     XmlScopeName(ExprId),
     /// `object..name`.
     XmlDescendants {
@@ -199,6 +202,46 @@ pub enum Expr {
         object: ExprId,
         predicate: ExprId,
     },
+    /// An arrow function.
+    Arrow(FunctionId),
+    /// A template literal: its pieces (one more than its substitutions) and its substitutions,
+    /// in source order.
+    Template {
+        quasis: Vec<TemplatePiece>,
+        exprs: Vec<ExprId>,
+    },
+    /// A tagged template (`` tag`a${b}c` ``): `tag` called with the template object and the
+    /// substitutions.
+    TaggedTemplate {
+        tag: ExprId,
+        quasis: Vec<TemplatePiece>,
+        exprs: Vec<ExprId>,
+    },
+    /// `...expression` in an array literal or an argument list, and as the last of an arrow
+    /// function's parenthesized parameters while they are read.
+    Spread(ExprId),
+    /// An optional chain (`a?.b.c`, `a?.[k]`, `f?.()`): its accesses and calls, the
+    /// [`Expr::Optional`] steps among them included. It is `undefined` when one of those steps
+    /// finds `undefined` or `null`, and the rest of the chain is skipped.
+    OptionalChain(ExprId),
+    /// The object or function before `?.` in an [`Expr::OptionalChain`].
+    Optional(ExprId),
+}
+
+/// A piece of a template literal's text between its substitutions.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TemplatePiece {
+    /// The text with its escapes read.
+    pub cooked: Vec<u16>,
+    /// The text as written.
+    pub raw: Vec<u16>,
+}
+
+/// Which lexical declaration a name has.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LexKind {
+    Let,
+    Const,
 }
 
 /// A piece of an XML literal, in source order.
@@ -246,12 +289,17 @@ pub enum ForInTarget {
     /// `for (var x in o)`, with the declaration's initializer if it has one.
     Var(VarDecl),
     Expr(ExprId),
+    /// `for (let x in o)` or `for (const x in o)`: a new binding for each name.
+    Lexical(LexKind, Name),
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ForInit {
     Var(Vec<VarDecl>),
     Expr(ExprId),
+    /// `let` or `const` declarations, in a scope of the loop's own with a new copy of each `let`
+    /// binding for each iteration.
+    Lexical(LexKind, Vec<VarDecl>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -271,6 +319,8 @@ pub struct CatchClause {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Stmt {
     Var(Vec<VarDecl>),
+    /// `let` or `const` declarations (a `const` always has an initializer).
+    Lexical(LexKind, Vec<VarDecl>),
     FunctionDecl(FunctionId),
     Expr(ExprId),
     Block(Vec<StmtId>),
@@ -333,18 +383,32 @@ pub enum FunctionKind {
     Expression,
     Getter,
     Setter,
+    /// An arrow function; one with an expression body has a body of one `return` statement.
+    Arrow,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Function {
     pub kind: FunctionKind,
     pub name: Option<Name>,
+    /// The parameters before a rest parameter.
     pub params: Vec<Name>,
+    /// Each parameter's default value, in the order of `params` (empty when none has one).
+    pub defaults: Vec<Option<ExprId>>,
+    /// The rest parameter (`...name`).
+    pub rest: Option<Name>,
     pub body: Vec<StmtId>,
     /// The function's code is strict mode code: its own directive prologue holds `"use strict"`,
     /// or the code around it is strict.
     pub strict: bool,
     pub span: Span,
+}
+
+impl Function {
+    /// The parameters are plain names: no default value and no rest parameter.
+    pub fn simple_params(&self) -> bool {
+        self.rest.is_none() && self.defaults.iter().all(Option::is_none)
+    }
 }
 
 /// The arenas of a parsed script.
@@ -411,6 +475,8 @@ pub struct Program {
     /// Its preprocessor lines, in source order.
     pub directives: Vec<crate::token::Directive>,
     pub(crate) lines: crate::LineTable,
+    /// It was read with [`crate::Options::es2015`].
+    pub(crate) es2015: bool,
 }
 
 impl Program {

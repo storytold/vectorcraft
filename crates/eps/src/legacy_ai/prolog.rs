@@ -96,17 +96,18 @@ VCLegacy begin
 /_l 256 string def /_s 128 string def
 /_row {{currentfile _l readline not {exit} if dup length 1 gt {exit} if pop} loop
  dup length 1 gt {dup length 1 sub 1 exch getinterval /ASCIIHexDecode filter _s readstring pop} {pop ()} ifelse} bd
-% An image mask (ImageMask 1) paints its 0 bits in the fill color.
+% An image mask (ImageMask 1) paints its 0 bits in the fill color, with the fill overprint.
 /XI {1 eq /_im exch def pop pop pop /_ic exch def /_ib exch def /_ih exch def /_iw exch def pop pop pop pop
  [1 0 0 -1 0 0] exch matrix concatmatrix
- _on {gsave concat _im {_fc _iw _ih false [1 0 0 1 0 0] /_row load imagemask}
+ _on {gsave concat _im {_fc _fo setoverprint _iw _ih false [1 0 0 1 0 0] /_row load imagemask}
  {_iw _ih _ib [1 0 0 1 0 0] /_row load false _ic 1 eq {1} {_ic} ifelse colorimage} ifelse grestore} {pop} ifelse} bd
 % Type (15) is set by the app that reads the file: its operators take their operands and mark
 % nothing; encodings (3.3) are skipped.
 /TE {cleartomark} bd /TZ {cleartomark} bd
 /To {pop} bd /Tp {7 {pop} repeat} bd /TP {} bd /TO {} bd
 /Tr {pop} bd /Tf {pop pop pop pop} bd /Ts {pop} bd /Tz {pop pop} bd /Tt {pop} bd /TA {pop} bd
-/Tl {pop pop} bd /Ta {pop} bd /Ti {pop pop pop} bd /Tx {pop} bd
+/Tl {pop pop} bd /Ta {pop} bd /Ti {pop pop pop} bd /Tx {pop} bd /Tv {pop} bd /TY {pop} bd
+/Tk {pop pop} bd /T+ {} bd
 % The page trailer (3): annotatepage marks nothing.
 /annotatepage {} bd
 end

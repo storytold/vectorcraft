@@ -1,25 +1,10 @@
-use std::collections::HashSet;
+use craft::layers::ui::thumbs::{LayerThumb, LayerThumbKind}; // PLAN: assumed path of craft-layers' thumbnail key
+use craft::ui::primitives::textures::{LoadFailure, LoadedPicture, Revision, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails};
 use vectorcraft_doc::{NodeKind, TextKind};
 use vectorcraft_geom::PathData;
 
-use super::{Arc, Color32, Document, HashMap, Node, NodeId, Settle, ThumbWorker, Ui, VectorcraftApp, Weak, vec2};
-use crate::thumb_worker::Done;
-
-/// Where row thumbnails come from: document `uid` at `revision`, and whether a drag is in
-/// progress (the thumbnails shown then stay until it ends).
-pub(crate) struct ThumbSource<'a> {
-    pub uid: u64,
-    pub revision: u64,
-    pub doc: &'a Arc<Document>,
-    pub busy: bool,
-}
-
-impl<'a> ThumbSource<'a> {
-    /// The thumbnails of the document `st` holds (`doc`, its document).
-    pub(crate) fn of(app: &VectorcraftApp, st: &vectorcraft_engine::DocState, doc: &'a Arc<Document>) -> Self {
-        Self { uid: st.uid, revision: st.revision, doc, busy: st.interaction.is_some() || app.session.tool_busy() }
-    }
-}
+use super::model::RowId; // PLAN: assumed document-panels-w7's `RowId::{Node(NodeId), Guide(usize), Spine(NodeId)}`
+use super::{Arc, Document, Node, NodeId};
 
 /// Node `id` of `doc`, as the `Arc` its parent holds.
 pub(crate) fn node_arc(doc: &Document, id: NodeId) -> Option<Arc<Node>> {
@@ -32,56 +17,139 @@ pub(crate) fn node_arc(doc: &Document, id: NodeId) -> Option<Arc<Node>> {
     Some(cur.clone())
 }
 
-/// A row thumbnail's image.
-struct ThumbEntry {
-    /// The node it shows. Weak, so the cache doesn't keep old art alive, but its allocation stays
-    /// and no other node can come to have its address.
-    node: Weak<Node>,
-    px: u32,
-    /// None: the node draws nothing.
-    tex: Option<egui::TextureHandle>,
-    /// How long it took to render (ms).
-    ms: f64,
-    /// The pass it was last drawn in.
-    used: u64,
+/// A node of the Links panel's rows: the document and the node, nested ones included.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct NodeThumb {
+    /// The document's uid.
+    pub uid: u64,
+    /// The node the row shows.
+    pub node: NodeId,
 }
 
-/// A row thumbnail job: the row (document uid, node), the node and the size rendered.
-type ThumbJob = ((u64, NodeId), Weak<Node>, u32);
-
-#[derive(Default)]
-pub(super) struct Thumbs {
-    entries: HashMap<(u64, NodeId), ThumbEntry>,
-    /// Documents still open. None until the app first synchronizes its documents.
-    open_docs: Option<HashSet<u64>>,
-    /// What the worker is rendering, by row.
-    pending: HashMap<(u64, NodeId), (Weak<Node>, u32)>,
-    worker: Option<ThumbWorker<(u64, NodeId), ThumbJob>>,
-    worker_started: bool,
-    /// The uid of the document whose rows were last drawn: the worker holds jobs for it alone.
-    pub(super) showing: Option<u64>,
-    settle: Settle,
-    /// (pass, ms, count) rendered on the UI thread in that pass.
-    spent: (u64, f64, u32),
-    /// Thumbnails rendered on the UI thread (tests count them).
-    pub(super) renders: u64,
+/// The thumbnails of one document's Layers panel, one store for each document: node ids repeat across
+/// documents, and a key shared by two would show one document's picture for the other's row.
+pub(crate) fn layer_thumbnails(ctx: &egui::Context, uid: u64) -> Thumbnails<LayerThumb<RowId>> {
+    Thumbnails::in_context(ctx, ("vc-layer-thumbs", uid), ThumbnailOptions::new())
 }
 
-thread_local! {
-    pub(super) static THUMBS: crate::graphics::TexCache<Thumbs> = crate::graphics::TexCache::default();
+/// The thumbnails of the Links panel's rows, for every document.
+pub(crate) fn link_thumbnails(ctx: &egui::Context) -> Thumbnails<NodeThumb> {
+    Thumbnails::in_context(ctx, "vc-link-thumbs", ThumbnailOptions::new())
 }
 
-/// The most row thumbnails kept: past it the ones drawn longest ago go.
-const MAX_THUMBS: usize = 512;
+/// Forget every thumbnail of document `uid`'s Layers panel, when it closes.
+pub(crate) fn forget(ctx: &egui::Context, uid: u64) {
+    layer_thumbnails(ctx, uid).retain(ctx, |_| false);
+}
 
-/// Rendering a thumbnail that took longer than this (ms) again goes to the worker.
-const LIGHT_THUMB_MS: f64 = 4.0;
+/// Keep the Links panel's thumbnails of the documents in `uids`, the open ones.
+pub(crate) fn retain_open(ctx: &egui::Context, uids: &[u64]) {
+    link_thumbnails(ctx).retain(ctx, |key| uids.contains(&key.uid));
+}
 
-/// A node with more objects than this inside has its first thumbnail made on the worker.
+/// The version of `node`'s picture: the node's identity, since an unchanged node keeps its `Arc`
+/// allocation and an edited one gets another.
+fn node_revision(node: &Arc<Node>, request: &ThumbRequest) -> Revision {
+    Revision::of(&(Arc::as_ptr(node) as usize, request.side))
+}
+
+/// Where the Layers panel's thumbnails come from: the rows of document `doc`.
+pub(crate) struct LayerThumbs<'a> {
+    /// The document the rows are of.
+    pub doc: &'a Arc<Document>,
+}
+
+// PLAN: the sheet's `tree` field is left out: `RowId` already says which rows have no picture (guides and spines).
+impl LayerThumbs<'_> {
+    /// The node of the row `key` names, when it has a picture of its own to show.
+    fn node(&self, key: &LayerThumb<RowId>) -> Option<Arc<Node>> {
+        if key.kind != LayerThumbKind::Pixels {
+            return None;
+        }
+        match &key.layer {
+            RowId::Node(id) => node_arc(self.doc, *id),
+            _ => None,
+        }
+    }
+}
+
+impl ThumbSource<LayerThumb<RowId>> for LayerThumbs<'_> {
+    fn revision(&self, key: &LayerThumb<RowId>, request: &ThumbRequest) -> Revision {
+        self.node(key).map_or_else(Revision::default, |n| node_revision(&n, request))
+    }
+
+    fn render(&self, key: &LayerThumb<RowId>, request: &ThumbRequest) -> ThumbRender {
+        match self.node(key) {
+            Some(n) => {
+                let light = light_row(&n, None, self.doc);
+                render(n, self.doc.clone(), request, light)
+            }
+            None => ThumbRender::Blank,
+        }
+    }
+}
+
+/// Where the Links panel's thumbnails come from: the nodes of document `doc`, found by `lookup`
+/// (nested nodes are not in the document's own tree).
+pub(crate) struct NodeThumbs<'a, F: Fn(NodeId) -> Option<Arc<Node>>> {
+    doc: &'a Arc<Document>,
+    lookup: F,
+}
+
+impl<'a, F: Fn(NodeId) -> Option<Arc<Node>>> NodeThumbs<'a, F> {
+    /// The source of the rows of `doc`.
+    pub(crate) fn new(doc: &'a Arc<Document>, lookup: F) -> Self {
+        Self { doc, lookup }
+    }
+}
+
+impl<F: Fn(NodeId) -> Option<Arc<Node>>> ThumbSource<NodeThumb> for NodeThumbs<'_, F> {
+    fn revision(&self, key: &NodeThumb, request: &ThumbRequest) -> Revision {
+        (self.lookup)(key.node).map_or_else(Revision::default, |n| node_revision(&n, request))
+    }
+
+    fn render(&self, key: &NodeThumb, request: &ThumbRequest) -> ThumbRender {
+        match (self.lookup)(key.node) {
+            Some(n) => {
+                let light = light_row(&n, None, self.doc);
+                render(n, self.doc.clone(), request, light)
+            }
+            None => ThumbRender::Blank,
+        }
+    }
+}
+
+/// The thumbnail of `node` (of `doc`) for `request`: made here and now when `light`, else as a job
+/// for a lane that stops when cancelled. A node that draws nothing is `Blank`.
+pub(crate) fn render(node: Arc<Node>, doc: Arc<Document>, request: &ThumbRequest, light: bool) -> ThumbRender {
+    let side = request.side;
+    if light {
+        thread_local! {
+            static RENDERER: std::cell::RefCell<vectorcraft_render::Renderer> = std::cell::RefCell::new(vectorcraft_render::Renderer::new());
+        }
+        return match RENDERER.with(|r| render_thumb(&mut r.borrow_mut(), &doc, &node, side)) {
+            Some(img) => ThumbRender::Ready(crate::canvas::color_image(&img)),
+            None => ThumbRender::Blank,
+        };
+    }
+    ThumbRender::Later(Box::new(move |cancel| {
+        let cancelled = || LoadFailure::Message("cancelled".to_owned());
+        if cancel.is_cancelled() {
+            return Err(cancelled());
+        }
+        let img = render_thumb(&mut vectorcraft_render::Renderer::new(), &doc, &node, side);
+        if cancel.is_cancelled() {
+            return Err(cancelled());
+        }
+        Ok(img.map_or(LoadedPicture::Blank, |img| LoadedPicture::Image(crate::canvas::color_image(&img))))
+    }))
+}
+
+/// A node with more objects than this inside has its first thumbnail made on a lane.
 const LIGHT_THUMB_NODES: usize = 200;
 
-/// A node whose paths have more anchors than this in all has its first thumbnail made on the
-/// worker. Type's glyphs, mesh points and image pixels count against it too, each as the anchors
+/// A node whose paths have more anchors than this in all has its first thumbnail made on a lane.
+/// Type's glyphs, mesh points and image pixels count against it too, each as the anchors
 /// that take about as long to render: [`GLYPH_ANCHORS`], [`MESH_POINT_ANCHORS`] and
 /// [`IMAGE_PIXELS_PER_ANCHOR`].
 const LIGHT_THUMB_ANCHORS: usize = 2_000;
@@ -96,21 +164,14 @@ const MESH_POINT_ANCHORS: usize = 1;
 const IMAGE_PIXELS_PER_ANCHOR: usize = 100;
 
 /// The most symbols and placed documents counted inside one another: a node holding them deeper
-/// (a symbol whose art holds an instance of itself, for one) has its first thumbnail made on the
-/// worker.
+/// (a symbol whose art holds an instance of itself, for one) has its first thumbnail made on a
+/// lane.
 const MAX_THUMB_NESTING: usize = 8;
 
 /// The most steps counting a node takes: each object, subpath, text run and symbol looked at is
 /// one step, and so is every 64 bytes of a symbol or placed file name looked up. A node that
-/// needs more has its thumbnail made on the worker, and the painted thumbnail draws nothing for
-/// it. A row drawn before counts at most this many objects too.
+/// needs more has its thumbnail made on a lane.
 const THUMB_COUNT_STEPS: usize = 20_000;
-
-/// At most this long (ms) and this many thumbnails are rendered on the UI thread in a pass; the
-/// rest go to the worker, or wait for the next pass where there is none.
-const THUMB_BUDGET_MS: f64 = 8.0;
-
-const THUMB_BUDGET_COUNT: u32 = 16;
 
 /// How row thumbnails render: images far smaller than they are sample their mip levels.
 pub(crate) fn thumb_options() -> vectorcraft_render::RenderOptions {
@@ -247,325 +308,19 @@ fn light_row(n: &Node, quick: Option<bool>, doc: &Document) -> bool {
     }
 }
 
-/// The thumbnail of `n` (`px` pixels square) as `r` renders it, on the UI thread or the worker.
+/// The thumbnail of `n` (`px` pixels square) as `r` renders it, on the UI thread or a lane.
 fn render_thumb(r: &mut vectorcraft_render::Renderer, doc: &Document, n: &Node, px: u32) -> Option<vectorcraft_render::Rendered> {
     r.render_node_thumbnail_with(doc, n, px, None, &thumb_options())
 }
 
-impl Thumbs {
-    #[cfg(test)]
-    pub(super) fn cached(&self, uid: u64) -> bool {
-        self.entries.keys().any(|key| key.0 == uid)
-    }
-
-    /// Release thumbnails and queued jobs for documents that have closed, keeping the cache for
-    /// other open documents even when the panels are hidden or another document is active. When a
-    /// document closes, the worker drops its jobs, the one running included, and the images it
-    /// finished that the panels have not collected yet.
-    fn retain_open(&mut self, uids: &[u64]) {
-        if self.open_docs.as_ref().is_some_and(|open| open.len() == uids.len() && uids.iter().all(|uid| open.contains(uid))) {
-            return;
-        }
-        let open: HashSet<u64> = uids.iter().copied().collect();
-        let closed: HashSet<u64> = self.open_docs.as_ref().map(|before| before.difference(&open).copied().collect()).unwrap_or_default();
-        let stale =
-            self.entries.keys().chain(self.pending.keys()).any(|key| !open.contains(&key.0)) || self.showing.is_some_and(|uid| !open.contains(&uid));
-        self.entries.retain(|key, _| open.contains(&key.0));
-        self.pending.retain(|key, _| open.contains(&key.0));
-        self.showing = self.showing.filter(|uid| open.contains(uid));
-        if !closed.is_empty() {
-            // Images finished before now are dropped with the rest of the queue: the open
-            // documents' rows are asked for again. Documents opened later keep their jobs.
-            if let Some(w) = &self.worker {
-                w.forget(move |key| closed.contains(&key.0));
-                if w.poll().is_none() {
-                    self.worker = None;
-                }
-            }
-            self.pending.clear();
-        } else if stale
-            && let Some(w) = &self.worker
-            && !w.discard({
-                let open = open.clone();
-                move |key| !open.contains(&key.0)
-            })
-        {
-            self.worker = None;
-            self.pending.clear();
-        }
-        self.open_docs = Some(open);
-    }
-
-    /// Keep `img` (None: nothing drawn) as the thumbnail of row `key` showing `node`.
-    fn upload(&mut self, ctx: &egui::Context, key: (u64, NodeId), node: Weak<Node>, px: u32, img: Option<&vectorcraft_render::Rendered>, ms: f64) {
-        let color = img.map(crate::canvas::color_image);
-        let used = ctx.cumulative_pass_nr();
-        let name = format!("layer-thumb-{}", key.1.0);
-        match self.entries.get_mut(&key) {
-            Some(e) => {
-                match (color, &mut e.tex) {
-                    (Some(color), Some(tex)) => tex.set(color, egui::TextureOptions::LINEAR),
-                    (Some(color), tex) => *tex = Some(ctx.load_texture(name, color, egui::TextureOptions::LINEAR)),
-                    (None, tex) => *tex = None,
-                }
-                (e.node, e.px, e.ms, e.used) = (node, px, ms, used);
-            }
-            None => {
-                let tex = color.map(|color| ctx.load_texture(name, color, egui::TextureOptions::LINEAR));
-                self.entries.insert(key, ThumbEntry { node, px, tex, ms, used });
-                if self.entries.len() > MAX_THUMBS {
-                    // Keep the three quarters drawn last.
-                    let mut by_use: Vec<u64> = self.entries.values().map(|e| e.used).collect();
-                    by_use.sort_unstable();
-                    let cut = by_use.get(by_use.len() - MAX_THUMBS * 3 / 4).copied().unwrap_or(0);
-                    self.entries.retain(|_, e| e.used >= cut);
-                }
-            }
-        }
-    }
-
-    /// The panels draw the rows of document `uid` (None: no document). When that is another
-    /// document than before, the worker drops the jobs it has not started for every other
-    /// document, so they don't hold up this one's thumbnails, and those rows are asked for again
-    /// when their document shows again. The thumbnails of still-open documents stay.
-    pub(super) fn show(&mut self, uid: Option<u64>) {
-        if self.showing == uid {
-            return;
-        }
-        self.showing = uid;
-        self.pending.retain(|key, _| Some(key.0) == uid);
-        if let Some(w) = &self.worker
-            && !w.discard(move |key| Some(key.0) != uid)
-        {
-            self.worker = None;
-            self.pending.clear();
-        }
-    }
-
-    /// Keep the thumbnail `d` the worker finished.
-    fn receive(&mut self, ctx: &egui::Context, d: Done<ThumbJob>) {
-        let (key, node, px) = d.key;
-        if self.open_docs.as_ref().is_some_and(|open| !open.contains(&key.0)) {
-            return;
-        }
-        if self.pending.get(&key).is_some_and(|(p, ppx)| p.ptr_eq(&node) && *ppx == px) {
-            self.pending.remove(&key);
-        }
-        self.upload(ctx, key, node, px, d.img.as_ref(), d.ms);
-    }
-
-    /// The texture of row `n` (`px` pixels square) to draw: made or updated now, or on the
-    /// worker (the old one is drawn meanwhile). Thumbnails shown stay during a drag and until
-    /// the document settles.
-    fn texture(&mut self, ctx: &egui::Context, src: &ThumbSource, n: &Arc<Node>, px: u32) -> Option<egui::TextureHandle> {
-        if !self.worker_started {
-            self.worker_started = true;
-            self.worker = ThumbWorker::spawn(ctx, "thumbnails");
-        }
-        let done = match self.worker.as_ref().map(ThumbWorker::poll) {
-            Some(Some(done)) => done,
-            Some(None) => {
-                // The thread is gone: render here from now on.
-                self.worker = None;
-                self.pending.clear();
-                vec![]
-            }
-            None => vec![],
-        };
-        for d in done {
-            self.receive(ctx, d);
-        }
-        self.show(Some(src.uid));
-        let key = (src.uid, n.id);
-        let pass = ctx.cumulative_pass_nr();
-        let (fresh, light) = match self.entries.get_mut(&key) {
-            Some(e) => {
-                e.used = pass;
-                (std::ptr::eq(e.node.as_ptr(), Arc::as_ptr(n)) && e.px == px, Some(e.ms <= LIGHT_THUMB_MS))
-            }
-            None => (false, None),
-        };
-        let shown = self.entries.get(&key).and_then(|e| e.tex.clone());
-        if fresh || self.pending.get(&key).is_some_and(|(p, ppx)| std::ptr::eq(p.as_ptr(), Arc::as_ptr(n)) && *ppx == px) {
-            return shown;
-        }
-        if light.is_some() && (src.busy || !self.settle.settled(ctx, src.uid, src.revision, ctx.input(|i| i.time))) {
-            return shown;
-        }
-        if self.spent.0 != pass {
-            self.spent = (pass, 0.0, 0);
-        }
-        let in_budget = self.spent.1 < THUMB_BUDGET_MS && self.spent.2 < THUMB_BUDGET_COUNT;
-        // A row drawn before is light when its last thumbnail was quick to render, unless its
-        // object now has more anchors than the limit.
-        let light = light_row(n, light, src.doc) && in_budget;
-        if !light && let Some(w) = &self.worker {
-            let (doc, node) = (src.doc.clone(), n.clone());
-            let job: ThumbJob = (key, Arc::downgrade(n), px);
-            if w.submit(key, job, Box::new(move |r| render_thumb(r, &doc, &node, px))) {
-                self.pending.insert(key, (Arc::downgrade(n), px));
-                return shown;
-            }
-            self.worker = None;
-            self.pending.clear();
-        }
-        if !in_budget {
-            ctx.request_repaint();
-            return shown;
-        }
-        thread_local! {
-            static RENDERER: std::cell::RefCell<vectorcraft_render::Renderer> = std::cell::RefCell::new(vectorcraft_render::Renderer::new());
-        }
-        let t0 = crate::now_ms();
-        let img = RENDERER.with(|r| render_thumb(&mut r.borrow_mut(), src.doc, n, px));
-        let ms = crate::now_ms() - t0;
-        self.spent.1 += ms;
-        self.spent.2 += 1;
-        self.renders += 1;
-        self.upload(ctx, key, Arc::downgrade(n), px, img.as_ref(), ms);
-        self.entries.get(&key).and_then(|e| e.tex.clone())
-    }
-}
-
-/// The Layers or Links panel shows the rows of document `uid` in this frame (None: no document
-/// is open), whether or not a thumbnail is drawn; see [`Thumbs::show`].
-pub(crate) fn show_thumbs_of(uid: Option<u64>) {
-    THUMBS.with(|c| c.borrow_mut().show(uid));
-}
-
-/// Forget thumbnails of documents no longer open, even if neither thumbnail panel is shown.
-pub(crate) fn retain_open_thumbs(uids: &[u64]) {
-    THUMBS.with(|c| c.borrow_mut().retain_open(uids));
-}
-
-/// A real rendered thumbnail of row `n`, cached by node identity (unchanged nodes keep their `Arc`
-/// allocation, so the address is a free change detector). Only rendered for visible rows; see
-/// [`Thumbs::texture`] for when.
-pub(crate) fn real_thumb(ui: &Ui, src: &ThumbSource, n: &Arc<Node>, r: egui::Rect) -> bool {
-    if !ui.is_rect_visible(r) {
-        return true;
-    }
-    let ppp = ui.ctx().pixels_per_point();
-    let px = ((r.width() * ppp).round() as u32).max(8);
-    match THUMBS.with(|c| c.borrow_mut().texture(ui.ctx(), src, n, px)) {
-        Some(t) => {
-            ui.painter().image(t.id(), r, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), Color32::WHITE);
-            true
-        }
-        None => false,
-    }
-}
-
-/// Tiny vector thumbnail painted with egui (fallback when rendering isn't possible). A node with
-/// more than [`LIGHT_THUMB_ANCHORS`] anchors, or that takes more than [`THUMB_COUNT_STEPS`] steps
-/// to count, paints nothing, since this runs on every frame and
-/// measuring its bounds takes time in proportion to its anchor count.
-pub(super) fn thumb(ui: &Ui, n: &Node, r: egui::Rect) {
-    if !small_node(n, usize::MAX, LIGHT_THUMB_ANCHORS, false, None) {
-        return;
-    }
-    let Some(b) = n.visual_bounds() else { return };
-    let s = ((r.width() - 3.0) as f64 / b.width().max(b.height()).max(1e-6)) as f32;
-    let off = r.center() - vec2(b.center().x as f32 * s, b.center().y as f32 * s);
-    let p = ui.painter().with_clip_rect(r);
-    let mut count = 0;
-    n.walk(&mut |c| {
-        if count > 40 {
-            return;
-        }
-        if let Some(pd) = c.path_data() {
-            count += 1;
-            let col = c.appearance.fill_paint().color().or(c.appearance.stroke_paint().color()).map(|cc| {
-                let [a, b2, d, _] = cc.to_rgba8(1.0);
-                Color32::from_rgb(a, b2, d)
-            });
-            if let Some(bb) = pd.bounds() {
-                let rr = egui::Rect::from_min_max(off + vec2(bb.x0 as f32 * s, bb.y0 as f32 * s), off + vec2(bb.x1 as f32 * s, bb.y1 as f32 * s));
-                p.rect_filled(rr, 0.0, col.unwrap_or(Color32::from_gray(120)));
-            }
-        }
-    });
-}
-
 #[cfg(test)]
 mod tests {
+    use craft::host::queue::Cancel; // PLAN: assumed path of craft-host's `Cancel`
     use vectorcraft_color::{Color, Paint};
     use vectorcraft_doc::{Appearance, CharStyle, LayerColor, NodeKind, OpacityMask, TextKind, TextObject};
     use vectorcraft_geom::{Affine, Point, SubPath};
 
     use super::*;
-
-    #[test]
-    fn a_finished_job_cannot_restore_a_closed_documents_thumbnail() {
-        let mut thumbs = Thumbs::default();
-        let ctx = egui::Context::default();
-        thumbs.retain_open(&[2]);
-        thumbs.receive(&ctx, Done { key: ((1, NodeId(1)), Weak::new(), 16), img: None, ms: 0.0 });
-        assert!(thumbs.entries.is_empty(), "a closed document's late result is discarded");
-        thumbs.receive(&ctx, Done { key: ((2, NodeId(2)), Weak::new(), 16), img: None, ms: 0.0 });
-        assert!(thumbs.entries.contains_key(&(2, NodeId(2))), "an open document's result is kept");
-    }
-
-    #[test]
-    fn closing_a_document_drops_the_image_its_running_job_finishes_while_the_panels_are_hidden() {
-        let ctx = egui::Context::default();
-        let Some(worker) = ThumbWorker::start(&ctx, "test") else { return };
-        let mut thumbs = Thumbs { worker: Some(worker), worker_started: true, ..Default::default() };
-        thumbs.retain_open(&[1, 2]);
-        // A job of document 1 is running, so discarding the queue cannot drop it.
-        let (started, running) = std::sync::mpsc::channel::<()>();
-        let (release, held) = std::sync::mpsc::channel::<()>();
-        let key = (1, NodeId(1));
-        let job: crate::thumb_worker::JobFn = Box::new(move |_| {
-            started.send(()).ok();
-            held.recv().ok();
-            None
-        });
-        assert!(thumbs.worker.as_ref().is_some_and(|w| w.submit(key, (key, Weak::new(), 1), job)));
-        running.recv().expect("the job starts");
-        // Another row of document 1 waits behind it.
-        let queued = (1, NodeId(3));
-        assert!(thumbs.worker.as_ref().is_some_and(|w| w.submit(queued, (queued, Weak::new(), 1), Box::new(|_| None))));
-        // Document 1 closes while no panel collects results, then its running job finishes.
-        thumbs.retain_open(&[2]);
-        release.send(()).ok();
-        // A job of document 2 queued after them comes back first: document 1's images were dropped.
-        let next = (2, NodeId(2));
-        assert!(thumbs.worker.as_ref().is_some_and(|w| w.submit(next, (next, Weak::new(), 1), Box::new(|_| None))));
-        let done = thumbs.worker.as_ref().and_then(ThumbWorker::wait).expect("the same worker finishes document 2's job");
-        assert_eq!(done.key.0, next, "no worker keeps the closed document's image");
-    }
-
-    #[test]
-    fn a_document_opened_while_a_job_runs_after_a_close_gets_its_thumbnails() {
-        let ctx = egui::Context::default();
-        let Some(worker) = ThumbWorker::start(&ctx, "test") else { return };
-        let mut thumbs = Thumbs { worker: Some(worker), worker_started: true, ..Default::default() };
-        thumbs.retain_open(&[1, 2]);
-        // A job of document 2 is running.
-        let (started, running) = std::sync::mpsc::channel::<()>();
-        let (release, held) = std::sync::mpsc::channel::<()>();
-        let blocker = (2, NodeId(1));
-        let job: crate::thumb_worker::JobFn = Box::new(move |_| {
-            started.send(()).ok();
-            held.recv().ok();
-            None
-        });
-        assert!(thumbs.worker.as_ref().is_some_and(|w| w.submit(blocker, (blocker, Weak::new(), 1), job)));
-        running.recv().expect("the job starts");
-        // Document 1 closes, then document 3 opens and one of its rows is queued.
-        thumbs.retain_open(&[2]);
-        thumbs.retain_open(&[2, 3]);
-        let opened = (3, NodeId(2));
-        assert!(thumbs.worker.as_ref().is_some_and(|w| w.submit(opened, (opened, Weak::new(), 1), Box::new(|_| None))));
-        // A job of document 2 queued after it marks the end of the queue.
-        let last = (2, NodeId(3));
-        assert!(thumbs.worker.as_ref().is_some_and(|w| w.submit(last, (last, Weak::new(), 1), Box::new(|_| None))));
-        release.send(()).ok();
-        let worker = thumbs.worker.as_ref().expect("the worker is kept");
-        let order: Vec<(u64, NodeId)> = (0..3).map_while(|_| worker.wait().map(|d| d.key.0)).take_while(|key| *key != last).collect();
-        assert_eq!(order, [blocker, opened], "document 3's job comes back before the last one");
-    }
 
     /// An open zigzag of `anchors` anchors.
     fn line(anchors: usize) -> PathData {
@@ -721,7 +476,7 @@ mod tests {
         assert!(small_in(&doc, &image(1, px / 100, 100)), "an image of as many pixels as the limit");
         assert!(!small_in(&doc, &image(1, px / 100, 101)), "a larger image");
         assert!(!small_in(&doc, &image(1, 4_000, 3_000)), "a photo");
-        // Without the document only paths and frames count, as the painted thumbnail needs.
+        // Without the document only paths and frames count.
         assert!(small(&glyphs(1, 5_000)) && small(&mesh(1, 100)) && small(&image(1, 4_000, 3_000)));
     }
 
@@ -821,29 +576,6 @@ mod tests {
         assert!(!small_in(&doc, &instance(1, &format!("Other {}", THUMB_COUNT_STEPS - 1))), "the last of many symbols");
     }
 
-    #[test]
-    fn the_painted_thumbnail_leaves_out_a_long_path() {
-        let ctx = egui::Context::default();
-        let painted = |n: &Node| {
-            let r = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), vec2(24.0, 24.0));
-            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| thumb(ui, n, r));
-            out.textures_delta.clear();
-            out.shapes.len()
-        };
-        let none = painted(&Node::layer(NodeId(1), "Layer 1", LayerColor::Preset(0)));
-        assert_eq!(painted(&rect(1)), none + 1, "a small path is painted");
-        assert_eq!(painted(&path(1, LIGHT_THUMB_ANCHORS)), none + 1, "a path of as many anchors as the limit");
-        assert_eq!(painted(&path(1, LIGHT_THUMB_ANCHORS + 1)), none, "a long path is not");
-        // Type is not painted, so each holds a small path beside it: the group is painted only
-        // while the type's frame or path keeps the anchors in all within the limit.
-        let left = LIGHT_THUMB_ANCHORS - rect(2).path_data().map_or(0, PathData::anchor_count);
-        let beside = |typ: Node| Node::group(NodeId(1), vec![Arc::new(rect(2)), Arc::new(typ)]);
-        assert_eq!(painted(&beside(area_type(3, left))), none + 1, "area type whose frame keeps the group at the limit");
-        assert_eq!(painted(&beside(area_type(3, left + 1))), none, "area type with a long frame");
-        assert_eq!(painted(&beside(path_type(3, left))), none + 1, "type on a path that keeps the group at the limit");
-        assert_eq!(painted(&beside(path_type(3, left + 1))), none, "type on a long path");
-    }
-
     /// A document with `n` on its layer, and `n` as the layer holds it.
     fn doc_with(n: impl FnOnce(NodeId) -> Node) -> (Arc<Document>, Arc<Node>) {
         let mut doc = Document::new(200.0, 200.0);
@@ -855,196 +587,59 @@ mod tests {
         (doc, node)
     }
 
+    /// `n` of `doc` as `render` answers for a 24-point cell, weighed as a row not drawn before.
+    fn rendered(doc: &Arc<Document>, n: &Arc<Node>, request: &ThumbRequest) -> ThumbRender {
+        render(n.clone(), doc.clone(), request, light_row(n, None, doc))
+    }
+
+    /// `render` gives a heavy node as a job, whose pixels are those `render_thumb` makes here.
+    fn assert_job_matches_a_render_made_here(doc: &Arc<Document>, n: &Arc<Node>) {
+        let request = ThumbRequest::for_cell(24.0, 1.0);
+        let ThumbRender::Later(job) = rendered(doc, n, &request) else { panic!("a heavy node is made on a lane") };
+        let Ok(LoadedPicture::Image(there)) = job(&Cancel::new()) else { panic!("the job draws the node") };
+        let here = render_thumb(&mut vectorcraft_render::Renderer::new(), doc, n, request.side).expect("this thread draws the node");
+        let here = crate::canvas::color_image(&here);
+        assert!(here.pixels.iter().any(|p| p.a() > 0), "the thumbnail shows the art");
+        assert_eq!((there.size, &there.pixels), (here.size, &here.pixels), "the same pixels");
+    }
+
     #[test]
     fn a_long_paths_thumbnail_is_made_on_the_worker_and_matches_one_made_here() {
-        let ctx = egui::Context::default();
-        let Some(worker) = ThumbWorker::start(&ctx, "test") else { return };
-        let mut thumbs = Thumbs { worker: Some(worker), worker_started: true, ..Default::default() };
         let (doc, n) = doc_with(|id| path(id.0, 50_000));
-        let src = ThumbSource { uid: 1, revision: 1, doc: &doc, busy: false };
-        assert!(thumbs.texture(&ctx, &src, &n, 24).is_none(), "nothing is shown until it is made");
-        assert_eq!(thumbs.renders, 0, "not made on this thread");
-        assert!(thumbs.pending.contains_key(&(1, n.id)), "sent to the worker");
-        let done = thumbs.worker.as_ref().and_then(ThumbWorker::wait).expect("the worker finishes it");
-        let there = done.img.as_ref().expect("the worker draws the path");
-        let here = render_thumb(&mut vectorcraft_render::Renderer::new(), &doc, &n, 24).expect("this thread draws the path");
-        assert!(here.pixels.chunks(4).any(|p| p[3] > 0), "the thumbnail shows the path");
-        assert_eq!((there.width, there.height, &there.pixels), (here.width, here.height, &here.pixels), "the same pixels");
-        thumbs.receive(&ctx, done);
-        assert!(thumbs.pending.is_empty());
-        assert!(thumbs.texture(&ctx, &src, &n, 24).is_some(), "the worker's thumbnail is shown");
-        assert_eq!(thumbs.renders, 0, "and not made again here");
-
-        // A small object's thumbnail is still made on this thread, at once.
+        assert_job_matches_a_render_made_here(&doc, &n);
+        // A small object's thumbnail is made on this thread, at once.
         let (doc, n) = doc_with(|id| rect(id.0));
-        let src = ThumbSource { uid: 2, revision: 1, doc: &doc, busy: false };
-        assert!(thumbs.texture(&ctx, &src, &n, 24).is_some());
-        assert_eq!(thumbs.renders, 1);
-        assert!(thumbs.pending.is_empty());
-    }
-
-    /// A document of `rows` paths of 5,000 anchors on its layer, and the paths as the layer holds
-    /// them.
-    fn long_paths(rows: usize) -> (Arc<Document>, Vec<Arc<Node>>) {
-        let mut doc = Document::new(200.0, 200.0);
-        let layer = doc.layers.first().map(|l| l.id);
-        let ids: Vec<NodeId> = (0..rows)
-            .map(|_| {
-                let id = doc.alloc_id();
-                doc.insert(layer, usize::MAX, path(id.0, 5_000)).unwrap();
-                id
-            })
-            .collect();
-        let doc = Arc::new(doc);
-        let nodes = ids.iter().filter_map(|id| node_arc(&doc, *id)).collect();
-        (doc, nodes)
-    }
-
-    /// Keep the worker of `thumbs` busy with a job of row (0, 0) until the sender returned sends,
-    /// so the jobs submitted meanwhile wait in its queue.
-    fn hold(thumbs: &Thumbs) -> std::sync::mpsc::Sender<()> {
-        let (started, running) = std::sync::mpsc::channel::<()>();
-        let (release, held) = std::sync::mpsc::channel::<()>();
-        let key = (0, NodeId(0));
-        let job: crate::thumb_worker::JobFn = Box::new(move |_| {
-            started.send(()).ok();
-            held.recv().ok();
-            None
-        });
-        assert!(thumbs.worker.as_ref().is_some_and(|w| w.submit(key, (key, Weak::new(), 1), job)));
-        running.recv().expect("the job starts");
-        release
-    }
-
-    /// The next job `thumbs`'s worker finishes, checked against the thumbnail of the same node in
-    /// `rows` of `doc` made on this thread, then kept.
-    fn receive_checked(ctx: &egui::Context, thumbs: &mut Thumbs, uid: u64, doc: &Document, rows: &[Arc<Node>]) {
-        let done = thumbs.worker.as_ref().and_then(ThumbWorker::wait).expect("the worker finishes a job");
-        assert_eq!(done.key.0.0, uid, "a job of document {uid} is done next");
-        let n = rows.iter().find(|n| n.id == done.key.0.1).expect("one of its rows");
-        let there = done.img.as_ref().expect("the worker draws the path");
-        let here = render_thumb(&mut vectorcraft_render::Renderer::new(), doc, n, 24).expect("this thread draws the path");
-        assert!(here.pixels.chunks(4).any(|p| p[3] > 0), "the thumbnail shows the path");
-        assert_eq!((there.width, there.height, &there.pixels), (here.width, here.height, &here.pixels), "the same pixels");
-        thumbs.receive(ctx, done);
-    }
-
-    /// Prioritize the shown document’s thumbnails, requeue them when revisited, and retain cached rows.
-    #[test]
-    fn the_shown_documents_thumbnails_are_made_before_the_queued_ones_of_another() {
-        let ctx = egui::Context::default();
-        let Some(worker) = ThumbWorker::start(&ctx, "test") else { return };
-        let mut thumbs = Thumbs { worker: Some(worker), worker_started: true, ..Default::default() };
-        let (a, a_rows) = long_paths(3);
-        let (b, b_rows) = long_paths(2);
-        let release = hold(&thumbs);
-        let src_a = ThumbSource { uid: 1, revision: 1, doc: &a, busy: false };
-        for n in &a_rows {
-            assert!(thumbs.texture(&ctx, &src_a, n, 24).is_none());
-        }
-        assert_eq!(thumbs.pending.len(), 3, "document 1's rows wait on the worker");
-        // Document 2 shows before the worker gets to them.
-        let src_b = ThumbSource { uid: 2, revision: 1, doc: &b, busy: false };
-        for n in &b_rows {
-            assert!(thumbs.texture(&ctx, &src_b, n, 24).is_none());
-        }
-        assert_eq!(thumbs.pending.keys().map(|k| k.0).collect::<Vec<_>>(), [2, 2], "only the shown document's rows are pending");
-        release.send(()).expect("the held job is waiting");
-        let held = thumbs.worker.as_ref().and_then(ThumbWorker::wait).expect("the held job finishes");
-        assert_eq!(held.key.0, (0, NodeId(0)));
-        for _ in &b_rows {
-            receive_checked(&ctx, &mut thumbs, 2, &b, &b_rows);
-        }
-        for n in &b_rows {
-            assert!(thumbs.texture(&ctx, &src_b, n, 24).is_some(), "the shown document's thumbnails are shown");
-        }
-        // Shown again, document 1's rows are asked for again and come back.
-        // Hold the worker so texture() cannot collect a completed row before the count.
-        let release = hold(&thumbs);
-        for n in &a_rows {
-            assert!(thumbs.texture(&ctx, &src_a, n, 24).is_none());
-        }
-        assert_eq!(thumbs.pending.keys().filter(|k| k.0 == 1).count(), 3);
-        release.send(()).expect("the held job is waiting");
-        let held = thumbs.worker.as_ref().and_then(ThumbWorker::wait).expect("the held job finishes");
-        assert_eq!(held.key.0, (0, NodeId(0)));
-        for _ in &a_rows {
-            receive_checked(&ctx, &mut thumbs, 1, &a, &a_rows);
-        }
-        for n in &a_rows {
-            assert!(thumbs.texture(&ctx, &src_a, n, 24).is_some());
-        }
-        // Document 2's thumbnails were kept: showing it again asks for nothing.
-        for n in &b_rows {
-            assert!(thumbs.texture(&ctx, &src_b, n, 24).is_some());
-        }
-        assert!(thumbs.pending.is_empty());
-        assert_eq!(thumbs.renders, 0, "none was made on this thread");
-    }
-
-    #[test]
-    fn the_queued_thumbnails_of_a_closed_document_are_dropped() {
-        let ctx = egui::Context::default();
-        let Some(worker) = ThumbWorker::start(&ctx, "test") else { return };
-        let mut thumbs = Thumbs { worker: Some(worker), worker_started: true, ..Default::default() };
-        let (a, a_rows) = long_paths(3);
-        let release = hold(&thumbs);
-        let src_a = ThumbSource { uid: 1, revision: 1, doc: &a, busy: false };
-        for n in &a_rows {
-            thumbs.texture(&ctx, &src_a, n, 24);
-        }
-        // The document closes and no other shows.
-        thumbs.show(None);
-        assert!(thumbs.pending.is_empty());
-        // A job queued after it, straight on the worker, comes back next.
-        let (b, b_rows) = long_paths(1);
-        let (doc, node) = (b.clone(), b_rows[0].clone());
-        let key = (2, node.id);
-        let job: crate::thumb_worker::JobFn = Box::new(move |r| render_thumb(r, &doc, &node, 24));
-        assert!(thumbs.worker.as_ref().is_some_and(|w| w.submit(key, (key, Arc::downgrade(&b_rows[0]), 24), job)));
-        release.send(()).expect("the held job is waiting");
-        let held = thumbs.worker.as_ref().and_then(ThumbWorker::wait).expect("the held job finishes");
-        assert_eq!(held.key.0, (0, NodeId(0)));
-        receive_checked(&ctx, &mut thumbs, 2, &b, &b_rows);
+        let request = ThumbRequest::for_cell(24.0, 1.0);
+        assert!(matches!(rendered(&doc, &n, &request), ThumbRender::Ready(_)));
+        // A cancelled job gives no picture.
+        let (doc, n) = doc_with(|id| path(id.0, 50_000));
+        let ThumbRender::Later(job) = rendered(&doc, &n, &request) else { panic!("a long path is made on a lane") };
+        let cancel = Cancel::new();
+        cancel.cancel();
+        assert!(job(&cancel).is_err());
     }
 
     #[test]
     fn an_instance_of_a_long_symbols_thumbnail_is_made_on_the_worker_and_matches_one_made_here() {
-        let ctx = egui::Context::default();
-        let Some(worker) = ThumbWorker::start(&ctx, "test") else { return };
-        let mut thumbs = Thumbs { worker: Some(worker), worker_started: true, ..Default::default() };
         let mut doc = with_symbol("Long", path(900, 50_000));
         let layer = doc.layers.first().map(|l| l.id);
         let id = doc.alloc_id();
         doc.insert(layer, usize::MAX, instance(id.0, "Long")).unwrap();
         let doc = Arc::new(doc);
         let n = node_arc(&doc, id).unwrap();
-        let src = ThumbSource { uid: 1, revision: 1, doc: &doc, busy: false };
-        assert!(thumbs.texture(&ctx, &src, &n, 24).is_none(), "nothing is shown until it is made");
-        assert_eq!(thumbs.renders, 0, "not made on this thread");
-        assert!(thumbs.pending.contains_key(&(1, n.id)), "sent to the worker");
-        let done = thumbs.worker.as_ref().and_then(ThumbWorker::wait).expect("the worker finishes it");
-        let there = done.img.as_ref().expect("the worker draws the symbol");
-        let here = render_thumb(&mut vectorcraft_render::Renderer::new(), &doc, &n, 24).expect("this thread draws the symbol");
-        assert!(here.pixels.chunks(4).any(|p| p[3] > 0), "the thumbnail shows the symbol's art");
-        assert_eq!((there.width, there.height, &there.pixels), (here.width, here.height, &here.pixels), "the same pixels");
+        assert_job_matches_a_render_made_here(&doc, &n);
     }
 
     #[test]
     fn a_row_whose_object_becomes_a_long_path_is_drawn_again_on_the_worker() {
-        let ctx = egui::Context::default();
-        let Some(worker) = ThumbWorker::start(&ctx, "test") else { return };
-        let mut thumbs = Thumbs { worker: Some(worker), worker_started: true, ..Default::default() };
-        let (doc, n) = doc_with(|id| path(id.0, 50_000));
-        let key = (1, n.id);
-        // The row's last thumbnail showed a small object and took no time to render.
-        let before = Arc::new(rect(n.id.0));
-        thumbs.upload(&ctx, key, Arc::downgrade(&before), 24, None, 0.0);
-        let src = ThumbSource { uid: 1, revision: 2, doc: &doc, busy: false };
-        // The document reached this revision long before now, so it has settled.
-        thumbs.settle.settled(&ctx, 1, 2, f64::NEG_INFINITY);
-        thumbs.texture(&ctx, &src, &n, 24);
-        assert_eq!(thumbs.renders, 0, "not made on this thread");
-        assert!(thumbs.pending.contains_key(&key), "sent to the worker");
+        let request = ThumbRequest::for_cell(24.0, 1.0);
+        let (doc, small_node) = doc_with(|id| rect(id.0));
+        let (long_doc, long_node) = doc_with(|id| path(id.0, 50_000));
+        let key = NodeThumb { uid: 1, node: small_node.id };
+        let before = NodeThumbs::new(&doc, |_| Some(small_node.clone()));
+        let after = NodeThumbs::new(&long_doc, |_| Some(long_node.clone()));
+        assert_ne!(before.revision(&key, &request), after.revision(&key, &request), "a changed node is a new picture");
+        assert!(matches!(before.render(&key, &request), ThumbRender::Ready(_)));
+        assert!(matches!(after.render(&key, &request), ThumbRender::Later(_)), "and a long path is made on a lane");
     }
 }

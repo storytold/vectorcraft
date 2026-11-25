@@ -80,14 +80,26 @@ fn lossy_makes_runs_and_smaller_gifs() {
     let px = image(96, 64, |x, y| [(x * 2 + y) as u8, (y * 3) as u8, ((x * y) % 255) as u8]);
     let ix = quantize(&px, 96, 64, &PaletteOptions { colors: 64, dither: Dither::Diffusion, ..Default::default() });
     let mut lossy_ix = ix.clone();
-    lossy(&mut lossy_ix, &px, 80);
+    lossy(&mut lossy_ix, &px, 80, &[]);
     let runs = |ix: &Indexed| ix.indices.windows(2).filter(|w| w[0] != w[1]).count();
     assert!(runs(&lossy_ix) < runs(&ix));
     let size = |ix: &Indexed| gif::encode(ix, false).unwrap().len();
     assert!(size(&lossy_ix) < size(&ix), "{} vs {}", size(&lossy_ix), size(&ix));
     let mut none = ix.clone();
-    lossy(&mut none, &px, 0);
+    lossy(&mut none, &px, 0, &[]);
     assert_eq!(none, ix);
+    // A fixed entry keeps its pixels and takes no others.
+    let fixed: Vec<u8> = (0..ix.palette.len()).filter_map(|i| u8::try_from(i).ok()).collect();
+    let mut kept = ix.clone();
+    lossy(&mut kept, &px, 100, &fixed);
+    assert_eq!(kept, ix);
+    // With one fixed entry of three, no pixel moves into or out of it, and the others still merge.
+    let palette: Vec<[u8; 3]> = vec![[100, 0, 0], [110, 0, 0], [120, 0, 0]];
+    let indices: Vec<u8> = vec![1, 0, 0, 1, 1, 2];
+    let px: Vec<u8> = indices.iter().flat_map(|&i| palette[usize::from(i)].into_iter().chain([255])).collect();
+    let mut part = Indexed { width: 2, height: 3, palette, transparent: None, indices };
+    lossy(&mut part, &px, 100, &[0]);
+    assert_eq!(part.indices, vec![1, 0, 0, 1, 1, 1]);
 }
 
 #[test]
@@ -95,15 +107,75 @@ fn comments_are_valid_files() {
     let ix = quantize(&image(5, 4, |x, _| [x as u8 * 40, 0, 0]), 5, 4, &PaletteOptions::default());
     let file = gif_comment(gif::encode(&ix, false).unwrap(), &"Copyright: Someone ".repeat(20));
     assert!(file.windows(2).any(|w| w == [0x21, 0xFE]));
-    assert_eq!(image::load_from_memory(&file).unwrap().width(), 5);
+    assert_eq!(
+        craft_image_codecs::decode(&file)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .width(),
+        5
+    );
     let px = vec![200u8; 5 * 4 * 3];
     let jpg = jpeg::encode(&px, 5, 4, 80, Some(72.0), &jpeg::JpegOptions::default()).unwrap();
     let with = jpeg_comment(jpg.clone(), "Copyright: Someone");
     assert_eq!(with.len(), jpg.len() + 4 + 18);
     assert!(with.windows(2).any(|w| w == [0xFF, 0xFE]));
-    assert_eq!(image::load_from_memory(&with).unwrap().height(), 4);
+    assert_eq!(
+        craft_image_codecs::decode(&with)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .height(),
+        4
+    );
     assert_eq!(jpeg_comment(vec![1, 2, 3], "x"), vec![1, 2, 3], "not a JPEG");
     let png = png::with_srgb(png::encode(&[0, 0, 0, 255], 1, 1, &png::PngOptions::default()).unwrap());
     assert!(png.windows(4).any(|w| w == b"sRGB"));
-    assert_eq!(image::load_from_memory(&png).unwrap().width(), 1);
+    assert_eq!(
+        craft_image_codecs::decode(&png)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .width(),
+        1
+    );
 }

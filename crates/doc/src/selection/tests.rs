@@ -17,6 +17,203 @@ fn basic_ops() {
 }
 
 #[test]
+fn remove_all_does_what_removing_each_does() {
+    let mut s = Selection::default();
+    for i in 1..=6 {
+        s.add(NodeId(i));
+    }
+    for i in [2, 4, 5] {
+        s.anchors.insert(NodeId(i), BTreeSet::from([(0, 1)]));
+        s.segments.insert(NodeId(i), BTreeSet::from([(0, 0)]));
+    }
+    s.key = Some(NodeId(4));
+    s.target = Some(NodeId(3));
+    s.slices = vec![NodeId(9)];
+    s.guides = vec![NodeId(10)];
+    s.on_path_member = Some(NodeId(11));
+    let mut one_by_one = s.clone();
+    for id in [NodeId(4), NodeId(1), NodeId(4), NodeId(7)] {
+        one_by_one.remove(id);
+    }
+    let mut all = s.clone();
+    all.remove_all([NodeId(4), NodeId(1), NodeId(4), NodeId(7)]);
+    assert_eq!(all, one_by_one);
+    assert_eq!(all.objects, [NodeId(2), NodeId(3), NodeId(5), NodeId(6)]);
+    // Removing nothing leaves the selection as it was.
+    let mut none = s.clone();
+    none.remove_all([]);
+    assert_eq!(none, s);
+}
+
+/// A selection with every field set: objects 1 to 6 with 3 listed twice, anchors, segments, a key,
+/// a key anchor, a target, slices, guides, a key guide, new art, a symbol part and an on-path member.
+fn seeded() -> Selection {
+    let mut s = Selection { objects: [1, 2, 3, 4, 5, 3, 6].map(NodeId).to_vec(), ..Selection::default() };
+    for i in [2, 3, 4, 5] {
+        s.anchors.insert(NodeId(i), BTreeSet::from([(0, 1)]));
+        s.segments.insert(NodeId(i), BTreeSet::from([(0, 0)]));
+    }
+    s.key = Some(NodeId(4));
+    s.key_anchor = Some((NodeId(5), (0, 1)));
+    s.target = Some(NodeId(3));
+    s.slices = vec![NodeId(9)];
+    s.guides = vec![NodeId(10)];
+    s.key_guide = Some(NodeId(10));
+    s.new_art = Arc::new(HashSet::from([NodeId(2)]));
+    s.symbol_part = Some(SymbolPart { instance: NodeId(1), path: vec![0] });
+    s.on_path_member = Some(NodeId(11));
+    s
+}
+
+/// Id lists with repeats, ids not selected, removals followed by additions, and the empty list.
+fn id_streams() -> Vec<Vec<NodeId>> {
+    let mut streams: Vec<Vec<NodeId>> = [
+        vec![],
+        vec![4],
+        vec![7],
+        vec![3],
+        vec![4, 1, 4, 7],
+        vec![7, 8, 7, 7, 3, 3, 5],
+        vec![1, 2, 3, 4, 5, 6],
+        vec![6, 5, 4, 3, 2, 1, 1, 2, 3],
+        vec![8, 2, 8, 2, 9, 9, 9],
+    ]
+    .into_iter()
+    .map(|ids| ids.into_iter().map(NodeId).collect())
+    .collect();
+    // Deterministic pseudo-random lists over ids 1 to 12, half of them selected to start with.
+    let mut x: u64 = 0x9e37_79b9_7f4a_7c15;
+    for len in [5, 17, 40, 120] {
+        let ids = (0..len)
+            .map(|_| {
+                x ^= x << 13;
+                x ^= x >> 7;
+                x ^= x << 17;
+                NodeId(x % 12 + 1)
+            })
+            .collect();
+        streams.push(ids);
+    }
+    streams
+}
+
+#[test]
+fn add_all_does_what_adding_each_does() {
+    for ids in id_streams() {
+        let mut one_by_one = seeded();
+        for id in &ids {
+            one_by_one.add(*id);
+        }
+        let mut all = seeded();
+        all.add_all(ids.iter().copied());
+        assert_eq!(all, one_by_one, "add_all({ids:?})");
+    }
+}
+
+#[test]
+fn toggle_all_does_what_toggling_each_does() {
+    for ids in id_streams() {
+        let mut one_by_one = seeded();
+        for id in &ids {
+            one_by_one.toggle(*id);
+        }
+        let mut all = seeded();
+        all.toggle_all(ids.iter().copied());
+        assert_eq!(all, one_by_one, "toggle_all({ids:?})");
+    }
+    // An id toggled twice is selected again, at the end, without the anchors it had.
+    let mut s = seeded();
+    s.toggle_all([NodeId(2), NodeId(2)]);
+    assert_eq!(s.objects, [1, 3, 4, 5, 3, 6, 2].map(NodeId));
+    assert!(!s.anchors.contains_key(&NodeId(2)) && !s.segments.contains_key(&NodeId(2)));
+    // A removed key and key anchor stay cleared.
+    let mut s = seeded();
+    s.toggle_all([NodeId(4), NodeId(5), NodeId(4), NodeId(5)]);
+    assert_eq!((s.key, s.key_anchor), (None, None));
+}
+
+#[test]
+fn set_slices_and_set_guides_keep_the_first_of_each_id() {
+    let mut s = seeded();
+    s.set_slices([3, 1, 3, 2, 1].map(NodeId));
+    assert_eq!(s.slices, [3, 1, 2].map(NodeId));
+    assert!(s.objects.is_empty() && s.guides.is_empty());
+    s.set_guides([5, 5, 4, 6, 4].map(NodeId));
+    assert_eq!(s.guides, [5, 4, 6].map(NodeId));
+    assert!(s.slices.is_empty());
+}
+
+/// Shift-clicking a target circle does what removing or adding each of its art one by one does,
+/// for a layer with art, an empty layer and an object.
+#[test]
+fn toggle_target_does_what_toggling_its_art_one_by_one_does() {
+    let rect = || vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 10.0, 10.0));
+    let mut d = Document::new(100.0, 100.0);
+    let l = d.layers[0].id;
+    let art: Vec<NodeId> = (0..4).map(|_| d.alloc_id()).collect();
+    for id in &art {
+        d.insert(Some(l), usize::MAX, Node::path(*id, rect(), crate::Appearance::default_art())).unwrap();
+    }
+    let empty = d.alloc_id();
+    d.insert(None, usize::MAX, Node::layer(empty, "Empty", crate::LayerColor::Preset(2))).unwrap();
+    let one_by_one = |s: &Selection, id: NodeId| {
+        let mut s = s.clone();
+        let ids = match d.node(id) {
+            Some(n) if n.is_layer() => n.layer_art(true),
+            _ => vec![id],
+        };
+        if ids.iter().all(|i| s.contains(*i)) {
+            ids.iter().for_each(|i| s.remove(*i));
+        } else {
+            ids.into_iter().for_each(|i| s.add(i));
+        }
+        s.target = None;
+        s
+    };
+    let mut starts = vec![Selection::default()];
+    for objects in [vec![art[1]], vec![art[3], art[0], art[1], art[2]], vec![art[2], art[2], NodeId(99)]] {
+        let mut s = seeded();
+        s.objects = objects;
+        s.key = s.objects.first().copied();
+        s.anchors.insert(art[1], BTreeSet::from([(0, 0)]));
+        starts.push(s);
+    }
+    for start in &starts {
+        for id in [l, empty, art[2], NodeId(99)] {
+            let mut s = start.clone();
+            s.toggle_target(&d, id);
+            assert_eq!(s, one_by_one(start, id), "toggle_target({id:?}) on {:?}", start.objects);
+        }
+    }
+}
+
+#[test]
+fn remove_all_does_what_removing_each_does_to_a_key_anchor_and_symbol_part() {
+    for kept in [false, true] {
+        let mut s = Selection::default();
+        for i in 1..=4 {
+            s.add(NodeId(i));
+        }
+        s.anchors.insert(NodeId(2), BTreeSet::from([(0, 0), (0, 1)]));
+        s.anchors.insert(NodeId(3), BTreeSet::from([(0, 2)]));
+        s.key_anchor = Some((NodeId(2), (0, 0)));
+        s.symbol_part = Some(SymbolPart { instance: NodeId(1), path: vec![0] });
+        s.guides = vec![NodeId(10)];
+        s.key_guide = Some(NodeId(10));
+        let ids = if kept { [NodeId(3), NodeId(8), NodeId(3)] } else { [NodeId(2), NodeId(8), NodeId(2)] };
+        let mut one_by_one = s.clone();
+        for id in ids {
+            one_by_one.remove(id);
+        }
+        let mut all = s.clone();
+        all.remove_all(ids);
+        assert_eq!(all, one_by_one);
+        assert_eq!(all.key_anchor.is_some(), kept);
+        assert_eq!((all.symbol_part.clone(), all.guides.clone(), all.key_guide), (None, vec![NodeId(10)], Some(NodeId(10))));
+    }
+}
+
+#[test]
 fn guides_are_selected_on_their_own() {
     let mut s = Selection::default();
     s.add(NodeId(1));
@@ -177,6 +374,49 @@ fn selection_changes_clear_the_target() {
     s.target = Some(NodeId(1));
     s.set([NodeId(3)]);
     assert_eq!(s.target, None);
+}
+
+#[test]
+fn a_chosen_object_on_a_path_needs_its_group_selected_alone() {
+    use vectorcraft_geom::{Point, Rect, shapes};
+    let mut d = Document::new(200.0, 200.0);
+    let l = d.layers[0].id;
+    let (line, a, b, g, other) = (d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let line = Node::path(line, shapes::line(Point::new(0.0, 100.0), Point::new(200.0, 100.0)), Default::default());
+    let a = Node::path(a, shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Default::default());
+    let b = Node::path(b, shapes::rectangle(Rect::new(20.0, 0.0, 30.0, 10.0)), Default::default());
+    let rec = crate::objects_on_path::ObjectsOnPath::new(line.id, &[&a, &b], crate::objects_on_path::CENTER, 0.0);
+    let (line_id, a_id) = (line.id, a.id);
+    let mut group = Node::new(g, NodeKind::Group { children: vec![Arc::new(line), Arc::new(a), Arc::new(b)], clip: false });
+    group.extras_mut().objects_on_path = Some(Box::new(rec));
+    d.insert(Some(l), 0, group).unwrap();
+    d.insert(Some(l), 1, Node::path(other, shapes::rectangle(Rect::new(150.0, 0.0, 160.0, 10.0)), Default::default())).unwrap();
+    let mut s = Selection::default();
+    s.set_on_path_member(g, a_id);
+    s.prune(&d);
+    assert_eq!((s.objects.as_slice(), s.on_path_member), (&[g][..], Some(a_id)));
+    s.add(other);
+    assert_eq!(s.on_path_member, None, "another object joins the selection");
+    s.set_on_path_member(g, a_id);
+    s.set([g]);
+    assert_eq!(s.on_path_member, None, "a new selection");
+    // The path is not one of the objects, nor is an object outside the group.
+    for m in [line_id, other] {
+        s.set_on_path_member(g, m);
+        s.prune(&d);
+        assert_eq!(s.on_path_member, None, "{m:?}");
+    }
+    // A locked object is not chosen.
+    s.set_on_path_member(g, a_id);
+    d.node_mut(a_id).unwrap().locked = true;
+    s.prune(&d);
+    assert_eq!((s.objects.as_slice(), s.on_path_member), (&[g][..], None), "locked");
+    d.node_mut(a_id).unwrap().locked = false;
+    // Once the group is a plain group, no object of it is chosen.
+    s.set_on_path_member(g, a_id);
+    d.node_mut(g).unwrap().extras_mut().objects_on_path = None;
+    s.prune(&d);
+    assert_eq!((s.objects.as_slice(), s.on_path_member), (&[g][..], None));
 }
 
 #[test]

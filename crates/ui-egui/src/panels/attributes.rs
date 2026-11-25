@@ -1,37 +1,110 @@
 //! Attributes panel: Overprint Fill / Overprint Stroke, Show / Don't Show Center, Reverse Path
 //! Direction Off / On, the fill rule (non-zero winding or even-odd), Image Map, URL (with the
-//! recent URLs and a Browser button) and the note. The menu hides the options and shows the note.
+//! recent URLs and a Browser button) and the note. The menu hides the options and shows the note,
+//! and its Panel Options… sets how many recent URLs the URL menu lists ([`PanelOptions`]).
 //! Everything reads `attributes.info` ([`vectorcraft_engine::Session::attributes_info`]) and acts
 //! through `attributes.set`, `path.reverse` and `path.setFillRule`.
 
+use craft::behavior::{IconId, Mixed, Value as Valued};
+use craft::keymap::CommandRef;
+use craft::ui::buttons::Button;
+use craft::ui::choice::{Checkbox, Segmented};
+use craft::ui::contract::{Bind, Entry, FieldLayout, Props as _, Show as _, ShowContainer as _};
+use craft::ui::display::{Divider, Shade, Text};
+use craft::ui::form::Field;
+use craft::ui::layout_components::Row;
+use craft::ui::menu::PanelRow;
+use craft::ui::pickers::{ComboBox, Select};
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::text::TextField;
 use egui::Ui;
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
 use vectorcraft_doc::{ImageMap, NodeId, NodeKind};
-use vectorcraft_engine::cmd::AttributesInfo;
+use vectorcraft_engine::cmd::{AttributesInfo, RECENT_URLS};
 use vectorcraft_geom::FillRule;
 
-use super::{pstate, selection_len, set_pstate};
+use super::{part_hidden, selection_len, set_part_hidden};
 use crate::VectorcraftApp;
-use crate::widgets::{self, menu_item};
 
-/// Panel state: the options (centre, direction, fill rule, image map, URL) are hidden.
-const HIDE_OPTIONS: &str = "attr-hide-options";
-/// Panel state: the note field is hidden.
-const HIDE_NOTE: &str = "attr-hide-note";
-const LABEL_W: f32 = 70.0;
+/// The part store's key for the options (centre, direction, fill rule, image map, URL).
+const OPTIONS_KEY: &str = "attr-hide-options";
+/// The part store's key for the note field.
+const NOTE_KEY: &str = "attr-hide-note";
+/// The UI command that opens Panel Options.
+const PANEL_OPTIONS: &str = "ui.attributesPanelOptions";
+
+/// How many recent URLs the URL menu lists by default (VectorCraft's own value).
+pub const DEFAULT_RECENT_URLS: u8 = 10;
+
+/// Attributes panel options (≡ › Panel Options…), kept with the UI state.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct PanelOptions {
+    /// How many of the recent URLs the URL menu lists, 1 to [`RECENT_URLS`]. A saved value that is
+    /// not a whole number in that range reads as [`DEFAULT_RECENT_URLS`].
+    #[serde(deserialize_with = "saved_count")]
+    pub recent_urls: u8,
+}
+
+impl Default for PanelOptions {
+    fn default() -> Self {
+        Self { recent_urls: DEFAULT_RECENT_URLS }
+    }
+}
+
+impl PanelOptions {
+    /// How many recent URLs the URL menu lists: [`Self::recent_urls`], or the default when it is
+    /// out of range.
+    pub fn shown(&self) -> usize {
+        Some(usize::from(self.recent_urls)).filter(|n| (1..=RECENT_URLS).contains(n)).unwrap_or(usize::from(DEFAULT_RECENT_URLS))
+    }
+}
+
+/// A saved count of recent URLs: a whole number from 1 to [`RECENT_URLS`], anything else the default.
+fn saved_count<'de, D: Deserializer<'de>>(d: D) -> Result<u8, D::Error> {
+    let v = Value::deserialize(d)?;
+    Ok(count(&v).unwrap_or(DEFAULT_RECENT_URLS))
+}
+
+/// `v` as a count of recent URLs, when it is a whole number from 1 to [`RECENT_URLS`].
+fn count(v: &Value) -> Option<u8> {
+    let n = v.as_f64().filter(|n| n.fract() == 0.0 && (1.0..=RECENT_URLS as f64).contains(n))?;
+    u8::try_from(n as u64).ok()
+}
+
+/// `ui.attributesPanelOptions {count?}`: without `count`, open Panel Options on the panel's
+/// options; otherwise set how many recent URLs the URL menu lists and answer the options. A count
+/// that is not a whole number from 1 to 30 is an error, and nothing changes.
+pub fn set_options(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let Some(c) = p.get("count") else {
+        return crate::dialogs::attributes_panel_options::open(app);
+    };
+    let n = count(c).ok_or("`count` must be a whole number from 1 to 30")?;
+    app.ui.attributes_panel.recent_urls = n;
+    Ok(json!({ "count": n }))
+}
+
+/// The recent URLs the URL menu lists, newest first: as many as Panel Options sets.
+fn menu_urls(app: &VectorcraftApp) -> &[String] {
+    let urls = &app.session.recent_urls;
+    &urls[..urls.len().min(app.ui.attributes_panel.shown())]
+}
+
+/// The key the memo of [`info`] is valid for: the document and revision, and the selection's size
+/// and ends.
+pub(crate) type AttrKey = (u64, u64, usize, Option<NodeId>, Option<NodeId>);
 
 /// The panel's values and whether the targets hold paths (direction and fill rule apply),
 /// recomputed only when the document or the selection changes.
-fn state(app: &VectorcraftApp, ctx: &egui::Context) -> (AttributesInfo, bool) {
-    type Key = (u64, u64, usize, Option<NodeId>, Option<NodeId>);
+fn info(app: &mut VectorcraftApp) -> (AttributesInfo, bool) {
     let Some(st) = app.session.active() else { return Default::default() };
     let sel = &st.selection.objects;
-    let key: Key = (st.uid, st.revision, sel.len(), sel.first().copied(), sel.last().copied());
-    let id = egui::Id::unique("attr-state");
-    if let Some((k, v)) = ctx.data(|d| d.get_temp::<(Key, (AttributesInfo, bool))>(id))
-        && k == key
+    let key: AttrKey = (st.uid, st.revision, sel.len(), sel.first().copied(), sel.last().copied());
+    if let Some((k, v)) = &app.canvas.attributes_info
+        && *k == key
     {
-        return v;
+        return v.clone();
     }
     let info = app.session.attributes_info();
     let mut paths = false;
@@ -39,124 +112,124 @@ fn state(app: &VectorcraftApp, ctx: &egui::Context) -> (AttributesInfo, bool) {
         n.walk(&mut |c| paths |= matches!(c.kind, NodeKind::Path { guide: false, .. }));
     }
     let v = (info, paths);
-    ctx.data_mut(|d| d.insert_temp(id, (key, v.clone())));
+    app.canvas.attributes_info = Some((key, v.clone()));
     v
 }
 
-/// Run `attributes.set` with `p` on the selection (errors show in the status bar).
-fn set(app: &mut VectorcraftApp, p: Value) {
-    app.run("attributes.set", p).ok();
+/// A value the targets share, or mixed where they differ (`None`).
+fn or_mixed<T>(v: Option<T>) -> Mixed<T> {
+    v.map_or(Mixed::Mixed, Mixed::Same)
 }
 
-/// A pair of icon buttons choosing one of two values (`current`: the targets' value, `None` where
-/// they differ); returns the value clicked.
-fn pair<T: Copy + PartialEq>(ui: &mut Ui, enabled: bool, current: Option<T>, items: [(&str, &str, T); 2]) -> Option<T> {
-    let mut clicked = None;
-    for (icon, tip, v) in items {
-        if widgets::icon_button_enabled(ui, icon, tip, enabled && current == Some(v), enabled, 24.0).clicked() {
-            clicked = Some(v);
-        }
-    }
-    clicked
+/// The name a framework label shows for a catalog string written with a trailing colon: the
+/// framework draws the colon itself.
+pub(crate) fn side_name(label: &str) -> String {
+    label.trim_end().trim_end_matches([':', '：']).trim_end().to_owned()
 }
 
+/// A pair of icon segments choosing one of two values (`current`: the targets' value, mixed where
+/// they differ, which picks none); returns the value picked. Each item is the icon, its tip and
+/// the value.
+fn pair<T: Valued>(ui: &mut Ui, name: &'static str, enabled: bool, current: Option<T>, items: [(&'static str, &'static str, T); 2]) -> Option<T> {
+    let entries = items.map(|(icon, tip, v)| Entry::new(v, tip).icon(IconId::new(icon)));
+    Segmented::new(name, Bind::given(or_mixed(current)), &entries).enabled(enabled).show(ui).events.committed().cloned()
+}
+
+/// The panel: the rows only read; their edits are collected and run once the rows are drawn.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let (info, paths) = state(app, ui.ctx());
+    let (info, paths) = info(app);
     let has = !info.ids.is_empty();
-    ui.horizontal(|ui| {
+    // (command, params) for each edit of this pass; errors show in the status bar through `run`.
+    let mut acts: Vec<(&'static str, Value)> = Vec::new();
+    Row::new().show(ui, |ui, _| {
         for (label, key, value) in
             [(tl!("Overprint Fill"), "overprintFill", info.overprint_fill), (tl!("Overprint Stroke"), "overprintStroke", info.overprint_stroke)]
         {
-            if widgets::check3(ui, label, value, has) {
-                set(app, json!({ key: value != Some(true) }));
+            // A click on a mixed or unchecked box turns it on; on a checked box, off.
+            let edit = Checkbox::new(Bind::given(or_mixed(value))).label(label).enabled(has).show(ui);
+            if let Some(on) = edit.events.committed() {
+                acts.push(("attributes.set", json!({ key: *on })));
             }
-            ui.add_space(8.0);
         }
     });
-    if !pstate::<bool>(ui.ctx(), HIDE_OPTIONS) {
-        widgets::divider(ui);
-        ui.horizontal(|ui| {
+    if !part_hidden(app, OPTIONS_KEY) {
+        Divider::horizontal().show(ui);
+        Row::new().show(ui, |ui, _| {
             let center = [("dc-center-hide", tl!("Don't Show Center"), false), ("dc-center-show", tl!("Show Center"), true)];
-            if let Some(v) = pair(ui, has, info.show_center, center) {
-                set(app, json!({ "showCenter": v }));
-            }
-            ui.add_space(10.0);
+            acts.extend(pair(ui, tl!("Show Center"), has, info.show_center, center).map(|v| ("attributes.set", json!({ "showCenter": v }))));
             let dir = [("dc-dir-off", tl!("Reverse Path Direction Off"), false), ("dc-dir-on", tl!("Reverse Path Direction On"), true)];
-            if let Some(v) = pair(ui, paths, info.reversed, dir) {
-                app.run("path.reverse", json!({ "reversed": v })).ok();
-            }
-            ui.add_space(10.0);
+            acts.extend(pair(ui, tl!("Reverse Path Direction"), paths, info.reversed, dir).map(|v| ("path.reverse", json!({ "reversed": v }))));
             let rules = [
                 ("dc-rule-nonzero", tl!("Use Non-Zero Winding Fill Rule"), FillRule::NonZero),
                 ("dc-rule-evenodd", tl!("Use Even-Odd Fill Rule"), FillRule::EvenOdd),
             ];
-            if let Some(r) = pair(ui, paths, info.fill_rule, rules) {
-                app.run("path.setFillRule", json!({ "rule": if r == FillRule::EvenOdd { "evenOdd" } else { "nonZero" } })).ok();
-            }
+            let rule = pair(ui, tl!("Fill Rule"), paths, info.fill_rule, rules);
+            acts.extend(rule.map(|r| ("path.setFillRule", json!({ "rule": if r == FillRule::EvenOdd { "evenOdd" } else { "nonZero" } }))));
         });
-        ui.add_space(4.0);
         let url = info.url.clone().filter(|u| !u.is_empty());
-        widgets::label_row(ui, tl!("Image Map:"), LABEL_W, |ui| {
-            ui.add_enabled_ui(has, |ui| {
-                let labels = ImageMap::ALL.map(ImageMap::label);
-                if let Some(i) = widgets::dropdown(ui, "attr-map", info.image_map.map_or("", ImageMap::label), &labels, 100.0) {
-                    set(app, json!({ "imageMap": ImageMap::ALL[i] }));
+        let maps = ImageMap::ALL.map(|m| Entry::new(m, m.label()));
+        let name = side_name(tl!("Image Map:"));
+        Field::new(name.clone()).show(ui, |ui, _| {
+            Row::new().show(ui, |ui, _| {
+                let pick = Select::new(name.clone(), Bind::given(or_mixed(info.image_map)), &maps).enabled(has).show(ui);
+                acts.extend(pick.events.committed().map(|m| ("attributes.set", json!({ "imageMap": m }))));
+                let browser = Button::new(tl!("Browser")).enabled(url.is_some()).tooltip(tl!("Open the URL in the web browser")).show(ui);
+                if browser.clicked() {
+                    acts.push(("attributes.openUrl", json!({})));
                 }
             });
-            ui.add_space(6.0);
-            let r = ui.add_enabled_ui(url.is_some(), |ui| widgets::flat_button(ui, tl!("Browser"), 64.0)).inner;
-            if r.on_hover_text(tl!("Open the URL in the web browser")).clicked() {
-                app.run("attributes.openUrl", json!({})).ok();
-            }
         });
-        widgets::label_row(ui, tl!("URL:"), LABEL_W, |ui| {
-            ui.add_enabled_ui(has, |ui| {
-                let width = (ui.available_width() - 26.0).max(80.0);
-                if let Some(u) = widgets::text_field(ui, "attr-url", info.url.as_deref(), width, 1) {
-                    set(app, json!({ "url": u }));
-                }
-                recent_urls(app, ui);
-            });
+        // With no recent URLs the options have nothing to list and the chevron does nothing.
+        let recent: Vec<Entry<String>> = menu_urls(app).iter().map(|u| Entry::new(u.clone(), u.clone())).collect();
+        let name = side_name(tl!("URL:"));
+        Field::new(name.clone()).show(ui, |ui, _| {
+            let edit = ComboBox::new(name.clone(), Bind::given(or_mixed(info.url.clone())), &recent).enabled(has).show(ui);
+            acts.extend(edit.edit.events.committed().map(|u| ("attributes.set", json!({ "url": u }))));
         });
     }
-    if !pstate::<bool>(ui.ctx(), HIDE_NOTE) {
-        widgets::divider(ui);
-        widgets::subheader(ui, tl!("Note:"));
-        ui.add_enabled_ui(has, |ui| {
-            if let Some(n) = widgets::text_field_named(ui, "attr-note", Some(tl!("Note:")), info.note.as_deref(), ui.available_width(), 3) {
-                set(app, json!({ "note": n }));
-            }
+    if !part_hidden(app, NOTE_KEY) {
+        Divider::horizontal().show(ui);
+        let name = side_name(tl!("Note:"));
+        Field::new(name.clone()).layout(FieldLayout::Above).show(ui, |ui, _| {
+            let edit = TextField::new(name.clone(), Bind::given(or_mixed(info.note.clone()))).lines(3).enabled(has).show(ui);
+            acts.extend(edit.events.committed().map(|n| ("attributes.set", json!({ "note": n }))));
         });
     }
-    if !has {
-        widgets::dim_label(ui, if selection_len(app) == 0 { tl!("No Selection") } else { "" });
+    if !has && selection_len(app) == 0 {
+        Text::new(tl!("No Selection")).shade(Shade::Muted).show(ui);
+    }
+    for (id, params) in acts {
+        app.run(id, params).ok();
     }
 }
 
-/// The recent URLs button: a menu of the URLs given lately; picking one sets it.
-fn recent_urls(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let resp = widgets::icon_button_enabled(ui, "chevron-down", tl!("Recent URLs"), false, !app.session.recent_urls.is_empty(), 20.0);
-    let mut chosen = None;
-    egui::Popup::menu(&resp).show(|ui| {
-        ui.set_min_width(220.0);
-        for u in &app.session.recent_urls {
-            if widgets::menu_item_name(ui, u, true, false) {
-                chosen = Some(u.clone());
-            }
-        }
-    });
-    if let Some(u) = chosen {
-        set(app, json!({ "url": u }));
-    }
+/// The panel's hideable parts, each as its UI command, part-store key and menu titles (shown, hidden).
+fn parts() -> [(&'static str, &'static str, &'static str, &'static str); 2] {
+    [
+        ("ui.attributes.options", OPTIONS_KEY, tl!("Hide Options"), tl!("Show Options")),
+        ("ui.attributes.note", NOTE_KEY, tl!("Hide Note"), tl!("Show Note")),
+    ]
 }
 
-pub fn menu(_app: &mut VectorcraftApp, ui: &mut Ui) {
-    for (key, hide, show) in [(HIDE_OPTIONS, tl!("Hide Options"), tl!("Show Options")), (HIDE_NOTE, tl!("Hide Note"), tl!("Show Note"))] {
-        let hidden: bool = pstate(ui.ctx(), key);
-        if menu_item(ui, if hidden { show } else { hide }, true, false) {
-            set_pstate(ui.ctx(), key, !hidden);
-        }
+/// The panel menu's rows: hide or show the options and the note, then Panel Options….
+pub(crate) fn menu_rows(_app: &VectorcraftApp) -> Vec<PanelRow> {
+    parts().into_iter().map(|p| p.0).chain([PANEL_OPTIONS]).map(|id| PanelRow::Command(CommandRef::new(id))).collect()
+}
+
+/// The titles of the rows of [`menu_rows`]: Hide or Show by whether the part is hidden.
+pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
+    for (id, key, hide, show) in parts() {
+        states.set(CommandRef::new(id), CommandState::new().title(if part_hidden(app, key) { show } else { hide }));
     }
+    states.set(CommandRef::new(PANEL_OPTIONS), CommandState::new().title(tl!("Panel Options…")));
+}
+
+/// Runs the panel's own UI commands: flips the options or the note; `None` for any other id.
+pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option<Result<Value, String>> {
+    let (_, key, ..) = parts().into_iter().find(|p| p.0 == id)?;
+    let hidden = !part_hidden(app, key);
+    set_part_hidden(app, key, hidden);
+    Some(Ok(json!({ "hidden": hidden })))
 }
 
 /// `attributes.openUrl {url?}`: open `url`, else the selection's URL, in the web browser.
@@ -173,56 +246,60 @@ pub(crate) fn open_url(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Str
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::panel_harness::Panel;
     use vectorcraft_engine::Session;
-
-    /// Run the panel and its menu for one headless frame: the texts drawn.
-    fn frame(app: &mut VectorcraftApp) -> Vec<String> {
-        fn texts(s: &egui::Shape, out: &mut Vec<String>) {
-            match s {
-                egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
-                egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
-                _ => {}
-            }
-        }
-        let ctx = egui::Context::default();
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
-            show(app, ui);
-            menu(app, ui);
-        });
-        out.textures_delta.clear();
-        let mut v = vec![];
-        out.shapes.iter().for_each(|c| texts(&c.shape, &mut v));
-        v
-    }
 
     fn run(app: &mut VectorcraftApp, id: &str, p: Value) -> Value {
         app.session.execute(id, &p).unwrap()
     }
 
+    /// The URLs the app asked egui to open in one frame.
+    fn opened(app: &mut VectorcraftApp) -> Vec<String> {
+        let mut out = crate::testing::ui_context().run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx()));
+        out.textures_delta.clear();
+        out.platform_output
+            .commands
+            .iter()
+            .filter_map(|c| match c {
+                egui::OutputCommand::OpenUrl(open) => Some(open.url.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
     #[test]
     fn panel_shows_the_selections_attributes() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        run(&mut app, "file.new", json!({"width": 100, "height": 100}));
-        let texts = frame(&mut app);
-        assert!(texts.iter().any(|t| t == "No Selection") && texts.iter().any(|t| t == "Overprint Fill"), "{texts:?}");
-        run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}));
-        run(&mut app, "attributes.set", json!({"url": "https://example.com/a", "note": "first note", "imageMap": "polygon"}));
-        let texts = frame(&mut app);
-        for want in ["https://example.com/a", "first note", "Polygon", "Image Map:", "URL:", "Browser", "   Hide Options", "   Hide Note"] {
-            assert!(texts.iter().any(|t| t == want), "{want} in {texts:?}");
-        }
-        assert!(!texts.iter().any(|t| t == "No Selection"));
+        let mut panel = Panel::new(VectorcraftApp::new(Session::new(), Default::default()), show);
+        run(&mut panel.app(), "file.new", json!({"width": 100, "height": 100}));
+        panel.frame();
+        assert!(panel.shows("No Selection") && panel.shows("Overprint Fill"));
+        assert!(!panel.enabled("Overprint Fill"), "nothing selected to overprint");
+        run(&mut panel.app(), "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}));
+        run(&mut panel.app(), "attributes.set", json!({"url": "https://example.com/a", "note": "first note", "imageMap": "polygon"}));
+        panel.frame();
+        assert_eq!(panel.value("URL").as_deref(), Some("https://example.com/a"));
+        assert_eq!(panel.value("Note").as_deref(), Some("first note"));
+        assert_eq!(panel.value("Image Map").as_deref(), Some("Polygon"));
+        assert!(panel.shows("Browser") && panel.enabled("Browser") && !panel.shows("No Selection"));
+        // A click turns overprint on, and a click on it turns it off.
+        let fill = |panel: &Panel| info(&mut panel.app()).0.overprint_fill;
+        panel.click("Overprint Fill");
+        assert_eq!(fill(&panel), Some(true));
+        panel.click("Overprint Fill");
+        assert_eq!(fill(&panel), Some(false));
         // The URL button opens the selection's URL.
-        let (info, paths) = state(&app, &egui::Context::default());
-        assert!(paths && info.url.as_deref() == Some("https://example.com/a"));
-        assert_eq!(open_url(&mut app, &json!({})).unwrap()["url"], "https://example.com/a");
+        let (found, paths) = info(&mut panel.app());
+        assert!(paths && found.url.as_deref() == Some("https://example.com/a"));
+        assert_eq!(open_url(&mut panel.app(), &json!({})).unwrap()["url"], "https://example.com/a");
         // Two objects whose values differ show blanks.
-        let b = run(&mut app, "shape.ellipse", json!({"x": 60, "y": 0, "width": 30, "height": 30}))["id"].clone();
-        let a = app.session.active().unwrap().doc.layers[0].children().unwrap()[0].id.0;
-        run(&mut app, "select.set", json!({"ids": [a, b]}));
-        let texts = frame(&mut app);
-        assert!(!texts.iter().any(|t| t == "https://example.com/a" || t == "first note"), "{texts:?}");
-        assert!(open_url(&mut app, &json!({})).is_err());
+        let b = run(&mut panel.app(), "shape.ellipse", json!({"x": 60, "y": 0, "width": 30, "height": 30}))["id"].clone();
+        let a = panel.app().session.active().unwrap().doc.layers[0].children().unwrap()[0].id.0;
+        run(&mut panel.app(), "select.set", json!({"ids": [a, b]}));
+        panel.frame();
+        assert_ne!(panel.value("URL").as_deref(), Some("https://example.com/a"));
+        assert_ne!(panel.value("Note").as_deref(), Some("first note"));
+        assert!(!panel.enabled("Browser"));
+        assert!(open_url(&mut panel.app(), &json!({})).is_err());
     }
 
     /// Only web and mail URLs reach the browser.
@@ -244,17 +321,49 @@ mod tests {
         ] {
             assert!(crate::browsable_url(refused).is_err(), "{refused}");
         }
-        let opened = std::rc::Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
-        let o = opened.clone();
-        let services = crate::Services { open_url: Some(Box::new(move |u: &str| o.borrow_mut().push(u.to_string()))), ..Default::default() };
-        let mut app = VectorcraftApp::new(Session::new(), services);
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
         run(&mut app, "file.new", json!({"width": 100, "height": 100}));
         run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}));
         run(&mut app, "attributes.set", json!({"url": "file:///tmp/run.desktop"}));
         assert!(open_url(&mut app, &json!({})).is_err());
         assert!(open_url(&mut app, &json!({"url": "vscode://file/x"})).is_err());
-        assert!(opened.borrow().is_empty());
+        assert!(opened(&mut app).is_empty());
         open_url(&mut app, &json!({"url": "https://example.com/b"})).unwrap();
-        assert_eq!(*opened.borrow(), ["https://example.com/b"]);
+        assert_eq!(opened(&mut app), ["https://example.com/b"]);
+    }
+
+    /// The URL menu lists the newest 10 recent URLs by default, and `ui.attributesPanelOptions`
+    /// sets how many it lists, from 1 to 30, kept with the UI state. A lower count hides the older
+    /// URLs without forgetting them, and a count that is not a whole number from 1 to 30 is an
+    /// error that changes nothing.
+    #[test]
+    fn panel_options_set_how_many_recent_urls_the_menu_lists() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+        run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}));
+        for i in 0..32 {
+            run(&mut app, "attributes.set", json!({"url": format!("https://example.com/{i}")}));
+        }
+        assert!(menu_rows(&app).iter().any(|r| matches!(r, PanelRow::Command(c) if c.id == PANEL_OPTIONS)));
+        assert_eq!((menu_urls(&app).len(), menu_urls(&app)[0].as_str()), (10, "https://example.com/31"));
+        assert_eq!(app.run("ui.attributesPanelOptions", json!({"count": 1})).unwrap(), json!({"count": 1}));
+        assert_eq!(menu_urls(&app), ["https://example.com/31"]);
+        app.run("ui.attributesPanelOptions", json!({"count": 30.0})).unwrap();
+        assert_eq!((menu_urls(&app).len(), menu_urls(&app)[29].as_str()), (30, "https://example.com/2"));
+        for bad in [json!(0), json!(31), json!(2.5), json!(-1), json!("5"), Value::Null] {
+            assert!(app.run("ui.attributesPanelOptions", json!({"count": bad})).is_err(), "{bad}");
+        }
+        assert_eq!(app.ui.attributes_panel.recent_urls, 30, "a refused count changes nothing");
+        assert_eq!(app.session.recent_urls.len(), 30);
+        // Kept with the UI state; UI state saved without it, or with a count out of range, lists 10.
+        let back: crate::UiState = serde_json::from_value(serde_json::to_value(&app.ui).unwrap()).unwrap();
+        assert_eq!(back.attributes_panel.recent_urls, 30);
+        let old: crate::UiState = serde_json::from_value(json!({})).unwrap();
+        assert_eq!(old.attributes_panel, PanelOptions::default());
+        for saved in [json!(0), json!(99), json!(1000), json!(4.5), json!("12"), Value::Null] {
+            let s: crate::UiState = serde_json::from_value(json!({"attributes_panel": {"recentUrls": saved}})).unwrap();
+            assert_eq!(s.attributes_panel.shown(), 10, "{saved}");
+        }
+        assert_eq!(PanelOptions { recent_urls: 200 }.shown(), 10);
     }
 }

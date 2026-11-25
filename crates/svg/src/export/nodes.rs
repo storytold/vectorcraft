@@ -1,4 +1,4 @@
-use super::output::{sanitize_id, valid_xml_value, xml_attr_escape, xml_attr_valid};
+use super::output::{sanitize_id, valid_xml_value, xml_attr_escape};
 use super::paint::{StrokePlan, has_raster, pixel_gradient};
 use super::text::OUTLINE_TOLERANCE;
 use super::{
@@ -51,15 +51,16 @@ fn export_shape_bounds(n: &Node) -> Option<Rect> {
 impl Reuse {
     const NONE: Self = Self { moves: false, turns: false, scales: false };
 
-    /// What a def of symbol art `art` stands for.
-    pub(crate) fn of(doc: &Document, art: &Node) -> Self {
+    /// What a def of symbol art `art` stands for, in `doc`. `find` finds the symbol of each
+    /// instance in it by name.
+    pub(crate) fn of<'d>(doc: &'d Document, find: &dyn Fn(&str) -> Option<&'d vectorcraft_doc::Symbol>, art: &Node) -> Self {
         let mut r = Self { moves: true, turns: true, scales: true };
-        r.scan(doc, art, 0);
+        r.scan(doc, find, art, 0);
         r
     }
 
     /// Narrow down to what `n` (inside symbols nested `depth` deep) allows.
-    fn scan(&mut self, doc: &Document, n: &Node, depth: u32) {
+    fn scan<'d>(&mut self, doc: &'d Document, find: &dyn Fn(&str) -> Option<&'d vectorcraft_doc::Symbol>, n: &Node, depth: u32) {
         let pattern = |p: &Paint| matches!(p, Paint::Pattern { .. });
         let text_patterns = matches!(&n.kind, NodeKind::Text(t) if t.runs.iter().any(|r| pattern(&r.style.fill) || pattern(&r.style.stroke)));
         let unlinked_mask = n.extras().mask.as_ref().is_some_and(|m| !m.linked);
@@ -89,23 +90,24 @@ impl Reuse {
             | NodeKind::Repeat(_)
             | NodeKind::PlacedDocument(_)
             | NodeKind::Intertwine { .. } => (self.turns, self.scales) = (false, false),
+            NodeKind::Image(_) if n.is_distorted_image() => (self.turns, self.scales) = (false, false),
             NodeKind::SymbolInstance { symbol, .. } => {
                 // A scale reaching an instance of a symbol with 9-slice guides changes how its
                 // cells are sized.
                 if doc.symbol_nine_slice(symbol).is_some() {
                     self.scales = false;
                 }
-                if let Some(s) = doc.symbols.iter().find(|s| s.name == *symbol) {
-                    self.scan(doc, &s.art, depth + 1);
+                if let Some(s) = find(symbol) {
+                    self.scan(doc, find, &s.art, depth + 1);
                 }
             }
             _ => {}
         }
         if let Some(m) = &n.extras().mask {
-            self.scan(doc, &m.art, depth);
+            self.scan(doc, find, &m.art, depth);
         }
         for c in n.children().into_iter().flatten() {
-            self.scan(doc, c, depth);
+            self.scan(doc, find, c, depth);
         }
     }
 
@@ -119,6 +121,28 @@ impl Reuse {
         let rigid = (a * a + b * b - 1.0).abs() < EPS && (c * c + d * d - 1.0).abs() < EPS && (a * c + b * d).abs() < EPS;
         if rigid { self.turns } else { self.scales }
     }
+}
+
+/// Are `children` the pieces of a raster mesh warp ([`vectorcraft_doc::live::mesh_warp_image`]):
+/// more than one, each a clip group of a triangle and one and the same image, or that image masked
+/// by a triangle (Preserve Shape Using Transparency)?
+fn image_pieces(children: &[std::sync::Arc<Node>]) -> bool {
+    let mut first: Option<(&str, u32, u32)> = None;
+    children.len() > 1
+        && children.iter().all(|c| {
+            let (shape, im) = match (&c.kind, c.extras().mask.as_deref()) {
+                (NodeKind::Group { children, clip: true }, _) => match children.as_slice() {
+                    [clip, im] => (&**clip, &**im),
+                    _ => return false,
+                },
+                (NodeKind::Image(_), Some(m)) => (&*m.art, &**c),
+                _ => return false,
+            };
+            let (NodeKind::Path { path, .. }, NodeKind::Image(im)) = (&shape.kind, &im.kind) else { return false };
+            let triangle = path.subpaths.len() == 1 && path.anchor_count() == 3;
+            let image = (im.key.as_str(), im.width, im.height);
+            triangle && *first.get_or_insert(image) == image
+        })
 }
 
 /// Art about to be written moved by `m.inverse()` (a symbol instance's): map what the canvas
@@ -141,6 +165,18 @@ fn pin_to_page(n: &mut Node, m: Affine) {
 
 /// What SVG Tiny 1.2 does without masks.
 const TINY_MASKS: &str = "SVG Tiny 1.2 has no masks: opacity masks are left out and knockout groups written as plain groups";
+
+/// What a knockout group too large to mask is written as.
+const KNOCKOUT_SIZE: &str = "knockout groups with too many overlapping elements to mask are written as plain groups";
+
+/// The most knockout shapes the masks of one knockout group's elements use between them: each
+/// mask uses the shapes of the elements above its own element that overlap it.
+const MAX_KNOCKOUT_MASK_SHAPES: usize = 1 << 16;
+
+/// The most elements of one knockout group drawn through masks: finding the elements that
+/// overlap compares every pair.
+const MAX_MASKED_ELEMENTS: usize = 2048;
+
 pub(super) const UNDECODED: &str = "an image couldn't be decoded and is missing from the picture";
 
 /// The region of a mask or filter over art that has no box to measure: one covering any artwork.
@@ -226,7 +262,7 @@ impl Writer<'_> {
                     if let (Some(g), Some(b)) = (pixel_gradient(&f.paint, true), bounds) {
                         p.extend((f.opacity < 1.0).then(|| ("opacity", fmt_num(f.opacity as f64, 3))));
                         p.extend(blend);
-                        self.raster_paint(g, b, &[d.to_string()], rule, &p, "", true);
+                        self.raster_paint(g, b, b, &[d.to_string()], rule, &p, "", true);
                     } else {
                         self.fill_props(f, rule, bounds, &mut p);
                         p.extend(blend);
@@ -263,13 +299,19 @@ impl Writer<'_> {
                             let clip = self.path_d(&PathData::from_bezpath(&outline), self.xf);
                             p.extend(opacity);
                             p.extend(blend);
-                            self.raster_paint(g, b, &[clip], FillRule::NonZero, &p, &side, false);
+                            let reach =
+                                if outline.elements().is_empty() { b } else { b.union(vectorcraft_geom::kurbo::Shape::bounding_box(&outline)) };
+                            self.raster_paint(g, b, reach, &[clip], FillRule::NonZero, &p, &side, false);
                         }
                         (WrittenShape::Fill(outlines), Some((g, b))) if s.path_gradient().is_none() => {
                             let clip: Vec<String> = outlines.iter().map(|o| self.path_d(&PathData::from_bezpath(o), self.xf)).collect();
                             p.extend(opacity);
                             p.extend(blend);
-                            self.raster_paint(g, b, &clip, FillRule::NonZero, &p, &side, false);
+                            let reach = outlines
+                                .iter()
+                                .filter(|o| !o.elements().is_empty())
+                                .fold(b, |r, o| r.union(vectorcraft_geom::kurbo::Shape::bounding_box(o)));
+                            self.raster_paint(g, b, reach, &clip, FillRule::NonZero, &p, &side, false);
                         }
                         (WrittenShape::Stroke { width }, _) => {
                             p.push(("fill", "none".into()));
@@ -391,9 +433,73 @@ impl Writer<'_> {
         self.def(1, "</mask>");
         self.line(&format!("<g mask=\"url(#{mid})\">"));
         self.depth += 1;
+        self.spanning_rect(&bare, &region);
         self.node_body(&bare);
         self.depth -= 1;
         self.line("</g>");
+    }
+
+    /// Some readers draw a masked group only inside the bounding box of its shapes, which leaves
+    /// out a drop shadow, blur, glow or feather that paints past them. When `n`, written inside a
+    /// `<g mask>`, holds one ([`Self::holds_raster`]), a hidden, unpainted rectangle over the
+    /// mask's `region` makes that box cover what it paints.
+    fn spanning_rect(&mut self, n: &Node, region: &str) {
+        if self.holds_raster(n) {
+            self.line(&format!("<rect {region} fill=\"none\" visibility=\"hidden\"/>"));
+        }
+    }
+
+    /// Do `n`, its fills and strokes, its members at any depth, its symbols' art or the art its
+    /// live objects are written as have a visible raster effect (shadow, glow, blur, feather)?
+    /// Objects that aren't written (hidden ones, unless the options keep them) are skipped, and so
+    /// are fills and strokes that [`Self::shape`] doesn't write (hidden, unpainted or zero-width).
+    /// An instance with overrides is looked at in the art it is written as
+    /// ([`vectorcraft_brush::instance_art`]). The walk keeps its own stack, and looks at each
+    /// symbol's art once, and at each instance's overridden art once.
+    fn holds_raster(&self, n: &Node) -> bool {
+        let mut stack: Vec<std::sync::Arc<Node>> = vec![];
+        let mut symbols: std::collections::HashSet<(String, Option<vectorcraft_doc::NodeId>)> = std::collections::HashSet::new();
+        let paints = |i: &AppearanceItem| match i {
+            AppearanceItem::Fill(f) => f.visible && !f.paint.is_none(),
+            AppearanceItem::Stroke(s) => s.visible && !s.paint.is_none() && s.width > 0.0,
+        };
+        // Whether `n` itself has one; else its members, symbol art or expanded art go on the stack.
+        let mut visit = |n: &Node, stack: &mut Vec<std::sync::Arc<Node>>| {
+            if !(n.visible || self.opts.hidden_layers) {
+                return false;
+            }
+            if has_raster(&n.appearance.effects) || n.appearance.items.iter().any(|i| paints(i) && has_raster(i.effects())) {
+                return true;
+            }
+            // A live object is written as its expanded art ([`Self::node_body`]), which holds no
+            // live objects.
+            if vectorcraft_doc::live::is_live(n) {
+                let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+                if !vectorcraft_doc::live::is_live(&g) {
+                    stack.push(std::sync::Arc::new(g));
+                    return false;
+                }
+            }
+            if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
+                let custom = !n.extras().symbol_overrides.is_empty();
+                if symbols.insert((symbol.clone(), custom.then_some(n.id)))
+                    && let Some(s) = self.symbol_lookup.symbol(symbol)
+                {
+                    stack.push(if custom { std::sync::Arc::new(vectorcraft_brush::instance_art(&s.art, n)) } else { s.art.clone() });
+                }
+            }
+            stack.extend(n.children().into_iter().flatten().cloned());
+            false
+        };
+        if visit(n, &mut stack) {
+            return true;
+        }
+        while let Some(c) = stack.pop() {
+            if visit(&c, &mut stack) {
+                return true;
+            }
+        }
+        false
     }
 
     /// What `write` writes to the body, taken out of it (written at `depth`, for `<defs>`).
@@ -414,7 +520,7 @@ impl Writer<'_> {
     /// its geometry, so the region also covers the geometry's box, placed, grown by the strokes'
     /// and effects' reach unscaled.
     fn region_attrs(&mut self, nodes: &[&Node]) -> String {
-        let symbols = self.region_boxes.take().unwrap_or_else(|| self.doc.symbol_boxes());
+        let symbols = self.region_boxes.take().unwrap_or_else(|| self.symbol_lookup.unmeasured());
         let mut art_reach = std::mem::take(&mut self.art_reach);
         let region = self.region_of(&symbols, &mut art_reach, nodes);
         self.region_boxes = Some(symbols);
@@ -422,20 +528,39 @@ impl Writer<'_> {
         region
     }
 
+    /// The box of what each of `nodes` paints, as [`Self::paint_box`] measures it.
+    fn paint_boxes(&mut self, nodes: &[&Node]) -> Vec<Option<Option<Rect>>> {
+        let symbols = self.region_boxes.take().unwrap_or_else(|| self.symbol_lookup.unmeasured());
+        let mut art_reach = std::mem::take(&mut self.art_reach);
+        let boxes = nodes.iter().map(|n| self.paint_box(&symbols, &mut art_reach, n)).collect();
+        self.region_boxes = Some(symbols);
+        self.art_reach = art_reach;
+        boxes
+    }
+
+    /// The box of what `n` paints in the current user space, as [`Self::region_attrs`] measures
+    /// it: `Some(None)` when it has no box, `None` when the box can't be told (type, or nesting
+    /// deeper than [`MAX_REACH_DEPTH`]).
+    fn paint_box(&self, symbols: &vectorcraft_doc::SymbolBoxes, art_reach: &mut HashMap<String, f64>, n: &Node) -> Option<Option<Rect>> {
+        let Some(v) = n.visual_bounds_with(symbols) else { return Some(None) };
+        let r = self.paint_reach(symbols, art_reach, n, v, 0)?;
+        let g = n.geometric_bounds_with(symbols).unwrap_or(v);
+        let stroke = [g.x0 - v.x0, g.y0 - v.y0, v.x1 - g.x1, v.y1 - g.y1].into_iter().fold(0.0, f64::max);
+        let scaled = self.xf.transform_rect_bbox(v.inflate(r, r));
+        let unscaled = self.xf.transform_rect_bbox(g).inflate(stroke + r, stroke + r);
+        Some(Some(scaled.union(unscaled)))
+    }
+
     /// [`Self::region_attrs`] with the document's symbol boxes and the symbols' art reach so far.
     fn region_of(&self, symbols: &vectorcraft_doc::SymbolBoxes, art_reach: &mut HashMap<String, f64>, nodes: &[&Node]) -> String {
         let mut painted: Option<Rect> = None;
         for n in nodes {
-            let Some(v) = n.visual_bounds_with(symbols) else { continue };
-            let Some(r) = self.paint_reach(symbols, art_reach, n, v, 0) else {
+            let Some(b) = self.paint_box(symbols, art_reach, n) else {
                 return BIG.to_string();
             };
-            let g = n.geometric_bounds_with(symbols).unwrap_or(v);
-            let stroke = [g.x0 - v.x0, g.y0 - v.y0, v.x1 - g.x1, v.y1 - g.y1].into_iter().fold(0.0, f64::max);
-            let scaled = self.xf.transform_rect_bbox(v.inflate(r, r));
-            let unscaled = self.xf.transform_rect_bbox(g).inflate(stroke + r, stroke + r);
-            let both = scaled.union(unscaled);
-            painted = Some(painted.map_or(both, |p| p.union(both)));
+            if let Some(both) = b {
+                painted = Some(painted.map_or(both, |p| p.union(both)));
+            }
         }
         let Some(b) = painted.map(|b| b.inflate(2.0, 2.0)).filter(|b| b.is_finite()) else {
             return BIG.to_string();
@@ -492,7 +617,7 @@ impl Writer<'_> {
             return Some(own + past + self.paint_reach(symbols, art_reach, &g, gb, depth + 1)?);
         }
         let symbol = match &n.kind {
-            NodeKind::SymbolInstance { symbol, xf } => self.doc.symbols.iter().find(|s| s.name == *symbol).map(|s| (s, xf)),
+            NodeKind::SymbolInstance { symbol, xf } => self.symbol_lookup.symbol(symbol).map(|s| (s, xf)),
             _ => None,
         };
         if n.children().is_none_or(|c| c.is_empty()) && symbol.is_none() {
@@ -544,8 +669,10 @@ impl Writer<'_> {
     }
 
     /// Children of the group being written. SVG has no knockout groups: in one, each element is
-    /// drawn through a mask of where the elements above it don't paint (the same look for Normal
-    /// blending). The masks nest, so element i sits inside the masks of elements i+1…n.
+    /// drawn through one mask of where the elements above it that overlap it don't paint (the
+    /// same look for Normal blending). The masks share one copy of each element's knockout shape,
+    /// and the elements stay siblings however many there are. A group whose masks would hold more
+    /// than [`MAX_KNOCKOUT_MASK_SHAPES`] shapes is written as a plain group, with a warning.
     pub(super) fn children(&mut self, children: &[std::sync::Arc<Node>]) {
         if self.knockout && self.tiny() {
             self.warn(TINY_MASKS);
@@ -557,6 +684,16 @@ impl Writer<'_> {
             return;
         }
         let elements = Node::knockout_elements(children);
+        if !elements.is_empty() && elements.iter().all(|c| c.knockout_outline().is_some()) {
+            let pieces: Vec<&Node> = elements.iter().map(|c| &***c).collect();
+            if vectorcraft_effects::warp_pieces_translucent(self.doc, &pieces) {
+                return self.warp_pieces(&elements);
+            }
+            for c in elements {
+                self.node(c);
+            }
+            return;
+        }
         // Where every element over another covers it fully, drawing them in order knocks out as
         // much: the masks would only add seams along the shapes' antialiased edges.
         if elements.iter().skip(1).all(|c| paints_opaque(c)) {
@@ -565,41 +702,106 @@ impl Writer<'_> {
             }
             return;
         }
-        let Some((first, rest)) = elements.split_first() else { return };
-        // The elements are written first, in paint order, so that each mask copies an element
+        let all: Vec<&Node> = elements.iter().map(|c| &***c).collect();
+        let Some(above) = self.knockout_masks(&all) else {
+            self.warn(KNOCKOUT_SIZE);
+            for c in elements {
+                self.node(c);
+            }
+            return;
+        };
+        // The elements are written first, in paint order, so that each shape copies an element
         // with the symbol art count the element itself was written with
-        // (`Self::symbol_nodes`): an instance left out of an element is left out of its mask.
-        let (depth, nest) = (self.depth, rest.len());
-        let first = self.detached(depth + nest, |w| w.node(first));
-        let mut written = Vec::with_capacity(nest);
-        for (i, c) in rest.iter().enumerate() {
+        // (`Self::symbol_nodes`): an instance left out of an element is left out of its shape.
+        let depth = self.depth;
+        let mut written = Vec::with_capacity(elements.len());
+        for (c, above) in elements.iter().zip(&above) {
             let before = self.symbol_nodes;
-            written.push((before, self.detached(depth + nest - 1 - i, |w| w.node(c))));
+            written.push((before, self.detached(depth + usize::from(!above.is_empty()), |w| w.node(c))));
         }
         let after = self.symbol_nodes;
         // Each mask covers what the group's elements paint.
-        let all: Vec<&Node> = elements.iter().map(|c| &***c).collect();
         let region = self.region_attrs(&all);
-        for (c, (before, _)) in rest.iter().zip(&written).rev() {
-            self.symbol_nodes = *before;
-            let mid = self.knockout_mask(c, &region);
-            self.line(&format!("<g mask=\"url(#{mid})\">"));
-            self.depth += 1;
+        let mut shapes: Vec<Option<String>> = vec![None; elements.len()];
+        for &j in above.iter().flatten() {
+            if shapes[j].is_none() {
+                self.symbol_nodes = written[j].0;
+                shapes[j] = Some(self.knockout_shape(elements[j]));
+            }
         }
         self.symbol_nodes = after;
-        self.body.push_str(&first);
-        for (_, body) in written {
+        for ((c, above), (_, body)) in elements.iter().zip(&above).zip(written) {
+            if above.is_empty() {
+                self.body.push_str(&body);
+                continue;
+            }
+            let ids: Vec<&str> = above.iter().filter_map(|&j| shapes[j].as_deref()).collect();
+            let mid = self.knockout_mask(&ids, &region);
+            self.line(&format!("<g mask=\"url(#{mid})\">"));
+            // An element that paints past its shapes starts its mask group with a spanning
+            // rectangle (`Self::spanning_rect`).
+            self.depth += 1;
+            self.spanning_rect(c, &region);
             self.depth -= 1;
-            self.line("</g>");
             self.body.push_str(&body);
+            self.line("</g>");
         }
     }
 
-    /// A mask that is 1 − the knockout shape of `c`: white, then `c` painted black (at full object
-    /// opacity without its own mask, unless those define its shape). `region` is the attributes of
-    /// the mask's region ([`Self::region_attrs`]), which the filter that paints `c` black shares.
-    /// Returns the mask id.
-    fn knockout_mask(&mut self, c: &Node, region: &str) -> String {
+    /// For each element of a knockout group, the indices of the elements above it whose painted
+    /// boxes overlap its own (every one above it when a box can't be told). `None` when there are
+    /// more than [`MAX_MASKED_ELEMENTS`] elements or the masks would hold more than
+    /// [`MAX_KNOCKOUT_MASK_SHAPES`] shapes.
+    fn knockout_masks(&mut self, elements: &[&Node]) -> Option<Vec<Vec<usize>>> {
+        if elements.len() > MAX_MASKED_ELEMENTS {
+            return None;
+        }
+        let boxes = self.paint_boxes(elements);
+        let overlap = |a: Option<Option<Rect>>, b: Option<Option<Rect>>| match (a, b) {
+            (Some(None), _) | (_, Some(None)) => false,
+            (Some(Some(a)), Some(Some(b))) => a.x0 <= b.x1 + 2.0 && b.x0 <= a.x1 + 2.0 && a.y0 <= b.y1 + 2.0 && b.y0 <= a.y1 + 2.0,
+            _ => true,
+        };
+        let mut shapes = 0usize;
+        let mut out = Vec::with_capacity(elements.len());
+        for (i, &below) in boxes.iter().enumerate() {
+            let mut above = vec![];
+            for (j, &over) in boxes.iter().enumerate().skip(i + 1) {
+                if overlap(below, over) {
+                    shapes = shapes.checked_add(1).filter(|&s| s <= MAX_KNOCKOUT_MASK_SHAPES)?;
+                    above.push(j);
+                }
+            }
+            out.push(above);
+        }
+        Some(out)
+    }
+
+    /// One copy of the knockout shape of `c` in the definitions: `c` at full object opacity
+    /// without its own mask, unless those define its shape. Returns its id.
+    fn knockout_shape(&mut self, c: &Node) -> String {
+        let shape = if c.knockout_shape {
+            c.clone()
+        } else {
+            let mut s = c.clone().with_mask(None);
+            s.opacity = 1.0;
+            s
+        };
+        let anonymous = std::mem::replace(&mut self.anonymous, true);
+        let art = self.detached(2, |w| w.node(&shape));
+        self.anonymous = anonymous;
+        let id = self.fresh_id("knockout-art");
+        self.def(1, &format!("<g id=\"{id}\">"));
+        self.defs.push_str(&art);
+        self.def(1, "</g>");
+        id
+    }
+
+    /// A mask that is 1 − the knockout shapes `ids` ([`Self::knockout_shape`]): white, then the
+    /// shapes painted black. `region` is the attributes of the mask's region
+    /// ([`Self::region_attrs`]), which the filter that paints the shapes black shares. Returns
+    /// the mask id.
+    fn knockout_mask(&mut self, ids: &[&str], region: &str) -> String {
         let filter = match self.knockout_filters.get(region) {
             Some(f) => f.clone(),
             None => {
@@ -611,24 +813,66 @@ impl Writer<'_> {
                 f
             }
         };
-        let shape = if c.knockout_shape {
-            c.clone()
-        } else {
-            let mut s = c.clone().with_mask(None);
-            s.opacity = 1.0;
-            s
-        };
-        let anonymous = std::mem::replace(&mut self.anonymous, true);
-        let art = self.detached(3, |w| w.node(&shape));
-        self.anonymous = anonymous;
         let mid = self.fresh_id("knockout");
         self.def(1, &format!("<mask id=\"{mid}\" {MASK} {region}>"));
         self.def(2, &format!("<rect {region} fill=\"white\"/>"));
         self.def(2, &format!("<g filter=\"url(#{filter})\">"));
-        self.defs.push_str(&art);
+        for id in ids {
+            self.def(3, &format!("<use xlink:href=\"#{id}\"/>"));
+        }
         self.def(2, "</g>");
         self.def(1, "</mask>");
         mid
+    }
+
+    /// The pieces of a partly transparent mesh-warped image (`elements`) as the elements of a
+    /// knockout group ([`vectorcraft_effects::warp_pieces_translucent`]). Each piece is drawn
+    /// through one mask of where the pieces above it that reach it don't cover
+    /// (their triangles, [`vectorcraft_effects::knockout_silhouette`], black over white):
+    /// only neighbors overlap, so each mask holds a few triangles and no mask nests in another.
+    /// A piece above that overlaps it only over opaque pixels ([`vectorcraft_effects::WarpSeams`])
+    /// is left out of its mask.
+    fn warp_pieces(&mut self, elements: &[&std::sync::Arc<Node>]) {
+        // Each piece's triangle and its box: a piece paints inside its triangle only.
+        let silhouette = |c: &Node| {
+            let b = c.knockout_outline()?.geometric_bounds()?;
+            Some((vectorcraft_effects::knockout_silhouette(c, vectorcraft_doc::color::Color::BLACK)?, b))
+        };
+        let silhouettes: Vec<Option<(Node, Rect)>> = elements.iter().map(|c| silhouette(c)).collect();
+        let pieces: Vec<&Node> = elements.iter().map(|c| &***c).collect();
+        let seams = vectorcraft_effects::WarpSeams::new(self.doc, &pieces);
+        for (i, c) in elements.iter().enumerate() {
+            let Some((own, reach)) = &silhouettes[i] else { continue };
+            let reach = reach.inflate(1.0, 1.0);
+            let overlaps = |b: &Rect| b.x0 <= reach.x1 && reach.x0 <= b.x1 && b.y0 <= reach.y1 && reach.y0 <= b.y1;
+            let above: Vec<&Node> = silhouettes
+                .iter()
+                .enumerate()
+                .skip(i + 1)
+                .filter_map(|(j, s)| s.as_ref().filter(|(_, b)| overlaps(b) && seams.shows_through(i, j)))
+                .map(|(n, _)| n)
+                .collect();
+            if above.is_empty() {
+                self.node(c);
+                continue;
+            }
+            let region = self.region_attrs(&[own]);
+            let anonymous = std::mem::replace(&mut self.anonymous, true);
+            let art: Vec<String> = above.iter().map(|a| self.detached(2, |w| w.node(a))).collect();
+            self.anonymous = anonymous;
+            let mid = self.fresh_id("knockout");
+            self.def(1, &format!("<mask id=\"{mid}\" {MASK} {region}>"));
+            self.def(2, &format!("<rect {region} fill=\"white\"/>"));
+            for a in art {
+                self.defs.push_str(&a);
+            }
+            self.def(1, "</mask>");
+            self.line(&format!("<g mask=\"url(#{mid})\">"));
+            self.depth += 1;
+            self.node(c);
+            self.depth -= 1;
+            self.line("</g>");
+        }
     }
 
     /// An object, inside `<a>` when it links to a URL (Attributes panel).
@@ -644,7 +888,7 @@ impl Writer<'_> {
                 if !valid_xml_value(url) {
                     self.warn("Link URLs containing invalid XML characters had those characters removed");
                 }
-                self.line(&format!("<a xlink:href=\"{}\">", xml_attr_valid(url)));
+                self.line(&format!("<a xlink:href=\"{}\">", xml_attr_escape(url)));
                 self.depth += 1;
                 self.node_body(n);
                 self.depth -= 1;
@@ -672,6 +916,10 @@ impl Writer<'_> {
         match &n.kind {
             NodeKind::Layer { template: true, .. } => {}
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
+                // The pieces a Warp effect cuts an image into share its pixels, as an envelope's do.
+                if image_pieces(children) {
+                    self.share_images(n);
+                }
                 let id = self.id_attr(n);
                 let a = self.attrs(&self.group_props(n));
                 self.line(&format!("<g{id}{a}>"));
@@ -741,7 +989,9 @@ impl Writer<'_> {
                 self.shape(n, &d.join(" "), None, &paths, *rule, export_shape_bounds(n));
             }
             NodeKind::Text(t) => self.text_node(n, t),
-            NodeKind::Image(im) => {
+            NodeKind::Image(im) if !n.is_distorted_image() => {
+                let shown = self.doc.shown_image(n, im);
+                let im = &*shown;
                 if let Some(Paint::Solid { color, .. }) = n.extras().colorize.as_deref()
                     && let Some(blob) = self.doc.image_blob(im)
                     && blob.gray_source().is_some()
@@ -778,7 +1028,7 @@ impl Writer<'_> {
                 let doc = self.doc;
                 // The instances nested in an inline graphic's art are ordinary instances again.
                 let inline = std::mem::take(&mut self.inline_graphic);
-                let Some(sym) = doc.symbols.iter().find(|s| s.name == *symbol) else { return };
+                let Some(sym) = self.symbol_lookup.symbol(symbol) else { return };
                 if self.symbol_nest > MAX_SYMBOL_NEST {
                     return;
                 }
@@ -813,8 +1063,8 @@ impl Writer<'_> {
                     (self.xf, self.instance_xf) = saved;
                     return;
                 }
-                if let Some(def) = self.symbol_use(sym, n, *xf) {
-                    let m = self.xf * *xf;
+                let m = self.xf * *xf;
+                if let Some(def) = self.symbol_use(sym, n, m) {
                     let tr = if m == Affine::IDENTITY { String::new() } else { format!(" transform=\"{}\"", self.matrix(m)) };
                     self.line(&format!("<use{id} xlink:href=\"#{def}\"{tr}{a}/>"));
                     return;
@@ -841,21 +1091,36 @@ impl Writer<'_> {
                 self.line("</g>");
                 (self.xf, self.instance_xf) = saved;
             }
-            // Live blends/envelopes/meshes export their evaluated (expanded) form.
+            // Live blends/envelopes/meshes (and distorted images) export their evaluated
+            // (expanded) form.
             NodeKind::Blend { .. }
             | NodeKind::Envelope { .. }
             | NodeKind::Mesh(_)
             | NodeKind::Repeat(_)
             | NodeKind::PlacedDocument(_)
-            | NodeKind::Intertwine { .. } => {
-                let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+            | NodeKind::Intertwine { .. }
+            | NodeKind::Image(_) => {
+                let mut g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+                // A distorted image inside instances that scale it is cut as finely on the page as
+                // one placed directly.
+                let stretch = vectorcraft_doc::image_quad::max_stretch(self.instance_xf);
+                if n.is_distorted_image()
+                    && (stretch - 1.0).abs() > 1e-9
+                    && let Some(art) = vectorcraft_doc::image_quad::distorted_art_at(n, vectorcraft_doc::image_quad::Density::page_at(stretch))
+                    && let NodeKind::Group { children, .. } = &mut g.kind
+                    && let [only] = &mut children[..]
+                    && only.id == n.id
+                {
+                    *only = std::sync::Arc::new(art);
+                }
                 self.share_images(&g);
                 self.node_body(&g);
             }
         }
     }
 
-    /// The id of the `<symbol>` def instance `inst` (transform `xf`) can `<use>`, written on first
+    /// The id of the `<symbol>` def instance `inst` can `<use>` with transform `xf` (the `<use>`'s
+    /// own: the instance's transform after those of the instances it sits in), written on first
     /// use. `None` when the instance needs its own copy of the art: stained by its fill, or moved
     /// by a transform under which the def would not look as the canvas paints it ([`Reuse`]).
     fn symbol_use(&mut self, sym: &vectorcraft_doc::Symbol, inst: &Node, xf: Affine) -> Option<String> {
@@ -864,7 +1129,8 @@ impl Writer<'_> {
             return None;
         }
         if !self.symbols.contains_key(&sym.name) {
-            let reuse = Reuse::of(self.doc, &sym.art);
+            let lookup = &self.symbol_lookup;
+            let reuse = Reuse::of(self.doc, &|name| lookup.symbol(name), &sym.art);
             self.symbols.insert(sym.name.clone(), SymbolDef { id: None, reuse, nodes: 0 });
         }
         let def = self.symbols.get(&sym.name)?;

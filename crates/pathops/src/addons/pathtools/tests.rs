@@ -245,6 +245,42 @@ fn crossings_are_found_on_both_paths() {
 }
 
 #[test]
+fn a_shallow_crossing_is_placed_where_the_curves_meet() {
+    // Lines square to the middle of a quarter circle of radius 100, just inside it: each crosses the
+    // arc twice, at under a degree for the nearest one.
+    let arc = PathData::single(quarter());
+    let k = std::f64::consts::FRAC_1_SQRT_2;
+    for gap in [0.5, 0.05, 0.005, 0.0005] {
+        let mid = pt((100.0 - gap) * k, (100.0 - gap) * k);
+        let (from, to) = (mid + Vec2::new(-k, k) * 60.0, mid + Vec2::new(k, -k) * 60.0);
+        let across = PathData::single(line(&[(from.x, from.y), (to.x, to.y)], false));
+        let exact: Vec<Point> = kurbo::PathSeg::Cubic(arc.subpaths[0].segment(0))
+            .intersect_line(kurbo::Line::new(from, to))
+            .iter()
+            .map(|x| from.lerp(to, x.line_t))
+            .collect();
+        assert_eq!(exact.len(), 2, "{gap}");
+        let on = |p: &PathData, other: &PathData| -> Vec<Point> {
+            crossings_on(p, &[other]).unwrap().iter().map(|q| p.subpaths[0].segment(q.1).eval(q.2)).collect()
+        };
+        let both = crossings(&[&arc, &across], false).unwrap();
+        let found = [
+            on(&arc, &across),
+            on(&across, &arc),
+            both[0].iter().map(|q| arc.subpaths[0].segment(q.1).eval(q.2)).collect(),
+            both[1].iter().map(|q| across.subpaths[0].segment(q.1).eval(q.2)).collect(),
+        ];
+        for places in found {
+            assert_eq!(places.len(), 2, "{gap}: {places:?}");
+            for x in &exact {
+                let off = places.iter().map(|p| p.distance(*x)).fold(f64::INFINITY, f64::min);
+                assert!(off < 1e-6, "{gap}: {off} pt from {x:?}");
+            }
+        }
+    }
+}
+
+#[test]
 fn insert_at_keeps_the_shape_and_names_the_new_anchors() {
     let sp = line(&[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0)], false);
     let (out, marks) = insert_at(&sp, &[(1, 0.5), (0, 0.25), (0, 0.75), (1, 1.0), (7, 0.5)]);
@@ -433,4 +469,314 @@ fn splitting_reads_an_anchors_kind_from_its_handles() {
     let sq = line(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0)], true);
     assert_eq!(split_at_anchors(&sq, true, false).len(), 3);
     assert!(split_at_anchors(&sq, true, false).iter().all(|p| !p.closed));
+}
+
+#[test]
+fn crossings_on_finds_one_paths_places_among_many() {
+    // A horizontal line crossed by two uprights, with a self-crossing bow far away.
+    let across = PathData::single(line(&[(0.0, 50.0), (300.0, 50.0)], false));
+    let up1 = PathData::single(line(&[(100.0, 0.0), (100.0, 100.0)], false));
+    let up2 = PathData::single(line(&[(200.0, 0.0), (200.0, 100.0)], false));
+    let far = PathData::single(line(&[(1000.0, 0.0), (1100.0, 100.0), (1100.0, 0.0), (1000.0, 100.0)], false));
+    let places = crossings_on(&across, &[&up1, &up2, &far]).unwrap();
+    assert_eq!(places.len(), 2, "{places:?}");
+    let x = |p: &Place| across.subpaths[p.0].segment(p.1).eval(p.2).x;
+    assert!(near(x(&places[0]), 100.0, 1e-6) && near(x(&places[1]), 200.0, 1e-6));
+    // A path's crossings with itself count, once on each of the two segments.
+    let own = crossings_on(&far, &[&across]).unwrap();
+    assert_eq!(own.iter().map(|p| p.1).collect::<Vec<_>>(), [0, 2], "{own:?}");
+    // A path that ends on another marks the other there, and its own end.
+    let stub = PathData::single(line(&[(150.0, 50.0), (150.0, 90.0)], false));
+    assert_eq!(crossings_on(&across, &[&stub]).unwrap().len(), 1);
+    assert!(near(crossings_on(&stub, &[&across]).unwrap()[0].2, 0.0, 1e-6));
+    // Lines lying along each other don't cross, and a path with a coordinate that isn't finite is refused.
+    let along = PathData::single(line(&[(50.0, 50.0), (250.0, 50.0)], false));
+    assert!(crossings_on(&across, &[&along]).unwrap().is_empty());
+    let broken = PathData::single(line(&[(0.0, f64::NAN), (10.0, 10.0)], false));
+    assert!(crossings_on(&broken, &[&across]).is_none());
+    assert_eq!(crossings_on(&across, &[&broken, &up1]).unwrap().len(), 1, "a broken path beside it is left out");
+    assert!(crossings_on(&PathData::default(), &[&across]).unwrap().is_empty());
+}
+
+#[test]
+fn segments_that_share_an_anchor_still_cross_elsewhere() {
+    // A straight segment, then a curve from its end that swings back across it near x = 17.4.
+    let hook = SubPath::new(
+        vec![Anchor::corner(pt(0.0, 0.0)), Anchor { h_out: pt(-50.0, 50.0), ..Anchor::corner(pt(100.0, 0.0)) }, Anchor::corner(pt(50.0, -50.0))],
+        false,
+    );
+    let path = PathData::single(hook.clone());
+    let places = crossings_on(&path, &[]).unwrap();
+    assert_eq!(places.iter().map(|p| p.1).collect::<Vec<_>>(), [0, 1], "{places:?}");
+    let x = hook.segment(0).eval(places[0].2).x;
+    assert!(near(x, 17.4, 0.01), "{x}");
+    assert!(hook.segment(1).eval(places[1].2).distance(pt(x, 0.0)) < 1e-3);
+    // Split at Crossings finds it too, and neither counts the anchor the segments share.
+    assert_eq!(crossings(&[&path], true).unwrap()[0], places);
+    // The two segments of a closed subpath share both ends: a lens has no crossing.
+    let lens = SubPath::new(
+        vec![
+            Anchor { h_out: pt(30.0, -40.0), h_in: pt(30.0, 40.0), ..Anchor::corner(pt(0.0, 0.0)) },
+            Anchor { h_in: pt(70.0, -40.0), h_out: pt(70.0, 40.0), ..Anchor::corner(pt(100.0, 0.0)) },
+        ],
+        true,
+    );
+    assert!(crossings_on(&PathData::single(lens.clone()), &[]).unwrap().is_empty());
+    assert!(crossings(&[&PathData::single(lens)], true).unwrap()[0].is_empty());
+}
+
+#[test]
+fn segments_with_no_length_between_them_still_share_their_anchor() {
+    // An open path with its middle anchor doubled, and a closed one whose last anchor sits on its
+    // first: the segments either side of the one with no length meet there and don't cross.
+    let doubled = PathData::single(line(&[(0.0, 0.0), (100.0, 0.0), (100.0, 0.0), (100.0, 100.0)], false));
+    let ring = PathData::single(line(&[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0), (0.0, 0.0)], true));
+    for p in [&doubled, &ring] {
+        assert!(crossings_on(p, &[]).unwrap().is_empty(), "{:?}", crossings_on(p, &[]));
+        assert!(crossings(&[p], true).unwrap()[0].is_empty(), "{:?}", crossings(&[p], true));
+    }
+    // A segment that crosses them elsewhere still does.
+    let bow = PathData::single(line(&[(0.0, 0.0), (100.0, 100.0), (100.0, 100.0), (100.0, 0.0), (0.0, 100.0)], false));
+    assert_eq!(crossings_on(&bow, &[]).unwrap().iter().map(|p| p.1).collect::<Vec<_>>(), [0, 3]);
+}
+
+#[test]
+fn one_work_budget_bounds_several_calls_together() {
+    // 1,000 segments in a straight row: 500,000 pairs a call, so 120 calls spend 60,000,000.
+    let row: Vec<(f64, f64)> = (0..=1000).map(|i| (i as f64, 0.0)).collect();
+    let path = PathData::single(line(&row, false));
+    let mut work = Work::default();
+    let calls = (0..200).take_while(|_| crossings_on_within(&path, &[], &mut work).is_some()).count();
+    assert_eq!(calls, 120);
+    assert!(crossings_on(&path, &[]).is_some(), "a call of its own has its own budget");
+}
+
+#[test]
+fn work_done_once_can_be_drawn_again_from_another_budget() {
+    let row: Vec<(f64, f64)> = (0..=1000).map(|i| (i as f64, 0.0)).collect();
+    let path = PathData::single(line(&row, false));
+    let start = Work::default();
+    let mut work = start;
+    crossings_on_within(&path, &[], &mut work).unwrap();
+    let cost = work.spent_since(start);
+    // Drawing a call's cost leaves what the call itself leaves, 120 times and no more.
+    let mut again = Work::default();
+    assert_eq!(again.draw(cost), Some(()));
+    assert_eq!(again, work);
+    let draws = (1..200).take_while(|_| again.draw(cost).is_some()).count();
+    assert_eq!(draws, 119);
+    let left = again;
+    assert_eq!(again.draw(cost), None);
+    assert_eq!(again, left, "a draw that fails takes nothing");
+    // A twentieth of the budget pays for the call 6 times.
+    assert_eq!((Work::share(0), Work::share(1)), (Work::default(), Work::default()));
+    let mut part = Work::share(20);
+    assert_eq!((0..200).take_while(|_| part.draw(cost).is_some()).count(), 6);
+}
+
+#[test]
+fn a_segment_that_loops_over_itself_crosses_itself() {
+    // One cubic that meets itself at t = 0.25 and t = 0.75.
+    let looped = PathData::single(SubPath::new(
+        vec![Anchor { h_out: pt(13.0 / 9.0, 1.0), ..Anchor::corner(pt(0.0, 0.0)) }, Anchor { h_in: pt(0.0, 1.0), ..Anchor::corner(pt(1.0, 0.0)) }],
+        false,
+    ));
+    let places = crossings_on(&looped, &[]).unwrap();
+    assert_eq!(places.len(), 2, "{places:?}");
+    assert!(near(places[0].2, 0.25, 1e-9) && near(places[1].2, 0.75, 1e-9), "{places:?}");
+    assert_eq!(crossings(&[&looped], true).unwrap()[0], places);
+    assert!(crossings(&[&looped], false).unwrap()[0].is_empty());
+    // Its two visits to that point divide it into three stretches, and the loop can go alone.
+    let sp = &looped.subpaths[0];
+    let three = spans(sp, &places.iter().map(|p| (p.1, p.2)).collect::<Vec<_>>());
+    assert_eq!(three.len(), 3, "{three:?}");
+    let left = without_spans(sp, &three, &[false, true, false]).unwrap();
+    assert_eq!(left.len(), 2);
+    let x = sp.segment(0).eval(0.25);
+    assert_eq!((left[0].anchors[0].p, left[1].anchors.last().unwrap().p), (pt(0.0, 0.0), pt(1.0, 0.0)));
+    assert!(left[0].anchors.last().unwrap().p.distance(x) < 1e-3 && left[1].anchors[0].p.distance(x) < 1e-3);
+    // The same loop squashed to a 10⁻¹² of its height.
+    let flat = PathData::single(SubPath::new(
+        vec![
+            Anchor { h_out: pt(13.0 / 9.0, 1e-12), ..Anchor::corner(pt(0.0, 0.0)) },
+            Anchor { h_in: pt(0.0, 1e-12), ..Anchor::corner(pt(1.0, 0.0)) },
+        ],
+        false,
+    ));
+    assert_eq!(crossings_on(&flat, &[]).unwrap().iter().map(|p| (p.2 * 4.0).round()).collect::<Vec<_>>(), [1.0, 3.0]);
+    // An arch, an S and a cusp don't cross themselves.
+    for (h1, h2) in [((0.0, 1.0), (1.0, 1.0)), ((0.3, 1.0), (0.7, -1.0)), ((1.0, 1.0), (0.0, 1.0))] {
+        let c = PathData::single(SubPath::new(
+            vec![Anchor { h_out: pt(h1.0, h1.1), ..Anchor::corner(pt(0.0, 0.0)) }, Anchor { h_in: pt(h2.0, h2.1), ..Anchor::corner(pt(1.0, 0.0)) }],
+            false,
+        ));
+        assert!(crossings_on(&c, &[]).unwrap().is_empty(), "{h1:?} {h2:?}");
+    }
+    // Nor does a straight curve that doubles back along itself, at a slant.
+    let back = PathData::single(SubPath::new(
+        vec![Anchor { h_out: pt(1.6, 1.2), ..Anchor::corner(pt(0.0, 0.0)) }, Anchor { h_in: pt(-0.8, -0.6), ..Anchor::corner(pt(0.8, 0.6)) }],
+        false,
+    ));
+    assert!(crossings_on(&back, &[]).unwrap().is_empty());
+}
+
+#[test]
+fn spans_divide_a_subpath_at_its_places() {
+    let open = line(&[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0)], false);
+    assert_eq!(spans(&open, &[]), [(0.0, 2.0)]);
+    assert_eq!(spans(&open, &[(1, 0.5), (0, 0.25)]), [(0.0, 0.25), (0.25, 1.5), (1.5, 2.0)]);
+    // Places at an open end, off the subpath, or twice at one point, add no stretch.
+    assert_eq!(spans(&open, &[(0, 0.0), (1, 1.0), (7, 0.5), (0, 0.5), (0, 0.5 + 1e-9), (0, f64::NAN)]), [(0.0, 0.5), (0.5, 2.0)]);
+    // A place at an anchor is the same from either segment.
+    assert_eq!(spans(&open, &[(0, 1.0), (1, 0.0)]), [(0.0, 1.0), (1.0, 2.0)]);
+    let ring = line(&[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)], true);
+    assert_eq!(spans(&ring, &[]), [(0.0, 4.0)]);
+    assert_eq!(spans(&ring, &[(1, 0.5)]), [(1.5, 5.5)], "one place: from it round to it again");
+    assert_eq!(spans(&ring, &[(3, 0.5), (0, 0.5)]), [(0.5, 3.5), (3.5, 4.5)]);
+    // The closing segment's end is the first anchor.
+    assert_eq!(spans(&ring, &[(3, 1.0), (0, 0.0), (2, 0.0)]), [(0.0, 2.0), (2.0, 4.0)]);
+    assert!(spans(&SubPath::new(vec![Anchor::corner(pt(1.0, 1.0))], false), &[(0, 0.5)]).is_empty());
+    // Which stretch a place is on: the one that starts there, the last one at an open end.
+    let three = spans(&open, &[(1, 0.5), (0, 0.25)]);
+    assert_eq!(span_at(&open, &three, 0, 0.1), Some(0));
+    assert_eq!(span_at(&open, &three, 0, 0.25), Some(1));
+    assert_eq!(span_at(&open, &three, 1, 1.0), Some(2));
+    assert_eq!(span_at(&open, &three, 0, f64::NAN), None);
+    let two = spans(&ring, &[(3, 0.5), (0, 0.5)]);
+    assert_eq!((span_at(&ring, &two, 0, 0.25), span_at(&ring, &two, 3, 0.75), span_at(&ring, &two, 2, 0.0)), (Some(1), Some(1), Some(0)));
+    // The closing segment's end is the first anchor: on the stretch that starts there, or runs through it.
+    let at_first = spans(&ring, &[(0, 0.0), (2, 0.0)]);
+    assert_eq!((span_at(&ring, &at_first, 3, 1.0), span_at(&ring, &at_first, 0, 0.0)), (Some(0), Some(0)));
+    assert_eq!((span_at(&ring, &two, 3, 1.0), span_at(&ring, &spans(&ring, &[]), 3, 1.0)), (Some(1), Some(0)));
+}
+
+#[test]
+fn a_subpath_without_some_stretches_keeps_the_rest_as_it_was() {
+    // An open line of three segments, crossed twice on its middle one: the middle stretch goes.
+    let open = line(&[(0.0, 0.0), (100.0, 0.0), (200.0, 0.0), (300.0, 0.0)], false);
+    let three = spans(&open, &[(1, 0.25), (1, 0.75)]);
+    let left = without_spans(&open, &three, &[false, true, false]).unwrap();
+    let xs = |sp: &SubPath| sp.anchors.iter().map(|a| a.p.x).collect::<Vec<_>>();
+    // A straight segment's parameter doesn't run evenly along it: the cuts are where it puts them.
+    let (q1, q3) = (open.segment(1).eval(0.25).x, open.segment(1).eval(0.75).x);
+    assert!(100.0 < q1 && q1 < q3 && q3 < 200.0);
+    assert_eq!(left.iter().map(xs).collect::<Vec<_>>(), [vec![0.0, 100.0, q1], vec![q3, 200.0, 300.0]]);
+    assert!(left.iter().all(|p| !p.closed && p.anchors.iter().all(|a| a.h_in == a.p && a.h_out == a.p)), "straight pieces have no handles");
+    // Nothing marked: unchanged. All marked: nothing left. An end stretch: one piece.
+    assert!(without_spans(&open, &three, &[false, false, false]).is_none());
+    assert!(without_spans(&open, &three, &[]).is_none());
+    assert_eq!(without_spans(&open, &three, &[true, true, true]), Some(vec![]));
+    assert_eq!(without_spans(&open, &three, &[true, false, false]).unwrap().iter().map(xs).collect::<Vec<_>>(), [vec![q1, 200.0, 300.0]]);
+    // Stretches left side by side stay one piece with no anchor where they meet.
+    let four = spans(&open, &[(0, 0.5), (1, 0.5), (2, 0.5)]);
+    assert_eq!(
+        without_spans(&open, &four, &[false, false, false, true]).unwrap().iter().map(xs).collect::<Vec<_>>(),
+        [vec![0.0, 100.0, 200.0, 250.0]]
+    );
+    // A closed square that loses a stretch opens, and its first anchor stays inside the piece.
+    let ring = line(&[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)], true);
+    let two = spans(&ring, &[(1, 0.5), (2, 0.5)]);
+    let open_ring = without_spans(&ring, &two, &[true, false]).unwrap();
+    assert_eq!(open_ring.len(), 1);
+    let pts: Vec<Point> = open_ring[0].anchors.iter().map(|a| a.p).collect();
+    assert_eq!(pts, [pt(50.0, 100.0), pt(0.0, 100.0), pt(0.0, 0.0), pt(100.0, 0.0), pt(100.0, 50.0)]);
+    assert!(!open_ring[0].closed);
+    // The same when the removed stretch is the one through the first anchor.
+    let through = without_spans(&ring, &two, &[false, true]).unwrap();
+    assert_eq!(through[0].anchors.iter().map(|a| a.p).collect::<Vec<_>>(), [pt(100.0, 50.0), pt(100.0, 100.0), pt(50.0, 100.0)]);
+    // Three places: the two stretches left on both sides of the first anchor are one piece through it.
+    let three = spans(&ring, &[(0, 0.5), (1, 0.5), (2, 0.5)]);
+    assert_eq!(three, [(0.5, 1.5), (1.5, 2.5), (2.5, 4.5)]);
+    let around = without_spans(&ring, &three, &[false, true, false]).unwrap();
+    assert_eq!(around.len(), 1, "{around:?}");
+    let pts: Vec<Point> = around[0].anchors.iter().map(|a| a.p).collect();
+    assert_eq!(pts, [pt(50.0, 100.0), pt(0.0, 100.0), pt(0.0, 0.0), pt(100.0, 0.0), pt(100.0, 50.0)]);
+    // A closed subpath with one place loses all of itself.
+    assert_eq!(without_spans(&ring, &spans(&ring, &[(0, 0.5)]), &[true]), Some(vec![]));
+}
+
+#[test]
+fn a_slice_of_a_curve_keeps_its_shape_and_the_anchors_it_runs_through() {
+    let mut circle = line(&[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)], true);
+    for i in 0..4 {
+        auto_smooth(&mut circle, i, SMOOTH_RATIO);
+    }
+    let piece = slice(&circle, (0.5, 2.5));
+    assert_eq!(piece.anchors.len(), 4);
+    assert!(!piece.closed);
+    // Its ends are corners with the handle off the piece retracted; the anchors between stay smooth, and
+    // the whole segment between them keeps its handles.
+    assert_eq!((piece.anchors[0].kind, piece.anchors[3].kind), (AnchorKind::Corner, AnchorKind::Corner));
+    assert_eq!((piece.anchors[0].h_in, piece.anchors[3].h_out), (piece.anchors[0].p, piece.anchors[3].p));
+    assert_eq!((piece.anchors[1].p, piece.anchors[2].p), (circle.anchors[1].p, circle.anchors[2].p));
+    assert_eq!((piece.anchors[1].h_out, piece.anchors[2].h_in), (circle.anchors[1].h_out, circle.anchors[2].h_in));
+    assert_eq!((piece.anchors[1].kind, piece.anchors[2].kind), (AnchorKind::Smooth, AnchorKind::Smooth));
+    // Every point of the piece is on the circle's outline.
+    for i in 0..piece.segment_count() {
+        for k in 0..=8 {
+            let p = piece.segment(i).eval(k as f64 / 8.0);
+            let d = PathData::single(circle.clone()).nearest(p).unwrap().4;
+            assert!(d < 1e-6, "{p:?} is {d} off");
+        }
+    }
+    assert!(near(length(&piece), length(&circle) / 2.0, 1e-3));
+    // No length, backwards or not finite: nothing.
+    assert!(slice(&circle, (1.0, 1.0)).anchors.is_empty());
+    assert!(slice(&circle, (2.0, 1.0)).anchors.is_empty());
+    assert!(slice(&circle, (f64::NAN, 1.0)).anchors.is_empty());
+}
+
+#[test]
+fn an_open_end_a_hair_off_another_path_still_meets_it() {
+    // A bow from (0, 0) to (100, 100), and where a line across at y = 50 crosses it.
+    let bow = PathData::single(SubPath::new(
+        vec![Anchor { h_out: pt(0.0, 55.0), ..Anchor::corner(pt(0.0, 0.0)) }, Anchor { h_in: pt(45.0, 100.0), ..Anchor::corner(pt(100.0, 100.0)) }],
+        false,
+    ));
+    let across = PathData::single(line(&[(-50.0, 50.0), (150.0, 50.0)], false));
+    let at = crossings_on(&across, &[&bow]).unwrap();
+    assert_eq!(at.len(), 1);
+    let p = across.subpaths[0].segment(0).eval(at[0].2);
+    // A line ending 0.00005 pt short of the bow, or past it, as a line cut where the bow crosses it
+    // can: the bow is crossed there, on both searches.
+    let on_bow = |l: &PathData| crossings_on(&bow, &[l]).unwrap().iter().map(|q| bow.subpaths[0].segment(q.1).eval(q.2)).collect::<Vec<_>>();
+    for off in [-5e-5, 5e-5] {
+        let stub = PathData::single(line(&[(-50.0, 50.0), (p.x + off, 50.0)], false));
+        let found = on_bow(&stub);
+        assert!(found.len() == 1 && found[0].distance(p) < 1e-3, "{off}: {found:?}");
+        let both = crossings(&[&stub, &bow], false).unwrap();
+        assert_eq!((both[0].len(), both[1].len()), (1, 1), "{off}: {both:?}");
+    }
+    // 0.01 pt short is not on it.
+    assert!(on_bow(&PathData::single(line(&[(-50.0, 50.0), (p.x - 0.01, 50.0)], false))).is_empty());
+    // The bow's own open end 0.00005 pt short of an upright meets it there.
+    let upright = PathData::single(line(&[(100.00005, 50.0), (100.00005, 150.0)], false));
+    let found = crossings_on(&upright, &[&bow]).unwrap();
+    assert!(found.len() == 1 && near(upright.subpaths[0].segment(0).eval(found[0].2).y, 100.0, 1e-3), "{found:?}");
+    // Two ends that each stop 0.0009 pt short of a corner lie 0.0013 pt apart: they don't meet.
+    let flat = PathData::single(line(&[(0.0, 0.0), (99.9991, 0.0)], false));
+    let post = PathData::single(line(&[(100.0, 0.0009), (100.0, 50.0)], false));
+    assert!(crossings_on(&flat, &[&post]).unwrap().is_empty() && crossings_on(&post, &[&flat]).unwrap().is_empty());
+    // Two ends that each stop 0.0004 pt short of a corner lie 0.0006 pt apart: they meet.
+    let flat = PathData::single(line(&[(0.0, 0.0), (99.9996, 0.0)], false));
+    let post = PathData::single(line(&[(100.0, 0.0004), (100.0, 50.0)], false));
+    assert_eq!((crossings_on(&flat, &[&post]).unwrap().len(), crossings_on(&post, &[&flat]).unwrap().len()), (1, 1));
+    // A level line that crosses a quarter circle near its top, where the two meet at under 3
+    // degrees, cut 0.0015 pt short along its length: its end lies under 0.0001 pt from the arc and
+    // meets it there.
+    use kurbo::ParamCurveNearest;
+    let arc = PathData::single(quarter());
+    let level = PathData::single(line(&[(50.0, 99.9), (-50.0, 99.9)], false));
+    let at = crossings_on(&level, &[&arc]).unwrap();
+    assert_eq!(at.len(), 1);
+    let end = level.subpaths[0].segment(0).eval(at[0].2) + Vec2::new(0.0015, 0.0);
+    assert!(arc.subpaths[0].segment(0).nearest(end, 1e-12).distance_sq.sqrt() < 1e-4);
+    let stub = PathData::single(line(&[(50.0, 99.9), (end.x, end.y)], false));
+    let found = crossings_on(&arc, &[&stub]).unwrap();
+    assert!(found.len() == 1 && arc.subpaths[0].segment(0).eval(found[0].2).distance(end) < 1e-3, "{found:?}");
+    assert_eq!(crossings(&[&stub, &arc], false).unwrap().iter().map(Vec::len).collect::<Vec<_>>(), [1, 1]);
+    // A corner of a closed path as near a line is not an open end: it doesn't reach the line.
+    let wedge = PathData::single(line(&[(180.0, 0.0), (220.0, 0.0), (200.0, 49.99995)], true));
+    let floor = PathData::single(line(&[(150.0, 50.0), (250.0, 50.0)], false));
+    assert!(crossings_on(&floor, &[&wedge]).unwrap().is_empty() && crossings_on(&wedge, &[&floor]).unwrap().is_empty());
 }

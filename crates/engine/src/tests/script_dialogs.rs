@@ -120,6 +120,18 @@ fn missing_or_mismatched_answer_rolls_back() {
     assert_eq!(s.script_report().unwrap()["dialogs"][0]["answer"], "missing");
 }
 
+/// The error about answers left over names their count with the matching noun.
+#[test]
+fn unused_answers_are_counted_in_the_singular_and_the_plural() {
+    let mut s = one_doc();
+    let ok = json!({"kind": "alert", "value": "ok"});
+    for (extra, says) in [(1, "`answers` has 1 answer the script did not use"), (2, "`answers` has 2 answers the script did not use")] {
+        let given = Value::Array(vec![ok.clone(); extra + 1]);
+        let e = headless(&mut s, "alert('x');", given).unwrap_err().to_string();
+        assert!(e.contains(says), "{e}");
+    }
+}
+
 #[test]
 fn invalid_answers_are_rejected_before_run() {
     let mut s = one_doc();
@@ -214,6 +226,26 @@ fn dialog_loop_stops_or_exhausts() {
     framed(&mut s, source);
     assert!(s.script_abandon(), "quitting while a dialog waits abandons the run");
     assert_eq!(s.script_report().unwrap()["dialogs"][0]["answer"], "stop");
+    assert_eq!(art(&s), before);
+}
+
+#[test]
+fn a_run_waiting_at_a_dialog_stops_at_the_next_slice_once_its_work_is_canceled() {
+    let mut s = one_doc();
+    let before = art(&s);
+    let token = crate::cancel::CancelToken::new();
+    s.script_frames = true;
+    let source = "vc.run('shape.rectangle', {x: 20, y: 0, width: 5, height: 5}); alert('x'); vc.log('answered');";
+    assert_eq!(s.execute("script.run", &json!({"source": source, "name": "d.js"})).unwrap()["running"], true);
+    assert!(crate::cancel::scope(&token, None, || s.script_pump()).is_none());
+    assert!(s.script_dialog().is_some());
+    token.cancel();
+    let ended = crate::cancel::scope(&token, None, || s.script_pump());
+    assert!(ended.expect("the run goes on waiting for an answer").is_err());
+    let report = s.script_report().unwrap();
+    assert_eq!((report["kind"].as_str(), &report["log"]), (Some("stopped"), &json!([])), "{report}");
+    assert_eq!(report["dialogs"][0]["answer"], "stop");
+    assert_eq!(s.script_dialog(), None);
     assert_eq!(art(&s), before);
 }
 

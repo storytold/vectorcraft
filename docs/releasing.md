@@ -42,6 +42,12 @@ pick that branch for a full run. Run on any other branch, it is a dry run: the L
 FreeBSD and web jobs build and upload their artifacts, the environment refuses the signing jobs,
 and no draft release is created.
 
+Flatpak permission repairs need one update through the existing host-side installation method.
+After that update, Help > Check for Updates can inspect and update standalone bundles.
+Repository-managed installations continue to use their package manager; launcher-pinned
+versions keep their selected version. Both Flatpak manifests must grant network access,
+the host Flatpak interface, and read-only access to the shared version choices.
+
 ## What gets built
 
 | Platform | Artifacts | Built on |
@@ -164,7 +170,7 @@ to the target triple, so host build scripts aren't affected.
 AppStream metainfo, the MIME type for VectorCraft documents, the icons and the licence files.
 
 **Document types.** The desktop entry's `MimeType` lists every format File › Open reads but PSD,
-PSB, `.ps` PostScript, Targa, PCX, Pixar, JPEG 2000 and HEIC/HEIF, so file managers list VectorCraft under Open With for them.
+PSB, `.ps` PostScript, Targa, PCX, Pixar, JPEG 2000, HEIC/HEIF and HP-GL, so file managers list VectorCraft under Open With for them.
 `ai.storyteller.vectorcraft.mime.xml` declares the types that shared-mime-info lacks: VectorCraft
 documents and templates, `.ait` templates and Affinity files (`application/x-affinity`). An `.af`
 file gets the Affinity type by its content, and `.afdesign` and `.afpub` files by their extension.

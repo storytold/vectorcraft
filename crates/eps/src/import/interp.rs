@@ -92,6 +92,15 @@ pub(crate) struct Interp<'a> {
     pub cid_subrs: super::cid::CidSubrs,
     /// The font number `usefont` gave the CMap mappings that follow.
     pub cmap_font: i64,
+    /// The predefined CMaps type was set in so far, by name, with how their strings decode
+    /// (`None` when one can't be read; see `text`).
+    pub predefined_cmaps: Vec<(Rc<str>, Option<Rc<super::predefined_cmap::CMapCodes>>)>,
+    /// The font a `kshow` procedure sees as current while type in a CIDFont only named is set in
+    /// a font of its own (see `text`).
+    pub kshow_font: Option<DictRef>,
+    /// The `cshow` procedure running over a composite font's type, with the font it sees as
+    /// current (see `text`).
+    pub cshow: Option<super::text::CShowFont>,
     pub g: GState,
     pub saved: Vec<GState>,
     pub out: Out,
@@ -232,6 +241,9 @@ impl<'a> Interp<'a> {
             cff: vec![],
             cid_subrs: vec![],
             cmap_font: 0,
+            predefined_cmaps: vec![],
+            kshow_font: None,
+            cshow: None,
             type42_counted: HashSet::new(),
             g,
             saved: vec![],
@@ -741,21 +753,25 @@ impl<'a> Interp<'a> {
     }
 
     fn search_string(&mut self, op: Op) -> Res {
-        let seek = self.pop_str()?.to_vec();
+        let seek = self.pop_str()?;
         let s = self.pop_str()?;
-        let text = s.to_vec();
-        self.spend((text.len() / 64) as u64)?;
-        let at = if op == Op::Search { super::lex::find(&text, &seek) } else { text.starts_with(&seek).then_some(0) };
+        // Both strings are read in place, and the borrows end before the results are pushed.
+        let (len, n, at) = {
+            let (text, seek) = (s.borrow(), seek.borrow());
+            self.spend((text.len() / 64) as u64)?;
+            let at = if op == Op::Search { super::lex::find(&text, &seek) } else { text.starts_with(&seek).then_some(0) };
+            (text.len(), seek.len(), at)
+        };
         match at {
             Some(i) => {
                 let o = Obj::Str(s);
                 if op == Op::Search {
-                    self.push_interval(o.clone(), i + seek.len(), text.len() - i - seek.len())?;
-                    self.push_interval(o.clone(), i, seek.len())?;
+                    self.push_interval(o.clone(), i + n, len - i - n)?;
+                    self.push_interval(o.clone(), i, n)?;
                     self.push_interval(o, 0, i)?;
                 } else {
-                    self.push_interval(o.clone(), seek.len(), text.len() - seek.len())?;
-                    self.push_interval(o, 0, seek.len())?;
+                    self.push_interval(o.clone(), n, len - n)?;
+                    self.push_interval(o, 0, n)?;
                 }
                 self.push(Obj::Bool(true))?;
             }

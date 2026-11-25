@@ -115,6 +115,9 @@ fn constrain_angle_draws_boxes_along_the_turned_axes() {
     let mut s = new_doc();
     set_pref(&mut s, "constrainAngle", json!(90));
     for tool in ["rectangle", "ellipse"] {
+        // The shape drawn before stays selected, and a press on its box's corner handle would
+        // scale it instead of drawing.
+        s.execute("select.none", &json!({})).unwrap();
         s.select_tool(tool, ViewInfo::default()).unwrap();
         // 60 right and 20 down on the page: along axes turned 90°, 20 wide and 60 high.
         gesture(&mut s, Mods::default(), &[(Down, 100.0, 100.0), (Drag, 130.0, 110.0), (Drag, 160.0, 120.0), (Up, 160.0, 120.0)]);

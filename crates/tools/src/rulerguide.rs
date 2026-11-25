@@ -9,14 +9,15 @@
 //! ruler's ticks, else to whole pixels, the grid, with Smart Guides the art's and the artboards'
 //! edges, centres and anchors, or with Snap to Point the anchors. Dropped off the canvas onto its
 //! ruler, a moved guide is deleted. Hidden or locked guides (View › Guides), and guides on a hidden
-//! or locked layer, can't be picked.
+//! or locked layer, can't be picked. The rulers' origin, dragged out of their corner
+//! ([`OriginDrag`]), snaps as a drawn point does.
 
 use serde_json::json;
 use vectorcraft_doc::{Guide, NodeId};
 use vectorcraft_geom::{Point, Rect};
 
-use crate::guides::Targets;
-use crate::{Action, Cursor, Overlay, PointerEvent, PointerKind, ToolContext};
+use crate::guides::{PointSnap, Targets};
+use crate::{Action, Cursor, Overlay, PixelOp, PointerEvent, PointerKind, ToolContext};
 
 /// The ruler guide under `p`, by its index in `guide.list`: the nearest within the selection
 /// tolerance (the newest of equals).
@@ -122,7 +123,7 @@ struct GuideSnap {
 impl GuideSnap {
     fn new(cx: &ToolContext) -> Self {
         let targets = || Targets::collect(cx.doc, &[], None);
-        let targets = if cx.snap_to_pixel || cx.snap_to_grid {
+        let targets = if cx.snaps_to_pixel(PixelOp::Moving) || cx.snap_to_grid {
             None
         } else if cx.smart_guides {
             Some((targets().styled(cx), cx.snapping_tolerance))
@@ -135,7 +136,8 @@ impl GuideSnap {
     }
 
     /// Where a guide dragged to `v` (the x of a vertical one, the y of a horizontal one) goes:
-    /// with Shift on the nearest ruler tick, else on whole pixels, the grid or a target.
+    /// with Shift on the nearest ruler tick, else on whole pixels (Snap to Pixel's While Moving
+    /// option), the grid or a target.
     fn snap(&mut self, cx: &ToolContext, vertical: bool, v: f64, shift: bool) -> f64 {
         self.snapped.clear();
         if shift {
@@ -143,7 +145,7 @@ impl GuideSnap {
             let origin = if vertical { origin.x } else { origin.y };
             return origin + cx.unit.snap_to_ruler_tick(v - origin, cx.zoom);
         }
-        if cx.snap_to_pixel {
+        if cx.snaps_to_pixel(PixelOp::Moving) {
             return v.round();
         }
         if cx.snap_to_grid {
@@ -244,6 +246,39 @@ impl NewGuide {
     /// While the guide shows: the target it snapped to and its position by the pointer.
     pub fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         self.at.map(|(vertical, at)| self.snap.overlays(cx, vertical, at, self.pointer)).unwrap_or_default()
+    }
+}
+
+/// The rulers' origin dragged out of the box where they meet, with any tool: it snaps as a drawn
+/// point does ([`PointSnap::drawn`]), with Smart Guides onto the anchors, centres, edges and paths
+/// of the art and the artboards or into line with them, with Snap to Point onto the anchors and
+/// along the ruler guides, else onto whole pixels or the grid. The targets are gathered when the
+/// drag begins. It changes nothing: the origin is set where the button is released.
+pub struct OriginDrag {
+    snap: PointSnap,
+    /// The guides showing what the origin snapped to.
+    guides: Vec<Overlay>,
+}
+
+impl OriginDrag {
+    pub fn new(cx: &ToolContext) -> Self {
+        Self { snap: PointSnap::drawn(cx), guides: vec![] }
+    }
+
+    /// Where the origin goes with the pointer at `p` (none off the canvas).
+    pub fn pointer(&mut self, cx: &ToolContext, p: Option<Point>) -> Option<Point> {
+        let Some(p) = p else {
+            self.guides.clear();
+            return None;
+        };
+        let (at, guides) = self.snap.snap(cx, p);
+        self.guides = guides;
+        Some(at)
+    }
+
+    /// The guides showing what the origin snapped to.
+    pub fn overlays(&self) -> Vec<Overlay> {
+        self.guides.clone()
     }
 }
 

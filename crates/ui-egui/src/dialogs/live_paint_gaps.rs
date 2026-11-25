@@ -6,36 +6,54 @@
 //! draws the gaps of the selected groups the same way ([`selected_gaps`]).
 //!
 //! Fields: `detect`, `size` (`small` | `medium` | `large` | `custom`), `custom` (pt), `color`
-//! (`#rrggbb`, or a preset's name such as "Red"), `closeGaps`, `preview`, `__ids` (the groups) and
-//! `__gaps` (the gaps the last preview found, as `livePaint.gapOptions` returns them).
+//! (`#rrggbb`, or a preset's name such as "Red"), `closeGaps` and `preview`.
 
-use serde_json::{Value, json};
+use craft::ui::contract::ShowContainer as _;
+use craft::ui::dialog::{DialogId, HeldOk, StackDialog as _};
+use craft::ui::layout_components::Row;
+use serde_json::{Map, Value, json};
 use vectorcraft_color::Color;
-use vectorcraft_doc::{GapSize, LAYER_COLORS};
+use vectorcraft_doc::GapSize;
 use vectorcraft_geom::{BezPath, Point};
 use vectorcraft_tools::Overlay;
 
-use super::tile_edge_color::{checked, has_alpha, resolve};
-use super::{DialogSpec, form};
-use crate::state::Dialog;
-use crate::{VectorcraftApp, widgets};
+use super::option_form::{self, OptionForm, OptionSpec, Rows, is_on};
+use super::preview::LivePreview;
+use super::tile_edge_color::{checked, has_alpha};
+use crate::VectorcraftApp;
 
 /// The dialog kind of Gap Options.
 pub const KIND: &str = "livePaintGapOptions";
 
 const CMD: &str = "livePaint.gapOptions";
-
-/// Width of the label column.
-const LABEL_W: f32 = 120.0;
+/// The undo step the preview and OK make.
+const PREVIEW_LABEL: &str = "Gap Options";
 
 /// Paint Stops At: (value, label).
 const SIZES: [(&str, &str); 4] = [("small", "Small Gaps"), ("medium", "Medium Gaps"), ("large", "Large Gaps"), ("custom", "Custom")];
 
-/// The private field holding the gaps of the last preview.
-const GAPS: &str = "__gaps";
+/// The dialog's description for the option form.
+pub(super) static SPEC: OptionSpec = OptionSpec {
+    key: KIND,
+    title: || tl!("Gap Options").to_owned(),
+    keys: &["detect", "size", "custom", "color", "closeGaps"],
+    colors: &["color"],
+    preview: true,
+    body,
+    // The custom size takes input while Custom is chosen.
+    inactive: |values, key| key == "custom" && values.get("size").and_then(Value::as_str) != Some("custom"),
+    run,
+    cancelled: Some(cancelled),
+};
 
-pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| tl!("Gap Options").into(), body, confirm, preview: true, min_width: 340.0, ..DialogSpec::FORM };
+/// Gap Options' running preview while its dialog is open. It lives on the app, not in the dialog: a Cancel or
+/// Escape closes the dialog where no app is at hand to roll the preview back ([`cancelled`]).
+pub(crate) struct Open {
+    /// The dialog the preview belongs to.
+    pub id: DialogId,
+    /// The preview the options run as.
+    pub preview: LivePreview,
+}
 
 /// Open Gap Options on the selected Live Paint groups, filled in from the first one's options.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
@@ -54,94 +72,119 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         Some(id) => (id.to_string(), o["points"].clone()),
         None => ("custom".to_string(), o["size"].clone()),
     };
-    app.ui.dialog = Some(Dialog::new(
-        KIND,
-        json!({
-            "detect": o["detect"],
-            "size": size,
-            "custom": custom,
-            "color": o["color"],
-            "closeGaps": false,
-            "preview": false,
-            "__ids": groups,
-        }),
-    ));
+    let fields =
+        [("detect", o["detect"].clone()), ("size", json!(size)), ("custom", custom), ("color", o["color"].clone()), ("closeGaps", json!(false))];
+    let values = Map::from_iter(fields.map(|(key, value)| (key.to_owned(), value)));
+    option_form::open(app, &SPEC, values, json!({ "ids": groups })).ok_or("no window")?;
     Ok(Value::Null)
 }
 
-/// `livePaint.gapOptions` parameters from the fields.
-fn params(d: &Dialog) -> Value {
-    let size = match d.str("size").as_str() {
-        "custom" => json!(d.f64("custom", GapSize::SMALL)),
-        id => json!(id),
+/// `livePaint.gapOptions` parameters from the values and the groups in `extra`.
+fn params(values: &Map<String, Value>, extra: &Value) -> Value {
+    let size = match values.get("size").and_then(Value::as_str) {
+        Some("custom") => json!(values.get("custom").and_then(Value::as_f64).unwrap_or(GapSize::SMALL)),
+        Some(id) => json!(id),
+        None => Value::Null,
     };
     json!({
-        "ids": d.fields.get("__ids").cloned().unwrap_or_default(),
-        "detect": d.bool("detect"),
+        "ids": extra["ids"],
+        "detect": is_on(values, "detect"),
         "size": size,
-        "color": d.str("color"),
-        "closeGaps": d.bool("closeGaps"),
+        "color": values.get("color").cloned().unwrap_or(Value::Null),
+        "closeGaps": is_on(values, "closeGaps"),
     })
 }
 
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    form::check(ui, d, "detect", tl!("Gap Detection"));
-    ui.add_space(6.0);
-    let size = d.str("size");
-    let shown = SIZES.iter().find(|(v, _)| *v == size).map_or(SIZES[0].1, |(_, l)| l);
-    let labels = SIZES.map(|(_, l)| l);
-    widgets::label_row(ui, tl!("Paint Stops At:"), LABEL_W, |ui| {
-        if let Some((value, _)) = widgets::dropdown(ui, "gap-size", shown, &labels, 130.0).and_then(|i| SIZES.get(i)) {
-            d.fields.insert("size".into(), json!(value));
-        }
-        ui.add_space(6.0);
-        // The custom size field is enabled while Custom is chosen.
-        ui.add_enabled_ui(size == "custom", |ui| form::length(ui, d, "custom", app.session.general_unit(), 72.0));
+fn body(ui: &mut egui::Ui, rows: &mut Rows<'_>) {
+    rows.check(ui, "detect", tl!("Gap Detection"), true);
+    let custom = rows.text("size") == "custom";
+    let sizes = SIZES.map(|(value, label)| (value, tl!(label)));
+    rows.field(ui, tl!("Paint Stops At"), true, |ui, rows, label| {
+        Row::new().show(ui, |ui, _| {
+            rows.select(ui, "size", label, &sizes);
+            rows.length(ui, "custom", tl!("Custom"), 0.0..=GapSize::MAX, custom);
+        });
     });
-    let color = resolve(&d.str("color")).unwrap_or(Color::BLACK);
-    let [r, g, b, _] = color.to_rgba8(1.0);
-    let preset = LAYER_COLORS.iter().position(|(_, c)| *c == [r, g, b]);
-    let names: Vec<&str> = LAYER_COLORS.iter().map(|(n, _)| *n).chain(["Custom"]).collect();
-    widgets::label_row(ui, tl!("Gap Preview Color:"), LABEL_W, |ui| {
-        if let Some((_, [r, g, b])) =
-            widgets::dropdown(ui, "gap-color", names[preset.unwrap_or(LAYER_COLORS.len())], &names, 130.0).and_then(|i| LAYER_COLORS.get(i))
-        {
-            d.fields.insert("color".into(), json!(Color::rgb8(*r, *g, *b).to_hex()));
-        }
-        // The color button sets any other color; the dropdown then shows Custom.
-        let mut rgb = [r, g, b];
-        if ui.color_edit_button_srgb(&mut rgb).changed() {
-            d.fields.insert("color".into(), json!(Color::rgb8(rgb[0], rgb[1], rgb[2]).to_hex()));
-        }
-    });
-    ui.add_space(6.0);
-    form::check(ui, d, "closeGaps", tl!("Close Gaps With Paths"));
-    let mut p = params(d);
-    // OK refuses a color with an alpha part, so the preview leaves each group's own color.
-    if has_alpha(&d.str("color")) {
-        p["color"] = Value::Null;
-    }
-    if let Some(r) = form::preview_result(app, ui, d, "Gap Options", CMD, p) {
-        d.fields.insert(GAPS.into(), r["gaps"].clone());
-    }
-    if !d.bool("preview") {
-        d.fields.remove(GAPS);
-    }
-    false
+    rows.field(ui, tl!("Gap Preview Color"), true, |ui, rows, label| rows.color(ui, "color", label, true));
+    rows.check(ui, "closeGaps", tl!("Close Gaps With Paths"), true);
 }
 
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    checked(&d.str("color"))?;
-    form::commit_preview(app, CMD, params(d))
+/// OK: keep the previewed options as one undo step; with no preview running they run as one.
+fn run(app: &mut VectorcraftApp, values: &Map<String, Value>, extra: &Value) -> Result<Value, String> {
+    let preview = app.object_dialogs.gaps.take().map_or_else(LivePreview::default, |open| open.preview);
+    preview.commit(app, CMD, params(values, extra))
+}
+
+/// The dialog closed without OK: roll the preview back.
+fn cancelled(app: &mut VectorcraftApp) {
+    if let Some(open) = app.object_dialogs.gaps.take() {
+        open.preview.cancel(app);
+    }
+}
+
+/// Runs the open Gap Options' preview as its options stand, once per frame after the shell pass: with Preview on the
+/// options apply to the groups, off they are rolled back; the gaps a new preview finds are kept for [`overlays`].
+/// Nothing runs while an OK waits for its answer, which keeps or refuses the preview that is running.
+pub(crate) fn pump(app: &mut VectorcraftApp, _: &egui::Context) {
+    let Some(dialogs) = app.dialogs() else { return };
+    let shown = dialogs.with(|host| {
+        let form = host.get::<OptionForm>().filter(|form| form.is(KIND))?;
+        if !form.held.state().is_none_or(|state| matches!(state, HeldOk::Refused(_))) {
+            return None;
+        }
+        let mut params = params(&form.values, &form.extra);
+        // OK refuses a color with an alpha part, so the preview leaves each group's own color.
+        if form.values.get("color").and_then(Value::as_str).is_some_and(has_alpha) {
+            params["color"] = Value::Null;
+        }
+        Some((form.id(), params, form.preview))
+    });
+    let Some((id, params, on)) = shown else { return };
+    // A preview of another dialog is rolled back before this one starts its own.
+    let mut open = match app.object_dialogs.gaps.take() {
+        Some(open) if open.id == id => open,
+        stale => {
+            if let Some(stale) = stale {
+                stale.preview.cancel(app);
+            }
+            Open { id, preview: LivePreview::default() }
+        }
+    };
+    let ran = open.preview.run(app, on, PREVIEW_LABEL, CMD, &params);
+    app.object_dialogs.gaps = Some(open);
+    let found = match ran {
+        Some(Ok(done)) => Some(done["gaps"].clone()),
+        Some(Err(e)) => {
+            app.status(e);
+            None
+        }
+        None => None,
+    };
+    dialogs.with(|host| {
+        if let Some(form) = host.get_mut_by_id::<OptionForm>(id) {
+            if !on {
+                form.previewed = Value::Null;
+            } else if let Some(gaps) = found {
+                form.previewed = gaps;
+            }
+        }
+    });
 }
 
 /// The gaps the open Gap Options previews, as lines in its preview color (none while Preview is
 /// off or another dialog is open).
 pub(crate) fn overlays(app: &VectorcraftApp) -> Vec<Overlay> {
-    let Some(d) = app.ui.dialog.as_ref().filter(|d| d.kind == KIND && d.bool("preview")) else { return vec![] };
-    let [r, g, b, _] = checked(&d.str("color")).unwrap_or(Color::BLACK).to_rgba8(1.0);
-    let gaps = d.fields.get(GAPS).and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default();
-    gaps.iter()
+    let Some(dialogs) = app.dialogs() else { return vec![] };
+    let shown = dialogs.with(|host| {
+        let form = host.get::<OptionForm>().filter(|form| form.is(KIND) && form.preview)?;
+        Some((form.previewed.clone(), form.values.get("color").and_then(Value::as_str)?.to_owned()))
+    });
+    let Some((gaps, color)) = shown else { return vec![] };
+    let [r, g, b, _] = checked(&color).unwrap_or(Color::BLACK).to_rgba8(1.0);
+    gaps.as_array()
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
         .filter_map(|gap| {
             let v: Vec<f64> = gap.as_array()?.iter().filter_map(Value::as_f64).collect();
             let [x0, y0, x1, y1] = v.as_slice() else { return None };
@@ -173,16 +216,9 @@ fn gap_line(a: Point, b: Point, color: [u8; 3]) -> Overlay {
 
 #[cfg(test)]
 mod tests {
+    use super::super::option_form::tests::{app, cancel, fields, held, is_open, press_ok, pump_all, set};
     use super::*;
     use vectorcraft_doc::{GapOptions, NodeId};
-    use vectorcraft_engine::Session;
-
-    fn frame(app: &mut VectorcraftApp) {
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::super::show(app, ui.ctx()));
-        out.textures_delta.clear();
-    }
 
     fn options(app: &VectorcraftApp, g: u64) -> GapOptions {
         app.session.doc().unwrap().doc.node(NodeId(g)).unwrap().gap_options()
@@ -192,11 +228,17 @@ mod tests {
         vectorcraft_tools::builder::faces(app.session.doc().unwrap().doc.node(NodeId(g)).unwrap()).len()
     }
 
+    /// An open path round a square, its end 2 pt short of its start, made a Live Paint group.
+    fn gapped_group(app: &mut VectorcraftApp) -> u64 {
+        let anchors = [(0, 0), (100, 0), (100, 100), (0, 100), (0, 2)].map(|(x, y)| json!({"x": x, "y": y}));
+        let p = app.run("path.create", json!({ "anchors": anchors })).unwrap();
+        app.run("select.set", json!({"ids": [p["id"]]})).unwrap();
+        app.run("livePaint.make", json!({})).unwrap()["id"].as_u64().unwrap()
+    }
+
     #[test]
     fn the_menu_item_opens_gap_options_which_preview_the_gaps_and_ok_keeps_them() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-        // An open path round a square, its end 2 pt short of its start.
+        let mut app = app();
         let anchors = [(0, 0), (100, 0), (100, 100), (0, 100), (0, 2)].map(|(x, y)| json!({"x": x, "y": y}));
         let p = app.run("path.create", json!({ "anchors": anchors })).unwrap();
         app.run("select.set", json!({"ids": [p["id"]]})).unwrap();
@@ -206,112 +248,151 @@ mod tests {
         // Object › Live Paint › Gap Options… runs the command that opens the dialog.
         let tree = crate::menus::menu_tree();
         let (_, object) = tree.iter().find(|(t, _)| *t == "Object").unwrap();
-        let live = object.iter().find_map(|i| if let crate::menus::Item::Sub("Live Paint", items) = i { Some(items) } else { None }).unwrap();
-        assert!(live.iter().any(|i| matches!(i, crate::menus::Item::Cmd("Gap Options…", "ui.livePaintGapOptions", _))), "{live:?}");
+        let live = object
+            .iter()
+            .find_map(|n| match n {
+                crate::menus::Node::Submenu { label, children, .. } if label == "Live Paint" => Some(children),
+                _ => None,
+            })
+            .unwrap();
+        assert!(
+            live.iter().any(|n| matches!(n, crate::menus::Node::Item(i) if i.label == "Gap Options…" && i.command.id == "ui.livePaintGapOptions")),
+            "{live:?}"
+        );
         crate::menus::invoke(&mut app, "ui.livePaintGapOptions", json!({}));
-        let d = app.ui.dialog.as_ref().expect("Object › Live Paint › Gap Options… opens the dialog");
-        assert_eq!(d.kind, KIND);
-        assert_eq!((d.bool("detect"), d.str("size"), d.str("color")), (false, "small".to_string(), "#ff4f4f".to_string()));
-        frame(&mut app);
+        assert!(is_open(&app), "Object › Live Paint › Gap Options… opens the dialog");
+        let shown = fields(&app);
+        assert_eq!((&shown["detect"], &shown["size"], &shown["color"]), (&json!(false), &json!("small"), &json!("#ff4f4f")));
+        pump_all(&mut app);
         assert!(overlays(&app).is_empty(), "no preview yet");
         // Preview with Gap Detection and Small Gaps: the square fills as one face and its gap shows.
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("detect".into(), json!(true));
-        d.fields.insert("size".into(), json!("small"));
-        d.fields.insert("color".into(), json!("Green"));
-        d.fields.insert("preview".into(), json!(true));
-        frame(&mut app);
+        set(&app, "detect", json!(true)).unwrap();
+        set(&app, "size", json!("small")).unwrap();
+        set(&app, "color", json!("Green")).unwrap();
+        set(&app, "preview", json!(true)).unwrap();
+        pump_all(&mut app);
         assert_eq!(faces(&app, g), 1, "previewed");
         let shown = overlays(&app);
         assert_eq!(shown.len(), 1);
         assert!(matches!(&shown[0], Overlay::Path { color: [0x4f, 0xff, 0x4f], .. }), "{shown:?}");
         // Cancel rolls the preview back.
-        crate::dialogs::cancel(&mut app);
+        cancel(&mut app);
         assert_eq!((faces(&app, g), options(&app, g)), (0, GapOptions::default()));
         assert!(overlays(&app).is_empty());
         // OK keeps a custom size as one undo step.
         app.run("ui.livePaintGapOptions", json!({})).unwrap();
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("detect".into(), json!(true));
-        d.fields.insert("size".into(), json!("custom"));
-        d.fields.insert("custom".into(), json!(2.5));
-        frame(&mut app);
+        set(&app, "detect", json!(true)).unwrap();
+        set(&app, "size", json!("custom")).unwrap();
+        set(&app, "custom", json!(2.5)).unwrap();
+        pump_all(&mut app);
         let depth = app.session.doc().unwrap().history.undo.len();
-        crate::dialogs::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
+        assert!(press_ok(&mut app));
         assert_eq!(app.session.doc().unwrap().history.undo.len(), depth + 1);
         assert_eq!(options(&app, g).size, GapSize::Custom(2.5));
         assert_eq!(faces(&app, g), 1);
         // The dialog opens again on those options; Close Gaps With Paths adds the closing path.
         app.run("ui.livePaintGapOptions", json!({})).unwrap();
-        let d = app.ui.dialog.as_mut().unwrap();
-        assert_eq!((d.str("size"), d.f64("custom", 0.0)), ("custom".to_string(), 2.5));
-        d.fields.insert("detect".into(), json!(false));
-        d.fields.insert("closeGaps".into(), json!(true));
-        crate::dialogs::confirm(&mut app).unwrap();
+        let shown = fields(&app);
+        assert_eq!((&shown["size"], shown["custom"].as_f64()), (&json!("custom"), Some(2.5)));
+        set(&app, "detect", json!(false)).unwrap();
+        set(&app, "closeGaps", json!(true)).unwrap();
+        assert!(press_ok(&mut app));
         assert_eq!(faces(&app, g), 1, "closed by a path");
         let info = app.run("livePaint.info", json!({"group": g})).unwrap();
         assert_eq!((info["sources"].as_u64(), info["gaps"].as_array().map(Vec::len)), (Some(2), Some(0)));
         // OK keeps Medium Gaps, and the dialog opens again on Large Gaps.
         app.run("ui.livePaintGapOptions", json!({})).unwrap();
-        app.ui.dialog.as_mut().unwrap().fields.insert("size".into(), json!("medium"));
-        crate::dialogs::confirm(&mut app).unwrap();
+        set(&app, "size", json!("medium")).unwrap();
+        assert!(press_ok(&mut app));
         assert_eq!(options(&app, g).size, GapSize::Medium);
         app.run("livePaint.gapOptions", json!({"id": g, "size": "large"})).unwrap();
         app.run("ui.livePaintGapOptions", json!({})).unwrap();
-        let d = app.ui.dialog.as_ref().unwrap();
-        assert_eq!((d.str("size"), d.f64("custom", 0.0)), ("large".to_string(), GapSize::LARGE));
+        let shown = fields(&app);
+        assert_eq!((&shown["size"], shown["custom"].as_f64()), (&json!("large"), Some(GapSize::LARGE)));
     }
 
-    /// A Gap Preview Color with an alpha part is refused and leaves the group's options as they
-    /// were; `#rrggbb` still sets them.
+    /// OK on the options the group has, with Preview on or off, closes the dialog and records no
+    /// undo step: the redo step stays and a saved document stays saved.
     #[test]
-    fn a_color_with_an_alpha_part_is_refused() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    fn ok_on_unchanged_options_records_no_undo_step() {
+        let mut app = app();
         app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap();
         app.run("select.all", json!({})).unwrap();
         let g = app.run("livePaint.make", json!({})).unwrap()["id"].as_u64().unwrap();
+        app.run("shape.rectangle", json!({"x": 200, "y": 200, "width": 10, "height": 10})).unwrap();
+        app.run("edit.undo", json!({})).unwrap();
+        app.run("select.set", json!({"ids": [g]})).unwrap();
+        app.session.doc_mut().unwrap().mark_saved();
+        let state = |app: &VectorcraftApp| {
+            let st = app.session.doc().unwrap();
+            (st.history.undo.len(), st.history.redo.len(), st.is_dirty())
+        };
+        let before = state(&app);
+        for preview in [false, true] {
+            app.run("ui.livePaintGapOptions", json!({})).unwrap();
+            set(&app, "preview", json!(preview)).unwrap();
+            pump_all(&mut app);
+            assert!(press_ok(&mut app), "preview={preview}: OK closes the dialog");
+            assert!(!is_open(&app));
+            assert_eq!(state(&app), before, "preview={preview}: no undo step");
+            assert_eq!(options(&app, g), GapOptions::default());
+        }
+        // A changed option is one undo step.
         app.run("ui.livePaintGapOptions", json!({})).unwrap();
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("color".into(), json!("#ff000080"));
-        d.fields.insert("detect".into(), json!(true));
-        let depth = app.session.doc().unwrap().history.undo.len();
-        let err = crate::dialogs::confirm(&mut app).unwrap_err();
-        assert_eq!(err, "`#ff000080` is not a colour (#rrggbb or a preset name)");
-        assert!(app.ui.dialog.is_some(), "the dialog stays open");
-        assert_eq!((options(&app, g), app.session.doc().unwrap().history.undo.len()), (GapOptions::default(), depth), "nothing changes");
-        app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!("#ff0000"));
-        crate::dialogs::confirm(&mut app).unwrap();
-        assert_eq!(options(&app, g).color, [0xff, 0, 0]);
+        set(&app, "detect", json!(true)).unwrap();
+        assert!(press_ok(&mut app));
+        assert_eq!(state(&app).0, before.0 + 1);
+    }
+
+    /// The canvas draws the gaps Gap Options previews, in its preview color, and stops when Preview goes off.
+    #[test]
+    fn the_canvas_draws_the_previewed_gaps() {
+        let mut app = app();
+        gapped_group(&mut app);
+        let green = egui::Color32::from_rgb(0x4f, 0xff, 0x4f);
+        let drawn = |app: &mut VectorcraftApp| {
+            let ctx = app.ui_ctx.clone().unwrap();
+            let raw =
+                egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0))), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| crate::canvas::show(app, ui));
+            out.textures_delta.clear();
+            ctx.tessellate(out.shapes, out.pixels_per_point).into_iter().any(|p| match p.primitive {
+                egui::epaint::Primitive::Mesh(mesh) => mesh.vertices.iter().any(|v| v.color == green),
+                egui::epaint::Primitive::Callback(_) => false,
+            })
+        };
+        app.run("ui.livePaintGapOptions", json!({})).unwrap();
+        set(&app, "detect", json!(true)).unwrap();
+        set(&app, "color", json!("Green")).unwrap();
+        set(&app, "preview", json!(true)).unwrap();
+        pump_all(&mut app);
+        assert!(!overlays(&app).is_empty());
+        assert!(drawn(&mut app), "the previewed gap draws on the canvas");
+        set(&app, "preview", json!(false)).unwrap();
+        pump_all(&mut app);
+        assert!(!drawn(&mut app), "no preview, no gap");
     }
 
     /// With Preview on, a Gap Preview Color with an alpha part is not previewed: the group keeps
     /// its own color, the gaps draw in black, OK refuses the color and Cancel rolls the preview back.
     #[test]
     fn a_color_with_an_alpha_part_is_not_previewed() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-        // An open path round a square, its end 2 pt short of its start.
-        let anchors = [(0, 0), (100, 0), (100, 100), (0, 100), (0, 2)].map(|(x, y)| json!({"x": x, "y": y}));
-        let p = app.run("path.create", json!({ "anchors": anchors })).unwrap();
-        app.run("select.set", json!({"ids": [p["id"]]})).unwrap();
-        let g = app.run("livePaint.make", json!({})).unwrap()["id"].as_u64().unwrap();
+        let mut app = app();
+        let g = gapped_group(&mut app);
         let own = options(&app, g).color;
         app.run("ui.livePaintGapOptions", json!({})).unwrap();
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("preview".into(), json!(true));
-        d.fields.insert("detect".into(), json!(true));
-        d.fields.insert("color".into(), json!("#ff000080"));
+        set(&app, "preview", json!(true)).unwrap();
+        set(&app, "detect", json!(true)).unwrap();
+        set(&app, "color", json!("#ff000080")).unwrap();
         let depth = app.session.doc().unwrap().history.undo.len();
-        frame(&mut app);
+        pump_all(&mut app);
         assert_eq!((options(&app, g).detect, options(&app, g).color), (true, own), "the group keeps its own color");
         let shown = overlays(&app);
         assert!(matches!(&shown[..], [Overlay::Path { color: [0, 0, 0], .. }]), "{shown:?}");
-        let err = crate::dialogs::confirm(&mut app).unwrap_err();
-        assert_eq!(err, "`#ff000080` is not a colour (#rrggbb or a preset name)");
-        assert!(app.ui.dialog.is_some(), "the dialog stays open");
-        crate::dialogs::cancel(&mut app);
+        assert!(!press_ok(&mut app));
+        assert!(is_open(&app), "the dialog stays open");
+        assert!(matches!(held(&app), Some(HeldOk::Refused(_))), "with the reason");
+        cancel(&mut app);
         let undo = app.session.doc().unwrap().history.undo.len();
         assert_eq!((options(&app, g), undo), (GapOptions::default(), depth), "Cancel rolls the preview back");
     }

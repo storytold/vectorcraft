@@ -317,6 +317,24 @@ fn offset_of_an_open_path_whose_ends_meet_is_the_closed_shape_offset() {
 }
 
 #[test]
+fn a_negative_offset_outlines_an_open_path_as_a_positive_one_does() {
+    // Issue #6427 (A4): an inset of an open path was empty. Open subpaths are outlined with a
+    // stroke of width 2|delta| whichever way the offset goes.
+    let line = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(100.0, 0.0)], false));
+    for delta in [2.0, -2.0] {
+        let o = offset_path(&line, delta, Join::Miter, 4.0);
+        assert!(close(ar(&o), 400.0, 1e-6), "delta {delta}: {}", ar(&o));
+        assert_eq!(o.subpaths.len(), 1, "delta {delta}");
+    }
+    // With a closed shape beside it, the shape is inset and the line still outlined.
+    let mut both = rect(0.0, 0.0, 20.0, 10.0);
+    both.subpaths.push(SubPath::polyline(&[Point::new(100.0, 0.0), Point::new(150.0, 0.0)], false));
+    let o = offset_path(&both, -2.0, Join::Miter, 4.0);
+    assert!(close(ar(&o), 16.0 * 6.0 + 50.0 * 4.0, 1e-6), "{}", ar(&o));
+    assert_eq!(o.subpaths.len(), 2);
+}
+
+#[test]
 fn outline_stroke_of_line() {
     let l = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(30.0, 40.0)], false));
     let o = outline_stroke(&l, 4.0, Cap::Butt, Join::Miter, 4.0);
@@ -397,6 +415,132 @@ fn simplify_keeps_square_corners() {
     let s = simplify(&sq, 0.1);
     assert_eq!(s.anchor_count(), 4);
     assert!(!has_curves(&s));
+}
+
+/// The largest turn, in degrees, at an anchor of `sp` that is not an end of an open subpath: the
+/// angle between the direction a segment arrives along and the one the next leaves along.
+fn largest_join_turn(sp: &SubPath) -> f64 {
+    let dir = |v: kurbo::Vec2, w: kurbo::Vec2, chord: kurbo::Vec2| [v, w, chord].into_iter().find(|d| d.hypot() > 1e-9).unwrap_or(chord);
+    let n = sp.segment_count();
+    let first = usize::from(!sp.closed);
+    (first..n)
+        .map(|i| {
+            let (prev, next) = (sp.segment((i + n - 1) % n), sp.segment(i));
+            let arrive = dir(prev.p3 - prev.p2, prev.p3 - prev.p1, prev.p3 - prev.p0);
+            let leave = dir(next.p1 - next.p0, next.p2 - next.p0, next.p3 - next.p0);
+            arrive.cross(leave).atan2(arrive.dot(leave)).abs().to_degrees()
+        })
+        .fold(0.0, f64::max)
+}
+
+/// A refitted curve becomes a line only when the line keeps the smooth joins on both sides of it:
+/// with no corners kept, the refit of a jagged line or of an arc running into a line turns by at most
+/// 0.5° at every anchor. Points that all lie on one line still become one line.
+#[test]
+fn simplify_turns_a_curve_into_a_line_only_where_the_joins_stay_smooth() {
+    let mut seed = 7u64;
+    let mut noise = || {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        ((seed >> 11) as f64 / (1u64 << 53) as f64) * 2.0 - 1.0
+    };
+    let jagged: Vec<Point> = (0..=60).map(|i| Point::new(100.0 + f64::from(i) * 5.0, 200.0 + 6.0 * noise())).collect();
+    let mut arc_into_line: Vec<Point> =
+        (0..=40).map(|i| Point::new(50.0 * (f64::from(i) / 80.0 * PI).cos(), 50.0 * (f64::from(i) / 80.0 * PI).sin())).collect();
+    arc_into_line.extend((1..=20).map(|i| Point::new(-f64::from(i) * 2.0, 50.0)));
+    for pts in [&jagged, &arc_into_line] {
+        let path = PathData::single(SubPath::polyline(pts, false));
+        for tolerance in [1.0, 2.5, 5.0] {
+            let s = simplify_with(&path, &SimplifyOptions { tolerance, corner_angle_deg: 179.0, ..Default::default() });
+            let turn = largest_join_turn(&s.subpaths[0]);
+            assert!(turn <= 0.5 + 1e-9, "{tolerance} pt: an anchor turns {turn}°: {s:?}");
+            assert!(max_deviation(&path, &s) <= tolerance + 1e-6, "{tolerance} pt: {}", max_deviation(&path, &s));
+        }
+    }
+    let in_line: Vec<Point> = [0.0, 3.0, 10.0, 11.0, 40.0, 41.5, 90.0, 100.0].map(|x| Point::new(x, 0.5 * x)).to_vec();
+    let s = simplify_with(&PathData::single(SubPath::polyline(&in_line, false)), &SimplifyOptions { tolerance: 1.0, ..Default::default() });
+    assert_eq!(s.anchor_count(), 2, "{s:?}");
+    assert!(!has_curves(&s), "{s:?}");
+}
+
+/// A smoothed loop with no corner is fitted across its start, and the join there also turns by at
+/// most 0.5°. Each loop is a flat side that bends by 0.6° at the loop's start, closed by an arc of
+/// `n` lines `height` tall, with `inner` anchors along each half of the side.
+#[test]
+fn simplify_keeps_the_join_at_the_start_of_a_smoothed_loop_smooth() {
+    for (half, height, n, inner, tolerance, smooth) in
+        [(40.0, 20.0, 8, 3, 2.5, 2.0), (80.0, 60.0, 8, 3, 5.0, 0.5), (160.0, 200.0, 24, 3, 10.0, 2.0), (160.0, 20.0, 24, 8, 10.0, 5.0)]
+    {
+        let rise = half * 0.3f64.to_radians().tan();
+        let along = |i: i32| Point::new(half * f64::from(i) / f64::from(inner), -rise * f64::from(i.abs()) / f64::from(inner));
+        let mut pts: Vec<Point> = (0..=inner).map(along).collect();
+        pts.extend((1..n).map(|i| {
+            let a = f64::from(i) / f64::from(n) * PI;
+            Point::new(half * a.cos(), -rise - height * a.sin())
+        }));
+        pts.extend((-inner..0).map(along));
+        let path = PathData::single(SubPath::polyline(&pts, true));
+        let s = simplify_with(&path, &SimplifyOptions { tolerance, corner_angle_deg: 179.0, smooth, ..Default::default() });
+        let sp = &s.subpaths[0];
+        assert!(sp.closed && sp.anchors.len() < pts.len(), "{tolerance} pt: {s:?}");
+        assert!(sp.segment_is_line(0), "{tolerance} pt: the first segment is a curve: {s:?}");
+        let turn = largest_join_turn(sp);
+        assert!(turn <= 0.5 + 1e-9, "{tolerance} pt: an anchor turns {turn}°: {s:?}");
+    }
+}
+
+/// The degrees between the x axis and the direction `sp` leaves its first anchor along.
+fn start_angle(sp: &SubPath) -> f64 {
+    let c = sp.segment(0);
+    let d = [c.p1 - c.p0, c.p2 - c.p0, c.p3 - c.p0].into_iter().find(|d| d.hypot() > 1e-9).unwrap_or_default();
+    d.y.atan2(d.x).to_degrees()
+}
+
+/// With `free_start` and `free_end`, a smoothed open subpath leaves its first anchor and arrives at
+/// its last one along the smoothed path, not along a jagged first or last segment, and its end points
+/// stay. Only a flagged end turns, and a closed subpath, Object › Path › Smooth's selected segments
+/// (`simplify_part`) and a refit without smoothing give the same result with the flags as without.
+#[test]
+fn free_ends_turn_only_open_smoothed_ends() {
+    let pts: Vec<Point> = (0..=40).map(|i| Point::new(5.0 * f64::from(i), if i == 1 || i == 39 { 1.5 } else { 0.0 })).collect();
+    let path = PathData::single(SubPath::polyline(&pts, false));
+    let base = SimplifyOptions { tolerance: 2.5, corner_angle_deg: 179.0, smooth: 4.0, smooth_moved_only: true, ..Default::default() };
+    let both = SimplifyOptions { free_start: true, free_end: true, ..base };
+    let s = simplify_with(&path, &both);
+    let sp = &s.subpaths[0];
+    assert_eq!((sp.anchors[0].p, sp.anchors[sp.anchors.len() - 1].p), (pts[0], pts[40]), "{s:?}");
+    let mut back = sp.clone();
+    back.reverse();
+    assert!(start_angle(sp).abs() <= 5.0 && (start_angle(&back).abs() - 180.0).abs() <= 5.0, "{s:?}");
+    let start_only = simplify_with(&path, &SimplifyOptions { free_start: true, ..base });
+    let plain = simplify_with(&path, &base);
+    assert!(start_angle(&start_only.subpaths[0]).abs() <= 5.0, "{start_only:?}");
+    assert!(start_angle(&plain.subpaths[0]) > 16.0, "{plain:?}");
+    let (mut a, mut b) = (start_only.subpaths[0].clone(), plain.subpaths[0].clone());
+    a.reverse();
+    b.reverse();
+    assert!((start_angle(&a) - start_angle(&b)).abs() <= 1e-9, "the last anchor keeps its direction: {start_only:?}");
+    // Flags that must have no effect.
+    let ring = PathData::single(SubPath::polyline(&pts[..39], true));
+    assert_eq!(simplify_with(&ring, &both), simplify_with(&ring, &base));
+    let unsmoothed = SimplifyOptions { smooth: 0.0, ..base };
+    assert_eq!(simplify_with(&path, &SimplifyOptions { free_start: true, free_end: true, ..unsmoothed }), simplify_with(&path, &unsmoothed));
+    let picked: std::collections::BTreeSet<(usize, usize)> = (0..20).map(|i| (0, i)).collect();
+    assert_eq!(simplify_part(&path, &picked, &both).path, simplify_part(&path, &picked, &base).path);
+}
+
+/// A free end whose smoothed path turns back by more than 90° from its first segment keeps that
+/// segment's direction: a path that leaves its start along x for 2 pt, then turns by 170°.
+#[test]
+fn a_free_end_that_turns_back_keeps_its_first_direction() {
+    let back = kurbo::Vec2::from_angle(170f64.to_radians());
+    let mut pts = vec![Point::ORIGIN, Point::new(2.0, 0.0)];
+    pts.extend((1..=10).map(|i| Point::new(2.0, 0.0) + back * (3.0 * f64::from(i))));
+    let path = PathData::single(SubPath::polyline(&pts, false));
+    let opts =
+        SimplifyOptions { tolerance: 2.5, corner_angle_deg: 179.0, smooth: 4.0, smooth_moved_only: true, free_start: true, ..Default::default() };
+    let s = simplify_with(&path, &opts);
+    let angle = start_angle(&s.subpaths[0]);
+    assert!(angle.abs() <= 1.0, "the path leaves its start at {angle}°: {s:?}");
 }
 
 #[test]
@@ -598,6 +742,74 @@ fn smooth_level_0_keeps_a_closed_paths_start_corner_within_tolerance() {
     assert!(moved <= limit, "level 0 moved the path by {moved} pt, more than {limit} pt: {:?}", s.subpaths[0].anchors[0]);
 }
 
+/// Twice the area `sp` encloses, from 16 points along each segment: positive when it runs
+/// counterclockwise in y-up terms.
+fn signed_area(sp: &SubPath) -> f64 {
+    let pts: Vec<Point> = (0..sp.segment_count()).flat_map(|i| (0..16).map(move |k| sp.segment(i).eval(f64::from(k) / 16.0))).collect();
+    (0..pts.len()).map(|i| pts[i].to_vec2().cross(pts[(i + 1) % pts.len()].to_vec2())).sum()
+}
+
+/// A D of 41 corner points round (0, 0): the arc of radius 100 from (100, 0) up to (0, 100), the
+/// straight side down to (0, -100), and the arc back. It starts in the middle of its arc, and its
+/// first corner is at the top.
+fn d_shape() -> SubPath {
+    let at = |deg: f64| Point::new(100.0 * deg.to_radians().cos(), 100.0 * deg.to_radians().sin());
+    let pts: Vec<Point> = (0..=20).map(|i| at(4.5 * f64::from(i))).chain((0..20).map(|i| at(-90.0 + 4.5 * f64::from(i)))).collect();
+    SubPath::polyline(&pts, true)
+}
+
+/// Object › Path › Simplify starts a closed path where it started, though the refit runs from the
+/// first corner: on the D, the refit starts within the tolerance of the old start, runs the same way
+/// round, and has fewer anchors.
+#[test]
+fn simplify_keeps_a_closed_paths_start() {
+    let sp = d_shape();
+    let path = PathData::single(sp.clone());
+    let s = simplify_with(&path, &SimplifyOptions { tolerance: 1.0, ..Default::default() });
+    let out = &s.subpaths[0];
+    assert!(out.closed && out.anchors.len() < sp.anchors.len(), "{out:?}");
+    let moved = out.anchors[0].p.distance(sp.anchors[0].p);
+    assert!(moved <= 1.0 + 1e-9, "the start moved {moved} pt, to {:?}", out.anchors[0].p);
+    assert!(signed_area(out) * signed_area(&sp) > 0.0, "the direction stays");
+    assert!(one_way_distance(&path, &s).max(one_way_distance(&s, &path)) <= 1.0 + 1e-6);
+}
+
+/// Object › Path › Smooth starts a closed path near where it started, though the refit runs from the
+/// point where the path turns back: a round loop of radius 50 with a needle out to (250, 0), which
+/// starts on the far side of the loop at (-50, 0).
+#[test]
+fn smooth_keeps_a_closed_paths_start() {
+    let at = |deg: f64| Point::new(50.0 * deg.to_radians().cos(), 50.0 * deg.to_radians().sin());
+    let pts: Vec<Point> = (0..=20)
+        .map(|i| at(180.0 + 8.95 * f64::from(i)))
+        .chain([Point::new(250.0, 0.0)])
+        .chain((0..20).map(|i| at(1.0 + 8.95 * f64::from(i))))
+        .collect();
+    let sp = SubPath::polyline(&pts, true);
+    let path = PathData::single(sp.clone());
+    let s = smooth_level(&path, SMOOTH_AUTO_LEVEL);
+    let out = &s.subpaths[0];
+    assert!(out.closed && out.anchors.len() < sp.anchors.len(), "{out:?}");
+    let moved = out.anchors[0].p.distance(sp.anchors[0].p);
+    assert!(moved <= 5.0, "the start moved {moved} pt, to {:?}", out.anchors[0].p);
+    assert!(signed_area(out) * signed_area(&sp) > 0.0, "the direction stays");
+}
+
+/// A refit with only one anchor fewer than the closed path gets no anchor split in to keep its
+/// start: it starts at its anchor nearest the old start. A rectangle with a straight point at
+/// (30, 0) simplifies to its four corners, starting at (0, 0).
+#[test]
+fn simplify_starts_at_the_nearest_anchor_rather_than_add_one_back() {
+    let pts = [(30.0, 0.0), (100.0, 0.0), (100.0, 50.0), (0.0, 50.0), (0.0, 0.0)].map(|(x, y)| Point::new(x, y));
+    let path = PathData::single(SubPath::polyline(&pts, true));
+    let want = [(0.0, 0.0), (100.0, 0.0), (100.0, 50.0), (0.0, 50.0)].map(|(x, y)| Point::new(x, y));
+    for straight_lines in [false, true] {
+        let s = simplify_with(&path, &SimplifyOptions { tolerance: 1.0, straight_lines, ..Default::default() });
+        let got: Vec<Point> = s.subpaths[0].anchors.iter().map(|a| a.p).collect();
+        assert_eq!(got, want, "straight_lines {straight_lines}");
+    }
+}
+
 #[test]
 fn remove_redundant_collinear_and_curve() {
     let p = PathData::single(SubPath::polyline(
@@ -625,7 +837,7 @@ fn add_anchor_points_doubles() {
 /// The one-pass build gives what inserting a midpoint into each segment (last first) gives, open or closed.
 #[test]
 fn add_anchor_points_matches_inserting() {
-    let open = PathData::single(SubPath::new(circle(0.0, 0.0, 10.0).subpaths[0].anchors.clone(), false));
+    let open = PathData::single(SubPath::new(circle(0.0, 0.0, 10.0).subpaths[0].anchors.to_vec(), false));
     for src in [circle(0.0, 0.0, 10.0), rect(0.0, 0.0, 10.0, 10.0), open] {
         let mut want = src.clone();
         for sp in &mut want.subpaths {

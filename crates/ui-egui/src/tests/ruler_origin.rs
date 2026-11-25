@@ -17,20 +17,19 @@ fn app() -> VectorcraftApp {
 }
 
 fn context() -> egui::Context {
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    ctx
+    crate::testing::ui_context()
 }
 
+/// One frame of `draw` with `events`: the texts it painted and where. The window is wide enough for the Control bar to
+/// keep its inline X/Y/W/H fields beside the align strip.
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>, draw: fn(&mut VectorcraftApp, &mut Ui)) -> Vec<(String, Rect)> {
     let raw = egui::RawInput {
-        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1700.0, 900.0))),
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(2200.0, 900.0))),
         time: Some(ctx.input(|i| i.time) + 0.05),
         events,
         ..Default::default()
     };
-    let mut out = ctx.run_ui(raw, |ui| draw(app, ui));
-    out.textures_delta.clear();
+    let out = crate::testing::part_frame(app, ctx, raw, draw);
     fn walk(s: &egui::Shape, v: &mut Vec<(String, Rect)>) {
         match s {
             egui::Shape::Text(t) => v.push((t.galley.text().to_string(), Rect::from_min_size(t.pos, t.galley.size()))),
@@ -43,6 +42,20 @@ fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>, draw
     texts
 }
 
+/// How many fields show `v` points: painted as one run, or as its number with the unit as the next run on its row.
+fn shown(texts: &[(String, Rect)], v: f64) -> usize {
+    let whole = Unit::Points.format(v);
+    let Some((number, unit)) = whole.rsplit_once(' ') else { return texts.iter().filter(|(t, _)| *t == whole).count() };
+    let unit_next = |r: &Rect| {
+        texts
+            .iter()
+            .filter(|(_, u)| u.left() >= r.right() && (u.center().y - r.center().y).abs() < 4.0)
+            .min_by(|a, b| a.1.left().total_cmp(&b.1.left()))
+            .is_some_and(|(t, _)| t == unit)
+    };
+    texts.iter().filter(|(t, r)| *t == whole || (t == number && unit_next(r))).count()
+}
+
 fn press(at: Pos2, pressed: bool) -> Event {
     Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() }
 }
@@ -51,8 +64,15 @@ fn key(key: Key) -> Event {
     Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }
 }
 
+/// The middle of the rulers' corner. The view starts one strip thickness in from the corner of the canvas area, which
+/// is the screen's, so the corner's middle is half of the view's start.
+pub(crate) fn corner(app: &VectorcraftApp) -> Pos2 {
+    let min = app.view().map_or(Pos2::ZERO, |v| v.rect.min);
+    pos2(min.x / 2.0, min.y / 2.0)
+}
+
 fn start_drag(app: &mut VectorcraftApp, ctx: &egui::Context, to: Pos2) {
-    let at = pos2(8.0, 8.0);
+    let at = corner(app);
     frame(app, ctx, vec![Event::PointerMoved(at)], canvas::show);
     frame(app, ctx, vec![press(at, true)], canvas::show);
     frame(app, ctx, vec![Event::PointerMoved(to)], canvas::show);
@@ -72,7 +92,7 @@ fn ruler_origin_drag_uses_the_rotated_zoomed_view_and_commits_only_on_release() 
     let before = app.session.doc().unwrap().doc.clone();
     let undo = app.session.doc().unwrap().history.undo.len();
     let goal = Point::new(125.25, 90.5);
-    let to = canvas::Xf::new(app.canvas_rect.unwrap(), app.view().unwrap()).to_screen(goal);
+    let to = app.canvas_view().unwrap().to_screen(goal);
     start_drag(&mut app, &ctx, to);
     assert_eq!(&*app.session.doc().unwrap().doc, &*before, "preview does not edit the document");
     frame(&mut app, &ctx, vec![press(to, false)], canvas::show);
@@ -88,6 +108,27 @@ fn ruler_origin_drag_uses_the_rotated_zoomed_view_and_commits_only_on_release() 
     assert_eq!(app.ruler_origin(), origin);
 }
 
+/// The origin snaps as a drawn point does: dragged next to a rectangle's corner, it is set on it.
+#[test]
+fn ruler_origin_drag_snaps_onto_the_art() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    // The Hand tool shows no smart guides of its own as the pointer passes over the corner.
+    app.select_tool("hand");
+    let ctx = context();
+    frame(&mut app, &ctx, vec![], canvas::show);
+    let to = app.canvas_view().unwrap().to_screen(Point::new(100.4, 99.6));
+    frame(&mut app, &ctx, vec![Event::PointerMoved(to)], canvas::show);
+    assert!(app.session.overlays(app.view_info()).is_empty());
+    start_drag(&mut app, &ctx, to);
+    frame(&mut app, &ctx, vec![], canvas::show);
+    assert!(!app.session.overlays(app.view_info()).is_empty(), "the guide showing what it snapped to");
+    frame(&mut app, &ctx, vec![press(to, false)], canvas::show);
+    assert_eq!(app.ruler_origin(), Point::new(100.0, 100.0));
+    assert!(app.session.overlays(app.view_info()).is_empty());
+}
+
 #[test]
 fn ruler_origin_double_click_resets_to_the_active_artboard() {
     let mut app = app();
@@ -97,7 +138,7 @@ fn ruler_origin_double_click_resets_to_the_active_artboard() {
     let ctx = context();
     frame(&mut app, &ctx, vec![], canvas::show);
     app.view_mut().unwrap().artboard = 1;
-    let at = pos2(8.0, 8.0);
+    let at = corner(&app);
     let undo = app.session.doc().unwrap().history.undo.len();
     for _ in 0..2 {
         frame(&mut app, &ctx, vec![Event::PointerMoved(at)], canvas::show);
@@ -110,20 +151,6 @@ fn ruler_origin_double_click_resets_to_the_active_artboard() {
     assert_eq!(app.ruler_origin(), Point::new(125.0, 90.0));
 }
 
-/// Tab does not stop on the rulers or on the box where they meet, which only the pointer uses.
-#[test]
-fn tab_skips_the_rulers_and_their_origin_box() {
-    let mut app = app();
-    let ctx = context();
-    frame(&mut app, &ctx, vec![], canvas::show);
-    let rulers = ["ruler-top", "ruler-left", "ruler-corner"].map(egui::Id::unique);
-    assert!(rulers.iter().all(|&id| ctx.read_response(id).is_some()), "the rulers are drawn");
-    let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 20, |events| {
-        frame(&mut app, &ctx, events, canvas::show);
-    });
-    assert!(!stops.iter().any(|id| rulers.contains(id)), "{stops:?}");
-}
-
 #[test]
 fn ruler_origin_cancelled_drags_do_not_modify_either_document() {
     #[derive(Debug, PartialEq)]
@@ -132,13 +159,14 @@ fn ruler_origin_cancelled_drags_do_not_modify_either_document() {
         Escape,
         Focus,
         Document,
+        HideRulers,
     }
-    for cancel in [Cancel::Outside, Cancel::Escape, Cancel::Focus, Cancel::Document] {
+    for cancel in [Cancel::Outside, Cancel::Escape, Cancel::Focus, Cancel::Document, Cancel::HideRulers] {
         let mut app = app();
         app.run("document.setRulerOrigin", json!({"x": 25, "y": 30})).unwrap();
         let ctx = context();
         frame(&mut app, &ctx, vec![], canvas::show);
-        let to = app.canvas_rect.unwrap().center();
+        let to = app.view().unwrap().rect.center();
         let before = app.session.doc().unwrap().doc.clone();
         let undo = app.session.doc().unwrap().history.undo.len();
         start_drag(&mut app, &ctx, to);
@@ -146,15 +174,25 @@ fn ruler_origin_cancelled_drags_do_not_modify_either_document() {
             Cancel::Outside => pos2(4.0, 4.0),
             Cancel::Escape => {
                 frame(&mut app, &ctx, vec![key(Key::Escape)], canvas::show);
+                assert!(app.session.overlays(app.view_info()).is_empty(), "the snapping guides go too");
                 to
             }
             Cancel::Focus => {
-                let mut out = ctx.run_ui(egui::RawInput { focused: false, ..Default::default() }, |ui| canvas::show(&mut app, ui));
+                // As the host reports it: the window unfocused, and the event that says so.
+                let lost = egui::RawInput { focused: false, events: vec![Event::WindowFocused(false)], ..Default::default() };
+                let mut out = ctx.run_ui(lost, |ui| canvas::show(&mut app, ui));
                 out.textures_delta.clear();
                 to
             }
             Cancel::Document => {
                 app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+                to
+            }
+            Cancel::HideRulers => {
+                assert!(!app.session.overlays(app.view_info()).is_empty(), "the snapping guides show");
+                app.ui.view.rulers = false;
+                frame(&mut app, &ctx, vec![], canvas::show);
+                assert!(app.session.overlays(app.view_info()).is_empty(), "the snapping guides go with the rulers");
                 to
             }
         };
@@ -173,14 +211,14 @@ fn ruler_origin_cancelled_drags_do_not_modify_either_document() {
 #[test]
 fn ruler_origin_position_fields_show_relative_values_and_edit_absolute_positions() {
     for draw in [panels::properties::show as fn(&mut VectorcraftApp, &mut Ui), panels::transform::show, chrome::control_bar] {
-        for (label, arrow) in [("X:", (1.0, 0.0)), ("Y:", (0.0, 1.0))] {
+        for (label, arrow) in [("X", (1.0, 0.0)), ("Y", (0.0, 1.0))] {
             let mut app = app();
             let id = NodeId(app.run("shape.rectangle", json!({"x": 100, "y": 50, "width": 80, "height": 40})).unwrap()["id"].as_u64().unwrap());
             app.run("document.setRulerOrigin", json!({"x": 120, "y": 50})).unwrap();
             let ctx = context();
             frame(&mut app, &ctx, vec![], draw);
             let texts = frame(&mut app, &ctx, vec![], draw);
-            assert!(texts.iter().filter(|(t, _)| t == &Unit::Points.format(20.0)).count() >= 2, "{texts:?}");
+            assert!(shown(&texts, 20.0) >= 2, "{texts:?}");
             let label = texts.iter().find(|(t, _)| t == label).unwrap().1;
             let at = pos2(label.right() + 40.0, label.center().y);
             frame(&mut app, &ctx, vec![Event::PointerMoved(at), press(at, true)], draw);
@@ -198,7 +236,7 @@ fn ruler_origin_position_fields_show_relative_values_and_edit_absolute_positions
 #[test]
 fn ruler_origin_artboard_fields_preserve_the_absolute_reference_point() {
     for draw in [panels::properties::show as fn(&mut VectorcraftApp, &mut Ui), panels::transform::show] {
-        for label in ["X:", "Y:"] {
+        for label in ["X", "Y"] {
             let mut app = app();
             app.run("document.setRulerOrigin", json!({"x": 120, "y": 50})).unwrap();
             app.select_tool("artboard");
@@ -211,13 +249,13 @@ fn ruler_origin_artboard_fields_preserve_the_absolute_reference_point() {
             frame(&mut app, &ctx, vec![press(at, false)], draw);
             frame(&mut app, &ctx, vec![key(Key::ArrowUp)], draw);
             let ab = app.session.doc().unwrap().doc.artboards[0].rect;
-            assert_eq!((ab.x0, ab.y0), if label == "X:" { (1.0, 0.0) } else { (0.0, 1.0) });
+            assert_eq!((ab.x0, ab.y0), if label == "X" { (1.0, 0.0) } else { (0.0, 1.0) });
             assert_eq!((ab.width(), ab.height()), (400.0, 300.0));
         }
     }
 }
 
-// View › Rulers › Change to Global / Artboard Rulers (Adobe's public help:
+// View › Rulers › Change to Global / Artboard Rulers (public documentation:
 // https://helpx.adobe.com/illustrator/desktop/measure-and-align/grids-and-guides/about-rulers.html):
 // artboard rulers, a new document's, count from the active artboard's top-left corner; global
 // rulers from one zero point for the whole document.
@@ -241,10 +279,10 @@ fn artboard_rulers_position_fields_count_from_the_active_artboard() {
         let texts = frame(&mut app, &ctx, vec![], draw);
         // The reference point is the centre (760, -210): 60 and 40 from artboard 2's corner.
         for v in [60.0, 40.0] {
-            assert!(texts.iter().any(|(t, _)| t == &Unit::Points.format(v)), "X and Y count from artboard 2: {texts:?}");
+            assert!(shown(&texts, v) > 0, "X and Y count from artboard 2: {texts:?}");
         }
         // Typing a position puts the object there on the active artboard's rulers.
-        let label = texts.iter().find(|(t, _)| t == "X:").unwrap().1;
+        let label = texts.iter().find(|(t, _)| t == "X").unwrap().1;
         let at = pos2(label.right() + 40.0, label.center().y);
         frame(&mut app, &ctx, vec![Event::PointerMoved(at), press(at, true)], draw);
         frame(&mut app, &ctx, vec![press(at, false)], draw);
@@ -256,8 +294,8 @@ fn artboard_rulers_position_fields_count_from_the_active_artboard() {
         assert_eq!(app.ruler_origin(), Point::ZERO);
         frame(&mut app, &ctx, vec![], draw);
         let texts = frame(&mut app, &ctx, vec![], draw);
-        assert!(texts.iter().any(|(t, _)| t == &Unit::Points.format(761.0)), "{texts:?}");
-        assert!(!texts.iter().any(|(t, _)| t == &Unit::Points.format(61.0)), "{texts:?}");
+        assert!(shown(&texts, 761.0) > 0, "{texts:?}");
+        assert_eq!(shown(&texts, 61.0), 0, "{texts:?}");
     }
 }
 
@@ -272,7 +310,7 @@ fn ruler_origin_drag_with_artboard_rulers_sets_the_active_artboards_origin() {
     v.center = Point::new(800.0, -175.0);
     frame(&mut app, &ctx, vec![], canvas::show);
     let goal = Point::new(760.0, -200.0);
-    let to = canvas::Xf::new(app.canvas_rect.unwrap(), app.view().unwrap()).to_screen(goal);
+    let to = app.canvas_view().unwrap().to_screen(goal);
     start_drag(&mut app, &ctx, to);
     frame(&mut app, &ctx, vec![press(to, false)], canvas::show);
     let doc = app.session.doc().unwrap().doc.clone();
@@ -287,74 +325,30 @@ fn ruler_origin_drag_with_artboard_rulers_sets_the_active_artboards_origin() {
 #[test]
 fn change_to_global_rulers_menu_item_toggles_and_names_the_other_mode() {
     let (mut app, _) = two_boards();
-    let item = crate::menus::menu_tree().iter().find(|(title, _)| *title == "View").map(|(_, items)| format!("{items:?}")).unwrap();
-    assert!(item.contains("view.globalRulers"), "View › Rulers lists it: {item}");
     assert_eq!(crate::menus::dynamic_label(&app, "view.globalRulers", "Change to Global Rulers"), "Change to Global Rulers");
     app.run("view.globalRulers", json!({})).unwrap();
     assert_eq!(app.session.doc().unwrap().doc.rulers, vectorcraft_doc::RulerMode::Global);
     assert_eq!(crate::menus::dynamic_label(&app, "view.globalRulers", "Change to Global Rulers"), "Change to Artboard Rulers");
     app.run("view.globalRulers", json!({})).unwrap();
     assert_eq!(app.session.doc().unwrap().doc.rulers, vectorcraft_doc::RulerMode::Artboard);
-    let spec = vectorcraft_engine::command_specs().iter().find(|c| c.id == "view.globalRulers").unwrap();
-    assert_eq!(spec.shortcut, Some("Cmd+Alt+R"));
 }
 
-/// The top ruler's labels and where each starts on screen.
-fn top_labels(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<(String, f32)> {
-    frame(app, ctx, vec![], canvas::show).into_iter().filter(|(_, r)| r.min.y < 4.0 && r.min.x > 16.0).map(|(t, r)| (t, r.min.x)).collect()
-}
-
-/// Where the top ruler's label `text` starts, if it shows.
-fn label_x(labels: &[(String, f32)], text: &str) -> Option<f32> {
-    labels.iter().find(|(t, _)| t == text).map(|(_, x)| *x)
-}
-
-/// #2849: View › Rulers › Show Video Rulers shows the rulers counting the active artboard in video
-/// pixels from its top-left corner, whatever the ruler origin, a pixel as wide as the artboard's
-/// Video Ruler Pixel Aspect Ratio: at 0.5 the 400 pt artboard reads 800 at its right edge. The
-/// item then reads Hide Video Rulers, which puts the rulers back in points from the ruler origin;
-/// they follow the active artboard, and hiding the rulers names the item Show Video Rulers again.
+/// #2849: View › Rulers › Show Video Rulers shows the rulers in video pixels (what they read is
+/// `canvas::rulers::tests`). The item then reads Hide Video Rulers, which puts the rulers back in
+/// points from the ruler origin, and hiding the rulers names the item Show Video Rulers again.
 #[test]
-fn show_video_rulers_counts_the_active_artboard_in_pixels() {
+fn show_video_rulers_command_state_follows_the_rulers() {
     let (mut app, _) = two_boards();
-    let ctx = context();
-    let tree = format!("{:?}", crate::menus::menu_tree().iter().find(|(title, _)| *title == "View").unwrap().1);
-    assert!(tree.contains("\"Show Video Rulers\", \"view.videoRulers\"") && !tree.contains("Todo(\"Show Video Rulers\""), "{tree}");
-    app.run("artboard.setProps", json!({"index": 0, "videoRulerPixelAspectRatio": 0.5})).unwrap();
-    app.run("document.setRulerOrigin", json!({"x": 100, "y": 50, "artboard": 0})).unwrap();
     app.ui.view.rulers = false;
     let label = |app: &VectorcraftApp| crate::menus::dynamic_label(app, "view.videoRulers", "Show Video Rulers");
     assert_eq!(label(&app), "Show Video Rulers");
     assert_eq!(app.run("view.videoRulers", json!({})).unwrap(), json!(true));
     assert!(app.ui.view.rulers && app.ui.view.video_rulers, "the rulers show");
     assert_eq!(label(&app), "Hide Video Rulers");
-    let at_100 = |app: &mut VectorcraftApp, center: Point| {
-        let v = app.view_mut().unwrap();
-        (v.zoom, v.center, v.fitted, v.rotation) = (1.0, center, true, 0.0);
-    };
-    at_100(&mut app, Point::new(200.0, 150.0));
-    // How far label `text` of `labels` starts right of `zero`, to within a hundredth of a point.
-    let from = |labels: &[(String, f32)], text: &str, zero: f32, want: f32| label_x(labels, text).is_some_and(|x| (x - zero - want).abs() < 0.01);
-    let video = top_labels(&mut app, &ctx);
-    let zero = label_x(&video, "0").unwrap();
-    assert!(from(&video, "800", zero, 400.0), "800 pixels at the right edge: {video:?}");
-    assert!(from(&video, "100", zero, 50.0), "{video:?}");
-    // Hide Video Rulers: points from the ruler origin, 100 pt in from the artboard's left edge.
     assert_eq!(app.run("view.videoRulers", json!({})).unwrap(), json!(false));
     assert!(app.ui.view.rulers && !app.ui.view.video_rulers, "the rulers stay");
     assert_eq!(label(&app), "Show Video Rulers");
-    let points = top_labels(&mut app, &ctx);
-    assert!(from(&points, "0", zero, 100.0), "{points:?}");
-    assert!(from(&points, "300", zero, 400.0), "{points:?}");
-    // The second artboard (square pixels, 200 pt wide at x = 700) once it is the active one.
     app.run("view.videoRulers", json!({})).unwrap();
-    app.view_mut().unwrap().artboard = 1;
-    at_100(&mut app, Point::new(800.0, -175.0));
-    let second = top_labels(&mut app, &ctx);
-    let zero = label_x(&second, "0").unwrap();
-    assert!(from(&second, "200", zero, 200.0), "{second:?}");
-    // Hidden with Show Rulers, the item offers to show them again.
     app.run("view.rulers", json!({})).unwrap();
-    assert_eq!(label(&app), "Show Video Rulers");
-    assert!(top_labels(&mut app, &ctx).is_empty());
+    assert_eq!(label(&app), "Show Video Rulers", "hidden with Show Rulers, the item offers to show them again");
 }

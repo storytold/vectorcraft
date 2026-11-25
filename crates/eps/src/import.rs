@@ -24,7 +24,9 @@
 //! from those layers alone, without its page.
 //!
 //! The page is the file's `%%BoundingBox` (`%%HiResBoundingBox` when it has one), the first page
-//! of a PostScript file without one. A file whose program can't be read (an operator the
+//! of a PostScript file without one. A `.ai` in the legacy format ([`import_ai`]) that comes in
+//! through its layers keeps the artboard its header gives, with its art outside it; an EPS comes in
+//! on its page. A file whose program can't be read (an operator the
 //! interpreter doesn't know, an error, a limit reached) or that draws nothing comes in from its
 //! layers when its program has them (a `.ai` in PostScript form whose prolog is named but not
 //! included, as other apps write it), or with its art on one layer when it is in the legacy format
@@ -42,6 +44,7 @@ mod interp;
 mod lex;
 mod native;
 mod obj;
+mod predefined_cmap;
 mod preview;
 mod shading;
 mod text;
@@ -65,6 +68,10 @@ mod tests_images;
 #[cfg(test)]
 mod tests_native;
 #[cfg(test)]
+mod tests_reads;
+#[cfg(test)]
+mod tests_strings;
+#[cfg(test)]
 mod tests_type1;
 #[cfg(test)]
 mod tests_type42;
@@ -84,14 +91,19 @@ use obj::PsError;
 pub use ai::NameEncoding;
 #[cfg(test)]
 pub(crate) use ai::objects_read;
+#[cfg(test)]
+pub(crate) use ai::{ART_STYLE_PARSES, ENVELOPE_DRAWN, ENVELOPE_TYPE_DRAWN};
 pub(crate) use ai::{
-    MAX_EDITING_OBJECTS, MAX_GRADIENT_STOPS, MAX_LISTED, MAX_LISTED_NAME, MAX_SYMBOLS, read_art_style, read_style_list, style_moves_with,
-    symbol_art_member, warp_number,
+    BLEND_BUDGET, BLEND_PLUGIN, BRUSH_MANAGER, BrushesRead, DEFORM_PLUGIN, EnvelopeGridPoint, MAX_BLEND_KEYS, MAX_BLEND_OBJECTS,
+    MAX_CHECKED as ENVELOPE_CHECKS, MAX_EDITING_OBJECTS, MAX_GRADIENT_STOPS, MAX_LISTED, MAX_LISTED_NAME, MAX_MESH_SIDE, MAX_SYMBOLS, ParsedStyle,
+    blend_reads, brush_plugin_name, brushes_kept, envelope_outline, envelope_upright, mesh_reads, parse_art_style, parsed_moves_with,
+    read_brush_object, read_parsed_style, read_style_list, symbol_art_member, turn_brush_art_over, warp_number,
 };
-pub(crate) use ate::{MAX_BYTES as MAX_TEXT_DOCUMENT, MAX_FRAMES, MAX_SEGMENTS, MAX_STORY, MAX_VALUES as MAX_TEXT_VALUES};
+pub(crate) use ate::{MAX_BYTES as MAX_TEXT_DOCUMENT, MAX_FRAMES, MAX_SEGMENTS, MAX_STORY, MAX_VALUES as MAX_TEXT_VALUES, record_version};
 pub use native::{AiLayers, ai_alone, ai_alone_on_page, ai_alone_with, ai_layers_alone, ai_opened_artboard, is_loss, layered_ai, layered_ai_from};
-pub(crate) use native::{MAX_TEXT, scale_document};
+pub(crate) use native::{MAX_TEXT, MAX_WRAP_WORK, scale_document, scale_symbols};
 pub use text::family_style;
+pub(crate) use text::{document_font, postscript_face};
 
 /// The page of a PostScript file without a bounding box (US Letter).
 const LETTER: [f64; 4] = [0.0, 0.0, 612.0, 792.0];
@@ -127,7 +139,8 @@ struct Dsc {
     own_legacy: bool,
 }
 
-/// The four numbers of a bounding box comment's value, when it has them and they make a box.
+/// The four numbers of a bounding box comment's value, when it has them and they make a box
+/// within [`MAX_SIDE`].
 fn box_of(v: &str) -> Option<[f64; 4]> {
     let n: Vec<f64> = v.split_whitespace().map_while(|w| w.parse::<f64>().ok()).collect();
     let [x0, y0, x1, y1] = n.as_slice() else { return None };
@@ -136,50 +149,53 @@ fn box_of(v: &str) -> Option<[f64; 4]> {
 }
 
 impl Dsc {
-    /// The comments of `ps`: from the header, or (`(atend)`) the last ones in the file.
+    /// The comments of `ps`: from the header, or (`(atend)`) the last ones in the file, bounded by
+    /// `craft_eps::MAX_EXTENDED_HEADER` / `craft_eps::MAX_TRAILER`. Preserves the last in-range
+    /// header box within [`MAX_SIDE`].
     fn read(ps: &[u8]) -> Self {
-        let mut d = Dsc::default();
-        let (mut bbox, mut hires, mut atend) = (None, None, false);
-        let mut header = true;
-        for raw in ps.split(|b| matches!(b, b'\n' | b'\r')).filter(|l| !l.is_empty()) {
-            // Past the header only comments can matter.
-            if !header && !raw.starts_with(b"%%") {
-                continue;
-            }
+        let shared = craft_eps::Comments::read_with_header_limit(ps, craft_eps::MAX_EXTENDED_HEADER);
+        let head = &ps[..ps.len().min(craft_eps::MAX_EXTENDED_HEADER)];
+        let (mut bbox, mut hires, mut atend, mut own_legacy) = (None, None, false, false);
+        for raw in head.split(|b| matches!(b, b'\n' | b'\r')).filter(|l| !l.is_empty()) {
             let line = String::from_utf8_lossy(raw);
             let line = line.trim_end();
-            if header && (line.starts_with("%%EndComments") || !line.starts_with('%')) {
-                header = false;
-                if !atend {
-                    break;
-                }
+            if line.starts_with("%%EndComments") || !line.starts_with('%') {
+                break;
             }
             let value = |key: &str| line.strip_prefix(key).map(str::trim);
-            let creator = value("%%Creator:").is_some_and(|v| v.contains("Illustrator")); // brand-ok: the creator its files name
-            if header && (line.starts_with("%AI") || line.starts_with("%%AI") || creator) {
-                d.illustrator = true;
-            }
-            if header && value("%%DocumentSuppliedResources:").is_some_and(|v| v.strip_prefix("procset ") == Some(crate::legacy_ai::PROCSET)) {
-                d.own_legacy = true;
+            if value("%%DocumentSuppliedResources:").is_some_and(|v| v.strip_prefix("procset ") == Some(crate::legacy_ai::PROCSET)) {
+                own_legacy = true;
             }
             if let Some(v) = value("%%HiResBoundingBox:") {
-                if header || atend {
+                if v.starts_with("(atend)") {
+                    atend = true;
+                } else {
                     hires = box_of(v).or(hires);
                 }
             } else if let Some(v) = value("%%BoundingBox:") {
                 if v.starts_with("(atend)") {
                     atend = true;
-                } else if header || atend {
+                } else {
                     bbox = box_of(v).or(bbox);
                 }
-            } else if let Some(v) = value("%%Pages:")
-                && header
-            {
-                d.pages = v.split_whitespace().next().and_then(|n| n.parse().ok());
             }
         }
-        d.bbox = hires.or(bbox);
-        d
+        if atend {
+            let tail = &ps[ps.len().saturating_sub(craft_eps::MAX_TRAILER)..];
+            for raw in tail.split(|b| matches!(b, b'\n' | b'\r')).filter(|l| !l.is_empty()) {
+                if !raw.starts_with(b"%%") {
+                    continue;
+                }
+                let line = String::from_utf8_lossy(raw);
+                let line = line.trim_end();
+                if let Some(v) = line.strip_prefix("%%HiResBoundingBox:").map(str::trim) {
+                    hires = box_of(v).or(hires);
+                } else if let Some(v) = line.strip_prefix("%%BoundingBox:").map(str::trim) {
+                    bbox = box_of(v).or(bbox);
+                }
+            }
+        }
+        Self { bbox: hires.or(bbox), pages: shared.pages, illustrator: shared.illustrator, own_legacy }
     }
 }
 
@@ -274,7 +290,20 @@ pub fn import_trusting(bytes: &[u8], editing_data: bool, trust: bool) -> Result<
 /// and data sets) read in `names`. The type of the document it gives that is set in families that
 /// aren't available shows in the fallback font, and a warning names them.
 pub fn import_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding) -> Result<Imported, String> {
-    let mut r = read_names(bytes, editing_data, trust, names)?;
+    read_checked(bytes, editing_data, trust, names, false)
+}
+
+/// [`import_names`] for a `.ai` (or `.ait`) in PostScript form: a program in the legacy format
+/// that comes in through its layers keeps the artboard its header gives, with its art outside it,
+/// where an EPS comes in on its page, its art's box. A `.ai` of versions 3 and 4, which doesn't
+/// give its artboard's size, has a US Letter artboard around its template box's center.
+pub fn import_ai(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding) -> Result<Imported, String> {
+    read_checked(bytes, editing_data, trust, names, true)
+}
+
+/// [`import_names`] (a `.ai` when `ai_file`, see [`import_ai`]).
+fn read_checked(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding, ai_file: bool) -> Result<Imported, String> {
+    let mut r = read_names(bytes, editing_data, trust, names, ai_file)?;
     let missing = missing_fonts(&r.document);
     if !missing.is_empty() {
         r.warnings.push(format!("{MISSING_FONTS_NOTE}: {}", missing.join(", ")));
@@ -309,8 +338,8 @@ fn missing_fonts(d: &Document) -> Vec<String> {
     missing
 }
 
-/// [`import_names`] before the type's fonts are checked.
-fn read_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding) -> Result<Imported, String> {
+/// [`import_names`] before the type's fonts are checked (a `.ai` when `ai_file`, see [`import_ai`]).
+fn read_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding, ai_file: bool) -> Result<Imported, String> {
     let ps = program(bytes)?;
     let dsc = Dsc::read(ps);
     // A legacy `.ai` VectorCraft wrote: its prolog prints the art plainly (gradients flat, no
@@ -318,7 +347,7 @@ fn read_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding
     // printed).
     if editing_data
         && dsc.own_legacy
-        && let Some(Ok((document, warnings))) = native::program_alone(ps, dsc.illustrator, names)
+        && let Some(Ok((document, warnings))) = native::program_alone(ps, dsc.illustrator, ai_file, names)
     {
         return Ok(Imported { document, warnings, preview: false });
     }
@@ -338,7 +367,7 @@ fn read_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding
     }
     let drew = !out.drawn.is_empty();
     let why = match (&result, drew) {
-        (Ok(()), true) if editing_data => return Ok(native::layered(ps, finish(out), trust, dsc.illustrator, names)),
+        (Ok(()), true) if editing_data => return Ok(native::layered(ps, finish(out), trust, dsc.illustrator, ai_file, names)),
         (Ok(()), true) => return Ok(finish(out)),
         (Ok(()), false) => "it draws nothing VectorCraft's PostScript reader can show".to_string(),
         (Err(e), _) => reason(e, fault.as_ref()),
@@ -346,7 +375,7 @@ fn read_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding
     // A file in the legacy Illustrator format whose program can't be run (a `.ai` that names the
     // prolog defining its operators without including it): its layers, which the program has, or
     // its art on one layer when it has none (Illustrator 3).
-    let why = match editing_data.then(|| native::program_alone(ps, dsc.illustrator, names)).flatten() {
+    let why = match editing_data.then(|| native::program_alone(ps, dsc.illustrator, ai_file, names)).flatten() {
         Some(Ok((document, warnings))) => return Ok(Imported { document, warnings, preview: false }),
         Some(Err(e)) => format!("{why}; its layers couldn't be read either ({e})"),
         None => why,

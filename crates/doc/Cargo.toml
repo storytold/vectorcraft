@@ -8,20 +8,32 @@ description = "VectorCraft document model: artboards, layers, objects, appearanc
 [lints]
 workspace = true
 
+[features]
+# `vectorcraft_doc::blend::spines_built` for other crates' tests (dev-dependencies only).
+spine-count = []
+# `vectorcraft_doc::symbols_read` for other crates' tests (dev-dependencies only).
+symbol-read-count = []
+# `vectorcraft_doc::locked_artboard_measures` for other crates' tests (dev-dependencies only).
+locked-artboard-count = []
+
 [dependencies]
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 kurbo = { workspace = true }
 image = { workspace = true }
+# Image headers (PNG and JPEG sizes, `pixels::header_size`) and CMYK JPEG inks (`cmyk`).
+craft-image-codecs = { workspace = true }
 tiff = { workspace = true }
 # 1-bit TIFFs compressed with CCITT Group 3 (Compression 2 and 3).
-hayro-ccitt = { workspace = true }
-zune-jpeg = { workspace = true }
+craft-stream-codecs = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 chrono = { workspace = true }
 
 [dev-dependencies]
+flate2 = { workspace = true }
+# The CMYK JPEG reader `cmyk` had before craft-image-codecs, kept as the reference its inks match.
+zune-jpeg = { workspace = true }
 jpeg-encoder = { workspace = true }
 proptest = { workspace = true }

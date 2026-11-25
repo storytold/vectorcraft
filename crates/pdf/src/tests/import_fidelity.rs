@@ -112,7 +112,24 @@ fn mask_image_pixels(s: &str) -> [[u8; 4]; 2] {
         }
     });
     let [key] = keys.as_slice() else { panic!("one image in the mask art: {keys:?}") };
-    let px = image::load_from_memory(&d.images[key].bytes).unwrap().to_rgba8();
+    let px = craft_image_codecs::decode(&d.images[key].bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     [px.get_pixel(0, 0).0, px.get_pixel(1, 0).0]
 }
 
@@ -454,7 +471,7 @@ fn a_composite_font_is_noted_by_its_cid_font_name() {
     let noted = |font: &str| {
         let resources = format!("/Font << /F1 {font} >>");
         let bytes = one_page("BT /F1 24 Tf 10 30 Td <0001> Tj ET", &resources, &[]);
-        let pdf = craft_pdf::syntax::Pdf::new(bytes).unwrap();
+        let pdf = craft::pdf::syntax::Pdf::new(bytes).unwrap();
         let mut fonts = crate::import_scan::FontNames::new();
         let mut ocgs = crate::import_scan::Ocgs::read(&pdf);
         crate::import_scan::scan_page(&pdf.pages()[0], &mut ocgs, false, &mut fonts, pdf.decode_limits().max_decoded_stream()).unwrap();
@@ -482,12 +499,62 @@ fn a_form_drawn_many_times_reads_its_font_resources_once() {
     let form = stream("/Type /XObject /Subtype /Form /BBox [0 0 100 100]", "0 0 1 rg 50 50 30 30 re f");
     let resources = format!("/Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> /XObject << /X0 {form_no} 0 R >>");
     let page = PdfPage { resources, ..PdfPage::new(100.0, 100.0, &format!("BT /F1 24 Tf 10 30 Td (Hi) Tj ET {}", "/X0 Do ".repeat(500))) };
-    let pdf = craft_pdf::syntax::Pdf::new(pdf_with(&[page], &[&form], None)).unwrap();
+    let pdf = craft::pdf::syntax::Pdf::new(pdf_with(&[page], &[&form], None)).unwrap();
     let mut fonts = crate::import_scan::FontNames::new();
     let mut ocgs = crate::import_scan::Ocgs::read(&pdf);
     let walk = crate::import_scan::walk_page(&pdf.pages()[0], &mut ocgs, false, &mut fonts, pdf.decode_limits().max_decoded_stream());
     assert_eq!(walk.font_dicts.len(), 1);
     assert_eq!(walk.fonts.len(), 1);
+}
+
+/// A Type 3 font that every page lists in a font dictionary of its own, and a form lists in its
+/// resources, has its glyph procedures read once for the document. Each page still maps the font's
+/// glyphs, and the font whose glyphs set their own color (`d0`) is told from the one whose glyphs
+/// don't (`d1`).
+#[test]
+fn a_type3_font_on_every_page_has_its_glyph_procedures_read_once() {
+    const PAGES: usize = 6;
+    let n = first_extra(PAGES);
+    let (shape, color, shape_a, shape_b, color_a, form) = (n, n + 1, n + 2, n + 3, n + 4, n + 5);
+    let font = |name: &str, procs: &str| {
+        format!(
+            "<< /Type /Font /Subtype /Type3 /Name /{name} /FontBBox [0 0 1000 1000] /FontMatrix [0.001 0 0 0.001 0 0] /CharProcs << {procs} >> /Encoding << /Type /Encoding /Differences [97 /a /b] >> /FirstChar 97 /LastChar 98 /Widths [1000 1000] /Resources << >> >>"
+        )
+    };
+    let objects = [
+        font("Vcshape", &format!("/a {shape_a} 0 R /b {shape_b} 0 R")),
+        font("Vccolor", &format!("/a {color_a} 0 R /b {color_a} 0 R")),
+        stream("", "1000 0 0 0 1000 1000 d1 0 0 1000 1000 re f"),
+        stream("", "1000 0 0 0 1000 1000 d1 0 0 500 500 re f"),
+        stream("", "1000 0 d0 1 0 0 rg 0 0 1000 1000 re f"),
+        stream(
+            &format!("/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Resources << /Font << /C {color} 0 R /S {shape} 0 R >> >>"),
+            "BT /S 12 Tf (ab) Tj /C 12 Tf (ab) Tj ET",
+        ),
+    ];
+    let pages: Vec<PdfPage> = (0..PAGES)
+        .map(|_| PdfPage {
+            resources: format!("/Font << /S {shape} 0 R /C {color} 0 R >> /XObject << /X0 {form} 0 R >>"),
+            ..PdfPage::new(100.0, 100.0, "BT /S 24 Tf 10 30 Td (ab) Tj /C 24 Tf (ab) Tj ET /X0 Do")
+        })
+        .collect();
+    let extra: Vec<&str> = objects.iter().map(String::as_str).collect();
+    let pdf = craft::pdf::syntax::Pdf::new(pdf_with(&pages, &extra, None)).unwrap();
+    let mut fonts = crate::import_scan::FontNames::new();
+    let mut ocgs = crate::import_scan::Ocgs::read(&pdf);
+    crate::import_scan::TEST_CHARPROC_DECODES.with(|d| d.set(0));
+    for page in pdf.pages().iter() {
+        let scan = crate::import_scan::scan_page(page, &mut ocgs, false, &mut fonts, pdf.decode_limits().max_decoded_stream()).unwrap();
+        let mapped: std::collections::HashSet<(u128, bool)> = scan.type3_cache_map.values().copied().collect();
+        let noted: std::collections::HashSet<(u128, bool)> = fonts.keys().map(|k| (*k, false)).collect();
+        assert_eq!(scan.type3_cache_map.len(), 2 * 257);
+        assert_eq!(mapped, noted);
+        let mut colors: Vec<(String, bool)> = fonts.values().map(|f| (f.name.clone(), f.is_colour)).collect();
+        colors.sort();
+        assert_eq!(colors, [("Vccolor".to_string(), true), ("Vcshape".to_string(), false)]);
+    }
+    // The `d1` font's two procedures and the `d0` font's one.
+    assert_eq!(crate::import_scan::TEST_CHARPROC_DECODES.with(std::cell::Cell::get), 3);
 }
 
 /// A value of the page's font dictionary that the reader can't parse (a name with a broken `#`
@@ -499,7 +566,7 @@ fn fonts_are_noted_past_font_resources_the_reader_cannot_parse() {
         let resources = format!("/Font << /A {junk} /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >>");
         let bytes = one_page("BT /F1 24 Tf 10 30 Td (Hello) Tj ET", &resources, &[]);
         // Opened by the reader alone, without the checks of `pages::open`.
-        let pdf = craft_pdf::syntax::Pdf::new(bytes).unwrap();
+        let pdf = craft::pdf::syntax::Pdf::new(bytes).unwrap();
         let mut fonts = crate::import_scan::FontNames::new();
         let mut ocgs = crate::import_scan::Ocgs::read(&pdf);
         crate::import_scan::scan_page(&pdf.pages()[0], &mut ocgs, false, &mut fonts, pdf.decode_limits().max_decoded_stream()).unwrap();
@@ -766,6 +833,47 @@ fn a_function_based_shading_beside_the_origin_becomes_a_conic_gradient() {
             let want = turn(x, y) as f32;
             assert!((gray - want).abs() < 0.03, "{domain} ({x}, {y}): {gray} vs {want}");
         }
+    }
+}
+
+/// A function-based shading whose calculator function turns `abs(x) + abs(y)` into a gray ramp
+/// (ISO 32000-1 7.10.5; the ramp clipped to 1 past the square with corners at the domain's edges)
+/// comes in as a diamond gradient about the origin's place on the page. A ramp along a circle
+/// about the origin does not.
+#[test]
+fn a_function_based_shading_of_squares_about_the_origin_becomes_a_diamond_gradient() {
+    use vectorcraft_geom::Point;
+    let _held = shadings();
+    let fill = |r: &ImportReport| {
+        all(&r.document).into_iter().find_map(|n| match n.appearance.fill().map(|f| &f.paint) {
+            Some(Paint::Gradient(g)) => Some(g.clone()),
+            _ => None,
+        })
+    };
+    // The origin at the square's center, a unit 50 pt.
+    let r = function_shading("-1 1 -1 1", "50 0 0 50 50 50", "{ abs exch abs add dup dup }");
+    let g = fill(&r).unwrap_or_else(|| panic!("a gradient fill, {:?}", r.warnings));
+    assert_eq!(g.gradient.kind, GradientKind::Diamond);
+    let geom = g.geom.unwrap();
+    assert!(geom.start.distance(Point::new(50.0, 50.0)) < 0.01, "{geom:?}");
+    for (x, y) in [(50.0, 50.0), (75.0, 50.0), (50.0, 20.0), (70.0, 70.0), (35.0, 60.0), (95.0, 95.0), (10.0, 80.0)] {
+        let gray = g.gradient.sample(geom.param_at(GradientKind::Diamond, Point::new(x, y)) as f32).0.to_rgb()[0];
+        let want = (((x - 50.0) as f32).abs() / 50.0 + ((y - 50.0) as f32).abs() / 50.0).min(1.0);
+        assert!((gray - want).abs() < 0.03, "({x}, {y}): {gray} vs {want}");
+    }
+    // A radial ramp (the distance from the origin) is not one.
+    let r = function_shading("-1 1 -1 1", "50 0 0 50 50 50", "{ dup mul exch dup mul add sqrt dup dup }");
+    assert!(fill(&r).is_none_or(|g| g.gradient.kind != GradientKind::Diamond));
+    // A domain wider than it is tall: the ramp keeps changing out to its far corners, past the
+    // largest square the domain holds whole.
+    let r = function_shading("-2 2 -1 1", "50 0 0 50 50 50", "{ abs exch abs add 3 div dup dup }");
+    let g = fill(&r).unwrap_or_else(|| panic!("a gradient fill, {:?}", r.warnings));
+    assert_eq!(g.gradient.kind, GradientKind::Diamond);
+    let geom = g.geom.unwrap();
+    for (x, y) in [(50.0, 50.0), (125.0, 90.0), (-20.0, 10.0), (140.0, 50.0), (60.0, 95.0), (0.0, 30.0)] {
+        let gray = g.gradient.sample(geom.param_at(GradientKind::Diamond, Point::new(x, y)) as f32).0.to_rgb()[0];
+        let want = (((x - 50.0) as f32).abs() / 50.0 + ((y - 50.0) as f32).abs() / 50.0) / 3.0;
+        assert!((gray - want).abs() < 0.03, "({x}, {y}): {gray} vs {want}");
     }
 }
 

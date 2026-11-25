@@ -24,10 +24,21 @@ impl Session {
         });
         // Clicks find an image's own fills and strokes where their effects draw them.
         vectorcraft_doc::hit::set_image_paint(vectorcraft_render::effects::image_paint);
+        // Direct Selection picks and outlines the parts of a dynamic symbol's instance where the
+        // effects of the instance's fill and stroke draw them.
+        vectorcraft_doc::hit::set_instance_row_art(vectorcraft_render::effects::add_instance_row_effects_to_parts);
+        vectorcraft_doc::hit::set_instance_reshapes(vectorcraft_render::effects::has_item_geometry);
+        // Clicks inside a clip group fall in the region its clipping path's effects give it.
+        vectorcraft_doc::hit::set_clip_region(vectorcraft_render::effects::reshaped_clip_outline);
+        // Clicks and marquees find paths, compound paths, groups and layers where their geometry
+        // effects draw them.
+        vectorcraft_doc::hit::set_drawn_art(vectorcraft_render::effects::preview::drawn_art);
         // Clicks find a blend's steps and an envelope's distorted art where the canvas draws them,
-        // evaluated again when the fonts or the plug-ins change.
+        // evaluated again when the fonts, the hyphenation exceptions or the plug-ins change.
         vectorcraft_doc::hit::set_live_art(vectorcraft_render::effects::expand_live, || {
-            vectorcraft_text::FontDb::global().generation().rotate_left(32) ^ vectorcraft_render::effects::plugin_revision()
+            let mut h = std::hash::DefaultHasher::new();
+            std::hash::Hash::hash(&(vectorcraft_text::layout_inputs(), vectorcraft_render::effects::plugin_revision()), &mut h);
+            std::hash::Hasher::finish(&h)
         });
         // Envelopes map type from the bounds of its glyph outlines, underlines and strikethroughs.
         vectorcraft_text::register_envelope_ink();
@@ -48,6 +59,7 @@ impl Session {
             histories_seen: None,
             tool: vectorcraft_tools::create("selection"),
             lender: None,
+            back_to_bucket: false,
             held_input: Default::default(),
             input_count: 0,
             edit_started_by: None,
@@ -61,6 +73,7 @@ impl Session {
             preview_memo: Default::default(),
             depth: 0,
             replaying: false,
+            shape_drawn: false,
             tool_panic: None,
             tool_resets: 0,
             tool_set_since_reset: false,
@@ -76,10 +89,14 @@ impl Session {
             recent_colors: vec![],
             pending_paint: None,
             swatch_libraries: Default::default(),
+            graph_design_libraries: Default::default(),
             freeform_point: None,
             style_libraries: Default::default(),
             symbol_libraries: Default::default(),
             brush_libraries: Default::default(),
+            arrowheads: Default::default(),
+            bevels: Default::default(),
+            shown_library_ids: Default::default(),
             libraries: Default::default(),
             pdf_preset_dir: None,
             dictionary_file: None,
@@ -87,7 +104,11 @@ impl Session {
             color_settings_file: None,
             plugin_dir: None,
             scripts_dir: None,
-            ignored_plugin_grants: Default::default(),
+            metadata_templates_dir: None,
+            new_doc_profile_dir: None,
+            proof_setup_dir: None,
+            proof_setup_saves: 0,
+            script_data_dir: None,
             plugin_output: None,
             plugin_install_approval: None,
             plugin_grants_from_requests: false,
@@ -97,6 +118,7 @@ impl Session {
             journal_note: Default::default(),
             note_depth: 1,
             journal_query: false,
+            defaults_only_ran: None,
             explicit_undo_group: None,
             batch_stash: None,
             batch_steps: None,
@@ -107,6 +129,7 @@ impl Session {
             place_hand_off: None,
             queue_hand_off: None,
             place_queue_roots: None,
+            place_queue_loads: 0,
             image_hand_off: None,
             trace_hand_off: None,
             place_cursor_requests: false,
@@ -114,15 +137,19 @@ impl Session {
             screens_hand_off: None,
             recovery: Default::default(),
             in_tool_actions: false,
+            settled_warnings: None,
             previewing: false,
+            decoded_images: Default::default(),
             envelope_defaults: None,
             liquify_stroke: None,
             plane_widget_press: false,
             pointer_held: false,
             press_options: None,
+            press_options_stored: false,
             press_type_selection: None,
             press_point: None,
             ruler_guide: None,
+            ruler_origin: None,
             port_marks: Default::default(),
             font_search: None,
             link_search: None,
@@ -132,7 +159,9 @@ impl Session {
             link_stamps: Default::default(),
             link_scan: None,
             global_edit_options: Default::default(),
+            select_similar: crate::cmd::SIMILAR[0].0,
             keyboard_text: false,
+            toasts: Default::default(),
             script_key: None,
             script_engines: crate::script::EnginesKey::new(),
             script_stop: vectorcraft_js::Interrupt::new(),
@@ -188,12 +217,16 @@ impl Session {
         let _ = self.finish_tool_edit_later();
         // The switch goes on whatever the lent tool's last actions did, as for the deactivation.
         let _ = self.give_back_tool(view);
-        let acts = self.with_tool_cx(view, |t, cx| t.deactivate(cx));
-        let _ = self.apply_actions(acts);
+        let _ = self.deactivate_tool(view);
         // A batch leaves its interaction open in the document it leaves, to keep or roll back with
-        // the rest of the batch; anything else in progress (a drag) is cancelled.
+        // the rest of the batch; one that keeps on a switch is kept; anything else in progress (a
+        // drag) is cancelled.
         if self.batch_stash.is_none() {
-            let _ = self.cancel_interaction();
+            let _ = if self.active().and_then(|st| st.interaction.as_ref()).is_some_and(|it| it.keep_on_switch) {
+                self.commit_interaction()
+            } else {
+                self.cancel_interaction()
+            };
         }
         self.keep_tool_settings();
         self.tool = self.make_tool(self.tool.id());
@@ -216,6 +249,7 @@ impl Session {
             self.active = Some(index);
             if switched {
                 self.sync_front_composite_fonts();
+                self.sync_front_profiles();
             }
             true
         } else {
@@ -223,13 +257,30 @@ impl Session {
         }
     }
 
+    /// Make the profiles the document in front is assigned the ones colors are drawn and converted
+    /// through, in place of the working spaces (with no document open, or none assigned: the working
+    /// spaces), after a switch, an open, a close, a revert or a restored document brought another
+    /// document or another assignment to the front. The open documents redraw when the active color
+    /// settings change.
+    pub(crate) fn sync_front_profiles(&mut self) {
+        cmd::colormgmt::use_front_profiles(self);
+    }
+
     /// Register the composite fonts of the document now in front ([`cmd::compositefonts::sync`]),
     /// after a switch or a close brought it there. Its type set in a composite font that differs
     /// from the one of that name before (added, changed or removed) is measured again, and type not
-    /// measured yet (in a document replaced while in the back) is measured now.
+    /// measured yet is measured now. Type that [`Session::replace_document`] measured in the
+    /// document's own composite fonts while it was in the back is not measured again when the
+    /// document is unchanged since.
     fn sync_front_composite_fonts(&mut self) {
-        let changed: HashSet<String> = cmd::compositefonts::sync(self).into_iter().collect();
+        let mut changed: HashSet<String> = cmd::compositefonts::sync(self).into_iter().collect();
         let Some(index) = self.active else { return };
+        if let Some(st) = self.docs.get_mut(index)
+            && let Some((doc, own)) = st.measured_in_own.take()
+            && std::ptr::eq(doc.as_ptr(), Arc::as_ptr(&st.doc))
+        {
+            changed.retain(|n| !own.contains(n));
+        }
         self.refresh_document_text_bounds(index, |t| t.cached_bounds.is_none() || sets_in_any(t, &changed));
     }
 
@@ -248,13 +299,19 @@ impl Session {
     /// what is fitted to type's bounds (an envelope warping it) would come out differently. That
     /// holds for the type in symbol definitions, pattern tiles, graph designs and opacity masks too,
     /// not only in the layers (#1738).
-    pub(crate) fn refresh_text_bounds(doc: &mut Document) {
+    pub(crate) fn refresh_text_bounds(doc: &mut Document) -> Vec<String> {
+        // The fonts files carried for their type draw it ([`vectorcraft_doc::FileFonts`]).
+        let warnings = vectorcraft_text::FontDb::global().bind_document_file_fonts(doc);
         // Inline graphics in text take their size from their symbols' art (not saved either).
         doc.resolve_inline_art();
         let mut uncached = |t: &TextObject| t.cached_bounds.is_none();
         for tree in text_trees_mut(doc) {
             each_text_where(tree, &mut uncached, &mut cmd::typecmd::refresh_bounds_for_first_frame);
         }
+        // The symbols' type is measured now: the inline graphics showing those symbols take their
+        // art's measured size, a symbol's type before the type that shows that symbol inline.
+        doc.resolve_inline_art_with(&mut cmd::typecmd::refresh_bounds_for_first_frame);
+        warnings
     }
 
     /// Measure the type in open document `index` that `stale` picks (in its trees as
@@ -272,12 +329,9 @@ impl Session {
                 each_text_where(tree, &mut stale, &mut cmd::typecmd::refresh_bounds_for_first_frame);
             }
             // Inline graphics take their size from their symbols' art, whose type may just have
-            // been measured again: the text holding one whose size changed is measured again too.
-            if !doc.resolve_inline_art().is_empty() {
-                for tree in text_trees_mut(doc) {
-                    each_text_where(tree, &mut |t| t.cached_bounds.is_none(), &mut cmd::typecmd::refresh_bounds_for_first_frame);
-                }
-            }
+            // been measured again: the text holding one whose size changed is measured again too,
+            // a symbol's type before the type that shows that symbol inline.
+            doc.resolve_inline_art_with(&mut cmd::typecmd::refresh_bounds_for_first_frame);
         });
     }
 
@@ -299,11 +353,15 @@ impl Session {
         // (importers and the native reader have seen to theirs already, with a warning).
         doc.limit_depth();
         cmd::compositefonts::filter_loaded(&mut doc);
+        // Importers report binding failures; programmatic additions still need owned resources.
+        let _ = vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut doc);
         // Inline graphics in text take their size from their symbols' art (not saved).
         doc.resolve_inline_art();
         // Ruler guides a reader left in the saved list become nodes on their layers.
         doc.guides_into_nodes();
         cmd::dimension::conform(&mut doc);
+        // A plane held by Automatic Plane Positioning when the file was saved is back in its place.
+        vectorcraft_tools::distort::perspective::PerspectiveGrid::end_positioning(&mut doc);
         self.reset_tool_for_doc_switch();
         let mut st = DocState::new(doc, path);
         st.history.limit = self.prefs.history_states as usize;
@@ -312,6 +370,7 @@ impl Session {
         let i = self.docs.len() - 1;
         self.active = Some(i);
         self.sync_opened_composite_fonts(i);
+        self.sync_front_profiles();
         if self.depth == 0
             && let Some(label) = self.explicit_undo_group.clone()
         {
@@ -331,14 +390,11 @@ impl Session {
         doc.resolve_inline_art();
         doc.guides_into_nodes();
         cmd::dimension::conform(&mut doc);
-        // In the back, type set in a font named like a composite font is measured when the document
-        // comes to the front and its own composite fonts are registered, not in the front
-        // document's.
-        let mut back_names = None;
-        if self.active == Some(index) {
-            // Pending tool work (typing, a drag) belongs to the content being thrown away.
-            self.reset_tool_for_doc_switch();
-        } else {
+        vectorcraft_tools::distort::perspective::PerspectiveGrid::end_positioning(&mut doc);
+        // In the back, type set in a font named like a composite font is measured again below, in
+        // the document's own composite fonts, not in the front document's.
+        let back = self.active != Some(index);
+        if back {
             let mut names = cmd::compositefonts::names_in_use(self);
             names.extend(doc.composite_fonts.iter().map(|f| f.name.to_lowercase()));
             for tree in text_trees_mut(&mut doc) {
@@ -347,16 +403,22 @@ impl Session {
                     t.cached_baselines.clear();
                 });
             }
-            back_names = Some(names);
+        } else {
+            // Pending tool work (typing, a drag) belongs to the content being thrown away.
+            self.reset_tool_for_doc_switch();
         }
         let old = &self.docs[index];
         let mut st = DocState::new(doc, old.path.clone());
         st.history.limit = old.history.limit;
         // Same open document (caches keyed by uid stay valid); a new revision redraws it.
         st.uid = old.uid;
+        // Work started for the content being thrown away is dropped when it finishes.
+        st.reverts = old.reverts + 1;
         st.opened_as_tab = old.opened_as_tab;
         st.revision = old.revision + 1;
         st.format = old.format;
+        // What scripts' commands did to the document stays until the person saves it.
+        st.by_script = old.by_script.clone();
         st.save_options = old.save_options.clone();
         // The remembered artboard pick follows the artboards it named when the file read back has
         // the artboards the document had at the save, in the same order and with the same ids (a
@@ -378,18 +440,50 @@ impl Session {
         if let Some(stash) = &mut self.batch_stash {
             stash.push(old);
         }
-        match back_names {
-            Some(names) => self.refresh_document_text_bounds(index, |t| t.cached_bounds.is_none() && !sets_in_any(t, &names)),
-            None => self.sync_opened_composite_fonts(index),
+        if back {
+            self.measure_back_document(index);
+        } else {
+            self.sync_opened_composite_fonts(index);
+            self.sync_front_profiles();
         }
         true
     }
 
+    /// Measure the type not measured yet in open document `index`, which is in the back, in its own
+    /// composite fonts, lent for the measuring, so its type has the bounds it will have when the
+    /// document comes to the front: type naming a composite font the document does not define is
+    /// measured as in a missing font, also when the front document defines one of that name, and
+    /// also when the document defines none. The front document stays the one whose composite fonts
+    /// are registered. The names of the document's composite fonts its type was measured in are
+    /// kept, so its coming to the front does not measure that type again.
+    fn measure_back_document(&mut self, index: usize) {
+        let Some(st) = self.docs.get(index) else { return };
+        let fonts = st.doc.composite_fonts.clone();
+        let db = vectorcraft_text::FontDb::global();
+        let lent = db.lend_document_composite_fonts(&fonts);
+        // A name another loan holds with a different definition is not lent: type set in it is
+        // measured again when the document comes to the front.
+        let own: HashSet<String> =
+            fonts.iter().filter(|f| db.composite_font(&f.name).is_some_and(|have| *have == **f)).map(|f| f.name.to_lowercase()).collect();
+        self.refresh_document_text_bounds(index, |t| t.cached_bounds.is_none());
+        drop(lent);
+        if let Some(st) = self.docs.get_mut(index) {
+            st.measured_in_own = Some((Arc::downgrade(&st.doc), own));
+        }
+    }
+
+    /// Close the document in tab `index` (`file.close`). Closing a tab other than the current one
+    /// keeps the current document current, and its tool keeps its state: no document is switched
+    /// to. Closing the current document makes the tab now at `index` current, or the last tab when
+    /// it was the last one. False, changing nothing, when `index` is past the last document.
     pub fn close_document(&mut self, index: usize) -> bool {
         if index >= self.docs.len() {
             return false;
         }
-        self.reset_tool_for_doc_switch();
+        let front = self.active().map(|d| d.uid).filter(|_| self.active != Some(index));
+        if front.is_none() {
+            self.reset_tool_for_doc_switch();
+        }
         // Closed (saved or discarded): nothing left to recover.
         let uid = self.docs[index].uid;
         cmd::recovery::forget(self, uid);
@@ -397,8 +491,13 @@ impl Session {
         if let Some(stash) = &mut self.batch_stash {
             stash.push(old);
         }
+        if let Some(uid) = front {
+            self.active = self.docs.iter().position(|d| d.uid == uid);
+            return true;
+        }
         self.active = if self.docs.is_empty() { None } else { Some(index.min(self.docs.len() - 1)) };
         self.sync_front_composite_fonts();
+        self.sync_front_profiles();
         true
     }
 

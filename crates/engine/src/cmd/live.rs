@@ -21,7 +21,7 @@ use super::expand::gradient_sampler;
 use super::pathops::Beside;
 use super::{
     CommandSpec, EngineError, Result, Session, always, bad, check_numbers, cmd, color_param, f64_or, f64_req, finite_numbers, has_doc, has_multi,
-    has_selection, id_param, named_ids, number_or, ok, str_param, switch_or, text_param,
+    has_selection, named_ids, number_or, object_param, ok, str_param, switch_or, text_param,
 };
 
 mod blend;
@@ -29,6 +29,8 @@ mod commands;
 mod common;
 mod envelope;
 mod mesh;
+#[cfg(test)]
+mod selected_tests;
 
 pub(crate) use blend::expand_blends;
 pub use commands::specs;

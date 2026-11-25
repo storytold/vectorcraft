@@ -14,7 +14,8 @@ use crate::{Options, SyntaxError};
 /// cannot catch it, and their `finally` blocks do not run.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Limits {
-    /// Instructions a run may execute.
+    /// Instructions a run may execute. Source that `eval`, `Function` or a host evaluator
+    /// compiles during the run also takes one unit for each UTF-16 code unit, before it is parsed.
     pub fuel: u64,
     /// Estimated bytes the heap (objects, environments and the strings they hold) may reach
     /// after a collection. A string longer than a quarter of this many code units cannot be
@@ -61,6 +62,16 @@ pub enum LimitKind {
 /// The tag [`Realm::error_source`] gives for a source that is neither the realm's script nor an
 /// evaluator's: code that `eval` or `Function` compiled, or an error with no place.
 pub const UNKNOWN_SOURCE: u32 = u32::MAX;
+
+/// The file and line that line `line` of the source with tag `tag` ([`Realm::error_tag`]) came
+/// from, as `$.line` and `$.stack` give them ([`Realm::set_source_locator`]).
+pub type SourceLocator = std::rc::Rc<dyn Fn(u32, u32) -> (String, u32)>;
+
+/// The source tag after `tag`. Once the tags are used up, every later source gets
+/// [`UNKNOWN_SOURCE`], so no two sources share a tag.
+pub(crate) fn next_tag(tag: u32) -> u32 {
+    if tag >= UNKNOWN_SOURCE - 1 { UNKNOWN_SOURCE } else { tag + 1 }
+}
 
 /// The fuel [`Realm::advance`] lets a slice spend, past the slice it was asked for, in a nested run
 /// it cannot pause.
@@ -128,6 +139,10 @@ pub struct RunError {
     pub message: String,
     pub line: u32,
     pub column: u32,
+    /// `message` is text the script supplied: a value it threw, or an error object it made or whose
+    /// name or message it changed. False for the interpreter's and host functions' own errors,
+    /// syntax errors and limits, even when a script caught one and threw it again.
+    pub authored: bool,
 }
 
 impl std::fmt::Display for RunError {
@@ -140,7 +155,7 @@ impl std::error::Error for RunError {}
 
 impl From<SyntaxError> for RunError {
     fn from(e: SyntaxError) -> Self {
-        RunError { kind: RunErrorKind::Syntax, message: e.to_string(), line: e.line, column: e.column }
+        RunError { kind: RunErrorKind::Syntax, message: e.to_string(), line: e.line, column: e.column, authored: false }
     }
 }
 
@@ -150,7 +165,9 @@ pub struct Realm {
     unbroken_fuel: u64,
     /// The source tag of the script the last [`Realm::run`] or [`Realm::start`] compiled. Each
     /// script gets a new one, and the sources an evaluator gives during its run get the ones after
-    /// it, so code that an earlier script defined keeps a tag of its own.
+    /// it, so code that an earlier script defined keeps a tag of its own. [`UNKNOWN_SOURCE`]
+    /// before the first script, for a script the realm did not compile, and once the tags are used
+    /// up.
     script_tag: u32,
 }
 
@@ -169,7 +186,7 @@ impl Realm {
     /// `options`; [`Options::max_source_units`] caps the source parsed in one run, all of it
     /// counted together.
     pub fn with_options(options: Options, limits: Limits) -> Self {
-        Self { interp: Interp::new(options, limits), unbroken_fuel: MAX_UNBROKEN_FUEL, script_tag: 0 }
+        Self { interp: Interp::new(options, limits), unbroken_fuel: MAX_UNBROKEN_FUEL, script_tag: UNKNOWN_SOURCE }
     }
 
     /// Sets the fuel [`Realm::advance`] lets a nested run spend past its slice (by default
@@ -196,6 +213,19 @@ impl Realm {
     pub fn set_limits(&mut self, limits: Limits) {
         self.interp.limits = limits;
         self.interp.reset_gc_threshold();
+    }
+
+    /// Sets [`Options::es2015`] for the next runs, and for the code they evaluate. The `let` and
+    /// `const` names earlier runs declared stay visible when it is turned off. A run begun with
+    /// [`Realm::start`] that is still going keeps the language it started with for the code it
+    /// evaluates; the new one applies once it ends.
+    pub fn set_es2015(&mut self, es2015: bool) {
+        if self.is_running() || self.interp.waiting {
+            self.interp.next_es2015 = Some(es2015);
+        } else {
+            self.interp.next_es2015 = None;
+            self.interp.set_es2015(es2015);
+        }
     }
 
     /// The realm's interrupt flag. Setting it stops a running script, or the next one to start.
@@ -225,24 +255,27 @@ impl Realm {
 
     /// Compiles `source` and readies the realm for a run.
     fn compile(&mut self, source: &str) -> Result<std::rc::Rc<crate::bytecode::Code>, RunError> {
+        self.script_tag = UNKNOWN_SOURCE;
         let interp = &mut self.interp;
         if let Some(message) = &interp.install_error {
-            return Err(RunError { kind: RunErrorKind::Internal, message: message.clone(), line: 0, column: 0 });
+            return Err(RunError { kind: RunErrorKind::Internal, message: message.clone(), line: 0, column: 0, authored: false });
         }
         interp.fuel = interp.limits.fuel;
+        interp.flattened_fuel.set(0);
         interp.source_units = 0;
         interp.throw_site = None;
         interp.last_thrown = Value::Undefined;
         interp.last_error = Value::Null;
         interp.host_abort = None;
         interp.waiting = false;
+        interp.resuming = None;
         interp.error_tag = UNKNOWN_SOURCE;
         interp.thrown_mark = None;
         interp.finally_marks.clear();
         interp.finally_sites.clear();
         interp.error_mark = None;
         let strict = interp.options.strict;
-        interp.evaluated = interp.evaluated.saturating_add(1).min(UNKNOWN_SOURCE - 1);
+        interp.evaluated = next_tag(interp.evaluated);
         self.script_tag = interp.evaluated;
         interp.source_tag = self.script_tag;
         let code = interp.encode_source(source).and_then(|units| interp.compile_source(&units, strict, CodeKind::Global));
@@ -253,7 +286,7 @@ impl Realm {
                 interp.error_tag = self.script_tag;
                 Err(e.into())
             }
-            Err(CompileError::Internal(m)) => Err(RunError { kind: RunErrorKind::Internal, message: m, line: 0, column: 0 }),
+            Err(CompileError::Internal(m)) => Err(RunError { kind: RunErrorKind::Internal, message: m, line: 0, column: 0, authored: false }),
         }
     }
 
@@ -271,20 +304,27 @@ impl Realm {
         interp.temp_roots.clear();
         interp.join_stack.clear();
         interp.waiting = false;
+        interp.resuming = None;
         interp.passing = Value::Undefined;
+        if let Some(es2015) = interp.next_es2015.take() {
+            interp.set_es2015(es2015);
+        }
         match result {
             Ok(v) => Ok(interp.to_js_value(&v)),
             Err(Abrupt::Throw(v)) => {
                 let message = interp.describe(&v);
+                let authored = interp.thrown_by_script(&v);
                 interp.last_thrown = v;
-                Err(RunError { kind: RunErrorKind::Thrown, message, line, column })
+                Err(RunError { kind: RunErrorKind::Thrown, message, line, column, authored })
             }
             Err(Abrupt::Limit(LimitKind::Host)) => {
                 let message = interp.host_abort.take().unwrap_or_else(|| format!("limit reached: {:?}", LimitKind::Host));
-                Err(RunError { kind: RunErrorKind::Limit(LimitKind::Host), message, line, column })
+                Err(RunError { kind: RunErrorKind::Limit(LimitKind::Host), message, line, column, authored: false })
             }
-            Err(Abrupt::Limit(kind)) => Err(RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line, column }),
-            Err(Abrupt::Internal(message)) => Err(RunError { kind: RunErrorKind::Internal, message, line, column }),
+            Err(Abrupt::Limit(kind)) => {
+                Err(RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line, column, authored: false })
+            }
+            Err(Abrupt::Internal(message)) => Err(RunError { kind: RunErrorKind::Internal, message, line, column, authored: false }),
         }
     }
 
@@ -306,10 +346,16 @@ impl Realm {
     pub fn advance(&mut self, slice: u64) -> Result<Progress, RunError> {
         let interp = &mut self.interp;
         if interp.frames.is_empty() {
-            return Err(RunError { kind: RunErrorKind::Internal, message: "no run to advance".into(), line: 0, column: 0 });
+            return Err(RunError { kind: RunErrorKind::Internal, message: "no run to advance".into(), line: 0, column: 0, authored: false });
         }
         if interp.waiting {
-            return Err(RunError { kind: RunErrorKind::Internal, message: "the run waits for a host function's result".into(), line: 0, column: 0 });
+            return Err(RunError {
+                kind: RunErrorKind::Internal,
+                message: "the run waits for a host function's result".into(),
+                line: 0,
+                column: 0,
+                authored: false,
+            });
         }
         let total = interp.fuel;
         let cap = slice.saturating_add(self.unbroken_fuel).min(total);
@@ -360,12 +406,20 @@ impl Realm {
     }
 
     /// Gives the call that waits ([`crate::HostError::Wait`]) its result `d`; the next
-    /// [`Realm::advance`] goes on from there. A result past the heap limit ends the run with that
+    /// [`Realm::advance`] goes on from there. When a built-in such as `File.openDialog` made the
+    /// call, the built-in takes `d` first and gives its own result, and what it throws is thrown
+    /// at its call. A result past the heap limit ends the run with that
     /// limit, and with no call waiting this gives an internal error.
     pub fn answer(&mut self, d: crate::Data) -> Result<(), RunError> {
         let interp = &mut self.interp;
         if !interp.waiting {
-            return Err(RunError { kind: RunErrorKind::Internal, message: "no host function waits for a result".into(), line: 0, column: 0 });
+            return Err(RunError {
+                kind: RunErrorKind::Internal,
+                message: "no host function waits for a result".into(),
+                line: 0,
+                column: 0,
+                authored: false,
+            });
         }
         interp.waiting = false;
         // The value on top of the stack stood in for the result.
@@ -384,6 +438,19 @@ impl Realm {
         self.interp.interrupt = interrupt.0.clone();
     }
 
+    /// Has `$.line` give the line `locate` maps the running line to, and `$.stack` give each
+    /// frame's line that way, after the file `locate` names: `function@file:line`. Without a
+    /// locator they give the line of the compiled source, and `$.stack` names no file.
+    pub fn set_source_locator(&mut self, locate: SourceLocator) {
+        self.interp.locator = Some(locate);
+    }
+
+    /// Has `$.stack` start with a line `[name]` that names the running script, before its frames;
+    /// `None` leaves the line out.
+    pub fn set_script_name(&mut self, name: Option<String>) {
+        self.interp.script_name = name;
+    }
+
     /// Which source the last error's `line` and `column` are in: 0 for the script last given to
     /// [`Realm::run`] or [`Realm::start`], `n` for the `n`th source a
     /// [`crate::HostItem::Evaluator`] gave since then, and [`UNKNOWN_SOURCE`] otherwise, which
@@ -393,6 +460,28 @@ impl Realm {
             UNKNOWN_SOURCE => UNKNOWN_SOURCE,
             tag => tag.checked_sub(self.script_tag).unwrap_or(UNKNOWN_SOURCE),
         }
+    }
+
+    /// The source tag of the code the last error's `line` and `column` are in, which stays the same
+    /// from run to run: each script given to [`Realm::run`] or [`Realm::start`] and each source a
+    /// [`crate::HostItem::Evaluator`] gives gets the next tag, so a function an earlier script
+    /// defined has its script's tag. [`UNKNOWN_SOURCE`] for code that `eval` or `Function`
+    /// compiled, an error with no place, and sources given once the tags are used up.
+    pub fn error_tag(&self) -> u32 {
+        self.interp.error_tag
+    }
+
+    /// The source tag ([`Realm::error_tag`]) of the script the last [`Realm::run`] or
+    /// [`Realm::start`] compiled; the `n`th source an evaluator gave during that run has this tag
+    /// plus `n`. [`UNKNOWN_SOURCE`] when that call compiled nothing.
+    pub fn script_tag(&self) -> u32 {
+        self.script_tag
+    }
+
+    /// Tests: makes `tag` the last source tag given out.
+    #[cfg(test)]
+    pub(crate) fn set_last_tag(&mut self, tag: u32) {
+        self.interp.evaluated = tag;
     }
 
     /// The mark of the host error ([`crate::HostError::Marked`]) the last run ended with, when no
@@ -424,10 +513,12 @@ impl Realm {
     /// Adds the global constructors `File` and `Folder`, whose file system work the host functions
     /// in `items` do: `parse`, `relative`, `tempName`, `stat`, `open`, `close`, `read`, `readln`,
     /// `readch`, `seek`, `tell`, `eof`, `encoding`, `setEncoding`, `list`, `resolve`, `execute`,
-    /// `encode`, `decode`, `encodingAvailable`, `current` and `locations`, with the values `system`
-    /// and `lineFeed` and the messages `text.notOpen`, `text.noWrites`, `text.noPicker` and
-    /// `text.badMode`. Each object keeps its path, its `error` text, its open file's id, its
-    /// encoding and its line feed in properties that are not enumerable.
+    /// `write`, `copy`, `remove`, `rename`, `create`, `setLength`, `setReadonly`, `setHidden`,
+    /// `createAlias`, `pick` (the file dialogs, where a run may wait), `encode`, `decode`,
+    /// `encodingAvailable`, `current` and `locations`, with the values `system` and `lineFeed` and
+    /// the messages `text.notOpen` and `text.badMode`. Each object keeps its path, its `error`
+    /// text, its open file's id, its encoding and its line feed in properties that are not
+    /// enumerable.
     pub fn define_file_classes(&mut self, items: Vec<(String, crate::HostItem)>) -> Result<(), RunError> {
         match crate::file_classes::install(&mut self.interp, items) {
             Ok(()) => Ok(()),
@@ -455,6 +546,18 @@ impl Realm {
     /// and the localized `Object.prototype.toString` while [`crate::Localization::enabled`].
     pub fn add_script_extensions(&mut self) -> Result<(), RunError> {
         match crate::builtins::extensions::install(&mut self.interp) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Adds the global constructor `UnitValue`, measurements with a magnitude and a unit, and has
+    /// the arithmetic, comparison and unary operators calculate with its objects
+    /// ([`crate::unit_value`]). A realm without it keeps the standard operators. A second call
+    /// after one that succeeded changes nothing; after one that failed, it installs everything
+    /// again.
+    pub fn add_unit_values(&mut self) -> Result<(), RunError> {
+        match crate::unit_value::install(&mut self.interp) {
             Ok(()) => Ok(()),
             Err(e) => self.outcome(Err(e)).map(drop),
         }
@@ -497,6 +600,14 @@ impl Realm {
     /// default local time is UTC.
     pub fn set_time_zone(&mut self, offset: impl Fn(f64) -> f64 + 'static) {
         self.interp.date_host.offset = std::rc::Rc::new(offset);
+    }
+
+    /// Calls `observe` with the text of each source the realm's scripts evaluate at run time, before
+    /// it is compiled: a string given to `eval` (direct or indirect), the parameters and body
+    /// `Function` joins, and a source an evaluator host function
+    /// ([`crate::HostItem::Evaluator`]) gives. Replaces an earlier observer.
+    pub fn observe_code(&mut self, observe: impl Fn(&[u16]) + 'static) {
+        self.interp.code_observer = Some(std::rc::Rc::new(observe));
     }
 
     /// Collects garbage now and returns the heap's estimated size in bytes afterwards.

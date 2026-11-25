@@ -110,8 +110,8 @@ pub(crate) struct PlacedEntry {
     pub(crate) art: std::sync::Weak<Node>,
     /// The art placed, or `None` for art placed again in every frame ([`depends_on_document`]).
     pub(crate) placed: Option<Arc<Node>>,
-    /// The font generation ([`vectorcraft_text::FontDb::generation`]) the art was placed in, when
-    /// it holds type: the art is placed again when the fonts change.
+    /// The layout inputs ([`vectorcraft_text::layout_inputs`]) the art was placed with, when it
+    /// holds type: the art is placed again when the fonts or the hyphenation exceptions change.
     pub(crate) fonts: Option<u64>,
     /// The 9-slice map the art was placed through ([`Renderer::sliced_art`]), or `None` for art
     /// placed by the transform alone ([`Renderer::placed_art`]). An entry is used only by the

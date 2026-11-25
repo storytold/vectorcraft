@@ -251,6 +251,45 @@ fn undrawable(heights: &Heights, used: Def, depth: usize) -> bool {
     heights.get(&used).is_some_and(|h| h.is_none_or(|h| depth + h > MAX_DRAWN_DEPTH))
 }
 
+/// How deep the art of a document's symbols and patterns draws, to measure objects that use them
+/// outside the document's layers ([`Self::deepest`]).
+#[derive(Clone, Debug, Default)]
+pub struct DrawnHeights {
+    symbols: HashMap<String, usize>,
+    patterns: HashMap<String, usize>,
+}
+
+impl DrawnHeights {
+    /// The heights of `doc`'s symbols and patterns, as [`Document::too_deep`] counts them: the art
+    /// is 1 deep, and what it uses is counted under it. A symbol or pattern that uses itself, or
+    /// draws deeper than [`MAX_DRAWN_DEPTH`], has none.
+    pub fn of(doc: &Document) -> Self {
+        let mut out = Self::default();
+        for ((pattern, name), h) in heights(doc) {
+            if let Some(h) = h {
+                let map = if pattern { &mut out.patterns } else { &mut out.symbols };
+                map.insert(name.to_string(), h);
+            }
+        }
+        out
+    }
+
+    /// The deepest `n`, placed `depth` deep, draws: its own objects and the art of their opacity
+    /// masks, and under the objects the art of the symbols and patterns they use. A use of a
+    /// symbol or pattern without a height ([`Self::of`]) counts as the object alone. `n`'s own
+    /// nesting may pass [`MAX_DEPTH`]. Without recursion.
+    pub fn deepest(&self, n: &Node, depth: usize) -> usize {
+        let mut out = depth;
+        let mut stack = vec![(n, depth)];
+        while let Some((n, d)) = stack.pop() {
+            let used = uses(n).filter_map(|(pattern, name)| if pattern { self.patterns.get(name) } else { self.symbols.get(name) }).max();
+            out = out.max(d + used.copied().unwrap_or(0));
+            stack.extend(n.children().into_iter().flatten().chain(n.extras().mask.as_ref().map(|m| &m.art)).map(|c| (&**c, d + 1)));
+        }
+        out
+    }
+}
+
 /// Take out of `nodes` (each `depth` deep) the uses `bad` picks (given the depth of the object):
 /// an instance goes, a pattern paint becomes no paint. Returns whether anything changed. For trees
 /// within [`MAX_DEPTH`].
@@ -622,5 +661,24 @@ mod tests {
         d.patterns.push(crate::PatternDef::new("p", vec![painted(2, "q")]));
         d.patterns.push(crate::PatternDef::new("q", vec![painted(3, "none")]));
         assert!(!d.too_deep(None) && !d.limit_depth());
+    }
+
+    #[test]
+    fn drawn_heights_measure_objects_outside_the_layers() {
+        // s0 holds s1 two groups deep, which holds s2, which holds an instance of nothing known:
+        // s2 draws 3 deep, s1 6 and s0 9.
+        let d = symbols(3, 2, "none");
+        let heights = DrawnHeights::of(&d);
+        let on_layer = instance(1, "s0");
+        assert_eq!(heights.deepest(&on_layer, 2), 2 + 9);
+        // An object's own nesting and its mask's art count past MAX_DEPTH.
+        let mut deep = Node::group(NodeId(5), vec![nested(MAX_DEPTH + 10)]);
+        deep.extras_mut().mask = Some(Box::new(OpacityMask::new((*instance(6, "s2")).clone(), true)));
+        assert_eq!(heights.deepest(&deep, 1), 1 + 1 + MAX_DEPTH + 10);
+        let shallow = Node::group(NodeId(5), vec![instance(7, "s1")]);
+        assert_eq!(heights.deepest(&shallow, 100), 101 + 6);
+        // A symbol that holds itself has no height, so its instance counts alone.
+        let looped = DrawnHeights::of(&symbols(2, 1, "s0"));
+        assert_eq!(looped.deepest(&instance(1, "s0"), 2), 2);
     }
 }

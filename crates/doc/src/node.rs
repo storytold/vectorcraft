@@ -32,6 +32,7 @@ pub use kind::{ImageObject, MAX_BUFFERED_VALUES, NodeKind, with_buffered_value_b
 pub use live_shape::{LiveShape, Scaling};
 pub use opacity::{Knockout, OpacityMask, whiten};
 pub use ops::{flattens, keeps_gradient_fit};
+pub(crate) use ops::{held_guides, map_held, strip_held};
 use wire::NodeWire;
 pub(crate) use wire::counted_list;
 pub use wire::{MAX_READ_NODES, with_node_budget};

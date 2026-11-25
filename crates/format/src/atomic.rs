@@ -9,6 +9,10 @@
 //! are on disk, and the error names them. Where that copy of the old file can't be made, the file
 //! is left as it was and the save fails.
 //!
+//! Work canceled ([`vectorcraft_doc::cancel`]) by the time the temporary file is written and flushed
+//! puts nothing in place: the temporary file is removed, the file stays as it was (or absent), and
+//! the error wraps [`vectorcraft_doc::cancel::Cancelled`].
+//!
 //! On macOS `File::sync_all` is a full flush (`F_FULLFSYNC`), which SMB shares refuse with
 //! `ENOTSUP` and virtiofs shares (folders shared into a macOS VM) with `ENOTTY`, while a plain
 //! `fsync` works: [`sync_file`] falls back to the plain one there (#1620).
@@ -18,13 +22,33 @@ use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+/// Whether the returned write error refuses this location. Recovery errors must still be shown:
+/// their message names copies the user may need, even when their kind is PermissionDenied.
+pub fn read_only_location(error: &io::Error) -> bool {
+    matches!(error.kind(), io::ErrorKind::ReadOnlyFilesystem | io::ErrorKind::PermissionDenied)
+        && !error.get_ref().is_some_and(|e| e.is::<RecoveryError>())
+}
+
+/// Marks the existing recovery message without changing its text or the returned error kind.
+#[derive(Debug)]
+struct RecoveryError(String);
+
+impl std::fmt::Display for RecoveryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for RecoveryError {}
+
 /// Write `bytes` to `path` atomically (see the module docs).
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     write_atomic_with(path, |f| f.write_all(bytes))
 }
 
 /// Write `path` atomically with `fill`, which writes the content into the temporary file. When
-/// `fill` or flushing fails the temporary file is removed and `path` is left untouched. When the
+/// `fill` or flushing fails, or the work was canceled meanwhile ([`vectorcraft_doc::cancel`]), the
+/// temporary file is removed and `path` is left untouched. When the
 /// folder refuses the temporary file or the rename, the content is copied into `path` instead (see
 /// the module docs).
 pub fn write_atomic_with(path: &Path, fill: impl FnOnce(&mut File) -> io::Result<()>) -> io::Result<()> {
@@ -60,7 +84,7 @@ fn write_atomic_stepping(
             (tmp, f, Some(e))
         }
     };
-    let filled = fill(&mut f).and_then(|()| sync_file(&f));
+    let filled = fill(&mut f).and_then(|()| sync_file(&f)).and_then(|()| not_cancelled());
     drop(f);
     if let Err(e) = filled {
         // Best effort: the temporary file is all there is to clean up.
@@ -102,7 +126,7 @@ fn write_over(tmp: &Path, target: &Path, refused: io::Error) -> io::Result<()> {
         let _ = std::fs::remove_file(old);
         let why =
             format!("{refused}, and the file can't be copied aside before it is overwritten ({e}); the new content is kept in {}", tmp.display());
-        return Err(io::Error::new(refused.kind(), why));
+        return Err(io::Error::new(refused.kind(), RecoveryError(why)));
     }
     let copied = to.set_len(0).and_then(|()| io::copy(&mut from, &mut to)).and_then(|_| sync_file(&to));
     drop((from, to));
@@ -115,10 +139,11 @@ fn write_over(tmp: &Path, target: &Path, refused: io::Error) -> io::Result<()> {
             }
             Ok(())
         }
-        (Err(e), Some(old)) => {
-            Err(io::Error::new(e.kind(), format!("{e} (the new content is kept in {}, the file as it was in {})", tmp.display(), old.display())))
-        }
-        (Err(e), None) => Err(io::Error::new(e.kind(), format!("{e} (the new content is kept in {})", tmp.display()))),
+        (Err(e), Some(old)) => Err(io::Error::new(
+            e.kind(),
+            RecoveryError(format!("{e} (the new content is kept in {}, the file as it was in {})", tmp.display(), old.display())),
+        )),
+        (Err(e), None) => Err(io::Error::new(e.kind(), RecoveryError(format!("{e} (the new content is kept in {})", tmp.display())))),
     }
 }
 
@@ -156,7 +181,7 @@ fn write_new_linking(
 ) -> io::Result<()> {
     let tmp = temp_path(path)?;
     let mut f = OpenOptions::new().write(true).create_new(true).open(&tmp)?;
-    let filled = fill(&mut f).and_then(|()| sync_file(&f));
+    let filled = fill(&mut f).and_then(|()| sync_file(&f)).and_then(|()| not_cancelled());
     drop(f);
     let placed = filled.and_then(|()| match link(&tmp, path) {
         Err(e) if e.kind() != io::ErrorKind::AlreadyExists => copy_new(&tmp, path),
@@ -165,6 +190,12 @@ fn write_new_linking(
     // Best effort: the temporary file is all there is to clean up.
     let _ = std::fs::remove_file(&tmp);
     placed
+}
+
+/// `Err` wrapping [`vectorcraft_doc::cancel::Cancelled`] when the work running on this thread has
+/// been canceled: the last check before a written temporary file is put in place.
+fn not_cancelled() -> io::Result<()> {
+    vectorcraft_doc::cancel::check().map_err(io::Error::other)
 }
 
 /// Create `path` (never replacing anything) with the content of the file `from`; a failed copy
@@ -318,6 +349,24 @@ fn keep_permissions(_: &Path, _: &Path) -> io::Result<()> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn readonly_classification_uses_the_terminal_kind_and_excludes_recovery() {
+        for (kind, expected) in [
+            (io::ErrorKind::PermissionDenied, true),
+            (io::ErrorKind::ReadOnlyFilesystem, true),
+            (io::ErrorKind::StorageFull, false),
+            (io::ErrorKind::QuotaExceeded, false),
+            (io::ErrorKind::NotFound, false),
+            (io::ErrorKind::Other, false),
+        ] {
+            assert_eq!(read_only_location(&io::Error::new(kind, "injected")), expected, "{kind:?}");
+            let recovery = io::Error::new(kind, RecoveryError("the new content is kept in a.tmp".into()));
+            assert!(!read_only_location(&recovery), "recovery: {kind:?}");
+            assert_eq!(recovery.kind(), kind);
+            assert_eq!(recovery.to_string(), "the new content is kept in a.tmp");
+        }
+    }
+
     fn dir(name: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("vc-atomic-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
@@ -367,6 +416,39 @@ mod tests {
         assert_eq!(staging_mode, 0o600, "the staging file must not be group or world readable");
         assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
         assert_eq!(std::fs::read(&path).unwrap(), b"new");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// Work canceled by the time the temporary file is written and flushed puts nothing in place:
+    /// the old file stays as it was, also where the folder refuses the rename (no copy over it), a
+    /// new file is not created, and no temporary file is left.
+    #[test]
+    fn canceled_work_puts_nothing_in_place() {
+        use vectorcraft_doc::cancel::{CancelToken, Cancelled, scope};
+        fn cancelled(e: &io::Error) -> bool {
+            e.get_ref().is_some_and(|e| e.is::<Cancelled>())
+        }
+        let d = dir("cancel");
+        let path = d.join("doc.vectorcraft");
+        std::fs::write(&path, b"original").unwrap();
+        let token = CancelToken::new();
+        let r = scope(&token, None, || {
+            write_atomic_with(&path, |f| {
+                f.write_all(b"new")?;
+                token.cancel();
+                Ok(())
+            })
+        });
+        assert!(r.as_ref().is_err_and(cancelled), "{r:?}");
+        let refused = |_: &Path, _: &Path| -> io::Result<()> { Err(io::Error::from(io::ErrorKind::PermissionDenied)) };
+        let r = scope(&token, None, || write_atomic_stepping(&path, |f| f.write_all(b"new"), create_new, refused));
+        assert!(r.as_ref().is_err_and(cancelled), "{r:?}");
+        assert_eq!(std::fs::read(&path).unwrap(), b"original");
+        let new = d.join("new.vectorcraft");
+        let r = scope(&token, None, || write_new_with(&new, |f| f.write_all(b"new")));
+        assert!(r.as_ref().is_err_and(cancelled), "{r:?}");
+        assert!(!new.exists());
+        assert!(leftovers(&d, "doc.vectorcraft").is_empty(), "{:?}", leftovers(&d, "doc.vectorcraft"));
         let _ = std::fs::remove_dir_all(&d);
     }
 

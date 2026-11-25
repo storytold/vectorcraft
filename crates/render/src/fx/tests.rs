@@ -307,6 +307,107 @@ fn drop_shadow_darkens_outside_the_shape() {
     assert_eq!(lum(img.pixel(15, 15)), WHITE);
 }
 
+/// A Transform effect listed after a Drop Shadow transforms the shadow with the art: halving a
+/// 40 pt square about its center halves the shadow's 10 pt offset, with Scale Strokes & Effects
+/// off or on, and for a group as for a path.
+#[test]
+fn a_transform_after_a_drop_shadow_scales_the_shadow_with_the_art() {
+    let r = Rect::new(20.0, 20.0, 60.0, 60.0);
+    let shadow = ("stylize.dropShadow", json!({"x": 10, "y": 10, "blur": 0, "opacity": 100, "mode": "normal"}));
+    for strokes in [false, true] {
+        let transform = ("distort.transform", json!({"scaleH": 50, "scaleV": 50, "strokes": strokes}));
+        let path = doc_with(r, Color::rgb(1.0, 0.0, 0.0), vec![shadow.clone(), transform.clone()]);
+        let mut group = doc_with(r, Color::rgb(1.0, 0.0, 0.0), vec![]);
+        let l = group.layers[0].id;
+        let square = group.layers[0].children().and_then(|c| c.first()).cloned().unwrap();
+        group.remove(square.id).unwrap();
+        let mut g = Node::group(group.alloc_id(), vec![square]);
+        g.appearance.effects = [shadow.clone(), transform].into_iter().map(|(id, p)| Effect { id: id.into(), params: p, visible: true }).collect();
+        group.insert(Some(l), 0, g).unwrap();
+        for (what, d) in [("path", path), ("group", group)] {
+            let img = render(&d);
+            // The square now covers 30..50 and its shadow 35..55.
+            assert_eq!(img.pixel(40, 40), [255, 0, 0, 255], "{what}, Scale Strokes & Effects {strokes}");
+            assert!(lum(img.pixel(53, 37)) < 100, "{what}, {strokes}: the shadow reaches up to 35: {:?}", img.pixel(53, 37));
+            assert_eq!(lum(img.pixel(57, 57)), WHITE, "{what}, {strokes}: the shadow ends at 55");
+            // The area redrawn for it takes in the 5 pt shadow around the 30..50 square.
+            let b = super::cull_bounds(&d.symbol_boxes(), &d.layers[0].children().unwrap()[0]).unwrap();
+            assert!((b.x0 - 25.0).abs() < 1e-9 && (b.x1 - 55.0).abs() < 1e-9, "{what}, {strokes}: {b:?}");
+        }
+    }
+}
+
+/// A Transform effect listed after a Bas Relief turns its light with the art: a group of a black
+/// square centered on a white one, lit from the top and turned 90° counterclockwise about its
+/// center, draws as the group lit from the left.
+#[test]
+fn a_transform_after_bas_relief_turns_its_light_with_the_art() {
+    let relieved = |effects: Vec<(&str, serde_json::Value)>| {
+        let mut d = Document::new(100.0, 100.0);
+        let mut square =
+            |r: Rect, c: Color| Arc::new(Node::path(d.alloc_id(), shapes::rectangle(r), Appearance::basic(Paint::solid(c), Paint::None, 0.0)));
+        let members = vec![square(Rect::new(20.0, 20.0, 80.0, 80.0), Color::WHITE), square(Rect::new(40.0, 40.0, 60.0, 60.0), Color::BLACK)];
+        let mut g = Node::group(d.alloc_id(), members);
+        g.appearance.effects = effects.into_iter().map(|(id, p)| Effect { id: id.into(), params: p, visible: true }).collect();
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, g).unwrap();
+        render(&d)
+    };
+    let relief = |light: &str| ("sketch.basRelief", json!({"lightDirection": light}));
+    let turned = relieved(vec![relief("top"), ("distort.transform", json!({"rotate": 90}))]);
+    let left = relieved(vec![relief("left")]);
+    let top = relieved(vec![relief("top")]);
+    // The largest difference of a channel between two images.
+    let diff = |a: &Rendered, b: &Rendered| {
+        (0..100u32)
+            .flat_map(|y| (0..100u32).map(move |x| (x, y)))
+            .map(|(x, y)| a.pixel(x, y).iter().zip(b.pixel(x, y)).map(|(p, q)| p.abs_diff(q)).max().unwrap_or(0))
+            .max()
+            .unwrap_or(0)
+    };
+    assert!(diff(&left, &top) > 50, "the light's direction shows: {}", diff(&left, &top));
+    assert!(diff(&turned, &left) <= 2, "turned top light draws as a left light: {}", diff(&turned, &left));
+}
+
+/// An object's or a group's Transform effect transforms the raster effects of what it holds with
+/// the art: halving a 40 pt square about its center halves the 10 pt offset of its fill's shadow,
+/// and of a group member's own shadow, with Scale Strokes & Effects off or on.
+#[test]
+fn a_transform_scales_the_shadows_of_fills_and_members_with_the_art() {
+    let r = Rect::new(20.0, 20.0, 60.0, 60.0);
+    let shadow =
+        Effect { id: "stylize.dropShadow".into(), params: json!({"x": 10, "y": 10, "blur": 0, "opacity": 100, "mode": "normal"}), visible: true };
+    for strokes in [false, true] {
+        let transform = ("distort.transform", json!({"scaleH": 50, "scaleV": 50, "strokes": strokes}));
+        let mut fill = doc_with(r, Color::rgb(1.0, 0.0, 0.0), vec![transform.clone()]);
+        let l = fill.layers[0].id;
+        let mut square = (*fill.layers[0].children().and_then(|c| c.first()).cloned().unwrap()).clone();
+        fill.remove(square.id).unwrap();
+        if let Some(item) = square.appearance.items.first_mut() {
+            *item.effects_mut() = vec![shadow.clone()];
+        }
+        fill.insert(Some(l), 0, square.clone()).unwrap();
+        let mut member = doc_with(r, Color::rgb(1.0, 0.0, 0.0), vec![]);
+        let l = member.layers[0].id;
+        let mut square = (*member.layers[0].children().and_then(|c| c.first()).cloned().unwrap()).clone();
+        member.remove(square.id).unwrap();
+        square.appearance.effects = vec![shadow.clone()];
+        let mut g = Node::group(member.alloc_id(), vec![Arc::new(square)]);
+        g.appearance.effects = [transform].into_iter().map(|(id, p)| Effect { id: id.into(), params: p, visible: true }).collect();
+        member.insert(Some(l), 0, g).unwrap();
+        for (what, d) in [("fill", fill), ("member", member)] {
+            let img = render(&d);
+            // The square now covers 30..50 and its shadow 35..55.
+            assert_eq!(img.pixel(40, 40), [255, 0, 0, 255], "{what}, Scale Strokes & Effects {strokes}");
+            assert!(lum(img.pixel(53, 37)) < 100, "{what}, {strokes}: the shadow reaches up to 35: {:?}", img.pixel(53, 37));
+            assert_eq!(lum(img.pixel(57, 57)), WHITE, "{what}, {strokes}: the shadow ends at 55");
+            // The area redrawn for it takes in the 5 pt shadow around the 30..50 square.
+            let b = super::cull_bounds(&d.symbol_boxes(), &d.layers[0].children().unwrap()[0]).unwrap();
+            assert!((b.x0 - 25.0).abs() < 1e-9 && (b.x1 - 55.0).abs() < 1e-9, "{what}, {strokes}: {b:?}");
+        }
+    }
+}
+
 /// A red square's drop shadow at Darkness `darkness` (%), opaque and sharp, 10 pt down and
 /// right; `shade` "color" or "darkness".
 fn shaded_doc(mode: vectorcraft_doc::ColorMode, fill: Color, shade: &str, darkness: f64) -> Document {
@@ -909,7 +1010,7 @@ fn an_edit_out_of_sight_builds_nothing() {
     let drawn_hidden = extruded(&mut d, 70.0);
     let ids = [d.insert(Some(l), 0, hidden).unwrap(), group.children().unwrap()[0].id, d.insert(Some(l), 0, drawn_hidden).unwrap()];
     d.insert(Some(l), 0, group).unwrap();
-    let opts = RenderOptions { hidden: vec![ids[2]], ..Default::default() };
+    let opts = RenderOptions { hidden: [ids[2]].into(), ..Default::default() };
     let mut r = Renderer::new();
     r.render(&d, 100, 100, Affine::IDENTITY, &opts);
     let mut e = d.clone();
@@ -965,7 +1066,7 @@ fn a_measuring_pass_sweeps_the_bounds_of_held_art_as_they_double() {
     }
     let mut r = Renderer::new();
     // Held here, as the art kept to draw is.
-    let held: Vec<_> = d.layers[0].children().unwrap().iter().map(|n| r.measured_fx_art(&d, n)).collect();
+    let held: Vec<_> = d.layers[0].children().unwrap().iter().map(|n| r.measured_fx_art(&d.symbol_boxes(), n)).collect();
     assert_eq!((held.len(), r.three_d_bounds.len()), (3000, 3000));
     assert!(r.three_d_sweeps <= 2, "{} sweeps", r.three_d_sweeps);
 }
@@ -1092,7 +1193,7 @@ fn drawing_takes_measured_art_out_of_the_budget() {
     let mut r = Renderer::new();
     r.bounds_of(&d.symbol_boxes(), &n);
     assert!(r.measured_bytes > 0);
-    r.fx_art(&d, &n, true);
+    r.fx_art(&d.symbol_boxes(), &n, true);
     assert_eq!((r.measured_bytes, r.measured.len()), (0, 0), "taken out when drawn");
     let mut r = Renderer::new();
     r.render(&d, 800, 100, Affine::IDENTITY, &RenderOptions::default());
@@ -1242,11 +1343,11 @@ fn art_measured_again_takes_the_place_of_the_held() {
     let n = d.layers[0].children().unwrap()[0].clone();
     let key = Arc::as_ptr(&n) as usize;
     let mut r = Renderer::new();
-    let art = r.measured_fx_art(&d, &n);
+    let art = r.measured_fx_art(&d.symbol_boxes(), &n);
     let bytes = r.measured_bytes;
     // As if it had read something else then.
     r.measured.insert(key, (n.clone(), art, Some(7)));
-    r.measured_fx_art(&d, &n);
+    r.measured_fx_art(&d.symbol_boxes(), &n);
     assert_eq!((r.measured_bytes, r.measured.len()), (bytes, 1));
 }
 

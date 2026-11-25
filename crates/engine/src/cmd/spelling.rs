@@ -7,17 +7,20 @@
 //! `removeWord`, `changeWord`), which every document's check takes as right; Ignore All
 //! (`text.spelling.ignoreAll`) skips a word in the active document only.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use craft_proof::{IssueKind, Options, ProofLang};
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, NodeId, NodeKind, TextObject};
+use vectorcraft_text::edit;
 
 use super::menucmds::whole_or;
+use super::textedit::text_mut;
+use super::typecmd::refresh_bounds;
 use super::typemenu::{all_texts, text_ids};
-use super::{CommandSpec, Result, Session, always, bad, checked_ids_param, cmd, has_doc, str_param};
+use super::{CommandSpec, EngineError, Result, Session, always, bad, checked_ids_param, cmd, has_doc, str_param};
 
 /// Most unknown words one check lists; past it the result says `more`.
 pub const MAX_WORDS: usize = 10_000;
@@ -36,9 +39,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Check Spelling",
             [],
             None,
-            "{ids?: [id…] (type objects, or groups holding them; default: every visible, unlocked type object)} the words the dictionaries don't know, each in its run's language (English when it has none; none in a language without a dictionary), each paragraph on its own, in paint order (given ids too) → {words: [{id, start: byte, end: byte, word, lang}…], more: bool (more than 10000 words, the rest left out)}. text.editRange {id, start, end, insert} changes one",
+            "{ids?: [id…] (type objects, or groups holding them; default: every visible, unlocked type object), from?: {id, byte} (go on from there: the words of that type object that start at byte or later, then the objects after it; id must be one of the objects checked), max?: 1..10000 (default 10000)} the words the dictionaries don't know, each in its run's language (English when it has none; none in a language without a dictionary), each paragraph on its own, in paint order (given ids too) → {words: [{id, start: byte, end: byte, word, lang}…], more: bool (more than max words, the rest left out: check again with from {id, byte: end} of the last word)}. text.editRange {id, start, end, insert} changes one",
             has_doc,
             check
+        ),
+        cmd!(
+            "text.spelling.change",
+            "Change All",
+            [],
+            None,
+            "{to: string, words: [{id, start: byte, end: byte}…] (words of type objects, as text.spelling.check lists them; none overlapping)} replaces each word with to, all in one undo step, each object laid out once (Check Spelling's Change All); a word that already reads as to is left alone, and with no other word there is no edit and no undo step; an error, with nothing changed, when a word's bytes are not in its object's text → {changed: count of words replaced}",
+            has_doc,
+            change_words
         ),
         cmd!(
             query "text.spelling.suggest",
@@ -107,22 +119,42 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 /// `text.spelling.check`: the unknown words of the given type objects (or every visible, unlocked
-/// one), in paint order, each paragraph checked on its own, at most [`MAX_WORDS`] of them.
+/// one), in paint order, each paragraph checked on its own, at most `max` of them, starting at
+/// `from` when it is given.
 fn check(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.spelling.check";
     // Given `ids` are checked like Find and Replace's, so a malformed one is an error rather than
     // a check of the whole document.
-    let ids = match p.get("ids").filter(|v| !v.is_null()) {
+    let mut ids = match p.get("ids").filter(|v| !v.is_null()) {
         Some(_) => in_paint_order(&s.doc()?.doc, text_ids(&s.doc()?.doc, &checked_ids_param(s, p, "ids", C)?)),
         None => all_texts(&s.doc()?.doc),
     };
+    let max = whole_or(p, "max", MAX_WORDS as u64, C)?;
+    let max = usize::try_from(max).ok().filter(|m| (1..=MAX_WORDS).contains(m)).ok_or_else(|| bad(C, format!("`max` must be 1 to {MAX_WORDS}")))?;
     let st = s.doc()?;
+    // Where the last check stopped: the objects before it are skipped, and the bytes of its object
+    // before `byte`.
+    let mut from_byte = 0;
+    if let Some(from) = p.get("from").filter(|v| !v.is_null()) {
+        let (id, byte) = from_param(from, C)?;
+        let Some(pos) = ids.iter().position(|i| i.0 == id) else {
+            return Err(bad(C, format!("`from.id` {id} is not one of the type objects checked")));
+        };
+        let Some(NodeKind::Text(t)) = st.doc.node(NodeId(id)).map(|n| &n.kind) else {
+            return Err(bad(C, format!("`from.id` {id} is not a type object")));
+        };
+        let len = t.plain_text().len();
+        from_byte = usize::try_from(byte).ok().filter(|b| *b <= len).ok_or_else(|| bad(C, format!("`from.byte` is past the end of {id}'s text")))?;
+        ids.drain(..pos);
+    }
     let mut words = vec![];
     let mut more = false;
     for id in ids {
         let Some(NodeKind::Text(t)) = st.doc.node(id).map(|n| &n.kind) else { continue };
         let text = t.plain_text();
-        let (found, cut) = misspellings(t, &st.spelling_ignored, MAX_WORDS - words.len());
+        // Only the first object listed starts part way.
+        let from = std::mem::take(&mut from_byte);
+        let (found, cut) = misspellings_from(t, &st.spelling_ignored, from, max - words.len());
         for m in found {
             let Some(word) = text.get(m.range.clone()) else { continue };
             words.push(json!({ "id": id.0, "start": m.range.start, "end": m.range.end, "word": word, "lang": m.lang.tag() }));
@@ -133,6 +165,87 @@ fn check(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     Ok(json!({ "words": words, "more": more }))
+}
+
+/// `text.spelling.check`'s `from`: `{id, byte}`, both whole numbers.
+fn from_param(from: &Value, command: &str) -> Result<(u64, u64)> {
+    let Some(o) = from.as_object() else { return Err(bad(command, "`from` must be {id, byte}")) };
+    if let Some(k) = o.keys().find(|k| !matches!(k.as_str(), "id" | "byte")) {
+        return Err(bad(command, format!("`from` takes id and byte, not `{k}`")));
+    }
+    let id = o.get("id").and_then(Value::as_u64).ok_or_else(|| bad(command, "`from.id` must be a type object's id"))?;
+    let byte = o.get("byte").and_then(Value::as_u64).ok_or_else(|| bad(command, "`from.byte` must be a whole number"))?;
+    Ok((id, byte))
+}
+
+/// `text.spelling.change`: Change All, every listed word replaced in one edit. Each object's words
+/// are changed back to front, so the bytes of the ones before stay true, and the object is laid out
+/// once at the end rather than once for each word.
+fn change_words(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.spelling.change";
+    let to = str_param(p, "to").ok_or_else(|| bad(C, "missing `to`"))?.to_string();
+    let list = p.get("words").and_then(Value::as_array).ok_or_else(|| bad(C, "`words` must be a list of {id, start, end}"))?;
+    let mut by_id: BTreeMap<NodeId, Vec<(usize, usize)>> = BTreeMap::new();
+    for w in list {
+        let (id, start, end) = word_param_range(w, C)?;
+        by_id.entry(NodeId(id)).or_default().push((start, end));
+    }
+    // Every word checked against its object before anything changes.
+    let st = s.doc()?;
+    for (id, ranges) in &mut by_id {
+        let Some(NodeKind::Text(t)) = st.doc.node(*id).map(|n| &n.kind) else {
+            return Err(bad(C, format!("{} is not a type object", id.0)));
+        };
+        let text = t.plain_text();
+        ranges.sort_unstable();
+        let mut last_end = 0;
+        for &(a, b) in ranges.iter() {
+            if a >= b || text.get(a..b).is_none() {
+                return Err(bad(C, format!("{a}..{b} is not a word of {}'s text", id.0)));
+            }
+            if a < last_end {
+                return Err(bad(C, format!("words of {} overlap at byte {a}", id.0)));
+            }
+            last_end = b;
+        }
+        // A word that already reads as `to` is left alone, so a list of only those makes no edit.
+        ranges.retain(|&(a, b)| text.get(a..b) != Some(to.as_str()));
+    }
+    by_id.retain(|_, ranges| !ranges.is_empty());
+    let changed: usize = by_id.values().map(Vec::len).sum();
+    if changed == 0 {
+        return Ok(json!({ "changed": 0 }));
+    }
+    s.edit("Change All", |d, _| {
+        for (id, ranges) in &by_id {
+            let t = text_mut(d, *id).ok_or(EngineError::NoNode(*id))?;
+            for &(a, b) in ranges.iter().rev() {
+                // Paragraph styles and ruby follow each edit, as in `text.editRange`.
+                t.splice_paras(a, b, &to);
+                edit::replace_range(&mut t.runs, a, b, &to);
+                t.ruby_after_replace(a, b, to.len());
+            }
+            refresh_bounds(t);
+        }
+        Ok(())
+    })?;
+    Ok(json!({ "changed": changed }))
+}
+
+/// One of `text.spelling.change`'s `words`: `{id, start, end}`, all whole numbers.
+fn word_param_range(w: &Value, command: &str) -> Result<(u64, usize, usize)> {
+    let Some(o) = w.as_object() else { return Err(bad(command, "each of `words` must be {id, start, end}")) };
+    if let Some(k) = o.keys().find(|k| !matches!(k.as_str(), "id" | "start" | "end")) {
+        return Err(bad(command, format!("each of `words` takes id, start and end, not `{k}`")));
+    }
+    let id = o.get("id").and_then(Value::as_u64).ok_or_else(|| bad(command, "a word's `id` must be a type object's id"))?;
+    let byte = |k: &str| {
+        o.get(k)
+            .and_then(Value::as_u64)
+            .and_then(|b| usize::try_from(b).ok())
+            .ok_or_else(|| bad(command, format!("a word's `{k}` must be a whole number")))
+    };
+    Ok((id, byte("start")?, byte("end")?))
 }
 
 /// One word of a type object its dictionaries don't know ([`misspellings`]).
@@ -149,6 +262,13 @@ pub struct Misspelling {
 /// All words). At most `max` of them; the flag says the list was cut short there. What
 /// `text.spelling.check` lists for one object, and what Auto Spell Check underlines.
 pub fn misspellings(t: &TextObject, ignored: &BTreeSet<String>, max: usize) -> (Vec<Misspelling>, bool) {
+    misspellings_from(t, ignored, 0, max)
+}
+
+/// [`misspellings`] of the words that start at byte `from` or later. The paragraphs that end at
+/// or before `from` are not checked; the paragraph that holds `from` is checked whole, since
+/// craft-proof reads a paragraph's language from all of it.
+pub fn misspellings_from(t: &TextObject, ignored: &BTreeSet<String>, from: usize, max: usize) -> (Vec<Misspelling>, bool) {
     let text = t.plain_text();
     // Each run in its own language, at its bytes of the plain text.
     let mut spans: Vec<(Range<usize>, ProofLang)> = Vec::with_capacity(t.runs.len());
@@ -166,6 +286,11 @@ pub fn misspellings(t: &TextObject, ignored: &BTreeSet<String>, max: usize) -> (
     let mut para_start = 0;
     for para in text.split('\n') {
         let para_end = para_start + para.len();
+        // No word of a paragraph that ends at `from` starts there or later.
+        if para_end <= from {
+            para_start = para_end + 1;
+            continue;
+        }
         let para_spans: Vec<(Range<usize>, ProofLang)> = spans
             .iter()
             .filter_map(|(r, lang)| {
@@ -178,6 +303,9 @@ pub fn misspellings(t: &TextObject, ignored: &BTreeSet<String>, max: usize) -> (
                 continue;
             }
             let (start, end) = (para_start + issue.start, para_start + issue.end);
+            if start < from {
+                continue;
+            }
             let Some(word) = text.get(start..end) else { continue };
             if craft_proof::custom_word(word).is_some_and(|w| ignored.contains(&w)) {
                 continue;

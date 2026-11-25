@@ -1,4 +1,6 @@
-use super::build::{PAGE_MOVE, Page, alone_scale, build, build_from, build_on_page, build_without_page, reid_page_art};
+use super::build::{
+    PAGE_MOVE, Page, ReadText, alone_scale, build, build_from, build_on_page, build_weighing, build_without_page, reid_page_art, scale_symbol_art,
+};
 use super::slots::LAYERS_UNREAD;
 use super::{Affine, Arc, Cow, Document, Imported, Node, NodeKind, PathData, Rect, Vec2, ai};
 
@@ -11,12 +13,16 @@ use super::{Affine, Arc, Cow, Document, Imported, Node, NodeKind, PathData, Rect
 /// ([`use_symbols`]) and its variable library ([`use_variables`]) when it could be read, and with
 /// its layer tree, empty, below the page's layer when that could be read (#2033). A program in the
 /// legacy format without layers (`illustrator`, see [`program_alone`]) is read with its art on one
-/// layer; when that can't be used, the file is `visible` as it was. `names`: the encoding of names
-/// that aren't UTF-8.
-pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool, illustrator: bool, names: ai::NameEncoding) -> Imported {
+/// layer; when that can't be used, the file is `visible` as it was. The program of a `.ai`
+/// (`ai_file`) in the legacy format keeps the artboard its header gives ([`Page::Program`]).
+/// `names`: the encoding of names that aren't UTF-8.
+pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool, illustrator: bool, ai_file: bool, names: ai::NameEncoding) -> Imported {
+    let program_page = if ai_file { Page::Program } else { Page::Art };
     let Some(data) = editing_copy(ps) else {
-        let read =
-            illustrator.then(|| one_layer(ps)).flatten().and_then(|p| build(&p, Some(&visible.document), Page::Art, false, trust, 1.0, names).ok());
+        let read = illustrator
+            .then(|| one_layer(ps))
+            .flatten()
+            .and_then(|p| build(&p, Some(&visible.document), program_page, false, trust, 1.0, names).ok());
         return match read {
             Some((document, warnings)) => with_page_notes(document, warnings, &visible),
             None => visible,
@@ -26,11 +32,17 @@ pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool, illus
     // can't be used.
     // Private data kept apart from the program: the program's own header gives the author and
     // custom colors the private data's header may lack.
-    let read =
-        |d: &[u8]| if matches!(data, Ok(Cow::Owned(_))) { ai::read_beside(d, true, ps, true, names) } else { ai::read_over_page(d, true, names) };
+    let private = matches!(data, Ok(Cow::Owned(_)));
+    let read = |d: &[u8]| match (private, program_page) {
+        (true, _) => ai::read_beside(d, true, ps, true, names),
+        (false, Page::Program) => ai::read_program(d, true, true, names),
+        (false, _) => ai::read_over_page(d, true, names),
+    };
+    // Private data is an EPS's editing copy, whatever the file is named.
+    let page = if private { Page::Art } else { program_page };
     let (tree, result) = match data.as_deref() {
         Ok(d) => match read(d) {
-            Ok(s) => (layer_tree(&s.doc.layers), build_from(s, d, Some(&visible.document), Page::Art, false, trust, 1.0)),
+            Ok(s) => (layer_tree(&s.doc.layers), build_from(s, d, Some(&visible.document), page, false, trust, 1.0)),
             Err(why) => (vec![], Err(why)),
         },
         Err(why) => (vec![], Err(why.clone())),
@@ -45,7 +57,7 @@ pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool, illus
                 let own_palette = use_palette(data, &mut v.document, &mut read);
                 use_brushes(data, &mut v.document, have, &mut v.warnings, &mut read);
                 use_styles(data, &mut v.document, true, 1.0, None, &mut read);
-                use_symbols(data, &mut v.document, own_palette, &mut v.warnings, &mut read);
+                use_symbols(data, &mut v.document, own_palette, None, &mut v.warnings, &mut read);
                 use_variables(data, &mut v.document, &mut v.warnings, &mut read);
                 add_notes(&mut v.warnings, read.notes());
             }
@@ -137,7 +149,7 @@ pub fn layered_ai_from(
         all.push(format!("{LAYERS_UNREAD} from its editing data ({why}): they come from its PDF part"));
         all
     };
-    let AiLayers { data, structure, alone } = layers;
+    let AiLayers { data, structure, alone, mut text } = layers;
     let data = match data {
         Ok(data) => data,
         Err(why) => return (visible, unread(warnings, &why), false),
@@ -153,7 +165,7 @@ pub fn layered_ai_from(
         let own_palette = use_palette(&data, &mut visible, &mut read);
         use_brushes(&data, &mut visible, have, &mut warnings, &mut read);
         use_styles(&data, &mut visible, false, unit, Some(&boards), &mut read);
-        use_symbols(&data, &mut visible, own_palette, &mut warnings, &mut read);
+        use_symbols(&data, &mut visible, own_palette, Some((unit, boards.as_slice())), &mut warnings, &mut read);
         use_variables(&data, &mut visible, &mut warnings, &mut read);
         add_notes(&mut warnings, read.notes());
         return (visible, warnings, false);
@@ -172,21 +184,33 @@ pub fn layered_ai_from(
         use_brushes(&data, &mut visible, have, &mut warnings, &mut read);
         use_styles(&data, &mut visible, false, unit, Some(&boards), &mut read);
         let mut all = unread(warnings, why);
-        use_symbols(&data, &mut visible, own_palette, &mut all, &mut read);
+        use_symbols(&data, &mut visible, own_palette, Some((unit, boards.as_slice())), &mut all, &mut read);
         use_variables(&data, &mut visible, &mut all, &mut read);
         add_notes(&mut all, read.notes());
         (visible, all, false)
     };
-    let built = structure
-        .unwrap_or_else(|| ai::read_over_page(&data, false, names).map(Box::new))
-        .and_then(|structure| build_from(*structure, &data, Some(&visible), Page::Artboard, outlined, trust, unit));
+    // The envelopes of type the page doesn't hold against layers that don't draw as it, and how many
+    // envelopes of type the layers had.
+    let (mut free, mut count) = (None, 0);
+    let built = structure.unwrap_or_else(|| ai::read_over_page(&data, false, names).map(Box::new)).and_then(|structure| {
+        count = structure.warped_type.envelope_count();
+        build_weighing(*structure, &data, Some(&visible), Page::Artboard, outlined, trust, unit, &mut free, &mut text)
+    });
     // Layers that waited on the page only for their envelopes of type open alone, as they would
-    // have without them, each envelope keeping its drawn art, unless one opened live with the page.
-    let live = matches!(&built, Ok((done, _)) if holds_type_envelope(&done.layers));
+    // have without them, unless one opened live with the layers drawing as the page. Alone, each
+    // envelope keeps its drawn art but those the page didn't hold against the layers, which open
+    // live as they were weighed. They were weighed on the layers as compared with the page, before
+    // any object of them came in as the page's art: those layers aren't used here, whatever came of
+    // them.
+    let live = free.is_none() && matches!(&built, Ok((done, _)) if holds_type_envelope(&done.layers));
     if !live
         && let Some((mut done, notes)) = alone.and_then(|(pages, unit)| {
-            let structure = ai::read_over_page(&data, false, names).ok()?;
-            build_without_page(structure, &data, &pages, unit).ok()?.ok()
+            let mut structure = ai::read_over_page(&data, false, names).ok()?;
+            // With none free, nothing needs settling again: every envelope keeps its drawn art.
+            if let Some(free) = free.as_deref().filter(|free| !free.is_empty()) {
+                structure.warped_type.open_alone(free, count);
+            }
+            build_without_page(structure, &data, &pages, unit, &mut text).ok()?.ok()
         })
     {
         done.setup.bleed = visible.setup.bleed;
@@ -224,27 +248,28 @@ fn holds_type_envelope(nodes: &[Arc<Node>]) -> bool {
 pub fn ai_layers_alone(private: &[u8], pages: &[(f64, f64)], unit: f64, names: ai::NameEncoding) -> Result<(Document, Vec<String>), AiLayers> {
     let data = match ai::decode_private(private) {
         Ok(data) => data,
-        Err(why) => return Err(AiLayers { data: Err(why), structure: None, alone: None }),
+        Err(why) => return Err(AiLayers { data: Err(why), structure: None, alone: None, text: Box::default() }),
     };
     if !has_layers(&data) {
-        return Err(AiLayers { data: Ok(data), structure: None, alone: None });
+        return Err(AiLayers { data: Ok(data), structure: None, alone: None, text: Box::default() });
     }
     // An image past the hard limits is read as an unread box, which the PDF part's art replaces.
     let structure = match ai::read_over_page(&data, false, names) {
         Ok(structure) => structure,
-        Err(why) => return Err(AiLayers { data: Ok(data), structure: Some(Err(why)), alone: None }),
+        Err(why) => return Err(AiLayers { data: Ok(data), structure: Some(Err(why)), alone: None, text: Box::default() }),
     };
+    let mut text = Box::<ReadText>::default();
     // An envelope of type opens live only where the layers with it draw as the page, as the other
     // live envelopes do: the PDF part is imported to compare them with. Should none open live, the
     // layers open alone as they would have, the envelopes keeping their drawn art ([`layered_ai_from`]).
-    if structure.warped_type.has_envelopes() && alone_scale(&structure, &data, pages, unit).is_some() {
+    if structure.warped_type.has_envelopes() && alone_scale(&structure, &data, pages, unit, &mut text).is_some() {
         let alone = Some((pages.to_vec(), unit));
-        return Err(AiLayers { data: Ok(data), structure: Some(Ok(Box::new(structure))), alone });
+        return Err(AiLayers { data: Ok(data), structure: Some(Ok(Box::new(structure))), alone, text });
     }
-    match build_without_page(structure, &data, pages, unit) {
+    match build_without_page(structure, &data, pages, unit, &mut text) {
         Ok(Ok((doc, notes))) => Ok((doc, notes)),
-        Ok(_) => Err(AiLayers { data: Ok(data), structure: None, alone: None }),
-        Err(structure) => Err(AiLayers { data: Ok(data), structure: Some(Ok(structure)), alone: None }),
+        Ok(_) => Err(AiLayers { data: Ok(data), structure: None, alone: None, text }),
+        Err(structure) => Err(AiLayers { data: Ok(data), structure: Some(Ok(structure)), alone: None, text }),
     }
 }
 
@@ -259,12 +284,14 @@ pub struct AiLayers {
     /// The pages and their unit the layers open on without the PDF part, when they wait on it only
     /// for their envelopes of type ([`ai_layers_alone`]).
     alone: Option<(Vec<(f64, f64)>, f64)>,
+    /// The text objects' frames and the text document of the editing copy, as far as they were read.
+    text: Box<ReadText>,
 }
 
 impl AiLayers {
     /// The editing copy `private` (as [`layered_ai`] takes it), decoded.
     pub fn decode(private: &[u8]) -> Self {
-        Self { data: ai::decode_private(private), structure: None, alone: None }
+        Self { data: ai::decode_private(private), structure: None, alone: None, text: Box::default() }
     }
 }
 
@@ -365,24 +392,32 @@ fn use_styles(data: &[u8], doc: &mut Document, large_canvas: bool, unit: f64, bo
     if styles.is_empty() {
         return;
     }
-    if !large_canvas && (unit != 1.0 || canvas != 1.0) {
-        let read;
-        let boards = match boards {
-            Some(b) => b,
-            None => {
-                read = ai::artboards(data, &mut ai::Names::default()).0;
-                &read
-            }
-        };
-        let k = board_scale(boards, doc, unit).or_else(|| board_scale(boards, doc, canvas));
-        if let Some(k) = k.filter(|k| *k != 1.0) {
-            for g in &mut styles {
-                g.appearance.scale_strokes(k);
-                g.appearance.scale_effects(k, vectorcraft_effects::scale_effect);
-            }
+    if !large_canvas && let Some(k) = data_scale(data, doc, unit, canvas, boards) {
+        for g in &mut styles {
+            g.appearance.scale_strokes(k);
+            g.appearance.scale_effects(k, vectorcraft_effects::scale_effect);
         }
     }
     doc.graphic_styles = styles.into();
+}
+
+/// How many times as large `doc` (a file read as its PDF part) draws the art of its editing data
+/// `data`, whose declared large canvas scale is `canvas`, when it isn't 1: `unit` when the editing
+/// data's artboards (`boards`, or read from `data`) are the size of `doc`'s pages in units of
+/// `unit` points, else `canvas` when they are the pages' size at that scale ([`board_scale`]).
+fn data_scale(data: &[u8], doc: &Document, unit: f64, canvas: f64, boards: Option<&[(String, Rect)]>) -> Option<f64> {
+    if unit == 1.0 && canvas == 1.0 {
+        return None;
+    }
+    let read;
+    let boards = match boards {
+        Some(b) => b,
+        None => {
+            read = ai::artboards(data, &mut ai::Names::default()).0;
+            &read
+        }
+    };
+    board_scale(boards, doc, unit).or_else(|| board_scale(boards, doc, canvas)).filter(|k| *k != 1.0)
 }
 
 /// `doc` (a file read as its page or PDF part, in place of its layers) with the symbols of its
@@ -393,15 +428,34 @@ fn use_styles(data: &[u8], doc: &mut Document, large_canvas: bool, unit: f64, bo
 /// of the name, which the art then names, as does one whose name a color group has), as [`build`] gives a document read from the layers, and
 /// the note about instances that can't be drawn added to `warnings`. An object of their art linked
 /// to a graphic style keeps the link when [`use_styles`] gave `doc` the editing data's styles. The
-/// symbols' art keeps the editing data's units, as in a document read from the layers: when
-/// [`use_styles`] draws the styles' strokes and effects larger (a file in larger units), linked art
-/// isn't scaled with them. Left as it is when `doc` has symbols already or the editing data has
-/// none this reads. `names` reads the symbols' names and keeps the notes on them.
-fn use_symbols(data: &[u8], doc: &mut Document, own_palette: bool, warnings: &mut Vec<String>, names: &mut ai::Names) {
+/// symbols' art is drawn as large as a document read from the layers draws it
+/// ([`scale_symbol_art`]): with `units` `None` (an EPS's page), as many times as large as the data's
+/// declared large canvas scale; with `Some((unit, boards))`, as many times as large as
+/// [`use_styles`] draws the styles' strokes and effects ([`data_scale`], `boards` the editing data's
+/// artboards); at its own size in data VectorCraft wrote. Left as it is when `doc` has symbols
+/// already or the editing data has none this reads. `names` reads the symbols' names and keeps the
+/// notes on them.
+fn use_symbols(
+    data: &[u8],
+    doc: &mut Document,
+    own_palette: bool,
+    units: Option<(f64, &[(String, Rect)])>,
+    warnings: &mut Vec<String>,
+    names: &mut ai::Names,
+) {
     if !doc.symbols.is_empty() {
         return;
     }
-    let Some(ai::Symbols { symbols, images, swatches }) = ai::symbols(data, names) else { return };
+    let Some(ai::Symbols { symbols, images, swatches, canvas_scale, own_size }) = ai::symbols(data, names) else { return };
+    let (mut symbols, registrations): (Vec<_>, Vec<_>) = symbols.into_iter().unzip();
+    let k = match units {
+        _ if own_size => None,
+        None => Some(canvas_scale),
+        Some((unit, boards)) => data_scale(data, doc, unit, canvas_scale, Some(boards)),
+    };
+    if let Some(k) = k {
+        scale_symbol_art(&mut symbols, k);
+    }
     for (key, blob) in images {
         doc.images.entry(key).or_insert(blob);
     }
@@ -432,7 +486,7 @@ fn use_symbols(data: &[u8], doc: &mut Document, own_palette: bool, warnings: &mu
         *link = Some(new.clone());
         true
     };
-    for (mut symbol, registration) in symbols {
+    for (mut symbol, registration) in symbols.into_iter().zip(registrations) {
         let mut art = reid_page_art(doc, &symbol.art);
         if !renamed.is_empty() {
             vectorcraft_doc::swatches::map_node_solid_paints(&mut art, &mut follow);
@@ -566,16 +620,23 @@ fn editing_copy(ps: &[u8]) -> Option<Result<Cow<'_, [u8]>, String>> {
 /// but whose program has no layers (Illustrator 3 had none; image editors still export their
 /// paths so, storytold/photocraft#6036) is read with its art on one layer. `None` when the program
 /// has no layers and isn't in the format: other PostScript isn't read as the format's operators.
+/// The program of a `.ai` (`ai_file`) has the artboard its header gives ([`Page::Program`]).
 /// `names`: the encoding of names that aren't UTF-8.
-pub(in super::super) fn program_alone(ps: &[u8], illustrator: bool, names: ai::NameEncoding) -> Option<Result<(Document, Vec<String>), String>> {
+pub(in super::super) fn program_alone(
+    ps: &[u8],
+    illustrator: bool,
+    ai_file: bool,
+    names: ai::NameEncoding,
+) -> Option<Result<(Document, Vec<String>), String>> {
     if ai::has_eps_data(ps) {
         return None;
     }
+    let page = if ai_file { Page::Program } else { Page::Art };
     if has_layers(ps) {
-        return Some(build(ps, None, Page::Art, false, false, 1.0, names));
+        return Some(build(ps, None, page, false, false, 1.0, names));
     }
     let program = illustrator.then(|| one_layer(ps)).flatten()?;
-    Some(build(&program, None, Page::Art, false, false, 1.0, names))
+    Some(build(&program, None, page, false, false, 1.0, names))
 }
 
 /// `ps` with its art (from its `%%EndSetup` to its `%%PageTrailer`, else its `%%Trailer`, else its

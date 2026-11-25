@@ -325,7 +325,11 @@ fn encode_read_only_within(doc: &Document, n: &Node, symbols: &SymbolBoxes, left
             o["truncated"] = json!(false);
         }
         NodeKind::Image(im) => {
-            o["transform"] = affine_json(im.xf);
+            // A distorted image: its corners, and the affine placement nearest them at its middle.
+            o["transform"] = affine_json(vectorcraft_doc::image_quad::nearest_affine(n).unwrap_or(im.xf));
+            if let Some(q) = n.image_quad() {
+                o["corners"] = json!(q.map(|p| [p.x, p.y]));
+            }
             o["pixelSize"] = json!([im.width, im.height]);
             o["colorMode"] = json!(doc.image_blob(im).map_or("unknown", color_mode));
             o["linked"] = json!(im.link.is_some());
@@ -459,9 +463,8 @@ fn color_mode(b: &ImageBlob) -> &'static str {
     if b.gray_source().is_some() {
         return "gray";
     }
-    let readable =
-        image::ImageReader::new(std::io::Cursor::new(b.bytes.as_slice())).with_guessed_format().ok().and_then(|r| r.into_dimensions().ok());
-    if readable.is_some() { "rgb" } else { "unknown" }
+    let readable = vectorcraft_doc::header_size(&b.bytes).is_some() || b.header_size().is_some();
+    if readable { "rgb" } else { "unknown" }
 }
 
 #[cfg(test)]
@@ -481,8 +484,7 @@ fn rgba_pixels(b: &ImageBlob, w: u32, h: u32, max: usize, charged: &mut usize) -
         return None;
     }
     let cmyk = b.is_cmyk();
-    let reader = || image::ImageReader::new(std::io::Cursor::new(b.bytes.as_slice())).with_guessed_format().ok();
-    let size = if cmyk { b.header_size()? } else { reader()?.into_dimensions().ok()? };
+    let size = if cmyk { b.header_size()? } else { vectorcraft_doc::header_size(&b.bytes).or_else(|| b.header_size())? };
     if size != (w, h) {
         return None;
     }
@@ -492,13 +494,11 @@ fn rgba_pixels(b: &ImageBlob, w: u32, h: u32, max: usize, charged: &mut usize) -
     if cmyk {
         return cmyk_rgba(b, w, h);
     }
-    let mut r = reader()?;
-    let mut limits = image::Limits::default();
+    let mut opts = craft_image_codecs::DecodeOptions::default();
     // The decoder's own buffers besides the RGBA it gives.
-    limits.max_alloc = Some(64 << 20);
-    r.limits(limits);
-    let img = r.decode().ok()?.into_rgba8();
-    (img.dimensions() == (w, h)).then(|| img.into_raw())
+    opts.limits.max_alloc = 64 << 20;
+    let img = craft_image_codecs::decode_with(&b.bytes, &opts).ok()?;
+    (img.dimensions() == (w, h)).then(|| img.to_rgba8())
 }
 
 /// The inks → XYZ table of [`cmyk_rgba`] and the color settings it was built with.
@@ -579,6 +579,11 @@ fn unit(v: f32) -> f32 {
     v.clamp(0.0, 1.0)
 }
 
+/// Process plate `v` in 0..1: NaN is 0, infinities go to the nearest end.
+fn plate(v: f32) -> f32 {
+    if v.is_nan() { 0.0 } else { unit(v) }
+}
+
 /// `c` with its components in range.
 pub(crate) fn clamp_color(c: Color) -> Color {
     match c {
@@ -589,8 +594,8 @@ pub(crate) fn clamp_color(c: Color) -> Color {
     }
 }
 
-/// A paint from plug-in output (`null`: none), with colours, opacities and offsets clamped and
-/// gradient and pattern placements checked.
+/// A paint from plug-in output (`null`: none), with colors, process plates, opacities and
+/// offsets clamped and gradient and pattern placements checked.
 fn decode_paint(v: &Value, at: &str) -> Result<Paint> {
     if v.is_null() {
         return Ok(Paint::None);
@@ -613,15 +618,24 @@ fn decode_paint(v: &Value, at: &str) -> Result<Paint> {
                 s.midpoint = s.midpoint.clamp(0.13, 0.87);
                 s.tint = unit(s.tint);
                 s.color = clamp_color(s.color);
+                if let Some(plates) = &mut s.plates {
+                    *plates = plates.map(plate);
+                }
             }
             stops.sort_by(|a, b| a.offset.total_cmp(&b.offset));
             g.angle = g.angle.rem_euclid(360.0);
+            g.gradient.repeats = g.gradient.repeat_count();
             let conic = g.gradient.kind == vectorcraft_color::GradientKind::Conic;
+            let no_focal = conic || g.gradient.kind == vectorcraft_color::GradientKind::Diamond;
             if let Some(geom) = &mut g.geom {
                 check_point(geom.start, at)?;
                 check_point(geom.end, at)?;
                 if let Some(f) = geom.focal {
                     check_point(f, at)?;
+                }
+                // Conic and diamond gradients have no focal point (the commands refuse one).
+                if no_focal {
+                    geom.focal = None;
                 }
                 let a = geom.aspect;
                 // A conic's negative aspect mirrors its sweep, so its sign stays.
@@ -937,7 +951,8 @@ fn paints(ap: &Appearance, fill: bool) -> Vec<&Paint> {
 }
 
 /// `p` without swatch links: a plug-in's colours are its own, so only paints it returned
-/// unchanged keep theirs.
+/// unchanged keep theirs. A gradient stop also loses its process plates, which print only with
+/// a spot swatch.
 fn unlinked(mut p: Paint) -> Paint {
     match &mut p {
         Paint::Solid { swatch, tint, .. } => {
@@ -947,8 +962,7 @@ fn unlinked(mut p: Paint) -> Paint {
         Paint::Gradient(g) => {
             g.swatch = None;
             for s in &mut g.gradient.stops {
-                s.swatch = None;
-                s.tint = 1.0;
+                s.set_color(s.color, None);
             }
         }
         Paint::None | Paint::Pattern { .. } => {}
@@ -1017,12 +1031,40 @@ fn members(doc: &mut Document, old: &[Arc<Node>], path: PathData) -> Vec<Arc<Nod
         .collect()
 }
 
+/// Whether `returned`, a path from plug-in output, is `current` as it was: output has its empty
+/// subpaths dropped, so `current`'s are left out of the comparison.
+fn same_geometry(returned: &PathData, current: &PathData) -> bool {
+    returned.subpaths.iter().eq(current.subpaths.iter().filter(|sp| !sp.anchors.is_empty()))
+}
+
+/// Refuses an output that replaces the members of compound path `n` while one of them isn't a path
+/// (plug-ins aren't given its geometry), or is hidden, locked or (unless the output sets `guide`) a
+/// guide.
+fn check_members_replaceable(n: &Node, children: &[Arc<Node>], sets_guide: bool, at: &str) -> Result<()> {
+    let id = n.id.0;
+    if children.iter().any(|c| c.path_data().is_none()) {
+        return Err(out_err(at, format!("compound path {id} has a member that isn't a path, so its members can't be replaced")));
+    }
+    if children.iter().any(|c| !c.visible || c.locked || (!sets_guide && is_guide(c))) {
+        return Err(out_err(at, format!("compound path {id} has a hidden, locked or guide member, so its members can't be replaced")));
+    }
+    Ok(())
+}
+
 /// Writes `o` into `n` (an input object, or a fresh node for a new one); its effect records once
 /// `admit` lets them in.
 fn write(doc: &mut Document, n: &mut Node, o: OutObject, at: &str, admit: AdmitEffects) -> Result<()> {
     let (cur_path, cur_rule, cur_compound) = geometry(n).unwrap_or((PathData::default(), FillRule::NonZero, false));
     let compound = o.compound.unwrap_or(cur_compound);
     let rule = o.rule.unwrap_or(cur_rule);
+    // A compound path handed back with its path as it was keeps its members as they are.
+    let same_members = cur_compound && o.path.as_ref().is_none_or(|p| same_geometry(p, &cur_path));
+    if let NodeKind::Compound { children, .. } = &n.kind
+        && (!same_members || !compound)
+    {
+        let at = if compound { format!("{at}.path") } else { format!("{at}.type") };
+        check_members_replaceable(n, children, o.guide.is_some(), &at)?;
+    }
     match (&mut n.kind, compound) {
         (NodeKind::Path { path, rule: r, live, .. }, false) => {
             // A path handed back as it was stays the live shape it was.
@@ -1033,7 +1075,7 @@ fn write(doc: &mut Document, n: &mut Node, o: OutObject, at: &str, admit: AdmitE
             *r = rule;
         }
         (NodeKind::Compound { children, rule: r }, true) => {
-            if let Some(p) = o.path {
+            if let Some(p) = o.path.filter(|_| !same_members) {
                 *children = members(doc, children, p);
             }
             *r = rule;
@@ -1238,8 +1280,11 @@ pub fn apply_output(doc: &mut Document, inputs: &[NodeId], out: Vec<OutObject>, 
         match o.id {
             Some(id) => {
                 let mut n = originals.remove(&id).ok_or_else(|| {
-                    let why = if wanted.contains(&id) { "is listed twice" } else { "is not the id of an input object" };
-                    out_err(&at, format!("{} {why}", id.0))
+                    if wanted.contains(&id) {
+                        out_err(&at, format!("{} is listed twice", id.0))
+                    } else {
+                        out_err(&at, format!("{} is not the id of an input object", id.0))
+                    }
                 })?;
                 // Type, images and symbol instances are only read: writing one would make it a path.
                 if input_kind(&n).is_some() && !o.kept {

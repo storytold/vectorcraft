@@ -13,6 +13,7 @@ use std::collections::HashSet;
 use super::{Builder, ELEMENT_BYTES, arg, data, key_of, length_of, method, new_array, new_string, to_integer};
 use crate::heap::{Class, Key, OBJECT_BYTES, OPEN, ObjId, Object, Prop, key, string_bytes};
 use crate::interp::{Desc, ErrorType, Hint, Interp, JsResult};
+use crate::string_builtins::flat_charged;
 use crate::value::{Str, Value, number_to_str};
 
 pub(super) fn install(interp: &mut Interp) -> JsResult<()> {
@@ -473,7 +474,7 @@ fn settings(interp: &mut Interp, replacer: &Value, space: &Value) -> JsResult<Se
             let n = to_integer(interp, &space)?.clamp(0.0, 10.0) as usize;
             s.gap = vec![u16::from(b' '); n];
         }
-        Value::String(t) => s.gap = t.flat().iter().take(10).copied().collect(),
+        Value::String(t) => s.gap = flat_charged(interp, &t)?.iter().take(10).copied().collect(),
         _ => {}
     }
     Ok(s)
@@ -632,7 +633,10 @@ fn write_primitive(interp: &mut Interp, out: &mut Builder, v: &Value) -> JsResul
         Value::Bool(b) => out.push_str(interp, if *b { "true" } else { "false" }),
         Value::Number(n) if n.is_finite() => out.push_units(interp, &number_to_str(*n).flat()),
         Value::Number(_) => out.push_str(interp, "null"),
-        Value::String(s) => write_quoted(interp, out, &s.flat()),
+        Value::String(s) => interp.rooted(std::slice::from_ref(v), |i| {
+            let units = flat_charged(i, s)?;
+            write_quoted(i, out, &units)
+        }),
         Value::Undefined | Value::Object(_) => Ok(()),
     }
 }

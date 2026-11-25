@@ -1,4 +1,4 @@
-use super::bounds::{apply_carrying, item_effects};
+use super::bounds::{apply_carrying, item_effects, item_raster};
 use super::entries::{Content, DocInputs, Drawn, FX_RASTER_BUDGET, Inputs, ItemGeom, KeptImage, Made, Reads, feather_outline};
 #[cfg(test)]
 use super::raster::RASTERIZED;
@@ -95,7 +95,9 @@ impl Renderer {
         let key = content.cache.map(|slot| (content.node as *const Node as usize, slot, f.ink));
         // Made again at this zoom and rotation (after a pan), a raster cropped to the view covers a
         // margin around the view too, so that later pans within the margin draw it.
-        let again = key.and_then(|key| self.pixel_fx.get(&key)).is_some_and(|e| e.linear == linear) && content.kept.is_none() && !f.opts.dragging;
+        let again = key.and_then(|key| self.pixel_fx.get(&key)).is_some_and(|e| e.linear == linear)
+            && content.kept.is_none_or(|k| k.shared)
+            && !f.opts.dragging;
         let room = match margin {
             Some(m) if !fits && again => {
                 let e = pan_margin((screen.width(), screen.height()), m, PIXEL_BUDGET, f64::from(crate::MAX_RASTER_SIDE));
@@ -122,7 +124,7 @@ impl Renderer {
         let channels = match f.ink.base() {
             Ink::Cmy => effects::pixel::Channels::CmyPlane,
             Ink::K => effects::pixel::Channels::KPlane,
-            Ink::Display | Ink::RichBlack if f.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk => effects::pixel::Channels::Cmyk,
+            Ink::Display | Ink::RichBlack | Ink::Proofed(_) if f.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk => effects::pixel::Channels::Cmyk,
             _ => effects::pixel::Channels::Rgb,
         };
         // What the content reads (as the raster kept for it found it, else found now), with the
@@ -241,7 +243,10 @@ impl Renderer {
             outline: feather_outline(&chain, content, content.reach.origin()),
         });
         let (center, extent) = (content.reach.center(), 0.5 * content.reach.width().hypot(content.reach.height()));
-        let space = effects::PixelSpace { to_doc, px, center, channels, line, extent };
+        // The Blur Center lies in the object's bounds; a split stack's later part spreads `reach`
+        // evenly, so the centre stays the same.
+        let size = content.object.size().to_vec2();
+        let space = effects::PixelSpace { to_doc, px, center, size, channels, line, extent };
         let (wz, hz) = (wu as usize, hu as usize);
         // What the content covers after the effects run so far: Rasterize makes its image over it.
         let mut bounds = content.bounds.unwrap_or(content.reach);
@@ -286,7 +291,7 @@ impl Renderer {
         // A raster kept for this view alone at a lower resolution than the view's is resampled to the
         // view's pixels once: each frame that draws it then copies it pixel for pixel, where sampling
         // it again across the whole view cost several times as much as a plain fill.
-        let view_raster = key.is_some() && in_view.is_some() && k < 1.0 && content.kept.is_none();
+        let view_raster = key.is_some() && in_view.is_some() && k < 1.0 && content.kept.is_none_or(|k| k.shared);
         let (image, x0, y0, k) = match view_raster.then(|| self.resampled(f, image.clone(), (x0, y0), k, screen)).flatten() {
             Some((image, x, y)) => (image, x, y, 1.0),
             None => (image, x0, y0, k),
@@ -305,8 +310,9 @@ impl Renderer {
             self.pixel_fx.insert(key, entry);
             self.trim_fx_rasters(FX_RASTER_BUDGET);
         }
-        // An image over the limits was drawn at a frame's resolution: its raster is kept.
-        match content.kept.filter(|kept| kept.image.borrow().is_none()) {
+        // An image over the limits was drawn at a frame's resolution: its raster is kept. The
+        // placements of a copied image each draw their own (`Kept::shared`).
+        match content.kept.filter(|kept| !kept.shared && kept.image.borrow().is_none()) {
             Some(kept) => {
                 let place = f.view.inverse() * Affine::translate((x0, y0)) * Affine::scale(1.0 / k);
                 *kept.image.borrow_mut() = Some(KeptImage::Raster(image.clone(), place, failed, image_left_out));
@@ -412,7 +418,7 @@ impl Renderer {
     /// brush library it reads; for images and placed documents their pixels and files, the
     /// layer's Dim Images and the options they are drawn with (with
     /// [`crate::RenderOptions::kept_images_only`], also which pixels and undecodable notes the
-    /// image store holds); for type the fonts, whether overprinting shows
+    /// image store holds); for type the fonts and the hyphenation exceptions, whether overprinting shows
     /// ([`crate::proof::overprints`]) and Document Setup's substitution highlights; and the
     /// plug-ins installed, with the names of the document's swatches and patterns and its pattern
     /// definitions (a plug-in's painted pieces can name them), when an object in it has a plug-in
@@ -457,7 +463,7 @@ impl Renderer {
                 f.doc.setup.highlight_substituted_glyphs,
                 o.highlight_alternate_glyphs,
             ));
-            (vectorcraft_text::FontDb::global().generation(), crate::proof::overprints(f.opts), highlights).hash(&mut h);
+            (vectorcraft_text::layout_inputs(), crate::proof::overprints(f.opts), highlights).hash(&mut h);
         }
         if reads.plugins || (doc.plugins && (reads.symbols || reads.patterns)) {
             (effects::plugin_revision(), doc.names, doc.patterns).hash(&mut h);
@@ -676,8 +682,15 @@ impl Renderer {
                 ap.items.pop()
             });
             let item = carried.as_ref().and_then(Option::as_ref).unwrap_or(item);
+            // Its raster effects follow only the Transform effects that moved it.
+            let ran = carry.skipped().then(|| {
+                let mut it = item.clone();
+                carry.hide_skipped(it.effects_mut());
+                it
+            });
+            let item = ran.as_ref().unwrap_or(item);
             let ib = if effects::has_geometry(item_effects(item)) && !ig.elements().is_empty() { ig.bounding_box() } else { bounds };
-            let rfx = effects::raster_effects(item_effects(item));
+            let rfx = effects::raster_effects(&item_raster(n, item));
             if rfx.is_empty() {
                 self.paint_item(ctx, f, n, item, ig, rule, ib);
                 continue;
@@ -701,6 +714,7 @@ impl Renderer {
                 owner: None,
                 cache: Some((j + 1) << 8),
                 reach: ib.inflate(outset, outset),
+                object: ib.inflate(outset, outset),
                 outline: Some((&outline, orule)),
                 bounds,
                 kept: None,

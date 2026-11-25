@@ -41,3 +41,26 @@ fn type_naming_a_version_is_set_in_it() {
     assert!((newer - older).abs() > 50.0, "the two versions set the line differently: {newer} vs {older}");
     assert_eq!(width(&db, Some(VERSIONS[1])), newer);
 }
+
+/// Every installed face a PostScript name answers to, ignoring case and punctuation: the face
+/// `find_postscript` gives first, then the copies in other families and the versions, in load
+/// order; none for a name no face has.
+#[test]
+fn every_face_of_a_postscript_name_is_found() {
+    use crate::test_fonts::named_copy;
+    let db = FontDb::with_font_dirs(vec![]);
+    for (inter, names) in [
+        (true, ("Facetest Ink", "Bold", "Version 1.000", "FacetestInkBold")),
+        (false, ("Facetest-Ink", "Bold", "Version 1.000", "FacetestInk-Bold")),
+        (true, ("Facetest-Ink", "Bold", "Version 2.000", "FACETESTINK-BOLD")),
+        (false, ("Other Ink", "Bold", "Version 1.000", "OtherInk-Bold")),
+    ] {
+        assert_eq!(db.add_font(named_copy(inter, names).expect("the test font builds")), 1, "{names:?}");
+    }
+    let names = |name: &str| db.postscript_faces(name).iter().map(|f| f.postscript_name()).collect::<Vec<_>>();
+    let first = db.find_postscript("FacetestInk-Bold").expect("a face").postscript_name();
+    assert_eq!(first, "FacetestInkBold");
+    assert_eq!(names("FacetestInk-Bold"), ["FacetestInkBold", "FacetestInk-Bold", "FACETESTINK-BOLD"]);
+    assert_eq!(names("OtherInk-Bold"), ["OtherInk-Bold"]);
+    assert!(names("NoSuchInk-Bold").is_empty());
+}

@@ -1,5 +1,7 @@
-//! The Variables dialogs (`variable.define`, `variable.bind`, `dataset.new`, `dataset.set`
-//! and `dataset.select`), opened from Window › Variables or the command palette.
+//! The Variables dialogs (`variable.define`, `variable.rename` as Variable Options, `variable.bind`,
+//! `dataset.new`, `dataset.set`, `dataset.rename` and `dataset.select`), opened from Window ›
+//! Variables or the command palette. Variable Options shows the variable's name and kind, and OK
+//! changes either or both.
 //!
 //! One dialog covers all of them: what it shows is what the command takes. A variable is a
 //! name and a kind; a dataset is a name and one field per variable — a text field for a
@@ -8,17 +10,16 @@
 //! already says, and its Name field renames the row. The data set dialogs stay open when OK
 //! fails, keeping what was typed.
 
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::env::Label;
 use serde_json::{Value, json};
 use vectorcraft_doc::{DataValue, VariableKind, Variables};
 
-use super::{DialogSpec, run_and_close};
 use crate::VectorcraftApp;
-use crate::state::Dialog;
-use crate::theme::Tokens;
-use crate::widgets;
 
-/// The dialog kind of every Variables dialog.
-pub const KIND: &str = "variables";
+/// The host key of every Variables dialog: one dialog at a time, so opening another command
+/// replaces the open one.
+pub(crate) const KEY: &str = "variables";
 
 /// The field of Edit Data Set that holds the name of the row it edits, which its Name field
 /// renames.
@@ -31,9 +32,6 @@ const KINDS: [&str; 4] = ["text", "visibility", "image", "graph"];
 fn kind_labels() -> [&'static str; 4] {
     [tl!("Text"), tl!("Visibility"), tl!("Image"), tl!("Graph")]
 }
-
-pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |d| tl!(&d.str("__label")).to_string(), body, confirm, min_width: 380.0, ..DialogSpec::FORM };
 
 /// The command the dialog runs and what it is called.
 fn opened(id: &str) -> Option<&'static str> {
@@ -50,7 +48,7 @@ fn opened(id: &str) -> Option<&'static str> {
 }
 
 /// The row `id` renames, which the dialog offers as a dropdown when the document has more than
-/// one. Variable Options renames the one the panel has highlighted, so it starts there.
+/// one. Variable Options edits the one the panel has highlighted, so it starts there.
 fn rename_of(id: &str) -> Option<&'static str> {
     Some(match id {
         "variable.rename" => "variable",
@@ -69,17 +67,15 @@ pub fn open(app: &mut VectorcraftApp, id: &str, preselect: Option<&str>) -> bool
         return true;
     };
     let vars = st.doc.variables.clone();
-    let mut fields = serde_json::Map::new();
+    let mut fields = DialogFields::new();
     match id {
         "variable.define" => {
-            fields.insert("name".into(), json!(""));
-            fields.insert("kind".into(), json!(KINDS[0]));
+            fields.set("name", "");
+            fields.set("kind", KINDS[0]);
         }
-        "variable.bind" => {
-            fields.insert("variable".into(), json!(""));
-        }
+        "variable.bind" => fields.set("variable", ""),
         "dataset.new" => {
-            fields.insert("name".into(), json!(""));
+            fields.set("name", "");
             value_fields(&vars, vars.datasets.first().map(|d| &d.values), &mut fields);
         }
         "dataset.set" => {
@@ -89,21 +85,19 @@ pub fn open(app: &mut VectorcraftApp, id: &str, preselect: Option<&str>) -> bool
                 return true;
             };
             let Some(current) = vars.dataset(&name) else { return true };
-            fields.insert("name".into(), json!(name));
+            fields.set("name", name.as_str());
             // The row being edited; the Name field renames it.
-            fields.insert(EDITED.into(), json!(name));
+            fields.set(EDITED, name.as_str());
             value_fields(&vars, Some(&current.values), &mut fields);
             // An empty text value is a value, but its field looks like a field with no value:
             // mark it so OK keeps it until the field is edited.
             for (var, value) in &current.values {
                 if matches!(value, DataValue::Text(t) if t.is_empty()) {
-                    fields.insert(empty_marker(&value_key(var)), json!(true));
+                    fields.set(empty_marker(&value_key(var)), true);
                 }
             }
         }
-        "dataset.select" => {
-            fields.insert("name".into(), json!(""));
-        }
+        "dataset.select" => fields.set("name", ""),
         _ => {
             // A rename: which row, and its new name.
             let key = rename_of(id).unwrap_or("name");
@@ -116,14 +110,48 @@ pub fn open(app: &mut VectorcraftApp, id: &str, preselect: Option<&str>) -> bool
                 app.status(if key == "variable" { tl!("no variable to rename").to_string() } else { tl!("no data set to rename").to_string() });
                 return true;
             }
-            fields.insert(key.into(), json!(preselect.filter(|p| names.contains(p)).or(names.first().copied()).unwrap_or_default()));
-            fields.insert("newName".into(), json!(""));
+            let row = preselect.filter(|p| names.contains(p)).or(names.first().copied()).unwrap_or_default();
+            fields.set(key, row);
+            // Variable Options' Name and Kind rows default to the variable's own.
+            if key != "variable" {
+                fields.set("newName", "");
+            }
         }
     }
-    fields.insert("__command".into(), json!(id));
-    fields.insert("__label".into(), json!(label));
-    app.ui.dialog = Some(Dialog::new(KIND, Value::Object(fields)));
+    let Some(ctx) = app.ui_ctx.clone() else {
+        app.status(tl!("no window").to_string());
+        return true;
+    };
+    let (command, title) = (id.to_string(), tl!(label).to_string());
+    let build_id = command.clone();
+    let dialog = HostedParamDialog::new(&ctx, KEY, fields, move |fields| {
+        let rows = params(&vars, &build_id, fields);
+        ParamDialog::command(KEY, Label::from(title.clone()), rows)
+    });
+    crate::dialogs::host::open_held(app, dialog, move |app, result| ok(app, &command, result));
     true
+}
+
+/// Runs `command` with what the confirmed `result` says. A data set dialog answers the error, which
+/// keeps it open with what was typed (a taken or empty name); any other command's error goes to the
+/// status line and the dialog closes.
+fn ok(app: &mut VectorcraftApp, command: &str, result: &ParamResult) -> Result<(), String> {
+    let Some(vars) = app.session.active().map(|st| st.doc.variables.clone()) else {
+        return Err(tl!("no document").to_string());
+    };
+    let Err(e) = app.run(command, params_of(command, result, &vars)) else { return Ok(()) };
+    if matches!(command, "dataset.new" | "dataset.set") {
+        return Err(e);
+    }
+    app.status(e);
+    Ok(())
+}
+
+/// Variable Options' Name and Kind defaults for the variable `name`: its name, and its kind as
+/// `variable.rename` takes it (empty for a variable of unknown kind, which OK leaves as it is).
+fn defaults_of(vars: &Variables, name: &str) -> (String, &'static str) {
+    let kind = vars.variable(name).map(|v| v.kind).filter(|k| *k != VariableKind::Unknown).map(VariableKind::label).unwrap_or_default();
+    (name.to_string(), kind)
 }
 
 /// Whether `id` opens one of these dialogs.
@@ -133,22 +161,22 @@ pub fn opens(id: &str) -> bool {
 
 /// One field per variable, prefilled from `current` (the row being edited, else the first row
 /// so a new one starts from something rather than from nothing).
-fn value_fields(vars: &Variables, current: Option<&std::collections::BTreeMap<String, DataValue>>, out: &mut serde_json::Map<String, Value>) {
+fn value_fields(vars: &Variables, current: Option<&std::collections::BTreeMap<String, DataValue>>, out: &mut DialogFields) {
     for v in &vars.variables {
-        let value = match (current.and_then(|c| c.get(&v.name)), v.kind) {
-            (Some(DataValue::Text(t)), _) => json!(t),
-            (Some(DataValue::Visible(b)), _) => json!(b),
-            (Some(DataValue::Image(p)), _) => json!(p),
-            (Some(DataValue::Graph(c)), _) => json!(c),
+        let key = value_key(&v.name);
+        match (current.and_then(|c| c.get(&v.name)), v.kind) {
+            (Some(DataValue::Text(t)), _) => out.set(key, t.to_string()),
+            (Some(DataValue::Visible(b)), _) => out.set(key, *b),
+            (Some(DataValue::Image(p)), _) => out.set(key, p.to_string()),
+            (Some(DataValue::Graph(c)), _) => out.set(key, c.to_string()),
             // Without a value in the row a text, image or graph field starts empty (no value in
             // this row) and a visibility one starts shown: its false is a value, so it is never
             // "unset".
-            (None, VariableKind::Text | VariableKind::Image | VariableKind::Graph) => json!(""),
-            (None, VariableKind::Visibility) => json!(true),
+            (None, VariableKind::Text | VariableKind::Image | VariableKind::Graph) => out.set(key, ""),
+            (None, VariableKind::Visibility) => out.set(key, true),
             // A variable of unknown kind takes no value, so it has no field.
-            (None, VariableKind::Unknown) => continue,
-        };
-        out.insert(value_key(&v.name), value);
+            (None, VariableKind::Unknown) => {}
+        }
     }
 }
 
@@ -164,129 +192,65 @@ fn empty_marker(key: &str) -> String {
     format!("__empty:{key}")
 }
 
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let t = Tokens::get(ui.ctx());
-    let Some(st) = app.session.active() else {
-        widgets::dim_label(ui, tl!("No document"));
-        return false;
-    };
-    let vars = &st.doc.variables;
-    let variable_names: Vec<&str> = vars.variables.iter().map(|v| v.name.as_str()).collect();
-    let dataset_names: Vec<&str> = vars.datasets.iter().map(|x| x.name.as_str()).collect();
-    egui::Grid::new("variables-grid").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
-        let label = |ui: &mut egui::Ui, text: &str| widgets::field_label(ui, egui::RichText::new(text).color(t.text));
-        match d.str("__command").as_str() {
-            "variable.define" => {
-                label(ui, tl!("Name"));
-                text(ui, d, "name", 220.0);
-                ui.end_row();
-                label(ui, tl!("Kind"));
-                // The kinds by their translated names; the field keeps the command's own word.
-                let labels = kind_labels();
-                let shown = KINDS.iter().position(|k| *k == d.str("kind")).and_then(|i| labels.get(i)).copied().unwrap_or_default();
-                if let Some(kind) = widgets::dropdown_names(ui, ("variables-dd", "kind"), shown, &labels, 220.0).and_then(|i| KINDS.get(i)) {
-                    d.fields.insert("kind".into(), json!(kind));
-                }
-                ui.end_row();
-            }
-            "variable.bind" => {
-                label(ui, tl!("Variable"));
-                dropdown(ui, d, "variable", &variable_names, 220.0);
-                ui.end_row();
-            }
-            "dataset.select" => {
-                label(ui, tl!("Data Set"));
-                dropdown(ui, d, "name", &dataset_names, 220.0);
-                ui.end_row();
-            }
-            // A rename: which row, and its new name.
-            "variable.rename" | "dataset.rename" => {
-                let (key, label_text, names) = if d.str("__command") == "variable.rename" {
-                    ("variable", tl!("Variable").to_string(), &variable_names)
-                } else {
-                    ("name", tl!("Data Set").to_string(), &dataset_names)
-                };
-                label(ui, &label_text);
-                dropdown(ui, d, key, names, 220.0);
-                ui.end_row();
-                label(ui, tl!("New Name"));
-                text(ui, d, "newName", 220.0);
-                ui.end_row();
-            }
-            _ => {
-                label(ui, tl!("Name"));
-                text(ui, d, "name", 220.0);
-                ui.end_row();
-                if vars.variables.is_empty() {
-                    widgets::dim_label(ui, tl!("Define a variable first"));
-                    ui.end_row();
-                    return;
-                }
-                // One row per variable, in the order they are defined, each with the editor
-                // its kind takes.
-                for v in &vars.variables {
-                    label(ui, &v.name);
-                    let key = value_key(&v.name);
-                    match v.kind {
-                        VariableKind::Text | VariableKind::Image => {
-                            text(ui, d, &key, 220.0);
-                        }
-                        VariableKind::Graph => {
-                            text_area(ui, d, &key, 220.0);
-                        }
-                        VariableKind::Visibility => checkbox(ui, d, &key, &v.name),
-                        VariableKind::Unknown => {}
-                    }
-                    ui.end_row();
-                }
-            }
+/// A dropdown row over the document's names (shown as they are, never translated). The empty
+/// option is first so a fresh dialog can still be filled in.
+fn names_row(key: &str, label: &'static str, names: Vec<&str>) -> Param {
+    let options =
+        std::iter::once((String::new(), Label::from(""))).chain(names.into_iter().map(|n| (n.to_string(), Label::from(n.to_string())))).collect();
+    Param::new(key, Label::from(label), ParamKind::choice(options, None))
+}
+
+/// A text row.
+fn text_row(key: &str, label: &'static str, default: &str) -> Param {
+    Param::new(key, Label::from(label), ParamKind::text(default))
+}
+
+/// The Kind row: the kinds by their translated names, while the field keeps the command's own word.
+fn kind_row(default: Option<String>) -> Param {
+    let options = KINDS.iter().zip(kind_labels()).map(|(k, l)| (k.to_string(), Label::from(l))).collect();
+    Param::new("kind", Label::from(tl!("Kind")), ParamKind::choice(options, default))
+}
+
+/// The rows of `id`'s dialog over the document's `vars` and the dialog's current `fields`.
+fn params(vars: &Variables, id: &str, fields: &DialogFields) -> Vec<Param> {
+    let variables: Vec<&str> = vars.variables.iter().map(|v| v.name.as_str()).collect();
+    let datasets: Vec<&str> = vars.datasets.iter().map(|d| d.name.as_str()).collect();
+    match id {
+        "variable.define" => vec![text_row("name", tl!("Name"), ""), kind_row(Some(KINDS[0].to_string()))],
+        // Variable Options: which variable, and its name and kind; picking another variable
+        // starts the two rows over from that one.
+        "variable.rename" => {
+            let (name, kind) = defaults_of(vars, fields.text("variable").unwrap_or_default());
+            vec![
+                names_row("variable", tl!("Variable"), variables).resets(["newName", "kind"]),
+                text_row("newName", tl!("Name"), &name),
+                kind_row((!kind.is_empty()).then(|| kind.to_string())),
+            ]
         }
-    });
-    false
-}
-
-/// A text field for `key`, written back as it is typed.
-fn text(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32) -> egui::Response {
-    let mut s = d.str(key);
-    let r = ui.add(egui::TextEdit::singleline(&mut s).align(egui::Align2::LEFT_CENTER).desired_width(width));
-    if r.changed() {
-        set_text(d, key, s);
-    }
-    r
-}
-
-/// Write a typed `s` into `key`.
-fn set_text(d: &mut Dialog, key: &str, s: String) {
-    note_set(d, key);
-    d.fields.insert(key.into(), json!(s));
-}
-
-/// Records that `field` was typed in or set by `ui.dialog.set`: it no longer holds the row's
-/// empty text value, so emptying it unsets the variable.
-pub(super) fn note_set(d: &mut Dialog, field: &str) {
-    d.fields.remove(&empty_marker(field));
-}
-
-/// A checkbox for `key`, written back as it is toggled, which screen readers call `name`.
-fn checkbox(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str) {
-    let b = d.bool(key);
-    if widgets::check_box(ui, name, b, true) {
-        d.fields.insert(key.into(), json!(!b));
-    }
-}
-
-/// A dropdown over the document's names `options` (shown as they are, never translated) for
-/// `key`, written back as it changes. The empty option is first so a fresh dialog can still be
-/// filled in; a name that is no longer offered reads as empty rather than being silently
-/// swapped for another one.
-fn dropdown(ui: &mut egui::Ui, d: &mut Dialog, key: &str, options: &[&str], width: f32) {
-    let cur = d.str(key);
-    let mut labels: Vec<&str> = vec![""];
-    labels.extend_from_slice(options);
-    let shown = if cur.is_empty() || options.contains(&cur.as_str()) { cur.as_str() } else { "" };
-    if let Some(i) = widgets::dropdown_names(ui, ("variables-dd", key), shown, &labels, width) {
-        // The empty option (0) empties the field; the rest are `options`, one along.
-        d.fields.insert(key.into(), json!(i.checked_sub(1).and_then(|i| options.get(i)).copied().unwrap_or_default()));
+        "variable.bind" => vec![names_row("variable", tl!("Variable"), variables)],
+        "dataset.select" => vec![names_row("name", tl!("Data Set"), datasets)],
+        "dataset.rename" => vec![names_row("name", tl!("Data Set"), datasets), text_row("newName", tl!("New Name"), "")],
+        _ => {
+            let mut rows = vec![text_row("name", tl!("Name"), "")];
+            if vars.variables.is_empty() {
+                rows.push(Param::read_only_text("note", "", tl!("Define a variable first")));
+                return rows;
+            }
+            // One row per variable, in the order they are defined, each with the editor its kind takes.
+            for v in &vars.variables {
+                let key = value_key(&v.name);
+                let label = Label::from(v.name.clone());
+                match v.kind {
+                    VariableKind::Text | VariableKind::Image => {
+                        rows.push(Param::new(key.as_str(), label, ParamKind::text("")).resets([empty_marker(&key)]));
+                    }
+                    VariableKind::Graph => rows.push(Param::new(key.as_str(), label, ParamKind::text("")).multiline(4)),
+                    VariableKind::Visibility => rows.push(Param::new(key.as_str(), label, ParamKind::bool(true))),
+                    VariableKind::Unknown => {}
+                }
+            }
+            rows
+        }
     }
 }
 
@@ -294,19 +258,19 @@ fn dropdown(ui: &mut egui::Ui, d: &mut Dialog, key: &str, options: &[&str], widt
 /// empty carries no value in this row, except a text variable whose value in the edited row was
 /// already the empty text, which keeps it. A visibility checkbox is always a value — its false,
 /// too.
-fn values_of(d: &Dialog, vars: &Variables) -> Value {
+fn values_of(fields: &DialogFields, vars: &Variables) -> Value {
     let mut out = serde_json::Map::new();
     for v in &vars.variables {
         let key = value_key(&v.name);
         match v.kind {
             VariableKind::Text | VariableKind::Image | VariableKind::Graph => {
-                let text = d.str(&key);
-                if !text.is_empty() || (v.kind == VariableKind::Text && d.bool(&empty_marker(&key))) {
+                let text = fields.text(&key).unwrap_or_default();
+                if !text.is_empty() || (v.kind == VariableKind::Text && fields.bool(&empty_marker(&key)).unwrap_or(false)) {
                     out.insert(v.name.clone(), json!(text));
                 }
             }
             VariableKind::Visibility => {
-                out.insert(v.name.clone(), json!(d.bool(&key)));
+                out.insert(v.name.clone(), json!(fields.bool(&key).unwrap_or(false)));
             }
             VariableKind::Unknown => {}
         }
@@ -314,45 +278,36 @@ fn values_of(d: &Dialog, vars: &Variables) -> Value {
     Value::Object(out)
 }
 
-/// A multiline field for graph CSV.
-fn text_area(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32) {
-    let mut s = d.str(key);
-    let r = ui.add(egui::TextEdit::multiline(&mut s).desired_width(width).desired_rows(4));
-    if r.changed() {
-        set_text(d, key, s);
-    }
-}
-
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let cmd = d.str("__command");
-    let name = d.str("name");
-    let p = match cmd.as_str() {
-        "variable.define" => json!({"name": name, "kind": d.str("kind")}),
-        "variable.bind" => json!({"variable": d.str("variable")}),
-        "variable.rename" => json!({"name": d.str("variable"), "newName": d.str("newName")}),
-        "dataset.rename" => json!({"name": name, "newName": d.str("newName")}),
-        "dataset.new" | "dataset.set" => {
-            let values = app.session.active().map(|st| values_of(d, &st.doc.variables)).unwrap_or_else(|| json!({}));
-            // A data set dialog keeps its typed values when OK fails (a taken or empty name).
-            let p = if cmd == "dataset.set" {
-                json!({"name": d.str(EDITED), "newName": name, "values": values})
-            } else {
-                json!({"name": name, "values": values})
-            };
-            let r = app.run(&cmd, p);
-            if r.is_ok() {
-                app.ui.dialog = None;
+/// The params of `command` for the confirmed `result`.
+fn params_of(command: &str, result: &ParamResult, vars: &Variables) -> Value {
+    let f = &result.fields;
+    let text = |key: &str| f.text(key).unwrap_or_default().to_string();
+    let name = text("name");
+    match command {
+        "variable.define" => json!({"name": name, "kind": text("kind")}),
+        "variable.bind" => json!({"variable": text("variable")}),
+        // A Name the Variable field just reset keeps the variable's name (an emptied one is sent,
+        // and refused), and a reset or empty Kind (a variable of unknown kind) keeps its kind.
+        "variable.rename" => {
+            let variable = text("variable");
+            let new_name = f.text("newName").map_or_else(|| defaults_of(vars, &variable).0, str::to_string);
+            match f.text("kind").filter(|k| !k.is_empty()) {
+                // Any kind word goes to the command, which refuses one it doesn't know.
+                Some(kind) => json!({"name": variable, "newName": new_name, "kind": kind}),
+                None => json!({"name": variable, "newName": new_name}),
             }
-            return r;
         }
+        "dataset.rename" => json!({"name": name, "newName": text("newName")}),
+        "dataset.new" => json!({"name": name, "values": values_of(f, vars)}),
+        "dataset.set" => json!({"name": text(EDITED), "newName": name, "values": values_of(f, vars)}),
         "dataset.select" => json!({"name": name}),
         _ => json!({}),
-    };
-    run_and_close(app, &cmd, p)
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use craft::ui::dialog::{DialogId, StackDialog};
     use serde_json::json;
     use vectorcraft_engine::Session;
 
@@ -360,24 +315,61 @@ mod tests {
 
     fn app_with_variables() -> VectorcraftApp {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        // PLAN: assumed `crate::testing::ui_context() -> egui::Context` (hub-w1, S-SH4) and `ui_ctx: Option<egui::Context>`
+        app = crate::testing::windowed(app);
         app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
         app.run("variable.define", json!({"name": "Title", "kind": "text"})).unwrap();
         app.run("variable.define", json!({"name": "Badge", "kind": "visibility"})).unwrap();
         app
     }
 
+    fn ctx(app: &VectorcraftApp) -> egui::Context {
+        app.ui_ctx.clone().unwrap()
+    }
+
+    /// The id of the open dialog.
+    fn open_id(app: &VectorcraftApp) -> DialogId {
+        app.dialogs().unwrap().with(|h| h.open_dialogs().into_iter().find(|d| d.key.as_deref() == Some(KEY)).map(|d| d.id)).unwrap()
+    }
+
+    /// Sets `key` on the open dialog the way `ui.dialog.set` does.
+    fn set(app: &mut VectorcraftApp, key: &str, value: Value) {
+        let (ctx, id) = (ctx(app), open_id(app));
+        app.dialogs().unwrap().with(|h| h.set_json_field(&ctx, id, key, value)).unwrap();
+    }
+
+    /// The open dialog's fields.
+    fn fields(app: &VectorcraftApp) -> Value {
+        let id = open_id(app);
+        app.dialogs().unwrap().with(|h| h.get_by_id::<HostedParamDialog>(id).and_then(|d| d.json_fields())).unwrap()
+    }
+
+    fn is_open(app: &VectorcraftApp) -> bool {
+        app.dialogs().unwrap().with(|h| h.open_dialogs().iter().any(|d| d.key.as_deref() == Some(KEY)))
+    }
+
+    /// Presses OK on the open dialog, runs the host pass that answers it and the frame that closes it.
+    fn ok(app: &mut VectorcraftApp) {
+        let (ctx, id) = (ctx(app), open_id(app));
+        app.dialogs().unwrap().with(|h| h.confirm_by_id(&ctx, id));
+        crate::dialogs::host::pump(app, &ctx);
+        crate::testing::app_frame(app, &ctx, Default::default());
+    }
+
+    fn kind_of(app: &VectorcraftApp, name: &str) -> Option<VariableKind> {
+        app.session.active().and_then(|st| st.doc.variables.variable(name).map(|v| v.kind))
+    }
+
     #[test]
     fn defining_a_variable_from_the_dialog_works() {
         let mut app = app_with_variables();
         assert!(open(&mut app, "variable.define", None));
-        {
-            let d = app.ui.dialog.as_ref().unwrap();
-            assert_eq!(d.kind, KIND);
-            assert_eq!(d.str("name"), "");
-            assert_eq!(d.str("kind"), "text", "text is the default kind");
-        }
-        app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Price"));
-        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(is_open(&app));
+        let f = fields(&app);
+        assert_eq!(f["name"], "");
+        assert_eq!(f["kind"], "text", "text is the default kind");
+        set(&mut app, "name", json!("Price"));
+        ok(&mut app);
         let vars = app.run("variable.list", json!({})).unwrap();
         assert!(vars["variables"].as_array().unwrap().iter().any(|v| v["name"] == "Price"));
     }
@@ -386,13 +378,10 @@ mod tests {
     fn a_new_dataset_carries_the_dialogs_values_and_omits_the_empty_ones() {
         let mut app = app_with_variables();
         open(&mut app, "dataset.new", None);
-        {
-            let d = app.ui.dialog.as_mut().unwrap();
-            d.fields.insert("name".into(), json!("Row 1"));
-            d.fields.insert(value_key("Title"), json!("Hello"));
-            d.fields.insert(value_key("Badge"), json!(false));
-        }
-        crate::dialogs::confirm(&mut app).unwrap();
+        set(&mut app, "name", json!("Row 1"));
+        set(&mut app, &value_key("Title"), json!("Hello"));
+        set(&mut app, &value_key("Badge"), json!(false));
+        ok(&mut app);
         let sets = app.run("dataset.list", json!({})).unwrap();
         assert_eq!(sets["datasets"][0]["name"], "Row 1");
         assert_eq!(sets["datasets"][0]["values"]["Title"], json!({"text": "Hello"}));
@@ -408,8 +397,8 @@ mod tests {
         app.run("dataset.new", json!({"name": "Row 2", "values": {"Title": "Bob", "Badge": true}})).unwrap();
         app.run("dataset.select", json!({"name": "Row 1"})).unwrap();
         open(&mut app, "dataset.set", None);
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str(&value_key("Title")), "");
-        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(fields(&app)[value_key("Title")], "");
+        ok(&mut app);
         let sets = app.run("dataset.list", json!({})).unwrap();
         assert_eq!(sets["datasets"][0]["values"]["Title"], json!({"text": ""}), "OK with nothing changed keeps the empty text");
         app.run("dataset.select", json!({"name": "Row 2"})).unwrap();
@@ -418,30 +407,20 @@ mod tests {
         // A field the user empties on a row that had a value still leaves the variable unset.
         app.run("dataset.select", json!({"name": "Row 2"})).unwrap();
         open(&mut app, "dataset.set", None);
-        app.ui.dialog.as_mut().unwrap().fields.insert(value_key("Title"), json!(""));
-        crate::dialogs::confirm(&mut app).unwrap();
+        set(&mut app, &value_key("Title"), json!(""));
+        ok(&mut app);
         let sets = app.run("dataset.list", json!({})).unwrap();
         assert_eq!(sets["datasets"][1]["values"]["Title"], json!(null));
-        // Typing into the empty text value's field and emptying it again unsets it too, and so
-        // does the same edit through `ui.dialog.set`.
-        for typed in [true, false] {
-            app.run("dataset.set", json!({"name": "Row 1", "values": {"Title": "", "Badge": true}})).unwrap();
-            app.run("dataset.select", json!({"name": "Row 1"})).unwrap();
-            open(&mut app, "dataset.set", None);
-            {
-                let d = app.ui.dialog.as_mut().unwrap();
-                for s in ["a", ""] {
-                    if typed {
-                        set_text(d, &value_key("Title"), s.into());
-                    } else {
-                        crate::dialogs::set_field(d, value_key("Title"), json!(s));
-                    }
-                }
-            }
-            crate::dialogs::confirm(&mut app).unwrap();
-            let sets = app.run("dataset.list", json!({})).unwrap();
-            assert_eq!(sets["datasets"][0]["values"]["Title"], json!(null), "typed: {typed}");
+        // Typing into the empty text value's field and emptying it again unsets it too.
+        app.run("dataset.set", json!({"name": "Row 1", "values": {"Title": "", "Badge": true}})).unwrap();
+        app.run("dataset.select", json!({"name": "Row 1"})).unwrap();
+        open(&mut app, "dataset.set", None);
+        for s in ["a", ""] {
+            set(&mut app, &value_key("Title"), json!(s));
         }
+        ok(&mut app);
+        let sets = app.run("dataset.list", json!({})).unwrap();
+        assert_eq!(sets["datasets"][0]["values"]["Title"], json!(null));
     }
 
     #[test]
@@ -450,14 +429,12 @@ mod tests {
         app.run("dataset.new", json!({"name": "Row 1", "values": {"Title": "Hello", "Badge": false}})).unwrap();
         app.run("dataset.set", json!({"name": "Row 1", "values": {"Badge": true}})).unwrap();
         open(&mut app, "dataset.set", None);
-        {
-            let d = app.ui.dialog.as_ref().unwrap();
-            assert_eq!(d.str("name"), "Row 1");
-            assert_eq!(d.str(&value_key("Title")), "", "the row carries no value for it");
-            assert!(d.bool(&value_key("Badge")), "the row's own value");
-        }
-        app.ui.dialog.as_mut().unwrap().fields.insert(value_key("Title"), json!("Changed"));
-        crate::dialogs::confirm(&mut app).unwrap();
+        let f = fields(&app);
+        assert_eq!(f["name"], "Row 1");
+        assert_eq!(f[value_key("Title")], "", "the row carries no value for it");
+        assert_eq!(f[value_key("Badge")], true, "the row's own value");
+        set(&mut app, &value_key("Title"), json!("Changed"));
+        ok(&mut app);
         let sets = app.run("dataset.list", json!({})).unwrap();
         assert_eq!(sets["datasets"][0]["values"]["Title"], json!({"text": "Changed"}));
         assert_eq!(sets["datasets"][0]["values"]["Badge"], json!({"visible": true}));
@@ -471,13 +448,10 @@ mod tests {
         app.run("dataset.select", json!({"name": "Row 1"})).unwrap();
         let undo = app.session.active().unwrap().history.undo.len();
         open(&mut app, "dataset.set", None);
-        {
-            let d = app.ui.dialog.as_mut().unwrap();
-            d.fields.insert("name".into(), json!("Spring"));
-            d.fields.insert(value_key("Title"), json!("Changed"));
-        }
-        crate::dialogs::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
+        set(&mut app, "name", json!("Spring"));
+        set(&mut app, &value_key("Title"), json!("Changed"));
+        ok(&mut app);
+        assert!(!is_open(&app));
         let sets = app.run("dataset.list", json!({})).unwrap();
         assert_eq!((sets["datasets"][0]["name"].clone(), sets["active"].clone()), (json!("Spring"), json!("Spring")));
         assert_eq!(sets["datasets"][0]["values"]["Title"], json!({"text": "Changed"}));
@@ -488,13 +462,11 @@ mod tests {
         // what was typed.
         for taken in ["Row 2", " "] {
             open(&mut app, "dataset.set", None);
-            {
-                let d = app.ui.dialog.as_mut().unwrap();
-                d.fields.insert("name".into(), json!(taken));
-                d.fields.insert(value_key("Title"), json!("Meant for Spring"));
-            }
-            assert!(crate::dialogs::confirm(&mut app).is_err(), "{taken:?}");
-            assert_eq!(app.ui.dialog.as_ref().map(|d| d.str(&value_key("Title"))).as_deref(), Some("Meant for Spring"));
+            set(&mut app, "name", json!(taken));
+            set(&mut app, &value_key("Title"), json!("Meant for Spring"));
+            ok(&mut app);
+            assert!(is_open(&app), "{taken:?}");
+            assert_eq!(fields(&app)[value_key("Title")], "Meant for Spring");
             let sets = app.run("dataset.list", json!({})).unwrap();
             assert_eq!(sets["datasets"][0]["values"]["Title"], json!({"text": "Changed"}));
             assert_eq!(sets["datasets"][1]["values"]["Title"], json!({"text": "Other"}));
@@ -506,36 +478,12 @@ mod tests {
         let mut app = app_with_variables();
         app.run("dataset.new", json!({"name": "Row 1", "values": {"Title": "Hello"}})).unwrap();
         open(&mut app, "dataset.new", None);
-        {
-            let d = app.ui.dialog.as_mut().unwrap();
-            d.fields.insert("name".into(), json!("Row 1"));
-            d.fields.insert(value_key("Title"), json!("Typed"));
-        }
-        assert!(crate::dialogs::confirm(&mut app).is_err());
-        assert_eq!(app.ui.dialog.as_ref().map(|d| d.str(&value_key("Title"))).as_deref(), Some("Typed"));
+        set(&mut app, "name", json!("Row 1"));
+        set(&mut app, &value_key("Title"), json!("Typed"));
+        ok(&mut app);
+        assert!(is_open(&app));
+        assert_eq!(fields(&app)[value_key("Title")], "Typed");
         assert_eq!(app.run("dataset.list", json!({})).unwrap()["datasets"].as_array().map(Vec::len), Some(1));
-    }
-
-    #[test]
-    fn selecting_a_dataset_from_the_dialog_applies_it() {
-        let mut app = app_with_variables();
-        let id = app.run("text.create", json!({"x": 10, "y": 10, "text": "x"})).unwrap()["id"].as_u64().unwrap();
-        app.run("variable.bind", json!({"variable": "Title", "ids": [id]})).unwrap();
-        app.run("dataset.new", json!({"name": "Row 1", "values": {"Title": "Hi"}})).unwrap();
-        open(&mut app, "dataset.select", None);
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("name"), "");
-        app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Row 1"));
-        crate::dialogs::confirm(&mut app).unwrap();
-        assert_eq!(app.run("text.getRange", json!({"id": id})).unwrap()["text"], "Hi");
-    }
-
-    #[test]
-    fn only_the_variables_commands_open_one() {
-        let mut app = app_with_variables();
-        assert!(opens("dataset.set") && opens("variable.define"));
-        assert!(!opens("dataset.list") && !opens("dataset.next"), "no dialog for a query or a step");
-        assert!(!open(&mut app, "dataset.list", None), "and it opens nothing");
-        assert!(app.ui.dialog.is_none());
     }
 
     #[test]
@@ -543,11 +491,63 @@ mod tests {
         let mut app = app_with_variables();
         app.run("dataset.new", json!({"name": "Row 1", "values": {"Title": "Hello"}})).unwrap();
         open(&mut app, "variable.rename", Some("Badge"));
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("variable"), "Badge");
+        assert_eq!(fields(&app)["variable"], "Badge");
         // A preselect the document no longer has falls back to the first row.
         open(&mut app, "variable.rename", Some("Gone"));
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("variable"), "Title");
+        assert_eq!(fields(&app)["variable"], "Title");
         open(&mut app, "dataset.rename", Some("Row 1"));
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("name"), "Row 1");
+        assert_eq!(fields(&app)["name"], "Row 1");
+    }
+
+    #[test]
+    fn variable_options_shows_the_name_and_kind_and_changes_either() {
+        let mut app = app_with_variables();
+        open(&mut app, "variable.rename", Some("Badge"));
+        let f = fields(&app);
+        assert_eq!((f["newName"].clone(), f["kind"].clone()), (json!("Badge"), json!("visibility")));
+        set(&mut app, "kind", json!("text"));
+        ok(&mut app);
+        assert_eq!(kind_of(&app, "Badge"), Some(VariableKind::Text));
+
+        // OK with nothing changed adds no undo step, and an emptied Name is refused.
+        let undo = app.session.active().unwrap().history.undo.len();
+        open(&mut app, "variable.rename", Some("Title"));
+        ok(&mut app);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        open(&mut app, "variable.rename", Some("Title"));
+        set(&mut app, "newName", json!(""));
+        ok(&mut app);
+        assert!(kind_of(&app, "Title").is_some(), "Title keeps its name");
+
+        // Picking another variable keeps that variable's own name and kind until Name or Kind is set.
+        open(&mut app, "variable.rename", Some("Title"));
+        set(&mut app, "variable", json!("Badge"));
+        ok(&mut app);
+        assert_eq!((kind_of(&app, "Title"), kind_of(&app, "Badge")), (Some(VariableKind::Text), Some(VariableKind::Text)));
+        open(&mut app, "variable.rename", Some("Title"));
+        set(&mut app, "variable", json!("Badge"));
+        set(&mut app, "newName", json!("Flag"));
+        set(&mut app, "kind", json!("visibility"));
+        ok(&mut app);
+        assert_eq!((kind_of(&app, "Flag"), kind_of(&app, "Title")), (Some(VariableKind::Visibility), Some(VariableKind::Text)));
+    }
+
+    #[test]
+    fn variable_options_fills_the_field_left_unset_after_the_variable_changes() {
+        // Kind alone: Name is the newly picked variable's name.
+        let mut app = app_with_variables();
+        open(&mut app, "variable.rename", Some("Title"));
+        set(&mut app, "variable", json!("Badge"));
+        set(&mut app, "kind", json!("text"));
+        ok(&mut app);
+        assert_eq!((kind_of(&app, "Badge"), kind_of(&app, "Title")), (Some(VariableKind::Text), Some(VariableKind::Text)));
+
+        // Name alone: Kind is the newly picked variable's kind, and OK renames Badge keeping it.
+        let mut app = app_with_variables();
+        open(&mut app, "variable.rename", Some("Title"));
+        set(&mut app, "variable", json!("Badge"));
+        set(&mut app, "newName", json!("Flag"));
+        ok(&mut app);
+        assert_eq!((kind_of(&app, "Flag"), kind_of(&app, "Badge")), (Some(VariableKind::Visibility), None));
     }
 }

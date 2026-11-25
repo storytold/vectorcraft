@@ -6,7 +6,13 @@ use super::{BezPath, Document, FillRule, Node, NodeKind, Rect, SymbolBoxes, brus
 /// geometry effects, and the shadows and glows of it and its members. Symbol instances are
 /// measured by their art in `doc` ([`Node::visual_bounds_with`]).
 pub fn painted_bounds(doc: &Document, n: &Node) -> Option<Rect> {
-    brush_fx::cull_bounds(&doc.symbol_boxes(), n)
+    painted_bounds_with(&doc.symbol_boxes(), n)
+}
+
+/// [`painted_bounds`] with symbol instances measured by their art in `symbols` (made with
+/// [`Document::symbol_boxes`]).
+pub fn painted_bounds_with(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
+    brush_fx::cull_bounds(symbols, n)
 }
 
 /// [`painted_bounds`] of `n` without the room it leaves for brush art past the brushed strokes of
@@ -58,10 +64,19 @@ pub fn drawn_bounds(doc: &Document, n: &Node) -> Option<Rect> {
     fx::painted_reach(&doc.symbol_boxes(), n)
 }
 
+/// For a path or compound path whose own Rasterize effect is followed by Transform effects that
+/// move or copy the art ([`crate::effects::rasterize_stage`]): `n` with those Transform effects
+/// hidden, which the image is made of, and the maps they place the image by, the lowest first
+/// (one per copy, the original's last). The canvas draws the image on its own pixel grid and
+/// places it, and the room around the art, through each map. `None` for other objects.
+pub fn rasterize_stage(doc: &Document, n: &Node) -> Option<(Node, Vec<vectorcraft_geom::Affine>)> {
+    fx::rasterize_stage(doc, n)
+}
+
 /// The outline, with `n`'s geometry effects applied, that the canvas clips `n`'s Rasterize with
 /// Create Clipping Mask to. Object › Rasterize's clipping mask follows it.
 pub fn drawn_outline(doc: &Document, n: &Node) -> Option<(BezPath, FillRule)> {
-    fx::drawn_outline(doc, n)
+    fx::drawn_outline(&doc.symbol_boxes(), n)
 }
 
 /// The outlines a drag draws for `nodes` with Real-time Drawing off: one for each object in them,

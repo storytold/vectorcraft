@@ -31,7 +31,8 @@ pub fn merged_params(id: &str, params: &Value) -> Value {
 /// (`lightRotation`, `lightHeight`, `lightBehind`). Scribble took one `variation` before its
 /// separate `overlapVariation` and `spacingVariation`. Earlier values (from a file or a script of
 /// then) become the current ones that show exactly the same, unless those are given too, which win.
-/// Scribble's angle is also stored above -180° and up to 180° (270° becomes -90°).
+/// Scribble's angle is also stored above -180° and up to 180° (270° becomes -90°), and a Warp's
+/// map `version` given as a whole float is stored as an integer.
 pub fn upgrade_params(id: &str, params: &Value) -> Value {
     match params {
         Value::Object(m) => {
@@ -39,6 +40,7 @@ pub fn upgrade_params(id: &str, params: &Value) -> Value {
             upgrade_perspective(id, &mut m);
             upgrade_light(id, &mut m);
             upgrade_scribble(id, &mut m);
+            upgrade_warp_version(id, &mut m);
             Value::Object(m)
         }
         other => other.clone(),
@@ -71,6 +73,19 @@ fn upgrade_perspective(id: &str, m: &mut Map<String, Value>) {
     }
 }
 
+/// A Warp's map `version` given as a whole float (`1.0`) is stored as the integer.
+fn upgrade_warp_version(id: &str, m: &mut Map<String, Value>) {
+    if !id.starts_with("warp.") {
+        return;
+    }
+    if let Some(v) = m.get_mut("version")
+        && !v.is_u64()
+        && let Some(n) = crate::warp::warp_version(v)
+    {
+        *v = json!(n);
+    }
+}
+
 fn upgrade_scribble(id: &str, m: &mut Map<String, Value>) {
     if id != "stylize.scribble" {
         return;
@@ -91,13 +106,24 @@ pub fn new_effect(id: &str, params: &Value) -> Option<Effect> {
     if !catalog_index().contains_key(id) {
         vectorcraft_plugins::effect::installed(id)?;
     }
-    Some(Effect { id: id.to_string(), params: merged_params(id, params), visible: true })
+    let mut params = merged_params(id, params);
+    // A new Warp takes its style's Bézier net unless a map is given; the catalog's defaults carry
+    // no version, so warps saved without one keep the earlier map.
+    if id.starts_with("warp.")
+        && let Value::Object(m) = &mut params
+    {
+        m.entry("version").or_insert(json!(crate::warp::WARP_NET));
+    }
+    Some(Effect { id: id.to_string(), params, visible: true })
 }
 
 /// Scale the distance parameters of `e` by `s` (Scale Strokes & Effects; see
 /// [`EffectInfo::lengths`]), and its sizes in raster pixels ([`crate::raster_px_range`]), which
 /// keep their share of the object so. A distance left at its default is written out scaled; one
-/// the effect doesn't have (Outline Stroke's weight following its stroke) stays absent.
+/// the effect doesn't have (Outline Stroke's weight following its stroke) stays absent. A Pathfinder
+/// effect without a `precision` gets the precision it evaluates with, scaled. Values are scaled
+/// as stored, out of range or not, so a scale and its inverse restore them; evaluation applies
+/// each effect's range.
 pub fn scale_effect(e: &mut Effect, s: f64) {
     let Some(info) = catalog_index().get(e.id.as_str()) else { return };
     let merged = merged_params(&e.id, &e.params);
@@ -105,7 +131,9 @@ pub fn scale_effect(e: &mut Effect, s: f64) {
     let mut keys: Vec<&str> = info.lengths.keys(relative).collect();
     keys.extend(merged.as_object().into_iter().flat_map(|m| m.keys()).map(String::as_str).filter(|k| crate::raster_px_range(&e.id, k).is_some()));
     for k in keys {
-        let v = util::num(&merged, k, f64::NAN);
+        let missing =
+            if k == "precision" && crate::takes_pathfinder_options(&e.id) { crate::PathfinderEffectOptions::default().precision } else { f64::NAN };
+        let v = util::num(&merged, k, missing);
         if v.is_finite() {
             if !e.params.is_object() {
                 e.params = Value::Object(Map::new());

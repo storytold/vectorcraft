@@ -271,6 +271,41 @@ fn a_frozen_getter_gives_a_frozen_value_each_time() {
     assert_eq!(r.run(source).unwrap(), JsValue::String("true,true,true,1,false,false".into()));
 }
 
+/// A site getter is told the source tag, line and column of the code that reads it: a function an
+/// earlier script or an evaluator's source defined keeps that source's tag, and code that `eval`
+/// compiled has none.
+#[test]
+fn a_site_getter_is_told_where_the_code_that_reads_it_is() {
+    let mut r = realm(10_000_000);
+    let seen: Rc<RefCell<Vec<CallSite>>> = Rc::default();
+    let log = seen.clone();
+    let site: SiteFunction = Rc::new(move |s| {
+        log.borrow_mut().push(s);
+        Ok(Data::Number(f64::from(s.line)))
+    });
+    let source: HostFunction = Rc::new(|_| Ok(Data::String("\n\nfunction inEval() { return host.site; }".into())));
+    let load = HostItem::Evaluator { source, end: Rc::new(|| {}), strict_writes: Rc::new(|| None) };
+    r.define_host_object("host", vec![("site".into(), HostItem::SiteGetter(site)), ("load".into(), load)]).unwrap();
+    r.run("function early() {\n  return  host.site;\n}\nhost.load();").unwrap();
+    let first = r.script_tag();
+    assert_eq!(r.run("\n\n\n\nhost.site + early() + inEval() + eval('host.site')").unwrap(), JsValue::Number(5.0 + 2.0 + 3.0 + 1.0));
+    let second = r.script_tag();
+    let sites = seen.borrow().clone();
+    assert_eq!(
+        sites,
+        vec![
+            CallSite { source: second, line: 5, column: 1 },
+            CallSite { source: first, line: 2, column: 11 },
+            CallSite { source: first + 1, line: 3, column: 28 },
+            CallSite { source: UNKNOWN_SOURCE, line: 1, column: 1 },
+        ]
+    );
+    seen.borrow_mut().clear();
+    // A getter a built-in calls is at the place of the code that called the built-in.
+    assert_eq!(r.run("\nObject.getOwnPropertyDescriptor(host, 'site').get.call(host)").unwrap(), JsValue::Number(2.0));
+    assert_eq!(seen.borrow().first().map(|s| s.source), Some(r.script_tag()));
+}
+
 #[test]
 fn a_text_function_takes_each_argument_as_string_gives_it() {
     let mut r = realm(1_000_000);
@@ -436,6 +471,104 @@ fn a_marked_host_error_that_passes_through_a_finally_block_says_where_it_was_rai
     assert_eq!(r.error_mark(), Some(7));
 }
 
+/// A realm with a 1 MiB heap, the size that the `finally` blocks of these tests collect garbage in.
+fn small_heap_realm() -> Realm {
+    let mut r = Realm::new();
+    r.set_limits(Limits { fuel: 200_000_000, heap_bytes: 1 << 20, ..Limits::default() });
+    r
+}
+
+/// Begins a run of `source` and advances it one instruction at a time until a `finally` block runs
+/// for an exception whose throw site is saved.
+fn start_until_a_throw_site_is_saved(r: &mut Realm, source: &str) {
+    r.start(source).unwrap();
+    while r.interp().finally_sites.is_empty() {
+        assert_eq!(r.advance(1), Ok(Progress::Paused), "{source}");
+    }
+}
+
+/// The collections that a `finally` block's allocations cause under a small heap limit keep the
+/// site its exception was raised at, and the run's end leaves no saved site behind.
+#[test]
+fn an_error_that_passes_through_a_finally_block_that_collects_garbage_says_where_it_was_raised() {
+    let mut r = small_heap_realm();
+    let source = "try {\n  throw new Error('original');\n} finally {\n  for (var i = 0; i < 20000; i++) { var waste = [i, i + 1, i + 2]; }\n}";
+    start_until_a_throw_site_is_saved(&mut r, source);
+    r.collect_garbage();
+    let collections = r.interp().heap.collections;
+    let e = loop {
+        match r.advance(1_000) {
+            Ok(Progress::Paused) => assert_eq!(r.interp().finally_sites.len(), 1, "the site stays saved while the block runs"),
+            Ok(Progress::Done(v)) => panic!("the run ended with {v:?}"),
+            Err(e) => break e,
+        }
+    };
+    assert!(r.interp().heap.collections > collections, "the block's allocations collect garbage");
+    assert_eq!((e.kind, e.line, e.column, e.message.as_str()), (RunErrorKind::Thrown, 2, 3, "Error: original"));
+    assert!(r.interp().finally_sites.is_empty());
+}
+
+/// The code of a saved throw site stays live through a collection: direct `eval` code that
+/// threw is not part of the code of any frame still running.
+#[test]
+fn a_saved_throw_site_keeps_its_code_live() {
+    let mut r = small_heap_realm();
+    let source = "try {\n  eval(\"var unused = 'padding padding padding padding';\\nthrow new Error('original');\");\n} finally {\n  for (var i = 0; i < 2000; i++) { var waste = [i]; }\n}";
+    start_until_a_throw_site_is_saved(&mut r, source);
+    let with_site = r.collect_garbage();
+    let sites = std::mem::take(&mut r.interp().finally_sites);
+    let without_site = r.collect_garbage();
+    r.interp().finally_sites = sites;
+    assert_eq!(r.collect_garbage(), with_site, "the saved site's code is counted again");
+    assert!(with_site > without_site, "{with_site} <= {without_site}");
+    let e = finish(&mut r, 1_000).0.unwrap_err();
+    assert_eq!((e.kind, e.line, e.message.as_str()), (RunErrorKind::Thrown, 2, "Error: original"));
+    assert!(r.interp().finally_sites.is_empty());
+}
+
+/// A run that a host function stops inside a `finally` block leaves no saved throw site behind.
+#[test]
+fn a_run_stopped_in_a_finally_block_leaves_no_saved_throw_site() {
+    let mut r = realm(1_000_000);
+    let f: HostFunction = Rc::new(|_| Err(HostError::Abort("stopped".into())));
+    r.define_host_object("host", vec![("abort".into(), HostItem::Function(f))]).unwrap();
+    let e = r.run("try { throw new Error('original'); } finally { host.abort(); }").unwrap_err();
+    assert_eq!((e.kind, e.message.as_str()), (RunErrorKind::Limit(LimitKind::Host), "stopped"));
+    assert!(r.interp().finally_sites.is_empty());
+    assert_eq!(r.run("1").unwrap(), JsValue::Number(1.0));
+    assert!(r.interp().finally_sites.is_empty());
+}
+
+/// A `finally` block that `break`, `continue` or `return` leaves drops the saved site of the
+/// exception it ran for as it leaves, before the stack grows back over that site's slot.
+#[test]
+fn leaving_a_finally_block_early_drops_its_saved_throw_site() {
+    let mut r = realm(1_000_000);
+    let marked = Rc::new(Cell::new(false));
+    let seen = marked.clone();
+    let f: HostFunction = Rc::new(move |_| {
+        seen.set(true);
+        Ok(Data::Undefined)
+    });
+    r.define_host_object("host", vec![("mark".into(), HostItem::Function(f))]).unwrap();
+    for source in [
+        "do { try { throw new Error('x'); } finally { break; } } while (false);\nhost.mark(); var a = [1, 2, 3];",
+        "for (var i = 0; i < 1; i++) { try { throw new Error('x'); } finally { continue; } }\nhost.mark(); var a = [1, 2, 3];",
+        "function f() { try { throw new Error('x'); } finally { return 1; } }\nf(); host.mark(); var a = [f, f, f];",
+    ] {
+        marked.set(false);
+        let mut saved = false;
+        r.start(source).unwrap();
+        while r.advance(1).unwrap() == Progress::Paused {
+            saved |= !r.interp().finally_sites.is_empty();
+            if marked.get() {
+                assert!(r.interp().finally_sites.is_empty(), "{source}");
+            }
+        }
+        assert!(saved && marked.get(), "{source}");
+    }
+}
+
 #[test]
 fn advancing_without_a_run_is_an_error() {
     let mut r = realm(1_000);
@@ -538,6 +671,94 @@ fn error_sources_count_from_the_last_script_and_code_from_an_earlier_one_is_unkn
     assert_eq!(r.error_source(), 1, "counted again from this run's script");
     assert!(r.run("var = 1").is_err());
     assert_eq!(r.error_source(), 0, "a syntax error is in the script");
+}
+
+#[test]
+fn the_code_observer_sees_every_source_evaluated_at_run_time() {
+    let mut r = realm(10_000_000);
+    let seen = Rc::new(RefCell::new(Vec::<String>::new()));
+    let s = seen.clone();
+    r.observe_code(move |units| s.borrow_mut().push(String::from_utf16_lossy(units)));
+    let source: HostFunction = Rc::new(|_| Ok(Data::String("40 + 2".into())));
+    let load = HostItem::Evaluator { source, end: Rc::new(|| {}), strict_writes: Rc::new(|| None) };
+    r.define_host_object("host", vec![("load".into(), load)]).unwrap();
+    let out = r.run("function f() { return eval('1 + 1'); } f() + (0, eval)('2') + Function('a', 'return a')(3) + host.load()").unwrap();
+    assert_eq!(out, JsValue::Number(49.0));
+    let want = ["1 + 1", "2", "(function anonymous(a\n) {\nreturn a\n})", "40 + 2"];
+    assert_eq!(*seen.borrow(), want, "the script's own text is not observed");
+    seen.borrow_mut().clear();
+    r.run("eval(7); Function.prototype.toString.call(f)").unwrap();
+    assert!(seen.borrow().is_empty(), "eval of a value that is not a string compiles nothing");
+}
+
+#[test]
+fn error_tags_stay_the_same_from_run_to_run_and_are_never_shared() {
+    let mut r = realm(10_000_000);
+    let source: HostFunction = Rc::new(|_| Ok(Data::String("function inEval() { throw new Error('in eval'); }".into())));
+    let load = HostItem::Evaluator { source, end: Rc::new(|| {}), strict_writes: Rc::new(|| None) };
+    r.define_host_object("host", vec![("load".into(), load)]).unwrap();
+    assert_eq!(r.script_tag(), UNKNOWN_SOURCE, "no script yet");
+    r.run("function late() { throw new Error('late'); }\nhost.load(); host.load();").unwrap();
+    let first = r.script_tag();
+    assert_ne!(first, UNKNOWN_SOURCE);
+    assert!(r.run("\nlate()").is_err());
+    let second = r.script_tag();
+    assert!(second > first + 2, "the evaluator's two sources took the tags after the first script");
+    assert_eq!((r.error_source(), r.error_tag()), (UNKNOWN_SOURCE, first), "late keeps its script's tag");
+    assert!(r.run("inEval()").is_err());
+    assert_eq!(r.error_tag(), first + 2, "the second source the evaluator gave in the first run");
+    assert!(r.run("\nthrow 1").is_err());
+    assert_eq!((r.error_source(), r.error_tag()), (0, r.script_tag()));
+    // Once the tags are used up, a source gets no tag rather than one an earlier source has.
+    r.set_last_tag(UNKNOWN_SOURCE - 3);
+    r.run("function nearEnd() { throw 1; }\nhost.load(); host.load(); host.load();").unwrap();
+    assert_eq!(r.script_tag(), UNKNOWN_SOURCE - 2);
+    assert!(r.run("nearEnd()").is_err());
+    assert_eq!(r.script_tag(), UNKNOWN_SOURCE, "a script after the last tag");
+    assert_eq!(r.error_tag(), UNKNOWN_SOURCE - 2);
+    assert!(r.run("inEval()").is_err());
+    assert_eq!(r.error_tag(), UNKNOWN_SOURCE, "the third source came after the last tag");
+    assert!(r.run("\nthrow 1").is_err());
+    assert_eq!((r.error_source(), r.error_tag()), (UNKNOWN_SOURCE, UNKNOWN_SOURCE));
+}
+
+#[test]
+fn an_evaluators_source_takes_fuel_before_it_is_parsed() {
+    // The evaluator gives 131,072 spaces and a number: far more code units than the fuel left.
+    let ends = Rc::new(Cell::new(0));
+    let ended = ends.clone();
+    let source: HostFunction = Rc::new(|_| Ok(Data::String(format!("{}7", " ".repeat(1 << 17)))));
+    let item = HostItem::Evaluator { source, end: Rc::new(move || ended.set(ended.get() + 1)), strict_writes: Rc::new(|| None) };
+    let mut r = realm(10_000);
+    r.define_host_object("host", vec![("evaluate".into(), item)]).unwrap();
+    let e = r.run("host.evaluate()").unwrap_err();
+    assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Fuel));
+    assert_eq!(ends.get(), 1, "the evaluator's end runs once");
+    // This fuel covers a third of the source's bytes but not all of its code units.
+    r.set_limits(Limits { fuel: 60_000, ..Limits::default() });
+    assert_eq!(r.run("host.evaluate()").unwrap_err().kind, RunErrorKind::Limit(LimitKind::Fuel));
+    assert_eq!(ends.get(), 2);
+    r.set_limits(Limits { fuel: 1_000_000, ..Limits::default() });
+    assert_eq!(r.run("host.evaluate()"), Ok(JsValue::Number(7.0)));
+    assert_eq!(ends.get(), 3);
+}
+
+#[test]
+fn an_evaluators_whole_source_must_fit_in_the_heap_before_it_is_parsed() {
+    // A third of the source and the other two thirds each fit in the heap; the whole does not.
+    // The source does not parse, so a parse would throw a syntax error instead.
+    let n = (1 << 17) + 1;
+    let source: HostFunction = Rc::new(move |_| Ok(Data::String(format!("{}(", " ".repeat(n - 1)))));
+    let item = HostItem::Evaluator { source, end: Rc::new(|| {}), strict_writes: Rc::new(|| None) };
+    let mut r = realm(1_000_000);
+    r.define_host_object("host", vec![("evaluate".into(), item)]).unwrap();
+    r.interp().collect_for_room();
+    let heap_bytes = r.interp().heap.bytes + crate::heap::string_bytes(n * 5 / 6);
+    r.set_limits(Limits { fuel: 1_000_000, heap_bytes, ..Limits::default() });
+    assert_eq!(r.run("host.evaluate()").unwrap_err().kind, RunErrorKind::Limit(LimitKind::Heap));
+    // With room for the whole source, it is parsed.
+    r.set_limits(Limits { fuel: 1_000_000, ..Limits::default() });
+    assert_eq!(r.run("host.evaluate()").unwrap_err().kind, RunErrorKind::Thrown);
 }
 
 proptest::proptest! {

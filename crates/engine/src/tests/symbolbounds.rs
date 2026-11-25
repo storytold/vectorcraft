@@ -506,7 +506,24 @@ fn a_copied_instances_png_is_cropped_to_its_art() {
     let r = run(&mut s, "clipboard.exportPng", json!({}));
     assert_eq!((r["width"].as_u64(), r["height"].as_u64()), (Some(40), Some(20)));
     let png = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
-    let img = image::load_from_memory(&png).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(&png)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!(img.get_pixel(20, 10).0, [0, 0, 0, 255], "the art fills the picture");
 }
 

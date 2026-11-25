@@ -4,7 +4,7 @@
 use serde_json::{Value, json};
 
 use crate::Session;
-use crate::cmd::fileio::pdf::DEFAULT_PRESET;
+use vectorcraft_pdf::{APP, default_preset_name};
 
 fn session() -> Session {
     let mut s = Session::new();
@@ -31,14 +31,15 @@ fn built_in_presets_are_listed_and_read_only() {
     let mut s = session();
     let v = s.execute("pdf.preset.list", &json!({})).unwrap();
     let rows = v["presets"].as_array().unwrap();
-    assert_eq!(rows[0]["name"], DEFAULT_PRESET);
+    let default = default_preset_name(APP);
+    assert_eq!(rows[0]["name"], default);
     assert!(rows.iter().all(|r| r["builtIn"] == true && !r["description"].as_str().unwrap().is_empty()));
     let row = |n: &str| rows.iter().find(|r| r["name"] == n).unwrap_or_else(|| panic!("{n}"));
     for n in ["High Quality Print", "Press Quality", "Smallest File Size", "PDF/X-1a:2001", "PDF/X-3:2002", "PDF/X-4:2010"] {
         assert_eq!(row(n)["builtIn"], true);
     }
     assert!(rows.iter().all(|r| r["supported"] == true), "every built-in standard is written");
-    assert_eq!(row(DEFAULT_PRESET)["settings"]["preserveEditing"], true);
+    assert_eq!(row(&default)["settings"]["preserveEditing"], true);
     // Read-only: neither changed nor deleted, in any case.
     assert!(is_bad_params(s.execute("pdf.preset.save", &json!({"name": "press quality", "compatibility": "1.4"}))));
     assert!(is_bad_params(s.execute("pdf.preset.save", &json!({"name": "default"}))));
@@ -96,7 +97,7 @@ fn presets_export_and_import_round_trip() {
     let r = s.execute("pdf.preset.import", &json!({"data": text})).unwrap();
     assert_eq!(r["imported"], json!(["Proof", "Press Quality 2"]), "a built-in name gets a number");
     assert_eq!(s.prefs.pdf_presets[0], saved[0], "the same preset comes back");
-    let press = vectorcraft_pdf::builtin_preset("Press Quality").unwrap();
+    let press = vectorcraft_pdf::builtin_preset("Press Quality", APP).unwrap();
     assert_eq!(s.prefs.pdf_presets[1].settings, press.settings);
     // replace: saved presets of the same names are overwritten.
     let r = s.execute("pdf.preset.import", &json!({"data": text, "replace": true})).unwrap();
@@ -123,40 +124,55 @@ fn presets_export_and_import_round_trip() {
     assert!(is_bad_params(Session::new().execute("pdf.preset.export", &json!({}))), "nothing saved to export");
 }
 
-/// `longPagesInPoints` is saved with a preset, comes back through a presets file and the
-/// preferences, shows in `document.pdfSettings`, and a 10 m page exported with it reopens at 10 m.
-/// A value that isn't a boolean is refused.
+/// `longPagesInPoints` is on by default: a 10 m page exported without options is written in
+/// points and reopens at 10 m. Turned off, it is saved with a preset, comes back through a presets
+/// file and the preferences, shows in `document.pdfSettings`, and the page exported with it has a
+/// `UserUnit` and reopens at 10 m. A value that isn't a boolean is refused.
 #[test]
 fn long_pages_in_points_round_trips_through_presets_and_reopens_at_full_size() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 28_346.456_692_913_386, "height": 2_834.645_669_291_338_5})).unwrap();
-    s.execute("pdf.preset.save", &json!({"name": "Banner", "longPagesInPoints": true, "preserveEditing": false})).unwrap();
-    assert!(s.prefs.pdf_presets[0].settings.long_pages_in_points);
+    let reopened = |bytes: &[u8]| {
+        let mut o = Session::new();
+        o.execute("document.open", &json!({"name": "banner.pdf", "dataBase64": vectorcraft_format::base64_encode(bytes)})).unwrap();
+        let rect = o.doc().unwrap().doc.artboards[0].rect;
+        assert!((rect.width() - 28_346.46).abs() < 0.01 && (rect.height() - 2_834.65).abs() < 0.01, "{rect:?}");
+    };
+    let warned = |v: &Value, end: &str| v["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().ends_with(end));
+    // By default the page is written in points.
+    assert_eq!(s.execute("document.pdfSettings", &json!({})).unwrap()["settings"]["longPagesInPoints"], json!(true));
+    let v = s.execute("document.exportPdf", &json!({"preserveEditing": false})).unwrap();
+    let bytes = pdf(&v);
+    assert!(!String::from_utf8_lossy(&bytes).contains("/UserUnit"));
+    assert!(warned(&v, "written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in"), "{v}");
+    reopened(&bytes);
+    // Off in a preset.
+    s.execute("pdf.preset.save", &json!({"name": "Banner", "longPagesInPoints": false, "preserveEditing": false})).unwrap();
+    assert!(!s.prefs.pdf_presets[0].settings.long_pages_in_points);
     let back: crate::Prefs = serde_json::from_value(s.prefs.to_json()).unwrap();
     assert_eq!(back.pdf_presets, s.prefs.pdf_presets);
     let text = s.execute("pdf.preset.export", &json!({"names": ["Banner"]})).unwrap()["data"].as_str().unwrap().to_string();
     let mut t = session();
     t.execute("pdf.preset.import", &json!({"data": text})).unwrap();
     assert_eq!(t.prefs.pdf_presets, s.prefs.pdf_presets);
-    let v = s.execute("document.pdfSettings", &json!({"longPagesInPoints": true})).unwrap();
-    assert_eq!((&v["settings"]["longPagesInPoints"], &v["changed"]), (&json!(true), &json!([{"option": "longPagesInPoints", "value": true}])), "{v}");
-    assert_eq!(s.execute("document.pdfSettings", &json!({})).unwrap()["settings"]["longPagesInPoints"], json!(false));
-    // The preset writes the page in points; the file reopens at 10 m.
-    let v = s.execute("document.exportPdf", &json!({"preset": "Banner"})).unwrap();
-    let bytes = pdf(&v);
-    assert!(!String::from_utf8_lossy(&bytes).contains("/UserUnit"));
-    assert!(
-        v["warnings"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|w| w.as_str().unwrap().ends_with("written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in")),
+    let v = s.execute("document.pdfSettings", &json!({"longPagesInPoints": false})).unwrap();
+    assert_eq!(
+        (&v["settings"]["longPagesInPoints"], &v["changed"]),
+        (&json!(false), &json!([{"option": "longPagesInPoints", "value": false}])),
         "{v}"
     );
-    let mut o = Session::new();
-    o.execute("document.open", &json!({"name": "banner.pdf", "dataBase64": vectorcraft_format::base64_encode(&bytes)})).unwrap();
-    let rect = o.doc().unwrap().doc.artboards[0].rect;
-    assert!((rect.width() - 28_346.46).abs() < 0.01 && (rect.height() - 2_834.65).abs() < 0.01, "{rect:?}");
+    // The preset writes the page with a `UserUnit`; the file reopens at 10 m.
+    let v = s.execute("document.exportPdf", &json!({"preset": "Banner"})).unwrap();
+    let bytes = pdf(&v);
+    assert!(String::from_utf8_lossy(&bytes).contains("/UserUnit 1.969"));
+    assert!(
+        warned(
+            &v,
+            "it is written with a UserUnit of 1.969, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points"
+        ),
+        "{v}"
+    );
+    reopened(&bytes);
     for bad in [json!("yes"), json!(1)] {
         assert!(is_bad_params(s.execute("document.exportPdf", &json!({"longPagesInPoints": bad}))), "{bad}");
         assert!(is_bad_params(s.execute("pdf.preset.save", &json!({"name": "Bad", "longPagesInPoints": bad}))), "{bad}");

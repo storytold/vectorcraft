@@ -177,11 +177,13 @@ pub(crate) enum NativeKind {
 /// 15.3.4.5): calling it calls `target` with `this` and `args` before the arguments it is given.
 /// `Data` is a host function given [`crate::Data`], its arguments read as `read` says. `Eval` is a
 /// host function that gives source to run as global code ([`crate::HostItem::Evaluator`]); `end`
-/// is called when that code ends.
+/// is called when that code ends. `Pausable` is a built-in that may ask the host for a value the
+/// run to wait for ([`crate::interp::Pause`]).
 #[derive(Clone)]
 pub(crate) enum Func {
     Closure { code: Rc<Code>, env: EnvId },
     Native { f: NativeFn, kind: NativeKind, constructor: bool, name: &'static str },
+    Pausable { f: crate::interp::PausableFn, name: &'static str },
     Host { f: Rc<HostFn>, name: Rc<str> },
     Data { f: DataFn, name: Rc<str>, read: crate::host::ArgRead },
     Eval { f: DataFn, end: Rc<dyn Fn()>, strict_writes: Rc<dyn Fn() -> Option<bool>>, name: Rc<str> },
@@ -213,7 +215,9 @@ pub(crate) enum Class {
         length_writable: bool,
     },
     Function(Func),
-    Error,
+    /// An error object. One the interpreter threw itself holds a hash of the description it had
+    /// then ([`crate::interp::Interp::describe`]); one a script made holds `None`.
+    Error(Option<u64>),
     Arguments(Box<ArgMap>),
     /// A `Boolean` object made by ToObject, with its primitive value.
     Boolean(bool),
@@ -242,6 +246,8 @@ pub(crate) enum Class {
     },
     /// A `.( )` filter in progress.
     XmlFilter(Box<XmlFilterState>),
+    /// A `UnitValue` object and its measurement ([`crate::unit_value`]).
+    UnitValue(Box<crate::unit_value::Measure>),
 }
 
 /// What an XML value is.
@@ -311,13 +317,14 @@ impl Class {
             Class::Ordinary | Class::ForIn(_) => "Object",
             Class::Array { .. } => "Array",
             Class::Function(_) => "Function",
-            Class::Error => "Error",
+            Class::Error(_) => "Error",
             Class::Arguments(_) => "Arguments",
             Class::Boolean(_) => "Boolean",
             Class::Number(_) => "Number",
             Class::String(_) => "String",
             Class::RegExp(_) => "RegExp",
             Class::Date(_) => "Date",
+            Class::UnitValue(_) => "UnitValue",
         }
     }
 }
@@ -341,6 +348,26 @@ pub(crate) struct Binding {
     pub(crate) value: Value,
     pub(crate) mutable: bool,
     pub(crate) deletable: bool,
+    /// A `let`, `const` or parameter binding not yet initialized: reading or writing it is a
+    /// `ReferenceError` (its temporal dead zone).
+    pub(crate) uninitialized: bool,
+    /// A `const` binding: writing it is a `TypeError`, in strict mode code or not.
+    pub(crate) constant: bool,
+    /// A `let` or `const` binding, or a function declared in a block: a `var` that eval code
+    /// declares cannot take its name.
+    pub(crate) lexical: bool,
+}
+
+impl Binding {
+    /// An initialized binding.
+    pub(crate) fn new(value: Value, mutable: bool, deletable: bool) -> Self {
+        Self { value, mutable, deletable, uninitialized: false, constant: false, lexical: false }
+    }
+
+    /// A `let` (or with `constant`, a `const`) binding not yet initialized.
+    pub(crate) fn lexical(constant: bool) -> Self {
+        Self { value: Value::Undefined, mutable: !constant, deletable: false, uninitialized: true, constant, lexical: true }
+    }
 }
 
 /// An environment record (section 10.2.1) with its outer environment.
@@ -391,6 +418,8 @@ pub(crate) const XML_LIST_BYTES: usize = 96;
 pub(crate) const XML_REF_BYTES: usize = 8;
 /// The estimated bytes of a namespace an XML node holds.
 pub(crate) const XML_NS_BYTES: usize = 48;
+/// The estimated bytes of the measurement a `UnitValue` object holds.
+pub(crate) const UNIT_VALUE_BYTES: usize = 32;
 /// The estimated bytes of a piece of code without its instructions, tables and strings.
 const CODE_BYTES: usize = 384;
 
@@ -592,7 +621,9 @@ fn mark_code(code: &Code, strings: &mut StringSizes) {
             + code.functions.len()
             + code.params.len()
             + code.vars.len()
-            + 2 * code.fun_decls.len();
+            + 2 * code.fun_decls.len()
+            + code.scopes.iter().map(|s| 2 + s.lets.len() + 2 * s.funcs.len()).sum::<usize>()
+            + code.templates.iter().map(|t| 2 + t.cooked.len() + t.raw.len()).sum::<usize>();
         let tables = code.finally_tables.iter().map(|t| 24 + 4 * t.len()).sum::<usize>();
         strings.bytes += CODE_BYTES
             + size_of::<Op>() * code.ops.len()
@@ -609,8 +640,14 @@ fn mark_code(code: &Code, strings: &mut StringSizes) {
             strings.add(flags);
         }
         let keys = code.names.iter().chain(&code.params).chain(&code.vars).chain(code.fun_decls.iter().map(|(k, _)| k));
-        for k in keys.chain(&code.self_name).chain(&code.decl_name) {
+        for k in keys.chain(&code.self_name).chain(&code.decl_name).chain(&code.rest) {
             strings.add_key(k);
+        }
+        for scope in &code.scopes {
+            scope.lets.iter().map(|(k, _)| k).chain(scope.funcs.iter().map(|(k, _)| k)).for_each(|k| strings.add_key(k));
+        }
+        for t in &code.templates {
+            t.cooked.iter().chain(&t.raw).for_each(|s| strings.add(s));
         }
         stack.extend(code.functions.iter().map(|f| &**f));
     }
@@ -676,6 +713,7 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
             work.extend(state.input.iter().chain(&state.kept).map(|o| o.0));
             extra = XML_LIST_BYTES + XML_REF_BYTES * (state.input.len() + state.kept.len());
         }
+        Class::UnitValue(_) => extra = UNIT_VALUE_BYTES,
         _ => {}
     }
     OBJECT_BYTES + PROP_BYTES * o.props.len() + extra

@@ -290,7 +290,7 @@ impl Sub {
     /// them.
     fn moved(&mut self, was: &SubPath, now: &SubPath, els: &mut [PathEl], st: Option<&StrokeLayer>) {
         let (mut first, mut segs) = (false, vec![]);
-        for (k, (a, b)) in was.anchors.iter().zip(&now.anchors).enumerate() {
+        for (k, a, b) in was.anchors.pairs_not_shared(&now.anchors) {
             if same(a, b) {
                 continue;
             }
@@ -489,7 +489,7 @@ fn differs(was: &PathData, now: &PathData) -> bool {
     !std::ptr::eq(was, now)
         && (was.subpaths.len() != now.subpaths.len()
             || was.subpaths.iter().zip(&now.subpaths).any(|(w, p)| {
-                w.closed != p.closed || w.anchors.len() != p.anchors.len() || w.anchors.iter().zip(&p.anchors).any(|(a, b)| !same(a, b))
+                w.closed != p.closed || w.anchors.len() != p.anchors.len() || w.anchors.pairs_not_shared(&p.anchors).any(|(_, a, b)| !same(a, b))
             }))
 }
 

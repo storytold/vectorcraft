@@ -472,7 +472,7 @@ impl Session {
     pub fn transparency_info(&self) -> TransparencyInfo {
         match (self.active(), transparency_targets(self, &Value::Null)) {
             (Some(st), Ok(ids)) => {
-                let points = super::paint::picked_mesh_points_of(self, &ids);
+                let points = self.mesh_points_picked();
                 TransparencyInfo::of(&st.doc, ids).with_mesh_points(&st.doc, points)
             }
             _ => TransparencyInfo::default(),
@@ -483,7 +483,8 @@ impl Session {
 fn info(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
     let ids = transparency_targets(s, p)?;
-    let points = super::paint::picked_mesh_points_of(s, &ids);
+    // The points `transparency.set` with the same `ids` (or none) fades.
+    let points = if p.get("ids").is_none() && p.get("id").is_none() { s.mesh_points_picked() } else { super::paint::picked_mesh_points_of(s, &ids) };
     let i = TransparencyInfo::of(&st.doc, ids).with_mesh_points(&st.doc, points);
     Ok(json!({
         "ids": i.ids.iter().map(|id| id.0).collect::<Vec<_>>(),

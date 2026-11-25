@@ -26,12 +26,16 @@ use vectorcraft_doc::{Document, NodeId, NodeKind, Selection};
 use vectorcraft_geom::Affine;
 use vectorcraft_tools::{PaintDefaults, Tool};
 
-pub use cmd::clipboard::Clipboard;
+pub use cmd::clipboard::{Clipboard, SourceLayer};
 pub use cmd::create::constrain_click;
-pub use cmd::distortcmds::perspective_click;
+pub use cmd::distortcmds::{perspective_click, width_point_pair};
+pub use cmd::flare::flare_settings;
+pub use cmd::graph::{GraphTypeSubject, calculated_axes as graph_calculated_axes, graph_type_subject};
 pub use cmd::params::{check_keys, check_params};
 pub use cmd::pathops::auto_simplify_level;
 pub use cmd::rasterfx::{export_pdf, flatten_raster_effects};
+pub use cmd::select::{path_fingerprint, storable_selection, stored_path_params, stored_path_step};
+pub use cmd::textwrap::TEXT_WRAP_OFFSET_RANGE;
 pub use cmd::{CommandInfo, CommandSpec, command_specs, find_command};
 pub use cmd::{EyedropperOptions, PathfinderOptions};
 pub use journal::Journal;
@@ -70,6 +74,11 @@ pub struct Session {
     /// While Cmd lends `tool` (a selection tool) for a drag: the tool it was lent to, which comes
     /// back as it was at the release ([`Session::pointer`]).
     pub(crate) lender: Option<Box<dyn Tool>>,
+    /// Set while tool actions that end by switching back to the Live Paint Bucket are applied (the
+    /// Eyedropper's sample into a stop of the bucket's gradient), and while a tool the bucket lent
+    /// is deactivated as it goes back: their paint commands change the colors the bucket paints
+    /// with ([`Session::bucket_paints`]).
+    pub(crate) back_to_bucket: bool,
     /// Pointer and key input that came while the tool computed an edit on another thread, each with
     /// its number and view, made in order once the edit is applied.
     held_input: std::collections::VecDeque<(u64, tooling::HeldInput, ViewInfo)>,
@@ -106,6 +115,9 @@ pub struct Session {
     /// Set while saved steps play ([`Session::replay`]): [`Session::execute`] then takes keys the
     /// command's params description doesn't name instead of refusing them.
     replaying: bool,
+    /// Set when a command that draws a shape was journaled outside saved steps
+    /// ([`Session::take_shape_drawn`]).
+    shape_drawn: bool,
     /// Set when the active tool panicked (see [`guard`]); reported by the next tool event.
     tool_panic: Option<EngineError>,
     /// How many times switching or closing documents, or replacing the active one, has started the
@@ -142,6 +154,9 @@ pub struct Session {
     pub(crate) pending_paint: Option<Paint>,
     /// User Defined and loaded swatch libraries (Window → Swatch Libraries); not saved.
     pub swatch_libraries: cmd::swatchlib::Libraries,
+    /// The graph designs of the documents loaded as swatch libraries (Window → Swatch Libraries →
+    /// Other Library…), for the Graph Column and Graph Marker dialogs; not saved.
+    pub graph_design_libraries: cmd::swatchlib::DesignLibraries,
     /// The selected freeform gradient point (`paint.freeform.selectPoint`) and whose gradient it
     /// was selected on: read it with [`Session::selected_freeform_point`].
     pub(crate) freeform_point: Option<(usize, cmd::gradient::StopOwner)>,
@@ -151,6 +166,13 @@ pub struct Session {
     pub symbol_libraries: cmd::symbollib::Libraries,
     /// User Defined and loaded brush libraries (Window → Brush Libraries); not saved.
     pub brush_libraries: cmd::brushlib::Libraries,
+    /// The custom arrowheads of the arrowheads file (`stroke.arrowheads.*`); none without one.
+    pub arrowheads: cmd::arrowheads::Arrowheads,
+    /// The custom bevels of the bevels file (`threeD.bevels.*`); none without one.
+    pub bevels: cmd::bevels::Bevels,
+    /// The id each loaded library outside a request's read roots has been shown under, by its own id
+    /// ([`cmd::swatchlib::concealed_library_ids`]), kept for the session.
+    shown_library_ids: std::sync::Mutex<std::collections::BTreeMap<String, String>>,
     /// The Libraries panel's libraries of graphics, colours and text styles (`library.*`).
     pub libraries: cmd::library::Libraries,
     /// Where the saved PDF presets are kept, one file each; `None`: only for the session
@@ -171,10 +193,21 @@ pub struct Session {
     /// The Scripts folder, whose scripts File › Scripts lists; `None`: no folder
     /// ([`Session::attach_scripts_dir`]).
     scripts_dir: Option<std::path::PathBuf>,
-    /// The plug-in ids whose grant in the plug-in store should be gone but could not be removed:
-    /// [`Session::plugin_approver`] and a load of the store do not count those grants, and a successful
-    /// [`Session::store_grant`] for the id takes it out.
-    ignored_plugin_grants: std::sync::Mutex<std::collections::BTreeSet<String>>,
+    /// The folder of File Info's metadata templates; `None`: no folder
+    /// ([`Session::attach_metadata_templates_dir`]).
+    metadata_templates_dir: Option<std::path::PathBuf>,
+    /// The folder of the New Document profiles `file.new` starts documents from; `None`: none,
+    /// every document starts with the defaults ([`Session::attach_new_doc_profiles`]).
+    new_doc_profile_dir: Option<std::path::PathBuf>,
+    /// The folder of the proof setups `view.proofSetup.save` saves by name and View → Proof Setup
+    /// lists; `None`: no folder ([`Session::attach_proof_setups`]).
+    proof_setup_dir: Option<std::path::PathBuf>,
+    /// How many proof setup files `view.proofSetup.save` wrote ([`Session::proof_setup_saves`]).
+    proof_setup_saves: u64,
+    /// The folder of each script's data folder (`Folder.userData`), beside which the grants file
+    /// keeps the file access people allowed scripts; `None`: no folder
+    /// ([`Session::attach_script_data`]).
+    script_data_dir: Option<std::path::PathBuf>,
     /// A filter's output that a run made in the background handed in for `plugin.run` to apply
     /// ([`cmd::plugin::FilterRun::hand_in`]); the next `plugin.run` takes it.
     plugin_output: Option<cmd::plugin::HandedIn>,
@@ -184,7 +217,8 @@ pub struct Session {
     /// `plugin.install` takes `grant` and `allowHeavy` from any request
     /// ([`Session::allow_plugin_grants_from_requests`]).
     plugin_grants_from_requests: bool,
-    /// URLs recently given in the Attributes panel (`attributes.set {url}`), newest first; not saved.
+    /// URLs recently given in the Attributes panel (`attributes.set {url}`), newest first, at most
+    /// [`cmd::RECENT_URLS`]; not saved.
     pub recent_urls: Vec<String>,
     /// The saved tracing presets' revision and latest changes ([`Session::trace_presets_revision`]).
     pub(crate) trace_preset_changes: cmd::TracePresetChanges,
@@ -201,6 +235,11 @@ pub struct Session {
     /// The running top-level query command changed the selection and is journaled like any other
     /// command ([`Session::journal_query`]).
     journal_query: bool,
+    /// The running top-level command changed only the paint defaults, as the Live Paint Bucket
+    /// or `defaultsOnly: true` has a paint command do, when new art would have taken this
+    /// appearance (none: nothing selected): unless a later batch step changes it, the selection's
+    /// appearance does not replace the defaults afterwards ([`Session::inherit_new_art`]).
+    pub(crate) defaults_only_ran: Option<Option<cmd::newart::NewArtSource>>,
     /// From `edit.undoGroup.begin` to `edit.undoGroup.end`: the name of the undo step (`None`: after
     /// its first edit). Each document opened or created meanwhile opens an undo group of its own
     /// ([`Session::add_document`]). `None` otherwise.
@@ -212,9 +251,10 @@ pub struct Session {
     /// groups: for each step, the documents ([`DocState::uid`]) whose undo groups it belongs to, and
     /// the index of the document it left active when it changed the active document.
     pub(crate) batch_steps: Option<Vec<(Vec<u64>, Option<usize>)>>,
-    /// After `command.batch` kept a color-mode step's new-art colors, until the top-level command
-    /// has inherited the selection's appearance: the documents ([`DocState::uid`]) whose newest
-    /// history step takes the colors the batch finally left.
+    /// After `command.batch` kept a color-mode step's new-art colors, or a pattern command recorded
+    /// the new-art paints it changed, until the top-level command has inherited the selection's
+    /// appearance: the documents ([`DocState::uid`]) whose newest history step takes the colors the
+    /// command finally left.
     pub(crate) batch_paint_docs: Vec<u64>,
     /// The composite fonts (lowercase names) that the open documents defined when the font
     /// database was last brought in step with them ([`cmd::compositefonts::sync`]).
@@ -237,6 +277,8 @@ pub struct Session {
     /// keyboard: those files, and the files they link to, are read under these roots, so a queue
     /// an agent loaded never reads beyond what it was given.
     pub(crate) place_queue_roots: Option<std::sync::Arc<file_access::AutomationRoots>>,
+    /// How many times the place cursor has been loaded ([`Session::place_queue_loads`]).
+    pub(crate) place_queue_loads: u64,
     /// While [`Session::import_image_read`] runs `clipboard.importImage`: the image read for it,
     /// which the command loads instead of reading `dataBase64`; `None` otherwise.
     pub(crate) image_hand_off: Option<cmd::clipboard::ImageRead>,
@@ -280,8 +322,14 @@ pub struct Session {
     /// While the active tool's actions run: their commands aren't "a command from outside the
     /// tool" ([`Session::after_command`]).
     pub(crate) in_tool_actions: bool,
+    /// The warnings of the previews that settling an interaction applied, while a top-level command
+    /// or the tool's actions collect them ([`Session::collect_settled_warnings`]).
+    settled_warnings: Option<Vec<String>>,
     /// While [`Session::preview`] runs its command: its edits are the interaction's own.
     previewing: bool,
+    /// The images Remove Background decoded during the interaction's preview steps, emptied when
+    /// it ends ([`cmd::DecodedImages`]).
+    pub(crate) decoded_images: cmd::DecodedImages,
     /// Envelope Options with no envelope selected: the options and fidelity new envelopes get
     /// (`None`: the reference app's defaults, fidelity 50); not saved.
     pub(crate) envelope_defaults: Option<(vectorcraft_doc::live::EnvelopeOptions, f64)>,
@@ -296,6 +344,9 @@ pub struct Session {
     /// The id and persistent options of the tool when the press under way began, which a dropped
     /// press puts back ([`Session::drop_tool_press`]).
     pub(crate) press_options: Option<(String, serde_json::Map<String, serde_json::Value>)>,
+    /// An option of the active tool was set during the press under way, which stored all of its
+    /// options, so a dropped press stores the options it puts back.
+    pub(crate) press_options_stored: bool,
     /// The engine saves the selection and active layer before a Type press and restores them if it drops.
     pub(crate) press_type_selection: Option<(Selection, Option<NodeId>)>,
     /// The freeform gradient point selected once the tool took the press under way, which a
@@ -303,6 +354,8 @@ pub struct Session {
     pub(crate) press_point: Option<Option<(usize, cmd::gradient::StopOwner)>>,
     /// A guide being dragged out of a ruler ([`Session::ruler_guide`]).
     pub(crate) ruler_guide: Option<vectorcraft_tools::rulerguide::NewGuide>,
+    /// The rulers' origin being dragged out of their corner ([`Session::ruler_origin_drag`]).
+    pub(crate) ruler_origin: Option<vectorcraft_tools::rulerguide::OriginDrag>,
     /// Which selected type overflows its frame, for the ports every tool but the Type tools shows.
     pub(crate) port_marks: vectorcraft_tools::text::PortMarks,
     /// The last search for the files of missing fonts (`text.findFontFiles`), until another
@@ -329,9 +382,14 @@ pub struct Session {
     /// The Global Edit Options Start Global Edit matches with (`select.globalEditOptions`); not
     /// saved.
     pub global_edit_options: cmd::globaledit::Options,
+    /// The attribute Select Similar Objects selects by (`select.similar`), one of
+    /// [`cmd::SIMILAR`]; not saved.
+    pub select_similar: &'static str,
     /// Set while [`Session::tool_typed_text`] passes keyboard input to the active tool
     /// ([`vectorcraft_tools::ToolContext::typed_from_keyboard`]).
     keyboard_text: bool,
+    /// The messages `app.toast` and [`Session::toast`] queued for the app to show; not saved.
+    pub(crate) toasts: cmd::toast::Queue,
 }
 
 impl Default for Session {
@@ -379,15 +437,15 @@ mod session;
 pub(crate) use command_sets::SELECTS_GIVEN_IDS;
 #[cfg(test)]
 use command_sets::given_ids;
-pub use command_sets::{FIT_ACTIVE_ARTBOARD, ON_ACTIVE_ARTBOARD, waits_for_tool_edit};
-pub use doc_state::{DocState, OpenRows, RecalledSelection};
-pub use error::{EngineError, Result, SCRIPT_BUSY};
+pub use command_sets::{DRAWS_SHAPE, FIT_ACTIVE_ARTBOARD, ON_ACTIVE_ARTBOARD, waits_for_tool_edit};
+pub use doc_state::{DocState, LayersReveal, OpenRows, RecalledSelection};
+pub use error::{EngineError, READ_ONLY_LOCATION, Result, SCRIPT_BUSY};
 #[cfg(test)]
 use history::history_budget_for;
 pub use history::{History, HistoryEntry, NamedStep, default_history_budget};
 pub(crate) use interaction::PreviewCopies;
 pub use interaction::{Interaction, LastTransform, UndoGroup, UndoScope};
-pub use prefs::{DrawMode, Prefs};
+pub use prefs::{DrawMode, KEY_HOLD_DELAY, KEY_HOLD_DELAY_RANGE, PluginBudget, Prefs};
 pub use sanity::TOO_DEEP;
 pub(crate) use sanity::{deselect_hidden, is_guide_path};
 #[cfg(test)]

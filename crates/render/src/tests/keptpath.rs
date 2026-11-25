@@ -140,7 +140,7 @@ fn a_long_path_draws_and_culls_after_each_edit_as_when_its_path_is_made_again() 
         }),
         ("that anchor moved off it", |p| moved(&mut p.subpaths[0].anchors[1535], Vec2::new(5.0, 5.0))),
         ("a doubled anchor moved off its twin", |p| moved(&mut p.subpaths[0].anchors[1536], Vec2::new(0.0, -12.0))),
-        ("1,200 anchors moved", |p| p.subpaths[0].anchors[..1200].iter_mut().for_each(|a| moved(a, Vec2::new(2.0, 1.0)))),
+        ("1,200 anchors moved", |p| p.subpaths[0].anchors.iter_mut().take(1200).for_each(|a| moved(a, Vec2::new(2.0, 1.0)))),
         ("an anchor added", |p| _ = p.subpaths[0].insert_anchor(1520, 0.5)),
         ("an anchor deleted", |p| _ = p.subpaths[0].anchors.remove(1521)),
         ("the subpath closed", |p| p.subpaths[0].closed = true),
@@ -454,7 +454,7 @@ fn random_edit(g: &mut Seeded, p: &mut PathData) -> String {
             match g.below(3) {
                 0 => moved(&mut sp.anchors[at], Vec2::new(g.offset(30), g.offset(30))),
                 1 => sp.anchors[at].h_out = sp.anchors[at].p + Vec2::new(g.offset(10), g.offset(10)),
-                _ => sp.anchors[at..].iter_mut().take(n / 10).for_each(|a| moved(a, Vec2::new(1.0, -1.0))),
+                _ => sp.anchors.iter_mut().skip(at).take(n / 10).for_each(|a| moved(a, Vec2::new(1.0, -1.0))),
             }
             format!("anchors moved at {at} of subpath {s} of {n}")
         }
@@ -486,7 +486,7 @@ fn same_as_made_again(k: &mut crate::kept_paths::KeptPath, n: &Arc<Node>, st: &S
 fn random_edits_of_a_long_path_keep_what_making_its_path_again_makes() {
     let st = stroke(6.0, LineJoin::Miter, LineCap::Butt);
     let mut g = Seeded(5744);
-    let closed = |sp: SubPath| SubPath::new(sp.anchors, true);
+    let closed = |sp: SubPath| SubPath::of(sp.anchors, true);
     let path = PathData::new(vec![
         zigzag(2, 11_990.0),
         closed(zigzag(3, 12_000.0)),
@@ -517,7 +517,7 @@ fn random_edits_of_a_long_compound_path_keep_what_making_its_path_again_makes() 
         Arc::new(Node::path(NodeId(ids.get()), p, Appearance::default()))
     };
     let children = vec![
-        member(PathData::new(vec![SubPath::new(zigzag(3, 11_990.0).anchors, true), zigzag(5, 12_010.0)])),
+        member(PathData::new(vec![SubPath::of(zigzag(3, 11_990.0).anchors, true), zigzag(5, 12_010.0)])),
         member(PathData::single(zigzag(3000, 0.0))),
         member(PathData::single(ring(40, Point::new(12_000.0, 15.0), 30.0))),
         member(PathData::single(zigzag(2, 12_020.0))),

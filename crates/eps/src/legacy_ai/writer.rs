@@ -3,13 +3,38 @@ use super::encoding::{
     unit, writable,
 };
 use super::{
-    Affine, AppearanceItem, Arc, BezPath, BlendMode, CharStyle, Cms, Color, Document, ELLIPTICAL, FREEFORM, FillLayer, FillRule, Gradient,
-    GradientKind, GradientPaint, HEX_LINE, HIDDEN, HIDDEN_LAYER, HIDDEN_SHOWN, HiddenObjects, IMAGE_ALPHA, ImageBlob, Justify, LARGE_IMAGE,
+    Affine, AppearanceItem, Arc, BezPath, BlendMode, CharStyle, Cms, Color, DYNAMIC_TEXT, Document, ELLIPTICAL, FREEFORM, FillLayer, FillRule,
+    Gradient, GradientKind, GradientPaint, HEX_LINE, HIDDEN, HIDDEN_LAYER, HIDDEN_SHOWN, HiddenObjects, IMAGE_ALPHA, ImageBlob, Justify, LARGE_IMAGE,
     LAYER_NAME, LIVE, LegacyAiOptions, MAX_IMAGE_PIXELS, MAX_NEST, NAMES, Node, NodeKind, PATTERNS, Paint, ParaDirection, ParaStyle, PathData,
     ROTATED_TYPE, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY, TYPE, TYPE_ATTRIBUTES, TextKind,
     TextObject, UNDECODED, Vec2, Write, ai_ops, latin, ps, stroke,
 };
-use super::{CONIC, CONIC_WEDGES};
+use super::{CONIC, CONIC_WEDGES, DEEP_DISTORTED, DIAMOND, GRAPHS, HUE_STOPS, PERCEPTUAL_STOPS, SPREAD, SPREAD_CAPPED};
+use crate::gradient_key::gradient_key;
+
+#[cfg(test)]
+thread_local! {
+    /// How many times [`Writer::coverage`] has worked out an image's coverage on this thread.
+    pub(super) static COVERAGE_RUNS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Whether [`Numbered::take`] numbers names on this thread by searching the names given so
+    /// far, one number at a time, for each number it tries.
+    pub(super) static SCANNED_NAMES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Whether [`Writer::defined`] finds a gradient's definition on this thread by comparing the
+    /// gradient with each definition in turn.
+    pub(super) static SCANNED_DEFINITIONS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// How many times [`Writer::defined`] has compared two gradients on this thread.
+    pub(super) static GRADIENT_COMPARISONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Are gradients `a` and `b` the same?
+fn same_gradient(a: &Gradient, b: &Gradient) -> bool {
+    #[cfg(test)]
+    GRADIENT_COMPARISONS.with(|c| c.set(c.get() + 1));
+    a == b
+}
+
+/// An image's coverage ([`ImageBlob::coverage`]): its width, its height and one byte a pixel.
+type Coverage = (u32, u32, Arc<Vec<u8>>);
 
 pub(super) struct Writer<'a> {
     doc: &'a Document,
@@ -22,8 +47,10 @@ pub(super) struct Writer<'a> {
     /// Spot colors used: the name written and full CMYK equivalent.
     pub(super) spots: Vec<(String, [f32; 4])>,
     /// The name each spot color (by its swatch's name) is written with ([`Self::spot`]).
-    spot_names: Vec<(String, String)>,
+    spot_names: std::collections::HashMap<String, String>,
     pub(super) warnings: Vec<String>,
+    /// Notes on what the options asked for ([`crate::LegacyAiOutput::setting_notes`]).
+    pub(super) setting_notes: Vec<String>,
     /// The lock state the last `A` set.
     locked: bool,
     /// Symbols and live objects being written inside one another.
@@ -39,6 +66,33 @@ pub(super) struct Writer<'a> {
     in_hidden: bool,
     /// The fonts type is set in: PostScript name, and whether it's TrueType.
     pub(super) fonts: Vec<(String, bool)>,
+    /// The Standard Vertical Roman Alignment the last `Tv` set (it lasts into later text objects).
+    roman: bool,
+    /// Inside a Kumi block `1 TY` began (Tate-chu-yoko in horizontal type).
+    kumi: bool,
+    /// The outlines of the clipping groups the art being written is in, in the document.
+    clips: Vec<BezPath>,
+    /// The image decoded last (`None` when it can't be): the pieces of a warped image, which follow
+    /// one another, decode it once.
+    last_image: Option<(ImageBlob, Option<Arc<image::DynamicImage>>)>,
+    /// The coverage of [`Self::last_image`] once a colorized piece of it asked for it (`Some(None)`
+    /// when it can't be worked out), so the pieces of a colorized warped image work it out once.
+    last_coverage: Option<Option<Coverage>>,
+    /// The images written whole so far, by the address of their data (which each entry keeps).
+    whole_images: std::collections::HashMap<usize, Arc<Vec<u8>>>,
+    /// Writing a graph's art with its records: a graph inside it is written as its art.
+    in_graph: bool,
+    /// The names of [`Self::gradients`].
+    gradient_names: Numbered,
+    /// The names spot colors are written with ([`Self::spot`]).
+    spot_written: Numbered,
+    /// The names of [`Self::spots`].
+    spot_set: std::collections::HashSet<String>,
+    /// The PostScript names of [`Self::fonts`].
+    font_set: std::collections::HashSet<String>,
+    /// The places in [`Self::gradients`] of the definitions, in order, by their gradient's key
+    /// ([`gradient_key`]).
+    gradient_index: std::collections::HashMap<u64, Vec<usize>>,
 }
 
 impl<'a> Writer<'a> {
@@ -50,8 +104,9 @@ impl<'a> Writer<'a> {
             body: String::new(),
             gradients: vec![],
             spots: vec![],
-            spot_names: vec![],
+            spot_names: std::collections::HashMap::new(),
             warnings: vec![],
+            setting_notes: vec![],
             locked: false,
             nest: 0,
             hidden: o.hidden,
@@ -59,12 +114,33 @@ impl<'a> Writer<'a> {
             hidden_art: vec![],
             in_hidden: false,
             fonts: vec![],
+            roman: false,
+            kumi: false,
+            clips: vec![],
+            last_image: None,
+            last_coverage: None,
+            whole_images: std::collections::HashMap::new(),
+            in_graph: false,
+            gradient_names: Numbered::default(),
+            spot_written: Numbered::default(),
+            spot_set: std::collections::HashSet::new(),
+            font_set: std::collections::HashSet::new(),
+            gradient_index: std::collections::HashMap::new(),
         }
     }
 
+    /// Note `w`, once, about something of the document that the file leaves out or that reaches
+    /// it changed. A note about an option goes to [`Self::note_setting`].
     fn warn(&mut self, w: &str) {
         if !self.warnings.iter().any(|x| x == w) {
             self.warnings.push(w.to_string());
+        }
+    }
+
+    /// Note `w`, once, about hidden objects left out or written visible as an option asks.
+    fn note_setting(&mut self, w: &str) {
+        if !self.setting_notes.iter().any(|x| x == w) {
+            self.setting_notes.push(w.to_string());
         }
     }
 
@@ -107,21 +183,17 @@ impl<'a> Writer<'a> {
     /// Windows-1252 are written as `?` (with a warning), and it is numbered when another spot color
     /// is already written with that name; the name is the same each time.
     fn spot(&mut self, name: &str, cmyk: [f32; 4]) -> String {
-        let written = match self.spot_names.iter().find(|(n, _)| n == name) {
-            Some((_, w)) => w.clone(),
+        let written = match self.spot_names.get(name) {
+            Some(w) => w.clone(),
             None => {
                 let base = self.latin_name(name, TITLE_AND_COLOR_NAMES);
-                let mut written = base.clone();
-                let mut i = 1;
-                while self.spot_names.iter().any(|(_, w)| *w == written) {
-                    i += 1;
-                    written = format!("{base} {i}");
-                }
-                self.spot_names.push((name.to_string(), written.clone()));
+                let written = self.spot_written.take(base);
+                self.spot_names.insert(name.to_string(), written.clone());
                 written
             }
         };
-        if !self.spots.iter().any(|(n, _)| *n == written) {
+        if !self.spot_set.contains(&written) {
+            self.spot_set.insert(written.clone());
             self.spots.push((written.clone(), cmyk));
         }
         written
@@ -130,7 +202,7 @@ impl<'a> Writer<'a> {
     /// The name spot color `name` (its swatch's name) is written with, once [`Self::spot`] has
     /// noted it.
     pub(super) fn spot_name<'n>(&'n self, name: &'n str) -> &'n str {
-        self.spot_names.iter().find(|(n, _)| n == name).map_or(name, |(_, w)| w.as_str())
+        self.spot_names.get(name).map_or(name, String::as_str)
     }
 
     /// A top-level layer. False when it isn't a layer.
@@ -219,7 +291,7 @@ impl<'a> Writer<'a> {
         if !n.visible && !self.in_hidden {
             match self.hidden {
                 HiddenObjects::Omit => {
-                    self.warn(HIDDEN);
+                    self.note_setting(HIDDEN);
                     return;
                 }
                 HiddenObjects::Layer => {
@@ -227,7 +299,7 @@ impl<'a> Writer<'a> {
                     self.hidden_art.push((n.clone(), locked || n.locked));
                     return;
                 }
-                HiddenObjects::Visible => self.warn(HIDDEN_SHOWN),
+                HiddenObjects::Visible => self.note_setting(HIDDEN_SHOWN),
             }
         }
         if n.opacity < 1.0 || n.blend != BlendMode::Normal || n.extras().mask.as_ref().is_some_and(|m| !m.disabled) {
@@ -236,13 +308,24 @@ impl<'a> Writer<'a> {
         if n.name.as_deref().is_some_and(|s| !s.is_empty()) && !n.is_layer() {
             self.warn(NAMES);
         }
+        // A graph on the layers keeps its data and settings when its records read back whole.
+        let graph = match n.extras().graph.is_some() {
+            true if self.nest == 0 && !self.in_graph => crate::ai_graph::records(n, self.to_art),
+            _ => None,
+        };
+        if n.extras().graph.is_some() && graph.is_none() {
+            self.warn(GRAPHS);
+        }
         let locked = locked || n.locked;
         match &n.kind {
             NodeKind::Layer { children, clip, .. } => {
                 self.warn(SUBLAYERS);
                 self.group(children, *clip, locked);
             }
-            NodeKind::Group { children, clip } => self.group(children, *clip, locked),
+            NodeKind::Group { children, clip } => match &graph {
+                Some(records) => self.graph(children, locked, records),
+                None => self.group(children, *clip, locked),
+            },
             NodeKind::Path { path, rule, guide, .. } => {
                 self.lock(locked);
                 if *guide {
@@ -263,19 +346,29 @@ impl<'a> Writer<'a> {
                 self.lock(locked);
                 self.text(t);
             }
-            NodeKind::Image(im) => {
+            // A distorted image too deep for its pieces is written at the placement nearest its
+            // corners.
+            NodeKind::Image(im) if !n.is_distorted_image() || self.nest >= MAX_NEST => {
                 self.lock(locked);
-                let blob = self.doc.image_blob(im);
+                let shown = self.doc.shown_image(n, im);
+                let blob = self.doc.image_blob(&shown);
                 // A colorize color the renderer draws the image in.
                 let colorize =
                     n.extras().colorize.as_deref().filter(|p| matches!(p, Paint::Solid { .. }) && blob.is_some_and(ImageBlob::takes_colorize));
-                self.image(blob, im.width, im.height, im.xf, colorize);
+                let xf = match vectorcraft_doc::image_quad::nearest_affine(n) {
+                    Some(near) => {
+                        self.warn(DEEP_DISTORTED);
+                        near
+                    }
+                    None => im.xf,
+                };
+                self.image(blob, im.width, im.height, xf, colorize.map(|p| (p, n.colorize_overprints())));
             }
             NodeKind::SymbolInstance { symbol, xf } => {
                 self.warn(LIVE);
                 if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
-                    && let Some(mut art) = self.doc.place_symbol_art(symbol, &vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n), *xf)
+                    && let Some(mut art) = self.doc.place_symbol_art(symbol, &vectorcraft_doc::symbol_overrides::instance_art(&sym.art, n), *xf)
                 {
                     art.visible = true;
                     self.nest += 1;
@@ -288,7 +381,8 @@ impl<'a> Writer<'a> {
             | NodeKind::Mesh(_)
             | NodeKind::Repeat(_)
             | NodeKind::PlacedDocument(_)
-            | NodeKind::Intertwine { .. } => {
+            | NodeKind::Intertwine { .. }
+            | NodeKind::Image(_) => {
                 self.warn(LIVE);
                 if self.nest < MAX_NEST {
                     let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
@@ -320,6 +414,25 @@ impl<'a> Writer<'a> {
         }
     }
 
+    /// A graph's group (`u` … `U`) between its records (§17): `%_Gs` and its functional records
+    /// before it, `%_GS` after it, and each series' group followed by its `Go` tag.
+    fn graph(&mut self, children: &[Arc<Node>], locked: bool, records: &crate::ai_graph::Records) {
+        self.lock(locked);
+        self.body.push_str(&records.head);
+        self.line("u");
+        self.in_graph = true;
+        for c in children {
+            self.node(c, locked);
+            if let Some(tag) = records.tags.get(&c.id) {
+                self.line(tag);
+            }
+        }
+        self.in_graph = false;
+        self.lock(locked);
+        self.line("U");
+        self.line(crate::ai_graph::END);
+    }
+
     /// A clipping group: its first member's outline clips the others (`h W n`). That member's fills
     /// paint behind the art, inside the clip, and its strokes over it, outside.
     fn clip_group(&mut self, children: &[Arc<Node>], locked: bool) {
@@ -341,12 +454,14 @@ impl<'a> Writer<'a> {
         if several {
             self.line("*U");
         }
+        self.clips.push(outline);
         if let Some(fill) = &paint.fill {
             self.node(fill, locked);
         }
         for c in rest {
             self.node(c, locked);
         }
+        self.clips.pop();
         self.lock(locked);
         self.line("Q");
         if let Some(stroke) = &paint.stroke {
@@ -429,6 +544,11 @@ impl<'a> Writer<'a> {
         {
             return self.conic_object(path, rule, f, g);
         }
+        if let Paint::Gradient(g) = &f.paint
+            && g.gradient.kind == GradientKind::Diamond
+        {
+            return self.diamond_object(path, rule, f, g);
+        }
         let Paint::Pattern { pattern, xf } = &f.paint else {
             // A freeform gradient: its average colour.
             self.warn(FREEFORM);
@@ -476,7 +596,8 @@ impl<'a> Writer<'a> {
             self.warn(TRANSPARENCY);
         }
         let area = path.to_bezpath().bounding_box();
-        let wedges = g.resolve(area).conic_wedges(area, CONIC_WEDGES, true);
+        let wedges = g.resolve(area).conic_wedges(area, g.gradient.conic_wedge_count(CONIC_WEDGES), true);
+        let spread = g.gradient.spreader();
         self.line("q");
         self.fill_rule(rule);
         let several = path.subpaths.len() > 1;
@@ -490,9 +611,44 @@ impl<'a> Writer<'a> {
             self.line("*U");
         }
         for (pts, t) in wedges {
-            let (color, _) = g.gradient.sample_keep_model(t as f32);
+            let (color, _) = g.gradient.sample_keep_model(spread(t) as f32);
             let wedge = FillLayer { paint: Paint::solid(color), ..f.clone() };
             self.path_object(&PathData::single(SubPath::polyline(&pts, true)), FillRule::NonZero, Some(&wedge), None);
+        }
+        self.line("Q");
+    }
+
+    /// A diamond gradient fill (the format has no diamond gradient) as four linear gradients
+    /// clipped to `path` (filled by `rule`), one for each quadrant of its frame and equal to the
+    /// diamond there, each running on under the next
+    /// ([`vectorcraft_color::GradientGeom::diamond_quadrants`]). A diamond without an extent is its
+    /// last stop.
+    fn diamond_object(&mut self, path: &PathData, rule: FillRule, f: &FillLayer, g: &GradientPaint) {
+        let area = path.to_bezpath().bounding_box();
+        let Some(quadrants) = g.resolve(area).diamond_quadrants(area) else {
+            let color = g.gradient.stops.last().map_or(Color::gray(0.5), |s| s.color);
+            let flat = FillLayer { paint: Paint::solid(color), ..f.clone() };
+            return self.path_object(path, rule, Some(&flat), None);
+        };
+        self.warn(DIAMOND);
+        self.line("q");
+        self.fill_rule(rule);
+        let several = path.subpaths.len() > 1;
+        if several {
+            self.line("*u");
+        }
+        for sp in path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()) {
+            self.mask(sp);
+        }
+        if several {
+            self.line("*U");
+        }
+        let gradient = Gradient { kind: GradientKind::Linear, ..g.gradient.clone() };
+        for (pts, geom) in quadrants {
+            // Not named after the swatch: the definition is a linear gradient, not the swatch's.
+            let linear = GradientPaint { gradient: gradient.clone(), geom: Some(geom), swatch: None, ..g.clone() };
+            let quadrant = FillLayer { paint: Paint::Gradient(Box::new(linear)), ..f.clone() };
+            self.path_object(&PathData::single(SubPath::polyline(&pts, true)), FillRule::NonZero, Some(&quadrant), None);
         }
         self.line("Q");
     }
@@ -586,11 +742,9 @@ impl<'a> Writer<'a> {
             // Grey is ink coverage; the format's grey is lightness.
             Color::Gray { k } => Ink::Gray(unit(1.0 - k)),
             Color::Cmyk { c, m, y, k } => Ink::Cmyk([c, m, y, k].map(unit)),
-            Color::Rgb { r, g, b } => Ink::Rgb(self.cms.to_cmyk(color, intent).map(unit), [r, g, b].map(unit)),
-            Color::Lab { .. } => {
-                let rgb = color.to_rgb().map(unit);
-                Ink::Rgb(self.cms.to_cmyk(color, intent).map(unit), rgb)
-            }
+            // The CMYK equivalent of the RGB values as written.
+            Color::Rgb { r, g, b } => Ink::Rgb(self.cms.to_cmyk(&ai_ops::as_written(*color), intent).map(unit), [r, g, b].map(unit)),
+            Color::Lab { .. } => Ink::Rgb(self.cms.to_cmyk(color, intent).map(unit), ai_ops::rgb_values(*color)),
         }
     }
 
@@ -632,6 +786,32 @@ impl<'a> Writer<'a> {
     /// (its distance a fraction of the radius, at most 1, §3.5.5; `0 0 0 0 Bh` at the center,
     /// §3.5.6), `1 (name) x y angle length 1 0 0 1 0 0 Bg`.
     fn gradient(&mut self, g: &GradientPaint, bounds: Rect) -> String {
+        // A gradient mixed by the Perceptual method or around the hue wheel (the format's
+        // gradients mix their stops' colors directly): the stops on its curve, in process colors,
+        // no more than the reader reads, in a definition of its own.
+        if !g.gradient.method.is_classic() {
+            self.warn(if g.gradient.method.is_hue() { HUE_STOPS } else { PERCEPTUAL_STOPS });
+            let curve = g.gradient.as_classic_curve();
+            let gradient = if curve.is_spread() { curve } else { curve.fitted(crate::import::MAX_GRADIENT_STOPS).into_owned() };
+            let p = GradientPaint { gradient, swatch: None, ..g.clone() };
+            return self.gradient(&p, bounds);
+        }
+        // A gradient that repeats or reflects (the format's gradients pad past their ends): its
+        // stops repeated as many times as `bounds` needs, in a definition of its own, no more
+        // stops than the reader reads.
+        if let Some(padded) = g.gradient.padded_within(&g.resolve(bounds), bounds, crate::import::MAX_GRADIENT_STOPS) {
+            self.warn(if padded.capped { SPREAD_CAPPED } else { SPREAD });
+            let geom = padded.geom;
+            let p = GradientPaint { gradient: padded.gradient, geom: Some(geom), angle: geom.angle_deg(), swatch: None, ..g.clone() };
+            return self.gradient(&p, bounds);
+        }
+        // One whose levels over `bounds` are not finite (a vector of no length): its stops
+        // repeated along the vector, padding past it.
+        if g.gradient.is_spread() {
+            self.warn(SPREAD_CAPPED);
+            let p = GradientPaint { gradient: g.gradient.unrolled_within(crate::import::MAX_GRADIENT_STOPS).into_owned(), swatch: None, ..g.clone() };
+            return self.gradient(&p, bounds);
+        }
         let name = self.define(&g.gradient, g.swatch.as_deref());
         for stop in &g.gradient.stops {
             if stop.opacity < 1.0 {
@@ -675,33 +855,38 @@ impl<'a> Writer<'a> {
     /// The name of the definition of `g` (its swatch's name when it has one, with each character
     /// outside Windows-1252 written as `?` and a warning), defined the first time.
     fn define(&mut self, g: &Gradient, swatch: Option<&str>) -> String {
-        if let Some((name, _)) = self.gradients.iter().find(|(_, d)| d == g) {
+        let key = gradient_key(g);
+        if let Some((name, _)) = self.defined(g, key).and_then(|i| self.gradients.get(i)) {
             return name.clone();
         }
-        let taken = |n: &str, defs: &[(String, Gradient)]| defs.iter().any(|(m, _)| m == n);
         let base = self.latin_name(swatch.filter(|s| !s.is_empty()).unwrap_or("Gradient"), TITLE_AND_COLOR_NAMES);
-        let mut name = base.clone();
-        let mut i = 1;
-        while taken(&name, &self.gradients) {
-            i += 1;
-            name = format!("{base} {i}");
-        }
+        let name = self.gradient_names.take(base);
+        self.gradient_index.entry(key).or_default().push(self.gradients.len());
         self.gradients.push((name.clone(), g.clone()));
         name
+    }
+
+    /// The place in [`Self::gradients`] of the first definition of `g`, whose key is `key`.
+    fn defined(&self, g: &Gradient, key: u64) -> Option<usize> {
+        #[cfg(test)]
+        if SCANNED_DEFINITIONS.with(std::cell::Cell::get) {
+            return self.gradients.iter().position(|(_, d)| same_gradient(d, g));
+        }
+        self.gradient_index.get(&key)?.iter().copied().find(|i| self.gradients.get(*i).is_some_and(|(_, d)| same_gradient(d, g)))
     }
 
     // ---------- type ----------
 
     /// Type: a text object when the format can hold it as text, else its outlines (type with
-    /// rotated characters among them, which keeps their rotation). A run whose
-    /// font size measures a height other than the em box is written at the em size it is drawn
-    /// at ([`vectorcraft_text::FontDb::font_heights_resolved`]).
+    /// rotated characters among them, which keeps their rotation).
     fn text(&mut self, t: &TextObject) {
         if !invertible(t.xf) {
             return;
         }
-        let resolved = vectorcraft_text::FontDb::global().font_heights_resolved(t);
-        let t = &*resolved;
+        // Written as text or as outlines, the type keeps its drawn sizes but not the setting.
+        if t.dynamic_text && matches!(t.kind, TextKind::OnPath { .. }) {
+            self.warn(DYNAMIC_TEXT);
+        }
         if !self.outline_text {
             if writable(self.doc, t) {
                 return self.text_object(t);
@@ -719,14 +904,18 @@ impl<'a> Writer<'a> {
     /// A text object (§15): `type To`, the text path (`a b c d tx ty startPt Tp`, an area's frame
     /// or the path type runs along, `TP`), then each run's style and characters, `TO`. The matrix
     /// takes text space (y up, the first baseline's start for point type) to art space; the frame
-    /// and path are in art space, as the specification's examples have them (§15.5).
+    /// and path are in art space, as the specification's examples have them (§15.5). Type that
+    /// Shrink Text to Fit or Dynamic Text scales is written in the styles it draws in, fitted at
+    /// the sizes the Character panel shows; then a run whose font size measures a height other
+    /// than the em box is written at the em size it is drawn at
+    /// ([`vectorcraft_text::FontDb::font_heights_resolved`]).
     fn text_object(&mut self, t: &TextObject) {
         if lost_attributes(t) {
             self.warn(TYPE_ATTRIBUTES);
         }
-        // Type that Shrink Text to Fit or Dynamic Text scales is written in the styles it draws in.
         let fitted = vectorcraft_text::drawn(t);
-        let t = &*fitted;
+        let resolved = vectorcraft_text::FontDb::global().font_heights_resolved(&fitted);
+        let t = &*resolved;
         let m = self.to_art * t.xf * Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]);
         let (kind, path, start) = match &t.kind {
             TextKind::Point => (0, None, 0.0),
@@ -752,6 +941,8 @@ impl<'a> Writer<'a> {
         self.line("TP");
         let mut para = 0usize;
         let mut para_start = true;
+        // No character of the current paragraph has been written.
+        let mut line_start = true;
         for run in &t.runs {
             let text = if run.style.all_caps { run.text.to_uppercase() } else { run.text.clone() };
             let mut pieces = text.split('\n').peekable();
@@ -765,17 +956,61 @@ impl<'a> Writer<'a> {
                     para_start = false;
                 }
                 self.char_style(&run.style, t.para_at(para));
-                let mut bytes: Vec<u8> = piece.chars().filter_map(latin::encode).collect();
+                // The space before a line's first character, kerning before it (§15.4.6.1).
+                if line_start && !piece.is_empty() && run.style.kerning_before != 0.0 {
+                    self.kern(run.style.kerning_before);
+                }
+                line_start = false;
+                // Manual kerning after each character (0 included, which differs from automatic
+                // kerning), a soft hyphen as a discretionary hyphen (§15.4.10.1).
+                let kerning = run.style.kerning;
+                let mut bytes = vec![];
+                for c in piece.chars() {
+                    if c == '\u{ad}' {
+                        self.text_string(&mut bytes);
+                        self.line("T+");
+                        if let Some(k) = kerning {
+                            self.kern(k);
+                        }
+                        continue;
+                    }
+                    let Some(b) = latin::encode(c) else { continue };
+                    bytes.push(b);
+                    if let Some(k) = kerning {
+                        self.text_string(&mut bytes);
+                        self.kern(k);
+                    }
+                }
                 if ends_paragraph {
                     bytes.push(b'\r');
                     para += 1;
                     para_start = true;
+                    line_start = true;
                 }
-                self.body.push_str(&ps::bytes(&bytes));
-                self.line(" Tx");
+                self.text_string(&mut bytes);
             }
         }
+        if self.kumi {
+            self.line("0 TY");
+            self.kumi = false;
+        }
         self.line("TO");
+    }
+
+    /// `bytes` as a string of characters, `(…) Tx`, when there are any; `bytes` is left empty.
+    fn text_string(&mut self, bytes: &mut Vec<u8>) {
+        if !bytes.is_empty() {
+            self.body.push_str(&ps::bytes(bytes));
+            self.line(" Tx");
+            bytes.clear();
+        }
+    }
+
+    /// Manual kerning of `k` 1/1000 em between the characters before and after it: `0 k Tk`.
+    fn kern(&mut self, k: f64) {
+        self.body.push_str("0 ");
+        ps::push_num(&mut self.body, finite(k, 0.0));
+        self.line(" Tk");
     }
 
     /// A paragraph's attributes: alignment `Ta` and indents `Ti` (first line's, left, right).
@@ -794,7 +1029,8 @@ impl<'a> Writer<'a> {
     }
 
     /// A run's character attributes and paint style: `Tr`, its fill and stroke, `Tf`, `Ts`, `Tz`,
-    /// `Tt`, `TA`, and the leading with the space before its paragraph, `Tl`.
+    /// `Tt`, `TA`, and the leading with the space before its paragraph, `Tl`; then `Tv` and `TY`
+    /// where Standard Vertical Roman Alignment or Tate-chu-yoko changes.
     fn char_style(&mut self, st: &CharStyle, p: &ParaStyle) {
         let fill = !st.fill.is_none();
         let stroke = st.has_stroke();
@@ -815,7 +1051,8 @@ impl<'a> Writer<'a> {
             self.line_style(&st.stroke_layer());
         }
         let (name, truetype, ascent, descent) = font_of(st);
-        if !self.fonts.iter().any(|(n, _)| *n == name) {
+        if !self.font_set.contains(&name) {
+            self.font_set.insert(name.clone());
             self.fonts.push((name.clone(), truetype));
         }
         let size = finite(st.size, 12.0);
@@ -832,6 +1069,14 @@ impl<'a> Writer<'a> {
         let leading = st.leading.unwrap_or_else(|| p.justification.auto_leading_for(st.size));
         ps::push_nums(&mut self.body, &[finite(leading, size * 1.2), finite(p.space_before, 0.0)]);
         self.line("Tl");
+        if st.standard_vertical_roman != self.roman {
+            self.roman = st.standard_vertical_roman;
+            self.line(if self.roman { "1 Tv" } else { "0 Tv" });
+        }
+        if st.tate_chu_yoko != self.kumi {
+            self.kumi = st.tate_chu_yoko;
+            self.line(if self.kumi { "1 TY" } else { "0 TY" });
+        }
     }
 
     /// Type as its glyphs' outlines: a group of a compound path for each run, with the run's fill
@@ -884,12 +1129,14 @@ impl<'a> Writer<'a> {
     /// `%AI5_EndRaster`, then `F`. §8.4's examples have no `F`; without it, an app reading the file
     /// can leave out an image in a clipping group and the art after it. No path is open there, so
     /// the `F` paints nothing. `blob` holds the pixels, placed as a grid of `width` × `height`
-    /// by `xf`, and `colorize` is the solid color the image is colorized with. A colorized image
-    /// whose pixels are all black or white is written as an image mask (ImageMask 1, §8.1): its
-    /// color as the fill, then 1-bit samples, a 0 bit for each black pixel, which takes the color,
-    /// and a 1 bit for each white pixel, which is clear. Another colorized image is written with
-    /// its color in its pixels.
-    fn image(&mut self, blob: Option<&ImageBlob>, width: u32, height: u32, xf: Affine, colorize: Option<&Paint>) {
+    /// by `xf`, and `colorize` is the solid color the image is colorized with and whether it
+    /// overprints. A colorized image whose pixels are all black or white is written as an image
+    /// mask (ImageMask 1, §8.1): its color as the fill with its fill overprint, then 1-bit
+    /// samples, a 0 bit for each black pixel, which takes the color, and a 1 bit for each white
+    /// pixel, which is clear. Another colorized image is written with
+    /// its color in its pixels. In a clipping group, an image whose pixels were written whole
+    /// already is written as the part of them the group shows ([`ai_ops::image_window`]).
+    fn image(&mut self, blob: Option<&ImageBlob>, width: u32, height: u32, xf: Affine, colorize: Option<(&Paint, bool)>) {
         let flip = Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]);
         let m = self.to_art * xf * flip;
         if !invertible(m) {
@@ -899,7 +1146,7 @@ impl<'a> Writer<'a> {
             self.warn(LARGE_IMAGE);
             return;
         }
-        let Some(img) = blob.and_then(|b| image::load_from_memory(&b.bytes).ok()) else {
+        let Some((blob, img)) = blob.and_then(|b| Some((b, self.decoded(b)?))) else {
             self.warn(UNDECODED);
             return;
         };
@@ -910,14 +1157,31 @@ impl<'a> Writer<'a> {
         }
         // The object places the image's own pixel grid (its width × height) wherever the file's is.
         let fit = Affine::scale_non_uniform(f64::from(width.max(1)) / f64::from(w), f64::from(height.max(1)) / f64::from(h));
-        let m = self.to_art * xf * fit * flip;
+        let coverage = match colorize {
+            Some((paint, overprint)) => {
+                let Some((_, _, coverage)) = self.coverage(blob).filter(|(cw, ch, _)| (*cw, *ch) == (w, h)) else {
+                    self.warn(UNDECODED);
+                    return;
+                };
+                Some((paint, overprint, coverage))
+            }
+            None => None,
+        };
+        // An image written whole already, cut to a clipping group: the part the group shows, placed
+        // where it is in the image (the pieces of a warped image each show a small part of the same one).
+        let key = Arc::as_ptr(&blob.bytes) as usize;
+        let window = if self.whole_images.contains_key(&key) { ai_ops::image_window(&self.clips, xf * fit, (w, h)) } else { None };
+        if window.is_none() {
+            self.whole_images.insert(key, blob.bytes.clone());
+        }
+        let window = window.unwrap_or([0, 0, w, h]);
+        let [x0, y0, x1, y1] = window;
+        let m = self.to_art * xf * fit * Affine::translate((f64::from(x0), f64::from(y0))) * flip;
+        let (w, h) = (x1 - x0, y1 - y0);
         // Over white.
         let over = |c: u8, a: u8| ((u32::from(c) * u32::from(a) + 255 * (255 - u32::from(a)) + 127) / 255) as u8;
-        if let Some(paint) = colorize {
-            let Some((_, _, coverage)) = blob.and_then(ImageBlob::coverage).filter(|(cw, ch, _)| (*cw, *ch) == (w, h)) else {
-                self.warn(UNDECODED);
-                return;
-            };
+        if let Some((paint, overprint, coverage)) = coverage {
+            let coverage = ai_ops::window_samples(&coverage, img.width(), 1, window);
             if coverage.iter().all(|&v| v == 0 || v == 255) {
                 let stride = (w as usize).div_ceil(8);
                 let mut bits = vec![0xFF; stride.saturating_mul(h as usize)];
@@ -928,6 +1192,7 @@ impl<'a> Writer<'a> {
                     }
                 }
                 self.color(paint, false);
+                self.line(if overprint { "1 O" } else { "0 O" });
                 self.raster(m, &format!("0 0 {w} {h} {w} {h} 1 1 0 0 0 1"), &bits);
                 return;
             }
@@ -937,7 +1202,7 @@ impl<'a> Writer<'a> {
             self.raster(m, &format!("0 0 {w} {h} {w} {h} 8 3 0 0 0 0"), &samples);
             return;
         }
-        let rgba = img.to_rgba8();
+        let rgba = img.crop_imm(x0, y0, w, h).to_rgba8();
         let mut samples = Vec::with_capacity(rgba.len() / 4 * 3);
         let mut see_through = false;
         for px in rgba.pixels() {
@@ -953,32 +1218,118 @@ impl<'a> Writer<'a> {
         self.raster(m, &format!("0 0 {w} {h} {w} {h} 8 3 0 0 0 0"), &samples);
     }
 
+    /// The pixels of `blob`, decoded once for images that follow one another with the same data.
+    fn decoded(&mut self, blob: &ImageBlob) -> Option<Arc<image::DynamicImage>> {
+        if let Some((last, img)) = &self.last_image
+            && Arc::ptr_eq(&last.bytes, &blob.bytes)
+            && last.mime == blob.mime
+        {
+            return img.clone();
+        }
+        let too_large = |w: u32, h: u32| w == 0 || h == 0 || u64::from(w) * u64::from(h) > MAX_IMAGE_PIXELS;
+        let img = if vectorcraft_doc::header_size(&blob.bytes).is_some_and(|(w, h)| too_large(w, h)) {
+            None
+        } else {
+            vectorcraft_doc::decode::decode_within(&blob.bytes, MAX_IMAGE_PIXELS.saturating_mul(8))
+                .ok()
+                .flatten()
+                .map(|(img, _)| img)
+                .filter(|img| !too_large(img.width(), img.height()))
+        }
+        .map(Arc::new);
+        self.last_image = Some((blob.clone(), img.clone()));
+        self.last_coverage = None;
+        img
+    }
+
+    /// The coverage of `blob` ([`ImageBlob::coverage`]), worked out once for images that follow one
+    /// another with the same data, as [`Self::decoded`] decodes them.
+    fn coverage(&mut self, blob: &ImageBlob) -> Option<Coverage> {
+        let last = self.last_image.as_ref().is_some_and(|(last, _)| Arc::ptr_eq(&last.bytes, &blob.bytes) && last.mime == blob.mime);
+        if last && let Some(coverage) = &self.last_coverage {
+            return coverage.clone();
+        }
+        #[cfg(test)]
+        COVERAGE_RUNS.with(|n| n.set(n.get() + 1));
+        let coverage = ImageBlob::coverage(blob).map(|(w, h, c)| (w, h, Arc::new(c)));
+        if last {
+            self.last_coverage = Some(coverage.clone());
+        }
+        coverage
+    }
+
+    /// Appends `samples` to `s` as upper-case hex digits on comment lines: each line starts with `%`,
+    /// holds [`HEX_LINE`] digits (the last line may hold fewer) and ends with a newline. An empty
+    /// `samples` appends no line.
+    pub(super) fn push_hex(s: &mut String, samples: &[u8]) {
+        const DIGITS: &[u8; 16] = b"0123456789ABCDEF";
+        const PER_LINE: usize = HEX_LINE / 2;
+        const _: () = assert!(HEX_LINE > 0 && HEX_LINE.is_multiple_of(2));
+        let lines = samples.len().div_ceil(PER_LINE);
+        s.reserve(samples.len().saturating_mul(2).saturating_add(lines.saturating_mul(2)));
+        for line in samples.chunks(PER_LINE) {
+            s.push('%');
+            for &c in line {
+                s.push(char::from(DIGITS[usize::from(c >> 4)]));
+                s.push(char::from(DIGITS[usize::from(c & 0x0F)]));
+            }
+            s.push('\n');
+        }
+    }
+
     /// An image's lines (§8.4): `%AI5_File:`, `%AI5_BeginRaster`, matrix `m` as `[ a b c d tx ty ]`
     /// and the numbers `operands` with `XI`, `samples` in hex on comment lines of [`HEX_LINE`]
     /// digits, `%AI5_EndRaster`, then `F`.
     fn raster(&mut self, m: Affine, operands: &str, samples: &[u8]) {
-        let mut hex = String::with_capacity(samples.len() * 2 + samples.len() / HEX_LINE * 2 + 2);
-        hex.push('%');
-        let mut on_line = 0;
-        for c in samples {
-            let _ = write!(hex, "{c:02X}");
-            on_line += 2;
-            if on_line >= HEX_LINE {
-                hex.push_str("\n%");
-                on_line = 0;
-            }
-        }
-        if hex.ends_with('%') {
-            hex.pop();
-        } else {
-            hex.push('\n');
-        }
         let [a, b, c, d, e, f] = m.as_coeffs();
         let s = &mut self.body;
         s.push_str("%AI5_File:\n%AI5_BeginRaster\n[ ");
         ps::push_nums(s, &[a, b, c, d, e, f]);
         let _ = writeln!(s, "] {operands} XI");
-        s.push_str(&hex);
+        Self::push_hex(s, samples);
         s.push_str("%AI5_EndRaster\nF\n");
+    }
+}
+
+/// Names kept apart: a name already given is numbered, as the first free `name 2`, `name 3`…
+#[derive(Default)]
+pub(super) struct Numbered {
+    taken: std::collections::HashSet<String>,
+    /// The number to try first for each name already given, after the numbers it was given.
+    next: std::collections::HashMap<String, usize>,
+    /// The names given, in order, for [`SCANNED_NAMES`].
+    #[cfg(test)]
+    given: Vec<String>,
+}
+
+impl Numbered {
+    /// `base`, or the first free `base 2`, `base 3`… when `base` is taken; it is then taken.
+    pub(super) fn take(&mut self, base: String) -> String {
+        #[cfg(test)]
+        if SCANNED_NAMES.with(std::cell::Cell::get) {
+            let mut name = base.clone();
+            let mut i = 1;
+            while self.given.contains(&name) {
+                i += 1;
+                name = format!("{base} {i}");
+            }
+            self.given.push(name.clone());
+            return name;
+        }
+        let name = if self.taken.contains(&base) {
+            // Names are never given back, so every number below `from` is still taken. Of the
+            // numbers `from..=tries`, at least one is free.
+            let from = self.next.get(&base).copied().unwrap_or(2);
+            let tries = from.saturating_add(self.taken.len());
+            let i = (from..tries).find(|i| !self.taken.contains(&format!("{base} {i}"))).unwrap_or(tries);
+            self.next.insert(base.clone(), i.saturating_add(1));
+            format!("{base} {i}")
+        } else {
+            base
+        };
+        self.taken.insert(name.clone());
+        #[cfg(test)]
+        self.given.push(name.clone());
+        name
     }
 }

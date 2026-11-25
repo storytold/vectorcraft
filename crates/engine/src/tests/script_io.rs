@@ -1,6 +1,7 @@
 //! `File` and `Folder` in a script: their classes and names, reading inside the script's own folder,
-//! the paths refused before anything is looked up, the read limits, and the parts that write, which
-//! are not available.
+//! the paths refused before anything is looked up, the read limits, writing in the run's temporary
+//! folder, the script's data folder and what a person allowed in a file dialog, and the grants kept
+//! for a script.
 
 use std::path::{Path, PathBuf};
 
@@ -11,12 +12,14 @@ use crate::*;
 
 const DENIED: &str = "Script file access denied";
 
-/// A fresh folder for test `name`, with a `main` folder inside it for the script.
+/// A fresh folder for test `name`, with a `main` folder inside it for the script, by its real
+/// path: kept grants hold real paths, and a path named through a link (macOS's `/var` is
+/// `/private/var`) is refused by its names alone.
 fn folder(name: &str) -> PathBuf {
     let base = std::env::temp_dir().join(format!("vc-script-io-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
     std::fs::create_dir_all(base.join("main")).unwrap();
-    base
+    std::fs::canonicalize(&base).unwrap()
 }
 
 fn write(path: &Path, bytes: &[u8]) {
@@ -55,6 +58,42 @@ fn file_constructor_identity_and_folder_path() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `exists` is true only when the path names an entry of the object's own kind.
+#[test]
+fn script_file_exists_checks_the_kind() {
+    let base = folder("kind");
+    write(&base.join("main/data.txt"), b"x");
+    std::fs::create_dir_all(base.join("main/sub")).unwrap();
+    let log =
+        logged(&base, "vc.log([new File('sub').exists, new Folder('data.txt').exists, new File('data.txt').exists, new Folder('sub').exists]);");
+    assert_eq!(log, json!([[false, false, true, true]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A property a script puts on `Object.prototype` is not read as part of what the app returns.
+#[test]
+fn script_file_ignores_inherited_result_fields() {
+    let base = folder("inherited");
+    write(&base.join("main/data.txt"), b"data");
+    let log = logged(
+        &base,
+        "Object.prototype.error = 'inherited'; Object.prototype.exists = true;\n\
+         var f = new File('data.txt'); var opened = f.open('r');\n\
+         vc.log([f.exists, new File('nope').exists, opened, f.error, f.read()]);",
+    );
+    assert_eq!(log, json!([[true, false, true, "", "data"]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `File.encode`, `File.decode`, `File.isEncodingAvailable` and the `Folder` locations are counted as
+/// calls to the app.
+#[test]
+fn script_file_class_functions_are_counted() {
+    let source = "File.encode('x'); File.decode('y'); Folder.isEncodingAvailable('UTF-8'); Folder.temp;";
+    let r = Session::new().execute("script.run", &json!({"source": source})).unwrap();
+    assert_eq!(r["hostCallCounts"]["fileCalls"], 4, "{r}");
+}
+
 #[test]
 fn file_names_are_uri_encoded_and_current_relative() {
     let base = folder("names");
@@ -74,7 +113,7 @@ fn file_names_are_uri_encoded_and_current_relative() {
     assert_eq!(
         log,
         json!([
-            ["caf%C3%A9%20x.txt", "caf\u{e9} x.txt", "caf%C3%A9%20x.txt", true, "%C3%A9%20%2F", "\u{e9}", "sub/y.txt", true, true],
+            ["caf%C3%A9%20x.txt", "caf\u{e9} x.txt", "caf%C3%A9%20x.txt", true, "%C3%A9%20/", "\u{e9}", "sub/y.txt", true, true],
             ["sub", "w", "w"],
             ["literal%20name.txt", "literal%2520name.txt", "literal%2520name.txt", true, "p%41", "p%41"]
         ])
@@ -83,6 +122,22 @@ fn file_names_are_uri_encoded_and_current_relative() {
         let log = logged(&base, "vc.log([new File('/c/a b/x.txt').fsName, new File('C:/a/x.txt').absoluteURI, new File('d:\\\\q').fsName]);");
         assert_eq!(log, json!([["C:\\a b\\x.txt", "/c/a/x.txt", "D:\\q"]]));
     }
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `localizedName` of a file and a folder is the name they show, decoded, as `displayName` is,
+/// not the encoded `name`.
+#[test]
+fn file_and_folder_give_their_localized_name() {
+    let base = folder("localized");
+    let log = logged(
+        &base,
+        "var f = new File('caf%C3%A9 x.txt'), d = new Folder('n%C3%A9w');\n\
+         f.localizedName = 'other';\n\
+         vc.log([f.localizedName === f.displayName, f.localizedName === f.name, d.localizedName === d.displayName,\n\
+         d.localizedName === d.name, f.localizedName, 'localizedName' in Folder.prototype]);",
+    );
+    assert_eq!(log, json!([[true, false, true, false, "caf\u{e9} x.txt", true]]));
     let _ = std::fs::remove_dir_all(base);
 }
 
@@ -194,7 +249,7 @@ fn script_file_link_escape_refused() {
 /// not matter, and outside it where case matters, whether or not the file is there.
 #[test]
 fn script_file_case_variant_folder() {
-    let base = folder("case");
+    let base = crate::cmd::findfiles::plain(folder("case").canonicalize().unwrap());
     write(&base.join("main/own.txt"), b"own");
     let upper = base.join("MAIN");
     let source = |name: &str| {
@@ -231,15 +286,34 @@ fn script_file_oversize_refused_before_read() {
 #[test]
 fn script_files_read_at_most_32_mib_in_a_run() {
     let base = folder("total");
-    write(&base.join("main/seven.bin"), &vec![b'a'; 7 << 20]);
+    for i in 0..5 {
+        write(&base.join(format!("main/seven{i}.bin")), &vec![b'a'; 7 << 20]);
+    }
     let mut s = Session::new();
     let main = base.join("main/main.jsx");
-    write(&main, b"var f = new File('seven.bin'); for (var i = 0; i < 5; i++) { f.open('r'); vc.log(i); }");
+    write(&main, b"for (var i = 0; i < 5; i++) { new File('seven' + i + '.bin').open('r'); vc.log(i); }");
     let e = s.execute("script.run", &json!({"path": main.to_string_lossy()}));
     assert!(e.is_err(), "the fifth open passes 32 MiB");
     let report = s.script_report().unwrap();
     assert_eq!(report["log"], json!([0, 1, 2, 3]));
     assert!(report["message"].as_str().unwrap().contains("32 MiB"), "{report}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A file opened again once its objects closed counts only once toward the 32 MiB a run reads, and
+/// a file open in two objects at once counts for each.
+#[test]
+fn script_file_opened_again_counts_once_toward_the_run_limit() {
+    let base = folder("reopencount");
+    write(&base.join("main/seven.bin"), &vec![b'a'; 7 << 20]);
+    let mut s = Session::new();
+    let main = base.join("main/main.jsx");
+    write(&main, b"var f = new File('seven.bin'); for (var i = 0; i < 8; i++) { f.open('r'); f.close(); } vc.log('again');");
+    let r = s.execute("script.run", &json!({"path": main.to_string_lossy()})).unwrap();
+    assert_eq!(r["log"], json!(["again"]));
+    write(&main, b"for (var i = 0; i < 5; i++) { new File('seven.bin').open('r'); vc.log(i); }");
+    assert!(s.execute("script.run", &json!({"path": main.to_string_lossy()})).is_err(), "five objects hold five copies");
+    assert_eq!(s.script_report().unwrap()["log"], json!([0, 1, 2, 3]));
     let _ = std::fs::remove_dir_all(base);
 }
 
@@ -275,7 +349,9 @@ fn script_folder_getfiles_stays_inside_scope() {
          try { d.getFiles(function () { throw new Error('stop'); }); } catch (e) { vc.log(e.message); }\n\
          vc.log([new Folder('nope').getFiles(), d.getFiles('*.jsx')[0] instanceof File]);",
     );
-    assert_eq!(log, json!([["C.JSX", "a.jsx", "main.jsx"], ["sub"], [["b.txt"], 5, null, DENIED], "stop", [null, true]]));
+    // Where case does not matter to the file system, the mask matches without regard to case.
+    let jsx = if cfg!(any(windows, target_os = "macos")) { json!(["C.JSX", "a.jsx", "main.jsx"]) } else { json!(["a.jsx", "main.jsx"]) };
+    assert_eq!(log, json!([jsx, ["sub"], [["b.txt"], 5, null, DENIED], "stop", [null, true]]));
     let many = base.join("main/many");
     for i in 0..=crate::script::files::MAX_ENTRIES {
         write(&many.join(format!("{i:04}.txt")), b"");
@@ -357,23 +433,29 @@ fn script_file_encoding_binary_ascii() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// A script's own folder is only read: writing there, and anywhere it was not given, is refused,
+/// and with nobody to ask its file dialogs give `null`. Setting `hidden` and `createAlias` are
+/// refused there too, and `execute` is not available.
 #[test]
-fn script_file_writes_dialogs_and_execute_are_not_available() {
+fn script_file_writes_outside_its_places_and_headless_dialogs_are_refused() {
     let base = folder("writes");
     write(&base.join("main/keep.txt"), b"keep");
+    let outside = base.join("outside.txt").to_string_lossy().into_owned();
     let r = run(
         &base,
-        "var f = new File('keep.txt'); var n = new File('new.txt');\n\
-         var out = [n.open('w'), n.error, f.open('a'), f.open('e'), f.open('x'), f.error, f.write('x'), f.remove(), f.copy('c.txt'), f.rename('r.txt')];\n\
-         out.push(new Folder('made').create(), f.openDlg(), f.error, File.openDialog(), Folder.selectDialog(), f.execute(), f.error);\n\
-         f.hidden = true; out.push(f.error, f.hidden); f.error = ''; out.push(f.error);\n\
-         vc.log(out);",
+        &format!(
+            "var f = new File('keep.txt'); var n = new File('new.txt'); var o = new File({outside:?});\n\
+             var out = [n.open('w'), n.error, f.open('a'), f.open('e'), f.open('x'), f.error, f.remove(), f.copy('c.txt'), f.rename('r.txt'), o.open('w')];\n\
+             out.push(new Folder('made').create(), f.openDlg(), f.error, File.openDialog(), Folder.selectDialog(), f.execute(), f.error);\n\
+             f.hidden = true; out.push(f.error, f.hidden, f.createAlias('l'), f.error); f.error = ''; out.push(f.error);\n\
+             vc.log(out);"
+        ),
     );
     assert_eq!(
         r["log"],
         json!([[
             false,
-            "Script file writing is not available",
+            DENIED,
             false,
             false,
             false,
@@ -384,20 +466,1993 @@ fn script_file_writes_dialogs_and_execute_are_not_available() {
             false,
             false,
             null,
-            "Script file dialogs are not available",
+            "Script file dialogs need a person to answer them",
             null,
             null,
             false,
             "Script files cannot be opened in another application",
-            "Script file writing is not available",
+            DENIED,
             false,
+            false,
+            DENIED,
             ""
         ]])
     );
     assert_eq!(r["hostCallCounts"]["fileExecutes"], 1);
-    assert!(r["hostCallCounts"]["fileCalls"].as_u64().unwrap() > 0);
+    assert_eq!(r["written"], json!([]));
     assert_eq!(std::fs::read(base.join("main/keep.txt")).unwrap(), b"keep");
     assert!(!base.join("main/new.txt").exists() && !base.join("main/made").exists() && !base.join("main/c.txt").exists());
+    assert!(!base.join("main/.keep.txt").exists() && std::fs::symlink_metadata(base.join("main/l")).is_err());
+    assert!(!Path::new(&outside).exists());
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A session whose scripts keep their data folders in `base/settings/Script Data`.
+fn with_data(base: &Path) -> Session {
+    let mut s = Session::new();
+    s.attach_script_data(base.join("settings/Script Data"));
+    s
+}
+
+/// Runs `main/main.jsx` in `base` with the text `text` in `s`.
+fn run_in(s: &mut Session, base: &Path, text: &str) -> Result<Value> {
+    let main = base.join("main/main.jsx");
+    write(&main, text.as_bytes());
+    s.execute("script.run", &json!({"path": main.to_string_lossy()}))
+}
+
+/// `Folder.userData` is the script's own folder, kept between runs, and `Folder.temp` the run's,
+/// deleted when it ends. `write` joins its values, `writeln` adds the `lineFeed`'s line end, and a
+/// byte order mark is written as the script writes it.
+#[test]
+fn script_files_write_in_the_temporary_and_data_folders() {
+    let base = folder("userdata");
+    let mut s = with_data(&base);
+    let r = run_in(
+        &mut s,
+        &base,
+        "var out = [], u = new File(Folder.userData.fsName + '/notes.txt');\n\
+         out.push(u.open('w'), u.write('a', 1, true), u.writeln('b'), u.close());\n\
+         u.lineFeed = 'Windows'; out.push(u.open('a'), u.writeln('c'), u.close());\n\
+         u.open('r'); out.push(u.read()); u.close();\n\
+         var t = new File(Folder.temp.fsName + '/t.txt'); out.push(t.open('w'), t.write('\\uFEFFx'), t.close(), t.length);\n\
+         var m = new File(); out.push(m.open('w'), m.parent.fsName === Folder.temp.fsName);\n\
+         vc.log(out); vc.log(u.fsName); vc.log(Folder.temp.fsName);",
+    )
+    .unwrap();
+    // The first `writeln` uses the default line end, which is the platform's.
+    let text = if cfg!(windows) { "a1trueb\r\nc\r\n" } else { "a1trueb\nc\r\n" };
+    assert_eq!(r["log"][0], json!([true, true, true, true, true, true, true, text, true, true, true, 4, true, true]));
+    let notes = PathBuf::from(r["log"][1].as_str().unwrap());
+    let temp = PathBuf::from(r["log"][2].as_str().unwrap());
+    assert_eq!(std::fs::read(&notes).unwrap(), text.as_bytes());
+    assert!(notes.starts_with(crate::cmd::findfiles::plain(std::fs::canonicalize(base.join("settings/Script Data")).unwrap())), "{notes:?}");
+    assert!(!temp.exists(), "the run's temporary folder is deleted when it ends");
+    let written: Vec<&str> = r["written"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    assert!(written.contains(&notes.to_string_lossy().as_ref()), "{written:?}");
+    let again = run_in(&mut s, &base, "var u = new File(Folder.userData.fsName + '/notes.txt'); u.open('r'); vc.log(u.read());").unwrap();
+    assert_eq!(again["log"], json!([text]), "a script's data folder is kept between runs");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A file whose bytes fail to be written after it was opened for them has lost its old bytes, so the
+/// failed run names it among the files that stay written.
+#[test]
+fn script_file_whose_write_fails_partway_is_named_as_written() {
+    let base = folder("flushfails");
+    let mut s = with_data(&base);
+    let r = run_in(&mut s, &base, "var f = new File(Folder.userData.fsName + '/f.txt'); f.open('w'); f.write('old'); f.close(); vc.log(f.fsName);")
+        .unwrap();
+    let path = r["log"][0].as_str().unwrap().to_string();
+    crate::script::files::FLUSH_WRITE_FAILS.with(|f| f.set(true));
+    let r = run_in(&mut s, &base, "var f = new File(Folder.userData.fsName + '/f.txt'); f.open('e'); f.write('new'); f.close();");
+    crate::script::files::FLUSH_WRITE_FAILS.with(|f| f.set(false));
+    let e = format!("{}", r.unwrap_err());
+    assert!(e.split("these files stay written:").nth(1).is_some_and(|w| w.contains(&path)), "{e}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `copy` reads its source under the rules for reading: a source that a link to a file outside the
+/// script's places replaced after it was looked up is refused, and nothing is copied.
+#[cfg(unix)]
+#[test]
+fn a_copy_whose_source_becomes_a_link_outside_copies_nothing() {
+    let base = folder("copy-link");
+    let mut s = with_data(&base);
+    let secret = base.join("secret.txt");
+    write(&secret, b"secret");
+    crate::script::files::BEFORE_COPY_READ.with(|h| {
+        *h.borrow_mut() = Some(Box::new(move |_: &Path, source: &Path| {
+            std::fs::remove_file(source).unwrap();
+            std::os::unix::fs::symlink(&secret, source).unwrap();
+        }));
+    });
+    let r = run_in(
+        &mut s,
+        &base,
+        "var d = Folder.userData.fsName, a = new File(d + '/a.txt'); a.open('w'); a.write('mine'); a.close();\n\
+         vc.log([a.copy(d + '/b.txt'), a.error, new File(d + '/b.txt').exists]);",
+    )
+    .unwrap();
+    crate::script::files::BEFORE_COPY_READ.with(|h| h.borrow_mut().take());
+    assert_eq!(r["log"], json!([[false, "Script file access denied", false]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `copy` of a link whose target changes after it was looked up is refused, also when both files
+/// are in the script's places.
+#[cfg(unix)]
+#[test]
+fn a_copy_of_a_link_that_leads_elsewhere_after_it_was_looked_up_copies_nothing() {
+    let base = folder("copy-relink");
+    let mut s = with_data(&base);
+    let first = run_in(
+        &mut s,
+        &base,
+        "var d = Folder.userData.fsName;\n\
+         ['a', 'c'].forEach(function (n) { var f = new File(d + '/' + n + '.txt'); f.open('w'); f.write(n); f.close(); });\n\
+         vc.log(d);",
+    )
+    .unwrap();
+    let data = PathBuf::from(first["log"][0].as_str().unwrap());
+    std::os::unix::fs::symlink(data.join("a.txt"), data.join("link.txt")).unwrap();
+    let other = data.join("c.txt");
+    crate::script::files::BEFORE_COPY_READ.with(|h| {
+        *h.borrow_mut() = Some(Box::new(move |given: &Path, _: &Path| {
+            std::fs::remove_file(given).unwrap();
+            std::os::unix::fs::symlink(&other, given).unwrap();
+        }));
+    });
+    let r = run_in(
+        &mut s,
+        &base,
+        "var d = Folder.userData.fsName, l = new File(d + '/link.txt');\n\
+         vc.log([l.copy(d + '/b.txt'), l.error, new File(d + '/b.txt').exists]);",
+    )
+    .unwrap();
+    crate::script::files::BEFORE_COPY_READ.with(|h| h.borrow_mut().take());
+    assert_eq!(r["log"], json!([[false, "Script file access denied", false]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// The grants file is written through a temporary file of its own, so a temporary file another
+/// process left beside it, or one an earlier write left under the name this write takes first,
+/// does not stop a change and is left where it is.
+#[test]
+fn a_grants_change_does_not_use_another_writers_temporary_file() {
+    let base = folder("grants-part");
+    let data = base.join("settings/Script Data");
+    let grant = json!({"script": "/s.jsx", "sha256": "0", "code": [], "path": "/p", "write": false, "folder": false});
+    write(&base.join("settings/Script Grants.json"), json!({"version": 1, "grants": [grant]}).to_string().as_bytes());
+    std::fs::create_dir_all(base.join("settings/Script Grants.json.part/held")).unwrap();
+    let next = crate::script::files::NEXT_PART.load(std::sync::atomic::Ordering::Relaxed);
+    let left_behind: Vec<PathBuf> =
+        (next..next + 8).map(|n| base.join(format!("settings/Script Grants.json.{}-{n}.part", std::process::id()))).collect();
+    for p in &left_behind {
+        write(p, b"earlier");
+    }
+    assert_eq!(crate::script::files::revoke_grants(&data, None, None).unwrap(), 1);
+    let left: Value = serde_json::from_slice(&std::fs::read(base.join("settings/Script Grants.json")).unwrap()).unwrap();
+    assert_eq!(left["grants"], json!([]));
+    assert!(left_behind.iter().all(|p| std::fs::read(p).is_ok_and(|b| b == b"earlier")), "files this write did not make stay");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A change to the grants file is not made when its lock cannot be taken.
+#[test]
+fn a_grants_change_without_its_lock_changes_nothing() {
+    let base = folder("grants-lock");
+    let data = base.join("settings/Script Data");
+    let grant = json!({"script": "/s.jsx", "sha256": "0", "code": [], "path": "/p", "write": false, "folder": false});
+    let text = json!({"version": 1, "grants": [grant]}).to_string();
+    write(&base.join("settings/Script Grants.json"), text.as_bytes());
+    std::fs::create_dir_all(base.join("settings/Script Grants.lock/held")).unwrap();
+    assert!(crate::script::files::revoke_grants(&data, None, None).is_err());
+    assert_eq!(std::fs::read_to_string(base.join("settings/Script Grants.json")).unwrap(), text);
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Reading and changing the grants file wait for a lock another handle holds only for a bounded
+/// number of tries: then a read gives no grants and a change fails with the file unchanged. A lock
+/// released while it waits is taken.
+#[test]
+fn a_grants_change_waits_for_a_held_lock_a_bounded_number_of_tries() {
+    use crate::script::files::{LOCK_TRIES, WHILE_GRANTS_LOCKED, revoke_grants, stored_grants};
+    let base = folder("grants-lock-held");
+    let data = base.join("settings/Script Data");
+    let grant = json!({"script": "/s.jsx", "sha256": "0", "code": [], "path": "/p", "write": false, "folder": false});
+    let text = json!({"version": 1, "grants": [grant]}).to_string();
+    write(&base.join("settings/Script Grants.json"), text.as_bytes());
+    let held = std::fs::File::options().create(true).truncate(false).read(true).write(true).open(base.join("settings/Script Grants.lock")).unwrap();
+    held.lock().unwrap();
+    let waits = std::rc::Rc::new(std::cell::Cell::new(0));
+    let counted = waits.clone();
+    WHILE_GRANTS_LOCKED.set(Some(Box::new(move || counted.set(counted.get() + 1))));
+    assert_eq!(stored_grants(&data), Vec::<Value>::new(), "grants are not read without the lock");
+    assert_eq!(waits.get(), LOCK_TRIES - 1);
+    waits.set(0);
+    let refused = revoke_grants(&data, None, None);
+    assert_eq!(refused.map_err(|e| e.kind()), Err(std::io::ErrorKind::TimedOut));
+    assert_eq!(waits.get(), LOCK_TRIES - 1, "it waits between tries and gives up after the last");
+    assert_eq!(std::fs::read_to_string(base.join("settings/Script Grants.json")).unwrap(), text);
+    let mut released = Some(held);
+    let counted = waits.clone();
+    waits.set(0);
+    WHILE_GRANTS_LOCKED.set(Some(Box::new(move || {
+        counted.set(counted.get() + 1);
+        drop(released.take());
+    })));
+    assert_eq!(revoke_grants(&data, None, None).unwrap(), 1, "a lock released while it waits is taken");
+    assert_eq!(waits.get(), 1);
+    WHILE_GRANTS_LOCKED.set(None);
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `rename` of a file an earlier run wrote names both its old and its new path in `written`.
+#[test]
+fn a_renamed_file_names_its_old_and_new_paths_in_written() {
+    let base = folder("renamed");
+    let mut s = with_data(&base);
+    let first = run_in(&mut s, &base, "var u = new File(Folder.userData.fsName + '/old.txt'); u.open('w'); u.write('x'); vc.log(u.close());");
+    assert_eq!(first.unwrap()["log"], json!([true]));
+    let r = run_in(
+        &mut s,
+        &base,
+        "var u = new File(Folder.userData.fsName + '/old.txt'); var before = u.fsName;\n\
+         vc.log(u.rename('new.txt')); vc.log(before); vc.log(u.fsName);",
+    )
+    .unwrap();
+    assert_eq!(r["log"][0], json!(true));
+    let written: Vec<&str> = r["written"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    for at in [1, 2] {
+        let path = r["log"][at].as_str().unwrap();
+        assert!(written.contains(&path), "{path} in {written:?}");
+    }
+    let _ = std::fs::remove_dir_all(base);
+}
+
+#[cfg(unix)]
+const NOT_FOUND: &str = "Script file does not exist";
+#[cfg(unix)]
+const NOT_REGULAR: &str = "Script file is not a regular file";
+#[cfg(unix)]
+const TAKEN: &str = "Script file name is already in use";
+
+/// On Unix setting `hidden` renames a file with one dot added or its leading dots taken off, and the
+/// object takes the new path: a file it has open stays open and is written at the new path, a file
+/// already as asked keeps its name, and a name in use, a name of dots alone and a folder are refused.
+#[cfg(unix)]
+#[test]
+fn script_file_hidden_renames_the_file_with_a_leading_dot() {
+    let base = folder("hidden");
+    let mut s = with_data(&base);
+    let r = run_in(
+        &mut s,
+        &base,
+        "var d = Folder.userData.fsName, u = new File(d + '/u.txt'); u.open('w'); u.write('kept');\n\
+         var before = u.fsName; u.hidden = true;\n\
+         var out = [u.name, u.hidden, u.error, new File(d + '/.u.txt').hidden, new File(before).exists];\n\
+         u.hidden = true; out.push(u.name, u.error, u.write('+'), u.close()); u.open('r'); out.push(u.read()); u.close();\n\
+         u.hidden = false; out.push(u.name, u.hidden, new File(d + '/.u.txt').exists);\n\
+         var dots = new File(d + '/...'); dots.open('w'); dots.close(); dots.hidden = false; out.push(dots.error, dots.exists);\n\
+         var v = new File(d + '/v.txt'), w = new File(d + '/.v.txt'); v.open('w'); v.close(); w.open('w'); w.write('w'); w.close();\n\
+         v.hidden = true; out.push(v.error, v.name, w.length);\n\
+         var g = new Folder(d + '/g'); g.create(); var gf = new File(g.fsName); gf.hidden = true; out.push(gf.error, g.exists);\n\
+         vc.log(out); vc.log(d);",
+    )
+    .unwrap();
+    let no_hidden = "Script file hidden setting cannot be changed";
+    assert_eq!(
+        r["log"][0],
+        json!([
+            ".u.txt",
+            true,
+            "",
+            true,
+            false,
+            ".u.txt",
+            "",
+            true,
+            true,
+            "kept+",
+            "u.txt",
+            false,
+            false,
+            no_hidden,
+            true,
+            TAKEN,
+            "v.txt",
+            1,
+            NOT_REGULAR,
+            true
+        ])
+    );
+    let d = PathBuf::from(r["log"][1].as_str().unwrap());
+    let mut names: Vec<String> = std::fs::read_dir(&d).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    names.sort();
+    assert_eq!(names, ["...", ".v.txt", "g", "u.txt", "v.txt"]);
+    let written: Vec<&str> = r["written"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    for name in ["u.txt", ".u.txt"] {
+        assert!(written.contains(&d.join(name).to_string_lossy().as_ref()), "{name} in {written:?}");
+    }
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Setting `hidden` gives the file a new name, which must be a place the script may write too: a
+/// file allowed on its own in a save dialog keeps its name.
+#[cfg(unix)]
+#[test]
+fn script_file_hidden_needs_the_new_name_to_be_writable() {
+    let base = folder("hiddengrant");
+    let picked = base.join("picked/s.txt");
+    write(&picked, b"s");
+    let mut s = with_data(&base);
+    start_framed(
+        &mut s,
+        &base,
+        "var f = File.saveDialog('s'); f.hidden = true; var out = [f.error, f.name, f.hidden]; out.push(f.rename('t.txt'), f.error, f.name); vc.log(out);",
+    );
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![picked.to_string_lossy().into_owned()], always: false }));
+    let r = pump_to_picker(&mut s).unwrap().unwrap();
+    assert_eq!(r["log"], json!([[DENIED, "s.txt", false, false, DENIED, "s.txt"]]));
+    assert!(picked.exists() && !base.join("picked/.s.txt").exists() && !base.join("picked/t.txt").exists());
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// On Unix `createAlias` makes a link, in a place the script may write, to a file it may read: the
+/// link is an alias that resolves to the file and reads it, `hidden` tells of the link's own name,
+/// setting `hidden` and `remove` change the link alone, and writing through it to a file the script
+/// may only read is refused. A link that leads out of the script's places afterward reads nothing.
+#[cfg(unix)]
+#[test]
+fn script_file_create_alias_links_to_a_file_the_script_may_read() {
+    let base = folder("alias");
+    write(&base.join("main/keep.txt"), b"keep");
+    write(&base.join("main/.hid.txt"), b"hid");
+    write(&base.join("secret.txt"), b"secret");
+    let mut s = with_data(&base);
+    let r = run_in(
+        &mut s,
+        &base,
+        "var d = Folder.userData.fsName, k = new File('keep.txt'), l = new File(d + '/l');\n\
+         var out = [l.createAlias(k), l.error, l.alias, l.resolve().fsName === k.fsName, l.hidden, k.alias];\n\
+         l.open('r'); out.push(l.read()); l.close();\n\
+         out.push(l.open('w'), l.error, l.open('a'), l.error);\n\
+         var h = new File(d + '/h'); out.push(h.createAlias('.hid.txt'), h.hidden, h.resolve().name);\n\
+         l.hidden = true; out.push(l.name, l.alias, l.hidden, k.exists, k.hidden);\n\
+         out.push(l.remove(), l.exists, k.exists); vc.log(out); vc.log(d);",
+    )
+    .unwrap();
+    assert_eq!(
+        r["log"][0],
+        json!([
+            true, "", true, true, false, false, "keep", false, DENIED, false, DENIED, true, false, ".hid.txt", ".l", true, true, true, false, true,
+            false, true
+        ])
+    );
+    let d = PathBuf::from(r["log"][1].as_str().unwrap());
+    assert_eq!(std::fs::read(base.join("main/keep.txt")).unwrap(), b"keep");
+    assert!(std::fs::symlink_metadata(d.join("l")).is_err() && std::fs::symlink_metadata(d.join(".l")).is_err());
+    let written: Vec<&str> = r["written"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    assert!(written.contains(&d.join("l").to_string_lossy().as_ref()), "{written:?}");
+    std::fs::remove_file(d.join("h")).unwrap();
+    std::os::unix::fs::symlink(base.join("secret.txt"), d.join("h")).unwrap();
+    let r = run_in(&mut s, &base, "var h = new File(Folder.userData.fsName + '/h'); vc.log([h.open('r'), h.error, h.alias, h.resolve()]);").unwrap();
+    assert_eq!(r["log"], json!([[false, DENIED, false, null]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `createAlias` makes nothing where the script may only read or may not go at all, at a name in use
+/// (a link that leads nowhere included), to a folder, to a file outside its places, in the settings
+/// folder or behind a link that leads out, to a file that is not there, or without a target.
+#[cfg(unix)]
+#[test]
+fn script_file_create_alias_is_refused_outside_the_scripts_places() {
+    let base = folder("aliasdenied");
+    write(&base.join("main/keep.txt"), b"keep");
+    write(&base.join("secret.txt"), b"secret");
+    write(&base.join("main/settings/Script Grants.json"), b"{\"version\": 1, \"grants\": []}");
+    std::fs::create_dir_all(base.join("main/sub")).unwrap();
+    std::fs::create_dir_all(base.join("elsewhere")).unwrap();
+    std::os::unix::fs::symlink(base.join("secret.txt"), base.join("main/out.txt")).unwrap();
+    let mut s = Session::new();
+    s.attach_script_data(base.join("main/settings/Script Data"));
+    let d = PathBuf::from(run_in(&mut s, &base, "vc.log(Folder.userData.fsName);").unwrap()["log"][0].as_str().unwrap());
+    write(&d.join("taken"), b"t");
+    std::os::unix::fs::symlink(base.join("nowhere"), d.join("dangling")).unwrap();
+    let text = format!(
+        "var d = Folder.userData.fsName, out = [];\n\
+         function a(at, to) {{ var f = new File(at); out.push(f.createAlias(to), f.error); }}\n\
+         a('own', 'keep.txt'); a(d + '/taken', 'keep.txt'); a(d + '/dangling', 'keep.txt'); a(d + '/dir', 'sub');\n\
+         a(d + '/s', {:?}); a(d + '/g', 'settings/Script Grants.json'); a(d + '/o', 'out.txt'); a(d + '/n'); a(d + '/m', 'missing.txt');\n\
+         a({:?}, 'keep.txt'); vc.log(out);",
+        base.join("secret.txt").to_string_lossy(),
+        base.join("elsewhere/x").to_string_lossy()
+    );
+    let r = run_in(&mut s, &base, &text).unwrap();
+    assert_eq!(
+        r["log"],
+        json!([[
+            false,
+            DENIED,
+            false,
+            TAKEN,
+            false,
+            TAKEN,
+            false,
+            NOT_REGULAR,
+            false,
+            DENIED,
+            false,
+            DENIED,
+            false,
+            DENIED,
+            false,
+            NOT_FOUND,
+            false,
+            NOT_FOUND,
+            false,
+            DENIED
+        ]])
+    );
+    assert!(std::fs::symlink_metadata(base.join("main/own")).is_err());
+    assert_eq!(std::fs::read_dir(base.join("elsewhere")).unwrap().count(), 0);
+    for name in ["dir", "s", "g", "o", "n", "m"] {
+        assert!(std::fs::symlink_metadata(d.join(name)).is_err(), "{name}");
+    }
+    assert_eq!(std::fs::read(d.join("taken")).unwrap(), b"t");
+    assert_eq!(std::fs::read_link(d.join("dangling")).unwrap(), base.join("nowhere"));
+    assert_eq!(r["written"], json!([]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A link put in place of the folder an alias goes in, after the alias's place was looked up, does
+/// not leave a new link where it leads.
+#[cfg(unix)]
+#[test]
+fn script_file_alias_is_not_left_behind_a_folder_replaced_by_a_link() {
+    let base = folder("aliasrace");
+    write(&base.join("main/keep.txt"), b"keep");
+    let outside = base.join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    let mut s = with_data(&base);
+    let to = outside.clone();
+    crate::script::files::BEFORE_ALIAS_LINK.with(|h| {
+        *h.borrow_mut() = Some(Box::new(move |at: &Path| {
+            let sub = at.parent().unwrap();
+            std::fs::rename(sub, sub.with_file_name("moved")).unwrap();
+            std::os::unix::fs::symlink(&to, sub).unwrap();
+        }));
+    });
+    let r = run_in(
+        &mut s,
+        &base,
+        "var d = Folder.userData.fsName; new Folder(d + '/sub').create(); var l = new File(d + '/sub/l'); vc.log([l.createAlias('keep.txt'), l.error]);",
+    );
+    crate::script::files::BEFORE_ALIAS_LINK.with(|h| h.borrow_mut().take());
+    assert_eq!(r.unwrap()["log"], json!([[false, DENIED]]));
+    assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0, "no link is left outside the script's places");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Where a hidden file is not one whose name starts with a dot, setting `hidden` and `createAlias`
+/// set `error` and change nothing.
+#[cfg(not(unix))]
+#[test]
+fn script_file_hidden_and_aliases_are_refused_off_unix() {
+    let base = folder("hiddenoff");
+    write(&base.join("main/keep.txt"), b"keep");
+    let mut s = with_data(&base);
+    let r = run_in(
+        &mut s,
+        &base,
+        "var d = Folder.userData.fsName, u = new File(d + '/u.txt'); u.open('w'); u.close(); u.hidden = true; var out = [u.error, u.name];\n\
+         var l = new File(d + '/l'); out.push(l.createAlias('keep.txt'), l.error, l.exists); vc.log(out);",
+    )
+    .unwrap();
+    assert_eq!(r["log"], json!([["Script file hidden setting cannot be changed", "u.txt", false, "Script files cannot make aliases", false]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// The open modes, the encodings that cannot hold a character, `copy` over a file, `remove` of a
+/// folder only when it is empty, `rename` refusing a name in use, `create`, and setting `length` and
+/// `readonly`.
+#[test]
+fn script_file_modes_encodings_and_changes() {
+    let base = folder("changes");
+    let r = run(
+        &base,
+        "var d = Folder.temp.fsName, out = [];\n\
+         var e = new File(d + '/missing.txt'); out.push(e.open('e'), e.error);\n\
+         var a = new File(d + '/a.txt'); a.encoding = 'ASCII'; out.push(a.open('w'), a.write('caf\\u00e9'), a.error, a.write('cafe'), a.close(), a.length);\n\
+         var b = new File(d + '/b.bin'); b.encoding = 'BINARY'; b.open('w'); b.write('\\u0141B'); b.close();\n\
+         b.encoding = 'BINARY'; b.open('r'); out.push(b.read()); b.close();\n\
+         out.push(a.copy(d + '/b.bin'), new File(d + '/b.bin').length);\n\
+         var f = new Folder(d + '/x/y'); out.push(f.create(), f.exists);\n\
+         var x = new Folder(d + '/x'); out.push(x.remove(), x.error, f.remove(), f.exists);\n\
+         out.push(a.rename('b.bin'), a.error, a.rename('c.txt'), a.name, a.exists, new File(d + '/a.txt').exists);\n\
+         a.length = 2; out.push(a.length); a.length = 6; out.push(a.length);\n\
+         a.readonly = true; out.push(a.readonly); a.readonly = false; out.push(a.readonly);\n\
+         out.push(a.remove(), a.exists);\n\
+         vc.log(out);",
+    );
+    assert_eq!(
+        r["log"],
+        json!([[
+            false,
+            "Script file does not exist",
+            true,
+            false,
+            "Script file cannot encode the text",
+            true,
+            true,
+            4,
+            "AB",
+            true,
+            4,
+            true,
+            true,
+            false,
+            "Script folder is not empty",
+            true,
+            false,
+            false,
+            "Script file name is already in use",
+            true,
+            "c.txt",
+            true,
+            false,
+            2,
+            6,
+            true,
+            false,
+            true,
+            false
+        ]])
+    );
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Setting `length` while the file is open changes what the open file holds, so closing it keeps
+/// the new length.
+#[test]
+fn script_file_length_changes_reach_an_open_file() {
+    let base = folder("openlength");
+    let r = run(
+        &base,
+        "var o = new File(Folder.temp.fsName + '/l.txt'); o.open('w'); o.write('abc');\n\
+         new File(o.fsName).length = 1; o.write('d'); o.close();\n\
+         o.open('r'); vc.log([o.read(), o.length]); o.close();",
+    );
+    assert_eq!(r["log"], json!([["ad", 2]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A file is kept as it was when `open('w')` is given an encoding that is not one and when it is
+/// copied onto itself, and the changes an open file holds stay to be written when writing them fails.
+#[test]
+fn script_file_writes_keep_what_they_cannot_change() {
+    let base = folder("keeps");
+    let r = run(
+        &base,
+        "var d = Folder.temp.fsName, out = [];\n\
+         var k = new File(d + '/k.txt'); k.open('w'); k.write('keep'); k.close();\n\
+         k.encoding = 'nope'; out.push(k.open('w'), k.error);\n\
+         k.encoding = 'UTF-8'; k.open('r'); out.push(k.read()); k.close();\n\
+         out.push(k.copy(k.fsName), k.length);\n\
+         var w = new File(d + '/w.txt'); w.open('w'); w.write('abc'); new File(w.fsName).readonly = true;\n\
+         var q = new File(w.fsName); q.length = 1; out.push(q.error);\n\
+         new File(w.fsName).readonly = false; out.push(w.close()); w.open('r'); out.push(w.read()); w.close();\n\
+         vc.log(out);",
+    );
+    assert_eq!(r["log"], json!([[false, "Script file cannot be decoded", "keep", true, 4, "Script file could not be written", true, "abc"]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A file whose `close` could not write it stays to be written when the run ends.
+#[test]
+fn script_file_close_that_cannot_write_keeps_the_changes() {
+    let base = folder("closefail");
+    let mut s = with_data(&base);
+    let r = run_in(
+        &mut s,
+        &base,
+        "var u = new File(Folder.userData.fsName + '/c.txt'); u.open('w'); u.write('kept');\n\
+         new File(u.fsName).readonly = true; var out = [u.close(), u.error]; new File(u.fsName).readonly = false;\n\
+         vc.log(out); vc.log(u.fsName);",
+    )
+    .unwrap();
+    assert_eq!(r["log"][0], json!([false, "Script file could not be written"]));
+    assert_eq!(std::fs::read(r["log"][1].as_str().unwrap()).unwrap(), b"kept");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `changePath` on an object whose changes could not be written gives false with `error` set, and
+/// the object keeps its path.
+#[test]
+fn script_file_change_path_that_cannot_write_keeps_the_path() {
+    let base = folder("changepathfail");
+    let mut s = with_data(&base);
+    let r = run_in(
+        &mut s,
+        &base,
+        "var u = new File(Folder.userData.fsName + '/p.txt'); u.open('w'); u.write('kept'); var was = u.fsName;\n\
+         new File(was).readonly = true; var out = [u.changePath(Folder.userData.fsName + '/q.txt'), u.error, u.fsName == was];\n\
+         new File(was).readonly = false; vc.log(out);",
+    )
+    .unwrap();
+    assert_eq!(r["log"][0], json!([false, "Script file could not be written", true]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A file opened again after a `close` that could not write it keeps what was written after it was
+/// opened again, and the earlier changes do not replace it when the run ends.
+#[test]
+fn script_file_opened_again_after_a_failed_close_keeps_the_later_text() {
+    let base = folder("reopen");
+    let mut s = with_data(&base);
+    let r = run_in(
+        &mut s,
+        &base,
+        "var u = new File(Folder.userData.fsName + '/r.txt'); u.open('w'); u.write('old');\n\
+         new File(u.fsName).readonly = true; var out = [u.close()]; new File(u.fsName).readonly = false;\n\
+         out.push(u.open('w'), u.write('new'), u.close()); vc.log(out); vc.log(u.fsName);",
+    )
+    .unwrap();
+    assert_eq!(r["log"][0], json!([false, true, true, true]));
+    assert_eq!(std::fs::read(r["log"][1].as_str().unwrap()).unwrap(), b"new");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A write that would pass the run's 32 MiB of writing ends the run, and its text is not written.
+#[test]
+fn script_file_write_past_the_run_limit_is_not_written() {
+    let base = folder("runlimit");
+    let mut s = with_data(&base);
+    let r = run_in(
+        &mut s,
+        &base,
+        "var t = 'x'; while (t.length < 4194304) t += t;\n\
+         var f = new File(Folder.userData.fsName + '/f.bin'); f.encoding = 'UTF-16';\n\
+         for (var k = 0; k < 4; k++) { f.open('w'); f.write(t); f.close(); }\n\
+         var g = new File(Folder.userData.fsName + '/g.txt'); vc.log(g.fsName); g.open('w'); g.write('over');",
+    );
+    assert!(r.is_err());
+    let report = s.script_report().unwrap();
+    assert!(report["message"].as_str().unwrap().contains("32 MiB"), "{report}");
+    assert_eq!(std::fs::read(report["log"][0].as_str().unwrap()).unwrap(), b"", "{report}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `remove` and `rename` of a file that is open elsewhere: a removed file is not written again when
+/// the run ends, a renamed one is written under its new name, and an object whose own changes could
+/// not be written does not remove or rename its file.
+#[test]
+fn script_file_remove_and_rename_of_an_open_file() {
+    let base = folder("openmove");
+    let mut s = with_data(&base);
+    let r = run_in(
+        &mut s,
+        &base,
+        "var d = Folder.userData.fsName, out = [];\n\
+         var a = new File(d + '/a.txt'); a.open('w'); a.write('a'); out.push(new File(a.fsName).remove());\n\
+         var b = new File(d + '/b.txt'); b.open('w'); b.write('b'); var c = new File(b.fsName); out.push(c.rename('c.txt'), b.close());\n\
+         var e = new File(d + '/e.txt'); e.open('w'); e.write('e'); new File(e.fsName).readonly = true;\n\
+         out.push(e.remove(), e.error, e.exists); new File(e.fsName).readonly = false;\n\
+         vc.log(out); vc.log(d);",
+    )
+    .unwrap();
+    assert_eq!(r["log"][0], json!([true, true, true, false, "Script file could not be written", true]));
+    let d = PathBuf::from(r["log"][1].as_str().unwrap());
+    assert!(!d.join("a.txt").exists() && !d.join("b.txt").exists());
+    assert_eq!(std::fs::read(d.join("c.txt")).unwrap(), b"b");
+    assert_eq!(std::fs::read(d.join("e.txt")).unwrap(), b"e", "the run's end writes the changes the failed close kept");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `copy` of a file that is open copies what the open file holds, and an object that has the target
+/// open then holds the copy.
+#[test]
+fn script_file_copy_of_an_open_file_has_its_changes() {
+    let base = folder("copyopen");
+    let r = run(
+        &base,
+        "var d = Folder.temp.fsName, f = new File(d + '/f.txt'); f.open('w'); f.write('new');\n\
+         var out = [f.copy(d + '/g.txt')]; var g = new File(d + '/g.txt'); g.open('r'); out.push(g.read()); g.close(); vc.log(out);",
+    );
+    assert_eq!(r["log"], json!([[true, "new"]]));
+    let r = run(
+        &base,
+        "var d = Folder.temp.fsName, s = new File(d + '/s.txt'); s.open('w'); s.write('copied'); s.close();\n\
+         var t = new File(d + '/t.txt'); t.open('w'); t.write('old'); var out = [s.copy(t.fsName), t.close()];\n\
+         t.open('r'); out.push(t.read()); t.close(); vc.log(out);",
+    );
+    assert_eq!(r["log"], json!([[true, true, "copied"]]), "an open target holds the copy");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Two objects that changed the same file write it in the order they were opened, so the one opened
+/// last is written last, before the file is copied, given a new length or opened again.
+#[test]
+fn script_files_changed_by_two_objects_are_written_in_the_order_they_were_opened() {
+    let base = folder("twowriters");
+    let r = run(
+        &base,
+        "var d = Folder.temp.fsName, out = [];\n\
+         function two(name) { var p = d + '/' + name, s = new File(p); s.open('w'); s.write('xx'); s.close();\n\
+           var a = new File(p), b = new File(p); a.open('e'); b.open('e'); a.write('A'); b.write('B'); return [a, b, p]; }\n\
+         function done(h) { h[0].close(); h[1].close(); }\n\
+         function text(p) { var f = new File(p); f.open('r'); var t = f.read(); f.close(); return t; }\n\
+         for (var i = 0; i < 24; i++) {\n\
+           var h = two('c' + i + '.txt'); h[0].copy(d + '/copy.txt'); out.push(text(d + '/copy.txt')); done(h);\n\
+           h = two('l' + i + '.txt'); new File(h[2]).length = 1; done(h); out.push(text(h[2]));\n\
+           h = two('o' + i + '.txt'); var c = new File(h[2]); c.open('e'); out.push(c.read()); c.close(); done(h);\n\
+         }\n\
+         vc.log(out.join(','));",
+    );
+    assert_eq!(r["log"], json!([vec!["Bx,B,Bx"; 24].join(",")]), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// An object that has a file open for reading holds what `copy` writes over the file and the length
+/// `length` sets, as an object open for writing does, also after the file is renamed, and not after
+/// it is removed.
+#[test]
+fn script_file_open_for_reading_holds_a_copy_and_a_new_length() {
+    let base = folder("copyreader");
+    let r = run(
+        &base,
+        "var d = Folder.temp.fsName, s = new File(d + '/s.txt'); s.open('w'); s.write('copied'); s.close();\n\
+         var t = new File(d + '/t.txt'); t.open('w'); t.write('old'); t.close(); t.open('r');\n\
+         var out = [s.copy(t.fsName), t.read()]; t.close();\n\
+         var u = new File(d + '/u.txt'); u.open('w'); u.write('abcdef'); u.close(); u.open('r');\n\
+         new File(u.fsName).length = 2; out.push(u.read()); u.close(); vc.log(out);",
+    );
+    assert_eq!(r["log"], json!([[true, "copied", "ab"]]));
+    // A renamed file is held at its new path; a removed one is not held by a file made at its path.
+    let r = run(
+        &base,
+        "var d = Folder.temp.fsName, s = new File(d + '/s.txt'); s.open('w'); s.write('copied'); s.close();\n\
+         var v = new File(d + '/v.txt'); v.open('w'); v.write('old'); v.close(); v.open('r');\n\
+         var w = new File(d + '/v.txt'); var out = [w.rename('w.txt'), s.copy(d + '/v.txt'), v.read()];\n\
+         v.seek(0); out.push(s.copy(w.fsName), v.read()); v.close();\n\
+         var x = new File(d + '/x.txt'); x.open('w'); x.write('kept'); x.close(); x.open('r');\n\
+         out.push(new File(x.fsName).remove(), s.copy(d + '/x.txt'), x.read()); x.close(); vc.log(out);",
+    );
+    assert_eq!(r["log"], json!([[true, true, "old", true, "copied", true, true, "kept"]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A file whose `close` could not write it stays open, so a later `close` writes it.
+#[test]
+fn script_file_close_that_fails_can_be_tried_again() {
+    let base = folder("closeagain");
+    let r = run(
+        &base,
+        "var d = Folder.temp.fsName, f = new File(d + '/f.txt'); f.open('w'); f.write('kept');\n\
+         new File(f.fsName).readonly = true; var out = [f.close(), f.error];\n\
+         new File(f.fsName).readonly = false; out.push(f.close());\n\
+         var g = new File(f.fsName); g.open('r'); out.push(g.read()); g.close(); vc.log(out);",
+    );
+    assert_eq!(r["log"], json!([[false, "Script file could not be written", true, "kept"]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `copy` gives the copy the source's permissions: the copy of a read-only file is read-only.
+#[test]
+fn script_file_copy_keeps_the_source_read_only() {
+    let base = folder("copyreadonly");
+    let r = run(
+        &base,
+        "var d = Folder.temp.fsName, s = new File(d + '/s.txt'); s.open('w'); s.write('x'); s.close(); s.readonly = true;\n\
+         var out = [s.copy(d + '/t.txt'), new File(d + '/t.txt').readonly, new File(d + '/t.txt').length];\n\
+         s.readonly = false; new File(d + '/t.txt').readonly = false; vc.log(out);",
+    );
+    assert_eq!(r["log"], json!([[true, true, 1]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `write` with several values joins them before making them text, so a surrogate pair split
+/// between two values is written as one character.
+#[test]
+fn script_file_write_joins_a_surrogate_pair_split_between_values() {
+    let base = folder("surrogates");
+    let r = run(
+        &base,
+        "var f = new File(Folder.temp.fsName + '/s.txt'); f.encoding = 'UTF-8'; f.open('w'); f.write('\\uD83D', '\\uDE00'); f.close();\n\
+         f.open('r'); var t = f.read(); f.close(); vc.log([t === '\\uD83D\\uDE00', t.length]);",
+    );
+    assert_eq!(r["log"], json!([[true, 2]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A grant that would make the grants file larger than it may be read is not kept, and the grants
+/// file keeps the grants it had.
+#[test]
+fn script_file_grants_file_stays_within_its_size_limit() {
+    let base = folder("bigstore");
+    let out = base.join("picked/out.txt");
+    std::fs::create_dir_all(out.parent().unwrap()).unwrap();
+    let store = base.join("settings/Script Grants.json");
+    let grants =
+        |path: String| json!({"version": 1, "grants": [{"script": "x", "sha256": "y", "code": [], "path": path, "write": false, "folder": false}]});
+    let empty = serde_json::to_vec_pretty(&grants(String::new())).unwrap().len();
+    let full = serde_json::to_vec_pretty(&grants("p".repeat((4 << 20) - 64 - empty))).unwrap();
+    write(&store, &full);
+    let mut s = with_data(&base);
+    assert_eq!(s.execute("script.grants", &json!({})).unwrap()["grants"].as_array().unwrap().len(), 1);
+    start_framed(&mut s, &base, "var f = File.saveDialog('p'); vc.log(f === null ? null : f.fsName);");
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![out.to_string_lossy().into_owned()], always: true }));
+    let _ = pump_to_picker(&mut s).unwrap();
+    assert_eq!(std::fs::read(&store).unwrap(), full, "the grants file is left as it was");
+    assert_eq!(s.execute("script.grants", &json!({})).unwrap()["grants"].as_array().unwrap().len(), 1);
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A grants file that is there but cannot be read (another version, not JSON, a grant that is not
+/// well formed, or no list of grants) is not written over: a grant picked with Always is not kept, and a revoke fails, so the grants it holds stay.
+#[test]
+fn script_file_grants_file_that_cannot_be_read_is_left_as_it_is() {
+    let cases = [
+        ("newer", br#"{"version": 2, "grants": [{"script": "x"}]}"#.as_slice()),
+        ("broken", b"{ not json".as_slice()),
+        ("malformed", br#"{"version": 1, "grants": [{"script": "x"}]}"#.as_slice()),
+        ("nolist", br#"{"version": 1, "grants": {}}"#.as_slice()),
+    ];
+    for (name, held) in cases {
+        let base = folder(&format!("store-{name}"));
+        let out = base.join("picked/out.txt");
+        std::fs::create_dir_all(out.parent().unwrap()).unwrap();
+        let store = base.join("settings/Script Grants.json");
+        write(&store, held);
+        let mut s = with_data(&base);
+        start_framed(&mut s, &base, "var f = File.saveDialog('p'); vc.log(f === null ? null : f.fsName);");
+        assert!(pump_to_picker(&mut s).is_none());
+        assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![out.to_string_lossy().into_owned()], always: true }));
+        let _ = pump_to_picker(&mut s).unwrap();
+        assert_eq!(std::fs::read(&store).unwrap(), held, "{name}: the grants file is left as it was");
+        assert!(s.execute("script.grants.revoke", &json!({"all": true})).is_err(), "{name}");
+        assert_eq!(std::fs::read(&store).unwrap(), held, "{name}: a revoke leaves it too");
+        let _ = std::fs::remove_dir_all(base);
+    }
+}
+
+/// `copy` of a file over 8 MiB is refused, as opening one is.
+#[test]
+fn script_file_copy_is_held_to_the_file_limit() {
+    let base = folder("bigcopy");
+    write(&base.join("main/big.bin"), &vec![0u8; 8 * 1024 * 1024 + 1]);
+    let r = run(&base, "var b = new File('big.bin'); vc.log([b.copy(Folder.temp.fsName + '/b.bin'), b.error]);");
+    assert_eq!(r["log"], json!([[false, "Script file exceeds 8 MiB"]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// The run's 32 MiB of writes counts what setting `length` adds to each object the file is open in,
+/// as each holds its own bytes.
+#[test]
+fn script_file_length_counts_the_growth_of_every_open_object() {
+    let base = folder("lengthheld");
+    let mut s = Session::new();
+    let main = base.join("main/main.jsx");
+    write(
+        &main,
+        b"var p = Folder.temp.fsName + '/l.bin'; var w = new File(p); w.open('w'); w.close();\n\
+          var all = []; for (var i = 0; i < 5; i++) { var f = new File(p); f.open('e'); all.push(f); }\n\
+          vc.log('open'); new File(p).length = 7 * 1024 * 1024; vc.log('grown');",
+    );
+    assert!(s.execute("script.run", &json!({"path": main.to_string_lossy()})).is_err(), "five objects grow by 7 MiB each");
+    let report = s.script_report().unwrap();
+    assert_eq!(report["log"], json!(["open"]));
+    assert!(report["message"].as_str().unwrap().contains("32 MiB"), "{report}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `copy` onto another name of the same file, a hard link, keeps the file's bytes, and what the
+/// source's open object holds is in the file when `copy` returns.
+#[test]
+fn script_file_copy_onto_a_hard_link_of_itself_keeps_the_file() {
+    let base = folder("copylink");
+    let picked = base.join("picked");
+    write(&picked.join("a.txt"), b"keep");
+    std::fs::hard_link(picked.join("a.txt"), picked.join("b.txt")).unwrap();
+    let mut s = Session::new();
+    start_framed(
+        &mut s,
+        &base,
+        "var p = Folder.selectDialog('p'); var a = new File(p.fsName + '/a.txt'), b = new File(p.fsName + '/b.txt');\n\
+         a.open('w'); a.write('new'); var out = [a.copy(b.fsName)]; b.open('r'); out.push(b.read()); b.close(); a.close(); vc.log(out);",
+    );
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![picked.to_string_lossy().into_owned()], always: false }));
+    let r = pump_to_picker(&mut s).unwrap().unwrap();
+    assert_eq!(r["log"], json!([[true, "new"]]));
+    assert_eq!(std::fs::read(picked.join("a.txt")).unwrap(), b"new");
+    assert_eq!(std::fs::read(picked.join("b.txt")).unwrap(), b"new");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// The run's 32 MiB of writes counts the copy each open object of `copy`'s target takes.
+#[test]
+fn script_file_copy_counts_the_bytes_each_open_object_of_the_target_takes() {
+    let base = folder("copyheld");
+    write(&base.join("main/seven.bin"), &vec![b'a'; 7 << 20]);
+    let mut s = Session::new();
+    let main = base.join("main/main.jsx");
+    write(
+        &main,
+        b"var t = Folder.temp.fsName + '/t.bin'; var w = new File(t); w.open('w'); w.close();\n\
+          var all = []; for (var i = 0; i < 5; i++) { var f = new File(t); f.open('e'); all.push(f); }\n\
+          vc.log('open'); vc.log(new File('seven.bin').copy(t));",
+    );
+    assert!(s.execute("script.run", &json!({"path": main.to_string_lossy()})).is_err(), "five objects take 7 MiB each");
+    let report = s.script_report().unwrap();
+    assert_eq!(report["log"], json!(["open"]));
+    assert!(report["message"].as_str().unwrap().contains("32 MiB"), "{report}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `write` joins its values only for an open file, and stops joining once the text is longer than
+/// any file a script writes: the values after that are not turned into text.
+#[test]
+fn script_file_write_stops_joining_past_the_file_limit() {
+    let base = folder("writejoin");
+    let r = run(
+        &base,
+        "var seen = 0, late = { toString: function () { seen++; return 'x'; } };\n\
+         var f = new File(Folder.temp.fsName + '/j.txt'); var closed = [f.write(late), seen];\n\
+         var s = new Array((1 << 20) + 1).join('x'), a = []; for (var k = 0; k < 17; k++) a.push(s); a.push(late);\n\
+         f.open('w'); var big = f.write.apply(f, a); vc.log([closed, big, f.error, seen, f.write('ok'), f.close(), f.length]);",
+    );
+    assert_eq!(r["log"], json!([[[false, 0], false, "Script file exceeds 8 MiB", 0, true, true, 2]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// The report names at most 4,096 files a run wrote, each once, and says when it wrote more.
+#[test]
+fn script_reports_name_at_most_4096_written_files() {
+    let base = folder("manywritten");
+    let r = run(
+        &base,
+        "var d = Folder.temp.fsName; for (var k = 0; k < 4100; k++) { var f = new File(d + '/' + k + '.txt'); f.open('w'); f.close(); f.open('w'); f.close(); }",
+    );
+    let written = r["written"].as_array().unwrap();
+    assert_eq!(written.len(), crate::script::MAX_WRITTEN, "{}", written.len());
+    assert_eq!(written.iter().filter_map(Value::as_str).collect::<std::collections::HashSet<_>>().len(), written.len());
+    assert_eq!(r["writtenMore"], true);
+    let few = run(&base, "var f = new File(Folder.temp.fsName + '/one.txt'); f.open('w'); f.close();");
+    assert_eq!((few["written"].as_array().map(Vec::len), few.get("writtenMore")), (Some(1), None));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A kept grant stays on the real path it was kept for: when a link to another folder takes the
+/// granted folder's place, the next run is not granted the folder the link leads to.
+#[cfg(unix)]
+#[test]
+fn script_file_grants_do_not_follow_a_link_put_in_the_granted_place() {
+    let base = folder("grantlink");
+    let granted = base.join("picked/granted");
+    write(&granted.join("s.txt"), b"mine");
+    write(&base.join("away/s.txt"), b"secret");
+    let text = format!(
+        "var t = new File({:?}), u = new File({:?});\n\
+         if (t.open('r')) vc.log(['kept', t.read()]); else if (u.open('r')) vc.log(['away', u.read()]);\n\
+         else vc.log(Folder.selectDialog('p') ? 'asked' : null);",
+        granted.join("s.txt").to_string_lossy(),
+        base.join("away/s.txt").to_string_lossy()
+    );
+    let mut s = with_data(&base);
+    start_framed(&mut s, &base, &text);
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![granted.to_string_lossy().into_owned()], always: true }));
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!(["asked"]));
+    start_framed(&mut s, &base, &text);
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!([["kept", "mine"]]));
+    std::fs::rename(&granted, base.join("picked/moved")).unwrap();
+    std::os::unix::fs::symlink(base.join("away"), &granted).unwrap();
+    start_framed(&mut s, &base, &text);
+    assert!(pump_to_picker(&mut s).is_none(), "the run asks again instead of reading where the link leads");
+    s.script_pick(crate::script::files::PickAnswer::Deny);
+    let _ = pump_to_picker(&mut s);
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A folder granted in a file dialog cannot have a folder in it renamed when that folder holds the
+/// settings folder.
+#[test]
+fn script_file_rename_does_not_move_the_settings_folder() {
+    let base = folder("moveup");
+    let mut s = Session::new();
+    s.attach_script_data(base.join("cfg/settings/Script Data"));
+    std::fs::create_dir_all(base.join("cfg/settings")).unwrap();
+    start_framed(&mut s, &base, "var p = Folder.selectDialog('p'); var c = new Folder(p.fsName + '/cfg'); vc.log([c.rename('cfg2'), c.error]);");
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![base.to_string_lossy().into_owned()], always: false }));
+    let r = pump_to_picker(&mut s).unwrap().unwrap();
+    assert_eq!(r["log"], json!([[false, DENIED]]));
+    assert!(base.join("cfg/settings").is_dir());
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// In a folder granted in a file dialog, a file is not renamed to the name of the settings folder,
+/// and on Unix setting `hidden` does not give it that name either.
+#[test]
+fn script_file_rename_does_not_take_the_settings_folders_name() {
+    let base = folder("renamein");
+    write(&base.join("cfg"), b"c");
+    write(&base.join("x.txt"), b"x");
+    let mut s = Session::new();
+    s.attach_script_data(base.join(".cfg/Script Data"));
+    let hide =
+        if cfg!(unix) { "var h = new File(p.fsName + '/cfg'); h.hidden = true; out.push(h.error, h.name);" } else { "out.push(DENIED, 'cfg');" };
+    let denied = format!("var DENIED = {DENIED:?};");
+    start_framed(
+        &mut s,
+        &base,
+        &format!(
+            "{denied} var p = Folder.selectDialog('p'), x = new File(p.fsName + '/x.txt'), out = [x.rename('.cfg'), x.error, x.name]; {hide} vc.log(out);"
+        ),
+    );
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![base.to_string_lossy().into_owned()], always: false }));
+    let r = pump_to_picker(&mut s).unwrap().unwrap();
+    assert_eq!(r["log"], json!([[false, DENIED, "x.txt", DENIED, "cfg"]]));
+    assert!(!base.join(".cfg").is_file());
+    assert_eq!(std::fs::read(base.join("x.txt")).unwrap(), b"x");
+    assert_eq!(std::fs::read(base.join("cfg")).unwrap(), b"c");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Where case does not matter, a folder named in another case is still the folder that holds the
+/// settings folder, or the settings folder itself: it is not renamed or removed.
+#[cfg(any(windows, target_os = "macos"))]
+#[test]
+fn script_file_rename_does_not_move_the_settings_folder_named_in_another_case() {
+    let base = folder("moveupcase");
+    let mut s = Session::new();
+    s.attach_script_data(base.join("cfg/settings/Script Data"));
+    std::fs::create_dir_all(base.join("cfg/settings")).unwrap();
+    start_framed(
+        &mut s,
+        &base,
+        "var p = Folder.selectDialog('p'); var c = new Folder(p.fsName + '/CFG'), d = new Folder(p.fsName + '/cfg/SETTINGS');\n\
+         vc.log([c.rename('cfg2'), c.error, d.rename('s2'), d.error, d.remove(), d.error]);",
+    );
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![base.to_string_lossy().into_owned()], always: false }));
+    let r = pump_to_picker(&mut s).unwrap().unwrap();
+    assert_eq!(r["log"], json!([[false, DENIED, false, DENIED, false, DENIED]]));
+    assert!(base.join("cfg/settings").is_dir());
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Where case does not matter, a folder renamed under its name in another case still moves the open
+/// objects of the files in it: changes are written under the new name, not lost at the old one.
+#[cfg(any(windows, target_os = "macos"))]
+#[test]
+fn script_file_rename_of_a_folder_named_in_another_case_moves_its_open_files() {
+    let base = folder("renamecase");
+    let mut s = with_data(&base);
+    let r = run_in(
+        &mut s,
+        &base,
+        "var d = Folder.userData.fsName; new Folder(d + '/sub').create();\n\
+         var f = new File(d + '/sub/f.txt'); f.open('w'); f.write('kept');\n\
+         var out = [new Folder(d + '/SUB').rename('moved'), f.close(), f.error]; vc.log(out); vc.log(d);",
+    )
+    .unwrap();
+    let d = PathBuf::from(r["log"][1].as_str().unwrap());
+    assert_eq!(r["log"][0], json!([true, true, ""]));
+    assert_eq!(std::fs::read(d.join("moved/f.txt")).unwrap(), b"kept");
+    assert!(!d.join("sub").exists());
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Where case matters, a rename to a name that differs in case alone does not replace the other file.
+#[cfg(target_os = "linux")]
+#[test]
+fn script_file_rename_keeps_a_file_that_differs_in_case() {
+    let base = folder("casename");
+    let r = run(
+        &base,
+        "var d = Folder.temp.fsName, a = new File(d + '/a.txt'), b = new File(d + '/A.txt');\n\
+         a.open('w'); a.write('a'); a.close(); b.open('w'); b.write('B'); b.close();\n\
+         var out = [a.rename('A.txt'), a.error]; b.open('r'); out.push(b.read()); b.close(); vc.log(out);",
+    );
+    assert_eq!(r["log"], json!([[false, "Script file name is already in use", "B"]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A script's data folder that is a link is not used: the folder it leads to is not granted.
+#[cfg(unix)]
+#[test]
+fn script_data_folder_that_is_a_link_is_not_granted() {
+    let base = folder("datalink");
+    let mut s = with_data(&base);
+    let r = run_in(&mut s, &base, "vc.log(Folder.userData.fsName);").unwrap();
+    let data = PathBuf::from(r["log"][0].as_str().unwrap());
+    std::fs::remove_dir(&data).unwrap();
+    std::fs::create_dir_all(base.join("away")).unwrap();
+    std::os::unix::fs::symlink(base.join("away"), &data).unwrap();
+    let text = format!(
+        "var d = Folder.userData; var w = new File({:?}); vc.log([d === null, w.open('w'), w.error]);",
+        base.join("away/x.txt").to_string_lossy()
+    );
+    let r = run_in(&mut s, &base, &text).unwrap();
+    assert_eq!(r["log"], json!([[true, false, DENIED]]));
+    assert!(!base.join("away/x.txt").exists());
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A data folder that is a link is not used: no script's `Folder.userData` is made in the folder it
+/// leads to.
+#[cfg(unix)]
+#[test]
+fn script_data_folders_in_a_data_folder_that_is_a_link_are_not_granted() {
+    let base = folder("datadirlink");
+    let mut s = with_data(&base);
+    let r = run_in(&mut s, &base, "vc.log(Folder.userData.fsName);").unwrap();
+    let key = PathBuf::from(r["log"][0].as_str().unwrap()).file_name().unwrap().to_owned();
+    let data = base.join("settings/Script Data");
+    std::fs::remove_dir_all(&data).unwrap();
+    std::fs::create_dir_all(base.join("away")).unwrap();
+    std::os::unix::fs::symlink(base.join("away"), &data).unwrap();
+    let text = format!(
+        "var d = Folder.userData; var w = new File({:?}); vc.log([d === null, w.open('w'), w.error]);",
+        base.join("away").join(&key).join("x.txt").to_string_lossy()
+    );
+    let r = run_in(&mut s, &base, &text).unwrap();
+    assert_eq!(r["log"], json!([[true, false, DENIED]]));
+    assert!(!base.join("away").join(&key).exists());
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// An open file whose folder was replaced by a link before it was written is not written through
+/// the link.
+#[cfg(unix)]
+#[test]
+fn script_files_are_not_written_through_a_link_put_in_place_of_their_folder() {
+    let base = folder("parentlink");
+    let mut s = with_data(&base);
+    std::fs::create_dir_all(base.join("away")).unwrap();
+    // The run opens and changes `sub/f.txt` in its data folder and waits on a file dialog, while
+    // another program puts a link to `away` in place of `sub`.
+    start_framed(
+        &mut s,
+        &base,
+        "var d = Folder.userData.fsName, f = new File(d + '/sub/f.txt');\n\
+         var before = [new Folder(d + '/sub').create(), f.open('w'), f.write('x')];\n\
+         File.openDialog('p'); vc.log([before, f.close(), f.error]);",
+    );
+    assert!(pump_to_picker(&mut s).is_none());
+    let data = std::fs::read_dir(base.join("settings/Script Data")).unwrap().next().unwrap().unwrap().path();
+    std::fs::rename(data.join("sub"), data.join("old")).unwrap();
+    std::os::unix::fs::symlink(base.join("away"), data.join("sub")).unwrap();
+    assert!(s.script_pick(crate::script::files::PickAnswer::Deny));
+    // The file stays unwritten, so the run's end fails the run as for any file it could not write.
+    let e = pump_to_picker(&mut s).unwrap().unwrap_err().to_string();
+    assert!(e.contains("left open files that could not be written"), "{e}");
+    assert!(!base.join("away/f.txt").exists());
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// On Unix, `readonly` clears the write bits and clearing it gives the file the bits it had.
+#[cfg(unix)]
+#[test]
+fn script_file_readonly_keeps_the_other_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+    let base = folder("modes");
+    let mut s = with_data(&base);
+    let r = run_in(&mut s, &base, "var u = new File(Folder.userData.fsName + '/m.txt'); u.open('w'); u.close(); vc.log(u.fsName);").unwrap();
+    let path = PathBuf::from(r["log"][0].as_str().unwrap());
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o640)).unwrap();
+    let text = format!(
+        "Folder.userData; var u = new File({:?}); u.readonly = true; var a = u.readonly; u.readonly = false; vc.log([a, u.readonly]);",
+        path.to_string_lossy()
+    );
+    let r = run_in(&mut s, &base, &text).unwrap();
+    assert_eq!(r["log"], json!([[true, false]]));
+    assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o640);
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Clearing `readonly` gives back every write bit that setting it cleared in the run, also after a
+/// rename, and only the owner's write bit for a file that was read-only before the run.
+#[cfg(unix)]
+#[test]
+fn script_file_readonly_gives_back_the_write_bits_it_cleared() {
+    use std::os::unix::fs::PermissionsExt;
+    let base = folder("modesback");
+    let mut s = with_data(&base);
+    let r = run_in(&mut s, &base, "var u = new File(Folder.userData.fsName + '/m.txt'); u.open('w'); u.close(); vc.log(u.fsName);").unwrap();
+    let path = PathBuf::from(r["log"][0].as_str().unwrap());
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o662)).unwrap();
+    let toggle = format!(
+        "Folder.userData; var u = new File({:?}); u.readonly = true; var a = u.readonly; var b = u.rename('n.txt');\n\
+         u.readonly = false; vc.log([a, b, u.readonly]); u.rename('m.txt');",
+        path.to_string_lossy()
+    );
+    let r = run_in(&mut s, &base, &toggle).unwrap();
+    assert_eq!(r["log"], json!([[true, true, false]]));
+    assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o662);
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o444)).unwrap();
+    let clear = format!("Folder.userData; var u = new File({:?}); u.readonly = false;", path.to_string_lossy());
+    run_in(&mut s, &base, &clear).unwrap();
+    assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o644);
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Opening a file to append or edit reads it, so the automation read roots apply as well as the
+/// write roots.
+#[test]
+fn script_file_append_and_edit_need_the_read_roots() {
+    let base = folder("appendroots");
+    let mut s = with_data(&base);
+    std::fs::create_dir_all(base.join("main")).unwrap();
+    let roots = AutomationRoots::new(&[&base.join("main")], &[&base]).unwrap();
+    let r = confine(roots.as_ref(), || {
+        run_in(
+            &mut s,
+            &base,
+            "var u = new File(Folder.userData.fsName + '/w.txt'), out = [u.open('w'), u.write('kept'), u.close()];\n\
+             out.push(u.open('a'), u.error, u.open('e'), u.error); vc.log(out);",
+        )
+    })
+    .unwrap();
+    assert_eq!(r["log"], json!([[true, true, true, false, DENIED, false, DENIED]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A script run from a folder that holds the settings folder reads its own files there, but no file
+/// in the settings folder.
+#[test]
+fn script_files_in_a_folder_above_the_settings_folder_do_not_reach_it() {
+    let base = folder("above");
+    let mut s = Session::new();
+    s.attach_script_data(base.join("main/settings/Script Data"));
+    write(&base.join("main/settings/Script Grants.json"), b"{\"version\": 1, \"grants\": []}");
+    write(&base.join("main/own.txt"), b"own");
+    let r = run_in(
+        &mut s,
+        &base,
+        "var a = new File('own.txt'), g = new File('settings/Script Grants.json');\n\
+         var out = [a.open('r'), a.read()]; a.close(); out.push(g.open('r'), g.error, g.exists); vc.log(out);",
+    )
+    .unwrap();
+    assert_eq!(r["log"], json!([[true, "own", false, DENIED, false]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A script run from the settings folder itself reads its own file there, but no other file in the
+/// settings folder.
+#[test]
+fn script_files_in_the_settings_folder_do_not_reach_it() {
+    let base = folder("insettings");
+    let mut s = Session::new();
+    s.attach_script_data(base.join("main/Script Data"));
+    write(&base.join("main/Script Grants.json"), b"{\"version\": 1, \"grants\": []}");
+    let r = run_in(
+        &mut s,
+        &base,
+        "var a = new File('main.jsx'), g = new File('Script Grants.json');\n\
+         var out = [a.open('r'), a.read().length > 0]; a.close(); out.push(g.open('r'), g.error, g.exists); vc.log(out);",
+    )
+    .unwrap();
+    assert_eq!(r["log"], json!([[true, true, false, DENIED, false]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// The settings folder is kept out of every grant also before it has been made.
+#[test]
+fn script_file_grants_never_reach_a_settings_folder_not_made_yet() {
+    let base = folder("unmade");
+    let mut s = with_data(&base);
+    assert!(!base.join("settings").exists());
+    start_framed(&mut s, &base, "var o = new Folder(Folder.userData.parent.parent.fsName); var f = o.selectDlg('p'); vc.log([f, o.error]);");
+    assert!(pump_to_picker(&mut s).is_none());
+    let settings = base.join("settings").to_string_lossy().into_owned();
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![settings], always: true }));
+    let r = pump_to_picker(&mut s).unwrap().unwrap();
+    assert_eq!(r["log"], json!([[null, "Script file access to the app's own folders is not allowed"]]));
+    assert_eq!(s.execute("script.grants", &json!({})).unwrap()["grants"], json!([]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Files left open are written when the run ends in the order they were opened, so of two objects
+/// that hold the same file, the one opened last decides what it holds.
+#[test]
+fn script_files_left_open_are_written_in_the_order_they_were_opened() {
+    let base = folder("flushorder");
+    let mut s = with_data(&base);
+    let text = "var p = Folder.userData.fsName + '/two.txt'; var a = new File(p), b = new File(p);\n\
+                a.open('w'); b.open('w'); a.write('first'); b.write('second'); vc.log(p);";
+    for _ in 0..16 {
+        let r = run_in(&mut s, &base, text).unwrap();
+        let path = PathBuf::from(r["log"][0].as_str().unwrap_or_default());
+        assert_eq!(std::fs::read(&path).unwrap(), b"second", "{r}");
+    }
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Removing a file leaves the other objects that have it open without the file: they take no more
+/// writes, and closing them does not make it again.
+#[test]
+fn script_file_remove_detaches_the_other_open_objects() {
+    let base = folder("removeopen");
+    let mut s = with_data(&base);
+    let text = "var p = Folder.userData.fsName + '/gone.txt'; var a = new File(p), b = new File(p);\n\
+                a.open('w'); a.write('x'); a.close(); b.open('e');\n\
+                var removed = a.remove(); var w = b.write('y'); var e = b.error; b.close();\n\
+                vc.log([removed, w, e, new File(p).exists]);";
+    let r = run_in(&mut s, &base, text).unwrap();
+    assert_eq!(r["log"], json!([[true, false, "Script file is not open for writing", false]]), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A run that ends with a changed file open that cannot be written fails and names the file.
+#[test]
+fn script_files_left_open_that_cannot_be_written_fail_the_run() {
+    let base = folder("unwritten");
+    let mut s = with_data(&base);
+    let r = run_in(
+        &mut s,
+        &base,
+        "var u = new File(Folder.userData.fsName + '/ro.txt'); u.open('w'); u.write('x'); new File(u.fsName).readonly = true; vc.log(u.fsName);",
+    );
+    let report = s.script_report().unwrap();
+    let path = PathBuf::from(report["log"][0].as_str().unwrap_or_default());
+    if let Ok(m) = std::fs::metadata(&path) {
+        let mut p = m.permissions();
+        #[allow(clippy::permissions_set_readonly_false)]
+        p.set_readonly(false);
+        let _ = std::fs::set_permissions(&path, p);
+    }
+    assert!(r.is_err(), "{report}");
+    let message = report["message"].as_str().unwrap();
+    assert!(message.contains("the script left open files that could not be written") && message.contains("ro.txt"), "{report}");
+    assert_eq!(std::fs::read(&path).unwrap(), b"", "{report}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// The automation write roots apply to the run's own folders too: outside them `Folder.temp` and
+/// `Folder.userData` are `null` and are not made.
+#[test]
+fn script_files_write_only_inside_the_automation_write_roots() {
+    let base = folder("writeroots");
+    std::fs::create_dir_all(base.join("out")).unwrap();
+    let roots = AutomationRoots::new(&[&base], &[&base.join("out")]).unwrap();
+    let mut s = with_data(&base);
+    let r = confine(roots.as_ref(), || run_in(&mut s, &base, "vc.log([Folder.temp === null, Folder.userData === null]);")).unwrap();
+    assert_eq!(r["log"], json!([[true, true]]));
+    assert!(!base.join("settings/Script Data").exists(), "the data folder is not made");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// The run's temporary folder is checked against the write roots by its own name: a write root named
+/// `VectorCraft Script` in the temporary folder does not take the run's folder beside it.
+#[test]
+fn script_temporary_folder_is_checked_by_its_own_name() {
+    let base = folder("tempname");
+    let named = std::env::temp_dir().join("VectorCraft Script");
+    let made = std::fs::create_dir(&named).is_ok();
+    let roots = AutomationRoots::new(&[&base], &[&named]).unwrap();
+    let mut s = with_data(&base);
+    let r = confine(roots.as_ref(), || run_in(&mut s, &base, "vc.log(Folder.temp === null);"));
+    if made {
+        let _ = std::fs::remove_dir(&named);
+    }
+    assert_eq!(r.unwrap()["log"], json!([true]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// The folders made above a script's data folder are inside the write roots too: with a write root
+/// that names the data folder after the folders above it were removed, none of them is made again.
+#[test]
+fn script_data_folder_makes_no_folder_outside_the_write_roots() {
+    let base = folder("dataparent");
+    let mut s = with_data(&base);
+    let r = run_in(&mut s, &base, "vc.log(Folder.userData.fsName);").unwrap();
+    let data = PathBuf::from(r["log"][0].as_str().unwrap());
+    let roots = AutomationRoots::new(&[&base], &[&data]).unwrap();
+    std::fs::remove_dir_all(base.join("settings")).unwrap();
+    let r = confine(roots.as_ref(), || run_in(&mut s, &base, "vc.log(Folder.userData === null);")).unwrap();
+    assert_eq!(r["log"], json!([true]));
+    assert!(!base.join("settings").exists(), "no folder above the write root is made");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `create` makes no folder outside the places the script may write: when the folders above its data
+/// folder were removed during the run, a folder in the data folder is not made, and neither are they.
+#[test]
+fn script_folder_create_makes_no_folder_outside_the_grants() {
+    let base = folder("createabove");
+    let mut s = with_data(&base);
+    start_framed(&mut s, &base, "var d = Folder.userData.fsName; File.openDialog('p'); var f = new Folder(d + '/a'); vc.log([f.create(), f.error]);");
+    assert!(pump_to_picker(&mut s).is_none());
+    std::fs::remove_dir_all(base.join("settings")).unwrap();
+    assert!(s.script_pick(crate::script::files::PickAnswer::Deny));
+    let r = pump_to_picker(&mut s).unwrap().unwrap();
+    assert_eq!(r["log"], json!([[false, DENIED]]));
+    assert!(!base.join("settings").exists(), "no folder above the data folder is made");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A file a script wrote stays written after its run fails, and the report names it.
+#[test]
+fn script_files_written_before_a_failure_are_named() {
+    let base = folder("failwrite");
+    let mut s = with_data(&base);
+    let r = run_in(&mut s, &base, "var u = new File(Folder.userData.fsName + '/left.txt'); u.open('w'); u.write('left'); throw new Error('late');");
+    assert!(r.is_err());
+    let report = s.script_report().unwrap();
+    let written: Vec<PathBuf> = report["written"].as_array().unwrap().iter().filter_map(Value::as_str).map(PathBuf::from).collect();
+    assert_eq!(written.len(), 1, "{report}");
+    assert_eq!(std::fs::read(&written[0]).unwrap(), b"left", "the open file is written when the run ends");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Pumps the run in the app until it ends or waits at a file dialog (`None`).
+fn pump_to_picker(s: &mut Session) -> Option<Result<Value>> {
+    for _ in 0..10_000 {
+        if s.script_picker().is_some() {
+            return None;
+        }
+        if let Some(r) = s.script_pump() {
+            return Some(r);
+        }
+    }
+    panic!("the run neither ended nor waited");
+}
+
+/// Starts `main/main.jsx` in `base` with the text `text`, in the app.
+fn start_framed(s: &mut Session, base: &Path, text: &str) {
+    s.script_frames = true;
+    let main = base.join("main/main.jsx");
+    write(&main, text.as_bytes());
+    assert_eq!(s.execute("script.run", &json!({"path": main.to_string_lossy()})).unwrap()["running"], true);
+}
+
+/// The filter of an open or save dialog gives the file types the dialog shows; an open dialog with
+/// `multiSelect` takes every file picked and gives them as a list.
+#[test]
+fn script_file_dialogs_show_the_filters_file_types_and_open_several_files() {
+    use crate::script::files::dialog_filters;
+    let f = |types: &[(&str, &[&str])]| -> Vec<(String, Vec<String>)> {
+        types.iter().map(|(n, e)| (n.to_string(), e.iter().map(|e| e.to_string()).collect())).collect()
+    };
+    assert_eq!(dialog_filters("JavaScript files:*.jsx;All files:*.*"), f(&[("JavaScript files", &["jsx"]), ("All files", &["*"])]));
+    assert_eq!(dialog_filters("Images:*.png,*.JPG , Text:*.txt"), f(&[("Images", &["png", "JPG"]), ("Text", &["txt"])]));
+    assert_eq!(dialog_filters("*.svg;*.ai"), f(&[("*.svg;*.ai", &["svg", "ai"])]));
+    assert_eq!(dialog_filters("All files:*.*"), f(&[]), "every file");
+    assert_eq!(dialog_filters("Odd:a*b.txt;Bad:*.a/b;Text:*.txt"), f(&[("Text", &["txt"])]), "patterns that are not *.ext are left out");
+    assert_eq!(dialog_filters(""), f(&[]));
+
+    let base = folder("pickfilter");
+    for name in ["a.txt", "b.txt"] {
+        write(&base.join("picked").join(name), b"x");
+    }
+    let mut s = with_data(&base);
+    start_framed(&mut s, &base, "var f = File.openDialog('Pick', 'Text:*.txt;All files:*.*', true); vc.log([f.length, f[0].name, f[1].name]);");
+    assert!(pump_to_picker(&mut s).is_none());
+    let picker = s.script_picker().unwrap();
+    assert!(picker.multiple);
+    assert_eq!(picker.filters, f(&[("Text", &["txt"]), ("All files", &["*"])]));
+    let paths = ["a.txt", "b.txt"].iter().map(|n| base.join("picked").join(n).to_string_lossy().into_owned()).collect();
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths, always: false }));
+    let r = pump_to_picker(&mut s).unwrap().unwrap();
+    assert_eq!(r["log"], json!([[2, "a.txt", "b.txt"]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A dialog's `filter` that is a function is called with each file picked, and the files it gives a
+/// false value for are left out: a list keeps the rest, and one file, or a list left empty, gives
+/// `null`. The dialog shows every file. A save dialog takes the same filter.
+#[test]
+fn script_file_dialogs_leave_out_the_files_a_filter_function_refuses() {
+    let base = folder("pickfilterfn");
+    for name in ["a.txt", "b.svg", "c.txt"] {
+        write(&base.join("picked").join(name), b"x");
+    }
+    let paths = |names: &[&str]| -> Vec<String> { names.iter().map(|n| base.join("picked").join(n).to_string_lossy().into_owned()).collect() };
+    let text = "var seen = [];\n\
+                function txt(f) { seen.push(f instanceof File ? f.name : null); return f.name.slice(-4) === '.txt'; }\n\
+                var many = File.openDialog('Pick', txt, true);\n\
+                vc.log([many.length, many[0].name, many[1].name]);\n\
+                vc.log(File.openDialog('Pick one', txt));\n\
+                vc.log(File.openDialog('Pick svg', txt, true));\n\
+                var saved = File.saveDialog('Save', txt);\n\
+                vc.log(saved && saved.name);\n\
+                vc.log(new File('x.txt').saveDlg('Save svg', txt));\n\
+                vc.log(seen);";
+    let mut s = with_data(&base);
+    start_framed(&mut s, &base, text);
+    for picked in [&["a.txt", "b.svg", "c.txt"][..], &["b.svg"], &["b.svg"], &["c.txt"], &["b.svg"]] {
+        assert!(pump_to_picker(&mut s).is_none());
+        assert_eq!(s.script_picker().unwrap().filters, Vec::<(String, Vec<String>)>::new(), "every file is shown");
+        assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: paths(picked), always: false }));
+    }
+    let r = pump_to_picker(&mut s).unwrap().unwrap();
+    let seen = ["a.txt", "b.svg", "c.txt", "b.svg", "b.svg", "c.txt", "b.svg"];
+    assert_eq!(r["log"], json!([[2, "a.txt", "c.txt"], null, null, "c.txt", null, seen]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A file a person allows always is kept for that script with that text: a later run reads it
+/// without asking, and a run of changed text asks again. A file allowed once is not kept.
+#[test]
+fn script_file_dialog_grants_are_kept_for_the_same_script_text() {
+    let base = folder("grants");
+    let out = base.join("picked/out.txt");
+    std::fs::create_dir_all(out.parent().unwrap()).unwrap();
+    let text = format!(
+        "var target = new File({:?});\n\
+         if (target.open('r')) {{ vc.log(['kept', target.read()]); target.close(); }}\n\
+         else {{ vc.log(['asked', target.error]); var f = File.saveDialog('Save it'); if (f) {{ f.open('w'); f.write('hi'); vc.log(f.close()); }} else vc.log(null); }}",
+        out.to_string_lossy()
+    );
+    let mut s = with_data(&base);
+    start_framed(&mut s, &base, &text);
+    assert!(pump_to_picker(&mut s).is_none());
+    let picker = s.script_picker().unwrap();
+    assert_eq!((picker.kind, picker.prompt.as_str(), picker.can_always), (crate::script::files::PickerKind::Save, "Save it", true));
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![out.to_string_lossy().into_owned()], always: true }));
+    let r = pump_to_picker(&mut s).unwrap().unwrap();
+    assert_eq!(r["log"], json!([["asked", DENIED], true]));
+    assert_eq!(std::fs::read(&out).unwrap(), b"hi");
+    let grants = s.execute("script.grants", &json!({})).unwrap();
+    assert_eq!(grants["grants"].as_array().unwrap().len(), 1, "{grants}");
+    assert_eq!(grants["grants"][0]["write"], true);
+    // Under automation read roots, a path outside them is named by its file name alone.
+    let roots = AutomationRoots::new(&[&base.join("main")], &[]).unwrap();
+    let hidden = confine(roots.as_ref(), || s.execute("script.grants", &json!({}))).unwrap();
+    assert_eq!(hidden["grants"][0]["path"], "out.txt", "{hidden}");
+    assert_eq!(hidden["grants"][0]["script"], grants["grants"][0]["script"], "the script inside the roots is named whole: {hidden}");
+    assert_eq!(hidden["file"], "Script Grants.json", "{hidden}");
+
+    start_framed(&mut s, &base, &text);
+    let r = pump_to_picker(&mut s).unwrap().unwrap();
+    assert_eq!(r["log"], json!([["kept", "hi"]]), "the same script text keeps its grant");
+
+    start_framed(&mut s, &base, &format!("{text}\n// changed"));
+    assert!(pump_to_picker(&mut s).is_none(), "changed text has no grant, so it asks");
+    assert!(s.script_pick(crate::script::files::PickAnswer::Deny));
+    let r = pump_to_picker(&mut s).unwrap().unwrap();
+    assert_eq!(r["log"], json!([["asked", DENIED], null]));
+
+    let once = "var g = File.openDialog('Read it'); vc.log(g.fsName === null ? null : g.open('r') && g.read());";
+    start_framed(&mut s, &base, once);
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![out.to_string_lossy().into_owned()], always: false }));
+    let r = pump_to_picker(&mut s).unwrap().unwrap();
+    assert_eq!(r["log"], json!(["hi"]));
+    assert_eq!(s.execute("script.grants", &json!({})).unwrap()["grants"].as_array().unwrap().len(), 1, "a file allowed once is not kept");
+
+    // A run that waits at a dialog keeps the grants it started with, so they are not revoked under it.
+    start_framed(&mut s, &base, once);
+    assert!(pump_to_picker(&mut s).is_none());
+    let busy = s.execute("script.grants.revoke", &json!({"all": true}));
+    assert!(matches!(busy, Err(crate::EngineError::Busy)), "{busy:?}");
+    assert_eq!(s.execute("script.grants", &json!({})).unwrap()["grants"].as_array().unwrap().len(), 1);
+    assert!(s.script_pick(crate::script::files::PickAnswer::Deny));
+    assert!(pump_to_picker(&mut s).is_some(), "the run ends");
+
+    // Under automation read roots, a path outside them is not looked up: a link there to the
+    // granted file does not name it.
+    #[cfg(unix)]
+    {
+        let link = base.join("link.txt");
+        std::os::unix::fs::symlink(&out, &link).unwrap();
+        let roots = AutomationRoots::new(&[&base.join("main")], &[]).unwrap();
+        let r = confine(roots.as_ref(), || s.execute("script.grants.revoke", &json!({"path": link.to_string_lossy()}))).unwrap();
+        assert_eq!(r["removed"], 0, "{r}");
+        let r = s.execute("script.grants.revoke", &json!({"path": link.to_string_lossy()})).unwrap();
+        assert_eq!(r["removed"], 1, "without roots the link is followed: {r}");
+    }
+    #[cfg(not(unix))]
+    {
+        let removed = s.execute("script.grants.revoke", &json!({"path": out.to_string_lossy()})).unwrap();
+        assert_eq!(removed["removed"], 1);
+    }
+    assert_eq!(s.execute("script.grants", &json!({})).unwrap()["grants"], json!([]));
+    assert!(s.execute("script.grants.revoke", &json!({})).is_err());
+    assert!(!base.join("settings/Script Grants.json.part").exists());
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A grant is kept for the script's text with the files it includes: a changed included file asks
+/// again.
+#[test]
+fn script_file_grants_are_kept_for_the_included_files_too() {
+    let base = folder("grantinclude");
+    let out = base.join("picked/out.txt");
+    std::fs::create_dir_all(out.parent().unwrap()).unwrap();
+    write(&out, b"hi");
+    write(&base.join("main/lib.jsxinc"), b"var lib = 1;\n");
+    let text = format!(
+        "#include \"lib.jsxinc\"\nvar t = new File({:?});\nif (t.open('r')) vc.log('kept'); else vc.log(File.openDialog('p') ? 'asked' : null);",
+        out.to_string_lossy()
+    );
+    let mut s = with_data(&base);
+    start_framed(&mut s, &base, &text);
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![out.to_string_lossy().into_owned()], always: true }));
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!(["asked"]));
+    start_framed(&mut s, &base, &text);
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!(["kept"]));
+    write(&base.join("main/lib.jsxinc"), b"var lib = 2;\n");
+    start_framed(&mut s, &base, &text);
+    assert!(pump_to_picker(&mut s).is_none(), "a changed included file has no grant, so it asks");
+    assert!(s.script_pick(crate::script::files::PickAnswer::Deny));
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!([null]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A kept grant is in force only while the run evaluates code the run that kept it evaluated: a
+/// file `$.evalFile` runs, or a string given to `eval` or `Function`, that differs withdraws it
+/// before that code runs.
+#[test]
+fn script_file_grants_are_kept_for_the_code_the_script_evaluates() {
+    let base = folder("granteval");
+    let out = base.join("picked/out.txt");
+    write(&out, b"hi");
+    write(&base.join("main/lib.jsxinc"), b"var lib = 1;");
+    write(&base.join("main/code.txt"), b"new File(p).open('r')");
+    let text = format!(
+        "var p = {:?};\n$.evalFile('lib.jsxinc');\n\
+         var c = new File('code.txt'); c.open('r'); var src = c.read(); c.close();\n\
+         var one = Function('return 1')();\n\
+         var before = new File(p).open('r');\n\
+         var during = eval(src) && one === 1;\n\
+         if (before) vc.log(['kept', during]); else vc.log(['asked', !!File.openDialog('p')]);",
+        out.to_string_lossy()
+    );
+    let mut s = with_data(&base);
+    let picked = || crate::script::files::PickAnswer::Allow { paths: vec![out.to_string_lossy().into_owned()], always: true };
+    start_framed(&mut s, &base, &text);
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(picked()));
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!([["asked", true]]));
+    start_framed(&mut s, &base, &text);
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!([["kept", true]]), "the same code keeps the grant");
+    write(&base.join("main/code.txt"), b"new File(p).open('r') && true");
+    start_framed(&mut s, &base, &text);
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!([["kept", false]]), "changed eval code runs without the grant");
+    write(&base.join("main/code.txt"), b"new File(p).open('r')");
+    write(&base.join("main/lib.jsxinc"), b"var lib = 2;");
+    start_framed(&mut s, &base, &text);
+    assert!(pump_to_picker(&mut s).is_none(), "a changed $.evalFile file has no grant, so it asks");
+    assert!(s.script_pick(crate::script::files::PickAnswer::Deny));
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!([["asked", false]]));
+    write(&base.join("main/lib.jsxinc"), b"var lib = 1;");
+    start_framed(&mut s, &base, &text);
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!([["kept", true]]));
+    let grants = s.execute("script.grants", &json!({})).unwrap();
+    assert_eq!(grants["grants"][0]["code"].as_array().map(Vec::len), Some(3), "{grants}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A file's grant covers that path only: a folder the script makes in the file's place, in the run
+/// that was allowed the file and in later runs that keep its grant, is not read or written inside.
+#[test]
+fn script_file_grants_do_not_reach_into_a_folder_in_the_files_place() {
+    let base = folder("grantfileplace");
+    let out = base.join("picked/out.txt");
+    write(&out, b"hi");
+    let text = "var p = File.saveDialog('p').fsName;\n\
+                var gone = new File(p).remove(); var made = new Folder(p).create();\n\
+                var w = new File(p + '/x.txt'); vc.log([gone, made, w.open('w'), w.error]);";
+    let mut s = with_data(&base);
+    start_framed(&mut s, &base, text);
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![out.to_string_lossy().into_owned()], always: true }));
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!([[true, true, false, DENIED]]));
+    assert!(out.is_dir() && !out.join("x.txt").exists());
+    let grants = s.execute("script.grants", &json!({})).unwrap();
+    assert_eq!(grants["grants"][0]["folder"], false, "{grants}");
+
+    let later = format!("var w = new File({:?}); vc.log([w.open('w'), w.error]);", out.join("y.txt").to_string_lossy());
+    let main = base.join("main/main.jsx");
+    write(&main, later.as_bytes());
+    let real = std::fs::canonicalize(&main).unwrap();
+    let hash = vectorcraft_plugins::permissions::sha256_hex(later.as_bytes());
+    let out_real = crate::cmd::findfiles::plain(std::fs::canonicalize(&out).unwrap());
+    let kept = json!({"version": 1, "grants": [{"script": crate::cmd::findfiles::plain(real).to_string_lossy(), "sha256": hash, "code": [], "path": out_real.to_string_lossy(), "write": true, "folder": false}]});
+    write(&base.join("settings/Script Grants.json"), kept.to_string().as_bytes());
+    start_framed(&mut s, &base, &later);
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!([[false, DENIED]]), "a kept file grant does not reach inside either");
+    assert!(!out.join("y.txt").exists());
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// The code a run evaluates after a person allowed it a file always is kept with the grant when
+/// the run ends, so the next run of the same script that evaluates it keeps the grant.
+#[test]
+fn script_file_grants_keep_the_code_evaluated_after_the_dialog() {
+    let base = folder("grantlater");
+    let out = base.join("picked/out.txt");
+    write(&out, b"hi");
+    let text = format!(
+        "var t = new File({:?}); var kept = t.open('r');\n\
+         if (!kept) File.openDialog('p');\n\
+         vc.log([kept, eval('new File(t.fsName).open(\"r\")')]);",
+        out.to_string_lossy()
+    );
+    let mut s = with_data(&base);
+    start_framed(&mut s, &base, &text);
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![out.to_string_lossy().into_owned()], always: true }));
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!([[false, true]]));
+    start_framed(&mut s, &base, &text);
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!([[true, true]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A grant kept with Always before a second one is kept in the same run also keeps the code the
+/// run evaluated between the two, so the next run that evaluates it keeps both grants.
+#[test]
+fn script_file_grants_kept_earlier_in_a_run_keep_the_code_evaluated_before_a_later_grant() {
+    let base = folder("grantbetween");
+    let first = base.join("picked/a.txt");
+    let second = base.join("picked/b.txt");
+    write(&first, b"a");
+    write(&second, b"b");
+    let text = format!(
+        "var a = new File({:?}); var ka = a.open('r');\n\
+         if (!ka) File.openDialog('a');\n\
+         var between = eval('new File(a.fsName).open(\"r\")');\n\
+         var b = new File({:?}); var kb = b.open('r');\n\
+         if (!kb) File.openDialog('b');\n\
+         vc.log([ka, between, kb, new File(a.fsName).open('r')]);",
+        first.to_string_lossy(),
+        second.to_string_lossy()
+    );
+    let mut s = with_data(&base);
+    start_framed(&mut s, &base, &text);
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![first.to_string_lossy().into_owned()], always: true }));
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![second.to_string_lossy().into_owned()], always: true }));
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!([[false, true, false, true]]));
+    start_framed(&mut s, &base, &text);
+    assert_eq!(
+        pump_to_picker(&mut s).unwrap().unwrap()["log"],
+        json!([[true, true, true, true]]),
+        "the first grant keeps the code evaluated before the second"
+    );
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Code another script left in a named engine withdraws a script's kept grants in that engine.
+#[test]
+fn script_file_grants_are_withdrawn_by_code_another_script_left_in_the_engine() {
+    let base = folder("grantengine");
+    let out = base.join("picked/out.txt");
+    write(&out, b"hi");
+    let text = format!(
+        "#targetengine shared\nvar t = new File({:?});\nif (t.open('r')) vc.log('kept'); else vc.log(File.openDialog('p') ? 'asked' : null);",
+        out.to_string_lossy()
+    );
+    let mut s = with_data(&base);
+    start_framed(&mut s, &base, &text);
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![out.to_string_lossy().into_owned()], always: true }));
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!(["asked"]));
+    start_framed(&mut s, &base, &text);
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!(["kept"]), "the engine holds only this script's code");
+    let other = base.join("main/other.jsx");
+    write(&other, b"#targetengine shared\nvar otherWasHere = 1;");
+    s.script_frames = false;
+    s.execute("script.run", &json!({"path": other.to_string_lossy()})).unwrap();
+    start_framed(&mut s, &base, &text);
+    assert!(pump_to_picker(&mut s).is_none(), "another script's code is in the engine, so it asks");
+    assert!(s.script_pick(crate::script::files::PickAnswer::Deny));
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!([null]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Code a script given as text left in a named engine withdraws a script's kept grants in that
+/// engine, as a file script's code does.
+#[test]
+fn script_file_grants_are_withdrawn_by_code_a_text_script_left_in_the_engine() {
+    let base = folder("grantenginetext");
+    let out = base.join("picked/out.txt");
+    write(&out, b"hi");
+    let text = format!(
+        "#targetengine shared\nvar t = new File({:?});\nif (t.open('r')) vc.log('kept'); else vc.log(File.openDialog('p') ? 'asked' : null);",
+        out.to_string_lossy()
+    );
+    let mut s = with_data(&base);
+    start_framed(&mut s, &base, &text);
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![out.to_string_lossy().into_owned()], always: true }));
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!(["asked"]));
+    s.script_frames = false;
+    s.execute("script.run", &json!({"source": "#targetengine shared\nvar textWasHere = 1;"})).unwrap();
+    start_framed(&mut s, &base, &text);
+    assert!(pump_to_picker(&mut s).is_none(), "a text script's code is in the engine, so it asks");
+    assert!(s.script_pick(crate::script::files::PickAnswer::Deny));
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!([null]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A file opened for writing under a kept grant that new code withdraws takes no more writes, and
+/// changes that cannot be written then fail the run when it ends.
+#[test]
+fn script_files_open_under_a_withdrawn_grant_keep_their_unwritten_changes() {
+    let base = folder("grantwithdrawn");
+    let dir = base.join("picked");
+    std::fs::create_dir_all(&dir).unwrap();
+    let out = dir.join("out.txt");
+    let text = format!(
+        "var f = new File({:?});\n\
+         if (!f.open('w')) vc.log(['asked', !!Folder.selectDialog('p')]);\n\
+         else {{ f.write('a'); new File(f.fsName).readonly = true; eval('1'); vc.log(['wrote', f.write('b'), f.error]); }}",
+        out.to_string_lossy()
+    );
+    let mut s = with_data(&base);
+    start_framed(&mut s, &base, &text);
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![dir.to_string_lossy().into_owned()], always: true }));
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!([["asked", true]]));
+    start_framed(&mut s, &base, &text);
+    let r = pump_to_picker(&mut s).unwrap();
+    let report = s.script_report().unwrap();
+    if let Ok(m) = std::fs::metadata(&out) {
+        let mut p = m.permissions();
+        #[allow(clippy::permissions_set_readonly_false)]
+        p.set_readonly(false);
+        let _ = std::fs::set_permissions(&out, p);
+    }
+    assert!(r.is_err(), "{report}");
+    assert_eq!(report["log"], json!([["wrote", false, "Script file is not open for writing"]]), "{report}");
+    let message = report["message"].as_str().unwrap();
+    assert!(message.contains("the script left open files that could not be written") && message.contains("out.txt"), "{report}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Files opened for writing under a kept grant that new code withdraws are written in the order
+/// they were opened, so the object opened last is written last.
+#[test]
+fn script_files_open_under_a_withdrawn_grant_are_written_in_the_order_they_were_opened() {
+    let base = folder("grantwithdrawnorder");
+    let dir = base.join("picked");
+    std::fs::create_dir_all(&dir).unwrap();
+    let out = dir.join("out.txt");
+    let text = format!(
+        "var f = new File({:?});\n\
+         if (!f.open('w')) vc.log(['asked', !!Folder.selectDialog('p')]);\n\
+         else {{ f.write('x'); var all = [f];\n\
+           for (var i = 1; i < 64; i++) {{ var g = new File(f.fsName); g.open('e'); all.push(g); }}\n\
+           for (var i = 0; i < 64; i++) all[i].write(('0' + i).slice(-2));\n\
+           eval('1'); vc.log(['wrote']); }}",
+        out.to_string_lossy()
+    );
+    let mut s = with_data(&base);
+    start_framed(&mut s, &base, &text);
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![dir.to_string_lossy().into_owned()], always: true }));
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!([["asked", true]]));
+    start_framed(&mut s, &base, &text);
+    let r = pump_to_picker(&mut s).unwrap();
+    let report = s.script_report().unwrap();
+    assert!(r.is_ok(), "{report}");
+    assert_eq!(report["log"], json!([["wrote"]]), "{report}");
+    assert_eq!(std::fs::read(&out).unwrap(), b"63", "{report}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A file opened for reading under a kept grant that new code withdraws gives no more of what it
+/// holds.
+#[test]
+fn script_files_open_under_a_withdrawn_grant_are_not_read() {
+    let base = folder("grantwithdrawnread");
+    let dir = base.join("picked");
+    write(&dir.join("in.txt"), b"secret");
+    let text = format!(
+        "var f = new File({:?});\n\
+         if (!f.open('r')) vc.log(['asked', !!Folder.selectDialog('p')]);\n\
+         else {{ var a = f.readch(); eval('1'); var r = f.read(), e = f.error; f.error = ''; vc.log([a, r, e, f.eof, f.seek(0, 2), f.error, f.tell()]); }}",
+        dir.join("in.txt").to_string_lossy()
+    );
+    let mut s = with_data(&base);
+    start_framed(&mut s, &base, &text);
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![dir.to_string_lossy().into_owned()], always: true }));
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!([["asked", true]]));
+    start_framed(&mut s, &base, &text);
+    let r = pump_to_picker(&mut s).unwrap().unwrap();
+    assert_eq!(r["log"], json!([["s", "", DENIED, true, false, DENIED, 1]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A file opened for reading and then renamed is read under the rules for its new path: when new code
+/// withdraws the kept grant for its folder, a grant the run still holds for its old path does not let
+/// the object give more of it.
+#[test]
+fn script_files_renamed_while_open_are_read_under_their_new_path() {
+    let base = folder("grantwithdrawnrenamed");
+    let dir = base.join("picked");
+    let file = dir.join("in.txt");
+    write(&file, b"secret");
+    let text = format!(
+        "var f = new File({:?});\n\
+         if (!f.open('r')) vc.log(['asked', !!Folder.selectDialog('p')]);\n\
+         else {{ var a = f.readch(); File.openDialog('p'); var n = new File(f.fsName).rename('r.txt'); eval('1');\n\
+         var r = f.read(), e = f.error; vc.log([a, n, r, e]); }}",
+        file.to_string_lossy()
+    );
+    let mut s = with_data(&base);
+    start_framed(&mut s, &base, &text);
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![dir.to_string_lossy().into_owned()], always: true }));
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!([["asked", true]]));
+    start_framed(&mut s, &base, &text);
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![file.to_string_lossy().into_owned()], always: false }));
+    let r = pump_to_picker(&mut s).unwrap().unwrap();
+    assert_eq!(r["log"], json!([["s", true, "", DENIED]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// The folder that holds the settings is kept out of every grant: a pick there gives `null` with the
+/// error, a grant written into the grants file for it is not taken, and the script cannot write the
+/// grants file through its data folder.
+#[test]
+fn script_file_grants_never_reach_the_settings_folder() {
+    let base = folder("protected");
+    let mut s = with_data(&base);
+    std::fs::create_dir_all(base.join("settings/Scripts")).unwrap();
+    let inside = base.join("settings/Scripts/x.txt");
+    write(&inside, b"secret");
+    let text = format!(
+        "var o = new File('x.txt'); var f = o.saveDlg('p'); vc.log([f, o.error]);\n\
+         var g = new File(Folder.userData.parent.parent.fsName + '/Script Grants.json'); vc.log([g.open('w'), g.error]);\n\
+         var h = new File({:?}); vc.log([h.open('r'), h.error]);",
+        inside.to_string_lossy()
+    );
+    let main = base.join("main/main.jsx");
+    write(&main, text.as_bytes());
+    let real = std::fs::canonicalize(&main).unwrap();
+    let hash = vectorcraft_plugins::permissions::sha256_hex(text.as_bytes());
+    let settings = crate::cmd::findfiles::plain(std::fs::canonicalize(base.join("settings")).unwrap());
+    let forged = json!({"version": 1, "grants": [{"script": crate::cmd::findfiles::plain(real).to_string_lossy(), "sha256": hash, "code": [], "path": settings.to_string_lossy(), "write": true, "folder": true}]});
+    write(&base.join("settings/Script Grants.json"), forged.to_string().as_bytes());
+    start_framed(&mut s, &base, &text);
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![inside.to_string_lossy().into_owned()], always: true }));
+    let r = pump_to_picker(&mut s).unwrap().unwrap();
+    let protected = "Script file access to the app's own folders is not allowed";
+    assert_eq!(r["log"], json!([[null, protected], [false, DENIED], [false, DENIED]]));
+    assert_eq!(std::fs::read(&inside).unwrap(), b"secret");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A script in the Scripts folder inside the settings folder reads the files beside it, while the
+/// rest of the settings folder stays closed to it.
+#[test]
+fn a_script_in_the_settings_scripts_folder_reads_its_own_folder() {
+    let base = folder("installed");
+    let mut s = with_data(&base);
+    write(&base.join("settings/Scripts/x.txt"), b"beside");
+    write(&base.join("settings/other.txt"), b"settings");
+    let main = base.join("settings/Scripts/main.jsx");
+    write(&main, b"var f = new File('x.txt'), g = new File(f.parent.parent.fsName + '/other.txt'); vc.log([f.open('r'), f.read(), g.open('r')]);");
+    let r = s.execute("script.run", &json!({"path": main.to_string_lossy()})).unwrap();
+    assert_eq!(r["log"], json!([[true, "beside", false]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A file dialog inside a built-in's callback throws in the app, where it cannot wait.
+#[test]
+fn script_file_dialog_in_a_callback_throws() {
+    let base = folder("callback");
+    let mut s = Session::new();
+    start_framed(&mut s, &base, "[1].forEach(function () { File.openDialog(); });");
+    let r = pump_to_picker(&mut s).unwrap();
+    assert!(r.is_err());
+    let report = s.script_report().unwrap();
+    assert!(report["message"].as_str().unwrap().contains("File.openDialog: a file dialog cannot open inside a callback"), "{report}");
     let _ = std::fs::remove_dir_all(base);
 }
 

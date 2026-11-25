@@ -265,3 +265,31 @@ fn the_slowest_commands_are_the_longest_in_all_then_by_id() {
     assert_eq!(ids, ["b.two", "a.one", "c.three", "f", "e"]);
     assert_eq!((slow[0].calls, slow[0].total_ms, slow[0].max_ms), (3, 9, 4));
 }
+
+/// Under automation read roots, the error lines of a failed run name the included file it stopped
+/// in by its file name also when the console cut a line inside the file's path.
+#[test]
+fn a_cut_error_line_leaves_out_an_included_files_folder_outside_the_read_root() {
+    use crate::file_access::{AutomationRoots, confine};
+    let base = crate::tests_links::Folder::new("script-report-cut-line");
+    let inside = base.0.join("in");
+    std::fs::create_dir_all(&inside).unwrap();
+    // A path longer than a console line, as the report of a failed run names it.
+    let file = base.0.join("out").join("d".repeat(MAX_LINE_BYTES)).join("bad.jsxinc").to_string_lossy().to_string();
+    let mut report = json!({"ok": false, "name": "t.js", "file": file, "line": 2, "column": 7, "message": format!("Error: stopped\nin {file}")});
+    let error = script::error_lines(&report);
+    assert!(error.len() == 2 && error.iter().all(|l| l.len() <= MAX_LINE_BYTES && l.ends_with(CUT_MARK)), "both lines are cut: {error:?}");
+    let written: Vec<String> = std::iter::once("written by the script".to_string()).chain(error).collect();
+    report["console"] = json!({"lines": written, "droppedLines": 0, "truncatedLines": 2});
+    let mut s = Session::new();
+    s.script_report = Some(report.clone());
+
+    let roots = AutomationRoots::new(&[&inside], &[]).unwrap();
+    let shown = confine(roots.as_ref(), || s.shown_script_report()).unwrap();
+    assert_eq!((&shown["file"], &shown["message"]), (&json!("bad.jsxinc"), &json!("Error: stopped\nin bad.jsxinc")), "{shown}");
+    assert_eq!(shown["console"]["lines"], json!(["written by the script", "t.js: bad.jsxinc:2:7: Error: stopped", "in bad.jsxinc"]), "{shown}");
+    let outside = json!(base.0.join("out").to_string_lossy()).to_string();
+    assert!(!shown.to_string().contains(outside.trim_matches('"')), "no path outside the root: {shown}");
+    // The person sees the report as it is.
+    assert_eq!(s.shown_script_report(), Some(report));
+}

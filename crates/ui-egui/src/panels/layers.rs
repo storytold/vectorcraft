@@ -11,22 +11,32 @@
 //! - The selection column selects a row's art (`layer.selectAll`, Shift adds or removes); a row
 //!   whose art is selected shows a square in its layer's colour, and dragging that square onto
 //!   another row moves the selected art there (Alt copies it).
-//! - The eye and lock columns toggle a row (`layer.setProps`); dragging down a column sets every
-//!   row it passes to the same state, in one undo step. Ctrl/Cmd-click an eye switches the layer
-//!   between Preview and Outline. Alt-click an eye hides the other layers (`layer.hideOthers`), or
-//!   shows every layer when they are hidden (`layer.showAll`); Alt-click a lock does the same with
-//!   `layer.lockOthers` and `layer.unlockAll`. Ctrl/Cmd+Alt-click an eye switches the other layers
-//!   to Outline and the row's layer to Preview (`layer.outlineOthers`), or switches every layer to
-//!   Preview when the others are in Outline (`layer.previewAll`).
+//! - The eye and lock columns toggle a row (`layer.setProps`), a ruler guide's row included;
+//!   dragging down a column sets every row it passes to the same state, in one undo step.
+//!   Ctrl/Cmd-click a layer's eye switches it between Preview and Outline. Alt-click an eye hides
+//!   the other layers (`layer.hideOthers`), or shows every layer when they are hidden
+//!   (`layer.showAll`); Alt-click a lock does the same with `layer.lockOthers` and
+//!   `layer.unlockAll`. Ctrl/Cmd+Alt-click an eye switches the other layers to Outline and the
+//!   row's layer to Preview (`layer.outlineOthers`), or switches every layer to Preview when the
+//!   others are in Outline (`layer.previewAll`).
+//! - A ruler guide's row selects the guide (`guide.select`) and leaves no row highlighted, so
+//!   Delete then deletes the guide; dragged onto another layer's row the guide goes there
+//!   (`guide.setLayer`), and onto the trash it is deleted (`guide.remove`).
 //! - Dragging rows moves them above, below or into a layer or group (`layer.move`, a drop line or
-//!   a box shows where); Alt copies them. A dimmed copy of the row follows the pointer. Layers
+//!   a box shows where); Alt copies them. A dimmed copy of the row follows the pointer, and rows
+//!   held near the top or bottom edge of the list scroll it, faster nearer the edge. Layers
 //!   dropped in the empty space under the last row go below the bottom layer. Dropped on the trash
 //!   they are deleted, on New Layer duplicated.
+//! - Deleting rows from the panel (the trash, rows dropped on it, Delete Selection, Delete and
+//!   Backspace) asks first when a layer or sublayer among them holds art ([`delete`]).
 //! - The triangle opens or closes a row; Alt-click does the same to everything inside it.
 //! - Double-clicking a name renames it; double-clicking elsewhere on a row opens its options.
-//! - A target circle targets its layer, group or object (`layer.target`); dragging it onto another
-//!   row's circle moves the appearance there (Alt copies it, `appearance.transfer`) and dropping it
-//!   on the trash clears it.
+//! - A target circle targets its layer, group or object (`layer.target`). Its modifier keys
+//!   follow the names' rules: Ctrl/Cmd adds the item to the selection or takes it out, Shift
+//!   selects the art of every row from the last circle clicked to this one, and Shift+Ctrl/Cmd
+//!   adds that art (#8639). Dragging a circle onto another row's circle moves the appearance there
+//!   (Alt copies it, `appearance.transfer`) and dropping it on the trash reduces it to basic
+//!   appearance (`appearance.reduceToBasic`) without deleting it.
 //! - Search All and the Filter button at its right (`ui.layersFilter`, lit while a filter is on)
 //!   narrow the rows, and every row that holds others shows open while they do. A row stays when
 //!   its name holds the text typed, it is one of the object kinds ticked under By Object and it is
@@ -35,52 +45,43 @@
 //!
 //! While an opacity mask is edited the panel lists only its art, under an `<Opacity Mask>` entry.
 //!
-//! The rows open are the document's ([`OpenRows`], saved in native files): a document opens with
-//! only its top-level layers open. The rows shown are listed once per document change, and only
-//! those scrolled into view are laid out, so a document of many thousand objects costs no more
-//! per frame than a small one.
+//! The rows open are the document's ([`OpenRows`](vectorcraft_engine::OpenRows), saved in native
+//! files): a document opens with only its top-level layers open. The rows shown are listed once per
+//! document change, and only those scrolled into view are laid out, so a document of many thousand
+//! objects costs no more per frame than a small one.
 
-use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Weak};
+use std::collections::HashSet;
+use std::sync::Arc;
 
-use egui::{Color32, Sense, Stroke, StrokeKind, Ui, vec2};
+use craft::layers::ui::filter::{FilterBy, LayerFilter};
+use craft::layers::ui::options::LayersSettings;
+use craft::layers::ui::panel::{Groups, LayerRowLook, LayersPanel};
+use craft::layers::ui::thumbs::ThumbContents;
+use craft::ui::contract::{Bind, PlainData, Tracked};
+use craft::ui::list::ThumbSize;
+use egui::{Color32, Ui};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, LiveShape, Node, NodeId, NodeKind};
-use vectorcraft_engine::OpenRows;
+use vectorcraft_engine::LayersReveal;
 
-use crate::theme::Tokens;
-use crate::thumb_worker::{Settle, ThumbWorker};
-use crate::widgets::{Live, PanelDrag};
-use crate::{VectorcraftApp, icons, widgets};
+use crate::VectorcraftApp;
 
+mod cells;
 mod controls;
 mod model;
 mod rows;
 mod thumbs;
 
-use controls::{bottom_bar, filter_button};
-pub use controls::{expand, menu, set_filter};
+pub use controls::{delete, expand, set_filter};
+// PLAN: the sheet's `pub use` of these cannot work: document-panels-w8 declares them `pub(crate)`, which `pub use` cannot re-export.
+pub(crate) use controls::{menu_rows, menu_states, new_layer_unlisted, run};
 pub(crate) use model::shown_name;
-pub use model::{Filter, ObjectKind, RowState};
-#[cfg(test)]
-use model::{Row, list_rows, painted_name};
-use model::{push_rows, rows_of_doc};
-use rows::{drag_ghost, key, rename_id, resolve_click, row};
-#[cfg(test)]
-use thumbs::THUMBS;
-pub(crate) use thumbs::{ThumbSource, node_arc, real_thumb, retain_open_thumbs, show_thumbs_of, thumb_options};
-
-/// Width of the eye and the lock columns.
-const COLUMN: f32 = 25.0;
-/// Indent per nesting level.
-const INDENT: f32 = 14.0;
-/// Right edge offsets of the target circle and the selection square.
-const TARGET_X: f32 = 28.0;
-const SQUARE_X: f32 = 11.0;
+use model::{DocLayers, LayerRows, RowId, isolated_root};
+pub(crate) use thumbs::{NodeThumb, NodeThumbs, forget, link_thumbnails, node_arc, retain_open, thumb_options};
 
 /// Layers panel options (≡ › Panel Options…), kept with the UI state.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, PlainData)]
 #[serde(default, rename_all = "camelCase")]
 pub struct PanelOptions {
     /// Show Layers Only: no rows for groups and objects.
@@ -90,322 +91,232 @@ pub struct PanelOptions {
     /// row, as after Locate Object, without highlighting the row. When Show Layers Only, a search or
     /// the filter leaves the object without a row, the panel opens no rows for it.
     pub locate_selected: bool,
-    /// Row height in points: [`ROW_SMALL`], [`ROW_MEDIUM`], [`ROW_LARGE`] or another (12–100).
-    pub row_size: f32,
+    /// Row Size: the thumbnail size, which sets the rows' height.
+    #[serde(deserialize_with = "saved_row_size")]
+    pub row_size: RowSize,
     /// Thumbnails on layer, group and object rows.
     pub thumb_layers: bool,
     pub thumb_groups: bool,
     pub thumb_objects: bool,
 }
 
-pub const ROW_SMALL: f32 = 20.0;
-pub const ROW_MEDIUM: f32 = 26.0;
-pub const ROW_LARGE: f32 = 40.0;
-
 impl Default for PanelOptions {
     fn default() -> Self {
-        Self { layers_only: false, locate_selected: false, row_size: ROW_MEDIUM, thumb_layers: true, thumb_groups: true, thumb_objects: true }
+        Self { layers_only: false, locate_selected: false, row_size: RowSize::Medium, thumb_layers: true, thumb_groups: true, thumb_objects: true }
     }
+}
+
+/// Panel Options › Row Size.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize, PlainData)]
+#[serde(rename_all = "camelCase")]
+pub enum RowSize {
+    /// Small rows.
+    Small,
+    /// Medium rows.
+    #[default]
+    Medium,
+    /// Large rows.
+    Large,
+}
+
+/// A saved Row Size: its name, or the row height in points that options saved before Row Size had
+/// names hold (up to 23 Small, up to 33 Medium, above Large). Anything else loads as Medium, so the
+/// rest of the saved options still load.
+fn saved_row_size<'de, D: serde::Deserializer<'de>>(d: D) -> Result<RowSize, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Saved {
+        Name(RowSize),
+        Points(f64),
+        Other(serde::de::IgnoredAny),
+    }
+    Ok(match Saved::deserialize(d)? {
+        Saved::Name(size) => size,
+        Saved::Points(points) if points.is_finite() && points <= 23.0 => RowSize::Small,
+        Saved::Points(points) if points.is_finite() && points > 33.0 => RowSize::Large,
+        Saved::Points(_) | Saved::Other(_) => RowSize::Medium,
+    })
 }
 
 impl PanelOptions {
-    /// The row height, kept to 12–100 points.
-    pub fn row(&self) -> f32 {
-        if self.row_size.is_finite() { self.row_size.clamp(12.0, 100.0) } else { ROW_MEDIUM }
+    /// The rows' thumbnail size, which sets their height.
+    pub fn thumb_size(&self) -> ThumbSize {
+        match self.row_size {
+            RowSize::Small => ThumbSize::Small,
+            RowSize::Medium => ThumbSize::Medium,
+            RowSize::Large => ThumbSize::Large,
+        }
     }
+
     /// Whether `n`'s row shows a thumbnail.
     fn thumb(&self, n: &Node) -> bool {
-        self.row() >= 18.0
-            && match n.kind {
-                NodeKind::Layer { .. } => self.thumb_layers,
-                NodeKind::Group { .. } => self.thumb_groups,
-                _ => self.thumb_objects,
-            }
+        match n.kind {
+            NodeKind::Layer { .. } => self.thumb_layers,
+            NodeKind::Group { .. } => self.thumb_groups,
+            _ => self.thumb_objects,
+        }
+    }
+
+    /// The settings the panel shows its rows with: the thumbnails frame each row's own art.
+    fn settings(&self) -> LayersSettings {
+        let mut settings = LayersSettings::default();
+        settings.options.thumbnail_size = self.thumb_size();
+        settings.options.thumbnail_contents = ThumbContents::LayerBounds;
+        settings.show_filters = true;
+        settings
     }
 }
 
-/// What a drag in the panel carries.
+/// What the app keeps of the Layers panel beside its document: the filter, a rename asked for by
+/// `ui.rename`, whether the rows had key focus in the last pass and the rows the panel reads. Not saved.
 #[derive(Clone, Debug)]
-enum LayersDrag {
-    /// Rows dragged to move (or, with Alt, copy) them.
-    Rows(Vec<NodeId>),
-    /// The selected-art square: the selected objects go to the row it is dropped on.
-    Art,
-    /// Ruler guide rows (indexes into the document's guides): they go to the layer of the row
-    /// they are dropped on.
-    Guides(Vec<usize>),
+pub struct LayersUi {
+    /// Search All and the Filter's ticks.
+    pub filter: LayerFilter,
+    /// The row whose name field opens in the next pass.
+    pub rename: Option<RowId>,
+    /// Key focus was in the rows: Rename then names the highlighted row first.
+    pub focused: bool,
+    /// The target circle clicked last, with its document's `uid`: where a Shift-click on another circle starts.
+    pub target_anchor: Option<(u64, NodeId)>,
+    /// The active document's rows with the [`LayerRows::key`] they were listed at.
+    rows: Option<(u64, Tracked<LayerRows>)>,
 }
 
-/// A drag down the eye or lock column: every row it passes takes `value`.
-#[derive(Clone, Debug, Default)]
-struct ColumnDrag {
-    /// The eye column (visibility), else the lock column.
-    eye: bool,
-    value: bool,
-    ids: Vec<u64>,
+impl Default for LayersUi {
+    /// No filter. The panel offers only the Objects filter, so the filter is of that type from the start.
+    fn default() -> Self {
+        let mut filter = LayerFilter::default();
+        filter.by = FilterBy::Objects;
+        Self { filter, rename: None, focused: false, target_anchor: None, rows: None }
+    }
 }
 
-/// Everything one frame of the panel reads.
-struct View<'a> {
-    doc: &'a Arc<Document>,
-    /// Where the row thumbnails come from.
-    thumbs: ThumbSource<'a>,
-    sel: HashSet<NodeId>,
-    /// The selected ruler guides, as indexes into [`Self::ruler_guides`].
-    guides: Vec<usize>,
-    /// The document's ruler guides ([`Document::ruler_guides`]).
-    ruler_guides: Vec<vectorcraft_doc::Guide>,
-    target: Option<NodeId>,
-    current: Option<NodeId>,
-    rows: Vec<NodeId>,
-    opts: PanelOptions,
-    t: Tokens,
-    h: f32,
-    column: Option<ColumnDrag>,
-    /// The row to scroll into view.
-    reveal: Option<NodeId>,
-    /// Preferences › Units › Identify Objects By › XML ID.
-    identify_xml_id: bool,
-}
-
-/// What one frame of the panel decided.
-#[derive(Default)]
-struct Out {
-    actions: Vec<(String, Value)>,
-    /// A row clicked with these modifiers (resolved once every row is listed).
-    click: Option<(NodeId, egui::Modifiers)>,
-    /// The column drag after this frame (`Some(None)`: it ended).
-    column: Option<Option<ColumnDrag>>,
-    /// Rows to open or close, and whether to open them.
-    toggle: Vec<(NodeId, bool)>,
-    /// The highlighted rows after this frame's row click, when one happened: the click's action
-    /// runs after `delete_key`, so `view.rows` is still the state before it.
-    rows_after_click: Option<Vec<NodeId>>,
-}
-
-/// The panel state that says the Layers panel's rows have the keyboard ([`super::has_row_keys`]).
-pub(crate) const ROW_KEYS: &str = "ly-keys";
-
-/// The Layers panel: the layer tree with its click, drag and rename rules and the bottom buttons; Delete/Backspace after a row click delete the highlighted rows.
+/// The Layers panel: the layer tree with its click, drag and rename rules and the bottom buttons; Delete/Backspace in the rows delete the highlighted rows.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
-    show_thumbs_of(app.session.active().map(|st| st.uid));
-    let Some(st) = app.session.active() else { return };
-    // A rename belongs to the document it started in (node ids are per document): drop it when
-    // another document shows, so it can't rename that document's node with the same id.
-    let shown_doc = egui::Id::unique("layers-doc");
-    let before = ui.data(|d| d.get_temp::<u64>(shown_doc));
-    if before != Some(st.uid) {
-        ui.data_mut(|d| {
-            if before.is_some() {
-                d.remove::<(u64, String)>(rename_id());
-            }
-            d.insert_temp(shown_doc, st.uid);
-        });
-    }
-    let doc = st.doc.clone();
-    let rows = st.highlighted_rows();
-    let current = st.current_layer();
-    // Rows highlighted anew (a click, Locate Object, a new layer): open the layers around them.
-    let seen: Vec<NodeId> = ui.data(|d| d.get_temp(key("seen"))).unwrap_or_default();
-    let mut reveal = None;
-    if rows != seen {
-        open_around(app, &doc, &rows);
-        reveal = rows.first().copied();
-        ui.data_mut(|d| d.insert_temp(key("seen"), rows.clone()));
-    }
-    let highlighted = reveal.is_some();
-    // A new active layer (a canvas selection highlights no row): reveal it too, unless a row
-    // highlighted in the panel holds the view.
-    let seen_current: Option<NodeId> = ui.data(|d| d.get_temp(key("seen-current"))).flatten();
-    if current != seen_current {
-        if rows.is_empty()
-            && let Some(layer) = current
-        {
-            let around = doc.ancestry(layer).unwrap_or_default().split_last().map(|(_, a)| a.to_vec()).unwrap_or_default();
-            if let Some(st) = app.session.active_mut() {
-                for a in around {
-                    st.layers_open.set(a, true);
-                }
-            }
-            reveal = Some(layer);
-        }
-        ui.data_mut(|d| d.insert_temp(key("seen-current"), current));
-    }
-    // With Locate Selected Objects on, an object selected anew outside the panel (below).
-    let located = newly_selected(app, ui).filter(|_| !highlighted);
-    // Search All, and the Filter button at its right.
-    let query = ui
-        .horizontal(|ui| {
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                filter_button(app, ui);
-                crate::widgets::search_field(ui, egui::Id::unique("layers-search"), tl!("Search All"))
-            })
-            .inner
-        })
-        .inner
-        .trim()
-        .to_lowercase();
-    // The located object, when it has a row once the rows around it are open (Show Layers Only, a
-    // search or the filter can leave it out): those rows open, and its row is revealed instead of
-    // the row revealed above. Otherwise nothing opens.
-    let located = located.filter(|id| {
-        app.session.active().is_some_and(|st| listed_when_opened(&doc, &st.layers_open, &app.ui.layers_panel, &query, &app.ui.layers_filter, *id))
-    });
-    if let Some(id) = located {
-        open_around(app, &doc, &[id]);
-    }
-    // A row Rename (`ui.rename`) opened the name field of comes into view first.
-    let renamed = ui.data_mut(|d| d.remove_temp::<NodeId>(key("rename-reveal")));
-    let reveal = renamed.or(located).or(reveal);
-    let Some(st) = app.session.active() else { return };
-    let list = rows_of_doc(ui, st, &app.ui.layers_panel, &query, &app.ui.layers_filter);
-    let view = View {
-        doc: &doc,
-        thumbs: ThumbSource::of(app, st, &doc),
-        sel: st.selection.objects.iter().copied().collect(),
-        guides: vectorcraft_engine::cmd::guide_indexes(&doc, &st.selection.guides),
-        ruler_guides: doc.ruler_guides(),
-        target: st.selection.target,
-        current: st.current_layer(),
-        rows,
-        opts: app.ui.layers_panel.clone(),
-        t,
-        h: app.ui.layers_panel.row(),
-        column: ui.data(|d| d.get_temp(key("column"))),
-        reveal,
-        identify_xml_id: app.session.prefs.identify_objects_by == "xmlId",
-    };
-    let mut out = Out::default();
-    ui.add_space(6.0);
-    let list_h = ui.available_height() - 34.0;
-    // Only the rows in view are laid out; one revealed out of view is scrolled to.
-    let revealed = reveal.and_then(|id| list.iter().position(|r| r.node.id == id));
-    let scrolled = ui.scope(|ui| {
-        ui.spacing_mut().item_spacing.y = 0.0;
-        // The bar takes a column of its own, so it never covers the target and selection marks at
-        // the rows' right edge (#3443). Whether the rows overflow is known before they are laid
-        // out, so the bar is decided up front and the rows never shift when it appears.
-        ui.spacing_mut().scroll = crate::widgets::list_scroll_style();
-        let overflows = view.h * list.len() as f32 > list_h;
-        let bar =
-            if overflows { egui::scroll_area::ScrollBarVisibility::AlwaysVisible } else { egui::scroll_area::ScrollBarVisibility::AlwaysHidden };
-        egui::ScrollArea::vertical().max_height(list_h).auto_shrink([false, false]).scroll_bar_visibility(bar).show_rows(
-            ui,
-            view.h,
-            list.len(),
-            |ui, range| {
-                if let Some(i) = revealed.filter(|i| !range.contains(i)) {
-                    let top = ui.max_rect().top() + (i as f32 - range.start as f32) * view.h;
-                    ui.scroll_to_rect(egui::Rect::from_min_size(egui::pos2(ui.max_rect().left(), top), vec2(ui.max_rect().width(), view.h)), None);
-                }
-                for r in list.get(range).unwrap_or_default() {
-                    row(ui, &view, r, &mut out);
-                }
-            },
-        )
-    });
-    let list_rect = scrolled.inner.inner_rect;
-    resolve_click(ui, &view, &list, &mut out);
-    if let Some(st) = app.session.active_mut() {
-        for (id, open) in out.toggle.drain(..) {
-            st.layers_open.set(id, open);
-        }
-    }
-    let selected = last_selected(app);
-    // The column drag: live while it lasts, one undo step when the button is released.
-    let released = ui.input(|i| i.pointer.any_released());
-    // Layers dragged into the empty space under the last row go below the bottom layer (there is
-    // no row there to take the drop).
-    let below = list_rect.top() - scrolled.inner.state.clamped_offset().y + list.len() as f32 * view.h;
-    if query.is_empty()
-        && !app.ui.layers_filter.is_on()
-        && let Some(drag) = egui::DragAndDrop::payload::<LayersDrag>(ui.ctx())
-        && let LayersDrag::Rows(ids) = &*drag
-        && let Some(bottom) = doc.layers.first()
-        && !ids.is_empty()
-        && !ids.contains(&bottom.id)
-        && ids.iter().all(|i| doc.node(*i).is_some_and(Node::is_layer))
-        && let Some(p) = ui.input(|i| i.pointer.hover_pos())
-        && list_rect.contains(p)
-        && p.y > below
+    // In isolation mode only rows inside the isolated art stay highlighted, since the panel lists
+    // no others.
+    if let Some(st) = app.session.active_mut()
+        && let Some(root) = st.isolation.filter(|i| st.doc.node(*i).is_some())
     {
-        let stroke = Stroke::new(2.0, view.t.accent);
-        ui.painter().line_segment([egui::pos2(list_rect.left(), below), egui::pos2(list_rect.right(), below)], stroke);
-        if released {
-            let copy = ui.input(|i| i.modifiers.alt);
-            let ids: Vec<u64> = ids.iter().map(|i| i.0).collect();
-            out.actions.push(("layer.move".into(), json!({"ids": ids, "target": bottom.id.0, "place": "below", "copy": copy})));
+        let doc = st.doc.clone();
+        let inside = |r: &NodeId| doc.ancestry(*r).is_some_and(|a| a.contains(&root));
+        if !st.layer_rows.iter().all(&inside) {
+            st.layer_rows.retain(&inside);
         }
     }
-    let changed = out.column.is_some();
-    let column = out.column.take().unwrap_or_else(|| view.column.clone());
-    if let Some(c) = column.as_ref().filter(|_| changed || released) {
-        let (prop, label) = if c.eye { ("visible", "Visibility") } else { ("locked", "Lock") };
-        let phase = if released { Live::Released } else { Live::Dragging };
-        let params = json!({"ids": c.ids, prop: c.value});
-        super::live_run(app, label, "layer.setProps", params, phase);
+    let Some(uid) = app.session.active().map(|st| st.uid) else { return };
+    // The reveal and the rename are requests: the pass that takes them sends them, and a second pass
+    // in the frame sends none, as the panel acts on each once.
+    let reveal = reveal_for(app);
+    let rename = app.ui.layers_ui.rename.take();
+    let mut filter = app.ui.layers_ui.filter.clone();
+    let mut footer = Vec::new();
+    let mut picks = Vec::new();
+    let mut target_click = None;
+    let thumbnails = thumbs::layer_thumbnails(ui.ctx(), uid);
+    // A drag's previews keep the shown pictures; the rows render once it ends.
+    thumbnails.hold(app.session.active().is_some_and(|st| st.interaction.is_some()) || app.session.tool_busy());
+    let settings = app.ui.layers_panel.settings();
+    refresh_rows(app);
+    let (Some(st), Some((_, kept))) = (app.session.active(), &app.ui.layers_ui.rows) else { return };
+    let tree = DocLayers::of(st, kept);
+    let source = thumbs::LayerThumbs { doc: &st.doc };
+    let mut panel = LayersPanel::new(kept)
+        .settings(&settings)
+        .thumbnails(&thumbnails, &source)
+        .filter(Bind::bound(&mut filter))
+        .filter_types([FilterBy::Objects])
+        .row_look(LayerRowLook::ColorBar)
+        .lock_column(true)
+        .blend_rows(false)
+        .deletable(true)
+        .takes_drop::<cells::ArtDrag>(cells::accepts_art(&tree))
+        .trailing(|id, info| cells::build(&tree, id, info), |id, shown| cells::output(&mut picks, &mut target_click, id, shown))
+        .row_menu(|target| controls::row_menu(&tree, target))
+        .footer(|ui| controls::footer(&tree, ui, &mut footer))
+        .document(uid);
+    if let Some(id) = reveal {
+        panel = panel.reveal(RowId::Node(id), Groups::Open);
     }
-    ui.data_mut(|d| match column.filter(|_| !released) {
-        Some(c) => {
-            d.insert_temp(key("column"), c);
-        }
-        None => d.remove::<ColumnDrag>(key("column")),
-    });
-    if released {
-        ui.data_mut(|d| d.remove::<u64>(egui::Id::unique("layers-drag")));
+    if let Some(row) = rename {
+        panel = panel.start_rename(row);
     }
-    // Dragged rows show as a dimmed row under the pointer.
-    if !released
-        && let Some(drag) = egui::DragAndDrop::payload::<LayersDrag>(ui.ctx())
-        && let LayersDrag::Rows(ids) = &*drag
-        && let Some(&grabbed) = ui.data(|d| d.get_temp::<NodeId>(key("grabbed"))).as_ref().or(ids.first())
-        && let Some(pos) = ui.input(|i| i.pointer.latest_pos())
-    {
-        drag_ghost(ui, &view, widgets::ghost_row(ids, grabbed), pos);
+    let output = panel.show(ui);
+    // A Shift-click starts at the last circle clicked in this document, else at the targeted row.
+    let anchor = app.ui.layers_ui.target_anchor.filter(|(doc, _)| *doc == uid).map(|(_, id)| id);
+    let target = target_click.map(|(id, mods)| (id, rows::target_click(&tree, &filter, anchor, id, mods)));
+    app.ui.layers_ui.filter = filter;
+    if let Some((id, (_, true))) = &target {
+        app.ui.layers_ui.target_anchor = Some((uid, *id));
     }
-    // Keyboard: Delete removes the highlighted rows while the panel has the keyboard (a row was
-    // clicked last, not the canvas).
-    // The panel keeps it while it is drawn ([`super::has_row_keys`]); the app's shortcuts leave
-    // Delete and Backspace to it meanwhile ([`super::rows_take_delete`]). With no highlighted rows
-    // left (the last one was deleted) the panel gives the keys back, so Delete clears the selected
-    // art again instead of doing nothing.
-    let pressed_outside = ui.input(|i| i.pointer.any_pressed() && i.pointer.interact_pos().is_some_and(|p| !list_rect.contains(p)));
-    // A click's highlight action runs after this block, so read the rows it will leave, not the
-    // snapshot `view.rows` took before it.
-    let rows = out.rows_after_click.as_deref().unwrap_or(&view.rows);
-    let focus = super::has_row_keys(ui.ctx(), ROW_KEYS) && !pressed_outside && !rows.is_empty();
-    super::set_row_keys(ui.ctx(), ROW_KEYS, focus);
-    if focus
-        && !rows.is_empty()
-        && ui.ctx().memory(|m| m.focused().is_none())
-        && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete) || i.consume_key(egui::Modifiers::NONE, egui::Key::Backspace))
-    {
-        out.actions.push(("layer.delete".into(), json!({})));
-    }
-    bottom_bar(app, ui, &view, &doc, &mut out.actions);
-    for (c, p) in out.actions {
+    app.ui.layers_ui.focused = output.focused;
+    rows::apply(app, output.events);
+    for (c, p) in footer.into_iter().chain(picks).chain(target.map(|(_, (command, _))| command)) {
         app.run(&c, p).ok();
     }
-    // A deletion that took the last highlighted row leaves the panel nothing to delete. Release the
-    // keys now, not at the next draw, so the very next frame's Delete reaches Edit › Clear.
-    if app.session.active().is_some_and(|st| st.highlighted_rows().is_empty()) {
-        super::set_row_keys(ui.ctx(), ROW_KEYS, false);
+    // The panel's own commands reveal nothing for the selection they made: Locate Selected Objects
+    // follows selections made on the canvas or by a command.
+    if let Some(st) = app.session.active_mut()
+        && matches!(st.layers_reveal, Some(LayersReveal::Selected(_)))
+    {
+        st.layers_reveal = None;
     }
-    see_selection(app, ui, selected);
 }
 
-/// The search typed into the Layers panel's Search All field, as the panel matches it.
-fn search_query(ctx: &egui::Context) -> String {
-    ctx.data(|d| d.get_temp::<String>(egui::Id::unique("layers-search"))).unwrap_or_default().trim().to_lowercase()
+/// Runs `f`, a change the Layers panel makes itself, which reveals nothing: the rows it changes are
+/// in view, and Locate Selected Objects follows selections made on the canvas or by a command. The
+/// request `f` raised is dropped; one pending before stands.
+fn unrevealed<T>(app: &mut VectorcraftApp, f: impl FnOnce(&mut VectorcraftApp) -> T) -> T {
+    let before = app.session.active().map(|st| (st.uid, st.layers_reveal));
+    let r = f(app);
+    if let Some(st) = app.session.active_mut()
+        && let Some((_, request)) = before.filter(|(uid, _)| *uid == st.uid)
+    {
+        st.layers_reveal = request;
+    }
+    r
+}
+
+/// Lists the active document's rows again when what they are listed from changed.
+fn refresh_rows(app: &mut VectorcraftApp) {
+    let Some(st) = app.session.active() else { return };
+    let key = LayerRows::key(app, st);
+    if app.ui.layers_ui.rows.as_ref().is_none_or(|(kept, _)| *kept != key) {
+        let rows = Tracked::new(LayerRows::new(app, st));
+        app.ui.layers_ui.rows = Some((key, rows));
+    }
+}
+
+/// The row the panel reveals this pass, with the layers around it opened: the active document's
+/// reveal request, which is consumed whether it reveals anything or not. A row (highlighted,
+/// located, isolated) is revealed when the panel lists it once the layers around it are open; a new
+/// current layer only while no row is highlighted; a newly selected object only with Locate
+/// Selected Objects on and when it has a row, else the current layer as for a new current layer.
+fn reveal_for(app: &mut VectorcraftApp) -> Option<NodeId> {
+    let request = app.session.active_mut()?.layers_reveal.take()?;
+    let st = app.session.active()?;
+    let tree = DocLayers::new(app, st);
+    let listed = |id: NodeId| listed_when_opened(&tree, &app.ui.layers_ui.filter, id);
+    let unhighlighted = st.highlighted_rows().is_empty();
+    let id = match request {
+        LayersReveal::Row(id) => listed(id).then_some(id),
+        LayersReveal::Current(layer) => unhighlighted.then_some(layer),
+        LayersReveal::Selected(id) if app.ui.layers_panel.locate_selected && listed(id) => Some(id),
+        LayersReveal::Selected(_) => st.current_layer().filter(|_| unhighlighted),
+    }?;
+    let doc = st.doc.clone();
+    open_around(app, &doc, &[id]);
+    Some(id)
 }
 
 /// `ui.rename {id?}`: open the Layers panel's name field on the row of layer, group or object
 /// `id`, as double-clicking the row's name does: Enter renames it (`layer.setProps`, one undo
 /// step), Escape leaves the name as it was. Without `id`, the row Rename names is the Layers
 /// panel's highlighted row when a row was clicked last, else the one selected object or group,
-/// else the one highlighted row, else the current layer. Several of them, or a row the panel's
-/// search, filter or Show Layers Only leaves out, is an error that opens nothing.
+/// else the one highlighted row, else the current layer. Several of them, a row the panel's
+/// search, filter or Show Layers Only leaves out, or in isolation mode an object outside the
+/// isolated art, is an error that opens nothing.
 pub fn rename(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let ctx = app.ui_ctx.clone().ok_or("the Layers panel is not shown")?;
     let st = app.session.active().ok_or("no document open")?;
@@ -421,7 +332,7 @@ pub fn rename(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         None => {
             let rows = st.highlighted_rows();
             let selected = &st.selection.objects;
-            let rows_first = super::has_row_keys(&ctx, ROW_KEYS) || selected.is_empty();
+            let rows_first = app.ui.layers_ui.focused || selected.is_empty();
             if rows_first && !rows.is_empty() {
                 one(&rows)?
             } else if !selected.is_empty() {
@@ -433,24 +344,37 @@ pub fn rename(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     };
     let doc = st.doc.clone();
     let node = doc.node(id).ok_or("no such layer or object")?;
-    if !listed_when_opened(&doc, &st.layers_open, &app.ui.layers_panel, &search_query(&ctx), &app.ui.layers_filter, id) {
+    if st.isolation.and_then(|i| isolated_root(&doc, i)).is_some_and(|(root, ..)| !doc.ancestry(id).is_some_and(|a| a.contains(&root.id))) {
+        return Err("the object is outside the isolated group".into());
+    }
+    if !listed_when_opened(&DocLayers::new(app, st), &app.ui.layers_ui.filter, id) {
         return Err("the Layers panel's search, filter or Show Layers Only hides its row".into());
     }
     let name = node.identify_label(app.session.prefs.identify_objects_by == "xmlId");
     crate::panel_docking::reveal_panel(app, "layers")?;
     open_around(app, &doc, &[id]);
-    ctx.data_mut(|d| {
-        d.insert_temp(rename_id(), (id.0, name.clone()));
-        d.insert_temp(key("rename-reveal"), id);
-    });
+    app.ui.layers_ui.rename = Some(RowId::Node(id));
+    if let Some(st) = app.session.active_mut() {
+        st.layers_reveal = Some(LayersReveal::Row(id));
+    }
     ctx.request_repaint();
     Ok(json!({ "id": id.0, "name": name }))
 }
 
-/// Open the layers and groups around rows `ids`.
+// PLAN: the sheet keeps `last_selected`, but nothing reads it once the session decides what to locate (document-panels-w8's controls.rs no longer calls it); it would be dead code, so it goes.
+/// Open the layers and groups around rows `ids`. In isolation mode only those from the isolated
+/// row down open, and nothing opens for a row outside it.
 fn open_around(app: &mut VectorcraftApp, doc: &Document, ids: &[NodeId]) {
-    let around: Vec<NodeId> =
-        ids.iter().flat_map(|r| doc.ancestry(*r).unwrap_or_default().split_last().map(|(_, a)| a.to_vec()).unwrap_or_default()).collect();
+    let root = app.session.active().and_then(|st| st.isolation).filter(|i| doc.node(*i).is_some());
+    let around: Vec<NodeId> = ids
+        .iter()
+        .flat_map(|r| {
+            let ancestry = doc.ancestry(*r).unwrap_or_default();
+            let from = root.map_or(Some(0), |i| ancestry.iter().position(|a| *a == i));
+            let parents = ancestry.split_last().map(|(_, a)| a.to_vec()).unwrap_or_default();
+            from.map(|f| parents.into_iter().skip(f).collect::<Vec<_>>()).unwrap_or_default()
+        })
+        .collect();
     if let Some(st) = app.session.active_mut() {
         for a in around {
             st.layers_open.set(a, true);
@@ -458,51 +382,26 @@ fn open_around(app: &mut VectorcraftApp, doc: &Document, ids: &[NodeId]) {
     }
 }
 
-/// Whether [`list_rows`] gives `id` a row once the layers and groups around it are open as well as
-/// `open`. Only the rows of `id`'s top-level layer are listed.
-fn listed_when_opened(doc: &Document, open: &OpenRows, opts: &PanelOptions, query: &str, filter: &Filter, id: NodeId) -> bool {
-    let Some(ancestry) = doc.ancestry(id) else { return false };
-    let Some(layer) = doc.layers.iter().find(|l| ancestry.first() == Some(&l.id)) else { return false };
-    if doc.mask_edit.is_some_and(|m| m.layer != layer.id) {
-        return false;
+/// Whether the panel over `tree` gives object `id` a row once the layers and groups around it are
+/// open, under `filter`: every row from the top one (the isolated row in isolation mode) down to
+/// `id` is listed in the one above it, and `filter` keeps `id`.
+fn listed_when_opened(tree: &DocLayers<'_>, filter: &LayerFilter, id: NodeId) -> bool {
+    use craft::layers::ui::tree::LayerTree as _;
+    let Some(ancestry) = tree.doc().ancestry(id) else { return false };
+    let from = tree.root().map_or(Some(0), |root| ancestry.iter().position(|a| *a == root));
+    let Some(path) = from.and_then(|f| ancestry.get(f..)) else { return false };
+    let mut above: Option<RowId> = None;
+    for a in path {
+        let row = RowId::Node(*a);
+        if !tree.children(above.as_ref()).contains(&row) {
+            return false;
+        }
+        above = Some(row);
     }
-    let mut open = open.clone();
-    for a in ancestry.split_last().map(|(_, a)| a).unwrap_or_default() {
-        open.set(*a, true);
-    }
-    let mut rows = vec![];
-    // Only object rows are looked for, so the guide rows are left out.
-    push_rows(layer, 0, false, (Color32::PLACEHOLDER, true), (&open, opts, query, filter, &[]), &mut rows);
-    rows.iter().any(|r| r.node.id == id && r.guide.is_none() && !r.spine)
-}
-
-/// The active document's uid and its last selected object, the one Locate Object locates.
-fn last_selected(app: &VectorcraftApp) -> Option<(u64, Option<NodeId>)> {
-    app.session.active().map(|st| (st.uid, st.selection.objects.last().copied()))
-}
-
-/// Locate Selected Objects: the object to locate in this frame. With the option on, that is the
-/// last selected object when it differs from the one noted in an earlier frame for the same
-/// document. [`see_selection`] notes the panel's own changes, so only a change made on the canvas
-/// or by a command is located. This function notes nothing during a drag, so a selection made on
-/// the canvas during one is located when the drag ends. When another document becomes active,
-/// nothing is located.
-fn newly_selected(app: &VectorcraftApp, ui: &Ui) -> Option<NodeId> {
-    let busy = app.session.active().is_some_and(|st| st.interaction.is_some()) || app.session.tool_busy();
-    let now = last_selected(app).filter(|_| !busy)?;
-    let was = ui.data(|d| d.get_temp::<(u64, Option<NodeId>)>(key("selected")));
-    ui.data_mut(|d| d.insert_temp(key("selected"), now));
-    let anew = was.is_some_and(|w| w.0 == now.0 && w.1 != now.1);
-    now.1.filter(|_| anew && app.ui.layers_panel.locate_selected)
-}
-
-/// Note the selection as seen when the panel's rows, buttons or menu changed it (`before`: what
-/// [`last_selected`] gave before they ran), so Locate Selected Objects does not locate it.
-fn see_selection(app: &VectorcraftApp, ui: &Ui, before: Option<(u64, Option<NodeId>)>) {
-    if let Some(now) = last_selected(app).filter(|now| Some(*now) != before) {
-        ui.data_mut(|d| d.insert_temp(key("selected"), now));
-    }
+    !filter.active() || tree.listed(&RowId::Node(id), filter)
 }
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_reveal;

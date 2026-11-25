@@ -1,43 +1,33 @@
 //! DXF Options (Export As → DXF): a preset (Custom, or CNC / CAM, which sets the options below for
 //! cutting software and shows Custom again once one is changed), version, scale (1 unit of the
-//! art = N drawing units) and lineweights, number of colours, the format of placed images,
-//! Preserve Appearance or Maximize Editability, and Export Selected Art Only, Alter Paths for
-//! Appearance and Outline Text.
+//! art = N drawing units) and lineweights, number of colours, the format of placed images and
+//! Include Placed Images, Preserve Appearance or Maximize Editability, and Export Selected Art
+//! Only, Alter Paths for Appearance, Outline Text and Include Fill Hatches.
 //!
 //! Fields: `document.export` params (`format: dxf`, `path?`, the artboard choice) and the DXF
 //! options of `document.exportDxf`. OK remembers the options for next time and writes the file
 //! (asking where when there is no path); bad options keep the dialog open.
 
+use craft::ui::contract::{Bind, Entry, Show as _};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::pickers::Select;
+use craft::ui::text::NumberField;
 use serde_json::{Map, Value, json};
 use vectorcraft_cad::{ColorDepth, DxfPreset, DxfVersion, Preserve, RasterFormat};
 use vectorcraft_doc::Unit;
 use vectorcraft_engine::cmd::fileio;
 
-use super::DialogSpec;
-use super::document_setup::{LABEL, check, choice};
-use crate::state::Dialog;
-use crate::{VectorcraftApp, io, widgets};
+use super::export_host::{self, After, Export, Open};
+use super::form;
+use crate::{VectorcraftApp, io};
 
 pub(super) const KIND: &str = "dxfOptions";
-
-pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("DXF Options").into(),
-    body,
-    confirm,
-    ok: Some("Export"),
-    min_width: 420.0,
-    max_width: Some(460.0),
-    inputs: |_| &["path"],
-    ..DialogSpec::FORM
-};
 
 /// Fields that are not remembered between exports (they belong to one export).
 const PER_EXPORT: [&str; 7] = ["format", "path", "useArtboards", "range", "artboard", "artboards", "selectedOnly"];
 
 /// The preset field (the `dxfPreset` param).
 const PRESET: &str = "dxfPreset";
-/// The preset the fields were last set from or matched (a change of [`PRESET`] sets its fields).
-const SHOWN_PRESET: &str = "__shownPreset";
 
 /// The options a first DXF Options dialog starts from (the export's defaults).
 fn defaults() -> Map<String, Value> {
@@ -58,6 +48,8 @@ fn preset_fields(preset: DxfPreset) -> Map<String, Value> {
         ("scaleLineweights", json!(o.scale_lineweights)),
         ("colors", json!(o.colors.id())),
         ("rasterFormat", json!(o.raster.id())),
+        ("includeImages", json!(o.include_images)),
+        ("includeHatches", json!(o.include_hatches)),
         ("preserve", json!(o.preserve.id())),
         ("alterPaths", json!(o.alter_paths)),
         ("outlineText", json!(o.outline_text)),
@@ -67,41 +59,123 @@ fn preset_fields(preset: DxfPreset) -> Map<String, Value> {
     m
 }
 
-/// Show the preset the fields match: CNC / CAM while every field it sets is as it sets it, else
-/// Custom. An unknown preset stays as it is, for OK to refuse.
-fn show_matching_preset(d: &mut Dialog) {
-    if DxfPreset::from_id(&d.str(PRESET)).is_none() {
-        return;
-    }
-    let preset = fileio::dxf::options(&super::form::params(d)).map_or(DxfPreset::Custom, |o| DxfPreset::of(&o));
-    d.fields.insert(PRESET.into(), json!(preset.id()));
-    d.fields.insert(SHOWN_PRESET.into(), json!(preset.id()));
+/// `map` as the dialog's values.
+fn dialog_fields(map: &Map<String, Value>) -> DialogFields {
+    form::fields_of(&kinds(), map)
 }
 
-/// A preset picked since the fields were last matched, or any preset when `force` is set, sets
-/// its fields; Custom puts back the export's defaults.
-fn apply_picked_preset(d: &mut Dialog, force: bool) {
-    if (force || !d.str(PRESET).eq_ignore_ascii_case(&d.str(SHOWN_PRESET)))
-        && let Some(p) = DxfPreset::from_id(&d.str(PRESET))
-    {
-        d.fields.extend(preset_fields(p));
-    }
+/// The rows as far as their kinds go, for reading values to and from JSON.
+fn kinds() -> Vec<Param> {
+    rows(false, false, false)
 }
 
-/// `field` was set (`ui.dialog.set`): a preset sets its fields now, even the one shown, so fields
-/// set after it keep their values, and any other field shows the preset the fields then match, as
-/// drawing does.
-pub(super) fn note_set(d: &mut Dialog, field: &str) {
-    if field == PRESET {
-        apply_picked_preset(d, true);
+/// Gives the dialog the fields the current preset sets and the others have lost (a change of the preset row removes
+/// them), then shows the preset the fields match: CNC / CAM while every field it sets is as it sets it, else Custom.
+/// An unknown preset stays as it is, for OK to refuse.
+fn settle(fields: &mut DialogFields) {
+    let Some(preset) = fields.text(PRESET).and_then(DxfPreset::from_id) else { return };
+    for (key, value) in dialog_fields(&preset_fields(preset)).iter() {
+        if !fields.contains(key) {
+            fields.set(key, value.clone());
+        }
     }
-    show_matching_preset(d);
+    let shown = fileio::dxf::options(&Value::Object(form::json_of(&kinds(), fields))).map_or(DxfPreset::Custom, |o| DxfPreset::of(&o));
+    fields.set(PRESET, shown.id());
+}
+
+/// A choice row over `rows` (id, label).
+pub(super) fn choice_param(key: &str, label: &'static str, rows: impl IntoIterator<Item = (&'static str, &'static str)>) -> Param {
+    let options = rows.into_iter().map(|(id, name)| (id.to_string(), tl!(name).into())).collect();
+    Param::new(key, label, ParamKind::choice(options, None))
+}
+
+/// A radio row over `rows` (id, label).
+pub(super) fn radio_param(key: &str, label: &'static str, rows: impl IntoIterator<Item = (&'static str, &'static str)>) -> Param {
+    let options = rows.into_iter().map(|(id, name)| (id.to_string(), tl!(name).into())).collect();
+    Param::new(key, label, ParamKind::radio(options, None))
+}
+
+/// A check box row.
+pub(super) fn check_param(key: &str, label: &'static str) -> Param {
+    Param::new(key, label, ParamKind::bool(false))
+}
+
+/// The rows. Export Selection leaves Export Selected Art Only out, as it writes the selected art alone;
+/// without a selection that row is off. `note` shows the true-colour note.
+fn rows(selection: bool, has_selection: bool, note: bool) -> Vec<Param> {
+    let keys: Vec<String> = preset_fields(DxfPreset::Custom).keys().cloned().collect();
+    let mut rows = vec![
+        choice_param(PRESET, tl!("Preset:"), DxfPreset::ALL.iter().map(|p| (p.id(), p.label()))).resets(keys),
+        choice_param("version", tl!("Version:"), DxfVersion::ALL.iter().map(|v| (v.id(), v.label()))),
+        scale_param(None),
+        check_param("scaleLineweights", tl!("Scale Lineweights")),
+        choice_param("colors", tl!("Number of Colors:"), ColorDepth::ALL.iter().map(|c| (c.id(), c.label()))),
+    ];
+    if note {
+        rows.push(Param::read_only_text("__colorNote", "", tl!("True colour needs version 2004 or later: the nearest of 256 colours is written.")));
+    }
+    rows.extend([
+        choice_param("rasterFormat", tl!("Raster File Format:"), RasterFormat::ALL.iter().map(|r| (r.id(), r.label()))),
+        check_param("includeImages", tl!("Include Placed Images")),
+        Param::section(tl!("Export Option")),
+        radio_param("preserve", "", Preserve::ALL.iter().map(|p| (p.id(), p.label()))),
+    ]);
+    if !selection {
+        let row = check_param("selectedOnly", tl!("Export Selected Art Only"));
+        rows.push(if has_selection { row } else { row.enabled_when_in("selectedOnly", std::iter::empty::<FieldValue>()) });
+    }
+    rows.extend([
+        check_param("alterPaths", tl!("Alter Paths for Appearance")),
+        // Preserve Appearance always outlines type.
+        check_param("outlineText", tl!("Outline Text")).enabled_when("preserve", FieldValue::Text(Preserve::Editability.id().into())),
+        check_param("includeHatches", tl!("Include Fill Hatches")),
+    ]);
+    rows
+}
+
+/// Scale: 1 [unit] = [scale] Units (the `unit` and `scale` fields; DXF import reads them too). The row is disabled
+/// while the check box `disabled_when` names holds the value it gives.
+pub(crate) fn scale_param(disabled_when: Option<(&str, FieldValue)>) -> Param {
+    let row = Param::custom("scale", tl!("Scale:"), |ui, fields, _| {
+        let units: Vec<Entry<String>> =
+            Unit::ALL.iter().filter(|u| **u != Unit::FeetInches).map(|u| Entry::new(u.label().to_string(), u.label())).collect();
+        let mut unit = fields.text("unit").map_or_else(|| Unit::Millimeters.label().to_string(), str::to_string);
+        let mut scale = Some(fields.number("scale").unwrap_or(1.0));
+        let (lo, hi) = (*vectorcraft_cad::SCALE_RANGE.start(), *vectorcraft_cad::SCALE_RANGE.end());
+        let shown = ui
+            .horizontal(|ui| {
+                ui.label("1");
+                Select::new(tl!("Unit"), Bind::bound(&mut unit), &units).show(ui);
+                ui.label("=");
+                NumberField::new(tl!("Scale"), Bind::bound(&mut scale)).range(lo..=hi).show(ui);
+                ui.label(tl!("Units"));
+            })
+            .response;
+        let scale = scale.unwrap_or(1.0);
+        if fields.text("unit") != Some(unit.as_str()) {
+            fields.set("unit", unit);
+        }
+        if fields.number("scale") != Some(scale) {
+            fields.set("scale", scale);
+        }
+        shown
+    })
+    .companions(["unit"]);
+    match disabled_when {
+        Some((key, FieldValue::Bool(v))) => row.enabled_when(key, FieldValue::Bool(!v)),
+        _ => row,
+    }
 }
 
 /// Open DXF Options for an export whose params (path, artboard choice, any DXF option) are
 /// `params`, over the options used last. A `dxfPreset` in `params` sets its fields under the
 /// options `params` gives.
 pub fn open(app: &mut VectorcraftApp, params: &Value) {
+    open_with(app, params, false);
+}
+
+/// [`open`] for Export Selection when `selection` is set: the options then write the selected art alone.
+pub fn open_with(app: &mut VectorcraftApp, params: &Value, selection: bool) {
     let mut fields = defaults();
     if let Some(o) = app.ui.dxf_options.as_object() {
         fields.extend(o.iter().map(|(k, v)| (k.clone(), v.clone())));
@@ -113,112 +187,41 @@ pub fn open(app: &mut VectorcraftApp, params: &Value) {
         fields.extend(o.iter().map(|(k, v)| (k.clone(), v.clone())));
     }
     fields.insert("format".into(), json!("dxf"));
-    let mut d = Dialog::new(KIND, Value::Object(fields));
-    show_matching_preset(&mut d);
-    app.ui.dialog = Some(d);
-}
-
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let presets: Vec<(&str, &str)> = DxfPreset::ALL.iter().map(|p| (p.id(), p.label())).collect();
-    choice(ui, d, PRESET, tl!("Preset:"), &presets);
-    apply_picked_preset(d, false);
-    ui.add_space(4.0);
-    let versions: Vec<(&str, &str)> = DxfVersion::ALL.iter().map(|v| (v.id(), v.label())).collect();
-    choice(ui, d, "version", tl!("Version:"), &versions);
-    ui.add_space(4.0);
-    scale_row(ui, d);
-    ui.horizontal(|ui| {
-        ui.add_space(LABEL + 8.0);
-        check(ui, d, "scaleLineweights", tl!("Scale Lineweights"));
+    let mut values = dialog_fields(&fields);
+    settle(&mut values);
+    let has_selection = app.session.active().is_some_and(|st| !st.selection.is_empty());
+    let ctx = app.ui_ctx.clone().unwrap_or_default();
+    let dialog = HostedParamDialog::new(&ctx, KIND, values, move |fields| {
+        settle(fields);
+        let note = fields.text("colors").and_then(ColorDepth::from_id) == Some(ColorDepth::True)
+            && fields.text("version").and_then(DxfVersion::from_id).unwrap_or_default() < DxfVersion::R2004;
+        ParamDialog::new(KIND, tl!("DXF Options"), rows(selection, has_selection, note))
+            .values(Bind::bound(fields))
+            .ok_label(tl!("Export").into())
+            .below(|ui, fields| {
+                ui.weak(match fields.text("preserve").and_then(Preserve::from_id).unwrap_or_default() {
+                    Preserve::Appearance => tl!("Type becomes outlines, and strokes a CAD line can't draw become filled shapes."),
+                    Preserve::Editability => tl!("Type stays text, and every stroke is a line with its lineweight and dashes."),
+                });
+            })
     });
-    ui.add_space(4.0);
-    let depths: Vec<(&str, &str)> = ColorDepth::ALL.iter().map(|c| (c.id(), c.label())).collect();
-    choice(ui, d, "colors", tl!("Number of Colors:"), &depths);
-    let version = DxfVersion::from_id(&d.str("version")).unwrap_or_default();
-    if ColorDepth::from_id(&d.str("colors")) == Some(ColorDepth::True) && version < DxfVersion::R2004 {
-        note(ui, tl!("True colour needs version 2004 or later: the nearest of 256 colours is written."));
-    }
-    let rasters: Vec<(&str, &str)> = RasterFormat::ALL.iter().map(|r| (r.id(), r.label())).collect();
-    choice(ui, d, "rasterFormat", tl!("Raster File Format:"), &rasters);
-    ui.add_space(10.0);
-    widgets::subheader(ui, tl!("Export Option"));
-    let preserve = Preserve::from_id(&d.str("preserve")).unwrap_or_default();
-    ui.horizontal(|ui| {
-        for p in Preserve::ALL {
-            if widgets::radio(ui, p.label(), p == preserve, true) {
-                d.fields.insert("preserve".into(), json!(p.id()));
-            }
-            ui.add_space(12.0);
-        }
-    });
-    ui.add_space(4.0);
-    let selection = app.session.active().is_some_and(|st| !st.selection.is_empty());
-    if widgets::check(ui, tl!("Export Selected Art Only"), d.bool("selectedOnly") && selection, selection) {
-        d.fields.insert("selectedOnly".into(), json!(!d.bool("selectedOnly")));
-    }
-    check(ui, d, "alterPaths", tl!("Alter Paths for Appearance"));
-    // Preserve Appearance always outlines type.
-    let appearance = preserve == Preserve::Appearance;
-    if widgets::check(ui, tl!("Outline Text"), appearance || d.bool("outlineText"), !appearance) {
-        d.fields.insert("outlineText".into(), json!(!d.bool("outlineText")));
-    }
-    ui.add_space(8.0);
-    super::form::caption(
-        ui,
-        match preserve {
-            Preserve::Appearance => tl!("Type becomes outlines, and strokes a CAD line can't draw become filled shapes."),
-            Preserve::Editability => tl!("Type stays text, and every stroke is a line with its lineweight and dashes."),
-        },
-    );
-    show_matching_preset(d);
-    false
-}
-
-/// Scale: 1 [unit] = [scale] Units (the `unit` and `scale` fields; DXF import reads them too).
-pub(super) fn scale_row(ui: &mut egui::Ui, d: &mut Dialog) {
-    let t = crate::theme::Tokens::get(ui.ctx());
-    let units: Vec<&str> = Unit::ALL.iter().filter(|u| **u != Unit::FeetInches).map(|u| u.label()).collect();
-    let unit = Unit::named(&d.str("unit")).unwrap_or(Unit::Millimeters);
-    widgets::label_row(ui, tl!("Scale:"), LABEL, |ui| {
-        ui.label(egui::RichText::new("1").color(t.text));
-        if let Some(u) = widgets::dropdown(ui, "dxf-unit", unit.label(), &units, 120.0).and_then(|i| units.get(i)) {
-            d.fields.insert("unit".into(), json!(u));
-        }
-        ui.label(egui::RichText::new("=").color(t.text));
-        let scale = d.f64("scale", 1.0);
-        if let Some(v) = widgets::plain_field(ui, "dxf-scale", scale, "", 3, 64.0) {
-            let (lo, hi) = (*vectorcraft_cad::SCALE_RANGE.start(), *vectorcraft_cad::SCALE_RANGE.end());
-            d.fields.insert("scale".into(), json!(v.clamp(lo, hi)));
-        }
-        ui.label(egui::RichText::new(tl!("Units")).color(t.text));
-    });
-}
-
-/// A dim line under a field.
-fn note(ui: &mut egui::Ui, text: &str) {
-    ui.horizontal(|ui| {
-        ui.add_space(LABEL + 8.0);
-        super::form::caption(ui, text);
-    });
+    export_host::open(app, Export::Dxf, selection, dialog);
 }
 
 /// Check the options, remember them, and write the file(s).
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+pub(super) fn confirm(app: &mut VectorcraftApp, open: &Open, fields: &DialogFields) -> Result<After, String> {
     // A preset or field set since the dialog last drew (the control channel sets fields without
     // drawing) counts as drawn.
-    let mut d = d.clone();
-    apply_picked_preset(&mut d, false);
-    show_matching_preset(&mut d);
-    let d = &d;
-    let params = super::form::params(d);
+    let mut fields = fields.clone();
+    settle(&mut fields);
+    let map = form::json_of(&rows(open.selection, true, false), &fields);
+    let params = Value::Object(map.clone());
     fileio::dxf::check(&params)?;
     // Nothing selected keeps the dialog open too.
     if let Some(st) = app.session.active() {
         fileio::export_source(st, &params).map_err(|e| e.to_string())?;
     }
-    let remembered = params.as_object().map(|o| o.iter().filter(|(k, _)| !PER_EXPORT.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())));
-    app.ui.dxf_options = Value::Object(remembered.into_iter().flatten().collect());
-    app.ui.dialog = None;
-    let path = d.fields.get("path").and_then(Value::as_str).map(str::to_string);
-    io::export(app, Some("dxf"), path, &params)
+    app.ui.dxf_options = Value::Object(map.into_iter().filter(|(k, _)| !PER_EXPORT.contains(&k.as_str())).collect());
+    let path = fields.text("path").map(str::to_string);
+    io::export(app, Some("dxf"), path, &super::export_as::exported(open.selection, params)).map(|_| None)
 }

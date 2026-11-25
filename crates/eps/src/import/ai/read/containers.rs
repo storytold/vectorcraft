@@ -16,6 +16,9 @@ impl<'a> Reader<'a> {
         if matches!(kind, Kind::Layer(_)) {
             self.ensure_space();
             self.check_symbols();
+            if self.defs_only {
+                (self.envelope_checks, self.dash_checks) = (0, 0);
+            }
         }
         let base = if matches!(kind, Kind::Obj(_)) { self.stack.len() } else { self.frames.last().map_or(0, |f| f.base) };
         self.frames.push(Frame {
@@ -120,11 +123,13 @@ impl<'a> Reader<'a> {
         }
         // A group holding only clipping paths (`q … u <path> W n U … Q`) doesn't clip on its own: `u`/`U` don't save
         // the graphics state as `q`/`Q` do, so its paths clip the clipping group around it, as the file's PDF part draws it.
+        // In a compound path (`*u u <path> W n … U *U`, possibly nested in other groups) they are the compound
+        // path's subpaths, as its other grouped paths are: the compound clipping path, their union.
         if matches!(kind, Kind::Group)
             && unread.is_empty()
             && !clips.is_empty()
             && clips.len() == kids.len()
-            && matches!(self.frames.last(), Some(Frame { kind: Kind::Clip, .. }))
+            && (matches!(self.frames.last(), Some(Frame { kind: Kind::Clip, .. })) || self.in_compound())
         {
             for kid in kids {
                 if let Some(parent) = self.frames.last_mut() {
@@ -134,6 +139,15 @@ impl<'a> Reader<'a> {
             }
             return Ok(());
         }
+        // A clipping group (`q` … `Q`) with no clipping path whose last object is type: that type is
+        // its clipping path, as Illustrator writes a clipping mask of type made from the text
+        // document (`/AI11Text`), which has no `W`. The slot is filled later ([`clip_by_type`]).
+        let type_clip = match kids.last() {
+            Some(last) if matches!(kind, Kind::Clip) && clips.is_empty() && !super::is_look_slot(last.name.as_deref()) => {
+                slot_of(last.name.as_deref()).map(|_| last.id)
+            }
+            _ => None,
+        };
         // A compound path of clipping paths clips its clipping group.
         let clipping = matches!(kind, Kind::Compound) && !clips.is_empty();
         self.group_ended = !matches!(kind, Kind::Compound);
@@ -179,6 +193,9 @@ impl<'a> Reader<'a> {
         if clipping && let Some(f) = self.frames.last_mut() {
             f.clips.push(f.children.len());
         }
+        if let Some(slot) = type_clip {
+            self.type_clips.insert(node.id, slot);
+        }
         if compound_members {
             self.compound_groups.insert(node.id);
         }
@@ -195,6 +212,18 @@ impl<'a> Reader<'a> {
             self.add(p, opened_hidden || hidden)?;
         }
         Ok(())
+    }
+
+    /// Is the innermost open frame a compound path (`*u`), or a group in one with only groups between them?
+    fn in_compound(&self) -> bool {
+        for f in self.frames.iter().rev() {
+            match f.kind {
+                Kind::Group => {}
+                Kind::Compound => return true,
+                _ => return false,
+            }
+        }
+        false
     }
 
     /// The compound path of `kids`, painted and made transparent as its subpaths say.
@@ -482,6 +511,13 @@ impl<'a> Reader<'a> {
             return Ok(());
         }
         let Some(f) = self.frames.pop() else { return Ok(()) };
+        let depth = self.frames.len();
+        // A block left open ends with its dictionary, and envelopes still waiting in it keep their
+        // drawn art: nothing after the dictionary is theirs.
+        self.envelope_blocks.retain(|d| *d <= depth);
+        while let Some(p) = self.envelopes.pop_if(|p| p.depth > depth) {
+            self.warn(crate::import::ai::envelope::drawn_note(p.typed));
+        }
         let Frame { kind, children, base, hidden, gs, pending_unread_fill, pending_unread_stroke, after, mesh_ended, state, .. } = f;
         let Kind::Obj(mut o) = kind else { return Ok(()) };
         obj::close(&mut o, &mut self.stack, base);
@@ -496,7 +532,10 @@ impl<'a> Reader<'a> {
         }
         self.after_object = after;
         self.mesh_ended = mesh_ended;
-        if matches!(self.frames.last(), Some(Frame { kind: Kind::Obj(_), .. })) {
+        // An object's dictionary in an envelope's `AIDeformArtKey` block is about the art before it
+        // there, as it is in a container: an envelope there is one of the outer envelope's contents.
+        let in_block = o.ty == "ArtDictionary" && self.envelope_blocks.last() == Some(&depth);
+        if !in_block && matches!(self.frames.last(), Some(Frame { kind: Kind::Obj(_), .. })) {
             return self.push(V::Obj(Rc::new(*o)));
         }
         match o.ty.as_str() {
@@ -636,17 +675,22 @@ impl<'a> Reader<'a> {
     /// A symbol instance (`/SymbolInstance`): the symbol its `SymbolRef` names, placed by its
     /// `RTransformMatrix`, hidden and locked as the state says. In a symbol's art the matrix is
     /// written about the canvas point of art space's origin, and the name is the file's until the
-    /// symbols are checked ([`Self::check_symbols`]). An instance of a symbol that wasn't read, one
-    /// whose appearance differs from its symbol's, or one placed only by a `Matrix` or `Transform`,
-    /// comes in as the page draws it, within the symbol's box placed by the matrix when the box is
-    /// known.
+    /// symbols are checked ([`Self::check_symbols`]). Files of versions 10 to 13 place an instance
+    /// by a `TransformMatrix` instead, which takes the symbol's art to the canvas (y down); in a
+    /// symbol's art, it takes the art to that symbol's space. The reader converts it with the canvas
+    /// point of art space's origin, from the template box. An instance of a symbol that wasn't
+    /// read, one whose appearance differs from its symbol's, or one placed only by a `Matrix` or
+    /// `Transform`, comes in as the page draws it, within the symbol's box placed by the matrix
+    /// when the box is known.
     fn symbol_instance(&mut self, o: &Obj) -> Result<(), String> {
         let name = self.names.entry(o, "SymbolRef");
         let affine = |n: &[f64]| match n {
             [a, b, c, d, e, f] if [a, b, c, d, e, f].iter().all(|v| v.is_finite()) => Some(super::Affine::new([*a, *b, *c, *d, *e, *f])),
             _ => None,
         };
-        let live = affine(&o.nums("RTransformMatrix"));
+        // The canvas → art space: y turned up about the canvas point of art space's origin.
+        let from_canvas = self.canvas_origin().map(|o| super::Affine::new([1.0, 0.0, 0.0, -1.0, -o.x, o.y]));
+        let live = affine(&o.nums("RTransformMatrix")).or_else(|| Some(from_canvas? * affine(&o.nums("TransformMatrix"))?));
         let boxed_only = live.is_none();
         let matrix = live.or_else(|| {
             o.get("Matrix")
@@ -708,6 +752,8 @@ impl<'a> Reader<'a> {
         if std::mem::replace(&mut self.symbols_checked, true) {
             return;
         }
+        // The symbols are all read now: the heads of those defined after the styles.
+        self.read_arrowheads();
         // Each symbol's name in the file (none for one named as an earlier one), and the names its
         // instances use.
         let files: HashMap<&str, &str> = self.symbol_names.iter().map(|(file, named)| (named.as_str(), file.as_str())).collect();
@@ -870,6 +916,7 @@ impl<'a> Reader<'a> {
             return;
         }
         let Some(p) = self.envelopes.pop() else { return };
+        let scale = self.space_scale();
         let drawn = self.frames.last().filter(|f| f.children.len() == p.siblings + 1).and_then(|f| f.children.last());
         let Some(drawn) = drawn else {
             self.warn(crate::import::ai::envelope::drawn_note(p.typed));
@@ -879,7 +926,7 @@ impl<'a> Reader<'a> {
             self.wait_for_type(p);
             return;
         }
-        let live = (self.envelope_checks > 0).then(|| crate::import::ai::envelope::live(&p.obj, p.before, p.inner)).flatten();
+        let live = (self.envelope_checks > 0).then(|| crate::import::ai::envelope::live(&p.obj, p.before, p.inner, scale)).flatten();
         let Some(kind) = live else {
             self.warn(crate::import::ai::envelope::DRAWN);
             return;
@@ -967,8 +1014,8 @@ impl Reader<'_> {
             self.warn(crate::import::ai::envelope::TYPE_DRAWN);
             return;
         }
-        let drawn = drawn.id;
-        self.typed_envelopes.push(crate::import::ai::envelope::TypedEnvelope { obj: p.obj, before: p.before, inner: p.inner, drawn });
+        let (drawn, scale) = (drawn.id, self.space_scale());
+        self.typed_envelopes.push(crate::import::ai::envelope::TypedEnvelope { obj: p.obj, before: p.before, inner: p.inner, drawn, scale });
     }
 }
 

@@ -38,6 +38,15 @@ pub(crate) fn native(interp: &mut Interp, name: &'static str, f: NativeFn, lengt
     Ok(o)
 }
 
+/// A built-in function object that may wait for the host ([`crate::interp::Pause`]), defined as
+/// `name` on `on` the way [`method`] defines one.
+pub(crate) fn pausable_method(interp: &mut Interp, on: ObjId, name: &'static str, f: crate::interp::PausableFn, length: u32) -> JsResult<()> {
+    let proto = interp.intrinsics.function_proto;
+    let m = alloc(interp, Class::Function(Func::Pausable { f, name }), Some(proto));
+    interp.define(m, key("length"), Prop::Data { value: Value::Number(f64::from(length)), flags: 0 })?;
+    interp.define(on, key(name), Prop::Data { value: Value::Object(m), flags: HIDDEN })
+}
+
 pub(crate) fn method(interp: &mut Interp, on: ObjId, name: &'static str, f: NativeFn, length: u32) -> JsResult<()> {
     let m = native(interp, name, f, length, NativeKind::Plain, false)?;
     interp.define(on, key(name), Prop::Data { value: Value::Object(m), flags: HIDDEN })
@@ -318,7 +327,7 @@ fn install_errors(interp: &mut Interp, object_proto: ObjId) -> JsResult<()> {
     for (i, (name, f)) in kinds.into_iter().enumerate() {
         // Error.prototype and each NativeError prototype are Error objects (sections 15.11.4 and
         // 15.11.7.7).
-        let proto = alloc(interp, Class::Error, Some(if i == 0 { object_proto } else { error_proto }));
+        let proto = alloc(interp, Class::Error(None), Some(if i == 0 { object_proto } else { error_proto }));
         if i == 0 {
             error_proto = proto;
             method(interp, proto, "toString", error_to_string, 0)?;
@@ -466,6 +475,7 @@ fn function_ctor(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsRe
         .chain([parts.len().saturating_sub(1), HEAD.len() + MID.len() + TAIL.len(), body.len()])
         .fold(0usize, usize::saturating_add);
     interp.check_source_units(total).map_err(|e| interp.compile_error_to_abrupt(e))?;
+    interp.prepare_source(total)?;
     let mut units = Vec::with_capacity(total);
     units.extend(HEAD.encode_utf16());
     for (i, p) in parts.iter().enumerate() {
@@ -477,6 +487,7 @@ fn function_ctor(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsRe
     units.extend(MID.encode_utf16());
     units.extend_from_slice(&body.flat());
     units.extend(TAIL.encode_utf16());
+    interp.observe_code(&units);
     interp.source_units = interp.source_units.saturating_add(units.len());
     let remaining = interp.options.max_source_units.saturating_sub(interp.source_units.saturating_sub(units.len()));
     let options = crate::Options { strict: false, max_source_units: remaining, ..interp.options.clone() };
@@ -492,7 +503,7 @@ fn function_ctor(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsRe
         Err(CompileFail::Internal(m)) => return Err(Abrupt::Internal(m)),
     };
     interp.charge_code(&code, 0)?;
-    let env = interp.global_env;
+    let env = interp.global_scope();
     interp.make_closure(code, env).map(Value::Object)
 }
 
@@ -512,7 +523,7 @@ fn function_to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) ->
             interp.heap.bytes = interp.heap.bytes.saturating_add(bytes);
             return Ok(Value::String(Str::from_units(units.to_vec())));
         }
-        Some(Func::Native { name, .. }) => format!("function {name}() {{ [native code] }}"),
+        Some(Func::Native { name, .. } | Func::Pausable { name, .. }) => format!("function {name}() {{ [native code] }}"),
         Some(Func::Host { name, .. } | Func::Data { name, .. } | Func::Eval { name, .. }) => format!("function {name}() {{ [native code] }}"),
         Some(Func::Bound { .. }) => "function () { [native code] }".to_string(),
         None => return Err(interp.type_error("Function.prototype.toString was called on a value that is not a function")),
@@ -554,7 +565,9 @@ fn eval(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Valu
     let x = arg(args, 0);
     let Value::String(s) = &x else { return Ok(x) };
     interp.check_source_units(s.len()).map_err(|e| interp.compile_error_to_abrupt(e))?;
+    interp.prepare_source(s.len())?;
     let units = s.flat();
+    interp.observe_code(&units);
     let code = interp.compile_source(&units, false, CodeKind::Eval).map_err(|e| interp.compile_error_to_abrupt(e))?;
     interp.run_global(code, true)
 }

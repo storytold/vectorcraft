@@ -6,10 +6,11 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{CharStyle, Guide, Node, NodeId, NodeKind, SavedSelection, TextKind};
+use vectorcraft_doc::{CharStyle, Guide, Node, NodeId, NodeKind, SavedSelection, Selection, TextKind};
 use vectorcraft_geom::Vec2;
 
 use super::edit::selected_roots;
+use super::panelcmds::artboard_at;
 use super::pathops::Beside;
 use super::select::{first_selectable, is_selectable, selectable_ids, walk_selectable};
 use super::{
@@ -201,7 +202,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Guide",
             [],
             None,
-            "{vertical: bool, pos: pt (x for vertical, y for horizontal), artboard?: index (an artboard guide: it runs across that artboard only and moves, is copied and is deleted with it; default a canvas guide, across the whole canvas), layer?: id (the layer it is on, shown, hidden, locked and deleted with it; default the current layer)} → {index}",
+            "{vertical: bool, pos: pt (x for vertical, y for horizontal), artboard?: index (0-based whole number; an artboard guide: it runs across that artboard only and moves, is copied and is deleted with it; default, or null, a canvas guide, across the whole canvas), layer?: id (the layer it is on, shown, hidden, locked and deleted with it; default the current layer)} → {index}",
             has_doc,
             guide_add
         ),
@@ -210,7 +211,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Guides",
             [],
             None,
-            "{} → [{index, vertical, pos, selected, artboard?: index (an artboard guide's), layer?: id (the layer it is on), shown, editable (its layer shown and unlocked)}…] the ruler guides",
+            "{} → [{index, id (its node, which `layer.setProps` hides or locks on its own), vertical, pos, selected, artboard?: index (an artboard guide's), layer?: id (the layer it is on), hidden, locked (its own visibility and lock), shown, editable (it and its layer shown and unlocked)}…] the ruler guides",
             has_doc,
             guide_list
         ),
@@ -219,7 +220,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select Guides",
             [],
             None,
-            "{indexes: [index…], toggle?: bool} select ruler guides on their own (deselecting the art); toggle adds or removes them instead, keeping the selected art (a Shift-click on a guide) → {selected: [index…]}",
+            "{indexes: [index…] (at most 10,000), toggle?: bool} select ruler guides on their own (deselecting the art); toggle adds or removes them instead, keeping the selected art (a Shift-click on a guide) → {selected: [index…]}",
             guides_unlocked,
             guide_select
         ),
@@ -228,7 +229,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Remove Guide",
             [],
             None,
-            "{index?} delete ruler guide `index`, else the selected ones (as Delete / edit.clear does) → {count}",
+            "{index?, indexes?: [index…] (at most 10,000)} delete ruler guide `index` (or guides `indexes`, as dragging their rows onto the Layers panel's trash does), else the selected ones (as Delete / edit.clear does), in one undo step; give `index` or `indexes`, not both, and an index given twice counts once; a hidden or locked guide, or one on a hidden or locked layer, is an error → {count}",
             guides_unlocked,
             guide_remove
         ),
@@ -237,7 +238,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Guide",
             [],
             None,
-            "{index, pos: pt} | {dx?, dy?: pt, copy?: bool} put ruler guide `index` at `pos`, or move the selected guides (vertical ones by dx, horizontal ones by dy); copy leaves them and selects the moved copies",
+            "{index, pos: pt} | {dx?, dy?: pt, copy?: bool, interpolate?: bool (with art selected too: as object.move's)} put ruler guide `index` at `pos`, or move the selected guides (vertical ones by dx, horizontal ones by dy); copy leaves them and selects the moved copies",
             guides_unlocked,
             guide_move
         ),
@@ -246,7 +247,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Guide to Layer",
             [],
             None,
-            "{index?, indexes?: [index…], layer: id} put ruler guide `index` (or guides `indexes`), else the selected guides, on layer `layer` (a layer or sublayer), as dragging their rows onto that layer's row in the Layers panel does → {count}",
+            "{index?, indexes?: [index…] (at most 10,000), layer: id} put ruler guide `index` (or guides `indexes`), else the selected guides, on layer `layer` (a layer or sublayer), as dragging their rows onto that layer's row in the Layers panel does; give `index` or `indexes`, not both, and an index given twice counts once → {count}",
             guides_unlocked,
             guide_set_layer
         ),
@@ -268,6 +269,33 @@ pub fn specs() -> Vec<CommandSpec> {
             "{title?, author?, authorTitle?, description?, keywords?: [string…]|\"a, b\" (each once), rating?: 0–5, copyrightStatus?: \"unknown\"|\"copyrighted\"|\"publicDomain\", copyrightNotice?, copyrightUrl?, created?, modified?, colorMode?, units?, artboards?, objects? (the last six only as read back; ignored)} set the File Info in one undo step (SVG with metadata, PDF and PNG exports carry it); no params → {title, author, authorTitle, description, keywords, rating, copyrightStatus, copyrightNotice, copyrightUrl, created, modified (ISO 8601 UTC or null; read-only), colorMode, units, artboards, objects}",
             has_doc,
             super::fileinfo::file_info
+        ),
+        cmd!(
+            "file.info.saveTemplate",
+            "Save Metadata Template…",
+            [],
+            None,
+            "{name?: save into the metadata templates folder as <name>.xmp (a name with characters file systems reject, a dot at either end, or a device name is an error (spaces at either end are dropped); the same name replaces that template), path?: save to this file instead (not both), fields?: {File Info fields as file.info takes them} save these instead of the document's (default: the document's File Info)} write the File Info as an XMP metadata template: title (only one of its own, not Untitled-N), author, authorTitle, description, keywords, rating (1–5), copyrightStatus, copyrightNotice and copyrightUrl, each where it has a value; the dates are left out → {name, path} (with name), {path} (with path), or {data: the XMP text} with neither",
+            has_doc,
+            super::fileinfo::save_template
+        ),
+        cmd!(
+            "file.info.applyTemplate",
+            "Import Metadata Template…",
+            [],
+            None,
+            "{path?: an XMP file, name?: a template of the metadata templates folder by the name or file file.info.templates lists, data?: XMP text (exactly one of the three; at most 8 MB), mode: \"replace\" (clear the author, authorTitle, description, keywords, rating, copyright status, notice and URL, then take the template's; the title stays unless the template has one) | \"keep\" (keep the File Info, and take each field the template has) | \"append\" (keep the File Info, add the template's keywords, and take its other fields only where the File Info has none: a title only over an Untitled-N one, a rating only over 0, a copyright status only over unknown), apply?: true (false: change nothing and return the merged File Info), base?: {File Info fields as file.info takes them} merged into instead of the document's} merge a metadata template into the File Info in one undo step, none when nothing changes; a template value file.info would refuse is left out; a missing file, a file larger than 8 MB or one that is not XMP is an error → the File Info as file.info reports it, with changed: true|false (with apply: false, the merged File Info without changed)",
+            has_doc,
+            super::fileinfo::apply_template
+        ),
+        cmd!(
+            query "file.info.templates",
+            "Metadata Templates",
+            [],
+            None,
+            "{create?: false (true: make the folder when it is missing)} the metadata templates in the metadata templates folder next to the preferences, sorted by name, at most 1,000 → {templates: [{name, file: the file name, path}], folder?: the folder (left out for a request that may not read it, in runs without preferences and on the web, where the list is empty)}",
+            super::always,
+            super::fileinfo::templates
         ),
     ]
 }
@@ -467,14 +495,15 @@ fn direction_handles(s: &mut Session, _: &Value) -> Result<Value> {
         }
     }
     let total: usize = items.iter().map(|x| x.1.len()).sum();
-    s.select(|_, sel| {
-        sel.clear();
-        for (id, refs) in items {
-            sel.add(id);
-            sel.anchors.insert(id, refs);
-        }
-    })?;
+    s.select(|_, sel| select_anchors(sel, items))?;
     Ok(json!({ "anchors": total }))
+}
+
+/// Replaces `sel` with the paths of `items` in order, each once, and direct-selects the anchors
+/// listed with each path. A path listed twice keeps its first place and its last anchor set.
+fn select_anchors(sel: &mut Selection, items: Vec<(NodeId, BTreeSet<(usize, usize)>)>) {
+    sel.set(items.iter().map(|(id, _)| *id));
+    sel.anchors.extend(items);
 }
 
 fn save_selection(s: &mut Session, p: &Value) -> Result<Value> {
@@ -767,15 +796,8 @@ fn clear_guides(s: &mut Session, _: &Value) -> Result<Value> {
 fn guide_add(s: &mut Session, p: &Value) -> Result<Value> {
     let pos = f64_req(p, "pos", "guide.add")?;
     let vertical = switch_or(p, "vertical", false, "guide.add")?;
-    let artboard = match p.get("artboard").filter(|v| !v.is_null()) {
-        Some(v) => {
-            let boards = &s.doc()?.doc.artboards;
-            let ab = v.as_u64().and_then(|i| boards.get(usize::try_from(i).ok()?)).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
-            Some(ab.id)
-        }
-        None => None,
-    };
     let st = s.doc()?;
+    let artboard = artboard_at(&st.doc, p, "artboard", "guide.add")?.and_then(|i| st.doc.artboards.get(i)).map(|a| a.id);
     let layer = match id_param(p, "layer") {
         Some(l) if st.doc.node(l).is_some_and(Node::is_layer) => Some(l),
         Some(_) => return Err(bad("guide.add", "layer must name a layer or sublayer")),
@@ -805,12 +827,17 @@ fn guide_list(s: &mut Session, _: &Value) -> Result<Value> {
     let row = |(i, g): (usize, &Guide)| {
         let selected = g.id.is_some_and(|id| st.selection.guides.contains(&id));
         let mut r = json!({ "index": i, "vertical": g.vertical, "pos": g.pos, "selected": selected });
+        if let Some(id) = g.id {
+            r["id"] = json!(id.0);
+        }
         if let Some(ab) = st.doc.artboards.iter().position(|a| Some(a.id) == g.artboard) {
             r["artboard"] = json!(ab);
         }
         if let Some(l) = g.layer {
             r["layer"] = json!(l.0);
         }
+        r["hidden"] = json!(g.hidden);
+        r["locked"] = json!(g.locked);
         r["shown"] = json!(st.doc.guide_shown(g));
         r["editable"] = json!(st.doc.guide_editable(g));
         r
@@ -824,27 +851,44 @@ fn guide_index_in(ids: &[NodeId], v: Option<&Value>, cmd: &str) -> Result<NodeId
     ids.get(i).copied().ok_or_else(|| bad(cmd, format!("no guide {i}")))
 }
 
+/// The most guide indexes one `indexes` list may hold.
+const MAX_GUIDE_INDEXES: usize = 10_000;
+
+/// `indexes` as a list of at most [`MAX_GUIDE_INDEXES`] entries.
+fn guide_index_list<'a>(v: &'a Value, cmd: &str) -> Result<&'a Vec<Value>> {
+    let list = v.as_array().ok_or_else(|| bad(cmd, "indexes must be an array of guide indexes"))?;
+    if list.len() > MAX_GUIDE_INDEXES {
+        return Err(bad(cmd, format!("indexes may hold at most {MAX_GUIDE_INDEXES} entries")));
+    }
+    Ok(list)
+}
+
 /// The id of ruler guide `index` of the active document (`index` validated).
 fn guide_index(s: &Session, v: Option<&Value>, cmd: &str) -> Result<NodeId> {
     guide_index_in(&guide_ids(&s.doc()?.doc), v, cmd)
 }
 
-/// Is ruler guide `id` one that can be moved or deleted: not on a hidden or locked layer?
+/// Is ruler guide `id` one that can be moved or deleted: not hidden or locked itself, nor on a
+/// hidden or locked layer?
 fn check_editable_guide(s: &Session, id: NodeId) -> Result<NodeId> {
     let d = &s.doc()?.doc;
-    if !d.ruler_guide(id).is_some_and(|g| d.guide_editable(&g)) {
+    let guide = d.ruler_guide(id);
+    if guide.as_ref().is_some_and(|g| g.hidden || g.locked) {
+        return Err(EngineError::Other("the guide is hidden or locked".into()));
+    }
+    if !guide.is_some_and(|g| d.guide_editable(&g)) {
         return Err(EngineError::Other("the guide is on a hidden or locked layer".into()));
     }
     Ok(id)
 }
 
-/// [`guide_index`] of a guide that can be moved or deleted: not on a hidden or locked layer.
+/// [`guide_index`] of a guide that can be moved or deleted ([`check_editable_guide`]).
 fn editable_guide_index(s: &Session, v: Option<&Value>, cmd: &str) -> Result<NodeId> {
     check_editable_guide(s, guide_index(s, v, cmd)?)
 }
 
 fn guide_select(s: &mut Session, p: &Value) -> Result<Value> {
-    let list = p.get("indexes").and_then(Value::as_array).ok_or_else(|| bad("guide.select", "missing indexes"))?;
+    let list = guide_index_list(p.get("indexes").ok_or_else(|| bad("guide.select", "missing indexes"))?, "guide.select")?;
     let ids = guide_ids(&s.doc()?.doc);
     let picked = list.iter().map(|v| guide_index_in(&ids, Some(v), "guide.select")).collect::<Result<Vec<_>>>()?;
     if switch_or(p, "toggle", false, "guide.select")? {
@@ -861,18 +905,30 @@ fn guide_select(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "selected": guide_indexes(&st.doc, &st.selection.guides) }))
 }
 
-/// Delete ruler guide `index`, else the selected guides, in one undo step → {count}.
+/// Delete ruler guide `index` (or guides `indexes`), else the selected guides, in one undo step
+/// → {count}.
 pub(crate) fn guide_remove(s: &mut Session, p: &Value) -> Result<Value> {
-    let gone: Vec<NodeId> = match p.get("index") {
-        Some(v) => vec![editable_guide_index(s, Some(v), "guide.remove")?],
-        None => s.doc()?.selection.guides.clone(),
+    const C: &str = "guide.remove";
+    let mut gone: Vec<NodeId> = match (p.get("index"), p.get("indexes")) {
+        (Some(_), Some(_)) => return Err(bad(C, "give index or indexes, not both")),
+        (Some(v), None) => vec![editable_guide_index(s, Some(v), C)?],
+        (None, Some(list)) => {
+            let list = guide_index_list(list, C)?;
+            let ids = guide_ids(&s.doc()?.doc);
+            // A set, so an index given twice deletes its guide once and the ids held never outnumber the guides.
+            let set = list.iter().map(|v| check_editable_guide(s, guide_index_in(&ids, Some(v), C)?)).collect::<Result<BTreeSet<_>>>()?;
+            set.into_iter().collect()
+        }
+        (None, None) => s.doc()?.selection.guides.clone(),
     };
+    gone.sort_unstable();
+    gone.dedup();
     if gone.is_empty() {
-        return Err(bad("guide.remove", "no guide selected"));
+        return Err(bad(C, "no guide selected"));
     }
     let label = if gone.len() == 1 { "Delete Guide" } else { "Delete Guides" };
     s.edit(label, |d, sel| {
-        d.retain_guides(sel, |g| !g.id.is_some_and(|id| gone.contains(&id)));
+        d.retain_guides(sel, |g| !g.id.is_some_and(|id| gone.binary_search(&id).is_ok()));
         Ok(())
     })?;
     Ok(json!({ "count": gone.len() }))
@@ -888,14 +944,19 @@ fn guide_set_layer(s: &mut Session, p: &Value) -> Result<Value> {
     if super::layer::locked_within(d, layer) {
         return Err(EngineError::Other("the layer or group is locked".into()));
     }
-    let moving: Vec<NodeId> = match (p.get("index"), p.get("indexes").and_then(Value::as_array)) {
-        (Some(v), _) => vec![editable_guide_index(s, Some(v), C)?],
+    let mut moving: Vec<NodeId> = match (p.get("index"), p.get("indexes")) {
+        (Some(_), Some(_)) => return Err(bad(C, "give index or indexes, not both")),
+        (Some(v), None) => vec![editable_guide_index(s, Some(v), C)?],
         (None, Some(list)) => {
+            let list = guide_index_list(list, C)?;
             let ids = guide_ids(&s.doc()?.doc);
-            list.iter().take(10_000).map(|v| check_editable_guide(s, guide_index_in(&ids, Some(v), C)?)).collect::<Result<Vec<_>>>()?
+            list.iter().map(|v| check_editable_guide(s, guide_index_in(&ids, Some(v), C)?)).collect::<Result<Vec<_>>>()?
         }
         (None, None) => s.doc()?.selection.guides.clone(),
     };
+    // An index given twice moves (and counts) its guide once; the others keep their order.
+    let mut seen = HashSet::new();
+    moving.retain(|id| seen.insert(*id));
     if moving.is_empty() {
         return Err(bad(C, "no guide selected (or give an index)"));
     }
@@ -929,6 +990,7 @@ pub(crate) fn guide_move(s: &mut Session, p: &Value) -> Result<Value> {
     let dx = number_or(p, "dx", 0.0, "guide.move")?;
     let dy = number_or(p, "dy", 0.0, "guide.move")?;
     let copy = switch_or(p, "copy", false, "guide.move")?;
+    switch_or(p, "interpolate", false, "guide.move")?;
     if !s.doc()?.selection.is_empty() {
         let ids = super::edit::selected_roots(s)?;
         return super::object::apply_transform(
@@ -966,3 +1028,6 @@ fn close_all(s: &mut Session, _: &Value) -> Result<Value> {
     }
     Ok(json!({ "closed": n }))
 }
+
+#[cfg(test)]
+mod tests;

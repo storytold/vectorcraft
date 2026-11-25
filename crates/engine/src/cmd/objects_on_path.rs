@@ -9,6 +9,11 @@
 //! from the tool's options (Objects on Path Tool Options). `object.objectsOnPath.options` sets the
 //! group's Pivot, Rotate and Space (the distance between the objects along the path, and where the
 //! first one attaches), and `object.objectsOnPath.expand` makes it a plain group.
+//! `object.objectsOnPath.selectMember` chooses one object of a selected group (its Select/Move
+//! widget), and `object.objectsOnPath.moveMember` moves one object to another's place along the
+//! path, the objects between it and that place each moving one place toward where it was; hidden
+//! and locked objects keep their places. `object.objectsOnPath.detach` takes one object out of its
+//! group, just above it, and the others move up the path.
 //!
 //! After every edit, [`refresh`] puts the objects of each Objects on Path group that changed back
 //! on its path: editing the path moves them, an object moved on its own goes back to its place,
@@ -17,9 +22,10 @@
 //!
 //! Behavior: <https://helpx.adobe.com/illustrator/using/objects-on-path.html> (the tool and
 //! Object › Objects on Path › Attach; the order on the path, the attachment point, the distribution,
-//! the objects squared to the path; Pivot and Rotate; path edits realign the objects; Expand).
+//! the objects squared to the path; Pivot and Rotate; path edits realign the objects; Detach and
+//! the objects that move up the path after it; Expand).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -28,7 +34,7 @@ use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 use vectorcraft_geom::Rect;
 
 use super::edit::{roots_of, selected_roots};
-use super::{CommandSpec, EngineError, Result, Session, bad, check_numbers, checked_id, checked_ids_param, cmd, has_selection};
+use super::{CommandSpec, EngineError, Result, Session, bad, check_numbers, checked_id, checked_ids_param, cmd, has_doc, has_selection};
 
 /// The id of the Objects on Path tool.
 pub const TOOL: &str = "objectsOnPath";
@@ -52,6 +58,33 @@ pub fn specs() -> Vec<CommandSpec> {
             "{ids?: Objects on Path groups or objects in them (default: the selection), pivot?: 0-8 (the reference point of each object that attaches to the path, row by row from the top left; 4: the center), rotate?: degrees counter-clockwise from upright on the path, spacing?: points along the path from each object's attachment point to the next one's (0 or more, kept to what the path has room for; or \"auto\", the default: spread evenly with the last object at the end of an open path), start?: points along the path from its first anchor to the first object's attachment point (default 0)} set how the objects of the groups attach and are spaced → {ids}",
             has_objects_on_path,
             options
+        ),
+        cmd!(
+            "object.objectsOnPath.selectMember",
+            "Select Object on Path",
+            [],
+            None,
+            "{member: id of an object of an Objects on Path group} select the group alone with that object chosen, as a click on the object's Select/Move widget does; any other selection change clears the choice → {group, member}",
+            has_doc,
+            select_member
+        ),
+        cmd!(
+            "object.objectsOnPath.moveMember",
+            "Move Object on Path",
+            [],
+            None,
+            "{member: id of an object of an Objects on Path group, target: id of another object of the same group, group?: the group's id (when given, it must be the group of both); neither object nor the group may be hidden or locked} move the object to the target's place along the path; the objects between them each move one place toward where it was, except hidden and locked objects, which keep their places. Only the order along the path changes: Space, the start, Pivot, Rotate and the order in the Layers panel stay. A target that is the object itself changes nothing → {group, member, index}",
+            has_doc,
+            move_member
+        ),
+        cmd!(
+            "object.objectsOnPath.detach",
+            "Detach Object from Path",
+            [],
+            None,
+            "{member?: id of an object of an Objects on Path group (default: the object chosen with the selected group's Select/Move widget); neither the object nor the group may be hidden or locked} take one object off the path, out of its group and just above the group in the Layers panel, where it stays as drawn and is selected alone. The group's other objects move up the path in their order: with Auto Space they spread evenly again, and a Space value and the start are kept. The group and its path stay, even with one object or none left → {group, member}",
+            has_doc,
+            detach
         ),
         cmd!(
             "object.objectsOnPath.expand",
@@ -294,6 +327,112 @@ fn options(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(json!({ "ids": groups.iter().map(|g| g.0).collect::<Vec<_>>() }))
+}
+
+// ---------- Select/Move ----------
+
+/// The Objects on Path group whose object `key` of `p` names, checked: an object listed in the
+/// group's record (not its path), in a group that is not hidden or locked.
+fn member_param(s: &Session, p: &Value, key: &str, cmd: &str) -> Result<(NodeId, NodeId)> {
+    let v = p.get(key).filter(|v| !v.is_null()).ok_or_else(|| bad(cmd, format!("missing `{key}`")))?;
+    let id = checked_id(s, v, cmd)?;
+    let d = &s.doc()?.doc;
+    let not_on_path = || bad(cmd, format!("`{key}` must name an object attached to the path of an Objects on Path group"));
+    let g =
+        d.ancestry(id).unwrap_or_default().into_iter().rev().nth(1).filter(|g| d.node(*g).is_some_and(is_objects_on_path)).ok_or_else(not_on_path)?;
+    let listed = d.node(g).and_then(|n| n.extras().objects_on_path.as_deref()).is_some_and(|rec| rec.members.iter().any(|m| m.id == id));
+    if !listed {
+        return Err(not_on_path());
+    }
+    if !d.is_editable(g) {
+        return Err(bad(cmd, "the Objects on Path group is hidden or locked"));
+    }
+    if !d.is_editable(id) {
+        return Err(bad(cmd, format!("`{key}` names an object that is hidden or locked")));
+    }
+    Ok((g, id))
+}
+
+fn select_member(s: &mut Session, p: &Value) -> Result<Value> {
+    let (g, member) = member_param(s, p, "member", "object.objectsOnPath.selectMember")?;
+    s.select(|_, sel| sel.set_on_path_member(g, member))?;
+    Ok(json!({ "group": g.0, "member": member.0 }))
+}
+
+fn move_member(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.objectsOnPath.moveMember";
+    let (g, member) = member_param(s, p, "member", C)?;
+    let (target_group, target) = member_param(s, p, "target", C)?;
+    if target_group != g {
+        return Err(bad(C, "`target` must be an object of the same Objects on Path group as `member`"));
+    }
+    if let Some(v) = p.get("group").filter(|v| !v.is_null())
+        && checked_id(s, v, C)? != g
+    {
+        return Err(bad(C, "`group` must be the Objects on Path group of `member` and `target`"));
+    }
+    let at = |s: &Session| -> Result<usize> {
+        let rec = s.doc()?.doc.node(g).and_then(|n| n.extras().objects_on_path.as_deref().cloned()).ok_or(EngineError::NoNode(g))?;
+        rec.members.iter().position(|m| m.id == member).ok_or(EngineError::NoNode(member))
+    };
+    // Onto its own place: nothing changes, and no undo step is recorded.
+    if target == member {
+        return Ok(json!({ "group": g.0, "member": member.0, "index": at(s)? }));
+    }
+    // Hidden and locked objects between them keep their places.
+    let index = s.edit("Move Object on Path", |d, _| {
+        let mut rec = d.node(g).and_then(|n| n.extras().objects_on_path.as_deref().cloned()).ok_or(EngineError::NoNode(g))?;
+        let fixed: HashSet<NodeId> = {
+            let editable = d.editable();
+            rec.members.iter().map(|m| m.id).filter(|&id| !editable(id)).collect()
+        };
+        let index = rec.move_member(member, target, |id| fixed.contains(&id)).ok_or(EngineError::NoNode(member))?;
+        let n = d.node_mut(g).ok_or(EngineError::NoNode(g))?;
+        n.extras_mut().objects_on_path = Some(Box::new(rec));
+        Ok(index)
+    })?;
+    Ok(json!({ "group": g.0, "member": member.0, "index": index }))
+}
+
+// ---------- Detach ----------
+
+/// The object chosen with the Select/Move widget of the one selected Objects on Path group.
+fn chosen_member(s: &Session) -> Option<NodeId> {
+    let st = s.active()?;
+    match st.selection.objects[..] {
+        [_] => st.selection.on_path_member,
+        _ => None,
+    }
+}
+
+fn detach(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.objectsOnPath.detach";
+    const CHOOSE: &str = "choose the object to detach with its Select/Move widget";
+    let (g, member) = if p.get("member").is_none_or(Value::is_null) {
+        let chosen = chosen_member(s).ok_or_else(|| bad(C, CHOOSE))?;
+        let found = member_param(s, &json!({ "member": chosen.0 }), "member", C)?;
+        if s.active().is_none_or(|st| st.selection.objects[..] != [found.0]) {
+            return Err(bad(C, CHOOSE));
+        }
+        found
+    } else {
+        member_param(s, p, "member", C)?
+    };
+    // The object goes just above the group, in the group's parent, and keeps where it is drawn.
+    // When the group is itself an object on another group's path, the object goes above that
+    // group instead (and so on outward), so it does not join that path. The refresh after the edit
+    // removes it from the group's record and moves the others up the path.
+    s.edit("Detach Object from Path", |d, sel| {
+        let mut above = g;
+        while let Some(p) = d.parent_of(above).filter(|p| d.node(*p).is_some_and(is_objects_on_path)) {
+            above = p;
+        }
+        let (parent, index, _) = d.position(above).ok_or(EngineError::NoNode(above))?;
+        d.move_node(member, parent, index + 1)?;
+        sel.set([member]);
+        Ok(())
+    })?;
+    Ok(json!({ "group": g.0, "member": member.0 }))
 }
 
 // ---------- Expand ----------

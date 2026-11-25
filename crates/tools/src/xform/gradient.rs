@@ -6,9 +6,14 @@
 //! pointer; a click inside selected art applies the gradient from that point.
 //!
 //! The annotator is a bar from a round start handle to a square end handle. Drag the start handle
-//! (or the bar) to move the gradient, the end handle to change its length and angle, and just past
-//! the end to rotate it. Dragged handles snap to anchors, edges and smart guides; Shift instead
-//! constrains the vector to 45° steps from the Constrain Angle preference. Colour stops sit under the bar: click the bar to add
+//! (or the bar) to move the gradient, the end handle to change its length, and just past the end
+//! to rotate it. The dragged end stays on the bar's line, never nearer the start than
+//! `MIN_LENGTH`; Alt-drag the end handle to change the length and angle together. A vector drawn
+//! on the art, a click that applies one, and the dragged handles snap as drawn points do (the
+//! anchors and paths of the art, and with Snap to Glyph the guides of live type; the end handle
+//! without Alt only onto points on the bar's line); Shift keeps the end of a drawn vector, the
+//! Alt-dragged end handle or the start handle at 45° steps from the Constrain Angle preference,
+//! snapping along that step. Colour stops sit under the bar: click the bar to add
 //! one, drag one to move it (Alt drags a copy), drag it off the bar to delete it, and drag a
 //! diamond above the bar to move a midpoint. Double-clicking a stop opens its popover. The
 //! selected stop (`gradient.selectStop`) is shared with the Gradient and Color panels: Delete or
@@ -24,6 +29,14 @@
 //! dot: the bar runs from the center to where the sweep starts, its stops along it by their share
 //! of the turn.
 //!
+//! A diamond gradient shows its square instead of the ellipse, a corner at the end of the bar,
+//! with the same aspect handle and center ring and no focal dot: drag the dot across the bar to
+//! stretch the square into a rhombus, and the square elsewhere to rotate it.
+//!
+//! Dragging the aspect handle of a radial or diamond gradient whose file gave it a negative
+//! aspect starts from its size (the aspect's magnitude); only a conic's negative aspect mirrors
+//! it.
+//!
 //! On a freeform gradient the tool edits its points instead (see `freeform`).
 
 use serde_json::{Value, json};
@@ -35,7 +48,7 @@ use vectorcraft_geom::{Affine, Point, Shape, Vec2, constrain_angle_from};
 
 use super::freeform::{self, Annotator as FreeformAnnotator};
 use super::paint_owner;
-use crate::guides::snap_draw;
+use crate::guides::{DrawSnap, Leave};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 const BAR: [u8; 3] = [0x20, 0x20, 0x20];
@@ -44,6 +57,9 @@ const LIGHT: [u8; 3] = [0xf0, 0xf0, 0xf0];
 // Annotator layout and hit radii, in screen pixels.
 /// Start and end handles.
 const HANDLE: f64 = 5.0;
+/// The end handle dragged without Alt stays at least this far from the start (or at the vector's
+/// own length when that is shorter).
+const MIN_LENGTH: f64 = 2.0 * HANDLE;
 /// The rotate zone reaches this far past the end handle.
 const ROTATE: f64 = 14.0;
 /// Stop chips sit this far below the bar.
@@ -60,6 +76,8 @@ const CENTRE: f64 = 4.5;
 const CENTRE_HIT: f64 = 8.0;
 /// A stop dragged farther than this from the bar is deleted on release.
 const OFF_BAR: f64 = 24.0;
+/// Half the length of the ticks across the bar where the runs of a repeating gradient meet.
+const TICK: f64 = 5.0;
 /// A press becomes a drag after this much movement.
 const DRAG_START: f64 = 3.0;
 /// Arrow-key nudges of the selected stop (Shift: the big step).
@@ -103,7 +121,7 @@ impl Annotator {
     fn with(geom: GradientGeom, stops: &[GradientStop]) -> Self {
         Self { geom, gradient: Gradient::new(GradientKind::Linear, stops.to_vec()) }
     }
-    /// Placed by a center and an extent ellipse (radial and conic)?
+    /// Placed by a center and an extent ellipse (radial and conic) or square (diamond)?
     fn radial(&self) -> bool {
         self.gradient.kind.is_centered()
     }
@@ -116,11 +134,12 @@ impl Annotator {
     pub fn aspect_point(&self) -> Point {
         self.geom.start - self.normal() * (self.vector().hypot() * self.geom.aspect.abs())
     }
-    /// How far `p` is from a radial's extent ellipse (approximately, along the ray from the
-    /// centre).
+    /// How far `p` is from a radial's extent ellipse, or a diamond's square (approximately, along
+    /// the ray from the center).
     fn off_ellipse(&self, p: Point) -> Option<f64> {
         let m = self.geom.unit_frame()?;
-        let rho = (m.inverse() * p).to_vec2().hypot();
+        let q = (m.inverse() * p).to_vec2();
+        let rho = if self.gradient.kind == GradientKind::Diamond { q.x.abs() + q.y.abs() } else { q.hypot() };
         (rho > 1e-12).then(|| p.distance(self.geom.start) * (1.0 - 1.0 / rho).abs())
     }
     fn vector(&self) -> Vec2 {
@@ -228,6 +247,8 @@ struct Gesture {
     grab: Grab,
     /// Where the press happened.
     at: Point,
+    /// Where a vector drawn on the art starts: the press, snapped.
+    start: Point,
     /// Moved past the drag threshold (an interaction is open).
     began: bool,
     /// The vector drawn so far (Art drags).
@@ -244,19 +265,25 @@ pub struct GradientTool {
     free: Option<freeform::Gesture>,
     /// The line Lines mode is drawing on a freeform gradient.
     lines: freeform::Lines,
-    /// Smart-guide feedback of the handle being dragged.
-    guides: Vec<Overlay>,
+    /// Smart Guides for the vector being drawn or the handle being dragged, and for the pointer
+    /// hovering over the art.
+    snap: DrawSnap,
 }
 
 /// Overlays of an annotator: the bar, the handles, the midpoint diamonds and a chip per stop; a
-/// radial's extent ellipse with its aspect handle, centre ring and focal dot.
+/// radial's extent ellipse (a diamond's square) with its aspect handle, center ring and focal dot.
 fn annotator_overlays(cx: &ToolContext, a: &Annotator) -> Vec<Overlay> {
     let (s, e) = (a.geom.start, a.geom.end);
     let shade = Vec2::new(0.0, cx.tol(1.0));
     let mut o = vec![];
     if let Some(m) = a.geom.unit_frame().filter(|_| a.radial()) {
         // Dark dashes over a light line: readable on any art.
-        let path = vectorcraft_geom::kurbo::Ellipse::from_affine(m).to_path(cx.tol(0.25));
+        let path = if a.gradient.kind == GradientKind::Diamond {
+            // A diamond's extent is its square, a corner at the end of the vector.
+            super::polygon(&[m * Point::new(1.0, 0.0), m * Point::new(0.0, 1.0), m * Point::new(-1.0, 0.0), m * Point::new(0.0, -1.0)], true)
+        } else {
+            vectorcraft_geom::kurbo::Ellipse::from_affine(m).to_path(cx.tol(0.25))
+        };
         o.push(Overlay::Path { path: path.clone(), color: LIGHT, width: 1.0, dashed: false });
         o.push(Overlay::Path { path, color: BAR, width: 1.0, dashed: true });
         o.push(Overlay::Handle { p: a.aspect_point(), color: BAR });
@@ -273,6 +300,7 @@ fn annotator_overlays(cx: &ToolContext, a: &Annotator) -> Vec<Overlay> {
     if len < 1e-12 {
         return o;
     }
+    o.extend(run_ticks(cx, a));
     let r = cx.tol(4.0);
     let (along, across) = (a.vector() / len * r, a.normal() * r);
     for i in 0..a.gradient.stops.len().saturating_sub(1) {
@@ -286,6 +314,44 @@ fn annotator_overlays(cx: &ToolContext, a: &Annotator) -> Vec<Overlay> {
         o.push(Overlay::Swatch { p, color: st.color.to_rgba8(st.opacity), selected: cx.gradient_stop == Some(i) });
     }
     o
+}
+
+/// Where each run of the stops of a gradient that repeats or reflects meets the next: a tick across
+/// the bar at each such place along the vector, or, for a conic, a tick across its extent ellipse
+/// at each such turn. None for a gradient that pads.
+fn run_ticks(cx: &ToolContext, a: &Annotator) -> Vec<Overlay> {
+    if !a.gradient.is_spread() {
+        return vec![];
+    }
+    let n = a.gradient.repeat_count();
+    let conic = a.gradient.kind == GradientKind::Conic;
+    let frame = a.geom.conic_frame();
+    let tick = a.normal() * cx.tol(TICK);
+    (1..n)
+        .flat_map(|k| {
+            let t = f64::from(k) / f64::from(n);
+            let (p, q) = if conic {
+                let (sin, cos) = (t * std::f64::consts::TAU).sin_cos();
+                (frame * Point::new(0.9 * cos, 0.9 * sin), frame * Point::new(1.1 * cos, 1.1 * sin))
+            } else {
+                (a.at(t) - tick, a.at(t) + tick)
+            };
+            [Overlay::Line { a: p, b: q, color: LIGHT, dashed: false }, Overlay::Line { a: p, b: q, color: BAR, dashed: true }]
+        })
+        .collect()
+}
+
+/// Where the end handle dragged to `p` lands when only the length changes: `p` projected onto the
+/// line of `geom`'s vector, on the side of its end and no nearer the start than `min` (or the
+/// vector's own length when that is shorter). None for a vector of no length.
+fn along_bar(geom: &GradientGeom, p: Point, min: f64) -> Option<Point> {
+    let v = geom.end - geom.start;
+    let len = v.hypot();
+    if len < 1e-12 {
+        return None;
+    }
+    let u = v / len;
+    Some(geom.start + u * (p - geom.start).dot(u).max(min.min(len)))
 }
 
 /// The vector a click applies to `id`: its current gradient's, else the default fit on its box.
@@ -331,19 +397,43 @@ impl GradientTool {
             Some((a, Part::End)) => Grab::End(a.geom),
             Some((a, Part::Rotate)) => Grab::Rotate { geom: a.geom, from: (p - a.geom.start).atan2() - a.vector().atan2() },
             Some((a, Part::Focal)) => Grab::Focal(a.geom),
-            Some((a, Part::Aspect)) => Grab::Aspect(a.geom),
+            // Only a conic's negative aspect means a mirror (a file's other kinds draw as its size).
+            Some((a, Part::Aspect)) if a.gradient.kind == GradientKind::Conic => Grab::Aspect(a.geom),
+            Some((a, Part::Aspect)) => Grab::Aspect(GradientGeom { aspect: a.geom.aspect.abs(), ..a.geom }),
             None => {
                 if cx.selection.is_empty() {
-                    let Some(h) = hit_test(cx.doc, p, cx.hit_options()) else { return out };
+                    let Some(h) = hit_test(cx.doc, p, cx.hit_options()) else {
+                        self.snap.clear();
+                        return out;
+                    };
                     out.push(Action::Exec("select.set".into(), json!({ "ids": [paint_owner(cx.doc, h.leaf).0] })));
                 }
                 Grab::Art
             }
         };
-        // A vector drawn on the art starts on the snapped point.
-        let at = if grab == Grab::Art { snap_draw(cx, p, &[]).0 } else { p };
-        self.gesture = Some(Gesture { grab, at, began: false, vector: None, stop: None });
+        // The targets are gathered for a drag that snaps. A vector drawn on the art starts on the
+        // snapped point; the drag threshold still counts from the press.
+        let snaps = matches!(grab, Grab::Art | Grab::Move { .. } | Grab::End(_));
+        let snapped = if snaps { self.snap.press(cx, p, &[], None) } else { p };
+        let start = if grab == Grab::Art { snapped } else { p };
+        if grab != Grab::Art {
+            self.snap.clear();
+        }
+        self.gesture = Some(Gesture { grab, at: p, start, began: false, vector: None, stop: None });
         out
+    }
+
+    /// Snap the pointer hovering where a press would draw a vector (anywhere with art selected,
+    /// over art with nothing selected), to show where the vector starts; no guides over the
+    /// annotator, elsewhere with nothing selected, or during a press.
+    fn hover(&mut self, cx: &ToolContext, p: Point) {
+        let on_annotator = || Annotator::of(cx).is_some_and(|a| a.hit(cx, p).is_some());
+        let off_art = || cx.selection.is_empty() && hit_test(cx.doc, p, cx.hit_options()).is_none();
+        if self.gesture.is_some() || self.free.is_some() || FreeformAnnotator::of(cx).is_some() || on_annotator() || off_art() {
+            self.snap.clear();
+        } else {
+            self.snap.hover(cx, p, &[], None);
+        }
     }
 
     fn drag(&mut self, cx: &ToolContext, p: Point, mods: Mods) -> Vec<Action> {
@@ -357,30 +447,40 @@ impl GradientTool {
             out.push(Action::Begin("Gradient".into()));
         }
         let constrain = |v: Vec2| constrain_angle_from(v, 45.0, cx.constrain_angle);
-        // Where a handle dragged to `to` lands: Shift constrains the vector from `from`, else it
-        // snaps (keeping the guides to show).
-        let mut guides = vec![];
-        let mut place = |from: Point, to: Point| {
-            if mods.shift {
-                from + constrain(to - from)
-            } else {
-                let (q, o) = snap_draw(cx, to, &[]);
-                guides = o;
-                q
-            }
-        };
+        // Where a handle dragged to `to` lands: it snaps as a drawn segment's end leaving `from`
+        // does, Shift keeping it at 45° steps from `from` (keeping the guides to show).
+        let snap = &mut self.snap;
+        snap.clear();
+        let mut place = |from: Point, to: Point| snap.drag(cx, to, Some(&Leave::segment(cx, from, mods.shift)));
         let (cmd, params) = match &g.grab {
             Grab::Art => {
-                let end = place(g.at, p);
-                g.vector = Some((g.at, end));
-                ("paint.setGradientGeom", Self::geom_params(cx, g.at, end))
+                let end = place(g.start, p);
+                g.vector = Some((g.start, end));
+                ("paint.setGradientGeom", Self::geom_params(cx, g.start, end))
             }
             Grab::Move { geom, .. } => {
                 // The start handle snaps; Shift constrains the move.
                 let start = place(geom.start, geom.start + (p - g.at));
                 ("paint.setGradientGeom", Self::geom_params(cx, start, start + (geom.end - geom.start)))
             }
-            Grab::End(geom) => ("paint.setGradientGeom", Self::geom_params(cx, geom.start, place(geom.start, p))),
+            // Alt (or a vector of no length, which has no direction to keep) moves the end freely.
+            Grab::End(geom) if mods.alt || geom.length() < 1e-12 => {
+                ("paint.setGradientGeom", Self::geom_params(cx, geom.start, place(geom.start, p)))
+            }
+            Grab::End(geom) => {
+                // Only the length changes: the end slides along the bar's line. It snaps only to a
+                // target on that line; elsewhere it follows the pointer, with no guides.
+                let min = cx.tol(MIN_LENGTH);
+                let q = snap.drag(cx, p, Some(&Leave::segment(cx, geom.start, false)));
+                let end = match along_bar(geom, q, min) {
+                    Some(e) if e.distance(q) <= cx.tol(0.5) => e,
+                    _ => {
+                        snap.clear();
+                        along_bar(geom, p, min).unwrap_or(geom.end)
+                    }
+                };
+                ("paint.setGradientGeom", Self::geom_params(cx, geom.start, end))
+            }
             Grab::Rotate { geom, from } => {
                 let dir = (Affine::rotate(-from) * (p - geom.start).to_point()).to_vec2();
                 let dir = if mods.shift { constrain(dir) } else { dir };
@@ -425,13 +525,12 @@ impl GradientTool {
                 ("paint.editGradient", Self::stops_params(cx, &set_midpoint(stops, *index, m)))
             }
         };
-        self.guides = guides;
         out.push(Action::Preview(cmd.into(), params));
         out
     }
 
     fn release(&mut self, cx: &ToolContext, p: Point) -> Vec<Action> {
-        self.guides.clear();
+        self.snap.clear();
         let Some(g) = self.gesture.take() else { return vec![] };
         if g.began {
             let mut out = vec![Action::Commit];
@@ -450,12 +549,12 @@ impl GradientTool {
                 let (stops, i) = insert_stop(&a.gradient, t);
                 vec![Action::Exec("paint.editGradient".into(), Self::stops_params(cx, &stops)), Self::select_stop(i)]
             }
-            // A click inside selected art applies the gradient from that point.
+            // A click inside selected art applies the gradient from that point, snapped.
             Grab::Art => {
                 let Some(h) = hit_test(cx.doc, p, cx.hit_options()) else { return vec![] };
                 let id = paint_owner(cx.doc, h.leaf);
                 let Some(v) = cx.selection.objects.contains(&id).then(|| click_vector(cx, id)).flatten() else { return vec![] };
-                let mut params = Self::geom_params(cx, p, p + v);
+                let mut params = Self::geom_params(cx, g.start, g.start + v);
                 // Without `ids`, the engine refuses the gradient while an object of a dynamic symbol
                 // instance's art is selected.
                 if cx.selection.symbol_part.is_some() {
@@ -482,6 +581,12 @@ impl Tool for GradientTool {
         self.gesture.as_ref().is_some_and(|g| g.began) || self.free.as_ref().is_some_and(freeform::Gesture::began)
     }
 
+    /// The vector a drag on the art has drawn so far.
+    fn readout(&self, _cx: &ToolContext) -> Option<crate::Readout> {
+        let (start, end) = self.gesture.as_ref().filter(|g| g.began)?.vector?;
+        Some(crate::Readout::drag(end - start))
+    }
+
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         // A freeform gradient: its points instead of the bar.
         match (ev.kind, &mut self.free) {
@@ -506,6 +611,9 @@ impl Tool for GradientTool {
             }
             _ => {}
         }
+        if matches!(ev.kind, PointerKind::Move) {
+            self.hover(cx, ev.pos);
+        }
         match ev.kind {
             PointerKind::Down => self.press(cx, ev.pos, ev.mods),
             PointerKind::Drag => self.drag(cx, ev.pos, ev.mods),
@@ -516,7 +624,7 @@ impl Tool for GradientTool {
                 let at = a.stop_point(cx, i).unwrap_or(ev.pos);
                 vec![Self::select_stop(i), Action::Dialog("gradientStop".into(), json!({ "index": i, "x": at.x, "y": at.y }))]
             }
-            PointerKind::Move => vec![],
+            PointerKind::Move | PointerKind::TripleClick => vec![],
         }
     }
 
@@ -535,14 +643,19 @@ impl Tool for GradientTool {
             return self.key(cx, ToolKey::Escape, Mods::default());
         }
         (self.gesture, self.free) = (None, None);
-        self.guides.clear();
+        self.snap.clear();
+        vec![]
+    }
+
+    fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        self.snap.clear();
         vec![]
     }
 
     fn key(&mut self, cx: &ToolContext, key: ToolKey, mods: Mods) -> Vec<Action> {
         if key == ToolKey::Escape && self.busy() {
             self.gesture = None;
-            self.guides.clear();
+            self.snap.clear();
             return self.free.take().map_or_else(|| vec![Action::Cancel], |g| freeform::cancel(&g));
         }
         if self.busy() || !self.claims_key(cx, key) {
@@ -582,7 +695,7 @@ impl Tool for GradientTool {
             }
             _ => vec![],
         };
-        o.extend(self.guides.iter().cloned());
+        o.extend(self.snap.guides().iter().cloned());
         o
     }
 

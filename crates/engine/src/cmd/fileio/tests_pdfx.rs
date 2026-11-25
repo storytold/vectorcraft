@@ -17,9 +17,41 @@ fn session() -> Session {
     s.execute("paint.setFill", &json!({"color": {"model": "rgb", "r": 1.0, "g": 0.2, "b": 0.0}})).unwrap();
     s.execute("transparency.set", &json!({"opacity": 50})).unwrap();
     let mut png = vec![];
-    image::RgbaImage::from_fn(8, 8, |x, _| image::Rgba([0, 120, 255, if x < 4 { 0 } else { 255 }]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_fn(8, 8, |x, _| image::Rgba([0, 120, 255, if x < 4 { 0 } else { 255 }]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     s.execute("file.place", &json!({"name": "dots.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [150, 50]})).unwrap();
     s
 }
@@ -139,6 +171,226 @@ fn a_pdfx_file_that_leaves_out_the_document_bleed_warns() {
     assert!(!left_out(&warnings), "{warnings:?}");
 }
 
+/// A 200 × 100 pt document with no art, bleed `bleed` (pt).
+fn bleed_session(bleed: Value) -> Session {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    s.execute("document.setup", &json!({ "bleed": bleed })).unwrap();
+    s
+}
+
+/// A rectangle from (x0, y0) to (x1, y1) without a stroke, on the current layer.
+fn plain_rect(s: &mut Session, [x0, y0, x1, y1]: [f64; 4]) -> Value {
+    let id = s.execute("shape.rectangle", &json!({"x": x0, "y": y0, "width": x1 - x0, "height": y1 - y0})).unwrap()["id"].clone();
+    s.execute("paint.setStroke", &json!({"ids": [id], "none": true})).unwrap();
+    id
+}
+
+/// The warnings of a PDF that carries the document's bleed that say art stops short of it.
+fn short_of_bleed(s: &mut Session) -> Vec<String> {
+    let (_, warnings) = pdf(s, json!({"bleed": {"useDocument": true}}));
+    warnings.into_iter().filter(|w| super::pdf::is_short_of_bleed(w)).collect()
+}
+
+const MM: f64 = 72.0 / 25.4;
+
+/// A bleed raised from 2 mm to 5 mm leaves a background that filled the old bleed, and a band
+/// placed against the trim edge, short of the new one: the export warns once, counting both.
+#[test]
+fn art_that_reaches_the_trim_edge_but_stops_short_of_the_bleed_warns() {
+    let mut s = bleed_session(json!(2.0 * MM));
+    let (b, w, h) = (2.0 * MM, 200.0, 100.0);
+    plain_rect(&mut s, [-b, -b, w + b, h + b]);
+    plain_rect(&mut s, [0.0, 0.0, w, 20.0]);
+    // At 2 mm the background reaches the bleed; the band stops at the trim edge.
+    assert_eq!(short_of_bleed(&mut s), ["1 object reaches the trim edge but stops short of the bleed"]);
+    s.execute("document.setup", &json!({"bleed": 5.0 * MM})).unwrap();
+    assert_eq!(short_of_bleed(&mut s), ["2 objects reach the trim edge but stop short of the bleed"]);
+    // The PDF/X presets carry the document's bleed.
+    let (_, warnings) = pdf(&mut s, json!({"preset": "PDF/X-4:2010"}));
+    assert!(warnings.iter().any(|w| super::pdf::is_short_of_bleed(w)), "{warnings:?}");
+    // A PDF/X file with a bleed on the top alone leaves out the rest of the document's bleed, and
+    // the background and the band stop short at the top: the warning comes right after
+    // BLEED_LEFT_OUT.
+    let (_, warnings) = pdf(&mut s, json!({"standard": "pdfX4", "bleed": {"top": 9}}));
+    assert_eq!(warnings.first().map(String::as_str), Some(super::pdf::BLEED_LEFT_OUT), "{warnings:?}");
+    assert_eq!(warnings.get(1).map(String::as_str), Some("2 objects reach the trim edge but stop short of the bleed"), "{warnings:?}");
+    // A page without the bleed (the default preset) doesn't warn, and neither does a page of the art's bounds.
+    let (_, warnings) = pdf(&mut s, json!({}));
+    assert!(!warnings.iter().any(|w| super::pdf::is_short_of_bleed(w)), "{warnings:?}");
+    let (_, warnings) = pdf(&mut s, json!({"bleed": {"useDocument": true}, "useArtboards": false}));
+    assert!(!warnings.iter().any(|w| super::pdf::is_short_of_bleed(w)), "{warnings:?}");
+    // An explicit bleed counts too, and the Summary lists the warning.
+    let (_, warnings) = pdf(&mut s, json!({"bleed": {"top": 9, "bottom": 9, "left": 9, "right": 9}}));
+    assert!(warnings.iter().any(|w| super::pdf::is_short_of_bleed(w)), "{warnings:?}");
+    let v = s.execute("document.pdfSettings", &json!({"bleed": {"useDocument": true}, "includeDocument": true})).unwrap();
+    assert!(v["warnings"].as_array().unwrap().iter().any(|w| super::pdf::is_short_of_bleed(w.as_str().unwrap())), "{v}");
+    // A group counts once, measured by its visible members: a hidden member that fills the bleed
+    // doesn't hide a visible one at the trim edge.
+    let mut s = bleed_session(json!(9));
+    let fill = plain_rect(&mut s, [-9.0, -9.0, 209.0, 109.0]);
+    let band = plain_rect(&mut s, [0.0, 0.0, 200.0, 20.0]);
+    let side = plain_rect(&mut s, [0.0, 40.0, 20.0, 60.0]);
+    s.execute("object.group", &json!({"ids": [fill, band, side]})).unwrap();
+    s.execute("object.hide", &json!({"ids": [fill]})).unwrap();
+    assert_eq!(short_of_bleed(&mut s), ["1 object reaches the trim edge but stops short of the bleed"]);
+    // A clip group is measured by the art inside its clipping path, not by a clipping path that
+    // reaches the bleed edge.
+    let mut s = bleed_session(json!(9));
+    let art = plain_rect(&mut s, [0.0, 0.0, 200.0, 20.0]);
+    let clip = plain_rect(&mut s, [-9.0, -9.0, 209.0, 109.0]);
+    s.execute("select.set", &json!({"ids": [art, clip]})).unwrap();
+    s.execute("object.clippingMask.make", &json!({})).unwrap();
+    assert_eq!(short_of_bleed(&mut s).len(), 1);
+    // A clipping path that paints a fill reaching the trim edge counts, though the art it clips is
+    // inside: in a clip group, and as an object of its own in a clipping layer.
+    let mut s = bleed_session(json!(9));
+    let art = plain_rect(&mut s, [20.0, 30.0, 60.0, 60.0]);
+    let clip = plain_rect(&mut s, [0.0, 0.0, 200.0, 100.0]);
+    s.execute("select.set", &json!({"ids": [art, clip]})).unwrap();
+    s.execute("object.clippingMask.make", &json!({})).unwrap();
+    assert!(short_of_bleed(&mut s).is_empty());
+    s.execute("paint.setFill", &json!({"ids": [clip], "color": "#ff0000"})).unwrap();
+    assert_eq!(short_of_bleed(&mut s).len(), 1);
+    let mut s = bleed_session(json!(9));
+    let clipping = s.execute("layer.new", &json!({})).unwrap()["id"].clone();
+    plain_rect(&mut s, [20.0, 30.0, 60.0, 60.0]);
+    let clip = plain_rect(&mut s, [0.0, 0.0, 200.0, 100.0]);
+    s.execute("layer.clippingMask.toggle", &json!({"id": clipping})).unwrap();
+    assert!(short_of_bleed(&mut s).is_empty());
+    s.execute("paint.setFill", &json!({"ids": [clip], "color": "#ff0000"})).unwrap();
+    assert_eq!(short_of_bleed(&mut s).len(), 1);
+    // A hidden brushed member doesn't keep a group's visible art at the trim edge from counting.
+    let mut s = bleed_session(json!(9));
+    let brushed = plain_rect(&mut s, [-9.0, -9.0, 209.0, 109.0]);
+    s.execute("brush.apply", &json!({"ids": [brushed], "name": "Charcoal"})).unwrap();
+    let band = plain_rect(&mut s, [0.0, 0.0, 200.0, 20.0]);
+    s.execute("object.group", &json!({"ids": [brushed, band]})).unwrap();
+    s.execute("object.hide", &json!({"ids": [brushed]})).unwrap();
+    assert_eq!(short_of_bleed(&mut s).len(), 1);
+    // A clipping layer clips its art to the clipping path's geometry, not to the stroke around it:
+    // the stroke reaches the trim edge, but the art it clips stops 5 pt inside.
+    let mut s = bleed_session(json!(9));
+    let clipping = s.execute("layer.new", &json!({})).unwrap()["id"].clone();
+    plain_rect(&mut s, [-9.0, -9.0, 209.0, 109.0]);
+    let clip = plain_rect(&mut s, [5.0, 5.0, 195.0, 95.0]);
+    s.execute("layer.clippingMask.toggle", &json!({"id": clipping})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [clip], "color": "#ff0000"})).unwrap();
+    s.execute("stroke.set", &json!({"ids": [clip], "weight": 10})).unwrap();
+    assert_eq!(short_of_bleed(&mut s), ["1 object reaches the trim edge but stops short of the bleed"]);
+}
+
+/// No warning for art that already fills the bleed, art inside the trim, a document without a
+/// bleed, art on hidden, non-printing or template layers, a side without a bleed, area type, a
+/// masked object, or a `.ai` save.
+#[test]
+fn art_that_fills_the_bleed_or_stays_inside_does_not_warn() {
+    let mut s = bleed_session(json!(9));
+    plain_rect(&mut s, [-9.0, -9.0, 209.0, 109.0]);
+    plain_rect(&mut s, [-20.0, 40.0, 50.0, 60.0]);
+    plain_rect(&mut s, [10.0, 10.0, 190.0, 90.0]);
+    assert!(short_of_bleed(&mut s).is_empty());
+    // A document without a bleed has nothing to fall short of.
+    let mut s = bleed_session(json!(0));
+    plain_rect(&mut s, [0.0, 0.0, 200.0, 20.0]);
+    assert!(short_of_bleed(&mut s).is_empty());
+    // Layers that don't print.
+    for props in [json!({"visible": false}), json!({"printable": false}), json!({"template": true})] {
+        let mut s = bleed_session(json!(9));
+        let layer = s.execute("layer.new", &json!({})).unwrap()["id"].clone();
+        plain_rect(&mut s, [0.0, 0.0, 200.0, 20.0]);
+        let mut p = props.clone();
+        p["id"] = layer;
+        s.execute("layer.setProps", &p).unwrap();
+        assert!(short_of_bleed(&mut s).is_empty(), "{props}");
+    }
+    // A hidden object, and a group whose hidden member is the one at the trim edge.
+    let mut s = bleed_session(json!(9));
+    let id = plain_rect(&mut s, [0.0, 0.0, 200.0, 20.0]);
+    s.execute("object.hide", &json!({"ids": [id]})).unwrap();
+    assert!(short_of_bleed(&mut s).is_empty());
+    let mut s = bleed_session(json!(9));
+    let edge = plain_rect(&mut s, [0.0, 0.0, 200.0, 20.0]);
+    let inside = plain_rect(&mut s, [10.0, 30.0, 50.0, 60.0]);
+    s.execute("object.group", &json!({"ids": [edge, inside]})).unwrap();
+    s.execute("object.hide", &json!({"ids": [edge]})).unwrap();
+    assert!(short_of_bleed(&mut s).is_empty());
+    // Art that lies in the bleed alone, away from the trim edge.
+    let mut s = bleed_session(json!(9));
+    plain_rect(&mut s, [20.0, -5.0, 60.0, -3.0]);
+    assert!(short_of_bleed(&mut s).is_empty());
+    // A guide in a group at the trim edge.
+    let mut s = bleed_session(json!(9));
+    let guide = plain_rect(&mut s, [0.0, 0.0, 200.0, 20.0]);
+    s.execute("view.guides.make", &json!({})).unwrap();
+    let inside = plain_rect(&mut s, [10.0, 30.0, 50.0, 60.0]);
+    s.execute("object.group", &json!({"ids": [guide, inside]})).unwrap();
+    assert!(short_of_bleed(&mut s).is_empty());
+    // A brushed stroke, whose brush art can paint past its visual bounds, is not measured.
+    let mut s = bleed_session(json!(9));
+    let id = plain_rect(&mut s, [0.0, 0.0, 200.0, 20.0]);
+    s.execute("brush.apply", &json!({"ids": [id], "name": "Charcoal"})).unwrap();
+    assert!(short_of_bleed(&mut s).is_empty());
+    // A path with no fill and no stroke paints nothing.
+    let mut s = bleed_session(json!(9));
+    let id = plain_rect(&mut s, [0.0, 0.0, 200.0, 20.0]);
+    s.execute("paint.setFill", &json!({"ids": [id], "none": true})).unwrap();
+    assert!(short_of_bleed(&mut s).is_empty());
+    // An object at 0% opacity draws nothing.
+    let mut s = bleed_session(json!(9));
+    let id = plain_rect(&mut s, [0.0, 0.0, 200.0, 20.0]);
+    s.execute("object.setProps", &json!({"ids": [id], "opacity": 0})).unwrap();
+    assert!(short_of_bleed(&mut s).is_empty());
+    // A clipping layer whose clipping path lies inside the trim draws none of its art at the edge.
+    let mut s = bleed_session(json!(9));
+    let clipping = s.execute("layer.new", &json!({})).unwrap()["id"].clone();
+    plain_rect(&mut s, [0.0, 0.0, 200.0, 20.0]);
+    plain_rect(&mut s, [10.0, 10.0, 60.0, 60.0]);
+    s.execute("layer.clippingMask.toggle", &json!({"id": clipping})).unwrap();
+    assert!(short_of_bleed(&mut s).is_empty());
+    // A bleed on the top alone: art short at the left doesn't count, art short at the top does.
+    let mut s = bleed_session(json!([9, 0, 0, 0]));
+    plain_rect(&mut s, [0.0, 30.0, 40.0, 60.0]);
+    assert!(short_of_bleed(&mut s).is_empty());
+    plain_rect(&mut s, [60.0, 0.0, 100.0, 40.0]);
+    assert_eq!(short_of_bleed(&mut s).len(), 1);
+    // Area type is bounded by its frame, not its glyphs: a frame at the trim edge is not measured.
+    let mut s = bleed_session(json!(9));
+    s.execute("text.create", &json!({"x": 0, "y": 0, "text": "Title", "size": 12, "area": {"width": 200, "height": 40}})).unwrap();
+    assert!(short_of_bleed(&mut s).is_empty());
+    // An opacity mask decides what shows of the object, so a masked object is not measured.
+    let mut s = bleed_session(json!(9));
+    let band = plain_rect(&mut s, [0.0, 0.0, 200.0, 20.0]);
+    let mask = plain_rect(&mut s, [20.0, 30.0, 60.0, 60.0]);
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [band, mask]})).unwrap();
+    assert!(short_of_bleed(&mut s).is_empty());
+    // A `.ai` save with a bleed doesn't warn: the check is PDF export's.
+    let mut s = bleed_session(json!(9));
+    plain_rect(&mut s, [0.0, 0.0, 200.0, 20.0]);
+    assert_eq!(short_of_bleed(&mut s).len(), 1);
+    let r = s.execute("document.export", &json!({"format": "ai", "bleed": {"useDocument": true}})).unwrap();
+    assert!(!r["warnings"].to_string().contains("short of the bleed"), "{}", r["warnings"]);
+}
+
+/// The warning changes neither the art nor the page boxes.
+#[test]
+fn the_bleed_warning_changes_no_geometry_and_no_page_box() {
+    let mut s = bleed_session(json!(9));
+    plain_rect(&mut s, [0.0, 0.0, 200.0, 20.0]);
+    let before = s.doc().unwrap().doc.clone();
+    let v = s.execute("document.exportPdf", &json!({"bleed": {"useDocument": true}})).unwrap();
+    assert!(v["warnings"].as_array().unwrap().iter().any(|w| super::pdf::is_short_of_bleed(w.as_str().unwrap())), "{v}");
+    assert_eq!(s.doc().unwrap().doc, before);
+    let info = s.execute("document.pdfInfo", &json!({"name": "x.pdf", "dataBase64": v["dataBase64"]})).unwrap();
+    let boxes = &info["pageInfo"][0]["boxes"];
+    let side = |b: &Value| {
+        let n: Vec<f64> = b.as_array().unwrap().iter().map(|x| x.as_f64().unwrap()).collect();
+        (((n[2] - n[0]) * 100.0).round() / 100.0, ((n[3] - n[1]) * 100.0).round() / 100.0)
+    };
+    assert_eq!(side(&boxes["trim"]), (200.0, 100.0), "{info}");
+    assert_eq!(side(&boxes["bleed"]), (218.0, 118.0), "{info}");
+}
+
 /// The ink amounts (0..1) `doc` shows at `p` in its images (the topmost image there).
 fn image_inks_at(doc: &vectorcraft_doc::Document, p: vectorcraft_geom::Point) -> Option<[f32; 4]> {
     fn visit(n: &vectorcraft_doc::Node, out: &mut Vec<vectorcraft_doc::ImageObject>) {
@@ -175,9 +427,41 @@ fn pdfx_1a_flattening_keeps_the_inks_behind_an_image_in_a_cmyk_document() {
     s.execute("paint.setFill", &json!({"color": {"c": teal[0], "m": teal[1], "y": teal[2], "k": teal[3]}})).unwrap();
     s.execute("paint.setStroke", &json!({"none": true})).unwrap();
     let mut png = vec![];
-    image::RgbaImage::from_fn(40, 40, |x, _| image::Rgba([0, 120, 255, if x < 20 { 0 } else { 255 }]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_fn(40, 40, |x, _| image::Rgba([0, 120, 255, if x < 20 { 0 } else { 255 }]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     s.execute("file.place", &json!({"name": "logos.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [100, 50]})).unwrap();
     let v = s.execute("document.exportPdf", &json!({"standard": "pdfX1a"})).unwrap();
     let bytes = vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap();
@@ -228,10 +512,45 @@ fn cropped_by(mode: &str, width: f64, art: Art, layer: bool) -> (Session, u64) {
     let art = match art {
         Art::Image { see_through } => {
             let mut png = vec![];
-            image::RgbaImage::from_fn(240, 160, |x, y| {
-                image::Rgba([200, (x % 256) as u8, (y % 256) as u8, if see_through && x < 60 { 128 } else { 255 }])
-            })
-            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            {
+                let __dyn: image::DynamicImage = (image::RgbaImage::from_fn(240, 160, |x, y| {
+                    image::Rgba([200, (x % 256) as u8, (y % 256) as u8, if see_through && x < 60 { 128 } else { 255 }])
+                }))
+                .into();
+                let (__w, __h) = (__dyn.width(), __dyn.height());
+                let (__layout, __sample, __raw) = match __dyn {
+                    image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                    image::DynamicImage::ImageLumaA8(b) => {
+                        (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw())
+                    }
+                    image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                    image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                    image::DynamicImage::ImageLuma16(b) => (
+                        craft_image_codecs::ChannelLayout::Gray,
+                        craft_image_codecs::SampleType::U16,
+                        b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                    ),
+                    image::DynamicImage::ImageLumaA16(b) => (
+                        craft_image_codecs::ChannelLayout::GrayA,
+                        craft_image_codecs::SampleType::U16,
+                        b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                    ),
+                    image::DynamicImage::ImageRgb16(b) => (
+                        craft_image_codecs::ChannelLayout::Rgb,
+                        craft_image_codecs::SampleType::U16,
+                        b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                    ),
+                    image::DynamicImage::ImageRgba16(b) => (
+                        craft_image_codecs::ChannelLayout::Rgba,
+                        craft_image_codecs::SampleType::U16,
+                        b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                    ),
+                    other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+                };
+                let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+                craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                    .map(|__b| png.extend_from_slice(&__b))
+            }
             .unwrap();
             let placed =
                 run(&mut s, "file.place", json!({"name": "photo.png", "dataBase64": vectorcraft_format::base64_encode(&png), "rect": FRAME}));
@@ -486,9 +805,41 @@ fn flat_pdf_files_of_art_that_no_clip_group_hides_are_unchanged() {
     run(&mut fitted, "shape.rectangle", json!({"x": 180, "y": 90, "width": 160, "height": 160}));
     run(&mut fitted, "paint.setFill", json!({"color": "#203040"}));
     let mut png = vec![];
-    image::RgbaImage::from_fn(240, 160, |x, y| image::Rgba([200, x as u8, y as u8, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_fn(240, 160, |x, y| image::Rgba([200, x as u8, y as u8, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let photo =
         run(&mut fitted, "file.place", json!({"name": "photo.png", "dataBase64": vectorcraft_format::base64_encode(&png), "rect": FRAME}))["ids"][0]
             .clone();
@@ -698,4 +1049,79 @@ fn flattening_keeps_the_group_in_the_clipping_layer_when_the_layer_below_differs
         }
     }
     assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// #6861: Layer opacity, blend modes, sublayers with transparency, and empty transparent layers:
+/// PDF/X-1a, PDF/X-3, and PDF 1.3 automatically flatten and reduce transparency without failing,
+/// and the output contains no transparency dictionary or soft mask.
+#[test]
+fn pdfx_flattens_layer_and_sublayer_transparency() {
+    let _g = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 200, "height": 200, "colorMode": "cmyk"}));
+
+    // Bottom layer: base artwork
+    let _layer1 = s.doc().unwrap().doc.layers[0].id.0;
+    run(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 80, "height": 80}));
+    run(&mut s, "paint.setFill", json!({"color": {"c": 1.0, "m": 0.0, "y": 0.0, "k": 0.0}}));
+
+    // Middle layer with 50% opacity and Multiply blend mode
+    let layer2 = run(&mut s, "layer.new", json!({}))["id"].as_u64().unwrap();
+    run(&mut s, "shape.rectangle", json!({"x": 40, "y": 40, "width": 80, "height": 80}));
+    run(&mut s, "paint.setFill", json!({"color": {"c": 0.0, "m": 1.0, "y": 0.0, "k": 0.0}}));
+    run(&mut s, "transparency.set", json!({"ids": [layer2], "opacity": 50, "blendMode": "multiply"}));
+
+    // Sublayer inside layer2 with 70% opacity
+    let sublayer = run(&mut s, "layer.newSublayer", json!({"parent": layer2}))["id"].as_u64().unwrap();
+    run(&mut s, "shape.rectangle", json!({"x": 60, "y": 60, "width": 80, "height": 80}));
+    run(&mut s, "paint.setFill", json!({"color": {"c": 0.0, "m": 0.0, "y": 1.0, "k": 0.0}}));
+    run(&mut s, "transparency.set", json!({"ids": [sublayer], "opacity": 70}));
+
+    // Empty layer with opacity (must not leave /CA or /ca in output)
+    let empty_layer = run(&mut s, "layer.new", json!({}))["id"].as_u64().unwrap();
+    run(&mut s, "transparency.set", json!({"ids": [empty_layer], "opacity": 40}));
+
+    for standard in ["pdfX1a", "pdfX3"] {
+        let (text, warnings) = pdf(&mut s, json!({"standard": standard}));
+        assert!(text.starts_with("%PDF-1.3"), "{standard}");
+        assert!(warnings.iter().any(|w| w.contains("flattened")), "{standard}: expected flattening warning");
+        for no in ["/SMask", "/S/Transparency", "/ca ", "/CA "] {
+            assert!(!text.contains(no), "{standard}: forbidden token '{no}' found in text:\n{text}");
+        }
+        // Verify it can be imported back and renders artwork
+        let v = s.execute("document.exportPdf", &json!({"standard": standard})).unwrap();
+        let bytes = vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap();
+        let imported = vectorcraft_pdf::import(&bytes).unwrap();
+        assert!(!imported.layers.is_empty());
+        let rendered = drawn(&imported);
+        let non_white = rendered.pixels.as_chunks::<4>().0.iter().filter(|p| p[..3].iter().any(|c| *c < 240)).count();
+        assert!(non_white > 1000, "{standard}: flattened artwork failed to render, only {non_white} pixels");
+    }
+
+    // PDF 1.3 export with compatibility: 1.3
+    let (text, warnings) = pdf(&mut s, json!({"compatibility": "1.3", "preserveEditing": false}));
+    assert!(text.starts_with("%PDF-1.3"));
+    assert!(warnings.iter().any(|w| w.contains("flattened")));
+    for no in ["/SMask", "/S/Transparency", "/ca ", "/CA "] {
+        assert!(!text.contains(no), "PDF 1.3: forbidden token '{no}' found in text");
+    }
+}
+
+#[test]
+fn pdf_outlining_does_not_wrap_layer_transparency_into_groups() {
+    let _g = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+    let layer1 = s.doc().unwrap().doc.layers[0].id.0;
+    run(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 80, "height": 80}));
+    run(&mut s, "transparency.set", json!({"ids": [layer1], "opacity": 60}));
+
+    let o = crate::cmd::FlattenOptions { text_to_outlines: true, ..Default::default() };
+    let doc = s.doc().unwrap().doc.clone();
+    let flattened = crate::cmd::flatten::flatten_expanded(&doc, &o).unwrap();
+    let resulting_doc = flattened.as_ref().unwrap_or(&doc);
+    assert_eq!(resulting_doc.layers.len(), 1);
+    let l = &resulting_doc.layers[0];
+    assert_eq!(l.opacity, 0.6);
+    assert!(!matches!(l.children().unwrap()[0].kind, vectorcraft_doc::NodeKind::Group { .. }));
 }

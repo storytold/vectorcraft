@@ -82,6 +82,17 @@ fn checked_page(ps: &str) -> String {
                 }
             }
             '{' | '[' => stack.push(c),
+            // An ASCII85 string: its digits are data.
+            '<' if chars.peek() == Some(&'~') => {
+                let mut last = ' ';
+                loop {
+                    let c = chars.next().expect("ASCII85 string closes");
+                    if last == '~' && c == '>' {
+                        break;
+                    }
+                    last = c;
+                }
+            }
             '<' if chars.peek() == Some(&'<') => {
                 chars.next();
                 stack.push('<');
@@ -214,6 +225,175 @@ fn conic_gradients_are_solid_wedges_at_both_levels() {
             8.0,
             0.01,
         );
+    }
+}
+
+/// PostScript has no diamond shading: a diamond is four axial shadings at Level 3 (stepped fills at
+/// Level 2), each clipped to a quadrant of its frame, and read back from the PostScript it looks
+/// as the canvas paints it, with no hairline between the quadrants.
+#[test]
+fn diamond_gradients_are_four_linear_gradients_clipped_to_quadrants() {
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Diamond, stops));
+    g.geom = Some(vectorcraft_color::GradientGeom { start: Point::new(100.0, 70.0), end: Point::new(140.0, 40.0), aspect: 0.6, focal: None });
+    let paint = Paint::Gradient(Box::new(g));
+    let d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), paint, Paint::None, 0.0)]);
+    for (o, shadings) in [(opts(&d), 4), (EpsOptions { level: Level::Two, ..opts(&d) }, 0)] {
+        let out = export(&d, &o, None, None).unwrap();
+        assert!(out.warnings.iter().any(|w| w.contains("diamond gradients are written as four linear gradients")), "{:?}", out.warnings);
+        let page = page_of(&d, &o);
+        assert_eq!(page.matches("shfill").count(), shadings);
+        assert_eq!(page.matches("closepath clip newpath").count(), 4, "a clip a quadrant");
+    }
+    let out = export(&d, &opts(&d), None, None).unwrap();
+    let back = import_with(&out.bytes, false).unwrap().document;
+    vectorcraft_testkit::raster::assert_similar(
+        &vectorcraft_testkit::raster::render_artboard(&d),
+        &vectorcraft_testkit::raster::render_artboard(&back),
+        6.0,
+        0.01,
+    );
+}
+
+/// PostScript's shadings pad past their ends: a linear, radial or diamond gradient that repeats or
+/// reflects is written with its stops repeated over the shape, a conic one as wedges that repeat
+/// with the stops; read back from the PostScript, each looks as the canvas paints it, at Level 3
+/// and Level 2.
+#[test]
+fn spread_gradients_are_written_with_their_stops_repeated() {
+    use vectorcraft_color::{GradientGeom, GradientSpread};
+    let c = Point::new(100.0, 100.0);
+    let around = GradientGeom { start: c, end: c + vectorcraft_geom::Vec2::new(60.0, -25.0), aspect: 0.7, focal: None };
+    let cases = [
+        (GradientKind::Linear, GradientGeom { start: Point::new(70.0, 80.0), end: Point::new(150.0, 110.0), aspect: 1.0, focal: None }),
+        (GradientKind::Radial, around),
+        (GradientKind::Radial, GradientGeom { focal: Some(c + vectorcraft_geom::Vec2::new(-15.0, 12.0)), ..around }),
+        (GradientKind::Conic, around),
+        (GradientKind::Diamond, around),
+    ];
+    for (kind, geom) in cases {
+        for spread in [GradientSpread::Repeat, GradientSpread::Reflect] {
+            let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+            let mut g = GradientPaint::new(Gradient { spread, repeats: 3, ..Gradient::new(kind, stops) });
+            g.geom = Some(geom);
+            let paint = Paint::Gradient(Box::new(g));
+            let d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 180.0)), paint, Paint::None, 0.0)]);
+            for o in [opts(&d), EpsOptions { level: Level::Two, ..opts(&d) }] {
+                let out = export(&d, &o, None, None).unwrap();
+                let back = import_with(&out.bytes, false).unwrap().document;
+                let (a, b) = (vectorcraft_testkit::raster::render_artboard(&d), vectorcraft_testkit::raster::render_artboard(&back));
+                let st = vectorcraft_testkit::raster::perceptual_diff(&a, &b, 12.0);
+                assert!(
+                    (st.bad_pixels as f64) < 0.03 * st.pixels as f64,
+                    "{kind:?} {spread:?} level {:?}: {} of {} pixels differ",
+                    o.level,
+                    st.bad_pixels,
+                    st.pixels
+                );
+            }
+        }
+    }
+}
+
+/// A gradient that repeats with no stops (a file can hold one) is written as one that pads, to
+/// EPS, legacy `.ai` and the `.ai` editing data.
+#[test]
+fn a_spread_gradient_without_stops_is_written() {
+    use vectorcraft_color::GradientSpread;
+    for kind in [GradientKind::Linear, GradientKind::Radial, GradientKind::Conic, GradientKind::Diamond] {
+        let g = GradientPaint::new(Gradient { spread: GradientSpread::Repeat, repeats: 3, ..Gradient::new(kind, vec![]) });
+        let paint = Paint::Gradient(Box::new(g));
+        let d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 180.0)), paint.clone(), paint, 4.0)]);
+        export(&d, &opts(&d), None, None).unwrap();
+        export_legacy_ai(&d, &LegacyAiOptions::default()).unwrap();
+        crate::export_ai_editing(&d, &crate::AiEditingOptions::default()).unwrap();
+    }
+}
+
+/// A gradient repeated 256 times across the shape keeps each run's place: the smooth shading's
+/// stitching bounds lie where the runs meet, to well under a run's thousandth.
+#[test]
+fn many_repeats_keep_their_places_in_a_smooth_shading() {
+    use vectorcraft_color::{GradientGeom, GradientSpread};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    // A run of 0.4 pt across a shape 160 pt wide: capped at 256 runs.
+    let mut g = GradientPaint::new(Gradient { spread: GradientSpread::Repeat, repeats: 100, ..Gradient::new(GradientKind::Linear, stops) });
+    g.geom = Some(GradientGeom { start: Point::new(20.0, 100.0), end: Point::new(60.0, 100.0), aspect: 1.0, focal: None });
+    let paint = Paint::Gradient(Box::new(g));
+    let d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 180.0)), paint, Paint::None, 0.0)]);
+    let page = page_of(&d, &opts(&d));
+    let bounds: Vec<f64> =
+        page.split("/Bounds [").nth(1).and_then(|s| s.split(']').next()).unwrap().split_whitespace().map(|v| v.parse().unwrap()).collect();
+    let runs = (bounds.len() + 1) as f64;
+    assert_eq!(runs, 256.0, "{bounds:?}");
+    for b in bounds {
+        assert!((b * runs - (b * runs).round()).abs() < 1e-3, "bound {b} is {} runs along", b * runs);
+    }
+}
+
+/// Level 3 smooth shadings handle two-stop (`FunctionType 2`), hard-edge (duplicate offset),
+/// zero-span (solid fallback), and degenerate zero-length linear/radial gradients cleanly.
+#[test]
+fn smooth_shadings_handle_two_stop_hard_edge_and_degenerate_gradients() {
+    use vectorcraft_color::GradientGeom;
+
+    // Two-stop linear gradient emits a single FunctionType 2 (no stitching FunctionType 3).
+    let two_stop = Gradient::new(
+        GradientKind::Linear,
+        vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))],
+    );
+    let two_doc = doc_with(|d| {
+        vec![path(
+            d,
+            shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)),
+            Paint::Gradient(Box::new(GradientPaint::new(two_stop))),
+            Paint::None,
+            0.0,
+        )]
+    });
+    let two_page = page_of(&two_doc, &opts(&two_doc));
+    assert!(two_page.contains("/ShadingType 2") && two_page.contains("/FunctionType 2"), "{two_page}");
+    assert!(!two_page.contains("/FunctionType 3"), "{two_page}");
+
+    // Hard-edge gradient (two stops at offset 0.5) skips the zero-width segment and stitches at 0.5.
+    let hard = Gradient::new(
+        GradientKind::Linear,
+        vec![
+            GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)),
+            GradientStop::new(0.5, Color::rgb(1.0, 0.0, 0.0)),
+            GradientStop::new(0.5, Color::rgb(0.0, 0.0, 1.0)),
+            GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0)),
+        ],
+    );
+    let hard_doc = doc_with(|d| {
+        vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), Paint::Gradient(Box::new(GradientPaint::new(hard))), Paint::None, 0.0)]
+    });
+    let hard_page = page_of(&hard_doc, &opts(&hard_doc));
+    assert!(hard_page.contains("/FunctionType 3") && hard_page.contains("/Bounds [0.5 ] /Encode [0 1 0 1 ]"), "{hard_page}");
+
+    // Two stops at the same interior offset pad to 0 and 1, emitting a hard-edge stitch at 0.5.
+    let flat = Gradient::new(
+        GradientKind::Linear,
+        vec![GradientStop::new(0.5, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(0.5, Color::rgb(0.0, 0.0, 1.0))],
+    );
+    let flat_doc = doc_with(|d| {
+        vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), Paint::Gradient(Box::new(GradientPaint::new(flat))), Paint::None, 0.0)]
+    });
+    let flat_page = page_of(&flat_doc, &opts(&flat_doc));
+    assert!(flat_page.contains("/FunctionType 3") && flat_page.contains("/Bounds [0.5 ] /Encode [0 1 0 1 ]"), "{flat_page}");
+    assert!(flat_page.contains("/C0 [1 0 0] /C1 [1 0 0]") && flat_page.contains("/C0 [0 0 1] /C1 [0 0 1]"), "{flat_page}");
+
+    // Zero-length linear and radial gradients still emit valid shfill geometry.
+    for kind in [GradientKind::Linear, GradientKind::Radial] {
+        let mut gp = GradientPaint::new(Gradient::new(
+            kind,
+            vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))],
+        ));
+        gp.geom = Some(GradientGeom { start: Point::new(50.0, 50.0), end: Point::new(50.0, 50.0), aspect: 1.0, focal: None });
+        let deg_doc =
+            doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), Paint::Gradient(Box::new(gp)), Paint::None, 0.0)]);
+        let deg_page = page_of(&deg_doc, &opts(&deg_doc));
+        assert!(deg_page.contains("shfill"), "{kind:?}: {deg_page}");
     }
 }
 
@@ -419,6 +599,66 @@ fn a_gradient_mixing_a_spot_ink_with_rgb_is_written_without_the_ink() {
 }
 
 #[test]
+fn gradients_name_only_the_spot_inks_of_stops_that_color_a_stretch() {
+    let black = |offset: f32| GradientStop::new(offset, Color::cmyk(0.0, 0.0, 0.0, 1.0));
+    let paper = |offset: f32| GradientStop::new(offset, Color::cmyk(0.0, 0.0, 0.0, 0.0));
+    let no_spot_space = |ps: &str| !ps.contains("(Gold Ink) cvn") && !ps.contains("/DeviceN") && !ps.contains("/Separation");
+    for level in [Level::Two, Level::Three] {
+        // Gold Ink out of order: the stops at 0 and 0.8 cover the stretches next to it, so it
+        // colors nothing and has no plate.
+        let d = spot_gradient_doc(vec![black(0.0), black(0.8), spot_stop(0.2, "Gold Ink", GOLD, 1.0), black(0.4), black(1.0)]);
+        let out = export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap();
+        let ps = text(&out);
+        assert_eq!(dsc(&ps, "DocumentCustomColors"), None, "{level:?}: {ps}");
+        assert!(no_spot_space(&ps), "{level:?}: {ps}");
+        assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{level:?}: {:?}", out.warnings);
+        checked_page(&ps);
+        // Without it, Leaf Ink's tints over paper are a Separation shading.
+        let d = spot_gradient_doc(vec![
+            spot_stop(0.0, "Leaf Ink", LEAF, 1.0),
+            spot_stop(0.8, "Leaf Ink", LEAF, 0.5),
+            spot_stop(0.2, "Gold Ink", GOLD, 1.0),
+            paper(0.4),
+            paper(1.0),
+        ]);
+        let ps = text(&export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap());
+        assert_eq!(dsc(&ps, "DocumentCustomColors").as_deref(), Some("(Leaf Ink)"), "{level:?}: {ps}");
+        assert!(ps.contains("/VCsp0 [/Separation (Leaf Ink) cvn /DeviceCMYK") && !ps.contains("(Gold Ink) cvn"), "{level:?}: {ps}");
+        checked_page(&ps);
+        // An RGB stop out of order colors nothing either, so it keeps no ink out.
+        let d = spot_gradient_doc(vec![
+            spot_stop(0.0, "Gold Ink", GOLD, 1.0),
+            spot_stop(0.8, "Gold Ink", GOLD, 0.5),
+            GradientStop::new(0.2, Color::rgb(0.0, 1.0, 0.0)),
+            paper(0.4),
+            paper(1.0),
+        ]);
+        let out = export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap();
+        let ps = text(&out);
+        assert!(ps.contains("/VCsp0 [/Separation (Gold Ink) cvn /DeviceCMYK"), "{level:?}: {ps}");
+        assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{level:?}: {:?}", out.warnings);
+        // Gold Ink at a tint of 0 prints no ink.
+        let d = spot_gradient_doc(vec![spot_stop(0.0, "Gold Ink", GOLD, 0.0), black(1.0)]);
+        let ps = text(&export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap());
+        assert_eq!(dsc(&ps, "DocumentCustomColors"), None, "{level:?}: {ps}");
+        assert!(no_spot_space(&ps), "{level:?}: {ps}");
+    }
+    // Gold Ink at a tint of 0 over a 30% cyan plate (a DeviceN gradient read from a PDF) keeps
+    // its process plate in the same space.
+    let plated = GradientStop { plates: Some([0.3, 0.0, 0.0, 0.0]), ..spot_stop(1.0, "Gold Ink", GOLD, 0.0) };
+    let d = spot_gradient_doc(vec![GradientStop::new(0.0, Color::cmyk(0.3, 0.0, 0.0, 0.0)), plated]);
+    let ps = text(&export(&d, &opts(&d), None, None).unwrap());
+    assert!(ps.contains("/VCdn0 [/DeviceN [/Cyan (Gold Ink) cvn ] /DeviceCMYK") && checked_page(&ps).contains("/C0 [0.3 0] /C1 [0.3 0]"), "{ps}");
+    // EPS leaves stop opacity out, so a clear Gold Ink stop between clear stops is written opaque
+    // and keeps its plate.
+    let clear = |s: GradientStop| GradientStop { opacity: 0.0, ..s };
+    let d = spot_gradient_doc(vec![black(0.0), clear(black(0.2)), clear(spot_stop(0.4, "Gold Ink", GOLD, 1.0)), clear(black(0.6)), black(1.0)]);
+    let ps = text(&export(&d, &opts(&d), None, None).unwrap());
+    assert_eq!(dsc(&ps, "DocumentCustomColors").as_deref(), Some("(Gold Ink)"), "{ps}");
+    assert!(ps.contains("/VCdn0 [/DeviceN [/Black (Gold Ink) cvn ] /DeviceCMYK"), "{ps}");
+}
+
+#[test]
 fn spot_inks_named_all_or_none_are_written_under_names_of_their_own() {
     let rect = |d: &mut Document, fill: &str, stroke: &str| {
         let solid = |name: &str| Paint::Solid { color: GOLD, swatch: Some(name.into()), tint: 1.0 };
@@ -559,6 +799,53 @@ fn perceptual_gradients_of_spot_inks_are_written_in_process_colors() {
     assert!(text(&export(&d, &opts(&d), None, None).unwrap()).contains("/ColorSpace VCdn0"));
 }
 
+/// The colors between two stops mixed around the hue wheel are not mixes of the stops' inks: a
+/// gradient of spot inks mixed that way is written in process colors, with its own warning, as
+/// the same gradient without spot inks is.
+#[test]
+fn hue_wheel_gradients_of_spot_inks_are_written_in_process_colors() {
+    for method in [GradientMethod::HueClockwise, GradientMethod::HueCounterclockwise] {
+        let stops = vec![spot_stop(0.0, "Gold Ink", GOLD, 1.0), spot_stop(1.0, "Leaf Ink", LEAF, 1.0)];
+        let mut hue = Gradient::new(GradientKind::Linear, stops.clone());
+        hue.method = method;
+        // Reflecting, it is written from the stops on its curve, and warns all the same.
+        let reflected = Gradient { spread: vectorcraft_color::GradientSpread::Reflect, repeats: 2, ..hue.clone() };
+        let r = spot_gradient_doc_of(reflected);
+        let reflected_out = export(&r, &opts(&r), None, None).unwrap();
+        let reflected_page = checked_page(&text(&reflected_out));
+        assert!(!reflected_page.contains("VCdn") && !reflected_page.contains("VCsp"), "{method:?} reflected: {reflected_page}");
+        assert!(
+            reflected_out.warnings.iter().any(|w| w.contains("mixed around the hue wheel are written in process colors")),
+            "{method:?} reflected: {:?}",
+            reflected_out.warnings
+        );
+        let d = spot_gradient_doc_of(hue);
+        let out = export(&d, &opts(&d), None, None).unwrap();
+        let page = checked_page(&text(&out));
+        assert!(!page.contains("VCdn") && !page.contains("VCsp"), "{method:?}: {page}");
+        assert!(page.contains("/ColorSpace /DeviceCMYK"), "{method:?}: {page}");
+        assert!(
+            out.warnings.iter().any(|w| w.contains("gradients of spot colors mixed around the hue wheel are written in process colors")),
+            "{method:?}: {:?}",
+            out.warnings
+        );
+        assert!(!out.warnings.iter().any(|w| w.contains("Perceptual")), "{method:?}: {:?}", out.warnings);
+        let process = |c: Color| GradientStop::new(0.0, c);
+        let mut plain = Gradient::new(GradientKind::Linear, vec![process(GOLD), GradientStop { offset: 1.0, ..process(LEAF) }]);
+        plain.method = method;
+        let p = spot_gradient_doc_of(plain);
+        let plain_out = export(&p, &opts(&p), None, None).unwrap();
+        assert!(!plain_out.warnings.iter().any(|w| w.contains("hue wheel")), "{method:?}: {:?}", plain_out.warnings);
+        let plain_page = checked_page(&text(&plain_out));
+        let shading = |s: &str| -> Option<String> {
+            let i = s.find("/ShadingType")?;
+            Some(s[i..i + s[i..].find("shfill")?].to_string())
+        };
+        assert!(shading(&page).is_some_and(|s| s.contains("/Bounds")), "{method:?}: {page}");
+        assert_eq!(shading(&page), shading(&plain_page), "{method:?}");
+    }
+}
+
 #[test]
 fn rgb_is_written_as_cmyk_when_asked_and_in_cmyk_documents() {
     let d = doc_with(|d| vec![red_rect(d)]);
@@ -576,15 +863,20 @@ fn png_doc() -> Document {
     for (x, _, p) in img.enumerate_pixels_mut() {
         *p = if x < 2 { image::Rgba([0, 200, 0, 255]) } else { image::Rgba([0, 0, 0, 0]) };
     }
+    image_doc(&img, 10.0)
+}
+
+/// A 200 × 200 pt document holding `img` as a PNG, its pixels `scale` points wide, at (10, 10).
+fn image_doc(img: &image::RgbaImage, scale: f64) -> Document {
     let mut png = vec![];
     img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
     let mut d = Document::new(200.0, 200.0);
     d.images.insert("pic".into(), ImageBlob::new("image/png", png));
     let im = ImageObject {
         key: "pic".into(),
-        width: 4,
-        height: 2,
-        xf: Affine::translate((10.0, 10.0)) * Affine::scale(10.0),
+        width: img.width(),
+        height: img.height(),
+        xf: Affine::translate((10.0, 10.0)) * Affine::scale(scale),
         link: None,
         placement: Default::default(),
         pixels: None,
@@ -871,6 +1163,130 @@ fn continuous_colorized_coverage_without_clear_pixels_only_warns_for_midtones() 
     assert_eq!(&pixels[6..], &[255, 0, 255]);
 }
 
+/// A CMYK document holding [`colorized_doc`]'s image of `gray` colorized with `color`, its color
+/// overprinting or not.
+fn overprinting_colorized_doc(gray: Vec<u8>, color: Color, overprint: bool) -> Document {
+    let mut d = colorized_doc(gray, Some(Paint::solid(color)));
+    d.color_mode = vectorcraft_doc::ColorMode::Cmyk;
+    let id = d.layers[0].children().unwrap()[0].id;
+    d.node_mut(id).unwrap().extras_mut().colorize_overprint = overprint;
+    d
+}
+
+/// At the page limit the Level 2 passes of an overprinting colorized image are left out
+/// together: the image is never written with some of its inks.
+#[test]
+fn an_overprinting_colorized_image_at_the_page_limit_keeps_all_its_inks_or_none() {
+    let gray: Vec<u8> = (0..2000u32).map(|i| (i * 37 % 251) as u8).collect();
+    let one = overprinting_colorized_doc(gray.clone(), Color::cmyk(0.0, 0.0, 0.0, 1.0), true);
+    let two = overprinting_colorized_doc(gray, Color::cmyk(0.4, 0.0, 0.0, 1.0), true);
+    let o = EpsOptions { level: Level::Two, ..opts(&two) };
+    let (one, all) = (crate::scene::Scene::new(&one, &o).run().body.len(), crate::scene::Scene::new(&two, &o).run().body.len());
+    assert!(all > one + 1000, "{one} {all}");
+    let page = crate::scene::Scene::new(&two, &o).with_max_body(one + (all - one) / 2).run();
+    assert!(page.warnings.iter().any(|w| w.contains("too large")), "{:?}", page.warnings);
+    assert!(!page.body.contains("image") && !page.body.contains("VCdn"), "{}", page.body);
+}
+
+/// An overprinting colorized image in a CMYK color is written in only the process inks it puts
+/// down, so the plates it leaves at zero keep the inks below: one DeviceN image at Level 3, a
+/// Separation image for each ink at Level 2. Not overprinting, it stays one CMYK image.
+#[test]
+fn an_overprinting_colorized_image_writes_only_its_process_inks() {
+    let doc = overprinting_colorized_doc;
+    let ink = Color::cmyk(0.4, 0.0, 0.0, 1.0);
+    let d = doc(vec![0, 128, 255], ink, true);
+
+    let (ps, pixels, _) = colorized_samples(&d, Level::Three);
+    assert!(ps.contains("/VCdn0 [/DeviceN [/Cyan /Black ] /DeviceCMYK") && ps.contains("VCdn0 setcolorspace"), "{ps}");
+    assert!(!ps.contains("/DeviceCMYK setcolorspace") && ps.contains("/MaskColor [0 0 0 0]"), "{ps}");
+    assert_eq!(pixels, vec![102, 255, 51, 127, 0, 0]);
+
+    let (ps, pixels, _) = colorized_samples(&d, Level::Two);
+    assert!(ps.contains("/VCdn0 [/Separation /Cyan /DeviceCMYK {0 0 0}] def"), "{ps}");
+    assert!(ps.contains("/VCdn1 [/Separation /Black /DeviceCMYK {0 0 0 4 -1 roll}] def"), "{ps}");
+    assert!(ps.contains("VCdn0 setcolorspace") && ps.contains("VCdn1 setcolorspace") && !ps.contains("/DeviceN"), "{ps}");
+    assert_eq!(pixels, vec![102, 51, 0], "the cyan pass first");
+    assert_eq!(ps.matches("/ImageType 1").count(), 2, "one image per ink: {ps}");
+
+    // A gray color is black ink alone.
+    let gray = doc(vec![0, 128, 255], Color::Gray { k: 0.6 }, true);
+    for level in Level::ALL {
+        let (ps, ..) = colorized_samples(&gray, level);
+        assert!(ps.contains("/Black") && !ps.contains("/DeviceGray setcolorspace") && !ps.contains("/Cyan"), "{ps}");
+    }
+
+    // A stencil sets the pass's inks as its color.
+    let (ps, ..) = colorized_samples(&doc(vec![0, 255, 0], ink, true), Level::Three);
+    assert!(ps.contains("VCdn0 setcolorspace 0.4 1 setcolor") && ps.contains("imagemask"), "{ps}");
+
+    // Without overprinting, and with overprints discarded, one CMYK image as before.
+    let off = doc(vec![0, 128, 255], ink, false);
+    let discarded = |d: &Document, level| text(&export(d, &EpsOptions { level, overprint: Overprint::Discard, ..opts(d) }, None, None).unwrap());
+    for level in Level::ALL {
+        for ps in [colorized_samples(&off, level).0, discarded(&d, level)] {
+            assert!(ps.contains("/DeviceCMYK setcolorspace") && !ps.contains("VCdn"), "{ps}");
+        }
+    }
+
+    // Paper white that overprints (Discard White Overprint off) puts no ink down.
+    let mut white = doc(vec![0, 128, 255], Color::cmyk(0.0, 0.0, 0.0, 0.0), true);
+    white.setup.discard_white_overprint = false;
+    for level in Level::ALL {
+        let ps = page_of(&white, &EpsOptions { level, ..opts(&white) });
+        assert!(!ps.contains("image"), "{ps}");
+    }
+    // With Discard White Overprint on, it knocks out: one CMYK image, drawn without overprinting.
+    white.setup.discard_white_overprint = true;
+    for level in Level::ALL {
+        let ps = text(&export(&white, &EpsOptions { level, ..opts(&white) }, None, None).unwrap());
+        assert!(ps.contains("/DeviceCMYK setcolorspace") && !ps.contains("VCdn") && !ps.contains("true op"), "{ps}");
+    }
+
+    // The same image and color placed overprinting and not keeps two encodings.
+    let mut both = d.clone();
+    let mut n = (*both.layers[0].children().unwrap()[0]).clone();
+    n.id = both.alloc_id();
+    n.extras_mut().colorize_overprint = false;
+    both.insert(both.default_layer(), usize::MAX, n).unwrap();
+    let ps = text(&export(&both, &EpsOptions { level: Level::Three, ..opts(&both) }, None, None).unwrap());
+    assert!(ps.contains("VCdn0 setcolorspace") && ps.contains("/DeviceCMYK setcolorspace"), "{ps}");
+}
+
+/// On a separation plate, an overprinting colorized image whose color puts none of the plate's ink
+/// down is drawn as nothing, so the ink below stays; one that knocks out, or whose overprint is
+/// discarded, is drawn as paper. (The plate's colors come from the separator, which has already
+/// applied Discard White Overprint.)
+#[test]
+fn a_plate_leaves_out_an_overprinting_image_without_its_ink() {
+    let body = |overprint: bool, preserve: bool| {
+        let mut d = colorized_doc(vec![0, 128, 255], Some(Paint::solid(Color::WHITE)));
+        d.setup.discard_white_overprint = false;
+        let id = d.layers[0].children().unwrap()[0].id;
+        d.node_mut(id).unwrap().extras_mut().colorize_overprint = overprint;
+        let o = EpsOptions { overprint: if preserve { Overprint::Preserve } else { Overprint::Discard }, ..opts(&d) };
+        crate::scene::Scene::new(&d, &o).on_plate(true).run().body
+    };
+    assert!(!body(true, true).contains("image"), "{}", body(true, true));
+    assert!(body(false, true).contains("image"), "{}", body(false, true));
+    assert!(body(true, false).contains("image"), "{}", body(true, false));
+}
+
+/// With Discard White Overprint on, an overprinting colorized image in a tint of a spot ink whose
+/// color is white still overprints: it is written as that ink, which is not paper white.
+#[test]
+fn a_white_spot_ink_colorized_image_overprints_with_discard_white_overprint() {
+    let mut d = overprinting_colorized_doc(vec![0, 128, 255], Color::WHITE, true);
+    d.swatches.push(Swatch { name: "White Ink".into(), paint: Paint::solid(Color::WHITE), global: true, spot: true });
+    let id = d.layers[0].children().unwrap()[0].id;
+    d.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(Paint::Solid { color: Color::WHITE, swatch: Some("White Ink".into()), tint: 0.5 }));
+    d.setup.discard_white_overprint = true;
+    for level in Level::ALL {
+        let ps = text(&export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap());
+        assert!(ps.contains("(White Ink) cvn") && ps.contains("true op"), "{ps}");
+    }
+}
+
 #[test]
 fn uncolorized_image_stays_on_original_eps_path() {
     let d = colorized_doc(vec![0, 128, 255], None);
@@ -883,6 +1299,712 @@ fn uncolorized_image_stays_on_original_eps_path() {
     let id = color.layers[0].children().unwrap()[0].id;
     color.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(Paint::solid(Color::rgb8(255, 0, 0))));
     assert_eq!(page_of(&color, &opts(&color)), original);
+}
+
+/// A copy of the first layer's object `i`, moved by `xf`, added on top.
+fn place_again(d: &mut Document, i: usize, xf: Affine) {
+    let mut n = (*d.layers[0].children().unwrap()[i]).clone();
+    n.id = d.alloc_id();
+    if let NodeKind::Image(im) = &mut n.kind {
+        im.xf = xf * im.xf;
+    }
+    d.insert(d.default_layer(), usize::MAX, n).unwrap();
+}
+
+/// Pixels of noise, opaque.
+fn noise(w: u32, h: u32) -> image::RgbaImage {
+    let mut seed = 1u32;
+    image::RgbaImage::from_fn(w, h, |_, _| {
+        let mut px = [255u8; 4];
+        for v in &mut px[..3] {
+            seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+            *v = (seed >> 16) as u8;
+        }
+        image::Rgba(px)
+    })
+}
+
+/// The pixels of each image an EPS file's page draws, read back from the page.
+fn imported_images(bytes: &[u8]) -> Vec<Vec<u8>> {
+    fn walk(n: &Node, d: &Document, out: &mut Vec<Vec<u8>>) {
+        if let NodeKind::Image(im) = &n.kind {
+            out.push(image::load_from_memory(&d.images[&im.key].bytes).unwrap().to_rgba8().into_raw());
+        }
+        for c in n.children().into_iter().flatten() {
+            walk(c, d, out);
+        }
+    }
+    let r = import_with(bytes, false).unwrap();
+    assert!(!r.preview, "{:?}", r.warnings);
+    let mut out = vec![];
+    for l in &r.document.layers {
+        walk(l, &r.document, &mut out);
+    }
+    out
+}
+
+/// The samples of an image placed more than once, from the setup that defines them: inflated at
+/// Level 3, each string run-length decoded in turn at Level 2.
+fn reused_samples(ps: &str, level: Level) -> Vec<u8> {
+    let setup = &ps[ps.find("%%BeginSetup").unwrap()..ps.find("%%EndSetup").unwrap()];
+    match level {
+        Level::Three => ps::inflate(&image_data(setup), 1 << 28).unwrap(),
+        Level::Two => {
+            let mut data = vec![];
+            for s in setup.split("<~").skip(1) {
+                let chunk = ps::ascii85_decode(&s[..s.find("~>").unwrap() + 2]).unwrap();
+                assert!(chunk.len() <= 65_535, "a string holds at most 65,535 bytes: {}", chunk.len());
+                data.extend(chunk);
+            }
+            unpack(&data)
+        }
+    }
+}
+
+/// The samples of a single image written where it is drawn.
+fn inline_samples(ps: &str, level: Level) -> Vec<u8> {
+    match level {
+        Level::Three => ps::inflate(&image_data(ps), 1 << 28).unwrap(),
+        Level::Two => unpack(&image_data(ps)),
+    }
+}
+
+/// How many placements draw the image the setup defines as `VCim<i>`.
+fn reuses(ps: &str, i: usize, level: Level) -> usize {
+    match level {
+        Level::Three => ps.matches(&format!("VCim{i} resetfile\n")).count(),
+        Level::Two => ps.matches(&format!("{{VCi VCim{i} length lt")).count(),
+    }
+}
+
+#[test]
+fn an_image_placed_twice_writes_its_samples_once_at_both_levels() {
+    let single = png_doc();
+    let mut d = single.clone();
+    place_again(&mut d, 0, Affine::translate((60.0, 80.0)) * Affine::rotate(0.5));
+    for level in Level::ALL {
+        let one = export(&single, &EpsOptions { level, ..opts(&single) }, None, None).unwrap();
+        let one_ps = text(&one);
+        assert!(!one_ps.contains("VCim"), "an image placed once is written where it is drawn: {one_ps}");
+        let out = export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap();
+        let ps = text(&out);
+        checked_page(&ps);
+        assert_eq!(reuses(&ps, 0, level), 2, "{ps}");
+        assert!(!ps.contains("VCim1"), "{ps}");
+        let body = &ps[ps.find("%%EndSetup").unwrap()..];
+        assert!(!body.contains("currentfile") && !body.contains("~>"), "no samples in the page: {ps}");
+        match level {
+            Level::Three => {
+                assert_eq!(ps.matches("/ReusableStreamDecode filter def").count(), 1, "{ps}");
+                assert!(ps.contains("/Intent 0 /AsyncRead false /CloseSource false"), "{ps}");
+                assert!(body.contains("/DataSource VCim0 /FlateDecode filter >> image\n"), "{ps}");
+            }
+            Level::Two => {
+                assert!(ps.contains("/VCim0 [\n<~") && !ps.contains("ReusableStreamDecode"), "{ps}");
+                assert!(body.contains("/VCi 0 def\n") && body.contains("/RunLengthDecode filter >> image\n"), "{ps}");
+            }
+        }
+        assert_eq!(reused_samples(&ps, level), inline_samples(&one_ps, level));
+        assert_eq!(out.warnings, one.warnings);
+        // Read back, each placement draws the image the single placement draws.
+        let once = imported_images(&one.bytes);
+        assert_eq!(once.len(), 1);
+        assert_eq!(imported_images(&out.bytes), vec![once[0].clone(); 2], "{level:?}");
+    }
+}
+
+/// An image in an envelope is drawn as clipped pieces, all from one copy of its samples, which the
+/// image placed beside the envelope also draws.
+#[test]
+fn an_envelopes_image_pieces_draw_one_copy_of_its_samples() {
+    let mut d = png_doc();
+    let mut content = (*d.layers[0].children().unwrap()[0]).clone();
+    content.id = d.alloc_id();
+    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 50.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
+    let envelope = Node::new(
+        d.alloc_id(),
+        NodeKind::Envelope {
+            content: vec![Arc::new(content)],
+            kind: Box::new(kind),
+            fidelity: 50.0,
+            editing: false,
+            options: Default::default(),
+            frame: Box::new(Affine::IDENTITY),
+        },
+    );
+    d.insert(d.default_layer(), usize::MAX, envelope).unwrap();
+    for level in Level::ALL {
+        let out = export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap();
+        let ps = text(&out);
+        checked_page(&ps);
+        // The plain image and 200 pieces: 10 × 10 cells of two triangles.
+        assert_eq!(reuses(&ps, 0, level), 201, "{ps}");
+        assert!(!ps.contains("VCim1"), "{ps}");
+        assert_eq!(ps.matches(if level == Level::Three { "/ReusableStreamDecode" } else { "<~" }).count(), 1, "{ps}");
+        assert!(!out.warnings.iter().any(|w| w.contains("too large")), "{:?}", out.warnings);
+    }
+}
+
+/// An image changed by Perspective Distort is written as the pieces of its mesh, placed so that
+/// its pixel rectangle's corners land on its corners: read back, each corner of the quad is a
+/// corner of one of the pieces' images.
+#[test]
+fn a_distorted_image_is_written_with_its_corners_on_its_quad() {
+    let mut d = png_doc();
+    let id = d.layers[0].children().unwrap()[0].id;
+    let q = [(40.0, 10.0), (60.0, 10.0), (90.0, 90.0), (10.0, 90.0)].map(|(x, y)| Point::new(x, y));
+    d.node_mut(id).unwrap().set_image_corners(q).unwrap();
+    for level in Level::ALL {
+        let out = export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap();
+        let back = import::import(&out.bytes).unwrap().document;
+        let (mut seen, mut pieces) = ([false; 4], 0);
+        back.walk(|n| {
+            if let NodeKind::Image(im) = &n.kind {
+                pieces += 1;
+                let (w, h) = (f64::from(im.width), f64::from(im.height));
+                for p in [(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)] {
+                    let at = im.xf * Point::new(p.0, p.1);
+                    for (i, c) in q.iter().enumerate() {
+                        seen[i] |= at.distance(*c) < 0.01;
+                    }
+                }
+            }
+        });
+        assert!(pieces > 2, "{level:?}: {pieces}");
+        assert_eq!(seen, [true; 4], "{level:?}");
+        // The pieces are clipped by the quad: a clipping path with its bounds and its area.
+        let mut quad_clips = 0;
+        back.walk(|n| {
+            if let NodeKind::Group { children, clip: true } = &n.kind
+                && let Some(p) = children.first().and_then(|c| c.path_data())
+                && let Some(b) = p.bounds()
+            {
+                let area: f64 = p.subpaths.iter().map(|s| s.area()).sum::<f64>().abs();
+                if [b.x0 - 10.0, b.y0 - 10.0, b.x1 - 90.0, b.y1 - 90.0].iter().all(|v| v.abs() < 0.01) && (area - 4000.0).abs() < 1.0 {
+                    quad_clips += 1;
+                }
+            }
+        });
+        assert!(quad_clips >= 1, "{level:?}: no clipping path on the quad");
+    }
+}
+
+#[test]
+fn each_ink_of_a_colorized_image_placed_twice_is_written_once() {
+    let first = Paint::Solid { color: Color::rgb8(255, 0, 0), swatch: Some("Ink".into()), tint: 1.0 };
+    let mut d = colorized_doc(vec![0, 255, 0], Some(first));
+    let mut n = (*d.layers[0].children().unwrap()[0]).clone();
+    n.id = d.alloc_id();
+    n.extras_mut().colorize = Some(Box::new(Paint::Solid { color: Color::rgb8(255, 128, 128), swatch: Some("Ink".into()), tint: 0.5 }));
+    d.insert(d.default_layer(), usize::MAX, n).unwrap();
+    place_again(&mut d, 0, Affine::translate((0.0, 50.0)));
+    place_again(&mut d, 1, Affine::translate((0.0, 100.0)));
+    for level in Level::ALL {
+        let ps = page_of(&d, &EpsOptions { level, ..opts(&d) });
+        assert_eq!((reuses(&ps, 0, level), reuses(&ps, 1, level)), (2, 2), "{ps}");
+        assert_eq!(ps.matches("VCsp0 setcolorspace 1 setcolor\n").count(), 2, "{ps}");
+        assert_eq!(ps.matches("VCsp0 setcolorspace 0.5 setcolor\n").count(), 2, "{ps}");
+        assert_eq!(ps.matches("imagemask").count(), 4, "{ps}");
+        if level == Level::Three {
+            assert_eq!(ps.matches("/Intent 1 ").count(), 2, "image masks: {ps}");
+        }
+    }
+}
+
+/// Samples longer than PostScript's longest string: one stream at Level 3, several strings at
+/// Level 2, each placement reading all of them.
+#[test]
+fn samples_longer_than_a_string_are_reused_at_both_levels() {
+    let single = image_doc(&noise(160, 160), 1.0);
+    let mut d = single.clone();
+    place_again(&mut d, 0, Affine::translate((20.0, 0.0)));
+    for level in Level::ALL {
+        let one = export(&single, &EpsOptions { level, ..opts(&single) }, None, None).unwrap();
+        let out = export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap();
+        let ps = text(&out);
+        checked_page(&ps);
+        assert_eq!(reuses(&ps, 0, level), 2);
+        if level == Level::Two {
+            assert_eq!(ps.matches("<~").count(), 2, "160 × 160 × 3 run-length bytes take two strings");
+        }
+        let samples = reused_samples(&ps, level);
+        assert_eq!(samples.len(), 160 * 160 * 3);
+        assert_eq!(samples, inline_samples(&text(&one), level));
+        let once = imported_images(&one.bytes);
+        assert_eq!(imported_images(&out.bytes), vec![once[0].clone(); 2], "{level:?}");
+    }
+}
+
+/// The limit on the page body counts the samples of an image placed many times once. Art taken
+/// back for passing the limit takes its image placements with it.
+#[test]
+fn the_page_limit_counts_a_repeated_images_samples_once() {
+    let single = image_doc(&noise(40, 40), 1.0);
+    let o = opts(&single);
+    let inline = crate::scene::Scene::new(&single, &o).run().body.len();
+    let mut d = single.clone();
+    for k in 1..20 {
+        place_again(&mut d, 0, Affine::translate((f64::from(k), 0.0)));
+    }
+    let page = crate::scene::Scene::new(&d, &o).with_max_body(inline * 3).run();
+    assert!(page.warnings.is_empty(), "{:?}", page.warnings);
+    assert_eq!(reuses(&page.body, 0, Level::Three), 20);
+    assert!(page.setup.contains("/VCim0 VCsrc"));
+    // Past the limit, the placements that don't fit are left out with a warning.
+    let page = crate::scene::Scene::new(&d, &o).with_max_body(inline + 1000).run();
+    assert!(page.warnings.iter().any(|w| w.contains("too large")), "{:?}", page.warnings);
+    let placed = reuses(&page.body, 0, Level::Three);
+    assert!((2..20).contains(&placed), "{placed}");
+    assert!(page.body.len() + page.setup.len() <= inline + 1000 + 400, "{}", page.body.len());
+}
+
+/// Type whose color bitmap glyphs fit under the page limit but whose run fill passes it is left
+/// out with its glyph image placements: the page is the page without that type. A glyph image
+/// that other art draws once more is written inline there again, and an image that other art
+/// draws twice keeps its shared samples.
+#[test]
+fn type_taken_back_for_the_page_limit_takes_its_glyph_images_with_it() {
+    use vectorcraft_doc::{CharStyle, TextObject};
+    use vectorcraft_text::test_fonts::{COLOUR_CHAR, colour_bitmap_family, colour_bitmap_font};
+    vectorcraft_text::FontDb::global().add_font(colour_bitmap_font(false).unwrap());
+    let black = Paint::solid(Color::rgb(0.0, 0.0, 0.0));
+    let type_node = |d: &mut Document, at: Point, text: &str, fill: Paint| {
+        let st = CharStyle { font_family: colour_bitmap_family(false).into(), size: 32.0, fill, ..CharStyle::default() };
+        Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(at, text, st))))
+    };
+    // Six glyph images, then outlines enough for the fill to pass the limit.
+    let target = format!("{}{}", COLOUR_CHAR.to_string().repeat(6), "W".repeat(40));
+    // `shared`: an image drawn twice comes first; `before`: one glyph drawn with the type's image;
+    // `fill`: the type's run fill (`None`: no type). A red rectangle comes last.
+    let build = |shared: bool, before: bool, fill: Option<Paint>| {
+        let mut d = if shared {
+            let mut d = image_doc(&noise(8, 8), 1.0);
+            place_again(&mut d, 0, Affine::translate((40.0, 0.0)));
+            d
+        } else {
+            Document::new(200.0, 200.0)
+        };
+        let mut nodes = vec![];
+        if before {
+            nodes.push(type_node(&mut d, Point::new(20.0, 40.0), &COLOUR_CHAR.to_string(), black.clone()));
+        }
+        if let Some(fill) = fill {
+            nodes.push(type_node(&mut d, Point::new(20.0, 100.0), &target, fill));
+        }
+        nodes.push(red_rect(&mut d));
+        for n in nodes {
+            d.insert(d.default_layer(), usize::MAX, n).unwrap();
+        }
+        d
+    };
+    for shared in [false, true] {
+        for before in [false, true] {
+            let case = format!("shared {shared}, before {before}");
+            let (without, unfilled, filled) =
+                (build(shared, before, None), build(shared, before, Some(Paint::None)), build(shared, before, Some(black.clone())));
+            let o = opts(&filled);
+            let glyph = usize::from(shared);
+            let fits = crate::scene::Scene::new(&unfilled, &o).run();
+            let full = crate::scene::Scene::new(&filled, &o).run();
+            assert!(fits.warnings.is_empty() && full.warnings.is_empty(), "{case}: {:?} {:?}", fits.warnings, full.warnings);
+            assert_eq!(reuses(&fits.body, glyph, o.level), 6 + usize::from(before), "{case}: {}", fits.body);
+            assert_eq!(reuses(&full.body, glyph, o.level), 6 + usize::from(before), "{case}: {}", full.body);
+            let (fits_len, full_len) = (fits.body.len() + fits.setup.len(), full.body.len() + full.setup.len());
+            assert!(full_len > fits_len + 2000, "{case}: {fits_len} {full_len}");
+            let limit = (fits_len + full_len) / 2;
+            // Without its fill the type fits, every glyph image with it.
+            let page = crate::scene::Scene::new(&unfilled, &o).with_max_body(limit).run();
+            assert!(page.warnings.is_empty(), "{case}: {:?}", page.warnings);
+            assert_eq!((page.setup, page.body), (fits.setup, fits.body), "{case}");
+            // With it the type is taken back after its glyph images were placed.
+            let page = crate::scene::Scene::new(&filled, &o).with_max_body(limit).run();
+            assert!(page.warnings.iter().any(|w| w.contains("too large")), "{case}: {:?}", page.warnings);
+            let alone = crate::scene::Scene::new(&without, &o).run();
+            assert!(alone.warnings.is_empty(), "{case}: {:?}", alone.warnings);
+            assert_eq!(reuses(&page.body, glyph, o.level), 0, "{case}: {}", page.body);
+            assert!(!page.setup.contains(&format!("/VCim{glyph} ")), "{case}: {}", page.setup);
+            assert_eq!(page.body.matches("/Width 16 /Height 16").count(), usize::from(before), "{case}: {}", page.body);
+            assert_eq!(reuses(&page.body, 0, o.level), if shared { 2 } else { 0 }, "{case}: {}", page.body);
+            assert_eq!((&page.setup, &page.body), (&alone.setup, &alone.body), "{case}");
+            checked_page(&page.body);
+        }
+    }
+}
+
+/// A freeform gradient of `points` (x, y and color).
+fn freeform(points: &[(f64, f64, Color)]) -> Paint {
+    let mut g = GradientPaint::new(Gradient { kind: GradientKind::Freeform, ..Default::default() });
+    g.freeform = Some(Freeform { points: points.iter().map(|&(x, y, c)| FreeformPoint::new(Point::new(x, y), c)).collect(), ..Default::default() });
+    Paint::Gradient(Box::new(g))
+}
+
+/// A square at (`x`, `y`) of side `side`, filled with a freeform gradient of `a` and `b` at a
+/// fifth and four fifths of its width.
+fn freeform_square(d: &mut Document, x: f64, y: f64, side: f64, a: Color, b: Color) -> Node {
+    let mid = y + side / 2.0;
+    let paint = freeform(&[(x + side / 5.0, mid, a), (x + side * 0.8, mid, b)]);
+    path(d, shapes::rectangle(Rect::new(x, y, x + side, y + side)), paint, Paint::None, 0.0)
+}
+
+/// A freeform gradient on a shape and on a moved copy of it is sampled the same for both: its
+/// image's samples are written once, at both levels, in RGB and in CMYK.
+#[test]
+fn a_freeform_gradients_image_drawn_twice_writes_its_samples_once() {
+    let rgb = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0));
+    let cmyk = (Color::cmyk(1.0, 0.0, 0.0, 0.0), Color::cmyk(0.0, 0.0, 0.0, 1.0));
+    for (a, b) in [rgb, cmyk] {
+        let single = doc_with(|d| vec![freeform_square(d, 0.0, 0.0, 64.0, a, b)]);
+        let twice = doc_with(|d| vec![freeform_square(d, 0.0, 0.0, 64.0, a, b), freeform_square(d, 64.0, 64.0, 64.0, a, b)]);
+        for level in Level::ALL {
+            let one = export(&single, &EpsOptions { level, ..opts(&single) }, None, None).unwrap();
+            let one_ps = text(&one);
+            assert!(!one_ps.contains("VCim"), "a field drawn once is written where it is drawn: {one_ps}");
+            let out = export(&twice, &EpsOptions { level, ..opts(&twice) }, None, None).unwrap();
+            let ps = text(&out);
+            checked_page(&ps);
+            assert_eq!(reuses(&ps, 0, level), 2, "{ps}");
+            assert!(!ps.contains("VCim1"), "{ps}");
+            let body = &ps[ps.find("%%EndSetup").unwrap()..];
+            assert!(!body.contains("currentfile") && !body.contains("~>"), "no samples in the page: {ps}");
+            assert_eq!(reused_samples(&ps, level), inline_samples(&one_ps, level), "{level:?}");
+            assert_eq!(out.warnings, one.warnings);
+        }
+    }
+}
+
+/// Fields sampled differently are each written where they are drawn: different gradients, and one
+/// gradient on shapes of different sizes.
+#[test]
+fn freeform_gradients_sampled_differently_dont_share_an_image() {
+    let (red, blue, green) = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0), Color::rgb(0.0, 1.0, 0.0));
+    let colors = doc_with(|d| vec![freeform_square(d, 0.0, 0.0, 64.0, red, blue), freeform_square(d, 0.0, 0.0, 64.0, red, green)]);
+    let sizes = doc_with(|d| {
+        let paint = freeform(&[(20.0, 50.0, red), (80.0, 50.0, blue)]);
+        vec![
+            path(d, shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), paint.clone(), Paint::None, 0.0),
+            path(d, shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 100.0)), paint, Paint::None, 0.0),
+        ]
+    });
+    for d in [colors, sizes] {
+        for level in Level::ALL {
+            let ps = page_of(&d, &EpsOptions { level, ..opts(&d) });
+            assert!(!ps.contains("VCim"), "{ps}");
+            assert_eq!(ps.matches("} exec\n").count(), 2, "{ps}");
+        }
+    }
+}
+
+/// A field's second placement that passes the page limit is left out, and the first is written
+/// where it is drawn. A field taken back with the shape that passed the limit leaves nothing in the
+/// setup.
+#[test]
+fn a_field_taken_back_at_the_page_limit_leaves_no_image_behind() {
+    let (red, blue) = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0));
+    let single = doc_with(|d| vec![freeform_square(d, 0.0, 0.0, 64.0, red, blue)]);
+    let o = opts(&single);
+    let inline = crate::scene::Scene::new(&single, &o).run().body;
+    let twice = doc_with(|d| vec![freeform_square(d, 0.0, 0.0, 64.0, red, blue), freeform_square(d, 0.0, 0.0, 64.0, red, blue)]);
+    let page = crate::scene::Scene::new(&twice, &o).with_max_body(inline.len() + 50).run();
+    assert!(page.warnings.iter().any(|w| w.contains("too large")), "{:?}", page.warnings);
+    assert!(page.body.starts_with(&inline), "{}", page.body);
+    assert_eq!(page.body.matches("} exec\n").count(), 1, "{}", page.body);
+    assert!(!page.setup.contains("VCim"), "{}", page.setup);
+    // A many-sided shape whose stroke passes the limit after its fill's field was placed.
+    let big = |d: &mut Document, stroke: Paint| {
+        let paint = freeform(&[(60.0, 100.0, Color::rgb(0.0, 1.0, 0.0)), (140.0, 100.0, red)]);
+        path(d, shapes::polygon(Point::new(100.0, 100.0), 90.0, 2000, 0.0), paint, stroke, 1.0)
+    };
+    let filled = doc_with(|d| vec![big(d, Paint::None)]);
+    let stroked = doc_with(|d| vec![big(d, Paint::solid(Color::rgb(0.0, 0.0, 0.0)))]);
+    let fill = crate::scene::Scene::new(&filled, &o).run().body.len();
+    let both = crate::scene::Scene::new(&stroked, &o).run().body.len();
+    assert!(both > fill + 20_000, "{fill} {both}");
+    let d = doc_with(|d| {
+        let s = big(d, Paint::solid(Color::rgb(0.0, 0.0, 0.0)));
+        vec![s, freeform_square(d, 0.0, 0.0, 64.0, red, blue), freeform_square(d, 0.0, 0.0, 64.0, red, blue)]
+    });
+    let page = crate::scene::Scene::new(&d, &o).with_max_body(fill + (both - fill) / 2).run();
+    assert!(page.warnings.iter().any(|w| w.contains("too large")), "{:?}", page.warnings);
+    assert_eq!(reuses(&page.body, 0, Level::Three), 2, "{}", page.body);
+    assert!(page.setup.contains("/VCim0 VCsrc") && !page.setup.contains("VCim1"), "{}", page.setup);
+}
+
+/// On a plate at Level 2, an overprinting field drawn again inside the clip of its inked cells
+/// is charged the reference to the image already kept against the page limit, not its samples a
+/// second time: a page with room for that reference keeps both placements.
+#[test]
+fn a_repeated_field_clipped_on_a_plate_is_charged_its_reference_at_the_page_limit() {
+    let square = |d: &mut Document| {
+        // Wide spreads of pure color: paper white around the left point.
+        let mut g = GradientPaint::new(Gradient { kind: GradientKind::Freeform, ..Default::default() });
+        let pure = |x: f64, c: Color| FreeformPoint { spread: 0.9, ..FreeformPoint::new(Point::new(x, 32.0), c) };
+        g.freeform = Some(Freeform { points: vec![pure(12.0, Color::gray(0.0)), pure(52.0, Color::gray(0.6))], ..Default::default() });
+        let mut n = path(d, shapes::rectangle(Rect::new(0.0, 0.0, 64.0, 64.0)), Paint::Gradient(Box::new(g)), Paint::None, 0.0);
+        for it in &mut n.appearance.items {
+            *it.overprint_mut() = true;
+        }
+        n
+    };
+    let twice = doc_with(|d| vec![square(d), square(d)]);
+    let o = EpsOptions { level: Level::Two, ..opts(&twice) };
+    let full = crate::scene::Scene::new(&twice, &o).on_plate(true).run();
+    assert!(full.warnings.is_empty(), "{:?}", full.warnings);
+    assert_eq!(reuses(&full.body, 0, Level::Two), 2, "{}", full.body);
+    assert!(full.body.contains("\nW\n"), "the inked cells clip the image: {}", full.body);
+    // The image's samples are in the setup and the body draws them twice. The limit leaves room
+    // for the body and the samples twice over (the clip is charged more than it writes), though
+    // not for the samples charged again at the second placement.
+    assert!(full.setup.len() > 2_000, "{}", full.setup.len());
+    let limit = full.body.len() + 2 * full.setup.len();
+    let page = crate::scene::Scene::new(&twice, &o).on_plate(true).with_max_body(limit).run();
+    assert!(page.warnings.is_empty(), "{:?}", page.warnings);
+    assert_eq!((&page.setup, &page.body), (&full.setup, &full.body));
+}
+
+/// On a plate, an overprinting freeform gradient whose cells are translucent enough that their
+/// opacity takes every sample to no ink (or to paper white in RGB) draws no image at either level.
+#[test]
+fn a_translucent_field_whose_samples_write_no_ink_on_a_plate_draws_no_image() {
+    let faint = [Color::cmyk(0.004, 0.0, 0.0, 0.0), Color::rgb(254.0 / 255.0, 254.0 / 255.0, 254.0 / 255.0)];
+    for color in faint {
+        let d = doc_with(|d| {
+            let mut g = GradientPaint::new(Gradient { kind: GradientKind::Freeform, ..Default::default() });
+            let point = |x: f64| FreeformPoint { opacity: 0.25, ..FreeformPoint::new(Point::new(x, 32.0), color) };
+            g.freeform = Some(Freeform { points: vec![point(12.0), point(52.0)], ..Default::default() });
+            let mut n = path(d, shapes::rectangle(Rect::new(0.0, 0.0, 64.0, 64.0)), Paint::Gradient(Box::new(g)), Paint::None, 0.0);
+            for it in &mut n.appearance.items {
+                *it.overprint_mut() = true;
+            }
+            vec![n]
+        });
+        for level in [Level::Three, Level::Two] {
+            let o = EpsOptions { level, ..opts(&d) };
+            let out = crate::scene::Scene::new(&d, &o).on_plate(true).run();
+            assert!(!out.body.contains("image"), "{color:?} at {level:?}: {}", out.body);
+        }
+    }
+}
+
+/// A 200 × 200 pt document holding 8 × 8 pixels of noise as image `pic` and a three-pixel gray ramp
+/// as image `gray`, its first layer holding what `nodes` makes.
+fn image_doc_with(nodes: impl FnOnce(&mut Document) -> Vec<Node>) -> Document {
+    let mut d = Document::new(200.0, 200.0);
+    let mut png = vec![];
+    noise(8, 8).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    d.images.insert("pic".into(), ImageBlob::new("image/png", png));
+    let mut gray = vec![];
+    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(3, 1, vec![0, 128, 255]).unwrap())
+        .write_to(&mut std::io::Cursor::new(&mut gray), image::ImageFormat::Png)
+        .unwrap();
+    d.images.insert("gray".into(), ImageBlob::png(gray));
+    let nodes = nodes(&mut d);
+    let layer = d.layers[0].id;
+    for n in nodes {
+        d.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    d
+}
+
+/// One of [`image_doc_with`]'s images: `pic`, or `gray` colorized in process red.
+#[derive(Clone, Copy, Debug)]
+enum Pic {
+    Placed,
+    Colorized,
+}
+
+/// An image of `pic` at (`x`, `y`), its pixels `scale` points wide.
+fn pic_node(d: &mut Document, pic: Pic, x: f64, y: f64, scale: f64) -> Node {
+    let (key, width, height) = match pic {
+        Pic::Placed => ("pic", 8, 8),
+        Pic::Colorized => ("gray", 3, 1),
+    };
+    let im = ImageObject {
+        key: key.into(),
+        width,
+        height,
+        xf: Affine::translate((x, y)) * Affine::scale(scale),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let mut n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
+    if let Pic::Colorized = pic {
+        n.extras_mut().colorize = Some(Box::new(Paint::solid(Color::rgb(1.0, 0.0, 0.0))));
+    }
+    n
+}
+
+/// A pattern whose tile is an image of `pic` about 60 points wide.
+fn pic_pattern(d: &mut Document, pic: Pic) -> Paint {
+    let scale = match pic {
+        Pic::Placed => 8.0,
+        Pic::Colorized => 20.0,
+    };
+    let tile = pic_node(d, pic, 0.0, 0.0, scale);
+    d.patterns.push(vectorcraft_doc::PatternDef::new("tile", vec![Arc::new(tile)]));
+    Paint::Pattern { pattern: "tile".into(), xf: Affine::IDENTITY }
+}
+
+/// A 2000-sided shape filled with each of `fills` in turn, and stroked in black when `stroked`.
+fn many_sided(d: &mut Document, fills: &[Paint], stroked: bool) -> Node {
+    let stroke = if stroked { Paint::solid(Color::rgb(0.0, 0.0, 0.0)) } else { Paint::None };
+    let mut n = path(d, shapes::polygon(Point::new(100.0, 100.0), 90.0, 2000, 0.0), fills[0].clone(), stroke, 1.0);
+    let Some(AppearanceItem::Fill(first)) = n.appearance.items.first().cloned() else { panic!("a filled shape") };
+    for (k, paint) in fills.iter().enumerate().skip(1) {
+        let mut fill = first.clone();
+        fill.paint = paint.clone();
+        n.appearance.items.insert(k, AppearanceItem::Fill(fill));
+    }
+    n
+}
+
+/// A page limit that the many-sided shape of `build` (`true`: stroked) passes with its stroke and
+/// not without it.
+fn stroke_passes_the_limit(build: impl Fn(bool) -> Document, o: &EpsOptions) -> usize {
+    let fill = crate::scene::Scene::new(&build(false), o).run().body.len();
+    let both = crate::scene::Scene::new(&build(true), o).run().body.len();
+    assert!(both > fill + 20_000, "{fill} {both}");
+    fill + (both - fill) / 2
+}
+
+/// Art taken back for passing the page limit after it placed an image (a placed or a colorized
+/// one) keeps no encoding of that image, and no cache entry names one. A later placement of the
+/// image is encoded again and written where it is drawn, at both levels.
+#[test]
+fn a_rolled_back_node_frees_its_image_codes() {
+    for pic in [Pic::Placed, Pic::Colorized] {
+        for level in Level::ALL {
+            let case = format!("{pic:?}, {level:?}");
+            let build = |stroked: bool, after: bool| {
+                image_doc_with(|d| {
+                    let fill = pic_pattern(d, pic);
+                    let mut nodes = vec![many_sided(d, &[fill], stroked)];
+                    if after {
+                        nodes.push(pic_node(d, pic, 20.0, 20.0, 4.0));
+                    }
+                    nodes
+                })
+            };
+            let o = EpsOptions { level, ..opts(&build(false, false)) };
+            let limit = stroke_passes_the_limit(|stroked| build(stroked, false), &o);
+            let (page, uses, cached) = crate::scene::Scene::new(&build(true, false), &o).with_max_body(limit).run_with_codes();
+            assert!(page.warnings.iter().any(|w| w.contains("too large")), "{case}: {:?}", page.warnings);
+            assert_eq!((uses, cached), (vec![], vec![]), "{case}");
+            assert!(page.body.is_empty() && page.setup.is_empty(), "{case}: {} {}", page.setup, page.body);
+            let (page, uses, cached) = crate::scene::Scene::new(&build(true, true), &o).with_max_body(limit).run_with_codes();
+            assert_eq!((uses, cached), (vec![1], vec![0]), "{case}");
+            let alone = crate::scene::Scene::new(&image_doc_with(|d| vec![pic_node(d, pic, 20.0, 20.0, 4.0)]), &o).run();
+            assert_eq!(alone.body.matches("} exec\n").count(), 1, "{case}: {}", alone.body);
+            assert_eq!((&page.setup, &page.body), (&alone.setup, &alone.body), "{case}");
+        }
+    }
+}
+
+/// A field encoded before an image in art taken back for passing the page limit is forgotten with
+/// it. Two later fields sampled the same share one image, the first one the page keeps.
+#[test]
+fn a_rolled_back_image_does_not_pin_an_earlier_field_code() {
+    let (red, blue) = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0));
+    for pic in [Pic::Placed, Pic::Colorized] {
+        for level in Level::ALL {
+            let case = format!("{pic:?}, {level:?}");
+            let build = |stroked: bool, after: bool| {
+                image_doc_with(|d| {
+                    let field = freeform(&[(60.0, 100.0, Color::rgb(0.0, 1.0, 0.0)), (140.0, 100.0, red)]);
+                    let fills = [field, pic_pattern(d, pic)];
+                    let mut nodes = vec![many_sided(d, &fills, stroked)];
+                    if after {
+                        nodes.extend([freeform_square(d, 0.0, 0.0, 64.0, red, blue), freeform_square(d, 0.0, 0.0, 64.0, red, blue)]);
+                    }
+                    nodes
+                })
+            };
+            let o = EpsOptions { level, ..opts(&build(false, false)) };
+            let limit = stroke_passes_the_limit(|stroked| build(stroked, false), &o);
+            let (page, uses, cached) = crate::scene::Scene::new(&build(true, false), &o).with_max_body(limit).run_with_codes();
+            assert!(page.warnings.iter().any(|w| w.contains("too large")), "{case}: {:?}", page.warnings);
+            assert_eq!((uses, cached), (vec![], vec![]), "{case}");
+            let (page, uses, cached) = crate::scene::Scene::new(&build(true, true), &o).with_max_body(limit).run_with_codes();
+            assert_eq!((uses, cached), (vec![2], vec![0]), "{case}");
+            assert_eq!(reuses(&page.body, 0, level), 2, "{case}: {}", page.body);
+            let alone = doc_with(|d| vec![freeform_square(d, 0.0, 0.0, 64.0, red, blue), freeform_square(d, 0.0, 0.0, 64.0, red, blue)]);
+            let alone = crate::scene::Scene::new(&alone, &o).run();
+            assert_eq!((&page.setup, &page.body), (&alone.setup, &alone.body), "{case}");
+        }
+    }
+}
+
+/// An image whose first placement doesn't fit under the page limit is left out with a warning and
+/// keeps no encoding, though the object that draws it fits. The art before it is written.
+#[test]
+fn an_image_rejected_by_the_page_limit_keeps_no_unused_code() {
+    for pic in [Pic::Placed, Pic::Colorized] {
+        for level in Level::ALL {
+            let case = format!("{pic:?}, {level:?}");
+            let d = image_doc_with(|d| vec![red_rect(d), pic_node(d, pic, 20.0, 20.0, 4.0)]);
+            let o = EpsOptions { level, ..opts(&d) };
+            let rect = crate::scene::Scene::new(&image_doc_with(|d| vec![red_rect(d)]), &o).run();
+            let full = crate::scene::Scene::new(&d, &o).run().body.len();
+            let (page, uses, cached) = crate::scene::Scene::new(&d, &o).with_max_body(full - 1).run_with_codes();
+            assert!(page.warnings.iter().any(|w| w.contains("too large")), "{case}: {:?}", page.warnings);
+            assert_eq!((uses, cached), (vec![], vec![]), "{case}");
+            assert_eq!((&page.setup, &page.body), (&rect.setup, &rect.body), "{case}");
+        }
+    }
+}
+
+/// An image turned away at the page limit is encoded once, not again at each later placement
+/// that doesn't fit either.
+#[test]
+fn an_image_rejected_by_the_page_limit_is_encoded_once() {
+    for pic in [Pic::Placed, Pic::Colorized] {
+        for level in Level::ALL {
+            let case = format!("{pic:?}, {level:?}");
+            let d = image_doc_with(|d| {
+                let mut nodes = vec![red_rect(d)];
+                nodes.extend((0..50).map(|k| pic_node(d, pic, f64::from(k), 20.0, 4.0)));
+                nodes
+            });
+            let o = EpsOptions { level, ..opts(&d) };
+            let rect = crate::scene::Scene::new(&image_doc_with(|d| vec![red_rect(d)]), &o).run();
+            let (page, encodes) = crate::scene::Scene::new(&d, &o).with_max_body(rect.body.len() + 64).run_counting_encodes();
+            assert!(page.warnings.iter().any(|w| w.contains("too large")), "{case}: {:?}", page.warnings);
+            assert_eq!(encodes, 1, "{case}");
+            assert_eq!((&page.setup, &page.body), (&rect.setup, &rect.body), "{case}");
+        }
+    }
+}
+
+/// An image turned away at the page limit inside art that is then taken back is encoded again
+/// once the page has room for it, and written where it is drawn.
+#[test]
+fn an_image_rejected_in_art_taken_back_is_encoded_again_when_it_fits() {
+    for pic in [Pic::Placed, Pic::Colorized] {
+        for level in Level::ALL {
+            let case = format!("{pic:?}, {level:?}");
+            let build = |stroked: bool, after: bool| {
+                image_doc_with(|d| {
+                    let fill = pic_pattern(d, pic);
+                    let mut nodes = vec![many_sided(d, &[fill], stroked)];
+                    if after {
+                        nodes.push(pic_node(d, pic, 20.0, 20.0, 4.0));
+                    }
+                    nodes
+                })
+            };
+            let o = EpsOptions { level, ..opts(&build(false, false)) };
+            let solid = image_doc_with(|d| vec![many_sided(d, &[Paint::solid(Color::rgb(1.0, 0.0, 0.0))], false)]);
+            // The shape's outline fits under this limit, and its first tile of the image doesn't.
+            let limit = crate::scene::Scene::new(&solid, &o).run().body.len() + 64;
+            let (page, encodes) = crate::scene::Scene::new(&build(false, false), &o).with_max_body(limit).run_counting_encodes();
+            assert!(page.warnings.iter().any(|w| w.contains("too large")), "{case}: {:?}", page.warnings);
+            assert_eq!((encodes, page.body.matches("} exec\n").count()), (1, 0), "{case}: {}", page.body);
+            let (page, encodes) = crate::scene::Scene::new(&build(true, true), &o).with_max_body(limit).run_counting_encodes();
+            assert_eq!(encodes, 2, "{case}");
+            let alone = crate::scene::Scene::new(&image_doc_with(|d| vec![pic_node(d, pic, 20.0, 20.0, 4.0)]), &o).run();
+            assert_eq!((&page.setup, &page.body), (&alone.setup, &alone.body), "{case}");
+        }
+    }
 }
 
 #[test]
@@ -949,7 +2071,7 @@ fn a_tiff_preview_sits_behind_the_binary_header() {
     }
     // Asked for but not rendered: the file has no preview, and says so.
     let out = export(&d, &EpsOptions { preview: Preview::TiffColor, ..opts(&d) }, None, None).unwrap();
-    assert!(out.bytes.starts_with(b"%!PS") && out.warnings.iter().any(|w| w.contains("preview")));
+    assert!(out.bytes.starts_with(b"%!PS") && out.setting_notes.iter().any(|w| w.contains("preview")));
 }
 
 #[test]
@@ -1011,6 +2133,20 @@ fn an_instance_whose_art_reaches_the_region_is_written() {
     assert!(page.contains("1 0 0 rg"), "{page}");
 }
 
+/// An instance stained blue by its fill writes its symbol's red art in blue, as the canvas draws it.
+#[test]
+fn a_stained_instance_is_written_in_its_stained_color() {
+    let mut d = doc_with(|d| {
+        let mut n = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((50.0, 50.0)) });
+        n.appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0).into();
+        vec![n]
+    });
+    let art = path(&mut d, shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 40.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Mark".into(), art: Arc::new(art) });
+    let page = page_of(&d, &opts(&d));
+    assert!(page.contains("0 0 1 rg") && !page.contains("1 0 0 rg"), "{page}");
+}
+
 #[test]
 fn an_instance_whose_brush_art_reaches_the_region_is_written() {
     // The symbol's art: a line from (0, 40) to (0, 60) with a 1 pt red stroke painted by a 20 pt
@@ -1028,6 +2164,76 @@ fn an_instance_whose_brush_art_reaches_the_region_is_written() {
     d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Nib".into(), art: Arc::new(art) });
     let page = page_of(&d, &opts(&d));
     assert!(page.contains("1 0 0 rg"), "{page}");
+}
+
+#[test]
+fn a_path_whose_brush_art_reaches_the_region_is_written() {
+    // A line from (-5, 40) to (-5, 60) with a 1 pt red stroke painted by a 20 pt round nib lies
+    // left of the artboard, and the nib paints 10 pt either side of it, onto the artboard: alone, in
+    // a group and as a compound path. Without its brush, or 100 pt left of the artboard, where the
+    // nib does not reach it, the line is left out.
+    let red = |x: f64, brushed: bool| {
+        let mut n = Node::path(
+            vectorcraft_doc::NodeId(0),
+            shapes::line((x, 40.0).into(), (x, 60.0).into()),
+            Appearance::basic(Paint::None, Paint::solid(Color::rgb(1.0, 0.0, 0.0)), 1.0),
+        );
+        if brushed {
+            n.appearance.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
+        }
+        n
+    };
+    let cases: [(&str, f64, bool, bool); 5] = [
+        ("path", -5.0, true, true),
+        ("group", -5.0, true, true),
+        ("compound path", -5.0, true, true),
+        ("unbrushed path", -5.0, false, false),
+        ("far path", -100.0, true, false),
+    ];
+    for (what, x, brushed, written) in cases {
+        let mut d = Document::new(200.0, 200.0);
+        let mut lib = vectorcraft_brush::library(&d);
+        let Some(vectorcraft_brush::BrushKind::Calligraphic(c)) = lib.iter_mut().find(|b| b.name == "3 pt. Round").map(|b| &mut b.kind) else {
+            panic!("the 3 pt. Round brush")
+        };
+        c.size = 20.0;
+        vectorcraft_brush::store(&mut d, &lib);
+        let line = red(x, brushed);
+        let mut n = match what {
+            "group" => Node::group(vectorcraft_doc::NodeId(0), vec![Arc::new(line)]),
+            "compound path" => {
+                let mut c = Node::new(
+                    vectorcraft_doc::NodeId(0),
+                    NodeKind::Compound { children: vec![Arc::new(red(x, false))], rule: vectorcraft_geom::FillRule::NonZero },
+                );
+                c.appearance = line.appearance;
+                c
+            }
+            _ => line,
+        };
+        n.id = d.alloc_id();
+        let layer = d.layers[0].id;
+        d.insert(Some(layer), usize::MAX, n).unwrap();
+        let page = page_of(&d, &opts(&d));
+        assert_eq!(page.contains("1 0 0 rg") || page.contains("1 0 0 RG"), written, "{what}: {page}");
+    }
+}
+
+#[test]
+fn symbol_art_effects_are_written_where_they_draw() {
+    // The symbol's square at (10, 40), which a Transform effect moves 100 pt right, is drawn from
+    // x = 110 and not from x = 10.
+    let mut d = doc_with(|d| vec![Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Moved".into(), xf: Affine::IDENTITY })]);
+    let mut art = path(&mut d, shapes::rectangle(Rect::new(10.0, 40.0, 20.0, 50.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    art.appearance.effects.push(vectorcraft_doc::Effect {
+        id: "distort.transform".into(),
+        params: serde_json::json!({"moveH": 100.0}),
+        visible: true,
+    });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Moved".into(), art: Arc::new(art) });
+    let page = page_of(&d, &opts(&d));
+    let starts: Vec<f64> = page.lines().filter(|l| l.ends_with(" m")).filter_map(|l| l.split_whitespace().next()?.parse().ok()).collect();
+    assert!(!starts.is_empty() && starts.iter().all(|x| (110.0..=120.0).contains(x)), "{starts:?}\n{page}");
 }
 
 #[test]
@@ -1111,4 +2317,53 @@ fn ruby_is_written_with_its_type() {
         page_of(&d, &opts(&d)).lines().filter(|l| l.ends_with(" m")).count()
     };
     assert_eq!(moves(true), moves(false) + reading, "the reading's contours are written");
+}
+
+#[test]
+fn tiff_preview_round_trips_when_postscript_is_unreadable() {
+    let d = doc_with(|d| vec![red_rect(d)]);
+    for kind in [Preview::TiffColor, Preview::TiffBlackWhite] {
+        let out = export(&d, &EpsOptions { preview: kind, ..opts(&d) }, Some(&preview()), None).unwrap();
+        let (ps, tiff) = sections(&out.bytes).unwrap();
+        let tiff = tiff.unwrap();
+        // Corrupt the PostScript body while keeping the binary header and TIFF preview intact.
+        let bad_ps = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\nunknown_op\n%%EOF\n";
+        let wrapped = craft_eps::wrap(bad_ps, Some(tiff), None).unwrap();
+        let imported = import_with(&wrapped, false).unwrap();
+        assert!(imported.preview, "{kind:?}: expected TIFF preview fallback");
+        let mut has_image = false;
+        imported.document.walk(|n| {
+            if matches!(n.kind, NodeKind::Image(_)) {
+                has_image = true;
+            }
+        });
+        assert!(has_image, "{kind:?}: expected preview image node");
+        assert!(ps.starts_with(b"%!PS-Adobe-3.0 EPSF-3.0"));
+    }
+}
+
+#[test]
+fn edit_payloads_and_bounded_malformed_inputs_preserve_benign_fixtures() {
+    // Ordinary benign fixture with native edit payload + TIFF preview round-trips cleanly.
+    let d = doc_with(|d| vec![red_rect(d)]);
+    let payload = b"vectorcraft-native-edit-payload".to_vec();
+    let out = export(&d, &EpsOptions { native: Some(payload.clone()), preview: Preview::TiffColor, ..opts(&d) }, Some(&preview()), None).unwrap();
+    assert!(super::has_native(&out.bytes));
+    assert_eq!(super::native(&out.bytes).as_deref(), Some(payload.as_slice()));
+    let benign = import_with(&out.bytes, false).unwrap();
+    assert!(!benign.preview);
+
+    // Truncated DOS EPS binary header is refused cleanly without panicking.
+    let mut bad_header = vec![0xC5, 0xD0, 0xD3, 0xC6];
+    bad_header.extend_from_slice(&[0xFF; 26]);
+    assert!(sections(&bad_header).is_none());
+    assert!(import_with(&bad_header, false).is_err());
+
+    // Bounded malformed currentfile filter hitting EOF early does not panic or hang.
+    let truncated_inline = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 10 10\n%%EndComments\n2 2 8 [2 0 0 -2 0 2] currentfile /ASCII85Decode filter false 3 colorimage\n9jqo^";
+    let _ = import_with(truncated_inline, false);
+
+    // Unterminated PostScript string at EOF is refused cleanly.
+    let unterminated = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 10 10\n%%EndComments\n(unterminated";
+    assert!(import_with(unterminated, false).is_err());
 }

@@ -18,7 +18,41 @@ fn png(w: u32, h: u32, seed: u8) -> Vec<u8> {
         image::Rgba([v ^ seed, v.wrapping_mul(3), seed, 255])
     });
     let mut out = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     out
 }
 
@@ -320,13 +354,13 @@ fn kept_glyphs(r: &mut Renderer, d: &Document) -> Vec<Option<Arc<TextGeom>>> {
         .collect()
 }
 
-/// `f`'s result from a run during which the fonts did not change: other tests add fonts, and the
-/// renderer lays all type out again when the fonts change.
+/// `f`'s result from a run during which the fonts and the hyphenation exceptions did not change:
+/// other tests change them, and the renderer lays all type out again when they change.
 fn fonts_unchanged<T>(mut f: impl FnMut() -> T) -> T {
     loop {
-        let fonts = vectorcraft_text::FontDb::global().generation();
+        let inputs = vectorcraft_text::layout_inputs();
         let t = f();
-        if vectorcraft_text::FontDb::global().generation() == fonts {
+        if vectorcraft_text::layout_inputs() == inputs {
             return t;
         }
     }
@@ -931,6 +965,8 @@ fn brush_art_draws_edits_of_the_symbols_and_patterns_it_shows() {
         painted.transform(Affine::translate((0.0, 8.0)), true);
         let scatter = Node::group(d.alloc_id(), vec![Arc::new(instance), Arc::new(painted)]);
         let mut lib = vectorcraft_brush::library(&d);
+        // The default library has its own `Dots`, which a stroke would draw with first.
+        lib.retain(|b| b.name != "Dots");
         lib.push(Brush { name: "Dots".into(), kind: BrushKind::Scatter(Scatter { art: scatter, spacing: (150.0, 150.0), ..Default::default() }) });
         vectorcraft_brush::store(&mut d, &lib);
         let mut ap = vectorcraft_doc::Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
@@ -997,6 +1033,8 @@ fn brush_art_draws_renamed_symbols_and_patterns_it_shows() {
         painted.transform(Affine::translate((0.0, 8.0)), true);
         let scatter = Node::group(d.alloc_id(), vec![Arc::new(instance), Arc::new(painted)]);
         let mut lib = vectorcraft_brush::library(&d);
+        // The default library has its own `Dots`, which a stroke would draw with first.
+        lib.retain(|b| b.name != "Dots");
         lib.push(Brush { name: "Dots".into(), kind: BrushKind::Scatter(Scatter { art: scatter, spacing: (150.0, 150.0), ..Default::default() }) });
         vectorcraft_brush::store(&mut d, &lib);
         let mut ap = vectorcraft_doc::Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
@@ -1252,7 +1290,7 @@ fn art_with_live_objects_draws_pattern_layout_edits() {
     d.patterns.push(def);
     let band = vectorcraft_geom::shapes::rectangle(Rect::new(-80.0, -40.0, 80.0, 40.0));
     let filled = Node::path(d.alloc_id(), band, vectorcraft_doc::Appearance::basic(pattern_paint("Checks"), Paint::None, 0.0));
-    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
     let options = EnvelopeOptions { distort_appearance: true, distort_pattern_fills: true, ..Default::default() };
     let envelope = Node::new(
         d.alloc_id(),
@@ -1398,7 +1436,7 @@ fn live_objects_in_symbol_art_draw_symbol_and_pattern_edits() {
 /// An envelope of `d` bending `content` with an arc warp (30%); with `patterns`, Distort
 /// Appearance and Distort Pattern Fills are on, and the tiles of its pattern fills bend with it.
 fn arc_envelope(d: &mut Document, content: Vec<Node>, patterns: bool) -> Node {
-    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
     let options = vectorcraft_doc::live::EnvelopeOptions { distort_appearance: patterns, distort_pattern_fills: patterns, ..Default::default() };
     let content = content.into_iter().map(Arc::new).collect();
     Node::new(
@@ -1663,6 +1701,16 @@ fn objects_with_plugin_effects_follow_the_plugins_installed() {
     plugin_change_draws_as_new(alone(20.0, vec![drop_shadow()]), ID, small.clone(), big.clone());
     let blur = effect("blur.gaussian", serde_json::json!({"radius": 1.0}));
     plugin_change_draws_as_new(alone(20.0, vec![blur]), ID, small.clone(), big.clone());
+    // A clip group whose clipping path, the square, has the plug-in effect: it clips a red
+    // rectangle over the whole view by the shape the plug-in draws.
+    let mut d = Document::new(200.0, 100.0);
+    let mut clip = square(&mut d, 20.0, 30.0, vec![]);
+    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    let red = filled(&mut d, rectangle(Rect::new(0.0, 0.0, 200.0, 100.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), vec![]);
+    let group = Node::new(d.alloc_id(), NodeKind::Group { children: vec![Arc::new(clip), Arc::new(red)], clip: true });
+    plugin_change_draws_as_new(with_art(d, vec![group]), ID, small.clone(), big.clone());
     // An instance of symbol `Shaped`, a group of the square around the origin.
     let mut d = Document::new(200.0, 100.0);
     let art = square(&mut d, -20.0, -20.0, vec![]);
@@ -1716,7 +1764,8 @@ fn installing_a_plugin_keeps_what_is_kept_for_other_objects() {
 }
 
 /// The art drawn for an object's effects follows the plug-ins installed: in the next frame, a group
-/// with a plug-in effect, the same group feathered (Feather clips to the art's outline), an
+/// with a plug-in effect, the same group feathered (Feather clips to the art's outline), a group
+/// with a Transform effect holding a square with a plug-in effect, an
 /// instance of symbol `S` ([`symbol_art`]) and type, each with a plug-in effect, are drawn as the
 /// plug-in installed again with another shape draws them.
 #[test]
@@ -1738,6 +1787,13 @@ fn effect_art_follows_the_plugins_installed() {
     plugin_change_draws_as_new(group(vec![]), ID, small.clone(), big.clone());
     let feather = effect("stylize.feather", serde_json::json!({"radius": 2.0}));
     plugin_change_draws_as_new(group(vec![feather]), ID, small.clone(), big.clone());
+    // A group with a Transform effect holding a square with the plug-in effect: the group's art
+    // holds what the plug-in draws for the square.
+    let mut d = Document::new(200.0, 100.0);
+    let square = filled(&mut d, rectangle(Rect::new(20.0, 30.0, 60.0, 70.0)), Paint::solid(Color::BLACK), vec![plugin()]);
+    let mut moved = Node::group(d.alloc_id(), vec![Arc::new(square)]);
+    moved.appearance.effects.push(effect("distort.transform", serde_json::json!({"moveH": 10.0})));
+    plugin_change_draws_as_new(with_art(d, vec![moved]), ID, small.clone(), big.clone());
     let mut d = Document::new(200.0, 100.0);
     let art = symbol_art(&mut d);
     d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
@@ -2514,7 +2570,41 @@ fn a_reduced_image_on_the_ink_planes_shows_its_average() {
     let _fonts = fonts_steady();
     let lines = image::RgbaImage::from_fn(64, 64, |x, _| image::Rgba(if x % 2 == 0 { [0, 0, 0, 255] } else { [255; 4] }));
     let mut bytes = vec![];
-    lines.write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = lines.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| bytes.extend_from_slice(&__b))
+    }
+    .unwrap();
     let mut d = cmyk_doc_with("lines", ImageBlob::new("image/png", bytes), 64, 64);
     // Transparency beside the image: the document blends in CMYK, drawing on its ink planes.
     let shape = vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 0.0, 110.0, 10.0));
@@ -2538,7 +2628,41 @@ fn a_reduced_image_on_the_ink_planes_shows_its_average() {
 fn varied_png(w: u32, h: u32, seed: u8) -> Vec<u8> {
     let img = image::RgbaImage::from_fn(w, h, |x, y| image::Rgba([(x * 5 + y) as u8, (x / 3 + y * 7) as u8, (x ^ y) as u8 ^ seed, 255]));
     let mut out = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     out
 }
 

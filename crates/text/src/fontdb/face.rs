@@ -201,6 +201,25 @@ pub struct FontFace {
     pub(super) colour_layers: bool,
     /// Has an `SVG ` table: OpenType SVG glyphs ([`FontDb::glyph_colour`]).
     pub(super) svg_glyphs: bool,
+    /// What the `GSUB` table substitutes ([`Self::substitutions`]), read the first time it is asked
+    /// for.
+    pub(super) gsub: std::sync::OnceLock<super::gsub::GsubIndex>,
+    /// [`Self::unencoded_glyphs`], read once.
+    pub(super) unencoded: std::sync::OnceLock<std::sync::Arc<[u32]>>,
+    /// [`Self::mapped_chars`], read once.
+    pub(super) char_list: std::sync::OnceLock<Arc<[(char, u32)]>>,
+    /// [`Self::name_owner`]'s glyph names to characters, read once.
+    pub(super) named_chars: std::sync::OnceLock<std::collections::HashMap<String, char>>,
+}
+
+impl vectorcraft_doc::FileFontFace for FontFace {
+    fn id(&self) -> u32 {
+        self.id
+    }
+
+    fn bytes(&self) -> &[u8] {
+        self.data()
+    }
 }
 
 /// Where the ideographic character face (ICF) lies inside the ideographic em box: its distance
@@ -349,18 +368,60 @@ impl FontFace {
     pub fn x_height(&self) -> f64 {
         self.x_height
     }
+    /// The height of the capital letters in font units, positive (estimated from the ascent when
+    /// the font has no OS/2 value).
+    pub fn cap_height(&self) -> f64 {
+        self.cap_height
+    }
     /// The line gap the font asks for between lines, in font units (from the same table as
     /// [`vertical_metrics`](Self::vertical_metrics); 0 when it has none).
     pub fn line_gap(&self) -> f64 {
         self.skrifa().map_or(0.0, |f| f64::from(f.metrics(Size::unscaled(), self.location()).leading)).max(0.0)
     }
+    /// The height of the face's character cell on Windows (the OS/2 table's `usWinAscent` plus
+    /// `usWinDescent`, at the face's location in a variable font), in font units; `None` when the
+    /// font has no OS/2 table or the sum isn't positive.
+    pub fn win_cell_height(&self) -> Option<f64> {
+        self.win_ascent_descent().map(|(a, d)| a + d)
+    }
+    /// The face's character cell on Windows above and below the baseline (the OS/2 table's
+    /// `usWinAscent` and `usWinDescent`, at the face's location in a variable font), in font
+    /// units; `None` when the font has no OS/2 table or the sum isn't positive.
+    pub fn win_ascent_descent(&self) -> Option<(f64, f64)> {
+        use skrifa::raw::TableProvider;
+        let f = self.skrifa()?;
+        let o = f.os2().ok()?;
+        // A variable font's MVAR table moves usWinAscent (`hcla`) and usWinDescent (`hcld`):
+        // https://learn.microsoft.com/en-us/typography/opentype/spec/mvar
+        let varied = |tag: &[u8; 4]| {
+            f.mvar().ok().and_then(|m| m.metric_delta(skrifa::Tag::new(tag), self.location().coords()).ok()).map_or(0.0, |d| d.to_f64())
+        };
+        let (a, d) = (f64::from(o.us_win_ascent()) + varied(b"hcla"), f64::from(o.us_win_descent()) + varied(b"hcld"));
+        (a + d > 0.0 && (a + d).is_finite()).then_some((a, d))
+    }
+    /// The average width of the face's characters (the OS/2 table's `xAvgCharWidth`), in font
+    /// units; `None` when the font has no OS/2 table or gives no positive width.
+    pub fn average_char_width(&self) -> Option<f64> {
+        use skrifa::raw::TableProvider;
+        let w = f64::from(self.skrifa()?.os2().ok()?.x_avg_char_width());
+        (w > 0.0).then_some(w)
+    }
     /// Every mapped character and its glyph id, sorted by code point (the Glyphs panel).
     pub fn chars(&self) -> Vec<(char, u32)> {
-        let Some(f) = self.skrifa() else { return vec![] };
-        let mut v: Vec<(char, u32)> = f.charmap().mappings().filter_map(|(cp, g)| char::from_u32(cp).map(|c| (c, g.to_u32()))).collect();
-        v.sort_unstable_by_key(|x| x.0);
-        v.dedup_by_key(|x| x.0);
-        v
+        self.mapped_chars().to_vec()
+    }
+    /// [`Self::chars`], read from the font once for the face and shared by every caller. Empty when
+    /// the font cannot be read or maps no character.
+    pub fn mapped_chars(&self) -> Arc<[(char, u32)]> {
+        self.char_list
+            .get_or_init(|| {
+                let Some(f) = self.skrifa() else { return Arc::from([]) };
+                let mut v: Vec<(char, u32)> = f.charmap().mappings().filter_map(|(cp, g)| char::from_u32(cp).map(|c| (c, g.to_u32()))).collect();
+                v.sort_unstable_by_key(|x| x.0);
+                v.dedup_by_key(|x| x.0);
+                v.into()
+            })
+            .clone()
     }
     /// Advance width of glyph `gid` in font units.
     pub fn advance(&self, gid: u32) -> f64 {
@@ -707,5 +768,55 @@ impl FontFace {
     pub fn is_truetype(&self) -> bool {
         use skrifa::raw::TableProvider;
         self.skrifa().is_some_and(|f| f.glyf().is_ok())
+    }
+    /// The kind of outlines the face's glyphs are drawn from ([`outline_format_of`]).
+    pub fn outline_format(&self) -> Option<OutlineFormat> {
+        self.skrifa().and_then(|f| outline_format_of(&f))
+    }
+}
+
+/// The kind of outlines a face's glyphs are drawn from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OutlineFormat {
+    /// Quadratic outlines in a `glyf` table.
+    TrueType,
+    /// PostScript outlines in a `CFF ` or `CFF2` table.
+    Cff,
+}
+
+/// The kind of outlines `font`'s glyphs are drawn from: TrueType when it has a `glyf` table, else
+/// CFF when it has a `CFF ` or `CFF2` table. None for a font with neither (outlines in `VARC`
+/// alone, color bitmaps only).
+pub(crate) fn outline_format_of(font: &skrifa::FontRef<'_>) -> Option<OutlineFormat> {
+    let has = |tag: &[u8; 4]| font.table_data(skrifa::Tag::new(tag)).is_some();
+    if has(b"glyf") {
+        Some(OutlineFormat::TrueType)
+    } else if has(b"CFF ") || has(b"CFF2") {
+        Some(OutlineFormat::Cff)
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The outline format comes from the tables the font holds.
+    #[test]
+    fn outline_format_follows_the_outline_tables() {
+        let format = |tables: &[(&[u8; 4], &[u8])]| {
+            let font = crate::fontdb::sfnt_of(tables).unwrap_or_default();
+            outline_format_of(&skrifa::FontRef::new(&font).unwrap())
+        };
+        let table = [0_u8; 4];
+        assert_eq!(format(&[(b"glyf", &table), (b"loca", &table)]), Some(OutlineFormat::TrueType));
+        assert_eq!(format(&[(b"CFF ", &table)]), Some(OutlineFormat::Cff));
+        assert_eq!(format(&[(b"CFF2", &table)]), Some(OutlineFormat::Cff));
+        assert_eq!(format(&[(b"VARC", &table)]), None);
+        assert_eq!(format(&[(b"sbix", &table)]), None);
+        // The built-in faces are TrueType.
+        let face = crate::FontDb::global().resolve("Source Sans 3", "Regular").map(|(f, _)| f).unwrap();
+        assert_eq!(face.outline_format(), Some(OutlineFormat::TrueType));
     }
 }

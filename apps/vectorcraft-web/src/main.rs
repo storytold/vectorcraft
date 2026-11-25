@@ -6,8 +6,7 @@
 //!
 //! Differences from the desktop app:
 //! - no TCP control server (browsers can't listen on sockets);
-//! - File → Open uses the browser file picker; bytes arrive asynchronously through
-//!   `Services::inbox`;
+//! - File → Open uses the browser file picker, through the host's file service (`BrowserFiles`);
 //! - Save / Export trigger a browser download;
 //! - dropped files are read asynchronously by `web::WebShell` and delivered through the inbox;
 //! - pen and finger input is read from Pointer Events by `pencil` (Apple Pencil pressure and
@@ -25,7 +24,7 @@ mod api;
 mod fonts;
 #[cfg(any(target_arch = "wasm32", test))]
 mod keys;
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(target_arch = "wasm32", test))]
 mod locks;
 #[cfg(any(target_arch = "wasm32", test))]
 mod pencil;

@@ -23,6 +23,15 @@ pub(super) fn is_targa(bytes: &[u8]) -> bool {
         && descriptor & 0xc0 == 0
 }
 
+/// A Targa file's size, from its header (there is no signature for a size probe to go by).
+pub(super) fn size(bytes: &[u8]) -> Option<(u32, u32)> {
+    let le = |at: usize| Some(u32::from(u16::from_le_bytes(bytes.get(at..at + 2)?.try_into().ok()?)));
+    if !is_targa(bytes) {
+        return None;
+    }
+    Some((le(12)?, le(14)?))
+}
+
 /// Give `img`, decoded from Targa file `bytes`, the transparency the file stores. Bits 0 to 3 of
 /// the image descriptor give the number of attribute bits per pixel, and the extension area's
 /// Attributes Type, when the file has one, says what they hold:

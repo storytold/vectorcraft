@@ -96,6 +96,14 @@ fn variables_functions_and_closures() {
 }
 
 #[test]
+fn a_trailing_comma_adds_no_argument_or_parameter() {
+    assert_eq!(num("function f(a, b,) { return arguments.length * 10 + f.length; } f(1,)"), 12.0);
+    assert_eq!(num("function P(x,) { this.n = arguments.length; } new P(5,).n"), 1.0);
+    assert_eq!(num("var f = new Function('a,', 'return arguments.length'); f(1, 2) * 10 + f.length"), 21.0);
+    assert_eq!(num("Function('a', '', 'return a')(4)"), 4.0);
+}
+
+#[test]
 fn call_and_apply_set_this_and_arguments() {
     assert_eq!(num("function f(a, b) { return this.k + a + b; } f.call({k: 1}, 2, 3)"), 6.0);
     assert_eq!(num("function f(a, b) { return this.k + a + b; } f.apply({k: 1}, [2, 3])"), 6.0);
@@ -237,6 +245,65 @@ fn errors_carry_line_and_column() {
     assert_eq!((e.kind, e.line), (RunErrorKind::Syntax, 1));
     let e = fail("throw 42");
     assert_eq!(e.message, "42");
+}
+
+/// A run error says whether its message is the script's own text, whatever that text reads: an
+/// error the interpreter or a host function threw is not, even when a script caught it and threw
+/// it again, and a value or error the script made, or an error whose name or message it changed,
+/// is.
+#[test]
+fn script_error_origin_distinguishes_native_and_authored_values() {
+    let native = "RangeError: invalid array length";
+    for (src, message, authored) in [
+        ("new Array(-1)", native, false),
+        ("try { new Array(-1); } catch (e) { throw e; }", native, false),
+        ("try { new Array(-1); } catch (e) { e.message = 'invalid array length'; throw e; }", native, false),
+        ("nope()", "ReferenceError: nope is not defined", false),
+        ("throw new RangeError('invalid array length')", native, true),
+        ("throw new Error('invalid array length')", "Error: invalid array length", true),
+        ("throw 'invalid array length'", "invalid array length", true),
+        ("throw 17", "17", true),
+        ("throw {}", "[object Object]", true),
+        ("throw new Error()", "Error", true),
+        ("try { new Array(-1); } catch (e) { throw e.message; }", "invalid array length", true),
+        ("try { new Array(-1); } catch (e) { throw new RangeError(e.message); }", native, true),
+        ("try { new Array(-1); } catch (e) { e.message = 'mine'; throw e; }", "RangeError: mine", true),
+        ("try { nope(); } catch (e) { e.name = 'TypeError'; throw e; }", "TypeError: nope is not defined", true),
+        ("try { new Array(-1); } catch (e) { RangeError.prototype.name = 'Mine'; throw e; }", "Mine: invalid array length", true),
+        ("RangeError.prototype.name = 'Mine'; new Array(-1)", "Mine: invalid array length", true),
+        ("RangeError.prototype.name = 'RangeError'; new Array(-1)", native, false),
+    ] {
+        let e = fail(src);
+        assert_eq!((e.kind, e.message.as_str(), e.authored), (RunErrorKind::Thrown, message, authored), "{src}");
+    }
+    assert!(!fail("var x = ;").authored, "a syntax error");
+    let mut realm = Realm::new();
+    realm.define_function("add", |_| Err("add takes two numbers".into()));
+    let e = realm.run("add()").unwrap_err();
+    assert_eq!((e.message.as_str(), e.authored), ("Error: add takes two numbers", false), "a host function's error");
+    let e = realm.run("throw new Error('add takes two numbers')").unwrap_err();
+    assert_eq!((e.message.as_str(), e.authored), ("Error: add takes two numbers", true));
+}
+
+/// An error about a property of `null` or `undefined` names a computed property whose name is a
+/// primitive, and says whether the script read or set it, never naming an empty property; a
+/// member assignment, an object key and a long name leave the name out.
+#[test]
+fn errors_about_null_and_undefined_name_the_property() {
+    for (source, message) in [
+        ("null[1]", "TypeError: cannot read property '1' of null"),
+        ("var u; u['k'] += 1", "TypeError: cannot set property 'k' of undefined"),
+        ("var u; u['k']++", "TypeError: cannot read property 'k' of undefined"),
+        ("delete null[true]", "TypeError: cannot read property 'true' of null"),
+        ("var u; u['k'] = 1", "TypeError: cannot set property 'k' of undefined"),
+        ("null.x", "TypeError: cannot read property 'x' of null"),
+        ("var u; u.y = 1", "TypeError: cannot set a property of undefined"),
+        ("var u; u[{}] = 1", "TypeError: cannot set a property of undefined"),
+        ("null[new Array(300).join('a')]", "TypeError: cannot read a property of null"),
+    ] {
+        assert_eq!(fail(source).message, message, "{source}");
+    }
+    truth("var k = {toString: function () { throw 1; }}; try { null[k]; false } catch (e) { e instanceof TypeError }");
 }
 
 #[test]
@@ -498,6 +565,19 @@ fn declarations_take_fuel() {
     let mut realm = small(Limits { fuel: 1000, ..Limits::default() });
     assert_eq!(limit(&mut realm, &format!("var {vars};")), LimitKind::Fuel);
     assert_eq!(limit(&mut realm, &format!("Function('var {vars};')();")), LimitKind::Fuel);
+}
+
+#[test]
+fn source_compiled_during_a_run_takes_fuel_before_it_is_parsed() {
+    // Doubling a string 17 times makes 131,072 spaces in about a hundred instructions, so only
+    // the compiled source can use up the fuel.
+    let build = "var s = ' '; for (var i = 0; i < 17; i++) s += s;";
+    let mut realm = small(Limits { fuel: 10_000, ..Limits::default() });
+    for call in ["eval(s)", "(0, eval)(s)", "Function(s)", "new Function('a', s)"] {
+        assert_eq!(limit(&mut realm, &format!("{build} {call};")), LimitKind::Fuel, "{call}");
+    }
+    let mut realm = small(Limits { fuel: 1_000_000, ..Limits::default() });
+    assert_eq!(realm.run(&format!("{build} eval(s + '1') + (0, eval)(s + '2') + Function(s + 'return 3')()")), Ok(JsValue::Number(6.0)));
 }
 
 #[test]
@@ -823,13 +903,14 @@ fn long_property_names_count_toward_the_heap_after_their_strings_are_collected()
     // Each name is a 16,385-unit buffer that only the object's key or the function's binding
     // holds once the string that made it is garbage, so about 32 of them fill the heap well before
     // the fuel runs out. In the second script the property lookup flattens a long string each
-    // time, so collections run.
+    // time, so collections run. Each eval there also takes fuel for its source, so that run has
+    // more fuel.
     let mut realm = small(Limits { heap_bytes: 1 << 20, fuel: 20_000, ..Limits::default() });
     let src = "var s = 'x'; while (s.length < 10000) s += s; var o = {}; for (var i = 0; ; i++) o[s + i] = 1;";
     assert_eq!(limit(&mut realm, src), LimitKind::Heap);
     let src = "var s = 'x'; while (s.length < 10000) s += s; \
         (function () { for (var i = 0; ; i++) { eval('var ' + s + i + ' = 1'); ({})[s + i]; } })();";
-    let mut realm = small(Limits { heap_bytes: 1 << 20, fuel: 20_000, ..Limits::default() });
+    let mut realm = small(Limits { heap_bytes: 1 << 20, fuel: 5_000_000, ..Limits::default() });
     assert_eq!(limit(&mut realm, src), LimitKind::Heap);
 }
 
@@ -902,6 +983,14 @@ fn code(ops: Vec<Op>) -> Code {
         uses_arguments: false,
         source,
         span: (0, 0),
+        scopes: Vec::new(),
+        top_scope: None,
+        templates: Vec::new(),
+        rest: None,
+        length: 0,
+        arrow: false,
+        uses_this: false,
+        param_init: false,
     }
 }
 

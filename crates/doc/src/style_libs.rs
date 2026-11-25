@@ -155,11 +155,15 @@ pub const STYLE_LIBRARIES: &[BuiltinStyleLibrary] = &[
     BuiltinStyleLibrary { id: "shadows-glows", name: "Shadows and Glows", make: shadows_glows },
     BuiltinStyleLibrary { id: "outlines-rules", name: "Outlines and Rules", make: outlines_rules },
     BuiltinStyleLibrary { id: "hand-drawn", name: "Hand-Drawn", make: hand_drawn },
+    BuiltinStyleLibrary { id: "textures", name: "Textures", make: textures },
+    BuiltinStyleLibrary { id: "painted-sketched", name: "Painted and Sketched", make: painted_sketched },
+    BuiltinStyleLibrary { id: "paper-cutouts", name: "Paper Cutouts", make: paper_cutouts },
     BuiltinStyleLibrary { id: "gradient-finishes", name: "Gradient Finishes", make: gradient_finishes },
     BuiltinStyleLibrary { id: "shape-effects", name: "Shape Effects", make: shape_effects },
     BuiltinStyleLibrary { id: "blends-transparency", name: "Blends and Transparency", make: blends_transparency },
     BuiltinStyleLibrary { id: "game-hud", name: "Game HUD", make: game_hud },
     BuiltinStyleLibrary { id: "status-effects", name: "Status Effects", make: status_effects },
+    BuiltinStyleLibrary { id: "neon-glow", name: "Neon & Glow", make: neon_glow },
 ];
 
 /// Built-in library `id`, made once.
@@ -192,8 +196,14 @@ fn round(h: &str, width: f64) -> StrokeLayer {
     StrokeLayer { cap: LineCap::Round, join: LineJoin::Round, ..stroke(h, width) }
 }
 
-/// Live effect `id` with `params` (the others keep the effect's defaults).
-fn fx(id: &str, params: Value) -> Effect {
+/// Live effect `id` with `params` (the others keep the effect's defaults). A Warp draws with its
+/// style's Bézier net, as a new Warp does.
+fn fx(id: &str, mut params: Value) -> Effect {
+    if id.starts_with("warp.")
+        && let Value::Object(m) = &mut params
+    {
+        m.entry("version").or_insert(json!(crate::live::WARP_NET));
+    }
     Effect { id: id.into(), params, visible: true }
 }
 
@@ -319,6 +329,116 @@ fn hand_drawn() -> Vec<GraphicStyle> {
         ),
         style("Puffy", vec![F(fill("#ffc8dd")), S(round("#c9184a", 1.5))], vec![fx("distort.puckerBloat", json!({"amount": 25.0}))]),
         style("Starburst", vec![F(fill("#ffbe0b")), S(stroke("#fb5607", 1.0))], vec![fx("distort.puckerBloat", json!({"amount": -40.0}))]),
+    ]
+}
+
+/// Painted and Sketched: one catalog paint or sketch effect over the whole appearance, so it
+/// repaints the fill and the stroke together (watercolor, dry brush, pastels, charcoal and ink).
+fn painted_sketched() -> Vec<GraphicStyle> {
+    vec![
+        style(
+            "Washed Blue",
+            vec![F(fill("#8ab9c9"))],
+            vec![fx("artistic.watercolor", json!({"brushDetail": 8.0, "shadowIntensity": 2.0, "texture": 2.0}))],
+        ),
+        style(
+            "Bristle Ochre",
+            vec![F(fill("#c4975a")), S(stroke("#76533d", 1.0))],
+            vec![fx("artistic.dryBrush", json!({"brushSize": 4.0, "brushDetail": 7.0, "texture": 2.0}))],
+        ),
+        style(
+            "Pastel Heather",
+            vec![F(fill("#a78ca5"))],
+            vec![fx(
+                "artistic.roughPastels",
+                json!({
+                    "strokeLength": 8.0,
+                    "strokeDetail": 9.0,
+                    "texture": "canvas",
+                    "scaling": 100.0,
+                    "relief": 5.0,
+                    "lightDirection": "topLeft",
+                    "invert": false
+                }),
+            )],
+        ),
+        style(
+            "Charcoal Shade",
+            vec![F(fill("#666666"))],
+            vec![fx("sketch.charcoal", json!({"thickness": 3.0, "detail": 3.0, "lightDarkBalance": 55.0}))],
+        ),
+        style(
+            "Ink Contour",
+            vec![F(fill("#d9e2df")), S(stroke("#26323b", 1.0))],
+            vec![fx("brushStrokes.inkOutlines", json!({"strokeLength": 6.0, "darkIntensity": 24.0, "lightIntensity": 8.0}))],
+        ),
+        style(
+            "Wet Ink",
+            vec![F(fill("#637b85"))],
+            vec![fx("brushStrokes.sumiE", json!({"strokeWidth": 7.0, "strokePressure": 5.0, "contrast": 20.0}))],
+        ),
+        style(
+            "Fine Pen",
+            vec![F(fill("#d8d4c6"))],
+            vec![fx("sketch.graphicPen", json!({"strokeLength": 6.0, "lightDarkBalance": 55.0, "strokeDirection": "rightDiagonal"}))],
+        ),
+    ]
+}
+
+/// Paper Cutouts: original layered paper colors with visible cut edges and crisp cast shadows.
+fn paper_cutouts() -> Vec<GraphicStyle> {
+    let cutout = |name: &str, face: &str, edge: &str, rim: &str, shadow: &str, x: f64, y: f64| {
+        style(
+            name,
+            vec![F(fill(face)), S(stroke(edge, 7.0)), S(stroke(rim, 2.0))],
+            vec![fx("stylize.dropShadow", json!({"mode": "normal", "opacity": 100.0, "x": x, "y": y, "blur": 0.0, "color": shadow}))],
+        )
+    };
+    vec![
+        cutout("Coral Layers", "#ff6b6b", "#f9c74f", "#fff4e6", "#6d597a", 5.0, 5.0),
+        cutout("Mint Layers", "#80cbc4", "#2a9d8f", "#e9f5db", "#355070", 4.0, 6.0),
+        cutout("Midnight Layers", "#3d5a80", "#ee6c4d", "#e0fbfc", "#1b263b", 6.0, 4.0),
+        cutout("Sunflower Sheet", "#ffbe0b", "#fb5607", "#fff3b0", "#6a4c93", 3.0, 6.0),
+        cutout("Rose Layers", "#f28482", "#84a59d", "#f7ede2", "#4a4e69", 6.0, 3.0),
+        cutout("Monochrome Stack", "#f5f5f5", "#444444", "#ffffff", "#222222", 5.0, 5.0),
+    ]
+}
+
+/// Textures: fills and strokes painted with the catalog's texture effects (grain, canvas and
+/// burlap surfaces, craquelure, tiles, patchwork, stained glass and water paper).
+fn textures() -> Vec<GraphicStyle> {
+    let surface = |texture: &str, scaling: f64, relief: f64, light: &str| {
+        fx("texture.texturizer", json!({"texture": texture, "scaling": scaling, "relief": relief, "lightDirection": light, "invert": false}))
+    };
+    vec![
+        style(
+            "Fine Grain",
+            vec![F(fill("#c9ada7")), S(stroke("#4a4e69", 1.0))],
+            vec![fx("texture.grain", json!({"intensity": 35.0, "contrast": 55.0, "grainType": "regular"}))],
+        ),
+        style("Canvas Weave", vec![F(fill("#e9d8a6"))], vec![surface("canvas", 100.0, 6.0, "topLeft")]),
+        style("Burlap Sack", vec![F(fill("#bc8a5f")), S(stroke("#6f4518", 1.5))], vec![surface("burlap", 120.0, 8.0, "top")]),
+        style(
+            "Cracked Glaze",
+            vec![F(fill("#94d2bd")), S(stroke("#005f73", 1.0))],
+            vec![fx("texture.craquelure", json!({"crackSpacing": 12.0, "crackDepth": 5.0, "crackBrightness": 8.0}))],
+        ),
+        style(
+            "Mosaic Floor",
+            vec![F(fill("#0a9396"))],
+            vec![fx("texture.mosaicTiles", json!({"tileSize": 10.0, "groutWidth": 3.0, "lightenGrout": 8.0}))],
+        ),
+        style("Quilted Squares", vec![F(fill("#ee9b00"))], vec![fx("texture.patchwork", json!({"squareSize": 5.0, "relief": 10.0}))]),
+        style(
+            "Leaded Glass",
+            vec![F(FillLayer::new(linear(-45.0, &[(0.0, "#ae2012", 1.0), (0.5, "#ee9b00", 1.0), (1.0, "#005f73", 1.0)])))],
+            vec![fx("texture.stainedGlass", json!({"cellSize": 8.0, "borderThickness": 4.0, "lightIntensity": 3.0}))],
+        ),
+        style(
+            "Damp Paper",
+            vec![F(fill("#4895ef")), S(stroke("#3f37c9", 1.0))],
+            vec![fx("sketch.waterPaper", json!({"fiberLength": 12.0, "brightness": 55.0, "contrast": 60.0}))],
+        ),
     ]
 }
 
@@ -520,6 +640,44 @@ fn status_effects() -> Vec<GraphicStyle> {
     ]
 }
 
+/// Neon & Glow: original multi-layer procedural styles with neon tubes, laser beams, and glowing halos.
+fn neon_glow() -> Vec<GraphicStyle> {
+    vec![
+        style(
+            "Cyan Neon",
+            vec![S(StrokeLayer { opacity: 0.7, ..round("#00e5ff", 6.0) }), S(round("#ffffff", 1.5))],
+            vec![fx("stylize.dropShadow", json!({"mode": "screen", "opacity": 85.0, "x": 0.0, "y": 0.0, "blur": 8.0, "color": "#00e5ff"}))],
+        ),
+        GraphicStyle {
+            blend: BlendMode::Screen,
+            ..style(
+                "Magenta Laser",
+                vec![S(StrokeLayer { blend: BlendMode::Screen, ..round("#ff007f", 5.0) }), S(round("#ffffff", 1.5))],
+                vec![fx("stylize.outerGlow", json!({"mode": "screen", "opacity": 90.0, "blur": 8.0, "color": "#ff007f"}))],
+            )
+        },
+        style(
+            "Amber Tube",
+            vec![S(StrokeLayer { opacity: 0.8, ..round("#ff8c00", 6.0) }), S(round("#ffea00", 1.5))],
+            vec![fx("stylize.outerGlow", json!({"mode": "screen", "opacity": 85.0, "blur": 8.0, "color": "#ff8c00"}))],
+        ),
+        style(
+            "Electric Lime",
+            vec![S(StrokeLayer { opacity: 0.75, ..round("#39ff14", 6.0) }), S(round("#ffffff", 1.5))],
+            vec![fx("stylize.outerGlow", json!({"mode": "screen", "opacity": 90.0, "blur": 8.0, "color": "#39ff14"}))],
+        ),
+        style(
+            "Pulse Violet",
+            vec![S(StrokeLayer { opacity: 0.75, ..round("#7b2cbf", 5.0) }), S(round("#e0aaff", 1.5))],
+            vec![
+                fx("stylize.innerGlow", json!({"mode": "screen", "opacity": 75.0, "blur": 6.0, "color": "#c77dff", "source": "edge"})),
+                fx("stylize.outerGlow", json!({"mode": "screen", "opacity": 85.0, "blur": 8.0, "color": "#7b2cbf"})),
+            ],
+        ),
+        style("Cobalt Phosphor", vec![S(round("#0047ab", 6.0)), S(round("#ffffff", 1.5))], vec![fx("blur.gaussian", json!({"radius": 2.0}))]),
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -550,6 +708,86 @@ mod tests {
         assert_eq!(status.name, "Status Effects");
         let status_names: Vec<&str> = status.styles.iter().map(|g| g.name.as_str()).collect();
         assert_eq!(status_names, ["Poison Tint", "Freeze Edge", "Burn Aura", "Stun Pulse", "Stealth Fade", "Shield Buff"]);
+        let textures = builtin_style_library("textures").unwrap();
+        assert_eq!(textures.name, "Textures");
+        let texture_names: Vec<&str> = textures.styles.iter().map(|g| g.name.as_str()).collect();
+        let expected =
+            ["Fine Grain", "Canvas Weave", "Burlap Sack", "Cracked Glaze", "Mosaic Floor", "Quilted Squares", "Leaded Glass", "Damp Paper"];
+        assert_eq!(texture_names, expected);
+        for b in STYLE_LIBRARIES.iter().filter(|b| b.id != "textures") {
+            let lib = builtin_style_library(b.id).unwrap();
+            assert!(lib.styles.iter().all(|g| !expected.contains(&g.name.as_str())), "{} shares a name with Textures", b.id);
+        }
+        let ids: Vec<&str> = STYLE_LIBRARIES.iter().map(|b| b.id).collect();
+        assert_eq!(ids.iter().position(|&i| i == "textures"), ids.iter().position(|&i| i == "hand-drawn").map(|i| i + 1), "after Hand-Drawn");
+    }
+
+    #[test]
+    fn paper_cutouts_have_layered_edges_and_crisp_shadows() {
+        let lib = builtin_style_library("paper-cutouts").unwrap();
+        assert_eq!(lib.name, "Paper Cutouts");
+        let names: Vec<&str> = lib.styles.iter().map(|g| g.name.as_str()).collect();
+        assert_eq!(names, ["Coral Layers", "Mint Layers", "Midnight Layers", "Sunflower Sheet", "Rose Layers", "Monochrome Stack"]);
+        for g in &lib.styles {
+            assert_eq!(g.appearance.items.len(), 3, "{} has a face and two cut edges", g.name);
+            assert!(matches!(g.appearance.items[0], AppearanceItem::Fill(_)));
+            assert!(matches!(g.appearance.items[1], AppearanceItem::Stroke(_)));
+            assert!(matches!(g.appearance.items[2], AppearanceItem::Stroke(_)));
+            assert_eq!(g.appearance.effects.len(), 1);
+            let shadow = &g.appearance.effects[0];
+            assert_eq!(shadow.id, "stylize.dropShadow");
+            assert_eq!(shadow.params["blur"], 0.0);
+            assert_eq!(shadow.params["opacity"], 100.0);
+        }
+        assert_eq!(read(&write(&lib), "Fallback").unwrap(), *lib);
+    }
+
+    /// The built-in styles' Warps draw with the map a new Warp takes.
+    #[test]
+    fn builtin_warp_styles_take_the_nets_map() {
+        let mut warps = 0;
+        for b in STYLE_LIBRARIES {
+            let lib = builtin_style_library(b.id).unwrap();
+            for g in &lib.styles {
+                let mut effects: Vec<&Effect> = g.appearance.effects.iter().collect();
+                effects.extend(g.appearance.items.iter().flat_map(|i| i.effects()));
+                for e in effects.into_iter().filter(|e| e.id.starts_with("warp.")) {
+                    assert_eq!(e.params["version"], json!(crate::live::WARP_NET), "{} › {}: {}", b.id, g.name, e.id);
+                    warps += 1;
+                }
+            }
+        }
+        assert!(warps >= 3, "{warps}");
+    }
+
+    #[test]
+    fn painted_and_sketched_follows_textures_with_one_effect_per_style() {
+        let ids: Vec<&str> = STYLE_LIBRARIES.iter().map(|b| b.id).collect();
+        let at = ids.iter().position(|&id| id == "painted-sketched").expect("listed");
+        assert_eq!(ids[at - 1], "textures");
+        let lib = builtin_style_library("painted-sketched").unwrap();
+        assert_eq!(lib.name, "Painted and Sketched");
+        let names: Vec<&str> = lib.styles.iter().map(|g| g.name.as_str()).collect();
+        assert_eq!(names, ["Washed Blue", "Bristle Ochre", "Pastel Heather", "Charcoal Shade", "Ink Contour", "Wet Ink", "Fine Pen"]);
+        let effects: Vec<&str> = lib.styles.iter().flat_map(|g| g.appearance.effects.iter().map(|e| e.id.as_str())).collect();
+        assert_eq!(
+            effects,
+            [
+                "artistic.watercolor",
+                "artistic.dryBrush",
+                "artistic.roughPastels",
+                "sketch.charcoal",
+                "brushStrokes.inkOutlines",
+                "brushStrokes.sumiE",
+                "sketch.graphicPen"
+            ]
+        );
+        assert!(lib.styles.iter().all(|g| g.appearance.items.iter().all(|i| i.effects().is_empty())), "no effects on a fill or stroke");
+        // No other built-in library holds a style of the same name.
+        for b in STYLE_LIBRARIES.iter().filter(|b| b.id != "painted-sketched") {
+            let other = builtin_style_library(b.id).unwrap();
+            assert!(other.styles.iter().all(|g| !names.contains(&g.name.as_str())), "{}", b.id);
+        }
     }
 
     #[test]
@@ -590,5 +828,37 @@ mod tests {
         let g = GraphicStyle::new("G", Appearance::basic(Paint::Gradient(Box::new(gp)), Paint::None, 1.0)).standalone();
         let Paint::Gradient(gp) = g.appearance.fill_paint() else { panic!("a gradient") };
         assert!(gp.swatch.is_none() && gp.gradient.stops.iter().all(|s| s.swatch.is_none() && s.tint == 1.0));
+    }
+
+    #[test]
+    fn neon_and_glow_styles_are_defined_with_multi_strokes_and_effects() {
+        let lib = builtin_style_library("neon-glow").expect("neon-glow library exists");
+        assert_eq!(lib.name, "Neon & Glow");
+        assert_eq!(lib.len(), 6);
+        let names: Vec<&str> = lib.styles.iter().map(|g| g.name.as_str()).collect();
+        assert_eq!(names, ["Cyan Neon", "Magenta Laser", "Amber Tube", "Electric Lime", "Pulse Violet", "Cobalt Phosphor"]);
+        for g in &lib.styles {
+            let strokes = g.appearance.items.iter().filter(|i| matches!(i, AppearanceItem::Stroke(_))).count();
+            assert!(strokes >= 2, "{} has {} strokes, expected >= 2", g.name, strokes);
+            assert!(!g.appearance.effects.is_empty(), "{} has effects", g.name);
+        }
+        let cyan = lib.style("Cyan Neon").unwrap();
+        assert_eq!(cyan.appearance.effects[0].id, "stylize.dropShadow");
+        let magenta = lib.style("Magenta Laser").unwrap();
+        assert_eq!(magenta.blend, BlendMode::Screen);
+        let pulse = lib.style("Pulse Violet").unwrap();
+        let pulse_fx: Vec<&str> = pulse.appearance.effects.iter().map(|e| e.id.as_str()).collect();
+        assert_eq!(pulse_fx, ["stylize.innerGlow", "stylize.outerGlow"]);
+        let cobalt = lib.style("Cobalt Phosphor").unwrap();
+        assert_eq!(cobalt.appearance.effects[0].id, "blur.gaussian");
+    }
+
+    #[test]
+    fn neon_glow_round_trips_through_vcstyles() {
+        let lib = builtin_style_library("neon-glow").unwrap();
+        let text = write(&lib);
+        assert!(sniff(&text));
+        let read_back = read(&text, "Fallback").unwrap();
+        assert_eq!(*lib, read_back);
     }
 }

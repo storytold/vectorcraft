@@ -570,6 +570,98 @@ fn ending_during_a_pen_gesture_commits_and_clears_it() {
     }
 }
 
+/// Choosing the Pen again ends the path being drawn as Escape does, with the rubber band on or off
+/// and for a one-anchor path: the preview goes, nothing is added to the document, and the next
+/// click starts a new path. Mid-drag it commits the anchor being placed first. With no path being
+/// drawn it changes nothing.
+#[test]
+fn choosing_the_pen_again_ends_the_path() {
+    let p = paint();
+    let created = |acts: &[Action]| matches!(acts, [Action::Begin(_), Action::Preview(c, _)] if c == "path.create");
+    let preview = |o: &[Overlay]| o.iter().any(|o| matches!(o, Overlay::Path { .. } | Overlay::Measure { .. }));
+    for pts in [vec![Point::new(100.0, 300.0), Point::new(200.0, 300.0)], vec![Point::new(100.0, 300.0)]] {
+        let (d, _, s) = drawing(vectorcraft_geom::SubPath::polyline(&pts, false));
+        for band in [true, false] {
+            let cx = ToolContext { pen_rubber_band: band, ..cx(&d, &s, &p) };
+            let mut t = PenTool { drawing: true, ..PenTool::default() };
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 300.0, 410.0));
+            assert!(preview(&t.overlays(&cx)), "band {band}");
+            assert_eq!(t.cursor(&cx, Point::new(300.0, 410.0), Mods::default()), Cursor::PenDrawing);
+            assert!(t.chosen_again(&cx).is_empty(), "nothing to commit");
+            assert!(!preview(&t.overlays(&cx)), "band {band}");
+            assert_eq!(t.cursor(&cx, Point::new(300.0, 410.0), Mods::default()), Cursor::Pen);
+            let acts = click(&mut t, &cx, 300.0, 410.0, Mods::default());
+            assert!(created(&acts), "{} anchors, band {band}: {acts:?}", pts.len());
+        }
+        // Chosen again (through `tool.select`) while a drag places an anchor: it is committed.
+        let cx = cx(&d, &s, &p);
+        let mut t = PenTool { drawing: true, ..PenTool::default() };
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 300.0, 410.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 320.0, 440.0));
+        assert_eq!(t.chosen_again(&cx), vec![Action::Commit]);
+        assert!(!t.busy());
+        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 320.0, 440.0)).is_empty());
+        assert!(created(&click(&mut t, &cx, 300.0, 500.0, Mods::default())));
+    }
+    let (d, _, s) = drawing(vectorcraft_geom::SubPath::polyline(&[Point::new(100.0, 300.0), Point::new(200.0, 300.0)], false));
+    let cx = cx(&d, &s, &p);
+    let mut t = PenTool::default();
+    assert!(t.chosen_again(&cx).is_empty());
+    assert_eq!(t.cursor(&cx, Point::new(300.0, 410.0), Mods::default()), Cursor::Pen);
+}
+
+/// Choosing the Pen again while it draws a path inside a compound path ends that path as Escape
+/// and Enter do: the compound path is selected, the path is not closed, no undo step is added,
+/// and the next click starts a new path. Ending a path outside any compound path sends no
+/// selection change.
+#[test]
+fn choosing_the_pen_again_selects_the_compound_parent_of_the_path_being_drawn() {
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let (a, b, compound) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let open = |x: f64| {
+        vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&[Point::new(x, 300.0), Point::new(x + 100.0, 300.0)], false))
+    };
+    let path = |id, x| std::sync::Arc::new(vectorcraft_doc::Node::path(id, open(x), vectorcraft_doc::Appearance::default_art()));
+    let mut node = vectorcraft_doc::Node::new(
+        compound,
+        NodeKind::Compound { children: vec![path(a, 10.0), path(b, 300.0)], rule: vectorcraft_geom::FillRule::NonZero },
+    );
+    node.appearance = vectorcraft_doc::Appearance::default_art().into();
+    d.insert(Some(l), 1, node).unwrap();
+    let p = paint();
+    // The member path alone is the selection while the Pen draws it.
+    let mut s = Selection::default();
+    s.set([a]);
+    let inside = cx(&d, &s, &p);
+    // The selection once the engine ran `select.set`: the compound path.
+    let mut sc = Selection::default();
+    sc.set([compound]);
+    let after = cx(&d, &sc, &p);
+    let select_compound = vec![Action::Exec("select.set".into(), json!({"ids": [compound.0]}))];
+    for key in [None, Some(ToolKey::Escape), Some(ToolKey::Enter)] {
+        let mut t = PenTool { drawing: true, path: Some(a), subpath: Some(0), ..PenTool::default() };
+        assert_eq!(t.cursor(&inside, Point::new(250.0, 450.0), Mods::default()), Cursor::PenDrawing, "{key:?}");
+        let acts = match key {
+            Some(k) => t.key(&inside, k, Mods::default()),
+            None => t.chosen_again(&inside),
+        };
+        assert_eq!(acts, select_compound, "{key:?}: only the selection changes, with no close and no undo step");
+        assert!(!t.busy() && t.active(&after).is_none(), "{key:?}: the path is done");
+        assert_eq!(t.cursor(&after, Point::new(250.0, 450.0), Mods::default()), Cursor::Pen, "{key:?}");
+        let next = click(&mut t, &after, 250.0, 450.0, Mods::default());
+        assert!(
+            matches!(next.as_slice(), [Action::Begin(_), Action::Preview(c, _)] if c == "path.create"),
+            "{key:?}: the next click starts a new path: {next:?}"
+        );
+    }
+    let (d, id, s) = drawing(vectorcraft_geom::SubPath::polyline(&[Point::new(100.0, 300.0), Point::new(200.0, 300.0)], false));
+    let plain = cx(&d, &s, &p);
+    let mut t = PenTool { drawing: true, path: Some(id), subpath: Some(0), ..PenTool::default() };
+    assert!(t.chosen_again(&plain).is_empty());
+    assert!(!t.busy() && t.active(&plain).is_none());
+}
+
 /// #501: a press on the first anchor closes the path, however far the drag then goes: the
 /// closing preview leaves the path closed (so not one the pen extends), and each move still
 /// previews the close with the incoming handle mirroring the pointer (Alt keeps the outgoing one
@@ -607,7 +699,7 @@ fn a_drag_from_the_first_anchor_always_closes() {
 fn alt_mid_close_keeps_the_turned_outgoing_handle() {
     use vectorcraft_geom::{Anchor, SubPath};
     let anchors = vec![Anchor::smooth(Point::new(100.0, 300.0), Point::new(150.0, 300.0)), Anchor::corner(Point::new(200.0, 200.0))];
-    let (mut d, id, s) = drawing(SubPath { anchors, closed: false });
+    let (mut d, id, s) = drawing(SubPath::new(anchors, false));
     let p = paint();
     let mut t = PenTool { drawing: true, ..PenTool::default() };
     assert_eq!(t.pointer(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Down, 100.0, 300.0)), close_press(id, Point::new(100.0, 300.0)));
@@ -626,6 +718,43 @@ fn alt_mid_close_keeps_the_turned_outgoing_handle() {
         )]
     );
     assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 130.0, 200.0)), vec![Action::Commit]);
+}
+
+/// Space held during a closing drag moves the first anchor, handles and all, by as far as the
+/// pointer moves; released, the drag shapes the handles round the anchor's new place.
+#[test]
+fn space_moves_the_closing_anchor() {
+    use vectorcraft_geom::{Anchor, SubPath};
+    let anchors = vec![Anchor::smooth(Point::new(100.0, 300.0), Point::new(150.0, 300.0)), Anchor::corner(Point::new(200.0, 200.0))];
+    let (mut d, id, s) = drawing(SubPath::new(anchors, false));
+    let p = paint();
+    let mut t = PenTool { drawing: true, ..PenTool::default() };
+    assert_eq!(t.pointer(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Down, 100.0, 300.0)), close_press(id, Point::new(100.0, 300.0)));
+    d.node_mut(id).unwrap().path_data_mut().unwrap().subpaths[0].closed = true;
+    let c = cx(&d, &s, &p);
+    let close = |v: serde_json::Value| vec![Action::Preview("path.close".into(), v)];
+    assert_eq!(
+        t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 100.0, 200.0)),
+        close(json!({"id": id.0, "in": [100.0, 400.0], "independent": false, "subpath": 0}))
+    );
+    let space = Mods { space: true, ..Mods::default() };
+    assert_eq!(
+        t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 130.0, 180.0).with_mods(space)),
+        close(json!({"id": id.0, "at": [130.0, 280.0], "in": [130.0, 380.0], "independent": false, "subpath": 0})),
+        "moved, handles and all"
+    );
+    // Space released: the drag shapes the handles round the anchor's new place.
+    assert_eq!(
+        t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 130.0, 230.0)),
+        close(json!({"id": id.0, "at": [130.0, 280.0], "in": [130.0, 330.0], "independent": false, "subpath": 0}))
+    );
+    // Alt keeps the outgoing handle where the drag had turned it, moved with the anchor.
+    let alt = Mods { alt: true, ..Mods::default() };
+    assert_eq!(
+        t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 160.0, 230.0).with_mods(alt)),
+        close(json!({"id": id.0, "at": [130.0, 280.0], "in": [100.0, 330.0], "out": [130.0, 230.0], "independent": true, "subpath": 0}))
+    );
+    assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 160.0, 230.0)), vec![Action::Commit]);
 }
 
 #[test]
@@ -734,6 +863,69 @@ fn anchors_snap_to_smart_guides() {
     let mut t = PenTool::default();
     let a = click(&mut t, &cx, 102.0, 99.0, Mods::default());
     assert_eq!(a[1], Action::Preview("path.create".into(), json!({"anchors": [{"x": 100.0, "y": 100.0}]})));
+}
+
+/// The rubber band after a smooth anchor is the curve the click then adds: it leaves along the
+/// anchor's outgoing handle and arrives at the new corner anchor without a handle, so the segment
+/// keeps its shape when the anchor goes down (#8296).
+#[test]
+fn rubber_band_is_the_segment_a_click_adds() {
+    let (last, out) = (Point::new(60.0, 300.0), Point::new(110.0, 250.0));
+    let sub = vectorcraft_geom::SubPath::new(vec![Anchor::corner(Point::new(10.0, 300.0)), Anchor::smooth(last, out)], false);
+    let (d, id, s) = drawing(sub);
+    let p = paint();
+    let cx = ToolContext { zoom: 1.0, smart_guides: false, snap_to_point: false, snap_to_pixel: false, snap_to_grid: false, ..cx(&d, &s, &p) };
+    let h = Point::new(237.0, 361.0);
+    let mut t = PenTool { drawing: true, ..PenTool::default() };
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Move, h.x, h.y));
+    let band: Vec<_> =
+        t.overlays(&cx).into_iter().filter_map(|o| if let Overlay::Path { path, .. } = o { Some(path.elements().to_vec()) } else { None }).collect();
+    assert_eq!(band, vec![vec![vectorcraft_geom::PathEl::MoveTo(last), vectorcraft_geom::PathEl::CurveTo(out, h, h)]]);
+    // The click adds a corner anchor there: the segment drawn is the one previewed.
+    let a = click(&mut t, &cx, h.x, h.y, Mods::default());
+    assert_eq!(a[1], Action::Preview("path.appendAnchor".into(), json!({"id": id.0, "x": h.x, "y": h.y, "subpath": 0})));
+}
+
+/// With Enable Rubber Band off, the preview segment is hidden but Measurement Labels still shows
+/// the D / Angle / dX / dY readout at the snapped point before the next click.
+#[test]
+fn measurement_label_shows_with_the_rubber_band_off() {
+    let (d, id, s) = drawing(vectorcraft_geom::SubPath::polyline(&[Point::new(10.0, 300.0), Point::new(60.0, 300.0)], false));
+    let p = paint();
+    let on = cx(&d, &s, &p);
+    let off = ToolContext { pen_rubber_band: false, ..cx(&d, &s, &p) };
+    let from = Point::new(60.0, 300.0);
+    let to = Point::new(150.0, 318.0);
+    let measure =
+        |o: &[Overlay]| o.iter().filter_map(|o| if let Overlay::Measure { text, .. } = o { Some(text.clone()) } else { None }).collect::<Vec<_>>();
+    let preview = |o: &[Overlay]| {
+        o.iter().any(|o| matches!(o, Overlay::Path { path, .. } if path.elements().first().and_then(|e| e.end_point()) == Some(from)))
+    };
+    let mut t = PenTool { drawing: true, ..PenTool::default() };
+    t.pointer(&off, &PointerEvent::new(PointerKind::Move, 152.0, 318.0));
+    let o = t.overlays(&off);
+    assert_eq!(measure(&o), vec![off.segment_measure_label(from, to)], "{o:?}");
+    assert!(!preview(&o), "{o:?}");
+    // The rubber band on still shows both.
+    let o = t.overlays(&on);
+    assert_eq!(measure(&o), vec![on.segment_measure_label(from, to)], "{o:?}");
+    assert!(preview(&o), "{o:?}");
+    // Measurement Labels off shows no readout either way.
+    for band in [true, false] {
+        let quiet = ToolContext { pen_rubber_band: band, measurement_labels: false, ..cx(&d, &s, &p) };
+        assert!(measure(&t.overlays(&quiet)).is_empty());
+    }
+    // The click places the same anchor as with the rubber band on.
+    let a = click(&mut t, &off, 152.0, 318.0, Mods::default());
+    assert_eq!(a[1], Action::Preview("path.appendAnchor".into(), json!({"id": id.0, "x": 150.0, "y": 318.0, "subpath": 0})));
+    // Hovering exactly on the last anchor measures no segment.
+    let mut t = PenTool { drawing: true, ..PenTool::default() };
+    t.pointer(&off, &PointerEvent::new(PointerKind::Move, 60.0, 300.0));
+    assert!(measure(&t.overlays(&off)).is_empty());
+    // With no path being drawn there is nothing to measure from.
+    let mut t = PenTool::default();
+    t.pointer(&off, &PointerEvent::new(PointerKind::Move, 152.0, 318.0));
+    assert!(measure(&t.overlays(&off)).is_empty());
 }
 
 #[test]
@@ -890,4 +1082,129 @@ fn continuing_a_compound_member_at_its_first_anchor_reverses_that_path_by_id() {
         "the reverse names the member path, not the compound the select.set just selected"
     );
     assert_eq!((pen.path, pen.subpath), (Some(a), Some(0)));
+}
+
+/// A context with snapping off, so each point goes where the pointer is.
+fn plain<'a>(d: &'a vectorcraft_doc::Document, s: &'a Selection, p: &'a crate::PaintDefaults) -> ToolContext<'a> {
+    ToolContext { zoom: 1.0, smart_guides: false, snap_to_point: false, snap_to_pixel: false, snap_to_grid: false, ..cx(d, s, p) }
+}
+
+fn drag_readout(dx: f64, dy: f64) -> Option<crate::Readout> {
+    Some(crate::Readout::Drag { dx, dy })
+}
+
+/// The Info panel shows the handle a drag pulls out of a new anchor, from the anchor to the
+/// handle's end, once the drag passes the threshold and until the button comes up.
+#[test]
+fn info_readout_tracks_the_handle_of_a_new_anchor() {
+    let (d, s, p) = (vectorcraft_doc::Document::new(500.0, 500.0), Selection::default(), paint());
+    let cx = plain(&d, &s, &p);
+    let mut t = PenTool::default();
+    assert_eq!(t.readout(&cx), None, "hovering");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+    assert_eq!(t.readout(&cx), None, "pressed");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 101.0, 101.0));
+    assert_eq!(t.readout(&cx), None, "inside the drag threshold");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 130.0, 60.0));
+    let r = t.readout(&cx);
+    assert_eq!(r, drag_readout(30.0, -40.0));
+    let (dist, angle) = r.and_then(|r| r.distance_angle()).unwrap_or_default();
+    assert!((dist - 50.0).abs() < 1e-9 && (angle - 53.130_102_354_155_98).abs() < 1e-9, "{dist} {angle}");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 130.0, 60.0));
+    assert_eq!(t.readout(&cx), None, "released");
+    // A click shows nothing.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 200.0, 200.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 201.0, 200.0));
+    assert_eq!(t.readout(&cx), None);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 201.0, 200.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 250.0, 250.0));
+    assert_eq!(t.readout(&cx), None, "hovering after a click");
+}
+
+/// An anchor added to the path being drawn and the first anchor closing it: the handle the drag
+/// shapes is measured from the anchor it belongs to.
+#[test]
+fn info_readout_tracks_added_and_closing_anchors() {
+    let pts = [Point::new(100.0, 300.0), Point::new(200.0, 300.0), Point::new(200.0, 400.0)];
+    let (d, _, s) = drawing(vectorcraft_geom::SubPath::polyline(&pts, false));
+    let p = paint();
+    let cx = plain(&d, &s, &p);
+    let mut t = PenTool { drawing: true, ..PenTool::default() };
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 300.0, 400.0));
+    assert!(matches!(&a[..], [Action::Begin(_), Action::Preview(c, _)] if c == "path.appendAnchor"), "{a:?}");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 330.0, 440.0));
+    assert_eq!(t.readout(&cx), drag_readout(30.0, 40.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 330.0, 440.0));
+    assert_eq!(t.readout(&cx), None);
+    // A press on the first anchor, a pixel off it, closes: the readout is that anchor's incoming
+    // handle, which mirrors the pointer.
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 101.0, 301.0));
+    assert!(matches!(&a[..], [Action::Begin(c), _] if c == "Close Path"), "{a:?}");
+    let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 130.0, 260.0));
+    let [Action::Preview(c, v)] = acts.as_slice() else { panic!("not a close preview: {acts:?}") };
+    assert_eq!((c.as_str(), &v["in"]), ("path.close", &json!([70.0, 340.0])));
+    assert_eq!(t.readout(&cx), drag_readout(-30.0, 40.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 130.0, 260.0));
+    assert_eq!(t.readout(&cx), None);
+}
+
+/// A drag from the last anchor pulls its outgoing handle out on its own; with Shift the readout
+/// gives the constrained handle the preview shows.
+#[test]
+fn info_readout_tracks_the_last_anchor_handle() {
+    let (d, id, s) = drawing(vectorcraft_geom::SubPath::polyline(&[Point::new(10.0, 300.0), Point::new(60.0, 300.0)], false));
+    let p = paint();
+    let cx = plain(&d, &s, &p);
+    let mut t = PenTool { drawing: true, ..PenTool::default() };
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 60.0, 300.0));
+    assert_eq!(t.readout(&cx), None, "a click retracts the handle");
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 70.0, 280.0)), vec![set_out(id, 1, 70.0, 280.0)]);
+    assert_eq!(t.readout(&cx), drag_readout(10.0, -20.0));
+    let shift = Mods { shift: true, ..Mods::default() };
+    // 26.6° from the anchor: Shift turns it to the 45° step nearest.
+    let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 80.0, 290.0).with_mods(shift));
+    let [Action::Preview(_, v)] = acts.as_slice() else { panic!("not a handle preview: {acts:?}") };
+    let (hx, hy) = (v["x"].as_f64().unwrap_or(f64::NAN), v["y"].as_f64().unwrap_or(f64::NAN));
+    assert!(((hx - 60.0) + (hy - 300.0)).abs() < 1e-9, "constrained to 45°: {v}");
+    assert_eq!(t.readout(&cx), drag_readout(hx - 60.0, hy - 300.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 80.0, 290.0));
+    assert_eq!(t.readout(&cx), None);
+}
+
+/// Space moves the anchor and its handles together, so the handle keeps its length; Alt leaves
+/// the incoming handle behind and the readout follows the outgoing one.
+#[test]
+fn info_readout_follows_space_and_alt() {
+    let (d, s, p) = (vectorcraft_doc::Document::new(500.0, 500.0), Selection::default(), paint());
+    let cx = plain(&d, &s, &p);
+    let mut t = PenTool::default();
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 400.0, 420.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 450.0, 420.0));
+    assert_eq!(t.readout(&cx), drag_readout(50.0, 0.0));
+    let space = Mods { space: true, ..Mods::default() };
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 450.0, 380.0).with_mods(space));
+    assert_eq!(t.readout(&cx), drag_readout(50.0, 0.0), "the anchor moved with the handle");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 460.0, 400.0));
+    assert_eq!(t.readout(&cx), drag_readout(60.0, 20.0), "measured from the moved anchor");
+    let alt = Mods { alt: true, ..Mods::default() };
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 400.0, 450.0).with_mods(alt));
+    assert_eq!(t.readout(&cx), drag_readout(0.0, 70.0));
+}
+
+/// A dropped press and switching tools clear the readout.
+#[test]
+fn info_readout_clears_on_a_dropped_press_and_deactivate() {
+    let (d, s, p) = (vectorcraft_doc::Document::new(500.0, 500.0), Selection::default(), paint());
+    let cx = plain(&d, &s, &p);
+    let mut t = PenTool::default();
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 120.0, 100.0));
+    assert_eq!(t.readout(&cx), drag_readout(20.0, 0.0));
+    t.drop_press(&cx);
+    assert_eq!(t.readout(&cx), None, "dropped");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 100.0, 130.0));
+    assert_eq!(t.readout(&cx), drag_readout(0.0, 30.0));
+    t.deactivate(&cx);
+    assert_eq!(t.readout(&cx), None, "deactivated");
 }

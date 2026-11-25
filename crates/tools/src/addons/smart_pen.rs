@@ -368,7 +368,7 @@ impl SmartPenTool {
             }
             Target::Close { id, si, first, mut anchor } => {
                 let out = Self::handle_to(cx, first, ev.pos, first, shift, false);
-                let act = close_drag(id, Some(si), first - (out - first), alt, anchor.as_mut());
+                let act = close_drag(id, Some(si), None, first - (out - first), alt, anchor.as_mut());
                 pr.what = Target::Close { id, si, first, anchor };
                 ("", act)
             }
@@ -478,9 +478,9 @@ impl SmartPenTool {
         } else {
             straighten_segment(&mut sp, prev);
         }
-        let tail = sp.anchors.get(prev..)?;
+        let tail = sp.anchors.get_range(prev..)?;
         let mut bp = BezPath::new();
-        SubPath::new(tail.to_vec(), false).to_bezpath_into(&mut bp);
+        SubPath::new(tail, false).to_bezpath_into(&mut bp);
         Some(bp)
     }
 }
@@ -527,6 +527,7 @@ impl Tool for SmartPenTool {
                 }
                 _ => vec![],
             },
+            PointerKind::TripleClick => vec![],
         }
     }
 
@@ -573,12 +574,15 @@ impl Tool for SmartPenTool {
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut o = vec![];
-        if cx.pen_rubber_band
-            && self.press.is_none()
+        // The rubber band preference hides only the preview segment; Measurement Labels decides the readout.
+        if self.press.is_none()
             && let (Some((id, _, sp)), Some(h)) = (self.active(cx), self.hover)
-            && let Some(path) = self.rubber_band(sp, h)
         {
-            o.push(Overlay::Path { path, color: cx.doc.layer_color(id), width: 1.0, dashed: false });
+            if cx.pen_rubber_band
+                && let Some(path) = self.rubber_band(sp, h)
+            {
+                o.push(Overlay::Path { path, color: cx.doc.layer_color(id), width: 1.0, dashed: false });
+            }
             if let Some(last) = sp.anchors.last().map(|a| a.p)
                 && cx.measurement_labels
                 && last.distance(h) > 1e-9
@@ -620,6 +624,10 @@ impl Tool for SmartPenTool {
                 _ => {}
             }
         }
+    }
+
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        if key == "next" { crate::option_check::one_of(key, v, &["curved", "straight"]) } else { Err(crate::option_check::unknown(key)) }
     }
 }
 

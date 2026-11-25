@@ -492,9 +492,11 @@ fn new_and_renamed_artboards_trim_their_names() {
     assert_eq!(names(&s), ["Back", "Artboard 2", "Artboard 3", "Artboard 4"]);
 }
 
-/// Duplicate, Copy and Cut Artboard and Move Artboard Up/Down fail with `no such artboard` on an
-/// `index` that names no artboard (past the last, negative, fractional, a string or null), and the
-/// artboards, the art and the clipboard stay as they were.
+/// Duplicate, Copy and Cut Artboard and Move Artboard Up/Down fail with `no such artboard` on a
+/// whole-number `index` past the last artboard, with "`index` must be a whole number" on one that
+/// is negative, fractional, a string, true or a list, and with `missing index` on a null one,
+/// instead of acting on the Artboard tool's active artboard. The artboards, the art and the
+/// clipboard stay as they were.
 #[test]
 fn artboard_copies_refuse_an_index_that_names_no_artboard() {
     let mut s = session();
@@ -502,15 +504,111 @@ fn artboard_copies_refuse_an_index_that_names_no_artboard() {
     s.execute("artboard.new", &json!({})).unwrap();
     s.set_tool_options(Some("artboard"), json!({"active": 1}).as_object().unwrap());
     let (was, n) = (boards(&s), s.doc().unwrap().history.undo.len());
-    for index in [json!(99), json!(-1), json!(1.5), json!("1"), serde_json::Value::Null] {
+    let not_whole = Some("`index` must be a whole number");
+    let cases = [
+        (json!(99), None),
+        (json!(u64::MAX), None),
+        (json!(-1), not_whole),
+        (json!(1.5), not_whole),
+        (json!("1"), not_whole),
+        (json!(true), not_whole),
+        (json!([1]), not_whole),
+        (serde_json::Value::Null, Some("missing index")),
+    ];
+    for (index, error) in cases {
         for cmd in ["artboard.duplicate", "artboard.copy", "artboard.cut", "artboard.reorder"] {
             let p = if cmd == "artboard.reorder" { json!({"index": index, "to": 0}) } else { json!({"index": index}) };
-            assert_eq!(s.execute(cmd, &p).unwrap_err().to_string(), "no such artboard", "{cmd} {p}");
+            let want = error.map_or_else(|| "no such artboard".to_string(), |e| format!("invalid parameters for `{cmd}`: {e}"));
+            assert_eq!(s.execute(cmd, &p).unwrap_err().to_string(), want, "{cmd} {p}");
         }
     }
     let st = s.doc().unwrap();
     assert_eq!((boards(&s), st.doc.layers[0].children().unwrap().len(), st.history.undo.len()), (was, 1, n));
     assert!(s.clipboard.nodes.is_empty() && s.clipboard.artboards.is_empty(), "nothing copied");
+}
+
+/// The artboard commands that take `indices` (and `selectedArtboards`, a replay of the journal)
+/// name the fault: a value that is not a list, an empty list and a list with an entry that is not a
+/// whole number each have their own message naming the key, and a whole number past the last
+/// artboard is `no such artboard`, also when another entry is malformed after it. The artboards,
+/// the art, the undo history and the clipboard stay as they were.
+#[test]
+fn artboard_lists_name_the_fault_and_the_key() {
+    let mut s = session();
+    rect(&mut s);
+    s.execute("artboard.new", &json!({})).unwrap();
+    let (was, n) = (boards(&s), s.doc().unwrap().history.undo.len());
+    let cmds = [
+        ("artboard.duplicate", json!({})),
+        ("artboard.copy", json!({})),
+        ("artboard.cut", json!({})),
+        ("artboard.rename", json!({"name": "A"})),
+        ("artboard.switchOrientation", json!({})),
+        ("artboard.delete", json!({})),
+        ("artboard.fitToArt", json!({})),
+        ("artboard.move", json!({"dx": 10, "dy": 0})),
+        ("artboard.align", json!({"horizontal": "left"})),
+    ];
+    for key in ["indices", "selectedArtboards"] {
+        let cases = [
+            (json!(null), format!("`{key}` must be a list of artboard indices")),
+            (json!(1), format!("`{key}` must be a list of artboard indices")),
+            (json!("0,1"), format!("`{key}` must be a list of artboard indices")),
+            (json!([]), format!("`{key}` must be a non-empty list of artboard indices")),
+            (json!([0, -1]), format!("`{key}` must contain whole numbers")),
+            (json!([0, 1.5]), format!("`{key}` must contain whole numbers")),
+            (json!(["1"]), format!("`{key}` must contain whole numbers")),
+            (json!([null]), format!("`{key}` must contain whole numbers")),
+            (json!([9, "1"]), format!("`{key}` must contain whole numbers")),
+            (json!([0, 9]), "no such artboard".to_string()),
+        ];
+        for (cmd, base) in &cmds {
+            if key == "selectedArtboards" && matches!(*cmd, "artboard.delete" | "artboard.fitToArt" | "artboard.move") {
+                continue;
+            }
+            for (value, want) in &cases {
+                let mut p = base.clone();
+                p[key] = value.clone();
+                let want = if want.starts_with('`') { format!("invalid parameters for `{cmd}`: {want}") } else { want.clone() };
+                assert_eq!(s.execute(cmd, &p).unwrap_err().to_string(), want, "{cmd} {p}");
+            }
+        }
+    }
+    let st = s.doc().unwrap();
+    assert_eq!((boards(&s), st.doc.layers[0].children().unwrap().len(), st.history.undo.len()), (was, 1, n));
+    assert!(s.clipboard.nodes.is_empty() && s.clipboard.artboards.is_empty(), "nothing copied");
+}
+
+/// Align, Distribute and Distribute Spacing for artboards name the key that holds a malformed
+/// artboard to align to (`artboard` or `activeArtboard`), not `index`; a null one is left out, and
+/// a whole number past the last artboard is `no such artboard`.
+#[test]
+fn artboard_align_names_the_key_of_a_malformed_reference() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    s.execute("artboard.new", &json!({})).unwrap();
+    let cmds = [
+        ("artboard.align", json!({"indices": [0, 1, 2], "horizontal": "left", "to": "artboard"})),
+        ("artboard.distribute", json!({"indices": [0, 1, 2], "horizontal": "left", "to": "artboard"})),
+        ("artboard.distributeSpacing", json!({"indices": [0, 1, 2], "to": "artboard"})),
+    ];
+    for (cmd, base) in &cmds {
+        for key in ["artboard", "activeArtboard"] {
+            let (was, n) = (boards(&s), s.doc().unwrap().history.undo.len());
+            for value in [json!(-1), json!(1.5), json!("1"), json!(true)] {
+                let mut p = base.clone();
+                p[key] = value;
+                let want = format!("invalid parameters for `{cmd}`: `{key}` must be a whole number");
+                assert_eq!(s.execute(cmd, &p).unwrap_err().to_string(), want, "{cmd} {p}");
+            }
+            let mut p = base.clone();
+            p[key] = json!(9);
+            assert_eq!(s.execute(cmd, &p).unwrap_err().to_string(), "no such artboard", "{cmd} {p}");
+            assert_eq!((boards(&s), s.doc().unwrap().history.undo.len()), (was, n), "{cmd} {key}: nothing moved");
+            p[key] = json!(null);
+            s.execute(cmd, &p).unwrap();
+        }
+    }
 }
 
 /// Artboard Options, Move Artboard, Duplicate Artboards, Copy Artboard and Cut Artboard refuse an
@@ -867,6 +965,21 @@ fn a_locked_artboard_protects_the_art_on_it() {
     s.execute("select.all", &json!({})).unwrap();
     let tile = selected(&s);
     assert!(!tile.is_empty() && !tile.contains(&a), "{tile:?}");
+}
+
+/// Art on a locked artboard stays unselected when `select.add` adds it after another object.
+#[test]
+fn art_on_a_locked_artboard_added_after_another_object_stays_unselected() {
+    let mut s = session();
+    let a = rect(&mut s);
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 200, "height": 200})).unwrap();
+    let b = NodeId(s.execute("shape.rectangle", &json!({"x": 1010, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap());
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    for id in [a, b] {
+        s.execute("select.add", &json!({"ids": [id.0]})).unwrap();
+    }
+    assert_eq!(s.doc().unwrap().selection.objects, [a]);
 }
 
 /// New art on a locked artboard stays selected and editable until the selection leaves it: a
@@ -1624,6 +1737,35 @@ fn text_set_format() {
     assert_eq!(t.para.composer, vectorcraft_doc::Composer::EveryLine);
 }
 
+/// `text.setFormat {composer}` takes the two Middle Eastern & South Asian and the two Standard
+/// composers, each per paragraph and one undo step; any other value is refused and names them all.
+#[test]
+fn text_set_format_takes_the_four_composers() {
+    use vectorcraft_doc::Composer;
+    let mut s = session();
+    let r = s.execute("text.create", &json!({"x": 10, "y": 100, "text": "One\nTwo"})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let composers = |s: &Session| {
+        let NodeKind::Text(t) = node(s, id).kind else { panic!() };
+        [t.para_at(0).composer, t.para_at(1).composer]
+    };
+    assert_eq!(composers(&s), [Composer::EveryLine; 2], "new type is ME&SA Every-line");
+    for (value, want) in [
+        ("singleLine", Composer::SingleLine),
+        ("standardSingleLine", Composer::StandardSingleLine),
+        ("standardEveryLine", Composer::StandardEveryLine),
+        ("everyLine", Composer::EveryLine),
+    ] {
+        s.execute("text.setFormat", &json!({"ids": [id.0], "composer": value, "start": 4, "end": 4})).unwrap();
+        assert_eq!(composers(&s), [Composer::EveryLine, want], "{value}: only the second paragraph");
+    }
+    s.execute("text.setFormat", &json!({"ids": [id.0], "composer": "standardEveryLine"})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(composers(&s), [Composer::EveryLine; 2], "one undo step");
+    let e = s.execute("text.setFormat", &json!({"ids": [id.0], "composer": "standard"})).unwrap_err().to_string();
+    assert!(e.contains("standardSingleLine") && e.contains("standardEveryLine"), "{e}");
+}
+
 #[test]
 fn stroke_advanced_scale_swap_flip() {
     let mut s = session();
@@ -1681,6 +1823,95 @@ fn delete_empty_artboards_deletes_those_with_no_art_in_one_step() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(artboard_names(&s), ["Artboard 1", "Artboard 2", "Artboard 3"]);
     assert_eq!(s.doc().unwrap().doc.ruler_guides().len(), 3);
+}
+
+/// `n` artboards in a row, each with a guide, and a guide on no artboard; every guide is selected,
+/// and the key guide is the one on artboard `key`.
+fn artboards_with_selected_guides(n: usize, key: usize) -> Session {
+    let mut s = row_of_artboards(n);
+    s.edit("selection fixture", |d, sel| {
+        d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, 75.0));
+        sel.guides = d.ruler_guides().iter().filter_map(|g| g.id).collect();
+        let on_key = d.artboards[key].id;
+        sel.key_guide = d.ruler_guides().iter().find(|g| g.artboard == Some(on_key)).and_then(|g| g.id);
+        Ok(())
+    })
+    .unwrap();
+    s
+}
+
+/// A document's artboards, ruler guides, selected guides and key guide.
+type BoardsAndGuides = (Vec<vectorcraft_doc::Artboard>, Vec<vectorcraft_doc::Guide>, Vec<NodeId>, Option<NodeId>);
+
+/// The artboards, guides, selected guides and key guide after deleting artboards `indices` of the
+/// open document one at a time, the last first. A clone shares the document's retired artboard id,
+/// so the clone retires none.
+fn deleted_one_at_a_time(s: &Session, indices: &[usize]) -> BoardsAndGuides {
+    let st = s.doc().unwrap();
+    let (mut d, mut sel) = ((*st.doc).clone(), st.selection.clone());
+    for &i in indices.iter().rev() {
+        let id = d.artboards.remove(i).id;
+        d.retain_guides(&mut sel, |g| g.artboard != Some(id));
+    }
+    let guides = d.ruler_guides();
+    (d.artboards, guides, sel.guides, sel.key_guide)
+}
+
+/// The same as [`deleted_one_at_a_time`] for the open document as it is.
+fn artboards_and_guides(s: &Session) -> BoardsAndGuides {
+    let st = s.doc().unwrap();
+    (st.doc.artboards.clone(), st.doc.ruler_guides(), st.selection.guides.clone(), st.selection.key_guide)
+}
+
+/// Delete Artboard with many artboards chosen walks the artboards once and the ruler guides once,
+/// and leaves the same artboards, guides and selected guides as deleting them one at a time, in
+/// one undo step.
+#[test]
+fn deleting_many_artboards_walks_the_artboards_and_guides_once() {
+    use crate::cmd::layer::ARTBOARD_PASSES;
+    let mut s = artboards_with_selected_guides(40, 7);
+    let indices: Vec<usize> = (0..40).filter(|i| i % 2 == 1 || *i == 38).collect();
+    let expected = deleted_one_at_a_time(&s, &indices);
+    let steps = s.doc().unwrap().history.undo.len();
+    ARTBOARD_PASSES.set(0);
+    s.execute("artboard.delete", &json!({ "indices": indices })).unwrap();
+    assert_eq!(ARTBOARD_PASSES.get(), 2, "one walk over the artboards and one over the guides");
+    let now = artboards_and_guides(&s);
+    assert_eq!(now, expected);
+    assert_eq!(now.0.len(), 19);
+    assert_eq!(now.1.len(), 20, "the kept artboards' guides and the guide on no artboard stay");
+    assert_eq!((now.2.len(), now.3), (20, None), "the deleted guides leave the selection, the key guide with them");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.artboards.len(), 40);
+    assert_eq!(s.doc().unwrap().doc.ruler_guides().len(), 41);
+}
+
+/// Delete Empty Artboards and Cut Artboard delete their artboards in the same single pass, with the
+/// same result as deleting them one at a time.
+#[test]
+fn delete_empty_and_cut_artboards_walk_the_artboards_and_guides_once() {
+    use crate::cmd::layer::ARTBOARD_PASSES;
+    let mut s = artboards_with_selected_guides(30, 0);
+    box_at(&mut s, 4010.0, 20.0);
+    let empty: Vec<usize> = (0..30).filter(|i| *i != 10).collect();
+    let expected = deleted_one_at_a_time(&s, &empty);
+    ARTBOARD_PASSES.set(0);
+    assert_eq!(s.execute("artboard.deleteEmpty", &json!({})).unwrap(), json!({ "deleted": empty }));
+    assert_eq!(ARTBOARD_PASSES.get(), 2);
+    assert_eq!(artboards_and_guides(&s), expected);
+    assert_eq!(artboard_names(&s), ["Artboard 11"]);
+
+    let mut s = artboards_with_selected_guides(30, 4);
+    let cut: Vec<usize> = (2..28).collect();
+    let expected = deleted_one_at_a_time(&s, &cut);
+    ARTBOARD_PASSES.set(0);
+    s.execute("artboard.cut", &json!({ "indices": cut, "art": false })).unwrap();
+    assert_eq!(ARTBOARD_PASSES.get(), 2);
+    assert_eq!(artboards_and_guides(&s), expected);
+    assert_eq!(s.doc().unwrap().doc.artboards.len(), 4);
+    assert!(s.execute("artboard.cut", &json!({ "indices": [0, 1, 2, 3], "art": false })).is_err(), "a document keeps one artboard");
+    assert_eq!(s.doc().unwrap().doc.artboards.len(), 4);
 }
 
 /// What counts as art: hidden and locked objects, an object straddling two artboards and one
@@ -2109,7 +2340,7 @@ fn empty_artboard_checks_match_the_visual_bounds_on_varied_strokes() {
                 st.cap = [LineCap::Butt, LineCap::Round, LineCap::Square][next(3) as usize];
                 st.align = [StrokeAlign::Center, StrokeAlign::Inside, StrokeAlign::Outside][next(3) as usize];
                 st.miter_limit = 1.0 + next(20) as f64;
-                let mut head = || (next(3) == 0).then(|| Arrowhead::ALL[next(Arrowhead::ALL.len() as u64) as usize]);
+                let mut head = || (next(3) == 0).then(|| Arrowhead::ALL[next(Arrowhead::ALL.len() as u64) as usize].clone());
                 (st.start_arrow, st.end_arrow) = (head(), head());
                 st.arrow_scale = (50.0 + next(250) as f64, 50.0 + next(250) as f64);
                 if next(3) == 0 {

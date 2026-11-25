@@ -73,14 +73,13 @@ fn arrowheads_are_part_of_the_outline() {
     assert_eq!(path_of(&n).subpaths.len(), 1, "line and head are one shape");
 }
 
-/// Outline Stroke of a Lens-profile line covers 7/12 of the full-width rectangle.
+/// Outline Stroke of a Lens-profile line covers 2/3 of the full-width rectangle.
 #[test]
-fn a_lens_profile_outlines_to_seven_twelfths_of_the_rectangle() {
+fn a_lens_profile_outlines_to_two_thirds_of_the_rectangle() {
     let mut s = session();
     line(&mut s, json!({"weight": 10, "profile": "lens"}));
     let n = outline(&mut s);
-    // Each half of the lens swells on a cubic, flat at the middle (#5714).
-    assert!(near(area(&n), 7.0 / 12.0 * 10.0 * 100.0, 2.0), "{}", area(&n));
+    assert!(near(area(&n), 2.0 / 3.0 * 10.0 * 100.0, 2.0), "{}", area(&n));
 }
 
 #[test]
@@ -307,6 +306,54 @@ fn the_outline_of_a_reshaped_stroke_keeps_its_drop_shadow() {
     let kept: Vec<&str> = n.appearance.items.iter().flat_map(|i| i.effects()).map(|e| e.id.as_str()).collect();
     assert_eq!(kept, ["stylize.dropShadow"]);
     assert_eq!(differing(&before, &render(&s), 64), 0, "the shadowed outline draws as the stroke did");
+}
+
+/// A Transform effect after a drop shadow, on the object or on the stroke (brushed or not), turns
+/// and scales the shadow on the canvas; outlining the stroke keeps the shadow the canvas drew.
+#[test]
+fn a_shadow_before_a_transform_outlines_as_the_canvas_draws_it() {
+    let effects = [
+        ("stylize.dropShadow", json!({"x": 10, "y": 0, "blur": 0, "opacity": 100})),
+        ("distort.transform", json!({"scaleH": 50, "scaleV": 50, "rotate": 90})),
+    ];
+    for (item, brush) in [(Value::Null, false), (json!(1), false), (json!(1), true)] {
+        // Flatten Transparency draws a brushed stroke's drop shadow differently with or without a
+        // Transform effect, so the brushed stroke is checked with the other two commands.
+        for (command, p) in outlining().into_iter().filter(|(command, _)| !(brush && *command == "object.flattenTransparency")) {
+            let mut s = session();
+            square_with(&mut s, json!({"color": "#ff0000"}), item.clone(), &effects);
+            if brush {
+                s.execute("brush.apply", &json!({"name": "Tapered Stroke"})).unwrap();
+            }
+            let before = render(&s);
+            outlined_by(&mut s, command, &p);
+            assert_eq!(differing(&before, &render(&s), 64), 0, "{command}, item {item}, brush {brush}");
+        }
+    }
+}
+
+/// The object's Transform effect turns and scales the drop shadow of its stroke (brushed or not)
+/// on the canvas; outlining the stroke keeps the shadow the canvas drew.
+#[test]
+fn a_strokes_shadow_under_the_objects_transform_outlines_as_the_canvas_draws_it() {
+    for brush in [false, true] {
+        for (command, p) in outlining().into_iter().filter(|(command, _)| !(brush && *command == "object.flattenTransparency")) {
+            let mut s = session();
+            square_with(
+                &mut s,
+                json!({"color": "#ff0000"}),
+                json!(1),
+                &[("stylize.dropShadow", json!({"x": 10, "y": 0, "blur": 0, "opacity": 100}))],
+            );
+            s.execute("effect.apply", &json!({"effect": "distort.transform", "params": {"scaleH": 50, "scaleV": 100, "rotate": 90}})).unwrap();
+            if brush {
+                s.execute("brush.apply", &json!({"name": "Tapered Stroke"})).unwrap();
+            }
+            let before = render(&s);
+            outlined_by(&mut s, command, &p);
+            assert_eq!(differing(&before, &render(&s), 64), 0, "{command}, brush {brush}");
+        }
+    }
 }
 
 /// The brush art of a brushed stroke with a geometry effect follows the path the effect makes.
