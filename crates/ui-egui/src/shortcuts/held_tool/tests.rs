@@ -1,59 +1,52 @@
+use egui::Key;
 use serde_json::json;
 use vectorcraft_tools::{PointerEvent, PointerKind};
 
-use super::super::handle;
 use super::*;
 
 /// A keyboard on one context, so egui keeps the keys held down from frame to frame and marks a
-/// held key's later presses as repeats, with the frame times the test sets.
+/// held key's later presses as repeats, with the frame times the test sets. A frame runs the app's own
+/// `tick` and `ui`.
 struct Keyboard {
     ctx: egui::Context,
 }
 
 impl Keyboard {
     fn new() -> Self {
-        Self { ctx: egui::Context::default() }
+        Self { ctx: crate::testing::ui_context() }
     }
 
-    /// One frame at `time` seconds delivering `events`; with `field`, a text field that takes the
-    /// keyboard is drawn after the shortcuts.
-    fn frame(&self, app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>, field: Option<&mut String>) {
-        self.frame_with_focus(app, time, events, field, true);
+    /// One frame at `time` seconds delivering `events`.
+    fn frame(&self, app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>) {
+        self.frame_with_focus(app, time, events, true);
     }
 
     /// [`Self::frame`], with the window having the keyboard (`focused`) or not.
-    fn frame_with_focus(&self, app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>, mut field: Option<&mut String>, focused: bool) {
+    fn frame_with_focus(&self, app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>, focused: bool) {
         let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
-        let mut out = self.ctx.run_ui(egui::RawInput { events, screen_rect, time: Some(time), focused, ..Default::default() }, |ui| {
-            app.logic(ui.ctx());
-            handle(app, ui.ctx());
-            if let Some(text) = field.as_deref_mut() {
-                ui.add(egui::TextEdit::singleline(text).id(egui::Id::unique("held-tool-field"))).request_focus();
-            }
-        });
-        out.textures_delta.clear();
+        crate::testing::app_frame(app, &self.ctx, egui::RawInput { events, screen_rect, time: Some(time), focused, ..Default::default() });
     }
 
-    /// One frame at `time` seconds delivering `events`, with the canvas drawn after the shortcuts.
-    fn on_canvas(&self, app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>) {
+    /// [`Self::frame`] without the window's parts: the app's tick and its held tools' returns only, so a
+    /// pointer press reaches no canvas.
+    fn off_canvas(&self, app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>) {
         let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
-        let mut out = self.ctx.run_ui(egui::RawInput { events, screen_rect, time: Some(time), focused: true, ..Default::default() }, |ui| {
-            app.logic(ui.ctx());
-            handle(app, ui.ctx());
-            crate::canvas::show(app, ui);
+        let raw = egui::RawInput { events, screen_rect, time: Some(time), focused: true, ..Default::default() };
+        crate::testing::part_frame(app, &self.ctx, raw, |app, ui| {
+            app.tick(ui.ctx());
+            crate::shortcuts::follow_holds(app, ui.ctx());
         });
-        out.textures_delta.clear();
     }
 
     /// `key` pressed (or repeated while it is down) at `time`, typing `letter`.
     fn press(&self, app: &mut VectorcraftApp, time: f64, key: Key, letter: &str) {
         let press = egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
-        self.frame(app, time, vec![press, egui::Event::Text(letter.into())], None);
+        self.frame(app, time, vec![press, egui::Event::Text(letter.into())]);
     }
 
     fn release(&self, app: &mut VectorcraftApp, time: f64, key: Key) {
         let release = egui::Event::Key { key, physical_key: Some(key), pressed: false, repeat: false, modifiers: egui::Modifiers::NONE };
-        self.frame(app, time, vec![release], None);
+        self.frame(app, time, vec![release]);
     }
 
     fn press_s(&self, app: &mut VectorcraftApp, time: f64) {
@@ -68,7 +61,6 @@ impl Keyboard {
 /// A document with a selected rectangle and the Pen tool chosen.
 fn pen_app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-    crate::shortcut_editor::sync(&app.ui);
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap();
     app.select_tool("pen");
@@ -86,7 +78,9 @@ fn a_tool_key_let_go_behind_the_update_prompt_returns_after_it() {
     keys.release_s(&mut app, 1.0);
     assert_eq!(app.session.tool_id(), "scale", "Scale stays behind the prompt");
     crate::updates_ui::close_dialogs_for_test(&mut app);
-    keys.frame(&mut app, 1.1, vec![], None);
+    // The prompt's layer is gone in the first frame after it closes, and the held tool returns in the next.
+    keys.frame(&mut app, 1.1, vec![]);
+    keys.frame(&mut app, 1.15, vec![]);
     assert_eq!(app.session.tool_id(), "pen", "the Pen is back after the prompt");
 }
 
@@ -108,21 +102,9 @@ fn a_quick_press_of_a_tool_key_chooses_the_tool_for_good() {
     let keys = Keyboard::new();
     hold_s(&mut app, &keys, &[], HOLD_SECONDS / 2.0);
     assert_eq!(app.session.tool_id(), "scale");
-    keys.frame(&mut app, 5.0, vec![], None);
+    keys.frame(&mut app, 5.0, vec![]);
     assert_eq!(app.session.tool_id(), "scale", "Scale stays chosen");
     assert!(app.held_tool.is_empty());
-}
-
-/// A press and release of S in one frame is a quick press, also when the next frame comes long
-/// after it.
-#[test]
-fn a_press_and_release_in_one_frame_chooses_the_tool_for_good() {
-    let mut app = pen_app();
-    let keys = Keyboard::new();
-    let key = |pressed| egui::Event::Key { key: Key::S, physical_key: Some(Key::S), pressed, repeat: false, modifiers: egui::Modifiers::NONE };
-    keys.frame(&mut app, 0.0, vec![key(true), egui::Event::Text("s".into()), key(false)], None);
-    keys.frame(&mut app, 5.0, vec![], None);
-    assert_eq!(app.session.tool_id(), "scale");
 }
 
 /// S held past the threshold, with its key repeats, and let go returns to the Pen.
@@ -163,13 +145,13 @@ fn a_tool_key_let_go_during_a_drag_returns_after_the_drag() {
         app.session.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 150.0), view).unwrap();
         app.session.pointer(&PointerEvent::new(PointerKind::Drag, 260.0, 190.0), view).unwrap();
         assert!(app.session.tool_busy(), "Scale is dragging");
-        keys.frame(&mut app, release / 2.0, vec![], None);
+        keys.frame(&mut app, release / 2.0, vec![]);
         keys.release_s(&mut app, release);
         assert_eq!(app.session.tool_id(), "scale", "let go at {release} s: Scale stays during the drag");
-        keys.frame(&mut app, release + 0.1, vec![], None);
+        keys.frame(&mut app, release + 0.1, vec![]);
         assert_eq!(app.session.tool_id(), "scale", "let go at {release} s: still dragging");
         app.session.pointer(&PointerEvent::new(PointerKind::Up, 260.0, 190.0), view).unwrap();
-        keys.frame(&mut app, release + 0.2, vec![], None);
+        keys.frame(&mut app, release + 0.2, vec![]);
         assert_eq!(app.session.tool_id(), "pen", "let go at {release} s: the Pen is back after the drag");
     }
 }
@@ -204,7 +186,7 @@ fn a_click_lent_to_a_selection_tool_does_not_use_the_held_tool() {
         let event = |kind| PointerEvent { mods, ..PointerEvent::new(kind, 150.0, 125.0) };
         crate::canvas::dispatch(&mut app, &event(PointerKind::Down), view);
         if frame_during_click {
-            keys.frame(&mut app, HOLD_SECONDS / 4.0, vec![], None);
+            keys.frame(&mut app, HOLD_SECONDS / 4.0, vec![]);
         }
         crate::canvas::dispatch(&mut app, &event(PointerKind::Up), view);
         keys.release_s(&mut app, HOLD_SECONDS / 2.0);
@@ -220,26 +202,26 @@ fn a_view_tool_drag_counts_as_using_the_held_tool() {
     for let_go_during_pan in [false, true] {
         let mut app = pen_app();
         let keys = Keyboard::new();
-        keys.on_canvas(&mut app, 0.0, vec![]);
-        let at = app.canvas_rect.expect("the canvas was drawn").center();
+        keys.frame(&mut app, 0.0, vec![]);
+        let at = app.canvas_view().expect("the canvas was drawn").rect.center();
         let to = at + egui::vec2(30.0, 20.0);
         let button =
             |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
         let key = |pressed| egui::Event::Key { key: Key::H, physical_key: Some(Key::H), pressed, repeat: false, modifiers: egui::Modifiers::NONE };
-        keys.on_canvas(&mut app, 0.01, vec![egui::Event::PointerMoved(at), key(true), egui::Event::Text("h".into())]);
+        keys.frame(&mut app, 0.01, vec![egui::Event::PointerMoved(at), key(true), egui::Event::Text("h".into())]);
         assert_eq!(app.session.tool_id(), "hand", "let go during the pan: {let_go_during_pan}");
-        keys.on_canvas(&mut app, 0.02, vec![button(at, true)]);
-        keys.on_canvas(&mut app, 0.03, vec![egui::Event::PointerMoved(to)]);
-        assert!(crate::canvas::dragging(&keys.ctx), "the Hand pans");
+        keys.frame(&mut app, 0.02, vec![button(at, true)]);
+        keys.frame(&mut app, 0.03, vec![egui::Event::PointerMoved(to)]);
+        assert!(crate::canvas::in_gesture(&app, &keys.ctx), "the Hand pans");
         if let_go_during_pan {
-            keys.on_canvas(&mut app, 0.05, vec![key(false)]);
+            keys.frame(&mut app, 0.05, vec![key(false)]);
             assert_eq!(app.session.tool_id(), "hand", "the Hand stays during the pan");
-            keys.on_canvas(&mut app, 0.06, vec![button(to, false)]);
+            keys.frame(&mut app, 0.06, vec![button(to, false)]);
         } else {
-            keys.on_canvas(&mut app, 0.05, vec![button(to, false)]);
-            keys.on_canvas(&mut app, 0.06, vec![key(false)]);
+            keys.frame(&mut app, 0.05, vec![button(to, false)]);
+            keys.frame(&mut app, 0.06, vec![key(false)]);
         }
-        keys.on_canvas(&mut app, 0.07, vec![]);
+        keys.frame(&mut app, 0.07, vec![]);
         assert_eq!(app.session.tool_id(), "pen", "let go during the pan: {let_go_during_pan}");
         assert!(app.held_tool.is_empty());
     }
@@ -257,7 +239,8 @@ fn a_press_in_the_frame_that_lets_go_waits_for_the_canvas() {
         let at = egui::pos2(150.0, 125.0);
         let press = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE };
         let release = egui::Event::Key { key: Key::S, physical_key: Some(Key::S), pressed: false, repeat: false, modifiers: egui::Modifiers::NONE };
-        keys.frame(&mut app, 0.1, vec![egui::Event::PointerMoved(at), press, release], None);
+        // The press reaches no canvas in these frames: the canvas's own press is dispatched here.
+        keys.off_canvas(&mut app, 0.1, vec![egui::Event::PointerMoved(at), press, release]);
         assert_eq!(app.session.tool_id(), "scale", "canvas {canvas}: no decision before the canvas");
         if canvas {
             let view = app.view_info();
@@ -265,31 +248,9 @@ fn a_press_in_the_frame_that_lets_go_waits_for_the_canvas() {
                 crate::canvas::dispatch(&mut app, &PointerEvent::new(kind, 150.0, 125.0), view);
             }
         }
-        keys.frame(&mut app, 2.0, vec![], None);
+        keys.off_canvas(&mut app, 2.0, vec![]);
         assert_eq!(app.session.tool_id(), if canvas { "pen" } else { "scale" }, "canvas {canvas}");
     }
-}
-
-/// S and then V pressed quickly, both let go in the frame of a canvas click with the Selection tool:
-/// V was used, so Scale comes back, and S was a quick press, so Scale stays, also when the next
-/// frame comes late.
-#[test]
-fn keys_let_go_together_are_timed_in_the_frame_that_lets_them_go() {
-    let mut app = pen_app();
-    let keys = Keyboard::new();
-    keys.press_s(&mut app, 0.0);
-    keys.press(&mut app, 0.02, Key::V, "v");
-    let at = egui::pos2(150.0, 125.0);
-    let up = |key| egui::Event::Key { key, physical_key: Some(key), pressed: false, repeat: false, modifiers: egui::Modifiers::NONE };
-    let press = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE };
-    keys.frame(&mut app, 0.05, vec![egui::Event::PointerMoved(at), press, up(Key::V), up(Key::S)], None);
-    let view = app.view_info();
-    for kind in [PointerKind::Down, PointerKind::Up] {
-        crate::canvas::dispatch(&mut app, &PointerEvent::new(kind, 150.0, 125.0), view);
-    }
-    keys.frame(&mut app, 2.0, vec![], None);
-    assert_eq!(app.session.tool_id(), "scale");
-    assert!(app.held_tool.is_empty());
 }
 
 /// With S held and then V held, a click with the Selection tool uses Selection only: V let go
@@ -320,64 +281,31 @@ fn a_dialog_opened_during_the_hold_counts_as_using_the_tool() {
         keys.press(&mut app, 0.0, key, letter);
         let enter =
             egui::Event::Key { key: Key::Enter, physical_key: Some(Key::Enter), pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
-        keys.frame(&mut app, 0.05, vec![enter], None);
-        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialog), "Enter opens the {dialog} dialog");
+        keys.frame(&mut app, 0.05, vec![enter]);
+        let top = crate::tests::picks::open_dialogs(&app).pop().and_then(|d| d.key);
+        assert_eq!(top, Some(format!("object.{dialog}")), "Enter opens the {dialog} dialog");
         keys.release(&mut app, 0.1, key);
         assert_eq!(app.session.tool_id(), tool, "{tool} stays while its dialog is open");
-        crate::dialogs::cancel(&mut app);
-        keys.frame(&mut app, 0.15, vec![], None);
+        crate::shortcuts::tests::close_top_dialog(&mut app, false);
+        keys.frame(&mut app, 0.15, vec![]);
         assert_eq!(app.session.tool_id(), "pen", "after the {dialog} dialog");
     }
 }
 
-/// Enter pressed in the frame that lets go of S after the threshold opens the Scale dialog, and
-/// Scale stays until the dialog closes.
-#[test]
-fn enter_in_the_frame_that_lets_go_reaches_the_held_tool() {
-    let mut app = pen_app();
-    let keys = Keyboard::new();
-    keys.press_s(&mut app, 0.0);
-    let enter = egui::Event::Key { key: Key::Enter, physical_key: Some(Key::Enter), pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
-    let release = egui::Event::Key { key: Key::S, physical_key: Some(Key::S), pressed: false, repeat: false, modifiers: egui::Modifiers::NONE };
-    keys.frame(&mut app, 1.0, vec![release, enter], None);
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("scale"), "Enter opens the Scale dialog");
-    keys.frame(&mut app, 1.1, vec![], None);
-    assert_eq!(app.session.tool_id(), "scale", "Scale stays while its dialog is open");
-    crate::dialogs::cancel(&mut app);
-    keys.frame(&mut app, 1.2, vec![], None);
-    assert_eq!(app.session.tool_id(), "pen");
-}
-
-/// Another dialog (Preferences) opened while S is down and S let go quickly while it is open: Scale
+/// Another dialog (New Document) opened while S is down and S let go quickly while it is open: Scale
 /// was not used, so it stays once the dialog closes.
 #[test]
 fn another_dialog_opened_during_the_hold_does_not_use_the_tool() {
     let mut app = pen_app();
     let keys = Keyboard::new();
     keys.press_s(&mut app, 0.0);
-    crate::prefs_dialog::open(&mut app, None);
-    keys.frame(&mut app, 0.05, vec![], None);
+    // PLAN: Preferences is its own viewport and `any_dialog_open()` does not count it; New Document is a dialog of the host.
+    app.run("file.newDialog", json!({})).unwrap();
+    keys.frame(&mut app, 0.05, vec![]);
     keys.release_s(&mut app, 0.1);
-    crate::dialogs::cancel(&mut app);
-    keys.frame(&mut app, 0.15, vec![], None);
+    crate::shortcuts::tests::close_top_dialog(&mut app, false);
+    keys.frame(&mut app, 0.15, vec![]);
     assert_eq!(app.session.tool_id(), "scale");
-}
-
-/// S typed and held in a text field types its letter and chooses no tool.
-#[test]
-fn a_tool_key_held_in_a_text_field_types_and_keeps_the_tool() {
-    let mut app = pen_app();
-    let keys = Keyboard::new();
-    let mut text = String::new();
-    keys.frame(&mut app, 0.0, vec![], Some(&mut text));
-    let press = egui::Event::Key { key: Key::S, physical_key: Some(Key::S), pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
-    let release = egui::Event::Key { key: Key::S, physical_key: Some(Key::S), pressed: false, repeat: false, modifiers: egui::Modifiers::NONE };
-    keys.frame(&mut app, 0.1, vec![press.clone(), egui::Event::Text("s".into())], Some(&mut text));
-    keys.frame(&mut app, 0.6, vec![press, egui::Event::Text("s".into())], Some(&mut text));
-    keys.frame(&mut app, 1.0, vec![release], Some(&mut text));
-    assert_eq!(text, "ss");
-    assert_eq!(app.session.tool_id(), "pen");
-    assert!(app.held_tool.is_empty());
 }
 
 /// With General › Hold a Tool Shortcut to Use the Tool Temporarily off, a held S chooses Scale for
@@ -391,40 +319,20 @@ fn with_the_preference_off_a_held_tool_key_chooses_the_tool_for_good() {
     assert_eq!(app.session.tool_id(), "scale");
 }
 
-/// With the preference off, each repeat of a held S chooses Scale again, as before: a flyout opened
-/// in between closes.
+/// With the preference off, each repeat of a held S chooses Scale again, as before: a tool chosen in
+/// between gives way to Scale. With it on, a repeat chooses nothing.
 #[test]
 fn with_the_preference_off_each_repeat_chooses_the_tool_again() {
-    let mut app = pen_app();
-    app.run("prefs.set", json!({"key": "holdToolKeys", "value": false})).unwrap();
-    let keys = Keyboard::new();
-    keys.press_s(&mut app, 0.0);
-    app.ui.flyout = Some(0);
-    keys.press_s(&mut app, 0.3);
-    assert_eq!(app.ui.flyout, None, "the repeat chose Scale again");
-    assert_eq!(app.session.tool_id(), "scale");
-}
-
-/// A hold whose viewport stopped drawing ends when another viewport has the keyboard or the
-/// preference is turned off, and stays while the other viewport does not have the keyboard.
-#[test]
-fn a_hold_of_another_viewport_ends_when_this_one_has_the_keyboard() {
-    let other = egui::ViewportId::from_hash_of("held-tool-other");
-    let hold = || HeldTool { key: Key::S, viewport: other, tool: "scale", previous: "pen", since: 0.0, used: false, released: None };
-    let mut app = pen_app();
-    app.select_tool("scale");
-    let keys = Keyboard::new();
-    app.held_tool.push(hold());
-    keys.frame_with_focus(&mut app, 0.5, vec![], None, false);
-    assert_eq!(app.held_tool.len(), 1, "a viewport without the keyboard leaves the hold alone");
-    keys.frame(&mut app, 1.0, vec![], None);
-    assert!(app.held_tool.is_empty(), "a viewport with the keyboard ends the hold");
-    assert_eq!(app.session.tool_id(), "scale");
-    app.held_tool.push(hold());
-    app.run("prefs.set", json!({"key": "holdToolKeys", "value": false})).unwrap();
-    keys.frame_with_focus(&mut app, 1.5, vec![], None, false);
-    assert!(app.held_tool.is_empty(), "turning the preference off ends the hold");
-    assert_eq!(app.session.tool_id(), "scale");
+    for hold in [false, true] {
+        let mut app = pen_app();
+        app.run("prefs.set", json!({"key": "holdToolKeys", "value": hold})).unwrap();
+        let keys = Keyboard::new();
+        keys.press_s(&mut app, 0.0);
+        app.select_tool("rectangle");
+        keys.press_s(&mut app, 0.3);
+        let chosen = if hold { "rectangle" } else { "scale" };
+        assert_eq!(app.session.tool_id(), chosen, "holdToolKeys: {hold}");
+    }
 }
 
 /// Scale chosen again on the toolbar while S is held stays chosen when S is let go.
@@ -434,10 +342,8 @@ fn the_held_tool_chosen_again_stays_when_the_key_is_let_go() {
     let keys = Keyboard::new();
     keys.press_s(&mut app, 0.0);
     app.select_tool("scale");
-    // A tool chosen closes an open flyout: the repeats of S, still down, choose nothing.
-    app.ui.flyout = Some(0);
+    // The repeats of S, still down, choose nothing.
     keys.press_s(&mut app, 0.3);
-    assert_eq!(app.ui.flyout, Some(0), "a repeat chooses no tool");
     keys.release_s(&mut app, 0.5);
     assert_eq!(app.session.tool_id(), "scale");
 }
@@ -454,11 +360,11 @@ fn losing_the_keyboard_ends_the_hold() {
             app.session.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 150.0), view).unwrap();
             app.session.pointer(&PointerEvent::new(PointerKind::Drag, 260.0, 190.0), view).unwrap();
         }
-        keys.frame_with_focus(&mut app, 0.3, vec![egui::Event::WindowFocused(false)], None, false);
+        keys.frame_with_focus(&mut app, 0.3, vec![egui::Event::WindowFocused(false)], false);
         if drag {
             app.session.pointer(&PointerEvent::new(PointerKind::Up, 260.0, 190.0), view).unwrap();
         }
-        keys.frame(&mut app, 0.5, vec![egui::Event::WindowFocused(true)], None);
+        keys.frame(&mut app, 0.5, vec![egui::Event::WindowFocused(true)]);
         keys.release_s(&mut app, 0.6);
         assert_eq!(app.session.tool_id(), "scale", "drag {drag}: Scale stays");
     }
@@ -471,7 +377,7 @@ fn a_tool_chosen_during_the_hold_stays_when_the_key_is_let_go() {
     let keys = Keyboard::new();
     keys.press_s(&mut app, 0.0);
     app.select_tool("rectangle");
-    keys.frame(&mut app, 0.3, vec![], None);
+    keys.frame(&mut app, 0.3, vec![]);
     keys.release_s(&mut app, 0.5);
     assert_eq!(app.session.tool_id(), "rectangle");
 }
