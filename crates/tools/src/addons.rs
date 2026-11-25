@@ -27,19 +27,20 @@ use crate::{Tool, ToolInfo};
 pub const PATH_TOOLS: &[ToolInfo] = &[
     ToolInfo { id: anchor_eraser::ID, label: "Anchor Eraser Brush", shortcut: None, icon: "dc-remove-brush" },
     ToolInfo { id: extend_path::ID, label: "Extend Path Tool", shortcut: None, icon: "dc-arrow-extend" },
-    ToolInfo { id: measure_inspect::ID, label: "Measure & Inspect Tool", shortcut: None, icon: "ruler" },
-    ToolInfo { id: parametric_shape::ID, label: "Parametric Shape Tool", shortcut: None, icon: "hexagon" },
-    ToolInfo { id: corner_tool::ID, label: "Corner Tool", shortcut: None, icon: "dc-rounded-rect" },
-    ToolInfo { id: slide_anchor::ID, label: "Slide Anchor Along Path", shortcut: None, icon: "dc-anchor" },
-    ToolInfo { id: shared_edge::ID, label: "Shared Edge Merge Tool", shortcut: None, icon: "dc-join" },
-    ToolInfo { id: tangent_circle::ID, label: "Tangent Circle Tool", shortcut: None, icon: "circle" },
+    ToolInfo { id: measure_inspect::ID, label: "Measure & Inspect Tool", shortcut: None, icon: "dc-measure-inspect" },
+    ToolInfo { id: parametric_shape::ID, label: "Parametric Shape Tool", shortcut: None, icon: "dc-parametric-shape" },
+    ToolInfo { id: corner_tool::ID, label: "Corner Tool", shortcut: None, icon: "dc-corner-tool" },
+    ToolInfo { id: slide_anchor::ID, label: "Slide Anchor Along Path", shortcut: None, icon: "dc-slide-anchor" },
+    ToolInfo { id: shared_edge::ID, label: "Shared Edge Merge Tool", shortcut: None, icon: "dc-shared-edge" },
+    ToolInfo { id: tangent_circle::ID, label: "Tangent Circle Tool", shortcut: None, icon: "dc-tangent-circle" },
 ];
 
 pub const CONTOUR: &[ToolInfo] = &[ToolInfo { id: contour::ID, label: "Contour Tool", shortcut: None, icon: "tool-contour" }];
 
-pub const BOX_3D: &[ToolInfo] = &[ToolInfo { id: box3d::ID, label: "3D Box Tool", shortcut: None, icon: "box" }];
+pub const BOX_3D: &[ToolInfo] = &[ToolInfo { id: box3d::ID, label: "3D Box Tool", shortcut: None, icon: "dc-cube" }];
 
-pub const POLYGONAL_LASSO: &[ToolInfo] = &[ToolInfo { id: polygonal_lasso::ID, label: "Polygonal Lasso Tool", shortcut: None, icon: "tool-lasso" }];
+pub const POLYGONAL_LASSO: &[ToolInfo] =
+    &[ToolInfo { id: polygonal_lasso::ID, label: "Polygonal Lasso Tool", shortcut: None, icon: "dc-lasso-polygonal" }];
 
 /// The add-ons' tool groups, after the toolbar's own ([`crate::TOOL_GROUPS`]), each with the
 /// heading the All Tools drawer lists it under (its add-on's name).
@@ -124,7 +125,7 @@ mod tests {
         let ids: Vec<_> = groups[0].iter().map(|t| t.id).collect();
         assert_eq!(ids, ["lasso", id]);
         let info = crate::tool_info(id).expect("catalogued");
-        assert_eq!((info.label, info.shortcut, info.icon), ("Enclosing Lasso Tool", None, "tool-lasso"));
+        assert_eq!((info.label, info.shortcut, info.icon), ("Enclosing Lasso Tool", None, "tool-lasso-enclosing"));
         assert_eq!(crate::tool_info("lasso").and_then(|t| t.shortcut), Some("Q"), "the Lasso keeps its shortcut");
         assert_eq!(create(id).map(|tool| tool.id()), Some(id));
         assert!(heading(id).is_none(), "not listed again under the add-on");

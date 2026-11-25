@@ -373,13 +373,11 @@ impl Exporter<'_> {
         let enclosing = std::mem::replace(&mut self.knockout, knockout);
         let (mut pushes, isolated_children) = transparency(s, n, page, container, knockout);
         let mask = n.extras().mask.as_deref().filter(|m| !m.disabled);
+        // A distorted image's art, when its masked image needs the size its pieces share.
+        let mut expanded = None;
         let alpha = match (&n.kind, mask) {
             // The mask's image shares the pixel grid only when it has the same corners (or none).
-            // A color-masked image keeps the colors it hides hidden.
-            (NodeKind::Image(im), Some(m)) if n.image_quad() == m.art.image_quad() => {
-                let shown = self.doc.shown_image(n, im);
-                self.masked_image(im, &shown, m, !n.extras().pixelated)
-            }
+            (NodeKind::Image(im), Some(m)) if n.image_quad() == m.art.image_quad() => self.node_masked_image(n, im, m, &mut expanded),
             _ => None,
         };
         if let Some(m) = mask
@@ -436,12 +434,7 @@ impl Exporter<'_> {
                 (Some(p @ Paint::Solid { .. }), im) if self.doc.image_blob(&im).is_none_or(vectorcraft_doc::ImageBlob::takes_colorize) => {
                     let im = &*im;
                     if writable(s, im.xf, Rect::new(0.0, 0.0, im.width.max(1).into(), im.height.max(1).into())) {
-                        if let Some(colorized) = self.colorized_image(im, p, !n.extras().pixelated) {
-                            self.image(s, im, Some(colorized), n.extras().pixelated);
-                        } else {
-                            self.image_left_out = self.image_left_out.map(|_| true);
-                            self.warn(UNDECODED);
-                        }
+                        self.colorized(s, n, im, p);
                     } else if self.image_left_out.is_some() {
                         self.image_left_out = Some(true);
                         self.warn(super::exporter::UNWRITABLE_IMAGE);
@@ -506,7 +499,7 @@ impl Exporter<'_> {
             | NodeKind::PlacedDocument(_)
             | NodeKind::Intertwine { .. }
             | NodeKind::Image(_) => {
-                let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+                let g = expanded.unwrap_or_else(|| vectorcraft_effects::expand_live_deep(Some(self.doc), n));
                 // The pieces draw the image as it is shown, under its color mask's key.
                 let piece = match (&n.kind, &alpha) {
                     (NodeKind::Image(im), Some(img)) => Some((self.doc.shown_image(n, im).key.clone(), img.clone())),
@@ -526,6 +519,26 @@ impl Exporter<'_> {
         self.knockout = enclosing;
         for _ in 0..pushes {
             s.pop();
+        }
+    }
+
+    /// Draw image `im` of node `n` colorized with `p` ([`Self::colorized_image`]), overprinting
+    /// when its color does ([`Node::colorize_overprints`]). A paper white color ([`Self::paper_white`])
+    /// that overprints (Discard White Overprint off) puts no ink down, so it paints nothing.
+    fn colorized(&mut self, s: &mut Surface, n: &Node, im: &vectorcraft_doc::ImageObject, p: &Paint) {
+        let overprint = n.colorize_overprints() && self.overprint;
+        if overprint && !self.doc.setup.discard_white_overprint && self.paper_white(p) {
+            return;
+        }
+        match self.colorized_image(im, p, !n.extras().pixelated, overprint) {
+            Some(colorized) => {
+                let pixelated = n.extras().pixelated;
+                self.overprinting(s, overprint, p, |ex, s| ex.image(s, im, Some(colorized), pixelated));
+            }
+            None => {
+                self.image_left_out = self.image_left_out.map(|_| true);
+                self.warn(UNDECODED);
+            }
         }
     }
 
@@ -620,11 +633,10 @@ impl Exporter<'_> {
     }
 
     /// Draw a fill or stroke of `paint` with `draw`: as a form marked to overprint when it
-    /// `overprints`, paints and overprints are kept (but not a white one with Discard White
-    /// Overprint).
+    /// `overprints`, paints and overprints are kept (but not a paper white one with Discard White
+    /// Overprint, [`Self::discards_white`]).
     pub(super) fn overprinting(&mut self, s: &mut Surface, overprints: bool, paint: &Paint, draw: impl FnOnce(&mut Self, &mut Surface)) {
-        let white = || self.doc.setup.discard_white_overprint && vectorcraft_doc::overprint::is_white(paint);
-        if overprints && self.overprint && !paint.is_none() && !white() {
+        if overprints && self.overprint && !paint.is_none() && !self.discards_white(paint) {
             self.overprinted = true;
             crate::forms::form(s, Mark::Overprint, |s| draw(self, s));
         } else {
@@ -633,17 +645,36 @@ impl Exporter<'_> {
     }
 
     /// [`Self::overprinting`] for a character fill or stroke, which has no blend mode of its own:
-    /// with [`Self::darken_overprints`] an overprinting one is drawn with Darken (not a white one
-    /// with Discard White Overprint).
+    /// with [`Self::darken_overprints`] an overprinting one is drawn with Darken (not a paper
+    /// white one with Discard White Overprint).
     pub(super) fn char_overprinting(&mut self, s: &mut Surface, overprints: bool, paint: &Paint, draw: impl FnOnce(&mut Self, &mut Surface)) {
-        let white = vectorcraft_doc::overprint::is_white(paint) && self.doc.setup.discard_white_overprint;
-        if overprints && self.darken_overprints && !paint.is_none() && !white {
+        if overprints && self.darken_overprints && !paint.is_none() && !self.discards_white(paint) {
             s.push_blend_mode(krilla::blend::BlendMode::Darken);
             self.overprinting(s, overprints, paint, draw);
             s.pop();
         } else {
             self.overprinting(s, overprints, paint, draw);
         }
+    }
+
+    /// Whether paint `p` knocks out where it overprints under Document Setup → Discard White
+    /// Overprint ([`vectorcraft_doc::overprint::DiscardWhite::discards`]).
+    fn discards_white(&mut self, p: &Paint) -> bool {
+        self.doc.setup.discard_white_overprint && self.paper_white(p)
+    }
+
+    /// Whether paint `p` is paper white ([`vectorcraft_doc::overprint::DiscardWhite::paper_white`]):
+    /// white, and not a tint above 0% of one of the document's spot inks. The spot ink names are
+    /// read only for a white linked to a swatch.
+    fn paper_white(&mut self, p: &Paint) -> bool {
+        if !vectorcraft_doc::overprint::is_white(p) {
+            return false;
+        }
+        if !matches!(p, Paint::Solid { swatch: Some(_), .. }) {
+            return true;
+        }
+        let doc = self.doc;
+        self.discard_white.get_or_insert_with(|| vectorcraft_doc::overprint::DiscardWhite::of(doc)).paper_white(p)
     }
 
     /// Is `p` a paint PDF has no paint for when it paints a fill (`fill`) or a stroke, which
