@@ -3956,13 +3956,12 @@ not included.
 
 ## Learn panel
 
-Window › Learn and the Explore tutorials button beside the search field at the right end of the app bar show and hide
-the Learn panel. Its For you tab holds a Get started section with a Quick skill guide card; choosing the card opens
+Window › Learn shows and hides the Learn panel. Its For you tab holds a Get started section with a Quick skill guide card; choosing the card opens
 the Skills tab. The Skills tab lists VectorCraft's own skills, each with a progress ring and the count of its tutorials
 finished of all its tutorials. Choosing a skill lists its tutorials, choosing a tutorial shows its numbered steps, and
 Back goes up one level.
 The tutorial text is English. `window.learn {show?}` shows the panel (`show: true`), hides it (`show: false`) or
-toggles it (`show` omitted or null), and answers whether it shows; Window › Learn and Explore tutorials run it.
+toggles it (`show` omitted or null), and answers whether it shows; Window › Learn runs it.
 The panel counts as hidden while the dock is hidden or a full screen mode hides the panels. Showing it shows a hidden
 dock; in a full screen mode it makes Learn the front panel, which shows when the mode ends, and answers false. Any
 other value of `show` is an error and changes nothing. `learn.list {}` →
@@ -7288,7 +7287,8 @@ same way for a blend's spine point; without `handle` it is refused. These rules 
 `path.insertAnchor` keeps the direct-selected anchors and selected segments of the path on the same points: those
 after the new anchor on its subpath are numbered one higher, and a selected segment that the new anchor splits stays
 selected as its two halves, with the new anchor as an end of both that moves with them. Undo restores the path and
-the selection in one step.
+the selection in one step. With `selectAnchor: true` the path becomes the selection with only the new anchor
+direct-selected, also when the path was selected; a `selectAnchor` value that is not a boolean is an error.
 `path.close {id, subpath?, at?, in?, out?, independent?}` closes an open subpath (by default the last open one). `at`
 moves the first anchor to `[x, y]`, its handles with it, before `in` and `out` are placed. `in` places
 the first anchor's incoming handle as `path.setHandle` places a handle: a smooth anchor turns its outgoing handle to
@@ -8679,9 +8679,18 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
 - `deleteKeepsPathsJoined` (General › Delete Removes Anchor Points and Keeps Paths Joined, off by default): the
   default of the `keepJoined` param of `edit.clear` (Delete, Backspace, Edit › Clear, and the Layers panel's Delete
   button while no row is highlighted). On, Delete removes the direct-selected anchors of a path as `path.removeAnchors` does, refitting the curve
-  around each one, so a closed path stays closed and an open path stays in one piece; a path left with fewer than two
-  anchors is deleted. The next anchor along (the one before at an open path's end) is then selected, so the next
-  Delete goes on along the path. Off, Delete deletes the anchors with their segments and opens the path there.
+  around each one, so a closed path stays closed and an open path stays in one piece. The next anchor along (the one
+  before at an open path's end) is then selected, so the next Delete goes on along the path. When no subpath that lost
+  an anchor keeps two anchors, the path stays selected whole, and the next Delete removes it. Off, Delete deletes the anchors with their segments and opens the path there.
+- `doubleClickAddsAnchorPoints` (General › Double-Click Adds Anchor Points, off by default): on, a double-click
+  without modifier keys on a path segment with Direct Selection adds an anchor at the
+  clicked point (`path.insertAnchor` with `selectAnchor: true`): the curve keeps its shape, the new anchor alone is
+  selected, and the change is one undo step. The double-click takes the path whose stroke or outline is under the
+  pointer, selected or not, in a group or in isolation mode, a clipping path included, and the path's own line must
+  pass within the Selection & Anchor Display tolerance of the pointer. A double-click on an anchor, a direction
+  handle, a center point, a mesh point or a blend's spine point, on a fill, or on a wide stroke or an effect's outline
+  farther from the path, adds nothing and does what it did before. Group Selection is unchanged. Off, a Direct
+  Selection double-click on a segment adds nothing.
 - `hideCornerWidgetAbove` (177° by default): corners wider than this show no Live Corners widget (a rectangle's right
   angles hide below 90°).
 - `transformPatternTiles` (off by default): the default of the transforms' `patterns` param (`object.transform`,
@@ -9277,7 +9286,7 @@ area, in a grid of as many columns as the square root of the number of windows, 
 its pane. Each view of a document counts as a window (see `window.newWindow` below). With fewer than two windows open it
 leaves the view, `tiled` and the layout as they are. It returns
 `{tiled, panes, layout}`. `window.arrange.tile {layout}` picks another layout, as the other Tile items of Window ›
-Arrange and of the application bar's Arrange Documents button do: `grid` (the default), `vertical` (Tile All
+Arrange do: `grid` (the default), `vertical` (Tile All
 Vertically: side by side in one row), `horizontal` (Tile All Horizontally: stacked in one column), and `2up`, `3up`,
 `4up` and `6up`, which show at most that many windows (2-Up and 3-Up side by side, 4-Up two by two, 6-Up three by
 two) and leave the others under their tabs. Those layouts show the first windows in tab order, and the current
