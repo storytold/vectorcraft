@@ -1321,7 +1321,8 @@ fn script_file_grants_file_that_cannot_be_read_is_left_as_it_is() {
 }
 
 /// `script.grants` fails on a grants file that is there but cannot be read (another version, not
-/// JSON, no list of grants, over the size limit or not a file), lists none when it is missing, and
+/// JSON, no list of grants, over the size limit, not a file, or on Unix a link to a missing file),
+/// lists none when it is missing, and
 /// lists the well-formed grants of one that holds a grant that is not.
 #[test]
 fn script_grants_fails_on_a_grants_file_that_cannot_be_read() {
@@ -1346,6 +1347,15 @@ fn script_grants_fails_on_a_grants_file_that_cannot_be_read() {
     let mut s = with_data(&base);
     assert!(s.execute("script.grants", &json!({})).is_err(), "a folder in the grants file's place");
     let _ = std::fs::remove_dir_all(base);
+    #[cfg(unix)]
+    {
+        let base = folder("list-dangling");
+        std::fs::create_dir_all(base.join("settings")).unwrap();
+        std::os::unix::fs::symlink(base.join("gone.json"), base.join("settings/Script Grants.json")).unwrap();
+        let mut s = with_data(&base);
+        assert!(s.execute("script.grants", &json!({})).is_err(), "a link to a missing file in the grants file's place");
+        let _ = std::fs::remove_dir_all(base);
+    }
     let base = folder("list-missing");
     let mut s = with_data(&base);
     assert_eq!(s.execute("script.grants", &json!({})).unwrap()["grants"], json!([]), "a missing grants file lists none");

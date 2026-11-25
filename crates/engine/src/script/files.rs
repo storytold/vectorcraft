@@ -947,7 +947,8 @@ fn try_read_store(store: &Path) -> std::io::Result<Vec<serde_json::Value>> {
 fn load_store(store: &Path, strict: bool) -> std::io::Result<Vec<serde_json::Value>> {
     let bytes = match read_head(store, MAX_STORE_BYTES) {
         Ok(bytes) => bytes,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        // A link whose target is missing is there but cannot be read.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound && std::fs::symlink_metadata(store).is_err() => return Ok(Vec::new()),
         Err(e) => return Err(e),
     };
     if bytes.len() > MAX_STORE_BYTES {

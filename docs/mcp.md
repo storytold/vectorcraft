@@ -3117,7 +3117,7 @@ is given as its file name alone. `script.grants.revoke {script?, path?, all?}` r
 a script file, of a path, of both together, or with `all: true` every grant, and returns `{removed}`. A path is
 matched after its links are followed; under automation read roots, a path outside them is matched as given. While a script
 runs it is refused with the busy error, as the run keeps the grants it started with. A grants file that is there but
-cannot be read is left as it is: `script.grants` and `script.grants.revoke` fail, and a grant picked with Always is
+cannot be read, a link to a missing file included, is left as it is: `script.grants` and `script.grants.revoke` fail, and a grant picked with Always is
 not kept. A missing grants file lists no grants, and `script.grants` leaves out a grant in the file that is not well
 formed. A script
 cannot run either command.
