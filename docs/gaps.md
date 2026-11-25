@@ -814,7 +814,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 - **Missing:** the rest of the document object model for scripts (layers, artboards, paths, type and the
   other classes) and the `#engine` script directive (#1183 is open). Scripts have `app`, the open documents, new
   documents, each document's selection and its page items, and save, export and open documents with
-  `Document.saveAs`, `Document.exportFile` and `app.open`, read a document's `fullName`, `path` and `saved`, and
+  `Document.saveAs`, `Document.exportFile`, `Document.exportForScreens` and `app.open`, read a document's `fullName`, `path` and `saved`, and
   close it with `Document.close`. File › Scripts › Other Script… and `script.run` run JavaScript files over the command registry, `#targetengine`
   runs a script in a named engine whose globals last between runs,
   File › Scripts lists the scripts of the Scripts folder, and

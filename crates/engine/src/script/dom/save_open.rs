@@ -62,6 +62,8 @@ use std::rc::Rc;
 use serde_json::{Map, Value, json};
 use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostMember};
 
+pub(super) mod screens;
+
 use super::{
     Answer, Host, Link, MAX_TEXT_BYTES, NO_ACTIVE_DOCUMENT, arg, boolean, command, current, doc_ref, get, given, method, named, num, on_doc,
     property, text, this_doc, whole,
@@ -955,6 +957,9 @@ pub(super) fn document_members(l: &Link) -> Vec<(String, HostMember)> {
         ("saved", property(l, doc_saved, doc_set_saved)),
         ("close", method(l, doc_close)),
     ])
+    .into_iter()
+    .chain(screens::document_members(l))
+    .collect()
 }
 
 /// The option classes: each `new Name()` gives a record with its `typename` and the defaults its
@@ -969,5 +974,6 @@ pub(super) fn classes(link: &Link) -> Vec<HostClass> {
         });
         HostClass { name: c.name.into(), parent: None, members: Vec::new(), index: None, construct: Some(f) }
     })
+    .chain(screens::classes(link))
     .collect()
 }

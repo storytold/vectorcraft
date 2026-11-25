@@ -543,6 +543,21 @@ fn save_as_and_export_file_write_a_file() {
     assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[3, 4][..])]);
 }
 
+/// A document's `exportForScreens` writes files into the folder it is given, called directly or by
+/// its name in brackets; an object of the script's own that defines it writes nothing.
+#[test]
+fn export_for_screens_writes_files() {
+    let r = report(concat!(
+        "var dir = new Folder(p);\n",
+        "app.activeDocument.exportForScreens(dir, ExportForScreensType.SE_PNG24);\n",
+        "documents[0]['exportForScreens'](dir, ExportForScreensType.SE_SVG);\n",
+        "var local = {exportForScreens: function () {}};\n",
+        "local.exportForScreens(dir);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[2, 3][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[2, 3][..])]);
+}
+
 /// `SaveOptions.SAVECHANGES` makes a document's `close` save it to its own file, read directly, in
 /// brackets, as a string or through a variable; closing without it, and the other save options,
 /// write nothing.

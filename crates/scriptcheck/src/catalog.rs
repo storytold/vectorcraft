@@ -74,8 +74,10 @@ pub(crate) const REFLECT: &str = "reflect";
 // The roots of the document model: https://ai-scripting.docsforadobe.dev/jsobjref/Application/
 pub(crate) const DOM_ROOTS: [&str; 4] = ["app", "activeDocument", "documents", "selection"];
 
-// Document methods that write the file they are given: https://ai-scripting.docsforadobe.dev/jsobjref/Document/
-pub(crate) const DOM_FILE_WRITES: &[&str] = &["exportFile", "saveAs"];
+// Document methods that write the file they are given, or files in the folder they are given:
+// https://ai-scripting.docsforadobe.dev/jsobjref/Document/ and
+// https://www.indesignjs.de/indesignapi/illustrator/Document.html (exportForScreens)
+pub(crate) const DOM_FILE_WRITES: &[&str] = &["exportFile", "saveAs", "exportForScreens"];
 
 // The save option of `Document.close` that saves the document to its own file:
 // https://ai-scripting.docsforadobe.dev/jsobjref/Document/ and

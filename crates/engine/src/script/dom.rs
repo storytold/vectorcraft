@@ -2077,7 +2077,7 @@ const ENUMS: &[(&str, &[&str])] = &[
 /// Adds `app`, its classes and the enumerations to `realm`; their members act for the run `link`
 /// holds.
 pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(), RunError> {
-    for (name, members) in ENUMS.iter().chain(save_open::ENUMS) {
+    for (name, members) in ENUMS.iter().chain(save_open::ENUMS).chain(save_open::screens::ENUMS) {
         let items = members.iter().map(|m| (m.to_string(), HostItem::Value(text(format!("{name}.{m}"))))).collect();
         realm.define_host_object(name, items)?;
     }

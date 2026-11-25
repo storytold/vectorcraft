@@ -2589,7 +2589,7 @@ control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script,
   while 4,096 other `[` are open, assign a property in brackets whose name is a string literal of more than 256
   characters, assign properties of more than 1,000 different names on members (`o.d = …`, `o['d'] = …`), or
   assign or declare `Folder`; a variable whose name a member assignment writes counts as one that may hold a File
-  object; a document's `saveAs` or `exportFile` counts too, and so does `SaveOptions.SAVECHANGES` wherever the script
+  object; a document's `saveAs`, `exportFile` or `exportForScreens` counts too, and so does `SaveOptions.SAVECHANGES` wherever the script
   reads it, since `close` given it saves the document to its file), `filesOpened` (files opened in other apps),
   `network`,
   `nativeCode`, `otherApps` (messages to other apps), `environment` (environment variables), `unseenCode` (`eval`,
@@ -2846,6 +2846,44 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   and leaves the document open when the document has no file (a converted or recovered document included); and
   `SaveOptions.PROMPTTOSAVECHANGES`, the default, throws an error and leaves the document open, since a script cannot
   show the prompt. A bad value throws an error before anything is written.
+- `Document.exportForScreens(exportFolder, exportFormat, options?, itemToExport?, fileNamePrefix?)` runs
+  `document.exportForScreens` with one format row into `exportFolder`, a `Folder` (or a `File`, read as the folder at
+  its path) (https://www.indesignjs.de/indesignapi/illustrator/Document.html). `exportFormat` is an
+  `ExportForScreensType` (https://www.indesignjs.de/indesignapi/illustrator/ExportForScreensType.html): `SE_JPEG100`,
+  `SE_JPEG80`, `SE_JPEG50` and `SE_JPEG20` write JPEG at a quality of 100, 80, 50 and 20 and take
+  `new ExportForScreensOptionsJPEG()`; `SE_PNG24` takes `new ExportForScreensOptionsPNG24()`; `SE_PNG8` takes
+  `new ExportForScreensOptionsPNG8()`; `SE_SVG` takes `new ExportForScreensOptionsWebOptimizedSVG()`; and `SE_PDF`
+  takes `new ExportForScreensPDFOptions()` (https://www.indesignjs.de/indesignapi/illustrator/ExportForScreensOptionsJPEG.html,
+  https://www.indesignjs.de/indesignapi/illustrator/ExportForScreensOptionsPNG24.html,
+  https://www.indesignjs.de/indesignapi/illustrator/ExportForScreensOptionsPNG8.html,
+  https://www.indesignjs.de/indesignapi/illustrator/ExportForScreensOptionsWebOptimizedSVG.html,
+  https://www.indesignjs.de/indesignapi/illustrator/ExportForScreensPDFOptions.html). The raster classes map
+  `antiAliasing`, `scaleType` and `scaleTypeValue` (`SCALEBYFACTOR`, `SCALEBYWIDTH` and `SCALEBYHEIGHT` in pixels,
+  `SCALEBYRESOLUTION` in ppi); JPEG also maps `compressionMethod`, `embedICCProfile` and `progressiveScan` (3 to 5);
+  PNG24 maps `transparency`, `backgroundBlack` and `interlaced`; PNG8 maps `colorCount` (2 to 256), `interlaced`,
+  `matte` and `transparency`. The SVG class maps `coordinatePrecision` (1 to 7), `cssProperties`, `fontType`,
+  `rasterImageLocation`, `svgId`, `svgMinify` and `svgResponsive`, and the PDF class maps `pdfPreset` (at most 255
+  bytes; a name in square brackets names a built-in preset as `PDFSaveOptions.pDFPreset` does). `itemToExport` is a
+  `new ExportForScreensItemToExport()` (https://www.indesignjs.de/indesignapi/illustrator/ExportForScreensItemToExport.html)
+  with `artboards` (`all`, the default, a range of artboard numbers such as `1-3, 5`, or `""` for none), `assets` (a
+  list of asset ids, as `assets.list` gives them) and `document` (false by default). `fileNamePrefix` goes before each
+  file's name. The enumerations `ExportForScreensType`, `ExportForScreensScaleType`, `AntiAliasingMethod`,
+  `JPEGCompressionMethodType`, `RasterImageLocation`, `SVGCSSPropertyLocation`, `SVGFontType` and `SVGIdType` hold
+  strings such as `"ExportForScreensType.SE_PNG24"`.
+  VectorCraft's own rules: the folder is checked as a `File` opened for writing in it is checked, before the command
+  runs: a folder outside the script's folders throws `Script file access denied`, and a file throws `Script folder is
+  a file`. The command writes only where the script's folders allow. The files go into the folder without
+  sub-folders, each named `<fileNamePrefix><name><suffix>.<extension>` as `document.exportForScreens` names them (`@2x`
+  after a raster file at twice the size); a character a file name may not hold, `/` and `\` included, is written as
+  `-` in the prefix. The export keeps its settings in the document, as an export from the dialog does. The artboards,
+  the assets and, with `document` true, the bounds of the whole document's art (a PDF of every artboard) are each
+  their own export, in that order: when a later one throws, the files of the earlier ones stay written. An
+  `itemToExport` that names nothing throws `nothing to export`. A scale factor is from 0.01 to 64 and a resolution
+  from 0.72 to 4608 ppi. `RasterImageLocation.PRESERVE`, the default, embeds raster images as `EMBED` does, and
+  `SVGFontType.SVGFONT`, the default, writes text as SVG text elements. A listed option that is not mapped
+  (`matteColor`) is accepted at its default and throws at any other value, a property the pages do not list throws an
+  error that names it, an omitted options object takes the defaults a new one holds, and an options object of
+  another class throws. A bad value throws an error before anything is written.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global

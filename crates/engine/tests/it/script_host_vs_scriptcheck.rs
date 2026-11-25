@@ -39,6 +39,7 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
     ("Folder.prototype.execute", "var d = new Folder(p); d.execute();", "filesOpened"),
     ("Document.prototype.saveAs", "app.activeDocument.saveAs(f);", "filesWritten"),
     ("Document.prototype.exportFile", "app.activeDocument.exportFile(f, ExportType.PNG24);", "filesWritten"),
+    ("Document.prototype.exportForScreens", "app.activeDocument.exportForScreens(f, ExportForScreensType.SE_PNG24);", "filesWritten"),
     ("SaveOptions.SAVECHANGES", "app.activeDocument.close(SaveOptions.SAVECHANGES);", "filesWritten"),
 ];
 
@@ -155,13 +156,28 @@ const INSIDE: &[(&str, &str)] = &[
     ("PDFOverprint.", "DISCARDPDFOVERPRINT PRESERVEPDFOVERPRINT"),
     ("SaveOptions.", "DONOTSAVECHANGES PROMPTTOSAVECHANGES"),
     ("UserInteractionLevel.", "DISPLAYALERTS DONTDISPLAYALERTS"),
+    // The enumerations of exporting for screens.
+    (
+        "",
+        "AntiAliasingMethod ExportForScreensScaleType ExportForScreensType JPEGCompressionMethodType RasterImageLocation \
+         SVGCSSPropertyLocation SVGFontType SVGIdType",
+    ),
+    ("AntiAliasingMethod.", "ARTOPTIMIZED None TYPEOPTIMIZED"),
+    ("ExportForScreensScaleType.", "SCALEBYFACTOR SCALEBYHEIGHT SCALEBYRESOLUTION SCALEBYWIDTH"),
+    ("ExportForScreensType.", "SE_JPEG100 SE_JPEG20 SE_JPEG50 SE_JPEG80 SE_PDF SE_PNG24 SE_PNG8 SE_SVG"),
+    ("JPEGCompressionMethodType.", "BASELINEOPTIMIZED BASELINESTANDARD PROGRESSIVE"),
+    ("RasterImageLocation.", "EMBED LINK PRESERVE"),
+    ("SVGCSSPropertyLocation.", "ENTITIES PRESENTATIONATTRIBUTES STYLEATTRIBUTES STYLEELEMENTS"),
+    ("SVGFontType.", "OUTLINEFONT SVGFONT"),
+    ("SVGIdType.", "SVGIDMINIMAL SVGIDREGULAR SVGIDUNIQUE"),
 ];
 
 /// The classes the host adds with nothing but a prototype and its constructor: the page item types
 /// and the save and export option classes.
 const BARE_CLASSES: &str = "BlendItem CompoundPathItem EnvelopeItem GraphItem GroupItem IntertwineItem MeshItem PathItem \
      PlacedDocumentItem PlacedItem RasterItem RepeatItem SymbolItem TextFrame EPSSaveOptions ExportOptionsJPEG ExportOptionsPNG24 \
-     ExportOptionsSVG IllustratorSaveOptions PDFSaveOptions";
+     ExportOptionsSVG IllustratorSaveOptions PDFSaveOptions ExportForScreensItemToExport ExportForScreensOptionsJPEG \
+     ExportForScreensOptionsPNG24 ExportForScreensOptionsPNG8 ExportForScreensOptionsWebOptimizedSVG ExportForScreensPDFOptions";
 
 /// The name the checker does not read, which also stands for its members: `vc` is VectorCraft's
 /// own API, and what `vc.run` does depends on the command it runs.

@@ -263,11 +263,14 @@ impl Interp {
         if r.ancestors.len() >= r.limits.depth {
             return Err(self.data_error(r, ErrorType::Range, "is nested too deep"));
         }
-        // A `File` reads as its path ([`crate::FILE_REF_KEY`]).
+        // A `File` or a `Folder` reads as its path ([`crate::FILE_REF_KEY`], [`crate::FOLDER_REF_KEY`]).
         if r.hosted
             && let Some(file) = self.file_ref_of(id)?
         {
-            let len = crate::file_ref_path(&file).map_or(0, str::len);
+            let len = match &file {
+                Data::Object(items) => items.iter().map(|(_, v)| if let Data::String(p) = v { p.len() } else { 0 }).sum(),
+                _ => 0,
+            };
             self.charge_reading(r, len.saturating_mul(3).saturating_add(2))?;
             return Ok(file);
         }

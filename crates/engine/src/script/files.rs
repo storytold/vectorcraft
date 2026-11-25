@@ -127,6 +127,7 @@ pub(crate) const WRITE_FAILED: &str = "Script file could not be written";
 pub(crate) const READ_ONLY: &str = "Script file is read-only";
 pub(crate) const OPEN_FOR_WRITING: &str = "Script file is open for writing";
 pub(crate) const NOT_EMPTY: &str = "Script folder is not empty";
+pub(crate) const NOT_FOLDER: &str = "Script folder is a file";
 pub(crate) const NAME_TAKEN: &str = "Script file name is already in use";
 pub(crate) const BAD_NAME: &str = "Script file name must be a name without a folder";
 #[cfg(not(unix))]
@@ -708,6 +709,17 @@ impl Disk {
         match std::fs::metadata(&real) {
             Ok(m) if !m.is_file() => Err(NOT_REGULAR),
             Ok(m) if m.permissions().readonly() => Err(READ_ONLY),
+            _ => Ok(real),
+        }
+    }
+
+    /// The real path of the folder `path` that an export writes its files into, as a `File`
+    /// opened for writing there would reach it ([`Disk::target`]), or why it may not: a file is
+    /// not a folder.
+    pub(crate) fn folder_target(&self, path: &str) -> Result<std::path::PathBuf, &'static str> {
+        let real = self.target(path, true)?;
+        match std::fs::metadata(&real) {
+            Ok(m) if !m.is_dir() => Err(NOT_FOLDER),
             _ => Ok(real),
         }
     }

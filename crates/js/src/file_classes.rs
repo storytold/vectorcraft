@@ -97,15 +97,21 @@ impl Interp {
 
     /// The [`crate::Data`] for `id` when it is a `File` the `File` class made (its prototype is
     /// `File.prototype` and it holds its path in its [`Class::FsEntry`]), as [`file_ref_path`] reads
-    /// it; `None` for any other object, one made with `Object.create(File.prototype)` included.
+    /// it, or a `Folder` the `Folder` class made, as [`folder_ref`] gives one; `None` for any other
+    /// object, one made with `Object.create(File.prototype)` or `Object.create(Folder.prototype)`
+    /// included.
     pub(crate) fn file_ref_of(&self, id: ObjId) -> JsResult<Option<crate::Data>> {
         let Some(c) = &self.files else { return Ok(None) };
         let o = self.object(id)?;
-        if o.proto != Some(c.file_proto) {
+        let key = if o.proto == Some(c.file_proto) {
+            FILE_REF_KEY
+        } else if o.proto == Some(c.folder_proto) {
+            FOLDER_REF_KEY
+        } else {
             return Ok(None);
-        }
+        };
         Ok(match &o.class {
-            Class::FsEntry(s) => Some(crate::Data::Object(vec![(FILE_REF_KEY.to_string(), crate::Data::String(s.to_rust_string()))])),
+            Class::FsEntry(s) => Some(crate::Data::Object(vec![(key.to_string(), crate::Data::String(s.to_rust_string()))])),
             _ => None,
         })
     }
