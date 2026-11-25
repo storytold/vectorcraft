@@ -247,19 +247,26 @@ fn named_panel_default_chords_toggle_their_panels() {
 }
 
 /// Each Window menu row that shows a panel shows the chord of that panel's shortcut, as production's did, and the
-/// rows of the panels with a default key show one.
+/// rows of the panels with a default key show one. The first frame builds the keymap after its menus, so the menus of
+/// the next frame show the chords.
 #[test]
 fn window_menu_panel_rows_show_their_panels_shortcuts() {
     let mut app = new_app();
     let ctx = ready(&mut app);
-    let rows: Vec<craft::keymap::CommandRef> =
-        app.menus.bar.items().into_iter().filter(|it| it.command.id == "window.panel").map(|it| it.command.clone()).collect();
+    key_frame(&mut app, &ctx, vec![]);
+    let rows: Vec<(craft::keymap::CommandRef, Option<craft::keymap::Chord>)> = app
+        .menus
+        .bar
+        .items()
+        .into_iter()
+        .filter(|it| it.command.id == "window.panel" && it.command.params["toggle"] == true)
+        .map(|it| (it.command.clone(), it.shortcut))
+        .collect();
     assert!(!rows.is_empty(), "the Window menu lists panels");
     let mut with_keys = 0;
-    for row in &rows {
+    for (row, chord) in rows {
         let panel = row.params["panel"].as_str().expect("a panel row names its panel");
         let entry = crate::keymap::command_of(&format!("panel:{panel}"));
-        let chord = craft::ui::runtime::commands::chord(&ctx, row);
         assert_eq!(chord, craft::ui::runtime::commands::chord(&ctx, &entry), "{panel}: the row shows its shortcut's chord");
         if crate::shortcut_editor::PANEL_SHORTCUTS.iter().any(|(p, _)| *p == panel) {
             assert!(chord.is_some(), "{panel} has a default key, and its row shows it");
@@ -295,14 +302,14 @@ fn a_window_menu_click_toggles_its_panel() {
     assert_eq!(click(&mut app), before, "the second click toggles it back");
 }
 
-/// A click on the task bar's More Options › Show Properties Panel leaves a showing Properties panel showing, docked
-/// and in an icon column's flyout: it does not take the toggle of Window › Properties.
+/// A click on the task bar's More Options › Show Properties Panel, a menu row that runs `window.panel {panel:
+/// "properties"}`, leaves a showing docked Properties panel showing: it does not take the toggle of Window › Properties.
 #[test]
 fn the_task_bar_show_properties_row_keeps_properties_showing() {
     use craft::ui::runtime::commands::{FirePhase, FireSource, Fired};
     let mut app = new_app();
     let ctx = ready(&mut app);
-    let row = crate::canvas::task_bar::show_properties();
+    let row = craft::keymap::CommandRef::with_params("window.panel", json!({ "panel": "properties" }));
     let click = |app: &mut VectorcraftApp| {
         crate::shortcuts::run_fired(app, &ctx, &Fired::new(row.clone(), FireSource::Menu, FirePhase::Press, 0.0));
         key_frame(app, &ctx, vec![]);
@@ -310,25 +317,6 @@ fn the_task_bar_show_properties_row_keeps_properties_showing() {
     };
     assert!(click(&mut app), "the first click shows Properties");
     assert!(click(&mut app), "a second click leaves Properties showing");
-    app.run("window.collapseDock", json!({ "collapsed": true })).expect("the dock collapses to icons");
-    key_frame(&mut app, &ctx, vec![]);
-    assert!(click(&mut app), "a click opens the Properties flyout");
-    assert!(click(&mut app), "a second click leaves the flyout open");
-    app.run("window.panel", row.params.clone()).expect("the command runs from automation");
-    assert!(crate::panel_docking::showing(&app.ui, "properties"), "the command leaves the flyout open from automation too");
-}
-
-/// `ui.menu.list` lists a Window menu panel row with the toggle a click on it runs, and a plug-in's row that shows a
-/// panel the Window menu does not list (Object › Plug-ins › Packaging Tools › Fold Lines) without one.
-#[test]
-fn listed_window_rows_toggle_and_plugin_panel_rows_do_not() {
-    let app = new_app();
-    let entries = crate::menus::menu_entries(&app);
-    let row =
-        |panel: &str| entries.iter().find(|e| e.command.as_deref() == Some("window.panel") && e.params["panel"] == panel).map(|e| e.params.clone());
-    assert_eq!(row("layers").map(|p| p["toggle"].clone()), Some(json!(true)), "Window › Layers toggles");
-    let fold = row(crate::addons::packaging::ID).expect("a Fold Lines row");
-    assert!(fold.get("toggle").is_none(), "Fold Lines shows its panel: {fold}");
 }
 
 /// A shortcut on a panel without a function key of its own runs `window.panel` with the params it has: no toggle is

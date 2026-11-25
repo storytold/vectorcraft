@@ -45,9 +45,7 @@ impl Listed {
 }
 
 pub fn menu_tree_named(english_names: bool, listed: &Listed) -> Vec<(&'static str, Vec<Node>)> {
-    // A Window row names the command the panel's shortcut runs, so it shows that shortcut; a click toggles the panel
-    // (`menu_entries` lists the row with `toggle: true`).
-    let panel = |label: &'static str, id: &'static str| cp(label, "window.panel", json!({ "panel": id }));
+    let panel = |label: &'static str, id: &'static str| cp(label, "window.panel", json!({ "panel": id, "toggle": true }));
     vec![
         (
             // The application menu, shown on macOS only: the layout merges it with the items the

@@ -413,16 +413,12 @@ fn ui_dock(app: &mut VectorcraftApp, params: &Value) -> Result<Value, String> {
 /// library panel or a panel the dock has no place for floats. A flyout or floating panel is put
 /// away only while it can be seen ([`visible`]): with the dock hidden by Tab or Shift+Tab, the
 /// dock shows again with the panel where it was, and the toolbar and Control bar stay as they are.
-/// Presentation Mode hides every panel, so there the command fails and changes nothing. With
-/// `toggle: false` a panel that can be seen stays as it is ([`reveal_panel`]).
+/// Presentation Mode hides every panel, so there the command fails and changes nothing.
 fn show_panel(app: &mut VectorcraftApp, params: &Value) -> Result<Value, String> {
     let raw = params.get("panel").and_then(Value::as_str).unwrap_or_default();
     let panel = normalize(raw).ok_or_else(|| format!("unknown panel `{raw}`"))?;
     if app.ui.screen_mode >= 3 {
         return Err("panels can't be shown in Presentation Mode".into());
-    }
-    if params.get("toggle") == Some(&Value::Bool(false)) {
-        return reveal_panel(app, panel);
     }
     place_panel(app, panel)
 }

@@ -29,48 +29,13 @@ pub struct MenuEntry {
     pub shown_path: Vec<String>,
 }
 
-/// The command id of the menu rows that show a panel.
-const PANEL_COMMAND: &str = "window.panel";
-
-/// Flattened menu for `ui.menu.list`. A row that shows a panel of the Window menu, there or in another menu (Type ›
-/// Glyphs), lists the params a click on it runs: `window.panel` with `toggle: true`, which puts a showing panel away
-/// ([`is_row_of`]).
+/// Flattened menu for `ui.menu.list`.
 pub fn menu_entries(app: &VectorcraftApp) -> Vec<MenuEntry> {
     let mut out = vec![];
     for (title, items) in menu_tree_named(app.session.prefs.font_names_in_english, &Listed::of(app)) {
         flatten(app, vec![title.to_string()], vec![crate::i18n::t(title).to_string()], &items, &mut out);
     }
-    let window_panels: Vec<Value> = out
-        .iter()
-        .filter(|e| e.path.first().is_some_and(|t| t == "Window") && e.command.as_deref() == Some(PANEL_COMMAND))
-        .map(|e| e.params.clone())
-        .collect();
-    for e in &mut out {
-        if e.command.as_deref() == Some(PANEL_COMMAND)
-            && window_panels.contains(&e.params)
-            && let Some(params) = e.params.as_object_mut()
-        {
-            params.entry("toggle").or_insert(Value::Bool(true));
-        }
-    }
     out
-}
-
-/// Whether `e` is the row of the menu item that runs command `id` with `params`: the same command and params, or a
-/// panel row that [`menu_entries`] lists with `toggle: true` added. Another menu's row that shows a panel without
-/// toggling it names `toggle: false` (the task bar's Show Properties Panel), so it does not match a Window row.
-pub fn is_row_of(e: &MenuEntry, id: &str, params: &Value) -> bool {
-    if e.command.as_deref() != Some(id) {
-        return false;
-    }
-    if e.params == *params {
-        return true;
-    }
-    let mut listed = e.params.clone();
-    id == PANEL_COMMAND
-        && params.get("toggle").is_none()
-        && listed.as_object_mut().and_then(|o| o.remove("toggle")) == Some(Value::Bool(true))
-        && listed == *params
 }
 
 /// Flattened canvas context menu for `ui.contextMenu.list` (paths are its submenus).
