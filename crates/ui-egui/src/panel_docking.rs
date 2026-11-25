@@ -22,8 +22,8 @@ use craft::behavior::{Axis, DockSide, IconId};
 use craft::ui::buttons::IconButton;
 use craft::ui::contract::{Bind, BodyCx, PlainData, Show as _, Tracked};
 use craft::ui::docking::{
-    DockCommands, DockConfig, DockEvent, DockGrid, DockPanels, DockScene, DockSizes, DockTo, DragUnit, FloatSpace, GroupAt, HidePanels, PanelKey,
-    PanelSpec, PanelSpecs, actions as command_actions, move_actions, request_actions,
+    ColumnCards, DockCommands, DockConfig, DockEvent, DockGrid, DockPanels, DockScene, DockSizes, DockTo, DragUnit, FloatSpace, GroupAt, HidePanels,
+    PanelKey, PanelSpec, PanelSpecs, actions as command_actions, move_actions, request_actions,
 };
 use craft::ui::menu::PanelRow;
 use craft::ui::patterns::dock::DockArea;
@@ -31,6 +31,7 @@ use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::commands::CommandRef;
 use craft::ui::runtime::frame::{ChromeToggle, request_chrome_toggle};
 use craft::ui::shell::chrome_state;
+use craft::ui::tabs::PanelTabLook;
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
@@ -1316,7 +1317,13 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, keeps_tools: boo
             Bind::bound(&mut workspace),
             &specs,
             &mut panels,
-            DockConfig::default().panel_menu_always(true).panel_menu_icon(IconId::new("menu")).floating_rounded_body(true),
+            DockConfig::default()
+                .panel_menu_always(true)
+                .panel_menu_icon(IconId::new("menu"))
+                .floating_rounded_body(true)
+                .tab_look(PanelTabLook::Block)
+                .column_cards(ColumnCards::Stepped)
+                .flush_docks(true),
         )
         .hide(hide)
         .flyout(Bind::bound(&mut flyout));
