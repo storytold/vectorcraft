@@ -89,6 +89,7 @@ mod history_document;
 mod history_mem;
 mod ids_without_selection;
 mod inline;
+mod interaction_commands;
 mod interactivity;
 mod interpolate_handles;
 mod intertwine;
