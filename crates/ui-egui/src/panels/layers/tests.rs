@@ -483,6 +483,18 @@ fn context_menu_others_actions_sublayer_state_enables_all_commands() {
     assert!(lock_enabled, "locked sublayer enables Unlock All Layers");
 }
 
+/// The footer's layer count is in the accessibility tree, and it follows the document's layers.
+#[test]
+fn the_footer_counts_the_layers() {
+    use crate::tests::panel_harness::Panel;
+    let (app, _, _) = two_rects();
+    let mut panel = Panel::new(app, show);
+    assert!(panel.shows("1 Layer"));
+    panel.app().session.execute("layer.new", &json!({})).unwrap();
+    panel.frame();
+    assert!(panel.shows("2 Layers") && !panel.shows("1 Layer"));
+}
+
 /// Names object `id` `name`, so its target circle is "Target {name}".
 fn name_row(app: &mut VectorcraftApp, id: NodeId, name: &str) {
     app.session.execute("layer.setProps", &json!({"ids": [id.0], "name": name})).unwrap();

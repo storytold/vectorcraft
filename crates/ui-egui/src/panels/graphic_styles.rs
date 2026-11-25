@@ -20,7 +20,7 @@ use craft::behavior::{EditEvent, GesturePhase, IconId, Selection};
 use craft::ui::contract::{
     Bind, DropAt, DropPayload, DropPlace, Entry, ListDrag, MemoProps, PopupKind, ReorderMove, SelectMode, Show as _, ShowContainer as _, Trigger,
 };
-use craft::ui::display::Divider;
+use craft::ui::display::{Divider, Text};
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::patterns::presets::{
     PickerField, PresetBrowser, PresetDrop, PresetEvent, PresetFns, PresetPicker, PresetReorder, PresetRow, PresetSource, PresetState, PresetView,
@@ -393,7 +393,7 @@ fn large_tip(app: &VectorcraftApp, thumbs: &StyleThumbs, ui: &mut Ui, key: &Styl
         Some(tex) => ui.painter().image(tex.id(), r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE),
         None => ui.painter().rect_filled(r, 0.0, Color32::WHITE),
     };
-    ui.label(key);
+    Text::new(key.clone()).show(ui);
 }
 
 // ---------- the panel ----------

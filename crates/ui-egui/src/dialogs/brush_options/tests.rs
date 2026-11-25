@@ -278,6 +278,24 @@ fn ok_redraws_the_strokes_painted_with_the_brush() {
     assert!((drawn_height(&app, id) - before).abs() < 1e-6);
 }
 
+/// Art Brush Options draws each Direction segment as an arrow icon named by its tooltip, so the
+/// accessibility tree reads the direction instead of an arrow glyph.
+#[test]
+fn art_brush_direction_segments_are_named_by_their_tooltips() {
+    let mut app = app();
+    open(&mut app, "Arrow");
+    crate::dialogs::tests::settle(&mut app);
+    let out = crate::dialogs::tests::frame(&mut app, vec![]);
+    let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+    let labels: Vec<&str> = nodes.iter().filter_map(|(_, node)| node.label()).collect();
+    for tip in ["Left to Right", "Right to Left", "Top to Bottom", "Bottom to Top"] {
+        assert!(labels.contains(&tip), "{tip} is not named in {labels:?}");
+    }
+    for glyph in ["→", "←", "↓", "↑"] {
+        assert!(!labels.contains(&glyph), "a segment is named {glyph}");
+    }
+}
+
 #[test]
 fn a_taken_name_keeps_the_dialog_open() {
     let mut app = app();

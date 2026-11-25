@@ -48,6 +48,8 @@ pub static ICONS: &[(&str, &[u8])] = &[
     ("dc-arc-three-point", include_bytes!("../../../assets/icons/dc-arc-three-point.svg")),
     ("dc-arrow-down", include_bytes!("../../../assets/icons/dc-arrow-down.svg")),
     ("dc-arrow-extend", include_bytes!("../../../assets/icons/dc-arrow-extend.svg")),
+    ("dc-arrow-left", include_bytes!("../../../assets/icons/dc-arrow-left.svg")),
+    ("dc-arrow-right", include_bytes!("../../../assets/icons/dc-arrow-right.svg")),
     ("dc-arrow-tip", include_bytes!("../../../assets/icons/dc-arrow-tip.svg")),
     ("dc-arrow-up", include_bytes!("../../../assets/icons/dc-arrow-up.svg")),
     ("dc-artboard-options", include_bytes!("../../../assets/icons/dc-artboard-options.svg")),

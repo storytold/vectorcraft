@@ -9,8 +9,10 @@
 //! (asking where when there is no path); bad options keep the dialog open.
 
 use craft::ui::contract::{Bind, Entry, Show as _};
+use craft::ui::display::{Shade, Text};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
 use craft::ui::pickers::Select;
+use craft::ui::style::TypeRole;
 use craft::ui::text::NumberField;
 use serde_json::{Map, Value, json};
 use vectorcraft_cad::{ColorDepth, DxfPreset, DxfVersion, Preserve, RasterFormat};
@@ -144,11 +146,11 @@ pub(crate) fn scale_param(disabled_when: Option<(&str, FieldValue)>) -> Param {
         let (lo, hi) = (*vectorcraft_cad::SCALE_RANGE.start(), *vectorcraft_cad::SCALE_RANGE.end());
         let shown = ui
             .horizontal(|ui| {
-                ui.label("1");
+                Text::new("1").show(ui);
                 Select::new(tl!("Unit"), Bind::bound(&mut unit), &units).show(ui);
-                ui.label("=");
+                Text::new("=").show(ui);
                 NumberField::new(tl!("Scale"), Bind::bound(&mut scale)).range(lo..=hi).show(ui);
-                ui.label(tl!("Units"));
+                Text::new(tl!("Units")).show(ui);
             })
             .response;
         let scale = scale.unwrap_or(1.0);
@@ -199,10 +201,13 @@ pub fn open_with(app: &mut VectorcraftApp, params: &Value, selection: bool) {
             .values(Bind::bound(fields))
             .ok_label(tl!("Export").into())
             .below(|ui, fields| {
-                ui.weak(match fields.text("preserve").and_then(Preserve::from_id).unwrap_or_default() {
+                Text::new(match fields.text("preserve").and_then(Preserve::from_id).unwrap_or_default() {
                     Preserve::Appearance => tl!("Type becomes outlines, and strokes a CAD line can't draw become filled shapes."),
                     Preserve::Editability => tl!("Type stays text, and every stroke is a line with its lineweight and dashes."),
-                });
+                })
+                .role(TypeRole::Caption)
+                .shade(Shade::Muted)
+                .show(ui);
             })
     });
     export_host::open(app, Export::Dxf, selection, dialog);

@@ -11,6 +11,7 @@ use craft::keymap::CommandRef;
 use craft::ui::buttons::IconButton;
 use craft::ui::choice::Segmented;
 use craft::ui::contract::{Bind, Entry, FieldLabelRole, Props as _, Show as _, ShowContainer as _, SideLabel, TooltipSpec};
+use craft::ui::display::Divider;
 use craft::ui::form::Field;
 use craft::ui::menu::PanelRow;
 use craft::ui::pickers::Select;
@@ -386,9 +387,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let (Some(new), Some(field)) = (output.events.landed(), output.field) {
         apply_style(app, &style, new.clone(), field);
     }
-    ui.separator();
+    Divider::horizontal().show(ui);
     arrow_rows(app, ui, st.as_ref());
-    ui.separator();
+    Divider::horizontal().show(ui);
     Field::new(tl!("Profile")).show(ui, |ui, _| {
         ui.horizontal(|ui| {
             profile_select(app, ui);

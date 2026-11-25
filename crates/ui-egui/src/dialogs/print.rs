@@ -33,7 +33,7 @@ use craft::ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
 use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use craft::ui::shell::WindowDialogs;
-use craft::ui::text::{LinkMode, LinkedFields, NumberField};
+use craft::ui::text::{LinkMode, LinkedFields, NumberField, SelectableText};
 use serde_json::{Map, Value, json};
 use vectorcraft_color::cms::Intent;
 use vectorcraft_engine::cmd::printpresets::DEFAULT_PRESET;
@@ -633,9 +633,9 @@ fn scaling_ids(tiles: bool) -> Vec<&'static str> {
     PrintScaling::ALL.iter().filter(|s| s.tiles() == tiles).map(|s| s.id()).collect()
 }
 
-/// A summary line that the pump fills (`key` is a `__` companion of the fields).
-fn shown(key: &'static str) -> Param {
-    Param::custom(key, "", move |ui, fields, _| ui.label(fields.text(key).unwrap_or_default()))
+/// A summary line that the pump fills (`key` is a `__` companion of the fields), selectable and named `label`.
+fn shown(key: &'static str, label: &'static str) -> Param {
+    Param::custom(key, "", move |ui, fields, _| SelectableText::new(label, fields.text(key).unwrap_or_default()).multiline().show(ui))
 }
 
 /// The sections of the dialog, with the rows of each.
@@ -791,11 +791,11 @@ fn sections(lists: &Lists) -> Vec<PrintSection> {
     ];
     let summary = vec![
         Param::section(tl!("Pages")),
-        shown("__summary.pages"),
+        shown("__summary.pages", tl!("Pages")),
         Param::section(tl!("Options")),
-        shown("__summary.options"),
+        shown("__summary.options", tl!("Options")),
         Param::section(tl!("Warnings")),
-        shown("__summary.warnings"),
+        shown("__summary.warnings", tl!("Warnings")),
     ];
     [general, marks, output, graphics, color, advanced, summary]
         .into_iter()

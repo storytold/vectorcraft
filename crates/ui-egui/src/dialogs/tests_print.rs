@@ -346,6 +346,23 @@ fn the_control_channel_fills_and_confirms_the_dialog() {
     assert_eq!(jobs.borrow().len(), 1);
 }
 
+/// The Summary section's Pages, Options and Warnings are each named in the window's accessibility tree, with their
+/// summary text as the value.
+#[test]
+fn the_summary_names_its_pages_options_and_warnings() {
+    let (mut app, _) = app();
+    app.run("file.print", json!({})).unwrap();
+    pump(&mut app);
+    set(&mut app, "section", json!("Summary"));
+    pump(&mut app);
+    let ctx = ctx(&app);
+    let out = crate::testing::app_frame(&mut app, &ctx, Default::default());
+    let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+    for name in ["Pages", "Options", "Warnings"] {
+        assert!(nodes.iter().any(|(_, n)| n.label() == Some(name) && n.value().is_some_and(|v| !v.is_empty())), "{name} has no summary");
+    }
+}
+
 /// Scale W and H of the open dialog, and its link.
 fn scale(app: &VectorcraftApp) -> (f64, f64, bool) {
     let f = fields(app);
