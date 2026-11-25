@@ -8,7 +8,7 @@ use craft::ui::display::{Divider, Elide, Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::menu::Menu;
-use craft::ui::pickers::Select;
+use craft::ui::pickers::{Select, SelectLook};
 use craft::ui::style::TypeRole;
 use craft::ui::text::ZoomField;
 
@@ -73,7 +73,7 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         Field::new(tl!("Rotation")).side(SideLabel::new().kind(LabelKind::Hidden)).show(ui, |ui, _| {
             // Entries are keyed by index: an angle is not a hashable value.
-            rotate_to = Select::new(tl!("Rotation"), Bind::given(turned), &angles).show(ui).value().copied();
+            rotate_to = Select::new(tl!("Rotation"), Bind::given(turned), &angles).look(SelectLook::Filled).show(ui).value().copied();
         });
         Divider::vertical().show(ui);
         for (icon, to, tip, enabled) in
@@ -84,7 +84,9 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
         Field::new(tl!("Artboard")).side(SideLabel::new().kind(LabelKind::Hidden)).show(ui, |ui, _| {
-            if let Some(i) = Select::new(tl!("Artboard"), Bind::given(cur), &boards).enabled(nab > 0).show(ui).value().copied() {
+            if let Some(i) =
+                Select::new(tl!("Artboard"), Bind::given(cur), &boards).look(SelectLook::Filled).enabled(nab > 0).show(ui).value().copied()
+            {
                 go = Some(json!(i));
             }
         });

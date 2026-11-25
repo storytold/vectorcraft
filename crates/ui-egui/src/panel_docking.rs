@@ -22,8 +22,8 @@ use craft::behavior::{Axis, DockSide, IconId};
 use craft::ui::buttons::IconButton;
 use craft::ui::contract::{Bind, BodyCx, PlainData, Show as _, Tracked};
 use craft::ui::docking::{
-    DockCommands, DockConfig, DockEvent, DockGrid, DockPanels, DockScene, DockSizes, DockTo, DragUnit, FloatSpace, GroupAt, HidePanels, PanelKey,
-    PanelSpec, PanelSpecs, actions as command_actions, move_actions, request_actions,
+    ColumnCards, DockCommands, DockConfig, DockEvent, DockGrid, DockPanels, DockScene, DockSizes, DockTo, DragUnit, FloatSpace, GroupAt, HidePanels,
+    PanelKey, PanelSpec, PanelSpecs, actions as command_actions, move_actions, request_actions,
 };
 use craft::ui::menu::PanelRow;
 use craft::ui::patterns::dock::DockArea;
@@ -1320,9 +1320,10 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, keeps_tools: boo
             DockConfig::default()
                 .panel_menu_always(true)
                 .panel_menu_icon(IconId::new("menu"))
-                .column_cards(true)
-                .tab_look(PanelTabLook::Pill)
-                .floating_rounded_body(true),
+                .floating_rounded_body(true)
+                .tab_look(PanelTabLook::Block)
+                .column_cards(ColumnCards::Stepped)
+                .flush_docks(true),
         )
         .hide(hide)
         .flyout(Bind::bound(&mut flyout));

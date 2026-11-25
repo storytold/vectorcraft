@@ -830,8 +830,7 @@ pub(super) fn transform_items() -> Vec<Node> {
     ]
 }
 
-/// Window → Arrange's Tile layouts, one `window.arrange.tile` `layout` each (also under the
-/// application bar's Arrange Documents button).
+/// Window → Arrange's Tile layouts, one `window.arrange.tile` `layout` each.
 fn tile_items() -> Vec<Node> {
     vec![
         c("Tile", "window.arrange.tile"),
@@ -842,13 +841,6 @@ fn tile_items() -> Vec<Node> {
         cp("4-Up Layout", "window.arrange.tile", json!({"layout": "4up"})),
         cp("6-Up Layout", "window.arrange.tile", json!({"layout": "6up"})),
     ]
-}
-
-/// The application bar's Arrange Documents menu: Consolidate All Windows, then the Tile layouts.
-pub(crate) fn arrange_documents_items() -> Vec<Node> {
-    let mut items = vec![c("Consolidate All Windows", "window.arrange.consolidateAllWindows"), Sep];
-    items.extend(tile_items());
-    items
 }
 
 /// Object → Arrange (also in the canvas context menu).
