@@ -208,6 +208,7 @@
 	Anti-alias Rasters	Suavizar imágenes ráster
 	Anti-aliased Artwork	Ilustración suavizada
 	Anti-aliasing Method	Método de suavizado
+@id	language.name	Español
 antiAlias	Sharp	Nítido
 	Crisp	Definido
 	Strong	Fuerte
@@ -5091,7 +5092,6 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` para el cuadro de diálogo de archivo de un script debe ser uno de: once, always, deny, stop
 @msg	choose a file or folder first, or deny	elija primero un archivo o una carpeta, o deniegue
 @msg	the script file permissions could not be saved: {e}	no se pudieron guardar los permisos de archivos de los scripts: {e}
-@msg	the script file permissions could not be read: {e}	no se pudieron leer los permisos de archivos de los scripts: {e}
 @msg	this script's file access can be allowed only once	el acceso a archivos de este script solo se puede permitir una vez
 @msg	Only the person at the keyboard can allow a script's file access	Solo la persona que está en el teclado puede permitir el acceso a archivos de un script
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Un script recibe como máximo 2.048 archivos: los archivos elegidos después de ellos se omitieron
@@ -6833,6 +6833,7 @@ mark-style	Japanese	Japonesas
 @msg	a 3D effect on a group's fill or stroke draws nothing	un efecto 3D en el relleno o el trazo de un grupo no dibuja nada
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un efecto 3D en el relleno o el trazo de un grupo no dibuja nada que exportar
 @msg	The 3D object is too complex to export	El objeto 3D es demasiado complejo para exportarlo
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	La malla del objeto 3D está incompleta o contiene un valor que no es un número
 @msg	give one <filter> element	indique un elemento <filter>
 @msg	the <filter> element needs an id, the filter's name	el elemento <filter> necesita un id, el nombre del filtro
 @msg	an SVG filter's id is at most {MAX_NAME} characters	el id de un filtro SVG tiene como máximo {MAX_NAME} caracteres
@@ -7298,11 +7299,17 @@ axis	Y Axis	Eje Y
 @msg	module is {_1} bytes (limit {_2})	el módulo ocupa {_1} bytes (límite {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	requiere aprobación: pide {0}, que el usuario concede al instalarlo por separado
 @msg	not JSON: {e}	no es JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	no es un binario WebAssembly (falta el encabezado \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	no es un binario WebAssembly (falta el encabezado \\0asm)
 @msg	parameter `{k}`: {what}	parámetro `{k}`: {what}
 @msg	parameter `{name}`: {what}	parámetro `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	los parámetros del plugin deben ser un objeto JSON
 @msg	the module must export its linear memory as `memory`	el módulo debe exportar su memoria lineal como `memory`
+@msg	the module must export `{name}` with the type {signature}	el módulo debe exportar `{name}` con el tipo {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	el módulo tiene más de una sección personalizada `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	presupuesto de memoria (la memoria inicial del módulo es de {initial} bytes, límite {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	el manifiesto de la sección personalizada `{MANIFEST_SECTION}` debe dar `abi` como {ABI_VERSION}, la versión de la ABI que implementa este host
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	presupuesto de tablas (el módulo define {count} tablas, la mayor con {largest} elementos; límite {MAX_TABLES} tablas de {MAX_TABLE_ELEMENTS} elementos)
+@msg	the module's table section could not be read	no se pudo leer la sección de tablas del módulo
 @msg	the objects to change are no longer in the document	los objetos que se iban a cambiar ya no están en el documento
 @msg	the runtime panicked	el entorno de ejecución falló
 @msg	unexpected host trap	error inesperado (trap) del host
@@ -7373,6 +7380,8 @@ axis	Y Axis	Eje Y
 @msg	`plates` requires a stop linked to a spot swatch	`plates` requiere una parada vinculada a una muestra de tinta plana
 @msg	the output	la salida
 @msg	the path has no anchor points	el trazado no tiene puntos de ancla
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	el trazado compuesto {id} tiene un miembro oculto, bloqueado o guía, por lo que sus miembros no se pueden reemplazar
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	el trazado compuesto {id} tiene un miembro que no es un trazado, por lo que sus miembros no se pueden reemplazar
 @msg	too many anchor points (limit {MAX_ANCHORS})	demasiados puntos de ancla (límite {MAX_ANCHORS})
 @msg	true or false	true o false
 @msg	a number >= {_1}	un número >= {_1}
@@ -9317,6 +9326,8 @@ breakText	Glyphs	Glifos
 @msg	`dataBase64` is larger than the module limit	`dataBase64` supera el límite de módulos
 @msg	`dataBase64` is not valid base64	`dataBase64` no es base64 válido
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` no se puede combinar con `ids`, `reverse` ni `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` no se puede combinar con `ids`, `id` ni `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` no se puede combinar con `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` y `childLimit` recortan el resumen: pasa `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` es el nombre de un diseño, o null para columnas simples
 @msg	`design` is a design name, or null for the default marker	`design` es el nombre de un diseño, o null para el marcador predeterminado

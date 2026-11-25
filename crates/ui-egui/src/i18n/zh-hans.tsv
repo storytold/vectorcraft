@@ -156,6 +156,7 @@
 	Anti-alias Rasters	栅格消除锯齿
 	Anti-aliased Artwork	图稿抗锯齿
 	Anti-aliasing Method	消除锯齿方法
+@id	language.name	简体中文
 antiAlias	Sharp	锐利
 	Crisp	清晰
 	Strong	强
@@ -5609,7 +5610,6 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	脚本文件对话框的 `answer` 必须是以下之一：once、always、deny、stop
 @msg	choose a file or folder first, or deny	请先选择文件或文件夹，或拒绝
 @msg	the script file permissions could not be saved: {e}	无法保存脚本的文件权限：{e}
-@msg	the script file permissions could not be read: {e}	无法读取脚本的文件权限：{e}
 @msg	this script's file access can be allowed only once	此脚本的文件访问只能允许一次
 @msg	Only the person at the keyboard can allow a script's file access	只有键盘前的人才能允许脚本访问文件
 @msg	A script is given at most 2,048 files: the files picked after them were left out	脚本最多获得 2,048 个文件：之后选择的文件已被略去
@@ -6724,6 +6724,7 @@ lighting	Light	光源
 @msg	a 3D effect on a group's fill or stroke draws nothing	编组填色或描边上的 3D 效果不绘制任何内容
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	编组填色或描边上的 3D 效果没有可导出的内容
 @msg	The 3D object is too complex to export	3D 对象过于复杂，无法导出
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D 对象的网格不完整，或含有非数字的值
 @msg	the <filter> element needs an id, the filter's name	<filter> 元素需要 id，即滤镜的名称
 @msg	an SVG filter's id is at most {MAX_NAME} characters	SVG 滤镜的 id 最多 {MAX_NAME} 个字符
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> 不是 SVG 滤镜的元素
@@ -7155,11 +7156,17 @@ axis	Y Axis	Y 轴
 @msg	module is {_1} bytes (limit {_2})	模块为 {_1} 字节（上限 {_2}）
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	需要批准：它请求 {0}，用户单独安装它时授予这些权限
 @msg	not JSON: {e}	不是 JSON：{e}
-@msg	not a WebAssembly binary (missing \0asm header)	不是 WebAssembly 二进制文件（缺少 \0asm 头）
+@msg	not a WebAssembly binary (missing \\0asm header)	不是 WebAssembly 二进制文件（缺少 \\0asm 头）
 @msg	parameter `{k}`: {what}	参数 `{k}`：{what}
 @msg	parameter `{name}`: {what}	参数 `{name}`：{what}
 @msg	plug-in parameters must be a JSON object	增效工具参数必须是 JSON 对象
 @msg	the module must export its linear memory as `memory`	模块必须将其线性内存导出为 `memory`
+@msg	the module must export `{name}` with the type {signature}	模块必须以类型 {signature} 导出 `{name}`
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	模块有多个 `{MANIFEST_SECTION}` 自定义段
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	内存预算（模块的初始内存为 {initial} 字节，上限 {max_memory_bytes}）
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	`{MANIFEST_SECTION}` 自定义段中的清单必须将 `abi` 设为 {ABI_VERSION}，即此宿主实现的 ABI 版本
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	表预算（模块定义了 {count} 个表，最大的有 {largest} 个元素；上限为 {MAX_TABLES} 个表，每个 {MAX_TABLE_ELEMENTS} 个元素）
+@msg	the module's table section could not be read	无法读取模块的表段
 @msg	the objects to change are no longer in the document	要更改的对象已不在文档中
 @msg	the runtime panicked	运行时崩溃
 @msg	unexpected host trap	宿主发生意外的 trap
@@ -7229,6 +7236,8 @@ axis	Y Axis	Y 轴
 @msg	`plates` requires a stop linked to a spot swatch	`plates` 需要链接到专色色板的渐变色标
 @msg	the output	输出
 @msg	the path has no anchor points	路径没有锚点
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	复合路径 {id} 有隐藏、锁定或参考线成员，因此无法替换其成员
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	复合路径 {id} 有不是路径的成员，因此无法替换其成员
 @msg	too many anchor points (limit {MAX_ANCHORS})	锚点过多（上限 {MAX_ANCHORS}）
 @msg	true or false	true 或 false
 @msg	a number >= {_1}	大于或等于 {_1} 的数字
@@ -8671,7 +8680,7 @@ breakText	Glyphs	字形
 @msg	The {name} profile could not be read, so the new document has the default settings: {reason}	无法读取配置文件 {name}，因此新文档使用默认设置：{reason}
 @msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	陷印：距离近到需要陷印的对象超过 {_1} 对，或处于同一水平范围的对象过多；请减少每次陷印的对象
 @msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	除废框和除废线：图稿外侧放不下任何除废线，且除废框已关闭
-@msg	\ at end of pattern	模式以 \ 结尾
+@msg	\\ at end of pattern	模式以 \\ 结尾
 @msg	`alignOn` cannot be empty	`alignOn` 不能为空
 @msg	`alignOn` must be a string	`alignOn` 必须是字符串
 @msg	`align` must be a string	`align` 必须是字符串
@@ -8781,7 +8790,7 @@ breakText	Glyphs	字形
 @msg	`{u}` is no Unicode character	`{u}` 不是 Unicode 字符
 @msg	`{word}` isn't in the custom dictionary	`{word}` 不在自定义词典中
 @msg	a CMap has too many mappings	某个 CMap 的映射过多
-@msg	a \u escape needs four hexadecimal digits	\u 转义需要四位十六进制数字
+@msg	a \\u escape needs four hexadecimal digits	\\u 转义需要四位十六进制数字
 @msg	a comma in an XPath expression must separate function arguments	XPath 表达式中的逗号只能用来分隔函数参数
 @msg	a document holds at most {_1} SVG filters	一个文档最多包含 {_1} 个 SVG 滤镜
 @msg	a document with unsaved changes has no recovery copy	有未保存更改的文档没有恢复副本
@@ -9146,6 +9155,8 @@ breakText	Glyphs	字形
 @msg	`dataBase64` is larger than the module limit	`dataBase64` 超过了模块大小上限
 @msg	`dataBase64` is not valid base64	`dataBase64` 不是有效的 base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` 不能与 `ids`、`reverse` 或 `append` 同时使用
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` 不能与 `ids`、`id` 或 `item` 同时使用
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` 不能与 `brush` 同时使用
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` 和 `childLimit` 用于截取摘要：请传入 `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` 是设计名称，或用 null 表示普通柱形
 @msg	`design` is a design name, or null for the default marker	`design` 是设计名称，或用 null 表示默认标记
@@ -9934,7 +9945,7 @@ breakText	Glyphs	字形
 @msg	not a print presets file: {e}	不是打印预设文件：{e}
 @msg	not a stored or deflated central record	不是以存储或 deflate 方式保存的中央记录
 @msg	not a valid SVGZ file: {e}	不是有效的 SVGZ 文件：{e}
-@msg	not an RTF file: it doesn't start with {\rtf	不是 RTF 文件：它不是以 {\rtf 开头
+@msg	not an RTF file: it doesn't start with {\\rtf	不是 RTF 文件：它不是以 {\\rtf 开头
 @msg	not an image VectorCraft reads (see document.formats)	不是 VectorCraft 可读取的图像 (参见 document.formats)
 @msg	not area type (text in a frame) outside perspective	不是透视之外的区域文字 (文本框中的文本)
 @msg	not editing an opacity mask	当前没有在编辑不透明度蒙版

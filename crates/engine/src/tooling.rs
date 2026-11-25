@@ -1,12 +1,12 @@
 //! Hosting the active tool: pointer/key events → actions → commands.
 
 use serde_json::{Map, Value};
-use vectorcraft_doc::Selection;
+use vectorcraft_doc::{NodeId, Selection};
 use vectorcraft_geom::Point;
 use vectorcraft_tools::distort::perspective::widget::WidgetPlace;
 use vectorcraft_tools::draw2::FEEDBACK;
 use vectorcraft_tools::shape::MAX_CORNER_RADIUS;
-use vectorcraft_tools::{Action, Cursor, ImeSurrounding, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, settings};
+use vectorcraft_tools::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, settings};
 
 use crate::{EngineError, Prefs, Result, Session};
 
@@ -42,6 +42,9 @@ pub struct ViewInfo {
     pub screen: Option<vectorcraft_tools::ScreenFrame>,
     /// The view's active artboard (an index): artboard rulers measure from it.
     pub artboard: usize,
+    /// Precise cursors in this call: the canvas's `CanvasSpace::precise`, the preference toggled by
+    /// Caps Lock. The one source for the tools' crosshair and for hiding the brush tip.
+    pub precise: bool,
 }
 
 impl Default for ViewInfo {
@@ -61,6 +64,7 @@ impl Default for ViewInfo {
             shape_widgets: true,
             screen: None,
             artboard: 0,
+            precise: false,
         }
     }
 }
@@ -319,6 +323,7 @@ impl Session {
     /// Pen goes on drawing its path), less the work the gesture ended as a command would: a
     /// Cmd+click that takes the type being edited out of the selection ends its edit (#3779).
     pub(crate) fn give_back_tool(&mut self, view: ViewInfo) -> Result<()> {
+        let lent_by_bucket = self.lent_by_bucket();
         let Some(lender) = self.lender.take() else { return Ok(()) };
         // The points the lent tool left picked go back to the tool it was lent to when that tool
         // picks mesh points, none when it unpicked them all (#8090). Group Selection and the
@@ -328,7 +333,12 @@ impl Session {
             .then(|| self.tool.options().get("meshPoints").cloned())
             .flatten()
             .filter(|p| lender.options().get("meshPoints") != Some(p));
+        // The lent tool's last actions (a drag it cancels or keeps) still count as the Live Paint
+        // Bucket's when the bucket lent it ([`Session::bucket_paints`]).
+        let outer_bucket = self.back_to_bucket;
+        self.back_to_bucket |= lent_by_bucket;
         let r = self.deactivate_tool(view);
+        self.back_to_bucket = outer_bucket;
         self.keep_tool_settings();
         self.tool = lender;
         if let Some(points) = mesh_points {
@@ -495,7 +505,7 @@ impl Session {
             screen: view.screen,
             plane_widget: self.prefs.perspective_widget.show.then_some(self.prefs.perspective_widget.position),
             plane_targets: self.prefs.perspective_widget.targets(),
-            precise_cursors: self.precise_cursors(),
+            precise_cursors: view.precise,
             global_edit: st.global_edit.as_ref().map_or(&[], |g| g.members.as_slice()),
             interaction_doc: st.interaction.as_ref().map(|it| &*it.doc),
         };
@@ -511,6 +521,13 @@ impl Session {
                 R::default()
             }
         }
+    }
+
+    /// Runs `f` with the context the tools read for the active document seen through `view`, for code
+    /// outside the engine that draws on the tools' geometry (the canvas's selection widgets).
+    /// `R::default()` with no document open.
+    pub fn with_tool_context<R: Default>(&mut self, view: ViewInfo, f: impl FnOnce(&ToolContext) -> R) -> R {
+        self.with_tool_cx(view, |_, cx| f(cx))
     }
 
     /// The error of a tool that panicked in the last [`Self::with_tool_cx`] call, if any.
@@ -1088,30 +1105,6 @@ impl Session {
         r
     }
 
-    /// Would [`Session::tool_text`] insert `text` unchanged (no control-character filtering,
-    /// newline normalization or document formatting such as Typographer's Quotes)? An IME commit
-    /// the application rewrites is an application edit, not an accepted IME insertion.
-    pub fn tool_text_is_verbatim(&mut self, text: &str, view: ViewInfo) -> bool {
-        self.with_tool_cx(view, |t, cx| t.text_input_is_verbatim(cx, text))
-    }
-
-    /// [`Session::tool_text_is_verbatim`] for text typed on the keyboard, as
-    /// [`Session::tool_typed_text`] would insert it: a lone typed `”` that Typographer's Quotes
-    /// turns into an opening quote is not verbatim.
-    pub fn tool_typed_text_is_verbatim(&mut self, text: &str, view: ViewInfo) -> bool {
-        self.keyboard_text = true;
-        let v = self.tool_text_is_verbatim(text, view);
-        self.keyboard_text = false;
-        v
-    }
-
-    /// Does the active tool's open typing session still match the document? An IME commit after
-    /// an external edit starts a fresh session (an application-side reset), so its receipt must
-    /// not be accepted as an unchanged IME insertion.
-    pub fn tool_ime_session_matches(&mut self, view: ViewInfo) -> bool {
-        self.with_tool_cx(view, |t, cx| t.ime_session_matches_document(cx))
-    }
-
     /// Whether the active tool currently owns keyboard text input, as the Type tool does while editing.
     pub fn tool_wants_text(&self) -> bool {
         self.tool.wants_text()
@@ -1146,14 +1139,6 @@ impl Session {
     /// afresh. Ordinary edits and caret moves leave both unchanged.
     pub fn tool_ime_target(&mut self, view: ViewInfo) -> Option<(u64, u64, u64)> {
         self.with_tool_cx(view, |t, cx| t.ime_target(cx))
-    }
-
-    /// The committed logical text around the IME cursor (UTF-8 byte offsets), with any pre-edit
-    /// removed and at most `max_bytes` bytes copied: the app's outgoing surrounding-text producer
-    /// (egui E21b) reads it. An explicit [`ImeSurrounding::Unavailable`] carries the narrow reason
-    /// (no editor, invalid offsets, or a selection wider than the limit).
-    pub fn tool_ime_surrounding(&mut self, max_bytes: usize, view: ViewInfo) -> ImeSurrounding {
-        self.with_tool_cx(view, |t, cx| t.ime_surrounding(cx, max_bytes))
     }
 
     /// Is the active tool showing uncommitted IME text?
@@ -1316,13 +1301,12 @@ impl Session {
         v
     }
 
-    /// The pointer the active tool shows at `p` (General › Use Precise Cursors, or Caps Lock while
-    /// it is on, makes the drawing tools' a crosshair, [`Cursor::precise`]). With Cmd held, the pointer of the selection tool a
+    /// The pointer the active tool shows at `p`. With Cmd held, the pointer of the selection tool a
     /// press would borrow ([`Self::lend_selection_tool`]).
     pub fn cursor(&mut self, p: Point, mods: Mods, view: ViewInfo) -> Cursor {
         // While an edit is computed, a Cmd press is held for the active tool, which shows it is busy.
         let lent = if mods.cmd && self.lender.is_none() && !self.tool_editing() { self.lent_tool(self.tool.id(), &mods) } else { None };
-        let c = match lent {
+        match lent {
             Some(id) => {
                 let lent = self.make_tool(id);
                 let own = std::mem::replace(&mut self.tool, lent);
@@ -1331,13 +1315,7 @@ impl Session {
                 c
             }
             None => self.with_tool_cx(view, |t, cx| t.cursor(cx, p, mods)),
-        };
-        if self.precise_cursors() { c.precise() } else { c }
-    }
-
-    /// General › Use Precise Cursors is on, or Caps Lock is.
-    fn precise_cursors(&self) -> bool {
-        self.prefs.use_precise_cursors || self.caps_lock
+        }
     }
 
     pub fn tool_options(&self) -> Value {
@@ -1755,7 +1733,7 @@ impl Session {
             (st.doc.clone(), st.selection.clone(), st.revision, self.pending_paint.clone(), interaction_fields)
         };
         let (overlays, transform_box) = if self.preview(cmd, p).is_ok() {
-            let overlays = self.active().map(|st| outlines_for_selection(&st.doc, &st.selection)).unwrap_or_default();
+            let overlays = self.active().map(|st| outlines_for_selection(&st.doc, &st.selection, cmd, p)).unwrap_or_default();
             let (objects, color) = self
                 .active()
                 .map(|st| (st.selection.objects.clone(), st.selection.objects.first().map(|id| st.doc.layer_color(*id))))
@@ -1796,11 +1774,17 @@ const FEEDBACK_MAX_POINTS: usize = 100_000;
 
 /// The outlines of every selected object, a group's members each with their own, or the selection's
 /// bounds when the outlines' points and the objects evaluated to make them come to more than
-/// [`FEEDBACK_MAX_POINTS`].
-fn outlines_for_selection(doc: &vectorcraft_doc::Document, selection: &Selection) -> Vec<Overlay> {
-    let nodes = selection.objects.iter().filter_map(|&id| doc.node(id));
-    let outlines = vectorcraft_render::drawn_outlines(doc, nodes, FEEDBACK_MAX_POINTS).unwrap_or_else(|| {
-        doc.bounds_of(&selection.objects, true).map(|b| vectorcraft_geom::shapes::rectangle(b).to_bezpath()).into_iter().collect()
-    });
+/// [`FEEDBACK_MAX_POINTS`]. A `dimension.update` preview (`cmd`, `p`) that names its dimensions,
+/// as the Dimension tool sends for a dimension it drags, outlines those dimensions instead.
+fn outlines_for_selection(doc: &vectorcraft_doc::Document, selection: &Selection, cmd: &str, p: &Value) -> Vec<Overlay> {
+    let named: Vec<NodeId> = if cmd == "dimension.update" {
+        p.get("ids").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64).map(NodeId).collect()
+    } else {
+        vec![]
+    };
+    let objects = if named.is_empty() { &selection.objects } else { &named };
+    let nodes = objects.iter().filter_map(|&id| doc.node(id));
+    let outlines = vectorcraft_render::drawn_outlines(doc, nodes, FEEDBACK_MAX_POINTS)
+        .unwrap_or_else(|| doc.bounds_of(objects, true).map(|b| vectorcraft_geom::shapes::rectangle(b).to_bezpath()).into_iter().collect());
     outlines.into_iter().map(|path| Overlay::Path { path, color: FEEDBACK, width: 1.0, dashed: false }).collect()
 }
