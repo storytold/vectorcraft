@@ -322,6 +322,12 @@ impl Panel {
         self.fixture.tree().value_of(self.look(name).node).map(str::to_owned)
     }
 
+    /// The value text of the control of `role` named `name`, where nodes of other roles share the name (a slider
+    /// beside its number box).
+    pub(crate) fn value_role(&self, name: &str, role: craft::ui::contract::Role) -> Option<String> {
+        self.fixture.tree().value_of(self.look_role(name, role).node).map(str::to_owned)
+    }
+
     /// The description of the control named `name` (a list row's trailing texts).
     pub(crate) fn description(&self, name: &str) -> Option<String> {
         self.fixture.tree().description_of(self.look(name).node).map(str::to_owned)

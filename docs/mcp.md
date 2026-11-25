@@ -301,9 +301,9 @@ the suite) keep the agent to the folders you give it:
   outside the read roots, also those the person or an earlier request put there. In `plugin.list`, the plug-in
   folder last loaded is `null` in `folder.folder`, and a failed file in `folder.failed` and a plug-in's `source`
   (also in `plugin.info`) are named by their file name, in the errors too. A plug-in turned off for the next
-  launch (`disabled`, and `pendingItem` in `plugin.safeMode`) has a file outside the read roots named by its file
-  name. `plugin.setEnabled {file}` takes that name, and a plug-in's `source` name, when no other listed file has
-  it. In `file.recovery.list` and `file.recovery.restore`, a
+  launch (`disabled`, and `pendingItem` and `pendingItems` in `plugin.safeMode`) has a file outside the read roots
+  named by its file name. `plugin.setEnabled {file}` takes that name, and a plug-in's `source` name, when no other
+  listed file has it. In `file.recovery.list` and `file.recovery.restore`, a
   document's original file in `path` is `null`, and so is the recovery folder in `location` (`file.recovery.save`
   too); the restored documents keep their files. In `scriptReport`, a file the run wrote (`written`) and the
   included file a failed run stopped in (`file`, also in `message` and the run's error lines in `console`) are named
@@ -2646,10 +2646,24 @@ not UTF-8. The language is ES5.1, except that identifiers take the characters Un
 `.js` (in any case) also reads these ECMAScript 2015 forms (https://262.ecma-international.org/6.0/): `let` and
 `const` with block scope and their temporal dead zone, a new `let` binding for each `for` loop iteration, function
 declarations scoped to their block, arrow functions, template literals and tagged templates, default and rest
-parameters, and spread in array literals, calls and `new`. Spread reads arrays by index, reading the length again
-before each element, strings and `String` objects by code point, and objects with a `length` property by index, and
-throws a `TypeError` for any other value; that rule is VectorCraft's own
-until iterators are added. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
+parameters, spread in array literals, calls and `new`, `for`-`of` loops, array and object destructuring in `var`,
+`let` and `const` declarations, assignments, parameters and `catch` clauses (with defaults, holes and rest elements),
+and shorthand and computed property names in object literals (https://262.ecma-international.org/11.0/). Spread,
+`for`-`of` and array patterns use the iterator protocol. A loop or pattern left early, by `break`, `return`, a
+`continue` to an outer loop or an exception, calls the iterator's `return` method when it has one. An iterator is not
+closed when its `next()` throws or gives a result that is not an object, when reading the result's `done` or `value`
+throws, or when the result says it is done. Destructuring `undefined` or `null` throws a `TypeError`. Object rest properties
+(`{ a, ...rest }`, ECMAScript 2018) are syntax errors. In an engine that `#targetengine` keeps and a `.jsx` script
+started, which has no `Symbol`, spread, `for`-`of` and array patterns read arrays, `arguments` objects and strings
+(by code point), by index, and throw a `TypeError` for any other value; that rule is VectorCraft's own. Object
+literals there also take methods (`{m() {}}`, `{[key]() {}}`), and `__proto__: value` sets the new object's
+prototype (https://262.ecma-international.org/6.0/, sections 14.3 and B.3.1). Functions get a `name` property
+(section 9.2.11): a declaration's or expression's own name, or else the name of the binding, parameter, default
+value, assignment target or property they are first given to, with `get ` or `set ` before an accessor's and a
+Symbol key's description in brackets; `bound ` before the target's name for `bind`; `anonymous` for `Function`; and
+an own empty `name` otherwise, as the 12th edition gives it (https://262.ecma-international.org/12.0/, section
+20.2.4.2). A function's `length` can be redefined. The built-in functions get their names the first time a run reads
+ECMAScript 2015, and keep them in later `.jsx` runs of an engine that `#targetengine` keeps. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
 an engine that `#targetengine` keeps reads each run the way that run's script does. A
 `.jsx` file and a `source` string read ES5.1 only, and the ECMAScript 2015 forms are syntax errors there. A `.js` file
 also reads two ECMAScript 2020 forms (https://262.ecma-international.org/11.0/): optional chains (`a?.b`, `a?.[key]`,
@@ -2683,6 +2697,16 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   open a dialog, described below. `vc.api.has("dialogs")` is true.
 - `vc.args` gives a read-only copy of the `args` object each time it is read.
 - `vc.api.version` is `"1.0"`, and `vc.api.has(feature)` says whether the API has a feature.
+
+The first run in an engine decides whether the engine has `Symbol` and the iterators of arrays, strings and
+`arguments` objects, and each run's script decides which syntax that run reads. The built-in functions' names follow
+the rule above. A `.jsx` script or a `source` string that starts a new engine has no `Symbol` and no iterators of arrays,
+strings and `arguments` objects: `typeof Symbol` is `"undefined"`, and `Array.prototype.values`, `keys` and `entries`
+are not defined. A `.js` script that starts a new engine has them, through the JavaScript engine's ECMAScript 2015 mode
+(`Options::es2015` in `vectorcraft-js`), as `docs/target-app-parity.md` describes. An engine that `#targetengine` keeps
+has them only when a `.js` script started it, and then a later `.jsx` run in it has them too while it reads ES5.1 only.
+In such a `.jsx` run, `Object.prototype.toString` gives the ES5.1 result, `[object Object]` or another class name,
+and does not read `Symbol.toStringTag`.
 
 Before any of the script runs, its preprocessor lines are read. The help page
 https://extendscript.docsforadobe.dev/extendscript-tools-features/preprocessor-directives/ describes these lines, and
@@ -8910,8 +8934,8 @@ turn it off to keep each point's other side), and Total Width scales each point'
 one `stroke.widthProfile.set` (one undo step, none when nothing changed), and Delete removes them all; with a
 discontinuous point among them, Incoming and Outgoing edit its two halves and both edit the continuous points.
 Malformed or out-of-range `indices`, or more than one of `index`, `indices` and `t`, are errors that open no dialog. OK
-and Delete on existing points are refused when those points changed since the dialog opened or another document is
-active.
+and Delete on existing points are refused when those points changed since the dialog opened (their place, their widths,
+or which of them pair as a discontinuous point) or another document is active.
 `document.inspect` reports a path's `strokeOptions.widthPoints` (`[t, left, right]`, factors of half the weight; null
 for a uniform stroke). `stroke.widthPoint.remove {id, index | indices}` deletes points; `stroke.widthProfile.set {ids,
 points}` replaces them all, as dragging several Shift-selected points with the Width tool does in one undo step.
@@ -12834,7 +12858,10 @@ a font without vertical metrics keeps its cells. Line-end Punctuation Half Width
 punctuation `palt` or `vpal` re-spaced (the opening bracket at a line's start, consecutive punctuation, the closing
 mark at a line's end); punctuation left full width is trimmed as before. With automatic kerning the font's kerning
 for the re-spaced glyphs comes too: `apkn` with `palt`, and `vkrn` and `vapk` with `vpal` (vertical type is otherwise
-not kerned). Off by default and saved only when on. One undo step.
+not kerned). Off by default and saved only when on. One undo step. With Show East Asian Options on, the Character
+panel menu and the OpenType panel menu ([the help page](https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html))
+each have a Proportional Metrics item that sends this attribute; the OpenType panel's item is checked when every
+character it changes has it.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"proportionalMetrics":true}}}
@@ -13530,7 +13557,16 @@ fit makes `plugin.run` return a memory-budget error naming the object and its si
 memory-budget error `the selection is too large to hand over`, and more than 100,000 of these objects make it return
 an object-budget error. Its output returns
 each of them as `{"id": …}` or exactly as given, otherwise `plugin.run` returns an error naming the object and the
-field, and the document and undo history are unchanged. A filter at plug-in API level 2 whose manifest lists the
+field, and the document and undo history are unchanged. A filter, or a live effect with commands, at plug-in API level 3
+whose manifest lists `context` (`settings`, `artboards`, `layers`, `swatches`; `context` in its `plugin.list` entry)
+also lists `doc.read` in its `permissions`, and each filter or command run is given those parts of the active document in
+`_context.document`, with or without a selection: the document's name without its folder, color mode, units, active
+artboard size, bleed and raster effects resolution; every artboard's id, name and rectangle; every layer and sublayer
+with its id, parent, depth, name, visibility, lock, template, color and whether it is current; and every swatch as
+`swatch.list` lists it. It holds no path and no object. More than 10,000 rows, or more than 4 MiB of them, make
+`plugin.run` and the command return an error before the plug-in starts, with nothing changed, and each row takes 1,000
+instructions from the run's budget (VectorCraft's own values; docs/plugins.md, Document information). This is narrower
+than `document.inspect`, which plug-ins can't call. A filter at plug-in API level 2 whose manifest lists the
 `commands` permission and a `commandAllowlist` (both in its `plugin.list` entry) runs the commands that list names
 while it runs, through `vc_call`: the calls and its output are one undo step, and a run that fails or makes a call that
 fails leaves the documents, selections and history as they were. Without `doc.read` every call fails. A command that
@@ -13646,8 +13682,9 @@ commands, `ids` left out or null means the selection, and an `ids` that is not a
 
 Safe Mode starts VectorCraft without plug-ins: `vectorcraft --safe-mode`, `vectorcraft-cli --safe-mode <subcommand>`, or
 the choice the desktop app offers when the last launch stopped while a plug-in was loading (Disable and Continue, Start
-Normally, Start in Safe Mode). It names that plug-in without saying it caused the stop. Until the user picks Disable and
-Continue or Start Normally, the next launch asks again, also after a `--safe-mode` launch, which asks nothing.
+Normally, Start in Safe Mode). It names that plug-in without saying it caused the stop. When several plug-ins were
+loading at once, it lists all of them, and Disable Listed Plug-ins and Continue turns off every one. Until the user picks
+Disable and Continue or Start Normally, the next launch asks again, also after a `--safe-mode` launch, which asks nothing.
 `vectorcraft --safe-mode` opens its files in a window of its own, and on Windows and Linux a file opened from the file
 manager while the app is in Safe Mode starts a window with plug-ins. Files given on the command line, or opened from
 the file manager while the choice is up, open after the user picks. On Windows and Linux, when the choice is Start in Safe
@@ -13661,7 +13698,8 @@ visible plain symbol instance in a group or layer with a raster effect, since th
 hidden instance, or one in a template sublayer, draws nothing in that image, so its symbol's art does not count. `vectorcraft` rejects an option it does not know (such as
 `--safe-mod`) instead of opening it as a file; `--` before a file name that starts with `-` opens it. The web build keeps
 no installed plug-ins from one page load to the next and has no launch marker, so it never offers the choice. `plugin.safeMode` returns `{active, source, disabled,
-pendingItem}`; a command does not turn Safe Mode on or off. `plugin.setEnabled {id | file, enabled}` turns a plug-in on or
+pendingItem, pendingItems}` (`pendingItems` lists every plug-in the choice names, and `pendingItem` is the first);
+a command does not turn Safe Mode on or off. `plugin.setEnabled {id | file, enabled}` turns a plug-in on or
 off for the next launch, as Help › Safe Mode's Enable on Re-launch does; it does not load, unload or uninstall anything
 now, and `plugin.install` of a disabled plug-in turns it on. Turning a plug-in on by `id` or by installing it also turns
 on the file it is stored in, which names it when it stopped a launch while loading; when the new version can't be saved

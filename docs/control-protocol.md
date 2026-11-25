@@ -657,7 +657,8 @@ as it was; `totalWidth` scales each point's own two sides to that total; a null 
 `stroke.widthPoint.remove {id, indices}`. With `adjustAdjoining`, each changed point changes the nearest unselected
 point at another place before and after it in proportion to its change since the dialog opened; a point next to two
 changed points takes both changes. These rules for several points are VectorCraft's own. Confirm and Delete on existing
-points, one or several, are refused when those points changed since the dialog opened or another document is active.
+points, one or several, are refused when those points changed since the dialog opened (their place, their widths, or
+which of them pair as a discontinuous point) or another document is active.
 
 Corners: double-clicking a Live Corners widget with the Selection or Direct Selection tool, or `ui.corners {id?,
 corners?}`, opens the `corners` dialog for a path's corners (the Direct-Selected ones, else every corner; fields `id`,
