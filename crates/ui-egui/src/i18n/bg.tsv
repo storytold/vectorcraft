@@ -194,6 +194,7 @@
 	Anti-alias Rasters	Заглаждане на растери
 	Anti-aliased Artwork	Загладено произведение
 	Anti-aliasing Method	Метод на заглаждане
+@id	language.name	Български
 antiAlias	Sharp	Остро
 	Crisp	Четко
 	Strong	Силно
@@ -895,6 +896,7 @@ font-technology	Variable	Променливи
 	Direct Selection Tool	Инструмент „Директен избор“
 	Direction Handles	Маркери за посока
 	Disable Auto Add/Delete	Изключване на автоматично добавяне/изтриване
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete премахва опорните точки и запазва контурите свързани
 	Interpolate Control Points When Moving Anchors	Интерполиране на маркерите за посока при преместване на опорни точки
 	Disable Opacity Mask	Изключване на маска за непрозрачност
 	Discard	Отхвърляне
@@ -1283,6 +1285,147 @@ font-technology	Variable	Променливи
 	Drop Artwork	Поставяне на графика
 @msg	{key} must be [x, y] with finite coordinates	{key} трябва да е [x, y] с крайни координати
 @msg	ids must contain 1–10000 object ids	ids трябва да съдържа от 1 до 10000 идентификатора на обекти
+@msg	{what} can't be exported in 3D: {e}	{what} не може да се експортира в 3D: {e}
+@msg	asset {id} isn't a 3D asset	ресурсът {id} не е 3D ресурс
+@msg	asset {id} is a 3D asset: assets.export3D writes it	ресурсът {id} е 3D ресурс: записва се с assets.export3D
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	все още няма 3D ресурси: първо съберете обект с 3D ефект (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	изберете обект с 3D ефект (или задайте идентификаторите му)
+@msg	select point type or type on a path	изберете точков текст или текст по пътя
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	текст по пътя в свързана верига не може да използва динамичен текст: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	текст по отворен или съставен път не може да се центрира по горния или долния си край: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	текст по път без дължина или без височина не може да се центрира: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	текст по пътя в свързана верига не може да се центрира по горния или долния си край: {frames}
+@msg	select type on a closed path	изберете текст по затворен път
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` означава променени настройки: запазете предварителната настройка под друго име
+@msg	the selection has no gradient fill	селекцията няма запълване с градиент
+@msg	the selection has no gradient stroke	селекцията няма щрих с градиент
+@msg	the selection has no pattern fill	селекцията няма запълване с мостра
+@msg	the selection has no pattern stroke	селекцията няма щрих с мостра
+@msg	no gradient swatch `{name}`	няма образец на градиент `{name}`
+@msg	no pattern swatch `{name}`	няма образец на мостра `{name}`
+@msg	the library item is damaged	елементът от библиотеката е повреден
+@msg	its zlib compression is damaged	компресията му zlib е повредена
+@msg	its Zstandard compression is damaged	компресията му Zstandard е повредена
+@msg	it decompresses to more than {_1} MB	след декомпресиране заема повече от {_1} MB
+@msg	its editing data is for a different page	данните му за редактиране са за друга страница
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` трябва да е "emBox", "capHeight", "xHeight" или "icfBox"
+@msg	Choose a .js or .jsx script	Изберете скрипт .js или .jsx
+@msg	Ran {name}	Изпълнен е {name}
+@msg	The script was stopped and its changes were undone	Скриптът беше спрян и промените му бяха отменени
+@msg	a script is running: stop it or wait for it to finish	изпълнява се скрипт: спрете го или изчакайте да завърши
+@msg	this is a compiled script, which cannot be run; use its source text	това е компилиран скрипт, който не може да се изпълни; използвайте изходния му текст
+@msg	the script is not UTF-8 text	скриптът не е текст в UTF-8
+@msg	the script is too large to run	скриптът е твърде голям, за да се изпълни
+@msg	a drag or an undo group is open; finish it before running a script	има отворено влачене или група за отмяна; завършете го, преди да изпълните скрипт
+@msg	the script left a document that cannot be kept	скриптът остави документ, който не може да се запази
+@msg	the script is no longer in the Scripts folder	скриптът вече не е в папката Scripts
+@msg	the script's run is no longer available	изпълнението на скрипта вече не е налично
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	неуспешна команда промени стъпки за отмяна, които не можаха да се възстановят, затова скриптът беше спрян
+@msg	a recovery copy could not be written, so the script was not run	не можа да се запише копие за възстановяване, затова скриптът не беше изпълнен
+@msg	Script file access denied	Достъпът до файла на скрипта е отказан
+@msg	Script file exceeds 8 MiB	Файлът на скрипта надхвърля 8 MiB
+@msg	Script file is not open	Файлът на скрипта не е отворен
+@msg	Script file cannot be decoded	Файлът на скрипта не може да се декодира
+@msg	Script file is not a regular file	Файлът на скрипта не е обикновен файл
+@msg	Script file does not exist	Файлът на скрипта не съществува
+@msg	Script file could not be read	Файлът на скрипта не можа да се прочете
+@msg	Script folder has more than 2,048 entries	Папката на скрипта има повече от 2,048 елемента
+@msg	Script file open mode must be r, w, e or a	Режимът на отваряне на файла на скрипта трябва да е r, w, e или a
+@msg	Script file writing is not available	Записването на файлове от скрипт не е налично
+@msg	Script file dialogs are not available	Файловите диалогови прозорци за скриптове не са налични
+@msg	Script files cannot be opened in another application	Файловете на скриптове не могат да се отварят в друго приложение
+@msg	Script file access is unavailable on the web	Достъпът до файлове от скрипт не е наличен в уеб версията
+@msg	Script has 256 files open	Скриптът има 256 отворени файла
+@msg	Script file path exceeds 32,767 characters	Пътят до файла на скрипта надхвърля 32,767 знака
+@msg	Script folder mask takes too many steps to match	Маската за папка на скрипта изисква твърде много стъпки за съвпадение
+@msg	the script opened more file data than one run may open (32 MiB)	скриптът отвори повече файлови данни, отколкото е разрешено за едно изпълнение (32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: приема позиция и режим
+@msg	vc.run: give a command id, as a string	vc.run: задайте идентификатор на команда като низ
+@msg	vc.run: takes a command id and an object of parameters	vc.run: приема идентификатор на команда и обект с параметри
+@msg	vc.run: the parameters must be an object	vc.run: параметрите трябва да са обект
+@msg	vc.run: the result{place} is too large for a script	vc.run: резултатът{place} е твърде голям за скрипт
+@msg	$.evalFile requires a file path	$.evalFile изисква път до файл
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: времето за изчакване трябва да е крайно число милисекунди, 0 или повече
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: приема път до файл и време за изчакване
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: ред {line}, колона {column} от {file}: {e} (хвърлена грешка)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: ред {line}, колона {column}: {e} (хвърлена грешка)
+@msg	{name}: {e} (thrown)	{name}: {e} (хвърлена грешка)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: ред {line}, колона {column} от {file}: {e} (ограничение)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: ред {line}, колона {column}: {e} (ограничение)
+@msg	{name}: {e} (limit)	{name}: {e} (ограничение)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: ред {line}, колона {column} от {file}: {e} (синтаксис)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: ред {line}, колона {column}: {e} (синтаксис)
+@msg	{name}: {e} (syntax)	{name}: {e} (синтаксис)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: ред {line}, колона {column} от {file}: {e} (спрян)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: ред {line}, колона {column}: {e} (спрян)
+@msg	{name}: {e} (stopped)	{name}: {e} (спрян)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: ред {line}, колона {column} от {file}: {e} (вътрешна грешка)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: ред {line}, колона {column}: {e} (вътрешна грешка)
+@msg	{name}: {e} (internal)	{name}: {e} (вътрешна грешка)
+@msg	{e} (these files stay written: {paths})	{e} (тези файлове остават записани: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: задайте име като низ
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: задайте локал, например "en" или "de_DE", или null за този на интерфейса
+@msg	$.localize: give true or false	$.localize: задайте true или false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: може да се зададе само 512, което включва локализацията, или 0
+@msg	$.flags: give a number	$.flags: задайте число
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: скриптовете тук четат и записват само UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: задайте името на кодировка като низ
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: размерът на кеша в паметта не може да се задава
+@msg	$.setenv: give a value, as a string	$.setenv: задайте стойност като низ
+@msg	$.setenv: only {_1} can be set	$.setenv: може да се зададе само {_1}
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: стойността има най-много {MAX_ENV_BYTES} букви, цифри и _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: задайте брой милисекунди от 0 до {MAX_SLEEP_MS}
+@msg	$.sleep: give a number of milliseconds	$.sleep: задайте брой милисекунди
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: изпълнението не може да чака в обратно извикване на вградена функция, в getter, в преобразуване или във файл, изпълнен от $.evalFile; извикайте го от собствения код на скрипта
+@msg	$.bp: scripts here have no debugger	$.bp: скриптовете тук нямат дебъгер
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: скриптовете все още не могат да показват диалогов прозорец
+@msg	{name}: give a message	{name}: задайте съобщение
+@msg	{name}: give the text the field starts with	{name}: задайте началния текст на полето
+@msg	{name}: the message is longer than 16 KiB	{name}: съобщението е по-дълго от 16 KiB
+@msg	{name}: the title is longer than 256 bytes	{name}: заглавието е по-дълго от 256 байта
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: началният текст на полето е по-дълъг от 16 KiB
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: диалогов прозорец не може да се отвори в обратно извикване на вградена функция, в getter, в преобразуване или във файл, изпълнен от $.evalFile; извикайте го от собствения код на скрипта
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: следващият отговор в `answers` е за {_1}, а не за {name}
+@msg	{name}: `answers` has no answer left for this dialog	{name}: в `answers` не е останал отговор за този диалогов прозорец
+@msg	`answers` must be a list of answers	`answers` трябва да е списък с отговори
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` има повече от {MAX_ANSWERS} отговора
+@msg	`answers` is larger than 1 MiB	`answers` е по-голям от 1 MiB
+@msg	must be an object with `kind` and `value`	трябва да е обект с `kind` и `value`
+@msg	must have exactly `kind` and `value`	трябва да има точно `kind` и `value`
+@msg	is an alert's answer, whose `value` must be "ok"	е отговор на предупреждение, чиято стойност `value` трябва да е "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	е отговор на потвърждение, чиято стойност `value` трябва да е true или false
+@msg	is longer than 16 KiB	е по-дълъг от 16 KiB
+@msg	is a prompt's answer, whose `value` must be a string or null	е отговор на подкана, чиято стойност `value` трябва да е низ или null
+@msg	must have `kind` alert, confirm or prompt	трябва да има `kind` alert, confirm или prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` е само за изпълнение без човек, когото да се пита: в приложението човекът отговаря на всеки диалогов прозорец
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` трябва да е цяло число от 1 до {_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` е вложен на повече от 64 нива
+@msg	`args` must be an object	`args` трябва да е обект
+@msg	`args` is larger than 1 MiB	`args` е по-голям от 1 MiB
+@msg	`path` is empty	`path` е празен
+@msg	`installed` takes a `path`, not a `source`	`installed` приема `path`, а не `source`
+@msg	`path` must name a .js or .jsx file	`path` трябва да сочи файл .js или .jsx
+@msg	give exactly one of `path` and `source`	задайте точно едно от `path` и `source`
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	vc.document{place} is too large for a script	vc.document{place} е твърде голям за скрипт
+@msg	vc.log: the log of this run is full	vc.log: дневникът на това изпълнение е пълен
+@msg	this function's script run has ended	изпълнението на скрипта на тази функция е приключило
+@msg	the script made more host calls than one run may make	скриптът направи повече извиквания към приложението, отколкото е разрешено за едно изпълнение
+@msg	the script passed more data to and from commands than one run may pass	скриптът предаде повече данни към и от команди, отколкото е разрешено за едно изпълнение
+@msg	the script added more objects and data to the documents than one run may add	скриптът добави повече обекти и данни в документите, отколкото е разрешено за едно изпълнение
+@msg	{what}: the object is not a File or a Folder	{what}: обектът не е File или Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: броят трябва да е крайно число, 0 или повече
+@msg	File.seek: the position must be a finite number	File.seek: позицията трябва да е крайно число
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: режимът трябва да е 0, 1 или 2
+@msg	script file is compiled: {value}	файлът на скрипта е компилиран: {value}
+@msg	`name` must be the name of a script engine	`name` трябва да е име на скриптов двигател
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	основният скриптов двигател е нов при всяко изпълнение и никога не се запазва, затова не може да бъде премахнат
+@msg	there is no script engine named {name}	няма скриптов двигател с име {name}
+@msg	Running a script	Изпълнява се скрипт
+@msg	Data Recovery can't keep copies in {path}: {e}	Възстановяването на данни не може да пази копия в {path}: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	Приставките не могат да се зареждат от {path}: {e}
+@msg	select a path	изберете път
 
 	File	Файл
 	File Dimensions	Размери на файла
@@ -1998,9 +2141,6 @@ font-technology	Variable	Променливи
 	Last Effect: {name}	Посл. ефект: {name}
 	Last Effect: {}	Посл. ефект: {}
 	Last Effect…	Посл. ефект…
-	Apply Last Filter	Прилагане на последния филтър
-	Last Filter…	Посл. филтър…
-	Apply {filter}	Прилагане на {filter}
 	Last Page	Последна страница
 	Latin	Латиница
 	Thai	Тайландски
@@ -2387,6 +2527,12 @@ font-technology	Variable	Променливи
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	разделителната способност не е налична
+	estimated memory {memory}	приблизителна памет {memory}
+	memory unavailable	паметта не е налична
+	Unknown format	Неизвестен формат
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -2535,6 +2681,7 @@ font-technology	Variable	Променливи
 	One Point Perspective Preset 5	Предварителна настройка 5 за едноточкова перспектива
 	Only Web Colors	Само уеб цветове
 	Opacity	Непрозрачност
+	Show Opacity	Показване на непрозрачността
 	Opacity & Mask Define Knockout Shape	Непрозрачността и маската определят формата на изрязване
 	Opacity Mask	Маска за непрозрачност
 	Opacity Mask Info	Информация за маската за непрозрачност
@@ -2972,6 +3119,9 @@ digits	Malayalam	Малаялам
 	Scale Artwork with Artboard	Мащабиране на графиката заедно с работната област
 	Artboards: {n}	Работни области: {n}
 	Rearrange All Artboards…	Пренареждане на всички работни области…
+	Rearrange…	Пренареждане…
+	Selected Artboards: {n}	Избрани работни области: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Кликнете върху платното, за да поставите работните области (Esc отменя)
 	Recall Selection	Възстановяване на селекцията
 	RECENT	СКОРОШНИ
 	Recent	Скорошни
@@ -3223,6 +3373,7 @@ digits	Malayalam	Малаялам
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест за завъртане с два пръста върху тъчпад завърта изгледа на платното.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Задържането на клавиш изпълнява инструмента или командата от колоната „Задръжте“ в „Клавишни комбинации“; краткото натискане изпълнява обичайната му комбинация.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Колко секунди трябва да се задържи клавиш, преди вместо обичайната му комбинация да се изпълни комбинацията му със задържане.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete премахва избраните опорни точки и напасва кривата около всяка от тях, вместо да отваря контура там.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Когато премествате котвени точки, всяка крива с една преместена крайна точка запазва формата си спрямо краищата си.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Задържането на клавишната комбинация на инструмент го избира, докато я пуснете, а след това отново се избира предишният инструмент.
 	Shows the bounding box while you move the selection or draw a shape.	Показва ограничителната рамка, докато премествате селекцията или рисувате форма.
@@ -3948,6 +4099,8 @@ digits	Malayalam	Малаялам
 	Flattener Preset	Предварителна настройка за сплескване
 	X	X
 	Y	Y
+@msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	слоевете на файла не бяха прочетени ({_1}): той се импортира като своята страница, в един слой
+@msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	слоевете на файла не бяха прочетени от данните му за редактиране ({_1}): те идват от частта му PDF
 	Spot Colors	Спот цветове
 	Spot Colors…	Спот цветове…
 	Spread:	Разпространение:
@@ -4119,6 +4272,48 @@ digits	Malayalam	Малаялам
 	Composite Fonts	Съставни шрифтове
 	Export Composite Fonts	Експортиране на съставни шрифтове
 	Import Composite Fonts	Импортиране на съставни шрифтове
+@msg	each font must be {{name, parts}}	всеки шрифт трябва да е {{name, parts}}
+@msg	unknown key `{k}`; a font takes name and parts	неизвестен ключ `{k}`; шрифтът приема name и parts
+@msg	each font needs a name	всеки шрифт изисква име
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` не може да е име на съставен шрифт (от 1 до {COMPOSITE_NAME_MAX} знака, без управляващи знаци)
+@msg	`{name}`: parts must be an object	`{name}`: parts трябва да е обект
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: неизвестен клас `{k}`; класовете са kanji, kana, punctuation, symbols, roman и numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} трябва да е обект
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: неизвестен ключ `{k}` в {_1}
+@msg	`{name}`: give the kanji part	`{name}`: задайте частта kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	документът съдържа най-много {COMPOSITE_FONTS_MAX} съставни шрифта
+@msg	two composite fonts are named `{_1}`	два съставни шрифта имат името `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` е името на инсталиран шрифт
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} е зададен с `{font}`, който е съставен шрифт
+@msg	give fonts: [{{name, parts}}…]	задайте fonts: [{{name, parts}}…]
+@msg	path is empty	path е празен
+@msg	fonts must be a list of composite fonts	fonts трябва да е списък от съставни шрифтове
+@msg	names must be strings	names трябва да са низове
+@msg	no composite font named `{n}`	няма съставен шрифт с име `{n}`
+@msg	names must be a list of names	names трябва да е списък от имена
+@msg	no composite fonts to export	няма съставни шрифтове за експортиране
+@msg	not a composite fonts file: {e}	не е файл със съставни шрифтове: {e}
+@msg	not a composite fonts file: no compositeFonts list	не е файл със съставни шрифтове: няма списък compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	файлът съдържа повече от {COMPOSITE_FONTS_MAX} съставни шрифта
+@msg	the file is larger than 4 MB	файлът е по-голям от 4 MB
+@msg	dataBase64 is not base64	dataBase64 не е в base64
+@msg	give one of path, data or dataBase64	задайте едно от path, data или dataBase64
+@msg	the file holds no composite fonts	файлът не съдържа съставни шрифтове
+@msg	the file holds two composite fonts named `{_1}`	файлът съдържа два съставни шрифта с име `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` не може да е име на съставен шрифт
+@msg	{k}: give a font	{k}: задайте шрифт
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: задайте шрифт
+@msg	{k}: size must be {_1} to {_2}%	{k}: size трябва да е от {_1} до {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size трябва да е от {_1} до {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline трябва да е от {_1} до {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline трябва да е от {_1} до {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}: мащабът трябва да е от {_1} до {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: мащабът трябва да е от {_1} до {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: само kana, roman и numerals могат да се мащабират
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: само kana, roman и numerals могат да се мащабират
+@msg	{k}: only kana can be scaled at the center	{k}: само kana може да се мащабира спрямо центъра
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: само kana може да се мащабира спрямо центъра
+@msg	no composite font	няма съставен шрифт
 	Delete Font	Изтриване на шрифт
 	Kanji	Канджи
 	Kana	Кана
@@ -4785,6 +4980,10 @@ axis	Both	И двете
 @msg	Save for Web: the image is empty	Запис за уеб: изображението е празно
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Записът записва {_1}, а не {_2}: използвайте document.export за други формати
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Записът записва {_1}, а не {_2}: използвайте file.saveAsTemplate, за да го запишете
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 записва стари файлове .ai, а не шаблони .ait
+@msg	`groupColors` must be an array	`groupColors` трябва да е масив
+@msg	`preserve` must be an object	`preserve` трябва да е обект
+@msg	`{key}` must be an array	`{key}` трябва да е масив
 @msg	Saved recovery data for {title}	Запазени данни за възстановяване за {title}
 @msg	Saved to User Defined: {_1}	Запазено в Потребителски: {_1}
 @msg	Saved {path}	Записано: {path}
@@ -4796,13 +4995,18 @@ axis	Both	И двете
 @msg	Split Into Grid: select paths large enough for the grid	Разделяне на мрежа: изберете пътища, достатъчно големи за мрежата
 @msg	Targa files are RGB: colorModel rgb	Файловете Targa са RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Обгръщане на текст: изберете обгръщащ обект
-@msg	This shortcut file is in a form VectorCraft can't read.	 Този файл с преки пътища е във формат, който VectorCraft не може да прочете.
+@msg	This shortcut file is in a form VectorCraft can't read.	Този файл с преки пътища е във формат, който VectorCraft не може да прочете.
 @msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` трябва да е "none", "sharp", "crisp" или "strong"
 @msg	`aspect` must be a number (%)	`aspect` трябва да бъде число (%)
 @msg	`at` must be [x, y]	`at` трябва да бъде [x, y]
 @msg	`color` must be a colour	`color` трябва да бъде цвят
 @msg	`sliders` must be none, oklch or hsl	`sliders` трябва да бъде none, oklch или hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH изисква sRGB като работно RGB пространство
+@msg	the Color Picker is not open	Палитрата с цвят не е отворена
+@msg	the screen color sampler is already open	инструментът за вземане на цвят от екрана вече е отворен
+@msg	this system has no screen color sampler	тази система няма инструмент за вземане на цвят от екрана
+@msg	the screen color sampler did not answer	инструментът за вземане на цвят от екрана не отговори
+@msg	the screen color sampler failed	инструментът за вземане на цвят от екрана се провали
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` трябва да бъде команда, чийто елемент от менюто отваря диалогов прозорец (вижте ui.menuDialog)
 @msg	`freeform.points` must be an array	`freeform.points` трябва да бъде масив
 @msg	`freeform.lines` must be an array	`freeform.lines` трябва да бъде масив
@@ -4821,6 +5025,19 @@ axis	Both	И двете
 @msg	`{keep}` is not a side of this axis	`{keep}` не е страна на тази ос
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` трябва да бъде `auto` или езиков код като `en` или `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` трябва да бъде цвят във формат #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` трябва да бъде цвят във формат #rrggbb или име на цвят на слой
+@msg	unknown Live Paint option `{key}`	неизвестна опция за динамично оцветяване `{key}`
+@msg	unknown Shape Builder option `{key}`	неизвестна опция за инструмента за създаване на форми `{key}`
+@msg	`{key}` must be a profile name or null	`{key}` трябва да е име на профил или null
+@msg	`top` and `below` can't both be true	`top` и `below` не могат да са true едновременно
+@msg	`select` must be true or false	`select` трябва да е true или false
+@msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` и `maxAnchors` трябва да са цели числа
+@msg	`{key}` must be a number not below 0	`{key}` трябва да е число не по-малко от 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` трябва да е четири числа не по-малки от 0: [tl, tr, br, bl]
+@msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` трябва да е [x, y, width, height]: четири крайни числа, като width и height не са отрицателни
+@msg	`{min_key}` is greater than `{max_key}`	`{min_key}` е по-голямо от `{max_key}`
+@msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	задайте поне едно от `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
+@msg	a process color can't colorize a grayscale image with transparency: use a spot color, black or white	триадичен цвят не може да оцвети изображение в нива на сивото с прозрачност: използвайте спот цвят, черно или бяло
 @msg	`{key}` must be a #rrggbb colour	`{key}` трябва да бъде цвят във формат #rrggbb
 @msg	`{key}` must be a number	`{key}` трябва да бъде число
 @msg	`{key}` must be a number, not {v}	`{key}` трябва да бъде число, а не {v}
@@ -4877,6 +5094,10 @@ axis	Both	И двете
 @msg	a gradient needs at least two stops	градиентът се нуждае от поне две опорни точки
 @msg	a graphic style named `{to}` already exists	графичен стил с име `{to}` вече съществува
 @msg	a key object sits on that point	в тази точка има основен обект
+@msg	`name` is empty	`name` е празно
+@msg	`newName` is empty	`newName` е празно
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` е вградена предварителна настройка и не може да се променя: запазете я под друго име
+@msg	`{name}` is a built-in preset and stays	`{name}` е вградена предварителна настройка и остава
 @msg	a page is missing	липсва страница
 @msg	a page out of range	страница извън диапазона
 @msg	a page tree kid isn't a reference	дете в дървото на страниците не е препратка
@@ -4886,6 +5107,9 @@ axis	Both	И двете
 @msg	a swatch or color group named `{n}` exists	образец или цветова група с име `{n}` вече съществува
 @msg	a slice size must be a positive number of points	размерът на парчето трябва да бъде положително число в точки
 @msg	a spine keeps at least two points	оста запазва поне две точки
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` е null, име на цвят на слой или #rrggbb
+@msg	the Simplify slider is not open	плъзгачът за опростяване не е отворен
+@msg	the Smooth slider is not open	плъзгачът за изглаждане не е отворен
 @msg	a stream runs past the end	потокът преминава отвъд края
 @msg	a stream's length is wrong	дължината на потока е грешна
 @msg	a stream's length isn't a number	дължината на потока не е число
@@ -4956,6 +5180,15 @@ axis	Both	И двете
 @msg	index must be a number or first, previous, next or last	index трябва да е число или first, previous, next или last
 @msg	index must be a number or first, previous, next or last, not `{other}`	index трябва да е число или first, previous, next или last, а не `{other}`
 @msg	index must be ≥ 0	index трябва да е ≥ 0
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	страницата на работна област {n} е {size}, по-дълга от ограничението на PDF за страница от 14,400 pt (200 in): записва се с UserUnit {unit}, затова приложенията, които пренебрегват UserUnit, я показват толкова пъти по-малка
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	страницата на работна област {n} е {size}, по-дълга от ограничението на PDF за страница от 14,400 pt (200 in): записва се с UserUnit {unit}, затова приложенията, които пренебрегват UserUnit, я показват толкова пъти по-малка: включете Записване на страници, по-дълги от 200 in, в пълен размер в точки
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	страницата на работна област {n} е {size}, по-дълга от ограничението на PDF за страница от 14,400 pt (200 in): страниците {label} се записват без UserUnit, в пунктове, и приложенията, които спазват ограничението, отрязват страницата до 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 няма UserUnit, който е нужен на страница, по-дълга от 14,400 pt (200 in), за да запази размера си: файлът се записва като PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 няма UserUnit, който е нужен на страница, по-дълга от 14,400 pt (200 in), за да остане в ограничението на PDF/A-2 за страница от 14,400 единици: файлът се записва като PDF 1.6
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	страницата на работна област {n} е {size}, твърде дълга и тясна за страните на страница в PDF от 3 до 14,400 единици: записва се с UserUnit {unit}, което запазва късата страна на 3 или повече единици, а приложенията, които спазват ограничението, отрязват дългата страна до 14,400 единици
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	файловете {label} съдържат реални числа до {max}, а страницата на работна област {n}, дълга {side} pt, изисква по-големи: изберете PDF 1.6 или по-нов без стандарт PDF/X или по-малка работна област
+@msg	line {line}: value for `{var}` must be true or false	ред {line}: стойността за `{var}` трябва да е true или false
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	ред {line}: стойността за `{var}` е по-дълга от {MAX_GRAPH_CSV} байта
 @msg	installing from a path is not available on the web; pass the module as `dataBase64`	инсталирането от път не е налично в уеб; предайте модула като `dataBase64`
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	вътрешна грешка в `{cmd}`: {msg} (документът беше оставен в състоянието си отпреди; моля, докладвайте тази грешка)
 @msg	internal error: {msg} (please report this bug)	вътрешна грешка: {msg} (моля, докладвайте тази грешка)
@@ -4997,6 +5230,10 @@ axis	Both	И двете
 @msg	no bounds	няма граници
 @msg	no brush named `{name}`	няма четка с име `{name}`
 @msg	a bristle brush name can have at most {max} characters: `{name}` has {count}	най-голяма дължина на името на четка с косъм (знаци): {max}; в `{name}` знаците са {count}
+@msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}` не е документ на VectorCraft, PDF или PDF-съвместим файл .ai
+@msg	no saved preset named `{name}`	няма запазена предварителна настройка с име `{name}`
+@msg	no saved preset named `{name}` to rename	няма запазена предварителна настройка с име `{name}` за преименуване
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: препратката би била по-голяма от {MAX_BYTES} байта
 @msg	no brush selected	няма избрана четка
 @msg	brushes move only within their type	четките се преместват само в рамките на своя тип
 @msg	no catalog	няма каталог
@@ -5011,7 +5248,6 @@ axis	Both	И двете
 @msg	no document	няма документ
 @msg	no document open	няма отворен документ
 @msg	no effect applied yet	все още няма приложен ефект
-@msg	no plug-in filter to repeat: run one from Object › Plug-ins first	няма филтър от приставка за повторение: първо стартирайте такъв от Обект › Приставки
 @msg	no Pathfinder operation applied yet	все още няма приложена операция на Pathfinder
 @msg	no effect at index {k}	няма ефект на индекс {k}
 @msg	no end record	няма краен запис
@@ -5082,6 +5318,7 @@ axis	Both	И двете
 @msg	`link` and `independent` cannot both be true	`link` и `independent` не могат и двата да са true
 @msg	`link` places a handle: give `handle`	`link` поставя дръжка: задайте `handle`
 @msg	no such spine segment	няма такъв сегмент от оста
+@msg	node {_1} is on a locked artboard	възелът {_1} е върху заключена работна област
 @msg	no such subpath	няма такъв подпът
 @msg	no such user library	няма такава потребителска библиотека
 @msg	no such view	няма такъв изглед
@@ -5101,8 +5338,10 @@ axis	Both	И двете
 @msg	not a VectorCraft file: {0}	не е файл на VectorCraft: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	не е набор от клавишни комбинации на VectorCraft (липсват `overrides`)
 @msg	not a blend	не е преливане
+@msg	not a PICT file	не е файл PICT
+@msg	thumbnail: no page {n} (the file has 1)	миниатюра: няма страница {n} (файлът има 1)
 @msg	not a graphic style library (format `{_1}`)	не е библиотека със стилове на графики (формат `{_1}`)
-@msg	not a shortcut set: the text doesn't start with a slash name and an opening brace	 не е набор от преки пътища: текстът не започва с име със слъш и отваряща скоба
+@msg	not a shortcut set: the text doesn't start with a slash name and an opening brace	не е набор от преки пътища: текстът не започва с име със слъш и отваряща скоба
 @msg	not a stored central record	не е съхранен централен запис
 @msg	not a valid plug-in module: {0}	не е валиден модул за плъгин: {0}
 @msg	not an EMF or WMF file	не е EMF или WMF файл
@@ -5142,6 +5381,12 @@ axis	Both	И двете
 @msg	percent must be above 0 and at most 6400, not {p}	percent трябва да е над 0 и най-много 6400, а не {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	изберете цвят, градиент или мостра за запазване като образец
 @msg	plane must be left, right or ground	plane трябва да е left, right или ground
+@msg	tolerance must be 0 or more	tolerance трябва да е 0 или повече
+@msg	give `at` or `clear`, not both	задайте `at` или `clear`, но не и двете
+@msg	anchorPoint must be true or false	anchorPoint трябва да е true или false
+@msg	gridlineIntersection must be true or false	gridlineIntersection трябва да е true или false
+@msg	the perspective grid is hidden	перспективната мрежа е скрита
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Автоматичното позициониране на равнина е изключено: включете anchorPoint или gridlineIntersection (perspective.widget.options)
 @msg	plug-in ABI: {0}	ABI на плъгин: {0}
 @msg	plug-in exceeded its {0}	плъгинът надвиши своя {0}
 @msg	plug-in failed: {0}	плъгинът се провали: {0}
@@ -5158,14 +5403,39 @@ axis	Both	И двете
 @msg	recovery copy `{file}`: {e}	възстановяване на копие `{file}`: {e}
 @msg	resolutions must be between 1 and 2400 ppi	резолюциите трябва да бъдат между 1 и 2400 ppi
 @msg	result would exceed the canvas (coordinates out of range)	резултатът ще надвиши платното (координатите са извън обхвата)
-@msg	objects can't be nested more than 32 deep	 обектите не могат да бъдат вложени на повече от 32 нива
-@msg	the SVG's elements are nested more than {0} deep	 елементите на SVG са вложени на повече от {0} нива
+@msg	objects can't be nested more than 32 deep	обектите не могат да бъдат вложени на повече от 32 нива
+@msg	the SVG's elements are nested more than {0} deep	елементите на SVG са вложени на повече от {0} нива
 @msg	scale must be a number from {_1} to {_2}, not {_3}	scale трябва да е число от {_1} до {_2}, а не {_3}
 @msg	scale must be a number from {_1} to {_2}, not {s}	scale трябва да е число от {_1} до {_2}, а не {s}
 @msg	select (or target) objects whose appearance isn't basic	изберете (или насочете към) обекти, чийто изглед не е основен
 @msg	select a Live Paint group	изберете група за интерактивно оцветяване (Live Paint)
 @msg	select a blend	изберете преход (blend)
 @msg	select a blend or give `id`	изберете преливане или задайте неговия `id`
+@msg	select an Objects on Path group	изберете група „Обекти по пътя“
+@msg	choose the object to detach with its Select/Move widget	изберете обекта за откачане с неговия манипулатор за избиране и преместване
+@msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	път в съставен път, преливане, плик, повторение или група за преплитане не може да приема обекти
+@msg	a clipping path can't take objects	изрязващ път не може да приема обекти
+@msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	обекти в преливане, плик, повторение или група за преплитане не могат да се прикачват към път
+@msg	a clipping path can't be attached to a path	изрязващ път не може да се прикачи към път
+@msg	`background` must be edges, corners or colors	`background` трябва да е edges, corners или colors
+@msg	`match` must be distance or channels	`match` трябва да е distance или channels
+@msg	`{key}` must be from 0 to 100	`{key}` трябва да е от 0 до 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` трябва да изброява от 1 до 16 цвята, всеки шестнадесетичен (#rrggbb или #rgb) или black, white, red, green или blue
+@msg	the linked image shows its preview: embed or relink it first	свързаното изображение показва визуализацията си: първо го вградете или свържете отново
+@msg	a CMYK image has no transparency to set	изображение в CMYK няма прозрачност за задаване
+@msg	every pixel matches the background: no image would be left	всеки пиксел съвпада с фона: няма да остане изображение
+@msg	an image of {w} × {h} pixels is too large to change	изображение от {w} × {h} пиксела е твърде голямо за промяна
+@msg	select an image with a color mask	изберете изображение с цветова маска
+@msg	the color mask's settings are out of range	настройките на цветовата маска са извън допустимия диапазон
+@msg	a CMYK image can't take a color mask	изображение в CMYK не може да приеме цветова маска
+@msg	the mask would hide every pixel	маската би скрила всеки пиксел
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Преоцветяването завърши; {locked} и {hidden} останаха непроменени
+@msg	Recolor completed; {objects} were left unchanged	Преоцветяването завърши; {objects} останаха непроменени
+@msg	Recolor completed; {objects} was left unchanged	Преоцветяването завърши; {objects} остана непроменен
+@msg	1 locked object	1 заключен обект
+@msg	{n} locked objects	{n} заключени обекта
+@msg	1 hidden object	1 скрит обект
+@msg	{n} hidden objects	{n} скрити обекта
 @msg	select a clip group	изберете група за изрязване
 @msg	select a flare	изберете взрив
 @msg	select a gradient mesh	изберете мрежа на градиент (gradient mesh)
@@ -5263,6 +5533,8 @@ axis	Both	И двете
 @msg	the selection has no URL (or they differ)	селекцията няма URL адрес (или те се различават)
 @msg	the selection isn't in perspective	селекцията не е в перспектива
 @msg	the spine has no segments	оста няма сегменти
+@msg	panels can't be shown in Presentation Mode	панелите не могат да се показват в режим на презентация
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	неизвестна предварителна настройка `{name}`: не е вградена или запазена предварителна настройка (вижте imageTrace.presets)
 @msg	the stroke has no weight	щрихът няма дебелина
 @msg	the thumbnail image is malformed	миниатюрното изображение е дефектно
 @msg	the top object must be a path, compound path or text object to use as a clipping mask	горният обект трябва да бъде път, съставен път или текстов обект, за да се използва като маска за изрязване
@@ -5273,6 +5545,7 @@ axis	Both	И двете
 @msg	this file's PostScript couldn't be read ({why}): {what}	PostScript файлът не можа да бъде прочетен ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	този формат съдържа една работна област: експортирайте няколко като PDF или с document.exportForScreens
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	това е DWG чертеж, който не може да бъде прочетен: запазете го от CAD приложението като ASCII DXF и го отворете
+@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	това е файл PostScript (.ai, запазен в по-стар формат или без съвместимост с PDF, или файл EPS), който все още не може да се отвори: запазете го като PDF, PDF-съвместим .ai или SVG
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	това е PostScript файл (.ai, запазен в по-стар формат или без съвместимост с PDF, или EPS файл), а не PDF: Файл › Отваряне и Файл › Вмъкване го четат като EPS
 @msg	this is not a PostScript file	това не е PostScript файл
 @msg	tool shortcuts must be a single key (optionally with Shift)	клавишните комбинации за инструменти трябва да са един клавиш (по избор със Shift)
@@ -5314,6 +5587,9 @@ axis	Both	И двете
 @msg	unknown workspace (one of {_1})	непознато работно пространство (едно от {_1})
 @msg	unsupported: {0}	не се поддържа: {0}
 @msg	variables are locked	променливите са заключени
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	повече от {MAX_CSV_ROWS} набора от данни: Импортиране на набори от данни чете най-много {MAX_CSV_ROWS}
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	повече от {MAX_CSV_COLS} променливи: Импортиране на набори от данни чете най-много {MAX_CSV_COLS}
+@msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` и `options.{key}: {inner}` си противоречат: задайте опцията веднъж
 @msg	variables that aren't text were left out: {kinds}	променливите, които не са текстови, бяха пропуснати: {kinds}
 @msg	a new document won't read these variables back with their kind: {names}	нов документ няма да прочете тези променливи обратно с техния вид: {names}
 @msg	a new document refuses this file because of these variables: {names}	нов документ отказва този файл заради тези променливи: {names}
@@ -5322,6 +5598,121 @@ axis	Both	И двете
 @msg	width and height are at least 1 pixel	ширината и височината са най-малко 1 пиксел
 @msg	workspace name can't be empty	името на работното пространство не може да бъде празно
 @msg	x and y must be finite	x и y трябва да са крайни числа
+@msg	{_1} is an exporter (File › Export › Export As…)	{_1} е формат за експортиране (Файл › Експортиране › Експортиране като…)
+@msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` е {size} байта (ограничение {MAX_DOCUMENT_DATA})
+@msg	a mask that covers several layers comes in as a clipping group in each layer it covers	маска, която покрива няколко слоя, се импортира като група за изрязване във всеки покрит слой
+@msg	a graph's records don't end where they should: its art was read as it is	записите на диаграма не завършват където трябва: графиката ѝ беше прочетена такава, каквато е
+@msg	`{w}` takes no operands	`{w}` не приема операнди
+@msg	a wraparound group is inside a compound path	обгръщаща група е в съставен път
+@msg	it ends inside a multi-layer mask	завършва вътре в многослойна маска
+@msg	a multi-layer mask's operators are out of order	операторите на многослойна маска не са в правилния ред
+@msg	a multi-layer mask needs one clipping path	многослойната маска изисква един изрязващ път
+@msg	a group crosses a multi-layer mask	група пресича многослойна маска
+@msg	graphs come in as plain art, without their data or settings	диаграмите се импортират като обикновена графика, без данните и настройките си
+@msg	the active document changed while the question was open; nothing was deleted	активният документ се промени, докато въпросът беше отворен; нищо не беше изтрито
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Връзката е в символ, дизайн на диаграма, мостра или маска за непрозрачност и няма място върху платното
+@msg	source must be the id of a Shaper Group's original shape	source трябва да е идентификаторът на оригинална форма от група от форми
+@msg	group must be the id of a Shaper Group	group трябва да е идентификаторът на група от форми
+@msg	the shape is not an editable original shape of that Shaper Group	формата не е редактируема оригинална форма от тази група от форми
+@msg	id {value} is a layer, not an object	id {value} е слой, а не обект
+@msg	id {value} is a layer, not an object; move layers with layer.move	id {value} е слой, а не обект; премествайте слоевете с layer.move
+@msg	the PCX file is cut short	файлът PCX е прекъснат
+@msg	the PCX file's header is damaged	заглавката на файла PCX е повредена
+@msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	файлове PCX с {bits}-битови пиксели в {planes} равнини не могат да се четат
+@msg	the Pixar file is cut short	файлът Pixar е прекъснат
+@msg	the Pixar file's header is damaged	заглавката на файла Pixar е повредена
+@msg	the Pixar file's image data is damaged	данните за изображението във файла Pixar са повредени
+@msg	the JPEG 2000 file can't be read	файлът JPEG 2000 не може да се прочете
+@msg	the JPEG 2000 file has an unsupported color space or JPX content	файлът JPEG 2000 има неподдържано цветово пространство или съдържание JPX
+@msg	the HEIC or HEIF file can't be read	файлът HEIC или HEIF не може да се прочете
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	файлът HEIC или HEIF съдържа вид изображение, което не може да се прочете
+@msg	HEIC and HEIF images can't be opened in this build	изображенията HEIC и HEIF не могат да се отварят в тази компилация
+@msg	the JPEG XL file is cut short	файлът JPEG XL е прекъснат
+@msg	the JPEG XL container is too large to read	контейнерът JPEG XL е твърде голям за четене
+@msg	CMYK JPEG XL images can't be read	изображенията JPEG XL в CMYK не могат да се четат
+@msg	the JPEG XL file can't be read: {e}	файлът JPEG XL не може да се прочете: {e}
+@msg	Extrude & Bevel	Избутване и фасетка
+@msg	Revolve	Завъртане около ос
+@msg	Inflate	Издуване
+@msg	Rotate	Завъртане
+@msg	Extrude & Bevel (Classic)	Избутване и фасетка (класически)
+@msg	Revolve (Classic)	Завъртане около ос (класическо)
+@msg	Rotate (Classic)	Ротация (класическа)
+@msg	This effect	Този ефект
+@msg	clipping paths	изрязващи пътища
+@msg	other objects	други обекти
+@msg	{label} requires a group holding a shape with at least two anchors	{label} изисква група, съдържаща форма с поне две опорни точки
+@msg	Revolve requires a group holding a shape with at least two anchors	Завъртането около ос изисква група, съдържаща форма с поне две опорни точки
+@msg	Revolve requires a shape with at least two anchors	Завъртането около ос изисква форма с поне две опорни точки
+@msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	{label} върху група изисква пътища, съставни пътища, текст, групи, групи за изрязване, преливания и инстанции на символи: първо освободете или разширете {what}.
+@msg	{label} on a group takes at most {MAX_MEMBERS} objects	{label} върху група приема най-много {MAX_MEMBERS} обекта
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	3D ефект върху група или слой се прилага към самата група, а не към нейното запълване или щрих
+@msg	a 3D effect on a group's fill or stroke draws nothing	3D ефект върху запълването или щриха на група не рисува нищо
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	3D ефект върху запълването или щриха на група не рисува нищо за експортиране
+@msg	The 3D object is too complex to export	3D обектът е твърде сложен за експортиране
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	обектът няма 3D ефект (Избутване и фасетка, Завъртане около ос, Издуване или Завъртане)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` трябва да е обект, съдържащ само `mode`, със стойност shaded или wireframe
+@msg	its 3D effect builds no solid	неговият 3D ефект не изгражда тяло
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel трябва да е none или едно от {_1}, или custom с {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom изисква {BEVEL_PROFILE}, точките на фасетката
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} трябва да е низ
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} трябва да е от 2 до {most} точки [x, y], всяка стойност между 0 и 1, от [0, 0] (ръбът на капачката) до [1, 1] (страничната стена)
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} не може да изгради тела от тази графика: нейните инстанции на символи, преливания и групи за изрязване съдържат твърде много обекти
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} не може да изгради тяло от инстанцията на символа "{symbol}": графиката на символа не е налична
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1}: изрязващият път е твърде сложен, за да се изреже графиката с него
+@msg	{_1} takes at most {MAX_MEMBERS} objects	{_1} приема най-много {MAX_MEMBERS} обекта
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1} не може да изгради тела от графика, вложена на повече от {MAX_DEPTH} нива
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	Боята на завъртането около ос е твърде сложна за тази повърхност; намалете Сегменти или опростете градиента
+@msg	Revolve edge must be left or right	Завъртане около ос: edge трябва да е left или right
+@msg	Revolve cap must be a boolean	Завъртане около ос: cap трябва да е булева стойност
+@msg	the revolved object has no fill or stroke	завъртяният около ос обект няма запълване или щрих
+@msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor трябва да е непрозрачен цвят RGB във формат #rrggbb
+@msg	lights must contain one to ten lights	lights трябва да съдържа от един до десет източника на светлина
+@msg	each light must be an object	всеки източник на светлина трябва да е обект
+@msg	unknown light setting: use color, intensity, rotation, height, softness or behind	неизвестна настройка на светлината: използвайте color, intensity, rotation, height, softness или behind
+@msg	light {key} must be a number from {min} to {max}	{key} на светлината трябва да е число от {min} до {max}
+@msg	light color must use opaque #rrggbb	светлина: color трябва да е непрозрачен #rrggbb
+@msg	light behind must be true or false	behind на светлината трябва да е true или false
+@msg	shadow must be true or false	shadow трябва да е true или false
+@msg	shadowPosition must be behind or below	shadowPosition трябва да е behind или below
+@msg	{key} must be a number from {min} to {max}	{key} трябва да е число от {min} до {max}
+@msg	each of `{GRAPHICS}` must be an object	всеки елемент от `{GRAPHICS}` трябва да е обект
+@msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	елементите на `{GRAPHICS}` приемат symbol, face, x, y, scale и rotation, а не `{k}`
+@msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	всеки елемент от `{GRAPHICS}` изисква `symbol`, името на символ
+@msg	`{GRAPHICS}` face must be front or back	face в `{GRAPHICS}` трябва да е front или back
+@msg	`{GRAPHICS}` face must be front, back or side	face в `{GRAPHICS}` трябва да е front, back или side
+@msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} в `{GRAPHICS}` трябва да е число от {lo} до {hi}
+@msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` трябва да е масив
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Графиките се нанасят върху типовете обекти Равнина, Избутване, Завъртане около ос и Издуване
+@msg	Revolve maps graphics onto its side: map them onto the front	Завъртането около ос нанася графиките върху страната си: нанесете ги върху предната страна
+@msg	Inflate maps graphics onto its front and back, not onto a side	Издуването нанася графиките върху предната и задната си страна, а не върху странична
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	обект {_1}: задната страна на издуването приема графики, когато И двете страни и Капачка са включени
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Графиките са твърде сложни за тази повърхност: опростете графиката на символите или намалете Сегменти
+@msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` приема най-много {MAX_GRAPHICS} графики
+@msg	A plane has one face: map its graphics onto the front	Равнината има една страна: нанесете графиките ѝ върху предната страна
+@msg	The graphics are too complex: simplify the symbols' art	Графиките са твърде сложни: опростете графиката на символите
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	Графиката на нанесен елемент може да е вложена най-много на {MAX_LEVELS} нива: опростете графиката на символа
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	Графиката на нанесен елемент може да влага символи най-много на {MAX_NESTING} нива: опростете графиката на символа
+@msg	A graphic's art holds too many objects: simplify the symbol's art	Графиката на нанесен елемент съдържа твърде много обекти: опростете графиката на символа
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	Нанесен елемент рисува най-много {MAX_PIECES} запълвания и щрихи: опростете графиката на символа
+@msg	`surface` must be one of {_1}	`surface` трябва да е едно от {_1}
+@msg	{label} draws the source art for this object instead of its 3D surface	{label} рисува изходната графика за този обект вместо 3D повърхността му
+@msg	{label} draws no faces for this object	{label} не рисува страни за този обект
+@msg	the wireframe has more than {MAX_WIRE_EDGES} edges	телената рамка има повече от {MAX_WIRE_EDGES} ръба
+@msg	the params must be an object, not {got}	параметрите трябва да са обект, а не {got}
+@msg	unknown parameter `{path}`; the object takes no keys	неизвестен параметър `{path}`; обектът не приема ключове
+@msg	unknown parameter `{path}`; it takes: {keys}	неизвестен параметър `{path}`; приема: {keys}
+@msg	missing `{path}`	липсва `{path}`
+@msg	`{path}` must be {expected}, not {got}	`{path}` трябва да е {expected}, а не {got}
+@msg	`{path}` is nested too deeply	`{path}` е вложен твърде дълбоко
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: не е изображение PNG, JPEG, WebP, TIFF или BMP
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	изображението е {iw} × {ih} пиксела, а работната област при тази ширина е {rw} × {rh} пиксела: пропорциите им се различават
+@msg	`threshold` must be a number from 0 to 1	`threshold` трябва да е число от 0 до 1
+@msg	background {v}: a color such as "#808080"	background {v}: цвят, например "#808080"
+@msg	comparing with an image file isn't available in the browser	сравняването с файл на изображение не е налично в браузъра
+@msg	columns {first} and {column} both name the variable `{name}`	колоните {first} и {column} именуват една и съща променлива `{name}`
+@msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	нищо от набора от данни {name} не беше приложено: нито един обект не е свързан с променлива, за която наборът има стойност
+@msg	no bound object reports a value (locked objects and embedded images report none)	нито един свързан обект не връща стойност (заключените обекти и вградените изображения не връщат)
 @msg	{C}: no effect at index {from}	{C}: няма ефект на индекс {from}
 @msg	{_1} failed: {e}	{_1} неуспешно: {e}
 @msg	{_1} files can be opened but not written (see document.formats)	{_1} файловете могат да се отварят, но не и да се записват (вижте document.formats)
@@ -6285,6 +6676,9 @@ file-filter	Flattener presets	Предварителни настройки за
 file-filter	PDF presets	Предварителни настройки за PDF
 file-filter	PDF-compatible .ai	Съвместими с PDF .ai файлове
 file-filter	Print presets	Предварителни настройки за печат
+file-filter	Tracing presets	Предварителни настройки за трасиране
+file-filter	Action sets	Набори от действия
+file-filter	Composite fonts	Съставни шрифтове
 file-filter	Preferences	Настройки
 file-filter	Export presets	Набори за експортиране
 file-filter	SVG Compressed	Компресиран SVG
@@ -6305,11 +6699,11 @@ theme	Appearance	Външен вид
 	Drawer menu	Меню на чекмеджето
 	Toolbar: Show Controls	Лента с инструменти: Показване на контроли
 @msg	control must be fillStroke, coloring, drawMode or screenMode	control трябва да бъде fillStroke, coloring, drawMode или screenMode
-@msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	 неизвестен контрол `{name}`: fillStroke, coloring, drawMode или screenMode
-@msg	give a fraction `t` from 0 to 1	 въведете дробно число `t` от 0 до 1
-@msg	give the path `id`	 въведете `id` на пътя
-@msg	invalid stroke widths	 невалидни ширини на щриха
-@msg	object has no weighted stroke	 обектът няма претеглен щрих
+@msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	неизвестен контрол `{name}`: fillStroke, coloring, drawMode или screenMode
+@msg	give a fraction `t` from 0 to 1	въведете дробно число `t` от 0 до 1
+@msg	give the path `id`	въведете `id` на пътя
+@msg	invalid stroke widths	невалидни ширини на щриха
+@msg	object has no weighted stroke	обектът няма претеглен щрих
 	Single Corner Radius	Радиус на единичен ъгъл
 	Top Left:	Горно ляво:
 	Top Right:	Горно дясно:
@@ -6465,6 +6859,8 @@ theme	Appearance	Външен вид
 	Save Variable Library…	Запазване на библиотека с променливи…
 @msg	a variable library holds text variables, and the document has none	библиотеката с променливи съдържа текстови променливи, а документът няма такива
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	променливата `{name}` не може да бъде запазена в библиотека с променливи: преименувайте я така, че да започва с буква или `_`, без интервали и символи, различни от `-`, `_` и `.`
+@msg	{k} has control characters	{k} съдържа управляващи знаци
+@msg	{k} has control characters or line breaks	{k} съдържа управляващи знаци или нови редове
 @msg	data set `{name}` holds a control character, which a variable library can't hold	наборът от данни `{name}` съдържа управляващ знак, който библиотеката с променливи не може да съдържа
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	наборът от данни `{name}` започва или завършва с интервал, който библиотеката с променливи не може да съдържа
 	Make Graph Dynamic	Динамична диаграма
@@ -6519,6 +6915,7 @@ theme	Appearance	Външен вид
 # User Interface › Color Scheme
 	Color Scheme	Цветова схема
 	Modern	Модерна
+@msg	`{key}` must be an array of these names: {_1}	`{key}` трябва да е масив от тези имена: {_1}
 
 # Symbol Options › Export Type
 	Export Type:	Тип на експортиране:
@@ -6562,6 +6959,33 @@ theme	Appearance	Външен вид
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	в браузъра се отварят само URL адреси с http, https и mailto, не „{url}“
 @msg	{id} opens another app: only the person at the keyboard can run it	{id} отваря друга програма: само човекът пред клавиатурата може да изпълни командата
 @msg	“{name}” is not a file	„{name}“ не е файл
+@msg	a mask has more than one art block	маската има повече от един блок графика
+@msg	mask art ends outside a mask dictionary	графиката на маската завършва извън речник на маска
+@msg	cancelled; nothing was changed	отменено; нищо не беше променено
+@msg	a linked image can't become a gradient mesh: embed it first	свързано изображение не може да стане мрежа на градиент: първо го вградете
+@msg	the image has no usable size or position	изображението няма използваем размер или позиция
+@msg	the image's pixels can't be read	пикселите на изображението не могат да се прочетат
+@msg	Persistent libraries not found: {files}	Не са намерени постоянни библиотеки: {files}
+@msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` не е панел на библиотека (вижте window.swatchLibrary)
+@msg	library panel `{given}` isn't open	панелът на библиотека `{given}` не е отворен
+@msg	too many changed shortcuts	твърде много променени клавишни комбинации
+@msg	library panel `{given}` isn't missing its library	на панела на библиотека `{given}` не липсва библиотеката му
+@msg	too many library panels were opened in this session	в тази сесия бяха отворени твърде много панели на библиотеки
+@msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Изображението е {_1} × {_2} пиксела, повече от {LARGE_TRACE_SIDE} по една страна: трасира се, но по-бавно. Предварителна настройка с по-ниска точност или по-малко копие на изображението се трасира по-бързо.
+@msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Изображението беше трасирано при {_1} × {_2} пиксела, намалено от {_3} × {_4} (най-много {_5} мегапиксела).
+@msg	byColor must be true or false	byColor трябва да е true или false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor не може да разделя групи от Автоматично групиране: трасирайте без Автоматично групиране
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor не може да прегрупира трасиране с динамичен ефект Търсач на пътища: разширете без byColor
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Режимът „Плоско лого“ не използва keepColors: той трасира цветовете, посочени в logoColors, или цветовете, които намери.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Нищо не беше трасирано: нито един от цветовете, намерени при трасирането, не съвпада с keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Нищо не беше трасирано: Игнориране на цвета изключва всяка област от цветовете, изброени в keepColors.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Нищо не беше трасирано: цветовете, които съвпадат с keepColors, не създават пътища.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: нито един от цветовете, намерени при трасирането, не съвпада с {c}, затова нищо от него не се трасира.
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` изисква `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` изисква `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` изисква `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	в документа няма цветова група `{name}` (вижте swatch.list)
+@msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	Режимът „Плоско лого“ трасира изображението при {_1} × {_2} пиксела, осреднено от {_3} × {_4}.
 	Enable Guides for 9-Slice Scaling	Включване на водачи за 9-slice мащабиране
 	Persistent	Постоянна
 	Locate Library…	Намиране на библиотека…
@@ -6603,10 +7027,269 @@ theme	Appearance	Външен вид
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	библиотеката с променливи на файла беше прочетена частично (пропуснати записи: {_1}): панелът „Променливи“ показва останалите
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	библиотеката с променливи на файла не можа да бъде прочетена: панелът „Променливи“ не я показва
 @msg	a variable of unknown kind can't be bound to objects	променлива от неизвестен вид не може да бъде свързана с обекти
+@msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` трябва да е grayscale, rgb, hsb, cmyk или websafe
+@msg	`view` must be wheel or box	`view` трябва да е wheel или box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` трябва да е hue, saturation, brightness, red, green или blue
 # Select by Color (select.color)
 	Select by Color	Избиране по цвят
 	Move Anchor Point	Преместване на опорна точка
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} запазва 1 от {n} работни области на документа: файлът се отваря отново с един. Включете „Запазване на възможностите за редактиране“, за да запазите всички.
+@msg	`spread` must be pad, repeat or reflect	`spread` трябва да е pad, repeat или reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` трябва да е цяло число от 1 до {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` се прилага към линейни, радиални, конични и ромбовидни градиенти
+@msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} завърши, но междувременно документът или приставката се промени: изпълнете отново
+@msg	Running “{name}”…	Изпълнява се „{name}“…
+@msg	a live effect runs while the document is drawn, so it can't be `heavy`	динамичният ефект се изпълнява, докато документът се рисува, затова не може да е `heavy`
+@msg	an exporter always gets an export's budget: leave `budget` out	форматът за експортиране винаги получава бюджета на експортиране: пропуснете `budget`
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	„{_1}“ иска голям бюджет (всяко изпълнение до {minutes} минути и {times} пъти обичайния брой инструкции): човек трябва да го одобри в настолното приложение или подайте `allowHeavy: true` в сесия, стартирана с --allow-plugin-grants
+@msg	`name` must be 1-64 printable characters	`name` трябва да е от 1 до 64 видими знака
+@msg	`version`, `description` or `author` is too long	`version`, `description` или `author` е твърде дълго
+@msg	`warnings` must be a list of strings	`warnings` трябва да е списък от низове
+@msg	`{k}` must be one of {_1}	`{k}` трябва да е едно от {_1}
+@msg	`{k}` must be {what}	`{k}` трябва да е {what}
+@msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	форматът за експортиране обявява от 1 до {MAX_EXTENSIONS} `extensions`
+@msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	най-много {MAX_UNGROUPED} параметъра извън групи: задайте `group` на останалите
+@msg	can't encode the input	входните данни не могат да се кодират
+@msg	expected {{"dataBase64": "…"}}	очаква се {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	очаква се {{"objects": [...]}}
+@msg	export `{name}`: {e}	експортиране `{name}`: {e}
+@msg	extension {e} is listed twice	разширението {e} е изброено два пъти
+@msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	разширение {e}: използвайте от 1 до 16 малки букви и цифри, без точката
+@msg	invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -	невалиден id {_1}: използвайте от 1 до 64 знака от A-Z a-z 0-9 . _ -
+@msg	invalid parameter name {k}	невалидно име на параметър {k}
+@msg	manifest is not UTF-8	манифестът не е в UTF-8
+@msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	манифестът е твърде дълъг (ограничение {MAX_MANIFEST_BYTES} байта)
+@msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	манифестът е {_1} байта (ограничение {MAX_MANIFEST_BYTES})
+@msg	module is {_1} bytes (limit {_2})	модулът е {_1} байта (ограничение {_2})
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	изисква одобрение: иска {0}, което потребителят разрешава, когато я инсталира самостоятелно
+@msg	not JSON: {e}	не е JSON: {e}
+@msg	not a WebAssembly binary (missing \\0asm header)	не е двоичен файл WebAssembly (липсва заглавка \\0asm)
+@msg	parameter `{k}`: {what}	параметър `{k}`: {what}
+@msg	parameter `{name}`: {what}	параметър `{name}`: {what}
+@msg	plug-in parameters must be a JSON object	параметрите на приставката трябва да са обект JSON
+@msg	the module must export its linear memory as `memory`	модулът трябва да експортира линейната си памет като `memory`
+@msg	the objects to change are no longer in the document	обектите за промяна вече не са в документа
+@msg	the runtime panicked	средата за изпълнение аварира
+@msg	unexpected host trap	неочакван прихванат срив в приложението
+@msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	vc_abi_version върна {v}; това приложение реализира версия {ABI_VERSION}
+@msg	vc_alloc returned 0 (out of memory)	vc_alloc върна 0 (няма достатъчно памет)
+@msg	vc_alloc returned a block outside memory	vc_alloc върна блок извън паметта
+@msg	vc_run returned error code {packed}	vc_run върна код на грешка {packed}
+@msg	{_1} is not a file	{_1} не е файл
+@msg	{_1} is {_2} bytes (limit {_3})	{_1} е {_2} байта (ограничение {_3})
+@msg	{_1} objects (limit {MAX_OBJECTS})	{_1} обекта (ограничение {MAX_OBJECTS})
+@msg	{at}: {msg}	{at}: {msg}
+@msg	{what} points outside memory	{what} сочи извън паметта
+@msg	`angle` must be a number	`angle` трябва да е число
+@msg	`aspect` must be from 0.01 to 100	`aspect` трябва да е от 0.01 до 100
+@msg	`cap` must be "butt", "round" or "square"	`cap` трябва да е "butt", "round" или "square"
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` трябва да е "nonzero" или "evenodd"
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` трябва да е адрес https:// с най-много {MAX_HELP_URL} байта
+@msg	`help` must be 1-{MAX_HELP} printable characters	`help` трябва да е от 1 до {MAX_HELP} видими знака
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id` трябва да е идентификатор на ефект от 1 до {MAX_EFFECT_ID} байта
+@msg	`id` must be the id of an input object	`id` трябва да е идентификаторът на входен обект
+@msg	`join` must be "miter", "round" or "bevel"	`join` трябва да е "miter", "round" или "bevel"
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	`label` и `group` трябва да са от 1 до {MAX_LABEL} видими знака
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	`maxLength` трябва да е от 1 до {MAX_TEXT}, а стойността по подразбиране да не е по-дълга
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` и `maxItems` трябва да са от 0 до {MAX_LIST}, `maxItems` поне 1, а стойността по подразбиране да има толкова елемента
+@msg	`name` must be a string	`name` трябва да е низ
+@msg	`opacity` must be a number	`opacity` трябва да е число
+@msg	`type` must be "path" or "compound"	`type` трябва да е "path" или "compound"
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` трябва да е от 1 до {MAX_UNIT} видими знака
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` изброява от 1 до {MAX_CONDITION_VALUES} стойности за `{other}`
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` посочва `{other}`, който не е параметър, обявен преди този
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` посочва най-много {MAX_CONDITIONS} параметъра
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` приема стойностите на `{other}`, които са на отметка или на избор
+@msg	`visible` must be true or false	`visible` трябва да е true или false
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}` трябва да е число от {_1} до {_2}
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` трябва да е масив с най-много {MAX_ITEMS} елемента
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	цветовата стойност по подразбиране трябва да е обект на цвят или шестнадесетичен низ, например "#3a7bd5"
+@msg	a color object or a hex string such as "#3a7bd5"	обект на цвят или шестнадесетичен низ, например "#3a7bd5"
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	свободният градиент съдържа най-много {MAX_ITEMS} точки и линии
+@msg	a freeform gradient line names a point it doesn't have	линия на свободен градиент посочва точка, която той няма
+@msg	a gradient needs 1-{MAX_ITEMS} stops	градиентът изисква от 1 до {MAX_ITEMS} спирки
+@msg	a list of numbers	списък от числа
+@msg	a list of {min_items} to {max_items} numbers	списък от {min_items} до {max_items} числа
+@msg	a new object needs a `path`	нов обект изисква `path`
+@msg	a number	число
+@msg	a painted live effect returns only `objects`	рисуващ динамичен ефект връща само `objects`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	частта на рисуващ динамичен ефект има само `path`, `fillRule`, `fills` и `strokes`
+@msg	a read-only object was left out	обект само за четене беше пропуснат
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	обект само за четене беше пропуснат: върнете го само като {{"id": …}} или такъв, какъвто е зададен
+@msg	a string	низ
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	щрихът има само `paint`, `width`, `join`, `cap` и `miterLimit`
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	щрихът трябва да е {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	ефектът трябва да е {{"id", "params"?, "visible"?}}
+@msg	an effect on a fill returns only `fills`	ефект върху запълване връща само `fills`
+@msg	an effect on a stroke returns only `strokes`	ефект върху щрих връща само `strokes`
+@msg	an object must be a JSON object	обектът трябва да е обект JSON
+@msg	bad range	невалиден диапазон
+@msg	choices must be 1-64 non-empty, printable strings	изборите трябва да са от 1 до 64 непразни низа от видими знаци
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	координатата е извън диапазона (ограничение ±{MAX_COORD} pt)
+@msg	default is not one of the options	стойността по подразбиране не е от опциите
+@msg	each piece needs a `path`	всяка част изисква `path`
+@msg	is listed twice	е изброено два пъти
+@msg	pattern transform out of range	трансформацията на мострата е извън диапазона
+@msg	read-only field '{field}' changed	полето само за четене '{field}' е променено
+@msg	stops must be in order of `offset`	спирките трябва да са подредени по `offset`
+@msg	the document has no pattern {pattern}	документът няма мостра {pattern}
+@msg	the document has no swatch {n}	документът няма образец {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` изисква спирка, свързана със спот образец
+@msg	the output	изходът
+@msg	the path has no anchor points	пътят няма опорни точки
+@msg	too many anchor points (limit {MAX_ANCHORS})	твърде много опорни точки (ограничение {MAX_ANCHORS})
+@msg	true or false	true или false
+@msg	a number >= {_1}	число >= {_1}
+@msg	a number > {_1}	число > {_1}
+@msg	a number <= {_1}	число <= {_1}
+@msg	a number < {_1}	число < {_1}
+@msg	a number {_1} to {_2}	число от {_1} до {_2}
+@msg	a number >= {_1} and < {_2}	число >= {_1} и < {_2}
+@msg	a number > {_1} and <= {_2}	число > {_1} и <= {_2}
+@msg	a number > {_1} and < {_2}	число > {_1} и < {_2}
+@msg	a number ({_1})	число ({_1})
+@msg	a number >= {_1} ({_2})	число >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	число > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	число <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	число < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	число от {_1} до {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	число >= {_1} и < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	число > {_1} и <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	число > {_1} и < {_2} ({_3})
+@msg	an integer	цяло число
+@msg	an integer >= {_1}	цяло число >= {_1}
+@msg	an integer <= {_1}	цяло число <= {_1}
+@msg	an integer {_1} to {_2}	цяло число от {_1} до {_2}
+@msg	one of {_1}	едно от {_1}
+@msg	an object id (a non-negative integer)	идентификатор на обект (неотрицателно цяло число)
+@msg	a list of object ids	списък от идентификатори на обекти
+@msg	a color (a string, [r, g, b] or an object)	цвят (низ, [r, g, b] или обект)
+@msg	[x, y] (two numbers)	[x, y] (две числа)
+@msg	an object	обект
+@msg	a list	списък
+@msg	unknown key `{k}`; the keys here are {_1}	неизвестен ключ `{k}`; ключовете тук са {_1}
+@msg	{_1} is listed twice	{_1} е изброен два пъти
+@msg	{_1} is not the id of an input object	{_1} не е идентификаторът на входен обект
+@msg	{_1} is read-only	{_1} е само за четене
+@msg	{what} must be from {lo} to {hi}	{what} трябва да е от {lo} до {hi}
+@msg	a color component	цветови компонент
+@msg	a plate	печатна плака
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Автоматизацията поиска да инсталира тази приставка. За да я инсталирате, изберете сами Обект › Приставки › Инсталиране на приставка….
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}“ е различен модул от приставката с id {_1} и би получил запазените за нея настройки и кеш: инсталирайте го с `replace: true`, след като потребителят се съгласи
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	„{name}“ изброява `{id}` в `commandAllowlist`, а приставка не може да я извиква
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: не е изброена в `commandAllowlist` на манифеста
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: идентификаторът или аргументите са извън паметта на модула
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: идентификаторът или аргументите не са в UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: аргументите не са обект JSON
+@msg	only a filter with the usual budget declares `commandAllowlist`	само филтър с обичайния бюджет обявява `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	извиквания на команди ({MAX_CALLS} извиквания и {MAX_CALL_BYTES} байта на изпълнение)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	размер на извикване на команда (vc_call `{shown}`: {len} байта, ограничение {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	най-много {MAX_ALLOWED_COMMANDS} команди в `commandAllowlist`
+@msg	a plug-in may not call this command	приставка не може да извиква тази команда
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` изисква разрешението `commands`, а `commands` изисква `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` посочва `{shown}`, който не е идентификатор на команда или е изброен два пъти
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	разрешението `{permission}` изисква ниво {PROGRESS_API} на API за приставки: задайте `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	модулът импортира `env.{name}` с тип, различен от този на приложението: той е {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	модулът импортира `env.{name}`, която приставка може да използва само при ниво {PROGRESS_API} на API за приставки (`api` {PROGRESS_API}) и с разрешението `{permission}`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	модулът импортира `{from}.{name}`, която приложението не предлага: приставка може да импортира само функциите `env.vc_*`, изброени в docs/plugins.md (ниво 2 на API за приставки), и никакви WASI, файлове или мрежа
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` е {_1}; това приложение реализира нива от 1 до {API_LEVEL} на API за приставки
+@msg	`paintOutput` may only be true	`paintOutput` може да е само true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` е само за динамичен ефект (`kind` "effect") при `api` 2
+@msg	`grant` must be a list of permission names	`grant` трябва да е списък от имена на разрешения
+@msg	`grant` names an unknown permission `{shown}`	`grant` посочва неизвестно разрешение `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	приставка от вид `{_1}` изисква разрешението `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	най-много {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	разрешението `{shown}` не се отнася за приставка от вид `{_1}`
+@msg	permission `{shown}` is listed twice	разрешението `{shown}` е изброено два пъти
+@msg	only a filter declares `inputs`	само филтър обявява `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` посочва неизвестен вид обект `{shown}`: използвайте type, image или symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` изброява `{shown}` два пъти
+@msg	`inputs` needs `api` 2 or later	`inputs` изисква `api` 2 или по-ново
+@msg	`inputs` needs the permission `doc.read`	`inputs` изисква разрешението `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	бюджет на паметта (обект {_1} изисква {size} байта входни данни, остават {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	бюджет на обектите (повече от {MAX_OBJECTS} обекта само за четене)
+@msg	instruction budget	бюджет на инструкциите
+@msg	time budget	бюджет на времето
+@msg	memory budget (the selection is too large to hand over)	бюджет на паметта (селекцията е твърде голяма за предаване)
+@msg	output size ({what} is {len} bytes, limit {max})	размер на изхода ({what} е {len} байта, ограничение {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	разрешението на приставката не може да се премахне от хранилището на приставки
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	разрешението `{shown}` е запазено за по-късен API за приставки; това приложение не го дава
+@msg	unknown permission `{shown}`	неизвестно разрешение `{shown}`
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	„{name}“ иска разрешенията {asked}: човек трябва да ги одобри в настолното приложение или подайте `grant` в сесия, стартирана с --allow-plugin-grants
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` и `allowHeavy` действат само в сесия, стартирана с --allow-plugin-grants: одобрете приставката в настолното приложение
+@msg	Only the person at the keyboard can approve installing a plug-in	Само човекът на клавиатурата може да одобри инсталирането на приставка
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	на „{name}“ не е дадено `{p}`, което е нужно за изхода ѝ: нищо не беше променено
+@msg	a heavy filter runs in the background, so it can't declare `commands`	тежък филтър се изпълнява във фонов режим, затова не може да обявява `commands`
+@msg	at most {MAX_COMMANDS} `commands`	най-много {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	командата {name} е обявена два пъти
+@msg	command {name}: `label` must be 1-64 printable characters	команда {name}: `label` трябва да е от 1 до 64 видими знака
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	команда {name}: използвайте id от 1 до {MAX_COMMAND_ID} знака от a-z 0-9 _, който започва с буква
+@msg	command {name}: {e}	команда {name}: {e}
+@msg	manifest: {e}	манифест: {e}
+@msg	manifest: {e} at line {line} column {column}	манифест: {e} на ред {line}, колона {column}
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` трябва да е списък от команди, всяка с `id` и `label`
+@msg	command {name} must be an object with an `id` and a `label`	командата {name} трябва да е обект с `id` и `label`
+@msg	missing field `{key}`	липсва поле `{key}`
+@msg	duplicate field `{key}`	повтарящо се поле `{key}`
+@msg	only a filter or a live effect declares `commands`	само филтър или динамичен ефект обявява `commands`
+@msg	“{name}” › {label}: {e}	„{name}“ › {label}: {e}
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	модулът няма SHA-256, зададен в `hash`: нищо не беше инсталирано
+@msg	select one object	изберете един обект
+@msg	Global Edit is off	Глобалното редактиране е изключено
+@msg	only an object of the Global Edit other than the one it started from can be left out	може да се пропусне само обект от глобалното редактиране, различен от този, от който то е започнало
+@msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all или диапазон, например 1, 3-5, а не {v}
+@msg	`{_1}` has no symbols to place	`{_1}` няма символи за поставяне
+@msg	missing `library` (see symbol.libraries)	липсва `library` (вижте symbol.libraries)
+@msg	no symbol `{n}`	няма символ `{n}`
+@msg	no symbol `{n}` in `{_1}`	няма символ `{n}` в `{_1}`
+@msg	no symbol library `{key}` (see symbol.libraries)	няма библиотека със символи `{key}` (вижте symbol.libraries)
+@msg	the document has no symbols to save	документът няма символи за запазване
+@msg	`{_1}` has no brushes to apply	`{_1}` няма четки за прилагане
+@msg	missing `library` (see brush.libraries)	липсва `library` (вижте brush.libraries)
+@msg	no brush `{n}`	няма четка `{n}`
+@msg	no brush `{n}` in `{_1}`	няма четка `{n}` в `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	няма библиотека с четки `{key}` (вижте brush.libraries)
+@msg	the document has no brushes to save	документът няма четки за запазване
+@msg	a {width}×{height} screenshot's byte count overflows	броят байтове на екранна снимка {width}×{height} препълва
+@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	{what} на прозореца ({points} точки × {scale} DPI) не може да определи размера на екранна снимка
+@msg	{label} must be a number	{label} трябва да е число
+@msg	{label} must be a number of at least 0.1	{label} трябва да е число не по-малко от 0.1
+@msg	{label} must be a number from {min} to {max}	{label} трябва да е число от {min} до {max}
+@msg	{label} must be a whole number from {min} to {max}	{label} трябва да е цяло число от {min} до {max}
+@msg	features lists at most {max} tags	features изброява най-много {max} етикета
+@msg	unknown OpenType feature `{t}`	неизвестна функция на OpenType `{t}`
+@msg	{label} must be a number above 0 and at most {max}	{label} трябва да е число над 0 и най-много {max}
+@msg	{label} must be at most {max} characters	{label} трябва да е най-много {max} знака
+@msg	{label} must be one character	{label} трябва да е един знак
+@msg	at most {max} tab stops	най-много {max} табулатора
+@msg	unknown align `{other}`	неизвестно подравняване `{other}`
+@msg	no character style `{name}`	няма стил на знаци `{name}`
+@msg	{_1} is an importer (File › Open With)	{_1} е формат за импортиране (Файл › Отваряне с)
+@msg	missing `importer` (see document.formats)	липсва `importer` (вижте document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` трябва да е идентификатор на формат на приставка (вижте document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	„{shown}“ отваря файлове {_1}, а не `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` е приставка от вид `{_2}`, а не формат за импортиране
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` е приставка от вид `{_2}`, а не формат за експортиране
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` е формат за импортиране: отворете файл с document.open {{"importer": "{_2}"}}
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` е формат за експортиране: експортирайте с document.export {{"format": "{_2}"}}
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` е динамичен ефект: приложете го с effect.apply {{"effect": "{_2}"}}
+@msg	the importer returned no objects	форматът за импортиране не върна обекти
+@msg	an importer returns `objects` and `warnings`, not `{key}`	форматът за импортиране връща `objects` и `warnings`, а не `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	файлът е по-голям от {MAX_INPUT_BYTES} байта, които чете форматът за импортиране
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	форматът за импортиране обявява от 1 до {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	само формат за експортиране или за импортиране обявява `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	форматът за импортиране винаги получава бюджета на импортиране: пропуснете `budget`
+@msg	only paths and compound paths can be aligned to the pixel grid	само пътища и съставни пътища могат да се подравняват към пикселната мрежа
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` и `last` трябва да са номера на редове в конзолата, като first е преди last
+@msg	no plug-in effect is deferred	няма отложен ефект на приставка
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Отворено с {n} отложен ефект на приставка. Ефект › Обновяване на отложените ефекти го изпълнява.|Отворено с {n} отложени ефекта на приставки. Ефект › Обновяване на отложените ефекти ги изпълнява.
+@msg	The selected art has no islands to bridge	Избраната графика няма острови за свързване с мостове
+@msg	No bridge of this width fits across the selected art	Нито един мост с тази ширина не се побира през избраната графика
+@msg	Some islands could not be joined to the area around the art	Някои острови не можаха да се свържат с областта около графиката
+@msg	`width` must be from {lo} to {hi} pt	`width` трябва да е от {lo} до {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` трябва да е цяло число от 1 до {MAX_BRIDGES_PER_ISLAND}
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	Зареден е „{name}“: {n} стъпка има неизвестна команда и беше запазена: „{action}“, стъпка {step}, `{command}`|Зареден е „{name}“: {n} стъпки имат неизвестни команди и бяха запазени; първата: „{action}“, стъпка {step}, `{command}`
 	Chalk & Charcoal…	Креда и въглен…
 	Chalk & Charcoal	Креда и въглен
 	Graphic Pen…	Графична писалка…
@@ -6687,6 +7370,7 @@ axis	Y Axis	Y ос
 	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Автоматизация поиска инсталирането на тази приставка. За да я инсталирате, изберете Обект › Приставки › Инсталиране на приставка… сами.
 	File SHA-256: {hash}	SHA-256 на файла: {hash}
 	Read the objects it is given	Четене на обектите, които получава
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Четене на обектите, които получава, както и на настройките, работните области, слоевете и образците на документа
 	Change, add and delete objects in the document	Промяна, добавяне и изтриване на обекти в документа
 	Keep data of its own with the document	Съхраняване на собствени данни в документа
 	Change how the objects its effect is applied to are drawn	Промяна на начина, по който се рисуват обектите, към които е приложен ефектът му
@@ -8039,7 +8723,361 @@ breakText	Glyphs	Глифи
 	Pulse Stroke	Пулсиращ щрих
 	Round Flow	Кръгъл поток
 	Chisel Flow	Скосен поток
+@msg	Script file access denied: {path}	Достъпът до файла на скрипта е отказан: {path}
+@msg	Script file access to the app's own folders is not allowed	Достъпът от скрипт до собствените папки на приложението не е разрешен
+@msg	Script file cannot encode the text	Файлът на скрипта не може да кодира текста
+@msg	Script file could not be written	Файлът на скрипта не можа да се запише
+@msg	Script file dialogs need a person to answer them	Файловите диалогови прозорци за скриптове изискват човек, който да им отговори
+@msg	Script file is not open for writing	Файлът на скрипта не е отворен за запис
+@msg	Script file name is already in use	Името на файла на скрипта вече се използва
+@msg	Script file name must be a name without a folder	Името на файла на скрипта трябва да е име без папка
+@msg	Script file permission can be kept only for a script run from a file	Разрешението за файлове може да се запази само за скрипт, изпълнен от файл
+@msg	Script file permission could not be saved	Разрешението за файлове на скрипта не можа да се запази
+@msg	Script folder is not empty	Папката на скрипта не е празна
+@msg	Script files cannot make aliases	Файловете на скриптове не могат да създават псевдоними
+@msg	Script file hidden setting cannot be changed	Настройката за скриване на файла на скрипта не може да се променя
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: файлов диалогов прозорец не може да се отвори в обратно извикване на вградена функция, в getter, в преобразуване или във файл, изпълнен от $.evalFile; извикайте го от собствения код на скрипта
+@msg	the script wrote more file data than one run may write (32 MiB)	скриптът записа повече файлови данни, отколкото е разрешено за едно изпълнение (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` за файлов диалогов прозорец на скрипт трябва да е едно от: once, always, deny, stop
+@msg	choose a file or folder first, or deny	първо изберете файл или папка или откажете
+@msg	the script file permissions could not be saved: {e}	разрешенията за файлове на скрипта не можаха да се запазят: {e}
+@msg	this script's file access can be allowed only once	достъпът до файлове на този скрипт може да се разреши само веднъж
+@msg	Only the person at the keyboard can allow a script's file access	Само човекът на клавиатурата може да разреши достъпа на скрипт до файлове
+@msg	A script is given at most 2,048 files: the files picked after them were left out	На скрипт се дават най-много 2,048 файла: файловете, избрани след тях, бяха пропуснати
+@msg	assignment to a constant binding	присвояване на константна връзка
+@msg	invalid array length	невалидна дължина на масив
+@msg	array literal too long	литералът на масив е твърде дълъг
+@msg	the value is not a function	стойността не е функция
+@msg	apply was called on a value that is not a function	apply беше извикан за стойност, която не е функция
+@msg	the argument list is not an object	списъкът с аргументи не е обект
+@msg	too many arguments	твърде много аргументи
+@msg	the value is not a constructor	стойността не е конструктор
+@msg	cannot convert the object to a primitive value	обектът не може да се преобразува в примитивна стойност
+@msg	cannot convert undefined or null to an object	undefined или null не може да се преобразува в обект
+@msg	the right side of 'in' is not an object	дясната страна на 'in' не е обект
+@msg	the right side of 'instanceof' is not a function	дясната страна на 'instanceof' не е функция
+@msg	the function's prototype is not an object	прототипът на функцията не е обект
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} не е дефиниран
+@msg	cannot read property '{key}' of {base}	свойството '{key}' на {base} не може да се прочете
+@msg	cannot set property '{key}' of {base}	свойството '{key}' на {base} не може да се зададе
+@msg	cannot read a property of {base}	свойство на {base} не може да се прочете
+@msg	cannot set a property of {base}	свойство на {base} не може да се зададе
+@msg	cannot define property '{key}': {why}	свойството '{key}' не може да се дефинира: {why}
+@msg	cannot assign to property '{key}': {why}	на свойството '{key}' не може да се присвои: {why}
+@msg	cannot delete property '{key}'	свойството '{key}' не може да се изтрие
+@msg	cannot declare function {ident}	функцията {ident} не може да се декларира
+@msg	invalid assignment target	невалидна цел на присвояване
+@msg	the array's length is read-only	дължината на масива е само за четене
+@msg	the property cannot be redefined	свойството не може да се предефинира
+@msg	the object is not extensible	обектът не е разширяем
+@msg	the length cannot be redefined	дължината не може да се предефинира
+@msg	it is read-only	то е само за четене
+@msg	an element cannot be deleted	елемент не може да се изтрие
+@msg	it has only a getter	то има само getter
+@msg	the value is a primitive	стойността е примитивна
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` има {n} отговор, който скриптът не използва|`answers` има {n} отговора, които скриптът не използва
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} остави {n} обект под четката непроменен ({_2}): променя формата само на пътища|{_1} остави {n} обекта под четката непроменени ({_2}): променя формата само на пътища
+liquify-tool	Warp	Изкривяване
+liquify-tool	Twirl	Въртене
+liquify-tool	Pucker	Свиване
+liquify-tool	Bloat	Надуване
+liquify-tool	Scallop	Назъбване
+liquify-tool	Crystallize	Кристализация
+liquify-tool	Wrinkle	Набръчкване
+liquify-kind	graphs	диаграми
+liquify-kind	type	текст
+liquify-kind	symbols	символи
+liquify-kind	images	изображения
+liquify-kind	meshes	мрежи
+liquify-kind	envelopes	пликове
+liquify-kind	repeats	повторения
+liquify-kind	placed documents	поставени документи
+liquify-kind	blends	преливания
+liquify-list-two	{0}, {1}	{0} и {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} и {1}
+@msg	give one <filter> element	задайте един елемент <filter>
+@msg	the <filter> element needs an id, the filter's name	елементът <filter> изисква id, името на филтъра
+@msg	an SVG filter's id is at most {MAX_NAME} characters	id на SVG филтър е най-много {MAX_NAME} знака
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> не е елемент на SVG филтър
+@msg	an SVG filter has no event attributes such as {_1}	SVG филтърът няма атрибути за събития като {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	изображенията на SVG филтър са data: URL адреси на PNG, JPEG, GIF или WebP
+@msg	the SVG filter isn't valid XML: {e}	SVG филтърът не е валиден XML: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves на feTurbulence е най-много {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} е най-много {max}
+@msg	feConvolveMatrix's order	order на feConvolveMatrix
+@msg	feMorphology's radius	radius на feMorphology
+@msg	a blur's stdDeviation	stdDeviation на размазване
+@msg	the SVG filter has no primitives	SVG филтърът няма примитиви
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	SVG филтърът има най-много {MAX_PRIMITIVES} примитива
+@msg	the SVG filter is too large once its attributes are written out	SVG филтърът е твърде голям, след като атрибутите му бъдат изписани
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	изображенията на SVG филтър имат общо най-много {MAX_IMAGE_PIXELS} пиксела
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG филтърът не може да се нарисува: проверете примитивите му и техните входове
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	елементите на SVG филтър се влагат най-много на {MAX_DEPTH} нива
+@msg	an SVG filter is at most {_1} KB	SVG филтърът е най-много {_1} KB
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` трябва да е [a, b, c, d], всяко от -1000 до 1000, като a·d - b·c е на поне 0.001 от 0
+@msg	`angle` must be from -180 to 180 degrees	`angle` трябва да е от -180 до 180 градуса
+@msg	`roundness` must be from 0 to 100%	`roundness` трябва да е от 0 до 100%
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` трябва да е от 0.01 до 100 pt
+@msg	style must be "pencil" or "brush"	style трябва да е "pencil" или "brush"
+@msg	extend end must be "start" or "end"	end за удължаване трябва да е "start" или "end"
+@msg	connect end must be "start" or "end"	end за свързване трябва да е "start" или "end"
+@msg	`roundness` must be from 1 to 100%	`roundness` трябва да е от 1 до 100%
+@msg	3D effects require finite coordinates within 100 million points	3D ефектите изискват крайни координати в рамките на 100 милиона точки
+@msg	3D effects require one to ten lights	3D ефектите изискват от един до десет източника на светлина
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	дълбочина на BMP {_1}: 1, 4, 8, 16, 24 или 32 бита на пиксел
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	кодирането в BMP е неуспешно: {width} × {height} пиксела не се побират във формата или в буфера на пикселите
+@msg	GIF encoding failed: the palette image is malformed	кодирането в GIF е неуспешно: изображението с палитра е неправилно оформено
+@msg	GIF encoding failed: {e}	кодирането в GIF е неуспешно: {e}
+@msg	JPEG colour profile: {e}	цветови профил на JPEG: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	кодирането в JPEG е неуспешно: буферът на пикселите не съответства на размера на изображението
+@msg	JPEG encoding failed: {e}	кодирането в JPEG е неуспешно: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	кодирането в PNG е неуспешно: буферът на пикселите не съответства на размера на изображението
+@msg	PNG encoding failed: the palette image is malformed	кодирането в PNG е неуспешно: изображението с палитра е неправилно оформено
+@msg	PNG encoding failed: {e}	кодирането в PNG е неуспешно: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	кодирането в PNG е неуспешно: {width} × {height} пиксела не е валиден размер на изображение
+@msg	PSD colour profile: {e}	цветови профил на PSD: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	кодирането в PSD е неуспешно: буферът на пикселите не съответства на размера на изображението
+@msg	Revolve profile contains invalid coordinates	профилът за завъртане около ос съдържа невалидни координати
+@msg	Revolve profile is too complex	профилът за завъртане около ос е твърде сложен
+@msg	Revolve projection is not finite	проекцията на завъртането около ос не е крайна
+@msg	Revolve requires finite profile coordinates within 100 million points	завъртането около ос изисква крайни координати на профила в рамките на 100 милиона точки
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	повърхността на завъртането около ос е твърде сложна; намалете Сегменти или опростете профила
+@msg	Revolve surface is too complex; simplify the profile	повърхността на завъртането около ос е твърде сложна; опростете профила
+@msg	Revolve visibility cannot split the projected boundary	изчисляването на видимостта при завъртане около ос не може да раздели проектираната граница
+@msg	Revolve visibility creates too many fragments	изчисляването на видимостта при завъртане около ос създава твърде много фрагменти
+@msg	Revolve visibility creates too many vector anchors	изчисляването на видимостта при завъртане около ос създава твърде много векторни опорни точки
+@msg	Revolve visibility exceeds its geometry work limit	изчисляването на видимостта при завъртане около ос надхвърля ограничението си за геометрична работа
+@msg	Revolve visibility exceeds its spatial index limit	изчисляването на видимостта при завъртане около ос надхвърля ограничението си за пространствен индекс
+@msg	Revolve visibility has too many boundary crossings	изчисляването на видимостта при завъртане около ос има твърде много пресичания на граници
+@msg	Revolve visibility has too many input anchors	изчисляването на видимостта при завъртане около ос има твърде много входни опорни точки
+@msg	Revolve visibility requires convex cap sectors	изчисляването на видимостта при завъртане около ос изисква изпъкнали сектори на капачката
+@msg	Revolve visibility requires finite projected faces	изчисляването на видимостта при завъртане около ос изисква крайни проектирани страни
+@msg	SVG options: {e}	опции за SVG: {e}
+@msg	Save for Web settings: {e}	настройки за запис за уеб: {e}
+@msg	TIFF colour profile: {e}	цветови профил на TIFF: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	кодирането в TIFF е неуспешно: буферът на пикселите не съответства на размера на изображението
+@msg	TIFF encoding failed: {e}	кодирането в TIFF е неуспешно: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	дълбочина на Targa {_1}: 16, 24 или 32 бита на пиксел
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	кодирането в Targa е неуспешно: буферът на пикселите не съответства на размера на изображението
+@msg	The 3D projection is not finite	3D проекцията не е крайна
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	3D сянката е твърде сложна; изключете Сенки или опростете графиката
+@msg	The shape contains invalid coordinates	Формата съдържа невалидни координати
+@msg	Too many Revolve faces for visibility evaluation	Твърде много страни на завъртането около ос за изчисляване на видимостта
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft чете най-много {ASE_MAX_ENTRIES} цвята и групи от файл за обмен на образци, а тази библиотека има {entries}
+@msg	WebP encoding failed: {e}	кодирането в WebP е неуспешно: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	кодирането в WebP е неуспешно: изображението е твърде голямо за WebP със загуба: намалете разделителната способност или изберете Без загуба
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` трябва да е "document", {{artboards: [index, …]}} или {{layers: [id, …]}}
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` е smallThumb, mediumThumb, largeThumb, smallList или largeList
+@msg	`{file}` has no swatches of its own	`{file}` няма собствени образци
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` има образци на мостри, които файл .vcswatches не може да съдържа
+@msg	a line can't run from a point to itself	линия не може да минава от точка до самата нея
+@msg	a line needs at least two points	линията изисква поне две точки
+@msg	a linked image file is outside the read roots	свързан файл на изображение е извън корените за четене
+@msg	a linked file's export folder is outside the read roots	папката за експортиране на свързан файл е извън корените за четене
+@msg	a number cannot be read	число не може да се прочете
+@msg	a swatch exchange block is too long	блок за обмен на образци е твърде дълъг
+@msg	a swatch exchange name is too long	име за обмен на образци е твърде дълго
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	изображение {sw} × {sh} не може да се преоразмери до {width} × {height} пиксела
+@msg	a {width} × {height} image is too large	изображение {width} × {height} е твърде голямо
+@msg	a {width} × {height} image: {e}	изображение {width} × {height}: {e}
+@msg	an image could not be written: {e}	изображение не можа да се запише: {e}
+@msg	an image that couldn't be read was left out	изображение, което не можа да се прочете, беше пропуснато
+@msg	can't open “{name}”: {e}	„{name}“ не може да се отвори: {e}
+@msg	cannot align zip entries to {align} bytes	елементите на zip не могат да се подравнят на {align} байта
+@msg	cannot open the automation {kind} root `{_1}`: {e}	коренът {kind} за автоматизация `{_1}` не може да се отвори: {e}
+@msg	cannot read profile: {0}	профилът не може да се прочете: {0}
+@msg	color book version {version} isn't supported (only 1)	версия {version} на цветова книга не се поддържа (само 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	цветови книги в цветово пространство {other} не се поддържат (само RGB, CMYK и Lab)
+@msg	file name too long to zip: {_1}	името на файла е твърде дълго за zip: {_1}
+@msg	file name too long to zip: {name}	името на файла е твърде дълго за zip: {name}
+@msg	freeform line {i}: {e}	свободна линия {i}: {e}
+@msg	freeform point {i}: {e}	свободна точка {i}: {e}
+@msg	give `{key}` or `{other}`, not both	задайте `{key}` или `{other}`, но не и двете
+@msg	grayscale profiles can't be working spaces yet	профилите в нива на сивото все още не могат да бъдат работни пространства
+@msg	input contains NaN or infinite coordinates	входните данни съдържат NaN или безкрайни координати
+@msg	input path could not be closed	входният път не можа да се затвори
+@msg	invalid ICC profile: {0}	невалиден профил ICC: {0}
+@msg	invalid scale {scale}	невалиден мащаб {scale}
+@msg	its localized names take more than {_1} KB	локализираните му имена заемат повече от {_1} KB
+@msg	its objects are nested too deep ({e})	обектите му са вложени твърде дълбоко ({e})
+@msg	its tag table lists the `{_1}` tag more than once	таблицата му с тагове изброява тага `{_1}` повече от веднъж
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	не са намерени подобни обекти (отразените копия не се съпоставят); променете опциите за глобално редактиране и опитайте отново
+@msg	not a graphic style library: {e}	не е библиотека с графични стилове: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	не е библиотека с образци (.vcswatches или .gpl)
+@msg	not a swatch library (format `{_1}`)	не е библиотека с образци (формат `{_1}`)
+@msg	not a swatch library: {e}	не е библиотека с образци: {e}
+@msg	not an action set file ({e})	не е файл с набор от действия ({e})
+@msg	numbers out of order in {{}} quantifier	числата в квантора {{}} не са в правилния ред
+@msg	profile colour space {other} is not RGB, CMYK or Gray	цветовото пространство на профила {other} не е RGB, CMYK или Gray
+@msg	regular expression too large	регулярният израз е твърде голям
+@msg	script file is not UTF-8 text: {value}	файлът на скрипта не е текст в UTF-8: {value}
+@msg	step {step} of “{action}” runs the unknown command `{command}`	стъпка {step} от „{action}“ изпълнява неизвестната команда `{command}`
+@msg	stop {i}: {e}	спирка {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	версия {major}.{minor} на обмена на образци не се поддържа (само 1.x)
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: използвайте "{_1}" или "{_2}"
+@msg	the SVG's style sheets take too long to match	съпоставянето на стиловете на SVG отнема твърде дълго
+@msg	the SVG's styles expand to more than {0} MB	стиловете на SVG се разширяват до повече от {0} MB
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	цветовата книга съдържа повече от {ASE_MAX_ENTRIES} цвята
+@msg	the color book is cut short	цветовата книга е прекъсната
+@msg	the color book's names take more than {_1} MB	имената в цветовата книга заемат повече от {_1} MB
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	изображението би било {w} × {h} пиксела; растерното експортиране е ограничено до {MAX_RASTER_SIDE} пиксела на страна и {_1} мегапиксела: намалете мащаба или разделителната способност
+@msg	the optimised image can't be read back: {e}	оптимизираното изображение не може да се прочете обратно: {e}
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	боята не е свободен градиент (приложете такъв с paint.editGradient {{kind: "freeform"}})
+@msg	the pixel buffer doesn't match the image size	буферът на пикселите не съответства на размера на изображението
+@msg	the preview: {e}	визуализацията: {e}
+@msg	the request may not read the New Document profiles folder	заявката не може да чете папката с профили за нов документ
+@msg	the shapes are too degenerate to combine	формите са твърде дегенерирали за комбиниране
+@msg	the shapes cross themselves and each other too often to combine	формите пресичат себе си и една друга твърде често за комбиниране
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	файлът за обмен на образци съдържа повече от {ASE_MAX_ENTRIES} цвята и групи
+@msg	the swatch exchange file is cut short	файлът за обмен на образци е прекъснат
+@msg	the {_1} plate can't be read: {e}	плаката {_1} не може да се прочете: {e}
+@msg	this binary DXF file is damaged or cut short	този двоичен файл DXF е повреден или прекъснат
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	това е DWG чертеж, който не може да бъде прочетен: запазете го от CAD приложението като DXF и го отворете
+@msg	too many classes	твърде много класове
+@msg	too many groups	твърде много групи
+@msg	too many layers for PSD (at most 32767)	твърде много слоеве за PSD (най-много 32767)
+@msg	too many swatch exchange blocks	твърде много блокове за обмен на образци
+@msg	unknown colour profile: {0}	неизвестен цветови профил: {0}
+@msg	{_1} clashes with a built-in profile name	{_1} съвпада с име на вграден профил
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} пиксела е твърде голямо за GIF (най-много 65535 пиксела на страна): намалете разделителната способност
+@msg	{_1}: no usable transform to/from sRGB	{_1}: няма използваемо преобразуване към или от sRGB
+@msg	{name} is not a CMYK profile	{name} не е профил CMYK
+@msg	{name} is not an RGB profile	{name} не е профил RGB
+@msg	{path}: could not be read	{path}: не можа да се прочете
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} пиксела е твърде голямо за JPEG (най-много 65535 пиксела на страна): намалете разделителната способност
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} пиксела е твърде голямо за Targa (най-много 65535 пиксела на страна): намалете разделителната способност
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пиксела е твърде голямо за PSD (най-много {MAX_SIDE} пиксела на страна): намалете разделителната способност
+@msg	the template name can't be empty	името на шаблона не може да е празно
+@msg	the template name isn't usable as a file name	името на шаблона не може да се използва като име на файл
+@msg	no metadata templates folder here	тук няма папка с шаблони за метаданни
+@msg	give `name` or `path`, not both	задайте `name` или `path`, но не и двете
+@msg	give one of `path`, `name` and `data`	задайте едно от `path`, `name` и `data`
+@msg	mode must be replace, keep or append	mode трябва да е replace, keep или append
+@msg	the file is not an XMP metadata template	файлът не е шаблон за метаданни XMP
+@msg	no path painted with a brush is selected	не е избран път, нарисуван с четка
+@msg	the selected paths are painted with brushes of different types	избраните пътища са нарисувани с четки от различни типове
+@msg	give `params` or `reset`, not both	задайте `params` или `reset`, но не и двете
+@msg	a bristle brush has no options of its own on a path	четката с косъм няма собствени опции върху път
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	някои растерни ефекти не бяха превърнати в изображения: биха заели общо повече от 1,024 изображения или 256 мегапиксела
+@msg	Shape Builder: select all paths you want to merge	Инструмент за създаване на форми: изберете всички пътища, които искате да обедините
+@msg	action step {_1} (`{id}`) failed: {reason}	стъпката на действие {_1} (`{id}`) е неуспешна: {reason}
+@msg	`points` must be three [x, y] pairs of numbers	`points` трябва да са три двойки числа [x, y]
+@msg	direct-select three anchor points, or give `points`	изберете директно три опорни точки или задайте `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	никоя окръжност не минава през тези точки: две от тях съвпадат или и трите лежат на една линия
+@msg	`{panel}` has no display sizes to cycle	`{panel}` няма размери на показване за превключване
+@msg	the panels are not shown	панелите не са показани
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	линия или друг отворен път, който не огражда площ, не променя формата на резултата; за да го включите, първо приложете към него Обект › Път › Преобразуване на щриха в контур
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} даде празен резултат: линия или друг отворен път не огражда площ; за да го включите, първо приложете към него Обект › Път › Преобразуване на щриха в контур
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	линия или друг отворен път, който не огражда площ, не добавя площ към съставната форма; за да го включите, първо приложете към него Обект › Път › Преобразуване на щриха в контур
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Извадено е {n} вградено изображение в {folder}|Извадени са {n} вградени изображения в {folder}
+@msg	every numbered name for {name} is taken in that folder	всяко номерирано име за {name} вече е заето в тази папка
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	Импортирането чете файл с източник на данни, завършващ на .csv, .tsv, .txt или .xml
+variable-kind	Visibility	Видимост
+variable-kind	Linked File	Свързан файл
+variable-kind	Graph Data	Данни за диаграма
+variable-kind	Unknown	Непознат
+variable-list-two	{0}, {1}	{0} и {1}
+variable-list-middle	{0}, {1}	{0}, {1}
+variable-list-end	{0}, {1}	{0} и {1}
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: Минимум не трябва да надхвърля Желано, нито Желано да надхвърля Максимум
+@msg	side is left or right, not `{v}`	side е left или right, а не `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order е цяло число от 0 до {others}, а не `{v}`
+@msg	toolbar (a toolbar's name) must be a string	toolbar (името на лента с инструменти) трябва да е низ
+@msg	no toolbar named `{name}`	няма лента с инструменти с име `{name}`
+@msg	toolbar name can't be empty	името на лентата с инструменти не може да е празно
+@msg	a toolbar name has at most {MAX_NAME} characters	името на лента с инструменти има най-много {MAX_NAME} знака
+@msg	there is already a toolbar named `{name}`	вече има лента с инструменти с име `{name}`
+@msg	there is already a toolbar named `{to}`	вече има лента с инструменти с име `{to}`
+@msg	a workspace keeps at most {MAX} toolbars	работното пространство съдържа най-много {MAX} ленти с инструменти
+@msg	name (a toolbar's name) must be a string	name (името на лента с инструменти) трябва да е низ
+@msg	name (a toolbar's name) is required	name (името на лента с инструменти) е задължително
+@msg	to (the new name) is required	to (новото име) е задължително
+@msg	name must be a toolbar's name	name трябва да е името на лента с инструменти
 
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Редактиране на оригинала с:
 file-filter	Applications	Приложения
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	текстът, растерните изображения, преливанията, контурите, щрихите на четки и другите обекти от CDR, които VectorCraft все още не чете, бяха пропуснати
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	запълванията от CDR с преход, мостра, текстура и PostScript бяха пропуснати
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	цветовете в цветови модели на CDR, които VectorCraft не чете, бяха отворени като черно
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	цветовете от библиотеки на CDR, които чертежът съхранява само по номер, бяха отворени като черни спот цветове
+@msg	CDR outline arrowheads were left out	върховете на стрелки на контурите от CDR бяха пропуснати
+@msg	CDR envelopes were not applied, and the shapes under them keep their outlines	пликовете от CDR не бяха приложени и формите под тях запазват очертанията си
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	лещите и прозрачността на обекти от CDR не бяха приложени и обектите, върху които са, се показват непрозрачни
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	части от чертежа, вложени твърде дълбоко или извън ограниченията за импортиране, бяха пропуснати
+@msg	damaged parts of the drawing were left out	повредените части от чертежа бяха пропуснати
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	страниците от CDR, по-дълги от 163,830 pt, бяха отворени с тази дължина и графиката близо до ръбовете им е извън работната област
+@msg	CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out	текстът, изображенията, правоъгълниците, елипсите, изрязващите пътища и другите обекти от CMX, които VectorCraft все още не чете, бяха пропуснати
+@msg	CMX fills other than uniform colors were left out	запълванията от CMX, различни от еднородни цветове, бяха пропуснати
+@msg	colors in CMX color models VectorCraft doesn't read were opened as black	цветовете в цветови модели на CMX, които VectorCraft не чете, бяха отворени като черно
+@msg	CMX library colors that the file stores only by number were opened as black spot colors	цветовете от библиотеки на CMX, които файлът съхранява само по номер, бяха отворени като черни спот цветове
+@msg	CMX outline arrowheads were left out	върховете на стрелки на контурите от CMX бяха пропуснати
+@msg	CMX lenses were not applied	лещите от CMX не бяха приложени
+@msg	CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	страниците от CMX, по-дълги от 163,830 pt, бяха отворени с тази дължина и графиката близо до ръбовете им е извън работната област
+@msg	the file is no longer loaded	файлът вече не е зареден
+@msg	1 type layer came in as pixels: the text isn't editable	1 текстов слой беше импортиран като пиксели: текстът не може да се редактира
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} текстови слоя бяха импортирани като пиксели: текстът не може да се редактира
+@msg	1 adjustment layer was not applied	1 коригиращ слой не беше приложен
+@msg	{n} adjustment layers were not applied	{n} коригиращи слоя не бяха приложени
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 слой за запълване не беше нарисуван (запълване с градиент или мостра, цвят, който не може да се прочете, или форма, която не съхранява пиксели)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} слоя за запълване не бяха нарисувани (запълване с градиент или мостра, цвят, който не може да се прочете, или форма, която не съхранява пиксели)
+@msg	the layer effects of 1 layer weren't drawn	ефектите на слоя на 1 слой не бяха нарисувани
+@msg	the layer effects of {n} layers weren't drawn	ефектите на слоевете на {n} слоя не бяха нарисувани
+@msg	the vector masks of 1 layer weren't applied	векторните маски на 1 слой не бяха приложени
+@msg	the vector masks of {n} layers weren't applied	векторните маски на {n} слоя не бяха приложени
+@msg	the knockout of 1 layer wasn't applied	избиването на 1 слой не беше приложено
+@msg	the knockout of {n} layers wasn't applied	избиването на {n} слоя не беше приложено
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 слой беше пропуснат (скрити слоеве и слоевете, изрязани по тях)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} слоя бяха пропуснати (скрити слоеве и слоевете, изрязани по тях)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 слой, изрязан по слой за запълване, който не беше нарисуван, беше пропуснат
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	{n} слоя, изрязани по слоеве за запълване, които не бяха нарисувани, бяха пропуснати
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	слоевете в режими на смесване, които VectorCraft няма ({modes}), бяха обединени със слоевете под тях
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 слой в режими на смесване, които VectorCraft няма, беше импортиран като Нормално: обединяването изисква повече памет от разрешеното
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} слоя в режими на смесване, които VectorCraft няма, бяха импортирани като Нормално: обединяването изисква повече памет от разрешеното
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 слой, изрязан по слоя отдолу, беше импортиран без изрязване: обединяването изисква повече памет от разрешеното
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} слоя, изрязани по слоя отдолу, бяха импортирани без изрязване: обединяването изисква повече памет от разрешеното
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers се прилага към файл PSD, поставен с layers: true
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: свързан файл PSD се поставя като плоското си изображение; задайте link: false, за да го вградите с отрязъците му
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: свързан файл PSD се поставя като плоското си изображение; пропуснете link или задайте link: false
+@msg	1 slice lies outside the canvas or has no size and was left out	1 отрязък е извън платното или няма размер и беше пропуснат
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} отрязъка са извън платното или нямат размер и бяха пропуснати
+@msg	1 slice would lie outside the canvas and was left out	1 отрязък би бил извън платното и беше пропуснат
+@msg	{n} slices would lie outside the canvas and were left out	{n} отрязъка биха били извън платното и бяха пропуснати
+@msg	the slices' descriptor holds too many values	дескрипторът на отрязъците съдържа твърде много стойности
+@msg	the slices' descriptor has a version other than 16	дескрипторът на отрязъците има версия, различна от 16
+@msg	the slices' descriptor has no list of slices	дескрипторът на отрязъците няма списък с отрязъци
+@msg	the slices' descriptor lists something other than a slice	дескрипторът на отрязъците изброява нещо, което не е отрязък
+@msg	a slice in the slices' descriptor has no bounds	отрязък в дескриптора на отрязъците няма граници
+@msg	a slice's bounds in the slices' descriptor aren't numbers	границите на отрязък в дескриптора на отрязъците не са числа
+@msg	the slices' descriptor nests too deep	дескрипторът на отрязъците е вложен твърде дълбоко
+@msg	the slices can't be read ({e}) and were left out	отрязъците не могат да се прочетат ({e}) и бяха пропуснати
+@msg	the slices are stored in version {v}, which isn't read	отрязъците са съхранени във версия {v}, която не се чете
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	файлът има {count} отрязъка, повече от {MAX_SLICES}, които се четат
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	текст в отрязъците има повече от {MAX_TEXT} знака, които се четат
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	дескрипторът на отрязъците има препратка от неизвестен вид ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	дескрипторът на отрязъците има стойност от неизвестен тип ({_1})
+@msg	the layers can't be read ({e}): the file was placed as its merged image	слоевете не могат да се прочетат ({e}): файлът беше поставен като обединеното си изображение
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	обектът {_1} е изображение, променено с Перспективно изкривяване или Свободно изкривяване, с което тази команда не работи
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	изображението {_1} не може да се изкриви така: ъглите му не биха образували изпъкнала форма
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	изображението {_1} не може да се изкриви така: ъглите му биха пресекли хоризонта на деформацията
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	изображението {_1} не може да се изкриви така: ъглите му биха били твърде близо един до друг за перспективно преобразуване
+@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	`spacing` трябва да е повече от 0 и най-много {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	`{key}` трябва да е от 0 до {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}` трябва да е от 0,01 до 1000 pt
+@msg	select the banner, or mark every artboard	изберете банера или маркирайте всички работни области
+@msg	the banner has no width or height	банерът няма ширина или височина
+@msg	the grommet inset is too large for the banner	отстъпът на капсите е твърде голям за банера
+@msg	the hem is too deep for the banner	подгъвът е твърде дълбок за банера
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	разстоянието дава повече от {MAX_GROMMETS} капси
+@msg	there is no banner to mark	няма банер за маркиране
+@msg	turn on at least one side	включете поне една страна
+@msg	with no hem and no grommets there is nothing to mark	без подгъв и без капси няма нищо за маркиране
+@msg	{saving} failed: {e}	{saving} неуспешно: {e}

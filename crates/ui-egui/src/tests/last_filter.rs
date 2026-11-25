@@ -7,8 +7,9 @@ use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_plugins::wat as tpl;
 
+use super::plugins::{Window, at, window};
 use crate::dialogs::plugin::{APPLY_LAST, LAST, NO_LAST_FILTER};
-use crate::{VectorcraftApp, dialogs, menus, theme};
+use crate::{VectorcraftApp, dialogs, menus};
 
 /// The whole-number parameter `n` of [`filter`]: 0 to 10, 3 by default.
 const N: &str = r#"{"n":{"type":"int","min":0,"max":10,"default":3}}"#;
@@ -46,12 +47,56 @@ fn undo_len(app: &VectorcraftApp) -> usize {
     app.session.doc().unwrap().history.undo.len()
 }
 
-/// One headless frame of the dialog layer, which previews the dialog's fields.
-fn frame(app: &mut VectorcraftApp) {
-    let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
-    let mut out = ctx.run_ui(Default::default(), |ui| dialogs::show(app, ui.ctx()));
-    out.textures_delta.clear();
+/// The id of the dialog on top of the host.
+fn top(app: &VectorcraftApp) -> Option<egui::Id> {
+    app.dialogs()?.with(|host| host.open_dialogs().last().map(|d| d.id))
+}
+
+/// The values of the dialog on top of the host, as automation lists them.
+fn fields(app: &VectorcraftApp) -> Value {
+    app.dialogs().and_then(|d| d.with(|host| host.open_dialogs().last().and_then(|d| d.fields.clone()))).unwrap_or(Value::Null)
+}
+
+/// Draws a frame a tenth of a second after the one before.
+fn step(h: &mut Window) {
+    let time = h.input_mut().time.unwrap_or(0.0) + 0.1;
+    at(h, time);
+}
+
+/// Sets `field` of the top dialog as `ui.dialog.set` does, and draws the frame that previews it.
+fn set(h: &mut Window, field: &str, value: Value) {
+    let (ctx, id) = (h.ctx.clone(), top(h.state()).expect("a dialog is open"));
+    h.state().dialogs().expect("the dialog host").with(|host| host.set_json_field(&ctx, id, field, value)).unwrap();
+    step(h);
+}
+
+/// Answers the top dialog with OK (`ok`) or Cancel and draws the frames that take the answer.
+fn answer(h: &mut Window, ok: bool) {
+    let (ctx, id) = (h.ctx.clone(), top(h.state()).expect("a dialog is open"));
+    let done = h.state().dialogs().expect("the dialog host").with(|host| if ok { host.confirm_by_id(&ctx, id) } else { host.cancel_by_id(&ctx, id) });
+    assert!(done, "the dialog took the answer");
+    for _ in 0..3 {
+        step(h);
+        if top(h.state()) != Some(id) {
+            return;
+        }
+    }
+    panic!("the answered dialog stayed open");
+}
+
+/// Runs `cmd` with `p`, then draws the frame that shows the dialog it opened.
+fn open(h: &mut Window, cmd: &str, p: Value) {
+    h.state_mut().run(cmd, p).unwrap();
+    step(h);
+    assert!(top(h.state()).is_some(), "{cmd} opened a dialog");
+}
+
+/// The value of `n` filter `id`'s own dialog opens with, after which the dialog is canceled.
+fn opens_with(h: &mut Window, id: &str) -> Value {
+    open(h, "plugin.dialog", json!({"id": id}));
+    let n = fields(h.state())["n"].clone();
+    answer(h, false);
+    n
 }
 
 /// Both items are off, and say so when run, until a filter ran; then they are named after it, and
@@ -59,31 +104,34 @@ fn frame(app: &mut VectorcraftApp) {
 /// dialog, as one undo step.
 #[test]
 fn apply_last_filter_runs_the_last_filter_again_with_its_parameters() {
-    let mut app = app();
+    let mut h = window(app());
+    let app = h.state_mut();
     let id = "test.ui.last.apply";
-    install(&mut app, &filter(id, "Grow Shape", N));
-    let entries = menus::menu_entries(&app);
+    install(app, &filter(id, "Grow Shape", N));
+    let entries = menus::menu_entries(app);
     let under: Vec<&str> = entries.iter().filter(|e| e.path == ["Object", "Plug-ins"]).map(|e| e.label.as_str()).take(2).collect();
     assert_eq!(under, ["Apply Last Filter", "Last Filter…"], "the first items of Object › Plug-ins");
     for cmd in [APPLY_LAST, LAST] {
-        assert!(!menus::enabled(&app, cmd), "{cmd} before any filter ran");
+        assert!(!menus::enabled(app, cmd), "{cmd} before any filter ran");
         assert_eq!(app.run(cmd, json!({})), Err(NO_LAST_FILTER.to_string()));
     }
-    assert_eq!(menus::dynamic_label(&app, APPLY_LAST, "Apply Last Filter"), "Apply Last Filter");
+    assert_eq!(menus::dynamic_label(app, APPLY_LAST, "Apply Last Filter"), "Apply Last Filter");
 
     let first = app.run("plugin.dialog", json!({"id": id, "params": {"n": 7}})).unwrap();
-    assert_eq!(width(&app, &first), 30.0);
+    assert_eq!(width(app, &first), 30.0);
     assert_eq!(app.last_filters.last_id(), Some(id));
-    assert!(menus::enabled(&app, APPLY_LAST) && menus::enabled(&app, LAST));
-    assert_eq!(menus::dynamic_label(&app, APPLY_LAST, "Apply Last Filter"), "Apply Grow Shape");
-    assert_eq!(menus::dynamic_label(&app, LAST, "Last Filter…"), "Grow Shape…");
-    assert_eq!(menus::display_label(&app, APPLY_LAST, "Apply Last Filter"), "Apply Grow Shape");
+    assert!(menus::enabled(app, APPLY_LAST) && menus::enabled(app, LAST));
+    assert_eq!(menus::dynamic_label(app, APPLY_LAST, "Apply Last Filter"), "Apply Grow Shape");
+    assert_eq!(menus::dynamic_label(app, LAST, "Last Filter…"), "Grow Shape…");
+    assert_eq!(menus::display_label(app, APPLY_LAST, "Apply Last Filter"), "Apply Grow Shape");
 
     app.run("select.none", json!({})).unwrap();
-    let undo = undo_len(&app);
+    let undo = undo_len(app);
     let again = app.run(APPLY_LAST, json!({})).unwrap();
-    assert!(app.ui.dialog.is_none(), "no dialog");
-    assert_eq!(width(&app, &again), 30.0, "the same parameters: n 7");
+    step(&mut h);
+    assert!(top(h.state()).is_none(), "no dialog");
+    let app = h.state();
+    assert_eq!(width(app, &again), 30.0, "the same parameters: n 7");
     assert_ne!(again["ids"], first["ids"], "a new run");
     let st = app.session.doc().unwrap();
     assert_eq!((st.history.undo.len(), st.history.undo.last().unwrap().label.as_str()), (undo + 1, "Grow Shape"));
@@ -94,59 +142,54 @@ fn apply_last_filter_runs_the_last_filter_again_with_its_parameters() {
 /// the last ones.
 #[test]
 fn last_filter_opens_its_dialog_with_the_last_parameters() {
-    let mut app = app();
+    let mut h = window(app());
     let id = "test.ui.last.dialog";
-    install(&mut app, &filter(id, "Grow Dialog…", N));
-    app.run("plugin.dialog", json!({"id": id, "params": {"n": 7}})).unwrap();
-    assert_eq!(menus::dynamic_label(&app, LAST, "Last Filter…"), "Grow Dialog…", "one ellipsis");
-    app.run("select.none", json!({})).unwrap();
-    let undo = undo_len(&app);
+    install(h.state_mut(), &filter(id, "Grow Dialog…", N));
+    h.state_mut().run("plugin.dialog", json!({"id": id, "params": {"n": 7}})).unwrap();
+    assert_eq!(menus::dynamic_label(h.state(), LAST, "Last Filter…"), "Grow Dialog…", "one ellipsis");
+    h.state_mut().run("select.none", json!({})).unwrap();
+    let undo = undo_len(h.state());
 
-    app.run(LAST, json!({})).unwrap();
-    let d = app.ui.dialog.as_ref().expect("its dialog");
-    assert_eq!((d.kind.as_str(), d.str("__plugin"), d.fields.get("n")), (dialogs::plugin::KIND, id.to_string(), Some(&json!(7))));
-    frame(&mut app);
-    dialogs::cancel(&mut app);
-    assert_eq!(undo_len(&app), undo, "Cancel changes nothing");
+    open(&mut h, LAST, json!({}));
+    assert_eq!(fields(h.state())["n"], json!(7), "the last value");
+    answer(&mut h, false);
+    assert_eq!(undo_len(h.state()), undo, "Cancel changes nothing");
 
     // OK with the preview kept.
-    app.run(LAST, json!({})).unwrap();
-    app.ui.dialog.as_mut().unwrap().fields.insert("n".into(), json!(5));
-    frame(&mut app);
-    assert!(app.session.in_interaction(), "previewing");
-    dialogs::confirm(&mut app).unwrap();
-    assert_eq!(undo_len(&app), undo + 1);
-    app.run(LAST, json!({})).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().unwrap().fields.get("n"), Some(&json!(5)), "OK made 5 the last value");
+    open(&mut h, LAST, json!({}));
+    set(&mut h, "n", json!(5));
+    assert!(h.state().session.in_interaction(), "previewing");
+    answer(&mut h, true);
+    assert_eq!(undo_len(h.state()), undo + 1);
+    open(&mut h, LAST, json!({}));
+    assert_eq!(fields(h.state())["n"], json!(5), "OK made 5 the last value");
 
     // OK without a preview.
-    app.ui.dialog.as_mut().unwrap().fields.insert("n".into(), json!(7));
-    app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(false));
-    dialogs::confirm(&mut app).unwrap();
-    assert_eq!(undo_len(&app), undo + 2);
-    app.run("select.none", json!({})).unwrap();
-    let again = app.run(APPLY_LAST, json!({})).unwrap();
-    assert_eq!(width(&app, &again), 30.0);
+    set(&mut h, "n", json!(7));
+    set(&mut h, "preview", json!(false));
+    assert!(!h.state().session.in_interaction(), "the preview is off");
+    answer(&mut h, true);
+    assert_eq!(undo_len(h.state()), undo + 2);
+    h.state_mut().run("select.none", json!({})).unwrap();
+    let again = h.state_mut().run(APPLY_LAST, json!({})).unwrap();
+    assert_eq!(width(h.state(), &again), 30.0);
 }
 
 /// Each filter's own dialog opens with the parameters that filter last ran with, never another
 /// filter's; one that hasn't run opens with its defaults.
 #[test]
 fn each_filter_dialog_opens_with_its_own_last_parameters() {
-    let mut app = app();
+    let mut h = window(app());
     let (a, b, c) = ("test.ui.last.own.a", "test.ui.last.own.b", "test.ui.last.own.c");
     for (id, name) in [(a, "Own A"), (b, "Own B"), (c, "Own C")] {
-        install(&mut app, &filter(id, name, N));
+        install(h.state_mut(), &filter(id, name, N));
     }
-    app.run("plugin.dialog", json!({"id": a, "params": {"n": 7}})).unwrap();
-    app.run("plugin.dialog", json!({"id": b, "params": {"n": 2}})).unwrap();
-    app.run("plugin.dialog", json!({"id": a, "params": {"n": 8}})).unwrap();
-    app.run("plugin.dialog", json!({"id": b, "params": {"n": 1}})).unwrap();
-    assert_eq!(app.last_filters.last_id(), Some(b));
+    for (id, n) in [(a, 7), (b, 2), (a, 8), (b, 1)] {
+        h.state_mut().run("plugin.dialog", json!({"id": id, "params": {"n": n}})).unwrap();
+    }
+    assert_eq!(h.state().last_filters.last_id(), Some(b));
     for (id, n) in [(a, 8), (b, 1), (c, 3)] {
-        app.run("plugin.dialog", json!({"id": id})).unwrap();
-        assert_eq!(app.ui.dialog.as_ref().unwrap().fields.get("n"), Some(&json!(n)), "{id}");
-        dialogs::cancel(&mut app);
+        assert_eq!(opens_with(&mut h, id), json!(n), "{id}");
     }
 }
 
@@ -154,36 +197,33 @@ fn each_filter_dialog_opens_with_its_own_last_parameters() {
 /// command and a live effect don't.
 #[test]
 fn only_successful_filter_runs_become_the_last_filter() {
-    let mut app = app();
+    let mut h = window(app());
     let id = "test.ui.last.kinds";
-    install(&mut app, &filter(id, "Kinds", N));
-    assert!(app.run("plugin.run", json!({"id": id, "params": {"n": "seven"}})).is_err());
-    assert_eq!(app.last_filters.last_id(), None, "a run that failed");
+    install(h.state_mut(), &filter(id, "Kinds", N));
+    assert!(h.state_mut().run("plugin.run", json!({"id": id, "params": {"n": "seven"}})).is_err());
+    assert_eq!(h.state().last_filters.last_id(), None, "a run that failed");
 
     let steps = json!({"commands": [{"command": "plugin.run", "params": {"id": id, "params": {"n": 7}}}]});
-    app.run("command.batch", steps).unwrap();
-    assert_eq!(app.last_filters.last_id(), Some(id), "a batch step");
-    app.run("plugin.dialog", json!({"id": id})).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().unwrap().fields.get("n"), Some(&json!(7)));
-    dialogs::cancel(&mut app);
+    h.state_mut().run("command.batch", steps).unwrap();
+    assert_eq!(h.state().last_filters.last_id(), Some(id), "a batch step");
+    assert_eq!(opens_with(&mut h, id), json!(7));
 
     let other = "test.ui.last.kinds.other";
-    install(&mut app, &filter(other, "Other", N));
-    app.run("plugin.run", json!({"id": other, "n": 2})).unwrap();
-    assert_eq!(app.last_filters.last_id(), Some(other), "a direct run, its parameters as top-level keys");
-    app.run("plugin.dialog", json!({"id": other})).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().unwrap().fields.get("n"), Some(&json!(2)));
-    dialogs::cancel(&mut app);
+    install(h.state_mut(), &filter(other, "Other", N));
+    h.state_mut().run("plugin.run", json!({"id": other, "n": 2})).unwrap();
+    assert_eq!(h.state().last_filters.last_id(), Some(other), "a direct run, its parameters as top-level keys");
+    assert_eq!(opens_with(&mut h, other), json!(2));
 
+    let app = h.state_mut();
     let cmds = "test.ui.last.cmds";
     let manifest = format!(r#"{{"id":"{cmds}","name":"Cmds","version":"1","kind":"filter","commands":[{{"id":"grow","label":"Grow"}}]}}"#);
     let triangle = r#"{"objects":[{"path":{"subpaths":[{"closed":true,"anchors":[{"p":[0,0]},{"p":[5,0]},{"p":[5,5]}]}]}}]}"#;
-    install(&mut app, &wat::parse_str(tpl::returning(&manifest, triangle)).unwrap());
+    install(app, &wat::parse_str(tpl::returning(&manifest, triangle)).unwrap());
     app.run("plugin.test.ui.last.cmds.grow", json!({})).unwrap();
     assert_eq!(app.last_filters.last_id(), Some(other), "a plug-in's own command");
 
     let fx = tpl::module(&tpl::manifest("test.ui.last.fx", "effect", "{}"), tpl::ECHO, "", 1);
-    install(&mut app, &wat::parse_str(fx).unwrap());
+    install(app, &wat::parse_str(fx).unwrap());
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
     app.run("effect.apply", json!({"effect": "plugin.test.ui.last.fx"})).unwrap();
     assert_eq!(app.last_filters.last_id(), Some(other), "a live effect");
@@ -194,9 +234,7 @@ fn only_successful_filter_runs_become_the_last_filter() {
     let r = app.run("action.batch", json!({"source": "datasets", "commands": steps})).unwrap();
     assert_eq!((r["count"].clone(), r["failed"].clone()), (json!(1), json!(0)), "{r}");
     assert_eq!(app.last_filters.last_id(), Some(id), "an Action Batch step");
-    app.run("plugin.dialog", json!({"id": id})).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().unwrap().fields.get("n"), Some(&json!(5)));
-    dialogs::cancel(&mut app);
+    assert_eq!(opens_with(&mut h, id), json!(5));
 }
 
 /// Every filter step of a batch counts, in the order the steps ran: the last one becomes the last
@@ -204,22 +242,20 @@ fn only_successful_filter_runs_become_the_last_filter() {
 /// filter that ran twice keeps the newer ones.
 #[test]
 fn every_filter_step_of_a_batch_counts() {
-    let mut app = app();
+    let mut h = window(app());
     let (a, b) = ("test.ui.last.batch.a", "test.ui.last.batch.b");
-    install(&mut app, &filter(a, "Batch A", N));
-    install(&mut app, &filter(b, "Batch B", N));
+    install(h.state_mut(), &filter(a, "Batch A", N));
+    install(h.state_mut(), &filter(b, "Batch B", N));
     let steps = json!([
         {"command": "plugin.run", "params": {"id": a, "params": {"n": 4}}},
         {"command": "plugin.run", "params": {"id": b, "params": {"n": 2}}},
         {"command": "plugin.run", "params": {"id": a, "params": {"n": 7}}},
         {"command": "plugin.run", "params": {"id": b, "params": {"n": 6}}},
     ]);
-    app.run("command.batch", json!({"commands": steps})).unwrap();
-    assert_eq!(app.last_filters.last_id(), Some(b), "the last filter step");
+    h.state_mut().run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!(h.state().last_filters.last_id(), Some(b), "the last filter step");
     for (id, n) in [(a, 7), (b, 6)] {
-        app.run("plugin.dialog", json!({"id": id})).unwrap();
-        assert_eq!(app.ui.dialog.as_ref().unwrap().fields.get("n"), Some(&json!(n)), "{id}");
-        dialogs::cancel(&mut app);
+        assert_eq!(opens_with(&mut h, id), json!(n), "{id}");
     }
 
     // Filters installed in the batch: installing another plug-in after a filter ran keeps that
@@ -231,27 +267,23 @@ fn every_filter_step_of_a_batch_counts() {
         {"command": "plugin.install", "params": {"dataBase64": vectorcraft_format::base64_encode(&filter(d, "Batch D", N)), "replace": true}},
         {"command": "plugin.run", "params": {"id": d, "params": {"n": 2}}},
     ]);
-    app.run("command.batch", json!({"commands": steps})).unwrap();
-    assert_eq!(app.last_filters.last_id(), Some(d), "the last filter step");
+    h.state_mut().run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!(h.state().last_filters.last_id(), Some(d), "the last filter step");
     for (id, n) in [(c, 7), (d, 2)] {
-        app.run("plugin.dialog", json!({"id": id})).unwrap();
-        assert_eq!(app.ui.dialog.as_ref().unwrap().fields.get("n"), Some(&json!(n)), "{id}");
-        dialogs::cancel(&mut app);
+        assert_eq!(opens_with(&mut h, id), json!(n), "{id}");
     }
 
     // The same over an Action Batch, with the filters in the other order.
-    app.run("dataset.new", json!({"name": "a"})).unwrap();
+    h.state_mut().run("dataset.new", json!({"name": "a"})).unwrap();
     let steps = json!([
         {"command": "plugin.run", "params": {"id": b, "params": {"n": 1}}},
         {"command": "plugin.run", "params": {"id": a, "params": {"n": 9}}},
     ]);
-    let r = app.run("action.batch", json!({"source": "datasets", "commands": steps})).unwrap();
+    let r = h.state_mut().run("action.batch", json!({"source": "datasets", "commands": steps})).unwrap();
     assert_eq!((r["count"].clone(), r["failed"].clone()), (json!(1), json!(0)), "{r}");
-    assert_eq!(app.last_filters.last_id(), Some(a), "the last Action Batch filter step");
+    assert_eq!(h.state().last_filters.last_id(), Some(a), "the last Action Batch filter step");
     for (id, n) in [(a, 9), (b, 1)] {
-        app.run("plugin.dialog", json!({"id": id})).unwrap();
-        assert_eq!(app.ui.dialog.as_ref().unwrap().fields.get("n"), Some(&json!(n)), "{id}");
-        dialogs::cancel(&mut app);
+        assert_eq!(opens_with(&mut h, id), json!(n), "{id}");
     }
 }
 
@@ -260,42 +292,42 @@ fn every_filter_step_of_a_batch_counts() {
 /// module's dialog opens with its own defaults. Installing another plug-in keeps them.
 #[test]
 fn the_last_filter_is_off_once_its_plugin_is_removed_or_replaced() {
-    let mut app = app();
+    let mut h = window(app());
+    let app = h.state_mut();
     let id = "test.ui.last.stale";
     let wasm = filter(id, "Stale", N);
-    install(&mut app, &wasm);
+    install(app, &wasm);
     app.run("plugin.dialog", json!({"id": id, "params": {"n": 7}})).unwrap();
-    install(&mut app, &filter("test.ui.last.unrelated", "Unrelated", N));
-    assert!(menus::enabled(&app, APPLY_LAST), "another plug-in installed");
-    install(&mut app, &wasm);
-    assert!(!menus::enabled(&app, APPLY_LAST), "the same module again");
+    install(app, &filter("test.ui.last.unrelated", "Unrelated", N));
+    assert!(menus::enabled(app, APPLY_LAST), "another plug-in installed");
+    install(app, &wasm);
+    assert!(!menus::enabled(app, APPLY_LAST), "the same module again");
     app.run("plugin.dialog", json!({"id": id, "params": {"n": 7}})).unwrap();
 
     // Another module and then the first one again: the run with the first one doesn't come back.
-    install(&mut app, &filter(id, "Stale", r#"{"n":{"type":"int","min":0,"max":20,"default":3}}"#));
-    install(&mut app, &wasm);
-    assert!(!menus::enabled(&app, APPLY_LAST), "replaced, then the module that ran installed again");
+    install(app, &filter(id, "Stale", r#"{"n":{"type":"int","min":0,"max":20,"default":3}}"#));
+    install(app, &wasm);
+    assert!(!menus::enabled(app, APPLY_LAST), "replaced, then the module that ran installed again");
 
-    install(&mut app, &filter(id, "Stale", r#"{"n":{"type":"choice","options":["a","b"],"default":"b"}}"#));
+    install(app, &filter(id, "Stale", r#"{"n":{"type":"choice","options":["a","b"],"default":"b"}}"#));
     for cmd in [APPLY_LAST, LAST] {
-        assert!(!menus::enabled(&app, cmd), "{cmd} once the parameters no longer fit");
+        assert!(!menus::enabled(app, cmd), "{cmd} once the parameters no longer fit");
         assert_eq!(app.run(cmd, json!({})), Err(NO_LAST_FILTER.to_string()));
     }
-    assert_eq!(menus::dynamic_label(&app, APPLY_LAST, "Apply Last Filter"), "Apply Last Filter");
-    app.run("plugin.dialog", json!({"id": id})).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().unwrap().fields.get("n"), Some(&json!("b")), "the new module's default");
-    dialogs::cancel(&mut app);
+    assert_eq!(menus::dynamic_label(app, APPLY_LAST, "Apply Last Filter"), "Apply Last Filter");
+    assert_eq!(opens_with(&mut h, id), json!("b"), "the new module's default");
 
-    install(&mut app, &filter(id, "Stale", r#"{"n":{"type":"int","min":0,"max":20,"default":3}}"#));
-    assert!(!menus::enabled(&app, APPLY_LAST), "another module, though it takes n 7");
+    let app = h.state_mut();
+    install(app, &filter(id, "Stale", r#"{"n":{"type":"int","min":0,"max":20,"default":3}}"#));
+    assert!(!menus::enabled(app, APPLY_LAST), "another module, though it takes n 7");
     app.run("plugin.dialog", json!({"id": id, "params": {"n": 7}})).unwrap();
-    assert!(menus::enabled(&app, APPLY_LAST));
+    assert!(menus::enabled(app, APPLY_LAST));
     app.run("plugin.remove", json!({"id": id})).unwrap();
-    assert!(!menus::enabled(&app, APPLY_LAST) && !menus::enabled(&app, LAST), "removed");
+    assert!(!menus::enabled(app, APPLY_LAST) && !menus::enabled(app, LAST), "removed");
     assert_eq!(app.run(APPLY_LAST, json!({})), Err(NO_LAST_FILTER.to_string()));
 
     // A batch that runs the filter and then replaces its module.
-    install(&mut app, &wasm);
+    install(app, &wasm);
     let other = filter(id, "Stale", r#"{"n":{"type":"int","min":0,"max":20,"default":3}}"#);
     let steps = json!([
         {"command": "plugin.run", "params": {"id": id, "params": {"n": 7}}},
@@ -303,17 +335,17 @@ fn the_last_filter_is_off_once_its_plugin_is_removed_or_replaced() {
     ]);
     app.run("command.batch", json!({"commands": steps})).unwrap();
     assert_eq!(app.last_filters.last_id(), Some(id));
-    assert!(!menus::enabled(&app, APPLY_LAST) && !menus::enabled(&app, LAST), "replaced after it ran in the batch");
+    assert!(!menus::enabled(app, APPLY_LAST) && !menus::enabled(app, LAST), "replaced after it ran in the batch");
 
     // A batch that runs the filter and then installs another plug-in keeps it.
-    install(&mut app, &wasm);
+    install(app, &wasm);
     let unrelated = filter("test.ui.last.unrelated", "Unrelated", N);
     let steps = json!([
         {"command": "plugin.run", "params": {"id": id, "params": {"n": 7}}},
         {"command": "plugin.install", "params": {"dataBase64": vectorcraft_format::base64_encode(&unrelated), "replace": true}},
     ]);
     app.run("command.batch", json!({"commands": steps})).unwrap();
-    assert!(menus::enabled(&app, APPLY_LAST), "another plug-in installed after it ran in the batch");
+    assert!(menus::enabled(app, APPLY_LAST), "another plug-in installed after it ran in the batch");
 
     // A batch that runs the filter, removes it and installs the same module again.
     let steps = json!([
@@ -322,7 +354,7 @@ fn the_last_filter_is_off_once_its_plugin_is_removed_or_replaced() {
         {"command": "plugin.install", "params": {"dataBase64": vectorcraft_format::base64_encode(&wasm), "replace": true}},
     ]);
     app.run("command.batch", json!({"commands": steps})).unwrap();
-    assert!(!menus::enabled(&app, APPLY_LAST), "installed again in the batch after it ran");
+    assert!(!menus::enabled(app, APPLY_LAST), "installed again in the batch after it ran");
 }
 
 /// A filter that runs in the background becomes the last filter only when its result is applied:
@@ -349,13 +381,13 @@ fn a_background_run_becomes_the_last_filter_only_when_applied() {
     // A filter with parameters, so Last Filter… would open its dialog.
     let with_params = "test.ui.last.nodoc";
     install(&mut app, &filter(with_params, "No Document", N));
-    let mut empty = VectorcraftApp::new(Session::new(), Default::default());
+    let mut empty = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     dialogs::plugin::record(&mut empty, &json!({"id": with_params, "params": {"n": 7}}));
     assert_eq!(empty.last_filters.last_id(), Some(with_params));
     assert!(!menus::enabled(&empty, APPLY_LAST) && !menus::enabled(&empty, LAST), "no document");
     assert_eq!(dialogs::plugin::apply_last(&mut empty), Err("no document open".into()));
     assert_eq!(dialogs::plugin::open_last(&mut empty), Err("no document open".into()));
-    assert!(empty.ui.dialog.is_none(), "no dialog opens without a document");
+    assert!(top(&empty).is_none(), "no dialog opens without a document");
 }
 
 /// The native menu reads its rows again when the filter that ran last changes, also when nothing
@@ -367,7 +399,7 @@ fn the_native_menu_follows_the_last_filter() {
     install(&mut app, &filter(a, "Native A", N));
     install(&mut app, &filter(b, "Native B", N));
     dialogs::plugin::record(&mut app, &json!({"id": a, "params": {}}));
-    let before = crate::native_menu::state_hash(&app, None);
+    let before = crate::menus::model::state_key(&app, None);
     dialogs::plugin::record(&mut app, &json!({"id": b, "params": {}}));
-    assert_ne!(crate::native_menu::state_hash(&app, None), before);
+    assert_ne!(crate::menus::model::state_key(&app, None), before);
 }

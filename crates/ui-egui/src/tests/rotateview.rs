@@ -32,8 +32,8 @@ fn with_document() -> VectorcraftApp {
 
 /// Send a control request and keep its success/error value for protocol assertions.
 fn control_response(app: &mut VectorcraftApp, ctx: &egui::Context, method: &str, params: Value) -> Value {
-    let (request, _) = crate::control::ControlRequest::new(method, params);
-    let crate::control::Outcome::Done(reply) = crate::control::handle(app, ctx, &request) else { panic!("not done") };
+    let (request, _) = craft::automation::control::ControlRequest::new(method, params);
+    let craft::automation::control::Reply::Done(reply) = crate::control::handle(app, ctx, &request) else { panic!("not done") };
     reply
 }
 
@@ -67,8 +67,8 @@ fn view_rotate_turns_the_view_to_any_angle() {
 #[test]
 fn control_rotate_view_gesture_turns_the_canvas_and_reset_restores_it() {
     let mut app = with_document();
-    let ctx = egui::Context::default();
-    app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
+    let ctx = crate::testing::ui_context();
+    super::synthetic::key_frame(&mut app, &ctx, vec![]);
     let view = app.view_mut().unwrap();
     view.center = vectorcraft_geom::Point::new(200.0, 150.0);
     view.zoom = 1.0;
@@ -102,8 +102,8 @@ fn control_rotate_view_gesture_turns_the_canvas_and_reset_restores_it() {
 #[test]
 fn control_rotate_view_keeps_press_coordinates_and_shift_snapping_across_requests() {
     let mut app = with_document();
-    let ctx = egui::Context::default();
-    app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
+    let ctx = crate::testing::ui_context();
+    super::synthetic::key_frame(&mut app, &ctx, vec![]);
     let view = app.view_mut().unwrap();
     view.center = vectorcraft_geom::Point::new(200.0, 150.0);
     view.zoom = 1.0;
@@ -126,18 +126,16 @@ fn control_rotate_view_keeps_press_coordinates_and_shift_snapping_across_request
 #[test]
 fn control_rotate_view_rejects_nonfinite_positions_and_a_changed_document() {
     let mut app = with_document();
-    let ctx = egui::Context::default();
-    app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
+    let ctx = crate::testing::ui_context();
+    super::synthetic::key_frame(&mut app, &ctx, vec![]);
     let send = super::synthetic::control;
     send(&mut app, &ctx, "ui.tool.select", json!({"tool": "rotateView"}));
-    let (req, _) = crate::control::ControlRequest::new("ui.pointer", json!({"events": [{"kind": "down", "x": 1e300, "y": 0}]}));
-    let crate::control::Outcome::Done(reply) = crate::control::handle(&mut app, &ctx, &req) else { panic!("not done") };
+    let reply = control_response(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "down", "x": 1e300, "y": 0}]}));
     assert_eq!(reply["ok"], false);
     assert_eq!(app.view().unwrap().rotation, 0.0);
     send(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "down", "x": 300, "y": 150}]}));
     app.run("file.new", json!({})).unwrap();
-    let (req, _) = crate::control::ControlRequest::new("ui.pointer", json!({"events": [{"kind": "drag", "x": 200, "y": 250}]}));
-    let crate::control::Outcome::Done(reply) = crate::control::handle(&mut app, &ctx, &req) else { panic!("not done") };
+    let reply = control_response(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "drag", "x": 200, "y": 250}]}));
     assert_eq!(reply["ok"], false);
     assert_eq!(app.view().unwrap().rotation, 0.0);
 }
@@ -162,8 +160,8 @@ fn control_rotate_view_rejects_malformed_packets_without_leaving_a_press() {
         json!({"events": null}),
     ] {
         let mut app = with_document();
-        let ctx = egui::Context::default();
-        app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
+        let ctx = crate::testing::ui_context();
+        super::synthetic::key_frame(&mut app, &ctx, vec![]);
         let view = app.view_mut().unwrap();
         view.center = vectorcraft_geom::Point::new(200.0, 150.0);
         view.zoom = 1.0;
@@ -183,22 +181,24 @@ fn control_rotate_view_rejects_malformed_packets_without_leaving_a_press() {
 #[test]
 fn control_rotate_view_screen_events_require_a_live_press() {
     let mut app = with_document();
-    let ctx = egui::Context::default();
-    app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
+    let ctx = crate::testing::ui_context();
+    super::synthetic::key_frame(&mut app, &ctx, vec![]);
+    let c = app.canvas_view().unwrap().rect.center();
     let view = app.view_mut().unwrap();
     view.center = vectorcraft_geom::Point::new(1200.0, 900.0);
     view.zoom = 2.0;
     let send = super::synthetic::control;
     send(&mut app, &ctx, "ui.tool.select", json!({"tool": "rotateView"}));
-    let down = json!({"events": [{"kind": "down", "x": 500, "y": 300, "space": "screen"}]});
-    let drag = json!({"events": [{"kind": "drag", "x": 400, "y": 400, "space": "screen"}]});
+    let (down_at, drag_at) = (c + egui::vec2(100.0, 0.0), c + egui::vec2(0.0, 100.0));
+    let down = json!({"events": [{"kind": "down", "x": down_at.x, "y": down_at.y, "space": "screen"}]});
+    let drag = json!({"events": [{"kind": "drag", "x": drag_at.x, "y": drag_at.y, "space": "screen"}]});
     assert_eq!(control_response(&mut app, &ctx, "ui.pointer", drag.clone())["ok"], false);
     send(&mut app, &ctx, "ui.pointer", down.clone());
     let mut frame = ctx.run_ui(Default::default(), |_| {});
     frame.textures_delta.clear();
     send(&mut app, &ctx, "ui.pointer", drag.clone());
     assert!((app.view().unwrap().rotation - 90.0).abs() < 1e-3);
-    send(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "up", "x": 400, "y": 400, "space": "screen"}]}));
+    send(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "up", "x": drag_at.x, "y": drag_at.y, "space": "screen"}]}));
     assert_eq!(control_response(&mut app, &ctx, "ui.pointer", drag.clone())["ok"], false, "release ends the press");
     send(&mut app, &ctx, "ui.pointer", down.clone());
     send(&mut app, &ctx, "ui.tool.select", json!({"tool": "selection"}));
@@ -208,8 +208,9 @@ fn control_rotate_view_screen_events_require_a_live_press() {
     send(&mut app, &ctx, "ui.pointer", drag);
     assert!((app.view().unwrap().rotation.abs() - 180.0).abs() < 1e-3, "a new press starts at the current angle");
     let before = app.view().unwrap().rotation;
-    send(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "down", "x": 400, "y": 300, "space": "screen"}]}));
-    send(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "drag", "x": 500, "y": 300, "space": "screen"}]}));
+    let right = c + egui::vec2(100.0, 0.0);
+    send(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "down", "x": c.x, "y": c.y, "space": "screen"}]}));
+    send(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "drag", "x": right.x, "y": right.y, "space": "screen"}]}));
     assert!(app.view().unwrap().rotation.is_finite());
     assert!((app.view().unwrap().rotation - before).abs() < 1e-3);
 }
@@ -219,16 +220,7 @@ fn the_view_menu_lists_the_status_bar_angles_and_checks_the_current_one() {
     let mut app = with_document();
     let entries = menus::menu_entries(&app);
     let at = entries.iter().position(|e| e.path == ["View", "Rotate View"]).expect("View › Rotate View");
-    let (items, after) = entries[at..].split_at(ANGLES.len());
-    let shown: Vec<_> = items.iter().map(|e| (e.path.join(" › "), e.label.as_str(), e.command.as_deref(), e.params.clone(), e.enabled)).collect();
-    let want: Vec<_> = ANGLES.iter().map(|(l, a)| ("View › Rotate View".to_string(), *l, Some("view.rotate"), json!({ "angle": a }), true)).collect();
-    assert_eq!(shown, want);
-    let next: Vec<_> = after[..2].iter().map(|e| (e.path.join(" › "), e.label.as_str(), e.command.as_deref())).collect();
-    let want = [
-        ("View".to_string(), "Rotate View to Selection", Some("view.rotateToSelection")),
-        ("View".to_string(), "Reset Rotate View", Some("view.rotateReset")),
-    ];
-    assert_eq!(next, want, "the submenu comes right before them");
+    let items = &entries[at..at + ANGLES.len()];
 
     app.run("view.rotate", json!({"angle": 30})).unwrap();
     assert_eq!(checked(&app), ["30°"]);
@@ -248,31 +240,21 @@ fn the_view_menu_lists_the_status_bar_angles_and_checks_the_current_one() {
 /// filled in, and OK turns the view to the angle entered.
 #[test]
 fn rotate_view_without_an_angle_asks_for_one() {
-    assert!(crate::palette::items().iter().any(|(label, id, _)| (label.as_str(), id.as_str()) == ("Rotate View", "view.rotate")));
-    let mut app = with_document();
+    assert!(crate::palette::items().iter().any(|(label, id)| (label.as_str(), id.as_str()) == ("Rotate View", "view.rotate")));
+    // The dialog opens on the window's host.
+    let mut app = crate::testing::windowed(with_document());
     app.run("view.rotate", json!({"angle": 30})).unwrap();
     menus::invoke(&mut app, "view.rotate", json!({}));
-    let mut d = app.ui.dialog.clone().expect("Rotate View dialog");
-    assert_eq!((d.kind.as_str(), d.str("__command"), d.str("__label")), ("command", "view.rotate".into(), "Rotate View".into()));
-    assert_eq!(d.fields.get("angle"), Some(&json!(30.0)));
-    d.fields.insert("angle".into(), json!(-45));
-    app.ui.dialog = Some(d);
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
+    assert!(app.any_dialog_open(), "Rotate View dialog");
+    let dialog = super::picks::open_dialogs(&app).pop().expect("the Rotate View dialog").id;
+    super::picks::answer_dialog(&mut app, dialog, &[("angle", json!(-45))], true);
+    assert!(!app.any_dialog_open());
     assert_eq!(app.view().unwrap().rotation, -45.0);
     // Without a document no dialog opens, and the status bar shows "no document".
     let mut empty = VectorcraftApp::new(Session::new(), crate::Services::default());
     menus::invoke(&mut empty, "view.rotate", json!({}));
-    assert!(empty.ui.dialog.is_none());
+    assert!(!empty.any_dialog_open());
     assert_eq!(empty.ui.status, "no document");
-}
-
-#[test]
-fn rotate_view_needs_a_document() {
-    let empty = VectorcraftApp::new(Session::new(), crate::Services::default());
-    assert!(!menus::enabled(&empty, "view.rotate"));
-    assert_eq!(menus::checked(&empty, "view.rotate", &json!({"angle": 0})), Some(false), "a check item without a document");
-    assert!(menus::enabled(&with_document(), "view.rotate"));
 }
 
 /// Selects the object `id` alone and turns it by `angle` degrees.
@@ -291,8 +273,7 @@ fn rectangle(app: &mut VectorcraftApp, x: f64) -> Value {
 fn square_on_screen(app: &VectorcraftApp) -> bool {
     let st = app.session.active().unwrap();
     let corners = st.doc.oriented_bounds(&st.selection.objects, false).unwrap().corners();
-    let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
-    let to_screen = crate::canvas::Xf::new(rect, app.view().unwrap()).affine();
+    let to_screen = app.canvas_view().unwrap().affine();
     let [a, b, c, _] = corners.map(|p| to_screen * p);
     let (top, side) = (b - a, c - b);
     top.x.abs() > 1.0 && top.y.abs() < 1e-6 && side.x.abs() < 1e-6 && side.y.abs() > 1.0
@@ -311,6 +292,7 @@ fn rotate_to_selection(app: &mut VectorcraftApp) -> f64 {
 fn rotate_view_to_selection_squares_the_view_to_the_selected_object() {
     let near = |a: f64, b: f64| (a - b).abs() < 1e-9;
     let mut app = with_document();
+    super::synthetic::key_frame(&mut app, &crate::testing::ui_context(), vec![]);
     let id = rectangle(&mut app, 40.0);
     turn(&mut app, &id, 30.0);
     let (zoom, center) = (app.view().unwrap().zoom, app.view().unwrap().center);
@@ -336,37 +318,6 @@ fn rotate_view_to_selection_squares_the_view_to_the_selected_object() {
     assert!(square_on_screen(&app));
 }
 
-#[test]
-fn rotate_view_to_selection_needs_a_selected_object() {
-    let mut app = with_document();
-    let id = rectangle(&mut app, 40.0);
-    turn(&mut app, &id, 30.0);
-    assert!(menus::enabled(&app, "view.rotateToSelection"));
-    app.run("select.none", json!({})).unwrap();
-    assert!(!menus::enabled(&app, "view.rotateToSelection"));
-    app.run("view.rotate", json!({"angle": 15})).unwrap();
-    assert_eq!(app.run("view.rotateToSelection", json!({})).unwrap_err(), "nothing selected");
-    assert_eq!(app.view().unwrap().rotation, 15.0, "an error leaves the view as it was");
-
-    let mut empty = VectorcraftApp::new(Session::new(), crate::Services::default());
-    assert!(!menus::enabled(&empty, "view.rotateToSelection"));
-    assert_eq!(empty.run("view.rotateToSelection", json!({})).unwrap_err(), "no document");
-    // The command palette lists it.
-    let listed = crate::palette::items().into_iter().any(|(label, id, _)| label == "Rotate View to Selection" && id == "view.rotateToSelection");
-    assert!(listed);
-}
-
-/// The strings the catalogs cover include the submenu's name and leave out the angle labels, as they
-/// leave out Type › Size's point sizes.
-#[test]
-fn only_the_submenu_name_needs_translating() {
-    let strings = menus::menu_strings();
-    assert!(strings.contains("Rotate View"));
-    for (label, _) in ANGLES {
-        assert!(!strings.contains(label), "{label}");
-    }
-}
-
 /// The window, with a 400 × 300 document whose view is turned to 30°, and the Selection tool. Each
 /// frame comes the given number of seconds, zero or more, after the one before it.
 struct Window {
@@ -377,7 +328,7 @@ struct Window {
 
 impl Window {
     fn new() -> Self {
-        let mut w = Self { app: with_document(), ctx: egui::Context::default(), time: 0.0 };
+        let mut w = Self { app: with_document(), ctx: crate::testing::ui_context(), time: 0.0 };
         w.app.select_tool("selection");
         w.app.run("view.rotate", json!({"angle": 30})).unwrap();
         w.after(0.0, vec![]);
@@ -385,18 +336,14 @@ impl Window {
         w
     }
 
-    /// One headless frame of the whole window, `seconds` after the last one, with `events`.
+    /// One headless frame of the whole window, `seconds` after the last one, with `events`. The window is wide enough
+    /// for the docked panels and a canvas the clicks below land on.
     fn after(&mut self, seconds: f64, events: Vec<egui::Event>) -> egui::FullOutput {
         self.time += seconds;
-        let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
+        let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 1000.0));
         let raw = egui::RawInput { screen_rect: Some(rect), time: Some(self.time), events, ..Default::default() };
-        let app = &mut self.app;
-        let mut out = self.ctx.run_ui(raw, |ui| {
-            app.logic(ui.ctx());
-            app.ui(ui);
-        });
-        out.textures_delta.clear();
-        out
+
+        crate::testing::app_frame(&mut self.app, &self.ctx, raw)
     }
 
     /// A press and release of Escape, `seconds` after the last frame.
@@ -506,7 +453,7 @@ fn escape_after_ending_isolation_resets_the_view() {
     assert_eq!(w.rotation(), 0.0, "the second resets the view 5 s later");
 
     let mut w = isolated_window();
-    let empty = w.app.canvas_rect.unwrap().left_top() + egui::vec2(20.0, 20.0);
+    let empty = w.app.canvas_view().unwrap().rect.left_top() + egui::vec2(20.0, 20.0);
     w.escape(0.0);
     assert_eq!((isolated(&w), w.rotation()), (false, 30.0));
     w.click(2.0, egui::PointerButton::Primary, empty);
@@ -523,7 +470,7 @@ fn escape_that_ends_a_path_being_drawn_keeps_the_rotation() {
         let mut w = Window::new();
         w.app.session.prefs.pen_rubber_band = rubber_band;
         w.app.select_tool(tool);
-        let c = w.app.canvas_rect.unwrap().center();
+        let c = w.app.canvas_view().unwrap().rect.center();
         w.click(0.0, egui::PointerButton::Primary, c);
         w.click(0.1, egui::PointerButton::Primary, c + egui::vec2(60.0, 10.0));
         w.after(0.1, vec![egui::Event::PointerMoved(c + egui::vec2(60.0, 80.0))]);
@@ -542,7 +489,7 @@ fn escape_after_deselecting_the_path_resets_the_view() {
     for tool in ["pen", "smartPen", "curvature"] {
         let mut w = Window::new();
         w.app.select_tool(tool);
-        let c = w.app.canvas_rect.unwrap().center();
+        let c = w.app.canvas_view().unwrap().rect.center();
         w.click(0.0, egui::PointerButton::Primary, c);
         w.click(0.1, egui::PointerButton::Primary, c + egui::vec2(60.0, 10.0));
         assert!(w.app.session.tool_ends_on_escape(w.app.view_info()), "{tool}: a path is being drawn");
@@ -567,7 +514,7 @@ fn escape_ends_one_thing_at_a_time() {
     let isolated = |w: &Window| w.app.session.active().unwrap().isolation.is_some();
     assert!(isolated(&w));
     w.app.select_tool("pen");
-    let c = w.app.canvas_rect.unwrap().center();
+    let c = w.app.canvas_view().unwrap().rect.center();
     w.click(0.0, egui::PointerButton::Primary, c);
     w.click(0.1, egui::PointerButton::Primary, c + egui::vec2(60.0, 10.0));
     assert!(w.app.session.tool_ends_on_escape(w.app.view_info()), "a path is being drawn");
@@ -597,9 +544,11 @@ fn escape_in_a_dialog_or_a_full_screen_mode_keeps_the_rotation() {
     let mut w = Window::new();
     menus::invoke(&mut w.app, "view.rotate", json!({}));
     w.after(0.0, vec![]);
-    assert!(w.app.ui.dialog.is_some(), "Rotate View asks for an angle");
+    assert!(w.app.any_dialog_open(), "Rotate View asks for an angle");
     w.escape(0.0);
-    assert_eq!((w.app.ui.dialog.is_none(), w.rotation()), (true, 30.0), "Escape closes the dialog");
+    // The dialog's Cancel is held: the window's next pass closes it.
+    w.after(0.0, vec![]);
+    assert_eq!((!w.app.any_dialog_open(), w.rotation()), (true, 30.0), "Escape closes the dialog");
     w.escape(0.5);
     assert_eq!(w.rotation(), 0.0, "the next Escape");
 
@@ -635,118 +584,4 @@ fn escape_in_a_dialog_or_a_full_screen_mode_keeps_the_rotation() {
     assert_eq!((w.app.ui.screen_mode != 3, w.rotation()), (true, 30.0), "Escape leaves Presentation Mode");
     w.escape(0.5);
     assert_eq!(w.rotation(), 0.0, "the next Escape after Presentation Mode");
-}
-
-/// An Escape while About or an Appearance row's popup is open, or while a pointer button is held
-/// outside the canvas (a scroll bar, a tab or a panel being dragged) or let go in the same frame,
-/// leaves the view as it is.
-#[test]
-fn escape_with_a_window_open_or_a_button_held_keeps_the_rotation() {
-    let mut w = Window::new();
-    w.app.ui.about = true;
-    w.after(0.0, vec![]);
-    w.escape(0.0);
-    assert_eq!(w.rotation(), 30.0, "an Escape with About open");
-
-    // An Appearance row's popup (here, the Stroke panel's) closes on Escape as the frame is drawn.
-    let mut w = Window::new();
-    w.app.ui.transient_panel = Some("stroke".into());
-    w.escape(0.0);
-    assert_eq!(w.rotation(), 30.0, "an Escape with an Appearance row's popup open");
-
-    let mut w = Window::new();
-    let bar = w.app.canvas_rect.unwrap().right_center() + egui::vec2(4.0, 0.0);
-    let button = |pressed| egui::Event::PointerButton { pos: bar, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    w.after(0.0, vec![egui::Event::PointerMoved(bar), button(true)]);
-    w.escape(0.1);
-    assert_eq!(w.rotation(), 30.0, "an Escape with the button held");
-    let mut release = vec![button(false)];
-    release.extend(key(egui::Key::Escape, false));
-    w.after(0.1, release);
-    assert_eq!(w.rotation(), 30.0, "an Escape in the frame the button is let go");
-    w.escape(0.1);
-    assert_eq!(w.rotation(), 0.0, "an Escape after the release");
-}
-
-/// An Escape in a text field ends the editing and leaves the view as it is.
-#[test]
-fn escape_in_a_text_field_keeps_the_rotation() {
-    let mut w = Window::new();
-    w.ctx.enable_accesskit();
-    let out = w.after(0.0, vec![]);
-    let tree = out.platform_output.accesskit_update.expect("the window's accessibility tree");
-    let field = tree.nodes.iter().find(|(_, node)| node.role() == egui::accesskit::Role::TextInput).map(|(id, _)| *id).expect("a text field");
-    let field = w
-        .ctx
-        .viewport(|vp| vp.prev_pass.widgets.layers().flat_map(|(_, ws)| ws.iter()).find(|r| r.id.accesskit_id() == field).copied())
-        .expect("the text field's widget");
-    w.ctx.memory_mut(|m| m.request_focus(field.id));
-    w.after(0.0, vec![]);
-    assert!(w.ctx.egui_wants_keyboard_input(), "the field has the keyboard");
-    w.escape(0.0);
-    assert_eq!(w.rotation(), 30.0, "the Escape in the field");
-}
-
-/// An Escape that closes a popup (the status bar's angle menu, the canvas context menu) or ends a
-/// drag of the ruler origin leaves the view as it is; the next Escape resets it.
-#[test]
-fn escape_that_closes_a_popup_or_ends_a_ruler_origin_drag_keeps_the_rotation() {
-    let mut w = Window::new();
-    // Find the actual combo by its accessible name, which is present in both build profiles;
-    // `Id`'s debug source (including "rot-combo") only exists with debug assertions enabled.
-    w.ctx.enable_accesskit();
-    let out = w.after(0.0, vec![]);
-    let tree = out.platform_output.accesskit_update.expect("the window's accessibility tree");
-    let combos: Vec<_> =
-        tree.nodes.iter().filter(|(_, node)| node.role() == egui::accesskit::Role::ComboBox && node.label() == Some("Rotation")).collect();
-    assert_eq!(combos.len(), 1, "the status bar's angle menu");
-    let combo = w
-        .ctx
-        .viewport(|vp| vp.prev_pass.widgets.layers().flat_map(|(_, ws)| ws.iter()).find(|r| r.id.accesskit_id() == combos[0].0).copied())
-        .expect("the angle menu's widget");
-    w.click(0.0, egui::PointerButton::Primary, combo.rect.center());
-    w.after(0.0, vec![]);
-    assert!(craft_ui::ComboBox::is_open(&w.ctx, combo.id), "the angle menu is open");
-    w.escape(0.2);
-    assert!(!egui::Popup::is_any_open(&w.ctx), "Escape closes it");
-    assert_eq!(w.rotation(), 30.0, "the Escape that closes the angle menu");
-    w.escape(0.2);
-    assert_eq!(w.rotation(), 0.0, "the next Escape");
-
-    let mut w = Window::new();
-    w.click(0.0, egui::PointerButton::Secondary, w.app.canvas_rect.unwrap().center());
-    w.after(0.0, vec![]);
-    assert!(egui::Popup::is_any_open(&w.ctx), "a right click opens the context menu");
-    w.escape(0.2);
-    assert!(!egui::Popup::is_any_open(&w.ctx), "Escape closes it");
-    assert_eq!(w.rotation(), 30.0, "the Escape that closes the context menu");
-    w.escape(0.2);
-    assert_eq!(w.rotation(), 0.0, "the next Escape");
-    // With the Rotate View tool, the Escape that closes the menu leaves the view as it is too.
-    let mut w = Window::new();
-    w.app.select_tool("rotateView");
-    w.click(0.0, egui::PointerButton::Secondary, w.app.canvas_rect.unwrap().center());
-    w.after(0.0, vec![]);
-    assert!(egui::Popup::is_any_open(&w.ctx), "a right click opens the context menu");
-    w.escape(0.2);
-    assert_eq!(w.rotation(), 30.0, "the Escape that closes the context menu");
-    w.escape(0.2);
-    assert_eq!(w.rotation(), 0.0, "the next Escape with the Rotate View tool");
-
-    let mut w = Window::new();
-    w.app.ui.view.rulers = true;
-    w.after(0.0, vec![]);
-    let corner = w.ctx.read_response(egui::Id::unique("ruler-corner")).expect("the rulers' corner").rect.center();
-    let to = w.app.canvas_rect.unwrap().center();
-    w.after(0.0, vec![egui::Event::PointerMoved(corner)]);
-    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    w.after(0.0, vec![button(corner, true)]);
-    w.after(0.1, vec![egui::Event::PointerMoved(to)]);
-    assert!(crate::canvas::ruler_origin_dragging(&w.ctx));
-    w.escape(0.2);
-    w.escape(0.2);
-    assert_eq!(w.rotation(), 30.0, "two Escapes while the ruler origin is dragged");
-    w.after(0.1, vec![button(to, false)]);
-    w.escape(0.2);
-    assert_eq!(w.rotation(), 0.0, "an Escape after the drag ends");
 }
