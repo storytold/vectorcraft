@@ -5,10 +5,10 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use craft_pdf::syntax::Pdf;
-use craft_pdf::syntax::object::{Array, Dict, MaybeRef, Object, ObjectIdentifier, Stream, String as PdfString};
-use craft_pdf::syntax::xref::XRef;
-use craft_pdf::write::backend as krilla;
+use craft::pdf::syntax::Pdf;
+use craft::pdf::syntax::object::{Array, Dict, MaybeRef, Object, ObjectIdentifier, Stream, String as PdfString};
+use craft::pdf::syntax::xref::XRef;
+use craft::pdf::write::backend as krilla;
 use krilla::embed::{AssociationKind, EmbeddedFile, MimeType};
 use krilla::metadata::DateTime;
 

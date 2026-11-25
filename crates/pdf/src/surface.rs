@@ -9,7 +9,7 @@
 
 use std::ops::{Deref, DerefMut};
 
-use craft_pdf::write::backend as krilla;
+use craft::pdf::write::backend as krilla;
 use krilla::blend::BlendMode;
 use krilla::geom::{Path, Transform};
 use krilla::mask::Mask;

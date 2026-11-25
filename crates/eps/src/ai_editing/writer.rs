@@ -974,8 +974,9 @@ impl<'a> Writer<'a> {
             self.warn(w);
         }
         let moved = bounds && self.wrap_on_bounds(n, state);
-        // A gradient mesh's drawn look is paths, which hold nothing: it is written at any depth.
-        if self.nest < MAX_NEST || matches!(n.kind, NodeKind::Mesh(_)) {
+        // A gradient mesh's drawn look is paths, and a distorted image's is clipped copies of its
+        // image, which hold nothing: they are written at any depth.
+        if self.nest < MAX_NEST || matches!(n.kind, NodeKind::Mesh(_)) || n.is_distorted_image() {
             let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
             self.nest += 1;
             self.drawn += 1;
