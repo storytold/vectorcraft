@@ -2192,6 +2192,13 @@ pub fn blend_steps(keys: &[Arc<Node>], spec: &BlendSpec) -> Vec<usize> {
     StepCount::default().blend(keys, spec, Rail::new(keys, spec).as_ref()).0
 }
 
+/// Most steps the blends in `n` and its subtree make in all when drawn: a step that copies a
+/// blend counts that blend's steps again, and each instance of a repeat counts its source's
+/// steps again. Objects that are not blend steps count 0.
+pub fn blend_steps_made(n: &Node) -> usize {
+    StepCount::default().node(n, false)
+}
+
 /// Does each pair of `keys` blended with `spec` ask for the same number of steps
 /// ([`blend_step_count`]) when each coordinate it counts from moves by up to `length` points and,
 /// for Smooth Color, the difference between keys of different colors by up to `color` (0 to 1)?

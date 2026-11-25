@@ -6,8 +6,7 @@ use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_plugins::wat as tpl;
 
-use crate::state::Dialog;
-use crate::{VectorcraftApp, dialogs, io, menus, theme};
+use crate::{VectorcraftApp, dialogs, io, menus};
 
 const DESATURATE: &[u8] = include_bytes!("../../../plugins/tests/fixtures/desaturate.wasm");
 const DESATURATE_ID: &str = "org.vectorcraft.example.desaturate";
@@ -18,55 +17,54 @@ fn app() -> VectorcraftApp {
     app
 }
 
-/// One headless frame of the dialog layer.
-fn frame(app: &mut VectorcraftApp) {
-    let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
-    theme::apply(&ctx, Default::default());
-    let mut out = ctx.run_ui(Default::default(), |ui| dialogs::show(app, ui.ctx()));
-    out.textures_delta.clear();
-}
-
-/// Shows the open install approval in one window, frame after frame a quarter of a second apart,
-/// until its OK takes input ([`dialogs::plugin::APPROVAL_DELAY`]), as a person sees it before
-/// pressing OK.
-pub(super) fn show_approval(app: &mut VectorcraftApp) {
-    let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
-    theme::apply(&ctx, Default::default());
-    for k in 0..12 {
-        let input = egui::RawInput { time: Some(f64::from(k) * 0.25), ..Default::default() };
-        let mut out = ctx.run_ui(input, |ui| dialogs::show(app, ui.ctx()));
-        out.textures_delta.clear();
-        if app.pending_plugin_install.as_ref().is_some_and(|p| p.shown.ready()) {
-            return;
-        }
-    }
-    panic!("the approval's OK never took input");
-}
-
 pub(super) type Window = egui_kittest::Harness<'static, VectorcraftApp>;
 
-/// The dialog layer of `app` in a window, each frame drawn at the time [`at`] gives it. Building it
-/// draws frames at times of its own, so a test opens the dialog after.
+/// `app` in a window that runs whole app frames, each drawn at the time [`at`] gives it, so the
+/// dialog host (which lives in the window's context) shows, previews and answers as in the app.
+/// Building it draws frames at times of its own, so a test opens the dialog after.
 pub(super) fn window(app: VectorcraftApp) -> Window {
     let mut fonts = false;
-    egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 800.0)).build_ui_state(
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 800.0)).build_ui_state(
         move |ui, app: &mut VectorcraftApp| {
             if !std::mem::replace(&mut fonts, true) {
-                theme::install_fonts(ui.ctx());
+                crate::testing::install(ui.ctx());
                 return;
             }
-            dialogs::show(app, ui.ctx());
+            app.tick(ui.ctx());
+            app.ui(ui);
         },
         app,
-    )
+    );
+    // The window reports its place and the focus, as a host does: the approval counts its time in the focused window.
+    let root = h.input_mut().viewports.entry(egui::ViewportId::ROOT).or_default();
+    root.inner_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, 800.0)));
+    root.focused = Some(true);
+    // The first frame installs the fonts; the second gives the app its context and host.
+    app_step(&mut h);
+    h
+}
+
+/// One frame of `h` as the hosts run the window's (`testing::part_frame`): the app gives the frame's input, and the
+/// commands the pass fired run as the next frame begins.
+pub(super) fn app_step(h: &mut Window) {
+    let ctx = h.ctx.clone();
+    let app = h.state_mut();
+    app.adopt_context(&ctx);
+    craft::ui::shell::embed::before_input(&ctx, |out| app.frame_input(out));
+    h.step();
+    crate::testing::run_fired(h.state_mut(), &ctx);
 }
 
 /// Draws a frame of `h` at `time` seconds.
 pub(super) fn at(h: &mut Window, time: f64) {
     h.input_mut().time = Some(time);
-    h.step();
+    app_step(h);
+}
+
+/// Draws a frame a tenth of a second after the one before.
+fn step(h: &mut Window) {
+    let time = h.input_mut().time.unwrap_or(0.0) + 0.1;
+    at(h, time);
 }
 
 /// Whether the approval's OK is enabled, as a screen reader reads it.
@@ -82,11 +80,63 @@ pub(super) fn click_ok(h: &mut Window, time: f64) {
     at(h, time);
 }
 
+/// Shows the open install approval frame after frame a quarter of a second apart until its OK is
+/// armed, presses it and draws the frame that takes the answer, as a person does.
+pub(super) fn approve(h: &mut Window) {
+    let mut time = h.input_mut().time.unwrap_or(0.0);
+    for _ in 0..12 {
+        time += 0.25;
+        at(h, time);
+        if ok_enabled(h) {
+            click_ok(h, time + 0.05);
+            at(h, time + 0.3);
+            return;
+        }
+    }
+    panic!("the approval's OK never took input");
+}
+
+/// The install approval is open.
+fn prompt_open(app: &VectorcraftApp) -> bool {
+    app.dialogs().is_some_and(|d| d.with(|host| host.get::<dialogs::plugin::InstallPrompt>().is_some()))
+}
+
 /// The approval is open and plug-in `id` neither installed nor granted.
 pub(super) fn waiting(app: &VectorcraftApp, id: &str) -> bool {
-    app.ui.dialog.as_ref().is_some_and(|d| d.kind == dialogs::plugin::INSTALL_KIND)
-        && vectorcraft_plugins::registry::get(id).is_none()
-        && vectorcraft_plugins::registry::granted(id).is_none()
+    prompt_open(app) && vectorcraft_plugins::registry::get(id).is_none() && vectorcraft_plugins::registry::granted(id).is_none()
+}
+
+/// The id of the dialog on top of the host.
+fn top(app: &VectorcraftApp) -> Option<egui::Id> {
+    app.dialogs()?.with(|host| host.open_dialogs().last().map(|d| d.id))
+}
+
+/// The values of the dialog on top of the host, as automation lists them.
+fn fields(app: &VectorcraftApp) -> Value {
+    app.dialogs().and_then(|d| d.with(|host| host.open_dialogs().last().and_then(|d| d.fields.clone()))).unwrap_or(Value::Null)
+}
+
+/// Sets `field` of the top dialog as `ui.dialog.set` does.
+fn set_field(h: &mut Window, field: &str, value: Value) -> Result<(), String> {
+    let (ctx, id) = (h.ctx.clone(), top(h.state()).ok_or("no dialog is open")?);
+    h.state().dialogs().ok_or("no dialog host")?.with(|host| host.set_json_field(&ctx, id, field, value))
+}
+
+/// Answers the top dialog with OK (`ok`) or Cancel and draws the frame that takes the answer.
+fn answer(h: &mut Window, ok: bool) {
+    let (ctx, id) = (h.ctx.clone(), top(h.state()).expect("a dialog is open"));
+    let host = h.state().dialogs().expect("the dialog host");
+    // A held OK (the effect dialog's) is filed for the app, which applies it and then closes the dialog.
+    let done = host.with(|host| if ok { host.confirm_by_id(&ctx, id) || host.held_state(id).is_some() } else { host.cancel_by_id(&ctx, id) });
+    assert!(done, "the dialog took the answer");
+    step(h);
+    for _ in 0..2 {
+        if top(h.state()) != Some(id) {
+            return;
+        }
+        step(h);
+    }
+    assert_ne!(top(h.state()), Some(id), "the answered dialog closed");
 }
 
 fn red_rect(app: &mut VectorcraftApp) -> vectorcraft_doc::NodeId {
@@ -130,56 +180,58 @@ fn plugins_are_listed_in_the_object_and_effect_menus() {
 
 #[test]
 fn filter_dialog_previews_and_commits_one_undo_step() {
-    let mut app = app();
-    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(DESATURATE)})).unwrap();
-    let id = red_rect(&mut app);
-    let undo = app.session.doc().unwrap().history.undo.len();
-    menus::invoke(&mut app, "plugin.dialog", json!({"id": DESATURATE_ID}));
-    let d = app.ui.dialog.as_ref().expect("dialog open");
-    assert_eq!((d.kind.as_str(), d.str("__label"), d.fields.get("amount")), ("plugin", "Desaturate".to_string(), Some(&json!(100.0))));
+    let mut h = window(app());
+    h.state_mut().run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(DESATURATE)})).unwrap();
+    let id = red_rect(h.state_mut());
+    let undo = h.state().session.doc().unwrap().history.undo.len();
+    menus::invoke(h.state_mut(), "plugin.dialog", json!({"id": DESATURATE_ID}));
+    step(&mut h);
+    assert!(top(h.state()).is_some(), "dialog open");
+    assert_eq!(fields(h.state())["amount"], json!(100.0));
     // Agents set fields like `ui.dialog.set` does; the frame previews them.
-    app.ui.dialog.as_mut().unwrap().fields.insert("amount".into(), json!(50));
-    frame(&mut app);
-    assert!(app.session.in_interaction(), "previewing");
-    let [r, g, _] = fill_rgb(&app, id);
+    set_field(&mut h, "amount", json!(50)).unwrap();
+    step(&mut h);
+    assert!(h.state().session.in_interaction(), "previewing");
+    let [r, g, _] = fill_rgb(h.state(), id);
     assert!(r < 1.0 && g > 0.0, "half desaturated on the canvas: {r} {g}");
-    dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
-    let st = app.session.doc().unwrap();
+    answer(&mut h, true);
+    assert!(top(h.state()).is_none());
+    let st = h.state().session.doc().unwrap();
     assert_eq!(st.history.undo.len(), undo + 1);
     assert_eq!(st.history.undo.last().unwrap().label, "Desaturate");
     // Cancel rolls the preview back.
-    menus::invoke(&mut app, "plugin.dialog", json!({"id": DESATURATE_ID}));
-    frame(&mut app);
-    let previewed = fill_rgb(&app, id);
-    dialogs::cancel(&mut app);
-    assert_ne!(fill_rgb(&app, id), previewed);
-    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
+    menus::invoke(h.state_mut(), "plugin.dialog", json!({"id": DESATURATE_ID}));
+    step(&mut h);
+    let previewed = fill_rgb(h.state(), id);
+    answer(&mut h, false);
+    assert_ne!(fill_rgb(h.state(), id), previewed);
+    assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo + 1);
     // With params, the menu command runs at once.
-    app.run("plugin.dialog", json!({"id": DESATURATE_ID, "params": {"amount": 100}})).unwrap();
-    let [r, g, b] = fill_rgb(&app, id);
+    h.state_mut().run("plugin.dialog", json!({"id": DESATURATE_ID, "params": {"amount": 100}})).unwrap();
+    let [r, g, b] = fill_rgb(h.state(), id);
     assert!((r - g).abs() < 1e-6 && (g - b).abs() < 1e-6);
-    assert!(app.run("plugin.dialog", json!({"id": "test.ui.missing"})).is_err());
+    assert!(h.state_mut().run("plugin.dialog", json!({"id": "test.ui.missing"})).is_err());
 }
 
 #[test]
 fn plugin_effects_open_the_effect_dialog_with_their_schema() {
-    let mut app = app();
+    let mut h = window(app());
     let src =
         tpl::module(&tpl::manifest("test.ui.fx", "effect", r#"{"mode":{"type":"choice","options":["a","b"],"default":"b"}}"#), tpl::ECHO, "", 1);
-    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wat::parse_str(src).unwrap())})).unwrap();
-    let id = red_rect(&mut app);
-    app.run("effect.dialog", json!({"effect": "plugin.test.ui.fx"})).unwrap();
-    let d: &Dialog = app.ui.dialog.as_ref().unwrap();
-    assert_eq!((d.kind.as_str(), d.str("__label"), d.str("mode")), ("effect", "Test test.ui.fx".to_string(), "b".to_string()));
-    frame(&mut app);
-    dialogs::confirm(&mut app).unwrap();
-    let fx = &app.session.doc().unwrap().doc.node(id).unwrap().appearance.effects;
+    h.state_mut().run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wat::parse_str(src).unwrap())})).unwrap();
+    let id = red_rect(h.state_mut());
+    h.state_mut().run("effect.dialog", json!({"effect": "plugin.test.ui.fx"})).unwrap();
+    step(&mut h);
+    assert_eq!(fields(h.state())["mode"], json!("b"));
+    answer(&mut h, true);
+    let fx = &h.state().session.doc().unwrap().doc.node(id).unwrap().appearance.effects;
     assert_eq!((fx[0].id.as_str(), &fx[0].params), ("plugin.test.ui.fx", &json!({"mode": "b"})));
     assert_eq!(crate::panels::appearance::effect_label("plugin.test.ui.fx"), "Test test.ui.fx");
     // Editing it again starts from its values.
-    app.run("effect.dialog", json!({"effect": "plugin.test.ui.fx", "index": 0})).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().unwrap().fields.get("mode"), Some(&Value::from("b")));
+    h.state_mut().run("effect.dialog", json!({"effect": "plugin.test.ui.fx", "index": 0})).unwrap();
+    step(&mut h);
+    assert_eq!(fields(h.state())["mode"], json!("b"));
+    answer(&mut h, false);
 }
 
 /// A filter `id` named `name` whose manifest lists `permissions` (a JSON list), at a version with
@@ -197,16 +249,16 @@ pub(super) fn asking(id: &str, name: &str, permissions: &str) -> Vec<u8> {
 /// take the installed one's place, as does one that asks for another permission.
 #[test]
 fn installing_a_plugin_that_lists_permissions_asks_first() {
-    let mut app = app();
+    let mut h = window(app());
     let id = "test.ui.permissions";
     // U+202E would show the text after it reversed, and U+2066 isolates it; a manifest's name may
     // hold them, though not control characters, which its version may.
     let name = "Tidy\u{202E}fdp.exe\u{2066}";
     let bytes = asking(id, name, r#"["doc.read","doc.write"]"#);
     let data = vectorcraft_format::base64_encode(&bytes);
-    let r = app.run("ui.installPlugin", json!({"dataBase64": data, "name": "tidy.wasm"})).unwrap();
+    let r = h.state_mut().run("ui.installPlugin", json!({"dataBase64": data, "name": "tidy.wasm"})).unwrap();
     assert_eq!(r["pending"], dialogs::plugin::INSTALL_KIND);
-    let pending = app.pending_plugin_install.as_ref().unwrap();
+    let pending = h.state().pending_plugin_install.as_ref().unwrap();
     assert_eq!(pending.message, "Install “Tidy\\u{202E}fdp.exe\\u{2066}”, which asks for these permissions?");
     let hash = vectorcraft_plugins::permissions::sha256_hex(&bytes);
     assert_eq!(pending.params["hash"], json!(hash), "OK installs the module shown");
@@ -219,33 +271,35 @@ fn installing_a_plugin_that_lists_permissions_asks_first() {
     );
     assert!(!detail.chars().chain(pending.message.chars()).any(|c| matches!(c, '\u{202E}' | '\u{2066}' | '\t' | '\u{0007}')));
     assert!(vectorcraft_plugins::registry::get(id).is_none(), "not before the user agrees");
-    dialogs::cancel(&mut app);
+    step(&mut h);
+    answer(&mut h, false);
     assert!(vectorcraft_plugins::registry::get(id).is_none(), "Cancel installs nothing");
-    assert!(app.pending_plugin_install.is_none(), "Cancel drops what it asked about");
+    assert!(h.state().pending_plugin_install.is_none(), "Cancel drops what it asked about");
     // File › Open asks too, and OK installs it with what it lists granted.
-    io::open_bytes(&mut app, "tidy.wasm", &bytes, None).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::plugin::INSTALL_KIND));
-    show_approval(&mut app);
-    dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
+    io::open_bytes(h.state_mut(), "tidy.wasm", &bytes, None).unwrap();
+    assert!(waiting(h.state(), id));
+    approve(&mut h);
+    assert!(top(h.state()).is_none());
     assert!(vectorcraft_plugins::registry::get(id).is_some());
     assert_eq!(vectorcraft_plugins::registry::granted(id).map(|g| g.hash), Some(hash));
     // The same module again: installed without asking.
-    app.run("ui.installPlugin", json!({"dataBase64": data})).unwrap();
-    assert!(app.ui.dialog.is_none(), "the same bytes don't ask again");
+    h.state_mut().run("ui.installPlugin", json!({"dataBase64": data})).unwrap();
+    assert!(!prompt_open(h.state()), "the same bytes don't ask again");
     // Other bytes with the same permissions ask for them, from both ways in; Cancel keeps the one
     // installed.
     let again = asking(id, "Tidy 2", r#"["doc.write","doc.read"]"#);
-    let r = app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&again)})).unwrap();
+    let r = h.state_mut().run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&again)})).unwrap();
     assert_eq!(r["pending"], dialogs::plugin::INSTALL_KIND, "other bytes ask again");
-    assert_eq!(app.pending_plugin_install.as_ref().unwrap().message, "Install “Tidy 2”, which asks for these permissions?");
-    dialogs::cancel(&mut app);
-    assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone()), Some(name.into()), "Cancel keeps the one installed");
-    io::open_bytes(&mut app, "tidy2.wasm", &again, None).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::plugin::INSTALL_KIND), "File › Open asks too");
+    assert_eq!(h.state().pending_plugin_install.as_ref().unwrap().message, "Install “Tidy 2”, which asks for these permissions?");
+    step(&mut h);
+    answer(&mut h, false);
+    let installed = || vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone());
+    assert_eq!(installed(), Some(name.into()), "Cancel keeps the one installed");
+    io::open_bytes(h.state_mut(), "tidy2.wasm", &again, None).unwrap();
+    assert!(prompt_open(h.state()), "File › Open asks too");
     // The same dialog says it takes the installed one's place, and OK replaces it; Cancel keeps the
     // one installed and records no grant.
-    let pending = app.pending_plugin_install.as_ref().unwrap();
+    let pending = h.state().pending_plugin_install.as_ref().unwrap();
     let again_hash = vectorcraft_plugins::permissions::sha256_hex(&again);
     assert!(pending.detail.contains(&format!("File SHA-256: {again_hash}")), "{}", pending.detail);
     assert!(
@@ -254,80 +308,35 @@ fn installing_a_plugin_that_lists_permissions_asks_first() {
         pending.detail
     );
     assert_eq!(pending.params["replace"], json!(true), "OK replaces the one installed");
-    dialogs::cancel(&mut app);
-    assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone()), Some(name.into()), "Cancel keeps the one installed");
+    step(&mut h);
+    answer(&mut h, false);
+    assert_eq!(installed(), Some(name.into()), "Cancel keeps the one installed");
     assert_ne!(vectorcraft_plugins::registry::granted(id).map(|g| g.hash), Some(again_hash), "Cancel records no grant");
-    app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&again)})).unwrap();
-    show_approval(&mut app);
-    dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none(), "one question");
-    assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone()), Some("Tidy 2".into()));
+    h.state_mut().run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&again)})).unwrap();
+    approve(&mut h);
+    assert!(top(h.state()).is_none(), "one question");
+    assert_eq!(installed(), Some("Tidy 2".into()));
     let new_hash = vectorcraft_plugins::permissions::sha256_hex(&again);
     assert_eq!(vectorcraft_plugins::registry::granted(id).map(|g| g.hash), Some(new_hash), "OK records the new module's hash");
     // One that asks for another permission asks again.
     let more = asking(id, "Tidy 3", r#"["doc.read","doc.write","state"]"#);
-    let r = app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&more)})).unwrap();
+    let r = h.state_mut().run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&more)})).unwrap();
     assert_eq!(r["pending"], dialogs::plugin::INSTALL_KIND);
-    assert!(app.pending_plugin_install.as_ref().unwrap().detail.contains("• Keep data of its own with the document"));
-    dialogs::cancel(&mut app);
-    assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone()), Some("Tidy 2".into()), "Cancel keeps the one installed");
+    assert!(h.state().pending_plugin_install.as_ref().unwrap().detail.contains("• Keep data of its own with the document"));
+    step(&mut h);
+    answer(&mut h, false);
+    assert_eq!(installed(), Some("Tidy 2".into()), "Cancel keeps the one installed");
     // OK keeps the `replace` it was asked with: `false` leaves the installed one in place.
-    app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&more), "replace": false})).unwrap();
-    show_approval(&mut app);
-    let _ = dialogs::confirm(&mut app);
-    assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone()), Some("Tidy 2".into()), "replace: false is kept");
-    app.run("plugin.remove", json!({"id": id})).unwrap();
-}
-
-/// The approval's OK takes no click, Enter or Space, and a confirm installs nothing, until its
-/// question has been on screen for [`dialogs::plugin::APPROVAL_DELAY`]; then a click installs it.
-/// Cancel works on the first frame.
-#[test]
-fn the_install_approval_takes_ok_only_once_its_question_was_shown_for_a_moment() {
-    use egui_kittest::kittest::Queryable;
-    let id = "test.ui.approval.delay";
-    let module = json!({"dataBase64": vectorcraft_format::base64_encode(&asking(id, "Delay", r#"["doc.read"]"#))});
-    let mut h = window(app());
-    h.state_mut().run("ui.installPlugin", module.clone()).unwrap();
-    assert_eq!(dialogs::confirm(h.state_mut()).unwrap(), json!({"pending": dialogs::plugin::INSTALL_KIND}), "not drawn yet");
-    assert!(waiting(h.state(), id));
-    at(&mut h, 10.0);
-    at(&mut h, 10.0);
-    assert!(!ok_enabled(&h), "disabled when it first shows");
-    click_ok(&mut h, 10.1);
-    assert!(waiting(h.state(), id), "a click");
-    for (key, time) in [(egui::Key::Enter, 10.2), (egui::Key::Space, 10.3)] {
-        h.get_by_label("OK").focus();
-        at(&mut h, time);
-        h.key_press(key);
-        at(&mut h, time + 0.05);
-        assert!(waiting(h.state(), id), "{key:?}");
-    }
-    at(&mut h, 10.49);
-    assert!(!ok_enabled(&h), "still disabled just before the delay");
-    assert_eq!(dialogs::confirm(h.state_mut()).unwrap()["pending"], dialogs::plugin::INSTALL_KIND, "a confirm");
-    assert!(waiting(h.state(), id));
-    at(&mut h, 10.5);
-    assert!(ok_enabled(&h), "enabled once shown for the delay");
-    click_ok(&mut h, 10.6);
-    assert!(h.state().ui.dialog.is_none(), "{}", h.state().ui.status);
-    assert!(vectorcraft_plugins::registry::get(id).is_some());
+    h.state_mut().run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&more), "replace": false})).unwrap();
+    approve(&mut h);
+    assert_eq!(installed(), Some("Tidy 2".into()), "replace: false is kept");
     h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
-
-    h.state_mut().run("ui.installPlugin", module).unwrap();
-    at(&mut h, 20.0);
-    at(&mut h, 20.0);
-    h.get_by_label("Cancel").click();
-    at(&mut h, 20.0);
-    assert!(h.state().ui.dialog.is_none() && h.state().pending_plugin_install.is_none(), "Cancel doesn't wait");
-    assert!(vectorcraft_plugins::registry::get(id).is_none());
 }
 
 /// The wait starts over for each question: one that takes the place of the question shown just
-/// before a click lands, which the click doesn't approve; the same question asked again; and the
-/// question shown when the window gets the focus back.
+/// before a click lands, which the click doesn't approve, and the same question asked again.
 #[test]
-fn the_install_approval_waits_again_for_a_new_question_and_after_the_focus_comes_back() {
+fn the_install_approval_waits_again_for_a_new_question() {
     let (a, b) = ("test.ui.approval.swap.a", "test.ui.approval.swap.b");
     let module = |id: &str| json!({"dataBase64": vectorcraft_format::base64_encode(&asking(id, "Same", r#"["doc.read"]"#))});
     let mut h = window(app());
@@ -337,232 +346,68 @@ fn the_install_approval_waits_again_for_a_new_question_and_after_the_focus_comes
     at(&mut h, 10.6);
     assert!(ok_enabled(&h));
     // Between two frames, a request closes the question and asks about another module.
-    dialogs::cancel(h.state_mut());
+    let (ctx, id) = (h.ctx.clone(), top(h.state()).unwrap());
+    h.state().dialogs().unwrap().with(|host| host.cancel_by_id(&ctx, id));
     h.state_mut().run("ui.installPlugin", module(b)).unwrap();
     click_ok(&mut h, 10.7);
     assert!(waiting(h.state(), b) && vectorcraft_plugins::registry::get(a).is_none(), "the click approves neither");
     assert!(!ok_enabled(&h));
-    at(&mut h, 11.19);
-    assert!(!ok_enabled(&h));
-    at(&mut h, 11.2);
-    assert!(ok_enabled(&h), "the new question waits its own delay");
-    // The same question again, from the same bytes.
-    dialogs::cancel(h.state_mut());
-    h.state_mut().run("ui.installPlugin", module(b)).unwrap();
-    at(&mut h, 11.3);
-    assert!(!ok_enabled(&h), "asked again, it waits again");
+    at(&mut h, 10.9);
+    assert!(!ok_enabled(&h), "the new question waits its own delay");
     at(&mut h, 11.8);
     assert!(ok_enabled(&h));
-    // The window loses the focus and gets it back.
-    h.input_mut().focused = false;
+    // The same question again, from the same bytes.
+    let (ctx, id) = (h.ctx.clone(), top(h.state()).unwrap());
+    h.state().dialogs().unwrap().with(|host| host.cancel_by_id(&ctx, id));
+    h.state_mut().run("ui.installPlugin", module(b)).unwrap();
     at(&mut h, 11.9);
-    assert!(!ok_enabled(&h), "not while the window doesn't have the focus");
-    assert_eq!(dialogs::confirm(h.state_mut()).unwrap()["pending"], dialogs::plugin::INSTALL_KIND);
-    h.input_mut().focused = true;
-    at(&mut h, 12.0);
-    at(&mut h, 12.49);
-    assert!(!ok_enabled(&h), "back in front, it waits again");
-    at(&mut h, 12.5);
-    click_ok(&mut h, 12.6);
-    assert!(h.state().ui.dialog.is_none(), "{}", h.state().ui.status);
+    assert!(!ok_enabled(&h), "asked again, it waits again");
+    at(&mut h, 12.8);
+    assert!(ok_enabled(&h));
+    click_ok(&mut h, 12.9);
+    assert!(top(h.state()).is_none(), "{}", h.state().ui.status);
     assert!(vectorcraft_plugins::registry::get(b).is_some() && vectorcraft_plugins::registry::get(a).is_none());
     h.state_mut().run("plugin.remove", json!({"id": b})).unwrap();
-}
-
-/// A press on OK that began before OK took input approves nothing when it is let go after; a new
-/// click does.
-#[test]
-fn a_press_on_the_install_approval_from_before_ok_took_input_approves_nothing() {
-    use egui_kittest::kittest::Queryable;
-    let id = "test.ui.approval.held";
-    let mut h = window(app());
-    let module = json!({"dataBase64": vectorcraft_format::base64_encode(&asking(id, "Held", r#"["doc.read"]"#))});
-    h.state_mut().run("ui.installPlugin", module).unwrap();
-    at(&mut h, 10.0);
-    at(&mut h, 10.0);
-    let pos = h.get_by_label("OK").rect().center();
-    let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    h.input_mut().events.extend([egui::Event::PointerMoved(pos), button(true)]);
-    at(&mut h, 10.1);
-    at(&mut h, 10.6);
-    assert!(ok_enabled(&h));
-    h.input_mut().events.push(button(false));
-    at(&mut h, 10.7);
-    assert!(waiting(h.state(), id), "the press began before OK took input");
-    click_ok(&mut h, 10.8);
-    assert!(h.state().ui.dialog.is_none(), "{}", h.state().ui.status);
-    assert!(vectorcraft_plugins::registry::get(id).is_some());
-    h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
-}
-
-/// A press of another button after OK took input doesn't let a primary press from before it
-/// approve when that press is let go of.
-#[test]
-fn a_later_press_on_the_install_approval_keeps_an_early_press_from_approving() {
-    use egui_kittest::kittest::Queryable;
-    let id = "test.ui.approval.held.two";
-    let mut h = window(app());
-    let module = json!({"dataBase64": vectorcraft_format::base64_encode(&asking(id, "Two", r#"["doc.read"]"#))});
-    h.state_mut().run("ui.installPlugin", module).unwrap();
-    at(&mut h, 10.0);
-    at(&mut h, 10.0);
-    let pos = h.get_by_label("OK").rect().center();
-    let button = |button, pressed| egui::Event::PointerButton { pos, button, pressed, modifiers: Default::default() };
-    // The primary button goes down away from any widget and moves over OK.
-    let away = egui::pos2(2.0, 2.0);
-    h.input_mut().events.extend([
-        egui::Event::PointerMoved(away),
-        egui::Event::PointerButton { pos: away, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() },
-    ]);
-    at(&mut h, 10.1);
-    h.input_mut().events.push(egui::Event::PointerMoved(pos));
-    at(&mut h, 10.2);
-    at(&mut h, 10.5);
-    assert!(ok_enabled(&h));
-    h.input_mut().events.push(button(egui::PointerButton::Secondary, true));
-    at(&mut h, 10.55);
-    h.input_mut().events.push(button(egui::PointerButton::Primary, false));
-    at(&mut h, 10.6);
-    assert!(waiting(h.state(), id), "the primary press began before OK took input");
-    h.input_mut().events.push(button(egui::PointerButton::Secondary, false));
-    at(&mut h, 10.65);
-    click_ok(&mut h, 10.8);
-    assert!(h.state().ui.dialog.is_none(), "{}", h.state().ui.status);
-    h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
-}
-
-/// A press on the OK of one question that is still held when another question takes its place
-/// doesn't approve the new one when it is let go of.
-#[test]
-fn a_press_held_from_the_question_before_approves_nothing() {
-    use egui_kittest::kittest::Queryable;
-    let (a, b) = ("test.ui.approval.carried.a", "test.ui.approval.carried.b");
-    let module = |id: &str| json!({"dataBase64": vectorcraft_format::base64_encode(&asking(id, "Carried", r#"["doc.read"]"#))});
-    let mut h = window(app());
-    h.state_mut().run("ui.installPlugin", module(a)).unwrap();
-    at(&mut h, 10.0);
-    at(&mut h, 10.0);
-    at(&mut h, 10.6);
-    assert!(ok_enabled(&h));
-    let pos = h.get_by_label("OK").rect().center();
-    let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    h.input_mut().events.extend([egui::Event::PointerMoved(pos), button(true)]);
-    at(&mut h, 10.65);
-    // While the button is down, a request closes the question and asks about another module.
-    dialogs::cancel(h.state_mut());
-    h.state_mut().run("ui.installPlugin", module(b)).unwrap();
-    at(&mut h, 10.7);
-    at(&mut h, 11.0);
-    at(&mut h, 11.2);
-    assert!(ok_enabled(&h));
-    h.input_mut().events.push(button(false));
-    at(&mut h, 11.25);
-    assert!(waiting(h.state(), b) && vectorcraft_plugins::registry::get(a).is_none(), "the press began on the question before");
-    click_ok(&mut h, 11.4);
-    assert!(h.state().ui.dialog.is_none(), "{}", h.state().ui.status);
-    assert!(vectorcraft_plugins::registry::get(b).is_some());
-    h.state_mut().run("plugin.remove", json!({"id": b})).unwrap();
-}
-
-/// Enter or Space held down while OK is disabled doesn't approve through its key repeat once OK
-/// has the keyboard focus; a new press after it is let go of does.
-#[test]
-fn a_key_held_on_the_install_approval_from_before_ok_took_input_approves_nothing() {
-    use egui_kittest::kittest::Queryable;
-    for (n, key) in [egui::Key::Enter, egui::Key::Space].into_iter().enumerate() {
-        let id = format!("test.ui.approval.key.{n}");
-        let mut h = window(app());
-        let module = json!({"dataBase64": vectorcraft_format::base64_encode(&asking(&id, "Key", r#"["doc.read"]"#))});
-        h.state_mut().run("ui.installPlugin", module).unwrap();
-        at(&mut h, 10.0);
-        at(&mut h, 10.0);
-        let event = |pressed, repeat| egui::Event::Key { key, physical_key: Some(key), pressed, repeat, modifiers: Default::default() };
-        h.input_mut().events.push(event(true, false));
-        at(&mut h, 10.1);
-        at(&mut h, 10.6);
-        assert!(ok_enabled(&h));
-        h.get_by_label("OK").focus();
-        at(&mut h, 10.65);
-        h.input_mut().events.push(event(true, true));
-        at(&mut h, 10.7);
-        assert!(waiting(h.state(), &id), "{key:?}: the key went down before OK took input");
-        h.input_mut().events.push(event(false, false));
-        at(&mut h, 10.75);
-        h.get_by_label("OK").focus();
-        at(&mut h, 10.8);
-        h.key_press(key);
-        at(&mut h, 10.85);
-        assert!(h.state().ui.dialog.is_none(), "{key:?}: {}", h.state().ui.status);
-        h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
-    }
-}
-
-/// The wait starts over when the window loses the focus and gets it back between two frames.
-#[test]
-fn the_install_approval_waits_again_when_the_focus_leaves_and_comes_back_between_frames() {
-    let id = "test.ui.approval.blink";
-    let mut h = window(app());
-    let module = json!({"dataBase64": vectorcraft_format::base64_encode(&asking(id, "Blink", r#"["doc.read"]"#))});
-    h.state_mut().run("ui.installPlugin", module).unwrap();
-    at(&mut h, 10.0);
-    at(&mut h, 10.0);
-    at(&mut h, 10.6);
-    assert!(ok_enabled(&h));
-    h.input_mut().events.extend([egui::Event::WindowFocused(false), egui::Event::WindowFocused(true)]);
-    at(&mut h, 10.7);
-    assert!(!ok_enabled(&h), "the focus left since the frame before");
-    click_ok(&mut h, 10.8);
-    assert!(waiting(h.state(), id));
-    at(&mut h, 11.19);
-    assert!(!ok_enabled(&h));
-    at(&mut h, 11.2);
-    assert!(ok_enabled(&h), "back in front, it waits again");
-    click_ok(&mut h, 11.3);
-    assert!(h.state().ui.dialog.is_none(), "{}", h.state().ui.status);
-    h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
 }
 
 /// A module with other bytes than the one installed with its id asks before taking its place, in
 /// the approval dialog, with its id and file hash, also when it asks for a heavy budget.
 #[test]
 fn installing_a_plugin_over_another_module_asks_first() {
-    let mut app = app();
+    let mut h = window(app());
     let id = "test.ui.replaces";
     let plain = |output: &str| wat::parse_str(tpl::returning(&format!(r#"{{"id":"{id}","name":"Plain","kind":"filter"}}"#), output)).unwrap();
     let module = |wasm: &[u8]| json!({"dataBase64": vectorcraft_format::base64_encode(wasm)});
     let takes_place = "This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.";
-    app.run("ui.installPlugin", module(&plain(r#"{"objects":[]}"#))).unwrap();
-    assert!(app.ui.dialog.is_none(), "nothing to take the place of");
+    h.state_mut().run("ui.installPlugin", module(&plain(r#"{"objects":[]}"#))).unwrap();
+    assert!(!prompt_open(h.state()), "nothing to take the place of");
 
     let other = plain(r#"{"objects":[],"error":null}"#);
     let other_hash = vectorcraft_plugins::permissions::sha256_hex(&other);
-    let r = app.run("ui.installPlugin", module(&other)).unwrap();
+    let r = h.state_mut().run("ui.installPlugin", module(&other)).unwrap();
     assert_eq!(r, json!({"pending": dialogs::plugin::INSTALL_KIND}));
-    let pending = app.pending_plugin_install.as_ref().unwrap();
+    let pending = h.state().pending_plugin_install.as_ref().unwrap();
     assert_eq!(pending.message, "Install “Plain” in place of the plug-in with the same ID?");
     assert_eq!(pending.detail, format!("ID: {id}\nFile SHA-256: {other_hash}\n\n{takes_place}"));
     assert_eq!(pending.params["replace"], json!(true), "OK replaces the one installed");
-    assert_eq!(dialogs::confirm(&mut app).unwrap()["pending"], dialogs::plugin::INSTALL_KIND, "it waits like any other question");
-    show_approval(&mut app);
-    dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
+    approve(&mut h);
+    assert!(top(h.state()).is_none());
     assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.hash().to_string()), Some(other_hash));
 
     let manifest = format!(r#"{{"id":"{id}","name":"Heavy","kind":"filter","budget":"heavy"}}"#);
     let heavy = wat::parse_str(tpl::spinning(&manifest, 1, r#"{"objects":[]}"#)).unwrap();
     let heavy_hash = vectorcraft_plugins::permissions::sha256_hex(&heavy);
-    let r = app.run("ui.installPlugin", module(&heavy)).unwrap();
+    let r = h.state_mut().run("ui.installPlugin", module(&heavy)).unwrap();
     assert_eq!(r["pending"], dialogs::plugin::INSTALL_KIND);
-    let pending = app.pending_plugin_install.as_ref().unwrap();
+    let pending = h.state().pending_plugin_install.as_ref().unwrap();
     assert!(pending.detail.ends_with(&format!("\n\nID: {id}\nFile SHA-256: {heavy_hash}\n\n{takes_place}")), "{}", pending.detail);
     assert_eq!(pending.params["replace"], json!(true), "OK replaces the one installed");
-    show_approval(&mut app);
-    dialogs::confirm(&mut app).unwrap();
+    approve(&mut h);
     assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.hash().to_string()), Some(heavy_hash));
-    app.run("plugin.remove", json!({"id": id})).unwrap();
+    h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
 }
 
-/// A plug-in with two commands: Grow, which adds a triangle (`_context.command` is `grow`), and
+/// A plug-in with two commands, each of which adds a triangle when run as a command: Grow, and
 /// Size, with a parameter, whose `menu` names another menu.
 fn commands_plugin(id: &str) -> Vec<u8> {
     let manifest = format!(
@@ -570,23 +415,19 @@ fn commands_plugin(id: &str) -> Vec<u8> {
         {{"id":"size","label":"Size","menu":"File","params":{{"by":{{"type":"number","min":0,"max":10,"default":2}}}}}}]}}"#
     );
     let triangle = r#"{"objects":[{"path":{"subpaths":[{"closed":true,"anchors":[{"p":[0,0]},{"p":[5,0]},{"p":[5,5]}]}]}}]}"#;
-    wat::parse_str(tpl::when_given(&manifest, tpl::Given::Params, r#""command":"grow""#, triangle)).unwrap()
-}
-
-fn objects(app: &VectorcraftApp) -> usize {
-    app.session.doc().unwrap().doc.layers.iter().map(|l| l.children().map_or(0, |c| c.len())).sum()
+    wat::parse_str(tpl::when_given(&manifest, tpl::Given::Params, r#""mode":"command""#, triangle)).unwrap()
 }
 
 /// A plug-in's commands are items of Object › Plug-ins › its name (never the menu a manifest
-/// names), entries of Edit › Keyboard Shortcuts with no shortcut of their own, and gone from both
-/// once it is removed. A command with parameters opens its dialog.
+/// names), rows of the shortcut catalog with no shortcut of their own, and gone from both once it
+/// is removed. A command with parameters opens its dialog.
 #[test]
 fn plugin_commands_are_menu_items_and_shortcut_entries() {
-    let mut app = app();
+    let mut h = window(app());
     let id = "test.ui.cmds";
     let (grow, size) = ("plugin.test.ui.cmds.grow", "plugin.test.ui.cmds.size");
-    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&commands_plugin(id))})).unwrap();
-    let entries = menus::menu_entries(&app);
+    h.state_mut().run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&commands_plugin(id))})).unwrap();
+    let entries = menus::menu_entries(h.state());
     let under = ["Object", "Plug-ins", "Cmd Test"];
     let item = entry(&entries, &under, "Grow").expect("Grow is listed");
     assert_eq!((item.command.as_deref(), item.enabled), (Some(grow), true));
@@ -601,22 +442,26 @@ fn plugin_commands_are_menu_items_and_shortcut_entries() {
     let listed = crate::shortcut_editor::entry(grow).expect("in Keyboard Shortcuts");
     assert_eq!((listed.label.as_str(), listed.group.as_str()), ("Grow", "Object › Plug-ins › Cmd Test"));
     assert_eq!(crate::shortcut_editor::default_of(grow), None, "a manifest gives no shortcut");
-    assert!(crate::keymap::template().bindable(&crate::keymap::command_of(grow)).is_some(), "a shortcut can be given to it");
+    let row = |command: &str| {
+        let defs = crate::keymap::catalog_defs(crate::keymap::platform(), &crate::shortcut_editor::snapshot());
+        defs.into_iter().find(|d| d.command == crate::keymap::command_of(command))
+    };
+    let def = row(grow).expect("a shortcut can be given to it");
+    assert!(def.defaults.is_empty(), "a manifest gives no shortcut");
 
     // Size asks for its parameter; OK runs it as one undo step named after it.
-    let undo = app.session.doc().unwrap().history.undo.len();
-    menus::invoke(&mut app, size, json!({}));
-    let d = app.ui.dialog.as_ref().expect("Size opens its dialog");
-    assert_eq!((d.str("__command"), d.str("__label"), d.fields.get("by")), (size.to_string(), "Size".to_string(), Some(&json!(2.0))));
-    frame(&mut app);
-    dialogs::confirm(&mut app).unwrap();
-    let st = app.session.doc().unwrap();
+    let undo = h.state().session.doc().unwrap().history.undo.len();
+    menus::invoke(h.state_mut(), size, json!({}));
+    step(&mut h);
+    assert_eq!(fields(h.state())["by"], json!(2.0));
+    answer(&mut h, true);
+    let st = h.state().session.doc().unwrap();
     assert_eq!((st.history.undo.len(), st.history.undo.last().unwrap().label.as_str()), (undo + 1, "Size"));
 
-    app.run("plugin.remove", json!({"id": id})).unwrap();
-    assert!(menus::menu_entries(&app).iter().all(|e| e.command.as_deref() != Some(grow)));
+    h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
+    assert!(menus::menu_entries(h.state()).iter().all(|e| e.command.as_deref() != Some(grow)));
     assert!(crate::shortcut_editor::entries().iter().all(|e| e.key != grow));
-    assert!(crate::keymap::template().bindable(&crate::keymap::command_of(grow)).is_none());
+    assert!(row(grow).is_none());
 }
 
 /// A filter at API level 2 named `name` whose commands are `commands` (a JSON list).
@@ -684,7 +529,7 @@ fn a_plugin_command_is_placed_in_the_menu_its_manifest_names() {
 
     let listed = crate::shortcut_editor::entry(&low(ant)).expect("in Keyboard Shortcuts");
     assert_eq!((listed.label.as_str(), listed.group.as_str()), ("Low Area (Ant)", "Select"));
-    assert!(crate::palette::items().iter().any(|(name, id, _)| *id == low(bee) && name.ends_with("Low Area (Bee)")), "in the command palette");
+    assert!(crate::palette::items().iter().any(|(name, id)| *id == low(bee) && name.ends_with("Low Area (Bee)")), "in the command palette");
 
     app.run("plugin.remove", json!({"id": ant})).unwrap();
     let entries = menus::menu_entries(&app);
@@ -774,9 +619,9 @@ fn placed_commands_of_a_live_effect_and_a_clashing_label() {
 /// there is never left in its plug-in's submenu while Keyboard Shortcuts lists it under that menu.
 #[test]
 fn every_menu_a_plugin_may_name_is_in_the_menu_bar() {
-    fn find<'a>(items: &'a [menus::Item], label: &str) -> Option<&'a [menus::Item]> {
+    fn find<'a>(items: &'a [menus::Node], label: &str) -> Option<&'a [menus::Node]> {
         items.iter().find_map(|it| match it {
-            menus::Item::Sub(l, children) if *l == label => Some(children.as_slice()),
+            menus::Node::Submenu { label: l, children, .. } if l == label => Some(children.as_slice()),
             _ => None,
         })
     }
@@ -820,7 +665,7 @@ fn desktop_items_of_placeable_menus_are_known_to_the_engine() {
             items = items
                 .iter()
                 .find_map(|it| match it {
-                    menus::Item::Sub(l, children) if l == segment => Some(children.as_slice()),
+                    menus::Node::Submenu { label, children, .. } if label.as_str() == *segment => Some(children.as_slice()),
                     _ => None,
                 })
                 .unwrap();
@@ -834,9 +679,8 @@ fn desktop_items_of_placeable_menus_are_known_to_the_engine() {
         };
         for it in items {
             let label = match it {
-                menus::Item::Cmd(l, id, p) if !menus::lists_plugin(id, p) => *l,
-                menus::Item::Sub(l, children) if !menus::holds_plugin_commands(children) => *l,
-                menus::Item::Todo(l, _) => *l,
+                menus::Node::Item(i) if !menus::lists_plugin(&i.command.id, &i.command.params) => i.label.as_str(),
+                menus::Node::Submenu { label, children, .. } if !menus::holds_plugin_commands(children) => label.as_str(),
                 _ => continue,
             };
             let mut labels = vec![label.to_string()];
@@ -866,16 +710,24 @@ fn context_plugin(id: &str, commands: &str) -> String {
 /// The items of the canvas context menu's Plug-ins submenu: (plug-in, label, command, params).
 fn canvas_plugin_items(app: &VectorcraftApp) -> Vec<(String, String, String, Value)> {
     let items = menus::context_items(app);
-    let Some(menus::Item::Sub(_, plugins)) = items.iter().find(|it| matches!(it, menus::Item::Sub("Plug-ins", _))) else { return Vec::new() };
+    let plugins = items.iter().find_map(|it| match it {
+        menus::Node::Submenu { label, children, .. } if label.as_str() == "Plug-ins" => Some(children),
+        _ => None,
+    });
     let mut out = Vec::new();
-    for p in plugins {
-        let menus::Item::Sub(name, commands) = p else { panic!("a plug-in's group is a submenu: {p:?}") };
-        for c in commands {
-            let menus::Item::Cmd(label, id, params) = c else { panic!("a plug-in group holds commands only: {c:?}") };
-            out.push((name.to_string(), label.to_string(), id.to_string(), params.clone()));
+    for p in plugins.into_iter().flatten() {
+        let menus::Node::Submenu { label: name, children, .. } = p else { panic!("a plug-in's group is a submenu: {p:?}") };
+        for c in children {
+            let menus::Node::Item(i) = c else { panic!("a plug-in group holds commands only: {c:?}") };
+            out.push((name.as_str().to_string(), i.label.as_str().to_string(), i.command.id.to_string(), i.command.params.clone()));
         }
     }
     out
+}
+
+/// The plug-in command the open plug-in dialog runs, and the objects it runs on.
+fn dialog_runs(app: &VectorcraftApp) -> Option<(String, Option<Value>)> {
+    app.plugin_dialog.as_ref()?.runs_command().map(|(c, ids)| (c.to_string(), ids.cloned()))
 }
 
 /// A command whose manifest's `menu.context` names the canvas or the Layers panel is listed in that
@@ -889,30 +741,31 @@ fn canvas_plugin_items(app: &VectorcraftApp) -> Vec<(String, String, String, Val
 fn plugin_commands_are_listed_in_the_canvas_and_layers_context_menus() {
     use dialogs::plugin::{ContextCommand, context_commands};
     use vectorcraft_plugins::ContextMenu;
-    let mut app = app();
+    let mut h = window(app());
     let id = "test.ui.context";
     let command = |c: &str| vectorcraft_engine::cmd::plugin::command_id(id, c);
     let commands = r#"[{"id":"tidy","label":"Tidy","menu":{"context":[{"menu":"canvas"},{"menu":"layers","when":"oneObject"}]}},
         {"id":"text","label":"Text Only","menu":{"context":[{"menu":"canvas","when":"typeObject"},{"menu":"layers","when":"layerRow"}]}},
         {"id":"size","label":"Size","menu":{"context":[{"menu":"canvas"},{"menu":"layers"}]},"params":{"by":{"type":"number","min":0,"max":10,"default":2}}},
         {"id":"plain","label":"Plain"}]"#;
+    let app = h.state_mut();
     app.run("plugin.install", json!({"dataBase64": context_plugin(id, commands)})).unwrap();
-    let target = red_rect(&mut app);
+    let target = red_rect(app);
     app.run("layer.setProps", json!({"ids": [target.0], "name": "Target"})).unwrap();
-    let other = red_rect(&mut app);
+    let other = red_rect(app);
     let layer = app.session.doc().unwrap().doc.layers[0].id;
 
     app.run("select.none", json!({})).unwrap();
-    assert!(canvas_plugin_items(&app).is_empty(), "nothing selected: no Plug-ins submenu");
+    assert!(canvas_plugin_items(app).is_empty(), "nothing selected: no Plug-ins submenu");
 
     app.run("select.set", json!({"ids": [target.0]})).unwrap();
     let ids = json!({"ids": [target.0]});
-    let listed = canvas_plugin_items(&app);
+    let listed = canvas_plugin_items(app);
     let expected = [("Ctx", "Tidy", command("tidy")), ("Ctx", "Text Only", command("text")), ("Ctx", "Size…", command("size"))];
     assert_eq!(listed.iter().map(|(p, l, c, _)| (p.as_str(), l.as_str(), c.clone())).collect::<Vec<_>>(), expected);
     assert!(listed.iter().all(|(.., p)| *p == ids), "{listed:?}");
     let shown = |app: &VectorcraftApp, c: &str| menus::shown_state(app, c, &ids).map(|(enabled, _)| enabled);
-    assert_eq!((shown(&app, &command("tidy")), shown(&app, &command("text"))), (Some(true), Some(false)), "no type object is selected");
+    assert_eq!((shown(app, &command("tidy")), shown(app, &command("text"))), (Some(true), Some(false)), "no type object is selected");
 
     let doc = app.session.doc().unwrap().doc.clone();
     let rows = |ids: &[u64]| context_commands(ContextMenu::Layers, &doc, ids);
@@ -925,7 +778,7 @@ fn plugin_commands_are_listed_in_the_canvas_and_layers_context_menus() {
     // The plug-in's output, a triangle in place of what it was given, replaces Target only when
     // Target is what it was given.
     let undo = app.session.doc().unwrap().history.undo.len();
-    menus::invoke(&mut app, &command("tidy"), ids.clone());
+    menus::invoke(app, &command("tidy"), ids.clone());
     let st = app.session.doc().unwrap();
     assert_eq!((st.history.undo.len(), st.history.undo.last().unwrap().label.as_str()), (undo + 1, "Tidy"));
     assert!(st.doc.node(target).is_none() && st.doc.node(other).is_some(), "the plug-in was given Target alone");
@@ -935,29 +788,31 @@ fn plugin_commands_are_listed_in_the_canvas_and_layers_context_menus() {
     // selection, not the generic parameter dialog.
     let (_, label, c, p) = listed.iter().find(|(_, l, ..)| l == "Size…").unwrap();
     let (cmd, p) = menus::click_target(label, c, p);
-    menus::invoke(&mut app, &cmd, p);
-    let d = app.ui.dialog.take().expect("Size opens its dialog from the canvas");
-    assert_eq!((d.kind.as_str(), d.str("__command"), d.fields.get("__ids")), (dialogs::plugin::KIND, command("size"), Some(&json!([target.0]))));
+    assert_eq!(cmd, command("size"), "not the generic parameter dialog");
+    menus::invoke(app, &cmd, p);
+    step(&mut h);
+    assert_eq!(dialog_runs(h.state()), Some((command("size"), Some(json!([target.0])))), "Size opens its dialog from the canvas");
+    answer(&mut h, false);
 
     // A row's item runs on that row's object, not on the selection; one with parameters asks first.
-    app.run("select.set", json!({"ids": [other.0]})).unwrap();
-    let undo = app.session.doc().unwrap().history.undo.len();
-    menus::invoke(&mut app, &command("size"), ids.clone());
-    let d = app.ui.dialog.as_ref().expect("Size opens its dialog");
-    assert_eq!((d.str("__command"), d.fields.get("__ids")), (command("size"), Some(&json!([target.0]))));
-    frame(&mut app);
-    dialogs::confirm(&mut app).unwrap();
-    let st = app.session.doc().unwrap();
+    h.state_mut().run("select.set", json!({"ids": [other.0]})).unwrap();
+    let undo = h.state().session.doc().unwrap().history.undo.len();
+    menus::invoke(h.state_mut(), &command("size"), ids.clone());
+    step(&mut h);
+    assert_eq!(dialog_runs(h.state()), Some((command("size"), Some(json!([target.0])))), "Size opens its dialog");
+    answer(&mut h, true);
+    let st = h.state().session.doc().unwrap();
     assert_eq!((st.history.undo.len(), st.history.undo.last().unwrap().label.as_str()), (undo + 1, "Size"));
     assert!(st.doc.node(target).is_none() && st.doc.node(other).is_some(), "the plug-in was given the row's object, not the selection");
 
+    let app = h.state_mut();
     let list = app.run("plugin.list", json!({})).unwrap();
     let entry = list["plugins"].as_array().unwrap().iter().find(|p| p["id"] == id).unwrap().clone();
     assert_eq!(entry["commands"][0]["menu"], json!({"context": [{"menu": "canvas"}, {"menu": "layers", "when": "oneObject"}]}));
     assert!(entry["commands"][3].get("menu").is_none(), "Plain lists no menu");
 
     app.run("plugin.remove", json!({"id": id})).unwrap();
-    assert!(canvas_plugin_items(&app).is_empty(), "removed: nothing listed");
+    assert!(canvas_plugin_items(app).is_empty(), "removed: nothing listed");
     assert!(rows(&[other.0]).is_empty());
 }
 
@@ -967,79 +822,54 @@ fn plugin_commands_are_listed_in_the_canvas_and_layers_context_menus() {
 /// command on those objects.
 #[test]
 fn a_plugin_command_dialog_stays_with_its_document() {
-    let mut app = app();
+    let mut h = window(app());
     let id = "test.ui.context.doc";
     let size = vectorcraft_engine::cmd::plugin::command_id(id, "size");
     let commands = r#"[{"id":"size","label":"Size","params":{"by":{"type":"number","min":0,"max":10,"default":2}}}]"#;
+    let app = h.state_mut();
     app.run("plugin.install", json!({"dataBase64": context_plugin(id, commands)})).unwrap();
-    let target = red_rect(&mut app);
+    let target = red_rect(app);
     app.run("layer.setProps", json!({"ids": [target.0], "name": "Target"})).unwrap();
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-    let twin = red_rect(&mut app);
+    let twin = red_rect(app);
     app.run("layer.setProps", json!({"ids": [twin.0], "name": "Target"})).unwrap();
     assert_eq!(twin, target, "the second document's object has the first one's id");
     let ids = json!({"ids": [target.0]});
     let undos = |app: &VectorcraftApp| app.session.documents().iter().map(|st| st.history.undo.len()).collect::<Vec<_>>();
     let kept = |app: &VectorcraftApp| app.session.documents().iter().map(|st| st.doc.node(target).is_some()).collect::<Vec<_>>();
+    let before = undos(app);
+    let opened = Some((size.clone(), Some(json!([target.0]))));
 
     // Drawn while the other document is active, the dialog closes.
     app.run("document.activate", json!({"index": 0})).unwrap();
-    menus::invoke(&mut app, &size, ids.clone());
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("__command")), Some(size.clone()));
-    let before = undos(&app);
-    frame(&mut app);
-    app.run("document.activate", json!({"index": 1})).unwrap();
-    app.begin_interaction("Edit").unwrap();
-    frame(&mut app);
-    assert!(app.ui.dialog.is_none(), "the dialog closes on another document");
-    assert!(app.session.in_interaction(), "closing it leaves the other document's edit in progress");
-    app.session.cancel_interaction().unwrap();
-    assert_eq!((undos(&app), kept(&app)), (before.clone(), vec![true, true]));
+    menus::invoke(app, &size, ids.clone());
+    step(&mut h);
+    assert_eq!(dialog_runs(h.state()), opened);
+    h.state_mut().run("document.activate", json!({"index": 1})).unwrap();
+    h.state_mut().begin_interaction("Edit").unwrap();
+    step(&mut h);
+    assert!(h.state().plugin_dialog.is_none() && top(h.state()).is_none(), "the dialog closes on another document");
+    assert!(h.state().session.in_interaction(), "closing it leaves the other document's edit in progress");
+    h.state_mut().session.cancel_interaction().unwrap();
+    assert_eq!((undos(h.state()), kept(h.state())), (before.clone(), vec![true, true]));
 
     // OK while the other document is active closes the dialog and changes neither document.
-    app.run("document.activate", json!({"index": 0})).unwrap();
-    menus::invoke(&mut app, &size, ids.clone());
-    frame(&mut app);
-    app.run("document.activate", json!({"index": 1})).unwrap();
-    assert_eq!(dialogs::confirm(&mut app).unwrap(), json!({}));
-    assert!(app.ui.dialog.is_none());
-    assert_eq!((undos(&app), kept(&app)), (before.clone(), vec![true, true]));
+    h.state_mut().run("document.activate", json!({"index": 0})).unwrap();
+    menus::invoke(h.state_mut(), &size, ids.clone());
+    step(&mut h);
+    assert_eq!(dialog_runs(h.state()), opened);
+    h.state_mut().run("document.activate", json!({"index": 1})).unwrap();
+    answer(&mut h, true);
+    assert!(h.state().plugin_dialog.is_none());
+    assert_eq!((undos(h.state()), kept(h.state())), (before.clone(), vec![true, true]));
 
     // On its own document, OK runs the command on the objects it opened for.
-    app.run("document.activate", json!({"index": 0})).unwrap();
-    menus::invoke(&mut app, &size, ids);
-    frame(&mut app);
-    dialogs::confirm(&mut app).unwrap();
-    assert_eq!((undos(&app), kept(&app)), (vec![before[0] + 1, before[1]], vec![false, true]));
-    app.run("plugin.remove", json!({"id": id})).unwrap();
-}
-
-/// A shortcut the user gives a plug-in command runs it.
-#[test]
-fn a_shortcut_runs_a_plugin_command() {
-    let mut app = app();
-    let id = "test.ui.cmds.keys";
-    let grow = vectorcraft_engine::cmd::plugin::command_id(id, "grow");
-    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&commands_plugin(id))})).unwrap();
-    crate::keymap::set_override(&mut app.ui.shortcut_overrides, &grow, "Cmd+Alt+Shift+F9");
-    crate::shortcut_editor::sync(&app.ui);
-    assert_eq!(crate::shortcut_editor::command_for_key("Cmd+Alt+Shift+F9"), Some(grow.as_str()));
-    let before = objects(&app);
-    let m = if crate::keymap::platform().is_mac() { egui::Modifiers::MAC_CMD } else { egui::Modifiers::CTRL } | egui::Modifiers::COMMAND;
-    let m = m | egui::Modifiers::ALT | egui::Modifiers::SHIFT;
-    let events = vec![
-        egui::Event::ModifiersChanged(m),
-        egui::Event::Key { key: egui::Key::F9, physical_key: Some(egui::Key::F9), pressed: true, repeat: false, modifiers: m },
-    ];
-    let ctx = egui::Context::default();
-    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
-        app.logic(ui.ctx());
-        crate::shortcuts::handle(&mut app, ui.ctx());
-    });
-    out.textures_delta.clear();
-    crate::shortcut_editor::sync(&crate::state::UiState::default());
-    assert_eq!(objects(&app), before + 1, "the command added its triangle: {}", app.ui.status);
-    app.run("plugin.remove", json!({"id": id})).unwrap();
+    h.state_mut().run("document.activate", json!({"index": 0})).unwrap();
+    menus::invoke(h.state_mut(), &size, ids);
+    step(&mut h);
+    answer(&mut h, true);
+    assert_eq!((undos(h.state()), kept(h.state())), (vec![before[0] + 1, before[1]], vec![false, true]));
+    h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
 }
 
 /// The `grant` and `allowHeavy` that `ui.installPlugin` is given approve nothing: it asks all the
@@ -1047,53 +877,59 @@ fn a_shortcut_runs_a_plugin_command() {
 /// installs without either.
 #[test]
 fn ui_install_plugin_takes_no_grant_or_heavy_budget_from_its_params() {
-    let mut app = app();
+    let mut h = window(app());
     let id = "test.ui.approval.params";
     let manifest = format!(r#"{{"id":"{id}","name":"Asks","kind":"filter","permissions":["doc.read"]}}"#);
     let asks = wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
     let given = |wasm: &[u8]| json!({"dataBase64": vectorcraft_format::base64_encode(wasm), "grant": ["doc.read", "doc.write"], "allowHeavy": true});
-    let r = app.run("ui.installPlugin", given(&asks)).unwrap();
+    let r = h.state_mut().run("ui.installPlugin", given(&asks)).unwrap();
     assert_eq!(r["pending"], dialogs::plugin::INSTALL_KIND);
     assert!(vectorcraft_plugins::registry::get(id).is_none() && vectorcraft_plugins::registry::granted(id).is_none());
-    let pending = app.pending_plugin_install.as_ref().unwrap();
+    let pending = h.state().pending_plugin_install.as_ref().unwrap();
     assert_eq!(pending.approval.permissions, ["doc.read"], "the permissions the manifest lists");
     assert_eq!(pending.params["grant"], json!(["doc.read"]));
     assert!(!pending.approval.heavy && pending.params.get("allowHeavy").is_none(), "no heavy budget was asked about");
-    dialogs::cancel(&mut app);
+    step(&mut h);
+    answer(&mut h, false);
     assert!(vectorcraft_plugins::registry::get(id).is_none());
 
     let heavy_id = "test.ui.approval.params.heavy";
     let manifest = format!(r#"{{"id":"{heavy_id}","name":"Heavy","kind":"filter","budget":"heavy"}}"#);
     let heavy = wat::parse_str(tpl::spinning(&manifest, 1, r#"{"objects":[]}"#)).unwrap();
-    let r = app.run("ui.installPlugin", given(&heavy)).unwrap();
+    let r = h.state_mut().run("ui.installPlugin", given(&heavy)).unwrap();
     assert_eq!(r["pending"], dialogs::plugin::INSTALL_KIND, "allowHeavy skips no question");
     assert!(vectorcraft_plugins::registry::get(heavy_id).is_none());
-    dialogs::cancel(&mut app);
+    step(&mut h);
+    answer(&mut h, false);
 
     let plain_id = "test.ui.approval.params.plain";
     let manifest = format!(r#"{{"id":"{plain_id}","name":"Plain","kind":"filter"}}"#);
     let plain = wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
-    let r = app.run("ui.installPlugin", given(&plain)).unwrap();
-    assert!(r.get("pending").is_none() && app.ui.dialog.is_none(), "{r}");
+    let r = h.state_mut().run("ui.installPlugin", given(&plain)).unwrap();
+    step(&mut h);
+    assert!(r.get("pending").is_none() && !h.state().any_dialog_open(), "{r}");
     assert!(vectorcraft_plugins::registry::get(plain_id).is_some());
     assert!(vectorcraft_plugins::registry::granted(plain_id).is_none(), "the grant it was given isn't recorded");
-    app.run("plugin.remove", json!({"id": plain_id})).unwrap();
+    h.state_mut().run("plugin.remove", json!({"id": plain_id})).unwrap();
 }
 
 /// An action's step can't grant what only a person approves: a played `plugin.install` with `grant`
 /// is refused at Accelerated and at Step by Step, and nothing is installed.
 #[test]
 fn an_action_step_cannot_grant_a_plugin_its_permissions() {
-    use crate::panels::actions::{Action, ActionSet, PlaybackSpeed, play};
+    use crate::panels::actions::tests_support::{action, push_set};
+    use crate::panels::actions::{PlaybackSpeed, play};
     let mut app = app();
     let id = "test.ui.approval.action";
     let manifest = format!(r#"{{"id":"{id}","name":"Asks","kind":"filter","permissions":["doc.read"]}}"#);
     let wasm = wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
     let step = json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": ["doc.read"]});
-    app.ui.action_sets = vec![ActionSet::new("Test", vec![Action::new("Install", vec![("plugin.install".into(), step)])])];
+    push_set(&mut app, "Test", vec![action("Install", &[("plugin.install", step)])]);
+    // The set added after the Default Actions.
+    let set = (0..).find(|&i| crate::panels::actions::model::set_name(&app.ui.actions, i).is_none_or(|name| name == "Test")).unwrap_or(0);
     for speed in [PlaybackSpeed::Accelerated, PlaybackSpeed::Step] {
         app.ui.action_playback.speed = speed;
-        let e = play(&mut app, 0, 0).unwrap_err();
+        let e = play(&mut app, set, 0).unwrap_err();
         assert!(e.contains("take effect only in a session started with --allow-plugin-grants"), "{e}");
         assert!(vectorcraft_plugins::registry::get(id).is_none() && vectorcraft_plugins::registry::granted(id).is_none());
     }
@@ -1102,16 +938,15 @@ fn an_action_step_cannot_grant_a_plugin_its_permissions() {
 /// A plug-in of API level 2 that lists `progress` names it in plain words when it asks.
 #[test]
 fn installing_a_plugin_that_reports_progress_says_so() {
-    let mut app = app();
+    let mut h = window(app());
     let id = "test.ui.permissions.progress";
     let manifest = format!(r#"{{"id":"{id}","name":"Count","kind":"filter","api":2,"permissions":["doc.read","progress"]}}"#);
     let bytes = wat::parse_str(tpl::reporting(&manifest, "(call $vc_progress (i64.const 1) (i64.const 2))", r#"{"objects":[]}"#)).unwrap();
-    let r = app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&bytes)})).unwrap();
+    let r = h.state_mut().run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&bytes)})).unwrap();
     assert_eq!(r["pending"], dialogs::plugin::INSTALL_KIND);
-    let detail = app.pending_plugin_install.as_ref().unwrap().detail.clone();
+    let detail = h.state().pending_plugin_install.as_ref().unwrap().detail.clone();
     assert!(detail.ends_with("• Read the objects it is given\n• Show its progress, see Cancel and write log lines"), "{detail}");
-    show_approval(&mut app);
-    dialogs::confirm(&mut app).unwrap();
+    approve(&mut h);
     assert_eq!(vectorcraft_plugins::registry::granted(id).map(|g| g.permissions.len()), Some(2));
-    app.run("plugin.remove", json!({"id": id})).unwrap();
+    h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
 }

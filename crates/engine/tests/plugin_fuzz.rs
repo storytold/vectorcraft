@@ -1,6 +1,6 @@
-//! Untrusted plug-ins never crash the app: mutated and garbage modules handed to `plugin.install`,
-//! and plug-ins returning hostile output (random JSON in the object model's shape: huge or
-//! malformed coordinates, unknown ids, broken paints and gradients, junk of every type) as object
+//! Untrusted plug-ins never crash the app: mutated and garbage modules, and modules whose
+//! `vc_manifest` custom section holds garbage, handed to `plugin.install`, and plug-ins returning
+//! hostile output (random JSON in the object model's shape: huge or malformed coordinates, unknown ids, broken paints and gradients, junk of every type) as object
 //! filters (`plugin.run`) or live effects (`effect.apply`), and plug-ins running bulk memory
 //! instructions (`memory.fill`, `memory.copy`, `memory.init`, `data.drop`) on ranges in, at and past
 //! the ends of memory and the data segment, under small and default budgets. Each run must end as
@@ -620,7 +620,11 @@ proptest! {
         }
         let mut s = rich_session();
         s.execute("select.all", &json!({})).unwrap();
-        for module in [bytes, [b"\0asm\x01\0\0\0".as_slice(), &garbage].concat(), garbage.clone()] {
+        // A module whose `vc_manifest` custom section holds the garbage.
+        let section = tpl::custom_section(vectorcraft_plugins::manifest::MANIFEST_SECTION, &garbage);
+        let sectioned = tpl::with_field(&tpl::module(&tpl::manifest("fuzz.section", "filter", "{}"), tpl::ECHO, "", 1), &section).unwrap();
+        let sectioned = wat::parse_str(sectioned).unwrap();
+        for module in [bytes, [b"\0asm\x01\0\0\0".as_slice(), &garbage].concat(), garbage.clone(), sectioned] {
             let r = catch_quiet(|| {
                 if let Ok(info) = install(&mut s, &module) {
                     let _ = s.execute("plugin.run", &json!({"id": info["id"]}));
@@ -911,6 +915,77 @@ proptest! {
         renders(&s, &text)?;
         vectorcraft_plugins::registry::remove("fuzz.inputs");
         vectorcraft_plugins::registry::revoke("fuzz.inputs");
+    }
+
+    /// Manifests with a hostile `context` (unknown, repeated and oddly cased sections, long lists,
+    /// junk of every type) with any `api`, kind and permissions parse to an error or to a filter, or
+    /// a live effect with commands, at `api` 3 or later asking for each section once, whose
+    /// `permissions` list `doc.read` so that installing it asks for approval. One that installs and
+    /// echoes its input, with or without a selection, leaves the document as it was, and it still
+    /// renders.
+    #[test]
+    fn hostile_manifest_context_never_crash(
+        kind in prop::sample::select(vec!["filter", "effect", "exporter"]),
+        commands in any::<bool>(),
+        names in prop::collection::vec(prop::sample::select(vec!["settings", "artboards", "layers", "swatches", "Layers", "document", ""]), 0..6),
+        long in prop::option::weighted(0.1, 5usize..300),
+        context in prop::option::weighted(0.8, prop_oneof![Just(Value::Null), arb_junk()]),
+        api in prop_oneof![2 => Just(json!(3)), 1 => Just(json!(2)), 1 => Just(json!(4)), 1 => arb_junk()],
+        permissions in prop_oneof![Just(Value::Null), Just(json!([])), Just(json!(["doc.read", "doc.write"])), Just(json!(["doc.read", "effect.render"])), Just(json!(["doc.write"]))],
+        select in any::<bool>(),
+    ) {
+        let mut m = json!({"id": "fuzz.context", "name": "Context", "kind": kind, "api": api});
+        if kind == "exporter" {
+            m["extensions"] = json!(["fz"]);
+        }
+        if commands {
+            m["commands"] = json!([{"id": "c", "label": "C"}]);
+        }
+        if !permissions.is_null() {
+            m["permissions"] = permissions;
+        }
+        m["context"] = match (context, long) {
+            (_, Some(n)) => json!(vec!["layers"; n]),
+            (Some(Value::Null) | None, None) => json!(names),
+            (Some(junk), None) => junk,
+        };
+        let text = m.to_string();
+        let parsed = catch_quiet(|| vectorcraft_plugins::Manifest::parse(text.as_bytes()));
+        let parsed = parsed.map_err(|msg| TestCaseError::fail(format!("panicked on {text}: {msg}")))?;
+        if let Ok(man) = &parsed {
+            let sections = man.context_sections();
+            prop_assert_eq!(sections.len(), man.context.len(), "{}", text);
+            prop_assert!(sections.iter().enumerate().all(|(i, k)| !sections[..i].contains(k)), "{}", text);
+            let kind_ok = man.kind == Kind::Filter || (man.kind == Kind::Effect && !man.commands.is_empty());
+            prop_assert!(sections.is_empty() || (kind_ok && man.api >= 3), "{}", text);
+            let reads = man.permissions.as_ref().is_some_and(|p| p.iter().any(|n| n == "doc.read"));
+            prop_assert!(sections.is_empty() || (man.asks_permissions() && reads), "{}", text);
+        }
+        let mut s = rich_session();
+        s.allow_plugin_grants_from_requests();
+        let module = wat::parse_str(tpl::module(&text, tpl::ECHO, "", 1)).unwrap();
+        let data = vectorcraft_format::base64_encode(&module);
+        let grant = json!(["doc.read", "doc.write", "state", "effect.render", "export.write"]);
+        let before = s.doc().unwrap().doc.clone();
+        let r = catch_quiet(|| {
+            let installed = s.execute("plugin.install", &json!({"dataBase64": data, "grant": grant})).is_ok();
+            let _ = s.execute(if select { "select.all" } else { "select.none" }, &json!({}));
+            let ran = installed && s.execute("plugin.run", &json!({"id": "fuzz.context"})).is_ok();
+            if installed {
+                for c in s.commands().into_iter().filter(|c| c.id.starts_with("plugin.fuzz.context.")) {
+                    let _ = s.execute(c.id, &json!({}));
+                }
+            }
+            (installed, ran)
+        });
+        let (installed, ran) = r.map_err(|msg| TestCaseError::fail(format!("panicked running {text}: {msg}")))?;
+        prop_assert!(!installed || parsed.is_ok(), "a manifest that doesn't parse installed: {}", text);
+        if ran {
+            prop_assert!(s.doc().unwrap().doc.layers == before.layers, "an echo changed the document: {}", text);
+        }
+        renders(&s, &text)?;
+        vectorcraft_plugins::registry::remove("fuzz.context");
+        vectorcraft_plugins::registry::revoke("fuzz.context");
     }
 
     /// A plug-in that calls the storage imports with hostile keys (`..`, separators, device names,

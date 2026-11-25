@@ -40,6 +40,7 @@ pub mod effect;
 pub mod export;
 pub mod host;
 pub mod import;
+pub mod loader;
 pub mod manifest;
 pub mod objects;
 pub mod painted;
@@ -52,7 +53,7 @@ pub mod wat;
 
 pub use dialog::ParamUi;
 pub use host::{LogLevel, LogLine, Report};
-pub use manifest::{Budget, Command, ContextMenu, ContextPlace, ContextWhen, InputKind, Kind, Manifest, MenuPlace, Param, ParamSpec};
+pub use manifest::{Budget, Command, ContextMenu, ContextPlace, ContextSection, ContextWhen, InputKind, Kind, Manifest, MenuPlace, Param, ParamSpec};
 pub use runtime::{ABI_VERSION, HEAVY_FUEL, HEAVY_WALL_TIME_MS, LARGE_FUEL, Limits, Plugin, heavy_terms};
 #[doc(hidden)]
 pub use runtime::{BYTES_COPIED_PER_FUEL, FUEL_SLICE};
