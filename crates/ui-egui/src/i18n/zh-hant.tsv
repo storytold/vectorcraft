@@ -9356,7 +9356,7 @@ breakText	Glyphs	字符
 @msg	artboard is a 0-based index	artboard 是從 0 起算的索引
 @msg	artboard must be a 0-based index	artboard 必須是從 0 起算的索引
 @msg	artboard {i} doesn't print	工作區域 {i} 不會列印
-@msg	artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}	artboardLayout 必須是 {layout?, columns?, spacing?, rightToLeft?}
+@msg	artboardLayout must be {layout?, columns?, rows?, spacing?, rightToLeft?}	artboardLayout 必須是 {layout?, columns?, rows?, spacing?, rightToLeft?}
 @msg	artboardLayout.columns must be 1 or more	artboardLayout.columns 必須大於或等於 1
 @msg	artboardLayout.layout must be gridByRow, gridByColumn, row or column	artboardLayout.layout 必須是 gridByRow、gridByColumn、row 或 column
 @msg	artboardLayout.rightToLeft must be true or false	artboardLayout.rightToLeft 必須是 true 或 false
@@ -10255,7 +10255,7 @@ breakText	Glyphs	字符
 @msg	unknown Warp style	未知的彎曲樣式
 @msg	unknown alignToPath `{a}`	未知的 alignToPath `{a}`
 @msg	unknown arrowhead {v}	未知的箭頭 {v}
-@msg	unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)	未知的 artboardLayout 鍵 `{k}` (layout、columns、spacing、rightToLeft)
+@msg	unknown artboardLayout key `{k}` (layout, columns, rows, spacing, rightToLeft)	未知的 artboardLayout 鍵 `{k}` (layout、columns、rows、spacing、rightToLeft)
 @msg	unknown attribute `{attribute}`	未知的屬性 `{attribute}`
 @msg	unknown attribute `{k}`	未知的屬性 `{k}`
 @msg	unknown axis `{other}` (vertical|horizontal|free)	未知的軸 `{other}` (vertical|horizontal|free)

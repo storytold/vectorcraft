@@ -9409,7 +9409,7 @@ breakText	Glyphs	Glify
 @msg	artboard is a 0-based index	artboard to indeks liczony od 0
 @msg	artboard must be a 0-based index	artboard musi być indeksem liczonym od 0
 @msg	artboard {i} doesn't print	obszar kompozycji {i} nie jest drukowany
-@msg	artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}	artboardLayout musi mieć postać {layout?, columns?, spacing?, rightToLeft?}
+@msg	artboardLayout must be {layout?, columns?, rows?, spacing?, rightToLeft?}	artboardLayout musi mieć postać {layout?, columns?, rows?, spacing?, rightToLeft?}
 @msg	artboardLayout.columns must be 1 or more	artboardLayout.columns musi wynosić 1 lub więcej
 @msg	artboardLayout.layout must be gridByRow, gridByColumn, row or column	artboardLayout.layout musi mieć wartość gridByRow, gridByColumn, row lub column
 @msg	artboardLayout.rightToLeft must be true or false	artboardLayout.rightToLeft musi mieć wartość true lub false
@@ -10308,7 +10308,7 @@ breakText	Glyphs	Glify
 @msg	unknown Warp style	nieznany styl wypaczenia
 @msg	unknown alignToPath `{a}`	nieznane alignToPath `{a}`
 @msg	unknown arrowhead {v}	nieznany grot strzałki {v}
-@msg	unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)	nieznany klucz artboardLayout `{k}` (layout, columns, spacing, rightToLeft)
+@msg	unknown artboardLayout key `{k}` (layout, columns, rows, spacing, rightToLeft)	nieznany klucz artboardLayout `{k}` (layout, columns, rows, spacing, rightToLeft)
 @msg	unknown attribute `{attribute}`	nieznany atrybut `{attribute}`
 @msg	unknown attribute `{k}`	nieznany atrybut `{k}`
 @msg	unknown axis `{other}` (vertical|horizontal|free)	nieznana oś `{other}` (vertical|horizontal|free)

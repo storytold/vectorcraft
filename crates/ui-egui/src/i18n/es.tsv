@@ -9588,7 +9588,7 @@ breakText	Glyphs	Glifos
 @msg	artboard is a 0-based index	artboard es un índice que empieza en 0
 @msg	artboard must be a 0-based index	artboard debe ser un índice que empieza en 0
 @msg	artboard {i} doesn't print	la mesa de trabajo {i} no se imprime
-@msg	artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}	artboardLayout debe ser {layout?, columns?, spacing?, rightToLeft?}
+@msg	artboardLayout must be {layout?, columns?, rows?, spacing?, rightToLeft?}	artboardLayout debe ser {layout?, columns?, rows?, spacing?, rightToLeft?}
 @msg	artboardLayout.columns must be 1 or more	artboardLayout.columns debe ser 1 o más
 @msg	artboardLayout.layout must be gridByRow, gridByColumn, row or column	artboardLayout.layout debe ser gridByRow, gridByColumn, row o column
 @msg	artboardLayout.rightToLeft must be true or false	artboardLayout.rightToLeft debe ser true o false
@@ -10465,7 +10465,7 @@ breakText	Glyphs	Glifos
 @msg	unknown Warp style	estilo de Deformación desconocido
 @msg	unknown alignToPath `{a}`	alignToPath desconocido `{a}`
 @msg	unknown arrowhead {v}	punta de flecha desconocida {v}
-@msg	unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)	clave de artboardLayout desconocida `{k}` (layout, columns, spacing, rightToLeft)
+@msg	unknown artboardLayout key `{k}` (layout, columns, rows, spacing, rightToLeft)	clave de artboardLayout desconocida `{k}` (layout, columns, rows, spacing, rightToLeft)
 @msg	unknown attribute `{attribute}`	atributo desconocido `{attribute}`
 @msg	unknown attribute `{k}`	atributo desconocido `{k}`
 @msg	unknown axis `{other}` (vertical|horizontal|free)	eje desconocido `{other}` (vertical|horizontal|free)

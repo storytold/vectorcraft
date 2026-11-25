@@ -682,6 +682,7 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
             work.extend(state.input.iter().chain(&state.kept).map(|o| o.0));
             extra = XML_LIST_BYTES + XML_REF_BYTES * (state.input.len() + state.kept.len());
         }
+        Class::Host(h) => extra = crate::host_classes::retained_bytes(h.handle.len()),
         _ => {}
     }
     OBJECT_BYTES + PROP_BYTES * o.props.len() + extra

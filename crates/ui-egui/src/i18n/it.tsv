@@ -9201,7 +9201,7 @@ breakText	Glyphs	Glifi
 @msg	artboard is a 0-based index	artboard è un indice a partire da 0
 @msg	artboard must be a 0-based index	artboard deve essere un indice a partire da 0
 @msg	artboard {i} doesn't print	la tavola da disegno {i} non viene stampata
-@msg	artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}	artboardLayout deve essere {layout?, columns?, spacing?, rightToLeft?}
+@msg	artboardLayout must be {layout?, columns?, rows?, spacing?, rightToLeft?}	artboardLayout deve essere {layout?, columns?, rows?, spacing?, rightToLeft?}
 @msg	artboardLayout.columns must be 1 or more	artboardLayout.columns deve essere 1 o maggiore
 @msg	artboardLayout.layout must be gridByRow, gridByColumn, row or column	artboardLayout.layout deve essere gridByRow, gridByColumn, row o column
 @msg	artboardLayout.rightToLeft must be true or false	artboardLayout.rightToLeft deve essere true o false
@@ -10101,7 +10101,7 @@ breakText	Glyphs	Glifi
 @msg	unknown Warp style	stile Altera sconosciuto
 @msg	unknown alignToPath `{a}`	alignToPath sconosciuto `{a}`
 @msg	unknown arrowhead {v}	punta di freccia sconosciuta {v}
-@msg	unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)	chiave di artboardLayout sconosciuta `{k}` (layout, columns, spacing, rightToLeft)
+@msg	unknown artboardLayout key `{k}` (layout, columns, rows, spacing, rightToLeft)	chiave di artboardLayout sconosciuta `{k}` (layout, columns, rows, spacing, rightToLeft)
 @msg	unknown attribute `{attribute}`	attributo sconosciuto `{attribute}`
 @msg	unknown attribute `{k}`	attributo sconosciuto `{k}`
 @msg	unknown axis `{other}` (vertical|horizontal|free)	asse sconosciuto `{other}` (vertical|horizontal|free)

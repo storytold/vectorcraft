@@ -9481,7 +9481,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	artboard is a 0-based index	artboard é um índice com base 0
 @msg	artboard must be a 0-based index	artboard deve ser um índice com base 0
 @msg	artboard {i} doesn't print	a prancheta {i} não é impressa
-@msg	artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}	artboardLayout deve ser {layout?, columns?, spacing?, rightToLeft?}
+@msg	artboardLayout must be {layout?, columns?, rows?, spacing?, rightToLeft?}	artboardLayout deve ser {layout?, columns?, rows?, spacing?, rightToLeft?}
 @msg	artboardLayout.columns must be 1 or more	artboardLayout.columns deve ser 1 ou mais
 @msg	artboardLayout.layout must be gridByRow, gridByColumn, row or column	artboardLayout.layout deve ser gridByRow, gridByColumn, row ou column
 @msg	artboardLayout.rightToLeft must be true or false	artboardLayout.rightToLeft deve ser true ou false
@@ -10586,7 +10586,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	unknown Warp style	estilo de Deformação desconhecido
 @msg	unknown alignToPath `{a}`	alignToPath desconhecido `{a}`
 @msg	unknown arrowhead {v}	ponta de seta desconhecida {v}
-@msg	unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)	chave de artboardLayout desconhecida `{k}` (layout, columns, spacing, rightToLeft)
+@msg	unknown artboardLayout key `{k}` (layout, columns, rows, spacing, rightToLeft)	chave de artboardLayout desconhecida `{k}` (layout, columns, rows, spacing, rightToLeft)
 @msg	unknown attribute `{attribute}`	atributo desconhecido `{attribute}`
 @msg	unknown attribute `{k}`	atributo desconhecido `{k}`
 @msg	unknown axis `{other}` (vertical|horizontal|free)	eixo desconhecido `{other}` (vertical|horizontal|free)

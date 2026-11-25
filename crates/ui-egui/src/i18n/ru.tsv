@@ -9406,7 +9406,7 @@ shape	Open	Открытый
 @msg	artboard is a 0-based index	artboard — индекс, отсчитываемый от 0
 @msg	artboard must be a 0-based index	artboard должно быть индексом, отсчитываемым от 0
 @msg	artboard {i} doesn't print	монтажная область {i} не печатается
-@msg	artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}	artboardLayout должно быть {layout?, columns?, spacing?, rightToLeft?}
+@msg	artboardLayout must be {layout?, columns?, rows?, spacing?, rightToLeft?}	artboardLayout должно быть {layout?, columns?, rows?, spacing?, rightToLeft?}
 @msg	artboardLayout.columns must be 1 or more	artboardLayout.columns должно быть 1 или больше
 @msg	artboardLayout.layout must be gridByRow, gridByColumn, row or column	artboardLayout.layout должно быть gridByRow, gridByColumn, row или column
 @msg	artboardLayout.rightToLeft must be true or false	artboardLayout.rightToLeft должно быть true или false
@@ -10503,7 +10503,7 @@ shape	Open	Открытый
 @msg	unknown Warp style	неизвестный стиль деформации
 @msg	unknown alignToPath `{a}`	неизвестное значение alignToPath `{a}`
 @msg	unknown arrowhead {v}	неизвестная стрелка {v}
-@msg	unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)	неизвестный ключ artboardLayout `{k}` (layout, columns, spacing, rightToLeft)
+@msg	unknown artboardLayout key `{k}` (layout, columns, rows, spacing, rightToLeft)	неизвестный ключ artboardLayout `{k}` (layout, columns, rows, spacing, rightToLeft)
 @msg	unknown attribute `{attribute}`	неизвестный атрибут `{attribute}`
 @msg	unknown attribute `{k}`	неизвестный атрибут `{k}`
 @msg	unknown axis `{other}` (vertical|horizontal|free)	неизвестная ось `{other}` (vertical|horizontal|free)

@@ -7364,7 +7364,7 @@ arrowhead	Feather	पंख
 @msg	artboard {i} doesn't print	आर्टबोर्ड {i} प्रिंट नहीं करता है
 @msg	artboard is a 0-based index	artboard 0 से शुरू होने वाला इंडेक्स है
 @msg	artboard must be a 0-based index	artboard 0 से शुरू होने वाला इंडेक्स होना चाहिए
-@msg	artboardLayout must be {{layout?, columns?, spacing?, rightToLeft?}}	artboardLayout को {{layout?, columns?, spacing?, rightToLeft?}} होना चाहिए
+@msg	artboardLayout must be {{layout?, columns?, rows?, spacing?, rightToLeft?}}	artboardLayout को {{layout?, columns?, rows?, spacing?, rightToLeft?}} होना चाहिए
 @msg	artboardLayout.columns must be 1 or more	artboardLayout.columns को 1 या अधिक होना चाहिए
 @msg	artboardLayout.layout must be gridByRow, gridByColumn, row or column	artboardLayout.layout को gridByRow, gridByColumn, row या column होना चाहिए
 @msg	artboardLayout.rightToLeft must be true or false	artboardLayout.rightToLeft को true या false होना चाहिए
@@ -9627,7 +9627,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	unknown align `{other}`	अज्ञात संरेखण `{other}`
 @msg	unknown alignToPath `{a}`	अज्ञात alignToPath `{a}`
 @msg	unknown arrowhead {v}	अज्ञात arrowhead {v}
-@msg	unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)	अज्ञात artboardLayout कुंजी `{k}` (layout, columns, spacing, rightToLeft)
+@msg	unknown artboardLayout key `{k}` (layout, columns, rows, spacing, rightToLeft)	अज्ञात artboardLayout कुंजी `{k}` (layout, columns, rows, spacing, rightToLeft)
 @msg	unknown attribute `{attribute}`	अज्ञात विशेषता `{attribute}`
 @msg	unknown attribute `{k}`	अज्ञात विशेषता `{k}`
 @msg	unknown axis `{other}` (vertical|horizontal|free)	अज्ञात अक्ष `{other}` (vertical|horizontal|free)

@@ -99,6 +99,8 @@ pub(super) struct State {
     locked: RefCell<Vec<LockedList>>,
     saving: Cell<bool>,
     presets: RefCell<Vec<Vec<(String, Data)>>>,
+    /// The bytes the settings in [`State::presets`] hold together ([`MAX_PRESET_BYTES`]).
+    preset_bytes: Cell<u64>,
 }
 
 impl State {
@@ -730,13 +732,14 @@ fn app_set_coords(h: &Host, a: &[Data]) -> Answer {
     Ok(Data::Undefined)
 }
 
-/// A path as `getIsFileOpen` compares it: `\` and `/` alike, and on Windows paths (a drive letter
-/// or a `\`) letters in one case.
+/// A path as `getIsFileOpen` compares it. A Windows path (any path on Windows, or one with a drive
+/// letter) has `\` and `/` alike and letters in one case; elsewhere a `\` is a character of a name.
 fn path_key(p: &str) -> String {
-    let windows = p.contains('\\') || p.as_bytes().get(1) == Some(&b':');
-    let p = p.replace('\\', "/");
-    let p = p.trim_end_matches('/').to_string();
-    if windows { p.to_lowercase() } else { p }
+    if cfg!(windows) || p.as_bytes().get(1) == Some(&b':') {
+        p.replace('\\', "/").trim_end_matches('/').to_lowercase()
+    } else {
+        p.trim_end_matches('/').to_string()
+    }
 }
 
 /// `app.getIsFileOpen(path)`: whether a document open in the run has the file `path`. The path is
@@ -1059,19 +1062,40 @@ fn new_preset(h: &Host) -> Answer {
         return Err(HostError::Range(format!("a script can make at most {MAX_PRESETS} DocumentPresets")));
     }
     let item = |k: &str, v: Data| (k.to_string(), v);
-    presets.push(vec![
+    let fields = vec![
         item("artboardLayout", text("DocumentArtboardLayout.GridByRow")),
         item("artboardRowsOrCols", num(1.0)),
         item("artboardSpacing", num(20.0)),
         item("height", num(792.0)),
         item("numArtboards", num(1.0)),
         item("width", num(612.0)),
-    ]);
+    ];
+    hold_preset_bytes(h, 0, fields.iter().map(|(k, v)| field_bytes(k, v)).sum())?;
+    presets.push(fields);
     Ok(host_ref("DocumentPreset", &[float(h.run), float(presets.len() as u64 - 1)]))
 }
 
 /// The most `DocumentPreset` objects one run can make.
 const MAX_PRESETS: usize = 10_000;
+
+/// The most bytes the settings of the `DocumentPreset` objects of one run hold together.
+const MAX_PRESET_BYTES: u64 = 16 << 20;
+
+/// The bytes a `DocumentPreset` setting holds, as `addDocument` charges it.
+fn field_bytes(key: &str, v: &Data) -> u64 {
+    key.len() as u64 + 2 + data_size(v)
+}
+
+/// Counts `added` bytes of settings in place of `released` toward [`MAX_PRESET_BYTES`], or throws
+/// a `RangeError` and counts nothing when that would hold more.
+fn hold_preset_bytes(h: &Host, released: u64, added: u64) -> std::result::Result<(), HostError> {
+    let held = h.dom.preset_bytes.get().saturating_sub(released).saturating_add(added);
+    if held > MAX_PRESET_BYTES {
+        return Err(HostError::Range(format!("the DocumentPresets of a script can hold at most {} MiB of settings", MAX_PRESET_BYTES >> 20)));
+    }
+    h.dom.preset_bytes.set(held);
+    Ok(())
+}
 
 /// The settings a `DocumentPreset` has, each a property a script reads and assigns.
 const PRESET_FIELDS: &[&str] = &[
@@ -1125,6 +1149,8 @@ fn preset_field(link: &Link, key: &'static str) -> HostMember {
         let i = preset_of(&h, arg(&a, 0)).ok_or_else(not_preset)?;
         let mut presets = h.dom.presets.borrow_mut();
         let fields = &mut presets[i];
+        let old = fields.iter().find(|(k, _)| k == key).map_or(0, |(k, v)| field_bytes(k, v));
+        hold_preset_bytes(&h, old, field_bytes(key, &value))?;
         match fields.iter_mut().find(|(k, _)| k == key) {
             Some((_, v)) => *v = value,
             None => fields.push((key.to_string(), value)),
@@ -1265,6 +1291,8 @@ fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId
         d => vec![d],
     };
     let mut ids: Vec<NodeId> = Vec::with_capacity(list.len());
+    // The ids listed so far; `ids` keeps them in the order they were first listed.
+    let mut seen: HashSet<NodeId> = HashSet::with_capacity(list.len());
     // The document is read once for every object: nothing changes it while the list is checked.
     let (d, isolation, guides_locked) = with_doc(h, doc, |s, st| (st.doc.clone(), st.isolation, s.guides_locked()));
     let locks = d.locked_artboards();
@@ -1279,7 +1307,7 @@ fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId
             let name = with_doc(h, item.doc, |_, st| st.doc.node(item.id).and_then(typename).unwrap_or("page item"));
             return Err(HostError::Error(format!("Cannot select {name} {}", item.id.0)));
         }
-        if !ids.contains(&item.id) {
+        if seen.insert(item.id) {
             ids.push(item.id);
         }
     }
@@ -1505,7 +1533,7 @@ fn item_set_opacity(h: &Host, a: &[Data]) -> Answer {
     // replaces the one the graph keeps for its series or kind.
     let item = this_item(h, a)?;
     let now = with_doc(h, item.doc, |_, st| st.doc.node(item.id).map(|n| f64::from(n.opacity) * 100.0));
-    let v = now.filter(|now| (now - v).abs() < 1e-4).unwrap_or(v);
+    let v = now.filter(|now| (now * 1e4).round() / 1e4 == v).unwrap_or(v);
     set_props(h, a, |_| false, json!({"opacity": v}))
 }
 

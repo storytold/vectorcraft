@@ -2637,8 +2637,10 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   starts with the defaults that page gives. Its `documentBleedLink`, `documentBleedOffsetRect` and
   `transparencyGrid` can be assigned, but `addDocument` throws an error that says they are not available yet when
   the preset it is given holds one of them with a value other than `null`, and makes no document. A
-  `presetSettings` that is not a `DocumentPreset` (a plain object such as `{width: 500}` included) throws a
-  `TypeError`. A script's `file.new` reads the profile's file in the profiles folder as the person's does, under the
+  `presetSettings` that is omitted, `undefined` or `null` gives the preset's settings unchanged; any other value
+  that is not a `DocumentPreset` (a plain object such as `{width: 500}` included) throws a `TypeError`. The
+  `DocumentPreset` objects of one run hold at most 16 MiB of settings together; an assignment past that throws a
+  `RangeError`. A script's `file.new` reads the profile's file in the profiles folder as the person's does, under the
   automation roots in force; when `file.new` reports a `profileError`, `addDocument` throws an error that names the
   profile and the reason, and makes no document. Each warning from reading the profile's file (a color profile in it
   that cannot be used, for example) goes to the Script Console as a line `addDocument: <warning>`. A `previewMode` of
@@ -2692,9 +2694,10 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `app.activeDocument` with no document open throws `No active document`. `Document.selection` takes one page item,
   a list of at most 10,000, `null` or `[]`, and an object that cannot be selected throws `Cannot select` with
   nothing changed. While View › Guides › Lock Guides is on, a path made into a guide cannot be selected this way or
-  with `selected`. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
-  letter case is ignored and `\` matches `/`) and does not resolve the path it is given. A document counts only when
-  the automation read roots allow its file, and that check can look the document's file up on disk. A path with
+  with `selected`. `getIsFileOpen` compares the path with the open documents' files as text (on Windows and in a
+  path with a drive letter, letter case is ignored and `\` matches `/`; elsewhere `\` is part of a name) and does
+  not resolve the path it is given. A document counts only when the automation read roots allow its file, and that
+  check can look the document's file up on disk. A path with
   `..`, a network path, a NUL character or more than 4,096 bytes throws an error. Some members the Application,
   Document and PageItem pages list, such as `Document.layers`, `PageItem.blendingMode`, `PageItem.rotate` and
   `app.beep`, throw an error that says they are not available yet when they are read or assigned. Other members

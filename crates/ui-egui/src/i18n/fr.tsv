@@ -9280,7 +9280,7 @@ breakText	Glyphs	Glyphes
 @msg	artboard is a 0-based index	artboard est un indice commençant à 0
 @msg	artboard must be a 0-based index	artboard doit être un indice commençant à 0
 @msg	artboard {i} doesn't print	le plan de travail {i} ne s’imprime pas
-@msg	artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}	artboardLayout doit être {layout?, columns?, spacing?, rightToLeft?}
+@msg	artboardLayout must be {layout?, columns?, rows?, spacing?, rightToLeft?}	artboardLayout doit être {layout?, columns?, rows?, spacing?, rightToLeft?}
 @msg	artboardLayout.columns must be 1 or more	artboardLayout.columns doit être supérieur ou égal à 1
 @msg	artboardLayout.layout must be gridByRow, gridByColumn, row or column	artboardLayout.layout doit valoir gridByRow, gridByColumn, row ou column
 @msg	artboardLayout.rightToLeft must be true or false	artboardLayout.rightToLeft doit valoir true ou false
@@ -10382,7 +10382,7 @@ breakText	Glyphs	Glyphes
 @msg	unknown Warp style	style de déformation inconnu
 @msg	unknown alignToPath `{a}`	alignToPath inconnu `{a}`
 @msg	unknown arrowhead {v}	pointe de flèche inconnue {v}
-@msg	unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)	clé artboardLayout inconnue `{k}` (layout, columns, spacing, rightToLeft)
+@msg	unknown artboardLayout key `{k}` (layout, columns, rows, spacing, rightToLeft)	clé artboardLayout inconnue `{k}` (layout, columns, rows, spacing, rightToLeft)
 @msg	unknown attribute `{attribute}`	attribut inconnu `{attribute}`
 @msg	unknown attribute `{k}`	attribut inconnu `{k}`
 @msg	unknown axis `{other}` (vertical|horizontal|free)	axe inconnu `{other}` (vertical|horizontal|free)

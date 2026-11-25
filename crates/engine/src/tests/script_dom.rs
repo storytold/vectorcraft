@@ -286,6 +286,27 @@ fn assigning_the_reported_opacity_changes_nothing() {
     assert_eq!(out, vec![json!(33.3333)]);
     assert_eq!(s.active().unwrap().doc.node(a).unwrap().opacity, before);
     assert_eq!(undo_steps(&s), steps);
+    // A value next to the item's opacity that the getter does not report is set as given.
+    s.execute("object.setProps", &json!({"id": a.0, "opacity": 100.0})).unwrap();
+    log(&mut s, "app.activeDocument.pageItems[0].opacity = 99.99995;");
+    assert_eq!(s.active().unwrap().doc.node(a).unwrap().opacity, 0.9999995);
+}
+
+/// The settings of a run's `DocumentPreset` objects are held to a total, and a setting assigned
+/// again counts only its new value.
+#[test]
+fn document_preset_settings_are_held_to_a_total() {
+    let (mut s, _, _) = doc();
+    let e = failure(
+        &mut s,
+        "var t = new Array(64001).join('x'), kept = []; for (var i = 0; i < 300; i++) { var p = new DocumentPreset(); p.title = t; kept.push(p); }",
+    );
+    assert!(e.contains("at most 16 MiB of settings"), "{e}");
+    let out = log(
+        &mut s,
+        "var t = new Array(64001).join('x'), p = new DocumentPreset(); for (var i = 0; i < 500; i++) p.title = t + i; vc.log(p.title.length);",
+    );
+    assert_eq!(out, vec![json!(64003)]);
 }
 
 #[test]
@@ -613,6 +634,11 @@ fn file_new_takes_the_rows_of_a_grid_by_column() {
         let e = s.execute("file.new", &json!({"artboardLayout": {"layout": layout, "rows": 2}})).unwrap_err().to_string();
         assert!(e.contains("rows needs the gridByColumn layout"), "{layout}: {e}");
     }
+    // The messages for a layout of the wrong kind and an unknown key list `rows` with the others.
+    let e = s.execute("file.new", &json!({"artboardLayout": 3})).unwrap_err().to_string();
+    assert!(e.contains("{layout?, columns?, rows?, spacing?, rightToLeft?}"), "{e}");
+    let e = s.execute("file.new", &json!({"artboardLayout": {"row": 2}})).unwrap_err().to_string();
+    assert!(e.contains("(layout, columns, rows, spacing, rightToLeft)"), "{e}");
 }
 
 #[test]
@@ -1291,10 +1317,19 @@ fn get_is_file_open_cannot_probe_outside_script_scope() {
     let (mut s, _, _) = doc();
     let path = std::env::temp_dir().join(format!("vc-dom-open-{}.svg", std::process::id()));
     s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
-    let p = path.to_string_lossy().replace('\\', "\\\\");
-    let query = format!("vc.log(app.getIsFileOpen('{p}')); vc.log(app.getIsFileOpen('{p}.other'));");
+    let p = path.to_string_lossy();
+    let (whole, other) = (serde_json::to_string(&p).unwrap(), serde_json::to_string(&format!("{p}.other")).unwrap());
+    let query = format!("vc.log(app.getIsFileOpen({whole})); vc.log(app.getIsFileOpen({other}));");
     let out = log(&mut s, &query);
     assert_eq!(out, vec![json!(true), json!(false)]);
+    // Outside Windows a `\` is a character of a name: the folder and the name joined by one name
+    // another file.
+    #[cfg(not(windows))]
+    {
+        let (dir, name) = (path.parent().unwrap().to_string_lossy(), path.file_name().unwrap().to_string_lossy());
+        let joined = serde_json::to_string(&format!("{dir}\\{name}")).unwrap();
+        assert_eq!(log(&mut s, &format!("vc.log(app.getIsFileOpen({joined}));")), vec![json!(false)], "{joined}");
+    }
     // Read roots that leave out the document's file: the same path does not count.
     let elsewhere = std::env::temp_dir().join(format!("vc-dom-roots-{}", std::process::id()));
     std::fs::create_dir_all(&elsewhere).unwrap();

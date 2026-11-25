@@ -1576,7 +1576,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	artboard is a 0-based index	artboard er et 0-baseret indeks
 @msg	artboard must be a 0-based index	artboard skal være et 0-baseret indeks
 @msg	artboard {i} doesn't print	tegneflade {i} udskrives ikke
-@msg	artboardLayout must be {{layout?, columns?, spacing?, rightToLeft?}}	artboardLayout skal være {{layout?, columns?, spacing?, rightToLeft?}}
+@msg	artboardLayout must be {{layout?, columns?, rows?, spacing?, rightToLeft?}}	artboardLayout skal være {{layout?, columns?, rows?, spacing?, rightToLeft?}}
 @msg	artboardLayout.columns must be 1 or more	artboardLayout.columns skal være 1 eller mere
 @msg	artboardLayout.layout must be gridByRow, gridByColumn, row or column	artboardLayout.layout skal være gridByRow, gridByColumn, row eller column
 @msg	artboardLayout.rightToLeft must be true or false	artboardLayout.rightToLeft skal være true eller false
@@ -2746,7 +2746,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	unknown `by` "{name}": expected one of {_1}	ukendt `by` "{name}": forventede en af {_1}
 @msg	unknown alignToPath `{a}`	ukendt alignToPath `{a}`
 @msg	unknown arrowhead {v}	ukendt pilespids {v}
-@msg	unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)	ukendt artboardLayout-nøgle `{k}` (layout, columns, spacing, rightToLeft)
+@msg	unknown artboardLayout key `{k}` (layout, columns, rows, spacing, rightToLeft)	ukendt artboardLayout-nøgle `{k}` (layout, columns, rows, spacing, rightToLeft)
 @msg	unknown attribute `{attribute}`	ukendt attribut `{attribute}`
 @msg	unknown attribute `{k}`	ukendt attribut `{k}`
 @msg	unknown axis `{other}` (vertical|horizontal|free)	ukendt akse `{other}` (vertical|horizontal|free)
