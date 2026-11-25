@@ -75,7 +75,7 @@ const INSIDE: &[(&str, &str)] = &[
     ),
     (
         "",
-        "activeDocument activeDocument= app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace \
+        "activeDocument activeDocument= app Application BlendModes CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace \
          DocumentPreset DocumentPresetType DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid documents \
          Documents ElementPlacement Layer PageItem PageItems RulerUnits selection selection= ZOrderMethod",
     ),
@@ -116,6 +116,11 @@ const INSIDE: &[(&str, &str)] = &[
          position= remove resize resize= rotate rotate= selected selected= sliced sliced= tags tags= toString top top= transform \
          transform= translate translate= typename uRL uRL= uuid uuid= visibilityVariable visibilityVariable= visibleBounds \
          width width= wrapInside wrapInside= wrapOffset wrapOffset= wrapped wrapped= zOrder zOrderPosition",
+    ),
+    (
+        "BlendModes.",
+        "COLORBLEND COLORBURN COLORDODGE DARKEN DIFFERENCE EXCLUSION HARDLIGHT HUE LIGHTEN LUMINOSITY MULTIPLY NORMAL \
+         OVERLAY SATURATIONBLEND SCREEN SOFTLIGHT",
     ),
     ("CoordinateSystem.", "ARTBOARDCOORDINATESYSTEM DOCUMENTCOORDINATESYSTEM"),
     ("DocumentArtboardLayout.", "Column GridByCol GridByRow RLGridByCol RLGridByRow RLRow Row"),

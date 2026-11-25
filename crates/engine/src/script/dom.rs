@@ -42,11 +42,12 @@
 //! - Assigning `Document.selection` takes one object, a list of them, `null` or `[]`; every object
 //!   must be one of that document's that can be selected, or nothing changes.
 //! - Members the help pages list that are not here yet throw an error that says so.
-//! - Assigning `hidden`, `locked`, `opacity`, `position`, `left`, `top`, `width` or `height` to an
-//!   object in a hidden or locked layer, and `zOrder()` on one, throw `Cannot edit` and change
-//!   nothing, even for the value the object has. The exception is `opacity` given the value the
-//!   object has when that changes nothing; on a graph's mark or label whose series or kind keeps
-//!   another opacity it would still change the graph, so it is refused too. Its `name` and `note`
+//! - Assigning `hidden`, `locked`, `opacity`, `blendingMode`, `position`, `left`, `top`, `width` or
+//!   `height` to an object in a hidden or locked layer, and `zOrder()` on one, throw `Cannot edit`
+//!   and change nothing, even for the value the object has. The exception is `opacity` or
+//!   `blendingMode` given the value the object has when that changes nothing; on a graph's mark or
+//!   label whose series or kind keeps another opacity or blend mode it would still change the graph,
+//!   so it is refused too. Its `name` and `note`
 //!   still change. An object that is hidden or locked itself, or is in a hidden or locked group,
 //!   takes them.
 //! - `name` and `note` take a number or a Boolean as the text `String(value)` gives.
@@ -60,6 +61,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
+use vectorcraft_color::BlendMode;
 use vectorcraft_geom::{Point, Rect};
 use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMember, Realm, RunError, host_ref, host_ref_parts};
 
@@ -1600,6 +1602,56 @@ fn item_set_opacity(h: &Host, a: &[Data]) -> Answer {
     set_props(h, a, |_| false, json!({"opacity": now.unwrap_or(v)}))
 }
 
+/// The members of `BlendModes` with the blend mode each one names.
+const BLEND_MODES: [(&str, BlendMode); 16] = [
+    ("COLORBLEND", BlendMode::Color),
+    ("COLORBURN", BlendMode::ColorBurn),
+    ("COLORDODGE", BlendMode::ColorDodge),
+    ("DARKEN", BlendMode::Darken),
+    ("DIFFERENCE", BlendMode::Difference),
+    ("EXCLUSION", BlendMode::Exclusion),
+    ("HARDLIGHT", BlendMode::HardLight),
+    ("HUE", BlendMode::Hue),
+    ("LIGHTEN", BlendMode::Lighten),
+    ("LUMINOSITY", BlendMode::Luminosity),
+    ("MULTIPLY", BlendMode::Multiply),
+    ("NORMAL", BlendMode::Normal),
+    ("OVERLAY", BlendMode::Overlay),
+    ("SATURATIONBLEND", BlendMode::Saturation),
+    ("SCREEN", BlendMode::Screen),
+    ("SOFTLIGHT", BlendMode::SoftLight),
+];
+
+fn item_blending_mode(h: &Host, a: &[Data]) -> Answer {
+    read_item(h, a, |_, n| {
+        let name = BLEND_MODES.iter().find(|(_, m)| *m == n.blend).map_or("NORMAL", |(name, _)| name);
+        Ok(text(format!("BlendModes.{name}")))
+    })
+}
+
+/// `blendingMode = BlendModes.<MODE>`: the object's own blend mode, as `object.setProps` sets it.
+/// The mode the object already has may be assigned while its layer is hidden or locked, unless it
+/// would still replace the blend mode a graph keeps for the item's series or kind.
+fn item_set_blending_mode(h: &Host, a: &[Data]) -> Answer {
+    let mode = match arg(a, 1) {
+        Data::String(s) => s.strip_prefix("BlendModes.").and_then(|m| BLEND_MODES.iter().find(|(name, _)| *name == m)).map(|(_, mode)| *mode),
+        _ => None,
+    };
+    let mode = mode.ok_or_else(|| HostError::Type("blendingMode needs a BlendModes value".into()))?;
+    let item = this_item(h, a)?;
+    let (same, keeps_other) = with_doc(h, item.doc, |_, st| {
+        let d = &st.doc;
+        let same = d.node(item.id).is_some_and(|n| n.blend == mode);
+        let keeps_other =
+            crate::cmd::graph::series_object_opacity_differs(d, &[item.id]) || crate::cmd::graph::label_object_opacity_differs(d, &[item.id]);
+        (same, keeps_other)
+    });
+    if !same || keeps_other {
+        refuse_in_closed_layer(h, item)?;
+    }
+    set_props(h, a, |_| false, json!({"blend": mode.label()}))
+}
+
 fn item_selected(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
     Ok(Data::Bool(with_doc(h, item.doc, |_, st| st.selection.objects.contains(&item.id))))
@@ -2077,6 +2129,8 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         let items = members.iter().map(|m| (m.to_string(), HostItem::Value(text(format!("{name}.{m}"))))).collect();
         realm.define_host_object(name, items)?;
     }
+    let blend_modes = BLEND_MODES.iter().map(|(m, _)| (m.to_string(), HostItem::Value(text(format!("BlendModes.{m}"))))).collect();
+    realm.define_host_object("BlendModes", blend_modes)?;
     let l = link;
     let mut application = named(vec![
         ("typename", typename_of("Application")),
@@ -2161,6 +2215,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("locked", property(l, item_locked, item_set_locked)),
         ("selected", property(l, item_selected, item_set_selected)),
         ("opacity", property(l, item_opacity, item_set_opacity)),
+        ("blendingMode", property(l, item_blending_mode, item_set_blending_mode)),
         ("position", property(l, item_position, item_set_position)),
         ("left", property(l, item_left, item_set_left)),
         ("top", property(l, item_top, item_set_top)),
@@ -2180,7 +2235,6 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
     page_item.extend(
         [
             "artworkKnockout",
-            "blendingMode",
             "isIsolated",
             "layer",
             "pixelAligned",

@@ -278,6 +278,40 @@ fn assigning_the_reported_opacity_changes_nothing() {
     assert_eq!(undo_steps(&s), steps + 1);
 }
 
+/// `blendingMode` reads and sets the object's own blend mode as a `BlendModes` value; the mode it
+/// already has adds no undo step, and any other value throws and changes nothing.
+#[test]
+fn blending_mode_reads_and_sets_the_objects_blend_mode() {
+    let (mut s, a, b) = doc();
+    let blend = |s: &Session, id: NodeId| s.active().unwrap().doc.node(id).unwrap().blend;
+    let steps = undo_steps(&s);
+    let out = log(
+        &mut s,
+        "var i = app.activeDocument.pageItems[1]; vc.log(i.blendingMode);\
+         i.blendingMode = BlendModes.MULTIPLY; vc.log(i.blendingMode);\
+         vc.log([i.hasOwnProperty('blendingMode'), BlendModes.SATURATIONBLEND, BlendModes.COLORBLEND]);",
+    );
+    assert_eq!(out[..2], [json!("BlendModes.NORMAL"), json!("BlendModes.MULTIPLY")]);
+    assert_eq!(out[2], json!([true, "BlendModes.SATURATIONBLEND", "BlendModes.COLORBLEND"]));
+    assert_ne!(blend(&s, a), blend(&s, b), "only the assigned object changed");
+    assert_eq!(undo_steps(&s), steps + 1, "one undo step for the run");
+    let (before, steps) = (blend(&s, a), undo_steps(&s));
+    log(&mut s, "var i = app.activeDocument.pageItems[1]; i.blendingMode = BlendModes.MULTIPLY; i.blendingMode = i.blendingMode;");
+    assert_eq!((blend(&s, a), undo_steps(&s)), (before, steps), "the mode the object has adds no step");
+    // Two modes the help page names with a suffix set the modes the Transparency panel calls Color
+    // and Saturation.
+    log(&mut s, "var p = app.activeDocument.pageItems; p[1].blendingMode = BlendModes.COLORBLEND; p[0].blendingMode = BlendModes.SATURATIONBLEND;");
+    assert_eq!((blend(&s, a).label(), blend(&s, b).label()), ("Color", "Saturation"));
+    let (before, steps) = (blend(&s, a), undo_steps(&s));
+    for value in
+        ["'BlendModes.SCREEN '", "'MULTIPLY'", "'Multiply'", "'BlendModes.multiply'", "'BlendModes.NOPE'", "5", "null", "ZOrderMethod.BRINGTOFRONT"]
+    {
+        let e = failure(&mut s, &format!("app.activeDocument.pageItems[1].blendingMode = {value};"));
+        assert!(e.contains("blendingMode needs a BlendModes value"), "{value}: {e}");
+        assert_eq!((blend(&s, a), undo_steps(&s)), (before, steps), "{value}");
+    }
+}
+
 #[test]
 fn selection_assignment_is_atomic_across_invalid_items() {
     let (mut s, a, b) = doc();
@@ -876,13 +910,13 @@ fn a_startup_preset_alone_gives_its_first_size() {
 fn page_item_members_not_built_yet_throw_on_read_and_assignment() {
     let (mut s, _, _) = doc();
     for source in
-        ["app.activeDocument.pageItems[0].blendingMode;", "app.activeDocument.pageItems[0].uuid = 'x';", "app.activeDocument.pageItems[0].rotate(5);"]
+        ["app.activeDocument.pageItems[0].isIsolated;", "app.activeDocument.pageItems[0].uuid = 'x';", "app.activeDocument.pageItems[0].rotate(5);"]
     {
         assert!(failure(&mut s, source).contains("is not available yet"), "{source}");
     }
     assert!(failure(&mut s, "app.activeDocument.layers = 1;").contains("Document.layers is not available yet"));
     // A deleted item or an earlier run's document is stale first.
-    let e = failure(&mut s, "var i = app.activeDocument.pageItems[0]; i.remove(); i.blendingMode;");
+    let e = failure(&mut s, "var i = app.activeDocument.pageItems[0]; i.remove(); i.isIsolated;");
     assert!(e.contains("Stale page item"), "{e}");
     run(&mut s, "#targetengine keep\nvar d = app.activeDocument;").unwrap();
     let e = failure(&mut s, "#targetengine keep\nd.layers;");
@@ -1407,7 +1441,7 @@ fn unsupported_members_say_so() {
 
 /// A script that names each visible selected object after its place in `app.selection`, testing
 /// the members it uses with `hasOwnProperty` and `propertyIsEnumerable` first. A member that is not
-/// available yet, such as `blendingMode`, is read only when `hasOwnProperty` reports it, so it is
+/// available yet, such as `isIsolated`, is read only when `hasOwnProperty` reports it, so it is
 /// never read.
 const NAME_PICKED: &str = "\
     var picked = app.selection, k = picked.length, named = 0;\
@@ -1415,7 +1449,7 @@ const NAME_PICKED: &str = "\
     while (k--) {\
         var obj = picked[k];\
         var usable = obj.propertyIsEnumerable('name') && obj.hasOwnProperty('hidden') && !obj.hidden;\
-        if (obj.hasOwnProperty('blendingMode') && obj.blendingMode) usable = false;\
+        if (obj.hasOwnProperty('isIsolated') && obj.isIsolated) usable = false;\
         if (usable) { obj.name = 'picked ' + k; named += 1; }\
     }\
     if (picked.length && named < picked.length) alert('Some objects were skipped.');";
@@ -1494,9 +1528,9 @@ fn page_items_report_their_available_members_as_their_own() {
          vc.log([p.hasOwnProperty('opacity'), p.hasOwnProperty('typename'), p.hasOwnProperty('duplicate'),\
            Object.prototype.hasOwnProperty.call(p, 'name'), p.propertyIsEnumerable('opacity'), d.hasOwnProperty('selection'),\
            app.hasOwnProperty('activeDocument')]);\
-         vc.log([p.hasOwnProperty('blendingMode'), p.hasOwnProperty('rotate'), d.hasOwnProperty('layers'),\
+         vc.log([p.hasOwnProperty('isIsolated'), p.hasOwnProperty('rotate'), d.hasOwnProperty('layers'),\
            p.hasOwnProperty('nosuch'), p.hasOwnProperty('hasOwnProperty'), p.hasOwnProperty('constructor')]);\
-         vc.log([keys.indexOf('opacity') >= 0, keys.indexOf('typename') >= 0, keys.indexOf('duplicate'), keys.indexOf('blendingMode')]);",
+         vc.log([keys.indexOf('opacity') >= 0, keys.indexOf('typename') >= 0, keys.indexOf('duplicate'), keys.indexOf('isIsolated')]);",
     );
     assert_eq!(out[0], json!([true, true, true, true, true, true, true]));
     // Members that are not available yet, unknown names and inherited ones are not the object's own.
@@ -1625,7 +1659,7 @@ fn a_collection_read_with_a_name_gives_the_named_object() {
     assert_eq!(out, vec![json!([true, "n", true, false, true]), json!([true, true, false]), json!(["Not found", "Not found"])]);
 }
 
-/// `opacity`, `hidden`, `locked` and the position and size setters on an object in a hidden or
+/// `opacity`, `blendingMode`, `hidden`, `locked` and the position and size setters on an object in a hidden or
 /// locked layer throw and the run changes nothing, while its name and note still change; an object
 /// that is hidden or locked itself takes them.
 #[test]
@@ -1645,6 +1679,7 @@ fn setters_refuse_art_in_a_hidden_or_locked_layer() {
         // `hidden` and `locked` are refused even when the value is the one the object has.
         for set in [
             "opacity = 50",
+            "blendingMode = BlendModes.MULTIPLY",
             "hidden = true",
             "hidden = false",
             "locked = true",
@@ -1666,9 +1701,9 @@ fn setters_refuse_art_in_a_hidden_or_locked_layer() {
         let out = log(
             &mut s,
             "var c = app.activeDocument.pageItems.getByName('closed'); c.note = 'n'; c.name = 'renamed'; c.opacity = c.opacity;\
-             vc.log([c.name, c.note, c.opacity]); c.name = 'closed'; c.note = '';",
+             c.blendingMode = c.blendingMode; vc.log([c.name, c.note, c.opacity, c.blendingMode]); c.name = 'closed'; c.note = '';",
         );
-        assert_eq!(out, vec![json!(["renamed", "n", 100])], "{on}");
+        assert_eq!(out, vec![json!(["renamed", "n", 100, "BlendModes.NORMAL"])], "{on}");
         s.execute("object.setProps", &off).unwrap();
     }
     s.execute("object.setProps", &json!({"ids": [a.0], "locked": true})).unwrap();
@@ -1676,9 +1711,11 @@ fn setters_refuse_art_in_a_hidden_or_locked_layer() {
     let out = log(
         &mut s,
         "var p = app.activeDocument.pageItems; p.getByName('locked').opacity = 50; p.getByName('free').opacity = 40;\
-         vc.log([p.getByName('locked').opacity, p.getByName('free').opacity]);",
+         p.getByName('locked').blendingMode = BlendModes.SCREEN; p.getByName('free').blendingMode = BlendModes.DARKEN;\
+         vc.log([p.getByName('locked').opacity, p.getByName('free').opacity, p.getByName('locked').blendingMode,\
+           p.getByName('free').blendingMode]);",
     );
-    assert_eq!(out, vec![json!([50, 40])]);
+    assert_eq!(out, vec![json!([50, 40, "BlendModes.SCREEN", "BlendModes.DARKEN"])]);
 }
 
 /// `name` takes a number or a Boolean as the text `String` gives it, and nothing else.
