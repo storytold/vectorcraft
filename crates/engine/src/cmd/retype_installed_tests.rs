@@ -354,6 +354,20 @@ fn a_run_away_from_the_command_loads_the_faces_it_finds() {
 }
 
 #[test]
+fn plain_shapes_alone_start_no_run_away_from_the_command() {
+    // A rectangle and a bar are plain: the search reads no installed font for them, so the
+    // command runs at once.
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
+    let rect = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 80, "height": 40})).unwrap()["id"].as_u64().unwrap();
+    let bar = s.execute("shape.rectangle", &json!({"x": 10, "y": 100, "width": 4, "height": 60})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [rect, bar]})).unwrap();
+    for (cmd, p) in [("type.retype", json!({})), ("type.retype", json!({"tolerance": 0.05})), ("type.retypeFonts", json!({}))] {
+        assert!(super::RetypeRun::prepare(&s, cmd, &p).unwrap().is_none(), "{cmd} {p}");
+    }
+}
+
+#[test]
 fn what_a_search_found_is_handed_to_the_next_command_in_its_document() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();

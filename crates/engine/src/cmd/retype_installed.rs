@@ -605,8 +605,8 @@ pub(super) fn handed(s: &mut Session) -> Option<Installed> {
 
 impl RetypeRun {
     /// The search `command` (`type.retype` or `type.retypeFonts`) with params `p` makes in the
-    /// active document. None when it reads no installed font: `installed` is false, or no shape has
-    /// a glyph's key. An error where the command fails on its params or on the selection.
+    /// active document. None when it reads no installed font: `installed` is false, or no shape
+    /// starts a search ([`starts`]: each is plain or has no glyph's key). An error where the command fails on its params or on the selection.
     /// The faces to compare are picked when the search runs.
     pub fn prepare(s: &Session, command: &str, p: &Value) -> Result<Option<RetypeRun>> {
         let (command, fonts, tolerance) = match command {
@@ -641,9 +641,7 @@ impl RetypeRun {
         } else {
             pieces.into_iter().map(|pc| Shape::whole(pc.path)).collect()
         };
-        let sought: Vec<Sought> = shapes.iter().map(Shape::sought).collect();
-        let (keys, near) = keys_of(&sought, tolerance);
-        if keys.is_empty() && near.is_empty() {
+        if !shapes.iter().any(|s| starts(&s.sought(), tolerance)) {
             return Ok(None);
         }
         let faces = Faces::Of { doc: st.doc.clone(), fonts };
