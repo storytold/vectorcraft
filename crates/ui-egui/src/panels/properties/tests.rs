@@ -1042,6 +1042,27 @@ fn the_width_profile_shows_while_another_selected_stroke_has_a_variable_width() 
     }
 }
 
+/// The Width Profile row follows a change of selection that leaves the document as it was: it
+/// hides when the stroke with a variable width leaves the selection and shows again when it comes
+/// back.
+#[test]
+fn the_width_profile_row_follows_a_selection_change() {
+    let mut app = new_app();
+    let a = app.run("shape.line", json!({"x1": 20, "y1": 100, "x2": 300, "y2": 100})).unwrap()["id"].clone();
+    let b = app.run("shape.line", json!({"x1": 20, "y1": 160, "x2": 300, "y2": 160})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.run("stroke.set", json!({"profile": "lens"})).unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let mut panel = Panel::new(app, show);
+    assert!(panel.shows("Profile"), "the other stroke has a variable width");
+    panel.app().run("select.set", json!({"ids": [a]})).unwrap();
+    panel.frame();
+    assert!(!panel.shows("Profile"), "the uniform stroke alone");
+    panel.app().run("select.set", json!({"ids": [a, b]})).unwrap();
+    panel.frame();
+    assert!(panel.shows("Profile"), "both strokes again");
+}
+
 /// With Direct Selection, a path whose corner is selected shows that corner's kind and radius;
 /// each edit sets that corner alone in one undo step. Not with the Selection tool, nor with the
 /// whole path selected; a live rectangle keeps its own Corner Radius row instead.
