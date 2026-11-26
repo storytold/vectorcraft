@@ -10194,6 +10194,7 @@ layer of its own below the others; files that carry the editing data (Preserve E
 Export for Screens) keep it as the artboard's color, not as art. `includeArtboardFill: false` on `document.export`,
 `document.serialize`, `document.exportForScreens` (Include Artboard Fill) or `file.print` leaves it out. `inspect_document`
 lists it as the artboard's `color` (`#rrggbb`), and `ui.colorPicker {artboard: index}` opens the Color Picker for it.
+The artboard preview and confirmation require the opening document to be active.
 
 Artboard Options' Show Center Mark and Show Cross Hairs: `artboard.setProps {index, showCenterMark?: bool,
 showCrossHairs?: bool}` (or each entry of `artboards`) turns them on or off for that artboard in one undo step, and
