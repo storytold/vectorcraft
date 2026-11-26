@@ -265,7 +265,10 @@ fn panel_readout_document_value_copies_once_with_feedback_and_cancels_pending_ar
     let copied = a.frame(vec![]);
     let expected = vec![vec![Flavor::text(LENGTH)]];
     assert_eq!(*offers.lock().unwrap(), expected, "one actual host offer contains the complete readout text");
-    assert!(copies(&release).is_empty() && copies(&commit).is_empty() && copies(&copied).is_empty(), "the injected host handles this copy without duplicate fallback output");
+    assert!(
+        copies(&release).is_empty() && copies(&commit).is_empty() && copies(&copied).is_empty(),
+        "the injected host handles this copy without duplicate fallback output"
+    );
     assert_eq!(visible_text_count(&copied, COPIED), 1, "one actual nonmodal confirmation is painted");
     assert_eq!(a.snapshot(), before, "readout copy leaves document, selection and history intact");
     assert!(copies(&a.frame(vec![])).is_empty(), "no fallback copy on the next frame");
