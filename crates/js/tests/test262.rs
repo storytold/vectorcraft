@@ -446,12 +446,12 @@ fn needs_missing_builtin_in(sources: &[&str], missing: &HashSet<&str>, options: 
 }
 
 /// The tokens can run a string as code: they name `eval`, `Function` or a `constructor` property,
-/// as an identifier or as a string key (`this["eval"]`), called directly or through an alias.
+/// as an identifier or as a string or template key (`this["eval"]`), called directly or through an alias.
 /// `Function.prototype` alone does not count.
 fn runs_strings_as_code(tokens: &[Token]) -> bool {
     const RUNNERS: [&str; 3] = ["eval", "Function", "constructor"];
     tokens.iter().enumerate().any(|(i, t)| match &t.kind {
-        TokenKind::String(units) => RUNNERS.iter().any(|r| r.encode_utf16().eq(units.iter().copied())),
+        TokenKind::String(units) | TokenKind::Template { cooked: units, .. } => RUNNERS.iter().any(|r| r.encode_utf16().eq(units.iter().copied())),
         TokenKind::Ident(name) if name == "eval" || name == "constructor" => true,
         TokenKind::Ident(name) if name == "Function" => {
             let prototype = tokens.get(i + 1).is_some_and(|d| d.is_punct(Punct::Dot))
@@ -1161,6 +1161,9 @@ fn a_missing_name_in_a_template_that_can_run_as_code_skips() {
     let modern = Options { es2015: true, ..Options::default() };
     assert!(needs_missing_builtin_in(&[r#"eval("new Map()");"#], &missing, &modern));
     assert!(needs_missing_builtin_in(&["eval(`new Map()`);"], &missing, &modern));
+    // A template key names the runner, as a string key does.
+    assert!(needs_missing_builtin_in(&["this[`eval`](`new Map()`);"], &missing, &modern));
+    assert!(needs_missing_builtin_in(&[r#"var F = this[`Function`]; F("return new Map()")();"#], &missing, &modern));
     assert!(!needs_missing_builtin_in(&["assert(true, `a Map`);"], &missing, &modern));
 }
 
