@@ -208,11 +208,7 @@ fn review_8687_status_snapping_uses_existing_commands_and_accessible_state() {
             app.view().map(|v| (v.zoom, v.rotation)),
         )
     };
-    for (name, command) in [
-        ("Smart Guides", "view.smartGuides"),
-        ("Snap to Point", "view.snapToPoint"),
-        ("Snap to Grid", "view.snapToGrid"),
-    ] {
+    for (name, command) in [("Smart Guides", "view.smartGuides"), ("Snap to Point", "view.snapToPoint"), ("Snap to Grid", "view.snapToGrid")] {
         let button = bar.settle().named(name);
         assert_eq!(bar.tree().role_of(button.node), Some(Role::BUTTON));
         // Native IconButton exposes its active state as pressed/toggled through its BUTTON role.
@@ -268,7 +264,10 @@ fn review_8687_status_snapping_uses_existing_commands_and_accessible_state() {
         let mut app = bar.app();
         let dialog = app.ui.dialog.as_ref().expect("the existing Pixel Snapping Options dialog");
         assert_eq!(dialog.kind, crate::dialogs::pixel_snap_options::KIND);
-        assert_eq!(serde_json::Value::Object(dialog.fields.clone()), json!({"drawing": pixel.drawing, "moving": pixel.moving, "scaling": pixel.scaling}));
+        assert_eq!(
+            serde_json::Value::Object(dialog.fields.clone()),
+            json!({"drawing": pixel.drawing, "moving": pixel.moving, "scaling": pixel.scaling})
+        );
         app.ui.dialog = None;
         assert_eq!(app.session.prefs.pixel_snap, pixel, "closing without OK changes no option");
         let st = app.session.active().unwrap();
@@ -282,11 +281,7 @@ fn review_8687_status_snapping_uses_existing_commands_and_accessible_state() {
 
 fn review_8687_menu_row(bar: &Shown, name: &str) -> Target {
     let tree = bar.tree();
-    let rows: Vec<_> = tree
-        .keys()
-        .into_iter()
-        .filter(|key| tree.name_of(*key) == Some(name) && tree.toggled_of(*key).is_some())
-        .collect();
+    let rows: Vec<_> = tree.keys().into_iter().filter(|key| tree.name_of(*key) == Some(name) && tree.toggled_of(*key).is_some()).collect();
     assert_eq!(rows.len(), 1, "one live checked menu row named {name}");
     bar.fixture.target(rows[0]).unwrap()
 }
@@ -304,7 +299,13 @@ fn review_8687_status_snapping_fits_full_menu_and_omitted_real_frames() {
         let direct: Vec<_> = ["Smart Guides", "Snap to Point", "Snap to Grid"].into_iter().filter_map(|name| bar.find(name)).collect();
         let menu = bar.find("Snapping");
         assert!(direct.is_empty() || direct.len() == 3, "the direct group remains whole at {width}");
-        let stage = if !direct.is_empty() { 2 } else if menu.is_some() { 1 } else { 0 };
+        let stage = if !direct.is_empty() {
+            2
+        } else if menu.is_some() {
+            1
+        } else {
+            0
+        };
         assert!(stage != 2 || menu.is_some(), "full includes Snapping");
         if let Some(previous) = stages.last() {
             assert!(stage <= *previous, "controls cannot return as the bar narrows");
