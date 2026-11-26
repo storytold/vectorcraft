@@ -199,7 +199,7 @@ pub(crate) fn request_busy(app: &crate::VectorcraftApp, ctx: &egui::Context) {
 
 /// Every cursor with a look: its own, or the one it borrows.
 #[cfg(test)]
-const GLYPHS: [Cursor; 99] = [
+const GLYPHS: [Cursor; 100] = [
     Cursor::Hand,
     Cursor::HandGrab,
     Cursor::ZoomIn,
