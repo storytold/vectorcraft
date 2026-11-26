@@ -82,6 +82,13 @@ pub(crate) fn update_changed(s: &mut Session, _: &Value) -> Result<Value> {
 }
 
 impl Session {
+    /// Whether the active document shows missing links but has no marker scan yet (the overlay
+    /// was just turned on, or its first scan saw art that has since changed): the desktop app
+    /// then starts a look at once instead of waiting for the next periodic one.
+    pub fn missing_link_scan_due(&self) -> bool {
+        self.link_scan.is_none() && self.active().is_some_and(|st| st.show_missing_links && st.missing_link_markers.is_none())
+    }
+
     /// Start stamping the active document's linked files on a worker thread, unless a look is
     /// still running (or the build has no files to look at: the web app).
     pub fn start_link_scan(&mut self) {
@@ -95,8 +102,10 @@ impl Session {
         let opened_by = st.opened_by.clone();
         let marker_doc = st.show_missing_links.then(|| st.doc.clone());
         if files.is_empty() {
+            // Nothing linked, so nothing missing: an empty scan, which also ends
+            // [`Session::missing_link_scan_due`] without starting a worker.
             if let Some(st) = self.docs.iter_mut().find(|st| st.uid == uid) {
-                st.missing_link_markers = None;
+                st.missing_link_markers = st.show_missing_links.then(|| (st.doc.clone(), vec![]));
             }
             return;
         }

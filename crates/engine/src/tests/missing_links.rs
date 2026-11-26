@@ -117,6 +117,52 @@ fn missing_link_worker_refreshes_without_the_panel_and_ignores_old_art() {
 }
 
 #[test]
+fn turning_missing_links_on_returns_before_the_file_probe_and_scans_on_the_link_watcher() {
+    use crate::cmd::links::probe_gate::{self, Gate};
+    use std::time::Duration;
+    let dir = Folder::new("marker-toggle-nonblocking");
+    let path = dir.file("art.png");
+    write(&path, &png(20, 20, RED));
+    let mut s = session();
+    let id = place(&mut s, &path);
+    std::fs::remove_file(&path).unwrap();
+    let stored = crate::tests_links::image(&s, id).link.unwrap().path;
+    let gate = Gate::close(&stored);
+    // The toggle returns while the probe of the (slow) linked file is held closed.
+    assert_eq!(s.execute("view.showMissingLinks", &json!({"on": true})).unwrap(), json!({"on": true}));
+    assert!(!gate.finished(), "the toggle waited for the file probe");
+    assert!(s.doc().unwrap().missing_link_markers.is_none());
+    assert!(s.doc().unwrap().marked_missing_links().is_empty());
+    // The desktop app starts the watcher's look at once, and the probe runs there.
+    assert!(s.missing_link_scan_due());
+    s.start_link_scan();
+    assert!(!s.missing_link_scan_due());
+    assert_eq!(gate.entered(Duration::from_secs(10)).as_deref(), Some("link-watch"));
+    assert!(s.poll_link_scan().is_none(), "the look ended before its probe was released");
+    gate.open();
+    s.wait_link_scan();
+    s.poll_link_scan().unwrap().unwrap();
+    probe_gate::remove(&stored);
+    assert_eq!(s.doc().unwrap().marked_missing_links(), vec![id]);
+    assert!(!s.missing_link_scan_due());
+    // Turning it on again while on keeps the markers; off clears them.
+    s.execute("view.showMissingLinks", &json!({"on": true})).unwrap();
+    assert_eq!(s.doc().unwrap().marked_missing_links(), vec![id]);
+    s.execute("view.showMissingLinks", &json!({"on": false})).unwrap();
+    assert!(!s.missing_link_scan_due());
+}
+
+#[test]
+fn missing_link_scan_for_a_document_without_links_ends_without_a_worker() {
+    let mut s = session();
+    s.execute("view.showMissingLinks", &json!({"on": true})).unwrap();
+    assert!(s.missing_link_scan_due());
+    s.start_link_scan();
+    assert!(s.link_scan.is_none());
+    assert!(!s.missing_link_scan_due());
+}
+
+#[test]
 fn missing_link_markers_include_placed_documents_and_exclude_hidden_art() {
     let dir = Folder::new("marker-placed");
     let path = dir.file("placed.vectorcraft");

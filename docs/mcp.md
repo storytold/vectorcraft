@@ -27,8 +27,10 @@ Use `run_command` (or its `command_run` alias) with these engine commands:
 `links.marked` refreshes file status and returns `{on, images: [{id, bounds: [x0, y0,
 x1, y1]}]}` for visible missing linked images and placed documents in the active document.
 When the toggle is off, `images` is empty; `links.list {show: "missing"}` still lists missing
-links independently. Neither command changes selection or undo history. The desktop canvas
-draws a red outline and badge, checks files in the background about every two seconds even
+links independently. Neither command changes selection or undo history. `view.showMissingLinks`
+never reads linked files, so it returns at once even for a large or slow file; `links.marked` is
+the explicit, synchronous inspection. The desktop canvas draws a red outline and badge, scans
+files in the background as soon as the toggle turns on and then about every two seconds even
 with the Links panel closed, and removes markers after repair. The toggle is per open
 document and starts off on reopen. Markers are never saved as artwork, rendered into exports
 or printing, or exposed as selectable objects. Headless mode exposes the same state and
