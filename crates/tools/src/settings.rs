@@ -108,7 +108,7 @@ const ROWS: &[Row] = &[
     (&[crate::addons::extend_path::ID], None, &["mode"]),
     (&[crate::addons::corner_tool::ID], None, &["radius", "kind"]),
     (&[crate::addons::shared_edge::ID], None, &["diameter", "tolerance", "together"]),
-    (&[crate::addons::tangent_circle::ID], None, &["radius", "center", "radii", "color", "snapTolerance", "snapWithoutGuides"]),
+    (&[crate::addons::tangent_circle::ID], None, &["radius", "addPoints", "center", "radii", "color", "snapTolerance", "snapWithoutGuides"]),
     (&[crate::addons::smart_pen::ID], None, &["next"]),
     // The kind first: a new kind resets the values after it.
     (&[crate::addons::parametric_shape::ID], None, &["kind", "count", "a", "b", "radius", "width", "height", "rotation"]),

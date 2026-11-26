@@ -100,8 +100,7 @@ wrapped_dialog!(Question, StandardPrompt, KIND);
 pub(crate) struct Message(HostedAlert);
 wrapped_dialog!(Message, HostedAlert, MESSAGE);
 
-/// The Type tool's question whether to edit type set in fonts that aren't available; its tag is the
-/// tool's edit token.
+/// The Type tool's question whether to edit type set in fonts that aren't available.
 pub(crate) struct MissingFontQuestion(StandardPrompt);
 wrapped_dialog!(MissingFontQuestion, StandardPrompt, MISSING_FONT_EDIT);
 
@@ -215,13 +214,15 @@ pub(crate) fn ask_replace_files(app: &mut VectorcraftApp, doc: u64, files: &[Str
 /// While another dialog is open (a press sent with `ui.pointer` reaches the tool then), that dialog
 /// stays and the Type tool forgets the edit, as Cancel would.
 pub(crate) fn ask_missing_font_edit(app: &mut VectorcraftApp, p: &Value) {
-    let token = p.get("token").cloned().unwrap_or(Value::Null);
+    let Some(token) = p.get("token").and_then(Value::as_u64) else {
+        return;
+    };
     let Some(dialogs) = app.dialogs() else {
-        answer_missing_font_edit(app, &token, false);
+        answer_missing_font_edit(app, token, false);
         return;
     };
     if app.any_dialog_open() && !dialogs.with(|host| host.is_open::<MissingFontQuestion>()) {
-        answer_missing_font_edit(app, &token, false);
+        answer_missing_font_edit(app, token, false);
         return;
     }
     let names = |k: &str| p.get(k).and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect::<Vec<_>>();
@@ -234,14 +235,18 @@ pub(crate) fn ask_missing_font_edit(app: &mut VectorcraftApp, p: &Value) {
     let prompt = StandardPrompt::custom(tl!("Edit type set in fonts that aren't available?"))
         .paragraph(detail)
         .button(PromptChoice::Proceed, tl!("OK"))
-        .button(PromptChoice::Cancel, tl!("Cancel"))
-        .tag(token);
-    dialogs.with(|host| host.open(MissingFontQuestion(prompt)));
+        .button(PromptChoice::Cancel, tl!("Cancel"));
+    dialogs.with(|host| {
+        host.open(MissingFontQuestion(prompt));
+        // Replacing a prompt leaves its Cancel in the host. The tool is already waiting on the new token.
+        let _ = host.take::<MissingFontQuestion>();
+    });
+    app.missing_font_edit_token = Some(token);
 }
 
 /// Give the Type tool the answer to [`ask_missing_font_edit`]'s question about the edit `token`
 /// names: with `ok` the edit starts at once; without, the tool forgets it.
-pub(crate) fn answer_missing_font_edit(app: &mut VectorcraftApp, token: &Value, ok: bool) {
+fn answer_missing_font_edit(app: &mut VectorcraftApp, token: u64, ok: bool) {
     app.session.set_tool_option("missingFontEdit", &json!({"token": token, "ok": ok}));
     if ok {
         let r = app.session.tool_poll(app.view_info(), false);
@@ -277,13 +282,12 @@ pub(crate) fn pump_missing_font(app: &mut VectorcraftApp, _ctx: &Context) {
     let Some(dialogs) = app.dialogs() else {
         return;
     };
-    let (ok, token) = match dialogs.with(|host| host.take::<MissingFontQuestion>()) {
-        None => return,
-        Some(DialogResult::Ok(mut answer)) => (answer.choice == PromptChoice::Proceed, answer.take_tag::<Value>()),
-        // PLAN: a question the host cancelled carries no tag, so the tool's token is unknown here.
-        Some(_) => (false, None),
-    };
-    answer_missing_font_edit(app, &token.unwrap_or(Value::Null), ok);
+    if let Some(result) = dialogs.with(|host| host.take::<MissingFontQuestion>())
+        && let Some(token) = app.missing_font_edit_token.take()
+    {
+        let ok = matches!(result, DialogResult::Ok(answer) if answer.choice == PromptChoice::Proceed);
+        answer_missing_font_edit(app, token, ok);
+    }
 }
 
 /// The confirmation open now, if one is: its message and detail as shown, and the command OK runs.
