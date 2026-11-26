@@ -76,6 +76,21 @@ pub struct View {
     /// document opens in Preview.
     #[serde(default)]
     pub outline: bool,
+    /// The density of the display the view was last shown on ([`crate::Services::screen_ppi`]),
+    /// which its zoom percentage counts from with Display Print Size at 100% Zoom; `None` until
+    /// the view was first shown ([`crate::VectorcraftApp::settle_screen_ppi`]).
+    #[serde(skip)]
+    pub(crate) shown_ppi: Option<crate::ScreenPpi>,
+    /// The zoom a fit to the window, or the document's saved view, gave the view. While the view
+    /// still has it, the first reading of its display leaves the zoom alone; a zoom chosen as a
+    /// percentage keeps its percentage then ([`crate::VectorcraftApp::settle_screen_ppi`]).
+    #[serde(skip)]
+    pub(crate) fit_zoom: Option<f64>,
+    /// The fit that gave [`Self::fit_zoom`] was made while the view's display was being read: the
+    /// view counts from the last reading meanwhile, and the reading, when it comes, leaves the zoom
+    /// alone while the view still has it.
+    #[serde(skip)]
+    pub(crate) fit_unread: bool,
     /// The canvas on screen, inside the rulers, as the last pass laid it out (screen points).
     #[serde(skip, default = "no_rect")]
     pub rect: egui::Rect,
@@ -97,6 +112,9 @@ impl Default for View {
             rotation: 0.0,
             artboard: 0,
             outline: false,
+            shown_ppi: None,
+            fit_zoom: None,
+            fit_unread: false,
             rect: egui::Rect::NOTHING,
             request: None,
             moved: None,
@@ -117,8 +135,10 @@ impl View {
     /// the zoom range; `None` when the canvas can't show it (a zoom or centre that isn't finite, a
     /// zoom of 0 or less).
     pub fn saved(v: &vectorcraft_engine::doc::SavedView) -> Option<Self> {
+        let zoom = v.zoom.clamp(0.0313, 640.0);
         v.is_usable().then(|| Self {
-            zoom: v.zoom.clamp(0.0313, 640.0),
+            zoom,
+            fit_zoom: Some(zoom),
             center: v.center,
             fitted: true,
             rotation: if v.rotation.is_finite() { v.rotation } else { 0.0 },
@@ -159,37 +179,59 @@ pub const ROTATE_VIEW_ANGLES: [(&str, f64); 12] = [
     ("-90°", -90.0),
 ];
 
+/// Screen points in an inch when the system reports no physical size for the display: the
+/// reference density that display scaling is set against (a CSS inch).
+pub const REFERENCE_PPI: f64 = 96.0;
+
+/// The pixel densities a measured display may have, in pixels per inch, before the display scale
+/// divides them into screen points. A size outside them is a wrong report (a projector or
+/// television that gives its aspect ratio as its size, or none).
+pub const SCREEN_PPI_RANGE: std::ops::RangeInclusive<f64> = 30.0..=1000.0;
+
+/// The screen points one inch takes at 100% zoom: `None` with Preferences › General › Display
+/// Print Size at 100% Zoom off, else the measured density of the display (`screen_ppi`,
+/// [`crate::Services::screen_ppi`]), or [`REFERENCE_PPI`] when the display has none. A measured
+/// density is taken when it is finite and positive: the host checks the display's pixels against
+/// [`SCREEN_PPI_RANGE`] before the display scale divides them into points, so a point density can
+/// fall outside that range.
+pub fn print_ppi(display_print_size: bool, screen_ppi: Option<f64>) -> Option<f64> {
+    display_print_size.then(|| screen_ppi.filter(|p| p.is_finite() && *p > 0.0).unwrap_or(REFERENCE_PPI))
+}
+
 /// Document zoom at 100% in the status bar: one screen point per document point, or with
-/// Preferences › General › Display Print Size at 100% Zoom, one document inch in 96 screen points.
-pub fn zoom_baseline(display_print_size: bool) -> f64 {
-    if display_print_size { 96.0 / 72.0 } else { 1.0 }
+/// Preferences › General › Display Print Size at 100% Zoom ([`print_ppi`] `Some`), one document
+/// inch (72 pt) in an inch of the screen, `print` screen points.
+pub fn zoom_baseline(print: Option<f64>) -> f64 {
+    print.map_or(1.0, |ppi| ppi / 72.0)
 }
 
 /// The zoom stops with 100% at [`zoom_baseline`]: the one scheme the status bar, the zoom
 /// commands and the canvas step through.
-fn zoom_stops(display_print_size: bool) -> ZoomScheme {
-    ZoomScheme::ILLUSTRATOR.with_hundred(zoom_baseline(display_print_size))
+fn zoom_stops(print: Option<f64>) -> ZoomScheme {
+    ZoomScheme::ILLUSTRATOR.with_hundred(zoom_baseline(print))
 }
 
 /// The zoom `z` as the status bar shows it, in percent of [`zoom_baseline`].
-pub fn zoom_display_percent(z: f64, display_print_size: bool) -> f64 {
-    zoom_stops(display_print_size).percent(z)
+pub fn zoom_display_percent(z: f64, print: Option<f64>) -> f64 {
+    zoom_stops(print).percent(z)
 }
 
 /// The zoom the status bar's `pct` stands for.
-pub fn zoom_from_display_percent(pct: f64, display_print_size: bool) -> f64 {
-    zoom_stops(display_print_size).device(pct)
+pub fn zoom_from_display_percent(pct: f64, print: Option<f64>) -> f64 {
+    zoom_stops(print).device(pct)
 }
 
 /// The zoom stop after `z`, up or down, within the zoom range. The range has a fixed floor, so
-/// the document's size does not enter.
-pub fn next_zoom(z: f64, up: bool, display_print_size: bool) -> f64 {
-    zoom_stops(display_print_size).step(z, if up { 1 } else { -1 }, vectorcraft_geom::Size::ZERO)
+/// the document's size does not enter. The stops count from [`zoom_baseline`]`(print)`; past the
+/// last stop in that direction, the zoom stays where it is.
+pub fn next_zoom(z: f64, up: bool, print: Option<f64>) -> f64 {
+    let stop = zoom_stops(print).step(z, if up { 1 } else { -1 }, vectorcraft_geom::Size::ZERO).clamp(0.0313, 640.0);
+    if up { stop.max(z) } else { stop.min(z) }
 }
 
 /// Format for the tab/zoom field: up to 2 decimals, no trailing zeros.
-pub fn zoom_label(z: f64, display_print_size: bool) -> String {
-    let s = format!("{:.2}", zoom_display_percent(z, display_print_size));
+pub fn zoom_label(z: f64, print: Option<f64>) -> String {
+    let s = format!("{:.2}", zoom_display_percent(z, print));
     let s = s.trim_end_matches('0').trim_end_matches('.');
     format!("{s}%")
 }
@@ -659,6 +701,11 @@ pub struct UiState {
     /// Not saved.
     #[serde(skip)]
     pub status_notes: Option<(String, Vec<String>)>,
+    /// The status text a plug-in wrote, with the app's words before and after it: while the status
+    /// is these three together, the status bar translates the app's words and shows the plug-in's
+    /// as they are ([`crate::plugin_runs::show_notice`]). Not saved.
+    #[serde(skip)]
+    pub status_kept: Option<(String, String, String)>,
     pub palette_open: bool,
     pub palette_query: String,
     /// Set when the palette's shortcut, its command or the search icon opens or closes the palette,
@@ -1429,6 +1476,7 @@ impl Default for UiState {
             replace_font_warning: None,
             last_find: None,
             status_notes: None,
+            status_kept: None,
             palette_open: false,
             palette_query: String::new(),
             palette_toggled: false,
@@ -1566,17 +1614,41 @@ mod tests {
     /// storytold/vectorcraft#2719: 100% in the zoom field matches Actual Size when Display Print Size is on.
     #[test]
     fn zoom_percent_honors_display_print_size_baseline() {
-        let print = zoom_baseline(true);
-        assert!(print > zoom_baseline(false), "an inch in 96 points zooms in past one point per point");
-        for display_print_size in [false, true] {
+        let print = zoom_baseline(print_ppi(true, None));
+        assert!(print > zoom_baseline(None), "an inch in 96 points zooms in past one point per point");
+        for display_print_size in [None, print_ppi(true, None)] {
             let baseline = zoom_baseline(display_print_size);
-            assert!((zoom_display_percent(baseline, display_print_size) - 100.0).abs() < 1e-9, "{display_print_size}");
-            assert!((zoom_from_display_percent(100.0, display_print_size) - baseline).abs() < 1e-9, "{display_print_size}");
+            assert!((zoom_display_percent(baseline, display_print_size) - 100.0).abs() < 1e-9, "{display_print_size:?}");
+            assert!((zoom_from_display_percent(100.0, display_print_size) - baseline).abs() < 1e-9, "{display_print_size:?}");
             let up = next_zoom(baseline, true, display_print_size);
             let down = next_zoom(baseline, false, display_print_size);
-            assert!(up > baseline && down < baseline, "{display_print_size}: {down} < {baseline} < {up}");
-            assert!(zoom_display_percent(up, display_print_size) > 100.0, "{display_print_size}");
+            assert!(up > baseline && down < baseline, "{display_print_size:?}: {down} < {baseline} < {up}");
+            assert!(zoom_display_percent(up, display_print_size) > 100.0, "{display_print_size:?}");
         }
+    }
+
+    /// #9051: with Display Print Size on, 100% follows the measured density of the display, so an
+    /// inch of the document takes as many screen points as an inch of that display holds. A
+    /// density that is not finite and positive counts as no measurement.
+    #[test]
+    fn print_size_follows_the_displays_measured_density() {
+        assert_eq!(print_ppi(false, Some(127.0)), None, "the preference off ignores the display");
+        let (dense, sparse) = (print_ppi(true, Some(127.0)), print_ppi(true, Some(91.0)));
+        assert!(zoom_baseline(dense) > zoom_baseline(print_ppi(true, None)), "a denser display than the reference zooms 100% further in");
+        assert!(zoom_baseline(sparse) < zoom_baseline(print_ppi(true, None)), "a sparser one zooms it out");
+        assert!((zoom_baseline(dense) * 72.0 - 127.0).abs() < 1e-9, "an inch of the document fills an inch of the display");
+        for wrong in [Some(0.0), Some(-5.0), Some(f64::NAN), Some(f64::INFINITY), Some(f64::NEG_INFINITY), None] {
+            assert_eq!(print_ppi(true, wrong), print_ppi(true, None), "{wrong:?} is no measurement");
+        }
+        assert_eq!(print_ppi(true, Some(23.15)), Some(23.15), "a display at a large scale factor has few points to an inch");
+        assert_eq!(print_ppi(true, Some(1600.0)), Some(1600.0), "and one at a scale below 1 many");
+        assert_eq!(zoom_label(zoom_from_display_percent(100.0, dense), dense), "100%");
+        let thin = print_ppi(true, Some(40.0));
+        assert!(next_zoom(0.0313, false, thin) >= 0.0313, "the last stop down stays in the zoom range");
+        assert!(next_zoom(600.0, true, print_ppi(true, Some(900.0))) <= 640.0, "and the last stop up");
+        let reference = print_ppi(true, None);
+        assert!(next_zoom(0.0313, false, reference) <= 0.0313, "past the last stop, zooming out does not zoom in");
+        assert!(next_zoom(640.0, true, thin) >= 640.0, "nor zooming in out");
     }
 
     #[test]

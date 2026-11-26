@@ -856,7 +856,7 @@ pub(crate) use object::bounds_rewrite;
 pub(crate) use object::{keep_aligned_in, refresh_pixel_aligned};
 /// The rules `object.scale`, `object.reflect` and `object.shear` check their params with.
 pub use object::{reflect_axis, scale_factors, shear_tangent};
-pub(crate) use paint::{LIVE_PAINT_BUCKET, asks_defaults_only};
+pub(crate) use paint::{asks_defaults_only, painting_tool_of};
 pub use plugin_call::{Location, ParamsPlace, key_location, location_in, location_keys};
 pub use select::SIMILAR;
 pub(crate) use vectorcraft_doc::range::parse_range;

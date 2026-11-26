@@ -1,11 +1,12 @@
 # Windows, Linux and macOS release-ref nightly: supervised manual go-live
 
-**Enabled for supervised manual runs, not yet qualified.** The producer (`nightly.yml`, main) and the
-signer (`nightly-sign.yml`, release) keep only their exact context guards and run when one of the reviewed
-manual actors dispatches them. There is no schedule yet. The installed policy
-[`.github/nightly-signing-policy.json`](../.github/nightly-signing-policy.json) is the v3
-policy. Once `nightly.yml` reaches `main`, populate `producer_workflow_id` with its registration ID
-before promoting the policy to `release`:
+**Enabled for supervised manual runs, not yet qualified.** The producer (`nightly.yml`, main) and
+the signer (`nightly-sign.yml`, on the dedicated `nightly-signer` branch) keep only their exact
+context guards and run when one of the reviewed manual actors dispatches them.
+`nightly-dispatch.yml` stays literally off: it only forwards scheduled producers. There is no
+schedule. The installed policy
+[`.github/nightly-signing-policy.json`](../.github/nightly-signing-policy.json) is the v3 policy.
+Its `producer_workflow_id` is the registration of `nightly.yml` on main, read with:
 
 ```bash
 gh api repos/storytold/vectorcraft/actions/workflows/nightly.yml --jq .id
@@ -14,38 +15,66 @@ gh api repos/storytold/vectorcraft/actions/workflows/nightly.yml --jq .id
 The callers pass no platform secrets. The unsigned reusable caller's maximum OIDC/attestation
 permissions are for its isolated attester; its compiler narrows to contents and Actions read
 only, with no OIDC, attestation write, release environment or platform signing secrets.
-Shared tooling is pinned to `605d58766e8f536564da8fc81d3676ac86816dea`, the craft-common-actions
-main commit that merged [#339](https://github.com/storytold/craft-common-actions/pull/339) (bounded
-lineage compares and an issue reread at the end of candidate admission) on top of
-[#342](https://github.com/storytold/craft-common-actions/pull/342) (policy v3, the `platforms` input
-and the Linux and macOS legs). Both callers name it in `uses` and `tooling-revision`. A pin is reviewed
-source availability, not provider, queue, native signing or crypto qualification.
-Existing stable workflows are unchanged.
+Shared tooling is pinned to `be00e5ccd18b68e950c8a08532f2230e7c3d0cba`, the craft-common-actions
+main commit that merged [#371](https://github.com/storytold/craft-common-actions/pull/371) (the
+candidate is admitted on the built commit's own Sonar analysis, not main's latest) after
+[#370](https://github.com/storytold/craft-common-actions/pull/370) (the Windows and macOS nightly
+registry rows for the 14 apps) and
+[#369](https://github.com/storytold/craft-common-actions/pull/369) (shared helper checkouts kept out
+of the app's clean-source check, and macOS on `macos-15`), following
+[#364](https://github.com/storytold/craft-common-actions/pull/364) (the signer may run on the
+policy's signer branch) and [#363](https://github.com/storytold/craft-common-actions/pull/363) (the
+multi-app pipeline, which makes the signer's `app-name` input required and admits any reviewed
+registry app), with #342 (`a4f6fd51`, policy v3 and the `platforms` input) and #339 (`605d5876`)
+earlier. Both callers name it in `uses` and `tooling-revision`. A pin is reviewed source
+availability, not provider, queue, native signing or crypto qualification. Existing stable workflows are unchanged.
 
 **First runs.** The first runs are manual dispatches in this order: `nightly.yml` on main (only a
-listed manual actor passes the producer's plan step), then `nightly-sign.yml` on `release` with that
-producer run ID and attempt, by a listed manual actor.
+listed manual actor passes the producer's plan step), then `nightly-sign.yml` on `nightly-signer`
+with that producer run ID and attempt, by a listed manual actor. `nightly-dispatch.yml` only matters
+once a schedule is approved.
+
+**Signer branch.** The signer runs on `refs/heads/nightly-signer`, not on the stable `release`
+branch, so nightly signer files never need a stable release sync. The policy's `release_branch`
+names it, the signer's guard requires it and the dispatcher targets it. The branch only
+fast-forwards to reviewed main commits, through the settings script's `advance` (no queued signer
+run, a trust-closure scan, then the full diff of `.github/` and `packaging/`), and the existing
+`release` environment must admit `nightly-signer` alongside `release` before the first dispatch (a
+repository settings change, not a workflow one). Its trust closure is all of `.github/` and
+`packaging/`, including `packaging/env.sh`, which `packaging/macos/import-cert.sh` sources with the
+Apple keys. On that branch only the pinned `nightly-sign.yml` caller may reach an environment: no
+app workflow binds one, nothing else calls `nightly-release.yml`, and the only caller of the shared
+stable `release.yml` is `release.yml`, whose callee must carry the stable-only environment guard.
+The contract tests check the in-repo part on every main PR; the settings scan also resolves the
+callee. Stable releases still come only from `refs/heads/release`. History does not carry over a
+switch between `release` and `nightly-signer`, so the switch happens before the first publication.
+
+**Registry admission.** The signer requires the protected policy's `platforms` map to equal the
+run app's admitted targets in craft-common-actions' `nightly-apps.json`, and it refuses rather
+than sign a subset. VectorCraft's row admits `linux-x86_64`, `windows-x86_64` and `macos-aarch64`, with
+each target's entrypoint and asset pattern, since craft-common-actions #370 (in the pin).
 
 **Manual actors.** `bflatastic`, `dylanmtaylor`, `echelon`, `FredApps` and `skylartaylor`, in the
 producer's `manual-actors` and the policy's `manual_actors`. The list mirrors the release-managers
-team (id 19837241), leaving out `echelon-robot`; update it by PR in both places when the team changes.
+team (id 19837241), leaving out `echelon-robot`; update it by PR in both places when the team
+changes.
 
 **Platform rows.** The producer caller lists
 `platforms: '["windows-x86_64","linux-x86_64","macos-aarch64"]'` on its single job: one producer
 run builds every listed platform for one all-or-nothing release (one failed or
-skipped platform stops that night's release, Windows included), and the release-ref signer admits
+skipped platform stops that night's release, Windows included), and the signer admits
 platforms only from the protected policy, so there is no separate Linux or macOS caller job and
 the signer caller has no platform input.
 
 ## Installed policy values and their sources
 
-Read on 2026-11-24; re-read anything that may have moved (and populate `producer_workflow_id` after `nightly.yml` lands on `main`) before the policy is promoted to `release`.
+Read on 2026-11-24; re-read anything that may have moved before `nightly-signer` is advanced to it.
 
 | Field | Value | Source |
 |---|---|---|
 | `repository_id` | `1398097510` | `gh api repos/storytold/vectorcraft --jq .id` |
-| `producer_workflow_id` | `null` (pending first registration on `main`) | Read via `gh api repos/storytold/vectorcraft/actions/workflows/nightly.yml --jq .id` once `nightly.yml` is on `main` |
-| `producer_tooling_revision`, `signer_tooling_revision`, `producer_workflow_ref` | `605d5876…` (craft-common-actions #339) | The callers' pin |
+| `producer_workflow_id` | `430275079` | `gh api repos/storytold/vectorcraft/actions/workflows/nightly.yml --jq .id` |
+| `producer_tooling_revision`, `signer_tooling_revision`, `producer_workflow_ref` | `be00e5cc…` (craft-common-actions #371 after #370, #369 and #364) | The callers' pin |
 | `manual_actors` / `automatic_signer_actors` | the five release managers / `[]` | release-managers team (id 19837241) members who can push; equals the producer caller's `manual-actors` |
 | `max_age_seconds`, `max_artifact_bytes` | `86400`, `2147483648` | Go-live checklist |
 | `platforms` | three rows | Learning Machines stable identities (Windows Authenticode publisher subject, Linux OpenPGP fingerprint, Apple Developer ID team `DJ6XS33FX8`) |
@@ -57,11 +86,15 @@ Read on 2026-11-24; re-read anything that may have moved (and populate `producer
 - `.github/workflows/nightly.yml`: default-main registration of the unsigned producer, named
   `VectorCraft unsigned nightly`, enabled for manual dispatch by `manual-actors`; no signing secrets
   may be passed or inherited.
-- `.github/workflows/nightly-sign.yml`: top-level release registration, enabled for manual dispatch,
-  and identical on main and release after reviewed promotion. It rejects wrong repository/event/actual branch,
+- `.github/workflows/nightly-sign.yml`: top-level registration on `nightly-signer`, enabled for manual dispatch,
+  and only ever fast-forwards to reviewed main commits. It rejects wrong repository/event/actual branch,
   including same-name tags. Its constant whole-run concurrency (`vectorcraft-nightly-release`) is distinct
   from stable, cancellation is off and `queue: max` must be hosted-qualified. The caller itself passes no
-  credentials; only the shared callee's sign jobs bind the `release` environment.
+  credentials; only the shared callee's sign jobs bind the `release` environment, which must admit
+  `nightly-signer` alongside `release` before the first dispatch.
+- `.github/workflows/nightly-dispatch.yml`: transport only, never authorization. It is literally
+  off (`false &&`) and forwards only a first-attempt scheduled producer to `nightly-sign.yml` on
+  `nightly-signer`. No schedule is registered until activation is reviewed.
 - Shared reusable entrypoints are `nightly-unsigned.yml` and `nightly-release.yml` in
   `storytold/craft-common-actions`. Both must resolve to a **real reviewed public immutable
   commit**; the defining workflow SHA and tooling input must match.
@@ -73,7 +106,14 @@ Read on 2026-11-24; re-read anything that may have moved (and populate `producer
 - Manual actors match the reviewed release-managers list in both `nightly.yml` and `.github/nightly-signing-policy.json`, with `automatic_signer_actors` empty.
 - Both callers pin the same immutable `craft-common-actions` commit in `uses` and `tooling-revision`.
 - No nightly schedule is registered, no cache actions or secrets appear in the app callers, and `nightly-sign.yml` retains its literal root `concurrency` block (`group: vectorcraft-nightly-release`, `cancel-in-progress: false`, `queue: max`).
-- Policy v3 schema, platform rows, bounds, required main-push CI workflow, and SonarCloud project identity match `sonar-project.properties`.
+- Policy v3 schema, platform rows, bounds, required main-push CI workflow, and SonarCloud project identity match `sonar-project.properties`, and the Sonar gate shape keeps every live condition once with accepted failures inside the reviewed issue scope.
+- The signer guards `refs/heads/nightly-signer`, passes `app-name: vectorcraft`, and the policy's
+  `release_branch` names it.
+- A trust-closure scan reads every workflow: nothing binds an `environment`, only `nightly-sign.yml`
+  calls `nightly-release.yml` (at a full SHA), and the only caller of the shared stable `release.yml`
+  is `release.yml`.
+- `nightly-dispatch.yml` keeps a literal-off guard, a `workflow_run`-only trigger and a
+  `refs/heads/nightly-signer` request.
 
 ## The app side of a Nightly build
 
@@ -139,12 +179,14 @@ enabled, so no `app.ron` is written anywhere); if it is ever turned on, its stat
 installation on every platform, and `apps/vectorcraft/src/profile.rs` (`install_data_root`) is the
 one hook every data path follows.
 
-## Activation prerequisite: the Sonar issue scope
+## The Sonar issue scope
 
 The pinned candidate validator requires every entry in `candidate_policy.sonar.issue_types` to map
 from a reviewed `accepted_conditions` row, and it requires the gate condition set to equal
-`accepted_conditions` plus `required_conditions`. The installed policy lists `VULNERABILITY` with no
-accepted condition, so it fails that contract before SonarCloud is read. Correct the policy in this
-app's activation review with Skylar, together with the live gate conditions, before the first run:
-the callers cannot run before that review anyway, because their `producer_workflow_id` stays null
-until `nightly.yml` is registered on `main` and the signer is promoted to `release`.
+`accepted_conditions` plus `required_conditions`. The installed policy lists `VULNERABILITY` with
+`new_security_rating` accepted (max 5) and the other five gate conditions required - the same shape
+PhotoCraft and WordCraft ship - so it satisfies that contract before SonarCloud is read. `debt` stays
+empty, so any unresolved vulnerability on `main` is still refused, and the live gate is still compared
+condition by condition against the policy. `producer_workflow_id` is now populated and the signer runs
+on `nightly-signer`; the registry's Windows and macOS targets are what still stand between this tree
+and a first signed nightly.

@@ -1219,7 +1219,7 @@ fn measure(app: &VectorcraftApp, panel: &mut WheelUi) -> Measured {
         black_on_screen: app.session.prefs.black_on_screen.clone(),
         under: under(),
         mesh_points: app.session.fill_mesh_points(),
-        bucket: app.session.bucket_paints(),
+        bucket: app.session.tool_paints(!app.session.fill_active),
         category,
     };
     match (&panel.ratio, &panel.backdrop) {
@@ -1672,13 +1672,15 @@ fn hsl_rows(app: &mut VectorcraftApp, panel: &mut WheelUi, ui: &mut Ui, cx: &Pic
 /// picks it), else that of the fill or stroke item
 /// ([`vectorcraft_engine::Session::proxy_opacity`]), which nothing selected and type characters
 /// do not have. A stop or point of a gradient on type characters belongs to the gradient, so the
-/// row sets it. With nothing selected, or while the Live Paint Bucket paints
-/// ([`vectorcraft_engine::Session::bucket_paints`]), the stop or point belongs to the defaults for
-/// new art, which the row leaves alone, and an object selected in a symbol instance has no opacity
-/// the row can set.
+/// row sets it. With nothing selected, or while the active tool paints with the chosen fill or
+/// stroke of the proxy in front ([`vectorcraft_engine::Session::tool_paints`]: the Live Paint
+/// Bucket's, the Shape Builder's fill), the stop or point belongs to the defaults for new art,
+/// which the row leaves alone, and an object selected in a symbol instance has no opacity the row
+/// can set.
 fn shown_opacity(app: &VectorcraftApp, tgt: &Target) -> (f32, bool) {
     let stroke = !app.session.fill_active;
-    let selected = !app.session.bucket_paints() && app.session.active().is_some_and(|d| !d.selection.is_empty() && d.selection.symbol_part.is_none());
+    let selected =
+        !app.session.tool_paints(stroke) && app.session.active().is_some_and(|d| !d.selection.is_empty() && d.selection.symbol_part.is_none());
     let point = |index: usize| match super::active_paint(app) {
         Paint::Gradient(g) => super::gradient::shown_points(&g).points.get(index).map(|p| p.opacity),
         _ => None,

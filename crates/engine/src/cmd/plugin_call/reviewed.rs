@@ -243,6 +243,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "layer.releaseToLayersBuild",
     "layer.reverse",
     "layer.selectAll",
+    "layer.selectHighlighted",
     "layer.setCurrent",
     "layer.setProps",
     "layer.showAll",

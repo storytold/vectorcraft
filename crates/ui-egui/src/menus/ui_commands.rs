@@ -485,7 +485,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "view.actualSize",
         "Actual Size",
         "Cmd+1",
-        "{} 100%: with Display Print Size at 100% Zoom off, one document point per screen point; on, one document inch fills 96 screen points (an inch at the system's reference density, whatever the display scaling); the same at every UI Scaling",
+        "{} 100%: with Display Print Size at 100% Zoom off, one document point per screen point; on, one document inch fills an inch of the display that shows the window, measured from the physical size the system reports for it, or 96 screen points where it reports none or a size no display has; the same at every UI Scaling",
     ),
     ("view.setZoom", "Set Zoom", "", "{zoom: percent, center?: [x,y]}"),
     (
@@ -995,7 +995,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.recolorDialog",
         "Recolor Artwork…",
         "",
-        "{colors?: n (an n-colour job: n rows, Scale Tints) | [colour] (new colours to assign, in order; with no art selected and no group they are the rows, and OK saves them as a new colour group, field `groupName`: the Color Guide's Edit or Apply Colors), library?: id or name; or \"document\" (Limit to Library; \"\" the first library), group?: colour group (Edit or Apply Color Group: OK rewrites the group with the new colours and recolours the selected art, if any)} open Recolor Artwork (dialog `recolor`; engine: recolor.reduce / recolor.apply)",
+        "{colors?: n (an n-colour job: n rows, Scale Tints) | [colour] (new colours to assign, in order; with no art selected and no group they are the rows, and OK saves them as a new colour group, field `groupName`: the Color Guide's Edit or Apply Colors), library?: id or name; or \"document\" (Limit to Library; \"\" the first library), group?: colour group (Edit or Apply Color Group: OK rewrites the group with the new colours and recolours the selected art, if any), preset?: bool (Recolor with Preset: first open the `recolorPreset` dialog, whose Limit to Library field `limitTo` starts on `library`; its OK opens Recolor Artwork with `colors` and that library; an error with `group`)} open Recolor Artwork (dialog `recolor`; engine: recolor.reduce / recolor.apply)",
     ),
     (
         "ui.recolorUndo",
@@ -1987,7 +1987,19 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "plugin.dialog",
         "Plug-in…",
         "",
-        "{id: an object filter plug-in (plugin.list), params?: {…}} Object › Plug-ins: run the filter at once when it takes no parameters or params are given (plugin.run), else open its dialog (dialog `plugin`: a field per parameter, `__plugin` the id, live preview; OK runs plugin.run as one undo step). A heavy filter, and a filter that lists `progress` and no commandAllowlist, run in the background when they run at once or OK runs them without a kept preview → {background: true, status} (see plugin.cancelRuns)",
+        "{id: an object filter plug-in (plugin.list), params?: {…}} Object › Plug-ins: run the filter at once when it takes no parameters or params are given (plugin.run), else open its dialog (dialog `plugin`: a field per parameter at the value the filter last ran with in this session, else its default, `__plugin` the id, live preview; OK runs plugin.run as one undo step). A heavy filter, and a filter that lists `progress` and no commandAllowlist, run in the background when they run at once or OK runs them without a kept preview → {background: true, status} (see plugin.cancelRuns)",
+    ),
+    (
+        "plugin.applyLastFilter",
+        "Apply Last Filter",
+        "",
+        "{} Object › Plug-ins › Apply <filter name>: run the object filter that last ran in this session (a plugin.run that succeeded: its menu item, its dialog's OK, a request, a command.batch step or an action.batch step; not a plug-in's own commands) again on the selection with the same parameters, without its dialog, as one undo step; it runs in the background where its menu item would → plugin.run's result | {background: true, status}. An error with no document open, when no filter ran yet, when that filter was removed or installed again (the same module too) since, or when its manifest no longer takes those parameters as they are",
+    ),
+    (
+        "plugin.lastFilter",
+        "Last Filter…",
+        "",
+        "{} Object › Plug-ins › <filter name>…: open the dialog of the object filter that last ran in this session (see plugin.applyLastFilter) with the parameters it ran with (dialog `plugin`); OK runs it as one undo step and Cancel changes nothing. A filter without parameters runs at once. The same errors as plugin.applyLastFilter",
     ),
     (
         "ui.installPlugin",

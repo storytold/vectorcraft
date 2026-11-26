@@ -297,9 +297,13 @@ canvas while open; `ui.dialog.confirm` keeps the result as one undo step (`edit.
 `edit.colors.saturate`) and `ui.dialog.cancel` rolls it back. Global mode answers with an error until tints of global
 and spot colours exist; the dialog then stays open.
 
-Recolor Artwork: `ui.recolorDialog {colors?, library?, group?}` opens the `recolor` dialog on the selected art
+Recolor Artwork: `ui.recolorDialog {colors?, library?, group?, preset?}` opens the `recolor` dialog on the selected art
 (`colors`: a count for an n-colour job, or colours to assign as the new colours; `library`: Limit to Library, a library
-or `"document"`, `""` for the first library; `group`: a colour group, Edit or Apply Color Group). Fields: `rows` (`[{from: [keys], to: key, exclude?, tint?, model?}]`
+or `"document"`, `""` for the first library; `group`: a colour group, Edit or Apply Color Group). With `preset: true`
+(the Edit › Edit Colors › Recolor with Preset items) it first opens the `recolorPreset` dialog, which asks whether to
+limit the colors to a swatch library: its field `limitTo` (a library id, `"document"`, or `""` for None) starts on
+`library`, and its OK opens the `recolor` dialog with `colors` and that library; `preset: true` with `group` is an
+error. Fields: `rows` (`[{from: [keys], to: key, exclude?, tint?, model?}]`
 as `recolor.reduce` returns them), `colors` (null for Auto), `method`, `preserveWhite`, `preserveBlack`,
 `preserveGrays`, `limitTo`, `groupName`, `tab` (`assign` or `edit`), `rule` (harmony id), `linked`, `preview`,
 `sliderMode` (the mode of the color sliders under the rows: `hsb`, `rgb`, `cmyk`, `lab`, or `tint` for a row whose new

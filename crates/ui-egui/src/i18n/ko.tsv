@@ -3333,7 +3333,7 @@ mark-style	Japanese	일본식
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	선택 › 동일 › 칠 색상, 선 색상, 칠 및 선은 전역 또는 별색 견본의 같은 색조만 찾고, 다른 색조는 찾지 않습니다.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	열린 문서가 없을 때 홈 화면을 표시합니다. 끄면 홈을 클릭할 때까지 창이 비어 있습니다.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	크기, 위치, 정렬을 위해 선과 모양을 바꾸는 효과를 포함하여 개체를 측정합니다. 그림자, 광선, 흐림 효과는 측정하지 않습니다.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100% 확대/축소에서 문서의 1인치가 72가 아닌 96 화면 포인트를 차지합니다.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	100% 확대/축소에서 문서의 1인치가 디스플레이의 1인치를 채우며, 시스템이 사용할 수 있는 디스플레이 크기를 알려 주지 않으면 96 화면 포인트를 차지합니다.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	선택 도구로 그룹, 패스 또는 이미지를 두 번 클릭하면 격리 모드로 엽니다.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	변형 명령이나 변형 패널의 메뉴에서 달리 선택하지 않는 한, 패턴 칠과 선이 아트웍과 함께 변형됩니다.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	크기 조정에서 달리 선택하지 않는 한, 라이브 모퉁이 반지름이 아트웍과 함께 크기 조정됩니다.
@@ -6926,6 +6926,8 @@ axis	Y Axis	Y축
 	Cancel Plug-in Run	플러그인 실행 취소
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1}이(가) 끝났지만 그동안 문서나 플러그인이 변경되었습니다. 다시 실행하세요
 @msg	Running “{name}”…	“{name}” 실행 중…
+@msg	Plug-in “{name}”: {notice}	플러그인 “{name}”: {notice}
+@msg	`notice` must be a string with visible text	`notice`는 보이는 텍스트가 있는 문자열이어야 합니다
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	라이브 효과는 문서를 그리는 동안 실행되므로 `heavy`일 수 없습니다
 @msg	an exporter always gets an export's budget: leave `budget` out	내보내기 플러그인은 항상 내보내기 예산을 받습니다. `budget`은 생략하세요
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}”은(는) 큰 계산 예산을 요청합니다(실행당 최대 {minutes}분, 평소의 {times}배 명령어). 데스크톱 앱에서 사람이 승인하거나 --allow-plugin-grants로 시작한 세션에서 `allowHeavy: true`를 전달하세요
@@ -7017,7 +7019,7 @@ axis	Y Axis	Y축
 @msg	a list of {min_items} to {max_items} numbers	숫자 {min_items}-{max_items}개의 목록
 @msg	a new object needs a `path`	새 개체에는 `path`가 필요합니다
 @msg	a number	숫자
-@msg	a painted live effect returns only `objects`	페인트형 라이브 효과는 `objects`만 반환합니다
+@msg	a painted live effect returns only `objects` and `notice`	페인트형 라이브 효과는 `objects`와 `notice`만 반환합니다
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	페인트형 라이브 효과의 조각에는 `path`, `fillRule`, `fills`, `strokes`만 있습니다
 @msg	a read-only object was left out	읽기 전용 개체가 빠졌습니다
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	읽기 전용 개체가 빠졌습니다: {{"id": …}}만 있는 형태나 받은 그대로 반환하십시오
@@ -7122,6 +7124,8 @@ axis	Y Axis	Y축
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api`가 {_1}입니다. 이 호스트는 플러그인 API 수준 1부터 {API_LEVEL}까지 지원합니다
 @msg	`paintOutput` may only be true	`paintOutput`에는 true만 지정할 수 있습니다
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput`은 `api` 2의 라이브 효과(`kind` "effect")에만 쓸 수 있습니다
+@msg	`place` is only for an importer (`kind` "importer")	`place`는 임포터(`kind` "importer")에만 쓸 수 있습니다
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	“{shown}”은(는) 파일을 열지만 배치하지는 않습니다: 매니페스트에 `place`가 설정되어 있지 않습니다
 @msg	`grant` must be a list of permission names	`grant`는 권한 이름 목록이어야 합니다
 @msg	`grant` names an unknown permission `{shown}`	`grant`에 알 수 없는 권한 `{shown}`이(가) 있습니다
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` 종류의 플러그인에는 `{_2}` 권한이 필요합니다

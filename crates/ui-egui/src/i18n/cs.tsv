@@ -4829,7 +4829,7 @@ font-technology	Variable	Variabilní
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Výběr › Stejné › Barva výplně, Barva tahu a Výplň a tah najdou jen stejný odstín globálního nebo přímého vzorku, ne libovolný jeho odstín.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Zobrazí domovskou obrazovku, když není otevřený žádný dokument; když je vypnuto, okno zůstane prázdné, dokud neklepnete na Domů.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Měří objekty včetně tahů a efektů měnících tvar pro velikost, polohu a zarovnání; stíny, záře a rozostření se neměří.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Při zvětšení 100 % zabere jeden palec dokumentu 96 obrazovkových bodů místo 72.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	Při zvětšení 100 % vyplní jeden palec dokumentu jeden palec displeje, nebo 96 obrazovkových bodů, pokud systém neudává použitelnou velikost displeje.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Poklepání na skupinu, cestu nebo obraz nástrojem Výběr je otevře v izolačním režimu.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Výplně a tahy se vzorkem se transformují s kresbou, pokud transformace nebo nabídka panelu Transformace nezvolí jinak.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Poloměry živých rohů se mění s velikostí kresby, pokud změna velikosti nezvolí jinak.
@@ -7332,6 +7332,8 @@ axis	Y Axis	osa Y
 	Cancel Plug-in Run	Zrušit běh zásuvného modulu
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} doběhl, ale dokument nebo zásuvný modul se mezitím změnil: spusťte ho znovu
 @msg	Running “{name}”…	Spouští se „{name}“…
+@msg	Plug-in “{name}”: {notice}	Zásuvný modul „{name}“: {notice}
+@msg	`notice` must be a string with visible text	`notice` musí být řetězec s viditelným textem
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	živý efekt běží během vykreslování dokumentu, takže nemůže být `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	exportní zásuvný modul dostává vždy rozpočet exportu: klíč `budget` vynechte
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	„{_1}“ žádá o velký výpočetní rozpočet (každé spuštění až {minutes} minut a {times}krát víc instrukcí než obvykle): musí ho schválit člověk v desktopové aplikaci, nebo předejte `allowHeavy: true` v relaci spuštěné s --allow-plugin-grants
@@ -7423,7 +7425,7 @@ axis	Y Axis	osa Y
 @msg	a list of {min_items} to {max_items} numbers	seznam {min_items} až {max_items} čísel
 @msg	a new object needs a `path`	nový objekt potřebuje `path`
 @msg	a number	číslo
-@msg	a painted live effect returns only `objects`	malující živý efekt vrací jen `objects`
+@msg	a painted live effect returns only `objects` and `notice`	malující živý efekt vrací jen `objects` a `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	část malujícího živého efektu má jen `path`, `fillRule`, `fills` a `strokes`
 @msg	a read-only object was left out	objekt jen pro čtení byl vynechán
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	objekt jen pro čtení byl vynechán: vraťte ho jako samotné {{"id": …}} nebo tak, jak byl předán
@@ -7528,6 +7530,8 @@ axis	Y Axis	osa Y
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` je {_1}; tento hostitel podporuje úrovně API zásuvných modulů 1 až {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` může být jen true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` je jen pro živý efekt (`kind` "effect") s `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` je jen pro importér (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	„{shown}“ otevírá soubory, ale neumísťuje je: jeho manifest nenastavuje `place`
 @msg	`grant` must be a list of permission names	`grant` musí být seznam názvů oprávnění
 @msg	`grant` names an unknown permission `{shown}`	`grant` uvádí neznámé oprávnění `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	zásuvný modul druhu `{_1}` potřebuje oprávnění `{_2}`
