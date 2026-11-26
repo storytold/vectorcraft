@@ -2071,6 +2071,17 @@ file-filter	Templates	Sablonok
 	Graphic Styles (4)	Grafikai stílusok (4)
 	Graphic Styles Options	Grafikai stílusok beállításai
 	Graphics	Grafikák
+	Show Contrast	Kontraszt megjelenítése
+	Contrast For	Kontraszt ehhez
+	Normal Text	Normál szöveg
+	Large Text	Nagy szöveg
+	Contrast Background	Kontraszt háttere
+	Behind Selection	A kijelölés mögött
+	Current Color	Aktuális szín
+	Pass	Megfelel
+	Fail	Nem felel meg
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 szerinti minimális kontraszt: normál szöveg AA 4.5:1 (1.4.3) és AAA 7:1 (1.4.6), nagy szöveg AA 3:1 és AAA 4.5:1, grafikák és vezérlők AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	A háttér színét a kijelölés közepén olvassa le a program.
 	Graphics Processor	Grafikus processzor
 	Graphics: {adapter}	Grafika: {adapter}
 	Gravity	Gravitáció
@@ -3918,7 +3929,7 @@ mark-style	Japanese	Japán
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	A Kijelölés › Azonos › Kitöltőszín, Körvonalszín és Kitöltés és körvonal csak egy globális vagy direkt színminta azonos árnyalatát találja meg, nem bármely árnyalatát.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Megjeleníti a kezdőképernyőt, ha nincs megnyitott dokumentum; kikapcsolva az ablak üres marad, amíg a Kezdőképernyő gombra nem kattint.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Az objektumokat körvonalaikkal és alakmódosító effektusaikkal együtt méri a mérethez, a pozícióhoz és az igazításhoz; az árnyékokat, ragyogásokat és elmosásokat nem méri.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100%-os nagyításnál a dokumentum egy hüvelyke 72 helyett 96 képernyőpontot foglal el.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	100%-os nagyításnál a dokumentum egy hüvelyke a kijelző egy hüvelykét tölti ki, vagy 96 képernyőpontot, ha a rendszer nem ad meg használható kijelzőméretet.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Ha a Kijelölés eszközzel duplán kattint egy csoportra, útvonalra vagy képre, az elkülönítő módban nyílik meg.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	A mintázatos kitöltések és körvonalak a grafikával együtt alakulnak át, hacsak egy átalakítás vagy az Átalakítás panel menüje mást nem választ.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Az élő sarkok sugara a grafikával együtt méreteződik, hacsak a méretezés mást nem választ.
@@ -6277,6 +6288,12 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	finish editing the pattern first	előbb fejezd be a mintázat szerkesztését
 @msg	nothing encoded	nincs kódolt adat
 @msg	nothing selected	nincs kijelölés
+@msg	`{key}` must be a color or {_1}	a(z) `{key}` értéke csak szín vagy {_1} lehet
+@msg	the selected objects' colors differ: give `color`	a kijelölt objektumok színei eltérnek: adja meg a `color` értékét
+@msg	the selected objects' colors differ: give `opacity` or `color`	a kijelölt objektumok színei eltérnek: adja meg az `opacity` vagy a `color` értékét
+@msg	the active fill or stroke has no color: give `color`	az aktív kitöltésnek vagy körvonalnak nincs színe: adja meg a `color` értékét
+@msg	the active fill or stroke is hidden: give `color`	az aktív kitöltés vagy körvonal rejtett: adja meg a `color` értékét
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	az aktív kitöltés vagy körvonal átlátszósági maszkon keresztül rajzolódik: adja meg a `color` értékét
 @msg	nothing selected is in a group	a kijelölésből semmi sincs csoportban
 @msg	nothing to align	nincs mit igazítani
 @msg	nothing to distort	nincs mit torzítani
@@ -7299,6 +7316,8 @@ axis	Y Axis	Y tengely
 	Cancel Plug-in Run	Bővítmény futásának megszakítása
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} lefutott, de közben megváltozott a dokumentum vagy a bővítmény: futtasd újra
 @msg	Running “{name}”…	Futtatás: „{name}”…
+@msg	Plug-in “{name}”: {notice}	„{name}” bővítmény: {notice}
+@msg	`notice` must be a string with visible text	a `notice` látható szöveget tartalmazó karakterlánc legyen
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	az élő effektus a dokumentum rajzolása közben fut, ezért nem lehet `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	az exportáló bővítmény mindig az exportálás keretét kapja: hagyd ki a `budget` kulcsot
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	a(z) „{_1}” nagy számítási keretet kér (futásonként legfeljebb {minutes} perc és a szokásos utasításszám {times}-szorosa): egy személynek jóvá kell hagynia az asztali alkalmazásban, vagy add meg az `allowHeavy: true` értéket egy --allow-plugin-grants kapcsolóval indított munkamenetben
@@ -7390,7 +7409,7 @@ axis	Y Axis	Y tengely
 @msg	a list of {min_items} to {max_items} numbers	{min_items}-{max_items} számból álló lista
 @msg	a new object needs a `path`	az új objektumhoz `path` kell
 @msg	a number	szám
-@msg	a painted live effect returns only `objects`	a festő élő effektus csak `objects` értéket ad vissza
+@msg	a painted live effect returns only `objects` and `notice`	a festő élő effektus csak `objects` és `notice` értéket ad vissza
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	a festő élő effektus darabjának csak `path`, `fillRule`, `fills` és `strokes` kulcsa van
 @msg	a read-only object was left out	kimaradt egy írásvédett objektum
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	kimaradt egy írásvédett objektum: adja vissza önmagában {{"id": …}} formában vagy úgy, ahogy megkapta
@@ -7495,6 +7514,8 @@ axis	Y Axis	Y tengely
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	az `api` értéke {_1}; ez a gazdaprogram az 1 és {API_LEVEL} közötti bővítmény-API-szinteket támogatja
 @msg	`paintOutput` may only be true	A `paintOutput` értéke csak true lehet
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	a `paintOutput` csak élő effektushoz (`kind` "effect") használható, `api` 2 mellett
+@msg	`place` is only for an importer (`kind` "importer")	a `place` csak importálóhoz (`kind` "importer") használható
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	„{shown}” megnyitja a fájlokat, de nem helyezi el őket: a jegyzéke nem állítja be a `place` kulcsot
 @msg	`grant` must be a list of permission names	a `grant` értékének engedélynevek listájának kell lennie
 @msg	`grant` names an unknown permission `{shown}`	a `grant` ismeretlen engedélyt nevez meg: `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	egy `{_1}` fajtájú bővítménynek szüksége van a(z) `{_2}` engedélyre

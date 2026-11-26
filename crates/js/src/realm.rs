@@ -271,6 +271,8 @@ impl Realm {
         interp.last_error = Value::Null;
         interp.host_abort = None;
         interp.waiting = false;
+        interp.waiting_hosted = false;
+        interp.constructing = false;
         interp.resuming = None;
         interp.error_tag = UNKNOWN_SOURCE;
         interp.thrown_mark = None;
@@ -324,6 +326,8 @@ impl Realm {
         interp.temp_roots.clear();
         interp.join_stack.clear();
         interp.waiting = false;
+        interp.waiting_hosted = false;
+        interp.constructing = false;
         interp.resuming = None;
         interp.passing = Value::Undefined;
         if let Some(es2015) = interp.next_es2015.take() {
@@ -442,8 +446,11 @@ impl Realm {
             });
         }
         interp.waiting = false;
+        // A member of a host class gets its answer as it gets an immediate result.
+        let hosted = std::mem::take(&mut interp.waiting_hosted);
         // The value on top of the stack stood in for the result.
-        let r = interp.write_data(d, 0, false).and_then(|v| {
+        let written = if hosted { interp.write_hosted(d) } else { interp.write_data(d, 0, false) };
+        let r = written.and_then(|v| {
             interp.stack.pop();
             interp.push(v)
         });
@@ -541,6 +548,27 @@ impl Realm {
     /// enumerable.
     pub fn define_file_classes(&mut self, items: Vec<(String, crate::HostItem)>) -> Result<(), RunError> {
         match crate::file_classes::install(&mut self.interp, items) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Adds the host classes `classes` ([`crate::HostClass`]), each a global constructor whose
+    /// prototype holds its members, and the global objects `instances`, each made from the
+    /// [`crate::host_ref`] given. Prototypes and constructors are frozen; the instances cannot be
+    /// replaced. A heap too small for them ends with the error the realm's next run would give.
+    pub fn define_host_classes(&mut self, classes: Vec<crate::HostClass>, instances: Vec<(String, crate::Data)>) -> Result<(), RunError> {
+        match crate::host_classes::install(&mut self.interp, classes, instances) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Adds the global properties `globals`: a name, the function that answers a read, and the
+    /// function that answers an assignment, each called with `undefined` as `this` (and the value
+    /// assigned). Assigning one without a setter keeps its value, and throws in strict mode code.
+    pub fn define_host_globals(&mut self, globals: Vec<(String, crate::HostFunction, Option<crate::HostFunction>)>) -> Result<(), RunError> {
+        match crate::host_classes::install_globals(&mut self.interp, globals) {
             Ok(()) => Ok(()),
             Err(e) => self.outcome(Err(e)).map(drop),
         }

@@ -413,6 +413,8 @@
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` berlaku untuk gradien linear, radial, conic, dan diamond
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} selesai, tetapi dokumen atau plug-in berubah sementara itu: jalankan lagi
 @msg	Running “{name}”…	Menjalankan “{name}”…
+@msg	Plug-in “{name}”: {notice}	Plug-in “{name}” melaporkan: {notice}
+@msg	`notice` must be a string with visible text	`notice` harus berupa string dengan teks yang terlihat
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	efek langsung berjalan saat dokumen digambar, sehingga tidak dapat `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	pengekspor selalu mendapat anggaran ekspor: hilangkan `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” meminta anggaran berat (setiap proses hingga {minutes} menit dan {times} kali instruksi biasa): seseorang harus menyetujuinya di aplikasi desktop, atau berikan `allowHeavy: true` dalam sesi yang dimulai dengan --allow-plugin-grants
@@ -503,7 +505,7 @@
 @msg	a list of {min_items} to {max_items} numbers	daftar berisi {min_items} sampai {max_items} angka
 @msg	a new object needs a `path`	objek baru memerlukan `path`
 @msg	a number	angka
-@msg	a painted live effect returns only `objects`	efek langsung yang dicat hanya mengembalikan `objects`
+@msg	a painted live effect returns only `objects` and `notice`	efek langsung yang dicat hanya mengembalikan `objects` dan `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	potongan efek langsung yang dicat hanya memiliki `path`, `fillRule`, `fills` dan `strokes`
 @msg	a read-only object was left out	objek baca-saja dihilangkan
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	objek baca-saja dihilangkan: kembalikan objek itu, sebagai {{"id": …}} saja atau seperti yang diberikan
@@ -589,6 +591,8 @@
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` bernilai {_1}; host ini menerapkan API plug-in tingkat 1 sampai {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` hanya boleh true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` hanya untuk efek langsung (`kind` "effect") pada `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` hanya untuk pengimpor (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	“{shown}” membuka berkas tetapi tidak menempatkannya: manifesnya tidak menetapkan `place`
 @msg	`grant` must be a list of permission names	`grant` harus berupa daftar nama izin
 @msg	`grant` names an unknown permission `{shown}`	`grant` menyebut izin yang tidak dikenal `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	plug-in berjenis `{_1}` memerlukan izin `{_2}`
@@ -2655,6 +2659,17 @@ digits	Malayalam	Malayalam
 	Create New Sublayer	Buat sublapisan baru
 	Search All	Cari semua
 	Graphics	Grafis
+	Show Contrast	Tampilkan kontras
+	Contrast For	Kontras untuk
+	Normal Text	Teks normal
+	Large Text	Teks besar
+	Contrast Background	Latar kontras
+	Behind Selection	Di belakang seleksi
+	Current Color	Warna saat ini
+	Pass	Lulus
+	Fail	Gagal
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Kontras minimum WCAG 2.2: teks normal AA 4.5:1 (1.4.3) dan AAA 7:1 (1.4.6), teks besar AA 3:1 dan AAA 4.5:1, grafis dan kontrol AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Latar dibaca di tengah seleksi.
 	Local Libraries	Pustaka lokal
 	Add Content	Tambahkan konten
 	Click to apply to the selected type	Klik untuk menerapkan ke teks terpilih
@@ -5170,7 +5185,7 @@ font-technology	Variable	Variabel
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Seleksi › Sama › Warna isian, Warna stroke, dan Isian & stroke hanya mencocokkan tint yang sama dari swatch global atau spot, bukan sembarang tint-nya.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Menampilkan layar Home saat tidak ada dokumen yang terbuka; saat nonaktif, jendela tetap kosong sampai Anda mengklik Home.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Mengukur objek beserta stroke dan efek yang mengubah bentuknya untuk ukuran, posisi, dan perataan; bayangan, cahaya, dan kekaburan tidak diukur.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Pada zum 100%, satu inci dokumen memakai 96 titik layar, bukan 72.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	Pada zum 100%, satu inci dokumen mengisi satu inci layar, atau 96 titik layar bila sistem tidak melaporkan ukuran layar yang dapat dipakai.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Mengklik ganda grup, jalur, atau gambar dengan alat Seleksi membukanya dalam mode isolasi.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Isian dan stroke pola ikut bertransformasi dengan karya seni, kecuali transformasi atau menu panel Transformasi memilih lain.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Radius sudut dinamis ikut diskalakan dengan karya seni, kecuali penskalaan memilih lain.

@@ -185,6 +185,7 @@ impl VectorcraftApp {
             titlebar_inset: 0.0,
             last_effect: None,
             last_pathfinder: None,
+            last_filters: Default::default(),
             character_focus: None,
             run_count: 0,
             channel: None,
@@ -382,7 +383,8 @@ impl VectorcraftApp {
             self.host = Arc::new(self.host.with_lang(lang));
         }
         let native_ppp = self.ui_ctx.as_ref().map_or(1.0, |ctx| ctx.pixels_per_point() / ctx.zoom_factor());
-        let root = root_env(&self.session.prefs, native_ppp);
+        // The canvas steps through the zoom stops of the current window's display.
+        let root = root_env(&self.session.prefs, native_ppp, self.print_ppi());
         FrameInput::new(root).commands(menus::model::command_input(self)).host(self.host.clone())
     }
 
@@ -441,6 +443,9 @@ impl VectorcraftApp {
         let now = self.now();
         self.perf.fps = self.frame_rate.frame(now, self.perf.frame_ms / 1000.0);
         self.sync_views();
+        // A document that moved between the main window and a floating OS window, or opened, takes
+        // the density of the display that shows it.
+        self.settle_screen_ppi_if_changed();
         self.refresh_replace_font_warning(false);
         updates_ui::tick(self, ctx);
         // Read the system clipboard only when that alone decides whether Paste is enabled. A
@@ -692,15 +697,16 @@ impl VectorcraftApp {
 }
 
 /// The root values the preferences give every frame: the theme, the interface scale (UI Scaling
-/// over the display's `native_ppp`), Show Tool Tips, the zoom stops and which drags scrub a value
-/// (Scrub Numeric Fields: the side label only, or nothing).
-pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> RootEnv {
+/// over the display's `native_ppp`), Show Tool Tips, the zoom stops (100% at `print` screen points
+/// to an inch, [`crate::state::print_ppi`]) and which drags scrub a value (Scrub Numeric Fields: the
+/// side label only, or nothing).
+pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32, print: Option<f64>) -> RootEnv {
     let (theme, mode, accent) = theme::root_theme(prefs);
     // A hand-edited preferences file must not scale the interface to nothing.
     let scaling = if prefs.ui_scaling.is_finite() && prefs.ui_scaling > 0.0 { prefs.ui_scaling as f32 } else { 1.0 };
     let mut root = RootEnv::new().theme(theme).mode(mode).accent(accent).scale(Scale::new(scaling)).tooltips(prefs.show_tool_tips);
     root.sizes = theme::app_sizes();
-    root.values.set(view::zoom_scheme(prefs, native_ppp));
+    root.values.set(view::zoom_scheme(print, native_ppp));
     root.values.set(if prefs.scrub_numeric_fields { ScrubDrags::LabelOnly } else { ScrubDrags::Off });
     // Number fields as production drew them: the value and its unit one run at the start ("720 pt"), percentages
     // whole and lengths to a thousandth of a point (357.114 pt).
