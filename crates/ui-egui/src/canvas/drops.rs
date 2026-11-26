@@ -170,7 +170,11 @@ impl Component for CanvasDrops<'_> {
         }
         if self.kind == BodyKind::Live {
             // The art of this canvas's own document is not accepted as a panel payload: its move resumes.
-            let panel = Target::new(rect, view, covered, |p: &PanelDrag| (!matches!(p, PanelDrag::Art { .. })).then(|| Payload::Panel(p.clone())));
+            let panel = Target::new(rect, view, covered, |p: &PanelDrag| match p {
+                PanelDrag::Art { .. } => None,
+                PanelDrag::Appearance { document, .. } if *document != self.document => None,
+                _ => Some(Payload::Panel(p.clone())),
+            });
             let style = Target::new(rect, view, covered, |d: &ListDrag<StyleKey>| Some(Payload::Style(d.grabbed.clone())));
             let symbol = Target::new(rect, view, covered, |d: &ListDrag<SymbolKey>| Some(Payload::Symbol(d.grabbed.clone())));
             let brush = Target::new(rect, view, covered, |d: &ListDrag<BrushKey>| Some(Payload::Brush(d.grabbed.clone())));
@@ -370,7 +374,7 @@ pub(crate) fn apply_drop(app: &mut VectorcraftApp, drop: &Dropped) -> Result<(),
             }
             run(app, cmd, params)
         }
-        Payload::Panel(PanelDrag::Appearance(source)) => {
+        Payload::Panel(PanelDrag::Appearance { document, source }) if app.session.active().is_some_and(|st| st.uid == *document) => {
             let Some(hit) = hit() else { return Ok(()) };
             let target = top_object(app, &hit)?;
             if target == source.0 {

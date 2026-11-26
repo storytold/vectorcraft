@@ -119,12 +119,14 @@ fn a_drop_runs_the_effect_of_its_payload() {
     drop_at(&mut app, Payload::Panel(PanelDrag::paint(Paint::Gradient(Box::new(gradient)))), on_b, Move).unwrap();
     assert!(matches!(fill(&app), Paint::Gradient(g) if g.geom.is_none()), "a gradient fits the object it lands on");
     app.run("transparency.set", json!({"opacity": 40})).unwrap();
-    drop_at(&mut app, Payload::Panel(PanelDrag::Appearance(a)), on_b, Move).unwrap();
+    let document = app.session.active().unwrap().uid;
+    let appearance = |source| Payload::Panel(PanelDrag::Appearance { document, source });
+    drop_at(&mut app, appearance(a), on_b, Move).unwrap();
     let doc = &app.session.active().unwrap().doc;
     let (na, nb) = (doc.node(a).unwrap(), doc.node(b).unwrap());
     assert_eq!((&nb.appearance, nb.opacity), (&na.appearance, na.opacity), "the appearance is copied");
     let n = undo_len(&app);
-    drop_at(&mut app, Payload::Panel(PanelDrag::Appearance(b)), on_b, Move).unwrap();
+    drop_at(&mut app, appearance(b), on_b, Move).unwrap();
     assert_eq!(undo_len(&app), n, "dropped on its own source: nothing changes");
 
     let path = NodeId(app.run("path.create", json!({"anchors": [{"x": 50, "y": 200}, {"x": 350, "y": 200}]})).unwrap()["id"].as_u64().unwrap());
@@ -291,4 +293,28 @@ fn an_anchor_dragged_off_the_canvas_is_not_carried() {
     frame(&mut app, &ctx, vec![Event::PointerMoved(Pos2::new(500.0, 2.0))]);
     frame(&mut app, &ctx, vec![]);
     assert!(craft::ui::runtime::drag::active::<PanelDrag>(&ctx).is_none());
+}
+
+#[test]
+fn a_foreign_appearance_drop_never_copies_a_matching_local_object() {
+    let (mut app, ctx) = app_with_canvas();
+    let add = |app: &mut VectorcraftApp, x| {
+        NodeId(app.run("shape.rectangle", json!({"x": x, "y": 20, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap())
+    };
+    let source = add(&mut app, 20);
+    let document = app.session.active().unwrap().uid;
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let other = add(&mut app, 20);
+    assert_eq!(source, other, "both documents have different objects with the same local ID");
+    app.run("paint.setFill", json!({"color": "#ed1c24"})).unwrap();
+    let target = add(&mut app, 200);
+    app.run("paint.setFill", json!({"color": "#0000ff"})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+
+    let fill = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(target).unwrap().appearance.fill_paint();
+    let before = fill(&app);
+    let history = undo_len(&app);
+    drop_at(&mut app, Payload::Panel(PanelDrag::Appearance { document, source }), Point::new(250.0, 70.0), DropOperation::Move).unwrap();
+    assert_eq!(fill(&app), before);
+    assert_eq!(undo_len(&app), history, "a foreign appearance drop makes no edit");
 }

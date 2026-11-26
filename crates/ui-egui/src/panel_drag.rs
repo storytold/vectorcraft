@@ -19,7 +19,7 @@ pub enum PanelDrag {
     /// The Appearance panel's thumbnail: art it is dropped on takes object `0`'s appearance
     /// (`appearance.copyFrom`); the Graphic Styles panel makes a style of it, or with Alt held
     /// replaces the style it is dropped on with it (`graphicStyle.redefine`).
-    Appearance(vectorcraft_doc::NodeId),
+    Appearance { document: u64, source: vectorcraft_doc::NodeId },
     /// The selected art, dragged off the canvas with the Selection tool (`document`: the uid of the
     /// document it came from): the Graphic Styles panel makes a style of the first object
     /// (`graphicStyle.new`), or with Alt held replaces the style it is dropped on with that
