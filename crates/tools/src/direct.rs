@@ -863,6 +863,31 @@ fn segment_at(cx: &ToolContext, id: NodeId, p: Point) -> Option<SegmentHit> {
     Some(SegmentHit { si, seg, t, curved: a.has_out() || b.has_in() })
 }
 
+/// With General › Double-Click Adds Anchor Points on, a plain
+/// double-click on a path segment adds an anchor there, the new anchor alone selected. The path is
+/// the one whose stroke or outline a press at `p` hits, a clipping path included. An anchor or a
+/// center point under the pointer comes first, so nothing is added (the caller has already given
+/// way to the handles, mesh points and blend spine points a press takes first). The path's own
+/// line must pass within the pick tolerance of `p`: a click on a wide stroke or on the drawn
+/// outline of an effect farther from the path adds nothing.
+fn add_anchor_at(cx: &ToolContext, ev: &PointerEvent, p: Point) -> Option<Action> {
+    let m = ev.mods;
+    if !cx.double_click_adds_anchor || m.shift || m.alt || m.cmd || m.ctrl {
+        return None;
+    }
+    let (tol, point) = (cx.pick_tol(), cx.point_tol());
+    if hit_anchor(cx, p, point).is_some() || hit_center(cx, p, point).is_some() {
+        return None;
+    }
+    let h = hit_test(cx.doc, p, cx.selection_hit_options()).filter(|h| matches!(h.kind, HitKind::Stroke | HitKind::Outline))?;
+    let id = cx.doc.node(h.leaf).and_then(|n| compound_part_at(n, p, tol)).unwrap_or(h.leaf);
+    if !cx.doc.node(id).is_some_and(|n| matches!(n.kind, NodeKind::Path { .. })) {
+        return None;
+    }
+    let (id, si, seg, t) = crate::draw2::segment_in(cx, [id], p, tol)?;
+    Some(Action::Exec("path.insertAnchor".into(), json!({"id": id.0, "subpath": si, "segment": seg, "t": t, "selectAnchor": true})))
+}
+
 impl Tool for DirectSelectionTool {
     /// The pointer hovers nothing for the tool: no bracket is highlighted.
     fn hover_ended(&mut self, _cx: &ToolContext) {
@@ -1483,6 +1508,9 @@ impl DirectSelectionTool {
         }
         if crate::rulerguide::guide_at(cx, p).is_some() {
             return vec![];
+        }
+        if let Some(a) = add_anchor_at(cx, ev, p).filter(|_| !self.takes_point(cx, p)) {
+            return vec![a];
         }
         // A double-click edits what is drawn: not a clipping path's outline.
         let hit = hit_test(cx.doc, p, cx.hit_options());

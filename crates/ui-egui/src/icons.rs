@@ -36,10 +36,10 @@ pub fn tool_icon(name: &str) -> &'static str {
         "tool-line" => "dc-line",
         "tool-arc" => "dc-arc",
         "tool-three-point-arc" => "dc-arc-three-point",
-        "tool-spiral" => "tornado",
+        "tool-spiral" => "dc-spiral",
         "tool-rect-grid" => "dc-rect-grid",
         "tool-polar-grid" => "dc-polar-grid",
-        "tool-rect" => "square",
+        "tool-rect" => "dc-rect",
         "tool-rounded-rect" => "dc-rounded-rect",
         "tool-ellipse" => "dc-ellipse",
         "tool-circle" => "dc-circle-points",
@@ -48,8 +48,8 @@ pub fn tool_icon(name: &str) -> &'static str {
         "tool-star" => "star",
         "tool-flare" => "dc-flare",
         "tool-brush" => "paintbrush",
-        "tool-blob-brush" => "brush",
-        "tool-shaper" => "shapes",
+        "tool-blob-brush" => "dc-blob-brush",
+        "tool-shaper" => "dc-shaper",
         "tool-pencil" => "pencil",
         "tool-smooth" => "dc-smooth",
         "tool-path-eraser" => "dc-path-eraser",
@@ -60,13 +60,13 @@ pub fn tool_icon(name: &str) -> &'static str {
         "tool-mirror-cut" => "dc-mirror-cut",
         "tool-line-cut" => "dc-line-cut",
         "tool-rect-cut" => "dc-rect-cut",
-        "tool-rotate" => "rotate_ccw",
+        "tool-rotate" => "dc-rotate",
         "tool-reflect" => "flip-horizontal-2",
-        "tool-scale" => "scaling",
+        "tool-scale" => "dc-scale",
         "tool-shear" => "dc-shear",
         "tool-reshape" => "dc-reshape",
         "tool-width" => "dc-width",
-        "tool-warp" => "waves",
+        "tool-warp" => "dc-warp",
         "tool-twirl" => "dc-twirl",
         "tool-pucker" => "dc-pucker",
         "tool-bloat" => "dc-bloat",
@@ -106,12 +106,12 @@ pub fn tool_icon(name: &str) -> &'static str {
         "tool-graph-scatter" => "dc-graph-scatter",
         "tool-graph-pie" => "dc-graph-pie",
         "tool-graph-radar" => "dc-graph-radar",
-        "tool-artboard" => "artboard",
+        "tool-artboard" => "dc-artboard",
         "tool-slice" => "dc-slice",
         "tool-slice-select" => "dc-slice-select",
         "tool-hand" => "hand",
         "tool-rotate-view" => "dc-rotate-view",
-        "tool-print-tiling" => "printer",
+        "tool-print-tiling" => "dc-print-tiling",
         "tool-zoom" => "zoom_in",
         // A name that is already an icon maps to itself, as the `'static` name of the set that has it.
         other => icon_names().iter().copied().chain(APP_ICONS.icons.iter().map(|(n, _)| *n)).find(|n| *n == other).unwrap_or("rect_dashed"),
@@ -230,6 +230,35 @@ mod tests {
         for (name, icon) in &icons {
             assert_eq!(end_line(icon), butt_end, "the {name} cap icon marks the end of the path where the butt cap icon does");
             assert!(stroke_opacity(icon) < 1.0, "the {name} cap icon's stroke is lighter than its end-of-path line");
+        }
+    }
+
+    /// These tools used general-purpose library icons whose picture did not show the tool (a tornado
+    /// for Spiral, waves for Warp, a printer for Print Tiling). Each has an icon drawn for
+    /// VectorCraft that no other tool uses.
+    #[test]
+    fn tools_with_drawn_icons_do_not_fall_back_to_library_icons() {
+        let tools = [
+            "spiral",
+            "rectangle",
+            "blobBrush",
+            "shaper",
+            "rotate",
+            "scale",
+            "warp",
+            "artboard",
+            "printTiling",
+            "measureInspect",
+            "parametricShape",
+            "tangentCircle",
+        ];
+        for id in tools {
+            let name = tool_icon(vectorcraft_tools::tool_info(id).unwrap_or_else(|| panic!("{id} is a tool")).icon);
+            assert!(name.starts_with("dc-"), "{id} maps to {name}, a library icon");
+            assert!(resolves(name), "{id} maps to {name}, which isn't an icon");
+            let shared: Vec<&str> =
+                vectorcraft_tools::catalog::all_tools().filter(|t| t.id != id && tool_icon(t.icon) == name).map(|t| t.id).collect();
+            assert!(shared.is_empty(), "{id} shares {name} with {shared:?}");
         }
     }
 

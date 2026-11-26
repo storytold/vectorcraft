@@ -7,14 +7,15 @@
 //! stack, and prefix operators, assignment chains, `else if` chains and labels with loops, so long
 //! runs of them do not nest at all.
 
+mod pattern;
 mod xml;
 
 use std::collections::{HashMap, HashSet};
 
 use crate::LineTable;
 use crate::ast::{
-    AssignOp, Ast, BinaryOp, CatchClause, Expr, ExprId, ForInTarget, ForInit, Function, FunctionKind, LexKind, LogicalOp, Name, Program, Property,
-    PropertyKey, PropertyValue, Stmt, StmtId, SwitchCase, TemplatePiece, UnaryOp, UpdateOp, VarDecl,
+    AssignOp, Ast, BinaryOp, Binding, CatchClause, Expr, ExprId, ForInTarget, ForInit, Function, FunctionKind, LexKind, LogicalOp, Name, Program,
+    Property, PropertyKey, PropertyValue, Stmt, StmtId, SwitchCase, TemplatePiece, UnaryOp, UpdateOp, VarDecl,
 };
 use crate::error::{SyntaxError, TOO_DEEP};
 use crate::lexer::{Goal, Lexer};
@@ -56,9 +57,9 @@ struct Scope {
     function: bool,
 }
 
-/// The parameters of a function as they are read: plain names, each name's default value, and a
-/// rest parameter.
-type Params = (Vec<Name>, Vec<Option<ExprId>>, Option<Name>);
+/// The parameters of a function as they are read: names or patterns, each one's default value,
+/// and a rest parameter.
+type Params = (Vec<Binding>, Vec<Option<ExprId>>, Option<Binding>);
 
 /// A binary operator, with the logical ones apart.
 #[derive(Clone, Copy, Debug)]
@@ -101,6 +102,19 @@ pub(crate) struct Parser<'s> {
     es2015: bool,
     /// The scopes open around the current token, outermost first (only with `es2015`).
     scopes: Vec<Scope>,
+    /// Where each shorthand property with an initializer (`{a = 1}`) not yet read as part of a
+    /// destructuring pattern starts; one left when its expression ends is a `SyntaxError`.
+    cover_inits: Vec<u32>,
+    /// The next assignment expression may leave such properties to a pattern around it: it is an
+    /// element of an array or object literal, an arrow function's parenthesized head or a
+    /// `for` loop's head.
+    cover_ok: bool,
+    /// The spread elements of array literals followed by a comma, which cannot end a pattern.
+    rest_commas: HashSet<u32>,
+    /// Where each `__proto__: value` after the first in an object literal starts (ECMA-262 2015
+    /// section B.3.1). Each is also in `cover_inits`, so it is a `SyntaxError` unless the literal
+    /// is read as a destructuring pattern.
+    proto_twice: HashSet<u32>,
 }
 
 impl<'s> Parser<'s> {
@@ -125,6 +139,10 @@ impl<'s> Parser<'s> {
             e4x: options.e4x,
             es2015: options.es2015,
             scopes: if options.es2015 { vec![Scope { function: true, ..Scope::default() }] } else { Vec::new() },
+            cover_inits: Vec::new(),
+            cover_ok: false,
+            rest_commas: HashSet::new(),
+            proto_twice: HashSet::new(),
         };
         parser.tok = parser.next_significant()?;
         Ok(parser)
@@ -375,25 +393,32 @@ impl<'s> Parser<'s> {
     }
 
     /// `let` or `const` declarations after the keyword: each name declared in the innermost scope.
-    /// `no_in` leaves `in` to a `for (… in …)` around them, where a `const` may go without an
-    /// initializer.
+    /// `no_in` leaves `in` to a `for (… in …)` around them, where a `const` or a pattern may go
+    /// without an initializer, as in `for (… of …)`.
     fn parse_lexical_decls(&mut self, kind: LexKind, no_in: bool) -> Result<Vec<VarDecl>> {
         let mut decls = Vec::new();
         loop {
-            if self.at(Punct::LBracket) || self.at(Punct::LBrace) {
-                return Err(self.error_at_token(&self.tok, "destructuring declarations are not supported"));
+            let target = self.parse_declaration_target()?;
+            for name in self.ast.bound_names(&target) {
+                if name.name == "let" {
+                    return Err(self.error_at_offset(name.span.start, "'let' cannot be the name of a let or const declaration"));
+                }
+                self.declare_lexical(&name, false)?;
             }
-            let name = self.binding_identifier()?;
-            if name.name == "let" {
-                return Err(self.error_at_offset(name.span.start, "'let' cannot be the name of a let or const declaration"));
-            }
-            self.declare_lexical(&name, false)?;
             let init = if self.eat(Punct::Eq)? { Some(self.parse_assignment(no_in)?) } else { None };
-            let in_head = no_in && self.at_keyword(Keyword::In) && decls.is_empty();
-            if kind == LexKind::Const && init.is_none() && !in_head {
-                return Err(self.error_at_offset(name.span.start, format!("const '{}' needs an initializer", name.name)));
+            let in_head = no_in && (self.at_keyword(Keyword::In) || self.at_of()) && decls.is_empty();
+            if init.is_none() && !in_head {
+                match &target {
+                    Binding::Pattern(p) => {
+                        return Err(self.error_at_offset(self.ast.expr_span(*p).start, "a destructuring declaration needs an initializer"));
+                    }
+                    Binding::Name(name) if kind == LexKind::Const => {
+                        return Err(self.error_at_offset(name.span.start, format!("const '{}' needs an initializer", name.name)));
+                    }
+                    Binding::Name(_) => {}
+                }
             }
-            decls.push(VarDecl { name, init });
+            decls.push(VarDecl { target, init });
             if !self.eat(Punct::Comma)? {
                 return Ok(decls);
             }
@@ -525,6 +550,11 @@ impl<'s> Parser<'s> {
                 Ok(self.ast.push_stmt(Stmt::Empty, start))
             }
             TokenKind::Keyword(k) => self.keyword_statement(*k, start),
+            // An expression statement cannot start with `let [` (ECMA-262 2015 section 13.5); in
+            // a statement list that starts a declaration, and elsewhere it is an error.
+            _ if self.es2015 && self.tok.ident() == Some("let") && !self.tok.escaped && self.peek().is_some_and(|t| t.is_punct(Punct::LBracket)) => {
+                Err(self.error_at_token(&self.tok, "a lexical declaration cannot stand here; put it in a block"))
+            }
             _ => {
                 let expr = self.parse_expression(false)?;
                 self.semicolon()?;
@@ -571,10 +601,20 @@ impl<'s> Parser<'s> {
     }
 
     /// `{ … }`, a scope of its own; `param` is a catch clause's parameter, which a lexical
-    /// declaration in the block must not take.
-    fn parse_block_with(&mut self, param: Option<&str>) -> Result<Vec<StmtId>> {
+    /// declaration in the block must not take. A pattern's names are not taken by a `var` in the
+    /// block either (ECMA-262 2015 section 13.15.1 and Annex B.3.5).
+    fn parse_block_with(&mut self, param: Option<&Binding>) -> Result<Vec<StmtId>> {
         self.expect(Punct::LBrace)?;
-        self.push_scope(false, param.map(str::to_string));
+        match param {
+            Some(Binding::Name(name)) => self.push_scope(false, std::iter::once(name.name.clone())),
+            Some(Binding::Pattern(p)) => {
+                self.push_scope(false, std::iter::empty());
+                for name in self.ast.pattern_names(*p) {
+                    self.declare_lexical(&name, false)?;
+                }
+            }
+            None => self.push_scope(false, std::iter::empty()),
+        }
         let body = self.block_items();
         self.pop_scope();
         let body = body?;
@@ -597,10 +637,18 @@ impl<'s> Parser<'s> {
     fn parse_var_decls(&mut self, no_in: bool) -> Result<Vec<VarDecl>> {
         let mut decls = Vec::new();
         loop {
-            let name = self.binding_identifier()?;
-            self.declare_var(&name)?;
+            let target = self.parse_declaration_target()?;
+            for name in self.ast.bound_names(&target) {
+                self.declare_var(&name)?;
+            }
             let init = if self.eat(Punct::Eq)? { Some(self.parse_assignment(no_in)?) } else { None };
-            decls.push(VarDecl { name, init });
+            if let (Binding::Pattern(p), None) = (&target, init) {
+                let in_head = no_in && (self.at_keyword(Keyword::In) || self.at_of()) && decls.is_empty();
+                if !in_head {
+                    return Err(self.error_at_offset(self.ast.expr_span(*p).start, "a destructuring declaration needs an initializer"));
+                }
+            }
+            decls.push(VarDecl { target, init });
             if !self.eat(Punct::Comma)? {
                 return Ok(decls);
             }
@@ -689,22 +737,46 @@ impl<'s> Parser<'s> {
         } else if self.at_keyword(Keyword::Var) {
             self.bump()?;
             let mut decls = self.parse_var_decls(true)?;
+            if decls.len() == 1 && self.at_of() {
+                let decl = decls.pop().ok_or_else(|| self.unexpected())?;
+                return self.parse_for_of_var(decl, start);
+            }
             if decls.len() == 1 && self.at_keyword(Keyword::In) {
                 let decl = decls.pop().ok_or_else(|| self.unexpected())?;
                 // The variable of a for-in loop takes an initializer only outside strict mode
-                // code (ECMA-262 2017 Annex B.3.6).
-                if self.ctx.strict && decl.init.is_some() {
-                    return Err(self.error_at_token(&self.tok, "a for-in variable cannot have an initializer in strict mode code"));
+                // code, and only when it is a name (ECMA-262 2017 Annex B.3.6).
+                if decl.init.is_some() && (self.ctx.strict || matches!(decl.target, Binding::Pattern(_))) {
+                    return Err(self.error_at_token(&self.tok, "a for-in variable cannot have an initializer here"));
                 }
                 return self.parse_for_in(ForInTarget::Var(decl), start, false);
             }
             Some(ForInit::Var(decls))
         } else {
+            let starts_with_let = self.tok.ident() == Some("let") && !self.tok.escaped;
+            let async_of =
+                self.tok.ident() == Some("async") && !self.tok.escaped && self.peek().is_some_and(|t| t.ident() == Some("of") && !t.escaped);
+            let mark = self.cover_inits.len();
+            self.cover_ok = self.es2015;
             let expr = self.parse_expression(true)?;
+            if self.at_of() {
+                if starts_with_let {
+                    return Err(self.error_at_offset(self.ast.expr_span(expr).start, "a for-of loop's left-hand side cannot start with 'let'"));
+                }
+                // `for (async of …` is a SyntaxError, as ECMAScript 2021 has it (ECMA-262 12th
+                // edition section 14.7.5, the lookahead restriction on `async of`).
+                if async_of {
+                    return Err(self.error_at_offset(self.ast.expr_span(expr).start, "a for-of loop's left-hand side cannot be 'async'"));
+                }
+                self.loop_target(expr, "invalid left-hand side in for-of loop", true)?;
+                self.check_cover(mark)?;
+                return self.parse_for_of(ForInTarget::Expr(expr), start);
+            }
             if self.at_keyword(Keyword::In) {
-                self.check_target(expr, "invalid left-hand side in for-in loop")?;
+                self.loop_target(expr, "invalid left-hand side in for-in loop", false)?;
+                self.check_cover(mark)?;
                 return self.parse_for_in(ForInTarget::Expr(expr), start, false);
             }
+            self.check_cover(mark)?;
             Some(ForInit::Expr(expr))
         };
         self.parse_for_rest(init, start)
@@ -724,12 +796,15 @@ impl<'s> Parser<'s> {
     /// `for (let …` or `for (const …`, after the keyword, in the loop's own scope.
     fn parse_for_lexical(&mut self, kind: LexKind, start: Span) -> Result<StmtId> {
         let mut decls = self.parse_lexical_decls(kind, true)?;
-        if decls.len() == 1 && self.at_keyword(Keyword::In) {
+        if decls.len() == 1 && (self.at_keyword(Keyword::In) || self.at_of()) {
             let Some(decl) = decls.pop() else { return Err(self.unexpected()) };
             if decl.init.is_some() {
-                return Err(self.error_at_token(&self.tok, "a for-in variable declared with let or const cannot have an initializer"));
+                return Err(self.error_at_token(&self.tok, "a loop variable declared with let or const cannot have an initializer here"));
             }
-            return self.parse_for_in(ForInTarget::Lexical(kind, decl.name), start, false);
+            if self.at_of() {
+                return self.parse_for_of(ForInTarget::Lexical(kind, decl.target), start);
+            }
+            return self.parse_for_in(ForInTarget::Lexical(kind, decl.target), start, false);
         }
         self.parse_for_rest(Some(ForInit::Lexical(kind, decls)), start)
     }
@@ -760,8 +835,11 @@ impl<'s> Parser<'s> {
             self.pop_scope();
             return result;
         }
+        let mark = self.cover_inits.len();
+        self.cover_ok = self.es2015;
         let expr = self.parse_expression(true)?;
-        self.check_target(expr, "invalid left-hand side in for each loop")?;
+        self.loop_target(expr, "invalid left-hand side in for each loop", false)?;
+        self.check_cover(mark)?;
         self.parse_for_in(ForInTarget::Expr(expr), start, true)
     }
 
@@ -773,9 +851,9 @@ impl<'s> Parser<'s> {
             return Err(self.error_at_token(&self.tok, "for each takes one variable"));
         };
         if decl.init.is_some() {
-            return Err(self.error_at_token(&self.tok, "a for-in variable declared with let or const cannot have an initializer"));
+            return Err(self.error_at_token(&self.tok, "a loop variable declared with let or const cannot have an initializer here"));
         }
-        self.parse_for_in(ForInTarget::Lexical(kind, decl.name), start, true)
+        self.parse_for_in(ForInTarget::Lexical(kind, decl.target), start, true)
     }
 
     /// `break` or `continue`, with an optional label on the same line, which must name a label
@@ -900,12 +978,9 @@ impl<'s> Parser<'s> {
         let handler = if self.at_keyword(Keyword::Catch) {
             self.bump()?;
             self.expect(Punct::LParen)?;
-            if self.es2015 && (self.at(Punct::LBracket) || self.at(Punct::LBrace)) {
-                return Err(self.error_at_token(&self.tok, "destructuring catch parameters are not supported"));
-            }
-            let param = self.binding_identifier()?;
+            let param = self.parse_declaration_target()?;
             self.expect(Punct::RParen)?;
-            let body = self.parse_block_with(Some(&param.name))?;
+            let body = self.parse_block_with(Some(&param))?;
             Some(CatchClause { param, body })
         } else {
             None
@@ -991,20 +1066,20 @@ impl<'s> Parser<'s> {
 
     fn function_rest(&mut self, kind: FunctionKind, name: Option<(Name, Token)>, start: Span) -> Result<crate::ast::FunctionId> {
         self.expect(Punct::LParen)?;
-        let mut params: Vec<Name> = Vec::new();
+        let mut params: Vec<Binding> = Vec::new();
         let mut defaults: Vec<Option<ExprId>> = Vec::new();
         let mut rest = None;
         if !self.at(Punct::RParen) {
             loop {
                 if self.es2015 && self.at(Punct::Ellipsis) {
                     self.bump()?;
-                    rest = Some(self.function_name_or_param()?.0);
+                    rest = Some(self.parse_param_target()?);
                     if !self.at(Punct::RParen) {
                         return Err(self.error_at_token(&self.tok, "a rest parameter must be the last parameter"));
                     }
                     break;
                 }
-                let (param, _) = self.function_name_or_param()?;
+                let param = self.parse_param_target()?;
                 let default = if self.es2015 && self.eat(Punct::Eq)? { Some(self.parse_assignment(false)?) } else { None };
                 params.push(param);
                 defaults.push(default);
@@ -1035,7 +1110,7 @@ impl<'s> Parser<'s> {
             defaults.clear();
         }
         self.expect(Punct::LBrace)?;
-        let names: Vec<String> = params.iter().chain(&rest).map(|p| p.name.clone()).collect();
+        let names: Vec<String> = params.iter().chain(&rest).flat_map(|p| self.ast.bound_names(p)).map(|n| n.name).collect();
         let outer_strict = self.ctx.strict;
         let inner = Context { strict: outer_strict, in_function: true, ..Context::default() };
         let outer = std::mem::replace(&mut self.ctx, inner);
@@ -1058,7 +1133,7 @@ impl<'s> Parser<'s> {
         }
         self.expect(Punct::Arrow)?;
         self.enter()?;
-        let names: Vec<String> = params.iter().chain(&rest).map(|p| p.name.clone()).collect();
+        let names: Vec<String> = params.iter().chain(&rest).flat_map(|p| self.ast.bound_names(p)).map(|n| n.name).collect();
         let outer_strict = self.ctx.strict;
         let inner = Context { strict: outer_strict, in_function: true, ..Context::default() };
         let outer = std::mem::replace(&mut self.ctx, inner);
@@ -1085,32 +1160,28 @@ impl<'s> Parser<'s> {
     }
 
     /// The parameters an arrow function's parenthesized head `expr` gives (ECMA-262 2015 section
-    /// 14.2.1): names, names with `= default`, and a last `...name`, each written bare.
-    fn arrow_params(&self, expr: ExprId) -> Result<Params> {
-        let invalid = |at: ExprId| self.error_at_offset(self.ast.expr_span(at).start, "invalid arrow function parameters");
-        let Some(Expr::Paren(inner)) = self.ast.expr(expr) else { return Err(invalid(expr)) };
+    /// 14.2.1): names or patterns, each with an optional `= default`, and a last `...name` or
+    /// `...[pattern]`.
+    fn arrow_params(&mut self, expr: ExprId) -> Result<Params> {
+        let invalid = |p: &Self, at: ExprId| p.error_at_offset(p.ast.expr_span(at).start, "invalid arrow function parameters");
+        let Some(Expr::Paren(inner)) = self.ast.expr(expr) else { return Err(invalid(self, expr)) };
         let items = match self.ast.expr(*inner) {
             Some(Expr::Sequence(list)) => list.clone(),
             _ => vec![*inner],
         };
         let (mut params, mut defaults, mut rest) = (Vec::new(), Vec::new(), None);
-        let name_of = |id: ExprId| match self.ast.expr(id) {
-            Some(Expr::Ident(n)) => Some(Name { name: n.clone(), span: self.ast.expr_span(id) }),
-            _ => None,
-        };
         let count = items.len();
         for (i, item) in items.into_iter().enumerate() {
-            match self.ast.expr(item) {
-                Some(Expr::Ident(_)) => {
-                    params.push(name_of(item).ok_or_else(|| invalid(item))?);
+            match self.ast.expr(item).cloned() {
+                Some(Expr::Assign { op: None, target, value }) => {
+                    params.push(self.arrow_param(target).ok_or_else(|| invalid(self, item))??);
+                    defaults.push(Some(value));
+                }
+                Some(Expr::Spread(arg)) if i + 1 == count => rest = Some(self.arrow_param(arg).ok_or_else(|| invalid(self, item))??),
+                _ => {
+                    params.push(self.arrow_param(item).ok_or_else(|| invalid(self, item))??);
                     defaults.push(None);
                 }
-                Some(Expr::Assign { op: None, target, value }) => {
-                    params.push(name_of(*target).ok_or_else(|| invalid(item))?);
-                    defaults.push(Some(*value));
-                }
-                Some(Expr::Spread(arg)) if i + 1 == count => rest = Some(name_of(*arg).ok_or_else(|| invalid(item))?),
-                _ => return Err(invalid(item)),
             }
         }
         Ok((params, defaults, rest))
@@ -1128,16 +1199,17 @@ impl<'s> Parser<'s> {
     }
 
     /// The rules for a function's name and parameters. Strict mode code (Annex C): neither `eval`,
-    /// `arguments` nor a strict-mode reserved word, and no parameter name twice. An arrow function
-    /// or a function with a default or rest parameter has no parameter name twice either (ECMA-262
-    /// 2015 sections 14.1.2 and 14.2.1), and its body cannot start with `"use strict"`
-    /// (`body_strict`; ECMA-262 2016 section 14.1.2).
+    /// `arguments` nor a strict-mode reserved word, and no parameter name twice. An arrow function,
+    /// a method or a function with a default or rest parameter has no parameter name twice either
+    /// (ECMA-262 2015 sections 14.1.2, 14.2.1 and 14.3.1), and its body cannot start with
+    /// `"use strict"` (`body_strict`; ECMA-262 2016 section 14.1.2).
     fn check_params(&self, function: &Function, body_strict: bool) -> Result<()> {
-        let params = || function.params.iter().chain(&function.rest);
-        let simple = function.simple_params() && function.kind != FunctionKind::Arrow;
+        let names: Vec<Name> = function.params.iter().chain(&function.rest).flat_map(|p| self.ast.bound_names(p)).collect();
+        let params = || names.iter();
+        let simple = function.simple_params() && !matches!(function.kind, FunctionKind::Arrow | FunctionKind::Method);
         if body_strict && !function.simple_params() {
             let at = function.body.first().map_or(function.span.start, |&s| self.ast.stmt_span(s).start);
-            return Err(self.error_at_offset(at, "\"use strict\" is not allowed in a function with default or rest parameters"));
+            return Err(self.error_at_offset(at, "\"use strict\" is not allowed in a function with default, rest or destructured parameters"));
         }
         if function.strict {
             for n in function.name.iter().chain(params()) {
@@ -1183,10 +1255,16 @@ impl<'s> Parser<'s> {
     }
 
     fn parse_assignment(&mut self, no_in: bool) -> Result<ExprId> {
+        let cover_ok = std::mem::take(&mut self.cover_ok);
+        let mark = self.cover_inits.len();
         self.enter()?;
         let result = self.assignment(no_in);
         self.leave();
-        result
+        let expr = result?;
+        if !cover_ok {
+            self.check_cover(mark)?;
+        }
+        Ok(expr)
     }
 
     /// `a = b += c`: the targets kept on a stack, so a long chain does not nest.
@@ -1205,7 +1283,11 @@ impl<'s> Parser<'s> {
                 }
                 return Ok(value);
             };
-            self.check_target(expr, "invalid assignment target")?;
+            if op.is_none() && self.es2015 && matches!(self.ast.expr(expr), Some(Expr::Array(_) | Expr::Object(_))) {
+                self.check_assignment_pattern(expr)?;
+            } else {
+                self.check_target(expr, "invalid assignment target")?;
+            }
             self.bump()?;
             targets.push((expr, op));
         }
@@ -1216,7 +1298,7 @@ impl<'s> Parser<'s> {
     fn arrow_from(&mut self, expr: ExprId, no_in: bool) -> Result<ExprId> {
         let start = self.ast.expr_span(expr);
         let params = match self.ast.expr(expr) {
-            Some(Expr::Ident(name)) => (vec![Name { name: name.clone(), span: start }], vec![None], None),
+            Some(Expr::Ident(name)) => (vec![Binding::Name(Name { name: name.clone(), span: start })], vec![None], None),
             Some(Expr::Paren(_)) => self.arrow_params(expr)?,
             _ => return Err(self.unexpected()),
         };
@@ -1562,15 +1644,16 @@ impl<'s> Parser<'s> {
         let start = self.expect(Punct::LParen)?.span;
         let mut items = Vec::new();
         let mut head_only = self.at(Punct::RParen);
+        let mark = self.cover_inits.len();
         while !self.at(Punct::RParen) {
             if self.at(Punct::Ellipsis) {
                 let spread_start = self.bump()?.span;
-                let name = self.binding_identifier()?;
-                let arg = self.ast.push_expr(Expr::Ident(name.name), name.span);
+                let arg = self.binding_target_expr()?;
                 items.push(self.ast.push_expr(Expr::Spread(arg), self.span_from(spread_start)));
                 head_only = true;
                 break;
             }
+            self.cover_ok = true;
             items.push(self.parse_assignment(false)?);
             if !self.eat(Punct::Comma)? {
                 break;
@@ -1582,6 +1665,9 @@ impl<'s> Parser<'s> {
         self.expect(Punct::RParen)?;
         if head_only && !self.at(Punct::Arrow) {
             return Err(self.error_at_token(&self.tok, format!("expected '=>' but found {}", describe(&self.tok))));
+        }
+        if !self.at(Punct::Arrow) {
+            self.check_cover(mark)?;
         }
         let inner = match items.as_slice() {
             [one] => *one,
@@ -1637,27 +1723,59 @@ impl<'s> Parser<'s> {
                 elements.push(None);
                 continue;
             }
-            elements.push(Some(self.parse_element()?));
+            self.cover_ok = self.es2015;
+            let element = self.parse_element()?;
+            elements.push(Some(element));
             if !self.at(Punct::RBracket) {
                 self.expect(Punct::Comma)?;
+                if matches!(self.ast.expr(element), Some(Expr::Spread(_))) {
+                    self.rest_commas.insert(element.0);
+                }
             }
         }
         Ok(self.ast.push_expr(Expr::Array(elements), self.span_from(start)))
     }
 
     /// `{a: 1, "b": 2, 3: c, get d() {…}, set d(v) {…}}`. A name may repeat, a later definition
-    /// replacing an earlier one (ECMA-262 2015 section 12.2.6.1).
+    /// replacing an earlier one (ECMA-262 2015 section 12.2.6.1). With [`crate::Options::es2015`],
+    /// also computed names, shorthand properties and methods ([`Self::parse_property_es2015`]).
     fn parse_object(&mut self) -> Result<ExprId> {
         let start = self.expect(Punct::LBrace)?.span;
         let mut properties = Vec::new();
         while !self.eat(Punct::RBrace)? {
-            let property = self.parse_property()?;
+            let property = if self.es2015 { self.parse_property_es2015()? } else { self.parse_property()? };
             properties.push(property);
             if !self.at(Punct::RBrace) {
                 self.expect(Punct::Comma)?;
             }
         }
+        if self.es2015 {
+            self.note_proto_twice(&properties);
+        }
         Ok(self.ast.push_expr(Expr::Object(properties), self.span_from(start)))
+    }
+
+    /// Records each `__proto__: value` of `properties` after the first in `proto_twice` and, in
+    /// order, in `cover_inits`.
+    fn note_proto_twice(&mut self, properties: &[Property]) {
+        // The offsets rise along the properties, so they are merged into the sorted list in one
+        // pass.
+        let twice: Vec<u32> = properties.iter().filter(|p| p.is_proto_setter(&self.ast)).skip(1).map(|p| p.span.start).collect();
+        let Some(&lowest) = twice.first() else { return };
+        let first = self.cover_inits.partition_point(|&x| x < lowest);
+        let tail = self.cover_inits.split_off(first);
+        let (mut a, mut b) = (tail.into_iter().peekable(), twice.iter().copied().peekable());
+        while let (Some(&x), Some(&y)) = (a.peek(), b.peek()) {
+            if y <= x {
+                self.cover_inits.push(y);
+                b.next();
+            } else {
+                self.cover_inits.push(x);
+                a.next();
+            }
+        }
+        self.cover_inits.extend(b.chain(a));
+        self.proto_twice.extend(twice);
     }
 
     fn parse_property(&mut self) -> Result<Property> {

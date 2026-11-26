@@ -113,6 +113,10 @@ pub(crate) enum ArgRead {
     Each(Rc<[Arg]>),
     /// None: the function is given the [`CallSite`] of the code that calls it, as three numbers.
     Site,
+    /// A member of a host class ([`crate::host_classes`]): `this` first, then each argument as
+    /// [`Data`], objects of host classes in them as [`crate::host_ref`] gives them; the objects of
+    /// host classes in the result are made from theirs.
+    Hosted,
 }
 
 /// A member of an object the host adds to the global environment.
@@ -188,6 +192,9 @@ struct Reading {
     ancestors: Vec<ObjId>,
     path: Vec<Step>,
     function: Rc<str>,
+    /// Objects of host classes are read as [`crate::host_ref`] gives them, and a plain object
+    /// that has [`crate::HOST_REF_KEY`] is refused.
+    hosted: bool,
 }
 
 impl Reading {
@@ -245,6 +252,7 @@ impl Interp {
                 Ok(Data::String(s.to_rust_string()))
             }
             Value::Object(id) => self.read_object(*id, r),
+            Value::Symbol(_) => Err(self.data_error(r, ErrorType::Type, "is a Symbol, not plain data")),
         }
     }
 
@@ -257,6 +265,10 @@ impl Interp {
             return Err(self.data_error(r, ErrorType::Range, "is nested too deep"));
         }
         let shape = match &self.object(id)?.class {
+            Class::Host(_) if r.hosted => {
+                return self.host_ref_of(id)?.ok_or_else(|| Abrupt::Internal("host object without a class".into()));
+            }
+            Class::Host(_) => return Err(self.data_error(r, ErrorType::Type, "is an object of a host class, not plain data")),
             Class::Array { length, .. } => Shape::Array(*length),
             Class::Ordinary => {
                 let o = self.object(id)?;
@@ -270,6 +282,14 @@ impl Interp {
                 return Err(self.data_error(r, ErrorType::Type, &what));
             }
         };
+        // Each Symbol key the scan may visit takes a unit of fuel first.
+        let syms = self.object(id)?.syms.as_ref().map_or(0, |m| m.len());
+        if syms > 0 {
+            crate::regexp_vm::use_fuel_n(self, syms as u64)?;
+        }
+        if self.object(id)?.syms.as_ref().is_some_and(|m| m.iter().any(|(_, p)| p.enumerable())) {
+            return Err(self.data_error(r, ErrorType::Type, "has a Symbol-keyed property, not plain data"));
+        }
         r.ancestors.push(id);
         let out = match shape {
             Shape::Array(length) => self.read_array(id, length, r),
@@ -304,6 +324,9 @@ impl Interp {
             self.use_fuel()?;
             self.charge_reading(r, k.len().saturating_mul(3).saturating_add(8))?;
             let name = String::from_utf16_lossy(&k);
+            if r.hosted && name == crate::HOST_REF_KEY {
+                return Err(self.data_error(r, ErrorType::Type, "is not plain data"));
+            }
             r.path.push(Step::Name(k));
             let item = match prop {
                 // A property holding `undefined` reads as one left out.
@@ -338,6 +361,9 @@ impl Interp {
             }
             Data::Array(items) => {
                 self.write_container(items.into_iter().enumerate().map(|(i, d)| (Slot::Index(i), d)).collect(), true, depth, frozen)?
+            }
+            Data::Object(items) if self.write_hosted && matches!(items.as_slice(), [(k, _)] if k == crate::HOST_REF_KEY) => {
+                self.write_host_ref(&Data::Object(items))?
             }
             Data::Object(items) => self.write_container(items.into_iter().map(|(k, d)| (Slot::Name(k), d)).collect(), false, depth, frozen)?,
         })
@@ -378,20 +404,32 @@ impl Interp {
 
     /// Calls host function `f`: reads its arguments as `how` says, runs it, and gives its result to
     /// the script.
-    pub(crate) fn call_data(&mut self, f: &crate::heap::DataFn, name: &Rc<str>, args: &[Value], how: &ArgRead) -> JsResult<Value> {
+    pub(crate) fn call_data(&mut self, f: &crate::heap::DataFn, name: &Rc<str>, this: &Value, args: &[Value], how: &ArgRead) -> JsResult<Value> {
         let data = match how {
             ArgRead::Site => site_data(self.call_site()),
+            ArgRead::Hosted => {
+                let this = match this {
+                    Value::Object(o) => self.host_ref_of(*o)?.unwrap_or(Data::Undefined),
+                    _ => Data::Undefined,
+                };
+                let mut data = vec![this];
+                data.extend(self.read_args(name, args, how)?);
+                data
+            }
             _ => self.read_args(name, args, how)?,
         };
-        // Only the script's own code, in a run that can pause, can wait for a result.
-        let can_wait = self.in_slice && self.reentry == 0;
+        // Only the script's own code, in a run that can pause, can wait for a result, and a host
+        // class's constructor called with `new` cannot.
+        let can_wait = self.in_slice && self.reentry == 0 && !self.constructing;
         self.can_wait.set(can_wait);
         let result = f(data);
         self.can_wait.set(false);
         match result {
+            Ok(d) if matches!(how, ArgRead::Hosted) => self.write_hosted(d),
             Ok(d) => self.write_data(d, 0, matches!(how, ArgRead::Frozen)),
             Err(HostError::Wait) if can_wait => {
                 self.waiting = true;
+                self.waiting_hosted = matches!(how, ArgRead::Hosted);
                 self.pause.set(true);
                 Ok(Value::Undefined)
             }
@@ -469,7 +507,15 @@ impl Interp {
 
     /// The arguments of host function `name` as [`Data`], read as `how` says.
     fn read_args(&mut self, name: &Rc<str>, args: &[Value], how: &ArgRead) -> JsResult<Vec<Data>> {
-        let mut reading = Reading { limits: self.data_limits, bytes: 0, entries: 0, ancestors: Vec::new(), path: Vec::new(), function: name.clone() };
+        let mut reading = Reading {
+            limits: self.data_limits,
+            bytes: 0,
+            entries: 0,
+            ancestors: Vec::new(),
+            path: Vec::new(),
+            function: name.clone(),
+            hosted: matches!(how, ArgRead::Hosted),
+        };
         let args = match how {
             ArgRead::Each(list) => args.get(..list.len().min(args.len())).unwrap_or(args),
             _ => args,
@@ -477,14 +523,14 @@ impl Interp {
         let mut data = Vec::with_capacity(args.len());
         // A conversion can run the script's own `toString`, which may collect garbage.
         let mark = self.temp_roots.len();
-        if !matches!(how, ArgRead::Data | ArgRead::Frozen) {
+        if !matches!(how, ArgRead::Data | ArgRead::Frozen | ArgRead::Hosted) {
             self.temp_roots.extend(args.iter().cloned());
         }
         let mut read = Ok(());
         for (i, a) in args.iter().enumerate() {
             reading.path.push(Step::Index(u32::try_from(i).unwrap_or(u32::MAX)));
             let d = match how {
-                ArgRead::Data | ArgRead::Frozen | ArgRead::Site => self.read_data(a, &mut reading),
+                ArgRead::Data | ArgRead::Frozen | ArgRead::Site | ArgRead::Hosted => self.read_data(a, &mut reading),
                 ArgRead::Text => self.read_text(a, &mut reading),
                 ArgRead::Each(list) => match list.get(i) {
                     Some(Arg::TextOrUndefined) if matches!(a, Value::Undefined) => Ok(Data::Undefined),
@@ -509,7 +555,7 @@ impl Interp {
     /// What host error `e` throws, or the limit it ends the run with. A function that waits
     /// ([`HostError::Wait`]) where its caller does not handle the wait ends the run with an internal
     /// error.
-    fn host_error(&mut self, e: HostError) -> JsResult<Abrupt> {
+    pub(crate) fn host_error(&mut self, e: HostError) -> JsResult<Abrupt> {
         match e {
             HostError::Wait => Ok(Abrupt::Internal("a host function waited for its result where the run cannot pause".into())),
             HostError::Abort(message) => {
@@ -530,7 +576,14 @@ impl Interp {
 
     /// `v` as the string `String(v)` gives, within the limits of a crossing.
     fn read_text(&mut self, v: &Value, r: &mut Reading) -> JsResult<Data> {
-        let s = self.to_str(v)?;
+        let s = match v {
+            // `String(symbol)` gives `Symbol(description)` (ECMA-262 11th edition, section 21.1.1.1).
+            Value::Symbol(k) => match self.descriptive_string(k)? {
+                Value::String(s) => s,
+                _ => return Err(Abrupt::Internal("a Symbol's descriptive string is not a string".into())),
+            },
+            _ => self.to_str(v)?,
+        };
         self.charge_reading(r, s.len().saturating_mul(3).saturating_add(2))?;
         Ok(Data::String(s.to_rust_string()))
     }
@@ -597,7 +650,7 @@ impl Interp {
             HostItem::Script(item) => match crate::builtins::extensions::getter(item) {
                 None => Prop::Data { value: Value::Object(self.global), flags: ENUMERABLE },
                 Some((name, f)) => {
-                    let get = crate::builtins::native(self, name, f, 0, crate::heap::NativeKind::Plain, false)?;
+                    let get = crate::builtins::accessor_native(self, "get ", name, f, 0)?;
                     Prop::Accessor { get: Some(get), set: None, flags: ENUMERABLE }
                 }
             },

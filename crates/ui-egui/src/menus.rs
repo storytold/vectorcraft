@@ -92,7 +92,6 @@ use slots::RECENT_FONT_IDS;
 pub(crate) use state::why_off;
 pub use state::{checked, enabled, plugin_revision, shortcut_of, shown_state};
 pub(crate) use submenus::PATH_EFFECTS;
-pub(crate) use tree::arrange_documents_items;
 pub use tree::{Listed, menu_tree, menu_tree_named};
 pub use ui_commands::UI_COMMANDS;
 

@@ -45,6 +45,24 @@ fn wait_read(app: &mut VectorcraftApp) {
     }
 }
 
+std::thread_local! {
+    /// Opening happens off the UI thread in this test ([`with_threads`]).
+    static THREADS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Is opening off the UI thread turned on for this test ([`available`])?
+pub(crate) fn threads_on() -> bool {
+    THREADS.with(std::cell::Cell::get)
+}
+
+/// Run `f` with opening off the UI thread, as on the desktop.
+pub(crate) fn with_threads<R>(f: impl FnOnce() -> R) -> R {
+    THREADS.with(|t| t.set(true));
+    let r = f();
+    THREADS.with(|t| t.set(false));
+    r
+}
+
 /// Wait until every file being opened has been read, then open the files that may open now.
 /// Whether the missing-fonts question is open once a frame has drawn the dialogs.
 fn asks_fonts(app: &mut VectorcraftApp) -> bool {
@@ -53,7 +71,7 @@ fn asks_fonts(app: &mut VectorcraftApp) -> bool {
     open_dialogs(app).iter().any(|d| d.key.as_deref() == Some(crate::dialogs::missing_fonts::KIND))
 }
 
-fn open_ready(app: &mut VectorcraftApp) {
+pub(crate) fn open_ready(app: &mut VectorcraftApp) {
     wait_read(app);
     poll(app);
 }

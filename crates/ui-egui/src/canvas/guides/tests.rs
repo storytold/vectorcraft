@@ -105,9 +105,9 @@ fn trim_view_hides_the_guides_and_the_grid() {
 #[test]
 fn pixel_grid_shows_in_pixel_preview_from_600_percent() {
     let mut app = app();
-    assert!(pixel_grid(&app).is_none(), "not in Pixel Preview");
+    assert!(pixel_grid(&app, None).is_none(), "not in Pixel Preview");
     app.ui.view.pixel_preview = true;
-    assert!(pixel_grid(&app).is_some());
+    assert!(pixel_grid(&app, None).is_some());
     app.session.execute("prefs.set", &json!({"key": "showPixelGrid", "value": false})).unwrap();
-    assert!(pixel_grid(&app).is_none(), "the preference is off");
+    assert!(pixel_grid(&app, None).is_none(), "the preference is off");
 }

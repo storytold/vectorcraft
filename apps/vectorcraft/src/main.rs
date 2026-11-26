@@ -28,6 +28,9 @@
 #![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
 
 mod automation_args;
+#[cfg(test)]
+mod build_channel;
+mod build_flavor;
 mod clipboard;
 #[cfg(feature = "wgpu")]
 mod compositor_gpu;
@@ -36,6 +39,7 @@ mod display_profile;
 #[cfg(feature = "wgpu")]
 mod gpu;
 mod hang_watch;
+mod launch_profile;
 #[cfg(target_os = "linux")]
 mod linux_stylus;
 mod logging;
@@ -46,13 +50,17 @@ mod mac_fonts;
 mod mac_tablet;
 #[cfg(target_os = "macos")]
 mod mac_window;
+mod nightly_session;
 #[cfg(target_os = "macos")]
 mod open_documents;
 mod prefs_dir;
 mod presentation;
 mod printing;
+mod process_identity;
+mod profile_root;
 #[cfg(not(any(target_os = "macos", windows)))]
 mod quit_windows;
+mod screen_density;
 #[cfg(not(target_os = "macos"))]
 mod single_instance;
 #[cfg(windows)]
@@ -62,6 +70,8 @@ mod window_frame;
 mod windows_alt_codes;
 #[cfg(windows)]
 mod windows_cores;
+#[cfg(windows)]
+mod windows_display_size;
 mod windows_stylus;
 mod windows_symbol_chars;
 mod xwayland;
@@ -101,9 +111,6 @@ use prefs::{load_prefs, log_dir, open_store, prefs_enabled};
 const DEFAULT_SIZE: [f32; 2] = [1440.0, 900.0];
 const MIN_SIZE: [f32; 2] = [800.0, 500.0];
 
-/// The app id every OS window carries; it matches `packaging/linux/ai.storyteller.vectorcraft.desktop`.
-const WINDOW_APP_ID: &str = "ai.storyteller.vectorcraft";
-
 /// The window, Dock, taskbar and app-switcher icon (`assets/app-icon/`, see its README). macOS gets
 /// the version with Apple's transparent margin; elsewhere the full-bleed tile. The app ID matches
 /// `packaging/linux/ai.storyteller.vectorcraft.desktop` so Wayland docks find the launcher icon.
@@ -137,7 +144,7 @@ fn adapter_summary(info: &eframe::wgpu::AdapterInfo) -> String {
 fn native_options(custom_titlebar: bool) -> eframe::NativeOptions {
     eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("VectorCraft")
+            .with_title(vectorcraft_ui_egui::os_window::name())
             .with_inner_size(DEFAULT_SIZE)
             .with_min_inner_size(MIN_SIZE)
             .with_drag_and_drop(true)
@@ -146,9 +153,33 @@ fn native_options(custom_titlebar: bool) -> eframe::NativeOptions {
             .with_titlebar_shown(false)
             .with_title_shown(false)
             .with_icon(app_icon())
-            .with_app_id(WINDOW_APP_ID),
+            .with_app_id(vectorcraft_ui_egui::os_window::app_id()),
+        // A nightly keeps its own window state in its private profile; a stable build lets eframe
+        // keep it where it always did.
+        persistence_path: nightly_window_state(),
         ..Default::default()
     }
+}
+
+/// Where eframe keeps its own saved state, if its persistence feature is ever on: a folder of its
+/// own inside the nightly profile ([`nightly_root`]), never the file craft's window placement is in
+/// (`<profile>/window.json`, which eframe would treat as a folder) and never the stable app's.
+fn nightly_window_state() -> Option<std::path::PathBuf> {
+    nightly_root().map(|root| root.join("eframe"))
+}
+
+/// The saved window placement (the framework's `window.json`): beside the preferences, as it always
+/// was, or inside a nightly's private profile so the two channels never move each other's windows.
+fn placement_store() -> Store {
+    match nightly_root() {
+        Some(root) => Store::at(&root.join(craft::window::restore::FILE_NAME)),
+        None => Store::open("vectorcraft"),
+    }
+}
+
+/// This launch's private Nightly profile, when it is one.
+fn nightly_root() -> Option<&'static std::path::Path> {
+    launch_profile::current().root()
 }
 
 struct App {
@@ -178,6 +209,9 @@ struct App {
     held_files: Vec<String>,
     /// Reads the profile of the display that shows the main window, for the canvas.
     display_profile: display_profile::Reader,
+    /// Measures the density of the display that shows the main window, for Display Print Size at
+    /// 100% Zoom.
+    screen_density: screen_density::Tracker,
     /// When this frame's input hook started, for the hang report's frame times (`hang_watch`).
     frame_start: Option<std::time::Instant>,
     /// The shortest time between the starts of two frames, while the window presents without vsync
@@ -277,7 +311,14 @@ fn read_command_line(
             "--new-instance" => new_instance = true,
             "--safe-mode" => safe_mode = true,
             "--version" => {
-                println!("vectorcraft {}", env!("CARGO_PKG_VERSION"));
+                // A nightly says what it is, like the early answer; a stable build's line is unchanged.
+                let line = match build_flavor::COMPILED {
+                    build_flavor::BuildFlavor::Stable => format!("vectorcraft {}\n", vectorcraft_ui_egui::os_window::version()),
+                    build_flavor::BuildFlavor::NightlyV1 => {
+                        format!("VectorCraft {}\n", build_flavor::version(build_flavor::COMPILED, vectorcraft_ui_egui::os_window::version()))
+                    }
+                };
+                let _ = std::io::Write::write_all(&mut std::io::stdout(), line.as_bytes());
                 return Err(std::process::ExitCode::SUCCESS);
             }
             // Before anything starts, like `--version`: from a terminal or an agent's shell the app
@@ -332,12 +373,158 @@ fn opens_through_xwayland(pref: Option<&str>) -> bool {
     true
 }
 
-fn main() -> std::process::ExitCode {
-    // Windows: the update helper is a copy of this program started with `--finish-update`.
-    #[cfg(windows)]
-    if let Some(result) = craft::update::self_update::finish(&vectorcraft_ui_egui::UPDATE_APP, &std::env::args_os().skip(1).collect::<Vec<_>>()) {
+/// The nightly channel this build is, as a string for the log.
+fn channel_name() -> &'static str {
+    match build_flavor::COMPILED {
+        build_flavor::BuildFlavor::Stable => "stable",
+        build_flavor::BuildFlavor::NightlyV1 => launch_profile::VERSION,
+    }
+}
+
+/// Says why a nightly launch was refused, then exits 2. A window could not have shown it yet: this
+/// app has no message box of its own before eframe starts (its dialogs are egui windows), so the
+/// text goes to standard error, which a Launcher launch records. The desktop-session test still
+/// decides whether a daily user would have seen it, for the message's wording.
+fn report_launch_profile_error(error: &str) {
+    eprintln!("VectorCraft launch profile: {error}");
+    let desktop_session = cfg!(windows)
+        || cfg!(target_os = "macos")
+        || (cfg!(target_os = "linux") && ["DISPLAY", "WAYLAND_DISPLAY"].into_iter().any(|key| std::env::var_os(key).is_some_and(|v| !v.is_empty())));
+    if build_flavor::needs_native_error(build_flavor::COMPILED, desktop_session) {
+        eprintln!("VectorCraft Nightly: open it from ArtCraft Launcher, which starts it in its own profile");
+    }
+}
+
+/// Selects the immutable launch profile before any startup service or side effect, and returns the
+/// arguments the rest of `main` reads. `None` means the process ends here (`--version` answered).
+fn prepare_launch() -> Option<Vec<std::ffi::OsString>> {
+    // The trusted Launcher protocol is decided before the logger, updates, fonts or any saved state.
+    let argv: Vec<_> = std::env::args_os().skip(1).collect();
+    // A nightly answers its version before root validation, process identity, IPC or any window:
+    // plain `--version`/`-V`, or the Launcher's `--launch-profile nightly-v1 --profile-root <dir>
+    // --version`. A stable build leaves the answer to `read_command_line`, exactly as before.
+    if build_flavor::COMPILED == build_flavor::BuildFlavor::NightlyV1 && (build_flavor::version_query(&argv) || launch_profile::version_query(&argv))
+    {
+        use std::io::Write as _;
+        let line = format!("VectorCraft {}\n", build_flavor::version(build_flavor::COMPILED, env!("VECTORCRAFT_BUILT_VERSION")));
+        let _ = std::io::stdout().write_all(line.as_bytes());
+        return None;
+    }
+    let early = launch_profile::parse(argv)
+        .and_then(|launch| {
+            build_flavor::require_profile(build_flavor::COMPILED, &launch.profile)?;
+            Ok(launch)
+        })
+        .and_then(|launch| {
+            launch_profile::prepare(launch, |root| {
+                launch_profile::validate_root(root, |key| std::env::var_os(key), std::env::current_exe().ok().as_deref())
+            })
+        })
+        .unwrap_or_else(|error| {
+            report_launch_profile_error(&error);
+            std::process::exit(2)
+        });
+    let nightly = early.profile.is_nightly();
+    let identity =
+        if nightly { vectorcraft_ui_egui::os_window::LaunchIdentity::NightlyV1 } else { vectorcraft_ui_egui::os_window::LaunchIdentity::Stable };
+    let install = launch_profile::install(early.profile).and_then(|()| {
+        // Every data path follows the selected profile from here on: settings, logs, recovery, the
+        // user's libraries, plug-ins, caches and the single-instance record.
+        if let Some(root) = launch_profile::current().root() {
+            prefs_dir::profile::install_data_root(root.to_path_buf())?;
+        }
+        vectorcraft_ui_egui::os_window::select_identity(identity)
+    });
+    if let Err(error) = install {
+        report_launch_profile_error(&error);
+        std::process::exit(2);
+    }
+    if let Err(error) = vectorcraft_ui_egui::os_window::set_version(env!("VECTORCRAFT_BUILT_VERSION")) {
+        report_launch_profile_error(&error);
+        std::process::exit(2);
+    }
+    // A nightly's taskbar identity, before the first window: otherwise Windows groups it with the
+    // stable app and the Launcher's own entry.
+    if let Err(error) =
+        process_identity::initialize(nightly, vectorcraft_ui_egui::os_window::id_for(vectorcraft_ui_egui::os_window::LaunchIdentity::NightlyV1))
+    {
+        report_launch_profile_error(&error.to_string());
+        // The window's identity, not the profile, failed: main's own failure status (1).
+        std::process::exit(1);
+    }
+    Some(early.args)
+}
+
+/// The arguments the rest of `main` reads: a nightly's profile tokens were consumed by
+/// `prepare_launch`, so what is left is `--` and the files to open. A stable launch reads its
+/// arguments exactly as it always did.
+fn launch_arguments(nightly: bool, arguments: &[std::ffi::OsString]) -> Vec<String> {
+    if nightly { arguments.iter().map(|a| a.to_string_lossy().into_owned()).collect() } else { std::env::args().skip(1).collect() }
+}
+
+/// The control channel's port, and the token's notice with the token itself.
+type ControlChannel = (Option<u16>, Option<(String, String)>);
+
+/// Port and token of the control channel, or the message to print. A nightly is started by the
+/// Launcher, never by an agent, so the channel and its inherited environment stay off: no token
+/// file is read and nothing listens.
+fn control_channel(control: &automation_args::ControlArg, nightly: bool) -> Result<ControlChannel, String> {
+    if nightly {
+        if control.options().port.is_some() || std::env::var_os("VECTORCRAFT_CONTROL_PORT").is_some() {
+            eprintln!("vectorcraft: the control channel is off in a nightly build");
+        }
+        return Ok((None, None));
+    }
+    let options = ControlOptions::resolve(control.options(), &EnvNames::for_app("VECTORCRAFT")).map_err(|e| e.to_string())?;
+    let port = options.port;
+    // Read before the window opens: a token file that can't be read keeps the app from starting
+    // rather than leaving the channel open without one.
+    let token = port.map(|_| options.server_token()).transpose().map_err(|e| e.to_string())?;
+    Ok((port, token.map(|token| (options.token_notice(&token), token))))
+}
+
+/// A nightly's own session record: whether the previous session did not finish normally, to be
+/// reported once the window is up. This session is cleared only on a controlled return (`on_exit`,
+/// or the code after the event loop). Stable keeps no record.
+fn previous_nightly_session_was_unclean(nightly: bool) -> bool {
+    if !nightly {
+        return false;
+    }
+    match nightly_session::begin(nightly_root(), vectorcraft_ui_egui::os_window::version(), None) {
+        Ok(unclean) => unclean,
+        Err(e) => {
+            log::warn!("Nightly session health is unavailable: {e}");
+            false
+        }
+    }
+}
+
+/// The first log lines: the version and channel, then a nightly's profile root.
+fn log_startup(nightly: bool) {
+    log::info!("VectorCraft {} ({})", vectorcraft_ui_egui::os_window::version(), channel_name());
+    if nightly {
+        log::info!("nightly profile: {}", nightly_root().map(|root| root.display().to_string()).unwrap_or_default());
+    }
+}
+
+/// Windows: the update helper is a copy of this program started with `--finish-update`. Nightly is
+/// updated by the Launcher, so it never starts one (`build_flavor` keeps its updater off).
+#[cfg(windows)]
+fn finish_pending_update(nightly: bool) {
+    if !nightly
+        && let Some(result) = craft::update::self_update::finish(&vectorcraft_ui_egui::UPDATE_APP, &std::env::args_os().skip(1).collect::<Vec<_>>())
+    {
         std::process::exit(i32::from(result.is_err()));
     }
+}
+
+fn main() -> std::process::ExitCode {
+    // The launch profile first: a nightly build without one is refused here, before the update
+    // helper, the logger, fonts or any saved state, and `--version` is answered here too.
+    let Some(arguments) = prepare_launch() else { return std::process::ExitCode::SUCCESS };
+    let nightly = launch_profile::current().is_nightly();
+    #[cfg(windows)]
+    finish_pending_update(nightly);
     // Before any thread starts: the pointer must find a cursor theme on Wayland (#2450).
     #[cfg(target_os = "linux")]
     cursor_theme::apply();
@@ -348,32 +535,21 @@ fn main() -> std::process::ExitCode {
     let mut roots_args =
         automation_args::AutomationArgs::new(root_env("VECTORCRAFT_AUTOMATION_READ_ROOT"), root_env("VECTORCRAFT_AUTOMATION_WRITE_ROOT"));
     let mut presentation = presentation::Overrides::default();
+    let given = launch_arguments(nightly, &arguments);
     let CommandLine { files: command_line_files, in_window_menus, new_instance, safe_mode: safe_mode_flag } =
-        match read_command_line(std::env::args().skip(1), &mut control, &mut roots_args, &mut presentation) {
+        match read_command_line(given.into_iter(), &mut control, &mut roots_args, &mut presentation) {
             Ok(command_line) => command_line,
             Err(code) => return code,
         };
     let automation_args::AutomationArgs { read_roots, write_roots, .. } = roots_args;
     // After the arguments: the flags and `--version` win over a bad environment value.
-    let control_options = match ControlOptions::resolve(control.options(), &EnvNames::for_app("VECTORCRAFT")) {
-        Ok(options) => options,
-        Err(e) => {
-            eprintln!("vectorcraft: {e}");
-            return std::process::ExitCode::FAILURE;
-        }
-    };
-    let control_port = control_options.port;
-    // Read before the window opens: a token file that can't be read keeps the app from starting
-    // rather than leaving the channel open without one.
-    let control_token = match control_port.map(|_| control_options.server_token()).transpose() {
-        Ok(token) => token.map(|token| (control_options.token_notice(&token), token)),
-        Err(e) => {
-            eprintln!("vectorcraft: {e}");
-            return std::process::ExitCode::FAILURE;
-        }
-    };
+    let (control_port, control_token) = control_channel(&control, nightly).unwrap_or_else(|message| {
+        eprintln!("vectorcraft: {message}");
+        std::process::exit(1)
+    });
     // Before desktop services, so every start-up warning is recorded (`logging`).
     let logger = logging::install();
+    log_startup(nightly);
     // Files opened from the file manager while VectorCraft runs open in its window (#4892). Before
     // the log file is attached: a launch that hands its files over leaves the running app's log be.
     #[cfg(not(target_os = "macos"))]
@@ -401,13 +577,14 @@ fn main() -> std::process::ExitCode {
     if let Some(logger) = logger {
         match log_dir().filter(|_| prefs_enabled()) {
             Some(dir) => match logger.attach_dir(&dir) {
-                Ok(path) => log::info!("VectorCraft {}, log file {}", env!("CARGO_PKG_VERSION"), path.display()),
+                Ok(path) => log::info!("VectorCraft {}, log file {}", vectorcraft_ui_egui::os_window::version(), path.display()),
                 // Standard error only by now (`attach_dir` gave up on the file); unlike `eprintln!`, never panics.
                 Err(e) => log::warn!("no log file: {e}"),
             },
             None => logger.no_file(),
         }
     }
+    let previous_nightly_unclean = previous_nightly_session_was_unclean(nightly);
     // The report a session left when it was closed while it did not answer (`hang_watch`).
     let previous_hang = log_dir().filter(|_| prefs_enabled()).and_then(|dir| hang_watch::take_previous(&dir));
     if let Some(report) = &previous_hang {
@@ -591,11 +768,11 @@ fn main() -> std::process::ExitCode {
     let run = |options: eframe::NativeOptions, app_creator: eframe::AppCreator<'_>| {
         #[cfg(target_os = "linux")]
         {
-            linux_stylus::run_native("VectorCraft", options, app_creator)
+            linux_stylus::run_native(vectorcraft_ui_egui::os_window::name(), options, app_creator)
         }
         #[cfg(not(target_os = "linux"))]
         {
-            eframe::run_native("VectorCraft", options, app_creator)
+            eframe::run_native(vectorcraft_ui_egui::os_window::name(), options, app_creator)
         }
     };
     let outcome = vectorcraft_engine::guard::catch_panic(|| {
@@ -605,8 +782,8 @@ fn main() -> std::process::ExitCode {
                 let ctx = &cc.egui_ctx;
                 let winit_window = cc.winit_window().cloned();
                 let spec = InstallSpec::new(shell_info, Arc::new(SystemWindows))
-                    .app_id(WINDOW_APP_ID)
-                    .placement(Arc::new(Mutex::new(Store::open("vectorcraft"))))
+                    .app_id(vectorcraft_ui_egui::os_window::app_id())
+                    .placement(Arc::new(Mutex::new(placement_store())))
                     .frame(decision);
                 let spec = match start_pen(&winit_window) {
                     Some(pen) => spec.pen(pen),
@@ -621,11 +798,15 @@ fn main() -> std::process::ExitCode {
                 };
                 let (files, file_panels) = file_service(wake, folders);
                 let files = Arc::new(files);
-                craft::host::Host::builder(AppInfo { id: "vectorcraft", name: "VectorCraft", version: env!("CARGO_PKG_VERSION") })
-                    .i18n(vectorcraft_ui_egui::i18n::shared())
-                    .settings(Arc::new(settings.clone()))
-                    .files(files.clone())
-                    .install(ctx);
+                craft::host::Host::builder(AppInfo {
+                    id: vectorcraft_ui_egui::os_window::SETTINGS_APP_ID,
+                    name: vectorcraft_ui_egui::os_window::name(),
+                    version: vectorcraft_ui_egui::os_window::version(),
+                })
+                .i18n(vectorcraft_ui_egui::i18n::shared())
+                .settings(Arc::new(settings.clone()))
+                .files(files.clone())
+                .install(ctx);
                 let mut session = Session::new();
                 // The profiles loaded before come back before the preferences name any of them.
                 prefs_dir::attach_profile_store(&mut session);
@@ -636,6 +817,9 @@ fn main() -> std::process::ExitCode {
                 let launch_dir = prefs_dir::prefs_dir().filter(|_| prefs_enabled()).map(|d| d.join("Launch"));
                 let folder = |name: &str| prefs_dir::prefs_dir().map(|d| d.join(name).to_string_lossy().to_string());
                 let stopped = safe_mode::begin_launch(launch_dir.as_deref(), safe_mode_flag);
+                // The launch's loads of the stored plug-ins and the plug-ins folder go on on worker
+                // threads while the window shows; the frames install them as they finish.
+                session.load_plugins_in_background(true);
                 prefs_dir::attach_plugin_store(&mut session);
                 // File › Scripts lists the scripts of the Scripts folder next to the preferences.
                 prefs_dir::attach_scripts_dir(&mut session);
@@ -646,9 +830,14 @@ fn main() -> std::process::ExitCode {
                 prefs_dir::attach_script_data(&mut session);
                 let mut app = VectorcraftApp::new(session, services(winit_window.clone()));
                 app.adopt_context(&cc.egui_ctx);
-                app.set_startup_update_check(true);
+                // A nightly is updated by the Launcher: it never checks for a stable release, which
+                // would install this program's own updater over the nightly build.
+                app.set_startup_update_check(!nightly);
                 load_prefs(&mut app, &settings);
                 safe_mode::after_start(&mut app, stopped);
+                // Loads started later (a preference change, the end of Safe Mode) are waited for,
+                // after the launch's own.
+                app.session.load_plugins_in_background(false);
                 // The saved PDF presets live in their own folder (also read by vectorcraft-cli),
                 // which takes over from the copy the preferences file used to hold.
                 prefs_dir::attach_pdf_preset_store(&mut app.session);
@@ -741,6 +930,17 @@ fn main() -> std::process::ExitCode {
                 if previous_hang.is_some() && app.ui.status.is_empty() {
                     vectorcraft_ui_egui::troubleshooting::last_session_stopped(&mut app);
                 }
+                // The previous nightly session did not finish normally: say so once, in the window
+                // that is now up, and only then let a clean exit clear the record.
+                if previous_nightly_unclean {
+                    // A graphics, plug-in or hang message may be up already: keep it, as above.
+                    if app.ui.status.is_empty() {
+                        app.status(
+                            "The previous VectorCraft Nightly session did not finish normally. Nothing has been sent anywhere; Help › About has this build's version for a bug report",
+                        );
+                    }
+                    nightly_session::mark_notice_shown();
+                }
                 let mut control_server = None;
                 if let (Some(port), Some((notice, token))) = (control_port, control_token) {
                     match server::listen(port, token, craft::ui::runtime::windows::WindowHost::of(&cc.egui_ctx)) {
@@ -795,6 +995,7 @@ fn main() -> std::process::ExitCode {
                     winit_window,
                     held_files,
                     display_profile: Default::default(),
+                    screen_density: Default::default(),
                     frame_start: None,
                     min_frame,
                     last_frame_began: None,
@@ -803,7 +1004,13 @@ fn main() -> std::process::ExitCode {
         )
     });
     // The window is gone: later launches start their own app, including the one a graphics
-    // failure starts again below.
+    // failure starts again below. A nightly's session record is finished here, by the controlled
+    // return, before a successor can take the profile; on macOS the window's own `on_exit` already
+    // did it (a Dock quit ends the process inside AppKit), so this is then a no-op. A run that
+    // reports a startup error has still returned in a controlled way (that error is logged and
+    // exits FAILURE below), so only a caught panic keeps the record for the next launch to report;
+    // it then also frees the lease for the successor this run may still start.
+    nightly_session::finish_after(outcome.is_ok());
     #[cfg(not(target_os = "macos"))]
     single_instance::resign();
     // The process ends normally from here: this launch didn't stop while a plug-in was loading.
