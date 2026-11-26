@@ -264,6 +264,8 @@ fn search_sought(
     }
     files.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
     let mut matched = vec![false; shapes.len()];
+    // Is a split shape not found yet: only then are faces kept in `partial`.
+    let open = |matched: &[bool]| shapes.iter().zip(matched).any(|(s, m)| !*m && !s.groups.is_empty());
     let (mut bytes_left, mut glyphs_left) = (limits.read, limits.glyphs);
     let total = files.len() as u64;
     for (i, (path, len, styles)) in files.iter().enumerate() {
@@ -313,6 +315,8 @@ fn search_sought(
                 if matched.get(k).copied().unwrap_or(true) {
                     return vec![];
                 }
+                // A shape matched whole only takes one glyph: the faces read before it do not hold it.
+                let extra = if s.groups.is_empty() { &[] } else { extra };
                 let with: Vec<&RetypeIndex> = beside.iter().copied().chain(&found).chain(extra.iter().copied()).chain(std::iter::once(ix)).collect();
                 super::shape_parts(s.path, s.groups, s.fill, s.once, &with, tolerance)
             };
@@ -324,9 +328,12 @@ fn search_sought(
                 (0..shapes.len()).map(|k| (k, parts_with(&parts, &index, k))).filter(|(_, p)| !p.is_empty()).collect();
             let fits: Vec<usize> = first.iter().map(|(k, _)| *k).collect();
             if fits.is_empty() {
-                // The face holds glyphs of a shape without completing one: a later face may.
-                // The latest are kept: the oldest goes when the cap is reached.
-                if !every {
+                // The face holds glyphs of a shape without completing one: a later face may, while
+                // a split shape is not found. The latest are kept: the oldest goes when the cap is
+                // reached.
+                if !every && open(&matched) {
+                    #[cfg(test)]
+                    KEPT_PARTIAL.with(|n| n.set(n.get() + 1));
                     if partial.len() >= MAX_FACES {
                         partial.remove(0);
                     }
@@ -407,6 +414,10 @@ fn search_sought(
             if !every && matched.iter().all(|m| *m) {
                 return Ok(out);
             }
+            // With every split shape found, the faces kept for them are dropped.
+            if !open(&matched) {
+                partial.clear();
+            }
         }
         // The cap reached with the file's last face: the later files are not compared.
         if out.faces.len() >= limits.faces {
@@ -415,6 +426,12 @@ fn search_sought(
         }
     }
     Ok(out)
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many times a search on this thread kept a face it read in `partial`.
+    static KEPT_PARTIAL: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// For each of `parts` (each part's candidates) that none of the faces of `held` has a glyph of,

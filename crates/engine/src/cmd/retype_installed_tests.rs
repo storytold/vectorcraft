@@ -181,6 +181,21 @@ fn the_search_stops_once_every_shape_matches_unless_every_face_is_wanted() {
 }
 
 #[test]
+fn faces_read_are_kept_for_split_shapes_only() {
+    let (db, _) = installed("kept-whole", &["Retype Kept Whole A", "Retype Kept Whole B", "Retype Kept Whole C"]);
+    // The k matches in the first file and the circle in none, so every file is read; the later
+    // files hold the k's glyph without completing a shape. With every shape whole, none is kept.
+    let mut shapes = glyphs(&db, "k");
+    shapes.push(kurbo::Circle::new((300.0, 100.0), 7.3).to_path(0.1));
+    assert!(shape_key(&shapes[1]).is_some(), "the circle has a key to look glyphs up by");
+    let refs: Vec<&BezPath> = shapes.iter().collect();
+    super::KEPT_PARTIAL.with(|n| n.set(0));
+    let found = search(&db, &refs, false).unwrap();
+    assert_eq!((found.read, found.faces.len()), (3, 1));
+    assert_eq!(super::KEPT_PARTIAL.with(std::cell::Cell::get), 0, "no face read is kept");
+}
+
+#[test]
 fn faces_past_the_limits_are_skipped_and_counted() {
     let (db, files) = installed("limits", &["Retype Copy G", "Retype Copy H"]);
     let shapes = glyphs(&db, "k");
