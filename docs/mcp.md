@@ -11301,7 +11301,8 @@ kept and do not change the file. An unknown method or an amount outside 0 to 100
 file size), `seconds` to download at `kbps` (default 56.6), the size, and for palette formats the colour table
 (`colors: [{color, source, transparent, locked, webShifted, shifted, webSafe}]`). The colour table's lists name colours by
 `source` (the colour the reduction made), so a colour keeps its edits when it is web-shifted or snapped. `slice: n`
-previews one slice; `image: true` adds the file; `warnings` holds the export's warnings.
+previews one slice, and a `slice` that is not a whole number from 1 up is an error; `image: true` adds the file;
+`warnings` holds the export's warnings.
 
 Delete Color is `colorTable.deleted: ["#rrggbb"…]`, by `source`. The deleted colors leave the table and the file, and
 their pixels take the nearest color left, with the current reduction's color distance and dither; the preview and the
@@ -11345,6 +11346,30 @@ way also names its color: the table marks it, Lock, Transparent, Web Shift and D
 are written as lowercase `#rrggbb`. A `#rrggbbaa` spelling names no table color. A shifted swatch shows the source color at its upper left and the new color at its lower
 right, with the lock mark, and Lock stays on until the color is unshifted. Web Shift replaces a shift by hand, and
 Unshift All Colors in the table's menu clears `shifted` and `webShift`. Only Web Colors in the picker starts off.
+
+Save Color Table is `document.exportForWeb.saveColorTable {path?, slice?, …settings}`. It writes
+the GIF or PNG-8 color table the preview shows as a color table file (`.act`) in the layout the file format
+specification gives (https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/): 256 entries of three bytes (red,
+green, blue) in file order, with zero bytes after the colors used, then the number of colors used and the index of the
+transparent entry, two bytes each with the most significant byte first. The file is always 772 bytes, and the index is
+65535 when the table has no transparent entry. A color shifted by hand is written as its new color. Without `slice`
+the file holds the whole image's table, also when `slices` is `selected` and no slice is selected; a `slice` is looked
+up among the slices `slices` names. `.act` is added to
+a `path` without an extension, and without `path` the file comes back as `dataBase64`. The reply is `{path, colors,
+transparentIndex, bytes, warnings}` (`transparentIndex` is null when there is none). An empty `path`, JPEG and PNG-24
+are errors, and the
+document and the settings do not change. Load Color Table is `webExport.loadColorTable {path | dataBase64,
+…settings}`. It reads a 768-byte file (256 colors, no transparent entry) or a 772-byte one (the number of colors used,
+1 to 256, and the transparent entry's index; an index past the colors used names no entry) and returns
+`{colors, transparentIndex, settings}`: the settings with the file's colors other than its transparent entry as
+`colorTable.customPalette`, `colors` set to the number of colors the file uses (at least 2), the table's other edits
+(`locked`, `transparent`, `deleted`, `shifted`, `webShift` and `sort`) cleared and `webSnap` set to 0, so every loaded
+color is written as it is, in the file's order, and none is locked. A file whose only color is its
+transparent entry loads that color. Another file size (base64 text included), a count of 0 or above 256, both or
+neither of `path` and `dataBase64`, and JPEG or PNG-24 are errors; the command reads at most 773 bytes of a file and
+remembers nothing. The Save for Web dialog's color table menu does not list Save Color Table… or Load Color
+Table… yet; both commands run through the engine and MCP. The help page describes both entries
+(https://help.adobe.com/archive/en_US/illustrator/cs4/illustrator_cs4_help.pdf#page=404).
 
 ```json
 {"name":"run_command","arguments":{"command":"document.exportForWeb.preview","params":{"format":"png8","colorTable":{"deleted":["#ff0000"],"customPalette":["#0000ff","#00ff00","#ff0000"]}}}}
