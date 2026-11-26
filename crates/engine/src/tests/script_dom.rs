@@ -201,13 +201,13 @@ fn window() -> WindowView {
 /// Shows the active document in the window `v`.
 fn show(s: &mut Session, v: WindowView) {
     let uid = s.active().unwrap().uid;
-    s.window_views = vec![(uid, v)];
+    s.window_views = vec![((uid, 1), v)];
 }
 
 /// The window of the active document.
 fn shown(s: &Session) -> Option<WindowView> {
     let uid = s.active().unwrap().uid;
-    s.window_views.iter().find(|(u, _)| *u == uid).map(|(_, v)| *v)
+    s.window_views.iter().find(|((u, _), _)| *u == uid).map(|(_, v)| *v)
 }
 
 #[test]
@@ -250,7 +250,7 @@ fn setting_the_zoom_changes_the_view_without_an_undo_step() {
     let (mut s, ..) = doc();
     show(&mut s, window());
     // Another document's window.
-    s.window_views.push((u64::MAX, window()));
+    s.window_views.push(((u64::MAX, 1), window()));
     let steps = undo_steps(&s);
     let out = log(
         &mut s,
@@ -282,6 +282,42 @@ fn setting_the_zoom_changes_the_view_without_an_undo_step() {
     // A run that fails after changing the view keeps the change.
     failure(&mut s, "app.activeDocument.views[0].zoom = 1; throw new Error('stop');");
     assert_eq!(shown(&s).map(|v| v.zoom), Some(1.0));
+}
+
+#[test]
+fn view_centers_stay_inside_the_canvas_after_coordinate_conversion() {
+    let (mut s, ..) = doc();
+    let origin = vectorcraft_geom::Point::new(3.0e6, 3.0e6);
+    s.edit("Move Artboard", |d, _| {
+        d.artboards[0].rect = vectorcraft_geom::Rect::from_origin_size(origin, (400.0, 300.0));
+        Ok(())
+    })
+    .unwrap();
+    show(&mut s, window());
+    let steps = undo_steps(&s);
+    for coordinates in ["ARTBOARDCOORDINATESYSTEM", "DOCUMENTCOORDINATESYSTEM"] {
+        let script_point = |p: vectorcraft_geom::Point| {
+            let y = if coordinates == "ARTBOARDCOORDINATESYSTEM" { p.y - origin.y } else { origin.y + 300.0 - p.y };
+            [p.x - origin.x, y]
+        };
+        for bound in [-MAX_COORD, MAX_COORD] {
+            for horizontal in [false, true] {
+                let point = |n| if horizontal { vectorcraft_geom::Point::new(n, 0.0) } else { vectorcraft_geom::Point::new(0.0, n) };
+                let before = shown(&s);
+                let [x, y] = script_point(point(bound + bound.signum()));
+                let source = format!(
+                    "app.coordinateSystem = CoordinateSystem.{coordinates}; var v = app.activeDocument.views[0]; \
+                     try {{ v.centerPoint = [{x}, {y}]; vc.log('set'); }} catch (e) {{ vc.log(e.name); }}"
+                );
+                assert_eq!(log(&mut s, &source), vec![json!("RangeError")], "{source}");
+                assert_eq!(shown(&s), before, "a rejected center leaves the view unchanged");
+                let [x, y] = script_point(point(bound));
+                log(&mut s, &format!("app.coordinateSystem = CoordinateSystem.{coordinates}; app.activeDocument.views[0].centerPoint = [{x}, {y}];"));
+                assert_eq!(shown(&s).unwrap().center, point(bound), "the canvas boundary is allowed");
+            }
+        }
+    }
+    assert_eq!(undo_steps(&s), steps);
 }
 
 #[test]
@@ -771,9 +807,13 @@ fn a_listed_preset_keeps_more_rows_than_artboards() {
 fn stale_documents_throw_on_every_member() {
     let (mut s, _, _) = doc();
     run(&mut s, "#targetengine keep\nvar d = app.activeDocument, p = d.pageItems, l = p[0].parent;").unwrap();
-    for (member, message) in
-        [("d.typename", "Stale document"), ("d.parent", "Stale document"), ("p.typename", "Stale document"), ("l.typename", "Stale")]
-    {
+    for (member, message) in [
+        ("d.typename", "Stale document"),
+        ("d.parent", "Stale document"),
+        ("p.typename", "Stale document"),
+        ("p.toString()", "Stale document"),
+        ("l.typename", "Stale"),
+    ] {
         let e = failure(&mut s, &format!("#targetengine keep\n{member};"));
         assert!(e.contains(message), "{member}: {e}");
     }
@@ -1452,6 +1492,70 @@ fn get_is_file_open_cannot_probe_outside_script_scope() {
     }
     assert!(failure(&mut s, "app.getIsFileOpen(new Array(5000).join('a'));").contains("too long"));
     let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn a_menu_command_runs_its_command_on_the_selection() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let steps = undo_steps(&s);
+    let out = log(&mut s, "app.executeMenuCommand('ungroup'); vc.log(app.activeDocument.selection.length);");
+    assert_eq!(out, vec![json!(2)]);
+    let st = s.active().unwrap();
+    assert!(st.doc.node(g).is_none(), "the group is gone");
+    assert!(st.doc.node(a).is_some() && st.doc.node(b).is_some());
+    assert_eq!(undo_steps(&s), steps + 1, "one undo step for the run");
+    // With nothing selected the menu item does nothing and adds no undo step.
+    s.execute("select.none", &json!({})).unwrap();
+    let steps = undo_steps(&s);
+    let before = s.active().unwrap().doc.clone();
+    log(&mut s, "app.executeMenuCommand('ungroup'); app.executeMenuCommand('releaseMask');");
+    assert_eq!(undo_steps(&s), steps);
+    assert!(std::sync::Arc::ptr_eq(&before, &s.active().unwrap().doc), "nothing changed");
+    // selectall then group makes one group of both rectangles.
+    let out = log(&mut s, "app.executeMenuCommand('selectall'); app.executeMenuCommand('group'); vc.log(app.activeDocument.selection[0].typename);");
+    assert_eq!(out, vec![json!("GroupItem")]);
+}
+
+#[test]
+fn the_fit_to_artwork_menu_command_fits_the_artboard_to_the_art() {
+    let (mut s, _, _) = doc();
+    let before = s.active().unwrap().doc.artboards[0].rect;
+    log(&mut s, "app.executeMenuCommand('Fit Artboard to artwork bounds');");
+    let after = s.active().unwrap().doc.artboards[0].rect;
+    assert!(after.width() < before.width() && after.height() < before.height(), "{before:?} -> {after:?}");
+    // An artboard that is locked, or has no art on it, leaves the menu item dimmed: it does nothing.
+    let (mut s, _, _) = doc();
+    s.execute("artboard.setProps", &json!({"index": 0, "locked": true})).unwrap();
+    let steps = undo_steps(&s);
+    assert_eq!(log(&mut s, "app.executeMenuCommand('Fit Artboard to artwork bounds'); vc.log(1);"), vec![json!(1)]);
+    assert_eq!(s.active().unwrap().doc.artboards[0].rect, before);
+    assert_eq!(undo_steps(&s), steps, "locked");
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let empty = s.active().unwrap().doc.artboards[0].rect;
+    assert_eq!(log(&mut s, "app.executeMenuCommand('Fit Artboard to artwork bounds'); vc.log(1);"), vec![json!(1)]);
+    assert_eq!(s.active().unwrap().doc.artboards[0].rect, empty);
+    assert_eq!(undo_steps(&s), 0, "no art");
+}
+
+#[test]
+fn an_unknown_menu_command_throws_and_names_it() {
+    let (mut s, a, _) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let steps = undo_steps(&s);
+    let e = failure(&mut s, "app.executeMenuCommand('acmeNoSuchMenu');");
+    assert!(e.contains("acmeNoSuchMenu"), "{e}");
+    assert!(failure(&mut s, "app.executeMenuCommand('Ungroup');").contains("Ungroup"), "names are matched exactly");
+    assert!(failure(&mut s, "app.executeMenuCommand(5);").contains("string"));
+    assert!(failure(&mut s, "app.executeMenuCommand();").contains("string"));
+    assert!(failure(&mut s, "app.executeMenuCommand(new Array(5000).join('a'));").contains("too long"));
+    assert_eq!(undo_steps(&s), steps, "nothing changed");
+    // With no document open a known menu item does nothing, and an unknown one still throws.
+    let mut s = Session::new();
+    assert_eq!(log(&mut s, "app.executeMenuCommand('selectall'); vc.log(app.documents.length);"), vec![json!(0)]);
+    assert!(failure(&mut s, "app.executeMenuCommand('acmeNoSuchMenu');").contains("acmeNoSuchMenu"));
 }
 
 #[test]

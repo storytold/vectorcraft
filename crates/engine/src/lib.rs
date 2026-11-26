@@ -136,6 +136,8 @@ pub struct Session {
     /// Set when a command that draws a shape was journaled outside saved steps
     /// ([`Session::take_shape_drawn`]).
     shape_drawn: bool,
+    /// The categories `prefs.reset` reset, `None` for every one ([`Session::take_prefs_resets`]).
+    prefs_resets: Vec<Option<&'static str>>,
     /// Set when the active tool panicked (see [`guard`]); reported by the next tool event.
     tool_panic: Option<EngineError>,
     /// How many times switching or closing documents, or replacing the active one, has started the
@@ -340,11 +342,11 @@ pub struct Session {
     pub(crate) script_high_water: std::collections::HashMap<u64, u64>,
     /// While a slice of a script runs in this session.
     pub(crate) script_in_run: bool,
-    /// The window of each document the desktop app shows, by [`DocState::uid`], which the app
-    /// keeps current while a script runs: a script reads it as `Document.views[0]`, and the app
-    /// takes the zoom, centre and screen mode a script sets. Empty without windows (headless).
+    /// The desktop app supplies each window by (document uid, runtime window identity) while a
+    /// script runs. Scripts read them as `Document.views`, and the app applies their zoom, center,
+    /// and screen mode. This list is empty without windows (headless).
     /// View state: not saved, not undoable, and a run that fails keeps what it changed.
-    pub window_views: Vec<(u64, WindowView)>,
+    pub window_views: Vec<((u64, u64), WindowView)>,
     /// Write recovery copies of the unsaved documents before a run, and don't start without them.
     pub script_copy_first: bool,
     /// While the active tool's actions run: their commands aren't "a command from outside the

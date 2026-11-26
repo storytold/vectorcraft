@@ -26,7 +26,8 @@ use crate::canvas::{BodyKind, show_document};
 
 mod views;
 pub(crate) use views::{
-    Views, Win, close_current, close_window, current, label, new_window, retain as retain_views, show_window, unfit_all, view, view_mut, windows,
+    Views, Win, close_current, close_window, current, label, new_window, retain as retain_views, show_window, unfit_all, view, view_by_id_mut,
+    view_mut, windows,
 };
 use views::{find, key, window_param};
 
@@ -391,6 +392,7 @@ fn show_windows(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     // Presentation Mode fits each floating window it shows to the main window: back in their
     // floating windows, those views fit their windows again.
     let presenting = presenting(app);
+    let restoring = !presenting && app.canvas.windows.presented.is_some();
     if presenting {
         let is_floating = current.is_some_and(|k| floating(app, &k));
         let shown = app.canvas.windows.presented.get_or_insert_default();
@@ -421,9 +423,15 @@ fn show_windows(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         return;
     }
     let raise = current.filter(|u| app.canvas.windows.current != Some(*u));
-    app.canvas.windows.current = current;
     let ctx = ui.ctx().clone();
     let os_windows = WindowHost::of(&ctx).viewports_available();
+    if restoring && !os_windows && raise.is_some() {
+        // egui raises every reappearing area in this pass, preserving their old order. Repeat
+        // the current window's raise next frame, when the other windows no longer request it.
+        ctx.request_repaint();
+    } else {
+        app.canvas.windows.current = current;
+    }
     // An OS window's place is in desktop points: the main window's own origin shifts it.
     let origin = if os_windows {
         ctx.input(|i| i.viewport().inner_rect.map(|r| r.min)).filter(|p| p.is_finite()).unwrap_or(egui::Pos2::ZERO).to_vec2()

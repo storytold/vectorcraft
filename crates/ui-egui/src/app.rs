@@ -120,6 +120,7 @@ impl VectorcraftApp {
                 last_ms: 0.0,
                 moved: false,
                 from_worker: false,
+                worker_parts: false,
                 reused: None,
                 waits_for_still: cfg!(target_arch = "wasm32"),
                 still: None,
@@ -150,6 +151,7 @@ impl VectorcraftApp {
                 carry_target: None,
                 last_drag: None,
                 escaped_press: false,
+                host_caps_lock: None,
                 committed_preview: false,
                 panes: Default::default(),
                 windows: crate::doc_windows::Windows::new(known),
@@ -542,6 +544,9 @@ impl VectorcraftApp {
         if let Some(wait) = crate::panels::actions::tick_playback(self, now) {
             ctx.request_repaint_after(std::time::Duration::from_secs_f64(wait));
         }
+        // A `prefs.reset` run in this frame outside `Self::run` (a script's, say): the pass that follows draws the
+        // reset rows.
+        prefs_dialog::apply_prefs_resets(self);
     }
 
     /// The canvas panel's body: the document tabs, then the canvas (a pane for each document while

@@ -40,21 +40,22 @@ pub fn poll(app: &mut VectorcraftApp) {
     app.sync_views();
 }
 
-/// Gives each document whose view has been drawn its view, which a running script reads as
-/// `Document.views`, with the size of the area that view last drew its art in. A document without
-/// one gets none. → the views given, for [`take_views`].
-pub(crate) fn share_views(app: &mut VectorcraftApp) -> Vec<(u64, WindowView)> {
+/// The running script reads each drawn window in `Document.views`, with its last drawn area.
+/// The returned list contains those windows for [`take_views`].
+pub(crate) fn share_views(app: &mut VectorcraftApp) -> Vec<((u64, u64), WindowView)> {
     // The view's zoom counts screen points before UI scaling; its area is in the interface's points.
     let scaling = f64::from(app.ui_scaling());
     let mode = app.ui.screen_mode;
-    let shared: Vec<(u64, WindowView)> = app
-        .view_uids
-        .iter()
-        .zip(&app.views)
-        .filter(|(_, v)| v.fitted && v.rect.width() > 0.0 && v.rect.height() > 0.0)
-        .map(|(uid, v)| {
+    let shared: Vec<((u64, u64), WindowView)> = crate::doc_windows::windows(app)
+        .into_iter()
+        .filter_map(|window| {
+            let uid = app.session.documents().get(window.0)?.uid;
+            let v = crate::doc_windows::view(app, window)?;
+            if !v.fitted || v.rect.width() <= 0.0 || v.rect.height() <= 0.0 {
+                return None;
+            }
             let size = [f64::from(v.rect.width()) * scaling, f64::from(v.rect.height()) * scaling];
-            (*uid, WindowView { center: v.center, zoom: v.zoom, rotation: v.rotation, size, screen_mode: mode })
+            Some(((uid, v.runtime_id), WindowView { center: v.center, zoom: v.zoom, rotation: v.rotation, size, screen_mode: mode }))
         })
         .collect();
     app.session.window_views.clone_from(&shared);
@@ -62,14 +63,14 @@ pub(crate) fn share_views(app: &mut VectorcraftApp) -> Vec<(u64, WindowView)> {
 }
 
 /// Takes the zoom, centre and screen mode a script gave the views [`share_views`] gave.
-pub(crate) fn take_views(app: &mut VectorcraftApp, shared: &[(u64, WindowView)]) {
+pub(crate) fn take_views(app: &mut VectorcraftApp, shared: &[((u64, u64), WindowView)]) {
     let (min, max) = WindowView::ZOOM_RANGE;
-    for (uid, before) in shared {
-        let Some(now) = app.session.window_views.iter().find(|(u, _)| u == uid).map(|(_, v)| *v) else { continue };
+    for (key, before) in shared {
+        let Some(now) = app.session.window_views.iter().find(|(k, _)| k == key).map(|(_, v)| *v) else { continue };
         if now == *before {
             continue;
         }
-        if let Some(v) = app.view_uids.iter().position(|u| u == uid).and_then(|k| app.views.get_mut(k)) {
+        if let Some(v) = crate::doc_windows::view_by_id_mut(app, *key) {
             v.zoom = now.zoom.clamp(min, max);
             v.center = now.center;
         }

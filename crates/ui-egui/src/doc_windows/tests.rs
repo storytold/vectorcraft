@@ -200,10 +200,74 @@ fn a_script_sees_each_window_at_its_own_size() {
     frame(&mut app, &ctx, vec![]);
     let uids: Vec<u64> = app.session.documents().iter().map(|d| d.uid).collect();
     let shared = crate::script_runs::share_views(&mut app);
-    let width = |uid: u64| shared.iter().find(|(u, _)| *u == uid).map(|(_, v)| v.size[0]);
+    let width = |uid: u64| shared.iter().find(|((u, _), _)| *u == uid).map(|(_, v)| v.size[0]);
     let (floating, tabbed) = (width(uids[2]).unwrap(), width(uids[0]).unwrap());
     assert!(floating < tabbed, "the floating window is narrower than the main window: {floating} and {tabbed}");
     assert_eq!(width(uids[1]), None, "a document never drawn has no view");
+}
+
+#[test]
+fn a_script_lists_and_changes_each_view_of_one_document() {
+    let mut app = app_with(1);
+    let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![]);
+    app.run("window.newWindow", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    let camera = serde_json::to_value(view(&app, (0, 1)).unwrap()).unwrap();
+    for number in [1, 2] {
+        let v = view_mut(&mut app, (0, number)).unwrap();
+        let rect = v.rect;
+        *v = serde_json::from_value(camera.clone()).unwrap();
+        v.rect = rect;
+    }
+    view_mut(&mut app, (0, 1)).unwrap().zoom = 1.0;
+    view_mut(&mut app, (0, 2)).unwrap().zoom = 2.0;
+    let shared = crate::script_runs::share_views(&mut app);
+    app.session.script_frames = false;
+    let count = app.session.execute("script.run", &json!({"source": "vc.log(app.activeDocument.views.length);"})).unwrap();
+    assert_eq!(count["log"], json!([2]));
+    let source = "var vs = app.activeDocument.views; vc.log(vs.length); vc.log(vs[0] !== vs[1]); \
+        vc.log(vs[0].bounds[2] - vs[0].bounds[0] > vs[1].bounds[2] - vs[1].bounds[0]); \
+        vs[0].zoom = 3; vs[1].zoom = 4; vs[0].centerPoint = [10, 20]; vs[1].centerPoint = [30, 40]; \
+        vs[1].screenMode = ScreenMode.FULLSCREEN;";
+    let report = app.session.execute("script.run", &json!({"source": source})).unwrap();
+    assert_eq!(report["log"], json!([2, true, true]));
+    show_window(&mut app, (0, 1));
+    crate::script_runs::take_views(&mut app, &shared);
+    assert_eq!(view(&app, (0, 1)).unwrap().zoom, 3.0);
+    assert_eq!(view(&app, (0, 2)).unwrap().zoom, 4.0);
+    assert_ne!(view(&app, (0, 1)).unwrap().center, view(&app, (0, 2)).unwrap().center);
+    assert_eq!(app.ui.screen_mode, 2);
+}
+
+#[test]
+fn a_script_retains_view_identity_after_renumbering_and_reusing_a_window_number() {
+    let mut app = app_with(1);
+    let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![]);
+    app.run("window.newWindow", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    view_mut(&mut app, (0, 1)).unwrap().zoom = 1.0;
+    view_mut(&mut app, (0, 2)).unwrap().zoom = 2.0;
+    crate::script_runs::share_views(&mut app);
+    app.session.script_frames = true;
+    let source = "var vs = app.activeDocument.views, closed = vs[0], kept = vs[1]; alert('ready'); \
+        vc.log(kept.zoom); kept.zoom = 5; \
+        try { closed.zoom = 9; vc.log('retargeted'); } catch (e) { vc.log(e.message); } vc.log(vs.length);";
+    app.session.execute("script.run", &json!({"source": source})).unwrap();
+    assert!(app.session.script_pump().is_none());
+    assert!(app.session.script_dialog().is_some(), "the script waits after retaining both views");
+    close_window(&mut app, (0, 1)).unwrap();
+    assert_eq!(windows(&app), [(0, 1)], "the remaining view is renumbered");
+    new_window(&mut app).unwrap();
+    view_mut(&mut app, (0, 2)).unwrap().zoom = 7.0;
+    let shared = crate::script_runs::share_views(&mut app);
+    assert!(app.session.script_answer(vectorcraft_engine::script::DialogAnswer::Ok));
+    let report = app.session.script_pump().expect("the resumed script ends").unwrap();
+    crate::script_runs::take_views(&mut app, &shared);
+    assert_eq!(report["log"], json!([2, "Stale view", 2]));
+    assert_eq!(view(&app, (0, 1)).unwrap().zoom, 5.0, "the retained view is the one that remained");
+    assert_eq!(view(&app, (0, 2)).unwrap().zoom, 7.0, "the new view is not an earlier handle's target");
 }
 
 #[test]
@@ -433,23 +497,36 @@ fn presentation_mode_shows_the_floating_current_document_in_the_main_window() {
 
 #[test]
 fn a_document_made_current_in_presentation_mode_comes_to_the_front_after_it() {
-    let mut app = app_with(2);
-    let ctx = crate::testing::ui_context();
-    frame(&mut app, &ctx, vec![]);
-    app.run("window.arrange.floatAllInWindows", json!({})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    frame(&mut app, &ctx, vec![]);
-    // Where the two windows overlap: document 1's title bar, over document 0's body.
-    let overlap = app.ui.floating[1].place.min + vec2(60.0, 10.0);
-    app.run("view.presentation", json!({})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    app.run("document.activate", json!({"index": 0})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    app.run("view.presentation", json!({})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    frame(&mut app, &ctx, vec![]);
-    click(&mut app, &ctx, overlap);
-    assert_eq!(app.session.active_index(), Some(0), "document 0's window is in front where they overlap");
+    for change_during_presentation in [false, true] {
+        let mut app = app_with(2);
+        let ctx = crate::testing::ui_context();
+        frame(&mut app, &ctx, vec![]);
+        app.run("window.arrange.floatAllInWindows", json!({})).unwrap();
+        frame(&mut app, &ctx, vec![]);
+        frame(&mut app, &ctx, vec![]);
+        // Where the two windows overlap: document 1's title bar, over document 0's body.
+        let overlap = app.ui.floating[1].place.min + vec2(60.0, 10.0);
+        // Cover both an unchanged current document and one chosen while the windows are hidden.
+        if !change_during_presentation {
+            app.run("document.activate", json!({"index": 0})).unwrap();
+            frame(&mut app, &ctx, vec![]);
+        }
+        app.run("view.presentation", json!({})).unwrap();
+        frame(&mut app, &ctx, vec![]);
+        if change_during_presentation {
+            app.run("document.activate", json!({"index": 0})).unwrap();
+            frame(&mut app, &ctx, vec![]);
+        }
+        app.run("view.presentation", json!({})).unwrap();
+        frame(&mut app, &ctx, vec![]);
+        frame(&mut app, &ctx, vec![]);
+        click(&mut app, &ctx, overlap);
+        assert_eq!(
+            app.session.active_index(),
+            Some(0),
+            "document 0's window is in front (changed during presentation: {change_during_presentation})"
+        );
+    }
 }
 
 /// A stand-in for the window system of the documents' OS windows: it runs each one's frame and asks

@@ -10,7 +10,7 @@
 //! The objects are host classes ([`vectorcraft_js::HostClass`]): each holds the run's number, the
 //! document's [`crate::DocState::uid`] and, for art, the object's id, and every read looks the
 //! document and the object up again. An object that was deleted, a document that was closed and an
-//! object from an earlier run of a named engine throw an error on every member. Every change runs
+//! object from an earlier run of a named engine throw an error on every member. Every document edit runs
 //! a command, as `vc.run` does, so it joins the run's transaction and its one undo step for each
 //! changed document; a change that changes nothing runs no command. A change to a document that is
 //! not the active one makes it active for the command and makes the other one active again after.
@@ -43,11 +43,13 @@
 //! - `app.activeDocument` with no document open throws `No active document`.
 //! - Assigning `Document.selection` takes one object, a list of them, `null` or `[]`; every object
 //!   must be one of that document's that can be selected, or nothing changes.
-//! - `Document.views` holds one view while the desktop app gives the document's window
-//!   ([`crate::Session::window_views`]), and none without one. The screen mode is the app's:
+//! - `Document.views` holds the document's drawn windows ([`crate::Session::window_views`]),
+//!   in view-number order, and none without one. View objects keep their window's identity when
+//!   windows are renumbered. The screen mode is the app's:
 //!   setting it on one view sets it on every view. Its `zoom` is 1 at 100%, from 0.0313 to 640; `screenMode` reads
 //!   Presentation Mode as `ScreenMode.FULLSCREEN`. Changing a view runs no command, is not
 //!   undoable and stays when the run fails.
+//!   A center outside the canvas after coordinate conversion throws a `RangeError`.
 //! - Members the help pages list that are not here yet throw an error that says so.
 //! - Assigning `hidden`, `locked`, `opacity`, `position`, `left`, `top`, `width` or `height` to an
 //!   object in a hidden or locked layer, and `zOrder()` on one, throw `Cannot edit` and change
@@ -781,6 +783,62 @@ fn app_is_open(h: &Host, a: &[Data]) -> Answer {
     Ok(Data::Bool(open))
 }
 
+/// The menu command strings `app.executeMenuCommand` takes, each with the command it runs. The
+/// strings are the ones
+/// <https://community.adobe.com/questions-652/a-list-of-illustrator-menu-commands-we-can-call-from-javascript-769510>
+/// lists, and `Fit Artboard to artwork bounds` is the one
+/// <https://gist.github.com/shalakolee/df3246659d4289eb99149b9ed00a00ee> gives for Object ›
+/// Artboards › Fit to Artwork Bounds.
+const MENU_COMMANDS: &[(&str, &str)] = &[
+    ("selectall", "select.all"),
+    ("deselectall", "select.none"),
+    ("group", "object.group"),
+    ("ungroup", "object.ungroup"),
+    ("makeMask", "object.clippingMask.make"),
+    ("releaseMask", "object.clippingMask.release"),
+    ("compoundPath", "object.compoundPath.make"),
+    ("noCompoundPath", "object.compoundPath.release"),
+    ("Fit Artboard to artwork bounds", "artboard.fitToArt"),
+];
+
+/// `app.executeMenuCommand(name)`: runs the command of the menu item `name` names
+/// ([`MENU_COMMANDS`]) on the active document, as
+/// <https://www.indesignjs.de/indesignapi/illustrator/illustrator.d.ts> describes the method. A
+/// name it does not list throws an error that names it. A menu item that is not available, with
+/// no document open or nothing selected that it acts on, does nothing, as a dimmed menu item does
+/// (VectorCraft's own rule). A menu item the menus show as available runs its command, and an error
+/// that command returns throws. `Fit Artboard to artwork bounds` fits the active artboard, and does
+/// nothing when that artboard is locked or has no art, as the canvas's right-click menu dims
+/// the item then ([`DocState::any_art_to_fit`]).
+fn app_menu_command(h: &Host, a: &[Data]) -> Answer {
+    let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("executeMenuCommand needs a menu command, as a string".into())) };
+    if name.len() > MAX_TEXT_BYTES {
+        return Err(HostError::Range("the menu command is too long".into()));
+    }
+    let Some(&(_, id)) = MENU_COMMANDS.iter().find(|(n, _)| n == name) else {
+        return Err(HostError::Error(format!("executeMenuCommand: unknown menu command \"{name}\"")));
+    };
+    let params = {
+        let s = h.session.borrow();
+        let Some(spec) = crate::find_command(id) else { return Err(HostError::Abort(format!("executeMenuCommand: no command {id}"))) };
+        if (spec.enabled)(&s).is_err() {
+            return Ok(Data::Undefined);
+        }
+        match (id, s.active()) {
+            ("artboard.fitToArt", Some(st)) => {
+                let index = active_artboard(st);
+                if !st.any_art_to_fit(&[index]) {
+                    return Ok(Data::Undefined);
+                }
+                json!({"index": index})
+            }
+            _ => json!({}),
+        }
+    };
+    command(h, id, &params)?;
+    Ok(Data::Undefined)
+}
+
 // ---- Documents ----
 
 fn docs_length(h: &Host, _: &[Data]) -> Answer {
@@ -1279,14 +1337,13 @@ fn views_doc(h: &Host, a: &[Data]) -> std::result::Result<Doc, HostError> {
     doc_of(h, arg(a, 0), "Views")
 }
 
-/// The window of `doc`, when the app shows one.
-fn window_of(h: &Host, doc: Doc) -> Option<WindowView> {
-    h.session.borrow().window_views.iter().find(|(uid, _)| *uid == doc.uid).map(|(_, v)| *v)
+fn window_of(h: &Host, doc: Doc, id: u64) -> Option<WindowView> {
+    h.session.borrow().window_views.iter().find(|((uid, window), _)| *uid == doc.uid && *window == id).map(|(_, v)| *v)
 }
 
 fn views_length(h: &Host, a: &[Data]) -> Answer {
     let doc = views_doc(h, a)?;
-    Ok(num(if window_of(h, doc).is_some() { 1.0 } else { 0.0 }))
+    Ok(num(h.session.borrow().window_views.iter().filter(|((uid, _), _)| *uid == doc.uid).count() as f64))
 }
 
 fn views_typename(h: &Host, a: &[Data]) -> Answer {
@@ -1306,8 +1363,13 @@ fn views_to_string(h: &Host, a: &[Data]) -> Answer {
 
 fn views_at(h: &Host, a: &[Data]) -> Answer {
     let doc = views_doc(h, a)?;
-    let first = matches!(arg(a, 1), Data::Number(n) if *n == 0.0);
-    Ok(if first && window_of(h, doc).is_some() { host_ref("View", &[float(h.run), float(doc.uid)]) } else { Data::Undefined })
+    let index = match arg(a, 1) {
+        Data::Number(n) => whole(*n).and_then(|n| usize::try_from(n).ok()),
+        _ => None,
+    };
+    let Some(index) = index else { return Ok(Data::Undefined) };
+    let key = h.session.borrow().window_views.iter().filter(|((uid, _), _)| *uid == doc.uid).nth(index).map(|(key, _)| *key);
+    Ok(key.map_or(Data::Undefined, |(uid, id)| host_ref("View", &[float(h.run), float(uid), float(id)])))
 }
 
 /// `views.index(key)`: the view at index `key`. A view has no name, so a name finds nothing.
@@ -1326,23 +1388,31 @@ fn views_index(h: &Host, a: &[Data]) -> Answer {
 }
 
 /// The document of a `View` and its window, which must still be shown.
-fn this_view(h: &Host, a: &[Data]) -> std::result::Result<(Doc, WindowView), HostError> {
-    let doc = doc_of(h, arg(a, 0), "View")?;
-    let v = window_of(h, doc).ok_or_else(|| HostError::Error(STALE_VIEW.into()))?;
-    Ok((doc, v))
+fn this_view(h: &Host, a: &[Data]) -> std::result::Result<(Doc, u64, WindowView), HostError> {
+    let Some(handle) = handle_of(arg(a, 0), "View") else { return Err(HostError::Type("this is not a View".into())) };
+    let &[run, uid, id] = handle.as_slice() else { return Err(HostError::Type("this is not a View".into())) };
+    let doc = find_doc(h, run, uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
+    let id = whole(id).ok_or_else(|| HostError::Error(STALE_VIEW.into()))?;
+    let v = window_of(h, doc, id).ok_or_else(|| HostError::Error(STALE_VIEW.into()))?;
+    Ok((doc, id, v))
 }
 
 /// Reads the view with `f`, given the document's script coordinates.
 fn read_view(h: &Host, a: &[Data], f: impl FnOnce(&Frame, Coords, &WindowView) -> Data) -> Answer {
-    let (doc, v) = this_view(h, a)?;
+    let (doc, _, v) = this_view(h, a)?;
     with_doc(h, doc, |_, st| Ok(f(&frame(st)?, h.dom.coords.get(), &v)))
 }
 
 /// Changes the window of `doc` with `f`. No command runs: the change is not undoable, does not
 /// join the run's undo step and stays when the run fails.
-fn set_window(h: &Host, doc: Doc, f: impl FnOnce(&mut WindowView)) -> Answer {
+fn set_window(h: &Host, doc: Doc, id: u64, f: impl FnOnce(&mut WindowView)) -> Answer {
     let mut s = h.session.borrow_mut();
-    let v = s.window_views.iter_mut().find(|(uid, _)| *uid == doc.uid).map(|(_, v)| v).ok_or_else(|| HostError::Error(STALE_VIEW.into()))?;
+    let v = s
+        .window_views
+        .iter_mut()
+        .find(|((uid, window), _)| *uid == doc.uid && *window == id)
+        .map(|(_, v)| v)
+        .ok_or_else(|| HostError::Error(STALE_VIEW.into()))?;
     f(v);
     Ok(Data::Undefined)
 }
@@ -1353,7 +1423,7 @@ fn view_typename(h: &Host, a: &[Data]) -> Answer {
 }
 
 fn view_parent(h: &Host, a: &[Data]) -> Answer {
-    let (doc, _) = this_view(h, a)?;
+    let (doc, _, _) = this_view(h, a)?;
     Ok(doc_ref(h, doc.uid))
 }
 
@@ -1372,25 +1442,28 @@ fn view_center(h: &Host, a: &[Data]) -> Answer {
 }
 
 fn view_set_center(h: &Host, a: &[Data]) -> Answer {
-    let (doc, _) = this_view(h, a)?;
+    let (doc, id, _) = this_view(h, a)?;
     let p = point(arg(a, 1), "centerPoint")?;
     let to = with_doc(h, doc, |_, st| frame(st).map(|f| f.to_document(h.dom.coords.get(), p)))?;
-    set_window(h, doc, |v| v.center = to)
+    if to.x.abs() > crate::MAX_COORD || to.y.abs() > crate::MAX_COORD {
+        return Err(HostError::Range("centerPoint is outside the canvas".into()));
+    }
+    set_window(h, doc, id, |v| v.center = to)
 }
 
 fn view_zoom(h: &Host, a: &[Data]) -> Answer {
-    let (_, v) = this_view(h, a)?;
+    let (_, _, v) = this_view(h, a)?;
     Ok(num(v.zoom))
 }
 
 fn view_set_zoom(h: &Host, a: &[Data]) -> Answer {
-    let (doc, _) = this_view(h, a)?;
+    let (doc, id, _) = this_view(h, a)?;
     let z = number(arg(a, 1), "zoom")?;
     let (min, max) = WindowView::ZOOM_RANGE;
     if !(min..=max).contains(&z) {
         return Err(HostError::Range(format!("zoom must be from {min} to {max}")));
     }
-    set_window(h, doc, |v| v.zoom = z)
+    set_window(h, doc, id, |v| v.zoom = z)
 }
 
 /// The `ScreenMode` value of each of the app's screen modes: Presentation Mode reads as
@@ -1404,12 +1477,12 @@ fn screen_mode_name(mode: u8) -> &'static str {
 }
 
 fn view_screen_mode(h: &Host, a: &[Data]) -> Answer {
-    let (_, v) = this_view(h, a)?;
+    let (_, _, v) = this_view(h, a)?;
     Ok(text(screen_mode_name(v.screen_mode)))
 }
 
 fn view_set_screen_mode(h: &Host, a: &[Data]) -> Answer {
-    let (_, v) = this_view(h, a)?;
+    let (_, _, v) = this_view(h, a)?;
     let mode = match arg(a, 1) {
         Data::String(s) if s == "ScreenMode.MULTIWINDOW" => 0,
         Data::String(s) if s == "ScreenMode.DESKTOP" => 1,
@@ -1470,6 +1543,7 @@ fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId
         d => vec![d],
     };
     let mut ids: Vec<NodeId> = Vec::with_capacity(list.len());
+    let mut seen: HashSet<NodeId> = HashSet::with_capacity(list.len());
     // The document is read once for every object: nothing changes it while the list is checked.
     let (d, isolation, guides_locked) = with_doc(h, doc, |s, st| (st.doc.clone(), st.isolation, s.guides_locked()));
     let locks = d.locked_artboards();
@@ -1484,7 +1558,7 @@ fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId
             let name = with_doc(h, item.doc, |_, st| st.doc.node(item.id).and_then(typename).unwrap_or("page item"));
             return Err(HostError::Error(format!("Cannot select {name} {}", item.id.0)));
         }
-        if !ids.contains(&item.id) {
+        if seen.insert(item.id) {
             ids.push(item.id);
         }
     }
@@ -1543,6 +1617,11 @@ fn items_length(h: &Host, a: &[Data]) -> Answer {
 fn items_typename(h: &Host, a: &[Data]) -> Answer {
     items_doc(h, a)?;
     Ok(text("PageItems"))
+}
+
+fn items_to_string(h: &Host, a: &[Data]) -> Answer {
+    items_doc(h, a)?;
+    Ok(text("[PageItems]"))
 }
 
 fn items_parent(h: &Host, a: &[Data]) -> Answer {
@@ -2253,6 +2332,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("selection", property(l, app_selection, app_set_selection)),
         ("coordinateSystem", property(l, app_coords, app_set_coords)),
         ("getIsFileOpen", method(l, app_is_open)),
+        ("executeMenuCommand", method(l, app_menu_command)),
         ("toString", class_text("Application")),
     ]);
     application.push(later(l, "Application", "beep"));
@@ -2343,7 +2423,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             ("index", method(l, items_index)),
             ("getByName", method(l, items_by_name)),
             ("removeAll", method(l, items_remove_all)),
-            ("toString", class_text("PageItems")),
+            ("toString", method(l, items_to_string)),
         ]),
         Some(function(l, items_at)),
     ));
