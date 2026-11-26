@@ -160,7 +160,73 @@ fn catch_finally_and_the_combinators_settle_as_the_specification_says() {
 }
 
 #[test]
-fn the_combinators_read_an_array_to_its_length_at_each_step_and_another_object_to_its_first_length() {
+fn promise_combinator_iterators_use_custom_values_and_boxed_string_code_points() {
+    let src = "var input = {}; input[Symbol.iterator] = function () {\n\
+                 var n = 0; return { next: function () { return n < 2 ? { value: ++n, done: false } : { done: true }; } };\n\
+               };\n\
+               Promise.all(input).then(function (v) { log.push('all ' + v.join(',')); });\n\
+               Promise.allSettled(input).then(function (v) { log.push('settled ' + v[0].value + ',' + v[1].value); });\n\
+               Promise.race(input).then(function (v) { log.push('race ' + v); });\n\
+               var a = [99]; a[Symbol.iterator] = input[Symbol.iterator];\n\
+               Promise.all(a).then(function (v) { log.push('array ' + v.join(',')); });\n\
+               Promise.all(new String('\u{1d306}x')).then(function (v) { log.push('string ' + v.length + ',' + v[0].length); });";
+    let out = log(src);
+    for expected in ["all 1,2", "settled 1,2", "race 1", "array 1,2", "string 2,2"] {
+        assert!(out.contains(expected), "{expected} in {out}");
+    }
+}
+
+#[test]
+fn promise_combinator_iterators_close_after_resolve_or_then_throws() {
+    let src = "function check(name, failure) {\n\
+                 var closed = 0, input = {};\n\
+                 input[Symbol.iterator] = function () { return {\n\
+                   next: function () { return { value: 1, done: false }; },\n\
+                   return: function () { closed++; throw 'close'; }\n\
+                 }; };\n\
+                 Promise.resolve = failure === 'resolve' ? function () { throw 'resolve'; } :\n\
+                   function () { return { get then() { throw 'then'; } }; };\n\
+                 Promise[name](input).then(null, function (e) { log.push(name + ':' + failure + ':' + e + ':' + closed); });\n\
+               }\n\
+               var original = Promise.resolve;\n\
+               for (var i = 0; i < 3; i++) { var name = ['all', 'allSettled', 'race'][i]; check(name, 'resolve'); check(name, 'then'); }\n\
+               Promise.resolve = original;";
+    let out = log(src);
+    for name in ["all", "allSettled", "race"] {
+        for failure in ["resolve", "then"] {
+            let expected = format!("{name}:{failure}:{failure}:1");
+            assert!(out.contains(&expected), "{expected} in {out}");
+        }
+    }
+}
+
+#[test]
+fn promise_combinator_iterators_do_not_close_when_the_step_throws_or_finishes() {
+    let src = "var closed = 0;\n\
+               function input(failure) { var o = {}; o[Symbol.iterator] = function () { return {\n\
+                 next: function () { if (failure === 'next') throw failure;\n\
+                   return { get done() { if (failure === 'done') throw failure; return false; },\n\
+                     get value() { throw failure; } }; },\n\
+                 return: function () { closed++; return {}; }\n\
+               }; }; return o; }\n\
+               for (var i = 0; i < 3; i++) {\n\
+                 Promise.all(input(['next', 'done', 'value'][i])).then(null, function (e) { log.push(e); });\n\
+               }\n\
+               var empty = {}; empty[Symbol.iterator] = function () { return {\n\
+                 next: function () { return { done: true }; }, return: function () { closed++; return {}; }\n\
+               }; };\n\
+               Promise.all(empty).then(function (v) { log.push('empty ' + v.length); });\n\
+               Promise.race(empty).then(function () { log.push('race settled'); });\n\
+               log.push('closed ' + closed);";
+    let out = log(src);
+    for expected in ["next", "done", "value", "empty 0", "closed 0"] {
+        assert!(out.contains(expected), "{expected} in {out}");
+    }
+    assert!(!out.contains("race settled"), "{out}");
+}
+
+#[test]
+fn the_combinators_read_an_array_to_its_changing_length_and_reject_noniterable_array_likes() {
     // `Promise.resolve` runs once for each input and appends to the input while it is read.
     let src = "var resolve = Promise.resolve; var input;\n\
                Promise.resolve = function (x) {\n\
@@ -168,11 +234,10 @@ fn the_combinators_read_an_array_to_its_length_at_each_step_and_another_object_t
                  return resolve.call(this, x);\n\
                };\n\
                input = [1]; Promise.all(input).then(function (v) { log.push('array ' + v.join(',')); });\n\
-               input = { length: 1, 0: 1 }; Promise.all(input).then(function (v) { log.push('object ' + v.join(',')); });";
+               input = { length: 1, 0: 1 }; Promise.all(input).then(null, function (e) { log.push('object ' + (e instanceof TypeError)); });";
     let out = log(src);
     assert!(out.contains("array 1,2,3"), "{out}");
-    assert!(out.contains("object 1"), "{out}");
-    assert!(!out.contains("object 1,"), "{out}");
+    assert!(out.contains("object true"), "{out}");
 }
 
 #[test]

@@ -1109,7 +1109,7 @@ pub(crate) fn open(app: &mut VectorcraftApp) {
     let prefs = &app.session.prefs;
     let hold = HoldSetting::new(prefs.hold_shortcuts, prefs.key_hold_delay(), min..=max);
     app.shortcuts_dialog = Some(ShortcutsDialogState {
-        state: DialogState::new().with_tab("tools"),
+        state: DialogState::new(),
         keymap: None,
         window: None,
         hold,
@@ -1141,6 +1141,7 @@ fn accept(def: &CommandDef, binding: &Binding) -> Result<(), String> {
 fn options() -> Options {
     Options::default().with(|o| {
         o.area_tabs = true;
+        o.own_areas = true;
         o.areas = vec![Area::new("tools", "Tools", is_tool), Area::new("menu", MENU_COMMANDS, |def| !is_tool(def))];
         o.summary = false;
         o.accept = Some(Box::new(accept));
@@ -2159,6 +2160,31 @@ mod tests {
             let out = crate::testing::app_frame(&mut app, &ctx, raw());
             assert_eq!(out.platform_output.num_completed_passes, 1, "frame {frame} after the first is drawn again");
         }
+    }
+
+    #[test]
+    fn the_dialog_opens_with_only_tools_and_menu_commands() {
+        use egui::accesskit::Role;
+
+        let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+        let ctx = app.ui_ctx.clone().unwrap();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 1000.0));
+        let raw = || egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+        for _ in 0..3 {
+            crate::testing::app_frame(&mut app, &ctx, raw());
+        }
+        open(&mut app);
+        for _ in 0..3 {
+            crate::testing::app_frame(&mut app, &ctx, raw());
+        }
+        let nodes = crate::testing::app_frame(&mut app, &ctx, raw()).platform_output.accesskit_update.expect("dialog access tree").nodes;
+        let (_, areas) = nodes.iter().find(|(_, n)| n.role() == Role::TabList && n.label() == Some("shortcuts.area")).expect("area tabs");
+        let labels: Vec<_> = areas
+            .children()
+            .iter()
+            .filter_map(|child| nodes.iter().find(|(id, n)| id == child && n.role() == Role::Tab).and_then(|(_, n)| n.label()))
+            .collect();
+        assert_eq!(labels, ["Tools", "Menu Commands"]);
     }
 
     /// An open dialog lists a live-effect plug-in installed while it is open, with the shortcut its
