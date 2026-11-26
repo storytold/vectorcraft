@@ -643,7 +643,7 @@ pub fn open_last(app: &mut VectorcraftApp) -> Result<Value, String> {
         return run(app, &plugin, json!({"id": plugin.id(), "params": params}));
     }
     let m = plugin.manifest();
-    open_filter(app, &plugin, m.clone(), None, m.name.trim_end_matches('…').to_string(), params, None, None)?;
+    open_filter(app, &plugin, m.clone(), None, m.name.trim_end_matches('…').to_string(), params)?;
     Ok(Value::Null)
 }
 
@@ -665,23 +665,25 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         return run(app, &plugin, json!({"id": id, "params": given.cloned().unwrap_or(Value::Null)}));
     }
     let values = remembered(app, id).map(|(_, params)| params).unwrap_or_else(|| m.defaults());
-    open_filter(app, &plugin, m.clone(), None, m.name.trim_end_matches('…').to_string(), values, None, None)?;
+    open_filter(app, &plugin, m.clone(), None, m.name.trim_end_matches('…').to_string(), values)?;
     Ok(Value::Null)
 }
 
 /// Opens the dialog of filter `plugin`, or of its command `command`, with `m` the manifest it runs
 /// with, headed `heading`: the rows at `values`, with a live Preview for a light filter. A
-/// command's dialog runs on objects `ids` when given, and only on document `doc`.
+/// command's dialog runs on its objects when given, and only on its document ([`CommandRun`]).
 fn open_filter(
     app: &mut VectorcraftApp,
     plugin: &Plugin,
     m: Manifest,
-    command: Option<String>,
+    command: Option<CommandRun>,
     heading: String,
     values: Map<String, Value>,
-    ids: Option<Value>,
-    doc: Option<u64>,
 ) -> Result<(), String> {
+    let (command, ids, doc) = match command {
+        Some(c) => (Some(c.id), c.ids, Some(c.doc)),
+        None => (None, None, None),
+    };
     let own = plugin.manifest();
     let light = own.budget == Budget::Light;
     let look = Look { title: heading.clone(), description: own.description.clone(), previews: light, note: !light, ok: None };
@@ -703,6 +705,14 @@ fn open_filter(
     Ok(())
 }
 
+/// The plug-in command a filter dialog runs: its id, the objects a context menu gave it, and the
+/// uid of the document the dialog opened on, the only one it runs on.
+struct CommandRun {
+    id: String,
+    ids: Option<Value>,
+    doc: u64,
+}
+
 /// Opens the dialog of plug-in command `id` (`plugin.<plug-in id>.<command id>`), given no params
 /// or only `ids` (a context menu's objects), when it has parameters and a document is open: its
 /// rows at their defaults with a live Preview, and OK keeps the run on those objects as one undo
@@ -718,7 +728,8 @@ pub fn open_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     let ids = p.get("ids").cloned();
     let m = plugin.manifest().for_command(&c);
     let defaults = m.defaults();
-    if let Err(e) = open_filter(app, &plugin, m, Some(id.to_string()), c.shown_label().to_string(), defaults, ids, Some(doc)) {
+    let run = CommandRun { id: id.to_string(), ids, doc };
+    if let Err(e) = open_filter(app, &plugin, m, Some(run), c.shown_label().to_string(), defaults) {
         app.status(e);
     }
     true
