@@ -14,7 +14,10 @@ fn realm(fuel: u64) -> Realm {
 #[test]
 fn non_finite_indexer_keys_reach_the_host_unchanged() {
     let mut r = realm(1_000_000);
-    let index: HostFunction = Rc::new(|args| Ok(Data::Bool(matches!(args.get(1), Some(Data::Number(n)) if !n.is_finite()))));
+    let index: HostFunction = Rc::new(|args| {
+        assert!(matches!(args.get(1), Some(Data::Number(n)) if !n.is_finite()), "{args:?}");
+        Ok(Data::Bool(true))
+    });
     let class = HostClass { name: "Indexed".into(), parent: None, members: vec![], index: Some(index), construct: None };
     r.define_host_classes(vec![class], vec![("it".into(), host_ref("Indexed", &[1.0]))]).unwrap();
     let source = "[it[NaN], it[Infinity], it[-Infinity], NaN in it, Infinity in it, -Infinity in it].join('|')";
@@ -55,7 +58,7 @@ fn index_keys_share_the_receivers_data_budget() {
     r.define_host_classes(vec![class], vec![("it".into(), host_ref("Indexed", &[1.0]))]).unwrap();
     r.set_data_limits(DataLimits { depth: 64, bytes: 256, entries: 100 });
     assert_eq!(r.run("it['short']").unwrap(), JsValue::Bool(true));
-    let source = "var result = 'called'; try { it[new Array(200).join('x')]; } catch (e) { result = e.name; } result";
+    let source = "var result = 'called'; try { it[new Array(71).join('x')]; } catch (e) { result = e.name; } result";
     assert_eq!(r.run(source).unwrap(), JsValue::String("RangeError".into()));
 }
 
