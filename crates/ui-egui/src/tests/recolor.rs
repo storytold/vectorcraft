@@ -276,6 +276,25 @@ fn the_dialog_reduces_previews_and_applies_as_one_undo_step() {
     assert_eq!(colors(&mut r.app()), 5);
 }
 
+/// Enter in the field that has the focus is OK: the color group is made with the name typed, and the dialog closes.
+#[test]
+fn enter_in_a_field_is_ok() {
+    let mut r = open(app(), json!({"colors": ["#ff8000", "#0080ff"]}));
+    r.settled();
+    r.set("groupName", json!("Enter Group")).unwrap();
+    r.settled();
+    r.click_label("Color Group:");
+    r.settled();
+    assert!(r.focused().is_some(), "a field of the dialog has the focus");
+    let groups = r.app().session.doc().unwrap().doc.swatch_groups.len();
+    key(&mut r, Key::Enter);
+    assert!(!r.is_open(), "Enter closes Recolor Artwork");
+    let app = r.app();
+    let doc = &app.session.doc().unwrap().doc;
+    assert_eq!(doc.swatch_groups.len(), groups + 1, "Enter makes the color group, as OK does");
+    assert_eq!(doc.swatch_groups.last().map(|g| g.name.as_str()), Some("Enter Group"));
+}
+
 #[test]
 fn presets_open_colour_jobs_and_libraries_and_both_tabs_draw() {
     let mut app = app();
