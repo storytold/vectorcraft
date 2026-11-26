@@ -1377,7 +1377,7 @@ impl Interp {
         let name = self.name(n)?;
         let v = match self.resolve(&name)? {
             Resolved::Unresolved => Value::Undefined,
-            _ => self.get_var(&name)?.0,
+            r => self.get_resolved(r, &name)?.0,
         };
         let t = self.type_of(&v);
         self.push(Value::str(t))

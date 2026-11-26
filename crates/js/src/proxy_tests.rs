@@ -408,6 +408,18 @@ fn a_proxy_works_as_a_prototype_and_a_with_scope() {
 }
 
 #[test]
+fn typeof_reads_the_binding_a_with_scope_reported_once() {
+    truth(
+        "var asked = 0;
+         var p = new Proxy({}, { has: function (t, k) { return k === 'x' && asked++ === 0; },
+                                 get: function (t, k) { return k === 'x' ? function () {} : undefined; } });
+         var r;
+         with (p) { r = typeof x; }
+         r === 'function' && asked === 1",
+    );
+}
+
+#[test]
 fn arrays_json_for_in_and_keys_read_a_proxy_through_its_traps() {
     truth(
         "var p = new Proxy([1, 2], {});
