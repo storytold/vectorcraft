@@ -1,117 +1,173 @@
-use super::tabs::artboard_list;
-use super::{Arc, ROTATE_VIEW_ANGLES, Sense, Stroke, Tokens, Ui, VectorcraftApp, ZOOM_STOPS, json, theme, vec2, widgets, zoom_label};
+use super::{ROTATE_VIEW_ANGLES, Ui, VectorcraftApp, json};
+use craft::behavior::IconId;
+use craft::behavior::kurbo::Size;
+use craft::ui::bars::{Bar, BarKind, StatusMessage, StatusProgress};
+use craft::ui::buttons::{Button, IconButton};
+use craft::ui::contract::{Bind, BodyCx, Entry, Gap, LabelKind, Outcome as _, Props as _, Show as _, ShowContainer as _, SideLabel, Trigger};
+use craft::ui::display::{Divider, Elide, Shade, Text};
+use craft::ui::form::Field;
+use craft::ui::layout_components::Row;
+use craft::ui::menu::Menu;
+use craft::ui::pickers::{Select, SelectLook};
+use craft::ui::style::TypeRole;
+use craft::ui::text::ZoomField;
 
-/// Draw the status message, bounded readouts and artboard navigation controls.
+/// Shows the status bar: zoom, rotation, artboard navigator, the info field with its Show menu, the readouts, Stop,
+/// the background-work progress and last the message, so a narrow bar elides the message before anything else.
 pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
-    let panel = egui::Panel::bottom("status_bar")
-        .exact_size(24.0)
-        .frame(egui::Frame::NONE.fill(t.panel).inner_margin(egui::Margin::symmetric(8, 0)).stroke(Stroke::new(1.0, t.border)))
-        .show(ui, |ui| {
-            ui.horizontal_centered(|ui| {
-                let zoom = app.view().map(|v| v.zoom).unwrap_or(1.0);
-                let print = app.session.prefs.display_print_size;
-                let shown = crate::state::zoom_display_percent(zoom, print);
-                ui.name_inputs(tl!("Zoom"), |ui| {
-                    craft_ui::ComboBox::from_id_salt("zoom-combo")
-                        .selected_text(egui::RichText::new(zoom_label(zoom, print)).size(11.5))
-                        .width(76.0)
-                        .show_ui(ui, |ui| {
-                            for z in ZOOM_STOPS.iter().rev() {
-                                if ui
-                                    .selectable_label((z - shown).abs() < 0.01, zoom_label(crate::state::zoom_from_display_percent(*z, print), print))
-                                    .clicked()
-                                {
-                                    app.run("view.setZoom", json!({"zoom": z})).ok();
-                                }
-                            }
-                            ui.separator();
-                            if ui.selectable_label(false, tl!("Fit on Screen")).clicked() {
-                                app.run("view.fitArtboard", json!({})).ok();
-                            }
-                            if ui.selectable_label(false, tl!("Fit All")).clicked() {
-                                app.run("view.fitAll", json!({})).ok();
-                            }
-                        });
-                });
-                let rot = app.view().map(|v| v.rotation).unwrap_or(0.0);
-                ui.name_inputs(tl!("Rotation"), |ui| {
-                    craft_ui::ComboBox::from_id_salt("rot-combo")
-                        .selected_text(egui::RichText::new(format!("{rot:.0}°")).size(11.5))
-                        .width(52.0)
-                        .show_ui(ui, |ui| {
-                            for (label, a) in ROTATE_VIEW_ANGLES {
-                                if ui.selectable_label((rot - a).abs() < 1e-9, label).clicked() {
-                                    // It fails only without a document, when there is no view to turn.
-                                    app.run("view.rotate", json!({"angle": a})).ok();
-                                }
-                            }
-                        });
-                });
-                ui.separator();
-                // The artboard navigator has First and Previous, a field with the current artboard's
-                // number and name and a list of every artboard, then Next and Last.
-                let nab = app.session.active().map(|d| d.doc.artboards.len()).unwrap_or(0);
-                let cur = crate::panels::artboards::selected(app, nab);
-                let mut go = None;
-                for (icon, to, tip) in [("chevrons-left", "first", tl!("First Artboard")), ("chevron-left", "previous", tl!("Previous Artboard"))] {
-                    if widgets::icon_button_enabled(ui, icon, tip, false, cur > 0, 18.0).clicked() {
-                        go = Some(json!(to));
-                    }
-                }
-                if let Some(i) = artboard_list(app, ui, cur) {
-                    go = Some(json!(i));
-                }
-                for (icon, to, tip) in [("chevron-right", "next", tl!("Next Artboard")), ("chevrons-right", "last", tl!("Last Artboard"))] {
-                    if widgets::icon_button_enabled(ui, icon, tip, false, cur + 1 < nab, 18.0).clicked() {
-                        go = Some(json!(to));
-                    }
-                }
-                if let Some(to) = go
-                    && let Err(e) = app.run("view.goToArtboard", json!({ "index": to }))
-                {
-                    app.status(e);
-                }
-                ui.separator();
-                let (info, next) = info_text(app);
-                if let Some(secs) = next {
-                    ui.ctx().request_repaint_after(std::time::Duration::from_secs(secs));
-                }
-                // The info field leaves the status message its least width and ends in an ellipsis first.
-                // An empty readout shows a dash, so the field can still be clicked.
-                let room = (ui.available_width() - MESSAGE_MIN - ui.spacing().item_spacing.x).max(0.0);
-                let shown = if info.is_empty() { "–" } else { info.as_str() };
-                let field = ui
-                    .scope(|ui| {
-                        ui.set_max_width(room);
-                        clipped_label(ui, egui::RichText::new(shown).size(11.5).color(t.text_dim))
-                    })
-                    .inner
-                    .interact(Sense::click());
-                let mut pick = None;
-                egui::Popup::menu(&field).show(|ui| {
-                    ui.menu_button(tl!("Show"), |ui| {
-                        for show in StatusBarShow::ALL {
-                            if widgets::menu_item_name(ui, show.label(), true, app.ui.status_bar_show == show) {
-                                pick = Some(show);
-                                ui.close();
-                            }
-                        }
-                    });
-                });
-                if let Some(show) = pick
-                    && let Err(e) = app.run("view.statusBarShow", json!({ "show": show.param() }))
-                {
-                    app.status(e);
-                }
-                status_readouts(app, ui, &t);
-            });
+    let held = crate::canvas::held_mods(ui.ctx());
+    let (info, next) = info_text(app, &held);
+    if let Some(secs) = next {
+        ui.ctx().request_repaint_after(std::time::Duration::from_secs(secs));
+    }
+    let print = app.print_ppi();
+    let nab = app.session.active().map(|d| d.doc.artboards.len()).unwrap_or(0);
+    let cur = crate::panels::artboards::selected(app, nab);
+    // PLAN: assumed Artboard::rect has `width()` and `height()`.
+    let document =
+        app.session.active().and_then(|d| d.doc.artboards.get(cur)).map_or(Size::new(1.0, 1.0), |a| Size::new(a.rect.width(), a.rect.height()));
+    let boards: Vec<Entry<usize>> = app
+        .session
+        .active()
+        .map(|d| d.doc.artboards.iter().enumerate().map(|(i, a)| Entry::new(i, format!("{}  {}", i + 1, a.name))).collect())
+        .unwrap_or_default();
+    let angles: Vec<Entry<usize>> = ROTATE_VIEW_ANGLES.iter().enumerate().map(|(i, (label, _))| Entry::new(i, *label)).collect();
+    let rotation = app.view().map_or(0.0, |v| v.rotation);
+    let turned = ROTATE_VIEW_ANGLES.iter().position(|(_, a)| (rotation - a).abs() < 1e-9).unwrap_or(usize::MAX);
+    // An angle between the presets, from the Rotate View tool or `view.rotate`, shows in whole degrees; adding 0.0
+    // turns the -0 of a small negative angle into 0.
+    let angle = format!("{}°", rotation.round() + 0.0);
+    let shows: Vec<Entry<StatusBarShow>> =
+        StatusBarShow::ALL.into_iter().map(|s| Entry::new(s, s.label()).checked(app.ui.status_bar_show == s)).collect();
+    let unit = app.session.general_unit();
+    let lang = crate::i18n::current();
+    let render = crate::i18n::tr_ctx(lang, "diagnostics", "render");
+    let ui_name = crate::i18n::tr_ctx(lang, "diagnostics", "ui");
+    let busy = busy_labels(app);
+
+    let (mut zoom_to, mut rotate_to, mut go, mut show_pick, mut stop) = (None, None, None, None, false);
+    // The readouts end the bar, the pointer's position and then the timings; a narrow bar leaves out the timings
+    // first, then the position, before the message.
+    let readouts = |ui: &mut Ui, _: &mut BodyCx<'_>| {
+        // With no hover point the axes stay empty and keep their width.
+        let origin = app.ruler_origin();
+        Row::new().gap(Gap::Item).fit_rank(2).show(ui, |ui, _| {
+            for (axis, value) in [("X", app.hover_doc.map(|p| p.x - origin.x)), ("Y", app.hover_doc.map(|p| p.y - origin.y))] {
+                let text = value.map(|v| format!("{axis}: {}", unit.readout(v))).unwrap_or_default();
+                Text::new(text).role(TypeRole::Mono).shade(Shade::Muted).sample(format!("{axis}: -8888.88 {}", unit.suffix())).show(ui);
+            }
         });
-    widgets::set_menu_floor(ui.ctx(), panel.response.rect.top());
+        let readout = |text: String, sample: String| Text::new(text).shade(Shade::Faint).sample(sample);
+        Row::new().gap(Gap::Item).fit_rank(1).show(ui, |ui, _| {
+            readout(format!("{render} {:.1} ms", app.perf.render_ms), format!("{render} 8888.8 ms")).show(ui);
+            readout(format!("{ui_name} {:.1} ms", app.perf.frame_ms), format!("{ui_name} 8888.8 ms")).show(ui);
+            // No rate until the window has drawn continuously for a moment (`frame_rate`).
+            let fps = if app.perf.fps > 0.0 { format!("{:.0} fps", app.perf.fps) } else { "\u{2013} fps".into() };
+            readout(fps, "8888 fps".into()).show(ui);
+        });
+    };
+    // PLAN: assumed VectorcraftApp::canvas_view() -> Option<CanvasView> (cv.S4) and the label msgid "Status Bar".
+    Bar::new(tl!("Status Bar"), BarKind::Status).trailing(readouts).show(ui, |ui, _| {
+        let zoom = Field::new(tl!("Zoom"))
+            .side(SideLabel::new().kind(LabelKind::Hidden))
+            .show(ui, |ui, _| ZoomField::new(tl!("Zoom"), app.canvas_view(), document).scrub(true).show(ui));
+        // The field edits the canvas view, whose zoom is divided by UI Scaling; `view.setZoom` takes the view's zoom.
+        if let Some(view) = zoom.inner.and_then(|z| z.view.committed().copied()) {
+            zoom_to = Some(crate::state::zoom_display_percent(crate::state::View::zoom_of_canvas(&view, app.ui_scaling()), print));
+        }
+        Field::new(tl!("Rotation")).side(SideLabel::new().kind(LabelKind::Hidden)).show(ui, |ui, _| {
+            // Entries are keyed by index: an angle is not a hashable value.
+            rotate_to = Select::new(tl!("Rotation"), Bind::given(turned), &angles)
+                .placeholder(angle.clone())
+                .look(SelectLook::Filled)
+                .show(ui)
+                .value()
+                .copied();
+        });
+        Divider::vertical().show(ui);
+        for (icon, to, tip, enabled) in
+            [("chevrons_left", "first", tl!("First Artboard"), cur > 0), ("chevron_left", "previous", tl!("Previous Artboard"), cur > 0)]
+        {
+            if IconButton::new(IconId::new(icon)).label(tip).enabled(enabled).show(ui).clicked() {
+                go = Some(json!(to));
+            }
+        }
+        Field::new(tl!("Artboard")).side(SideLabel::new().kind(LabelKind::Hidden)).show(ui, |ui, _| {
+            if let Some(i) =
+                Select::new(tl!("Artboard"), Bind::given(cur), &boards).look(SelectLook::Filled).enabled(nab > 0).show(ui).value().copied()
+            {
+                go = Some(json!(i));
+            }
+        });
+        for (icon, to, tip, enabled) in
+            [("chevron_right", "next", tl!("Next Artboard"), cur + 1 < nab), ("chevrons_right", "last", tl!("Last Artboard"), cur + 1 < nab)]
+        {
+            if IconButton::new(IconId::new(icon)).label(tip).enabled(enabled).show(ui).clicked() {
+                go = Some(json!(to));
+            }
+        }
+        Divider::vertical().show(ui);
+        // An empty readout shows a dash.
+        let shown = if info.is_empty() { "\u{2013}" } else { info.as_str() };
+        Text::new(shown.to_owned()).shade(Shade::Muted).elide(Elide::End).show(ui);
+        let more = IconButton::new(IconId::new("chevron_down")).label(tl!("Show")).show(ui);
+        show_pick = Menu::new(tl!("Show")).values().opened_by(more.response(), Trigger::Press).pick(ui, &shows).picked;
+        if app.session.script_running() {
+            stop = Button::new(tl!("Stop")).show(ui).response().clicked();
+        }
+        if let Some(job) = busy.first() {
+            let label = crate::i18n::msg(job);
+            let text = match busy.len() - 1 {
+                0 => format!("{label}\u{2026}"),
+                more => format!("{label}\u{2026} (+{more})"),
+            };
+            // The message's rule, so the work shows where the message was.
+            Divider::vertical().show(ui);
+            StatusProgress::new(text, None).show(ui);
+        } else {
+            let mut message = StatusMessage::new(status_message(app));
+            let notes = status_notes(&app.ui);
+            if !notes.is_empty() {
+                message = message.tooltip(listed_notes(notes, MAX_LISTED_NOTES));
+            }
+            message.show(ui);
+        }
+    });
+
+    if stop {
+        app.session.script_interrupt().set();
+    }
+    // It fails only without a document, when there is no view to turn or zoom.
+    if let Some(zoom) = zoom_to {
+        app.run("view.setZoom", json!({"zoom": zoom})).ok();
+    }
+    if let Some(&(_, angle)) = rotate_to.and_then(|i| ROTATE_VIEW_ANGLES.get(i)) {
+        app.run("view.rotate", json!({"angle": angle})).ok();
+    }
+    if let Some(to) = go
+        && let Err(e) = app.run("view.goToArtboard", json!({ "index": to }))
+    {
+        app.status(e);
+    }
+    if let Some(show) = show_pick
+        && let Err(e) = app.run("view.statusBarShow", json!({ "show": show.param() }))
+    {
+        app.status(e);
+    }
 }
 
-/// The least width the status message keeps when the window is narrow.
-const MESSAGE_MIN: f32 = 180.0;
+/// What the bar shows as work in progress: the running script, then background jobs, opens and places. The first
+/// names the progress; the rest are counted.
+fn busy_labels(app: &VectorcraftApp) -> Vec<&str> {
+    app.session
+        .script_running()
+        .then_some("Running a script")
+        .into_iter()
+        .chain(app.background.jobs.iter().filter(|j| !j.label.is_empty() && !j.cancelled()).map(|j| j.label.as_str()))
+        .chain(app.opening.pending.iter().map(|p| p.label.as_str()))
+        .chain(app.placing.pending.iter().map(|p| p.label.as_str()))
+        .collect()
+}
 
 /// What the status bar's info field shows, chosen from the Show menu that a click on the field
 /// opens (`view.statusBarShow`). Kept with the UI state ([`crate::UiState::status_bar_show`]).
@@ -183,12 +239,13 @@ pub fn set_status_bar_show(app: &mut VectorcraftApp, p: &serde_json::Value) -> R
 }
 
 /// The info field's text for the choice in the Show menu, and for Date and Time the seconds until
-/// the minute it shows ends (when the bar draws again).
-pub(super) fn info_text(app: &VectorcraftApp) -> (String, Option<u64>) {
+/// the minute it shows ends (when the bar draws again). Current Tool names the selection tool Cmd
+/// lends while it is held (`held`).
+pub(super) fn info_text(app: &VectorcraftApp, held: &vectorcraft_tools::Mods) -> (String, Option<u64>) {
     let st = app.session.active();
     match app.ui.status_bar_show {
         StatusBarShow::CurrentTool => {
-            let tool = vectorcraft_tools::tool_info(app.session.tool_id())
+            let tool = vectorcraft_tools::tool_info(app.session.shown_tool_id(held))
                 .map(|t| {
                     // The catalog keys carry the full label ("Selection Tool"); only English drops the suffix.
                     let shown = tl!(t.label);
@@ -260,165 +317,22 @@ fn date_time_now() -> (String, u64) {
     (format!("{} UTC", date_time_label(parts)), 60 - u64::try_from(parts[5].clamp(0, 59)).unwrap_or(0))
 }
 
-/// A label that ends in an ellipsis when it is wider than the room left in `ui`. Only a cut label
-/// shows its full text in a tooltip; screen readers always receive the full text.
-pub(super) fn clipped_label(ui: &mut Ui, text: impl Into<egui::WidgetText>) -> egui::Response {
-    let galley = text.into().into_galley(ui, Some(egui::TextWrapMode::Truncate), ui.available_width(), egui::FontSelection::Default);
-    let full = galley.elided.then(|| egui::text::LayoutJob {
-        sections: galley.job.sections.clone(),
-        text: galley.job.text.clone(),
-        language: galley.job.language.clone(),
-        ..Default::default()
-    });
-    let response = ui.add(egui::Label::new(galley).show_tooltip_when_elided(false));
-    match full {
-        Some(job) => full_text_tooltip(response, job),
-        None => response,
-    }
-}
-
-/// Show `text` on hover in a tooltip that wraps to fit inside the window.
-pub(super) fn full_text_tooltip(response: egui::Response, text: impl Into<egui::WidgetText>) -> egui::Response {
-    let text = text.into();
-    response.on_hover_ui(|ui| {
-        let margins = ui.spacing().menu_margin.sum().x + 2.0 * ui.spacing().item_spacing.x;
-        ui.set_max_width(ui.spacing().tooltip_width.min(ui.ctx().content_rect().width() - margins).max(0.0));
-        ui.add(egui::Label::new(text).wrap());
-    })
-}
-
-/// The most recently measured status widths, scoped to this UI and display settings.
-pub(super) struct StatusReadoutWidths {
-    pub(super) key: (crate::i18n::Lang, vectorcraft_doc::Unit, f32),
-    pub(super) values: [f32; 4],
-}
-
-/// Reuse sample-string measurements until language, document units or display scale changes.
-/// Keep a single entry per UI so repeated DPI/zoom changes cannot grow the cache indefinitely.
-fn status_readout_widths(ui: &Ui, lang: crate::i18n::Lang, unit: vectorcraft_doc::Unit, t: &Tokens) -> Arc<StatusReadoutWidths> {
-    let id = ui.scope_id().with("status-readout-widths");
-    let key = (lang, unit, ui.ctx().pixels_per_point());
-    if let Some(cached) = ui.data(|data| data.get_temp::<Arc<StatusReadoutWidths>>(id))
-        && cached.key == key
-    {
-        return cached;
-    }
-    // Text layout also accesses egui state, so measure outside the ui.data lock.
-    let mono = theme::mono(10.5);
-    let proportional = egui::FontId::proportional(10.5);
-    let render = crate::i18n::tr_ctx(lang, "diagnostics", "render");
-    let ui_name = crate::i18n::tr_ctx(lang, "diagnostics", "ui");
-    let measure = |text, font: &egui::FontId| ui.painter().layout_no_wrap(text, font.clone(), t.text).size().x.ceil() + 4.0;
-    // Reserve a readable numeric range using every digit in the active font. These samples
-    // depend on the language/units, never the live values: timings cannot move field boundaries.
-    let timing_width = |label| (0..=9).map(|d| measure(format!("{label} {d}{d}{d}{d}.{d} ms"), &proportional)).fold(0.0_f32, f32::max);
-    let render_width = timing_width(render);
-    let ui_width = timing_width(ui_name);
-    let fps_width = (0..=9).map(|d| measure(format!("{d}{d}{d}{d} fps"), &proportional)).fold(0.0_f32, f32::max);
-    // Each axis shows at least -9999.99..9999.99 in the selected unit without elision.
-    let axis_width = (0..=9).map(|d| measure(format!("X: -{d}{d}{d}{d}.{d}{d} {}", unit.suffix()), &mono)).fold(100.0_f32, f32::max);
-    let widths = Arc::new(StatusReadoutWidths { key, values: [render_width, ui_width, fps_width, axis_width] });
-    ui.data_mut(|data| data.insert_temp(id, Arc::clone(&widths)));
-    widths
-}
-
-/// Allocate the remaining row once, then paint each field inside its own bounded rectangle.
-/// Child UIs requested with a desired width can shrink to their contents; these rectangles cannot.
-pub(super) fn status_readouts(app: &VectorcraftApp, ui: &mut Ui, t: &Tokens) {
-    let mono = theme::mono(10.5);
-    let proportional = egui::FontId::proportional(10.5);
-    let unit = app.session.general_unit();
-    let lang = crate::i18n::current();
-    let render = crate::i18n::tr_ctx(lang, "diagnostics", "render");
-    let ui_name = crate::i18n::tr_ctx(lang, "diagnostics", "ui");
-    let widths = status_readout_widths(ui, lang, unit, t);
-    let [render_width, ui_width, fps_width, axis_width] = widths.values;
-    let coord_width = 2.0 * axis_width;
-    let perf_width = render_width + ui_width + fps_width + 12.0;
-    let point_id = ui.scope_id().with(("status-hover-point", app.session.active().map(|st| st.uid)));
-    if let Some(p) = app.hover_doc {
-        ui.data_mut(|data| data.insert_temp(point_id, p));
-    }
-    let gap = ui.spacing().item_spacing.x;
-    let size = vec2(ui.available_width().max(0.0), ui.available_height().max(0.0));
-    let (area, _) = ui.allocate_exact_size(size, Sense::hover());
-    let coordinates = area.width() >= MESSAGE_MIN + coord_width + gap;
-    let diagnostics = area.width() >= MESSAGE_MIN + coord_width + perf_width + 2.0 * gap;
-    let mut right = area.right();
-    if diagnostics {
-        let perf = egui::Rect::from_min_max(egui::pos2(right - perf_width, area.top()), area.right_bottom());
-        let mut x = perf.left();
-        for (id, width, text) in [
-            ("render", render_width, format!("{render} {:.1} ms", app.perf.render_ms)),
-            ("ui", ui_width, format!("{ui_name} {:.1} ms", app.perf.frame_ms)),
-            // No rate until the window has drawn continuously for a moment (`frame_rate`).
-            ("fps", fps_width, if app.perf.fps > 0.0 { format!("{:.0} fps", app.perf.fps) } else { "– fps".into() }),
-        ] {
-            let rect = egui::Rect::from_min_size(egui::pos2(x, area.top()), vec2(width, area.height()));
-            status_field(ui, id, rect, text, proportional.clone(), t.text_disabled);
-            x += width + 6.0;
-        }
-        right = perf.left() - gap;
-    }
-    if coordinates {
-        let left = right - coord_width;
-        // Keep the coordinate slot even without a hover point, so entering/leaving the canvas
-        // cannot move or re-truncate the message. X and Y have separate, stable origins.
-        let coord_rect = egui::Rect::from_min_max(egui::pos2(left, area.top()), egui::pos2(right, area.bottom()));
-        // The canvas clears hover_doc when the pointer leaves. While inspecting a readout,
-        // retain its last value so its tooltip can show the complete coordinate.
-        let inspecting = ui.input(|i| i.pointer.hover_pos()).is_some_and(|p| coord_rect.contains(p)) && ui.rect_contains_pointer(coord_rect);
-        let point = app.hover_doc.or_else(|| inspecting.then(|| ui.data(|data| data.get_temp::<vectorcraft_geom::Point>(point_id))).flatten());
-        if let Some(p) = point {
-            let origin = app.ruler_origin();
-            for (id, x, value) in [("X", left, p.x - origin.x), ("Y", left + axis_width, p.y - origin.y)] {
-                let rect = egui::Rect::from_min_size(egui::pos2(x, area.top()), vec2(axis_width, area.height()));
-                status_field(ui, id, rect, format!("{id}: {}", unit.readout(value)), mono.clone(), t.text_dim);
-            }
-        }
-        right = left - gap;
-    }
-    let script = app.session.script_running().then_some("Running a script");
-    if script.is_some() {
-        let left = (right - 52.0).max(area.left());
-        let stop = egui::Rect::from_min_max(egui::pos2(left, area.top() + 1.0), egui::pos2(right, area.bottom() - 1.0));
-        if ui.put(stop, egui::Button::new(tl!("Stop")).small()).clicked() {
-            app.session.script_interrupt().set();
-        }
-        right = left - gap;
-    }
-    let busy: Vec<&str> = script
-        .into_iter()
-        .chain(app.background.jobs.iter().filter(|j| !j.label.is_empty() && !j.cancelled()).map(|j| j.label.as_str()))
-        .chain(app.opening.pending.iter().map(|p| p.label.as_str()))
-        .chain(app.placing.pending.iter().map(|p| p.label.as_str()))
-        .collect();
-    // Reserve the spinner's space while idle too: starting a background job changes the text,
-    // not its origin. Messages take priority over optional readouts in a narrow window.
-    let (message, notes) = if let Some(job) = busy.first() {
-        let spinner = egui::Rect::from_center_size(egui::pos2(area.left() + 6.0, area.center().y), vec2(12.0, 12.0));
-        ui.put(spinner, egui::Spinner::new().size(12.0).color(t.accent));
-        let label = crate::i18n::msg(job);
-        let more = busy.len() - 1;
-        (if more > 0 { format!("{label}… (+{more})") } else { format!("{label}…") }, &[][..])
-    } else {
-        (status_message(app), status_notes(&app.ui))
-    };
-    if !message.is_empty() {
-        let rect = egui::Rect::from_min_max(egui::pos2((area.left() + 18.0).min(right), area.top()), egui::pos2(right, area.bottom()));
-        status_field_with_notes(ui, "message", rect, message, egui::FontId::proportional(11.0), t.text, notes);
-    }
-}
-
 /// The status message in the interface language. While it is the error of the last script run
-/// and that error's message is text the script supplied, that text is shown as it is and only the
-/// words around it are translated.
+/// and that error's message is text the script supplied, or a plug-in run's notice
+/// ([`crate::state::UiState::status_kept`]), that text is shown as it is and only the words around
+/// it are translated.
 pub(crate) fn status_message(app: &VectorcraftApp) -> String {
     let status = app.ui.status.as_str();
+    let is = |before: &str, kept: &str, after: &str| status.strip_prefix(before).and_then(|rest| rest.strip_suffix(after)) == Some(kept);
     if let Some((before, kept, after)) = app.session.script_authored_failure()
-        && status.strip_prefix(before.as_str()).and_then(|rest| rest.strip_suffix(after.as_str())) == Some(kept)
+        && is(&before, kept, &after)
     {
         return crate::i18n::msg_keeping(&before, kept, &after);
+    }
+    if let Some((before, kept, after)) = &app.ui.status_kept
+        && is(before, kept, after)
+    {
+        return crate::i18n::msg_keeping(before, kept, after);
     }
     crate::i18n::msg(status)
 }
@@ -444,63 +358,6 @@ pub(super) fn listed_notes(notes: &[String], most: usize) -> String {
         lines.push(format!("… (+{})", notes.len() - most));
     }
     lines.join("\n")
-}
-
-/// The hover of the status message `text` with `notes`: the message, then as many of the notes
-/// ([`listed_notes`]) as fit in the window above or below the field `field`, wrapped within the
-/// window's width.
-fn notes_tooltip(response: egui::Response, field: egui::Rect, text: &str, notes: &[String]) -> egui::Response {
-    response.on_hover_ui(|ui| {
-        let screen = ui.ctx().content_rect();
-        let margins = ui.spacing().menu_margin.sum() + 2.0 * ui.spacing().item_spacing;
-        let width = ui.spacing().tooltip_width.min(screen.width() - margins.x).max(0.0);
-        ui.set_max_width(width);
-        let room = (field.top() - screen.top()).max(screen.bottom() - field.bottom()) - 2.0 * margins.y;
-        let tip = |most: usize| format!("{text}\n{}", listed_notes(notes, most));
-        let height =
-            |s: &str| egui::WidgetText::from(s).into_galley(ui, Some(egui::TextWrapMode::Wrap), width, egui::FontSelection::Default).size().y;
-        let mut most = notes.len().min(MAX_LISTED_NOTES);
-        while most > 0 && height(&tip(most)) > room {
-            most -= 1;
-        }
-        ui.add(egui::Label::new(tip(most)).wrap());
-    })
-}
-
-/// A field never grows with its text. Clipping also bounds over-wide glyphs; hover and access
-/// information retain the complete value when its on-screen label is truncated.
-fn status_field(ui: &mut Ui, id: &str, rect: egui::Rect, text: String, font: egui::FontId, color: egui::Color32) {
-    status_field_with_notes(ui, id, rect, text, font, color, &[]);
-}
-
-/// [`status_field`], whose hover, when there are `notes`, lists them ([`notes_tooltip`]) and whose
-/// access information has them after the text.
-fn status_field_with_notes(ui: &mut Ui, id: &str, rect: egui::Rect, text: String, font: egui::FontId, color: egui::Color32, notes: &[String]) {
-    if rect.width() <= 0.0 || rect.height() <= 0.0 {
-        return;
-    }
-    let galley = egui::WidgetText::from(egui::RichText::new(&text).font(font)).into_galley(
-        ui,
-        Some(egui::TextWrapMode::Truncate),
-        rect.width(),
-        egui::TextStyle::Body,
-    );
-    let at = egui::pos2(rect.left(), rect.center().y - galley.size().y / 2.0);
-    let elided = galley.elided;
-    ui.painter().with_clip_rect(ui.clip_rect().intersect(rect)).galley(at, galley, color);
-    let response = ui.interact(rect, ui.scope_id().with(("status-field", id)), Sense::hover());
-    if notes.is_empty() {
-        response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &text));
-        if elided {
-            full_text_tooltip(response, text);
-        }
-        return;
-    }
-    // The list is made only for a hover or a screen reader.
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, format!("{text}\n{}", listed_notes(notes, MAX_LISTED_NOTES))));
-    if response.hovered() {
-        notes_tooltip(response, rect, &text, notes);
-    }
 }
 
 /// Contextual hint for the active tool: segments of (text, bold). Keys in bold segments are

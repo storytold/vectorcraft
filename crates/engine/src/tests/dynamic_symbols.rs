@@ -1213,6 +1213,26 @@ fn select_part_refuses_hidden_and_locked_objects_of_the_art() {
 }
 
 #[test]
+fn a_cmd_click_with_the_selection_tool_keeps_the_instance_selected_whole() {
+    // Cmd lends Direct Selection the Selection tool: the press picks one object of a dynamic
+    // instance, and back with the Selection tool after the release, the instance stays selected,
+    // whole, as choosing the Selection tool leaves it.
+    let mut s = session();
+    let inst = pair(&mut s, "dynamic");
+    let v = ViewInfo { smart_guides: false, ..Default::default() };
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    s.select_tool("selection", v).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 80.0, 30.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "directSelection");
+    assert!(s.doc().unwrap().selection.symbol_part.is_some(), "the lent tool picks the object");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 80.0, 30.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "selection");
+    let sel = &s.doc().unwrap().selection;
+    assert_eq!((&sel.objects, &sel.symbol_part), (&vec![inst], &None));
+}
+
+#[test]
 fn choosing_the_selection_tool_again_picks_the_instance_whole() {
     let mut s = session();
     let inst = pair(&mut s, "dynamic");

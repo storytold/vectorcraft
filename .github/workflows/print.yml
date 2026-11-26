@@ -25,7 +25,13 @@ jobs:
     uses: storytold/craft-common-actions/.github/workflows/gate.yml@main
     with:
       os: '["windows-2022"]'
-      timeout-minutes: 90
+      # A change to Cargo.lock finds no cache (only main saves one) and builds everything cold:
+      # about 55 minutes for `-p vectorcraft` alone, then the UI crate's tests.
+      timeout-minutes: 150
+      # As in ci.yml: test binaries without debug info or symbols, and workspace crates without
+      # line tables. A panic still names its file and line.
+      dev-strip: true
+      dev-debug: "0"
       # As before: printing builds and tests without craft-fonts, nextest or the wasm target.
       craft-fonts-ref: ""
       tools: ""

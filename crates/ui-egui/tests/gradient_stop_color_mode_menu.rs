@@ -4,15 +4,22 @@
 
 use std::sync::{Mutex, MutexGuard};
 
-use egui::{Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, Shape, pos2, vec2};
+use craft::behavior::OwnerClass;
+use craft::color_ui::ui::ColorPanelMode as Mode;
+use craft::ui::dialog::dialog_id;
+use craft::ui::runtime::env::WindowKey;
+use craft::ui::runtime::frame::take_output;
+use craft::ui::runtime::overlay;
+use craft::ui::shell::{WindowDialogs, embed};
+use egui::accesskit::{Node, Role, Toggled};
+use egui::{Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, pos2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::{GradientPaint, Paint, cms};
 use vectorcraft_engine::Session;
-use vectorcraft_ui_egui::{VectorcraftApp, i18n, panels::color::Mode, theme};
+use vectorcraft_ui_egui::{VectorcraftApp, i18n};
 
 static UI_STATE: Mutex<()> = Mutex::new(());
-const MODES: [&str; 5] = ["Grayscale", "RGB", "HSB", "CMYK", "Web Safe RGB"];
-type FrameObserver = Box<dyn FnMut(&egui::Context, &egui::FullOutput)>;
+const MODES: [&str; 5] = ["Grayscale Slider", "RGB Sliders", "HSB Sliders", "CMYK Sliders", "Web Color Sliders"];
 
 struct GlobalState {
     language: i18n::Lang,
@@ -42,30 +49,17 @@ fn key(key: Key, pressed: bool) -> Event {
     Event::Key { key, physical_key: Some(key), pressed, repeat: false, modifiers: Modifiers::NONE }
 }
 
-fn visit_shapes(shape: &Shape, clip: Rect, visit: &mut impl FnMut(&Shape, Rect)) {
-    if let Shape::Vec(shapes) = shape {
-        for shape in shapes {
-            visit_shapes(shape, clip, visit);
-        }
-    } else {
-        visit(shape, clip);
-    }
-}
-
 struct Scene {
     app: VectorcraftApp,
     ctx: egui::Context,
-    last_output: egui::FullOutput,
-    // Optional test-frame observation consumes initial texture uploads before they are cleared.
-    on_frame: Option<FrameObserver>,
     size: egui::Vec2,
     time: f64,
     freeform: bool,
-    buttons: Vec<(String, Rect)>,
+    nodes: Vec<Node>,
 }
 
 impl Scene {
-    /// No UI frames: an observer can attach before the first font upload.
+    /// The app has the native runtime and fonts before its first frame.
     fn new(size: egui::Vec2, freeform: bool) -> Self {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("app.language", json!({"lang": "en"})).unwrap();
@@ -85,13 +79,15 @@ impl Scene {
         app.select_tool("directSelection");
         if freeform {
             app.run("paint.freeform.selectPoint", json!({"index": 0})).unwrap();
+        } else {
+            app.run("gradient.selectStop", json!({"index": 0})).unwrap();
         }
         app.run("window.panel", json!({"panel": "gradient"})).unwrap();
         let ctx = egui::Context::default();
-        theme::install_fonts(&ctx);
-        egui_extras::install_image_loaders(&ctx);
+        embed::install(&ctx, craft::ui::testing::install_spec(), &vectorcraft_ui_egui::ui_fonts()).unwrap();
+        app.adopt_context(&ctx);
         ctx.enable_accesskit();
-        Self { app, ctx, last_output: Default::default(), on_frame: None, size, time: 0.0, freeform, buttons: vec![] }
+        Self { app, ctx, size, time: 0.0, freeform, nodes: vec![] }
     }
 
     fn frame(&mut self, events: Vec<Event>) {
@@ -105,23 +101,15 @@ impl Scene {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, self.size)),
             ..Default::default()
         };
-        self.app.raw_input_hook(&self.ctx, &mut raw);
-        let mut output = self.ctx.run_ui(raw, |ui| self.app.ui(ui));
-        self.buttons.clear();
-        let update = output.platform_output.accesskit_update.as_ref().expect("AccessKit enabled");
-        for (_, node) in &update.nodes {
-            if node.role() == egui::accesskit::Role::Button
-                && let Some((label, bounds)) = node.label().zip(node.bounds())
-            {
-                self.buttons
-                    .push((label.to_owned(), Rect::from_min_max(pos2(bounds.x0 as f32, bounds.y0 as f32), pos2(bounds.x1 as f32, bounds.y1 as f32))));
-            }
-        }
-        if let Some(observer) = &mut self.on_frame {
-            observer(&self.ctx, &output);
-        }
+        self.app.raw_input(&self.ctx, &mut raw);
+        embed::before_input(&self.ctx, |out| self.app.frame_input(out));
+        let mut output = self.ctx.run_ui(raw, |ui| {
+            self.app.tick(ui.ctx());
+            self.app.ui(ui);
+        });
+        let _ = self.app.frame_input(take_output(&self.ctx));
+        self.nodes = output.platform_output.accesskit_update.as_ref().expect("AccessKit enabled").nodes.iter().map(|(_, node)| node.clone()).collect();
         output.textures_delta.clear();
-        self.last_output = output;
     }
 
     fn idle(&mut self, count: usize) {
@@ -131,11 +119,8 @@ impl Scene {
     }
 
     fn click_with(&mut self, point: Pos2, modifiers: Modifiers) {
-        self.frame(vec![
-            Event::ModifiersChanged(modifiers),
-            Event::PointerMoved(point),
-            Event::PointerButton { pos: point, button: PointerButton::Primary, pressed: true, modifiers },
-        ]);
+        self.frame(vec![Event::ModifiersChanged(modifiers), Event::PointerMoved(point)]);
+        self.frame(vec![Event::PointerButton { pos: point, button: PointerButton::Primary, pressed: true, modifiers }]);
         self.frame(vec![Event::PointerButton { pos: point, button: PointerButton::Primary, pressed: false, modifiers }]);
         self.frame(vec![Event::ModifiersChanged(Modifiers::NONE)]);
     }
@@ -150,67 +135,35 @@ impl Scene {
         self.idle(2);
     }
 
+    fn node_rect(node: &Node) -> Option<Rect> {
+        let b = node.bounds()?;
+        Some(Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32)))
+    }
+
     fn popover(&self) -> Rect {
-        self.ctx.memory(|m| m.area_rect(egui::Id::unique("gradient-stop-popover"))).expect("actual painted popover area")
+        self.nodes.iter().find(|n| n.role() == Role::Dialog && n.label() == Some("Gradient stop"))
+            .and_then(Self::node_rect).expect("the actual native stop popover")
+    }
+
+    fn editor_open(&self) -> bool {
+        WindowDialogs::of(&self.ctx, &WindowKey::main()).with(|host| host.open_dialogs().iter().any(|d| d.id == dialog_id("gradientStop")))
     }
 
     fn assert_editor(&self) {
-        assert_eq!(self.app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("gradientStop"));
+        assert!(self.editor_open(), "the real stop/point editor remains open");
     }
 
-    fn painted(&self, mut visitor: impl FnMut(&Shape, Rect)) {
-        for clipped in &self.last_output.shapes {
-            visit_shapes(&clipped.shape, clipped.clip_rect, &mut visitor);
-        }
+    fn child_open(&self) -> bool {
+        overlay::top(&self.ctx).and_then(|id| overlay::entry(&self.ctx, id))
+            .is_some_and(|entry| !entry.exiting && entry.keys == OwnerClass::Menu)
     }
 
     fn open_stop(&mut self) {
         self.idle(8);
-        if self.freeform {
-            // The real Color: chip in freeform_section is the 18-point square next to its label.
-            let mut labels = vec![];
-            let mut chips = vec![];
-            self.painted(|shape, clip| match shape {
-                Shape::Text(text) if text.galley.text() == "Color:" => {
-                    labels.push(text.galley.rect.translate(text.pos.to_vec2()));
-                }
-                Shape::Rect(rect)
-                    if (rect.rect.width() - 18.0).abs() < 0.01 && (rect.rect.height() - 18.0).abs() < 0.01 && clip.contains(rect.rect.center()) =>
-                {
-                    chips.push(rect.rect)
-                }
-                _ => {}
-            });
-            chips.retain(|chip| {
-                labels.iter().any(|label| {
-                    chip.left() >= label.right() && chip.left() - label.right() < 20.0 && (chip.center().y - label.center().y).abs() < 10.0
-                })
-            });
-            chips.dedup();
-            assert_eq!(chips.len(), 1, "actual freeform Color chip, not a fabricated dialog: {chips:?}");
-            self.click(chips[0].center());
-        } else {
-            let mut markers = vec![];
-            self.painted(|shape, clip| {
-                if let Shape::Path(path) = shape
-                    && path.closed
-                    && path.points.len() == 5
-                {
-                    let rect = Rect::from_points(&path.points);
-                    if (rect.width() - 12.0).abs() < 0.01
-                        && (rect.height() - 15.0).abs() < 0.01
-                        && path.points[0].distance(pos2(rect.center().x, rect.top())) < 0.01
-                        && clip.contains(rect.center())
-                    {
-                        markers.push(rect.center());
-                    }
-                }
-            });
-            assert_eq!(markers.len(), 2, "real two-stop Gradient panel: {markers:?}");
-            markers.sort_by(|a, b| a.x.total_cmp(&b.x));
-            self.click(markers[0]);
-            self.click(markers[0]);
-        }
+        let name = if self.freeform { "Edit the point" } else { "Edit the stop" };
+        let matches: Vec<_> = self.nodes.iter().filter(|node| node.label() == Some(name)).filter_map(Self::node_rect).collect();
+        assert_eq!(matches.len(), 1, "the actual Gradient panel's color chip {name}");
+        self.click(matches[0].center());
         self.idle(3);
         self.assert_editor();
         if self.freeform {
@@ -222,13 +175,9 @@ impl Scene {
 
     fn button(&self, label: &str) -> Rect {
         let popover = self.popover();
-        let matches: Vec<_> = self
-            .buttons
-            .iter()
-            .filter(|(text, rect)| text == label && rect.is_positive() && popover.contains(rect.center()))
-            .map(|(_, rect)| *rect)
-            .collect();
-        assert_eq!(matches.len(), 1, "one actual accessible {label:?} button; labels: {:?}", self.buttons);
+        let matches: Vec<_> = self.nodes.iter().filter(|node| node.role() == Role::Button && node.label() == Some(label))
+            .filter_map(Self::node_rect).filter(|rect| rect.is_positive() && popover.contains(rect.center())).collect();
+        assert_eq!(matches.len(), 1, "one actual native mode chooser {label:?}");
         matches[0]
     }
 
@@ -238,19 +187,18 @@ impl Scene {
         assert!(self.popover().contains(button.center()));
         self.click(button.center());
         self.idle(3);
-        assert!(egui::Popup::is_any_open(&self.ctx), "actual child menu opens");
+        assert!(self.child_open(), "actual child menu opens");
         self.assert_editor();
     }
 
     fn mode_rows(&self) -> Vec<(String, bool, Rect)> {
-        let mut rows: Vec<_> = self
-            .buttons
-            .iter()
-            .filter_map(|(text, rect)| {
-                let (label, checked) = if let Some(label) = text.strip_prefix("✓ ") { (label, true) } else { (text.strip_prefix("   ")?, false) };
-                MODES.contains(&label).then_some((label.to_owned(), checked, *rect))
-            })
-            .collect();
+        let mut rows: Vec<_> = self.nodes.iter().filter_map(|node| {
+            let label = node.label()?;
+            if !matches!(node.role(), Role::MenuItem | Role::MenuItemRadio | Role::MenuItemCheckBox) || !MODES.contains(&label) {
+                return None;
+            }
+            Some((label.to_owned(), node.toggled() == Some(Toggled::True), Self::node_rect(node)?))
+        }).collect();
         rows.sort_by(|a, b| a.2.top().total_cmp(&b.2.top()));
         rows
     }
@@ -269,7 +217,7 @@ impl Scene {
         let rect = rows.iter().find(|(text, _, _)| text == label).expect("actual offered mode").2;
         self.click(rect.center());
         self.idle(3);
-        assert!(!egui::Popup::is_any_open(&self.ctx), "picking a mode closes only its dropdown");
+        assert!(!self.child_open(), "picking a mode closes only its dropdown");
         self.assert_editor();
         rect
     }
@@ -294,20 +242,9 @@ impl Scene {
 
     fn spectrum(&self) -> Rect {
         let popover = self.popover();
-        let mut found = vec![];
-        self.painted(|shape, clip| {
-            if let Shape::Mesh(mesh) = shape
-                && mesh.vertices.len() == 73 * 13
-                && mesh.indices.len() == 72 * 12 * 6
-            {
-                let points: Vec<_> = mesh.vertices.iter().map(|v| v.pos).collect();
-                let rect = Rect::from_points(&points);
-                if popover.contains(rect.center()) && clip.contains(rect.center()) {
-                    found.push(rect);
-                }
-            }
-        });
-        assert_eq!(found.len(), 1, "actual 72-by-12 Color spectrum mesh");
+        let found: Vec<_> = self.nodes.iter().filter(|node| node.role() == Role::Group && node.label() == Some("Color Ramp"))
+            .filter_map(Self::node_rect).filter(|rect| popover.contains(rect.center())).collect();
+        assert_eq!(found.len(), 1, "the actual native Color panel spectrum");
         found[0]
     }
 }
@@ -320,27 +257,27 @@ fn gradient_stop_mode_baseline_shift_and_menu_are_display_only() {
     let before = scene.snapshot();
     let original = scene.gradient();
     assert_eq!(original.gradient.stops[0].color.model(), cms::Model::Rgb);
-    // A legitimate existing control must succeed before the intended old-source failure.
+    // Retain the existing Shift control through the native panel's local-to-app synchronization.
     scene.click_with(scene.spectrum().center(), Modifiers::SHIFT);
     scene.idle(3);
-    assert_eq!(scene.app.ui.color_mode, Some(Mode::Hsb));
+    assert_eq!(scene.app.ui.color_panel.mode, Mode::HsbSliders);
     assert_eq!(scene.snapshot(), before, "Shift cycling changes display, not art/history");
-    scene.open_mode("HSB"); // Baseline: this actual chooser is absent on ed6f.
-    scene.assert_modes(Some("HSB"));
+    scene.open_mode("HSB Sliders");
+    scene.assert_modes(Some("HSB Sliders"));
     assert_eq!(scene.snapshot(), before, "opening the menu is not an edit");
     scene.escape();
-    assert!(!egui::Popup::is_any_open(&scene.ctx));
+    assert!(!scene.child_open());
     scene.assert_editor();
     assert_eq!(scene.snapshot(), before);
-    scene.open_mode("HSB");
-    scene.choose_mode("RGB");
-    scene.open_mode("RGB");
-    scene.assert_modes(Some("RGB"));
-    scene.choose_mode("HSB");
+    scene.open_mode("HSB Sliders");
+    scene.choose_mode("RGB Sliders");
+    scene.open_mode("RGB Sliders");
+    scene.assert_modes(Some("RGB Sliders"));
+    scene.choose_mode("HSB Sliders");
     assert_eq!(scene.gradient(), original);
     assert_eq!(scene.snapshot(), before, "RGB/HSB preserve native RGB and one-stop selection");
     scene.escape();
-    assert!(scene.app.ui.dialog.is_none(), "after dropdown dismissal the next Escape closes the editor");
+    assert!(!scene.editor_open(), "after dropdown dismissal the next Escape closes the editor");
     assert_eq!(scene.snapshot(), before);
 }
 
@@ -370,9 +307,9 @@ fn gradient_stop_mode_converts_only_selected_stop_and_unlinks_tint_with_one_undo
             assert_eq!(original.gradient.stops[0].swatch.as_deref(), Some("Ink"));
             assert!((original.gradient.stops[0].tint - 0.5).abs() < 1e-6);
         }
-        scene.open_mode(if tint { "Tint" } else { "RGB" });
-        scene.assert_modes(if tint { None } else { Some("RGB") });
-        scene.choose_mode("CMYK");
+        scene.open_mode(if tint { "Tint" } else { "RGB Sliders" });
+        scene.assert_modes(if tint { None } else { Some("RGB Sliders") });
+        scene.choose_mode("CMYK Sliders");
         let converted = scene.gradient();
         assert_eq!(converted.gradient.stops[0].color.model(), cms::Model::Cmyk);
         assert!(converted.gradient.stops[0].swatch.is_none(), "process mode unlinks a tint");
@@ -391,13 +328,13 @@ fn gradient_stop_mode_converts_only_selected_stop_and_unlinks_tint_with_one_undo
             // Hide Options is the existing compact mixer; its child menu can outgrow the editor.
             scene.app.run("ui.colorPanel", json!({"options": false})).unwrap();
             scene.idle(3);
-            scene.open_mode("RGB");
-            scene.assert_modes(Some("RGB"));
-            let row = scene.mode_rows().into_iter().find(|(label, _, _)| label == "Web Safe RGB").unwrap().2;
+            scene.open_mode("RGB Sliders");
+            scene.assert_modes(Some("RGB Sliders"));
+            let row = scene.mode_rows().into_iter().find(|(label, _, _)| label == "Web Color Sliders").unwrap().2;
             let parent = scene.popover();
             assert!(!parent.contains(row.center()), "compact editor must expose a real child row outside itself: parent={parent:?}, row={row:?}");
-            scene.choose_mode("Web Safe RGB");
-            assert_eq!(scene.app.ui.color_mode, Some(Mode::WebSafe));
+            scene.choose_mode("Web Color Sliders");
+            assert_eq!(scene.app.ui.color_panel.mode, Mode::WebColorSliders);
             assert_ne!(
                 scene.gradient().gradient.stops[0].color,
                 original.gradient.stops[0].color,
@@ -411,15 +348,15 @@ fn gradient_stop_mode_converts_only_selected_stop_and_unlinks_tint_with_one_undo
         // A real outside click closes both editor and child, without another edit.
         scene.idle(3);
         // Undo restores art, while the chosen display mode remains a UI preference.
-        scene.open_mode(if tint { "Tint" } else { "Web Safe RGB" });
+        scene.open_mode(if tint { "Tint" } else { "Web Color Sliders" });
         let closed_boundary = scene.snapshot();
         let outside = pos2(2.0, scene.size.y - 2.0);
         assert!(!scene.popover().contains(outside));
         assert!(scene.mode_rows().iter().all(|(_, _, r)| !r.contains(outside)));
         scene.click(outside);
         scene.idle(3);
-        assert!(scene.app.ui.dialog.is_none());
-        assert!(!egui::Popup::is_any_open(&scene.ctx));
+        assert!(!scene.editor_open());
+        assert!(!scene.child_open());
         assert_eq!(scene.snapshot(), closed_boundary);
     }
 }
@@ -431,16 +368,33 @@ fn gradient_stop_mode_freeform_point_uses_the_same_real_menu() {
     scene.open_stop();
     let before = scene.snapshot();
     let original = scene.gradient();
-    scene.open_mode("RGB");
-    scene.assert_modes(Some("RGB"));
-    scene.choose_mode("HSB");
-    assert_eq!(scene.app.ui.color_mode, Some(Mode::Hsb));
+    scene.open_mode("RGB Sliders");
+    scene.assert_modes(Some("RGB Sliders"));
+    scene.choose_mode("HSB Sliders");
+    assert_eq!(scene.app.ui.color_panel.mode, Mode::HsbSliders);
     assert_eq!(scene.gradient(), original, "display-only point editing keeps every freeform point");
     assert_eq!(scene.snapshot(), before);
-    scene.open_mode("HSB");
+    let (points, _) = scene.app.session.proxy_freeform(false).unwrap();
+    let undo = scene.app.session.active().unwrap().history.undo.len();
+    let geometry = scene.geometry();
+    scene.open_mode("HSB Sliders");
+    scene.choose_mode("CMYK Sliders");
+    let (converted, _) = scene.app.session.proxy_freeform(false).unwrap();
+    assert_eq!(converted.points[0].color.model(), cms::Model::Cmyk);
+    let mut expected = points;
+    expected.points[0].color = converted.points[0].color;
+    assert_eq!(converted, expected, "conversion changes only the selected freeform point's color");
+    assert_eq!(scene.geometry(), geometry);
+    assert_eq!(scene.app.session.active().unwrap().history.undo.len(), undo + 1);
+    scene.app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(serde_json::to_value(scene.app.session.active().unwrap().doc.as_ref()).unwrap(), before["doc"]);
+    assert_eq!(scene.gradient(), original, "one Undo restores the complete point paint");
+    scene.idle(3);
+    let boundary = scene.snapshot();
+    scene.open_mode("RGB Sliders");
     scene.escape();
     scene.assert_editor();
     scene.escape();
-    assert!(scene.app.ui.dialog.is_none());
-    assert_eq!(scene.snapshot(), before);
+    assert!(!scene.editor_open());
+    assert_eq!(scene.snapshot(), boundary, "both Escape stages preserve artwork and history");
 }
