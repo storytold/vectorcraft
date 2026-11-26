@@ -53,6 +53,8 @@ Cargo's `install.root`, use that installation root's `bin` directory instead. Ad
 to the `PATH` inherited by the MCP client, not just an interactive shell, and restart
 the client after changing its environment. Installing does not start or register a server.
 
+Follows [RFC-0018](https://github.com/storytold/craft-contrib/blob/main/rfcs/0018-cli-conventions.md) (command-line conventions), in `vectorcraft-cli`: clap parses every subcommand, so an unknown or repeated flag, a bad value or a conflicting pair of flags is a usage error (exit 2, on stderr) before any work starts; failures exit 1 as `error: …`, and a process ended by a signal exits 128 plus its number (130 for Ctrl-C); a value that starts with `-` is written `--cmd=-x`; `-V`/`--version` and generated `--help` work on every subcommand (`vectorcraft-cli convert --version`). `cargo run -p vectorcraft-cli --example man-and-completions -- DIR` writes the shell completions and man pages; the Linux and FreeBSD packages install them for bash, zsh and fish (a Nightly leaves them out).
+
 Other clients use the same command in their JSON config:
 
 ```json

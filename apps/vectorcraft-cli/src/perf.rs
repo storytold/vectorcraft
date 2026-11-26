@@ -4,6 +4,7 @@
 //! average above three quarters of the cores, or on Windows more than three quarters of the
 //! cores busy over a second) they are noise, and the report says so.
 
+use std::io::Write;
 use std::time::Instant;
 
 use serde_json::json;
@@ -11,6 +12,8 @@ use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Document, Node, hit};
 use vectorcraft_geom::{Affine, Point, Rect, shapes};
 use vectorcraft_render::{RenderOptions, Renderer};
+
+use crate::cli::PerfArgs;
 
 /// Deterministic xorshift in 0..1.
 struct Rng(u64);
@@ -67,7 +70,7 @@ fn median_ms(runs: usize, mut f: impl FnMut()) -> f64 {
 /// Exercise the application's native save/open commands, including previews, PDF output,
 /// compression and API base64 conversion. Session setup and validation are outside timing.
 /// Five measured runs follow one warmup; no filesystem or GPU window is involved.
-fn native_io(doc: &Document) -> Result<(), String> {
+fn native_io(doc: &Document, out: &mut dyn Write) -> Result<(), PerfError> {
     for (label, compatible, preview) in [
         ("default options", None, false),
         ("PDF disabled", Some(false), false),
@@ -114,7 +117,7 @@ fn native_io(doc: &Document) -> Result<(), String> {
         opens.sort_by(f64::total_cmp);
         let save = saves.get(2).copied().ok_or("no save measurements")?;
         let open = opens.get(2).copied().ok_or("no open measurements")?;
-        outln!("  native {label}: save {save:.2} ms, open {open:.2} ms, {size} bytes, PDF {has_pdf}, compressed {compressed}");
+        writeln!(out, "  native {label}: save {save:.2} ms, open {open:.2} ms, {size} bytes, PDF {has_pdf}, compressed {compressed}")?;
     }
     Ok(())
 }
@@ -287,7 +290,7 @@ fn pointing(n: usize, rows: &mut Vec<(String, f64)>) -> Result<(), String> {
 /// `--deep`: tracked rows (no budget yet) for work the budgets above don't reach: editing a whole
 /// selection, live effects, every Pathfinder operation, typing in a long story, and memory, with
 /// the peak so far where `rss_mb` reads one.
-fn deep(n: usize) -> Result<(), String> {
+fn deep(n: usize, out: &mut dyn Write) -> Result<(), PerfError> {
     let err = |e: vectorcraft_engine::EngineError| e.to_string();
     let mut rows: Vec<(String, f64)> = vec![];
     let mut mem: Vec<(String, f64, Option<f64>)> = vec![];
@@ -433,65 +436,62 @@ fn deep(n: usize) -> Result<(), String> {
     let svg = vectorcraft_svg::export(&doc, &vectorcraft_svg::ExportOptions::default());
     let saved = vectorcraft_format::save_file(&doc);
     let reopened = vectorcraft_format::load(&saved).map_err(|e| e.to_string())?;
-    outln!("  output hash: SVG export {:016x}, save→open→save {:016x}", fnv(svg.as_bytes()), fnv(&vectorcraft_format::save_file(&reopened)));
+    writeln!(out, "  output hash: SVG export {:016x}, save→open→save {:016x}", fnv(svg.as_bytes()), fnv(&vectorcraft_format::save_file(&reopened)))?;
     note("after the SVG export and save→open→save");
-    outln!("  tracked (no budget yet)");
+    writeln!(out, "  tracked (no budget yet)")?;
     for (name, ms) in &rows {
-        outln!("{}", tracked_row(name, *ms));
+        writeln!(out, "{}", tracked_row(name, *ms))?;
     }
     // `rss_mb` reads the working set on Windows.
     let memory = if cfg!(windows) { "working set" } else { "memory" };
     for (what, mb, peak) in &mem {
-        outln!("{}", memory_row(&format!("{memory} {what}"), *mb, *peak));
+        writeln!(out, "{}", memory_row(&format!("{memory} {what}"), *mb, *peak))?;
     }
     Ok(())
 }
 
-pub fn run(args: &[String]) -> Result<(), String> {
-    if crate::help_requested(args, &["--paths", "--artboards"]) {
-        return crate::help();
+/// Why `perf` failed.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum PerfError {
+    /// Building or measuring failed; the engine reports it as text.
+    #[error("{0}")]
+    Measure(String),
+    #[error("{0} budget(s) exceeded")]
+    OverBudget(usize),
+    #[error("can't write to stdout: {0}")]
+    Stdout(#[from] std::io::Error),
+}
+
+impl From<&str> for PerfError {
+    fn from(message: &str) -> Self {
+        Self::Measure(message.to_owned())
     }
-    let mut n = 50_000usize;
-    let mut want_deep = false;
-    let mut want_native = false;
-    let mut artboards = None::<usize>;
-    let mut it = args.iter();
-    while let Some(a) = it.next() {
-        match a.as_str() {
-            "--deep" => want_deep = true,
-            "--native-io" => want_native = true,
-            "--artboards" => {
-                artboards =
-                    Some(it.next().and_then(|v| v.parse().ok()).filter(|n| (1..=4).contains(n)).ok_or("--artboards needs a number from 1 to 4")?)
-            }
-            "--paths" => n = it.next().and_then(|v| v.parse().ok()).ok_or("--paths needs a number")?,
-            other => return Err(format!("unknown perf option `{other}`")),
-        }
+}
+
+impl From<String> for PerfError {
+    fn from(message: String) -> Self {
+        Self::Measure(message)
     }
-    if want_native && n > 50_000 {
-        return Err("--native-io allows at most 50000 paths".into());
-    }
-    if want_native && want_deep {
-        return Err("--native-io and --deep are separate measurement modes".into());
-    }
-    if artboards.is_some() && !want_native {
-        return Err("--artboards requires --native-io".into());
-    }
-    let artboards = artboards.unwrap_or(1);
+}
+
+/// Runs `vectorcraft-cli perf`, printing the report to `out`.
+pub(crate) fn run(args: &PerfArgs, out: &mut dyn Write) -> Result<(), PerfError> {
+    let (n, want_deep, want_native) = (args.paths, args.deep, args.native_io);
+    let artboards = usize::from(args.artboards.unwrap_or(1));
     let cores = std::thread::available_parallelism().map_or(1, |c| c.get());
     // The figure is the 1-minute load average, or on Windows the cores busy over one second.
     #[cfg(not(windows))]
     let (load, label) = (load_average(), "load average");
     #[cfg(windows)]
     let (load, label) = (busy_cores(cores), "cores busy");
-    outln!("VectorCraft performance budgets — {n} paths, {cores} cores, {label} {}", load.map_or("?".into(), |l| format!("{l:.1}")));
+    writeln!(out, "VectorCraft performance budgets — {n} paths, {cores} cores, {label} {}", load.map_or("?".into(), |l| format!("{l:.1}")))?;
     let noisy = load.is_some_and(|l| l > cores as f64 * 0.75);
     if noisy {
-        outln!("WARNING: the machine is busy; wall-clock timings below are not trustworthy.");
+        writeln!(out, "WARNING: the machine is busy; wall-clock timings below are not trustworthy.")?;
     }
     let t = Instant::now();
     let mut doc = synthetic(n)?;
-    outln!("  (built in {:.0} ms)", t.elapsed().as_secs_f64() * 1000.0);
+    writeln!(out, "  (built in {:.0} ms)", t.elapsed().as_secs_f64() * 1000.0)?;
     if want_native {
         let first = doc.artboards.first().cloned().ok_or("synthetic document has no artboard")?;
         // Overlapping artboards intentionally repeat the same paths on every PDF page.
@@ -501,8 +501,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
             page.name = format!("Perf {}", index + 1);
             doc.artboards.push(page);
         }
-        outln!("  application native I/O: {artboards} overlapping artboard(s), one warmup + five samples; medians; no disk I/O");
-        return native_io(&doc);
+        writeln!(out, "  application native I/O: {artboards} overlapping artboard(s), one warmup + five samples; medians; no disk I/O")?;
+        return native_io(&doc, out);
     }
 
     let mut rows: Vec<(&str, f64, f64)> = vec![];
@@ -570,26 +570,26 @@ pub fn run(args: &[String]) -> Result<(), String> {
     rows.push(("handle drag, 5,000-anchor path (per move)", handle, 8.0));
     rows.push(("segment drag, 5,000-anchor path (per move)", segment, 8.0));
     if let Some(e) = failed {
-        return Err(e);
+        return Err(PerfError::Measure(e));
     }
     if want_deep {
-        deep(n)?;
+        deep(n, out)?;
     }
 
     let mut over = 0;
-    outln!("  {:<42} {:>10} {:>10}", "", "measured", "budget");
+    writeln!(out, "  {:<42} {:>10} {:>10}", "", "measured", "budget")?;
     for (name, ms, budget) in &rows {
         let ok = ms <= budget;
         over += usize::from(!ok);
-        outln!("{}", budget_row(name, *ms, *budget, ok));
+        writeln!(out, "{}", budget_row(name, *ms, *budget, ok))?;
     }
     match (over, noisy) {
         (0, _) => Ok(()),
         (_, true) => {
-            outln!("{over} over budget, but the machine is busy: re-run when idle.");
+            writeln!(out, "{over} over budget, but the machine is busy: re-run when idle.")?;
             Ok(())
         }
-        _ => Err(format!("{over} budget(s) exceeded")),
+        _ => Err(PerfError::OverBudget(over)),
     }
 }
 
@@ -599,20 +599,7 @@ mod tests {
 
     #[test]
     fn native_io_exercises_the_application_save_and_open_commands() {
-        native_io(&synthetic(3).unwrap()).unwrap();
-    }
-
-    #[test]
-    fn native_io_rejects_conflicting_modes_and_excessive_workloads() {
-        for (args, expected) in [
-            (vec!["--native-io", "--deep"], "separate measurement modes"),
-            (vec!["--native-io", "--paths", "50001"], "at most 50000"),
-            (vec!["--native-io", "--artboards", "5"], "1 to 4"),
-            (vec!["--artboards", "1"], "requires --native-io"),
-            (vec!["--artboards", "2"], "requires --native-io"),
-        ] {
-            assert!(run(&args.into_iter().map(str::to_owned).collect::<Vec<_>>()).unwrap_err().contains(expected));
-        }
+        native_io(&synthetic(3).unwrap(), &mut Vec::new()).unwrap();
     }
 
     #[test]
