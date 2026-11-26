@@ -16,7 +16,7 @@
 use craft::behavior::{Selection, keyed};
 use craft::host::PickRequest;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, CollectionEvent, Props as _, Show as _, ShowCollection as _, ShowContainer as _, Sizing, clicked};
+use craft::ui::contract::{Bind, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, Sizing, clicked};
 use craft::ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, StackDialog, dialog_id};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
@@ -199,22 +199,21 @@ const LIST_ROWS: u16 = 6;
 
 fn body(ui: &mut Ui, files: &[(String, String)], form: &mut Form) {
     let source = keyed(files, |(linked, _): &(String, String)| linked.clone());
-    let selection =
-        selected_row(files, &form.selected).and_then(|i| files.get(i)).map(|(linked, _)| Selection::single(linked.clone())).unwrap_or_default();
-    let list = List::<String>::options(tl!("Linked files"))
+    let selected = selected_row(files, &form.selected).map(|i| &files[i].0);
+    let mut selection = selected.map(|linked| Selection::single(linked.clone())).unwrap_or_default();
+    List::new(tl!("Linked files"))
+        .select(SelectMode::Single)
         .min_rows(LIST_ROWS)
         .max_rows(LIST_ROWS)
-        .selection(Bind::given(selection))
+        .selection(Bind::bound(&mut selection))
         .sizing(Sizing::FillWidth)
         .empty(tl!("No JavaScript files linked"))
         .show_items(ui, &source, &mut |key, _| {
             // Paths and URLs are data: shown as they are.
             ListRow::new(files.iter().find(|(linked, _)| linked == key).map_or_else(String::new, |(_, shown)| shown.clone()))
         });
-    for event in list.events {
-        if let CollectionEvent::Activate(key) = event {
-            form.selected = key;
-        }
+    if selection.items.first() != selected {
+        form.selected = selection.items.into_iter().next().unwrap_or_default();
     }
     Field::new(caption("File or URL:")).show(ui, |ui, _| {
         let request = PickRequest::open("javascript").filter("JavaScript", &["js"]);
@@ -243,6 +242,7 @@ mod tests {
 
     use craft::host::{AppInfo, Host, Picked, ScriptedFiles};
     use craft::ui::testing::Fixture;
+    use egui::{Key, Modifiers};
     use vectorcraft_engine::Session;
 
     use super::*;
@@ -286,6 +286,26 @@ mod tests {
         let linked = panel.app().session.active().map(|st| st.doc.svg_scripts.clone()).unwrap_or_default();
         assert!(linked.iter().any(|f| f == "https://example.com/b.js"), "{linked:?}");
         assert_eq!(json_selected(&panel), json!("https://example.com/b.js"));
+    }
+
+    #[test]
+    fn arrow_navigation_changes_which_javascript_file_remove_unlinks() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        for file in ["scripts/first.js", "scripts/second.js"] {
+            app.run("svgInteractivity.addFile", json!({"file": file})).unwrap();
+        }
+        let mut panel = Panel::new(app, draw);
+        panel.app().run("ui.javascriptFilesDialog", json!({})).unwrap();
+        panel.frame();
+        panel.frame();
+
+        panel.click("scripts/first.js");
+        assert_eq!(json_selected(&panel), "scripts/first.js");
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        assert_eq!(json_selected(&panel), "scripts/second.js");
+        panel.click(tl!("Remove"));
+        assert_eq!(panel.app().session.active().unwrap().doc.svg_scripts, ["scripts/first.js"]);
     }
 
     /// In a frame drawn with read roots in force, the list names a linked file outside them by its
