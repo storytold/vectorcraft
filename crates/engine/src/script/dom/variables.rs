@@ -352,7 +352,7 @@ fn file_arg(h: &Host, a: &[Data], what: &str, access: Access) -> std::result::Re
     if path.chars().count() > super::super::files::MAX_PATH_CHARS {
         return Err(HostError::Range(format!("{what}: the path is too long")));
     }
-    let gate = h.disk.borrow().gate(Vec::new());
+    let gate = h.disk.borrow().gate(Vec::new(), crate::file_access::LinkedFiles::default());
     gate.check(path, access).map_err(HostError::Error)?;
     Ok(path.to_string())
 }

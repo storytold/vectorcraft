@@ -27,12 +27,12 @@ fn undo_steps(s: &Session) -> usize {
     s.active().unwrap().history.undo.len()
 }
 
-/// A document with a type object and a rectangle.
+/// A document with a rectangle and, above it, a type object, so `pageItems[0]` is the type and `pageItems[1]` the rectangle.
 fn doc() -> (Session, NodeId, NodeId) {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
-    let t = NodeId(s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Hello"})).unwrap()["id"].as_u64().unwrap());
     let r = NodeId(s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap());
+    let t = NodeId(s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Hello"})).unwrap()["id"].as_u64().unwrap());
     (s, t, r)
 }
 
