@@ -587,7 +587,7 @@ pub fn paint_profile(cx: &ContentPainterCx, rect: Rect, points: Option<&[(f64, f
 /// first member's.
 pub(crate) fn brush_keeps_size(app: &mut VectorcraftApp, shown: Option<&StrokeLayer>) -> Option<bool> {
     let st = app.session.active()?;
-    let bucket = app.session.bucket_paints();
+    let bucket = app.session.tool_paints(true);
     if bucket || (st.selection.objects.is_empty() && st.selection.subjects().is_empty()) {
         let s = shown?;
         let name = s.brush.as_deref()?;

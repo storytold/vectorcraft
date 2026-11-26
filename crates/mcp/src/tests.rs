@@ -776,6 +776,15 @@ fn set_paint_reports_how_many_objects_it_painted() {
     assert_eq!(v["objects"], 2, "{v}");
     let v = paint(&mut s, 16, json!({"strokeWidth": 2}));
     assert_eq!(v["objects"], 2, "{v}");
+
+    // While the Shape Builder is the active tool, the fill goes to new art only and the stroke to
+    // the selection: the reply names the command that painted nothing.
+    let r = call(&mut s, 17, "select_tool", json!({"tool": "shapeBuilder"}));
+    assert_eq!(r["isError"], false, "{r}");
+    let v = paint(&mut s, 18, json!({"fill": "#ff00ff", "stroke": "#00ffff"}));
+    assert_eq!(v["objects"], 2, "{v}");
+    assert_eq!(v["unpainted"], json!(["paint.setFill"]), "{v}");
+    assert!(v["note"].as_str().is_some_and(|n| n.contains("Shape Builder")), "{v}");
 }
 
 /// #1003: type made on or in a path takes add_text's `color` too, over the current fill.
