@@ -257,7 +257,8 @@ impl Scene {
         let found: Vec<_> = self
             .nodes
             .iter()
-            .filter(|node| node.role() == Role::Group && node.label() == Some("Color Ramp"))
+            // The component and its interactive bar share a name; only the bar carries the mode value.
+            .filter(|node| node.role() == Role::Group && node.label() == Some("Color Ramp") && node.value() == Some("RGB Sliders"))
             .filter_map(Self::node_rect)
             .filter(|rect| popover.contains(rect.center()))
             .collect();

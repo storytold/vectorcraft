@@ -218,6 +218,9 @@ impl StackDialog for GradientStopPopover {
             .at_point(*at)
             .close_on_enter(true)
             .show(ui, |ui, _| body(ui, feed, tab, panel, filed));
+        if shown.inner == Some(true) {
+            return Some(DialogResult::Cancel);
+        }
         match shown.output.closed {
             Some(CloseReason::Enter) => Some(DialogResult::Ok(set.clone())),
             Some(_) => Some(DialogResult::Cancel),
@@ -268,7 +271,8 @@ impl StackDialog for GradientStopPopover {
 
 /// The popover's body: the tabs and the eyedropper, the Color panel or the swatches, then opacity and location (a
 /// point: spread). What the user edits is filed in `filed`.
-fn body(ui: &mut Ui, feed: &Feed, tab: &mut Tab, panel: &mut ColorPanelState, filed: &mut Filed) {
+fn body(ui: &mut Ui, feed: &Feed, tab: &mut Tab, panel: &mut ColorPanelState, filed: &mut Filed) -> bool {
+    let mut outside = false;
     Stack::new().show(ui, |ui, _| {
         Row::new().show(ui, |ui, _| {
             let tabs = [
@@ -282,7 +286,7 @@ fn body(ui: &mut Ui, feed: &Feed, tab: &mut Tab, panel: &mut ColorPanelState, fi
                 filed.eyedropper |= DropperButton::new(tip, Bind::given(false)).show(ui).edit.value() == Some(&true);
             }
             if *tab == Tab::Color {
-                mode_menu(ui, &feed.shown, panel.mode);
+                outside |= mode_menu(ui, &feed.shown, panel.mode);
             }
         });
         match *tab {
@@ -307,11 +311,12 @@ fn body(ui: &mut Ui, feed: &Feed, tab: &mut Tab, panel: &mut ColorPanelState, fi
             *amount = percent_field(ui, label.to_owned(), feed.amount).or(*amount);
         });
     });
+    outside
 }
 
 /// The Color panel's existing five mode commands. Native menu ownership keeps its parent popover
 /// open on a pick and gives the child the first Escape, including rows outside the parent bounds.
-fn mode_menu(ui: &mut Ui, shown: &ColorPanelShown, fallback: ColorPanelMode) {
+fn mode_menu(ui: &mut Ui, shown: &ColorPanelShown, fallback: ColorPanelMode) -> bool {
     let words = Env::of(ui).words::<ColorPanelWords>();
     let label = match shown {
         ColorPanelShown::Mode(mode) => mode.label(&words),
@@ -319,11 +324,13 @@ fn mode_menu(ui: &mut Ui, shown: &ColorPanelShown, fallback: ColorPanelMode) {
         _ => fallback.label(&words),
     };
     let button = Button::new(label).popup(PopupKind::Menu).show(ui);
-    Menu::new(tl!("Color mode")).opened_by(&button, Trigger::Click).show(ui, |ui, _| {
+    let menu = Menu::new(tl!("Color mode")).opened_by(&button, Trigger::Click).show(ui, |ui, _| {
         for mode in ColorPanelMode::FILL_STROKE {
             MenuItem::command(mode.command()).show(ui);
         }
     });
+    // The child absorbs an outside press before its parent sees it. Close both for that event only.
+    menu.output.closed == Some(CloseReason::Outside)
 }
 
 /// Document swatches as tiles: a pick gives the stop (or point) that colour.
