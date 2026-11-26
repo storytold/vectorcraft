@@ -2809,12 +2809,14 @@ other files through `$`:
   the undo history as they were before the call. `move` on an object that is hidden or locked, inside a hidden or
   locked layer or group, or on a locked artboard throws `Cannot move` and moves nothing. `duplicate` on such an
   object, with or without a relative object, throws `Cannot duplicate` and makes no copy. Assigning `hidden`,
-  `locked`, `opacity`, `position`, `left`, `top`, `width` or `height` to an object in a hidden or locked layer
+  `locked`, `opacity`, `position`, `left`, `top`, `width` or `height` to an object in a hidden or locked layer or on a locked artboard
   throws `Cannot edit` and changes nothing, even when the value is the one the object has, and `zOrder()` on such
   an object throws `Cannot edit` too. The one exception is `opacity` given the value the object already has, which
   changes nothing and does not throw; on a graph's mark or label whose series or kind keeps another opacity, that
   value would still change the graph, so it throws `Cannot edit` as well. Its `name` and `note` still change, and an
-  object that is hidden or locked itself takes all of them (VectorCraft's own rule). `move` with the object itself
+  object that is hidden or locked itself takes `hidden`, `locked` and `opacity` (VectorCraft's own rule). Position,
+  size and stacking-order changes also require a selectable object. Other targets excluded by selection filtering,
+  including guide paths while Lock Guides is on, throw `Cannot select`. `move` with the object itself
   as the relative object and `PLACEBEFORE` or `PLACEAFTER` leaves it where it is and adds no undo step. When `move`
   or `remove()` takes the last path out of a compound path, the compound path stays, empty, so a script that holds
   it can still read it (`remove()` runs `edit.clear` with `keepEmpty: true`). An object with nothing in it, such
