@@ -249,7 +249,8 @@ pub fn canvas_submenu(doc: &vectorcraft_doc::Document, ids: &[u64]) -> Option<No
     let groups: Vec<Node> = context_commands(ContextMenu::Canvas, doc, ids)
         .into_iter()
         .map(|(name, commands)| {
-            let items = commands.into_iter().map(|command| cp(command.label, command.command, json!({ "ids": ids })).enabled(command.enabled)).collect();
+            let items =
+                commands.into_iter().map(|command| cp(command.label, command.command, json!({ "ids": ids })).enabled(command.enabled)).collect();
             sub(name, items)
         })
         .collect();
