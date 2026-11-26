@@ -719,7 +719,7 @@ struct CommandRun {
 /// step. The dialog runs only on the document that was active when it opened. False for any other
 /// command or params, which then run as they were given.
 pub fn open_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
-    let only_ids = p.as_object().is_none_or(|o| o.keys().all(|k| k == "ids")) && p.get("ids").is_none_or(Value::is_array);
+    let only_ids = (p.is_null() || p.as_object().is_some_and(|o| o.keys().all(|k| k == "ids"))) && p.get("ids").is_none_or(Value::is_array);
     if !only_ids {
         return false;
     }

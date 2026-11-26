@@ -872,6 +872,27 @@ fn a_plugin_command_dialog_stays_with_its_document() {
     h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
 }
 
+/// A command with parameters given params that are neither nothing nor an object of `ids` alone
+/// opens no dialog: they go to the command as they were given, and it changes nothing.
+#[test]
+fn a_plugin_command_given_other_params_opens_no_dialog() {
+    let mut h = window(app());
+    let id = "test.ui.context.params";
+    let size = vectorcraft_engine::cmd::plugin::command_id(id, "size");
+    let commands = r#"[{"id":"size","label":"Size","params":{"by":{"type":"number","min":0,"max":10,"default":2}}}]"#;
+    let app = h.state_mut();
+    app.run("plugin.install", json!({"dataBase64": context_plugin(id, commands)})).unwrap();
+    let target = red_rect(app);
+    let undo = app.session.doc().unwrap().history.undo.len();
+    for p in [json!(5), json!("by"), json!([target.0]), json!({"ids": target.0})] {
+        menus::invoke(h.state_mut(), &size, p.clone());
+        step(&mut h);
+        assert!(h.state().plugin_dialog.is_none(), "{p} opens no dialog");
+        assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo, "{p} changes nothing");
+    }
+    h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
+}
+
 /// The `grant` and `allowHeavy` that `ui.installPlugin` is given approve nothing: it asks all the
 /// same, and what OK would approve comes from the manifest. A module with nothing to approve
 /// installs without either.
