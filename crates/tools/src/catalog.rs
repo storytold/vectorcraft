@@ -35,6 +35,8 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
         t("deleteAnchor", "Delete Anchor Point Tool", Some("-"), "tool-pen-delete"),
         t("anchorPoint", "Anchor Point Tool", Some("Shift+C"), "tool-anchor"),
         t(crate::quickpen::ID, "Quick Pen Tool", Some("Alt+P"), "tool-quick-pen"),
+        // Smart Pen's tool, kept out of `addons::GROUPS` so that `all_tools` lists it once.
+        t(crate::addons::smart_pen::ID, "Smart Pen Tool", None, "spline-pointer"),
     ],
     &[t("curvature", "Curvature Tool", Some("Shift+~"), "tool-curvature")],
     &[

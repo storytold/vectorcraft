@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use craft::behavior::{Axis, DockSide, IconId};
 use craft::ui::buttons::IconButton;
-use craft::ui::contract::{Bind, BodyCx, PlainData, Show as _, SizeLimits, Tracked};
+use craft::ui::contract::{Bind, BodyCx, PlainData, Props as _, Show as _, SizeLimits, Tracked};
 use craft::ui::docking::{
     ColumnCards, DockCommands, DockConfig, DockEvent, DockGrid, DockPanels, DockScene, DockSizes, DockTo, DragUnit, FloatSpace, GroupAt, HidePanels,
     PanelKey, PanelSpec, PanelSpecs, actions as command_actions, move_actions, request_actions,
@@ -1256,7 +1256,10 @@ impl DockPanels<String> for Panels<'_> {
 
     fn group_header(&mut self, panels: &[String], active: usize, ui: &mut egui::Ui, _cx: &mut BodyCx<'_>) {
         let Some(panel) = panels.get(active).filter(|p| sizes::has_sizes(p)) else { return };
-        IconButton::command(IconId::new("dc-cycle-sizes"), CommandRef::with_params("window.panel.cycleOptions", json!({"panel": panel}))).show(ui);
+        // The command has no menu item, so its label comes from here: the button and its tooltip are named by it.
+        IconButton::command(IconId::new("dc-cycle-sizes"), CommandRef::with_params("window.panel.cycleOptions", json!({"panel": panel})))
+            .label(tl!("Cycle Display Sizes"))
+            .show(ui);
     }
 
     fn panel_rows(&mut self, panel: &String) -> Vec<PanelRow> {

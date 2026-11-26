@@ -93,13 +93,18 @@ build root every helper stays inside). `packaging/nightly-tests.py` runs the syn
 runs them with the Windows PowerShell suites, and `.github/workflows/nightly-macos.yml` builds and
 verifies the unsigned bundle behind the `full-ci` label.
 
-Every Linux Nightly format starts the app the same way, through one launcher
-(`packaging/linux/nightly-launch.sh`): the plain tar's `vectorcraft`, the deb/rpm's
-`/usr/bin/vectorcraft-nightly`, the AppImage's `AppRun`, the Arch handoff's `bin/vectorcraft` and
-the Flatpak's `/app/bin/vectorcraft`. It runs the GUI beside it (`<app>-bin`, the standard Nightly
-layout; `/usr/lib/vectorcraft-nightly/vectorcraft-bin` for deb/rpm, `/app/libexec/vectorcraft-bin`
-inside the Flatpak) with `--launch-profile nightly-v1 --profile-root <dir> -- "$@"`, and passes a
-version query, help or the Launcher's own `--launch-profile` invocation straight through. The
+Every packaged Linux Nightly format starts the app the same way, through one launcher
+(`packaging/linux/nightly-launch.sh`): the deb/rpm's `/usr/bin/vectorcraft-nightly`, the AppImage's
+`AppRun`, the Arch handoff's `bin/vectorcraft` and the Flatpak's `/app/bin/vectorcraft`. It runs the
+GUI beside it (`<app>-bin`, the standard Nightly layout;
+`/usr/lib/vectorcraft-nightly/vectorcraft-bin` for deb/rpm, `/app/libexec/vectorcraft-bin` inside the
+Flatpak) with `--launch-profile nightly-v1 --profile-root <dir> -- "$@"`, and passes a version query,
+help or the Launcher's own `--launch-profile` invocation straight through. The plain tar's
+`vectorcraft` is craft-common-actions' shared template instead
+(`packaging/linux/nightly-tar-launch.sh`, #363 rendered for this app): it adds its own tokens unless the first argument is already a `--launch-profile` pair,
+execs `vectorcraft-bin` beside it with
+`--profile-root <${XDG_DATA_HOME:-~/.local/share}/ai.storyteller.vectorcraft.nightly> --`, and asks a
+bare `--version`/`-V` in the Launcher's form. The
 Nightly tar therefore holds `vectorcraft` (launcher), `vectorcraft-bin` (GUI), `vectorcraft.png`
 (the Nightly art) and the notices.
 

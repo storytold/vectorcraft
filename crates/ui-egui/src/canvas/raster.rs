@@ -816,7 +816,8 @@ pub(super) fn backdrop(
     let paper = paper_color(setup);
     let b = if shows_artboards(app) {
         crate::display_profile::Backdrop {
-            everywhere: None,
+            // In Overprint Preview the canvas around the artboards is white paper.
+            everywhere: vectorcraft_render::proof::overprint_preview_on().then_some([255; 3]),
             artboards: st.doc.artboards.iter().map(|ab| (ab.rect, rgb(artboard_paper(ab, paper)))).collect(),
             grid: shows_transparency_grid(st).then(|| (setup.grid_colors.map(|c| rgb(crate::panels::c32(&c))), setup.grid_size.cell())),
         }
