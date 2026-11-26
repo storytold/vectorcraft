@@ -460,7 +460,7 @@ fn the_eyedropper_armed_for_the_bucket_answers_no_opacity() {
     s.select_tool("eyedropper", ViewInfo::default()).unwrap();
     assert_eq!(proxies(&mut s)["fillOpacity"], 100.0, "the Eyedropper alone shows the selection's");
     s.set_tool_option("stop", &json!("livePaintBucket"));
-    assert!(s.bucket_paints());
+    assert!(s.tool_paints(false) && s.tool_paints(true));
     assert_eq!(proxies(&mut s)["fillOpacity"], Value::Null);
     assert_eq!(proxies(&mut s)["strokeOpacity"], Value::Null);
 }
