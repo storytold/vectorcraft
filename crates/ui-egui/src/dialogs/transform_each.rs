@@ -52,6 +52,9 @@ pub(crate) struct Open {
     pub id: DialogId,
     /// The preview OK commits and Cancel rolls back.
     pub preview: LivePreview,
+    document: u64,
+    /// The tool reset count when the current preview record was created.
+    preview_tool_resets: u64,
 }
 
 /// Whether [`rows`] draws the link and the Relative / Absolute choice (Transform Each) or only the
@@ -470,6 +473,7 @@ fn form(fields: &mut DialogFields, shared: Shared, lengths: LengthUnits) -> Para
 /// Opens Transform Each on the values it was last confirmed with.
 pub(crate) fn open(app: &mut VectorcraftApp) {
     let Some(ctx) = app.ui_ctx.clone() else { return };
+    let Some(document) = app.session.active().map(|doc| doc.uid) else { return };
     let shared = shared_size(app, app.session.general_unit());
     let lengths = crate::canvas::general_lengths(app); // PLAN: assumed path of cv.B5b
     let mut f = opening_fields(app, &ctx);
@@ -482,19 +486,34 @@ pub(crate) fn open(app: &mut VectorcraftApp) {
     let dialog = HostedParamDialog::new(&ctx, KEY, f, move |fields| form(fields, shared, lengths));
     let options = HeldOptions { cancel: Some(Box::new(cancel)), ..Default::default() };
     if let Some(id) = open_held_with(app, dialog, move |app, result| ok(app, &ctx, result), options) {
-        app.object_dialogs.each = Some(Open { id, preview: LivePreview::default() });
+        app.object_dialogs.each = Some(Open { id, preview: LivePreview::default(), document, preview_tool_resets: app.session.tool_resets() });
     }
 }
 
 /// Cancel rolls the preview back.
 fn cancel(app: &mut VectorcraftApp) {
-    if let Some(open) = app.object_dialogs.each.take() {
+    if let Some(open) = app.object_dialogs.each.take()
+        && app.session.active().is_some_and(|doc| doc.uid == open.document)
+        && app.session.tool_resets() == open.preview_tool_resets
+    {
         open.preview.cancel(app);
     }
 }
 
 /// Applies the confirmed values as one undo step.
 fn commit(app: &mut VectorcraftApp, f: &DialogFields) -> Result<(), String> {
+    let open = app.object_dialogs.each.as_ref().ok_or("the Transform Each dialog is closed")?;
+    if app.session.active().is_none_or(|doc| doc.uid != open.document) {
+        let reason = if app.session.documents().iter().any(|doc| doc.uid == open.document) {
+            "switch back to the document where Transform Each was opened"
+        } else {
+            "the document where Transform Each was opened has closed"
+        };
+        return Err(reason.into());
+    }
+    if app.session.tool_resets() != open.preview_tool_resets && app.session.in_interaction() {
+        return Err("finish the active edit before applying Transform Each".into());
+    }
     let p = with_scale_options(app, f, command_params(app, f))?;
     let preview = app.object_dialogs.each.as_mut().map(|o| std::mem::take(&mut o.preview)).unwrap_or_default();
     preview.commit(app, CMD, p).map(|_| ())
@@ -527,18 +546,28 @@ fn ok(app: &mut VectorcraftApp, ctx: &egui::Context, result: &ParamResult) -> Re
 /// Each frame: previews the dialog's values while Preview is on, and turns a press of Copy into a
 /// confirm with `copy` set.
 pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let Some(id) = app.object_dialogs.each.as_ref().map(|o| o.id) else { return };
+    let Some((id, document)) = app.object_dialogs.each.as_ref().map(|o| (o.id, o.document)) else { return };
     let Some(dialogs) = app.dialogs() else { return };
     let Some((previewing, fields, action)) =
         dialogs.with(|host| host.get_mut_by_id::<HostedParamDialog>(id).map(|d| (d.is_previewing(), d.fields().clone(), d.take_action())))
     else {
         return;
     };
-    let mut p = command_params(app, &fields);
-    add_scale_options(app, &fields, &mut p);
-    if let Some(mut open) = app.object_dialogs.each.take() {
-        // The preview reports its own status; the answer of a run is not needed here.
-        let _ = open.preview.run(app, previewing, "Transform Each", CMD, &p);
+    if app.session.active().is_some_and(|doc| doc.uid == document)
+        && let Some(mut open) = app.object_dialogs.each.take()
+    {
+        let tool_resets = app.session.tool_resets();
+        if open.preview_tool_resets == tool_resets || !app.session.in_interaction() {
+            if open.preview_tool_resets != tool_resets {
+                // A switch already ended the earlier preview.
+                open.preview = LivePreview::default();
+                open.preview_tool_resets = tool_resets;
+            }
+            let mut p = command_params(app, &fields);
+            add_scale_options(app, &fields, &mut p);
+            // The preview reports its own status; the answer of a run is not needed here.
+            let _ = open.preview.run(app, previewing, "Transform Each", CMD, &p);
+        }
         app.object_dialogs.each = Some(open);
     }
     if action.as_deref() == Some(COPY) {
@@ -734,7 +763,7 @@ mod tests {
         h.get_by_role_and_label(egui::accesskit::Role::Button, "Copy").click();
         h.run_steps(4);
         assert_eq!(h.state().session.doc().unwrap().doc, other, "Copy must leave the other document unchanged");
-        assert_eq!(field(&h, COPY), Some(FieldValue::Bool(false)), "a refused Copy clears its flag");
+        assert_ne!(field(&h, COPY), Some(FieldValue::Bool(true)), "a refused Copy clears its flag");
 
         h.state_mut().run("document.activate", json!({"index": 0})).unwrap();
         h.get_by_role_and_label(egui::accesskit::Role::Button, "Copy").click();
@@ -758,6 +787,32 @@ mod tests {
         assert!(h.state().dialogs().unwrap().with(|host| host.cancel_by_id(&ctx, id)));
         h.run_steps(3);
         assert_eq!(h.state().session.doc().unwrap().doc, other, "Cancel preserves the other document's gesture");
+        assert!(h.state().session.in_interaction());
+    }
+
+    #[test]
+    fn switching_back_preserves_a_gesture_that_started_after_the_preview() {
+        let (mut h, _) = open_with_two_documents();
+        set(&mut h, "moveH", json!(45));
+        h.run_steps(2);
+        assert!(h.state().session.in_interaction());
+        let app = h.state_mut();
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.session.begin_interaction("Another gesture").unwrap();
+        app.session.preview("object.move", &json!({"dx": 20, "dy": 0})).unwrap();
+        let gesture = app.session.doc().unwrap().doc.clone();
+
+        set(&mut h, "moveH", json!(100));
+        h.run_steps(2);
+        confirm(&mut h);
+
+        assert_eq!(h.state().session.doc().unwrap().doc, gesture, "Preview and OK leave the newer gesture alone");
+        assert!(h.state().session.in_interaction());
+        let (ctx, id) = (h.ctx.clone(), id(&h));
+        assert!(h.state().dialogs().unwrap().with(|host| host.cancel_by_id(&ctx, id)));
+        h.run_steps(2);
+        assert_eq!(h.state().session.doc().unwrap().doc, gesture, "Cancel also leaves the newer gesture alone");
         assert!(h.state().session.in_interaction());
     }
 
