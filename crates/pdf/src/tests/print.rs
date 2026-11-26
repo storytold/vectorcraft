@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use serde_json::json;
-use vectorcraft_color::{Color, Freeform, FreeformPoint, Gradient, GradientKind, GradientPaint, GradientStop, Paint, Swatch};
+use vectorcraft_color::{BlendMode, Color, Freeform, FreeformPoint, Gradient, GradientKind, GradientPaint, GradientStop, Paint, Swatch};
 use vectorcraft_doc::{Appearance, Artboard, Document, LayerColor, Node, NodeKind};
 use vectorcraft_geom::{Rect, shapes};
 use vectorcraft_testkit::raster::render_region;
@@ -901,6 +901,47 @@ fn overprinting_near_blacks_linked_to_a_missing_swatch_keep_the_cyan_on_postscri
     assert_eq!(drawn(true, 0), (2, 0, 0), "PostScript cyan plate: the cyan and the faint fill");
     assert_eq!(drawn(false, 0), (4, 1, 1), "PDF cyan plate: the cyan, the fill, the gradient, the faint fill, the stroke and the type");
     assert_eq!(drawn(true, 3), (3, 1, 1), "PostScript Black plate: every black, not the faint fill");
+}
+
+#[test]
+fn a_white_spot_ink_keeps_overprinting_on_plates_and_in_simulated_composites() {
+    // With Discard White Overprint on (the default), a paper white square over cyan knocks the
+    // cyan out; one in a white spot ink overprints: it puts no cyan down, so the cyan plate draws
+    // nothing for it, and Simulate composites it with Darken.
+    let white = Color::cmyk(0.0, 0.0, 0.0, 0.0);
+    let square = |paint: Paint| {
+        let mut n =
+            Node::path(vectorcraft_doc::NodeId(0), shapes::rectangle(Rect::new(10.0, 15.0, 30.0, 35.0)), Appearance::basic(paint, Paint::None, 0.0));
+        if let Some(f) = n.appearance.fill_mut() {
+            f.overprint = true;
+        }
+        let mut d = over_cyan(vec![n]);
+        d.swatches.push(Swatch { name: "Opaque White".into(), paint: Paint::solid(white), global: true, spot: true });
+        d
+    };
+    let (paper, spot) = (square(Paint::solid(white)), square(Paint::Solid { color: white, swatch: Some("Opaque White".into()), tint: 1.0 }));
+    assert!(paper.setup.discard_white_overprint);
+    let cyan_fills = |d: &Document, output: serde_json::Value| {
+        let opts = PrintOptions { settings: settings(json!({"output": output})), ..Default::default() };
+        let p = plan(d, &opts).unwrap();
+        let mut count = 0;
+        p.plates[0].walk(|n| count += usize::from(n.appearance.fill().is_some_and(|f| !f.paint.is_none())));
+        count
+    };
+    let seps = json!({"mode": "separations"});
+    assert_eq!((cyan_fills(&paper, seps.clone()), cyan_fills(&spot, seps)), (2, 1), "paper white knocks out; the spot white leaves the cyan");
+    // The white ink printed as process inks is paper white.
+    let converted = json!({"mode": "separations", "inks": [{"name": "Opaque White", "convertToProcess": true}]});
+    assert_eq!(cyan_fills(&spot, converted), 2, "a converted spot white knocks out");
+    assert_eq!(cyan_fills(&spot, json!({"mode": "separations", "spotsToProcess": true})), 2, "so does one with every spot converted");
+    let blends = |d: &Document| {
+        let opts = PrintOptions { settings: settings(json!({"advanced": {"overprints": "simulate"}})), ..Default::default() };
+        let p = plan(d, &opts).unwrap();
+        let mut out = vec![];
+        p.doc.walk(|n| out.extend(n.appearance.fill().filter(|f| f.paint.color() == Some(white)).map(|f| f.blend)));
+        out
+    };
+    assert_eq!((blends(&paper), blends(&spot)), (vec![BlendMode::Normal], vec![BlendMode::Darken]));
 }
 
 #[test]

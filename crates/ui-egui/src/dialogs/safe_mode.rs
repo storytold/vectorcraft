@@ -5,15 +5,16 @@
 //! dialogs live on the dialog host; [`pump`] reads their answers.
 
 use craft::ui::contract::Bind;
-use craft::ui::dialog::{DialogResult, PromptChoice, StandardPrompt, StartupStage, dialog_id};
+use craft::ui::dialog::{DialogResult, PromptChoice, StandardPrompt, dialog_id};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
-use serde_json::Value;
+use serde_json::{Value, json};
 use vectorcraft_plugins::safe_mode::{self, Item};
 
 use crate::VectorcraftApp;
 
-/// Key of the choice after a launch that stopped. It holds `UiState::stopped_plugin` (the item as
-/// `{id, file, name, label}`) until answered. Cancel starts in Safe Mode.
+/// Key of the choice after a launch that stopped. It holds `UiState::stopped_plugin` until
+/// answered: `items` (`[{id, file, name, label}]`, the plug-ins that were loading, oldest first)
+/// and `item` (the first of them). Cancel starts in Safe Mode.
 pub const STOPPED: &str = "pluginStopped";
 
 /// Key of Help › Safe Mode's dialog. It has a check box `enable-{k}` (Enable on Re-launch) and the
@@ -32,17 +33,17 @@ fn enable_key(k: usize) -> String {
 
 /// Before any plug-in loads (desktop): starts this launch's marker in `marker_dir` (none: no
 /// marker), and turns Safe Mode on for `--safe-mode` (`flag`), or until the user chooses after a
-/// launch that stopped while a plug-in was loading → that plug-in, for [`after_start`]. With `flag`
-/// nothing is asked, and the plug-in stays pending (`plugin.safeMode`'s `pendingItem`): the next
-/// launch asks about it.
+/// launch that stopped while plug-ins were loading → those plug-ins, for [`after_start`]. With
+/// `flag` nothing is asked, and the plug-ins stay pending (`plugin.safeMode`'s `pendingItems`): the
+/// next launch asks about them.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn begin_launch(marker_dir: Option<&std::path::Path>, flag: bool) -> Option<Item> {
-    let stopped = marker_dir.and_then(safe_mode::begin_launch);
+pub fn begin_launch(marker_dir: Option<&std::path::Path>, flag: bool) -> Vec<Item> {
+    let stopped = marker_dir.map(safe_mode::begin_launch).unwrap_or_default();
     if flag {
         safe_mode::set_active(Some(safe_mode::Source::Flag));
-        return None;
+        return Vec::new();
     }
-    if stopped.is_some() {
+    if !stopped.is_empty() {
         safe_mode::set_active(Some(safe_mode::Source::Startup));
     }
     stopped
@@ -56,20 +57,21 @@ pub fn end_launch() {
 
 /// Once the app is made: the choice about `stopped` ([`begin_launch`]), or in Safe Mode a status
 /// line saying so.
-pub fn after_start(app: &mut VectorcraftApp, stopped: Option<Item>) {
-    match stopped {
-        Some(item) => ask_about_stopped(app, &item),
-        None if safe_mode::active() => app.status(vectorcraft_plugins::Error::SafeMode.to_string()),
-        None => {}
+pub fn after_start(app: &mut VectorcraftApp, stopped: Vec<Item>) {
+    if !stopped.is_empty() {
+        ask_about_stopped(app, &stopped);
+    } else if safe_mode::active() {
+        app.status(vectorcraft_plugins::Error::SafeMode.to_string());
     }
 }
 
-/// Ask what to do about `item`, the plug-in the last launch was loading when it stopped. Safe Mode
-/// is on until the user chooses. The app holds the item; [`pump`] puts the question on the dialog
-/// host once the host exists and no other dialog holds it, so a dialog that takes the choice's
-/// place leaves it waiting.
-pub fn ask_about_stopped(app: &mut VectorcraftApp, item: &Item) {
-    app.ui.stopped_plugin = Some(item.to_json());
+/// Ask what to do about `items`, the plug-ins the last launch was loading when it stopped. Safe
+/// Mode is on until the user chooses. The app holds the items; [`pump`] puts the question on the
+/// dialog host once the host exists and no other dialog holds it, so a dialog that takes the
+/// choice's place leaves it waiting.
+pub fn ask_about_stopped(app: &mut VectorcraftApp, items: &[Item]) {
+    let items: Vec<Value> = items.iter().map(Item::to_json).collect();
+    app.ui.stopped_plugin = Some(json!({ "item": items.first(), "items": items }));
 }
 
 /// The choice's Cancel, Start in Safe Mode: Safe Mode stays on for this launch, and the plug-in
@@ -95,27 +97,56 @@ fn item_of(v: &Value) -> Item {
     Item { id: s("id"), file: s("file"), name: s("name") }
 }
 
-/// The question about the stopped plug-in `item`.
-fn stopped_prompt(item: &Value) -> StandardPrompt {
-    let name = item_of(item).label();
-    let text = crate::i18n::fmt(
-        tl!("The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it."),
-        &[("name", &name)],
-    );
+/// The items the held choice names: its `items`, else its `item`.
+fn stopped_items(fields: &Value) -> Vec<Item> {
+    match fields.get("items").and_then(Value::as_array).filter(|i| !i.is_empty()) {
+        Some(items) => items.iter().map(item_of).collect(),
+        None => fields.get("item").filter(|i| i.is_object()).map(item_of).into_iter().collect(),
+    }
+}
+
+/// The question about the stopped plug-ins the held choice `fields` names.
+fn stopped_prompt(fields: &Value) -> StandardPrompt {
+    let items = stopped_items(fields);
+    let (text, proceed) = if let [item] = items.as_slice() {
+        let text = crate::i18n::fmt(
+            tl!("The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it."),
+            &[("name", &item.label())],
+        );
+        (text, tl!("Disable and Continue").to_string())
+    } else {
+        let mut text =
+            tl!("The last launch of VectorCraft stopped while these plug-ins were loading. Any one of them, or none, may be what stopped it.")
+                .to_string();
+        text.push('\n');
+        for item in &items {
+            // A name made safe to show: control and reordering characters removed, bounded.
+            text.push('\n');
+            text.push_str(&safe_mode::display_name(&item.label()));
+        }
+        (text, tl!("Disable Listed Plug-ins and Continue").to_string())
+    };
     StandardPrompt::custom(text)
         .title(tl!("Safe Mode").to_string())
-        .button(PromptChoice::Proceed, tl!("Disable and Continue").to_string())
+        .button(PromptChoice::Proceed, proceed)
         .button(PromptChoice::Alternate, tl!("Start Normally").to_string())
         .button(PromptChoice::Cancel, tl!("Start in Safe Mode").to_string())
 }
 
 /// The choice's Disable and Continue (`normal` false) or Start Normally: Safe Mode ends and the
-/// plug-ins load, without the stopped one for Disable and Continue (kept off for later launches
+/// plug-ins load, without the stopped ones for Disable and Continue (kept off for later launches
 /// too).
 fn confirm_stopped(app: &mut VectorcraftApp, normal: bool) {
-    let item = item_of(&app.ui.stopped_plugin.take().unwrap_or(Value::Null));
-    // When the disabled plug-in can't be saved for the next launch, that launch asks again.
-    let saved = normal || (safe_mode::disable(item) && app.session.store_disabled_plugins());
+    let items = stopped_items(&app.ui.stopped_plugin.take().unwrap_or(Value::Null));
+    // When a disabled plug-in can't be saved for the next launch, that launch asks again. Every
+    // listed plug-in is turned off for this launch, whether or not the one before it was saved.
+    let saved = normal || {
+        let mut all = true;
+        for item in items {
+            all &= safe_mode::disable(item);
+        }
+        all && app.session.store_disabled_plugins()
+    };
     if saved {
         safe_mode::forget_previous();
     } else {
@@ -203,14 +234,15 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
 }
 
 fn pump_stopped(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let Some(item) = app.ui.stopped_plugin.clone() else { return };
+    let Some(fields) = app.ui.stopped_plugin.clone() else { return };
     // PLAN: assumed `VectorcraftApp::dialogs() -> Option<handle>` whose `with(|host: &mut DialogHost| ..)` runs on the host (wg.S1).
     let Some(dialogs) = app.dialogs() else { return };
     let answered = dialogs.with(|h| {
         let answered = h.take::<StandardPrompt>();
-        // An empty host has neither an open dialog nor a queued one: otherwise the choice waits.
+        // An empty host has neither an open dialog nor a queued one: otherwise the choice waits. It opens now rather
+        // than through the startup queue, which the host drains only in its next pass: a frame may have no other.
         if answered.is_none() && h.is_empty() {
-            h.enqueue(StartupStage::Warning, stopped_prompt(&item));
+            h.open(stopped_prompt(&fields));
             ctx.request_repaint();
         }
         answered

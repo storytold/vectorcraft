@@ -19,10 +19,12 @@ use vectorcraft_render::encode::quantize::Reduction;
 
 use craft::behavior::PixelSize;
 use craft::host::PickRequest;
+use craft::theme::Srgba;
 use craft::ui::dialog::{DialogId, DialogResult, StackDialog};
 use craft::ui::patterns::form_dialogs::{
     BrowserPreview, ColorTable, ColorTableEdit, ColorTableEvent, HostedSaveForWeb, OptimizeAnswer, OptimizeRequest, OptimizeScope, OptimizeStart,
-    SaveForWebOptions, SaveForWebResult, WantedVariant, WebDocument, WebFormat, WebPreset, WebPresetEvent, WebSlice, WebSlices, WebVariant,
+    PALETTE_COLOR_KEY, SaveForWebOptions, SaveForWebResult, WantedVariant, WebDocument, WebFormat, WebPreset, WebPresetEvent, WebSlice, WebSlices,
+    WebVariant,
 };
 use craft::ui::primitives::{Revision, TextureStore, TextureStoreOptions};
 use craft::ui::runtime::requests::PathRequest;
@@ -47,6 +49,19 @@ pub(crate) struct WebExport {
     optimized: Option<Value>,
     /// The engine's `colorTable` value: the edits the colour table's buttons made.
     table: Value,
+    /// The engine's settings the dialog has no option for ([`KEPT`]), as the dialog opened on them
+    /// or Optimize to File Size found them: the previews, Save… and the presets use them. A preset
+    /// picked in the dialog does not change them.
+    kept: Value,
+}
+
+/// The engine's settings keys the dialog does not show; they pass through it unchanged.
+const KEPT: [&str; 2] = ["transparencyDither", "transparencyDitherAmount"];
+
+/// The [`KEPT`] keys of the engine's settings `s`.
+fn kept_of(s: &WebSettings) -> Value {
+    let engine = s.to_json();
+    Value::Object(KEPT.iter().filter_map(|k| engine.get(*k).map(|v| ((*k).to_string(), v.clone()))).collect())
 }
 
 /// The key of the Original pane's texture in the pump's [`TextureStore`]; the panes use their index.
@@ -127,11 +142,15 @@ pub(super) fn options_of(s: &WebSettings, natural: Option<PixelSize>) -> SaveFor
     serde_json::from_value(v).unwrap_or_default()
 }
 
-/// The engine's settings JSON for the dialog's `options`, the edited colour `table` and an optional
-/// `path`: what `webExport.settings`, `document.exportForWeb` and `file.saveForWeb` read.
-fn settings_of(options: &SaveForWebOptions, table: &Value, path: Option<&str>) -> Value {
+/// The engine's settings JSON for the dialog's `options`, the edited colour `table`, the `kept`
+/// settings the dialog does not show ([`WebExport::kept`]) and an optional `path`: what
+/// `webExport.settings`, `document.exportForWeb` and `file.saveForWeb` read.
+fn settings_of(options: &SaveForWebOptions, table: &Value, kept: &Value, path: Option<&str>) -> Value {
     let mut v = serde_json::to_value(options).unwrap_or(Value::Null);
     if let Some(o) = v.as_object_mut() {
+        if let Some(kept) = kept.as_object() {
+            o.extend(kept.clone());
+        }
         let [r, g, b] = options.matte;
         o.insert("matte".into(), json!(format!("#{r:02x}{g:02x}{b:02x}")));
         o.remove("colorTable");
@@ -168,7 +187,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let host = app.dialogs().ok_or("no window")?;
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let s = remembered(app);
-    app.web_export = WebExport { table: serde_json::to_value(&s.color_table).unwrap_or_default(), ..WebExport::default() };
+    app.web_export = WebExport { table: serde_json::to_value(&s.color_table).unwrap_or_default(), kept: kept_of(&s), ..WebExport::default() };
     let (name, artboards, slices) = {
         let st = app.session.active().ok_or("no document")?;
         let slices: Vec<WebSlice> = st
@@ -432,7 +451,7 @@ fn on_dialog<R>(host: &craft::ui::shell::WindowDialogs, f: impl FnOnce(&mut Host
 
 /// Answers the open dialog once per frame: its result when it closed, else its requests.
 /// Colour requests (the matte, a palette cell) are routed by the host-wide colour picker routing;
-/// a palette answer comes back as a `Shift` table event.
+/// a palette cell's pick is applied to the table by [`take_palette_pick`].
 pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(host) = app.dialogs() else { return };
     match host.with(|h| h.take::<HostedSaveForWeb>()) {
@@ -470,7 +489,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
         on_dialog(&host, |d| d.answer_optimize(answer.map_err(Into::into)));
     }
     if asked.browser {
-        let p = settings_of(&asked.options, &app.web_export.table, None);
+        let p = settings_of(&asked.options, &app.web_export.table, &app.web_export.kept, None);
         if let Err(e) = browser_preview(app, &p) {
             app.status(e);
         }
@@ -486,11 +505,11 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
 
 /// The encodes the dialog wants, as pictures, and the Original pane's picture when the rendering is new.
 fn answer_variants(app: &mut VectorcraftApp, ctx: &egui::Context, host: &craft::ui::shell::WindowDialogs, wanted: &[WantedVariant]) {
-    let table = app.web_export.table.clone();
+    let (table, kept) = (app.web_export.table.clone(), app.web_export.kept.clone());
     let mut answers = Vec::with_capacity(wanted.len());
     for w in wanted {
         let (index, revision) = (w.index, w.request.revision);
-        let settings = app.session.web_settings(&settings_of(&w.request.options, &table, None));
+        let settings = app.session.web_settings(&settings_of(&w.request.options, &table, &kept, None));
         let rendered = settings.and_then(|s| render_for(app, &s).map(|(key, r)| (s, key, r)));
         answers.push(match (rendered, app.session.active()) {
             (Ok((s, key, r)), Some(st)) => optimise(ctx, &st.doc, &r, &key, &s, w),
@@ -511,12 +530,7 @@ fn answer_variants(app: &mut VectorcraftApp, ctx: &egui::Context, host: &craft::
 
 /// Applies the colour table edits the dialog filed. A Delete clears the dialog's colour selection.
 fn edit_table(app: &mut VectorcraftApp, ctx: &egui::Context, host: &craft::ui::shell::WindowDialogs, asked: &Asked) {
-    let shown = app
-        .session
-        .web_settings(&settings_of(&asked.options, &app.web_export.table, None))
-        .and_then(|s| encoded(app, &s))
-        .map(|o| o.colors.iter().map(|c| c.source).collect::<Vec<[u8; 3]>>());
-    let shown = match shown {
+    let shown = match shown_colors(app, &asked.options) {
         Ok(shown) => shown,
         Err(e) => return app.status(e),
     };
@@ -533,12 +547,42 @@ fn edit_table(app: &mut VectorcraftApp, ctx: &egui::Context, host: &craft::ui::s
     }
 }
 
+/// The source colours of the palette the dialog's settings `options` show, with the table as it stands.
+fn shown_colors(app: &mut VectorcraftApp, options: &SaveForWebOptions) -> Result<Vec<[u8; 3]>, String> {
+    let settings = app.session.web_settings(&settings_of(options, &app.web_export.table, &app.web_export.kept, None))?;
+    Ok(encoded(app, &settings)?.colors.iter().map(|c| c.source).collect())
+}
+
+/// The Color Picker's OK for the colour table cell `key` of the open dialog `parent`: the cell's colour `from`
+/// is shifted to `to` in the table at once, so Done or Save in the dialog's next pass keeps the shift. A colour
+/// the palette no longer shows is not shifted, and a refused shift shows in the status line. `false` when
+/// `parent` is not Save for Web or `key` is not its palette, and the picker answers the row instead.
+pub(crate) fn take_palette_pick(app: &mut VectorcraftApp, parent: DialogId, key: &str, from: Srgba, to: Srgba) -> bool {
+    let Some(host) = app.dialogs() else { return false };
+    if key != PALETTE_COLOR_KEY {
+        return false;
+    }
+    let Some(options) = host.with(|h| h.get_mut_by_id::<HostedSaveForWeb>(parent).map(|d| d.current().clone())) else {
+        return false;
+    };
+    let rgb = |c: Srgba| {
+        let [r, g, b, _] = c.to_rgba().0;
+        [r, g, b]
+    };
+    let edit = ColorTableEdit::Shift(rgb(to));
+    let shifted = shown_colors(app, &options).and_then(|shown| color_table::apply(&mut app.web_export.table, &edit, &[rgb(from)], &shown));
+    if let Err(e) = shifted {
+        app.status(e);
+    }
+    true
+}
+
 /// Runs what the preset list asked for and shows a failure in the status line.
 fn store_presets(app: &mut VectorcraftApp, events: Vec<WebPresetEvent>) {
     for event in events {
         let r = match event {
             WebPresetEvent::Saved(p) => {
-                let mut v = settings_of(&p.options, &app.web_export.table, None);
+                let mut v = settings_of(&p.options, &app.web_export.table, &app.web_export.kept, None);
                 v["name"] = json!(p.name);
                 app.run("webExport.presets.save", v)
             }
@@ -569,7 +613,7 @@ fn has_slices(app: &VectorcraftApp) -> bool {
 
 /// The `webExport.optimizeToFileSize` params: `options`, the desired size and, with slices, what it covers.
 fn optimize_params(app: &VectorcraftApp, options: &SaveForWebOptions, desired_k: f64, start: Option<&str>, scope: &str) -> Value {
-    let mut p = settings_of(options, &app.web_export.table, None);
+    let mut p = settings_of(options, &app.web_export.table, &app.web_export.kept, None);
     if let Some(o) = p.as_object_mut() {
         o.insert("desiredK".into(), json!(desired_k));
         if let Some(start) = start {
@@ -590,7 +634,7 @@ fn optimize_start(app: &mut VectorcraftApp, options: &SaveForWebOptions) -> Opti
         let r = app.run("webExport.optimizeToFileSize", p).ok()?;
         return r["achieved"].as_bool().filter(|a| *a).and_then(|_| r["bytes"].as_u64());
     }
-    let s = app.session.web_settings(&settings_of(options, &app.web_export.table, None)).ok()?;
+    let s = app.session.web_settings(&settings_of(options, &app.web_export.table, &app.web_export.kept, None)).ok()?;
     encoded(app, &s).ok().map(|o| o.bytes.len() as u64)
 }
 
@@ -610,6 +654,7 @@ fn run_optimize(app: &mut VectorcraftApp, req: &OptimizeRequest) -> Result<Optim
     let r = app.run("webExport.optimizeToFileSize", p)?;
     let found = app.session.web_settings(&r["settings"])?;
     app.web_export.table = serde_json::to_value(&found.color_table).unwrap_or_default();
+    app.web_export.kept = kept_of(&found);
     app.web_export.optimized = Some(
         json!({ "settings": r["settings"], "bytes": r["bytes"], "targetBytes": r["targetBytes"], "achieved": r["achieved"], "art": art_key(app) }),
     );
@@ -626,7 +671,7 @@ fn run_optimize(app: &mut VectorcraftApp, req: &OptimizeRequest) -> Result<Optim
 /// Answers Save…'s request for a path. Bad settings never open a save panel; the web downloads, so
 /// the suggested name stands in for the path.
 fn ask_path(app: &mut VectorcraftApp, host: &craft::ui::shell::WindowDialogs, id: DialogId, req: PathRequest, options: &SaveForWebOptions) {
-    let settings = match app.session.web_settings(&settings_of(options, &app.web_export.table, None)) {
+    let settings = match app.session.web_settings(&settings_of(options, &app.web_export.table, &app.web_export.kept, None)) {
         Ok(s) => s,
         Err(e) => {
             on_dialog(host, HostedSaveForWeb::cancel_requests);
@@ -671,8 +716,9 @@ fn answer_path(app: &VectorcraftApp, id: DialogId, key: &str, path: PathBuf) {
 /// written. Failures show in the status line; the dialog has closed.
 fn finish(app: &mut VectorcraftApp, result: SaveForWebResult) {
     let table = std::mem::take(&mut app.web_export.table);
+    let kept = std::mem::take(&mut app.web_export.kept);
     app.web_export = WebExport::default();
-    let params = settings_of(&result.options, &table, None);
+    let params = settings_of(&result.options, &table, &kept, None);
     if let Err(e) = app.run("webExport.settings", params.clone()) {
         return app.status(e);
     }

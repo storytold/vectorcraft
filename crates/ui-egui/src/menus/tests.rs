@@ -1237,8 +1237,8 @@ fn every_bound_menu_command_exists() {
             match n {
                 Node::Item(it) => {
                     let id = it.command.id.as_str();
-                    // A Coming Soon row (`TODO`) is bound to no command.
-                    if id != TODO
+                    // A Coming Soon row (`TODO`) or a placeholder is bound to no command.
+                    if !unbound(id)
                         && vectorcraft_engine::find_command(id).is_none()
                         && !UI_COMMANDS.iter().any(|c| c.0 == id)
                         && !id.starts_with("object.path.")
@@ -1256,6 +1256,56 @@ fn every_bound_menu_command_exists() {
         walk(&children, &mut bad);
     }
     assert!(bad.is_empty(), "menu items bound to unknown commands: {bad:?}");
+}
+
+/// File › Open With and Object › Plug-ins stay in the laid-out bar with nothing of their kind installed, showing a
+/// disabled row that says so. Plug-ins are process-wide and other tests install some, so each list is checked only
+/// while it holds none of its own rows.
+#[test]
+fn plugin_lists_show_a_disabled_row_when_nothing_is_installed() {
+    fn submenu<'a>(nodes: &'a [Node], english: &str) -> Option<&'a [Node]> {
+        nodes.iter().find_map(|n| match n {
+            Node::Submenu { label, english: e, children, .. } if e.as_deref().unwrap_or(label) == english => Some(children.as_slice()),
+            _ => None,
+        })
+    }
+    fn placeholder_off(nodes: &[Node], text: &str) -> bool {
+        nodes.iter().any(|n| matches!(n, Node::Item(it) if it.command.id == PLACEHOLDER && it.command.params["label"] == text && !it.enabled))
+    }
+    fn lists(nodes: &[Node], id: &str) -> bool {
+        nodes.iter().any(|n| match n {
+            Node::Item(it) => it.command.id == id,
+            Node::Submenu { children, .. } => lists(children, id),
+            _ => false,
+        })
+    }
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let ctx = crate::testing::ui_context();
+    crate::menus::model::refresh(&mut app, &ctx);
+    let menu = |english: &str| {
+        app.menus.laid.menus.iter().find(|m| m.english.as_deref().unwrap_or(&m.title) == english).map(|m| m.children.as_slice()).unwrap_or_default()
+    };
+
+    let open_with = submenu(menu("File"), "Open With").expect("File › Open With is in the bar");
+    if !lists(open_with, "file.openWith") {
+        assert!(placeholder_off(open_with, crate::dialogs::plugin::NO_IMPORTERS), "{open_with:?}");
+    }
+    let plugins = submenu(menu("Object"), "Plug-ins").expect("Object › Plug-ins is in the bar");
+    if !lists(plugins, "plugin.dialog") {
+        assert!(placeholder_off(plugins, crate::dialogs::plugin::NO_FILTERS), "{plugins:?}");
+    }
+
+    // Whatever is installed: the layout keeps an empty list's row, and the submenu that holds only that row.
+    let row = |nodes: &[Node], text: &str| nodes.iter().any(|n| matches!(n, Node::Item(it) if it.command.id == PLACEHOLDER && it.label == text));
+    let mut empty = vec![
+        sub("Open With", vec![placeholder(crate::dialogs::plugin::NO_IMPORTERS)]),
+        placeholder(crate::dialogs::plugin::NO_FILTERS),
+        Sep,
+        c("Reload Plug-ins", "plugin.reload"),
+    ];
+    craft::menu::tidy(&mut empty);
+    assert!(submenu(&empty, "Open With").is_some_and(|o| row(o, crate::dialogs::plugin::NO_IMPORTERS)), "{empty:?}");
+    assert!(row(&empty, crate::dialogs::plugin::NO_FILTERS), "{empty:?}");
 }
 
 /// #543: Object › Image Trace › Make and Make and Expand trace with the Default preset at once,

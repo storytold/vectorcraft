@@ -421,7 +421,14 @@ pub(super) fn cache_key(
         // Preferences › Performance › Use Monitor Profile for Canvas.
         display: app.display_profile.key(app.session.prefs.monitor_profile_display),
         backdrop: backdrop(app, st, app.outline_view()),
+        color: color_key(),
     }
+}
+
+/// [`CacheKey::color`] now: the active color settings, the working color settings and the loaded
+/// profiles' generation.
+fn color_key() -> (vectorcraft_color::cms::ColorSettings, vectorcraft_color::cms::ColorSettings, u64) {
+    (vectorcraft_color::cms::active_settings(), vectorcraft_color::cms::working_settings(), vectorcraft_color::cms::profiles_generation())
 }
 
 /// [`CacheKey::plugins`] of document `st`, one of the documents open in `session`. `keys` holds each
@@ -550,10 +557,13 @@ pub(super) fn poll_worker(app: &mut VectorcraftApp, ui: &Ui, key_doc: usize) {
 
 /// Upload frame `done` from the render worker when it is of document `key_doc` and not older than
 /// the frame shown. This prevents canvas freezes during continuous edits (drags, arrow nudges, MCP
-/// command bursts) while ensuring obsolete out-of-order frames are dropped.
+/// command bursts) while ensuring obsolete out-of-order frames are dropped. A frame whose color key
+/// ([`CacheKey::color`]) is not the current one is dropped too: the worker converted its colors
+/// with the settings in force while it rendered, which may not be the ones in its key, and the next
+/// frame renders again with the current ones.
 fn show_worker_frame(app: &mut VectorcraftApp, ctx: &egui::Context, done: crate::render_worker::Done, key_doc: usize) {
     let not_older = app.canvas.key.as_ref().filter(|k| k.doc == done.key.doc).is_none_or(|k| done.key.revision >= k.revision);
-    if done.key.doc != key_doc || !not_older {
+    if done.key.doc != key_doc || !not_older || done.key.color != color_key() {
         return;
     }
     upload(app, ctx, done.img, done.key.pixel.is_some());
@@ -806,7 +816,8 @@ pub(super) fn backdrop(
     let paper = paper_color(setup);
     let b = if shows_artboards(app) {
         crate::display_profile::Backdrop {
-            everywhere: None,
+            // In Overprint Preview the canvas around the artboards is white paper.
+            everywhere: vectorcraft_render::proof::overprint_preview_on().then_some([255; 3]),
             artboards: st.doc.artboards.iter().map(|ab| (ab.rect, rgb(artboard_paper(ab, paper)))).collect(),
             grid: shows_transparency_grid(st).then(|| (setup.grid_colors.map(|c| rgb(crate::panels::c32(&c))), setup.grid_size.cell())),
         }

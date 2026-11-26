@@ -315,3 +315,128 @@ fn the_rubber_band_is_the_next_piece() {
         }
     }
 }
+
+/// A straight end is a line: at the end it keeps its other point and direction, at the start it
+/// keeps the end; the points between stay.
+#[test]
+fn a_line_end_takes_a_new_length_along_its_direction() {
+    let sp = build(&start(pt(0.0, 0.0)), &[piece(100.0, 0.0, Stroke::Line), piece(100.0, 50.0, Stroke::Line)], false);
+    let end = length::end_piece(&sp, false).unwrap();
+    assert_eq!(end.shape, length::EndShape::Line);
+    assert_eq!((end.fixed, end.end, end.length), (pt(100.0, 0.0), pt(100.0, 50.0), 50.0));
+    assert!((end.out - Vec2::new(0.0, 1.0)).hypot() < 1e-12);
+    let longer = length::with_length(&sp, false, 80.0).unwrap();
+    let pts: Vec<Point> = longer.anchors.iter().map(|a| a.p).collect();
+    assert_eq!(pts, [pt(0.0, 0.0), pt(100.0, 0.0), pt(100.0, 80.0)]);
+    let shorter = length::with_length(&sp, true, 40.0).unwrap();
+    let pts: Vec<Point> = shorter.anchors.iter().map(|a| a.p).collect();
+    assert_eq!(pts, [pt(60.0, 0.0), pt(100.0, 0.0), pt(100.0, 50.0)]);
+    assert_eq!(length::with_length(&sp, false, 0.0), None, "too short");
+    assert_eq!(length::with_length(&sp, false, length::MAX_LINE_LENGTH * 2.0), None, "too long");
+    // Dragged, the length is how far along the line the pointer is, at least the shortest.
+    assert_eq!(end.length_toward(pt(130.0, 70.0), 50.0), 70.0);
+    assert_eq!(end.length_toward(pt(100.0, -30.0), 50.0), length::MIN_LENGTH);
+}
+
+/// A half circle drawn as two quarter segments is one arc: a longer one goes around the same circle
+/// from the same start, in three segments for 270°, and a shorter one is one segment.
+#[test]
+fn an_arc_end_keeps_its_circle() {
+    let sp = build(&start(pt(0.0, 0.0)), &[piece(100.0, 0.0, Stroke::Line), piece(200.0, 0.0, Stroke::SharpArc)], false);
+    let end = length::end_piece(&sp, false).unwrap();
+    let length::EndShape::Arc { center, radius, sweep } = end.shape else { panic!("an arc: {end:?}") };
+    assert!(center.distance(pt(150.0, 0.0)) < 1e-9 && (radius - 50.0).abs() < 1e-9);
+    assert!((sweep.abs() - PI).abs() < 1e-9);
+    assert_eq!(end.fixed, pt(100.0, 0.0), "the arc starts where the line ends");
+    let three_quarters = length::with_length(&sp, false, 1.5 * PI * 50.0).unwrap();
+    assert_eq!(three_quarters.anchors.len(), 5);
+    assert!(on_circle(&three_quarters, 1, pt(150.0, 0.0), 50.0));
+    assert!(three_quarters.anchors.last().unwrap().p.distance(pt(150.0, 50.0)) < 1e-9, "a quarter more, below the center");
+    assert_eq!(three_quarters.anchors.get(1).unwrap().p, pt(100.0, 0.0));
+    let quarter = length::with_length(&sp, false, 0.5 * PI * 50.0).unwrap();
+    assert_eq!(quarter.anchors.len(), 3);
+    assert!(quarter.anchors.last().unwrap().p.distance(pt(150.0, -50.0)) < 1e-9);
+    // Set back to its own length, the arc is the same.
+    let same = length::with_length(&sp, false, end.length).unwrap();
+    assert!(same.anchors.iter().zip(sp.anchors.iter()).all(|(a, b)| a.p.distance(b.p) < 1e-9 && a.h_in.distance(b.h_in) < 1e-9));
+    assert_eq!(length::with_length(&sp, false, 360.0_f64.to_radians() * 50.0), None, "past 359°");
+    // 359° is the longest: set to it, the arc ends 1° short of where it starts.
+    let max = end.max_length();
+    assert!((max - 359f64.to_radians() * 50.0).abs() < 1e-9);
+    let longest = length::with_length(&sp, false, max).unwrap();
+    assert!(on_circle(&longest, 1, pt(150.0, 0.0), 50.0));
+    let short_of_start = pt(150.0, 0.0) + rot(pt(100.0, 0.0) - pt(150.0, 0.0), 359f64.to_radians() * sweep.signum());
+    assert!(longest.anchors.last().unwrap().p.distance(short_of_start) < 1e-6, "{:?}", longest.anchors.last());
+    // Dragged around past the start of the half circle, the arc grows on instead of starting again.
+    let near = 1.5 * PI * 50.0;
+    let l = end.length_toward(pt(150.0, 80.0), near);
+    assert!((l - near).abs() < 1e-9, "{l}");
+    // Dragged on past 359°, just past its start (above it, since the half circle bulges up), the arc
+    // stops there.
+    assert_eq!(end.length_toward(pt(100.0, -1.0), max - 0.01), max);
+}
+
+/// On a small arc, a handle dragged a quarter turn around the circle takes the end a quarter turn
+/// around too: the offset of the handle from the end turns with the pointer.
+#[test]
+fn a_small_arc_end_follows_its_handle_around_the_circle() {
+    let sp = build(&start(pt(0.0, 0.0)), &[piece(10.0, 0.0, Stroke::SharpArc)], false);
+    let end = length::end_piece(&sp, false).unwrap();
+    let length::EndShape::Arc { center, radius, sweep } = end.shape else { panic!("an arc: {end:?}") };
+    assert!((radius - 5.0).abs() < 1e-9);
+    let press = end.end + end.out * 20.0;
+    let quarter = end.length + FRAC_PI_2 * radius;
+    let turned = |p: Point, a: f64| center + rot(p - center, a);
+    let l = end.length_dragged(press, turned(press, FRAC_PI_2 * sweep.signum()), end.length);
+    assert!((l - quarter).abs() < 1e-9, "{l} against {quarter}");
+    // A handle pressed where it stands and not moved leaves the length as it is.
+    assert!((end.length_dragged(press, press, end.length) - end.length).abs() < 1e-9);
+}
+
+/// An end that is neither straight nor circular has no length to set, and neither does a closed path.
+#[test]
+fn other_ends_have_no_piece() {
+    let mut sp = start(pt(0.0, 0.0));
+    sp.anchors.push(Anchor::with_handles(pt(100.0, 0.0), pt(90.0, 40.0), pt(100.0, 0.0)));
+    if let Some(a) = sp.anchors.first_mut() {
+        a.h_out = pt(10.0, 5.0);
+    }
+    assert_eq!(length::end_piece(&sp, false), None);
+    assert_eq!(length::with_length(&sp, false, 10.0), None);
+    // A cubic with a quarter circle's handles whose end is on that circle, but not a quarter turn
+    // around it, is not an arc.
+    let k = 4.0 / 3.0 * (FRAC_PI_2 / 4.0).tan() * 100.0;
+    let mut off = start(pt(0.0, 0.0));
+    off.anchors.push(Anchor::with_handles(pt(-100.0, 100.0), pt(-100.0, 100.0 - k), pt(-100.0, 100.0)));
+    if let Some(a) = off.anchors.first_mut() {
+        a.h_out = pt(k, 0.0);
+    }
+    assert_eq!(length::end_piece(&off, false), None);
+    // An arc too small to be 0.001 pt long even at 359° has no length to set either.
+    let tiny = build(&start(pt(0.0, 0.0)), &[piece(0.0001, 0.0, Stroke::SharpArc)], false);
+    assert_eq!(tiny.anchors.len(), 3);
+    assert_eq!(length::end_piece(&tiny, false), None);
+    let mut closed = build(&start(pt(0.0, 0.0)), &[piece(100.0, 0.0, Stroke::Line), piece(100.0, 100.0, Stroke::Line)], false);
+    closed.closed = true;
+    assert_eq!(length::end_piece(&closed, false), None);
+}
+
+/// A control point may lie past the canvas while the curve stays on it; a curve that reaches past
+/// the canvas is refused.
+#[test]
+fn the_canvas_check_measures_the_curve_not_its_control_points() {
+    let m = MAX_COORD;
+    let cubic = |out_x: f64| {
+        let mut a = Anchor::corner(pt(m - 100.0, 0.0));
+        a.h_out = pt(out_x, 0.0);
+        let mut b = Anchor::corner(pt(m - 100.0, 100.0));
+        b.h_in = b.p;
+        SubPath::new(vec![a, b], false)
+    };
+    assert!(on_canvas(&cubic(m - 100.0)));
+    assert!(on_canvas(&cubic(m + 100.0)));
+    assert!(!on_canvas(&cubic(m + 1000.0)));
+    let mut far = start(pt(m + 1.0, 0.0));
+    far.anchors.push(Anchor::corner(pt(0.0, 0.0)));
+    assert!(!on_canvas(&far));
+}

@@ -27,7 +27,7 @@ use craft::ui::display::{Divider, Shade, Text};
 use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::{List, ListRow, ThumbAspect, ThumbSize};
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
-use craft::ui::notices::{Notice, NoticeAction, NoticeLayout};
+use craft::ui::notices::{Notice, NoticeAction, NoticeIcon, NoticeLayout};
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
 use craft::ui::pickers::Select;
 use craft::ui::primitives::textures::{Priority, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails};
@@ -791,6 +791,7 @@ fn no_library(ui: &mut Ui) -> bool {
             ),
         )
         .title(tl!("Local Libraries"))
+        .icon(NoticeIcon::Custom(IconSpec::svg(IconId::new("library"))))
         .layout(NoticeLayout::Centred)
         .action(NoticeAction::new(tl!("Create New Library")))
         .show(ui)

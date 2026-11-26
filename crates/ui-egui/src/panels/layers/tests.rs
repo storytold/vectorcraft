@@ -87,7 +87,7 @@ fn target_circle_marks_follow_targeted_and_styled() {
     let thin = std::rc::Rc::new(std::cell::Cell::new(f32::INFINITY));
     let seen = std::rc::Rc::clone(&thin);
     let mut fixture = craft::ui::testing::Fixture::new(move |ui| seen.set(craft::ui::runtime::env::Env::of(ui).tokens.stroke.thin));
-    fixture.root(crate::app::root_env(&vectorcraft_engine::Prefs::default(), 1.0)).frame(vec![]);
+    fixture.root(crate::app::root_env(&vectorcraft_engine::Prefs::default(), 1.0, None)).frame(vec![]);
     assert!(TARGET_DOT_IN_RING + 0.5 < TARGET_RING - thin.get() / 2.0, "the dot covers the ring");
 }
 
@@ -343,6 +343,30 @@ fn rows_list_by_depth_and_ruler_guide_nodes_get_no_object_row() {
     assert_eq!(ids, [second, first, rect]);
 }
 
+/// A horizontal and a vertical ruler guide's rows each show a glyph of their own, in place of the
+/// guide kind's ruler, and both glyphs are in the app's icon set.
+#[test]
+fn horizontal_and_vertical_guide_rows_show_their_own_drawn_glyphs() {
+    use craft::ui::primitives::{has_icon, register_app_icons};
+
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    app.session.execute("guide.add", &json!({"vertical": false, "pos": 40})).unwrap();
+    app.session.execute("guide.add", &json!({"vertical": true, "pos": 60})).unwrap();
+    let st = app.session.active().unwrap();
+    let rows = LayerRows::new(&app, st);
+    let icon_of = |vertical: bool| {
+        let i = st.doc.ruler_guides().iter().position(|g| g.vertical == vertical).unwrap();
+        rows.info(&RowId::Guide(i)).icon.unwrap_or_else(|| panic!("the vertical: {vertical} guide row has no glyph of its own"))
+    };
+    let (across, down) = (icon_of(false), icon_of(true));
+    assert_ne!(across, down, "the two kinds of guide rows look alike");
+    register_app_icons(&crate::icons::APP_ICONS);
+    for icon in [&across, &down] {
+        assert!(has_icon(icon), "{icon:?} is in no icon set, so the row draws nothing");
+    }
+}
+
 /// The undo steps of the active document.
 pub(super) fn undo_len(app: &VectorcraftApp) -> usize {
     app.session.active().unwrap().history.undo.len()
@@ -483,6 +507,18 @@ fn context_menu_others_actions_sublayer_state_enables_all_commands() {
     assert!(lock_enabled, "locked sublayer enables Unlock All Layers");
 }
 
+/// The footer's layer count is in the accessibility tree, and it follows the document's layers.
+#[test]
+fn the_footer_counts_the_layers() {
+    use crate::tests::panel_harness::Panel;
+    let (app, _, _) = two_rects();
+    let mut panel = Panel::new(app, show);
+    assert!(panel.shows("1 Layer"));
+    panel.app().session.execute("layer.new", &json!({})).unwrap();
+    panel.frame();
+    assert!(panel.shows("2 Layers") && !panel.shows("1 Layer"));
+}
+
 /// Names object `id` `name`, so its target circle is "Target {name}".
 fn name_row(app: &mut VectorcraftApp, id: NodeId, name: &str) {
     app.session.execute("layer.setProps", &json!({"ids": [id.0], "name": name})).unwrap();
@@ -560,4 +596,190 @@ fn the_target_circle_anchor_does_not_carry_over_to_another_document() {
     assert_eq!(a2, a, "the new document reuses the old anchor's id, so a stale anchor would find a row");
     panel.click_with("Target B", egui::Modifiers::SHIFT);
     assert_eq!(targeted(&panel.app()), (Some(b2), vec![b2]));
+}
+
+/// Shift-clicking a selection square selects the art of every row from the last square clicked to
+/// it, down or up and across a sublayer and a group, leaving out locked and hidden rows, and
+/// Shift+Ctrl/Cmd adds that art. A plain click selects one row's art, and Ctrl/Cmd adds it or takes
+/// it out again.
+#[test]
+fn shift_clicking_a_selection_square_selects_the_art_of_a_range_of_rows() {
+    use crate::tests::panel_harness::Panel;
+    use egui::Modifiers;
+    let (mut app, [_, _, g, b, a, c]) = nested();
+    for (id, name) in [(g, "G"), (b, "B"), (a, "A"), (c, "C")] {
+        name_row(&mut app, id, name);
+    }
+    // Rows top down: the layer, the sublayer, G, B (in G), A, then C on the layer itself.
+    let mut panel = Panel::new(app, show);
+    panel.click_with("Select art of A", Modifiers::NONE);
+    assert_eq!(targeted(&panel.app()), (None, vec![a]), "a plain click selects one row's art");
+    panel.click_with("Select art of C", Modifiers::SHIFT);
+    let (_, sel) = targeted(&panel.app());
+    assert!(sel.len() == 2 && sel.contains(&a) && sel.contains(&c), "a range down, out of the sublayer: {sel:?}");
+    // A range starts at the last square clicked, not at the end of the last range.
+    panel.click_with("Select art of G", Modifiers::SHIFT);
+    let (_, sel) = targeted(&panel.app());
+    assert!(sel.contains(&g) && sel.contains(&a) && !sel.contains(&c), "a range up, across the group: {sel:?}");
+    // Shift+Ctrl/Cmd adds a range: from A down to C.
+    panel.click_with("Select art of C", Modifiers::SHIFT | Modifiers::COMMAND);
+    let (_, sel) = targeted(&panel.app());
+    assert!(sel.contains(&g) && sel.contains(&a) && sel.contains(&c), "{sel:?}");
+    // Ctrl/Cmd takes one row's art out again.
+    panel.click_with("Select art of C", Modifiers::COMMAND);
+    let (_, sel) = targeted(&panel.app());
+    assert!(sel.contains(&g) && !sel.contains(&c), "{sel:?}");
+    // Locked and hidden rows in a range stay unselected.
+    panel.app().session.execute("layer.setProps", &json!({"ids": [a.0], "locked": true})).unwrap();
+    panel.app().session.execute("layer.setProps", &json!({"ids": [b.0], "visible": false})).unwrap();
+    panel.click_with("Select art of G", Modifiers::NONE);
+    panel.click_with("Select art of C", Modifiers::SHIFT);
+    let (_, sel) = targeted(&panel.app());
+    assert!(sel.contains(&g) && sel.contains(&c) && !sel.contains(&a) && !sel.contains(&b), "{sel:?}");
+}
+
+/// With no selection square clicked yet, Shift-clicking one adds its row's art, or takes it out
+/// when it is all selected, and that square becomes where the next Shift-click starts.
+#[test]
+fn shift_clicking_the_first_selection_square_adds_or_removes_one_row() {
+    use crate::tests::panel_harness::Panel;
+    use egui::Modifiers;
+    let (mut app, [_, _, g, _, a, c]) = nested();
+    for (id, name) in [(g, "G"), (a, "A"), (c, "C")] {
+        name_row(&mut app, id, name);
+    }
+    app.session.execute("select.set", &json!({"ids": [a.0, c.0]})).unwrap();
+    let mut panel = Panel::new(app, show);
+    panel.click_with("Select art of A", Modifiers::SHIFT);
+    assert_eq!(targeted(&panel.app()), (None, vec![c]), "a selected row's art is taken out");
+    panel.click_with("Select art of C", Modifiers::SHIFT);
+    let (_, sel) = targeted(&panel.app());
+    assert!(sel.contains(&a) && sel.contains(&c) && !sel.contains(&g), "the range from A to C: {sel:?}");
+}
+
+/// Each document keeps the selection square clicked last in it: after a click in a second
+/// document, a Shift-click back in the first selects the range from the first document's square.
+#[test]
+fn each_document_keeps_its_selection_square_anchor() {
+    use crate::tests::panel_harness::Panel;
+    use egui::Modifiers;
+    let (mut app, _, [a, b]) = two_rects();
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    let c = NodeId(run(&mut app, "shape.rectangle", json!({"x": 120, "y": 0, "width": 50, "height": 50}))["id"].as_u64().unwrap());
+    for (id, name) in [(a, "A"), (b, "B"), (c, "C")] {
+        name_row(&mut app, id, name);
+    }
+    run(&mut app, "select.none", json!({}));
+    let mut panel = Panel::new(app, show);
+    panel.click_with("Select art of A", Modifiers::NONE);
+    {
+        let mut app = panel.app();
+        run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+        let other = NodeId(run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}))["id"].as_u64().unwrap());
+        name_row(&mut app, other, "D");
+        run(&mut app, "select.none", json!({}));
+    }
+    panel.click_with("Select art of D", Modifiers::NONE);
+    {
+        let mut app = panel.app();
+        run(&mut app, "document.activate", json!({"index": 0}));
+        run(&mut app, "select.none", json!({}));
+    }
+    panel.click_with("Select art of C", Modifiers::SHIFT);
+    assert_eq!(targeted(&panel.app()), (None, vec![a, b, c]), "the range from A, the first document's square, to C");
+}
+
+/// The rows among `rows` whose selection square is full-sized, then those whose square is the
+/// small one, in the order given.
+fn squares(app: &VectorcraftApp, rows: &[NodeId]) -> (Vec<NodeId>, Vec<NodeId>) {
+    let st = app.session.active().unwrap();
+    let tree = DocLayers::new(app, st);
+    let (mut full, mut small) = (vec![], vec![]);
+    for &id in rows {
+        match cells::square_marks(&tree, st.doc.node(id).unwrap()) {
+            (true, _) => full.push(id),
+            (false, true) => small.push(id),
+            (false, false) => {}
+        }
+    }
+    (full, small)
+}
+
+/// A layer or sublayer whose selectable art is all selected shows the full-sized square; one
+/// holding some of its art, or a group's member instead of the group, shows the small one.
+#[test]
+fn a_layer_with_all_its_art_selected_shows_the_full_square() {
+    use crate::tests::panel_harness::Panel;
+    use egui::Modifiers;
+    let (mut app, [layer, sub, g, b, a, c]) = nested();
+    let rows = [layer, sub, g, b, a, c];
+    name_row(&mut app, layer, "Top");
+    name_row(&mut app, sub, "Sub");
+    name_row(&mut app, a, "A");
+    app.session.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    assert_eq!(squares(&app, &rows), (vec![a], vec![layer, sub]), "the rectangle's square, small ones on the sublayer and the layer");
+    app.session.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    assert_eq!(squares(&app, &rows), (vec![b, a], vec![layer, sub, g]), "a group's member is not the group: the sublayer's square stays small");
+    let mut panel = Panel::new(app, show);
+    panel.click_with("Select art of Sub", Modifiers::NONE);
+    assert_eq!(squares(&panel.app(), &rows), (vec![sub, g, a], vec![layer]), "the sublayer, its group and rectangle full, the layer small");
+    panel.click_with("Select art of Top", Modifiers::NONE);
+    assert_eq!(squares(&panel.app(), &rows), (vec![layer, sub, g, a, c], vec![]), "the layer and the sublayer full, with each row's art");
+    panel.click_with("Select art of A", Modifiers::COMMAND);
+    assert_eq!(squares(&panel.app(), &rows), (vec![g, c], vec![layer, sub]), "one rectangle let go: the layer and the sublayer small again");
+    // Locked art cannot be selected, so it does not keep the layer's square small.
+    panel.app().session.execute("layer.setProps", &json!({"ids": [c.0], "locked": true})).unwrap();
+    panel.click_with("Select art of Sub", Modifiers::NONE);
+    assert_eq!(squares(&panel.app(), &rows), (vec![layer, sub, g, a], vec![]), "the layer, the sublayer, the group and the rectangle");
+    // Hidden art neither.
+    panel.app().session.execute("layer.setProps", &json!({"ids": [c.0], "locked": false, "visible": false})).unwrap();
+    panel.app().session.execute("select.set", &json!({"ids": [a.0, g.0]})).unwrap();
+    assert_eq!(squares(&panel.app(), &rows), (vec![layer, sub, g, a], vec![]), "hidden art is left out");
+    // With nothing targeted, the full layers' target circles show as targeted too.
+    let app = panel.app();
+    let st = app.session.active().unwrap();
+    let tree = DocLayers::new(&app, st);
+    assert!(rows::shows_targeted(&tree, st.doc.node(layer).unwrap(), false), "the layer shows as targeted");
+}
+
+/// A layer with no selectable art shows no square, whatever else is selected.
+#[test]
+fn a_layer_without_art_shows_no_square() {
+    let (mut app, [layer, sub, g, b, a, c]) = nested();
+    let empty = NodeId(app.session.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap());
+    app.session.execute("select.set", &json!({"ids": [c.0, a.0, g.0]})).unwrap();
+    let rows = [empty, layer, sub, g, b, a, c];
+    assert_eq!(squares(&app, &rows), (vec![layer, sub, g, a, c], vec![]), "the first layer's rows; the new, empty layer's none");
+}
+
+/// The panel's set of full layers is the layers and sublayers whose `layer_art(true)` is not empty
+/// and all selected, for every selection of the document's objects, hidden and locked ones included.
+#[test]
+fn full_layers_are_the_layers_with_all_their_art_selected() {
+    let (mut app, [_, _, _, _, _, c]) = nested();
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    let id = |v: serde_json::Value| NodeId(v["id"].as_u64().unwrap());
+    let hidden = id(run(&mut app, "layer.newSublayer", json!({"name": "Hidden"})));
+    run(&mut app, "shape.rectangle", json!({"x": 200, "y": 0, "width": 20, "height": 20}));
+    run(&mut app, "layer.setProps", json!({"ids": [hidden.0], "visible": false}));
+    run(&mut app, "layer.setProps", json!({"ids": [c.0], "locked": true}));
+    run(&mut app, "layer.new", json!({}));
+    let doc = app.session.active().unwrap().doc.clone();
+    let (mut layers, mut objects) = (vec![], vec![]);
+    for l in &doc.layers {
+        l.walk(&mut |n| if n.is_layer() { layers.push(n) } else { objects.push(n.id) });
+    }
+    assert_eq!((layers.len(), objects.len()), (4, 5), "the layers, the sublayers and the objects");
+    for bits in 0u32..(1 << objects.len()) {
+        let sel: HashSet<NodeId> = objects.iter().enumerate().filter(|(i, _)| (bits >> i) & 1 == 1).map(|(_, id)| *id).collect();
+        let want: HashSet<NodeId> = layers
+            .iter()
+            .filter(|l| {
+                let art = l.layer_art(true);
+                !art.is_empty() && art.iter().all(|i| sel.contains(i))
+            })
+            .map(|l| l.id)
+            .collect();
+        assert_eq!(rows::full_layers(&doc, &sel), want, "selection {bits:b}");
+    }
 }

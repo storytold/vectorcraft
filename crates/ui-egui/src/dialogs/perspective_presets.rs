@@ -307,7 +307,7 @@ pub(super) fn run(app: &mut VectorcraftApp, act: Action, current: &str) -> Resul
             });
         }
         Action::Export => {
-            crate::io::save_command_output(app, "perspective.presets.export", PRESET_FORMAT, json!({ "names": [current] }), |_, _| Ok(Value::Null))?;
+            super::preset_manager::export(app, "perspective.presets.export", PRESET_FORMAT, current)?;
         }
     }
     Ok(())

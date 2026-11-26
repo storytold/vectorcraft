@@ -45,6 +45,14 @@ impl Listed {
 }
 
 pub fn menu_tree_named(english_names: bool, listed: &Listed) -> Vec<(&'static str, Vec<Node>)> {
+    let mut tree = built_in_tree(english_names, listed);
+    crate::dialogs::plugin::place_commands(&mut tree);
+    tree
+}
+
+/// The menus with each plug-in command in its plug-in's submenu, before
+/// [`crate::dialogs::plugin::place_commands`] moves those whose manifest names another menu.
+fn built_in_tree(english_names: bool, listed: &Listed) -> Vec<(&'static str, Vec<Node>)> {
     let panel = |label: &'static str, id: &'static str| cp(label, "window.panel", json!({ "panel": id, "toggle": true }));
     vec![
         (
@@ -140,10 +148,10 @@ pub fn menu_tree_named(english_names: bool, listed: &Listed) -> Vec<(&'static st
                         sub(
                             "Recolor with Preset",
                             vec![
-                                cp("1 Color Job…", "ui.recolorDialog", json!({"colors": 1})),
-                                cp("2 Color Job…", "ui.recolorDialog", json!({"colors": 2})),
-                                cp("3 Color Job…", "ui.recolorDialog", json!({"colors": 3})),
-                                cp("Color Library…", "ui.recolorDialog", json!({"library": ""})),
+                                cp("1 Color Job…", "ui.recolorDialog", json!({"colors": 1, "preset": true})),
+                                cp("2 Color Job…", "ui.recolorDialog", json!({"colors": 2, "preset": true})),
+                                cp("3 Color Job…", "ui.recolorDialog", json!({"colors": 3, "preset": true})),
+                                cp("Color Library…", "ui.recolorDialog", json!({"library": "", "preset": true})),
                             ],
                         ),
                         c("Adjust Color Balance…", "ui.colorBalanceDialog"),
@@ -427,7 +435,10 @@ pub fn menu_tree_named(english_names: bool, listed: &Listed) -> Vec<(&'static st
                     ],
                 ),
                 Sep,
-                sub("Plug-ins", [crate::addons::plugin_menu(), crate::dialogs::plugin::object_menu()].concat()),
+                sub(
+                    "Plug-ins",
+                    [crate::dialogs::plugin::last_filter_menu(), crate::addons::plugin_menu(), crate::dialogs::plugin::object_menu()].concat(),
+                ),
             ],
         ),
         (
@@ -830,8 +841,7 @@ pub(super) fn transform_items() -> Vec<Node> {
     ]
 }
 
-/// Window → Arrange's Tile layouts, one `window.arrange.tile` `layout` each (also under the
-/// application bar's Arrange Documents button).
+/// Window → Arrange's Tile layouts, one `window.arrange.tile` `layout` each.
 fn tile_items() -> Vec<Node> {
     vec![
         c("Tile", "window.arrange.tile"),
@@ -842,13 +852,6 @@ fn tile_items() -> Vec<Node> {
         cp("4-Up Layout", "window.arrange.tile", json!({"layout": "4up"})),
         cp("6-Up Layout", "window.arrange.tile", json!({"layout": "6up"})),
     ]
-}
-
-/// The application bar's Arrange Documents menu: Consolidate All Windows, then the Tile layouts.
-pub(crate) fn arrange_documents_items() -> Vec<Node> {
-    let mut items = vec![c("Consolidate All Windows", "window.arrange.consolidateAllWindows"), Sep];
-    items.extend(tile_items());
-    items
 }
 
 /// Object → Arrange (also in the canvas context menu).

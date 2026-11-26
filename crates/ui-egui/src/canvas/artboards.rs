@@ -1,5 +1,5 @@
 use craft::behavior::{CanvasView, EditEvent};
-use craft::ui::canvas::{PageBorder, PageFrame, Pasteboard, PasteboardColor, PasteboardOutput};
+use craft::ui::canvas::{ArtboardEdge, PageBorder, PageFrame, Pasteboard, PasteboardColor, PasteboardOutput};
 use craft::ui::contract::{Rename, Show as _};
 use craft::ui::primitives::Checker;
 use craft::ui::style::DataColor;
@@ -61,18 +61,28 @@ pub(super) fn frames(app: &VectorcraftApp, st: &vectorcraft_engine::DocState, vi
         .collect()
 }
 
-/// A line round each artboard in Outline, the drop shadow in Preview.
+/// A line round each artboard in Outline, the drop shadow in Preview, and no border in Overprint Preview (and
+/// Separations Preview, which turns it on).
 pub(super) fn border(outline: bool) -> PageBorder {
-    if outline { PageBorder::Line } else { PageBorder::DropShadow }
+    if outline {
+        PageBorder::Line
+    } else if vectorcraft_render::proof::overprint_preview_on() {
+        PageBorder::None
+    } else {
+        PageBorder::DropShadow
+    }
 }
 
-/// The pasteboard's color: white in Outline, the paper under Hide Artboards, else User Interface › Canvas Color, or the
-/// interface's when that matches the interface brightness.
+/// The pasteboard's color: white in Outline, the paper under Hide Artboards, white in Overprint Preview (and Separations
+/// Preview, which turns it on), else User Interface › Canvas Color, or the interface's when that matches the interface
+/// brightness.
 pub(super) fn pasteboard_color(app: &VectorcraftApp, st: &vectorcraft_engine::DocState, outline: bool) -> PasteboardColor {
     if outline {
         PasteboardColor::Custom(DataColor::new(Color32::WHITE))
     } else if !shows_artboards(app) {
         PasteboardColor::Custom(DataColor::new(paper_color(&st.doc.setup)))
+    } else if vectorcraft_render::proof::overprint_preview_on() {
+        PasteboardColor::Custom(DataColor::new(Color32::WHITE))
     } else {
         crate::prefs_dialog::canvas_color(&app.session.prefs.canvas_color)
             .map_or(PasteboardColor::Default, |c| PasteboardColor::Custom(DataColor::new(c)))
@@ -98,7 +108,8 @@ pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &CanvasSp
     let outline = view.outline;
     let list = frames(app, st, view, outline);
     // The pasteboard's colour is the canvas's (`Canvas::pasteboard`).
-    let out = Pasteboard::new("Artboards", &list).border(border(outline)).shows_outside().show_at(ui, space.view.rect);
+    let out =
+        Pasteboard::new("Artboards", &list).border(border(outline)).artboard_edge(ArtboardEdge::Plain).shows_outside().show_at(ui, space.view.rect);
     match kind {
         BodyKind::Live => apply(app, &out),
         BodyKind::Pane => None,

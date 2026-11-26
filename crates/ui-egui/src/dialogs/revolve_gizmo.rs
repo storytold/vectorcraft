@@ -19,9 +19,10 @@ use craft::ui::contract::{
     Remember as _, Role, Show as _,
 };
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog};
+use craft::ui::primitives::{ContentPainterCx, TextRun};
 use craft::ui::runtime::focus::KeyUse;
-use craft::ui::style::{ComponentStyle, StyleColor, StyleCx};
-use egui::{Align2, FontId, Painter, Pos2, Rect, Response, Stroke, Ui, Vec2, vec2};
+use craft::ui::style::{ComponentStyle, StyleColor, StyleCx, TypeRole};
+use egui::{Pos2, Rect, Response, Stroke, Ui, Vec2, vec2};
 use serde_json::json;
 use vectorcraft_effects::{CLASSIC_REVOLVE, REVOLVE};
 use vectorcraft_geom::Point;
@@ -39,6 +40,8 @@ const RING_REACH: f32 = 9.0;
 const ORBIT_REACH: f32 = 14.0;
 /// How far from the light's handle a press takes it, in points.
 const LIGHT_REACH: f32 = 18.0;
+/// The least radius of the plate under an axis letter, in points; a taller letter gets a plate as tall as its line.
+const AXIS_PLATE: f32 = 9.0;
 
 const RING: PartKey = PartKey::new("ring");
 const CENTRE: PartKey = PartKey::new("centre");
@@ -568,7 +571,7 @@ impl Component for RevolveGizmo<'_> {
         let Some(g) = Geometry::new(&space.view, &self.subject.fields, self.subject.bounds) else { return };
         let content = ui.content_painter(cx);
         let paint = Paint {
-            painter: &content.painter,
+            content: &content,
             style: cx.style,
             view: &space.view,
             subject: self.subject,
@@ -606,7 +609,8 @@ fn light_position(g: Geometry, options: Revolve) -> Pos2 {
 
 /// What a pass draws with.
 struct Paint<'a> {
-    painter: &'a Painter,
+    /// The content painter: its `painter` draws the rings and plates, and its `Draw` lays out and paints the labels.
+    content: &'a ContentPainterCx<'a>,
     style: &'a RevolveGizmoStyle,
     view: &'a CanvasView,
     subject: &'a Subject,
@@ -620,10 +624,11 @@ struct Paint<'a> {
 
 impl Paint<'_> {
     fn rotation(&self) {
-        let (g, s, painter) = (self.g, self.style, self.painter);
+        let (g, s, painter) = (self.g, self.style, &self.content.painter);
         for (axis, ring) in g.rings.iter().enumerate() {
             let hot = self.active == Some(axis);
-            let color = if hot { s.hot.egui() } else { s.axis(axis).egui() };
+            let ink = if hot { s.hot } else { s.axis(axis) };
+            let color = ink.egui();
             for i in 0..SAMPLES {
                 let angle = i as f32 * std::f32::consts::TAU / SAMPLES as f32;
                 let behind = ring.depth[0] * angle.cos() + ring.depth[1] * angle.sin() < -0.05;
@@ -641,8 +646,10 @@ impl Paint<'_> {
                 _ => 4.7,
             };
             let p = g.center + ring.point(phase);
-            painter.circle_filled(p, 9.0, s.plate.egui());
-            painter.text(p, Align2::CENTER_CENTER, ["X", "Y", "Z"][axis], FontId::proportional(11.0), color);
+            self.text(["X", "Y", "Z"][axis], ink, |size| {
+                painter.circle_filled(p, (size.max_elem() * 0.5).max(AXIS_PLATE), s.plate.egui());
+                p - size * 0.5
+            });
         }
         painter.circle(g.center, 8.0, s.plate.egui().gamma_multiply(0.8), Stroke::new(1.5, s.muted.egui()));
         painter.line_segment([g.center - vec2(4.0, 0.0), g.center + vec2(4.0, 0.0)], Stroke::new(1.0, s.muted.egui()));
@@ -654,12 +661,12 @@ impl Paint<'_> {
         if let Some(Mode::Ring { axis, .. }) = self.dragging {
             let degrees = self.values.rotation.get(axis).copied().unwrap_or(0.0);
             let text = format!("{}  {degrees:.1}°", ["X", "Y", "Z"].get(axis).unwrap_or(&""));
-            self.readout(text, g.center + vec2(0.0, g.radius * 1.12 + 18.0), 12.0);
+            self.readout(&text, g.center + vec2(0.0, g.radius * 1.12 + 18.0));
         }
     }
 
     fn light(&self) {
-        let (g, s, painter) = (self.g, self.style, self.painter);
+        let (g, s, painter) = (self.g, self.style, &self.content.painter);
         let options = light_options(&self.subject.fields);
         let radius = g.radius * 1.4;
         painter.circle_stroke(g.center, radius, Stroke::new(1.0, s.muted.egui().gamma_multiply(0.3)));
@@ -682,7 +689,7 @@ impl Paint<'_> {
             let label = labels[axis];
             painter.rect_filled(label, 4.0, if self.active == Some(axis) { s.plate_hover.egui() } else { s.plate.egui() });
             let text = if axis == 0 { tl!("Rotation") } else { tl!("Height") };
-            painter.text(label.center(), Align2::CENTER_CENTER, text, FontId::proportional(11.0), s.hot.egui());
+            self.text(text, s.hot, |size| label.center() - size * 0.5);
         }
         let p = light_position(g, options);
         let delta = g.center - p;
@@ -710,22 +717,34 @@ impl Paint<'_> {
             painter.line_segment([p + direction * 13.0, p + direction * 17.0], Stroke::new(1.5, s.hot.egui()));
         }
         let name = crate::i18n::tr_ctx(crate::i18n::current(), "lighting", "Light");
-        let galley = painter.layout_no_wrap(name.to_string(), FontId::proportional(11.0), s.hot.egui());
-        let name_pos = p - vec2(galley.size().x * 0.5, 25.0 + galley.size().y);
-        painter.rect_filled(Rect::from_min_size(name_pos - vec2(4.0, 2.0), galley.size() + vec2(8.0, 4.0)), 3.0, s.plate.egui());
-        painter.galley(name_pos, galley, s.hot.egui());
+        self.text(name, s.hot, |size| {
+            let name_pos = p - vec2(size.x * 0.5, 25.0 + size.y);
+            painter.rect_filled(Rect::from_min_size(name_pos - vec2(4.0, 2.0), size + vec2(8.0, 4.0)), 3.0, s.plate.egui());
+            name_pos
+        });
         if self.dragging.is_some() {
             let text = format!("{} {:.1}°   {} {:.1}°", tl!("Rotation"), self.values.light_rotation, tl!("Height"), self.values.light_height);
-            self.readout(text, g.center + vec2(0.0, radius + 56.0), 11.5);
+            self.readout(&text, g.center + vec2(0.0, radius + 56.0));
         }
     }
 
     /// `text` on a plate centred at `at`.
-    fn readout(&self, text: String, at: Pos2, size: f32) {
-        let (s, painter) = (self.style, self.painter);
-        let galley = painter.layout_no_wrap(text, FontId::proportional(size), s.ink.egui());
-        painter.rect_filled(Rect::from_center_size(at, galley.size() + vec2(14.0, 8.0)), 4.0, s.plate.egui());
-        painter.galley(at - galley.size() * 0.5, galley, s.ink.egui());
+    fn readout(&self, text: &str, at: Pos2) {
+        let (s, painter) = (self.style, &self.content.painter);
+        self.text(text, s.ink, |size| {
+            painter.rect_filled(Rect::from_center_size(at, size + vec2(14.0, 8.0)), 4.0, s.plate.egui());
+            at - size * 0.5
+        });
+    }
+
+    /// Paints `text` in the label type role and `color` at the top left `place` gives for its size; `place` may paint
+    /// what goes under the text.
+    fn text(&self, text: &str, color: StyleColor, place: impl FnOnce(Vec2) -> Pos2) {
+        self.content.with_draw(|draw| {
+            let layout = draw.layout(&TextRun::new(text).role(TypeRole::Label).color(color), f32::INFINITY);
+            let at = place(layout.size());
+            draw.galley(at, &layout);
+        });
     }
 }
 
