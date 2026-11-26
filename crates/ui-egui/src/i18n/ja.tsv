@@ -7209,6 +7209,8 @@ axis	Y Axis	Y 軸
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` は {_1} です。このホストが対応するプラグイン API レベルは 1 から {API_LEVEL} です
 @msg	`paintOutput` may only be true	`paintOutput` には true のみ指定できます
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` は `api` 2 のライブ効果 (`kind` "effect") 専用です
+@msg	`place` is only for an importer (`kind` "importer")	`place` はインポーター (`kind` "importer") 専用です
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	「{shown}」はファイルを開きますが配置はしません: マニフェストで `place` が設定されていません
 @msg	`grant` must be a list of permission names	`grant` は権限名のリストにしてください
 @msg	`grant` names an unknown permission `{shown}`	`grant` に不明な権限 `{shown}` が含まれています
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	種類 `{_1}` のプラグインには権限 `{_2}` が必要です

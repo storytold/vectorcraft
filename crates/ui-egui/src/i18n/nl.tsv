@@ -554,6 +554,8 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` is {_1}; deze host implementeert plug-in-API-niveaus 1 tot {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` mag alleen true zijn
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` is alleen voor een live-effect (`kind` "effect") bij `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` is alleen voor een importer (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	„{shown}” opent bestanden maar plaatst ze niet: het manifest stelt `place` niet in
 @msg	`grant` must be a list of permission names	`grant` moet een lijst met namen van machtigingen zijn
 @msg	`grant` names an unknown permission `{shown}`	`grant` noemt een onbekende machtiging `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	een plug-in van het soort `{_1}` heeft de machtiging `{_2}` nodig

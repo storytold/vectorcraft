@@ -37,6 +37,10 @@ impl Picker {
     pub(crate) fn answer(&self, paths: &[&str]) {
         self.files.answer(Picked::Paths(paths.iter().map(PathBuf::from).collect()));
     }
+    /// The newest open pick answers `files` by name and contents, as the web's picker does.
+    pub(crate) fn answer_contents(&self, files: &[(&str, &[u8])]) {
+        self.files.answer(Picked::Contents(files.iter().map(|(name, bytes)| ((*name).to_string(), bytes.to_vec())).collect()));
+    }
     /// The newest open Save pick answers `path`, with the index of the file type picked in the panel.
     pub(crate) fn answer_saved(&self, path: &str, file_type: Option<usize>) {
         self.files.answer(Picked::Saved { path: PathBuf::from(path), file_type });

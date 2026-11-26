@@ -6678,6 +6678,8 @@ arrowhead	Feather	पंख
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` {_1} है; यह होस्ट प्लग-इन API स्तर 1 से {API_LEVEL} तक का समर्थन करता है
 @msg	`paintOutput` may only be true	`paintOutput` केवल true हो सकता है
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` केवल `api` 2 पर लाइव इफ़ेक्ट (`kind` "effect") के लिए है
+@msg	`place` is only for an importer (`kind` "importer")	`place` केवल इम्पोर्टर (`kind` "importer") के लिए है
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	“{shown}” फ़ाइलें खोलता है पर उन्हें प्लेस नहीं करता: उसका मैनिफ़ेस्ट `place` सेट नहीं करता
 @msg	`grant` must be a list of permission names	`grant` अनुमति नामों की सूची होनी चाहिए
 @msg	`grant` names an unknown permission `{shown}`	`grant` एक अज्ञात अनुमति `{shown}` बताता है
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` प्रकार के प्लग-इन को `{_2}` अनुमति चाहिए

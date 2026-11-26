@@ -909,6 +909,9 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   It is given at most 128 MiB of the file and returns paths and compound paths, checked as a filter's output is, which
   become a new document; nothing opens when it fails, declines or is cancelled. Engine, unit and headless Open With
   regressions.
+- **Done:** importer plug-ins that place files (`"place": true`). File › Place lists their files, and `file.place` reads
+  a file with one when `importer` names it or no built-in format reads the file; its objects are placed as one group,
+  embedded, as one undo step, and nothing is placed when it fails, declines or is cancelled. Engine regressions.
 - **Done:** exporter plug-ins (`"kind": "exporter"`). A plug-in adds a write-only file format that File › Export ›
   Export As lists after the built-in ones and `document.export` writes (`plugin.<id>`, or a path ending in one of its
   extensions). It is given the document as the native file's JSON and its parameters, with a larger budget than a

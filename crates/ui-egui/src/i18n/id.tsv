@@ -591,6 +591,8 @@
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` bernilai {_1}; host ini menerapkan API plug-in tingkat 1 sampai {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` hanya boleh true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` hanya untuk efek langsung (`kind` "effect") pada `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` hanya untuk pengimpor (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	“{shown}” membuka berkas tetapi tidak menempatkannya: manifesnya tidak menetapkan `place`
 @msg	`grant` must be a list of permission names	`grant` harus berupa daftar nama izin
 @msg	`grant` names an unknown permission `{shown}`	`grant` menyebut izin yang tidak dikenal `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	plug-in berjenis `{_1}` memerlukan izin `{_2}`

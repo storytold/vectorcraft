@@ -709,6 +709,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` er {_1}; denne vært implementerer plug-in-API-niveau 1 til {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` må kun være true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` er kun til en live-effekt (`kind` "effect") ved `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` er kun til en importør (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	»{shown}« åbner filer, men placerer dem ikke: dens manifest angiver ikke `place`
 @msg	`grant` must be a list of permission names	`grant` skal være en liste med tilladelsesnavne
 @msg	`grant` names an unknown permission `{shown}`	`grant` angiver en ukendt tilladelse `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	et plug-in af typen `{_1}` kræver tilladelsen `{_2}`
