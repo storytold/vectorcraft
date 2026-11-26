@@ -772,6 +772,41 @@ fn returned_fill_shadows_follow_later_copying_transforms() {
     }
 }
 
+#[test]
+fn copied_piece_shadows_leave_later_fill_geometry_pending() {
+    for transform in [json!({"copies": 1, "moveH": 40.0, "rotate": 90.0}), json!({"copies": 1, "moveH": 40.0, "scaleH": 200, "scaleV": 200})] {
+        let mut source = Node::path(
+            NodeId(9),
+            shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        source.appearance.items.iter_mut().find(|item| item.is_fill()).unwrap().effects_mut().push(Effect {
+            id: "path.offsetPath".into(),
+            params: json!({"offset": 10.0}),
+            visible: true,
+        });
+        let look = vectorcraft_plugins::painted::Look {
+            effects: vec![
+                Effect { id: "stylize.dropShadow".into(), params: json!({"x": 3.0, "y": 4.0}), visible: true },
+                Effect { id: "distort.transform".into(), params: transform, visible: true },
+            ],
+            ..Default::default()
+        };
+        crate::reshape::dress_piece(&mut source, &look, Budget::EFFECTS, None).unwrap();
+        let mut shadows = vec![];
+        let mut offsets = vec![];
+        source.walk(&mut |node| {
+            shadows.extend(node.appearance.effects.iter().filter(|effect| effect.id == "stylize.dropShadow").map(|effect| effect.params.to_string()));
+            for item in &node.appearance.items {
+                offsets.extend(item.effects().iter().filter(|effect| effect.id == "path.offsetPath").map(|effect| effect.params.clone()));
+            }
+        });
+        assert_eq!(shadows.len(), 2, "{shadows:?}");
+        assert_ne!(shadows[0], shadows[1]);
+        assert_eq!(offsets, [json!({"offset": 10.0}), json!({"offset": 10.0})]);
+    }
+}
+
 /// The same on a fill: the plug-in and the Transform effect after it are the fill's. The piece's
 /// Offset Path runs on it alone, so the plug-in runs once and the square moves once.
 #[test]

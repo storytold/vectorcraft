@@ -1384,7 +1384,15 @@ fn dressed_keeping_effects(mut art: Node, n: &Node) -> Node {
 /// and an instance as its symbol's art, whose members take their own geometry effects first
 /// ([`crate::group::members_as_drawn`]). `None` when `outlined` gives no art.
 fn copied_raster_art(doc: Option<&Document>, n: &Node, t: usize, apart: bool, outlined: &dyn Fn(&Node) -> Option<Node>) -> Option<Node> {
-    copied_raster_art_checked(doc, n, t, apart, outlined, None)
+    copied_raster_art_checked(doc, n, t, apart, outlined, None, false)
+}
+
+fn copied_piece_raster_at(node: &Node) -> Option<usize> {
+    let mut source = node.clone();
+    for item in &mut source.appearance.items {
+        item.effects_mut().clear();
+    }
+    copied_raster_at(&source)
 }
 
 fn copied_raster_art_checked(
@@ -1394,13 +1402,15 @@ fn copied_raster_art_checked(
     apart: bool,
     outlined: &dyn Fn(&Node) -> Option<Node>,
     limit: Option<Budget>,
+    defer_items: bool,
 ) -> Option<Node> {
     let budget = limit.unwrap_or(Budget::EFFECTS);
     let (before, rest) = n.appearance.effects.split_at(t);
     let mut source = n.clone();
     source.appearance.effects = before.to_vec();
-    let piece = match copied_raster_at(&source) {
-        Some(at) => copied_raster_art_checked(doc, &source, at, apart, outlined, limit)?,
+    let split = if defer_items { copied_piece_raster_at(&source) } else { copied_raster_at(&source) };
+    let piece = match split {
+        Some(at) => copied_raster_art_checked(doc, &source, at, apart, outlined, limit, defer_items)?,
         None if needs_outline(&source) => {
             let mut art = outlined(&source)?;
             if matches!(source.kind, NodeKind::SymbolInstance { .. }) && geometry_effects(&source).is_empty() {
@@ -1432,7 +1442,9 @@ fn copied_raster_art_checked(
             if apart {
                 hoist_copies(&mut art);
             }
-            transform_items(&mut art, doc);
+            if !defer_items {
+                transform_items(&mut art, doc);
+            }
             let mut ran = source.appearance.effects.clone();
             if carry.skipped() {
                 carry.hide_skipped(&mut ran);
@@ -2658,9 +2670,9 @@ pub(crate) fn dress_piece(one: &mut Node, look: &vectorcraft_plugins::painted::L
     }
     let mut source = one.clone();
     source.appearance.effects.extend(look.effects.iter().cloned());
-    if let Some(at) = copied_raster_at(&source) {
+    if let Some(at) = copied_piece_raster_at(&source) {
         let before = art_cost(one);
-        let art = copied_raster_art_checked(doc, &source, at, false, &|_| None, Some(room.plus(before)))?;
+        let art = copied_raster_art_checked(doc, &source, at, false, &|_| None, Some(room.plus(before)), true)?;
         let extra = dressed_extra(&art, before);
         if !room.fits(extra) {
             return None;
