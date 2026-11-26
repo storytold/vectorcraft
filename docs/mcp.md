@@ -2860,9 +2860,9 @@ other files through `$`:
   the page's axes, so a rotated object then reads back the size that was set. `index` and `getByName` throw
   `Not found`; and
   `app.activeDocument` with no document open throws `No active document`. `Document.selection` takes one page item,
-  a list of at most 10,000, `null` or `[]`, and an object that cannot be selected throws `Cannot select` with
-  nothing changed. While View › Guides › Lock Guides is on, a path made into a guide cannot be selected this way or
-  with `selected`. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
+  a list of at most 10,000, `null` or `[]`. Any other value, `undefined` included, throws a `TypeError`, and an
+  object that cannot be selected throws `Cannot select`, each with nothing changed. While View › Guides › Lock
+  Guides is on, a path made into a guide cannot be selected this way or with `selected`. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
   letter case is ignored and `\` matches `/`) and does not resolve the path it is given. A document counts only when
   the automation read roots allow its file, and that check can look the document's file up on disk. A path with
   `..`, a network path, a NUL character or more than 4,096 bytes throws an error. Some members the Application,
@@ -2876,6 +2876,14 @@ other files through `$`:
   strict-mode code, which throws a `TypeError`. On a collection it throws `Not found`, as described above. Other members
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
   themselves, such as a path's fill, are not defined yet and read as `undefined`.
+- `PageItem.tags` and `Document.tags` are `Tags` collections (https://ai-scripting.docsforadobe.dev/jsobjref/Tags/)
+  with `typename`, `length`, `parent`, `[i]`, `index(key)`, `getByName(name)`, `add()` and `removeAll()`, and each
+  `Tag` (https://ai-scripting.docsforadobe.dev/jsobjref/Tag/) has `typename`, `name`, `value`, `parent` (its page
+  item) and `remove()`; they run the `object.tag.*` commands. VectorCraft's own rules: a collection lists the tags in
+  their order on the object, and `Document.tags` lists every page item's tags in `pageItems` order and throws an error
+  on `add()`; `add()` gives a tag with an empty name and value; `getByName` gives the first tag with the name;
+  `name` and `value` take strings of at most 65,536 bytes, and an object has at most 64 tags. A tag that was deleted
+  throws `Stale tag`, and one whose page item was deleted throws `Stale page item`.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global
@@ -7206,8 +7214,20 @@ range is an error and changes nothing. The help page
 [Create image maps for web graphics](https://helpx.adobe.com/illustrator/desktop/save-and-export/export-files-to-different-formats/create-image-maps-for-web-graphics.html)
 describes the same 1 to 30 range; the default of 10 is VectorCraft's own value.
 
+An object's tags are name and value pairs that scripts keep on it (`PageItem.tags`). `object.tags {id}` lists them in
+order → `{tags: [{tag, name, value}]}`, where `tag` tells each one apart from the object's other tags.
+`object.tag.add {id, name?, value?}` adds one after the others → `{tag}`, `object.tag.set {id, tag, name?, value?}`
+changes its name or value → `{changed}`, `object.tag.remove {id, tag}` deletes it, and `object.tag.removeAll {ids?}`
+deletes every tag of the objects in `ids` or the selection → `{changed: objects}`; each edit is one undo step, and an
+edit that changes nothing adds none. Names may be empty or repeated. An object has at most 64 tags, each name and
+value at most 65,536 bytes; a layer or a ruler guide has none, and a bad value (a null name or value included) is an error that changes nothing, as is
+an add in a document whose ids have reached the top of their range (a damaged or hand-made file). The
+native file keeps the tags and their `tag` ids, and opening one keeps the first 64 tags of each object whose name and
+value are within the limit, giving a new id to a tag whose id is missing, out of range or repeated. Copies keep their source's tags. Other file formats do not write them.
+
 ```json
 {"name":"run_command","arguments":{"command":"attributes.set","params":{"ids":[12],"url":"https://example.com","imageMap":"rectangle"}}}
+{"name":"run_command","arguments":{"command":"object.tag.add","params":{"id":12,"name":"size","value":"XL"}}}
 {"name":"run_command","arguments":{"command":"path.setFillRule","params":{"rule":"evenOdd"}}}
 {"name":"invoke_menu","arguments":{"command":"ui.attributesPanelOptions","params":{"count":20}}}
 ```
