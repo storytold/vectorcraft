@@ -150,6 +150,11 @@ fn generic_row(cx: &EffectCx, key: &str, default: &Value, relative: bool) -> Opt
                 Param::number(key, label, n, 1.0, 2)
             }
         }
+        // The blend mode the effect draws in: the mode it draws a name in, Normal for one it doesn't know.
+        Value::String(text) if vectorcraft_effects::takes_blend_mode(id, key) => {
+            let mode = vectorcraft_effects::blend_mode_id(vectorcraft_effects::blend_mode(text));
+            Param::new(key, label, ParamKind::blend(crate::fields::effect_blend_modes(), Some(mode)))
+        }
         Value::String(text) => match options() {
             Some(list) => Param::new(key, label, ParamKind::choice(list, Some(text.clone()))),
             None if text.starts_with('#') => Param::new(key, label, ParamKind::color(None)),
