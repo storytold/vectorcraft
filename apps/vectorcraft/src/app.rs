@@ -184,6 +184,11 @@ impl App {
         let now = ctx.input(|i| i.time);
         if let Some(w) = &self.winit_window {
             self.display_profile.tick(w, now, self.app.session.prefs.monitor_profile_display, &self.app.display_profile, ctx);
+            if let Some(read) = self.screen_density.tick(w, self.app.session.prefs.display_print_size, ctx) {
+                self.app.services.screens = read.screens;
+                self.app.set_screen_reading(read.main);
+                ctx.request_repaint();
+            }
         }
         self.app.tick(ctx);
         if self.app.ui.status == "quit" {
