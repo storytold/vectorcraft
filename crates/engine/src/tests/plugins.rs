@@ -7922,3 +7922,34 @@ fn a_clipboard_import_is_refused_while_a_run_holds_the_documents() {
     run(&mut s, "clipboard.importText", json!({"text": "Hello"}));
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
+
+#[test]
+fn mutating_queries_are_refused_while_a_run_holds_the_documents() {
+    use cmd::plugin::FilterRun;
+    let id = "test.engine.heldqueries";
+    let mut s = session();
+    install_select_all_then_remove(&mut s, id);
+    let a = rect(&mut s, 10.0, "#ff0000");
+    rect(&mut s, 40.0, "#00ff00");
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    let before = s.doc().unwrap().doc.clone();
+    let prefs = s.prefs.to_json();
+    FilterRun::begin_calls(&mut s, "plugin.run", &json!({"id": id})).unwrap();
+    for (command, params) in [
+        ("document.find", json!({"intersects": [0, 0, 400, 400], "select": true})),
+        ("prefs.set", json!({"key": "marqueeSelection", "value": "enclosed"})),
+    ] {
+        assert!(matches!(s.execute(command, &params), Err(EngineError::PluginBusy)), "{command}");
+        assert_eq!(s.doc().unwrap().selection.objects, [a]);
+        assert_eq!(s.doc().unwrap().doc, before);
+        assert_eq!(s.prefs.to_json(), prefs);
+    }
+    assert!(s.execute("prefs.get", &json!({})).is_ok());
+    assert!(s.execute("document.find", &json!({"intersects": [0, 0, 400, 400]})).is_ok());
+    s.end_plugin_calls();
+    run(&mut s, "document.find", json!({"intersects": [0, 0, 400, 400], "select": true}));
+    assert_eq!(s.doc().unwrap().selection.objects.len(), 2);
+    run(&mut s, "prefs.set", json!({"key": "marqueeSelection", "value": "enclosed"}));
+    assert_eq!(s.prefs.marquee_selection, "enclosed");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
