@@ -282,7 +282,8 @@ mod tests {
                 Brightness::MediumLight => ("craft.vectorcraft-modern-medium", ModeChoice::Light),
                 Brightness::Light => ("craft.vectorcraft-modern", ModeChoice::Light),
             };
-            let actual = resolved(crate::app::root_env(&prefs, 1.0));
+            let print = crate::state::print_ppi(prefs.display_print_size, None);
+            let actual = resolved(crate::app::root_env(&prefs, 1.0, print));
             let mut production = RootEnv::new().theme(theme_id(id)).mode(mode);
             production.sizes = app_sizes();
             let expected = resolved(production);
@@ -307,7 +308,7 @@ mod tests {
             (Brightness::Light, 0xf3f4f6, 0xe9ebee),
         ] {
             app.session.prefs.ui_brightness = b.id().into();
-            let actual = resolved(crate::app::root_env(&app.session.prefs, 1.0));
+            let actual = resolved(crate::app::root_env(&app.session.prefs, 1.0, app.print_ppi()));
             let rgb = |v: u32| Rgba::rgb((v >> 16) as u8, (v >> 8) as u8, v as u8);
             assert_eq!(actual.color.surface.panel, rgb(panel), "{b:?}");
             assert_eq!(actual.color.surface.chrome, rgb(panel), "{b:?}: one chrome surface");
