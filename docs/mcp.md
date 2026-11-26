@@ -15374,8 +15374,16 @@ Tools:
   change to the first segment that makes no undo step (a live preview, or one that was canceled) forgets the first
   segment. The circle is looked for again whenever either segment no longer has the shape it was found on, so a
   canceled preview does not leave a circle worked out on the previewed paths.
+  With `addPoints` on, the circle also adds an anchor point to the first segment and to the second segment (or the
+  one beside it) where it touches them, with `path.insertAnchor` at that point, so the segments are split without
+  changing their shape; the anchors and the circle are one `command.batch` undo step, and one Undo removes all of them.
+  When a touched path was not selected, a `select.set` step puts the selection back before the circle is drawn, so
+  Draw Behind places the circle behind the objects that were selected.
+  A touch within 0.05 screen pixels of an existing anchor adds no anchor there; when neither touch adds one, only the
+  circle is drawn. Alt (Option on macOS) held at the release turns `addPoints` the other way for that circle, and a
+  dot right of and below the pointer shows while it is in effect, following Alt as it is pressed and let go.
   Options (`tool.setOption`, or a double-click on the tool; kept with the preferences): `radius` (pt, 0.01 to
-  1000000, 36); `center` and `radii` (true or false, both true) show the center cross and the radii; `color` (`red`,
+  1000000, 36); `addPoints` (Add Points to Existing Paths, true or false, false); `center` and `radii` (true or false, both true) show the center cross and the radii; `color` (`red`,
   `blue`, `magenta`, `green`, `black` or `gray`; `red`) is the color of the circle, the cross, the radii and the note;
   `snapTolerance` (screen pixels, 0 to 25, 3; VectorCraft's own range and default) is how near the pointer picks a
   segment while Smart Guides are on (their Snapping Tolerance counts instead when it is larger) or while they are off
