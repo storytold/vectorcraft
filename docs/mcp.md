@@ -1222,6 +1222,8 @@ the art below it inside the object, groups and layer around it, the object's row
 the background when `against` or `opacity` is given;
 inside an object, group or layer that isolates its blending, the modes blend only with the art it holds);
 `opacity` (0 to 100) replaces that opacity. A given `color` is drawn in Normal mode, at `opacity` or fully opaque.
+While the active tool paints with the proxy's color (the Live Paint Bucket, the Shape Builder's fill), that color is
+drawn the same way, and the selected objects' opacities and blend modes do not apply.
 `against` takes a color, or `"below"` (the default, also for `null`): the color VectorCraft draws at the center of the
 selection's bounds with the selected objects hidden, as the canvas shows it (locked art, opacity, blend modes and
 images included; template layers and guides left out, as exports leave them out; the artboard's white where nothing
