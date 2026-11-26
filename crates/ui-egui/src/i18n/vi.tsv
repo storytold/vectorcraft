@@ -7195,6 +7195,35 @@ axis	Y Axis	Trục Y
 @msg	`inputs` lists `{shown}` twice	`inputs` liệt kê `{shown}` hai lần
 @msg	`inputs` needs `api` 2 or later	`inputs` cần `api` 2 trở lên
 @msg	`inputs` needs the permission `doc.read`	`inputs` cần quyền `doc.read`
+@msg	only a filter declares `writes`	chỉ bộ lọc mới khai báo `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` nêu một loại đối tượng không xác định `{shown}`: dùng type, image hoặc symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` liệt kê `{shown}` hai lần
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` liệt kê `{shown}`, nhưng `inputs` không liệt kê
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` cần `api` {WRITES_API} trở lên
+@msg	`writes` needs the permission `doc.write`	`writes` cần quyền `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} không phải là văn bản, hình ảnh hay thực thể ký hiệu
+@msg	the text of type given as `truncated` can't be changed	không thể thay đổi văn bản của đối tượng văn bản được đưa vào dưới dạng `truncated`
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	phải là danh sách có tối đa {MAX_INPUT_RUNS} mục
+@msg	type needs at least one run	văn bản cần ít nhất một đoạn chạy
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} byte văn bản (giới hạn {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} đoạn văn (giới hạn {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	hơn {MAX_INPUT_TEXT_TOTAL} byte văn bản trên toàn bộ đầu ra
+@msg	unknown key '{k}'	khóa không xác định '{k}'
+@msg	must be a list of 6 numbers	phải là danh sách gồm 6 số
+@msg	a number is out of range (limit ±{MAX_COORD})	một số nằm ngoài phạm vi (giới hạn ±{MAX_COORD})
+@msg	flattens the object to a line or a point	làm dẹt đối tượng thành một đường hoặc một điểm
+@msg	an object flattened to a line or a point can't be placed again	không thể đặt lại một đối tượng đã bị dẹt thành đường hoặc điểm
+@msg	must be a number from 0 to 1	phải là một số từ 0 đến 1
+@msg	must be the name of a symbol	phải là tên của một ký hiệu
+@msg	'{shown}' is not a symbol in this document	'{shown}' không phải là ký hiệu trong tài liệu này
+@msg	a run must be {{"text", "style", "inline"?}}	một đoạn chạy phải có dạng {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` chứa ký tự của một đồ họa nội dòng
+@msg	inline graphics can't be added, removed, reordered or changed	không thể thêm, xóa, sắp xếp lại hoặc thay đổi đồ họa nội dòng
+@msg	the characters of threaded type can't be changed	không thể thay đổi ký tự của văn bản chuỗi
+@msg	the characters of type with ruby can't be changed	không thể thay đổi ký tự của văn bản có ruby
+@msg	expected {count} paragraph styles, one per paragraph	cần {count} kiểu đoạn văn, mỗi đoạn một kiểu
+@msg	the document has no Kinsoku set named '{shown}'	tài liệu không có bộ Kinsoku nào tên '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	phải có 1-{MAX_FAMILY} ký tự in được
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Đọc các đối tượng được trao cho nó, cùng các thiết lập, bảng vẽ, lớp và mẫu màu của tài liệu
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` phải liệt kê các phần khác nhau: settings, artboards, layers hoặc swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` dành cho bộ lọc, hoặc hiệu ứng trực tiếp có `commands`, ở `api` 3 trở lên và có quyền `doc.read`

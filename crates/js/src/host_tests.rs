@@ -790,6 +790,29 @@ fn a_member_a_class_declares_hides_the_one_its_parent_declares() {
 }
 
 #[test]
+fn assigning_a_name_a_prototype_has_does_not_call_the_indexer() {
+    let mut r = realm(1_000_000);
+    let calls: Rc<Cell<u32>> = Rc::default();
+    let seen = calls.clone();
+    let index: HostFunction = Rc::new(move |a| {
+        seen.set(seen.get() + 1);
+        match a.get(1) {
+            Some(Data::Number(_)) => Ok(Data::Undefined),
+            _ => Err(HostError::Error("no such member".into())),
+        }
+    });
+    let class = HostClass { name: "List".into(), parent: None, members: Vec::new(), index: Some(index), construct: None };
+    r.define_host_classes(vec![class], vec![("it".into(), host_ref("List", &[1.0]))]).unwrap();
+    r.start("Object.prototype.extra = 1; it.extra = 2; it.extra").unwrap();
+    assert_eq!(finish(&mut r, 1_000_000).0.unwrap(), JsValue::Number(1.0));
+    assert_eq!(calls.get(), 0);
+    // A name nothing has still goes to the indexer, which throws.
+    r.start("it.nope = 2").unwrap();
+    assert!(finish(&mut r, 1_000_000).0.is_err());
+    assert_eq!(calls.get(), 1);
+}
+
+#[test]
 fn a_converted_function_reads_each_argument_as_its_list_says() {
     let mut r = realm(1_000_000);
     let seen: Rc<RefCell<Vec<Vec<Data>>>> = Rc::default();

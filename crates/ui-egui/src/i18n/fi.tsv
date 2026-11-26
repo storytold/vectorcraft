@@ -7611,6 +7611,35 @@ axis	Y Axis	Y-akseli
 @msg	`inputs` lists `{shown}` twice	`inputs` luettelee kohteen `{shown}` kahdesti
 @msg	`inputs` needs `api` 2 or later	`inputs` edellyttää `api`-tasoa 2 tai uudempaa
 @msg	`inputs` needs the permission `doc.read`	`inputs` edellyttää käyttöoikeutta `doc.read`
+@msg	only a filter declares `writes`	vain suodatin voi määrittää `writes`-avaimen
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` nimeää tuntemattoman objektilajin `{shown}`: käytä arvoa type, image tai symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` luettelee kohteen `{shown}` kahdesti
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` luettelee kohteen `{shown}`, jota `inputs` ei luettele
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` edellyttää `api`-tasoa {WRITES_API} tai uudempaa
+@msg	`writes` needs the permission `doc.write`	`writes` edellyttää käyttöoikeutta `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} ei ole teksti, kuva eikä symbolin ilmentymä
+@msg	the text of type given as `truncated` can't be changed	`truncated`-merkinnällä annetun tekstiobjektin tekstiä ei voi muuttaa
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	on oltava luettelo, jossa on enintään {MAX_INPUT_RUNS} kohdetta
+@msg	type needs at least one run	tekstissä on oltava vähintään yksi tekstijakso
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} tavua tekstiä (raja {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} kappaletta (raja {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	yli {MAX_INPUT_TEXT_TOTAL} tavua tekstiä koko tulosteessa
+@msg	unknown key '{k}'	tuntematon avain '{k}'
+@msg	must be a list of 6 numbers	on oltava 6 luvun luettelo
+@msg	a number is out of range (limit ±{MAX_COORD})	luku on alueen ulkopuolella (raja ±{MAX_COORD})
+@msg	flattens the object to a line or a point	litistää objektin viivaksi tai pisteeksi
+@msg	an object flattened to a line or a point can't be placed again	viivaksi tai pisteeksi litistynyttä objektia ei voi sijoittaa uudelleen
+@msg	must be a number from 0 to 1	on oltava luku väliltä 0-1
+@msg	must be the name of a symbol	on oltava symbolin nimi
+@msg	'{shown}' is not a symbol in this document	'{shown}' ei ole symboli tässä dokumentissa
+@msg	a run must be {{"text", "style", "inline"?}}	tekstijakson on oltava {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` sisältää upotetun grafiikan merkin
+@msg	inline graphics can't be added, removed, reordered or changed	upotettuja grafiikoita ei voi lisätä, poistaa, järjestää uudelleen eikä muuttaa
+@msg	the characters of threaded type can't be changed	ketjutetun tekstin merkkejä ei voi muuttaa
+@msg	the characters of type with ruby can't be changed	ruby-merkintöjä sisältävän tekstin merkkejä ei voi muuttaa
+@msg	expected {count} paragraph styles, one per paragraph	odotettiin {count} kappaletyyliä, yksi kutakin kappaletta kohden
+@msg	the document has no Kinsoku set named '{shown}'	dokumentissa ei ole Kinsoku-joukkoa nimeltä '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	siinä on oltava 1-{MAX_FAMILY} tulostettavaa merkkiä
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Lukea sille annetut objektit sekä asiakirjan asetukset, piirtoalustat, tasot ja värimallit
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context`-avaimen on lueteltava eri osiot: settings, artboards, layers tai swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` on suodattimelle tai reaaliaikaiselle tehosteelle, jolla on `commands`, tasolla `api` 3 tai uudempi ja käyttöoikeudella `doc.read`
