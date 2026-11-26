@@ -2064,6 +2064,8 @@
 	Chroma	ક્રોમા
 	The largest chroma sRGB holds at this lightness and hue	આ લાઇટનેસ અને હ્યૂ પર sRGB સમાવી શકે તે સૌથી વધુ ક્રોમા
 	OKLCH needs sRGB as the working RGB space	OKLCH માટે કાર્યકારી RGB સ્પેસ તરીકે sRGB જરૂરી છે
+@msg	`sliders` must be none, oklch or hsl	`sliders` none, oklch અથવા hsl હોવું જોઈએ
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH માટે કાર્યકારી RGB સ્પેસ તરીકે sRGB જરૂરી છે
 	Lightness	લાઇટનેસ
 	Lab Spot Colors:	Lab સ્પોટ રંગો:
 	Landscape	લેન્ડસ્કેપ
@@ -2637,6 +2639,17 @@
 	Only Web Colors	માત્ર વેબ રંગો
 	Opacity	અપારદર્શકતા
 	Show Opacity	અપારદર્શકતા બતાવો
+	Show Hex Field	Hex ફીલ્ડ બતાવો
+	Hex or CSS color	Hex અથવા CSS રંગ
+	Parse Color	રંગ પાર્સ કરો
+	Format Color	રંગ ફોર્મેટ કરો
+	Copy Color As	રંગની આ રીતે નકલ કરો
+	Hex	Hex
+	Hex with Alpha	આલ્ફા સાથે Hex
+	CSS rgb()	CSS rgb()
+	CSS hsl()	CSS hsl()
+	CSS oklch()	CSS oklch()
+	CMYK Values	CMYK મૂલ્યો
 	Opacity & Mask Define Knockout Shape	અપારદર્શકતા અને માસ્ક નૉકઆઉટ આકાર વ્યાખ્યાયિત કરે છે
 	Opacity Mask Info	અપારદર્શકતા માસ્ક માહિતી
 	Opacity Mask Options	અપારદર્શકતા માસ્ક વિકલ્પો

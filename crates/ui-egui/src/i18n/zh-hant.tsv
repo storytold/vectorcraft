@@ -2718,6 +2718,9 @@ file-filter	Templates	範本
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` 必須是 hue、saturation、brightness、red、green 或 blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` 必須是 none、oklch 或 hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH 需要將 sRGB 用作 RGB 工作空間
+@msg	`notation` must be hex, hexAlpha, rgb, hsl, oklch or cmyk	`notation` 必須是 hex、hexAlpha、rgb、hsl、oklch 或 cmyk
+@msg	Copied the color as {text}	已將顏色複製為 {text}
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` 必須是十六進位顏色 (#rgb、#rgba、#rrggbb 或 #rrggbbaa)，或不超過 48 個字元的 CSS rgb()、hsl() 或 oklch() 顏色
 @msg	`{key}` must be true or false	`{key}` 必須是 true 或 false
 @msg	`top` and `below` can't both be true	`top` 和 `below` 不能同時為 true
 @msg	`select` must be true or false	`select` 必須是 true 或 false
@@ -3991,6 +3994,17 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Only Web Colors	僅限網頁色彩
 	Opacity	不透明度
 	Show Opacity	顯示不透明度
+	Show Hex Field	顯示十六進位欄位
+	Hex or CSS color	十六進位或 CSS 顏色
+	Parse Color	剖析顏色
+	Format Color	格式化顏色
+	Copy Color As	將顏色複製為
+	Hex	Hex
+	Hex with Alpha	Hex (含 Alpha)
+	CSS rgb()	CSS rgb()
+	CSS hsl()	CSS hsl()
+	CSS oklch()	CSS oklch()
+	CMYK Values	CMYK 值
 	Opacity & Mask Define Knockout Shape	不透明度與遮色片定義挖空形狀
 	Opacity Mask	不透明度遮色片
 	Opacity Mask Info	不透明度遮色片資訊

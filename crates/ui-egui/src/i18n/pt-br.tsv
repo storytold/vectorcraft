@@ -2157,6 +2157,17 @@ antiAlias	Sharp	Nítido
 	Only Web Colors	Apenas Cores da Web
 	Opacity	Opacidade
 	Show Opacity	Mostrar Opacidade
+	Show Hex Field	Mostrar Campo Hex
+	Hex or CSS color	Cor hex ou CSS
+	Parse Color	Interpretar Cor
+	Format Color	Formatar Cor
+	Copy Color As	Copiar Cor Como
+	Hex	Hex
+	Hex with Alpha	Hex com Alfa
+	CSS rgb()	CSS rgb()
+	CSS hsl()	CSS hsl()
+	CSS oklch()	CSS oklch()
+	CMYK Values	Valores CMYK
 	Opacity & Mask Define Knockout Shape	Opacidade e Máscara Definem Forma de Isolamento
 	Opacity Mask	Máscara de Opacidade
 	Opacity Mask Info	Informações da Máscara de Opacidade
@@ -7030,6 +7041,9 @@ mark-style	Japanese	Japonesas
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` deve ser hue, saturation, brightness, red, green ou blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` deve ser none, oklch ou hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH requer sRGB como espaço de trabalho RGB
+@msg	`notation` must be hex, hexAlpha, rgb, hsl, oklch or cmyk	`notation` deve ser hex, hexAlpha, rgb, hsl, oklch ou cmyk
+@msg	Copied the color as {text}	Cor copiada como {text}
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` deve ser uma cor hex (#rgb, #rgba, #rrggbb ou #rrggbbaa) ou uma cor CSS rgb(), hsl() ou oklch() de no máximo 48 caracteres
 @msg	the image can't be read as a texture	a imagem não pode ser lida como textura
 
 # User Interface › Accent Color

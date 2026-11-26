@@ -2574,6 +2574,17 @@ font-technology	Variable	Variabla
 	Only Web Colors	Endast webbfärger
 	Opacity	Opacitet
 	Show Opacity	Visa opacitet
+	Show Hex Field	Visa hexfält
+	Hex or CSS color	Hex- eller CSS-färg
+	Parse Color	Tolka färg
+	Format Color	Formatera färg
+	Copy Color As	Kopiera färg som
+	Hex	Hex
+	Hex with Alpha	Hex med alfa
+	CSS rgb()	CSS rgb()
+	CSS hsl()	CSS hsl()
+	CSS oklch()	CSS oklch()
+	CMYK Values	CMYK-värden
 	Opacity & Mask Define Knockout Shape	Opacitet och mask definierar utsparningsform
 	Opacity Mask	Opacitetsmask
 	Opacity Mask Info	Info om opacitetsmask
@@ -7070,6 +7081,9 @@ theme	Appearance	Utseende
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` måste vara hue, saturation, brightness, red, green eller blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` måste vara none, oklch eller hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH kräver sRGB som RGB-arbetsfärgrymd
+@msg	`notation` must be hex, hexAlpha, rgb, hsl, oklch or cmyk	`notation` måste vara hex, hexAlpha, rgb, hsl, oklch eller cmyk
+@msg	Copied the color as {text}	Kopierade färgen som {text}
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` måste vara en hexfärg (#rgb, #rgba, #rrggbb eller #rrggbbaa) eller en CSS-färg rgb(), hsl() eller oklch() på högst 48 tecken
 @msg	`{key}` must be an array of these names: {_1}	`{key}` måste vara en lista med dessa namn: {_1}
 @msg	choose a destination folder	välj en målmapp
 @msg	choose a source folder	välj en källmapp

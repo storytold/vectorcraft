@@ -2161,6 +2161,17 @@ font-technology	Variable	Μεταβλητές
 	Only Web Colors	Μόνο χρώματα ιστού
 	Opacity	Αδιαφάνεια
 	Show Opacity	Εμφάνιση αδιαφάνειας
+	Show Hex Field	Εμφάνιση πεδίου Hex
+	Hex or CSS color	Χρώμα Hex ή CSS
+	Parse Color	Ανάλυση χρώματος
+	Format Color	Μορφοποίηση χρώματος
+	Copy Color As	Αντιγραφή χρώματος ως
+	Hex	Hex
+	Hex with Alpha	Hex με άλφα
+	CSS rgb()	CSS rgb()
+	CSS hsl()	CSS hsl()
+	CSS oklch()	CSS oklch()
+	CMYK Values	Τιμές CMYK
 	Opacity Mask	Μάσκα αδιαφάνειας
 	Opacity:	Αδιαφάνεια:
 	Open	Άνοιγμα
@@ -7084,6 +7095,9 @@ effect	Points	Σημεία
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	το `channel` πρέπει να είναι hue, saturation, brightness, red, green ή blue
 @msg	`sliders` must be none, oklch or hsl	Το `sliders` πρέπει να είναι none, oklch ή hsl
 @msg	OKLCH needs sRGB as the working RGB space	Το OKLCH απαιτεί sRGB ως χώρο εργασίας RGB
+@msg	`notation` must be hex, hexAlpha, rgb, hsl, oklch or cmyk	Το `notation` πρέπει να είναι hex, hexAlpha, rgb, hsl, oklch ή cmyk
+@msg	Copied the color as {text}	Το χρώμα αντιγράφηκε ως {text}
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	Το `text` πρέπει να είναι χρώμα Hex (#rgb, #rgba, #rrggbb ή #rrggbbaa) ή χρώμα CSS rgb(), hsl() ή oklch() με έως 48 χαρακτήρες
 @msg	`{key}` must be an array of these names: {_1}	το `{key}` πρέπει να είναι πίνακας με αυτά τα ονόματα: {_1}
 @msg	choose a destination folder	επιλέξτε φάκελο προορισμού
 @msg	choose a source folder	επιλέξτε φάκελο προέλευσης

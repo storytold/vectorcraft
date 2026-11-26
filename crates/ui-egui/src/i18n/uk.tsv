@@ -2683,6 +2683,17 @@ file-filter	Templates	Шаблони
 	Only Web Colors	Тільки web-кольору
 	Opacity	Непрозорість
 	Show Opacity	Показати непрозорість
+	Show Hex Field	Показати поле hex
+	Hex or CSS color	Колір hex або CSS
+	Parse Color	Розібрати колір
+	Format Color	Форматувати колір
+	Copy Color As	Копіювати колір як
+	Hex	Hex
+	Hex with Alpha	Hex з альфа-каналом
+	CSS rgb()	CSS rgb()
+	CSS hsl()	CSS hsl()
+	CSS oklch()	CSS oklch()
+	CMYK Values	Значення CMYK
 	Opacity & Mask Define Knockout Shape	Непрозорість та маска визначають форму вирізування
 	Opacity Mask	Маска непрозорості
 	Opacity Mask Info	Відомості про маску непрозорості
@@ -5278,6 +5289,9 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` має бути hue, saturation, brightness, red, green або blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` має бути none, oklch або hsl
 @msg	OKLCH needs sRGB as the working RGB space	Для OKLCH робочим простором RGB має бути sRGB
+@msg	`notation` must be hex, hexAlpha, rgb, hsl, oklch or cmyk	`notation` має бути hex, hexAlpha, rgb, hsl, oklch або cmyk
+@msg	Copied the color as {text}	Колір скопійовано як {text}
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` має бути кольором hex (#rgb, #rgba, #rrggbb або #rrggbbaa) або кольором CSS rgb(), hsl() або oklch() довжиною не більше 48 символів
 @msg	`{k}` must be [x, y]	`{k}` має бути [x, y]
 @msg	`{name}` has no options	`{name}` не має параметрів
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` - вбудоване робоче середовище; виберіть інше ім’я

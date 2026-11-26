@@ -481,6 +481,17 @@
 	Fill Color	Kolor wypełnienia
 	Opacity	Krycie
 	Show Opacity	Pokaż krycie
+	Show Hex Field	Pokaż pole hex
+	Hex or CSS color	Kolor hex lub CSS
+	Parse Color	Analizuj kolor
+	Format Color	Formatuj kolor
+	Copy Color As	Kopiuj kolor jako
+	Hex	Hex
+	Hex with Alpha	Hex z alfą
+	CSS rgb()	CSS rgb()
+	CSS hsl()	CSS hsl()
+	CSS oklch()	CSS oklch()
+	CMYK Values	Wartości CMYK
 	Stroke Color	Kolor obrysu
 	Fill Gradient	Gradient wypełnienia
 	Stroke Gradient	Gradient obrysu
@@ -5395,6 +5406,9 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` musi mieć wartość hue, saturation, brightness, red, green lub blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` musi mieć wartość none, oklch lub hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH wymaga sRGB jako roboczej przestrzeni RGB
+@msg	`notation` must be hex, hexAlpha, rgb, hsl, oklch or cmyk	`notation` musi mieć wartość hex, hexAlpha, rgb, hsl, oklch lub cmyk
+@msg	Copied the color as {text}	Skopiowano kolor jako {text}
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` musi być kolorem hex (#rgb, #rgba, #rrggbb lub #rrggbbaa) albo kolorem CSS rgb(), hsl() lub oklch() o długości najwyżej 48 znaków
 @msg	`{k}` must be [x, y]	`{k}` musi mieć postać [x, y]
 @msg	`{name}` has no options	`{name}` nie ma opcji
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` to wbudowany obszar roboczy; wybierz inną nazwę

@@ -112,11 +112,16 @@ fn turning_points(a: f64, b: f64, c: f64) -> Vec<f64> {
 
 /// The sRGB color (gamma encoded, 0..=1) of OKLCH `(l, c, h°)`, and whether its chroma was lowered:
 /// a color outside sRGB keeps its lightness and hue and takes the largest chroma below it that
-/// fits. Lightness is clamped to 0..=1 and chroma to 0 or more.
+/// fits. Lightness is clamped to 0..=1 and chroma to 0 or more. Lightness 0 gives exactly black and
+/// lightness 1 exactly white, as CSS Color 4 specifies, and a positive chroma there counts as
+/// lowered.
 pub fn from_oklch(l: f64, c: f64, h: f64) -> ([f32; 3], bool) {
     let l = if l.is_nan() { 0.0 } else { l.clamp(0.0, 1.0) };
     let c = if c.is_nan() { 0.0 } else { c.max(0.0) };
     let h = if h.is_finite() { h } else { 0.0 };
+    if l == 0.0 || l == 1.0 {
+        return ([l as f32; 3], c > 0.0);
+    }
     let exact = oklch_to_srgb(l, c, h);
     let (rgb, lowered) = if in_srgb(exact) { (exact, false) } else { (oklch_to_srgb(l, largest_fitting_chroma(l, h, c), h), true) };
     (rgb.map(|v| v.clamp(0.0, 1.0) as f32), lowered)
@@ -261,5 +266,15 @@ mod tests {
         assert_eq!(max_chroma(0.5, f64::INFINITY), 0.0);
         assert_eq!(eight(from_oklch(f64::NAN, f64::NAN, f64::NAN).0), [0, 0, 0]);
         assert_eq!(eight(from_oklch(2.0, -1.0, 0.0).0), [255, 255, 255]);
+    }
+
+    /// The lightness endpoints give exactly black and white at any chroma and hue, and report a
+    /// positive chroma as lowered. A rounded 8-bit comparison would hide a small leftover channel.
+    #[test]
+    fn the_lightness_endpoints_give_exact_black_and_white() {
+        assert_eq!(from_oklch(0.0, 0.04, 0.0), ([0.0; 3], true));
+        assert_eq!(from_oklch(0.0, 0.0, 120.0), ([0.0; 3], false));
+        assert_eq!(from_oklch(1.0, 0.1, 250.0), ([1.0; 3], true));
+        assert_eq!(from_oklch(1.0, 0.0, 0.0), ([1.0; 3], false));
     }
 }

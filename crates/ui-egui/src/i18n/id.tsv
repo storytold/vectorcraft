@@ -484,6 +484,7 @@
 @msg	`opacity` must be a number	`opacity` harus berupa angka
 @msg	`opacity` must be a number from 0 to 100	`opacity` harus berupa angka dari 0 sampai 100
 @msg	`opacity` must be true or false	`opacity` harus true atau false
+@msg	give color, none, swatch, gradient or opacity	berikan color, none, swatch, gradient, atau opacity
 @msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	karakter teks tidak memiliki opasitas sendiri: tambahkan isian atau guratan dengan Tambahkan isian baru atau Tambahkan guratan baru di panel Tampilan
 @msg	an object selected in a symbol instance has no fill or stroke opacity of its own	objek yang dipilih dalam instans simbol tidak memiliki opasitas isian atau guratan sendiri
 @msg	no target has that fill or stroke to take the opacity	tidak ada target yang memiliki isian atau guratan tersebut untuk menerima opasitas
@@ -1186,6 +1187,17 @@
 	Fill Color	Warna isian
 	Opacity	Opasitas
 	Show Opacity	Tampilkan opasitas
+	Show Hex Field	Tampilkan bidang hex
+	Hex or CSS color	Warna hex atau CSS
+	Parse Color	Urai warna
+	Format Color	Format warna
+	Copy Color As	Salin warna sebagai
+	Hex	Hex
+	Hex with Alpha	Hex dengan alfa
+	CSS rgb()	CSS rgb()
+	CSS hsl()	CSS hsl()
+	CSS oklch()	CSS oklch()
+	CMYK Values	Nilai CMYK
 	Stroke Color	Warna stroke
 	Fill Gradient	Gradien isian
 	Stroke Gradient	Gradien stroke
@@ -7058,6 +7070,9 @@ mark-style	Japanese	Jepang
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` harus hue, saturation, brightness, red, green atau blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` harus none, oklch, atau hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH memerlukan sRGB sebagai ruang RGB kerja
+@msg	`notation` must be hex, hexAlpha, rgb, hsl, oklch or cmyk	`notation` harus hex, hexAlpha, rgb, hsl, oklch, atau cmyk
+@msg	Copied the color as {text}	Warna disalin sebagai {text}
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` harus berupa warna hex (#rgb, #rgba, #rrggbb, atau #rrggbbaa) atau warna CSS rgb(), hsl(), atau oklch() dengan paling banyak 48 karakter
 @msg	the Color Picker is not open	Pemilih Warna tidak terbuka
 @msg	the screen color sampler is already open	pengambil warna layar sudah terbuka
 @msg	this system has no screen color sampler	sistem ini tidak memiliki pengambil warna layar

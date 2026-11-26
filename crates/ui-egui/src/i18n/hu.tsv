@@ -3123,6 +3123,17 @@ file-filter	Templates	Sablonok
 	Only Web Colors	Csak webes színek
 	Opacity	Átlátszatlanság
 	Show Opacity	Átlátszatlanság megjelenítése
+	Show Hex Field	Hex mező megjelenítése
+	Hex or CSS color	Hex vagy CSS szín
+	Parse Color	Szín értelmezése
+	Format Color	Szín formázása
+	Copy Color As	Szín másolása mint
+	Hex	Hex
+	Hex with Alpha	Hex alfával
+	CSS rgb()	CSS rgb()
+	CSS hsl()	CSS hsl()
+	CSS oklch()	CSS oklch()
+	CMYK Values	CMYK-értékek
 	Opacity & Mask Define Knockout Shape	Az átlátszatlanság és a maszk adja a kiütés alakját
 	Opacity Mask	Átlátszósági maszk
 	Opacity Mask Info	Átlátszósági maszk adatai
@@ -5598,6 +5609,9 @@ imageTrace	Outline	Körvonal
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel`: hue, saturation, brightness, red, green vagy blue kell
 @msg	`sliders` must be none, oklch or hsl	A `sliders` értéke none, oklch vagy hsl lehet
 @msg	OKLCH needs sRGB as the working RGB space	Az OKLCH-hoz sRGB munka-RGB-színtér szükséges
+@msg	`notation` must be hex, hexAlpha, rgb, hsl, oklch or cmyk	A `notation` értéke hex, hexAlpha, rgb, hsl, oklch vagy cmyk lehet
+@msg	Copied the color as {text}	A szín másolva ebben a formában: {text}
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text`: hex szín (#rgb, #rgba, #rrggbb vagy #rrggbbaa) vagy legfeljebb 48 karakteres CSS rgb(), hsl() vagy oklch() szín kell
 @msg	`{k}` must be [x, y]	`{k}`: [x, y] kell
 @msg	`{name}` has no options	ennek nincsenek beállításai: `{name}`
 @msg	`{name}` is a built-in workspace; choose another name	beépített munkaterület: `{name}`; válassz másik nevet

@@ -2410,6 +2410,17 @@ font-technology	Variable	Değişken
 	Only Web Colors	Yalnızca Web Renkleri
 	Opacity	Opaklık
 	Show Opacity	Opaklığı Göster
+	Show Hex Field	Hex Alanını Göster
+	Hex or CSS color	Hex veya CSS rengi
+	Parse Color	Rengi Ayrıştır
+	Format Color	Rengi Biçimlendir
+	Copy Color As	Rengi Farklı Biçimde Kopyala
+	Hex	Hex
+	Hex with Alpha	Alfalı Hex
+	CSS rgb()	CSS rgb()
+	CSS hsl()	CSS hsl()
+	CSS oklch()	CSS oklch()
+	CMYK Values	CMYK Değerleri
 	Opacity & Mask Define Knockout Shape	Opaklık ve Maske Tanımlama Nakavt Şekli
 	Opacity Mask	Opaklık Maskesi
 	Opacity Mask Info	Opaklık Maskesi Bilgisi
@@ -4985,6 +4996,9 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` hue, saturation, brightness, red, green veya blue olmalıdır
 @msg	`sliders` must be none, oklch or hsl	`sliders` none, oklch veya hsl olmalıdır
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH, çalışma RGB alanı olarak sRGB gerektirir
+@msg	`notation` must be hex, hexAlpha, rgb, hsl, oklch or cmyk	`notation` hex, hexAlpha, rgb, hsl, oklch veya cmyk olmalıdır
+@msg	Copied the color as {text}	Renk şu biçimde kopyalandı: {text}
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` bir hex rengi (#rgb, #rgba, #rrggbb veya #rrggbbaa) ya da en fazla 48 karakterlik bir CSS rgb(), hsl() veya oklch() rengi olmalıdır
 @msg	`{k}` must be [x, y]	`{k}` [x, y] olmalıdır
 @msg	`{name}` has no options	`{name}`nin seçeneği yok
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` yerleşik bir çalışma alanıdır; başka bir isim seç

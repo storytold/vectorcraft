@@ -84,8 +84,8 @@ fn ui_color_wheel_sets_gamut() {
     let with = |v: serde_json::Value| {
         let mut v = v;
         let rest = json!({
-            "sliders": "none", "harmony": false, "harmonyRule": "complementary", "opacity": false, "contrast": false, "contrastFor": "normalText",
-            "contrastBackground": null, "vision": false, "documentColors": false
+            "opacity": false, "hexField": false, "sliders": "none", "harmony": false, "harmonyRule": "complementary", "contrast": false,
+            "contrastFor": "normalText", "contrastBackground": null, "vision": false, "documentColors": false
         });
         v.as_object_mut().unwrap().extend(rest.as_object().unwrap().clone());
         v

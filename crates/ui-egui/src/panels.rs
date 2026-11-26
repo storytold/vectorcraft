@@ -1115,11 +1115,15 @@ mod tests_color_wheel_box;
 #[cfg(test)]
 mod tests_color_wheel_contrast;
 #[cfg(test)]
+mod tests_color_wheel_copy;
+#[cfg(test)]
 mod tests_color_wheel_document_colors;
 #[cfg(test)]
 mod tests_color_wheel_gamut;
 #[cfg(test)]
 mod tests_color_wheel_harmony;
+#[cfg(test)]
+mod tests_color_wheel_hex;
 #[cfg(test)]
 mod tests_color_wheel_opacity;
 #[cfg(test)]

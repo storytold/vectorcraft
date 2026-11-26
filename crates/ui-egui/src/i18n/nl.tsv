@@ -1173,6 +1173,17 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Fill Color	Vulkleur
 	Opacity	Dekking
 	Show Opacity	Dekking tonen
+	Show Hex Field	Hexveld tonen
+	Hex or CSS color	Hex- of CSS-kleur
+	Parse Color	Kleur ontleden
+	Format Color	Kleur opmaken
+	Copy Color As	Kleur kopiëren als
+	Hex	Hex
+	Hex with Alpha	Hex met alfa
+	CSS rgb()	CSS rgb()
+	CSS hsl()	CSS hsl()
+	CSS oklch()	CSS oklch()
+	CMYK Values	CMYK-waarden
 	Stroke Color	Contourkleur
 	Fill Gradient	Vulverloop
 	Stroke Gradient	Contourverloop
@@ -9064,6 +9075,9 @@ mark-style	Japanese	Japans
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` moet hue, saturation, brightness, red, green of blue zijn
 @msg	`sliders` must be none, oklch or hsl	`sliders` moet none, oklch of hsl zijn
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH vereist sRGB als werk-RGB-ruimte
+@msg	`notation` must be hex, hexAlpha, rgb, hsl, oklch or cmyk	`notation` moet hex, hexAlpha, rgb, hsl, oklch of cmyk zijn
+@msg	Copied the color as {text}	Kleur gekopieerd als {text}
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` moet een hexkleur (#rgb, #rgba, #rrggbb of #rrggbbaa) of een CSS-kleur rgb(), hsl() of oklch() van ten hoogste 48 tekens zijn
 @msg	the Color Picker is not open	de kleurenkiezer is niet open
 @msg	the screen color sampler is already open	de schermkleurkiezer is al open
 @msg	this system has no screen color sampler	dit systeem heeft geen schermkleurkiezer

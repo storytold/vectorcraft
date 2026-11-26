@@ -2646,6 +2646,17 @@ font-technology	Variable	Variables
 	Only Web Colors	Solo colores web
 	Opacity	Opacidad
 	Show Opacity	Mostrar opacidad
+	Show Hex Field	Mostrar campo hex
+	Hex or CSS color	Color hex o CSS
+	Parse Color	Analizar color
+	Format Color	Formatear color
+	Copy Color As	Copiar color como
+	Hex	Hex
+	Hex with Alpha	Hex con alfa
+	CSS rgb()	CSS rgb()
+	CSS hsl()	CSS hsl()
+	CSS oklch()	CSS oklch()
+	CMYK Values	Valores CMYK
 	Opacity & Mask Define Knockout Shape	La opacidad y la máscara definen la forma de exclusión
 	Opacity Mask	Máscara de opacidad
 	Opacity Mask Info	Información de máscara de opacidad
@@ -5264,6 +5275,9 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` debe ser hue, saturation, brightness, red, green o blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` debe ser none, oklch o hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH necesita sRGB como espacio de trabajo RGB
+@msg	`notation` must be hex, hexAlpha, rgb, hsl, oklch or cmyk	`notation` debe ser hex, hexAlpha, rgb, hsl, oklch o cmyk
+@msg	Copied the color as {text}	Se copió el color como {text}
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` debe ser un color hex (#rgb, #rgba, #rrggbb o #rrggbbaa) o un color CSS rgb(), hsl() u oklch() de 48 caracteres como máximo
 @msg	`{k}` must be [x, y]	`{k}` debe ser [x, y]
 @msg	`{name}` has no options	`{name}` no tiene opciones
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` es un espacio de trabajo integrado; elige otro nombre

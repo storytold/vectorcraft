@@ -1233,6 +1233,62 @@ fn color_management_policies_are_checked_and_kept() {
     assert_eq!(cms::active_settings(), cms::ColorSettings::default());
 }
 
+/// `color.parse` takes `oklch()` only while the working RGB space is sRGB; a hex color still gives
+/// its numbers as the document's RGB numbers in another working space.
+#[test]
+fn color_parse_takes_oklch_only_in_an_srgb_working_space() {
+    let _g = settings();
+    let old = cms::active_settings();
+    let mut s = session();
+    s.execute("edit.colorSettings", &json!({"rgb": cms::WIDE_GAMUT_RGB})).unwrap();
+    let oklch = s.execute("color.parse", &json!({"text": "oklch(0.6 0.1 30)"})).map_err(|e| e.to_string());
+    let hex = s.execute("color.parse", &json!({"text": "#33669980"})).map_err(|e| e.to_string());
+    cms::set_active(&old).unwrap();
+    assert!(oklch.as_ref().unwrap_err().ends_with("OKLCH needs sRGB as the working RGB space"), "{oklch:?}");
+    let hex = hex.unwrap();
+    assert_eq!((&hex["hex"], &hex["opacity"]), (&json!("#336699"), &json!(50.2)));
+    assert!(s.execute("color.parse", &json!({"text": "oklch(0.6 0.1 30)"})).is_ok(), "sRGB again");
+}
+
+/// `color.format` writes `oklch()` only while the working RGB space is sRGB, and writes every CSS
+/// form of a CMYK color from the RGB numbers the rendering intent gives, so `color.parse` reads each
+/// back to the hex color `color.format` gives.
+#[test]
+fn color_format_writes_every_css_form_through_the_intent() {
+    let _g = settings();
+    let old = cms::active_settings();
+    let mut s = session();
+    let format = |s: &mut Session, color: &serde_json::Value, notation: &str| {
+        s.execute("color.format", &json!({"color": color, "notation": notation})).map(|r| r["text"].as_str().unwrap_or_default().to_string())
+    };
+    s.execute("edit.colorSettings", &json!({"rgb": cms::WIDE_GAMUT_RGB})).unwrap();
+    let wide = format(&mut s, &json!("#336699"), "oklch").map_err(|e| e.to_string());
+    // The Generic CMYK profile's file loaded as an ICC profile, which converts through the intent.
+    let icc = cms::register_icc(&cms::icc_bytes(cms::GENERIC_CMYK).unwrap(), Some("Format Intent CMYK".into())).unwrap().name;
+    s.execute("edit.colorSettings", &json!({"rgb": cms::SRGB, "cmyk": icc, "intent": "absolute"})).unwrap();
+    let cyan = json!({"c": 100, "m": 0, "y": 0, "k": 0});
+    let absolute = cms::active().cmyk_to_rgb([1.0, 0.0, 0.0, 0.0], cms::Intent::AbsoluteColorimetric).map(|v| (v * 255.0).round() as u8);
+    let intents_differ =
+        absolute != cms::active().cmyk_to_rgb([1.0, 0.0, 0.0, 0.0], cms::Intent::RelativeColorimetric).map(|v| (v * 255.0).round() as u8);
+    // Collected as results, so that a failure still restores the process-wide settings first.
+    let mut read_back = vec![];
+    for notation in ["hex", "rgb", "hsl", "oklch"] {
+        let text = format(&mut s, &cyan, notation).map_err(|e| e.to_string());
+        let hex = text.clone().and_then(|t| s.execute("color.parse", &json!({"text": t})).map(|r| r["hex"].clone()).map_err(|e| e.to_string()));
+        read_back.push((notation, text, hex));
+    }
+    cms::set_active(&old).unwrap();
+    cms::unregister_icc(&icc);
+    assert!(wide.as_ref().unwrap_err().ends_with("OKLCH needs sRGB as the working RGB space"), "{wide:?}");
+    assert!(intents_differ, "absolute and relative colorimetric give cyan the same RGB");
+    let hex = read_back[0].1.clone().unwrap();
+    let [r, g, b] = absolute;
+    assert_eq!(hex, format!("#{r:02x}{g:02x}{b:02x}"), "hex is the absolute colorimetric RGB");
+    for (notation, text, back) in read_back {
+        assert_eq!(back, Ok(json!(hex)), "{notation}: {text:?}");
+    }
+}
+
 /// The Ask boxes of Edit › Color Settings are checked, come back in the reply and are kept in
 /// `Color Settings.json`.
 #[test]
