@@ -1596,8 +1596,8 @@ fn pick_library(app: &mut VectorcraftApp, opening: Arc<()>) {
     let request = builtin_open_filters().fold(PickRequest::open("library"), |request, (name, exts)| request.filter(name, exts));
     // A loaded library belongs to the session. The Limit to Library choice belongs to the opening that asked.
     crate::file_asks::ask(app, request, crate::file_asks::Owner::Free, move |app, picked| {
-        let Some(path) = picked.first_path() else { return Ok(Value::Null) };
-        let r = app.run("swatch.library.load", json!({ "path": path }))?;
+        let Some(params) = crate::file_asks::open_params(&picked) else { return Ok(Value::Null) };
+        let r = app.run("swatch.library.load", Value::Object(params))?;
         let library = r["library"].clone();
         if let Some(dialogs) = app.dialogs() {
             dialogs.with(|host| {

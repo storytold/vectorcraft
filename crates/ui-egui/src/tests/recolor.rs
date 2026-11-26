@@ -480,6 +480,23 @@ fn other_library_picker_only_limits_the_recolor_opening_that_requested_it() {
     }
 }
 
+#[test]
+fn other_library_picker_loads_a_browser_palette() {
+    let mut r = open(app(), json!({"colors": ["#123456"], "library": "document"}));
+    let picker = super::picks::scripted(&mut r.app());
+    r.settled();
+    tap(&mut r, "Other Library…");
+    assert_eq!(picker.requests().len(), 1);
+    picker.answer_contents(&[("Browser Colors.gpl", b"GIMP Palette\nName: Browser Colors\n#\n12 34 56 Test Color\n")]);
+    crate::file_asks::poll(&mut r.app());
+    r.settled();
+
+    let libraries = r.app().run("swatch.library.list", json!({})).unwrap();
+    let imported = libraries["libraries"].as_array().unwrap().iter().find(|lib| lib["category"] == "loaded").expect("the browser palette loads");
+    assert_eq!(field(&r, "limitTo"), imported["id"]);
+    r.cancel();
+}
+
 /// With Limit to Library, a row whose new color is a spot color of the library shows Tint, whose T
 /// slider sets the row's tint of it; OK links the art to the spot color at that tint.
 #[test]
