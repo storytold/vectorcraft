@@ -232,6 +232,7 @@ impl VectorcraftApp {
             shortcuts_dialog: None,
             shortcut_overrides: Default::default(),
             told: Default::default(),
+            missing_font_edit_token: None,
             held: Default::default(),
             edit_scopes: Default::default(),
             command_dialog: Default::default(),
