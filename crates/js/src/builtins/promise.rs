@@ -276,12 +276,12 @@ pub(crate) fn install(interp: &mut Interp) -> JsResult<()> {
     Ok(())
 }
 
-/// Turns on [`crate::Options::es2015`] in a realm made without it and creates `Promise` there,
-/// replacing a global `Promise` an earlier script defined. A realm that has the built-in `Promise`
-/// already keeps it. When `Promise` cannot be created, every later run of the realm ends with an
-/// internal error, as for a realm whose built-ins could not be installed.
+/// Creates `Promise` in a realm made without [`crate::Options::es2015`], replacing a global
+/// `Promise` an earlier script defined, and leaves the language the realm's runs read as it is. A
+/// realm that has the built-in `Promise` already keeps it. When `Promise` cannot be created, every
+/// later run of the realm ends with an internal error, as for a realm whose built-ins could not be
+/// installed.
 pub(crate) fn add_to(interp: &mut Interp) {
-    interp.options.es2015 = true;
     if interp.promises.ctor.is_some() || interp.install_error.is_some() {
         return;
     }

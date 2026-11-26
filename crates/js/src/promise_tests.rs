@@ -39,6 +39,25 @@ fn an_extendscript_realm_has_no_promise() {
 }
 
 #[test]
+fn adding_promise_leaves_the_language_and_the_other_built_ins_as_they_were() {
+    let mut r = Realm::new();
+    r.add_es2015();
+    assert_eq!(r.run("typeof Promise").unwrap(), JsValue::String("function".into()));
+    assert_eq!(r.run("typeof Symbol").unwrap(), JsValue::String("undefined".into()));
+    assert!(matches!(r.run("let a = 1;"), Err(RunError { kind: RunErrorKind::Syntax, .. })));
+    r.set_es2015(true);
+    assert_eq!(r.run("let b = 2; b").unwrap(), JsValue::Number(2.0));
+}
+
+#[test]
+fn promise_prototype_cannot_be_replaced() {
+    let src = "var before = Promise.prototype; Promise.prototype = {}; \
+               var p = new Promise(function () {}); \
+               [Promise.prototype === before, Object.getPrototypeOf(p) === before, p instanceof Promise].join()";
+    assert_eq!(string(src), "true,true,true");
+}
+
+#[test]
 fn then_callbacks_run_after_the_scripts_code_in_order() {
     let src = "Promise.resolve(1).then(function (v) { log.push('a' + v); });\n\
                new Promise(function (res) { log.push('executor'); res(2); }).then(function (v) { log.push('b' + v); });\n\
