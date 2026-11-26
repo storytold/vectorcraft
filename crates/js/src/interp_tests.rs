@@ -1015,6 +1015,7 @@ fn code(ops: Vec<Op>) -> Code {
         es2015: false,
         own_name: None,
         method: false,
+        generator: false,
     }
 }
 

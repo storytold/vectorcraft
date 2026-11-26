@@ -480,25 +480,28 @@ fn last_effect_dialog_and_view_toggles() {
     }
 }
 
-/// Edit › Undo and Edit › Redo name the step in the UI language as the History panel lists it
-/// (`panels::history::step_name`), including a step named after an effect whose catalog holds
-/// only the effect's menu row with an ellipsis, as Japanese does for Feather.
+/// Edit › Undo and Edit › Redo name the step in the UI language as the History panel lists it: a
+/// step that applied an effect by the effect's name as the Effect menu shows it
+/// (`i18n::effect_name`), even where the plain row of its English label holds another word, as
+/// French does for Feather, and any other step by `panels::history::step_name` of its label.
 #[test]
 fn undo_and_redo_name_the_step_as_the_history_panel_does() {
-    let ja = crate::i18n::Lang::from_code("ja").expect("ja registered");
-    crate::i18n::set_current(ja);
+    let fr = crate::i18n::Lang::from_code("fr").expect("fr registered");
+    crate::i18n::set_current(fr);
     let mut app = app_with_a_rectangle();
     app.run("effect.apply", json!({"effect": "stylize.feather"})).unwrap();
     assert_eq!(app.session.active().unwrap().history.undo.last().map(|h| h.label.as_str()), Some("Feather"));
     let shown = |app: &mut VectorcraftApp, id: &'static str| shown_label(app, id).unwrap_or_else(|| panic!("{id} is not a menu item"));
-    let step = |template: &str, name: &str| {
-        let name = crate::panels::history::step_name(ja, name).unwrap_or_else(|| name.to_string());
-        crate::i18n::fmt(crate::i18n::tr(ja, template), &[("name", &name)])
-    };
-    assert_eq!(shown(&mut app, "edit.undo"), step("Undo {name}", "Feather"));
+    let step = |lang, template: &str, name: &str| crate::i18n::fmt(crate::i18n::tr(lang, template), &[("name", name)]);
+    let feather = crate::i18n::effect_name(fr, "stylize.feather").expect("the Effect menu names Feather");
+    assert_eq!(shown(&mut app, "edit.undo"), step(fr, "Undo {name}", &feather));
     app.run("edit.undo", json!({})).unwrap();
-    assert_eq!(shown(&mut app, "edit.redo"), step("Redo {name}", "Feather"));
-    assert_eq!(shown(&mut app, "edit.undo"), step("Undo {name}", "Rectangle"), "a step with a plain row");
+    assert_eq!(shown(&mut app, "edit.redo"), step(fr, "Redo {name}", &feather));
+    // Japanese names a rectangle in other words than English.
+    let ja = crate::i18n::Lang::from_code("ja").expect("ja registered");
+    crate::i18n::set_current(ja);
+    let rectangle = crate::panels::history::step_name(ja, "Rectangle").unwrap_or_else(|| "Rectangle".to_string());
+    assert_eq!(shown(&mut app, "edit.undo"), step(ja, "Undo {name}", &rectangle), "a step with a plain row");
     crate::i18n::set_current(crate::i18n::Lang::EN);
     assert_eq!(shown(&mut app, "edit.redo"), "Redo Feather");
 }

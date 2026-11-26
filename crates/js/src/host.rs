@@ -30,6 +30,7 @@ pub enum Data {
 }
 
 /// How much one crossing may carry.
+/// Host receivers, their handles and explicit arguments share these limits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DataLimits {
     /// How deeply arrays and objects may nest.
@@ -265,9 +266,7 @@ impl Interp {
             return Err(self.data_error(r, ErrorType::Range, "is nested too deep"));
         }
         let shape = match &self.object(id)?.class {
-            Class::Host(_) if r.hosted => {
-                return self.host_ref_of(id)?.ok_or_else(|| Abrupt::Internal("host object without a class".into()));
-            }
+            Class::Host(_) if r.hosted => return self.read_host_ref(id, r),
             Class::Host(_) => return Err(self.data_error(r, ErrorType::Type, "is an object of a host class, not plain data")),
             Class::Array { length, .. } => Shape::Array(*length),
             Class::Ordinary => {
@@ -297,6 +296,14 @@ impl Interp {
         };
         r.ancestors.pop();
         out
+    }
+
+    fn read_host_ref(&mut self, id: ObjId, r: &mut Reading) -> JsResult<Data> {
+        let Some((name, len)) = self.host_ref_size(id)? else { return Err(Abrupt::Internal("host object without a class".into())) };
+        self.charge_entries(r, len.saturating_add(2))?;
+        let key = crate::HOST_REF_KEY.len().saturating_mul(3).saturating_add(8);
+        self.charge_reading(r, key.saturating_add(name.saturating_mul(3)).saturating_add(2))?;
+        self.host_ref_of(id)?.ok_or_else(|| Abrupt::Internal("host object without a class".into()))
     }
 
     fn read_array(&mut self, id: ObjId, length: u32, r: &mut Reading) -> JsResult<Data> {
@@ -407,16 +414,8 @@ impl Interp {
     pub(crate) fn call_data(&mut self, f: &crate::heap::DataFn, name: &Rc<str>, this: &Value, args: &[Value], how: &ArgRead) -> JsResult<Value> {
         let data = match how {
             ArgRead::Site => site_data(self.call_site()),
-            ArgRead::Hosted => {
-                let this = match this {
-                    Value::Object(o) => self.host_ref_of(*o)?.unwrap_or(Data::Undefined),
-                    _ => Data::Undefined,
-                };
-                let mut data = vec![this];
-                data.extend(self.read_args(name, args, how)?);
-                data
-            }
-            _ => self.read_args(name, args, how)?,
+            ArgRead::Hosted => self.read_args(name, Some(this), args, how)?,
+            _ => self.read_args(name, None, args, how)?,
         };
         // Only the script's own code, in a run that can pause, can wait for a result, and a host
         // class's constructor called with `new` cannot.
@@ -463,7 +462,7 @@ impl Interp {
         name: &Rc<str>,
         args: &[Value],
     ) -> JsResult<Value> {
-        let data = self.read_args(name, args, &ArgRead::Data)?;
+        let data = self.read_args(name, None, args, &ArgRead::Data)?;
         let source = match f(data) {
             Ok(Data::String(source)) => source,
             Ok(d) => return self.write_data(d, 0, false),
@@ -505,8 +504,8 @@ impl Interp {
         r
     }
 
-    /// The arguments of host function `name` as [`Data`], read as `how` says.
-    fn read_args(&mut self, name: &Rc<str>, args: &[Value], how: &ArgRead) -> JsResult<Vec<Data>> {
+    /// The arguments of host function `name` as [`Data`], read as `how` says, with an optional host receiver first.
+    fn read_args(&mut self, name: &Rc<str>, this: Option<&Value>, args: &[Value], how: &ArgRead) -> JsResult<Vec<Data>> {
         let mut reading = Reading {
             limits: self.data_limits,
             bytes: 0,
@@ -520,7 +519,14 @@ impl Interp {
             ArgRead::Each(list) => args.get(..list.len().min(args.len())).unwrap_or(args),
             _ => args,
         };
-        let mut data = Vec::with_capacity(args.len());
+        let mut data = Vec::with_capacity(args.len() + 1);
+        if let Some(this) = this {
+            let this = match this {
+                Value::Object(o) if self.host_ref_size(*o)?.is_some() => self.read_host_ref(*o, &mut reading)?,
+                _ => Data::Undefined,
+            };
+            data.push(this);
+        }
         // A conversion can run the script's own `toString`, which may collect garbage.
         let mark = self.temp_roots.len();
         if !matches!(how, ArgRead::Data | ArgRead::Frozen | ArgRead::Hosted) {
@@ -550,6 +556,29 @@ impl Interp {
         self.temp_roots.truncate(mark);
         read?;
         Ok(data)
+    }
+
+    pub(crate) fn read_index_args(&mut self, id: ObjId, key: Data, probe: bool) -> JsResult<Vec<Data>> {
+        let mut reading = Reading {
+            limits: self.data_limits,
+            bytes: 0,
+            entries: 0,
+            ancestors: Vec::new(),
+            path: Vec::new(),
+            function: Rc::from("host indexer"),
+            hosted: true,
+        };
+        let receiver = self.read_host_ref(id, &mut reading)?;
+        match &key {
+            Data::String(s) => self.charge_reading(&mut reading, s.encode_utf16().count().saturating_mul(3).saturating_add(2))?,
+            Data::Number(_) => {}
+            _ => return Err(Abrupt::Internal("a host indexer key is not a number or string".into())),
+        }
+        let mut args = vec![receiver, key];
+        if probe {
+            args.push(Data::Bool(true));
+        }
+        Ok(args)
     }
 
     /// What host error `e` throws, or the limit it ends the run with. A function that waits

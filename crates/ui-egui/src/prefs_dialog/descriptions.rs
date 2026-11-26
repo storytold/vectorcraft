@@ -18,6 +18,10 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ("showToolTips", "Shows a tip when the pointer rests on a button or field that has one."),
     ("showToolCards", "Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips."),
     ("showExternalScriptWarning", "Shows a warning before a script you choose runs."),
+    (
+        "runStartupScripts",
+        "Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.",
+    ),
     ("antiAliasedArtwork", "Smooths the edges of artwork on the canvas."),
     (
         "selectSameTintPercent",
