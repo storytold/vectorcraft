@@ -2177,6 +2177,17 @@ digits	Malayalam	Malajálamské
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` označuje změněná nastavení: uložte přednastavení pod jiným názvem
 @msg	`{key}` must be an array of these names: {_1}	`{key}` musí být pole těchto názvů: {_1}
 	Graphics	Grafika
+	Show Contrast	Zobrazit kontrast
+	Contrast For	Kontrast pro
+	Normal Text	Normální text
+	Large Text	Velký text
+	Contrast Background	Pozadí kontrastu
+	Behind Selection	Za výběrem
+	Current Color	Aktuální barva
+	Pass	Vyhovuje
+	Fail	Nevyhovuje
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Minimální kontrast podle WCAG 2.2: normální text AA 4.5:1 (1.4.3) a AAA 7:1 (1.4.6), velký text AA 3:1 a AAA 4.5:1, grafika a ovládací prvky AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Pozadí se čte uprostřed výběru.
 	Local Libraries	Místní knihovny
 	Add Content	Přidat obsah
 	Click to apply to the selected type	Kliknutím použijete na vybraný text
@@ -5888,6 +5899,12 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	finish editing the pattern first	nejprve dokončete úpravy vzorku
 @msg	nothing encoded	nic nebylo zakódováno
 @msg	nothing selected	nic není vybráno
+@msg	`{key}` must be a color or {_1}	`{key}` musí být barva nebo {_1}
+@msg	the selected objects' colors differ: give `color`	barvy vybraných objektů se liší: zadejte `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	barvy vybraných objektů se liší: zadejte `opacity` nebo `color`
+@msg	the active fill or stroke has no color: give `color`	aktivní výplň nebo tah nemá barvu: zadejte `color`
+@msg	the active fill or stroke is hidden: give `color`	aktivní výplň nebo tah je skrytý: zadejte `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	aktivní výplň nebo tah je kreslen přes masku krytí: zadejte `color`
 @msg	nothing selected is in a group	nic z výběru není ve skupině
 @msg	nothing to align	není co zarovnat
 @msg	nothing to distort	není co deformovat

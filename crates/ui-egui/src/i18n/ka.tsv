@@ -4119,6 +4119,17 @@ digits	Malayalam	მალაიალამური
 	Create New Sublayer	ახალი ქვეშრის შექმნა
 	Search All	ყველგან ძიება
 	Graphics	გრაფიკა
+	Show Contrast	კონტრასტის ჩვენება
+	Contrast For	კონტრასტი ამისთვის
+	Normal Text	ჩვეულებრივი ტექსტი
+	Large Text	დიდი ტექსტი
+	Contrast Background	კონტრასტის ფონი
+	Behind Selection	მონიშნულის უკან
+	Current Color	მიმდინარე ფერი
+	Pass	აკმაყოფილებს
+	Fail	არ აკმაყოფილებს
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2-ის მინიმალური კონტრასტი: ჩვეულებრივი ტექსტი AA 4.5:1 (1.4.3) და AAA 7:1 (1.4.6), დიდი ტექსტი AA 3:1 და AAA 4.5:1, გრაფიკა და მართვის ელემენტები AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	ფონი იკითხება მონიშნულის ცენტრში.
 	Local Libraries	ლოკალური ბიბლიოთეკები
 	Add Content	შიგთავსის დამატება
 	Click to apply to the selected type	დაწკაპეთ მონიშნულ ტექსტზე გამოსაყენებლად
@@ -7335,6 +7346,12 @@ font-technology	Variable	ცვლადი
 @msg	finish editing the pattern first	ჯერ დაასრულეთ პატერნის რედაქტირება
 @msg	nothing encoded	არაფერია კოდირებული
 @msg	nothing selected	არაფერია მონიშნული
+@msg	`{key}` must be a color or {_1}	`{key}` უნდა იყოს ფერი ან {_1}
+@msg	the selected objects' colors differ: give `color`	მონიშნული ობიექტების ფერები განსხვავდება: მიუთითეთ `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	მონიშნული ობიექტების ფერები განსხვავდება: მიუთითეთ `opacity` ან `color`
+@msg	the active fill or stroke has no color: give `color`	აქტიურ შევსებას ან კონტურს ფერი არ აქვს: მიუთითეთ `color`
+@msg	the active fill or stroke is hidden: give `color`	აქტიური შევსება ან კონტური დამალულია: მიუთითეთ `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	აქტიური შევსება ან კონტური იხატება გაუმჭვირვალობის ნიღბით: მიუთითეთ `color`
 @msg	nothing selected is in a group	მონიშნულთაგან არაფერია ჯგუფში
 @msg	nothing to align	გასასწორებელი არაფერია
 @msg	nothing to distort	დასადეფორმირებელი არაფერია

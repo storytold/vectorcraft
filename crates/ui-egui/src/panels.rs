@@ -990,6 +990,8 @@ mod tests_color_wheel;
 #[cfg(test)]
 mod tests_color_wheel_box;
 #[cfg(test)]
+mod tests_color_wheel_contrast;
+#[cfg(test)]
 mod tests_color_wheel_document_colors;
 #[cfg(test)]
 mod tests_color_wheel_gamut;

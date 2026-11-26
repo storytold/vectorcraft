@@ -4125,6 +4125,17 @@ font-technology	Variable	Variáveis
 	Symbol Set Density:	Densidade do conjunto de símbolos:
 	Flatten Artwork	Achatar arte-final
 	Graphics	Gráficos
+	Show Contrast	Mostrar Contraste
+	Contrast For	Contraste Para
+	Normal Text	Texto Normal
+	Large Text	Texto Grande
+	Contrast Background	Fundo do Contraste
+	Behind Selection	Atrás da Seleção
+	Current Color	Cor Atual
+	Pass	Aprovado
+	Fail	Reprovado
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Contraste mínimo da WCAG 2.2: texto normal AA 4.5:1 (1.4.3) e AAA 7:1 (1.4.6), texto grande AA 3:1 e AAA 4.5:1, gráficos e controles AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	O fundo é lido no centro da seleção.
 	Highlight Rows	Destacar linhas
 	Highlight Variable	Destacar variável
 	Sort Variables	Ordenar variáveis
@@ -4843,6 +4854,12 @@ axis	Both	Ambos
 @msg	finish editing the pattern first	termine de editar o padrão primeiro
 @msg	nothing encoded	nada codificado
 @msg	nothing selected	nada selecionado
+@msg	`{key}` must be a color or {_1}	`{key}` deve ser uma cor ou {_1}
+@msg	the selected objects' colors differ: give `color`	as cores dos objetos selecionados são diferentes: informe `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	as cores dos objetos selecionados são diferentes: informe `opacity` ou `color`
+@msg	the active fill or stroke has no color: give `color`	o preenchimento ou traçado ativo não tem cor: informe `color`
+@msg	the active fill or stroke is hidden: give `color`	o preenchimento ou traçado ativo está oculto: informe `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	o preenchimento ou traçado ativo é desenhado através de uma máscara de opacidade: informe `color`
 @msg	nothing selected is in a group	nada do que está selecionado está em um grupo
 @msg	nothing to align	nada para alinhar
 @msg	nothing to distort	nada para distorcer

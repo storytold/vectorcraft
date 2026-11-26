@@ -2618,6 +2618,17 @@ arrowhead	Feather	पंख
 	Graphic Styles (4)	ग्राफिक स्टाइल्स (4)
 	Graphic Styles Options	ग्राफ़िक स्टाइल ऑप्शन्स
 	Graphics	ग्राफ़िक्स
+	Show Contrast	कंट्रास्ट दिखाएँ
+	Contrast For	इसके लिए कंट्रास्ट
+	Normal Text	सामान्य टेक्स्ट
+	Large Text	बड़ा टेक्स्ट
+	Contrast Background	कंट्रास्ट पृष्ठभूमि
+	Behind Selection	सिलेक्शन के पीछे
+	Current Color	मौजूदा रंग
+	Pass	पास
+	Fail	फ़ेल
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 न्यूनतम कंट्रास्ट: सामान्य टेक्स्ट AA 4.5:1 (1.4.3) और AAA 7:1 (1.4.6), बड़ा टेक्स्ट AA 3:1 और AAA 4.5:1, ग्राफ़िक्स और कंट्रोल AA 3:1 (1.4.11)।
+	The background is read at the center of the selection.	पृष्ठभूमि सिलेक्शन के केंद्र पर पढ़ी जाती है।
 	Graphics Processor	ग्राफिक्स प्रोसेसर
 	Graphics: {adapter}	ग्राफिक्स: {adapter}
 	Gravity	ग्रेविटी
@@ -8684,6 +8695,12 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	डेटा सेट {name} से कुछ भी लागू नहीं हुआ: उसमें मान वाले किसी भी वेरिएबल से कोई ऑब्जेक्ट नहीं बाँधा गया है
 @msg	nothing prints	कुछ भी प्रिंट
 @msg	nothing selected	कुछ भी नहीं चुना
+@msg	`{key}` must be a color or {_1}	`{key}` कोई रंग या {_1} होना चाहिए
+@msg	the selected objects' colors differ: give `color`	चुने गए ऑब्जेक्ट्स के रंग अलग-अलग हैं: `color` दें
+@msg	the selected objects' colors differ: give `opacity` or `color`	चुने गए ऑब्जेक्ट्स के रंग अलग-अलग हैं: `opacity` या `color` दें
+@msg	the active fill or stroke has no color: give `color`	सक्रिय फ़िल या स्ट्रोक में कोई रंग नहीं है: `color` दें
+@msg	the active fill or stroke is hidden: give `color`	सक्रिय फ़िल या स्ट्रोक छिपा हुआ है: `color` दें
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	सक्रिय फ़िल या स्ट्रोक ओपेसिटी मास्क से होकर बनाया जाता है: `color` दें
 @msg	nothing selected is in a group	कुछ भी नहीं चुना गया है एक समूह में
 @msg	nothing to align	संरेखित करने के लिए कुछ नहीं
 @msg	nothing to bind	बाध्य करने के लिए कुछ नहीं

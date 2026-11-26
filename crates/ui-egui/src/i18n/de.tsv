@@ -1668,6 +1668,17 @@ file-filter	Templates	Vorlagen
 	Graphic Styles	Grafikstile
 	Graphic Styles Options	Optionen für Grafikstile
 	Graphics	Grafik
+	Show Contrast	Kontrast einblenden
+	Contrast For	Kontrast für
+	Normal Text	Normaler Text
+	Large Text	Großer Text
+	Contrast Background	Kontrasthintergrund
+	Behind Selection	Hinter der Auswahl
+	Current Color	Aktuelle Farbe
+	Pass	Bestanden
+	Fail	Nicht bestanden
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Mindestkontrast nach WCAG 2.2: normaler Text AA 4.5:1 (1.4.3) und AAA 7:1 (1.4.6), großer Text AA 3:1 und AAA 4.5:1, Grafiken und Bedienelemente AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Der Hintergrund wird in der Mitte der Auswahl gemessen.
 	Graphics Processor	Grafikprozessor
 	Graphics: {adapter}	Grafik: {adapter}
 	Gravity	Schwerkraft
@@ -5470,6 +5481,12 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	finish editing the pattern first	beenden Sie zuerst die Bearbeitung des Musters
 @msg	nothing encoded	nichts kodiert
 @msg	nothing selected	nichts ausgewählt
+@msg	`{key}` must be a color or {_1}	`{key}` muss eine Farbe oder {_1} sein
+@msg	the selected objects' colors differ: give `color`	die Farben der ausgewählten Objekte unterscheiden sich: geben Sie `color` an
+@msg	the selected objects' colors differ: give `opacity` or `color`	die Farben der ausgewählten Objekte unterscheiden sich: geben Sie `opacity` oder `color` an
+@msg	the active fill or stroke has no color: give `color`	die aktive Fläche oder Kontur hat keine Farbe: geben Sie `color` an
+@msg	the active fill or stroke is hidden: give `color`	die aktive Fläche oder Kontur ist ausgeblendet: geben Sie `color` an
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	die aktive Fläche oder Kontur wird durch eine Deckkraftmaske gezeichnet: geben Sie `color` an
 @msg	nothing selected is in a group	nichts Ausgewähltes befindet sich in einer Gruppe
 @msg	nothing to align	nichts auszurichten
 @msg	nothing to distort	nichts zu verzerren

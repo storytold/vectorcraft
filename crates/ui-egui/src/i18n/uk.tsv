@@ -1699,6 +1699,17 @@ file-filter	Templates	Шаблони
 	Graphic Styles	Графічні стилі
 	Graphic Styles Options	Параметри графічних стилів
 	Graphics	Графіка
+	Show Contrast	Показати контраст
+	Contrast For	Контраст для
+	Normal Text	Звичайний текст
+	Large Text	Великий текст
+	Contrast Background	Фон контрасту
+	Behind Selection	За виділенням
+	Current Color	Поточний колір
+	Pass	Відповідає
+	Fail	Не відповідає
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Мінімальний контраст за WCAG 2.2: звичайний текст AA 4.5:1 (1.4.3) і AAA 7:1 (1.4.6), великий текст AA 3:1 і AAA 4.5:1, графіка й елементи керування AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Фон визначається в центрі виділення.
 	Graphics Processor	Графічний процесор
 	Graphics: {adapter}	Графіка: {adapter}
 	Gravity	Гравітація
@@ -5591,6 +5602,12 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	finish editing the pattern first	спочатку завершіть редагування візерунка
 @msg	nothing encoded	нічого не закодовано
 @msg	nothing selected	нічого не виділено
+@msg	`{key}` must be a color or {_1}	`{key}` має бути кольором або {_1}
+@msg	the selected objects' colors differ: give `color`	кольори виділених об’єктів відрізняються: укажіть `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	кольори виділених об’єктів відрізняються: укажіть `opacity` або `color`
+@msg	the active fill or stroke has no color: give `color`	активна заливка чи обведення не має кольору: укажіть `color`
+@msg	the active fill or stroke is hidden: give `color`	активна заливка чи обведення приховані: укажіть `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	активна заливка чи обведення малюються крізь маску непрозорості: укажіть `color`
 @msg	nothing selected is in a group	нічого з виділеного не перебуває в групі
 @msg	nothing to align	нічого вирівнювати
 @msg	nothing to distort	нічого спотворювати

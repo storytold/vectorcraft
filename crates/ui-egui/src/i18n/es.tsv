@@ -1677,6 +1677,17 @@ font-technology	Variable	Variables
 	Graphic Styles	Estilos gráficos
 	Graphic Styles Options	Opciones de estilos gráficos
 	Graphics	Gráficos
+	Show Contrast	Mostrar contraste
+	Contrast For	Contraste para
+	Normal Text	Texto normal
+	Large Text	Texto grande
+	Contrast Background	Fondo del contraste
+	Behind Selection	Detrás de la selección
+	Current Color	Color actual
+	Pass	Cumple
+	Fail	No cumple
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Contraste mínimo de WCAG 2.2: texto normal AA 4.5:1 (1.4.3) y AAA 7:1 (1.4.6), texto grande AA 3:1 y AAA 4.5:1, gráficos y controles AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	El fondo se lee en el centro de la selección.
 	Graphics Processor	Procesador gráfico
 	Graphics: {adapter}	Gráficos: {adapter}
 	Gravity	Gravedad
@@ -5579,6 +5590,12 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	finish editing the pattern first	termina primero la edición del motivo
 @msg	nothing encoded	no se codificó nada
 @msg	nothing selected	no hay nada seleccionado
+@msg	`{key}` must be a color or {_1}	`{key}` debe ser un color o {_1}
+@msg	the selected objects' colors differ: give `color`	los colores de los objetos seleccionados difieren: indique `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	los colores de los objetos seleccionados difieren: indique `opacity` o `color`
+@msg	the active fill or stroke has no color: give `color`	el relleno o trazo activo no tiene color: indique `color`
+@msg	the active fill or stroke is hidden: give `color`	el relleno o trazo activo está oculto: indique `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	el relleno o trazo activo se dibuja a través de una máscara de opacidad: indique `color`
 @msg	nothing selected is in a group	nada de lo seleccionado está en un grupo
 @msg	nothing to align	no hay nada que alinear
 @msg	nothing to distort	no hay nada que distorsionar

@@ -2105,6 +2105,17 @@ digits	Malayalam	Malajalam
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` označava promijenjene postavke: sačuvajte unaprijed postavljeno pod drugim nazivom
 @msg	`{key}` must be an array of these names: {_1}	`{key}` mora biti niz ovih naziva: {_1}
 	Graphics	Grafika
+	Show Contrast	Prikaži kontrast
+	Contrast For	Kontrast za
+	Normal Text	Normalni tekst
+	Large Text	Veliki tekst
+	Contrast Background	Pozadina kontrasta
+	Behind Selection	Iza odabira
+	Current Color	Trenutna boja
+	Pass	Prolazi
+	Fail	Ne prolazi
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Minimalni kontrast po WCAG 2.2: normalni tekst AA 4.5:1 (1.4.3) i AAA 7:1 (1.4.6), veliki tekst AA 3:1 i AAA 4.5:1, grafike i kontrole AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Pozadina se očitava u sredini odabira.
 	Local Libraries	Lokalne biblioteke
 	Add Content	Dodaj sadržaj
 	Click to apply to the selected type	Kliknite da primijenite na odabrani tekst

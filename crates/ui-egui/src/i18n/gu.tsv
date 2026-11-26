@@ -1730,6 +1730,18 @@
 	Graphic Styles	ગ્રાફિક સ્ટાઇલ્સ
 	Graphic Styles Options	ગ્રાફિક સ્ટાઇલ્સ વિકલ્પો
 	Graphics	ગ્રાફિક્સ
+	Contrast	કોન્ટ્રાસ્ટ
+	Show Contrast	કોન્ટ્રાસ્ટ બતાવો
+	Contrast For	આના માટે કોન્ટ્રાસ્ટ
+	Normal Text	સામાન્ય ટેક્સ્ટ
+	Large Text	મોટું ટેક્સ્ટ
+	Contrast Background	કોન્ટ્રાસ્ટ પૃષ્ઠભૂમિ
+	Behind Selection	પસંદગીની પાછળ
+	Current Color	વર્તમાન રંગ
+	Pass	પાસ
+	Fail	નાપાસ
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 લઘુત્તમ કોન્ટ્રાસ્ટ: સામાન્ય ટેક્સ્ટ AA 4.5:1 (1.4.3) અને AAA 7:1 (1.4.6), મોટું ટેક્સ્ટ AA 3:1 અને AAA 4.5:1, ગ્રાફિક્સ અને નિયંત્રણો AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	પૃષ્ઠભૂમિ પસંદગીના કેન્દ્રમાં વાંચવામાં આવે છે.
 	Graphics Processor	ગ્રાફિક્સ પ્રોસેસર
 	Graphics: {adapter}	ગ્રાફિક્સ: {adapter}
 	Gravity	ગ્રેવિટી

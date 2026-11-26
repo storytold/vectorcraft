@@ -1667,6 +1667,17 @@ font-technology	Variable	Variables
 	Graphic Styles	Styles graphiques
 	Graphic Styles Options	Options des styles graphiques
 	Graphics	Graphiques
+	Show Contrast	Afficher le contraste
+	Contrast For	Contraste pour
+	Normal Text	Texte normal
+	Large Text	Grand texte
+	Contrast Background	Arrière-plan du contraste
+	Behind Selection	Derrière la sélection
+	Current Color	Couleur actuelle
+	Pass	Réussi
+	Fail	Échec
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Contraste minimal WCAG 2.2 : texte normal AA 4.5:1 (1.4.3) et AAA 7:1 (1.4.6), grand texte AA 3:1 et AAA 4.5:1, graphiques et commandes AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	L’arrière-plan est lu au centre de la sélection.
 	Graphics Processor	Processeur graphique
 	Graphics: {adapter}	Carte graphique : {adapter}
 	Gravity	Gravité
@@ -5536,6 +5547,12 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	finish editing the pattern first	terminez d’abord la modification du motif
 @msg	nothing encoded	rien n’a été encodé
 @msg	nothing selected	aucune sélection
+@msg	`{key}` must be a color or {_1}	`{key}` doit être une couleur ou {_1}
+@msg	the selected objects' colors differ: give `opacity` or `color`	les couleurs des objets sélectionnés diffèrent : indiquez `opacity` ou `color`
+@msg	the selected objects' colors differ: give `color`	les couleurs des objets sélectionnés diffèrent : indiquez `color`
+@msg	the active fill or stroke has no color: give `color`	le fond ou le contour actif n’a pas de couleur : indiquez `color`
+@msg	the active fill or stroke is hidden: give `color`	le fond ou le contour actif est masqué : indiquez `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	le fond ou le contour actif est dessiné à travers un masque d’opacité : indiquez `color`
 @msg	nothing selected is in a group	aucun élément sélectionné ne se trouve dans un groupe
 @msg	nothing to align	rien à aligner
 @msg	nothing to distort	rien à déformer
