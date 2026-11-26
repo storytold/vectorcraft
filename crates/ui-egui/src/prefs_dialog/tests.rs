@@ -296,6 +296,18 @@ fn reset_preferences_keeps_an_edit_of_general_units() {
     reset_preferences(&mut b, PromptChoice::Proceed);
     confirm(&mut b).unwrap();
     assert_eq!(b.session.prefs.units_general, Prefs::default().units_general);
+
+    // A document in the default unit, with another unit saved: the row opens showing the default, and the reset
+    // still resets the saved unit.
+    let mut c = app();
+    c.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    c.run("prefs.set", json!({"values": {"unitsGeneral": "inches"}, "documentUnits": false})).unwrap();
+    assert_eq!(c.session.active().unwrap().doc.units.key(), Prefs::default().units_general);
+    open(&mut c, Some("General"));
+    reset_preferences(&mut c, PromptChoice::Proceed);
+    confirm(&mut c).unwrap();
+    assert_eq!(c.session.prefs.units_general, Prefs::default().units_general, "the saved unit is reset");
+    assert_eq!(c.session.active().unwrap().doc.units.key(), Prefs::default().units_general, "the document's units stay");
 }
 
 /// Smart Guides, Snap to Grid and Enable Contextual Task Bar, the UI-only rows.
@@ -536,6 +548,84 @@ fn prefs_reset_outside_run_resets_the_ui_only_rows_in_the_next_frame() {
     b.run("window.workspace", json!({"name": crate::workspaces::ESSENTIALS})).unwrap();
     assert!(b.ui.task_bar, "Essentials keeps its own task bar");
     assert!(!left_task_bar(&b, "Essentials Classic"), "the workspace left keeps the reset value");
+}
+
+/// OK writes only the rows changed in Preferences: a preference, a UI-only row or the document's units changed by a
+/// command while the window is open keeps its new value, and a row changed in the window is still written.
+#[test]
+fn ok_keeps_settings_changed_by_commands_while_preferences_is_open() {
+    let mut a = app();
+    a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    let before = ui_rows(&a);
+    open(&mut a, Some("General"));
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 9})).unwrap();
+    a.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
+    for id in ["view.smartGuides", "view.snapToGrid", "window.taskBar"] {
+        a.run(id, json!({})).unwrap();
+    }
+    set_field(&mut a, "constrainAngle", json!(30.0)).unwrap();
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.keyboard_increment, 9.0, "the command's preference");
+    assert_eq!(a.session.active().unwrap().doc.units, vectorcraft_doc::Unit::Millimeters, "the command's units");
+    assert_eq!(ui_rows(&a), (!before.0, !before.1, !before.2), "the commands' UI-only rows");
+    assert_eq!(a.session.prefs.constrain_angle, 30.0, "the row changed in the window");
+    assert_eq!(a.ui.engine_prefs["keyboardIncrement"], json!(9.0), "saved with the UI state");
+
+    // A row changed both ways takes the window's value; Cancel writes nothing.
+    open(&mut a, Some("General"));
+    set_field(&mut a, "keyboardIncrement", json!(3)).unwrap();
+    set_field(&mut a, "constrainAngle", json!(15.0)).unwrap();
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 5})).unwrap();
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.keyboard_increment, 3.0, "the window's value");
+    open(&mut a, Some("General"));
+    set_field(&mut a, "constrainAngle", json!(45.0)).unwrap();
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 6})).unwrap();
+    cancel(&mut a);
+    assert_eq!((a.session.prefs.keyboard_increment, a.session.prefs.constrain_angle), (6.0, 15.0), "Cancel writes nothing");
+
+    // A reset in the window is written even where the row already showed the default: a command changed the
+    // preference after the window opened.
+    let default = Prefs::default().keyboard_increment;
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": default})).unwrap();
+    open(&mut a, Some("General"));
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 8})).unwrap();
+    reset_preferences(&mut a, PromptChoice::Proceed);
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.keyboard_increment, default, "the reset is written");
+}
+
+/// OK with nothing changed in Preferences writes nothing: no preference, no undo step in the document and no save
+/// of the settings.
+#[test]
+fn ok_with_nothing_changed_writes_nothing() {
+    let mut a = app();
+    a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    let undo = a.session.active().unwrap().history.undo.len();
+    let prefs = a.session.prefs.clone();
+    a.take_prefs_changed();
+    open(&mut a, Some("Units"));
+    confirm(&mut a).unwrap();
+    assert!(!is_open(&a));
+    assert_eq!(a.session.prefs, prefs);
+    assert_eq!(a.session.active().unwrap().history.undo.len(), undo, "no undo step");
+    assert!(!a.take_prefs_changed(), "the settings are not saved again");
+}
+
+/// Enable Contextual Task Bar left alone in Preferences stays with each workspace: a workspace switch while the
+/// window is open keeps the bar of the workspace switched to, and the workspace left keeps its own.
+#[test]
+fn ok_after_a_workspace_switch_keeps_each_workspaces_task_bar() {
+    let off = crate::workspaces::builtins().into_iter().find(|w| !w.record.task_bar).expect("a workspace saved with the bar off");
+    let mut a = app();
+    crate::workspaces::switch(&mut a, crate::workspaces::ESSENTIALS).unwrap();
+    assert!(a.ui.task_bar, "Essentials starts with the bar on");
+    open(&mut a, Some("General"));
+    a.run("window.workspace", json!({"name": off.name})).unwrap();
+    set_field(&mut a, "keyboardIncrement", json!(3)).unwrap();
+    confirm(&mut a).unwrap();
+    assert!(!a.ui.task_bar, "{} keeps its bar off", off.name);
+    assert!(left_task_bar(&a, crate::workspaces::ESSENTIALS), "Essentials keeps its bar on");
 }
 
 #[test]

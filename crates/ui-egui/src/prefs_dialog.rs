@@ -1,6 +1,6 @@
 //! Edit → Preferences (⌘K): the framework's Preferences window over the engine's preference table
 //! ([`PREF_SPECS`]). The window edits a draft ([`PrefsWindow::draft`]; one key per preference, so agents can
-//! `ui.dialog.set` any of them) and OK applies it through `prefs.set`. Also: persistence of engine prefs inside
+//! `ui.dialog.set` any of them) and OK applies the rows changed in it through `prefs.set`. Also: persistence of engine prefs inside
 //! `UiState` and the per-frame application of the UI-side preferences ([`runtime`]).
 
 // PLAN: assumed import paths of the framework items below through the `craft_ui` facade (it re-exports the dialog
@@ -44,9 +44,17 @@ pub struct PrefsWindow {
     draft: SettingsDraft,
     /// The draft as it was when the window opened or last applied: Apply is enabled while the draft differs.
     opened: SettingsDraft,
+    /// Each row's value as the window last read it from the preferences, the document or the UI state. OK and Apply
+    /// write only the rows whose draft value differs from it ([`Self::edited`]), so a setting changed outside the
+    /// window while it is open keeps its new value.
+    source: SettingsDraft,
     /// The Units ▸ General value Reset Preferences put in the draft, while it is still the row's value: OK then
     /// leaves the open document's units alone.
     reset_units: Option<String>,
+    /// The rows set in the window (by the user, `ui.dialog.set` or a reset) since it last read them. OK writes them
+    /// even when they hold the value they were read with: a reset of a row a command changed while the window is
+    /// open, or of Units ▸ General, which shows the document's units, is still written.
+    touched: std::collections::BTreeSet<String>,
     /// The colour picker and the Reset question, drawn in the window's own viewport.
     nested: DialogHost,
     reset_asked: Option<DialogId>,
@@ -70,9 +78,37 @@ impl PrefsWindow {
         if key == "unitsGeneral" && self.reset_units.as_ref().is_some_and(|u| value.as_str() != Some(u)) {
             self.reset_units = None;
         }
-        self.draft.set(key, value);
+        self.set_row(key, value);
         self.sync_strings();
         Ok(())
+    }
+
+    /// Whether the row `key` was changed in the window since it was last read: it was set there
+    /// ([`Self::touched`]), or its draft value differs from [`Self::source`]. Numbers compare by value, so `4` and
+    /// `4.0` are the same.
+    fn edited(&self, key: &str) -> bool {
+        if self.touched.contains(key) {
+            return true;
+        }
+        let (now, read) = (self.draft.get::<Value>(key), self.source.get::<Value>(key));
+        match (now.as_ref().and_then(Value::as_f64), read.as_ref().and_then(Value::as_f64)) {
+            (Some(a), Some(b)) => a != b,
+            _ => now != read,
+        }
+    }
+
+    /// Writes `value` at `key` in the draft and in [`Self::source`]: the row shows a value read from outside the
+    /// window, and OK does not write it back.
+    fn read(&mut self, key: &str, value: &Value) {
+        self.draft.set(key, value);
+        self.source.set(key, value);
+        self.touched.remove(key);
+    }
+
+    /// Sets the row `key` in the window, as the user or a reset does.
+    fn set_row(&mut self, key: &str, value: &Value) {
+        self.draft.set(key, value);
+        self.touched.insert(key.to_string());
     }
 
     /// Reads the draft's text and choice values again, after any write to the draft.
@@ -90,7 +126,7 @@ impl PrefsWindow {
     fn refresh(&mut self, prefs: &Value) {
         for (k, v) in prefs.as_object().into_iter().flatten() {
             if self.draft.get::<Value>(k).is_some() {
-                self.draft.set(k, v);
+                self.read(k, v);
             }
         }
         self.reset_units = self.draft.get::<String>("unitsGeneral");
@@ -102,7 +138,7 @@ impl PrefsWindow {
         let defaults = Prefs::default().to_json();
         for key in keys {
             if let Some(v) = defaults.get(key) {
-                self.draft.set(key, v);
+                self.set_row(key, v);
             }
         }
         if self.draft.get::<String>("unitsGeneral").is_some() {
@@ -117,7 +153,9 @@ fn is_known(key: &str) -> bool {
     UI_FIELDS.iter().any(|f| f.0 == key) || spec(key).is_some() || PREF_GROUPS.contains(&key)
 }
 
-/// Opens the window on `category` (matched ignoring case; General when it names none).
+/// Opens the window on `category` (matched ignoring case; General when it names none). OK writes only the rows
+/// changed in the window: a setting changed some other way while it is open (a command, a panel menu, a script)
+/// keeps its new value.
 pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
     crate::original_editor::open(app);
     let mut draft = SettingsDraft::default();
@@ -126,7 +164,8 @@ pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
     fields.retain(|k, _| is_known(k));
     // A restored settings file can hold a Hold Shortcut Delay outside its range: the window shows,
     // and OK sets, the delay in use.
-    if fields.contains_key("keyHoldDelay") {
+    let saved_delay = fields.get("keyHoldDelay").cloned();
+    if saved_delay.is_some() {
         fields.insert("keyHoldDelay".into(), json!(app.session.prefs.key_hold_delay()));
     }
     // Units ▸ General shows (and OK sets) the open document's units.
@@ -140,11 +179,18 @@ pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
     draft.set("__snapToGrid", &app.ui.view.snap_to_grid);
     draft.set("__taskBar", &app.ui.task_bar);
     let selected = category.and_then(|c| PREF_CATEGORIES.iter().find(|x| x.eq_ignore_ascii_case(c))).copied().unwrap_or(PREF_CATEGORIES[0]);
+    // The saved delay, so OK writes the delay in use in its place.
+    let mut source = draft.clone();
+    if let Some(saved) = &saved_delay {
+        source.set("keyHoldDelay", saved);
+    }
     let mut w = PrefsWindow {
         state: PreferencesState::default(),
         opened: draft.clone(),
+        source,
         draft,
         reset_units: None,
+        touched: Default::default(),
         nested: DialogHost::new(),
         reset_asked: None,
         strings: Default::default(),
@@ -362,7 +408,7 @@ fn apply_prefs_resets_to(app: &mut VectorcraftApp, mut w: Option<&mut PrefsWindo
         }
         // The window shows the reset row, so OK keeps it.
         if let Some(w) = w.as_deref_mut() {
-            w.draft.set(key, &value);
+            w.read(key, &json!(value));
         }
     }
     // And the reset preferences, the groups with a reset of every category; Units ▸ General then leaves the open
@@ -373,7 +419,7 @@ fn apply_prefs_resets_to(app: &mut VectorcraftApp, mut w: Option<&mut PrefsWindo
         for (k, v) in prefs.as_object().into_iter().flatten() {
             let reset = spec(k).map_or(every && PREF_GROUPS.contains(&k.as_str()), |s| in_reset(s.category));
             if reset && w.draft.get::<Value>(k).is_some() {
-                w.draft.set(k, v);
+                w.read(k, v);
                 if k == "unitsGeneral" {
                     w.reset_units = v.as_str().map(str::to_string);
                 }

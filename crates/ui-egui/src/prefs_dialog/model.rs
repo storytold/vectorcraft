@@ -283,7 +283,7 @@ impl Live<'_> {
     fn reset_ui_rows(&mut self, reset: impl Fn(&str) -> bool) {
         for (key, value) in super::default_ui_fields(&self.app.ui) {
             if UI_FIELDS.iter().any(|&(k, c, _)| k == key && reset(c)) {
-                self.w.draft.set(key, &value);
+                self.w.set_row(key, &json!(value));
             }
         }
     }
@@ -424,34 +424,44 @@ impl PreferencesDraft for Live<'_> {
     fn apply(&mut self) -> Result<(), String> {
         // A `prefs.reset` run since the last frame shows in the draft before OK reads it.
         super::apply_prefs_resets_to(self.app, Some(&mut *self.w));
-        let values: Map<String, Value> =
-            self.w.draft.to::<Map<String, Value>>().unwrap_or_default().into_iter().filter(|(k, _)| !k.starts_with("__")).collect();
+        // Only the rows changed in the window: a setting changed outside it while it is open keeps its new value.
+        let edited: Map<String, Value> =
+            self.w.draft.to::<Map<String, Value>>().unwrap_or_default().into_iter().filter(|(k, _)| self.w.edited(k)).collect();
+        let values: Map<String, Value> = edited.iter().filter(|(k, _)| !k.starts_with("__")).map(|(k, v)| (k.clone(), v.clone())).collect();
         let touch_ws = values.get("touchWorkspace").and_then(Value::as_bool);
         let document_units = self.w.reset_units.as_deref().is_none_or(|u| values.get("unitsGeneral").and_then(Value::as_str) != Some(u));
         // A refused folder, typed or picked, comes back here as the engine's message.
-        self.app.run("prefs.set", json!({ "values": values, "documentUnits": document_units }))?;
+        if !values.is_empty() {
+            self.app.run("prefs.set", json!({ "values": values, "documentUnits": document_units }))?;
+        }
+        let row = |key: &str| edited.get(key).and_then(Value::as_bool);
         // When OK enters the Touch workspace, the task bar is set before the switch, so it goes to the workspace being
         // left; otherwise after it, so a return from Touch gives it to the workspace returned to.
         let before_switch = touch_ws.is_some() && crate::workspaces::enters_touch(self.app, self.app.touch_screen);
-        if before_switch && let Some(on) = self.w.draft.get::<bool>("__taskBar") {
+        if before_switch && let Some(on) = row("__taskBar") {
             self.app.ui.task_bar = on;
         }
         if touch_ws.is_some() {
             crate::workspaces::sync_touch_workspace(self.app, self.app.touch_screen);
         }
-        let flag = |key: &str, now: bool| self.w.draft.get::<bool>(key).unwrap_or(now);
-        let (smart_guides, snap_to_grid, task_bar) = (
-            flag("__smartGuides", self.app.ui.view.smart_guides),
-            flag("__snapToGrid", self.app.ui.view.snap_to_grid),
-            if before_switch { self.app.ui.task_bar } else { flag("__taskBar", self.app.ui.task_bar) },
-        );
-        self.app.ui.view.smart_guides = smart_guides;
-        self.app.ui.view.snap_to_grid = snap_to_grid;
-        self.app.ui.task_bar = task_bar;
-        crate::original_editor::commit(self.app);
-        super::snapshot(self.app);
-        self.app.prefs_changed = true;
+        if let Some(on) = row("__smartGuides") {
+            self.app.ui.view.smart_guides = on;
+        }
+        if let Some(on) = row("__snapToGrid") {
+            self.app.ui.view.snap_to_grid = on;
+        }
+        if !before_switch && let Some(on) = row("__taskBar") {
+            self.app.ui.task_bar = on;
+        }
+        let editor = crate::original_editor::commit(self.app);
+        // The host saves the settings only when one changed.
+        if !edited.is_empty() || editor {
+            super::snapshot(self.app);
+            self.app.prefs_changed = true;
+        }
         self.w.opened = self.w.draft.clone();
+        self.w.source = self.w.draft.clone();
+        self.w.touched.clear();
         Ok(())
     }
 

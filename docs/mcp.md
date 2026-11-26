@@ -9054,7 +9054,11 @@ highlighted until another category is shown) and clears `__search`. Cmd/Ctrl+F f
 field with text clears it, and Escape in the empty field closes the dialog. Its Reset Preferences button opens a
 `resetPreferences` question (fields `message`, `detail`) over Preferences: `ui.dialog.cancel` shows Preferences again
 as it was, and `ui.dialog.confirm` shows it again with every preference at its default value, applied by OK in
-Preferences. `prefs.reset` resets the preferences at once, without the question.
+Preferences. `prefs.reset` resets the preferences at once, without the question. OK in Preferences writes only the
+fields changed in the dialog since it opened or since its last Apply, so a preference, Smart Guides, Snap to Grid,
+Enable Contextual Task Bar or the document's units changed some other way while it is open (a command, a panel menu,
+a script) keeps its new value. A field changed both ways takes the dialog's value. OK with no field changed writes
+nothing and adds no undo step.
 
 ```json
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"unitsGeneral","value":"millimeters"}}}
