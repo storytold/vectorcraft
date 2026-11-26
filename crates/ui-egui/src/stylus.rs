@@ -87,7 +87,7 @@ pub(crate) fn sync_eraser_tool(app: &mut VectorcraftApp) -> bool {
 
 /// Tells the host whether the active tool reads an airbrush pen's finger wheel
 /// ([`crate::Services::stylus_wheel`]): the Paintbrush with a brush on Stylus Wheel, or
-/// the Eraser with a value on it. The host is told at the first call and then each time the answer
+/// the Blob Brush or the Eraser with a value on it. The host is told at the first call and then each time the answer
 /// changes; the tool is asked again only when the document, its current brush, the tool or its
 /// options change.
 ///

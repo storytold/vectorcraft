@@ -4131,7 +4131,7 @@ fn pencil_alt_toggles_to_smooth_when_enabled_and_closes_when_disabled() {
 }
 
 #[test]
-fn the_eraser_reads_the_wheel_only_with_a_value_on_stylus_wheel() {
+fn a_tip_reads_the_wheel_only_with_a_value_on_stylus_wheel() {
     let (d, _) = doc_with_rect();
     let (s, p) = (Selection::default(), paint());
     let cx = cx(&d, &s, &p);
@@ -4147,4 +4147,8 @@ fn the_eraser_reads_the_wheel_only_with_a_value_on_stylus_wheel() {
         t.set_option(&format!("{value}Mode"), &json!("pressure"));
         assert!(!t.reads_wheel(&cx), "{value} on Pressure");
     }
+    let mut t = GestureTool::new("blobBrush");
+    t.set_option("sizeMode", &json!("stylusWheel"));
+    t.set_option("sizeVariation", &json!(4));
+    assert!(t.reads_wheel(&cx), "the Blob Brush's size on Stylus Wheel");
 }
