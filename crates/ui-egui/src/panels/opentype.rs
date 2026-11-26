@@ -197,6 +197,8 @@ enum Change {
     Position(usize),
     /// A checkbox row turned on or off.
     Toggle(Flag, bool),
+    /// A row menu's Reset OpenType Features: the panel menu's default.
+    Reset,
 }
 
 impl Change {
@@ -205,6 +207,7 @@ impl Change {
             Change::Figure(i) => set_figure(f, i),
             Change::Position(i) => set_position(f, i),
             Change::Toggle(flag, on) => flag.put(f, on),
+            Change::Reset => *f = OtFeatures::default(),
         }
     }
 }
@@ -293,7 +296,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if let Some(on) = out.events.committed() {
             change = Some(Change::Toggle(flag, *on));
         }
-        Menu::context(label, &out.response).show(ui, |ui, _| feature_row_menu(app, ui, flag, shown));
+        // The row menu's choice is applied with the rest at the end of the pass, so the rows drawn
+        // after it still read the state the pass started with.
+        if let Some(c) = Menu::context(label, &out.response).show(ui, |ui, _| feature_row_menu(app, ui, flag, shown)).inner.flatten() {
+            change = Some(c);
+        }
     }
     let sets = set_entries(app, &st);
     let opener = Button::new(tl!("Stylistic Sets")).enabled(!sets.is_empty()).show(ui);
@@ -307,8 +314,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if tracking_drops_ligatures(app) {
         Text::new(tl!("Ligatures are off while the text is tracked.")).shade(Shade::Muted).show(ui);
     }
-    if let Some(c) = change {
-        edit(app, c);
+    match change {
+        // Reset writes the default as the whole feature list, as the panel menu's entry does.
+        Some(Change::Reset) => set(app, OtFeatures::default()),
+        Some(c) => edit(app, c),
+        None => {}
     }
 }
 
@@ -316,14 +326,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// (`shown` is `Some(true)`); Turn On when it is off or mixed, through the same toggle a click
 /// uses, so a mixed row turns the feature on for every character the panel acts on. Reset
 /// OpenType Features applies the panel menu's default and is enabled on the same condition.
-fn feature_row_menu(app: &mut VectorcraftApp, ui: &mut Ui, flag: Flag, shown: Option<bool>) {
+fn feature_row_menu(app: &VectorcraftApp, ui: &mut Ui, flag: Flag, shown: Option<bool>) -> Option<Change> {
     let on = shown == Some(true);
+    let mut chosen = None;
     if MenuItem::new(if on { tl!("Turn Off") } else { tl!("Turn On") }).show(ui).ran {
-        edit(app, Change::Toggle(flag, !on));
+        chosen = Some(Change::Toggle(flag, !on));
     }
     if MenuItem::new(tl!("Reset OpenType Features")).enabled(text_style(app).is_some()).show(ui).ran {
-        set(app, OtFeatures::default());
+        chosen = Some(Change::Reset);
     }
+    chosen
 }
 
 /// Whether tracking turns off the standard ligatures of any character the panel acts on: one with
