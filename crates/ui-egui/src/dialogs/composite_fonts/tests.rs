@@ -61,6 +61,42 @@ fn names(app: &VectorcraftApp) -> Vec<String> {
     app.session.active().unwrap().doc.composite_fonts.iter().map(|f| f.name.clone()).collect()
 }
 
+#[test]
+fn delayed_load_and_replace_leave_the_reopened_composite_fonts_draft_alone() {
+    let choices: [(PresetCommands, &[&str]); 2] = [(PresetCommands::Load, &["New draft", "From file"]), (PresetCommands::Replace, &["From file"])];
+    for (command, expected_live) in choices {
+        let mut app = app();
+        let picker = scripted(&mut app);
+        let ctx = ctx(&app);
+        open(&mut app).unwrap();
+        let bytes = dialog(&mut app, |d| {
+            d.new_font("From file".into());
+            file_bytes(&d.fonts).unwrap()
+        });
+        let dir = vectorcraft_testkit::TempDir::new("composite-fonts-late-picker");
+        let file = dir.join("picked.vccomposite");
+        std::fs::write(&file, bytes).unwrap();
+        let path = file.to_str().unwrap();
+        request(&mut app, command, None);
+        assert_eq!(picker.requests().len(), 1);
+        cancel(&mut app);
+        open(&mut app).unwrap();
+        dialog(&mut app, |d| d.new_font("New draft".into()));
+
+        picker.answer(&[path]);
+        poll(&mut app, &ctx);
+        let draft_names = |app: &mut VectorcraftApp| dialog(app, |d| d.fonts.iter().map(|font| font.name.clone()).collect::<Vec<_>>());
+        assert_eq!(draft_names(&mut app), ["New draft"], "the stale picker leaves the new draft alone");
+
+        request(&mut app, command, None);
+        assert_eq!(picker.requests().len(), 2);
+        picker.answer(&[path]);
+        poll(&mut app, &ctx);
+        assert_eq!(draft_names(&mut app), expected_live, "a picker opened by the new draft still works");
+        assert!(names(&app).is_empty(), "a picker only edits the draft");
+    }
+}
+
 fn steps(app: &VectorcraftApp) -> usize {
     app.session.active().unwrap().history.undo.len()
 }
