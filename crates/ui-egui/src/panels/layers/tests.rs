@@ -797,10 +797,13 @@ fn appearance_diamond(shape: &egui::Shape) -> Option<(egui::Pos2, f32, f32)> {
 fn target_marks_painted(panel: &mut crate::tests::panel_harness::Panel, name: &str) -> Vec<(f32, bool, f32)> {
     let center = panel.rect(name).center();
     let (shapes, _) = panel.paint_at(1.0);
-    let ink = shapes.iter().find_map(|shape| match shape {
-        egui::Shape::Circle(circle) if circle.center.distance(center) < 0.01 && (circle.radius - 5.0).abs() < 1e-4 => Some(circle.stroke.color),
-        _ => None,
-    }).expect("the cell's outer target ring");
+    let ink = shapes
+        .iter()
+        .find_map(|shape| match shape {
+            egui::Shape::Circle(circle) if circle.center.distance(center) < 0.01 && (circle.radius - 5.0).abs() < 1e-4 => Some(circle.stroke.color),
+            _ => None,
+        })
+        .expect("the cell's outer target ring");
     for shape in &shapes {
         if appearance_diamond(shape).is_some_and(|(at, _, _)| at.distance(center) < 0.01)
             && let egui::Shape::Path(path) = shape
@@ -809,11 +812,17 @@ fn target_marks_painted(panel: &mut crate::tests::panel_harness::Panel, name: &s
             assert_eq!(path.stroke.kind, egui::StrokeKind::Middle, "the diamond's stroke is centered on its outline");
         }
     }
-    let mut marks: Vec<_> = shapes.iter().filter_map(|shape| match shape {
-        egui::Shape::Circle(circle) if circle.center.distance(center) < 0.01 && circle.radius < 5.0
-            && circle.fill == egui::Color32::TRANSPARENT => Some((circle.radius, false, circle.stroke.width)),
-        shape => appearance_diamond(shape).filter(|(at, _, _)| at.distance(center) < 0.01).map(|(_, r, width)| (r, true, width)),
-    }).collect();
+    let mut marks: Vec<_> = shapes
+        .iter()
+        .filter_map(|shape| match shape {
+            egui::Shape::Circle(circle)
+                if circle.center.distance(center) < 0.01 && circle.radius < 5.0 && circle.fill == egui::Color32::TRANSPARENT =>
+            {
+                Some((circle.radius, false, circle.stroke.width))
+            }
+            shape => appearance_diamond(shape).filter(|(at, _, _)| at.distance(center) < 0.01).map(|(_, r, width)| (r, true, width)),
+        })
+        .collect();
     marks.sort_by(|a, b| a.0.total_cmp(&b.0));
     marks
 }
@@ -845,7 +854,9 @@ fn a_targeted_circle_with_an_appearance_shows_both_ring_and_dot() {
     assert!((alone.0 - 2.5).abs() < 1e-4);
     let looks = [&neither, &targeted, &styled, &both];
     for (i, x) in looks.iter().enumerate() {
-        for y in &looks[i + 1..] { assert_ne!(x, y, "all four actual cell looks differ"); }
+        for y in &looks[i + 1..] {
+            assert_ne!(x, y, "all four actual cell looks differ");
+        }
     }
 }
 
