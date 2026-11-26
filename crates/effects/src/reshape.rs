@@ -1733,18 +1733,20 @@ fn reshape_leaves_checked(
     // ([`crate::raster::contents_step`], [`follow_art`]).
     let held = listed.iter().any(|e| crate::raster::holds_back(e));
     let mut rows = rows;
+    let mut painted = false;
     for e in fx {
         let Some(bounds) = warped.bounds(art) else { break };
         let params = merged_params(&e.id, &e.params);
         // Where a live-effect plug-in sits, which it is listed by when it is deferred.
         let effect = owner.iter().position(|x| std::ptr::eq(x, *e)).or_else(|| listed.iter().position(|x| std::ptr::eq(*x, *e)));
         let strict = complete.is_some();
-        let step = Step { e, params: &params, bounds, seed, effect, apart, rows, doc, wholes: &wholes, held, strict };
+        let step = Step { e, params: &params, bounds, seed, effect, apart, rows, painted, doc, wholes: &wholes, held, strict };
         // Art with linked masks keeps its shape under an effect that a mask in it could not take
         // as the art it masks did, so no mask is left apart from its art.
         let before = masked.then(|| (art.clone(), used));
         let ran = step.run(art, max, &mut used, copy_whole, Some(&mut warped), false, 0);
         if painted_plugin(e).is_some() {
+            painted |= ran.took;
             art.walk(&mut |node| rows |= node.appearance.items.iter().any(follows_row_raster));
         }
         if (ran.kept || ran.short)
@@ -1794,6 +1796,7 @@ struct Step<'a> {
     effect: Option<usize>,
     apart: bool,
     rows: bool,
+    painted: bool,
     doc: Option<&'a Document>,
     wholes: &'a HashMap<NodeId, bool>,
     held: bool,
@@ -1914,6 +1917,31 @@ impl Step<'_> {
         // it masks does.
         if own && transform.is_none() && (is_placed(art) || placed_count(art) > 0) {
             return Ran { kept: false, took: false, masks: true, short: false, whole: None };
+        }
+        if let Some((m, copies, options, _)) = transform
+            && !own
+            && self.painted
+            && copies > 0
+            && options.objects
+            && following_raster_in_art(art)
+        {
+            let overhead = used.minus(copy_cost(art));
+            let mut copies_art = Node::group(art.id, vec![Arc::new(art.clone())]);
+            let mut scaling = copy_scaling(options);
+            scaling.effects = options.strokes.then_some(scale_unfollowed as fn(&mut Effect, f64));
+            *used = copy_art_charged(&mut copies_art, m, copies, scaling, max, overhead);
+            let short = self.strict && copies_art.children().is_none_or(|children| children.len() <= copies);
+            if let Some(children) = copies_art.children_mut() {
+                let step = m.with_translation(vectorcraft_geom::Vec2::ZERO);
+                let mut map = Affine::IDENTITY;
+                let none = HashSet::new();
+                for copy in children.iter_mut().rev().skip(1) {
+                    map *= step;
+                    follow_art(Arc::make_mut(copy), map, &none, Some(&none), None, 0);
+                }
+            }
+            *art = copies_art;
+            return Ran { kept: false, took: true, masks: false, short, whole: None };
         }
         // Art of several objects is copied whole, so the copies don't interleave member by member.
         // The copies of its members carry their linked masks, moved with them.
@@ -2365,6 +2393,15 @@ fn contents_raster(effects: &[Effect]) -> bool {
     effects.iter().any(|e| crate::raster::follows(&e.id))
 }
 
+fn following_raster_in_art(art: &Node) -> bool {
+    let mut found = false;
+    art.walk(&mut |node| {
+        found |= node.appearance.effects.iter().any(|effect| effect.visible && crate::raster::follows(&effect.id))
+            || node.appearance.items.iter().any(follows_row_raster);
+    });
+    found
+}
+
 /// A Transform effect whose Transform Patterns or Scale Strokes & Effects is on (`options`), with
 /// map `m` and `copies`, applied to `leaf` (a path or compound path with geometry `path`) as Object
 /// › Transform with those options transforms an object (#885): the strokes' weights and dashes
@@ -2516,11 +2553,15 @@ fn without_guides(n: &mut Node) {
 /// [`crate::distort::MAX_COPY_OBJECTS`] nodes in all, the art of opacity masks counted. Returns what
 /// the art costs after.
 fn copy_art(art: &mut Node, m: Affine, copies: usize, scaling: vectorcraft_doc::Scaling, budget: Budget) -> Budget {
+    copy_art_charged(art, m, copies, scaling, budget, Budget { anchors: 0, lines: 0 })
+}
+
+fn copy_art_charged(art: &mut Node, m: Affine, copies: usize, scaling: vectorcraft_doc::Scaling, budget: Budget, overhead: Budget) -> Budget {
     let Some(mut members) = art.children().cloned() else { return art_cost(art) };
     // A layer's ruler guides are not copied: they stay above the copies, once.
     let guides = members.split_off(Node::guide_run_start(&members));
     let original = Node::group(art.id, members);
-    let mut made = copy_cost(&original);
+    let mut made = copy_cost(&original).plus(overhead);
     let mut drawn = original.clone();
     without_guides(&mut drawn);
     let mut nodes = original.count_with_masks();
@@ -2538,7 +2579,7 @@ fn copy_art(art: &mut Node, m: Affine, copies: usize, scaling: vectorcraft_doc::
         }
         let mut copy = drawn.clone();
         copy.transform(xf, scaling);
-        let cost = copy_cost(&copy);
+        let cost = copy_cost(&copy).plus(overhead);
         if !budget.fits(made.plus(cost)) || !copy.geometric_bounds().is_some_and(crate::distort::within_reach) {
             break;
         }
@@ -2631,6 +2672,7 @@ fn paint_leaf(
         one.blend = Default::default();
         one.isolate = false;
         one.appearance = vectorcraft_plugins::painted::appearance(&leaf.appearance, p).into();
+        one.appearance.effects.clear();
         set_geometry(&mut one, p.path.clone(), p.rule);
         // The pieces' own geometry effects keep to what the pieces before them leave of the budget.
         made = made.plus(dress_piece(&mut one, &p.look, budget.minus(made), doc)?);
@@ -2641,6 +2683,7 @@ fn paint_leaf(
     g.opacity = leaf.opacity;
     g.blend = leaf.blend;
     g.isolate = leaf.isolate;
+    g.appearance.effects = leaf.appearance.effects.clone();
     *leaf = g;
     Some(made)
 }
@@ -2806,6 +2849,7 @@ fn paint_piece(
         one.blend = Default::default();
         one.isolate = false;
         one.appearance.items = items;
+        one.appearance.effects.clear();
         set_geometry(&mut one, p.path.clone(), p.rule);
         made = made.plus(dress_piece(&mut one, &p.look, budget.minus(made), doc)?);
         children.push(Arc::new(one));
@@ -2814,6 +2858,7 @@ fn paint_piece(
     group.opacity = leaf.opacity;
     group.blend = leaf.blend;
     group.isolate = leaf.isolate;
+    group.appearance.effects = leaf.appearance.effects.clone();
     *leaf = group;
     Some(made)
 }

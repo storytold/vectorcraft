@@ -158,6 +158,57 @@ fn later_painted_pieces_keep_the_earlier_piece_transparency_as_a_group() {
     }
 }
 
+#[test]
+fn later_painted_pieces_keep_the_earlier_piece_blur_on_their_group() {
+    for stage in ["object", "fill", "stroke"] {
+        let first = format!("test.render.paintedlook.blur.{stage}");
+        let second = format!("test.render.paintedlook.blur.overlap.{stage}");
+        let blur = Effect { id: "blur.gaussian".into(), params: json!({"radius": 4.0}), visible: true };
+        let value: serde_json::Value = serde_json::from_str(&output(120.0, &json!({}))).unwrap();
+        let mut piece = value["objects"][0].clone();
+        if stage == "stroke" {
+            let fields = piece.as_object_mut().unwrap();
+            let red = fields.remove("fills").unwrap()[0].clone();
+            fields.insert("strokes".into(), json!([{"paint": red, "width": 4.0}]));
+        }
+        let mut blurred = piece.clone();
+        blurred["effects"] = json!([{"id": "blur.gaussian", "params": {"radius": 4.0}}]);
+        let module = wat::parse_str(vectorcraft_plugins::wat::returning(&manifest(&first), &json!({"objects": [blurred]}).to_string())).unwrap();
+        vectorcraft_plugins::registry::install_bytes(&module).unwrap();
+        let result = json!({"objects": [piece.clone(), piece]}).to_string();
+        let module = wat::parse_str(vectorcraft_plugins::wat::returning(&manifest(&second), &result)).unwrap();
+        vectorcraft_plugins::registry::install_bytes(&module).unwrap();
+        let mut actual = document(&first, 0.0);
+        let source = actual.layers[0].children().unwrap().last().unwrap().id;
+        let node = actual.node_mut(source).unwrap();
+        let mut effects = std::mem::take(&mut node.appearance.effects);
+        effects.push(Effect { id: format!("plugin.{second}"), params: json!({}), visible: true });
+        if stage == "object" {
+            node.appearance.effects = effects;
+        } else {
+            if stage == "stroke" {
+                node.appearance = Appearance::basic(Paint::None, Paint::solid(Color::rgb(0.0, 1.0, 0.0)), 4.0).into();
+            }
+            let row = node.appearance.items.iter_mut().find(|row| if stage == "fill" { row.is_fill() } else { !row.is_fill() }).unwrap();
+            row.effects_mut().extend(effects);
+        }
+        let mut expected = actual.clone();
+        let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+        let appearance = if stage == "stroke" { Appearance::basic(Paint::None, red, 4.0) } else { Appearance::basic(red, Paint::None, 0.0) };
+        let children = (0..2).map(|_| std::sync::Arc::new(Node::path(expected.alloc_id(), square_at(120.0), appearance.clone()))).collect();
+        let mut group = Node::group(source, children);
+        group.appearance.effects = vec![blur];
+        *expected.node_mut(source).unwrap() = group;
+        for x in [118.0, 120.0, 122.0] {
+            let got = pixel(&actual, x, 50.0);
+            let want = pixel(&expected, x, 50.0);
+            assert!(got.iter().zip(want).all(|(a, b)| a.abs_diff(b) <= 8), "{stage} at {x}: {got:?} != {want:?}");
+        }
+        assert_eq!(vectorcraft_plugins::effect::last_error(&first), None);
+        assert_eq!(vectorcraft_plugins::effect::last_error(&second), None);
+    }
+}
+
 /// An unknown blending mode, a plug-in effect (this one itself) and too many effects refuse the
 /// whole result: the source draws as it is, green at its own place, with no piece, and the plug-in
 /// reports the field.
