@@ -687,6 +687,54 @@ fn art_can_be_added_as_a_graphic_before_any_3d_effect() {
 }
 
 #[test]
+fn three_d_graphics_accepts_artwork_only_from_its_document() {
+    use crate::panel_drag::PanelDrag;
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::{ListDrag, ShowCollection as _};
+    use craft::ui::list::{List, ListRow};
+    use craft::ui::runtime::drag;
+
+    fn with_artwork(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+        let st = app.session.active().unwrap();
+        let payload = PanelDrag::Art { document: st.uid, ids: st.selection.objects.clone() };
+        ui.allocate_ui(egui::vec2(ui.available_width(), 80.0), |ui| {
+            let keys = craft::behavior::keyed(&[0_usize], |key: &usize| *key);
+            List::<usize>::new("Artwork")
+                .drag_payload(move |_: &ListDrag<usize>| Some(payload.clone()))
+                .show_items(ui, &keys, &mut |_, _| ListRow::new("Dragged artwork"));
+        });
+        show(app, ui);
+    }
+
+    let mut app = app();
+    let source = app.session.active().unwrap().uid;
+    let first = app.session.active().unwrap().selection.objects[0];
+    let add_existing = |app: &mut VectorcraftApp| app.run("threeD.addGraphic", json!({"name": "Existing Graphic"})).unwrap();
+    add_existing(&mut app);
+    app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    let second = app.run("shape.rectangle", json!({"x": 30, "y": 30, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    add_existing(&mut app);
+    assert_eq!(first.0, second, "the two documents have different artwork with the same local ID");
+    assert!(app.session.set_active(0));
+
+    let mut p = Panel::new(app, with_artwork);
+    let from = p.rect("Dragged artwork").center();
+    let to = p.rect("Existing Graphic").center();
+    p.drag_hold_role("Dragged artwork", craft::ui::contract::Role::LIST_ITEM, to - from);
+    assert!(drag::mark(p.ctx()).is_some(), "Graphics accepts the artwork before switching documents");
+    assert!(p.app().session.set_active(1));
+    p.frame();
+    let carried = drag::active::<PanelDrag>(p.ctx());
+    assert!(matches!(carried.as_deref(), Some(PanelDrag::Art { document, .. }) if *document == source));
+    assert!(drag::mark(p.ctx()).is_none(), "Graphics withdraws the drop indicator when the artwork is foreign");
+    p.release();
+    assert_eq!(p.app().session.active().unwrap().doc.symbols.len(), 1, "the foreign drop adds no symbol from the active document's same-ID artwork");
+
+    p.drag("Dragged artwork", "Existing Graphic", egui::Modifiers::NONE);
+    assert_eq!(p.app().session.active().unwrap().doc.symbols.len(), 2, "a same-document drop still makes a graphic");
+}
+
+#[test]
 fn a_graphics_handle_drags_it_over_its_face_in_one_undo_step() {
     let (mut app, _) = materials_app();
     app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
