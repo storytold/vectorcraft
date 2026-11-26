@@ -183,6 +183,7 @@
 	Anti-alias Rasters	Pixelbilder glätten
 	Anti-aliased Artwork	Geglättete Grafik
 	Anti-aliasing Method	Glättungsmethode
+@id	language.name	Deutsch
 antiAlias	Sharp	Scharf
 	Crisp	Klar
 	Strong	Stark
@@ -908,6 +909,7 @@ font-technology	Variable	Variabel
 	Direct Selection Tool	Direktauswahl-Werkzeug
 	Direction Handles	Richtungsgriffe
 	Disable Auto Add/Delete	Automatisches Hinzufügen/Löschen deaktivieren
+	Delete Removes Anchor Points and Keeps Paths Joined	Entf entfernt Ankerpunkte und lässt Pfade verbunden
 	Interpolate Control Points When Moving Anchors	Richtungsgriffe beim Verschieben von Ankerpunkten interpolieren
 	Disable Opacity Mask	Deckkraftmaske deaktivieren
 	Discard	Verwerfen
@@ -1461,6 +1463,9 @@ file-filter	Swatch libraries	Farbfeldbibliotheken
 file-filter	Flattener presets	Reduzierungsvorgaben
 file-filter	PDF presets	PDF-Vorgaben
 file-filter	Print presets	Druckvorgaben
+file-filter	Tracing presets	Nachzeichnervorgaben
+file-filter	Action sets	Aktionssätze
+file-filter	Composite fonts	Zusammengesetzte Schriften
 file-filter	Preferences	Voreinstellungen
 file-filter	Export presets	Exportvorgaben
 file-filter	SVG Compressed	SVG komprimiert
@@ -1663,6 +1668,17 @@ file-filter	Templates	Vorlagen
 	Graphic Styles	Grafikstile
 	Graphic Styles Options	Optionen für Grafikstile
 	Graphics	Grafik
+	Show Contrast	Kontrast einblenden
+	Contrast For	Kontrast für
+	Normal Text	Normaler Text
+	Large Text	Großer Text
+	Contrast Background	Kontrasthintergrund
+	Behind Selection	Hinter der Auswahl
+	Current Color	Aktuelle Farbe
+	Pass	Bestanden
+	Fail	Nicht bestanden
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Mindestkontrast nach WCAG 2.2: normaler Text AA 4.5:1 (1.4.3) und AAA 7:1 (1.4.6), großer Text AA 3:1 und AAA 4.5:1, Grafiken und Bedienelemente AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Der Hintergrund wird in der Mitte der Auswahl gemessen.
 	Graphics Processor	Grafikprozessor
 	Graphics: {adapter}	Grafik: {adapter}
 	Gravity	Schwerkraft
@@ -2435,6 +2451,12 @@ file-filter	Templates	Vorlagen
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	Auflösung nicht verfügbar
+	estimated memory {memory}	geschätzter Speicher {memory}
+	memory unavailable	Speicher nicht verfügbar
+	Unknown format	Unbekanntes Format
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -2583,6 +2605,7 @@ file-filter	Templates	Vorlagen
 	One Point Perspective Preset 5	Einpunktperspektive – Vorgabe 5
 	Only Web Colors	Nur Webfarben
 	Opacity	Deckkraft
+	Show Opacity	Deckkraft einblenden
 	Opacity & Mask Define Knockout Shape	Deckkraft und Maske definieren Aussparungsform
 	Opacity Mask	Deckkraftmaske
 	Opacity Mask Info	Informationen zur Deckkraftmaske
@@ -3037,6 +3060,9 @@ digits	Malayalam	Malayalam
 	Scale Artwork with Artboard	Grafik mit Zeichenfläche skalieren
 	Artboards: {n}	Zeichenflächen: {n}
 	Rearrange All Artboards…	Alle Zeichenflächen neu anordnen…
+	Rearrange…	Neu anordnen…
+	Selected Artboards: {n}	Ausgewählte Zeichenflächen: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Klicken Sie auf die Arbeitsfläche, um die Zeichenflächen zu platzieren (Esc bricht ab)
 	Recall Selection	Auswahl abrufen
 	RECENT	ZULETZT VERWENDET
 	Recent	Zuletzt verwendet
@@ -3279,7 +3305,7 @@ digits	Malayalam	Malayalam
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	„Auswahl › Gleich › Flächenfarbe“, „Konturfarbe“ und „Fläche und Kontur“ finden nur denselben Farbton eines globalen oder Volltonfarbfelds, nicht jeden Farbton davon.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Zeigt den Startbildschirm, wenn kein Dokument geöffnet ist; ist die Option aus, bleibt das Fenster leer, bis Sie auf „Start“ klicken.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Misst Objekte für Größe, Position und Ausrichtung mit ihren Konturen und formverändernden Effekten; Schatten, Schein und Weichzeichnungen werden nicht gemessen.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Bei 100 % Zoom nimmt ein Zoll des Dokuments 96 statt 72 Bildschirmpunkte ein.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	Bei 100 % Zoom füllt ein Zoll des Dokuments einen Zoll des Bildschirms, oder 96 Bildschirmpunkte, wenn das System keine verwendbare Bildschirmgröße meldet.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Ein Doppelklick mit dem Auswahl-Werkzeug auf eine Gruppe, einen Pfad oder ein Bild öffnet sie im Isolationsmodus.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Musterflächen und -konturen werden mit dem Bildmaterial transformiert, sofern die Transformation oder das Menü des Bedienfelds „Transformieren“ nichts anderes wählt.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Live-Eckenradien skalieren mit dem Bildmaterial, sofern die Skalierung nichts anderes wählt.
@@ -3290,6 +3316,7 @@ digits	Malayalam	Malayalam
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Eine Drehgeste mit zwei Fingern auf einem Trackpad dreht die Ansicht der Arbeitsfläche.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Halten Sie eine Taste, wird das Werkzeug oder der Befehl aus ihrer Spalte „Halten“ unter „Tastaturbefehle“ ausgeführt; ein kurzer Druck führt ihren üblichen Tastaturbefehl aus.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Wie viele Sekunden eine Taste gehalten werden muss, bevor statt ihres üblichen Tastaturbefehls ihr Halte-Tastaturbefehl ausgeführt wird.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Entf entfernt die ausgewählten Ankerpunkte und passt die Kurve um jeden davon neu an, statt den Pfad dort zu öffnen.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Wenn Sie Ankerpunkte verschieben, behält jede Kurve mit einem verschobenen Ende ihre Form relativ zu ihren Enden.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Solange Sie das Tastaturkürzel eines Werkzeugs gedrückt halten, ist dieses Werkzeug gewählt; danach wird wieder das vorherige gewählt.
 	Shows the bounding box while you move the selection or draw a shape.	Zeigt den Begrenzungsrahmen an, während Sie die Auswahl verschieben oder eine Form zeichnen.
@@ -5454,6 +5481,12 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	finish editing the pattern first	beenden Sie zuerst die Bearbeitung des Musters
 @msg	nothing encoded	nichts kodiert
 @msg	nothing selected	nichts ausgewählt
+@msg	`{key}` must be a color or {_1}	`{key}` muss eine Farbe oder {_1} sein
+@msg	the selected objects' colors differ: give `color`	die Farben der ausgewählten Objekte unterscheiden sich: geben Sie `color` an
+@msg	the selected objects' colors differ: give `opacity` or `color`	die Farben der ausgewählten Objekte unterscheiden sich: geben Sie `opacity` oder `color` an
+@msg	the active fill or stroke has no color: give `color`	die aktive Fläche oder Kontur hat keine Farbe: geben Sie `color` an
+@msg	the active fill or stroke is hidden: give `color`	die aktive Fläche oder Kontur ist ausgeblendet: geben Sie `color` an
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	die aktive Fläche oder Kontur wird durch eine Deckkraftmaske gezeichnet: geben Sie `color` an
 @msg	nothing selected is in a group	nichts Ausgewähltes befindet sich in einer Gruppe
 @msg	nothing to align	nichts auszurichten
 @msg	nothing to distort	nichts zu verzerren
@@ -6427,6 +6460,7 @@ lighting	Light	Licht
 @msg	a 3D effect on a group's fill or stroke draws nothing	ein 3D-Effekt auf der Fläche oder Kontur einer Gruppe zeichnet nichts
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ein 3D-Effekt auf der Fläche oder Kontur einer Gruppe zeichnet nichts, das exportiert werden kann
 @msg	The 3D object is too complex to export	Das 3D-Objekt ist zu komplex für den Export
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Das Netz des 3D-Objekts ist unvollständig oder enthält einen Wert, der keine Zahl ist
 @msg	the <filter> element needs an id, the filter's name	das <filter>-Element braucht eine id, den Namen des Filters
 @msg	an SVG filter's id is at most {MAX_NAME} characters	die id eines SVG-Filters hat höchstens {MAX_NAME} Zeichen
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> ist kein Element eines SVG-Filters
@@ -6880,6 +6914,8 @@ axis	Y Axis	Y-Achse
 	Cancel Plug-in Run	Plug-in-Ausführung abbrechen
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} ist fertig, aber das Dokument oder das Plug-in hat sich inzwischen geändert: Führen Sie es erneut aus
 @msg	Running “{name}”…	„{name}“ wird ausgeführt…
+@msg	Plug-in “{name}”: {notice}	Plug-in „{name}“: {notice}
+@msg	`notice` must be a string with visible text	`notice` muss eine Zeichenkette mit sichtbarem Text sein
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	ein Live-Effekt läuft, während das Dokument gezeichnet wird, daher kann er nicht `heavy` sein
 @msg	an exporter always gets an export's budget: leave `budget` out	ein Export-Plug-in erhält immer das Budget eines Exports: Lassen Sie `budget` weg
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	„{_1}“ verlangt ein großes Rechenbudget (jede Ausführung bis zu {minutes} Minuten und {times}-mal so viele Anweisungen wie üblich): Eine Person muss es in der Desktop-App genehmigen, oder übergeben Sie `allowHeavy: true` in einer mit --allow-plugin-grants gestarteten Sitzung
@@ -6905,11 +6941,19 @@ axis	Y Axis	Y-Achse
 @msg	module is {_1} bytes (limit {_2})	das Modul ist {_1} Byte groß (Grenze {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	muss genehmigt werden: Es verlangt {0}, was der Benutzer gewährt, wenn er es einzeln installiert
 @msg	not JSON: {e}	kein JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	keine WebAssembly-Binärdatei (der Header \0asm fehlt)
+@msg	not a WebAssembly binary (missing \\0asm header)	keine WebAssembly-Binärdatei (der Header \\0asm fehlt)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	ein Funktionstyp überschreitet die Grenze von {MAX_FUNC_TYPE_VALUES} Parametern
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	ein Funktionstyp überschreitet die Grenze von {MAX_FUNC_TYPE_VALUES} Ergebnissen
 @msg	parameter `{k}`: {what}	Parameter `{k}`: {what}
 @msg	parameter `{name}`: {what}	Parameter `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	die Plug-in-Parameter müssen ein JSON-Objekt sein
 @msg	the module must export its linear memory as `memory`	das Modul muss seinen linearen Speicher als `memory` exportieren
+@msg	the module must export `{name}` with the type {signature}	das Modul muss `{name}` mit dem Typ {signature} exportieren
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	das Modul hat mehr als einen benutzerdefinierten Abschnitt `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	Speicherbudget (der Anfangsspeicher des Moduls ist {initial} Byte groß, Grenze {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	das Manifest im benutzerdefinierten Abschnitt `{MANIFEST_SECTION}` muss `abi` als {ABI_VERSION} angeben, die ABI-Version, die dieser Host unterstützt
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	Tabellenbudget (das Modul definiert {count} Tabellen, die größte mit {largest} Elementen; Grenze {MAX_TABLES} Tabellen mit je {MAX_TABLE_ELEMENTS} Elementen)
+@msg	the module's table section could not be read	der Tabellenabschnitt des Moduls konnte nicht gelesen werden
 @msg	the objects to change are no longer in the document	die zu ändernden Objekte sind nicht mehr im Dokument
 @msg	the runtime panicked	die Laufzeitumgebung ist abgestürzt
 @msg	unexpected host trap	unerwarteter Abbruch (Trap) im Host
@@ -6917,6 +6961,10 @@ axis	Y Axis	Y-Achse
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc hat 0 zurückgegeben (kein Speicher mehr)
 @msg	vc_alloc returned a block outside memory	vc_alloc hat einen Block außerhalb des Speichers zurückgegeben
 @msg	vc_run returned error code {packed}	vc_run hat den Fehlercode {packed} zurückgegeben
+@msg	did not finish loading within {secs} s	wurde nicht innerhalb von {secs} s fertig geladen
+@msg	no thread was left to load it	es war kein Thread mehr frei, um es zu laden
+@msg	panicked while loading	ist beim Laden abgestürzt
+@msg	panicked while loading: {what}	ist beim Laden abgestürzt: {what}
 @msg	{_1} is not a file	{_1} ist keine Datei
 @msg	{_1} is {_2} bytes (limit {_3})	{_1} ist {_2} Byte groß (Grenze {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} Objekte (Grenze {MAX_OBJECTS})
@@ -6936,6 +6984,11 @@ axis	Y Axis	Y-Achse
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` und `maxItems` müssen 0-{MAX_LIST} sein, `maxItems` mindestens 1, und der Standardwert muss so viele Einträge haben
 @msg	`name` must be a string	`name` muss eine Zeichenkette sein
 @msg	`opacity` must be a number	`opacity` muss eine Zahl sein
+@msg	`opacity` must be a number from 0 to 100	`opacity` muss eine Zahl von 0 bis 100 sein
+@msg	`opacity` must be true or false	`opacity` muss true oder false sein
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	Textzeichen haben keine eigene Deckkraft: Fügen Sie mit „Neue Fläche hinzufügen“ oder „Neue Kontur hinzufügen“ im Bedienfeld „Aussehen“ eine Fläche oder Kontur hinzu
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	ein in einer Symbolinstanz ausgewähltes Objekt hat keine eigene Flächen- oder Konturdeckkraft
+@msg	no target has that fill or stroke to take the opacity	kein Ziel hat diese Fläche oder Kontur, die die Deckkraft übernehmen könnte
 @msg	`type` must be "path" or "compound"	`type` muss "path" oder "compound" sein
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` muss 1-{MAX_UNIT} druckbare Zeichen haben
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` muss 1 bis {MAX_CONDITION_VALUES} Werte für `{other}` nennen
@@ -6954,7 +7007,7 @@ axis	Y Axis	Y-Achse
 @msg	a list of {min_items} to {max_items} numbers	eine Liste von {min_items} bis {max_items} Zahlen
 @msg	a new object needs a `path`	ein neues Objekt braucht einen `path`
 @msg	a number	eine Zahl
-@msg	a painted live effect returns only `objects`	ein malender Live-Effekt gibt nur `objects` zurück
+@msg	a painted live effect returns only `objects` and `notice`	ein malender Live-Effekt gibt nur `objects` und `notice` zurück
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	ein Teil eines malenden Live-Effekts hat nur `path`, `fillRule`, `fills` und `strokes`
 @msg	a read-only object was left out	ein schreibgeschütztes Objekt wurde weggelassen
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	ein schreibgeschütztes Objekt wurde weggelassen: Geben Sie es zurück, als {{"id": …}} allein oder so, wie es übergeben wurde
@@ -6979,6 +7032,8 @@ axis	Y Axis	Y-Achse
 @msg	`plates` requires a stop linked to a spot swatch	`plates` erfordert einen Farbstopp, der mit einem Volltonfarbfeld verknüpft ist
 @msg	the output	die Ausgabe
 @msg	the path has no anchor points	der Pfad hat keine Ankerpunkte
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	der zusammengesetzte Pfad {id} hat ein ausgeblendetes, gesperrtes oder als Hilfslinie dienendes Element, daher lassen sich seine Elemente nicht ersetzen
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	der zusammengesetzte Pfad {id} hat ein Element, das kein Pfad ist, daher lassen sich seine Elemente nicht ersetzen
 @msg	too many anchor points (limit {MAX_ANCHORS})	zu viele Ankerpunkte (Grenze {MAX_ANCHORS})
 @msg	true or false	true oder false
 @msg	a number >= {_1}	eine Zahl >= {_1}
@@ -7057,6 +7112,8 @@ axis	Y Axis	Y-Achse
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` ist {_1}; dieser Host unterstützt die Plug-in-API-Stufen 1 bis {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` darf nur true sein
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` gilt nur für einen Live-Effekt (`kind` "effect") mit `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` gilt nur für einen Importer (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	„{shown}“ öffnet Dateien, platziert sie aber nicht: sein Manifest setzt `place` nicht
 @msg	`grant` must be a list of permission names	`grant` muss eine Liste von Berechtigungsnamen sein
 @msg	`grant` names an unknown permission `{shown}`	`grant` nennt eine unbekannte Berechtigung `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	ein Plug-in der Art `{_1}` braucht die Berechtigung `{_2}`
@@ -7068,6 +7125,10 @@ axis	Y Axis	Y-Achse
 @msg	`inputs` lists `{shown}` twice	`inputs` führt `{shown}` doppelt auf
 @msg	`inputs` needs `api` 2 or later	`inputs` erfordert `api` 2 oder höher
 @msg	`inputs` needs the permission `doc.read`	`inputs` erfordert die Berechtigung `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Die Objekte lesen, die es erhält, sowie die Einstellungen, Zeichenflächen, Ebenen und Farbfelder des Dokuments
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` muss verschiedene Abschnitte aufführen: settings, artboards, layers oder swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` gilt für einen Filter oder einen Live-Effekt mit `commands`, mit `api` 3 oder höher und der Berechtigung `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	die Dokumentinformationen, die das Plug-in anfordert, sind zu groß zum Übergeben: höchstens {MAX_CONTEXT_ITEMS} Zeichenflächen, Ebenen und Farbfelder in {MAX_CONTEXT_BYTES} Byte
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	Speicherbudget (Objekt {_1} benötigt {size} Byte Eingabe, {left} verbleiben)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	Objektbudget (mehr als {MAX_OBJECTS} schreibgeschützte Objekte)
 @msg	instruction budget	Anweisungsbudget
@@ -8873,6 +8934,8 @@ breakText	Glyphs	Glyphen
 @msg	`dataBase64` is larger than the module limit	`dataBase64` ist größer als die Modulgrenze
 @msg	`dataBase64` is not valid base64	`dataBase64` ist kein gültiges Base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` kann nicht mit `ids`, `reverse` oder `append` kombiniert werden
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` kann nicht mit `ids`, `id` oder `item` kombiniert werden
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` kann nicht mit `brush` kombiniert werden
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` und `childLimit` begrenzen die Zusammenfassung: Übergeben Sie `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` ist ein Designname oder null für einfache Säulen
 @msg	`design` is a design name, or null for the default marker	`design` ist ein Designname oder null für die Standardmarkierung
@@ -9361,6 +9424,7 @@ breakText	Glyphs	Glyphen
 @msg	give a pattern name or select an object painted with a pattern	geben Sie einen Musternamen an, oder wählen Sie ein mit einem Muster gefärbtes Objekt aus
 @msg	give at least one of clip, invert, disabled, linked	geben Sie mindestens eines von clip, invert, disabled, linked an
 @msg	give color, none, swatch or gradient	geben Sie color, none, swatch oder gradient an
+@msg	give color, none, swatch, gradient or opacity	geben Sie color, none, swatch, gradient oder opacity an
 @msg	give dataBase64	geben Sie dataBase64 an
 @msg	give either at (a click) or area (a path drawn around the overlaps)	geben Sie entweder at (einen Klick) oder area (einen um die Überlappungen gezeichneten Pfad) an
 @msg	give formats or a preset, not both	geben Sie formats oder eine Vorgabe an, nicht beides

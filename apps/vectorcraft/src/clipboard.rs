@@ -1,5 +1,5 @@
 //! The system clipboard with every format Copy offers and Paste reads
-//! (`Services::system_clipboard`).
+//! (`Services::clipboard`).
 //!
 //! - Windows: text, SVG, PDF, PNG and an opaque bitmap (for apps that don't read PNG) in one go;
 //!   Paste reads each of them and EPS, a bitmap as PNG, else as the device-independent bitmap that
@@ -23,12 +23,12 @@
 use std::io::{Cursor, Read};
 use std::path::PathBuf;
 
-use vectorcraft_engine::cmd::clipboard::{BITMAP, EPS, FILE_HEAD, Flavour, PDF, PNG, SVG, TEXT, file_flavour};
-use vectorcraft_ui_egui::{ClipboardRead, SystemClipboard};
+use craft::platform::clipboard::{ClipboardBackend, ClipboardError, ClipboardImage, Flavor};
+use vectorcraft_engine::cmd::clipboard::{BITMAP, EMF, EPS, FILE_HEAD, Flavour, PDF, PNG, SVG, TEXT, file_flavour};
 
 /// This platform's system clipboard. On Linux, `window`'s Wayland connection carries text, SVG and
 /// PNG where arboard can't open (GNOME has no data-control protocol, a Flatpak there no X11).
-pub fn system_clipboard(window: Option<std::sync::Arc<winit::window::Window>>) -> Box<dyn SystemClipboard> {
+pub fn system_clipboard(window: Option<std::sync::Arc<winit::window::Window>>) -> Box<dyn ClipboardBackend> {
     #[cfg(windows)]
     let cb = {
         let _ = window;
@@ -37,6 +37,76 @@ pub fn system_clipboard(window: Option<std::sync::Arc<winit::window::Window>>) -
     #[cfg(not(windows))]
     let cb = Box::new(portable::Clipboard::new(window));
     cb
+}
+
+/// What a read of the clipboard gave: the flavour, or the work that makes it from the bytes already
+/// copied off the clipboard (a bitmap decoded and encoded as PNG, an owner's data waited for), which
+/// a paste runs off the UI thread ([`ClipboardBackend::read_later`]).
+pub(crate) enum ClipboardRead {
+    /// The flavour.
+    Now(Flavour),
+    /// The work that makes the flavour.
+    Later(MakeFlavour),
+}
+
+/// Makes a flavour from bytes read off the clipboard, on any thread; `None` when it can't be made.
+pub(crate) type MakeFlavour = Box<dyn FnOnce() -> Option<Flavour> + Send>;
+
+/// The platform's form of [`MakeFlavour`].
+type LaterFlavor = Box<dyn FnOnce() -> Option<Flavor> + Send>;
+
+impl ClipboardRead {
+    /// The flavour, made at once when it is work.
+    pub(crate) fn flavour(self) -> Option<Flavour> {
+        match self {
+            Self::Now(f) => Some(f),
+            Self::Later(make) => make(),
+        }
+    }
+}
+
+/// The engine's name for `mime`: the platform's are not `'static`. `None` for a type the engine has
+/// no name for.
+fn engine_mime(mime: &str) -> Option<&'static str> {
+    [TEXT, SVG, PDF, EPS, EMF, PNG, BITMAP].into_iter().find(|known| *known == mime)
+}
+
+/// The engine's names for `mimes`; a type the engine has no name for is dropped.
+fn engine_mimes(mimes: &[&str]) -> Vec<&'static str> {
+    mimes.iter().filter_map(|m| engine_mime(m)).collect()
+}
+
+/// `flavour` as the platform's, unless it is more than `limit` bytes.
+fn bounded(flavour: Flavour, limit: u64) -> Result<Flavor, ClipboardError> {
+    if flavour.data.len() as u64 > limit {
+        return Err(ClipboardError::TooLarge { limit });
+    }
+    // A bitmap comes back already encoded (PNG, or the TIFF the macOS pasteboard holds), which the
+    // app and `Clipboard` take as it is.
+    Ok(Flavor::new(flavour.mime, flavour.data))
+}
+
+/// The first of `mimes` as `read` reads it, at most `limit` bytes of it.
+fn read_flavor(mimes: &[&str], limit: u64, read: impl FnOnce(&[&'static str]) -> Option<ClipboardRead>) -> Result<Option<Flavor>, ClipboardError> {
+    read(&engine_mimes(mimes)).and_then(ClipboardRead::flavour).map(|f| bounded(f, limit)).transpose()
+}
+
+/// [`read_flavor`] with the slow part of the read left in the work that comes back.
+fn read_later_flavor(
+    mimes: &[&str],
+    limit: u64,
+    read: impl FnOnce(&[&'static str]) -> Option<ClipboardRead>,
+) -> Result<Option<LaterFlavor>, ClipboardError> {
+    Ok(read(&engine_mimes(mimes)).map(|read| -> LaterFlavor { Box::new(move || read.flavour().and_then(|f| bounded(f, limit).ok())) }))
+}
+
+/// The clipboard's bitmap as RGBA8, at most `limit` bytes of it before it is decoded. Only a PNG is
+/// decoded here: the app takes any other bitmap through [`read_flavor`].
+fn read_image_flavor(limit: u64, read: impl FnOnce(&[&'static str]) -> Option<ClipboardRead>) -> Result<Option<ClipboardImage>, ClipboardError> {
+    let Some(flavor) = read_flavor(&[BITMAP], limit, read)? else { return Ok(None) };
+    let Some(img) = decode_png(&flavor.data) else { return Ok(None) };
+    let (width, height) = (img.width(), img.height());
+    Ok(Some(ClipboardImage { width, height, rgba: img.into_raw() }))
 }
 
 /// The registered Windows clipboard formats a flavour is written under (and read from, first held
@@ -65,11 +135,6 @@ fn pasteboard_types(mime: &str) -> &'static [(&'static str, &'static str)] {
         BITMAP => &[("public.png", PNG), ("public.tiff", "image/tiff")],
         _ => &[],
     }
-}
-
-/// The text flavour among `flavours`.
-fn text_of(flavours: &[Flavour]) -> Option<String> {
-    flavours.iter().find(|f| f.mime == TEXT).map(|f| String::from_utf8_lossy(&f.data).into_owned())
 }
 
 /// Most pixels a side of a bitmap another app put on the clipboard (untrusted data).
@@ -339,9 +404,12 @@ mod win {
 
     use clipboard_win::{formats, options::NoClear, raw};
 
+    use std::path::PathBuf;
+
     use super::{
-        BITMAP, ClipboardRead, Cursor, Flavour, MAX_BYTES, MAX_URIS, PNG, SVG, SystemClipboard, TEXT, copied_file, copy_within, decode_png,
-        dib_image, drop_files_within, png_flavour, utf8_most, windows_formats,
+        BITMAP, ClipboardBackend, ClipboardError, ClipboardImage, ClipboardRead, Cursor, Flavor, Flavour, LaterFlavor, MAX_BYTES, MAX_URIS, PNG, SVG,
+        TEXT, copied_file, copy_within, decode_png, dib_image, drop_files_within, png_flavour, read_flavor, read_image_flavor, read_later_flavor,
+        utf8_most, windows_formats,
     };
 
     /// The device-independent bitmaps, the one that carries alpha first. Each is there whenever the
@@ -352,8 +420,8 @@ mod win {
         windows_formats(mime).iter().filter_map(|n| raw::register_format(n)).map(NonZeroU32::get)
     }
 
-    fn err(e: impl std::fmt::Display) -> String {
-        format!("{e}")
+    fn err(e: impl std::fmt::Display) -> ClipboardError {
+        ClipboardError::Other(e.to_string())
     }
 
     /// `png` over white, as a BMP file (what the bitmap format takes).
@@ -371,30 +439,45 @@ mod win {
         Some(bmp)
     }
 
+    /// Windows' clipboard, opened afresh by each call.
     #[derive(Default)]
-    pub struct Clipboard {
-        /// The clipboard's sequence number right after our last write.
-        seq: Option<NonZeroU32>,
+    pub struct Clipboard;
+
+    impl Clipboard {
+        /// A device-independent bitmap is copied off the clipboard here and decoded and encoded
+        /// as PNG by the work that comes back.
+        fn read_deferred(&mut self, mimes: &[&'static str]) -> Option<ClipboardRead> {
+            let files = file_paths()?;
+            // The files are read with the clipboard closed again, not keeping other apps waiting.
+            copied_file(files, mimes).map(ClipboardRead::Now).or_else(|| {
+                let _open = clipboard_win::Clipboard::new_attempts(10).ok()?;
+                mimes.iter().find_map(|m| read_one(m))
+            })
+        }
     }
 
-    impl SystemClipboard for Clipboard {
-        /// Writes every flavour it can; the first failure is reported.
-        fn write(&mut self, flavours: &[Flavour]) -> Result<(), String> {
+    impl ClipboardBackend for Clipboard {
+        /// Writes every flavour it can; the first failure is reported. The index answered is the
+        /// first flavour that was written.
+        fn write(&mut self, flavors: &[Flavor]) -> Result<usize, ClipboardError> {
             let mut result = Ok(());
+            let mut first = None;
             {
                 let _open = clipboard_win::Clipboard::new_attempts(10).map_err(err)?;
                 raw::empty().map_err(err)?;
-                let mut set = |r: clipboard_win::SysResult<()>| {
-                    if result.is_ok() {
-                        result = r.map_err(err);
-                    }
-                };
-                for f in flavours {
+                for (i, f) in flavors.iter().enumerate() {
+                    let mut set = |r: clipboard_win::SysResult<()>| match r {
+                        Ok(()) => {
+                            first.get_or_insert(i);
+                        }
+                        Err(e) if result.is_ok() => result = Err(err(e)),
+                        Err(_) => {}
+                    };
                     if f.mime == TEXT {
                         set(raw::set_string_with(&String::from_utf8_lossy(&f.data), NoClear));
                         continue;
                     }
-                    for id in formats_of(f.mime) {
+                    for id in formats_of(&f.mime) {
                         set(raw::set_without_clear(id, &f.data));
                     }
                     if f.mime == PNG
@@ -404,44 +487,26 @@ mod win {
                     }
                 }
             }
-            self.seq = raw::seq_num();
-            result
+            result.map(|()| first.unwrap_or(0))
         }
 
-        fn holds_ours(&mut self) -> bool {
-            // The same text copied later by another app is a different clipboard entry. A
-            // clipboard manager that republishes our data is also a new entry.
-            self.seq.is_some() && raw::seq_num() == self.seq
+        fn read(&mut self, mimes: &[&str], limit: u64) -> Result<Option<Flavor>, ClipboardError> {
+            read_flavor(mimes, limit, |m| self.read_deferred(m))
         }
 
-        fn change_count(&mut self) -> Option<u64> {
-            raw::seq_num().map(|n| u64::from(n.get()))
+        fn read_later(&mut self, mimes: &[&str], limit: u64) -> Result<Option<LaterFlavor>, ClipboardError> {
+            read_later_flavor(mimes, limit, |m| self.read_deferred(m))
         }
 
-        fn read(&mut self, mimes: &[&'static str]) -> Option<Flavour> {
-            self.read_deferred(mimes)?.flavour()
+        fn read_image(&mut self, limit: u64) -> Result<Option<ClipboardImage>, ClipboardError> {
+            read_image_flavor(limit, |m| self.read_deferred(m))
         }
 
-        /// A device-independent bitmap is copied off the clipboard here and decoded and encoded
-        /// as PNG by the work that comes back.
-        fn read_deferred(&mut self, mimes: &[&'static str]) -> Option<ClipboardRead> {
-            let mut files = vec![];
-            {
-                let _open = clipboard_win::Clipboard::new_attempts(10).ok()?;
-                // None copied when the clipboard holds no file list, or one of more than MAX_BYTES
-                // or MAX_URIS files: the list is counted before its names are copied.
-                if copy_registered(formats::CF_HDROP, MAX_BYTES).is_some_and(|block| drop_files_within(&block, MAX_URIS)) {
-                    let _ = raw::get_file_list_path(&mut files);
-                }
-            }
-            // The files are read with the clipboard closed again, not keeping other apps waiting.
-            copied_file(files, mimes).map(ClipboardRead::Now).or_else(|| {
-                let _open = clipboard_win::Clipboard::new_attempts(10).ok()?;
-                mimes.iter().find_map(|m| read_one(m))
-            })
+        fn read_files(&mut self, _limit: usize) -> Result<Option<Vec<PathBuf>>, ClipboardError> {
+            Ok(file_paths().filter(|files| !files.is_empty()))
         }
 
-        fn has(&mut self, mimes: &[&'static str]) -> bool {
+        fn has(&mut self, mimes: &[&str]) -> bool {
             raw::is_format_avail(formats::CF_HDROP)
                 || mimes.iter().any(|m| match *m {
                     TEXT => raw::is_format_avail(formats::CF_UNICODETEXT),
@@ -449,6 +514,18 @@ mod win {
                     m => formats_of(m).any(raw::is_format_avail),
                 })
         }
+    }
+
+    /// The files copied in a file manager, listed with the clipboard open only that long; `None`
+    /// when it can't be opened. Empty when it holds no file list, or one of more than MAX_BYTES or
+    /// MAX_URIS files: the list is counted before its names are copied.
+    fn file_paths() -> Option<Vec<PathBuf>> {
+        let _open = clipboard_win::Clipboard::new_attempts(10).ok()?;
+        let mut files = vec![];
+        if copy_registered(formats::CF_HDROP, MAX_BYTES).is_some_and(|block| drop_files_within(&block, MAX_URIS)) {
+            let _ = raw::get_file_list_path(&mut files);
+        }
+        Some(files)
     }
 
     /// The size the clipboard reports for format `id`, while it is open.
@@ -808,17 +885,18 @@ mod portable {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::{Duration, Instant};
 
-    use super::{BITMAP, ClipboardRead, Flavour, PNG, SystemClipboard, TEXT, copied_file, decode_png, png_flavour, takes_files, text_of};
+    use super::{
+        BITMAP, ClipboardBackend, ClipboardError, ClipboardImage, ClipboardRead, Flavor, Flavour, LaterFlavor, PNG, TEXT, copied_file, decode_png,
+        engine_mimes, png_flavour, read_flavor, read_image_flavor, read_later_flavor, takes_files,
+    };
 
-    /// What our last write put on the clipboard.
+    /// What our last write put on the clipboard, for a read answered late ([`Unanswered::paste`]): a
+    /// paste does not take what this app copied. Whether the clipboard still holds a copy is
+    /// [`Clipboard::owns`](ClipboardBackend::owns).
     #[derive(Clone)]
     enum Ours {
         Text(String),
         Image(usize, usize),
-        /// A Copy through the Wayland core protocol, whose data source tells whether the
-        /// clipboard still holds it.
-        #[cfg(target_os = "linux")]
-        Source,
     }
 
     /// A read of arboard's clipboard.
@@ -1216,16 +1294,6 @@ mod portable {
             }
         }
 
-        /// Whether the clipboard holds the core protocol's last Copy made here (never for arboard,
-        /// whose writes are checked by what they wrote).
-        #[cfg(target_os = "linux")]
-        fn holds_source(&mut self) -> bool {
-            match self {
-                Self::Arboard(_) => false,
-                Self::Wayland(cb) => cb.holds_ours(),
-            }
-        }
-
         /// The bitmap, for a check on the UI thread: on Linux and the BSDs it waits
         /// [`LOAD_WAIT`](super::loads::LOAD_WAIT) at most, as text does.
         fn image_now(&mut self) -> Result<arboard::ImageData<'static>, String> {
@@ -1462,68 +1530,7 @@ mod portable {
         }
     }
 
-    impl SystemClipboard for Clipboard {
-        /// arboard takes the text, else the PNG as a bitmap; the Wayland core protocol offers the
-        /// SVG, PNG and text together ([`DataClipboard::copy`](super::wayland::DataClipboard::copy)).
-        fn write(&mut self, flavours: &[Flavour]) -> Result<(), String> {
-            let cb = self.cb(Asker::User)?;
-            #[cfg(target_os = "linux")]
-            if let Backend::Wayland(wl) = cb {
-                wl.copy(flavours)?;
-                // What a read got late was on the clipboard before this write.
-                wl.forget_unanswered();
-                self.ours = wl.holds_ours().then_some(Ours::Source);
-                return Ok(());
-            }
-            let text = text_of(flavours);
-            let image = match &text {
-                Some(_) => None,
-                None => flavours.iter().find(|f| f.mime == PNG).and_then(|f| decode_png(&f.data)),
-            };
-            let ours = match (text, image) {
-                (Some(t), _) => {
-                    cb.set_text(t.as_str())?;
-                    Some(Ours::Text(t))
-                }
-                (None, Some(img)) => {
-                    let (width, height) = (img.width() as usize, img.height() as usize);
-                    cb.set_image(arboard::ImageData { width, height, bytes: Cow::Owned(img.into_raw()) })?;
-                    Some(Ours::Image(width, height))
-                }
-                (None, None) => {
-                    cb.clear()?;
-                    None
-                }
-            };
-            // What a read got late was on the clipboard before this write.
-            #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
-            cb.forget_unanswered();
-            self.ours = ours;
-            Ok(())
-        }
-
-        fn holds_ours(&mut self) -> bool {
-            let Some(cb) = self.cb.opened() else { return false };
-            match &self.ours {
-                Some(Ours::Text(t)) => cb.get_text().is_ok_and(|now| now == *t),
-                Some(Ours::Image(w, h)) => cb.image_now().is_ok_and(|now| (now.width, now.height) == (*w, *h)),
-                #[cfg(target_os = "linux")]
-                Some(Ours::Source) => cb.holds_source(),
-                None => false,
-            }
-        }
-
-        /// On macOS the pasteboard's change count ([`super::mac::change_count`]); the other
-        /// platforms this module serves have none.
-        #[cfg(target_os = "macos")]
-        fn change_count(&mut self) -> Option<u64> {
-            super::mac::change_count()
-        }
-
-        fn read(&mut self, mimes: &[&'static str]) -> Option<Flavour> {
-            self.read_now_or_later(mimes)?.flavour()
-        }
-
+    impl Clipboard {
         /// arboard's image is read here and encoded as PNG by the work that comes back. On Linux and
         /// the BSDs, after a read that got no answer in its wait (such as the check whether the
         /// clipboard still holds what was copied here, or one of the reads here), the work waits for
@@ -1541,23 +1548,105 @@ mod portable {
             }
             read
         }
+    }
+
+    impl ClipboardBackend for Clipboard {
+        /// arboard takes the text, else the PNG as a bitmap; the Wayland core protocol offers the
+        /// SVG, PNG and text together ([`DataClipboard::copy`](super::wayland::DataClipboard::copy)).
+        /// The index answered is the flavour that went out: the text, else the PNG, and on the
+        /// core protocol the first flavour it offers.
+        fn write(&mut self, flavors: &[Flavor]) -> Result<usize, ClipboardError> {
+            let cb = self.cb(Asker::User).map_err(ClipboardError::Other)?;
+            #[cfg(target_os = "linux")]
+            if let Backend::Wayland(wl) = cb {
+                use super::{SVG, engine_mime};
+                let offered: Vec<Flavour> =
+                    flavors.iter().filter_map(|f| Some(Flavour { mime: engine_mime(&f.mime)?, data: f.data.clone() })).collect();
+                wl.copy(&offered).map_err(ClipboardError::Other)?;
+                // What a read got late was on the clipboard before this write.
+                wl.forget_unanswered();
+                self.ours = None;
+                return Ok(flavors.iter().position(|f| !f.data.is_empty() && matches!(&*f.mime, SVG | PNG | TEXT)).unwrap_or(0));
+            }
+            let text = flavors.iter().enumerate().find(|(_, f)| f.mime == TEXT).map(|(i, f)| (i, String::from_utf8_lossy(&f.data).into_owned()));
+            let image = match &text {
+                Some(_) => None,
+                None => flavors.iter().enumerate().find(|(_, f)| f.mime == PNG).and_then(|(i, f)| Some((i, decode_png(&f.data)?))),
+            };
+            let (ours, wrote) = match (text, image) {
+                (Some((i, t)), _) => {
+                    cb.set_text(t.as_str()).map_err(ClipboardError::Other)?;
+                    (Some(Ours::Text(t)), i)
+                }
+                (None, Some((i, img))) => {
+                    let (width, height) = (img.width() as usize, img.height() as usize);
+                    cb.set_image(arboard::ImageData { width, height, bytes: Cow::Owned(img.into_raw()) }).map_err(ClipboardError::Other)?;
+                    (Some(Ours::Image(width, height)), i)
+                }
+                (None, None) => {
+                    cb.clear().map_err(ClipboardError::Other)?;
+                    (None, 0)
+                }
+            };
+            // What a read got late was on the clipboard before this write.
+            #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+            cb.forget_unanswered();
+            self.ours = ours;
+            Ok(wrote)
+        }
+
+        fn read(&mut self, mimes: &[&str], limit: u64) -> Result<Option<Flavor>, ClipboardError> {
+            read_flavor(mimes, limit, |m| self.read_now_or_later(m))
+        }
+
+        fn read_later(&mut self, mimes: &[&str], limit: u64) -> Result<Option<LaterFlavor>, ClipboardError> {
+            read_later_flavor(mimes, limit, |m| self.read_deferred(m))
+        }
+
+        fn read_image(&mut self, limit: u64) -> Result<Option<ClipboardImage>, ClipboardError> {
+            read_image_flavor(limit, |m| self.read_now_or_later(m))
+        }
+
+        /// The copied files of arboard's clipboard; the Wayland core protocol reads its file list
+        /// with the rest of a paste, so it lists none here.
+        fn read_files(&mut self, _limit: usize) -> Result<Option<Vec<PathBuf>>, ClipboardError> {
+            let cb = self.cb(Asker::User).map_err(ClipboardError::Other)?;
+            Ok(Some(cb.file_list()).filter(|files| !files.is_empty()))
+        }
 
         /// Text or files copied in a file manager (their list read, no file opened:
         /// [`arboard_has`]), on macOS vector art or a bitmap (by the pasteboard's types), and on the
         /// Wayland core protocol copied files, SVG, text or PNG (by the types offered, nothing read).
         /// arboard has no cheap way to ask for a bitmap (reading one costs as much as pasting it):
         /// the paste keys take it, the menu item waits for text or copied files.
-        fn has(&mut self, mimes: &[&'static str]) -> bool {
+        fn has(&mut self, mimes: &[&str]) -> bool {
+            let mimes = engine_mimes(mimes);
             #[cfg(target_os = "macos")]
-            if super::mac::has(mimes) {
+            if super::mac::has(&mimes) {
                 return true;
             }
             let Ok(cb) = self.cb(Asker::Probe) else { return false };
             #[cfg(target_os = "linux")]
             if let Backend::Wayland(wl) = cb {
-                return wl.has(mimes);
+                return wl.has(&mimes);
             }
-            arboard_has(mimes, cb, Backend::get_text, Backend::file_list)
+            arboard_has(&mimes, cb, Backend::get_text, Backend::file_list)
+        }
+
+        /// Whether arboard's clipboard still holds the Copy made here, by its text or its bitmap's
+        /// size read with [`Backend::image_now`]'s wait, so the check on the UI thread waits no
+        /// longer than a text read. `None` (the platform clipboard compares what it reads) before a
+        /// handle is open and on the Wayland core protocol.
+        fn owns(&mut self) -> Option<bool> {
+            let cb = self.cb.opened()?;
+            #[cfg(target_os = "linux")]
+            if matches!(cb, Backend::Wayland(_)) {
+                return None;
+            }
+            Some(match self.ours.as_ref()? {
+                Ours::Text(t) => cb.get_text().is_ok_and(|now| now == *t),
+                Ours::Image(w, h) => cb.image_now().is_ok_and(|now| (now.width, now.height) == (*w, *h)),
+            })
         }
     }
 
@@ -1786,8 +1875,8 @@ mod portable {
             // The Paste check's handle is one of these: when the app quits, its unanswered X11 read
             // ends `X11_READ_LIMIT` after it was sent, and an idle worker stops within `LOAD_WAIT`.
             // Quitting waits for that handle until both are over.
-            assert!(vectorcraft_ui_egui::CLIPBOARD_PROBE_STOP_WAIT >= finish(false) + super::super::loads::LOAD_WAIT);
-            assert!(vectorcraft_ui_egui::CLIPBOARD_PROBE_STOP_WAIT >= finish(true) + super::super::loads::LOAD_WAIT);
+            assert!(craft::platform::clipboard::PROBE_STOP_WAIT >= finish(false) + super::super::loads::LOAD_WAIT);
+            assert!(craft::platform::clipboard::PROBE_STOP_WAIT >= finish(true) + super::super::loads::LOAD_WAIT);
         }
 
         #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
@@ -2044,9 +2133,9 @@ mod wayland {
     use std::sync::{Arc, Mutex, MutexGuard, PoisonError, mpsc};
     use std::time::{Duration, Instant};
 
+    use super::ClipboardRead;
     use rustix::event::{PollFd, PollFlags, Timespec};
     use vectorcraft_engine::cmd::clipboard::names_a_picture;
-    use vectorcraft_ui_egui::ClipboardRead;
     use wayland_client::backend::ObjectData;
     use wayland_client::globals::{GlobalListContents, registry_queue_init};
     use wayland_client::protocol::wl_callback::{self, WlCallback};
@@ -2467,11 +2556,6 @@ mod wayland {
             (takes_files(mimes) && file_list_type(&seen.offered).is_some()) || mimes.iter().any(|m| wire_type(m, &seen.offered).is_some())
         }
 
-        /// Whether the clipboard holds this connection's last Copy.
-        pub(super) fn holds_ours(&self) -> bool {
-            lock(&self.seen).ours
-        }
-
         /// The text read that got no answer in its wait, while its answer has still not come and a
         /// paste of one of `mimes` can take text. Once it has come the answer may be old, and it is
         /// dropped: a new read is made.
@@ -2774,10 +2858,6 @@ mod wayland {
 
         pub fn has(&self, mimes: &[&'static str]) -> bool {
             self.reads.has(mimes)
-        }
-
-        pub fn holds_ours(&self) -> bool {
-            self.reads.holds_ours()
         }
 
         /// The read that got no answer in its wait, when a paste of one of `mimes` can take its
@@ -3232,12 +3312,6 @@ mod mac {
             let types: Vec<&NSString> = types.iter().map(|t| &**t).collect();
             !types.is_empty() && NSPasteboard::generalPasteboard().availableTypeFromArray(&NSArray::from_slice(&types)).is_some()
         })
-    }
-
-    /// The pasteboard's change count, which goes up each time the pasteboard's ownership changes,
-    /// as when an app clears it to copy something.
-    pub fn change_count() -> Option<u64> {
-        autoreleasepool(|_| u64::try_from(NSPasteboard::generalPasteboard().changeCount()).ok())
     }
 
     /// The pasteboard's data for `mime`, the first of its types held ([`pasteboard_types`]) that is

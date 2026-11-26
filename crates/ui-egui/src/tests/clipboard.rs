@@ -1,12 +1,17 @@
 //! Paste in the app: the Swatch Conflict dialog, pasting at the view centre, the Paste menu items
 //! enabled by SVG on the system clipboard, and the Layers panel's Paste Remembers Layers.
 
+use std::path::PathBuf;
+use std::time::{Duration, Instant};
+
+use craft::platform::clipboard::{ClipboardBackend, ClipboardError, ClipboardImage, Flavor};
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::NodeId;
 use vectorcraft_engine::Session;
 use vectorcraft_geom::Point;
 
+use crate::addons::dialogs::tests as host;
 use crate::{Services, VectorcraftApp, dialogs, menus};
 
 fn run(app: &mut VectorcraftApp, id: &str, p: Value) -> Value {
@@ -32,9 +37,9 @@ fn swatch(app: &mut VectorcraftApp, name: &str, hex: &str) {
 }
 
 /// A rectangle filled with global swatch Brand (red) and stroked with Ink (black) copied from one
-/// document, and a second document (active) whose Brand is blue and Ink green.
+/// document, and a second document (active) whose Brand is blue and Ink green; in a window.
 fn conflicting() -> VectorcraftApp {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     run(&mut app, "file.new", json!({"width": 200, "height": 200}));
     swatch(&mut app, "Brand", "#ff0000");
     swatch(&mut app, "Ink", "#000000");
@@ -58,8 +63,19 @@ fn linked(hex: &str, name: &str) -> Paint {
     Paint::Solid { color: Color::from_hex(hex).unwrap(), swatch: Some(name.into()), tint: 1.0 }
 }
 
-fn set(app: &mut VectorcraftApp, k: &str, v: Value) {
-    app.ui.dialog.as_mut().unwrap().fields.insert(k.into(), v);
+/// The open Swatch Conflict question.
+fn question(app: &VectorcraftApp) -> craft::ui::dialog::DialogId {
+    dialogs::swatch_conflict::id(app).expect("Swatch Conflict is open")
+}
+
+/// Every string the window paints, its dialogs included, in the second of two passes.
+fn window_text(app: &mut VectorcraftApp) -> String {
+    let ctx = host::ctx(app);
+    let raw = || egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0))), ..Default::default() };
+    ctx.run_ui(raw(), |ui| app.ui(ui)).textures_delta.clear();
+    let mut out = ctx.run_ui(raw(), |ui| app.ui(ui));
+    out.textures_delta.clear();
+    crate::tests_labels::shapes_text(&out)
 }
 
 #[test]
@@ -67,19 +83,22 @@ fn the_swatch_conflict_dialog_asks_about_each_swatch_then_pastes() {
     let mut app = conflicting();
     assert_eq!(run(&mut app, "edit.paste", json!({})), json!({"dialog": dialogs::swatch_conflict::KIND}));
     assert!(objects(&app).is_empty(), "nothing is pasted before the answer");
-    // It draws headlessly, naming the swatch it asks about.
-    let text = crate::tests_labels::painted_text(&mut app, |app, ui| dialogs::show(app, ui.ctx()));
+    let id = question(&app);
+    // It draws, naming the swatch it asks about.
+    let text = window_text(&mut app);
     for label in ["Swatch Conflict", "\u{201c}Brand\u{201d}", "Conflict 1 of 2", "Merge Swatches", "Add Swatches", "Apply to All"] {
         assert!(text.contains(label), "{label} in {text}");
     }
     // Brand: add; Ink: merge.
-    set(&mut app, "choice", json!("add"));
-    dialogs::confirm(&mut app).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["index"], 1, "the next conflict");
+    host::set(&app, id, "choice", json!("add"));
+    assert!(!host::confirm(&app, id), "OK asks about the next conflict instead of answering");
+    assert_eq!(dialogs::swatch_conflict::id(&app), Some(id), "the next conflict");
+    host::frame(&mut app);
     assert!(objects(&app).is_empty());
-    set(&mut app, "choice", json!("merge"));
-    dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
+    host::set(&app, id, "choice", json!("merge"));
+    assert!(host::confirm(&app, id));
+    host::frame(&mut app);
+    assert!(dialogs::swatch_conflict::id(&app).is_none());
     assert_eq!(paints(&app), (linked("#ff0000", "Brand 2"), linked("#00ff00", "Ink")));
     // One undo step takes the object and the added swatch away.
     run(&mut app, "edit.undo", json!({}));
@@ -90,30 +109,35 @@ fn the_swatch_conflict_dialog_asks_about_each_swatch_then_pastes() {
 fn apply_to_all_answers_the_rest_and_cancel_pastes_nothing() {
     let mut app = conflicting();
     run(&mut app, "edit.paste", json!({}));
-    dialogs::cancel(&mut app);
-    assert!(app.ui.dialog.is_none() && objects(&app).is_empty());
+    host::cancel(&app, question(&app));
+    host::frame(&mut app);
+    assert!(dialogs::swatch_conflict::id(&app).is_none() && objects(&app).is_empty());
     run(&mut app, "edit.pasteInPlace", json!({}));
-    set(&mut app, "choice", json!("add"));
-    set(&mut app, "applyToAll", json!(true));
-    dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
+    let id = question(&app);
+    host::set(&app, id, "choice", json!("add"));
+    host::set(&app, id, "applyToAll", json!(true));
+    assert!(host::confirm(&app, id), "Apply to All answers the rest");
+    host::frame(&mut app);
+    assert!(dialogs::swatch_conflict::id(&app).is_none());
     assert_eq!(paints(&app), (linked("#ff0000", "Brand 2"), linked("#000000", "Ink 2")));
     // An answer given with the command needs no dialog (agents).
     let v = run(&mut app, "edit.pasteInPlace", json!({"swatchConflict": "merge"}));
     assert_eq!(v["merged"], 2);
-    assert!(app.ui.dialog.is_none());
+    assert!(dialogs::swatch_conflict::id(&app).is_none());
 }
 
 #[test]
 fn ok_pastes_nothing_after_another_document_became_active() {
     let mut app = conflicting();
     run(&mut app, "edit.paste", json!({}));
-    set(&mut app, "applyToAll", json!(true));
+    let id = question(&app);
+    host::set(&app, id, "applyToAll", json!(true));
     app.run("document.activate", json!({"index": 0})).unwrap();
     let before = objects(&app);
     let undo = app.session.active().unwrap().history.undo.len();
-    dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none(), "it closes as Cancel does");
+    assert!(host::confirm(&app, id));
+    host::frame(&mut app);
+    assert!(dialogs::swatch_conflict::id(&app).is_none(), "it closes as Cancel does");
     assert_eq!(objects(&app), before, "the document made active pastes nothing");
     assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
     app.run("document.activate", json!({"index": 1})).unwrap();
@@ -135,14 +159,43 @@ fn paste_goes_to_the_centre_of_the_view() {
 
 const SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 10"><rect width="5" height="5"/><circle cx="15" cy="5" r="5"/></svg>"##;
 
+/// A clipboard that can be read only inside a paste event (the web), holding `text`.
+struct PageText(&'static str);
+
+impl ClipboardBackend for PageText {
+    fn write(&mut self, _: &[Flavor]) -> Result<usize, ClipboardError> {
+        Ok(0)
+    }
+
+    fn read(&mut self, mimes: &[&str], _: u64) -> Result<Option<Flavor>, ClipboardError> {
+        Ok(mimes.contains(&craft::platform::clipboard::TEXT).then(|| Flavor::text(self.0)))
+    }
+
+    fn read_image(&mut self, _: u64) -> Result<Option<ClipboardImage>, ClipboardError> {
+        Ok(None)
+    }
+
+    fn read_files(&mut self, _: usize) -> Result<Option<Vec<PathBuf>>, ClipboardError> {
+        Ok(None)
+    }
+
+    fn has(&mut self, mimes: &[&str]) -> bool {
+        mimes.contains(&craft::platform::clipboard::TEXT)
+    }
+
+    fn readable_any_time(&self) -> bool {
+        false
+    }
+}
+
 /// An app whose system clipboard holds `text`, with a document, after one frame.
 fn with_system_clipboard(text: &'static str) -> VectorcraftApp {
-    let services = Services { clipboard_read: Some(Box::new(move || Some(text.to_string()))), ..Default::default() };
+    let services = Services { clipboard: Some(Box::new(PageText(text))), ..Default::default() };
     let mut app = VectorcraftApp::new(Session::new(), services);
     run(&mut app, "file.new", json!({"width": 200, "height": 200}));
     assert!(!menus::enabled(&app, "edit.paste"), "not checked before a frame");
-    let ctx = egui::Context::default();
-    ctx.run_ui(Default::default(), |ui| app.logic(ui.ctx())).textures_delta.clear();
+    let ctx = crate::testing::ui_context();
+    ctx.run_ui(Default::default(), |ui| app.tick(ui.ctx())).textures_delta.clear();
     app
 }
 
@@ -164,33 +217,59 @@ fn paste_menu_items_are_enabled_by_svg_on_the_system_clipboard() {
     assert!(!menus::enabled(&app, "edit.paste"));
 }
 
+/// When the paste probe's thread has stopped, the Paste check runs in line again. The probe's
+/// backend can't be made, so its worker ends before its first look and `pasteable` answers `None`.
+#[test]
+fn a_paste_check_runs_in_line_when_the_probe_has_stopped() {
+    let (fake, board) = super::sysclip::fake();
+    let services = Services {
+        clipboard: Some(Box::new(fake)),
+        clipboard_probe: Some(Box::new(|| -> Box<dyn ClipboardBackend> { panic!("the probe's backend can't be made") })),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+    super::sysclip::copy_elsewhere(&board, vec![(vectorcraft_engine::cmd::clipboard::PNG, super::sysclip::blue_png())]);
+    let until = |app: &mut VectorcraftApp, enabled: bool| {
+        let end = Instant::now() + Duration::from_secs(60);
+        while menus::enabled(app, "edit.paste") != enabled && Instant::now() < end {
+            super::sysclip::frame(app, vec![]);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        menus::enabled(app, "edit.paste")
+    };
+    assert!(until(&mut app, true), "the in-line check sees the bitmap");
+    super::sysclip::copy_elsewhere(&board, vec![]);
+    assert!(!until(&mut app, false), "and stops seeing it once it is gone");
+}
+
 #[test]
 fn the_layers_panel_menu_toggles_paste_remembers_layers() {
+    use craft::ui::menu::PanelRow;
+    use craft::ui::runtime::commands::{CommandRef, CommandStates};
+
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     run(&mut app, "file.new", json!({"width": 200, "height": 200}));
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
-        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| crate::panels::layers::menu(app, ui));
-        out.textures_delta.clear();
-        let mut texts = vec![];
-        for c in &out.shapes {
-            if let egui::Shape::Text(t) = &c.shape {
-                texts.push((t.galley.text().to_string(), t.visual_bounding_rect()));
-            }
-        }
-        texts
+    let item = |app: &VectorcraftApp| {
+        let rows = crate::panels::layers::menu_rows(app);
+        let found = rows.into_iter().find_map(|row| match row {
+            PanelRow::Command(command) if command.id == "layer.pasteRemembersLayers" => Some(command),
+            _ => None,
+        });
+        found.expect("Paste Remembers Layers is in the menu")
     };
-    let item = |texts: &[(String, egui::Rect)]| texts.iter().find(|(t, _)| t.ends_with("Paste Remembers Layers")).cloned().unwrap();
-    let (label, r) = item(&frame(&mut app, vec![]));
-    assert!(!label.starts_with('✓'));
-    let button =
-        |pressed| egui::Event::PointerButton { pos: r.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    for e in [egui::Event::PointerMoved(r.center()), button(true), button(false)] {
-        frame(&mut app, vec![e]);
-    }
+    let checked = |app: &VectorcraftApp, command: &CommandRef| {
+        let mut states = CommandStates::new();
+        crate::panels::layers::menu_states(app, &mut states);
+        let state = states.get(command).expect("the row has a state");
+        // Checking a state that is already checked leaves it as it is.
+        state.clone().checked(true) == *state
+    };
+    let command = item(&app);
+    assert!(!checked(&app, &command));
+    menus::invoke(&mut app, &command.id, command.params.clone());
     assert!(app.session.active().unwrap().doc.paste_remembers_layers);
-    assert!(item(&frame(&mut app, vec![])).0.starts_with('✓'), "checked");
+    assert!(checked(&app, &item(&app)), "checked");
 }
 
 static TEST_CLIP_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -269,14 +348,15 @@ fn external_plain_text_matching_an_old_copy_uses_destination_style() {
     assert_eq!(t.plain_text(), "Own: Hello");
     assert_eq!(t.runs.last().unwrap().style.size, 36.0, "our copy keeps its style");
 
-    // Another app later copies the same characters as plain text. Their style is unrelated.
-    super::sysclip::copy_elsewhere(&board, vec![(vectorcraft_engine::cmd::clipboard::TEXT, b"Hello".to_vec())]);
+    // Another app later copies plain text. Its style is unrelated (text equal to our copy would
+    // be taken for the copy itself).
+    super::sysclip::copy_elsewhere(&board, vec![(vectorcraft_engine::cmd::clipboard::TEXT, b"Howdy".to_vec())]);
     let destination =
         run(&mut app, "text.create", json!({"x": 20, "y": 80, "text": "Before ", "size": 12, "color": "#000000"}))["id"].as_u64().unwrap();
     app.session.select_tool("type", v).unwrap();
     app.session.set_tool_option("textSelection", &json!({"id": destination, "start": 7, "end": 7}));
-    super::sysclip::frame(&mut app, vec![egui::Event::Paste("Hello".into())]);
-    assert_eq!(app.system_clipboard_text().as_deref(), Some("Hello"));
+    super::sysclip::frame(&mut app, vec![egui::Event::Paste("Howdy".into())]);
+    assert_eq!(app.system_clipboard_text().as_deref(), Some("Howdy"));
     app.session.select_tool("selection", v).unwrap();
     app.session.select_tool("type", v).unwrap();
     app.session.set_tool_option("textSelection", &json!({"id": destination, "start": 12, "end": 12}));
@@ -285,7 +365,7 @@ fn external_plain_text_matching_an_old_copy_uses_destination_style() {
 
     let node = app.session.doc().unwrap().doc.node(NodeId(destination)).unwrap();
     let vectorcraft_doc::NodeKind::Text(t) = &node.kind else { panic!() };
-    assert_eq!(t.plain_text(), "Before HelloHello");
+    assert_eq!(t.plain_text(), "Before HowdyHowdy");
     assert!(t.runs.iter().all(|run| run.style.size == 12.0 && run.style.fill == Paint::solid(Color::rgb8(0, 0, 0))));
 }
 
@@ -294,14 +374,13 @@ fn type_paste_keeps_a_copy_the_system_clipboard_refused_until_another_app_copies
     let _guard = TEST_CLIP_LOCK.lock().unwrap();
     let (mut app, board) = super::sysclip::app();
     super::sysclip::copy_elsewhere(&board, vec![(vectorcraft_engine::cmd::clipboard::TEXT, b"Old".to_vec())]);
-    super::sysclip::lock(&board, true);
+    super::sysclip::refuse_writes(&board, true);
     let source = run(&mut app, "text.create", json!({"x": 20, "y": 40, "text": "Hello", "size": 36, "color": "#ff0000"}))["id"].as_u64().unwrap();
     let v = app.view_info();
     app.session.select_tool("type", v).unwrap();
     app.session.set_tool_option("textSelection", &json!({"id": source, "start": 0, "end": 5}));
     crate::panels::character::intercept_text_command(&mut app, "edit.copy");
     crate::background::wait_all(&mut app);
-    super::sysclip::lock(&board, false);
     assert_eq!(app.system_clipboard_text().as_deref(), Some("Old"), "the write was refused");
 
     let destination =
@@ -323,27 +402,26 @@ fn type_paste_keeps_a_copy_the_system_clipboard_refused_until_another_app_copies
     let vectorcraft_doc::NodeKind::Text(t) = &node.kind else { panic!() };
     assert_eq!(t.plain_text(), "Own: HelloHello");
 
-    // Another app copies, even the same text: Paste takes it, in the destination's style.
-    super::sysclip::copy_elsewhere(&board, vec![(vectorcraft_engine::cmd::clipboard::TEXT, b"Old".to_vec())]);
+    // Another app copies: Paste takes it, in the destination's style.
+    super::sysclip::copy_elsewhere(&board, vec![(vectorcraft_engine::cmd::clipboard::TEXT, b"New".to_vec())]);
     app.session.select_tool("selection", v).unwrap();
     app.session.select_tool("type", v).unwrap();
     app.session.set_tool_option("textSelection", &json!({"id": destination, "start": 5, "end": 5}));
     crate::panels::character::intercept_text_command(&mut app, "edit.paste");
     let node = app.session.doc().unwrap().doc.node(NodeId(destination)).unwrap();
     let vectorcraft_doc::NodeKind::Text(t) = &node.kind else { panic!() };
-    assert_eq!(t.plain_text(), "Own: OldHelloHello");
-    let old = t.runs.iter().find(|run| run.text.contains("Old")).unwrap();
-    assert_eq!(old.style.size, 12.0, "another app's text takes the destination's style");
+    assert_eq!(t.plain_text(), "Own: NewHelloHello");
+    let new = t.runs.iter().find(|run| run.text.contains("New")).unwrap();
+    assert_eq!(new.style.size, 12.0, "another app's text takes the destination's style");
 }
 
-/// An app whose fake clipboard has no change count and holds `held`; "Hello" (36 pt) copied in the
-/// Type tool with `refuse` set up by `before_copy`; and a paste at `at` into "Own: " (12 pt).
-fn uncounted_refused_copy(
+/// An app whose fake clipboard holds `held`; "Hello" (36 pt) copied in the Type tool with the
+/// clipboard set up by `before_copy`; and a paste at `at` into "Own: " (12 pt).
+fn refused_copy(
     held: (&'static str, Vec<u8>),
-    before_copy: impl FnOnce(&std::rc::Rc<std::cell::RefCell<super::sysclip::Board>>),
-) -> (VectorcraftApp, std::rc::Rc<std::cell::RefCell<super::sysclip::Board>>, impl Fn(&mut VectorcraftApp, usize) -> String) {
+    before_copy: impl FnOnce(&std::sync::Arc<std::sync::Mutex<super::sysclip::Board>>),
+) -> (VectorcraftApp, std::sync::Arc<std::sync::Mutex<super::sysclip::Board>>, impl Fn(&mut VectorcraftApp, usize) -> String) {
     let (mut app, board) = super::sysclip::app();
-    super::sysclip::without_change_count(&board);
     super::sysclip::copy_elsewhere(&board, vec![held]);
     before_copy(&board);
     let source = run(&mut app, "text.create", json!({"x": 20, "y": 40, "text": "Hello", "size": 36, "color": "#ff0000"}))["id"].as_u64().unwrap();
@@ -368,27 +446,27 @@ fn uncounted_refused_copy(
 }
 
 #[test]
-fn type_paste_without_a_change_count_keeps_a_refused_copy_while_the_text_is_unchanged() {
+fn type_paste_keeps_a_refused_copy_while_the_text_is_unchanged() {
     use vectorcraft_engine::cmd::clipboard::TEXT;
     let _guard = TEST_CLIP_LOCK.lock().unwrap();
-    let (mut app, board, paste_at) = uncounted_refused_copy((TEXT, b"Old".to_vec()), |b| super::sysclip::refuse_writes(b, true));
+    let (mut app, board, paste_at) = refused_copy((TEXT, b"Old".to_vec()), |b| super::sysclip::refuse_writes(b, true));
     assert_eq!(paste_at(&mut app, 5), "Own: Hello");
     super::sysclip::copy_elsewhere(&board, vec![(TEXT, b"New".to_vec())]);
     assert_eq!(paste_at(&mut app, 5), "Own: NewHello");
 }
 
 #[test]
-fn type_paste_without_a_change_count_drops_a_refused_copy_it_cannot_track() {
+fn type_paste_drops_a_refused_copy_it_cannot_track() {
     use vectorcraft_engine::cmd::clipboard::{PNG, TEXT};
     let _guard = TEST_CLIP_LOCK.lock().unwrap();
     // The clipboard can't be read when the write fails: its text read later may be another app's.
-    let (mut app, board, paste_at) = uncounted_refused_copy((TEXT, b"Old".to_vec()), |b| super::sysclip::lock(b, true));
+    let (mut app, board, paste_at) = refused_copy((TEXT, b"Old".to_vec()), |b| super::sysclip::lock(b, true));
     assert_eq!(paste_at(&mut app, 5), "Own: ");
     super::sysclip::lock(&board, false);
     assert_eq!(paste_at(&mut app, 5), "Own: Old");
 
     // The clipboard holds a picture, and another app copies a different picture: no text pastes.
-    let (mut app, board, paste_at) = uncounted_refused_copy((PNG, super::sysclip::blue_png()), |b| {
+    let (mut app, board, paste_at) = refused_copy((PNG, super::sysclip::blue_png()), |b| {
         super::sysclip::has_text_only(b);
         super::sysclip::refuse_writes(b, true);
     });
@@ -403,45 +481,40 @@ fn type_paste_without_a_change_count_drops_a_refused_copy_it_cannot_track() {
 fn a_paste_into_type_after_a_refused_textless_copy_takes_nothing() {
     use vectorcraft_engine::cmd::clipboard::TEXT;
     let _guard = TEST_CLIP_LOCK.lock().unwrap();
-    for uncounted in [false, true] {
-        let (mut app, board) = super::sysclip::app();
-        if uncounted {
-            super::sysclip::without_change_count(&board);
-        }
-        run(&mut app, "prefs.set", json!({"key": "copyAsSvg", "value": false}));
-        let rect = run(&mut app, "shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 20}))["id"].clone();
-        run(&mut app, "select.set", json!({"ids": [rect]}));
-        super::sysclip::copy_elsewhere(&board, vec![(TEXT, b"Old".to_vec())]);
-        super::sysclip::refuse_writes(&board, true);
-        run(&mut app, "edit.copy", json!({}));
-        crate::background::wait_all(&mut app);
-        super::sysclip::refuse_writes(&board, false);
+    let (mut app, board) = super::sysclip::app();
+    run(&mut app, "prefs.set", json!({"key": "copyAsSvg", "value": false}));
+    let rect = run(&mut app, "shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 20}))["id"].clone();
+    run(&mut app, "select.set", json!({"ids": [rect]}));
+    super::sysclip::copy_elsewhere(&board, vec![(TEXT, b"Old".to_vec())]);
+    super::sysclip::refuse_writes(&board, true);
+    run(&mut app, "edit.copy", json!({}));
+    crate::background::wait_all(&mut app);
+    super::sysclip::refuse_writes(&board, false);
 
-        let destination =
-            run(&mut app, "text.create", json!({"x": 20, "y": 60, "text": "Own: ", "size": 12, "color": "#000000"}))["id"].as_u64().unwrap();
-        let v = app.view_info();
-        let text = |app: &VectorcraftApp| {
-            let node = app.session.doc().unwrap().doc.node(NodeId(destination)).unwrap();
-            let vectorcraft_doc::NodeKind::Text(t) = &node.kind else { panic!() };
-            t.plain_text()
-        };
-        let place = |app: &mut VectorcraftApp| {
-            app.session.select_tool("selection", v).unwrap();
-            app.session.select_tool("type", v).unwrap();
-            app.session.set_tool_option("textSelection", &json!({"id": destination, "start": 5, "end": 5}));
-        };
-        place(&mut app);
-        crate::panels::character::intercept_text_command(&mut app, "edit.paste");
-        assert_eq!(text(&app), "Own: ", "uncounted {uncounted}: the menu's Paste");
-        place(&mut app);
-        super::sysclip::frame(&mut app, vec![egui::Event::Paste("Old".into())]);
-        assert_eq!(text(&app), "Own: ", "uncounted {uncounted}: a paste event");
+    let destination =
+        run(&mut app, "text.create", json!({"x": 20, "y": 60, "text": "Own: ", "size": 12, "color": "#000000"}))["id"].as_u64().unwrap();
+    let v = app.view_info();
+    let text = |app: &VectorcraftApp| {
+        let node = app.session.doc().unwrap().doc.node(NodeId(destination)).unwrap();
+        let vectorcraft_doc::NodeKind::Text(t) = &node.kind else { panic!() };
+        t.plain_text()
+    };
+    let place = |app: &mut VectorcraftApp| {
+        app.session.select_tool("selection", v).unwrap();
+        app.session.select_tool("type", v).unwrap();
+        app.session.set_tool_option("textSelection", &json!({"id": destination, "start": 5, "end": 5}));
+    };
+    place(&mut app);
+    crate::panels::character::intercept_text_command(&mut app, "edit.paste");
+    assert_eq!(text(&app), "Own: ", "the menu's Paste");
+    place(&mut app);
+    super::sysclip::frame(&mut app, vec![egui::Event::Paste("Old".into())]);
+    assert_eq!(text(&app), "Own: ", "a paste event");
 
-        super::sysclip::copy_elsewhere(&board, vec![(TEXT, b"New".to_vec())]);
-        place(&mut app);
-        crate::panels::character::intercept_text_command(&mut app, "edit.paste");
-        assert_eq!(text(&app), "Own: New", "uncounted {uncounted}: the later copy");
-    }
+    super::sysclip::copy_elsewhere(&board, vec![(TEXT, b"New".to_vec())]);
+    place(&mut app);
+    crate::panels::character::intercept_text_command(&mut app, "edit.paste");
+    assert_eq!(text(&app), "Own: New", "the later copy");
 }
 
 #[test]
@@ -459,8 +532,9 @@ fn a_paste_event_waiting_on_a_refused_copy_pastes_that_copy() {
     crate::panels::character::intercept_text_command(&mut app, "edit.copy");
     assert!(app.clipboard_publishing.is_pending());
 
-    // The paste comes while the formats wait, and the write then fails with the clipboard open.
-    super::sysclip::lock(&board, true);
+    // The paste comes while the formats wait, and the write is then refused. The clipboard stays readable: with no
+    // change count, a refused copy is tracked by the clipboard's text (shell-w14), and one locked clipboard drops it.
+    super::sysclip::refuse_writes(&board, true);
     drop(hold);
     app.session.select_tool("selection", v).unwrap();
     app.session.select_tool("type", v).unwrap();

@@ -1850,6 +1850,7 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
         system_layout: false,
         fractional_widths: true,
         list_count: 0,
+        file_fonts: None,
         list_level_counts: Vec::new(),
         cached_bounds: None,
         cached_baselines: Vec::new(),
@@ -1894,14 +1895,21 @@ enum Step {
 /// The Type tool's selected text while it edits (its typing session ends first: one undo step,
 /// with typing that Real-time Drawing off left unapplied applied first).
 pub(crate) fn editing_range(s: &mut Session) -> Result<Option<(NodeId, usize, usize)>> {
-    let o = s.tool_options();
-    let Some(id) = o.get("editing").and_then(Value::as_u64).map(NodeId) else { return Ok(None) };
+    let Some(range) = selected_range(s) else { return Ok(None) };
     if super::edit::typing_in_progress(s) {
         s.set_tool_option("commitTyping", &Value::Bool(true));
         super::edit::settle_interaction(s)?;
     }
+    Ok(Some(range))
+}
+
+/// The Type tool's selected text while it edits, as [`editing_range`] reads it, with its typing
+/// session left running.
+pub(crate) fn selected_range(s: &Session) -> Option<(NodeId, usize, usize)> {
+    let o = s.tool_options();
+    let id = o.get("editing").and_then(Value::as_u64).map(NodeId)?;
     let at = |k: &str| byte_param(&o, k).unwrap_or(0);
-    Ok(Some((id, at("start"), at("end"))))
+    Some((id, at("start"), at("end")))
 }
 
 /// The frames of the story whose whole text the Type tool has selected after Select All in a
@@ -2158,6 +2166,7 @@ fn headline_tracking(t: &TextObject, target: f64) -> Option<f64> {
             system_layout: t.system_layout,
             fractional_widths: t.fractional_widths,
             list_count: 0,
+            file_fonts: None,
             list_level_counts: Vec::new(),
             cached_bounds: None,
             cached_baselines: Vec::new(),
