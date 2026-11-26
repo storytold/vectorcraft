@@ -454,6 +454,7 @@ impl Session {
                     st.doc = doc;
                     st.selection = selection;
                     st.interaction = interaction;
+                    st.effect_step = None;
                     if let Some(history) = history {
                         st.history = history;
                     }
