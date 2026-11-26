@@ -306,8 +306,19 @@ fn blending_mode_reads_and_sets_the_objects_blend_mode() {
     for value in
         ["'BlendModes.SCREEN '", "'MULTIPLY'", "'Multiply'", "'BlendModes.multiply'", "'BlendModes.NOPE'", "5", "null", "ZOrderMethod.BRINGTOFRONT"]
     {
-        let e = failure(&mut s, &format!("app.activeDocument.pageItems[1].blendingMode = {value};"));
+        // The error is caught in the script, so the run does not roll back and the mode read right
+        // after it is the one the setter left.
+        let out = log(
+            &mut s,
+            &format!(
+                "var i = app.activeDocument.pageItems[1], e = '';\
+                 try {{ i.blendingMode = {value}; }} catch (x) {{ e = String(x); }}\
+                 vc.log(e); vc.log(i.blendingMode);"
+            ),
+        );
+        let e = out[0].as_str().unwrap_or_default();
         assert!(e.contains("blendingMode needs a BlendModes value"), "{value}: {e}");
+        assert_eq!(out[1], json!("BlendModes.COLORBLEND"), "{value}");
         assert_eq!((blend(&s, a), undo_steps(&s)), (before, steps), "{value}");
     }
 }
