@@ -118,10 +118,10 @@ const ARTBOARD_COORDS: &str = "CoordinateSystem.ARTBOARDCOORDINATESYSTEM";
 
 /// What the object model keeps for one run: its coordinate system, the lists of page items and the
 /// answers of which objects are on a locked artboard for the last [`ITEM_LISTS`] documents read,
-/// each kept while its document is unchanged, the point changes of a path not written yet, how
-/// many times each path's points went stale and each path as the run last saw its points, whether
-/// a call's own savepoint ([`atomically`]) is open, and the settings of each `DocumentPreset` the
-/// run made.
+/// each kept while its document is unchanged, the point changes of a path not written yet, how many
+/// times each path's points went stale and each path as the run last saw its points, whether a
+/// call's own savepoint ([`atomically`]) is open, and the settings of each `DocumentPreset` the run
+/// made.
 #[derive(Default)]
 pub(super) struct State {
     coords: Cell<Coords>,

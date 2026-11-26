@@ -2901,8 +2901,10 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   and `TextRange.changeCaseTo`, throw an error that says they are not available yet, and `start`, `end`,
   `characterOffset` and `orientation` cannot be set yet.
 - `Document.pathItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PathItems/) lists the document's paths in the
-  order of `pageItems`, paths inside groups and compound paths included, with `length`, `[i]`, `index(key)`,
-  `getByName(name)`, `removeAll()`, `add()` (a path with no points, from `path.create`, painted as new art; when new
+  order of `pageItems`, paths inside groups and compound paths included, with `length`, `[i]`, `[name]` (read as
+  `pageItems["name"]` is read), `index(key)`,
+  `getByName(name)`, `removeAll()` (when any path is on a locked artboard, it throws
+  `cannot delete objects on a locked artboard` and deletes nothing), `add()` (a path with no points, from `path.create`, painted as new art; when new
   art has no fill and no stroke, the path has neither), and the shape creators
   `rectangle(top, left, width, height, reversed?)`, `roundedRectangle(top, left, width, height, horizontalRadius = 15,
   verticalRadius = 20, reversed?)`, `ellipse(top = 100, left = 100, width = 50, height = 100, reversed?, inscribed?)`,
@@ -2912,22 +2914,29 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   art is painted. `add()` and the shape creators put the new path on top of the active layer whatever the drawing
   mode, which stays as it was. A `PathItem` (https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/) adds to the page item
   members `pathPoints`, `closed`, `evenodd`, `area` (negative for a path that runs counterclockwise), `length`,
-  `guides`, `clipping`, `setEntirePath(points)`, `filled`, `fillColor`, `fillOverprint`, `stroked`, `strokeColor`,
-  `strokeOverprint`, `strokeWidth`, `strokeCap`, `strokeJoin`, `strokeMiterLimit` (1 to 500), `strokeDashes`,
-  `strokeDashOffset`, `translate(deltaX?, deltaY?, ...)`, `rotate(angle, ..., rotateAbout?)` (counterclockwise for a
-  positive angle) and `resize(scaleX, scaleY, ..., changeLineWidths?, scaleAbout?)`. The geometry changes through
-  `path.setAnchors`, the fill and stroke through `paint.setFill` and `paint.setStroke`, the stroke options through
-  `stroke.set`, the fill rule through `path.setFillRule`, overprint through `object.setOverprint` and the transforms
-  through `object.move`, `object.rotate` and `object.scale`. Changes to the points of a path (`closed`,
-  `setEntirePath`, `pathPoints` and each `PathPoint`) are written together with one `path.setAnchors` before the
-  script uses any other member or command, or the points of another path, and when the script ends; a path aligned
-  to the pixel grid, or in an object that is, is written at each change, so its points read as the grid snaps them.
+  `guides`, `clipping`, `selectedPathPoints`, `setEntirePath(points)`, `filled`, `fillColor`, `fillOverprint`,
+  `stroked`, `strokeColor`, `strokeOverprint`, `strokeWidth`, `strokeCap`, `strokeJoin`, `strokeMiterLimit` (1 to
+  500), `strokeDashes`, `strokeDashOffset`, `translate(deltaX?, deltaY?, ...)`, `rotate(angle, ..., rotateAbout?)`
+  (counterclockwise for a positive angle) and `resize(scaleX, scaleY, ..., changeLineWidths?, scaleAbout?)`. The
+  geometry changes through `path.setAnchors`, the fill and stroke through `paint.setFill` and `paint.setStroke`, the
+  stroke options through `stroke.set`, the fill rule through `path.setFillRule`, overprint through
+  `object.setOverprint` and the transforms through `object.move`, `object.rotate` and `object.scale`. Changes to the
+  points of a path (`closed`, `setEntirePath`, `pathPoints` and each `PathPoint`) are written together with one
+  `path.setAnchors` before the script uses any other member or command, or the points of another path, and when the
+  script ends; a path aligned to the pixel grid, or in an object that is, is written at each change, so its points
+  read as the grid snaps them.
   `pathPoints`
   (https://ai-scripting.docsforadobe.dev/jsobjref/PathPoints/) has `length`, `[i]`, `index(i)`, `add()` and
   `removeAll()`, and each `PathPoint` (https://ai-scripting.docsforadobe.dev/jsobjref/PathPoint/) has `anchor`,
-  `leftDirection` (the handle into the point), `rightDirection` (the handle out of it), `pointType`, `parent` and
-  `remove()`. `new RGBColor()` (0 to 255), `new CMYKColor()` (0 to 100), `new GrayColor()` (0 to 100, 0 black and 100
-  white, as https://ai-scripting.docsforadobe.dev/jsobjref/GrayColor/ gives it), `new LabColor()` and `new NoColor()`
+  `leftDirection` (the handle into the point), `rightDirection` (the handle out of it), `pointType`, `selected`,
+  `parent` and `remove()`. Assigning `guides` makes the path a guide with `view.guides.make` (`true`) or a path again
+  with `view.guides.release` (`false`), with the selection kept; a value that is not a boolean throws a `TypeError`.
+  `PathPoint.selected` reads `PathPointSelection.ANCHORPOINT` for a selected anchor point and
+  `PathPointSelection.NOSELECTION` otherwise; assigning `ANCHORPOINT` adds the point to the direct-selected anchors and
+  `NOSELECTION` removes it, through `select.anchorsMany`, with the other selected objects and anchors kept.
+  `selectedPathPoints` lists the points that read `ANCHORPOINT`, in the order of `pathPoints`. `new RGBColor()` (0 to
+  255), `new CMYKColor()` (0 to 100), `new GrayColor()` (0 to 100, 0 black and 100 white, as
+  https://ai-scripting.docsforadobe.dev/jsobjref/GrayColor/ gives it), `new LabColor()` and `new NoColor()`
   (https://ai-scripting.docsforadobe.dev/jsobjref/NoColor/) make plain color objects; assigning a `NoColor` removes
   the fill or stroke. The enumerations `PointType`, `PathPointSelection`, `StrokeCap`, `StrokeJoin`, `PolarityValues`
   and `Transformation` hold strings such as `"StrokeCap.ROUNDENDCAP"`.
@@ -2939,8 +2948,17 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   a point of its path (`remove()`, `removeAll()`) or replaced its points (`setEntirePath`), or before anything other
   than the object model changed the path's points (a command run with `vc.run`, such as `path.setAnchors`,
   `object.move` or `edit.undo`); points stay valid through the object model's other changes to the path or to an
-  object that holds it, such as `translate()`. Color components left out
-  count as 0, `new
+  object that holds it, such as `translate()`. Every point of a path selected as a whole is a selected anchor point,
+  and the endpoints of selected segments are not; a path in a selected group or compound path is selected as a whole.
+  Direction handles are not selected on their own, so assigning `LEFTDIRECTION`, `RIGHTDIRECTION` or `LEFTRIGHTPOINT`
+  to `selected` throws an error that says it is not available yet, and so does assigning `NOSELECTION` to a point of a
+  path in a selected group or compound path. Selecting a point of a path with selected segments replaces that path's
+  segment selection. Changing `selected` adds no undo step. Selecting a point of a path that cannot be selected
+  throws `Cannot select`, and selecting a point of a guide while guides are locked throws an error. A clipping path
+  cannot be made a guide, and `guides = true` on one throws an error. Assigning `guides` the value a path already
+  has runs no command. Assigning the other value throws an error that says it is not available yet on a path inside
+  a compound path, throws `Cannot edit` on a path that is hidden, locked or cannot be selected, and throws an error
+  while guides are locked. Color components left out count as 0, `new
   cmykColor()` makes a `CMYKColor`, `LabColor.l` is 0 to 100 and `a` and `b` are -128 to 128, and a component out of
   range throws a `RangeError` when the color is assigned, with nothing changed. A component reads with the fewest
   decimals, at least 4, that give the stored value back, so assigning a color read from a path leaves the path as it
@@ -2960,8 +2978,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   that is hidden or locked, or that is in a hidden or locked layer or group, throws `Cannot edit` with nothing
   changed. A path in a compound path or compound shape reads the fill, stroke and overprint of that compound path or
   shape, which the paint commands paint in its place. A change to a path's paint or stroke leaves the paint for new
-  art, the active Fill or Stroke proxy and Recent Colors as they were. `selectedPathPoints`, `PathPoint.selected`,
-  `transform`, `polarity`, the gradient stops and the document's default paint are not available yet.
+  art, the active Fill or Stroke proxy and Recent Colors as they were. `transform`, `polarity`, the gradient stops and
+  the document's default paint are not available yet.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global

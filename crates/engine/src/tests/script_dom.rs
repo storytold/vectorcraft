@@ -717,10 +717,10 @@ fn selecting_an_item_keeps_the_direct_selected_anchors_of_others() {
     s.execute("select.add", &json!({"ids": [b.0]})).unwrap();
     let anchors = s.active().unwrap().selection.anchors.clone();
     assert!(anchors.contains_key(&a));
-    log(&mut s, "app.activeDocument.pageItems[1].selected = false;");
+    log(&mut s, "app.activeDocument.pageItems[0].selected = false;");
     let sel = &s.active().unwrap().selection;
     assert_eq!((sel.objects.clone(), sel.anchors.clone()), (vec![a], anchors.clone()));
-    log(&mut s, "app.activeDocument.pageItems[1].selected = true;");
+    log(&mut s, "app.activeDocument.pageItems[0].selected = true;");
     let sel = &s.active().unwrap().selection;
     assert_eq!((sel.objects.clone(), sel.anchors.get(&a)), (vec![a, b], anchors.get(&a)));
 }
@@ -1511,7 +1511,7 @@ fn page_items_report_their_available_members_as_their_own() {
          vc.log([p.hasOwnProperty('opacity'), p.hasOwnProperty('typename'), p.hasOwnProperty('duplicate'),\
            Object.prototype.hasOwnProperty.call(p, 'name'), p.propertyIsEnumerable('opacity'), d.hasOwnProperty('selection'),\
            app.hasOwnProperty('activeDocument')]);\
-         vc.log([p.hasOwnProperty('blendingMode'), p.hasOwnProperty('rotate'), d.hasOwnProperty('layers'),\
+         vc.log([p.hasOwnProperty('blendingMode'), p.hasOwnProperty('transform'), d.hasOwnProperty('layers'),\
            p.hasOwnProperty('nosuch'), p.hasOwnProperty('hasOwnProperty'), p.hasOwnProperty('constructor')]);\
          vc.log([keys.indexOf('opacity') >= 0, keys.indexOf('typename') >= 0, keys.indexOf('duplicate'), keys.indexOf('blendingMode')]);",
     );

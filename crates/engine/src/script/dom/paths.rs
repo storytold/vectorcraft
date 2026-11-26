@@ -39,6 +39,17 @@
 //!   says it is not available yet. `rotateAbout` and `scaleAbout` default to
 //!   `Transformation.CENTER`. A transform that leaves the path where it is (`rotate(360)`,
 //!   `resize(100, 100)`) checks its arguments and runs no command, on a path with no points too.
+//! - `PathPoint.selected` and `selectedPathPoints` count every point of a path selected as a whole
+//!   as a selected anchor point, and not the endpoints of selected segments; a path in a selected
+//!   group or compound path is selected as a whole. Direction handles are not selected on their
+//!   own, so `LEFTDIRECTION`, `RIGHTDIRECTION` and `LEFTRIGHTPOINT` throw an error that says they
+//!   are not available yet, and so does `NOSELECTION` on a point of a path in a selected group or
+//!   compound path. Selecting a point of a path with selected segments replaces that path's
+//!   segment selection. Selecting a point of a guide while guides are locked throws an error. A
+//!   clipping path cannot be made a guide. Assigning `guides` a value the path does not have
+//!   throws an error that says it is not available yet on a path inside a compound path, throws
+//!   `Cannot edit` on a path that cannot be edited or selected, and throws an error while guides
+//!   are locked; assigning the value the path has runs no command.
 //! - The transforms take one setting for fill and stroke patterns, so `changeFillPatterns` and
 //!   `changeStrokePattern` given as different values throw an error; gradients move with the art,
 //!   so `changeFillGradients` false throws an error that says it is not available yet.
@@ -56,9 +67,9 @@ use vectorcraft_js::{Data, HostClass, HostError, HostItem, HostMember, Realm, Ru
 use vectorcraft_tools::params::gradient_params;
 
 use super::{
-    Answer, Coords, Doc, Item, Link, NOT_FOUND, STALE_ITEM, arg, boolean, class, colors, command, coordinate, doc_of, edit_item, editable, find_doc,
-    float, frame, get, given, handle_of, id_of, id_parts, item_of, item_rect, later, method, named, num, number, on_doc, pair, point, point_get,
-    point_method, point_property, property, this_doc, typename_of, whole, with_doc,
+    Answer, Coords, Doc, Item, Link, NOT_FOUND, ON_LOCKED_ARTBOARD, STALE_ITEM, arg, boolean, class, colors, command, coordinate, doc_of, edit_item,
+    editable, find_doc, float, frame, get, given, handle_of, id_of, id_parts, item_of, item_rect, later, method, named, num, number, on_doc, pair,
+    point, point_get, point_method, point_property, property, this_doc, typename_of, whole, with_doc,
 };
 use crate::{DocState, NodeId, NodeKind};
 
@@ -299,8 +310,15 @@ fn items_parent(h: &super::Host, a: &[Data]) -> Answer {
     Ok(host_ref("Document", &[float(h.run), float(doc.uid)]))
 }
 
+/// `pathItems[i]`, and `pathItems["name"]` as `getByName` reads it.
 fn items_at(h: &super::Host, a: &[Data]) -> Answer {
     let doc = items_doc(h, a)?;
+    if let Data::String(_) = arg(a, 1) {
+        return match items_by_name(h, a) {
+            Err(HostError::Error(e)) if e == NOT_FOUND && super::probing(a) => Ok(Data::Undefined),
+            r => r,
+        };
+    }
     let Data::Number(n) = arg(a, 1) else { return Ok(Data::Undefined) };
     let Some(i) = whole(*n).and_then(|i| usize::try_from(i).ok()) else { return Ok(Data::Undefined) };
     Ok(with_doc(h, doc, |_, st| path_items(h, st).get(i).map_or(Data::Undefined, |id| super::item_ref(h, st, *id))))
@@ -329,17 +347,24 @@ fn items_index(h: &super::Host, a: &[Data]) -> Answer {
 }
 
 /// `pathItems.removeAll()`: deletes every path of the document in one command. A hidden or locked
-/// path, or one in a hidden or locked layer or group, stops it before anything is deleted.
+/// path, one in a hidden or locked layer or group, or one on a locked artboard stops it before
+/// anything is deleted, as `pageItems.removeAll()` is stopped.
 fn items_remove_all(h: &super::Host, a: &[Data]) -> Answer {
     let doc = items_doc(h, a)?;
-    let (ids, refused) = with_doc(h, doc, |_, st| {
+    let (ids, refused, on_locked) = with_doc(h, doc, |_, st| {
         let ids = path_items(h, st);
         let refused: Vec<u64> = ids.iter().filter(|i| !editable(&st.doc, **i)).map(|i| i.0).take(20).collect();
-        (ids, refused)
+        let locks = st.doc.locked_artboards();
+        let on_locked: Vec<u64> = ids.iter().filter(|i| locks.holds_id(**i)).map(|i| i.0).take(20).collect();
+        (ids, refused, on_locked)
     });
     if !refused.is_empty() {
         let list = refused.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
         return Err(HostError::Error(format!("cannot delete hidden or locked paths: {list}")));
+    }
+    if !on_locked.is_empty() {
+        let list = on_locked.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
+        return Err(HostError::Error(format!("{ON_LOCKED_ARTBOARD}: {list}")));
     }
     if !ids.is_empty() {
         on_doc(h, doc.uid, true, |h| command(h, "edit.clear", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})))?;
@@ -583,6 +608,56 @@ fn path_length(h: &super::Host, a: &[Data]) -> Answer {
 fn path_guides(h: &super::Host, a: &[Data]) -> Answer {
     let item = this_path(h, a)?;
     read_path(h, item, |_, n, _| Data::Bool(matches!(n.kind, NodeKind::Path { guide: true, .. })))
+}
+
+/// The error of assigning `guides` on a path inside a compound path.
+pub const COMPOUND_MEMBER_GUIDES: &str = "Changing guides on a path inside a compound path is not available yet";
+
+/// `guides = true` makes the path a guide with `view.guides.make`, and `false` makes it a path again
+/// with `view.guides.release`; the selection stays as it was. A value the path has already runs no
+/// command and throws no error. Otherwise a clipping path cannot be a guide, a path inside a
+/// compound path throws [`COMPOUND_MEMBER_GUIDES`], and while guides are locked both values throw
+/// an error.
+fn path_set_guides(h: &super::Host, a: &[Data]) -> Answer {
+    let on = boolean(arg(a, 1), "guides")?;
+    let item = this_path(h, a)?;
+    let (now, clipping) = read_path(h, item, |_, n, _| match &n.kind {
+        NodeKind::Path { guide, clipping, .. } => (*guide, *clipping),
+        _ => (false, false),
+    })?;
+    if now == on {
+        return Ok(Data::Undefined);
+    }
+    let (member, editable, selectable) = with_doc(h, item.doc, |_, st| {
+        let member = st.doc.parent_of(item.id).and_then(|p| st.doc.node(p)).is_some_and(|p| matches!(p.kind, NodeKind::Compound { .. }));
+        let selectable = crate::cmd::select::is_selectable(&st.doc, st.isolation, &st.doc.locked_artboards(), item.id);
+        (member, editable(&st.doc, item.id), selectable)
+    });
+    if member {
+        return Err(HostError::Error(COMPOUND_MEMBER_GUIDES.into()));
+    }
+    if !editable || !selectable {
+        return Err(cannot_edit(item.id));
+    }
+    if h.session.borrow().menu.guides_locked {
+        return Err(HostError::Error(format!("Cannot change guides on PathItem {}: guides are locked", item.id.0)));
+    }
+    if !on {
+        edit_path(h, item, "view.guides.release", json!({}))?;
+        return Ok(Data::Undefined);
+    }
+    if clipping {
+        return Err(HostError::Error(format!("Cannot make PathItem {} a guide: it is a clipping path", item.id.0)));
+    }
+    see_all_points(h);
+    let kept = h.dom.editing.replace(Some(item));
+    let r = on_doc(h, item.doc.uid, true, |h| {
+        command(h, "select.set", &json!({"ids": [item.id.0]}))?;
+        command(h, "view.guides.make", &json!({}))
+    });
+    h.dom.editing.set(kept);
+    r?;
+    Ok(Data::Undefined)
 }
 
 fn path_clipping(h: &super::Host, a: &[Data]) -> Answer {
@@ -1008,8 +1083,9 @@ fn path_rotate(h: &super::Host, a: &[Data]) -> Answer {
     let place = about_name(arg(a, 6))?;
     let mut params = json!({"angle": angle});
     transform_options(a, 2, &mut params)?;
-    if angle.rem_euclid(360.0) != 0.0 {
-        let (r, _) = item_rect(h, item, false)?;
+    if angle.rem_euclid(360.0) != 0.0
+        && let (Some(r), _) = item_rect(h, item, false)?
+    {
         let origin = about(h, item, place, r)?;
         params["origin"] = json!([origin.x, origin.y]);
         edit_path(h, item, "object.rotate", params)?;
@@ -1038,8 +1114,9 @@ fn path_resize(h: &super::Host, a: &[Data]) -> Answer {
     if new_width.is_some_and(|w| w > MAX_STROKE_WIDTH) {
         return Err(HostError::Range("changeLineWidths would make the stroke weight more than 1000 points".into()));
     }
-    if sx != 100.0 || sy != 100.0 {
-        let (r, _) = item_rect(h, item, false)?;
+    if (sx != 100.0 || sy != 100.0)
+        && let (Some(r), _) = item_rect(h, item, false)?
+    {
         let origin = about(h, item, place, r)?;
         params["origin"] = json!([origin.x, origin.y]);
         edit_path(h, item, "object.scale", params)?;
@@ -1323,6 +1400,129 @@ fn pt_parent(h: &super::Host, a: &[Data]) -> Answer {
     Ok(path_ref(h, item))
 }
 
+/// Whether a group or compound path that holds the path `id` is selected, which selects the path
+/// as a whole whatever the path's own selection is.
+fn held_selected(d: &crate::Document, sel: &crate::doc::Selection, id: NodeId) -> bool {
+    d.ancestry(id).is_some_and(|a| a.iter().any(|i| *i != id && sel.contains(*i) && d.node(*i).is_some_and(|n| !n.is_layer())))
+}
+
+/// The point at index `i` of `subs` is a selected anchor point of the path `id` in `sel`: every
+/// point of a path selected as a whole is (a path is when a group or compound path that holds it
+/// is selected, `held`), and of a path with direct-selected anchors only those anchors are. The
+/// endpoints of selected segments are not.
+fn anchor_selected(sel: &crate::doc::Selection, id: NodeId, held: bool, subs: &[SubPath], i: usize) -> bool {
+    if held {
+        return true;
+    }
+    if !sel.contains(id) || sel.segments.contains_key(&id) {
+        return false;
+    }
+    match sel.partial(id) {
+        None => true,
+        Some(picked) => locate(subs, i).is_some_and(|r| picked.contains(&r)),
+    }
+}
+
+/// Whether the subpaths `a` and `b` have the same number of points in the same subpaths, so that a
+/// point index names the same anchor in both.
+fn same_layout(a: &[SubPath], b: &[SubPath]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.anchors.len() == y.anchors.len())
+}
+
+/// `selected`: `PathPointSelection.ANCHORPOINT` when the point is a selected anchor point
+/// ([`anchor_selected`]), otherwise `PathPointSelection.NOSELECTION`. The point changes waiting in
+/// [`super::State`] are written first only when they add or remove points of this path, since
+/// the selection names anchors by their place in the document's path.
+fn pt_selected(h: &super::Host, a: &[Data]) -> Answer {
+    let (item, i) = this_point(h, a)?;
+    let moved = match &*h.dom.pending.borrow() {
+        Some((waiting, subs)) if same_path(*waiting, item) => !read_path(h, item, |_, _, pd| same_layout(subs, &pd.subpaths))?,
+        _ => false,
+    };
+    if moved {
+        super::flush(h)?;
+    }
+    let on =
+        read_path(h, item, |st, _, pd| anchor_selected(&st.selection, item.id, held_selected(&st.doc, &st.selection, item.id), &pd.subpaths, i))?;
+    Ok(Data::String(if on { "PathPointSelection.ANCHORPOINT" } else { "PathPointSelection.NOSELECTION" }.into()))
+}
+
+/// The `PathPointSelection` values that select a point's direction handles.
+const HANDLE_SELECTIONS: &[&str] = &["PathPointSelection.LEFTDIRECTION", "PathPointSelection.RIGHTDIRECTION", "PathPointSelection.LEFTRIGHTPOINT"];
+
+/// `selected = PathPointSelection.ANCHORPOINT` adds the point to the direct-selected anchors, and
+/// `NOSELECTION` removes it, with `select.anchorsMany`; the other selected objects and anchors stay
+/// selected, except that selecting an anchor of a path with selected segments replaces that path's
+/// segment selection, as `select.anchorsMany` does. A value the point has already runs no command.
+/// Direction handles cannot be selected, so `LEFTDIRECTION`, `RIGHTDIRECTION` and
+/// `LEFTRIGHTPOINT` throw an error, and so does `NOSELECTION` on a path selected through a group or
+/// compound path that holds it, and `ANCHORPOINT` on a guide while guides are locked. The setter
+/// writes the waiting point changes first, as every member that is not a point function does.
+fn pt_set_selected(h: &super::Host, a: &[Data]) -> Answer {
+    let on = match arg(a, 1) {
+        Data::String(s) if s == "PathPointSelection.ANCHORPOINT" => true,
+        Data::String(s) if s == "PathPointSelection.NOSELECTION" => false,
+        Data::String(s) if HANDLE_SELECTIONS.contains(&s.as_str()) => {
+            return Err(HostError::Error(format!("PathPoint.selected = {s} is not available yet: only anchor points can be selected")));
+        }
+        _ => return Err(HostError::Type("selected must be a PathPointSelection value".into())),
+    };
+    let (item, i) = this_point(h, a)?;
+    let (now, at, selectable, held, guide) = with_doc(h, item.doc, |_, st| {
+        let node = st.doc.node(item.id);
+        let subs = node.and_then(|n| n.path_data()).map_or(&[][..], |pd| &pd.subpaths[..]);
+        let guide = node.is_some_and(|n| matches!(n.kind, NodeKind::Path { guide: true, .. }));
+        let selectable = crate::cmd::select::is_selectable(&st.doc, st.isolation, &st.doc.locked_artboards(), item.id);
+        let held = held_selected(&st.doc, &st.selection, item.id);
+        (anchor_selected(&st.selection, item.id, held, subs, i), locate(subs, i), selectable, held, guide)
+    });
+    if now == on {
+        return Ok(Data::Undefined);
+    }
+    let Some((s, j)) = at else { return Err(HostError::Error(STALE_POINT.into())) };
+    if held {
+        return Err(HostError::Error(format!(
+            "PathPoint.selected = PathPointSelection.NOSELECTION is not available yet on PathItem {}: the group or compound path that holds it is selected",
+            item.id.0
+        )));
+    }
+    if on && !selectable {
+        return Err(HostError::Error(format!("Cannot select PathItem {}", item.id.0)));
+    }
+    if on && guide && h.session.borrow().menu.guides_locked {
+        return Err(HostError::Error(format!("Cannot select PathItem {}: guides are locked", item.id.0)));
+    }
+    let params = json!({"items": [{"id": item.id.0, "anchors": [[s, j]]}], "mode": if on { "add" } else { "subtract" }});
+    on_doc(h, item.doc.uid, false, |h| command(h, "select.anchorsMany", &params))?;
+    Ok(Data::Undefined)
+}
+
+/// `selectedPathPoints`: the points that are selected anchor points ([`anchor_selected`]), in the
+/// order of `pathPoints`.
+fn path_selected_points(h: &super::Host, a: &[Data]) -> Answer {
+    let item = this_path(h, a)?;
+    let picked: Vec<usize> = read_path(h, item, |st, _, pd| {
+        let sel = &st.selection;
+        let held = held_selected(&st.doc, sel, item.id);
+        if !held && (!sel.contains(item.id) || sel.segments.contains_key(&item.id)) {
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        let mut first = 0;
+        for (s, sp) in pd.subpaths.iter().enumerate() {
+            let n = sp.anchors.len();
+            out.extend((0..n).filter(|j| held || sel.partial(item.id).is_none_or(|p| p.contains(&(s, *j)))).map(|j| first + j));
+            first += n;
+        }
+        out
+    })?;
+    h.charge_call(picked.len() as u64)?;
+    let [high, low] = id_parts(item.id);
+    let cuts = float(point_cuts(h, item));
+    let points = picked.into_iter().map(|i| host_ref("PathPoint", &[float(h.run), float(item.doc.uid), high, low, float(i as u64), cuts])).collect();
+    Ok(Data::Array(points))
+}
+
 /// `remove()`: deletes the point; a subpath left with no points goes too.
 fn pt_remove(h: &super::Host, a: &[Data]) -> Answer {
     let (item, i) = this_point(h, a)?;
@@ -1350,7 +1550,7 @@ pub(super) fn path_item_members(l: &Link) -> Vec<(String, HostMember)> {
         ("evenodd", property(l, path_evenodd, path_set_evenodd)),
         ("area", get(l, path_area)),
         ("length", get(l, path_length)),
-        ("guides", get(l, path_guides)),
+        ("guides", property(l, path_guides, path_set_guides)),
         ("clipping", get(l, path_clipping)),
         ("setEntirePath", point_method(l, path_set_entire)),
         ("filled", property(l, path_filled, path_set_filled)),
@@ -1368,8 +1568,9 @@ pub(super) fn path_item_members(l: &Link) -> Vec<(String, HostMember)> {
         ("translate", method(l, path_translate)),
         ("rotate", method(l, path_rotate)),
         ("resize", method(l, path_resize)),
+        ("selectedPathPoints", get(l, path_selected_points)),
     ]);
-    m.extend(["selectedPathPoints", "polarity", "resolution"].into_iter().map(|n| later(l, "PathItem", n)));
+    m.extend(["polarity", "resolution"].into_iter().map(|n| later(l, "PathItem", n)));
     m
 }
 
@@ -1411,19 +1612,16 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
         class(
             "PathPoint",
             None,
-            {
-                let mut m = named(vec![
-                    ("typename", typename_of("PathPoint")),
-                    ("parent", point_get(l, pt_parent)),
-                    ("anchor", point_property(l, pt_anchor, pt_set_anchor)),
-                    ("leftDirection", point_property(l, pt_left, pt_set_left)),
-                    ("rightDirection", point_property(l, pt_right, pt_set_right)),
-                    ("pointType", point_property(l, pt_type, pt_set_type)),
-                    ("remove", point_method(l, pt_remove)),
-                ]);
-                m.push(later(l, "PathPoint", "selected"));
-                m
-            },
+            named(vec![
+                ("typename", typename_of("PathPoint")),
+                ("parent", point_get(l, pt_parent)),
+                ("anchor", point_property(l, pt_anchor, pt_set_anchor)),
+                ("leftDirection", point_property(l, pt_left, pt_set_left)),
+                ("rightDirection", point_property(l, pt_right, pt_set_right)),
+                ("pointType", point_property(l, pt_type, pt_set_type)),
+                ("selected", HostMember::Property { get: super::point_function(l, pt_selected), set: super::function(l, pt_set_selected) }),
+                ("remove", point_method(l, pt_remove)),
+            ]),
             None,
         ),
     ]
