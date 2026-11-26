@@ -115,6 +115,18 @@ fn simplify_opens_a_slider_whose_drag_previews_fewer_or_more_points() {
     assert_eq!(anchor_count(&app), 2);
 }
 
+/// The Simplify dialog's count of anchor points before and after is in the window's accessibility tree.
+#[test]
+fn the_simplify_dialog_names_its_anchor_point_counts() {
+    let mut app = app_with_dense_path();
+    open_simplify_dialog(&mut app);
+    settle(&mut app);
+    let out = frame(&mut app, vec![]);
+    let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+    let names: Vec<&str> = nodes.iter().filter_map(|(_, node)| node.label()).collect();
+    assert!(names.iter().any(|n| n.starts_with("Anchor Points:") && n.contains('→')), "{names:?}");
+}
+
 /// A wave of 20 anchors `width` pt wide and `width / 5` pt high, selected.
 fn app_with_wave(width: f64) -> VectorcraftApp {
     let mut app = window(VectorcraftApp::new(Session::new(), Default::default()));

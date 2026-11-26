@@ -51,6 +51,10 @@ struct Waiting {
 /// A replace question on the dialog host, and what proceeding runs.
 struct Replacing {
     dialog: DialogId,
+    /// The automation roots in force when asked, as [`Waiting::scope`].
+    scope: ScopeHandle,
+    /// Automation asked, as [`Waiting::automated`].
+    automated: bool,
     then: Proceed,
 }
 
@@ -73,6 +77,14 @@ impl FileAsks {
     /// A file dialog or a replace question is waiting to answer.
     pub(crate) fn asking(&self) -> bool {
         !self.waiting.is_empty() || !self.replacing.is_empty()
+    }
+
+    /// Whether the newest open replace question goes on confined to automation roots, and whether
+    /// as automation.
+    #[cfg(test)]
+    pub(crate) fn replace_access(&self) -> Option<(bool, bool)> {
+        let r = self.replacing.last()?;
+        Some((r.scope.clone().run(vectorcraft_engine::file_access::current).is_some(), r.automated))
     }
 }
 
@@ -155,7 +167,8 @@ pub(crate) fn ask_replace(
     app.file_asks.next_question += 1;
     let prompt = StandardPrompt::replace_file(name(path), Some(name(answered))).instance(("vectorcraft.replaceFile", app.file_asks.next_question));
     let dialog = dialogs.with(|host| host.open(prompt));
-    app.file_asks.replacing.push(Replacing { dialog, then: Box::new(then) });
+    let (scope, automated) = (ScopeHandle::capture(), app.automation_asked());
+    app.file_asks.replacing.push(Replacing { dialog, scope, automated, then: Box::new(then) });
     json!({ "pending": "replaceFile" })
 }
 
@@ -307,7 +320,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let files = dialogs.with(|host| {
         for r in previous {
             match host.take_by_id::<StandardPrompt>(r.dialog) {
-                Some(DialogResult::Ok(answer)) if answer.choice == PromptChoice::Proceed => proceed.push(r.then),
+                Some(DialogResult::Ok(answer)) if answer.choice == PromptChoice::Proceed => proceed.push(r),
                 Some(_) => {}
                 None if host.get_by_id::<StandardPrompt>(r.dialog).is_some() => open.push(r),
                 // Neither open nor holding a result: closed from outside.
@@ -317,8 +330,8 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         host.take::<ReplaceFilesPrompt>()
     });
     app.file_asks.replacing.extend(open);
-    for then in proceed {
-        let result = then(app);
+    for Replacing { scope, automated, then, .. } in proceed {
+        let result = scope.run(|| as_automated(app, automated, then));
         report(app, result);
     }
     if let Some(DialogResult::Ok(mut answer)) = files
@@ -328,7 +341,8 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     {
         let all: Vec<String> = r.files.iter().chain(&r.allowed).cloned().collect();
         crate::io::save::allow_replacing(app, &all);
-        let result = app.run(&r.command, r.params);
+        let ReplaceFiles { scope, automated, command, params, .. } = r;
+        let result = scope.run(|| as_automated(app, automated, |app| app.run(&command, params)));
         report(app, result);
     }
 }

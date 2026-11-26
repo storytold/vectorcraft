@@ -11,9 +11,11 @@
 
 use std::sync::LazyLock;
 
-use craft::ui::contract::Bind;
+use craft::ui::contract::{Bind, Show as _};
+use craft::ui::display::{Shade, Text};
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
 use craft::ui::runtime::env::Label;
+use craft::ui::style::TypeRole;
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::fileio::{self, ArtboardPick, Format};
 
@@ -127,7 +129,7 @@ fn open_dialog(app: &mut VectorcraftApp, format: Option<&str>, p: &Value) -> Res
         ParamDialog::new(KIND, tl!("Export As"), params())
             .values(Bind::bound(fields))
             .below(|ui, fields| {
-                ui.weak(summary(fields));
+                Text::new(summary(fields)).role(TypeRole::Caption).shade(Shade::Muted).show(ui);
             })
             .ok_label(Label::from("Export…"))
     });
