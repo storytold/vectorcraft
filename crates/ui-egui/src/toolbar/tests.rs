@@ -479,19 +479,26 @@ fn review_8758_panel(app: &VectorcraftApp, ctx: &egui::Context) -> egui::Rect {
     let report = crate::panel_docking::inspect(app, ctx);
     let columns = report["columns"].as_array().expect("dock columns");
     let r = &columns.iter().find(|column| column["panel"] == "tools").expect("the Tools column")["rect"];
-    egui::Rect::from_min_size(egui::pos2(r[0].as_f64().unwrap() as f32, r[1].as_f64().unwrap() as f32),
-        egui::vec2(r[2].as_f64().unwrap() as f32, r[3].as_f64().unwrap() as f32))
+    egui::Rect::from_min_size(
+        egui::pos2(r[0].as_f64().unwrap() as f32, r[1].as_f64().unwrap() as f32),
+        egui::vec2(r[2].as_f64().unwrap() as f32, r[3].as_f64().unwrap() as f32),
+    )
 }
 
 fn review_8758_button<'a>(app: &VectorcraftApp, ctx: &egui::Context, nodes: &'a [Node], label: &str) -> &'a Node {
     let panel = review_8758_panel(app, ctx);
-    nodes.iter().find(|n| n.role() == Role::Button && n.label() == Some(label)
-        && bounds(n).is_some_and(|r| panel.contains_rect(r))).unwrap_or_else(|| panic!("Tools footer button {label:?} is drawn"))
+    nodes
+        .iter()
+        .find(|n| n.role() == Role::Button && n.label() == Some(label) && bounds(n).is_some_and(|r| panel.contains_rect(r)))
+        .unwrap_or_else(|| panic!("Tools footer button {label:?} is drawn"))
 }
 
 fn review_8758_query(nodes: &[Node]) -> &str {
-    nodes.iter().find(|n| n.role() == Role::TextInput && n.label() == Some("Search commands"))
-        .and_then(Node::value).expect("the native palette's query field")
+    nodes
+        .iter()
+        .find(|n| n.role() == Role::TextInput && n.label() == Some("Search commands"))
+        .and_then(Node::value)
+        .expect("the native palette's query field")
 }
 
 fn review_8758_unchanged_content(app: &VectorcraftApp) -> Value {
@@ -511,11 +518,21 @@ fn review_8758_hovered_texts(app: &mut VectorcraftApp, ctx: &egui::Context, t0: 
     }
     let mut shown = vec![];
     for i in 0..20 {
-        let events = match i { 0 => vec![Event::PointerGone], 1 => vec![Event::PointerMoved(at)], _ => vec![] };
-        let out = crate::testing::app_frame(app, ctx, egui::RawInput {
-            time: Some(t0 + f64::from(i) * 0.1), events,
-            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, egui::vec2(1200.0, 1400.0))), ..Default::default()
-        });
+        let events = match i {
+            0 => vec![Event::PointerGone],
+            1 => vec![Event::PointerMoved(at)],
+            _ => vec![],
+        };
+        let out = crate::testing::app_frame(
+            app,
+            ctx,
+            egui::RawInput {
+                time: Some(t0 + f64::from(i) * 0.1),
+                events,
+                screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, egui::vec2(1200.0, 1400.0))),
+                ..Default::default()
+            },
+        );
         out.shapes.iter().for_each(|shape| texts(&shape.shape, &mut shown));
     }
     shown
@@ -527,11 +544,16 @@ fn review_8758_edit_control(app: &mut VectorcraftApp, ctx: &egui::Context, nodes
     let before = slots(app);
     let nodes = click(app, ctx, 1.0, edit.center(), 1400.0);
     assert!(app.ui.tools_drawer && app.ui.drawer_toolbar.is_none(), "Edit opens the Tools customization drawer");
-    let drawer = nodes.iter().find(|n| n.role() == Role::Dialog && n.label() == Some("Edit Toolbar"))
-        .and_then(bounds).expect("the native customization drawer is drawn");
+    let drawer = nodes
+        .iter()
+        .find(|n| n.role() == Role::Dialog && n.label() == Some("Edit Toolbar"))
+        .and_then(bounds)
+        .expect("the native customization drawer is drawn");
     // Main anchors its native drawer to the rail's canvas side; the footer button remains its focus opener.
-    assert!(drawer.left() >= panel.right() - 1.0 && drawer.top() < panel.bottom() && drawer.bottom() > panel.top(),
-        "the customization drawer remains beside its Tools rail: {drawer:?}, {panel:?}");
+    assert!(
+        drawer.left() >= panel.right() - 1.0 && drawer.top() < panel.bottom() && drawer.bottom() > panel.top(),
+        "the customization drawer remains beside its Tools rail: {drawer:?}, {panel:?}"
+    );
     assert!(nodes.iter().any(|n| n.label() == Some("All Tools")), "the customization list is present");
     assert_eq!(slots(app), before, "opening customization does not change tool membership");
     assert!(before.iter().any(|(_, tools)| tools.contains(&"rectangle")));
@@ -565,7 +587,10 @@ fn review_8758_layout(double: bool) {
     if double {
         assert!(search.right() <= edit.left() && (search.center().y - edit.center().y).abs() < 0.01, "Search left of Edit on one row");
     } else {
-        assert!(search.bottom() <= edit.top() && (search.center().x - edit.center().x).abs() < 0.01, "one column keeps both controls in a fitted stack");
+        assert!(
+            search.bottom() <= edit.top() && (search.center().x - edit.center().x).abs() < 0.01,
+            "one column keeps both controls in a fitted stack"
+        );
     }
     assert!(review_8758_hovered_texts(&mut app, &ctx, 4.0, search.center()).iter().any(|t| t == "Search commands, tools, panels and effects"));
     let before = review_8758_unchanged_content(&app);
@@ -587,7 +612,9 @@ fn review_8758_layout(double: bool) {
 
 #[test]
 fn review_8758_toolbar_search_fits_beside_edit_and_opens_the_existing_palette() {
-    for double in [true, false] { review_8758_layout(double); }
+    for double in [true, false] {
+        review_8758_layout(double);
+    }
 }
 
 #[test]
@@ -603,7 +630,9 @@ fn review_8758_toolbar_search_accepts_a_tool_query_and_is_disabled_over_a_dialog
     let nodes = frame(&mut app, &ctx, 0.4, vec![Event::Text("Scissors".into())], 1400.0);
     assert_eq!(review_8758_query(&nodes), "Scissors", "the actual focused query field receives typing");
     let nodes = settled(&mut app, &ctx, 0.5, 1400.0);
-    let tool = nodes.iter().find(|n| n.role() == Role::ListBoxOption && n.label().is_some_and(|label| label.starts_with("Scissors")))
+    let tool = nodes
+        .iter()
+        .find(|n| n.role() == Role::ListBoxOption && n.label().is_some_and(|label| label.starts_with("Scissors")))
         .expect("the native palette lists the matching Scissors tool");
     assert!(!tool.is_disabled());
     click(&mut app, &ctx, 0.7, bounds(tool).unwrap().center(), 1400.0);
