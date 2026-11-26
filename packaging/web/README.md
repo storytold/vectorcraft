@@ -39,9 +39,9 @@ files need revalidation.
     `script-src 'self'` alone blocks it, and the app does not start. A hash of that script in
     `script-src` allows it, or in `script-src-elem` when the policy sets that directive. The
     script changes with each build, so the hash must be taken from the build you deploy.
-  - WebAssembly compilation: a `script-src` needs `'wasm-unsafe-eval'`, on the page and on the
-    plug-in worker files. Without it the app does not start, and plug-ins fail to install and
-    run.
+  - WebAssembly compilation: the page and plug-in worker policies need `'wasm-unsafe-eval'` in
+    `script-src`, or in `default-src` when `script-src` is absent. Without it the app does not
+    start, and plug-ins fail to install and run.
   - The plug-in worker: `worker-src 'self'`. Without `worker-src`, the browser uses
     `child-src`, then `script-src`, then `default-src`, so a `script-src` that allows the
     site's own scripts is enough only when the policy sets neither `worker-src` nor
