@@ -475,6 +475,7 @@ fn opening_and_pasting_ask_about_profiles() {
     assert_eq!(count(&app), before + 1);
     swatch_conflicts_are_asked_again_when_they_change(&mut app);
     all_artboards_leaves_backgrounds_out(&mut app);
+    all_artboards_asks_no_swatch_conflict_for_backgrounds(&mut app);
     // It changes the working space: last.
     app.run("edit.colorSettings", json!({"askMismatchOpen": true})).unwrap();
     an_answer_waits_for_the_question_it_answers(&mut app, &tagged);
@@ -499,4 +500,28 @@ fn all_artboards_leaves_backgrounds_out(app: &mut VectorcraftApp) {
     let listed = |app: &mut VectorcraftApp, command: &str| paste_mismatches(app, command, &json!({})).map(|m| m.len());
     assert_eq!(listed(app, "edit.paste"), Some(1), "the background is RGB");
     assert_eq!(listed(app, ALL_ARTBOARDS), Some(0));
+}
+
+/// Swatch Conflict for Paste on All Artboards asks about the colors it brings, without the
+/// backgrounds of copied artboards: pasting back into the document the art came from, where only
+/// the RGB background now has another profile, converts nothing, so the edited CMYK swatch is no
+/// conflict and the paste runs. A plain paste converts the background and asks.
+fn all_artboards_asks_no_swatch_conflict_for_backgrounds(app: &mut VectorcraftApp) {
+    use super::super::swatch_conflict;
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("swatch.new", json!({"name": "Brand", "color": {"c": 20, "m": 40, "y": 60, "k": 10}, "global": true})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    app.run("paint.setFill", json!({"swatch": "Brand"})).unwrap();
+    app.run("paint.setStroke", json!({"none": true})).unwrap();
+    app.run("artboard.setProps", json!({"index": 0, "color": "#3366cc"})).unwrap();
+    app.run("edit.assignProfile", json!({ "rgb": cms::WIDE_GAMUT_RGB })).unwrap();
+    app.run("artboard.copy", json!({"index": 0})).unwrap();
+    app.run("edit.assignProfile", json!({ "rgb": null })).unwrap();
+    app.run("swatch.edit", json!({"name": "Brand", "color": {"c": 60, "m": 40, "y": 20, "k": 0}})).unwrap();
+    let r = app.run("edit.paste", json!({"profileMismatch": "convert"})).unwrap();
+    assert_eq!(r["dialog"], swatch_conflict::KIND, "{r}");
+    answer_cancel(app, swatch_conflict::id(app).expect("Swatch Conflict is open"));
+    let r = app.run(ALL_ARTBOARDS, json!({"profileMismatch": "convert"})).unwrap();
+    assert!(r.get("dialog").is_none() && r["ids"].as_array().is_some_and(|ids| !ids.is_empty()), "{r}");
+    assert!(swatch_conflict::id(app).is_none());
 }

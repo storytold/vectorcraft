@@ -9812,7 +9812,8 @@ light one, by the wedge colors as pasted: a wedge linked to a swatch merged with
 color first.
 
 A global or spot swatch whose name the document gives another colour is a conflict: `clipboard.conflicts` lists
-them, and `swatchConflict` answers: `"merge"` (the default: the objects take the document's swatch), `"add"` (the
+them (with `allArtboards: true`, the colors as Paste on All Artboards brings them, without the background colors of
+copied artboards), and `swatchConflict` answers: `"merge"` (the default: the objects take the document's swatch), `"add"` (the
 pasted swatch comes in renamed) or one answer per name. When a merged swatch turns a pie's wedge from light to dark
 or back, the legend labels in that pie's wedges take the contrast a redraw gives them (white on a dark wedge, black on
 a light one), unless the legend labels have a fill of their own. Pasting back into the document the objects came from
