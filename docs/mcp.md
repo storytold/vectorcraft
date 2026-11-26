@@ -4994,9 +4994,13 @@ already walks Image Trace. Short agent entry points:
   `replace` is true. Every preset in the file is checked first, and a file with a built-in preset's or `Custom`'s name,
   two presets of one name, a preset without a name or `params`, settings `imageTrace.presets.save` refuses, or a newer
   `version` changes nothing. In the app, opening a `.vctracepresets` file (File › Open, a drop, or the file picked
-  for Import… on the web) imports it as Import… does. Also in the app,
-  `ui.imageTracePresetDialog {params?, rename?}` opens the Image Trace panel's Save as New Preset… or Rename… dialog,
-  and `ui.tracingPresetsDialog {selected?}` opens Edit › Tracing Presets…: the built-in presets in brackets (read-only)
+  for Import… on the web) imports it as Import… does. Also in the app, the Image Trace panel's Preset row has a Manage
+  presets menu. Its Save as New Preset… and Rename… (a saved preset; also F2 on the picker) open a name field in the
+  row, which starts with the first free "Tracing Preset N" for a new preset and with the preset's name for a rename.
+  Enter or OK runs `imageTrace.presets.save` (with the panel's settings for a new preset, with `newName` for a rename),
+  and Escape or Cancel saves nothing. A built-in preset's name, `Custom` or another saved preset's name shows a message
+  under the field and keeps it open. Its Delete (a saved preset) runs `imageTrace.presets.delete`.
+  `ui.tracingPresetsDialog {selected?}` opens Edit › Tracing Presets…: the built-in presets in brackets (read-only)
   and the saved ones, with the selected preset's settings. Its New… (from the selected preset) and Edit… (a saved
   preset) open an editor with the Image Trace panel's settings; OK saves with `imageTrace.presets.save` and Cancel saves
   nothing, and a built-in preset's name, `Custom` or another saved preset's name keeps the editor open. Delete selects
