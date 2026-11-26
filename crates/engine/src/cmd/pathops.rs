@@ -1147,6 +1147,21 @@ pub(crate) fn outlinable(st: &StrokeLayer) -> bool {
     st.visible && !st.paint.is_none() && st.width > 0.0
 }
 
+/// Whether any segment can paint a butt-capped stroke. Check only used control points:
+/// coincident endpoints can still describe a curve, but unused open-end handles cannot.
+fn may_paint_butt_stroke(n: &Node) -> bool {
+    match &n.kind {
+        NodeKind::Path { path, .. } => path.subpaths.iter().any(|sp| {
+            (0..sp.segment_count()).any(|i| {
+                let c = sp.segment(i);
+                c.p0 != c.p3 || c.p0 != c.p1 || c.p0 != c.p2
+            })
+        }),
+        NodeKind::Compound { children, .. } => children.iter().any(|c| may_paint_butt_stroke(c)),
+        _ => false,
+    }
+}
+
 /// Does Outline Stroke have a stroke to turn into art under `n`, outside the dimension subtrees
 /// the command will keep? Guides, clipping paths and type are not outlined.
 fn has_outlinable_stroke(n: &Node, kept: &[NodeId]) -> bool {
@@ -1156,7 +1171,20 @@ fn has_outlinable_stroke(n: &Node, kept: &[NodeId]) -> bool {
     match &n.kind {
         NodeKind::Path { guide: true, .. } | NodeKind::Path { clipping: true, .. } => false,
         NodeKind::Path { .. } | NodeKind::Compound { .. } => {
-            n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(st) if outlinable(st)))
+            let geometry = std::cell::LazyCell::new(|| may_paint_butt_stroke(n));
+            n.appearance.items.iter().any(|i| {
+                let AppearanceItem::Stroke(st) = i else { return false };
+                // Brushes, arrowheads, profiles and geometry effects can make a point paint.
+                outlinable(st)
+                    && (st.cap != vectorcraft_doc::LineCap::Butt
+                        || st.brush.is_some()
+                        || st.start_arrow.is_some()
+                        || st.end_arrow.is_some()
+                        || st.profile.is_some()
+                        || vectorcraft_render::effects::has_geometry(&n.appearance.effects)
+                        || vectorcraft_render::effects::has_geometry(&st.effects)
+                        || *geometry)
+            })
         }
         NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => children.iter().any(|c| has_outlinable_stroke(c, kept)),
         _ => false,

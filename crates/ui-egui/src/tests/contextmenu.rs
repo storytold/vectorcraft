@@ -570,6 +570,43 @@ fn the_canvas_context_menu_offers_outline_stroke_for_a_stroked_selection() {
     assert!(canvas.outline_item().is_none(), "no stroke, no rendered outline item");
 }
 
+#[test]
+fn outline_stroke_menu_ignores_a_point_with_a_nonpainting_cap() {
+    for (cap, closed) in [("butt", false), ("round", false), ("square", false), ("butt", true), ("round", true), ("square", true)] {
+        let mut app = app();
+        let point = NodeId(
+            app.run("path.create", json!({"closed": closed, "anchors": [{"x": 250, "y": 200}, {"x": 250, "y": 200}]})).unwrap()["id"].as_u64().unwrap(),
+        );
+        app.run("paint.setFill", json!({"none": true})).unwrap();
+        app.run("paint.setStroke", json!({"color": "#000000"})).unwrap();
+        app.run("stroke.set", json!({"weight": 8, "cap": cap})).unwrap();
+        let visible = rect(&mut app, 50.0, 50.0);
+        app.run("paint.setFill", json!({"color": "#ff8010"})).unwrap();
+        app.run("paint.setStroke", json!({"none": true})).unwrap();
+        app.run("select.set", json!({"ids": [point.0, visible.0]})).unwrap();
+        let selected = app.session.active().unwrap().selection.objects.clone();
+        let mut canvas = CanvasMenu::new(app);
+        canvas.right_click(100.0, 100.0);
+        assert_eq!(canvas.app.borrow().session.active().unwrap().selection.objects, selected);
+        if cap == "butt" {
+            assert!(canvas.outline_item().is_none(), "the point paints nothing with a butt cap");
+        } else {
+            canvas.click_outline();
+            let app = canvas.app.borrow();
+            let st = app.session.active().unwrap();
+            assert!(st.doc.node(point).is_none(), "{cap} cap was outlined");
+            assert!(st.doc.node(visible).is_some(), "the fill-only object is unchanged");
+            let outlined = st.selection.objects.iter().find(|&&id| id != visible).and_then(|&id| st.doc.node(id)).expect("selected outline art");
+            assert!(
+                outlined.appearance.items.iter().any(|i| matches!(i, vectorcraft_doc::AppearanceItem::Fill(f) if f.visible && !f.paint.is_none())),
+                "{cap} cap becomes filled art"
+            );
+            let bounds = outlined.geometric_bounds().expect("the cap outline has geometry");
+            assert!(bounds.width() > 0.0 && bounds.height() > 0.0, "{cap} cap paints an area");
+        }
+    }
+}
+
 /// A compound path of two rectangles, filled and stroked with `weight`, isolated, with a member
 /// right-clicked. The member stays selected and has no appearance of its own: the compound holds
 /// the paint.
