@@ -36,6 +36,7 @@ fn document_name(app: &VectorcraftApp) -> Option<String> {
 /// Open the dialog for `library`: `extra` rows sit under the Name row. `names` are the items selected in the
 /// panel.
 pub(super) fn open(app: &mut VectorcraftApp, library: Library, names: Vec<String>, extra: Vec<Param>) -> Result<Value, String> {
+    let document = app.session.active().ok_or("no document open")?.uid;
     let name = document_name(app).ok_or("no document open")?;
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let Library { key, title, cmd, only, ext, has_user_dir } = library;
@@ -64,7 +65,15 @@ pub(super) fn open(app: &mut VectorcraftApp, library: Library, names: Vec<String
 
     let dialog =
         HostedParamDialog::new(&ctx, key, fields, move |fields| ParamDialog::new(key, title.clone(), params.clone()).values(Bind::bound(fields)));
-    let ok = move |app: &mut VectorcraftApp, result: &ParamResult| save(app, cmd, ext, result);
+    let owner = egui::Id::unique((key, "opening-drawing"));
+    ctx.data_mut(|data| data.insert_temp(owner, document));
+    let ok = move |app: &mut VectorcraftApp, result: &ParamResult| {
+        let document = ctx.data(|data| data.get_temp::<u64>(owner));
+        if app.session.active().is_none_or(|st| Some(st.uid) != document) {
+            return Err(tl!("Return to the original drawing to save its library").into());
+        }
+        save(app, cmd, ext, result)
+    };
     super::host::open_held(app, dialog, ok).ok_or("no window")?;
     Ok(Value::Null)
 }
@@ -103,5 +112,47 @@ fn save(app: &mut VectorcraftApp, cmd: &str, ext: fn(&DialogFields) -> String, r
         Err(e) if e == "cancelled" => Ok(()),
         Err(e) => Err(e),
         Ok(_) => Ok(()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::{save_symbol_library, tests_export};
+    use serde_json::json;
+
+    #[test]
+    fn save_library_waits_for_the_drawing_that_opened_it() {
+        let (mut app, written) = tests_export::app(1);
+        app.run("symbol.new", json!({"name": "Source Mark"})).unwrap();
+        save_symbol_library::open(&mut app, vec!["Source Mark".into()]).unwrap();
+        tests_export::set(&mut app, "saveTo", json!("file"));
+        tests_export::set(&mut app, "name", json!("Marks"));
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("shape.ellipse", json!({"x": 5, "y": 5, "width": 10, "height": 10})).unwrap();
+        app.run("symbol.new", json!({"name": "Other Mark"})).unwrap();
+        let error = tests_export::try_confirm(&mut app).expect_err("Save Library must refuse the other drawing");
+        assert!(error.contains("original drawing"), "{error}");
+        assert!(written.borrow().is_empty());
+        assert_eq!(tests_export::fields(&app)["name"], "Marks");
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        tests_export::try_confirm(&mut app).unwrap();
+        assert_eq!(written.borrow().len(), 1);
+    }
+
+    #[test]
+    fn reopening_save_library_uses_the_new_drawings_draft() {
+        let (mut app, written) = tests_export::app(1);
+        app.run("symbol.new", json!({"name": "Source Mark"})).unwrap();
+        save_symbol_library::open(&mut app, vec!["Source Mark".into()]).unwrap();
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("shape.ellipse", json!({"x": 5, "y": 5, "width": 10, "height": 10})).unwrap();
+        app.run("symbol.new", json!({"name": "Other Mark"})).unwrap();
+        save_symbol_library::open(&mut app, vec!["Other Mark".into()]).unwrap();
+        tests_export::set(&mut app, "saveTo", json!("file"));
+        tests_export::set(&mut app, "name", json!("Other Marks"));
+        tests_export::try_confirm(&mut app).unwrap();
+        let output = written.borrow();
+        assert_eq!(output.len(), 1);
+        assert!(output[0].0.contains("Other Marks"));
     }
 }
