@@ -5,6 +5,7 @@ use vectorcraft_engine::Session;
 
 use super::{CHECK, ID, SET_FOLD_ANGLE, SET_ROLE, follow_role, last_check, read_rows, rows, run_check, select_issue, show};
 use crate::i18n::LangExt as _;
+use crate::tests::panel_harness::Panel;
 use crate::{VectorcraftApp, menus};
 
 /// An app with two rectangles, nothing selected → (app, their ids).
@@ -17,16 +18,6 @@ fn app() -> (VectorcraftApp, u64, u64) {
     let (a, b) = (rect(&mut app, 20.0), rect(&mut app, 100.0));
     app.run("select.none", json!({})).unwrap();
     (app, a, b)
-}
-
-/// The values the panel's editable fields show, read from the access tree of its second frame.
-fn field_values(app: &mut VectorcraftApp) -> Vec<String> {
-    let ctx = crate::testing::ui_context();
-    ctx.enable_accesskit();
-    ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui)).textures_delta.clear();
-    let out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
-    let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
-    nodes.iter().filter(|(_, n)| n.supports_action(egui::accesskit::Action::SetValue)).filter_map(|(_, n)| n.value().map(str::to_string)).collect()
 }
 
 /// The count of each role the panel's rows show.
@@ -190,7 +181,9 @@ fn the_panel_shows_the_selected_lines_fold_angle_and_what_reset_takes_away() {
     app.run(SET_FOLD_ANGLE, json!({"angle": 135})).unwrap();
     let text = crate::tests_labels::painted_text(&mut app, show);
     assert!(text.contains("Fold Angle") && text.contains("Reset"), "{text}");
-    let values = field_values(&mut app);
+    let panel = Panel::new(app, show);
+    let values = panel.values();
+    let mut app = panel.app();
     assert!(values.iter().any(|v| v.strip_prefix("135").is_some_and(|unit| unit.is_empty() || unit.starts_with([' ', '°']))), "{values:?}");
     let kept = read_rows(&mut app);
     assert_eq!((kept.angle, kept.stored_angles), (Some(135.0), 1));
