@@ -292,7 +292,7 @@ fn preview_area(app: &mut VectorcraftApp, ui: &mut Ui, highlight: egui::Color32,
         .show(ui);
     *view = match out.clicked {
         Some(at) => {
-            let factor = if ui.input(|i| i.modifiers.alt) { 0.5 } else { 2.0 };
+            let factor = if craft::ui::runtime::pointer::frame(ui.ctx()).pick_mods.alt { 0.5 } else { 2.0 };
             zoomed_about(&out.shown, at, size, out.response.rect.size(), factor)
         }
         // The view as drawn, so the zoom row steps from what is on screen while the pane fits.
@@ -523,6 +523,42 @@ mod tests {
         assert!((out.transform.scale - zoomed.transform.scale).abs() < 1e-3, "an Alt-click zooms back out: {out:?}");
         click(&mut fixture, at, egui::Modifiers::ALT);
         assert!(view(&app).fit, "an Alt-click to the fit returns to fit");
+    }
+
+    #[test]
+    fn a_click_with_alt_latched_by_the_app_zooms_out() {
+        let mut app = app();
+        let mut frames = craft::ui::testing::Frames::new();
+        let mut pane = None;
+        for _ in 0..60 {
+            frames.frame(Vec::new(), |ui| show(&mut app, ui));
+            let tree = frames.tree();
+            pane = tree
+                .keys()
+                .into_iter()
+                .filter(|key| tree.name_of(*key) == Some("Flattener Preview"))
+                .filter_map(|key| tree.bounds_of(key))
+                .max_by(|a, b| a.area().total_cmp(&b.area()));
+            if pane.is_some() {
+                break;
+            }
+        }
+        let well = pane.unwrap_or_else(|| panic!("no preview pane"));
+        let at = well.center();
+        let primary =
+            |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        let click = |frames: &mut craft::ui::testing::Frames, app: &mut VectorcraftApp| {
+            frames.advance(2.0);
+            frames.frame(vec![egui::Event::PointerMoved(at), primary(true)], |ui| show(app, ui));
+            frames.frame(vec![primary(false)], |ui| show(app, ui));
+            frames.idle(1, |ui| show(app, ui));
+        };
+        click(&mut frames, &mut app);
+        assert!(!app.flattener_preview.view.fit, "a click zooms in");
+        // Alt held for the user by the app (the Modifier Keys panel), with no Alt key down.
+        frames.latched(craft::keymap::Mods { alt: true, ..Default::default() });
+        click(&mut frames, &mut app);
+        assert!(app.flattener_preview.view.fit, "a click with Alt latched zooms back out to fit");
     }
 
     #[test]
