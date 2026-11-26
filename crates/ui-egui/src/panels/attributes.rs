@@ -154,7 +154,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     if !part_hidden(app, OPTIONS_KEY) {
         Divider::horizontal().show(ui);
-        Row::new().show(ui, |ui, _| {
+        Row::new().wrap(true).show(ui, |ui, _| {
             let center = [("dc-center-hide", tl!("Don't Show Center"), false), ("dc-center-show", tl!("Show Center"), true)];
             acts.extend(pair(ui, tl!("Show Center"), has, info.show_center, center).map(|v| ("attributes.set", json!({ "showCenter": v }))));
             let dir = [("dc-dir-off", tl!("Reverse Path Direction Off"), false), ("dc-dir-on", tl!("Reverse Path Direction On"), true)];
@@ -170,7 +170,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let maps = ImageMap::ALL.map(|m| Entry::new(m, m.label()));
         let name = side_name(tl!("Image Map:"));
         Field::new(name.clone()).show(ui, |ui, _| {
-            Row::new().show(ui, |ui, _| {
+            Row::new().wrap(true).show(ui, |ui, _| {
                 let pick = Select::new(name.clone(), Bind::given(or_mixed(info.image_map)), &maps).enabled(has).show(ui);
                 acts.extend(pick.events.committed().map(|m| ("attributes.set", json!({ "imageMap": m }))));
                 let browser = Button::new(tl!("Browser")).enabled(url.is_some()).tooltip(tl!("Open the URL in the web browser")).show(ui);

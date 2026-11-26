@@ -911,6 +911,19 @@ fn cycle_options_steps_through_the_sizes_and_returns_to_the_largest() {
     assert!(!crate::panels::part_hidden(&h.app, "tr-hide-thumbs"), "the largest size shows the thumbnails");
 }
 
+/// The tab strip's Cycle Display Sizes button is named by its label, and no button of a panel's tab
+/// strip is named by a command id.
+#[test]
+fn tab_strip_buttons_are_named_by_their_labels() {
+    let mut h = Harness::new();
+    h.app.run("window.panel.activate", json!({"panel": "stroke"})).unwrap();
+    h.frames(3);
+    let buttons: Vec<&str> = h.nodes.iter().filter(|(_, n)| n.role() == egui::accesskit::Role::Button).filter_map(|(_, n)| n.label()).collect();
+    assert!(buttons.contains(&"Cycle Display Sizes"), "{buttons:?}");
+    let ids: Vec<&&str> = buttons.iter().filter(|l| !l.contains(' ') && l.contains('.') && l.starts_with(|c: char| c.is_ascii_lowercase())).collect();
+    assert!(ids.is_empty(), "buttons named by a command id: {ids:?}");
+}
+
 /// A panel the Window menu floats opens tall enough for its content: every control of Asset Export,
 /// and every Image Trace control down to the top of its Advanced section, lies between the body's
 /// top and bottom, none scrolled or clipped away.
