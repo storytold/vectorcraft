@@ -4,9 +4,10 @@ use craft::color_ui::ui::SwatchKey;
 use craft::keymap::Mods;
 use craft::ui::contract::{DropAt, ReorderMove};
 
-/// Swatches take paint payloads and artwork from the current document's canvas.
+/// Swatches take paints, and take swatch rows or canvas art from the current document.
 pub(super) fn accepts(drag: &PanelDrag, document: u64) -> bool {
     match drag {
+        PanelDrag::Paint { rows: Some(rows), .. } => rows.document == document,
         PanelDrag::Paint { .. } => true,
         PanelDrag::Art { document: source, .. } => *source == document,
         _ => false,
@@ -53,7 +54,7 @@ impl Drop {
 
 /// The drag a row of `key` starts, moving rows `names`. Colour groups have no paint of their own
 /// (the chip under the pointer draws Registration's mark for Registration).
-pub(super) fn drag_of(d: &Document, key: &SwatchKey, names: Vec<String>) -> PanelDrag {
+pub(super) fn drag_of(d: &Document, document: u64, key: &SwatchKey, names: Vec<String>) -> PanelDrag {
     let name = name_of(key);
     let (paint, params) = match key {
         SwatchKey::Swatch(_) if name == REGISTRATION => (Paint::registration(), swatch_params(d, name)),
@@ -63,7 +64,7 @@ pub(super) fn drag_of(d: &Document, key: &SwatchKey, names: Vec<String>) -> Pane
         },
         _ => (Paint::None, Value::Null),
     };
-    let rows = SwatchRows { grabbed: name.to_string(), names, groups: matches!(key, SwatchKey::Group(_)) };
+    let rows = SwatchRows { document, grabbed: name.to_string(), names, groups: matches!(key, SwatchKey::Group(_)) };
     PanelDrag::Paint { paint, params, rows: Some(rows), library: None }
 }
 

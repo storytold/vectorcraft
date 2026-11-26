@@ -409,8 +409,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui) {
     let dragged_doc = Arc::clone(&thumbs.doc);
     let document = st.uid;
     let shown_app: &VectorcraftApp = app;
-    let out = SwatchesPanel::new(&data, Bind::bound(&mut model.state), Srgba::rgb(0.0, 0.0, 0.0))
-        .drag_payload(move |drag: &ListDrag<SwatchKey>| Some(dnd::drag_of(&dragged_doc, &drag.grabbed, dragged_rows(drag))))
+    let browser = SwatchesPanel::new(&data, Bind::bound(&mut model.state), Srgba::rgb(0.0, 0.0, 0.0))
+        .drag_payload(move |drag: &ListDrag<SwatchKey>| Some(dnd::drag_of(&dragged_doc, document, &drag.grabbed, dragged_rows(drag))))
         .thumb(thumbs, thumb)
         .row_icons(|key| match key {
             SwatchKey::Swatch(name) => row_icons(shown_app, name),
@@ -422,8 +422,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui) {
         .select(SelectMode::Multi)
         .search(model.show_find)
         .reveal(focus.map(SwatchKey::Swatch))
-        .footer(None)
-        .show(ui);
+        .footer(None);
+    // A list drag is keyed by its browser ID. Each document has its own browser.
+    let out = ui.push_id(("swatch-rows", document), |ui| browser.show(ui)).inner;
     app.ui.swatches_panel = model;
     let shown = shown_keys(&data);
     if let Some((at, _, alt)) = out.used
