@@ -420,6 +420,38 @@ fn an_eps_save_with_use_artboards_asks_before_replacing_an_artboard_file_that_is
     let _ = std::fs::remove_dir_all(d);
 }
 
+/// A background save that automation confined to a folder started asks about the files it would
+/// replace once its result arrives, outside the request; OK still runs the save again under that
+/// folder and as automation.
+#[test]
+fn a_background_save_asks_about_replacing_files_under_the_access_of_the_request_that_started_it() {
+    let d = dir("eps-artboards-confined");
+    let path = d.join("Art.eps").to_string_lossy().to_string();
+    let options = json!({"useArtboards": true, "previewFormat": "none", "thumbnails": false});
+    let mut other = app();
+    other.run("file.new", json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    let _ = other.run("file.saveAs", json!({"path": path, "options": options}));
+    let there = artboard_files(&d);
+    assert_eq!(there.len(), 2, "{there:?}");
+    std::fs::remove_file(&path).unwrap();
+    let mut app = app();
+    checks_files_there(&mut app);
+    app.services.write_shared = Some(std::sync::Arc::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string())));
+    app.run("file.new", json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    rect(&mut app);
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[d.as_path()], &[d.as_path()]).unwrap();
+    let r = vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+        crate::file_asks::as_automated(&mut app, true, |app| app.run("file.saveAs", json!({"path": path, "options": options})))
+    })
+    .unwrap();
+    assert_eq!(r["background"], true, "{r}");
+    // The save's result is applied outside the request, as the next frame does.
+    crate::background::wait_all(&mut app);
+    assert_eq!(confirm::open_replace_files(&app), Some(there.clone()));
+    assert_eq!(confirm::open_replace_files_access(&app), Some((true, true)), "(confined, as automation)");
+    let _ = std::fs::remove_dir_all(d);
+}
+
 #[test]
 fn native_saves_stream_into_the_file() {
     let d = dir("stream");
