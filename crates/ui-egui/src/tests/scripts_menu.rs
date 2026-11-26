@@ -25,10 +25,9 @@ fn ctx() -> egui::Context {
     CTX.with(Clone::clone)
 }
 
-/// A fresh folder for test `name`, holding an empty `Scripts` folder.
-fn folder(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("vc-scripts-menu-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+/// A fresh folder for test `name`, holding an empty `Scripts` folder, removed when the test ends.
+fn folder(name: &str) -> vectorcraft_testkit::TempDir {
+    let dir = vectorcraft_testkit::TempDir::new(&format!("scripts-menu-{name}"));
     std::fs::create_dir_all(dir.join("Scripts")).unwrap();
     dir
 }
@@ -503,7 +502,6 @@ fn with_run_startup_scripts_on_a_listed_script_runs_after_the_startup_scripts() 
     assert!(!app.session.script_running());
     assert_eq!(started(&app).len(), 3);
     scripts_menu::finish();
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -522,7 +520,6 @@ fn with_run_startup_scripts_on_other_script_and_the_launch_run_the_startup_scrip
     finish(&mut app);
     assert_eq!(started(&app), ["a.jsx", "a.jsx", "chosen"]);
     assert_eq!(objects(&app), 4);
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -555,7 +552,6 @@ fn with_run_startup_scripts_on_a_chosen_script_still_replies_as_script_run() {
     finish(&mut app);
     assert_eq!((&r["running"], &r["queued"], &r["startup"]["queued"]), (&json!(true), &json!(true), &json!(2)), "{r}");
     assert_eq!(started(&app).last().map(String::as_str), Some("chosen"));
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -585,7 +581,6 @@ fn a_stopped_startup_script_says_it_was_stopped_and_the_chosen_script_still_runs
     // The stopped startup script stays in sight when the chosen script ends, with its message in the hover.
     assert_eq!(app.ui.status, stopped);
     assert_eq!(app.ui.status_notes, Some((stopped.clone(), vec![stopped, "Ran chosen".to_string()])));
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -601,7 +596,6 @@ fn a_last_startup_script_that_cannot_start_shows_in_the_status_bar_when_the_runs
     finish(&mut app);
     assert_eq!(started(&app), ["a.jsx", "b.jsx"]);
     assert_eq!(app.ui.status, format!("b.jsx: {}", vectorcraft_engine::cmd::scripts::TOO_LARGE));
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 /// `dir`'s `Startup Scripts` folder, attached to `app`, holding only `0.jsx`, too large to run.
@@ -628,7 +622,6 @@ fn a_launch_whose_only_startup_script_cannot_start_shows_it_in_the_status_bar() 
     script_runs::poll(&mut app);
     assert_eq!(app.ui.status, shown);
     assert_eq!(objects(&app), 0);
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -648,7 +641,6 @@ fn a_menu_run_after_a_first_startup_script_that_cannot_start_shows_it_and_runs_t
     // The failure stays in sight when the chosen script ends, with its message in the hover.
     assert_eq!(app.ui.status, shown);
     assert_eq!(app.ui.status_notes, Some((shown.clone(), vec![shown, "Ran chosen".to_string()])));
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -673,7 +665,6 @@ fn with_run_startup_scripts_on_other_script_with_a_missing_file_fails_before_the
     assert_eq!(app.ui.status, alone, "the error script.run gives, after the warning");
     assert!(!app.session.script_running());
     assert!(started(&app).is_empty(), "no startup script ran after the warning");
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -692,7 +683,6 @@ fn a_startup_scripts_folder_that_cannot_be_read_shows_in_the_status_bar_at_launc
     assert!(!app.session.script_running());
     // The message names the folder without its path, which automation replies would show.
     assert_eq!(app.ui.status, "The Startup Scripts folder cannot be read");
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -712,7 +702,6 @@ fn a_menu_run_with_a_startup_scripts_folder_that_cannot_be_read_says_so_and_runs
     assert_eq!(started(&app), ["chosen"]);
     assert_eq!(app.ui.status, note, "the note stays in sight when the chosen script ends");
     assert_eq!(app.ui.status_notes, Some((note.clone(), vec![note, "Ran chosen".to_string()])));
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 /// `dir`'s `Startup Scripts` folder, attached to `app`, holding one more entry than a listing reads
@@ -745,7 +734,6 @@ fn a_startup_scripts_folder_not_read_in_full_shows_in_the_status_bar_at_launch_a
     assert_eq!(started(&app), ["chosen"]);
     assert_eq!(app.ui.status, note, "the note stays in sight when the chosen script ends");
     assert_eq!(app.ui.status_notes, Some((note.to_string(), vec![note.to_string(), "Ran chosen".to_string()])));
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -765,5 +753,4 @@ fn startup_scripts_that_cannot_start_and_a_folder_not_read_in_full_all_stay_in_t
     // A reply with nothing left out keeps the message.
     script_runs::reply_notes(&mut app, &json!({"failed": [], "truncated": false, "unreadable": false}));
     assert_eq!(app.ui.status, "0.jsx: too large");
-    let _ = std::fs::remove_dir_all(dir);
 }

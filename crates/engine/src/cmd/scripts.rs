@@ -550,7 +550,6 @@ fn startup_run(s: &mut Session, p: &Value) -> Result<Value> {
     // parameters are checked as `script.run` checks them.
     if let Some(then) = &then {
         super::params::check_params("script.run", then)?;
-        prepare(s, then)?;
     }
     let root = match (s.startup_skip(), s.startup_scripts_dir()) {
         (None, Some(root)) => root.to_path_buf(),
@@ -562,6 +561,9 @@ fn startup_run(s: &mut Session, p: &Value) -> Result<Value> {
             return Ok(out);
         }
     };
+    if let Some(then) = &then {
+        prepare(s, then)?;
+    }
     let folder = root.to_string_lossy().into_owned();
     // The folder is the app's: a refusal names it as the request may see it.
     crate::file_access::check_read(&folder).map_err(|e| super::fileio::naming_in_error(EngineError::Other(e), &folder))?;
