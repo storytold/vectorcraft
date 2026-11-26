@@ -6280,8 +6280,6 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	Script file could not be written	Não foi possível gravar o arquivo do script
 @msg	Script file dialogs need a person to answer them	As caixas de diálogo de arquivo do script precisam de uma pessoa para respondê-las
 @msg	Script file is not open for writing	O arquivo do script não está aberto para gravação
-@msg	Script file is read-only	O arquivo do script é somente leitura
-@msg	Script file is open for writing	O arquivo do script está aberto para gravação
 @msg	Script file name is already in use	O nome do arquivo do script já está em uso
 @msg	Script file name must be a name without a folder	O nome do arquivo do script deve ser um nome sem pasta
 @msg	Script file permission can be kept only for a script run from a file	A permissão de arquivos só pode ser mantida para um script executado a partir de um arquivo

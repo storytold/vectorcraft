@@ -5968,8 +5968,6 @@ liquify-list-end	{0}, {1}	{0}、{1}
 @msg	Script file could not be written	スクリプトのファイルを書き込めませんでした
 @msg	Script file dialogs need a person to answer them	スクリプトのファイルダイアログには応答する人が必要です
 @msg	Script file is not open for writing	スクリプトのファイルが書き込み用に開かれていません
-@msg	Script file is read-only	スクリプトのファイルは読み取り専用です
-@msg	Script file is open for writing	スクリプトのファイルが書き込み用に開かれています
 @msg	Script file name is already in use	スクリプトのファイル名はすでに使用されています
 @msg	Script file name must be a name without a folder	スクリプトのファイル名はフォルダーを含まない名前にしてください
 @msg	Script file permission can be kept only for a script run from a file	ファイルの許可を保持できるのは、ファイルから実行したスクリプトだけです

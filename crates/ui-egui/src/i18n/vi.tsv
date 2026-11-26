@@ -5627,8 +5627,6 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	Script file could not be written	Không thể ghi tệp của tập lệnh
 @msg	Script file dialogs need a person to answer them	Hộp thoại tệp của tập lệnh cần một người trả lời
 @msg	Script file is not open for writing	Tệp của tập lệnh chưa được mở để ghi
-@msg	Script file is read-only	Tệp của tập lệnh ở chế độ chỉ đọc
-@msg	Script file is open for writing	Tệp của tập lệnh đang được mở để ghi
 @msg	Script file name is already in use	Tên tệp của tập lệnh đã được sử dụng
 @msg	Script file name must be a name without a folder	Tên tệp của tập lệnh phải là một tên không có thư mục
 @msg	Script file permission can be kept only for a script run from a file	Chỉ có thể giữ quyền truy cập tệp cho tập lệnh chạy từ một tệp

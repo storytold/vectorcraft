@@ -2968,8 +2968,6 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	Script file could not be written	無法寫入指令碼的檔案
 @msg	Script file dialogs need a person to answer them	指令碼的檔案對話框需要有人回應
 @msg	Script file is not open for writing	指令碼的檔案未以寫入方式開啟
-@msg	Script file is read-only	指令碼的檔案為唯讀
-@msg	Script file is open for writing	指令碼的檔案已以寫入方式開啟
 @msg	Script file name is already in use	指令碼的檔案名稱已在使用中
 @msg	Script file name must be a name without a folder	指令碼的檔案名稱必須是不含資料夾的名稱
 @msg	Script file permission can be kept only for a script run from a file	只有從檔案執行的指令碼才能保留檔案權限

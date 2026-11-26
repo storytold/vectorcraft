@@ -5624,8 +5624,6 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	Script file could not be written	无法写入脚本的文件
 @msg	Script file dialogs need a person to answer them	脚本的文件对话框需要有人回答
 @msg	Script file is not open for writing	脚本的文件未以写入方式打开
-@msg	Script file is read-only	脚本的文件为只读
-@msg	Script file is open for writing	脚本的文件已以写入方式打开
 @msg	Script file name is already in use	脚本的文件名已被使用
 @msg	Script file name must be a name without a folder	脚本的文件名必须是不含文件夹的名称
 @msg	Script file permission can be kept only for a script run from a file	只有从文件运行的脚本才能保留文件权限

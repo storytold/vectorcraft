@@ -2825,8 +2825,6 @@ liquify-list-end	{0}, {1}	{0} και {1}
 @msg	Script file could not be written	Δεν ήταν δυνατή η εγγραφή του αρχείου του σεναρίου
 @msg	Script file dialogs need a person to answer them	Τα παράθυρα διαλόγου αρχείων του σεναρίου χρειάζονται ένα άτομο για να απαντήσει
 @msg	Script file is not open for writing	Το αρχείο του σεναρίου δεν είναι ανοιχτό για εγγραφή
-@msg	Script file is read-only	Το αρχείο του σεναρίου είναι μόνο για ανάγνωση
-@msg	Script file is open for writing	Το αρχείο του σεναρίου είναι ανοιχτό για εγγραφή
 @msg	Script file name is already in use	Το όνομα του αρχείου του σεναρίου χρησιμοποιείται ήδη
 @msg	Script file name must be a name without a folder	Το όνομα του αρχείου του σεναρίου πρέπει να είναι όνομα χωρίς φάκελο
 @msg	Script file permission can be kept only for a script run from a file	Η άδεια αρχείων μπορεί να διατηρηθεί μόνο για σενάριο που εκτελείται από αρχείο

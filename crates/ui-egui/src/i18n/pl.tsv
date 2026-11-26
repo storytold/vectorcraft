@@ -5235,8 +5235,6 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	Script file could not be written	Nie można zapisać pliku skryptu
 @msg	Script file dialogs need a person to answer them	Okna dialogowe plików skryptu wymagają osoby, która na nie odpowie
 @msg	Script file is not open for writing	Plik skryptu nie jest otwarty do zapisu
-@msg	Script file is read-only	Plik skryptu jest tylko do odczytu
-@msg	Script file is open for writing	Plik skryptu jest otwarty do zapisu
 @msg	Script file name is already in use	Nazwa pliku skryptu jest już używana
 @msg	Script file name must be a name without a folder	Nazwa pliku skryptu musi być nazwą bez folderu
 @msg	Script file permission can be kept only for a script run from a file	Uprawnienie do plików można zachować tylko dla skryptu uruchomionego z pliku
