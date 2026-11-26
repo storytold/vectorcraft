@@ -302,8 +302,9 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let pairs = fields.as_object().into_iter().flatten().map(|(k, v)| (k.clone(), field_value(v.clone())));
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let dialog = HostedParamDialog::new(&ctx, KIND, DialogFields::from_pairs(pairs), build);
-    crate::dialogs::host::open_held(app, dialog, move |app, result: &ParamResult| {
-        if app.session.active().is_none_or(|st| st.uid != document) {
+    crate::dialogs::host::open_held(app, dialog, |app, result: &ParamResult| {
+        let source = opening(app).ok_or("the SVG Filter dialog is gone")?;
+        if app.session.active().is_none_or(|st| st.uid != source.document) {
             return Err(tl!("Return to the original drawing to apply this SVG filter").into());
         }
         confirm(app, &result.fields)
@@ -554,6 +555,23 @@ mod tests {
         activate(&mut app, 0);
         answer_dialog(&mut app, dialog, &[], true);
         assert_eq!(effects(&app, id)[0].params["name"], "Shift");
+    }
+
+    #[test]
+    fn reopened_svg_filter_uses_the_replacement_openings_drawing() {
+        let mut app = self::app();
+        app.run("svgFilter.define", json!({"xml": SHIFT})).unwrap();
+        let first = rect(&mut app);
+        open(&mut app, &json!({})).unwrap();
+        app.run("file.new", json!({"width": 120, "height": 120})).unwrap();
+        app.run("svgFilter.define", json!({"xml": SHIFT})).unwrap();
+        let second = rect(&mut app);
+        open(&mut app, &json!({})).unwrap();
+        answer_dialog(&mut app, dialog_id(KIND), &[(SELECTED, json!("Shift"))], true);
+        assert_eq!(effects(&app, second).first().map(|f| f.params["name"].clone()), Some(json!("Shift")));
+        assert!(open_dialogs(&app).is_empty());
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert!(effects(&app, first).is_empty());
     }
 
     #[test]
