@@ -126,11 +126,10 @@ fn hidden_characters_off_and_a_closed_document_release_the_text_nodes() {
 /// shows the Home screen or, with Show The Home Screen When No Documents Are Open off, an empty window.
 #[test]
 fn a_canvas_frame_without_a_document_releases_the_text_nodes() {
+    let ctx = crate::testing::ui_context();
     let frame = |app: &mut VectorcraftApp| {
-        let ctx = crate::testing::ui_context();
         let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, Vec2::new(800.0, 600.0))), ..Default::default() };
-        let mut out = ctx.run_ui(raw, |ui| crate::canvas::show(app, ui));
-        out.textures_delta.clear();
+        crate::testing::part_frame(app, &ctx, raw, crate::canvas::show);
     };
     for home in [true, false] {
         let mut app = app();
