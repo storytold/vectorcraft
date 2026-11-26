@@ -2161,6 +2161,20 @@ one opens as before and draws it as `rgb`:
 → invalid parameters for `effect.setParams`: `channel` must be one of rgb, red, green, blue
 ```
 
+The `mode` of Drop Shadow, Inner Glow and Outer Glow must name one of the 16 blend modes: `normal`, `darken`,
+`multiply`, `colorBurn`, `lighten`, `screen`, `colorDodge`, `overlay`, `softLight`, `hardLight`, `difference`,
+`exclusion`, `hue`, `saturation`, `color` or `luminosity`. The name is read in any letter case and with any spaces,
+hyphens or underscores (`Color Burn` and `color-burn` are `colorBurn`). An omitted `mode` keeps the effect's default
+(`multiply` for Drop Shadow, `screen` for the glows). New `effect.apply` and `effect.setParams` calls refuse any other
+value. An older document, action or journal with an unknown name still draws it as `normal`. A non-string value uses
+the effect's default. The effect dialogs and the Appearance panel show `mode` as a blend-mode menu.
+`ui.dialog.set` accepts the same blend-mode spellings.
+
+```json
+{"id": "effect.setParams", "params": {"index": 0, "params": {"mode": "multipy"}}}
+→ invalid parameters for `effect.setParams`: `mode` must be one of normal, darken, multiply, colorBurn, lighten, screen, colorDodge, overlay, softLight, hardLight, difference, exclusion, hue, saturation, color, luminosity
+```
+
 Radial Blur's Blur Center, `centerX` and `centerY`, must each be a number from 0 to 1: the share of the object's bounds
 across from its left edge and down from its top edge (0.5 each, the object's center, by default). The effect turns or
 zooms about that point, which moves and scales with the object. `effect.apply` and `effect.setParams` refuse any other
@@ -2784,8 +2798,8 @@ other files through `$`:
   `ScreenMode.MULTIWINDOW`, Full Screen Mode with Menu Bar as `ScreenMode.DESKTOP` and Full Screen Mode and
   Presentation Mode as `ScreenMode.FULLSCREEN` (VectorCraft's own mapping); the screen mode is the app's, so setting it
   on one view sets it on every view. Changing a view runs no command, adds
-  no undo step and stays when the run fails. A view object keeps its target when windows are renumbered; closing its
-  window makes it throw `Stale view`. `pageItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PageItems/)
+  no undo step and stays when the run fails. A view object keeps its target when windows are renumbered. While its
+  document remains open, closing its window makes it throw `Stale view`. `pageItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PageItems/)
   lists every object in the document's layers, the objects inside groups, compound paths, blends, envelopes, repeats
   and intertwines included, and has `length`, `[i]`, `index(key)`, `getByName(name)` and `removeAll()`; `i in` either
   collection is true for each
@@ -2909,6 +2923,9 @@ own rules:
   rejected (the `throw`, or the call of its reject function or of `Promise.reject`), `unhandledRejectionCount` counts
   all of them, and the Script Console shows an error line for each, as in
   `tidy.js:12:5: unhandled promise rejection: Error: not found`. Both fields are left out when there are none.
+  `all` and `race` preserve an input rejection's known location. Calling a saved reject function from script uses
+  that call's location. For rejections from code compiled by `eval` or `Function`, the `script.run` report omits
+  `file` and sets `line` and `column` to 0.
 
 The first run in an engine decides whether the engine has `Symbol` and the iterators of arrays, strings and
 `arguments` objects, and each run's script decides which syntax that run reads. The built-in functions' names follow
@@ -4520,9 +4537,12 @@ already walks Image Trace. Short agent entry points:
   value goes from the value less the variation (a Scatter brush's first value, an Art brush's `width`) at 0 to the
   value plus the variation (the second value, `width_max`) at 1, and a stroke without a wheel draws the value half
   way. Brush Options offers Stylus Wheel for a Calligraphic or Scatter brush's Size and an Art brush's Width. The
-  desktop app reads the wheel from XInput2 (`Abs Wheel`) under X11 and from AppKit (`tangentialPressure`) on macOS;
-  it does not read it on Windows or in the web build. `.ai` brush definitions read and write the wheel as variation
-  code 3.
+  desktop app reads the wheel from XInput2 (`Abs Wheel`) under X11, from AppKit (`tangentialPressure`) on macOS, and
+  on Windows from the tablet driver's Wintab interface (`pkTangentPressure`) of an airbrush pen, when `Wintab32.dll`
+  is installed; without it a Windows pen reads no wheel. Windows opens the Wintab context only while the active tool
+  uses the wheel (the Paintbrush with a brush on Stylus Wheel whose range the wheel can change, or the Blob Brush or
+  the Eraser with a value on it and a variation above 0), so there a Paintbrush stroke drawn with another brush keeps
+  no wheel. The web build does not read it. `.ai` brush definitions read and write the wheel as variation code 3.
 - Freehand Fidelity: the `fidelity` of `path.freehand` and `brush.freehand` is in points, 1.5 pt when left out. A
   value must be from 0.000015625 pt (0.01 / 640) to 100 / 0.0313 pt (about 3194.89 pt), and a value outside that range
   is rejected with an error. The Pencil and the Paintbrush give Fidelity in screen pixels, 0.01 to 100 px, and send it
@@ -15369,8 +15389,16 @@ Tools:
   change to the first segment that makes no undo step (a live preview, or one that was canceled) forgets the first
   segment. The circle is looked for again whenever either segment no longer has the shape it was found on, so a
   canceled preview does not leave a circle worked out on the previewed paths.
+  With `addPoints` on, the circle also adds an anchor point to the first segment and to the second segment (or the
+  one beside it) where it touches them, with `path.insertAnchor` at that point, so the segments are split without
+  changing their shape; the anchors and the circle are one `command.batch` undo step, and one Undo removes all of them.
+  When a touched path was not selected, a `select.set` step puts the selection back before the circle is drawn, so
+  Draw Behind places the circle behind the objects that were selected.
+  A touch within 0.05 screen pixels of an existing anchor adds no anchor there; when neither touch adds one, only the
+  circle is drawn. Alt (Option on macOS) held at the release turns `addPoints` the other way for that circle, and a
+  dot right of and below the pointer shows while it is in effect, following Alt as it is pressed and let go.
   Options (`tool.setOption`, or a double-click on the tool; kept with the preferences): `radius` (pt, 0.01 to
-  1000000, 36); `center` and `radii` (true or false, both true) show the center cross and the radii; `color` (`red`,
+  1000000, 36); `addPoints` (Add Points to Existing Paths, true or false, false); `center` and `radii` (true or false, both true) show the center cross and the radii; `color` (`red`,
   `blue`, `magenta`, `green`, `black` or `gray`; `red`) is the color of the circle, the cross, the radii and the note;
   `snapTolerance` (screen pixels, 0 to 25, 3; VectorCraft's own range and default) is how near the pointer picks a
   segment while Smart Guides are on (their Snapping Tolerance counts instead when it is larger) or while they are off

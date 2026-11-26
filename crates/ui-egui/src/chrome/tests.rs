@@ -1277,9 +1277,28 @@ fn isolation_shown(app: crate::VectorcraftApp) -> Shown {
 /// A point on the isolation bar's own surface: right of its crumbs, at the end of the path, which fills the bar up
 /// to the pattern editing buttons at its right.
 fn isolation_bar_surface(bar: &mut Shown) -> egui::Pos2 {
-    let back = bar.named("Back");
     let path = bar.named("Isolation path");
-    egui::pos2(path.rect.right() - 8.0, back.center().y)
+    egui::pos2(path.rect.right() - 8.0, path.center().y)
+}
+
+/// The names of the isolation bar's controls in the latest frame that screen readers read with `role`, sorted.
+fn isolation_names(bar: &Shown, role: Role) -> Vec<String> {
+    let tree = bar.tree();
+    let mut names: Vec<String> =
+        tree.keys().into_iter().filter(|key| tree.role_of(*key) == Some(role)).filter_map(|key| tree.name_of(key)).map(str::to_owned).collect();
+    names.sort();
+    names
+}
+
+/// The isolation bar's back arrow: the leftmost button named `name`.
+fn isolation_back(bar: &mut Shown, name: &str) -> Target {
+    bar.frame(Vec::new());
+    let tree = bar.tree();
+    let keys: Vec<_> = tree.keys().into_iter().filter(|key| tree.role_of(*key) == Some(Role::BUTTON) && tree.name_of(*key) == Some(name)).collect();
+    keys.into_iter()
+        .filter_map(|key| bar.fixture.target(key))
+        .min_by(|a, b| a.rect.left().total_cmp(&b.rect.left()))
+        .unwrap_or_else(|| panic!("no {name:?} button in {:?}", bar.names()))
 }
 
 /// #4468: In nested isolation, clicking the back button steps up one level in the hierarchy,
@@ -1308,15 +1327,15 @@ fn isolation_bar_navigation_and_back_button_steps_up() {
     let isolation = |bar: &Shown| bar.app().session.active().unwrap().isolation;
 
     // Clicking back from `a` steps up to parent group `g1`
-    bar.click("Back");
+    bar.click("Back One Level");
     assert_eq!(isolation(&bar), Some(NodeId(g1)));
 
     // Clicking back from `g1` steps up to grandparent group `g2`
-    bar.click("Back");
+    bar.click("Back One Level");
     assert_eq!(isolation(&bar), Some(NodeId(g2)));
 
     // Clicking back from `g2` (parent is layer) exits isolation mode completely
-    bar.click("Back");
+    bar.click("Exit Isolation Mode");
     assert_eq!(isolation(&bar), None);
 
     // Deep isolate again to test clicking ancestor breadcrumb directly
@@ -1355,11 +1374,11 @@ fn isolation_bar_back_button_steps_up_through_sublayers() {
     let steps = |bar: &Shown| bar.app().session.doc().unwrap().history.undo.len();
 
     let before = steps(&bar);
-    bar.click("Back");
+    bar.click("Back One Level");
     assert_eq!(isolation(&bar), Some(mid), "back from the deepest sublayer");
-    bar.click("Back");
+    bar.click("Back One Level");
     assert_eq!(isolation(&bar), Some(top), "back from the middle sublayer");
-    bar.click("Back");
+    bar.click("Exit Isolation Mode");
     assert_eq!(isolation(&bar), None, "back from the top-level layer");
     assert_eq!(steps(&bar), before, "no undo step");
 
@@ -1422,7 +1441,8 @@ fn isolation_bar_background_click_leaves_pattern_edit_open() {
         let st = app.session.active().unwrap();
         assert!(st.doc.pattern_edit.is_some() && st.isolation.is_some(), "pattern editing stays open");
     }
-    bar.click("Back");
+    let back = isolation_back(&mut bar, "Done");
+    bar.click_on(&back);
     let app = bar.app();
     let st = app.session.active().unwrap();
     assert!(st.doc.pattern_edit.is_none() && st.isolation.is_none(), "the back arrow ends pattern editing");
@@ -1504,6 +1524,72 @@ fn isolation_bar_click_on_the_current_name_exits() {
     let mut bar = isolation_shown(app);
     bar.click(&leaf);
     assert_eq!(bar.app().session.active().unwrap().isolation, None);
+}
+
+/// Screen readers call the isolation bar's back arrow by what it does: Back One Level, Exit Isolation Mode, Exit
+/// Symbol Editing Mode, or Done while a pattern is edited, in the UI's language. Each crumb of the levels above is
+/// a link with the name it shows, and the current object's name is not a control.
+#[test]
+fn the_isolation_bars_controls_have_screen_reader_names() {
+    use vectorcraft_doc::NodeId;
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let rect = |app: &mut crate::VectorcraftApp, x: f64| {
+        app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b) = (rect(&mut app, 10.0), rect(&mut app, 50.0));
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    app.run("object.group", json!({})).unwrap();
+    let name = |app: &crate::VectorcraftApp, id: NodeId| app.session.active().unwrap().doc.node(id).unwrap().display_name();
+    let st = app.session.active().unwrap();
+    let (layer, group) = (st.doc.layer_of(NodeId(a)).unwrap(), st.doc.parent_of(NodeId(a)).unwrap());
+    let (layer_name, group_name) = (name(&app, layer), name(&app, group));
+    let mut bar = isolation_shown(app);
+    let shown = |bar: &mut Shown, role: Role| {
+        bar.frame(Vec::new());
+        isolation_names(bar, role)
+    };
+
+    // A path in a group: back goes to the group.
+    bar.app().run("object.isolate", json!({"id": a})).unwrap();
+    assert_eq!(shown(&mut bar, Role::BUTTON), ["Back One Level"]);
+    let mut crumbs = vec![layer_name.clone(), group_name.clone()];
+    crumbs.sort();
+    assert_eq!(shown(&mut bar, Role::LINK), crumbs, "the current object's name is not a link");
+
+    // The group itself: back leaves isolation mode.
+    bar.app().run("object.isolate", json!({"id": group.0})).unwrap();
+    assert_eq!(shown(&mut bar, Role::BUTTON), ["Exit Isolation Mode"]);
+    assert_eq!(shown(&mut bar, Role::LINK), std::slice::from_ref(&layer_name));
+
+    // An isolated sublayer: back goes to its parent layer, and from the top-level layer it leaves.
+    let sub = bar.app().run("layer.newSublayer", json!({"parent": layer.0, "name": "Sublayer B"})).unwrap()["id"].as_u64().unwrap();
+    bar.app().run("object.isolate", json!({"id": sub})).unwrap();
+    assert_eq!(shown(&mut bar, Role::BUTTON), ["Back One Level"]);
+    bar.app().run("object.isolate", json!({"id": layer.0})).unwrap();
+    assert_eq!(shown(&mut bar, Role::BUTTON), ["Exit Isolation Mode"]);
+    bar.app().run("object.isolate", json!({"id": group.0})).unwrap();
+
+    // In German.
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").expect("de registered"));
+    let german = shown(&mut bar, Role::BUTTON);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    assert_eq!(german, ["Isolationsmodus beenden"]);
+    bar.app().run("object.exitIsolation", json!({"all": true})).unwrap();
+
+    // Pattern editing: back is Done, beside Save a Copy, Done and Cancel.
+    let c = rect(&mut bar.app(), 200.0);
+    bar.app().run("select.set", json!({"ids": [c]})).unwrap();
+    bar.app().run("object.pattern.make", json!({"name": "Dots", "width": 20, "height": 20})).unwrap();
+    assert_eq!(shown(&mut bar, Role::BUTTON), ["Cancel", "Done", "Done", "Save a Copy"]);
+    bar.app().run("object.pattern.cancel", json!({})).unwrap();
+
+    // Symbol editing mode: back leaves it.
+    let d = rect(&mut bar.app(), 300.0);
+    bar.app().run("select.set", json!({"ids": [d]})).unwrap();
+    bar.app().run("symbol.new", json!({"name": "Box"})).unwrap();
+    bar.app().run("symbol.edit", json!({"name": "Box"})).unwrap();
+    assert_eq!(shown(&mut bar, Role::BUTTON), ["Exit Symbol Editing Mode"]);
 }
 
 /// The Control bar's Isolate Selected Object isolates a path inside a group that Direct
