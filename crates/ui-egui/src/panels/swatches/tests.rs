@@ -665,6 +665,52 @@ fn new_swatch_skips_rows_replaced_during_the_drag() {
     assert_eq!(undo_steps(&app), undo + 1);
 }
 
+/// The rows of a drag running in the drag session are checked after every command the app runs:
+/// a swatch deleted and brought back by an undo, then an edit that clears the redo steps, all with
+/// no pass of the panel in between, is neither duplicated by New Swatch nor deleted by Delete
+/// Swatch.
+#[test]
+fn rows_dragged_in_the_session_are_checked_after_every_command() {
+    use craft::behavior::keyed;
+    use craft::ui::contract::ShowCollection as _;
+    use craft::ui::list::{List, ListRow};
+    use craft::ui::testing::Fixture;
+
+    let mut app = app();
+    let payload = rows_drag(&app, "Orange", &["Orange"]);
+    // A list row that starts the drag through the drag session, as a row of the panel does.
+    let mut fixture = Fixture::new(move |ui| {
+        let payload = payload.clone();
+        let _ = List::<u32>::new("Drag source").drag_payload(move |_: &ListDrag<u32>| Some(payload.clone())).show_items(
+            ui,
+            &keyed(&[0u32], |key: &u32| *key),
+            &mut |_, _| ListRow::new("Dragged"),
+        );
+    });
+    fixture.room(vec2(240.0, 120.0));
+    fixture.settle();
+    app.ui_ctx = Some(fixture.ctx().clone());
+    let from = fixture.by_label("Dragged").expect("the drag source").center();
+    let key = crate::dialogs::confirm::KIND;
+    fixture.drag_at_pausing(from, vec2(0.0, 60.0), |f| {
+        let drag = craft::ui::runtime::drag::active::<PanelDrag>(f.ctx()).expect("the rows drag");
+        for (id, params) in [
+            ("swatch.delete", json!({"names": ["Orange"]})),
+            ("edit.undo", json!({})),
+            ("shape.rectangle", json!({"x": 60, "y": 0, "width": 20, "height": 20})),
+        ] {
+            app.run(id, params).unwrap();
+        }
+        let restored = doc_and_steps(&app);
+        assert!(restored.0.swatch("Orange").is_some(), "the undo brings Orange back");
+        dnd::on_footer_drop(&mut app, dnd::FooterTarget::New, &drag);
+        assert_eq!(doc_and_steps(&app), restored, "a swatch brought back by an undo is not duplicated");
+        dnd::on_footer_drop(&mut app, dnd::FooterTarget::Delete, &drag);
+        assert!(!dialog_open(&app, key), "a swatch brought back by an undo asks nothing");
+        assert_eq!(doc_and_steps(&app), restored, "a swatch brought back by an undo is kept");
+    });
+}
+
 /// A selected swatch dragged onto New Swatch or Delete Swatch carries the selected swatches that
 /// the find field hides, which the browser leaves out of the drag, as a click on Delete Swatch
 /// takes them too. The copies are selected in panel order. A grabbed swatch outside the selection
