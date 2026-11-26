@@ -158,14 +158,16 @@ pub(crate) fn validate_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value)
         let mut copies = 0;
         // In wireframe mode the edges are drawn with no paint copies, graphics or shadow.
         let wire = wireframe_params(id, p);
-        shapes.iter().try_for_each(|s| check_surface(&s.path, b, options, surface_item(&s.items).filter(|_| !wire), &mut copies))?;
+        // Each member is swept with its own fill rule, as it is drawn.
+        let ruled = |s: &Profile| Revolve { fill_rule: s.rule, ..options };
+        shapes.iter().try_for_each(|s| check_surface(&s.path, b, ruled(s), surface_item(&s.items).filter(|_| !wire), &mut copies))?;
         if wire {
             return Ok(());
         }
         // Without graphics, or without the document they draw from, no member is measured for them.
         if let Some(doc) = doc.filter(|_| id == REVOLVE && !crate::solids::mapped_graphics(p).is_empty()) {
             match graphics_member(&shapes, b, options).and_then(|k| shapes.get(k)) {
-                Some(s) => check_graphics(Some(doc), id, &s.path, b, options, p, &mut 0)?,
+                Some(s) => check_graphics(Some(doc), id, &s.path, b, ruled(s), p, &mut 0)?,
                 // With no member to carry them, the graphics' art must still fit its limits.
                 None => {
                     crate::solids::graphics::validate_symbols(doc, p)?;
@@ -174,9 +176,9 @@ pub(crate) fn validate_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value)
             }
         }
         let casting = shapes.iter().filter(|s| surface_item(&s.items).is_some_and(|i| crate::solids::shadow::casts(paint_of(i).1 * s.opacity)));
-        return check_shadow(p, casting.map(|s| &s.path), b, options);
+        return check_shadow(p, casting.map(|s| (&s.path, s.rule)), b, options);
     }
-    let (path, _) = object_profile(n, "Revolve")?;
+    let (path, rule) = object_profile(n, "Revolve")?;
     if !has_two_anchors(&path) {
         return Err("Revolve requires a shape with at least two anchors".into());
     }
@@ -184,12 +186,13 @@ pub(crate) fn validate_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value)
     let b = path.bounds().ok_or("Revolve requires a shape with at least two anchors")?;
     let paints = solid_paints(n);
     let wire = wireframe_params(id, p);
-    check_surface(&path, b, options_of(id, p), surface_item(&paints).filter(|_| !wire), &mut 0)?;
+    let options = Revolve { fill_rule: rule, ..options_of(id, p) };
+    check_surface(&path, b, options, surface_item(&paints).filter(|_| !wire), &mut 0)?;
     if wire {
         return Ok(());
     }
-    check_graphics(doc, id, &path, b, options_of(id, p), p, &mut 0)?;
-    check_shadow(p, [&path], b, options_of(id, p))
+    check_graphics(doc, id, &path, b, options, p, &mut 0)?;
+    check_shadow(p, [(&path, rule)], b, options)
 }
 
 /// An error when the graphics in Revolve (`id`) parameters `p`, with the symbols of `doc`, are past
@@ -226,14 +229,14 @@ pub(crate) fn graphics_member(shapes: &[Profile], b: Rect, options: Revolve) -> 
         .map(|(k, _)| k)
 }
 
-/// With the shadow of Revolve parameters `p` on, an error when the surfaces of `paths` it is cast
-/// from, about the axis of `b`, are past the limits together.
-fn check_shadow<'a>(p: &Value, paths: impl IntoIterator<Item = &'a PathData>, b: Rect, options: Revolve) -> Result<(), String> {
+/// With the shadow of Revolve parameters `p` on, an error when the surfaces of `paths`, each filled
+/// with its rule, it is cast from, about the axis of `b`, are past the limits together.
+fn check_shadow<'a>(p: &Value, paths: impl IntoIterator<Item = (&'a PathData, FillRule)>, b: Rect, options: Revolve) -> Result<(), String> {
     if crate::solids::shadow::options(p).is_none() {
         return Ok(());
     }
     let mut caster = vectorcraft_three_d::ShadowCaster::new();
-    paths.into_iter().try_for_each(|path| caster.revolve(path, options.fill_rule, b, options).map(|_| ()))
+    paths.into_iter().try_for_each(|(path, rule)| caster.revolve(path, rule, b, Revolve { fill_rule: rule, ..options }).map(|_| ()))
 }
 
 /// [`validate_revolve`] for a Revolve with parameters `p` at index `index` of the effects of
@@ -269,7 +272,7 @@ pub(crate) fn validate_item_of(doc: Option<&Document>, n: &Node, id: &str, p: &V
     validate_params_of(id, p)?;
     validate_map_symbols(doc, id, p)?;
     const EMPTY: &str = "Revolve requires a shape with at least two anchors";
-    let (path, _) = object_profile(n, "Revolve")?;
+    let (path, rule) = object_profile(n, "Revolve")?;
     if !has_two_anchors(&path) {
         return Err(EMPTY.into());
     }
@@ -284,7 +287,7 @@ pub(crate) fn validate_item_of(doc: Option<&Document>, n: &Node, id: &str, p: &V
             Some(fx) if crate::paints(item) => (fx.id.as_str(), merged_params(&fx.id, &fx.params)),
             _ => continue,
         };
-        let options = options_of(kind, &params);
+        let options = Revolve { fill_rule: rule, ..options_of(kind, &params) };
         let path = geometry(&path, at.and_then(|at| effects.get(..at)).unwrap_or(effects), &ctx.item(item));
         let b = path.bounds().ok_or(EMPTY)?;
         let wire = wireframe_params(kind, &params);
@@ -298,7 +301,7 @@ pub(crate) fn validate_item_of(doc: Option<&Document>, n: &Node, id: &str, p: &V
         if i == target {
             graphics?;
         }
-        check_shadow(&params, [&path], b, options)?;
+        check_shadow(&params, [(&path, rule)], b, options)?;
     }
     Ok(())
 }
@@ -890,8 +893,11 @@ fn surface_meshes(
     }
     let (mesh, on) = vectorcraft_three_d::revolve_mesh_surface(path, rule, b, options)?;
     let (mut side, mut rest, mut art) = (vectorcraft_three_d::Mesh::default(), vectorcraft_three_d::Mesh::default(), vec![]);
-    for (t, points) in mesh.triangles.iter().zip(&on) {
-        let corner = |i: u32| mesh.positions.get(i as usize).copied().zip(mesh.normals.get(i as usize).copied());
+    for ((t, points), part) in mesh.triangles.iter().zip(&on).zip(&mesh.parts) {
+        let corner = |i: u32| {
+            let i = i as usize;
+            Some((*mesh.positions.get(i)?, *mesh.normals.get(i)?, *mesh.uvs.get(i)?))
+        };
         let Some(corners) = t.iter().map(|&i| corner(i)).collect::<Option<Vec<_>>>() else { continue };
         let into = match points {
             Some(points) => {
@@ -901,11 +907,13 @@ fn surface_meshes(
             None => &mut rest,
         };
         let base = into.positions.len() as u32;
-        for (p, n) in corners {
+        for (p, n, uv) in corners {
             into.positions.push(p);
             into.normals.push(n);
+            into.uvs.push(uv);
         }
         into.triangles.push([base, base + 1, base + 2]);
+        into.parts.push(*part);
     }
     let mut out = vec![];
     if !rest.is_empty() {
@@ -1948,6 +1956,65 @@ mod tests {
         let mut drawn = (*object).clone();
         drawn.appearance.effects.push(crate::new_effect(REVOLVE, &lit).unwrap());
         assert_eq!(revolve_art(&drawn), None, "past the budget the source draws");
+    }
+
+    #[test]
+    fn paint_copies_are_counted_on_the_faces_the_fill_rule_draws() {
+        use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+        use vectorcraft_geom::FillRule;
+        // Three nested squares drawn in the same direction, swept part way with Cap: under the
+        // even-odd rule each cut side is a ring and the inner square, and under the nonzero rule
+        // each cut side is one whole square.
+        let both = PathData::new(
+            [(100.0, 200.0), (120.0, 180.0), (140.0, 160.0)]
+                .iter()
+                .flat_map(|&(lo, hi)| {
+                    let mut b = BezPath::new();
+                    b.move_to((lo, lo));
+                    b.line_to((hi, lo));
+                    b.line_to((hi, hi));
+                    b.line_to((lo, hi));
+                    b.close_path();
+                    PathData::from_bezpath(&b).subpaths
+                })
+                .collect(),
+        );
+        let p = json!({"angle": 180, "cap": true});
+        let b = both.bounds().unwrap();
+        let faces = |rule| vectorcraft_three_d::revolve(&both, b, Revolve { fill_rule: rule, ..revolve_options(&p) }).unwrap().len();
+        let (drawn, other) = (faces(FillRule::EvenOdd), faces(FillRule::NonZero));
+        assert_ne!(drawn, other, "the two rules draw different faces");
+        // A gradient whose copies fit on the faces of one rule and not on those of the other.
+        let gradient = |n: usize| {
+            let stops = (0..n).map(|i| GradientStop::new(i as f32 / n as f32, Color::BLACK)).collect();
+            Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))))
+        };
+        let target = MAX_PAINT_COPIES / 4 * 2 / (drawn + other);
+        let paint = gradient(target / std::mem::size_of::<GradientStop>());
+        let bytes = paint_bytes(&paint);
+        let fits = |faces: usize| faces * 4 * bytes <= MAX_PAINT_COPIES;
+        assert_ne!(fits(drawn), fits(other), "{bytes} bytes per copy on {drawn} and {other} faces");
+        // The surface is drawn on the even-odd faces, so validation counts the copies on them.
+        let expected = if fits(drawn) {
+            Ok(())
+        } else {
+            Err("Revolve paint is too complex for this surface; reduce Segments or simplify the gradient".to_string())
+        };
+        let shape = |effects: Vec<Effect>| {
+            let mut fill = AppearanceItem::Fill(FillLayer::new(paint.clone()));
+            fill.effects_mut().extend(effects);
+            crate::group::shape_node(NodeId(1), both.clone(), FillRule::EvenOdd, Appearance { items: vec![fill], ..Default::default() })
+        };
+        let revolve = || crate::new_effect(REVOLVE, &p).unwrap();
+        let mut object = shape(vec![]);
+        assert_eq!(validate_revolve(&object, &p), expected, "an object");
+        object.appearance.effects.push(revolve());
+        assert_eq!(revolve_art(&object).is_some(), expected.is_ok(), "the object's surface draws when it is accepted");
+        let group = group_with(p.clone(), vec![Arc::new(shape(vec![]))]);
+        assert_eq!(validate_revolve(&group, &p), expected, "a group's member");
+        assert_eq!(revolve_art(&group).is_some(), expected.is_ok(), "the group's surface draws when it is accepted");
+        let item = shape(vec![revolve()]);
+        assert_eq!(validate_item_of(None, &item, REVOLVE, &p, 0, 0), expected, "a fill's Revolve");
     }
 
     /// Is `u` the underlay [`crate::lighting::underlay`] draws for `face`, a face [`surface`] draws?

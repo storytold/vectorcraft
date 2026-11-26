@@ -8,13 +8,15 @@ use std::rc::Rc;
 use std::sync::{Arc, mpsc};
 use std::time::Duration;
 
+use craft::ui::runtime::frame::take_output;
+use craft::ui::shell::embed;
 use egui::{Event, Modifiers, PointerButton, Pos2, Rect, Shape, vec2};
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::clipboard::Flavour;
 use vectorcraft_ui_egui::{Services, SystemClipboard, VectorcraftApp, background};
 
-const COPIED: &str = "Copied to clipboard";
+const COPIED: &str = "Copied the value";
 const LENGTH: &str = "234 pt";
 
 struct Board(Rc<Cell<usize>>);
@@ -52,6 +54,7 @@ impl App {
         app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 37, "height": 40})).unwrap();
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
+        embed::install(&ctx, craft::ui::testing::install_spec(), &vectorcraft_ui_egui::ui_fonts()).unwrap();
         let mut a = Self { app, ctx, time: 0.0 };
         a.settle();
         a
@@ -66,11 +69,14 @@ impl App {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 1000.0))),
             ..Default::default()
         };
-        self.app.raw_input_hook(&self.ctx, &mut raw);
+        self.app.adopt_context(&self.ctx);
+        self.app.raw_input(&self.ctx, &mut raw);
+        embed::before_input(&self.ctx, |out| self.app.frame_input(out));
         let mut out = self.ctx.run_ui(raw, |ui| {
-            self.app.logic(ui.ctx());
+            self.app.tick(ui.ctx());
             self.app.ui(ui);
         });
+        let _ = self.app.frame_input(take_output(&self.ctx));
         out.textures_delta.clear();
         out
     }
@@ -116,32 +122,10 @@ impl App {
     }
 
     fn document_category(&mut self, category: &str) -> egui::FullOutput {
-        let out = self.panel("docInfo");
-        let title = painted(&out, "Document Info").0;
-        let update = out.platform_output.accesskit_update.as_ref().expect("actual panel accessibility");
-        let at = update
-            .nodes
-            .iter()
-            .filter(|(_, n)| n.label() == Some("Panel menu"))
-            .filter_map(|(_, n)| n.bounds())
-            .map(|b| Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32)))
-            .filter(|r| (r.center().y - title.center().y).abs() < 16.0 && r.center().x > title.center().x)
-            .min_by(|a, b| a.center().distance(title.center()).total_cmp(&b.center().distance(title.center())))
-            .expect("the Document Info title's own Panel menu")
-            .center();
-        self.tap(at);
-        // A newly opened egui popup first measures an invisible sizing pass. Read its painted
-        // category only after normal subsequent layout frames, as the user sees it.
-        let menu = self.settle();
-        // menu_item_name paints the check column in the same galley as the label.
-        // Match that real menu text without trimming any copied readout or user data.
-        let item = ["   ", "✓ "]
-            .into_iter()
-            .map(|prefix| format!("{prefix}{category}"))
-            .find(|text| visible_text_count(&menu, text) > 0)
-            .map(|text| painted(&menu, &text).0.center())
-            .unwrap_or_else(|| panic!("fixture: no painted category menu item {category:?}"));
-        self.tap(item);
+        self.panel("docInfo");
+        let id = vectorcraft_engine::cmd::CATEGORIES.iter().find(|(_, label)| *label == category).unwrap().0;
+        // These frames exercise the readout, not the removed egui menu's layout.
+        self.app.run("ui.docInfo.category", json!({"category": id})).unwrap();
         self.settle()
     }
 }
@@ -188,10 +172,11 @@ fn visible_text_count(out: &egui::FullOutput, text: &str) -> usize {
 fn copy_at(a: &mut App, at: Pos2, value: &str) -> egui::FullOutput {
     let before = a.snapshot();
     let release = a.tap(at);
-    assert!(copies(&release).is_empty(), "the first release cannot yet exclude a double-click");
+    // #9353 copies the first click immediately; a later click selects the word.
     let commit = a.deadline();
     let next = a.frame(vec![]);
-    let mut all = copies(&commit);
+    let mut all = copies(&release);
+    all.extend(copies(&commit));
     all.extend(copies(&next));
     assert_eq!(all, [value], "exactly one full value, never the art's SVG");
     assert_eq!(visible_text_count(&next, COPIED), 1, "one actual nonmodal confirmation is painted");
@@ -275,7 +260,8 @@ fn panel_readout_document_value_copies_once_with_feedback_and_cancels_pending_ar
 }
 
 fn dismiss_feedback(a: &mut App, out: &egui::FullOutput) {
-    a.tap(painted(out, COPIED).0.center());
+    assert_eq!(visible_text_count(out, COPIED), 1);
+    a.app.ui.status.clear();
     assert_eq!(visible_text_count(&a.frame(vec![]), COPIED), 0, "the previous confirmation cannot satisfy the next readout's oracle");
 }
 
@@ -300,16 +286,16 @@ fn copy_long_link_value(a: &mut App) {
     place_original_png(a, &name);
     let out = a.panel("links");
     let label = painted(&out, "Name").0;
-    let (value, elided) = out
+    let (value, clipped) = out
         .shapes
         .iter()
         .find_map(|s| {
             let t = text_shape(&s.shape, &name)?;
             let r = t.galley.rect.translate(t.pos.to_vec2()).intersect(s.clip_rect);
-            (r.is_positive() && (r.center().y - label.center().y).abs() < 8.0).then_some((r, t.galley.elided))
+            (r.is_positive() && (r.center().y - label.center().y).abs() < 8.0).then_some((r, t.galley.elided || r.width() < t.galley.rect.width()))
         })
         .expect("the actual selected image's Link Info Name value");
-    assert!(elided, "this fixture really truncates the painted readout");
+    assert!(clipped, "the framework really clips this long painted readout");
     copy_at(a, value.center(), &name);
 }
 
@@ -346,19 +332,19 @@ fn cancelled_gesture(kind: &str) {
             assert!(copies(&up).is_empty(), "release outside does not accept the value");
         }
         "double" => {
-            assert!(copies(&a.tap(at)).is_empty());
+            assert_eq!(copies(&a.tap(at)), [LENGTH], "the first click follows the landed framework policy");
             let second = a.frame_after(a.delay() * 0.25, vec![button(at, true)]);
             assert!(copies(&second).is_empty());
             assert!(copies(&a.frame(vec![button(at, false)])).is_empty());
         }
         "hidden" => {
-            assert!(copies(&a.tap(at)).is_empty());
+            assert_eq!(copies(&a.tap(at)), [LENGTH], "the first click follows the landed framework policy");
             a.close_panel("docInfo");
             assert_no_delayed_copy(&mut a, kind);
             a.panel("docInfo");
         }
         "changed" => {
-            assert!(copies(&a.tap(at)).is_empty());
+            assert_eq!(copies(&a.tap(at)), [LENGTH], "the first click follows the landed framework policy");
             a.app.run("shape.rectangle", json!({"x": 70, "y": 70, "width": 1, "height": 1})).unwrap();
             let changed = a.frame(vec![]);
             painted(&changed, "238 pt");
@@ -372,7 +358,7 @@ fn cancelled_gesture(kind: &str) {
 }
 
 #[test]
-fn panel_readout_double_click_release_outside_and_stale_values_do_not_auto_copy() {
+fn panel_readout_primary_gestures_and_accessible_copy_follow_framework_policy() {
     for kind in ["outside", "double", "hidden", "changed"] {
         cancelled_gesture(kind);
     }
@@ -389,13 +375,13 @@ fn review_8826_motion_keeps_pending_copy() {
     let out = a.panel("info");
     let rect = painted(&out, "W: 37 pt").0;
     let before = a.snapshot();
-    assert!(copies(&a.tap(rect.center())).is_empty());
+    assert_eq!(copies(&a.tap(rect.center())), ["W: 37 pt"]);
     let at = rect.center() + vec2(1.0, 0.0);
     assert!(rect.contains(at), "ordinary motion stays over the same real readout");
     let moved = a.frame(vec![Event::PointerMoved(at)]);
     painted(&moved, "W: 37 pt");
     assert!(copies(&moved).is_empty());
-    assert_eq!(copies(&a.deadline()), ["W: 37 pt"], "motion alone does not cancel an ordinary primary copy");
+    assert!(copies(&a.deadline()).is_empty(), "motion cannot repeat the completed primary copy");
     let next = a.frame(vec![]);
     assert!(copies(&next).is_empty());
     assert_eq!(visible_text_count(&next, COPIED), 1);
@@ -408,7 +394,8 @@ fn review_8826_pointer_takeover(button: PointerButton) {
     let at = painted(&out, "W: 37 pt").0.center();
     let before = a.snapshot();
     let release = a.tap(at);
-    assert!(copies(&release).is_empty());
+    assert_eq!(copies(&release), ["W: 37 pt"]);
+    let sets = a.app.ui.status_sets;
     painted(&release, "W: 37 pt");
     let press = a.frame_after(a.delay() * 0.25, vec![Event::PointerButton { pos: at, button, pressed: true, modifiers: Modifiers::NONE }]);
     assert!(copies(&press).is_empty(), "{button:?} press must not copy");
@@ -419,7 +406,7 @@ fn review_8826_pointer_takeover(button: PointerButton) {
     assert_no_delayed_copy(&mut a, &format!("{button:?} takeover"));
     let still_shown = a.frame(vec![]);
     painted(&still_shown, "W: 37 pt");
-    assert_eq!(visible_text_count(&still_shown, COPIED), 0, "cancelled pending copy has no confirmation");
+    assert_eq!(a.app.ui.status_sets, sets, "another pointer action cannot repeat the confirmation");
     assert_eq!(a.snapshot(), before, "{button:?} takeover leaves document, selection and history intact");
 }
 
@@ -450,7 +437,7 @@ fn review_8826_accesskit_takeover(same_target: bool) {
     assert_ne!(width, height, "the live W and H rows have distinct semantic targets");
     let before = a.snapshot();
     let release = a.tap(painted(&out, "W: 37 pt").0.center());
-    assert!(copies(&release).is_empty());
+    assert_eq!(copies(&release), ["W: 37 pt"]);
     painted(&release, "W: 37 pt");
     painted(&release, "H: 40 pt");
     let (target_node, expected) = if same_target { (width, "W: 37 pt") } else { (height, "H: 40 pt") };

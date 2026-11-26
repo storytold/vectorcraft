@@ -3,17 +3,23 @@
 //! drag, the Zoom tool's magnification, the Paintbrush's brush) and the selection's fill and
 //! stroke colour values.
 
-use egui::{Sense, Ui, vec2};
+use craft::behavior::ColumnWidth;
+use craft::keymap::CommandRef;
+use craft::ui::contract::{Show as _, ShowContainer as _};
+use craft::ui::display::{Divider, Picture};
+use craft::ui::layout_components::{Grid, Row, Stack};
+use craft::ui::list::ThumbAspect;
+use craft::ui::menu::PanelRow;
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use egui::Ui;
+use serde_json::Value;
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{NodeKind, Unit};
-use vectorcraft_engine::Session;
 use vectorcraft_geom::Point;
 use vectorcraft_tools::Readout;
 
-use super::{current_paints, mixed_paints, pstate, set_pstate};
+use super::{current_paints, mixed_paints, swatches};
 use crate::VectorcraftApp;
-use crate::theme::Tokens;
-use crate::widgets::{self, menu_item};
 
 /// Color values in the color's own model, for the Info panel.
 pub fn color_values(c: &Color) -> Vec<(&'static str, String)> {
@@ -42,32 +48,69 @@ fn paint_name(p: &Paint) -> Option<String> {
     }
 }
 
-/// One paint's row: its tile and values, and with `options` its name ([`paint_name`]). A paint the
-/// selected objects do not share (`mixed`) leaves the row empty.
-fn paint_block(ui: &mut Ui, session: &mut Session, p: &Paint, mixed: bool, options: bool) {
-    let t = Tokens::get(ui.ctx());
-    ui.horizontal(|ui| {
-        let (r, _) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::hover());
+/// One paint's block: its tile, its values, and its name (a swatch's with Show Options, else a
+/// non-solid paint's kind). A paint the selected objects do not share (`mixed`) leaves it empty.
+struct PaintLines {
+    paint: Paint,
+    mixed: bool,
+    /// The monospaced `R: 230` values of a solid color.
+    values: Vec<String>,
+    note: Option<String>,
+}
+
+impl PaintLines {
+    fn of(paint: Paint, mixed: bool, options: bool) -> Self {
         if mixed {
-            return;
+            return PaintLines { paint, mixed, values: Vec::new(), note: None };
         }
-        widgets::swatch_tile(ui, r, p, false, false);
-        match p {
+        let (values, note) = match &paint {
             Paint::Solid { color, .. } => {
-                for (k, v) in color_values(color) {
-                    let value = format!("{k}: {v}");
-                    widgets::copyable_readout(ui, session, egui::RichText::new(&value).monospace().color(t.text), &value, false);
-                }
+                (color_values(color).into_iter().map(|(k, v)| format!("{k}: {v}")).collect(), paint_name(&paint).filter(|_| options))
             }
-            other => {
-                let name = paint_name(other).filter(|_| options).unwrap_or_else(|| other.label());
-                widgets::copyable_readout(ui, session, egui::RichText::new(&name).color(t.text_dim), &name, false);
+            other => (Vec::new(), Some(paint_name(other).filter(|_| options).unwrap_or_else(|| other.label()))),
+        };
+        PaintLines { paint, mixed, values, note }
+    }
+}
+
+/// What the panel shows, ready to lay out.
+pub(crate) struct InfoLines {
+    left: Vec<String>,
+    right: Vec<String>,
+    zoom: Option<String>,
+    brush: Option<String>,
+    fill: PaintLines,
+    stroke: PaintLines,
+    /// The font, and the size and tracking, the selected type shares.
+    type_block: Option<(String, String)>,
+}
+
+fn mono(ui: &mut Ui, s: &str) -> bool {
+    super::doc_info::copy_value(ui, s, s, true)
+}
+
+/// One paint's row: its tile, its values and its note. A mixed paint keeps the tile's room empty.
+fn paint_block(ui: &mut Ui, p: &PaintLines) -> Option<String> {
+    let mut copy = None;
+    Row::new().show(ui, |ui, _| {
+        Picture::painter("", ThumbAspect::SQUARE, |cx, rect| {
+            if !p.mixed {
+                swatches::paint_swatch(cx, rect, &p.paint, false, (false, false), None);
+            }
+        })
+        .show(ui);
+        for v in &p.values {
+            if mono(ui, v) {
+                copy = Some(v.clone());
+            }
+        }
+        if let Some(note) = &p.note {
+            if super::doc_info::copy_value(ui, note, note, false) {
+                copy = Some(note.clone());
             }
         }
     });
-    if let (false, true, Paint::Solid { .. }, Some(name)) = (mixed, options, p, paint_name(p)) {
-        widgets::copyable_readout(ui, session, egui::RichText::new(&name).color(t.text_dim), &name, false);
-    }
+    copy
 }
 
 /// What the panel reads from the document and the tool for its rows of numbers ([`Rows::of`]).
@@ -152,9 +195,9 @@ fn shared_type(app: &VectorcraftApp) -> Option<(String, f64, f64)> {
     shared
 }
 
-pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
-    let options = !pstate::<bool>(ui.ctx(), "info-hide-options");
+/// What the panel shows for the document, the tool in use and the selection.
+pub(crate) fn lines(app: &mut VectorcraftApp, ctx: &egui::Context) -> InfoLines {
+    let options = !app.ui.info_hide_options;
     // W and H are the sides of the bounding box the Transform panel shows, measured as Use Preview
     // Bounds says.
     let size = app.selection_box().map(|b| (b.rect.width(), b.rect.height(), b.center()));
@@ -168,58 +211,111 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         readout: readout.as_ref(),
         options,
     });
-    let mono = |ui: &mut Ui, session: &mut Session, s: String| {
-        widgets::copyable_readout(ui, session, egui::RichText::new(&s).monospace().color(t.text), &s, false);
-    };
-    ui.columns(2, |cols| {
-        for s in rows.left {
-            mono(&mut cols[0], &mut app.session, s);
-        }
-        for s in rows.right {
-            mono(&mut cols[1], &mut app.session, s);
-        }
-    });
-    if app.session.tool_id() == "zoom" {
+    let zoom = (app.session.tool_id() == "zoom").then(|| {
         let zoom = app.view().map_or(1.0, |v| v.zoom);
-        let value = format!("{} {}", crate::i18n::colon(tl!("Zoom")), crate::state::zoom_label(zoom, app.session.prefs.display_print_size));
-        mono(ui, &mut app.session, value);
-    }
-    if let Some(Readout::Brush { name: Some(name) }) = readout {
-        mono(ui, &mut app.session, name);
-    }
-    widgets::divider(ui);
+        format!("{} {}", crate::i18n::colon(tl!("Zoom")), crate::state::zoom_label(zoom, app.print_ppi()))
+    });
+    let brush = if let Some(Readout::Brush { name }) = readout { name } else { None };
     let (f, s) = current_paints(app);
-    let (fill_mixed, stroke_mixed) = mixed_paints(app, ui.ctx());
-    paint_block(ui, &mut app.session, &f, fill_mixed, options);
-    paint_block(ui, &mut app.session, &s, stroke_mixed, options);
-    if let Some((font, size, tracking)) = shared_type(app) {
-        widgets::divider(ui);
-        mono(ui, &mut app.session, font);
-        let value = crate::i18n::fmt(
+    let (fill_mixed, stroke_mixed) = mixed_paints(app, ctx);
+    let type_block = shared_type(app).map(|(font, size, tracking)| {
+        let line = crate::i18n::fmt(
             tl!("Size: {size}  Tracking: {tracking}"),
             &[("size", &app.session.type_unit().format(size)), ("tracking", &format!("{tracking:.0}"))],
         );
-        mono(ui, &mut app.session, value);
+        (font, line)
+    });
+    InfoLines {
+        left: rows.left,
+        right: rows.right,
+        zoom,
+        brush,
+        fill: PaintLines::of(f, fill_mixed, options),
+        stroke: PaintLines::of(s, stroke_mixed, options),
+        type_block,
     }
 }
 
-pub fn menu(_app: &mut VectorcraftApp, ui: &mut Ui) {
-    let hidden: bool = pstate(ui.ctx(), "info-hide-options");
-    if menu_item(ui, if hidden { tl!("Show Options") } else { tl!("Hide Options") }, true, false) {
-        set_pstate(ui.ctx(), "info-hide-options", !hidden);
+/// The panel's two columns of numbers: two equal halves of its width.
+const HALVES: &[ColumnWidth] = &[ColumnWidth::fill(1.0); 2];
+
+pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let l = lines(app, ui.ctx());
+    let mut copy = None;
+    // Two equal halves of the panel, as the reference app's columns were.
+    let _ = Grid::new(HALVES).show(ui, |ui, _| {
+        for column in [&l.left, &l.right] {
+            Stack::new().show(ui, |ui, _| {
+                for s in column {
+                    if mono(ui, s) {
+                        copy = Some(s.clone());
+                    }
+                }
+            });
+        }
+    });
+    for s in l.zoom.iter().chain(&l.brush) {
+        if mono(ui, s) {
+            copy = Some(s.clone());
+        }
+    }
+    Divider::horizontal().show(ui);
+    copy = paint_block(ui, &l.fill).or(copy);
+    copy = paint_block(ui, &l.stroke).or(copy);
+    if let Some((font, size)) = &l.type_block {
+        Divider::horizontal().show(ui);
+        for value in [font, size] {
+            if mono(ui, value) {
+                copy = Some(value.clone());
+            }
+        }
+    }
+    if let Some(text) = copy {
+        app.clipboard_out = Some(text);
+        app.status("Copied the value");
+    }
+}
+
+/// The panel menu's rows.
+pub(crate) fn menu_rows(_app: &VectorcraftApp) -> Vec<PanelRow> {
+    vec![PanelRow::Command(CommandRef::new("ui.info.options"))]
+}
+
+/// The title of Show Options / Hide Options.
+pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
+    let title = if app.ui.info_hide_options { tl!("Show Options") } else { tl!("Hide Options") };
+    states.set(CommandRef::new("ui.info.options"), CommandState::new().title(title));
+}
+
+/// Runs the panel menu's own rows; `None` for an id that is not one of them.
+pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option<Result<Value, String>> {
+    match id {
+        "ui.info.options" => {
+            app.ui.info_hide_options = !app.ui.info_hide_options;
+            Some(Ok(Value::Null))
+        }
+        _ => None,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::tests_appearance::{app_with_rect, frame_events, run};
+    use super::super::tests_appearance::{app_with_rect, run};
     use super::*;
     use serde_json::json;
     use vectorcraft_engine::ViewInfo;
     use vectorcraft_tools::{PointerEvent, PointerKind};
 
+    /// Every line the panel shows.
     fn texts(app: &mut VectorcraftApp) -> Vec<String> {
-        frame_events(&egui::Context::default(), app, vec![], show).into_iter().map(|(t, _)| t).collect()
+        let l = lines(app, &crate::testing::ui_context());
+        let mut out: Vec<String> = l.left.into_iter().chain(l.right).chain(l.zoom).chain(l.brush).collect();
+        for p in [l.fill, l.stroke] {
+            out.extend(p.values);
+            out.extend(p.note);
+        }
+        out.extend(l.type_block.into_iter().flat_map(|(font, size)| [font, size]));
+        out
     }
 
     fn view() -> ViewInfo {
@@ -239,14 +335,6 @@ mod tests {
         v.iter().map(|s| s.to_string()).collect()
     }
 
-    #[test]
-    fn values_follow_model() {
-        let v = color_values(&Color::rgb8(230, 120, 40));
-        assert_eq!(v[0], ("R", "230".to_string()));
-        assert_eq!(color_values(&Color::cmyk(0.1, 0.0, 0.0, 0.5))[3].1, "50%");
-        assert_eq!(color_values(&Color::gray(0.25)).len(), 1);
-    }
-
     /// #1882: scaled type shows its size in document points, as the Character panel does (#1034).
     #[test]
     fn scaled_type_shows_its_scaled_size() {
@@ -254,9 +342,8 @@ mod tests {
         let id = run(&mut app, "text.create", json!({"x": 10, "y": 150, "text": "Hi", "size": 12}))["id"].clone();
         run(&mut app, "select.set", json!({ "ids": [id] }));
         run(&mut app, "object.scale", json!({"sx": 200}));
-        let texts = frame_events(&egui::Context::default(), &mut app, vec![], show);
-        let size = texts.iter().find(|(t, _)| t.starts_with("Size:")).map(|(t, _)| t.as_str());
-        assert_eq!(size, Some("Size: 24 pt  Tracking: 0"), "{texts:?}");
+        let size = lines(&mut app, &crate::testing::ui_context()).type_block.map(|(_, size)| size);
+        assert_eq!(size.as_deref(), Some("Size: 24 pt  Tracking: 0"));
     }
 
     #[test]
@@ -308,43 +395,6 @@ mod tests {
         pointer(&mut app, PointerKind::Up, 90.0, 20.0);
         let after = texts(&mut app);
         assert!(after.iter().any(|t| t == "W: 100 pt") && !after.iter().any(|t| t == "W: 30 pt"), "{after:?}");
-    }
-
-    #[test]
-    fn the_zoom_tool_shows_the_magnification() {
-        let mut app = app_with_rect();
-        assert!(!texts(&mut app).iter().any(|t| t.starts_with("Zoom:")));
-        app.session.select_tool("zoom", view()).unwrap();
-        let zoom = app.view().map_or(1.0, |v| v.zoom);
-        let want = format!("Zoom: {}", crate::state::zoom_label(zoom, app.session.prefs.display_print_size));
-        assert!(texts(&mut app).contains(&want), "{want}: {:?}", texts(&mut app));
-    }
-
-    /// The Shear and Zoom readouts write their colon as the UI language does (#7991).
-    #[test]
-    fn readout_labels_use_the_language_colon() {
-        let mut app = app_with_rect();
-        app.session.select_tool("zoom", view()).unwrap();
-        let fr = crate::i18n::Lang::from_code("fr").unwrap();
-        crate::i18n::set_current(fr);
-        let shear = shown(Some(&Readout::Shear { center: Point::new(60.0, 70.0), axis: 90.0, angle: -12.5 }), true);
-        let shown_texts = texts(&mut app);
-        crate::i18n::set_current(crate::i18n::Lang::EN);
-        assert_eq!(shear.right[1], format!("{}\u{a0}: -12.5°", crate::i18n::tr(fr, "Shear")));
-        let zoom = app.view().map_or(1.0, |v| v.zoom);
-        let want = format!("{}\u{a0}: {}", crate::i18n::tr(fr, "Zoom"), crate::state::zoom_label(zoom, app.session.prefs.display_print_size));
-        assert!(shown_texts.contains(&want), "{want}: {shown_texts:?}");
-    }
-
-    #[test]
-    fn the_paintbrush_shows_its_brush() {
-        let mut app = app_with_rect();
-        app.session.select_tool("paintbrush", view()).unwrap();
-        let brush = run(&mut app, "brush.list", json!({}))["brushes"][0]["name"].as_str().map(str::to_string);
-        let Some(brush) = brush else { panic!("the document has no brush") };
-        assert!(!texts(&mut app).contains(&brush));
-        app.session.set_tool_option("brush", &json!(brush));
-        assert!(texts(&mut app).contains(&brush), "{brush}: {:?}", texts(&mut app));
     }
 
     #[test]

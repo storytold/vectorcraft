@@ -12,42 +12,35 @@
 //! goes back to EPS Options; Cancel goes back with the options as they were. Choosing a preset
 //! drops the custom options.
 
+use std::sync::Arc;
+
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Bind, Show as _, ShowContainer as _, TooltipSpec};
+use craft::ui::dialog::DialogId;
+use craft::ui::display::{Shade, Text};
+use craft::ui::layout_components::Row;
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::style::TypeRole;
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::cmd::{FlattenOptions, FlattenerPreset, fileio};
 use vectorcraft_eps::{Level, Overprint, Preview};
 
-use super::DialogSpec;
-use super::document_setup::{LABEL, check, choice};
-use crate::state::Dialog;
-use crate::theme::Tokens;
-use crate::{VectorcraftApp, io, widgets};
+use super::dxf_options::{check_param, choice_param};
+use super::export_host::{self, After, Export, Open};
+use super::{flatten, form};
+use crate::{VectorcraftApp, io};
 
 pub(super) const KIND: &str = "epsOptions";
-
-pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("EPS Options").into(),
-    body,
-    confirm,
-    ok: Some("Export"),
-    min_width: 420.0,
-    max_width: Some(460.0),
-    inputs: |_| &["path", "flattener"],
-    ..DialogSpec::FORM
-};
 
 /// Custom Transparency Flattener Options, opened over EPS Options by Custom….
 pub(super) const CUSTOM_KIND: &str = "epsFlattenerOptions";
 
-pub(super) const CUSTOM_SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("Custom Transparency Flattener Options").into(),
-    body: custom_body,
-    confirm: custom_confirm,
-    min_width: 420.0,
-    ..DialogSpec::FORM
-};
+/// The flattener rows the format fixes, and why.
+const FIXED: [&str; 2] = ["preserveAlpha", "preserveOverprints"];
+const FIXED_REASON: &str = "EPS has no alpha transparency, and Overprints sets whether overprints are kept.";
 
 /// Fields that are not remembered between exports (they belong to one export).
-const PER_EXPORT: [&str; 8] = ["format", "path", "useArtboards", "range", "artboard", "artboards", "selectedOnly", super::export_as::SELECTION_FIELD];
+const PER_EXPORT: [&str; 7] = ["format", "path", "useArtboards", "range", "artboard", "artboards", "selectedOnly"];
 
 /// The options a first EPS Options dialog starts from (the export's defaults).
 fn defaults() -> Map<String, Value> {
@@ -69,9 +62,66 @@ fn defaults() -> Map<String, Value> {
     m
 }
 
+/// The rows, with `presets` ([`flatten::preset_names`]) in the flattener picker.
+fn rows(presets: &Arc<[(String, String)]>) -> Vec<Param> {
+    let presets = Arc::clone(presets);
+    // PLAN: assumed ids "true" and "false" for the two-id radio that holds a JSON bool (wg.S12).
+    let transparency = Param::new(
+        "transparentPreview",
+        "",
+        ParamKind::radio(vec![("true".into(), tl!("Transparent").into()), ("false".into(), tl!("Opaque").into())], None),
+    );
+    vec![
+        Param::section(tl!("Preview")),
+        choice_param("previewFormat", tl!("Format:"), Preview::ALL.iter().map(|p| (p.id(), p.label()))),
+        // Only the colour preview can keep transparency.
+        transparency.enabled_when("previewFormat", FieldValue::Text(Preview::TiffColor.id().into())),
+        Param::section(tl!("Transparency")),
+        choice_param("overprints", tl!("Overprints:"), Overprint::ALL.iter().map(|o| (o.id(), o.label()))),
+        Param::custom("flattenerPreset", tl!("Preset:"), move |ui, fields, cx| {
+            let custom = fields.contains("flattener");
+            let mut pressed = false;
+            let shown = Row::new().show(ui, |ui, _| {
+                flatten::preset_picker(ui, fields, "flattenerPreset", &presets, custom);
+                pressed = Button::new(tl!("Custom…")).show(ui).clicks > 0;
+            });
+            if pressed {
+                cx.request_action("custom");
+            }
+            shown.output
+        })
+        .resets(["flattener"]),
+        Param::section(tl!("Fonts")),
+        // Type is written as glyph outlines, which need no fonts.
+        check_param("__embedFonts", tl!("Embed Fonts (for other applications)"))
+            .opens_with(true)
+            .enabled_when_in("__embedFonts", std::iter::empty::<FieldValue>())
+            .tooltip(
+                TooltipSpec::new(tl!("Type is written as glyph outlines, which need no fonts."))
+                    .disabled_text(tl!("Type is written as glyph outlines, which need no fonts.")),
+            ),
+        Param::section(tl!("Options")),
+        check_param("includeLinkedFiles", tl!("Include Linked Files")),
+        check_param("thumbnails", tl!("Include Document Thumbnails")),
+        check_param("cmykPostScript", tl!("Include CMYK PostScript in RGB Files")),
+        check_param("compatibleGradients", tl!("Compatible Gradient and Gradient Mesh Printing")),
+        choice_param("level", tl!("PostScript:"), Level::ALL.iter().map(|l| (l.id(), l.label()))),
+    ]
+}
+
+/// The rows as far as their kinds go, for reading values to and from JSON.
+fn kinds() -> Vec<Param> {
+    rows(&Arc::from(Vec::new()))
+}
+
 /// Open EPS Options for an export whose params (path, artboard choice, any EPS option) are
 /// `params`, over the options used last.
 pub fn open(app: &mut VectorcraftApp, params: &Value) {
+    open_with(app, params, false);
+}
+
+/// [`open`] for Export Selection when `selection` is set: the options then write the selected art alone.
+pub fn open_with(app: &mut VectorcraftApp, params: &Value, selection: bool) {
     let mut fields = defaults();
     for given in [&app.ui.eps_options, params] {
         if let Some(o) = given.as_object() {
@@ -83,159 +133,106 @@ pub fn open(app: &mut VectorcraftApp, params: &Value) {
         fields.remove("flattener");
     }
     fields.insert("format".into(), json!("eps"));
-    builtin_label(&mut fields);
-    app.ui.dialog = Some(Dialog::new(KIND, Value::Object(fields)));
-}
-
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    widgets::subheader(ui, tl!("Preview"));
-    let previews: Vec<(&str, &str)> = Preview::ALL.iter().map(|p| (p.id(), p.label())).collect();
-    choice(ui, d, "previewFormat", tl!("Format:"), &previews);
-    // Only the colour preview can keep transparency.
-    let color = Preview::from_id(&d.str("previewFormat")) == Some(Preview::TiffColor);
-    let transparent = d.bool("transparentPreview");
-    ui.horizontal(|ui| {
-        ui.add_space(LABEL + 8.0);
-        for (label, on) in [(tl!("Transparent"), true), (tl!("Opaque"), false)] {
-            if widgets::radio(ui, label, color && transparent == on, color) {
-                d.fields.insert("transparentPreview".into(), json!(on));
-            }
-            ui.add_space(12.0);
-        }
+    let mut values = form::fields_of(&kinds(), &fields);
+    builtin_label(&mut values);
+    let presets: Arc<[(String, String)]> = flatten::preset_names(app).into();
+    let ctx = app.ui_ctx.clone().unwrap_or_default();
+    let dialog = HostedParamDialog::new(&ctx, KIND, values, move |fields| {
+        builtin_label(fields);
+        normalise_level(fields);
+        ParamDialog::new(KIND, tl!("EPS Options"), rows(&presets)).values(Bind::bound(fields)).ok_label(tl!("Export").into()).below(|ui, fields| {
+            Text::new(if fields.text("level").and_then(Level::from_id) == Some(Level::Two) || fields.bool("compatibleGradients") == Some(true) {
+                tl!("Transparency is flattened with the preset. Type is written as outlines; gradients as bands of colour.")
+            } else {
+                tl!("Transparency is flattened with the preset. Type is written as outlines; gradients stay smooth.")
+            })
+            .role(TypeRole::Caption)
+            .shade(Shade::Muted)
+            .show(ui);
+        })
     });
-    ui.add_space(8.0);
-    widgets::subheader(ui, tl!("Transparency"));
-    let overprints: Vec<(&str, &str)> = Overprint::ALL.iter().map(|o| (o.id(), o.label())).collect();
-    choice(ui, d, "overprints", tl!("Overprints:"), &overprints);
-    let presets = app.session.flattener_presets();
-    let current = flattener(d, &app.session.prefs.flattener_presets).ok();
-    let mut custom = false;
-    widgets::label_row(ui, tl!("Preset:"), LABEL, |ui| {
-        if let Some(p) = super::flatten::preset_dropdown(ui, "eps-flattener-preset", &presets, &d.str("flattenerPreset"), current.as_ref(), 180.0) {
-            d.fields.insert("flattenerPreset".into(), json!(p.name));
-            d.fields.remove("flattener");
-        }
-        custom = widgets::flat_button_fit(ui, tl!("Custom…"), 72.0).clicked();
-    });
-    if custom {
-        *d = over(d, &app.session.prefs.flattener_presets);
-        return false;
-    }
-    ui.add_space(8.0);
-    widgets::subheader(ui, tl!("Fonts"));
-    // Type is written as glyph outlines, which need no fonts.
-    widgets::check(ui, tl!("Embed Fonts (for other applications)"), true, false);
-    ui.add_space(8.0);
-    widgets::subheader(ui, tl!("Options"));
-    check(ui, d, "includeLinkedFiles", tl!("Include Linked Files"));
-    check(ui, d, "thumbnails", tl!("Include Document Thumbnails"));
-    check(ui, d, "cmykPostScript", tl!("Include CMYK PostScript in RGB Files"));
-    check(ui, d, "compatibleGradients", tl!("Compatible Gradient and Gradient Mesh Printing"));
-    ui.add_space(4.0);
-    let levels: Vec<(&str, &str)> = Level::ALL.iter().map(|l| (l.id(), l.label())).collect();
-    // A level set as a number (`level: 2`) reads as its id.
-    if let Some(Value::Number(n)) = d.fields.get("level") {
-        let id = n.to_string();
-        d.fields.insert("level".into(), json!(id));
-    }
-    choice(ui, d, "level", tl!("PostScript:"), &levels);
-    ui.add_space(8.0);
-    super::form::caption(
-        ui,
-        if Level::from_id(&d.str("level")) == Some(Level::Two) || d.bool("compatibleGradients") {
-            tl!("Transparency is flattened with the preset. Type is written as outlines; gradients as bands of colour.")
-        } else {
-            tl!("Transparency is flattened with the preset. Type is written as outlines; gradients stay smooth.")
-        },
-    );
-    false
+    export_host::open(app, Export::Eps, selection, dialog);
 }
 
-/// `ui.dialog.set` changed `field` of EPS Options `d`: a preset set there drops the Custom…
-/// options, as choosing it in the dropdown does, and a built-in one named by id shows as its name.
-pub(super) fn field_set(d: &mut Dialog, field: &str) {
-    if field == "flattenerPreset" {
-        d.fields.remove("flattener");
-        builtin_label(&mut d.fields);
+/// A level set as a number (`level: 2`) reads as its id.
+fn normalise_level(fields: &mut DialogFields) {
+    let id = match fields.get("level") {
+        Some(FieldValue::Int(n)) => n.to_string(),
+        Some(FieldValue::Number(n)) if n.is_finite() => format!("{n}"),
+        _ => return,
+    };
+    fields.set("level", id);
+}
+
+/// A built-in preset named by id (`medium`) in `fields` shows as its name. It runs where the values are built and
+/// where the build runs each pass, so a preset set from outside shows as its name too.
+fn builtin_label(fields: &mut DialogFields) {
+    let label = fields.text("flattenerPreset").and_then(|p| FlattenOptions::preset_label(&p.to_ascii_lowercase()).map(|l| l.to_string()));
+    if let Some(label) = label {
+        fields.set("flattenerPreset", label);
     }
 }
 
-/// A built-in preset named by id (`medium`) in `fields` shows as its name.
-fn builtin_label(fields: &mut Map<String, Value>) {
-    if let Some(label) = fields.get("flattenerPreset").and_then(Value::as_str).and_then(|p| FlattenOptions::preset_label(&p.to_ascii_lowercase())) {
-        fields.insert("flattenerPreset".into(), json!(label));
+/// The custom options `fields` hold, as JSON.
+fn custom_value(fields: &DialogFields) -> Option<Value> {
+    match fields.get("flattener")? {
+        FieldValue::Json(v) => Some(v.clone()),
+        other => serde_json::to_value(other).ok(),
     }
 }
 
-/// The flattener options EPS Options `d` exports with: its preset, with the Custom… options over it.
-fn flattener(d: &Dialog, saved: &[FlattenerPreset]) -> Result<FlattenOptions, String> {
-    FlattenOptions::for_export(d.fields.get("flattenerPreset").and_then(Value::as_str), d.fields.get("flattener"), saved)
+/// The flattener options EPS Options `fields` export with: its preset, with the Custom… options over it.
+fn flattener(fields: &DialogFields, saved: &[FlattenerPreset]) -> Result<FlattenOptions, String> {
+    FlattenOptions::for_export(fields.text("flattenerPreset"), custom_value(fields).as_ref(), saved)
 }
 
-/// Custom Transparency Flattener Options over EPS Options `parent`, on the options it exports with
-/// (the default preset's while those are not valid), without alpha: EPS has none.
-pub(super) fn over(parent: &Dialog, saved: &[FlattenerPreset]) -> Dialog {
-    let mut o = flattener(parent, saved).unwrap_or_default();
+/// The options Custom Transparency Flattener Options `fields` hold.
+fn custom_options(fields: &DialogFields) -> Result<FlattenOptions, String> {
+    let rows = flatten::option_params(&FIXED, FIXED_REASON);
+    FlattenOptions::from_params_with(&Value::Object(form::json_of(&rows, fields)), &[])
+}
+
+/// Custom Transparency Flattener Options over EPS Options `parent` (whose values are `fields`), on the options it
+/// exports with (the default preset's while those are not valid), without alpha: EPS has none.
+pub(super) fn custom_dialog(app: &VectorcraftApp, parent: DialogId, fields: &DialogFields) -> HostedParamDialog {
+    let _ = parent; // the host keeps the parent; `Export::EpsCustom` names it
+    let mut o = flattener(fields, &app.session.prefs.flattener_presets).unwrap_or_default();
     o.preserve_alpha = false;
-    let mut d = Dialog::new(CUSTOM_KIND, json!({}));
-    super::flatten::put_options(&mut d.fields, &o);
-    d.fields.insert(super::PARENT.into(), serde_json::to_value(parent).unwrap_or_default());
-    d
+    let ctx = app.ui_ctx.clone().unwrap_or_default();
+    HostedParamDialog::new(&ctx, CUSTOM_KIND, flatten::option_fields(&o), |fields| {
+        ParamDialog::new(CUSTOM_KIND, tl!("Custom Transparency Flattener Options"), flatten::option_params(&FIXED, FIXED_REASON))
+            .values(Bind::bound(fields))
+            .below(|ui, _| {
+                Text::new(tl!("EPS has no alpha transparency, and Overprints sets whether overprints are kept."))
+                    .role(TypeRole::Caption)
+                    .shade(Shade::Muted)
+                    .show(ui);
+            })
+    })
 }
 
-/// The options Custom Transparency Flattener Options `d` holds.
-fn custom_options(d: &Dialog) -> Result<FlattenOptions, String> {
-    FlattenOptions::from_params_with(&Value::Object(d.fields.clone()), &[])
-}
-
-/// Whether the EPS Options under `d` keep overprints (Overprints: Preserve).
-fn overprints_kept(d: &Dialog) -> bool {
-    super::parent(d).is_none_or(|p| Overprint::from_id(&p.str("overprints")) != Some(Overprint::Discard))
-}
-
-/// The flattener options; the two Preserve switches show what the export does and are set by the
-/// format (no alpha) and by EPS Options' Overprints.
-fn custom_body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let current = custom_options(d);
-    // Values refused stay as entered, so that changing another option keeps them. The Preserve
-    // switches can't be set here, so the fields keep their own values of them.
-    let (mut o, unread) = super::flatten::shown_options(&d.fields, &current);
+/// OK of the custom options: EPS Options `parent` again, exporting with these options (a built-in preset under them,
+/// so that deleting a saved preset leaves them whole); bad options keep the dialog open.
+pub(super) fn custom_ok(_app: &VectorcraftApp, parent: &mut DialogFields, fields: &DialogFields) -> Result<(), String> {
+    let mut o = custom_options(fields)?;
     o.preserve_alpha = false;
-    o.preserve_overprints &= overprints_kept(d);
-    super::flatten::fields_editor(ui, "eps-flattener", &mut d.fields, &mut o, &unread, &["preserveAlpha", "preserveOverprints"]);
-    if let Err(e) = &current {
-        ui.label(egui::RichText::new(e).color(Tokens::get(ui.ctx()).text_dim).size(11.5));
-    }
-    ui.add_space(8.0);
-    super::form::caption(ui, tl!("EPS has no alpha transparency, and Overprints sets whether overprints are kept."));
-    false
-}
-
-/// OK: EPS Options again, exporting with these options (a built-in preset under them, so that
-/// deleting a saved preset leaves them whole); bad options keep the dialog open.
-fn custom_confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let mut o = custom_options(d)?;
-    o.preserve_alpha = false;
-    let mut parent = super::parent(d).ok_or("the dialog it was opened over is no longer open")?;
-    if FlattenOptions::preset(&parent.str("flattenerPreset")).is_none() {
+    if FlattenOptions::preset(parent.text("flattenerPreset").unwrap_or_default()).is_none() {
         let medium = FlattenOptions::preset_label(FlattenOptions::PRESETS[1]).unwrap_or_default();
-        parent.fields.insert("flattenerPreset".into(), json!(medium));
+        parent.set("flattenerPreset", medium.to_string());
     }
-    parent.fields.insert("flattener".into(), serde_json::to_value(&o).map_err(|e| e.to_string())?);
-    app.ui.dialog = Some(parent);
-    Ok(Value::Null)
+    parent.set("flattener", FieldValue::Json(serde_json::to_value(&o).map_err(|e| e.to_string())?));
+    Ok(())
 }
 
 /// Check the options, remember them, and write the file(s).
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let params = fileio::eps::resolve(&super::form::params(d), &app.session.prefs.flattener_presets)?;
+pub(super) fn confirm(app: &mut VectorcraftApp, open: &Open, fields: &DialogFields) -> Result<After, String> {
+    let map = form::json_of(&kinds(), fields);
+    let params = fileio::eps::resolve(&Value::Object(map.clone()), &app.session.prefs.flattener_presets)?;
     // Nothing selected keeps the dialog open too.
     if let Some(st) = app.session.active() {
         fileio::export_source(st, &params).map_err(|e| e.to_string())?;
     }
-    app.ui.eps_options =
-        Value::Object(d.fields.iter().filter(|(k, _)| !PER_EXPORT.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect());
-    app.ui.dialog = None;
-    let path = d.fields.get("path").and_then(Value::as_str).map(str::to_string);
-    io::export(app, Some("eps"), path, &super::export_as::exported(d, params))
+    app.ui.eps_options = Value::Object(map.into_iter().filter(|(k, _)| !PER_EXPORT.contains(&k.as_str())).collect());
+    let path = fields.text("path").map(str::to_string);
+    io::export(app, Some("eps"), path, &super::export_as::exported(open.selection, params)).map(|_| None)
 }
