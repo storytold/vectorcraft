@@ -14353,9 +14353,10 @@ The new path takes the current fill, stroke and stroke weight (`fill` and `strok
 above the front-most object along the area (one whose outline touches the area's outline, or that covers it) and is
 selected. When a group, Live Paint group, Shaper group or clipping group holds that object, the new path goes above the
 outermost group in its layer, not inside it, and the group keeps its members. In isolation mode only the paths in
-the isolated layer or group bound areas, for the tool's hover and click and for the command (with `ids`, only the
-paths of the listed objects that are in it), and the new path goes inside the isolated layer or group, directly above
-the object in it that holds that path. No area is found while the isolated object is not a layer or group (a path
+the isolated layer or group bound areas, for the tool's hover and click and for the command. With `ids`, the paths
+of the listed objects that are in it bound areas, and all of its paths do when `ids` lists the isolated layer or group
+or a layer or group that holds it; the other listed objects are ignored. The new path goes inside the isolated layer
+or group, directly above the object in it that holds that path. No area is found while the isolated object is not a layer or group (a path
 or compound path), is a Live Paint group, compound shape, Shaper group, graph, Image Trace result, dimension, flare or
 Objects on Path group, is a layer or group with a live effect or a clipping mask, or lies inside one of these or
 inside an envelope. A point in no enclosed area is the error "Fill Area: no enclosed area under the pointer" and records no undo
