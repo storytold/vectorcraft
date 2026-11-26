@@ -34,7 +34,8 @@
 //! plays. A key a schema doesn't name passes there too, and the values of the parameters it names
 //! are still checked. Even there, an effect's `color` that the effect can't read and a Levels or Curves
 //! `channel` that the effect doesn't have are refused by `effect.apply` and `effect.setParams`
-//! themselves ([`check_effect_color`], [`check_effect_channel`]).
+//! themselves ([`check_effect_color`], [`check_effect_channel`]). A saved step may keep an unknown
+//! shadow or glow blend mode, which the effect draws as Normal.
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -456,7 +457,8 @@ fn check_member_keys(id: &str, params: &Value) -> Result<()> {
 /// `params` of built-in effect `effect`, as command `id` was given them (#1592): only keys the
 /// effect takes (those of its dialog defaults and of its params description), each of the type
 /// the effect reads ([`check_effect_types`]), a `color` the effect can draw ([`check_effect_color`])
-/// and a Levels or Curves `channel` the effect has ([`check_effect_channel`]). Numbers out of range
+/// a Levels or Curves `channel` the effect has ([`check_effect_channel`]) and a Drop Shadow's or
+/// glow's `mode` that names a blend mode ([`check_effect_blend`]). Numbers out of range
 /// pass: the effect clamps them when it draws. An installed effect plug-in's are checked against its
 /// manifest, and an unknown effect is the command's to report.
 pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()> {
@@ -476,6 +478,7 @@ pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()>
     if let Some(key) = given.keys().find(|k| !keys.contains(&k.as_str())) {
         return Err(unknown(id, key, &keys));
     }
+    check_effect_blend(id, effect, params)?;
     check_effect_types(id, effect, params)?;
     // An SVG filter's XML is one drawable <filter> element.
     if effect == vectorcraft_render::effects::SVG_FILTER
@@ -659,6 +662,20 @@ pub(crate) fn check_effect_channel(id: &str, effect: &str, params: &Value) -> Re
         return Ok(());
     }
     Err(bad(id, format!("`{key}` must be one of {}", vectorcraft_render::effects::CHANNELS.join(", "))))
+}
+
+/// The `mode` in `params` of Drop Shadow, Inner Glow or Outer Glow (`effect`), as command `id` was
+/// given it: a parameter error naming the blend modes unless the effect reads it as one
+/// ([`vectorcraft_render::effects::parse_blend_mode`]); an older step with another value still replays in Normal.
+fn check_effect_blend(id: &str, effect: &str, params: &Value) -> Result<()> {
+    use vectorcraft_render::effects;
+    let key = "mode";
+    let Some(v) = params.get(key) else { return Ok(()) };
+    if !effects::takes_blend_mode(effect, key) || v.as_str().and_then(effects::parse_blend_mode).is_some() {
+        return Ok(());
+    }
+    let modes: Vec<String> = vectorcraft_color::BlendMode::ALL.into_iter().map(effects::blend_mode_id).collect();
+    Err(bad(id, format!("`{key}` must be one of {}", modes.join(", "))))
 }
 
 /// The Blur Center (`centerX`, `centerY`) in `params` of Radial Blur (`effect`), as command `id`
@@ -1067,7 +1084,7 @@ pub fn check_params(id: &str, params: &Value) -> Result<()> {
 fn check_params_in(id: &str, params: &Value, in_batch: bool) -> Result<()> {
     let Some(spec) = find_command(id) else { return Ok(()) };
     if let ("effect.apply" | "appearance.addEffect", Some(effect), Some(given)) =
-        (id, params.get("effect").or_else(|| params.get("id")).and_then(Value::as_str), params.get("params"))
+        (id, super::effectcmd::requested_effect(params), params.get("params"))
     {
         check_effect_params(id, effect, given)?;
     }

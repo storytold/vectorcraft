@@ -520,6 +520,28 @@ mod tests {
         assert!(p.app().run("pathfinder.repeat", json!({})).is_err());
     }
 
+    /// The state the window's menus give the Repeat row, which the panel menu's row reads.
+    fn repeat_row(p: &Panel) -> Option<CommandState> {
+        crate::menus::model::refresh(&mut p.app(), p.ctx());
+        p.app().menus.states.get(&CommandRef::new("pathfinder.repeat")).cloned()
+    }
+
+    /// Before an operation has run, the Repeat row reads Repeat Pathfinder and is dimmed; after Unite
+    /// or Minus Front from the panel it names that operation.
+    #[test]
+    fn the_repeat_row_names_the_last_operation() {
+        let mut p = Panel::new(two_squares(), show);
+        let command = CommandRef::new("pathfinder.repeat");
+        let off = crate::menus::model::off_reason(&p.app(), &command, "Repeat Pathfinder");
+        assert_eq!(repeat_row(&p), Some(CommandState::new().enabled(false).hint(off)), "the plain label, dimmed");
+        p.click("Unite");
+        select_two_squares(&mut p.app(), 110.0);
+        assert_eq!(repeat_row(&p), Some(CommandState::new().enabled(true).title("Repeat Unite")));
+        p.click("Minus Front");
+        select_two_squares(&mut p.app(), 210.0);
+        assert_eq!(repeat_row(&p), Some(CommandState::new().enabled(true).title("Repeat Minus Front")));
+    }
+
     /// One selected path cannot supply the operands for Unite; the command reports the failure.
     #[test]
     fn repeat_with_one_path_keeps_art_and_history() {
