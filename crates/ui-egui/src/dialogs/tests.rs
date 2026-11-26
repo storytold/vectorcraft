@@ -429,6 +429,53 @@ fn the_transform_effect_dialog_has_its_controls_previews_them_and_shows_them_aga
     assert_eq!((flag(&app, "objects"), flag(&app, "strokes")), (true, true));
 }
 
+/// The names of the sliders and number fields in the window's access tree.
+fn slider_and_field_names(app: &mut VectorcraftApp) -> Vec<String> {
+    let out = frame(app, vec![]);
+    let update = out.platform_output.accesskit_update.expect("an accessibility tree");
+    update
+        .nodes
+        .iter()
+        .filter(|(_, node)| matches!(node.role(), Role::TextInput | Role::SpinButton | Role::Slider))
+        .filter_map(|(_, node)| node.label())
+        .map(str::to_owned)
+        .collect()
+}
+
+/// Each Scale and Move slider and number field carries its row in its name, so the two Horizontal and two Vertical
+/// labels are told apart; the visible labels only describe them.
+fn assert_scale_and_move_names(names: &[String]) {
+    for name in ["Scale Horizontal:", "Scale Vertical:", "Move Horizontal:", "Move Vertical:"] {
+        let count = names.iter().filter(|n| n.as_str() == name).count();
+        assert_eq!(count, 2, "a slider and a number field named {name}: {names:?}");
+    }
+    for bare in ["Horizontal:", "Vertical:"] {
+        assert!(!names.iter().any(|n| n == bare), "no control named only {bare}: {names:?}");
+    }
+}
+
+/// Effect > Distort & Transform > Transform names its Scale and Move controls by their row.
+#[test]
+fn the_transform_effect_names_scale_and_move_controls_by_their_row() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    app.run("select.all", json!({})).unwrap();
+    app.run("effect.dialog", json!({"effect": "distort.transform"})).unwrap();
+    settle(&mut app);
+    assert_scale_and_move_names(&slider_and_field_names(&mut app));
+}
+
+/// Object > Transform > Transform Each shares the rows, and so the names.
+#[test]
+fn transform_each_names_scale_and_move_controls_by_their_row() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 60, "height": 20})).unwrap();
+    app.run("select.all", json!({})).unwrap();
+    open_each(&mut app, false);
+    settle(&mut app);
+    assert_scale_and_move_names(&slider_and_field_names(&mut app));
+}
+
 /// Transform Each opened by its menu item, on Absolute when `absolute` (as it was last confirmed).
 fn open_each(app: &mut VectorcraftApp, absolute: bool) {
     if absolute {

@@ -437,16 +437,17 @@ fn case_from_attrs(attrs: &Map<String, Value>) -> Option<&'static str> {
 /// and a final `%` in the percent fields or `°` in Character Rotation.
 fn typed_number(key: &str, text: &str) -> Option<f64> {
     let text = text.trim().replace('\u{2212}', "-");
-    let text = vectorcraft_doc::decimal_point(&text);
     let mark = match key {
         "size" | "leading" | "baseline_shift" | "tcyUpDown" | "tcyLeftRight" | "stroke_width" => {
-            return vectorcraft_doc::Unit::Points.parse(&text);
+            return vectorcraft_doc::Unit::Points.parse(&vectorcraft_doc::decimal_point(&text));
         }
         "h_scale" | "v_scale" | "tsume" | "fill_tint" | "stroke_tint" => Some('%'),
         "rotation" => Some('°'),
         _ => None,
     };
-    vectorcraft_doc::parse_number(mark.and_then(|m| text.strip_suffix(m)).unwrap_or(&text))
+    // The suffix comes off before the comma is read, so `1,000%` is refused as `1,000` is.
+    let number = mark.and_then(|m| text.strip_suffix(m)).unwrap_or(&text);
+    vectorcraft_doc::parse_number(&vectorcraft_doc::decimal_point(number))
 }
 
 fn optional_number(d: &Values, key: &str) -> Result<Option<Value>, String> {
