@@ -2,8 +2,8 @@
 //! the tables below, and each name that reaches outside the document has the `outside` id
 //! `script.check` (`vectorcraft-scriptcheck`) gives it. The names are read from a run: the own
 //! properties of the global object, of each object or function it holds and of each function's
-//! `prototype`, with a setter listed again as `name=`. The names a plain `vectorcraft_js::Realm` also
-//! has are the language's, which reach files and other apps only through the host; `eval` and
+//! `prototype`, with a setter listed again as `name=`. The names a plain `vectorcraft_js::Realm` with
+//! E4X also has are the language's, which reach files and other apps only through the host; `eval` and
 //! `Function` still have rows, since they run code the checker can't read. A name the host adds
 //! without a row fails the test.
 
@@ -11,7 +11,7 @@ use std::collections::BTreeSet;
 
 use serde_json::json;
 use vectorcraft_engine::Session;
-use vectorcraft_js::{DirectiveName, JsValue, Realm};
+use vectorcraft_js::{DirectiveName, JsValue, Options, Realm};
 use vectorcraft_scriptcheck::{Limits, check};
 
 /// The names that reach outside the document: each with a script that uses it and the `outside` id
@@ -41,7 +41,8 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
 
 /// The names the host adds that stay inside the document and the run, by the object that has them.
 /// Reading a file or a folder, a file dialog and a message to the person do not change anything
-/// outside it.
+/// outside it. The document model (`app`, its classes and the enumerations) acts on the open
+/// documents; `Document.saveAs` and `close` throw "not available yet".
 const INSIDE: &[(&str, &str)] = &[
     ("", "$ File Folder UnitValue alert confirm localize prompt toSource"),
     ("Object.prototype.", "toSource"),
@@ -72,7 +73,69 @@ const INSIDE: &[(&str, &str)] = &[
         "absoluteURI alias changePath constructor created displayName error error= exists fsName fullName getFiles \
          getRelativeURI localizedName modified name parent path relativeURI resolve selectDlg toString",
     ),
+    (
+        "",
+        "activeDocument activeDocument= app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace \
+         DocumentPreset DocumentPresetType DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid documents \
+         Documents ElementPlacement Layer PageItem PageItems RulerUnits selection selection= ZOrderMethod",
+    ),
+    ("Application.", "prototype"),
+    (
+        "Application.prototype.",
+        "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents executeMenuCommand \
+         getIsFileOpen selection selection= toString typename",
+    ),
+    ("DocumentPreset.", "prototype"),
+    (
+        "DocumentPreset.prototype.",
+        "artboardLayout artboardLayout= artboardRowsOrCols artboardRowsOrCols= artboardSpacing artboardSpacing= colorMode \
+         colorMode= constructor documentBleedLink documentBleedLink= documentBleedOffsetRect documentBleedOffsetRect= height \
+         height= numArtboards numArtboards= previewMode previewMode= rasterResolution rasterResolution= title title= \
+         toString transparencyGrid transparencyGrid= typename units units= width width=",
+    ),
+    ("Documents.", "prototype"),
+    ("Documents.prototype.", "add addDocument constructor getByName index length parent toString typename"),
+    ("Document.", "prototype"),
+    (
+        "Document.prototype.",
+        "activeLayer activeLayer= artboards artboards= close close= constructor convertCoordinate documentColorSpace \
+         groupItems groupItems= height layers layers= name pageItems parent pathItems pathItems= rulerOrigin rulerOrigin= \
+         rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= textFrames textFrames= toString \
+         typename views views= width",
+    ),
+    ("Layer.", "prototype"),
+    ("Layer.prototype.", "constructor name toString typename"),
+    ("PageItems.", "prototype"),
+    ("PageItems.prototype.", "constructor getByName index length parent removeAll toString typename"),
+    ("PageItem.", "prototype"),
+    (
+        "PageItem.prototype.",
+        "artworkKnockout artworkKnockout= blendingMode blendingMode= bringInPerspective bringInPerspective= constructor \
+         controlBounds duplicate editable geometricBounds height height= hidden hidden= isIsolated isIsolated= layer layer= \
+         left left= locked locked= move name name= note note= opacity opacity= parent pixelAligned pixelAligned= position \
+         position= remove resize resize= rotate rotate= selected selected= sliced sliced= tags tags= toString top top= transform \
+         transform= translate translate= typename uRL uRL= uuid uuid= visibilityVariable visibilityVariable= visibleBounds \
+         width width= wrapInside wrapInside= wrapOffset wrapOffset= wrapped wrapped= zOrder zOrderPosition",
+    ),
+    ("CoordinateSystem.", "ARTBOARDCOORDINATESYSTEM DOCUMENTCOORDINATESYSTEM"),
+    ("DocumentArtboardLayout.", "Column GridByCol GridByRow RLGridByCol RLGridByRow RLRow Row"),
+    ("DocumentColorSpace.", "CMYK RGB"),
+    ("DocumentPresetType.", "BasicCMYK BasicRGB Mobile Print Video Web"),
+    ("DocumentPreviewMode.", "DefaultPreview OverprintPreview PixelPreview"),
+    ("DocumentRasterResolution.", "HighResolution MediumResolution ScreenResolution"),
+    (
+        "DocumentTransparencyGrid.",
+        "TransparencyGridBlue TransparencyGridDark TransparencyGridGreen TransparencyGridLight TransparencyGridMedium \
+         TransparencyGridNone TransparencyGridOrange TransparencyGridPurple TransparencyGridRed",
+    ),
+    ("ElementPlacement.", "INSIDE PLACEAFTER PLACEATBEGINNING PLACEATEND PLACEBEFORE"),
+    ("RulerUnits.", "Centimeters Inches Millimeters Picas Pixels Points Qs Unknown"),
+    ("ZOrderMethod.", "BRINGFORWARD BRINGTOFRONT SENDBACKWARD SENDTOBACK"),
 ];
+
+/// The classes the host adds with nothing but a prototype and its constructor: the page item types.
+const BARE_CLASSES: &str = "BlendItem CompoundPathItem EnvelopeItem GraphItem GroupItem IntertwineItem MeshItem PathItem \
+     PlacedDocumentItem PlacedItem RasterItem RepeatItem SymbolItem TextFrame";
 
 /// The name the checker does not read, which also stands for its members: `vc` is VectorCraft's
 /// own API, and what `vc.run` does depends on the command it runs.
@@ -93,6 +156,9 @@ const LIST: &str = r#"(function () {
     var globals = Object.getOwnPropertyNames(g);
     add(g, "");
     for (var i = 0; i < globals.length; i++) {
+        // A global with a getter, such as `activeDocument`, is not read: it throws with no document open.
+        var gd = Object.getOwnPropertyDescriptor(g, globals[i]);
+        if (gd && gd.get) continue;
         var v = g[globals[i]];
         if (v !== null && (typeof v == "object" || typeof v == "function")) {
             add(v, globals[i] + ".");
@@ -110,9 +176,9 @@ fn host_names() -> BTreeSet<String> {
     text.lines().map(str::to_string).collect()
 }
 
-/// The names a plain JavaScript engine has.
+/// The names a plain JavaScript engine with E4X has.
 fn language_names() -> BTreeSet<String> {
-    match Realm::new().run(LIST) {
+    match Realm::with_options(Options { e4x: true, ..Options::default() }, vectorcraft_js::Limits::default()).run(LIST) {
         Ok(JsValue::String(text)) => text.lines().map(str::to_string).collect(),
         other => panic!("no list: {other:?}"),
     }
@@ -120,7 +186,8 @@ fn language_names() -> BTreeSet<String> {
 
 fn table_names() -> BTreeSet<String> {
     let inside = INSIDE.iter().flat_map(|(prefix, names)| names.split_whitespace().map(move |n| format!("{prefix}{n}")));
-    OUTSIDE.iter().map(|(n, ..)| n.to_string()).chain(inside).chain([NOT_CHECKED.to_string()]).collect()
+    let bare = BARE_CLASSES.split_whitespace().flat_map(|c| [c.to_string(), format!("{c}.prototype"), format!("{c}.prototype.constructor")]);
+    OUTSIDE.iter().map(|(n, ..)| n.to_string()).chain(inside).chain(bare).chain([NOT_CHECKED.to_string()]).collect()
 }
 
 #[test]
