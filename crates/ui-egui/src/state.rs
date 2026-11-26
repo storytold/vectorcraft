@@ -156,9 +156,15 @@ impl View {
     /// Takes the view the canvas reports back, the inverse of [`Self::canvas`].
     pub fn set_canvas(&mut self, view: &CanvasView, ui_scaling: f32) {
         self.center = view.center;
-        self.zoom = view.zoom * f64::from(ui_scaling);
+        self.zoom = Self::zoom_of_canvas(view, ui_scaling);
         self.rotation = view.rotation;
         self.rect = view.rect;
+    }
+
+    /// The zoom [`Self::zoom`] holds for the canvas view `view` at `ui_scaling`, the inverse of the
+    /// zoom in [`Self::canvas`]: the zoom `view.setZoom` and the View menu set and the status bar shows.
+    pub fn zoom_of_canvas(view: &CanvasView, ui_scaling: f32) -> f64 {
+        view.zoom * f64::from(ui_scaling)
     }
 }
 
@@ -701,6 +707,11 @@ pub struct UiState {
     /// Not saved.
     #[serde(skip)]
     pub status_notes: Option<(String, Vec<String>)>,
+    /// What the startup scripts' round under way left out ([`crate::script_runs`]): the runs that
+    /// could not start and the notes on the Startup Scripts folder, shown again when its last run
+    /// ends. Not saved.
+    #[serde(skip)]
+    pub startup_notes: Vec<String>,
     /// The status text a plug-in wrote, with the app's words before and after it: while the status
     /// is these three together, the status bar translates the app's words and shows the plug-in's
     /// as they are ([`crate::plugin_runs::show_notice`]). Not saved.
@@ -1476,6 +1487,7 @@ impl Default for UiState {
             replace_font_warning: None,
             last_find: None,
             status_notes: None,
+            startup_notes: Vec::new(),
             status_kept: None,
             palette_open: false,
             palette_query: String::new(),

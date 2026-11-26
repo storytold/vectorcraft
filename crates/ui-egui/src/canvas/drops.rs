@@ -23,7 +23,7 @@ use crate::doc_windows::Win;
 use crate::panel_drag::PanelDrag;
 use crate::panels::brushes::BrushKey;
 use crate::panels::brushes::BrushLibraries;
-use crate::panels::graphic_styles::StyleKey;
+use crate::panels::graphic_styles::StyleDrag;
 use crate::panels::library_panel::{self, LibraryKey, LibraryKind as _};
 use crate::panels::symbols::{SymbolKey, SymbolLibraries};
 use crate::place::{CanvasDrop, CanvasFiles};
@@ -50,7 +50,7 @@ pub(crate) struct CarriedArt {
 #[derive(Clone, Debug)]
 enum Payload {
     Panel(PanelDrag),
-    Style(StyleKey),
+    Style(StyleDrag),
     Symbol(SymbolKey),
     Brush(BrushKey),
     Library(LibraryKey),
@@ -171,12 +171,12 @@ impl Component for CanvasDrops<'_> {
         if self.kind == BodyKind::Live {
             // The art of this canvas's own document is not accepted as a panel payload: its move resumes.
             let panel = Target::new(rect, view, covered, |p: &PanelDrag| (!matches!(p, PanelDrag::Art { .. })).then(|| Payload::Panel(p.clone())));
-            let style = Target::new(rect, view, covered, |d: &ListDrag<StyleKey>| Some(Payload::Style(d.grabbed.clone())));
+            let style = Target::new(rect, view, covered, |d: &StyleDrag| (d.document == self.document).then(|| Payload::Style(d.clone())));
             let symbol = Target::new(rect, view, covered, |d: &ListDrag<SymbolKey>| Some(Payload::Symbol(d.grabbed.clone())));
             let brush = Target::new(rect, view, covered, |d: &ListDrag<BrushKey>| Some(Payload::Brush(d.grabbed.clone())));
             let library = Target::new(rect, view, covered, |d: &ListDrag<LibraryKey>| Some(Payload::Library(d.grabbed.clone())));
             let panel = cx.drop_target::<PanelDrag, _>(&panel);
-            let style = cx.drop_target::<ListDrag<StyleKey>, _>(&style);
+            let style = cx.drop_target::<StyleDrag, _>(&style);
             let symbol = cx.drop_target::<ListDrag<SymbolKey>, _>(&symbol);
             let brush = cx.drop_target::<ListDrag<BrushKey>, _>(&brush);
             let library = cx.drop_target::<ListDrag<LibraryKey>, _>(&library);
@@ -344,11 +344,12 @@ pub(crate) fn apply_drop(app: &mut VectorcraftApp, drop: &Dropped) -> Result<(),
                 run(app, "brush.apply", json!({"name": key.name, "ids": [owner]}))
             }
         },
-        Payload::Style(key) => {
+        Payload::Style(style) if app.session.active().is_some_and(|st| st.uid == style.document) => {
             let Some(hit) = hit() else { return Ok(()) };
             let top = top_object(app, &hit)?;
-            run(app, "graphicStyle.apply", json!({"name": key, "ids": [top], "add": drop.op == DropOperation::Copy}))
+            run(app, "graphicStyle.apply", json!({"name": style.name, "ids": [top], "add": drop.op == DropOperation::Copy}))
         }
+        Payload::Style(_) => Ok(()),
         Payload::Panel(PanelDrag::Paint { params, paint, .. }) if !params.is_null() => {
             if let Some(color) = paint.color()
                 && crate::panels::proxy_cmd(app, false) == "paint.setFill"
@@ -362,6 +363,12 @@ pub(crate) fn apply_drop(app: &mut VectorcraftApp, drop: &Dropped) -> Result<(),
             params["ids"] = json!([owner(app, &hit)?]);
             params["focus"] = json!(false);
             let cmd = crate::panels::proxy_cmd(app, false);
+            if let Some(gradient) = params.get_mut("gradient").and_then(Value::as_object_mut) {
+                if cmd == "paint.setStroke" {
+                    gradient.remove("dither");
+                }
+                params["keepModel"] = json!(true);
+            }
             run(app, cmd, params)
         }
         Payload::Panel(PanelDrag::Appearance(source)) => {

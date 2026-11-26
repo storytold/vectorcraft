@@ -51,6 +51,9 @@ pub struct Done {
     /// The frame holds pixels copied from the worker's last frame ([`crate::canvas::render_job`]),
     /// and `ms` is the time of the copy and of the parts rendered.
     pub reused: bool,
+    /// The frame drew art in a way that depends on its size
+    /// ([`vectorcraft_render::FrameStats::view_sized`]): a part of it drawn on its own may differ.
+    pub view_sized: bool,
 }
 
 /// Render `job` as the worker thread does: inside the job's automation roots and deferred
@@ -59,7 +62,7 @@ pub(crate) fn render(r: &mut Renderer, kept: &mut Option<crate::canvas::KeptFram
     let t0 = monotonic_ms();
     let frame = job.scope.clone().run(|| job.effects.view(|| crate::canvas::render_job(r, kept, &job)));
     let ms = monotonic_ms() - t0;
-    Done { key: job.key, doc: job.doc, opts: job.opts, img: frame.img, ms, moved: frame.moved, reused: frame.reused }
+    Done { key: job.key, doc: job.doc, opts: job.opts, img: frame.img, ms, moved: frame.moved, reused: frame.reused, view_sized: frame.view_sized }
 }
 
 pub struct Worker {

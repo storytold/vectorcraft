@@ -2,6 +2,7 @@
 //! closed path of that area with the current fill and stroke (`shapeBuilder.copyRegion`). The
 //! paths around the area stay as they are, and nothing needs to be selected.
 
+use vectorcraft_geom::kurbo::ParamCurveDeriv;
 use vectorcraft_geom::path::segment_bounds;
 use vectorcraft_geom::{ParamCurve, PathSeg};
 
@@ -171,13 +172,39 @@ fn unmasked(doc: &Document, leaf: &Node, mut shape: po::Shape, masks: &mut Masks
     Some(shape)
 }
 
+/// How far (pt) the middle of a piece of an outline may lie from a mask's outline and still count
+/// as on the mask's edge, which [`clip_to`] keeps. It covers rounding only, so a piece just outside
+/// the mask is still left out.
+const ON_MASK: f64 = 1e-6;
+
+/// How far (pt) to each side of a piece [`shows_through`] looks for the mask's filled area: past
+/// [`ON_MASK`], and within a filled strip of the mask as narrow as this.
+const MASK_SIDE: f64 = 1e-4;
+
+/// Does the piece of an outline whose middle is `p`, running in direction `dir` there, show
+/// through `mask` filled with `rule`? A piece off the mask's outline shows when the filled area
+/// holds `p`. A piece on the outline ([`ON_MASK`]) shows when the filled area lies on one side of
+/// it ([`MASK_SIDE`]), so every side of a square clipped by the same square shows, and an outline
+/// of the mask that bounds no filled area (two copies of one outline under even-odd) hides it.
+fn shows_through(mask: &PathData, rule: FillRule, p: Point, dir: vectorcraft_geom::Vec2) -> bool {
+    if !mask.nearest(p).is_some_and(|(.., d)| d <= ON_MASK) {
+        return path_contains(mask, rule, p);
+    }
+    let len = dir.hypot();
+    if !(len > 0.0 && len.is_finite()) {
+        return false;
+    }
+    let side = dir.turn_90() * (MASK_SIDE / len);
+    path_contains(mask, rule, p + side) || path_contains(mask, rule, p - side)
+}
+
 /// `shape` cut to `mask` (filled with `rule`). With `filled` (the path's fill draws), its closed
 /// subpaths are cut to their overlap with the mask, whose edge then bounds the fill. Its other
-/// subpaths, and every subpath of a path without a fill, are cut to their pieces inside the mask,
-/// so a hidden part of an outline does not close an area. A subpath with more segments or
-/// crossings than [`po::addons::pathtools::crossings_on`] takes is left out. None when nothing of
-/// it is inside.
-fn clip_to(shape: po::Shape, filled: bool, mask: &PathData, rule: FillRule) -> Option<po::Shape> {
+/// subpaths, and every subpath of a path without a fill, are cut to their pieces inside the mask or
+/// on its edge ([`shows_through`]), so a hidden part of an outline does not close an area. A
+/// subpath with more segments or crossings than [`po::addons::pathtools::crossings_on`] takes is
+/// left out. None when nothing of it is inside.
+pub(super) fn clip_to(shape: po::Shape, filled: bool, mask: &PathData, rule: FillRule) -> Option<po::Shape> {
     let (b, mb) = (shape.path.bounds()?, mask.bounds()?);
     if !meet(&b, &mb) {
         return None;
@@ -195,7 +222,17 @@ fn clip_to(shape: po::Shape, filled: bool, mask: &PathData, rule: FillRule) -> O
         let (cut, at) = po::addons::pathtools::insert_at(sp, &places);
         subs.extend(cut.cut_at(&at).into_iter().filter(|piece| {
             let n = piece.segment_count();
-            n > 0 && path_contains(mask, rule, piece.segment(n / 2).eval(0.5))
+            n > 0 && {
+                let seg = piece.segment(n / 2);
+                // Where the tangent vanishes (a cusp at the middle), the curve runs along its second
+                // derivative there, and a straight segment with that degenerate form along its chord.
+                let d1 = seg.deriv();
+                let dir = [d1.eval(0.5).to_vec2(), d1.deriv().eval(0.5).to_vec2(), seg.p3 - seg.p0]
+                    .into_iter()
+                    .find(|v| v.hypot2() > 0.0)
+                    .unwrap_or_default();
+                shows_through(mask, rule, seg.eval(0.5), dir)
+            }
         }));
     }
     if subs.is_empty() {

@@ -406,8 +406,10 @@ impl Document {
     /// gives it. A line that stays vertical or horizontal stays a ruler guide, at its new place. A
     /// line at any other angle becomes a guide path with that line, on the guide's layer, named
     /// as the guide was; `sel` then holds the path as a selected object instead of the guide.
-    /// Guides that cannot be edited ([`Self::guide_editable`]) stay as they are.
-    pub fn transform_ruler_guides(&mut self, sel: &mut Selection, xf: Affine) {
+    /// Guides that cannot be edited ([`Self::guide_editable`]) stay as they are. Returns the ids
+    /// of the guide paths it adds, in the order it adds them.
+    pub fn transform_ruler_guides(&mut self, sel: &mut Selection, xf: Affine) -> Vec<NodeId> {
+        let mut paths = vec![];
         for id in sel.guides.clone() {
             let Some(g) = self.ruler_guide(id).filter(|g| self.guide_editable(g)) else { continue };
             let (a, b) = match self.transformed_guide(&g, xf) {
@@ -431,7 +433,9 @@ impl Document {
             }
             self.retain_guides(sel, |g| g.id != Some(id));
             sel.objects.push(path);
+            paths.push(path);
         }
+        paths
     }
 
     /// The ruler guide node `g` names, if this document has it.

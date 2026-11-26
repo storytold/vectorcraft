@@ -680,9 +680,13 @@ fn a_listed_preset_keeps_more_rows_than_artboards() {
 fn stale_documents_throw_on_every_member() {
     let (mut s, _, _) = doc();
     run(&mut s, "#targetengine keep\nvar d = app.activeDocument, p = d.pageItems, l = p[0].parent;").unwrap();
-    for (member, message) in
-        [("d.typename", "Stale document"), ("d.parent", "Stale document"), ("p.typename", "Stale document"), ("l.typename", "Stale")]
-    {
+    for (member, message) in [
+        ("d.typename", "Stale document"),
+        ("d.parent", "Stale document"),
+        ("p.typename", "Stale document"),
+        ("p.toString()", "Stale document"),
+        ("l.typename", "Stale"),
+    ] {
         let e = failure(&mut s, &format!("#targetengine keep\n{member};"));
         assert!(e.contains(message), "{member}: {e}");
     }
@@ -903,6 +907,18 @@ fn assigning_the_same_objects_clears_the_key_and_guides() {
     s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
     log(&mut s, "app.activeDocument.selection = null;");
     assert!(s.active().unwrap().selection.guides.is_empty());
+}
+
+/// Assigning `undefined` or a value that is not a page item to the selection throws and keeps it.
+#[test]
+fn assigning_undefined_to_the_selection_throws_and_keeps_it() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    for source in ["var u; app.activeDocument.selection = u;", "app.activeDocument.selection = undefined;", "app.activeDocument.selection = 1;"] {
+        let e = failure(&mut s, source);
+        assert!(e.contains("TypeError"), "{source}: {e}");
+        assert_eq!(s.active().unwrap().selection.objects, vec![a, b], "{source}");
+    }
 }
 
 #[test]
@@ -1321,6 +1337,54 @@ fn duplicate_refuses_hidden_or_locked_art() {
     assert!(order.contains(&a) && order.contains(&b));
 }
 
+#[test]
+fn setters_refuse_art_on_a_locked_artboard() {
+    let (mut s, _, _) = doc();
+    s.edit("Lock Artboard", |d, _| {
+        d.artboards[0].locked = true;
+        Ok(())
+    })
+    .unwrap();
+    let (before, steps) = (format!("{:?}", s.active().unwrap().doc.layers), undo_steps(&s));
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pageItems[0], refused = [];\
+         var setters = [function(){p.position=[5,5]},function(){p.left=5},function(){p.top=5},\
+         function(){p.width=10},function(){p.height=10},function(){p.opacity=50},\
+         function(){p.hidden=true},function(){p.locked=true},function(){p.zOrder(ZOrderMethod.SENDTOBACK)}];\
+         for(var i=0;i<setters.length;i++){try{setters[i]();refused.push(false)}catch(e){refused.push(e.name==='Error')}}\
+         vc.log(refused);",
+    );
+    assert_eq!(out, vec![json!(vec![true; 9])]);
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
+    assert_eq!(undo_steps(&s), steps);
+    assert_eq!(log(&mut s, "var p=app.activeDocument.pageItems[0];p.opacity=p.opacity;vc.log(p.opacity);"), vec![json!(100)]);
+}
+
+#[test]
+fn geometry_setters_refuse_locked_guide_paths() {
+    let (mut s, _, b) = doc();
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.execute("view.guides.make", &json!({})).unwrap();
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    let (before, steps) = (format!("{:?}", s.active().unwrap().doc.layers), undo_steps(&s));
+    let out = log(
+        &mut s,
+        "var p=app.activeDocument.pageItems[0],refused=[];\
+         var setters=[function(){p.position=[5,5]},function(){p.left=5},function(){p.top=5},\
+         function(){p.width=10},function(){p.height=10},function(){p.zOrder(ZOrderMethod.SENDTOBACK)}];\
+         for(var i=0;i<setters.length;i++){try{setters[i]();refused.push(false)}catch(e){refused.push(e.name==='Error')}}\
+         vc.log(refused);",
+    );
+    assert_eq!(out, vec![json!(vec![true; 6])]);
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
+    assert_eq!(undo_steps(&s), steps);
+    s.execute("view.guides.lock", &json!({"locked": false})).unwrap();
+    log(&mut s, "var p=app.activeDocument.pageItems[0];p.left=5;p.width=10;");
+    let bounds = s.active().unwrap().doc.bounds_of(&[b], false).unwrap();
+    assert!((bounds.x0 - 5.0).abs() < 1e-9 && (bounds.width() - 10.0).abs() < 1e-9);
+}
+
 /// Reading `editable` on every member of a group on a locked artboard measures the group once.
 #[test]
 fn editable_measures_a_group_on_a_locked_artboard_once() {
@@ -1343,24 +1407,88 @@ fn editable_measures_a_group_on_a_locked_artboard_once() {
 #[test]
 fn get_is_file_open_cannot_probe_outside_script_scope() {
     let (mut s, _, _) = doc();
-    let path = std::env::temp_dir().join(format!("vc-dom-open-{}.svg", std::process::id()));
+    let fixture = vectorcraft_testkit::TempDir::new("script-file-open-quoting");
+    let path = fixture.join("quote's open.svg");
     s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
-    let p = path.to_string_lossy().replace('\\', "\\\\");
-    let query = format!("vc.log(app.getIsFileOpen('{p}')); vc.log(app.getIsFileOpen('{p}.other'));");
+    let p = serde_json::to_string(&path.to_string_lossy()).unwrap();
+    let other = serde_json::to_string(&format!("{}.other", path.to_string_lossy())).unwrap();
+    let query = format!("vc.log(app.getIsFileOpen({p})); vc.log(app.getIsFileOpen({other}));");
     let out = log(&mut s, &query);
     assert_eq!(out, vec![json!(true), json!(false)]);
     // Read roots that leave out the document's file: the same path does not count.
-    let elsewhere = std::env::temp_dir().join(format!("vc-dom-roots-{}", std::process::id()));
+    let elsewhere = fixture.join("elsewhere");
     std::fs::create_dir_all(&elsewhere).unwrap();
     let roots = crate::file_access::AutomationRoots::new(&[&elsewhere], &[]).unwrap().unwrap();
     let out = crate::file_access::confine(Some(&roots), || log(&mut s, &query));
     assert_eq!(out, vec![json!(false), json!(false)]);
-    let _ = std::fs::remove_dir_all(&elsewhere);
     for bad in ["../x.svg", "a/../b.svg", "\\\\\\\\host\\\\share\\\\x.svg", "//host/share/x.svg", "a\\u0000b", ""] {
         assert!(failure(&mut s, &format!("app.getIsFileOpen('{bad}');")).contains("cannot check"), "{bad}");
     }
     assert!(failure(&mut s, "app.getIsFileOpen(new Array(5000).join('a'));").contains("too long"));
-    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn a_menu_command_runs_its_command_on_the_selection() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let steps = undo_steps(&s);
+    let out = log(&mut s, "app.executeMenuCommand('ungroup'); vc.log(app.activeDocument.selection.length);");
+    assert_eq!(out, vec![json!(2)]);
+    let st = s.active().unwrap();
+    assert!(st.doc.node(g).is_none(), "the group is gone");
+    assert!(st.doc.node(a).is_some() && st.doc.node(b).is_some());
+    assert_eq!(undo_steps(&s), steps + 1, "one undo step for the run");
+    // With nothing selected the menu item does nothing and adds no undo step.
+    s.execute("select.none", &json!({})).unwrap();
+    let steps = undo_steps(&s);
+    let before = s.active().unwrap().doc.clone();
+    log(&mut s, "app.executeMenuCommand('ungroup'); app.executeMenuCommand('releaseMask');");
+    assert_eq!(undo_steps(&s), steps);
+    assert!(std::sync::Arc::ptr_eq(&before, &s.active().unwrap().doc), "nothing changed");
+    // selectall then group makes one group of both rectangles.
+    let out = log(&mut s, "app.executeMenuCommand('selectall'); app.executeMenuCommand('group'); vc.log(app.activeDocument.selection[0].typename);");
+    assert_eq!(out, vec![json!("GroupItem")]);
+}
+
+#[test]
+fn the_fit_to_artwork_menu_command_fits_the_artboard_to_the_art() {
+    let (mut s, _, _) = doc();
+    let before = s.active().unwrap().doc.artboards[0].rect;
+    log(&mut s, "app.executeMenuCommand('Fit Artboard to artwork bounds');");
+    let after = s.active().unwrap().doc.artboards[0].rect;
+    assert!(after.width() < before.width() && after.height() < before.height(), "{before:?} -> {after:?}");
+    // An artboard that is locked, or has no art on it, leaves the menu item dimmed: it does nothing.
+    let (mut s, _, _) = doc();
+    s.execute("artboard.setProps", &json!({"index": 0, "locked": true})).unwrap();
+    let steps = undo_steps(&s);
+    assert_eq!(log(&mut s, "app.executeMenuCommand('Fit Artboard to artwork bounds'); vc.log(1);"), vec![json!(1)]);
+    assert_eq!(s.active().unwrap().doc.artboards[0].rect, before);
+    assert_eq!(undo_steps(&s), steps, "locked");
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let empty = s.active().unwrap().doc.artboards[0].rect;
+    assert_eq!(log(&mut s, "app.executeMenuCommand('Fit Artboard to artwork bounds'); vc.log(1);"), vec![json!(1)]);
+    assert_eq!(s.active().unwrap().doc.artboards[0].rect, empty);
+    assert_eq!(undo_steps(&s), 0, "no art");
+}
+
+#[test]
+fn an_unknown_menu_command_throws_and_names_it() {
+    let (mut s, a, _) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let steps = undo_steps(&s);
+    let e = failure(&mut s, "app.executeMenuCommand('acmeNoSuchMenu');");
+    assert!(e.contains("acmeNoSuchMenu"), "{e}");
+    assert!(failure(&mut s, "app.executeMenuCommand('Ungroup');").contains("Ungroup"), "names are matched exactly");
+    assert!(failure(&mut s, "app.executeMenuCommand(5);").contains("string"));
+    assert!(failure(&mut s, "app.executeMenuCommand();").contains("string"));
+    assert!(failure(&mut s, "app.executeMenuCommand(new Array(5000).join('a'));").contains("too long"));
+    assert_eq!(undo_steps(&s), steps, "nothing changed");
+    // With no document open a known menu item does nothing, and an unknown one still throws.
+    let mut s = Session::new();
+    assert_eq!(log(&mut s, "app.executeMenuCommand('selectall'); vc.log(app.documents.length);"), vec![json!(0)]);
+    assert!(failure(&mut s, "app.executeMenuCommand('acmeNoSuchMenu');").contains("acmeNoSuchMenu"));
 }
 
 #[test]

@@ -30,6 +30,7 @@ pub use cmd::clipboard::{Clipboard, SourceLayer};
 pub use cmd::create::constrain_click;
 pub use cmd::distortcmds::{perspective_click, width_point_pair};
 pub use cmd::flare::flare_settings;
+pub use cmd::gradient::StopOwner;
 pub use cmd::graph::{GraphTypeSubject, calculated_axes as graph_calculated_axes, graph_type_subject};
 pub use cmd::params::{check_keys, check_params};
 pub use cmd::pathops::auto_simplify_level;
@@ -136,6 +137,8 @@ pub struct Session {
     /// Set when a command that draws a shape was journaled outside saved steps
     /// ([`Session::take_shape_drawn`]).
     shape_drawn: bool,
+    /// The categories `prefs.reset` reset, `None` for every one ([`Session::take_prefs_resets`]).
+    prefs_resets: Vec<Option<&'static str>>,
     /// Set when the active tool panicked (see [`guard`]); reported by the next tool event.
     tool_panic: Option<EngineError>,
     /// How many times switching or closing documents, or replacing the active one, has started the
@@ -216,6 +219,9 @@ pub struct Session {
     /// The Scripts folder, whose scripts File › Scripts lists; `None`: no folder
     /// ([`Session::attach_scripts_dir`]).
     scripts_dir: Option<std::path::PathBuf>,
+    /// The Startup Scripts folder, whose scripts `script.startup.run` runs; `None`: no folder
+    /// ([`Session::attach_startup_scripts_dir`]).
+    startup_scripts_dir: Option<std::path::PathBuf>,
     /// The folder of File Info's metadata templates; `None`: no folder
     /// ([`Session::attach_metadata_templates_dir`]).
     metadata_templates_dir: Option<std::path::PathBuf>,
@@ -308,6 +314,9 @@ pub struct Session {
     /// What a [`cmd::TraceRun`] traced, until the next `imageTrace.make` or
     /// `imageTrace.makeAndExpand` takes it ([`cmd::Traced::hand_in`]).
     pub(crate) trace_hand_off: Option<cmd::Traced>,
+    /// The installed fonts a [`cmd::RetypeSearch`] found, until the next `type.retype` or
+    /// `type.retypeFonts` takes it ([`cmd::RetypeFound::hand_in`]).
+    pub(crate) retype_hand_off: Option<cmd::RetypeFound>,
     /// Whether a click or drag of the place cursor asks the frontend to place its file
     /// ([`UiRequest::Place`]) instead of running `file.place`: the desktop app sets it to read the
     /// file off the UI thread. False: the file is placed at once.
@@ -336,6 +345,19 @@ pub struct Session {
     /// `script.run` starts the job and returns, and the frontend advances it once per frame
     /// ([`Session::script_pump`]). Off, `script.run` advances it to its end.
     pub script_frames: bool,
+    /// The runs `script.startup.run` queued in the app, each started when the run before it ends
+    /// ([`Session::script_pump`]).
+    pub(crate) script_queue: std::collections::VecDeque<script::startup::Queued>,
+    /// The file access scope of the request that queued [`Self::script_queue`], in which each queued
+    /// run starts and is read.
+    pub(crate) script_queue_scope: Option<file_access::ScopeHandle>,
+    pub(crate) script_queue_then: Option<script::Request>,
+    /// While a startup script runs: the launch marker's entry naming it
+    /// ([`vectorcraft_plugins::safe_mode::loading`]).
+    pub(crate) startup_loading: Option<vectorcraft_plugins::safe_mode::Loading>,
+    /// The queued runs that could not start, as (name, error), until the frontend takes them
+    /// ([`Session::take_startup_failures`]).
+    pub(crate) startup_failures: Vec<(String, String)>,
     /// Each open document's highest next id a run has seen, by [`DocState::uid`].
     pub(crate) script_high_water: std::collections::HashMap<u64, u64>,
     /// While a slice of a script runs in this session.

@@ -86,6 +86,9 @@ struct Drag {
     /// when the Alt state at the release changes what it transforms.
     pointer: Point,
     shift: bool,
+    /// The pointer's own movement since the press, before snapping: a snapped press can turn a
+    /// level drag diagonal, so Scale's Shift-drag uses this to pick an axis (#6324).
+    moved: Vec2,
     last: Affine,
     /// The document revision at the press: a press whose document or selection changes before it
     /// becomes a drag is dropped, so its reference point is never applied to other objects.
@@ -98,6 +101,16 @@ impl Drag {
     fn angle_for(&self, copy: bool, patterns_only: bool) -> f64 {
         if self.anchors && !copy && !patterns_only { 0.0 } else { self.angle }
     }
+}
+
+/// The pointer drag [`TransformTool::solve`] turns into a transform.
+struct SolveDrag {
+    start: Point,
+    p: Point,
+    /// The pointer's own movement since the press, before snapping (#6324).
+    moved: Vec2,
+    shift: bool,
+    bounds: Rect,
 }
 
 /// The first point of a Reflect axis set by a click, waiting for the second point, with the
@@ -222,7 +235,7 @@ impl TransformTool {
     /// and Shift's 45° steps start from the box's axes. A Reflect axis drawn by the drag is the
     /// line the pointer draws on the page.
     pub fn matrix_in(&self, angle: f64, o: Point, start: Point, p: Point, shift: bool, bounds: Rect) -> (Affine, String) {
-        let (m, a, b) = self.solve(angle, o, start, p, shift, bounds);
+        let (m, a, b) = self.solve(angle, o, SolveDrag { start, p, moved: p - start, shift, bounds });
         (m, self.label(a, b))
     }
 
@@ -253,7 +266,8 @@ impl TransformTool {
     /// axis in degrees counter-clockwise (Reflect), the scale along the box's width and height
     /// (Scale), or the angle of the shear axis (0 horizontal, 90 vertical) and the shear angle as
     /// `object.shear` takes it (Shear).
-    fn solve(&self, angle: f64, o: Point, start: Point, p: Point, shift: bool, bounds: Rect) -> (Affine, f64, f64) {
+    fn solve(&self, angle: f64, o: Point, d: SolveDrag) -> (Affine, f64, f64) {
+        let SolveDrag { start, p, moved, shift, bounds } = d;
         let frame = OrientedBox { angle, rect: Rect::ZERO };
         let local = |v: Vec2| frame.to_doc().inverse() * v.to_point();
         match self.kind {
@@ -276,7 +290,18 @@ impl TransformTool {
                 let d1 = local(p - o).to_vec2();
                 let ratio = |a: f64, b: f64| if a.abs() > 1e-6 { b / a } else { 1.0 };
                 let (mut sx, mut sy) = (ratio(d0.x, d1.x), ratio(d0.y, d1.y));
-                if shift {
+                // Shift: a drag within 22.5° of an axis scales along that axis alone, a diagonal
+                // one uniformly (#6324). The pointer's own movement decides, in the box's axes; a
+                // snapped press can otherwise turn a level drag diagonal. A drag that starts level
+                // with the reference point on that axis has nothing to scale it by, so it stays uniform.
+                let moved_local = local(moved).to_vec2();
+                let axis_angle = moved_local.y.abs().atan2(moved_local.x.abs()).to_degrees();
+                let along = moved_local.hypot() > 1e-9;
+                if shift && along && axis_angle <= 22.5 && d0.x.abs() > 1e-6 {
+                    sy = 1.0;
+                } else if shift && along && axis_angle >= 67.5 && d0.y.abs() > 1e-6 {
+                    sx = 1.0;
+                } else if shift {
                     let l2 = d0.hypot2();
                     let k = if l2 > 1e-12 { d1.dot(d0) / l2 } else { 1.0 };
                     sx = k;
@@ -380,6 +405,7 @@ impl Tool for TransformTool {
                     anchors,
                     pointer: p,
                     shift: false,
+                    moved: Vec2::ZERO,
                     last: Affine::IDENTITY,
                     revision: cx.revision,
                 });
@@ -406,10 +432,15 @@ impl Tool for TransformTool {
                         Some(if self.kind == TransformKind::Scale { PointSnap::scaling(cx, targets) } else { PointSnap::moving(cx, targets) });
                     out.push(Action::Begin(self.kind.label().into()));
                 }
+                let moved = p - d.start;
                 let (p, guides) = self.snap.as_ref().map_or((p, vec![]), |s| s.snap(cx, p));
                 self.hover = guides;
-                let (m, a, b) = self.solve(d.angle_for(ev.mods.alt, ev.backquote), d.origin, d.pick, p, ev.mods.shift, d.bounds);
-                (d.last, d.pointer, d.shift) = (m, p, ev.mods.shift);
+                let (m, a, b) = self.solve(
+                    d.angle_for(ev.mods.alt, ev.backquote),
+                    d.origin,
+                    SolveDrag { start: d.pick, p, moved, shift: ev.mods.shift, bounds: d.bounds },
+                );
+                (d.last, d.pointer, d.shift, d.moved) = (m, p, ev.mods.shift, moved);
                 self.drag = Some(d);
                 self.measure = Some((p, self.label(a, b)));
                 self.readout = Some(self.readout_of(m, a, b, d.bounds));
@@ -423,7 +454,12 @@ impl Tool for TransformTool {
                     // or moves only pattern tiles, and with anchors selected, whether it acts
                     // along the box or the page.
                     let m = if d.anchors {
-                        self.matrix_in(d.angle_for(ev.mods.alt, ev.backquote), d.origin, d.pick, d.pointer, d.shift, d.bounds).0
+                        self.solve(
+                            d.angle_for(ev.mods.alt, ev.backquote),
+                            d.origin,
+                            SolveDrag { start: d.pick, p: d.pointer, moved: d.moved, shift: d.shift, bounds: d.bounds },
+                        )
+                        .0
                     } else {
                         d.last
                     };
@@ -445,7 +481,11 @@ impl Tool for TransformTool {
                     }
                     self.drop_axis();
                     let copy = ev.mods.alt;
-                    let (m, _, _) = self.solve(d.angle_for(copy, ev.backquote), first, first, d.pick, false, d.bounds);
+                    let (m, _, _) = self.solve(
+                        d.angle_for(copy, ev.backquote),
+                        first,
+                        SolveDrag { start: first, p: d.pick, moved: d.pick - first, shift: false, bounds: d.bounds },
+                    );
                     vec![Action::Begin(self.kind.label().into()), preview(m, copy, ev.backquote), Action::Commit]
                 } else {
                     // A click sets the reference point; with Alt, it opens the dialog too. With the
@@ -739,6 +779,54 @@ mod tests {
         let (m, _) = t.matrix_for(Point::new(150.0, 150.0), Point::new(200.0, 200.0), Point::new(250.0, 240.0), true, Rect::ZERO);
         let c = m.as_coeffs();
         assert!((c[0] - c[3]).abs() < 1e-9 && c[0] > 1.0);
+    }
+
+    /// A Shift-drag along one axis scales along that axis alone, and a diagonal one scales
+    /// uniformly (#6324): the drag's own direction decides, within 22.5° of an axis.
+    #[test]
+    fn scale_shift_follows_the_drag_direction() {
+        let t = TransformTool::new(TransformKind::Scale);
+        let o = Point::new(100.0, 100.0);
+        let scales = |p: Point| {
+            let c = t.matrix_for(o, Point::new(150.0, 140.0), p, true, Rect::ZERO).0.as_coeffs();
+            (c[0], c[3])
+        };
+        // Sideways, a little off the level: width only.
+        let (sx, sy) = scales(Point::new(200.0, 145.0));
+        assert!((sx - 2.0).abs() < 1e-9 && (sy - 1.0).abs() < 1e-9, "{sx} {sy}");
+        // Up or down: height only.
+        let (sx, sy) = scales(Point::new(148.0, 180.0));
+        assert!((sx - 1.0).abs() < 1e-9 && (sy - 2.0).abs() < 1e-9, "{sx} {sy}");
+        // Diagonal: both, by the same factor.
+        let (sx, sy) = scales(Point::new(200.0, 180.0));
+        assert!((sx - sy).abs() < 1e-9 && sx > 1.0, "{sx} {sy}");
+        // A drag that starts straight above (beside) the reference point has no width (height) to
+        // scale, so a sideways (up or down) Shift-drag from there scales uniformly, as before.
+        let from = |start: Point, p: Point| {
+            let c = t.matrix_for(o, start, p, true, Rect::ZERO).0.as_coeffs();
+            (c[0], c[3])
+        };
+        let (sx, sy) = from(Point::new(100.0, 150.0), Point::new(150.0, 160.0));
+        assert!((sx - sy).abs() < 1e-9 && (sx - 1.2).abs() < 1e-9, "{sx} {sy}");
+        let (sx, sy) = from(Point::new(150.0, 100.0), Point::new(160.0, 150.0));
+        assert!((sx - sy).abs() < 1e-9 && (sx - 1.2).abs() < 1e-9, "{sx} {sy}");
+    }
+
+    /// The axis of a Shift-drag comes from the pointer's own movement: a press near a corner
+    /// snaps to it, and a level drag from there still scales the width alone.
+    #[test]
+    fn scale_shift_axis_follows_the_pointer_not_the_snapped_press() {
+        let (d, id) = doc_with_rect();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let shift = Mods { shift: true, ..Default::default() };
+        let mut t = TransformTool::new(TransformKind::Scale);
+        t.pointer(&cx, &ev(PointerKind::Down, 198.0, 203.0).with_mods(shift));
+        let drag = t.pointer(&cx, &ev(PointerKind::Drag, 205.0, 203.0).with_mods(shift));
+        let c = matrix(drag.last().expect("a preview")).as_coeffs();
+        assert!((c[0] - 1.1).abs() < 1e-9 && (c[3] - 1.0).abs() < 1e-9, "the width alone: {c:?}");
     }
 
     #[test]
