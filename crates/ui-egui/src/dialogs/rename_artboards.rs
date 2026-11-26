@@ -19,14 +19,15 @@ pub(crate) const CMD: &str = "artboard.rename";
 /// for several.
 pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
-    let (indices, name) = app.session.active().map_or((vec![], String::new()), |st| {
-        let indices = crate::panels::artboards::picked(app, st.doc.artboards.len());
-        let name = match indices.as_slice() {
-            [one] => st.doc.artboards.get(*one).map_or("", |a| a.name.as_str()),
-            _ => "",
-        };
-        (indices, name.to_owned())
-    });
+    let st = app.session.active().ok_or_else(|| tl!("No document").to_owned())?;
+    let document = st.uid;
+    let selected: Vec<_> =
+        crate::panels::artboards::picked(app, st.doc.artboards.len()).into_iter().filter_map(|index| st.doc.artboards.get(index)).collect();
+    let name = match selected.as_slice() {
+        [one] => one.name.clone(),
+        _ => String::new(),
+    };
+    let artboards: Vec<_> = selected.iter().map(|board| board.id).collect();
     let mut fields = DialogFields::new();
     fields.set("name", name);
     let dialog = HostedParamDialog::command(&ctx, CMD, fields, |fields| {
@@ -39,6 +40,13 @@ pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         if name.trim().is_empty() {
             return Ok(());
         }
+        let st =
+            app.session.active().filter(|st| st.uid == document).ok_or_else(|| tl!("This dialog was opened in a different document.").to_owned())?;
+        let indices = artboards
+            .iter()
+            .map(|id| st.doc.artboards.iter().position(|board| board.id == *id))
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(|| tl!("One of the artboards being renamed no longer exists.").to_owned())?;
         if let Err(e) = app.run(CMD, json!({ "indices": indices, "name": name })) {
             app.status(e);
         }
@@ -103,6 +111,51 @@ mod tests {
         assert!(!app.any_dialog_open());
         assert_eq!(names(&app), ["Page-1", "Artboard 2", "Page-2"]);
         assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1, "one undo step");
+    }
+
+    #[test]
+    fn rename_follows_the_original_artboards_after_reordering() {
+        let mut app = app();
+        app.session.set_tool_option("selected", &json!([0, 2]));
+        open(&mut app).unwrap();
+        app.run("artboard.reorder", json!({"index": 0, "to": 2})).unwrap();
+        assert_eq!(names(&app), ["Artboard 2", "Artboard 3", "Artboard 1"]);
+        let steps = app.session.active().unwrap().history.undo.len();
+        rename(&mut app, "Page");
+        assert_eq!(names(&app), ["Artboard 2", "Page-1", "Page-2"]);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1);
+    }
+
+    #[test]
+    fn rename_waits_for_the_document_it_opened_in() {
+        let mut app = app();
+        open(&mut app).unwrap();
+        app.run("file.new", json!({"width": 100, "height": 50, "artboards": 3})).unwrap();
+        let steps = app.session.active().unwrap().history.undo.len();
+        rename(&mut app, "Source only");
+        assert_eq!(names(&app), ["Artboard 1", "Artboard 2", "Artboard 3"]);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), steps);
+        assert!(app.any_dialog_open(), "the original document can still answer");
+
+        app.session.execute("document.activate", &json!({"index": 0})).unwrap();
+        rename(&mut app, "Source only");
+        assert_eq!(names(&app), ["Source only", "Artboard 2", "Artboard 3"]);
+        assert!(!app.any_dialog_open());
+    }
+
+    #[test]
+    fn rename_leaves_the_other_targets_alone_if_an_original_artboard_was_removed() {
+        let mut app = app();
+        app.session.set_tool_option("selected", &json!([0, 2]));
+        open(&mut app).unwrap();
+        app.run("artboard.delete", json!({"index": 2})).unwrap();
+        app.run("artboard.duplicate", json!({"index": 1})).unwrap();
+        let before = names(&app);
+        let steps = app.session.active().unwrap().history.undo.len();
+        rename(&mut app, "Page");
+        assert_eq!(names(&app), before);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), steps);
+        assert!(app.any_dialog_open());
     }
 
     /// OK with an empty name or the name the artboard already has records no undo step.
