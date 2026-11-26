@@ -8701,6 +8701,11 @@ breakText	Glyphs	Glif
 	No objects are selected.	Tidak ada objek yang dipilih.
 	Open a document to mark its fold lines.	Buka dokumen untuk menandai garis lipatnya.
 	Remove Fold Line Role	Hapus jenis garis
+	Fold Angle	Sudut lipat
+	Set Fold Angle…	Atur sudut lipat…
+	Set Fold Angle	Atur sudut lipat
+	Reset Fold Angle	Atur ulang sudut lipat
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	pilih garis lekuk, garis potong sebagian, atau garis perforasi yang tidak terkunci dan tidak tersembunyi
 	Check	Periksa
 	Check Fold Lines	Periksa garis lipat
 @msg	No cut lines are in the selection.	Tidak ada garis potong dalam seleksi.

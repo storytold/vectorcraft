@@ -11149,6 +11149,11 @@ font-script	Japanese	იაპონური
 	No objects are selected.	ობიექტები არ არის მონიშნული.
 	Open a document to mark its fold lines.	გახსენით დოკუმენტი მისი მოკეცვის ხაზების მარკირებისთვის.
 	Remove Fold Line Role	ხაზის ტიპის მოხსნა
+	Fold Angle	მოკეცვის კუთხე
+	Set Fold Angle…	მოკეცვის კუთხის დაყენება…
+	Set Fold Angle	მოკეცვის კუთხის დაყენება
+	Reset Fold Angle	მოკეცვის კუთხის ჩამოყრა
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	მონიშნეთ ბიგის, ნაწილობრივი ჭრის ან პერფორაციის ხაზი, რომელიც არც ჩაკეტილია და არც დამალული
 	Check	შემოწმება
 	Check Fold Lines	მოკეცვის ხაზების შემოწმება
 @msg	No cut lines are in the selection.	მონიშვნაში ჭრის ხაზები არ არის.

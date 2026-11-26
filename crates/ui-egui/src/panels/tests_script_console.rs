@@ -8,7 +8,9 @@ use serde_json::json;
 use vectorcraft_engine::Session;
 use vectorcraft_engine::script::console::{Ending, Entry};
 
-use super::script_console::{menu_states, shown};
+use super::script_console::{menu_states, show, shown};
+use crate::panel_docking::PANEL_MIN_WIDTH;
+use crate::tests::panel_harness::{Panel, Place, ROOM, floated};
 use crate::{Services, VectorcraftApp, script_runs};
 
 fn app() -> VectorcraftApp {
@@ -35,6 +37,44 @@ fn enabled(app: &VectorcraftApp, id: &str) -> bool {
     let mut states = CommandStates::new();
     menu_states(app, &mut states);
     states.get(&CommandRef::new(id)).is_some_and(|s| s.is_enabled())
+}
+
+#[test]
+fn the_console_footer_stays_inside_the_panel_at_minimum_width() {
+    let names = ["Clear", "Copy Selected", "Copy All"];
+    for lang in ["en", "fr", "de"] {
+        let mut app = app();
+        run(&mut app, "$.writeln('one')");
+        let panel = floated(app, "scriptConsole", lang, Place::Floating(PANEL_MIN_WIDTH), &names);
+        for name in names {
+            let bounds = panel.rects(name);
+            assert!(
+                bounds.iter().all(|rect| panel.body.expand(0.5).contains_rect(*rect)),
+                "{lang}: {name} at {bounds:?} is outside {:?}",
+                panel.body
+            );
+        }
+    }
+
+    let wide = floated(app(), "scriptConsole", "en", Place::Floating(380.0), &names);
+    assert!(wide.middles(&names).windows(2).all(|pair| (pair[0] - pair[1]).abs() < 1.0), "the wide footer uses one row");
+}
+
+#[test]
+fn the_console_footer_buttons_run_their_commands_at_minimum_width() {
+    let mut app = app();
+    run(&mut app, "$.writeln('one'); $.writeln('two')");
+    let mut panel = Panel::new(app, show);
+    panel.room(egui::vec2(PANEL_MIN_WIDTH, ROOM.y)).frame();
+    assert!(!panel.enabled("Copy Selected"));
+    panel.click("#1 c.js: one");
+    panel.click("Copy Selected");
+    assert_eq!(panel.app().clipboard_out.take().as_deref(), Some("#1 c.js: one"));
+    panel.click("Copy All");
+    assert!(panel.app().clipboard_out.take().is_some_and(|text| text.contains("#1 c.js: two")));
+    panel.click("Clear");
+    assert!(panel.app().session.script_console().lines().is_empty());
+    assert!(!panel.enabled("Copy All"));
 }
 
 #[test]

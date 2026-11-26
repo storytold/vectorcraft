@@ -9049,6 +9049,11 @@ breakText	Glyphs	Glifs
 	No objects are selected.	No hi ha cap objecte seleccionat.
 	Open a document to mark its fold lines.	Obre un document per marcar-ne les línies de plegat.
 	Remove Fold Line Role	Elimina el tipus de línia
+	Fold Angle	Angle de plegat
+	Set Fold Angle…	Defineix l’angle de plegat…
+	Set Fold Angle	Defineix l’angle de plegat
+	Reset Fold Angle	Restableix l’angle de plegat
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	seleccioneu una línia d’hendit, de tall parcial o de perforació que no estigui bloquejada ni amagada
 	Check	Comprova
 	Check Fold Lines	Comprova les línies de plegat
 @msg	No cut lines are in the selection.	No hi ha cap línia de tall a la selecció.
