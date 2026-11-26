@@ -100,7 +100,7 @@ const INSIDE: &[(&str, &str)] = &[
         "Document.prototype.",
         "activeLayer activeLayer= artboards artboards= close close= constructor convertCoordinate documentColorSpace \
          groupItems groupItems= height layers layers= name pageItems parent pathItems pathItems= rulerOrigin rulerOrigin= \
-         rulerUnits saveAs saveAs= selection selection= stories swatches swatches= symbols symbols= textFrames textFrames= toString \
+         rulerUnits saveAs saveAs= selection selection= stories swatches swatches= symbols symbols= textFrames toString \
          typename views views= width",
     ),
     ("Layer.", "prototype"),
