@@ -234,6 +234,7 @@ impl VectorcraftApp {
             told: Default::default(),
             missing_font_edit_token: None,
             held: Default::default(),
+            document_setup_source: None,
             edit_scopes: Default::default(),
             command_dialog: Default::default(),
             effect_dialogs: Default::default(),
