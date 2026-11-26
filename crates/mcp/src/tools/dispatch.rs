@@ -183,11 +183,16 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
             if !["fill", "stroke", "strokeWidth"].iter().any(|k| a.contains_key(*k)) {
                 return Err("give at least one of `fill`, `stroke`, `strokeWidth`".into());
             }
-            let (applied, objects) = apply_paint(b, a, a.get("ids").cloned())?;
+            let (applied, objects, unpainted) = apply_paint(b, a, a.get("ids").cloned())?;
             let mut reply = json!({"applied": applied, "objects": objects});
             if objects == 0 {
                 reply["note"] = json!(
-                    "no object was painted (nothing selected, the Live Paint Bucket is the active tool and no `ids` were given, or `ids` is empty or holds no object this paint applies to): only the paint for new art changed"
+                    "no object was painted (nothing selected, the Live Paint Bucket, or for a fill the Shape Builder, is the active tool and no `ids` were given, or `ids` is empty or holds no object this paint applies to): only the paint for new art changed"
+                );
+            } else if !unpainted.is_empty() {
+                reply["unpainted"] = json!(unpainted);
+                reply["note"] = json!(
+                    "the commands in `unpainted` painted no object: no given or selected object takes that paint, or, for a fill, the Shape Builder is the active tool and no `ids` were given, and the fill changed for new art only"
                 );
             }
             j(reply)

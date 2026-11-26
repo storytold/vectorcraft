@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use craft::color_ui::ui::ColorPickerDialog;
-use craft::ui::dialog::{DialogId, StackDialog};
+use craft::ui::dialog::{DialogId, HeldOk, StackDialog};
 use egui::{Event, Key, Modifiers, PointerButton, Pos2, Rect, pos2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::Color;
@@ -208,6 +208,47 @@ fn assign(app: VectorcraftApp, params: Value) -> Recolor {
     r
 }
 
+/// The open Recolor with Preset dialog: its id and its fields.
+fn preset(r: &Recolor) -> Option<(DialogId, Value)> {
+    r.host(|host, _| {
+        let open = host.open_dialogs().into_iter().find(|d| d.key.as_deref() == Some(dialogs::recolor_preset::KIND));
+        open.map(|d| (d.id, d.fields.unwrap_or_default()))
+    })
+    .flatten()
+}
+
+/// Field `k` of the open Recolor with Preset dialog; null when it is not open.
+fn preset_field(r: &Recolor, k: &str) -> Value {
+    preset(r).map(|(_, fields)| fields[k].clone()).unwrap_or_default()
+}
+
+/// Sets field `k` of the open Recolor with Preset dialog, as `ui.dialog.set` does.
+fn set_preset(r: &mut Recolor, k: &str, v: Value) -> Result<(), String> {
+    let (id, _) = preset(r).ok_or("no Recolor with Preset")?;
+    r.host(|host, ctx| host.set_json_field(ctx, id, k, v)).unwrap_or_else(|| Err("no window".into()))
+}
+
+/// OK in Recolor with Preset, as `ui.dialog.confirm` gives it, and the frames in which it closes.
+/// `Err` with the reason it was refused, which keeps the dialog open.
+fn confirm_preset(r: &mut Recolor) -> Result<(), String> {
+    let (id, _) = preset(r).ok_or("no Recolor with Preset")?;
+    r.host(|host, ctx| host.confirm_by_id(ctx, id));
+    r.frame().frame();
+    match r.host(|host, _| host.held_state(id)).flatten() {
+        Some(HeldOk::Refused(reason)) => Err(reason.as_str().to_owned()),
+        _ if preset(r).is_some() => Err("Recolor with Preset stayed open".into()),
+        _ => Ok(()),
+    }
+}
+
+/// Cancel in Recolor with Preset, and the frame in which it closes.
+fn cancel_preset(r: &mut Recolor) {
+    if let Some((id, _)) = preset(r) {
+        r.host(|host, ctx| host.cancel_by_id(ctx, id));
+    }
+    r.frame();
+}
+
 #[test]
 fn the_dialog_reduces_previews_and_applies_as_one_undo_step() {
     let mut app = app();
@@ -235,6 +276,25 @@ fn the_dialog_reduces_previews_and_applies_as_one_undo_step() {
     assert_eq!(colors(&mut r.app()), 5);
 }
 
+/// Enter in the field that has the focus is OK: the color group is made with the name typed, and the dialog closes.
+#[test]
+fn enter_in_a_field_is_ok() {
+    let mut r = open(app(), json!({"colors": ["#ff8000", "#0080ff"]}));
+    r.settled();
+    r.set("groupName", json!("Enter Group")).unwrap();
+    r.settled();
+    r.click_label("Color Group:");
+    r.settled();
+    assert!(r.focused().is_some(), "a field of the dialog has the focus");
+    let groups = r.app().session.doc().unwrap().doc.swatch_groups.len();
+    key(&mut r, Key::Enter);
+    assert!(!r.is_open(), "Enter closes Recolor Artwork");
+    let app = r.app();
+    let doc = &app.session.doc().unwrap().doc;
+    assert_eq!(doc.swatch_groups.len(), groups + 1, "Enter makes the color group, as OK does");
+    assert_eq!(doc.swatch_groups.last().map(|g| g.name.as_str()), Some("Enter Group"));
+}
+
 #[test]
 fn presets_open_colour_jobs_and_libraries_and_both_tabs_draw() {
     let mut app = app();
@@ -246,11 +306,14 @@ fn presets_open_colour_jobs_and_libraries_and_both_tabs_draw() {
         .collect();
     assert_eq!(presets.iter().map(|p| p.0.as_str()).collect::<Vec<_>>(), ["1 Color Job…", "2 Color Job…", "3 Color Job…", "Color Library…"]);
     let mut r = open(app, presets[1].1.clone());
+    confirm_preset(&mut r).unwrap();
     r.settled();
     assert_eq!((field(&r, "colors"), field(&r, "method")), (json!(2), json!("scaleTints")));
     assert_eq!(field(&r, "rows").as_array().unwrap().len(), 2);
     r.cancel();
     r.app().run("ui.recolorDialog", presets[3].1.clone()).unwrap();
+    assert_eq!(preset_field(&r, "limitTo"), "web-safe-216", "Color Library asks with the first library chosen");
+    confirm_preset(&mut r).unwrap();
     assert_eq!(field(&r, "limitTo"), "web-safe-216", "Color Library starts on the first library");
     r.settled();
     let web = |k: &Value| vectorcraft_engine::cmd::color_value(k).unwrap().to_rgb().iter().all(|v| ((v * 5.0).round() - v * 5.0).abs() < 1e-3);
@@ -1274,6 +1337,37 @@ fn row_context_menu_pick_from_swatches_and_limit_to_library() {
     }
 }
 
+/// A Color Picker opened over the dialog, on its color models, has the Color Swatches button that
+/// switches it to the swatches.
+#[test]
+fn a_picker_over_the_dialog_offers_the_color_swatches_view() {
+    let mut r = edit(&["#ff0000", "#0000ff"]);
+    let at = marker(&r, 0);
+    right_click(&mut r, at);
+    tap(&mut r, "Color Picker");
+    assert!(picker(&r).is_some(), "the marker's Color Picker opens the picker");
+    assert!(has(&r, "Color Swatches"), "the picker has the Color Swatches button");
+    tap(&mut r, "Color Swatches");
+    assert!(has(&r, "Color Models"), "the button switches the picker to its swatches");
+}
+
+/// Pick from Swatches opens the picker on its swatches, showing the library that Limit to Library
+/// limits the rows to.
+#[test]
+fn pick_from_swatches_shows_the_limit_to_library_library() {
+    let mut app = app();
+    art(&mut app, &["#ff0000", "#0000ff"]);
+    let lib = library_of(&mut app, &[json!({"name": "Lib Teal", "color": "#008080"}), json!({"name": "Lib Plum", "color": "#8e4585"})]);
+    let mut r = assign(app, json!({"library": lib}));
+    assert_eq!(field(&r, "limitTo"), json!(lib));
+    let at = rect(&r, "New 1").center();
+    right_click(&mut r, at);
+    tap(&mut r, "Pick from Swatches");
+    assert!(picker(&r).is_some(), "Pick from Swatches opens the Color Picker");
+    assert!(has(&r, "Color Models"), "the picker shows its swatches, with the button back to the color models");
+    assert!(has(&r, "Lib Teal") && has(&r, "Lib Plum"), "the swatches are the Limit to Library library's");
+}
+
 /// Undo Changes and Redo Changes step back and forward through the dialog's own color edits, and
 /// the art previews each step; the document's undo history is unchanged until OK, which records
 /// one step. Both buttons start disabled, and a new edit after Undo Changes leaves nothing to redo.
@@ -1457,4 +1551,255 @@ fn the_recolor_undo_and_redo_commands_preview_the_step() {
     r.app().run("ui.recolorRedo", json!({})).unwrap();
     assert_eq!(fills(&r.app()), adjusted, "Redo Changes previews the step after");
     r.cancel();
+}
+
+/// Edit › Edit Colors › Recolor with Preset asks whether to limit the colors to a swatch library
+/// before Recolor Artwork opens: Cancel opens nothing, and OK opens Recolor Artwork with the
+/// preset's colors and the library chosen.
+#[test]
+fn recolor_with_preset_asks_for_a_library_first() {
+    let mut r = Recolor::new(app());
+    assert!(r.app().run("ui.recolorDialog", json!({"colors": 1, "preset": true})).is_err(), "nothing selected");
+    assert!(preset(&r).is_none());
+    art(&mut r.app(), &["#333333", "#999999"]);
+    for (p, why) in [
+        (json!({"colors": 1, "preset": 1}), "`preset` is true or false"),
+        (json!({"colors": 0, "preset": true}), "a preset has at least one color"),
+        (json!({"colors": 1, "preset": true, "group": "Grays"}), "a preset takes no group"),
+    ] {
+        assert!(r.app().run("ui.recolorDialog", p).is_err(), "{why}");
+    }
+    assert!(preset(&r).is_none() && !r.is_open());
+    let presets: Vec<Value> = crate::menus::menu_entries(&r.app())
+        .iter()
+        .filter(|e| e.path.last().is_some_and(|p| p == "Recolor with Preset"))
+        .map(|e| e.params.clone())
+        .collect();
+    assert_eq!(presets.len(), 4);
+    for p in &presets {
+        r.app().run("ui.recolorDialog", p.clone()).unwrap();
+        r.settled();
+        assert!(preset(&r).is_some() && !r.is_open(), "{p}");
+        cancel_preset(&mut r);
+        assert!(preset(&r).is_none() && !r.is_open(), "Cancel opens nothing: {p}");
+    }
+    // A preset opened over Recolor Artwork's preview rolls the preview back.
+    let start = colors(&mut r.app());
+    r.app().run("ui.recolorDialog", json!({})).unwrap();
+    r.set("colors", json!(1)).unwrap();
+    r.set("method", json!("exact")).unwrap();
+    r.settled();
+    assert_eq!(colors(&mut r.app()), 1, "previewed");
+    r.app().run("ui.recolorDialog", presets[0].clone()).unwrap();
+    assert!(preset(&r).is_some());
+    assert_eq!(colors(&mut r.app()), start, "the preview is rolled back");
+    r.settled();
+    assert!(!r.is_open(), "Recolor Artwork closed");
+    assert_eq!(preset_field(&r, "limitTo"), json!(""), "a color job starts on None");
+    set_preset(&mut r, "limitTo", json!("document")).unwrap();
+    // OK with nothing to recolor leaves the dialog open.
+    r.app().run("select.none", json!({})).unwrap();
+    assert!(confirm_preset(&mut r).is_err());
+    assert!(preset(&r).is_some() && !r.is_open(), "the dialog stays");
+    r.app().run("select.all", json!({})).unwrap();
+    confirm_preset(&mut r).unwrap();
+    assert!(r.is_open());
+    assert_eq!((field(&r, "colors"), field(&r, "method"), field(&r, "limitTo")), (json!(1), json!("scaleTints"), json!("document")));
+    // Recolor Artwork opened over its own preview rolls that preview back too.
+    r.set("method", json!("exact")).unwrap();
+    r.set("limitTo", json!("")).unwrap();
+    r.settled();
+    assert_eq!(colors(&mut r.app()), 1, "previewed");
+    r.app().run("ui.recolorDialog", json!({})).unwrap();
+    assert_eq!(colors(&mut r.app()), start, "the preview is rolled back");
+    r.cancel();
+}
+
+/// Recolor Artwork opened on a colour group over its own preview of that group starts on the
+/// group's colours as the rolled-back preview leaves them.
+#[test]
+fn reopening_a_group_over_its_preview_starts_on_the_groups_colours() {
+    let mut app = app();
+    art(&mut app, &["#ff0000", "#0000ff"]);
+    let before = group_keys(&app, "Brights");
+    let mut r = open(app, json!({"group": "Brights"}));
+    r.settled();
+    let mut rows = field(&r, "rows");
+    rows[1]["to"] = json!("rgb 1 2 3");
+    r.set("rows", rows).unwrap();
+    r.settled();
+    assert_ne!(group_keys(&r.app(), "Brights"), before, "the preview changes the group");
+    r.app().run("ui.recolorDialog", json!({"group": "Brights"})).unwrap();
+    assert_eq!(group_keys(&r.app(), "Brights"), before, "the preview is rolled back");
+    assert_eq!(field(&r, "__assign"), json!(before), "the new dialog starts on the group's colours");
+    r.cancel();
+}
+
+/// Recolor Artwork opened on a colour group over a preview that renames it finds the group by its
+/// name without the preview; an unknown group leaves the open dialog as it is.
+#[test]
+fn reopening_a_group_over_a_preview_that_renames_it_finds_the_group() {
+    let mut app = app();
+    art(&mut app, &["#ff0000", "#0000ff"]);
+    let before = group_keys(&app, "Brights");
+    let mut r = open(app, json!({"group": "Brights"}));
+    r.settled();
+    r.set("groupName", json!("Renamed")).unwrap();
+    r.settled();
+    let named = |r: &Recolor, n: &str| r.app().session.doc().unwrap().doc.swatch_groups.iter().any(|g| g.name == n);
+    assert!(named(&r, "Renamed") && !named(&r, "Brights"), "the preview renames the group");
+    assert!(r.app().run("ui.recolorDialog", json!({"group": "Nope"})).is_err());
+    assert_eq!(field(&r, "groupName"), json!("Renamed"), "an unknown group leaves the dialog open");
+    r.app().run("ui.recolorDialog", json!({"group": "Brights"})).unwrap();
+    assert!(named(&r, "Brights") && !named(&r, "Renamed"), "the preview is rolled back");
+    assert_eq!(field(&r, "__assign"), json!(before), "the new dialog starts on the group's colours");
+    r.cancel();
+}
+
+/// A `library` or `group` that is not a string is an error, with or without a preset, and opens
+/// no dialog.
+#[test]
+fn recolor_rejects_a_library_or_group_that_is_not_a_string() {
+    let mut app = app();
+    art(&mut app, &["#ff0000", "#0000ff"]);
+    let mut r = Recolor::new(app);
+    for p in [
+        json!({"colors": 1, "library": 123}),
+        json!({"preset": true, "colors": 1, "library": 123}),
+        json!({"preset": true, "colors": 1, "library": true}),
+        json!({"group": 5}),
+        json!({"group": ["Brights"]}),
+    ] {
+        assert!(r.app().run("ui.recolorDialog", p.clone()).is_err(), "{p}");
+        assert!(!r.is_open() && preset(&r).is_none(), "{p} opens no dialog");
+    }
+    r.app().run("ui.recolorDialog", json!({"colors": 1, "library": null, "group": null})).unwrap();
+    assert_eq!(field(&r, "limitTo"), json!(""), "a null library is no limit");
+    r.cancel();
+}
+
+/// Every paint under `v`, in order: its color, the swatch it is linked to and its tint.
+fn paints_in(v: &Value, out: &mut Vec<(Color, Option<String>, f64)>) {
+    match v {
+        Value::Object(m) => {
+            if let Some(c) = m.get("color").and_then(|c| serde_json::from_value::<Color>(c.clone()).ok()) {
+                out.push((c, m.get("swatch").and_then(Value::as_str).map(String::from), m.get("tint").and_then(Value::as_f64).unwrap_or(1.0)));
+            }
+            m.values().for_each(|x| paints_in(x, out));
+        }
+        Value::Array(a) => a.iter().for_each(|x| paints_in(x, out)),
+        _ => {}
+    }
+}
+
+/// Every number under an `opacity` key under `v`, in order.
+fn opacities_in(v: &Value, out: &mut Vec<f64>) {
+    match v {
+        Value::Object(m) => {
+            out.extend(m.get("opacity").and_then(Value::as_f64));
+            m.values().for_each(|x| opacities_in(x, out));
+        }
+        Value::Array(a) => a.iter().for_each(|x| opacities_in(x, out)),
+        _ => {}
+    }
+}
+
+/// The art of every layer as saved.
+fn art_json(app: &VectorcraftApp) -> Value {
+    let d = &app.session.doc().unwrap().doc;
+    Value::Array(d.layers.iter().filter_map(|l| l.children()).map(|c| serde_json::to_value(c).unwrap()).collect())
+}
+
+fn art_paints(app: &VectorcraftApp) -> Vec<(Color, Option<String>, f64)> {
+    let mut out = vec![];
+    paints_in(&art_json(app), &mut out);
+    out
+}
+
+/// A gray other than black or white, with its lightness.
+fn gray(c: &Color) -> Option<f32> {
+    let [r, g, b] = c.to_rgb();
+    ((r - g).abs() < 1e-3 && (g - b).abs() < 1e-3 && r > 0.01 && r < 0.99).then_some(r)
+}
+
+/// Gray art placed from an SVG file (fills, a stroke, a group at 50% opacity, `fill-opacity`, a
+/// compound path, a gradient's stops and type) with a 1 Color Job of Recolor with Preset limited
+/// to the document's swatches and a spot or global ink picked for its row becomes tints of that
+/// ink linked to its swatch, darker grays at higher tints, with its opacities kept; editing the
+/// swatch then recolors the art at the same tints. A process swatch gives tints of its color with
+/// no link.
+#[test]
+fn a_one_color_job_limited_to_document_swatches_links_gray_art_to_the_ink() {
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="240" height="80"><rect x="0" y="0" width="20" height="20" fill="#000000"/><rect x="25" y="0" width="20" height="20" fill="#333333" stroke="#808080" stroke-width="2"/><g opacity="0.5"><rect x="50" y="0" width="20" height="20" fill="#808080"/></g><rect x="75" y="0" width="20" height="20" fill="#cccccc" fill-opacity="0.7"/><rect x="100" y="0" width="20" height="20" fill="#ffffff" stroke="#000000"/><path d="M130 0 L150 0 L150 20 Z M135 5 L145 5 L145 15 Z" fill="#666666" fill-rule="evenodd"/><defs><linearGradient id="g"><stop offset="0" stop-color="#222222"/><stop offset="1" stop-color="#dddddd"/></linearGradient></defs><rect x="160" y="0" width="20" height="20" fill="url(#g)"/><text x="0" y="60" font-size="18" fill="#555555">Ink</text></svg>"##;
+    let path = std::env::temp_dir().join(format!("vectorcraft-recolor-preset-{}.svg", std::process::id()));
+    std::fs::write(&path, svg).unwrap();
+    for (kind, options, linked) in [("spot", json!({"spot": true}), true), ("global", json!({"global": true}), true), ("process", json!({}), false)] {
+        let mut r = Recolor::new(app());
+        let mut swatch = json!({"name": "Ink", "color": "cmyk 0 100 0 0"});
+        swatch.as_object_mut().unwrap().extend(options.as_object().unwrap().clone());
+        r.app().run("swatch.new", swatch).unwrap();
+        r.app().run("file.place", json!({"path": path.to_string_lossy(), "at": [120, 50]})).unwrap();
+        r.app().run("select.all", json!({})).unwrap();
+        let before = art_paints(&r.app());
+        let grays: Vec<usize> = (0..before.len()).filter(|&i| gray(&before[i].0).is_some()).collect();
+        assert!(grays.len() >= 9, "{kind}: the fills, the stroke, the stops and the type are gray: {before:?}");
+        let mut opacities = vec![];
+        opacities_in(&art_json(&r.app()), &mut opacities);
+        assert!(opacities.iter().any(|o| (o - 0.5).abs() < 1e-6), "the group's opacity came in: {opacities:?}");
+        assert!(opacities.iter().any(|o| (o - 0.7).abs() < 1e-6), "the fill opacity came in: {opacities:?}");
+
+        let job = crate::menus::menu_entries(&r.app()).iter().find(|e| e.label == "1 Color Job…").unwrap().params.clone();
+        r.app().run("ui.recolorDialog", job).unwrap();
+        set_preset(&mut r, "limitTo", json!("document")).unwrap();
+        confirm_preset(&mut r).unwrap();
+        r.settled();
+        let ink = r.app().session.doc().unwrap().doc.swatch("Ink").unwrap().paint.color().unwrap();
+        let mut rows = field(&r, "rows").as_array().unwrap().clone();
+        let row = rows.iter().position(|r| !r["exclude"].as_bool().unwrap_or(false)).unwrap();
+        assert!(rows.iter().enumerate().all(|(i, r)| i == row || r["exclude"].as_bool().unwrap_or(false)), "one row: {rows:?}");
+        rows[row]["to"] = json!(ColorKey::of(&ink).to_string());
+        r.set("rows", Value::Array(rows)).unwrap();
+        r.settled();
+        r.confirm().unwrap();
+        assert!(!r.is_open());
+
+        let after = art_paints(&r.app());
+        assert_eq!(after.len(), before.len(), "{kind}: the art has the same paints");
+        let mut kept = vec![];
+        opacities_in(&art_json(&r.app()), &mut kept);
+        assert_eq!(kept, opacities, "{kind}: the opacities are kept");
+        for &i in &grays {
+            let (c, link, tint) = &after[i];
+            assert!(gray(c).is_none(), "{kind}: paint {i} is no longer gray: {c:?}");
+            assert_eq!(link.is_some(), linked, "{kind}: paint {i} linked: {link:?}");
+            if linked {
+                assert_eq!(link.as_deref(), Some("Ink"));
+                assert!(*tint > 0.0 && *tint <= 1.0, "{kind}: paint {i} at a tint: {tint}");
+            }
+        }
+        for (i, c) in before.iter().enumerate().filter(|(i, _)| !grays.contains(i)) {
+            assert_eq!(after[i].0, c.0, "{kind}: black and white are kept");
+        }
+        for &a in &grays {
+            for &b in &grays {
+                if gray(&before[a].0) < gray(&before[b].0) {
+                    if linked {
+                        assert!(after[a].2 > after[b].2, "{kind}: a darker gray takes more ink: {:?} {:?}", after[a], after[b]);
+                    } else {
+                        assert_ne!(after[a].0, after[b].0, "{kind}: grays of different lightness get different colors: {a} {b}");
+                    }
+                }
+            }
+        }
+        if linked {
+            r.app().run("swatch.edit", json!({"name": "Ink", "color": "cmyk 100 0 0 0"})).unwrap();
+            let edited = art_paints(&r.app());
+            for &i in &grays {
+                assert_eq!(edited[i].1.as_deref(), Some("Ink"), "{kind}: paint {i} stays linked");
+                assert!((edited[i].2 - after[i].2).abs() < 1e-6, "{kind}: paint {i} keeps its tint");
+                assert_ne!(edited[i].0, after[i].0, "{kind}: paint {i} takes the edited ink");
+            }
+        }
+    }
+    let _ = std::fs::remove_file(&path);
 }

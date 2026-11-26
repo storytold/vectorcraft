@@ -12,15 +12,16 @@
 //! nothing.
 
 use craft::behavior::IconId;
+use craft::theme::variant::Tone;
 use craft::theme::{Rgba, Srgba};
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::choice::{Radio, RadioGroup, Swatch};
-use craft::ui::contract::{Bind, Props as _, Scroll, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Politeness, Props as _, Scroll, Show as _, ShowContainer as _};
 use craft::ui::dialog::DialogId;
+use craft::ui::display::Text;
 use craft::ui::layout_components::{Row, Stack};
+use craft::ui::notices::{Notice, NoticeLayout};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog};
-use craft::ui::runtime::env::Env;
-use craft::ui::style::rgba_color;
 use craft::ui::text::TextField;
 use serde_json::{Map, Value, json};
 use vectorcraft_cad::hpgl::write::{DEFAULT_TOLERANCE, MAX_PENS, TOLERANCE_RANGE};
@@ -209,8 +210,10 @@ fn pens_ui(ui: &mut egui::Ui, fields: &DialogFields) -> PensAsked {
         asked.table = Some(on);
     }
     if let Some(e) = fields.text(PEN_ERROR).filter(|_| asked.table != Some(false)) {
-        let error = rgba_color(Env::of(ui).tokens.tokens().color.status.bad.fg);
-        ui.colored_label(error, crate::i18n::message(crate::i18n::current(), e));
+        Notice::new(Tone::Bad, crate::i18n::message(crate::i18n::current(), e).to_string())
+            .layout(NoticeLayout::Inline)
+            .announce(Politeness::Assertive)
+            .show(ui);
     }
     // A table longer than a plot takes (set through `ui.dialog.set`) draws no rows: OK refuses it.
     let Some(mut pens) = list.filter(|a| asked.table.is_none() && a.len() <= MAX_PENS) else { return asked };
@@ -225,7 +228,7 @@ fn pens_ui(ui: &mut egui::Ui, fields: &DialogFields) -> PensAsked {
         (remove, asked.pick) = (None, None);
         for (i, pen) in pens.iter().enumerate() {
             Row::new().id_salt(("hpgl-pen-row", i)).show(ui, |ui, _| {
-                ui.label((i + 1).to_string());
+                Text::new((i + 1).to_string()).show(ui);
                 let mut color = pen.as_str().and_then(Rgba::from_hex).unwrap_or(Rgba::rgb(0, 0, 0));
                 if Swatch::new(tl!("Pen color"), Srgba::from(color)).show(ui).clicked {
                     asked.pick = Some((i, Srgba::from(color)));
