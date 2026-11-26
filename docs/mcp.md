@@ -2941,8 +2941,8 @@ other files through `$`:
   `antiAliasing`, `scaleType` and `scaleTypeValue` (`SCALEBYFACTOR` as a multiplier from 0.01 to 64, so 2 doubles the
   size, `SCALEBYWIDTH` and `SCALEBYHEIGHT` in pixels, `SCALEBYRESOLUTION` in ppi from 0.72 to 4608); JPEG also maps `compressionMethod`, `embedICCProfile` and `progressiveScan` (3 to 5);
   PNG24 maps `transparency`, `backgroundBlack` and `interlaced`; PNG8 maps `colorCount` (2 to 256), `interlaced`,
-  `matte` and `transparency`. The SVG class maps `coordinatePrecision` (1 to 7), `cssProperties`, `fontType`,
-  `rasterImageLocation`, `svgId`, `svgMinify` and `svgResponsive`, and the PDF class maps `pdfPreset` (at most 255
+  `matte` and `transparency`. With PNG8 transparency enabled, `matte: false` preserves transparency without a white background. The SVG class maps `coordinatePrecision` (1 to 7), `cssProperties`, `fontType`,
+  `rasterImageLocation`, `svgId`, `svgMinify` and `svgResponsive`. SVG `RasterImageLocation.LINK` throws; `EMBED` and `PRESERVE` embed raster images. The PDF class maps `pdfPreset` (at most 255
   bytes; a name in square brackets names a built-in preset as `PDFSaveOptions.pDFPreset` does). `itemToExport` is a
   `new ExportForScreensItemToExport()` (https://www.indesignjs.de/indesignapi/illustrator/ExportForScreensItemToExport.html)
   with `artboards` (`all`, the default, a range of artboard numbers such as `1-3, 5`, or `""` for none), `assets` (a

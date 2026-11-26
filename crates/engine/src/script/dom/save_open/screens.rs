@@ -15,6 +15,8 @@
 //! The method runs `document.exportForScreens` with one format row into the folder, which goes
 //! through the script's file grants as a `File` opened for writing there would, and the command
 //! writes only where the script's `File` objects may ([`super::exactly`]).
+//! With PNG8 transparency enabled, `matte: false` preserves transparency without a white background. SVG raster images are
+//! embedded; `RasterImageLocation.LINK` returns an error.
 //!
 //! VectorCraft's own rules, which the reference pages do not state:
 //! - `exportFolder` is a `Folder`, or a `File` read as the folder at its path. The files go into
@@ -217,7 +219,7 @@ fn png8_map(name: &str, d: &Data, p: &mut Map<String, Value>) -> std::result::Re
         }
         // Matted on white, the default `matteColor`, or not matted.
         "matte" => {
-            p.insert("matte".into(), if boolean(d, &what)? { json!("white") } else { Value::Null });
+            p.insert("matte".into(), json!(if boolean(d, &what)? { "white" } else { "none" }));
         }
         _ => return raster_map(CLASS, name, d, p),
     }
@@ -254,7 +256,12 @@ fn svg_map(name: &str, d: &Data, p: &mut Map<String, Value>) -> std::result::Res
             ("styling", json!(styling))
         }
         "fontType" => ("outlineText", json!(pick(d, "SVGFontType", &what)? == "OUTLINEFONT")),
-        "rasterImageLocation" => ("images", json!(if pick(d, "RasterImageLocation", &what)? == "LINK" { "link" } else { "embed" })),
+        "rasterImageLocation" => {
+            if pick(d, "RasterImageLocation", &what)? == "LINK" {
+                return Err(HostError::Error(format!("{what}: RasterImageLocation.LINK is not available yet")));
+            }
+            ("images", json!("embed"))
+        }
         "svgId" => {
             let ids = match pick(d, "SVGIdType", &what)? {
                 "SVGIDMINIMAL" => "minimal",

@@ -9,6 +9,54 @@ use crate::*;
 
 const DENIED: &str = "Script file access denied";
 
+#[test]
+fn screen_png8_without_matting_keeps_transparent_edge_colors() {
+    let base = vectorcraft_testkit::TempDir::new("screen-png8-unmatted");
+    std::fs::create_dir_all(base.join("main")).unwrap();
+    let mut s = session(&base);
+    let dir = data_folder(&mut s, &base);
+    logged(
+        &mut s,
+        &base,
+        &format!(
+            "Folder.userData; var d = app.documents.add(DocumentColorSpace.RGB, 20, 20); \
+         vc.run('shape.rectangle', {{x: 0, y: 0, width: 20, height: 20}}); \
+         vc.run('paint.setFill', {{color: '#ff0000'}}); d.pageItems[0].opacity = 50; \
+         var o = new ExportForScreensOptionsPNG8(); o.matte = false; \
+         d.exportForScreens(new Folder({}), ExportForScreensType.SE_PNG8, o);",
+            quoted(&dir.join("png8"))
+        ),
+    );
+    let output = dir.join("png8");
+    let files = names(&output);
+    assert_eq!(files.len(), 1);
+    let rgba = image::open(output.join(&files[0])).unwrap().to_rgba8();
+    let pixel = rgba.get_pixel(5, 5).0;
+    assert!(pixel[0] > 200 && pixel[1] < 20 && pixel[2] < 20, "{pixel:?}");
+}
+
+#[test]
+fn linked_screen_svg_images_are_rejected_before_output_is_created() {
+    let base = vectorcraft_testkit::TempDir::new("screen-svg-linked");
+    std::fs::create_dir_all(base.join("main")).unwrap();
+    let mut s = session(&base);
+    let dir = data_folder(&mut s, &base);
+    s.execute("file.new", &json!({"width": 20, "height": 20})).unwrap();
+    let output = dir.join("svg");
+    let error = failure(
+        &mut s,
+        &base,
+        &format!(
+            "Folder.userData; var o = new ExportForScreensOptionsWebOptimizedSVG(); \
+         o.rasterImageLocation = RasterImageLocation.LINK; \
+         app.activeDocument.exportForScreens(new Folder({}), ExportForScreensType.SE_SVG, o);",
+            quoted(&output)
+        ),
+    );
+    assert!(error.contains("not available yet"), "{error}");
+    assert!(!output.exists());
+}
+
 /// A fresh folder for test `name`, by its real path, with `main` for the script.
 fn folder(name: &str) -> PathBuf {
     let base = std::env::temp_dir().join(format!("vc-script-screens-{name}-{}", std::process::id()));

@@ -268,7 +268,7 @@ impl Interp {
         if r.hosted
             && let Some(file) = self.file_ref_of(id)?
         {
-            let len = match &file {
+            let len: usize = match &file {
                 Data::Object(items) => items.iter().map(|(_, v)| if let Data::String(p) = v { p.len() } else { 0 }).sum(),
                 _ => 0,
             };
