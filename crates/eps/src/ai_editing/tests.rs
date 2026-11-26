@@ -11555,7 +11555,8 @@ fn variable_font_instances_name_their_design_space() {
 /// Type in a static font whose PostScript name is also an installed variable font's named
 /// instance's names that instance's design vector and the variable font's version: the app that
 /// opens the file takes the name for the instance, and without them sets the variable font's
-/// default instance (#6756). It comes back as the style it was set in.
+/// default instance (#6756). A run that selects the static font's version keeps its static face,
+/// without a design vector or a loss warning.
 #[test]
 fn a_static_font_named_like_a_variable_instance_names_the_instance() {
     use vectorcraft_doc::{CharStyle, TextObject};
@@ -11574,6 +11575,8 @@ fn a_static_font_named_like_a_variable_instance_names_the_instance() {
     let layer = doc.layers[0].id;
     doc.insert(Some(layer), usize::MAX, n).unwrap();
 
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
     let td = text_document(&program(&doc));
     // 400 × 65536: the default instance's weight.
     assert!(td.contains("ShadowtestSans-Regular) /2 1 /4 [ 26214400 ] /5 ("), "{td}");
@@ -11591,6 +11594,18 @@ fn a_static_font_named_like_a_variable_instance_names_the_instance() {
         })
         .collect();
     assert_eq!(styles, [(SHADOWED_FAMILY.into(), "Regular".into())]);
+
+    // A run that selects the static font's version keeps its static face on readback, whether the
+    // static face or the variable face was loaded first.
+    let (warnings, back) = fonts_saved(&[
+        ("Static", SHADOWED_FAMILY, Some("Version 1.500")),
+        ("Var", SHADOWED_FAMILY, Some("Version 2.000")),
+    ]);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    let face = |v: Option<&str>| db.face_version(SHADOWED_FAMILY, "Regular", v).unwrap().id();
+    assert_eq!(back.len(), 2);
+    assert_eq!(face(back[0].2.as_deref()), regular.id());
+    assert_ne!(face(back[1].2.as_deref()), regular.id());
 }
 
 /// Style 12 pt black in family `family` and style `style`, with the Variable Font settings `axes`.

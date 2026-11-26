@@ -607,9 +607,13 @@ fn font_name(st: &CharStyle) -> FontRecord {
             // A static face whose PostScript name is also an installed variable font's named
             // instance's: an app that opens the file takes the name for that instance and, without
             // its design vector, sets the variable font's default instance (#6756). So the record
-            // names the instance, at its own setting. The family's traits read no font file, so
-            // other static fonts don't load their families' files.
-            let instance = if face.axes().is_empty() && db.family_traits(&face.family).variable {
+            // names the instance, at its own setting, unless the run selects that static version.
+            // The family's traits read no font file, so other static fonts don't load their
+            // families' files.
+            let instance = if st.font_version.as_deref() != Some(face.version.as_str())
+                && face.axes().is_empty()
+                && db.family_traits(&face.family).variable
+            {
                 let name = face.postscript_name();
                 db.versions(&face).into_iter().find(|f| !f.axes().is_empty() && f.postscript_name().eq_ignore_ascii_case(&name))
             } else {
@@ -670,17 +674,21 @@ fn fixed(v: f32) -> i64 {
 
 /// Does the font of style `st` come back as itself: are the family and style the reader makes of
 /// the record it is written as (its name, and its version as the reader takes it, as its
-/// `char_style` does) the style's own, and the face they and the version read back resolve to the
-/// face of the style? A version that isn't installed draws in the face the font resolves to anyway.
+/// `char_style` does) the style's own, and the face they and the version read back resolve to (or
+/// the static face whose variable instance the record names for other apps) the face of the style?
+/// A version that isn't installed draws in the face the font resolves to anyway.
 fn font_kept(st: &CharStyle) -> bool {
     let record = font_name(st);
     let version = crate::import::record_version(&record.version);
     let (family, style, read) = crate::import::document_font(&record.name, version);
     let db = vectorcraft_text::FontDb::global();
     let face = |family: &str, style: &str, version: Option<&str>| db.face_version(family, style, version).map(|f| f.id());
-    family == st.font_family
-        && style == st.font_style
-        && face(&family, &style, read.as_deref()) == face(&st.font_family, &st.font_style, st.font_version.as_deref())
+    let read_face = face(&family, &style, read.as_deref());
+    let own = db.face_version(&st.font_family, &st.font_style, st.font_version.as_deref());
+    let shadowed_instance = own.as_ref().is_some_and(|f| {
+        f.axes().is_empty() && !record.design.is_empty() && f.postscript_name().eq_ignore_ascii_case(&record.name)
+    });
+    family == st.font_family && style == st.font_style && (read_face == own.map(|f| f.id()) || shadowed_instance)
 }
 
 /// The font fields of a style, as [`ResolvedFonts`] keeps what they resolve to: the family, style
