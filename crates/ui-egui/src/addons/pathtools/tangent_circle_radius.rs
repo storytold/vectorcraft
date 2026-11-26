@@ -4,7 +4,7 @@
 //! nearest the click ([`tangent_circle::radius_circle`]). A radius that gives no circle there shows
 //! the tool's note and leaves OK off, as does an edit to either segment after the click. OK draws
 //! the circle with `shape.circleThroughPoints` in one undo step, and with Auto-Update Default on
-//! also sets the tool's `radius` to the one given; Cancel draws nothing.
+//! also sets the tool's `radius` to the one given when it is in the tool's range; Cancel draws nothing.
 
 use craft::ui::contract::Bind;
 use craft::ui::dialog::DialogId;
@@ -202,8 +202,8 @@ fn ok(app: &mut VectorcraftApp, result: &ParamResult) -> Result<(), String> {
         }
     };
     let auto = app.session.tool_options_of(tangent_circle::ID).get("autoUpdateDefault").and_then(Value::as_bool) == Some(true);
-    let preview = std::mem::take(&mut open.preview);
-    if let Err(e) = preview.commit(app, DRAW, points) {
+    // A failed commit leaves the interaction running: the dialog keeps its preview, so Cancel still ends it.
+    if let Err(e) = open.preview.clone().commit(app, DRAW, points) {
         app.addon_dialogs.tangent_radius = Some(open);
         return Err(e);
     }
@@ -380,6 +380,39 @@ mod tests {
         assert_eq!(count(&app), paths);
         press_ok_while_off(&mut app);
         assert_eq!(count(&app), paths);
+    }
+
+    #[test]
+    fn a_failed_ok_keeps_the_preview_for_cancel() {
+        let mut app = app_with_lines(&[100, 140]);
+        let (paths, steps) = (count(&app), undo_steps(&app));
+        click(&mut app, 150.0, 100.0, false);
+        click(&mut app, 200.0, 140.0, false);
+        frame(&mut app);
+        assert_eq!(count(&app), paths + 1);
+        // The layer the preview started from is locked before OK, so OK's draw is refused and the dialog stays open.
+        {
+            let st = app.session.doc_mut().unwrap();
+            let layer = st.doc.layers[0].id;
+            let it = st.interaction.as_mut().unwrap();
+            std::sync::Arc::make_mut(&mut it.doc).node_mut(layer).unwrap().locked = true;
+        }
+        let id = dialog_id(&app);
+        assert!(confirm(&app, id), "OK is on");
+        frame(&mut app);
+        assert!(is_open(&app));
+        assert!(app.session.in_interaction());
+        // The dialog still owns the interaction: a radius with no circle there ends it.
+        set(&app, id, "radius", json!(25));
+        frame(&mut app);
+        assert_eq!(note(&app).as_deref(), Some(tool::NO_CIRCLE));
+        assert!(!app.session.in_interaction());
+        // Cancel closes it with nothing drawn and no undo step.
+        cancel(&app, id);
+        frame(&mut app);
+        assert!(!is_open(&app));
+        assert!(!app.session.in_interaction());
+        assert_eq!((count(&app), undo_steps(&app)), (paths, steps));
     }
 
     #[test]
