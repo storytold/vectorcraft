@@ -446,7 +446,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   such stubs into one vertex (within 4× the sweep's tolerance up and down its frame and 1/16 of the 0.01 pt precision
   along it, bounded by each cluster's extent so a run of tiny level segments keeps its length); regression tests
   in `crates/pathops/src/planar.rs`. Estimate unchanged.
-- **Done (#864):** SVG export writes physical unit suffixes on the root `<svg width="..." height="...">` for documents with physical units (`mm`, `cm`, `in`, `pc`), so external vector tools (Inkscape, LightBurn) and browsers render drawings at their intended physical scale rather than scaling to 75% under point-based user-unit assumptions; unitless user coordinates in `viewBox` and path geometry remain in 1:1 internal points per SVG 1.1 coords §7.10, preserving document units on round trips (`export_physical_units_writes_unit_suffixes`, `svg_round_trip_preserves_document_units`). General document unit preferences across restarts remain tracked under #864.
+- **Done (#864):** SVG export writes physical unit suffixes on the root `<svg width="..." height="...">` for documents with physical units (`mm`, `cm`, `in`, `pc`; documents in feet and yards are written in `in`, in meters in `cm`, and in Q or Ha in `mm`, since SVG has no unit for them: `every_physical_document_unit_exports_its_printed_size`), so external vector tools (Inkscape, LightBurn) and browsers render drawings at their intended physical scale rather than scaling to 75% under point-based user-unit assumptions; unitless user coordinates in `viewBox` and path geometry remain in 1:1 internal points per SVG 1.1 coords §7.10. A round trip keeps `mm`, `cm`, `in` and `pc` documents in their unit (`export_physical_units_writes_unit_suffixes`, `svg_round_trip_preserves_document_units`); documents in feet, yards, meters, Q or Ha keep their printed size and open again in the SVG unit they were written in. General document unit preferences across restarts remain tracked under #864.
 - **Missing:** general document unit preference on restart (#864; SVG export physical units done). Shape Builder regions (#937, closed), PDF text placement
   (#722, above), the bezier drag preview (#834, #3065, #3729) and deleting an interior anchor of an open path (above)
   are done.
@@ -815,8 +815,9 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 
 ## G6 Automation and scripting
 
-- **Missing:** the document object model for scripts and the `#engine` script directive (#1183 is
-  open). File › Scripts › Other Script… and `script.run` run JavaScript files over the command registry, `#targetengine`
+- **Missing:** the rest of the document object model for scripts (layers, artboards, paths, type and the
+  other classes) and the `#engine` script directive (#1183 is open). Scripts have `app`, the open documents, new
+  documents, each document's selection and its page items. File › Scripts › Other Script… and `script.run` run JavaScript files over the command registry, `#targetengine`
   runs a script in a named engine whose globals last between runs,
   File › Scripts lists the scripts of the Scripts folder, and
   Window › Script Console shows their output, errors and run reports. Actions, Batch, Variables (text, visibility, image and graph), data set CSV import and
@@ -913,6 +914,9 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   It is given at most 128 MiB of the file and returns paths and compound paths, checked as a filter's output is, which
   become a new document; nothing opens when it fails, declines or is cancelled. Engine, unit and headless Open With
   regressions.
+- **Done:** importer plug-ins that place files (`"place": true`). File › Place lists their files, and `file.place` reads
+  a file with one when `importer` names it or no built-in format reads the file; its objects are placed as one group,
+  embedded, as one undo step, and nothing is placed when it fails, declines or is cancelled. Engine regressions.
 - **Done:** exporter plug-ins (`"kind": "exporter"`). A plug-in adds a write-only file format that File › Export ›
   Export As lists after the built-in ones and `document.export` writes (`plugin.<id>`, or a path ending in one of its
   extensions). It is given the document as the native file's JSON and its parameters, with a larger budget than a

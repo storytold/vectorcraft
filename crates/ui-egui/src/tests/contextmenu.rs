@@ -134,6 +134,128 @@ fn right_click_on_empty_canvas_offers_the_view_and_selects_nothing() {
     assert_eq!(app.session.active().unwrap().doc.art_bounds(), None);
 }
 
+/// The document point at the centre of the canvas view, where a key request reports itself.
+fn view_centre(app: &VectorcraftApp) -> Point {
+    let view = app.canvas_view().unwrap();
+    view.to_doc(view.rect.center())
+}
+
+/// `key` with `modifiers`, pressed on the focused canvas, then a frame to show the result.
+fn menu_key(app: &mut VectorcraftApp, ctx: &egui::Context, key: egui::Key, modifiers: egui::Modifiers) {
+    frame(app, ctx, vec![Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }]);
+    frame(app, ctx, vec![]);
+}
+
+/// Rectangle A, selected with a click (which also gives the canvas the keyboard focus), and an unselected
+/// rectangle B under the view's centre with a locked rectangle over it.
+fn selection_away_from_the_centre(app: &mut VectorcraftApp, ctx: &egui::Context) -> (NodeId, NodeId) {
+    let a = rect(app, 0.0, 0.0);
+    frame(app, ctx, vec![]);
+    let c = view_centre(app);
+    let b = rect(app, c.x - 50.0, c.y - 50.0);
+    let locked = rect(app, c.x - 25.0, c.y - 25.0);
+    app.run("layer.setProps", json!({"ids": [locked.0], "locked": true})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    let p = screen(app, 50.0, 50.0);
+    click(app, ctx, p, PointerButton::Primary);
+    assert_eq!(app.session.active().unwrap().selection.objects, [a]);
+    (a, b)
+}
+
+/// Asserts the menu opened for `a` as selected, at a point over it, without what lies under the view's centre.
+fn opened_for_the_selection(app: &VectorcraftApp, a: NodeId) {
+    assert_eq!(app.session.active().unwrap().selection.objects, [a], "a key request keeps the selection");
+    let at = app.ui.context_menu_at.expect("the menu is open");
+    let over_a = Rect::from_two_pos(screen(app, 0.0, 0.0), screen(app, 100.0, 100.0));
+    assert!(over_a.contains(at), "the menu opens at the selection: {at:?} in {over_a:?}");
+    assert!(has(app, "Arrange") && has_command(app, "object.arrange.bringToFront"), "{:?}", labels(app));
+    assert!(app.ui.context_locked.is_none() && !has(app, "Unlock"), "nothing under the view's centre is measured");
+}
+
+#[test]
+fn shift_f10_opens_the_menu_for_the_selection_without_changing_it() {
+    let mut app = app();
+    let ctx = crate::testing::ui_context();
+    let (a, _) = selection_away_from_the_centre(&mut app, &ctx);
+    menu_key(&mut app, &ctx, egui::Key::F10, egui::Modifiers::SHIFT);
+    opened_for_the_selection(&app, a);
+}
+
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn menu_key_opens_the_menu_for_the_selection_without_changing_it() {
+    let mut app = app();
+    let ctx = crate::testing::ui_context();
+    let (a, _) = selection_away_from_the_centre(&mut app, &ctx);
+    menu_key(&mut app, &ctx, egui::Key::Menu, egui::Modifiers::NONE);
+    opened_for_the_selection(&app, a);
+}
+
+/// With nothing selected, Shift+F10 opens the menu at the view's centre and selects nothing, even over an object.
+#[test]
+fn shift_f10_with_nothing_selected_opens_the_menu_at_the_view_centre() {
+    let mut app = app();
+    let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![]);
+    let c = view_centre(&app);
+    rect(&mut app, c.x - 50.0, c.y - 50.0);
+    app.run("select.none", json!({})).unwrap();
+    // A click on the empty artboard gives the canvas the focus and keeps the selection empty.
+    let p = screen(&app, 380.0, 280.0);
+    click(&mut app, &ctx, p, PointerButton::Primary);
+    assert!(app.session.active().unwrap().selection.objects.is_empty());
+    menu_key(&mut app, &ctx, egui::Key::F10, egui::Modifiers::SHIFT);
+    assert!(app.session.active().unwrap().selection.objects.is_empty(), "the object under the view's centre stays unselected");
+    let at = app.ui.context_menu_at.expect("the menu is open");
+    let centre = app.canvas_view().unwrap().rect.center();
+    assert!(at.distance(centre) < 0.5, "{at:?} at {centre:?}");
+    assert!(has(&app, "Select All") && !has(&app, "Arrange"), "{:?}", labels(&app));
+}
+
+/// With the Artboard tool, Shift+F10 opens the menu for the selected artboard, at it, and selects no other artboard;
+/// the menu's Paste would put artboards on it.
+#[test]
+fn shift_f10_with_the_artboard_tool_keeps_the_selected_artboard() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 100, "artboards": 3})).unwrap();
+    let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![]);
+    crate::menus::invoke(&mut app, "view.fitAll", json!({}));
+    for _ in 0..3 {
+        frame(&mut app, &ctx, vec![]);
+    }
+    let boards: Vec<vectorcraft_geom::Rect> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect();
+    let centre = view_centre(&app);
+    let away = boards.iter().position(|r| !r.contains(centre)).unwrap();
+    app.select_tool("artboard");
+    // A click on the artboard selects it and gives the canvas the focus.
+    let c = boards[away].center();
+    let p = screen(&app, c.x, c.y);
+    click(&mut app, &ctx, p, PointerButton::Primary);
+    assert_eq!(crate::panels::artboards::picked(&app, boards.len()), [away]);
+    menu_key(&mut app, &ctx, egui::Key::F10, egui::Modifiers::SHIFT);
+    assert_eq!(crate::panels::artboards::picked(&app, boards.len()), [away], "a key request keeps the selected artboard");
+    let at = app.ui.context_menu_at.expect("the menu is open");
+    let on_board = Rect::from_two_pos(screen(&app, boards[away].x0, boards[away].y0), screen(&app, boards[away].x1, boards[away].y1));
+    assert!(on_board.contains(at), "the menu opens at the selected artboard: {at:?} in {on_board:?}");
+    let pasted_at = app.ui.context_artboards.as_ref().map(|f| f.at).expect("the menu's artboard facts");
+    assert!(boards[away].contains(pasted_at), "{pasted_at:?} on {:?}", boards[away]);
+}
+
+/// A right-click on an object that is not selected still selects it, with another object selected before.
+#[test]
+fn right_click_still_selects_the_object_under_the_pointer() {
+    let mut app = app();
+    let ctx = crate::testing::ui_context();
+    let (_, b) = selection_away_from_the_centre(&mut app, &ctx);
+    // Inside B, outside the locked rectangle over its middle.
+    let c = view_centre(&app);
+    let p = screen(&app, c.x - 40.0, c.y - 40.0);
+    click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert_eq!(app.session.active().unwrap().selection.objects, [b]);
+    assert!(app.ui.context_menu_at.is_some_and(|at| at.distance(p) < 0.5), "the menu opens at the pointer");
+}
+
 /// A right-click over a locked object adds an Unlock submenu that lists the object by its name; once
 /// the menu is closed, the menu lists no Unlock items.
 #[test]

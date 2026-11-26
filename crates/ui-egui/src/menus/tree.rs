@@ -148,10 +148,10 @@ fn built_in_tree(english_names: bool, listed: &Listed) -> Vec<(&'static str, Vec
                         sub(
                             "Recolor with Preset",
                             vec![
-                                cp("1 Color Job…", "ui.recolorDialog", json!({"colors": 1})),
-                                cp("2 Color Job…", "ui.recolorDialog", json!({"colors": 2})),
-                                cp("3 Color Job…", "ui.recolorDialog", json!({"colors": 3})),
-                                cp("Color Library…", "ui.recolorDialog", json!({"library": ""})),
+                                cp("1 Color Job…", "ui.recolorDialog", json!({"colors": 1, "preset": true})),
+                                cp("2 Color Job…", "ui.recolorDialog", json!({"colors": 2, "preset": true})),
+                                cp("3 Color Job…", "ui.recolorDialog", json!({"colors": 3, "preset": true})),
+                                cp("Color Library…", "ui.recolorDialog", json!({"library": "", "preset": true})),
                             ],
                         ),
                         c("Adjust Color Balance…", "ui.colorBalanceDialog"),
@@ -435,7 +435,10 @@ fn built_in_tree(english_names: bool, listed: &Listed) -> Vec<(&'static str, Vec
                     ],
                 ),
                 Sep,
-                sub("Plug-ins", [crate::addons::plugin_menu(), crate::dialogs::plugin::object_menu()].concat()),
+                sub(
+                    "Plug-ins",
+                    [crate::dialogs::plugin::last_filter_menu(), crate::addons::plugin_menu(), crate::dialogs::plugin::object_menu()].concat(),
+                ),
             ],
         ),
         (
@@ -887,15 +890,11 @@ fn not_mac() -> Platforms {
 fn app_menu() -> Vec<Node> {
     let settings: Vec<Node> = vectorcraft_engine::cmd::prefscmds::PREF_CATEGORIES
         .iter()
-        .enumerate()
-        .map(|(i, page)| {
-            let mut item =
-                Item::new(CommandRef::with_params("edit.preferences", json!({ "category": page })), format!("{page}…")).role(ItemRole::Settings);
-            // Only the first page carries Preferences' shortcut.
-            if i == 0 {
-                item.shortcut = crate::shortcut_editor::default_command_shortcut("edit.preferences").and_then(crate::keymap::stored::parse_vc);
-            }
-            Node::Item(item)
+        // Only the first page carries Preferences' shortcut, which the menus' model gives it from the keymap.
+        .map(|page| {
+            Node::Item(
+                Item::new(CommandRef::with_params("edit.preferences", json!({ "category": page })), format!("{page}…")).role(ItemRole::Settings),
+            )
         })
         .collect();
     let mut language = vec![cp("Automatic", "app.language", json!({ "lang": "auto" })), Sep];

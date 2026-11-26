@@ -13,8 +13,7 @@
 //! one tutorial, `learn.back` goes up one level, `learn.locateTool` shows where a tool is,
 //! `learn.openSample`, `learn.markStep`, `learn.finish` and `learn.next` run the practice controls,
 //! `learn.resetProgress` clears the progress, and `window.learn` shows or hides the panel. The Home
-//! screen's Learn section shows the same card ([`guide_card`]) and the tutorials, which open the
-//! panel.
+//! screen's Learn section links to the list of skills and to each tutorial, which open the panel.
 
 pub mod catalog;
 pub mod locate;
@@ -74,10 +73,12 @@ fn run(app: &mut VectorcraftApp, cmd: &str, params: Value) {
     }
 }
 
-/// The key a collection's last selection change set, if any: a click on a row or a tab.
+/// The key a collection's last pick chose, if any: a click on a row or a tab, a click on the row or tab already
+/// selected, or Enter on one.
 fn picked<K, E>(events: Vec<CollectionEvent<K, E>>) -> Option<K> {
     events.into_iter().rev().find_map(|event| match event {
         CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } => keys.into_iter().last(),
+        CollectionEvent::Picked { key, .. } | CollectionEvent::Activate(key) => Some(key),
         _ => None,
     })
 }
@@ -109,9 +110,8 @@ fn for_you(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// The Quick skill guide card, as one button: a click, or Enter or Space while it has the keyboard
-/// focus, shows the panel's list of skills (`learn.skills`). The For you tab and the Home screen's
-/// Learn section show it.
-pub(crate) fn guide_card(app: &mut VectorcraftApp, ui: &mut Ui) {
+/// focus, shows the panel's list of skills (`learn.skills`). The For you tab shows it.
+fn guide_card(app: &mut VectorcraftApp, ui: &mut Ui) {
     // PLAN: assumed `Button::detail(impl Into<Label>)` (dp.R3, document-panels-w4).
     let card = Button::new(tl!("Quick skill guide"))
         .icon(IconSpec::svg(IconId::new("graduation-cap")))
@@ -160,8 +160,6 @@ fn skill_list(app: &mut VectorcraftApp, ui: &mut Ui) {
     let rings: Vec<(&'static catalog::Skill, SkillRing)> =
         catalog::SKILLS.iter().map(|s| (s, SkillRing { done: progress.done(s), total: s.tutorials.len() })).collect();
     let source = keyed(&keys, |key: &&'static str| *key);
-    // PLAN: a single-select list keeps its last pick highlighted and reports no change when the same key is
-    // picked again; the keys differ between the levels, but the list is the framework's to reset on a new view.
     // A few skills: the list is as tall as its rows, so Reset progress shows under them.
     let out = List::new(tl!("Skills")).select(SelectMode::Single).natural_height(true).show_items(ui, &source, &mut |key, _| {
         let row = ListRow::new(*key);

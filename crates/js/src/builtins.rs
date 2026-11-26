@@ -1,8 +1,8 @@
 //! The built-in objects (ECMA-262 5.1 section 15): `Object` with `Object.prototype` and the
 //! ES5 statics, `Function` with `Function.prototype.call`, `apply`, `bind` and `toString`,
 //! `Array`, the error constructors, `Math`, `JSON`, the global functions and constants, Annex
-//! B's `escape` and `unescape`, and the prototypes primitive values look properties up on, with
-//! `Boolean.prototype`'s `toString` and `valueOf`. `String`, `Number`, `RegExp` and `Date` are in
+//! B's `escape` and `unescape`, `Boolean` with `Boolean.prototype`'s `toString` and `valueOf`, and
+//! the prototypes primitive values look properties up on. `String`, `Number`, `RegExp` and `Date` are in
 //! their own modules. A realm with [`crate::Options::es2015`] also has `Symbol` (in `symbol`) and
 //! the iterators of arrays, strings and `arguments` objects (in `iterator`).
 //!
@@ -242,6 +242,8 @@ fn try_install(interp: &mut Interp) -> JsResult<()> {
     method(interp, function_proto, "bind", function_bind, 1)?;
     method(interp, function_proto, "toString", function_to_string, 0)?;
 
+    let boolean = native(interp, "Boolean", boolean_ctor, 1, NativeKind::Plain, true)?;
+    constructor(interp, "Boolean", boolean, boolean_proto)?;
     method(interp, boolean_proto, "toString", boolean_to_string, 0)?;
     method(interp, boolean_proto, "valueOf", boolean_value_of, 0)?;
 
@@ -293,7 +295,7 @@ fn get_at(interp: &mut Interp, o: ObjId, k: f64) -> JsResult<Value> {
 }
 
 fn has_at(interp: &mut Interp, o: ObjId, k: f64) -> JsResult<bool> {
-    interp.has_property(o, &key_of(k))
+    interp.has_property_indexed(o, &key_of(k))
 }
 
 /// The estimated bytes a new element adds.
@@ -516,6 +518,16 @@ fn object_to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> J
     Ok(Value::str(&format!("[object {class}]")))
 }
 
+/// `Boolean(value)` and `new Boolean(value)` (sections 15.6.1 and 15.6.2).
+fn boolean_ctor(interp: &mut Interp, _: Value, args: &[Value], construct: bool) -> JsResult<Value> {
+    let b = args.first().is_some_and(Value::truthy);
+    if !construct {
+        return Ok(Value::Bool(b));
+    }
+    let proto = interp.intrinsics.boolean_proto;
+    Ok(Value::Object(interp.heap.alloc_object(Object::new(Class::Boolean(b), Some(proto)))))
+}
+
 /// The Boolean a `Boolean.prototype` method was called on (sections 15.6.4.2 and 15.6.4.3): a
 /// primitive, or the primitive value of a Boolean object.
 fn this_boolean(interp: &mut Interp, this: &Value, name: &str) -> JsResult<bool> {
@@ -559,7 +571,15 @@ fn object_value_of(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> Js
 fn has_own_property(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let k = interp.to_prop_key(&arg(args, 0))?;
     let o = interp.to_object(&this)?;
-    Ok(Value::Bool(interp.get_own_pk(o, &k)?.is_some()))
+    Ok(Value::Bool(interp.get_own_pk(o, &k)?.is_some() || is_host_member_pk(interp, o, &k)?))
+}
+
+/// [`Interp::is_host_member`] for either kind of key: a Symbol never names a host member.
+fn is_host_member_pk(interp: &Interp, o: ObjId, k: &crate::symbol::PropKey) -> JsResult<bool> {
+    match k {
+        crate::symbol::PropKey::Str(name) => interp.is_host_member(o, name),
+        crate::symbol::PropKey::Sym(_) => Ok(false),
+    }
 }
 
 fn is_prototype_of(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
@@ -578,7 +598,7 @@ fn is_prototype_of(interp: &mut Interp, this: Value, args: &[Value], _: bool) ->
 fn property_is_enumerable(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let k = interp.to_prop_key(&arg(args, 0))?;
     let o = interp.to_object(&this)?;
-    Ok(Value::Bool(interp.get_own_pk(o, &k)?.is_some_and(|p| p.enumerable())))
+    Ok(Value::Bool(interp.get_own_pk(o, &k)?.is_some_and(|p| p.enumerable()) || is_host_member_pk(interp, o, &k)?))
 }
 
 // ---- Function ----

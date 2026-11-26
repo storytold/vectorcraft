@@ -4,7 +4,7 @@ use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
 use craft::automation::{ControlRequest, Reply};
 
-use super::handle;
+use super::{handle, inspect};
 use crate::{Services, VectorcraftApp};
 
 /// Whether a dialog is open on the app's window.
@@ -785,7 +785,24 @@ fn the_method_table_routes_each_method_and_checks_its_params() {
         assert_eq!(after, before, "{id} {params}: nothing changes");
     }
     app.run("view.setZoom", json!({"zoom": null, "center": null})).unwrap();
-    assert_eq!(app.view().map(|v| v.zoom), Some(crate::state::zoom_from_display_percent(100.0, app.session.prefs.display_print_size)));
+    assert_eq!(app.view().map(|v| v.zoom), Some(crate::state::zoom_from_display_percent(100.0, app.print_ppi())));
+}
+
+/// `ui.inspect` gives the measured density of the main window's display and the points an inch
+/// takes at 100% while Display Print Size at 100% Zoom is on, and neither with it off (#9051).
+#[test]
+fn inspect_reports_the_display_density() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    let ctx = egui::Context::default();
+    let got = inspect(&app, &ctx);
+    assert_eq!((got["screenPpi"].clone(), got["printPpi"].as_f64()), (Value::Null, Some(96.0)), "nothing measured: an inch is 96 points");
+    app.set_screen_ppi(Some(127.0));
+    let got = inspect(&app, &ctx);
+    assert_eq!((got["screenPpi"].as_f64(), got["printPpi"].as_f64()), (Some(127.0), Some(127.0)));
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
+    let got = inspect(&app, &ctx);
+    assert_eq!((got["screenPpi"].clone(), got["printPpi"].clone()), (Value::Null, Value::Null));
 }
 
 #[test]

@@ -1,5 +1,7 @@
 use super::*;
+use crate::i18n::LangExt as _;
 use crate::tests::panel_harness::Panel;
+use craft::keymap::CommandRef;
 
 #[test]
 fn single_object_aligns_to_artboard() {
@@ -787,4 +789,57 @@ fn a_button_runs_the_artboard_command_only_with_the_artboard_tool() {
     let before = artboard_corners(&app);
     run_button(&mut app, Button::Align("horizontal", "left")).ok();
     assert_eq!(artboard_corners(&app), before, "with the Selection tool the buttons leave the artboards alone");
+}
+
+/// The description of the dimmed command of each button in [`COMMANDS`], which its tooltip and its
+/// menu item show.
+fn off_reasons(app: &VectorcraftApp, distribute: bool) -> Vec<(&'static str, Option<String>)> {
+    COMMANDS
+        .iter()
+        .filter(|(_, b)| matches!(b, Button::Distribute(..) | Button::Spacing(_)) == distribute)
+        .map(|(id, _)| {
+            let command = CommandRef::new(*id);
+            (*id, (!crate::menus::enabled(app, id)).then(|| crate::menus::model::off_reason(app, &command, "Label")))
+        })
+        .collect()
+}
+
+/// Every reason in `reasons` is `why`.
+fn all_say(reasons: &[(&'static str, Option<String>)], why: &str) {
+    for (id, reason) in reasons {
+        assert_eq!(reason.as_deref(), Some(why), "{id}");
+    }
+}
+
+/// A dimmed Align or Distribute button says why it can't run, as an engine command's menu item
+/// does, in the interface language: with no document, that none is open; with nothing selected,
+/// that Align needs a selection; with fewer than two objects, that Distribute needs two or more;
+/// with the Artboard tool chosen and too few artboards selected, how many it needs.
+#[test]
+fn a_dimmed_align_or_distribute_button_says_why() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    all_say(&off_reasons(&app, true), "no document open");
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    all_say(&off_reasons(&app, false), "nothing selected");
+    all_say(&off_reasons(&app, true), "select at least two objects");
+    let a = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 10, "height": 10})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert!(off_reasons(&app, false).iter().all(|(_, r)| r.is_none()), "one object aligns");
+    all_say(&off_reasons(&app, true), "select at least two objects");
+    // The reason is shown in the interface language.
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").unwrap());
+    let german = crate::i18n::msg("select at least two objects");
+    let reasons = off_reasons(&app, true);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    assert_ne!(german, "select at least two objects");
+    all_say(&reasons, &german);
+
+    let mut app = selected_artboards();
+    app.session.set_tool_option("selected", &json!([1, 0]));
+    assert!(off_reasons(&app, false).iter().all(|(_, r)| r.is_none()), "two artboards align");
+    all_say(&off_reasons(&app, true), "select at least three artboards");
+    app.ui.align_to = AlignTo::Artboard;
+    assert!(off_reasons(&app, true).iter().all(|(_, r)| r.is_none()), "two artboards distribute to the artboard");
+    app.session.set_tool_option("selected", &json!([1]));
+    all_say(&off_reasons(&app, true), "select at least two artboards");
 }
