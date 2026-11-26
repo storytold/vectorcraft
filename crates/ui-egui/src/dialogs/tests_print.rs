@@ -511,6 +511,23 @@ fn a_print_preset_keeps_the_scale_link() {
 }
 
 #[test]
+fn print_preset_changes_survive_a_paused_preview() {
+    let (mut app, jobs) = app();
+    app.run("print.presets.save", json!({"name": "Apart", "settings": {"scaling": "custom", "scale": {"width": 30, "height": 90}}})).unwrap();
+    app.run("file.print", json!({})).unwrap();
+    pump(&mut app);
+    app.run("file.new", json!({"width": 90, "height": 90})).unwrap();
+    set(&mut app, "preset", json!("Apart"));
+    let ctx = ctx(&app);
+    super::print::pump(&mut app, &ctx);
+    assert_eq!(scale(&app), (30.0, 90.0, false));
+    assert!(jobs.borrow().is_empty());
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    super::print::pump(&mut app, &ctx);
+    assert_eq!(scale(&app), (30.0, 90.0, false));
+}
+
+#[test]
 fn a_scale_set_through_the_dialog_keeps_the_percentage_it_changes() {
     let (mut app, _) = app();
     app.run("file.print", json!({})).unwrap();

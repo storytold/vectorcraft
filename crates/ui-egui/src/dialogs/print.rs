@@ -369,6 +369,19 @@ fn serve(app: &mut VectorcraftApp, ctx: &egui::Context, dialogs: &WindowDialogs,
         let _ = dialogs.with(|h| h.take_by_id::<HostedPrint>(open.id));
         return false;
     };
+    for event in std::mem::take(&mut d.events) {
+        apply_preset_event(app, dialogs, open, &mut d.settings, event);
+    }
+    if open.mode == PrintMode::Print {
+        let same = serde_json::from_value::<PrintSettings>(d.settings.clone())
+            .ok()
+            .is_some_and(|s| app.session.print_preset_settings(&open.preset) == Some(s));
+        let held = same.then(|| open.preset.clone());
+        let rows: Vec<PresetRow<String>> = std::iter::once(PresetRow::item(DEFAULT_PRESET.to_string(), tl!(DEFAULT_PRESET), 0))
+            .chain(app.session.prefs.print_presets.iter().map(|p| PresetRow::item(p.name.clone(), p.name.clone(), 0)))
+            .collect();
+        on(dialogs, |p| p.set_presets(rows, held, vec![DEFAULT_PRESET.to_string()]));
+    }
     if open.document.is_some_and(|document| app.session.active().is_none_or(|st| st.uid != document)) {
         let message = tl!("Return to the original drawing to print it");
         on(dialogs, |p| {
@@ -396,9 +409,6 @@ fn serve(app: &mut VectorcraftApp, ctx: &egui::Context, dialogs: &WindowDialogs,
         && let Err(e) = app.run("print.printerSetup", json!({ "printer": printer }))
     {
         app.status(e);
-    }
-    for event in std::mem::take(&mut d.events) {
-        apply_preset_event(app, dialogs, open, &mut d.settings, event);
     }
     let doc = app.session.active().map_or((0, 0), |s| (s.uid, s.revision));
     let stamp = (d.settings.to_string(), doc);
@@ -438,16 +448,6 @@ fn serve(app: &mut VectorcraftApp, ctx: &egui::Context, dialogs: &WindowDialogs,
             p.set_field("__summary.warnings", warnings.into());
             p.set_field("__inks", FieldValue::Json(inks));
         });
-    }
-    if open.mode == PrintMode::Print {
-        let same = serde_json::from_value::<PrintSettings>(d.settings.clone())
-            .ok()
-            .is_some_and(|s| app.session.print_preset_settings(&open.preset) == Some(s));
-        let held = same.then(|| open.preset.clone());
-        let rows: Vec<PresetRow<String>> = std::iter::once(PresetRow::item(DEFAULT_PRESET.to_string(), tl!(DEFAULT_PRESET), 0))
-            .chain(app.session.prefs.print_presets.iter().map(|p| PresetRow::item(p.name.clone(), p.name.clone(), 0)))
-            .collect();
-        on(dialogs, |p| p.set_presets(rows, held, vec![DEFAULT_PRESET.to_string()]));
     }
     if let Some(answer) = d.ok {
         let result = accept(app, open, &answer, &d.name);
