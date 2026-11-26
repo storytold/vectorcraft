@@ -2551,6 +2551,26 @@ fn the_type_groups_leave_the_control_bar_before_opacity_and_style() {
     assert!(seen.iter().any(|s| s[2] && !s[0]), "some width shows Opacity without the Character group");
 }
 
+/// With type selected, the Paragraph group's Align left, Align center and Align right buttons leave the Control bar
+/// before its Paragraph: link: some width shows the link without them, and no width shows them without the link.
+#[test]
+fn the_paragraph_link_stays_on_the_control_bar_after_its_align_buttons_leave() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let text = app.run("text.create", json!({"x": 10, "y": 100, "text": "Hi"})).unwrap()["id"].clone();
+    app.run("select.set", json!({ "ids": [text] })).unwrap();
+    let mut bar = control_shown(app);
+    let names = ["Paragraph:", "Align left", "Align center", "Align right"];
+    let seen = control_bar_widths(&mut bar, &names);
+    assert!(seen.iter().any(|s| s.iter().all(|shown| *shown)), "a wide bar shows {names:?}");
+    for s in &seen {
+        assert!(s[1..].iter().all(|shown| *shown == s[1]), "the three Align buttons show or go together: {s:?}");
+        assert!(!s[1] || s[0], "the Align buttons show only with the Paragraph: link: {s:?}");
+    }
+    assert!(seen.iter().any(|s| s[0] && !s[1]), "some width shows the Paragraph: link without the Align buttons");
+}
+
 /// With area type selected, its vertical alignment buttons leave the Control bar before Opacity and the Style group,
 /// and after the Align buttons that follow them, with the Character and Paragraph groups shown and with both off.
 #[test]
