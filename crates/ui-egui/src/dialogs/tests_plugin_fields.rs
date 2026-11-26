@@ -88,6 +88,21 @@ fn labels_units_sections_text_and_lists_come_from_the_manifest() {
 }
 
 #[test]
+fn a_slider_widget_makes_a_whole_number_range_row_of_an_int_parameter() {
+    use craft::ui::patterns::form_dialogs::ParamKind;
+    let manifest = r#"{"id":"test.ui.fields.slider","name":"Slide","version":"1","kind":"filter","params":{
+        "count":{"type":"int","min":1,"max":20,"default":4,"widget":"slider"},
+        "plain":{"type":"int","min":1,"max":20,"default":4}}}"#;
+    let parsed = vectorcraft_plugins::manifest::Manifest::parse(manifest.as_bytes()).unwrap();
+    let rows = super::form::plugin_params(&parsed, &Map::new());
+    let kind = |key: &str| &rows.iter().find(|p| p.key == key).unwrap_or_else(|| panic!("no row for {key}")).kind;
+    assert!(matches!(kind("count"), ParamKind::Range { min, max, .. } if (*min, *max) == (1.0, 20.0)), "an int slider is a range row");
+    assert!(matches!(kind("plain"), ParamKind::Int { .. }), "an int without the key stays a number field");
+    // The slider's value reaches the plug-in as a whole number.
+    assert_eq!(super::form::typed_number(7.0), json!(7));
+}
+
+#[test]
 fn visible_when_shows_a_parameter_only_while_its_condition_holds() {
     let id = "test.ui.fields.visible";
     let mut h = harness(id);

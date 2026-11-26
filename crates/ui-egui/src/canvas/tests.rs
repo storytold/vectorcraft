@@ -53,6 +53,94 @@ fn a_symbol_instance_is_outlined_around_its_art() {
     assert_eq!(node_outline(inst.unwrap(), &st.doc.symbol_boxes()).bounding_box(), Rect::new(20.0, 30.0, 40.0, 50.0));
 }
 
+/// The points of `bp`'s move and line elements, in order.
+fn outline_points(bp: &vectorcraft_geom::BezPath) -> Vec<Point> {
+    use vectorcraft_geom::kurbo::PathEl;
+    bp.elements()
+        .iter()
+        .filter_map(|el| match el {
+            PathEl::MoveTo(p) | PathEl::LineTo(p) => Some(*p),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Whether `got` are the points `want`, each within 1e-9, a last point of `got` that repeats its
+/// first left out.
+fn same_points(got: &[Point], want: &[Point]) -> bool {
+    let near = |a: &Point, b: &Point| a.distance(*b) < 1e-9;
+    let got = match got {
+        [first, rest @ .., last] if !rest.is_empty() && near(first, last) => &got[..got.len() - 1],
+        _ => got,
+    };
+    got.len() == want.len() && got.iter().zip(want).all(|(a, b)| near(a, b))
+}
+
+/// Puts `n` in perspective, drawn through `h`.
+fn in_perspective(n: &mut Node, h: vectorcraft_geom::Homography) {
+    let at = vectorcraft_doc::PerspectiveAttachment { projection: Some(h.to_array()), ..vectorcraft_doc::PerspectiveAttachment::new("left", 0.0) };
+    n.extras_mut().perspective = Some(Box::new(at));
+}
+
+#[test]
+fn a_turned_or_skewed_symbol_instance_is_outlined_along_its_frame() {
+    // The 20 × 20 square symbol of the test above, its instance at (20, 30).
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="120"><defs><symbol id="Star"><path d="M0 0H20V20H0Z" fill="#e0a000"/></symbol></defs><use href="#Star" x="20" y="30"/></svg>"##;
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "star.svg", "dataBase64": vectorcraft_format::base64_encode(svg.as_bytes())})).unwrap();
+    let st = s.active().unwrap();
+    let mut inst = None;
+    st.doc.walk(|n| {
+        if matches!(n.kind, NodeKind::SymbolInstance { .. }) {
+            inst = Some(n.clone());
+        }
+    });
+    let inst = inst.unwrap();
+    let symbols = st.doc.symbol_boxes();
+    let square = [(0.0, 0.0), (20.0, 0.0), (20.0, 20.0), (0.0, 20.0)].map(|(x, y)| Point::new(x, y));
+    let placed = |a: Affine| {
+        let mut n = inst.clone();
+        let NodeKind::SymbolInstance { xf, .. } = &mut n.kind else { panic!("an instance") };
+        *xf = a * *xf;
+        let xf = *xf;
+        (n, square.map(|p| xf * p))
+    };
+    for (case, a) in [
+        ("unturned", Affine::IDENTITY),
+        ("turned 30 degrees", Affine::rotate_about(30f64.to_radians(), Point::new(30.0, 40.0))),
+        ("skewed", Affine::skew(0.5, 0.0)),
+    ] {
+        let (n, frame) = placed(a);
+        let got = outline_points(&node_outline(&n, &symbols));
+        assert!(same_points(&got, &frame), "{case}: {got:?} is not the frame {frame:?}");
+    }
+    // In perspective, the frame's corners go through the projection.
+    let h = vectorcraft_geom::Homography([[1.0, 0.0, 0.0], [0.1, 1.0, 0.0], [0.004, 0.0, 1.0]]);
+    let mut n = inst.clone();
+    in_perspective(&mut n, h);
+    let (_, flat) = placed(Affine::IDENTITY);
+    let drawn = flat.map(|p| h.apply(p).unwrap());
+    let got = outline_points(&node_outline(&n, &symbols));
+    assert!(same_points(&got, &drawn), "in perspective: {got:?} is not the projected frame {drawn:?}");
+}
+
+#[test]
+fn type_in_perspective_is_outlined_by_its_projected_box() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let r = s.execute("text.create", &json!({"x": 100, "y": 150, "text": "Hello world", "size": 24})).unwrap();
+    let id = vectorcraft_doc::NodeId(r["id"].as_u64().unwrap());
+    let st = s.active().unwrap();
+    let mut n = st.doc.node(id).unwrap().clone();
+    let NodeKind::Text(t) = &n.kind else { panic!("type") };
+    let b = t.bounds().unwrap();
+    let h = vectorcraft_geom::Homography([[1.0, 0.0, 0.0], [0.1, 1.0, 0.0], [0.002, 0.0, 1.0]]);
+    in_perspective(&mut n, h);
+    let drawn = [(b.x0, b.y0), (b.x1, b.y0), (b.x1, b.y1), (b.x0, b.y1)].map(|(x, y)| h.apply(Point::new(x, y)).unwrap());
+    let got = outline_points(&node_outline(&n, &st.doc.symbol_boxes()));
+    assert!(same_points(&got, &drawn), "{got:?} is not the projected box {drawn:?}");
+}
+
 /// One headless canvas frame on an 800 × 600 window.
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) {
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), events, ..Default::default() };
@@ -1613,6 +1701,89 @@ fn an_interaction_stays_on_the_worker_that_drew_the_frame_shown() {
     }
 }
 
+/// A Pen drag over a frame the worker drew draws each move's curve into that frame, here, in the
+/// frame of the move: once the press's frame arrives from the worker, every move shows the
+/// document's revision and queues nothing on the worker. When the frame shown drew effect rasters
+/// from before their objects moved, when a part drawn here would have differed from it, or when
+/// the part's share of the whole frame's time is over 8 ms, the next move renders on the worker,
+/// and the moves after the worker's frame are drawn here again. A frame of an older revision on
+/// its way does not hold a move back.
+#[test]
+fn a_pen_drag_over_a_worker_frame_draws_each_move_in_its_frame() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    for i in 0..60 {
+        let (x, y) = (f64::from(i % 10) * 40.0, f64::from(i / 10) * 50.0);
+        app.session.execute("shape.rectangle", &json!({"x": x, "y": y, "width": 30, "height": 30})).unwrap();
+    }
+    app.session.execute("select.none", &json!({})).unwrap();
+    app.ui.view.smart_guides = false;
+    app.canvas.worker_started = true; // the first frame renders on this thread
+    let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![]);
+    let (worker, mut side) = WorkerSide::start();
+    app.canvas.worker = Some(worker);
+    app.canvas.last_ms = 50.0;
+    app.select_tool("pen");
+    let revision = |app: &VectorcraftApp| Some(app.session.active().unwrap().revision);
+    let shown = |app: &VectorcraftApp| app.canvas.key.as_ref().map(|k| k.revision);
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let mut at = app.canvas_view().unwrap().to_screen(Point::new(105.0, 155.0));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    frame(&mut app, &ctx, vec![button(at, true)]);
+    assert!(shown(&app) < revision(&app), "the press's frame, the first of the drag, renders on the worker");
+    assert!(side.render());
+    let mut drag = |app: &mut VectorcraftApp| {
+        at += vec2(9.0, 5.0);
+        frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    };
+    for step in 0..6 {
+        drag(&mut app);
+        assert_eq!(shown(&app), revision(&app), "move {step}: the curve is drawn in its own frame");
+        assert!(side.jobs.try_recv().is_err(), "move {step}: nothing is queued on the worker");
+    }
+    for case in ["moved", "differs", "slow"] {
+        match case {
+            "moved" => app.canvas.moved = true,
+            "differs" => app.canvas.worker_parts = true,
+            _ => app.canvas.last_ms = 10_000.0,
+        }
+        drag(&mut app);
+        assert!(shown(&app) < revision(&app), "{case}: the move is not drawn here");
+        assert!(side.render(), "{case}: the move renders on the worker");
+        drag(&mut app);
+        assert_eq!(shown(&app), revision(&app), "{case}: after the worker's frame, the next move is drawn here");
+        assert!(!app.canvas.worker_parts, "{case}");
+    }
+    // A worker's frame that drew art in a way that depends on its size: the move after it renders
+    // on the worker too.
+    app.canvas.worker_parts = true;
+    drag(&mut app);
+    let job = side.jobs.try_iter().last().expect("the move is on the worker");
+    let done = crate::render_worker::render(&mut side.renderer, &mut side.kept, job);
+    side.done.send(crate::render_worker::Done { ms: 50.0, view_sized: true, ..done }).unwrap();
+    drag(&mut app);
+    assert!(app.canvas.worker_parts, "the frame shown drew art that depends on its size");
+    assert!(shown(&app) < revision(&app) && side.render(), "the move after it renders on the worker");
+    drag(&mut app);
+    assert_eq!(shown(&app), revision(&app), "after the next worker frame, the move is drawn here");
+    // A frame on its way of an older revision: the next move is drawn here, and that frame is not
+    // shown when it arrives.
+    app.canvas.worker_parts = true;
+    drag(&mut app);
+    assert!(app.canvas.worker.as_ref().is_some_and(|w| w.pending.is_some()), "a frame is on its way");
+    app.canvas.worker_parts = false;
+    for late in [false, true] {
+        if late {
+            assert!(side.render());
+        }
+        drag(&mut app);
+        assert_eq!(shown(&app), revision(&app), "drawn here, the frame on its way arrived: {late}");
+    }
+    frame(&mut app, &ctx, vec![button(at, false)]);
+    app.canvas.worker = None;
+}
+
 /// The frame after an interaction renders without `interacting` also when the interaction
 /// leaves the document as it was (#1257): here a drag back to where it started.
 #[test]
@@ -1777,7 +1948,9 @@ fn cached_frames_keep_their_scale() {
         // Deliver the actual replacement and verify that it replaces the cached key.
         let img = app.canvas.renderer.render(&job.doc, job.w, job.h, job.view, &job.opts);
         let expected = job.key.clone();
-        completed.send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 1.0, moved: 0, reused: false }).unwrap();
+        completed
+            .send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 1.0, moved: 0, reused: false, view_sized: false })
+            .unwrap();
         frame(&mut app, size, new_ppp);
         assert_eq!(app.canvas.key.as_ref(), Some(&expected), "the worker's frame arrived");
     }
@@ -1917,7 +2090,9 @@ fn a_pan_fills_the_area() {
     // The fill arrives; the next frame draws it, and asks for no other fill.
     let img = app.canvas.renderer.render(&fill_job.doc, fill_job.w, fill_job.h, fill_job.view, &fill_job.opts);
     let (doc, opts) = (fill_job.doc, fill_job.opts);
-    fill_completed.send(crate::render_worker::Done { key: fill_job.key, doc, opts, img, ms: 5.0, moved: 0, reused: false }).unwrap();
+    fill_completed
+        .send(crate::render_worker::Done { key: fill_job.key, doc, opts, img, ms: 5.0, moved: 0, reused: false, view_sized: false })
+        .unwrap();
     let (meshes, pixels) = frame(&mut app);
     assert!(fill_jobs.try_recv().is_err(), "the fill covers the canvas");
     assert_eq!(app.canvas.key.as_ref(), Some(&old), "the last frame is still shown");
@@ -1962,11 +2137,15 @@ fn a_pan_fills_the_area() {
     app.view_mut().unwrap().center = Point::new(250.0, 150.0);
     // That fill finishes after the worker's frame: it is taken and not kept.
     let img = app.canvas.renderer.render(&next.doc, next.w, next.h, next.view, &next.opts);
-    fill_completed.send(crate::render_worker::Done { key: next.key, doc: next.doc, opts: next.opts, img, ms: 5.0, moved: 0, reused: false }).unwrap();
+    fill_completed
+        .send(crate::render_worker::Done { key: next.key, doc: next.doc, opts: next.opts, img, ms: 5.0, moved: 0, reused: false, view_sized: false })
+        .unwrap();
     // The worker's frame arrives: it covers the canvas, and the fill is no longer drawn or kept.
     let img = app.canvas.renderer.render(&job.doc, job.w, job.h, job.view, &job.opts);
     let expected = job.key.clone();
-    completed.send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 50.0, moved: 0, reused: false }).unwrap();
+    completed
+        .send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 50.0, moved: 0, reused: false, view_sized: false })
+        .unwrap();
     let (meshes, _) = frame(&mut app);
     assert_eq!(app.canvas.key.as_ref(), Some(&expected), "the worker's frame is shown");
     assert!(app.canvas.fill.is_none() && meshes.iter().all(|m| m.texture_id != fill_tex), "the fill is dropped");
@@ -5043,6 +5222,7 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
             ms: 2.5,
             moved: 0,
             reused: false,
+            view_sized: false,
         })
         .unwrap();
 
@@ -5066,6 +5246,7 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
             ms: 2.5,
             moved: 0,
             reused: false,
+            view_sized: false,
         })
         .unwrap();
 
@@ -5088,6 +5269,7 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
             ms: 2.5,
             moved: 0,
             reused: false,
+            view_sized: false,
         })
         .unwrap();
 
@@ -5110,6 +5292,7 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
             ms: 2.5,
             moved: 0,
             reused: false,
+            view_sized: false,
         })
         .unwrap();
 
@@ -5170,7 +5353,16 @@ fn the_contour_bar_sets_corners_and_bakes() {
 /// A frame the render worker finished for `job`: white pixels of the job's size.
 fn finished(job: &crate::render_worker::Job) -> crate::render_worker::Done {
     let img = vectorcraft_render::Rendered { width: job.w, height: job.h, pixels: vec![255; job.w as usize * job.h as usize * 4] };
-    crate::render_worker::Done { key: job.key.clone(), doc: job.doc.clone(), opts: job.opts.clone(), img, ms: 40.0, moved: 0, reused: false }
+    crate::render_worker::Done {
+        key: job.key.clone(),
+        doc: job.doc.clone(),
+        opts: job.opts.clone(),
+        img,
+        ms: 40.0,
+        moved: 0,
+        reused: false,
+        view_sized: false,
+    }
 }
 
 /// A job for the render worker to pan over a document of `doc`: a view at 100% moved by `(dx, dy)`
@@ -5636,7 +5828,8 @@ fn a_pan_after_the_settling_frame() {
         let job = jobs.try_recv().unwrap_or_else(|_| panic!("{name}: the canvas asks for a frame"));
         let f = render_job(&mut r, &mut kept, &job);
         assert_eq!(f.reused, copies, "{name}");
-        let done = crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img: f.img, ms: 40.0, moved: f.moved, reused: f.reused };
+        let (key, doc, opts, img) = (job.key, job.doc, job.opts, f.img);
+        let done = crate::render_worker::Done { key, doc, opts, img, ms: 40.0, moved: f.moved, reused: f.reused, view_sized: f.view_sized };
         done_tx.send(done).unwrap();
     };
     frame(&mut app, 1.0);

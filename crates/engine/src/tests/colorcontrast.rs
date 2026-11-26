@@ -68,6 +68,31 @@ fn a_translucent_fill_counts_at_the_opacity_it_is_drawn_with() {
     assert!((ratio(&given) - 21.0).abs() < 1e-3, "{given}");
 }
 
+/// While the Live Paint Bucket is the active tool, the proxy shows the color it paints with, so the
+/// selected objects' opacities and blend modes do not apply, and objects drawn differently are no
+/// error.
+#[test]
+fn the_live_paint_bucket_color_is_measured_without_the_selections_drawing() {
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#000000"})).unwrap();
+    s.execute("transparency.set", &json!({"opacity": 50, "blend": "multiply"})).unwrap();
+    let selection = ratio(&s.execute("color.contrast", &json!({})).unwrap());
+    s.select_tool("livePaintBucket", ViewInfo::default()).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#000000"})).unwrap();
+    let bucket = s.execute("color.contrast", &json!({})).unwrap();
+    assert!(ratio(&bucket) > selection, "the bucket's black is drawn opaque: {bucket} against {selection}");
+    assert!((ratio(&bucket) - 21.0).abs() < 1e-3, "{bucket}");
+    // A second selected object drawn at another opacity does not make the answer ambiguous.
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#000000"})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.select_tool("livePaintBucket", ViewInfo::default()).unwrap();
+    let both = s.execute("color.contrast", &json!({})).unwrap();
+    assert!((ratio(&both) - ratio(&bucket)).abs() < 1e-3, "{both}");
+}
+
 #[test]
 fn a_translucent_group_counts_for_the_art_inside_it() {
     let mut s = session();

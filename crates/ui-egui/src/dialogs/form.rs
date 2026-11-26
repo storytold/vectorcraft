@@ -298,7 +298,10 @@ fn plugin_row(key: &str, p: &PluginParam) -> Param {
             // there. Past it, the number typed is read as an integer.
             const EXACT: i64 = 1 << 53;
             let start = (*default).max(*min).min(*max);
-            if -EXACT <= *min && *max <= EXACT {
+            if let Some(range) = p.ui.slider_range(&p.spec) {
+                // A slider over the whole numbers of the range, as the framework's range row with no decimals.
+                Param::new(key, name, ParamKind::range(*range.start(), *range.end(), start as f64, SliderScale::Linear)).decimals(0)
+            } else if -EXACT <= *min && *max <= EXACT {
                 Param::new(key, name, ParamKind::int(Some(*min), Some(*max), start))
             } else {
                 let (min, max) = (*min, *max);
