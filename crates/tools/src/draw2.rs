@@ -92,6 +92,11 @@ pub fn pressure_size(size: f64, variation: f64, pressure: f64) -> f64 {
 /// The narrowest a Blob Brush or Eraser stroke gets, in points (their Size field's minimum).
 pub const MIN_BRUSH_SIZE: f64 = 0.1;
 
+/// The modes the Blob Brush's Size takes (`sizeMode`). The Eraser's Size takes every
+/// [`vectorcraft_brush::Variation`].
+pub const BLOB_SIZE_MODES: [vectorcraft_brush::Variation; 3] =
+    [vectorcraft_brush::Variation::Fixed, vectorcraft_brush::Variation::Pressure, vectorcraft_brush::Variation::StylusWheel];
+
 /// A pen's tilt as a lean on the page (each tilt's tangent) and its angle from upright in degrees,
 /// as Pointer Events' tiltX and tiltY convert to an altitude and an azimuth.
 fn pen_lean(tilt: [f32; 2]) -> ([f64; 2], f64) {

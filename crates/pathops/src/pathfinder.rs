@@ -226,7 +226,7 @@ pub fn pathfinder_with(op: PathfinderOp, shapes: &[Shape], precision: f64) -> Ve
             );
             subpaths.into_iter().zip(shapes).filter(|(sp, _)| !sp.is_empty()).flat_map(|(sp, s)| one(PathData::new(sp), s.key)).collect()
         }
-        PathfinderOp::Outline => outline_edges(&arr, shapes),
+        PathfinderOp::Outline => outline_edges(&arr, shapes, precision),
         PathfinderOp::HardMix | PathfinderOp::SoftMix => regions_of(&arr)
             .into_iter()
             .filter_map(|r| {
@@ -971,13 +971,60 @@ fn along(a: &[PathSeg], b: &[PathSeg], tol: f64) -> bool {
     covers(a, b) && covers(b, a)
 }
 
-/// Pathfinder Outline: split every shape's boundary at junctions of the arrangement.
-fn outline_edges(arr: &Arrangement, shapes: &[Shape]) -> Vec<Shape> {
+/// [`along`] with each piece checked at points no farther apart along its control polygon than
+/// `tol`, at most 64 to a piece, so curves that meet at the middles and ends of their pieces but
+/// part between them are not one. `a` and `b` run opposite ways. Each piece's samples include its
+/// middle. Chains whose pieces pair up with control points within `tol` of each other are one
+/// without sampling: each point of such a piece is within `tol` of the point of its pair at the same
+/// parameter.
+fn along_closely(a: &[PathSeg], b: &[PathSeg], tol: f64) -> bool {
+    let within = |p: Point, q: Point| p.distance(q) <= tol;
+    let paired = a.len() == b.len()
+        && a.iter().zip(b.iter().rev()).all(|(p, q)| match (p, q.reverse()) {
+            (PathSeg::Line(x), PathSeg::Line(y)) => within(x.p0, y.p0) && within(x.p1, y.p1),
+            (PathSeg::Quad(x), PathSeg::Quad(y)) => within(x.p0, y.p0) && within(x.p1, y.p1) && within(x.p2, y.p2),
+            (PathSeg::Cubic(x), PathSeg::Cubic(y)) => within(x.p0, y.p0) && within(x.p1, y.p1) && within(x.p2, y.p2) && within(x.p3, y.p3),
+            _ => false,
+        });
+    if paired {
+        return true;
+    }
+    let samples = |s: &PathSeg| {
+        let len = match s {
+            PathSeg::Line(l) => l.p0.distance(l.p1),
+            PathSeg::Quad(q) => q.p0.distance(q.p1) + q.p1.distance(q.p2),
+            PathSeg::Cubic(c) => c.p0.distance(c.p1) + c.p1.distance(c.p2) + c.p2.distance(c.p3),
+        };
+        // An even count puts a sample at the middle of the piece.
+        let n = if tol > 0.0 { ((len / tol / 2.0).ceil().clamp(1.0, 32.0) as usize) * 2 } else { 64 };
+        let s = *s;
+        (1..=n).map(move |k| s.eval(k as f64 / n as f64))
+    };
+    let covers = |from: &[PathSeg], to: &[PathSeg]| {
+        // Each point's search goes back along `to` from the piece the point before it was near.
+        let mut at = to.len();
+        from.iter().flat_map(samples).all(|p| {
+            let mut order = to.iter().enumerate().take(at).rev().chain(to.iter().enumerate().skip(at).rev());
+            let Some((i, _)) = order.find(|(_, t)| t.nearest(p, 1e-12).distance_sq.sqrt() <= tol) else { return false };
+            at = i + 1;
+            true
+        })
+    };
+    covers(a, b) && covers(b, a)
+}
+
+/// Pathfinder Outline: split every shape's boundary at junctions of the arrangement. Junctions
+/// closer together than `reach` are one, and coincident edges within ten times it are one edge.
+/// `reach` is the larger of the arrangement's tolerance for the art's size and `precision` / 10,000,
+/// with `precision` kept within 0.001 to 10 pt (Pathfinder Options › Precision's range), so the
+/// default precision gives 0.000001 pt as before. Scaling the art and the precision together scales
+/// `reach` by the same amount.
+fn outline_edges(arr: &Arrangement, shapes: &[Shape], precision: f64) -> Vec<Shape> {
     // Sorted by x (then y), so a segment needs only the junctions inside its control box.
     let junctions = arr.junctions();
     let scale = shapes.iter().filter_map(|s| s.path.control_bounds()).map(|r| r.width().max(r.height())).fold(1.0, f64::max);
     let tol = scale * 1e-7;
-    let reach = tol.max(1e-6);
+    let reach = tol.max(1e-6 * (precision / DEFAULT_PRECISION).clamp(0.1, 1000.0));
     // (chain, key, source index)
     let mut chains: Vec<(Vec<Seg>, u64)> = Vec::new();
     for s in shapes {
@@ -1054,8 +1101,15 @@ fn outline_edges(arr: &Arrangement, shapes: &[Shape]) -> Vec<Shape> {
     // De-duplicate coincident chains, keeping the front-most key (later shapes overwrite). A
     // match has its midpoint within `near` of this one's, so only the chains in the grid cells
     // around it are candidates; the first of them in `out` order is the one a scan would find.
+    // Ends and midpoint only pick the candidates: two chains are one edge when each lies within `d`
+    // of the other along its whole length.
     let mut out: Vec<(Vec<Seg>, u64)> = Vec::new();
     let mut sigs: Vec<(Point, Point, Point)> = Vec::new();
+    let mut paths: Vec<Vec<PathSeg>> = Vec::new();
+    let as_path = |c: &[Seg]| -> Vec<PathSeg> {
+        c.iter().map(|s| if s.line { PathSeg::Line(Line::new(s.c.p0, s.c.p3)) } else { PathSeg::Cubic(s.c) }).collect()
+    };
+    let reversed = |c: &[PathSeg]| -> Vec<PathSeg> { c.iter().rev().map(|s| s.reverse()).collect() };
     let sig = |c: &[Seg]| -> (Point, Point, Point) {
         let a = c[0].c.p0;
         let b = c[c.len() - 1].c.p3;
@@ -1068,6 +1122,7 @@ fn outline_edges(arr: &Arrangement, shapes: &[Shape]) -> Vec<Shape> {
     let mut grid: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
     for (chain, key) in chains {
         let (a, b, m) = sig(&chain);
+        let path = as_path(&chain);
         let (cx, cy) = cell(m);
         let found = (cx - 1..=cx + 1)
             .flat_map(|x| (cy - 1..=cy + 1).map(move |y| (x, y)))
@@ -1076,7 +1131,21 @@ fn outline_edges(arr: &Arrangement, shapes: &[Shape]) -> Vec<Shape> {
             .copied()
             .filter(|&i| {
                 let (a2, b2, m2) = sigs[i];
-                near(m, m2) && ((near(a, a2) && near(b, b2)) || (near(a, b2) && near(b, a2)))
+                let other = &paths[i];
+                let same = near(a, a2) && near(b, b2);
+                let opposite = near(a, b2) && near(b, a2);
+                if !near(m, m2) || !(same || opposite) {
+                    return false;
+                }
+                // A chain whose ends meet matches both ways round; the end of its first piece shows
+                // which way the other runs. `along_closely` takes chains that run opposite ways.
+                let runs_same = same
+                    && (!opposite
+                        || match (path.first(), other.first(), other.last()) {
+                            (Some(p), Some(f), Some(l)) => p.end().distance(f.end()) <= p.end().distance(l.start()),
+                            _ => true,
+                        });
+                if runs_same { along_closely(&path, &reversed(other), d) } else { along_closely(&path, other, d) }
             })
             .min();
         match found {
@@ -1084,6 +1153,7 @@ fn outline_edges(arr: &Arrangement, shapes: &[Shape]) -> Vec<Shape> {
             None => {
                 grid.entry((cx, cy)).or_default().push(out.len());
                 sigs.push((a, b, m));
+                paths.push(path);
                 out.push((chain, key));
             }
         }
@@ -1710,5 +1780,42 @@ mod tests {
         assert!(passes <= 8, "{passes} contour passes");
         assert_eq!(merged.len(), 40);
         assert!(merged.iter().enumerate().all(|(k, s)| s.key == k as u64));
+    }
+
+    /// A curve with the ends of a line that passes within 0.25 pt of the line's middle, and whose
+    /// own middle is within 0.25 pt of the line, but which runs about 23 pt past the line's start:
+    /// the middles and ends of the two pieces match, and the two are still not one edge.
+    #[test]
+    fn along_closely_checks_curves_between_the_middles_of_their_pieces() {
+        let line = [PathSeg::Line(Line::new((100.0, 0.0), (0.0, 0.0)))];
+        let curve = [PathSeg::Cubic(kurbo::CubicBez::new((0.0, 0.0), (-54.56, 0.4537), (198.85, 0.0963), (100.0, 0.0)))];
+        assert!(along(&line, &curve, 0.25), "the middles and ends match");
+        assert!(!along_closely(&line, &curve, 0.25));
+        assert!(!along_closely(&curve, &line, 0.25));
+        let same = [PathSeg::Line(Line::new((0.0, 0.0), (100.0, 0.0)))];
+        assert!(along_closely(&line, &same, 0.25));
+    }
+
+    /// A curve 1.05 pt from a line at its middle and under 1 pt from it at its thirds: with a
+    /// control polygon under three times the tolerance long, the samples still take in the middle.
+    #[test]
+    fn along_closely_samples_the_middle_of_a_short_piece() {
+        let line = [PathSeg::Line(Line::new((0.15, 0.0), (0.0, 0.0)))];
+        let curve = [PathSeg::Cubic(kurbo::CubicBez::new((0.0, 0.0), (0.05, 1.4), (0.1, 1.4), (0.15, 0.0)))];
+        assert!(!along_closely(&curve, &line, 1.0));
+    }
+
+    /// Pieces whose control points pair up within the tolerance are one edge, copies included.
+    #[test]
+    fn along_closely_takes_pieces_whose_control_points_pair_up() {
+        let a = [
+            PathSeg::Cubic(kurbo::CubicBez::new((0.0, 0.0), (10.0, 20.0), (30.0, 20.0), (40.0, 0.0))),
+            PathSeg::Line(Line::new((40.0, 0.0), (80.0, 0.0))),
+        ];
+        let reversed: Vec<PathSeg> = a.iter().rev().map(|s| s.reverse()).collect();
+        assert!(along_closely(&a, &reversed, 0.01));
+        let shifted: Vec<PathSeg> = reversed.iter().map(|s| kurbo::Affine::translate((0.0, 0.2)) * *s).collect();
+        assert!(along_closely(&a, &shifted, 0.25));
+        assert!(!along_closely(&a, &shifted, 0.1));
     }
 }

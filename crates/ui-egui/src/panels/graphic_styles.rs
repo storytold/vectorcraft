@@ -20,7 +20,7 @@ use craft::behavior::{EditEvent, GesturePhase, IconId, Selection};
 use craft::ui::contract::{
     Bind, DropAt, DropPayload, DropPlace, Entry, ListDrag, MemoProps, PopupKind, ReorderMove, SelectMode, Show as _, ShowContainer as _, Trigger,
 };
-use craft::ui::display::{Divider, Picture, PictureSize};
+use craft::ui::display::{Divider, Picture, PictureSize, Text};
 use craft::ui::list::ThumbAspect;
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::patterns::presets::{
@@ -404,7 +404,7 @@ fn large_tip(app: &VectorcraftApp, thumbs: &StyleThumbs, ui: &mut Ui, key: &Styl
     })
     .extent(PictureSize::Fill)
     .show(ui);
-    ui.label(key);
+    Text::new(key.clone()).show(ui);
 }
 
 // ---------- the panel ----------
@@ -460,7 +460,7 @@ const AT_START: usize = 2;
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The document is shared (an `Arc`): holding it while drawing copies nothing.
-    let Some(doc) = app.session.active().map(|d| d.doc.clone()) else {
+    let Some((uid, doc)) = app.session.active().map(|d| (d.uid, d.doc.clone())) else {
         super::empty_state(ui, "dc-graphic-styles", tl!("No document"), tl!("Open a document to see its graphic styles."));
         return;
     };
@@ -474,7 +474,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let (alt, linked) = (alt_held(ui), app.session.selection_graphic_style().is_some());
     let thumbs = style_thumbs(app, &doc, &looks, panel.preview);
     let source = style_source(thumbs);
-    let browser_id = ui.make_persistent_id("graphic-styles-browser");
+    // The browser's own state (an open rename field, the scroll position) is kept per document.
+    let browser_id = ui.make_persistent_id(("graphic-styles-browser", uid));
     let list = PresetBrowser::<StyleKey>::list_id(browser_id);
     // A style dragged from this panel's list.
     let ours = move |drag: &ListDrag<StyleKey>| drag.list == list;
@@ -1399,5 +1400,34 @@ mod tests {
         let n = names(&app);
         select(&mut app, n[..2].to_vec());
         assert_eq!(state(&app, "ui.graphicStyles.merge"), Some(true));
+    }
+
+    /// A rename left open in one document does not open in another document that has a style of the same name, and
+    /// Enter there renames nothing.
+    #[test]
+    fn a_rename_left_open_does_not_carry_over_to_another_document() {
+        use crate::tests::panel_harness::Panel;
+        use egui::{Key, Modifiers};
+        let mut app = app();
+        app.session.execute("graphicStyle.new", &json!({"name": "Mine"})).unwrap();
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
+        app.session.execute("graphicStyle.new", &json!({"name": "Mine"})).unwrap();
+        app.run("window.previousDocument", json!({})).unwrap();
+        let first = app.session.active().unwrap().uid;
+        let mut panel = Panel::new(app, show);
+        panel.click("Mine");
+        panel.key(Key::F2, Modifiers::NONE);
+        panel.type_text("X");
+        assert!(panel.shows_value("X"), "the rename field is open in the first document");
+        panel.app().run("window.nextDocument", json!({})).unwrap();
+        assert_ne!(panel.app().session.active().unwrap().uid, first, "the second document is active");
+        panel.frame();
+        panel.type_text("Y");
+        panel.key(Key::Enter, Modifiers::NONE);
+        let app = panel.app();
+        let names: Vec<Vec<String>> =
+            app.session.documents().iter().map(|st| st.doc.graphic_styles.iter().map(|g| g.name.clone()).collect()).collect();
+        assert!(names.iter().all(|n| n.iter().any(|g| g == "Mine")), "no style is renamed: {names:?}");
     }
 }
