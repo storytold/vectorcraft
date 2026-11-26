@@ -117,6 +117,7 @@ mod psd_options;
 pub mod raster_effects;
 pub mod rearrange_artboards;
 pub mod recolor;
+pub mod recolor_preset;
 pub mod relink;
 pub mod rename_artboards;
 pub(crate) mod revolve;
