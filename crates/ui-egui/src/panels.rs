@@ -356,7 +356,7 @@ pub(crate) fn corners_link(app: &mut VectorcraftApp, ui: &mut Ui) {
 fn corners_popup(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(picked) = picked_corners(app) else { return };
     let lengths = general_lengths(app);
-    let mut set = None;
+    let (mut set, mut radius) = (None, None);
     Stack::new().show(ui, |ui, _| {
         Field::new(tl!("Corner")).show(ui, |ui, _| {
             let group = RadioGroup::new(tl!("Corner"), Bind::given(picked.kind)).show(ui, |ui, _| {
@@ -371,13 +371,7 @@ fn corners_popup(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
         Field::new(tl!("Radius")).show(ui, |ui, _| {
-            let radius = NumberField::length(tl!("Radius"), Bind::given(picked.radius), lengths).show(ui).edit;
-            apply_edits(app, &radius, EditPath::Scope, |app, v: &Option<f64>, _| {
-                // A negative radius typed in rounds nothing: the command takes 0 or more.
-                if let Some(r) = v {
-                    set_picked_corners(app, &picked, json!({"radius": r.max(0.0)}));
-                }
-            });
+            radius = Some(NumberField::length(tl!("Radius"), Bind::given(picked.radius), lengths).show(ui).edit);
         });
         let rounding = RadioGroup::new(tl!("Rounding"), Bind::given(picked.relative)).show(ui, |ui, _| {
             Row::new().show(ui, |ui, _| {
@@ -389,6 +383,15 @@ fn corners_popup(app: &mut VectorcraftApp, ui: &mut Ui) {
             set = Some(json!({"relativeRadii": on}));
         }
     });
+    // Applied after the Stack, whose body runs twice (measure, then real), as the radios' `set`.
+    if let Some(radius) = radius {
+        apply_edits(app, &radius, EditPath::Scope, |app, v: &Option<f64>, _| {
+            // A negative radius typed in rounds nothing: the command takes 0 or more.
+            if let Some(r) = v {
+                set_picked_corners(app, &picked, json!({"radius": r.max(0.0)}));
+            }
+        });
+    }
     if let Some(p) = set {
         set_picked_corners(app, &picked, p);
     }

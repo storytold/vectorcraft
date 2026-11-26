@@ -910,12 +910,10 @@ fn relative_corner_rounding_keeps_fraction_on_resize() {
     assert!((c.drawn_radius(0) / drawn - 2.0).abs() < 0.05, "drawn radius doubled with the shape");
 }
 
-/// Relative rounding on a path with corners and no Live Corners yet takes effect in one undo step,
-/// a radius set afterwards is stored as a fraction, and the rounding stays when no corner is cut
-/// any more. Absolute, which such a path already has, and Relative on an ellipse, which has no
-/// corners, add no undo step.
+/// `relativeRadii` on a plain path or an ellipse, which have no Live Corners record, leaves them
+/// as they are and adds no undo step.
 #[test]
-fn relative_rounding_takes_on_a_plain_path() {
+fn relative_rounding_without_live_corners_adds_no_undo_step() {
     let (mut s, id) = session();
     s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
     s.execute("object.expandShape", &json!({})).unwrap();
@@ -923,22 +921,9 @@ fn relative_rounding_takes_on_a_plain_path() {
     let steps = |s: &Session| s.doc().unwrap().history.undo.len();
     let n = steps(&s);
     run(&mut s, json!({"ids": [id.0], "relativeRadii": false}));
-    assert_eq!(steps(&s), n, "Absolute: no change");
     run(&mut s, json!({"ids": [id.0], "relativeRadii": true}));
-    assert_eq!(steps(&s), n + 1, "Relative: one undo step");
-    let node = s.doc().unwrap().doc.node(id).unwrap();
-    assert!(LiveCorners::of(node).unwrap().radii_relative());
-    let max = LiveCorners::of(node).unwrap().corner(0).unwrap().max_radius();
-    run(&mut s, json!({"ids": [id.0], "corners": [0], "radius": max / 2.0}));
-    let c = LiveCorners::of(s.doc().unwrap().doc.node(id).unwrap()).unwrap();
-    assert!(c.radii_relative() && (c.radius(0) - 0.5).abs() < 1e-9, "stored fraction: {}", c.radius(0));
-    // With no corner cut again, the path keeps its Relative rounding.
-    run(&mut s, json!({"ids": [id.0], "corners": [0], "radius": 0}));
-    let c = LiveCorners::of(s.doc().unwrap().doc.node(id).unwrap()).unwrap();
-    assert!(c.radii_relative() && c.radius(0) == 0.0, "still Relative");
-    // Absolute again with no corner cut: a plain path again.
-    run(&mut s, json!({"ids": [id.0], "relativeRadii": false}));
-    assert!(s.doc().unwrap().doc.node(id).unwrap().live_shape().is_none(), "a plain path again");
+    assert_eq!(steps(&s), n, "a plain path: no change");
+    assert!(s.doc().unwrap().doc.node(id).unwrap().live_shape().is_none(), "still a plain path");
     let e = s.execute("shape.ellipse", &json!({"x": 200, "y": 200, "width": 50, "height": 30})).unwrap()["id"].as_u64().unwrap();
     let n = steps(&s);
     run(&mut s, json!({"ids": [e], "relativeRadii": true}));

@@ -205,8 +205,8 @@ impl<'a> LiveCorners<'a> {
 /// Set `radius` (document units; negative: 0) and/or `kind` on the `corners` (anchor indices of
 /// the uncut outline, see [`LiveCorners`]) of a path and its live shape, then cut the path again.
 /// A path that isn't a live shape keeps its uncut outline as a [`LiveShape::Path`], which is a
-/// plain path again once no corner is cut, unless its rounding is Relative. Ellipses and lines
-/// have no corners: they stay as they are.
+/// plain path again once no corner is cut. Ellipses and lines have no corners: they stay as they
+/// are.
 pub fn set_corners(path: &mut PathData, live: &mut Option<Box<LiveShape>>, corners: &BTreeSet<usize>, radius: Option<f64>, kind: Option<CornerKind>) {
     fn edit(
         base: &PathData,
@@ -268,8 +268,7 @@ pub fn set_corners(path: &mut PathData, live: &mut Option<Box<LiveShape>>, corne
         LiveShape::Ellipse { .. } | LiveShape::Line { .. } => return,
     }
     match live.as_deref_mut() {
-        // A path with Relative rounding keeps its record, and with it the rounding.
-        Some(LiveShape::Path { base, radii, kinds, radii_relative: false }) if radii.is_empty() && kinds.is_empty() => {
+        Some(LiveShape::Path { base, radii, kinds, .. }) if radii.is_empty() && kinds.is_empty() => {
             *path = std::mem::take(base);
             *live = None;
         }

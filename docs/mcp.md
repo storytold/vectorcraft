@@ -7989,8 +7989,8 @@ polygon's from its first vertex clockwise; a star's from its first tip; an index
 Each corner keeps its own radius and kind (the shape's `live` in queries has `radii` and, when a corner isn't round,
 `kinds`); a corner with no radius is one anchor, a cut one two, and Direct-Selected corners stay selected as that
 changes. A path that isn't a live shape keeps its uncut outline (`live` `{"shape": "path", "base", "radii"}`) so its
-corners stay editable, and is a plain path again once no corner is cut, unless its rounding is Relative; a polygon
-stays a live polygon, its corners keeping the radius they shared when `sides` changes. Every corner is a circular arc tangent to both sides: a radius
+corners stay editable, and is a plain path again once no corner is cut; a polygon stays a live polygon, its corners
+keeping the radius they shared when `sides` changes. Every corner is a circular arc tangent to both sides: a radius
 draws no larger than takes the cut halfway along the corner's shorter side (half the shorter side of a rectangle, the
 same limit for its four corners), the corners stay circular through uneven scales (the radius scales by the mean scale,
 or keeps its size with Scale Corners off), and a rectangle from a file that kept an uneven scale in its transform
@@ -8018,9 +8018,9 @@ Direct Selection, while a corner is selected or one live rectangle or polygon is
 the corners holding a Direct-Selected anchor, or every corner of a path selected whole; a path whose selected anchors
 hold no corner is left out. The pop-up has the corner kind, the radius (blank while the picked corners differ) and the
 rounding, Relative or Absolute (`relativeRadii`, which applies to each path as a whole; neither is chosen while the
-paths differ). A path without Live Corners is Absolute, and Relative on a path with a corner keeps its outline as the
-base of its Live Corners, as a radius does; ellipses and lines are left as they are. Editing a path's anchors (for
-example `path.moveAnchors`) ends its Live Corners, so it is Absolute again. With Relative rounding, a radius is
+paths differ). A path without Live Corners is Absolute: Relative leaves it, an ellipse or a line as it is, with no
+undo step. Editing a path's anchors (for example `path.moveAnchors`) ends its Live Corners, so it is Absolute again.
+With Relative rounding, a radius is
 compared as the fraction it stores (its share of the corner's maximum, at most all of it), so typing the radius
 shown again adds no undo step. The Corner Radius field beside the link sets the same corners. Each change runs one
 `object.setLiveShape` with `items`, one undo step, and the corners that were not picked keep their radius and kind.

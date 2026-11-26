@@ -99,15 +99,10 @@ fn corners_param(p: &Value) -> Result<Option<BTreeSet<usize>>> {
     list.iter().map(|k| k.as_u64().and_then(|k| usize::try_from(k).ok()).ok_or_else(err)).collect::<Result<_>>().map(Some)
 }
 
-/// Whether `relativeRadii` applies to a path drawn as `path` with live shape `live`: a live
-/// rectangle, a live polygon, a path with Live Corners, or a plain path with a corner. A plain
-/// path's rounding is Absolute.
-fn takes_rounding(path: &PathData, live: Option<&LiveShape>) -> bool {
-    match live {
-        Some(LiveShape::Rectangle { .. } | LiveShape::Polygon { .. } | LiveShape::Path { .. }) => true,
-        Some(LiveShape::Ellipse { .. } | LiveShape::Line { .. }) => false,
-        None => LiveCorners::new(path, None).is_some_and(|c| !c.all().is_empty()),
-    }
+/// Whether `relativeRadii` applies to a path with live shape `live`: a live rectangle, a live
+/// polygon or a path with Live Corners. A plain path, an ellipse and a line stay as they are.
+fn takes_rounding(live: Option<&LiveShape>) -> bool {
+    matches!(live, Some(LiveShape::Rectangle { .. } | LiveShape::Polygon { .. } | LiveShape::Path { .. }))
 }
 
 /// Live line `l` with Line Length `len` (its first end stays) and then Line Angle `angle` (about
@@ -288,7 +283,7 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
             Some(l @ LiveShape::Rectangle { .. }) if rectangle_angle.is_some_and(|a| !at_angle(l.shape_angle(), a)) => return false,
             _ => {}
         }
-        if relative_radii.is_some_and(|on| takes_rounding(path, live.as_deref()) && live.as_deref().is_some_and(LiveShape::radii_relative) != on) {
+        if relative_radii.is_some_and(|on| takes_rounding(live.as_deref()) && live.as_deref().is_some_and(LiveShape::radii_relative) != on) {
             return false;
         }
         if radius.is_none() && kind.is_none() {
@@ -366,23 +361,11 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
                 *l = new.clone();
                 *path = l.to_path();
             }
-            // A path with corners and no Live Corners yet keeps its outline as their base, so that
-            // Relative rounding has a record to go in.
-            if relative_radii == Some(true) && live.is_none() && takes_rounding(path, None) {
-                *live = Some(Box::new(LiveShape::Path { base: path.clone(), radii: vec![], kinds: vec![], radii_relative: false }));
-            }
             if let Some(on) = relative_radii
                 && let Some(l) = live.as_deref_mut()
             {
                 convert_radii_relative(l, on);
                 *path = l.to_path();
-                // Absolute with no corner cut: a plain path again, as `set_corners` leaves one.
-                if let LiveShape::Path { radii, kinds, radii_relative: false, .. } = l
-                    && radii.is_empty()
-                    && kinds.is_empty()
-                {
-                    *live = None;
-                }
             }
             if radius.is_none() && kind.is_none() {
                 continue;
