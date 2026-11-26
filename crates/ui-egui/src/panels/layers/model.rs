@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::hash::{Hash as _, Hasher as _};
 use std::ops::Deref;
 
+use craft::behavior::IconId;
 use craft::keymap::Mods;
 pub(super) use craft::layers::ui::filter::{FilterObject, FilterState};
 use craft::layers::ui::filter::{LayerFilter, SmartSource};
@@ -35,6 +36,12 @@ pub(super) fn painted_name(n: &Node, name: &str, lang: crate::i18n::Lang) -> Str
 pub(crate) fn shown_name(app: &VectorcraftApp, n: &Node, lang: crate::i18n::Lang) -> String {
     listed_name(n, by_xml_id(app), lang)
 }
+
+/// The glyph of a horizontal ruler guide's row: a line across from a ruler.
+const HORIZONTAL_GUIDE_ICON: &str = "dc-guide-horizontal";
+
+/// The glyph of a vertical ruler guide's row: a line down from a ruler.
+const VERTICAL_GUIDE_ICON: &str = "dc-guide-vertical";
 
 /// Whether Identify Objects By is XML ID.
 fn by_xml_id(app: &VectorcraftApp) -> bool {
@@ -182,6 +189,10 @@ pub(super) struct LayerRows {
     /// The selected objects.
     #[plain_data(assume = "node ids are integers")]
     selected: HashSet<NodeId>,
+    /// The layers and sublayers whose visible, unlocked art ([`Node::layer_art`]) is all selected
+    /// and not empty.
+    #[plain_data(assume = "node ids are integers")]
+    full: HashSet<NodeId>,
     /// The selected blends, in selection order.
     #[plain_data(assume = "node ids are integers")]
     blends: Vec<NodeId>,
@@ -228,6 +239,7 @@ impl LayerRows {
         let ruler = doc.ruler_guides();
         let guide_rows = ruler.iter().enumerate().filter_map(|(i, g)| Some((g.id?, i))).collect();
         let blends = st.selection.objects.iter().copied().filter(|id| doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Blend { .. })));
+        let selected: HashSet<NodeId> = st.selection.objects.iter().copied().collect();
         Self {
             doc: doc.clone(),
             opts: app.ui.layers_panel.clone(),
@@ -239,7 +251,8 @@ impl LayerRows {
             guides: vectorcraft_engine::cmd::guide_indexes(doc, &st.selection.guides),
             ruler,
             guide_rows,
-            selected: st.selection.objects.iter().copied().collect(),
+            full: super::rows::full_layers(doc, &selected),
+            selected,
             blends: blends.collect(),
             root: st.isolation.and_then(|i| isolated_root(doc, i)).map(|(n, ..)| n.id),
         }
@@ -289,6 +302,12 @@ impl LayerRows {
     /// Whether object `id` is selected.
     pub(super) fn is_selected(&self, id: NodeId) -> bool {
         self.selected.contains(&id)
+    }
+
+    /// Whether `id` is a layer or sublayer whose visible, unlocked art is all selected and not
+    /// empty.
+    pub(super) fn is_full(&self, id: NodeId) -> bool {
+        self.full.contains(&id)
     }
 
     /// The node ids a row menu's command acts on: every highlighted row when the menu's row is one of
@@ -411,7 +430,7 @@ impl LayerRows {
             info.dimmed = !self.shown(layer) || !info.visible;
             info.color = Some(self.color(layer));
         }
-        // PLAN: dp.L12's horizontal and vertical guide marks need app icons the icon set lacks; the row keeps the kind's ruler glyph.
+        info.icon = Some(IconId::new(if vertical { VERTICAL_GUIDE_ICON } else { HORIZONTAL_GUIDE_ICON }));
         info.renamable = false;
         info.thumbnail = false;
         info

@@ -291,6 +291,27 @@ impl Panel {
         self.look(name).rect
     }
 
+    /// One frame with no input at `pixels_per_point`; the shapes it painted, nested shapes flattened, and the images of
+    /// the textures it made.
+    pub(crate) fn paint_at(&mut self, pixels_per_point: f32) -> (Vec<egui::Shape>, Vec<(egui::TextureId, egui::ImageData)>) {
+        self.fixture.pixels_per_point(pixels_per_point).record_paint();
+        self.take_input();
+        self.fixture.frame(Vec::new());
+        let Some(mut paint) = self.fixture.take_paint() else { return (Vec::new(), Vec::new()) };
+        let images = paint.textures_delta.set.iter().flat_map(|(id, deltas)| deltas.iter().map(move |delta| (*id, delta.image.clone()))).collect();
+        // The test reads the images; no renderer applies them.
+        paint.textures_delta.clear();
+        let mut shapes = Vec::new();
+        let mut open: Vec<egui::Shape> = paint.shapes.into_iter().map(|clipped| clipped.shape).collect();
+        while let Some(shape) = open.pop() {
+            match shape {
+                egui::Shape::Vec(nested) => open.extend(nested),
+                shape => shapes.push(shape),
+            }
+        }
+        (shapes, images)
+    }
+
     /// Where the control of `role` named `name` is, where nodes of other roles share the name.
     pub(crate) fn rect_role(&self, name: &str, role: craft::ui::contract::Role) -> Rect {
         self.look_role(name, role).rect
@@ -301,9 +322,21 @@ impl Panel {
         self.fixture.tree().value_of(self.look(name).node).map(str::to_owned)
     }
 
+    /// The value text of the control of `role` named `name`, where nodes of other roles share the name (a slider
+    /// beside its number box).
+    pub(crate) fn value_role(&self, name: &str, role: craft::ui::contract::Role) -> Option<String> {
+        self.fixture.tree().value_of(self.look_role(name, role).node).map(str::to_owned)
+    }
+
     /// The description of the control named `name` (a list row's trailing texts).
     pub(crate) fn description(&self, name: &str) -> Option<String> {
         self.fixture.tree().description_of(self.look(name).node).map(str::to_owned)
+    }
+
+    /// The value texts of the latest frame's controls, in tree order.
+    pub(crate) fn values(&self) -> Vec<String> {
+        let tree = self.fixture.tree();
+        tree.keys().into_iter().filter_map(|key| tree.value_of(key)).map(str::to_owned).collect()
     }
 
     /// Whether a control in the latest frame holds the value text `value`.

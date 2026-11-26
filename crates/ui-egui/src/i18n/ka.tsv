@@ -2496,6 +2496,9 @@
 	Artboards	სამუშაო დაფები
 	Convert to Artboards	სამუშაო დაფებად გარდაქმნა
 	Rearrange All Artboards…	ყველა სამუშაო დაფის გადალაგება…
+	Rearrange…	გადალაგება…
+	Selected Artboards: {n}	მონიშნული სამუშაო დაფები: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	დაწკაპეთ ტილოზე სამუშაო დაფების განსათავსებლად (Esc აუქმებს)
 	Fit to Artwork Bounds	ნახატის საზღვრებზე მორგება
 	Fit to Selected Art	მონიშნულ ნახატზე მორგება
 	Graph	დიაგრამა
@@ -2650,6 +2653,7 @@
 	Fill & Stroke	შევსება და კონტური
 	Fill Color	შევსების ფერი
 	Opacity	გაუმჭვირვალობა
+	Show Opacity	გაუმჭვირვალობის ჩვენება
 	Stroke Color	კონტურის ფერი
 	Fill Gradient	შევსების გრადიენტი
 	Stroke Gradient	კონტურის გრადიენტი
@@ -4115,6 +4119,17 @@ digits	Malayalam	მალაიალამური
 	Create New Sublayer	ახალი ქვეშრის შექმნა
 	Search All	ყველგან ძიება
 	Graphics	გრაფიკა
+	Show Contrast	კონტრასტის ჩვენება
+	Contrast For	კონტრასტი ამისთვის
+	Normal Text	ჩვეულებრივი ტექსტი
+	Large Text	დიდი ტექსტი
+	Contrast Background	კონტრასტის ფონი
+	Behind Selection	მონიშნულის უკან
+	Current Color	მიმდინარე ფერი
+	Pass	აკმაყოფილებს
+	Fail	არ აკმაყოფილებს
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2-ის მინიმალური კონტრასტი: ჩვეულებრივი ტექსტი AA 4.5:1 (1.4.3) და AAA 7:1 (1.4.6), დიდი ტექსტი AA 3:1 და AAA 4.5:1, გრაფიკა და მართვის ელემენტები AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	ფონი იკითხება მონიშნულის ცენტრში.
 	Local Libraries	ლოკალური ბიბლიოთეკები
 	Add Content	შიგთავსის დამატება
 	Click to apply to the selected type	დაწკაპეთ მონიშნულ ტექსტზე გამოსაყენებლად
@@ -5538,6 +5553,12 @@ theme	Appearance	იერსახე
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	გარჩევადობა მიუწვდომელია
+	estimated memory {memory}	სავარაუდო მეხსიერება {memory}
+	memory unavailable	მეხსიერება მიუწვდომელია
+	Unknown format	უცნობი ფორმატი
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -5986,6 +6007,7 @@ theme	Appearance	იერსახე
 	Data Recovery	მონაცემების აღდგენა
 	Default Language	ნაგულისხმევი ენა
 	Disable Auto Add/Delete	ავტომატური დამატება/წაშლის გამორთვა
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete შლის ღუზის წერტილებს და ინარჩუნებს კონტურებს შეერთებულად
 	Interpolate Control Points When Moving Anchors	სახელურების ინტერპოლაცია საყრდენი წერტილების გადაადგილებისას
 	Display All Blacks Accurately	ყველა შავის ზუსტად ჩვენება
 	Display All Blacks as Rich Black	ყველა შავის მდიდარ შავად ჩვენება
@@ -6509,7 +6531,7 @@ font-technology	Variable	ცვლადი
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	მონიშვნა › იგივე › შევსების ფერი, კონტურის ფერი და შევსება და კონტური პოულობს გლობალური ან სპოტ-ფერის ნიმუშის მხოლოდ იმავე ტონირებას და არა მის ნებისმიერ ტონირებას.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	აჩვენებს საწყის ეკრანს, როცა არცერთი დოკუმენტი არ არის გახსნილი; გამორთვისას ფანჯარა ცარიელი რჩება, „საწყის ეკრანზე“ დაწკაპუნებამდე.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	ზომის, პოზიციისა და სწორების დროს ობიექტებს ზომავს კონტურებითა და ფორმის შემცვლელი ეფექტებით; ჩრდილები, ნათება და გაბუნდოვნება არ იზომება.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100%-იან მასშტაბზე დოკუმენტის ერთი დუიმი 72-ის ნაცვლად 96 ეკრანის პუნქტს იკავებს.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	100%-იან მასშტაბზე დოკუმენტის ერთი დუიმი ეკრანის ერთ დუიმს ავსებს, ან 96 ეკრანის პუნქტს, როცა სისტემა ეკრანის გამოსადეგ ზომას არ აცნობებს.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	მონიშვნის ხელსაწყოთი ჯგუფზე, ტრაექტორიაზე ან გამოსახულებაზე ორჯერ დაწკაპუნება მას იზოლაციის რეჟიმში ხსნის.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	პატერნის შევსებები და კონტურები ნახატთან ერთად გარდაიქმნება, თუ გარდაქმნა ან გარდაქმნის პანელის მენიუ სხვას არ აირჩევს.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	ცოცხალი კუთხეების რადიუსები ნახატთან ერთად მასშტაბირდება, თუ მასშტაბირება სხვას არ აირჩევს.
@@ -6521,6 +6543,7 @@ font-technology	Variable	ცვლადი
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	ტრეკპადზე ორი თითით მობრუნების ჟესტი ტილოს ხედს აბრუნებს.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	კლავიშის ხანგრძლივი დაჭერა უშვებს ხელსაწყოს ან ბრძანებას კლავიატურის მალსახმობების დაჭერის სვეტიდან; მოკლე დაჭერა უშვებს მის ჩვეულ მალსახმობს.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	რამდენი წამი უნდა იყოს კლავიში დაჭერილი, სანამ ჩვეული მალსახმობის ნაცვლად მისი ხანგრძლივი დაჭერის მალსახმობი გაეშვება.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete შლის არჩეულ ღუზის წერტილებს და თითოეულის გარშემო მრუდს ხელახლა არგებს, ნაცვლად იმისა, რომ იქ კონტური გახსნას.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	როცა ღუზის წერტილებს გადაადგილებთ, ყოველი მრუდი, რომლის ერთი ბოლოც გადაადგილდა, ინარჩუნებს ფორმას თავის ბოლოებთან მიმართებით.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	სანამ ხელსაწყოს მალსახმობ კლავიშს დაჭერილს გიჭირავთ, ეს ხელსაწყოა არჩეული; კლავიშის აშვების შემდეგ ისევ წინა ხელსაწყო აირჩევა.
 	Shows the bounding box while you move the selection or draw a shape.	აჩვენებს შემომსაზღვრელ ჩარჩოს, სანამ მონიშნულს გადაადგილებთ ან ფიგურას ხატავთ.
@@ -7323,6 +7346,12 @@ font-technology	Variable	ცვლადი
 @msg	finish editing the pattern first	ჯერ დაასრულეთ პატერნის რედაქტირება
 @msg	nothing encoded	არაფერია კოდირებული
 @msg	nothing selected	არაფერია მონიშნული
+@msg	`{key}` must be a color or {_1}	`{key}` უნდა იყოს ფერი ან {_1}
+@msg	the selected objects' colors differ: give `color`	მონიშნული ობიექტების ფერები განსხვავდება: მიუთითეთ `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	მონიშნული ობიექტების ფერები განსხვავდება: მიუთითეთ `opacity` ან `color`
+@msg	the active fill or stroke has no color: give `color`	აქტიურ შევსებას ან კონტურს ფერი არ აქვს: მიუთითეთ `color`
+@msg	the active fill or stroke is hidden: give `color`	აქტიური შევსება ან კონტური დამალულია: მიუთითეთ `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	აქტიური შევსება ან კონტური იხატება გაუმჭვირვალობის ნიღბით: მიუთითეთ `color`
 @msg	nothing selected is in a group	მონიშნულთაგან არაფერია ჯგუფში
 @msg	nothing to align	გასასწორებელი არაფერია
 @msg	nothing to distort	დასადეფორმირებელი არაფერია
@@ -8283,6 +8312,9 @@ file-filter	Swatch libraries	ფერის ნიმუშების ბი�
 file-filter	Flattener presets	გაბრტყელების პრესეტები
 file-filter	PDF presets	PDF-ის პრესეტები
 file-filter	Print presets	ბეჭდვის პრესეტები
+file-filter	Tracing presets	ვექტორიზაციის პრესეტები
+file-filter	Action sets	მოქმედებების ნაკრებები
+file-filter	Composite fonts	კომპოზიტური შრიფტები
 file-filter	Preferences	პარამეტრები
 file-filter	Export presets	ექსპორტის პრესეტები
 file-filter	SVG Compressed	შეკუმშული SVG
@@ -9403,6 +9435,8 @@ axis	Y Axis	Y ღერძი
 	Cancel Plug-in Run	პლაგინის გაშვების გაუქმება
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} დასრულდა, მაგრამ ამასობაში დოკუმენტი ან პლაგინი შეიცვალა: გაუშვით ხელახლა
 @msg	Running “{name}”…	მიმდინარეობს „{name}“-ის გაშვება…
+@msg	Plug-in “{name}”: {notice}	პლაგინი „{name}“: {notice}
+@msg	`notice` must be a string with visible text	`notice` უნდა იყოს ხილული ტექსტის მქონე სტრიქონი
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	ცოცხალი ეფექტი დოკუმენტის დახატვისას ეშვება, ამიტომ ის ვერ იქნება `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	ექსპორტის პლაგინი ყოველთვის ექსპორტის ბიუჯეტს იღებს: გამოტოვეთ `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	„{_1}“ დიდ გამოთვლით ბიუჯეტს ითხოვს (თითო გაშვება {minutes} წუთამდე და ჩვეულებრივზე {times}-ჯერ მეტი ინსტრუქცია): ის დესკტოპის აპში ადამიანმა უნდა დაამტკიცოს, ან გადაეცით `allowHeavy: true` --allow-plugin-grants-ით გაშვებულ სესიაში
@@ -9429,6 +9463,8 @@ axis	Y Axis	Y ღერძი
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	საჭიროებს დამტკიცებას: ითხოვს {0}-ს, რასაც მომხმარებელი მისი ცალკე დაყენებისას აძლევს
 @msg	not JSON: {e}	არ არის JSON: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	არ არის WebAssembly-ის ბინარული ფაილი (აკლია \\0asm სათაური)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	ფუნქციის ტიპი აჭარბებს {MAX_FUNC_TYPE_VALUES} პარამეტრის ლიმიტს
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	ფუნქციის ტიპი აჭარბებს {MAX_FUNC_TYPE_VALUES} შედეგის ლიმიტს
 @msg	parameter `{k}`: {what}	პარამეტრი `{k}`: {what}
 @msg	parameter `{name}`: {what}	პარამეტრი `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	პლაგინის პარამეტრები JSON ობიექტი უნდა იყოს
@@ -9446,6 +9482,10 @@ axis	Y Axis	Y ღერძი
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc-მა დააბრუნა 0 (მეხსიერება ამოიწურა)
 @msg	vc_alloc returned a block outside memory	vc_alloc-მა დააბრუნა ბლოკი მეხსიერების გარეთ
 @msg	vc_run returned error code {packed}	vc_run-მა დააბრუნა შეცდომის კოდი {packed}
+@msg	did not finish loading within {secs} s	ჩატვირთვა {secs} წამში არ დასრულდა
+@msg	no thread was left to load it	მის ჩასატვირთად ნაკადი აღარ დარჩა
+@msg	panicked while loading	ჩატვირთვისას ავარიულად შეწყდა
+@msg	panicked while loading: {what}	ჩატვირთვისას ავარიულად შეწყდა: {what}
 @msg	{_1} is not a file	{_1} ფაილი არ არის
 @msg	{_1} is {_2} bytes (limit {_3})	{_1} {_2} ბაიტია (ლიმიტი {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} ობიექტი (ლიმიტი {MAX_OBJECTS})
@@ -9466,6 +9506,11 @@ axis	Y Axis	Y ღერძი
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` და `maxItems` უნდა იყოს 0-{MAX_LIST}, `maxItems` მინიმუმ 1, ხოლო ნაგულისხმევ მნიშვნელობაში უნდა იყოს ამდენი ელემენტი
 @msg	`name` must be a string	`name` უნდა იყოს სტრიქონი
 @msg	`opacity` must be a number	`opacity` უნდა იყოს რიცხვი
+@msg	`opacity` must be a number from 0 to 100	`opacity` უნდა იყოს რიცხვი 0-დან 100-მდე
+@msg	`opacity` must be true or false	`opacity` უნდა იყოს true ან false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	ტექსტის სიმბოლოებს საკუთარი გაუმჭვირვალობა არ აქვთ: დაამატეთ შევსება ან კონტური იერსახის პანელის ბრძანებით ახალი შევსების დამატება ან ახალი კონტურის დამატება
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	სიმბოლოს ეგზემპლარში არჩეულ ობიექტს შევსების ან კონტურის საკუთარი გაუმჭვირვალობა არ აქვს
+@msg	no target has that fill or stroke to take the opacity	არცერთ სამიზნეს არ აქვს ის შევსება ან კონტური, რომელიც გაუმჭვირვალობას მიიღებს
 @msg	`type` must be "path" or "compound"	`type` უნდა იყოს "path" ან "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` უნდა შედგებოდეს 1-{MAX_UNIT} დასაბეჭდი სიმბოლოსგან
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen`-ში `{other}`-ისთვის უნდა იყოს 1-დან {MAX_CONDITION_VALUES}-მდე მნიშვნელობა
@@ -9484,7 +9529,7 @@ axis	Y Axis	Y ღერძი
 @msg	a list of {min_items} to {max_items} numbers	{min_items}-დან {max_items}-მდე რიცხვის სია
 @msg	a new object needs a `path`	ახალ ობიექტს სჭირდება `path`
 @msg	a number	რიცხვი
-@msg	a painted live effect returns only `objects`	მხატვრული ცოცხალი ეფექტი აბრუნებს მხოლოდ `objects`-ს
+@msg	a painted live effect returns only `objects` and `notice`	მხატვრული ცოცხალი ეფექტი აბრუნებს მხოლოდ `objects`-სა და `notice`-ს
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	მხატვრული ცოცხალი ეფექტის ნაწილს აქვს მხოლოდ `path`, `fillRule`, `fills` და `strokes`
 @msg	a read-only object was left out	გამოტოვებულია მხოლოდ წასაკითხი ობიექტი
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	გამოტოვებულია მხოლოდ წასაკითხი ობიექტი: დააბრუნეთ ის მხოლოდ {{"id": …}}-ის სახით ან ისე, როგორც მიიღეთ
@@ -9589,6 +9634,8 @@ axis	Y Axis	Y ღერძი
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` არის {_1}; ეს ჰოსტი პლაგინის API-ის დონეებს 1-დან {API_LEVEL}-მდე უჭერს მხარს
 @msg	`paintOutput` may only be true	`paintOutput` შეიძლება იყოს მხოლოდ true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` მხოლოდ ცოცხალი ეფექტისთვისაა (`kind` "effect") `api` 2-ზე
+@msg	`place` is only for an importer (`kind` "importer")	`place` მხოლოდ იმპორტერისთვისაა (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	„{shown}“ ხსნის ფაილებს, მაგრამ არ ათავსებს: მის მანიფესტში `place` არ არის მითითებული
 @msg	`grant` must be a list of permission names	`grant` ნებართვების სახელების სია უნდა იყოს
 @msg	`grant` names an unknown permission `{shown}`	`grant` უცნობ ნებართვას ასახელებს: `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` სახის პლაგინს სჭირდება ნებართვა `{_2}`
@@ -9600,6 +9647,10 @@ axis	Y Axis	Y ღერძი
 @msg	`inputs` lists `{shown}` twice	`inputs`-ში `{shown}` ორჯერაა ჩამოთვლილი
 @msg	`inputs` needs `api` 2 or later	`inputs`-ს სჭირდება `api` 2 ან უფრო ახალი
 @msg	`inputs` needs the permission `doc.read`	`inputs`-ს სჭირდება ნებართვა `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	მიღებული ობიექტების და დოკუმენტის პარამეტრების, სამუშაო დაფების, შრეებისა და ფერის ნიმუშების წაკითხვა
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context`-ში განსხვავებული სექციები უნდა იყოს: settings, artboards, layers ან swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` განკუთვნილია ფილტრისთვის ან `commands`-ის მქონე ცოცხალი ეფექტისთვის, `api` 3-ზე ან უფრო ახალზე, ნებართვით `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	პლაგინის მიერ მოთხოვნილი დოკუმენტის ინფორმაცია ზედმეტად დიდია გადასაცემად: მაქსიმუმ {MAX_CONTEXT_ITEMS} სამუშაო დაფა, შრე და ფერის ნიმუში {MAX_CONTEXT_BYTES} ბაიტში
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	მეხსიერების ბიუჯეტი (ობიექტს {_1} სჭირდება შეყვანის {size} ბაიტი, დარჩენილია {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	ობიექტების ბიუჯეტი ({MAX_OBJECTS}-ზე მეტი მხოლოდ წასაკითხი ობიექტი)
 @msg	instruction budget	ინსტრუქციების ბიუჯეტი

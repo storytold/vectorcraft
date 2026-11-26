@@ -846,15 +846,16 @@ pub(crate) const MAX_IMPORTED_PRESETS: usize = 1000;
 pub(crate) use addons::{DecodedImages, refresh_color_masks};
 /// Packaging Tools' blanks and the objects their print leaves out, for the Fold Preview window.
 pub use addons::{fold_source, print_hidden};
-/// Document Info's category titles and the Objects category's count labels.
-pub use docinfo::{CATEGORIES, OBJECT_LABELS};
+/// Document Info's category titles, the Objects category's count labels, and how its image rows
+/// write a resolution and a number of bytes.
+pub use docinfo::{CATEGORIES, OBJECT_LABELS, byte_size, ppi_number};
 pub use docmenu::guide_indexes;
 pub(crate) use edit::{Unrecorded, settle_interaction, typing_in_progress};
 pub(crate) use object::bounds_rewrite;
 pub(crate) use object::{keep_aligned_in, refresh_pixel_aligned};
 /// The rules `object.scale`, `object.reflect` and `object.shear` check their params with.
 pub use object::{reflect_axis, scale_factors, shear_tangent};
-pub(crate) use paint::{LIVE_PAINT_BUCKET, asks_defaults_only};
+pub(crate) use paint::{asks_defaults_only, painting_tool_of};
 pub use plugin_call::{Location, ParamsPlace, key_location, location_in, location_keys};
 pub use select::SIMILAR;
 pub(crate) use vectorcraft_doc::range::parse_range;

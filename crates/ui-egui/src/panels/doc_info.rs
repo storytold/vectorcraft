@@ -3,6 +3,8 @@
 //! linked and embedded images, repeat objects), for the whole document or the selection only. The flyout picks one category (or all)
 //! and saves the text report (`docInfo.save`, the report File → Package writes too).
 
+use std::sync::Arc;
+
 use craft::keymap::CommandRef;
 use craft::ui::contract::{Show as _, ShowContainer as _};
 use craft::ui::display::{Divider, Shade, Text};
@@ -31,7 +33,7 @@ pub struct DocInfoView {
 /// A `label: value` row. `label` is shown as given: translate an interface label first, a name
 /// stays as it is.
 pub(crate) fn row(ui: &mut Ui, label: &str, value: String) {
-    Row::new().fill_width().align(RowAlign::SpaceBetween).show(ui, |ui, _| {
+    Row::new().fill_width().align(RowAlign::SpaceBetween).wrap(true).show(ui, |ui, _| {
         Text::new(label.to_string()).shade(Shade::Muted).show(ui);
         // The value can be selected and copied (#8432).
         SelectableText::new(label.to_string(), &value).show(ui);
@@ -39,8 +41,9 @@ pub(crate) fn row(ui: &mut Ui, label: &str, value: String) {
 }
 
 /// `document.info` with its categories, fetched again only when the document, the scope or the
-/// artboards the Artboard tool has selected change.
-pub(crate) fn info(app: &mut VectorcraftApp) -> Option<Value> {
+/// artboards the Artboard tool has selected change. A frame that fetches nothing returns the stored
+/// result without copying it and stores nothing; a failed fetch leaves the stored result as it was.
+pub(crate) fn info(app: &mut VectorcraftApp) -> Option<Arc<Value>> {
     let selection_only = app.ui.doc_info.selection_only;
     let artboard_tool = if app.session.tool_id() == "artboard" { app.session.tool_options_of("artboard") } else { Value::Null };
     let st = app.session.active()?;
@@ -48,10 +51,10 @@ pub(crate) fn info(app: &mut VectorcraftApp) -> Option<Value> {
     if let Some((cached, info)) = &app.canvas.doc_info
         && *cached == key
     {
-        return Some(info.clone());
+        return Some(Arc::clone(info));
     }
-    let info = app.session.execute("document.info", &json!({ "selectionOnly": selection_only })).ok()?;
-    app.canvas.doc_info = Some((key, info.clone()));
+    let info = Arc::new(app.session.execute("document.info", &json!({ "selectionOnly": selection_only })).ok()?);
+    app.canvas.doc_info = Some((key, Arc::clone(&info)));
     Some(info)
 }
 
@@ -230,14 +233,39 @@ fn font_detail_value(e: &Value) -> Option<String> {
     }
 }
 
-/// An `imageObjects` entry as Linked Images and Embedded Images show it: its size in pixels, and
-/// for a linked image the file it shows.
+/// An `imageObjects` entry as Linked Images and Embedded Images show it: its format, its size in
+/// pixels, and for a linked image its resolution and the file it shows, for an embedded one the
+/// memory its pixels take. Format names and file names stay as they are.
 fn image_value(o: &Value) -> Option<String> {
+    use vectorcraft_engine::cmd::{byte_size, ppi_number};
+    let format = match &o["format"] {
+        Value::Null => tl!("Unknown format"),
+        f => f.as_str()?,
+    };
     let size = crate::i18n::fmt(
         tl!("{width} × {height} px"),
         &[("width", &o["width"].as_u64()?.to_string()), ("height", &o["height"].as_u64()?.to_string())],
     );
-    if o["linked"] == true { Some(crate::i18n::fmt(tl!("{size} — {file}"), &[("size", &size), ("file", o["file"].as_str()?)])) } else { Some(size) }
+    let detail = if o["linked"] == true {
+        match &o["effectivePpi"] {
+            Value::Null => tl!("resolution unavailable").to_string(),
+            ppi => {
+                let (x, y) = (ppi_number(ppi.get(0)?.as_f64()?), ppi_number(ppi.get(1)?.as_f64()?));
+                if x == y { crate::i18n::fmt(tl!("{n} ppi"), &[("n", &x)]) } else { crate::i18n::fmt(tl!("{x} × {y} ppi"), &[("x", &x), ("y", &y)]) }
+            }
+        }
+    } else {
+        match &o["memoryBytes"] {
+            Value::Null => tl!("memory unavailable").to_string(),
+            bytes => crate::i18n::fmt(tl!("estimated memory {memory}"), &[("memory", &byte_size(bytes.as_u64()?))]),
+        }
+    };
+    let shown = crate::i18n::fmt(tl!("{format}; {size}; {detail}"), &[("format", format), ("size", &size), ("detail", &detail)]);
+    if o["linked"] == true {
+        Some(crate::i18n::fmt(tl!("{size} — {file}"), &[("size", &shown), ("file", o["file"].as_str()?)]))
+    } else {
+        Some(shown)
+    }
 }
 
 /// A `repeatObjects` entry as Repeat Objects shows it: its kind and the number of instances it
@@ -583,7 +611,7 @@ mod tests {
         let gone = fonts.iter().find(|(l, _)| l.starts_with("Qx Absent Family")).unwrap_or_else(|| panic!("{fonts:?}")).1.clone();
         assert!(gone == "fehlt" || gone.starts_with("fehlt: angezeigt in "), "{gone}");
         assert_eq!(images.len(), 1);
-        assert!(images[0].1.ends_with(" px") && images[0].1.contains(" × "), "{images:?}");
+        assert!(images[0].1.contains(" × ") && images[0].1.contains(" px; geschätzter Speicher ") && images[0].1.ends_with(" B"), "{images:?}");
         // A swatch named like a kind keeps its name; the gradient named by its kind is translated.
         assert_eq!(value(&gradients, "Glow"), "Linear gradient, Radialer Verlauf");
         assert_eq!(value(&selected, "Glow"), "Linear gradient, Radialer Verlauf");
@@ -591,6 +619,54 @@ mod tests {
         assert!(saved.contains("(the selection only)") && saved.contains("\nGRADIENT OBJECTS\nGlow: Linear gradient, Radial gradient\n"), "{saved}");
         let report = app.session.execute("document.info", &json!({"format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
         assert!(report.contains("Units: Millimeters\n") && report.contains("Radial Repeat, 6 instances"), "{report}");
+    }
+
+    /// Linked Images and Embedded Images show each image's format, size, resolution or memory in
+    /// the interface language, the format and file names as they are; values that do not fit an
+    /// image entry are shown as `document.info` gives the row.
+    #[test]
+    fn image_details_show_in_the_interface_language() {
+        let linked = |format: Value, ppi: Value| json!({"name": "a.png", "width": 3, "height": 2, "linked": true, "file": "/art/a.png", "format": format, "effectivePpi": ppi});
+        let embedded =
+            |memory: Value| json!({"name": "Image", "width": 3, "height": 2, "linked": false, "file": null, "format": "PNG", "memoryBytes": memory});
+        let shown = || {
+            [
+                linked(json!("PNG"), json!([150.0, 150.0])),
+                linked(json!(null), json!([144.0, 72.0])),
+                linked(json!("TIFF"), json!(null)),
+                embedded(json!(1536)),
+                embedded(json!(null)),
+            ]
+            .map(|o| image_value(&o))
+        };
+        assert_eq!(
+            shown(),
+            [
+                "PNG; 3 × 2 px; 150 ppi — /art/a.png",
+                "Unknown format; 3 × 2 px; 144 × 72 ppi — /art/a.png",
+                "TIFF; 3 × 2 px; resolution unavailable — /art/a.png",
+                "PNG; 3 × 2 px; estimated memory 1.5 KiB",
+                "PNG; 3 × 2 px; memory unavailable",
+            ]
+            .map(|v| Some(v.to_string()))
+        );
+        let Some(de) = crate::i18n::Lang::from_code("de") else { panic!("no German catalog") };
+        crate::i18n::set_current(de);
+        let german = shown();
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(
+            german,
+            [
+                "PNG; 3 × 2 px; 150 ppi – /art/a.png",
+                "Unbekanntes Format; 3 × 2 px; 144 × 72 ppi – /art/a.png",
+                "TIFF; 3 × 2 px; Auflösung nicht verfügbar – /art/a.png",
+                "PNG; 3 × 2 px; geschätzter Speicher 1.5 KiB",
+                "PNG; 3 × 2 px; Speicher nicht verfügbar",
+            ]
+            .map(|v| Some(v.to_string()))
+        );
+        assert_eq!(image_value(&linked(json!("PNG"), json!([150.0]))), None);
+        assert_eq!(image_value(&embedded(json!("big"))), None);
     }
 
     /// Document shows the transparency settings with their values in the interface language (two
@@ -640,6 +716,151 @@ mod tests {
         let custom = value(&document(&mut app), "Grid Colors");
         crate::i18n::set_current(crate::i18n::Lang::EN);
         assert_eq!(custom.as_deref(), Some("#ff0000, #00ff00"));
+    }
+
+    /// The by-value cache the panel kept before its result was shared, with the same key.
+    type CopiedCache = Option<((u64, u64, bool, Value), Value)>;
+
+    /// `document.info` read as the panel read it before its result was shared: the stored result
+    /// copied out by value on every call, kept in `cache` so it does not touch the panel's.
+    fn copied_info(app: &mut VectorcraftApp, cache: &mut CopiedCache) -> Option<Value> {
+        let selection_only = app.ui.doc_info.selection_only;
+        let artboard_tool = if app.session.tool_id() == "artboard" { app.session.tool_options_of("artboard") } else { Value::Null };
+        let st = app.session.active()?;
+        let key = (st.uid, st.revision, selection_only, artboard_tool);
+        if let Some((cached, info)) = cache.as_ref()
+            && *cached == key
+        {
+            return Some(info.clone());
+        }
+        let info = app.session.execute("document.info", &json!({ "selectionOnly": selection_only })).ok()?;
+        *cache = Some((key, info.clone()));
+        Some(info)
+    }
+
+    /// A frame that fetches nothing keeps the stored `document.info` result without a copy and
+    /// shows the same rows; another document (at the same revision), an edit, Selection Only and
+    /// the Artboard tool's options each store a new one, and a category does not. With no
+    /// document nothing is fetched and the stored result stays as it was.
+    #[test]
+    fn frames_that_fetch_nothing_reuse_the_cached_rows() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        app.session.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+        let mut old: CopiedCache = None;
+        let mut frame = |app: &mut VectorcraftApp| {
+            let text = crate::tests_labels::painted_text(app, show);
+            let Some((key, stored)) = app.canvas.doc_info.clone() else { panic!("nothing stored") };
+            // The rows are the ones the by-value read gives for the same state.
+            let has_doc = app.session.active().is_some();
+            assert_eq!(has_doc.then(|| (*stored).clone()), copied_info(app, &mut old), "the same rows as before");
+            (key, stored, text)
+        };
+        let (_, first, text) = frame(&mut app);
+        assert!(text.contains("Color Mode") && text.contains("Artboard 1"), "{text}");
+        let (_, same, again) = frame(&mut app);
+        assert!(Arc::ptr_eq(&first, &same), "a frame that fetches nothing stores no new result");
+        assert!(Arc::ptr_eq(&info(&mut app).unwrap(), &same), "the stored result is returned without a copy");
+        assert_eq!(text, again);
+        // Another document at the same revision.
+        let revision = |app: &VectorcraftApp| app.session.active().map(|st| st.revision);
+        let at = revision(&app);
+        let before = app.session.active().map(|st| st.uid);
+        app.session.execute("document.activate", &json!({"index": 0})).unwrap();
+        assert_eq!(revision(&app), at, "both documents are at the same revision");
+        let (key, other, _) = frame(&mut app);
+        assert!(!Arc::ptr_eq(&same, &other), "another document stores a new result");
+        assert_ne!(Some(key.0), before);
+        app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+        let (_, edited, _) = frame(&mut app);
+        assert!(!Arc::ptr_eq(&other, &edited), "an edit stores a new result");
+        assert!(shown_rows(&edited, "objects").contains(&("Paths".into(), "1".into())), "{:?}", shown_rows(&edited, "objects"));
+        run(&mut app, "ui.docInfo.selectionOnly", &json!({})).unwrap().unwrap();
+        let (_, selection, text) = frame(&mut app);
+        assert!(!Arc::ptr_eq(&edited, &selection), "Selection Only stores a new result");
+        assert!(text.contains("(selection)"), "{text}");
+        run(&mut app, "ui.docInfo.selectionOnly", &json!({})).unwrap().unwrap();
+        run(&mut app, "ui.docInfo.category", &json!({"category": "objects"})).unwrap().unwrap();
+        let (_, all, _) = frame(&mut app);
+        let (_, category, _) = frame(&mut app);
+        assert!(Arc::ptr_eq(&all, &category), "a category filters the stored result");
+        run(&mut app, "ui.docInfo.category", &json!({"category": ""})).unwrap().unwrap();
+        app.session.execute("artboard.new", &json!({"x": 150, "y": 40, "width": 60, "height": 80})).unwrap();
+        let (_, two, _) = frame(&mut app);
+        assert!(!Arc::ptr_eq(&category, &two), "a new artboard stores a new result");
+        app.select_tool("artboard");
+        app.session.set_tool_option("selected", &json!([0]));
+        let (_, tool, _) = frame(&mut app);
+        assert!(!Arc::ptr_eq(&two, &tool), "the Artboard tool stores a new result");
+        let artboard_rows = |i: &Value| shown_rows(i, "document").iter().filter(|(l, _)| l == "Artboard").count();
+        assert_eq!(artboard_rows(&tool), 1);
+        app.session.set_tool_option("selected", &json!([0, 1]));
+        let (_, picked, _) = frame(&mut app);
+        assert!(!Arc::ptr_eq(&tool, &picked), "the Artboard tool's options store a new result");
+        assert_eq!(artboard_rows(&picked), 2);
+        let (_, kept, _) = frame(&mut app);
+        assert!(Arc::ptr_eq(&picked, &kept));
+        app.select_tool("selection");
+        let (key, away, _) = frame(&mut app);
+        assert!(!Arc::ptr_eq(&kept, &away), "another tool stores a new result");
+        assert_eq!(key.3, Value::Null);
+        // With no document the panel shows its empty state and keeps the stored result.
+        app.session.execute("file.close", &json!({})).unwrap();
+        app.session.execute("file.close", &json!({})).unwrap();
+        let (_, closed, text) = frame(&mut app);
+        assert!(Arc::ptr_eq(&away, &closed), "nothing is fetched or stored without a document");
+        assert!(text.contains("No document"), "{text}");
+    }
+
+    /// Time a frame's read of Document Info's result for a document with 5,000 objects painted
+    /// with a gradient (a row each): by the by-value read before the result was shared
+    /// ([`copied_info`]) and by [`info`]. Per run each side reads 2,000 times; the two sides
+    /// alternate, and the median time per read of 7 runs is printed, as this thread's CPU time
+    /// where the system reports it (Linux), else wall-clock time.
+    /// Run with `cargo test --release -p vectorcraft-ui-egui --lib doc_info::tests::cached_rows_read_timing -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "manual timing probe; performance depends on machine load"]
+    fn cached_rows_read_timing() {
+        const OBJECTS: usize = 5_000;
+        const READS: u32 = 2_000;
+        fn thread_cpu_ns() -> Option<u128> {
+            std::fs::read_to_string("/proc/thread-self/schedstat").ok()?.split_whitespace().next()?.parse().ok()
+        }
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 2000, "height": 2000})).unwrap();
+        let mut ids = vec![];
+        for i in 0..OBJECTS {
+            let r = json!({"x": i % 100 * 20, "y": i / 100 * 20, "width": 10, "height": 10});
+            ids.push(app.session.execute("shape.rectangle", &r).unwrap()["id"].clone());
+        }
+        let ramp = json!({"kind": "linear", "stops": [{"offset": 0, "color": "#000"}, {"offset": 1, "color": "#fff"}]});
+        app.session.execute("paint.setFill", &json!({"ids": ids, "gradient": ramp})).unwrap();
+        let mut old: CopiedCache = None;
+        let rows =
+            info(&mut app).unwrap()["sections"].as_array().into_iter().flatten().map(|s| s["rows"].as_array().map_or(0, Vec::len)).sum::<usize>();
+        assert_eq!(copied_info(&mut app, &mut old), info(&mut app).map(|i| (*i).clone()));
+        let time = |app: &mut VectorcraftApp, f: &mut dyn FnMut(&mut VectorcraftApp) -> usize| {
+            let (cpu, wall) = (thread_cpu_ns(), std::time::Instant::now());
+            for _ in 0..READS {
+                assert!(f(app) > 0);
+            }
+            let ns = thread_cpu_ns().zip(cpu).map_or_else(|| wall.elapsed().as_nanos(), |(b, a)| b - a);
+            ns as f64 / f64::from(READS) / 1000.0
+        };
+        let sections = |i: &Value| i["sections"].as_array().map_or(0, Vec::len);
+        let (mut copied, mut shared) = (vec![], vec![]);
+        for _ in 0..7 {
+            copied.push(time(&mut app, &mut |app| copied_info(app, &mut old).map_or(0, |i| sections(&i))));
+            shared.push(time(&mut app, &mut |app| info(app).map_or(0, |i| sections(&i))));
+        }
+        let median = |v: &mut Vec<f64>| {
+            v.sort_by(f64::total_cmp);
+            v[v.len() / 2]
+        };
+        let clock = if thread_cpu_ns().is_some() { "thread CPU time" } else { "wall-clock time" };
+        eprintln!("{OBJECTS} objects, {rows} rows; {clock} per read, median of 7 runs");
+        eprintln!("copied ({READS} reads a run): {:>10.3} us  {copied:.3?}", median(&mut copied));
+        eprintln!("shared ({READS} reads a run): {:>10.3} us  {shared:.3?}", median(&mut shared));
     }
 
     /// A Repeat object's counts take each language's plural forms, and a grid that draws fewer

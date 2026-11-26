@@ -30,8 +30,9 @@ fn rect(s: &mut Session, x: f64, y: f64, w: f64, h: f64) -> NodeId {
 fn doc() -> (Session, NodeId, NodeId) {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
-    let a = rect(&mut s, 10.0, 20.0, 30.0, 40.0);
+    // `pathItems` lists the topmost path first, so `a`, the first one a script reads, is made last.
     let b = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    let a = rect(&mut s, 10.0, 20.0, 30.0, 40.0);
     s.execute("select.none", &json!({})).unwrap();
     (s, a, b)
 }
@@ -394,14 +395,14 @@ fn a_global_process_link_read_as_a_spot_color_is_not_assigned() {
     let steps = undo_steps(&s);
     let out = log(
         &mut s,
-        "var q = app.activeDocument.pathItems; vc.log([q[0].fillColor.typename, q[0].fillColor.spot === undefined, q[2].fillColor.typename, q[3].fillColor.typename]);",
+        "var q = app.activeDocument.pathItems; vc.log([q[2].fillColor.typename, q[2].fillColor.spot === undefined, q[1].fillColor.typename, q[0].fillColor.typename]);",
     );
-    // `pathItems` holds a (Leaf), the document's second rectangle, b (Moss) and c (unlinked).
+    // `pathItems` lists c (unlinked), b (Moss), a (Leaf) and the document's first rectangle.
     assert_eq!(out, vec![json!(["SpotColor", true, "SpotColor", "RGBColor"])]);
     for script in [
-        "var q = app.activeDocument.pathItems; q[0].fillColor = q[0].fillColor;",
-        "var q = app.activeDocument.pathItems; q[2].fillColor = q[0].fillColor;",
-        "var q = app.activeDocument.pathItems; q[3].fillColor = q[0].fillColor;",
+        "var q = app.activeDocument.pathItems; q[2].fillColor = q[2].fillColor;",
+        "var q = app.activeDocument.pathItems; q[1].fillColor = q[2].fillColor;",
+        "var q = app.activeDocument.pathItems; q[0].fillColor = q[2].fillColor;",
     ] {
         let e = failure(&mut s, script);
         assert!(e.contains("global process swatch cannot be assigned yet"), "{script}: {e}");
@@ -853,7 +854,7 @@ fn locked_paths_and_wrong_objects_are_refused() {
     }
     assert_eq!(art(&s), before);
     s.execute("text.create", &json!({"x": 10, "y": 250, "text": "hi"})).unwrap();
-    let e = failure(&mut s, "var t = app.activeDocument.pageItems[2]; Object.getOwnPropertyDescriptor(PathItem.prototype, 'closed').get.call(t);");
+    let e = failure(&mut s, "var t = app.activeDocument.pageItems[0]; Object.getOwnPropertyDescriptor(PathItem.prototype, 'closed').get.call(t);");
     assert!(e.contains("not a PathItem"), "{e}");
     let e = failure(&mut s, "Object.getOwnPropertyDescriptor(PathPoint.prototype, 'anchor').get.call({});");
     assert!(e.contains("not a PathPoint"), "{e}");

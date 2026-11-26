@@ -36,6 +36,8 @@ fn the_print_dialog_saves_and_loads_presets() {
     set(&mut app, "copies", json!(4));
     set(&mut app, "media", json!("a4"));
     super::tests_print::press(&mut app, "New…");
+    // The name field takes the keyboard in the frame after the press.
+    pump(&mut app);
     call(&mut app, "ui.text", json!({"text": "Proofs"}));
     call(&mut app, "ui.key", json!({"key": "Enter"}));
     pump(&mut app);
@@ -129,6 +131,8 @@ fn presets_files_import_and_export() {
     app.run("ui.printPresetsDialog", json!({"selected": "Mine"})).unwrap();
     pump(&mut app);
     press(&mut app, ManagerAction::Export);
+    // The save panel suggests the preset's name.
+    assert_eq!(picker.requests().last().and_then(|r| r.file_name.clone()).as_deref(), Some("Mine.vcprintpresets"));
     picker.answer_saved(&file, None);
     let ctx = app.ui_ctx.clone().expect("the test app has a window");
     crate::tests_picks::poll(&mut app, &ctx);
@@ -139,5 +143,11 @@ fn presets_files_import_and_export() {
     assert_eq!(names, ["Mine", "Mine 2"]);
     assert_eq!(app.session.prefs.print_presets[1].settings.copies, 2);
     assert!(app.ui.status.contains("print presets"), "{}", app.ui.status);
+    // The built-in preset's file is named without its brackets.
+    app.run("ui.printPresetsDialog", json!({"selected": DEFAULT_PRESET})).unwrap();
+    pump(&mut app);
+    press(&mut app, ManagerAction::Export);
+    assert_eq!(picker.requests().last().and_then(|r| r.file_name.clone()).as_deref(), Some("Default.vcprintpresets"));
+    picker.cancel();
     let _ = std::fs::remove_dir_all(dir);
 }

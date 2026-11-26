@@ -378,7 +378,7 @@ fn symbols_add_keeps_the_source_and_instances_follow_their_symbol() {
          vc.log(d.pageItems.length === n); vc.log(sym.typename); vc.log(d.symbols.length);\
          sym.name = 'Mark'; var copy = sym.duplicate(); vc.log(copy.name);\
          var inst = d.symbolItems.add(sym); vc.log(inst.typename); vc.log(inst.symbol.name); vc.log(d.symbolItems.length);\
-         inst.symbol = copy; vc.log(inst.symbol.name); vc.log(d.selection === null);",
+         inst.symbol = copy; vc.log(inst.symbol.name); vc.log(d.selection.length === 0);",
     );
     assert_eq!(
         out,
@@ -438,14 +438,14 @@ fn graphic_styles_apply_replaces_and_merge_adds() {
     let out = log(
         &mut s,
         "var d = app.activeDocument, g = d.graphicStyles.getByName('Red'); vc.log(g.typename); vc.log(d.graphicStyles.typename);\
-         g.applyTo(d.pageItems[1]);",
+         g.applyTo(d.pageItems[0]);",
     );
     assert_eq!(out, vec![json!("GraphicStyle"), json!("GraphicStyles")]);
     let id = s.active().unwrap().doc.graphic_style("Red").unwrap().id;
     let n = s.active().unwrap().doc.node(b).unwrap().clone();
     assert_eq!(n.extras().graphic_style, Some(id));
     let fills = n.appearance.items.len();
-    log(&mut s, "var d = app.activeDocument; d.graphicStyles.getByName('Red').mergeTo(d.pageItems[1]);");
+    log(&mut s, "var d = app.activeDocument; d.graphicStyles.getByName('Red').mergeTo(d.pageItems[0]);");
     let n = s.active().unwrap().doc.node(b).unwrap().clone();
     assert!(n.appearance.items.len() > fills, "merge adds the style's rows");
     assert_eq!(n.extras().graphic_style, None);
@@ -475,7 +475,7 @@ fn brushes_apply_to_paths_only_and_once() {
     );
     assert_eq!(out, vec![json!("Brushes"), json!("Brush"), json!(first), json!(true)]);
     let before = resources(&s);
-    let e = failure(&mut s, "var d = app.activeDocument; d.brushes[0].applyTo(d.pageItems[1]);");
+    let e = failure(&mut s, "var d = app.activeDocument; d.brushes[0].applyTo(d.pageItems[0]);");
     assert!(e.contains("PathItem only"), "{e}");
     assert_eq!(resources(&s), before);
     log(&mut s, "var d = app.activeDocument; d.brushes[0].applyTo(d.pathItems[0]);");

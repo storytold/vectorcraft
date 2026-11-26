@@ -19,13 +19,15 @@ use craft::ui::list::{List, ListRow, RowEvent, ThumbSize, ThumbTarget};
 use craft::ui::menu::PanelRow;
 use craft::ui::pickers::Select;
 use craft::ui::primitives::{
-    ContentPainterCx, IconSpec, LoadFailure, LoadedPicture, Priority, ThumbJob, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails,
+    ContentPainterCx, IconSpec, LoadFailure, LoadedPicture, PaintShape, Priority, StrokeWidth, ThumbJob, ThumbRender, ThumbRequest, ThumbSource,
+    ThumbnailOptions, Thumbnails,
 };
 use craft::ui::primitives::{Revision, ThumbPaint};
 use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
-use craft::ui::runtime::env::UnitKind;
+use craft::ui::runtime::env::{Env, UnitKind};
+use craft::ui::style::DataColor;
 use craft::ui::text::NumberField;
-use egui::{Color32, Stroke, Ui};
+use egui::{Color32, Ui};
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Knockout, Node, NodeId, OpacityMask};
 use vectorcraft_engine::cmd::TransparencyInfo;
@@ -34,10 +36,6 @@ use super::{current_paints, current_transparency, live_run, selection_len};
 use crate::VectorcraftApp;
 use crate::edits::{EditPath, apply_edits};
 use crate::fields::blend_entries;
-
-/// The side of the mask row's thumbnails, in points.
-// PLAN: should come from the `size.thumb.lg` token; the row's `ThumbSize::Large` gives the rect, this only sizes the render.
-const THUMB_POINTS: f32 = 48.0;
 
 /// The command ids of the menu's own rows.
 const THUMBNAILS: &str = "ui.transparency.thumbnails";
@@ -154,6 +152,12 @@ fn mask_click(m: &OpacityMask, id: NodeId, mods: craft::keymap::Mods, editing: b
     }
 }
 
+/// The render request of the mask row's thumbnails: the side `ThumbSize::Large` gives the row's cells
+/// (`size.thumb.lg`), in pixels of the screen `ui` shows on.
+fn mask_thumb_request(ui: &Ui) -> ThumbRequest {
+    ThumbRequest::for_cell(Env::of(ui).tokens.size.thumb.lg, ui.ctx().pixels_per_point())
+}
+
 /// The one-row list of the object's and the mask's thumbnails with the mask's link; the events it reported.
 fn mask_row(
     app: &VectorcraftApp,
@@ -166,7 +170,7 @@ fn mask_row(
     let Some(st) = app.session.active() else { return vec![] };
     let source = MaskThumbs { doc: &st.doc, revision: st.revision };
     let store = Thumbnails::<MaskKey>::in_context(ui.ctx(), "vc-mask-thumbs", ThumbnailOptions::new());
-    let request = ThumbRequest::for_cell(THUMB_POINTS, ui.ctx().pixels_per_point());
+    let request = mask_thumb_request(ui);
     let state_of = |ui: &Ui, node: NodeId, bg, own_mask| {
         store.state(ui.ctx(), &source, &MaskKey { uid: st.uid, node, bg, own_mask }, &request, Priority::VISIBLE)
     };
@@ -183,8 +187,7 @@ fn mask_row(
         if !object_state.as_ref().is_some_and(|s| store.paint(cx, rect, s, plain))
             && let Some(c) = fill
         {
-            // PLAN: a colour from data should go through the content painter's data path, not the raw painter.
-            cx.painter.rect_filled(rect.shrink(rect.width() * 0.2), 0.0, c);
+            cx.data_shapes([egui::Shape::rect_filled(rect.shrink(rect.width() * 0.2), 0.0, c)]);
         }
     };
     let paint_mask = move |cx: &ContentPainterCx, rect: egui::Rect| {
@@ -193,9 +196,12 @@ fn mask_row(
                 store.paint(cx, rect, s, paper);
             }
             if disabled {
-                let red = Stroke::new(2.0, Color32::from_rgb(220, 40, 40));
-                cx.painter.line_segment([rect.left_top(), rect.right_bottom()], red);
-                cx.painter.line_segment([rect.right_top(), rect.left_bottom()], red);
+                let red = DataColor::new(super::swatches::OFF_MARK);
+                cx.with_draw(|draw| {
+                    for line in [[rect.left_top(), rect.right_bottom()], [rect.right_top(), rect.left_bottom()]] {
+                        draw.stroke(&PaintShape::Path(line.to_vec()), StrokeWidth::Thick, red);
+                    }
+                });
             }
         } else {
             cx.icon(rect, &IconSpec::svg(IconId::new("dc-mask-none")));
@@ -566,6 +572,45 @@ mod tests {
         run_cmd(&mut app, "transparency.togglePageKnockoutGroup", json!({}));
         run_cmd(&mut app, "transparency.togglePageIsolatedBlending", json!({}));
         assert_eq!(page(&app), [true, true]);
+    }
+
+    /// The mask row's pictures are rendered at the size of the cells a large thumbnail row draws them in, at
+    /// either density and when the app's sizes change `size.thumb.lg`: at least as many pixels as the cell
+    /// covers, and less than one request step (16 pixels) more.
+    #[test]
+    fn mask_thumbnails_render_at_the_size_of_their_cells() {
+        use craft::theme::{AppSizes, Size};
+        use craft::ui::runtime::env::RootEnv;
+        use craft::ui::testing::Fixture;
+        use std::cell::Cell;
+        use std::rc::Rc;
+        let ppp = 2.0;
+        let changed = AppSizes::parse(br#"{"all": {"size.thumb.lg": 72}}"#).expect("a size override");
+        for density in [Size::Compact, Size::Comfortable] {
+            for sizes in [crate::theme::app_sizes(), Arc::new(changed.clone())] {
+                let (cell, side) = (Rc::new(Cell::new(None)), Rc::new(Cell::new(None)));
+                let (cell_seen, side_seen) = (Rc::clone(&cell), Rc::clone(&side));
+                let mut fixture = Fixture::new(move |ui| {
+                    side_seen.set(Some(mask_thumb_request(ui).side));
+                    let cell_seen = Rc::clone(&cell_seen);
+                    let keys = [()];
+                    List::<()>::new("Thumbnails").select(SelectMode::None).natural_height(true).show_items(ui, &keyed(&keys, |_| ()), &mut |_, _| {
+                        let cell_seen = Rc::clone(&cell_seen);
+                        ListRow::new("Row").thumbnails_only().thumb(ThumbSize::Large, move |_: &ContentPainterCx, rect: egui::Rect| {
+                            cell_seen.set(Some(rect));
+                        })
+                    });
+                });
+                let mut root = RootEnv::new().density(density);
+                root.sizes = sizes;
+                fixture.root(root).pixels_per_point(ppp);
+                fixture.frame(vec![]);
+                fixture.frame(vec![]);
+                let cell = cell.get().expect("the row draws its thumbnail");
+                let (side, covered) = (side.get().expect("the request") as f32, cell.width().max(cell.height()) * ppp);
+                assert!(side >= covered && side < covered + 16.0, "{density:?}: a {side} px picture for a {covered} px cell");
+            }
+        }
     }
 
     /// The panel's state holds the target as the document holds it, a new one after an edit and

@@ -43,6 +43,32 @@ fn the_fidelity_keys_step_finely_at_the_low_end() {
     assert_eq!((fidelity_step(0.035, 1.0), fidelity_step(0.035, -1.0), fidelity_step(1.5, 1.0), fidelity_step(1.5, -1.0)), (0.04, 0.03, 2.0, 1.0));
 }
 
+/// Smooth Tool Options shows Smoothness under Fidelity, at 50% until it is set, and OK sets it from 0% to 100%; a
+/// Smoothness past 100% is refused and sets nothing. The other freehand tools have no Smoothness.
+#[test]
+fn smooth_tool_options_set_the_smoothness() {
+    let mut app = app();
+    let smooth = app.session.tool_options_of("smooth");
+    assert_eq!(smooth["smoothness"], json!(50.0));
+    let present: Vec<&str> = KEYS.iter().copied().filter(|key| smooth.get(*key).is_some()).collect();
+    let keys: Vec<String> = params("smooth", &present).iter().map(|p| p.key.to_string()).collect();
+    let (fidelity, smoothness) = (keys.iter().position(|k| k == "fidelity"), keys.iter().position(|k| k == "smoothness"));
+    assert!(fidelity.is_some() && fidelity < smoothness, "{keys:?}");
+    for value in [30.0, 0.0, 100.0] {
+        set_through_dialog(&mut app, "smooth", &[("smoothness", json!(value))]);
+        assert_eq!(app.session.tool_options_of("smooth")["smoothness"], json!(value));
+    }
+    let key = app.run("tool.options", json!({"tool": "smooth"})).unwrap()["dialog"].as_str().unwrap().to_owned();
+    let (ctx, id) = (app.ui_ctx.clone().expect("a window"), open_id(&app, &key));
+    let host = app.dialogs().expect("a window");
+    assert!(host.with(|host| host.set_json_field(&ctx, id, "smoothness", json!(120))).is_err(), "120% is refused");
+    host.with(|host| host.cancel_by_id(&ctx, id));
+    assert_eq!(app.session.tool_options_of("smooth")["smoothness"], json!(100.0));
+    for tool in ["pencil", "paintbrush", "blobBrush", "eraser"] {
+        assert!(app.session.tool_options_of(tool).get("smoothness").is_none(), "{tool}");
+    }
+}
+
 /// Each tool's dialog, opened as the user opens it, stores the values set in it as the tool's options: the field
 /// keys, the units (Liquify's percent is a fraction) and the companion keys of the variation rows.
 #[test]
@@ -60,7 +86,7 @@ fn ok_sets_each_tools_options() {
             json!({"fidelity": 6.5, "fill": true, "altSmooth": true, "closeWithin": 0.0, "editWithin": 20.0, "liveFit": false}),
         ),
         ("paintbrush", json!({"fidelity": 3, "keepSelected": false}), "paintbrush", json!({"fidelity": 3.0, "keepSelected": false})),
-        ("smooth", json!({"fidelity": 5}), "smooth", json!({"fidelity": 5.0})),
+        ("smooth", json!({"fidelity": 5, "smoothness": 75}), "smooth", json!({"fidelity": 5.0, "smoothness": 75.0})),
         (
             "blobBrush",
             json!({"angle": 45, "roundness": 0, "sizeMode": "pressure", "sizeVariation": 6, "fidelity": 0.01, "keepSelected": true, "mergeOnlySelection": true}),
@@ -305,4 +331,31 @@ fn the_blob_brush_and_eraser_size_can_follow_the_pen_pressure() {
     }
     let o = app.session.tool_options_of("pencil");
     assert!(o.get("sizeMode").is_none() && o.get("sizeVariation").is_none());
+}
+
+/// The names and values the window's access tree shows.
+fn shown_text(app: &mut VectorcraftApp) -> String {
+    crate::dialogs::tests::settle(app);
+    let out = crate::dialogs::tests::frame(app, vec![]);
+    let update = out.platform_output.accesskit_update.expect("an accessibility tree");
+    update.nodes.iter().flat_map(|(_, node)| [node.label(), node.value()]).flatten().collect::<Vec<_>>().join("\n")
+}
+
+/// The Blob Brush's Size menu offers Stylus Wheel beside Fixed and Pressure, Fixed still the
+/// default; the menu shows it once chosen, and OK sets it with the Variation.
+#[test]
+fn the_blob_brush_size_offers_the_stylus_wheel() {
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    assert_eq!(crate::dialogs::tests::fields(&app)["sizeMode"], json!("fixed"), "Fixed by default");
+    crate::dialogs::tests::set(&mut app, "sizeMode", json!("stylusWheel"));
+    crate::dialogs::tests::set(&mut app, "sizeVariation", json!(5));
+    let text = shown_text(&mut app);
+    assert!(text.contains("Stylus Wheel"), "{text}");
+    assert!(crate::dialogs::tests::confirm(&mut app), "OK closes the dialog");
+    let o = app.session.tool_options_of("blobBrush");
+    assert_eq!((o["sizeMode"].clone(), o["sizeVariation"].as_f64()), (json!("stylusWheel"), Some(5.0)));
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    let text = shown_text(&mut app);
+    assert!(text.contains("Stylus Wheel"), "it shows again on the next open: {text}");
 }

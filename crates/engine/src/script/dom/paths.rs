@@ -1025,7 +1025,7 @@ fn path_rotate(h: &super::Host, a: &[Data]) -> Answer {
     transform_options(a, 2, &mut params)?;
     if angle.rem_euclid(360.0) != 0.0 {
         let (r, _) = item_rect(h, item, false)?;
-        let origin = about(h, item, place, r)?;
+        let origin = about(h, item, place, r.unwrap_or(Rect::new(0.0, 0.0, 0.0, 0.0)))?;
         params["origin"] = json!([origin.x, origin.y]);
         edit_path(h, item, "object.rotate", params)?;
     }
@@ -1055,7 +1055,7 @@ fn path_resize(h: &super::Host, a: &[Data]) -> Answer {
     }
     if sx != 100.0 || sy != 100.0 {
         let (r, _) = item_rect(h, item, false)?;
-        let origin = about(h, item, place, r)?;
+        let origin = about(h, item, place, r.unwrap_or(Rect::new(0.0, 0.0, 0.0, 0.0)))?;
         params["origin"] = json!([origin.x, origin.y]);
         edit_path(h, item, "object.scale", params)?;
     }

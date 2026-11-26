@@ -4,14 +4,14 @@
 //! (Live curve fitting, on: its preview fits the stroke while it is drawn).
 //!
 //! Fields: `tool`; `fidelity` (screen pixels for the Pencil, Paintbrush and Smooth, points for the
-//! Blob Brush), `fill` (Pencil and
+//! Blob Brush), `smoothness` (percent, 0 to 100; Smooth), `fill` (Pencil and
 //! Paintbrush), `keepSelected` (Pencil, Paintbrush and Blob Brush), `mergeOnlySelection` (Blob
 //! Brush), `closeWithin` and `editWithin` (screen pixels, 0 turns it off; Pencil and Paintbrush),
 //! `angle` (degrees) and `roundness` (percent; Blob Brush and Eraser), `livePreview` (Pencil: the stroke shows
 //! with its fill and stroke while it is drawn, or as a thin line until the release), `size`
 //! (points; Blob Brush and Eraser), and `sizeMode` and `sizeVariation` (points; Blob Brush and
 //! Eraser: with Pressure the tip is Size − Variation wide at the lightest pen pressure and Size +
-//! Variation at the heaviest). The Blob Brush's `sizeMode` is `fixed` or `pressure`. The Eraser's
+//! Variation at the heaviest). The Blob Brush's `sizeMode` is `fixed`, `pressure` or `stylusWheel`. The Eraser's
 //! Angle, Roundness and Size each have a menu (`angleMode`, `roundnessMode`, `sizeMode`: `fixed`,
 //! `random`, `pressure`, `tilt`, `bearing` or `rotation`) before the field and a Variation field
 //! under it (`angleVariation` in degrees, `roundnessVariation` in percent, `sizeVariation`),
@@ -21,10 +21,12 @@
 // of the draw crate is where `TipEllipse` and `TipAngle` live.
 use craft::draw::ui::brush_settings::{TipAngle, TipEllipse};
 use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
+use craft::ui::display::{Picture, PictureSize};
 use craft::ui::layout_components::Row;
+use craft::ui::list::{ThumbAspect, ThumbSize};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
-use craft::ui::runtime::env::{Env, UnitKind};
-use craft::ui::style::rgba_color;
+use craft::ui::primitives::{ContentPainterCx, PaintShape};
+use craft::ui::runtime::env::UnitKind;
 use craft::ui::text::NumberField;
 use craft::ui::value_drag::{Slider, SliderScale};
 use egui::{Response, Ui};
@@ -43,8 +45,9 @@ pub const KIND: &str = "freehandOptions";
 pub const TOOLS: [&str; 5] = ["pencil", "paintbrush", "smooth", "blobBrush", "eraser"];
 
 /// The options the dialog edits, in the order it shows them (a tool has those it reports).
-const KEYS: [&str; 18] = [
+const KEYS: [&str; 19] = [
     "fidelity",
+    "smoothness",
     "angle",
     "angleMode",
     "angleVariation",
@@ -68,9 +71,6 @@ const KEYS: [&str; 18] = [
 /// and Smooth, points for the Blob Brush); it starts at the lowest Fidelity the tool takes,
 /// and the field takes up to 100.
 const FIDELITY_MAX: f64 = 20.0;
-
-/// Half the length of a tip in its dabs, in points.
-const DAB_LONG: f32 = 18.0;
 
 /// Fidelity `v` stepped `n` steps by the slider's and the field's keys: an arrow steps hundredths up to 0.1,
 /// tenths up to 1 and whole units above, in the tool's unit (a step down from 0.1 or 1 takes the finer step below
@@ -175,27 +175,34 @@ fn tip_row(ui: &mut Ui, fields: &mut DialogFields, least: f64) -> Response {
     shown.output
 }
 
-/// Three dabs of `tip`, as a stroke of it lays them down.
-// PLAN: a `Picture::painter` replaces the plain allocation once its `ThumbAspect` is known to this set.
+/// Three dabs of `tip`, as a stroke of it lays them down: a picture seven tip halves wide and two high, at the
+/// small sample size, each dab as long as the picture is high.
 fn dabs(ui: &mut Ui, tip: TipAngle) {
-    let tokens = Env::of(ui).tokens.clone();
-    let (dim, ink) = (rgba_color(tokens.color.text.muted), rgba_color(tokens.color.text.normal));
-    let long = DAB_LONG;
-    let (response, painter) = ui.allocate_painter(egui::vec2(7.0 * long, 2.0 * long), egui::Sense::hover());
+    // Decorative: the Tip control beside it is the row's accessible control.
+    Picture::painter("", ThumbAspect::new(7, 2), move |cx, rect| paint_dabs(cx, rect, tip)).extent(PictureSize::Sample(ThumbSize::Small)).show(ui);
+}
+
+/// Paints three dabs of `tip` across `rect`, the middle one in the text color and the outer two in the muted one.
+fn paint_dabs(cx: &ContentPainterCx<'_>, rect: egui::Rect, tip: TipAngle) {
+    let style = cx.style_cx();
+    let (dim, ink) = (style.color(style.tokens.color.text.muted), style.color(style.tokens.color.text.normal));
+    let long = rect.height() / 2.0;
     let a = tip.degrees.clamp(-180.0, 180.0).to_radians();
     let u = egui::vec2(a.cos() as f32, -a.sin() as f32);
     let v = egui::vec2(-u.y, u.x);
     let short = long * (tip.roundness.clamp(0.0, 1.0) as f32).max(0.001);
-    for (i, color) in [dim, ink, dim].into_iter().enumerate() {
-        let center = egui::pos2(response.rect.min.x + long + i as f32 * 2.5 * long, response.rect.center().y);
-        let points = (0..32)
-            .map(|k| {
-                let s = std::f32::consts::TAU * k as f32 / 32.0;
-                center + u * (long * s.cos()) + v * (short * s.sin())
-            })
-            .collect();
-        painter.add(egui::Shape::convex_polygon(points, color, egui::Stroke::NONE));
-    }
+    cx.with_draw(|draw| {
+        for (i, color) in [dim, ink, dim].into_iter().enumerate() {
+            let center = egui::pos2(rect.min.x + long + i as f32 * 2.5 * long, rect.center().y);
+            let points = (0..32)
+                .map(|k| {
+                    let s = std::f32::consts::TAU * k as f32 / 32.0;
+                    center + u * (long * s.cos()) + v * (short * s.sin())
+                })
+                .collect();
+            draw.fill(&PaintShape::Polygon(points), color);
+        }
+    });
 }
 
 /// The rows of tool `tool`'s dialog: those of `present` (the option keys the tool reports), in the order the
@@ -221,6 +228,12 @@ fn params(tool: &str, present: &[&str]) -> Vec<Param> {
             .full_width(),
         );
     }
+    if has("smoothness") {
+        // The Smooth tool's Smoothness: a slider from 0% to 100% with the field at its end, in whole percent.
+        rows.push(
+            Param::new("smoothness", tl!("Smoothness:"), ParamKind::range(0.0, 100.0, 50.0, SliderScale::Linear)).decimals(0).unit(UnitKind::Percent),
+        );
+    }
     if eraser {
         rows.push(variation_param("angle", tl!("Angle:"), UnitKind::Degrees, 0, (-180.0, 180.0), (0.0, 180.0), &Variation::ALL));
         rows.push(variation_param("roundness", tl!("Roundness:"), UnitKind::Percent, 0, (1.0, 100.0), (0.0, 100.0), &Variation::ALL));
@@ -238,7 +251,7 @@ fn params(tool: &str, present: &[&str]) -> Vec<Param> {
             rows.push(Param::custom("tip", "", |ui, fields, _| tip_row(ui, fields, 0.0)).full_width());
         }
         if has("sizeMode") {
-            let offered = &[Variation::Fixed, Variation::Pressure];
+            let offered = &vectorcraft_tools::draw2::BLOB_SIZE_MODES;
             rows.push(variation_param("size", tl!("Size:"), UnitKind::Points, 1, (0.1, 1000.0), (0.0, 1000.0), offered));
         } else if has("size") {
             rows.push(Param::number("size", tl!("Size:"), 10.0, 1.0, 1).unit(UnitKind::Points).bounds(Some(0.1), Some(1000.0)));
