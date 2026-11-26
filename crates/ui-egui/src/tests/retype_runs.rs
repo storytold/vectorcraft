@@ -107,12 +107,14 @@ fn the_progress_window_shows_a_search() {
     if let Some(r) = app.retype_runs.running.as_mut() {
         r.started -= DELAY;
     }
-    progress(&mut app, &ctx, DELAY + 0.05); // a new window measures itself unseen first
-    let shown = progress(&mut app, &ctx, DELAY + 0.1);
+    let shown = progress(&mut app, &ctx, DELAY + 0.05);
     assert!(shown.contains("Finding matching fonts…") && shown.contains("Reading the installed fonts…"), "{shown}");
     assert!(shown.contains("Cancel") && !shown.contains("Continue in Background"), "{shown}");
     assert_eq!(app.run("retype.cancelSearch", json!({})).unwrap(), json!({"cancelled": 1}));
-    assert!(!progress(&mut app, &ctx, DELAY + 1.0).contains("Finding matching fonts"), "a canceled search isn't shown");
+    // The window open in the last frame is gone from the next two.
+    for time in [DELAY + 1.0, DELAY + 1.1] {
+        assert!(!progress(&mut app, &ctx, time).contains("Finding matching fonts"), "a canceled search isn't shown");
+    }
     retype_runs::wait(&mut app);
     assert_eq!(undos(&app), before, "canceled: nothing changes");
 }
