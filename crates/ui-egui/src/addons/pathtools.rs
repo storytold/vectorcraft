@@ -17,10 +17,10 @@ pub mod tangent_circle;
 use craft::behavior::ColumnWidth;
 use craft::menu::Node;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _, Sizing, clicked};
+use craft::ui::contract::{Bind, Props as _, Scroll, Show as _, ShowContainer as _, Sizing, clicked};
 use craft::ui::display::{Divider, Text};
 use craft::ui::form::Field;
-use craft::ui::layout_components::{Grid, Row};
+use craft::ui::layout_components::{Grid, Row, Stack};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
 use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
 use craft::ui::text::NumberField;
@@ -192,6 +192,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         empty_state(ui, "dc-anchor-smooth", tl!("No document"), tl!("Open a document to edit its anchor points."));
         return;
     }
+    Stack::new().label(tl!("Anchor Inspector")).fill().scroll(Scroll::vertical()).show(ui, |ui, _| show_inspector(app, ui));
+}
+
+fn show_inspector(app: &mut VectorcraftApp, ui: &mut Ui) {
     let readout = readout(app);
     let anchor = readout.anchor.as_ref();
     let selected = app.session.active().is_some_and(|st| !st.selection.is_empty());
