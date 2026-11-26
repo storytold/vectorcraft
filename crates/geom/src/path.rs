@@ -158,9 +158,55 @@ impl Anchor {
             let dir = p - pos;
             let l = dir.hypot();
             if l > 1e-9 {
-                *other = p + dir * (len / l);
+                let turned = p + dir * (len / l);
+                if turned.is_finite() {
+                    *other = turned;
+                } else {
+                    // Long handles overflow the squares above: measure with `f64::hypot` and scale
+                    // the unit direction, leaving the handle where it is if that is not finite.
+                    let (v, l) = (*other - p, dir.x.hypot(dir.y));
+                    let turned = p + (dir / l) * v.x.hypot(v.y);
+                    if turned.is_finite() {
+                        *other = turned;
+                    }
+                }
             }
         }
+    }
+    /// Place the end of the outgoing (`out`) or incoming handle at `pos` and make the anchor smooth:
+    /// the other handle turns to lie in line with it on the far side of the anchor, at its own
+    /// length. A retracted other handle is pulled out to the moved handle's length when `pull_out`
+    /// and stays retracted otherwise. A handle placed on the anchor, or where the turned handle's
+    /// end would not be a finite point, gives no direction: it is placed, and the other handle and
+    /// the anchor's kind stay as they are.
+    pub fn link_handle(&mut self, out: bool, pos: Point, pull_out: bool) {
+        let p = self.p;
+        let (moved, other) = if out { (&mut self.h_out, &mut self.h_in) } else { (&mut self.h_in, &mut self.h_out) };
+        *moved = pos;
+        // `f64::hypot` keeps long handles from overflowing the square of their length.
+        let dir = p - pos;
+        let l = dir.x.hypot(dir.y);
+        if !(l > EPS && l.is_finite()) {
+            return;
+        }
+        let v = *other - p;
+        let len = v.x.hypot(v.y);
+        let len = if len > EPS {
+            len
+        } else if pull_out {
+            l
+        } else {
+            0.0
+        };
+        if len > 0.0 {
+            // The unit direction first, so a short handle does not overflow the scale factor.
+            let turned = p + (dir / l) * len;
+            if !turned.is_finite() {
+                return;
+            }
+            *other = turned;
+        }
+        self.kind = AnchorKind::Smooth;
     }
     /// Swap handles (used when reversing path direction).
     pub fn reversed(&self) -> Self {
@@ -280,6 +326,11 @@ impl SubPath {
     pub fn polyline(points: &[Point], closed: bool) -> Self {
         Self { anchors: points.iter().map(|&p| Anchor::corner(p)).collect(), closed }
     }
+    /// Whether anchor `ai` has a segment on its outgoing (`out`) or incoming side.
+    pub fn has_segment(&self, ai: usize, out: bool) -> bool {
+        let n = self.anchors.len();
+        ai < n && n > 1 && (self.closed || if out { ai + 1 < n } else { ai > 0 })
+    }
     /// Number of segments (a closed path has one more, back to the start).
     pub fn segment_count(&self) -> usize {
         let n = self.anchors.len();
@@ -392,6 +443,59 @@ impl SubPath {
             b.set_handle(false, b.p + v, false);
         }
         true
+    }
+    /// Bend segment `seg` as the arrow keys do: its anchors stay and its handles go where
+    /// [`Self::nudged_handles`] puts them. A handle that keeps its direction leaves a smooth anchor
+    /// smooth; one that flips or grows out of its anchor makes it a corner, so the segment beside
+    /// it stays as it is. False, with nothing changed, when the bend changes nothing.
+    pub fn nudge_segment(&mut self, seg: usize, dv: kurbo::Vec2) -> bool {
+        let Some((h_out, h_in)) = self.nudged_handles(seg, dv) else { return false };
+        let n = self.anchors.len();
+        // Turned when the new handle doesn't point the way the old one did.
+        let turned = |a: &Anchor, old: Point, new: Point| (old - a.p).dot(new - a.p) <= 0.0;
+        if let Some(a) = self.anchors.get_mut(seg % n)
+            && h_out != a.h_out
+        {
+            let independent = turned(a, a.h_out, h_out);
+            a.set_handle(true, h_out, independent);
+        }
+        if let Some(b) = self.anchors.get_mut((seg + 1) % n)
+            && h_in != b.h_in
+        {
+            let independent = turned(b, b.h_in, h_in);
+            b.set_handle(false, h_in, independent);
+        }
+        true
+    }
+    /// The outgoing handle at the start and the incoming one at the end that segment `seg` gets
+    /// from the arrow keys' step `dv`. Each handle keeps its direction and changes length in
+    /// proportion to `dv` projected onto that direction, so the curve bulges toward `dv`: the
+    /// middle of the curve moves by `dv`'s length along `dv`, or less when the handles point
+    /// mostly across it. A handle can shrink through its anchor and come out the other way. A
+    /// retracted handle takes the direction from its anchor to the other handle's end. `None` when
+    /// there is no such segment, it is a straight line, or both handles are at right angles to
+    /// `dv`, so nothing changes.
+    pub fn nudged_handles(&self, seg: usize, dv: kurbo::Vec2) -> Option<(Point, Point)> {
+        if seg >= self.segment_count() || self.segment_is_line(seg) {
+            return None;
+        }
+        let c = self.segment(seg);
+        let direction = |anchor: Point, handle: Point, other: Point| {
+            let dir = if handle.distance(anchor) > EPS { handle - anchor } else { other - anchor };
+            let len = dir.hypot();
+            if len > EPS { dir / len } else { kurbo::Vec2::ZERO }
+        };
+        let (u0, u1) = (direction(c.p0, c.p1, c.p2), direction(c.p3, c.p2, c.p1));
+        let (d0, d1) = (dv.dot(u0), dv.dot(u1));
+        // Handles that change by k·d0 and k·d1 move the middle B(1/2) by 3/8·k·(d0·u0 + d1·u1),
+        // whose part along dv is 3/8·k·(d0² + d1²)/|dv|: one |dv| for k = 8/3·|dv|²/(d0² + d1²),
+        // kept to at most 8/3 so that handles nearly across dv don't grow without bound.
+        let sum = d0 * d0 + d1 * d1;
+        if sum <= EPS * EPS {
+            return None;
+        }
+        let k = 8.0 / 3.0 * (dv.hypot2() / sum).min(1.0);
+        Some((c.p1 + u0 * (k * d0), c.p2 + u1 * (k * d1)))
     }
 
     /// Split segment `seg` at parameter `t`, inserting a new anchor. Returns the new anchor index.
@@ -1102,5 +1206,74 @@ mod tests {
         let s = serde_json::to_string(&p).unwrap();
         let back: PathData = serde_json::from_str(&s).unwrap();
         assert_eq!(p, back);
+    }
+
+    /// `link_handle` makes a corner smooth: the other handle turns onto the far side of the anchor
+    /// at its own length; a retracted one is pulled out to the moved handle's length only when
+    /// asked, and a handle placed on the anchor changes nothing else.
+    #[test]
+    fn link_handle_makes_a_corner_smooth_keeping_the_other_length() {
+        let p = Point::new(10.0, 10.0);
+        let mut a = Anchor { p, h_in: Point::new(10.0, 0.0), h_out: Point::new(13.0, 10.0), kind: AnchorKind::Corner };
+        a.link_handle(true, Point::new(14.0, 13.0), false);
+        assert_eq!(a.kind, AnchorKind::Smooth);
+        assert_eq!(a.h_out, Point::new(14.0, 13.0));
+        // The in handle keeps its length of 10, opposite the out handle's direction (4, 3) / 5.
+        assert!(a.h_in.distance(Point::new(2.0, 4.0)) < 1e-9, "{:?}", a.h_in);
+
+        let retracted = Anchor { p, h_in: p, h_out: Point::new(13.0, 10.0), kind: AnchorKind::Corner };
+        let mut pulled = retracted;
+        pulled.link_handle(true, Point::new(13.0, 14.0), true);
+        assert_eq!((pulled.kind, pulled.h_in), (AnchorKind::Smooth, Point::new(7.0, 6.0)));
+        let mut kept = retracted;
+        kept.link_handle(true, Point::new(13.0, 14.0), false);
+        assert_eq!((kept.kind, kept.h_in), (AnchorKind::Smooth, p));
+
+        let mut on_anchor = Anchor { p, h_in: Point::new(10.0, 0.0), h_out: Point::new(13.0, 10.0), kind: AnchorKind::Corner };
+        on_anchor.link_handle(false, p, true);
+        assert_eq!(on_anchor, Anchor { p, h_in: p, h_out: Point::new(13.0, 10.0), kind: AnchorKind::Corner });
+
+        // A handle so far away that its distance overflows leaves the other handle finite.
+        let far = Point::new(1.7e308, 1.7e308);
+        let mut overflow = retracted;
+        overflow.link_handle(true, far, true);
+        assert_eq!(overflow, Anchor { p, h_in: p, h_out: far, kind: AnchorKind::Corner });
+        // A very long other handle turned by a very short one stays finite, at its own length.
+        let mut long = Anchor { p: Point::ZERO, h_in: Point::new(1e308, 0.0), h_out: Point::ZERO, kind: AnchorKind::Corner };
+        long.link_handle(true, Point::new(0.0, 1e-8), false);
+        assert_eq!((long.kind, long.h_in), (AnchorKind::Smooth, Point::new(0.0, -1e308)));
+        // One whose turned end would leave the finite range is left where it is.
+        let edge = Point::new(-1.5e308, 0.0);
+        let mut beyond = Anchor { p: edge, h_in: Point::new(1.5e308, 0.0), h_out: edge, kind: AnchorKind::Corner };
+        beyond.link_handle(true, Point::new(-1.5e308 + 1e300, 0.0), false);
+        assert_eq!((beyond.kind, beyond.h_in), (AnchorKind::Corner, Point::new(1.5e308, 0.0)));
+    }
+
+    /// `set_handle` on a smooth anchor turns a very long other handle without overflowing, and
+    /// leaves it where it is when its turned end would not be a finite point.
+    #[test]
+    fn set_handle_on_a_smooth_anchor_keeps_long_handles_finite() {
+        let mut long = Anchor { p: Point::ZERO, h_in: Point::new(-1e308, 0.0), h_out: Point::new(1.0, 0.0), kind: AnchorKind::Smooth };
+        long.set_handle(true, Point::new(0.0, 1e-8), false);
+        assert_eq!(long.h_in, Point::new(0.0, -1e308));
+        let edge = Point::new(-1.5e308, 0.0);
+        let mut beyond = Anchor { p: edge, h_in: Point::new(-1.6e308, 0.0), h_out: Point::new(1.5e308, 0.0), kind: AnchorKind::Smooth };
+        beyond.set_handle(false, Point::new(-1.5e308 + 1e300, 0.0), false);
+        assert_eq!(beyond.h_out, Point::new(1.5e308, 0.0));
+    }
+
+    /// `has_segment` sees a segment on each side of an inner anchor, none past an open path's ends,
+    /// and both sides on a closed path of two anchors or more.
+    #[test]
+    fn has_segment_follows_the_open_ends() {
+        let pts = [Point::ZERO, Point::new(10.0, 0.0), Point::new(10.0, 10.0)];
+        let open = SubPath::polyline(&pts, false);
+        assert!(!open.has_segment(0, false) && open.has_segment(0, true));
+        assert!(open.has_segment(1, false) && open.has_segment(1, true));
+        assert!(open.has_segment(2, false) && !open.has_segment(2, true));
+        assert!(!open.has_segment(3, false));
+        let closed = SubPath::polyline(&pts, true);
+        assert!(closed.has_segment(0, false) && closed.has_segment(2, true));
+        assert!(!SubPath::polyline(&pts[..1], true).has_segment(0, true));
     }
 }

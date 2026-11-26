@@ -210,6 +210,18 @@ pub struct FontFace {
     pub(super) char_list: std::sync::OnceLock<Arc<[(char, u32)]>>,
     /// [`Self::name_owner`]'s glyph names to characters, read once.
     pub(super) named_chars: std::sync::OnceLock<std::collections::HashMap<String, char>>,
+    /// [`Self::glyph_name`]'s names by glyph id, read once.
+    pub(super) glyph_names: std::sync::OnceLock<Vec<Option<Box<str>>>>,
+}
+
+impl vectorcraft_doc::FileFontFace for FontFace {
+    fn id(&self) -> u32 {
+        self.id
+    }
+
+    fn bytes(&self) -> &[u8] {
+        self.data()
+    }
 }
 
 /// Where the ideographic character face (ICF) lies inside the ideographic em box: its distance
@@ -372,6 +384,12 @@ impl FontFace {
     /// `usWinDescent`, at the face's location in a variable font), in font units; `None` when the
     /// font has no OS/2 table or the sum isn't positive.
     pub fn win_cell_height(&self) -> Option<f64> {
+        self.win_ascent_descent().map(|(a, d)| a + d)
+    }
+    /// The face's character cell on Windows above and below the baseline (the OS/2 table's
+    /// `usWinAscent` and `usWinDescent`, at the face's location in a variable font), in font
+    /// units; `None` when the font has no OS/2 table or the sum isn't positive.
+    pub fn win_ascent_descent(&self) -> Option<(f64, f64)> {
         use skrifa::raw::TableProvider;
         let f = self.skrifa()?;
         let o = f.os2().ok()?;
@@ -380,8 +398,8 @@ impl FontFace {
         let varied = |tag: &[u8; 4]| {
             f.mvar().ok().and_then(|m| m.metric_delta(skrifa::Tag::new(tag), self.location().coords()).ok()).map_or(0.0, |d| d.to_f64())
         };
-        let h = f64::from(o.us_win_ascent()) + varied(b"hcla") + f64::from(o.us_win_descent()) + varied(b"hcld");
-        (h > 0.0 && h.is_finite()).then_some(h)
+        let (a, d) = (f64::from(o.us_win_ascent()) + varied(b"hcla"), f64::from(o.us_win_descent()) + varied(b"hcld"));
+        (a + d > 0.0 && (a + d).is_finite()).then_some((a, d))
     }
     /// The average width of the face's characters (the OS/2 table's `xAvgCharWidth`), in font
     /// units; `None` when the font has no OS/2 table or gives no positive width.
@@ -752,5 +770,55 @@ impl FontFace {
     pub fn is_truetype(&self) -> bool {
         use skrifa::raw::TableProvider;
         self.skrifa().is_some_and(|f| f.glyf().is_ok())
+    }
+    /// The kind of outlines the face's glyphs are drawn from ([`outline_format_of`]).
+    pub fn outline_format(&self) -> Option<OutlineFormat> {
+        self.skrifa().and_then(|f| outline_format_of(&f))
+    }
+}
+
+/// The kind of outlines a face's glyphs are drawn from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OutlineFormat {
+    /// Quadratic outlines in a `glyf` table.
+    TrueType,
+    /// PostScript outlines in a `CFF ` or `CFF2` table.
+    Cff,
+}
+
+/// The kind of outlines `font`'s glyphs are drawn from: TrueType when it has a `glyf` table, else
+/// CFF when it has a `CFF ` or `CFF2` table. None for a font with neither (outlines in `VARC`
+/// alone, color bitmaps only).
+pub(crate) fn outline_format_of(font: &skrifa::FontRef<'_>) -> Option<OutlineFormat> {
+    let has = |tag: &[u8; 4]| font.table_data(skrifa::Tag::new(tag)).is_some();
+    if has(b"glyf") {
+        Some(OutlineFormat::TrueType)
+    } else if has(b"CFF ") || has(b"CFF2") {
+        Some(OutlineFormat::Cff)
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The outline format comes from the tables the font holds.
+    #[test]
+    fn outline_format_follows_the_outline_tables() {
+        let format = |tables: &[(&[u8; 4], &[u8])]| {
+            let font = crate::fontdb::sfnt_of(tables).unwrap_or_default();
+            outline_format_of(&skrifa::FontRef::new(&font).unwrap())
+        };
+        let table = [0_u8; 4];
+        assert_eq!(format(&[(b"glyf", &table), (b"loca", &table)]), Some(OutlineFormat::TrueType));
+        assert_eq!(format(&[(b"CFF ", &table)]), Some(OutlineFormat::Cff));
+        assert_eq!(format(&[(b"CFF2", &table)]), Some(OutlineFormat::Cff));
+        assert_eq!(format(&[(b"VARC", &table)]), None);
+        assert_eq!(format(&[(b"sbix", &table)]), None);
+        // The built-in faces are TrueType.
+        let face = crate::FontDb::global().resolve("Source Sans 3", "Regular").map(|(f, _)| f).unwrap();
+        assert_eq!(face.outline_format(), Some(OutlineFormat::TrueType));
     }
 }

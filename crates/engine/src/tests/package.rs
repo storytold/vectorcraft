@@ -326,9 +326,11 @@ fn a_confined_package_names_files_outside_the_read_root_by_name() {
         let zip = unzip(&vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap());
         String::from_utf8(zip["poster Folder/poster Report.txt"].clone()).unwrap()
     };
+    // Reopened existing links use native separators; missing links keep their stored path.
+    let red = dir.0.join("art").join("red.png").to_string_lossy().into_owned();
     let person = report(&run(&mut s, "file.package", json!({})));
     assert!(person.contains(&format!("From: {}\n", dir.file("poster.vectorcraft"))), "{person}");
-    assert!(person.contains(&format!("{} → Links/red.png", dir.file("art/red.png"))), "{person}");
+    assert!(person.contains(&format!("{red} → Links/red.png")), "{person}");
     assert!(person.contains(&format!("blue.png: not found ({})", dir.file("art/blue.png"))), "{person}");
 
     let in_root = dir.0.join("in");
@@ -339,16 +341,19 @@ fn a_confined_package_names_files_outside_the_read_root_by_name() {
     assert!(text.contains("\nred.png → Links/red.png\n") && text.contains("\nblue.png: not found (blue.png), not copied\n"), "{text}");
     let base = dir.0.to_string_lossy().into_owned();
     assert!(!text.contains(&base), "{text}");
+    // Compare serialized JSON with the path encoded the same way, without its outer quotes.
+    let json_base = serde_json::to_string(&base).unwrap();
+    let json_base = &json_base[1..json_base.len() - 1];
     for key in ["missingLinks", "warnings", "files"] {
-        assert!(!client[key].to_string().contains(&base), "{key}: {client}");
+        assert!(!client[key].to_string().contains(json_base), "{key}: {client}");
     }
     // Document Info, whose report the package holds, gives no link either.
     for p in [json!({}), json!({"format": "text"})] {
         let info = crate::file_access::confine(roots.as_ref(), || run(&mut s, "document.info", p.clone()));
-        assert!(!info.to_string().contains(&base), "{p}: {info}");
+        assert!(!info.to_string().contains(json_base), "{p}: {info}");
     }
     let info = run(&mut s, "document.info", json!({"format": "text"}));
-    assert!(info.to_string().contains(&dir.file("art/red.png")), "the person's: {info}");
+    assert!(info["text"].as_str().unwrap().contains(&red), "the person's: {info}");
 }
 
 /// A confined request packages no document that links, or places a native document or a PDF with
@@ -742,7 +747,9 @@ fn a_font_named_by_another_of_its_names_is_copied() {
     let zip = unzip(&vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap());
     let report = String::from_utf8(zip["poster Folder/poster Report.txt"].clone()).unwrap();
     assert!(report.contains("SourceSans3-Semibold Regular → Fonts/"), "{report}");
-    let details = report.lines().find(|l| l.starts_with("SourceSans3-Semibold Regular: ")).unwrap_or_default();
+    // The Font Details row: the Fonts rows above it start with the same label.
+    let font_details = report.split("\nFONT DETAILS\n").nth(1).unwrap_or_default();
+    let details = font_details.lines().find(|l| l.starts_with("SourceSans3-Semibold Regular: ")).unwrap_or_default();
     assert!(details.contains("embedding allowed") && !details.contains("missing"), "{report}");
 }
 
@@ -785,7 +792,7 @@ fn the_document_info_report_has_every_category() {
         assert!(text.contains(&format!("\n{h}\n")), "{h}: {text}");
     }
     assert!(text.contains("Images: 3") && text.contains("Source Sans 3 Regular: built in; embedding allowed"), "{text}");
-    assert!(text.contains("red.png: 600 × 300 px — ") && text.contains("Color Mode: RGB") && text.contains("\nSwatches: "), "{text}");
+    assert!(text.contains("red.png: PNG; 600 × 300 px; 72 ppi — ") && text.contains("Color Mode: RGB") && text.contains("\nSwatches: "), "{text}");
     let fonts = run(&mut s, "document.info", json!({"format": "text", "category": "fonts"}))["text"].as_str().unwrap().to_string();
     assert!(fonts.contains("FONTS") && !fonts.contains("OBJECTS"), "{fonts}");
     let i = run(&mut s, "document.info", json!({"category": "linkedImages"}));
@@ -795,7 +802,7 @@ fn the_document_info_report_has_every_category() {
     // embedded one with no file.
     let linked: Vec<Value> = i["imageObjects"].as_array().unwrap().iter().filter(|o| o["linked"] == true).cloned().collect();
     for (o, r) in linked.iter().zip(i["sections"][0]["rows"].as_array().unwrap()) {
-        let shown = format!("{} × {} px — {}", o["width"], o["height"], o["file"].as_str().unwrap());
+        let shown = format!("PNG; {} × {} px; 72 ppi — {}", o["width"], o["height"], o["file"].as_str().unwrap());
         assert_eq!((&o["name"], shown.as_str()), (&r[0], r[1].as_str().unwrap()));
     }
     assert_eq!(linked.len(), 2);
@@ -1012,8 +1019,15 @@ fn package_copies_held_postscript_only_for_a_placed_document_with_a_postscript_n
         im.link.as_mut().unwrap().path = logo_ai.clone();
         im.link.as_mut().unwrap().relative = None;
         let key = im.key.clone();
-        d.images
-            .insert(key, vectorcraft_doc::ImageBlob { mime: "application/postscript".into(), bytes: std::sync::Arc::new(eps.to_vec()), proxy: None });
+        d.images.insert(
+            key,
+            vectorcraft_doc::ImageBlob {
+                mime: "application/postscript".into(),
+                bytes: std::sync::Arc::new(eps.to_vec()),
+                proxy: None,
+                file_font: Default::default(),
+            },
+        );
         Ok(())
     })
     .unwrap();

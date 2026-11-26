@@ -7,8 +7,10 @@
 //! opcodes with random contents) opened or placed, nor EPS and PostScript files
 //! (damaged ones, hostile programs) read by the PostScript interpreter, nor the editing data of
 //! Illustrator EPS and `.ai` files (the layers they carry, damaged or hostile), nor Affinity documents
-//! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor the
-//! font files a folder search reads (damaged fonts, collections whose headers give any count of
+//! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor
+//! `.cdr` drawings (mutated and cut short, plain, compressed and packaged, opened and placed),
+//! nor `.cmx` files (mutated, cut short and garbage after the header, opened and placed),
+//! nor the font files a folder search reads (damaged fonts, collections whose headers give any count of
 //! faces), nor scripts written for the reference app checked without running them (garbage,
 //! generated script text and mutated scripts).
 //!
@@ -300,6 +302,181 @@ proptest! {
             assert!(no_panic(s.execute("file.place.queue", &json!({"files":[p]}))).is_err());
         });
         prop_assert!(r.is_ok(), "Affinity placement panicked: {:?}", r.err());
+    }
+}
+
+// ---------- .cdr drawings ----------
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn cdr_mutated_drawings_render_and_export(
+        version in prop::sample::select(vec![300u16, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300]),
+        compress: bool,
+        features: bool,
+        cut in 12usize..8192,
+        edits in prop::collection::vec((0usize..8192, any::<u8>()), 0..24),
+    ) {
+        // The feature sample adds a style table, a clipping container and a lens to the shapes.
+        let compress = compress && version >= 700;
+        let mut bytes =
+            if features { craft_cdr::synth::feature_sample(version, compress) } else { craft_cdr::synth::sample(version, compress) };
+        let n = bytes.len();
+        for (at, b) in edits { bytes[at % n] = b; }
+        bytes.truncate(cut);
+        survive("CDR drawing", || vectorcraft_engine::cmd::fileio::load("x.cdr", &bytes).ok().map(|l| l.doc))?;
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"x.cdr", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "CDR drawing placement panicked: {:?}", r.err());
+    }
+
+    #[test]
+    fn cdr_mutated_packages_render_and_export(
+        version in prop::sample::select(vec![1400u16, 1500, 1600, 2000, 2700]),
+        cut in prop::option::of(22usize..16384),
+        edits in prop::collection::vec((any::<usize>(), 0usize..8192, any::<u8>()), 0..24),
+    ) {
+        // The members are edited before they are zipped, so that the edits reach the drawing
+        // rather than stop at the CRC-32; the archive may then be cut short.
+        let mut members = if version < 1600 {
+            vec![craft_cdr::synth::Member { name: "content/riffData.cdr".into(), data: craft_cdr::synth::sample(version, true), deflate: false }]
+        } else {
+            let mut body = vec![craft_cdr::synth::chunk(b"vrsn", version.to_le_bytes().to_vec())];
+            body.extend(craft_cdr::synth::sample_content(version));
+            craft_cdr::synth::package16_members(version, &body, false, &[])
+        };
+        for (m, at, b) in edits {
+            let k = m % members.len();
+            let data = &mut members[k].data;
+            if !data.is_empty() {
+                let n = data.len();
+                data[at % n] = b;
+            }
+        }
+        let mut bytes = craft_cdr::synth::zip(&members, b"");
+        if let Some(cut) = cut {
+            bytes.truncate(cut);
+        }
+        survive("CDR package", || vectorcraft_engine::cmd::fileio::load("x.cdr", &bytes).ok().map(|l| l.doc))?;
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"x.cdr", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "CDR package placement panicked: {:?}", r.err());
+    }
+
+    #[test]
+    fn cdr_garbage_opens_and_places_without_panicking(tail in prop::collection::vec(any::<u8>(), 0..2048)) {
+        let mut bytes = b"RIFF".to_vec();
+        bytes.extend(((4 + tail.len()) as u32).to_le_bytes());
+        bytes.extend(b"CDRB");
+        bytes.extend(tail);
+        survive("CDR garbage", || vectorcraft_engine::cmd::fileio::load("x.cdr", &bytes).ok().map(|l| l.doc))?;
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"x.cdr", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "CDR placement panicked: {:?}", r.err());
+    }
+
+    // Drawings of versions 1 and 2 are not RIFF files: a header of offsets, then records.
+    #[test]
+    fn cdr_mutated_wl_drawings_render_and_export(
+        marker in prop::sample::select(vec![b'e', b'l', b'm']),
+        cut in prop::option::of(0usize..1024),
+        edits in prop::collection::vec((0usize..8192, any::<u8>()), 0..24),
+    ) {
+        let mut bytes = craft_cdr::synth::wl_sample(marker);
+        let n = bytes.len();
+        for (at, b) in edits { bytes[at % n] = b; }
+        if let Some(cut) = cut {
+            bytes.truncate(cut);
+        }
+        survive("CDR drawing of version 1 or 2", || vectorcraft_engine::cmd::fileio::load("x.cdr", &bytes).ok().map(|l| l.doc))?;
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"x.cdr", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "placing a CDR drawing of version 1 or 2 panicked: {:?}", r.err());
+    }
+
+    #[test]
+    fn cdr_garbage_after_a_wl_header_opens_and_places_without_panicking(
+        marker in prop::sample::select(vec![b'e', b'l', b'm']),
+        tail in prop::collection::vec(any::<u8>(), 0..2048),
+    ) {
+        // Offsets that fit the file, so the garbage is walked as records.
+        let mut bytes = vec![b'W', b'L', marker, 0];
+        bytes.extend(28u32.to_le_bytes());
+        bytes.extend(28u32.to_le_bytes());
+        bytes.extend((28 + tail.len() as u32).to_le_bytes());
+        bytes.extend([0; 12]);
+        bytes.extend(tail);
+        survive("CDR garbage of version 1 or 2", || vectorcraft_engine::cmd::fileio::load("x.cdr", &bytes).ok().map(|l| l.doc))?;
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"x.cdr", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "placing CDR garbage of version 1 or 2 panicked: {:?}", r.err());
+    }
+}
+
+// ---------- .cmx files ----------
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn cmx_mutated_files_render_and_export(
+        cut in prop::option::of(12usize..4096),
+        edits in prop::collection::vec((0usize..8192, any::<u8>()), 0..24),
+    ) {
+        let mut bytes = craft_cdr::synth_cmx::sample();
+        let n = bytes.len();
+        for (at, b) in edits { bytes[at % n] = b; }
+        if let Some(cut) = cut {
+            bytes.truncate(cut);
+        }
+        survive("CMX file", || vectorcraft_engine::cmd::fileio::load("x.cmx", &bytes).ok().map(|l| l.doc))?;
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"x.cmx", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "CMX placement panicked: {:?}", r.err());
+    }
+
+    #[test]
+    fn cmx_garbage_opens_and_places_without_panicking(tail in prop::collection::vec(any::<u8>(), 0..2048)) {
+        // A 32-bit header, so the garbage is walked as chunks, tables and instructions.
+        let mut bytes = b"RIFF".to_vec();
+        let cont = craft_cdr::synth_cmx::cont(b'4', 1e-7);
+        bytes.extend(((4 + cont.len() + tail.len()) as u32).to_le_bytes());
+        bytes.extend(b"CMX1");
+        bytes.extend(cont);
+        bytes.extend(tail);
+        survive("CMX garbage", || vectorcraft_engine::cmd::fileio::load("x.cmx", &bytes).ok().map(|l| l.doc))?;
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"x.cmx", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "CMX placement panicked: {:?}", r.err());
     }
 }
 
@@ -1918,7 +2095,8 @@ proptest! {
 
     /// Mutated copies of the PSD and PSB samples never crash opening them with their layers, hidden
     /// ones too: the PSD's layer records, channel lengths and data, and the PSB's layer count.
-    /// (Masks, clipping and groups are covered by `tests_psdlayers::damaged_layers_never_panic`.)
+    /// (Masks, clipping and groups are covered by `tests_psdlayers::damaged_layers_never_panic`, and
+    /// Invert, Threshold and Posterize layers by `tests_psdlayers::damaged_adjustment_layers_never_panic`.)
     /// Neither does `document.psdInfo`, nor placing them with their layers as objects.
     #[test]
     fn mutated_layered_psds_open_without_panics(which in 6usize..8, cut in 0usize..1_000_000, edits in prop::collection::vec((0usize..1_000_000, any::<u8>()), 0..12)) {
@@ -8286,5 +8464,53 @@ proptest! {
         let mut paths = 0;
         doc.walk(|n| paths += usize::from(matches!(n.kind, vectorcraft_doc::NodeKind::Path { .. })));
         prop_assert_eq!(paths, 2, "{:?}", notes);
+    }
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// A stroke's arrowheads (#8188): its arrowhead entries with any scale of any kind, naming a
+    /// symbol the file defines, one it doesn't or one named in Chinese, the symbol's art any run of
+    /// paths (frames, samples of the line, heads, open and closed, filled, stroked or neither), at
+    /// any weight, the style section cut anywhere, the line drawn as any look. Read as a `.ai` and
+    /// as an EPS, then rendered.
+    #[test]
+    fn ai_arrowhead_strokes_never_panic(
+        scale in prop_oneof![arb_num(), Just("50".to_string())],
+        kind in prop::sample::select(vec!["Real", "Int", "Bool"]),
+        named in prop::sample::select(vec!["W", "Missing", "\u{6954}"]),
+        both in any::<bool>(),
+        art in prop::collection::vec(prop::sample::select(vec![
+            "-10 5 m\n10 5 L\n10 -5 L\n-10 -5 L\nn\n",
+            "0 G\n1 w\n-9 0 m\n4 0 l\nS\n",
+            "0 G\n0.5 w\n-9 0 m\n4 0 l\nS\n",
+            "0 g\n2 3 m\n8 0 l\n2 -3 l\nf\n",
+            "0 G\n1 w\n2 3 m\n8 0 l\n2 -3 l\nS\n",
+            "0 g\n1e300 0 m\n-1e300 1 l\nf\n",
+            "0 g\n0 0 m\n0 0 l\nf\n",
+        ]), 0..6),
+        width in arb_num(),
+        cut in 0usize..2000,
+        look in prop::sample::select(vec!["0 G\n2 w\n0 50 m\n96 50 l\nS\n0 g\n94 53 m\n100 50 l\n94 47 l\nf\n", "0 G\n2 w\n0 50 m\n100 50 l\nS\n", ""]),
+    ) {
+        use vectorcraft_testkit::ai;
+        let symbol = format!("%AI5_Begin_NonPrinting\n%AI14_BeginSymbol\n(W)\n0 A\n0 Xw\n0 Ae\nu\n{}U\n%AI10_EndSymbol\n%AI5_End_NonPrinting--\n", art.concat());
+        let start = if both { format!("{scale} /{kind} (BSArrowBeginScale) ,\n/GObjRef : ({named}) /SymbolArt ; (BSArrowBeginSymbol) ,\n") } else { String::new() };
+        let styles = format!(
+            "%AI9_BeginArtStyles\n/KnownStyle :\n(Arrowed) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+             /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+             /BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/Dictionary : /NotRecorded ,\n\
+             {start}{scale} /{kind} (BSArrowEndScale) ,\n/GObjRef : ({named}) /SymbolArt ; (BSArrowEndSymbol) ,\n; (kAIBeautifulStrokesParamsDictKey) ,\n\
+             /StrokeStyle : 0 R\n0 0 0 1 0 0 0 XA\n0 J 0 j {width} w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n\
+             /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n;\n%AI9_EndArtStyles\n\
+             %AI9_BeginArtStyleList\n(Arrowed)\n%AI9_EndArtStyleList\n"
+        );
+        let styles: String = styles.chars().take(cut).collect();
+        let line = format!("0 Ae\nu\n{look}U\n%_0 50 m\n%_100 50 L\n%_N\n1 (Arrowed) XW\n");
+        let data = ai::editing_data(200.0, 100.0, &format!("{symbol}{styles}{}", ai::layer("L", &line)));
+        survive("arrowhead strokes", || Some(vectorcraft_eps::layered_ai(data.as_bytes(), Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+        let eps = ai::eps(data.as_bytes(), ai::page_ps());
+        survive("arrowhead strokes in an EPS", || vectorcraft_engine::cmd::fileio::load("x.eps", &eps).ok().map(|l| l.doc))?;
     }
 }

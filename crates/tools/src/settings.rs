@@ -20,13 +20,38 @@ pub const SYMBOLISM: &[&str] =
 
 const ROWS: &[Row] = &[
     (&["dimension"], None, &["mode", "style"]),
+    (&[crate::quickpen::ID], None, &["action", "turn"]),
     // Global Brush Dimensions.
     (LIQUIFY, Some("liquify"), &["width", "height", "angle", "intensity", "usePressure", "showBrush"]),
     (LIQUIFY, None, &["detail", "simplify", "simplifyOn", "rate", "complexity", "horizontal", "vertical", "affectAnchors", "affectIn", "affectOut"]),
-    (SYMBOLISM, Some("symbolism"), &["diameter", "intensity", "density"]),
+    // Symbolism Tools Options: the general options, then the Symbol Sprayer's and the Symbol Sizer's.
+    (
+        SYMBOLISM,
+        Some("symbolism"),
+        &[
+            "diameter",
+            "intensity",
+            "density",
+            "usePressure",
+            "method",
+            "showBrush",
+            "sprayScrunch",
+            "spraySize",
+            "spraySpin",
+            "sprayScreen",
+            "sprayStain",
+            "sprayStyle",
+            "proportional",
+            "affectsDensity",
+        ],
+    ),
+    // The graphic style the Symbol Styler and the Symbol Sprayer's User Defined Style apply, set
+    // from the Graphic Styles panel.
+    (&["symbolSprayer", "symbolStyler"], Some("symbolismStyle"), &["style"]),
     (&["mirrorCut"], None, &["axis", "keep"]),
     (&["puppetWarp"], None, &["showMesh", "expand"]),
     (&["arc"], None, &["closed", "lengthX", "lengthY", "reference", "baseAlong", "slope", "fillArc"]),
+    (&[crate::three_point_arc::ID], None, &["direction"]),
     (&["spiral"], None, &["decay", "segments", "clockwise"]),
     // The grids' Tool Options: the dividers and switches the drag uses, the Default Size and
     // Reference Point a click's dialog opens with.
@@ -38,7 +63,7 @@ const ROWS: &[Row] = &[
     // Pencil Tool Options' Alt key toggles to Smooth Tool, Live preview and Live curve fitting (the
     // Paintbrush has none of them).
     (&["pencil"], None, &["altSmooth", "livePreview", "liveFit"]),
-    (&["smooth"], None, &["fidelity"]),
+    (&["smooth"], None, &["fidelity", "smoothness"]),
     (&["blobBrush", "eraser"], None, &["size", "sizeMode", "sizeVariation"]),
     (&["blobBrush"], None, &["fidelity", "keepSelected", "mergeOnlySelection"]),
     // Eraser Tool Options' tip shape.
@@ -53,6 +78,8 @@ const ROWS: &[Row] = &[
     (&["star"], None, &["points"]),
     // The Ellipse dialog's Anchors.
     (&["ellipse"], None, &["anchors"]),
+    // Circle Tool Options (`circle::CircleTool`) and the Control bar's From Center.
+    (&[crate::circle::ID], None, &["center", "radii", "diameter", "color", "standardAnchors", "dragThird", "fromCenter"]),
     (&["freeTransform"], None, &["constrain"]),
     // Shape Builder Tool Options (`builder::ShapeBuilderOptions`).
     (
@@ -71,6 +98,8 @@ const ROWS: &[Row] = &[
             "highlightColor",
         ],
     ),
+    // Fill Area uses the Shape Builder's Gap Detection and open-filled-path options.
+    (&["fillArea"], Some("shapeBuilder"), &["openFilledAsClosed", "gapDetection", "gapLength"]),
     // Objects on Path Tool Options: the Pivot and Rotate of the objects attached next.
     (&["objectsOnPath"], None, &["pivot", "rotate"]),
     (&["artboard"], None, &["moveArt", "scaleArt"]),
@@ -79,6 +108,7 @@ const ROWS: &[Row] = &[
     (&[crate::addons::extend_path::ID], None, &["mode"]),
     (&[crate::addons::corner_tool::ID], None, &["radius", "kind"]),
     (&[crate::addons::shared_edge::ID], None, &["diameter", "tolerance", "together"]),
+    (&[crate::addons::tangent_circle::ID], None, &["radius", "center", "radii", "color", "snapTolerance", "snapWithoutGuides"]),
     (&[crate::addons::smart_pen::ID], None, &["next"]),
     // The kind first: a new kind resets the values after it.
     (&[crate::addons::parametric_shape::ID], None, &["kind", "count", "a", "b", "radius", "width", "height", "rotation"]),

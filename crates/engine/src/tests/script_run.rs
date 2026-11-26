@@ -165,9 +165,63 @@ fn an_error_names_the_script_its_place_and_kind() {
     assert_eq!(e, "t.js: line 2, column 3: TypeError: no (thrown)");
     let e = run(&mut s, "var = 1;").unwrap_err().to_string();
     assert!(e.starts_with("t.js: line 1,") && e.ends_with("(syntax)"), "{e}");
-    assert!(run(&mut s, "app.activeDocument;").unwrap_err().to_string().contains("`vc`"));
+    assert!(run(&mut s, "new Window('dialog');").unwrap_err().to_string().contains("`vc`"));
+    // The application's members need no `app.`, so naming one alone is not an error.
+    assert_eq!(run(&mut s, "activeDocument;").unwrap()["ok"], true);
     assert!(run(&mut s, "#targetengine 9x\n1").unwrap_err().to_string().contains("#targetengine needs a name of letters, digits and _"));
     assert_eq!(s.script_report().unwrap()["line"], 1);
+}
+
+/// A failed run's report keeps its message and kind and says where the message came from: text the
+/// script supplied, or one of the app's own errors. The status text and the console line read the
+/// same either way, and only the app's own errors get advice about other applications' objects.
+#[test]
+fn failed_script_report_keeps_message_and_adds_origin() {
+    let mut s = two_docs();
+    for (source, kind, message, origin) in [
+        ("throw new Error('invalid array length');", "thrown", "Error: invalid array length", "script"),
+        ("throw new RangeError('invalid array length');", "thrown", "RangeError: invalid array length", "script"),
+        ("throw 'invalid array length';", "thrown", "invalid array length", "script"),
+        ("throw 'ReferenceError: Window is not defined';", "thrown", "ReferenceError: Window is not defined", "script"),
+        ("try { new Array(-1); } catch (e) { throw new Error(e.message); }", "thrown", "Error: invalid array length", "script"),
+        ("new Array(-1);", "thrown", "RangeError: invalid array length", "built-in"),
+        ("try { new Array(-1); } catch (e) { throw e; }", "thrown", "RangeError: invalid array length", "built-in"),
+        ("vc.run();", "thrown", "TypeError: vc.run: give a command id, as a string", "built-in"),
+    ] {
+        let e = run(&mut s, source).unwrap_err().to_string();
+        let report = s.script_report().unwrap().clone();
+        assert_eq!(
+            (report["kind"].as_str(), report["message"].as_str(), report["messageOrigin"].as_str()),
+            (Some(kind), Some(message), Some(origin)),
+            "{source}"
+        );
+        let (line, column) = (&report["line"], &report["column"]);
+        let before = format!("t.js: line {line}, column {column}: ");
+        assert_eq!(e, format!("{before}{message} ({kind})"), "{source}");
+        assert_eq!(s.script_failure_text().as_deref(), Some(e.as_str()));
+        let authored = s.script_authored_failure();
+        assert_eq!(authored, (origin == "script").then(|| (before.clone(), message, format!(" ({kind})"))), "{source}");
+        let console = s.execute("script.console", &json!({})).unwrap();
+        let error = console["lines"].as_array().unwrap().iter().rev().find(|l| l["kind"] == "error").map(|l| l["text"].clone());
+        assert_eq!(error, Some(json!(format!("t.js:{line}:{column}: {message}"))), "{source}");
+    }
+    // The app's own reference error names the `vc` object; the same text a script threw does not.
+    run(&mut s, "new Window('dialog');").unwrap_err();
+    assert!(s.script_report().unwrap()["message"].as_str().unwrap().contains("`vc`"));
+    assert_eq!(s.script_report().unwrap()["messageOrigin"], "built-in");
+    // An error in code `eval` compiled keeps where its message came from.
+    let e = run(&mut s, "eval(\"throw new Error('invalid array length')\");").unwrap_err().to_string();
+    assert_eq!(e, "t.js: Error: invalid array length (thrown)");
+    assert_eq!(s.script_authored_failure(), Some(("t.js: ".to_string(), "Error: invalid array length", " (thrown)".to_string())));
+    // Syntax errors and limits are the app's own.
+    run(&mut s, "var = 1;").unwrap_err();
+    assert_eq!((s.script_report().unwrap()["kind"].as_str(), s.script_authored_failure()), (Some("syntax"), None));
+    s.execute("script.run", &json!({"source": "while (true) {}", "name": "t.js", "maxFuel": 100_000})).unwrap_err();
+    assert_eq!((s.script_report().unwrap()["messageOrigin"].as_str(), s.script_authored_failure()), (Some("built-in"), None));
+    // A run that completes has no failure to split.
+    run(&mut s, "throw 'x';").unwrap_err();
+    run(&mut s, "1").unwrap();
+    assert_eq!(s.script_authored_failure(), None);
 }
 
 /// An error raised where the run has no place for it, such as in code `eval` compiled, is named
@@ -242,6 +296,134 @@ fn files_are_checked_before_they_are_read() {
     assert_eq!(s.execute("script.run", &path(&upper)).unwrap()["log"], json!([3]));
     std::fs::create_dir_all(dir.join("folder.js")).unwrap();
     assert!(s.execute("script.run", &path(&dir.join("folder.js").to_string_lossy())).is_err());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_js_script_reads_ecmascript_2015_and_a_jsx_script_does_not() {
+    let dir = fresh_folder("es2015");
+    let write = |name: &str, text: &str| {
+        let p = dir.join(name);
+        std::fs::write(&p, text).unwrap();
+        p.to_string_lossy().into_owned()
+    };
+    let mut s = two_docs();
+    let path = |p: &str| json!({"path": p});
+    write("lib.jsxinc", "const k = 2;\nvar twice = n => n * k;\n");
+    write("more.jsx", "let m = `m${k}`;\nm;\n");
+    let modern = "#include \"lib.jsxinc\"\nlet x = [1, ...[2]];\nvc.log(`${twice(x[1])}`);\nvc.log(eval('let e = 5; e'));\nvc.log(new Function('a = 6', 'return a')());\nvc.log($.evalFile(File($.fileName).parent + '/more.jsx'));\n";
+    let r = s.execute("script.run", &path(&write("modern.js", modern))).unwrap();
+    assert_eq!(r["log"], json!(["4", 5, 6, "m2"]), "{r}");
+    let upper = s.execute("script.run", &path(&write("UPPER.JS", "let u = 1; vc.log(u);"))).unwrap();
+    assert_eq!(upper["log"], json!([1]), "{upper}");
+    for (name, text) in [("legacy.jsx", "let x = 1;"), ("arrow.jsx", "var f = () => 1;"), ("template.jsx", "vc.log(`t`);")] {
+        let e = s.execute("script.run", &path(&write(name, text))).unwrap_err().to_string();
+        assert!(e.contains("SyntaxError"), "{name}: {e}");
+    }
+    // Script text given without a file keeps the ExtendScript language.
+    assert!(run(&mut s, "const c = 1;").unwrap_err().to_string().contains("SyntaxError"));
+    // A named engine reads each run the way that run's script does.
+    s.execute("script.run", &path(&write("first.jsx", "#targetengine kept\nvar kept = 1;"))).unwrap();
+    let modern = s.execute("script.run", &path(&write("second.js", "#targetengine kept\nlet k2 = kept + 1;\nvc.log(k2);"))).unwrap();
+    assert_eq!(modern["log"], json!([2]), "{modern}");
+    let legacy = s.execute("script.run", &path(&write("third.jsx", "#targetengine kept\nvc.log(k2);\nconst c = 1;")));
+    assert!(legacy.unwrap_err().to_string().contains("SyntaxError"));
+    let fourth = "#targetengine kept\nvc.log(k2 + kept);\ntry { eval('let x = 1'); } catch (e) { vc.log(e.name); }";
+    let legacy = s.execute("script.run", &path(&write("fourth.jsx", fourth))).unwrap();
+    assert_eq!(legacy["log"], json!([3, "SyntaxError"]), "{legacy}");
+    // `for`-`of` and destructuring, in a new engine and in one a `.jsx` script made.
+    let loops = "var s = 0;\nfor (const [a, { b = 1 }] of [[1, {}], [2, { b: 3 }]]) s += a + b;\nvar { p, q: [r] } = { p: 4, q: [5] };\nvc.log(s);\nvc.log(p + r);\nvc.log(typeof Symbol);";
+    let r = s.execute("script.run", &path(&write("loops.js", loops))).unwrap();
+    assert_eq!(r["log"], json!([7, 9, "function"]), "{r}");
+    let kept = s
+        .execute("script.run", &path(&write("fifth.js", "#targetengine kept\nfor (const [i, ...j] of [[kept, 'x', 'y']]) vc.log(i + j.join(''));")))
+        .unwrap();
+    assert_eq!(kept["log"], json!(["1xy"]), "{kept}");
+    let e = s.execute("script.run", &path(&write("pattern.jsx", "var [a] = [1];"))).unwrap_err().to_string();
+    assert!(e.contains("SyntaxError"), "{e}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_js_script_reads_object_literal_extensions_and_function_names_and_a_jsx_script_does_not() {
+    let dir = fresh_folder("es2015-objects");
+    let write = |name: &str, text: &str| {
+        let p = dir.join(name);
+        std::fs::write(&p, text).unwrap();
+        p.to_string_lossy().into_owned()
+    };
+    let mut s = two_docs();
+    let path = |p: &str| json!({"path": p});
+    let modern = "var k = 'b';\nvar a = 1;\nvar o = { a, [k + 1]: 2, m() { return 3; }, f: () => 4 };\n\
+                  vc.log(o.a + o.b1 + o.m() + o.f());\nvc.log(o.m.name + ',' + o.f.name + ',' + o.f.bind().name + ',' + Math.max.name);\n";
+    let r = s.execute("script.run", &path(&write("objects.js", modern))).unwrap();
+    assert_eq!(r["log"], json!([10, "m,f,bound f,max"]), "{r}");
+    for (name, text) in [("short.jsx", "var a = 1; var o = { a };"), ("computed.jsx", "var o = { ['b']: 1 };"), ("method.jsx", "var o = { m() {} };")]
+    {
+        let e = s.execute("script.run", &path(&write(name, text))).unwrap_err().to_string();
+        assert!(e.contains("SyntaxError"), "{name}: {e}");
+    }
+    let legacy = s.execute("script.run", &path(&write("names.jsx", "var f = function () {};\nvc.log(f.hasOwnProperty('name'));"))).unwrap();
+    assert_eq!(legacy["log"], json!([false]), "{legacy}");
+    // Script text given without a file keeps the ExtendScript language.
+    assert!(run(&mut s, "var a = 1; var o = { a };").unwrap_err().to_string().contains("SyntaxError"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_js_script_reads_optional_chains_and_coalescing_and_a_jsx_script_does_not() {
+    let dir = fresh_folder("es2020");
+    let write = |name: &str, text: &str| {
+        let p = dir.join(name);
+        std::fs::write(&p, text).unwrap();
+        p.to_string_lossy().into_owned()
+    };
+    let mut s = two_docs();
+    let path = |p: &str| json!({"path": p});
+    let modern = "var o = { a: { f: function () { return this.n; }, n: 3 } }, none = null;\n\
+                  vc.log(none?.a.b ?? 'none');\nvc.log(o.a?.f());\nvc.log(0 ?? 1);\nvc.log(eval('none?.[0] ?? 2'));\n";
+    let r = s.execute("script.run", &path(&write("modern.js", modern))).unwrap();
+    assert_eq!(r["log"], json!(["none", 3, 0, 2]), "{r}");
+    for (name, text) in [("chain.jsx", "var o; vc.log(o?.a);"), ("coalesce.jsx", "vc.log(null ?? 1);"), ("mixed.js", "vc.log(1 || 2 ?? 3);")] {
+        let e = s.execute("script.run", &path(&write(name, text))).unwrap_err().to_string();
+        assert!(e.contains("SyntaxError"), "{name}: {e}");
+    }
+    // Script text given without a file keeps the ExtendScript language.
+    assert!(run(&mut s, "vc.log(null ?? 1);").unwrap_err().to_string().contains("SyntaxError"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn every_script_reads_e4x_and_has_the_xml_objects() {
+    let dir = fresh_folder("e4x");
+    let write = |name: &str, text: &str| {
+        let p = dir.join(name);
+        std::fs::write(&p, text).unwrap();
+        p.to_string_lossy().into_owned()
+    };
+    let mut s = two_docs();
+    let path = |p: &str| json!({"path": p});
+    // Script text: literals, selectors, for each and the four constructors.
+    let text = "var x = <list><item id=\"a\">1</item><item id=\"b\">2</item></list>;\n\
+                vc.log(x.item.length() + ' ' + x.item.(@id == 'b').toString() + ' ' + x..item[0].@id);\n\
+                var sum = 0; for each (var i in x.item) sum += Number(i); vc.log(sum);\n\
+                vc.log(new XML('<a><b/></a>').b.length() + new XMLList('<c/><c/>').length());\n\
+                vc.log(new Namespace('p', 'urn:p').prefix + ' ' + new QName('urn:q', 'n').localName + ' ' + isXMLName('ok'));\n\
+                vc.log(typeof setDefaultXMLNamespace + ' ' + (1 < 2));\n";
+    let r = run(&mut s, text).unwrap();
+    assert_eq!(r["log"], json!(["2 2 a", 3, 3, "p n true", "function true"]), "{r}");
+    // A .js file, a file it includes, eval, Function and $.evalFile read XML as well.
+    write("lib.jsxinc", "var fromLib = <lib n=\"7\"/>.@n.toString();\n");
+    write("more.jsx", "<m>{fromLib}</m>.toString();\n");
+    let modern = "#include \"lib.jsxinc\"\nlet tag = <t>{fromLib}</t>;\nvc.log(tag.toString());\n\
+                  vc.log(eval('<e>5</e>').toString());\nvc.log(new Function('return <f>6</f>.toString()')());\n\
+                  vc.log($.evalFile(File($.fileName).parent + '/more.jsx'));\n";
+    let r = s.execute("script.run", &path(&write("modern.js", modern))).unwrap();
+    assert_eq!(r["log"], json!(["7", "5", "6", "7"]), "{r}");
+    // A named engine first made by a .js run gives a later .jsx run the XML objects too.
+    s.execute("script.run", &path(&write("first.js", "#targetengine xmlkept\nlet k = 1;"))).unwrap();
+    let later = s.execute("script.run", &path(&write("second.jsx", "#targetengine xmlkept\nvc.log(XML('<k>2</k>').toString());"))).unwrap();
+    assert_eq!(later["log"], json!(["2"]), "{later}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -362,6 +544,178 @@ fn a_scripts_commands_reach_only_its_own_places_and_the_open_documents() {
     let r = run(&mut s, &call("document.save", &own)).unwrap();
     assert_eq!(r["log"], json!(["ok"]), "a document's own file that was removed is made again: {r}");
     assert!(own.exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The color at the middle of the PNG at `path`.
+fn middle_color(path: &std::path::Path) -> [u8; 3] {
+    let img = craft_image_codecs::decode(&std::fs::read(path).unwrap()).unwrap();
+    let (w, h) = img.dimensions();
+    let rgba = img.to_rgba8();
+    let i = ((h / 2 * w + w / 2) * 4) as usize;
+    [rgba[i], rgba[i + 1], rgba[i + 2]]
+}
+
+/// A script's export of a document open when the run began draws the file its image links to,
+/// also outside the script's places. A file the script names itself, a link it points at such a
+/// file, writing to the linked file and the links of a document the script opens are refused all
+/// the same.
+#[test]
+fn a_scripts_export_reads_the_files_the_documents_open_before_it_link_to() {
+    use crate::tests_links::{BLUE, RED, near, open, place, png, save, session, write};
+    let dir = fresh_folder("gate-links");
+    let (inside, art) = (dir.join("in"), dir.join("art"));
+    std::fs::create_dir_all(&inside).unwrap();
+    let p = |f: std::path::PathBuf| f.to_string_lossy().into_owned();
+    let (pic, secret, poster, other) =
+        (p(art.join("photo.png")), p(art.join("secret.png")), p(art.join("poster.vectorcraft")), p(inside.join("other.vectorcraft")));
+    write(&pic, &png(600, 300, RED));
+    write(&secret, &png(600, 300, RED));
+    let mut s = session();
+    place(&mut s, &pic);
+    save(&mut s, &poster);
+    s.execute("file.close", &json!({})).unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    place(&mut s, &secret);
+    save(&mut s, &other);
+    s.execute("file.close", &json!({})).unwrap();
+    // The files change after the saves: each document holds only the red preview of its image.
+    write(&pic, &png(600, 300, BLUE));
+    write(&secret, &png(600, 300, BLUE));
+    open(&mut s, &poster);
+    let (first, second) = (inside.join("first.png"), inside.join("second.png"));
+    let call = |id: &str, params: String| {
+        format!(
+            "try {{ var r = vc.run('{id}', {params}); vc.log(r.warnings ? r.warnings.length : 0); }} \
+             catch (e) {{ vc.log(String(e.message).indexOf('Script file access denied') >= 0 ? 'denied' : e.message); }}\n"
+        )
+    };
+    let export = |to: &std::path::Path| format!("{{path: {:?}, format: 'png', background: 'white'}}", p(to.to_path_buf()));
+    let source = [
+        call("document.export", export(&first)),
+        call("file.place", format!("{{path: {secret:?}, at: [200, 150]}}")),
+        "vc.run('select.all', {});\n".to_string(),
+        call("links.relink", format!("{{path: {secret:?}}}")),
+        call("document.export", format!("{{path: {pic:?}, format: 'png'}}")),
+        call("document.open", format!("{{path: {other:?}}}")),
+        call("document.export", export(&second)),
+    ]
+    .concat();
+    let r = run_allowed(&mut s, &inside, &source).unwrap();
+    assert_eq!(r["log"], json!([0, "denied", "denied", "denied", 0, 1]), "{r}");
+    assert!(near(middle_color(&first), BLUE), "the linked file, not its preview: {:?}", middle_color(&first));
+    assert!(near(middle_color(&second), RED), "a document the script opened gets no linked file: {:?}", middle_color(&second));
+    assert_eq!(std::fs::read(&pic).unwrap(), png(600, 300, BLUE), "the linked file is not written");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A script line that runs command `id` with `params` and logs `ok`, or `denied` when the gate
+/// refuses a file.
+fn tried(id: &str, params: &str) -> String {
+    format!(
+        "try {{ vc.run('{id}', {params}); vc.log('ok'); }} \
+         catch (e) {{ vc.log(String(e.message).indexOf('Script file access denied') >= 0 ? 'denied' : e.message); }}\n"
+    )
+}
+
+/// A document a script opened from a file that only a link let it read is not written in that run
+/// or a later one, and gives a later run no access to its file once no document the person left
+/// links to it.
+#[test]
+fn a_document_a_script_opened_from_a_linked_file_stays_read_only_in_later_runs() {
+    use crate::tests_links::{RED, open, place, png, save, session, write};
+    let art = fresh_folder("gate-linked-runs").join("art");
+    std::fs::create_dir_all(&art).unwrap();
+    let p = |f: std::path::PathBuf| f.to_string_lossy().into_owned();
+    let (pic, inner, poster) = (p(art.join("photo.png")), p(art.join("inner.vectorcraft")), p(art.join("poster.vectorcraft")));
+    write(&pic, &png(60, 30, RED));
+    let mut s = session();
+    place(&mut s, &pic);
+    save(&mut s, &inner);
+    s.execute("file.close", &json!({})).unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    place(&mut s, &inner);
+    save(&mut s, &poster);
+    s.execute("file.close", &json!({})).unwrap();
+    open(&mut s, &poster);
+    let bytes = std::fs::read(&inner).unwrap();
+    let opened = run(&mut s, &[tried("document.open", &format!("{{path: {inner:?}}}")), tried("document.save", "{}")].concat()).unwrap();
+    assert_eq!(opened["log"], json!(["ok", "denied"]), "{opened}");
+    assert_eq!(s.doc().unwrap().path.as_deref(), Some(inner.as_str()));
+    let mut log = vec![];
+    let next = run(&mut s, &tried("document.save", "{}")).unwrap();
+    log.push(next["log"][0].clone());
+    // The person closes the document that links to it.
+    let at = s.documents().iter().position(|d| d.path.as_deref() == Some(poster.as_str())).unwrap();
+    assert!(s.set_active(at));
+    s.execute("file.close", &json!({})).unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let later = run(&mut s, &tried("file.place", &format!("{{path: {inner:?}, at: [200, 150]}}"))).unwrap();
+    log.push(later["log"][0].clone());
+    assert_eq!(log, [json!("denied"), json!("denied")], "a save in the next run, then a read once nothing the person left links to it");
+    assert_eq!(std::fs::read(&inner).unwrap(), bytes, "the linked file is as it was");
+    let _ = std::fs::remove_dir_all(art.parent().unwrap());
+}
+
+/// A data set value a script gives a document, and a document a script opens, let no later run
+/// read the files they name; once the person saves the document, the files its data sets name are
+/// read again.
+#[test]
+fn what_a_script_adds_to_the_documents_lets_no_later_run_read_more() {
+    use crate::tests_links::{RED, place, png, session, write};
+    let dir = fresh_folder("gate-linked-later");
+    let (inside, art) = (dir.join("in"), dir.join("art"));
+    std::fs::create_dir_all(&inside).unwrap();
+    std::fs::create_dir_all(&art).unwrap();
+    let p = |f: std::path::PathBuf| f.to_string_lossy().into_owned();
+    let (secret, other, mine) = (p(art.join("secret.png")), p(inside.join("other.vectorcraft")), p(inside.join("mine.vectorcraft")));
+    write(&secret, &png(60, 30, RED));
+    let mut s = session();
+    place(&mut s, &secret);
+    s.execute("document.save", &json!({"path": other})).unwrap();
+    s.execute("file.close", &json!({})).unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let read_secret = tried("file.place", &format!("{{path: {secret:?}, at: [200, 150]}}"));
+    let set = format!(
+        "vc.run('variable.define', {{name: 'Photo', kind: 'image'}});\nvc.run('dataset.new', {{name: 'X', values: {{Photo: {secret:?}}}}});\n"
+    );
+    run(&mut s, &set).unwrap();
+    let mut log = vec![];
+    log.push(run(&mut s, &read_secret).unwrap()["log"][0].clone());
+    let own = s.active_index().unwrap();
+    let r = run_allowed(&mut s, &inside, &tried("document.open", &format!("{{path: {other:?}}}"))).unwrap();
+    assert_eq!(r["log"], json!(["ok"]), "{r}");
+    log.push(run(&mut s, &read_secret).unwrap()["log"][0].clone());
+    assert_eq!(log, [json!("denied"), json!("denied")], "after a data set value, then after a document a script opened");
+    assert!(s.set_active(own));
+    s.execute("document.save", &json!({"path": mine})).unwrap();
+    let saved = run(&mut s, &read_secret).unwrap();
+    assert_eq!(saved["log"], json!(["ok"]), "saved by the person: {saved}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A save the person started before a script's command changed the document, and that finishes
+/// after it, does not let a later run read the files that change names.
+#[test]
+fn a_save_started_before_a_scripts_change_lets_no_later_run_read_more() {
+    use crate::cmd::fileio::{SaveMode, save_job, save_plan};
+    use crate::tests_links::{RED, png, session, write};
+    let dir = fresh_folder("gate-linked-save");
+    let p = |f: std::path::PathBuf| f.to_string_lossy().into_owned();
+    let (secret, mine) = (p(dir.join("secret.png")), p(dir.join("mine.vectorcraft")));
+    write(&secret, &png(60, 30, RED));
+    let mut s = session();
+    let uid = s.doc().unwrap().uid;
+    let plan = save_plan(&s, SaveMode::SaveAs, &json!({"path": mine})).unwrap();
+    let job = save_job(&mut s, plan).unwrap();
+    let set = format!(
+        "vc.run('variable.define', {{name: 'Photo', kind: 'image'}});\nvc.run('dataset.new', {{name: 'X', values: {{Photo: {secret:?}}}}});\n"
+    );
+    run(&mut s, &set).unwrap();
+    job.write(|_, _| Ok(())).unwrap();
+    job.complete(&mut s, uid);
+    let r = run(&mut s, &tried("file.place", &format!("{{path: {secret:?}, at: [200, 150]}}"))).unwrap();
+    assert_eq!(r["log"], json!(["denied"]), "{r}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

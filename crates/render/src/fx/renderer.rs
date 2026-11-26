@@ -481,6 +481,23 @@ impl Renderer {
 
     /// What [`Self::draw_object_fx`] draws inside the object's transparency group.
     fn draw_object_fx_art(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>, cache: bool) {
+        // A placed document whose effects make no art of their own (raster effects and color
+        // adjustments, which Outline mode does not draw) shows its box crossed as without effects
+        // ([`Self::draw_placed`]). Effects that change geometry (plug-in effects among them,
+        // [`effects::is_geometry`]), 3D and Pathfinder make art from
+        // the file's art, which is drawn; Crop Marks and Vector Halftone draw the placed document
+        // itself among their art.
+        if let NodeKind::PlacedDocument(p) = &a.kind
+            && self.crosses_placed(f)
+            && !effects::has_geometry(&a.appearance.effects)
+            && !effects::has_revolve(a)
+            && !effects::has_solid(a)
+            && !effects::has_pathfinder(a)
+            && !effects::has_crop_marks(a)
+            && !effects::addons::halftone::has_halftone(a)
+        {
+            return self.draw_crossed_placed(ctx, f, p);
+        }
         if !self.charge_fx_instance(f.symbols, a) {
             return;
         }
@@ -493,7 +510,27 @@ impl Renderer {
         {
             return self.draw_staged(ctx, f, stage, &bp, *rule);
         }
-        let art = self.fx_art(f.symbols, a, cache);
+        let separations = f.opts.proof.as_ref().filter(|proof| proof.separations.is_some());
+        let key = Arc::as_ptr(a) as usize;
+        let previous = (cache && separations.is_some()).then(|| self.fx_arts.get(&key, self.stamp).map(|entry| entry.1.clone())).flatten();
+        let mut art = self.fx_art(f.symbols, a, cache);
+        if let Some(proof) = separations
+            && previous.as_ref().is_none_or(|previous| !Arc::ptr_eq(previous, &art))
+        {
+            let made = crate::proof::generated_black(f.doc, proof, &art);
+            if !Arc::ptr_eq(&made, &art) {
+                if let Some((_, bounds)) = self.three_d_bounds.remove(&(Arc::as_ptr(&art) as usize)) {
+                    self.three_d_bounds.insert(Arc::as_ptr(&made) as usize, (Arc::downgrade(&made), bounds));
+                }
+                if cache
+                    && let Some((node, _, found)) =
+                        self.fx_arts.get(&key, self.stamp).filter(|entry| Arc::ptr_eq(&entry.0, a) && Arc::ptr_eq(&entry.1, &art)).cloned()
+                {
+                    self.fx_arts.insert(key, (node, made.clone(), found), crate::lru::node_bytes(&made), self.stamp);
+                }
+                art = made;
+            }
+        }
         // Art the cache did not keep is made again in the next frame.
         let kept = cache && self.fx_arts.get(&(Arc::as_ptr(a) as usize), self.stamp).is_some_and(|e| Arc::ptr_eq(&e.1, &art));
         let outer = self.made_again;
@@ -1029,7 +1066,7 @@ impl Renderer {
 /// the Transform effects the geometry pass left out hidden ([`effects::Carry::hide_skipped`]), so
 /// its raster effects and those of its fills and strokes stay with its art; `None` when it stays
 /// as it is.
-fn carried(n: &Node, carry: &effects::Carry) -> Option<Arc<Node>> {
+pub(super) fn carried(n: &Node, carry: &effects::Carry) -> Option<Arc<Node>> {
     let moves = carry.moves(&n.appearance);
     (moves || carry.skipped()).then(|| {
         let mut m = n.clone();

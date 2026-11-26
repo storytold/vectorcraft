@@ -81,6 +81,33 @@ impl Unit {
             Unit::Ha => "H",
         }
     }
+    /// Whether this unit is a physical measurement unit (not points or pixels).
+    pub fn is_physical(self) -> bool {
+        self.svg_suffix().is_some() || matches!(self, Unit::FeetInches | Unit::Meters | Unit::Yards | Unit::Feet | Unit::Q | Unit::Ha)
+    }
+    /// The standard SVG length unit suffix, if this unit is a physical unit supported in SVG
+    /// (`mm`, `cm`, `in`, `pc`).
+    pub fn svg_suffix(self) -> Option<&'static str> {
+        match self {
+            Unit::Millimeters => Some("mm"),
+            Unit::Centimeters => Some("cm"),
+            Unit::Inches => Some("in"),
+            Unit::Picas => Some("pc"),
+            _ => None,
+        }
+    }
+    /// The SVG length unit an export writes this unit's sizes in: the unit itself when SVG has it,
+    /// else an SVG unit of the same kind (inches for feet and yards, centimeters for meters,
+    /// millimeters for Q and Ha). `None` for points and pixels.
+    pub fn svg_unit(self) -> Option<Unit> {
+        match self {
+            Unit::Millimeters | Unit::Centimeters | Unit::Inches | Unit::Picas => Some(self),
+            Unit::FeetInches | Unit::Feet | Unit::Yards => Some(Unit::Inches),
+            Unit::Meters => Some(Unit::Centimeters),
+            Unit::Q | Unit::Ha => Some(Unit::Millimeters),
+            Unit::Points | Unit::Pixels => None,
+        }
+    }
     pub const fn label(self) -> &'static str {
         match self {
             Unit::Points => "Points",
@@ -157,12 +184,17 @@ impl Unit {
     /// that share of everything before it (`50pt+25%` is 62.5 pt, `100pt+20pt-50%` is 60 pt). A
     /// percentage on its own (`50%`) reads as nothing.
     ///
-    /// Text with more than 128 `+ - * /` signs reads as nothing.
+    /// `x`, `X` and `×` multiply as `*` does (`10x2` is 20, `2x3 mm` is 6 mm), except a lowercase
+    /// `x` right after a `p`, which is the `px` suffix (`2px x 3` is 6 px, and `2px3` reads as
+    /// nothing; write `2p x 3` for picas). `X` and `×` after a `p` multiply (`2pX3` is 6 picas).
+    ///
+    /// Text with more than 128 `+ - * /` signs ([`arithmetic_signs`], a multiplication sign counted
+    /// as `*`) reads as nothing.
     pub fn parse(self, s: &str) -> Option<f64> {
-        if s.chars().filter(|c| matches!(c, '+' | '-' | '*' | '/')).count() > MAX_MEASURE_OPERATORS {
+        if arithmetic_signs(s) > MAX_MEASURE_OPERATORS {
             return None;
         }
-        parse_measure(s, self).filter(|v| v.is_finite())
+        parse_measure(&times_as_asterisks(s), self).filter(|v| v.is_finite())
     }
     /// The value naming this unit in the Units preferences (`points`, `millimeters`,
     /// `feetInches`).
@@ -214,6 +246,46 @@ impl Unit {
 
 /// The most `+ - * /` signs [`Unit::parse`] reads in one text.
 const MAX_MEASURE_OPERATORS: usize = 128;
+
+/// The number of `+ - * /` signs in `s`, each multiplication sign typed as `x`, `X` or `×`
+/// ([`Unit::parse`]) counted as a `*`.
+pub fn arithmetic_signs(s: &str) -> usize {
+    let mut prev = None;
+    s.chars()
+        .filter(|&c| {
+            let sign = matches!(c, '+' | '-' | '*' | '/') || is_times(c, prev);
+            prev = Some(c);
+            sign
+        })
+        .count()
+}
+
+/// Is `c`, after `prev`, a multiplication sign typed as `x`, `X` or `×`? A lowercase `x` right
+/// after a `p` is the `px` suffix (`2px x 3`), also where a number follows it (`2px3`).
+fn is_times(c: char, prev: Option<char>) -> bool {
+    matches!(c, 'X' | '×') || (c == 'x' && prev != Some('p'))
+}
+
+/// `s` with each multiplication sign ([`is_times`]) written as `*` (`10 x 2` is `10 * 2`); text
+/// without one is not copied.
+fn times_as_asterisks(s: &str) -> std::borrow::Cow<'_, str> {
+    let mut prev = None;
+    let any = s.chars().any(|c| {
+        let times = is_times(c, prev);
+        prev = Some(c);
+        times
+    });
+    if !any {
+        return s.into();
+    }
+    let mut out = String::with_capacity(s.len());
+    let mut prev = None;
+    for c in s.chars() {
+        out.push(if is_times(c, prev) { '*' } else { c });
+        prev = Some(c);
+    }
+    out.into()
+}
 
 fn parse_measure(s: &str, default: Unit) -> Option<f64> {
     let s = s.trim();
@@ -348,9 +420,10 @@ pub fn finite_in_every_unit(pt: f64) -> bool {
 }
 
 /// A unitless field value (percent, degrees, counts) with the same `+ - * /` arithmetic as
-/// [`Unit::parse`] (`45*2`, `100/3`); text other than digits, `.` and operators reads as nothing.
+/// [`Unit::parse`] (`45*2`, `45x2`, `100/3`); text other than digits, `.` and operators reads as
+/// nothing.
 pub fn parse_number(s: &str) -> Option<f64> {
-    if !s.chars().all(|c| c.is_ascii_digit() || " .+-*/".contains(c)) {
+    if !s.chars().all(|c| c.is_ascii_digit() || " .+-*/xX×".contains(c)) {
         return None;
     }
     // A leading `+` is a sign (`+5`), as a plain number read it.

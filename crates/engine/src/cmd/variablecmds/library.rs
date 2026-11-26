@@ -250,7 +250,6 @@ fn parse_library(xml: &str, cmd: &str, text_only: bool) -> Result<Library> {
         craft_xml::Error::TooDeep(_) => bad(cmd, format!("the variable library nests elements more than {MAX_LIBRARY_NESTING} deep")),
         _ => bad(cmd, format!("the variable library is not well-formed XML: {e}")),
     })?;
-    crate::cmd::xmlattrs::validate(xml.as_bytes(), opts.limits).map_err(|e| bad(cmd, format!("the variable library is not well-formed XML: {e}")))?;
     let Some(root) = std::iter::once(&doc).chain(doc.descendants()).find(|n| n.is(craft_xml::Local("variableSets"))) else {
         return Err(bad(cmd, "the file holds no `variableSets` element"));
     };

@@ -11,9 +11,14 @@
 //! onto another object's anchor scales exactly onto it. Scale stretches along the bounding box's
 //! own width and height, turned with rotated objects until Reset Bounding Box; Reflect's default
 //! axis is the box's vertical one, and Shift constrains a drawn axis to 45° steps from the box.
+//! With the Reflect tool, a click also sets the first point of an axis, and a second click
+//! reflects the selection across the line through both points (Alt on it reflects a copy); a
+//! drag from there draws the axis from that first point.
+
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{NodeId, OrientedBox};
+use vectorcraft_doc::{AnchorRef, NodeId, OrientedBox};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use super::target_overlays;
@@ -82,6 +87,9 @@ struct Drag {
     pointer: Point,
     shift: bool,
     last: Affine,
+    /// The document revision at the press: a press whose document or selection changes before it
+    /// becomes a drag is dropped, so its reference point is never applied to other objects.
+    revision: (u64, u64),
 }
 
 impl Drag {
@@ -92,10 +100,24 @@ impl Drag {
     }
 }
 
+/// The first point of a Reflect axis set by a click, waiting for the second point, with the
+/// selection and the document revision it was set for.
+#[derive(Clone, Debug)]
+struct Axis {
+    first: Point,
+    objects: Vec<NodeId>,
+    anchors: BTreeMap<NodeId, BTreeSet<AnchorRef>>,
+    revision: (u64, u64),
+}
+
 pub struct TransformTool {
     kind: TransformKind,
     /// Custom reference point and the selection it was set for.
     origin: Option<(Point, Vec<NodeId>)>,
+    /// Reflect: the axis whose second point the next click sets.
+    axis: Option<Axis>,
+    /// The snapped pointer while hovering with an axis waiting, where its dashed line ends.
+    axis_to: Option<Point>,
     drag: Option<Drag>,
     measure: Option<(Point, String)>,
     /// What the Info panel shows for the drag in progress.
@@ -104,6 +126,11 @@ pub struct TransformTool {
     hover: Vec<Overlay>,
     /// What the dragged pointer snaps to, gathered when the drag begins.
     snap: Option<PointSnap>,
+}
+
+/// The selected objects and ruler guides, which a reference point set by a click belongs to.
+fn selected_ids(cx: &ToolContext) -> Vec<NodeId> {
+    cx.selection.objects.iter().chain(&cx.selection.guides).copied().collect()
 }
 
 fn about(o: Point, a: Affine) -> Affine {
@@ -128,14 +155,31 @@ pub fn reflect_matrix(o: Point, theta: f64) -> Affine {
 
 impl TransformTool {
     pub fn new(kind: TransformKind) -> Self {
-        Self { kind, origin: None, drag: None, measure: None, readout: None, hover: vec![], snap: None }
+        Self { kind, origin: None, axis: None, axis_to: None, drag: None, measure: None, readout: None, hover: vec![], snap: None }
+    }
+
+    /// The first point of the Reflect axis waiting for its second point, when it was set for the
+    /// current selection (objects and anchors) and nothing in the document or the selection has
+    /// changed since, so a selection changed and then changed back does not bring it back.
+    fn axis_first(&self, cx: &ToolContext) -> Option<Point> {
+        self.axis
+            .as_ref()
+            .filter(|a| !a.objects.is_empty() && a.revision == cx.revision && a.objects == cx.selection.objects && a.anchors == cx.selection.anchors)
+            .map(|a| a.first)
+    }
+
+    /// Drops the Reflect axis waiting for its second point.
+    fn drop_axis(&mut self) {
+        self.axis = None;
+        self.axis_to = None;
     }
 
     /// The effective reference point: the custom one if it belongs to the current selection,
-    /// otherwise the centre of its bounding box (rotated with rotated objects).
+    /// otherwise the centre of its bounding box (rotated with rotated objects). With ruler guides
+    /// selected, it is the center of the objects' box and the guides' lines together.
     pub fn reference_point(&self, cx: &ToolContext) -> Option<Point> {
         if let Some((p, ids)) = &self.origin
-            && *ids == cx.selection.objects
+            && *ids == selected_ids(cx)
             && !ids.is_empty()
         {
             return Some(*p);
@@ -143,7 +187,29 @@ impl TransformTool {
         // Anchors selected with Direct Selection transform alone, about their own centre.
         vectorcraft_effects::preview::anchor_bounds_with(cx.selection, cx.doc, cx.bounds_measure())
             .map(|b| b.center())
-            .or_else(|| selection_box(cx).map(|b| b.center()))
+            .or_else(|| if self.guide_lines(cx).is_empty() { selection_box(cx).map(|b| b.center()) } else { self.bounds(cx).map(|b| b.center()) })
+    }
+
+    /// The selected ruler guides the tool transforms, as the boxes of the lines they stand for
+    /// ([`vectorcraft_doc::Document::guide_line`]): those that can be edited, with objects
+    /// selected, and with the Rotate tool also without.
+    fn guide_lines(&self, cx: &ToolContext) -> Vec<Rect> {
+        if cx.selection.is_empty() && self.kind != TransformKind::Rotate {
+            return vec![];
+        }
+        let d = cx.doc;
+        let guides = cx.selection.guides.iter().filter_map(|id| d.ruler_guide(*id)).filter(|g| d.guide_editable(g));
+        guides.filter_map(|g| d.guide_line(&g)).map(|(a, b)| Rect::from_points(a, b)).collect()
+    }
+
+    /// The bounding box of the selected objects and the lines of the guides the tool transforms.
+    fn bounds(&self, cx: &ToolContext) -> Option<Rect> {
+        self.guide_lines(cx).into_iter().fold(selection_bounds(cx), |acc, r| Some(acc.map_or(r, |acc| acc.union(r))))
+    }
+
+    /// Is there anything selected for the tool to transform?
+    fn has_target(&self, cx: &ToolContext) -> bool {
+        !cx.selection.is_empty() || !self.guide_lines(cx).is_empty()
     }
 
     /// Transform for dragging from `start` to `p` about `o`; returns the matrix and a readout.
@@ -293,12 +359,14 @@ impl Tool for TransformTool {
         let p = ev.pos;
         match ev.kind {
             PointerKind::Down => {
-                let Some(bounds) = selection_bounds(cx) else { return vec![] };
+                let Some(bounds) = self.bounds(cx) else { return vec![] };
                 self.hover.clear();
                 let (pick, _) = snap_pick(cx, p);
                 // Alt: decided on release. A click sets the point and opens the dialog; a drag
-                // transforms a copy about the reference point as it was.
-                let origin = self.reference_point(cx).unwrap_or(bounds.center());
+                // transforms a copy about the reference point as it was. With a Reflect axis waiting
+                // for its second point, a drag draws the axis from its first point.
+                self.axis_to = None;
+                let origin = self.axis_first(cx).or_else(|| self.reference_point(cx)).unwrap_or(bounds.center());
                 let anchors = vectorcraft_effects::preview::anchor_bounds_with(cx.selection, cx.doc, cx.bounds_measure()).is_some();
                 let angle = selection_box(cx).map_or(0.0, |b| b.angle);
                 self.drag = Some(Drag {
@@ -313,6 +381,7 @@ impl Tool for TransformTool {
                     pointer: p,
                     shift: false,
                     last: Affine::IDENTITY,
+                    revision: cx.revision,
                 });
                 vec![]
             }
@@ -321,6 +390,12 @@ impl Tool for TransformTool {
                 let mut out = vec![];
                 if !d.began {
                     if p.distance(d.start) < cx.tol(3.0) {
+                        return out;
+                    }
+                    // The document or the selection changed since the press: its reference point
+                    // (or Reflect axis) belongs to the selection as it was, so the press is dropped.
+                    if d.revision != cx.revision {
+                        self.end_drag();
                         return out;
                     }
                     d.began = true;
@@ -352,15 +427,49 @@ impl Tool for TransformTool {
                     } else {
                         d.last
                     };
+                    // A drag draws a Reflect axis to its end, so it uses up an axis waiting for
+                    // its second point.
+                    self.drop_axis();
                     vec![preview(m, ev.mods.alt, ev.backquote), Action::Commit]
+                } else if d.revision != cx.revision {
+                    // The document or the selection changed since the press, as for a drag: the
+                    // release sets no reference point or Reflect axis.
+                    vec![]
+                } else if let (TransformKind::Reflect, Some(first)) = (self.kind, self.axis_first(cx)) {
+                    // The second point of a Reflect axis: the selection (with Alt at the release, as
+                    // for a drag, a copy) reflects across the line through both points, as one undo
+                    // step. A click on the first point does not define a line, so the axis keeps
+                    // waiting.
+                    if d.pick.distance(first) < cx.tol(3.0) {
+                        return vec![];
+                    }
+                    self.drop_axis();
+                    let copy = ev.mods.alt;
+                    let (m, _, _) = self.solve(d.angle_for(copy, ev.backquote), first, first, d.pick, false, d.bounds);
+                    vec![Action::Begin(self.kind.label().into()), preview(m, copy, ev.backquote), Action::Commit]
                 } else {
-                    // A click sets the reference point; with Alt, it opens the dialog too.
-                    self.origin = Some((d.pick, cx.selection.objects.clone()));
-                    if d.alt { vec![self.dialog(d.pick)] } else { vec![] }
+                    // A click sets the reference point; with Alt, it opens the dialog too. With the
+                    // Reflect tool, a plain click also sets the first point of an axis.
+                    self.origin = Some((d.pick, selected_ids(cx)));
+                    self.drop_axis();
+                    if d.alt {
+                        vec![self.dialog(d.pick)]
+                    } else {
+                        if self.kind == TransformKind::Reflect {
+                            self.axis = Some(Axis {
+                                first: d.pick,
+                                objects: cx.selection.objects.clone(),
+                                anchors: cx.selection.anchors.clone(),
+                                revision: cx.revision,
+                            });
+                        }
+                        vec![]
+                    }
                 }
             }
             PointerKind::DoubleClick => {
                 self.end_drag();
+                self.drop_axis();
                 match self.reference_point(cx) {
                     Some(o) => vec![self.dialog(o)],
                     None => vec![],
@@ -369,7 +478,9 @@ impl Tool for TransformTool {
             PointerKind::TripleClick => vec![],
             PointerKind::Move => {
                 if self.drag.is_none() {
-                    self.hover = if cx.selection.is_empty() { vec![] } else { snap_pick(cx, p).1 };
+                    let (pick, hover) = if self.has_target(cx) { snap_pick(cx, p) } else { (p, vec![]) };
+                    self.hover = hover;
+                    self.axis_to = self.axis_first(cx).map(|_| pick);
                 }
                 vec![]
             }
@@ -378,13 +489,38 @@ impl Tool for TransformTool {
 
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
         match key {
+            // Escape cancels a drag, and drops the Reflect axis the drag was drawing from too.
             ToolKey::Escape if self.busy() => {
                 self.end_drag();
+                self.drop_axis();
                 vec![Action::Cancel]
             }
-            ToolKey::Enter => self.reference_point(cx).map(|o| vec![self.dialog(o)]).unwrap_or_default(),
+            // Escape drops a Reflect axis waiting for its second point, and a press not yet
+            // released with it, so the release sets no point; the reference point stays.
+            ToolKey::Escape if self.axis.is_some() => {
+                self.end_drag();
+                self.drop_axis();
+                vec![]
+            }
+            // Enter opens the dialog. A press not yet a drag ends with it, so its release sets no
+            // reference point or Reflect axis behind the dialog.
+            ToolKey::Enter => {
+                if !self.busy() {
+                    self.end_drag();
+                }
+                self.drop_axis();
+                self.reference_point(cx).map(|o| vec![self.dialog(o)]).unwrap_or_default()
+            }
             _ => vec![],
         }
+    }
+
+    /// A dropped press ends whether or not it became a drag, so the release the engine sends after
+    /// it sets no reference point or Reflect axis; a Reflect axis waiting for its second point is
+    /// dropped too, as with Escape.
+    fn drop_press(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        self.drop_axis();
+        if self.end_drag().is_some_and(|d| d.began) { vec![Action::Cancel] } else { vec![] }
     }
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
@@ -403,6 +539,13 @@ impl Tool for TransformTool {
         {
             o.push(Overlay::Line { a: d.origin, b: *p, color: super::CYAN, dashed: true });
         }
+        // A Reflect axis waiting for its second point: a dashed line from its first point to the
+        // pointer.
+        if self.drag.is_none()
+            && let (Some(a), Some(b)) = (self.axis_first(cx), self.axis_to)
+        {
+            o.push(Overlay::Line { a, b, color: super::CYAN, dashed: true });
+        }
         if let (Some((p, t)), true) = (&self.measure, cx.transform_tools_guides) {
             o.push(Overlay::Measure { p: *p + Vec2::new(cx.tol(12.0), cx.tol(12.0)), text: t.clone() });
         }
@@ -410,7 +553,7 @@ impl Tool for TransformTool {
     }
 
     fn cursor(&self, cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
-        if cx.selection.is_empty() {
+        if !self.has_target(cx) {
             return Cursor::NotAllowed;
         }
         match self.kind {
@@ -429,7 +572,18 @@ impl Tool for TransformTool {
     fn set_option(&mut self, key: &str, value: &Value) {
         if key == "origin" {
             self.origin = value.as_array().and_then(|a| Some((Point::new(a.first()?.as_f64()?, a.get(1)?.as_f64()?), vec![])));
+            self.drop_axis();
         }
+    }
+
+    fn ends_on_escape(&self, cx: &ToolContext) -> bool {
+        self.axis_first(cx).is_some()
+    }
+
+    /// An edit, Undo or Redo made outside the tool, or another document, drops a Reflect axis
+    /// waiting for its second point.
+    fn history_moved(&mut self) {
+        self.drop_axis();
     }
 
     /// `origin` is `[x, y]`, or null to clear it.
@@ -442,6 +596,7 @@ impl Tool for TransformTool {
     }
 
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        self.drop_axis();
         if self.end_drag().is_some_and(|d| d.began) { vec![Action::Cancel] } else { vec![] }
     }
 }
@@ -528,6 +683,35 @@ mod tests {
         assert!((m * Point::new(250.0, 150.0)).distance(Point::new(150.0, 250.0)) < 1e-9);
         let up = t.pointer(&cx, &ev(PointerKind::Up, 150.0, 250.0));
         assert_eq!(up.last(), Some(&Action::Commit));
+    }
+
+    /// With only a ruler guide selected, the Rotate tool drags about the middle of the guide's
+    /// line, and Alt-click opens its dialog; the Scale tool still needs objects.
+    #[test]
+    fn the_rotate_tool_turns_a_selected_ruler_guide_alone() {
+        let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+        let g = d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 100.0));
+        let mut s = Selection::default();
+        s.guides.push(g);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = TransformTool::new(TransformKind::Rotate);
+        assert_eq!(t.reference_point(&cx), Some(Point::new(100.0, 250.0)));
+        assert_ne!(t.cursor(&cx, Point::ZERO, Mods::default()), Cursor::NotAllowed);
+        assert!(t.pointer(&cx, &ev(PointerKind::Down, 200.0, 250.0)).is_empty());
+        let a = t.pointer(&cx, &ev(PointerKind::Drag, 100.0, 350.0));
+        assert_eq!(a[0], Action::Begin("Rotate".into()));
+        let m = matrix(&a[1]);
+        assert!((m * Point::new(100.0, 250.0)).distance(Point::new(100.0, 250.0)) < 1e-9);
+        assert!((m * Point::new(200.0, 250.0)).distance(Point::new(100.0, 350.0)) < 1e-9);
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 100.0, 350.0)).last(), Some(&Action::Commit));
+        t.pointer(&cx, &ev(PointerKind::Down, 50.0, 60.0).with_mods(alt()));
+        let up = t.pointer(&cx, &ev(PointerKind::Up, 50.0, 60.0).with_mods(alt()));
+        assert!(matches!(up.as_slice(), [Action::Dialog(id, _)] if id == "rotate"), "{up:?}");
+        let mut scale = TransformTool::new(TransformKind::Scale);
+        assert_eq!(scale.reference_point(&cx), None);
+        assert!(scale.pointer(&cx, &ev(PointerKind::Down, 200.0, 250.0)).is_empty());
+        assert!(scale.pointer(&cx, &ev(PointerKind::Drag, 100.0, 350.0)).is_empty());
     }
 
     #[test]
@@ -672,6 +856,353 @@ mod tests {
         t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0));
         let a = t.pointer(&c, &ev(PointerKind::Drag, 302.0, 262.0));
         assert!((matrix(&a[1]) * Point::new(200.0, 200.0)).distance(Point::new(302.0, 262.0)) < 1e-9);
+    }
+
+    /// Sends a click (a press and a release, with `mods`) at `(x, y)` and returns the release's actions.
+    fn click(t: &mut TransformTool, cx: &ToolContext, x: f64, y: f64, mods: Mods) -> Vec<Action> {
+        assert!(t.pointer(cx, &ev(PointerKind::Down, x, y).with_mods(mods)).is_empty());
+        t.pointer(cx, &ev(PointerKind::Up, x, y).with_mods(mods))
+    }
+
+    /// Returns the matrix of a two-click reflection: a Begin, one `object.transform` preview with
+    /// `copy`, and a Commit.
+    fn reflected(a: &[Action], copy: bool) -> Affine {
+        assert!(
+            matches!(a, [Action::Begin(l), Action::Preview(c, v), Action::Commit] if l == "Reflect" && c == "object.transform" && v["copy"] == copy),
+            "{a:?}"
+        );
+        matrix(&a[1])
+    }
+
+    /// The Reflect tool: a click sets the first point of an axis, and a second click reflects the
+    /// selection across the line through both points, as one interaction. The next click starts a
+    /// new axis.
+    #[test]
+    fn a_second_reflect_click_reflects_across_the_line_through_both_points() {
+        let (d, id) = doc_with_rect();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let mut c = cx(&d, &s, &p);
+        (c.smart_guides, c.snap_to_point) = (false, false);
+        let none = Mods::default();
+        let mut t = TransformTool::new(TransformKind::Reflect);
+        assert!(click(&mut t, &c, 100.0, 100.0, none).is_empty());
+        assert_eq!(t.reference_point(&c), Some(Point::new(100.0, 100.0)));
+        assert!(t.ends_on_escape(&c));
+        // Hovering draws the axis from the first point to the pointer.
+        t.pointer(&c, &ev(PointerKind::Move, 200.0, 260.0));
+        let line = Overlay::Line { a: Point::new(100.0, 100.0), b: Point::new(200.0, 260.0), color: super::super::CYAN, dashed: true };
+        assert!(t.overlays(&c).contains(&line), "{:?}", t.overlays(&c));
+        let m = reflected(&click(&mut t, &c, 200.0, 200.0, none), false);
+        for fixed in [Point::new(100.0, 100.0), Point::new(200.0, 200.0), Point::new(300.0, 300.0)] {
+            assert!((m * fixed).distance(fixed) < 1e-9, "{m:?}");
+        }
+        assert!((m * Point::new(200.0, 100.0)).distance(Point::new(100.0, 200.0)) < 1e-9, "{m:?}");
+        // The axis is used up; the first point stays the reference point.
+        assert!(!t.ends_on_escape(&c));
+        assert!(!t.overlays(&c).contains(&line));
+        assert_eq!(t.reference_point(&c), Some(Point::new(100.0, 100.0)));
+        // The next click starts a new axis, and the one after it reflects across a vertical line.
+        assert!(click(&mut t, &c, 120.0, 50.0, none).is_empty());
+        let m = reflected(&click(&mut t, &c, 120.0, 250.0, none), false);
+        assert!((m * Point::new(150.0, 130.0)).distance(Point::new(90.0, 130.0)) < 1e-9, "{m:?}");
+        // Shift on a plain second click does not constrain the line.
+        assert!(click(&mut t, &c, 100.0, 100.0, none).is_empty());
+        let shift = Mods { shift: true, ..Default::default() };
+        let m = reflected(&click(&mut t, &c, 210.0, 190.0, shift), false);
+        assert!((m * Point::new(210.0, 190.0)).distance(Point::new(210.0, 190.0)) < 1e-9, "{m:?}");
+    }
+
+    /// Alt on the second click reflects a copy and opens no dialog; Alt on a first click still opens
+    /// the dialog and starts no axis.
+    #[test]
+    fn alt_on_the_second_reflect_click_reflects_a_copy() {
+        let (d, id) = doc_with_rect();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let mut c = cx(&d, &s, &p);
+        (c.smart_guides, c.snap_to_point) = (false, false);
+        let mut t = TransformTool::new(TransformKind::Reflect);
+        assert!(click(&mut t, &c, 250.0, 100.0, Mods::default()).is_empty());
+        let m = reflected(&click(&mut t, &c, 250.0, 200.0, alt()), true);
+        assert!((m * Point::new(150.0, 150.0)).distance(Point::new(350.0, 150.0)) < 1e-9, "{m:?}");
+        // As for a drag, Alt at the release decides: held only at the press, the original reflects;
+        // pressed during the click, a copy does.
+        for (press, release) in [(alt(), Mods::default()), (Mods::default(), alt())] {
+            assert!(click(&mut t, &c, 250.0, 100.0, Mods::default()).is_empty());
+            assert!(t.pointer(&c, &ev(PointerKind::Down, 250.0, 200.0).with_mods(press)).is_empty());
+            reflected(&t.pointer(&c, &ev(PointerKind::Up, 250.0, 200.0).with_mods(release)), release.alt);
+        }
+        // Alt on a first click: the dialog, and the click after it is a first click again.
+        assert_eq!(
+            click(&mut t, &c, 120.0, 130.0, alt()),
+            vec![Action::Dialog("reflect".into(), json!({"axis": "vertical", "origin": [120.0, 130.0]}))]
+        );
+        assert!(!t.ends_on_escape(&c));
+        assert!(click(&mut t, &c, 130.0, 160.0, Mods::default()).is_empty());
+        assert!(t.ends_on_escape(&c));
+    }
+
+    /// A second click on the first point does not define a line: nothing happens and the axis keeps
+    /// waiting. Escape, Enter, a double-click, a changed selection, an edit made outside the tool,
+    /// a new reference point and switching tools drop the axis, so the next click starts a new one.
+    #[test]
+    fn a_reflect_axis_waits_through_a_click_on_its_first_point_and_drops_on_escape_or_a_new_selection() {
+        let (mut d, id) = doc_with_rect();
+        let l = d.layers[0].id;
+        let other = d.alloc_id();
+        d.insert(
+            Some(l),
+            1,
+            vectorcraft_doc::Node::path(
+                other,
+                vectorcraft_geom::shapes::rectangle(Rect::new(300.0, 300.0, 340.0, 340.0)),
+                vectorcraft_doc::Appearance::default_art(),
+            ),
+        )
+        .unwrap();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let mut c = cx(&d, &s, &p);
+        (c.smart_guides, c.snap_to_point) = (false, false);
+        let none = Mods::default();
+        let mut t = TransformTool::new(TransformKind::Reflect);
+        click(&mut t, &c, 100.0, 100.0, none);
+        assert!(click(&mut t, &c, 100.0, 100.0, none).is_empty());
+        assert!(click(&mut t, &c, 101.0, 102.0, none).is_empty());
+        assert!(t.ends_on_escape(&c));
+        reflected(&click(&mut t, &c, 100.0, 200.0, none), false);
+
+        // Each way of dropping the axis, then a click that only starts a new one.
+        type DropAxis = fn(&mut TransformTool, &ToolContext);
+        let drops: [(&str, DropAxis); 6] = [
+            ("escape", |t, c| assert!(t.key(c, ToolKey::Escape, Mods::default()).is_empty())),
+            ("enter", |t, c| assert!(matches!(t.key(c, ToolKey::Enter, Mods::default()).as_slice(), [Action::Dialog(..)]))),
+            ("double-click", |t, c| assert!(matches!(t.pointer(c, &ev(PointerKind::DoubleClick, 100.0, 100.0)).as_slice(), [Action::Dialog(..)]))),
+            ("history", |t, _| t.history_moved()),
+            ("origin", |t, _| t.set_option("origin", &json!([10.0, 10.0]))),
+            ("deactivate", |t, c| assert!(t.deactivate(c).is_empty())),
+        ];
+        for (name, drop) in drops {
+            click(&mut t, &c, 100.0, 100.0, none);
+            assert!(t.ends_on_escape(&c), "{name}");
+            drop(&mut t, &c);
+            assert!(!t.ends_on_escape(&c), "{name}");
+            assert!(click(&mut t, &c, 100.0, 200.0, none).is_empty(), "{name}");
+            assert!(t.ends_on_escape(&c), "{name}");
+            t.key(&c, ToolKey::Escape, Mods::default());
+        }
+
+        // A double-click elsewhere arrives as two clicks and then the double-click: its first click
+        // sets the second point and reflects, its second click starts a new axis, and the
+        // double-click drops that axis and opens the dialog there.
+        click(&mut t, &c, 100.0, 100.0, none);
+        reflected(&click(&mut t, &c, 100.0, 200.0, none), false);
+        assert!(click(&mut t, &c, 100.0, 200.0, none).is_empty());
+        let a = t.pointer(&c, &ev(PointerKind::DoubleClick, 100.0, 200.0));
+        assert_eq!(a, vec![Action::Dialog("reflect".into(), json!({"axis": "vertical", "origin": [100.0, 200.0]}))]);
+        assert!(!t.ends_on_escape(&c));
+
+        // The selection changed and changed back (or the document edited) moves the revision: the
+        // axis set before it does not come back.
+        click(&mut t, &c, 100.0, 100.0, none);
+        let mut moved = cx(&d, &s, &p);
+        (moved.smart_guides, moved.snap_to_point) = (false, false);
+        moved.revision = (c.revision.0, c.revision.1 + 1);
+        assert!(!t.ends_on_escape(&moved));
+        assert!(click(&mut t, &moved, 100.0, 200.0, none).is_empty());
+        reflected(&click(&mut t, &moved, 200.0, 200.0, none), false);
+
+        // Another object selected, then nothing selected: the axis set for the first selection
+        // does not reflect them.
+        click(&mut t, &c, 100.0, 100.0, none);
+        let mut s2 = Selection::default();
+        s2.add(other);
+        let mut c2 = cx(&d, &s2, &p);
+        (c2.smart_guides, c2.snap_to_point) = (false, false);
+        assert!(!t.ends_on_escape(&c2));
+        assert!(click(&mut t, &c2, 100.0, 200.0, none).is_empty());
+        let empty = Selection::default();
+        let c3 = cx(&d, &empty, &p);
+        assert!(t.pointer(&c3, &ev(PointerKind::Down, 100.0, 300.0)).is_empty());
+        assert!(t.pointer(&c3, &ev(PointerKind::Up, 100.0, 300.0)).is_empty());
+        // Anchors selected with Direct Selection make a different selection too.
+        let mut s4 = s.clone();
+        s4.anchors.insert(id, [(0, 0), (0, 1)].into());
+        let mut c4 = cx(&d, &s4, &p);
+        (c4.smart_guides, c4.snap_to_point) = (false, false);
+        click(&mut t, &c, 100.0, 100.0, none);
+        assert!(!t.ends_on_escape(&c4));
+        assert!(click(&mut t, &c4, 100.0, 200.0, none).is_empty());
+        // With those anchors selected, the second click reflects them, across the line y = 200.
+        let m = reflected(&click(&mut t, &c4, 200.0, 200.0, none), false);
+        assert!((m * Point::new(150.0, 150.0)).distance(Point::new(150.0, 250.0)) < 1e-9, "{m:?}");
+
+        // The other transform tools only move the reference point on a second click.
+        for kind in [TransformKind::Rotate, TransformKind::Scale, TransformKind::Shear] {
+            let mut t = TransformTool::new(kind);
+            assert!(click(&mut t, &c, 100.0, 100.0, none).is_empty(), "{kind:?}");
+            assert!(click(&mut t, &c, 100.0, 200.0, none).is_empty(), "{kind:?}");
+            assert!(!t.ends_on_escape(&c), "{kind:?}");
+            assert_eq!(t.reference_point(&c), Some(Point::new(100.0, 200.0)), "{kind:?}");
+        }
+    }
+
+    /// Escape pressed between the press and the release of the second click drops the axis and the
+    /// press with it: the release starts no new axis and moves no reference point, so the click
+    /// after it starts an axis and reflects nothing. Escape during a drag from the first point
+    /// cancels the drag and drops the axis too.
+    #[test]
+    fn escape_during_the_second_reflect_click_cancels_that_click() {
+        let (d, id) = doc_with_rect();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let mut c = cx(&d, &s, &p);
+        (c.smart_guides, c.snap_to_point) = (false, false);
+        let none = Mods::default();
+        let mut t = TransformTool::new(TransformKind::Reflect);
+        assert!(click(&mut t, &c, 100.0, 100.0, none).is_empty());
+        assert!(t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0)).is_empty());
+        assert!(t.key(&c, ToolKey::Escape, none).is_empty());
+        assert!(t.pointer(&c, &ev(PointerKind::Up, 200.0, 200.0)).is_empty());
+        assert!(!t.ends_on_escape(&c));
+        assert_eq!(t.reference_point(&c), Some(Point::new(100.0, 100.0)));
+        assert!(click(&mut t, &c, 150.0, 300.0, none).is_empty());
+        assert!(t.ends_on_escape(&c));
+        // A drag from the first point, then Escape.
+        assert!(t.pointer(&c, &ev(PointerKind::Down, 300.0, 300.0)).is_empty());
+        assert_eq!(t.pointer(&c, &ev(PointerKind::Drag, 100.0, 250.0))[0], Action::Begin("Reflect".into()));
+        assert_eq!(t.key(&c, ToolKey::Escape, none), vec![Action::Cancel]);
+        assert!(!t.ends_on_escape(&c));
+        assert!(t.pointer(&c, &ev(PointerKind::Up, 100.0, 250.0)).is_empty());
+        assert!(click(&mut t, &c, 200.0, 200.0, none).is_empty());
+    }
+
+    /// Enter between the press and the release of the second click opens the dialog at the first
+    /// point and ends the press: the release sets no point and starts no axis. A press the engine
+    /// drops ends the same way, with or without an axis waiting, and a dropped drag is canceled. A
+    /// press whose document or selection changes before it becomes a drag is dropped.
+    #[test]
+    fn enter_or_a_dropped_press_during_a_reflect_click_ends_that_press() {
+        let (d, id) = doc_with_rect();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let mut c = cx(&d, &s, &p);
+        (c.smart_guides, c.snap_to_point) = (false, false);
+        let none = Mods::default();
+        let first = Point::new(100.0, 100.0);
+        let mut t = TransformTool::new(TransformKind::Reflect);
+        assert!(click(&mut t, &c, 100.0, 100.0, none).is_empty());
+        assert!(t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0)).is_empty());
+        assert_eq!(t.key(&c, ToolKey::Enter, none), vec![Action::Dialog("reflect".into(), json!({"axis": "vertical", "origin": [100.0, 100.0]}))]);
+        assert!(t.pointer(&c, &ev(PointerKind::Up, 200.0, 200.0)).is_empty());
+        assert!(!t.ends_on_escape(&c));
+        assert_eq!(t.reference_point(&c), Some(first));
+
+        // A dropped first press: its release sets no point and starts no axis.
+        assert!(t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0)).is_empty());
+        assert!(t.drop_press(&c).is_empty());
+        assert!(t.pointer(&c, &ev(PointerKind::Up, 200.0, 200.0)).is_empty());
+        assert!(!t.ends_on_escape(&c));
+        assert_eq!(t.reference_point(&c), Some(first));
+        // A dropped second press drops the axis too, so the next click is a first click.
+        assert!(click(&mut t, &c, 100.0, 100.0, none).is_empty());
+        assert!(t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0)).is_empty());
+        assert!(t.drop_press(&c).is_empty());
+        assert!(t.pointer(&c, &ev(PointerKind::Up, 200.0, 200.0)).is_empty());
+        assert!(!t.ends_on_escape(&c));
+        assert!(click(&mut t, &c, 150.0, 300.0, none).is_empty());
+        // A dropped drag is canceled, and its release commits nothing.
+        assert!(t.pointer(&c, &ev(PointerKind::Down, 300.0, 300.0)).is_empty());
+        assert_eq!(t.pointer(&c, &ev(PointerKind::Drag, 100.0, 250.0))[0], Action::Begin("Reflect".into()));
+        assert_eq!(t.drop_press(&c), vec![Action::Cancel]);
+        assert!(t.pointer(&c, &ev(PointerKind::Up, 100.0, 250.0)).is_empty());
+        assert!(!t.ends_on_escape(&c));
+
+        // The selection changes between the press and the first drag event: the press is dropped,
+        // and neither the drag nor its release transforms anything.
+        assert!(click(&mut t, &c, 100.0, 100.0, none).is_empty());
+        assert!(t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0)).is_empty());
+        let mut moved = cx(&d, &s, &p);
+        (moved.smart_guides, moved.snap_to_point) = (false, false);
+        moved.revision = (c.revision.0, c.revision.1 + 1);
+        assert!(t.pointer(&moved, &ev(PointerKind::Drag, 100.0, 250.0)).is_empty());
+        assert!(!t.busy());
+        assert!(t.pointer(&moved, &ev(PointerKind::Up, 100.0, 250.0)).is_empty());
+    }
+
+    /// A press whose document or selection changes before a release that is not a drag sets no
+    /// reference point and starts no Reflect axis, so the next click is a first click.
+    #[test]
+    fn a_reflect_press_released_after_the_document_changed_sets_nothing() {
+        let (d, id) = doc_with_rect();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let mut c = cx(&d, &s, &p);
+        (c.smart_guides, c.snap_to_point) = (false, false);
+        let none = Mods::default();
+        let mut moved = cx(&d, &s, &p);
+        (moved.smart_guides, moved.snap_to_point) = (false, false);
+        moved.revision = (c.revision.0, c.revision.1 + 1);
+        let mut t = TransformTool::new(TransformKind::Reflect);
+        assert!(t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0)).is_empty());
+        assert!(t.pointer(&moved, &ev(PointerKind::Up, 200.0, 200.0)).is_empty());
+        assert!(!t.ends_on_escape(&moved));
+        assert_ne!(t.reference_point(&moved), Some(Point::new(200.0, 200.0)));
+        assert!(click(&mut t, &moved, 150.0, 300.0, none).is_empty());
+        // The other transform tools set no reference point either.
+        let mut t = TransformTool::new(TransformKind::Rotate);
+        assert!(t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0)).is_empty());
+        assert!(t.pointer(&moved, &ev(PointerKind::Up, 200.0, 200.0)).is_empty());
+        assert_ne!(t.reference_point(&moved), Some(Point::new(200.0, 200.0)));
+    }
+
+    /// After a click sets the first point, a drag draws the axis from it (Shift in 45° steps from a
+    /// turned box), and its release uses the axis up. With the selection turned, two clicks still
+    /// reflect across the line through the clicked points on the page.
+    #[test]
+    fn a_drag_after_a_reflect_click_draws_the_axis_from_the_first_point() {
+        let (mut d, id) = doc_with_rect();
+        let c0 = Point::new(150.0, 150.0);
+        d.node_mut(id).unwrap().transform(about(c0, Affine::rotate(-30f64.to_radians())), false);
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let mut c = cx(&d, &s, &p);
+        (c.smart_guides, c.snap_to_point) = (false, false);
+        let none = Mods::default();
+        let mut t = TransformTool::new(TransformKind::Reflect);
+        click(&mut t, &c, 100.0, 100.0, none);
+        t.pointer(&c, &ev(PointerKind::Down, 300.0, 300.0));
+        let a = t.pointer(&c, &ev(PointerKind::Drag, 100.0, 250.0));
+        assert_eq!(a[0], Action::Begin("Reflect".into()));
+        let m = matrix(&a[1]);
+        assert!((m * Point::new(100.0, 180.0)).distance(Point::new(100.0, 180.0)) < 1e-9, "{m:?}");
+        assert!((m * Point::new(150.0, 150.0)).distance(Point::new(50.0, 150.0)) < 1e-9, "{m:?}");
+        // Shift: a pointer a few degrees off the box's vertical axis steps onto it.
+        let frame = OrientedBox { angle: 30.0, rect: Rect::ZERO };
+        let along = |x: f64, y: f64| Point::new(100.0, 100.0) + (frame.to_doc() * Point::new(x, y)).to_vec2();
+        let to = along(3.0, 50.0);
+        let a = t.pointer(&c, &ev(PointerKind::Drag, to.x, to.y).with_mods(Mods { shift: true, ..Default::default() }));
+        assert!((matrix(&a[0]) * along(0.0, 50.0)).distance(along(0.0, 50.0)) < 1e-9, "{a:?}");
+        let up = t.pointer(&c, &ev(PointerKind::Up, to.x, to.y));
+        assert_eq!(up.last(), Some(&Action::Commit));
+        assert!(!t.ends_on_escape(&c));
+        assert!(click(&mut t, &c, 100.0, 300.0, none).is_empty());
+        // Two clicks with the box turned: the line through the clicked points on the page.
+        let m = reflected(&click(&mut t, &c, 300.0, 300.0, none), false);
+        assert!((m * Point::new(200.0, 250.0)).distance(Point::new(200.0, 350.0)) < 1e-9, "{m:?}");
+        // A drag with no axis waiting still draws it from the reference point.
+        let mut t = TransformTool::new(TransformKind::Reflect);
+        t.pointer(&c, &ev(PointerKind::Down, 150.0, 50.0));
+        let a = t.pointer(&c, &ev(PointerKind::Drag, 150.0, 20.0));
+        assert!((matrix(&a[1]) * Point::new(100.0, 120.0)).distance(Point::new(200.0, 120.0)) < 1e-9);
     }
 
     #[test]

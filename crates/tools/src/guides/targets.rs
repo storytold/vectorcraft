@@ -119,6 +119,27 @@ fn parallel(a: Vec2, b: Vec2) -> bool {
     scale > 1e-18 && a.dot(b) > 0.0 && a.cross(b).abs() <= 1e-6 * scale
 }
 
+/// `seg` as a line from its start to its end when it runs straight: a line, or a curve whose
+/// control points lie on that line and that stays between its ends (a straight path with its
+/// handles drawn out along it).
+fn straight(seg: PathSeg) -> Option<Line> {
+    use vectorcraft_geom::kurbo::ParamCurveExtrema;
+    let (l, ctrl) = match seg {
+        PathSeg::Line(l) => return Some(l),
+        PathSeg::Quad(q) => (Line::new(q.p0, q.p2), [q.p1, q.p1]),
+        PathSeg::Cubic(c) => (Line::new(c.p0, c.p3), [c.p1, c.p2]),
+    };
+    let d = l.p1 - l.p0;
+    let len2 = d.hypot2();
+    if !len2.is_finite() || len2 <= 1e-18 || !ctrl.into_iter().all(|p| d.cross(p - l.p0).abs() <= 1e-9 * len2) {
+        return None;
+    }
+    // The curve's own bounds, not its control points', must stay within the ends' box.
+    let (b, ends) = (ParamCurveExtrema::bounding_box(&seg), Rect::from_points(l.p0, l.p1));
+    let eps = 1e-9 * len2.sqrt();
+    (b.x0 >= ends.x0 - eps && b.x1 <= ends.x1 + eps && b.y0 >= ends.y0 - eps && b.y1 <= ends.y1 + eps).then_some(l)
+}
+
 /// Does the curve `seg` run around `center` the whole way, as an arc of a circle about it drawn
 /// with curves does: nearly square to the center all along, and its distance from the center
 /// varying by no more than 0.03%? A circle drawn with four curves ([`vectorcraft_geom::shapes::ellipse`])
@@ -257,9 +278,10 @@ impl Targets {
         Self::moving(cx, exclude, Gather::Bounds)
     }
 
-    /// [`Self::for_move`]'s targets for a selection moved by one of its anchors (#7411): the path
-    /// segments of the art but `exclude` too, which that anchor lands on ([`Self::snap_onto_path`]),
-    /// as a dragged anchor does with Direct Selection.
+    /// [`Self::for_move`]'s targets for a selection moved by one of its anchors (#7411) or by a
+    /// point of a path's stroke or outline (#8568): the path segments of the art but `exclude` too,
+    /// which that point lands on ([`Self::snap_onto_path`]), as a dragged anchor does with Direct
+    /// Selection.
     pub fn for_move_by_anchor(cx: &ToolContext, exclude: &[NodeId]) -> Self {
         Self::moving(cx, exclude, Gather::Segments)
     }
@@ -685,6 +707,12 @@ impl Targets {
         self
     }
 
+    /// These targets without the ruler guides, once they stop showing during the drag they were
+    /// gathered for (#8363).
+    pub(crate) fn forget_rulers(&mut self) {
+        self.rulers.clear();
+    }
+
     /// The ruler guides alone ([`Self::with_rulers`]): what a dragged selection's grabbed point
     /// still snaps to with View → Snap to Point when Smart Guides line the selection up.
     pub(crate) fn rulers(cx: &ToolContext) -> Self {
@@ -750,27 +778,35 @@ impl Targets {
     /// that way into line with the nearest target; else, before lining up, it lands on a
     /// construction guide through it, where a target's line crosses the guide if one does nearby.
     pub fn snap_from(&self, p: Point, from: Option<&Leave>, tol: f64) -> (Point, Vec<Overlay>) {
+        let (q, guides, _) = self.snap_hit(p, from, tol);
+        (q, guides)
+    }
+
+    /// [`Self::snap_from`], and whether `p` landed on a target (an anchor or center, a crossing,
+    /// a segment, a construction guide or a target's line), whether or not its guides show. A
+    /// point Shift kept to its angle without lining up with a target landed on none.
+    pub(crate) fn snap_hit(&self, p: Point, from: Option<&Leave>, tol: f64) -> (Point, Vec<Overlay>, bool) {
         if let Some(f) = from
             && let Some(q) = f.constrained(p)
         {
             return match self.slide(f.at, q - f.at, q, tol, true) {
-                Some((q, target)) => (q, self.lined_up(q, target)),
-                None => (q, vec![]),
+                Some((q, target)) => (q, self.lined_up(q, target), true),
+                None => (q, vec![], false),
             };
         }
         if let Some((q, k)) = self.nearest_point(p, tol) {
-            return (q, self.label(q, k.label()).into_iter().collect());
+            return (q, self.label(q, k.label()).into_iter().collect(), true);
         }
         if let Some(q) = self.crossing(p, tol) {
-            return (q, self.label(q, "intersect").into_iter().collect());
+            return (q, self.label(q, "intersect").into_iter().collect(), true);
         }
         if let Some(f) = from.filter(|f| f.contact)
             && let Some((q, perpendicular, dir)) = self.touching(f.at, p, tol)
         {
-            return (q, self.touch_guides(f.at, q, perpendicular, dir, tol));
+            return (q, self.touch_guides(f.at, q, perpendicular, dir, tol), true);
         }
         if let Some(q) = self.on_segment(p, tol) {
-            return (q, self.label(q, Kind::Edge.label()).into_iter().collect());
+            return (q, self.label(q, Kind::Edge.label()).into_iter().collect(), true);
         }
         // A construction guide through the point it leaves, else a dragged segment's extension:
         // it lands on the guide, sliding into line with a target crossing it nearby.
@@ -781,8 +817,8 @@ impl Targets {
         {
             let construction = |q: Point| Overlay::Line { a: at, b: q, color: self.style.color, dashed: false };
             return match self.slide(at, dir, q, tol, false) {
-                Some((q, target)) => (q, std::iter::once(construction(q)).chain(self.lined_up(q, target)).collect()),
-                None => (q, vec![construction(q)]),
+                Some((q, target)) => (q, std::iter::once(construction(q)).chain(self.lined_up(q, target)).collect(), true),
+                None => (q, vec![construction(q)], true),
             };
         }
         let mut out = p;
@@ -812,7 +848,7 @@ impl Targets {
         if aligned {
             ov.extend(self.label(out, "align"));
         }
-        (out, ov)
+        (out, ov, aligned)
     }
 
     /// Where a line from `at` through a point near `p` touches a target segment: square to it
@@ -1036,15 +1072,57 @@ impl Targets {
         Some((q, self.label(q, Kind::Edge.label()).into_iter().collect()))
     }
 
+    /// [`Self::snap_onto_path`] for a selection held by a point `p` of a path's edge, its bounds
+    /// now `r` (#8568). Where paths cross, or on a curved segment, the point lands as
+    /// `snap_onto_path` lands it. On a straight segment, the selection then slides along that
+    /// segment, so the point stays on it, until its bounds line up with the other art or are spaced
+    /// evenly with it ([`Self::snap_rects_along`]), else until they line up with a ruler guide of
+    /// `rulers` ([`Self::snap_moved_along_to_rulers`]). A slide goes at most twice `tol` and not
+    /// past the segment's ends. Returns where the point goes and the guides.
+    pub(crate) fn snap_held_onto_path(&self, p: Point, r: Rect, tol: f64, rulers: Option<&Targets>) -> Option<(Point, Vec<Overlay>)> {
+        if self.segments.is_empty() {
+            return None;
+        }
+        if let Some(q) = self.crossing_with(p, tol, rulers.map_or(&self.rulers, |r| &r.rulers)) {
+            return Some((q, self.label(q, "intersect").into_iter().collect()));
+        }
+        let (seg, q) = self.nearest_segment(p, tol)?;
+        let on_path = |q: Point| self.label(q, Kind::Edge.label());
+        let Some(l) = straight(seg) else { return Some((q, on_path(q).into_iter().collect())) };
+        let len = (l.p1 - l.p0).hypot();
+        if !len.is_finite() || len <= 1e-9 {
+            return Some((q, on_path(q).into_iter().collect()));
+        }
+        let u = (l.p1 - l.p0) / len;
+        let moved = r + (q - p);
+        // How far the point may slide each way: twice `tol`, and not past the segment's ends.
+        let at = (q - l.p0).dot(u);
+        let within = ((-at).max(-2.0 * tol), (len - at).min(2.0 * tol));
+        let (s, mut ov) = Some(self.slide_rects_along(&[moved], u, tol, within))
+            .filter(|(.., hit)| *hit)
+            .or_else(|| rulers.map(|t| t.slide_moved_along_to_rulers(q, moved, u, tol, within)).filter(|(.., hit)| *hit))
+            .map_or((Vec2::ZERO, vec![]), |(s, ov, _)| (s, ov));
+        let q = q + s;
+        // The point's label is "path", the label a ruler guide's slide puts there too.
+        ov.retain(|o| !matches!(o, Overlay::Label { .. }));
+        ov.extend(on_path(q));
+        Some((q, ov))
+    }
+
     /// The nearest point within `tol` of `p` on a target segment.
     fn on_segment(&self, p: Point, tol: f64) -> Option<Point> {
+        self.nearest_segment(p, tol).map(|(_, q)| q)
+    }
+
+    /// [`Self::on_segment`], with the segment the point is on.
+    fn nearest_segment(&self, p: Point, tol: f64) -> Option<(PathSeg, Point)> {
         self.segments
             .iter()
             .filter(|(b, _)| b.inflate(tol, tol).contains(p))
             .map(|(_, c)| (c, c.nearest(p, 1e-6)))
             .filter(|(_, n)| n.distance_sq <= tol * tol)
             .min_by(|a, b| a.1.distance_sq.total_cmp(&b.1.distance_sq))
-            .map(|(c, n)| c.eval(n.t))
+            .map(|(c, n)| (*c, c.eval(n.t)))
     }
 
     /// Where two target paths, a path and a ruler guide, or two ruler guides cross, the crossing
@@ -1152,9 +1230,16 @@ impl Targets {
     /// it is spaced evenly along an axis the line runs along. Returns the shift (along `dir`) and
     /// the guides.
     pub(crate) fn snap_rects_along(&self, rects: &[Rect], dir: Vec2, tol: f64) -> (Vec2, Vec<Overlay>) {
+        let (s, ov, _) = self.slide_rects_along(rects, dir, tol, (f64::NEG_INFINITY, f64::INFINITY));
+        (s, ov)
+    }
+
+    /// [`Self::snap_rects_along`] for a slide of `within` (the least and the most way along
+    /// `dir`), also saying whether anything lined up or was spaced evenly.
+    fn slide_rects_along(&self, rects: &[Rect], dir: Vec2, tol: f64, (lo, hi): (f64, f64)) -> (Vec2, Vec<Overlay>, bool) {
         let len = dir.hypot();
         if !len.is_finite() || len <= 1e-9 {
-            return (Vec2::ZERO, vec![]);
+            return (Vec2::ZERO, vec![], false);
         }
         let u = dir / len;
         // The axes the line runs along: the x axis (`true`) and the y axis, and how far a step of
@@ -1170,7 +1255,7 @@ impl Targets {
                 for v in vs {
                     for (t, from, _) in lines_near(lines, v, tol).iter().filter(|(t, ..)| (t - v).abs() <= tol) {
                         let s = (t - v) / c;
-                        if best.is_none_or(|b| s.abs() < b.0.abs()) {
+                        if (lo..=hi).contains(&s) && best.is_none_or(|b| s.abs() < b.0.abs()) {
                             best = Some((s, *t, *from, x));
                         }
                     }
@@ -1185,17 +1270,41 @@ impl Targets {
                     self.line(Point::new(from.x.min(m.x0), t), Point::new(from.x.max(m.x1), t))
                 }
             });
-            return (u * s, ov.into_iter().collect());
+            return (u * s, ov.into_iter().collect(), true);
         }
-        let [r] = rects else { return (Vec2::ZERO, vec![]) };
+        let [r] = rects else { return (Vec2::ZERO, vec![], false) };
         if self.boxes.is_empty() {
-            return (Vec2::ZERO, vec![]);
+            return (Vec2::ZERO, vec![], false);
         }
-        let spaced =
-            axes.filter_map(|(x, c)| self.even_spacing(*r, x, tol).map(|(shift, _)| (shift / c, x))).min_by(|a, b| a.0.abs().total_cmp(&b.0.abs()));
-        let Some((s, x)) = spaced else { return (Vec2::ZERO, vec![]) };
+        // The slide that spaces it evenly along each axis, within `lo..=hi` along the line. A slide
+        // along a slanted line also moves it across, so the gaps must still be equal where it ends
+        // up.
+        let spaced = axes
+            .filter_map(|(x, c)| {
+                // A level or upright slide along that axis keeps its row.
+                let level = (if x { u.y } else { u.x }).abs() <= 1e-9;
+                // At most 8 slides are checked where they end up, to bound the work per pointer move.
+                let checked = std::cell::Cell::new(0_usize);
+                let fits = |shift: f64| {
+                    let s = shift / c;
+                    if !(lo..=hi).contains(&s) {
+                        return false;
+                    }
+                    if level {
+                        return true;
+                    }
+                    if checked.get() >= 8 {
+                        return false;
+                    }
+                    checked.set(checked.get() + 1);
+                    self.even_spacing(*r + u * s, x, tol).is_some_and(|(rest, _)| rest.abs() <= 1e-6)
+                };
+                self.even_spacing_by(*r, x, tol, Some(&fits)).map(|(shift, _)| (shift / c, x))
+            })
+            .min_by(|a, b| a.0.abs().total_cmp(&b.0.abs()));
+        let Some((s, x)) = spaced else { return (Vec2::ZERO, vec![], false) };
         let gaps = self.even_spacing(*r + u * s, x, tol).map(|(_, gaps)| gaps).unwrap_or_default();
-        (u * s, gaps.into_iter().flat_map(|g| self.gap_marks(g, x, tol)).collect())
+        (u * s, gaps.into_iter().flat_map(|g| self.gap_marks(g, x, tol)).collect(), true)
     }
 
     /// Snap rectangles that move together (an artboard and its bleed): the edge or centre of any
@@ -1240,6 +1349,12 @@ impl Targets {
     /// neighbour before or after it as two other objects of the row are apart, or as far from both
     /// neighbours; and the equal gaps then, as (start, end, where across) along that axis.
     fn even_spacing(&self, r: Rect, x: bool, tol: f64) -> Option<(f64, Vec<[f64; 3]>)> {
+        self.even_spacing_by(r, x, tol, None)
+    }
+
+    /// [`Self::even_spacing`] for the nearest shift along that axis that `accept` takes (any shift
+    /// when `None`).
+    fn even_spacing_by(&self, r: Rect, x: bool, tol: f64, accept: Option<&dyn Fn(f64) -> bool>) -> Option<(f64, Vec<[f64; 3]>)> {
         let (r0, r1) = span(&r, x);
         let len = r1 - r0;
         let (c0, c1) = span(&r, !x);
@@ -1276,8 +1391,36 @@ impl Targets {
             starts.extend(before.map(|a| (a.2 + g, Some(*g))));
             starts.extend(after.map(|b| (b.1 - g - len, Some(*g))));
         }
-        let (start, repeats) =
-            starts.into_iter().filter(|(t, _)| (t - r0).abs() <= tol).min_by(|a, b| (a.0 - r0).abs().total_cmp(&(b.0 - r0).abs()))?;
+        starts.retain(|(t, _)| (t - r0).abs() <= tol);
+        let nearer = |a: &(f64, Option<f64>), b: &(f64, Option<f64>)| (a.0 - r0).abs().total_cmp(&(b.0 - r0).abs());
+        let (start, repeats) = match accept {
+            // The nearest start, the first proposed among equally near ones.
+            None => starts.into_iter().min_by(nearer)?,
+            Some(accept) => {
+                // Nearest first; the sort is stable, so equally near starts keep the order they
+                // were proposed in. Starts as near as each other are at most two shifts (one each
+                // way), so the shifts refused at the current distance are few, and each is asked
+                // about once.
+                starts.sort_by(nearer);
+                let mut refused: Vec<f64> = vec![];
+                let mut at = f64::NAN;
+                starts.into_iter().find(|(t, _)| {
+                    let shift = t - r0;
+                    if shift.abs() != at {
+                        at = shift.abs();
+                        refused.clear();
+                    }
+                    if refused.contains(&shift) {
+                        return false;
+                    }
+                    let ok = accept(shift);
+                    if !ok {
+                        refused.push(shift);
+                    }
+                    ok
+                })?
+            }
+        };
         let at = r + if x { Vec2::new(start - r0, 0.0) } else { Vec2::new(0.0, start - r0) };
         let (end, mut gaps) = (start + len, vec![]);
         if let Some((a, _, a1)) = before
@@ -1385,9 +1528,16 @@ impl Targets {
     /// shortest slide winning and at most twice `tol` (a line nearly parallel to a guide would
     /// carry the selection far to meet it). Returns the shift along the line and the guides.
     pub(crate) fn snap_moved_along_to_rulers(&self, p: Point, r: Rect, dir: Vec2, tol: f64) -> (Vec2, Vec<Overlay>) {
+        let (s, ov, _) = self.slide_moved_along_to_rulers(p, r, dir, tol, (f64::NEG_INFINITY, f64::INFINITY));
+        (s, ov)
+    }
+
+    /// [`Self::snap_moved_along_to_rulers`] for a slide of `within` (the least and the most way
+    /// along `dir`), also saying whether the bounds lined up with a guide.
+    fn slide_moved_along_to_rulers(&self, p: Point, r: Rect, dir: Vec2, tol: f64, (lo, hi): (f64, f64)) -> (Vec2, Vec<Overlay>, bool) {
         let len = dir.hypot();
         if !len.is_finite() || len <= 1e-9 {
-            return (Vec2::ZERO, vec![]);
+            return (Vec2::ZERO, vec![], false);
         }
         let u = dir / len;
         // The way along the line, where the guide is and where it starts, and whether it is upright.
@@ -1399,16 +1549,22 @@ impl Targets {
             let vs = if vertical { [r.x0, r.center().x, r.x1] } else { [r.y0, r.center().y, r.y1] };
             let (mid, half) =
                 if vertical { (Point::new(0.0, r.center().y), r.height() / 2.0) } else { (Point::new(r.center().x, 0.0), r.width() / 2.0) };
-            for (t, from, _) in self.rulers.iter().filter(|g| g.vertical == vertical).filter_map(|g| g.line_at(mid, tol + half)) {
+            for g in self.rulers.iter().filter(|g| g.vertical == vertical) {
                 for v in vs {
-                    let s = (t - v) / c;
-                    if (t - v).abs() <= tol && s.abs() <= 2.0 * tol && best.is_none_or(|b| s.abs() < b.0.abs()) {
+                    let s = (g.pos - v) / c;
+                    if (g.pos - v).abs() > tol || s.abs() > 2.0 * tol || !(lo..=hi).contains(&s) || best.is_some_and(|b| s.abs() >= b.0.abs()) {
+                        continue;
+                    }
+                    // The guide runs past the bounds: for a slide held to `within`, where the slide
+                    // puts them; for a Shift move, where the move put them.
+                    let at = if lo.is_finite() || hi.is_finite() { r.center() + u * s } else { mid };
+                    if let Some((t, from, _)) = g.line_at(at, tol + half) {
                         best = Some((s, t, from, vertical));
                     }
                 }
             }
         }
-        let Some((s, t, from, vertical)) = best else { return (Vec2::ZERO, vec![]) };
+        let Some((s, t, from, vertical)) = best else { return (Vec2::ZERO, vec![], false) };
         let moved = r + u * s;
         let line = if vertical {
             self.line(Point::new(t, from.y.min(moved.y0)), Point::new(t, from.y.max(moved.y1)))
@@ -1417,7 +1573,7 @@ impl Targets {
         };
         let mut ov: Vec<Overlay> = line.into_iter().collect();
         ov.extend(self.label(p + u * s, "align"));
-        (u * s, ov)
+        (u * s, ov, true)
     }
 
     /// Snap a bounding-box resize. `a` is the scale [`crate::bbox::scale_for_drag`] gave for

@@ -140,8 +140,11 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("pasteOffset", "General", "", "Paste Offset", len(0.0, 1296.0, General)),
     p!("disableAutoAddDelete", "General", "Options", "Disable Auto Add/Delete", bool),
     p!("interpolateControlPoints", "General", "Options", "Interpolate Control Points When Moving Anchors", bool),
+    p!("deleteKeepsPathsJoined", "General", "Options", "Delete Removes Anchor Points and Keeps Paths Joined", bool),
+    p!("doubleClickAddsAnchorPoints", "General", "Options", "Double-Click Adds Anchor Points", bool),
     p!("usePreciseCursors", "General", "Options", "Use Precise Cursors", bool),
     p!("showToolTips", "General", "Options", "Show Tool Tips", bool),
+    p!("showToolCards", "General", "Options", "Show Tool Cards", bool),
     p!("showExternalScriptWarning", "General", "Options", "Show External Script Warning", bool),
     p!("antiAliasedArtwork", "General", "Options", "Anti-aliased Artwork", bool),
     p!("selectSameTintPercent", "General", "Options", "Select Same Tint %", bool),
@@ -157,6 +160,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("scrubNumericFields", "General", "Options", "Scrub Numeric Fields by Dragging", bool),
     p!("trackpadRotateView", "General", "Options", "Trackpad Gesture to Rotate View", bool),
     p!("holdToolKeys", "General", "Options", "Hold a Tool Shortcut to Use the Tool Temporarily", bool),
+    p!("holdShortcuts", "General", "Options", "Hold Shortcuts", bool),
+    p!("keyHoldDelay", "General", "Options", "Hold Shortcut Delay", num(0.2, 1.0, "s")),
     p!("boundingBoxWhileMovingAndDrawing", "General", "Options", "Show Bounding Box While Moving and Drawing", bool),
     // Selection & Anchor Display
     p!("selectionTolerance", "Selection & Anchor Display", "Selection", "Tolerance", num(1.0, 8.0, "px")),
@@ -393,6 +398,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("recoveryOffForComplex", "File Handling", "Data Recovery", "Turn off Data Recovery for complex documents", bool),
     p!("recentFilesCount", "File Handling", "Files", "Number of Recent Files to Display", int(0, 30)),
     p!("lowResProxyEps", "File Handling", "Files", "Use Low Resolution Proxy for Linked EPS", bool),
+    p!("pdfImportEmbeddedFonts", "File Handling", "Files", "Use fonts embedded in imported PDFs", bool),
     p!("antiAliasedBitmaps", "File Handling", "Files", "Display Bitmaps as Anti-aliased Images in Pixel Preview", bool),
     p!(
         "updateLinks",
@@ -401,6 +407,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
         "Update Links",
         choice(&[("automatically", "Automatically"), ("manually", "Manually"), ("askWhenModified", "Ask When Modified")])
     ),
+    p!("pdfTextAs", "File Handling", "Files", "PDF Text", choice(&[("text", "Editable"), ("outlines", "Outlines")])),
     // Clipboard Handling
     p!("copyAsSvg", "Clipboard Handling", "On Copy", "Include SVG Code", bool),
     p!("copyAsPdf", "Clipboard Handling", "On Copy", "PDF", bool),
@@ -453,6 +460,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
         choice(&[("default", "Default"), ("object", "Transform Object Only"), ("pattern", "Transform Pattern Only"), ("both", "Transform Both")])
     ),
     p!("useRegistrationPointForSymbol", "General", "Transform Panel", "Use Registration Point for Symbol", bool),
+    // The Transform panel menu: drawing a shape shows the panel.
+    p!("showOnShapeCreation", "General", "Transform Panel", "Show on Shape Creation", bool),
     // The Align panel menu's Align to Glyph Bounds: Align and Distribute measure type by its glyphs' ink.
     p!("alignGlyphBoundsPoint", "Type", "Align to Glyph Bounds", "Point Text", bool),
     p!("alignGlyphBoundsArea", "Type", "Align to Glyph Bounds", "Area Text", bool),
@@ -746,6 +755,13 @@ impl Session {
                 if t.id() == "roundedRectangle" {
                     t.set_option("cornerRadius", &r);
                 }
+            }
+            // A press of the tool that is dropped keeps the new radius, also when the tool lent a
+            // selection tool for the press.
+            if self.press_taken_by("roundedRectangle")
+                && let Some((_, saved)) = self.press_options.as_mut()
+            {
+                saved.insert("cornerRadius".into(), r);
             }
         }
         if fonts_folder_changed {

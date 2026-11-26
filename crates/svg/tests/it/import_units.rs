@@ -3,7 +3,7 @@
 
 use vectorcraft_doc::{Document, Node, NodeKind, Unit};
 use vectorcraft_geom::Rect;
-use vectorcraft_svg::import;
+use vectorcraft_svg::{ExportOptions, export, import};
 
 fn art(d: &Document) -> Vec<&Node> {
     let mut v = Vec::new();
@@ -129,4 +129,91 @@ fn absolute_lengths_in_a_pixel_document_keep_their_size() {
     let n = art(&d)[0];
     assert!(close_rect(n.geometric_bounds().unwrap(), Rect::new(0.0, 0.0, 72.0, 720.0 / 25.4)), "{:?}", n.geometric_bounds());
     assert!(close(n.appearance.stroke_width(), 2.0));
+}
+
+#[test]
+fn export_physical_units_writes_unit_suffixes() {
+    // Millimeters (#864 / G11: avoid 75% scale in external tools like LightBurn, LaserGRBL, Inkscape)
+    let mut d = Document::new(50.0 * 72.0 / 25.4, 30.0 * 72.0 / 25.4);
+    d.units = Unit::Millimeters;
+    let s = export(&d, &ExportOptions::default());
+    assert!(s.contains("width=\"50mm\" height=\"30mm\""), "{s}");
+    assert!(s.contains("viewBox=\"0 0 141.732 85.039\""), "{s}");
+
+    // Inches
+    let mut d = Document::new(8.5 * 72.0, 11.0 * 72.0);
+    d.units = Unit::Inches;
+    let s = export(&d, &ExportOptions::default());
+    assert!(s.contains("width=\"8.5in\" height=\"11in\""), "{s}");
+    assert!(s.contains("viewBox=\"0 0 612 792\""), "{s}");
+
+    // Centimeters
+    let mut d = Document::new(5.0 * 72.0 / 2.54, 3.0 * 72.0 / 2.54);
+    d.units = Unit::Centimeters;
+    let s = export(&d, &ExportOptions::default());
+    assert!(s.contains("width=\"5cm\" height=\"3cm\""), "{s}");
+
+    // Picas
+    let mut d = Document::new(10.0 * 12.0, 20.0 * 12.0);
+    d.units = Unit::Picas;
+    let s = export(&d, &ExportOptions::default());
+    assert!(s.contains("width=\"10pc\" height=\"20pc\""), "{s}");
+
+    // Points and pixels remain unitless
+    let mut d = Document::new(100.0, 200.0);
+    d.units = Unit::Points;
+    let s = export(&d, &ExportOptions::default());
+    assert!(s.contains("width=\"100\" height=\"200\""), "{s}");
+
+    d.units = Unit::Pixels;
+    let s = export(&d, &ExportOptions::default());
+    assert!(s.contains("width=\"100\" height=\"200\""), "{s}");
+
+    // Responsive export omits width and height even with physical units
+    d.units = Unit::Millimeters;
+    let s = export(&d, &ExportOptions { responsive: true, ..Default::default() });
+    assert!(!s.contains("width="), "{s}");
+    assert!(!s.contains("height="), "{s}");
+
+    // Non-zero small dimensions do not round to zero
+    let mut d = Document::new(0.001 * 72.0 / 25.4, 0.002 * 72.0 / 25.4);
+    d.units = Unit::Millimeters;
+    let s = export(&d, &ExportOptions::default());
+    assert!(s.contains("width=\"0.001mm\" height=\"0.002mm\""), "{s}");
+
+    // Extreme small dimension below 8 decimal places preserves non-zero width and viewBox
+    let mut d = Document::new(1e-9 * 72.0 / 25.4, 1e-9 * 72.0 / 25.4);
+    d.units = Unit::Millimeters;
+    let s = export(&d, &ExportOptions::default());
+    assert!(!s.contains("width=\"0mm\""), "{s}");
+    assert!(!s.contains("viewBox=\"0 0 0 0\""), "{s}");
+
+    // Re-importing preserved physical units
+    let back = import(&s).unwrap();
+    assert_eq!(back.units, Unit::Millimeters);
+}
+
+/// The `width` of `svg`'s root as a length in points, read by the SVG and CSS absolute units
+/// (96 px per inch). `None` when it has no unit an SVG reader takes as physical.
+fn root_width_in_points(svg: &str) -> Option<f64> {
+    let start = svg.find("<svg")?;
+    let w = svg[start..].split("width=\"").nth(1)?.split('"').next()?;
+    let (points_per_unit, number) = [("mm", 72.0 / 25.4), ("cm", 72.0 / 2.54), ("in", 72.0), ("pc", 12.0), ("pt", 1.0)]
+        .into_iter()
+        .find_map(|(suffix, pt)| w.strip_suffix(suffix).map(|v| (pt, v)))?;
+    number.parse::<f64>().ok().map(|v| v * points_per_unit)
+}
+
+#[test]
+fn every_physical_document_unit_exports_its_printed_size() {
+    // 100 inches by 50: feet, yards, meters, Q and Ha have no SVG unit of their own.
+    for unit in [Unit::Feet, Unit::FeetInches, Unit::Yards, Unit::Meters, Unit::Q, Unit::Ha, Unit::Inches, Unit::Millimeters] {
+        let mut d = Document::new(7200.0, 3600.0);
+        d.units = unit;
+        let s = export(&d, &ExportOptions::default());
+        let width = root_width_in_points(&s).unwrap_or_else(|| panic!("{unit:?}: no physical width in {s}"));
+        assert!((width - 7200.0).abs() < 0.01, "{unit:?}: {width} pt in {s}");
+        let back = import(&s).unwrap();
+        assert!(close_rect(back.artboards[0].rect, d.artboards[0].rect), "{unit:?}: {:?}", back.artboards[0].rect);
+    }
 }

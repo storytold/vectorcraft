@@ -1,6 +1,6 @@
 //! Bounded ownership of authored replacement text (ISO 32000-1, 14.9.4).
 
-use super::state::Builder;
+use super::state::{Builder, HeldStroke};
 use super::{Affine, Look, Placement, Shape, TextLine, Upright};
 use crate::import_text::TextContent;
 
@@ -21,13 +21,16 @@ impl ActualText {
         self.depth = self.depth.saturating_add(1);
     }
 
-    pub(super) fn end(&mut self) {
-        if self.owner == Some(self.depth) {
+    /// `true`: the owner's span ended.
+    pub(super) fn end(&mut self) -> bool {
+        let ended = self.owner == Some(self.depth);
+        if ended {
             self.owner = None;
             self.pending = None;
             self.empty = false;
         }
         self.depth = self.depth.saturating_sub(1);
+        ended
     }
 
     pub(super) fn active(&self) -> bool {
@@ -60,15 +63,34 @@ impl ActualText {
 impl Builder<'_> {
     /// The authored path never enters ordinary visual glyph reordering. The font was matched
     /// against the glyph's original Unicode, not against this replacement's characters.
-    pub(super) fn actual_glyph(&mut self, o: &craft_pdf::interpret::font::OutlineGlyph, m: Affine, at: Placement, look: Look, opacity: f32) -> bool {
+    pub(super) fn actual_glyph(&mut self, o: &craft::pdf::interpret::font::OutlineGlyph, m: Affine, at: Placement, look: Look, opacity: f32) -> bool {
         let key = o.font_cache_key();
-        self.flush_glyphs();
-        // A fill and stroke callback for the same glyph consumes its text only once.
-        if let (Some(stroke), Some(line)) = (&look.stroke, &mut self.text)
-            && look.fill.is_none()
-            && line.stroke_actual(key, at, stroke.clone(), look.overprint_stroke)
+        // A fill and stroke callback for the same glyph consumes its text only once: the stroke
+        // goes over the glyph of the span filled, matched as the stroke pass ends as any other
+        // (`Builder::hold_stroke`), on a line the operator's kerning finished too.
+        let stroking = look.fill.is_none() && look.stroke.is_some();
+        if let Some(stroke) = &look.stroke
+            && stroking
         {
-            return true;
+            let h = HeldStroke {
+                font: key,
+                at,
+                opacity,
+                text: String::new(),
+                stroke: stroke.clone(),
+                overprint: look.overprint_stroke,
+                glyph: None,
+                actual: true,
+                first: (0, 0),
+            };
+            if self.hold_stroke(h) {
+                return true;
+            }
+        }
+        self.flush_glyphs();
+        // Stroked type of its own ends the stroke pass of the glyphs filled before it.
+        if stroking {
+            self.end_fills();
         }
         let width = o.advance_width().filter(|w| w.is_finite());
         let advance = width.map_or(at.size * 0.5, |w| w as f64 / 1000.0 * at.size * at.h_scale / 100.0);
@@ -87,7 +109,7 @@ impl Builder<'_> {
             None => line.push_content(&look, at, opacity, advance, content),
         };
         if !self.text.as_mut().is_some_and(place) {
-            self.flush_text();
+            self.park_text(!stroking);
             let mut line = TextLine::new(at, opacity);
             if !place(&mut line) {
                 self.actual.pending = pending;

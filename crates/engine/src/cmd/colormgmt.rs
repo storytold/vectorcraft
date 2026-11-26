@@ -26,6 +26,8 @@ use vectorcraft_render::proof;
 use super::EngineError;
 use super::{CommandSpec, Result, Session, always, bad, cmd, color_value, has_doc, switch_or, targets, text_param};
 
+pub mod proof_file;
+
 /// `Document.unknown` key under which files before format v3 kept the assigned profiles (migrated
 /// to `Document::color_profiles` on load).
 pub const PROFILES_KEY: &str = vectorcraft_doc::profiles::LEGACY_PROFILES_KEY;
@@ -37,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Color Settings…",
             ["Edit"],
             Some("Cmd+Shift+K"),
-            "{rgb?: profile, cmyk?: profile, intent?: \"perceptual\"|\"relative\"|\"saturation\"|\"absolute\", bpc?: bool, rgbPolicy?: \"off\"|\"preserveEmbedded\"|\"convert\", cmykPolicy?: \"off\"|\"preserveEmbedded\"|\"convert\"|\"preserveNumbers\"} set the working spaces and the color management policies → {rgb, cmyk, intent, bpc, rgbPolicy, cmykPolicy, profiles: [{name, kind, builtin}]}. A policy decides what opening a document (document.open, file.newFromTemplate, file.revert) does with an RGB or CMYK profile it is tagged with that is not the working space: preserveEmbedded (default) keeps it; off and preserveNumbers take it off and keep the color numbers; convert converts the colors of that model into the working space with the intent and bpc and takes it off. The open reply's warnings name each profile taken off or converted, and a document a policy changed opens with unsaved changes. The desktop app and vectorcraft-cli keep them in `Color Settings.json` next to the preferences and use them again at the next start (not with VECTORCRAFT_NO_PREFS); saved settings naming a profile that is gone leave the defaults",
+            "{rgb?: profile, cmyk?: profile, intent?: \"perceptual\"|\"relative\"|\"saturation\"|\"absolute\", bpc?: bool, rgbPolicy?: \"off\"|\"preserveEmbedded\"|\"convert\", cmykPolicy?: \"off\"|\"preserveEmbedded\"|\"convert\"|\"preserveNumbers\", askMismatchOpen?: bool, askMismatchPaste?: bool, askMissingOpen?: bool (all false by default)} set the working spaces, the color management policies and the Ask boxes → {rgb, cmyk, intent, bpc, rgbPolicy, cmykPolicy, askMismatchOpen, askMismatchPaste, askMissingOpen, profiles: [{name, kind, builtin}]}. With askMismatchOpen or askMissingOpen on, the desktop app's File › Open asks what to do when the profile of a document's color mode is not the working space, or it has none (document.open takes the answer as profileChoice; it never asks); with askMismatchPaste on, Paste asks whether colors copied from a document with another profile keep their numbers or convert (edit.paste takes it as profileMismatch; see clipboard.profileMismatch). A policy decides what opening a document (document.open, file.newFromTemplate, file.revert) does with an RGB or CMYK profile it is tagged with that is not the working space: preserveEmbedded (default) keeps it; off and preserveNumbers take it off and keep the color numbers; convert converts the colors of that model into the working space with the intent and bpc and takes it off. The open reply's warnings name each profile taken off or converted, and a document a policy changed opens with unsaved changes. The desktop app and vectorcraft-cli keep them in `Color Settings.json` next to the preferences and use them again at the next start (not with VECTORCRAFT_NO_PREFS); saved settings naming a profile that is gone leave the defaults",
             always,
             color_settings
         ),
@@ -82,7 +84,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert Color",
             [],
             None,
-            "{color (#rrggbbaa and #rgba are refused), to: \"rgb\"|\"cmyk\"|\"gray\"|\"lab\", intent?} → {model, values, hex, lab: [L,a,b], outOfGamut, deltaE}",
+            "{color (#rrggbbaa and #rgba are refused), to: \"rgb\"|\"cmyk\"|\"gray\"|\"lab\"|\"oklch\", intent?} → {model, values, hex, lab: [L,a,b], outOfGamut, deltaE}; oklch values are [L (0..100 %), C, H (0..360°)] of the color's display sRGB (CSS Color 4 OKLCH: https://www.w3.org/TR/css-color-4/#specifying-oklab-oklch), with H 0 for a gray; a color outside sRGB (a Lab color, a CMYK color or an RGB color in a wider working RGB space) is clipped to sRGB first",
             always,
             convert_color
         ),
@@ -100,9 +102,45 @@ pub fn specs() -> Vec<CommandSpec> {
             "Proof Setup",
             ["View", "Proof Setup"],
             None,
-            "{target?: \"workingCmyk\"|\"cmyk:<profile>\"|\"legacyMacRgb\"|\"srgb\"|\"monitorRgb\"|\"protanopia\"|\"deuteranopia\"|\"tritanopia\", intent?, simulatePaper?, proof?: bool (also turn Proof Colors on)} → proof state",
+            "{target?: \"workingCmyk\"|\"cmyk:<profile>\"|\"rgb:<profile>\"|\"legacyMacRgb\"|\"srgb\"|\"monitorRgb\"|\"protanopia\"|\"deuteranopia\"|\"tritanopia\" (cmyk: and rgb: name a CMYK or RGB profile of color.loadProfile or the built-in ones: the device to simulate), intent? (used while preserveNumbers is off), simulatePaper?: bool, preserveNumbers?: bool (Preserve CMYK or RGB Numbers: the colors' numbers in the document's space go to the device unchanged), simulateBlack?: bool (Simulate Black Ink: the device's black shows as the dark gray it prints; simulatePaper does this too; CMYK devices only, as simulatePaper), proof?: bool (also turn Proof Colors on)} → proof state",
             always,
             proof_setup
+        ),
+        cmd!(
+            query "view.proofSetup.save",
+            "Save Proof Setup…",
+            [],
+            None,
+            "{path?: file | name?: a setup in the Proof Setups folder next to the preferences (at most 100 characters and no path characters; exactly one of the two), target?, intent?, simulatePaper?, preserveNumbers?, simulateBlack? (as view.proofSetup; default: the current proof setup's)} write a custom proof setup to a VectorCraft proof setup file (.vcproof, JSON) without changing the proof view. The target must be a device: workingCmyk, cmyk:<profile> or rgb:<profile> → {path, target, intent, simulatePaper, preserveNumbers, simulateBlack}",
+            always,
+            proof_file::save
+        ),
+        cmd!(
+            query "view.proofSetup.load",
+            "Load Proof Setup…",
+            [],
+            None,
+            "{path?: file | name?: a setup in the Proof Setups folder (exactly one of the two)} read a proof setup file of at most 64 KiB that view.proofSetup.save wrote, make it the proof setup and turn Proof Colors on → {path} and the proof state. A file whose device names a profile that is not loaded is refused and nothing changes",
+            always,
+            proof_file::load
+        ),
+        cmd!(
+            query "view.proofSetup.read",
+            "Read Proof Setup",
+            [],
+            None,
+            "{path?: file | name?: a setup in the Proof Setups folder (exactly one of the two)} the settings of a proof setup file, read as view.proofSetup.load reads it, without changing the proof view → {path, target, intent, simulatePaper, preserveNumbers, simulateBlack}",
+            always,
+            proof_file::read
+        ),
+        cmd!(
+            query "view.proofSetup.list",
+            "Saved Proof Setups",
+            [],
+            None,
+            "{} the proof setup files in the Proof Setups folder next to the preferences, by name, at most 100 → {folder (null without the folder), setups: [{name, path}], truncated}",
+            always,
+            proof_file::list
         ),
         cmd!(query "view.proofColors", "Proof Colors", ["View"], None, "{on?: bool (default: toggle)} → proof state", always, |s, p| {
             toggle_view(s, p, "view.proofColors", |v, on| v.proof_colors = on.unwrap_or(!v.proof_colors))
@@ -131,7 +169,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Overprint Black…",
             ["Edit", "Edit Colors"],
             None,
-            "{remove?: false, percentage?: 100, fill?: true, stroke?: true, includeCmyBlacks?: false, includeSpotBlacks?: false, ids?} make the black fills and/or strokes of the selection (or ids; groups: their contents; type: its characters) overprint, or stop (remove). Black: K ≥ percentage with no C, M or Y (any with includeCmyBlacks), not linked to a spot swatch (unless includeSpotBlacks); a gradient is black when every stop is → {changed: objects}",
+            "{remove?: false, percentage?: 100, fill?: true, stroke?: true, includeCmyBlacks?: false, includeSpotBlacks?: false, ids?} make the black fills and/or strokes of the selection (or ids; groups: their contents; type: its characters; a grayscale or 1-bit image colorized by paint.setFill: its color, as a fill) overprint, or stop (remove). Black: K ≥ percentage with no C, M or Y (any with includeCmyBlacks), not linked to a spot swatch (unless includeSpotBlacks); a gradient is black when every stop is → {changed: objects}",
             has_doc,
             super::overprint::overprint_black
         ),
@@ -183,6 +221,9 @@ fn settings_json(st: &ColorSettings) -> Value {
         "bpc": st.bpc,
         "rgbPolicy": st.rgb_policy.id(),
         "cmykPolicy": st.cmyk_policy.id(),
+        "askMismatchOpen": st.ask_mismatch_open,
+        "askMismatchPaste": st.ask_mismatch_paste,
+        "askMissingOpen": st.ask_missing_open,
         "profiles": cms::profiles().iter().map(|p| json!({"name": p.name, "kind": p.kind, "builtin": p.builtin})).collect::<Vec<_>>(),
     })
 }
@@ -225,6 +266,9 @@ fn color_settings(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(v) = policy_param(p, "cmykPolicy", &Policy::CMYK, C)? {
         st.cmyk_policy = v;
     }
+    st.ask_mismatch_open = switch_or(p, "askMismatchOpen", st.ask_mismatch_open, C)?;
+    st.ask_mismatch_paste = switch_or(p, "askMismatchPaste", st.ask_mismatch_paste, C)?;
+    st.ask_missing_open = switch_or(p, "askMissingOpen", st.ask_missing_open, C)?;
     if st != before {
         cms::set_active(&st).map_err(|e| bad(C, e.to_string()))?;
         // Saved for the next start when the app attached a settings file (#6335).
@@ -255,7 +299,7 @@ fn load_profile(s: &mut Session, p: &Value) -> Result<Value> {
         use_front_profiles(s);
         touch_all(s);
     } else if proof_targets(&info.name) {
-        // A new file of the CMYK profile View → Proof Setup targets: redraw.
+        // A new file of the profile View → Proof Setup targets: redraw.
         touch_all(s);
     } else {
         // Documents behind the front one draw through their own profiles: those assigned it redraw.
@@ -286,7 +330,7 @@ fn remove_profile(s: &mut Session, p: &Value) -> Result<Value> {
     if active.rgb == name || active.cmyk == name {
         use_front_profiles(s);
     }
-    // The CMYK profile View → Proof Setup targets: redraw.
+    // The profile View → Proof Setup targets: redraw.
     if proof_targets(&info.name) {
         touch_all(s);
     }
@@ -305,9 +349,9 @@ fn touch_assigned(s: &mut Session, name: &str) {
     }
 }
 
-/// Whether View → Proof Setup targets the CMYK profile `name`.
+/// Whether View → Proof Setup targets the CMYK or RGB profile `name`.
 fn proof_targets(name: &str) -> bool {
-    matches!(proof::view().setup.target, ProofTarget::Cmyk(t) if t == name)
+    matches!(proof::view().setup.target, ProofTarget::Cmyk(t) | ProofTarget::Rgb(t) if t == name)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -659,39 +703,263 @@ fn convert_colors(d: &mut vectorcraft_doc::Document, conv: &dyn Fn(&Color) -> Co
 /// by Off and Preserve Numbers and kept by Convert to Working Space, which has nothing to convert
 /// from. → a note for each profile, and whether `d` changed.
 pub(crate) fn apply_open_policies(d: &mut vectorcraft_doc::Document) -> (Vec<String>, bool) {
-    let working = cms::working_settings();
+    // Without a choice nothing can fail.
+    apply_open_policies_choosing(d, None, &cms::working_settings()).unwrap_or_default()
+}
+
+/// What opening a document can ask about its profile (Edit › Color Settings' Ask When Opening
+/// boxes): the profile of its color mode differs from the working space, or it has none.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProfileIssue {
+    /// Profile Mismatches: tagged with a profile other than the working space.
+    Mismatch,
+    /// Missing Profiles: not tagged with a profile.
+    Missing,
+}
+
+impl ProfileIssue {
+    pub fn id(self) -> &'static str {
+        match self {
+            ProfileIssue::Mismatch => "mismatch",
+            ProfileIssue::Missing => "missing",
+        }
+    }
+}
+
+/// The answer to a [`ProfileQuestion`] (`document.open`'s `profileChoice`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ProfileChoice {
+    /// Mismatch: keep the profile (as Preserve Embedded Profiles).
+    UseEmbedded,
+    /// Mismatch: convert the colors of that model into the working space and take the profile off
+    /// (as Convert to Working Space).
+    Convert,
+    /// Mismatch: take the profile off and keep the color numbers (as Off).
+    Discard,
+    /// Missing: leave the document untagged (it follows the working space).
+    Leave,
+    /// Missing: tag the document with the working space of its color mode.
+    AssignWorking,
+    /// Missing: tag the document with this profile.
+    Assign(String),
+}
+
+impl ProfileChoice {
+    /// The ids `profileChoice` takes.
+    pub const IDS: [&'static str; 6] = ["useEmbedded", "convert", "discard", "leave", "assignWorking", "assign"];
+
+    pub fn id(&self) -> &'static str {
+        match self {
+            ProfileChoice::UseEmbedded => "useEmbedded",
+            ProfileChoice::Convert => "convert",
+            ProfileChoice::Discard => "discard",
+            ProfileChoice::Leave => "leave",
+            ProfileChoice::AssignWorking => "assignWorking",
+            ProfileChoice::Assign(_) => "assign",
+        }
+    }
+
+    /// The question kind this choice answers.
+    pub fn issue(&self) -> ProfileIssue {
+        match self {
+            ProfileChoice::UseEmbedded | ProfileChoice::Convert | ProfileChoice::Discard => ProfileIssue::Mismatch,
+            _ => ProfileIssue::Missing,
+        }
+    }
+
+    /// The choice `id` (`profile`, which only `assign` takes, for `assign`), or an error naming
+    /// `cmd`.
+    pub fn parse(id: &str, profile: Option<&str>, cmd: &str) -> Result<Self> {
+        let key = "profileChoice";
+        let choice = match id {
+            "useEmbedded" => ProfileChoice::UseEmbedded,
+            "convert" => ProfileChoice::Convert,
+            "discard" => ProfileChoice::Discard,
+            "leave" => ProfileChoice::Leave,
+            "assignWorking" => ProfileChoice::AssignWorking,
+            "assign" => match profile.filter(|p| !p.is_empty()) {
+                Some(p) => ProfileChoice::Assign(cms::canonical_name(p).to_string()),
+                None => {
+                    let path = "assignProfile";
+                    return Err(bad(cmd, format!("missing `{path}`")));
+                }
+            },
+            _ => return Err(bad(cmd, format!("`{key}` must be one of {}", Self::IDS.join(", ")))),
+        };
+        // `assignProfile` goes with `assign` only.
+        if profile.is_some() && !matches!(choice, ProfileChoice::Assign(_)) {
+            let path = "assignProfile";
+            return Err(bad(cmd, format!("`{path}` goes with `{key}`: \"assign\" only")));
+        }
+        Ok(choice)
+    }
+
+    /// `document.open`'s `profileChoice` and `assignProfile` in `p` (`None` when left out).
+    pub(crate) fn param(p: &Value, cmd: &str) -> Result<Option<Self>> {
+        let profile = text_param(p, "assignProfile", cmd)?;
+        match text_param(p, "profileChoice", cmd)? {
+            Some(id) => Self::parse(id, profile, cmd).map(Some),
+            None if profile.is_some() => {
+                let path = "profileChoice";
+                Err(bad(cmd, format!("missing `{path}`")))
+            }
+            None => Ok(None),
+        }
+    }
+}
+
+/// What opening document `d` could ask about the profile of its color mode, with the working
+/// settings `st`: none when it is tagged with the working space.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProfileQuestion {
+    pub issue: ProfileIssue,
+    /// The model of the document's color mode.
+    pub model: ColorMode,
+    /// The profile the document is tagged with (none when it is missing).
+    pub profile: Option<String>,
+    /// The working space of that model.
+    pub working: String,
+    /// What the policy of that model does, the choice the prompt starts on.
+    pub default: ProfileChoice,
+}
+
+impl ProfileQuestion {
+    /// The question for document `d` under the working settings `st` (whether or not they ask it).
+    pub fn of(d: &vectorcraft_doc::Document, st: &ColorSettings) -> Option<Self> {
+        let (rgb, cmyk) = doc_profiles(d);
+        let (tag, working, policy) = match d.color_mode {
+            ColorMode::Rgb => (rgb, cms::canonical_name(&st.rgb).to_string(), st.rgb_policy),
+            ColorMode::Cmyk => (cmyk, cms::canonical_name(&st.cmyk).to_string(), st.cmyk_policy),
+        };
+        let (issue, default) = match &tag {
+            Some(t) if *t == working => return None,
+            Some(_) => (
+                ProfileIssue::Mismatch,
+                match policy {
+                    Policy::PreserveEmbedded => ProfileChoice::UseEmbedded,
+                    Policy::Convert => ProfileChoice::Convert,
+                    Policy::Off | Policy::PreserveNumbers => ProfileChoice::Discard,
+                },
+            ),
+            // VectorCraft's own rule: Convert to Working Space starts on assigning the working
+            // space, the other policies on leaving the document as it is.
+            None => (ProfileIssue::Missing, if policy == Policy::Convert { ProfileChoice::AssignWorking } else { ProfileChoice::Leave }),
+        };
+        Some(Self { issue, model: d.color_mode, profile: tag, working, default })
+    }
+
+    /// Do the settings `st` ask it (the Ask When Opening box of its kind is on)?
+    pub fn asked(&self, st: &ColorSettings) -> bool {
+        match self.issue {
+            ProfileIssue::Mismatch => st.ask_mismatch_open,
+            ProfileIssue::Missing => st.ask_missing_open,
+        }
+    }
+
+    /// The model's name as the UI shows it ("RGB", "CMYK").
+    pub fn model_label(&self) -> &'static str {
+        match self.model {
+            ColorMode::Rgb => "RGB",
+            ColorMode::Cmyk => "CMYK",
+        }
+    }
+
+    pub fn to_json(&self) -> Value {
+        json!({
+            "issue": self.issue.id(),
+            "model": self.model_label().to_ascii_lowercase(),
+            "profile": self.profile,
+            "working": self.working,
+            "default": self.default.id(),
+        })
+    }
+}
+
+/// [`apply_open_policies`] with the answer `choice` to the document's [`ProfileQuestion`]: a
+/// mismatch choice takes the place of the policy of the document's color mode, and a missing
+/// choice tags the document after the policies ran. A choice for the other kind of question, or
+/// for a document with none, is not used. → as [`apply_open_policies`]; an error when the profile
+/// to assign is not a profile of that model. `working` is the settings snapshot the question is
+/// built from and the policies are read from.
+pub(crate) fn apply_open_policies_choosing(
+    d: &mut vectorcraft_doc::Document,
+    choice: Option<&ProfileChoice>,
+    working: &ColorSettings,
+) -> Result<(Vec<String>, bool)> {
+    let question = ProfileQuestion::of(d, working);
+    let choice = choice.filter(|c| question.as_ref().is_some_and(|q| q.issue == c.issue()));
+    // A mismatch answer stands in for the policy of the document's color mode.
+    let chosen = |model: ColorMode, policy: Policy| -> (Policy, bool) {
+        match choice {
+            Some(c) if d.color_mode == model => match c {
+                ProfileChoice::UseEmbedded => (Policy::PreserveEmbedded, true),
+                ProfileChoice::Convert => (Policy::Convert, true),
+                ProfileChoice::Discard => (Policy::Off, true),
+                _ => (policy, false),
+            },
+            _ => (policy, false),
+        }
+    };
+    let (rgb_policy, rgb_chosen) = chosen(ColorMode::Rgb, working.rgb_policy);
+    let (cmyk_policy, cmyk_chosen) = chosen(ColorMode::Cmyk, working.cmyk_policy);
+    // The profile a missing answer assigns, checked before anything changes.
+    let assign = match (choice, &question) {
+        (Some(ProfileChoice::AssignWorking), Some(q)) => Some(q.working.clone()),
+        (Some(ProfileChoice::Assign(name)), Some(q)) => {
+            let kind = if q.model == ColorMode::Rgb { cms::ProfileKind::Rgb } else { cms::ProfileKind::Cmyk };
+            let (key, n) = (q.model_label().to_ascii_lowercase(), name);
+            let info = cms::profile(name).filter(|p| p.kind == kind).ok_or_else(|| bad("document.open", format!("unknown {key} profile `{n}`")))?;
+            Some(info.name)
+        }
+        _ => None,
+    };
     let (rgb, cmyk) = doc_profiles(d);
     let mut notes = Vec::new();
     // What each model's policy does with its profile: `None` keeps it; `Some` takes it off, after
-    // converting the colors from the profile it holds.
-    let mut decide = |label: &str, tag: Option<String>, working: &str, policy: Policy, kind: cms::ProfileKind| -> Option<Option<String>> {
-        let tag = tag.filter(|t| t != working)?;
-        let available = cms::profile(&tag).is_some_and(|p| p.kind == kind);
-        match policy {
-            Policy::PreserveEmbedded => None,
-            Policy::Off | Policy::PreserveNumbers => {
-                notes.push(format!(
-                    "the {label} profile “{tag}” the file is tagged with was not used: Color Settings' {label} policy is {}",
-                    policy.label()
-                ));
-                Some(None)
+    // converting the colors from the profile it holds. `by_choice`: the prompt's answer decided.
+    let mut decide =
+        |label: &str, tag: Option<String>, working: &str, policy: Policy, by_choice: bool, kind: cms::ProfileKind| -> Option<Option<String>> {
+            let tag = tag.filter(|t| t != working)?;
+            let available = cms::profile(&tag).is_some_and(|p| p.kind == kind);
+            match policy {
+                Policy::PreserveEmbedded => None,
+                Policy::Off | Policy::PreserveNumbers if by_choice => {
+                    notes.push(format!("the {label} profile “{tag}” the file is tagged with was discarded, as chosen when it was opened"));
+                    Some(None)
+                }
+                Policy::Off | Policy::PreserveNumbers => {
+                    notes.push(format!(
+                        "the {label} profile “{tag}” the file is tagged with was not used: Color Settings' {label} policy is {}",
+                        policy.label()
+                    ));
+                    Some(None)
+                }
+                Policy::Convert if available => {
+                    notes.push(format!(
+                        "the {label} colors were converted from the profile “{tag}” the file is tagged with into the working space “{working}”"
+                    ));
+                    Some(Some(tag))
+                }
+                Policy::Convert => {
+                    notes.push(format!("the {label} profile “{tag}” the file is tagged with is not available, so its colors were not converted"));
+                    None
+                }
             }
-            Policy::Convert if available => {
-                notes.push(format!(
-                    "the {label} colors were converted from the profile “{tag}” the file is tagged with into the working space “{working}”"
-                ));
-                Some(Some(tag))
-            }
-            Policy::Convert => {
-                notes.push(format!("the {label} profile “{tag}” the file is tagged with is not available, so its colors were not converted"));
-                None
-            }
+        };
+    let rgb_do = decide("RGB", rgb, &working.rgb, rgb_policy, rgb_chosen, cms::ProfileKind::Rgb);
+    let cmyk_do = decide("CMYK", cmyk, &working.cmyk, cmyk_policy, cmyk_chosen, cms::ProfileKind::Cmyk);
+    let mut changed = false;
+    if let (Some(name), Some(q)) = (assign, &question) {
+        let label = q.model_label();
+        notes.push(format!("the document was assigned the {label} profile “{name}”, as chosen when it was opened"));
+        match q.model {
+            ColorMode::Rgb => d.color_profiles.rgb = Some(name),
+            ColorMode::Cmyk => d.color_profiles.cmyk = Some(name),
         }
-    };
-    let rgb_do = decide("RGB", rgb, &working.rgb, working.rgb_policy, cms::ProfileKind::Rgb);
-    let cmyk_do = decide("CMYK", cmyk, &working.cmyk, working.cmyk_policy, cms::ProfileKind::Cmyk);
+        changed = true;
+    }
     if rgb_do.is_none() && cmyk_do.is_none() {
-        return (notes, false);
+        return Ok((notes, changed));
     }
     let (from_rgb, from_cmyk) = (rgb_do.clone().flatten(), cmyk_do.clone().flatten());
     if from_rgb.is_some() || from_cmyk.is_some() {
@@ -713,7 +981,214 @@ pub(crate) fn apply_open_policies(d: &mut vectorcraft_doc::Document) -> (Vec<Str
     if cmyk_do.is_some() {
         d.color_profiles.cmyk = None;
     }
-    (notes, true)
+    Ok((notes, true))
+}
+
+/// The colors of `d`'s art and resources ([`convert_colors`]) and of its character and paragraph
+/// styles, converted with `conv`; not its artboards' backgrounds or Document Setup's colors.
+pub(crate) fn convert_art_and_style_colors(d: &mut vectorcraft_doc::Document, conv: &dyn Fn(&Color) -> Color) {
+    convert_colors(d, conv);
+    convert_style_colors(d, conv);
+}
+
+/// The RGB and CMYK profiles the colors of `d` show through, by name: those it is assigned, else
+/// the working spaces. An assigned profile that is not available (removed since) is the working
+/// space, as the document draws through it ([`cms::for_document`]).
+pub(crate) fn effective_profiles(d: &vectorcraft_doc::Document) -> [String; 2] {
+    let working = cms::working_settings();
+    let (rgb, cmyk) = doc_profiles(d);
+    let available = |name: Option<String>, kind: cms::ProfileKind| name.filter(|n| cms::profile(n).is_some_and(|p| p.kind == kind));
+    [
+        available(rgb, cms::ProfileKind::Rgb).unwrap_or_else(|| cms::canonical_name(&working.rgb).to_string()),
+        available(cmyk, cms::ProfileKind::Cmyk).unwrap_or_else(|| cms::canonical_name(&working.cmyk).to_string()),
+    ]
+}
+
+/// What Paste does with the colors of a model when the document they were copied from showed them
+/// through another profile than the document they go into (`profileMismatch`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PasteProfile {
+    /// The colors keep their numbers.
+    PreserveNumbers,
+    /// The colors convert from the source profile into the destination's, which keeps their
+    /// appearance.
+    Convert,
+}
+
+impl PasteProfile {
+    pub fn id(self) -> &'static str {
+        match self {
+            PasteProfile::PreserveNumbers => "preserveNumbers",
+            PasteProfile::Convert => "convert",
+        }
+    }
+
+    /// What a model's policy does to pasted colors (VectorCraft's own mapping): Convert to Working
+    /// Space converts them, the other policies keep their numbers.
+    pub fn of(policy: Policy) -> Self {
+        if policy == Policy::Convert { PasteProfile::Convert } else { PasteProfile::PreserveNumbers }
+    }
+
+    /// The `profileMismatch` param of paste command `cmd` (`None` when left out): one choice for
+    /// both models, or `{rgb?, cmyk?}` with a choice for each (a model left out follows its policy).
+    pub(crate) fn param(p: &Value, cmd: &str) -> Result<Option<PasteChoice>> {
+        let key = "profileMismatch";
+        let refuse = || bad(cmd, format!("`{key}` must be one of {}", "preserveNumbers, convert, {rgb?, cmyk?} of those"));
+        let one = |v: &Value| match v.as_str() {
+            Some("preserveNumbers") => Ok(PasteProfile::PreserveNumbers),
+            Some("convert") => Ok(PasteProfile::Convert),
+            _ => Err(refuse()),
+        };
+        match p.get(key) {
+            None | Some(Value::Null) => Ok(None),
+            Some(Value::Object(o)) => {
+                if o.keys().any(|k| k != "rgb" && k != "cmyk") {
+                    return Err(refuse());
+                }
+                let model = |m: &str| o.get(m).map(one).transpose();
+                Ok(Some(PasteChoice { rgb: model("rgb")?, cmyk: model("cmyk")? }))
+            }
+            Some(v) => {
+                let c = one(v)?;
+                Ok(Some(PasteChoice { rgb: Some(c), cmyk: Some(c) }))
+            }
+        }
+    }
+}
+
+/// What Paste does with the mismatched colors of each model (`profileMismatch`); a model without a
+/// choice follows its policy ([`PasteProfile::of`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PasteChoice {
+    pub rgb: Option<PasteProfile>,
+    pub cmyk: Option<PasteProfile>,
+}
+
+impl PasteChoice {
+    /// The choice for the colors of `model`, if any.
+    pub fn of(&self, model: ColorMode) -> Option<PasteProfile> {
+        match model {
+            ColorMode::Rgb => self.rgb,
+            ColorMode::Cmyk => self.cmyk,
+        }
+    }
+}
+
+/// A model whose colors a paste brings from another profile than the destination's.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PasteMismatch {
+    pub model: ColorMode,
+    /// The profile the colors showed through where they were copied.
+    pub from: String,
+    /// The profile they show through in the document they go into.
+    pub to: String,
+    /// What the model's policy does with them; Preserve Numbers when they can't convert.
+    pub default: PasteProfile,
+    /// Both profiles are available, so the colors can convert; otherwise they keep their numbers
+    /// whatever the choice.
+    pub convertible: bool,
+}
+
+impl PasteMismatch {
+    pub fn to_json(&self) -> Value {
+        let model = if self.model == ColorMode::Rgb { "rgb" } else { "cmyk" };
+        json!({ "model": model, "clipboard": self.from, "document": self.to, "default": self.default.id(), "convertible": self.convertible })
+    }
+}
+
+/// The models whose colors pasting `clip` into `d` brings from another profile: RGB, CMYK or both,
+/// each only when the copied objects or the resources they carry hold a color of that model. The
+/// background colors of copied artboards count only with `boards` (Paste on All Artboards doesn't
+/// paste the artboards).
+pub(crate) fn paste_mismatches(clip: &super::clipboard::Clipboard, d: &vectorcraft_doc::Document, boards: bool) -> Vec<PasteMismatch> {
+    let Some([from_rgb, from_cmyk]) = &clip.source_profiles else { return vec![] };
+    let [to_rgb, to_cmyk] = effective_profiles(d);
+    let working = cms::working_settings();
+    let mut out: Vec<PasteMismatch> =
+        [(ColorMode::Rgb, from_rgb, to_rgb, working.rgb_policy), (ColorMode::Cmyk, from_cmyk, to_cmyk, working.cmyk_policy)]
+            .into_iter()
+            .filter(|(_, from, to, _)| cms::canonical_name(from) != cms::canonical_name(to))
+            .map(|(model, from, to, policy)| {
+                let kind = if model == ColorMode::Rgb { cms::ProfileKind::Rgb } else { cms::ProfileKind::Cmyk };
+                // Both profiles must be here to convert between them.
+                let here = |name: &str| cms::profile(name).is_some_and(|p| p.kind == kind);
+                let convertible = here(from) && here(&to);
+                let default = if convertible { PasteProfile::of(policy) } else { PasteProfile::PreserveNumbers };
+                PasteMismatch { model, from: from.clone(), to, default, convertible }
+            })
+            .collect();
+    if out.is_empty() {
+        return out;
+    }
+    // Without the artboards when their backgrounds don't paste.
+    let without_boards;
+    let clip = if !boards && !clip.artboards.is_empty() {
+        without_boards = super::clipboard::Clipboard { artboards: vec![], ..clip.clone() };
+        &without_boards
+    } else {
+        clip
+    };
+    // Which models the pasted colors use.
+    let seen = std::cell::Cell::new((false, false));
+    let _ = clip.with_colors(&|c: &Color| {
+        let (rgb, cmyk) = seen.get();
+        seen.set((rgb || matches!(c, Color::Rgb { .. }), cmyk || matches!(c, Color::Cmyk { .. })));
+        *c
+    });
+    let (rgb, cmyk) = seen.get();
+    out.retain(|m| if m.model == ColorMode::Rgb { rgb } else { cmyk });
+    out
+}
+
+/// The clipboard `clip` as pasting it into `d` brings it: for each mismatched model
+/// ([`paste_mismatches`]), its colors keep their numbers or convert from the source profile into
+/// the destination's with the working intent, as `choice` says for that model (default: the
+/// model's policy, [`PasteProfile::of`]). A source or destination profile that is not available
+/// keeps the numbers. `boards`: as [`paste_mismatches`].
+/// → the converted clipboard (`None` when nothing converts; its resources paste as another
+/// document's) and a line for each mismatched model (`{model, clipboard, document, choice}`).
+pub(crate) fn paste_profiles(
+    clip: &super::clipboard::Clipboard,
+    d: &vectorcraft_doc::Document,
+    choice: Option<PasteChoice>,
+    boards: bool,
+) -> (Option<super::clipboard::Clipboard>, Vec<Value>) {
+    let mismatches = paste_mismatches(clip, d, boards);
+    let mut report = Vec::new();
+    let (mut rgb_on, mut cmyk_on) = (false, false);
+    for m in &mismatches {
+        let picked = if m.convertible { choice.and_then(|c| c.of(m.model)).unwrap_or(m.default) } else { PasteProfile::PreserveNumbers };
+        if picked == PasteProfile::Convert {
+            match m.model {
+                ColorMode::Rgb => rgb_on = true,
+                ColorMode::Cmyk => cmyk_on = true,
+            }
+        }
+        let mut line = m.to_json();
+        if let Some(o) = line.as_object_mut() {
+            o.remove("default");
+            o.remove("convertible");
+            o.insert("choice".into(), json!(picked.id()));
+        }
+        report.push(line);
+    }
+    if !rgb_on && !cmyk_on {
+        return (None, report);
+    }
+    let Some([from_rgb, from_cmyk]) = &clip.source_profiles else { return (None, report) };
+    let source = cms::for_document(Some(from_rgb), Some(from_cmyk));
+    let dest = doc_cms(d);
+    let intent = cms::working_settings().intent;
+    let conv = |c: &Color| match c {
+        Color::Rgb { .. } if rgb_on => source.convert_into(&dest, c, intent),
+        Color::Cmyk { .. } if cmyk_on => source.convert_into(&dest, c, intent),
+        _ => *c,
+    };
+    let mut converted = clip.with_colors(&conv);
+    // Converted colors are not the source document's own: its resources of the same names are
+    // compared with them, as another document's are.
+    converted.colors_converted = true;
+    (Some(converted), report)
 }
 
 /// The colors of `d` outside its art that [`convert_colors`] leaves, converted with `conv`: each
@@ -726,6 +1201,11 @@ fn convert_setting_colors(d: &mut vectorcraft_doc::Document, conv: &dyn Fn(&Colo
     for c in &mut d.setup.grid_colors {
         *c = conv(c);
     }
+    convert_style_colors(d, conv);
+}
+
+/// The fill and stroke colors of `d`'s character and paragraph styles, converted with `conv`.
+fn convert_style_colors(d: &mut vectorcraft_doc::Document, conv: &dyn Fn(&Color) -> Color) {
     // A tint of a global swatch is the converted swatch's color at its tint, which
     // [`convert_colors`] already gave it.
     let bases = global_bases(d);
@@ -886,10 +1366,15 @@ fn convert_color(_: &mut Session, p: &Value) -> Result<Value> {
     let intent = intent_param(p, C)?.unwrap_or(c.settings().intent);
     let lab = c.lab(&col);
     let (model, vals) = match text_param(p, "to", C)?.unwrap_or("rgb") {
-        "rgb" => ("rgb", values(&c.convert(&col, Model::Rgb, intent))),
-        "cmyk" => ("cmyk", values(&c.convert(&col, Model::Cmyk, intent))),
-        "gray" | "grayscale" => ("gray", values(&c.convert(&col, Model::Gray, intent))),
-        "lab" => ("lab", vec![lab.l, lab.a, lab.b]),
+        "rgb" => ("rgb", json!(values(&c.convert(&col, Model::Rgb, intent)))),
+        "cmyk" => ("cmyk", json!(values(&c.convert(&col, Model::Cmyk, intent)))),
+        "gray" | "grayscale" => ("gray", json!(values(&c.convert(&col, Model::Gray, intent)))),
+        "lab" => ("lab", json!([lab.l, lab.a, lab.b])),
+        "oklch" => {
+            // RGB numbers past 0..1 ([2, 2, 2]) display clipped, as `hex` reports them.
+            let [l, ch, h] = vectorcraft_color::oklab::to_oklch(c.display_rgb(&col).map(|v| v.clamp(0.0, 1.0)));
+            ("oklch", json!([l * 100.0, ch, h]))
+        }
         other => return Err(bad(C, format!("unknown model `{other}`"))),
     };
     let de = c.gamut_error(&col);
@@ -954,6 +1439,8 @@ fn view_json(v: &proof::ProofView) -> Value {
         "target": v.setup.target.id(),
         "intent": v.setup.intent.id(),
         "simulatePaper": v.setup.simulate_paper,
+        "preserveNumbers": v.setup.preserve_numbers,
+        "simulateBlack": v.setup.simulate_black,
         "proofColors": v.proof_colors,
         "overprintPreview": v.overprint,
         "separations": v.separations,
@@ -963,24 +1450,39 @@ fn view_json(v: &proof::ProofView) -> Value {
 fn proof_setup(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "view.proofSetup";
     let mut v = proof::view();
-    if let Some(t) = text_param(p, "target", C)? {
-        let t = ProofTarget::parse(t).ok_or_else(|| bad(C, format!("unknown proof target `{t}`")))?;
-        if let ProofTarget::Cmyk(name) = &t
-            && !cms::profile(name).is_some_and(|k| k.kind == cms::ProfileKind::Cmyk)
-        {
-            return Err(bad(C, format!("unknown CMYK profile `{name}`")));
-        }
-        v.setup.target = t;
-    }
-    if let Some(i) = intent_param(p, C)? {
-        v.setup.intent = i;
-    }
-    v.setup.simulate_paper = switch_or(p, "simulatePaper", v.setup.simulate_paper, C)?;
+    setup_params(p, &mut v.setup, C)?;
     if let Some(on) = on_param(p, "proof", C)? {
         v.proof_colors = on;
     }
     store_view(s, v.clone());
     Ok(view_json(&v))
+}
+
+/// Take the proof setup settings `p` gives (`target`, `intent`, `simulatePaper`, `preserveNumbers`
+/// and `simulateBlack`, as `view.proofSetup` reads them) into `setup`. A `cmyk:` or `rgb:` target
+/// must name a CMYK or RGB profile that is loaded.
+fn setup_params(p: &Value, setup: &mut cms::ProofSetup, cmd: &str) -> Result<()> {
+    if let Some(t) = text_param(p, "target", cmd)? {
+        let t = ProofTarget::parse(t).ok_or_else(|| bad(cmd, format!("unknown proof target `{t}`")))?;
+        if let ProofTarget::Cmyk(name) = &t
+            && !cms::profile(name).is_some_and(|k| k.kind == cms::ProfileKind::Cmyk)
+        {
+            return Err(bad(cmd, format!("unknown CMYK profile `{name}`")));
+        }
+        if let ProofTarget::Rgb(name) = &t
+            && !cms::profile(name).is_some_and(|k| k.kind == cms::ProfileKind::Rgb)
+        {
+            return Err(bad(cmd, format!("unknown RGB profile `{name}`")));
+        }
+        setup.target = t;
+    }
+    if let Some(i) = intent_param(p, cmd)? {
+        setup.intent = i;
+    }
+    setup.simulate_paper = switch_or(p, "simulatePaper", setup.simulate_paper, cmd)?;
+    setup.preserve_numbers = switch_or(p, "preserveNumbers", setup.preserve_numbers, cmd)?;
+    setup.simulate_black = switch_or(p, "simulateBlack", setup.simulate_black, cmd)?;
+    Ok(())
 }
 
 /// Make `v` the proof view and redraw every document. When `v` equals the current view, the view
@@ -1097,4 +1599,23 @@ fn set_spot(s: &mut Session, p: &Value) -> Result<Value> {
         })?;
     }
     Ok(json!({"name": name, "spot": spot}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The policies come from the settings snapshot the question was built from, not from the
+    /// working settings as they are when the policies run.
+    #[test]
+    fn open_policies_use_the_snapshot_they_are_given() {
+        let tagged = |d: &mut vectorcraft_doc::Document| d.color_profiles.rgb = Some(cms::canonical_name(cms::WIDE_GAMUT_RGB).to_string());
+        let snapshot = ColorSettings { rgb_policy: Policy::Off, ..ColorSettings::default() };
+        let mut d = vectorcraft_doc::Document::new(100.0, 100.0);
+        tagged(&mut d);
+        let (notes, changed) = apply_open_policies_choosing(&mut d, None, &snapshot).unwrap();
+        assert!(changed, "the Off policy of the snapshot takes the profile off");
+        assert_eq!(d.color_profiles.rgb, None);
+        assert!(notes.iter().any(|n| n.contains("policy is")), "{notes:?}");
+    }
 }

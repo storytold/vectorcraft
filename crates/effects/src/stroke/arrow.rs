@@ -5,7 +5,8 @@
 //! corner. With [`ArrowAlign::Tip`] the tip sits on the end point and the stroke is shortened by
 //! the inset; with [`ArrowAlign::Extend`] the path keeps its length and the tip sits the inset
 //! past the end point. Heads added after the first ten are drawn in local units ([`local`]), as are
-//! custom heads, whose stroke ends halfway along their length.
+//! custom heads, whose stroke ends at their own stop or else halfway along their length
+//! ([`vectorcraft_doc::CustomArrowhead::stop`]).
 
 use std::borrow::Cow;
 

@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use super::geometry::region_pixels;
 use super::{Arc, NodeId, Rect, encode, proof};
 
@@ -39,8 +41,8 @@ pub struct RenderOptions {
     pub background: Option<[u8; 4]>,
     /// Draw artboards as white rectangles (screen view). Export sets this to false.
     pub artboards: bool,
-    /// Objects not to draw (e.g. the object being edited by a live drag preview).
-    pub hidden: Vec<NodeId>,
+    /// Objects not to draw (e.g. the layers and fold lines the Fold Preview's print leaves out).
+    pub hidden: HashSet<NodeId>,
     /// Draw the layers as their Layer Options show them on screen: Preview off in outline, Dim
     /// Images fading their images (a template layer's too), a template in Preview in Outline view.
     pub dim_templates: bool,
@@ -194,7 +196,7 @@ impl Default for RenderOptions {
             outline: false,
             background: None,
             artboards: false,
-            hidden: vec![],
+            hidden: HashSet::new(),
             dim_templates: true,
             proof: None,
             overprint_preview: false,

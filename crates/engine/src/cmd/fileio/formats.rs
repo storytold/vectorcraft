@@ -195,6 +195,20 @@ const TRANSPARENCY: FormatOption = FormatOption {
     description: "pixels under half opacity become one transparent entry (false: everything is blended over the matte)",
 };
 
+const TRANSPARENCY_DITHER: FormatOption = FormatOption {
+    name: "transparencyDither",
+    ty: "string",
+    default: "\"none\"",
+    description: "with transparency, how partly transparent pixels are split between the transparent entry and their color: none (cut at half opacity), diffusion, pattern (8×8 ordered) or noise",
+};
+
+const TRANSPARENCY_DITHER_AMOUNT: FormatOption = FormatOption {
+    name: "transparencyDitherAmount",
+    ty: "integer",
+    default: "100",
+    description: "the diffusion transparency dither's strength 0–100 (0 cuts at half opacity; more than 100 is refused)",
+};
+
 const MATTE: FormatOption = FormatOption {
     name: "matte",
     ty: "string",
@@ -235,6 +249,8 @@ const PALETTE_OPTIONS: &[FormatOption] = &[
     DITHER,
     DITHER_AMOUNT,
     TRANSPARENCY,
+    TRANSPARENCY_DITHER,
+    TRANSPARENCY_DITHER_AMOUNT,
     MATTE,
 ];
 
@@ -532,6 +548,14 @@ pub const FORMATS: &[Format] = &[
     reader("heif", "HEIC/HEIF", &["heic", "heif"], "image/heic", true),
     // jxl-oxide reads a JPEG XL file's first frame, which is stored as PNG. Exports don't write it.
     reader("jxl", "JPEG XL", &["jxl"], "image/jxl", true),
+    // `.cdr` drawings of versions 1 to 27 (`WL` files, RIFF files from version 3, and the ZIP packages of 14 on), read by
+    // `craft-cdr`; a `.cdt` template opens as a new untitled document. Exports don't write
+    // them.
+    reader("cdr", "CDR Drawing", &["cdr"], "application/vnd.corel-draw", false), // brand-ok: shared MIME type
+    reader("cdt", "CDR Template", &["cdt"], "application/vnd.corel-draw", false), // brand-ok: shared MIME type
+    // `.cmx` exchange files with 32-bit coordinates, read by `craft-cdr`; exports don't write
+    // them.
+    reader("cmx", "CMX", &["cmx"], "image/x-cmx", false),
     // QuickDraw pictures, read by `vectorcraft_metafile::import_pict` into paths, type and images.
     reader("pict", "PICT", &["pct", "pic", "pict"], "image/x-pict", false),
 ];
@@ -591,17 +615,20 @@ pub const OPEN_EXTS: &[&str] = &[
     "af",
     "afdesign",
     "afpub",
+    "cdr",
+    "cdt",
+    "cmx",
 ];
 
 /// Extensions in [`OPEN_EXTS`] the packaging declares no type for: Photoshop documents belong to
 /// raster editors, so Finder and file managers don't offer a vector app for them, and there is no
-/// `.epsf`, `.ps`, Targa, PCX, Pixar, JPEG 2000, HEIC/HEIF or JPEG XL type, nor one for the `.pns`, `.dib` and `.rle` names of
+/// `.epsf`, `.ps`, Targa, PCX, Pixar, JPEG 2000, HEIC/HEIF, JPEG XL, `.cdr` or `.cmx` type, nor one for the `.pns`, `.dib` and `.rle` names of
 /// PNG and BMP files (File › Open and Place still read them all). On Linux the desktop entry's EPS
 /// type (shared-mime-info's) also covers `.epsf`, so file managers offer VectorCraft for it.
 /// The packaging declares no type for HP-GL plot files or PICT pictures either.
 pub const UNASSOCIATED_EXTS: &[&str] = &[
     "psd", "pdd", "psb", "epsf", "ps", "pns", "dib", "rle", "tga", "vda", "icb", "vst", "pcx", "pxr", "jpf", "jpx", "jp2", "j2k", "j2c", "jpc",
-    "heic", "heif", "jxl", "plt", "hpgl", "hgl", "hpg", "pct", "pic", "pict",
+    "heic", "heif", "jxl", "cdr", "cdt", "cmx", "plt", "hpgl", "hgl", "hpg", "pct", "pic", "pict",
 ];
 
 /// The extension that picks each writable format when exporting (the format's first; PNG-8 shares
@@ -688,6 +715,9 @@ pub const PLACE_EXTS: &[&str] = &[
     "af",
     "afdesign",
     "afpub",
+    "cdr",
+    "cdt",
+    "cmx",
     "txt",
     "rtf",
     "docx",
@@ -723,11 +753,26 @@ fn format_filters() -> impl Iterator<Item = (&'static str, &'static [&'static st
     FORMATS.iter().filter(|f| f.read).map(|f| (f.label, read_extensions(f)))
 }
 
-/// Whether a file named `name` can only be read by an importer plug-in: an installed importer lists
-/// its extension and File › Place does not read that extension.
+/// Whether a file named `name` can only be opened, by an importer plug-in: an installed importer lists
+/// its extension, File › Place does not read that extension, and no installed importer that places
+/// its files lists it ([`places_with_importer`]).
 pub fn opens_with_importer(name: &str) -> bool {
     let ext = extension(name);
-    !ext.is_empty() && !PLACE_EXTS.contains(&ext.as_str()) && !vectorcraft_plugins::import::for_extension(&ext).is_empty()
+    !ext.is_empty()
+        && !PLACE_EXTS.contains(&ext.as_str())
+        && !vectorcraft_plugins::import::for_extension(&ext).is_empty()
+        && !places_with_importer(name)
+}
+
+/// Whether File › Place places a file named `name` with an importer plug-in when no built-in format
+/// reads its content: no built-in format reads its extension, and an installed importer whose manifest
+/// sets `place` lists it.
+pub fn places_with_importer(name: &str) -> bool {
+    let ext = extension(name);
+    !ext.is_empty()
+        && readable_format(&ext).is_none()
+        && !PLACE_EXTS.contains(&ext.as_str())
+        && !vectorcraft_plugins::import::placing(&ext).is_empty()
 }
 
 /// Whether File › Open opens a file of extension `ext` (lower case) as something other than a
@@ -855,6 +900,53 @@ pub fn place_filters() -> impl Iterator<Item = (&'static str, &'static [&'static
         .chain(std::iter::once(("Text", TEXT_EXTS)))
         .chain(std::iter::once(("RTF", RTF_EXTS)))
         .chain(std::iter::once(("Word", WORD_EXTS)))
+}
+
+/// File › Place's part for the installed importer plug-ins whose manifests set `place`: the
+/// extensions of "All placeable files" ([`PLACE_EXTS`], then theirs in plug-in id order) and one
+/// filter per such importer that has extensions left, under its name. An importer's extensions leave
+/// out those a built-in format reads, which File › Place reads with that format. Made once for each
+/// set of installed plug-ins, so it lives as long as the dialogs that hold it.
+fn importer_place_part() -> ImporterPart {
+    use vectorcraft_plugins::{import, registry};
+    static MADE: std::sync::Mutex<Option<(u64, ImporterPart)>> = std::sync::Mutex::new(None);
+    let mut made = MADE.lock().unwrap_or_else(|e| e.into_inner());
+    let revision = registry::revision();
+    if let Some((r, part)) = made.as_ref()
+        && *r == revision
+    {
+        return part.clone();
+    }
+    let mut exts: Vec<&'static str> = PLACE_EXTS.to_vec();
+    let mut filters = Vec::new();
+    for p in import::installed().into_iter().filter(|p| p.manifest().place) {
+        let m = p.manifest();
+        let own: Vec<&'static str> =
+            m.extensions.iter().filter(|e| readable_format(e).is_none() && !PLACE_EXTS.contains(&e.as_str())).map(|e| registry::intern(e)).collect();
+        if own.is_empty() {
+            continue;
+        }
+        for &e in &own {
+            if !exts.contains(&e) {
+                exts.push(e);
+            }
+        }
+        let own: &'static [&'static str] = Box::leak(own.into_boxed_slice());
+        filters.push((registry::intern(&m.name), own));
+    }
+    let exts: &'static [&'static str] = if exts.len() == PLACE_EXTS.len() { PLACE_EXTS } else { Box::leak(exts.into_boxed_slice()) };
+    let part = (exts, filters);
+    *made = Some((revision, part.clone()));
+    part
+}
+
+/// File › Place's own dialog filters: [`place_filters`], with the extensions of the installed
+/// importer plug-ins that place their files in "All placeable files" and one filter per such
+/// importer after the others, under its name ([`places_with_importer`]). Pickers that relink an
+/// image use [`place_filters`].
+pub fn place_dialog_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
+    let (all, importers) = importer_place_part();
+    std::iter::once(("All placeable files", all)).chain(place_filters().skip(1)).chain(importers)
 }
 
 /// A format by id or extension (any case, leading dot allowed; `jpeg` finds `jpg`): a built-in
@@ -1007,6 +1099,9 @@ pub(super) fn formats(_: &mut Session, _: &Value) -> Result<Value> {
         let mut v = f.to_json();
         if let Some(id) = vectorcraft_plugins::export::plugin_id(f.id) {
             v["plugin"] = json!(id);
+            if vectorcraft_plugins::import::by_format(f.id).is_some_and(|p| p.manifest().place) {
+                v["place"] = json!(true);
+            }
         }
         v
     };

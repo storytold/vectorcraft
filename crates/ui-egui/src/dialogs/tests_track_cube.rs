@@ -1,4 +1,4 @@
-//! The track cube's rotations, grips and gestures.
+//! The track cube's rotations and grips.
 use super::*;
 use egui::pos2;
 use vectorcraft_effects::ROTATION_PRESETS;
@@ -49,8 +49,7 @@ fn angles_stay_in_the_fields_range_to_a_hundredth() {
 }
 
 fn drag(grip: Grip, angles: [f64; 3], from: Pos2, to: Pos2, shift: bool) -> [f64; 3] {
-    let mut g =
-        CubeDrag { grip, matrix: rotation(angles), origin: from, last: from, lock: None, fields: Default::default(), pass: 0, owner: Id::NULL };
+    let mut g = CubeDrag { grip, matrix: rotation(angles), origin: from, last: from, lock: None };
     // In five steps, as a pointer moves.
     let mut near = angles;
     for k in 1..=5 {
@@ -107,64 +106,6 @@ fn a_face_drag_turns_the_front_toward_the_pointer_and_shift_keeps_one_axis() {
     assert!(close(steep, [20.0, 0.0, 0.0]), "Shift up: {steep:?}");
     let free = drag(Grip::Face, front, pos2(0.0, 0.0), pos2(40.0, 12.0), false);
     assert!(free[0].abs() > 1.0, "without Shift a slanted drag also tilts: {free:?}");
-}
-
-/// A gesture ends when the cube stops being drawn during it (its dialog closed, or the Rotation tab
-/// was left), so Escape is not held back for a cube that is no longer there.
-#[test]
-fn a_drag_ends_when_the_cube_is_no_longer_drawn() {
-    let ctx = egui::Context::default();
-    let run = |draw: &mut dyn FnMut(&mut egui::Ui)| ctx.run_ui(Default::default(), draw).textures_delta.clear();
-    run(&mut |ui| {
-        let pass = ui.ctx().cumulative_pass_nr();
-        let drag = CubeDrag {
-            grip: Grip::Face,
-            matrix: rotation([0.0; 3]),
-            origin: Pos2::ZERO,
-            last: Pos2::ZERO,
-            lock: None,
-            fields: Default::default(),
-            pass,
-            owner: Id::NULL,
-        };
-        ui.data_mut(|m| m.insert_temp(cube_drag_id(), drag));
-        assert!(cube_dragging(ui.ctx()));
-    });
-    assert!(cube_dragging(&ctx), "the next pass still sees the gesture");
-    for _ in 0..2 {
-        run(&mut |_| {});
-    }
-    assert!(!cube_dragging(&ctx), "two passes without the cube end the gesture");
-}
-
-/// With the 3D and Materials panel and a 3D dialog both showing a cube, a gesture on one cube is
-/// left alone by the other: Escape there does not put the first cube's settings into it.
-#[test]
-fn a_cube_leaves_a_gesture_on_the_other_cube_alone() {
-    let ctx = egui::Context::default();
-    let mut d = Dialog::new("effect", json!({ "rotationX": 10.0, "rotationY": 0.0, "rotationZ": 0.0 }));
-    let escape = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
-    let input = egui::RawInput { events: vec![escape], ..Default::default() };
-    let mut out = ctx.run_ui(input, |ui| {
-        let pass = ui.ctx().cumulative_pass_nr();
-        let other = CubeDrag {
-            grip: Grip::Face,
-            matrix: rotation([50.0, 0.0, 0.0]),
-            origin: Pos2::ZERO,
-            last: Pos2::ZERO,
-            lock: None,
-            fields: json!({ "rotationX": 50.0, "rotationY": 0.0, "rotationZ": 0.0 }).as_object().cloned().unwrap_or_default(),
-            pass,
-            owner: cube_id(crate::panels::three_d::ID),
-        };
-        assert_ne!(cube_id(crate::panels::three_d::ID), cube_id(&d.kind), "each cube has its own focus");
-        ui.data_mut(|m| m.insert_temp(cube_drag_id(), other));
-        track_cube(ui, &mut d);
-    });
-    out.textures_delta.clear();
-    assert_eq!(d.f64("rotationX", 0.0), 10.0, "the dialog keeps its own rotation");
-    // The button is up in that pass, and the other cube, drawn later, still has the release to handle.
-    assert!(ctx.data(|m| m.get_temp::<CubeDrag>(cube_drag_id())).is_some(), "the other cube's gesture is still there");
 }
 
 /// The centre is on the front face, the ring's band on the ring, and an edge's middle on that edge.

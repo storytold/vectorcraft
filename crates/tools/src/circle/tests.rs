@@ -94,6 +94,305 @@ fn a_click_and_a_drag_draw_the_circle_through_three_points() {
     assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, (300.0, 360.0), Mods::default())), circle(&[(300.0, 300.0), (380.0, 300.0), (300.0, 360.0)]));
 }
 
+/// The lines the tool shows from the center `c`: (radius lines, arms of the center cross), each
+/// with its color.
+fn annotations(o: &[Overlay], c: Point) -> (Vec<[u8; 3]>, Vec<[u8; 3]>) {
+    let (mut radii, mut cross) = (vec![], vec![]);
+    for o in o {
+        if let Overlay::Line { a, b, color, .. } = o {
+            if *a == c {
+                radii.push(*color);
+            } else if a.midpoint(*b).distance(c) < 1e-9 {
+                cross.push(*color);
+            }
+        }
+    }
+    (radii, cross)
+}
+
+/// `center`, `radii` and `diameter` show or hide the center cross, the radius lines and the
+/// diameter label, each on its own, and `color` is the color of the cross and the lines; the
+/// outline stays in the feedback color. Each option lasts in [`Tool::options`].
+#[test]
+fn the_options_show_or_hide_the_center_radii_and_diameter_in_their_color() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = CircleTool::default();
+    click(&mut t, &cx, (300.0, 300.0));
+    t.pointer(&cx, &ev(PointerKind::Move, (380.0, 360.0), Mods::default()));
+    let c = Point::new(340.0, 330.0);
+    let blue = crate::draw2::FEEDBACK;
+    assert_eq!(annotations(&t.overlays(&cx), c), (vec![blue; 2], vec![blue; 2]));
+    let diameter = |t: &CircleTool| t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Measure { .. }));
+    assert!(diameter(&t));
+    t.set_option("center", &json!(false));
+    assert_eq!(annotations(&t.overlays(&cx), c), (vec![blue; 2], vec![]));
+    t.set_option("radii", &json!(false));
+    assert_eq!(annotations(&t.overlays(&cx), c), (vec![], vec![]));
+    assert!(diameter(&t));
+    t.set_option("diameter", &json!(false));
+    assert!(!diameter(&t));
+    t.set_option("center", &json!(true));
+    t.set_option("radii", &json!(true));
+    t.set_option("color", &json!("red"));
+    let red = [0xe5, 0x2d, 0x27];
+    let o = t.overlays(&cx);
+    assert_eq!(annotations(&o, c), (vec![red; 2], vec![red; 2]));
+    assert!(o.iter().any(|o| matches!(o, Overlay::Path { color, .. } if *color == blue)), "{o:?}");
+    assert_eq!(
+        t.options(),
+        json!({"center": true, "radii": true, "diameter": false, "color": "red", "standardAnchors": true, "dragThird": true, "fromCenter": false})
+    );
+    // A value an option does not take leaves it as it was.
+    for (key, value) in [("color", json!("orange")), ("center", json!("no")), ("radii", json!(0))] {
+        t.set_option(key, &value);
+    }
+    assert_eq!(t.options()["color"], json!("red"));
+    assert_eq!((&t.options()["center"], &t.options()["radii"]), (&json!(true), &json!(true)));
+}
+
+/// With `standardAnchors` off, the circle's anchors go at the points it was drawn through.
+#[test]
+fn anchors_at_the_points_asks_for_them() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = CircleTool::default();
+    t.set_option("standardAnchors", &json!(false));
+    let acts = drag(&mut t, &cx, (300.0, 300.0), &[(380.0, 360.0)], Mods::default());
+    let points = json!([[300.0, 300.0], [380.0, 360.0]]);
+    assert_eq!(acts, vec![Action::Exec("shape.circleThroughPoints".into(), json!({"points": points, "anchors": "points"}))]);
+}
+
+/// With `standardAnchors` off, the tool shows the path with an anchor at each point, the one its
+/// release draws.
+#[test]
+fn anchors_at_the_points_show_the_path_they_draw() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = CircleTool::default();
+    t.set_option("standardAnchors", &json!(false));
+    click(&mut t, &cx, (300.0, 300.0));
+    t.pointer(&cx, &ev(PointerKind::Down, (380.0, 300.0), Mods::default()));
+    t.pointer(&cx, &ev(PointerKind::Drag, (310.0, 340.0), Mods::default()));
+    let points = [Point::new(300.0, 300.0), Point::new(380.0, 300.0), Point::new(310.0, 340.0)];
+    let (c, r) = circle_of(&points).expect("a circle");
+    let want = shapes::circle_with_anchors_at(c, r, &points).to_bezpath();
+    let o = t.overlays(&cx);
+    assert!(o.iter().any(|o| matches!(o, Overlay::Path { path, .. } if *path == want)), "{o:?}");
+}
+
+/// With `standardAnchors` off, a circle within 1 pt of the canvas edge whose path with anchors at
+/// the points curves past that edge is not shown and not drawn; with standard anchors it is.
+#[test]
+fn anchors_at_the_points_keep_the_path_on_the_canvas() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let r = MAX_COORD - 1.0;
+    let at = |deg: f64| (r * deg.to_radians().cos(), r * deg.to_radians().sin());
+    let points = [at(0.0), at(70.0), at(180.0)];
+    let geom: Vec<Point> = points.iter().map(|(x, y)| Point::new(*x, *y)).collect();
+    assert!(drawn_circle(&geom, false, true).is_some());
+    assert_eq!(drawn_circle(&geom, false, false), None);
+    let mut t = CircleTool::default();
+    t.set_option("standardAnchors", &json!(false));
+    click(&mut t, &cx, points[0]);
+    t.pointer(&cx, &ev(PointerKind::Down, points[1], Mods::default()));
+    t.pointer(&cx, &ev(PointerKind::Drag, points[2], Mods::default()));
+    // No outline at all: at this size the tool would draw it solid, not dashed.
+    let o = t.overlays(&cx);
+    assert!(!o.iter().any(|o| matches!(o, Overlay::Path { .. })), "{o:?}");
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, points[2], Mods::default())), vec![]);
+}
+
+/// With `dragThird` off, a click in reach of both placed points is on the nearer one: nearer the
+/// first point it places nothing, nearer the second it draws the circle on the two.
+#[test]
+fn with_third_point_by_dragging_off_a_click_near_both_points_takes_the_nearer() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = CircleTool::default();
+    t.set_option("dragThird", &json!(false));
+    click(&mut t, &cx, (100.0, 100.0));
+    assert_eq!(click(&mut t, &cx, (104.0, 100.0)), vec![]);
+    assert_eq!(click(&mut t, &cx, (101.0, 100.0)), vec![]);
+    assert_eq!(click(&mut t, &cx, (103.0, 100.0)), circle(&[(100.0, 100.0), (104.0, 100.0)]));
+}
+
+/// With `dragThird` off, a press on the second point shows the circle on the two points, which its
+/// release draws, and a press on the first point shows none.
+#[test]
+fn with_third_point_by_dragging_off_a_press_shows_the_circle_its_release_draws() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = CircleTool::default();
+    t.set_option("dragThird", &json!(false));
+    click(&mut t, &cx, (100.0, 100.0));
+    click(&mut t, &cx, (200.0, 100.0));
+    t.pointer(&cx, &ev(PointerKind::Down, (101.0, 101.0), Mods::default()));
+    assert_eq!(preview(&t.overlays(&cx)), None);
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, (101.0, 101.0), Mods::default())), vec![]);
+    t.pointer(&cx, &ev(PointerKind::Down, (202.0, 101.0), Mods::default()));
+    let o = t.overlays(&cx);
+    assert!(near(preview(&o).expect("the circle is shown"), Rect::new(100.0, 50.0, 200.0, 150.0)), "{o:?}");
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, (202.0, 101.0), Mods::default())), circle(&[(100.0, 100.0), (200.0, 100.0)]));
+}
+
+/// With `dragThird` off, a press that moves less than 2 screen points keeps the point where it was
+/// pressed, for the second point and for the third.
+#[test]
+fn with_third_point_by_dragging_off_a_short_move_keeps_the_pressed_point() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let (down, drag, up) = (PointerKind::Down, PointerKind::Drag, PointerKind::Up);
+    let mut t = CircleTool::default();
+    t.set_option("dragThird", &json!(false));
+    click(&mut t, &cx, (100.0, 100.0));
+    t.pointer(&cx, &ev(down, (200.0, 100.0), Mods::default()));
+    t.pointer(&cx, &ev(drag, (201.0, 100.0), Mods::default()));
+    assert_eq!(t.pointer(&cx, &ev(up, (200.0, 100.0), Mods::default())), vec![]);
+    t.pointer(&cx, &ev(down, (150.0, 200.0), Mods::default()));
+    t.pointer(&cx, &ev(drag, (151.0, 200.0), Mods::default()));
+    let three = circle(&[(100.0, 100.0), (200.0, 100.0), (150.0, 200.0)]);
+    assert_eq!(t.pointer(&cx, &ev(up, (150.0, 200.0), Mods::default())), three);
+}
+
+/// With `dragThird` off, a second click places the second point and a third click draws the circle
+/// through the three; a click on the second point again (as a double-click there does) draws the
+/// circle on the two; a second point let go on the first places nothing; a drag from the first
+/// point still draws the circle on its diameter.
+#[test]
+fn with_third_point_by_dragging_off_three_clicks_draw_the_circle() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = CircleTool::default();
+    t.set_option("dragThird", &json!(false));
+    click(&mut t, &cx, (300.0, 300.0));
+    assert_eq!(click(&mut t, &cx, (380.0, 300.0)), vec![]);
+    t.pointer(&cx, &ev(PointerKind::Move, (300.0, 360.0), Mods::default()));
+    let o = t.overlays(&cx);
+    assert!(near(preview(&o).expect("the circle through the three is shown"), Rect::new(290.0, 280.0, 390.0, 380.0)), "{o:?}");
+    assert_eq!(o.iter().filter(|o| matches!(o, Overlay::Anchor { .. })).count(), 2, "{o:?}");
+    // A click on the first point places nothing and keeps both points.
+    assert_eq!(click(&mut t, &cx, (300.0, 300.0)), vec![]);
+    assert!(t.busy());
+    assert_eq!(click(&mut t, &cx, (300.0, 360.0)), circle(&[(300.0, 300.0), (380.0, 300.0), (300.0, 360.0)]));
+    assert!(!t.busy());
+    // The events of a double-click on the second point: its first click places it, the second
+    // draws the circle on the two points, and the double-click event that follows adds nothing.
+    click(&mut t, &cx, (100.0, 100.0));
+    assert_eq!(click(&mut t, &cx, (200.0, 100.0)), vec![]);
+    assert_eq!(click(&mut t, &cx, (200.0, 100.0)), circle(&[(100.0, 100.0), (200.0, 100.0)]));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::DoubleClick, (200.0, 100.0), Mods::default())), vec![]);
+    assert!(!t.busy());
+    // A drag that moves the second point places it where it is let go.
+    click(&mut t, &cx, (100.0, 100.0));
+    assert_eq!(drag(&mut t, &cx, (150.0, 100.0), &[(180.0, 100.0), (200.0, 100.0)], Mods::default()), vec![]);
+    assert_eq!(click(&mut t, &cx, (100.0, 200.0)), circle(&[(100.0, 100.0), (200.0, 100.0), (100.0, 200.0)]));
+    // Three points on one line keep the two placed: the next click elsewhere draws.
+    click(&mut t, &cx, (100.0, 100.0));
+    click(&mut t, &cx, (200.0, 100.0));
+    assert_eq!(click(&mut t, &cx, (300.0, 100.0)), vec![]);
+    assert_eq!(click(&mut t, &cx, (100.0, 200.0)), circle(&[(100.0, 100.0), (200.0, 100.0), (100.0, 200.0)]));
+    // A second press elsewhere, dragged back and let go on the first point, places nothing: the
+    // next click places the second point.
+    click(&mut t, &cx, (100.0, 100.0));
+    assert_eq!(drag(&mut t, &cx, (200.0, 100.0), &[(150.0, 100.0), (100.0, 100.0)], Mods::default()), vec![]);
+    assert!(t.busy());
+    assert_eq!(click(&mut t, &cx, (200.0, 100.0)), vec![]);
+    assert_eq!(click(&mut t, &cx, (100.0, 200.0)), circle(&[(100.0, 100.0), (200.0, 100.0), (100.0, 200.0)]));
+    // A drag from the first point.
+    assert_eq!(drag(&mut t, &cx, (300.0, 300.0), &[(380.0, 360.0)], Mods::default()), circle(&[(300.0, 300.0), (380.0, 360.0)]));
+    // Switching the option drops the points placed so far.
+    click(&mut t, &cx, (100.0, 100.0));
+    t.set_option("dragThird", &json!(true));
+    assert!(!t.busy());
+}
+
+/// With `dragThird` off, a drag of the second or third point ends where it is let go, also when the
+/// release is away from the last drag.
+#[test]
+fn with_third_point_by_dragging_off_a_drag_ends_where_it_is_let_go() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let (down, drag, up) = (PointerKind::Down, PointerKind::Drag, PointerKind::Up);
+    let mut t = CircleTool::default();
+    t.set_option("dragThird", &json!(false));
+    click(&mut t, &cx, (300.0, 300.0));
+    t.pointer(&cx, &ev(down, (350.0, 300.0), Mods::default()));
+    t.pointer(&cx, &ev(drag, (380.0, 300.0), Mods::default()));
+    assert_eq!(t.pointer(&cx, &ev(up, (400.0, 300.0), Mods::default())), vec![]);
+    t.pointer(&cx, &ev(down, (350.0, 350.0), Mods::default()));
+    t.pointer(&cx, &ev(drag, (320.0, 380.0), Mods::default()));
+    assert_eq!(t.pointer(&cx, &ev(up, (300.0, 400.0), Mods::default())), circle(&[(300.0, 300.0), (400.0, 300.0), (300.0, 400.0)]));
+}
+
+/// With `dragThird` off, an Alt-click places the second point where Alt's rounding of the diameter
+/// puts it (88 pt rounds to 90 pt at 100%), and the tool shows it there: the marker, the preview,
+/// the circle on the two points and the circle through three all use it.
+#[test]
+fn an_alt_click_places_the_second_point_where_it_is_shown() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let alt = Mods { alt: true, ..Mods::default() };
+    let mut t = CircleTool::default();
+    t.set_option("dragThird", &json!(false));
+    click(&mut t, &cx, (300.0, 300.0));
+    t.pointer(&cx, &ev(PointerKind::Down, (388.0, 300.0), alt));
+    t.pointer(&cx, &ev(PointerKind::Up, (388.0, 300.0), alt));
+    t.pointer(&cx, &ev(PointerKind::Move, (300.0, 390.0), Mods::default()));
+    let o = t.overlays(&cx);
+    let second = Point::new(390.0, 300.0);
+    assert!(o.iter().any(|o| matches!(o, Overlay::Anchor { p, .. } if p.distance(second) < 1e-9)), "{o:?}");
+    // (300, 300), (390, 300) and (300, 390): center (345, 345), radius 45·√2.
+    let r = 45.0 * 2f64.sqrt();
+    assert!(near(preview(&o).unwrap(), Rect::new(345.0 - r, 345.0 - r, 345.0 + r, 345.0 + r)), "{o:?}");
+    assert_eq!(click(&mut t, &cx, (300.0, 390.0)), circle(&[(300.0, 300.0), (390.0, 300.0), (300.0, 390.0)]));
+    click(&mut t, &cx, (300.0, 300.0));
+    t.pointer(&cx, &ev(PointerKind::Down, (388.0, 300.0), alt));
+    t.pointer(&cx, &ev(PointerKind::Up, (388.0, 300.0), alt));
+    assert_eq!(click(&mut t, &cx, (390.0, 300.0)), circle(&[(300.0, 300.0), (390.0, 300.0)]));
+    // In inches the ticks are farther apart, and the rounding can move the point more than the
+    // 3 screen points a click reaches: the second click of a double-click, where the first let go,
+    // still draws the circle on the two points, at the rounded point.
+    let inches = ToolContext { unit: vectorcraft_doc::Unit::Inches, ..cx };
+    let d = 94.4;
+    let rounded = vectorcraft_doc::Unit::Inches.snap_to_ruler_tick(d, 1.0);
+    assert!((rounded - d).abs() > 3.0, "{rounded}");
+    click(&mut t, &inches, (300.0, 300.0));
+    t.pointer(&inches, &ev(PointerKind::Down, (300.0 + d, 300.0), alt));
+    t.pointer(&inches, &ev(PointerKind::Up, (300.0 + d, 300.0), alt));
+    assert_eq!(click(&mut t, &inches, (300.0 + d, 300.0)), circle(&[(300.0, 300.0), (300.0 + rounded, 300.0)]));
+}
+
+/// `tool.setOption`'s check takes the values the options take and nothing else.
+#[test]
+fn check_options_takes_only_the_values_the_options_take() {
+    let ok = json!({"center": false, "radii": true, "diameter": false, "color": "gray", "standardAnchors": false, "dragThird": false});
+    assert_eq!(check_options(ok.as_object().unwrap()), Ok(()));
+    // The tool's own check, which `tool.setOption` also runs, takes the same values.
+    let tool = CircleTool::default();
+    assert_eq!(tool.check_options(ok.as_object().unwrap()), Ok(()));
+    for (bad, error) in [
+        (json!({"center": 1}), "`center` must be true or false"),
+        (json!({"dragThird": null}), "`dragThird` must be true or false"),
+        (json!({"color": "orange"}), "`color` must be one of red, blue, magenta, green, black, gray"),
+        (json!({"colour": "red"}), "unknown Circle tool option `colour`"),
+    ] {
+        assert_eq!(check_options(bad.as_object().unwrap()), Err(error.to_string()), "{bad}");
+        assert_eq!(tool.check_options(bad.as_object().unwrap()), Err(error.to_string()), "{bad}");
+    }
+}
+
 /// A drag ends where it is let go, also when the release is away from the last drag: from a first
 /// press, from a second press, and from a press on the first point. A release within 2 screen
 /// points of a second press is still a click and keeps the point of the press.
@@ -118,6 +417,69 @@ fn a_drag_ends_where_it_is_let_go() {
     click(&mut t, &cx, (300.0, 300.0));
     t.pointer(&cx, &ev(down, (380.0, 360.0), Mods::default()));
     assert_eq!(t.pointer(&cx, &ev(up, (381.0, 360.0), Mods::default())), circle(&[(300.0, 300.0), (380.0, 360.0)]));
+}
+
+/// A release within 2 screen points of the press is a click also after a drag that came back to
+/// it: a second press draws the circle on the diameter to the press, a press on the first point
+/// places nothing, and a first press places the first point.
+#[test]
+fn a_release_near_the_press_is_a_click_after_a_drag() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = CircleTool::default();
+    click(&mut t, &cx, (300.0, 300.0));
+    assert_eq!(drag(&mut t, &cx, (380.0, 300.0), &[(300.0, 360.0), (381.0, 300.0)], Mods::default()), circle(&[(300.0, 300.0), (380.0, 300.0)]));
+    click(&mut t, &cx, (300.0, 300.0));
+    assert_eq!(drag(&mut t, &cx, (300.0, 300.0), &[(300.0, 380.0), (301.0, 300.0)], Mods::default()), vec![]);
+    assert!(t.ends_on_escape(&cx), "the first point stays");
+    assert_eq!(click(&mut t, &cx, (380.0, 360.0)), circle(&[(300.0, 300.0), (380.0, 360.0)]));
+    assert_eq!(drag(&mut t, &cx, (300.0, 300.0), &[(380.0, 300.0), (301.0, 300.0)], Mods::default()), vec![]);
+    assert!(t.ends_on_escape(&cx), "the press placed the first point");
+    assert_eq!(click(&mut t, &cx, (380.0, 360.0)), circle(&[(300.0, 300.0), (380.0, 360.0)]));
+    // Let go near the press straight from far away, the tool shows no circle to the last drag.
+    t.pointer(&cx, &ev(PointerKind::Down, (300.0, 300.0), Mods::default()));
+    t.pointer(&cx, &ev(PointerKind::Drag, (380.0, 300.0), Mods::default()));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, (301.0, 300.0), Mods::default())), vec![]);
+    assert_eq!(preview(&t.overlays(&cx)), None);
+    t.pointer(&cx, &ev(PointerKind::Down, (300.0, 300.0), Mods::default()));
+    t.pointer(&cx, &ev(PointerKind::Drag, (300.0, 380.0), Mods::default()));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, (301.0, 300.0), Mods::default())), vec![]);
+    assert_eq!(preview(&t.overlays(&cx)), None);
+    assert!(t.ends_on_escape(&cx));
+}
+
+/// A click within 3 screen points of the first point, also one dragged away and let go where it
+/// was pressed, places nothing and leaves no circle shown.
+#[test]
+fn a_click_near_the_first_point_shows_no_circle() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = CircleTool::default();
+    click(&mut t, &cx, (300.0, 300.0));
+    assert_eq!(drag(&mut t, &cx, (302.0, 300.0), &[(302.0, 380.0), (302.0, 300.0)], Mods::default()), vec![]);
+    assert_eq!(preview(&t.overlays(&cx)), None);
+    assert_eq!(click(&mut t, &cx, (302.0, 300.0)), vec![]);
+    assert_eq!(preview(&t.overlays(&cx)), None);
+    assert!(t.ends_on_escape(&cx), "the first point stays");
+    assert_eq!(click(&mut t, &cx, (380.0, 360.0)), circle(&[(300.0, 300.0), (380.0, 360.0)]));
+}
+
+/// A press on the first point, dragged to snap to the rectangle's corner anchor and let go near
+/// the press, leaves no guides of the drag.
+#[test]
+fn a_release_near_the_press_hides_the_guides_of_the_drag() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = cx(&d, &s, &p);
+    let mut t = CircleTool::default();
+    click(&mut t, &cx, (300.0, 300.0));
+    t.pointer(&cx, &ev(PointerKind::Down, (300.0, 300.0), Mods::default()));
+    t.pointer(&cx, &ev(PointerKind::Drag, (201.0, 201.0), Mods::default()));
+    assert!(!t.snap.guides().is_empty(), "the drag snapped to the corner anchor");
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, (301.0, 300.0), Mods::default())), vec![]);
+    assert!(t.snap.guides().is_empty(), "{:?}", t.snap.guides());
 }
 
 /// Three points on one line show no circle, and the release draws nothing and starts afresh. A
@@ -225,8 +587,8 @@ fn points_on_one_line_say_the_circle_is_too_large() {
     assert_eq!(label(&t), None, "a circle is shown");
     t.pointer(&cx, &ev(PointerKind::Drag, (200.0, 200.0), Mods::default()));
     assert_eq!(label(&t), None, "the third point is on the second");
-    assert!(too_large(&[Point::new(0.0, 0.0), Point::new(4.1e6, 0.0)]));
-    assert!(!too_large(&[Point::new(0.0, 0.0)]) && !too_large(&[Point::new(1.0, 0.0), Point::new(1.0, 0.0)]));
+    assert!(too_large(&[Point::new(0.0, 0.0), Point::new(4.1e6, 0.0)], false, true));
+    assert!(!too_large(&[Point::new(0.0, 0.0)], false, true) && !too_large(&[Point::new(1.0, 0.0), Point::new(1.0, 0.0)], false, true));
 }
 
 /// Escape drops the first point; so do a dropped press and an edit made outside the tool. A
@@ -337,6 +699,193 @@ fn a_huge_circle_is_previewed_solid() {
     // At 100% a circle 100 pt across is dashed.
     t.pointer(&cx, &ev(PointerKind::Drag, (500.0, 300.0), Mods::default()));
     assert!(preview(&t.overlays(&cx)).is_some());
+}
+
+/// The command the tool runs for a circle at `c` whose outline passes through `p`.
+fn centered(c: (f64, f64), p: (f64, f64)) -> Vec<Action> {
+    vec![Action::Exec("shape.circleThroughPoints".into(), json!({ "center": [c.0, c.1], "points": [[p.0, p.1]] }))]
+}
+
+fn from_center() -> CircleTool {
+    let mut t = CircleTool::default();
+    t.set_option("fromCenter", &json!(true));
+    t
+}
+
+/// With From Center, a drag from the corner anchor of the rectangle at (200, 200) to next to the
+/// opposite corner at (100, 100) snaps both ends to the anchors: the circle is centered on one
+/// corner, its outline passes through the other, and its radius is the diagonal. Until the release
+/// the outline passes through the pointer, with one radius drawn to it.
+#[test]
+fn from_center_the_outline_passes_through_the_opposite_corner() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = cx(&d, &s, &p);
+    let mut t = from_center();
+    assert_eq!(t.options()["fromCenter"], json!(true));
+    t.pointer(&cx, &ev(PointerKind::Move, (201.0, 199.5), Mods::default()));
+    t.pointer(&cx, &ev(PointerKind::Down, (201.0, 199.5), Mods::default()));
+    t.pointer(&cx, &ev(PointerKind::Drag, (150.0, 150.0), Mods::default()));
+    t.pointer(&cx, &ev(PointerKind::Drag, (101.0, 101.5), Mods::default()));
+    let r = 100.0 * std::f64::consts::SQRT_2;
+    let o = t.overlays(&cx);
+    let shown = o
+        .iter()
+        .find_map(|o| match o {
+            Overlay::Path { path, .. } => Some(vectorcraft_geom::Shape::bounding_box(path)),
+            _ => None,
+        })
+        .expect("the circle is shown");
+    assert!(near(shown, Rect::new(200.0 - r, 200.0 - r, 200.0 + r, 200.0 + r)), "{o:?}");
+    let center = Point::new(200.0, 200.0);
+    let radii: Vec<Point> = o
+        .iter()
+        .filter_map(|o| match o {
+            Overlay::Line { a, b, .. } if *a == center => Some(*b),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(radii, vec![Point::new(100.0, 100.0)], "one radius, to the pointer: {o:?}");
+    assert!(o.iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text.starts_with("D: 282.84"))), "{o:?}");
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, (101.0, 101.5), Mods::default())), centered((200.0, 200.0), (100.0, 100.0)));
+    assert_eq!(circle_for(&[center, Point::new(100.0, 100.0)], true), Some((center, r)));
+}
+
+/// With From Center, a click places the center and a second click the point the outline passes
+/// through; a second click on the center places nothing, and the center stays.
+#[test]
+fn from_center_two_clicks_draw_the_circle_through_the_second() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = from_center();
+    assert_eq!(click(&mut t, &cx, (300.0, 300.0)), vec![]);
+    assert_eq!(click(&mut t, &cx, (300.5, 300.0)), vec![], "a double-click places the center alone");
+    assert!(t.ends_on_escape(&cx));
+    t.pointer(&cx, &ev(PointerKind::Move, (330.0, 340.0), Mods::default()));
+    // Center (300, 300), radius 50.
+    assert!(near(preview(&t.overlays(&cx)).expect("the circle is shown"), Rect::new(250.0, 250.0, 350.0, 350.0)), "{:?}", t.overlays(&cx));
+    assert_eq!(click(&mut t, &cx, (330.0, 340.0)), centered((300.0, 300.0), (330.0, 340.0)));
+    // A second press dragged from elsewhere moves the point the outline passes through.
+    click(&mut t, &cx, (300.0, 300.0));
+    assert_eq!(drag(&mut t, &cx, (330.0, 340.0), &[(360.0, 300.0)], Mods::default()), centered((300.0, 300.0), (360.0, 300.0)));
+}
+
+/// With From Center, the release draws the circle the tool shows: a drag from the center ends
+/// where it is let go, and a second press moved less than 2 screen points shows and draws the
+/// outline through the point of the press.
+#[test]
+fn from_center_the_release_draws_the_circle_shown() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = from_center();
+    t.pointer(&cx, &ev(PointerKind::Down, (300.0, 300.0), Mods::default()));
+    t.pointer(&cx, &ev(PointerKind::Drag, (380.0, 300.0), Mods::default()));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, (400.0, 300.0), Mods::default())), centered((300.0, 300.0), (400.0, 300.0)));
+    click(&mut t, &cx, (300.0, 300.0));
+    t.pointer(&cx, &ev(PointerKind::Down, (330.0, 340.0), Mods::default()));
+    t.pointer(&cx, &ev(PointerKind::Drag, (331.0, 340.0), Mods::default()));
+    let shown = preview(&t.overlays(&cx)).expect("the circle is shown");
+    let r = Point::new(300.0, 300.0).distance(Point::new(330.0, 340.0));
+    assert!(near(shown, Rect::new(300.0 - r, 300.0 - r, 300.0 + r, 300.0 + r)), "{:?}", t.overlays(&cx));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, (331.0, 340.0), Mods::default())), centered((300.0, 300.0), (330.0, 340.0)));
+}
+
+/// A first press let go within 2 screen points of where it was pressed is a click also after a
+/// drag that came back to it, from a center and on a diameter: it places the first point.
+#[test]
+fn a_first_press_dragged_back_near_its_press_places_the_first_point() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = from_center();
+    assert_eq!(drag(&mut t, &cx, (300.0, 300.0), &[(320.0, 300.0), (301.0, 300.0)], Mods::default()), vec![]);
+    assert!(t.ends_on_escape(&cx), "the center is placed");
+    assert_eq!(click(&mut t, &cx, (380.0, 300.0)), centered((300.0, 300.0), (380.0, 300.0)));
+    let mut t = CircleTool::default();
+    assert_eq!(drag(&mut t, &cx, (300.0, 300.0), &[(320.0, 300.0), (301.0, 300.0)], Mods::default()), vec![]);
+    assert!(t.ends_on_escape(&cx), "the first point is placed");
+    t.key(&cx, ToolKey::Escape, Mods::default());
+    // A drag to a circle past the canvas draws nothing and leaves no point behind.
+    assert_eq!(drag(&mut t, &cx, (300.0, 300.0), &[(4.1e6, 300.0)], Mods::default()), vec![]);
+    assert!(!t.ends_on_escape(&cx), "nothing is left pending");
+}
+
+/// With From Center, Shift keeps the point at 45° steps from the center, and Alt rounds the
+/// diameter, twice the radius, to the rulers' ticks (every 5 pt at 100% in points).
+#[test]
+fn from_center_shift_and_alt_keep_to_the_center() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = from_center();
+    let shift = Mods { shift: true, ..Mods::default() };
+    let acts = drag(&mut t, &cx, (300.0, 300.0), &[(400.0, 310.0)], shift);
+    let [Action::Exec(_, v)] = acts.as_slice() else { panic!("one circle: {acts:?}") };
+    assert!((v["points"][0][1].as_f64().unwrap() - 300.0).abs() < 1e-9, "level with the center: {v}");
+    // Near the diagonal, the point keeps to the 45° line through the center.
+    let acts = drag(&mut t, &cx, (300.0, 300.0), &[(380.0, 372.0)], shift);
+    let [Action::Exec(_, v)] = acts.as_slice() else { panic!("one circle: {acts:?}") };
+    let (x, y) = (v["points"][0][0].as_f64().unwrap(), v["points"][0][1].as_f64().unwrap());
+    assert!(((x - 300.0) - (y - 300.0)).abs() < 1e-9 && x > 300.0, "on the 45° line from the center: {v}");
+    let alt = Mods { alt: true, ..Mods::default() };
+    // A radius of 26 is a diameter of 52, which Alt makes 50.
+    assert_eq!(drag(&mut t, &cx, (0.0, 0.0), &[(0.0, 26.0)], alt), centered((0.0, 0.0), (0.0, 25.0)));
+}
+
+/// The option in force when the first point is placed applies to that circle: turning From Center
+/// off part way keeps the circle being drawn centered, and the next circle is drawn on a diameter.
+/// A point on the center draws nothing.
+#[test]
+fn from_center_holds_for_the_circle_being_drawn() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = from_center();
+    click(&mut t, &cx, (100.0, 100.0));
+    t.set_option("fromCenter", &json!(false));
+    assert_eq!(click(&mut t, &cx, (100.0, 150.0)), centered((100.0, 100.0), (100.0, 150.0)));
+    assert_eq!(drag(&mut t, &cx, (300.0, 300.0), &[(380.0, 360.0)], Mods::default()), circle(&[(300.0, 300.0), (380.0, 360.0)]));
+    assert_eq!(circle_for(&[Point::new(1.0, 1.0), Point::new(1.0, 1.0)], true), None);
+    assert!(too_large(&[Point::new(0.0, 0.0), Point::new(4.1e6, 0.0)], true, true));
+    // Edges that round to one number at document precision, as `shape.circleThroughPoints` refuses.
+    let x = 1_048_576.0;
+    assert_eq!(circle_for(&[Point::new(x, 0.0), Point::new(x, 1e-11)], true), None);
+    assert_eq!(circle_of(&[Point::new(x, 0.0), Point::new(x, 2e-11)]), None);
+    t.set_option("fromCenter", &json!("yes"));
+    assert_eq!(t.options()["fromCenter"], json!(false), "a value that is not true or false is ignored");
+}
+
+/// Switching `dragThird` while a center is placed keeps the center: the circle from it is still
+/// drawn. Without From Center, the switch drops the point placed.
+#[test]
+fn switching_third_point_by_dragging_keeps_a_placed_center() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = from_center();
+    click(&mut t, &cx, (100.0, 100.0));
+    t.set_option("dragThird", &json!(false));
+    assert!(t.ends_on_escape(&cx), "the center is still placed");
+    assert_eq!(click(&mut t, &cx, (100.0, 150.0)), centered((100.0, 100.0), (100.0, 150.0)));
+    let mut t = CircleTool::default();
+    click(&mut t, &cx, (100.0, 100.0));
+    t.set_option("dragThird", &json!(false));
+    assert!(!t.ends_on_escape(&cx), "the first point is dropped");
+}
+
+/// `tool.setOption` takes `fromCenter` as true or false, and no other key.
+#[test]
+fn the_options_are_checked() {
+    let map = |v: Value| v.as_object().cloned().unwrap();
+    assert_eq!(check_options(&map(json!({ "fromCenter": true }))), Ok(()));
+    assert_eq!(check_options(&map(json!({ "fromCenter": 1 }))), Err("`fromCenter` must be true or false".into()));
+    assert_eq!(check_options(&map(json!({ "radius": 5 }))), Err("unknown Circle tool option `radius`".into()));
+    let t = CircleTool::default();
+    assert_eq!(t.check_option("fromCenter", &json!(false)), Ok(()));
+    assert_eq!(t.check_option("fromCenter", &json!(1)), Err("`fromCenter` must be true or false".into()));
+    assert_eq!(t.check_option("radius", &json!(5)), Err("unknown Circle tool option `radius`".into()));
 }
 
 /// The tool is in the Ellipse tool's group, after the Ellipse tool.

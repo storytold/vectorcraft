@@ -261,7 +261,7 @@ impl ShadowCaster {
         let p = self.projection?;
         let light = p.light()?;
         let s = shadow.sanitized();
-        let corners = || self.within(faces).flat_map(|(contours, _)| contours.iter().flatten());
+        let corners = || self.within(faces).flat_map(|face| face.contours.iter().flatten());
         let first = *corners().next()?;
         let (lo, hi) = corners()
             .fold((first, first), |(lo, hi), v| (V3(lo.0.min(v.0), lo.1.min(v.1), lo.2.min(v.2)), V3(hi.0.max(v.0), hi.1.max(v.1), hi.2.max(v.2))));
@@ -299,8 +299,8 @@ impl ShadowCaster {
         };
         let to_page = |q: Point| p.project(add(foot, add(scale(u, q.x), scale(w, q.y))));
         let mut bp = BezPath::new();
-        for (contours, _) in self.within(faces) {
-            let flat: Vec<Vec<Point>> = contours.iter().map(|c| c.iter().map(|v| cast(*v)).collect()).collect();
+        for face in self.within(faces) {
+            let flat: Vec<Vec<Point>> = face.contours.iter().map(|c| c.iter().map(|v| cast(*v)).collect()).collect();
             let turn: f64 = flat.iter().map(|c| signed_area(c)).sum();
             // A face edge-on to the light casts nothing.
             if flat_area(turn, flat.iter().flatten()) {
@@ -369,7 +369,7 @@ pub fn inflate_shadowed(
 /// [`crate::revolve`] gives one.
 pub fn revolve_shadowed(path: &PathData, bounds: Rect, options: Revolve) -> Result<(Vec<Face>, SolidFaces), String> {
     let mut kept = vec![];
-    let (faces, lost) = crate::revolve_sweep(path, options.fill_rule, bounds, options, true, Some(&mut kept))?;
+    let (faces, lost) = crate::revolve_sweep(path, options.fill_rule, bounds, options, true, Some(&mut kept), None)?;
     let projection = Some(crate::revolve_projection(bounds, options.sanitized()));
     Ok((faces, SolidFaces { faces: lost.map_or(Ok(kept), Err), projection }))
 }

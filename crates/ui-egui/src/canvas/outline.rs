@@ -1,47 +1,16 @@
-use super::{BezPath, Color32, Node, NodeKind, PathEl, Point, Pos2, Shape, Stroke, SymbolBoxes, VectorcraftApp, Xf, pos2};
+use egui::Color32;
+use vectorcraft_doc::{Node, NodeKind, SymbolBoxes};
+use vectorcraft_geom::{BezPath, Point};
 
-pub(super) fn to_screen_path(bp: &BezPath, xf: &Xf) -> Vec<Vec<Pos2>> {
-    // Flatten for drawing: a polyline per subpath (tolerance ~0.25 screen px).
-    let mut out: Vec<Vec<Pos2>> = vec![];
-    let a = xf.affine();
-    let mut t = bp.clone();
-    t.apply_affine(a);
-    let mut cur: Vec<Pos2> = vec![];
-    kurbo_flatten(&t, 0.25, &mut |el| match el {
-        PathEl::MoveTo(p) => {
-            if cur.len() > 1 {
-                out.push(std::mem::take(&mut cur));
-            }
-            cur.clear();
-            cur.push(pos2(p.x as f32, p.y as f32));
-        }
-        PathEl::LineTo(p) => cur.push(pos2(p.x as f32, p.y as f32)),
-        PathEl::ClosePath => {
-            if let Some(f) = cur.first().copied() {
-                cur.push(f);
-            }
-        }
-        _ => {}
-    });
-    if cur.len() > 1 {
-        out.push(cur);
-    }
-    out
-}
-
-pub(super) fn stroke_path(p: &egui::Painter, bp: &BezPath, xf: &Xf, s: Stroke) {
-    for line in to_screen_path(bp, xf) {
-        p.add(Shape::line(line, s));
-    }
-}
+use super::VectorcraftApp;
 
 pub(super) fn c32(rgb: [u8; 3]) -> Color32 {
     Color32::from_rgb(rgb[0], rgb[1], rgb[2])
 }
 
-/// Outline of a node for highlighting (paths, compound children, area type frames, other
-/// text/image bounds, symbol instances' bounds measured by their art from `symbols`; a clip
-/// group's clipping path only, as [`walk_drawn`] visits it).
+/// Outline of a node for highlighting (paths, compound children, area type frames, image bounds,
+/// the box as drawn of type in perspective and of symbol instances, whose art `symbols` measures
+/// ([`Node::drawn_corners`]); a clip group's clipping path only, as [`walk_drawn`] visits it).
 pub(super) fn node_outline(n: &Node, symbols: &SymbolBoxes) -> BezPath {
     let mut bp = BezPath::new();
     walk_drawn(n, &mut |c| match &c.kind {
@@ -58,13 +27,19 @@ pub(super) fn node_outline(n: &Node, symbols: &SymbolBoxes) -> BezPath {
                         bp.line_to(t.xf * b);
                     }
                 }
-            } else if let Some(b) = c.geometric_bounds_with(symbols) {
+            } else if let Some(q) = c.drawn_corners(symbols) {
+                corners(&mut bp, q);
+            }
+        }
+        NodeKind::Image(_) => {
+            if let Some(b) = c.geometric_bounds_with(symbols) {
                 bp.extend(vectorcraft_geom::shapes::rectangle(b).to_bezpath());
             }
         }
-        NodeKind::Image(_) | NodeKind::SymbolInstance { .. } => {
-            if let Some(b) = c.geometric_bounds_with(symbols) {
-                bp.extend(vectorcraft_geom::shapes::rectangle(b).to_bezpath());
+        // A symbol instance shows its art's box, turned, skewed or in perspective with it.
+        NodeKind::SymbolInstance { .. } => {
+            if let Some(q) = c.drawn_corners(symbols) {
+                corners(&mut bp, q);
             }
         }
         // A placed document shows its box, turned with it.
@@ -87,8 +62,13 @@ pub(super) fn node_outline(n: &Node, symbols: &SymbolBoxes) -> BezPath {
     bp
 }
 
-/// The width of the key object's outline (Align to Key Object), thicker than the selection's.
-pub(super) const KEY_OUTLINE: f32 = 2.5;
+/// Adds the closed outline through the four corners `q` to `bp`.
+fn corners(bp: &mut BezPath, q: [Point; 4]) {
+    let [a, b, c, d] = q;
+    bp.move_to(a);
+    [b, c, d].into_iter().for_each(|p| bp.line_to(p));
+    bp.close_path();
+}
 
 /// The most points ([`overlay_points`]) the selection's outlines and anchors, and the hover
 /// highlight, are drawn for: an Image Trace of a photo selects hundreds of thousands of paths at
@@ -188,14 +168,8 @@ pub(super) fn hit_with<T>(
         path_only: prefs.object_selection_by_path_only,
         type_path_only: prefs.type_selection_by_path_only,
         scope: app.session.active().and_then(|st| st.isolation),
-        skip_guides: !app.ui.view.guides,
+        skip_guides: !app.ui.view.guides_shown(),
         ..Default::default()
     };
     test(&app.session.active()?.doc, p, opt)
-}
-
-fn kurbo_flatten(p: &BezPath, tol: f64, f: &mut impl FnMut(PathEl)) {
-    // Bounded per curve: a document's far-out handles, zoomed onto the screen, made kurbo
-    // reserve gigabytes for the selection outline.
-    vectorcraft_geom::flatten(p.elements().iter().copied(), tol, f);
 }

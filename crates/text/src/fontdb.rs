@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use kurbo::BezPath;
 use skrifa::instance::{Location, LocationRef, Size};
-use skrifa::outline::{DrawSettings, OutlinePen};
+use skrifa::outline::OutlinePen;
 use skrifa::raw::FileRef;
 use skrifa::string::StringId;
 use skrifa::{GlyphId, MetadataProvider, Tag};
@@ -42,10 +42,9 @@ pub(crate) use alternates::listed;
 pub use build::style_weight;
 #[cfg(test)]
 use cache::GlyphCache;
-use cache::{CanonicalNames, Catalog, GlyphColours, GlyphImages, PostScriptNames};
+use cache::{CanonicalNames, GlyphColours, GlyphImages};
 pub use composite::{CompositeCoverage, LentCompositeFonts};
-#[cfg(all(not(target_arch = "wasm32"), test))]
-pub(crate) use dirs::fonts_outside;
+use craft::font_catalog::Catalog;
 #[cfg(test)]
 pub(crate) use dirs::sfnt_of;
 pub use dirs::{
@@ -56,7 +55,7 @@ use face::Instances;
 #[cfg(test)]
 pub(crate) use face::MAX_LIVE_INSTANCES;
 pub(crate) use face::PathAlignHeights;
-pub use face::{FALLBACK_FAMILY, FontFace, IcfMargins};
+pub use face::{FALLBACK_FAMILY, FontFace, IcfMargins, OutlineFormat};
 pub(crate) use glyph_pen::FlipPen;
 pub use gsub::{GlyphCategory, GlyphCategoryKind, GlyphOrigin, JoiningPosition, Substitution, SubstitutionKind};
 #[cfg(not(target_arch = "wasm32"))]
@@ -71,13 +70,24 @@ pub(crate) use scan::file_face_names_within;
 use scan::{MAX_FACES, enumerate_faces};
 pub use scan::{is_font_file, is_suitcase};
 pub use stylistic_sets::StylisticSet;
-use traits::Alias;
 #[cfg(test)]
-use traits::{FaceKeys, face_names};
-pub use traits::{FontClass, FontLikeness, FontMatch, FontTraits};
+use traits::{Alias, FaceKeys, face_names};
+pub use traits::{FontClass, FontLikeness, FontMatch, FontTraits, GENERIC_FAMILIES, is_generic_family};
 #[cfg(test)]
 pub(crate) use traits::{alias_lists, face_styles, on_faces_published};
 pub use wanted::{WantedFont, WantedFonts};
+
+/// Weak indexes of live file-font resources, by content hash (collisions checked by bytes) and id.
+#[derive(Default)]
+pub(super) struct FileFaces {
+    pub(super) by_key: HashMap<String, Vec<std::sync::Weak<FontFace>>>,
+    pub(super) by_id: HashMap<u32, std::sync::Weak<FontFace>>,
+    /// Only each admitted face's own byte allocation, never an unbounded list of alias owners.
+    pub(super) by_blob: HashMap<usize, std::sync::Weak<FontFace>>,
+}
+
+/// How many live fonts files carried the database admits at most (each shares its document's bytes).
+pub const MAX_FILE_FACES: usize = 4096;
 
 /// Process-wide font database.
 pub struct FontDb {
@@ -86,27 +96,23 @@ pub struct FontDb {
     /// [`FontDb::glyph_image`]'s answers per (face, glyph), misses too.
     images: Mutex<GlyphImages>,
     colours: Mutex<GlyphColours>,
-    catalog: RwLock<Catalog>,
-    /// The installed faces by PostScript name (documents name fonts so: PDF, EPS, .ai).
-    postscript: RwLock<PostScriptNames>,
-    /// Where the system font scan looks.
-    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
-    font_paths: FontPaths,
-    /// The installed fonts' other names (localized, legacy, full, PostScript) by normalized name.
-    aliases: RwLock<HashMap<String, Vec<Alias>>>,
+    /// The installed fonts: the system font scan's faces, found by any of their names
+    /// ([`FontDb::catalog`]). Lookups by family name wait for its first scan, so what they find
+    /// never depends on what ran before them.
+    catalog: Arc<Catalog>,
+    /// Fonts files carried for their type ([`vectorcraft_doc::FileFonts`]): apart from the faces,
+    /// so no family name, font menu, fallback or PostScript name lookup finds them.
+    pub(super) file_faces: RwLock<FileFaces>,
     /// Keeps [`FontDb::canonical`]'s answers for names other than the loaded and installed
     /// families until fonts are added or rescanned.
     canonical_cache: Mutex<CanonicalNames>,
-    /// Set once the font folders have been scanned. Lookups by family name wait for the first
-    /// scan, so what they find never depends on what ran before them.
-    #[cfg(not(target_arch = "wasm32"))]
-    cataloged: std::sync::OnceLock<()>,
     /// Families (lowercased) whose installed files were all loaded to find other versions of their
     /// faces (see [`FontDb::versions`]); a rescan forgets them.
     #[cfg(not(target_arch = "wasm32"))]
     version_scanned: RwLock<std::collections::HashSet<String>>,
-    /// [`FontDb::family_list`], built on demand and dropped when fonts are added or rescanned.
-    family_cache: Mutex<Option<Arc<[String]>>>,
+    /// [`FontDb::family_list`] with the catalog's family list it was built from, built on demand
+    /// and dropped when fonts are added or rescanned.
+    family_cache: Mutex<Option<MenuFamilies>>,
     menu_cache: Mutex<Option<MenuFamilies>>,
     generation: AtomicU64,
     /// This database's [`FontDb::id`].
@@ -114,9 +120,6 @@ pub struct FontDb {
     /// System fallback state: characters no system font covers.
     #[cfg(not(target_arch = "wasm32"))]
     sys: Mutex<SysFallback>,
-    /// What the last scan read, to tell when fonts were installed or removed since.
-    #[cfg(not(target_arch = "wasm32"))]
-    stamp: Mutex<Option<ScanStamp>>,
     /// Faces instanced at the axis settings of type's Variable Font sliders ([`FontDb::instance`]).
     instances: Mutex<Instances>,
     /// Composite fonts (Type › Composite Fonts…) by lowercased name ([`FontDb::set_composite_font`]):
@@ -126,38 +129,6 @@ pub struct FontDb {
     /// The lookups of the custom character sets of the composite fonts held or lent, each built
     /// when first used.
     custom_classes: Mutex<composite::CustomClasses>,
-}
-
-/// Where a database's system font scan looks: folders (read with their subfolders) and font files.
-#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
-enum FontPaths {
-    Fixed(Vec<PathBuf>),
-    /// The platform's ([`system_font_dirs`]), looked up again by each scan: fonts registered and
-    /// font folders added since count too.
-    System,
-}
-
-#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
-impl FontPaths {
-    fn get(&self) -> Vec<PathBuf> {
-        match self {
-            FontPaths::Fixed(paths) => paths.clone(),
-            FontPaths::System => system_font_dirs(),
-        }
-    }
-}
-
-/// What a system font scan read: the paths it started from, and when each folder it listed (and
-/// font file named by itself) last changed. Installing or removing a font changes its folder's.
-#[cfg(not(target_arch = "wasm32"))]
-struct ScanStamp {
-    paths: Vec<PathBuf>,
-    modified: Vec<(PathBuf, Option<std::time::SystemTime>)>,
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn modified(path: &Path) -> Option<std::time::SystemTime> {
-    std::fs::metadata(path).and_then(|m| m.modified()).ok()
 }
 
 static NEXT_ID: AtomicU32 = AtomicU32::new(1);
@@ -170,7 +141,8 @@ const IMAGE_CACHE_BYTES: usize = 64 << 20;
 /// them before it keeps the next one.
 const CANONICAL_CACHE_MAX: usize = 4_096;
 
-/// [`FontDb::menu_family_list`], with the [`FontDb::family_list`] it was built from.
+/// A family list with the list it was built from: [`FontDb::family_list`] with the catalog's
+/// families, [`FontDb::menu_family_list`] with [`FontDb::family_list`].
 type MenuFamilies = (Arc<[String]>, Arc<[String]>);
 
 #[cfg(test)]
@@ -316,18 +288,34 @@ mod alias_tests {
     /// A PDF names a font by PostScript name; when it isn't installed the importer splits the name
     /// (`Honoka-Mincho` → Honoka, Mincho). Once a font of that PostScript name is installed, under
     /// a family name of its own (ほのか明朝), the split pair finds it.
+    #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn a_family_and_style_split_from_a_postscript_name_find_its_face() {
-        let db = FontDb::with_font_dirs(vec![]);
-        db.ensure_catalog();
-        // An installed face whose family name shares nothing with its PostScript name.
-        let alias = Alias { family: "Source Sans 3".into(), style: Some("Semibold".into()), paired: None };
-        db.aliases.write().unwrap().insert(norm("Honoka-Mincho"), vec![alias]);
-        db.changed();
-        let m = db.resolve("Honoka", "Mincho").map(|(face, m)| (face.family.clone(), face.style.clone(), m)).unwrap();
-        assert_eq!(m, ("Source Sans 3".into(), "Semibold".into(), FontMatch::Exact));
+        // An installed face whose family name shares nothing with its PostScript name: Source
+        // Sans 3 Semibold as the family Honoka Gothic, its PostScript name HonokaMinch-Semibold
+        // (each name as long as the one it replaces, in the name table's UTF-16 and ASCII records).
+        let mut data = std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/fonts/SourceSans3-Semibold.ttf")).unwrap();
+        for (from, to) in [("Source Sans 3", "Honoka Gothic"), ("SourceSans3", "HonokaMinch")] {
+            let utf16 = |s: &str| s.encode_utf16().flat_map(u16::to_be_bytes).collect::<Vec<u8>>();
+            for (from, to) in [(utf16(from), utf16(to)), (from.as_bytes().to_vec(), to.as_bytes().to_vec())] {
+                let mut i = 0;
+                while let Some(at) = data[i..].windows(from.len()).position(|w| w == from) {
+                    data[i + at..i + at + to.len()].copy_from_slice(&to);
+                    i += at + to.len();
+                }
+            }
+        }
+        let dir = std::env::temp_dir().join(format!("vc-fontdb-{}-split-postscript", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("HonokaGothic-Semibold.ttf"), data).unwrap();
+        let db = FontDb::with_font_dirs(vec![dir.clone()]);
+        // A PDF names it HonokaMinch-Semibold; an importer without the font split the name.
+        let m = db.resolve("HonokaMinch", "Semibold").map(|(face, m)| (face.family.clone(), face.style.clone(), m)).unwrap();
+        assert_eq!(m, ("Honoka Gothic".into(), "Semibold".into(), FontMatch::Exact));
         // Unknown names still fall back.
-        assert_eq!(db.resolve("Honoka", "Gothic").unwrap().1, FontMatch::Missing);
+        assert_eq!(db.resolve("HonokaMinch", "Gothic").unwrap().1, FontMatch::Missing);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     /// The database keeps at most [`CANONICAL_CACHE_MAX`] answers, and names asked for past that

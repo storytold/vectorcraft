@@ -125,6 +125,69 @@ fn add_used_colors_skips_colours_that_have_swatches() {
     assert!(doc(&s).swatch("R=171 G=205 B=239").unwrap().global);
 }
 
+/// A run that finds no new color, over all the art or the selection, records no undo step.
+#[test]
+fn add_used_colors_with_no_new_color_records_no_undo_step() {
+    let mut s = session();
+    let a = rect_filled(&mut s, json!({"color": "#123456"}));
+    run(&mut s, "swatch.addUsedColors", json!({}));
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    let before = doc(&s).clone();
+    let undo = undo_len(&s);
+    for p in [json!({}), json!({"selection": true, "global": true})] {
+        assert_eq!(run(&mut s, "swatch.addUsedColors", p), json!({"added": [], "linked": 0}));
+        assert_eq!(undo_len(&s), undo);
+        assert_eq!(*doc(&s), before);
+    }
+    // An empty selection is still an error, with nothing changed.
+    run(&mut s, "select.set", json!({"ids": []}));
+    let undo = undo_len(&s);
+    assert!(s.execute("swatch.addUsedColors", &json!({"selection": true})).is_err());
+    assert_eq!(undo_len(&s), undo);
+}
+
+/// A run that finds no new color, while the Type tool is typing, still ends the typing session: the
+/// typing is its own undo step.
+#[test]
+fn add_used_colors_with_no_new_color_ends_the_typing() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut s = session();
+    let v = ViewInfo::default();
+    let t = NodeId(run(&mut s, "text.create", json!({"x": 10, "y": 10, "text": "Hello"}))["id"].as_u64().unwrap());
+    run(&mut s, "swatch.addUsedColors", json!({}));
+    s.select_tool("type", v).unwrap();
+    let b = doc(&s).bounds_of(&[t], false).unwrap();
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(kind, b.x1 - 1.0, b.center().y), v).unwrap();
+    }
+    s.tool_text("!", v).unwrap();
+    assert!(crate::cmd::typing_in_progress(&s));
+    let steps = undo_len(&s);
+    assert_eq!(run(&mut s, "swatch.addUsedColors", json!({})), json!({"added": [], "linked": 0}));
+    assert!(!crate::cmd::typing_in_progress(&s));
+    let labels: Vec<String> = s.doc().unwrap().history.undo.iter().map(|e| e.label.clone()).collect();
+    assert_eq!((labels.len(), labels.last().map(String::as_str)), (steps + 1, Some("Typing")));
+}
+
+/// Add Selected Colors while Global Edit is on links only the selected art: a member of the same
+/// shape with another color keeps its color and stays unlinked, and Global Edit stays on.
+#[test]
+fn add_selected_colors_in_global_edit_keeps_the_other_members_colors() {
+    let mut s = session();
+    let a = rect_filled(&mut s, json!({"color": "#123456"}));
+    let b = rect_filled(&mut s, json!({"color": "#654321"}));
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    let r = run(&mut s, "select.globalEdit", json!({}));
+    assert_eq!((r["active"].clone(), r["ids"].clone()), (json!(true), json!([a.0, b.0])), "the other rectangle is a member");
+    let other = fill(&s, b);
+    let undo = undo_len(&s);
+    run(&mut s, "swatch.addUsedColors", json!({"selection": true, "global": true}));
+    assert!(matches!(fill(&s, a), Paint::Solid { swatch: Some(_), .. }), "{:?}", fill(&s, a));
+    assert_eq!(fill(&s, b), other, "the unselected member keeps its color");
+    assert_eq!(undo_len(&s), undo + 1);
+    assert!(s.doc().unwrap().global_edit.is_some(), "Global Edit stays on");
+}
+
 /// Give `id` the fill `p` exactly as written (a command would round or convert some colors).
 fn set_fill(s: &mut Session, id: NodeId, p: Paint) {
     std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().appearance.set_fill(p);
@@ -567,6 +630,72 @@ fn ungroup_and_sort_by_kind_are_one_undo_step_each() {
     let n = names(&s, None);
     assert_eq!((n[0].as_str(), n[1].as_str()), ("[None]", "White"), "the order within a kind is kept");
     assert_eq!(n[n.iter().position(|x| x == "Orange").unwrap() + 1], "Ocean", "the spot colour comes after the process ones, then the gradients");
+}
+
+/// Color Group Options renames a color group alone, as one undo step: its swatches, their colors
+/// and the art linked to them stay as they are. A name another group or a swatch has, an empty
+/// name and a parameter that is missing or not a string are errors that change nothing, and the
+/// group's own name records no undo step.
+#[test]
+fn rename_group_renames_only_the_group_in_one_undo_step() {
+    let mut s = session();
+    run(&mut s, "swatch.edit", json!({"name": "Bright Red", "global": true}));
+    let a = rect_filled(&mut s, json!({"swatch": "Bright Red"}));
+    let linked = fill(&s, a);
+    let members = names(&s, Some("Brights"));
+    let before = doc(&s).clone();
+    let undo = undo_len(&s);
+    assert_eq!(run(&mut s, "swatch.renameGroup", json!({"group": "Brights", "name": "  Vivid Colors "}))["name"], "Vivid Colors");
+    assert!(doc(&s).swatch_groups.iter().all(|g| g.name != "Brights"));
+    assert_eq!(names(&s, Some("Vivid Colors")), members);
+    assert_eq!(fill(&s, a), linked, "linked art keeps its swatch and color");
+    assert_eq!(undo_len(&s), undo + 1);
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(*doc(&s), before);
+    run(&mut s, "edit.redo", json!({}));
+    assert_eq!(names(&s, Some("Vivid Colors")), members);
+    let renamed = doc(&s).clone();
+    // The group's own name, trimmed, changes nothing.
+    assert_eq!(run(&mut s, "swatch.renameGroup", json!({"group": "Vivid Colors", "name": " Vivid Colors"}))["name"], "Vivid Colors");
+    assert_eq!(undo_len(&s), undo + 1);
+    let refused = [
+        json!({"group": "Vivid Colors", "name": "Grays"}),
+        json!({"group": "Vivid Colors", "name": "White"}),
+        json!({"group": "Vivid Colors", "name": "[None]"}),
+        json!({"group": "Vivid Colors", "name": "[Registration]"}),
+        json!({"group": "Vivid Colors", "name": ""}),
+        json!({"group": "Vivid Colors", "name": "   "}),
+        json!({"group": "Vivid Colors"}),
+        json!({"group": "Vivid Colors", "name": null}),
+        json!({"group": "Vivid Colors", "name": 5}),
+        json!({"name": "Bold"}),
+        json!({"group": 5, "name": "Bold"}),
+        json!({"group": "Nope", "name": "Bold"}),
+        json!({"group": "White", "name": "Bold"}),
+    ];
+    for p in refused {
+        assert!(s.execute("swatch.renameGroup", &p).is_err(), "{p}");
+        assert_eq!(*doc(&s), renamed, "{p}");
+        assert_eq!(undo_len(&s), undo + 1, "{p}");
+    }
+}
+
+/// A color group renamed while a drag is still in progress keeps its new name when the drag is
+/// canceled: the drag becomes a step of its own first, and the rename is the next step.
+#[test]
+fn rename_group_during_a_drag_is_a_step_of_its_own() {
+    let mut s = session();
+    rect_filled(&mut s, json!({"swatch": "Bright Red"}));
+    let undo = undo_len(&s);
+    s.begin_interaction("Move").unwrap();
+    s.preview("object.move", &json!({"dx": 7, "dy": 0})).unwrap();
+    run(&mut s, "swatch.renameGroup", json!({"group": "Brights", "name": "Vivid"}));
+    s.cancel_interaction().ok();
+    assert!(doc(&s).swatch_groups.iter().any(|g| g.name == "Vivid"), "canceling the drag keeps the rename");
+    assert_eq!(undo_len(&s), undo + 2, "the drag and the rename are two steps");
+    run(&mut s, "edit.undo", json!({}));
+    assert!(doc(&s).swatch_groups.iter().any(|g| g.name == "Brights"), "Undo takes back the rename alone");
+    assert_eq!(undo_len(&s), undo + 1);
 }
 
 #[test]

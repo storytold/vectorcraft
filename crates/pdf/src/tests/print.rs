@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use serde_json::json;
-use vectorcraft_color::{Color, Freeform, FreeformPoint, Gradient, GradientKind, GradientPaint, GradientStop, Paint, Swatch};
+use vectorcraft_color::{BlendMode, Color, Freeform, FreeformPoint, Gradient, GradientKind, GradientPaint, GradientStop, Paint, Swatch};
 use vectorcraft_doc::{Appearance, Artboard, Document, LayerColor, Node, NodeKind};
 use vectorcraft_geom::{Rect, shapes};
 use vectorcraft_testkit::raster::render_region;
@@ -904,6 +904,47 @@ fn overprinting_near_blacks_linked_to_a_missing_swatch_keep_the_cyan_on_postscri
 }
 
 #[test]
+fn a_white_spot_ink_keeps_overprinting_on_plates_and_in_simulated_composites() {
+    // With Discard White Overprint on (the default), a paper white square over cyan knocks the
+    // cyan out; one in a white spot ink overprints: it puts no cyan down, so the cyan plate draws
+    // nothing for it, and Simulate composites it with Darken.
+    let white = Color::cmyk(0.0, 0.0, 0.0, 0.0);
+    let square = |paint: Paint| {
+        let mut n =
+            Node::path(vectorcraft_doc::NodeId(0), shapes::rectangle(Rect::new(10.0, 15.0, 30.0, 35.0)), Appearance::basic(paint, Paint::None, 0.0));
+        if let Some(f) = n.appearance.fill_mut() {
+            f.overprint = true;
+        }
+        let mut d = over_cyan(vec![n]);
+        d.swatches.push(Swatch { name: "Opaque White".into(), paint: Paint::solid(white), global: true, spot: true });
+        d
+    };
+    let (paper, spot) = (square(Paint::solid(white)), square(Paint::Solid { color: white, swatch: Some("Opaque White".into()), tint: 1.0 }));
+    assert!(paper.setup.discard_white_overprint);
+    let cyan_fills = |d: &Document, output: serde_json::Value| {
+        let opts = PrintOptions { settings: settings(json!({"output": output})), ..Default::default() };
+        let p = plan(d, &opts).unwrap();
+        let mut count = 0;
+        p.plates[0].walk(|n| count += usize::from(n.appearance.fill().is_some_and(|f| !f.paint.is_none())));
+        count
+    };
+    let seps = json!({"mode": "separations"});
+    assert_eq!((cyan_fills(&paper, seps.clone()), cyan_fills(&spot, seps)), (2, 1), "paper white knocks out; the spot white leaves the cyan");
+    // The white ink printed as process inks is paper white.
+    let converted = json!({"mode": "separations", "inks": [{"name": "Opaque White", "convertToProcess": true}]});
+    assert_eq!(cyan_fills(&spot, converted), 2, "a converted spot white knocks out");
+    assert_eq!(cyan_fills(&spot, json!({"mode": "separations", "spotsToProcess": true})), 2, "so does one with every spot converted");
+    let blends = |d: &Document| {
+        let opts = PrintOptions { settings: settings(json!({"advanced": {"overprints": "simulate"}})), ..Default::default() };
+        let p = plan(d, &opts).unwrap();
+        let mut out = vec![];
+        p.doc.walk(|n| out.extend(n.appearance.fill().filter(|f| f.paint.color() == Some(white)).map(|f| f.blend)));
+        out
+    };
+    assert_eq!((blends(&paper), blends(&spot)), (vec![BlendMode::Normal], vec![BlendMode::Darken]));
+}
+
+#[test]
 fn an_overprinting_fill_keeps_its_faint_ink_on_pdf_plates() {
     // 0.4% cyan beside 100% K, set to overprint: a PDF plate draws it with Darken, a PostScript
     // plate (it has no blending modes) draws it as nothing, since the color counts as black.
@@ -997,6 +1038,42 @@ fn overprinting_paints_keep_their_faint_ink_on_postscript_plates() {
         assert_eq!(fills, 4, "{at}: the cyan, the faint fill and both gradients, not the magenta");
         assert_eq!(grays, [1000.0, 4.0], "{at}: the cyan and the faint fill's 0.4%");
     }
+}
+
+#[test]
+fn a_near_black_stop_of_an_overprinting_gradient_puts_no_cyan_on_postscript_plates() {
+    // 0.4% cyan beside 100% K counts as black on a PostScript plate stop by stop, as a solid fill
+    // of it does: the cyan plate draws that stop of an overprinting gradient as paper white. A
+    // PDF plate and a gradient that does not overprint keep the 0.4%.
+    let stops = vec![GradientStop::new(0.0, Color::cmyk(0.004, 0.0, 0.0, 1.0)), GradientStop::new(1.0, Color::cmyk(0.5, 0.0, 0.0, 0.0))];
+    let fade = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    let square = |x: f64, overprint: bool| {
+        let r = shapes::rectangle(Rect::new(x, 15.0, x + 20.0, 35.0));
+        let mut n = Node::path(vectorcraft_doc::NodeId(0), r, Appearance::basic(fade.clone(), Paint::None, 0.0));
+        if let Some(f) = n.appearance.fill_mut() {
+            f.overprint = overprint;
+        }
+        n
+    };
+    let d = over_cyan(vec![square(10.0, true), square(40.0, false)]);
+    // The cyan plate's stops of each gradient, in thousandths of the ink.
+    let stops = |postscript: bool| {
+        let opts = PrintOptions { settings: settings(json!({"output": {"mode": "separations"}})), postscript, ..Default::default() };
+        let p = plan(&d, &opts).unwrap();
+        let mut all = vec![];
+        p.plates[0].walk(|n| {
+            if let Some(Paint::Gradient(g)) = n.appearance.fill().map(|f| &f.paint) {
+                let gray = |s: &GradientStop| match s.color {
+                    Color::Gray { k } if s.swatch.is_none() => (k * 1000.0).round(),
+                    c => panic!("{c:?}"),
+                };
+                all.push(g.gradient.stops.iter().map(gray).collect::<Vec<_>>());
+            }
+        });
+        all
+    };
+    assert_eq!(stops(true), [[0.0, 500.0], [4.0, 500.0]], "PostScript: the overprinting gradient, the other");
+    assert_eq!(stops(false), [[4.0, 500.0], [4.0, 500.0]], "PDF");
 }
 
 #[test]
@@ -1340,4 +1417,26 @@ fn separations_use_the_cmyk_profile_assigned_to_the_document() {
     assert!(working > 0.0, "the working CMYK profile separates grey into four inks: cyan {working}");
     d.color_profiles.cmyk = Some(vectorcraft_color::cms::DEVICE_CMYK.into());
     assert_eq!(cyan(&d), 0.0, "Device CMYK puts a neutral grey on the black plate only");
+}
+
+/// PDF print embeds font subsets (where the font's license allows it) whatever Fonts says: None
+/// and Complete get a note in the print
+/// and its preview, Subset none. PostScript output, which follows Fonts, gets none.
+#[test]
+fn non_subset_font_choices_report_pdf_subset_output() {
+    let d = doc(200.0, 100.0, &[(Rect::new(10.0, 10.0, 60.0, 60.0), rgb(1.0, 0.0, 0.0))]);
+    for (fonts, label) in [("none", Some("None")), ("subset", None), ("complete", Some("Complete"))] {
+        let v = json!({"graphics": {"fonts": fonts}});
+        let note = |notes: &[String]| notes.iter().filter(|n| n.starts_with("PDF print embeds subsets")).cloned().collect::<Vec<_>>();
+        let want: Vec<String> = label
+            .map(|l| {
+                format!("PDF print embeds subsets of the fonts whose licenses allow it and draws the others as outlines: Fonts: {l} applies to PostScript output")
+            })
+            .into_iter()
+            .collect();
+        assert_eq!(note(&job(&d, v.clone()).setting_notes), want, "{fonts}");
+        assert_eq!(note(&preview(&d, &settings(v.clone())).unwrap().setting_notes), want, "{fonts}");
+        let plan = plan(&d, &PrintOptions { settings: settings(v), postscript: true, ..Default::default() }).unwrap();
+        assert!(note(&plan.setting_notes).is_empty(), "{fonts}: {:?}", plan.setting_notes);
+    }
 }

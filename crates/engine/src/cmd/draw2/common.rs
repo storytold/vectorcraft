@@ -22,15 +22,17 @@ pub(super) struct Sample {
     tilt: Option<[f64; 2]>,
     /// Barrel rotation, degrees clockwise.
     rotation: Option<f64>,
+    /// The airbrush finger wheel, 0..1.
+    wheel: Option<f64>,
 }
 
 /// The keys of a point's pen values, in the order a point given as an array holds them after its
 /// x and y.
-const PEN_KEYS: [&str; 4] = ["pressure", "tiltX", "tiltY", "rotation"];
+const PEN_KEYS: [&str; 5] = ["pressure", "tiltX", "tiltY", "rotation", "wheel"];
 
-/// The range each of [`PEN_KEYS`] takes: pressure 0..1, each tilt −90..90 degrees and rotation
-/// 0..360 degrees (360 is the same direction as 0).
-const PEN_RANGES: [(f64, f64); PEN_KEYS.len()] = [(0.0, 1.0), (-90.0, 90.0), (-90.0, 90.0), (0.0, 360.0)];
+/// The range each of [`PEN_KEYS`] takes: pressure 0..1, each tilt −90..90 degrees, rotation
+/// 0..360 degrees (360 is the same direction as 0) and the wheel 0..1.
+const PEN_RANGES: [(f64, f64); PEN_KEYS.len()] = [(0.0, 1.0), (-90.0, 90.0), (-90.0, 90.0), (0.0, 360.0), (0.0, 1.0)];
 
 /// Blob Brush and Eraser Tool Options' Size, in points.
 pub(super) const SIZES: (f64, f64) = (0.1, 1000.0);
@@ -61,11 +63,11 @@ pub(super) fn point_entry(v: &Value, cmd: &str) -> Result<Point> {
 }
 
 /// [`points_param`] with what a pen read at each point, as far as it is given:
-/// `[[x,y,pressure,tiltX,tiltY,rotation]…]` or `[{x,y,pressure,tiltX,tiltY,rotation}…]`. Pressure
-/// is 0..1; tilt in degrees, each −90..90 (one of the two without the other is 0); rotation in
-/// degrees clockwise, 0..360. A point whose x or y is not a number, whose pressure, tilt or
-/// rotation is neither a number nor null or is outside its range, or an array of more than six
-/// numbers, is an error.
+/// `[[x,y,pressure,tiltX,tiltY,rotation,wheel]…]` or `[{x,y,pressure,tiltX,tiltY,rotation,wheel}…]`.
+/// Pressure is 0..1; tilt in degrees, each −90..90 (one of the two without the other is 0);
+/// rotation in degrees clockwise, 0..360; the wheel 0..1. A point whose x or y is not a number,
+/// whose pressure, tilt, rotation or wheel is neither a number nor null or is outside its range,
+/// or an array of more than seven numbers, is an error.
 pub(super) fn samples_param(p: &Value, key: &str, cmd: &str) -> Result<Vec<Sample>> {
     let a = p.get(key).and_then(Value::as_array).ok_or_else(|| bad(cmd, format!("missing array `{key}`")))?;
     let pts: Vec<Sample> = a
@@ -79,7 +81,7 @@ pub(super) fn samples_param(p: &Value, key: &str, cmd: &str) -> Result<Vec<Sampl
                 let key = format!("{key}[{at}]");
                 return Err(bad(cmd, format!("`{key}` must be an array of at most {MAX_ITEMS} entries")));
             }
-            let mut pen = [None; 4];
+            let mut pen = [None; PEN_KEYS.len()];
             for (i, ((key, range), slot)) in PEN_KEYS.iter().zip(PEN_RANGES).zip(&mut pen).enumerate() {
                 let given = match v {
                     Value::Array(xy) => xy.get(i + 2),
@@ -91,9 +93,9 @@ pub(super) fn samples_param(p: &Value, key: &str, cmd: &str) -> Result<Vec<Sampl
                     Some(v) => return Err(bad(cmd, format!("`{key}` must be a number, not {v}"))),
                 };
             }
-            let [pressure, tx, ty, rotation] = pen;
+            let [pressure, tx, ty, rotation, wheel] = pen;
             let tilt = (tx.is_some() || ty.is_some()).then(|| [tx, ty].map(|t| t.unwrap_or(0.0)));
-            Ok(Sample { pt: point_entry(v, cmd)?, pressure, tilt, rotation })
+            Ok(Sample { pt: point_entry(v, cmd)?, pressure, tilt, rotation, wheel })
         })
         .collect::<Result<_>>()?;
     if pts.is_empty() {
@@ -124,6 +126,15 @@ fn stroke_pressure(samples: &[Sample]) -> Option<PressureProfile> {
         return None;
     }
     PressureProfile::from_samples(along(samples).into_iter().zip(samples).map(|(t, s)| (t, s.pressure.unwrap_or(1.0))))
+}
+
+/// Where an airbrush pen's finger wheel was set along a freehand stroke, when any of its samples
+/// has it; samples without it count as the middle of its travel, which draws a brush's own value.
+fn stroke_wheel(samples: &[Sample]) -> Option<PressureProfile> {
+    if samples.iter().all(|s| s.wheel.is_none()) {
+        return None;
+    }
+    PressureProfile::from_samples(along(samples).into_iter().zip(samples).map(|(t, s)| (t, s.wheel.unwrap_or(PressureProfile::MID))))
 }
 
 /// A pen that leans less than this many degrees from upright leans no way in particular: its
@@ -165,24 +176,31 @@ fn stroke_pose(samples: &[Sample]) -> (Option<PressureProfile>, Option<AngleProf
     (tilt.flatten(), bearing.flatten(), rotation.flatten())
 }
 
-/// What a pen recorded along a stroke ([`StrokeLayer`]'s `pressure`, `tilt`, `bearing` and
-/// `rotation`).
+/// What a pen recorded along a stroke ([`StrokeLayer`]'s `pressure`, `tilt`, `bearing`,
+/// `rotation` and `wheel`).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(super) struct PenRecord {
     pressure: Option<PressureProfile>,
     tilt: Option<PressureProfile>,
     bearing: Option<AngleProfile>,
     rotation: Option<AngleProfile>,
+    wheel: Option<PressureProfile>,
 }
 
 impl PenRecord {
     /// What a freehand stroke's samples recorded.
     pub(super) fn of_samples(samples: &[Sample]) -> Self {
         let (tilt, bearing, rotation) = stroke_pose(samples);
-        Self { pressure: stroke_pressure(samples), tilt, bearing, rotation }
+        Self { pressure: stroke_pressure(samples), tilt, bearing, rotation, wheel: stroke_wheel(samples) }
     }
     pub(super) fn of(st: &StrokeLayer) -> Self {
-        Self { pressure: st.pressure.clone(), tilt: st.tilt.clone(), bearing: st.bearing.clone(), rotation: st.rotation.clone() }
+        Self {
+            pressure: st.pressure.clone(),
+            tilt: st.tilt.clone(),
+            bearing: st.bearing.clone(),
+            rotation: st.rotation.clone(),
+            wheel: st.wheel.clone(),
+        }
     }
     pub(super) fn is_empty(&self) -> bool {
         *self == Self::default()
@@ -195,6 +213,7 @@ impl PenRecord {
             tilt: PressureProfile::extended(self.tilt.as_ref(), old_len, added.tilt.as_ref(), added_len),
             bearing: AngleProfile::extended(self.bearing.as_ref(), old_len, added.bearing.as_ref(), added_len),
             rotation: AngleProfile::extended(self.rotation.as_ref(), old_len, added.rotation.as_ref(), added_len),
+            wheel: PressureProfile::extended(self.wheel.as_ref(), old_len, added.wheel.as_ref(), added_len),
         }
     }
     /// The record along the path reversed.
@@ -204,6 +223,7 @@ impl PenRecord {
             tilt: self.tilt.as_ref().map(PressureProfile::reversed),
             bearing: self.bearing.as_ref().map(AngleProfile::reversed),
             rotation: self.rotation.as_ref().map(AngleProfile::reversed),
+            wheel: self.wheel.as_ref().map(PressureProfile::reversed),
         }
     }
     /// Keep the record on stroke `st`.
@@ -212,25 +232,31 @@ impl PenRecord {
         st.tilt = self.tilt;
         st.bearing = self.bearing;
         st.rotation = self.rotation;
+        st.wheel = self.wheel;
     }
 }
 
-/// Blob Brush and Eraser Tool Options' Size set to Pressure (`sizeMode: "pressure"`, with
-/// `sizeVariation` in points, 0..1000): the stroke's pen pressure along it and the variation, `None`
-/// for Fixed (the default), no variation or a stroke without pressure (a mouse), which keeps the
-/// size. A `sizeVariation` outside its range is an error with Fixed too.
-pub(super) fn size_pressure(p: &Value, samples: &[Sample], cmd: &str) -> Result<Option<(PressureProfile, f64)>> {
+/// Blob Brush and Eraser Tool Options' Size set to Pressure (`sizeMode: "pressure"`) or, for the
+/// Blob Brush, Stylus Wheel (`sizeMode: "stylusWheel"`), with `sizeVariation` in points, 0..1000:
+/// the stroke's pen pressure or airbrush finger wheel along it (0..1, the size less the variation
+/// at 0 and plus it at 1) and the variation. `None` for Fixed (the default), no variation or a
+/// stroke without that reading (a mouse, a pen without a wheel), which keeps the size. A
+/// `sizeVariation` outside its range is an error with Fixed too.
+pub(super) fn size_profile(p: &Value, samples: &[Sample], cmd: &str) -> Result<Option<(PressureProfile, f64)>> {
+    const MODES: &str = "\"fixed\", \"pressure\" or \"stylusWheel\"";
     let variation = ranged(p, "sizeVariation", 0.0, SIZE_VARIATIONS, cmd)?;
-    match p.get("sizeMode").filter(|v| !v.is_null()).map(|v| v.as_str().ok_or(v)) {
-        None | Some(Ok("fixed")) => Ok(None),
-        Some(Ok("pressure")) => Ok(stroke_pressure(samples).filter(|_| variation > 0.0).map(|prof| (prof, variation))),
-        Some(Ok(other)) => Err(bad(cmd, format!("sizeMode is \"fixed\" or \"pressure\", not `{other}`"))),
-        Some(Err(other)) => Err(bad(cmd, format!("sizeMode is \"fixed\" or \"pressure\", not {other}"))),
-    }
+    let read = match p.get("sizeMode").filter(|v| !v.is_null()).map(|v| v.as_str().ok_or(v)) {
+        None | Some(Ok("fixed")) => return Ok(None),
+        Some(Ok("pressure")) => stroke_pressure(samples),
+        Some(Ok("stylusWheel")) => stroke_wheel(samples),
+        Some(Ok(other)) => return Err(bad(cmd, format!("sizeMode is {MODES}, not `{other}`"))),
+        Some(Err(other)) => return Err(bad(cmd, format!("sizeMode is {MODES}, not {other}"))),
+    };
+    Ok(read.filter(|_| variation > 0.0).map(|prof| (prof, variation)))
 }
 
-/// The area a stroke along `spine` covers with Size set to Pressure: as wide at each point as
-/// [`vectorcraft_tools::draw2::pressure_size`] gives for the pressure `prof` records there, with
+/// The area a stroke along `spine` covers with Size set to Pressure or Stylus Wheel: as wide at
+/// each point as [`vectorcraft_tools::draw2::pressure_size`] gives for the reading `prof` records there, with
 /// round ends and joins, its overlaps united into one outline.
 pub(super) fn pressure_region(spine: &PathData, size: f64, variation: f64, prof: &PressureProfile) -> Result<PathData> {
     let widest = size + variation;
@@ -345,18 +371,46 @@ pub(super) fn target_paths(doc: &Document, sel: &Selection, area: Rect) -> Vec<N
     out
 }
 
+/// Any visible non-None fill, including one below a topmost None.
+pub(super) fn has_fill(n: &Node) -> bool {
+    n.appearance.items.iter().any(|item| item.is_fill() && item.visible() && !item.paint().is_none())
+}
+
+/// A visible painted stroke keeps open paths on the existing outline-erasure route.
+pub(super) fn has_painted_stroke(n: &Node) -> bool {
+    n.appearance.items.iter().any(
+        |item| matches!(item, vectorcraft_doc::AppearanceItem::Stroke(stroke) if stroke.visible && !stroke.paint.is_none() && stroke.width > 0.0),
+    )
+}
+
+/// A container stroke that paints this target's open geometry. A clipping container's own
+/// paint follows its clipping outline, and a compound shape paints its combined area instead.
+/// Neither makes its descendants' implicit fill-closing edges into new stroked edges.
+pub(super) fn has_painted_ancestor_stroke(doc: &Document, id: NodeId) -> bool {
+    doc.ancestry(id)
+        .unwrap_or_default()
+        .into_iter()
+        .rev()
+        .skip(1)
+        .filter_map(|id| doc.node(id))
+        .take_while(|node| !node.clips() && !node.is_compound_shape())
+        .any(|node| matches!(node.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) && has_painted_stroke(node))
+}
+
 /// [`target_paths`] for the tools that cut fills, with each target's geometry and fill rule: the
 /// members of a compound path whose members are all closed paths give the compound path itself,
 /// once, so its fill (holes included) is cut as one shape under its own fill rule.
-pub(super) fn fill_targets(doc: &Document, sel: &Selection, area: Rect) -> Result<Vec<(NodeId, PathData, FillRule)>> {
-    let closed_compound = |n: &Node| {
+/// With `open_fills`, an open compound with a visible fill and no painted visible stroke does too.
+pub(super) fn fill_targets(doc: &Document, sel: &Selection, area: Rect, open_fills: bool) -> Result<Vec<(NodeId, PathData, FillRule)>> {
+    let area_compound = |n: &Node| {
+        let filled = open_fills && has_fill(n) && !has_painted_stroke(n) && !has_painted_ancestor_stroke(doc, n.id);
         matches!(&n.kind, NodeKind::Compound { children, .. }
-            if children.iter().all(|c| matches!(&c.kind, NodeKind::Path { path, .. } if path.is_closed())))
+            if children.iter().all(|c| matches!(&c.kind, NodeKind::Path { path, .. } if path.is_closed() || filled)))
     };
     let editable = doc.editable();
     let mut out: Vec<(NodeId, PathData, FillRule)> = vec![];
     for id in target_paths(doc, sel, area) {
-        let compound = doc.parent_of(id).and_then(|p| doc.node(p)).filter(|p| closed_compound(p) && editable(p.id));
+        let compound = doc.parent_of(id).and_then(|p| doc.node(p)).filter(|p| area_compound(p) && editable(p.id));
         let target = compound.map_or(id, |c| c.id);
         if out.iter().any(|t| t.0 == target) {
             continue;

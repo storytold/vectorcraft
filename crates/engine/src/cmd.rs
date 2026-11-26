@@ -8,6 +8,7 @@ pub mod arrowheads;
 mod artboardalign;
 mod assets;
 mod attributes;
+pub mod bevels;
 pub mod brushlib;
 mod brushsym;
 mod buildcmds;
@@ -32,6 +33,7 @@ pub mod expand;
 pub(crate) mod fileinfo;
 pub mod fileio;
 pub mod findfiles;
+pub mod flare;
 pub mod flatten;
 pub mod fontfiles;
 mod fonts;
@@ -47,6 +49,7 @@ mod info;
 pub(crate) mod inline;
 mod interactivity;
 mod intertwine;
+pub mod kinsokusets;
 pub(crate) mod layer;
 mod layerpanel;
 pub mod library;
@@ -91,6 +94,7 @@ pub(crate) mod slices;
 pub mod spelling;
 mod stroke;
 mod style;
+pub use style::styled_node;
 pub mod stylelib;
 mod svgfilter;
 mod swatch;
@@ -99,12 +103,13 @@ pub(crate) mod symboledit;
 pub mod symbollib;
 pub(crate) mod tabs;
 mod textedit;
-mod xmlattrs;
 
 pub use textedit::effective_kerning;
+mod retype;
 pub mod textstyles;
 pub(crate) mod textwrap;
 pub(crate) mod threads;
+pub mod toast;
 pub(crate) mod typecmd;
 mod typemenu;
 mod variablecmds;
@@ -318,10 +323,13 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(draw2::specs());
         v.extend(xform::specs());
         v.extend(effectcmd::specs());
+        v.extend(bevels::specs());
         v.extend(wireframe::specs());
         v.extend(pathops::specs());
         v.extend(compoundshape::specs());
         v.extend(typecmd::specs());
+        v.extend(retype::specs());
+        v.extend(retype::fonts::specs());
         v.extend(menucmds::specs());
         v.extend(live::specs());
         v.extend(colorcmds::specs());
@@ -332,8 +340,10 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(textstyles::specs());
         v.extend(fonts::specs());
         v.extend(compositefonts::specs());
+        v.extend(kinsokusets::specs());
         v.extend(fontfiles::specs());
         v.extend(help::specs());
+        v.extend(toast::specs());
         v.extend(threads::specs());
         v.extend(textwrap::specs());
         v.extend(graph::specs());
@@ -836,17 +846,23 @@ pub(crate) const MAX_IMPORTED_PRESETS: usize = 1000;
 pub(crate) use addons::{DecodedImages, refresh_color_masks};
 /// Packaging Tools' blanks and the objects their print leaves out, for the Fold Preview window.
 pub use addons::{fold_source, print_hidden};
-/// Document Info's category titles and the Objects category's count labels.
-pub use docinfo::{CATEGORIES, OBJECT_LABELS};
+/// Document Info's category titles, the Objects category's count labels, and how its image rows
+/// write a resolution and a number of bytes.
+pub use docinfo::{CATEGORIES, OBJECT_LABELS, byte_size, ppi_number};
 pub use docmenu::guide_indexes;
 pub(crate) use edit::{Unrecorded, settle_interaction, typing_in_progress};
 pub(crate) use object::bounds_rewrite;
 pub(crate) use object::{keep_aligned_in, refresh_pixel_aligned};
 /// The rules `object.scale`, `object.reflect` and `object.shear` check their params with.
 pub use object::{reflect_axis, scale_factors, shear_tangent};
+pub(crate) use paint::{asks_defaults_only, painting_tool_of};
 pub use plugin_call::{Location, ParamsPlace, key_location, location_in, location_keys};
 pub use select::SIMILAR;
 pub(crate) use vectorcraft_doc::range::parse_range;
+
+/// What the fill and stroke proxies read from the selected objects, kept with the selection
+/// ([`crate::doc_state::SelectionRecord`]).
+pub(crate) use paint::SelectionPaints;
 
 /// A date param in Unix seconds that defaults to the clock: `None` when absent (now, see
 /// [`clock_date`]), `Some(None)` for null (no date), else `Some(Some(seconds))`.
@@ -876,10 +892,17 @@ pub use xform::{AppearanceAttrs, EyedropperAttrs, EyedropperOptions, FillAttrs, 
 /// The shape modes of the selected compound-shape members (the Pathfinder panel lights theirs).
 pub use compoundshape::selected_member_modes;
 
+/// Make Compound Shape's warning when a member is an open path that encloses no area.
+pub use compoundshape::OPEN_PATHS_ADD_NO_AREA;
+
 /// Pathfinder Options (`Prefs::pathfinder`).
 pub use pathops::{PATHFINDER_PRECISION_RANGE, PathfinderOptions};
 
-/// The Attributes panel's state ([`Session::attributes_info`]).
+/// The Pathfinder Options a new Pathfinder effect takes (`effect.apply`).
+pub use effectcmd::pathfinder_effect_options;
+
+/// The Attributes panel's state ([`Session::attributes_info`]) and how many recent URLs it keeps.
+pub use attributes::RECENT_URLS;
 pub use overprint::AttributesInfo;
 
 /// Object → Flatten Transparency settings (`object.flattenTransparency`).
@@ -894,8 +917,12 @@ pub use gradpresets::{GradientPreset, GradientPresetEntry};
 /// A saved Image Trace preset ([`crate::Prefs::trace_presets`]), and a change to the saved presets.
 pub use buildcmds::{TracePreset, TracePresetChange};
 
+/// The `format`, extensions and largest size of the tracing presets files
+/// `imageTrace.presets.export` writes and `imageTrace.presets.import` reads.
+pub use buildcmds::{TRACE_PRESET_EXTS, TRACE_PRESET_FORMAT, TRACE_PRESET_MAX_BYTES};
+
 /// An Image Trace made off the UI thread, and what it traced (#3098).
-pub use buildcmds::{TraceRun, Traced};
+pub use buildcmds::{TraceRun, Traced, image_trace_target};
 
 /// The saved Image Trace presets' revision and latest changes ([`crate::Session`] keeps them).
 pub(crate) use buildcmds::TracePresetChanges;
@@ -903,6 +930,8 @@ pub(crate) use buildcmds::TracePresetChanges;
 /// The shapes a group selected alone gives the Pathfinder panel.
 pub use pathops::shape_count;
 
+/// The tile counts Create Object Mosaic would use (the dialog's Use Ratio button sets them).
+pub use menucmds::mosaic_counts;
 /// The Shape Mode commands' warning when a selected open path encloses no area.
 pub use pathops::SHAPE_MODE_OPEN_PATH_NO_AREA;
 
@@ -912,6 +941,10 @@ pub use buildcmds::live_paint_gaps;
 /// Whether Reset Transformation changes a symbol instance (the Symbols panel menu and the
 /// Control bar enable it when it changes one).
 pub use brushsym::reset_transformation_changes;
+
+/// Whether an object is a symbol set (the Symbolism Tools Options' Symbol Set Density applies to
+/// the selected ones).
+pub use brushsym::is_symbol_set;
 
 /// The Symbols panel's current symbol, as `symbol.list` answers it (the panel reads it on every
 /// frame without running the command).

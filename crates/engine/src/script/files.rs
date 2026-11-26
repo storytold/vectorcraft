@@ -54,7 +54,9 @@
 //!   for, loses the grant before that code runs. A run with nobody to ask gets `null` and
 //!   [`NO_PICKER`].
 //! - The commands a script runs with `vc.run` read and write only in the places above and in the
-//!   files of the open documents ([`crate::file_access::ScriptGate`]).
+//!   files the person gave the open documents ([`crate::file_access::ScriptGate`]). They also read
+//!   the files that the documents open when the run began link to, as the person last left those
+//!   documents and as those links led then.
 //! - `open('w')` empties the file at once; what a script writes is kept in memory, at most
 //!   [`MAX_FILE_BYTES`] a file, and written when it closes the file or the run ends; a run writes at
 //!   most [`MAX_RUN_BYTES`] in all and ends past that. `write` encodes in the file's encoding (an
@@ -67,8 +69,15 @@
 //!   file and once more for each such object. `write` joins its values only for an open file and
 //!   only up to twice [`MAX_FILE_BYTES`] UTF-16 code units. Each file written is named in the
 //!   report's `written` (at most [`super::MAX_WRITTEN`]), also after a run that failed.
-//! - Hidden settings, aliases and `execute` are not available: they return `false` and set `error`.
-//!   `execute` is counted in the report's `fileExecutes`.
+//! - On Unix, where a name that starts with a dot is hidden, setting `hidden` renames the file in
+//!   its folder, adding one dot or taking its leading dots off, under the rules for `rename`: the
+//!   old and the new name must both be places the script may write, and a name in use is refused.
+//!   `createAlias` makes a symbolic link at the object's path, a place the script may write where
+//!   nothing is, that leads to the real path of a file the script may read. `hidden` and `alias`
+//!   tell of a link itself, and setting `hidden`, `rename` and `remove` change the link, never what
+//!   it leads to. On other systems both set `error` and change nothing.
+//! - `execute` is not available: it returns `false`, sets `error`, and is counted in the report's
+//!   `fileExecutes`.
 //! - In a wasm build every lookup fails with [`NO_WEB`].
 
 use std::collections::HashMap;
@@ -118,6 +127,7 @@ pub(crate) const WRITE_FAILED: &str = "Script file could not be written";
 pub(crate) const NOT_EMPTY: &str = "Script folder is not empty";
 pub(crate) const NAME_TAKEN: &str = "Script file name is already in use";
 pub(crate) const BAD_NAME: &str = "Script file name must be a name without a folder";
+#[cfg(not(unix))]
 pub(crate) const NO_ALIAS: &str = "Script files cannot make aliases";
 pub(crate) const NO_HIDDEN: &str = "Script file hidden setting cannot be changed";
 pub(crate) const PROTECTED: &str = "Script file access to the app's own folders is not allowed";
@@ -454,10 +464,11 @@ impl Disk {
         }
     }
 
-    /// The gate for a command the script runs: the places it reads and writes now, and the files of
-    /// the open documents, `documents`.
-    pub(crate) fn gate(&self, documents: Vec<String>) -> crate::file_access::ScriptGate {
-        crate::file_access::ScriptGate { read: self.scope.clone(), write: self.writes.clone(), documents }
+    /// The gate for a command the script runs: the places it reads and writes now, the files the
+    /// person gave the open documents, `documents`, and the files it may only read because the documents open when
+    /// the run began link to them, `linked`.
+    pub(crate) fn gate(&self, documents: Vec<String>, linked: crate::file_access::LinkedFiles) -> crate::file_access::ScriptGate {
+        crate::file_access::ScriptGate { read: self.scope.clone(), write: self.writes.clone(), documents, linked, also: None }
     }
 
     /// The files written since this was last asked, to name in the report.
@@ -912,8 +923,15 @@ fn read_head(real: &Path, max: usize) -> std::io::Result<Vec<u8>> {
 /// that is not well formed is left out. It is read under [`lock_store`]'s lock, so it is read
 /// between two changes, and none are read when the lock cannot be taken.
 fn read_store(store: &Path) -> Vec<serde_json::Value> {
-    let Ok(_lock) = lock_store(store) else { return Vec::new() };
-    load_store(store, false).unwrap_or_default()
+    list_store(store).unwrap_or_default()
+}
+
+/// The grants [`read_store`] reads; none when the grants file is missing, and `Err` when the lock
+/// cannot be taken or the file is there but cannot be read, is too large, is not a grants file of
+/// this version or holds no list of grants.
+fn list_store(store: &Path) -> std::io::Result<Vec<serde_json::Value>> {
+    let _lock = lock_store(store)?;
+    load_store(store, false)
 }
 
 /// The grants the grants file at `store` holds, to change and write back; none when it is missing,
@@ -929,7 +947,8 @@ fn try_read_store(store: &Path) -> std::io::Result<Vec<serde_json::Value>> {
 fn load_store(store: &Path, strict: bool) -> std::io::Result<Vec<serde_json::Value>> {
     let bytes = match read_head(store, MAX_STORE_BYTES) {
         Ok(bytes) => bytes,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        // A link whose target is missing is there but cannot be read.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound && std::fs::symlink_metadata(store).is_err() => return Ok(Vec::new()),
         Err(e) => return Err(e),
     };
     if bytes.len() > MAX_STORE_BYTES {
@@ -947,14 +966,14 @@ fn load_store(store: &Path, strict: bool) -> std::io::Result<Vec<serde_json::Val
             && g["write"].is_boolean()
             && g["folder"].is_boolean()
     };
+    let grants = v["grants"].as_array().ok_or_else(|| std::io::Error::other("the grants file holds no list of grants"))?;
     if strict {
-        let grants = v["grants"].as_array().ok_or_else(|| std::io::Error::other("the grants file holds no list of grants"))?;
         if grants.len() > MAX_STORED_GRANTS || !grants.iter().all(valid) {
             return Err(std::io::Error::other("the grants file holds a grant that cannot be read"));
         }
         return Ok(grants.clone());
     }
-    Ok(v["grants"].as_array().map(|a| a.iter().filter(|g| valid(g)).take(MAX_STORED_GRANTS).cloned().collect()).unwrap_or_default())
+    Ok(grants.iter().filter(|g| valid(g)).take(MAX_STORED_GRANTS).cloned().collect())
 }
 
 /// The number in the name of the next file [`write_store`] writes before it takes the grants file's
@@ -1054,9 +1073,9 @@ fn lock_store(_: &Path) -> std::io::Result<std::fs::File> {
 }
 
 /// The grants the grants file beside the data folder `data_dir` keeps: each script, the SHA-256 of
-/// its text, the path and whether it may be written (`script.grants`).
-pub(crate) fn stored_grants(data_dir: &Path) -> Vec<serde_json::Value> {
-    read_store(&data_dir.with_file_name(GRANTS_FILE))
+/// its text, the path and whether it may be written (`script.grants`); as [`list_store`] reads them.
+pub(crate) fn stored_grants(data_dir: &Path) -> std::io::Result<Vec<serde_json::Value>> {
+    list_store(&data_dir.with_file_name(GRANTS_FILE))
 }
 
 /// Removes from the grants file beside `data_dir` the grants of the script `script` and of the path
@@ -1883,44 +1902,41 @@ fn remove(host: &Host, a: &[Data]) -> Result<Data, HostError> {
 /// `rename(path, name)`: the file or folder named `name` in the same folder; → `{fs}`, its new path.
 fn rename(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     let (path, name) = (arg_text(a, 0), arg_text(a, 1));
+    let mut disk = host.disk.borrow_mut();
+    Ok(match rename_in(&mut disk, &path, &name) {
+        Ok(new) => Data::Object(vec![("fs".into(), Data::String(new))]),
+        Err(m) => error(m),
+    })
+}
+
+/// Renames the file or folder at `path`, a link itself, to `name` in the same folder. → its new
+/// path.
+fn rename_in(disk: &mut Disk, path: &str, name: &str) -> Result<String, &'static str> {
     let bad = name.is_empty() || name == "." || name == ".." || name.contains('/') || (WINDOWS && (name.contains('\\') || name.contains(':')));
     if bad || name.contains('\0') {
-        return Ok(error(BAD_NAME));
+        return Err(BAD_NAME);
     }
-    let Some(new) = Path::new(&path).parent().map(|p| p.join(&name).to_string_lossy().into_owned()) else { return Ok(error(ACCESS_DENIED)) };
-    let mut disk = host.disk.borrow_mut();
-    let (from, to) = match (disk.target(&path, false), disk.target(&new, false)) {
-        (Ok(f), Ok(t)) => (f, t),
-        (Err(m), _) | (_, Err(m)) => return Ok(error(m)),
-    };
-    let Ok(was) = std::fs::symlink_metadata(&from) else { return Ok(error(NOT_FOUND)) };
+    let new = Path::new(path).parent().map(|p| p.join(name).to_string_lossy().into_owned()).ok_or(ACCESS_DENIED)?;
+    let (from, to) = (disk.target(path, false)?, disk.target(&new, false)?);
+    let was = std::fs::symlink_metadata(&from).map_err(|_| NOT_FOUND)?;
     // A folder that holds the settings folder is not moved, also when its name is given in another
     // case where case does not matter.
     let holds = |f: &Path| std::fs::canonicalize(&from).map_or(true, |kept| crate::file_access::path_inside(f, &kept));
     if was.is_dir() && disk.fenced.as_deref().is_some_and(holds) {
-        return Ok(error(ACCESS_DENIED));
+        return Err(ACCESS_DENIED);
     }
     // A name that differs in case alone may name the same file, which then takes the new name.
     if let Ok(there) = std::fs::symlink_metadata(&to)
         && !(from.to_string_lossy().eq_ignore_ascii_case(&to.to_string_lossy()) && same_file((&from, &was), (&to, &there)))
     {
-        return Ok(error(NAME_TAKEN));
+        return Err(NAME_TAKEN);
     }
     // Open objects hold real paths with the names the file system keeps, and `from` keeps the last
     // name as given, which where case does not matter can differ in case: they are matched by the
     // kept name. A link is renamed itself, and no object holds a path through it. When the kept
     // name cannot be learned, nothing is renamed, so no object goes on under the old path's rules.
-    let kept = if was.file_type().is_symlink() {
-        from.clone()
-    } else {
-        match std::fs::canonicalize(&from) {
-            Ok(kept) => kept,
-            Err(_) => return Ok(error(WRITE_FAILED)),
-        }
-    };
-    if std::fs::rename(&from, &to).is_err() {
-        return Ok(error(WRITE_FAILED));
-    }
+    let kept = if was.file_type().is_symlink() { from.clone() } else { std::fs::canonicalize(&from).map_err(|_| WRITE_FAILED)? };
+    std::fs::rename(&from, &to).map_err(|_| WRITE_FAILED)?;
     // Open objects of the file, or of files in the folder, write to the new path, and the rules for
     // reading apply to them there.
     let moved = |p: &mut Option<std::path::PathBuf>| {
@@ -1935,7 +1951,102 @@ fn rename(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     // The old path no longer holds the file, so the report names it as well as the new one.
     disk.wrote(&from);
     disk.wrote(&to);
-    Ok(Data::Object(vec![("fs".into(), Data::String(new))]))
+    Ok(new)
+}
+
+/// `setHidden(path, hidden)`: on Unix, where a name that starts with a dot is hidden, the file or
+/// link at `path` (a link itself, never what it leads to) renamed with one dot added or its leading
+/// dots taken off; → `{fs}`, its path. A file already as asked keeps its name. A name that would be
+/// left empty, a folder, and every system that is not Unix give `{error}`.
+fn set_hidden(host: &Host, a: &[Data]) -> Result<Data, HostError> {
+    let (path, on) = (arg_text(a, 0), matches!(a.get(1), Some(Data::Bool(true))));
+    let mut disk = host.disk.borrow_mut();
+    let at = match disk.target(&path, false) {
+        Ok(t) => t,
+        Err(m) => return Ok(error(m)),
+    };
+    if !cfg!(unix) {
+        return Ok(error(NO_HIDDEN));
+    }
+    match std::fs::symlink_metadata(&at) {
+        Err(_) => return Ok(error(NOT_FOUND)),
+        Ok(m) if m.is_dir() => return Ok(error(NOT_REGULAR)),
+        Ok(_) => {}
+    }
+    let Some(name) = Path::new(&path).file_name().map(|n| n.to_string_lossy().into_owned()) else { return Ok(error(ACCESS_DENIED)) };
+    if name.starts_with('.') == on {
+        return Ok(Data::Object(vec![("fs".into(), Data::String(path))]));
+    }
+    let new = if on { format!(".{name}") } else { name.trim_start_matches('.').to_string() };
+    if new.is_empty() {
+        return Ok(error(NO_HIDDEN));
+    }
+    Ok(match rename_in(&mut disk, &path, &new) {
+        Ok(fs) => Data::Object(vec![("fs".into(), Data::String(fs))]),
+        Err(m) => error(m),
+    })
+}
+
+/// `createAlias(path, target)`: on Unix a symbolic link at `path` that leads to the real path of the
+/// file `target`. `path` must be a place the script may write where nothing is, not even a link
+/// that leads nowhere, and `target` a file the script may read. Every system that is not Unix gives
+/// `{error}`.
+fn create_alias(host: &Host, a: &[Data]) -> Result<Data, HostError> {
+    let (path, to) = (arg_text(a, 0), arg_text(a, 1));
+    let mut disk = host.disk.borrow_mut();
+    let at = match disk.target(&path, false) {
+        Ok(t) => t,
+        Err(m) => return Ok(error(m)),
+    };
+    if std::fs::symlink_metadata(&at).is_ok() {
+        return Ok(error(NAME_TAKEN));
+    }
+    if to.is_empty() {
+        return Ok(error(NOT_FOUND));
+    }
+    let real = match disk.stat(&to) {
+        Ok(Some(e)) if e.file => disk.checked(&to).ok().and_then(|p| disk.scope.locate(p).ok()),
+        Ok(Some(_)) => return Ok(error(NOT_REGULAR)),
+        Ok(None) => return Ok(error(NOT_FOUND)),
+        Err(m) => return Ok(error(m)),
+    };
+    let Some(real) = real else { return Ok(error(ACCESS_DENIED)) };
+    #[cfg(test)]
+    if let Some(hook) = BEFORE_ALIAS_LINK.with(|h| h.borrow_mut().take()) {
+        hook(&at);
+    }
+    Ok(make_link(&mut disk, &at, &real))
+}
+
+/// A symbolic link at the real path `at` that leads to the real path `real`. → `true`, or `{error}`.
+#[cfg(unix)]
+fn make_link(disk: &mut Disk, at: &Path, real: &Path) -> Data {
+    // Making the link fails when something took its place since it was looked up.
+    if std::os::unix::fs::symlink(real, at).is_err() {
+        return error(WRITE_FAILED);
+    }
+    // A link put in place of a folder above it since it was looked up may have taken the new link
+    // elsewhere: that link is removed again, when it is still the one made here.
+    let placed = at.parent().is_some_and(|p| std::fs::canonicalize(p).is_ok_and(|c| c == p));
+    let ours = std::fs::read_link(at).is_ok_and(|l| l == real);
+    if !placed {
+        if ours {
+            let _ = std::fs::remove_file(at);
+        }
+        return error(ACCESS_DENIED);
+    }
+    // Something else at `at` replaced the new link since it was made: it is left alone.
+    if !ours {
+        return error(WRITE_FAILED);
+    }
+    disk.wrote(at);
+    Data::Bool(true)
+}
+
+/// Every system that is not Unix: `{error}` with [`NO_ALIAS`].
+#[cfg(not(unix))]
+fn make_link(_: &mut Disk, _: &Path, _: &Path) -> Data {
+    error(NO_ALIAS)
 }
 
 /// Do the paths `a` and `b`, with their metadata, name one file? On Unix by device and inode; on
@@ -2309,13 +2420,8 @@ pub(super) fn install(realm: &mut Realm, link: &super::Link) -> Result<(), RunEr
         }))
     };
     let value = |s: &str| HostItem::Value(Data::String(s.to_string()));
-    let text = HostItem::Object(vec![
-        ("notOpen".into(), value(NOT_OPEN)),
-        ("badMode".into(), value(BAD_MODE)),
-        ("noAlias".into(), value(NO_ALIAS)),
-        ("noHidden".into(), value(NO_HIDDEN)),
-        ("tooLarge".into(), value(TOO_LARGE)),
-    ]);
+    let text =
+        HostItem::Object(vec![("notOpen".into(), value(NOT_OPEN)), ("badMode".into(), value(BAD_MODE)), ("tooLarge".into(), value(TOO_LARGE))]);
     let system = if WINDOWS {
         "Windows"
     } else if cfg!(target_os = "macos") {
@@ -2357,6 +2463,8 @@ pub(super) fn install(realm: &mut Realm, link: &super::Link) -> Result<(), RunEr
         ("create".into(), call(link, create)),
         ("setLength".into(), call(link, set_length)),
         ("setReadonly".into(), call(link, set_readonly)),
+        ("setHidden".into(), call(link, set_hidden)),
+        ("createAlias".into(), call(link, create_alias)),
         ("pick".into(), call(link, pick)),
     ];
     realm.define_file_classes(items)
@@ -2367,9 +2475,16 @@ pub(super) fn install(realm: &mut Realm, link: &super::Link) -> Result<(), RunEr
 #[cfg(test)]
 pub(crate) type CopyHook = Box<dyn FnOnce(&Path, &Path)>;
 
+/// Tests: what the next `createAlias` does with the real path of its link.
+#[cfg(test)]
+pub(crate) type AliasHook = Box<dyn FnOnce(&Path)>;
+
 #[cfg(test)]
 thread_local! {
     pub(crate) static BEFORE_COPY_READ: std::cell::RefCell<Option<CopyHook>> = const { std::cell::RefCell::new(None) };
+    /// Tests: what the next `createAlias` does with the real path of its link, after looking it up
+    /// and before making the link.
+    pub(crate) static BEFORE_ALIAS_LINK: std::cell::RefCell<Option<AliasHook>> = const { std::cell::RefCell::new(None) };
     /// Tests: while set, the bytes `flush` writes fail after the file was opened for them.
     pub(crate) static FLUSH_WRITE_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }

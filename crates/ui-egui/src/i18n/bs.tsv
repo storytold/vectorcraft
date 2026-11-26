@@ -28,6 +28,7 @@
 	Light	Svijetlo
 	Quit VectorCraft	Zatvori VectorCraft
 	Drop Artwork	Ispusti crtež
+@id	language.name	Bosanski
 @msg	{key} must be [x, y] with finite coordinates	{key} mora biti [x, y] s konačnim koordinatama
 @msg	ids must contain 1–10000 object ids	ids mora sadržavati 1–10000 ID-ova objekata
 	File	Datoteka
@@ -87,6 +88,16 @@
 	Paste without Formatting	Zalijepi bez oblikovanja
 	Clear	Očisti
 	Find and Replace…	Pronađi i zamijeni…
+	Find and Replace	Pronađi i zamijeni
+	Find:	Pronađi:
+	Replace With:	Zamijeni sa:
+	Replace & Find	Zamijeni i pronađi
+	Replace All	Zamijeni sve
+	Match Case	Razlikuj velika i mala slova
+	Find Whole Word	Pronađi cijelu riječ
+	Search Backwards	Pretraži unazad
+	Check Hidden Layers	Provjeri skrivene slojeve
+	Check Locked Layers	Provjeri zaključane slojeve
 	Find Next	Pronađi sljedeće
 	Spelling	Pravopis
 	Auto Spell Check	Automatska provjera pravopisa
@@ -226,6 +237,16 @@
 	To Center	Prema sredini
 	To Edge	Prema ivici
 	Create Object Mosaic…	Kreiraj mozaik objekata…
+	Create Object Mosaic	Kreiraj mozaik objekata
+	Current Size:	Trenutna veličina:
+	New Size:	Nova veličina:
+	Tile Spacing:	Razmak između pločica:
+	Number of Tiles:	Broj pločica:
+	Constrain Ratio:	Ograniči omjer:
+	Result:	Rezultat:
+	Resize Using Percentages	Promijeni veličinu u postocima
+	Delete Raster	Izbriši rastersku sliku
+	Use Ratio	Koristi omjer
 	Vector Halftone…	Vektorski polutonovi…
 	Create Trim Marks	Kreiraj oznake za obrezivanje
 	Flatten Transparency…	Spljošti prozirnost…
@@ -323,6 +344,9 @@
 	Artboards	Radne ploče
 	Convert to Artboards	Pretvori u radne ploče
 	Rearrange All Artboards…	Preuredi sve radne ploče…
+	Rearrange…	Preuredi…
+	Selected Artboards: {n}	Odabrane radne ploče: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Kliknite na platno da postavite radne ploče (Esc otkazuje)
 	Fit to Artwork Bounds	Uklopi u granice crteža
 	Fit to Selected Art	Uklopi u odabrani crtež
 	Graph	Grafikon
@@ -422,6 +446,20 @@
 	Break Thread	Prekini nit
 	Fit Headline	Uklopi naslov
 	Find Font…	Pronađi font…
+	Retype	Ponovo otkucaj
+	Find Matching Fonts	Pronađi odgovarajuće fontove
+	Find more font matches	Pronađi još odgovarajućih fontova
+	Type your text to preview	Upišite tekst za pregled
+	Select outlined text, then Find Matching Fonts.	Odaberite tekst pretvoren u obrise, zatim Pronađi odgovarajuće fontove.
+	No font matches the selected shapes.	Nijedan font ne odgovara odabranim oblicima.
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	Oblici nakon prvih 2.048, ili dublje od 16 grupa, nisu upoređeni.
+	Reset Retype Panel	Vrati panel Ponovo otkucaj na početno
+	List Matching Fonts	Prikaži odgovarajuće fontove
+	Retype Preview	Pregled u panelu Ponovo otkucaj
+@msg	`count` must be a whole number from 1 to 96	`count` mora biti cijeli broj od 1 do 96
+@msg	`size` must be small, medium or large	`size` mora biti small, medium ili large
+@msg	`text` must be a string of at most 100 characters	`text` mora biti niz od najviše 100 znakova
+@msg	Retype: select outlined text (paths or compound paths)	Ponovo otkucaj: odaberite tekst pretvoren u obrise (putanje ili složene putanje)
 	Change Case	Promijeni veličinu slova
 	UPPERCASE	VELIKA SLOVA
 	lowercase	mala slova
@@ -469,6 +507,7 @@
 	Fill & Stroke	Ispuna i potez
 	Fill Color	Boja ispune
 	Opacity	Neprozirnost
+	Show Opacity	Prikaži neprozirnost
 	Stroke Color	Boja poteza
 	Fill Gradient	Gradijent ispune
 	Stroke Gradient	Gradijent poteza
@@ -529,6 +568,17 @@
 	Shading Color	Boja sjenčenja
 	Black Overprint	Crni pretisak
 	Draw Hidden Faces	Crtaj skrivene strane
+	Map Art…	Mapiranje crteža…
+	Map Art	Mapiranje crteža
+	First Surface	Prva površina
+	Previous Surface	Prethodna površina
+	Next Surface	Sljedeća površina
+	Last Surface	Posljednja površina
+	Horizontal Scale	Horizontalna skala
+	Vertical Scale	Vertikalna skala
+	Scale to Fit	Skaliraj da stane
+	Shade Artwork	Osjenči crtež
+	Invisible Geometry	Nevidljiva geometrija
 	Revolve…	Rotaciono tijelo…
 	Inflate…	Napuhni…
 	Materials…	Materijali…
@@ -613,6 +663,11 @@
 	Color blindness – Protanopia-type	Daltonizam – tip protanopije
 	Color blindness – Deuteranopia-type	Daltonizam – tip deuteranopije
 	Color blindness – Tritanopia-type	Daltonizam – tip tritanopije
+	Show Color Vision Preview	Prikaži pregled vida boja
+	Protanopia	Protanopija
+	Deuteranopia	Deuteranopija
+	Tritanopia	Tritanopija
+	Achromatopsia	Ahromatopsija
 	Customize…	Prilagodi…
 	Proof Colors	Probne boje
 	Zoom In	Uvećaj
@@ -648,6 +703,8 @@
 	Hide Gradient Annotator	Sakrij anotator gradijenta
 	Show Gradient Annotator	Prikaži anotator gradijenta
 	Hide Corner Widget	Sakrij widget ugla
+	Hide Shape Widgets	Sakrij widgete oblika
+	Show Shape Widgets	Prikaži widgete oblika
 	Show Corner Widget	Prikaži widget ugla
 	Guides	Vodilice
 	Hide Guides	Sakrij vodilice
@@ -745,6 +802,8 @@
 	Contextual Task Bar	Kontekstna traka zadataka
 	Pin Bar Position	Položaj prikvačene trake
 	Reset Bar Position	Vrati položaj trake na početno
+	Bar Actions	Radnje trake
+	Reset Bar Actions	Vrati radnje trake na početno
 	Resize	Promijeni veličinu
 	Tools	Alati
 	Toolbars	Trake s alatima
@@ -765,9 +824,17 @@
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Prikaz kotača
 	Box View	Prikaz kvadrata
+	Show Out-of-Gamut Colors	Prikaži boje izvan gamuta
 	Box Channel	Kanal kvadrata
 	Color box	Kvadrat boje
 	Color Wheel Options	Opcije kotača boja
+	Show Document Colors	Prikaži boje dokumenta
+	Document Colors	Boje dokumenta
+	Selection Colors	Boje odabira
+@plural	Used {n} time|Used {n} times	Korišteno {n} put|Korišteno {n} puta|Korišteno {n} puta
+	Show Harmony	Prikaži harmoniju
+	Harmony Rule	Pravilo harmonije
+	Harmony color	Boja harmonije
 	CSS Properties	CSS svojstva
 	Document Info	Informacije o dokumentu
 	Flattener Preview	Pregled spljoštavanja
@@ -785,6 +852,9 @@
 	Magic Wand	Čarobni štapić
 	Navigator	Navigator
 	Navigator Panel Options	Opcije panela navigatora
+	Attributes Panel Options	Opcije panela atributa
+	Number of Recent URLs:	Broj nedavnih URL-ova:
+@msg	`count` must be a whole number from 1 to 30	`count` mora biti cijeli broj od 1 do 30
 	Draw Dashed Lines as Solid Lines	Crtaj isprekidane linije kao pune
 	Pattern Options	Opcije uzorka
 	Properties	Svojstva
@@ -1012,6 +1082,25 @@
 	Preserve Embedded Profiles	Zadrži ugrađene profile
 	Convert to Working Space	Pretvori u radni prostor
 	Preserve Numbers	Zadrži brojeve
+	Profile Mismatches:	Neusklađenost profila:
+	Ask When Opening	Pitaj pri otvaranju
+	Ask When Pasting	Pitaj pri lijepljenju
+	Missing Profiles:	Nedostajući profili:
+	Embedded Profile Mismatch	Neusklađenost ugrađenog profila
+	Missing Profile	Nedostaje profil
+	Paste Profile Mismatch	Neusklađenost profila pri lijepljenju
+	“{name}” is not tagged with a {model} profile.	„{name}” nema {model} profil.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	„{name}” ima {model} profil „{profile}”, koji nije {model} radni prostor „{working}”.
+	Use the embedded profile	Koristi ugrađeni profil
+	Convert the colors to the working space	Pretvori boje u radni prostor
+	Discard the embedded profile	Odbaci ugrađeni profil
+	Leave as is	Ostavi kako jeste
+	Assign the working space	Dodijeli radni prostor
+	Assign profile:	Dodijeli profil:
+	Preserve the color numbers	Zadrži brojeve boja
+	Convert to keep the colors' appearance	Pretvori da boje zadrže izgled
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` ide samo uz `{key}`: "assign"
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Zalijepljene boje dolaze iz dokumenta čiji je {model} profil „{from}”; profil ovog dokumenta je „{to}”.
 	CMYK	CMYK
 	Texture	Tekstura
 	Craquelure…	Krakelura…
@@ -1094,6 +1183,15 @@ lighting	Light	Svjetlo
 	Document Raster Effects Settings Dialog	Dijalog postavki rasterskih efekata dokumenta
 	Drop Shadow	Sjena
 	DXF Options Dialog	Dijalog DXF opcija
+	HP-GL Options	HP-GL opcije
+	HP-GL Options Dialog	Dijalog HP-GL opcija
+	Curve Tolerance:	Tolerancija krivulja:
+	Origin:	Ishodište:
+	Pens:	Pera:
+	One Pen per Color	Jedno pero po boji
+	Pen Table	Tabela pera
+	Draw the Nearest Path Next	Sljedeću crtaj najbližu putanju
+	Draw Inner Paths First	Prvo crtaj unutrašnje putanje
 	Edit Toolbar	Uredi traku s alatima
 	Edit Views	Uredi poglede
 	Effect…	Efekat…
@@ -1420,6 +1518,10 @@ lighting	Light	Svjetlo
 	Add Anchor Point Tool	Alat za dodavanje sidrene tačke
 	Anchor Point Tool	Alat sidrena tačka
 	Arc Tool	Alat luk
+	Three-Point Arc Tool	Alat luk kroz tri tačke
+	Three-Point Arc	Luk kroz tri tačke
+	Arc too large	Luk je prevelik
+	Third Point Sets Direction	Treća tačka određuje smjer
 	Area Graph Tool	Alat za površinski grafikon
 	Area Type Tool	Alat za tekst u području
 	Artboard Tool	Alat radna ploča
@@ -1536,6 +1638,7 @@ lighting	Light	Svjetlo
 	Save Actions…	Sačuvaj akcije…
 	Load Actions…	Učitaj akcije…
 	Replace Actions…	Zamijeni akcije…
+	Clear Actions	Očisti akcije
 	Reset Actions	Vrati akcije na početno
 	Replace the current actions with the default set?	Zamijeniti trenutne akcije zadanim skupom?
 	Append adds the default set after the current sets instead.	Dugme Dodaj umjesto toga dodaje zadani skup iza trenutnih skupova.
@@ -1668,6 +1771,7 @@ digits	Malayalam	Malajalam
 	Roman Baseline	Latinična osnovna linija
 	Select a text object to edit its character attributes.	Odaberite tekstualni objekat da uredite njegove atribute znakova.
 	Show Options	Prikaži opcije
+	Show on Shape Creation	Prikaži pri kreiranju oblika
 	Show Recent Colors	Prikaži nedavne boje
 	Toggle RGB Percent	Uključi/isključi RGB u postocima
 	Color Panel Options	Opcije panela boja
@@ -1840,6 +1944,7 @@ digits	Malayalam	Malajalam
 	Duplicate Action or Action Set	Dupliciraj akciju ili skup akcija
 	Delete the action set “{name}” and its actions?	Izbrisati skup akcija „{name}” i njegove akcije?
 	Delete the selected action sets and their actions?	Izbrisati odabrane skupove akcija i njihove akcije?
+	Delete all action sets and their actions?	Izbrisati sve skupove akcija i njihove akcije?
 	Delete these {n} graphic styles?	Izbrisati ove grafičke stilove ({n})?
 	Delete this {n} graphic style?	Izbrisati ovaj grafički stil ({n})?
 	Graphic Style Libraries Menu	Meni biblioteka grafičkih stilova
@@ -1958,6 +2063,10 @@ digits	Malayalam	Malajalam
 	Rename Preset	Preimenuj unaprijed postavljeno
 	Save Image Trace Preset	Sačuvaj unaprijed postavljeno praćenje slike
 	Delete Image Trace Preset	Izbriši unaprijed postavljeno praćenje slike
+	Tracing Presets…	Predlošci praćenja…
+	Import Image Trace Presets	Uvezi predloške praćenja slike
+	Export Image Trace Presets	Izvezi predloške praćenja slike
+	Replace the saved presets that have these names?	Zamijeniti sačuvane predloške s ovim imenima?
 	Method:	Metoda:
 	Pad	Produži
 	Repeats	Broj ponavljanja
@@ -1973,6 +2082,8 @@ digits	Malayalam	Malajalam
 	Snap Curves To Lines	Hvataj krive na linije
 	Tracing Result with Outlines	Rezultat praćenja s obrisima
 	Source Image	Izvorna slika
+	Split View	Podijeljeni prikaz
+	Divider	Razdjelnik
 	Threshold	Prag
 	Trace	Prati
 	Trace the image with the Default preset	Prati sliku zadanim predloškom
@@ -1994,6 +2105,17 @@ digits	Malayalam	Malajalam
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` označava promijenjene postavke: sačuvajte unaprijed postavljeno pod drugim nazivom
 @msg	`{key}` must be an array of these names: {_1}	`{key}` mora biti niz ovih naziva: {_1}
 	Graphics	Grafika
+	Show Contrast	Prikaži kontrast
+	Contrast For	Kontrast za
+	Normal Text	Normalni tekst
+	Large Text	Veliki tekst
+	Contrast Background	Pozadina kontrasta
+	Behind Selection	Iza odabira
+	Current Color	Trenutna boja
+	Pass	Prolazi
+	Fail	Ne prolazi
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Minimalni kontrast po WCAG 2.2: normalni tekst AA 4.5:1 (1.4.3) i AAA 7:1 (1.4.6), veliki tekst AA 3:1 i AAA 4.5:1, grafike i kontrole AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Pozadina se očitava u sredini odabira.
 	Local Libraries	Lokalne biblioteke
 	Add Content	Dodaj sadržaj
 	Click to apply to the selected type	Kliknite da primijenite na odabrani tekst
@@ -2122,6 +2244,15 @@ digits	Malayalam	Malajalam
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku skup
 	Kinsoku Shori Type	Vrsta Kinsoku Shori
+	Kinsoku Shori Settings…	Postavke Kinsoku Shori…
+	Kinsoku Shori Settings	Postavke Kinsoku Shori
+	Kinsoku Sets	Kinsoku skupovi
+	Kinsoku Set Base	Osnova Kinsoku skupa
+	Based on:	Zasnovano na:
+	Cannot Start Line	Ne može početi red
+	Cannot End Line	Ne može završiti red
+	Hanging Punctuation	Viseća interpunkcija
+	Inseparable Characters	Neodvojivi znakovi
 	Push In First	Prvo uvlačenje
 	Push Out First	Prvo izbacivanje
 	Push Out Only	Samo izbacivanje
@@ -2522,6 +2653,12 @@ digits	Malayalam	Malajalam
 	Units:	Jedinice:
 	Use Typographer's Quotes	Koristi tipografske navodnike
 	Center Artwork	Centriraj crtež
+	PSD Import Options	Opcije uvoza PSD
+	Place PSD	Postavi PSD
+	Convert Layers to Objects	Pretvori slojeve u objekte
+	Import Hidden Layers	Uvezi skrivene slojeve
+	Flatten Layers to a Single Image	Spljošti slojeve u jednu sliku
+	Import Slices	Uvezi isječke
 	DXF Import Options	Opcije uvoza DXF
 	Layout:	Raspored:
 	Merge Layers	Spoji slojeve
@@ -2668,6 +2805,7 @@ digits	Malayalam	Malajalam
 	Rasters	Rasteri
 	Replaces the saved preset of that name.	Zamjenjuje sačuvani predložak tog naziva.
 	Save Preset…	Sačuvaj postavku…
+	Save Summary…	Sačuvaj sažetak…
 	Vectors	Vektori
 	A saved copy of the selected preset	Sačuvana kopija odabranog predloška
 	Built-in presets don't change: New makes a copy you can edit.	Ugrađeni predlošci se ne mijenjaju: Novo pravi kopiju koju možete uređivati.
@@ -2913,10 +3051,17 @@ digits	Malayalam	Malajalam
 	Overprint and Transparency Flattener Options	Opcije pretiska i spljoštavanja prozirnosti
 	Custom…	Prilagođeno…
 	Custom Transparency Flattener Options	Prilagođene opcije spljoštavanja prozirnosti
+	The PDF preset keeps the flattener preset but not the Custom… settings.	PDF postavka zadržava postavku spljoštavanja, ali ne i postavke iz Prilagođeno….
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	PDF 1.3 datoteke isijecaju rasterizirana područja po njihovim regijama, a Pretisak određuje da li se pretisci zadržavaju.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS nema alfa prozirnost, a Pretisci određuju da li se pretisci zadržavaju.
 	Place the pages with the placement again	Ponovo postavi stranice s postavljanjem
 	Placement:	Postavljanje:
 	Preserve CMYK Numbers	Očuvaj CMYK brojeve
+	Preserve RGB Numbers	Očuvaj RGB brojeve
+	Device to Simulate:	Uređaj za simulaciju:
+	Simulate Paper Color	Simuliraj boju papira
+	Simulate Black Ink	Simuliraj crnu tintu
+	Load…	Učitaj…
 	Previous page	Prethodna stranica
 	Print Layers:	Štampaj slojeve:
 	Print Preset:	Predložak štampanja:
@@ -2993,6 +3138,10 @@ digits	Malayalam	Malajalam
 	Add Color Tool	Alat za dodavanje boje
 	Remove Color Tool	Alat za uklanjanje boje
 	Remove Color	Ukloni boju
+	Set As Base Color	Postavi kao osnovnu boju
+	Select Shade	Odaberi nijansu
+	Add New Color	Dodaj novu boju
+	Set Current Color As Base Color	Postavi trenutnu boju kao osnovnu
 	Find the selected colors in the artwork	Pronađi odabrane boje u crtežu
 	Harmony Rules	Pravila harmonije
 	Keep this row's colors (exclude)	Zadrži boje ovog reda (isključi)
@@ -3007,6 +3156,9 @@ digits	Malayalam	Malajalam
 	Recolor this row	Ponovo oboji ovaj red
 	Reset the rows to the artwork's colors	Vrati redove na boje crteža
 	Color Theme Picker	Birač teme boja
+	Undo Changes	Poništi promjene
+	Redo Changes	Ponovi promjene
+@msg	Recolor Artwork is not open	Ponovo oboji crtež nije otvoreno
 	Click or drag across the art to pick its colors; Shift adds more	Kliknite ili prevucite preko crteža da uzmete njegove boje; Shift dodaje još
 	Prominent Colors	Istaknute boje
 	Save All Colors	Sačuvaj sve boje
@@ -3276,6 +3428,7 @@ antiAlias	Sharp	Oštro
 	Preserve Editing Capabilities	Očuvaj mogućnosti uređivanja
 	Responsive	Responzivno
 	Show Code	Prikaži kod
+	Show in Browser	Prikaži u pregledniku
 	Style Attributes	Atributi stila
 	Style Attributes (Entity References)	Atributi stila (reference entiteta)
 	Styling:	Stilizovanje:
@@ -3293,6 +3446,17 @@ antiAlias	Sharp	Oštro
 	Swatch Name:	Naziv uzorka boje:
 	Diameter:	Prečnik:
 	Symbolism Tools Options	Opcije alata simbolizam
+	Tool:	Alat:
+	Symbol Set Density	Gustoća skupa simbola
+	Symbol Sprayer Options	Opcije raspršivača simbola
+	Scrunch:	Sabijanje:
+	Spin:	Okretanje:
+	Screen:	Prozirnost:
+	Stain:	Bojenje:
+	Symbol Sizer Options	Opcije mijenjača veličine simbola
+	Proportional Resizing	Proporcionalna promjena veličine
+	Resizing Affects Density	Promjena veličine utiče na gustoću
+	Show Brush Size and Intensity	Prikaži veličinu i intenzitet četke
 	Symbol Set Density:	Gustoća skupa simbola:
 	Intensity:	Intenzitet:
 	Place PDF	Postavi PDF
@@ -3389,6 +3553,7 @@ antiAlias	Sharp	Oštro
 	Pressure	Pritisak
 	Tilt	Nagib
 	Bearing	Smjer
+	Stylus Wheel	Kotačić olovke
 	Random	Nasumično
 	Scatter	Raspršeno
 	Color Burn	Tamnjenje boje
@@ -3518,12 +3683,21 @@ theme	Appearance	Izgled
 	embedding for preview and print	ugrađivanje za pregled i štampu
 	embedding allowed	ugrađivanje dozvoljeno
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	nepoznata vrsta
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} upotreba|{n} upotrebe|{n} upotreba
 	substituted: shown in {family} {style} ({detail})	zamijenjen: prikazan fontom {family} {style} ({detail})
 	missing: shown in {family} {style}	nedostaje: prikazan fontom {family} {style}
 	missing	nedostaje
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	rezolucija nije dostupna
+	estimated memory {memory}	procijenjena memorija {memory}
+	memory unavailable	memorija nije dostupna
+	Unknown format	Nepoznat format
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -3549,6 +3723,8 @@ theme	Appearance	Izgled
 	Symbolism Tool	Alat simbolizam
 	Image Trace Presets	Predlošci praćenja slike
 	Live Paint Bucket	Kanta za živo bojenje
+	Fill Area	Popuni područje
+	Fill Area Tool	Alat za popunjavanje područja
 	Live Paint Bucket (Stroke)	Kanta za živo bojenje (potez)
 	Live Paint Info	Informacije o živom bojenju
 	Shape Builder	Graditelj oblika
@@ -3972,6 +4148,7 @@ theme	Appearance	Izgled
 	Data Recovery	Oporavak podataka
 	Default Language	Zadani jezik
 	Disable Auto Add/Delete	Onemogući automatsko dodavanje/brisanje
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete uklanja sidrene tačke i zadržava putanje spojenim
 	Interpolate Control Points When Moving Anchors	Interpoliraj ručke smjera pri pomjeranju sidrenih tačaka
 	Display All Blacks Accurately	Prikaži sve crne tačno
 	Display All Blacks as Rich Black	Prikaži sve crne kao bogatu crnu
@@ -4065,6 +4242,15 @@ theme	Appearance	Izgled
 	Paste Offset	Pomak lijepljenja
 	Pattern Editing	Uređivanje uzorka
 	Pen Tool	Alat pero
+	Quick Pen Tool	Alat brzo pero
+	Quick Pen	Brzo pero
+	Quick Pen Toolbar	Traka Brzog pera
+	Continuous Arc	Neprekidni luk
+	Sharp Corner Arc	Luk s oštrim uglom
+	Flip Arc	Preokreni luk
+	Hide Toolbar	Sakrij traku s alatima
+	Pin Toolbar Position	Prikvači položaj trake s alatima
+	Reset Toolbar Position	Vrati položaj trake s alatima na početno
 	Picas	Pice
 	Portuguese	Portugalski
 	Preserve Appearance and Overprints	Očuvaj izgled i pretiske
@@ -4103,6 +4289,7 @@ theme	Appearance	Izgled
 	Show Pixel Grid (Above 600% Zoom)	Prikaži mrežu piksela (iznad 600% zumiranja)
 	Show Slice Numbers	Prikaži brojeve isječaka
 	Show The Home Screen When No Documents Are Open	Prikaži početni ekran kad nijedan dokument nije otvoren
+	Show Tool Cards	Prikaži kartice alata
 	Show Tool Tips	Prikaži opise alata
 	Size/Leading	Veličina/prored
 	Snapping Tolerance	Tolerancija hvatanja
@@ -4177,6 +4364,11 @@ theme	Appearance	Izgled
 	Edit Arrowheads	Uredi vrhove strelica
 	Edit Arrowheads…	Uredi vrhove strelica…
 	Reload Arrowheads	Ponovo učitaj vrhove strelica
+	Bevels	Zakošenja
+	Edit Bevels	Uredi zakošenja
+	Edit Bevels…	Uredi zakošenja…
+	{name} (document)	{name} (dokument)
+	Reload Bevels	Ponovo učitaj zakošenja
 	Stroke Options	Opcije poteza
 	Width Profiles	Profili širine
 	Apply Graphic Style	Primijeni grafički stil
@@ -4198,6 +4390,7 @@ theme	Appearance	Izgled
 	Add to Graphic Styles	Dodaj u grafičke stilove
 	Graphic Style Library	Biblioteka grafičkih stilova
 	Add Used Colors	Dodaj korištene boje
+	Add Selected Colors	Dodaj odabrane boje
 	Delete Swatch	Izbriši uzorak boje
 	Duplicate Swatch	Dupliciraj uzorak boje
 	Merge Swatches	Spoji uzorke boja
@@ -4228,12 +4421,15 @@ theme	Appearance	Izgled
 	Spot Colors (0)	Spot boje (0)
 	Swatch Options	Opcije uzorka boje
 	Ungroup Color Group	Razgrupiši grupu boja
+	Color Group Options	Opcije grupe boja
+	Color Group Options…	Opcije grupe boja…
 	Copy to User Defined	Kopiraj u korisnički definisano
 	Swatch Library	Biblioteka uzoraka boja
 	Clear All Tabs	Očisti sve tabulatore
 	Set Tab Stops	Postavi tabulatore
 	Tab Stops	Tabulatori
 	Flare	Odsjaj
+	Edit Flare	Uredi odsjaj
 	Rays	Zrake
 	Rectangle	Pravougaonik
 	Paintbrush	Kist
@@ -4336,6 +4532,8 @@ axis	Both	Obje
 	Show	Prikaži
 	Copy Width Point	Kopiraj tačku širine
 	Duplicate Artboard	Dupliciraj radnu ploču
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Kliknite da dodate radnu ploču na ovu stranu, Alt-klik duplicira ovu radnu ploču s njenim crtežom
+	Click to add an artboard on this side	Kliknite da dodate radnu ploču na ovu stranu
 	Area / Path Type	Tekst u području / na putanji
 	Decrease Font Size	Smanji veličinu fonta
 	Decrease Font Size by Five Steps	Smanji veličinu fonta za pet koraka
@@ -4399,6 +4597,11 @@ axis	Both	Obje
 	Image	Slika
 	Ink	Tinta
 	Lab	Lab
+	OKLCH Sliders	OKLCH klizači
+	HSL Sliders	HSL klizači
+	Chroma	Hroma
+	The largest chroma sRGB holds at this lightness and hue	Najveća hroma koju sRGB obuhvata pri ovoj svjetloći i nijansi
+	OKLCH needs sRGB as the working RGB space	OKLCH zahtijeva sRGB kao radni RGB prostor
 	Medium	Srednje
 	Name	Naziv
 	None	Ništa
@@ -4491,6 +4694,8 @@ font-technology	Variable	Varijabilni
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} od {n} rezultata. Nastavite kucati da ih suzite.|{shown} od {n} rezultata. Nastavite kucati da ih suzite.|{shown} od {n} rezultata. Nastavite kucati da ih suzite.
 	Recent Commands	Nedavne naredbe
 	No recent commands	Nema nedavnih naredbi
+	Type to search commands, tools, panels and effects	Upišite za pretragu naredbi, alata, panela i efekata
+	Clear Recent Commands	Očisti nedavne naredbe
 	Dashed Line	Isprekidana linija
 	Panel menu	Meni panela
 	Unembed…	Poništi ugrađivanje…
@@ -4514,7 +4719,7 @@ font-technology	Variable	Varijabilni
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Odabir › Isto › Boja ispune, Boja poteza i Ispuna i potez pronalaze samo istu nijansu globalnog ili spot uzorka, a ne bilo koju njegovu nijansu.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Prikazuje početni ekran kada nijedan dokument nije otvoren; kada je isključeno, prozor ostaje prazan dok ne kliknete Početna.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Mjeri objekte zajedno s potezima i efektima koji mijenjaju oblik za veličinu, položaj i poravnanje; sjene, sjaj i zamućenja se ne mjere.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Pri zumu od 100% jedan inč dokumenta zauzima 96 tačaka ekrana umjesto 72.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	Pri zumu od 100% jedan inč dokumenta ispunjava jedan inč ekrana, ili 96 tačaka ekrana kada sistem ne javlja upotrebljivu veličinu ekrana.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Dvostruki klik na grupu, putanju ili sliku alatom Odabir otvara ih u načinu izolacije.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Ispune i potezi s uzorkom transformišu se zajedno s grafikom, osim ako transformacija ili meni panela Transformiši ne odabere drugačije.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Poluprečnici dinamičnih uglova skaliraju se zajedno s grafikom, osim ako skaliranje ne odabere drugačije.
@@ -4523,6 +4728,9 @@ font-technology	Variable	Varijabilni
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Točkić miša uz pritisnut Cmd/Ctrl pomjera platno u stranu.
 	Dragging sideways on a numeric field's label changes the field's value.	Prevlačenje u stranu po oznaci brojčanog polja mijenja vrijednost polja.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Pokret rotacije s dva prsta na dodirnoj podlozi rotira prikaz platna.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Držanje tipke pokreće alat ili naredbu iz njene kolone „Zadrži“ u Prečicama na tastaturi; kratki pritisak pokreće njenu uobičajenu prečicu.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Koliko sekundi tipka mora biti pritisnuta prije nego što se umjesto uobičajene prečice pokrene njena prečica zadržavanjem.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete uklanja odabrane sidrene tačke i ponovo prilagođava krivu oko svake od njih, umjesto da tamo otvori putanju.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Kada pomjerate sidrene tačke, svaka kriva s jednim pomjerenim krajem zadržava svoj oblik u odnosu na svoje krajeve.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Držanje prečice alata bira taj alat dok je ne pustite, a zatim se ponovo bira prethodni alat.
 	Shows the bounding box while you move the selection or draw a shape.	Prikazuje granični okvir dok pomjerate odabir ili crtate oblik.
@@ -4532,6 +4740,7 @@ font-technology	Variable	Varijabilni
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Svojstva dinamičnog pravougaonika prikazuju jedno polje Poluprečnik ugla za sva četiri ugla; kada je isključeno, svaki ugao ima svoje polje.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Šta transformišu izmjene u panelu Transformiši: objekat, pločice njegovog uzorka ili oboje; Zadano prati Transformiši pločice uzorka.
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Kada je odabrana jedna instanca simbola, panel Transformiši koristi tačku registracije simbola kao referentnu tačku.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	Crtanje pravougaonika, elipse, poligona, zvijezde ili linije otvara panel Transformiši ako je zatvoren.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Zatamnjuje platno izvan radnih ploča dok je alat Radna ploča aktivan.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Kada je uključeno Zatamni područje izvan radne ploče, područje izvan radnih ploča ostaje tamno dok prevlačite alatom Radna ploča.
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Koliko blizu, u pikselima, pokazivač mora biti objektu, sidrenoj tački ili ručki da bi ga klik odabrao.
@@ -4604,8 +4813,73 @@ font-technology	Variable	Varijabilni
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Koliko blizu na ekranu pokazivač ili prevučena tačka mora doći do objekta da bi ga pametne vodilice uhvatile; udaljenost je ista pri svakom zumu.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Hvata kraj segmenta linije ili krug nacrtan iz središta tako da dodiruje obližnju krivu.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Hvata kraj segmenta linije tako da pod pravim uglom susreće obližnji ravni segment.
+	Edit type set in fonts that aren't available?	Urediti tekst u fontovima koji nisu dostupni?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Prikazuje broj svakog isječka u okviru u njegovom gornjem lijevom uglu na platnu; kada je isključeno, obrisi isječaka i dalje se prikazuju.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Boja obrisa korisničkih i objektnih isječaka i okvira s njihovim brojevima; automatski isječci koriste blijeđu nijansu te boje.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	U pasusima s uključenom opcijom Rastavljaj riječi navedena riječ dobija crticu za rastavljanje samo na crticama upisanim u nju, ili nikad ako ih nema, bez obzira na jezik i velika ili mala slova.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	U desktop verziji .wasm dodaci iz ove mape učitavaju se pri pokretanju i kada U redu postavi novu mapu, osim u sigurnom načinu rada; dodatak koji traži dozvole učitava se tek kada ih odobrite. Web verzija ne učitava nijedan.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	Veliko daje svakom pokretanju dodatka za filter ili naredbu najmanje 250 miliona instrukcija uz isto vremensko ograničenje; Normalno zadržava vlastiti budžet dodatka. Živi efekti, izvoznici i uvoznici zadržavaju svoj.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Novi tekst dobija ovaj jezik dok je jezik u Postavkama dokumenta Engleski: SAD; tekst koji je već u dokumentu zadržava svoj jezik.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	U pasusima s uključenom opcijom Rastavljaj riječi navedena riječ se rastavlja samo na crticama upisanim u nju, ili nigdje ako ih nema, bez obzira na jezik i velika ili mala slova.
+	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	U desktop verziji .wasm dodaci iz ove mape učitavaju se pri pokretanju i kada kliknete U redu s novom mapom ovdje, osim u sigurnom načinu rada; web verzija ih ne učitava.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	Normalno zadržava vlastita ograničenja svakog dodatka; uz Veliko filter ili naredba dodatka može izvršiti najmanje 250 miliona instrukcija pored onih za svoj ulaz. Vremensko ograničenje ostaje isto.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Koliko instrukcija smije koristiti svako pokretanje filtera objekata iz dodatka; Veliko dopušta više od Normalno uz isto ograničenje od 60 sekundi. Teški filteri zadržavaju svoj budžet.
+	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Prvi izbor radnog diska: Startup, None ili putanja do mape; VectorCraft ga sprema, ali još ne koristi radne diskove.
+	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Drugi izbor radnog diska: Startup, None ili putanja do mape; VectorCraft ga sprema, ali još ne koristi radne diskove.
+	How light or dark the interface is.	Koliko je interfejs svijetao ili taman.
+	The set of colors the interface is drawn in.	Skup boja kojima se iscrtava interfejs.
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	Boja kontrola koje su uključene, odabrane ili u fokusu; meni je zatamnjen dok Shema boja ima vlastitu boju naglaska.
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	Boja platna oko radnih ploča; Uskladi sa svjetlinom korisničkog interfejsa uzima je iz Svjetline. Prikaz Obris uvijek ga prikazuje bijelim.
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	Panel otvoren sa svoje ikone zatvara se kada pritisnete Esc ili kliknete izvan njega; isključeno, ostaje otvoren dok ne kliknete ikonu.
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Prikazuje naziv svake grupe alata iznad njenih alata na traci s alatima; isključeno, grupe slijede jedna za drugom bez ičega između njih.
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Od sada se dokumenti koje otvorite ili kreirate otvaraju kao kartice; isključeno, svaki se otvara u plutajućem prozoru. Već otvoreni dokumenti ostaju gdje jesu.
+	Makes the document tabs taller and their names larger.	Kartice dokumenata čini višim, a njihove nazive većim.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	Od sljedećeg pokretanja sistem iscrtava naslovnu traku prozora tamo gdje bi VectorCraft inače iscrtao svoju; na Linuxu i BSD sistemima prednost ima varijabla VECTORCRAFT_TITLEBAR.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	Od sljedećeg pokretanja VectorCraft iscrtava naslovnu traku prozora čak i tamo gdje bi je iscrtala radna površina, osim ako je Sistemska naslovna traka uključena ili je bira varijabla VECTORCRAFT_TITLEBAR.
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Povećava ili smanjuje interfejs; crtež na platnu zadržava veličinu pri istom zumu.
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Pokazivači alata koje VectorCraft iscrtava rastu i smanjuju se sa Skaliranjem interfejsa; isključeno, zadržavaju svoju veličinu.
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Jezik interfejsa; Automatski koristi jezik sistema. Dijalog mijenja jezik čim ga odaberete.
+	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Animirano zumiranje radi samo dok je ovo uključeno; isključeno, Animirano zumiranje je zatamnjeno i zumiranje nije animirano.
+	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Zumiranje točkićem glatko klizi, a Alat za zumiranje zumira dok vučete ustranu ili ga držite; isključeno, Alat za zumiranje zumira na područje preko kojeg prevučete.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	Od sljedećeg pokretanja desktop verzija prikazuje platno preko ove vrste grafičkog procesora; crtež se u svakom slučaju iscrtava na CPU-u. Automatski daje prednost integrisanom na Windowsu i macOS-u. Web verzija ga ne koristi.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	Od sljedećeg pokretanja prozor prikazuje svaki kadar bez čekanja na osvježavanje ekrana gdje grafički drajver to dozvoljava, najviše 240 kadrova u sekundi.
+	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Od sljedećeg pokretanja desktop verzija crta ovom vrstom grafičkog procesora; Automatski daje prednost onom koji pokreće ekran. Web verzija ga ne koristi.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Od sljedećeg pokretanja prozor prikazuje kadrove bez čekanja na osvježavanje ekrana, najviše 240 u sekundi; isključeno, ritam određuje ekran. Način prikaza zadan pri pokretanju ima prednost.
+	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Najveći broj koraka poništavanja koje svaki dokument čuva; manji broj uklanja najstarije korake kada kliknete U redu. Koraci mogu nestati i ranije kada zauzimaju previše memorije.
+	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Prikazuje kako se crtež mijenja dok vučete; isključeno, obrisi prate povlačenje, a crtež se mijenja kada pustite. Vodilja s ravnala se uvijek pomiče dok vučete.
+	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Koliko radnih niti crta crtež; -1 koristi jednu manje od jezgri koje VectorCraft smije koristiti, najviše 8, a 0 nijednu. Web verzija nikad ne koristi nijednu.
+	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	Od sljedećeg pokretanja na Wayland radnoj površini, X11 (XWayland) otvara prozor kroz XWayland; ostali izbori to čine samo kada je priključena olovka.
+	From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.	Od sljedećeg pokretanja desktop verzija prikazuje sličice bez čekanja na osvježavanje ekrana, najviše 240 u sekundi; isključeno, ekran određuje njihov ritam.
+	The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.	Veći budžet petostruko povećava osnovne instrukcije svakog pokretanja filtera objekta i zadržava isti dodatak po bajtu ulaza; teški filteri, živi efekti, izvoznici i uvoznici zadržavaju vlastita ograničenja.
+	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	Pretvara crtež i radne ploče na platnu u profil boja ekrana tamo gdje sistem to već ne radi; isključeno, platno se crta u sRGB-u.
+	On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written.	U desktop verziji čuvanje u datoteku zapisuje se u pozadini dok nastavljate uređivati; isključeno, čekate dok se ne zapiše.
+	On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.	U desktop verziji izvozi u datoteke i paketi zapisuju se u pozadini dok nastavljate uređivati, osim 3D izvoza; isključeno, čekate ih.
+	Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.	Svakih nekoliko minuta čuva kopiju za oporavak svakog dokumenta s nesačuvanim izmjenama od njegove posljednje kopije; isključeno, periodične kopije se ne prave.
+	How many minutes pass between recovery copies while Automatically Save Recovery Data is on.	Koliko minuta prolazi između kopija za oporavak dok je uključeno Automatski čuvaj podatke za oporavak.
+	On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.	U desktop verziji folder u kojem se čuvaju kopije za oporavak; ostavite prazno za vlastiti folder VectorCrafta. Web verzija ih čuva u pregledniku.
+	No timed recovery copies are made of documents with more than 20,000 objects.	Za dokumente s više od 20.000 objekata periodične kopije za oporavak se ne prave.
+	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	Otvori nedavne datoteke i ekran Početna prikazuju najviše ovoliko nedavnih datoteka; 0 ne prikazuje nijednu, a VectorCraft i dalje pamti do 30.
+	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	Pri otvaranju dokumenta povezana EPS slika koja prikazuje svoj sačuvani pregled zadržava ga umjesto ponovnog čitanja EPS datoteke; izmijenjene datoteke i dalje slijede Ažuriraj veze.
+	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	U Pregledu piksela slike se crtaju zaglađene; isključeno, njihovi pikseli imaju oštre ivice. Izvan Pregleda piksela slike su uvijek zaglađene.
+	PDF Text	Tekst PDF-a
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	Tekst PDF-a koji otvorite ili ugradite dolazi kao tekst koji se može uređivati ili kao obrisi koji izgledaju isto na računaru bez njegovih fontova.
+	Linked pages show the file's own text.	Povezane stranice prikazuju vlastiti tekst datoteke.
+	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Kada se povezana datoteka promijeni, Automatski je ponovo čita, Pitaj kad je izmijenjeno vas prvo pita, a Ručno je ostavlja kakva jeste i prikazuje napomenu na statusnoj traci.
+	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	U desktop verziji folder u kojem počinju Novo iz predloška… i Sačuvaj kao predložak…; ostavite prazno za VectorCraft Templates u vašem folderu dokumenata.
+	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Uredi original otvara povezanu datoteku u zadanoj aplikaciji sistema za njen tip; isključeno, povezana rasterska slika otvara se u PhotoCraftu ako je instaliran.
+	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	Datoteka sačuvana starijom verzijom VectorCrafta otvara se sa [Converted] iza imena, a Sačuvaj pita gdje je sačuvati; isključeno, Sačuvaj zamjenjuje datoteku.
+	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	VectorCraft datoteke i predlošci čuvaju se komprimirani, pa su manji, osim ako čuvanje ne kaže drugačije; čuvanja za verzije koje ne otvaraju komprimirane datoteke ostaju nekomprimirana.
+	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Kopiraj i Izreži daju drugim aplikacijama i SVG kod crteža; na desktopu se kod ne kopira kao tekst kada crtež ugrađuje više od 1 MiB slika.
+	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Na Windowsu Kopiraj i Izreži daju drugim aplikacijama i PDF crteža; ostale platforme još ne kopiraju PDF.
+	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft čuva ovaj izbor, ali Kopiraj i Izreži još ne koriste format naslijeđenog vektorskog međuspremnika.
+	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Očuvaj putanje ili Očuvaj izgled i pretiske za naslijeđeni vektorski međuspremnik; VectorCraft čuva izbor, ali ga još ne koristi.
+	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Zadrži oblikovanje čuva stilove teksta kopiranog iz tekstualnog objekta u VectorCraftu kada se zalijepi u tekstualni objekt; Zadrži običan tekst daje mu stil mjesta na koje dospije.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	Prikaži sve crne kao bogatu crnu prikazuje čistu CMYK crnu (samo crnu boju na 100%) na platnu kao RGB crnu; Prikaži sve crne tačno je pretvara kroz radni CMYK prostor.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Izlaz svih crnih kao bogata crna crta čistu CMYK crnu kao RGB crnu u RGB rasterskim izvozima i izvozima u nijansama sive te uz Štampaj kao bitmapu; ne mijenja vektorske izvoze, CMYK JPEG, TIFF i PSD niti ostalu štampu.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	Na ekranu osjetljivom na dodir prelazi u radni prostor za dodir; isključivanje postavke ili gubitak ekrana osjetljivog na dodir vraća radni prostor iz kojeg je prešao.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Dodir s dva prsta na platnu poništava, a u radnom prostoru za dodir prebacuje između alata za odabir i crtanje; dodir s tri prsta ponavlja. Nijedan ne radi u načinu prezentacije.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Novi tekst dobija ovaj jezik dok je jezik u Postavkama dokumenta Engleski: SAD i [Normalni stil znakova] ne postavlja jezik; tekst koji je već u dokumentu zadržava svoj jezik.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	U pasusima s uključenom opcijom Rastavljaj riječi navedena riječ se rastavlja samo na crticama upisanim u nju, ili nigdje ako ih nema, bez obzira na velika ili mala slova; korejske riječi ne dobijaju crticu, a riječi na indijskim jezicima ne rastavljaju se unutar skupine znakova.
 	Reset all preferences to their defaults?	Vratiti sve postavke na zadane vrijednosti?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Zadane vrijednosti primjenjuju se kada kliknete U redu u Postavkama. Otkaži tamo zadržava vaše trenutne postavke.
 	Smaller ↔ Larger	Manje ↔ veće
@@ -4621,9 +4895,16 @@ font-technology	Variable	Varijabilni
 	Couldn't copy to the system clipboard: {e}	Nije moguće kopirati u sistemski međuspremnik: {e}
 	Couldn't paste from the clipboard: {e}	Nije moguće zalijepiti iz međuspremnika: {e}
 	Channel	Kanal
+	Curvature Circle Tool	Alat Krug zakrivljenosti
+	Cusp	Šiljak
+	Straight segment	Ravan segment
 	Circle	Krug
 	Circle Tool	Alat za krug
 	Circle too large	Krug je prevelik
+	Show Radii	Prikaži poluprečnike
+	Show Diameter	Prikaži prečnik
+	Anchors at Standard Positions	Sidrene tačke na standardnim položajima
+	Third Point by Dragging	Treća tačka povlačenjem
 	Clip to Art	Isijeci prema crtežu
 	Colorize	Oboji
 	Gamma	Gama
@@ -4913,7 +5194,7 @@ imageTrace	Outline	Obris
 @msg	PDF settings are not an object	PDF postavke nisu objekat
 @msg	PDF security settings are not an object	PDF sigurnosne postavke nisu objekat
 @msg	PDF writer error: {0}	greška PDF zapisivača: {0}
-@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Upakovano datoteka u {folder}: {n} ({note})
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Upakovano datoteka u {folder}: {n} ({note})|Upakovano datoteka u {folder}: {n} ({note})|Upakovano datoteka u {folder}: {n} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Pregledaj u pregledniku zahtijeva desktop aplikaciju (web umjesto toga preuzima datoteke)
 @msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	navedite `desiredK`, željenu veličinu datoteke u K (1024 bajta): broj veći od 0 i najviše 1048576
 @msg	`startWith` is `current` or `auto`	`startWith` je `current` ili `auto`
@@ -4935,6 +5216,7 @@ imageTrace	Outline	Obris
 @msg	Saved {path}	Sačuvano: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Odaberite tekst ili kliknite u tekst alatom za tekst da umetnete glifove
 @msg	Shape Builder: no region under the pointer	Graditelj oblika: nema regije ispod pokazivača
+@msg	Fill Area: no enclosed area under the pointer	Popuni područje: nema zatvorenog područja ispod pokazivača
 @msg	Shape Builder: select paths or compound paths	Graditelj oblika: odaberite putanje ili složene putanje
 @msg	Show All Hidden Attributes: nothing is hidden	Prikaži sve skrivene atribute: ništa nije skriveno
 @msg	Split Into Grid: select paths large enough for the grid	Podijeli u mrežu: odaberite putanje dovoljno velike za mrežu
@@ -4988,6 +5270,8 @@ imageTrace	Outline	Obris
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` mora biti grayscale, rgb, hsb, cmyk ili websafe
 @msg	`view` must be wheel or box	`view` mora biti wheel ili box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` mora biti hue, saturation, brightness, red, green ili blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` mora biti none, oklch ili hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH zahtijeva sRGB kao radni RGB prostor
 @msg	`{k}` must be [x, y]	`{k}` mora biti [x, y]
 @msg	`{name}` has no options	`{name}` nema opcija
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` je ugrađeni radni prostor; odaberite drugi naziv
@@ -5194,6 +5478,7 @@ imageTrace	Outline	Obris
 @msg	no graphic style `{n}`	nema grafičkog stila `{n}`
 @msg	no interaction in progress	nema interakcije u toku
 @msg	no key object	nema ključnog objekta
+@msg	Align to Key Object isn't available with the Artboard tool	„Poravnaj s ključnim objektom“ nije dostupno s alatom radna ploča
 @msg	no library `{key}` (see {list})	nema biblioteke `{key}` (vidi {list})
 @msg	no native format	nema izvornog formata
 @msg	no pages	nema stranica
@@ -5249,6 +5534,8 @@ imageTrace	Outline	Obris
 @msg	no such spine point	nema takve tačke kičme
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` mora biti lista od najviše 10000 indeksa tačaka kičme
 @msg	`with` moves points, not a handle	`with` pomjera tačke, ne ručicu
+@msg	`link` and `independent` cannot both be true	`link` i `independent` ne mogu oba biti true
+@msg	`link` places a handle: give `handle`	`link` postavlja ručicu: navedite `handle`
 @msg	no such spine segment	nema takvog segmenta kičme
 @msg	no such subpath	nema takve podputanje
 @msg	no such user library	nema takve korisničke biblioteke
@@ -5337,6 +5624,7 @@ imageTrace	Outline	Obris
 @msg	select a blend	odaberite stapanje
 @msg	select a blend or give `id`	odaberite stapanje ili navedite `id`
 @msg	select a clip group	odaberite grupu isijecanja
+@msg	select a flare	odaberite odsjaj
 @msg	select a gradient mesh	odaberite gradijentnu mrežu
 @msg	select a linked image: an embedded one has no file	odaberite povezanu sliku: ugrađena nema datoteku
 @msg	select a repeat	odaberite ponavljanje
@@ -5385,6 +5673,7 @@ imageTrace	Outline	Obris
 @msg	the PDF is password-protected: give its password	PDF je zaštićen lozinkom: navedite njegovu lozinku
 @msg	the PDF password is wrong	PDF lozinka je pogrešna
 @msg	the Save PDF dialog didn't open	dijalog Sačuvaj PDF se nije otvorio
+@msg	the Save PDF dialog is not open	dijalog Sačuvaj PDF nije otvoren
 @msg	the WMF header is damaged	WMF zaglavlje je oštećeno
 @msg	the art could not be sampled	crtež nije moguće uzorkovati
 @msg	the art has no bounds	crtež nema granice
@@ -5560,6 +5849,7 @@ imageTrace	Outline	Obris
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} povezana slika promijenjena je na disku: Ažuriraj veze prikazuje novu verziju|{n} povezane slike promijenjene su na disku: Ažuriraj veze prikazuje nove verzije|{n} povezanih slika promijenjeno je na disku: Ažuriraj veze prikazuje nove verzije
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Ažurirana je {n} povezana datoteka promijenjena na disku|Ažurirane su {n} povezane datoteke promijenjene na disku|Ažurirano je {n} povezanih datoteka promijenjenih na disku
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	dokument zadaje napust koji ova PDF/X datoteka izostavlja: uključite „Koristi postavke napusta dokumenta“
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} objekt doseže rub obreza, ali ne doseže napust|{n} objekta dosežu rub obreza, ali ne dosežu napust|{n} objekata doseže rub obreza, ali ne doseže napust
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Izvezeno {what} s {n} bilješkom: {first}|Izvezeno {what} s {n} bilješke: {first}|Izvezeno {what} s {n} bilješki: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} datoteka fonta sada je u {folder}|{n} datoteke fontova sada su u {folder}|{n} datoteka fontova sada je u {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} datoteka fonta sada je u {folder}; {failed} nije moguće dodati: {reason}|{n} datoteke fontova sada su u {folder}; {failed} nije moguće dodati: {reason}|{n} datoteka fontova sada je u {folder}; {failed} nije moguće dodati: {reason}
@@ -5588,6 +5878,7 @@ imageTrace	Outline	Obris
 @msg	onto must name a panel floating in another group	onto mora navesti panel koji pluta u drugoj grupi
 @msg	below and above must name a panel floating in another group	below i above moraju navesti panel koji pluta u drugoj grupi
 @msg	give only one of onto, below and above	navedite samo jedno od onto, below i above
+@msg	give only one of `index`, `indices` and `t`	navedite samo jedno od `index`, `indices` i `t`
 @msg	column must be true or a number from 1	column mora biti true ili broj od 1
 @msg	x and y must both be numbers	x i y moraju oba biti brojevi
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" nije boja: napišite je kao #rrggbb
@@ -5850,6 +6141,7 @@ imageTrace	Outline	Obris
 	Arrow	Strelica
 	Arrow (open)	Strelica (otvorena)
 	Barbed	Bodljikavo
+arrowhead	Feather	Pero
 	Half Arrow (left)	Polustrelica (lijevo)
 	Half Arrow (right)	Polustrelica (desno)
 	Concave	Konkavno
@@ -5877,6 +6169,7 @@ imageTrace	Outline	Obris
 	Kite	Zmaj
 	Triangle to Bar	Trougao u traku
 	Oval	Oval
+	Line Arrow	Linijska strelica
 	Complementary	Komplementarne
 	Complementary 2	Komplementarne 2
 	Split Complementary	Podijeljene komplementarne
@@ -6034,6 +6327,9 @@ file-filter	Swatch libraries	Biblioteke uzoraka boja
 file-filter	Flattener presets	Predlošci spljoštavanja
 file-filter	PDF presets	PDF predlošci
 file-filter	Print presets	Predlošci štampanja
+file-filter	Tracing presets	Predlošci praćenja
+file-filter	Action sets	Skupovi akcija
+file-filter	Composite fonts	Kompozitni fontovi
 file-filter	Preferences	Postavke
 file-filter	Export presets	Predlošci izvoza
 file-filter	SVG Compressed	Komprimirani SVG
@@ -6329,6 +6625,9 @@ mark-style	Japanese	Japanski
 	Continue in Background	Nastavi u pozadini
 	Cancel Export	Otkaži izvoz
 @msg	Export cancelled	Izvoz otkazan
+	Cancel Save	Otkaži čuvanje
+@plural	{n} more save waiting|{n} more saves waiting	Čeka još {n} čuvanje|Čekaju još {n} čuvanja|Čeka još {n} čuvanja
+@msg	Save canceled	Čuvanje otkazano
 	Desired	Željeno
 	Word Spacing:	Razmak riječi:
 	Letter Spacing:	Razmak slova:
@@ -6403,9 +6702,9 @@ mark-style	Japanese	Japanski
 	Slope:	Nagib:
 axis	X Axis	X osa
 axis	Y Axis	Y osa
-@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Upakovano datoteka u {folder}: {n}
-@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Upakovano datoteka: {n} {note}
-@msgplural	Packaged {n} file|Packaged {n} files	Upakovano datoteka: {n}
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Upakovano datoteka u {folder}: {n}|Upakovano datoteka u {folder}: {n}|Upakovano datoteka u {folder}: {n}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Upakovano datoteka: {n} {note}|Upakovano datoteka: {n} {note}|Upakovano datoteka: {n} {note}
+@msgplural	Packaged {n} file|Packaged {n} files	Upakovano datoteka: {n}|Upakovano datoteka: {n}|Upakovano datoteka: {n}
 @plural	Packaged {n} file|Packaged {n} files	Upakovano datoteka: {n}|Upakovano datoteka: {n}|Upakovano datoteka: {n}
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Upakovano datoteka u {folder}: {n}|Upakovano datoteka u {folder}: {n}|Upakovano datoteka u {folder}: {n}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Upakovano datoteka: {n} {note}|Upakovano datoteka: {n} {note}|Upakovano datoteka: {n} {note}
@@ -6439,6 +6738,7 @@ axis	Y Axis	Y osa
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}” je drugi modul od dodatka s ID-om {_1} i dobio bi postavke i predmemoriju sačuvane za njega: instalirajte ga s `replace: true` kada korisnik pristane
 	File SHA-256: {hash}	SHA-256 datoteke: {hash}
 	Read the objects it is given	Čitati objekte koje dobije
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Čitati objekte koje dobije, kao i postavke, radne ploče, slojeve i uzorke boja dokumenta
 	Change, add and delete objects in the document	Mijenjati, dodavati i brisati objekte u dokumentu
 	Keep data of its own with the document	Čuvati vlastite podatke uz dokument
 	Change how the objects its effect is applied to are drawn	Mijenjati kako se crtaju objekti na koje je primijenjen njegov efekt
@@ -6527,6 +6827,10 @@ axis	Y Axis	Y osa
 	Create New Action	Napravi novu akciju
 	Play Action	Reprodukuj akciju
 	Action Set:	Skup akcija:
+	Choose Align To at playback	Odaberi „Poravnaj s“ pri reprodukciji
+	Align steps use the key object, key anchor or key guide when one is set.	Koraci poravnanja koriste ključni objekt, ključnu sidrenu tačku ili ključnu vodilju kada je postavljen.
+	With one whole object selected and no key, they use the artboard.	S jednim cijelim odabranim objektom i bez ključa koriste radnu ploču.
+	Otherwise they use the selection.	Inače koriste odabir.
 	Function Key:	Funkcijska tipka:
 	Record	Snimi
 	Create New Set	Napravi novi skup
@@ -6558,6 +6862,8 @@ axis	Y Axis	Y osa
 	Checkpoint	Kontrolna tačka
 	Inventory Icons	Ikone inventara
 	Skill Icons	Ikone vještina
+	Weather Icons	Ikone vremena
+	Media Controls	Medijske kontrole
 	Attack	Napad
 	Defend	Odbrana
 	Heal	Iscjeljenje
@@ -6663,6 +6969,12 @@ axis	Y Axis	Y osa
 	Bus Lines	Linije sabirnice
 	Terminal Nodes	Priključni čvorovi
 
+# Original arrow art brushes.
+	Arrows	Strelice
+	Solid Arrow	Puna strelica
+	Open Arrow	Otvorena strelica
+	Chevron Arrow	Strelica sa ševronom
+
 	Notched Ribbon	Zarezana traka
 	Double Line	Dvostruka linija
 	Wave	Talas
@@ -6679,6 +6991,256 @@ axis	Y Axis	Y osa
 	Stars	Zvijezde
 	Triangles	Trouglovi
 	Sparkles	Iskrice
+	Warm Gray	Topla siva
+	Cool Gray	Hladna siva
+	Neutrals	Neutralne
+	Ivory	Slonovača
+	Linen	Lan
+	Oat	Zob
+	Greige	Greige
+	Stone	Kamen
+	Taupe	Taupe
+	Slate	Škriljac
+	Clay	Glina
+	Terracotta	Terakota
+	Ochre	Oker
+	Umber	Umbra
+	Sand	Pijesak
+	Olive	Maslinasta
+	Moss	Mahovina
+	Rosy	Ružičasta
+	Neutral	Neutralna
+	Golden	Zlatna
+	Pastel	Pastelne
+	Pastel Red	Pastelna crvena
+	Pastel Orange	Pastelna narandžasta
+	Pastel Amber	Pastelni jantar
+	Pastel Yellow	Pastelna žuta
+	Pastel Lime	Pastelna limeta
+	Pastel Green	Pastelna zelena
+	Pastel Teal	Pastelna plavozelena
+	Pastel Cyan	Pastelni cijan
+	Pastel Azure	Pastelna azurna
+	Pastel Blue	Pastelna plava
+	Pastel Violet	Pastelna ljubičasta
+	Pastel Magenta	Pastelna magenta
+	Soft Red	Blaga crvena
+	Soft Orange	Blaga narandžasta
+	Soft Amber	Blagi jantar
+	Soft Yellow	Blaga žuta
+	Soft Lime	Blaga limeta
+	Soft Green	Blaga zelena
+	Soft Teal	Blaga plavozelena
+	Soft Cyan	Blagi cijan
+	Soft Azure	Blaga azurna
+	Soft Blue	Blaga plava
+	Soft Violet	Blaga ljubičasta
+	Soft Magenta	Blaga magenta
+	Vivid Red	Živa crvena
+	Vivid Orange	Živa narandžasta
+	Vivid Amber	Živi jantar
+	Vivid Yellow	Živa žuta
+	Vivid Lime	Živa limeta
+	Vivid Green	Živa zelena
+	Vivid Teal	Živa plavozelena
+	Vivid Cyan	Živi cijan
+	Vivid Azure	Živa azurna
+	Vivid Blue	Živa plava
+	Vivid Violet	Živa ljubičasta
+	Vivid Magenta	Živa magenta
+	Deep	Tamne
+	Deep Red	Tamnocrvena
+	Deep Orange	Tamnonarandžasta
+	Deep Amber	Tamni jantar
+	Deep Yellow	Tamnožuta
+	Deep Lime	Tamna limeta
+	Deep Green	Tamnozelena
+	Deep Teal	Tamna plavozelena
+	Deep Cyan	Tamni cijan
+	Deep Azure	Tamna azurna
+	Deep Blue	Tamnoplava
+	Deep Violet	Tamnoljubičasta
+	Deep Magenta	Tamna magenta
+	Gold	Zlato
+	Silver	Srebro
+	Bronze	Bronza
+	Copper	Bakar
+	Brass	Mesing
+	Rose Gold	Rozo zlato
+	Gunmetal	Čelično siva
+	Platinum	Platina
+	Pewter	Kalaj
+	Ember	Žar
+	Lagoon	Laguna
+	Dusk	Sumrak
+	Clay to Teal	Od gline do plavozelene
+	Plum to Olive	Od šljive do maslinaste
+	Complementary Coral	Koralna, komplementarne
+	Split Complementary Coral	Koralna, podijeljene komplementarne
+	Analogous Coral	Koralna, analogne
+	Triad Coral	Koralna, trijada
+	Tetrad Coral	Koralna, tetrada
+	Pentagram Coral	Koralna, pentagram
+	Complementary Teal	Plavozelena, komplementarne
+	Split Complementary Teal	Plavozelena, podijeljene komplementarne
+	Analogous Teal	Plavozelena, analogne
+	Triad Teal	Plavozelena, trijada
+	Tetrad Teal	Plavozelena, tetrada
+	Pentagram Teal	Plavozelena, pentagram
+	Soft Spectrum	Blagi spektar
+	Red to Amber	Od crvene do jantara
+	Orange to Yellow	Od narandžaste do žute
+	Amber to Lime	Od jantara do limete
+	Yellow to Green	Od žute do zelene
+	Lime to Teal	Od limete do plavozelene
+	Green to Cyan	Od zelene do cijana
+	Teal to Azure	Od plavozelene do azurne
+	Cyan to Blue	Od cijana do plave
+	Azure to Violet	Od azurne do ljubičaste
+	Blue to Magenta	Od plave do magente
+	Violet to Red	Od ljubičaste do crvene
+	Magenta to Orange	Od magente do narandžaste
+	Dawn	Zora
+	Noon	Podne
+	Sunset	Zalazak sunca
+	Night	Noć
+	Overcast	Oblačno
+	White to Black	Od bijele do crne
+	Light Grays	Svijetle sive
+	Dark Grays	Tamne sive
+	Warm Grays	Tople sive
+	Cool Grays	Hladne sive
+	Fade to Transparent	Prelaz u providno
+	White Fade	Bijeli prelaz
+	Vignette	Vinjeta
+	Mist	Izmaglica
+	Petal	Latica
+	Fern	Paprat
+	Smoke	Dim
+	Honey	Med
+	Seafoam	Morska pjena
+	Lavender	Lavanda
+	Driftwood	Naplavljeno drvo
+	Ink Wash	Lavirani tuš
+	Tide	Plima
+	Bloom	Cvjetanje
+	Dew	Rosa
+	Pollen	Polen
+	Lichen	Lišaj
+	Prism Veil	Prizmatični veo
+	Opal Ribbon	Opalna traka
+	Pearl Flash	Biserni bljesak
+	Aurora Foil	Folija polarne svjetlosti
+	Iris Sheen	Sjaj irisa
+	Frost Spectrum	Mrazni spektar
+	Silver Tide	Srebrna plima
+	Rose Quartz Gleam	Sjaj ružičastog kvarca
+	Moonstone Shift	Prelivanje mjesečevog kamena
+	Violet Edge	Ljubičasta ivica
+	Mint Halo	Oreol boje mente
+	Amber Corona	Jantarna korona
+	Polar Glint	Polarni odsjaj
+	Pastel Orbit	Pastelna orbita
+	Coral and Navy	Koralna i mornarsko plava
+	Plum and Lime	Šljiva i limeta
+	Teal and Gold	Plavozelena i zlatna
+	Indigo and Peach	Indigo i breskva
+	Forest and Rose	Šuma i ruža
+	Red Glow	Crveni sjaj
+	Orange Glow	Narandžasti sjaj
+	Amber Glow	Jantarni sjaj
+	Yellow Glow	Žuti sjaj
+	Lime Glow	Sjaj limete
+	Green Glow	Zeleni sjaj
+	Teal Glow	Plavozeleni sjaj
+	Cyan Glow	Cijan sjaj
+	Azure Glow	Azurni sjaj
+	Blue Glow	Plavi sjaj
+	Violet Glow	Ljubičasti sjaj
+	Magenta Glow	Magenta sjaj
+	Polka Dots	Tufne
+	Vertical Stripes	Vertikalne pruge
+	Horizontal Stripes	Horizontalne pruge
+	Diagonal Stripes	Dijagonalne pruge
+	Checkerboard	Šahovska tabla
+	Diamonds	Rombovi
+	Crosses	Krstići
+	Coarse Grit	Grubo zrno
+	Stipple	Tačkanje
+	Scratches	Ogrebotine
+	Sparse Flecks	Rijetke mrlje
+	Dense Flecks	Guste mrlje
+	Sine Bands	Sinusne trake
+	Ripple Lines	Talasaste linije
+	Interference Rings	Interferentni prstenovi
+	Offset Rings	Pomaknuti prstenovi
+	Warped Checks	Iskrivljene kocke
+	Pinched Stripes	Stisnute pruge
+	Chevron Pulse	Pulsirajući ševroni
+	Radiating Lenses	Zračeća sočiva
+	Soft Shadow	Meka sjena
+	Hard Shadow	Oštra sjena
+	Lifted Card	Podignuta kartica
+	Neon Tube	Neonska cijev
+	Inner Light	Unutrašnje svjetlo
+	Feathered	Omekšane ivice
+	Haze	Sumaglica
+	Double Rule	Dvostruka linija
+	Triple Rule	Trostruka linija
+	Dashed Border	Isprekidani okvir
+	Dotted Border	Tačkasti okvir
+	Offset Keyline	Pomaknuta kontura
+	Inset Keyline	Unutrašnja kontura
+	Outside Stroke	Vanjski potez
+	Pointer	Pokazivač
+	Highlighter	Marker
+	Sketchy Line	Skicirana linija
+	Scribble Fill	Išarana ispuna
+	Wobble	Klimanje
+	Zig Zag Edge	Cik-cak ivica
+	Wavy Edge	Talasasta ivica
+	Puffy	Napuhan
+	Starburst	Zvjezdana eksplozija
+	Glossy	Sjajan
+	Brushed Metal	Brušeni metal
+	Spotlight	Reflektor
+	Sunset Band	Traka zalaska sunca
+	Sea Glass	Morsko staklo
+	Pearl	Biser
+	Chrome Rim	Hromirani rub
+	Glow Orb	Svjetleća kugla
+	Pill Badge	Značka u obliku pilule
+	Round Badge	Okrugla značka
+	Flag Wave	Vijoreća zastava
+	Bulge	Ispupčenje
+	Twisted	Uvrnut
+	Echo	Eho
+	Spiral Copies	Kopije u spirali
+	Multiply Tint	Nijansa množenja
+	Darken Veil	Veo potamnjivanja
+	Ghosted	Sablasno
+	Two Tone	Dvobojno
+	Overlay Glaze	Glazura prekrivanja
+	Screen Light	Svjetlo ekrana
+	Soft Light Wash	Laviranje mekim svjetlom
+	Cyan Neon	Cijan neon
+	Magenta Laser	Magenta laser
+	Amber Tube	Jantarna cijev
+	Electric Lime	Električna limeta
+	Pulse Violet	Pulsirajuća ljubičasta
+	Cobalt Phosphor	Kobaltni fosfor
+	Burst	Prasak
+	Rounded Square	Zaobljeni kvadrat
+	Sun	Sunce
+	Moon	Mjesec
+	Cloud	Oblak
+	Rain	Kiša
+	Thunder	Grom
+	Snow	Snijeg
+	Play	Reprodukuj
+	Pause	Pauza
+	Skip Next	Sljedeće
+	Shuffle	Nasumično
 	Save Brush Library…	Sačuvaj biblioteku četkica…
 @msg	`{_1}` has no brushes to apply	`{_1}` nema četkica za primjenu
 @msg	missing `library` (see brush.libraries)	nedostaje `library` (pogledajte brush.libraries)
@@ -7032,6 +7594,7 @@ shape	Open	Otvoren
 	Remove Strokes	Ukloni poteze
 	Place Brush Art	Postavi crtež četkice
 	Replace Brush Art	Zamijeni crtež četkice
+	Replace Pattern Art	Zamijeni crtež uzorka
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Potezi koriste ovu četkicu. Primijeniti novi crtež na te poteze ili ih ostaviti kakvi jesu i dodati kopiju četkice s novim crtežom?
 	Apply to Strokes	Primijeni na poteze
 	Leave Strokes	Ostavi poteze
@@ -7064,10 +7627,18 @@ shape	Open	Otvoren
 	Smooth Bridge…	Glatki most…
 	Smooth Bridge	Glatki most
 	Keep Originals	Zadrži originale
-@msg	select two circles to bridge	odaberite dva kruga za premošćavanje
+@msg	select two or more circles to bridge	odaberite dva ili više krugova za premošćavanje
 @msg	one circle is inside the other	jedan krug je unutar drugog
 @msg	the circles are too far apart for this radius: raise the radius	krugovi su predaleko jedan od drugog za ovaj radijus: povećajte radijus
 @msg	the circles are too far apart for this radius	krugovi su predaleko jedan od drugog za ovaj radijus
+	Constant Gap	Stalni razmak
+	Reach:	Domet:
+@msg	the circles are too far apart for this gap: raise the gap	krugovi su predaleko jedan od drugog za ovaj razmak: povećajte razmak
+@msg	the circles are too far apart for this gap	krugovi su predaleko jedan od drugog za ovaj razmak
+@msg	no two circles are within reach: raise the reach	nijedna dva kruga nisu u dometu: povećajte domet
+@msg	select at most 2000 circles to bridge	odaberite najviše 2000 krugova za premošćavanje
+@msg	that makes too many bridges (at most 8000): lower the reach	to daje previše mostova (najviše 8000): smanjite domet
+@msg	the bridged circles are too complex to unite	premošteni krugovi su previše složeni za spajanje
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Zajedničke tangente…
 	Common Tangents	Zajedničke tangente
@@ -7091,6 +7662,8 @@ shape	Open	Otvoren
 # Path Precision Tools add-on: Tangent Circle.
 	Tangent Circle…	Tangentna kružnica…
 	Tangent Circle	Tangentna kružnica
+	Tangent Circle Tool	Alat tangentna kružnica
+	No tangent circle here	Ovdje nema tangentne kružnice
 	Circle:	Kružnica:
 @msg	`ids` names an object twice	`ids` navodi objekat dvaput
 @msg	select two or three paths or compound paths	odaberite dvije ili tri putanje ili složene putanje
@@ -7106,6 +7679,16 @@ shape	Open	Otvoren
 @msg	`circle` is past the last circle found ({found})	`circle` je iza posljednje pronađene kružnice ({found})
 @msg	object {value} is not a path or compound path	objekat {value} nije putanja ni složena putanja
 @msg	these shapes are too small to measure	ovi oblici su premali za mjerenje
+# Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
+	Add Bounding Rectangle	Dodaj granični pravougaonik
+	Add Bounding Circle	Dodaj granični krug
+	Add Bounding Rectangle…	Dodaj granični pravougaonik…
+	Add Bounding Circle…	Dodaj granični krug…
+	One per Object	Jedan po objektu
+@msg	nothing to enclose	nema ničega za obuhvatiti
+@msg	`offset` must be 0 or more	`offset` mora biti 0 ili više
+@msg	the shape would have no size	oblik ne bi imao veličinu
+@msg	the shape would reach past the edge of the canvas	oblik bi prešao rub radne površine
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Alati za dokument
 	Save a Timestamped Copy	Sačuvaj kopiju s datumom i vremenom
@@ -7433,3 +8016,109 @@ shape	Open	Otvoren
 @msg	A joint does not close by {gap} pt.	Spoj se ne zatvara za {gap} pt.
 @msg	Two panels pass through each other.	Dva panela prolaze jedan kroz drugi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"
+	Nature Icons	Ikone prirode
+	Flower	Cvijet
+	Tree	Drvo
+	Mountain	Planina
+	Ornamental	Ornamentalno
+	Scrollwork	Ukrasni zavoj
+	Filigree Arrow	Filigranska strelica
+	Petal Sweep	Potez latica
+	Twin Curl	Dvostruki zavoj
+	Vector Packs	Vektorski paketi
+	Compass Rose	Ruža kompasa
+	Botanical Sprig	Botanička grančica
+	Facet Diamond	Fasetirani romb
+	Tide Crest	Vrh vala
+	Leaf Vine	Lisnata loza
+	Blossom Chain	Cvjetni lanac
+	Pennant Garland	Girlanda zastavica
+	Lantern String	Niz lampiona
+	Orbit Lines	Orbitalne linije
+	Petal Garland	Vijenac od latica
+	Lattice Braid	Rešetkasti preplet
+	Facet Sweep	Fasetni potez
+	Artistic Brushes	Umjetničke četke
+	Paint	Boja
+	Flat Sweep	Ravni potez
+	Dry Drag	Suhi potez
+	Loaded Stroke	Bogati potez
+	Fan Sweep	Lepezasti potez
+@msg	`at` must be "start" or "end"	`at` mora biti "start" ili "end"
+@msg	give exactly one of `through` and `toward`	navedite tačno jedno od `through` i `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	nijedan luk ne odgovara ovim tačkama: dvije su iste ili sve tri leže na jednoj pravoj
+@msg	give `at` only with `toward`	navedite `at` samo uz `toward`
+	Engraving	Gravura
+	Fine Hatching	Fino šrafiranje
+	Dense Hatching	Gusto šrafiranje
+	Tapered Hatching	Suženo šrafiranje
+	Broken Hatching	Isprekidano šrafiranje
+	Image Brush	Slikovni kistovi
+	Soft Bloom	Meko cvjetanje
+	Halftone Field	Polutonsko polje
+	Solar Grain	Sunčano zrno
+	Color Flecks	Šarene mrlje
+	Fine Stipple	Fino tačkasto sjenčenje
+	Dense Stipple	Gusto tačkasto sjenčenje
+	Soft Stipple	Meko tačkasto sjenčenje
+	Bold Stipple	Krupno tačkasto sjenčenje
+	Paper Cutouts	Papirni izrezi
+	Coral Layers	Koraljni slojevi
+	Mint Layers	Mentini slojevi
+	Midnight Layers	Ponoćni slojevi
+	Sunflower Sheet	List suncokreta
+	Rose Layers	Ružičasti slojevi
+	Monochrome Stack	Jednobojni slojevi
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Prikazuje karticu s onim što alat s trake radi i što rade njegove tipke, umjesto njegovog opisa; potrebno je Prikaži opise alata.
+	Selects whole objects and groups to move, resize or rotate them.	Odabire cijele objekte i grupe radi pomjeranja, promjene veličine ili rotacije.
+	Selects anchor points and path segments to reshape a path.	Odabire sidrene tačke i segmente putanje radi promjene oblika putanje.
+	Draws paths point by point, with straight segments and smooth curves.	Crta putanje tačku po tačku, s ravnim segmentima i glatkim krivuljama.
+	Draws smooth curves through the points you click.	Crta glatke krivulje kroz tačke na koje kliknete.
+	Adds text at a point, or in a frame you drag.	Dodaje tekst u tački ili u okviru koji povučete.
+	Draws rectangles and squares.	Crta pravougaonike i kvadrate.
+	Draws rectangles with rounded corners.	Crta pravougaonike sa zaobljenim uglovima.
+	Draws ellipses and circles.	Crta elipse i krugove.
+	Draws polygons with sides of equal length.	Crta mnogouglove sa stranicama jednake dužine.
+	Draws stars.	Crta zvijezde.
+	Turns objects around a reference point.	Rotira objekte oko referentne tačke.
+	Flips objects across an axis through a reference point.	Zrcali objekte preko ose koja prolazi kroz referentnu tačku.
+	Resizes objects from a reference point.	Mijenja veličinu objekata od referentne tačke.
+	Slants objects from a reference point.	Naginje objekte od referentne tačke.
+	Moves the view of the document.	Pomjera prikaz dokumenta.
+	Magnifies or reduces the view.	Uvećava ili umanjuje prikaz.
+	Copies the color and other attributes of one object to the selection.	Kopira boju i druge atribute jednog objekta na odabir.
+	Sets the direction and length of a gradient.	Postavlja smjer i dužinu gradijenta.
+	Creates, selects and resizes artboards.	Kreira i odabire radne površine i mijenja im veličinu.
+	Changes the width of a stroke along its length.	Mijenja širinu poteza duž njegove dužine.
+	Bends art by dragging pins placed on it.	Savija crtež povlačenjem pribadača postavljenih na njega.
+	Pushes the outlines of paths in the direction you drag.	Gura obrise putanja u smjeru u kojem povlačite.
+	Twists the outlines of paths into swirls.	Uvija obrise putanja u vrtloge.
+	Pulls the outlines of paths in toward the brush.	Privlači obrise putanja prema četkici.
+	Pushes the outlines of paths out from the brush.	Gura obrise putanja prema van od četkice.
+	Adds curved details along the outlines of paths.	Dodaje zakrivljene detalje duž obrisa putanja.
+	Adds spiky details along the outlines of paths.	Dodaje šiljaste detalje duž obrisa putanja.
+	Adds wrinkles along the outlines of paths.	Dodaje bore duž obrisa putanja.
+	Moves, copies and resizes objects on the perspective grid.	Pomjera, kopira i mijenja veličinu objekata na mreži perspektive.
+	Makes a series of steps between two or more objects.	Pravi niz koraka između dva ili više objekata.
+	Places dimension lines that show measured lengths.	Postavlja kotne linije koje prikazuju izmjerene dužine.
+	Tap	Kratki pritisak
+	Clear Hold	Očisti zadržavanje
+	Hold Shortcuts	Prečice zadržavanjem
+	Hold Shortcut Delay	Kašnjenje prečica zadržavanjem
+	How hold shortcuts work	Kako rade prečice zadržavanjem
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Kliknite, zatim pritisnite tipku koju treba zadržati za ovo (Esc otkazuje). Zadržavanje tipke pokreće ovo; kratki pritisak pokreće vlastitu prečicu tipke.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Kratki pritisak tipke pokreće njenu prečicu. Zadržavanje tipke tokom kašnjenja umjesto toga pokreće alat ili naredbu iz njene kolone Zadrži. Prečica zadržavanjem je tipka sa slovom, cifrom ili interpunkcijskim znakom, sama ili sa Shift.
+@msg	Hold {_1} is already used by {_2}	Zadržavanje {_1} već koristi {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	prečica zadržavanjem je tipka koja upisuje znak, sama ili sa Shift ({shown} ima Cmd, Ctrl ili Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} ne može biti prečica zadržavanjem: koristite slovo, cifru ili interpunkcijsku tipku
+	Dashed Arrow	Isprekidana strelica
+	Pressure Sensitive	Osjetljivo na pritisak
+	Flex Ribbon	Savijajuća traka
+	Pulse Stroke	Pulsirajući potez
+	Round Flow	Okrugli tok
+	Chisel Flow	Kosi tok
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Uredi original pomoću:
+file-filter	Applications	Aplikacije

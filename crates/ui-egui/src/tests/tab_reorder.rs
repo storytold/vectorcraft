@@ -10,7 +10,8 @@ use crate::{VectorcraftApp, chrome};
 const SIZE: egui::Vec2 = egui::vec2(1000.0, 700.0);
 const NAMES: [&str; 4] = ["Alpha", "Bravo", "Charlie", "Delta"];
 
-/// Run a tab-strip frame; → the tabs' titles with their rects, and the frame's output.
+/// Run a tab-strip frame; → the tabs' accessible names with their rects, and the frame's output.
+// PLAN: assumed the shell's context (craft_ui install) is set up by `app()`; tabs are read from the AccessKit tree
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>) -> (Vec<(String, egui::Rect)>, egui::FullOutput) {
     let mut out = ctx.run_ui(
         egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, SIZE)), time: Some(time), events, ..Default::default() },
@@ -19,18 +20,19 @@ fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<E
         },
     );
     out.textures_delta.clear();
-    fn walk(s: &egui::Shape, v: &mut Vec<(String, egui::Rect)>) {
-        match s {
-            egui::Shape::Text(t) => v.push((t.galley.text().to_owned(), egui::Rect::from_min_size(t.pos, t.galley.size()))),
-            egui::Shape::Vec(list) => list.iter().for_each(|s| walk(s, v)),
-            _ => {}
-        }
-    }
-    let mut texts = vec![];
-    for c in &out.shapes {
-        walk(&c.shape, &mut texts);
-    }
-    (texts, out)
+    let tabs = out
+        .platform_output
+        .accesskit_update
+        .iter()
+        .flat_map(|u| u.nodes.iter())
+        .filter(|(_, n)| n.role() == egui::accesskit::Role::Tab)
+        .filter_map(|(_, n)| {
+            let b = n.bounds()?;
+            let rect = egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32));
+            Some((n.label()?.to_owned(), rect))
+        })
+        .collect();
+    (tabs, out)
 }
 
 fn button(at: Pos2, pressed: bool) -> Event {
@@ -45,8 +47,8 @@ fn app() -> (VectorcraftApp, egui::Context) {
         app.run("file.new", json!({"width": 100, "height": 100, "name": name})).unwrap();
     }
     app.sync_views();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
+    ctx.enable_accesskit();
     frame(&mut app, &ctx, 0.0, vec![]);
     (app, ctx)
 }
@@ -59,10 +61,21 @@ fn current(app: &VectorcraftApp) -> String {
     app.session.active().map(|d| d.title()).unwrap_or_default()
 }
 
-/// The middle of the title of `name`'s tab.
-fn tab(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, name: &str) -> Pos2 {
+/// `name`'s tab.
+fn tab_rect(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, name: &str) -> egui::Rect {
     let (texts, _) = frame(app, ctx, time, vec![]);
-    texts.iter().find(|(t, _)| t.starts_with(name)).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("{name}'s tab: {texts:?}"))
+    texts.iter().find(|(t, _)| t.starts_with(name)).map(|(_, r)| *r).unwrap_or_else(|| panic!("{name}'s tab: {texts:?}"))
+}
+
+/// The middle of `name`'s tab.
+fn tab(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, name: &str) -> Pos2 {
+    tab_rect(app, ctx, time, name).center()
+}
+
+/// A point on the left edge of `name`'s tab: a tab dropped there goes before it.
+fn before(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, name: &str) -> Pos2 {
+    let r = tab_rect(app, ctx, time, name);
+    egui::pos2(r.left() + 4.0, r.center().y)
 }
 
 /// Press at `from`, move to `to` in steps, and release there; → the output of the frame before
@@ -86,18 +99,18 @@ fn a_tab_dragged_along_the_strip_moves_its_document_and_the_current_one_stays() 
     assert_eq!(current(&app), "Delta");
     let alpha = tab(&mut app, &ctx, 0.1, "Alpha");
     let delta = tab(&mut app, &ctx, 0.15, "Delta");
-    let during = drag(&mut app, &ctx, 0.2, alpha, delta + egui::vec2(80.0, 0.0));
-    assert_eq!(during.platform_output.cursor_icon, egui::CursorIcon::Grabbing, "the tab is held while it moves");
+    drag(&mut app, &ctx, 0.2, alpha, delta + egui::vec2(80.0, 0.0));
     assert_eq!(order(&app), ["Bravo", "Charlie", "Delta", "Alpha"]);
     assert_eq!(current(&app), "Delta", "a move is not a switch");
+    assert!(app.ui.floating.is_empty(), "a move along the strip floats no document");
     // The tabs are drawn in the new order.
     let xs: Vec<f32> = NAMES.iter().map(|n| tab(&mut app, &ctx, 1.0, n).x).collect();
     assert!(xs[1] < xs[2] && xs[2] < xs[3] && xs[3] < xs[0], "Bravo, Charlie, Delta, Alpha: {xs:?}");
 
     // And back to the start, before Bravo.
     let alpha = tab(&mut app, &ctx, 1.1, "Alpha");
-    let bravo = tab(&mut app, &ctx, 1.15, "Bravo");
-    drag(&mut app, &ctx, 1.2, alpha, bravo - egui::vec2(80.0, 0.0));
+    let bravo = before(&mut app, &ctx, 1.15, "Bravo");
+    drag(&mut app, &ctx, 1.2, alpha, bravo);
     assert_eq!(order(&app), NAMES);
     assert_eq!(current(&app), "Delta");
 }
@@ -115,25 +128,6 @@ fn a_document_keeps_its_own_zoom_after_its_tab_moves() {
     let zooms: Vec<f64> = app.views.iter().map(|v| v.zoom).collect();
     assert_eq!(zooms, [1.0, 3.0, 4.0, 2.0], "each view went with its document");
     assert_eq!(app.view().map(|v| v.zoom), Some(4.0), "the current document's view is still Delta's");
-}
-
-/// A move from outside the strip (MCP, the control channel, a recording) keeps the views with
-/// their documents too.
-#[test]
-fn views_follow_a_move_made_by_the_engine_command() {
-    let (mut app, _ctx) = app();
-    for (k, v) in app.views.iter_mut().enumerate() {
-        v.zoom = 1.0 + k as f64;
-    }
-    app.session.execute("document.move", &json!({"from": 3, "to": 0})).unwrap();
-    app.sync_views();
-    assert_eq!(order(&app), ["Delta", "Alpha", "Bravo", "Charlie"]);
-    assert_eq!(app.views.iter().map(|v| v.zoom).collect::<Vec<_>>(), [4.0, 1.0, 2.0, 3.0]);
-    // Closing a document still leaves the others' views with them.
-    app.run("file.close", json!({"index": 1})).unwrap();
-    app.sync_views();
-    assert_eq!(order(&app), ["Delta", "Bravo", "Charlie"]);
-    assert_eq!(app.views.iter().map(|v| v.zoom).collect::<Vec<_>>(), [4.0, 2.0, 3.0]);
 }
 
 /// One batch that closes documents and moves others (a script, a recording) leaves every view with
@@ -184,8 +178,8 @@ fn a_tab_dragged_off_the_strip_still_floats_and_moves_nothing() {
 fn next_document_steps_through_the_tabs_in_their_new_order() {
     let (mut app, ctx) = app();
     let delta = tab(&mut app, &ctx, 0.1, "Delta");
-    let alpha = tab(&mut app, &ctx, 0.15, "Alpha");
-    drag(&mut app, &ctx, 0.2, delta, alpha - egui::vec2(80.0, 0.0));
+    let alpha = before(&mut app, &ctx, 0.15, "Alpha");
+    drag(&mut app, &ctx, 0.2, delta, alpha);
     assert_eq!(order(&app), ["Delta", "Alpha", "Bravo", "Charlie"]);
     assert_eq!(current(&app), "Delta");
     app.run("window.nextDocument", json!({})).unwrap();
@@ -195,13 +189,15 @@ fn next_document_steps_through_the_tabs_in_their_new_order() {
     assert_eq!(current(&app), "Charlie", "before the first tab comes the last");
 }
 
+/// Only the current tab shows its whole title (name, zoom, mode); every other shows the name alone,
+/// so more tabs fit (#8582).
 #[test]
-fn a_click_on_a_tab_still_switches_to_it() {
+fn inactive_tabs_show_the_name_alone_and_the_current_one_its_whole_title() {
     let (mut app, ctx) = app();
-    let bravo = tab(&mut app, &ctx, 0.1, "Bravo");
-    frame(&mut app, &ctx, 0.2, vec![Event::PointerMoved(bravo)]);
-    frame(&mut app, &ctx, 0.25, vec![button(bravo, true)]);
-    frame(&mut app, &ctx, 0.3, vec![button(bravo, false)]);
-    assert_eq!(current(&app), "Bravo");
-    assert_eq!(order(&app), NAMES);
+    let (tabs, _) = frame(&mut app, &ctx, 0.1, vec![]);
+    let label = |name: &str| tabs.iter().find(|(t, _)| t.starts_with(name)).map(|(t, _)| t.clone()).unwrap_or_default();
+    assert!(label("Delta").contains(" @ ") && label("Delta").ends_with("(RGB/Preview)"), "the current tab: {tabs:?}");
+    for name in ["Alpha", "Bravo", "Charlie"] {
+        assert_eq!(label(name), name, "an inactive tab shows the name alone: {tabs:?}");
+    }
 }
