@@ -664,6 +664,41 @@ fn unembed_writes_several_images_to_one_picked_folder() {
 }
 
 #[test]
+fn switching_documents_dismisses_a_links_row_menu() {
+    let dir = Folder::new("context-switched-document");
+    let (mut app, first, _) = app(&dir);
+    let source = app.session.active().unwrap().uid;
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let path = dir.file("other.png", &png(40, 20));
+    let second = app.run("file.place", json!({"path": path, "at": [100, 100]})).unwrap()["ids"][0].as_u64().unwrap();
+    let destination = app.session.active().unwrap().uid;
+    assert_eq!(first, second, "the two documents have different images at the same local ID");
+    app.run("window.previousDocument", json!({})).unwrap();
+
+    let mut panel = Panel::new(app, super::links::show);
+    let activate = |panel: &mut Panel, index, document| {
+        panel.app().session.execute("document.activate", &json!({"index": index})).unwrap();
+        panel.frame();
+        panel.frame();
+        assert_eq!(panel.app().session.active().unwrap().uid, document);
+    };
+    panel.secondary_click("linked.png");
+    assert!(panel.menu_item_enabled("Embed Image"));
+    activate(&mut panel, 1, destination);
+    assert!(!panel.shows("Embed Image"), "the other document must not inherit the row menu");
+    assert_eq!(panel.app().run("links.info", json!({"id": second})).unwrap()["linked"], true);
+
+    activate(&mut panel, 0, source);
+    assert!(!panel.shows("Embed Image"), "switching back must not revive the menu");
+    assert_eq!(panel.app().run("links.info", json!({"id": first})).unwrap()["linked"], true);
+
+    activate(&mut panel, 1, destination);
+    panel.secondary_click("other.png");
+    panel.click_menu_item("Embed Image");
+    assert_eq!(panel.app().run("links.info", json!({"id": second})).unwrap()["status"], "embedded");
+}
+
+#[test]
 fn right_click_context_menu_in_links_panel() {
     let dir = Folder::new("context-menu");
     let (mut app, linked, embedded) = app(&dir);
