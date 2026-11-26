@@ -6,6 +6,7 @@
 
 use std::{
     cell::{RefCell, RefMut},
+    collections::HashMap,
     rc::Rc,
 };
 
@@ -13,7 +14,8 @@ use craft::behavior::PartRef;
 use craft::ui::runtime::frame::take_output;
 use craft::ui::testing::pointer::part_rect_of_node;
 use craft::ui::testing::{Fixture, Target};
-use egui::{Event, Key, Modifiers, PointerButton, Pos2, Rect, Ui, Vec2, vec2};
+use egui::{Event, Key, Modifiers, PointerButton, Pos2, Rect, Ui, Vec2, pos2, vec2};
+use serde_json::json;
 
 use crate::VectorcraftApp;
 
@@ -291,6 +293,27 @@ impl Panel {
         self.look(name).rect
     }
 
+    /// One frame with no input at `pixels_per_point`; the shapes it painted, nested shapes flattened, and the images of
+    /// the textures it made.
+    pub(crate) fn paint_at(&mut self, pixels_per_point: f32) -> (Vec<egui::Shape>, Vec<(egui::TextureId, egui::ImageData)>) {
+        self.fixture.pixels_per_point(pixels_per_point).record_paint();
+        self.take_input();
+        self.fixture.frame(Vec::new());
+        let Some(mut paint) = self.fixture.take_paint() else { return (Vec::new(), Vec::new()) };
+        let images = paint.textures_delta.set.iter().flat_map(|(id, deltas)| deltas.iter().map(move |delta| (*id, delta.image.clone()))).collect();
+        // The test reads the images; no renderer applies them.
+        paint.textures_delta.clear();
+        let mut shapes = Vec::new();
+        let mut open: Vec<egui::Shape> = paint.shapes.into_iter().map(|clipped| clipped.shape).collect();
+        while let Some(shape) = open.pop() {
+            match shape {
+                egui::Shape::Vec(nested) => open.extend(nested),
+                shape => shapes.push(shape),
+            }
+        }
+        (shapes, images)
+    }
+
     /// Where the control of `role` named `name` is, where nodes of other roles share the name.
     pub(crate) fn rect_role(&self, name: &str, role: craft::ui::contract::Role) -> Rect {
         self.look_role(name, role).rect
@@ -301,9 +324,21 @@ impl Panel {
         self.fixture.tree().value_of(self.look(name).node).map(str::to_owned)
     }
 
+    /// The value text of the control of `role` named `name`, where nodes of other roles share the name (a slider
+    /// beside its number box).
+    pub(crate) fn value_role(&self, name: &str, role: craft::ui::contract::Role) -> Option<String> {
+        self.fixture.tree().value_of(self.look_role(name, role).node).map(str::to_owned)
+    }
+
     /// The description of the control named `name` (a list row's trailing texts).
     pub(crate) fn description(&self, name: &str) -> Option<String> {
         self.fixture.tree().description_of(self.look(name).node).map(str::to_owned)
+    }
+
+    /// The value texts of the latest frame's controls, in tree order.
+    pub(crate) fn values(&self) -> Vec<String> {
+        let tree = self.fixture.tree();
+        tree.keys().into_iter().filter_map(|key| tree.value_of(key)).map(str::to_owned).collect()
     }
 
     /// Whether a control in the latest frame holds the value text `value`.
@@ -327,4 +362,104 @@ impl Panel {
     pub(crate) fn focused(&self, name: &str) -> bool {
         self.fixture.tree().focused_key() == self.look(name).node
     }
+}
+
+/// Where [`floated`] shows a panel in the app window.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Place {
+    /// Docked in its column.
+    Docked,
+    /// Floating at x 520, this many points wide.
+    Floating(f32),
+}
+
+/// A panel as one frame of the whole app window drew it.
+pub(crate) struct Shown {
+    /// The panel's body.
+    pub(crate) body: Rect,
+    /// The name and rect of every named node in the body.
+    pub(crate) nodes: Vec<(String, Rect)>,
+    /// Each catalog string asked for, with the text the panel's language shows for it.
+    names: Vec<(String, String)>,
+}
+
+impl Shown {
+    /// The rects of the nodes named `name` (a catalog string asked for).
+    pub(crate) fn rects(&self, name: &str) -> Vec<Rect> {
+        let shown = self.names.iter().find(|(asked, _)| asked == name).map_or(name, |(_, shown)| shown.as_str());
+        let found: Vec<Rect> = self.nodes.iter().filter(|(label, _)| label == shown).map(|(_, r)| *r).collect();
+        assert!(!found.is_empty(), "the panel shows no {shown:?}");
+        found
+    }
+
+    /// The nodes of `nodes` that reach past either side of the body, each with its rect.
+    pub(crate) fn past(&self, nodes: impl IntoIterator<Item = (String, Rect)>) -> Vec<String> {
+        let outside = |r: &Rect| r.left() < self.body.left() - 0.5 || r.right() > self.body.right() + 0.5;
+        nodes.into_iter().filter(|(_, r)| outside(r)).map(|(name, r)| format!("{name} at {r:?}")).collect()
+    }
+
+    /// The nodes named each of `names` (catalog strings asked for) that reach past either side of the body, each with
+    /// its rect.
+    pub(crate) fn past_named(&self, names: &[&str]) -> Vec<String> {
+        self.past(names.iter().flat_map(|name| self.rects(name).into_iter().map(|r| ((*name).to_owned(), r))))
+    }
+
+    /// The vertical middles of the nodes named `names`, in order.
+    pub(crate) fn middles(&self, names: &[&str]) -> Vec<f32> {
+        names.iter().flat_map(|name| self.rects(name)).map(|r| r.center().y).collect()
+    }
+}
+
+/// Panel `panel` of `app` shown at `place` in the whole app window (1440 by 900 pt), drawn in `lang`, with the catalog
+/// strings `names` as `lang` shows them. The test sets `app` up before the call. A floating panel's body is the tab
+/// panel at the left edge the float asked for; a docked panel's body is the tab panel that shows every one of `names`.
+pub(crate) fn floated(mut app: VectorcraftApp, panel: &str, lang: &str, place: Place, names: &[&str]) -> Shown {
+    use egui::accesskit::{Node, NodeId, Role};
+    const AT: f32 = 520.0;
+    app.session.prefs.interface_language = lang.into();
+    app.run("window.panel", json!({ "panel": panel })).unwrap();
+    match place {
+        Place::Docked => app.run("window.panel.dock", json!({ "panel": panel })).unwrap(),
+        Place::Floating(width) => app.run("window.panel.float", json!({ "panel": panel, "x": AT, "y": 120, "width": width, "height": 700 })).unwrap(),
+    };
+    app.run("window.panel.activate", json!({ "panel": panel })).unwrap();
+    let ctx = crate::testing::ui_context();
+    ctx.enable_accesskit();
+    let screen = Rect::from_min_size(Pos2::ZERO, vec2(1440.0, 900.0));
+    let mut nodes: Vec<(NodeId, Node)> = Vec::new();
+    for at in 1..=8 {
+        let input = egui::RawInput { time: Some(f64::from(at) * 0.1), screen_rect: Some(screen), ..Default::default() };
+        let out = crate::testing::app_frame(&mut app, &ctx, input);
+        nodes = out.platform_output.accesskit_update.map_or_else(Vec::new, |update| update.nodes);
+    }
+    // The frames set the language from the preference; the names are looked up in it before English is put back.
+    let names: Vec<(String, String)> = names.iter().map(|name| ((*name).to_owned(), crate::i18n::t(name).to_owned())).collect();
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let rect = |node: &Node| node.bounds().map(|b| Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32)));
+    let by_id: HashMap<NodeId, &Node> = nodes.iter().map(|(id, n)| (*id, n)).collect();
+    let under = |root: NodeId| {
+        let mut found = Vec::new();
+        let mut todo = vec![root];
+        while let Some(id) = todo.pop() {
+            let Some(node) = by_id.get(&id) else { continue };
+            if let (Some(label), Some(r)) = (node.label(), rect(node)) {
+                found.push((label.to_owned(), r));
+            }
+            todo.extend(node.children().iter().copied());
+        }
+        found
+    };
+    let mut bodies = nodes.iter().filter(|(_, n)| n.role() == Role::TabPanel).filter_map(|(id, n)| Some((rect(n)?, under(*id))));
+    let found = match place {
+        Place::Docked => {
+            assert!(!names.is_empty(), "a docked panel is found by the names it shows");
+            bodies.find(|(_, named)| names.iter().all(|(_, shown)| named.iter().any(|(label, _)| label == shown)))
+        }
+        Place::Floating(_) => bodies.find(|(r, _)| (r.left() - AT).abs() < 1.0),
+    };
+    let (body, nodes) = found.unwrap_or_else(|| panic!("no {panel} panel at {place:?} in {lang}"));
+    if let Place::Floating(width) = place {
+        assert!(body.width() <= width + 1.0, "{panel}'s body {body:?} is wider than the {width} the float asked for");
+    }
+    Shown { body, nodes, names }
 }

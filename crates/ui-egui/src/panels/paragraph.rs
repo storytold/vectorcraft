@@ -14,6 +14,7 @@ use craft::ui::buttons::{IconButton, PopupMark, ToggleButton};
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Entry, MemoProps, Props as _, Show as _, ShowContainer as _, Trigger};
 use craft::ui::form::Field;
+use craft::ui::layout_components::Row;
 use craft::ui::menu::{Menu, PanelRow};
 use craft::ui::pickers::Select;
 use craft::ui::popover::Popover;
@@ -433,19 +434,19 @@ pub(crate) fn alignment_toggles(app: &mut VectorcraftApp, ui: &mut Ui, count: us
 /// The Control bar's paragraph controls while type is selected or edited (#5372), after its
 /// Character controls: the Paragraph link, which opens the Paragraph panel in a popover under it,
 /// and the Align left, Align center and Align right buttons. Always `true`: the bar trims these
-/// itself as it narrows.
+/// itself as it narrows, the link and the buttons as two members of the type groups' rank, so the
+/// buttons leave before the link.
 pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     if text_style(app).is_none() {
         return true;
     }
-    // PLAN: the members' `Row::fit_rank` (ch.K30: toggles out before the link) belongs to chrome-w16's row; `horizontal` stands in until it lands.
-    ui.horizontal(|ui| {
+    Row::new().fit_rank(crate::chrome::rank::TYPE).show(ui, |ui, _| {
         let link = crate::panels::option_link(tl!("Paragraph:")).tooltip(tl!("Paragraph options")).show(ui);
         Popover::new(tl!("Paragraph"), Bind::kept())
             .overlay(|overlay| overlay.opened_by(&link.response, Trigger::Click))
             .show(ui, |ui, _| show(app, ui));
-        alignment_toggles(app, ui, CONTROL_BAR_ALIGNMENTS);
     });
+    Row::new().fit_rank(crate::chrome::rank::TYPE).show(ui, |ui, _| alignment_toggles(app, ui, CONTROL_BAR_ALIGNMENTS));
     true
 }
 
@@ -660,7 +661,7 @@ fn list_control(ui: &mut Ui, kind: ListKind, pressed: bool, entries: &[Entry<u32
 /// turns the list off, and the one every paragraph has is checked. More Options after them opens
 /// Bullets and Numbering on the kind's tab.
 fn lists_row(app: &mut VectorcraftApp, ui: &mut Ui) {
-    ui.horizontal(|ui| {
+    Row::new().show(ui, |ui, _| {
         let shown = bullets_shown(app);
         match list_control(ui, ListKind::Bullets, matches!(shown, Some(Some(_))), &bullet_entries(shown)) {
             Some(ListEvent::Toggle) => toggle_list(app, ListKind::Bullets),

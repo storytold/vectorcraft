@@ -144,7 +144,7 @@ fn list_events_and_menu_rows_reach_their_commands() {
     assert!(run(&mut app, "ui.artboards.rename", &json!({})).is_some());
     assert_eq!(app.ui.artboards_ui.rename, Some(2));
     assert!(run(&mut app, "ui.artboards.nothing", &json!({})).is_none());
-    assert_eq!(menu_rows(&app).len(), 11);
+    assert_eq!(menu_rows(&app).len(), 12);
 }
 
 /// #1006: Select › All on Active Artboard selects the art of the artboard made active here,
@@ -913,16 +913,17 @@ fn the_artboard_tools_menu_lists_the_pages_entries_in_order() {
 }
 
 /// An entry whose command can't run is left out: Cut with every artboard selected, or a locked one;
-/// Delete Artboards in a document of one; Select All Artboards with all selected; Rearrange with one;
-/// Fit to Artwork Bounds without art; Switch Orientation on a square artboard.
+/// Delete Artboards in a document of one; Select All Artboards with all selected; Fit to Artwork
+/// Bounds without art; Switch Orientation on a square artboard. Rearrange lays out the one selected
+/// artboard.
 #[test]
 fn the_artboard_tools_menu_leaves_out_what_cannot_run() {
     let shown = |app: &VectorcraftApp, label: &str| menu_labels(&crate::menus::context_items(app)).contains(&label);
     let mut app = menu_app(1);
-    for label in ["Cut", "Delete Artboards", "Delete Empty Artboards", "Select All Artboards", "Rearrange", "Fit to Artwork Bounds"] {
+    for label in ["Cut", "Delete Artboards", "Delete Empty Artboards", "Select All Artboards", "Fit to Artwork Bounds"] {
         assert!(!shown(&app, label), "{label} with one empty artboard");
     }
-    assert!(shown(&app, "Copy") && shown(&app, "Switch Orientation"));
+    assert!(shown(&app, "Copy") && shown(&app, "Switch Orientation") && shown(&app, "Rearrange"));
     app.session.execute("artboard.setProps", &json!({"index": 0, "width": 50})).unwrap();
     assert!(!shown(&app, "Switch Orientation"), "a square artboard");
 
@@ -1083,6 +1084,33 @@ fn the_artboard_tools_menu_deletes_empty_artboards_and_opens_dialogs() {
     choose(&mut app, "Delete Empty Artboards");
     assert_eq!(board_names(&app), ["Artboard 1"]);
     assert_eq!(selected(&app, 1), 0);
+}
+
+/// The panel menu's Rearrange… lays out the artboards the Artboard tool has selected, once each and
+/// in document order; with another tool nothing is selected by it, so Rearrange… is off and opens
+/// nothing, while the other entries still act on the active artboard. The list's Rearrange button
+/// stays Rearrange All Artboards.
+#[test]
+fn the_panels_rearrange_lays_out_only_what_the_artboard_tool_selected() {
+    let mut app = menu_app(3);
+    let ctx = app.ui_ctx.clone().expect("a window");
+    app.session.set_tool_option("selected", &json!([2, 0, 2]));
+    assert_eq!(tool_selection(&app, 3), [0, 2]);
+    assert!(enabled_state(&app, "ui.artboards.rearrange"));
+    run(&mut app, "ui.artboards.rearrange", &Value::Null).unwrap().unwrap();
+    assert!(is_open::<RearrangeArtboardsDialog>(&app));
+    assert_eq!(dialog_fields(&app)["indices"], json!([0, 2]));
+    cancel_open(&mut app, &ctx);
+    apply(&mut app, vec![PageListEvent::Rearrange]);
+    assert!(is_open::<RearrangeArtboardsDialog>(&app));
+    assert!(dialog_fields(&app).get("indices").is_none(), "the list's button lays out every artboard");
+    cancel_open(&mut app, &ctx);
+    app.select_tool("selection");
+    select(&mut app, 1);
+    assert_eq!((tool_selection(&app, 3), picked(&app, 3)), (vec![], vec![1]), "another tool");
+    assert!(!enabled_state(&app, "ui.artboards.rearrange"));
+    run(&mut app, "ui.artboards.rearrange", &Value::Null).unwrap().unwrap();
+    assert!(!is_open::<RearrangeArtboardsDialog>(&app));
 }
 
 /// A lock entry lists only the artboards it changes and is left out when it has none, so it never

@@ -254,54 +254,22 @@ fn block_text(app: &VectorcraftApp, id: NodeId) -> vectorcraft_doc::TextObject {
     }
 }
 
-/// Focuses the field of `panel` that shows the leading (the Font Size field reads 7 pt less).
-fn focus_leading_field(ctx: &egui::Context, app: &mut VectorcraftApp, panel: fn(&mut VectorcraftApp, &mut egui::Ui)) {
-    use super::super::tests_appearance::{click, frame_events, text_rect};
-    let leading = shared_leading(app).expect("a shared leading");
-    let texts = frame_events(ctx, app, vec![], panel);
-    let field = texts
-        .iter()
-        .find(|(s, _)| s.trim_end_matches(" pt").trim().parse::<f64>().is_ok_and(|v| (v - leading).abs() < 0.05))
-        .map(|(s, _)| s.clone())
-        .expect("the Leading field shows the leading");
-    click(ctx, app, text_rect(&texts, &field).center(), panel);
-}
-
-fn key_event(key: egui::Key, modifiers: egui::Modifiers) -> egui::Event {
-    egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }
-}
-
-/// Types `value` into the Leading field of `panel` and presses Enter.
-fn type_leading(app: &mut VectorcraftApp, panel: fn(&mut VectorcraftApp, &mut egui::Ui), value: &str) {
-    use super::super::tests_appearance::frame_events;
-    let ctx = egui::Context::default();
-    focus_leading_field(&ctx, app, panel);
-    frame_events(&ctx, app, vec![key_event(egui::Key::A, egui::Modifiers::COMMAND)], panel);
-    frame_events(&ctx, app, vec![egui::Event::Text(value.into())], panel);
-    frame_events(&ctx, app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], panel);
-    frame_events(&ctx, app, vec![], panel);
-}
-
-/// Picks `entry` from the Leading field's list (opened with Alt+↓) in the Character panel.
-fn pick_leading(app: &mut VectorcraftApp, entry: &str) {
-    use super::super::tests_appearance::{click, frame_events, text_rect};
-    let ctx = egui::Context::default();
-    focus_leading_field(&ctx, app, show);
-    frame_events(&ctx, app, vec![key_event(egui::Key::ArrowDown, egui::Modifiers::ALT)], show);
-    let texts = frame_events(&ctx, app, vec![], show);
-    // The list is drawn last, above the panel.
-    let rect = texts.iter().rev().find(|(s, _)| s == entry).map(|(_, r)| *r).unwrap_or_else(|| text_rect(&texts, entry));
-    click(&ctx, app, rect.center(), show);
-    frame_events(&ctx, app, vec![], show);
+fn pick_leading(panel: &mut crate::tests::panel_harness::Panel, entry: &str) {
+    panel.focus("Leading");
+    panel.key(egui::Key::ArrowDown, egui::Modifiers::ALT);
+    panel.click_role(entry, craft::ui::contract::Role::LIST_BOX_OPTION);
 }
 
 /// Area type with Dynamic Text (Block) on: a leading typed into the Leading field moves the
 /// frame's Line Gap, so the field then shows the leading typed and the lines are spaced by it.
 #[test]
 fn leading_typed_with_block_on_moves_the_line_gap() {
-    let (mut app, id) = block_app();
+    use crate::tests::panel_harness::Panel;
+    let (app, id) = block_app();
     let size = block_text(&app, id).runs[0].style.size;
-    type_leading(&mut app, show, "200");
+    let mut panel = Panel::new(app, show);
+    panel.type_into("Leading", "200");
+    let app = panel.app();
     let t = block_text(&app, id);
     assert!((t.area.line_gap - (200.0 - size)).abs() < 1e-6, "line gap {} for size {size}", t.area.line_gap);
     assert!(shared_leading(&app).is_some_and(|l| (l - 200.0).abs() < 1e-6), "the field shows {:?}", shared_leading(&app));
@@ -312,24 +280,28 @@ fn leading_typed_with_block_on_moves_the_line_gap() {
 /// The Properties panel's Leading field does the same on Block text.
 #[test]
 fn leading_typed_in_properties_with_block_on_moves_the_line_gap() {
-    let (mut app, id) = block_app();
+    use crate::tests::panel_harness::Panel;
+    let (app, id) = block_app();
     let size = block_text(&app, id).runs[0].style.size;
-    type_leading(&mut app, super::super::properties::show, "150");
-    let t = block_text(&app, id);
+    let mut panel = Panel::new(app, super::super::properties::show);
+    panel.type_into("Leading", "150");
+    let t = block_text(&panel.app(), id);
     assert!((t.area.line_gap - (150.0 - size)).abs() < 1e-6, "line gap {} for size {size}", t.area.line_gap);
 }
 
 /// A pick from the Leading field's list on Block text: a preset, then Auto, each moves the Line Gap.
 #[test]
 fn leading_picked_from_the_list_with_block_on_moves_the_line_gap() {
-    let (mut app, id) = block_app();
+    use crate::tests::panel_harness::Panel;
+    let (app, id) = block_app();
     let size = block_text(&app, id).runs[0].style.size;
     let preset = vectorcraft_doc::Unit::Points.format(72.0);
-    pick_leading(&mut app, &preset);
-    let gap = block_text(&app, id).area.line_gap;
+    let mut panel = Panel::new(app, show);
+    pick_leading(&mut panel, &preset);
+    let gap = block_text(&panel.app(), id).area.line_gap;
     assert!((gap - (72.0 - size)).abs() < 1e-6, "{preset}: line gap {gap} for size {size}");
-    pick_leading(&mut app, tl!("Auto"));
-    let gap = block_text(&app, id).area.line_gap;
+    pick_leading(&mut panel, tl!("Auto"));
+    let gap = block_text(&panel.app(), id).area.line_gap;
     assert!(gap > 0.0 && gap < size * 0.5, "Auto: line gap {gap} for size {size}");
 }
 
@@ -338,7 +310,9 @@ fn leading_picked_from_the_list_with_block_on_moves_the_line_gap() {
 fn reset_panel_with_block_on_keeps_the_line_gap() {
     let (mut app, id) = block_app();
     app.run("text.setFormat", json!({"baselineShift": 3})).unwrap();
-    reset_panel(&mut app);
+    let reset = CommandRef::with_params("ui.character.reset", json!({}));
+    assert!(listed(&app).contains(&reset), "the panel menu lists Reset Panel");
+    fire(&mut app, &reset);
     let t = block_text(&app, id);
     assert_eq!(t.area.line_gap, 7.0);
     assert_eq!(t.runs[0].style.baseline_shift, 0.0, "the reset ran");

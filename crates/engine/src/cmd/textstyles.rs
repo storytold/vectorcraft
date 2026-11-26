@@ -157,13 +157,13 @@ pub fn specs() -> Vec<CommandSpec> {
         "charStyle",
         "Character Styles",
         "Character",
-        "; changed numeric attrs: size 0.1..=1296 pt, explicit leading 0.1..=5000 pt, h/v scale 1..=10000%, baseline shift and Tate-chu-yoko offsets -1296..=1296 pt"
+        "; changed numeric attrs: size 0.1..=1296 pt, explicit leading 0.1..=5000 pt, h/v scale 1..=10000%, baseline shift and Tate-chu-yoko offsets -1296..=1296 pt, tracking and kerning -1000..=10000, rotation -360..=360°, stroke miter limit 1..=500, Small Caps 1..=200%, finite stroke dashes and variable font axis settings"
     );
     v.push(spec(
         "charStyle.edit",
         "Edit Character Style",
         &[],
-        "{name, to, attrs: {…}} replace name and sparse attributes in one undo step; users keep local overrides; changed numeric attrs: size 0.1..=1296 pt, explicit leading 0.1..=5000 pt, h/v scale 1..=10000%, baseline shift and Tate-chu-yoko offsets -1296..=1296 pt",
+        "{name, to, attrs: {…}} replace name and sparse attributes in one undo step; users keep local overrides; changed numeric attrs: size 0.1..=1296 pt, explicit leading 0.1..=5000 pt, h/v scale 1..=10000%, baseline shift and Tate-chu-yoko offsets -1296..=1296 pt, tracking and kerning -1000..=10000, rotation -360..=360°, stroke miter limit 1..=500, Small Caps 1..=200%, finite stroke dashes and variable font axis settings",
         |s, p| edit_style(s, p, Kind::Char),
         true,
     ));
@@ -658,52 +658,7 @@ fn attrs_param(d: &Document, p: &Value, kind: Kind, verb: &str, kept: Option<&Ma
                     }
                     let mut st = with_attrs(&CharStyle::default(), m, &c)?;
                     let changed = |key: &str| m.contains_key(key) && kept.and_then(|k| k.get(key)) != m.get(key);
-                    for (key, value, lo, hi) in
-                        [("size", st.size, 0.1, 1296.0), ("h_scale", st.h_scale, 1.0, 10000.0), ("v_scale", st.v_scale, 1.0, 10000.0)]
-                    {
-                        if changed(key) && !(lo..=hi).contains(&value) {
-                            return Err(bad(&c, format!("`{key}` must be from {lo} to {hi}")));
-                        }
-                    }
-                    if changed("leading") && st.leading.is_some_and(|value| !(0.1..=5000.0).contains(&value)) {
-                        return Err(bad(&c, "`leading` must be from 0.1 to 5000, or null for Auto"));
-                    }
-                    let shift_max = 1296.0;
-                    for (key, value) in [("baseline_shift", st.baseline_shift), ("tcyUpDown", st.tcy_up_down), ("tcyLeftRight", st.tcy_left_right)] {
-                        if changed(key) && !(-shift_max..=shift_max).contains(&value) {
-                            return Err(bad(&c, format!("`{key}` must be from {} to {shift_max}", -shift_max)));
-                        }
-                    }
-                    let (lo, hi) = (0.0, vectorcraft_doc::text::MAX_AKI);
-                    for (key, value) in [("akiLeft", st.aki_left), ("akiRight", st.aki_right)] {
-                        if changed(key) && !(lo..=hi).contains(&value) {
-                            return Err(bad(&c, format!("`{key}` must be from {lo} to {hi}")));
-                        }
-                    }
-                    let (key, lo, hi) = ("tsume", 0.0, vectorcraft_doc::text::MAX_TSUME);
-                    if changed(key) && !(lo..=hi).contains(&st.tsume) {
-                        return Err(bad(&c, format!("`{key}` must be from {lo} to {hi}")));
-                    }
-                    let hi = vectorcraft_doc::text::MAX_DIACRITIC_POSITION;
-                    let lo = -hi;
-                    for (key, value) in [("diacriticHorizontal", st.diacritic_horizontal), ("diacriticVertical", st.diacritic_vertical)] {
-                        if changed(key) && !(lo..=hi).contains(&value) {
-                            return Err(bad(&c, format!("`{key}` must be from {lo} to {hi}")));
-                        }
-                    }
-                    let lines = vectorcraft_doc::text::WARICHU_LINES;
-                    if changed("warichuLines") && !lines.contains(&st.warichu_lines) {
-                        return Err(bad(&c, format!("`warichuLines` must be a whole number from {} to {}", lines.start(), lines.end())));
-                    }
-                    let scale = vectorcraft_doc::text::WARICHU_SCALE;
-                    for (key, value, lo, hi) in [
-                        ("warichuGap", st.warichu_gap, 0.0, vectorcraft_doc::text::MAX_WARICHU_GAP),
-                        ("warichuScale", st.warichu_scale, *scale.start(), *scale.end()),
-                    ] {
-                        if changed(key) && !(lo..=hi).contains(&value) {
-                            return Err(bad(&c, format!("`{key}` must be from {lo} to {hi}")));
-                        }
-                    }
+                    st.check_ranges(changed).map_err(|e| bad(&c, e.message))?;
                     // A language of the list, stored as its tag (as text.setFormat takes it).
                     if let Some(l) = &st.language
                         && kept.and_then(|k| k.get("language")) != m.get("language")
@@ -714,10 +669,6 @@ fn attrs_param(d: &Document, p: &Value, kind: Kind, verb: &str, kept: Option<&Ma
                         if changed(key) {
                             style_paint(d, paint, key, &c)?;
                         }
-                    }
-                    let (key, lo, hi) = ("stroke_width", 0.0, vectorcraft_doc::MAX_COORD);
-                    if changed(key) && !(lo..=hi).contains(&st.stroke_width) {
-                        return Err(bad(&c, format!("`{key}` must be from {lo} to {hi}")));
                     }
                     if changed("features") {
                         style_features(&st.features, kept, &c)?;
@@ -775,85 +726,20 @@ fn attrs_param(d: &Document, p: &Value, kind: Kind, verb: &str, kept: Option<&Ma
     }
 }
 
-/// The range of a paragraph style's indents, space before and space after, and Hyphenation Zone (pt),
-/// as `text.setFormat` keeps them.
-const PARA_DISTANCE: f64 = 1296.0;
-
 /// Check the paragraph attributes of `st` (read from `attrs`) that differ from `kept` against the
-/// ranges `text.setFormat` keeps them to: the indents and the space before and after, each
-/// Hyphenation option, each Justification option (Minimum, Desired and Maximum in order, as
-/// `attrs` gives them), and the number of tab stops with the position and leader of each stop
-/// `kept` does not hold. A value `kept` has is not checked.
+/// ranges `text.setFormat` keeps them to ([`ParaStyle::check_ranges`]), the Justification options
+/// as `attrs` gives them. A value `kept` has is not checked.
 fn para_ranges(st: &ParaStyle, attrs: &Map<String, Value>, kept: Option<&Map<String, Value>>, c: &str) -> Result<()> {
-    let within = |key: &str, value: f64, lo: f64, hi: f64| {
-        if (lo..=hi).contains(&value) { Ok(()) } else { Err(bad(c, format!("`{key}` must be from {lo} to {hi}"))) }
-    };
     let changed = |key: &str| attrs.contains_key(key) && kept.and_then(|k| k.get(key)) != attrs.get(key);
-    let nested_changed = |key: &str, field: &str| {
-        changed(key) && attrs.get(key).and_then(|v| v.get(field)) != kept.and_then(|k| k.get(key)).and_then(|v| v.get(field))
+    let check = |key: &str, field: Option<&str>| match field {
+        None => changed(key),
+        Some(field) => changed(key) && attrs.get(key).and_then(|v| v.get(field)) != kept.and_then(|k| k.get(key)).and_then(|v| v.get(field)),
     };
-    for (key, value) in [
-        ("left_indent", st.left_indent),
-        ("right_indent", st.right_indent),
-        ("first_line_indent", st.first_line_indent),
-        ("space_before", st.space_before),
-        ("space_after", st.space_after),
-    ] {
-        if changed(key) {
-            within(key, value, -PARA_DISTANCE, PARA_DISTANCE)?;
-        }
-    }
-    let h = &st.hyphenation;
-    for (field, value, lo, hi) in [
-        ("words_longer_than", f64::from(h.words_longer_than), 1.0, 25.0),
-        ("after_first", f64::from(h.after_first), 1.0, 15.0),
-        ("before_last", f64::from(h.before_last), 1.0, 15.0),
-        ("hyphen_limit", f64::from(h.hyphen_limit), 0.0, 25.0),
-        ("zone", h.zone, 0.0, PARA_DISTANCE),
-    ] {
-        if nested_changed("hyphenation", field) {
-            within(&format!("hyphenation.{field}"), value, lo, hi)?;
-        }
-    }
     // Read as given: a paragraph's attributes keep justification options in range as they load.
-    if let Some(given) = attrs.get("justification").filter(|_| changed("justification")) {
-        let j: vectorcraft_doc::JustificationOptions = serde_json::from_value(given.clone()).map_err(|e| bad(c, e.to_string()))?;
-        for (field, values, (lo, hi)) in [
-            ("word_spacing", j.word_spacing, vectorcraft_doc::JustificationOptions::WORD_SPACING),
-            ("letter_spacing", j.letter_spacing, vectorcraft_doc::JustificationOptions::LETTER_SPACING),
-            ("glyph_scaling", j.glyph_scaling, vectorcraft_doc::JustificationOptions::GLYPH_SCALING),
-        ] {
-            if !nested_changed("justification", field) {
-                continue;
-            }
-            let name = format!("justification.{field}");
-            for value in values {
-                within(&name, value, lo, hi)?;
-            }
-            if !(values[0] <= values[1] && values[1] <= values[2]) {
-                return Err(bad(c, format!("`{name}`: Minimum must not exceed Desired, nor Desired Maximum")));
-            }
-        }
-        if nested_changed("justification", "auto_leading") {
-            let (lo, hi) = vectorcraft_doc::JustificationOptions::AUTO_LEADING;
-            within("justification.auto_leading", j.auto_leading, lo, hi)?;
-        }
-    }
-    if changed("tabs") {
-        let kept_tabs = kept_tab_stops(kept);
-        let max = TabStop::MAX_STOPS;
-        if st.tabs.len() > max.max(kept_tabs.len()) {
-            return Err(bad(c, format!("at most {max} tab stops")));
-        }
-        for stop in st.tabs.iter().filter(|stop| !kept_tabs.contains(stop)) {
-            within("tabs.position", stop.position, 0.0, TabStop::MAX_POSITION)?;
-            let (label, max) = ("`tabs.leader`", TabStop::MAX_LEADER);
-            if stop.leader.chars().count() > max {
-                return Err(bad(c, format!("{label} must be at most {max} characters")));
-            }
-        }
-    }
-    Ok(())
+    let given = attrs.get("justification").filter(|_| changed("justification"));
+    let justification: Option<vectorcraft_doc::JustificationOptions> =
+        given.map(|g| serde_json::from_value(g.clone())).transpose().map_err(|e| bad(c, e.to_string()))?;
+    st.check_ranges(justification.as_ref(), &kept_tab_stops(kept), check).map_err(|e| bad(c, e.message))
 }
 
 /// The tab stops `kept` holds, each as it reads (a stop that does not read is left out).
@@ -1235,17 +1121,22 @@ fn unused(s: &mut Session, kind: Kind) -> Result<Value> {
 
 /// The styles of `kind` in `src` that load, with their source names so that art in the file keeps
 /// referring to them: not the Normal style, and not one whose attributes don't read, whose sizes,
-/// scales, leading, shifts, Insert Aki, Tsume, diacritic positions, Warichu Settings or stroke width are out of the range `charStyle.new` takes, whose
+/// scales, leading, tracking, kerning, shifts, rotation, Insert Aki, Tsume, diacritic positions, Warichu Settings, Small Caps,
+/// variable font axes or stroke weight, miter limit or dashes are out of the range `charStyle.new` takes ([`CharStyle::check_ranges`]), whose
 /// indents, spacing, Hyphenation or Justification options or tab stops are out of the range
 /// `paraStyle.new` takes, or whose name is empty, which are skipped. → (the styles, the names in
 /// `src` of those skipped)
 fn loadable(src: &Document, kind: Kind) -> (Vec<TextStyleDef>, Vec<String>) {
-    const RANGED: [&str; 24] = [
+    const RANGED: [&str; 32] = [
         "size",
         "h_scale",
         "v_scale",
         "leading",
+        "tracking",
+        "kerning",
+        "kerningBefore",
         "baseline_shift",
+        "rotation",
         "akiLeft",
         "akiRight",
         "tsume",
@@ -1257,6 +1148,10 @@ fn loadable(src: &Document, kind: Kind) -> (Vec<TextStyleDef>, Vec<String>) {
         "warichuGap",
         "warichuScale",
         "stroke_width",
+        "stroke_miter_limit",
+        "stroke_dash",
+        "small_caps",
+        "fontAxes",
         "left_indent",
         "right_indent",
         "first_line_indent",

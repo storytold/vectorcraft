@@ -223,6 +223,59 @@ impl PrintService for UprightQueue {
     }
 }
 
+/// The printers whose settings the setup service was asked to open.
+type Setups = Rc<RefCell<Vec<Option<String>>>>;
+
+/// A print service that opens printer settings, recording each printer it was asked for.
+struct SetupPrint(Jobs, Setups);
+
+impl PrintService for SetupPrint {
+    fn printers(&mut self) -> Vec<Printer> {
+        MockPrint(self.0.clone()).printers()
+    }
+
+    fn print(&mut self, job: &PrintJob) -> Result<String, String> {
+        MockPrint(self.0.clone()).print(job)
+    }
+
+    fn has_setup(&self) -> bool {
+        true
+    }
+
+    fn setup(&mut self, printer: Option<&str>) -> Result<(), String> {
+        self.1.borrow_mut().push(printer.map(str::to_string));
+        Ok(())
+    }
+}
+
+#[test]
+fn setup_opens_the_settings_of_the_printer_chosen() {
+    let setups = Setups::default();
+    let services = Services { print: Some(Box::new(SetupPrint(Jobs::default(), setups.clone()))), ..Default::default() };
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
+    app.run("file.new", json!({"width": 120, "height": 90})).unwrap();
+    app.run("file.print", json!({})).unwrap();
+    pump(&mut app);
+    press(&mut app, "Setup…");
+    set(&mut app, "printer", json!("Office"));
+    press(&mut app, "Setup…");
+    assert_eq!(*setups.borrow(), [Some("Proofer".to_string()), Some("Office".to_string())], "the default printer, then the one chosen");
+    // PDF File has no printer settings.
+    set(&mut app, "printer", json!("PDF File"));
+    // The frame after the change draws the row with PDF File's controls.
+    pump(&mut app);
+    pump(&mut app);
+    let r = call_raw(&mut app, "ui.click", json!({"control": {"name": "Setup…"}}));
+    assert_eq!(r["ok"], false, "{r}");
+    assert_eq!(setups.borrow().len(), 2);
+    // A service without printer settings shows no Setup….
+    let (mut app, _) = self::app();
+    app.run("file.print", json!({})).unwrap();
+    pump(&mut app);
+    let r = call_raw(&mut app, "ui.click", json!({"control": {"name": "Setup…"}}));
+    assert_eq!(r["ok"], false, "{r}");
+}
+
 #[test]
 fn a_landscape_job_goes_upright_to_a_queue_that_does_not_turn_it() {
     let sizes = |pdf: &[u8]| vectorcraft_pdf::info(pdf, None).unwrap().pages.iter().map(|p| (p.width, p.height)).collect::<Vec<_>>();
@@ -346,6 +399,23 @@ fn the_control_channel_fills_and_confirms_the_dialog() {
     assert_eq!(jobs.borrow().len(), 1);
 }
 
+/// The Summary section's Pages, Options and Warnings are each named in the window's accessibility tree, with their
+/// summary text as the value.
+#[test]
+fn the_summary_names_its_pages_options_and_warnings() {
+    let (mut app, _) = app();
+    app.run("file.print", json!({})).unwrap();
+    pump(&mut app);
+    set(&mut app, "section", json!("Summary"));
+    pump(&mut app);
+    let ctx = ctx(&app);
+    let out = crate::testing::app_frame(&mut app, &ctx, Default::default());
+    let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+    for name in ["Pages", "Options", "Warnings"] {
+        assert!(nodes.iter().any(|(_, n)| n.label() == Some(name) && n.value().is_some_and(|v| !v.is_empty())), "{name} has no summary");
+    }
+}
+
 /// Scale W and H of the open dialog, and its link.
 fn scale(app: &VectorcraftApp) -> (f64, f64, bool) {
     let f = fields(app);
@@ -467,4 +537,41 @@ fn a_spot_inks_icon_converts_it_to_process_and_back() {
     call_raw(&mut app, "ui.click", json!({"control": {"name": "Keep Gold as spot"}}));
     pump(&mut app);
     assert_eq!(inks(&app), json!([{"name": "Gold", "print": true, "convertToProcess": false}]));
+}
+
+/// The names screen readers give the number and text fields in `out`'s accessibility tree: a field's own
+/// name, else the text of a label it is labeled by, else "".
+pub(super) fn field_names(out: &egui::FullOutput) -> Vec<String> {
+    use egui::accesskit::Role;
+    let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+    let text_of = |id| nodes.iter().find(|(n, _)| *n == id).and_then(|(_, n)| n.label().or(n.value())).map(str::to_string);
+    nodes
+        .iter()
+        .filter(|(_, n)| matches!(n.role(), Role::TextInput | Role::SpinButton))
+        .map(|(_, n)| n.label().map(str::to_string).or_else(|| n.labelled_by().iter().find_map(|l| text_of(*l))).unwrap_or_default())
+        .collect()
+}
+
+/// Every number and length field of the dialog's sections has a name that tells it from the others in its row.
+#[test]
+fn every_number_and_length_field_is_named() {
+    let (mut app, _) = app();
+    app.run("file.print", json!({})).unwrap();
+    pump(&mut app);
+    let sections: [(&str, &[&str]); 4] = [
+        ("General", &["Copies", "Range", "Width", "Height", "Overlap", "Tile Range", "Gutter", "Scale 1", "Scale 2"]),
+        ("Marks and Bleed", &["Offset", "Top", "Bottom", "Left", "Right"]),
+        ("Graphics", &["Flatness"]),
+        ("Advanced", &["Unprintable margin"]),
+    ];
+    for (section, expected) in sections {
+        set(&mut app, "section", json!(section));
+        pump(&mut app);
+        let ctx = ctx(&app);
+        let out = crate::testing::app_frame(&mut app, &ctx, Default::default());
+        let names = field_names(&out);
+        for name in expected {
+            assert!(names.iter().any(|n| n == name), "{section}: {name} in {names:?}");
+        }
+    }
 }

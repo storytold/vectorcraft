@@ -249,9 +249,11 @@ enum Pending<'s> {
     /// `Window`: `(` and a string literal with the window's type may follow.
     Window(Option<usize>),
     WindowType(Option<usize>),
-    /// `.executeMenuCommand(`: a string literal and `)` may follow.
+    /// `.executeMenuCommand(`: a string literal and `)` may follow, with a trailing comma
+    /// between them.
     Menu(Option<usize>),
     MenuString(Option<usize>, &'s str),
+    MenuStringComma(Option<usize>, &'s str),
     /// `.open(`: a string literal with the open mode may follow.
     Open(Option<usize>),
     /// A File object's `length`, `hidden` or `readonly` (`f.length`, `f['length']`): an assignment
@@ -336,18 +338,19 @@ impl Operand {
     /// object: `[new] File|Folder(…)`, `new File|Folder`, `File.openDialog(…)`, `File.saveDialog(…)`,
     /// `Folder.selectDialog(…)`, `Folder.<place>` ([`catalog::FOLDER_PLACES`]) or a variable holding
     /// one. `file`: `t` is the platform's `File` or `Folder`; `alias`: `t` names a variable holding a
-    /// File or Folder object.
+    /// File or Folder object, `Some(true)` when it counts as a Folder object whatever the path names.
     ///
-    /// Only `new Folder(…)`, `new Folder` and `Folder.<place>` are Folder objects whatever the path
-    /// names. `Folder(…)` gives a File object when the path names a file, `Folder.selectDialog(…)`
-    /// gives a File or Folder object for what the user picks, `Folder.current` is the one place a
-    /// script can assign, and a variable another variable was assigned to may hold a File object.
-    fn file_step(self, t: &Sig, file: bool, alias: bool) -> Operand {
+    /// Only `new Folder(…)`, `new Folder`, `Folder.<place>` and such a variable are Folder objects
+    /// whatever the path names. `Folder(…)` gives a File object when the path names a file,
+    /// `Folder.selectDialog(…)` gives a File or Folder object for what the user picks, and
+    /// `Folder.current` is the one place a script can assign. A variable another variable is assigned
+    /// may hold a File object, so a grouped value passes `Some(false)` for any variable.
+    fn file_step(self, t: &Sig, file: bool, alias: Option<bool>) -> Operand {
         match self {
             Operand::Start if t.word("new") => Operand::New,
             Operand::Start if file => Operand::FileName { new: false, folder: t.text == catalog::FOLDER },
             Operand::New if file => Operand::FileName { new: true, folder: t.text == catalog::FOLDER },
-            Operand::Start if alias => Operand::Done(Held::File { folder: false }),
+            Operand::Start if alias.is_some() => Operand::Done(Held::File { folder: alias == Some(true) }),
             Operand::FileName { new, folder } if t.is("(") => Operand::FileCall { folder: new && folder },
             Operand::FileDialog if t.is("(") => Operand::FileCall { folder: false },
             Operand::FileName { new: false, folder } if t.is(".") => Operand::FileMember { folder },
@@ -1376,7 +1379,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     fn group_step(&mut self, t: &Sig<'s>, started: bool, before: usize) {
         let after = self.depth();
         let file = (t.word(catalog::FILE) || t.word(catalog::FOLDER)) && !self.own_names.contains(t.text);
-        let alias = self.alias(t);
+        let alias = self.alias(t).then_some(false);
         let Some(g) = self.groups.last_mut().filter(|g| !g.closed) else { return };
         if after < g.level {
             // The `)` of the innermost pair: the operand, when complete, is the pair's value and the
@@ -1434,7 +1437,9 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     fn paren_step(&mut self, t: &Sig<'s>, before: usize) {
         let after = self.depth();
         let file = (t.word(catalog::FILE) || t.word(catalog::FOLDER)) && !self.own_names.contains(t.text);
-        let alias = self.alias(t);
+        // A variable in grouping parentheses is the object it holds now, as it is outside them
+        // ([`Analyzer::held_file`]).
+        let alias = self.alias(t).then(|| self.folder(t.text));
         if let Some(p) = self.parens.last_mut() {
             if before == p.level {
                 p.operand = match std::mem::replace(&mut p.operand, Operand::Other) {

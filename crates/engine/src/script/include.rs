@@ -326,7 +326,7 @@ impl Files {
 
     /// The options a file of this run is parsed with, preprocessor lines aside.
     pub(crate) fn options(&self) -> Options {
-        Options { max_source_units: MAX_TOTAL_BYTES, es2015: self.es2015, ..Options::default() }
+        Options { max_source_units: MAX_TOTAL_BYTES, es2015: self.es2015, e4x: true, ..Options::default() }
     }
 
     /// The `JSINCLUDE` folders of this process: absolute folders separated by `;`.

@@ -48,13 +48,19 @@ pub(crate) fn color_image_owned(img: vectorcraft_render::Rendered) -> egui::Colo
 
 /// The pixels of the `w`×`h` frame through `view` to render again for `doc`, when only the document
 /// changed, or placed documents' bitmaps were made, since the frame shown (its key `key` but for
-/// the revision and [`CacheKey::placed`], and its render options `opts`), which this thread
-/// rendered, and no frame is on its way from the worker: those it changed in, and those the
-/// objects showing those bitmaps' files cover (`Some(None)`: none), grown to whole eighths of the
-/// frame, as long as they are at most half of it. None: render the whole frame. Frames the worker
-/// renders stay whole: its renderer keeps the rasters of the art's effects, this thread's doesn't.
-/// What changed is measured by this thread's renderer, which drew the frame shown: it keeps what
-/// it measures (a 3D effect's art) to draw the part again.
+/// the revision and [`CacheKey::placed`], and its render options `opts`), and no frame of another
+/// document, or of this revision or a later one, is on its way from the worker: those it changed
+/// in, and those the objects showing those bitmaps' files cover (`Some(None)`: none), grown to
+/// whole eighths of the frame, as long as they are at most half of it. None: render the whole
+/// frame. A frame the worker rendered is drawn again here too, so an edit (a Pen drag's curve)
+/// shows in the frame it is made in, when the part's share of the frame's last whole render time
+/// is at most 8 ms, and except when that frame drew raster effects from rasters made before their
+/// objects moved ([`crate::CanvasCache::moved`]), holds pixels copied from the worker's last frame
+/// ([`crate::CanvasCache::reused`]), drew art in a way that depends on its size, or a part drawn
+/// again here since it arrived would have differed from it ([`crate::CanvasCache::worker_parts`]):
+/// the worker's renderer keeps the rasters of the art's effects, and this thread's doesn't. What
+/// changed is measured by this thread's renderer: it keeps what it measures (a 3D effect's art) to
+/// draw the part again.
 pub(super) fn changed_pixels(
     app: &mut VectorcraftApp,
     key: &CacheKey,
@@ -71,19 +77,25 @@ pub(super) fn changed_pixels(
     }
     let shown_key = app.canvas.key.as_ref()?;
     let same_view = *shown_key == CacheKey { revision: shown_key.revision, placed: shown_key.placed, ..key.clone() };
-    if !same_view || app.canvas.texture.is_none() || app.canvas.from_worker || app.canvas.worker.as_ref().is_some_and(|w| w.pending.is_some()) {
+    let worker_kept = app.canvas.from_worker && (app.canvas.moved || app.canvas.worker_parts || app.canvas.reused.is_some());
+    // A frame on its way of an older revision is not shown when it arrives ([`show_worker_frame`]).
+    let on_its_way = app.canvas.worker.as_ref().and_then(|w| w.pending.as_ref()).is_some_and(|p| p.doc != key.doc || p.revision >= key.revision);
+    if !same_view || app.canvas.texture.is_none() || worker_kept || on_its_way {
         return None;
     }
     // The placed documents' files whose bitmaps were made since the frame shown.
     let entry = app.session.documents().iter().find(|d| d.uid as usize == key.doc).and_then(|d| app.canvas.placed_keys.get(&d.uid));
     let placed = placed_changes(entry, shown_key.placed, key.placed, doc, vectorcraft_render::placed_document::made_between)?;
+    // Over a frame the worker rendered, the part's share of the whole frame's time is at most 8 ms.
+    let budget = if app.canvas.from_worker { 8.0 / app.canvas.last_ms } else { 0.5 };
     match app.canvas.renderer.changed(shown, doc, opts).and(placed) {
         vectorcraft_render::Changed::Nothing => Some(None),
         vectorcraft_render::Changed::Area(area) => match vectorcraft_render::view_pixels(area, view, w, h) {
             None => Some(None),
             Some([x0, y0, x1, y1]) => {
                 let ((x0, x1), (y0, y1)) = (in_steps(x0, x1, w), in_steps(y0, y1, h));
-                (u64::from(x1 - x0) * u64::from(y1 - y0) * 2 <= u64::from(w) * u64::from(h)).then_some(Some([x0, y0, x1, y1]))
+                let share = (f64::from(x1 - x0) * f64::from(y1 - y0)) / (f64::from(w) * f64::from(h));
+                (share <= budget.min(0.5)).then_some(Some([x0, y0, x1, y1]))
             }
         },
         vectorcraft_render::Changed::Everything => None,
@@ -122,6 +134,9 @@ pub(crate) struct WorkerFrame {
     pub(crate) moved: usize,
     /// The frame holds pixels copied from the last frame.
     pub(crate) reused: bool,
+    /// The frame drew art in a way that depends on its size
+    /// ([`vectorcraft_render::FrameStats::view_sized`]).
+    pub(crate) view_sized: bool,
 }
 
 /// Nothing but the position of the view differs between the frame `kept` and the job `job`, in
@@ -239,6 +254,8 @@ pub(crate) fn render_job(r: &mut vectorcraft_render::Renderer, kept: &mut Option
         let moved = r.stats.moved;
         (img, moved)
     });
+    // A copied frame's parts draw nothing that depends on the frame's size ([`composed_frame`]).
+    let view_sized = !reused && r.stats.view_sized > 0;
     let keeps =
         job.may_keep && moved == 0 && r.stats.view_sized == 0 && img.pixels.len() <= MAX_KEPT_BYTES && (img.width, img.height) == (job.w, job.h);
     *kept =
@@ -246,7 +263,7 @@ pub(crate) fn render_job(r: &mut vectorcraft_render::Renderer, kept: &mut Option
     // The kept frame stays sRGB, so the next frame's copied pixels are converted only once.
     let width = img.width;
     crate::display_profile::convert_over(job.display.as_deref(), &mut img.pixels, width, job.view, job.key.over());
-    WorkerFrame { img, moved, reused }
+    WorkerFrame { img, moved, reused, view_sized }
 }
 
 /// Upload the art's raster directly into the canvas texture without reallocating or copying pixels;
@@ -421,7 +438,14 @@ pub(super) fn cache_key(
         // Preferences › Performance › Use Monitor Profile for Canvas.
         display: app.display_profile.key(app.session.prefs.monitor_profile_display),
         backdrop: backdrop(app, st, app.outline_view()),
+        color: color_key(),
     }
+}
+
+/// [`CacheKey::color`] now: the active color settings, the working color settings and the loaded
+/// profiles' generation.
+fn color_key() -> (vectorcraft_color::cms::ColorSettings, vectorcraft_color::cms::ColorSettings, u64) {
+    (vectorcraft_color::cms::active_settings(), vectorcraft_color::cms::working_settings(), vectorcraft_color::cms::profiles_generation())
 }
 
 /// [`CacheKey::plugins`] of document `st`, one of the documents open in `session`. `keys` holds each
@@ -550,10 +574,13 @@ pub(super) fn poll_worker(app: &mut VectorcraftApp, ui: &Ui, key_doc: usize) {
 
 /// Upload frame `done` from the render worker when it is of document `key_doc` and not older than
 /// the frame shown. This prevents canvas freezes during continuous edits (drags, arrow nudges, MCP
-/// command bursts) while ensuring obsolete out-of-order frames are dropped.
+/// command bursts) while ensuring obsolete out-of-order frames are dropped. A frame whose color key
+/// ([`CacheKey::color`]) is not the current one is dropped too: the worker converted its colors
+/// with the settings in force while it rendered, which may not be the ones in its key, and the next
+/// frame renders again with the current ones.
 fn show_worker_frame(app: &mut VectorcraftApp, ctx: &egui::Context, done: crate::render_worker::Done, key_doc: usize) {
     let not_older = app.canvas.key.as_ref().filter(|k| k.doc == done.key.doc).is_none_or(|k| done.key.revision >= k.revision);
-    if done.key.doc != key_doc || !not_older {
+    if done.key.doc != key_doc || !not_older || done.key.color != color_key() {
         return;
     }
     upload(app, ctx, done.img, done.key.pixel.is_some());
@@ -570,6 +597,7 @@ fn show_worker_frame(app: &mut VectorcraftApp, ctx: &egui::Context, done: crate:
     app.canvas.reused = done.reused.then(|| frame::clock(ctx));
     app.canvas.moved = done.moved > 0;
     app.canvas.from_worker = true;
+    app.canvas.worker_parts = done.view_sized;
 }
 
 /// The size and view matrix of the frame to render: the pixel region in Pixel Preview, else the whole canvas.
@@ -657,7 +685,13 @@ pub(crate) const FIRST_FRAME_GRACE: std::time::Duration = std::time::Duration::f
 /// Draw `region` of `frame` again, into the texture of the frame shown, which then shows `frame`'s
 /// key: only the document changed since the frame shown, in that part of it
 /// ([`changed_pixels`]). `None`: nothing in view changed. `last_ms` stays the whole frame's.
-fn draw_changed(app: &mut VectorcraftApp, frame: &Frame, region: Option<[u32; 4]>) {
+///
+/// Over a frame the worker rendered, a part that drew raster effects from rasters made before
+/// their objects moved or at a drag's lower resolution ([`vectorcraft_render::FrameStats::moved`]),
+/// or art in a way that depends on the frame's size ([`vectorcraft_render::FrameStats::view_sized`]),
+/// would not match the frame around it: it is not drawn, false is returned, and the edits after it
+/// render on the worker until the worker's next frame is shown ([`crate::CanvasCache::worker_parts`]).
+fn draw_changed(app: &mut VectorcraftApp, frame: &Frame, region: Option<[u32; 4]>) -> bool {
     let Frame { key, doc, effects, view, opts, pixel, .. } = frame;
     let t0 = monotonic_ms();
     if region.is_none() {
@@ -669,6 +703,10 @@ fn draw_changed(app: &mut VectorcraftApp, frame: &Frame, region: Option<[u32; 4]
         let renderer = &mut app.canvas.renderer;
         let part_view = Affine::translate((-f64::from(x0), -f64::from(y0))) * *view;
         let mut part = effects.view(|| renderer.render(doc, x1 - x0, y1 - y0, part_view, opts));
+        if app.canvas.from_worker && (renderer.stats.moved > 0 || renderer.stats.view_sized > 0) {
+            app.canvas.worker_parts = true;
+            return false;
+        }
         let width = part.width;
         crate::display_profile::convert_over(display.as_deref(), &mut part.pixels, width, part_view, key.over());
         let color = color_image(&part);
@@ -679,6 +717,7 @@ fn draw_changed(app: &mut VectorcraftApp, frame: &Frame, region: Option<[u32; 4]
     app.canvas.key = Some((*key).clone());
     app.canvas.shown = Some(((*doc).clone(), opts.clone()));
     app.perf.render_ms = monotonic_ms() - t0;
+    true
 }
 
 /// With `waits_for_still` set (the web build) and the last render slow, an edit while the view
@@ -726,7 +765,8 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
     // Frames that would be slow on this thread (the last one took over 8 ms) go
     // to the worker. An interaction's frames stay on the worker once it drew the frame shown:
     // its renderer keeps the rasters of the art's effects that make those frames fast, and this
-    // thread's renderer has none, so a frame fast on the worker would be slow here.
+    // thread's renderer has none, so a frame fast on the worker would be slow here. An edit in a
+    // part of the frame shown is drawn again here, unless that part would differ ([`draw_changed`]).
     let same_doc = app.canvas.key.as_ref().is_some_and(|k| k.doc == key.doc);
     let settling = app.canvas.moved && !key.interacting;
     let staying = key.interacting && app.canvas.from_worker;
@@ -741,11 +781,14 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
     let may_copy = app.canvas.key.as_ref() != Some(key);
     let display = app.display_profile.transform(app.session.prefs.monitor_profile_display);
     let mut landed = None;
-    match (&mut app.canvas.worker, heavy, changed) {
-        // Only the document changed since the frame shown, in a part of it: that part is
-        // rendered again, here, into the texture. `last_ms` stays the whole frame's.
-        (_, _, Some(region)) => draw_changed(app, &Frame { key, doc, effects, size: (w, h), view, opts, pixel }, region),
-        (Some(worker), true, None) => {
+    // Only the document changed since the frame shown, in a part of it: that part is rendered
+    // again, here, into the texture. `last_ms` stays the whole frame's.
+    let part = Frame { key, doc, effects, size: (w, h), view, opts, pixel };
+    let drawn = changed.is_some_and(|region| draw_changed(app, &part, region));
+    let Frame { opts, .. } = part;
+    match (&mut app.canvas.worker, heavy, drawn) {
+        (_, _, true) => {}
+        (Some(worker), true, false) => {
             // The worker draws the frame: what this thread's renderer made to measure the edit
             // isn't drawn here.
             app.canvas.renderer.let_go_of_measured();
@@ -806,7 +849,8 @@ pub(super) fn backdrop(
     let paper = paper_color(setup);
     let b = if shows_artboards(app) {
         crate::display_profile::Backdrop {
-            everywhere: None,
+            // In Overprint Preview the canvas around the artboards is white paper.
+            everywhere: vectorcraft_render::proof::overprint_preview_on().then_some([255; 3]),
             artboards: st.doc.artboards.iter().map(|ab| (ab.rect, rgb(artboard_paper(ab, paper)))).collect(),
             grid: shows_transparency_grid(st).then(|| (setup.grid_colors.map(|c| rgb(crate::panels::c32(&c))), setup.grid_size.cell())),
         }

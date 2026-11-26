@@ -4,6 +4,7 @@
 
 use std::sync::{Mutex, MutexGuard};
 
+use craft::ui::runtime::frame::take_output;
 use craft::ui::shell::embed;
 use egui::{Event, Key, Modifiers};
 use serde_json::json;
@@ -65,6 +66,7 @@ impl Keyboard {
 
     fn frame(&mut self, app: &mut VectorcraftApp, events: Vec<Event>) {
         self.time += 0.05;
+        app.adopt_context(&self.ctx);
         embed::before_input(&self.ctx, |out| app.frame_input(out));
         let mut out = self.ctx.run_ui(
             egui::RawInput {
@@ -79,8 +81,8 @@ impl Keyboard {
                 app.ui(ui);
             },
         );
-        // The commands the pass fired run as the host's next frame begins.
-        embed::before_input(&self.ctx, |out| app.frame_input(out));
+        // The commands the pass fired run as the host's next frame begins; the next frame gives the input.
+        let _ = app.frame_input(take_output(&self.ctx));
         out.textures_delta.clear();
     }
 

@@ -420,6 +420,63 @@ fn edit_original_and_show_in_folder_hand_the_file_to_the_system() {
     assert!(app.run("links.editOriginal", json!({"id": linked})).is_err());
 }
 
+/// The Location row of Link Info has a Show in Folder button that shows the file of the image Link
+/// Info shows. An embedded image has no Location row; the button is off while the file is missing
+/// and without a file manager (the web).
+#[test]
+fn link_infos_location_row_shows_the_file_in_its_folder() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let dir = Folder::new("location-reveal");
+    let (mut app, linked, embedded) = app(&dir);
+    let other = dir.file("other.png", &png(30, 20));
+    let other = app.run("file.place", json!({"path": other, "at": [50, 50]})).unwrap()["ids"][0].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [embedded]})).unwrap();
+    let revealed: Rc<RefCell<Vec<String>>> = Rc::default();
+    let r = revealed.clone();
+    app.services.reveal = Some(Box::new(move |p: &str| {
+        r.borrow_mut().push(p.to_string());
+        Ok(())
+    }));
+    let path = |app: &mut VectorcraftApp, id: u64| app.run("links.info", json!({"id": id})).unwrap()["path"].as_str().unwrap().to_string();
+    let (linked_path, other_path) = (path(&mut app, linked), path(&mut app, other));
+    let mut h = Panel::new(app, super::links::show);
+    let select = |h: &mut Panel, ids: &[u64]| {
+        h.app().run("select.set", json!({ "ids": ids })).unwrap();
+        h.frame();
+    };
+    // The button is pressed as a keyboard or screen-reader user presses it: focus, then Enter.
+    let press = |h: &mut Panel| {
+        h.focus("Show in Folder");
+        h.key(egui::Key::Enter, egui::Modifiers::NONE);
+    };
+    // An embedded image has no file to show.
+    assert!(!h.shows("Show in Folder"));
+    select(&mut h, &[linked]);
+    assert!(h.enabled("Show in Folder"));
+    press(&mut h);
+    select(&mut h, &[other]);
+    assert!(h.enabled("Show in Folder"));
+    press(&mut h);
+    assert_eq!(*revealed.borrow(), [linked_path.clone(), other_path.clone()]);
+    // Both images selected: Link Info shows the first selected, `linked`, while the list has `other`
+    // (on top) first. Only the file of the image Link Info shows is handed over.
+    select(&mut h, &[linked, other]);
+    press(&mut h);
+    assert_eq!(*revealed.borrow(), [linked_path.clone(), other_path.clone(), linked_path]);
+    // A missing file: the row stays, the button is off once the panel looks at the files again.
+    select(&mut h, &[other]);
+    std::fs::remove_file(&other_path).unwrap();
+    h.advance(3.0);
+    h.frame();
+    assert!(h.shows("Location") && !h.enabled("Show in Folder"));
+    // Without a file manager (the web): off.
+    select(&mut h, &[linked]);
+    h.app().services.reveal = None;
+    h.frame();
+    assert!(!h.enabled("Show in Folder"));
+    assert_eq!(revealed.borrow().len(), 3, "nothing more was shown");
+}
+
 /// #5236: with Preferences › File Handling › Use System Defaults for Edit Original off, Edit
 /// Original opens a raster image in the app that made it, PhotoCraft, and falls back to the
 /// system's default app when PhotoCraft isn't installed or the file isn't a raster image.
