@@ -13,7 +13,7 @@ use super::edit::selected_roots;
 use super::pathops::{length_given, number_given, shape_node};
 use super::{
     CommandSpec, EngineError, Result, Session, bad, check_numbers, cmd, color_value, f64_req, has_doc, has_selection, index, index_opt, number_or,
-    object_param, ok, str_param, switch_or, targets, text_param,
+    object_param, ok, switch_or, targets, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -873,7 +873,7 @@ pub(crate) fn style_chars(t: &mut TextObject, range: Option<TextRange>, mut f: i
 }
 
 fn set_text(s: &mut Session, p: &Value) -> Result<Value> {
-    let text = str_param(p, "text").ok_or_else(|| bad("text.setText", "missing `text`"))?.to_string();
+    let text = text_param(p, "text", "text.setText")?.ok_or_else(|| bad("text.setText", "missing `text`"))?.to_string();
     let ids = text_targets(s, p, "text.setText")?;
     // The text the type already has is no undo step.
     edit_if_nodes_changed(s, "Typing", &ids, |d| {

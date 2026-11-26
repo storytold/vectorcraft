@@ -13,7 +13,8 @@ use crate::*;
 
 fn session() -> Session {
     let mut s = Session::new();
-    s.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    // A fixed created date: two sessions made in different seconds would otherwise differ in it.
+    s.execute("file.new", &json!({"width": 800, "height": 600, "created": 0})).unwrap();
     s
 }
 

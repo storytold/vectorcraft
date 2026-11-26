@@ -63,7 +63,7 @@ impl ActualText {
 impl Builder<'_> {
     /// The authored path never enters ordinary visual glyph reordering. The font was matched
     /// against the glyph's original Unicode, not against this replacement's characters.
-    pub(super) fn actual_glyph(&mut self, o: &craft_pdf::interpret::font::OutlineGlyph, m: Affine, at: Placement, look: Look, opacity: f32) -> bool {
+    pub(super) fn actual_glyph(&mut self, o: &craft::pdf::interpret::font::OutlineGlyph, m: Affine, at: Placement, look: Look, opacity: f32) -> bool {
         let key = o.font_cache_key();
         // A fill and stroke callback for the same glyph consumes its text only once: the stroke
         // goes over the glyph of the span filled, matched as the stroke pass ends as any other

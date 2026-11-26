@@ -395,7 +395,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "align.toSelection",
         "Align to Selection",
         "",
-        "{} the Align panel's Align to Selection button: Align To becomes Selection (saved with the preferences, ui.inspect › ui.align_to) and the key object, key guide or key anchor is let go → {alignTo: the choice the Align panel then shows: \"selection\", or \"artboard\" while one object is selected, since one object aligns to the artboard}; with the Artboard tool chosen the selected objects keep their key",
+        "{} the Align panel's Align to Selection button: Align To becomes Selection (saved with the preferences, ui.inspect › ui.align_to) and the key object, key guide or key anchor is let go → {alignTo: the choice the Align panel then shows: \"selection\", or \"artboard\" while one object is selected with no anchor points selected and the Artboard tool is not chosen, since one object aligns to the artboard; \"selection\" while anchor points are selected (Direct Selection) and with the Artboard tool chosen}; with the Artboard tool chosen the selected objects keep their key",
     ),
     (
         "align.toKeyObject",
@@ -484,7 +484,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "view.actualSize",
         "Actual Size",
         "Cmd+1",
-        "{} 100%: with Display Print Size at 100% Zoom off, one document point per screen point; on, one document inch fills 96 screen points (an inch at the system's reference density, whatever the display scaling); the same at every UI Scaling",
+        "{} 100%: with Display Print Size at 100% Zoom off, one document point per screen point; on, one document inch fills an inch of the display that shows the window, measured from the physical size the system reports for it, or 96 screen points where it reports none or a size no display has; the same at every UI Scaling",
     ),
     ("view.setZoom", "Set Zoom", "", "{zoom: percent, center?: [x,y]}"),
     (
@@ -570,18 +570,17 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{double?: bool, toolbar?: name} show the toolbar's tools (with `toolbar`, that toolbar made with New Toolbar's) in two columns (true), one (false) or toggle (omitted), as the double arrow at the top of the toolbar does; returns the new state",
     ),
-    ("window.toolbarAdvanced", "Toolbar: Advanced / Basic", "", "{}"),
+    (
+        "window.toolbarAdvanced",
+        "Toolbar: Advanced / Basic",
+        "",
+        "{advanced?: bool} give the Tools panel the Advanced toolbar (true) or the Basic one (false), as the All Tools drawer's menu does, which then edits the Tools panel's toolbar also when it was editing one made with New Toolbar; omitted, toggle between them; returns the new state",
+    ),
     (
         "window.toolbarCompact",
         "Compact Tools",
         "",
         "{on?: bool} use smaller tool cells and a narrower main Tools panel (true), restore its regular spacing (false), or toggle (omitted or null); the choice starts off and is kept with the workspace, independently of one/two columns and Basic/Advanced or edited tools. Tool icons and footer controls keep their size; tool flyouts, torn-off groups and named custom toolbars keep their spacing. A value other than true, false or null is an error and changes nothing; returns the new state",
-    ),
-    (
-        "window.toolsBesideCanvas",
-        "Keep Tools Beside the Canvas",
-        "",
-        "{on?: bool} dock the Tools panel between the left-side panels and the canvas (true) or at the window's left edge (false, the default), or toggle (omitted or null; any other value is an error); a floating Tools panel stays floating and docks at the chosen place when it is docked again. Dropping a floating Tools panel on the canvas's left edge, right of panels docked on the left, turns it on, and on the window's left edge turns it off; with no panels docked on the left, or in the column both edges share beside panels collapsed to icons, a drop leaves it as it is. Kept with the workspace; a workspace saved without it docks Tools at the window's edge. Returns the new state",
     ),
     (
         "window.floatTools",
@@ -659,19 +658,19 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.toolbar.dock",
         "Dock Toolbar",
         "",
-        "{name: string, side?: left|right, order?: int} dock the toolbar made with New Toolbar called `name` in the lane along the window's left or right edge (omitted: the edge it docked at last, the left at first), as Dock to Left and Dock to Right in its title bar's context menu and dropping its title bar on that edge do; `order` is its place in that edge's stack, 0 at the top (omitted: the end, or where it is when it is docked at that edge already); a bad `side` or `order` is an error and changes nothing; returns {toolbar, floating, side, order, pos}",
+        "{name: string, side?: left|right, order?: int} dock the toolbar made with New Toolbar called `name` as a column of the dock along the window's left or right edge (omitted: the edge it docks at, else the edge it docked at last, the left at first), as dragging its title bar to that edge does; a hidden toolbar shows; `order` is its column's place in that edge's dock, 0 at the window's edge (omitted: the innermost, or where it is when it docks at that edge already); a bad `side` or `order` is an error and changes nothing; returns {toolbar, floating, side, order, pos}, `pos` its top-left corner while it floats (else null)",
     ),
     (
         "window.toolbar.float",
         "Float Toolbar",
         "",
-        "{name: string, x?: number, y?: number} float the toolbar made with New Toolbar called `name` with its top-left corner at x, y in screen points (both or neither; omitted: where it floated last), as Float Toolbar in its title bar's context menu and dragging its title bar out of its lane do; returns {toolbar, floating, side, order, pos}",
+        "{name: string, x?: number, y?: number} float the toolbar made with New Toolbar called `name` with its top-left corner at x, y in window points (both or neither, each from -1000000 to 1000000; omitted: where the dock floats a panel, and a floating toolbar stays where it is), as dragging its title bar out of the dock does; a hidden toolbar shows; returns {toolbar, floating, side, order, pos}",
     ),
     (
         "window.toolbar.list",
         "List Toolbars",
         "",
-        "{} the toolbars made with New Toolbar in the current workspace: [{name, shown, double, slots, floating, side, order}], `side` the edge it docks at (while floating, the edge it docked at last) and `order` its place in that edge's stack while docked (else null)",
+        "{} the toolbars made with New Toolbar in the current workspace: [{name, shown, double, slots, floating, side, order}], `side` the edge it docks at (while floating, the edge it docked at last) and `order` its column's place in that edge's dock, 0 at the window's edge, while docked (else null)",
     ),
     ("window.taskBar", "Contextual Task Bar", "", "{}"),
     (
@@ -778,7 +777,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.panel.dock",
         "Dock Panel",
         "",
-        "{panel: id or \"tools\", anchor?: id, zone?: tab|center|left|right|top|bottom|above|below, before?: id, group?: bool, column?: bool or n, side?: Start|End, onto?: id, above?: id, below?: id, icon?: bool, collapsed?: bool} dock a panel (with `group`, its whole group): with no destination a floating panel goes back where it floated from (else joins the first dock group) and a hidden one shows where it was; with `anchor` (or `onto`) in the group holding that panel, `zone` as for window.panel.move; with `side`, as a new innermost column of that dock (`column: true` then moves its whole dock column or floating window); `column: n` with no other destination docks its group, or the whole floating window it floats in, as a new dock column at that place (1: next to the icon column, counting inwards; `true`: innermost); `icon: true` puts it in a row of its own at the end of the icon column; `above` / `below` as a group of its own above or below the group holding that panel. `collapsed` then minimizes or restores its group. \"tools\" docks the Tools panel at the left edge of the window, or beside the canvas inside any left-side dock while window.toolsBesideCanvas is on; with side: right (or End) on the right, between the canvas and the panels, as dropping it there or on the window's right edge does (default: the side it docked at last; left or Start docks it on the left), returning {panel, floating, pos, side}. Returns {layout, closed, floating}",
+        "{panel: id or \"tools\", anchor?: id, zone?: tab|center|left|right|top|bottom|above|below, before?: id, group?: bool, column?: bool or n, side?: Start|End, onto?: id, above?: id, below?: id, icon?: bool, collapsed?: bool} dock a panel (with `group`, its whole group): with no destination a floating panel goes back where it floated from (else joins the first dock group) and a hidden one shows where it was; with `anchor` (or `onto`) in the group holding that panel, `zone` as for window.panel.move; with `side`, as a new innermost column of that dock (`column: true` then moves its whole dock column or floating window); `column: n` with no other destination docks its group, or the whole floating window it floats in, as a new dock column at that place (1: next to the icon column, counting inwards; `true`: innermost); `icon: true` puts it in a row of its own at the end of the icon column; `above` / `below` as a group of its own above or below the group holding that panel. `collapsed` then minimizes or restores its group. \"tools\" docks the Tools panel at the left edge of the window; with side: right (or End) on the right, between the canvas and the panels, as dropping it there or on the window's right edge does (default: the side it docked at last; left or Start docks it on the left), returning {panel, floating, pos, side}. Returns {layout, closed, floating}",
     ),
     (
         "window.collapseDock",
@@ -790,7 +789,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.learn",
         "Learn",
         "",
-        "{show?: bool} show (true), hide (false) or toggle (omitted or null) the Learn panel, as Window › Learn and the app bar's Explore tutorials button do; any other value is an error and changes nothing; returns whether the panel shows",
+        "{show?: bool} show (true), hide (false) or toggle (omitted or null) the Learn panel, as Window › Learn does; any other value is an error and changes nothing; returns whether the panel shows",
     ),
     (
         "learn.list",
@@ -995,7 +994,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.recolorDialog",
         "Recolor Artwork…",
         "",
-        "{colors?: n (an n-colour job: n rows, Scale Tints) | [colour] (new colours to assign, in order; with no art selected and no group they are the rows, and OK saves them as a new colour group, field `groupName`: the Color Guide's Edit or Apply Colors), library?: id or name; or \"document\" (Limit to Library; \"\" the first library), group?: colour group (Edit or Apply Color Group: OK rewrites the group with the new colours and recolours the selected art, if any)} open Recolor Artwork (dialog `recolor`; engine: recolor.reduce / recolor.apply)",
+        "{colors?: n (an n-colour job: n rows, Scale Tints) | [colour] (new colours to assign, in order; with no art selected and no group they are the rows, and OK saves them as a new colour group, field `groupName`: the Color Guide's Edit or Apply Colors), library?: id or name; or \"document\" (Limit to Library; \"\" the first library), group?: colour group (Edit or Apply Color Group: OK rewrites the group with the new colours and recolours the selected art, if any), preset?: bool (Recolor with Preset: first open the `recolorPreset` dialog, whose Limit to Library field `limitTo` starts on `library`; its OK opens Recolor Artwork with `colors` and that library; an error with `group`)} open Recolor Artwork (dialog `recolor`; engine: recolor.reduce / recolor.apply)",
     ),
     (
         "ui.recolorUndo",
@@ -1344,12 +1343,6 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{selected?: preset name} open the presets manager (dialog `flattenerPresets`, fields `selected`, then the selected preset's `name` and option keys: setting them on a saved preset saves it, a new `name` renames it; built-in presets don't change). New, Delete, Import… and Export… run flattener.presets.save / delete / import / export",
     ),
     (
-        "ui.imageTracePresetDialog",
-        "Save as New Preset…",
-        "",
-        "{params?: tracing settings (default: the Default preset's), rename?: a saved preset's name} the Image Trace panel's Manage Presets: open Save as New Preset… for those settings, or with `rename`, Rename… for that saved preset (dialog `imageTracePreset`, field `name`: a new \"Tracing Preset N\" or the preset's name); OK runs imageTrace.presets.save with the name (as `newName` when renaming), and the panel shows the preset it made from its settings",
-    ),
-    (
         "ui.tracingPresetsDialog",
         "Tracing Presets…",
         "",
@@ -1532,7 +1525,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.corners",
         "Corners…",
         "",
-        "{id?, corners?: [i…]} open Corners for path `id` (default: the selected one) and its corners (anchor indices of the path with its corners uncut, as object.setLiveShape takes them: a rectangle's 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left; default: the Direct-Selected corners, else every corner) (dialog `corners`: kind (round|invertedRound|chamfer), radius (pt); double-clicking a corner widget opens it too): OK runs object.setLiveShape",
+        "{id?, corners?: [i…]} open Corners for path `id` (default: the selected one) and its corners (anchor indices of the path with its corners uncut, as object.setLiveShape takes them: a rectangle's 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left; default: the Direct-Selected corners, else every corner) (dialog `corners`: kind (round|invertedRound|chamfer), radii (relative|absolute), radius (pt, or with relative radii a percentage of each corner's own maximum); double-clicking a corner widget with Direct Selection opens it too): OK runs object.setLiveShape, as one command.batch undo step when relative radii give the corners different lengths",
     ),
     (
         "ui.simplifyAuto",
@@ -1556,7 +1549,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.dialogReset",
         "Reset",
         "",
-        "{} the open dialog's Reset, which its Cancel button reads while Alt (Option on macOS) is held (Flare Tool Options, dialog `flareOptions`; Save PDF, dialog `savePdf`): its fields go back to their defaults (Save PDF: the chosen preset's settings, with the path and artboards kept) and the dialog stays open, so OK applies them → the dialog; an error when no dialog is open, the open one has no Reset, or Save PDF's chosen preset was deleted (the fields stay as they are)",
+        "{} the top dialog's Reset, which its Cancel button reads while Alt (Option on macOS) is held (Flare Tool Options, Save PDF): its fields go back to their defaults (Save PDF: the chosen preset's settings, with the path and artboards kept) and the dialog stays open, so OK applies them → the dialog; an error when no dialog is open, the top one has no Reset, or Save PDF's chosen preset was deleted (the fields stay as they are)",
     ),
     (
         "ui.justification",
@@ -1604,7 +1597,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.colorWheel",
         "Color Wheel Options",
         "",
-        "{view?: wheel|box, channel?: hue|saturation|brightness|red|green|blue, sliders?: none|oklch|hsl, gamut?: bool, harmony?: bool, harmonyRule?: complementary|splitComplementary|leftComplement|rightComplement|analogous|analogous2|triad|tetrad|tetrad2|tetrad3|compound|compound2|highContrast|highContrast3|pentagram, vision?: bool, documentColors?: bool} show the Color Wheel panel's wheel or its box, as the panel menu's Wheel View and Box View do, pick the box's channel, as Box Channel does, and show no slider rows under the wheel or the box (none), OKLCH Sliders (oklch) or HSL Sliders (hsl), as the menu items of those names do: the box is a color field with the channel's strip at its right, and the field shows the other two components (hue: saturation across and brightness up; saturation: hue across and brightness up; brightness: hue across and saturation up; red: blue across and green up; green: blue across and red up; blue: red across and green up); OKLCH Sliders edit lightness 0 to 100 %, chroma 0 to 100 % of 0.4 and hue 0 to 360°, CSS Color 4's OKLCH of the display sRGB, and a color outside sRGB keeps L and H and takes the largest chroma that fits; HSL Sliders edit hue 0 to 360°, saturation 0 to 100 % and lightness 0 to 100 %, CSS Color 4's HSL of the display sRGB; gamut true grays out the parts of the wheel's square and the box's field whose colors the CMYK space cannot print (the out-of-gamut warning's test, as color.gamutCheck answers it), as Show Out-of-Gamut Colors does, and false shows them again; the shading is approximate: each cell of a 16 by 16 grid over the square or the field is grayed out or not by the color at its center, so a grayed cell can hold printable colors and a clear cell can hold colors that cannot print; harmony shows a marker on the wheel's ring for each other color of harmonyRule (the Color Guide's rule of that id; a rule's label is taken too), as Show Harmony and Harmony Rule do, and a click on a marker applies its color; vision shows Show Color Vision Preview's row under the wheel or the box, four chips with the current color as simulated for protanopia, deuteranopia and tritanopia (the simulations of view.proofSetup's protanopia, deuteranopia and tritanopia targets) and for achromatopsia (the gray with the color's CIE L*), each named with its hex value in its tooltip and to screen readers, and taking the keyboard focus; a click or a key on a chip does not apply its color; documentColors shows or hides the row the panel menu's Show Document Colors adds under the wheel or the box: the colors color.used {} lists, headed Selection Colors when something is selected and Document Colors otherwise, most used first and as many as fit in one row (a chip's tooltip gives its hex value and how many times the art uses it; a click applies it to the active proxy or to the selected gradient stop, keeping its color model and its link to a global swatch, or to the selected freeform point, which takes the color alone, and Alt+click applies it to the other proxy; the row reads the colors again when the document or the selection changes, not during a drag, and in art with more than 5,000 color uses at most once every half second after an edit); keys left out or null keep their values ({} reads them), params that are not an object, another key or a value off the list are an error and change nothing, oklch is an error while the working RGB space is not sRGB, the settings are kept with the preferences, and the command does not open the panel (window.panel {panel: \"colorWheel\"} does) (ui.inspect: ui.color_wheel) → {view, channel, sliders, gamut, harmony, harmonyRule, vision, documentColors}",
+        "{view?: wheel|box, channel?: hue|saturation|brightness|red|green|blue, sliders?: none|oklch|hsl, gamut?: bool, harmony?: bool, harmonyRule?: complementary|splitComplementary|leftComplement|rightComplement|analogous|analogous2|triad|tetrad|tetrad2|tetrad3|compound|compound2|highContrast|highContrast3|pentagram, opacity?: bool, contrast?: bool, contrastFor?: normalText|largeText|graphics, contrastBackground?: a color, or null, vision?: bool, documentColors?: bool} show the Color Wheel panel's wheel or its box, as the panel menu's Wheel View and Box View do, pick the box's channel, as Box Channel does, and show no slider rows under the wheel or the box (none), OKLCH Sliders (oklch) or HSL Sliders (hsl), as the menu items of those names do, and set Show Contrast, Contrast For, Contrast Background, Show Color Vision Preview and Show Document Colors: the box is a color field with the channel's strip at its right, and the field shows the other two components (hue: saturation across and brightness up; saturation: hue across and brightness up; brightness: hue across and saturation up; red: blue across and green up; green: blue across and red up; blue: red across and green up); OKLCH Sliders edit lightness 0 to 100 %, chroma 0 to 100 % of 0.4 and hue 0 to 360°, CSS Color 4's OKLCH of the display sRGB, and a color outside sRGB keeps L and H and takes the largest chroma that fits; HSL Sliders edit hue 0 to 360°, saturation 0 to 100 % and lightness 0 to 100 %, CSS Color 4's HSL of the display sRGB; gamut true grays out the parts of the wheel's square and the box's field whose colors the CMYK space cannot print (the out-of-gamut warning's test, as color.gamutCheck answers it), as Show Out-of-Gamut Colors does, and false shows them again; the shading is approximate: each cell of a 16 by 16 grid over the square or the field is grayed out or not by the color at its center, so a grayed cell can hold printable colors and a clear cell can hold colors that cannot print; harmony shows a marker on the wheel's ring for each other color of harmonyRule (the Color Guide's rule of that id; a rule's label is taken too), as Show Harmony and Harmony Rule do, and a click on a marker applies its color; opacity checks (true) or unchecks (false) Show Opacity, as the panel menu does: a row under the wheel or the box with a slider and a percent field that set the opacity of what the panel edits (the fill item, as paint.setFill {opacity} sets it, the stroke item, as paint.setStroke {opacity} sets it, the selected gradient stop, or the selected freeform point, the first stop or point when none is selected; gray with nothing selected, for an object selected in a symbol instance, and when the fill or stroke item it would set is on type characters or missing); contrast shows a row under the wheel or the box with the background's chip, the WCAG 2 contrast ratio cut off at two decimals and the AA and AAA results for contrastFor (AA only for graphics), as color.contrast answers them, and contrastBackground pins the background the row measures against (Contrast Background › Current Color; null: the color drawn behind the selection, Behind Selection); vision shows Show Color Vision Preview's row under the wheel or the box, four chips with the current color as simulated for protanopia, deuteranopia and tritanopia (the simulations of view.proofSetup's protanopia, deuteranopia and tritanopia targets) and for achromatopsia (the gray with the color's CIE L*), each named with its hex value in its tooltip and to screen readers, and taking the keyboard focus; a click or a key on a chip does not apply its color; documentColors shows or hides the row the panel menu's Show Document Colors adds under the wheel or the box: the colors color.used {} lists, headed Selection Colors when something is selected and Document Colors otherwise, most used first and as many as fit in one row (a chip's tooltip gives its hex value and how many times the art uses it; a click applies it to the active proxy or to the selected gradient stop, keeping its color model and its link to a global swatch, or to the selected freeform point, which takes the color alone, and Alt+click applies it to the other proxy; the row reads the colors again when the document or the selection changes, not during a drag, and in art with more than 5,000 color uses at most once every half second after an edit); keys left out or null keep their values ({} reads them), params that are not an object, another key or a value off the list are an error and change nothing, oklch is an error while the working RGB space is not sRGB, the settings are kept with the preferences, and the command does not open the panel (window.panel {panel: \"colorWheel\"} does) (ui.inspect: ui.color_wheel) → {view, channel, sliders, gamut, harmony, harmonyRule, opacity, contrast, contrastFor, contrastBackground, vision, documentColors}",
     ),
     (
         "ui.savePdfDialog",
@@ -1993,7 +1986,19 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "plugin.dialog",
         "Plug-in…",
         "",
-        "{id: an object filter plug-in (plugin.list), params?: {…}} Object › Plug-ins: run the filter at once when it takes no parameters or params are given (plugin.run), else open its dialog (dialog `plugin`: a field per parameter, `__plugin` the id, live preview; OK runs plugin.run as one undo step). A heavy filter, and a filter that lists `progress` and no commandAllowlist, run in the background when they run at once or OK runs them without a kept preview → {background: true, status} (see plugin.cancelRuns)",
+        "{id: an object filter plug-in (plugin.list), params?: {…}} Object › Plug-ins: run the filter at once when it takes no parameters or params are given (plugin.run), else open its dialog (dialog `plugin`: a field per parameter at the value the filter last ran with in this session, else its default, `__plugin` the id, live preview; OK runs plugin.run as one undo step). A heavy filter, and a filter that lists `progress` and no commandAllowlist, run in the background when they run at once or OK runs them without a kept preview → {background: true, status} (see plugin.cancelRuns)",
+    ),
+    (
+        "plugin.applyLastFilter",
+        "Apply Last Filter",
+        "",
+        "{} Object › Plug-ins › Apply <filter name>: run the object filter that last ran in this session (a plugin.run that succeeded: its menu item, its dialog's OK, a request, a command.batch step or an action.batch step; not a plug-in's own commands) again on the selection with the same parameters, without its dialog, as one undo step; it runs in the background where its menu item would → plugin.run's result | {background: true, status}. An error with no document open, when no filter ran yet, when that filter was removed or installed again (the same module too) since, or when its manifest no longer takes those parameters as they are",
+    ),
+    (
+        "plugin.lastFilter",
+        "Last Filter…",
+        "",
+        "{} Object › Plug-ins › <filter name>…: open the dialog of the object filter that last ran in this session (see plugin.applyLastFilter) with the parameters it ran with (dialog `plugin`); OK runs it as one undo step and Cancel changes nothing. A filter without parameters runs at once. The same errors as plugin.applyLastFilter",
     ),
     (
         "ui.installPlugin",
@@ -2169,4 +2174,6 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{plane?: left|right|ground (default: the active plane)} open the plane's options, as double-clicking its plane widget does (dialog `perspectivePlane`: location (pt along the plane's normal), objects: none|move|copy): OK runs perspective.plane.move",
     ),
+    ("ui.findAndReplace", "Find and Replace…", "", "{} open the Find and Replace dialog (Edit › Find and Replace…; dialog `findReplace`)"),
+    ("ui.retype", "Retype", "", "{} open the Retype panel (Window › Retype) or start Retype"),
 ];

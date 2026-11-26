@@ -114,7 +114,13 @@ fn tree(d: &Document) -> Vec<(usize, NodeId)> {
 fn assert_same(a: &Session, b: &Session, when: &str) {
     let (x, y) = (a.doc().unwrap(), b.doc().unwrap());
     assert_eq!(tree(&x.doc), tree(&y.doc), "{when}: the tree");
-    assert!(*x.doc == *y.doc, "{when}: the document");
+    // `file.new` stamps each document with the second it was made, and the two can be a second apart.
+    let unstamped = |d: &Document| {
+        let mut d = d.clone();
+        d.metadata.created = None;
+        d
+    };
+    assert!(unstamped(&x.doc) == unstamped(&y.doc), "{when}: the document");
     assert_eq!(x.selection, y.selection, "{when}: the selection");
     // Each session's document has its own uid; the clipboard names the one it came from.
     assert_eq!(a.clipboard.source_doc.is_some(), b.clipboard.source_doc.is_some(), "{when}: the clipboard's source");

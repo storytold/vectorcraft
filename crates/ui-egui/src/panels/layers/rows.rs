@@ -1,681 +1,30 @@
-use super::controls::collect_for_export_menu;
-use super::model::{Place, Row, opens, painted_name};
-use super::thumbs::{node_arc, real_thumb, thumb};
-use super::{
-    Arc, COLUMN, Color32, ColumnDrag, Document, INDENT, LayersDrag, Node, NodeId, NodeKind, Out, PanelDrag, ROW_KEYS, SQUARE_X, Sense, Stroke,
-    StrokeKind, TARGET_X, Tokens, Ui, Value, View, icons, json, vec2, widgets,
-};
+use std::collections::HashSet;
+
+use craft::behavior::{EditEvent, SelectionChange};
+use craft::keymap::{CommandRef, Mods};
+use craft::layers::ui::panel::{ActivateOn, LayerColumn, LayerDrop, LayerMove, LayerPosition, LayerSelect, LayerToggle, LayersEvent};
+use craft::layers::ui::tree::{LayerRowKey, LayerTree};
+use craft::ui::contract::{DropPayload, OpenChange, ReorderMove};
+use vectorcraft_engine::DocState;
 use vectorcraft_tools::intertwine::{in_intertwine, refused_member};
 
-/// Stable id for the layers panel's per-name UI state.
-pub(super) fn key(name: &str) -> egui::Id {
-    egui::Id::unique(("layers-panel", name))
-}
+use super::cells::ArtDrag;
+use super::model::{DocLayers, RowId, opens};
+use super::{Document, LayerFilter, Node, NodeId, NodeKind, Value, VectorcraftApp, json};
+use crate::edits::{EditPath, apply_event};
+use crate::panels::Live;
 
-/// Temp-memory key for the layer rename editor.
-pub(super) fn rename_id() -> egui::Id {
-    egui::Id::unique("layers-rename")
-}
-
-/// Whether a row's name is italic: a layer whose Layer Options › Print is off does not print, and
-/// the panel shows that in its name, as the reference application does (a template layer's Print is
-/// off too).
-fn prints_italic(n: &Node) -> bool {
-    matches!(n.kind, NodeKind::Layer { printable: false, .. })
-}
-
-/// Paints the row name `name` at `pos` (left, vertically centred), italic when `italic`, and
-/// returns its rect. Row names are painted rather than widgets, so italics come from a layout job's
-/// text format: egui slants the glyphs itself, no italic face is needed.
-fn paint_name(painter: &egui::Painter, pos: egui::Pos2, name: &str, font: egui::FontId, color: Color32, italic: bool) -> egui::Rect {
-    let mut job = egui::text::LayoutJob::default();
-    job.append(name, 0.0, egui::TextFormat { font_id: font, color, italics: italic, ..Default::default() });
-    let galley = painter.layout_job(job);
-    let rect = egui::Align2::LEFT_CENTER.anchor_size(pos, galley.size());
-    painter.galley(rect.min, galley, color);
-    rect
-}
-
-/// The colour of the layer holding `id`.
-fn layer_colour(doc: &Document, id: NodeId) -> Color32 {
-    let [r, g, b] = doc.layer_color(id);
-    Color32::from_rgb(r, g, b)
-}
-
-/// The layer colour bar of row `n` (rect `r`) at `x`: wider on layers.
-fn colour_bar(ui: &Ui, n: &Node, r: egui::Rect, x: f32, colour: Color32) {
-    let w = if n.is_layer() { 4.0 } else { 2.0 };
-    ui.painter().rect_filled(egui::Rect::from_min_size(egui::pos2(x - 1.0, r.top()), vec2(w, r.height())), 0.0, colour);
-}
-
-/// The thumbnail of row `n` (rect `r`) at `x`; returns where it went.
-fn row_thumb(ui: &Ui, view: &View, n: &Arc<Node>, r: egui::Rect, x: f32) -> egui::Rect {
-    let s = (view.h - 4.0).min(40.0);
-    let th = egui::Rect::from_min_size(egui::pos2(x, r.center().y - s / 2.0), vec2(s, s));
-    ui.painter().rect_filled(th, 0.0, Color32::WHITE);
-    ui.painter().rect_stroke(th, 0.0, Stroke::new(1.0, view.t.border), StrokeKind::Outside);
-    if !real_thumb(ui, &view.thumbs, n, th) {
-        thumb(ui, n, th);
-    }
-    th
-}
-
-/// The dragged row `src`, dimmed, following the pointer at `pos` above everything else: its
-/// colour bar, thumbnail and name.
-pub(super) fn drag_ghost(ui: &Ui, view: &View, src: NodeId, pos: egui::Pos2) {
-    let (doc, t, h) = (view.doc, &view.t, view.h);
-    let Some(n) = node_arc(doc, src) else { return };
-    let n = &n;
-    let (grab, width, depth) = ui.data(|d| d.get_temp::<(egui::Vec2, f32, usize)>(key("grab"))).unwrap_or((vec2(h, h / 2.0), 240.0, 0));
-    let r = egui::Rect::from_min_size(pos - grab, vec2(width, h));
-    widgets::drag_ghost(ui.ctx(), key("ghost"), r, |ui, r| {
-        let mut x = r.left() + 2.0 * COLUMN + 2.0;
-        colour_bar(ui, n, r, x, layer_colour(doc, src));
-        x += 22.0 + depth as f32 * INDENT;
-        if view.opts.thumb(n) {
-            x = row_thumb(ui, view, n, r, x).right() + 4.0;
-        }
-        let label = n.identify_label(view.identify_xml_id);
-        let name = if view.identify_xml_id { label } else { painted_name(n, &label, crate::i18n::current()) };
-        paint_name(ui.painter(), egui::pos2(x, r.center().y), &name, egui::FontId::proportional(13.0), t.text, prints_italic(n));
-    });
-}
-
-/// Resolve the row clicked this frame: plain (highlight it), Ctrl/Cmd (toggle it) or Shift
-/// (highlight the rows from the last one clicked down to it). A plain click also lets go of the
-/// selected ruler guides, keeping the selected art (#7340): a guide's row picks it the way a
-/// highlight picks a row, so picking another row alone drops it.
-pub(super) fn resolve_click(ui: &Ui, view: &View, list: &[Row], out: &mut Out) {
-    let Some((id, m)) = out.click.take() else { return };
-    let anchor: Option<NodeId> = ui.data(|d| d.get_temp(key("anchor")));
-    crate::panels::set_row_keys(ui.ctx(), ROW_KEYS, true);
-    let order: Vec<NodeId> = list.iter().map(|r| r.node.id).collect();
-    let click = widgets::row_click(&order, &view.rows, anchor, id, m);
-    if click.moves_anchor() {
-        ui.data_mut(|d| d.insert_temp(key("anchor"), id));
-    }
-    let mut rows = view.rows.clone();
-    widgets::apply_row_click(&mut rows, &click);
-    out.rows_after_click = Some(rows);
-    let ids = |rows: &[NodeId]| rows.iter().map(|r| r.0).collect::<Vec<_>>();
-    if matches!(click, widgets::RowClick::Only(_)) && !view.guides.is_empty() {
-        // Toggled out of the selection, so the selected art stays.
-        out.actions.push(("guide.select".into(), json!({"indexes": view.guides, "toggle": true})));
-    }
-    out.actions.push(match click {
-        widgets::RowClick::Only(id) => ("layer.setCurrent".into(), json!({"id": id.0})),
-        widgets::RowClick::Toggle(id) => ("layer.highlight".into(), json!({"ids": [id.0], "mode": "toggle"})),
-        widgets::RowClick::Range(rows) => ("layer.highlight".into(), json!({"ids": ids(&rows), "mode": "set"})),
-        widgets::RowClick::AddRange(rows) => ("layer.highlight".into(), json!({"ids": ids(&rows), "mode": "add"})),
-    });
-}
-
-/// Whether row `n` can take `drag` (the rows or objects `moving`) inside it. A group or an
-/// Intertwine group takes objects; an Intertwine group, or a group in one, only objects that can
-/// be intertwined.
-fn takes(n: &Node, drag: &LayersDrag, moving: &[NodeId], doc: &Document) -> bool {
+/// Whether row `n` can take what is moved (`moving`, objects only when `objects`) inside it. A
+/// layer takes them; a group or an Intertwine group takes objects; an Intertwine group, or a group
+/// in one, only objects that can be intertwined.
+pub(super) fn takes(n: &Node, objects: bool, moving: &[NodeId], doc: &Document) -> bool {
     match n.kind {
         NodeKind::Layer { .. } => true,
         NodeKind::Group { .. } | NodeKind::Intertwine { .. } => {
-            let objects = match drag {
-                LayersDrag::Rows(ids) => !ids.iter().any(|i| doc.node(*i).is_some_and(Node::is_layer)),
-                LayersDrag::Art => true,
-                LayersDrag::Guides(_) => false,
-            };
             objects && (!in_intertwine(doc, n.id) || moving.iter().filter_map(|i| doc.node(*i)).all(|m| refused_member(m).is_none()))
         }
         _ => false,
     }
-}
-
-/// The row of ruler guide `i` on the layer of `item`: the guide's own eye and lock, a guide mark
-/// and its name, the selection square when it is selected. The eye and lock hide and lock this
-/// guide alone (`layer.setProps` on its node, one undo step), and take part in a drag down either
-/// column, as other rows do; they work while its layer is hidden or locked, and the guide shows or
-/// can be edited only when its layer allows it too. A click elsewhere selects the guide and leaves
-/// no row highlighted; Shift or Cmd adds it to (or takes it from) the selected guides. Dragged onto
-/// another layer's row the guide goes to that layer, and onto the trash it is deleted. A hidden or
-/// locked guide, or one on a hidden or locked layer, can't be selected or dragged.
-fn guide_row(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
-    let (t, h) = (&view.t, view.h);
-    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click_and_drag());
-    let Some(g) = view.ruler_guides.get(i) else { return };
-    let selected = view.guides.contains(&i);
-    let editable = view.doc.guide_editable(g);
-    if selected {
-        ui.painter().rect_filled(r, 0.0, t.row_selected);
-    } else if editable && resp.hovered() {
-        ui.painter().rect_filled(r, 0.0, t.hover.gamma_multiply(0.6));
-    }
-    ui.painter().line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0, t.input_border));
-    if let Some(node) = g.id.and_then(|id| view.doc.node(id)) {
-        eye_and_lock(ui, view, node, r, out);
-    }
-    let mut x = r.left() + 2.0 * COLUMN + 2.0;
-    colour_bar(ui, &item.node, r, x, item.colour);
-    x += 6.0 + item.depth as f32 * INDENT + 16.0;
-    // The guide mark: a short line across or down, in the guides' colour.
-    let c = egui::pos2(x + 8.0, r.center().y);
-    let half = if g.vertical { vec2(0.0, 6.0) } else { vec2(6.0, 0.0) };
-    ui.painter().line_segment([c - half, c + half], Stroke::new(1.5, t.accent));
-    x += 22.0;
-    let name = format!("<{}>", if g.vertical { tl!("Vertical Guide") } else { tl!("Horizontal Guide") });
-    let color = if item.dim { t.text_dim } else { t.text };
-    ui.painter().text(egui::pos2(x, r.center().y), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(13.0), color);
-    let col_x = r.right() - 43.5;
-    ui.painter().line_segment([egui::pos2(col_x, r.top()), egui::pos2(col_x, r.bottom())], Stroke::new(1.0, t.input_border));
-    if selected {
-        let q = egui::Rect::from_center_size(egui::pos2(r.right() - SQUARE_X, r.center().y), vec2(7.0, 7.0));
-        ui.painter().rect_filled(q, 0.0, item.colour);
-        ui.painter().rect_stroke(q, 0.0, Stroke::new(1.0, t.text), StrokeKind::Inside);
-    }
-    if editable && resp.clicked() {
-        let m = ui.input(|i| i.modifiers);
-        // The highlighted rows are let go, so Delete then deletes the selected guide (Edit › Clear)
-        // rather than those rows.
-        if !view.rows.is_empty() {
-            out.actions.push(("layer.highlight".into(), json!({"ids": [], "mode": "set"})));
-            out.rows_after_click = Some(vec![]);
-        }
-        out.actions.push(("guide.select".into(), json!({"indexes": [i], "toggle": m.shift || m.command})));
-    }
-    if resp.secondary_clicked() {
-        crate::panels::set_row_keys(ui.ctx(), ROW_KEYS, true);
-        if editable && !selected {
-            if !view.rows.is_empty() {
-                out.actions.push(("layer.highlight".into(), json!({"ids": [], "mode": "set"})));
-                out.rows_after_click = Some(vec![]);
-            }
-            out.actions.push(("guide.select".into(), json!({"indexes": [i]})));
-        }
-    }
-    resp.context_menu(|ui| {
-        guide_context_menu(ui, view, item, i, out);
-    });
-    // Dragged: the selected guides when this is one of them, else this one, to another layer's row.
-    // Only the primary button drags a guide row, and not while a drag down a column passes it.
-    if editable && resp.drag_started_by(egui::PointerButton::Primary) && view.column.is_none() {
-        let guides = if selected { view.guides.clone() } else { vec![i] };
-        egui::DragAndDrop::set_payload(ui.ctx(), LayersDrag::Guides(guides));
-    }
-    if resp.dragged_by(egui::PointerButton::Primary) {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
-    }
-    // Guides dropped here go to this guide's layer.
-    if let Some(drag) = resp.dnd_hover_payload::<LayersDrag>()
-        && let LayersDrag::Guides(guides) = &*drag
-    {
-        guide_drop(ui, view, guides, item.node.id, r, &resp, out);
-    }
-}
-
-/// The right-click context menu of ruler guide row `i` (`item`).
-fn guide_context_menu(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
-    let Some(g) = view.ruler_guides.get(i) else { return };
-    let selected = view.guides.contains(&i);
-    let editable = view.doc.guide_editable(g);
-    let guides: Vec<usize> = if selected { view.guides.clone() } else { vec![i] };
-    let node = g.id.and_then(|id| view.doc.node(id));
-    let guide_nodes: Vec<u64> = if selected {
-        guides.iter().filter_map(|&idx| view.ruler_guides.get(idx)?.id.map(|id| id.0)).collect()
-    } else {
-        node.map(|n| vec![n.id.0]).unwrap_or_default()
-    };
-    let visible = node.is_none_or(|n| n.visible);
-    if widgets::menu_item(ui, if visible { "Hide" } else { "Show" }, !guide_nodes.is_empty(), false) {
-        out.actions.push(("layer.setProps".into(), json!({ "ids": guide_nodes, "visible": !visible })));
-        ui.close();
-    }
-    let locked = node.is_some_and(|n| n.locked);
-    if widgets::menu_item(ui, if locked { "Unlock" } else { "Lock" }, !guide_nodes.is_empty(), false) {
-        out.actions.push(("layer.setProps".into(), json!({ "ids": guide_nodes, "locked": !locked })));
-        ui.close();
-    }
-    ui.separator();
-    if widgets::menu_item(ui, "Release Guides", editable, false) {
-        let params = if guides.len() > 1 { json!({}) } else { json!({ "index": i }) };
-        out.actions.push(("view.guides.release".into(), params));
-        ui.close();
-    }
-    if widgets::menu_item(ui, "Delete", editable, false) {
-        out.actions.push(("guide.remove".into(), json!({ "indexes": guides })));
-        ui.close();
-    }
-    ui.separator();
-    let layers_only = view.opts.layers_only;
-    if widgets::menu_item(ui, if layers_only { "Locate Layer" } else { "Locate Object" }, true, false) {
-        out.actions.push(("layer.locate".into(), json!({ "id": item.node.id.0, "layersOnly": layers_only })));
-        ui.close();
-    }
-}
-
-/// The row of the spine of blend `item` (#4820): a path mark and `<Path>`, the selection square
-/// while the blend is selected. A click selects the blend, whose spine Direct Selection then edits
-/// on the canvas; Shift or Cmd adds it to (or takes it from) the selection. The spine of a hidden
-/// or locked blend can't be selected.
-fn spine_row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
-    let (t, h) = (&view.t, view.h);
-    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click());
-    let blend = item.node.id;
-    let selected = view.sel.contains(&blend);
-    let editable = (view.doc.editable())(blend);
-    if editable && resp.hovered() {
-        ui.painter().rect_filled(r, 0.0, t.hover.gamma_multiply(0.6));
-    }
-    ui.painter().line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0, t.input_border));
-    let mut x = r.left() + 2.0 * COLUMN + 2.0;
-    colour_bar(ui, &item.node, r, x, item.colour);
-    x += 6.0 + item.depth as f32 * INDENT + 16.0;
-    // The path mark: a short diagonal between two anchor dots.
-    let (a, b) = (egui::pos2(x + 2.0, r.center().y + 5.0), egui::pos2(x + 14.0, r.center().y - 5.0));
-    ui.painter().line_segment([a, b], Stroke::new(1.5, t.accent));
-    for p in [a, b] {
-        ui.painter().rect_filled(egui::Rect::from_center_size(p, vec2(3.0, 3.0)), 0.0, t.accent);
-    }
-    x += 22.0;
-    let name = format!("<{}>", tl!("Path"));
-    let color = if item.dim { t.text_dim } else { t.text };
-    ui.painter().text(egui::pos2(x, r.center().y), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(13.0), color);
-    let col_x = r.right() - 43.5;
-    ui.painter().line_segment([egui::pos2(col_x, r.top()), egui::pos2(col_x, r.bottom())], Stroke::new(1.0, t.input_border));
-    if selected {
-        let q = egui::Rect::from_center_size(egui::pos2(r.right() - SQUARE_X, r.center().y), vec2(7.0, 7.0));
-        ui.painter().rect_filled(q, 0.0, item.colour);
-        ui.painter().rect_stroke(q, 0.0, Stroke::new(1.0, t.text), StrokeKind::Inside);
-    }
-    if editable && resp.clicked() {
-        let m = ui.input(|i| i.modifiers);
-        let action = if m.shift || m.command { "select.toggle" } else { "select.set" };
-        out.actions.push((action.into(), json!({"ids": [blend.0]})));
-    }
-    if resp.secondary_clicked() {
-        crate::panels::set_row_keys(ui.ctx(), ROW_KEYS, true);
-        if editable && !selected {
-            out.actions.push(("select.set".into(), json!({"ids": [blend.0]})));
-        }
-    }
-    resp.context_menu(|ui| {
-        spine_context_menu(ui, view, item, out);
-    });
-}
-
-/// The right-click context menu of blend spine row `item`.
-fn spine_context_menu(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
-    let blend = item.node.id;
-    let selected = view.sel.contains(&blend);
-    let editable = (view.doc.editable())(blend);
-    let has_spine = !matches!(&item.node.kind, NodeKind::Blend { spec, .. } if spec.no_spine);
-    let ensure_selected = |out: &mut Out| {
-        if !selected {
-            out.actions.push(("select.set".into(), json!({ "ids": [blend.0] })));
-        }
-    };
-    if widgets::menu_item(ui, "Select", editable, false) {
-        out.actions.push(("select.set".into(), json!({ "ids": [blend.0] })));
-        ui.close();
-    }
-    if widgets::menu_item(ui, "Blend Options…", editable, false) {
-        ensure_selected(out);
-        out.actions.push(("ui.blendOptions".into(), json!({})));
-        ui.close();
-    }
-    ui.separator();
-    if widgets::menu_item(ui, "Reverse Spine", editable && has_spine, false) {
-        ensure_selected(out);
-        out.actions.push(("object.blend.reverseSpine".into(), json!({})));
-        ui.close();
-    }
-    if widgets::menu_item(ui, "Reverse Front to Back", editable, false) {
-        ensure_selected(out);
-        out.actions.push(("object.blend.reverseFrontToBack".into(), json!({})));
-        ui.close();
-    }
-    if widgets::menu_item(ui, "Expand", editable, false) {
-        ensure_selected(out);
-        out.actions.push(("object.blend.expand".into(), json!({})));
-        ui.close();
-    }
-    if widgets::menu_item(ui, "Release", editable, false) {
-        ensure_selected(out);
-        out.actions.push(("object.blend.release".into(), json!({})));
-        ui.close();
-    }
-    ui.separator();
-    let layers_only = view.opts.layers_only;
-    if widgets::menu_item(ui, if layers_only { "Locate Layer" } else { "Locate Object" }, true, false) {
-        out.actions.push(("layer.locate".into(), json!({ "id": blend.0, "layersOnly": layers_only })));
-        ui.close();
-    }
-}
-
-/// Guide rows `guides` dragged over row `r` (`resp`) of layer `layer`: the row lights up, and the
-/// release puts them on that layer (`guide.setLayer`, one undo step).
-fn guide_drop(ui: &Ui, view: &View, guides: &[usize], layer: NodeId, r: egui::Rect, resp: &egui::Response, out: &mut Out) {
-    ui.painter().rect_stroke(r.shrink(1.0), 0.0, Stroke::new(2.0, view.t.accent), StrokeKind::Inside);
-    if resp.dnd_release_payload::<LayersDrag>().is_some() {
-        out.actions.push(("guide.setLayer".into(), json!({"indexes": guides, "layer": layer.0})));
-    }
-}
-
-/// The row's fill (selected, current or hovered), its bottom edge and the current layer's marker.
-fn row_background(ui: &Ui, view: &View, n: &Node, r: egui::Rect, resp: &egui::Response) {
-    let t = &view.t;
-    // Highlighted rows (else the current layer's).
-    let highlighted = if view.rows.is_empty() { n.is_layer() && Some(n.id) == view.current } else { view.rows.contains(&n.id) };
-    if highlighted {
-        ui.painter().rect_filled(r, 0.0, t.row_selected);
-    } else if resp.hovered() {
-        ui.painter().rect_filled(r, 0.0, t.hover.gamma_multiply(0.6));
-    }
-    ui.painter().line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0, t.input_border));
-    if n.is_layer() && Some(n.id) == view.current {
-        // Current-layer marker: a small triangle in the top-right corner.
-        let c = r.right_top();
-        ui.painter().add(egui::Shape::convex_polygon(vec![c, c + vec2(-6.0, 0.0), c + vec2(0.0, 6.0)], t.text, Stroke::NONE));
-    }
-}
-
-/// The disclosure triangle of a row at `(r, x)`; Alt opens or closes everything inside too.
-fn disclosure(ui: &Ui, view: &View, n: &Node, (r, x): (egui::Rect, f32), open: bool, out: &mut Out) {
-    let t = &view.t;
-    let dr = egui::Rect::from_min_size(egui::pos2(x, r.center().y - 8.0), vec2(14.0, 16.0));
-    let dresp = ui.interact(dr, ui.scope_id().with(("disc", n.id.0)), Sense::click());
-    icons::paint(ui, if open { "chevron-down" } else { "chevron-right" }, dr, t.text_dim);
-    if dresp.clicked() {
-        out.toggle.push((n.id, !open));
-        if ui.input(|i| i.modifiers.alt) {
-            n.walk(&mut |c| {
-                if c.id != n.id && opens(c, &view.opts) {
-                    out.toggle.push((c.id, !open));
-                }
-            });
-        }
-    }
-}
-
-/// The row's name label or inline rename field. Returns (name_end, name_rect).
-fn row_name(ui: &mut Ui, view: &View, item: &Row, r: egui::Rect, x: f32, out: &mut Out) -> (f32, egui::Rect) {
-    let n = &*item.node;
-    let doc = view.doc;
-    let t = &view.t;
-    let xml_id = view.identify_xml_id;
-    let name = if doc.mask_edit.is_some_and(|m| m.layer == n.id) { "<Opacity Mask>".to_string() } else { n.identify_label(xml_id) };
-    let font = egui::FontId::proportional(13.0);
-    let renaming: Option<(u64, String)> = ui.data(|d| d.get_temp(rename_id()));
-    let name_rect = egui::Rect::from_min_max(egui::pos2(x - 2.0, r.center().y - 10.0), egui::pos2(r.right() - 44.0, r.center().y + 10.0));
-    let name_end = match renaming {
-        Some((rid, mut buf)) if rid == n.id.0 => {
-            let field = rename_id().with("field");
-            let kept = crate::widgets::own_field_shift_enter(ui, field, &mut buf, &name);
-            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(name_rect));
-            let te = child
-                .add(egui::TextEdit::singleline(&mut buf).id(field).align(egui::Align2::LEFT_CENTER).desired_width(name_rect.width()).font(font));
-            // Focus the field as it opens. Asking every frame took the focus back from Enter,
-            // Escape or a click elsewhere, so the rename never ended.
-            if !te.has_focus() && !te.lost_focus() {
-                te.request_focus();
-            }
-            if te.lost_focus() {
-                ui.data_mut(|d| d.remove::<(u64, String)>(rename_id()));
-                if child.input(|i| !i.key_pressed(egui::Key::Escape)) && buf != name {
-                    out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "name": buf})));
-                }
-            } else {
-                // Shift+Enter renames it and keeps the field open.
-                if kept && buf != name {
-                    out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "name": buf.clone()})));
-                }
-                ui.data_mut(|d| d.insert_temp(rename_id(), (n.id.0, buf)));
-            }
-            name_rect.right()
-        }
-        _ => {
-            let painter = ui.painter().with_clip_rect(name_rect);
-            // Generated names ("<Path>", "<Opacity Mask>") are translated where painted; the stored name stays English.
-            // XML IDs stay as ids (not translated).
-            let shown = if doc.mask_edit.is_some_and(|m| m.layer == n.id) {
-                tl!("<Opacity Mask>").to_string()
-            } else if xml_id {
-                name
-            } else {
-                painted_name(n, &n.display_name(), crate::i18n::current())
-            };
-            let text = paint_name(&painter, egui::pos2(x, r.center().y), &shown, font, if item.dim { t.text_dim } else { t.text }, prints_italic(n));
-            // A clipping path's name is underlined, a masked object's with a dashed line.
-            if item.clip_path {
-                painter.line_segment([text.left_bottom(), text.right_bottom()], Stroke::new(1.0, t.text));
-            } else if n.extras().mask.is_some() {
-                painter.extend(egui::Shape::dashed_line(&[text.left_bottom(), text.right_bottom()], Stroke::new(1.0, t.text), 3.0, 2.0));
-            }
-            text.right()
-        }
-    };
-    (name_end, name_rect)
-}
-
-/// The widgets of row `item`.
-pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
-    if let Some(i) = item.guide {
-        return guide_row(ui, view, item, i, out);
-    }
-    if item.spine {
-        return spine_row(ui, view, item, out);
-    }
-    let n = &*item.node;
-    let (depth, has_children, open, color) = (item.depth, item.opens, item.open, item.colour);
-    let t = &view.t;
-    let h = view.h;
-    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click_and_drag());
-    if view.reveal == Some(n.id) {
-        ui.scroll_to_rect(r, None);
-    }
-    let is_sel = view.sel.contains(&n.id);
-    let child_sel = !is_sel
-        && n.children().is_some_and(|_| {
-            let mut any = false;
-            n.walk(&mut |c| any |= c.id != n.id && view.sel.contains(&c.id));
-            any
-        });
-    row_background(ui, view, n, r, &resp);
-    eye_and_lock(ui, view, n, r, out);
-    // Layer colour bar (every row shows the colour of its layer).
-    let mut x = r.left() + 2.0 * COLUMN + 2.0;
-    colour_bar(ui, n, r, x, color);
-    x += 6.0 + depth as f32 * INDENT;
-    if has_children {
-        disclosure(ui, view, n, (r, x), open, out);
-    }
-    x += 16.0;
-    // Thumbnail.
-    let thumb_rect = view.opts.thumb(n).then(|| {
-        let th = row_thumb(ui, view, &item.node, r, x);
-        x = th.right() + 4.0;
-        th
-    });
-    // Name (Preferences › Units › Identify Objects By: Object Name or XML ID).
-    let (name_end, name_rect) = row_name(ui, view, item, r, x, out);
-    // Target circle and selection square.
-    let col_x = r.right() - 43.5;
-    ui.painter().line_segment([egui::pos2(col_x, r.top()), egui::pos2(col_x, r.bottom())], Stroke::new(1.0, t.input_border));
-    let tc = egui::pos2(r.right() - TARGET_X, r.center().y);
-    let tresp = target_circle(ui, n, tc, h, shows_targeted(view, n, is_sel), &mut out.actions, t);
-    let sq = egui::pos2(r.right() - SQUARE_X, r.center().y);
-    if is_sel {
-        let q = egui::Rect::from_center_size(sq, vec2(7.0, 7.0));
-        ui.painter().rect_filled(q, 0.0, color);
-        ui.painter().rect_stroke(q, 0.0, Stroke::new(1.0, t.text), StrokeKind::Inside);
-    } else if child_sel {
-        ui.painter().rect_filled(egui::Rect::from_center_size(sq, vec2(4.0, 4.0)), 0.0, color);
-    }
-    let sq_resp = ui.interact(egui::Rect::from_center_size(sq, vec2(18.0, h)), ui.scope_id().with(("selsq", n.id.0)), Sense::click_and_drag());
-    // Dragging the selected-art square carries the selection to another row.
-    if (is_sel || child_sel) && sq_resp.drag_started_by(egui::PointerButton::Primary) {
-        egui::DragAndDrop::set_payload(ui.ctx(), LayersDrag::Art);
-    }
-    let m = ui.input(|i| i.modifiers);
-    let on_name = ui.input(|i| i.pointer.interact_pos()).is_some_and(|p| p.x <= name_end.max(name_rect.left() + 20.0) && p.x >= name_rect.left());
-    if tresp.clicked() {
-        out.actions.push(("layer.target".into(), json!({"id": n.id.0, "add": m.shift})));
-    } else if sq_resp.clicked() {
-        out.actions.push(("layer.selectAll".into(), json!({"id": n.id.0, "add": m.shift})));
-    } else if resp.clicked() {
-        out.click = Some((n.id, m));
-        // Alt-click on a layer's or sublayer's name also selects its art, as its selection square does.
-        // Only the drawn text counts, not the wider rename target of a short name.
-        let on_text = ui.input(|i| i.pointer.interact_pos()).is_some_and(|p| p.x >= name_rect.left() && p.x <= name_end.min(name_rect.right()));
-        if m.alt && !m.shift && !m.command && n.is_layer() && on_text {
-            out.actions.push(("layer.selectAll".into(), json!({"id": n.id.0})));
-        }
-    }
-    if resp.double_clicked() {
-        let on_thumb = thumb_rect.is_some_and(|th| ui.input(|i| i.pointer.interact_pos()).is_some_and(|p| th.contains(p)));
-        if on_name && !on_thumb {
-            ui.data_mut(|d| d.insert_temp(rename_id(), (n.id.0, n.identify_label(view.identify_xml_id))));
-        } else {
-            out.actions.push(("ui.layerOptions".into(), json!({"ids": [n.id.0]})));
-        }
-    }
-    // Row menu: context actions on this row (or every highlighted row when this is one of them).
-    let collect_ids: Vec<u64> = if view.rows.contains(&n.id) { view.rows.iter().map(|id| id.0).collect() } else { vec![n.id.0] };
-    // Right-clicking an unselected row selects it; a highlighted row keeps multiselection.
-    if resp.secondary_clicked() && !view.rows.contains(&n.id) {
-        out.actions.push(("layer.setCurrent".into(), json!({"id": n.id.0})));
-        out.rows_after_click = Some(vec![n.id]);
-    }
-    if resp.secondary_clicked() {
-        crate::panels::set_row_keys(ui.ctx(), ROW_KEYS, true);
-    }
-    resp.context_menu(|ui| {
-        row_context_menu(ui, view, n, &collect_ids, out);
-    });
-    // Dragging rows: the highlighted rows when this is one of them, else this row. Only the primary
-    // button drags; the secondary button opens the row menu, and a drag with it moves nothing.
-    if resp.drag_started_by(egui::PointerButton::Primary) && view.column.is_none() {
-        let ids = if view.rows.contains(&n.id) { view.rows.clone() } else { vec![n.id] };
-        egui::DragAndDrop::set_payload(ui.ctx(), LayersDrag::Rows(ids));
-        let grab = resp.interact_pointer_pos().map_or(vec2(h, h / 2.0), |p| p - r.min);
-        ui.data_mut(|d| {
-            d.insert_temp(key("grab"), (grab, r.width(), depth));
-            d.insert_temp(key("grabbed"), n.id);
-        });
-    }
-    // The cursor of a row drag is the panel's ([`super::drag_cursor`]): Alt can change it on any frame.
-    drop_target(ui, view, n, r, x - 16.0, open, &resp, out);
-}
-
-/// The right-click context menu of row `n`.
-fn row_context_menu(ui: &mut Ui, view: &View, n: &Node, collect_ids: &[u64], out: &mut Out) {
-    let is_multi = collect_ids.len() > 1;
-    if n.is_guide() {
-        // "Release Guide" / "Release Guides"
-        let rel_label = if is_multi { "Release Guides" } else { "Release Guide" };
-        if widgets::menu_item(ui, rel_label, true, false) {
-            out.actions.push(("view.guides.release".into(), json!({ "ids": collect_ids })));
-            ui.close();
-        }
-        // "Duplicate" / "Duplicate Selection"
-        let dup_label = if is_multi { "Duplicate Selection" } else { "Duplicate" };
-        if widgets::menu_item(ui, dup_label, true, false) {
-            out.actions.push(("layer.duplicate".into(), json!({ "ids": collect_ids })));
-            ui.close();
-        }
-        // "Delete Guide" / "Delete Guides"
-        let del_label = if is_multi { "Delete Guides" } else { "Delete Guide" };
-        if widgets::menu_item(ui, del_label, true, false) {
-            out.actions.push(("layer.delete".into(), json!({ "ids": collect_ids })));
-            ui.close();
-        }
-        ui.separator();
-        // Lock / Unlock
-        let any_unlocked = collect_ids.iter().filter_map(|&id| view.doc.node(NodeId(id))).any(|node| !node.locked);
-        let lock_label = if any_unlocked { "Lock" } else { "Unlock" };
-        if widgets::menu_item(ui, lock_label, true, false) {
-            out.actions.push(("layer.setProps".into(), json!({ "ids": collect_ids, "locked": any_unlocked })));
-            ui.close();
-        }
-        // Hide / Show
-        let any_visible = collect_ids.iter().filter_map(|&id| view.doc.node(NodeId(id))).any(|node| node.visible);
-        let hide_label = if any_visible { "Hide" } else { "Show" };
-        if widgets::menu_item(ui, hide_label, true, false) {
-            out.actions.push(("layer.setProps".into(), json!({ "ids": collect_ids, "visible": !any_visible })));
-            ui.close();
-        }
-        return;
-    }
-    // "Layer Options…" / "Options for Selection…" / "Options…"
-    let options_label = if is_multi {
-        "Options for Selection…"
-    } else if n.is_layer() {
-        "Layer Options…"
-    } else {
-        "Options…"
-    };
-    if widgets::menu_item(ui, options_label, true, false) {
-        out.actions.push(("ui.layerOptions".into(), json!({ "ids": collect_ids })));
-        ui.close();
-    }
-    // "Duplicate "<name>"" or "Duplicate Selection"
-    let display = {
-        let raw = painted_name(n, &n.display_name(), crate::i18n::current());
-        if raw.chars().count() > 20 {
-            let truncated: String = raw.chars().take(20).collect();
-            format!("{truncated}…")
-        } else {
-            raw
-        }
-    };
-    let dup_label = if is_multi { tl!("Duplicate Selection").to_string() } else { format!("{} \"{display}\"", tl!("Duplicate")) };
-    // A copy of the isolated node goes beside it, outside the isolated art.
-    let dup_enabled = !view.root.is_some_and(|r| collect_ids.contains(&r.0));
-    if widgets::menu_item_name(ui, &dup_label, dup_enabled, false) {
-        out.actions.push(("layer.duplicate".into(), json!({ "ids": collect_ids })));
-        ui.close();
-    }
-    // "Delete "<name>"" or "Delete Selection"
-    let del_label = if is_multi { tl!("Delete Selection").to_string() } else { format!("{} \"{display}\"", tl!("Delete")) };
-    let del_enabled = {
-        let listed: std::collections::HashSet<NodeId> = collect_ids.iter().map(|&id| NodeId(id)).collect();
-        !view.doc.layers.iter().all(|l| listed.contains(&l.id))
-    };
-    if widgets::menu_item_name(ui, &del_label, del_enabled, false) {
-        out.actions.push(("layer.delete".into(), json!({ "ids": collect_ids })));
-        ui.close();
-    }
-    ui.separator();
-    // In isolation mode the other layers are outside the isolated art, so these pairs are off.
-    let isolated = view.root.is_some();
-    // Lock Others / Unlock All Layers
-    {
-        let (lock_cmd, lock_params, lock_enabled) = multi_others_action(view.doc, collect_ids, false);
-        let lock_label = if lock_cmd == "layer.lockOthers" { "Lock Others" } else { "Unlock All Layers" };
-        if widgets::menu_item(ui, lock_label, lock_enabled && !isolated, false) {
-            out.actions.push((lock_cmd, lock_params));
-            ui.close();
-        }
-    }
-    // Hide Others / Show All Layers
-    {
-        let (hide_cmd, hide_params, hide_enabled) = multi_others_action(view.doc, collect_ids, true);
-        let hide_label = if hide_cmd == "layer.hideOthers" { "Hide Others" } else { "Show All Layers" };
-        if widgets::menu_item(ui, hide_label, hide_enabled && !isolated, false) {
-            out.actions.push((hide_cmd, hide_params));
-            ui.close();
-        }
-    }
-    ui.separator();
-    // Locate Object, or Locate Layer with Show Layers Only on
-    let layers_only = view.opts.layers_only;
-    let locate_ok = !layers_only || locate_layer_listed(view.doc, view.root);
-    if widgets::menu_item(ui, if layers_only { "Locate Layer" } else { "Locate Object" }, locate_ok, false) {
-        out.actions.push(("layer.locate".into(), json!({ "id": n.id.0, "layersOnly": layers_only })));
-        ui.close();
-    }
-    ui.separator();
-    // Collect for Export
-    let ids: Vec<u64> = collect_ids.to_vec();
-    collect_for_export_menu(ui, true, move |multiple| {
-        out.actions.push(("assets.add".into(), json!({ "ids": ids.clone(), "multiple": multiple })));
-    });
 }
 
 /// Context menu Others action for `ids`: Lock Others / Unlock All Layers or Hide Others / Show All Layers.
@@ -756,242 +105,374 @@ pub(super) fn locate_layer_listed(doc: &Document, root: Option<NodeId>) -> bool 
     root.is_none_or(|r| doc.node(r).is_some_and(Node::is_layer))
 }
 
-/// The eye and lock columns of row `n` at `r`.
-fn eye_and_lock(ui: &mut Ui, view: &View, n: &Node, r: egui::Rect, out: &mut Out) {
-    let t = &view.t;
-    let h = view.h;
-    let eye = egui::Rect::from_min_size(r.min, vec2(COLUMN, h));
-    let lock = egui::Rect::from_min_size(r.min + vec2(COLUMN, 0.0), vec2(COLUMN, h));
-    ui.painter().line_segment([eye.right_top(), eye.right_bottom()], Stroke::new(1.0, t.input_border));
-    ui.painter().line_segment([lock.right_top(), lock.right_bottom()], Stroke::new(1.0, t.input_border));
-    let preview = !matches!(n.kind, NodeKind::Layer { preview: false, .. });
-    let er = ui.interact(eye, ui.scope_id().with(("eye", n.id.0)), Sense::click_and_drag());
-    if n.visible {
-        let icon = egui::Rect::from_center_size(eye.center(), vec2(14.0, 14.0));
-        if n.is_template() {
-            // A template layer shows the template mark instead of the eye.
-            icons::paint(ui, "shapes", icon, t.icon);
-        } else if preview {
-            icons::paint(ui, "eye", icon, t.icon);
-        } else {
-            // Outline view: a hollow eye.
-            icons::paint(ui, "eye", icon, t.text_dim);
-            ui.painter().circle_stroke(eye.center(), 7.5, Stroke::new(1.0, t.text_dim));
-        }
-    }
-    let lr = ui.interact(lock, ui.scope_id().with(("lock", n.id.0)), Sense::click_and_drag());
-    if n.locked {
-        icons::paint(ui, "lock", egui::Rect::from_center_size(lock.center(), vec2(12.0, 12.0)), t.icon);
-    } else if lr.hovered() {
-        icons::paint(ui, "lock", egui::Rect::from_center_size(lock.center(), vec2(12.0, 12.0)), t.text_disabled);
-    }
-    let m = ui.input(|i| i.modifiers);
-    // In isolation mode the other layers are outside the isolated art: Alt-clicks change nothing.
-    let isolated = view.root.is_some();
-    if er.clicked() {
-        if m.alt && m.command {
-            if !isolated {
-                out.actions.push(outline_others_action(view.doc, n));
-            }
-        } else if m.alt {
-            if !isolated {
-                out.actions.push(others_action(view.doc, n, true));
-            }
-        } else if m.command && n.is_layer() {
-            // Ctrl/Cmd-click: Preview ↔ Outline for this layer.
-            out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "preview": !preview})));
-        } else {
-            out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "visible": !n.visible})));
-        }
-    }
-    if lr.clicked() && m.alt {
-        if !isolated {
-            out.actions.push(others_action(view.doc, n, false));
-        }
-    } else if lr.clicked() {
-        out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "locked": !n.locked})));
-    }
-    // Dragging down a column with the primary button gives every row it passes this row's new state.
-    if er.drag_started_by(egui::PointerButton::Primary) {
-        out.column = Some(Some(ColumnDrag { eye: true, value: !n.visible, ids: vec![n.id.0] }));
-    } else if lr.drag_started_by(egui::PointerButton::Primary) {
-        out.column = Some(Some(ColumnDrag { eye: false, value: !n.locked, ids: vec![n.id.0] }));
-    } else if let Some(c) = out.column.clone().unwrap_or_else(|| view.column.clone())
-        && !c.ids.contains(&n.id.0)
-        && ui.input(|i| i.pointer.primary_down() && i.pointer.interact_pos().is_some_and(|p| p.y >= r.top() && p.y < r.bottom()))
-    {
-        let mut c = c;
-        c.ids.push(n.id.0);
-        out.column = Some(Some(c));
-    }
-}
-
-/// Row `n` at `r` as a drop target for dragged rows or the selected-art square: shows where they
-/// would go (a line above or below it, or a box around it for inside) and moves them on release
-/// (Alt copies). `indent` is where the row's content starts.
-#[allow(clippy::too_many_arguments)]
-fn drop_target(ui: &Ui, view: &View, n: &Node, r: egui::Rect, indent: f32, open: bool, resp: &egui::Response, out: &mut Out) {
-    let Some(drag) = resp.dnd_hover_payload::<LayersDrag>() else { return };
-    let doc = view.doc;
-    let moving: Vec<NodeId> = match &*drag {
-        LayersDrag::Rows(ids) => ids.clone(),
-        LayersDrag::Art => view.sel.iter().copied().collect(),
-        LayersDrag::Guides(guides) => {
-            // Guides go to the layer of the row (the row's own, for a layer); in isolation mode only
-            // to a layer inside the isolated art.
-            if let Some(layer) = if n.is_layer() { Some(n.id) } else { doc.layer_containing(n.id) }
-                && view.root.is_none_or(|r| doc.ancestry(layer).is_some_and(|a| a.contains(&r)))
-            {
-                guide_drop(ui, view, guides, layer, r, resp, out);
-            }
-            return;
-        }
-    };
-    // Never into itself or a row inside it. With Alt, rows held over one of their own rows copy
-    // beside it, above or below, as `layer.move` places a copy there (#8237).
-    let alt = ui.input(|i| i.modifiers.alt);
-    let beside_itself = alt && matches!(&*drag, LayersDrag::Rows(_)) && moving.contains(&n.id);
-    let around = doc.ancestry(n.id).unwrap_or_default();
-    if moving.is_empty() || moving.iter().any(|m| around.contains(m) && !(beside_itself && *m == n.id)) {
-        return;
-    }
-    let Some(p) = ui.input(|i| i.pointer.hover_pos()) else { return };
-    let rel = (p.y - r.top()) / r.height().max(1.0);
-    let inside = takes(n, &drag, &moving, doc);
-    let place = match &*drag {
-        LayersDrag::Rows(_) if beside_itself && rel < 0.5 => Place::Above,
-        LayersDrag::Rows(_) if beside_itself => Place::Below,
-        LayersDrag::Art if inside => Place::Inside,
-        LayersDrag::Art => Place::Above,
-        LayersDrag::Rows(_) if inside && rel >= 0.25 && (rel <= 0.75 || open) => Place::Inside,
-        LayersDrag::Rows(_) if rel < 0.5 => Place::Above,
-        LayersDrag::Rows(_) | LayersDrag::Guides(_) => Place::Below,
-    };
-    // In isolation mode the isolated row takes a drop only inside it, so nothing leaves the isolated
-    // art or lands beside it; held over its own row, it goes nowhere.
-    let place = if view.root == Some(n.id) {
-        if !inside || beside_itself {
-            return;
-        }
-        Place::Inside
-    } else {
-        place
-    };
-    // Beside a member of an Intertwine group (or a row in one) only what can be intertwined goes.
-    if place != Place::Inside
-        && doc.parent_of(n.id).is_some_and(|p| in_intertwine(doc, p))
-        && moving.iter().filter_map(|i| doc.node(*i)).any(|m| refused_member(m).is_some())
-    {
-        return;
-    }
-    let stroke = Stroke::new(2.0, view.t.accent);
-    match place {
-        Place::Above => {
-            ui.painter().line_segment([egui::pos2(indent, r.top()), egui::pos2(r.right(), r.top())], stroke);
-        }
-        Place::Below => {
-            ui.painter().line_segment([egui::pos2(indent, r.bottom()), egui::pos2(r.right(), r.bottom())], stroke);
-        }
-        Place::Inside => {
-            ui.painter().rect_stroke(r.shrink(1.0), 0.0, stroke, StrokeKind::Inside);
-        }
-    }
-    if resp.dnd_release_payload::<LayersDrag>().is_some() {
-        let copy = ui.input(|i| i.modifiers.alt);
-        let ids: Vec<u64> = match &*drag {
-            // The selection's top objects, as Arrange and Group take them.
-            LayersDrag::Art => doc.paint_order(moving.iter().copied()).iter().map(|i| i.0).collect(),
-            LayersDrag::Rows(ids) => ids.iter().map(|i| i.0).collect(),
-            LayersDrag::Guides(_) => return,
-        };
-        out.actions.push(("layer.move".into(), json!({"ids": ids, "target": n.id.0, "place": place.id(), "copy": copy})));
-    }
-}
-
 /// Whether `n`'s target circle shows as targeted: `n` is the one target, or, with nothing
 /// targeted, it is selected. A layer is never selected itself (its art is), so with nothing
 /// targeted a layer shows as targeted while all of its visible, unlocked art is selected, as an
 /// object added to the selection from its circle does (#8646).
-fn shows_targeted(view: &View, n: &Node, is_sel: bool) -> bool {
-    match view.target {
+pub(super) fn shows_targeted(tree: &DocLayers<'_>, n: &Node, is_sel: bool) -> bool {
+    match tree.state().selection.target {
         Some(id) => id == n.id,
-        None if n.is_layer() => {
-            if view.sel.is_empty() {
-                return false;
-            }
-            let art = n.layer_art(true);
-            !art.is_empty() && art.iter().all(|id| view.sel.contains(id))
-        }
+        None if n.is_layer() => tree.is_full(n.id),
         None => is_sel,
     }
 }
 
-/// The radius of the inner ring of a targeted item's target circle (the double ring); the outer
-/// ring's radius is 5.
+/// The layers and sublayers of `doc` whose [`Node::layer_art`] with `editable` is not empty and
+/// all in `sel`, found in one pass over the layers and their direct children.
+pub(super) fn full_layers(doc: &Document, sel: &HashSet<NodeId>) -> HashSet<NodeId> {
+    /// Adds `layer` to `out` when it is full, and returns its art's count and selected count.
+    fn visit(layer: &Node, sel: &HashSet<NodeId>, out: &mut HashSet<NodeId>) -> (usize, usize) {
+        let (mut art, mut selected) = (0, 0);
+        for c in layer.children().into_iter().flatten() {
+            let counts = !(c.is_ruler_guide() || !c.visible || c.locked || c.is_template());
+            if c.is_layer() {
+                let (a, s) = visit(c, sel, out);
+                if counts {
+                    art += a;
+                    selected += s;
+                }
+            } else if counts {
+                art += 1;
+                selected += usize::from(sel.contains(&c.id));
+            }
+        }
+        if art > 0 && selected == art {
+            out.insert(layer.id);
+        }
+        (art, selected)
+    }
+    let mut out = HashSet::new();
+    if !sel.is_empty() {
+        for layer in doc.layers.iter().filter(|l| l.is_layer()) {
+            visit(layer, sel, &mut out);
+        }
+    }
+    out
+}
+
+/// The `layer.target` of a click with `mods` on the target circle of `id`, by the rules of a row click (#8639): plain
+/// targets it, Ctrl/Cmd adds it to the selection or takes it out, Shift selects the art of every row `filter` lists
+/// from `anchor` (the last circle clicked, else the targeted row) to it, and Shift+Ctrl/Cmd adds that art. With it,
+/// whether the click moves the anchor to `id`: every click but a Shift range.
+pub(super) fn target_click(tree: &DocLayers<'_>, filter: &LayerFilter, anchor: Option<NodeId>, id: NodeId, mods: Mods) -> ((String, Value), bool) {
+    if mods.shift
+        && let Some(range) = anchor.or(tree.state().selection.target).and_then(|start| listed_range(tree, filter, start, id))
+    {
+        let params = if mods.cmd { json!({"range": range, "add": true}) } else { json!({"range": range}) };
+        return (("layer.target".into(), params), false);
+    }
+    let params = if mods.cmd { json!({"id": id.0, "add": true}) } else { json!({"id": id.0}) };
+    (("layer.target".into(), params), true)
+}
+
+/// The `layer.selectAll` of a click with `mods` on the selection square of `id`. A plain click selects the row's art.
+/// Shift selects the art of every row `filter` lists from `anchor` (the last square clicked) to it, and Shift+Ctrl/Cmd
+/// adds that art to the selection. With no anchor listed, Shift adds the row's art or removes it when it is all
+/// selected, and so does Ctrl/Cmd. With it, whether the click moves the anchor to `id`: every click but a Shift range.
+pub(super) fn art_click(tree: &DocLayers<'_>, filter: &LayerFilter, anchor: Option<NodeId>, id: NodeId, mods: Mods) -> ((String, Value), bool) {
+    if mods.shift
+        && let Some(range) = anchor.and_then(|start| listed_range(tree, filter, start, id))
+    {
+        let params = if mods.cmd { json!({"range": range, "add": true}) } else { json!({"range": range}) };
+        return (("layer.selectAll".into(), params), false);
+    }
+    let params = if mods.shift || mods.cmd { json!({"id": id.0, "add": true}) } else { json!({"id": id.0}) };
+    (("layer.selectAll".into(), params), true)
+}
+
+/// The rows `filter` lists from `start` to `end`, both included, top-down; `None` when either is not listed.
+fn listed_range(tree: &DocLayers<'_>, filter: &LayerFilter, start: NodeId, end: NodeId) -> Option<Vec<u64>> {
+    let order = listed_nodes(tree, filter);
+    let at = |k: NodeId| order.iter().position(|r| *r == k);
+    let (i, j) = (at(start)?, at(end)?);
+    Some(order.get(i.min(j)..=i.max(j)).unwrap_or_default().iter().map(|r| r.0).collect())
+}
+
+/// The layer, group and object rows the panel over `tree` lists under `filter`, top-down: the children of open rows,
+/// and while the filter is on every row it keeps and every row holding one, open or not.
+fn listed_nodes(tree: &DocLayers<'_>, filter: &LayerFilter) -> Vec<NodeId> {
+    fn walk(tree: &DocLayers<'_>, filter: &LayerFilter, parent: Option<&RowId>, out: &mut Vec<NodeId>) -> bool {
+        use craft::layers::ui::tree::LayerTree as _;
+        let filtered = filter.active();
+        let mut any = false;
+        for row in tree.children(parent) {
+            let at = out.len();
+            let inner = if filtered || tree.is_open(&row) { walk(tree, filter, Some(&row), out) } else { false };
+            let keep = !filtered || inner || tree.listed(&row, filter);
+            if keep && let RowId::Node(id) = row {
+                out.insert(at, id);
+            }
+            any |= keep;
+        }
+        any
+    }
+    let mut out = Vec::new();
+    walk(tree, filter, None, &mut out);
+    out
+}
+
+/// The radius of a target circle's outer ring.
+pub(super) const TARGET_RADIUS: f32 = 5.0;
+/// The radius of the inner ring of a targeted item's target circle (the double ring).
 pub(super) const TARGET_RING: f32 = 2.8;
-/// The width of the inner ring.
-pub(super) const TARGET_STROKE: f32 = 1.0;
 /// The radius of the outlined diamond marking an item's own appearance or transparency.
 pub(super) const APPEARANCE_MARK: f32 = 2.5;
-/// A mitered 1 px stroke extends a diamond's corner by sqrt(2) / 2. At radius 1, its outer
-/// extent stays more than 0.5 px inside the targeted ring's inner edge (#8711).
+/// A mitered thin stroke extends a diamond's corner by width / sqrt(2). Radius 1 keeps
+/// the diamond clear of the targeted ring's inner edge (#8711).
 pub(super) const APPEARANCE_MARK_IN_RING: f32 = 1.0;
 
-/// The marks inside a target circle's outer ring: the inner ring's radius when the item is
-/// `targeted`, and the appearance diamond's radius when it is `styled` (has an appearance of its own).
-/// Each of the four combinations looks different, as the Layers panel's target icons do.
+/// The inner target ring's radius and the own-appearance diamond's radius. Each of the four
+/// combinations differs, and the diamond inside a targeted ring leaves that ring visible.
 pub(super) fn target_marks(targeted: bool, styled: bool) -> (Option<f32>, Option<f32>) {
     let mark = if targeted { APPEARANCE_MARK_IN_RING } else { APPEARANCE_MARK };
     (targeted.then_some(TARGET_RING), styled.then_some(mark))
 }
 
-/// The target circle of `n`'s row at `c`: a ring, doubled while `n` is targeted, with a diamond when
-/// `n` has an appearance or transparency of its own ([`target_marks`]). Its response is clicked to target `n`; dragging
-/// it carries `n`'s appearance ([`PanelDrag::Appearance`]) onto another row's circle (Alt
-/// copies it) or the trash.
-fn target_circle(ui: &mut Ui, n: &Node, c: egui::Pos2, h: f32, targeted: bool, actions: &mut Vec<(String, Value)>, t: &Tokens) -> egui::Response {
-    let resp = ui.interact(egui::Rect::from_center_size(c, vec2(16.0, h)), ui.scope_id().with(("target", n.id.0)), Sense::click_and_drag());
-    // Only the primary button carries the appearance away.
-    if resp.drag_started_by(egui::PointerButton::Primary) {
-        egui::DragAndDrop::set_payload(ui.ctx(), PanelDrag::Appearance(n.id));
-    }
-    let held = resp.dnd_hover_payload::<PanelDrag>().is_some_and(|d| matches!(*d, PanelDrag::Appearance(id) if id != n.id));
-    if let Some(d) = resp.dnd_release_payload::<PanelDrag>()
-        && let PanelDrag::Appearance(source) = *d
-        && source != n.id
-    {
-        let copy = ui.input(|i| i.modifiers.alt);
-        actions.push(("appearance.transfer".into(), json!({"source": source.0, "target": n.id.0, "copy": copy})));
-    }
-    let ring = if held { t.accent } else { t.icon };
-    ui.painter().circle_stroke(c, 5.0, Stroke::new(if held { 1.5 } else { 1.0 }, ring));
-    let styled = has_styled_target(n);
-    let (inner, mark) = target_marks(targeted, styled);
-    if let Some(r) = inner {
-        ui.painter().circle_stroke(c, r, Stroke::new(TARGET_STROKE, t.icon));
-    }
-    if let Some(r) = mark {
-        let points = vec![c - vec2(0.0, r), c + vec2(r, 0.0), c + vec2(0.0, r), c - vec2(r, 0.0)];
-        ui.painter().add(egui::Shape::closed_line(points, Stroke::new(TARGET_STROKE, t.icon)));
-    }
-    if resp.dragged_by(egui::PointerButton::Primary) {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
-    }
-    let label = match (targeted, styled) {
-        (true, true) => tl!("Target appearance: targeted, additional appearance or transparency"),
-        (true, false) => tl!("Target appearance: targeted, basic appearance"),
-        (false, true) => tl!("Target appearance: not targeted, additional appearance or transparency"),
-        (false, false) => tl!("Target appearance: not targeted, basic appearance"),
-    };
-    resp.widget_info(|| egui::WidgetInfo { selected: Some(targeted), ..egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), label) });
-    resp.on_hover_text(label)
-}
-
 /// Whether an object's target circle shows its appearance mark: its appearance is not basic (a group or layer:
 /// it has fills, strokes or effects of its own) or its transparency (opacity, blend mode,
 /// isolation, knockout or an opacity mask) is not the default.
-fn has_styled_target(n: &Node) -> bool {
+pub(super) fn has_styled_target(n: &Node) -> bool {
     !n.appearance.is_basic()
         || (matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) && !n.appearance.items.is_empty())
         || !n.has_default_transparency()
+}
+
+/// Applies what the panel reported this pass, in order, each through its commands.
+pub(super) fn apply(app: &mut VectorcraftApp, events: Vec<LayersEvent<RowId>>) {
+    for event in events {
+        match event {
+            LayersEvent::Toggle(toggle) => apply_toggle(app, &toggle),
+            LayersEvent::Open(change) => set_open(app, &change),
+            // A row clicked in view.
+            LayersEvent::Select(_) => super::unrevealed(app, |app| run_commands(app, event)),
+            event => run_commands(app, event),
+        }
+    }
+}
+
+/// Runs the commands of one event other than a toggle sweep or an open.
+fn run_commands(app: &mut VectorcraftApp, event: LayersEvent<RowId>) {
+    let Some(st) = app.session.active() else { return };
+    for (c, p) in commands(app, st, event) {
+        app.run(&c, p).ok();
+    }
+}
+
+/// The commands of one event other than a toggle sweep or an open.
+fn commands(app: &VectorcraftApp, st: &DocState, event: LayersEvent<RowId>) -> Vec<(String, Value)> {
+    match event {
+        LayersEvent::Select(select) => select_commands(st, &select),
+        LayersEvent::ShowOnly(LayerRowKey::Layer(row)) => {
+            row_node(st, &row).filter(|_| !isolated(st)).map(|n| others_action(&st.doc, n, true)).into_iter().collect()
+        }
+        // The Show Only of the sweep that Escape took back was one undo step.
+        LayersEvent::UndoShowOnly(_) if !isolated(st) => vec![("edit.undo".into(), json!({}))],
+        LayersEvent::CellClick { row: LayerRowKey::Layer(row), column, mods, .. } => cell_click(st, &row, column, mods).into_iter().collect(),
+        LayersEvent::Drop(EditEvent::Set { after: LayerDrop::Layers(mv), .. }) => drop_command(&DocLayers::new(app, st), &mv).into_iter().collect(),
+        LayersEvent::HostDrop { payload, target: RowId::Node(target), position, copy, .. } => {
+            art_drop(st, &payload, target, position, copy).into_iter().collect()
+        }
+        LayersEvent::Rename { layer: RowId::Node(id), text, .. } => vec![("layer.setProps".into(), json!({"ids": [id.0], "name": text}))],
+        LayersEvent::Activate { row: LayerRowKey::Layer(RowId::Node(id)), on: ActivateOn::Row | ActivateOn::Thumbnail(_), .. } => {
+            vec![("ui.layerOptions".into(), json!({"ids": [id.0]}))]
+        }
+        LayersEvent::Delete(rows) => delete_command(&rows).into_iter().collect(),
+        LayersEvent::Menu { command, .. } => CommandRef::parse_key(&command).map(|c| (c.id, c.params)).into_iter().collect(),
+        _ => vec![],
+    }
+}
+
+/// Whether isolation mode is on: the other layers are outside the isolated art, so the Alt and
+/// Ctrl/Cmd+Alt clicks that change them change nothing.
+fn isolated(st: &DocState) -> bool {
+    st.isolation.is_some_and(|i| st.doc.node(i).is_some())
+}
+
+/// The node of a row's eye and lock: the row's own, a ruler guide's node; a spine has none.
+fn row_node<'a>(st: &'a DocState, row: &RowId) -> Option<&'a Node> {
+    let id = match *row {
+        RowId::Node(id) => id,
+        RowId::Guide(i) => st.doc.ruler_guides().get(i).and_then(|g| g.id)?,
+        RowId::Spine(_) => return None,
+    };
+    st.doc.node(id)
+}
+
+/// A row click or a selection key. A layer, group or object row highlights rows: one row alone
+/// makes its layer current (`layer.setCurrent`) and lets go of the selected ruler guides, keeping
+/// the selected art (#7340), and an Alt-click on a layer's or sublayer's row also selects its art,
+/// as its selection square does. A ruler guide's row selects the guide and leaves no row
+/// highlighted, so Delete then deletes the guide; a hidden or locked guide is not selected. A
+/// spine's row selects its blend, unless the blend is hidden or locked. A click on the empty space
+/// below the rows keeps the highlighted rows.
+fn select_commands(st: &DocState, select: &LayerSelect<RowId>) -> Vec<(String, Value)> {
+    let (rows, toggle) = match &select.change {
+        SelectionChange::Set(rows) => (rows.clone(), false),
+        SelectionChange::Toggle(row) => (vec![*row], true),
+        _ => return vec![],
+    };
+    let mut out: Vec<(String, Value)> = vec![];
+    let nodes: Vec<NodeId> = rows.iter().filter_map(|r| if let RowId::Node(id) = r { Some(*id) } else { None }).collect();
+    let guides: Vec<usize> = rows.iter().filter_map(|r| if let RowId::Guide(i) = r { Some(*i) } else { None }).collect();
+    let blends: Vec<u64> = rows.iter().filter_map(|r| if let RowId::Spine(b) = r { Some(b.0) } else { None }).collect();
+    match nodes.as_slice() {
+        [] if !guides.is_empty() => {
+            let all = st.doc.ruler_guides();
+            let editable: Vec<usize> = guides.into_iter().filter(|i| all.get(*i).is_some_and(|g| st.doc.guide_editable(g))).collect();
+            if editable.is_empty() {
+                return out;
+            }
+            // The highlighted rows are let go, so Delete then deletes the selected guide (Edit › Clear)
+            // rather than those rows.
+            if !st.highlighted_rows().is_empty() {
+                out.push(("layer.highlight".into(), json!({"ids": [], "mode": "set"})));
+            }
+            out.push(("guide.select".into(), json!({"indexes": editable, "toggle": toggle})));
+        }
+        [] => {
+            let editable = st.doc.editable();
+            let blends: Vec<u64> = blends.into_iter().filter(|b| editable(NodeId(*b))).collect();
+            if !blends.is_empty() {
+                let action = if toggle { "select.toggle" } else { "select.set" };
+                out.push((action.into(), json!({"ids": blends})));
+            }
+        }
+        [id] if toggle => out.push(("layer.highlight".into(), json!({"ids": [id.0], "mode": "toggle"}))),
+        [id] => {
+            let selected_guides = vectorcraft_engine::cmd::guide_indexes(&st.doc, &st.selection.guides);
+            if !selected_guides.is_empty() {
+                // Toggled out of the selection, so the selected art stays.
+                out.push(("guide.select".into(), json!({"indexes": selected_guides, "toggle": true})));
+            }
+            out.push(("layer.setCurrent".into(), json!({"id": id.0})));
+            let mods = select.mods;
+            if mods.alt && !mods.shift && !mods.cmd && st.doc.node(*id).is_some_and(|n| n.is_layer()) {
+                out.push(("layer.selectAll".into(), json!({"id": id.0})));
+            }
+        }
+        ids => out.push(("layer.highlight".into(), json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "mode": "set"}))),
+    }
+    out
+}
+
+/// A press on an eye or lock cell that is the app's, not a toggle: Ctrl/Cmd on an eye switches a
+/// layer between Preview and Outline (any other row's eye toggles), Ctrl/Cmd+Alt on an eye is
+/// Outline Others, Alt on a lock is Lock Others; the last two change nothing in isolation mode.
+fn cell_click(st: &DocState, row: &RowId, column: LayerColumn, mods: Mods) -> Option<(String, Value)> {
+    let n = row_node(st, row)?;
+    match column {
+        LayerColumn::Visibility if mods.cmd && mods.alt => (!isolated(st)).then(|| outline_others_action(&st.doc, n)),
+        LayerColumn::Visibility if mods.cmd && n.is_layer() => {
+            let preview = !matches!(n.kind, NodeKind::Layer { preview: false, .. });
+            Some(("layer.setProps".into(), json!({"ids": [n.id.0], "preview": !preview})))
+        }
+        LayerColumn::Visibility if mods.cmd => Some(("layer.setProps".into(), json!({"ids": [n.id.0], "visible": !n.visible}))),
+        LayerColumn::Lock if mods.alt => (!isolated(st)).then(|| others_action(&st.doc, n, false)),
+        _ => None,
+    }
+}
+
+/// A sweep down the eye or lock column: live while it runs, one undo step at its release, taken
+/// back by Escape. A ruler guide's row sets its guide alone.
+fn apply_toggle(app: &mut VectorcraftApp, toggle: &LayerToggle<RowId>) {
+    let Some(st) = app.session.active() else { return };
+    let ids: Vec<u64> = toggle
+        .rows
+        .iter()
+        .filter_map(|key| match key {
+            LayerRowKey::Layer(row) => row_node(st, row).map(|n| n.id.0),
+            _ => None,
+        })
+        .collect();
+    let (prop, label) = match toggle.column {
+        LayerColumn::Visibility => ("visible", "Visibility"),
+        _ => ("locked", "Lock"),
+    };
+    apply_event(app, &toggle.edit, &EditPath::Preview, &mut |app: &mut VectorcraftApp, on: &bool, phase: Live| {
+        crate::panels::live_run(app, label, "layer.setProps", json!({"ids": ids, prop: on}), phase);
+    });
+}
+
+/// A row opened or closed; Alt opens or closes every row inside it too. A view change: no undo step.
+fn set_open(app: &mut VectorcraftApp, change: &OpenChange<RowId>) {
+    let RowId::Node(id) = change.key else { return };
+    let opts = &app.ui.layers_panel;
+    let Some(st) = app.session.active_mut() else { return };
+    st.layers_open.set(id, change.open);
+    if change.all {
+        let doc = st.doc.clone();
+        if let Some(n) = doc.node(id) {
+            n.walk(&mut |c| {
+                if c.id != id && opens(c, opts) {
+                    st.layers_open.set(c.id, change.open);
+                }
+            });
+        }
+    }
+}
+
+/// Where a place lands as `layer.move` names it.
+fn place(position: LayerPosition) -> &'static str {
+    match position {
+        LayerPosition::Before => "above",
+        LayerPosition::After => "below",
+        _ => "inside",
+    }
+}
+
+/// Rows dropped above, below or into a row (Alt copies): layers, groups and objects move there
+/// (`layer.move`); ruler guides go to the layer of the row, its own for a layer (`guide.setLayer`).
+/// A place beside a ruler guide's row is at the top of its layer's art; a place just above a
+/// spine's row is below the blend's last key object. Rows dropped in the empty space under the last
+/// row arrive as a place after the bottom layer (`layer_drop` in craft-layers' `panel/drag.rs`); the
+/// engine's `layer.move` takes the bottom layer there only as a copy (#8237).
+fn drop_command(tree: &DocLayers<'_>, mv: &LayerMove<RowId>) -> Option<(String, Value)> {
+    // Only where the list takes the rows (in isolation mode, inside the isolated art): the group they
+    // land in is the target, or the one holding it.
+    let parent = match mv.position {
+        LayerPosition::Into => Some(mv.target),
+        _ => tree.parent(&mv.target),
+    };
+    let keys: Vec<LayerRowKey<RowId>> = mv.layers.iter().map(|row| LayerRowKey::Layer(*row)).collect();
+    let landing = ReorderMove { key: keys.first()?.clone(), keys, to: 0, copy: mv.copy, parent: parent.map(LayerRowKey::Layer) };
+    if !tree.accepts_drop(&landing, Mods::NONE) {
+        return None;
+    }
+    let doc = tree.doc();
+    let (target, position) = match mv.target {
+        RowId::Node(id) => (id, mv.position),
+        RowId::Guide(i) => (doc.ruler_guides().get(i).and_then(|g| g.layer)?, LayerPosition::Into),
+        RowId::Spine(blend) if mv.position == LayerPosition::Before => {
+            (doc.node(blend).and_then(|b| b.children()).and_then(|c| c.first()).map(|c| c.id)?, LayerPosition::After)
+        }
+        RowId::Spine(_) => return None,
+    };
+    let guides: Vec<usize> = mv.layers.iter().filter_map(|r| if let RowId::Guide(i) = r { Some(*i) } else { None }).collect();
+    if !guides.is_empty() {
+        let n = doc.node(target)?;
+        let layer = if n.is_layer() { target } else { doc.layer_containing(target)? };
+        return (guides.len() == mv.layers.len()).then(|| ("guide.setLayer".into(), json!({"indexes": guides, "layer": layer.0})));
+    }
+    let ids: Vec<u64> = mv.layers.iter().filter_map(|r| if let RowId::Node(id) = r { Some(id.0) } else { None }).collect();
+    (ids.len() == mv.layers.len()).then(|| ("layer.move".into(), json!({"ids": ids, "target": target.0, "place": place(position), "copy": mv.copy})))
+}
+
+/// The selected art carried by a row's selection square, dropped on `target`: the selection's top
+/// objects, as Arrange and Group take them, move there (Alt copies them).
+fn art_drop(st: &DocState, payload: &DropPayload, target: NodeId, position: LayerPosition, copy: bool) -> Option<(String, Value)> {
+    let art = payload.get::<ArtDrag>()?;
+    let ids: Vec<u64> = st.doc.paint_order(art.0.iter().copied()).iter().map(|i| i.0).collect();
+    Some(("layer.move".into(), json!({"ids": ids, "target": target.0, "place": place(position), "copy": copy})))
+}
+
+/// Delete or Backspace in the rows: the layer, group and object rows (`ui.layerDelete`, which asks
+/// first when a layer among them holds art), else the ruler guides.
+fn delete_command(rows: &[LayerRowKey<RowId>]) -> Option<(String, Value)> {
+    let row_of = |key: &LayerRowKey<RowId>| if let LayerRowKey::Layer(row) = key { Some(*row) } else { None };
+    let ids: Vec<u64> = rows.iter().filter_map(row_of).filter_map(|r| if let RowId::Node(id) = r { Some(id.0) } else { None }).collect();
+    if !ids.is_empty() {
+        return Some(("ui.layerDelete".into(), json!({"ids": ids})));
+    }
+    let guides: Vec<usize> = rows.iter().filter_map(row_of).filter_map(|r| if let RowId::Guide(i) = r { Some(i) } else { None }).collect();
+    (!guides.is_empty()).then(|| ("guide.remove".into(), json!({"indexes": guides})))
 }
