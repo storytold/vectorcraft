@@ -79,6 +79,13 @@ fn imports_can_be_renamed_and_combined() {
 }
 
 #[test]
+fn a_destructuring_declaration_exports_every_name_it_binds() {
+    let m = "export const { a, b: [c, ...d] } = { a: 1, b: [2, 3, 4] }; export var [e = 5] = [];";
+    let out = run("import { a, c, d, e } from './m.mjs'; out.push(a, c, d.join('+'), e);", &[("./m.mjs", m)]);
+    assert_eq!(out, "1|2|3+4|5");
+}
+
+#[test]
 fn default_exports_of_expressions_and_functions() {
     let out = run("import v from './v.mjs'; out.push(v * 2);", &[("./v.mjs", "export default 20 + 1;")]);
     assert_eq!(out, "42");

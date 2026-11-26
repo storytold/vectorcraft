@@ -776,6 +776,15 @@ fn overprint_black_and_print_fixes_reach_a_colorized_images_color() {
     let v = s.execute("addon.color.printFixes", &json!({"removeWhiteOverprint": true})).unwrap();
     assert_eq!(v["whiteOverprintRemoved"], 1, "{v}");
     assert!(!overprints(&s), "white knocks out again");
+    // A white spot ink is an ink: Remove White Overprint leaves its overprint.
+    s.execute("swatch.new", &json!({"name": "Opaque White", "color": {"c": 0, "m": 0, "y": 0, "k": 0}, "spot": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"swatch": "Opaque White"})).unwrap();
+    s.execute("object.setOverprint", &json!({"fill": true})).unwrap();
+    assert!(overprints(&s), "the spot white overprints");
+    let v = s.execute("addon.color.printFixes", &json!({"removeWhiteOverprint": true})).unwrap();
+    assert_eq!(v["whiteOverprintRemoved"], 0, "{v}");
+    assert!(overprints(&s), "the spot white keeps overprinting");
 }
 
 /// A flattening for a file that writes colorized images in their ink (EPS) keeps the image, and

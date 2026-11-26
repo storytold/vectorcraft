@@ -125,7 +125,7 @@ pub fn start(app: &mut VectorcraftApp, command: &str, p: Value, from_panel: bool
             let _ = tx.send((run, traced));
         })
         .map_err(|e| e.to_string())?;
-    let started = crate::export_progress::now();
+    let started = crate::export_progress::now(app);
     app.trace_runs.running.push(Running { started, doc, target, token, superseded: false, steps, from_panel, hidden: false, done });
     // This frame may have asked for its next one before the trace started (`tick`): ask now.
     if let Some(ctx) = &app.ui_ctx {

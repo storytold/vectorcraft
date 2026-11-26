@@ -12,7 +12,8 @@ use std::collections::HashSet;
 
 use super::{Parser, Result, describe};
 use crate::ast::{
-    DEFAULT_BINDING, ExportEntry, FunctionKind, ImportEntry, ImportName, LexKind, ModuleInfo, ModuleRequest, Name, Program, Stmt, StmtId, VarDecl,
+    Binding, DEFAULT_BINDING, ExportEntry, FunctionKind, ImportEntry, ImportName, LexKind, ModuleInfo, ModuleRequest, Name, Program, Stmt, StmtId,
+    VarDecl,
 };
 use crate::token::{Keyword, Punct, Span, Token, TokenKind};
 
@@ -217,7 +218,7 @@ impl Parser<'_> {
         }
         let stmt = self.parse_statement_item()?;
         let names: Vec<Name> = match self.ast.stmt(stmt) {
-            Some(Stmt::Var(decls) | Stmt::Lexical(_, decls)) => decls.iter().map(|d| d.name.clone()).collect(),
+            Some(Stmt::Var(decls) | Stmt::Lexical(_, decls)) => decls.iter().flat_map(|d| self.ast.bound_names(&d.target)).collect(),
             Some(Stmt::FunctionDecl(fid)) => self.ast.function(*fid).and_then(|f| f.name.clone()).into_iter().collect(),
             _ => return Err(self.error_at_offset(span.start, "expected a declaration after 'export'")),
         };
@@ -244,8 +245,8 @@ impl Parser<'_> {
         let start = self.tok.span;
         let value = self.parse_assignment(false)?;
         self.semicolon()?;
-        let name = Name { name: DEFAULT_BINDING.into(), span: start };
-        let stmt = self.ast.push_stmt(Stmt::Lexical(LexKind::Const, vec![VarDecl { name, init: Some(value) }]), self.span_from(start));
+        let target = Binding::Name(Name { name: DEFAULT_BINDING.into(), span: start });
+        let stmt = self.ast.push_stmt(Stmt::Lexical(LexKind::Const, vec![VarDecl { target, init: Some(value) }]), self.span_from(start));
         info.exports.push(ExportEntry::Local { export_name: "default".into(), local: DEFAULT_BINDING.into(), span });
         Ok(stmt)
     }
