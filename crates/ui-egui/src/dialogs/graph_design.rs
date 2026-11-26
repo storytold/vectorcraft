@@ -903,16 +903,14 @@ mod tests {
             );
             h.run_steps(4);
             if dismiss {
-                let pos = h.get_by_label("OK").rect().center();
-                let button =
-                    |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-                h.hover_at(pos);
-                h.event(button(true));
-                h.step();
-                h.input_mut().events.extend([
-                    button(false),
-                    egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() },
-                ]);
+                h.get_by_label("OK").click_accesskit();
+                h.input_mut().events.push(egui::Event::Key {
+                    key: egui::Key::Escape,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: Default::default(),
+                });
             } else {
                 h.get_by_label("OK").click();
             }
