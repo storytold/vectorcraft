@@ -94,9 +94,10 @@ fn dropped_below(app: &mut VectorcraftApp, drag: PanelDrag, mods: Mods) {
     dnd::on_dropped(app, &shown, &at, &drag, mods);
 }
 
-/// The drag the row `name` starts, carrying rows `names`.
+/// The drag the row `name` starts in the active document, carrying rows `names`.
 fn rows_drag(app: &VectorcraftApp, name: &str, names: &[&str]) -> PanelDrag {
-    dnd::drag_of(&doc(app), &key_of(app, name), names.iter().map(|n| n.to_string()).collect())
+    let start = dnd::DragStart::of(app.session.active().expect("a document"));
+    dnd::drag_of(&start, &key_of(app, name), names.iter().map(|n| n.to_string()).collect())
 }
 
 /// Art `ids` dragged off the canvas.
@@ -549,6 +550,184 @@ fn drops_on_the_buttons_and_the_panel_run_their_commands() {
         dnd::on_footer_drop(&mut app, dnd::FooterTarget::New, &drag);
         assert_eq!(doc(&app), kept, "{name}");
     }
+}
+
+/// The document and its undo step count.
+fn doc_and_steps(app: &VectorcraftApp) -> (Document, usize) {
+    (doc(app), undo_steps(app))
+}
+
+/// Delete Swatch acts only on rows the document has held unchanged since the drag started: a swatch
+/// deleted and made again under its name while it is dragged, a swatch the newest undo step made
+/// that an undo takes back before one of that name is made again, and a swatch deleted and brought
+/// back by an undo all ask nothing and are kept, also when the new swatch has the same color. A
+/// swatch dragged while an undo takes back a step that left it alone is still deleted after
+/// asking, and a drag started in another document deletes nothing.
+#[test]
+fn delete_swatch_skips_rows_replaced_during_the_drag() {
+    let mut app = app();
+    let key = crate::dialogs::confirm::KIND;
+    // Deleted and made again under its name, with the same color.
+    let drag = rows_drag(&app, "Orange", &["Orange"]);
+    let orange = doc(&app).swatch("Orange").cloned();
+    app.run("swatch.delete", json!({"names": ["Orange"]})).unwrap();
+    app.run("swatch.new", json!({"name": "Orange", "color": "#f7931e"})).unwrap();
+    let replaced = doc_and_steps(&app);
+    assert_eq!(replaced.0.swatch("Orange").cloned(), orange, "the new swatch is the same as the one deleted");
+    dnd::on_footer_drop(&mut app, dnd::FooterTarget::Delete, &drag);
+    assert!(!dialog_open(&app, key), "the new swatch of that name asks nothing");
+    assert_eq!(doc_and_steps(&app), replaced, "the new swatch of that name is kept");
+    // Made by the newest undo step, undone, and made again.
+    let glass = json!({"name": "Sea Glass", "color": "#00a99d"});
+    app.run("swatch.new", glass.clone()).unwrap();
+    let made = doc(&app).swatch("Sea Glass").cloned();
+    let drag = rows_drag(&app, "Sea Glass", &["Sea Glass"]);
+    app.session.execute("edit.undo", &json!({})).unwrap();
+    assert!(doc(&app).swatch("Sea Glass").is_none(), "the undo takes Sea Glass away");
+    app.session.execute("swatch.new", &glass).unwrap();
+    let replaced = doc_and_steps(&app);
+    assert_eq!(replaced.0.swatch("Sea Glass").cloned(), made, "the new swatch is the same as the one undone");
+    dnd::on_footer_drop(&mut app, dnd::FooterTarget::Delete, &drag);
+    assert!(!dialog_open(&app, key), "the new swatch made after the undo asks nothing");
+    assert_eq!(doc_and_steps(&app), replaced, "the new swatch made after the undo is kept");
+    // Deleted and brought back by an undo.
+    let drag = rows_drag(&app, "Orange", &["Orange"]);
+    app.session.execute("swatch.delete", &json!({"names": ["Orange"]})).unwrap();
+    app.session.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(doc_and_steps(&app), replaced, "the undo brings Orange back");
+    dnd::on_footer_drop(&mut app, dnd::FooterTarget::Delete, &drag);
+    assert!(!dialog_open(&app, key), "a swatch brought back by an undo asks nothing");
+    // An undo of a step that left the swatch alone.
+    app.run("shape.rectangle", json!({"x": 60, "y": 0, "width": 20, "height": 20})).unwrap();
+    let drag = rows_drag(&app, "Orange", &["Orange"]);
+    app.run("edit.undo", json!({})).unwrap();
+    dnd::on_footer_drop(&mut app, dnd::FooterTarget::Delete, &drag);
+    assert!(dialog_open(&app, key), "a swatch an undo left alone is deleted after asking");
+    cancel(&mut app, key);
+    // Dragged from this document, dropped while another document with the same swatches is active.
+    let drag = rows_drag(&app, "Orange", &["Orange"]);
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let other = doc_and_steps(&app);
+    assert!(other.0.swatch("Orange").is_some(), "the other document has Orange");
+    dnd::on_footer_drop(&mut app, dnd::FooterTarget::Delete, &drag);
+    assert!(!dialog_open(&app, key), "the other document asks nothing");
+    assert_eq!(doc_and_steps(&app), other, "the other document keeps Orange");
+}
+
+/// New Swatch duplicates only rows the document has held unchanged since the drag started: a
+/// swatch deleted and made again under its name while it is dragged, a swatch the newest undo step
+/// made that an undo takes back before one of that name is made again, and a swatch deleted and
+/// brought back by an undo between two passes of the panel are not duplicated. A swatch that stays
+/// unchanged is.
+#[test]
+fn new_swatch_skips_rows_replaced_during_the_drag() {
+    let mut app = app();
+    // Deleted and made again under its name, with the same color.
+    let drag = rows_drag(&app, "Orange", &["Orange"]);
+    app.run("swatch.delete", json!({"names": ["Orange"]})).unwrap();
+    app.run("swatch.new", json!({"name": "Orange", "color": "#f7931e"})).unwrap();
+    let replaced = doc_and_steps(&app);
+    dnd::on_footer_drop(&mut app, dnd::FooterTarget::New, &drag);
+    assert!(open_dialogs(&app).is_empty(), "the new swatch of that name opens no dialog");
+    assert_eq!(doc_and_steps(&app), replaced, "the new swatch of that name is not duplicated");
+    // Made by the newest undo step (a batch), undone, and made again.
+    let glass = json!({"name": "Sea Glass", "color": "#00a99d"});
+    let steps = json!([{"command": "swatch.new", "params": glass}, {"command": "swatch.move", "params": {"name": "Sea Glass", "to": 2}}]);
+    app.run("command.batch", json!({"label": "New Swatch", "commands": steps})).unwrap();
+    let drag = rows_drag(&app, "Sea Glass", &["Sea Glass"]);
+    app.session.execute("edit.undo", &json!({})).unwrap();
+    app.session.execute("swatch.new", &glass).unwrap();
+    let replaced = doc_and_steps(&app);
+    dnd::on_footer_drop(&mut app, dnd::FooterTarget::New, &drag);
+    assert_eq!(doc_and_steps(&app), replaced, "the new swatch made after the undo is not duplicated");
+    // Deleted and brought back by an undo, then an edit that clears the redo steps, each seen by a
+    // pass of the panel.
+    let drag = rows_drag(&app, "Orange", &["Orange"]);
+    let PanelDrag::Paint { rows: Some(rows), .. } = &drag else { panic!("a rows drag") };
+    for (id, params) in [
+        ("swatch.delete", json!({"names": ["Orange"]})),
+        ("edit.undo", json!({})),
+        ("shape.rectangle", json!({"x": 60, "y": 0, "width": 20, "height": 20})),
+    ] {
+        app.run(id, params).unwrap();
+        dnd::follow(&mut app, rows);
+    }
+    let restored = doc_and_steps(&app);
+    assert!(restored.0.swatch("Orange").is_some(), "the undo brings Orange back");
+    dnd::on_footer_drop(&mut app, dnd::FooterTarget::New, &drag);
+    assert_eq!(doc_and_steps(&app), restored, "a swatch brought back by an undo is not duplicated");
+    // A swatch that stays unchanged is duplicated.
+    let drag = rows_drag(&app, "Orange", &["Orange"]);
+    app.run("shape.rectangle", json!({"x": 90, "y": 0, "width": 20, "height": 20})).unwrap();
+    let undo = undo_steps(&app);
+    dnd::on_footer_drop(&mut app, dnd::FooterTarget::New, &drag);
+    assert!(doc(&app).swatch("Orange copy").is_some(), "an unchanged swatch is duplicated");
+    assert_eq!(undo_steps(&app), undo + 1);
+}
+
+/// A drag started before File › Revert replaced the document duplicates and deletes nothing, also
+/// when the reverted document holds the same swatches.
+#[test]
+fn rows_dragged_before_a_revert_are_left_alone() {
+    let mut app = app();
+    let key = crate::dialogs::confirm::KIND;
+    let drag = rows_drag(&app, "Orange", &["Orange"]);
+    let at = app.session.active_index().expect("a document");
+    let copy = doc(&app);
+    assert!(app.session.replace_document(at, copy));
+    let reverted = doc_and_steps(&app);
+    assert!(reverted.0.swatch("Orange").is_some(), "the reverted document has Orange");
+    dnd::on_footer_drop(&mut app, dnd::FooterTarget::New, &drag);
+    assert_eq!(doc_and_steps(&app), reverted, "the reverted document's Orange is not duplicated");
+    dnd::on_footer_drop(&mut app, dnd::FooterTarget::Delete, &drag);
+    assert!(!dialog_open(&app, key), "the reverted document asks nothing");
+    assert_eq!(doc_and_steps(&app), reverted, "the reverted document keeps Orange");
+}
+
+/// The rows of a drag running in the drag session are checked after every command the app runs:
+/// a swatch deleted and brought back by an undo, then an edit that clears the redo steps, all with
+/// no pass of the panel in between, is neither duplicated by New Swatch nor deleted by Delete
+/// Swatch.
+#[test]
+fn rows_dragged_in_the_session_are_checked_after_every_command() {
+    use craft::behavior::keyed;
+    use craft::ui::contract::ShowCollection as _;
+    use craft::ui::list::{List, ListRow};
+    use craft::ui::testing::Fixture;
+
+    let mut app = app();
+    let payload = rows_drag(&app, "Orange", &["Orange"]);
+    // A list row that starts the drag through the drag session, as a row of the panel does.
+    let mut fixture = Fixture::new(move |ui| {
+        let payload = payload.clone();
+        let _ = List::<u32>::new("Drag source").drag_payload(move |_: &ListDrag<u32>| Some(payload.clone())).show_items(
+            ui,
+            &keyed(&[0u32], |key: &u32| *key),
+            &mut |_, _| ListRow::new("Dragged"),
+        );
+    });
+    fixture.room(vec2(240.0, 120.0));
+    fixture.settle();
+    app.ui_ctx = Some(fixture.ctx().clone());
+    let from = fixture.by_label("Dragged").expect("the drag source").center();
+    let key = crate::dialogs::confirm::KIND;
+    fixture.drag_at_pausing(from, vec2(0.0, 60.0), |f| {
+        let drag = craft::ui::runtime::drag::active::<PanelDrag>(f.ctx()).expect("the rows drag");
+        for (id, params) in [
+            ("swatch.delete", json!({"names": ["Orange"]})),
+            ("edit.undo", json!({})),
+            ("shape.rectangle", json!({"x": 60, "y": 0, "width": 20, "height": 20})),
+        ] {
+            app.run(id, params).unwrap();
+        }
+        let restored = doc_and_steps(&app);
+        assert!(restored.0.swatch("Orange").is_some(), "the undo brings Orange back");
+        dnd::on_footer_drop(&mut app, dnd::FooterTarget::New, &drag);
+        assert_eq!(doc_and_steps(&app), restored, "a swatch brought back by an undo is not duplicated");
+        dnd::on_footer_drop(&mut app, dnd::FooterTarget::Delete, &drag);
+        assert!(!dialog_open(&app, key), "a swatch brought back by an undo asks nothing");
+        assert_eq!(doc_and_steps(&app), restored, "a swatch brought back by an undo is kept");
+    });
 }
 
 /// A selected swatch dragged onto New Swatch or Delete Swatch carries the selected swatches that

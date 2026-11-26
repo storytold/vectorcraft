@@ -263,8 +263,10 @@ impl VectorcraftApp {
                 }
                 // A renamed spot color swatch stays the Color Guide's base; a deleted one ends the link.
                 panels::color_guide::after_command(self, id, &params, v, spot_base);
-                // A renamed color group stays selected in the Swatches panel.
+                // A renamed color group stays selected in the Swatches panel, and the rows dragged
+                // from its list are checked against what the command left.
                 panels::swatches::after_command(self, id, &params, v);
+                panels::swatches::follow_drag(self);
                 if id == "file.new" {
                     self.status("");
                     // New Document's Pixel preview mode (Overprint Preview is the engine's).

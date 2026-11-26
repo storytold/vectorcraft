@@ -40,6 +40,7 @@ mod libraries;
 #[cfg(test)]
 use actions::{deletable, delete, mergeable, new_swatch, selected_group};
 pub(crate) use actions::{menu_rows, menu_states, run};
+pub(crate) use dnd::{HeldRows, follow_drag};
 pub(crate) use libraries::{
     DOCUMENT_SWATCHES, SwatchLibraries, USER_SLOT, colour_libraries, library_entries, limit_key, limit_name, load_library, open_library,
     other_library, user_library, window_menu,
@@ -129,6 +130,9 @@ pub(crate) struct Model {
     kept: Option<(String, Option<String>)>,
     /// The art and the active swatch the last pass saw ([`Model::focus`]).
     seen: Option<(Option<SelectedArt>, Option<String>)>,
+    /// The rows of the last drag from the list (as it started) and what its last check found
+    /// ([`dnd::follow`]).
+    drag: Option<(Arc<HeldRows>, HeldRows)>,
 }
 
 impl Model {
@@ -406,10 +410,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui) {
         lit: highlighted(&st.doc, &base).into_iter().map(str::to_string).collect(),
         doc: Arc::clone(&st.doc),
     };
-    let dragged_doc = Arc::clone(&thumbs.doc);
+    let start = dnd::DragStart::of(st);
     let shown_app: &VectorcraftApp = app;
     let out = SwatchesPanel::new(&data, Bind::bound(&mut model.state), Srgba::rgb(0.0, 0.0, 0.0))
-        .drag_payload(move |drag: &ListDrag<SwatchKey>| Some(dnd::drag_of(&dragged_doc, &drag.grabbed, dragged_rows(drag))))
+        .drag_payload(move |drag: &ListDrag<SwatchKey>| Some(dnd::drag_of(&start, &drag.grabbed, dragged_rows(drag))))
         .thumb(thumbs, thumb)
         .row_icons(|key| match key {
             SwatchKey::Swatch(name) => row_icons(shown_app, name),
@@ -424,6 +428,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui) {
         .footer(None)
         .show(ui);
     app.ui.swatches_panel = model;
+    // The rows being dragged from the list are checked on every pass, so the footer's drop finds
+    // the ones replaced since the drag started.
+    if let Some(PanelDrag::Paint { rows: Some(r), .. }) = craft::ui::runtime::drag::active::<PanelDrag>(ui.ctx()).as_deref() {
+        dnd::follow(app, r);
+    }
     let shown = shown_keys(&data);
     if let Some((at, _, alt)) = out.used
         && let Some(entry) = data.get(at.group).and_then(|g| g.entries.get(at.index))
@@ -771,7 +780,13 @@ fn footer(app: &mut VectorcraftApp, ui: &mut Ui) {
     let opts = actions::editable(app, &sel);
     let group = actions::selected_group(app, &sel).filter(|_| opts.is_none());
     let icon = |id: &'static str| IconSpec::svg(IconId::new(id));
-    let rows_drag = |d: &PanelDrag| matches!(d, PanelDrag::Paint { rows: Some(_), .. });
+    // A drag whose rows were all replaced or removed since it started (or that started in another
+    // document) is not taken.
+    let held = match craft::ui::runtime::drag::active::<PanelDrag>(ui.ctx()).as_deref() {
+        Some(PanelDrag::Paint { rows: Some(r), .. }) => !dnd::follow(app, r).is_empty(),
+        _ => true,
+    };
+    let rows_drag = move |d: &PanelDrag| held && matches!(d, PanelDrag::Paint { rows: Some(_), .. });
     let edit = if group.is_some() {
         FooterAction::new(icon("palette"), tl!("Edit or Apply Color Group"))
     } else {

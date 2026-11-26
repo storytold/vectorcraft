@@ -1,8 +1,12 @@
-use super::{Document, Paint, PanelDrag, REGISTRATION, Value, VectorcraftApp, json, name_of, swatch_params};
+use std::sync::{Arc, Weak};
+
+use super::{Document, Paint, PanelDrag, REGISTRATION, Swatch, Value, VectorcraftApp, json, name_of, swatch_params};
 use crate::panel_drag::SwatchRows;
 use craft::color_ui::ui::SwatchKey;
 use craft::keymap::Mods;
 use craft::ui::contract::{DropAt, ReorderMove};
+use vectorcraft_color::SwatchGroup;
+use vectorcraft_engine::{DocState, History, HistoryEntry};
 
 /// A drag released on the panel.
 pub(super) enum Drop {
@@ -42,9 +46,10 @@ impl Drop {
     }
 }
 
-/// The drag a row of `key` starts, moving rows `names`. Colour groups have no paint of their own
-/// (the chip under the pointer draws Registration's mark for Registration).
-pub(super) fn drag_of(d: &Document, key: &SwatchKey, names: Vec<String>) -> PanelDrag {
+/// The drag a row of `key` starts in document `start`, moving rows `names`. Colour groups have no
+/// paint of their own (the chip under the pointer draws Registration's mark for Registration).
+pub(super) fn drag_of(start: &DragStart, key: &SwatchKey, names: Vec<String>) -> PanelDrag {
+    let d = &start.doc;
     let name = name_of(key);
     let (paint, params) = match key {
         SwatchKey::Swatch(_) if name == REGISTRATION => (Paint::registration(), swatch_params(d, name)),
@@ -54,8 +59,194 @@ pub(super) fn drag_of(d: &Document, key: &SwatchKey, names: Vec<String>) -> Pane
         },
         _ => (Paint::None, Value::Null),
     };
-    let rows = SwatchRows { grabbed: name.to_string(), names, groups: matches!(key, SwatchKey::Group(_)) };
+    let held = Arc::new(start.rows(&names));
+    let rows = SwatchRows { grabbed: name.to_string(), names, groups: matches!(key, SwatchKey::Group(_)), held };
     PanelDrag::Paint { paint, params, rows: Some(rows), library: None }
+}
+
+/// A row dragged from the list as it was when the drag started: its swatch or its colour group.
+#[derive(Clone, PartialEq)]
+enum HeldRow {
+    Swatch(Swatch),
+    Group(SwatchGroup),
+}
+
+impl HeldRow {
+    /// Row `name` of `d`: its swatch, else the colour group of that name.
+    fn of(d: &Document, name: &str) -> Option<Self> {
+        match d.swatch(name) {
+            Some(w) => Some(HeldRow::Swatch(w.clone())),
+            None => d.swatch_groups.iter().find(|g| g.name == name).cloned().map(HeldRow::Group),
+        }
+    }
+    /// Whether `d` holds this row unchanged.
+    fn unchanged_in(&self, d: &Document) -> bool {
+        match self {
+            HeldRow::Swatch(w) => d.swatch(&w.name) == Some(w),
+            HeldRow::Group(g) => d.swatch_groups.iter().any(|x| x == g),
+        }
+    }
+}
+
+/// The newest undo step of `st` and the one under it, and the next redo step and the one under it
+/// ([`HistoryEntry::serial`]), 0 for none.
+fn steps(st: &DocState) -> [u64; 4] {
+    let serial = |list: &[HistoryEntry], back: usize| list.len().checked_sub(back).and_then(|i| list.get(i)).map_or(0, HistoryEntry::serial);
+    let h = &st.history;
+    [serial(&h.undo, 1), serial(&h.undo, 2), serial(&h.redo, 1), serial(&h.redo, 2)]
+}
+
+/// A document as a drag from the list finds it: its `uid` and its count of File › Revert
+/// ([`DocState::reverts`]), its state, its newest steps ([`steps`]) and the state undoing the newest
+/// undo step gives back (that step's document).
+#[derive(Clone)]
+pub(super) struct DragStart {
+    uid: u64,
+    reverts: u64,
+    doc: Arc<Document>,
+    steps: [u64; 4],
+    back: Option<Arc<Document>>,
+}
+
+impl DragStart {
+    pub(super) fn of(st: &DocState) -> Self {
+        let back = st.history.undo.last().map(|e| Arc::clone(&e.doc));
+        DragStart { uid: st.uid, reverts: st.reverts, doc: Arc::clone(&st.doc), steps: steps(st), back }
+    }
+
+    /// Rows `names` as this document holds them.
+    fn rows(&self, names: &[String]) -> HeldRows {
+        let rows: Vec<_> = names.iter().map(|n| (n.clone(), HeldRow::of(&self.doc, n))).collect();
+        let back = rows.iter().map(|(_, r)| r.as_ref().zip(self.back.as_deref()).is_some_and(|(r, d)| r.unchanged_in(d))).collect();
+        HeldRows { uid: self.uid, reverts: self.reverts, doc: Arc::downgrade(&self.doc), steps: self.steps, rows, back }
+    }
+}
+
+/// The rows a drag from the list carries, in the order of its names, and the document (`uid`, and
+/// its count of File › Revert) and the state and undo history they were last checked against. A
+/// row is `None` once a state of the document since the drag started did not hold it unchanged:
+/// deleted, edited, or deleted and made again under its name, also with the same paint.
+#[derive(Clone)]
+pub(crate) struct HeldRows {
+    uid: u64,
+    reverts: u64,
+    doc: Weak<Document>,
+    /// The newest undo step of the document and the one under it, and the next redo step and the
+    /// one under it ([`steps`]).
+    steps: [u64; 4],
+    rows: Vec<(String, Option<HeldRow>)>,
+    /// For each row, whether the document undoing the newest step gives back (that step's
+    /// document) holds it unchanged.
+    back: Vec<bool>,
+}
+
+impl PartialEq for HeldRows {
+    fn eq(&self, other: &Self) -> bool {
+        self.uid == other.uid
+            && self.reverts == other.reverts
+            && self.doc.ptr_eq(&other.doc)
+            && self.steps == other.steps
+            && self.rows == other.rows
+            && self.back == other.back
+    }
+}
+
+impl std::fmt::Debug for HeldRows {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let held: Vec<(&str, bool)> = self.rows.iter().map(|(n, r)| (n.as_str(), r.is_some())).collect();
+        f.debug_struct("HeldRows").field("uid", &self.uid).field("steps", &self.steps).field("held", &held).finish_non_exhaustive()
+    }
+}
+
+/// `held` checked against every state document `st` passed through since it was last checked, and
+/// the current one. Those states are the ones the redo steps made since then keep (the states an
+/// undo left), and:
+/// - While the newest undo step of then is still in the history, the states the undo steps made
+///   since then keep.
+/// - After an undo of that step, or an edit merged into it, the state before that step and the
+///   states the undo steps made since then keep.
+///
+/// Otherwise (more than one step undone, or steps dropped past the history's limits) the states in
+/// between are not known, and every row is left out of the drop. The panel checks the rows on every
+/// pass and after every command the app runs ([`follow_drag`]), so only the steps of one command go
+/// unseen. One undo step is one change: the states between the commands of a `command.batch` are
+/// not kept, and a row the batch leaves as it found it stays in the drop.
+fn checked(held: HeldRows, st: &DocState) -> HeldRows {
+    let now = steps(st);
+    let same = std::ptr::eq(held.doc.as_ptr(), Arc::as_ptr(&st.doc));
+    if same && held.steps == now {
+        return held;
+    }
+    let (undo, redo) = (&st.history.undo, &st.history.redo);
+    // Where the steps made after the step with `serial` start in `list`: 0 for none.
+    let after = |list: &[HistoryEntry], serial: u64| {
+        if serial == 0 { Some(0) } else { list.iter().rposition(|e| e.serial() == serial).map(|i| i + 1) }
+    };
+    let [newest, below, next, further] = held.steps;
+    // The redo steps made since: above the next redo step of then, or above the one under it once a
+    // redo took that step.
+    let left = redo.get(after(redo, next).or_else(|| after(redo, further)).unwrap_or(0)..).unwrap_or_default();
+    // The states in between, and whether they start with the state an undo of the newest step gave back.
+    let (between, undone) = match after(undo, newest) {
+        // With no step before it, the first step keeps the last checked state, unless steps were
+        // dropped past the history's limits, which leave at least that many steps.
+        Some(0) => {
+            let kept = same
+                || undo.len() < st.history.limit.min(History::MIN_STEPS)
+                || undo.first().is_none_or(|e| std::ptr::eq(held.doc.as_ptr(), Arc::as_ptr(&e.doc)));
+            (kept.then_some(undo.as_slice()), false)
+        }
+        Some(i) => (undo.get(i..), false),
+        None => (after(undo, below).and_then(|i| undo.get(i..)), true),
+    };
+    let unchanged = |r: &HeldRow, b: &[HistoryEntry]| b.iter().chain(left).all(|e| r.unchanged_in(&e.doc)) && r.unchanged_in(&st.doc);
+    let rows: Vec<_> = held
+        .rows
+        .into_iter()
+        .zip(held.back)
+        .map(|((name, row), back)| (name, row.filter(|r| (back || !undone) && between.is_some_and(|b| unchanged(r, b)))))
+        .collect();
+    let last = undo.last();
+    let back = rows.iter().map(|(_, r)| r.as_ref().zip(last).is_some_and(|(r, e)| r.unchanged_in(&e.doc))).collect();
+    HeldRows { uid: held.uid, reverts: held.reverts, doc: Arc::downgrade(&st.doc), steps: now, rows, back }
+}
+
+/// The names of drag `r` that the active document has held unchanged since the drag started
+/// ([`checked`]), in the drag's order. Empty when the drag started in another document, or before
+/// File › Revert replaced the document. The panel keeps what it found for the drag, so the next
+/// check starts from there.
+pub(super) fn follow(app: &mut VectorcraftApp, r: &SwatchRows) -> Vec<String> {
+    let Some(st) = app.session.active() else { return vec![] };
+    if st.uid != r.held.uid || st.reverts != r.held.reverts {
+        return vec![];
+    }
+    let kept = &mut app.ui.swatches_panel.drag;
+    let from = match kept {
+        Some((start, now)) if Arc::ptr_eq(start, &r.held) => now.clone(),
+        _ => (*r.held).clone(),
+    };
+    let now = checked(from, st);
+    let names = if now.rows.len() == r.names.len() {
+        r.names
+            .iter()
+            .zip(&now.rows)
+            .filter(|(n, (h, row))| *n == h && row.as_ref().is_some_and(|row| row.unchanged_in(&st.doc)))
+            .map(|(n, _)| n.clone())
+            .collect()
+    } else {
+        vec![]
+    };
+    *kept = Some((Arc::clone(&r.held), now));
+    names
+}
+
+/// Checks the rows being dragged from the list against the active document after a command ran
+/// ([`follow`]), so that the commands after it cannot replace one unseen.
+pub(crate) fn follow_drag(app: &mut VectorcraftApp) {
+    let Some(ctx) = app.ui_ctx.clone() else { return };
+    if let Some(PanelDrag::Paint { rows: Some(r), .. }) = craft::ui::runtime::drag::active::<PanelDrag>(&ctx).as_deref() {
+        follow(app, r);
+    }
 }
 
 /// The row `at` names and whether the drop lands after it: onto a row it is that row; in a gap it is
@@ -109,10 +300,17 @@ pub(super) enum FooterTarget {
 
 /// Swatches or groups dragged from the list and released on a footer button (ap.AP8 `FooterDrop`):
 /// New Swatch duplicates the swatches among them, Delete Swatch asks to delete them as a click on
-/// the button does. Other drags are left to their own targets.
+/// the button does. Only rows the active document has held unchanged since the drag started count
+/// ([`follow`]): a row deleted, edited or replaced under its name meanwhile, and every row of a drag
+/// started in another document, is left alone. Other drags are left to their own targets.
 pub(super) fn on_footer_drop(app: &mut VectorcraftApp, target: FooterTarget, drag: &PanelDrag) {
     let PanelDrag::Paint { rows: Some(r), .. } = drag else { return };
-    let rows = footer_rows(app, r);
+    let held = follow(app, r);
+    if held.is_empty() {
+        return;
+    }
+    // Rows of the drag must be unchanged since it started; selected rows the drag does not hold come with it.
+    let rows: Vec<String> = footer_rows(app, r).into_iter().filter(|n| !r.names.contains(n) || held.contains(n)).collect();
     match target {
         FooterTarget::Delete => {
             let names = super::actions::deletable(app, &rows);

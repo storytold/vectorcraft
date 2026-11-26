@@ -45,6 +45,9 @@ pub struct SwatchRows {
     pub names: Vec<String>,
     /// The names are colour groups.
     pub groups: bool,
+    /// The rows as the document held them when the drag started, which New Swatch and Delete
+    /// Swatch check before acting on them.
+    pub(crate) held: std::sync::Arc<crate::panels::swatches::HeldRows>,
 }
 
 impl PanelDrag {
