@@ -13,6 +13,18 @@ fn panel(subpaths: Vec<SubPath>) -> Panel {
     Panel { outline: PathData::new(subpaths), area: 0.0 }
 }
 
+fn poly(pts: &[(f64, f64)], closed: bool) -> PathData {
+    PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), closed))
+}
+
+fn fold_line(path: PathData, kind: super::super::LineKind, key: u64, angle: Option<f64>) -> super::super::FoldLine {
+    super::super::FoldLine { path, kind, key, angle }
+}
+
+fn line(pts: &[(f64, f64)], closed: bool, kind: super::super::LineKind, key: u64, angle: Option<f64>) -> super::super::FoldLine {
+    fold_line(poly(pts, closed), kind, key, angle)
+}
+
 /// A blank of `panels` and a fold that places each at `poses`, in the order given.
 fn scene_of(panels: Vec<Panel>, poses: Vec<Pose>) -> (Blank, Folded) {
     let n = panels.len();
@@ -237,24 +249,11 @@ fn a_scene_whose_panels_claim_any_depth_still_draws() {
 #[test]
 fn a_flap_folded_flat_lies_behind_the_print_at_180_and_in_front_at_minus_180() {
     // A 100 × 60 blank with a crease at x = 60: the flap (x 60 to 100) folds over onto the base.
-    let poly = |pts: &[(f64, f64)], closed: bool| {
-        PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), closed))
-    };
     // Folds a hair short of flat lie on the same side, everywhere within a tie of the base.
     for (angle, flap_in_front) in [(180.0, false), (-180.0, true), (179.9999, false), (-179.9999, true)] {
         let lines = [
-            super::super::FoldLine {
-                path: poly(&[(0.0, 0.0), (100.0, 0.0), (100.0, 60.0), (0.0, 60.0)], true),
-                kind: super::super::LineKind::Cut,
-                key: 1,
-                angle: None,
-            },
-            super::super::FoldLine {
-                path: poly(&[(60.0, 0.0), (60.0, 60.0)], false),
-                kind: super::super::LineKind::Crease,
-                key: 2,
-                angle: Some(angle),
-            },
+            fold_line(poly(&[(0.0, 0.0), (100.0, 0.0), (100.0, 60.0), (0.0, 60.0)], true), super::super::LineKind::Cut, 1, None),
+            fold_line(poly(&[(60.0, 0.0), (60.0, 60.0)], false), super::super::LineKind::Crease, 2, Some(angle)),
         ];
         let (blanks, issues) = super::super::blanks(&lines, 0.1);
         assert!(issues.is_empty(), "{issues:?}");
@@ -281,22 +280,9 @@ fn a_flap_folded_flat_lies_behind_the_print_at_180_and_in_front_at_minus_180() {
 fn a_hinge_left_at_0_degrees_keeps_its_panel_level_with_its_parent() {
     // A 100 × 60 blank: the base (x 0 to 60), a strip (60 to 65) left flat at 0°, and a flap (65 to
     // 100) folded back at 180°, which lies behind the base from x 30 to 60.
-    let poly = |pts: &[(f64, f64)], closed: bool| {
-        PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), closed))
-    };
-    let crease = |x: f64, key: u64, angle: f64| super::super::FoldLine {
-        path: poly(&[(x, 0.0), (x, 60.0)], false),
-        kind: super::super::LineKind::Crease,
-        key,
-        angle: Some(angle),
-    };
+    let crease = |x: f64, key: u64, angle: f64| fold_line(poly(&[(x, 0.0), (x, 60.0)], false), super::super::LineKind::Crease, key, Some(angle));
     let lines = [
-        super::super::FoldLine {
-            path: poly(&[(0.0, 0.0), (100.0, 0.0), (100.0, 60.0), (0.0, 60.0)], true),
-            kind: super::super::LineKind::Cut,
-            key: 1,
-            angle: None,
-        },
+        fold_line(poly(&[(0.0, 0.0), (100.0, 0.0), (100.0, 60.0), (0.0, 60.0)], true), super::super::LineKind::Cut, 1, None),
         crease(60.0, 2, 0.0),
         crease(65.0, 3, 180.0),
     ];
@@ -313,22 +299,9 @@ fn a_flap_folded_back_over_a_folded_panel_lies_between_it_and_the_base() {
     // A 110 × 60 strip: the base (x 0 to 60), a panel (60 to 100) folded back under the base at
     // 180°, and a flap (100 to 110) folded back at 180° from that panel, between it and the base, at
     // x 20 to 30.
-    let poly = |pts: &[(f64, f64)], closed: bool| {
-        PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), closed))
-    };
-    let crease = |x: f64, key: u64| super::super::FoldLine {
-        path: poly(&[(x, 0.0), (x, 60.0)], false),
-        kind: super::super::LineKind::Crease,
-        key,
-        angle: Some(180.0),
-    };
+    let crease = |x: f64, key: u64| fold_line(poly(&[(x, 0.0), (x, 60.0)], false), super::super::LineKind::Crease, key, Some(180.0));
     let lines = [
-        super::super::FoldLine {
-            path: poly(&[(0.0, 0.0), (110.0, 0.0), (110.0, 60.0), (0.0, 60.0)], true),
-            kind: super::super::LineKind::Cut,
-            key: 1,
-            angle: None,
-        },
+        fold_line(poly(&[(0.0, 0.0), (110.0, 0.0), (110.0, 60.0), (0.0, 60.0)], true), super::super::LineKind::Cut, 1, None),
         crease(60.0, 2),
         crease(100.0, 3),
     ];
@@ -359,19 +332,9 @@ fn a_strip_far_from_the_origin_stacks_the_same_about_any_base() {
     let at = |x: f64, y: f64| Point::new(3_000_000.0 + (x - y) * s, 3_000_000.0 + (x + y) * s);
     let poly =
         |pts: &[(f64, f64)], closed: bool| PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| at(x, y)).collect::<Vec<_>>(), closed));
-    let crease = |x: f64, key: u64| super::super::FoldLine {
-        path: poly(&[(x, 0.0), (x, 60.0)], false),
-        kind: super::super::LineKind::Crease,
-        key,
-        angle: Some(180.0),
-    };
+    let crease = |x: f64, key: u64| fold_line(poly(&[(x, 0.0), (x, 60.0)], false), super::super::LineKind::Crease, key, Some(180.0));
     let lines = [
-        super::super::FoldLine {
-            path: poly(&[(0.0, 0.0), (110.0, 0.0), (110.0, 60.0), (0.0, 60.0)], true),
-            kind: super::super::LineKind::Cut,
-            key: 1,
-            angle: None,
-        },
+        fold_line(poly(&[(0.0, 0.0), (110.0, 0.0), (110.0, 60.0), (0.0, 60.0)], true), super::super::LineKind::Cut, 1, None),
         crease(60.0, 2),
         crease(100.0, 3),
     ];
@@ -396,19 +359,9 @@ fn a_flat_stack_far_from_the_origin_stays_in_one_plane() {
     let poly = |pts: &[(f64, f64)], closed: bool| {
         PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x0 + x, y)).collect::<Vec<_>>(), closed))
     };
-    let crease = |x: f64, key: u64| super::super::FoldLine {
-        path: poly(&[(x, 0.0), (x, 60.0)], false),
-        kind: super::super::LineKind::Crease,
-        key,
-        angle: Some(180.0),
-    };
+    let crease = |x: f64, key: u64| fold_line(poly(&[(x, 0.0), (x, 60.0)], false), super::super::LineKind::Crease, key, Some(180.0));
     let lines = [
-        super::super::FoldLine {
-            path: poly(&[(0.0, 0.0), (135.0, 0.0), (135.0, 60.0), (0.0, 60.0)], true),
-            kind: super::super::LineKind::Cut,
-            key: 1,
-            angle: None,
-        },
+        fold_line(poly(&[(0.0, 0.0), (135.0, 0.0), (135.0, 60.0), (0.0, 60.0)], true), super::super::LineKind::Cut, 1, None),
         crease(60.0, 2),
         crease(100.0, 3),
     ];
@@ -443,19 +396,9 @@ fn parallel_a_hair_behind(dx: f64, back: f64, w: f64) {
     let poly = |pts: &[(f64, f64)], closed: bool| {
         PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x + dx, y)).collect::<Vec<_>>(), closed))
     };
-    let crease = |x: f64, key: u64, angle: f64| super::super::FoldLine {
-        path: poly(&[(x, 0.0), (x, 30.0)], false),
-        kind: super::super::LineKind::Crease,
-        key,
-        angle: Some(angle),
-    };
+    let crease = |x: f64, key: u64, angle: f64| fold_line(poly(&[(x, 0.0), (x, 30.0)], false), super::super::LineKind::Crease, key, Some(angle));
     let lines = [
-        super::super::FoldLine {
-            path: poly(&[(0.0, 0.0), (130.0 + w, 0.0), (130.0 + w, 30.0), (0.0, 30.0)], true),
-            kind: super::super::LineKind::Cut,
-            key: 1,
-            angle: None,
-        },
+        fold_line(poly(&[(0.0, 0.0), (130.0 + w, 0.0), (130.0 + w, 30.0), (0.0, 30.0)], true), super::super::LineKind::Cut, 1, None),
         crease(100.0, 2, 180.0 - back),
         crease(100.0 + w, 3, back),
     ];
@@ -484,18 +427,8 @@ fn a_small_blank_folded_near_flat_draws_the_same_far_from_the_origin() {
             PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x + at, y + at)).collect::<Vec<_>>(), closed))
         };
         let lines = [
-            super::super::FoldLine {
-                path: poly(&[(0.0, 0.0), (4.0, 0.0), (4.0, 1.0), (0.0, 1.0)], true),
-                kind: super::super::LineKind::Cut,
-                key: 1,
-                angle: None,
-            },
-            super::super::FoldLine {
-                path: poly(&[(2.0, 0.0), (2.0, 1.0)], false),
-                kind: super::super::LineKind::Crease,
-                key: 2,
-                angle: Some(179.999999),
-            },
+            fold_line(poly(&[(0.0, 0.0), (4.0, 0.0), (4.0, 1.0), (0.0, 1.0)], true), super::super::LineKind::Cut, 1, None),
+            fold_line(poly(&[(2.0, 0.0), (2.0, 1.0)], false), super::super::LineKind::Crease, 2, Some(179.999999)),
         ];
         let (blanks, issues) = super::super::blanks(&lines, 0.0001);
         assert!(issues.is_empty(), "{issues:?}");
@@ -518,23 +451,10 @@ fn a_small_blank_folded_near_flat_draws_the_same_far_from_the_origin() {
 fn a_blank_lying_flat_takes_its_ranks_from_the_order_alone() {
     // A strip of 64 panels, each crease at 180°, not yet folded: no panel overlaps another, so no
     // layer is worked out.
-    let poly = |pts: &[(f64, f64)], closed: bool| {
-        PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), closed))
-    };
-    let mut lines = vec![super::super::FoldLine {
-        path: poly(&[(0.0, 0.0), (640.0, 0.0), (640.0, 10.0), (0.0, 10.0)], true),
-        kind: super::super::LineKind::Cut,
-        key: 1,
-        angle: None,
-    }];
+    let mut lines = vec![fold_line(poly(&[(0.0, 0.0), (640.0, 0.0), (640.0, 10.0), (0.0, 10.0)], true), super::super::LineKind::Cut, 1, None)];
     for i in 1..64u32 {
         let x = f64::from(i) * 10.0;
-        lines.push(super::super::FoldLine {
-            path: poly(&[(x, 0.0), (x, 10.0)], false),
-            kind: super::super::LineKind::Crease,
-            key: u64::from(i) + 1,
-            angle: Some(180.0),
-        });
+        lines.push(fold_line(poly(&[(x, 0.0), (x, 10.0)], false), super::super::LineKind::Crease, u64::from(i) + 1, Some(180.0)));
     }
     let (blanks, issues) = super::super::blanks(&lines, 0.1);
     assert!(issues.is_empty(), "{issues:?}");
@@ -549,23 +469,12 @@ fn round_a_loop_of_panels_the_stack_follows_the_hinges_that_placed_them() {
     // point. The crease that closes the loop when folded about the largest panel folds at 180° and
     // the rest at 0°; folded about a panel on that crease, the crease is in the tree and its flap
     // lies flat behind the panel.
-    let poly = |pts: &[(f64, f64)], closed: bool| {
-        PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), closed))
-    };
     let lines = |flat_key: Option<u64>| {
-        let crease = |from: (f64, f64), to: (f64, f64), key: u64| super::super::FoldLine {
-            path: poly(&[from, to], false),
-            kind: super::super::LineKind::Crease,
-            key,
-            angle: Some(if Some(key) == flat_key { 180.0 } else { 0.0 }),
+        let crease = |from: (f64, f64), to: (f64, f64), key: u64| {
+            fold_line(poly(&[from, to], false), super::super::LineKind::Crease, key, Some(if Some(key) == flat_key { 180.0 } else { 0.0 }))
         };
         vec![
-            super::super::FoldLine {
-                path: poly(&[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)], true),
-                kind: super::super::LineKind::Cut,
-                key: 1,
-                angle: None,
-            },
+            fold_line(poly(&[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)], true), super::super::LineKind::Cut, 1, None),
             crease((50.0, 0.0), (50.0, 50.0), 2),
             crease((50.0, 50.0), (50.0, 100.0), 3),
             crease((0.0, 50.0), (50.0, 50.0), 4),
@@ -601,22 +510,16 @@ fn round_a_flat_loop_the_stack_is_the_same_whichever_tree_reaches_the_flaps() {
     // folded back at 180° off the top right panel: the first (x 100 to 130) under that panel, the
     // tip (130 to 140) between the two. Folded about the tip, the tree reaches the grid another way,
     // and the stack stays as it is about the largest panel.
-    let poly = |pts: &[(f64, f64)], closed: bool| {
-        PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), closed))
-    };
-    let crease = |from: (f64, f64), to: (f64, f64), key: u64, angle: f64| super::super::FoldLine {
-        path: poly(&[from, to], false),
-        kind: super::super::LineKind::Crease,
-        key,
-        angle: Some(angle),
+    let crease = |from: (f64, f64), to: (f64, f64), key: u64, angle: f64| {
+        fold_line(poly(&[from, to], false), super::super::LineKind::Crease, key, Some(angle))
     };
     let lines = [
-        super::super::FoldLine {
-            path: poly(&[(0.0, 0.0), (140.0, 0.0), (140.0, 40.0), (100.0, 40.0), (100.0, 100.0), (0.0, 100.0)], true),
-            kind: super::super::LineKind::Cut,
-            key: 1,
-            angle: None,
-        },
+        fold_line(
+            poly(&[(0.0, 0.0), (140.0, 0.0), (140.0, 40.0), (100.0, 40.0), (100.0, 100.0), (0.0, 100.0)], true),
+            super::super::LineKind::Cut,
+            1,
+            None,
+        ),
         crease((60.0, 0.0), (60.0, 40.0), 2, 0.0),
         crease((60.0, 40.0), (60.0, 100.0), 3, 0.0),
         crease((0.0, 40.0), (60.0, 40.0), 4, 0.0),
@@ -640,10 +543,7 @@ fn round_a_flat_loop_the_stack_is_the_same_whichever_tree_reaches_the_flaps() {
 fn two_flaps_folded_flat_behind_the_base_show_opposite_ones_from_each_side() {
     // The base (x 30 to 80) with a window (52 to 58), a flap on each side folded back at 180°: the
     // left one to x 30 to 60, the right one to 50 to 80, so both lie behind the window.
-    let poly = |pts: &[(f64, f64)], closed: bool| {
-        PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), closed))
-    };
-    let line = |pts: &[(f64, f64)], closed: bool, kind, key, angle| super::super::FoldLine { path: poly(pts, closed), kind, key, angle };
+
     use super::super::LineKind::{Crease, Cut};
     let lines = [
         line(&[(0.0, 0.0), (110.0, 0.0), (110.0, 60.0), (0.0, 60.0)], true, Cut, 1, None),
@@ -668,10 +568,7 @@ fn two_flaps_folded_flat_behind_the_base_show_opposite_ones_from_each_side() {
 fn a_flap_split_by_a_0_degree_crease_stacks_as_one_against_another_flap() {
     // The base (x 30 to 90), a right flap (90 to 140) folded back to 40 to 90, and a left flap (0 to
     // 30) folded back to 30 to 60 in two parts joined at 0° (x 15), both parts over the right flap.
-    let poly = |pts: &[(f64, f64)], closed: bool| {
-        PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), closed))
-    };
-    let line = |pts: &[(f64, f64)], closed: bool, kind, key, angle| super::super::FoldLine { path: poly(pts, closed), kind, key, angle };
+
     use super::super::LineKind::{Crease, Cut};
     let lines = [
         line(&[(0.0, 0.0), (140.0, 0.0), (140.0, 60.0), (0.0, 60.0)], true, Cut, 1, None),
@@ -703,10 +600,7 @@ fn a_tip_folded_on_a_flap_stays_on_that_flap_s_side_of_another_flap() {
     // Left to right: a tip (x 0 to 20), a left flap (20 to 70), the base (70 to 140) and a right flap
     // (140 to 205). Both flaps fold back at 180° behind the base (to 70 to 120 and 75 to 140), and
     // the tip folds at -180° on the left flap (to 100 to 120), so the three overlap from 100 to 120.
-    let poly = |pts: &[(f64, f64)], closed: bool| {
-        PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), closed))
-    };
-    let line = |pts: &[(f64, f64)], closed: bool, kind, key, angle| super::super::FoldLine { path: poly(pts, closed), kind, key, angle };
+
     use super::super::LineKind::{Crease, Cut};
     let lines = [
         line(&[(0.0, 0.0), (205.0, 0.0), (205.0, 60.0), (0.0, 60.0)], true, Cut, 1, None),
@@ -735,10 +629,7 @@ fn a_tip_folded_on_a_flap_stays_on_that_flap_s_side_of_another_flap() {
 fn a_tip_folded_back_toward_a_folded_panel_s_print_covers_it_from_the_back() {
     // The base (x 0 to 60), a panel (60 to 100) folded back at 180° to 20 to 60, and a tip (100 to
     // 110) folded at -180° onto that panel's printed side, to 20 to 30, behind it from the front.
-    let poly = |pts: &[(f64, f64)], closed: bool| {
-        PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), closed))
-    };
-    let line = |pts: &[(f64, f64)], closed: bool, kind, key, angle| super::super::FoldLine { path: poly(pts, closed), kind, key, angle };
+
     use super::super::LineKind::{Crease, Cut};
     // The same with the tip a hair short of flat, and with an 80 pt panel under a 100 pt base.
     for (middle, tip_angle) in [(40.0, -180.0), (40.0, -179.9999), (40.0, -179.999), (80.0, -179.9999), (1000.0, -179.999)] {
@@ -767,10 +658,7 @@ fn overlapping_lid_flaps_keep_their_order_as_the_view_turns_on_one_side_of_the_l
     // A box strip: a left flap (x 0 to 60), a wall (60 to 100), the base (100 to 200), a wall (200 to
     // 240) and a right flap (240 to 300). The walls fold 90° down and the flaps 90° in, so the flaps
     // meet in one plane 40 pt below the base and overlap from x 140 to 160.
-    let poly = |pts: &[(f64, f64)], closed: bool| {
-        PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), closed))
-    };
-    let line = |pts: &[(f64, f64)], closed: bool, kind, key, angle| super::super::FoldLine { path: poly(pts, closed), kind, key, angle };
+
     use super::super::LineKind::{Crease, Cut};
     let crease = |x: f64, key| line(&[(x, 0.0), (x, 60.0)], false, Crease, key, Some(90.0));
     let lines = [
@@ -799,10 +687,7 @@ fn flaps_folded_onto_a_panel_keep_their_order_as_the_panel_tilts_either_way() {
     // The base (x 0 to 100, y -50 to 110) and a panel (100 to 200, 0 to 60) on a crease at x = 100,
     // with a flap above (y -40 to 0) and one below (60 to 100), each cut free of the base and folded
     // at -180° onto the panel's printed side, where they overlap from y 20 to 40.
-    let poly = |pts: &[(f64, f64)], closed: bool| {
-        PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), closed))
-    };
-    let line = |pts: &[(f64, f64)], closed: bool, kind, key, angle| super::super::FoldLine { path: poly(pts, closed), kind, key, angle };
+
     use super::super::LineKind::{Crease, Cut};
     let shown = |tilt: f64| {
         let outline = [(0.0, -50.0), (100.0, -50.0), (100.0, -40.0), (200.0, -40.0), (200.0, 100.0), (100.0, 100.0), (100.0, 110.0), (0.0, 110.0)];
@@ -841,10 +726,7 @@ fn flaps_folded_onto_a_panel_keep_their_order_as_the_panel_tilts_either_way() {
 fn a_flap_folded_onto_a_wall_standing_at_90_degrees_covers_its_print() {
     // The base (x 0 to 60), a wall (60 to 100) folded 90° and a flap (100 to 130) folded at -180°
     // onto the wall's printed side, where it covers the wall from 10 to 40 pt out from the base.
-    let poly = |pts: &[(f64, f64)], closed: bool| {
-        PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), closed))
-    };
-    let line = |pts: &[(f64, f64)], closed: bool, kind, key, angle| super::super::FoldLine { path: poly(pts, closed), kind, key, angle };
+
     use super::super::LineKind::{Crease, Cut};
     let lines = [
         line(&[(0.0, 0.0), (130.0, 0.0), (130.0, 60.0), (0.0, 60.0)], true, Cut, 1, None),
@@ -880,10 +762,7 @@ fn end_flaps_seen_straight_through_an_open_carton_show_opposite_ones_from_each_s
     // The base (x 40 to 140, y 0 to 60) and a side wall on each side (0 to 40 and 140 to 180), each
     // with an end flap (y 60 to 160) that folds in across the carton's end, so both flaps cover
     // the same 100 pt. Looking straight through that end, the base and walls are edge on.
-    let poly = |pts: &[(f64, f64)], closed: bool| {
-        PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), closed))
-    };
-    let line = |pts: &[(f64, f64)], closed: bool, kind, key, angle| super::super::FoldLine { path: poly(pts, closed), kind, key, angle };
+
     use super::super::LineKind::{Crease, Cut};
     let outline = [(0.0, 0.0), (180.0, 0.0), (180.0, 160.0), (140.0, 160.0), (140.0, 60.0), (40.0, 60.0), (40.0, 160.0), (0.0, 160.0)];
     let lines = [
@@ -925,10 +804,7 @@ fn end_flaps_seen_straight_through_an_open_carton_show_opposite_ones_from_each_s
 fn a_flap_looped_round_onto_the_base_shows_from_the_side_it_came_from() {
     // A strip: the base (x 0 to 100) and panels 40, 60, 40 and 80 pt wide, folded 90°, -90°, -90°
     // and -90°, so the last one comes round and lies on the base's plane over part of it.
-    let poly = |pts: &[(f64, f64)], closed: bool| {
-        PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), closed))
-    };
-    let line = |pts: &[(f64, f64)], closed: bool, kind, key, angle| super::super::FoldLine { path: poly(pts, closed), kind, key, angle };
+
     use super::super::LineKind::{Crease, Cut};
     let lines = [
         line(&[(0.0, 0.0), (320.0, 0.0), (320.0, 60.0), (0.0, 60.0)], true, Cut, 1, None),
@@ -967,13 +843,9 @@ fn a_strip_wrapped_round_a_wall_lands_its_flap_on_the_print_side_it_came_from() 
     // flap folds from stands on the printed side of the base, and the flap lands on the base at x
     // 50 to 80. With `tab`, the wall also runs on past the flap's hinge (to x 340, y 30 to 60),
     // through the base's plane, which moves its middle to the other side of that plane.
-    let poly = |pts: &[(f64, f64)], closed: bool| {
-        PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), closed))
-    };
     // With `cutout` of 5, a 10 pt hole on the middle of each crease breaks every hinge in two; with
     // a larger one, the hole runs to within 2 pt of each end, as wide as `cutout` either side.
     let shown = |tab: bool, cutout: f64| {
-        let line = |pts: &[(f64, f64)], closed: bool, kind, key, angle| super::super::FoldLine { path: poly(pts, closed), kind, key, angle };
         use super::super::LineKind::{Crease, Cut};
         let mut lines = if tab {
             vec![
@@ -1035,9 +907,6 @@ fn a_flap_that_comes_down_onto_the_base_at_a_shallow_angle_lands_on_the_side_it_
     // 20 pt wide back level, one up through the base's plane to `drop` in front of it, a ramp
     // `ramp` wide that comes back down to the base's plane over its width, and a flap (30 pt) that
     // lies on the base from where the ramp ends.
-    let poly = |pts: &[(f64, f64)], closed: bool| {
-        PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), closed))
-    };
     let shown = |base: f64, ramp: f64, drop: f64| {
         // To the millionth of a degree a line keeps, and the drop that ramp comes down by.
         let tilt = super::super::kept_angle((drop / ramp).asin().to_degrees());
@@ -1045,19 +914,9 @@ fn a_flap_that_comes_down_onto_the_base_at_a_shallow_angle_lands_on_the_side_it_
         let up = base + 30.0;
         let creases = [(base, 90.0), (base + 10.0, -90.0), (up, -90.0), (up + 10.0 + drop, -90.0 - tilt), (up + 10.0 + drop + ramp, tilt)];
         let end = up + 10.0 + drop + ramp + 30.0;
-        let mut lines = vec![super::super::FoldLine {
-            path: poly(&[(0.0, 0.0), (end, 0.0), (end, 30.0), (0.0, 30.0)], true),
-            kind: super::super::LineKind::Cut,
-            key: 1,
-            angle: None,
-        }];
+        let mut lines = vec![fold_line(poly(&[(0.0, 0.0), (end, 0.0), (end, 30.0), (0.0, 30.0)], true), super::super::LineKind::Cut, 1, None)];
         for (i, (x, a)) in creases.into_iter().enumerate() {
-            lines.push(super::super::FoldLine {
-                path: poly(&[(x, 0.0), (x, 30.0)], false),
-                kind: super::super::LineKind::Crease,
-                key: 2 + i as u64,
-                angle: Some(a),
-            });
+            lines.push(fold_line(poly(&[(x, 0.0), (x, 30.0)], false), super::super::LineKind::Crease, 2 + i as u64, Some(a)));
         }
         let (blanks, issues) = super::super::blanks(&lines, 0.0001);
         assert!(issues.is_empty(), "{issues:?}");
@@ -1093,23 +952,10 @@ fn a_flap_brought_back_by_folds_all_near_flat_lands_on_the_side_its_ramp_came_fr
 }
 
 fn flap_brought_back_by_folds_all_near_flat(tilt: f64) {
-    let poly = |pts: &[(f64, f64)], closed: bool| {
-        PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), closed))
-    };
     let creases = [(1000.0, tilt), (1100.0, 180.0), (1400.0, -2.0 * tilt), (1600.0, tilt)];
-    let mut lines = vec![super::super::FoldLine {
-        path: poly(&[(0.0, 0.0), (1650.0, 0.0), (1650.0, 30.0), (0.0, 30.0)], true),
-        kind: super::super::LineKind::Cut,
-        key: 1,
-        angle: None,
-    }];
+    let mut lines = vec![fold_line(poly(&[(0.0, 0.0), (1650.0, 0.0), (1650.0, 30.0), (0.0, 30.0)], true), super::super::LineKind::Cut, 1, None)];
     for (i, (x, a)) in creases.into_iter().enumerate() {
-        lines.push(super::super::FoldLine {
-            path: poly(&[(x, 0.0), (x, 30.0)], false),
-            kind: super::super::LineKind::Crease,
-            key: 2 + i as u64,
-            angle: Some(a),
-        });
+        lines.push(fold_line(poly(&[(x, 0.0), (x, 30.0)], false), super::super::LineKind::Crease, 2 + i as u64, Some(a)));
     }
     let (blanks, issues) = super::super::blanks(&lines, 0.0001);
     assert!(issues.is_empty(), "{issues:?}");
@@ -1139,10 +985,7 @@ fn flap_brought_back_by_folds_all_near_flat(tilt: f64) {
 fn a_strip_wrapped_round_onto_a_panel_that_is_not_the_base_lands_on_the_side_it_came_from() {
     // The strip of the test above, with a larger base (x -150 to 0) on the left that the strip's
     // first panel (0 to 100) stands up from at -90°. The flap lands on that panel's printed side.
-    let poly = |pts: &[(f64, f64)], closed: bool| {
-        PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), closed))
-    };
-    let line = |pts: &[(f64, f64)], closed: bool, kind, key, angle| super::super::FoldLine { path: poly(pts, closed), kind, key, angle };
+
     use super::super::LineKind::{Crease, Cut};
     let mut lines = vec![line(&[(-150.0, 0.0), (270.0, 0.0), (270.0, 30.0), (240.0, 30.0), (240.0, 60.0), (-150.0, 60.0)], true, Cut, 1, None)];
     lines.push(line(&[(0.0, 0.0), (0.0, 60.0)], false, Crease, 2, Some(-90.0)));
@@ -1175,24 +1018,11 @@ fn a_strip_wrapped_round_onto_a_panel_that_is_not_the_base_lands_on_the_side_it_
 fn a_strip_rolled_up_45_times_keeps_the_base_in_front() {
     // A strip: the base (x 0 to 60) and 45 panels 50 pt wide, every crease folded back at 180°, so
     // each panel rolls under the one before it and all of them lie behind the base.
-    let poly = |pts: &[(f64, f64)], closed: bool| {
-        PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), closed))
-    };
     let end = 60.0 + 45.0 * 50.0;
-    let mut lines = vec![super::super::FoldLine {
-        path: poly(&[(0.0, 0.0), (end, 0.0), (end, 60.0), (0.0, 60.0)], true),
-        kind: super::super::LineKind::Cut,
-        key: 1,
-        angle: None,
-    }];
+    let mut lines = vec![fold_line(poly(&[(0.0, 0.0), (end, 0.0), (end, 60.0), (0.0, 60.0)], true), super::super::LineKind::Cut, 1, None)];
     lines.extend((0u32..45).map(|i| {
         let x = 60.0 + 50.0 * f64::from(i);
-        super::super::FoldLine {
-            path: poly(&[(x, 0.0), (x, 60.0)], false),
-            kind: super::super::LineKind::Crease,
-            key: 10 + u64::from(i),
-            angle: Some(180.0),
-        }
+        fold_line(poly(&[(x, 0.0), (x, 60.0)], false), super::super::LineKind::Crease, 10 + u64::from(i), Some(180.0))
     }));
     let (blanks, issues) = super::super::blanks(&lines, 0.1);
     assert!(issues.is_empty(), "{issues:?}");
@@ -1207,21 +1037,8 @@ fn hinges_left_at_0_degrees_before_two_folds_back_do_not_use_up_layers() {
     // A 155 × 60 strip: the base (x 0 to 60), 45 strips 1 pt wide left flat at 0°, a panel (105 to
     // 145) folded back at 180° and a flap (145 to 155) folded back at 180° from it, which lies
     // behind the flat strips at x 65 to 75.
-    let poly = |pts: &[(f64, f64)], closed: bool| {
-        PathData::single(SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), closed))
-    };
-    let crease = |x: f64, key: u64, angle: f64| super::super::FoldLine {
-        path: poly(&[(x, 0.0), (x, 60.0)], false),
-        kind: super::super::LineKind::Crease,
-        key,
-        angle: Some(angle),
-    };
-    let mut lines = vec![super::super::FoldLine {
-        path: poly(&[(0.0, 0.0), (155.0, 0.0), (155.0, 60.0), (0.0, 60.0)], true),
-        kind: super::super::LineKind::Cut,
-        key: 1,
-        angle: None,
-    }];
+    let crease = |x: f64, key: u64, angle: f64| fold_line(poly(&[(x, 0.0), (x, 60.0)], false), super::super::LineKind::Crease, key, Some(angle));
+    let mut lines = vec![fold_line(poly(&[(0.0, 0.0), (155.0, 0.0), (155.0, 60.0), (0.0, 60.0)], true), super::super::LineKind::Cut, 1, None)];
     lines.extend((0u32..45).map(|i| crease(60.0 + f64::from(i), 10 + u64::from(i), 0.0)));
     lines.push(crease(105.0, 2, 180.0));
     lines.push(crease(145.0, 3, 180.0));
