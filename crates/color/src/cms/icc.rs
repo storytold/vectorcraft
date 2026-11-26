@@ -432,10 +432,17 @@ fn text_tag(s: &str) -> Option<ProfileText> {
     Some(ProfileText::Localizable(vec![LocalizableString::new("en".into(), "US".into(), s.into())]))
 }
 
+/// The copyright text of profiles made here: they carry no copyright claim.
+pub(super) const NO_COPYRIGHT: &str = "No copyright, use freely";
+
 /// Profiles made here carry their name and no copyright claim.
-fn labelled(mut p: ColorProfile, name: &str) -> ColorProfile {
+fn labelled(p: ColorProfile, name: &str) -> ColorProfile {
+    with_copyright(p, name, NO_COPYRIGHT)
+}
+
+fn with_copyright(mut p: ColorProfile, name: &str, copyright: &str) -> ColorProfile {
     p.description = text_tag(name);
-    p.copyright = text_tag("No copyright, use freely");
+    p.copyright = text_tag(copyright);
     p
 }
 
@@ -452,10 +459,11 @@ const GAMUT_GRID: usize = 9;
 /// It carries every tag ICC.1 requires of an output profile: the tables for all three intents
 /// and the gamut tag (Windows rejects a CMYK profile without them, so Photos couldn't show a CMYK
 /// TIFF that embedded one, #2707). The media white point is `paper` (absolute XYZ, D50), which
-/// the ICC-absolute colorimetric intent reproduces.
+/// the ICC-absolute colorimetric intent reproduces; the copyright tag holds `copyright`.
 pub(super) fn cmyk_profile(
     name: &str,
     paper: [f32; 3],
+    copyright: &str,
     to_lab: impl Fn([f32; 4]) -> lab::Lab,
     mapped: impl Fn(lab::Lab) -> [f32; 4],
     colorimetric: impl Fn(lab::Lab) -> [f32; 4],
@@ -520,7 +528,7 @@ pub(super) fn cmyk_profile(
     p.lut_b_to_a_saturation = Some(b2a_mapped);
     p.lut_b_to_a_colorimetric = Some(b2a);
     p.gamut = Some(gamut);
-    labelled(p, name)
+    with_copyright(p, name, copyright)
 }
 
 /// The grey space of greyscale exports: sRGB's tone curve, D50 white.
