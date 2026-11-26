@@ -273,7 +273,7 @@ fn failures_open_nothing() {
         ("test.fail.notjson", "not json", "JSON"),
         ("test.fail.empty", r#"{"objects":[]}"#, "the importer returned no objects"),
         ("test.fail.key", r#"{"objects":[],"layers":[]}"#, "an importer returns `objects` and `warnings`, not `layers`"),
-        ("test.fail.id", r#"{"objects":[{"id":3}]}"#, "is not the id of an input object"),
+        ("test.fail.id", r#"{"objects":[{"id":3}]}"#, "an importer returns new paths without `id`"),
         ("test.fail.far", far, "4000000"),
         ("test.fail.warnings", bad_warnings.as_str(), "`warnings` must be a list of strings"),
     ];

@@ -62,9 +62,10 @@ importers that set `place`: when no built-in format reads the file, the first su
 extension reads it, and `"importer": "plugin.<id>"` names one, which must set `place` and list the file's extension,
 also one a built-in format reads. `"params"?: {…}` holds its parameters, which take their defaults when left out. The
 importer is given at most 128 MiB of the file and `_context.mode` `"place"`, and returns its objects as it does for
-File › Open. They are placed in the open document as
-one group named after the file, in the order the importer returned them, at the place, size or object `at`, `rect`,
-`replace` and `template` give, as one undo step; guides are left out, and the group's box is the bounds of what the
+File › Open. The visible layers' objects are placed in the open document as one group named after the file,
+from the bottom layer to the top, in each layer's listed object order. Without layers, objects keep their returned
+order. The group uses the place, size or object `at`, `rect`, `replace` and `template` give, as one undo step;
+guides are left out, and the group's box is the bounds of what the
 other objects draw. The file is embedded whatever `link`
 says, as a format that can't be linked is, and the reply's `linked` is `false`. A decline, invalid output, a trap or
 Cancel places nothing and leaves the document and its undo steps as they were. An importer without `place` is not used

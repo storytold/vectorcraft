@@ -13945,8 +13945,9 @@ and `file.place.queue` take `importer?: "plugin.<id>"` (one that sets `place` an
 extension. The importer is given at most 128 MiB of the file (a larger file is refused from its size, with `importer`
 before any of it is read or decoded, and without it after its first 64 KiB are read or decoded)
 and `_context.mode` `"place"`; its visible layers' objects, or all objects when it returns no layers, are placed
-as one group named after the file, in the order it returned them, with guides omitted, as one undo step,
-embedded whatever `link` says (`linked: false`). `plugin.run` of an importer is
+as one group named after the file. Layers are placed from bottom to top, with objects in each layer's listed order.
+Without layers, objects keep their returned order. Guides are omitted. Placement records one undo step and embeds
+the group whatever `link` says (`linked: false`). `plugin.run` of an importer is
 an error that names `document.open`. Placement rejects transformed art beyond ±4,000,000 pt on either axis,
 including template placement, before changing the document. An importer returns new paths with geometry and
 without object IDs. An artboard's positive width and height must produce distinct finite endpoints within the canvas.
