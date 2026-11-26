@@ -348,6 +348,7 @@ impl RasterOptions {
                     Some(v) => background(v).map_err(|e| bad(C, format!("matte: {e}")))?,
                     None => Some([255; 3]),
                 },
+                ..PaletteOptions::default()
             },
             tiff: TiffOptions {
                 color_model,
