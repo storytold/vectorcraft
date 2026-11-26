@@ -3441,6 +3441,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	RGB	RGB
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft-generisk CMYK (SWOP-lignende)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft bestrøget CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft ubestrøget CMYK (FOGRA52)
 	Legacy Macintosh RGB (Gamma 1.8)	Ældre Macintosh RGB (gamma 1,8)
 	Internet Standard RGB (sRGB)	Internetstandard-RGB (sRGB)
 	Monitor RGB	Skærm-RGB

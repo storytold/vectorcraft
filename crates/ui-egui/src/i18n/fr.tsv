@@ -6906,6 +6906,8 @@ arrowhead	Feather	Empennage
 	VectorCraft Default	VectorCraft par défaut
 	VectorCraft Defaults	Valeurs par défaut de VectorCraft
 	VectorCraft Generic CMYK (SWOP-like)	CMJN générique VectorCraft (de type SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	CMJN couché VectorCraft (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	CMJN non couché VectorCraft (FOGRA52)
 	VectorCraft Swatches (.vcswatches)	Nuances VectorCraft (.vcswatches)
 	Vertical Align	Alignement vertical
 	Vertical Area Type	Texte captif vertical

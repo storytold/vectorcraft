@@ -5344,6 +5344,8 @@ mark-style	Japanese	Japán
 	VectorCraft didn't quit normally last time. These documents had unsaved changes:	A VectorCraft legutóbb nem szabályosan lépett ki. Ezekben a dokumentumokban mentetlen módosítások voltak:
 	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft-dokumentumok: egyetlen zárolt objektum, amely a fájl változásakor frissül.
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft általános CMYK (SWOP-szerű)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft mázolt CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft mázolatlan CMYK (FOGRA52)
 	VectorCraft Help…	VectorCraft súgó…
 	VectorCraft on getartcraft.com	A VectorCraft a getartcraft.com oldalon
 	VectorCraft on GitHub	A VectorCraft a GitHubon
