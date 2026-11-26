@@ -7527,6 +7527,35 @@ axis	Y Axis	Eje Y
 @msg	`inputs` lists `{shown}` twice	`inputs` incluye `{shown}` dos veces
 @msg	`inputs` needs `api` 2 or later	`inputs` requiere `api` 2 o posterior
 @msg	`inputs` needs the permission `doc.read`	`inputs` requiere el permiso `doc.read`
+@msg	only a filter declares `writes`	solo un filtro declara `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` nombra un tipo de objeto desconocido `{shown}`: use type, image o symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` incluye `{shown}` dos veces
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` incluye `{shown}`, que `inputs` no incluye
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` requiere `api` {WRITES_API} o posterior
+@msg	`writes` needs the permission `doc.write`	`writes` requiere el permiso `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} no es texto, ni una imagen ni una instancia de símbolo
+@msg	the text of type given as `truncated` can't be changed	no se puede cambiar el texto de un objeto de texto dado como `truncated`
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	debe ser una lista de {MAX_INPUT_RUNS} entradas como máximo
+@msg	type needs at least one run	el texto necesita al menos un tramo
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} bytes de texto (límite {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} párrafos (límite {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	más de {MAX_INPUT_TEXT_TOTAL} bytes de texto en toda la salida
+@msg	unknown key '{k}'	clave desconocida '{k}'
+@msg	must be a list of 6 numbers	debe ser una lista de 6 números
+@msg	a number is out of range (limit ±{MAX_COORD})	un número está fuera de rango (límite ±{MAX_COORD})
+@msg	flattens the object to a line or a point	reduce el objeto a una línea o un punto
+@msg	an object flattened to a line or a point can't be placed again	un objeto reducido a una línea o un punto no se puede volver a colocar
+@msg	must be a number from 0 to 1	debe ser un número de 0 a 1
+@msg	must be the name of a symbol	debe ser el nombre de un símbolo
+@msg	'{shown}' is not a symbol in this document	'{shown}' no es un símbolo de este documento
+@msg	a run must be {{"text", "style", "inline"?}}	un tramo debe ser {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` contiene el carácter de un gráfico en línea
+@msg	inline graphics can't be added, removed, reordered or changed	los gráficos en línea no se pueden añadir, quitar, reordenar ni cambiar
+@msg	the characters of threaded type can't be changed	los caracteres del texto enlazado no se pueden cambiar
+@msg	the characters of type with ruby can't be changed	los caracteres del texto con ruby no se pueden cambiar
+@msg	expected {count} paragraph styles, one per paragraph	se esperaban {count} estilos de párrafo, uno por párrafo
+@msg	the document has no Kinsoku set named '{shown}'	el documento no tiene ningún conjunto de kinsoku llamado '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	debe tener 1-{MAX_FAMILY} caracteres imprimibles
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Leer los objetos que recibe, y los ajustes, las mesas de trabajo, las capas y las muestras del documento
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` debe enumerar secciones distintas: settings, artboards, layers o swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` es para un filtro, o un efecto dinámico con `commands`, con `api` 3 o posterior y el permiso `doc.read`

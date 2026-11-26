@@ -256,6 +256,11 @@ struct RasterOptions {
     dither: Option<String>,
     dither_amount: Option<u8>,
     transparency: Option<bool>,
+    /// GIF and PNG-8 with `transparency`: none, diffusion, pattern or noise, read by
+    /// [`RasterOptions::transparency_dither`] (other formats do not check it).
+    transparency_dither: Option<Value>,
+    /// The diffusion transparency dither's strength, 0–100, read as `transparency_dither` is.
+    transparency_dither_amount: Option<Value>,
     matte: Option<Value>,
     lossless: Option<bool>,
     lzw: Option<bool>,
@@ -293,6 +298,26 @@ impl RasterOptions {
                 .map(Some)
                 .ok_or_else(|| bad(C, format!("quality must be a whole number from 0 to 100, not {v}"))),
         }
+    }
+
+    /// GIF and PNG-8: `transparencyDither` (absent: none, which cuts at half opacity, not
+    /// `Dither`'s own default) and `transparencyDitherAmount` (0–100, default 100), or an error.
+    fn transparency_dither(&self) -> Result<(Dither, u8)> {
+        const IDS: &str = "none, diffusion, pattern or noise";
+        let method = match &self.transparency_dither {
+            None | Some(Value::Null) => PaletteOptions::default().transparency_dither,
+            Some(Value::String(s)) => parse(Some(s), Dither::from_id, "transparencyDither", IDS)?,
+            Some(v) => return Err(bad(C, format!("transparencyDither must be {IDS}, not {v}"))),
+        };
+        let amount = match &self.transparency_dither_amount {
+            None | Some(Value::Null) => 100,
+            Some(v) => v
+                .as_u64()
+                .filter(|n| *n <= 100)
+                .and_then(|n| u8::try_from(n).ok())
+                .ok_or_else(|| bad(C, format!("transparencyDitherAmount must be a whole number from 0 to 100, not {v}")))?,
+        };
+        Ok((method, amount))
     }
 
     /// The pixel size each file is scaled to: `width`, else `height`; `None` when neither is set.
@@ -1158,6 +1183,9 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
                 && let Some(q) = o.quality()?.filter(|q| *q > 100)
             {
                 return Err(bad(C, format!("quality {q}: WebP quality is 0–100")));
+            }
+            if matches!(format, RasterFormat::Gif | RasterFormat::Png8) {
+                (settings.palette.transparency_dither, settings.palette.transparency_dither_amount) = o.transparency_dither()?;
             }
             check_options(format, &settings)?;
             // Use Artboards: one file per chosen artboard (default all); else the one chosen.

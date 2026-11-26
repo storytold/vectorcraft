@@ -9656,6 +9656,35 @@ axis	Y Axis	Y ღერძი
 @msg	`inputs` lists `{shown}` twice	`inputs`-ში `{shown}` ორჯერაა ჩამოთვლილი
 @msg	`inputs` needs `api` 2 or later	`inputs`-ს სჭირდება `api` 2 ან უფრო ახალი
 @msg	`inputs` needs the permission `doc.read`	`inputs`-ს სჭირდება ნებართვა `doc.read`
+@msg	only a filter declares `writes`	`writes`-ის გამოცხადება მხოლოდ ფილტრს შეუძლია
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` უცნობ ობიექტის სახეობას ასახელებს `{shown}`: გამოიყენეთ type, image ან symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes`-ში `{shown}` ორჯერაა ჩამოთვლილი
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes`-ში ჩამოთვლილია `{shown}`, რომელიც `inputs`-ში არ არის ჩამოთვლილი
+@msg	`writes` needs `api` {WRITES_API} or later	`writes`-ს სჭირდება `api` {WRITES_API} ან უფრო ახალი
+@msg	`writes` needs the permission `doc.write`	`writes`-ს სჭირდება ნებართვა `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} არც ტექსტია, არც გამოსახულება და არც სიმბოლოს ეგზემპლარი
+@msg	the text of type given as `truncated` can't be changed	`truncated`-ად გადაცემული ტექსტური ობიექტის ტექსტის შეცვლა შეუძლებელია
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	უნდა იყოს სია მაქსიმუმ {MAX_INPUT_RUNS} ჩანაწერით
+@msg	type needs at least one run	ტექსტს სჭირდება მინიმუმ ერთი მონაკვეთი
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	ტექსტის {bytes} ბაიტი (ლიმიტი {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} აბზაცი (ლიმიტი {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	მთელ გამონატანში {MAX_INPUT_TEXT_TOTAL} ბაიტზე მეტი ტექსტია
+@msg	unknown key '{k}'	უცნობი გასაღები '{k}'
+@msg	must be a list of 6 numbers	უნდა იყოს 6 რიცხვის სია
+@msg	a number is out of range (limit ±{MAX_COORD})	რიცხვი დიაპაზონს გარეთაა (ლიმიტი ±{MAX_COORD})
+@msg	flattens the object to a line or a point	ობიექტს ხაზად ან წერტილად აბრტყელებს
+@msg	an object flattened to a line or a point can't be placed again	ხაზად ან წერტილად გაბრტყელებული ობიექტის ხელახლა განთავსება შეუძლებელია
+@msg	must be a number from 0 to 1	უნდა იყოს რიცხვი 0-დან 1-მდე
+@msg	must be the name of a symbol	უნდა იყოს სიმბოლოს სახელი
+@msg	'{shown}' is not a symbol in this document	'{shown}' ამ დოკუმენტში სიმბოლო არ არის
+@msg	a run must be {{"text", "style", "inline"?}}	მონაკვეთი უნდა იყოს {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` შეიცავს ტექსტში ჩასმული გრაფიკის სიმბოლოს
+@msg	inline graphics can't be added, removed, reordered or changed	ტექსტში ჩასმული გრაფიკის დამატება, წაშლა, გადალაგება ან შეცვლა შეუძლებელია
+@msg	the characters of threaded type can't be changed	დაკავშირებული ტექსტის სიმბოლოების შეცვლა შეუძლებელია
+@msg	the characters of type with ruby can't be changed	რუბის მქონე ტექსტის სიმბოლოების შეცვლა შეუძლებელია
+@msg	expected {count} paragraph styles, one per paragraph	მოსალოდნელი იყო აბზაცის {count} სტილი, თითო აბზაცზე ერთი
+@msg	the document has no Kinsoku set named '{shown}'	დოკუმენტს არ აქვს Kinsoku-ის ნაკრები სახელით '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	უნდა შედგებოდეს 1-{MAX_FAMILY} დასაბეჭდი სიმბოლოსგან
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	მიღებული ობიექტების და დოკუმენტის პარამეტრების, სამუშაო დაფების, შრეებისა და ფერის ნიმუშების წაკითხვა
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context`-ში განსხვავებული სექციები უნდა იყოს: settings, artboards, layers ან swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` განკუთვნილია ფილტრისთვის ან `commands`-ის მქონე ცოცხალი ეფექტისთვის, `api` 3-ზე ან უფრო ახალზე, ნებართვით `doc.read`

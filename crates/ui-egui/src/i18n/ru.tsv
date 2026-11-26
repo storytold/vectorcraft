@@ -7173,6 +7173,35 @@ axis	Y Axis	Ось Y
 @msg	`inputs` lists `{shown}` twice	в `inputs` `{shown}` указано дважды
 @msg	`inputs` needs `api` 2 or later	для `inputs` нужен `api` 2 или выше
 @msg	`inputs` needs the permission `doc.read`	для `inputs` нужно разрешение `doc.read`
+@msg	only a filter declares `writes`	`writes` может объявлять только фильтр
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	в `writes` указан неизвестный вид объекта `{shown}`: используйте type, image или symbolInstance
+@msg	`writes` lists `{shown}` twice	в `writes` `{shown}` указано дважды
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	в `writes` указано `{shown}`, которого нет в `inputs`
+@msg	`writes` needs `api` {WRITES_API} or later	для `writes` нужен `api` {WRITES_API} или выше
+@msg	`writes` needs the permission `doc.write`	для `writes` нужно разрешение `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} не является ни текстом, ни изображением, ни экземпляром символа
+@msg	the text of type given as `truncated` can't be changed	текст текстового объекта, переданного как `truncated`, изменить нельзя
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	должно быть списком не более чем из {MAX_INPUT_RUNS} элементов
+@msg	type needs at least one run	у текста должен быть хотя бы один фрагмент
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} байт текста (предел {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} абзацев (предел {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	более {MAX_INPUT_TEXT_TOTAL} байт текста во всём выводе
+@msg	unknown key '{k}'	неизвестный ключ '{k}'
+@msg	must be a list of 6 numbers	должно быть списком из 6 чисел
+@msg	a number is out of range (limit ±{MAX_COORD})	число вне диапазона (предел ±{MAX_COORD})
+@msg	flattens the object to a line or a point	сплющивает объект в линию или точку
+@msg	an object flattened to a line or a point can't be placed again	объект, сплющенный в линию или точку, нельзя разместить заново
+@msg	must be a number from 0 to 1	должно быть числом от 0 до 1
+@msg	must be the name of a symbol	должно быть именем символа
+@msg	'{shown}' is not a symbol in this document	'{shown}' не является символом этого документа
+@msg	a run must be {{"text", "style", "inline"?}}	фрагмент должен иметь вид {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` содержит символ встроенной в строку графики
+@msg	inline graphics can't be added, removed, reordered or changed	встроенную в строку графику нельзя добавлять, удалять, переупорядочивать или изменять
+@msg	the characters of threaded type can't be changed	знаки связанного текста изменить нельзя
+@msg	the characters of type with ruby can't be changed	знаки текста с руби изменить нельзя
+@msg	expected {count} paragraph styles, one per paragraph	ожидалось стилей абзацев: {count}, по одному на абзац
+@msg	the document has no Kinsoku set named '{shown}'	в документе нет набора kinsoku с именем '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	должно содержать 1-{MAX_FAMILY} печатаемых символов
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Читать переданные ему объекты, а также параметры, монтажные области, слои и образцы документа
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` должен перечислять разные разделы: settings, artboards, layers или swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` допустим только для фильтра или динамического эффекта с `commands`, с `api` 3 или выше и с разрешением `doc.read`

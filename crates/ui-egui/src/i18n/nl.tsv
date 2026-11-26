@@ -576,6 +576,35 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	`inputs` lists `{shown}` twice	`inputs` noemt `{shown}` twee keer
 @msg	`inputs` needs `api` 2 or later	`inputs` vereist `api` 2 of hoger
 @msg	`inputs` needs the permission `doc.read`	`inputs` vereist de machtiging `doc.read`
+@msg	only a filter declares `writes`	alleen een filter declareert `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` noemt een onbekende objectsoort `{shown}`: gebruik type, image of symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` noemt `{shown}` twee keer
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` noemt `{shown}`, dat `inputs` niet noemt
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` vereist `api` {WRITES_API} of hoger
+@msg	`writes` needs the permission `doc.write`	`writes` vereist de machtiging `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} is geen tekst, afbeelding of symboolinstantie
+@msg	the text of type given as `truncated` can't be changed	de tekst van een tekstobject dat als `truncated` is doorgegeven, kan niet worden gewijzigd
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	moet een lijst van ten hoogste {MAX_INPUT_RUNS} items zijn
+@msg	type needs at least one run	tekst heeft ten minste één tekstreeks nodig
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} bytes tekst (limiet {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} alinea's (limiet {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	meer dan {MAX_INPUT_TEXT_TOTAL} bytes tekst in de hele uitvoer
+@msg	unknown key '{k}'	onbekende sleutel '{k}'
+@msg	must be a list of 6 numbers	moet een lijst van 6 getallen zijn
+@msg	a number is out of range (limit ±{MAX_COORD})	een getal valt buiten het bereik (limiet ±{MAX_COORD})
+@msg	flattens the object to a line or a point	drukt het object plat tot een lijn of een punt
+@msg	an object flattened to a line or a point can't be placed again	een object dat tot een lijn of een punt is platgedrukt, kan niet opnieuw worden geplaatst
+@msg	must be a number from 0 to 1	moet een getal van 0 tot 1 zijn
+@msg	must be the name of a symbol	moet de naam van een symbool zijn
+@msg	'{shown}' is not a symbol in this document	'{shown}' is geen symbool in dit document
+@msg	a run must be {{"text", "style", "inline"?}}	een tekstreeks moet {{"text", "style", "inline"?}} zijn
+@msg	`text` holds the character of an inline graphic	`text` bevat het teken van een inline afbeelding
+@msg	inline graphics can't be added, removed, reordered or changed	inline afbeeldingen kunnen niet worden toegevoegd, verwijderd, anders geordend of gewijzigd
+@msg	the characters of threaded type can't be changed	de tekens van gekoppelde tekst kunnen niet worden gewijzigd
+@msg	the characters of type with ruby can't be changed	de tekens van tekst met ruby kunnen niet worden gewijzigd
+@msg	expected {count} paragraph styles, one per paragraph	{count} alineastijlen verwacht, één per alinea
+@msg	the document has no Kinsoku set named '{shown}'	het document heeft geen Kinsoku-set met de naam '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	moet uit 1-{MAX_FAMILY} afdrukbare tekens bestaan
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	De objecten lezen die het krijgt, en de instellingen, tekengebieden, lagen en stalen van het document
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` moet verschillende secties noemen: settings, artboards, layers of swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` is voor een filter, of een live-effect met `commands`, bij `api` 3 of later en met de machtiging `doc.read`

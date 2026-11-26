@@ -69,6 +69,26 @@ pub(crate) struct Open {
     asking: bool,
 }
 
+/// Match an automation request's blend-mode spelling to the mode shown in the targeted effect dialog.
+pub(crate) fn normalize_set_mode(app: &VectorcraftApp, id: DialogId, params: &mut Value) {
+    let Some(open) = app.effect_dialogs.effect.as_ref() else { return };
+    if id != open.id || open.asking || !vectorcraft_effects::takes_blend_mode(&open.cx.id, "mode") {
+        return;
+    }
+    let normalize = |field: &mut Value| {
+        if field["field"] == "mode"
+            && let Some(mode) = field["value"].as_str().and_then(vectorcraft_effects::parse_blend_mode)
+        {
+            field["value"] = json!(vectorcraft_effects::blend_mode_id(mode));
+        }
+    };
+    if let Some(fields) = params.get_mut("fields").and_then(Value::as_array_mut) {
+        fields.iter_mut().for_each(normalize);
+    } else {
+        normalize(params);
+    }
+}
+
 /// `effect.dialog {effect, index?, item?}`: edit applied effect `index` of `item` (null: the
 /// object's effects; omitted: the active item's, else the object's) prefilled with its values,
 /// or add `effect`, first asking when that list already has it.
@@ -559,6 +579,21 @@ mod tests {
         let (pa, pb) = (params(&app, a), params(&app, b));
         assert_eq!((pa["size"].as_f64(), pb["size"].as_f64()), (Some(20.0), Some(20.0)));
         assert_eq!((pa["detail"].as_f64(), pb["detail"].as_f64()), (Some(3.0), Some(8.0)), "each keeps its untouched value");
+    }
+
+    /// Zig Zag's Ridges per segment and Roughen's Detail are counts: their rows show no percent sign, while Size
+    /// with Relative, a share of the object's size, shows one.
+    #[test]
+    fn zig_zag_ridges_and_roughen_detail_show_no_percent_sign() {
+        use craft::ui::runtime::env::UnitKind;
+        let app = app();
+        for (effect, key) in [("distort.zigZag", "ridges"), ("distort.roughen", "detail")] {
+            let cx = EffectCx::new(&app, effect, false);
+            let rows = super::super::effect_rows::distort(&cx, &DialogFields::new());
+            let unit = |k: &str| rows.iter().find(|p| p.key == k).map(|p| p.unit);
+            assert_eq!(unit(key), Some(None), "{effect} {key}");
+            assert_eq!(unit("size"), Some(Some(UnitKind::Percent)), "{effect} size");
+        }
     }
 
     /// The lists the dialogs draw hold the values the effect's parameter documentation lists, in
