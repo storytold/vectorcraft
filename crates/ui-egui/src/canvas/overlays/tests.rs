@@ -61,3 +61,127 @@ fn a_tip_disc_is_scaled_by_the_zoom_and_never_empty() {
 fn empty_tip() -> Overlay {
     Overlay::HoverText { center: Point::new(f64::NAN, 0.0), radius: 5.0, text: "Tip" }
 }
+
+/// The dashes of `points` in `pattern`, as `Draw::dashed` lays them out.
+fn dashes_along(points: &[Pos2], pattern: Dashes) -> Vec<egui::Shape> {
+    let s = egui::Stroke::new(1.0, Color32::WHITE);
+    egui::Shape::dashed_line_with_offset(points, s, &[pattern.dash], &[pattern.gap], pattern.phase)
+}
+
+/// The stretches of x that horizontal dashes cover inside `lo..hi`, in order.
+fn spans(shapes: &[egui::Shape], lo: f32, hi: f32) -> Vec<(f32, f32)> {
+    let mut out: Vec<(f32, f32)> = shapes
+        .iter()
+        .map(|s| match s {
+            egui::Shape::LineSegment { points: [a, b], .. } => (a.x.min(b.x).max(lo), a.x.max(b.x).min(hi)),
+            other => panic!("{other:?}"),
+        })
+        .filter(|(a, b)| b > a)
+        .collect();
+    out.sort_by(|a, b| a.0.total_cmp(&b.0));
+    out
+}
+
+/// A dashed line much longer than the canvas is dashed only where it shows, with the dashes on the canvas where the
+/// whole line dashed in one go has them, for any phase of the pattern.
+#[test]
+fn a_long_dashed_line_is_dashed_only_on_the_canvas() {
+    let view = view();
+    let clip = view.rect.expand(8.0);
+    let (lo, hi) = (view.rect.left(), view.rect.right());
+    // From 1,000 points left of the canvas to 1,740 points right of it.
+    let (a, b) = (Point::new(-1000.0, 100.0), Point::new(1900.0, 100.0));
+    for phase in [0.0, 2.5, 6.9] {
+        let pattern = Dashes::new(4.0, 3.0).phase(phase);
+        let whole = dashes_along(&[view.to_screen(a), view.to_screen(b)], pattern);
+        let (run, from) = visible_run(&view, a, b, clip).unwrap();
+        let drawn = dashes_along(&run, dashes_from(pattern, from));
+        let (want, got) = (spans(&whole, lo, hi), spans(&drawn, lo, hi));
+        assert_eq!(want.len(), got.len(), "{phase}: {want:?} {got:?}");
+        assert!(want.iter().zip(&got).all(|(w, g)| (w.0 - g.0).abs() < 1e-2 && (w.1 - g.1).abs() < 1e-2), "{phase}: {want:?} {got:?}");
+        assert!(drawn.len() <= 30, "only the dashes on the canvas: {}", drawn.len());
+    }
+}
+
+/// Ends 10,000,000,000 points away on both sides still keep the part on the canvas, dashed in whole dashes.
+#[test]
+fn a_dashed_line_with_far_ends_keeps_its_part_on_the_canvas() {
+    let view = view();
+    let pattern = Dashes::new(4.0, 3.0);
+    let (run, from) = visible_run(&view, Point::new(-1e10, 100.0), Point::new(1e10, 100.0), view.rect.expand(8.0)).unwrap();
+    assert!(from > 1e9, "{from}");
+    let drawn = spans(&dashes_along(&run, dashes_from(pattern, from)), view.rect.left(), view.rect.right());
+    assert!((20..=26).contains(&drawn.len()), "{drawn:?}");
+    assert!(drawn.iter().all(|(a, b)| b - a <= 4.0 + 1e-3), "{drawn:?}");
+    // Ends so far off that the clipped ends round to one point along the line still keep the canvas's width.
+    let clip = view.rect.expand(8.0);
+    let (run, _) = visible_run(&view, Point::new(-1e20, 100.0), Point::new(1e20, 100.0), clip).unwrap();
+    assert_eq!(run, [Pos2::new(clip.left(), 100.0), Pos2::new(clip.right(), 100.0)]);
+    // A slanted line keeps its slant there too.
+    let (run, _) = visible_run(&view, Point::new(-1e20, -1e20), Point::new(1e20, 1e20), clip).unwrap();
+    assert!(run.iter().all(|p| (p.x - p.y).abs() < 1e-3 && clip.expand(1e-2).contains(*p)), "{run:?}");
+    assert!(run[0].distance(run[1]) > 200.0, "{run:?}");
+    // Far-off ends off one diagonal keep the line's offset: these ends, as `f64` holds them, give a line that
+    // crosses x = 0 at y = 72.35.
+    let (run, _) = visible_run(&view, Point::new(-1e18, -1e18 + 100.0), Point::new(1.3e18, 1.3e18 + 100.0), clip).unwrap();
+    assert!(run.iter().all(|p| (p.y - p.x - 72.35).abs() < 1e-2 && clip.expand(1e-2).contains(*p)), "{run:?}");
+}
+
+/// The line segments in `shapes`, with nested shape lists opened.
+fn segments(shapes: &[egui::Shape]) -> Vec<[Pos2; 2]> {
+    let mut out = Vec::new();
+    for s in shapes {
+        match s {
+            egui::Shape::LineSegment { points, .. } => out.push(*points),
+            egui::Shape::Vec(inner) => out.extend(segments(inner)),
+            other => panic!("{other:?}"),
+        }
+    }
+    out
+}
+
+/// A long dashed line overlay painted through `paint` gives only the dashes near the canvas, each on the line.
+#[test]
+fn a_long_dashed_line_overlay_paints_only_its_dashes_on_the_canvas() {
+    use craft::i18n::Direction;
+    use craft::theme::{Contrast, Mode};
+    use craft::ui::style::Ink;
+    use craft::ui::testing::Frames;
+    use craft::ui::testing::style::{paint_frame, tokens};
+
+    let view = view();
+    let tokens = tokens(Mode::Light, Contrast::Standard);
+    let style = ToolMarksStyle {
+        metrics: Metrics::new(),
+        dark: StyleColor(Color32::BLACK),
+        ink: StyleColor(Color32::WHITE),
+        accent: StyleColor(Color32::BLUE),
+        pad: Vec2::ZERO,
+        radius: CornerRadius::ZERO,
+        handle: 3.0,
+    };
+    let line = Overlay::Line { a: Point::new(-1000.0, 100.0), b: Point::new(1900.0, 100.0), color: [255, 0, 255], dashed: true };
+    let mut frames = Frames::new();
+    let (shapes, _) = paint_frame(&mut frames, &tokens, Direction::Ltr, Ink::OnPanel, |draw| {
+        paint(draw, &view, std::slice::from_ref(&line), &PathOptionsSettings::default(), &style);
+    });
+    let drawn = segments(&shapes);
+    assert!(!drawn.is_empty(), "the part on the canvas is drawn");
+    assert!(drawn.len() <= 40, "only the dashes near the canvas: {}", drawn.len());
+    let near = view.rect.expand(32.0);
+    assert!(drawn.iter().flatten().all(|p| near.contains(*p) && (p.y - 100.0).abs() < 1e-3), "{drawn:?}");
+}
+
+/// A turned view clips the line to the canvas too, and a line off the canvas or with an end that is not finite draws
+/// nothing.
+#[test]
+fn a_dashed_line_off_the_canvas_draws_nothing() {
+    let mut view = view();
+    view.rotation = 0.3;
+    let clip = view.rect.expand(8.0);
+    let (run, _) = visible_run(&view, Point::new(-1e6, 100.0), Point::new(1e6, 100.0), clip).unwrap();
+    assert!(run.iter().all(|p| clip.expand(1e-2).contains(*p)), "{run:?}");
+    assert!(visible_run(&view, Point::new(-1e6, 5000.0), Point::new(1e6, 5000.0), clip).is_none());
+    assert!(visible_run(&view, Point::new(0.0, 100.0), Point::new(f64::INFINITY, 100.0), clip).is_none());
+    assert!(visible_run(&view, Point::new(f64::NAN, 100.0), Point::new(10.0, 100.0), clip).is_none());
+}
