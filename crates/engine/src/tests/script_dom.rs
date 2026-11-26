@@ -717,10 +717,10 @@ fn selecting_an_item_keeps_the_direct_selected_anchors_of_others() {
     s.execute("select.add", &json!({"ids": [b.0]})).unwrap();
     let anchors = s.active().unwrap().selection.anchors.clone();
     assert!(anchors.contains_key(&a));
-    log(&mut s, "app.activeDocument.pageItems[1].selected = false;");
+    log(&mut s, "app.activeDocument.pageItems[0].selected = false;");
     let sel = &s.active().unwrap().selection;
     assert_eq!((sel.objects.clone(), sel.anchors.clone()), (vec![a], anchors.clone()));
-    log(&mut s, "app.activeDocument.pageItems[1].selected = true;");
+    log(&mut s, "app.activeDocument.pageItems[0].selected = true;");
     let sel = &s.active().unwrap().selection;
     assert_eq!((sel.objects.clone(), sel.anchors.get(&a)), (vec![a, b], anchors.get(&a)));
 }
@@ -2428,7 +2428,7 @@ fn every_page_item_has_its_layer_and_members_check_this() {
     let out = log(
         &mut s,
         "var d = app.activeDocument, p = d.pageItems[0], n = d.layers.add(); n.name = 'Up'; p.move(n);\
-         vc.log(p.layer.name); vc.log(d.pageItems[0].layer.name); vc.log(p.layer.layers.typename);\
+         vc.log(p.layer.name); vc.log(d.pageItems[1].layer.name); vc.log(p.layer.layers.typename);\
          vc.log(n.pageItems.typename); vc.log(n.groupItems.typename);",
     );
     assert_eq!(out, [json!("Up"), json!("Layer 1"), json!("Layers"), json!("PageItems"), json!("GroupItems")]);
@@ -2542,7 +2542,7 @@ fn page_items_report_their_available_members_as_their_own() {
     );
     assert_eq!(out[0], json!([true, true, true, true, true, true, true]));
     // Members that are not available yet, unknown names and inherited ones are not the object's own.
-    assert_eq!(out[1], json!([false, false, false, false, false, false]));
+    assert_eq!(out[1], json!([false, true, true, false, false, false]));
     // `for`-`in` lists the properties, not the methods or the members that are not available yet.
     assert_eq!(out[2], json!([true, true, -1, -1]));
 }

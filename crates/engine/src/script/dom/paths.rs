@@ -58,9 +58,9 @@ use vectorcraft_js::{Data, HostClass, HostError, HostItem, HostMember, Realm, Ru
 use vectorcraft_tools::params::gradient_params;
 
 use super::{
-    Answer, Coords, Doc, Item, Link, NOT_FOUND, STALE_ITEM, arg, boolean, class, class_text, colors, command, command_value, coordinate, edit_item, editable,
-    find_doc, float, frame, get, given, handle_of, id_of, id_parts, item_of, item_rect, later, method, named, num, number, on_doc, pair, point,
-    point_get, point_method, point_property, property, this_doc, typename_of, whole, with_doc,
+    Answer, Coords, Doc, Item, Link, NOT_FOUND, STALE_ITEM, arg, boolean, class, class_text, colors, command, command_value, coordinate, edit_item,
+    editable, find_doc, float, frame, get, given, handle_of, id_of, id_parts, item_of, item_rect, later, method, named, num, number, on_doc, pair,
+    point, point_get, point_method, point_property, property, this_doc, typename_of, whole, with_doc,
 };
 use crate::{DocState, NodeId, NodeKind};
 
@@ -1202,8 +1202,10 @@ fn path_rotate(h: &super::Host, a: &[Data]) -> Answer {
     let place = about_name(arg(a, 6))?;
     let mut params = json!({"angle": angle});
     transform_options(a, 2, &mut params)?;
-    if angle.rem_euclid(360.0) != 0.0 {
-        let (r, _) = item_rect(h, item, false)?;
+    // A path with no anchors has no bounds to turn about, and turning it changes nothing.
+    if angle.rem_euclid(360.0) != 0.0
+        && let (Some(r), _) = item_rect(h, item, false)?
+    {
         let origin = about(h, item, place, r)?;
         params["origin"] = json!([origin.x, origin.y]);
         edit_path(h, item, "object.rotate", params)?;
@@ -1234,8 +1236,9 @@ fn path_resize(h: &super::Host, a: &[Data]) -> Answer {
     }
     // The scale and the new stroke weight are one edit: a failure of either undoes both.
     super::atomically(h, |h| {
-        if sx != 100.0 || sy != 100.0 {
-            let (r, _) = item_rect(h, item, false)?;
+        if (sx != 100.0 || sy != 100.0)
+            && let (Some(r), _) = item_rect(h, item, false)?
+        {
             let origin = about(h, item, place, r)?;
             params["origin"] = json!([origin.x, origin.y]);
             edit_path(h, item, "object.scale", params)?;

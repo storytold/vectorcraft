@@ -1851,10 +1851,13 @@ fn item_control(h: &Host, a: &[Data]) -> Answer {
     let (r, f) = with_doc(h, item.doc, |_, st| {
         let visible = st.doc.bounds_of(&[item.id], true);
         let handles = st.doc.node(item.id).and_then(handles_box);
-        let r = vectorcraft_geom::union_opt(visible, handles).ok_or_else(|| HostError::Error("the object has no bounds".into()))?;
-        Ok::<_, HostError>((r, frame(st)?))
+        Ok::<_, HostError>((vectorcraft_geom::union_opt(visible, handles), frame(st)?))
     })?;
-    Ok(f.bounds(h.dom.coords.get(), r))
+    // An object with nothing in it has no bounds, and they read as zeros like its other bounds.
+    match r {
+        Some(r) => Ok(f.bounds(h.dom.coords.get(), r)),
+        None => Ok(Data::Array(vec![num(0.0), num(0.0), num(0.0), num(0.0)])),
+    }
 }
 
 fn item_position(h: &Host, a: &[Data]) -> Answer {

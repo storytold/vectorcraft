@@ -30,8 +30,9 @@ fn rect(s: &mut Session, x: f64, y: f64, w: f64, h: f64) -> NodeId {
 fn doc() -> (Session, NodeId, NodeId) {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
-    let a = rect(&mut s, 10.0, 20.0, 30.0, 40.0);
+    // `pathItems[0]` is the topmost path, so `a` is made last.
     let b = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    let a = rect(&mut s, 10.0, 20.0, 30.0, 40.0);
     s.execute("select.none", &json!({})).unwrap();
     (s, a, b)
 }
@@ -564,6 +565,14 @@ fn identity_transforms_of_an_empty_path_do_nothing() {
     }
 }
 
+#[test]
+fn turning_or_scaling_an_empty_path_changes_nothing() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    log(&mut s, "var n = app.activeDocument.pathItems.add(); n.rotate(90); n.resize(50, 50);");
+    assert_eq!(undo_steps(&s), 1, "only the path is added");
+}
+
 /// The paint of the fill (`fill`) or stroke of `id`.
 fn paint_of(s: &Session, id: NodeId, fill: bool) -> Paint {
     let n = node(s, id);
@@ -935,7 +944,7 @@ fn locked_paths_and_wrong_objects_are_refused() {
     }
     assert_eq!(art(&s), before);
     s.execute("text.create", &json!({"x": 10, "y": 250, "text": "hi"})).unwrap();
-    let e = failure(&mut s, "var t = app.activeDocument.pageItems[2]; Object.getOwnPropertyDescriptor(PathItem.prototype, 'closed').get.call(t);");
+    let e = failure(&mut s, "var t = app.activeDocument.pageItems[0]; Object.getOwnPropertyDescriptor(PathItem.prototype, 'closed').get.call(t);");
     assert!(e.contains("not a PathItem"), "{e}");
     let e = failure(&mut s, "Object.getOwnPropertyDescriptor(PathPoint.prototype, 'anchor').get.call({});");
     assert!(e.contains("not a PathPoint"), "{e}");

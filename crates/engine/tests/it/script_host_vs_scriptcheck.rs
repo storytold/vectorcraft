@@ -153,7 +153,10 @@ const INSIDE: &[(&str, &str)] = &[
          width width= wrapInside wrapInside= wrapOffset wrapOffset= wrapped wrapped= zOrder zOrderPosition",
     ),
     ("PathItems.", "prototype"),
-    ("PathItems.prototype.", "add constructor ellipse getByName index length parent polygon rectangle removeAll roundedRectangle star toString typename"),
+    (
+        "PathItems.prototype.",
+        "add constructor ellipse getByName index length parent polygon rectangle removeAll roundedRectangle star toString typename",
+    ),
     ("PathItem.", "prototype"),
     (
         "PathItem.prototype.",
