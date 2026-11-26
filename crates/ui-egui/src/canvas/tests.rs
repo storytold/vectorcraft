@@ -3919,6 +3919,23 @@ fn start_typing(app: &mut VectorcraftApp, ctx: &egui::Context) -> u64 {
     app.session.active().unwrap().selection.objects[0].0
 }
 
+#[test]
+fn the_canvas_type_editor_uses_the_interface_language() {
+    use crate::i18n::LangExt as _;
+
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = crate::testing::ui_context();
+    ctx.enable_accesskit();
+    let former = crate::i18n::current();
+    start_typing(&mut app, &ctx);
+    crate::i18n::set_current(crate::i18n::Lang::from_code("fr").unwrap());
+    let out = typing_frame(&mut app, &ctx, vec![egui::Event::Text("Bonjour".into())]);
+    crate::i18n::set_current(former);
+
+    let nodes = out.platform_output.accesskit_update.unwrap().nodes;
+    assert!(nodes.iter().any(|(_, node)| node.role() == egui::accesskit::Role::MultilineTextInput && node.label() == Some("Texte")));
+}
+
 /// Returns a key press and its release.
 fn tap(key: egui::Key) -> [egui::Event; 2] {
     [true, false].map(|pressed| egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers: Default::default() })
