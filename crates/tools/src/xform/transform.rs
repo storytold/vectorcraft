@@ -141,6 +141,11 @@ pub struct TransformTool {
     snap: Option<PointSnap>,
 }
 
+/// The selected objects and ruler guides, which a reference point set by a click belongs to.
+fn selected_ids(cx: &ToolContext) -> Vec<NodeId> {
+    cx.selection.objects.iter().chain(&cx.selection.guides).copied().collect()
+}
+
 fn about(o: Point, a: Affine) -> Affine {
     Affine::translate(o.to_vec2()) * a * Affine::translate(-o.to_vec2())
 }
@@ -183,10 +188,11 @@ impl TransformTool {
     }
 
     /// The effective reference point: the custom one if it belongs to the current selection,
-    /// otherwise the centre of its bounding box (rotated with rotated objects).
+    /// otherwise the centre of its bounding box (rotated with rotated objects). With ruler guides
+    /// selected, it is the center of the objects' box and the guides' lines together.
     pub fn reference_point(&self, cx: &ToolContext) -> Option<Point> {
         if let Some((p, ids)) = &self.origin
-            && *ids == cx.selection.objects
+            && *ids == selected_ids(cx)
             && !ids.is_empty()
         {
             return Some(*p);
@@ -194,7 +200,29 @@ impl TransformTool {
         // Anchors selected with Direct Selection transform alone, about their own centre.
         vectorcraft_effects::preview::anchor_bounds_with(cx.selection, cx.doc, cx.bounds_measure())
             .map(|b| b.center())
-            .or_else(|| selection_box(cx).map(|b| b.center()))
+            .or_else(|| if self.guide_lines(cx).is_empty() { selection_box(cx).map(|b| b.center()) } else { self.bounds(cx).map(|b| b.center()) })
+    }
+
+    /// The selected ruler guides the tool transforms, as the boxes of the lines they stand for
+    /// ([`vectorcraft_doc::Document::guide_line`]): those that can be edited, with objects
+    /// selected, and with the Rotate tool also without.
+    fn guide_lines(&self, cx: &ToolContext) -> Vec<Rect> {
+        if cx.selection.is_empty() && self.kind != TransformKind::Rotate {
+            return vec![];
+        }
+        let d = cx.doc;
+        let guides = cx.selection.guides.iter().filter_map(|id| d.ruler_guide(*id)).filter(|g| d.guide_editable(g));
+        guides.filter_map(|g| d.guide_line(&g)).map(|(a, b)| Rect::from_points(a, b)).collect()
+    }
+
+    /// The bounding box of the selected objects and the lines of the guides the tool transforms.
+    fn bounds(&self, cx: &ToolContext) -> Option<Rect> {
+        self.guide_lines(cx).into_iter().fold(selection_bounds(cx), |acc, r| Some(acc.map_or(r, |acc| acc.union(r))))
+    }
+
+    /// Is there anything selected for the tool to transform?
+    fn has_target(&self, cx: &ToolContext) -> bool {
+        !cx.selection.is_empty() || !self.guide_lines(cx).is_empty()
     }
 
     /// Transform for dragging from `start` to `p` about `o`; returns the matrix and a readout.
@@ -356,7 +384,7 @@ impl Tool for TransformTool {
         let p = ev.pos;
         match ev.kind {
             PointerKind::Down => {
-                let Some(bounds) = selection_bounds(cx) else { return vec![] };
+                let Some(bounds) = self.bounds(cx) else { return vec![] };
                 self.hover.clear();
                 let (pick, _) = snap_pick(cx, p);
                 // Alt: decided on release. A click sets the point and opens the dialog; a drag
@@ -462,7 +490,7 @@ impl Tool for TransformTool {
                 } else {
                     // A click sets the reference point; with Alt, it opens the dialog too. With the
                     // Reflect tool, a plain click also sets the first point of an axis.
-                    self.origin = Some((d.pick, cx.selection.objects.clone()));
+                    self.origin = Some((d.pick, selected_ids(cx)));
                     self.drop_axis();
                     if d.alt {
                         vec![self.dialog(d.pick)]
@@ -490,7 +518,7 @@ impl Tool for TransformTool {
             PointerKind::TripleClick => vec![],
             PointerKind::Move => {
                 if self.drag.is_none() {
-                    let (pick, hover) = if cx.selection.is_empty() { (p, vec![]) } else { snap_pick(cx, p) };
+                    let (pick, hover) = if self.has_target(cx) { snap_pick(cx, p) } else { (p, vec![]) };
                     self.hover = hover;
                     self.axis_to = self.axis_first(cx).map(|_| pick);
                 }
@@ -565,7 +593,7 @@ impl Tool for TransformTool {
     }
 
     fn cursor(&self, cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
-        if cx.selection.is_empty() {
+        if !self.has_target(cx) {
             return Cursor::NotAllowed;
         }
         match self.kind {
@@ -695,6 +723,35 @@ mod tests {
         assert!((m * Point::new(250.0, 150.0)).distance(Point::new(150.0, 250.0)) < 1e-9);
         let up = t.pointer(&cx, &ev(PointerKind::Up, 150.0, 250.0));
         assert_eq!(up.last(), Some(&Action::Commit));
+    }
+
+    /// With only a ruler guide selected, the Rotate tool drags about the middle of the guide's
+    /// line, and Alt-click opens its dialog; the Scale tool still needs objects.
+    #[test]
+    fn the_rotate_tool_turns_a_selected_ruler_guide_alone() {
+        let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+        let g = d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 100.0));
+        let mut s = Selection::default();
+        s.guides.push(g);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = TransformTool::new(TransformKind::Rotate);
+        assert_eq!(t.reference_point(&cx), Some(Point::new(100.0, 250.0)));
+        assert_ne!(t.cursor(&cx, Point::ZERO, Mods::default()), Cursor::NotAllowed);
+        assert!(t.pointer(&cx, &ev(PointerKind::Down, 200.0, 250.0)).is_empty());
+        let a = t.pointer(&cx, &ev(PointerKind::Drag, 100.0, 350.0));
+        assert_eq!(a[0], Action::Begin("Rotate".into()));
+        let m = matrix(&a[1]);
+        assert!((m * Point::new(100.0, 250.0)).distance(Point::new(100.0, 250.0)) < 1e-9);
+        assert!((m * Point::new(200.0, 250.0)).distance(Point::new(100.0, 350.0)) < 1e-9);
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 100.0, 350.0)).last(), Some(&Action::Commit));
+        t.pointer(&cx, &ev(PointerKind::Down, 50.0, 60.0).with_mods(alt()));
+        let up = t.pointer(&cx, &ev(PointerKind::Up, 50.0, 60.0).with_mods(alt()));
+        assert!(matches!(up.as_slice(), [Action::Dialog(id, _)] if id == "rotate"), "{up:?}");
+        let mut scale = TransformTool::new(TransformKind::Scale);
+        assert_eq!(scale.reference_point(&cx), None);
+        assert!(scale.pointer(&cx, &ev(PointerKind::Down, 200.0, 250.0)).is_empty());
+        assert!(scale.pointer(&cx, &ev(PointerKind::Drag, 100.0, 350.0)).is_empty());
     }
 
     #[test]

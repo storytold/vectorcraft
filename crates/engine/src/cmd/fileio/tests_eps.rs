@@ -212,11 +212,29 @@ fn flattening_cropped_art_keeps_the_art_under_its_hidden_part() {
 fn overprints_are_kept_or_discarded() {
     let mut s = session(100.0, 100.0, 1);
     let id = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap()["id"].as_u64().unwrap();
+    s.execute("paint.setFill", &json!({"ids": [id], "color": {"c": 100, "m": 0, "y": 0, "k": 0}})).unwrap();
     s.execute("attributes.set", &json!({"ids": [id], "overprintFill": true})).unwrap();
     let kept = postscript(&b64(&s.execute("document.exportEps", &json!({"previewFormat": "none"})).unwrap()));
     assert!(kept.contains("true op\n"), "{kept}");
     let dropped = postscript(&b64(&s.execute("document.exportEps", &json!({"previewFormat": "none", "overprints": "discard"})).unwrap()));
     assert!(!dropped.contains("true op"));
+
+    // A white fill or stroke that overprints knocks out with Discard White Overprint (on by
+    // default), and overprints without it, as in PDF export.
+    let white = json!({"c": 0, "m": 0, "y": 0, "k": 0});
+    let filled = [json!({"ids": [id], "color": white}), json!({"ids": [id], "none": true})];
+    let stroked = [json!({"ids": [id], "none": true}), json!({"ids": [id], "color": white})];
+    for (i, [fill, stroke]) in [filled, stroked].iter().enumerate() {
+        s.execute("paint.setFill", fill).unwrap();
+        s.execute("paint.setStroke", stroke).unwrap();
+        s.execute("attributes.set", &json!({"ids": [id], "overprintFill": i == 0, "overprintStroke": i == 1})).unwrap();
+        s.execute("document.setup", &json!({"discardWhiteOverprint": true})).unwrap();
+        let knocked_out = postscript(&b64(&s.execute("document.exportEps", &json!({"previewFormat": "none"})).unwrap()));
+        assert!(!knocked_out.contains("true op"), "{i}: {knocked_out}");
+        s.execute("document.setup", &json!({"discardWhiteOverprint": false})).unwrap();
+        let overprinted = postscript(&b64(&s.execute("document.exportEps", &json!({"previewFormat": "none"})).unwrap()));
+        assert!(overprinted.contains("true op\n"), "{i}: {overprinted}");
+    }
 }
 
 #[test]

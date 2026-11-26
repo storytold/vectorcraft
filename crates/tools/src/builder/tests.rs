@@ -3796,6 +3796,32 @@ fn fill_area_press_does_not_search_a_hover_position_it_passed() {
     assert_eq!(super::fill_area::hover_searches_started() - started, 1, "only the search that was running");
 }
 
+/// An outline without a fill, cut to a clipping mask, keeps the pieces on the mask's edge: a square
+/// clipped by the same square keeps all four sides. A square just outside the mask, and a square on
+/// an outline of the mask that bounds no filled area (two copies of the square under even-odd),
+/// keep nothing.
+#[test]
+fn fill_area_clip_keeps_outline_pieces_on_the_mask_edge() {
+    let unit = Rect::new(0.0, 0.0, 100.0, 100.0);
+    let clip =
+        |shape: PathData, mask: &PathData, rule: FillRule| super::fill_area::clip_to(po::Shape::new(shape, FillRule::NonZero, 1), false, mask, rule);
+    let kept = clip(shapes::rectangle(unit), &shapes::rectangle(unit), FillRule::NonZero).expect("the sides on the mask's edge");
+    assert_eq!(kept.path.subpaths.iter().map(|sp| sp.segment_count()).sum::<usize>(), 4, "{:?}", kept.path);
+    let outside = shapes::rectangle(Rect::new(-0.005, -0.005, 100.005, 100.005));
+    assert!(clip(outside, &shapes::rectangle(unit), FillRule::NonZero).is_none());
+    let mut twice = shapes::rectangle(unit);
+    let mut back = shapes::rectangle(unit).subpaths;
+    back[0].anchors.reverse();
+    twice.subpaths.extend(back);
+    assert!(clip(shapes::rectangle(unit), &twice, FillRule::EvenOdd).is_none());
+    // A top side drawn as a cubic whose tangent vanishes at its middle shows as well.
+    let a = |p: Point, h_in: Point, h_out: Point| vectorcraft_geom::Anchor { p, h_in, h_out, kind: vectorcraft_geom::AnchorKind::Corner };
+    let (o, x, xy, y) = (Point::new(0.0, 0.0), Point::new(100.0, 0.0), Point::new(100.0, 100.0), Point::new(0.0, 100.0));
+    let cusp = SubPath::new(vec![a(o, o, x), a(x, o, x), a(xy, xy, xy), a(y, y, y)], true);
+    let kept = clip(PathData::single(cusp), &shapes::rectangle(unit), FillRule::NonZero).expect("the sides on the mask's edge");
+    assert_eq!(kept.path.subpaths.iter().map(|sp| sp.segment_count()).sum::<usize>(), 4, "{:?}", kept.path);
+}
+
 #[test]
 fn create_builds_the_three_tools() {
     for id in ["shapeBuilder", "livePaintBucket", "livePaintSelection"] {
