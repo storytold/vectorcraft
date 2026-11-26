@@ -104,10 +104,10 @@ fn paint_block(ui: &mut Ui, p: &PaintLines) -> Option<String> {
                 copy = Some(v.clone());
             }
         }
-        if let Some(note) = &p.note {
-            if super::doc_info::copy_value(ui, note, note, false) {
-                copy = Some(note.clone());
-            }
+        if let Some(note) = &p.note
+            && super::doc_info::copy_value(ui, note, note, false)
+        {
+            copy = Some(note.clone());
         }
     });
     copy
