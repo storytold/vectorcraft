@@ -13,10 +13,10 @@ use vectorcraft_tools::distort::liquify::{Dabber, LiquifyParams, PathStroke, Sam
 use vectorcraft_tools::distort::perspective::{self as persp, PerspectiveGrid, Plane};
 use vectorcraft_tools::distort::{PinSet, arap, collect_points, mesh_for, project_node, stroke_owner, warp_from_rest, warp_node_with};
 
-use super::edit::{duplicate_in, outermost, selected_roots};
+use super::edit::{duplicate_in, outermost, refuse_symbol_part, selected_roots};
 use super::{
-    CommandSpec, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, f64_req, finite_numbers, has_doc, has_selection, id_param,
-    ids_param, matrix_param, number_or, ok, point_indices, point_param, str_param, switch_or, targets,
+    CommandSpec, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, f64_req, finite_numbers, has_doc, has_selection, matrix_param,
+    named_id, named_ids, number_or, object_param, ok, point_indices, point_param, str_param, switch_or, targets, text_param, u64_req,
 };
 use crate::EngineError;
 
@@ -26,7 +26,7 @@ pub use perspective::perspective_click;
 use perspective::{
     attach, edit_text, grid_set, grid_show, persp_draw, persp_move, persp_nudge, persp_transform, plane_match, plane_move, plane_set, release,
 };
-pub(crate) use perspective::{finish_edit_text, grid_of, perspective_rewrite, silent, store_grid, transform_again};
+pub(crate) use perspective::{finish_edit_text, grid_kept, grid_of, perspective_rewrite, silent, store_grid, transform_again};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -35,7 +35,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Width Point",
             [],
             None,
-            "{id, t: 0..1 (fraction of the path length), left, right: side widths in pt, index?: width point to edit or move, adjustAdjoining?: bool (the nearest points either side change their widths in proportion, using the sampled widths for a new point)} → {index}. Without index a point already at t is replaced; a point moved onto another one's t joins it as a discontinuous point (on the side it came from), so the width steps there. Creates a uniform profile first if needed",
+            "{id, t: 0..1 (fraction of the path length), left, right: side widths in pt, index?: width point to edit or move, adjustAdjoining?: bool (the nearest points either side change their widths in proportion, using the sampled widths for a new point), outIndex?, outLeft, outRight: the outgoing half of the discontinuous point whose incoming half is index, single?: \"incoming\" | \"outgoing\"} → {index}. Without index a point already at t is replaced; a point moved onto another one's t joins it as a discontinuous point (on the side it came from), so the width steps there. With outIndex both halves change in one step and keep their place (t must be theirs); adjustAdjoining then changes the nearest point before from the incoming half and the nearest point after from the outgoing half. single keeps only that half's widths, leaving one continuous point. Creates a uniform profile first if needed",
             has_doc,
             width_point_set
         ),
@@ -71,7 +71,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Liquify",
             [],
             None,
-            "{tool: warp|twirl|pucker|bloat|scallop|crystallize|wrinkle, points: [[x,y,pressure?]…] (the brush stroke; pen pressure 0..1, default 1), diameter?|width?, height? (pt, default 100), angle?, intensity? (0..1 or %), usePressure?: bool (each point's pressure is the intensity there), detail? (1..10), simplify?: 0..100, simplifyOn?: bool (default true; both for warp, twirl, pucker, bloat), rate? (twirl °), complexity? (0..15), horizontal?, vertical? (wrinkle, 0..1 or %), affectAnchors?, affectIn?, affectOut?: bool (scallop, crystallize, wrinkle; default true), ids?|id? (default: selection, else every path the brush touches)}",
+            "{tool: warp|twirl|pucker|bloat|scallop|crystallize|wrinkle, points: [[x,y,pressure?]…] (the brush stroke; pen pressure 0..1, default 1), diameter?|width?, height? (pt, default 100), angle? (deg clockwise: the brush's width axis from level), intensity? (0..1 or %), usePressure?: bool (each point's pressure is the intensity there), detail? (1..10), simplify?: 0..100, simplifyOn?: bool (default true; both for warp, twirl, pucker, bloat), rate? (twirl °, positive turns clockwise), complexity? (0..15), horizontal?, vertical? (wrinkle, 0..1 or %), affectAnchors?, affectIn?, affectOut?: bool (scallop, crystallize, wrinkle; default true), ids?|id? (default: selection, else every path the brush touches)}",
             has_doc,
             liquify
         ),
@@ -80,7 +80,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Puppet Warp",
             [],
             None,
-            "{id?|ids? (default: selection), pins: [[x,y]…] (current pin positions), moved: [[x,y]…] (targets, same length), angles?: [deg|null…] (same length: the turn the art takes around each pin, as Alt-dragging around a pin does; null leaves it free), expand?: pt, rest?: bool, auto?: bool (as object.puppetWarp.pins reports; ignored)} as-rigid-as-possible mesh warp of anchors and handles. rest: true = the Puppet Warp tool's pins: `pins` are points on the shape the pins started from (object.puppetWarp.pins), each must be on its mesh, the warp replaces the previous one instead of adding to it, and the pins are kept with the document for Undo (an empty list removes them all, leaving the art as it is)",
+            "{id?|ids? (default: selection), pins: [[x,y]…] (current pin positions), moved: [[x,y]…] (targets, same length), angles?: [deg|null…] (same length: the turn the art takes around each pin, clockwise, as Alt-dragging around a pin does; null leaves it free), expand?: pt, rest?: bool, auto?: bool (as object.puppetWarp.pins reports; ignored)} as-rigid-as-possible mesh warp of anchors and handles. rest: true = the Puppet Warp tool's pins: `pins` are points on the shape the pins started from (object.puppetWarp.pins), each must be on its mesh, the warp replaces the previous one instead of adding to it, and the pins are kept with the document for Undo (an empty list removes them all, leaving the art as it is)",
             has_doc,
             puppet_warp
         ),
@@ -89,7 +89,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Puppet Warp Pins",
             [],
             None,
-            "{id?|ids? (default: selection), expand?: pt} → {ids, pins, moved, angles, expand, rest: true, auto} the Puppet Warp pins on the art: pins = where each sits on the shape they started from, moved = where it is now, angles = the turn it holds (deg, null = free); auto: none placed yet (the tool's automatic pins: the centre and the end of each limb). Change moved/angles (or add/remove pins) and pass it back to object.puppetWarp",
+            "{id?|ids? (default: selection), expand?: pt} → {ids, pins, moved, angles, expand, rest: true, auto} the Puppet Warp pins on the art: pins = where each sits on the shape they started from, moved = where it is now, angles = the turn it holds (deg clockwise, null = free); auto: none placed yet (the tool's automatic pins: the centre and the end of each limb). Change moved/angles (or add/remove pins) and pass it back to object.puppetWarp",
             has_doc,
             puppet_pins
         ),
@@ -107,7 +107,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Perspective Grid Preset",
             [],
             None,
-            "{kind: 1|2|3 (its normal view) | name: a preset (see perspective.presets.list)} reset the grid to the preset fitted to the first artboard (and show it; attached objects stay attached)",
+            "{kind: 1|2|3 (its normal view) | name: a preset (see perspective.presets.list)} reset the grid to the preset fitted to the first artboard (and show it; attached objects stay attached). No undo step when the document already holds that grid; when only whether it shows or its active plane differs, those are set without one",
             has_doc,
             super::perspgrid::grid_preset
         ),
@@ -144,7 +144,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move in Perspective",
             [],
             None,
-            "{ids?|id?, from: [x,y], to: [x,y], plane?, copy?: bool (move copies, as Alt-dragging does), perpendicular?: bool (move along the plane's normal instead, as pressing 5 while dragging does), snap?: bool (default: View › Perspective Grid › Snap to Grid)} slide objects within their plane (unattached objects attach to `plane`/the active plane first); snapping lands the nearer edge of the objects' joint bounds on a gridline within a quarter cell; Transform Again repeats it",
+            "{ids?|id?, from: [x,y], to: [x,y], plane?, copy?: bool (move copies, as Alt-dragging does), perpendicular?: bool (move along the plane's normal instead, as pressing 5 while dragging does), snap?: bool (default: View › Perspective Grid › Snap to Grid), constrain?: bool (default false; constrain each in-plane move to its plane's nearest axis or 45° diagonal)} slide objects within their own planes (unattached objects attach to `plane`/the active plane first); snapping pulls the nearer edge of the first plane's joint bounds toward a gridline within a quarter cell while preserving the constrained direction, and moves every object on that plane, at any depth, by the same plane offset; Transform Again repeats it",
             has_doc,
             persp_move
         ),
@@ -214,6 +214,15 @@ fn uniform() -> WidthProfile {
 /// Width points closer than this (in t) are at the same place: a discontinuous point.
 const SAME_T: f64 = 1e-6;
 
+/// The outgoing half of the discontinuous width point whose incoming half is point `a`: point `a`
+/// and the next one are the two halves when they are the only points within 1e-6 (in t) of `a`'s
+/// place. None when `a` is out of range or not such an incoming half.
+pub fn width_point_pair(points: &[(f64, f64, f64)], a: usize) -> Option<usize> {
+    let t = points.get(a)?.0;
+    let at: Vec<usize> = (0..points.len()).filter(|i| (points[*i].0 - t).abs() <= SAME_T).collect();
+    (at == [a, a + 1]).then_some(a + 1)
+}
+
 /// The stroke of `id` that width point commands edit (a compound path's for its members).
 fn stroke_mut(d: &mut Document, id: NodeId) -> Result<&mut vectorcraft_doc::StrokeLayer> {
     let id = stroke_owner(d, id);
@@ -265,9 +274,9 @@ fn place(points: &mut Vec<(f64, f64, f64)>, mut pt: (f64, f64, f64), from_below:
 }
 
 /// Adjust Adjoining Width Points: point `i` changes from `old` to `new` widths, and the nearest
-/// points at other positions either side change in proportion (by the same amount from zero).
-fn adjust_adjoining(points: &mut [(f64, f64, f64)], i: usize, old: (f64, f64, f64), new: (f64, f64, f64)) {
-    let t = points[i].0;
+/// points farther than [`SAME_T`] from place `t` on the sides `sides` names (before, after)
+/// change in proportion (by the same amount from zero).
+fn adjust_adjoining(points: &mut [(f64, f64, f64)], i: usize, t: f64, old: (f64, f64, f64), new: (f64, f64, f64), sides: [bool; 2]) {
     let scale = |v: f64, o: f64, n: f64| {
         let width = if o > 1e-9 {
             let product = v * n;
@@ -284,8 +293,8 @@ fn adjust_adjoining(points: &mut [(f64, f64, f64)], i: usize, old: (f64, f64, f6
         };
         width.max(0.0)
     };
-    let before = (0..i).rev().find(|j| (points[*j].0 - t).abs() > SAME_T);
-    let after = (i + 1..points.len()).find(|j| (points[*j].0 - t).abs() > SAME_T);
+    let before = (0..i).rev().find(|j| (points[*j].0 - t).abs() > SAME_T).filter(|_| sides[0]);
+    let after = (i + 1..points.len()).find(|j| (points[*j].0 - t).abs() > SAME_T).filter(|_| sides[1]);
     for j in before.into_iter().chain(after) {
         let q = &mut points[j];
         (q.1, q.2) = (scale(q.1, old.1, new.1), scale(q.2, old.2, new.2));
@@ -303,15 +312,74 @@ fn same_points(a: Option<&WidthProfile>, b: Option<&WidthProfile>) -> bool {
     }
 }
 
+/// Set both halves of the discontinuous point whose incoming half is `i` and outgoing half `j` to
+/// the widths of `inc` and `out` (their places are ignored: the point keeps its place). With
+/// `single` (`true` for the outgoing half) only that half's widths remain, as one continuous point.
+/// With `adjust`, the nearest point before changes with the incoming half and the nearest point after
+/// with the outgoing half, once each. → the index of the point (its incoming half).
+fn set_pair(
+    points: &mut Vec<(f64, f64, f64)>,
+    (i, inc): (usize, (f64, f64, f64)),
+    (j, out): (usize, (f64, f64, f64)),
+    adjust: bool,
+    single: Option<bool>,
+) -> Result<usize> {
+    const C: &str = "stroke.widthPoint.set";
+    if width_point_pair(points, i) != Some(j) {
+        return Err(bad(C, "`index` and `outIndex` must be the two halves of one discontinuous width point"));
+    }
+    let at = points[i].0;
+    let (old_in, old_out) = (points[i], points[j]);
+    if (old_in.0 - inc.0).abs() > SAME_T {
+        return Err(bad(C, "a discontinuous width point keeps its place"));
+    }
+    let (new_in, new_out) = match single {
+        None => ((old_in.0, inc.1, inc.2), (old_out.0, out.1, out.2)),
+        Some(false) => ((old_in.0, inc.1, inc.2), (old_in.0, inc.1, inc.2)),
+        Some(true) => ((old_in.0, out.1, out.2), (old_in.0, out.1, out.2)),
+    };
+    // Both halves measure their neighbors from the point's place, so a point within SAME_T of the
+    // outgoing half but not of that place is the point after the pair.
+    if adjust {
+        adjust_adjoining(points, i, at, old_in, new_in, [true, false]);
+        adjust_adjoining(points, j, at, old_out, new_out, [false, true]);
+    }
+    points[i] = new_in;
+    points[j] = new_out;
+    if single.is_some() {
+        points.remove(j);
+    }
+    Ok(i)
+}
+
 fn width_point_set(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "stroke.widthPoint.set";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let t = f64_req(p, "t", C)?.clamp(0.0, 1.0);
     let (left, right) = (f64_req(p, "left", C)?, f64_req(p, "right", C)?);
     if !(left.is_finite() && right.is_finite()) || left < 0.0 || right < 0.0 || left.max(right) > 1.0e5 {
         return Err(bad(C, "left/right must be non-negative widths"));
     }
     let adjust = switch_or(p, "adjustAdjoining", false, C)?;
+    let single = match text_param(p, "single", C)? {
+        None => None,
+        Some(side @ ("incoming" | "outgoing")) => Some(side == "outgoing"),
+        Some(_) => return Err(bad(C, "`single` must be `incoming` or `outgoing`")),
+    };
+    // The outgoing half of a discontinuous point: its index and side widths (points).
+    // `single`, `outLeft` or `outRight` without `outIndex` is refused as a missing `outIndex`.
+    let out_widths = ["outLeft", "outRight"].iter().any(|k| p.get(*k).is_some_and(|v| !v.is_null()));
+    let out = match p.get("outIndex") {
+        None | Some(Value::Null) if single.is_none() && !out_widths => None,
+        _ => {
+            let j = usize::try_from(u64_req(p, "outIndex", C)?).map_err(|_| bad(C, "no such width point"))?;
+            let (l, r) = (f64_req(p, "outLeft", C)?, f64_req(p, "outRight", C)?);
+            if !(l.is_finite() && r.is_finite()) || l < 0.0 || r < 0.0 || l.max(r) > 1.0e5 {
+                return Err(bad(C, "left/right must be non-negative widths"));
+            }
+            Some((j, l, r))
+        }
+    };
     // When the profile comes out as it was, within a rounding error (1e-9), the document and its undo
     // history stay as they are.
     let mut pos = 0;
@@ -324,11 +392,19 @@ fn width_point_set(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(bad(C, "width factors must be finite"));
         }
         let mut prof = st.profile.take().unwrap_or_else(uniform);
-        pos = match point_index(p, &prof, C)? {
-            Some(i) => {
+        pos = match (point_index(p, &prof, C)?, out) {
+            (None, Some(_)) => return Err(bad(C, "missing index")),
+            (Some(i), Some((j, l, r))) => {
+                let out = (t, l / half, r / half);
+                if !out.1.is_finite() || !out.2.is_finite() {
+                    return Err(bad(C, "width factors must be finite"));
+                }
+                set_pair(&mut prof.points, (i, pt), (j, out), adjust, single)?
+            }
+            (Some(i), None) => {
                 let old = prof.points[i];
                 if adjust {
-                    adjust_adjoining(&mut prof.points, i, old, pt);
+                    adjust_adjoining(&mut prof.points, i, old.0, old, pt, [true, true]);
                 }
                 if (old.0 - t).abs() <= SAME_T {
                     // Widths only: it keeps its place (and its side of a discontinuous point).
@@ -339,12 +415,12 @@ fn width_point_set(s: &mut Session, p: &Value) -> Result<Value> {
                     place(&mut prof.points, pt, old.0 < t)
                 }
             }
-            None => {
+            (None, None) => {
                 let old = adjust.then(|| prof.at(t));
                 prof.points.retain(|q| (q.0 - t).abs() > SAME_T);
                 let i = place(&mut prof.points, pt, true);
                 if let Some((left, right)) = old {
-                    adjust_adjoining(&mut prof.points, i, (t, left, right), pt);
+                    adjust_adjoining(&mut prof.points, i, pt.0, (t, left, right), pt, [true, true]);
                 }
                 i
             }
@@ -362,7 +438,7 @@ fn width_point_set(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn width_point_copy(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "stroke.widthPoint.copy";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let t = f64_req(p, "t", C)?.clamp(0.0, 1.0);
     // When the profile comes out as it was (the copy replaces a side of a discontinuous point that has
     // its widths already), the document and its undo history stay as they are.
@@ -382,7 +458,7 @@ fn width_point_copy(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn width_point_remove(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "stroke.widthPoint.remove";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let indices = match (p.get("indices"), p.get("index")) {
         (Some(a), _) => point_indices(a),
         (None, Some(i)) => point_indices(&json!([i])),
@@ -631,13 +707,12 @@ impl LiquifyStroke {
         }
         let msg = (!ids.is_empty()).then(|| {
             let n = ids.len();
-            format!(
-                "{} left {n} object{} under the brush as {} ({}): it reshapes paths only",
-                self.prm.kind.label(),
-                if n == 1 { "" } else { "s" },
-                if n == 1 { "it was" } else { "they were" },
-                kinds.join(", ")
-            )
+            let (tool, kinds) = (self.prm.kind.label(), kinds.join(", "));
+            if n == 1 {
+                format!("{tool} left {n} object under the brush as it was ({kinds}): it reshapes paths only")
+            } else {
+                format!("{tool} left {n} objects under the brush as they were ({kinds}): it reshapes paths only")
+            }
         });
         (ids, msg)
     }
@@ -658,7 +733,7 @@ fn liquify(s: &mut Session, p: &Value) -> Result<Value> {
     if pts.iter().any(|(q, f)| !q.x.is_finite() || !q.y.is_finite() || !f.is_finite()) {
         return Err(bad(C, "points must be finite"));
     }
-    let roots = match ids_param(p, "ids").or_else(|| id_param(p, "id").map(|i| vec![i])) {
+    let roots = match named_ids(p)? {
         Some(v) => v,
         None => s.doc()?.selection.objects.clone(),
     };
@@ -708,7 +783,7 @@ fn liquify(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// The objects a Puppet Warp command works on: `id`/`ids`, else `default`.
 fn puppet_ids(p: &Value, default: impl FnOnce() -> Result<Vec<NodeId>>) -> Result<Vec<NodeId>> {
-    let ids = match ids_param(p, "ids").or_else(|| id_param(p, "id").map(|i| vec![i])) {
+    let ids = match named_ids(p)? {
         Some(v) => v,
         None => default()?,
     };
@@ -730,8 +805,13 @@ fn puppet_warp(s: &mut Session, p: &Value) -> Result<Value> {
     if pins.iter().chain(&moved).any(|q| !q.x.is_finite() || !q.y.is_finite()) {
         return Err(bad(C, "pins must be finite"));
     }
-    let ids =
-        if rest { puppet_ids(p, || Ok(s.doc()?.selection.objects.clone()))? } else { outermost(&s.doc()?.doc, puppet_ids(p, || selected_roots(s))?) };
+    // While an object of a dynamic symbol instance's art is selected, the selection is refused, as
+    // `selected_roots` refuses it.
+    let selected = || {
+        refuse_symbol_part(s)?;
+        Ok(s.doc()?.selection.objects.clone())
+    };
+    let ids = if rest { puppet_ids(p, selected)? } else { outermost(&s.doc()?.doc, puppet_ids(p, || selected_roots(s))?) };
     let expand = f64_or(p, "expand", 3.0).clamp(0.0, 1000.0);
     let angles: Vec<Option<f64>> = match p.get("angles") {
         None | Some(Value::Null) => vec![None; pins.len()],

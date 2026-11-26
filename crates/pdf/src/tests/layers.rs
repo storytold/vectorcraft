@@ -2,7 +2,7 @@
 //! visibility, print state and lock) and Advanced › Overprint (a graphics state that overprints
 //! for the overprinting fills and strokes).
 
-use craft_pdf::syntax::object::{Array, Dict, Name, ObjectIdentifier};
+use craft::pdf::syntax::object::{Array, Dict, Name, ObjectIdentifier};
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, CharStyle, Document, LayerColor, Node, NodeKind, TextObject};
@@ -43,18 +43,18 @@ fn export(d: &Document, v: Value) -> ExportReport {
 }
 
 /// The groups of `refs` (an array of the catalog's optional content properties) by name.
-fn names(xref: &craft_pdf::syntax::xref::XRef, refs: Option<Array<'_>>) -> Vec<String> {
+fn names(xref: &craft::pdf::syntax::xref::XRef, refs: Option<Array<'_>>) -> Vec<String> {
     let ids = refs.map(|a| a.raw_iter().filter_map(|i| i.as_obj_ref()).map(ObjectIdentifier::from).collect::<Vec<_>>()).unwrap_or_default();
     ids.into_iter()
         .map(|id| {
             let g = xref.get::<Dict<'_>>(id).unwrap();
-            String::from_utf8(g.get::<craft_pdf::syntax::object::String<'_>>(b"Name").unwrap().as_bytes().to_vec()).unwrap()
+            String::from_utf8(g.get::<craft::pdf::syntax::object::String<'_>>(b"Name").unwrap().as_bytes().to_vec()).unwrap()
         })
         .collect()
 }
 
 /// The catalog's `/OCProperties` of `bytes` (opened with `password`), if any.
-fn oc_properties(bytes: &[u8], password: Option<&str>, f: impl FnOnce(Option<Dict<'_>>, &craft_pdf::syntax::xref::XRef)) {
+fn oc_properties(bytes: &[u8], password: Option<&str>, f: impl FnOnce(Option<Dict<'_>>, &craft::pdf::syntax::xref::XRef)) {
     let file = crate::pages::open(bytes, password).unwrap();
     let xref = file.xref();
     let catalog = xref.get::<Dict<'_>>(xref.root_id()).unwrap();
@@ -86,7 +86,7 @@ fn create_layers_writes_a_group_per_layer_with_its_states() {
         assert_eq!(names(xref, config.get(b"Order")), ["Notes", "Hidden", "Back"]);
         assert_eq!(names(xref, config.get(b"OFF")), ["Hidden"], "hidden layers are off");
         assert_eq!(names(xref, config.get(b"Locked")), ["Hidden"]);
-        assert!(config.get::<craft_pdf::syntax::object::String<'_>>(b"Name").is_some());
+        assert!(config.get::<craft::pdf::syntax::object::String<'_>>(b"Name").is_some());
         let auto = config.get::<Array<'_>>(b"AS").unwrap().iter::<Dict<'_>>().next().unwrap();
         assert_eq!(auto.get::<Name<'_>>(b"Event").unwrap().as_ref(), b"Print");
         let print_state = |name: &str| {
@@ -95,7 +95,7 @@ fn create_layers_writes_a_group_per_layer_with_its_states() {
             let g = ids
                 .into_iter()
                 .map(|id| xref.get::<Dict<'_>>(id).unwrap())
-                .find(|g| g.get::<craft_pdf::syntax::object::String<'_>>(b"Name").unwrap().as_bytes() == name.as_bytes());
+                .find(|g| g.get::<craft::pdf::syntax::object::String<'_>>(b"Name").unwrap().as_bytes() == name.as_bytes());
             let usage = g.unwrap().get::<Dict<'_>>(b"Usage").unwrap();
             usage.get::<Dict<'_>>(b"Print").unwrap().get::<Name<'_>>(b"PrintState").unwrap().as_ref().to_vec()
         };
@@ -128,6 +128,37 @@ fn pdf_layers_import_back_as_layers() {
             ],
             "password {password:?}"
         );
+    }
+}
+
+/// A hidden layer written as a PDF layer places the live effects of its instances' symbol art,
+/// also in a PDF/A-2b file at PDF 1.4 whose 17,000 pt page has it written as PDF 1.6: the symbol's
+/// square from x = 10 to 40, which a Transform effect moves 100 pt right, is written from x = 110
+/// to 140.
+#[test]
+fn a_hidden_layer_places_symbol_art_effects_when_a_long_page_raises_the_version() {
+    let mut d = Document::new(17_000.0, 300.0);
+    d.layers.clear();
+    let mut square = rect(&mut d, 10.0, RED);
+    square.appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params: json!({"moveH": 100.0}), visible: true });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Moved".into(), art: square.into() });
+    let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Moved".into(), xf: vectorcraft_geom::Affine::IDENTITY });
+    let mut l = Node::layer(d.alloc_id(), "Hidden", LayerColor::Preset(0));
+    l.visible = false;
+    if let NodeKind::Layer { children, .. } = &mut l.kind {
+        children.push(instance.into());
+    }
+    d.layers.push(l.into());
+    for compatibility in [Compatibility::Pdf14, Compatibility::Pdf16] {
+        let settings = PdfSettings { standard: Standard::PdfA2b, compatibility, create_layers: true, ..PdfSettings::default() };
+        let r = export_with_report(&d, &PdfOptions { settings, created: Some(1_791_200_000), ..Default::default() }).unwrap();
+        assert!(r.bytes.starts_with(b"%PDF-1.6"), "{compatibility:?}");
+        let back = import_with_report(&r.bytes, &ImportOptions::default()).unwrap().document;
+        let hidden = back.layers.iter().find(|l| l.name.as_deref() == Some("Hidden")).expect("the hidden layer");
+        let art = hidden.children().unwrap();
+        assert_eq!(art.len(), 1, "{compatibility:?}");
+        let b = art[0].geometric_bounds().unwrap();
+        assert!((b.x0 - 110.0).abs() < 0.1 && (b.x1 - 140.0).abs() < 0.1, "{compatibility:?}: {b:?}");
     }
 }
 
@@ -212,15 +243,15 @@ fn without_pdf_layers_the_layers_are_plain_page_content() {
         oc_properties(&r.bytes, None, |props, _| has = props.is_some());
         assert_eq!(has, v["createLayers"] == json!(true) && warning.is_none(), "{v}");
         match warning {
-            Some(w) => assert!(r.warnings.iter().any(|x| x.contains(w)), "{v}: {:?}", r.warnings),
-            None => assert!(r.warnings.is_empty(), "{v}: {:?}", r.warnings),
+            Some(w) => assert!(r.setting_notes.iter().any(|x| x.contains(w)), "{v}: {:?}", r.setting_notes),
+            None => assert!(r.warnings.is_empty() && r.setting_notes.is_empty(), "{v}: {:?} {:?}", r.warnings, r.setting_notes),
         }
     }
     // A knockout page group draws objects, not layers.
     d.page_knockout = true;
     let r = export(&d, json!({"createLayers": true}));
     oc_properties(&r.bytes, None, |props, _| assert!(props.is_none()));
-    assert!(r.warnings.iter().any(|w| w.contains("knockout page group")), "{:?}", r.warnings);
+    assert!(r.setting_notes.iter().any(|w| w.contains("knockout page group")), "{:?}", r.setting_notes);
 }
 
 #[test]
@@ -228,7 +259,7 @@ fn pdf_a_layers_have_no_automatic_states() {
     let r = export(&layered(), json!({"standard": "pdfA2b", "createLayers": true}));
     oc_properties(&r.bytes, None, |props, _| {
         let config = props.unwrap().get::<Dict<'_>>(b"D").unwrap();
-        assert!(config.get::<Array<'_>>(b"AS").is_none() && config.get::<craft_pdf::syntax::object::String<'_>>(b"Name").is_some());
+        assert!(config.get::<Array<'_>>(b"AS").is_none() && config.get::<craft::pdf::syntax::object::String<'_>>(b"Name").is_some());
     });
 }
 
@@ -322,6 +353,28 @@ fn white_overprint_is_discarded_as_the_document_setup_says() {
 }
 
 #[test]
+fn a_white_spot_ink_keeps_overprinting_under_discard_white_overprint() {
+    let white = Color::cmyk(0.0, 0.0, 0.0, 0.0);
+    let mut d = overprinting(white);
+    d.swatches.push(vectorcraft_color::Swatch { name: "Opaque White".into(), paint: Paint::solid(white), global: true, spot: true });
+    let paint = |d: &mut Document, p: &Paint| {
+        for n in std::sync::Arc::make_mut(&mut d.layers[0]).children_mut().into_iter().flatten() {
+            let n = std::sync::Arc::make_mut(n);
+            if let Some(f) = n.appearance.fill_mut().filter(|f| f.overprint) {
+                f.paint = p.clone();
+            }
+            if let NodeKind::Text(t) = &mut n.kind {
+                t.runs.iter_mut().for_each(|r| r.style.fill = p.clone());
+            }
+        }
+    };
+    paint(&mut d, &Paint::solid(white));
+    assert_eq!(overprints(&d, json!({})).1, 1, "paper white fills and characters knock out");
+    paint(&mut d, &Paint::Solid { color: white, swatch: Some("Opaque White".into()), tint: 1.0 });
+    assert_eq!(overprints(&d, json!({})).1, 3, "a white spot ink overprints, characters too");
+}
+
+#[test]
 fn pdf_a_overprint_mode_is_0() {
     let r = export(&overprinting(RED), json!({"standard": "pdfA2b", "compression": {"compressText": false}}));
     let text = String::from_utf8_lossy(&r.bytes);
@@ -337,6 +390,45 @@ fn overprinting_art_imports_as_it_was_drawn() {
     for v in [json!({}), json!({"createLayers": true})] {
         assert_eq!(painted(&export(&d, v.clone()).bytes), plain, "{v}: the marks draw nothing");
     }
+}
+
+/// The `/BBox` of each form of the uncompressed `bytes`, in the order written.
+fn form_boxes(bytes: &[u8]) -> Vec<String> {
+    let text = String::from_utf8_lossy(bytes);
+    text.split("/Subtype/Form").skip(1).filter_map(|d| Some(d.split("/BBox[").nth(1)?.split(']').next()?.to_string())).collect()
+}
+
+/// #2181: a layer's form has a box round the paper and its art, not one 23 m across, and no
+/// form (a layer's, an overprinting one or invisible text's) keeps the empty clip far off the
+/// page that marked it while the file was written.
+#[test]
+fn layer_forms_have_real_boxes_and_no_marks() {
+    let mut d = overprinting(RED);
+    // Invisible text (neither fill nor stroke) and art across the paper's left edge.
+    let l = d.layers[0].id;
+    let style = CharStyle { size: 24.0, fill: Paint::None, ..Default::default() };
+    let t = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(200.0, 40.0), "Hid", style))));
+    let past = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(-50.0, 10.0, 5.0, 40.0)), Appearance::basic(Paint::solid(RED), Paint::None, 0.0));
+    d.insert(Some(l), 0, t).unwrap();
+    d.insert(Some(l), 0, past).unwrap();
+    let mut sub = Node::layer(d.alloc_id(), "Sub", LayerColor::Preset(1));
+    if let NodeKind::Layer { children, .. } = &mut sub.kind {
+        children.push(rect(&mut d, 250.0, BLUE).into());
+    }
+    d.insert(Some(l), 0, sub).unwrap();
+    let r = export(&d, json!({"createLayers": true, "compression": {"compressText": false}}));
+    let text = String::from_utf8_lossy(&r.bytes);
+    for mark in ["-32000 ", "-32001 ", "-32002 ", "32767"] {
+        assert!(!text.contains(mark), "{mark} is in the file: {text}");
+    }
+    assert!(text.contains("3 Tr") && text.contains("/VCop gs"), "invisible text and overprint are still written: {text}");
+    // The layer's form reaches the art across the left edge; its sublayer's covers the paper.
+    let boxes = form_boxes(&r.bytes);
+    assert!(boxes.contains(&"-50 0 300 100".to_string()) && boxes.contains(&"0 0 300 100".to_string()), "{boxes:?}");
+    // It still imports as it was drawn: a layer holding its sublayer, no clipping group.
+    let mut got = vec![];
+    tree(&import(&r.bytes).unwrap().layers, 0, &mut got);
+    assert!(got.contains(&"1 Sub true".to_string()) && got.contains(&format!("2 {:?}", Some(BLUE))), "{got:?}");
 }
 
 #[test]

@@ -1,24 +1,53 @@
 //! Path Precision Tools' geometry: anchor edits for the Anchor Inspector (smooth by the auto-smooth
-//! rule, equalise handles, add evenly spaced anchors, close), the readouts the Measure & Inspect
+//! rule, equalise handles, add evenly spaced anchors, close), what its live path effects add to them
+//! ([`add_anchors`], [`smooth_anchors`], [`split_at_anchors`]), the readouts the Measure & Inspect
 //! tool shows over a path, open paths lengthened or shortened at an end ([`extend`]), the places
-//! where paths cross ([`crossings`]), anchors slid along their path ([`slide`]) and the Parametric
-//! Shape Tool's shapes ([`shapes`]).
+//! where paths cross ([`crossings`]), the stretches between them ([`spans`]), anchors slid along
+//! their path ([`slide`]), touching edges merged ([`shared_edge`]), paths divided into dashes
+//! ([`divide_dashes`]), two circles joined by a smooth bridge ([`smooth_bridge`]) or many circles
+//! joined to their neighbors ([`bridge_many`]), the common tangents of two convex outlines
+//! ([`common_tangents`]), the Parametric Shape Tool's shapes ([`shapes`]), the circles that touch
+//! two or three shapes ([`tangent_circles`]) and the largest circle inside a shape
+//! ([`inscribed_circle`]).
 
+mod bridge;
 mod crossings;
+mod dashes;
 mod extend;
+mod inscribed;
 pub mod shapes;
+mod shared_edge;
 mod slide;
+mod tangent_circle;
+mod tangents;
 #[cfg(test)]
 mod tests;
+mod trim;
 
 use std::collections::BTreeSet;
 
 use kurbo::{CubicBez, ParamCurve, ParamCurveArclen, ParamCurveNearest, Point, Vec2};
-use vectorcraft_geom::{AnchorKind, PathData, SubPath};
+use vectorcraft_geom::{Anchor, AnchorKind, PathData, SubPath};
 
-pub use crossings::{MAX_CROSSING_SEGMENTS, crossings, insert_at};
+pub use bridge::{
+    ArcRadius, BridgeError, Bridged, Joined, MAX_BRIDGED_CIRCLES, MAX_BRIDGES, ManyError, bridge_many, bridges_any, circle_of, smooth_bridge,
+};
+pub use crossings::{MAX_CROSSED_BY_SEGMENTS, MAX_CROSSING_SEGMENTS, Place, Work, crossings, crossings_on, crossings_on_within, insert_at};
+pub use dashes::{DashSpec, Piece, divide_dashes};
 pub use extend::{ExtendMode, extend_length_to, extend_open};
+pub use inscribed::{
+    INSCRIBED_PRECISION, Inscribed, InscribedError, MAX_INSCRIBED_CELLS, MAX_INSCRIBED_EDGES, MAX_INSCRIBED_WORK, inscribed_circle,
+    inscribed_circle_within,
+};
+pub use shared_edge::{
+    COINCIDENCE, EndSide, Follow, MAX_COINCIDENCE, MergePlan, MergePreview, Stretch, apply_merge, ends_at, merge_preview, stretches_at,
+};
 pub use slide::{MAX_SLIDE, slide_anchor, slide_stops, slide_t_at};
+pub use tangent_circle::{Circle, MAX_TANGENT_CIRCLE_SEGMENTS, MAX_TANGENT_CIRCLES, TangentCircleError, tangent_circle_segments, tangent_circles};
+pub use tangents::{Coincide, MAX_TANGENT_SEGMENTS, Outline, OutlineError, Tangent, TangentKind, common_tangents};
+pub use trim::{Span, slice, span_at, spans, without_spans};
+
+pub use tangent_circle::{SegmentCircle, circles_of_radius, circles_through};
 
 use crate::fit::{end_tangent, start_tangent};
 
@@ -149,6 +178,69 @@ pub fn add_points(sp: &SubPath, segments: Option<&BTreeSet<usize>>, count: usize
         hits.extend((1..=count).map(|k| (seg, c.inv_arclen(len * k as f64 / (count + 1) as f64, ACCURACY))));
     }
     insert_at(sp, &hits)
+}
+
+/// The segments [`add_anchors`] adds to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SegmentKind {
+    All,
+    Curved,
+    Straight,
+}
+
+/// How [`add_anchors`] spaces its anchors along a segment.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum AnchorSpacing {
+    /// This many, evenly spaced by length.
+    Count(usize),
+    /// One every this many points from the segment's start, none on its end.
+    Distance(f64),
+}
+
+/// `sp` with anchors added on the segments `which` picks, spaced as `spacing` says and at most `cap`
+/// on one segment; the shape doesn't change. `None` when that would add more than `room` anchors.
+pub fn add_anchors(sp: &SubPath, which: SegmentKind, spacing: AnchorSpacing, cap: usize, mut room: usize) -> Option<SubPath> {
+    let mut hits = vec![];
+    for seg in 0..sp.segment_count() {
+        let picked = match which {
+            SegmentKind::All => true,
+            SegmentKind::Curved => !sp.segment_is_line(seg),
+            SegmentKind::Straight => sp.segment_is_line(seg),
+        };
+        let c = sp.segment(seg);
+        let len = c.arclen(ACCURACY);
+        if !(picked && len > TINY && len.is_finite()) {
+            continue;
+        }
+        let (count, step) = match spacing {
+            AnchorSpacing::Count(n) => (n, len / (n as f64 + 1.0)),
+            AnchorSpacing::Distance(d) if d > 0.0 => (((len / d).ceil() as usize).saturating_sub(1), d),
+            AnchorSpacing::Distance(_) => (0, 0.0),
+        };
+        let count = count.min(cap);
+        room = room.checked_sub(count)?;
+        hits.extend((1..=count).map(|k| (seg, c.inv_arclen(step * k as f64, ACCURACY))));
+    }
+    Some(insert_at(sp, &hits).0)
+}
+
+/// Make every anchor of `sp` smooth by the auto-smooth rule ([`auto_smooth`]). An open path's ends
+/// come last, so each aims at the handle its neighbour ended up with, whichever way the path runs.
+pub fn smooth_anchors(sp: &mut SubPath, ratio: f64) {
+    let (n, closed) = (sp.anchors.len(), sp.closed);
+    let ends = if closed { vec![] } else { vec![0, n.saturating_sub(1)] };
+    for i in (0..n).filter(|&i| closed || (i > 0 && i + 1 < n)).chain(ends) {
+        auto_smooth(sp, i, ratio);
+    }
+}
+
+/// `sp` cut at its `corners`, its `smooth` anchors, or both ([`SubPath::cut_at`]); the shape doesn't
+/// change. An anchor is smooth when its handles stand in line, as the outline shows it, whatever
+/// kind it was given.
+pub fn split_at_anchors(sp: &SubPath, corners: bool, smooth: bool) -> Vec<SubPath> {
+    let is_smooth = |a: &Anchor| Anchor::with_handles(a.p, a.h_in, a.h_out).kind == AnchorKind::Smooth;
+    let at = sp.anchors.iter().enumerate().filter(|(_, a)| if is_smooth(a) { smooth } else { corners }).map(|(i, _)| i).collect();
+    sp.cut_at(&at)
 }
 
 /// How [`close`] joins an open subpath's ends.

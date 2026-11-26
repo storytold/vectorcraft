@@ -13,12 +13,17 @@ pub(crate) fn is_template(path: &str) -> bool {
     vectorcraft_engine::cmd::fileio::format_for_name(path).is_some_and(|f| f.id == "ait")
 }
 
-/// The export `params` for `path`, with `--scale` (pixels per point) when its format is raster.
+/// The export `params` for `path`, with explicit raster resolution options only for raster formats.
 /// DXF has a `scale` of its own (drawing units per unit), which would resize the drawing and leave
 /// its units unset.
-pub(crate) fn with_pixel_scale(mut params: Value, path: &str, scale: f64) -> Value {
+pub(crate) fn with_pixel_scale(mut params: Value, path: &str, scale: Option<f64>, ppi: Option<f64>) -> Value {
     if vectorcraft_engine::cmd::fileio::writable_format(None, Some(path)).is_ok_and(|f| f.raster) {
-        params["scale"] = json!(scale);
+        if let Some(scale) = scale {
+            params["scale"] = json!(scale);
+        }
+        if let Some(ppi) = ppi {
+            params["ppi"] = json!(ppi);
+        }
     }
     params
 }
@@ -27,8 +32,15 @@ pub(crate) fn convert(args: &ConvertArgs, out: &mut dyn Write) -> Result<(), Cli
     let (input, output) = (&args.input, &args.output);
     let template = is_template(output);
     let mut h = Headless::new();
-    let opened = if args.editing_data {
-        let params = json!({"path": input, "editingData": "always"});
+    let opened = if args.editing_data || args.legacy_name_encoding.is_some() {
+        let mut params = json!({"path": input});
+        if args.editing_data {
+            params["editingData"] = json!("always");
+        }
+        // The encoding of a legacy `.ai`'s names that aren't UTF-8; the engine checks it.
+        if let Some(encoding) = &args.legacy_name_encoding {
+            params["legacyNameEncoding"] = json!(encoding);
+        }
         h.call("engine.execute", json!({"command": "document.open", "params": params}))
     } else {
         h.call("app.open", json!({"path": input}))
@@ -38,13 +50,18 @@ pub(crate) fn convert(args: &ConvertArgs, out: &mut dyn Write) -> Result<(), Cli
         // Save as Template writes every artboard, with the .ai options.
         ("file.saveAsTemplate", json!({"path": output, "format": "ait", "outlineText": args.outline_text, "acknowledgeLoss": args.replace_lossy}))
     } else {
-        // A conversion keeps hidden layers and objects, written hidden, where the format can (SVG,
-        // PSD).
-        let params = json!({
-            "path": output, "artboard": args.artboard, "range": args.range, "outlineText": args.outline_text,
-            "hiddenLayers": true, "acknowledgeLoss": args.replace_lossy,
-        });
-        let mut params = with_pixel_scale(params, output, args.scale);
+        let params = json!({"path": output, "artboard": args.artboard, "range": args.range, "acknowledgeLoss": args.replace_lossy});
+        let mut params = with_pixel_scale(params, output, args.scale, args.ppi);
+        // An option the format doesn't read comes back in the warnings, so each goes out only when
+        // it was asked for: `outlineText` with --outline-text, and `hiddenLayers` to the formats
+        // that have it (SVG, PSD), where a conversion keeps hidden layers and objects, written
+        // hidden.
+        if args.outline_text {
+            params["outlineText"] = json!(true);
+        }
+        if vectorcraft_engine::cmd::fileio::writable_format(None, Some(output)).is_ok_and(|f| f.options.iter().any(|o| o.name == "hiddenLayers")) {
+            params["hiddenLayers"] = json!(true);
+        }
         if let Some(decimals) = args.decimals {
             params["decimals"] = json!(decimals);
         }

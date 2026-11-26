@@ -1,70 +1,253 @@
 //! Transform dialogs: Move, Rotate, Scale, Reflect and Shear (with Transform Objects, Transform
 //! Patterns, Copy and Preview; Scale also has Uniform, Scale Corners and Scale Strokes & Effects;
-//! Reflect's axis is Horizontal, Vertical or an angle). With Preview on (`preview`), the transform
-//! shows on the canvas as the values change.
+//! Reflect's axis is Horizontal, Vertical or an angle). With Preview on, the transform shows on the
+//! canvas as the values change.
 //!
-//! Move opens on the offset moved last, by a drag or by itself, and with the checkboxes (Preview
-//! too) it was last confirmed with, so Enter, Enter repeats a move or a copy at the same spacing.
-//! The other dialogs open with Preview off.
+//! Move opens on the offset moved last, by a drag or by itself, and with the Copy and Transform
+//! Objects boxes it was last confirmed with, so Enter, Enter repeats a move or a copy at the same
+//! spacing.
 
-use serde_json::{Value, json};
+use craft::ui::contract::Bind;
+use craft::ui::dialog::DialogId; // PLAN: assumed path of `DialogId` in the craft_ui facade
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::memory::SaveKey;
+use serde_json::{Map, Value, json};
 
-use super::{DialogSpec, form, run_and_close};
+use super::form::{fields_of, grid_params};
+use super::host::{HeldOptions, open_held_with};
+use super::preview::LivePreview;
 use crate::VectorcraftApp;
-use crate::state::Dialog;
+use crate::canvas::rulers::general_lengths;
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |d| title(&d.kind).into(), body, confirm, preview: true, inputs, ..DialogSpec::FORM };
+/// Where Move keeps its Copy and Transform Objects boxes between runs.
+const MOVE_KEY: SaveKey = SaveKey::new("vectorcraft.move");
 
-/// The fields a transform dialog reads that it may not hold yet: Copy and the object options,
-/// Move's Distance and Angle, Scale's scale options, and the reference point of the others.
-fn inputs(kind: &str) -> &'static [&'static str] {
-    match kind {
-        "move" => &["copy", "objects", "patterns", "distance", "angle"],
-        "scale" => &["copy", "objects", "patterns", "corners", "strokes", "origin"],
-        _ => &["copy", "objects", "patterns", "origin"],
+/// The Distance and Angle Move's last link pass saw: a change in them since, with Horizontal and
+/// Vertical unchanged, means the polar pair was edited. Hidden fields (`__` keys never leave the dialog).
+// PLAN: the `__polar` list is kept as two numbers; the bundle gives no `FieldValue` list reader
+const POLAR_DISTANCE: &str = "__polarDistance";
+const POLAR_ANGLE: &str = "__polarAngle";
+
+/// The five transform dialogs.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Kind {
+    /// Object › Transform › Move.
+    Move,
+    /// Object › Transform › Rotate and the Rotate tool.
+    Rotate,
+    /// Object › Transform › Scale and the Scale tool.
+    Scale,
+    /// Object › Transform › Reflect and the Reflect tool.
+    Reflect,
+    /// Object › Transform › Shear and the Shear tool.
+    Shear,
+}
+
+impl Kind {
+    /// The dialog a menu command opens.
+    pub(crate) fn of_command(id: &str) -> Option<Kind> {
+        Some(match id {
+            "object.move" => Kind::Move,
+            "object.rotate" => Kind::Rotate,
+            "object.scale" => Kind::Scale,
+            "object.reflect" => Kind::Reflect,
+            "object.shear" => Kind::Shear,
+            _ => return None,
+        })
+    }
+
+    /// The dialog a tool's double click or Enter opens; Move has no tool of its own.
+    pub(crate) fn of_tool(kind: &str) -> Option<Kind> {
+        Some(match kind {
+            "rotate" => Kind::Rotate,
+            "scale" => Kind::Scale,
+            "reflect" => Kind::Reflect,
+            "shear" => Kind::Shear,
+            _ => return None,
+        })
+    }
+
+    /// The command OK runs, which is also the dialog's key.
+    pub(crate) fn command(self) -> &'static str {
+        match self {
+            Kind::Move => "object.move",
+            Kind::Rotate => "object.rotate",
+            Kind::Scale => "object.scale",
+            Kind::Reflect => "object.reflect",
+            Kind::Shear => "object.shear",
+        }
+    }
+
+    /// The kind name `grid_params` keys its rows by.
+    pub(crate) fn dialog_kind(self) -> &'static str {
+        match self {
+            Kind::Move => "move",
+            Kind::Rotate => "rotate",
+            Kind::Scale => "scale",
+            Kind::Reflect => "reflect",
+            Kind::Shear => "shear",
+        }
+    }
+
+    /// The dialog's title, and the name of its preview's undo step.
+    pub(crate) fn title(self) -> &'static str {
+        match self {
+            Kind::Move => tl!("Move"),
+            Kind::Rotate => tl!("Rotate"),
+            Kind::Scale => tl!("Scale"),
+            Kind::Reflect => tl!("Reflect"),
+            Kind::Shear => tl!("Shear"),
+        }
     }
 }
 
-fn title(kind: &str) -> &'static str {
-    match kind {
-        "move" => tl!("Move"),
-        "rotate" => tl!("Rotate"),
-        "scale" => tl!("Scale"),
-        "reflect" => tl!("Reflect"),
-        _ => tl!("Shear"),
+/// The open transform dialog: which one, the reference point the tool click chose (none from a menu),
+/// and its live preview.
+pub(crate) struct Open {
+    /// The dialog's id on the window's host.
+    pub id: DialogId,
+    /// Which transform it is.
+    pub kind: Kind,
+    /// The reference point of a tool click, sent with every command but Move's.
+    pub origin: Option<Value>,
+    /// The preview on the canvas.
+    pub preview: LivePreview,
+}
+
+/// Opens the dialog of `kind`; `tool` is the tool click's params (its `origin`), or `{}` from a menu.
+pub(crate) fn open(app: &mut VectorcraftApp, kind: Kind, tool: &Value) {
+    let Some(ctx) = app.ui_ctx.clone() else {
+        app.status("no window".to_string());
+        return;
+    };
+    let Value::Object(opening) = opening(app, kind) else { return };
+    let rows = rows(app, kind, &opening);
+    let fields = fields_of(&rows, &opening);
+    let dialog = HostedParamDialog::new(&ctx, kind.command(), fields, move |f| {
+        if kind == Kind::Move {
+            link_distance_and_angle(f);
+        }
+        let dialog = ParamDialog::new(kind.command(), kind.title(), rows.clone()).previews(true).values(Bind::bound(f));
+        if kind == Kind::Move { dialog.remember(MOVE_KEY) } else { dialog }
+    });
+    // A dialog this one replaces leaves its preview behind otherwise.
+    cancel_preview(app);
+    let ok_ctx = ctx.clone();
+    let options = HeldOptions { parent: None, cancel: Some(Box::new(cancel_preview)) };
+    let Some(id) = open_held_with(app, dialog, move |app, result| ok(app, kind, &ok_ctx, result), options) else {
+        app.status("no window".to_string());
+        return;
+    };
+    app.object_dialogs.transform = Some(Open { id, kind, origin: tool.get("origin").cloned(), preview: LivePreview::default() });
+}
+
+/// Rolls the preview back and drops the record: Cancel, Esc and the close box.
+fn cancel_preview(app: &mut VectorcraftApp) {
+    if let Some(open) = app.object_dialogs.transform.take() {
+        open.preview.cancel(app);
     }
 }
 
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    if d.kind == "move" {
-        link_distance_and_angle(d);
+/// Runs the preview of the open dialog from its current values; OK and Cancel end it.
+pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+    let Some(record) = app.object_dialogs.transform.as_ref() else { return };
+    let (id, kind) = (record.id, record.kind);
+    let Some(dialogs) = app.dialogs() else { return };
+    let shown = dialogs.with(|host| host.get_mut_by_id::<HostedParamDialog>(id).map(|d| (d.is_previewing(), d.fields().clone())));
+    let Some((on, fields)) = shown else { return };
+    let Some(mut open) = app.object_dialogs.transform.take() else { return };
+    let (cmd, mut params) = command(app, kind, &fields, open.origin.as_ref());
+    if kind == Kind::Scale {
+        add_scale_options(app, &fields, &mut params);
     }
-    form::grid(ui, d, app.session.general_unit());
-    if d.kind == "move" {
-        link_distance_and_angle(d);
+    // `run` reports a refusal on the status line itself.
+    open.preview.run(app, on, kind.title(), cmd, &params);
+    app.object_dialogs.transform = Some(open);
+}
+
+/// OK: the preview is rolled back and the command run as without one, so its undo step, its journal
+/// entry and Transform Again are the same either way.
+fn ok(app: &mut VectorcraftApp, kind: Kind, ctx: &egui::Context, result: &ParamResult) -> Result<(), String> {
+    let origin = match app.object_dialogs.transform.take() {
+        Some(open) => {
+            let origin = open.origin;
+            open.preview.cancel(app);
+            origin
+        }
+        None => None,
+    };
+    let fields = &result.fields;
+    let (cmd, mut params) = command(app, kind, fields, origin.as_ref());
+    if kind == Kind::Scale {
+        params = with_scale_options(app, fields, params)?;
     }
-    ui.add_space(6.0);
-    if d.kind == "scale" {
-        form::check(ui, d, "uniform", tl!("Uniform"));
-        scale_options(app, ui, d);
+    app.run(cmd, params)?;
+    if kind == Kind::Move {
+        // Move's Transform Patterns stays as confirmed: it is the preference it starts from.
+        let patterns = transform_patterns(app, fields);
+        if patterns != app.session.prefs.transform_pattern_tiles {
+            app.run("prefs.set", json!({"key": "transformPatternTiles", "value": patterns}))?;
+        }
     }
-    object_options(app, ui, d);
-    form::check(ui, d, "copy", tl!("Copy (make a transformed copy)"));
-    let (cmd, mut params) = command(app, d);
-    if d.kind == "scale" {
-        add_scale_options(app, d, &mut params);
+    result.remember(ctx);
+    Ok(())
+}
+
+/// The fields `kind` opens with: the last offset for Move, the reference values of the others, and the
+/// option boxes from the preferences.
+fn opening(app: &VectorcraftApp, kind: Kind) -> Value {
+    let prefs = &app.session.prefs;
+    let mut fields = match kind {
+        Kind::Move => {
+            let [dx, dy, distance, angle] = offset(last_move(app).map_or([0.0; 2], |(dx, dy)| [dx, dy]));
+            json!({"dx": dx, "dy": dy, "distance": distance, "angle": angle, POLAR_DISTANCE: distance, POLAR_ANGLE: angle})
+        }
+        Kind::Rotate => json!({"angle": 0}),
+        Kind::Scale => json!({"sx": 100, "sy": 100, "uniform": true, "corners": prefs.scale_corners, "strokes": prefs.scale_strokes}),
+        Kind::Reflect => json!({"axis": "vertical", "angle": 90}),
+        Kind::Shear => json!({"angle": 0, "axis": "horizontal", "axisAngle": 0}),
+    };
+    fields["objects"] = json!(true);
+    fields["patterns"] = json!(prefs.transform_pattern_tiles);
+    fields
+}
+
+/// The dialog's rows: the grid of `kind`, then its check boxes. Move's number rows and Transform
+/// Patterns are decided by the journal and the preference, not by what the dialog remembers.
+fn rows(app: &VectorcraftApp, kind: Kind, opening: &Map<String, Value>) -> Vec<Param> {
+    let mut rows = grid_params(kind.dialog_kind(), opening, general_lengths(app));
+    if kind == Kind::Move {
+        rows = rows.into_iter().map(Param::not_remembered).collect();
     }
-    form::preview(app, ui, d, title(&d.kind), cmd, params);
-    false
+    let mut checks: Vec<(&str, &str)> = Vec::new();
+    if kind == Kind::Scale {
+        checks.push(("uniform", tl!("Uniform")));
+        checks.extend(SCALE_OPTIONS.map(|(field, _, label)| (field, tl!(label))));
+    }
+    checks.extend([("objects", tl!("Transform Objects")), ("patterns", tl!("Transform Patterns")), ("copy", tl!("Copy (make a transformed copy)"))]);
+    rows.extend(checks.into_iter().map(|(key, label)| {
+        let default = opening.get(key).and_then(Value::as_bool).unwrap_or(false);
+        let row = Param::new(key, label, ParamKind::bool(default));
+        if key == "patterns" { row.not_remembered() } else { row }
+    }));
+    rows
+}
+
+/// `[dx, dy, distance, angle]` of the offset `(dx, dy)`. The angle is counter-clockwise on the page and
+/// y points down, so 90° moves up.
+fn offset([dx, dy]: [f64; 2]) -> [f64; 4] {
+    [dx, dy, dx.hypot(dy), (-dy).atan2(dx).to_degrees()].map(clean)
 }
 
 /// Move's Distance and Angle (fields `distance`, `angle`) and Horizontal and Vertical (`dx`, `dy`)
-/// are the same offset: the pair edited since the last call (`__polar` holds the values then)
-/// sets the other. The angle is counter-clockwise on the page and y points down, so 90° moves up.
-fn link_distance_and_angle(d: &mut Dialog) {
-    let [dx, dy, distance, angle] = ["dx", "dy", "distance", "angle"].map(|k| d.f64(k, 0.0));
-    let last: Option<Vec<f64>> = d.fields.get("__polar").and_then(|v| serde_json::from_value(v.clone()).ok());
-    let polar_edited = last.as_deref().is_some_and(|l| l.get(2..) != Some(&[distance, angle][..]));
+/// are the same offset: the pair edited since the last call (the hidden polar fields hold the values
+/// then) sets the other.
+fn link_distance_and_angle(f: &mut DialogFields) {
+    let [dx, dy, distance, angle] = ["dx", "dy", "distance", "angle"].map(|k| f.number(k).unwrap_or(0.0));
+    let polar_edited = match (f.number(POLAR_DISTANCE), f.number(POLAR_ANGLE)) {
+        (Some(d), Some(a)) => (d, a) != (distance, angle),
+        _ => false,
+    };
     let [dx, dy, distance, angle] = if polar_edited {
         let a = angle.to_radians();
         // An angle past 180° reads as its negative one (270° is -90°), as the documented dialog has it.
@@ -72,41 +255,17 @@ fn link_distance_and_angle(d: &mut Dialog) {
         let angle = if turn > 180.0 { turn - 360.0 } else { turn };
         [distance * a.cos(), -distance * a.sin(), distance, angle].map(clean)
     } else {
-        [dx, dy, dx.hypot(dy), (-dy).atan2(dx).to_degrees()].map(clean)
+        offset([dx, dy])
     };
-    for (k, v) in [("dx", dx), ("dy", dy), ("distance", distance), ("angle", angle)] {
-        d.fields.insert(k.into(), json!(v));
+    for (k, v) in [("dx", dx), ("dy", dy), ("distance", distance), ("angle", angle), (POLAR_DISTANCE, distance), (POLAR_ANGLE, angle)] {
+        f.set(k, v);
     }
-    d.fields.insert("__polar".into(), json!([dx, dy, distance, angle]));
 }
 
 /// `v` without the float noise of the trigonometry (cos 90° is not quite 0). Adding 0 turns -0
 /// into 0.
 fn clean(v: f64) -> f64 {
     (v * 1e6).round() / 1e6 + 0.0
-}
-
-/// The Move dialog's fields as it opens: Horizontal and Vertical are the offset moved last, Distance
-/// and Angle are the same offset, and Copy, Transform Objects and Preview are as it was last
-/// confirmed with (Transform Patterns is General › Transform Pattern Tiles, which its OK sets).
-pub(crate) fn move_fields(app: &VectorcraftApp) -> Value {
-    let (dx, dy) = last_move(app).unwrap_or_default();
-    let [dx, dy, distance, angle] = [dx, dy, dx.hypot(dy), (-dy).atan2(dx).to_degrees()].map(clean);
-    let mut fields = json!({
-        "dx": format!("{dx} pt"),
-        "dy": format!("{dy} pt"),
-        "distance": distance,
-        "angle": angle,
-        "__polar": [dx, dy, distance, angle],
-    });
-    let kept = &app.ui.move_options;
-    let kept_bool = |k: &str| kept.get(k).and_then(Value::as_bool);
-    for k in ["copy", "objects", "preview"] {
-        if let Some(on) = kept_bool(k) {
-            fields[k] = json!(on);
-        }
-    }
-    fields
 }
 
 /// The offset of the last move the session's journal keeps: a drag that moved the selection (a
@@ -130,240 +289,236 @@ fn last_move(app: &VectorcraftApp) -> Option<(f64, f64)> {
 }
 
 /// Transform Patterns: the dialog's field, else General › Transform Pattern Tiles.
-fn transform_patterns(app: &VectorcraftApp, d: &Dialog) -> bool {
-    d.fields.get("patterns").and_then(Value::as_bool).unwrap_or(app.session.prefs.transform_pattern_tiles)
+pub(super) fn transform_patterns(app: &VectorcraftApp, f: &DialogFields) -> bool {
+    f.bool("patterns").unwrap_or(app.session.prefs.transform_pattern_tiles)
 }
 
 /// Transform Objects: the dialog's field, on until it is switched off (the pattern tiles alone
 /// transform then, with Transform Patterns).
-fn transform_objects(d: &Dialog) -> bool {
-    d.fields.get("objects").and_then(Value::as_bool).unwrap_or(true)
-}
-
-/// The Transform Objects and Transform Patterns checkboxes (fields `objects` and `patterns`).
-pub(super) fn object_options(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
-    d.fields.insert("objects".into(), Value::Bool(transform_objects(d)));
-    form::check(ui, d, "objects", tl!("Transform Objects"));
-    d.fields.insert("patterns".into(), Value::Bool(transform_patterns(app, d)));
-    form::check(ui, d, "patterns", tl!("Transform Patterns"));
+pub(super) fn transform_objects(f: &DialogFields) -> bool {
+    f.bool("objects").unwrap_or(true)
 }
 
 /// Add the dialog's Transform Objects and Transform Patterns options to command `params`.
-pub(super) fn add_object_options(app: &VectorcraftApp, d: &Dialog, params: &mut Value) {
-    params["objects"] = json!(transform_objects(d));
-    params["patterns"] = json!(transform_patterns(app, d));
+pub(super) fn add_object_options(app: &VectorcraftApp, f: &DialogFields, params: &mut Value) {
+    params["objects"] = json!(transform_objects(f));
+    params["patterns"] = json!(transform_patterns(app, f));
 }
 
 /// The scale options: (dialog field, preference, label).
 const SCALE_OPTIONS: [(&str, &str, &str); 2] = [("corners", "scaleCorners", "Scale Corners"), ("strokes", "scaleStrokes", "Scale Strokes & Effects")];
 
 /// A scale option's value: the dialog's field, else the preference.
-fn scale_option(app: &VectorcraftApp, d: &Dialog, field: &str) -> bool {
+pub(super) fn scale_option(app: &VectorcraftApp, f: &DialogFields, field: &str) -> bool {
     let prefs = &app.session.prefs;
-    d.fields.get(field).and_then(Value::as_bool).unwrap_or(if field == "corners" { prefs.scale_corners } else { prefs.scale_strokes })
-}
-
-/// The Scale Corners and Scale Strokes & Effects checkboxes (fields `corners` and `strokes`),
-/// starting from the preferences.
-pub(super) fn scale_options(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
-    for (field, _, label) in SCALE_OPTIONS {
-        let on = scale_option(app, d, field);
-        d.fields.insert(field.into(), Value::Bool(on));
-        form::check(ui, d, field, tl!(label));
-    }
+    f.bool(field).unwrap_or(if field == "corners" { prefs.scale_corners } else { prefs.scale_strokes })
 }
 
 /// Add the dialog's scale options to command `params`.
-pub(super) fn add_scale_options(app: &VectorcraftApp, d: &Dialog, params: &mut Value) {
+pub(super) fn add_scale_options(app: &VectorcraftApp, f: &DialogFields, params: &mut Value) {
     for (field, _, _) in SCALE_OPTIONS {
-        params[field] = json!(scale_option(app, d, field));
+        params[field] = json!(scale_option(app, f, field));
     }
 }
 
 /// `params` with the dialog's scale options, which also become the preferences (they are shared
 /// with the Transform panel and Preferences, as in the reference app).
-pub(super) fn with_scale_options(app: &mut VectorcraftApp, d: &Dialog, mut params: Value) -> Result<Value, String> {
-    add_scale_options(app, d, &mut params);
-    let prefs: serde_json::Map<String, Value> = SCALE_OPTIONS.iter().map(|(field, pref, _)| (pref.to_string(), params[*field].clone())).collect();
+pub(super) fn with_scale_options(app: &mut VectorcraftApp, f: &DialogFields, mut params: Value) -> Result<Value, String> {
+    add_scale_options(app, f, &mut params);
+    let prefs: Map<String, Value> = SCALE_OPTIONS.iter().map(|(field, pref, _)| (pref.to_string(), params[*field].clone())).collect();
     app.run("prefs.set", json!({ "values": prefs }))?;
     Ok(params)
 }
 
-/// Pass a tool-chosen reference point (origin) through to transform commands.
-fn origin_params(d: &Dialog, mut p: Value) -> Value {
-    if let Some(o) = d.fields.get("origin") {
+/// Pass a tool-chosen reference point through to transform commands.
+fn origin_params(origin: Option<&Value>, mut p: Value) -> Value {
+    if let Some(o) = origin {
         p["origin"] = o.clone();
     }
     p
 }
 
 /// The dialog's command and its params (Scale's without its scale options).
-fn command(app: &VectorcraftApp, d: &Dialog) -> (&'static str, Value) {
-    let (id, mut params) = match d.kind.as_str() {
-        "move" => ("object.move", json!({"dx": d.f64("dx", 0.0), "dy": d.f64("dy", 0.0)})),
-        "rotate" => ("object.rotate", json!({"angle": d.f64("angle", 0.0)})),
-        "scale" => {
-            let sx = d.f64("sx", 100.0);
-            let sy = if d.bool("uniform") { sx } else { d.f64("sy", 100.0) };
-            ("object.scale", json!({"sx": sx, "sy": sy}))
+fn command(app: &VectorcraftApp, kind: Kind, f: &DialogFields, origin: Option<&Value>) -> (&'static str, Value) {
+    let number = |key: &str, default: f64| f.number(key).unwrap_or(default);
+    let axis = f.text("axis").unwrap_or("");
+    let mut params = match kind {
+        Kind::Move => json!({"dx": number("dx", 0.0), "dy": number("dy", 0.0)}),
+        Kind::Rotate => json!({"angle": number("angle", 0.0)}),
+        Kind::Scale => {
+            let sx = number("sx", 100.0);
+            let sy = if f.bool("uniform").unwrap_or(false) { sx } else { number("sy", 100.0) };
+            json!({"sx": sx, "sy": sy})
         }
         // The axis by name, or the angle it is at.
-        "reflect" if d.str("axis") == "angle" => ("object.reflect", json!({"axis": d.f64("angle", 90.0)})),
-        "reflect" => ("object.reflect", json!({"axis": d.fields.get("axis").cloned().unwrap_or(json!("vertical"))})),
-        _ => ("object.shear", json!({"angle": d.f64("angle", 0.0), "axis": d.str("axis")})),
+        Kind::Reflect if axis == "angle" => json!({"axis": number("angle", 90.0)}),
+        Kind::Reflect => json!({"axis": if axis.is_empty() { "vertical" } else { axis }}),
+        Kind::Shear if axis == "angle" => json!({"angle": number("angle", 0.0), "axis": number("axisAngle", 0.0)}),
+        Kind::Shear => json!({"angle": number("angle", 0.0), "axis": axis}),
     };
-    params["copy"] = json!(d.bool("copy"));
-    add_object_options(app, d, &mut params);
+    params["copy"] = json!(f.bool("copy").unwrap_or(false));
+    add_object_options(app, f, &mut params);
     // Move has no reference point.
-    if id == "object.move" { (id, params) } else { (id, origin_params(d, params)) }
-}
-
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    // The preview is rolled back and the command run as without one, so its undo step, its journal
-    // entry and Transform Again are the same either way.
-    if app.session.in_interaction() {
-        app.session.cancel_interaction().map_err(|e| e.to_string())?;
-    }
-    // A Distance and Angle set since the last frame set the offset Move runs with.
-    let mut d = d.clone();
-    if d.kind == "move" {
-        link_distance_and_angle(&mut d);
-    }
-    let d = &d;
-    let (id, mut params) = command(app, d);
-    if d.kind == "scale" {
-        params = with_scale_options(app, d, params)?;
-    }
-    let r = run_and_close(app, id, params)?;
-    if d.kind == "move" {
-        app.ui.move_options = json!({"copy": d.bool("copy"), "objects": transform_objects(d), "preview": d.bool("preview")});
-        // Move's Transform Patterns stays as confirmed: it is the preference it starts from.
-        let patterns = transform_patterns(app, d);
-        if patterns != app.session.prefs.transform_pattern_tiles {
-            app.run("prefs.set", json!({"key": "transformPatternTiles", "value": patterns}))?;
-        }
-    }
-    Ok(r)
+    let params = if kind == Kind::Move { params } else { origin_params(origin, params) };
+    (kind.command(), params)
 }
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
+    use serde_json::{Value, json};
     use vectorcraft_engine::Session;
 
-    use crate::VectorcraftApp;
+    use super::*;
+
+    /// An app with one rectangle (100, 100, 60 × 20) and a window context whose host the frames run.
+    struct Rig {
+        app: VectorcraftApp,
+        ctx: egui::Context,
+    }
+
+    impl Rig {
+        fn new() -> Self {
+            let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+            app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+            app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 60, "height": 20})).unwrap();
+            let ctx = app.ui_ctx.clone().expect("a window");
+            // The window's first frame gives it its dialog host.
+            crate::testing::app_frame(&mut app, &ctx, Default::default());
+            Rig { app, ctx }
+        }
+
+        /// One frame: the host shows its dialogs, then the module pumps and the held OKs run.
+        fn frame(&mut self) {
+            let host = self.app.dialogs().unwrap();
+            let mut out = self.ctx.run_ui(egui::RawInput::default(), |ui| host.with(|h| h.run(ui)));
+            out.textures_delta.clear();
+            crate::dialogs::host::pump(&mut self.app, &self.ctx);
+        }
+
+        fn id(&self) -> egui::Id {
+            self.app.object_dialogs.transform.as_ref().unwrap().id
+        }
+
+        /// Opens the dialog of menu command `cmd` and runs its first frame.
+        fn open(&mut self, cmd: &str) {
+            assert!(crate::dialogs::object_dialogs::open_from_menu(&mut self.app, cmd));
+            self.frame();
+        }
+
+        /// Sets a field as a control client would, with no frame after it.
+        fn set_now(&mut self, field: &str, value: Value) {
+            let id = self.id();
+            self.app.dialogs().unwrap().with(|h| h.set_json_field(&self.ctx, id, field, value)).unwrap();
+        }
+
+        fn set(&mut self, field: &str, value: Value) {
+            self.set_now(field, value);
+            self.frame();
+        }
+
+        /// OK: the held OK is answered in the first frame and the dialog closes in the second.
+        fn confirm(&mut self) {
+            let id = self.id();
+            self.app.dialogs().unwrap().with(|h| h.confirm_by_id(&self.ctx, id));
+            self.frame();
+            self.frame();
+        }
+
+        fn cancel(&mut self) {
+            let id = self.id();
+            self.app.dialogs().unwrap().with(|h| h.cancel_by_id(&self.ctx, id));
+            self.frame();
+        }
+
+        fn number(&self, key: &str) -> f64 {
+            let id = self.id();
+            self.app.dialogs().unwrap().with(|h| h.get_by_id::<HostedParamDialog>(id).and_then(|d| d.fields().number(key))).unwrap()
+        }
+
+        fn flag(&self, key: &str) -> bool {
+            let id = self.id();
+            self.app.dialogs().unwrap().with(|h| h.get_by_id::<HostedParamDialog>(id).and_then(|d| d.fields().bool(key))).unwrap()
+        }
+
+        fn bounds(&self) -> vectorcraft_geom::Rect {
+            self.app.session.doc().unwrap().doc.layers[0].children().unwrap()[0].geometric_bounds().unwrap()
+        }
+
+        fn size(&self) -> (f64, f64) {
+            let b = self.bounds();
+            (b.width().round(), b.height().round())
+        }
+
+        fn undo_steps(&self) -> usize {
+            self.app.session.doc().unwrap().history.undo.len()
+        }
+
+        fn last_command(&self) -> (String, Value) {
+            self.app.session.journal.last().cloned().unwrap()
+        }
+    }
 
     #[test]
     fn scale_options_start_from_and_update_the_preferences() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50, "radius": 5})).unwrap();
-        app.run("select.all", json!({})).unwrap();
-        app.run("prefs.set", json!({"values": {"scaleStrokes": true, "scaleCorners": false}})).unwrap();
-        crate::menus::invoke(&mut app, "object.scale", json!({}));
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
-        out.textures_delta.clear();
-        let d = app.ui.dialog.as_mut().unwrap();
-        assert_eq!((&d.fields["strokes"], &d.fields["corners"]), (&json!(true), &json!(false)));
-        d.fields.insert("sx".into(), json!(200));
-        d.fields.insert("strokes".into(), json!(false));
-        d.fields.insert("corners".into(), json!(true));
-        crate::dialogs::confirm(&mut app).unwrap();
-        let prefs = &app.session.prefs;
+        let mut rig = Rig::new();
+        rig.app.run("select.all", json!({})).unwrap();
+        rig.app.run("prefs.set", json!({"values": {"scaleStrokes": true, "scaleCorners": false}})).unwrap();
+        rig.open("object.scale");
+        assert_eq!((rig.flag("strokes"), rig.flag("corners")), (true, false));
+        rig.set("sx", json!(200));
+        rig.set("strokes", json!(false));
+        rig.set("corners", json!(true));
+        rig.confirm();
+        let prefs = &rig.app.session.prefs;
         assert_eq!((prefs.scale_strokes, prefs.scale_corners), (false, true));
-        let n = &app.session.doc().unwrap().doc.layers[0].children().unwrap()[0];
-        assert_eq!(n.appearance.stroke_width(), 1.0);
-        let (cmd, p) = app.session.journal.last().unwrap();
+        let (cmd, p) = rig.last_command();
         assert_eq!((cmd.as_str(), &p["strokes"], &p["corners"]), ("object.scale", &json!(false), &json!(true)));
     }
 
-    /// #1412: Preview shows the transform on the canvas as the values change, ↑/↓ in the angle
-    /// field step it by 1° (Shift: 10°), Cancel rolls the preview back and OK keeps one undo step
-    /// that Transform Again repeats.
+    /// OK with Preview on keeps one undo step that Transform Again repeats; Cancel leaves the
+    /// document and its history as they were.
     #[test]
-    fn preview_follows_the_stepped_angle() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-        app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 60, "height": 20})).unwrap();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let frame = |app: &mut VectorcraftApp, key: Option<(egui::Key, egui::Modifiers)>| {
-            let events = key.map(|(key, modifiers)| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers });
-            let mut out =
-                ctx.run_ui(egui::RawInput { events: events.into_iter().collect(), ..Default::default() }, |ui| crate::dialogs::show(app, ui.ctx()));
-            out.textures_delta.clear();
-        };
-        let size = |app: &VectorcraftApp| {
-            let b = app.session.doc().unwrap().doc.layers[0].children().unwrap()[0].geometric_bounds().unwrap();
-            (b.width().round(), b.height().round())
-        };
-        let undo_steps = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
-        let steps = undo_steps(&app);
-        crate::menus::invoke(&mut app, "object.rotate", json!({}));
-        frame(&mut app, None);
-        assert!(!app.session.in_interaction(), "Preview is off when the dialog opens");
-        // ↑ nine times with Shift: 90°, in the dialog only.
-        for _ in 0..9 {
-            frame(&mut app, Some((egui::Key::ArrowUp, egui::Modifiers::SHIFT)));
-        }
-        frame(&mut app, Some((egui::Key::ArrowUp, egui::Modifiers::NONE)));
-        frame(&mut app, Some((egui::Key::ArrowDown, egui::Modifiers::NONE)));
-        assert_eq!(app.ui.dialog.as_ref().unwrap().fields["angle"], json!(90.0));
-        assert_eq!(size(&app), (60.0, 20.0));
-        // Preview on: the canvas shows it, and follows the next steps.
-        app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(true));
-        frame(&mut app, None);
-        assert!(app.session.in_interaction());
-        assert_eq!(size(&app), (20.0, 60.0));
-        for _ in 0..9 {
-            frame(&mut app, Some((egui::Key::ArrowUp, egui::Modifiers::SHIFT)));
-        }
-        assert_eq!(size(&app), (60.0, 20.0), "180°");
-        // Cancel rolls it back.
-        for _ in 0..9 {
-            frame(&mut app, Some((egui::Key::ArrowDown, egui::Modifiers::SHIFT)));
-        }
-        crate::dialogs::cancel(&mut app);
-        assert!(!app.session.in_interaction());
-        assert_eq!((size(&app), undo_steps(&app)), ((60.0, 20.0), steps));
-        // OK keeps the previewed transform as one undo step, and Transform Again repeats it.
-        crate::menus::invoke(&mut app, "object.rotate", json!({}));
-        app.ui.dialog.as_mut().unwrap().fields.extend([("preview".to_string(), json!(true)), ("angle".to_string(), json!(90))]);
-        frame(&mut app, None);
-        assert_eq!(size(&app), (20.0, 60.0));
-        crate::dialogs::confirm(&mut app).unwrap();
-        assert!(!app.session.in_interaction() && app.ui.dialog.is_none());
-        assert_eq!((size(&app), undo_steps(&app)), ((20.0, 60.0), steps + 1));
-        assert_eq!(app.session.journal.last().unwrap().0, "object.rotate");
-        app.run("object.transformAgain", json!({})).unwrap();
-        assert_eq!(size(&app), (60.0, 20.0));
+    fn ok_with_a_preview_is_one_undo_step_and_cancel_restores() {
+        let mut rig = Rig::new();
+        let steps = rig.undo_steps();
+        rig.open("object.rotate");
+        rig.set("angle", json!(90));
+        assert!(rig.app.session.in_interaction());
+        assert_eq!(rig.size(), (20.0, 60.0), "the canvas shows the preview");
+        rig.cancel();
+        assert!(!rig.app.session.in_interaction());
+        assert_eq!((rig.size(), rig.undo_steps()), ((60.0, 20.0), steps));
+        rig.open("object.rotate");
+        rig.set("angle", json!(90));
+        rig.confirm();
+        assert!(!rig.app.session.in_interaction());
+        assert_eq!((rig.size(), rig.undo_steps()), ((20.0, 60.0), steps + 1));
+        assert_eq!(rig.last_command().0, "object.rotate");
+        rig.app.run("object.transformAgain", json!({})).unwrap();
+        assert_eq!(rig.size(), (60.0, 20.0));
     }
 
-    /// #1460: Reflect's axis is Horizontal, Vertical or an angle, and Transform Objects goes with
-    /// the command (on until switched off).
+    /// A transform dialog sends its command's params: Reflect and Shear by name and by angle, and
+    /// Transform Objects off.
     #[test]
-    fn reflect_takes_an_angle_and_transform_objects() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-        app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 60, "height": 20})).unwrap();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        for (axis, objects, size) in [("angle", true, (20.0, 60.0)), ("vertical", false, (20.0, 60.0))] {
-            crate::menus::invoke(&mut app, "object.reflect", json!({}));
-            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
-            out.textures_delta.clear();
-            let d = app.ui.dialog.as_mut().unwrap();
-            assert_eq!((&d.fields["objects"], &d.fields["angle"]), (&json!(true), &json!(90)));
-            d.fields.extend([("axis".to_string(), json!(axis)), ("angle".to_string(), json!(45)), ("objects".to_string(), json!(objects))]);
-            crate::dialogs::confirm(&mut app).unwrap();
-            let (cmd, p) = app.session.journal.last().unwrap();
-            let want = if axis == "angle" { json!(45.0) } else { json!(axis) };
-            assert_eq!((cmd.as_str(), &p["axis"], &p["objects"]), ("object.reflect", &want, &json!(objects)));
-            // Across the 45° axis the rectangle's sides swap; without Transform Objects it stays.
-            let b = app.session.doc().unwrap().doc.layers[0].children().unwrap()[0].geometric_bounds().unwrap();
-            assert_eq!((b.width().round(), b.height().round()), size);
+    fn a_transform_dialog_sends_its_commands_params() {
+        type Fields<'a> = Vec<(&'a str, Value)>;
+        let rows: [(&str, Fields<'_>, &str, Value); 5] = [
+            ("object.reflect", vec![("axis", json!("horizontal"))], "axis", json!("horizontal")),
+            ("object.reflect", vec![("axis", json!("angle")), ("angle", json!(45))], "axis", json!(45.0)),
+            ("object.shear", vec![("axis", json!("vertical")), ("angle", json!(45))], "axis", json!("vertical")),
+            ("object.shear", vec![("axis", json!("angle")), ("axisAngle", json!(30)), ("angle", json!(45))], "axis", json!(30.0)),
+            ("object.reflect", vec![("objects", json!(false))], "objects", json!(false)),
+        ];
+        for (cmd, sets, key, want) in rows {
+            let mut rig = Rig::new();
+            rig.open(cmd);
+            for (field, value) in sets {
+                rig.set(field, value);
+            }
+            rig.confirm();
+            let (id, p) = rig.last_command();
+            assert_eq!((id.as_str(), &p[key]), (cmd, &want), "{cmd} {key}");
         }
     }
 
@@ -371,40 +526,28 @@ mod tests {
     /// The angle is counter-clockwise on the page and Vertical is down = +, so 90° moves up.
     #[test]
     fn move_takes_a_distance_and_an_angle() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-        app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 60, "height": 20})).unwrap();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let frame = |app: &mut VectorcraftApp| {
-            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(app, ui.ctx()));
-            out.textures_delta.clear();
-        };
-        let set = |app: &mut VectorcraftApp, values: [(&str, f64); 2]| {
-            app.ui.dialog.as_mut().unwrap().fields.extend(values.map(|(k, v)| (k.to_string(), json!(v))));
-        };
-        let fields = |app: &VectorcraftApp| {
-            let d = app.ui.dialog.as_ref().unwrap();
-            ["dx", "dy", "distance", "angle"].map(|k| d.f64(k, f64::NAN))
-        };
-        crate::menus::invoke(&mut app, "object.move", json!({}));
-        frame(&mut app);
-        assert_eq!(fields(&app), [0.0, 0.0, 0.0, 0.0]);
-        set(&mut app, [("distance", 10.0), ("angle", 90.0)]);
-        frame(&mut app);
-        assert_eq!(fields(&app), [0.0, -10.0, 10.0, 90.0]);
-        set(&mut app, [("dx", 3.0), ("dy", 4.0)]);
-        frame(&mut app);
-        assert_eq!(fields(&app), [3.0, 4.0, 5.0, -53.130102]);
-        set(&mut app, [("distance", 10.0), ("angle", 270.0)]);
-        frame(&mut app);
-        assert_eq!(fields(&app), [0.0, 10.0, 10.0, -90.0], "270° is -90°");
-        set(&mut app, [("distance", 10.0), ("angle", 90.0)]);
-        frame(&mut app);
-        crate::dialogs::confirm(&mut app).unwrap();
-        let (cmd, p) = app.session.journal.last().unwrap();
+        let mut rig = Rig::new();
+        rig.open("object.move");
+        let fields = |rig: &Rig| ["dx", "dy", "distance", "angle"].map(|k| rig.number(k));
+        assert_eq!(fields(&rig), [0.0, 0.0, 0.0, 0.0]);
+        rig.set("distance", json!(10.0));
+        rig.set("angle", json!(90.0));
+        rig.frame();
+        assert_eq!(fields(&rig), [0.0, -10.0, 10.0, 90.0]);
+        rig.set("dx", json!(3.0));
+        rig.set("dy", json!(4.0));
+        rig.frame();
+        assert_eq!(fields(&rig), [3.0, 4.0, 5.0, -53.130102]);
+        rig.set("distance", json!(10.0));
+        rig.set("angle", json!(270.0));
+        rig.frame();
+        assert_eq!(fields(&rig), [0.0, 10.0, 10.0, -90.0], "270° is -90°");
+        rig.set("distance", json!(10.0));
+        rig.set("angle", json!(90.0));
+        rig.confirm();
+        let (cmd, p) = rig.last_command();
         assert_eq!((cmd.as_str(), &p["dx"], &p["dy"]), ("object.move", &json!(0.0), &json!(-10.0)));
-        let b = app.session.doc().unwrap().doc.layers[0].children().unwrap()[0].geometric_bounds().unwrap();
+        let b = rig.bounds();
         assert_eq!((b.x0, b.y0), (100.0, 90.0));
     }
 
@@ -412,124 +555,74 @@ mod tests {
     /// offset (as `ui.dialog.set` then `ui.dialog.confirm` from a control client).
     #[test]
     fn move_takes_a_distance_and_an_angle_set_before_a_frame() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-        app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 60, "height": 20})).unwrap();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let corner = |app: &VectorcraftApp| {
-            let b = app.session.doc().unwrap().doc.layers[0].children().unwrap()[0].geometric_bounds().unwrap();
-            (b.x0, b.y0)
-        };
+        let mut rig = Rig::new();
         // Up 10 pt with no frame, then right 20 pt (Move opens on the last offset) with one.
         for (with_frame, distance, angle, want, corner_after) in
             [(false, 10.0, 90.0, (0.0, -10.0), (100.0, 90.0)), (true, 20.0, 0.0, (20.0, 0.0), (120.0, 90.0))]
         {
-            crate::menus::invoke(&mut app, "object.move", json!({}));
-            let d = app.ui.dialog.as_mut().unwrap();
-            d.fields.extend([("distance".to_string(), json!(distance)), ("angle".to_string(), json!(angle))]);
+            assert!(crate::dialogs::object_dialogs::open_from_menu(&mut rig.app, "object.move"));
+            rig.set_now("distance", json!(distance));
+            rig.set_now("angle", json!(angle));
             if with_frame {
-                let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
-                out.textures_delta.clear();
-                let d = app.ui.dialog.as_ref().unwrap();
-                assert_eq!(["distance", "angle"].map(|k| d.f64(k, f64::NAN)), [distance, angle], "the first frame keeps them");
+                rig.frame();
+                assert_eq!([rig.number("distance"), rig.number("angle")], [distance, angle], "the first frame keeps them");
             }
-            crate::dialogs::confirm(&mut app).unwrap();
-            let (cmd, p) = app.session.journal.last().unwrap();
+            rig.confirm();
+            let (cmd, p) = rig.last_command();
             assert_eq!((cmd.as_str(), &p["dx"], &p["dy"]), ("object.move", &json!(want.0), &json!(want.1)), "with a frame: {with_frame}");
-            assert_eq!(corner(&app), corner_after);
+            let b = rig.bounds();
+            assert_eq!((b.x0, b.y0), corner_after);
         }
     }
 
-    /// Move opens on the offset of the last drag or Move, and with the checkboxes it was last
-    /// confirmed with: Enter, Enter makes copies at the same spacing.
+    /// Move opens on the offset of the last drag or Move, and with the Copy and Transform Objects
+    /// boxes it was last confirmed with: Enter, Enter makes copies at the same spacing.
     #[test]
     fn move_opens_on_the_last_move_and_checkboxes() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let open = |app: &mut VectorcraftApp| {
-            crate::toolbar::open_options(app, "selection").unwrap();
-            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(app, ui.ctx()));
-            out.textures_delta.clear();
-            let d = app.ui.dialog.as_ref().unwrap();
-            ([d.f64("dx", f64::NAN), d.f64("dy", f64::NAN)], ["copy", "objects", "preview"].map(|k| d.bool(k)))
+        let mut rig = Rig::new();
+        let open = |rig: &mut Rig| {
+            crate::toolbar::open_options(&mut rig.app, "selection").unwrap();
+            rig.frame();
+            ([rig.number("dx"), rig.number("dy")], ["copy", "objects"].map(|k| rig.flag(k)))
         };
-        let lefts = |app: &VectorcraftApp| {
-            let kids = app.session.doc().unwrap().doc.layers[0].children().unwrap();
-            kids.iter().map(|n| n.geometric_bounds().unwrap().x0).collect::<Vec<_>>()
-        };
-        assert_eq!(open(&mut app), ([0.0, 0.0], [false, true, false]), "nothing moved yet");
-        crate::dialogs::cancel(&mut app);
+        assert_eq!(open(&mut rig), ([0.0, 0.0], [false, true]), "nothing moved yet");
+        rig.cancel();
         // A drag: its offset, and a rotation since doesn't count.
-        app.session.begin_interaction("Move").unwrap();
-        app.session.preview("object.transform", &json!({"matrix": [1, 0, 0, 1, 20, 5]})).unwrap();
-        app.session.commit_interaction().unwrap();
-        app.run("object.rotate", json!({"angle": 90})).unwrap();
-        app.run("object.rotate", json!({"angle": -90})).unwrap();
-        assert_eq!(open(&mut app).0, [20.0, 5.0]);
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.extend([("dx".to_string(), json!(30)), ("dy".to_string(), json!(0)), ("copy".to_string(), json!(true))]);
-        crate::dialogs::confirm(&mut app).unwrap();
-        assert_eq!(open(&mut app), ([30.0, 0.0], [true, true, false]));
-        crate::dialogs::confirm(&mut app).unwrap();
-        assert_eq!(lefts(&app), [20.0, 50.0, 80.0], "a copy at 30 pt each time");
-        // A drag moves the next one by its offset instead; the checkboxes stay.
-        app.session.begin_interaction("Move").unwrap();
-        app.session.preview("object.transform", &json!({"matrix": [1, 0, 0, 1, 0, 12]})).unwrap();
-        app.session.commit_interaction().unwrap();
-        assert_eq!(open(&mut app), ([0.0, 12.0], [true, true, false]));
-        crate::dialogs::cancel(&mut app);
+        rig.app.session.begin_interaction("Move").unwrap();
+        rig.app.session.preview("object.transform", &json!({"matrix": [1, 0, 0, 1, 20, 5]})).unwrap();
+        rig.app.session.commit_interaction().unwrap();
+        rig.app.run("object.rotate", json!({"angle": 90})).unwrap();
+        rig.app.run("object.rotate", json!({"angle": -90})).unwrap();
+        assert_eq!(open(&mut rig).0, [20.0, 5.0]);
+        rig.set("dx", json!(30));
+        rig.set("dy", json!(0));
+        rig.set("copy", json!(true));
+        rig.confirm();
+        assert_eq!(open(&mut rig), ([30.0, 0.0], [true, true]));
+        rig.confirm();
+        let kids = rig.app.session.doc().unwrap().doc.layers[0].children().unwrap();
+        let lefts: Vec<f64> = kids.iter().map(|n| n.geometric_bounds().unwrap().x0).collect();
+        // The drag moved the rectangle from 100 to 120; each copy is 30 pt further.
+        assert_eq!(lefts, [120.0, 150.0, 180.0], "a copy at 30 pt each time");
     }
 
     /// The Move dialog's Transform Patterns is as it was last confirmed with: its OK sets General ›
     /// Transform Pattern Tiles, which it starts from.
     #[test]
     fn move_keeps_transform_patterns_in_the_preference() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let open = |app: &mut VectorcraftApp| {
-            crate::menus::invoke(app, "object.move", json!({}));
-            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(app, ui.ctx()));
-            out.textures_delta.clear();
-            app.ui.dialog.as_ref().unwrap().bool("patterns")
-        };
-        app.run("prefs.set", json!({"key": "transformPatternTiles", "value": false})).unwrap();
-        assert!(!open(&mut app));
-        app.ui.dialog.as_mut().unwrap().fields.insert("patterns".into(), json!(true));
-        crate::dialogs::confirm(&mut app).unwrap();
-        assert!(open(&mut app) && app.session.prefs.transform_pattern_tiles, "as confirmed");
-        crate::dialogs::cancel(&mut app);
-        app.run("prefs.set", json!({"key": "transformPatternTiles", "value": false})).unwrap();
-        assert!(!open(&mut app), "the preference");
-        crate::dialogs::cancel(&mut app);
-    }
-
-    /// Transform Patterns starts from General › Transform Pattern Tiles (#394) and goes with the
-    /// command.
-    #[test]
-    fn transform_patterns_starts_from_the_preference() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        for on in [false, true] {
-            app.run("prefs.set", json!({"key": "transformPatternTiles", "value": on})).unwrap();
-            crate::menus::invoke(&mut app, "object.move", json!({}));
-            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
-            out.textures_delta.clear();
-            let d = app.ui.dialog.as_mut().unwrap();
-            assert_eq!(d.fields["patterns"], json!(on));
-            d.fields.insert("dx".into(), json!(10));
-            crate::dialogs::confirm(&mut app).unwrap();
-            let (cmd, p) = app.session.journal.last().unwrap();
-            assert_eq!((cmd.as_str(), &p["patterns"]), ("object.move", &json!(on)));
-        }
+        let mut rig = Rig::new();
+        rig.app.run("prefs.set", json!({"key": "transformPatternTiles", "value": false})).unwrap();
+        rig.open("object.move");
+        assert!(!rig.flag("patterns"));
+        rig.set("patterns", json!(true));
+        rig.confirm();
+        assert!(rig.app.session.prefs.transform_pattern_tiles, "OK wrote the preference");
+        rig.open("object.move");
+        assert!(rig.flag("patterns"), "as confirmed");
+        rig.cancel();
+        rig.app.run("prefs.set", json!({"key": "transformPatternTiles", "value": false})).unwrap();
+        rig.open("object.move");
+        assert!(!rig.flag("patterns"), "the preference");
+        rig.cancel();
     }
 }

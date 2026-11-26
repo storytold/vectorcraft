@@ -193,7 +193,7 @@ impl Interp<'_> {
 
     // ---------- painting ----------
 
-    pub(super) fn fill_path(&mut self, bp: BezPath, rule: FillRule) -> Res {
+    pub(in super::super) fn fill_path(&mut self, bp: BezPath, rule: FillRule) -> Res {
         if bp.elements().is_empty() || self.g.null {
             return Ok(());
         }

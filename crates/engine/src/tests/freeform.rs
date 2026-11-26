@@ -283,6 +283,41 @@ fn point_commands_need_a_freeform_gradient() {
     assert!(s.execute("paint.freeform.addPoint", &json!({"at": [1, 1]})).is_err());
 }
 
+/// While the Live Paint Bucket is the active tool, the point and line commands that name no `ids`,
+/// `id` or `item` leave a selected freeform fill as it is and report an error, as
+/// `paint.freeform.get` finds no freeform gradient then. With `ids` they edit that object. `get` and
+/// `selectPoint` with an index name the bucket's colors in their error.
+#[test]
+fn point_commands_without_a_target_leave_the_selection_alone_under_the_bucket() {
+    let (mut s, id) = freeform_rect();
+    run(&mut s, "paint.freeform.addLine", json!({"points": [0, 1]}));
+    run(&mut s, "paint.freeform.selectPoint", json!({"index": 1}));
+    s.select_tool("livePaintBucket", ViewInfo::default()).unwrap();
+    // get and selectPoint with an index name the bucket's colors; clearing the point still works.
+    for (cmd, p) in [("paint.freeform.get", json!({})), ("paint.freeform.selectPoint", json!({"index": 0}))] {
+        let err = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(err.contains("Live Paint Bucket"), "{cmd}: {err}");
+    }
+    run(&mut s, "paint.freeform.selectPoint", json!({"index": null}));
+    let before = points(&s, id);
+    // A bad `aligned` is reported as such, before the missing target.
+    let err = s.execute("paint.freeform.addPoint", &json!({"at": [150, 150], "aligned": 3})).unwrap_err().to_string();
+    assert!(err.contains("aligned"), "{err}");
+    for (cmd, p) in [
+        ("paint.freeform.addPoint", json!({"at": [150, 150]})),
+        ("paint.freeform.setPoint", json!({"index": 0, "color": "#ff0000"})),
+        ("paint.freeform.deletePoint", json!({"index": 0})),
+        ("paint.freeform.addLine", json!({"points": [1, 2]})),
+        ("paint.freeform.splitLine", json!({"line": 0, "segment": 0})),
+        ("paint.freeform.setPoint", json!({"index": 0, "color": "#ff0000", "ids": null})),
+    ] {
+        assert!(s.execute(cmd, &p).is_err(), "{cmd} {p}");
+        assert_eq!(points(&s, id), before, "{cmd} {p}: the object's points");
+    }
+    run(&mut s, "paint.freeform.setPoint", json!({"index": 0, "color": "#ff0000", "ids": [id.0]}));
+    assert_ne!(points(&s, id), before, "with ids the object's point changes");
+}
+
 /// The point and line commands refuse a point, line or segment of 2^32 + k, where k names one that
 /// exists, and the points and the selected point stay as they were. A 32-bit build read the number
 /// as k.
@@ -330,4 +365,30 @@ fn type_objects_keep_points_in_text_space() {
     let (f, _) = node(&s, id).proxy_freeform(false, None).unwrap();
     assert!(close(f.points[i].at, Point::new(90.0, 150.0)), "back in document coordinates: {:?}", f.points[i].at);
     assert_eq!(f.points[i].color, Color::rgb(1.0, 0.0, 1.0));
+}
+
+/// A dropped press (a long touch, a canceled touch) of the Gradient tool that dragged a selected
+/// point out of the object, and out and back in, keeps the point and its selection.
+#[test]
+fn a_dropped_drag_of_a_point_keeps_it_selected() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let (mut s, id) = freeform_rect();
+    let v = ViewInfo::default();
+    s.select_tool("gradient", v).unwrap();
+    let count = points(&s, id).points.len();
+    assert!(count > 1, "a point can be dragged out");
+    let at = s.proxy_freeform(false).unwrap().0.points[0].at;
+    for back in [false, true] {
+        run(&mut s, "paint.freeform.selectPoint", json!({"index": 0}));
+        s.pointer(&PointerEvent::new(PointerKind::Down, at.x, at.y), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 400.0, 400.0), v).unwrap();
+        assert_eq!(s.selected_freeform_point(), None, "the removal the drag previews deselects the point");
+        if back {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, at.x + 5.0, at.y + 5.0), v).unwrap();
+        }
+        s.drop_tool_press(v).unwrap();
+        assert!(!s.tool_busy(), "the tool is at rest");
+        assert_eq!(points(&s, id).points.len(), count, "back inside: {back}");
+        assert_eq!(s.selected_freeform_point(), Some(0), "back inside: {back}");
+    }
 }

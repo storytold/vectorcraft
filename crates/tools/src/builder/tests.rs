@@ -132,20 +132,34 @@ fn shape_builder_builds_its_map_once_for_hover_alt_hover_and_a_merge() {
     // The merge left the document as it was (it failed, say): the map still fits it.
     t.pointer(&cx1, &ev(PointerKind::Move, 75.0, 75.0));
     assert_eq!(t.cache.builds, 1, "a hover after a merge that changed nothing");
+    // A new revision of the same art (a view setting, a preference) keeps the map.
     let cx2 = ToolContext { revision: (1, 2), ..cx(&d, &s, &p) };
     t.pointer(&cx2, &ev(PointerKind::Move, 75.0, 75.0));
-    assert_eq!(t.cache.builds, 2, "a hover on a new revision");
+    assert_eq!(t.cache.builds, 1, "a hover on a new revision of the same art");
+    assert!(matches!(t.hover, Some(Hit::Region(_))), "{:?}", t.hover);
+    // The same objects, one of them moved.
+    let mut moved = d.clone();
+    let second = s.objects[1];
+    moved.node_mut(second).unwrap().transform(vectorcraft_geom::Affine::translate((10.0, 0.0)), false);
+    let cx3 = ToolContext { revision: (1, 3), ..cx(&moved, &s, &p) };
+    t.pointer(&cx3, &ev(PointerKind::Move, 75.0, 75.0));
+    assert_eq!(t.cache.builds, 2, "a hover on a new revision of other art");
 }
 
 /// A row of `n` selected squares 20 pt wide, each overlapping the next by half: 4 segments each.
 fn square_row(n: usize) -> (Document, Selection) {
+    square_row_at(n, 0.0)
+}
+
+/// [`square_row`] with the squares' tops at `y`: the same objects, moved.
+fn square_row_at(n: usize, y: f64) -> (Document, Selection) {
     let mut d = Document::new(500.0, 500.0);
     let l = d.layers[0].id;
     let mut s = Selection::default();
     for k in 0..n {
         let x = k as f64 * 10.0;
         let id = d.alloc_id();
-        d.insert(Some(l), k, Node::path(id, shapes::rectangle(Rect::new(x, 0.0, x + 20.0, 20.0)), Appearance::default_art())).unwrap();
+        d.insert(Some(l), k, Node::path(id, shapes::rectangle(Rect::new(x, y, x + 20.0, y + 20.0)), Appearance::default_art())).unwrap();
         s.add(id);
     }
     (d, s)
@@ -176,9 +190,10 @@ fn shape_builder_hover_builds_a_large_map_on_another_thread() {
     assert_eq!((t.cache.builds, t.cache.background), (1, 1));
     assert_eq!(t.overlays(&cx1).len(), 2, "the region's hatch and outline");
     // A new revision while the map of the one before it is being built: only the newer one's
-    // map is used.
-    let cx2 = ToolContext { revision: (1, 2), ..cx(&d, &s, &p) };
-    let cx3 = ToolContext { revision: (1, 3), ..cx(&d, &s, &p) };
+    // map is used. Each revision moves the squares down 1 pt.
+    let rows: Vec<Document> = (0..7).map(|k| square_row_at(40, f64::from(k)).0).collect();
+    let cx2 = ToolContext { revision: (1, 2), ..cx(&rows[2], &s, &p) };
+    let cx3 = ToolContext { revision: (1, 3), ..cx(&rows[3], &s, &p) };
     t.pointer(&cx2, &hover);
     t.pointer(&cx3, &hover);
     poll_until_ready(&mut t, &cx3);
@@ -186,27 +201,263 @@ fn shape_builder_hover_builds_a_large_map_on_another_thread() {
     assert_eq!((t.cache.builds, t.cache.background), (3, 3), "the earlier revision's map, then the newer one's");
     assert_eq!(t.cache.key.as_ref().map(|k| k.1), Some((1, 3)));
     // A host without frames waits for the map.
-    let cx4 = ToolContext { revision: (1, 4), ..cx(&d, &s, &p) };
+    let cx4 = ToolContext { revision: (1, 4), ..cx(&rows[4], &s, &p) };
     t.pointer(&cx4, &hover);
     assert!(t.waiting() && t.hover.is_none());
     t.poll(&cx4, true);
     assert!(!t.waiting());
     assert!(matches!(t.hover, Some(Hit::Region(_))), "{:?}", t.hover);
     assert_eq!((t.cache.builds, t.cache.background), (4, 4));
-    // A press while the map is being built waits for it, and the drag merges.
-    let cx5 = ToolContext { revision: (1, 5), ..cx(&d, &s, &p) };
+    // A drag while the map is being built is replayed once it is there, and merges (on
+    // another thread, see `shape_builder_merges_a_large_selection_on_another_thread` and
+    // `shape_builder_gesture_waits_for_the_map_without_holding_the_caller`).
+    let cx5 = ToolContext { revision: (1, 5), ..cx(&rows[5], &s, &p) };
     t.pointer(&cx5, &hover);
     t.pointer(&cx5, &ev(PointerKind::Down, 15.0, 10.0));
     t.pointer(&cx5, &ev(PointerKind::Drag, 35.0, 10.0));
-    let acts = t.pointer(&cx5, &ev(PointerKind::Up, 35.0, 10.0));
-    assert!(matches!(acts.as_slice(), [Action::Exec(id, _)] if id == "shapeBuilder.merge"), "{acts:?}");
+    assert!(t.pointer(&cx5, &ev(PointerKind::Up, 35.0, 10.0)).is_empty());
+    let acts = t.poll(&cx5, true);
     assert_eq!((t.cache.builds, t.cache.background), (5, 5));
+    assert!(matches!(acts.as_slice(), [Action::Exec(id, _)] if id == "shapeBuilder.merge"), "{acts:?}");
     assert!(!t.waiting());
     // Changing an option forgets a map being built with the old one.
-    let cx6 = ToolContext { revision: (1, 6), ..cx(&d, &s, &p) };
+    let cx6 = ToolContext { revision: (1, 6), ..cx(&rows[6], &s, &p) };
     t.pointer(&cx6, &hover);
     t.set_option("gapDetection", &json!(true));
     assert!(!t.waiting());
+}
+
+/// Polls `t` until it stops waiting, as the desktop app does each frame, and returns the
+/// actions the polls gave.
+fn poll_actions(t: &mut dyn Tool, cx: &ToolContext) -> Vec<Action> {
+    let start = std::time::Instant::now();
+    let mut acts = vec![];
+    while t.waiting() {
+        assert!(start.elapsed() < std::time::Duration::from_secs(60), "the tool is still waiting");
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        acts.extend(t.poll(cx, false));
+    }
+    acts
+}
+
+/// A Shape Builder over `square_row(40)` (160 segments) that has merged nothing, with its map,
+/// after a click at (15, 10) that started a merge on another thread.
+fn clicked_row(cx: &ToolContext) -> ShapeBuilderTool {
+    let mut t = ShapeBuilderTool::default();
+    t.pointer(cx, &ev(PointerKind::Move, 15.0, 10.0));
+    poll_until_ready(&mut t, cx);
+    t.pointer(cx, &ev(PointerKind::Down, 15.0, 10.0));
+    assert!(t.pointer(cx, &ev(PointerKind::Up, 15.0, 10.0)).is_empty(), "the release returns before the merge is computed");
+    assert!(t.waiting() && t.editing());
+    t
+}
+
+#[test]
+fn shape_builder_merges_a_large_selection_on_another_thread() {
+    let (d, s) = square_row(40);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let computed = merges_computed();
+    let mut t = clicked_row(&cx);
+    assert_eq!(t.cursor(&cx, Point::new(15.0, 10.0), Mods::default()), Cursor::Busy);
+    assert_eq!(t.overlays(&cx).len(), 2, "the clicked region's hatch and outline stay");
+    // A press while the merge is being computed starts no gesture.
+    assert!(t.pointer(&cx, &ev(PointerKind::Down, 35.0, 10.0)).is_empty());
+    assert!(!t.busy());
+    assert!(t.pointer(&cx, &ev(PointerKind::Up, 35.0, 10.0)).is_empty());
+    let acts = poll_actions(&mut t, &cx);
+    assert_eq!(merges_computed(), computed, "the merge was computed on another thread");
+    let [Action::Exec(id, params)] = acts.as_slice() else { panic!("{acts:?}") };
+    assert_eq!((id.as_str(), &params["points"]), ("shapeBuilder.merge", &json!([[15.0, 10.0]])));
+    assert!(!t.waiting() && !t.editing());
+    assert_eq!(t.cursor(&cx, Point::new(15.0, 10.0), Mods::default()), Cursor::ShapeBuilder);
+    let m = t.shape_builder_merge().expect("the merge the command takes");
+    assert!(Arc::ptr_eq(&m.map, &t.cache.map));
+    assert_eq!((m.touched.regions.len(), m.touched.lines.len(), m.touched.edges.len()), (1, 0, 0));
+    assert!(!m.geometry.union.is_empty());
+    assert_eq!(m.geometry, merge_geometry(&m.map, &m.touched, m.gap, &m.inputs));
+    assert_eq!(m.geometry.rests.iter().flatten().count(), 2, "the two squares over the region change");
+    // The next event lets it go.
+    t.pointer(&cx, &ev(PointerKind::Move, 15.0, 10.0));
+    assert!(t.shape_builder_merge().is_none());
+}
+
+#[test]
+fn shape_builder_drops_a_merge_the_art_changed_under() {
+    let (d, s) = square_row(40);
+    let p = paint();
+    let mut fewer = Selection::default();
+    fewer.set(s.objects.iter().skip(1).copied());
+    let cx1 = ToolContext { revision: (1, 1), ..cx(&d, &s, &p) };
+    let (moved, _) = square_row_at(40, 5.0);
+    let later = [
+        // An edit or an undo: the squares moved.
+        ToolContext { revision: (1, 2), ..cx(&moved, &s, &p) },
+        // Another document.
+        ToolContext { revision: (2, 1), ..cx(&d, &s, &p) },
+        // Another selection.
+        ToolContext { revision: (1, 1), ..cx(&d, &fewer, &p) },
+    ];
+    for (k, cx2) in later.iter().enumerate() {
+        let mut t = clicked_row(&cx1);
+        // Dropped at the first poll, before the thread is done.
+        assert!(t.poll(cx2, false).is_empty(), "change {k}: the merge is not applied");
+        assert!(!t.editing() && !t.waiting() && t.shape_builder_merge().is_none(), "change {k}");
+    }
+    // Unchanged, the same wait applies it.
+    let mut t = clicked_row(&cx1);
+    assert_eq!(t.poll(&cx1, true).len(), 1);
+    // A copy of the document at the same revision (a save stamps its dates on a copy), and
+    // finishing the edit before a command, apply it too.
+    let copy = d.clone();
+    let cx3 = ToolContext { revision: (1, 1), ..cx(&copy, &s, &p) };
+    let mut t = clicked_row(&cx1);
+    assert_eq!(t.finish_edit(&cx3).len(), 1);
+    assert!(!t.editing() && t.shape_builder_merge().is_some());
+    // Switching away applies it.
+    let mut t = clicked_row(&cx1);
+    assert_eq!(t.deactivate(&cx1).len(), 1);
+    assert!(!t.editing());
+}
+
+/// A new revision of the document that leaves the selection's inputs as they were (a view
+/// setting or a preference that redraws it) keeps the merge being computed, the gesture made
+/// while the map is being built and the map itself: the merge applies with the map it was
+/// computed over, and no map is built again.
+#[test]
+fn shape_builder_keeps_its_work_over_a_new_revision_of_the_same_art() {
+    let (d, s) = square_row(40);
+    let p = paint();
+    let cx1 = ToolContext { revision: (1, 1), ..cx(&d, &s, &p) };
+    let cx2 = ToolContext { revision: (1, 2), ..cx(&d, &s, &p) };
+    // A merge being computed.
+    let computed = merges_computed();
+    let mut t = clicked_row(&cx1);
+    let acts = poll_actions(&mut t, &cx2);
+    assert!(matches!(acts.as_slice(), [Action::Exec(id, _)] if id == "shapeBuilder.merge"), "{acts:?}");
+    assert_eq!(merges_computed(), computed, "the merge computed on another thread");
+    let m = t.shape_builder_merge().expect("the merge the command takes");
+    assert!(Arc::ptr_eq(&m.map, &t.cache.map), "the map the merge was computed over");
+    assert_eq!(t.cache.key.as_ref().map(|k| k.1), Some((1, 2)));
+    assert_eq!(t.cache.builds, 1, "no map built again");
+    // Finishing it before a command too.
+    let mut t = clicked_row(&cx1);
+    assert_eq!(t.finish_edit(&cx2).len(), 1);
+    // A hover over the new revision builds no map.
+    let mut t = ShapeBuilderTool::default();
+    let hover = ev(PointerKind::Move, 15.0, 10.0);
+    t.pointer(&cx1, &hover);
+    poll_until_ready(&mut t, &cx1);
+    t.pointer(&cx2, &hover);
+    assert!(!t.waiting() && matches!(t.hover, Some(Hit::Region(_))), "{:?}", t.hover);
+    assert_eq!(t.cache.builds, 1);
+    // A map being built, and a gesture made meanwhile.
+    let drag = [ev(PointerKind::Down, 15.0, 10.0), ev(PointerKind::Drag, 35.0, 10.0), ev(PointerKind::Up, 35.0, 10.0)];
+    let mut ready = ShapeBuilderTool::default();
+    ready.pointer(&cx1, &hover);
+    poll_until_ready(&mut ready, &cx1);
+    for e in &drag {
+        ready.pointer(&cx1, e);
+    }
+    let want = poll_actions(&mut ready, &cx1);
+    let mut t = ShapeBuilderTool::default();
+    t.pointer(&cx1, &hover);
+    for e in &drag {
+        assert!(t.pointer(&cx1, e).is_empty());
+    }
+    assert!(t.editing() && t.cache.builds == 0, "the gesture waits for the map");
+    assert_eq!(poll_actions(&mut t, &cx2), want);
+    assert_eq!((t.cache.builds, t.cache.background), (1, 1), "the map built for the first revision");
+    // Finishing it before a command waits for the map being built rather than building it again.
+    let mut t = ShapeBuilderTool::default();
+    t.pointer(&cx1, &hover);
+    for e in &drag {
+        t.pointer(&cx1, e);
+    }
+    assert_eq!(t.finish_edit(&cx2), want);
+    assert_eq!((t.cache.builds, t.cache.background), (1, 1), "the map built on the other thread");
+    // Another document with the same art drops the merge.
+    let cx3 = ToolContext { revision: (2, 1), ..cx(&d, &s, &p) };
+    let mut t = clicked_row(&cx1);
+    assert!(t.poll(&cx3, false).is_empty());
+    assert!(!t.editing());
+}
+
+/// A press while the map of a large selection is being built on another thread does not wait
+/// for it: the gesture is recorded, each event returns at once, and the polls replay it once
+/// the map is there, giving the merge the same gesture gives over the map. Finishing the edit
+/// waits for the map and the merge; another revision of other art drops the gesture.
+#[test]
+fn shape_builder_gesture_waits_for_the_map_without_holding_the_caller() {
+    let (d, s) = square_row(200);
+    let p = paint();
+    let cx1 = ToolContext { revision: (1, 1), ..cx(&d, &s, &p) };
+    let hover = ev(PointerKind::Move, 15.0, 10.0);
+    let drag = [ev(PointerKind::Down, 15.0, 10.0), ev(PointerKind::Drag, 35.0, 10.0), ev(PointerKind::Up, 35.0, 10.0)];
+    let mut ready = ShapeBuilderTool::default();
+    ready.pointer(&cx1, &hover);
+    poll_until_ready(&mut ready, &cx1);
+    for e in &drag {
+        ready.pointer(&cx1, e);
+    }
+    let want = poll_actions(&mut ready, &cx1);
+    assert!(matches!(want.as_slice(), [Action::Exec(id, _)] if id == "shapeBuilder.merge"), "{want:?}");
+    let made_while_building = || {
+        let mut t = ShapeBuilderTool::default();
+        t.pointer(&cx1, &hover);
+        for e in &drag {
+            assert!(t.pointer(&cx1, e).is_empty());
+        }
+        assert_eq!(t.cache.builds, 0, "the gesture did not wait for the map");
+        assert!(t.editing() && t.waiting());
+        t
+    };
+    let mut t = made_while_building();
+    assert_eq!(t.cursor(&cx1, Point::new(35.0, 10.0), Mods::default()), Cursor::Busy);
+    // A press before the gesture is replayed starts nothing.
+    assert!(t.pointer(&cx1, &ev(PointerKind::Down, 55.0, 10.0)).is_empty());
+    assert!(t.pointer(&cx1, &ev(PointerKind::Up, 55.0, 10.0)).is_empty());
+    assert_eq!(poll_actions(&mut t, &cx1), want);
+    assert!(!t.editing() && t.shape_builder_merge().is_some());
+    // Finishing the edit before a command waits for both.
+    let mut t = made_while_building();
+    assert_eq!(t.finish_edit(&cx1), want);
+    // Another revision of other art before the map is there drops the gesture.
+    let mut t = made_while_building();
+    let (moved, _) = square_row_at(200, 5.0);
+    let cx2 = ToolContext { revision: (1, 2), ..cx(&moved, &s, &p) };
+    assert!(t.poll(&cx2, false).is_empty());
+    assert!(!t.editing());
+}
+
+/// Escape during a drag made while the map of a large selection is being built cancels the
+/// recorded gesture too: the release and the polls after it merge nothing, the tool stops
+/// waiting once the map is there, and the next drag merges on its own.
+#[test]
+fn shape_builder_escape_cancels_a_gesture_made_while_the_map_is_built() {
+    let (d, s) = square_row(200);
+    let p = paint();
+    let cx1 = ToolContext { revision: (1, 1), ..cx(&d, &s, &p) };
+    let mut t = ShapeBuilderTool::default();
+    t.pointer(&cx1, &ev(PointerKind::Move, 15.0, 10.0));
+    assert!(t.pointer(&cx1, &ev(PointerKind::Down, 15.0, 10.0)).is_empty());
+    assert!(t.pointer(&cx1, &ev(PointerKind::Drag, 35.0, 10.0)).is_empty());
+    assert_eq!(t.cache.builds, 0, "the gesture did not wait for the map");
+    assert!(t.claims_key(&cx1, ToolKey::Escape));
+    assert!(t.key(&cx1, ToolKey::Escape, Mods::default()).is_empty());
+    assert!(t.pointer(&cx1, &ev(PointerKind::Up, 35.0, 10.0)).is_empty());
+    assert!(poll_actions(&mut t, &cx1).is_empty(), "the canceled gesture merges nothing");
+    assert!(!t.waiting() && !t.editing());
+    // The next drag merges what it touches, with no event of the canceled one.
+    let mut fresh = ShapeBuilderTool::default();
+    fresh.pointer(&cx1, &ev(PointerKind::Move, 55.0, 10.0));
+    poll_until_ready(&mut fresh, &cx1);
+    let next = [ev(PointerKind::Down, 55.0, 10.0), ev(PointerKind::Drag, 75.0, 10.0), ev(PointerKind::Up, 75.0, 10.0)];
+    for e in &next {
+        fresh.pointer(&cx1, e);
+        t.pointer(&cx1, e);
+    }
+    assert_eq!(poll_actions(&mut t, &cx1), poll_actions(&mut fresh, &cx1));
 }
 
 #[test]
@@ -218,6 +469,106 @@ fn shape_builder_hover_builds_a_small_map_at_once() {
     t.pointer(&cx, &ev(PointerKind::Move, 15.0, 10.0));
     assert!(!t.waiting() && matches!(t.hover, Some(Hit::Region(_))), "{:?}", t.hover);
     assert_eq!((t.cache.builds, t.cache.background), (1, 0));
+}
+
+fn status(msg: &str) -> Vec<Action> {
+    vec![Action::Status(msg.into())]
+}
+
+/// A click or drag with nothing selected shows what to select when it is released, and Escape
+/// during the press keeps the release quiet.
+#[test]
+fn shape_builder_with_nothing_selected_says_what_to_select() {
+    let (d, _, _) = two_rects();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = ShapeBuilderTool::default();
+    assert!(t.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0)).is_empty());
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 75.0, 50.0)), status(SELECT_PATHS), "a click");
+    assert!(t.pointer(&cx, &ev(PointerKind::Down, 25.0, 50.0)).is_empty());
+    assert!(t.pointer(&cx, &ev(PointerKind::Drag, 125.0, 50.0)).is_empty());
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 125.0, 50.0)), status(SELECT_PATHS), "a drag");
+    assert!(t.pointer(&cx, &ev(PointerKind::Up, 125.0, 50.0)).is_empty(), "a release without a press");
+    t.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0));
+    assert!(t.claims_key(&cx, ToolKey::Escape));
+    assert!(t.key(&cx, ToolKey::Escape, Mods::default()).is_empty());
+    assert!(t.pointer(&cx, &ev(PointerKind::Up, 75.0, 50.0)).is_empty(), "a canceled press");
+    assert!(!t.claims_key(&cx, ToolKey::Escape));
+}
+
+/// With A of the overlapping squares A and B selected, a click on the part of B outside A builds
+/// nothing and says to select every path to merge; a click on empty canvas says there is no
+/// region; a click inside A still merges A alone and clears that status, and the click after it
+/// gives the merge alone.
+#[test]
+fn shape_builder_names_the_unselected_path_under_a_release_that_built_nothing() {
+    let (d, a, _) = two_rects();
+    let mut s = Selection::default();
+    s.set([a]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = ShapeBuilderTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, 125.0, 50.0));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 125.0, 50.0)), status(SELECT_ALL_PATHS));
+    t.pointer(&cx, &ev(PointerKind::Down, 300.0, 300.0));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 300.0, 300.0)), status(NO_REGION));
+    t.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0));
+    let acts = t.pointer(&cx, &ev(PointerKind::Up, 75.0, 50.0));
+    assert!(
+        matches!(acts.as_slice(), [Action::Status(m), Action::Exec(id, v)] if m.is_empty() && id == "shapeBuilder.merge" && v["ids"] == json!([a.0])),
+        "{acts:?}"
+    );
+    t.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0));
+    let acts = t.pointer(&cx, &ev(PointerKind::Up, 75.0, 50.0));
+    assert!(matches!(acts.as_slice(), [Action::Exec(id, _)] if id == "shapeBuilder.merge"), "{acts:?}");
+    // A locked or hidden B cannot be picked, so the release says there is no region.
+    for hide in [false, true] {
+        let (mut d, a, b) = two_rects();
+        let n = d.node_mut(b).unwrap();
+        if hide {
+            n.visible = false;
+        } else {
+            n.locked = true;
+        }
+        let mut s = Selection::default();
+        s.set([a]);
+        let cx = crate::testutil::cx(&d, &s, &p);
+        let mut t = ShapeBuilderTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, 125.0, 50.0));
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 125.0, 50.0)), status(NO_REGION), "hidden: {hide}");
+    }
+}
+
+/// A selection that holds no path or compound path says to select one.
+#[test]
+fn shape_builder_with_no_path_selected_says_to_select_paths() {
+    let (mut d, a, _) = two_rects();
+    d.node_mut(a).unwrap().locked = true;
+    let mut s = Selection::default();
+    s.set([a]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = ShapeBuilderTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 75.0, 50.0)), status(SELECT_PATHS));
+}
+
+/// A gesture made while the map of a large selection is being built and released over nothing
+/// gives its status once, when it is replayed.
+#[test]
+fn shape_builder_replayed_gesture_over_nothing_gives_its_status_once() {
+    let (d, s) = square_row(200);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = ShapeBuilderTool::default();
+    t.pointer(&cx, &ev(PointerKind::Move, 15.0, 10.0));
+    assert!(t.pointer(&cx, &ev(PointerKind::Down, 450.0, 450.0)).is_empty());
+    assert_eq!(t.cache.builds, 0, "the gesture did not wait for the map");
+    assert!(t.pointer(&cx, &ev(PointerKind::Up, 450.0, 450.0)).is_empty(), "the gesture waits for the map");
+    assert!(t.editing());
+    assert_eq!(t.finish_edit(&cx), status(NO_REGION));
+    assert!(t.finish_edit(&cx).is_empty() && !t.editing());
 }
 
 #[test]
@@ -234,7 +585,7 @@ fn shape_builder_alt_drag_erases_and_empty_drag_does_nothing() {
     let Action::Exec(_, v) = &acts[0] else { panic!() };
     assert_eq!(v["erase"], true);
     t.pointer(&cx, &ev(PointerKind::Down, 300.0, 300.0));
-    assert!(t.pointer(&cx, &ev(PointerKind::Up, 300.0, 300.0)).is_empty());
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 300.0, 300.0)), status(NO_REGION), "the release edits nothing and says why");
 }
 
 /// Squares A (0..100) and B (50..150 both ways), overlapping at a corner, selected.
@@ -341,6 +692,50 @@ fn rects(rs: &[Rect]) -> (Document, Selection) {
 
 fn map_of(d: &Document, s: &Selection) -> BuilderMap {
     BuilderMap::new(d, &sorted_roots(d, &s.objects), true, true).0
+}
+
+#[test]
+fn shape_builder_keeps_a_line_under_an_edge_in_front_and_alt_click_there_takes_the_edge() {
+    // A line from (0, 50) to (200, 50), then a rectangle in front of it whose bottom edge lies
+    // along its left half.
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let mut s = Selection::default();
+    let line = PathData::new(vec![SubPath::polyline(&[Point::new(0.0, 50.0), Point::new(200.0, 50.0)], false)]);
+    for (k, path) in [line, shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 50.0))].into_iter().enumerate() {
+        let id = d.alloc_id();
+        d.insert(Some(l), k, Node::path(id, path, Appearance::default_art())).unwrap();
+        s.add(id);
+    }
+    let map = map_of(&d, &s);
+    let under = map.lines.iter().any(|(piece, b)| piece.key == 0 && b.x1 <= 100.5 && (b.y0 - 50.0).abs() < 1e-6 && b.width() > 99.0);
+    assert!(under, "the line keeps its piece under the rectangle's edge: {:?}", map.lines.iter().map(|(_, b)| b).collect::<Vec<_>>());
+    assert!(matches!(map.hit(Point::new(50.0, 51.0), Some(4.0)), Some(Hit::Edge(_))), "the rectangle in front is hit");
+    assert!(matches!(map.hit(Point::new(150.0, 51.0), Some(4.0)), Some(Hit::Line(_))));
+}
+
+#[test]
+fn shape_builder_alt_click_on_coincident_lines_takes_the_front_one() {
+    // Two lines from (0, 50) to (200, 50), crossed by a line at x = 100: each keeps its own
+    // pieces, and a hit where they lie on each other takes the piece of the line in front.
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let mut s = Selection::default();
+    let line = |a: (f64, f64), b: (f64, f64)| PathData::new(vec![SubPath::polyline(&[Point::new(a.0, a.1), Point::new(b.0, b.1)], false)]);
+    let paths = [line((0.0, 50.0), (200.0, 50.0)), line((0.0, 50.0), (200.0, 50.0)), line((100.0, 0.0), (100.0, 100.0))];
+    for (k, path) in paths.into_iter().enumerate() {
+        let id = d.alloc_id();
+        d.insert(Some(l), k, Node::path(id, path, Appearance::default_art())).unwrap();
+        s.add(id);
+    }
+    let map = map_of(&d, &s);
+    for key in [0, 1] {
+        assert_eq!(map.lines.iter().filter(|(piece, _)| piece.key == key).count(), 2, "line {key}: {:?}", map.lines);
+    }
+    for x in [50.0, 150.0] {
+        let Some(Hit::Line(i)) = map.hit(Point::new(x, 51.0), Some(4.0)) else { panic!("no line hit at {x}") };
+        assert_eq!(map.lines.get(i).map(|(piece, _)| piece.key), Some(1), "at {x}");
+    }
 }
 
 #[test]
@@ -625,6 +1020,43 @@ fn shape_builder_shift_drag_shows_no_scissors_or_stroke_highlight() {
     assert_eq!(t.cursor(&cx, Point::new(75.0, 75.0), shift), Cursor::ShapeBuilder);
 }
 
+/// When the pointer leaves the canvas, the Shape Builder's region or stroke highlight and its
+/// cursor swatch preview go.
+#[test]
+fn shape_builder_hover_ended_drops_the_highlight_and_the_swatch_preview() {
+    let (d, s) = corner_rects();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = ShapeBuilderTool::default();
+    for (key, v) in [("pickColorFrom", json!("swatches")), ("cursorSwatchPreview", json!(true)), ("clickStrokeSplitsPath", json!(true))] {
+        t.set_option(key, &v);
+    }
+    // Over a region, then over a stroke a click would split.
+    for (x, y) in [(25.0, 25.0), (-1.0, 25.0)] {
+        t.pointer(&cx, &ev(PointerKind::Move, x, y));
+        let ov = t.overlays(&cx);
+        assert!(ov.iter().any(|o| matches!(o, Overlay::Swatch { .. })) && ov.iter().any(|o| matches!(o, Overlay::Path { .. })), "{ov:?}");
+        t.hover_ended(&cx);
+        assert!(t.overlays(&cx).is_empty());
+    }
+}
+
+/// A map of a large selection that arrives after the pointer leaves the canvas highlights nothing
+/// under the point where the pointer was last seen.
+#[test]
+fn shape_builder_map_arriving_after_hover_ended_highlights_nothing() {
+    let (d, s) = square_row(40);
+    let p = paint();
+    let cx = ToolContext { revision: (1, 1), ..cx(&d, &s, &p) };
+    let mut t = ShapeBuilderTool::default();
+    t.pointer(&cx, &ev(PointerKind::Move, 15.0, 10.0));
+    assert!(t.waiting() && t.hover.is_none(), "the map is built on another thread");
+    t.hover_ended(&cx);
+    t.poll(&cx, true);
+    assert!(!t.waiting());
+    assert!(t.hover.is_none() && t.overlays(&cx).is_empty(), "{:?}", t.hover);
+}
+
 #[test]
 fn shape_builder_stroke_options_round_trip_and_pick_the_side_under_the_pointer() {
     let (d, s) = corner_rects();
@@ -666,9 +1098,9 @@ fn shape_builder_stroke_options_round_trip_and_pick_the_side_under_the_pointer()
     let acts = t.pointer(&cx, &ev(PointerKind::Up, 0.5, 27.0));
     let [Action::Exec(_, v)] = acts.as_slice() else { panic!("{acts:?}") };
     assert_eq!((&v["splitStroke"], &v["points"]), (&json!(true), &json!([[-1.0, 25.0]])));
-    // A release farther away is a drag, which splits nothing.
+    // A release farther away is a drag, which splits nothing and says it touched no region.
     t.pointer(&cx, &ev(PointerKind::Down, -1.0, 25.0));
-    assert!(t.pointer(&cx, &ev(PointerKind::Up, -1.0, 30.0)).is_empty());
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, -1.0, 30.0)), status(NO_REGION));
     // So is a Straight Line drag that goes away and ends back near the press.
     t.set_option("selection", &json!("straightLine"));
     t.pointer(&cx, &ev(PointerKind::Down, -1.0, 25.0));
@@ -676,11 +1108,12 @@ fn shape_builder_stroke_options_round_trip_and_pick_the_side_under_the_pointer()
     let acts = t.pointer(&cx, &ev(PointerKind::Up, -0.5, 25.5));
     assert!(!acts.iter().any(|a| matches!(a, Action::Exec(_, v) if v.get("splitStroke").is_some())), "{acts:?}");
     t.set_option("selection", &json!("freeform"));
-    // A drag merges as before and sends no switch.
+    // A drag merges as before and sends no switch; it clears the status the drag before it gave.
     t.pointer(&cx, &ev(PointerKind::Down, 25.0, 25.0));
     t.pointer(&cx, &ev(PointerKind::Drag, 75.0, 75.0));
     let acts = t.pointer(&cx, &ev(PointerKind::Up, 75.0, 75.0));
-    let [Action::Exec(_, v)] = acts.as_slice() else { panic!("{acts:?}") };
+    let [Action::Status(m), Action::Exec(_, v)] = acts.as_slice() else { panic!("{acts:?}") };
+    assert!(m.is_empty(), "{m}");
     assert!(v.get("splitStroke").is_none(), "{v}");
 }
 
@@ -691,6 +1124,282 @@ fn hatch_stays_inside_region() {
     let bb = h.bounding_box();
     assert!(bb.x0 >= -1e-6 && bb.y0 >= -1e-6 && bb.x1 <= 40.0 + 1e-6 && bb.y1 <= 20.0 + 1e-6);
     assert!(h.elements().len() > 10);
+}
+
+#[test]
+fn hatch_far_from_the_origin_ends() {
+    // At 1e17 a 4-point gap is below the coordinates' precision: adding it doesn't move the line.
+    let bp = shapes::rectangle(Rect::new(0.0, 1e17, 64.0, 1e17 + 64.0)).to_bezpath();
+    assert!(hatch(&bp, 4.0).elements().len() <= 2 * 402);
+}
+
+/// [`hatch`] as it tested every edge on every scanline, the reference the sweep must match.
+fn hatch_every_edge(path: &BezPath, gap: f64) -> BezPath {
+    let mut out = BezPath::new();
+    let b = path.bounding_box();
+    if b.width() <= 0.0 || b.height() <= 0.0 {
+        return out;
+    }
+    let s = std::f64::consts::FRAC_1_SQRT_2;
+    let rot = |p: Point| Point::new((p.x + p.y) * s, (p.y - p.x) * s);
+    let unrot = |p: Point| Point::new((p.x - p.y) * s, (p.x + p.y) * s);
+    let mut edges: Vec<(Point, Point)> = vec![];
+    let mut first = Point::ZERO;
+    let mut last = Point::ZERO;
+    kurbo::flatten(path.iter(), gap.max(1e-3) * 0.1, |el| match el {
+        kurbo::PathEl::MoveTo(p) => {
+            if last != first {
+                edges.push((rot(last), rot(first)));
+            }
+            first = p;
+            last = p;
+        }
+        kurbo::PathEl::LineTo(p) => {
+            edges.push((rot(last), rot(p)));
+            last = p;
+        }
+        kurbo::PathEl::ClosePath => {
+            if last != first {
+                edges.push((rot(last), rot(first)));
+            }
+            last = first;
+        }
+        _ => {}
+    });
+    if last != first {
+        edges.push((rot(last), rot(first)));
+    }
+    let (mut y0, mut y1) = (f64::INFINITY, f64::NEG_INFINITY);
+    for (a, c) in &edges {
+        y0 = y0.min(a.y.min(c.y));
+        y1 = y1.max(a.y.max(c.y));
+    }
+    let gap = gap.max((y1 - y0) / 400.0).max(1e-6);
+    let start = (y0 / gap).floor() * gap + gap * 0.5;
+    let mut xs: Vec<f64> = vec![];
+    for i in 0..402u32 {
+        let y = start + f64::from(i) * gap;
+        if y.partial_cmp(&y1) != Some(std::cmp::Ordering::Less) {
+            break;
+        }
+        xs.clear();
+        for (a, c) in &edges {
+            if (a.y <= y) != (c.y <= y) {
+                xs.push(a.x + (y - a.y) / (c.y - a.y) * (c.x - a.x));
+            }
+        }
+        xs.sort_by(f64::total_cmp);
+        for pair in xs.as_chunks::<2>().0 {
+            out.move_to(unrot(Point::new(pair[0], y)));
+            out.line_to(unrot(Point::new(pair[1], y)));
+        }
+    }
+    out
+}
+
+/// A path's elements with every coordinate as its bits, so NaN and -0.0 compare exactly.
+fn path_bits(p: &BezPath) -> Vec<(u8, Vec<u64>)> {
+    let bits = |pts: &[Point]| pts.iter().flat_map(|p| [p.x.to_bits(), p.y.to_bits()]).collect();
+    p.elements()
+        .iter()
+        .map(|el| match *el {
+            kurbo::PathEl::MoveTo(a) => (0, bits(&[a])),
+            kurbo::PathEl::LineTo(a) => (1, bits(&[a])),
+            kurbo::PathEl::QuadTo(a, b) => (2, bits(&[a, b])),
+            kurbo::PathEl::CurveTo(a, b, c) => (3, bits(&[a, b, c])),
+            kurbo::PathEl::ClosePath => (4, vec![]),
+        })
+        .collect()
+}
+
+/// A closed polygon through `pts`.
+fn polygon(pts: impl IntoIterator<Item = Point>) -> BezPath {
+    let mut bp = BezPath::new();
+    for (i, p) in pts.into_iter().enumerate() {
+        if i == 0 {
+            bp.move_to(p);
+        } else {
+            bp.line_to(p);
+        }
+    }
+    bp.close_path();
+    bp
+}
+
+/// A polygon of `n` sides inscribed in the circle of radius `r` about the origin.
+fn circle_polygon(n: u32, r: f64) -> BezPath {
+    polygon((0..n).map(|i| {
+        let t = std::f64::consts::TAU * f64::from(i) / f64::from(n);
+        Point::new(r * t.cos(), r * t.sin())
+    }))
+}
+
+/// The paths the hatch is checked on: many edges, a random star, holes, several subpaths, a
+/// sliver, curves, edges along the hatch, repeated outlines, an open path, far coordinates, an
+/// empty path and NaN and infinite coordinates.
+fn hatch_cases() -> Vec<(&'static str, BezPath)> {
+    let mut seed = 0x2545_f491_4f6c_dd1d_u64;
+    let mut rand = move || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        (seed >> 11) as f64 / (1u64 << 53) as f64
+    };
+    let star = polygon((0..300).map(|i| {
+        let t = std::f64::consts::TAU * f64::from(i) / 300.0;
+        let r = 100.0 + 300.0 * rand();
+        Point::new(r * t.cos(), r * t.sin())
+    }));
+    let mut holes = shapes::rectangle(Rect::new(0.0, 0.0, 300.0, 200.0)).to_bezpath();
+    holes.extend(polygon([(50.0, 50.0), (50.0, 150.0), (120.0, 150.0), (120.0, 50.0)].map(Point::from)));
+    holes.extend(polygon([(180.0, 40.0), (260.0, 100.0), (180.0, 160.0)].map(Point::from)));
+    holes.extend(circle_polygon(40, 30.0).iter().map(|el| match el {
+        kurbo::PathEl::MoveTo(p) => kurbo::PathEl::MoveTo(p + kurbo::Vec2::new(400.0, 100.0)),
+        kurbo::PathEl::LineTo(p) => kurbo::PathEl::LineTo(p + kurbo::Vec2::new(400.0, 100.0)),
+        other => other,
+    }));
+    let mut repeated = BezPath::new();
+    for _ in 0..7 {
+        repeated.extend(shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 50.0)).to_bezpath());
+    }
+    let mut open = BezPath::new();
+    open.move_to((0.0, 0.0));
+    open.line_to((120.0, 10.0));
+    open.line_to((60.0, 90.0));
+    vec![
+        ("2,000-sided circle", circle_polygon(2000, 500.0)),
+        ("300-point star", star),
+        ("holes and subpaths", holes),
+        ("sliver", polygon([(0.0, 0.0), (900.0, 1.0), (900.0, 1.002)].map(Point::from))),
+        ("curves", kurbo::Circle::new((10.0, -20.0), 300.0).to_path(0.01)),
+        ("edges along the hatch", polygon([(0.0, 0.0), (10.0, 10.0), (0.0, 20.0), (-10.0, 10.0)].map(Point::from))),
+        ("repeated outlines", repeated),
+        ("open path", open),
+        ("far from the origin", shapes::rectangle(Rect::new(0.0, 1e17, 64.0, 1e17 + 64.0)).to_bezpath()),
+        ("empty", BezPath::new()),
+        ("NaN", polygon([(0.0, 0.0), (100.0, f64::NAN), (100.0, 100.0), (0.0, 80.0)].map(Point::from))),
+        ("infinite", polygon([(0.0, 0.0), (f64::INFINITY, 50.0), (100.0, 100.0)].map(Point::from))),
+    ]
+}
+
+#[test]
+fn hatch_matches_testing_every_edge() {
+    for (name, bp) in hatch_cases() {
+        for gap in [0.5, 4.0, 40.0] {
+            assert_eq!(path_bits(&hatch(&bp, gap)), path_bits(&hatch_every_edge(&bp, gap)), "{name} at gap {gap}");
+        }
+    }
+}
+
+#[test]
+fn hatch_tests_only_the_edges_spanning_each_line() {
+    let bp = circle_polygon(2000, 500.0);
+    let before = map::HATCH_EDGE_TESTS.with(std::cell::Cell::get);
+    let h = hatch(&bp, 4.0);
+    let tests = map::HATCH_EDGE_TESTS.with(std::cell::Cell::get) - before;
+    // Each line crosses the circle once, so it has one segment.
+    let lines = h.elements().len() / 2;
+    assert!(lines > 200, "{lines}");
+    assert!(tests * 20 < lines * 2000, "{tests} edge tests on {lines} lines of 2,000 edges");
+}
+
+#[test]
+fn hatch_sweep_finds_the_crossings_of_every_edge() {
+    let p = Point::new;
+    let edges = vec![
+        (p(0.0, 0.0), p(1.0, 1.0)),
+        (p(1.0, 1.0), p(0.0, 2.0)),
+        (p(3.0, 2.0), p(3.0, -1.0)),
+        (p(5.0, 1.0), p(9.0, 1.0)),
+        (p(2.0, -0.0), p(2.0, 0.0)),
+        (p(4.0, -0.0), p(4.0, 3.0)),
+        (p(6.0, 0.5), p(6.0, 0.5)),
+        (p(7.0, f64::NAN), p(7.0, 2.0)),
+        (p(8.0, 0.0), p(8.0, f64::INFINITY)),
+        (p(f64::NAN, 0.0), p(1.0, 2.0)),
+        (p(3.0, 2.0), p(3.0, -1.0)),
+        (p(3.0, 2.0), p(3.0, -1.0)),
+    ];
+    let mut sweep = map::EdgeSweep::new(edges.clone());
+    let mut xs = vec![];
+    for y in [-2.0, -1.0, -0.0, 0.0, 0.5, 1.0, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0] {
+        let mut old: Vec<f64> =
+            edges.iter().filter(|(a, c)| (a.y <= y) != (c.y <= y)).map(|(a, c)| a.x + (y - a.y) / (c.y - a.y) * (c.x - a.x)).collect();
+        xs.clear();
+        sweep.crossings(y, &mut xs);
+        old.sort_by(f64::total_cmp);
+        xs.sort_by(f64::total_cmp);
+        let bits = |v: &[f64]| v.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
+        assert_eq!(bits(&xs), bits(&old), "at y = {y}");
+    }
+}
+
+fn thread_cpu() -> Option<std::time::Duration> {
+    let stat = std::fs::read_to_string("/proc/thread-self/schedstat").ok()?;
+    stat.split_whitespace().next()?.parse().ok().map(std::time::Duration::from_nanos)
+}
+
+/// The time `f` takes: this thread's CPU time where Linux reports it, otherwise the wall clock.
+fn cpu_time(f: impl FnOnce()) -> std::time::Duration {
+    match thread_cpu() {
+        Some(before) => {
+            f();
+            thread_cpu().map_or(std::time::Duration::ZERO, |after| after.saturating_sub(before))
+        }
+        None => {
+            let start = std::time::Instant::now();
+            f();
+            start.elapsed()
+        }
+    }
+}
+
+/// Timings of 1,000 hatches by the sweep and by testing every edge, on a 2,000-sided circle of
+/// radius 500 and on a 40-sided one, run in turn, 7 runs each. Ignored by default; it prints the
+/// median, fastest and slowest run and sets no bound on them:
+/// `cargo test --release -p vectorcraft-tools --lib hatch_perf -- --ignored --nocapture`.
+#[test]
+#[ignore = "a benchmark: run with --ignored --nocapture"]
+fn hatch_perf() {
+    const RUNS: usize = 7;
+    let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.0;
+    eprintln!("hatch_perf: {}", if thread_cpu().is_some() { "thread CPU time" } else { "wall clock" });
+    for (sides, r) in [(2000, 500.0), (2000, 100.0), (40, 100.0)] {
+        let bp = circle_polygon(sides, r);
+        assert_eq!(path_bits(&hatch(&bp, 4.0)), path_bits(&hatch_every_edge(&bp, 4.0)));
+        let (mut old, mut new) = (vec![], vec![]);
+        let every = || {
+            for _ in 0..1000 {
+                std::hint::black_box(hatch_every_edge(std::hint::black_box(&bp), 4.0));
+            }
+        };
+        let sweep = || {
+            for _ in 0..1000 {
+                std::hint::black_box(hatch(std::hint::black_box(&bp), 4.0));
+            }
+        };
+        for run in 0..RUNS {
+            // The two take turns going first.
+            if run % 2 == 0 {
+                old.push(cpu_time(every));
+                new.push(cpu_time(sweep));
+            } else {
+                new.push(cpu_time(sweep));
+                old.push(cpu_time(every));
+            }
+        }
+        old.sort();
+        new.sort();
+        eprintln!(
+            "hatch_perf: {sides:>5} sides r {r:>5}: every edge {:>9.3} ms ({:.3}-{:.3}), sweep {:>9.3} ms ({:.3}-{:.3})",
+            ms(old[RUNS / 2]),
+            ms(old[0]),
+            ms(old[RUNS - 1]),
+            ms(new[RUNS / 2]),
+            ms(new[0]),
+            ms(new[RUNS - 1]),
+        );
+    }
 }
 
 /// An empty hidden sources group for a Live Paint group made in a test.
@@ -744,6 +1453,25 @@ fn live_square(d: &mut Document, r: Rect) -> (NodeId, [NodeId; 4]) {
 }
 
 #[test]
+fn bucket_long_drag_keeps_turns_and_release_after_the_point_limit() {
+    let (d, gid, ..) = live_group_doc();
+    let s = Selection::default();
+    let paint = paint();
+    let cx = cx(&d, &s, &paint);
+    let mut t = LivePaintBucketTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, 25.0, 25.0));
+    for i in 1..4096 {
+        t.pointer(&cx, &ev(PointerKind::Drag, 25.0 + f64::from(i) / 10000.0, 25.0));
+    }
+    t.pointer(&cx, &ev(PointerKind::Drag, 25.0, 100.0));
+    t.pointer(&cx, &ev(PointerKind::Drag, 75.0, 100.0));
+    let acts = t.pointer(&cx, &ev(PointerKind::Up, 75.0, 25.0));
+    let [Action::Preview(id, params), Action::Commit] = acts.as_slice() else { panic!("release must extend the drag before committing") };
+    assert_eq!(id, "livePaint.fill");
+    assert_eq!(params["group"], gid.0);
+}
+
+#[test]
 fn bucket_click_fills_face_and_shift_click_strokes_edge() {
     let (d, gid, f2, _e) = live_group_doc();
     assert_eq!(live_paint_at(&d, Point::new(75.0, 25.0)), Some(gid));
@@ -756,13 +1484,901 @@ fn bucket_click_fills_face_and_shift_click_strokes_edge() {
     let ov = t.overlays(&cx);
     assert!(matches!(&ov[0], Overlay::Path { color: HIGHLIGHT_RED, .. }));
     let acts = t.pointer(&cx, &ev(PointerKind::Down, 75.0, 25.0));
-    let Action::Exec(id, v) = &acts[0] else { panic!() };
+    let [Action::Begin(_), Action::Preview(id, v)] = acts.as_slice() else { panic!("{acts:?}") };
     assert_eq!(id, "livePaint.fill");
     assert_eq!(v["group"], gid.0);
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 75.0, 25.0)), vec![Action::Commit]);
     let shift = Mods { shift: true, ..Default::default() };
     let acts = t.pointer(&cx, &ev(PointerKind::Down, 51.0, 25.0).with_mods(shift));
-    let Action::Exec(id, _) = &acts[0] else { panic!() };
+    let [Action::Begin(_), Action::Preview(id, _)] = acts.as_slice() else { panic!("{acts:?}") };
     assert_eq!(id, "livePaint.strokeEdge");
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 51.0, 25.0).with_mods(shift)), vec![Action::Commit]);
+}
+
+/// A drag reaches the visible edges its path crosses or passes within 0.0001 pt of, including the
+/// middle of a curved edge it runs past without crossing; a hidden edge and an edge farther away are
+/// not reached.
+#[test]
+fn visible_edges_along_finds_crossed_and_near_edges() {
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let mut arc = BezPath::new();
+    arc.move_to((100.0, 0.0));
+    // Farthest right at (130, 50), where it runs straight down.
+    arc.curve_to((140.0, 0.0), (140.0, 100.0), (100.0, 100.0));
+    let mut kids = vec![empty_sources(&mut d)];
+    let mut ids = vec![];
+    for (path, visible) in [
+        (shapes::line(Point::new(0.0, 0.0), Point::new(0.0, 100.0)), true),
+        (shapes::line(Point::new(50.0, 0.0), Point::new(50.0, 100.0)), false),
+        (vectorcraft_geom::PathData::from_bezpath(&arc), true),
+        (shapes::line(Point::new(0.0, 200.0), Point::new(100.0, 200.0)), true),
+    ] {
+        let id = d.alloc_id();
+        let mut edge = Node::path(id, path, Appearance::default());
+        edge.name = Some(EDGE_NAME.into());
+        edge.visible = visible;
+        kids.push(Arc::new(edge));
+        ids.push(id);
+    }
+    let gid = d.alloc_id();
+    let mut g = Node::group(gid, kids);
+    g.name = Some(LIVE_PAINT_NAME.into());
+    d.insert(Some(l), 0, g).unwrap();
+    let group = d.node(gid).unwrap();
+    let reached = |x: f64| {
+        let chunks = vec![
+            vec![Point::new(-10.0, 50.0), Point::new(60.0, 50.0), Point::new(60.0, -20.0)],
+            vec![Point::new(60.0, -20.0), Point::new(x, -20.0), Point::new(x, 60.0)],
+        ];
+        visible_edges_along(group, &chunks).iter().map(|e| e.id).collect::<Vec<_>>()
+    };
+    assert_eq!(reached(130.00005), vec![ids[0], ids[2]]);
+    assert_eq!(reached(130.001), vec![ids[0]]);
+}
+
+/// A drag that passes 0.0002 pt before the start of a long curved edge does not reach it, although
+/// the curve extended a tiny step past its start meets the drag.
+#[test]
+fn visible_edges_along_skips_an_edge_the_drag_meets_only_past_its_end() {
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let mut curve = BezPath::new();
+    curve.move_to((0.0, 0.0));
+    curve.curve_to((100000.0, 0.0), (200000.0, 100.0), (300000.0, 100.0));
+    let id = d.alloc_id();
+    let mut edge = Node::path(id, vectorcraft_geom::PathData::from_bezpath(&curve), Appearance::default());
+    edge.name = Some(EDGE_NAME.into());
+    let gid = d.alloc_id();
+    let mut g = Node::group(gid, vec![empty_sources(&mut d), Arc::new(edge)]);
+    g.name = Some(LIVE_PAINT_NAME.into());
+    d.insert(Some(l), 0, g).unwrap();
+    let group = d.node(gid).unwrap();
+    let reached = |x: f64| visible_edges_along(group, &[vec![Point::new(x, -1.0), Point::new(x, 1.0)]]).iter().map(|e| e.id).collect::<Vec<_>>();
+    assert_eq!(reached(-0.0002), Vec::<NodeId>::new());
+    assert_eq!(reached(-0.00005), vec![id]);
+    assert_eq!(reached(0.0002), vec![id]);
+}
+
+/// A double-click on an edge after a press whose drag stroked another edge of the line joins
+/// through that edge as the stroke paint it had before the drag.
+#[test]
+fn bucket_edge_double_click_joins_through_an_edge_the_first_drag_stroked() {
+    let black = vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 0.0));
+    let green = vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 1.0, 0.0));
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let mut kids = vec![empty_sources(&mut d)];
+    let mut ids = vec![];
+    for (x0, x1) in [(0.0, 30.0), (30.0, 70.0), (70.0, 100.0)] {
+        let id = d.alloc_id();
+        let mut a = Appearance::default();
+        a.set_stroke(black.clone());
+        let mut edge = Node::path(id, shapes::line(Point::new(x0, 100.0), Point::new(x1, 100.0)), a);
+        edge.name = Some(EDGE_NAME.into());
+        kids.push(Arc::new(edge));
+        ids.push(id);
+    }
+    let gid = d.alloc_id();
+    let mut g = Node::group(gid, kids);
+    g.name = Some(LIVE_PAINT_NAME.into());
+    d.insert(Some(l), 0, g).unwrap();
+    let mut later = d.clone();
+    for id in &ids[1..] {
+        later.node_mut(*id).unwrap().appearance.set_stroke(green.clone());
+    }
+    let s = Selection::default();
+    let p = paint();
+    let (cx, later) = (cx(&d, &s, &p), cx(&later, &s, &p));
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = LivePaintBucketTool::default();
+    // The first press strokes the right edge and its drag crosses the middle one.
+    for (k, x, y) in
+        [(PointerKind::Down, 85.0, 100.0), (PointerKind::Drag, 85.0, 110.0), (PointerKind::Drag, 50.0, 110.0), (PointerKind::Up, 50.0, 90.0)]
+    {
+        t.pointer(&cx, &ev(k, x, y).with_mods(shift));
+    }
+    t.pointer(&later, &ev(PointerKind::Down, 85.0, 100.0).with_mods(shift));
+    t.pointer(&later, &ev(PointerKind::Up, 85.0, 100.0).with_mods(shift));
+    let like = serde_json::to_value(&black).unwrap();
+    assert_eq!(
+        t.pointer(&later, &ev(PointerKind::DoubleClick, 85.0, 100.0).with_mods(shift)),
+        vec![Action::Exec(
+            "livePaint.strokeEdge".into(),
+            json!({ "group": gid.0, "point": [85.0, 100.0], "tolerance": 4.0, "scope": "connected", "through": [ids[1].0], "match": like })
+        )]
+    );
+}
+
+/// A drag from an edge previews `livePaint.strokeEdge` with the drag's path as it goes and commits
+/// once on the release; Escape cancels it, and what the drag paints is fixed at the press.
+#[test]
+fn bucket_edge_drag_previews_points_and_commits_once() {
+    let (d, gid, ..) = live_group_doc();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Default::default() };
+    let stroke = |points: Value| {
+        let mut v = json!({ "group": gid.0, "point": [51.0, 25.0], "tolerance": 4.0 });
+        if !points.is_null() {
+            v["points"] = points;
+        }
+        Action::Preview("livePaint.strokeEdge".into(), v)
+    };
+    let mut t = LivePaintBucketTool::default();
+    assert_eq!(
+        t.pointer(&cx, &ev(PointerKind::Down, 51.0, 25.0).with_mods(shift)),
+        vec![Action::Begin("Live Paint Bucket".into()), stroke(Value::Null)]
+    );
+    assert!(t.busy());
+    // Shift let go during the drag: the drag still paints edges.
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Drag, 75.0, 25.0)), vec![stroke(json!([[51.0, 25.0], [75.0, 25.0]]))]);
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 120.0, 25.0)), vec![stroke(json!([[51.0, 25.0], [75.0, 25.0], [120.0, 25.0]])), Action::Commit]);
+    assert!(!t.busy());
+    // Escape before the release cancels the drag, and the release then commits nothing.
+    assert_eq!(
+        t.pointer(&cx, &ev(PointerKind::Down, 51.0, 25.0).with_mods(shift)),
+        vec![Action::Begin("Live Paint Bucket".into()), stroke(Value::Null)]
+    );
+    t.pointer(&cx, &ev(PointerKind::Drag, 75.0, 25.0).with_mods(shift));
+    assert!(t.claims_key(&cx, ToolKey::Escape));
+    assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+    assert!(t.pointer(&cx, &ev(PointerKind::Up, 120.0, 25.0).with_mods(shift)).is_empty());
+    // With both options on, a drag from a face fills faces, even across an edge.
+    t.set_option("paintStrokes", &json!(true));
+    let acts = t.pointer(&cx, &ev(PointerKind::Down, 75.0, 25.0));
+    let [Action::Begin(_), Action::Preview(id, _)] = acts.as_slice() else { panic!("{acts:?}") };
+    assert_eq!(id, "livePaint.fill");
+    let acts = t.pointer(&cx, &ev(PointerKind::Drag, 51.0, 25.0));
+    let [Action::Preview(id, _)] = acts.as_slice() else { panic!("{acts:?}") };
+    assert_eq!(id, "livePaint.fill");
+    t.pointer(&cx, &ev(PointerKind::Up, 51.0, 25.0));
+}
+
+/// A double-click runs a click's command with `scope: "connected"` and a triple-click with
+/// `"samePaint"`, matching the paint the face or edge had before the first click there.
+#[test]
+fn bucket_double_and_triple_click_widen_what_a_click_paints() {
+    let (d, gid, f2, e) = live_group_doc();
+    let red = vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0));
+    let mut painted = d.clone();
+    painted.node_mut(f2).unwrap().appearance.set_fill(red.clone());
+    painted.node_mut(e).unwrap().appearance.set_stroke(red.clone());
+    let s = Selection::default();
+    let p = paint();
+    let (cx, later) = (cx(&d, &s, &p), cx(&painted, &s, &p));
+    let face_before = serde_json::to_value(d.node(f2).unwrap().appearance.fill_paint()).unwrap();
+    let edge_before = serde_json::to_value(d.node(e).unwrap().appearance.stroke_paint()).unwrap();
+    let red_json = serde_json::to_value(&red).unwrap();
+    assert_ne!(face_before, red_json);
+    assert_ne!(edge_before, red_json);
+    let fill = |scope: &str, like: Option<&Value>| {
+        let mut v = json!({ "group": gid.0, "point": [75.0, 25.0], "scope": scope });
+        if let Some(like) = like {
+            v["match"] = like.clone();
+        }
+        vec![Action::Exec("livePaint.fill".into(), v)]
+    };
+    let click = |t: &mut LivePaintBucketTool, cx: &ToolContext, x: f64, m: Mods| {
+        t.pointer(cx, &ev(PointerKind::Down, x, 25.0).with_mods(m));
+        t.pointer(cx, &ev(PointerKind::Up, x, 25.0).with_mods(m));
+    };
+    let mut t = LivePaintBucketTool::default();
+    // The clicks paint the face as they arrive; the triple-click matches the fill from before them.
+    click(&mut t, &cx, 75.0, Mods::default());
+    click(&mut t, &later, 75.0, Mods::default());
+    assert_eq!(t.pointer(&later, &ev(PointerKind::DoubleClick, 75.0, 25.0)), fill("connected", None));
+    click(&mut t, &later, 75.0, Mods::default());
+    assert_eq!(t.pointer(&later, &ev(PointerKind::TripleClick, 75.0, 25.0)), fill("samePaint", Some(&face_before)));
+    // A new click there starts again from the fill it finds.
+    click(&mut t, &later, 75.0, Mods::default());
+    assert_eq!(t.pointer(&later, &ev(PointerKind::TripleClick, 75.0, 25.0)), fill("samePaint", Some(&red_json)));
+    // A click before the triple-click's own three is not part of it.
+    let mut t = LivePaintBucketTool::default();
+    click(&mut t, &cx, 75.0, Mods::default());
+    for _ in 0..3 {
+        click(&mut t, &later, 75.0, Mods::default());
+    }
+    assert_eq!(t.pointer(&later, &ev(PointerKind::TripleClick, 75.0, 25.0)), fill("samePaint", Some(&red_json)));
+    // Shift: the edge, matching its stroke from before the first click.
+    let shift = Mods { shift: true, ..Default::default() };
+    let stroke = |scope: &str, like: &Value| {
+        vec![Action::Exec(
+            "livePaint.strokeEdge".into(),
+            json!({ "group": gid.0, "point": [51.0, 25.0], "tolerance": 4.0, "scope": scope, "match": like }),
+        )]
+    };
+    click(&mut t, &cx, 51.0, shift);
+    click(&mut t, &later, 51.0, shift);
+    assert_eq!(t.pointer(&later, &ev(PointerKind::DoubleClick, 51.0, 25.0).with_mods(shift)), stroke("connected", &edge_before));
+    click(&mut t, &later, 51.0, shift);
+    assert_eq!(t.pointer(&later, &ev(PointerKind::TripleClick, 51.0, 25.0).with_mods(shift)), stroke("samePaint", &edge_before));
+    // With Alt or Space held, or with both options off, a double-click or triple-click paints nothing.
+    let alt = Mods { alt: true, ..Default::default() };
+    let space = Mods { space: true, ..Default::default() };
+    for k in [PointerKind::DoubleClick, PointerKind::TripleClick] {
+        assert!(t.pointer(&cx, &ev(k, 75.0, 25.0).with_mods(alt)).is_empty(), "{k:?}");
+        assert!(t.pointer(&cx, &ev(k, 75.0, 25.0).with_mods(Mods { cmd: true, ..Default::default() })).is_empty(), "{k:?} with Cmd");
+        assert!(t.pointer(&cx, &ev(k, 75.0, 25.0).with_mods(space)).is_empty(), "{k:?} with Space");
+        assert!(t.pointer(&cx, &ev(k, 51.0, 25.0).with_mods(Mods { shift: true, ..space })).is_empty(), "{k:?} with Shift and Space");
+    }
+    // A press with Space held paints nothing either.
+    for m in [space, Mods { shift: true, ..space }] {
+        for (k, x) in [(PointerKind::Down, 75.0), (PointerKind::Up, 75.0), (PointerKind::Down, 51.0), (PointerKind::Up, 51.0)] {
+            assert!(t.pointer(&cx, &ev(k, x, 25.0).with_mods(m)).is_empty(), "{k:?} at {x} with {m:?}");
+        }
+    }
+    t.set_option("paintFills", &json!(false));
+    for k in [PointerKind::DoubleClick, PointerKind::TripleClick] {
+        assert!(t.pointer(&cx, &ev(k, 75.0, 25.0)).is_empty(), "{k:?}");
+    }
+    // Outside every face, nothing is painted.
+    t.set_option("paintFills", &json!(true));
+    assert!(t.pointer(&cx, &ev(PointerKind::DoubleClick, 400.0, 400.0)).is_empty());
+}
+
+/// A triple-click whose third click lands on a face the double-click's flood filled matches that
+/// face's fill from before the double-click.
+#[test]
+fn bucket_triple_click_on_a_face_the_double_click_flooded_matches_its_earlier_fill() {
+    let (mut d, gid, f2, _) = live_group_doc();
+    let red = vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0));
+    let blue = vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0));
+    let f1 = crate::builder::face_at(d.node(gid).unwrap(), Point::new(25.0, 25.0)).unwrap().id;
+    for f in [f1, f2] {
+        d.node_mut(f).unwrap().appearance.set_fill(red.clone());
+    }
+    let mut first = d.clone();
+    first.node_mut(f1).unwrap().appearance.set_fill(blue.clone());
+    let mut flooded = first.clone();
+    flooded.node_mut(f2).unwrap().appearance.set_fill(blue.clone());
+    let s = Selection::default();
+    let p = paint();
+    let (start, first, flooded) = (cx(&d, &s, &p), cx(&first, &s, &p), cx(&flooded, &s, &p));
+    let mut t = LivePaintBucketTool::default();
+    let click = |t: &mut LivePaintBucketTool, cx: &ToolContext, x: f64| {
+        t.pointer(cx, &ev(PointerKind::Down, x, 25.0));
+        t.pointer(cx, &ev(PointerKind::Up, x, 25.0));
+    };
+    click(&mut t, &start, 25.0);
+    click(&mut t, &first, 25.0);
+    t.pointer(&first, &ev(PointerKind::DoubleClick, 25.0, 25.0));
+    click(&mut t, &flooded, 75.0);
+    let like = serde_json::to_value(&red).unwrap();
+    assert_eq!(
+        t.pointer(&flooded, &ev(PointerKind::TripleClick, 75.0, 25.0)),
+        vec![Action::Exec("livePaint.fill".into(), json!({ "group": gid.0, "point": [75.0, 25.0], "scope": "samePaint", "match": like }))]
+    );
+}
+
+/// On an edge that stores a stroke paint but draws none (its stroke hidden, or the edge fully
+/// transparent), a double-click or triple-click matches no paint, with or without the clicks
+/// before it.
+#[test]
+fn bucket_multi_click_on_an_edge_matches_the_paint_it_draws() {
+    let (mut d, gid, _, e) = live_group_doc();
+    d.node_mut(e).unwrap().appearance.set_stroke(vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 0.0)));
+    let mut hidden = d.clone();
+    hidden.node_mut(e).unwrap().appearance.stroke_mut().unwrap().visible = false;
+    let mut clear = d.clone();
+    clear.node_mut(e).unwrap().opacity = 0.0;
+    let none = serde_json::to_value(vectorcraft_color::Paint::None).unwrap();
+    let s = Selection::default();
+    let p = paint();
+    let shift = Mods { shift: true, ..Default::default() };
+    let stroke = |scope: &str| {
+        vec![Action::Exec(
+            "livePaint.strokeEdge".into(),
+            json!({ "group": gid.0, "point": [51.0, 25.0], "tolerance": 4.0, "scope": scope, "match": none }),
+        )]
+    };
+    for doc in [&hidden, &clear] {
+        let cx = cx(doc, &s, &p);
+        let mut t = LivePaintBucketTool::default();
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::DoubleClick, 51.0, 25.0).with_mods(shift)), stroke("connected"));
+        for _ in 0..3 {
+            t.pointer(&cx, &ev(PointerKind::Down, 51.0, 25.0).with_mods(shift));
+            t.pointer(&cx, &ev(PointerKind::Up, 51.0, 25.0).with_mods(shift));
+        }
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::TripleClick, 51.0, 25.0).with_mods(shift)), stroke("samePaint"));
+    }
+}
+
+/// A triple-click whose first click makes the Live Paint group matches the fill of the face the
+/// group makes there: an open path in front, whose outline bounds no face, does not give it.
+#[test]
+fn bucket_triple_click_on_a_made_group_skips_open_paths() {
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_geom::{PathData, SubPath};
+    let (red, blue) = (Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let back = d.alloc_id();
+    let mut look = Appearance::default_art();
+    look.set_fill(red.clone());
+    d.insert(Some(l), 0, Node::path(back, shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), look)).unwrap();
+    // An open U around (75, 25), filled blue.
+    let u = [Point::new(60.0, 5.0), Point::new(60.0, 45.0), Point::new(90.0, 45.0), Point::new(90.0, 5.0)];
+    let front = d.alloc_id();
+    let mut look = Appearance::default_art();
+    look.set_fill(blue);
+    d.insert(Some(l), 1, Node::path(front, PathData::single(SubPath::polyline(&u, false)), look)).unwrap();
+    // The face the planar map makes there takes its fill from the square, as the group's would.
+    let shapes: Vec<vectorcraft_pathops::Shape> = [back, front]
+        .iter()
+        .enumerate()
+        .filter_map(|(k, id)| node_outline(d.node(*id)?).map(|(path, rule)| vectorcraft_pathops::Shape::new(path, rule, k as u64)))
+        .collect();
+    let (regions, _) = vectorcraft_pathops::live_paint(&shapes);
+    let face = regions.iter().find(|r| r.contains(Point::new(75.0, 25.0))).expect("a face at (75, 25)");
+    assert_eq!(face.top(), Some(0), "the square is the face's top shape");
+    let mut s = Selection::default();
+    s.set([back, front]);
+    let p = paint();
+    let (made, ..) = live_group_doc();
+    let none = Selection::default();
+    let (cx, later) = (cx(&d, &s, &p), cx(&made, &none, &p));
+    let mut t = LivePaintBucketTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, 75.0, 25.0));
+    t.pointer(&cx, &ev(PointerKind::Up, 75.0, 25.0));
+    for _ in 0..2 {
+        t.pointer(&later, &ev(PointerKind::Down, 75.0, 25.0));
+        t.pointer(&later, &ev(PointerKind::Up, 75.0, 25.0));
+    }
+    let acts = t.pointer(&later, &ev(PointerKind::TripleClick, 75.0, 25.0));
+    let [Action::Exec(id, v)] = acts.as_slice() else { panic!("{acts:?}") };
+    assert_eq!(id, "livePaint.fill");
+    assert_eq!(v["match"], serde_json::to_value(&red).unwrap());
+}
+
+/// A triple-click whose first click makes the Live Paint group on one face and whose other two
+/// clicks fill another face matches the fill the second face had before the first click on it,
+/// not the fill under the first click or the fill the clicks gave it.
+#[test]
+fn bucket_triple_click_after_making_the_group_on_another_face_matches_its_own_face() {
+    use vectorcraft_color::{Color, Paint};
+    let (red, blue) = (Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let square = d.alloc_id();
+    let mut look = Appearance::default_art();
+    look.set_fill(red.clone());
+    d.insert(Some(l), 0, Node::path(square, shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 50.0)), look)).unwrap();
+    let mut s = Selection::default();
+    s.set([square]);
+    let p = paint();
+    let (made, _, f2, _) = live_group_doc();
+    let mut painted = made.clone();
+    painted.node_mut(f2).unwrap().appearance.set_fill(blue.clone());
+    let none = Selection::default();
+    let (cx, later, after) = (cx(&d, &s, &p), cx(&made, &none, &p), cx(&painted, &none, &p));
+    let mut t = LivePaintBucketTool::default();
+    // The first click makes the group and fills the face at (25, 25); the next two fill (75, 25),
+    // the first of them painting it blue.
+    t.pointer(&cx, &ev(PointerKind::Down, 25.0, 25.0));
+    t.pointer(&cx, &ev(PointerKind::Up, 25.0, 25.0));
+    for ctx in [&later, &after] {
+        t.pointer(ctx, &ev(PointerKind::Down, 75.0, 25.0));
+        t.pointer(ctx, &ev(PointerKind::Up, 75.0, 25.0));
+    }
+    let acts = t.pointer(&after, &ev(PointerKind::TripleClick, 75.0, 25.0));
+    let [Action::Exec(id, v)] = acts.as_slice() else { panic!("{acts:?}") };
+    assert_eq!(id, "livePaint.fill");
+    let own = serde_json::to_value(made.node(f2).unwrap().appearance.fill_paint()).unwrap();
+    assert_ne!(own, serde_json::to_value(&red).unwrap());
+    assert_ne!(own, serde_json::to_value(&blue).unwrap());
+    assert_eq!(v["match"], own);
+}
+
+/// A triple-click whose clicks land on one face, another face, then the first face again matches
+/// the fill the first face had before the first click on it, not the fill that click gave it.
+#[test]
+fn bucket_triple_click_with_a_click_on_another_face_between_matches_the_first_fill() {
+    use vectorcraft_color::{Color, Paint};
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let (d, gid, f2, _) = live_group_doc();
+    let mut painted = d.clone();
+    painted.node_mut(f2).unwrap().appearance.set_fill(red.clone());
+    let s = Selection::default();
+    let p = paint();
+    let (cx, later) = (cx(&d, &s, &p), cx(&painted, &s, &p));
+    let mut t = LivePaintBucketTool::default();
+    // The first click paints the face at (75, 25) red; the second fills the face at (25, 25).
+    for (ctx, x) in [(&cx, 75.0), (&later, 25.0), (&later, 75.0)] {
+        t.pointer(ctx, &ev(PointerKind::Down, x, 25.0));
+        t.pointer(ctx, &ev(PointerKind::Up, x, 25.0));
+    }
+    let acts = t.pointer(&later, &ev(PointerKind::TripleClick, 75.0, 25.0));
+    let own = serde_json::to_value(d.node(f2).unwrap().appearance.fill_paint()).unwrap();
+    assert_ne!(own, serde_json::to_value(&red).unwrap());
+    assert_eq!(
+        acts,
+        vec![Action::Exec("livePaint.fill".into(), json!({ "group": gid.0, "point": [75.0, 25.0], "scope": "samePaint", "match": own }))]
+    );
+}
+
+/// A triple-click whose second press the view tools take (held Space) matches the fill the face had
+/// before the first click: that press counts as one that paints nothing. The pointer leaving the
+/// canvas between three clicks adds no press.
+#[test]
+fn bucket_triple_click_with_a_view_tool_press_between_matches_the_first_fill() {
+    use vectorcraft_color::{Color, Paint};
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let (d, gid, f2, _) = live_group_doc();
+    let mut painted = d.clone();
+    painted.node_mut(f2).unwrap().appearance.set_fill(red.clone());
+    let s = Selection::default();
+    let p = paint();
+    let (cx, later) = (cx(&d, &s, &p), cx(&painted, &s, &p));
+    let own = serde_json::to_value(d.node(f2).unwrap().appearance.fill_paint()).unwrap();
+    assert_ne!(own, serde_json::to_value(&red).unwrap());
+    let want = vec![Action::Exec("livePaint.fill".into(), json!({ "group": gid.0, "point": [75.0, 25.0], "scope": "samePaint", "match": own }))];
+    fn click(t: &mut LivePaintBucketTool, ctx: &ToolContext) {
+        t.pointer(ctx, &ev(PointerKind::Down, 75.0, 25.0));
+        t.pointer(ctx, &ev(PointerKind::Up, 75.0, 25.0));
+    }
+    let mut t = LivePaintBucketTool::default();
+    click(&mut t, &cx);
+    t.press_elsewhere();
+    click(&mut t, &later);
+    assert_eq!(t.pointer(&later, &ev(PointerKind::TripleClick, 75.0, 25.0)), want, "a view tool's press between");
+    let mut t = LivePaintBucketTool::default();
+    click(&mut t, &cx);
+    click(&mut t, &later);
+    t.hover_ended(&later);
+    click(&mut t, &later);
+    assert_eq!(t.pointer(&later, &ev(PointerKind::TripleClick, 75.0, 25.0)), want, "the pointer leaving between");
+}
+
+/// With Space held for the view tools, the pointer outlines no face or edge, as a press there
+/// paints nothing.
+#[test]
+fn bucket_highlights_nothing_with_space_held() {
+    let (d, ..) = live_group_doc();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = LivePaintBucketTool::default();
+    let outlined = |t: &LivePaintBucketTool| t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Path { .. }));
+    let space = Mods { space: true, ..Default::default() };
+    for (x, m) in [(75.0, space), (51.0, Mods { shift: true, ..space })] {
+        t.pointer(&cx, &ev(PointerKind::Move, x, 25.0).with_mods(m));
+        assert!(!outlined(&t), "at {x} with {m:?}");
+    }
+    t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0));
+    assert!(outlined(&t));
+}
+
+/// After a fill drag, the cursor swatch preview shows at the release point, not where the pointer
+/// last moved before the press.
+#[test]
+fn bucket_swatch_preview_follows_the_release_point() {
+    let (d, ..) = live_group_doc();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = LivePaintBucketTool::default();
+    let chip_x = |t: &LivePaintBucketTool| {
+        t.overlays(&cx).iter().find_map(|o| if let Overlay::Swatch { p, selected: true, .. } = o { Some(p.x) } else { None })
+    };
+    t.pointer(&cx, &ev(PointerKind::Move, 25.0, 25.0));
+    assert_eq!(chip_x(&t), Some(25.0));
+    t.pointer(&cx, &ev(PointerKind::Down, 25.0, 25.0));
+    t.pointer(&cx, &ev(PointerKind::Drag, 50.0, 25.0));
+    assert_eq!(chip_x(&t), None, "no chips during the drag");
+    t.pointer(&cx, &ev(PointerKind::Up, 75.0, 25.0));
+    assert_eq!(chip_x(&t), Some(75.0));
+}
+
+/// When the pointer leaves the canvas, the Live Paint Bucket's swatch preview and highlight go.
+#[test]
+fn bucket_hover_ended_drops_the_swatch_preview_and_highlight() {
+    let (d, ..) = live_group_doc();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = LivePaintBucketTool::default();
+    t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0));
+    let ov = t.overlays(&cx);
+    assert!(ov.iter().any(|o| matches!(o, Overlay::Swatch { .. })) && ov.iter().any(|o| matches!(o, Overlay::Path { .. })), "{ov:?}");
+    t.hover_ended(&cx);
+    assert!(t.overlays(&cx).is_empty());
+}
+
+#[test]
+fn bucket_options_choose_what_a_click_paints() {
+    let (d, gid, ..) = live_group_doc();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Default::default() };
+    let fill = |x: f64| {
+        vec![Action::Begin("Live Paint Bucket".into()), Action::Preview("livePaint.fill".into(), json!({ "group": gid.0, "point": [x, 25.0] }))]
+    };
+    let stroke = |x: f64| {
+        vec![
+            Action::Begin("Live Paint Bucket".into()),
+            Action::Preview("livePaint.strokeEdge".into(), json!({ "group": gid.0, "point": [x, 25.0], "tolerance": 4.0 })),
+        ]
+    };
+    let click = |t: &mut LivePaintBucketTool, x: f64, m: Mods| {
+        let acts = t.pointer(&cx, &ev(PointerKind::Down, x, 25.0).with_mods(m));
+        t.pointer(&cx, &ev(PointerKind::Up, x, 25.0).with_mods(m));
+        acts
+    };
+    let hovered = |t: &mut LivePaintBucketTool, x: f64, m: Mods| {
+        t.pointer(&cx, &ev(PointerKind::Move, x, 25.0).with_mods(m));
+        match t.overlays(&cx).as_slice() {
+            [] => None,
+            [Overlay::Path { path, .. }] => Some(path.bounding_box()),
+            ov => panic!("{ov:?}"),
+        }
+    };
+    let (face, edge) = (Some(Rect::new(50.0, 0.0, 100.0, 50.0)), Some(Rect::new(50.0, 0.0, 50.0, 50.0)));
+    let mut t = LivePaintBucketTool::default();
+    assert_eq!(
+        t.options(),
+        json!({"paintFills": true, "paintStrokes": false, "cursorSwatchPreview": true, "highlight": true, "color": "#ff2a2a", "width": 4.0})
+    );
+    // The highlight alone, without the swatch chips.
+    t.set_option("cursorSwatchPreview", &json!(false));
+    // Paint Fills alone: 1 pt from the edge, a click fills the face and Shift-click strokes the edge.
+    assert_eq!((click(&mut t, 51.0, Mods::default()), hovered(&mut t, 51.0, Mods::default())), (fill(51.0), face));
+    assert_eq!((click(&mut t, 51.0, shift), hovered(&mut t, 51.0, shift)), (stroke(51.0), edge));
+    // Paint Strokes alone: a click strokes the edge in reach and paints nothing farther away;
+    // Shift-click fills the face.
+    t.set_option("paintFills", &json!(false));
+    t.set_option("paintStrokes", &json!(true));
+    assert_eq!((click(&mut t, 51.0, Mods::default()), hovered(&mut t, 51.0, Mods::default())), (stroke(51.0), edge));
+    assert_eq!((click(&mut t, 75.0, Mods::default()), hovered(&mut t, 75.0, Mods::default())), (vec![], None));
+    assert_eq!((click(&mut t, 51.0, shift), hovered(&mut t, 51.0, shift)), (fill(51.0), face));
+    // Both: a click strokes the edge in reach, else fills the face; Shift-click fills the face.
+    t.set_option("paintFills", &json!(true));
+    assert_eq!((click(&mut t, 51.0, Mods::default()), hovered(&mut t, 51.0, Mods::default())), (stroke(51.0), edge));
+    assert_eq!((click(&mut t, 75.0, Mods::default()), hovered(&mut t, 75.0, Mods::default())), (fill(75.0), face));
+    assert_eq!((click(&mut t, 51.0, shift), hovered(&mut t, 51.0, shift)), (fill(51.0), face));
+    // Both off: nothing is painted or highlighted.
+    t.set_option("paintFills", &json!(false));
+    t.set_option("paintStrokes", &json!(false));
+    for m in [Mods::default(), shift] {
+        assert_eq!((click(&mut t, 51.0, m), hovered(&mut t, 51.0, m)), (vec![], None));
+    }
+    // A value that is not true or false is ignored.
+    t.set_option("paintFills", &json!("yes"));
+    assert_eq!(t.options()["paintFills"], false);
+}
+
+/// The cursor says what a click paints: a filled bucket over a face it fills, a brush over an
+/// edge it paints, an empty bucket where it paints nothing, under each Paint Fills / Paint Strokes
+/// setting and Shift; Alt keeps the Eyedropper, and Use Precise Cursors turns each into the
+/// crosshair.
+#[test]
+fn bucket_cursor_shows_what_a_click_paints() {
+    let (d, ..) = live_group_doc();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Default::default() };
+    let alt = Mods { alt: true, ..Default::default() };
+    let at = |t: &LivePaintBucketTool, x: f64, m: Mods| t.cursor(&cx, Point::new(x, 25.0), m);
+    let (face, edge, none) = (Cursor::LivePaintBucketFace, Cursor::LivePaintBucketEdge, Cursor::LivePaintBucket);
+    let mut t = LivePaintBucketTool::default();
+    // Paint Fills alone: the face, and with Shift the edge in reach.
+    assert_eq!([at(&t, 51.0, Mods::default()), at(&t, 75.0, Mods::default()), at(&t, 400.0, Mods::default())], [face, face, none]);
+    assert_eq!([at(&t, 51.0, shift), at(&t, 75.0, shift)], [edge, none]);
+    assert_eq!([at(&t, 51.0, alt), at(&t, 400.0, alt)], [Cursor::Eyedropper, Cursor::Eyedropper]);
+    // Paint Strokes alone: the edge in reach, nothing farther away; Shift fills the face.
+    t.set_option("paintFills", &json!(false));
+    t.set_option("paintStrokes", &json!(true));
+    assert_eq!([at(&t, 51.0, Mods::default()), at(&t, 75.0, Mods::default())], [edge, none]);
+    assert_eq!([at(&t, 51.0, shift), at(&t, 75.0, shift)], [face, face]);
+    // Both: the edge in reach, else the face; Shift fills the face.
+    t.set_option("paintFills", &json!(true));
+    assert_eq!([at(&t, 51.0, Mods::default()), at(&t, 75.0, Mods::default()), at(&t, 400.0, Mods::default())], [edge, face, none]);
+    assert_eq!(at(&t, 51.0, shift), face);
+    // Both off: a click paints nothing.
+    t.set_option("paintFills", &json!(false));
+    t.set_option("paintStrokes", &json!(false));
+    assert_eq!([at(&t, 51.0, Mods::default()), at(&t, 75.0, shift)], [none, none]);
+    // Highlight off: the cursor still says what a click paints.
+    let mut t = LivePaintBucketTool::default();
+    t.set_option("highlight", &json!(false));
+    assert_eq!([at(&t, 75.0, Mods::default()), at(&t, 51.0, shift)], [face, edge]);
+    for c in [face, edge, none] {
+        assert_eq!(c.precise(), Cursor::Crosshair, "{c:?}");
+        assert_eq!(c.stand_in(), None, "{c:?} is drawn");
+    }
+}
+
+/// Over a region of selected ordinary paths the cursor is the filled bucket once the pointer has
+/// moved there (the move makes the selection's map), with Highlight on or off; with Paint Strokes
+/// alone, a click there paints nothing and the bucket stays empty.
+#[test]
+fn bucket_cursor_fills_a_region_of_the_selected_paths() {
+    let (d, a, b) = two_rects();
+    let mut s = Selection::default();
+    s.set([a, b]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let pos = Point::new(75.0, 50.0);
+    for highlight in [true, false] {
+        let mut t = LivePaintBucketTool::default();
+        t.set_option("highlight", &json!(highlight));
+        assert_eq!(t.cursor(&cx, pos, Mods::default()), Cursor::LivePaintBucket, "no map yet, highlight {highlight}");
+        t.pointer(&cx, &ev(PointerKind::Move, 75.0, 50.0));
+        t.poll(&cx, true);
+        assert_eq!(t.cursor(&cx, pos, Mods::default()), Cursor::LivePaintBucketFace, "highlight {highlight}");
+        assert_eq!(t.cursor(&cx, Point::new(400.0, 400.0), Mods::default()), Cursor::LivePaintBucket, "highlight {highlight}");
+        t.set_option("paintFills", &json!(false));
+        t.set_option("paintStrokes", &json!(true));
+        assert_eq!(t.cursor(&cx, pos, Mods::default()), Cursor::LivePaintBucket, "highlight {highlight}");
+        assert!(t.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0)).is_empty());
+    }
+}
+
+/// With a Live Paint group and ordinary paths selected, a region of the paths outside the group
+/// is highlighted and shows the filled bucket, as a click there fills it; with only the group
+/// selected, the same point shows the empty bucket.
+#[test]
+fn bucket_fills_a_region_of_a_selection_that_mixes_a_group_and_paths() {
+    let (mut d, a, b) = two_rects_at(200.0);
+    let (g, _) = live_square(&mut d, Rect::new(0.0, 0.0, 50.0, 50.0));
+    let p = paint();
+    let pos = Point::new(275.0, 50.0);
+    let mut s = Selection::default();
+    s.set([g, a, b]);
+    let mixed = cx(&d, &s, &p);
+    let mut t = LivePaintBucketTool::default();
+    t.pointer(&mixed, &ev(PointerKind::Move, pos.x, pos.y));
+    t.poll(&mixed, true);
+    assert!(!t.overlays(&mixed).is_empty(), "the region is highlighted");
+    assert_eq!(t.cursor(&mixed, pos, Mods::default()), Cursor::LivePaintBucketFace);
+    let acts = t.pointer(&mixed, &ev(PointerKind::Down, pos.x, pos.y));
+    assert!(matches!(acts.as_slice(), [Action::Begin(_), Action::Preview(id, v)] if id == "livePaint.fill" && v.get("ids").is_some()), "{acts:?}");
+    let mut s = Selection::default();
+    s.set([g]);
+    let live = cx(&d, &s, &p);
+    let mut t = LivePaintBucketTool::default();
+    t.set_option("cursorSwatchPreview", &json!(false));
+    t.pointer(&live, &ev(PointerKind::Move, pos.x, pos.y));
+    t.poll(&live, true);
+    assert!(t.overlays(&live).is_empty());
+    assert_eq!(t.cursor(&live, pos, Mods::default()), Cursor::LivePaintBucket);
+}
+
+#[test]
+fn bucket_strokes_alone_paints_and_highlights_no_region_of_the_selection() {
+    let (d, a, b) = two_rects();
+    let mut s = Selection::default();
+    s.set([a, b]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = LivePaintBucketTool::default();
+    t.set_option("cursorSwatchPreview", &json!(false));
+    t.pointer(&cx, &ev(PointerKind::Move, 75.0, 50.0));
+    t.poll(&cx, true);
+    assert!(!t.overlays(&cx).is_empty(), "Paint Fills highlights the region");
+    t.set_option("paintFills", &json!(false));
+    t.set_option("paintStrokes", &json!(true));
+    t.pointer(&cx, &ev(PointerKind::Move, 75.0, 50.0));
+    t.poll(&cx, true);
+    assert!(t.overlays(&cx).is_empty());
+    assert!(t.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0)).is_empty());
+}
+
+#[test]
+fn bucket_options_set_the_highlight() {
+    let (d, ..) = live_group_doc();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = LivePaintBucketTool::default();
+    t.set_option("cursorSwatchPreview", &json!(false));
+    let highlight = |t: &mut LivePaintBucketTool| {
+        t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0));
+        match t.overlays(&cx).as_slice() {
+            [] => None,
+            [Overlay::Path { color, width, .. }] => Some((*color, *width)),
+            ov => panic!("{ov:?}"),
+        }
+    };
+    assert_eq!(highlight(&mut t), Some((HIGHLIGHT_RED, 4.0)));
+    t.set_option("color", &json!("#00FF00"));
+    t.set_option("width", &json!(9));
+    assert_eq!(highlight(&mut t), Some(([0, 0xff, 0], 9.0)));
+    t.set_option("color", &json!("light blue"));
+    t.set_option("width", &json!("wide"));
+    assert_eq!(highlight(&mut t), Some(([0x4f, 0x80, 0xff], 9.0)));
+    t.set_option("width", &json!(100));
+    assert_eq!(t.options()["width"], json!(LP_BUCKET_WIDTH_RANGE.1));
+    t.set_option("width", &json!(0));
+    assert_eq!(t.options()["width"], json!(LP_BUCKET_WIDTH_RANGE.0));
+    // Highlight off: nothing is highlighted, and a click still paints.
+    t.set_option("highlight", &json!(false));
+    assert_eq!(highlight(&mut t), None);
+    let acts = t.pointer(&cx, &ev(PointerKind::Down, 75.0, 25.0));
+    assert!(matches!(acts.as_slice(), [Action::Begin(_), Action::Preview(id, _)] if id == "livePaint.fill"));
+    t.pointer(&cx, &ev(PointerKind::Up, 75.0, 25.0));
+    t.set_option("highlight", &json!(true));
+    assert!(highlight(&mut t).is_some());
+}
+
+#[test]
+fn bucket_highlights_an_edge_thinner_than_a_face() {
+    let (d, ..) = live_group_doc();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = LivePaintBucketTool::default();
+    t.set_option("cursorSwatchPreview", &json!(false));
+    let width = |t: &mut LivePaintBucketTool, x: f64, shift: bool| {
+        t.pointer(&cx, &ev(PointerKind::Move, x, 25.0).with_mods(Mods { shift, ..Default::default() }));
+        match t.overlays(&cx).as_slice() {
+            [Overlay::Path { width, .. }] => *width,
+            ov => panic!("{ov:?}"),
+        }
+    };
+    // The face at (75, 25) and, with Shift (Paint Strokes), the edge at x = 50.
+    assert_eq!((width(&mut t, 75.0, false), width(&mut t, 50.0, true)), (4.0, 2.0));
+    t.set_option("width", &json!(9));
+    assert_eq!((width(&mut t, 75.0, false), width(&mut t, 50.0, true)), (9.0, 4.5));
+    // With both on, the edge a click paints is drawn thin too.
+    t.set_option("paintStrokes", &json!(true));
+    assert_eq!((width(&mut t, 75.0, false), width(&mut t, 50.0, false)), (9.0, 4.5));
+    // The Live Paint Selection tool outlines a face and an edge (Alt) at its one Width.
+    let mut sel = LivePaintSelectionTool::default();
+    for alt in [false, true] {
+        let x = if alt { 50.0 } else { 75.0 };
+        sel.pointer(&cx, &ev(PointerKind::Move, x, 25.0).with_mods(Mods { alt, ..Default::default() }));
+        let ov = sel.overlays(&cx);
+        assert!(matches!(ov.as_slice(), [Overlay::Path { width: 4.0, .. }]), "{ov:?}");
+    }
+}
+
+#[test]
+fn bucket_alt_samples_face_edge_and_selected_region_without_painting() {
+    let (mut d, _gid, face, edge) = live_group_doc();
+    d.node_mut(face).unwrap().appearance.set_fill(vectorcraft_color::Paint::solid(vectorcraft_color::Color::WHITE));
+    d.node_mut(edge).unwrap().appearance.set_stroke(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK));
+    let s = Selection::default();
+    let p = paint();
+    let cx = crate::testutil::cx(&d, &s, &p);
+    let mut t = LivePaintBucketTool::default();
+    let alt = Mods { alt: true, ..Default::default() };
+    assert_eq!(
+        t.pointer(&cx, &ev(PointerKind::Down, 75.0, 25.0).with_mods(alt)),
+        vec![Action::Exec("appearance.copyFrom".into(), json!({"source": face.0, "defaultsOnly": true}))]
+    );
+    assert_eq!(
+        t.pointer(&cx, &ev(PointerKind::Down, 50.0, 25.0).with_mods(alt)),
+        vec![Action::Exec("appearance.copyFrom".into(), json!({"source": edge.0, "defaultsOnly": true}))]
+    );
+
+    let (d, a, b) = two_rects();
+    let mut s = Selection::default();
+    s.set([a, b]);
+    let cx = crate::testutil::cx(&d, &s, &p);
+    assert_eq!(
+        t.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0).with_mods(alt)),
+        vec![Action::Exec("appearance.copyFrom".into(), json!({"source": b.0, "defaultsOnly": true}))]
+    );
+    assert!(t.pointer(&cx, &ev(PointerKind::Down, 400.0, 400.0).with_mods(alt)).is_empty());
+    let (d, _, _, _) = live_group_doc();
+    assert!(t.pointer(&crate::testutil::cx(&d, &Selection::default(), &p), &ev(PointerKind::Down, 75.0, 25.0).with_mods(alt)).is_empty());
+}
+
+#[test]
+fn bucket_alt_shift_samples_only_solid_color_and_restores_hover() {
+    let (mut d, _gid, face, _edge) = live_group_doc();
+    d.node_mut(face).unwrap().appearance.set_fill(vectorcraft_color::Paint::solid(vectorcraft_color::Color::WHITE));
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = LivePaintBucketTool::default();
+    let alt = Mods { alt: true, ..Default::default() };
+    let both = Mods { alt: true, shift: true, ..Default::default() };
+    let pos = Point::new(75.0, 25.0);
+    assert_eq!(t.cursor(&cx, pos, Mods::default()), Cursor::LivePaintBucketFace);
+    t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0));
+    assert!(!t.overlays(&cx).is_empty());
+    t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0).with_mods(alt));
+    assert_eq!(t.cursor(&cx, pos, alt), Cursor::Eyedropper);
+    assert_eq!(t.id(), "livePaintBucket");
+    assert!(t.overlays(&cx).is_empty());
+    assert_eq!(
+        t.pointer(&cx, &ev(PointerKind::Down, 75.0, 25.0).with_mods(both)),
+        vec![Action::Exec("paint.sampleColor".into(), json!({"color": crate::params::color_json(&vectorcraft_color::Color::WHITE), "ids": []}))]
+    );
+    assert!(t.pointer(&cx, &ev(PointerKind::Down, 400.0, 400.0).with_mods(both)).is_empty());
+    t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0));
+    assert_eq!(t.cursor(&cx, pos, Mods::default()), Cursor::LivePaintBucketFace);
+    assert!(!t.overlays(&cx).is_empty());
+}
+
+#[test]
+fn bucket_alt_shift_samples_gradient_image_and_stroke_color() {
+    let (mut d, _a, b) = two_rects();
+    let gradient = vectorcraft_color::Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient::default())));
+    d.node_mut(b).unwrap().appearance.set_fill(gradient.clone());
+    let s = Selection::default();
+    let p = paint();
+    let both = Mods { alt: true, shift: true, ..Default::default() };
+    let mut t = LivePaintBucketTool::default();
+    assert_eq!(
+        t.pointer(&cx(&d, &s, &p), &ev(PointerKind::Down, 100.0, 50.0).with_mods(both)),
+        vec![Action::Exec(
+            "paint.sampleColor".into(),
+            json!({"color": crate::params::color_json(&vectorcraft_color::Color::rgb(0.5, 0.5, 0.5)), "ids": []})
+        )]
+    );
+
+    let (mut d, _gid, _face, edge) = live_group_doc();
+    d.node_mut(edge).unwrap().appearance.set_stroke(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK));
+    assert_eq!(
+        t.pointer(&cx(&d, &s, &p), &ev(PointerKind::Down, 50.0, 25.0).with_mods(both)),
+        vec![Action::Exec("paint.sampleColor".into(), json!({"color": crate::params::color_json(&vectorcraft_color::Color::BLACK), "ids": []}))]
+    );
+
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let img = craft_image_codecs::Image::from_raw(
+        3,
+        1,
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        vec![255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255],
+    )
+    .unwrap();
+    let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
+    d.images.insert("px".into(), vectorcraft_doc::ImageBlob::png(png));
+    let im = vectorcraft_doc::ImageObject {
+        key: "px".into(),
+        width: 3,
+        height: 1,
+        xf: vectorcraft_geom::Affine::scale(10.0),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let id = d.alloc_id();
+    d.insert(Some(l), 0, Node::new(id, vectorcraft_doc::NodeKind::Image(Box::new(im)))).unwrap();
+    let mut cx = cx(&d, &s, &p);
+    cx.raster_sample = 3;
+    assert_eq!(
+        t.pointer(&cx, &ev(PointerKind::Down, 15.0, 5.0).with_mods(Mods { alt: true, ..Default::default() })),
+        vec![Action::Exec(
+            "paint.sampleColor".into(),
+            json!({"color": crate::params::color_json(&vectorcraft_color::Color::rgb8(85, 85, 85)), "stroke": false, "ids": [], "clearStroke": true})
+        )]
+    );
+    assert_eq!(
+        t.pointer(&cx, &ev(PointerKind::Down, 15.0, 5.0).with_mods(both)),
+        vec![Action::Exec(
+            "paint.sampleColor".into(),
+            json!({"color": crate::params::color_json(&vectorcraft_color::Color::rgb8(85, 85, 85)), "ids": []})
+        )]
+    );
 }
 
 #[test]
@@ -774,7 +2390,7 @@ fn bucket_on_plain_selection_makes_live_paint() {
     let cx = cx(&d, &s, &p);
     let mut t = LivePaintBucketTool::default();
     let acts = t.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0));
-    let Action::Exec(id, v) = &acts[0] else { panic!() };
+    let [Action::Begin(_), Action::Preview(id, v)] = acts.as_slice() else { panic!("{acts:?}") };
     assert_eq!(id, "livePaint.fill");
     assert_eq!(v["ids"], json!([a.0, b.0]));
 }
@@ -792,7 +2408,13 @@ fn bucket_rebuilds_its_map_for_a_new_revision_at_the_same_address() {
     d = two_rects_at(300.0).0;
     let cx2 = ToolContext { revision: (1, 2), ..cx(&d, &s, &p) };
     let acts = t.pointer(&cx2, &ev(PointerKind::Down, 375.0, 50.0));
-    assert_eq!(acts, vec![Action::Exec("livePaint.fill".into(), json!({ "ids": [a.0, b.0], "point": [375.0, 50.0] }))]);
+    assert_eq!(
+        acts,
+        vec![
+            Action::Begin("Live Paint Bucket".into()),
+            Action::Preview("livePaint.fill".into(), json!({ "ids": [a.0, b.0], "point": [375.0, 50.0] }))
+        ]
+    );
 }
 
 #[test]
@@ -805,13 +2427,20 @@ fn bucket_keeps_its_map_while_the_document_is_unchanged() {
     let cx1 = ToolContext { revision: (1, 1), ..cx(&d, &s, &p) };
     t.pointer(&cx1, &ev(PointerKind::Move, 75.0, 50.0));
     let acts = t.pointer(&cx1, &ev(PointerKind::Down, 75.0, 50.0));
-    assert!(matches!(acts.as_slice(), [Action::Exec(id, _)] if id == "livePaint.fill"), "{acts:?}");
+    assert!(matches!(acts.as_slice(), [Action::Begin(_), Action::Preview(id, _)] if id == "livePaint.fill"), "{acts:?}");
+    t.pointer(&cx1, &ev(PointerKind::Up, 75.0, 50.0));
     // The fill left the document as it was: the map still fits it.
     t.pointer(&cx1, &ev(PointerKind::Move, 25.0, 50.0));
     assert_eq!(t.cache.builds, 1, "a hover after a fill that changed nothing");
+    // A new revision of the same art keeps the map; one with an object moved builds it again.
     let cx2 = ToolContext { revision: (1, 2), ..cx(&d, &s, &p) };
     t.pointer(&cx2, &ev(PointerKind::Move, 25.0, 50.0));
-    assert_eq!(t.cache.builds, 2, "a hover on a new revision");
+    assert_eq!(t.cache.builds, 1, "a hover on a new revision of the same art");
+    let mut moved = d.clone();
+    moved.node_mut(b).unwrap().transform(vectorcraft_geom::Affine::translate((10.0, 0.0)), false);
+    let cx3 = ToolContext { revision: (1, 3), ..cx(&moved, &s, &p) };
+    t.pointer(&cx3, &ev(PointerKind::Move, 25.0, 50.0));
+    assert_eq!(t.cache.builds, 2, "a hover on a new revision of other art");
 }
 
 #[test]
@@ -827,7 +2456,7 @@ fn bucket_hover_builds_a_large_map_on_another_thread() {
     poll_until_ready(&mut t, &cx);
     assert!(matches!(t.hover, LpHover::Region(_)), "{:?}", t.hover);
     assert_eq!((t.cache.builds, t.cache.background), (1, 1));
-    assert_eq!(t.overlays(&cx).len(), 1);
+    assert_eq!(t.overlays(&cx).iter().filter(|o| matches!(o, Overlay::Path { .. })).count(), 1);
 }
 
 #[test]
@@ -856,6 +2485,21 @@ fn live_paint_selection_hover_builds_no_map_of_the_selection() {
     assert_eq!(t.hover, LpHover::None);
     assert_eq!(t.cache.builds, 0);
     assert!(!t.waiting());
+}
+
+/// When the pointer leaves the canvas, the Live Paint Selection tool's highlight goes.
+#[test]
+fn live_paint_selection_hover_ended_drops_the_highlight() {
+    let (d, ..) = live_group_doc();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = LivePaintSelectionTool::default();
+    t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0));
+    let ov = t.overlays(&cx);
+    assert!(ov.iter().any(|o| matches!(o, Overlay::Path { .. })), "{ov:?}");
+    t.hover_ended(&cx);
+    assert!(t.overlays(&cx).is_empty());
 }
 
 /// A Live Paint Selection click pressed with `down`: the press does nothing, and the release does
@@ -944,6 +2588,876 @@ fn live_paint_selection_click_outside_the_faces_selects_the_edge_it_highlights()
     t.pointer(&cx, &ev(PointerKind::Move, 106.0, 50.0));
     assert!(t.overlays(&cx).is_empty());
     assert_eq!(lp_click(&mut t, &cx, ev(PointerKind::Down, 106.0, 50.0)), vec![Action::Exec("select.none".into(), json!({}))]);
+}
+
+/// A Live Paint group of three faces in a row, A (0..50), B (50..100) and C (100..150), 50 pt tall,
+/// with these edges: AB between A and B, with no stroke; BC between B and C, stroked red; the tops
+/// of A and B stroked black; the top of C stroked red; and one bottom edge under all three,
+/// stroked black. Returns the group, the faces [A, B, C] and the edges [AB, BC, top A, top B,
+/// top C, bottom].
+fn live_strip(d: &mut Document) -> (NodeId, [NodeId; 3], [NodeId; 6]) {
+    let l = d.layers[0].id;
+    let black = Paint::solid(vectorcraft_color::Color::BLACK);
+    let red = Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0));
+    let mut kids = vec![empty_sources(d)];
+    let mut fs = [NodeId(0); 3];
+    for (k, x) in [0.0, 50.0, 100.0].into_iter().enumerate() {
+        fs[k] = d.alloc_id();
+        let mut face = Node::path(fs[k], shapes::rectangle(Rect::new(x, 0.0, x + 50.0, 50.0)), Appearance::default());
+        face.name = Some(FACE_NAME.into());
+        kids.push(Arc::new(face));
+    }
+    let pt = Point::new;
+    let lines = [
+        (pt(50.0, 0.0), pt(50.0, 50.0), None),
+        (pt(100.0, 0.0), pt(100.0, 50.0), Some(red.clone())),
+        (pt(0.0, 0.0), pt(50.0, 0.0), Some(black.clone())),
+        (pt(50.0, 0.0), pt(100.0, 0.0), Some(black.clone())),
+        (pt(100.0, 0.0), pt(150.0, 0.0), Some(red)),
+        (pt(0.0, 50.0), pt(150.0, 50.0), Some(black)),
+    ];
+    let mut es = [NodeId(0); 6];
+    for (k, (from, to, stroke)) in lines.into_iter().enumerate() {
+        es[k] = d.alloc_id();
+        let mut a = Appearance::default();
+        if let Some(s) = stroke {
+            a.set_stroke(s);
+        }
+        let mut edge = Node::path(es[k], shapes::line(from, to), a);
+        edge.name = Some(EDGE_NAME.into());
+        kids.push(Arc::new(edge));
+    }
+    let gid = d.alloc_id();
+    let mut g = Node::group(gid, kids);
+    g.name = Some(LIVE_PAINT_NAME.into());
+    let at = d.layers[0].children().map_or(0, |c| c.len());
+    d.insert(Some(l), at, g).unwrap();
+    (gid, fs, es)
+}
+
+#[test]
+fn live_paint_flood_crosses_unstroked_edges_and_stops_at_stroked_ones() {
+    let mut d = Document::new(500.0, 500.0);
+    let (g, [a, b, c], [ab, bc, ..]) = live_strip(&mut d);
+    let group = |d: &Document| d.node(g).unwrap().clone();
+    assert_eq!(flood_faces(&group(&d), a), vec![a, b]);
+    assert_eq!(flood_faces(&group(&d), b), vec![b, a]);
+    assert_eq!(flood_faces(&group(&d), c), vec![c]);
+    // A hidden edge does not part the faces either; a hidden face is not reached and does not start
+    // a flood; an id that is not a face of the group reaches nothing.
+    let mut hidden = d.clone();
+    hidden.node_mut(bc).unwrap().visible = false;
+    assert_eq!(flood_faces(&group(&hidden), a), vec![a, b, c]);
+    hidden.node_mut(b).unwrap().visible = false;
+    assert_eq!(flood_faces(&group(&hidden), a), vec![a]);
+    assert!(flood_faces(&group(&hidden), b).is_empty());
+    assert!(flood_faces(&group(&d), ab).is_empty());
+    // An edge whose stroke is hidden, 0 pt wide or fully transparent, or that is itself fully
+    // transparent, draws no stroke, so the flood crosses it.
+    use vectorcraft_doc::appearance::{AppearanceItem, StrokeLayer};
+    let base = d.node(bc).unwrap().appearance.stroke().unwrap().clone();
+    let changes: [fn(&mut StrokeLayer); 3] = [|s| s.visible = false, |s| s.width = 0.0, |s| s.opacity = 0.0];
+    for change in changes {
+        let mut e = d.clone();
+        let mut s = base.clone();
+        change(&mut s);
+        e.node_mut(bc).unwrap().appearance.items.retain(|i| !matches!(i, AppearanceItem::Stroke(_)));
+        e.node_mut(bc).unwrap().appearance.items.push(AppearanceItem::Stroke(s));
+        assert_eq!(flood_faces(&group(&e), a), vec![a, b, c]);
+    }
+    let mut e = d.clone();
+    e.node_mut(bc).unwrap().opacity = 0.0;
+    assert_eq!(flood_faces(&group(&e), a), vec![a, b, c]);
+}
+
+/// Faces P (0..50) and Q (50..100) above one edge from (0, 0) to (100, 0) and face R (0..100) below
+/// it, with no edge between P and Q (as where a Gap Detection line parts them): P and Q each run
+/// along part of the edge, and R along all of it.
+#[test]
+fn live_paint_flood_measures_faces_along_part_of_an_edge() {
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let mut kids = vec![empty_sources(&mut d)];
+    let mut ids = [NodeId(0); 3];
+    for (k, r) in [Rect::new(0.0, -50.0, 50.0, 0.0), Rect::new(50.0, -50.0, 100.0, 0.0), Rect::new(0.0, 0.0, 100.0, 50.0)].into_iter().enumerate() {
+        ids[k] = d.alloc_id();
+        let mut face = Node::path(ids[k], shapes::rectangle(r), Appearance::default());
+        face.name = Some(FACE_NAME.into());
+        kids.push(Arc::new(face));
+    }
+    let [p, q, r] = ids;
+    let mut edge = Node::path(d.alloc_id(), shapes::line(Point::new(0.0, 0.0), Point::new(100.0, 0.0)), Appearance::default());
+    edge.name = Some(EDGE_NAME.into());
+    kids.push(Arc::new(edge));
+    let gid = d.alloc_id();
+    let mut g = Node::group(gid, kids);
+    g.name = Some(LIVE_PAINT_NAME.into());
+    d.insert(Some(l), 0, g).unwrap();
+    let group = d.node(gid).unwrap().clone();
+    // P reaches R across the edge, and Q through R; P and Q only touch at (50, 0).
+    assert_eq!(flood_faces(&group, p), vec![p, r, q]);
+    let mut without_r = d.clone();
+    without_r.node_mut(r).unwrap().visible = false;
+    assert_eq!(flood_faces(without_r.node(gid).unwrap(), p), vec![p]);
+}
+
+/// Face P (0..100) above unstroked edges along y = 0 split at `splits`, whose outline runs along
+/// all of them with one segment, and below them one face between each two splits, the faces parted
+/// from each other by stroked edges. A flood from any face below reaches P and, through it, the
+/// others; this holds when the outline's middle is no edge's middle (30), is the end shared by two
+/// edges (50), and is the middle of an edge shorter than the outline (25 and 75).
+#[test]
+fn live_paint_flood_crosses_an_outline_segment_that_spans_several_edges() {
+    for splits in [vec![30.0], vec![50.0], vec![25.0, 75.0]] {
+        let mut d = Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        let mut kids = vec![empty_sources(&mut d)];
+        let xs: Vec<f64> = std::iter::once(0.0).chain(splits.iter().copied()).chain(std::iter::once(100.0)).collect();
+        let add_face = |d: &mut Document, kids: &mut Vec<Arc<Node>>, r: Rect| {
+            let id = d.alloc_id();
+            let mut face = Node::path(id, shapes::rectangle(r), Appearance::default());
+            face.name = Some(FACE_NAME.into());
+            kids.push(Arc::new(face));
+            id
+        };
+        let p = add_face(&mut d, &mut kids, Rect::new(0.0, -50.0, 100.0, 0.0));
+        let below: Vec<NodeId> = xs.windows(2).map(|w| add_face(&mut d, &mut kids, Rect::new(w[0], 0.0, w[1], 50.0))).collect();
+        let pt = Point::new;
+        let lines = xs
+            .windows(2)
+            .map(|w| (pt(w[0], 0.0), pt(w[1], 0.0), false))
+            .chain(splits.iter().map(|&x| (pt(x, 0.0), pt(x, 50.0), true)))
+            .collect::<Vec<_>>();
+        for (from, to, stroked) in lines {
+            let mut a = Appearance::default();
+            if stroked {
+                a.set_stroke(Paint::solid(vectorcraft_color::Color::BLACK));
+            }
+            let mut edge = Node::path(d.alloc_id(), shapes::line(from, to), a);
+            edge.name = Some(EDGE_NAME.into());
+            kids.push(Arc::new(edge));
+        }
+        let gid = d.alloc_id();
+        let mut g = Node::group(gid, kids);
+        g.name = Some(LIVE_PAINT_NAME.into());
+        d.insert(Some(l), 0, g).unwrap();
+        let group = d.node(gid).unwrap().clone();
+        let mut all = below.clone();
+        all.push(p);
+        all.sort();
+        for &f in &below {
+            let mut got = flood_faces(&group, f);
+            assert_eq!(got.first(), Some(&f), "{splits:?}");
+            got.sort();
+            assert_eq!(got, all, "{splits:?} from {f:?}");
+        }
+    }
+}
+
+/// A Live Paint group built from `paths` as `livePaint.make` builds one, with Gap Detection closing
+/// gaps up to `gap` pt when given, and with no stroke on any edge. Returns the group and its faces.
+fn live_from_paths(paths: Vec<PathData>, gap: Option<f64>) -> (Node, Vec<NodeId>) {
+    let mut d = Document::new(500.0, 500.0);
+    let shapes: Vec<po::Shape> = paths.into_iter().enumerate().map(|(k, p)| po::Shape::new(p, FillRule::NonZero, k as u64)).collect();
+    let (regions, lines) = match gap {
+        Some(g) => {
+            let (r, e, _) = po::live_paint_with_gaps(&shapes, g);
+            (r, e)
+        }
+        None => po::live_paint(&shapes),
+    };
+    let mut kids = vec![empty_sources(&mut d)];
+    let mut ids = vec![];
+    for r in regions {
+        let id = d.alloc_id();
+        let mut face = Node::path(id, r.path, Appearance::default());
+        face.name = Some(FACE_NAME.into());
+        kids.push(Arc::new(face));
+        ids.push(id);
+    }
+    for e in lines {
+        let mut edge = Node::path(d.alloc_id(), e.path, Appearance::default());
+        edge.name = Some(EDGE_NAME.into());
+        kids.push(Arc::new(edge));
+    }
+    let mut g = Node::group(d.alloc_id(), kids);
+    g.name = Some(LIVE_PAINT_NAME.into());
+    (g, ids)
+}
+
+/// Live Paint groups built from curves, one with a T-junction where lines end inside an ellipse and
+/// one with Gap Detection closing the gap between a curve's end and a circle: with no stroke on any
+/// edge, a flood from any face reaches every face.
+#[test]
+fn live_paint_flood_crosses_unstroked_curves_in_built_groups() {
+    let pt = Point::new;
+    let frame = shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 200.0));
+    let t_junction = vec![
+        frame,
+        shapes::ellipse(Rect::new(50.0, 60.0, 150.0, 140.0)),
+        shapes::line(pt(113.0, 0.0), pt(113.0, 80.0)),
+        shapes::line(pt(113.0, 200.0), pt(113.0, 120.0)),
+    ];
+    let a = |p: Point, h_in: Point, h_out: Point| vectorcraft_geom::Anchor { p, h_in, h_out, kind: vectorcraft_geom::AnchorKind::Smooth };
+    let (start, end) = (pt(102.7, 20.0), pt(109.0, 100.0 + (2500.0f64 - 81.0).sqrt() - 2.0));
+    let curve = PathData::single(SubPath::new(
+        vec![a(start, start, start + kurbo::Vec2::new(40.0, 40.0)), a(end, end + kurbo::Vec2::new(-30.0, -40.0), end)],
+        false,
+    ));
+    let gap = vec![shapes::ellipse(Rect::new(50.0, 50.0, 150.0, 150.0)), curve];
+    for (name, paths, max_gap, count) in [("T-junction", t_junction, None, 3), ("Gap Detection", gap, Some(3.0), 2)] {
+        let (g, fs) = live_from_paths(paths, max_gap);
+        assert_eq!(fs.len(), count, "{name}");
+        for &f in &fs {
+            let mut got = flood_faces(&g, f);
+            got.sort();
+            assert_eq!(got, fs, "{name} from {f:?}");
+        }
+    }
+}
+
+/// A closed outline: `curve`, then straight lines through `rest` and back to the curve's start.
+fn curve_then_lines(curve: kurbo::CubicBez, rest: &[Point]) -> PathData {
+    let a = |p: Point, h_in: Point, h_out: Point| vectorcraft_geom::Anchor { p, h_in, h_out, kind: vectorcraft_geom::AnchorKind::Corner };
+    let mut anchors = vec![a(curve.p0, curve.p0, curve.p1), a(curve.p3, curve.p2, curve.p3)];
+    anchors.extend(rest.iter().map(|&p| a(p, p, p)));
+    PathData::single(SubPath::new(anchors, true))
+}
+
+/// `c` with its two handles moved 0.006 pt along y: its ends stay put and its middle moves 0.0045 pt,
+/// as a face outline refit within the planar map's precision can lie off its edge.
+fn refit(c: kurbo::CubicBez) -> kurbo::CubicBez {
+    let up = kurbo::Vec2::new(0.0, 0.006);
+    kurbo::CubicBez::new(c.p0, c.p1 + up, c.p2 + up, c.p3)
+}
+
+/// A Live Paint group of `faces` and of `lines`, each line with or without a stroke. Returns the
+/// group and the ids of the faces.
+fn live_of(faces: Vec<PathData>, lines: Vec<(PathData, bool)>) -> (Node, Vec<NodeId>) {
+    let mut d = Document::new(500.0, 500.0);
+    let mut kids = vec![empty_sources(&mut d)];
+    let mut ids = vec![];
+    for pd in faces {
+        let id = d.alloc_id();
+        let mut face = Node::path(id, pd, Appearance::default());
+        face.name = Some(FACE_NAME.into());
+        kids.push(Arc::new(face));
+        ids.push(id);
+    }
+    for (pd, stroked) in lines {
+        let mut a = Appearance::default();
+        if stroked {
+            a.set_stroke(Paint::solid(vectorcraft_color::Color::BLACK));
+        }
+        let mut edge = Node::path(d.alloc_id(), pd, a);
+        edge.name = Some(EDGE_NAME.into());
+        kids.push(Arc::new(edge));
+    }
+    let mut g = Node::group(d.alloc_id(), kids);
+    g.name = Some(LIVE_PAINT_NAME.into());
+    (g, ids)
+}
+
+/// Faces whose outlines along an unstroked curved edge lie up to 0.0045 pt off it, as the planar map
+/// can leave them when it refits an outline across a T-junction or, with Gap Detection on, builds the
+/// faces and the edges from two maps: the flood still crosses the edge. Two faces that a gap parts
+/// on the same side of the edge, which only touch, are still not joined.
+#[test]
+fn live_paint_flood_crosses_curved_edges_that_outlines_lie_slightly_off() {
+    use kurbo::ParamCurve;
+    let c = kurbo::CubicBez::new(Point::new(0.0, 0.0), Point::new(30.0, 40.0), Point::new(70.0, 40.0), Point::new(100.0, 0.0));
+    let edge = |s: kurbo::CubicBez| {
+        let a = |p: Point, h_in: Point, h_out: Point| vectorcraft_geom::Anchor { p, h_in, h_out, kind: vectorcraft_geom::AnchorKind::Corner };
+        PathData::single(SubPath::new(vec![a(s.p0, s.p0, s.p1), a(s.p3, s.p2, s.p3)], false))
+    };
+    // T-junction: a stroked line ends on the curve at t = 0.4 and parts the faces below it (L and R);
+    // the curve is two edges, and the face above (U) runs along both with one refit segment.
+    let j = c.eval(0.4);
+    let (left, right) = (c.subsegment(0.0..0.4), c.subsegment(0.4..1.0));
+    let (g, ids) = live_of(
+        vec![
+            curve_then_lines(left, &[Point::new(j.x, 80.0), Point::new(0.0, 80.0)]),
+            curve_then_lines(right, &[Point::new(100.0, 80.0), Point::new(j.x, 80.0)]),
+            curve_then_lines(refit(c), &[Point::new(100.0, -50.0), Point::new(0.0, -50.0)]),
+        ],
+        vec![(edge(left), false), (edge(right), false), (shapes::line(j, Point::new(j.x, 80.0)), true)],
+    );
+    let [l, r, u] = [ids[0], ids[1], ids[2]];
+    assert_eq!(flood_faces(&g, l), vec![l, u, r]);
+    let mut from_u = flood_faces(&g, u);
+    assert_eq!(from_u.first(), Some(&u));
+    from_u.sort();
+    assert_eq!(from_u, ids);
+    // Gap Detection: a gap line, which is no edge, parts P and Q above the curve at t = 0.5; the curve
+    // is one edge, and Q and the face below (B) run along it with refit segments.
+    let m = c.eval(0.5);
+    let (g, ids) = live_of(
+        vec![
+            curve_then_lines(c.subsegment(0.0..0.5), &[Point::new(m.x, -50.0), Point::new(0.0, -50.0)]),
+            curve_then_lines(refit(c.subsegment(0.5..1.0)), &[Point::new(100.0, -50.0), Point::new(m.x, -50.0)]),
+            curve_then_lines(refit(c), &[Point::new(100.0, 80.0), Point::new(0.0, 80.0)]),
+        ],
+        vec![(edge(c), false)],
+    );
+    let [p, q, b] = [ids[0], ids[1], ids[2]];
+    assert_eq!(flood_faces(&g, p), vec![p, b, q]);
+    let mut without_b = g.clone();
+    if let Some(kids) = without_b.children_mut()
+        && let Some(n) = kids.iter_mut().find(|n| n.id == b)
+    {
+        Arc::make_mut(n).visible = false;
+    }
+    assert_eq!(flood_faces(&without_b, p), vec![p]);
+}
+
+/// Two large faces whose only shared edge, with no stroke, is 0.005 pt long: the flood crosses it.
+#[test]
+fn live_paint_flood_crosses_a_shared_edge_shorter_than_the_precision() {
+    let pt = Point::new;
+    let (a, b) = (pt(50.0, 0.0), pt(50.0, 0.005));
+    let (g, ids) = live_of(
+        vec![
+            PathData::single(SubPath::polyline(&[pt(0.0, -50.0), a, b, pt(0.0, 50.0)], true)),
+            PathData::single(SubPath::polyline(&[pt(100.0, -50.0), pt(100.0, 50.0), b, a], true)),
+        ],
+        vec![(shapes::line(a, b), false)],
+    );
+    assert_eq!(flood_faces(&g, ids[0]), ids);
+}
+
+/// A stroked edge along y = 0 and an edge with no stroke 0.008 pt below it, with a face above the
+/// first whose outline ends on it and bows 0.005 pt off it in the middle, nearer the second, and a
+/// face below the second: the stroked edge parts the two faces, so the flood does not join them.
+#[test]
+fn live_paint_flood_stops_where_a_stroked_edge_runs_along_an_unstroked_one() {
+    let pt = Point::new;
+    let bow = kurbo::CubicBez::new(pt(100.0, 0.0), pt(70.0, 0.02 / 3.0), pt(30.0, 0.02 / 3.0), pt(0.0, 0.0));
+    let (g, ids) = live_of(
+        vec![
+            curve_then_lines(bow, &[pt(0.0, -50.0), pt(100.0, -50.0)]),
+            PathData::single(SubPath::polyline(&[pt(0.0, 0.008), pt(0.0, 50.0), pt(100.0, 50.0), pt(100.0, 0.008)], true)),
+        ],
+        vec![(shapes::line(pt(0.0, 0.0), pt(100.0, 0.0)), true), (shapes::line(pt(0.0, 0.008), pt(100.0, 0.008)), false)],
+    );
+    assert_eq!(flood_faces(&g, ids[0]), vec![ids[0]]);
+    assert_eq!(flood_faces(&g, ids[1]), vec![ids[1]]);
+}
+
+/// An edge with no stroke from (10, 0) to (90, 0), and two faces that meet on a line 0.005 pt below
+/// it from (0, 0.005) to (100, 0.005) (as a Gap Detection line): neither face runs along the edge, so
+/// the flood does not join them.
+#[test]
+fn live_paint_flood_does_not_cross_an_edge_beside_a_line_two_faces_meet_on() {
+    let pt = Point::new;
+    let (a, b) = (pt(0.0, 0.005), pt(100.0, 0.005));
+    let (g, ids) = live_of(
+        vec![
+            PathData::single(SubPath::polyline(&[a, b, pt(100.0, -50.0), pt(0.0, -50.0)], true)),
+            PathData::single(SubPath::polyline(&[b, a, pt(0.0, 50.0), pt(100.0, 50.0)], true)),
+        ],
+        vec![(shapes::line(pt(10.0, 0.0), pt(90.0, 0.0)), false)],
+    );
+    assert_eq!(flood_faces(&g, ids[0]), vec![ids[0]]);
+}
+
+/// A stroked edge and an edge with no stroke that leave one point at a slope of 0.01, so they lie
+/// within 0.01 pt of each other for their first point or so: the face between them and the face
+/// beyond the edge with no stroke share that edge, so the flood joins them.
+#[test]
+fn live_paint_flood_crosses_an_unstroked_edge_beside_a_stroked_one() {
+    let pt = Point::new;
+    let (o, a, b) = (pt(0.0, 0.0), pt(100.0, 0.0), pt(100.0, 1.0));
+    let (g, ids) = live_of(
+        vec![
+            PathData::single(SubPath::polyline(&[o, a, b], true)),
+            PathData::single(SubPath::polyline(&[o, b, pt(100.0, 50.0), pt(0.0, 50.0)], true)),
+        ],
+        vec![(shapes::line(o, a), true), (shapes::line(o, b), false), (shapes::line(a, b), true)],
+    );
+    assert_eq!(flood_faces(&g, ids[0]), ids);
+}
+
+/// Two faces on either side of an edge with no stroke whose curve has a cusp at its middle (no
+/// direction there): the flood crosses it.
+#[test]
+fn live_paint_flood_crosses_an_edge_with_a_cusp_at_its_middle() {
+    let c = kurbo::CubicBez::new(Point::new(0.0, 0.0), Point::new(100.0, 60.0), Point::new(0.0, 60.0), Point::new(100.0, 0.0));
+    let a = |p: Point, h_in: Point, h_out: Point| vectorcraft_geom::Anchor { p, h_in, h_out, kind: vectorcraft_geom::AnchorKind::Corner };
+    let edge = PathData::single(SubPath::new(vec![a(c.p0, c.p0, c.p1), a(c.p3, c.p2, c.p3)], false));
+    let (g, ids) = live_of(
+        vec![
+            curve_then_lines(c, &[Point::new(100.0, -50.0), Point::new(0.0, -50.0)]),
+            curve_then_lines(c, &[Point::new(100.0, 100.0), Point::new(0.0, 100.0)]),
+        ],
+        vec![(edge, false)],
+    );
+    assert_eq!(flood_faces(&g, ids[0]), ids);
+}
+
+/// Two faces parted by a line that is no edge (as a Gap Detection line), which crosses an edge with
+/// no stroke: one 0.006 pt long, upright or at a slope of 0.1, and one 1 pt long at a slope of 0.09.
+/// The faces only cross the edge and do not run along it, so the flood does not join them.
+#[test]
+fn live_paint_flood_does_not_cross_an_edge_an_outline_only_crosses() {
+    let pt = Point::new;
+    let short = pt(0.006, 0.0);
+    for (a, b, end) in
+        [(pt(0.003, -0.004), pt(0.003, 0.02), short), (pt(-0.037, -0.004), pt(0.043, 0.004), short), (pt(0.1, -0.009), pt(0.3, 0.009), pt(1.0, 0.0))]
+    {
+        let (g, ids) = live_of(
+            vec![
+                PathData::single(SubPath::polyline(&[a, b, pt(-50.0, 50.0), pt(-50.0, -50.0)], true)),
+                PathData::single(SubPath::polyline(&[b, a, pt(50.0, -50.0), pt(50.0, 50.0)], true)),
+            ],
+            vec![(shapes::line(pt(0.0, 0.0), end), false)],
+        );
+        assert_eq!(flood_faces(&g, ids[0]), vec![ids[0]], "{a:?} to {b:?}");
+    }
+}
+
+#[test]
+fn live_paint_connected_edges_follow_the_same_stroke_paint() {
+    let mut d = Document::new(500.0, 500.0);
+    let (g, [a, ..], [ab, bc, top_a, top_b, top_c, bottom]) = live_strip(&mut d);
+    let group = d.node(g).unwrap().clone();
+    let black = Paint::solid(vectorcraft_color::Color::BLACK);
+    let red = Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0));
+    // Top A and top B join end to end; top C joins them but is red, and the black bottom does not
+    // join them.
+    assert_eq!(connected_edges(&group, top_a, &black), vec![top_a, top_b]);
+    // BC and top C, both red, join at (100, 0).
+    assert_eq!(connected_edges(&group, bc, &red), vec![bc, top_c]);
+    assert_eq!(connected_edges(&group, bottom, &black), vec![bottom]);
+    // The edge started from is taken whatever its paint.
+    assert_eq!(connected_edges(&group, ab, &Paint::None), vec![ab]);
+    assert!(connected_edges(&group, a, &black).is_empty());
+}
+
+/// An edge from (0, 0) through (50, 0) to (100, 0) and a second edge with the same stroke from
+/// (50, 0) to (50, 50): the second one ends at an anchor in the middle of the first, not at one of
+/// its ends, so the two are not joined end to end. A third edge from (100, 0) is.
+#[test]
+fn live_paint_connected_edges_join_only_at_path_ends() {
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let black = Paint::solid(vectorcraft_color::Color::BLACK);
+    let mut kids = vec![empty_sources(&mut d)];
+    let pt = Point::new;
+    let paths = [
+        PathData::single(SubPath::polyline(&[pt(0.0, 0.0), pt(50.0, 0.0), pt(100.0, 0.0)], false)),
+        shapes::line(pt(50.0, 0.0), pt(50.0, 50.0)),
+        shapes::line(pt(100.0, 0.0), pt(100.0, 50.0)),
+    ];
+    let mut ids = vec![];
+    for pd in paths {
+        let mut a = Appearance::default();
+        a.set_stroke(black.clone());
+        let id = d.alloc_id();
+        let mut edge = Node::path(id, pd, a);
+        edge.name = Some(EDGE_NAME.into());
+        kids.push(Arc::new(edge));
+        ids.push(id);
+    }
+    let gid = d.alloc_id();
+    let mut g = Node::group(gid, kids);
+    g.name = Some(LIVE_PAINT_NAME.into());
+    d.insert(Some(l), 0, g).unwrap();
+    let group = d.node(gid).unwrap().clone();
+    assert_eq!(connected_edges(&group, ids[0], &black), vec![ids[0], ids[2]]);
+    assert_eq!(connected_edges(&group, ids[1], &black), vec![ids[1]]);
+}
+
+/// Three edges end to end along (0, 0) to (150, 0) under one face: a red one, one drawn red with a
+/// hidden blue stroke over it, and one drawn blue with a hidden red stroke over it. Edges join by the
+/// paint they draw with, not by a hidden stroke's paint, for `connected_edges` and a double-click.
+#[test]
+fn live_paint_connected_edges_follow_the_stroke_paint_they_draw_with() {
+    use vectorcraft_doc::appearance::{AppearanceItem, StrokeLayer};
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let red = Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0));
+    let blue = Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0));
+    let mut kids = vec![empty_sources(&mut d)];
+    let fid = d.alloc_id();
+    let mut face = Node::path(fid, shapes::rectangle(Rect::new(0.0, 0.0, 150.0, 50.0)), Appearance::default());
+    face.name = Some(FACE_NAME.into());
+    kids.push(Arc::new(face));
+    let pt = Point::new;
+    let hidden = |p: &Paint| AppearanceItem::Stroke(StrokeLayer { visible: false, ..StrokeLayer::new(p.clone(), 1.0) });
+    let shown = |p: &Paint| AppearanceItem::Stroke(StrokeLayer::new(p.clone(), 1.0));
+    let edges = [(0.0, vec![shown(&red)]), (50.0, vec![shown(&red), hidden(&blue)]), (100.0, vec![shown(&blue), hidden(&red)])];
+    let mut ids = vec![];
+    for (x, items) in edges {
+        let id = d.alloc_id();
+        let mut edge = Node::path(id, shapes::line(pt(x, 0.0), pt(x + 50.0, 0.0)), Appearance { items, ..Appearance::default() });
+        edge.name = Some(EDGE_NAME.into());
+        kids.push(Arc::new(edge));
+        ids.push(id);
+    }
+    let gid = d.alloc_id();
+    let mut g = Node::group(gid, kids);
+    g.name = Some(LIVE_PAINT_NAME.into());
+    d.insert(Some(l), 0, g).unwrap();
+    let group = d.node(gid).unwrap().clone();
+    assert_eq!(connected_edges(&group, ids[0], &red), vec![ids[0], ids[1]]);
+    assert_eq!(connected_edges(&group, ids[2], &blue), vec![ids[2]]);
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let set = |ids: &[NodeId]| vec![Action::Exec("select.set".into(), json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))];
+    let alt = Mods { alt: true, ..Default::default() };
+    let mut t = LivePaintSelectionTool::default();
+    let mut dbl = |x: f64| t.pointer(&cx, &ev(PointerKind::DoubleClick, x, 1.0).with_mods(alt));
+    assert_eq!(dbl(75.0), set(&[ids[1], ids[0]]));
+    assert_eq!(dbl(125.0), set(&[ids[2]]));
+}
+
+#[test]
+fn live_paint_selection_double_click_selects_connected_faces_or_edges() {
+    let mut d = Document::new(500.0, 500.0);
+    let (_, [a, b, c], [_, _, top_a, top_b, ..]) = live_strip(&mut d);
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let set = |ids: &[NodeId]| vec![Action::Exec("select.set".into(), json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))];
+    let toggle = |ids: &[NodeId]| vec![Action::Exec("select.toggle".into(), json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))];
+    let alt = Mods { alt: true, ..Default::default() };
+    let shift = Mods { shift: true, ..Default::default() };
+    let dbl = |t: &mut LivePaintSelectionTool, x: f64, y: f64, m: Mods| t.pointer(&cx, &ev(PointerKind::DoubleClick, x, y).with_mods(m));
+    let mut t = LivePaintSelectionTool::default();
+    // A face: the faces not parted from it by a stroked edge.
+    assert_eq!(dbl(&mut t, 25.0, 25.0, Mods::default()), set(&[a, b]));
+    assert_eq!(dbl(&mut t, 125.0, 25.0, Mods::default()), set(&[c]));
+    // An edge (Alt): the edges joined to it end to end with its stroke paint.
+    assert_eq!(dbl(&mut t, 25.0, 1.0, alt), set(&[top_a, top_b]));
+    // With Shift held, the parts reached leave the selection or join it.
+    assert_eq!(dbl(&mut t, 75.0, 25.0, shift), toggle(&[b, a]));
+    assert_eq!(dbl(&mut t, 75.0, 1.0, Mods { alt: true, shift: true, ..Default::default() }), toggle(&[top_b, top_a]));
+    // Away from the group, a double-click adds nothing to what its clicks did.
+    assert!(dbl(&mut t, 300.0, 300.0, Mods::default()).is_empty());
+    // Select Fills off: the double-click picks the edge nearest the pointer as a click does.
+    t.set_option("selectFills", &json!(false));
+    assert_eq!(dbl(&mut t, 25.0, 1.0, Mods::default()), set(&[top_a, top_b]));
+    assert!(dbl(&mut t, 25.0, 25.0, Mods::default()).is_empty());
+    // Select Strokes off: Alt picks the face.
+    t.set_option("selectFills", &json!(true));
+    t.set_option("selectStrokes", &json!(false));
+    assert_eq!(dbl(&mut t, 25.0, 1.0, alt), set(&[a, b]));
+    // Both off: nothing.
+    t.set_option("selectFills", &json!(false));
+    assert!(dbl(&mut t, 25.0, 25.0, Mods::default()).is_empty());
+    assert!(dbl(&mut t, 25.0, 1.0, alt).is_empty());
+}
+
+/// A triple-click on a face selects every face of its group with that face's fill, joined to it or
+/// not; on an edge (Alt), every edge of its group that draws with that edge's stroke paint. Shift
+/// toggles them. Hidden parts, other groups and parts with another paint are left out.
+#[test]
+fn live_paint_selection_triple_click_selects_every_part_of_the_same_paint() {
+    let mut d = Document::new(500.0, 500.0);
+    let (_, [a, b, c], [ab, bc, top_a, top_b, top_c, bottom]) = live_strip(&mut d);
+    let (other, [_, other_top, ..]) = live_square(&mut d, Rect::new(200.0, 0.0, 300.0, 100.0));
+    let other_face = faces(d.node(other).unwrap())[0].id;
+    let red = Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0));
+    let blue = Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0));
+    // A and C are red and B is blue; the other group's face is red and its top edge black, too.
+    for (id, fill) in [(a, &red), (b, &blue), (c, &red), (other_face, &red)] {
+        d.node_mut(id).unwrap().appearance.set_fill(fill.clone());
+    }
+    d.node_mut(other_top).unwrap().appearance.set_stroke(Paint::solid(vectorcraft_color::Color::BLACK));
+    let s = Selection::default();
+    let p = paint();
+    let set = |ids: &[NodeId]| vec![Action::Exec("select.set".into(), json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))];
+    let toggle = |ids: &[NodeId]| vec![Action::Exec("select.toggle".into(), json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))];
+    let alt = Mods { alt: true, ..Default::default() };
+    let shift = Mods { shift: true, ..Default::default() };
+    let tri = |d: &Document, t: &mut LivePaintSelectionTool, x: f64, y: f64, m: Mods| {
+        let cx = cx(d, &s, &p);
+        t.pointer(&cx, &ev(PointerKind::TripleClick, x, y).with_mods(m))
+    };
+    let mut t = LivePaintSelectionTool::default();
+    // A face: every face of its group with its fill, even across the stroked edge BC; the clicked face first.
+    assert_eq!(tri(&d, &mut t, 125.0, 25.0, Mods::default()), set(&[c, a]));
+    assert_eq!(tri(&d, &mut t, 75.0, 25.0, Mods::default()), set(&[b]));
+    // An edge: every edge of its group that draws with its stroke paint, joined to it or not.
+    assert_eq!(tri(&d, &mut t, 25.0, 1.0, alt), set(&[top_a, top_b, bottom]));
+    assert_eq!(tri(&d, &mut t, 125.0, 1.0, alt), set(&[top_c, bc]));
+    assert_eq!(tri(&d, &mut t, 50.0, 25.0, alt), set(&[ab]));
+    // With Shift held, the parts leave the selection or join it.
+    assert_eq!(tri(&d, &mut t, 25.0, 25.0, shift), toggle(&[a, c]));
+    assert_eq!(tri(&d, &mut t, 125.0, 1.0, Mods { alt: true, shift: true, ..Default::default() }), toggle(&[top_c, bc]));
+    // Away from the group, a triple-click adds nothing to what its clicks did.
+    assert!(tri(&d, &mut t, 400.0, 400.0, Mods::default()).is_empty());
+    // A hidden face of the same fill is left out.
+    d.node_mut(c).unwrap().visible = false;
+    assert_eq!(tri(&d, &mut t, 25.0, 25.0, Mods::default()), set(&[a]));
+    // On the other group, a triple-click selects that group's parts alone.
+    assert_eq!(tri(&d, &mut t, 250.0, 50.0, Mods::default()), set(&[other_face]));
+    assert_eq!(tri(&d, &mut t, 250.0, 1.0, alt), set(&[other_top]));
+    // Select Fills off: the triple-click picks the edge nearest the pointer; both off: nothing.
+    t.set_option("selectFills", &json!(false));
+    assert_eq!(tri(&d, &mut t, 25.0, 1.0, Mods::default()), set(&[top_a, top_b, bottom]));
+    t.set_option("selectStrokes", &json!(false));
+    assert!(tri(&d, &mut t, 25.0, 25.0, Mods::default()).is_empty());
+    assert!(tri(&d, &mut t, 25.0, 1.0, alt).is_empty());
+}
+
+/// The whole event series of a triple-click (three presses and releases, the double-click after
+/// the second release and the triple-click after the third), applied to a selection: without
+/// Shift the selection ends as the parts with the clicked part's paint, and with Shift as the
+/// selection from before the clicks with those parts toggled, whatever the double-click reached.
+#[test]
+fn live_paint_selection_triple_click_series_ends_with_the_same_paint_parts() {
+    let mut d = Document::new(500.0, 500.0);
+    let (_, [a, b, c], [_, bc, top_a, top_b, top_c, bottom]) = live_strip(&mut d);
+    let red = Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0));
+    let blue = Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0));
+    // A and C are red and B is blue; a double-click on A also reaches B across the unstroked edge AB.
+    for (id, fill) in [(a, &red), (b, &blue), (c, &red)] {
+        d.node_mut(id).unwrap().appearance.set_fill(fill.clone());
+    }
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let apply = |sel: &mut Vec<u64>, acts: Vec<Action>| {
+        for act in acts {
+            let Action::Exec(cmd, args) = act else { panic!("{act:?}") };
+            let ids: Vec<u64> = match (args.get("ids"), args.get("id")) {
+                (Some(v), _) => v.as_array().unwrap().iter().map(|i| i.as_u64().unwrap()).collect(),
+                (None, Some(i)) => vec![i.as_u64().unwrap()],
+                (None, None) => vec![],
+            };
+            match cmd.as_str() {
+                "select.set" => *sel = ids,
+                "select.none" => sel.clear(),
+                "select.toggle" => {
+                    for i in ids {
+                        match sel.iter().position(|x| *x == i) {
+                            Some(k) => {
+                                sel.remove(k);
+                            }
+                            None => sel.push(i),
+                        }
+                    }
+                }
+                other => panic!("{other}"),
+            }
+        }
+    };
+    // The first click at `first`, every later event at (`x`, `y`).
+    let series = |t: &mut LivePaintSelectionTool, sel: &mut Vec<u64>, first: (f64, f64), x: f64, y: f64, m: Mods| {
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            apply(sel, t.pointer(&cx, &ev(kind, first.0, first.1).with_mods(m)));
+        }
+        for kind in [PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick, PointerKind::Down, PointerKind::Up, PointerKind::TripleClick] {
+            apply(sel, t.pointer(&cx, &ev(kind, x, y).with_mods(m)));
+        }
+    };
+    let sorted = |ids: &[NodeId]| {
+        let mut v: Vec<u64> = ids.iter().map(|i| i.0).collect();
+        v.sort_unstable();
+        v
+    };
+    let alt = Mods { alt: true, ..Default::default() };
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = LivePaintSelectionTool::default();
+    for (start, first, x, y, m, want) in [
+        (vec![], (25.0, 25.0), 25.0, 25.0, Mods::default(), sorted(&[a, c])),
+        (vec![top_c.0], (25.0, 25.0), 25.0, 25.0, Mods::default(), sorted(&[a, c])),
+        (vec![], (25.0, 25.0), 25.0, 25.0, shift, sorted(&[a, c])),
+        (vec![top_c.0, c.0], (25.0, 25.0), 25.0, 25.0, shift, sorted(&[a, top_c])),
+        (vec![], (25.0, 1.0), 25.0, 1.0, Mods { alt: true, shift: true, ..Default::default() }, sorted(&[top_a, top_b, bottom])),
+        (vec![bc.0], (125.0, 1.0), 125.0, 1.0, alt, sorted(&[top_c, bc])),
+        // The first click on A and the rest on B, beside it: B alone has B's fill.
+        (vec![], (49.0, 25.0), 51.0, 25.0, shift, sorted(&[b])),
+        (vec![c.0], (49.0, 25.0), 51.0, 25.0, shift, sorted(&[b, c])),
+    ] {
+        let mut sel = start.clone();
+        series(&mut t, &mut sel, first, x, y, m);
+        sel.sort_unstable();
+        assert_eq!(sel, want, "from {start:?} at {first:?} then ({x}, {y}) with {m:?}");
+    }
+    // Shift first held at the third click: the two clicks and the double-click select A and B, and
+    // the parts with A's fill are toggled from that selection.
+    let mut sel = vec![top_c.0];
+    for (kind, m) in [
+        (PointerKind::Down, Mods::default()),
+        (PointerKind::Up, Mods::default()),
+        (PointerKind::Down, Mods::default()),
+        (PointerKind::Up, Mods::default()),
+        (PointerKind::DoubleClick, Mods::default()),
+        (PointerKind::Down, shift),
+        (PointerKind::Up, shift),
+        (PointerKind::TripleClick, shift),
+    ] {
+        apply(&mut sel, t.pointer(&cx, &ev(kind, 25.0, 25.0).with_mods(m)));
+    }
+    sel.sort_unstable();
+    assert_eq!(sel, sorted(&[b, c]));
+    // A Shift-click on C, then a click on A without Shift, which selects A alone, and Shift held
+    // from the double-click on: the parts with A's fill are toggled from that selection.
+    let mut sel = vec![];
+    for (kind, x, m) in [
+        (PointerKind::Down, 125.0, shift),
+        (PointerKind::Up, 125.0, shift),
+        (PointerKind::Down, 25.0, Mods::default()),
+        (PointerKind::Up, 25.0, Mods::default()),
+        (PointerKind::DoubleClick, 25.0, shift),
+        (PointerKind::Down, 25.0, shift),
+        (PointerKind::Up, 25.0, shift),
+        (PointerKind::TripleClick, 25.0, shift),
+    ] {
+        apply(&mut sel, t.pointer(&cx, &ev(kind, x, 25.0).with_mods(m)));
+    }
+    assert_eq!(sel, vec![c.0]);
+}
+
+/// A Shift-triple-click on a face whose double-click already reaches a joined face of the same
+/// fill selects every face with that fill: the joined face the double-click toggled on is not
+/// toggled off again.
+#[test]
+fn live_paint_selection_shift_triple_click_keeps_joined_faces_of_the_same_fill() {
+    let mut d = Document::new(500.0, 500.0);
+    let (_, [a, b, c], _) = live_strip(&mut d);
+    let red = Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0));
+    // A and B are joined across the unstroked edge AB; C is parted from them by the stroked edge BC.
+    for id in [a, b, c] {
+        d.node_mut(id).unwrap().appearance.set_fill(red.clone());
+    }
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = LivePaintSelectionTool::default();
+    let mut sel: Vec<u64> = vec![];
+    for kind in [
+        PointerKind::Down,
+        PointerKind::Up,
+        PointerKind::Down,
+        PointerKind::Up,
+        PointerKind::DoubleClick,
+        PointerKind::Down,
+        PointerKind::Up,
+        PointerKind::TripleClick,
+    ] {
+        for act in t.pointer(&cx, &ev(kind, 25.0, 25.0).with_mods(shift)) {
+            let Action::Exec(cmd, args) = act else { panic!("{act:?}") };
+            assert_eq!(cmd, "select.toggle");
+            let ids: Vec<u64> = match (args.get("ids"), args.get("id")) {
+                (Some(v), _) => v.as_array().unwrap().iter().map(|i| i.as_u64().unwrap()).collect(),
+                (None, Some(i)) => vec![i.as_u64().unwrap()],
+                (None, None) => vec![],
+            };
+            for i in ids {
+                match sel.iter().position(|x| *x == i) {
+                    Some(k) => {
+                        sel.remove(k);
+                    }
+                    None => sel.push(i),
+                }
+            }
+        }
+    }
+    sel.sort_unstable();
+    let mut want = vec![a.0, b.0, c.0];
+    want.sort_unstable();
+    assert_eq!(sel, want);
+}
+
+#[test]
+fn live_paint_selection_double_click_skips_locked_groups_and_art_outside_isolation() {
+    let mut d = Document::new(500.0, 500.0);
+    let (g, _, _) = live_strip(&mut d);
+    let (other, _) = live_square(&mut d, Rect::new(200.0, 0.0, 300.0, 100.0));
+    let s = Selection::default();
+    let p = paint();
+    let dbl = |d: &Document, iso: Option<NodeId>, x: f64| {
+        let cx = ToolContext { isolation: iso, ..cx(d, &s, &p) };
+        LivePaintSelectionTool::default().pointer(&cx, &ev(PointerKind::DoubleClick, x, 25.0))
+    };
+    assert!(!dbl(&d, None, 25.0).is_empty());
+    assert!(dbl(&d, Some(other), 25.0).is_empty(), "outside the isolated art");
+    d.node_mut(g).unwrap().locked = true;
+    assert!(dbl(&d, None, 25.0).is_empty(), "a locked group");
+    assert!(!dbl(&d, None, 250.0).is_empty());
+}
+
+/// The Live Paint Selection pointer shows what a click at the point selects, from the point and
+/// the modifier keys alone (no move first): a face, an edge, or nothing. Groups the tool does not
+/// take (locked, hidden, outside isolation) show nothing to select. A press keeps its look until
+/// the release.
+#[test]
+fn live_paint_selection_cursor_shows_what_a_click_selects() {
+    let mut d = Document::new(500.0, 500.0);
+    let (g, _) = live_square(&mut d, Rect::new(0.0, 0.0, 100.0, 100.0));
+    let (other, _) = live_square(&mut d, Rect::new(200.0, 0.0, 300.0, 100.0));
+    let s = Selection::default();
+    let p = paint();
+    let plain = Mods::default();
+    let alt = Mods { alt: true, ..Default::default() };
+    let (face, edge, out) = (Cursor::LivePaintSelectFace, Cursor::LivePaintSelectEdge, Cursor::LivePaintSelectOutside);
+    let at = |t: &LivePaintSelectionTool, cx: &ToolContext, x: f64, m: Mods| t.cursor(cx, Point::new(x, 50.0), m);
+    let mut t = LivePaintSelectionTool::default();
+    {
+        let cx = cx(&d, &s, &p);
+        // Both options on: a face inside the square; with Alt the side within reach, inside or
+        // outside the face; nothing away from the groups or from every side.
+        assert_eq!(
+            [at(&t, &cx, 50.0, plain), at(&t, &cx, 98.5, plain), at(&t, &cx, 102.0, plain), at(&t, &cx, 150.0, plain)],
+            [face, face, out, out]
+        );
+        assert_eq!([at(&t, &cx, 98.5, alt), at(&t, &cx, 102.0, alt), at(&t, &cx, 50.0, alt), at(&t, &cx, 150.0, alt)], [edge, edge, out, out]);
+        // The cursor agrees with what a click there selects.
+        let face_id = faces(d.node(g).unwrap())[0].id;
+        assert_eq!(lp_click(&mut t, &cx, ev(PointerKind::Down, 50.0, 50.0)), vec![Action::Exec("select.set".into(), json!({ "ids": [face_id.0] }))]);
+        assert_eq!(lp_click(&mut t, &cx, ev(PointerKind::Down, 50.0, 50.0).with_mods(alt)), vec![Action::Exec("select.none".into(), json!({}))]);
+        // Select Fills off: a side without Alt too, never a face.
+        t.set_option("selectFills", &json!(false));
+        assert_eq!([at(&t, &cx, 98.5, plain), at(&t, &cx, 50.0, plain), at(&t, &cx, 98.5, alt)], [edge, out, edge]);
+        // Select Strokes off: the face with Alt too, never a side.
+        t.set_option("selectFills", &json!(true));
+        t.set_option("selectStrokes", &json!(false));
+        assert_eq!([at(&t, &cx, 98.5, alt), at(&t, &cx, 102.0, alt)], [face, out]);
+        // Both off: nothing.
+        t.set_option("selectFills", &json!(false));
+        assert_eq!([at(&t, &cx, 50.0, plain), at(&t, &cx, 98.5, alt)], [out, out]);
+    }
+    let mut t = LivePaintSelectionTool::default();
+    // A locked group shows nothing to select; the other group still does.
+    d.node_mut(g).unwrap().locked = true;
+    {
+        let cx = cx(&d, &s, &p);
+        assert_eq!([at(&t, &cx, 50.0, plain), at(&t, &cx, 98.5, alt), at(&t, &cx, 250.0, plain)], [out, out, face]);
+    }
+    d.node_mut(g).unwrap().locked = false;
+    // In isolation mode, a group outside the isolated art shows nothing to select.
+    {
+        let cx = ToolContext { isolation: Some(other), ..cx(&d, &s, &p) };
+        assert_eq!([at(&t, &cx, 50.0, plain), at(&t, &cx, 250.0, plain)], [out, face]);
+    }
+    // A hidden group shows nothing to select.
+    d.node_mut(g).unwrap().visible = false;
+    {
+        let cx = cx(&d, &s, &p);
+        assert_eq!([at(&t, &cx, 50.0, plain), at(&t, &cx, 98.5, alt)], [out, out]);
+    }
+    d.node_mut(g).unwrap().visible = true;
+    // A press keeps its look while the drag goes elsewhere, and the release lets it follow again.
+    let cx = cx(&d, &s, &p);
+    t.pointer(&cx, &ev(PointerKind::Down, 50.0, 50.0));
+    t.pointer(&cx, &ev(PointerKind::Drag, 150.0, 50.0));
+    assert_eq!(at(&t, &cx, 150.0, plain), face);
+    t.pointer(&cx, &ev(PointerKind::Up, 150.0, 50.0));
+    assert_eq!(at(&t, &cx, 150.0, plain), out);
+    t.pointer(&cx, &ev(PointerKind::Down, 150.0, 50.0));
+    t.pointer(&cx, &ev(PointerKind::Drag, 50.0, 50.0));
+    assert_eq!(at(&t, &cx, 50.0, plain), out);
+    t.key(&cx, ToolKey::Escape, plain);
+    assert_eq!(at(&t, &cx, 50.0, plain), face, "Escape ends the press");
+    for c in [face, edge, out] {
+        assert_eq!(c.precise(), Cursor::Crosshair, "{c:?}");
+        assert_eq!(c.stand_in(), None, "{c:?} is drawn");
+    }
 }
 
 /// Presses at `from` with `m`, drags to `to` and releases there; returns what the release does
@@ -1115,10 +3629,16 @@ fn live_paint_edges_outside_the_faces_come_from_the_nearest_visible_group() {
         };
         assert_eq!(lp_click(&mut sel, &cx, ev(PointerKind::Down, x, y).with_mods(alt)), vec![picked]);
         let mut bucket = LivePaintBucketTool::default();
+        bucket.set_option("cursorSwatchPreview", &json!(false));
         bucket.pointer(&cx, &ev(PointerKind::Move, x, y).with_mods(shift));
         assert_eq!(edge_x(&bucket.overlays(&cx)), want.map(|w| w.2));
-        let stroked = want.map(|(g, ..)| Action::Exec("livePaint.strokeEdge".into(), json!({ "group": g.0, "point": [x, y], "tolerance": 4.0 })));
-        assert_eq!(bucket.pointer(&cx, &ev(PointerKind::Down, x, y).with_mods(shift)), stroked.into_iter().collect::<Vec<_>>());
+        let stroked = want.map(|(g, ..)| {
+            vec![
+                Action::Begin("Live Paint Bucket".into()),
+                Action::Preview("livePaint.strokeEdge".into(), json!({ "group": g.0, "point": [x, y], "tolerance": 4.0 })),
+            ]
+        });
+        assert_eq!(bucket.pointer(&cx, &ev(PointerKind::Down, x, y).with_mods(shift)), stroked.unwrap_or_default());
     };
     check(&d, Some((back, back_right, 100.0)));
     // A hidden group's edges are not highlighted or picked.
@@ -1158,10 +3678,16 @@ fn live_paint_tools_skip_hidden_edges() {
         };
         assert_eq!(lp_click(&mut sel, &cx, ev(PointerKind::Down, x, 50.0).with_mods(alt)), vec![picked], "x {x}");
         let mut bucket = LivePaintBucketTool::default();
+        bucket.set_option("cursorSwatchPreview", &json!(false));
         bucket.pointer(&cx, &ev(PointerKind::Move, x, 50.0).with_mods(shift));
         assert_eq!(edge_x(&bucket.overlays(&cx)), want.map(|w| w.2), "x {x}");
-        let stroked = want.map(|(g, ..)| Action::Exec("livePaint.strokeEdge".into(), json!({ "group": g.0, "point": [x, 50.0], "tolerance": 4.0 })));
-        assert_eq!(bucket.pointer(&cx, &ev(PointerKind::Down, x, 50.0).with_mods(shift)), stroked.into_iter().collect::<Vec<_>>(), "x {x}");
+        let stroked = want.map(|(g, ..)| {
+            vec![
+                Action::Begin("Live Paint Bucket".into()),
+                Action::Preview("livePaint.strokeEdge".into(), json!({ "group": g.0, "point": [x, 50.0], "tolerance": 4.0 })),
+            ]
+        });
+        assert_eq!(bucket.pointer(&cx, &ev(PointerKind::Down, x, 50.0).with_mods(shift)), stroked.unwrap_or_default(), "x {x}");
     }
 }
 
@@ -1185,10 +3711,12 @@ fn live_paint_tools_skip_hidden_faces() {
     };
     // Where the faces overlap, both tools take the back group's face under the hidden one.
     let mut bucket = LivePaintBucketTool::default();
+    bucket.set_option("cursorSwatchPreview", &json!(false));
     bucket.pointer(&cx, &ev(PointerKind::Move, 75.0, 50.0));
     assert_eq!(part(&bucket.overlays(&cx)), Some(Rect::new(0.0, 0.0, 100.0, 100.0)));
-    let fill = Action::Exec("livePaint.fill".into(), json!({ "group": back.0, "point": [75.0, 50.0] }));
-    assert_eq!(bucket.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0)), vec![fill]);
+    let fill = Action::Preview("livePaint.fill".into(), json!({ "group": back.0, "point": [75.0, 50.0] }));
+    assert_eq!(bucket.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0)), vec![Action::Begin("Live Paint Bucket".into()), fill]);
+    bucket.pointer(&cx, &ev(PointerKind::Up, 75.0, 50.0));
     let mut sel = LivePaintSelectionTool::default();
     sel.pointer(&cx, &ev(PointerKind::Move, 75.0, 50.0));
     assert_eq!(part(&sel.overlays(&cx)), Some(Rect::new(0.0, 0.0, 100.0, 100.0)));
@@ -1237,6 +3765,61 @@ fn live_paint_selection_options_set_the_highlight() {
     assert_eq!(t.options()["width"], json!(LP_SELECT_WIDTH_RANGE.1));
     t.set_option("width", &json!(0));
     assert_eq!(t.options()["width"], json!(LP_SELECT_WIDTH_RANGE.0));
+}
+
+/// A press while a Fill Area hover search runs on another thread waits for that search only: no
+/// search starts for where the pointer moved meanwhile, and the press finds its own area.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn fill_area_press_does_not_search_a_hover_position_it_passed() {
+    let mut d = Document::new(800.0, 600.0);
+    let l = d.layers[0].id;
+    let pts: Vec<Point> = (0..200)
+        .map(|k| {
+            let a = k as f64 * std::f64::consts::TAU / 200.0;
+            Point::new(300.0 + 100.0 * a.cos(), 300.0 + 100.0 * a.sin())
+        })
+        .collect();
+    let poly = d.alloc_id();
+    d.insert(Some(l), 0, Node::path(poly, PathData::single(SubPath::polyline(&pts, true)), Appearance::default_art())).unwrap();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { revision: (1, 1), ..cx(&d, &s, &p) };
+    let mut t = FillAreaTool::new();
+    let started = super::fill_area::hover_searches_started();
+    t.pointer(&cx, &ev(PointerKind::Move, 500.0, 500.0));
+    assert!(t.waiting());
+    t.pointer(&cx, &ev(PointerKind::Move, 510.0, 500.0));
+    let acts = t.pointer(&cx, &ev(PointerKind::Down, 300.0, 300.0));
+    assert!(matches!(acts.as_slice(), [Action::Begin(_), Action::Preview(id, _)] if id == "shapeBuilder.copyRegion"), "{acts:?}");
+    assert!(!t.waiting());
+    assert_eq!(super::fill_area::hover_searches_started() - started, 1, "only the search that was running");
+}
+
+/// An outline without a fill, cut to a clipping mask, keeps the pieces on the mask's edge: a square
+/// clipped by the same square keeps all four sides. A square just outside the mask, and a square on
+/// an outline of the mask that bounds no filled area (two copies of the square under even-odd),
+/// keep nothing.
+#[test]
+fn fill_area_clip_keeps_outline_pieces_on_the_mask_edge() {
+    let unit = Rect::new(0.0, 0.0, 100.0, 100.0);
+    let clip =
+        |shape: PathData, mask: &PathData, rule: FillRule| super::fill_area::clip_to(po::Shape::new(shape, FillRule::NonZero, 1), false, mask, rule);
+    let kept = clip(shapes::rectangle(unit), &shapes::rectangle(unit), FillRule::NonZero).expect("the sides on the mask's edge");
+    assert_eq!(kept.path.subpaths.iter().map(|sp| sp.segment_count()).sum::<usize>(), 4, "{:?}", kept.path);
+    let outside = shapes::rectangle(Rect::new(-0.005, -0.005, 100.005, 100.005));
+    assert!(clip(outside, &shapes::rectangle(unit), FillRule::NonZero).is_none());
+    let mut twice = shapes::rectangle(unit);
+    let mut back = shapes::rectangle(unit).subpaths;
+    back[0].anchors.reverse();
+    twice.subpaths.extend(back);
+    assert!(clip(shapes::rectangle(unit), &twice, FillRule::EvenOdd).is_none());
+    // A top side drawn as a cubic whose tangent vanishes at its middle shows as well.
+    let a = |p: Point, h_in: Point, h_out: Point| vectorcraft_geom::Anchor { p, h_in, h_out, kind: vectorcraft_geom::AnchorKind::Corner };
+    let (o, x, xy, y) = (Point::new(0.0, 0.0), Point::new(100.0, 0.0), Point::new(100.0, 100.0), Point::new(0.0, 100.0));
+    let cusp = SubPath::new(vec![a(o, o, x), a(x, o, x), a(xy, xy, xy), a(y, y, y)], true);
+    let kept = clip(PathData::single(cusp), &shapes::rectangle(unit), FillRule::NonZero).expect("the sides on the mask's edge");
+    assert_eq!(kept.path.subpaths.iter().map(|sp| sp.segment_count()).sum::<usize>(), 4, "{:?}", kept.path);
 }
 
 #[test]

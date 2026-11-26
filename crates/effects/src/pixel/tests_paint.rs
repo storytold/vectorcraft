@@ -14,6 +14,7 @@ fn space(w: usize, h: usize) -> PixelSpace {
         to_doc: Affine::IDENTITY,
         px: 1.0,
         center: Point::new(w / 2.0, h / 2.0),
+        size: vectorcraft_geom::Vec2::new(w, h),
         channels: Channels::Rgb,
         line: 1.0,
         extent: 0.5 * w.hypot(h),

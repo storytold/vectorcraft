@@ -3,7 +3,7 @@
 # exports VERSION and NFPM_ARCH.
 #
 #   nfpm package -f packaging/linux/nfpm.yaml -p deb -t dist/release/
-name: vectorcraft
+name: ${NFPM_NAME}
 arch: ${NFPM_ARCH}
 platform: linux
 version: ${VERSION}
@@ -63,15 +63,24 @@ overrides:
       - xdg-desktop-portal
 
 contents:
-  - src: ${STAGE}/usr/bin/vectorcraft
-    dst: /usr/bin/vectorcraft
+  - src: ${STAGE}/usr/bin/${NFPM_BIN}
+    dst: /usr/bin/${NFPM_BIN}
     file_info: { mode: 0755 }
-  - src: ${STAGE}/usr/bin/vectorcraft-cli
-    dst: /usr/bin/vectorcraft-cli
+  - src: ${STAGE}/usr/bin/${NFPM_CLI}
+    dst: /usr/bin/${NFPM_CLI}
     file_info: { mode: 0755 }
+  - src: ${STAGE}/usr/lib/
+    dst: /usr/lib/
+    type: tree
   - src: ${STAGE}/usr/share/
     dst: /usr/share/
     type: tree
+  # Debian's zsh reads vendor-completions, not /usr/share/zsh/site-functions as Fedora's and
+  # openSUSE's do (its debian/rules sets --enable-additional-fpath).
+  - src: /usr/share/zsh/site-functions/_vectorcraft-cli
+    dst: /usr/share/zsh/vendor-completions/_vectorcraft-cli
+    type: symlink
+    packager: deb
 
 scripts:
   postinstall: packaging/linux/postinst.sh

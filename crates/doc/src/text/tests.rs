@@ -1,5 +1,19 @@
 use super::*;
 
+/// Dynamic Text is off for new type and for type saved before it, and saved only when on.
+#[test]
+fn dynamic_text_is_saved_only_when_on() {
+    let t = TextObject::point(Point::ZERO, "Hi", CharStyle::default());
+    assert!(!t.dynamic_text);
+    let off = serde_json::to_value(&t).unwrap();
+    assert!(off.get("dynamicText").is_none());
+    assert!(!serde_json::from_value::<TextObject>(off).unwrap().dynamic_text);
+    let on = TextObject { dynamic_text: true, ..t };
+    let saved = serde_json::to_value(&on).unwrap();
+    assert_eq!(saved["dynamicText"], true);
+    assert!(serde_json::from_value::<TextObject>(saved).unwrap().dynamic_text);
+}
+
 /// Character Direction is saved only when set, and styles written before it existed read as
 /// Default.
 #[test]
@@ -60,6 +74,170 @@ fn digits_map_between_the_numeral_systems() {
     assert_eq!(serde_json::from_value::<CharStyle>(serde_json::to_value(&farsi).unwrap()).unwrap(), farsi);
 }
 
+/// The font height reference is the em box by default and is saved only when it is another.
+#[test]
+fn font_height_reference_is_saved_only_when_not_the_em_box() {
+    let st = CharStyle::default();
+    assert_eq!(st.font_height_reference, FontHeightReference::EmBox);
+    assert!(serde_json::to_value(&st).unwrap().get("fontHeightReference").is_none());
+    for (r, key) in
+        [(FontHeightReference::CapHeight, "capHeight"), (FontHeightReference::XHeight, "xHeight"), (FontHeightReference::IcfBox, "icfBox")]
+    {
+        let set = CharStyle { font_height_reference: r, ..CharStyle::default() };
+        assert_eq!(serde_json::to_value(&set).unwrap()["fontHeightReference"], key);
+        assert_eq!(serde_json::from_value::<CharStyle>(serde_json::to_value(&set).unwrap()).unwrap(), set);
+    }
+    // Styles written before the attribute existed read as the em box.
+    let old = serde_json::to_value(&st).unwrap();
+    assert_eq!(serde_json::from_value::<CharStyle>(old).unwrap().font_height_reference, FontHeightReference::EmBox);
+}
+
+/// Insert Aki Left and Right are 0 by default and saved only when not 0, each side on its own;
+/// styles written before them read as 0, and a value out of range from a file is kept from 0 to one
+/// em.
+#[test]
+fn insert_aki_is_saved_only_when_set() {
+    let st = CharStyle::default();
+    assert_eq!((st.aki_left, st.aki_right), (0.0, 0.0));
+    let saved = serde_json::to_value(&st).unwrap();
+    assert!(saved.get("akiLeft").is_none() && saved.get("akiRight").is_none());
+    for set in [
+        CharStyle { aki_left: 250.0, ..CharStyle::default() },
+        CharStyle { aki_right: 500.0, ..CharStyle::default() },
+        CharStyle { aki_left: 125.5, aki_right: 1000.0, ..CharStyle::default() },
+    ] {
+        let saved = serde_json::to_value(&set).unwrap();
+        assert_eq!(saved.get("akiLeft").and_then(serde_json::Value::as_f64).unwrap_or(0.0), set.aki_left);
+        assert_eq!(saved.get("akiRight").and_then(serde_json::Value::as_f64).unwrap_or(0.0), set.aki_right);
+        assert_eq!(saved.get("akiLeft").is_some(), set.aki_left != 0.0);
+        assert_eq!(serde_json::from_value::<CharStyle>(saved).unwrap(), set);
+    }
+    let old = serde_json::to_value(&st).unwrap();
+    let read = serde_json::from_value::<CharStyle>(old).unwrap();
+    assert_eq!((read.aki_left, read.aki_right), (0.0, 0.0));
+    let mut damaged = CharStyle { aki_left: -20.0, aki_right: 4000.0, ..CharStyle::default() };
+    damaged.keep_dimensions_in_range();
+    assert_eq!((damaged.aki_left, damaged.aki_right), (0.0, MAX_AKI));
+    let mut damaged = CharStyle { aki_left: f64::NAN, aki_right: f64::INFINITY, ..CharStyle::default() };
+    damaged.keep_dimensions_in_range();
+    assert_eq!((damaged.aki_left, damaged.aki_right), (0.0, MAX_AKI));
+    // A character style from a file is kept in range the same way.
+    let mut d = crate::Document::new(100.0, 100.0);
+    let attrs = serde_json::json!({"akiLeft": 5000, "akiRight": -1});
+    d.char_styles.push(TextStyleDef { name: "Spaced".into(), attrs: attrs.as_object().cloned().unwrap_or_default() });
+    d.keep_type_values_in_range();
+    assert_eq!((d.char_styles[0].attrs["akiLeft"].as_f64(), d.char_styles[0].attrs["akiRight"].as_f64()), (Some(MAX_AKI), Some(0.0)));
+}
+
+/// Adjust Horizontal and Vertical Diacritic Position are 0 by default and saved only when not 0,
+/// each on its own; styles written before them read as 0, and a value out of range from a file is
+/// kept within one em either way.
+#[test]
+fn diacritic_positions_are_saved_only_when_set() {
+    let st = CharStyle::default();
+    assert_eq!((st.diacritic_horizontal, st.diacritic_vertical), (0.0, 0.0));
+    let saved = serde_json::to_value(&st).unwrap();
+    assert!(saved.get("diacriticHorizontal").is_none() && saved.get("diacriticVertical").is_none());
+    for set in [
+        CharStyle { diacritic_horizontal: -250.0, ..CharStyle::default() },
+        CharStyle { diacritic_vertical: 500.0, ..CharStyle::default() },
+        CharStyle { diacritic_horizontal: 12.5, diacritic_vertical: -1000.0, ..CharStyle::default() },
+    ] {
+        let saved = serde_json::to_value(&set).unwrap();
+        assert_eq!(saved.get("diacriticHorizontal").and_then(serde_json::Value::as_f64).unwrap_or(0.0), set.diacritic_horizontal);
+        assert_eq!(saved.get("diacriticVertical").and_then(serde_json::Value::as_f64).unwrap_or(0.0), set.diacritic_vertical);
+        assert_eq!(saved.get("diacriticHorizontal").is_some(), set.diacritic_horizontal != 0.0);
+        assert_eq!(saved.get("diacriticVertical").is_some(), set.diacritic_vertical != 0.0);
+        assert_eq!(serde_json::from_value::<CharStyle>(saved).unwrap(), set);
+    }
+    let mut damaged = CharStyle { diacritic_horizontal: -4000.0, diacritic_vertical: 4000.0, ..CharStyle::default() };
+    damaged.keep_dimensions_in_range();
+    assert_eq!((damaged.diacritic_horizontal, damaged.diacritic_vertical), (-MAX_DIACRITIC_POSITION, MAX_DIACRITIC_POSITION));
+    let mut damaged = CharStyle { diacritic_horizontal: f64::NAN, diacritic_vertical: f64::NEG_INFINITY, ..CharStyle::default() };
+    damaged.keep_dimensions_in_range();
+    assert_eq!((damaged.diacritic_horizontal, damaged.diacritic_vertical), (0.0, -MAX_DIACRITIC_POSITION));
+    // A character style from a file is kept in range the same way.
+    let mut d = crate::Document::new(100.0, 100.0);
+    let attrs = serde_json::json!({"diacriticHorizontal": 5000, "diacriticVertical": -5000});
+    d.char_styles.push(TextStyleDef { name: "Moved".into(), attrs: attrs.as_object().cloned().unwrap_or_default() });
+    d.keep_type_values_in_range();
+    let kept = |key: &str| d.char_styles[0].attrs[key].as_f64();
+    assert_eq!((kept("diacriticHorizontal"), kept("diacriticVertical")), (Some(MAX_DIACRITIC_POSITION), Some(-MAX_DIACRITIC_POSITION)));
+}
+
+/// Tsume is 0 by default and saved only when not 0; styles written before it read as 0, and a
+/// value out of range from a file, in a run or a character style, is kept from 0 to 100.
+#[test]
+fn tsume_is_saved_only_when_set_and_kept_in_range() {
+    let st = CharStyle::default();
+    assert_eq!(st.tsume, 0.0);
+    let saved = serde_json::to_value(&st).unwrap();
+    assert!(saved.get("tsume").is_none());
+    let read = serde_json::from_value::<CharStyle>(saved).unwrap();
+    assert_eq!(read.tsume, 0.0);
+    let set = CharStyle { tsume: 37.5, ..CharStyle::default() };
+    let saved = serde_json::to_value(&set).unwrap();
+    assert_eq!(saved.get("tsume").and_then(serde_json::Value::as_f64), Some(37.5));
+    assert_eq!(serde_json::from_value::<CharStyle>(saved).unwrap(), set);
+    for (stored, kept) in [(-5.0, 0.0), (250.0, MAX_TSUME), (f64::NAN, 0.0), (f64::INFINITY, MAX_TSUME), (50.0, 50.0)] {
+        let mut damaged = CharStyle { tsume: stored, ..CharStyle::default() };
+        damaged.keep_dimensions_in_range();
+        assert_eq!(damaged.tsume, kept, "{stored}");
+    }
+    let mut d = crate::Document::new(100.0, 100.0);
+    for tsume in [500, -1] {
+        let attrs = serde_json::json!({ "tsume": tsume });
+        d.char_styles.push(TextStyleDef { name: format!("Tight {tsume}"), attrs: attrs.as_object().cloned().unwrap_or_default() });
+    }
+    d.keep_type_values_in_range();
+    assert_eq!((d.char_styles[0].attrs["tsume"].as_f64(), d.char_styles[1].attrs["tsume"].as_f64()), (Some(MAX_TSUME), Some(0.0)));
+}
+
+/// Each Indic numeral system draws 0–9 (and the Arabic-Indic sets) as the ten digits of its
+/// script's block; every system saves under its id, which reads back, and other names are refused.
+#[test]
+fn indic_digits_map_to_their_scripts_block() {
+    let map = |d: Digits, s: &str| -> String { s.chars().map(|c| d.map(c)).collect() };
+    for (d, zero) in [
+        (Digits::Devanagari, 0x966),
+        (Digits::Bengali, 0x9E6),
+        (Digits::Gurmukhi, 0xA66),
+        (Digits::Gujarati, 0xAE6),
+        (Digits::Odia, 0xB66),
+        (Digits::Tamil, 0xBE6),
+        (Digits::Telugu, 0xC66),
+        (Digits::Kannada, 0xCE6),
+        (Digits::Malayalam, 0xD66),
+    ] {
+        let block: String = (zero..zero + 10).map(|u| char::from_u32(u).unwrap()).collect();
+        assert!(block.chars().all(char::is_numeric), "{d:?}: {block}");
+        for s in ["0123456789", "٠١٢٣٤٥٦٧٨٩", "۰۱۲۳۴۵۶۷۸۹"] {
+            assert_eq!(map(d, s), block, "{d:?}");
+        }
+        assert_eq!(map(d, "a-Z ٪"), "a-Z ٪");
+    }
+    assert_eq!(map(Digits::Devanagari, "page 12"), "page १२");
+    for d in Digits::ALL {
+        assert_eq!(serde_json::to_value(d).unwrap(), d.id());
+        assert_eq!(serde_json::from_value::<Digits>(d.id().into()).unwrap(), d);
+        assert_eq!(Digits::from_id(d.id()), Some(d));
+    }
+    assert_eq!(Digits::from_id("roman"), None);
+    assert!(serde_json::from_value::<Digits>("roman".into()).is_err());
+}
+
+/// Language is saved only when set; styles written before it existed read as the default.
+#[test]
+fn language_is_saved_only_when_set() {
+    let st = CharStyle::default();
+    let old = serde_json::to_value(&st).unwrap();
+    assert!(old.get("language").is_none());
+    assert_eq!(serde_json::from_value::<CharStyle>(old).unwrap().language, None);
+    let turkish = CharStyle { language: Some("tr".into()), ..CharStyle::default() };
+    assert_eq!(serde_json::to_value(&turkish).unwrap()["language"], "tr");
+    assert_eq!(serde_json::from_value::<CharStyle>(serde_json::to_value(&turkish).unwrap()).unwrap(), turkish);
+}
+
 /// Auto leading follows the paragraph's Auto Leading; a set leading doesn't.
 #[test]
 fn paragraph_effective_leading_follows_auto_leading() {
@@ -107,6 +285,29 @@ fn justification_options_read_from_a_file_stay_in_range() {
     assert_eq!(same, d);
 }
 
+/// Korean Line Break Anywhere is off for a new paragraph and saved only when off; a paragraph
+/// saved before it existed, or a text object saved without paragraph attributes, reads with it on,
+/// and both values read back as saved.
+#[test]
+fn korean_line_break_anywhere_is_saved_only_when_off() {
+    let off = ParaStyle::default();
+    assert!(!off.korean_line_break_anywhere);
+    let saved = serde_json::to_value(&off).unwrap();
+    assert_eq!(saved["korean_line_break_anywhere"], false);
+    assert_eq!(serde_json::from_value::<ParaStyle>(saved).unwrap(), off);
+    let on = ParaStyle { korean_line_break_anywhere: true, ..ParaStyle::default() };
+    let saved = serde_json::to_value(&on).unwrap();
+    assert!(saved.get("korean_line_break_anywhere").is_none());
+    assert_eq!(serde_json::from_value::<ParaStyle>(saved).unwrap(), on);
+    let old: ParaStyle = serde_json::from_str(r#"{"justify":"Left"}"#).unwrap();
+    assert!(old.korean_line_break_anywhere);
+    let mut saved = serde_json::to_value(TextObject::point(Point::ZERO, "가나", CharStyle::default())).unwrap();
+    assert_eq!(saved["para"]["korean_line_break_anywhere"], false);
+    saved.as_object_mut().unwrap().remove("para");
+    let old: TextObject = serde_json::from_value(saved).unwrap();
+    assert_eq!(old.para, ParaStyle { korean_line_break_anywhere: true, ..ParaStyle::default() });
+}
+
 /// Numbered lists: each number style writes its numbers and rolls over (letters after Z,
 /// roman numerals in subtractive forms, zero-padded numbers past their digits), the marker adds
 /// a period, and the count runs through list paragraphs, skips empty and bulleted ones and
@@ -131,13 +332,13 @@ fn number_styles_write_their_numbers_and_roll_over() {
     assert_eq!(ParaList::numbered(NumberStyle::UpperRoman).marker(4), "IV.");
     assert_eq!(ParaList::bulleted(Bullet::Square).marker(4), "\u{25AA}");
     let (num, dot) = (Some(ParaList::numbered(NumberStyle::Arabic)), Some(ParaList::bulleted(Bullet::Dot)));
-    let mut count = 0;
+    let mut count = ListCounts::default();
     let markers: Vec<Option<String>> = [(num, false), (num, true), (dot, false), (num, false), (None, false), (num, false)]
         .iter()
         .map(|&(l, empty)| ParaList::next_marker(l, empty, &mut count))
         .collect();
     assert_eq!(markers, [Some("1.".into()), None, Some("\u{2022}".into()), Some("2.".into()), None, Some("1.".into())]);
-    assert_eq!(count, 1);
+    assert_eq!(count.parts(), (1, vec![]));
     let read = |v: serde_json::Value| serde_json::from_value::<ParaList>(v).unwrap();
     assert_eq!(read(serde_json::json!({"bullet": "dash"})), ParaList::bulleted(Bullet::Dash));
     assert_eq!(read(serde_json::json!({"number": "threeDigits"})), ParaList::numbered(NumberStyle::ThreeDigits));
@@ -148,23 +349,38 @@ fn number_styles_write_their_numbers_and_roll_over() {
     );
 }
 
+/// A list's marker alignment: Left by default and not saved, Right saved as `"align": "right"`;
+/// a list saved without it reads as Left.
+#[test]
+fn a_list_saves_its_marker_alignment_only_when_it_is_right() {
+    let right = ParaList::numbered(NumberStyle::Arabic).aligned(ListAlign::Right);
+    assert_eq!(ParaList::bulleted(Bullet::Dot).align, ListAlign::Left);
+    assert_eq!(serde_json::to_value(right).unwrap(), serde_json::json!({"bullet": "dot", "number": "arabic", "align": "right"}));
+    assert_eq!(serde_json::to_value(ParaList::bulleted(Bullet::Dash)).unwrap(), serde_json::json!({"bullet": "dash"}));
+    let read = |v: serde_json::Value| serde_json::from_value::<ParaList>(v).unwrap();
+    assert_eq!(read(serde_json::json!({"bullet": "dot", "number": "arabic", "align": "right"})), right);
+    assert_eq!(read(serde_json::json!({"bullet": "square"})).align, ListAlign::Left);
+    assert!(serde_json::from_value::<ParaList>(serde_json::json!({"align": "center"})).is_err());
+}
+
 /// Typed list detection: "1.", "1)", "A." and "A)" and a space at the start of a paragraph
-/// start a numbered list, and "*", "#", ">" and "+" and a space start a bulleted list with the
-/// filled dot. Other text, the same characters later in a paragraph or without the space, and
-/// a paragraph already in a list start nothing.
+/// start a numbered list, and "*", "+", "#" and ">" and a space start a bulleted list with the
+/// filled dot, the hollow circle, the filled square and the dash. Other text, the same characters
+/// later in a paragraph or without the space, and a paragraph already in a list start nothing.
 #[test]
 fn typed_list_starts_are_found_at_a_paragraphs_start() {
     let (arabic, letters, dot) =
         (ParaList::numbered(NumberStyle::Arabic), ParaList::numbered(NumberStyle::UpperLetters), ParaList::bulleted(Bullet::Dot));
-    let typed = ["1.", "1)", "A.", "A)", "*", "#", ">", "+"].map(ParaList::typed);
-    assert_eq!(typed, [arabic, arabic, letters, letters, dot, dot, dot, dot].map(Some));
+    let (circle, square, dash) = (ParaList::bulleted(Bullet::Circle), ParaList::bulleted(Bullet::Square), ParaList::bulleted(Bullet::Dash));
+    let typed = ["1.", "1)", "A.", "A)", "*", "+", "#", ">"].map(ParaList::typed);
+    assert_eq!(typed, [arabic, arabic, letters, letters, dot, circle, square, dash].map(Some));
     for other in ["", "2.", "a.", "a)", "I.", "1", "A", "1:", "-", "•", "1.)", " 1.", "*1", "１."] {
         assert_eq!(ParaList::typed(other), None, "{other:?}");
     }
     let mut t = TextObject::point(Point::ZERO, "Fruit\n1. Apples\nA) x * y\n+ ", CharStyle::default());
     assert_eq!(t.typed_list_at(9), Some((6, arabic)));
     assert_eq!(t.typed_list_at(19), Some((16, letters)));
-    assert_eq!(t.typed_list_at(27), Some((25, dot)));
+    assert_eq!(t.typed_list_at(27), Some((25, circle)));
     // Not at the paragraph's start, not right after the space, or past the end.
     for at in [0, 5, 8, 10, 15, 23, 25, 26, 99] {
         assert_eq!(t.typed_list_at(at), None, "{at}");
@@ -174,6 +390,176 @@ fn typed_list_starts_are_found_at_a_paragraphs_start() {
     t.set_paragraph_styles(styles);
     assert_eq!(t.typed_list_at(9), None, "a list paragraph stays as it is");
     assert_eq!(t.typed_list_at(19), Some((16, letters)));
+}
+
+/// List levels: each level counts its own numbers, a deeper paragraph starts its count at 1,
+/// a paragraph back at a shallower level goes on with that level's count, and a paragraph in
+/// no list starts every level again. A level past the first sets the paragraph 18 pt further
+/// in; the file saves the level only when it is not 1, and a level outside 1 to 9 reads as the
+/// nearest one. A type object's counts save level 1 and the deeper levels apart.
+#[test]
+fn list_levels_count_their_own_numbers_and_save_only_past_the_first() {
+    let num = |level| Some(ParaList::numbered(NumberStyle::Arabic).at_level(level));
+    let dot = |level| Some(ParaList::bulleted(Bullet::Dot).at_level(level));
+    let mut counts = ListCounts::default();
+    let markers: Vec<Option<String>> = [
+        (num(1), false),
+        (num(2), false),
+        (num(2), false),
+        (num(3), false),
+        (num(2), true),
+        (num(2), false),
+        (num(1), false),
+        (num(2), false),
+        (dot(1), false),
+        (num(2), false),
+        (num(1), false),
+        (None, false),
+        (num(2), false),
+    ]
+    .iter()
+    .map(|&(l, empty)| ParaList::next_marker(l, empty, &mut counts))
+    .collect();
+    let want = ["1.", "1.", "2.", "1.", "", "3.", "2.", "1.", "\u{2022}", "1.", "3.", "", "1."];
+    assert_eq!(markers.iter().map(|m| m.as_deref().unwrap_or("")).collect::<Vec<_>>(), want);
+    assert_eq!(counts, ListCounts([0, 1, 0, 0, 0, 0, 0, 0, 0]));
+    assert_eq!((ParaList::default().level, ParaList::bulleted(Bullet::Dot).depth()), (1, 1));
+    assert_eq!([0, 1, 4, 9, 12].map(|l| ParaList::bulleted(Bullet::Dot).at_level(l).depth()), [1, 1, 4, 9, 9]);
+    assert_eq!([1, 2, 9].map(|l| ParaList::bulleted(Bullet::Dot).at_level(l).level_indent()), [0.0, 18.0, 144.0]);
+    let para = ParaStyle { left_indent: 18.0, list: dot(3), ..Default::default() };
+    assert_eq!((para.laid_out_left_indent(), ParaStyle { list: None, ..para.clone() }.laid_out_left_indent()), (54.0, 18.0));
+    assert_eq!(serde_json::to_value(dot(1)).unwrap(), serde_json::json!({"bullet": "dot"}));
+    assert_eq!(serde_json::to_value(num(4)).unwrap(), serde_json::json!({"bullet": "dot", "number": "arabic", "level": 4}));
+    let read = |v: serde_json::Value| serde_json::from_value::<ParaList>(v).unwrap();
+    assert_eq!((read(serde_json::json!({"bullet": "dash"})).level, read(serde_json::json!({"level": 4}))), (1, dot(4).unwrap()));
+    assert!(serde_json::from_value::<ParaList>(serde_json::json!({"level": "two"})).is_err());
+    assert!(serde_json::from_value::<ParaList>(serde_json::json!({"level": 2.5})).is_err());
+    let levels = [serde_json::json!(0), serde_json::json!(-1), serde_json::json!(12), serde_json::json!(300), serde_json::json!(u64::MAX)];
+    assert_eq!(
+        levels.map(|l| read(serde_json::json!({ "level": l })).level),
+        [1, 1, 9, 9, 9],
+        "a saved level outside 1 to 9 reads as the nearest one"
+    );
+    let deep = ListCounts([5, 0, 2, 0, 0, 0, 0, 0, 0]);
+    assert_eq!(deep.parts(), (5, vec![0, 2]));
+    assert_eq!((ListCounts::from_parts(5, &[0, 2]), ListCounts::default().parts()), (deep, (0, vec![])));
+    let mut t = TextObject::point(Point::ZERO, "Text", CharStyle::default());
+    t.set_list_counts(deep);
+    assert_eq!((t.list_count, t.list_level_counts.as_slice(), t.list_counts()), (5, &[0, 2][..], deep));
+    let saved = serde_json::to_value(&t).unwrap();
+    assert_eq!((&saved["listCount"], &saved["listLevelCounts"]), (&serde_json::json!(5), &serde_json::json!([0, 2])));
+    t.set_list_counts(ListCounts::default());
+    assert!(serde_json::to_value(&t).unwrap().get("listLevelCounts").is_none(), "no counts past level 1 are saved without them");
+    let mut saved = serde_json::to_value(&t).unwrap();
+    saved["listLevelCounts"] = serde_json::json!((1..=20).collect::<Vec<u32>>());
+    let opened = serde_json::from_value::<TextObject>(saved).unwrap();
+    assert_eq!(opened.list_level_counts, (1..=8).collect::<Vec<u32>>(), "a file keeps only the counts of levels 2 to 9");
+}
+
+/// A numbered paragraph given a number shows it, and the numbered paragraphs after it at its level
+/// count on from it; deeper levels still count from 1 after it, a bulleted or empty paragraph does
+/// not use the number, and a paragraph in no list still starts the count again. The file saves the
+/// number only when it is set, and a saved number outside 1 to 999999999 reads as the nearest one.
+#[test]
+fn a_numbered_paragraph_given_a_number_starts_its_level_count_there() {
+    let num = |level, start| Some(ParaList::numbered(NumberStyle::Arabic).at_level(level).starting_at(start));
+    let dot = Some(ParaList::bulleted(Bullet::Dot).starting_at(Some(7)));
+    let mut counts = ListCounts::default();
+    let markers: Vec<Option<String>> = [
+        (num(1, None), false),
+        (num(1, Some(5)), false),
+        (num(1, None), false),
+        (num(2, None), false),
+        (num(2, Some(1)), false),
+        (num(2, None), false),
+        (num(1, None), false),
+        (num(1, Some(9)), true),
+        (num(1, None), false),
+        (dot, false),
+        (num(1, Some(1)), false),
+        (None, false),
+        (num(1, None), false),
+    ]
+    .iter()
+    .map(|&(l, empty)| ParaList::next_marker(l, empty, &mut counts))
+    .collect();
+    let want = ["1.", "5.", "6.", "1.", "1.", "2.", "7.", "", "8.", "\u{2022}", "1.", "", "1."];
+    assert_eq!(markers.iter().map(|m| m.as_deref().unwrap_or("")).collect::<Vec<_>>(), want);
+    let mut counts = ListCounts::default();
+    let roman = Some(ParaList::numbered(NumberStyle::UpperRoman).starting_at(Some(MAX_LIST_START)));
+    assert_eq!(ParaList::next_marker(roman, false, &mut counts).as_deref(), Some("999999999."));
+    let zero = Some(ParaList::numbered(NumberStyle::Arabic).starting_at(Some(0)));
+    assert_eq!(ParaList::next_marker(zero, false, &mut counts).as_deref(), Some("1."), "a number below 1 counts as 1");
+    assert_eq!(serde_json::to_value(num(1, None)).unwrap(), serde_json::json!({"bullet": "dot", "number": "arabic"}));
+    assert_eq!(serde_json::to_value(num(1, Some(5))).unwrap(), serde_json::json!({"bullet": "dot", "number": "arabic", "start": 5}));
+    let read = |v: serde_json::Value| serde_json::from_value::<ParaList>(v).unwrap().start;
+    assert_eq!(read(serde_json::json!({"number": "arabic", "start": 5})), Some(5));
+    assert_eq!(read(serde_json::json!({"number": "arabic"})), None);
+    assert_eq!(read(serde_json::json!({"number": "arabic", "start": null})), None);
+    let starts = [serde_json::json!(0), serde_json::json!(-3), serde_json::json!(5_000_000_000_u64), serde_json::json!(u64::MAX)];
+    assert_eq!(
+        starts.map(|s| read(serde_json::json!({ "number": "arabic", "start": s }))),
+        [Some(1), Some(1), Some(MAX_LIST_START), Some(MAX_LIST_START)],
+        "a saved number outside 1 to 999999999 reads as the nearest one"
+    );
+    for bad in [serde_json::json!(2.5), serde_json::json!("5"), serde_json::json!(true)] {
+        assert!(serde_json::from_value::<ParaList>(serde_json::json!({ "start": bad })).is_err(), "{bad}");
+    }
+}
+
+/// Return in a paragraph that its list gives a number makes paragraphs without it, also while
+/// every paragraph shares one style; Return at the start of its text moves the number with the
+/// text, and Return elsewhere leaves it where it was.
+#[test]
+fn return_does_not_copy_a_paragraphs_number() {
+    let five = ParaStyle { list: Some(ParaList::numbered(NumberStyle::Arabic).starting_at(Some(5))), ..ParaStyle::default() };
+    let starts = |t: &TextObject| t.paragraph_styles().iter().map(|p| p.list.and_then(|l| l.start)).collect::<Vec<_>>();
+    // One style for the whole text: Return after "one" splits it.
+    let mut t = TextObject::point(Point::ZERO, "onetwo", CharStyle::default());
+    t.set_all_paras(five);
+    t.splice_paras(3, 3, "\n");
+    t.runs[0].text.insert(3, '\n');
+    t.normalize_paras();
+    assert_eq!(starts(&t), [Some(5), None]);
+    assert!(t.para_at(1).list.is_some_and(|l| l.number == Some(NumberStyle::Arabic)), "the new paragraph stays in the list");
+    // Return at the start of "two" (a paragraph with a number of its own): the number moves on
+    // with the text, and the empty paragraph left before it has none.
+    t.edit_paras(Some(1..2), |p| p.list = p.list.map(|l| l.starting_at(Some(8))));
+    t.splice_paras(4, 4, "\n\n");
+    t.runs[0].text.insert_str(4, "\n\n");
+    t.normalize_paras();
+    assert_eq!(t.plain_text(), "one\n\n\ntwo");
+    assert_eq!(starts(&t), [Some(5), None, None, Some(8)]);
+    // A whole paragraph pasted at the start of "two": the number stays with "two".
+    t.splice_paras(6, 6, "Pasted\n");
+    t.runs[0].text.insert_str(6, "Pasted\n");
+    t.normalize_paras();
+    assert_eq!(t.plain_text(), "one\n\n\nPasted\ntwo");
+    assert_eq!(starts(&t), [Some(5), None, None, None, Some(8)]);
+    // "two" replaced by two paragraphs: none of its text is left, so the first new one keeps it.
+    t.splice_paras(13, 16, "A\nB");
+    t.runs[0].text.replace_range(13..16, "A\nB");
+    t.normalize_paras();
+    assert_eq!(t.plain_text(), "one\n\n\nPasted\nA\nB");
+    assert_eq!(starts(&t), [Some(5), None, None, None, Some(8), None]);
+    // Text without a number keeps one style for every paragraph.
+    let mut t = TextObject::point(Point::ZERO, "onetwo", CharStyle::default());
+    t.set_all_paras(ParaStyle { list: Some(ParaList::numbered(NumberStyle::Arabic)), ..ParaStyle::default() });
+    t.splice_paras(3, 3, "\n");
+    assert!(t.paras.is_empty());
+}
+
+/// In a threaded frame whose first paragraph continues from the frame before, the text at the
+/// frame's start is not the start of a paragraph, so typing a list's start there starts nothing.
+/// The paragraphs after it still start lists.
+#[test]
+fn typed_list_starts_skip_a_continued_paragraph() {
+    let dot = ParaList::bulleted(Bullet::Dot);
+    let mut t = TextObject::point(Point::ZERO, "* Pears\n* ", CharStyle::default());
+    assert_eq!(t.typed_list_at(2), Some((0, dot)));
+    t.first_para_continues = true;
+    assert_eq!(t.typed_list_at(2), None, "a continued paragraph starts no list");
+    assert_eq!(t.typed_list_at(10), Some((8, dot)));
 }
 
 #[test]
@@ -248,12 +634,67 @@ fn paragraph_styles_split_merge_and_normalize() {
     assert_eq!(back.para_at(3).space_before, 4.0);
 }
 
+/// Text Flow is saved only when by rows: area type by columns (the default) saves as it did before
+/// the option, and files from before it read by columns; other values don't read.
+#[test]
+fn text_flow_is_saved_only_when_by_rows() {
+    let by_columns = serde_json::to_value(AreaOptions::default()).unwrap();
+    assert!(by_columns.get("flow").is_none());
+    assert_eq!(serde_json::from_value::<AreaOptions>(by_columns).unwrap().flow, TextFlow::Columns);
+    let by_rows = serde_json::to_value(AreaOptions { flow: TextFlow::Rows, ..AreaOptions::default() }).unwrap();
+    assert_eq!(by_rows["flow"], "rows");
+    assert_eq!(serde_json::from_value::<AreaOptions>(by_rows).unwrap().flow, TextFlow::Rows);
+    assert!(serde_json::from_value::<AreaOptions>(serde_json::json!({"flow": "diagonal"})).is_err());
+}
+
+/// First Baseline Em Box Height saves as `emBoxHeight` with its minimum and reads back; files from
+/// before it read their own first baseline as they did, Ascent when they have none.
+#[test]
+fn em_box_height_first_baseline_is_saved_and_read_back() {
+    let set = AreaOptions { first_baseline: FirstBaseline::EmBoxHeight, first_baseline_min: 9.0, ..AreaOptions::default() };
+    let saved = serde_json::to_value(&set).unwrap();
+    assert_eq!((saved["firstBaseline"].as_str(), saved["firstBaselineMin"].as_f64()), (Some("emBoxHeight"), Some(9.0)));
+    assert_eq!(serde_json::from_value::<AreaOptions>(saved).unwrap(), set);
+    let old = serde_json::json!({"firstBaseline": "leading", "firstBaselineMin": 3.0});
+    assert_eq!(serde_json::from_value::<AreaOptions>(old).unwrap().first_baseline, FirstBaseline::Leading);
+    assert_eq!(serde_json::from_value::<AreaOptions>(serde_json::json!({})).unwrap().first_baseline, FirstBaseline::Ascent);
+    assert!(serde_json::from_value::<AreaOptions>(serde_json::json!({"firstBaseline": "emBox"})).is_err());
+}
+
 /// 120 × 40 area type at (40, 40), its text drawn at twice its size.
 fn area_type() -> TextObject {
     let mut t = TextObject::point(Point::ZERO, "Some text", CharStyle::default());
     t.kind = TextKind::Area { frame: vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 60.0, 20.0)) };
     t.xf = Affine::translate((40.0, 40.0)) * Affine::scale(2.0);
     t
+}
+
+#[test]
+fn a_wrap_object_below_every_area_type_object_makes_no_outline() {
+    use crate::{Appearance, Document, Node, NodeKind};
+    let mut d = Document::new(300.0, 300.0);
+    let l = d.layers[0].id;
+    let wrap = |d: &mut Document, r: Rect| {
+        let id = d.alloc_id();
+        let mut n = Node::path(id, vectorcraft_geom::shapes::rectangle(r), Appearance::default_art());
+        n.extras_mut().wrap = Some(TextWrap::default());
+        n
+    };
+    // Bottom to top: a wrap object, the area type, then a wrap object.
+    let below = wrap(&mut d, Rect::new(0.0, 0.0, 250.0, 250.0));
+    d.insert(Some(l), 9, below).unwrap();
+    let id = d.alloc_id();
+    d.insert(Some(l), 9, Node::new(id, NodeKind::Text(Box::new(area_type())))).unwrap();
+    let above = wrap(&mut d, Rect::new(60.0, 40.0, 80.0, 60.0));
+    d.insert(Some(l), 9, above).unwrap();
+    wrap::OUTLINES_MADE.with(|c| c.set(0));
+    let mut sources = 0;
+    wrap_sources(&d, |_, objects, shapes| {
+        sources += 1;
+        assert_eq!((objects.len(), shapes.len()), (1, 1));
+    });
+    assert_eq!(sources, 1);
+    assert_eq!(wrap::OUTLINES_MADE.with(|c| c.get()), 1, "only the wrap object above the type is outlined");
 }
 
 #[test]
@@ -291,6 +732,33 @@ fn area_anchors_move_in_document_space() {
     assert!(!t.move_area_anchors(&[(0, 1), (0, 9)], Vec2::new(5.0, 5.0)));
     assert!(!t.move_area_anchors(&[(3, 0)], Vec2::new(5.0, 5.0)));
     assert_eq!(t, before);
+}
+
+/// Type on an open path may start before the path's start: the start is kept, saved and read back,
+/// while the start bracket stays at the path's start. On a closed path, and for a start that is not
+/// finite, the start is the start bracket as before.
+#[test]
+fn type_on_an_open_path_starts_before_the_path() {
+    let pts = [Point::new(0.0, 0.0), Point::new(100.0, 0.0), Point::new(100.0, 100.0)];
+    let on = |closed: bool, start: f64| TextKind::OnPath {
+        path: PathData::new(vec![vectorcraft_geom::SubPath::polyline(&pts, closed)]),
+        start,
+        end: None,
+    };
+    let open = on(false, -0.25);
+    assert_eq!(open.path_text_start(), Some(-0.25));
+    assert!(open.starts_before_path());
+    assert_eq!(open.path_span(), Some((0.0, 1.0)));
+    let saved = serde_json::to_value(&open).unwrap();
+    assert_eq!(saved["start"], -0.25);
+    assert_eq!(serde_json::from_value::<TextKind>(saved).unwrap(), open);
+    assert_eq!(on(false, -1e9).path_text_start(), Some(-PATH_LEAD_MAX));
+    assert_eq!(on(false, f64::NEG_INFINITY).path_text_start(), Some(0.0));
+    assert_eq!(on(false, 0.25).path_text_start(), Some(0.25));
+    assert!(!on(false, 0.0).starts_before_path());
+    assert_eq!(on(true, -0.25).path_text_start(), Some(0.0));
+    assert!(!on(true, -0.25).starts_before_path());
+    assert_eq!(TextKind::Point.path_text_start(), None);
 }
 
 /// Builds from before [`Justify::Auto`] read new type's alignment as Left or Right (and ignore
@@ -332,4 +800,70 @@ fn auto_alignment_saves_readable_by_older_builds() {
     assert_eq!(serde_json::from_str::<ParaStyle>(&json).unwrap(), p);
     // Files from before the flag keep their alignment.
     assert_eq!(serde_json::from_str::<ParaStyle>(r#"{"justify":"Center"}"#).unwrap().justify, Justify::Center);
+}
+
+/// The default character and paragraph styles are in range, and each number outside its range,
+/// one that is not a number included, is the error naming its attribute; an attribute the check
+/// is not asked about is not checked.
+#[test]
+fn style_ranges_name_the_attribute_out_of_range() {
+    let all = |_: &str| true;
+    assert_eq!(CharStyle::default().check_ranges(all), Ok(()));
+    let key = |s: CharStyle| s.check_ranges(all).map_err(|e| e.key);
+    let d = CharStyle::default();
+    assert_eq!(key(CharStyle { baseline_shift: f64::NAN, ..d.clone() }), Err("baseline_shift".into()));
+    assert_eq!(key(CharStyle { leading: Some(1e9), ..d.clone() }), Err("leading".into()));
+    assert_eq!(key(CharStyle { v_scale: 0.0, ..d.clone() }), Err("v_scale".into()));
+    assert_eq!(key(CharStyle { kerning: Some(f64::INFINITY), ..d.clone() }), Err("kerning".into()));
+    assert_eq!(key(CharStyle { rotation: 720.0, ..d.clone() }), Err("rotation".into()));
+    assert_eq!(key(CharStyle { warichu_lines: 9, ..d.clone() }), Err("warichuLines".into()));
+    assert_eq!(key(CharStyle { stroke_miter_limit: 0.0, ..d.clone() }), Err("stroke_miter_limit".into()));
+    assert_eq!(key(CharStyle { small_caps: Some(0.0), ..d.clone() }), Err("small_caps".into()));
+    let axes = std::iter::once(("wght".to_string(), f64::NAN)).collect();
+    assert_eq!(key(CharStyle { font_axes: axes, ..d.clone() }), Err("fontAxes".into()));
+    let dash = Some(Dash { pattern: vec![2.0, -1.0], offset: 0.0, align_corners: false });
+    assert_eq!(key(CharStyle { stroke_dash: dash, ..d.clone() }), Err("stroke_dash.pattern".into()));
+    assert_eq!(CharStyle { size: 0.0, ..d.clone() }.check_ranges(|k| k != "size"), Ok(()));
+
+    let all = |_: &str, _: Option<&str>| true;
+    let p = ParaStyle::default();
+    assert_eq!(p.check_ranges(Some(&JustificationOptions::default()), &[], all), Ok(()));
+    let key = |s: ParaStyle, j: Option<&JustificationOptions>| s.check_ranges(j, &[], all).map_err(|e| e.key);
+    assert_eq!(key(ParaStyle { first_line_indent: f64::NAN, ..p.clone() }, None), Err("first_line_indent".into()));
+    let stop = TabStop { position: 1.0, align: TabAlign::Left, leader: String::new(), align_on: '.' };
+    assert_eq!(key(ParaStyle { tabs: vec![stop.clone(); TabStop::MAX_STOPS + 1], ..p.clone() }, None), Err("tabs".into()));
+    let far = TabStop { position: -1.0, ..stop.clone() };
+    assert_eq!(key(ParaStyle { tabs: vec![far.clone()], ..p.clone() }, None), Err("tabs.position".into()));
+    assert_eq!(ParaStyle { tabs: vec![far.clone()], ..p.clone() }.check_ranges(None, &[far], all), Ok(()), "a kept stop");
+    let hyphenation = HyphenationOptions { hyphen_limit: 99, ..HyphenationOptions::default() };
+    assert_eq!(key(ParaStyle { hyphenation, ..p.clone() }, None), Err("hyphenation.hyphen_limit".into()));
+    let reversed = JustificationOptions { word_spacing: [133.0, 100.0, 80.0], ..JustificationOptions::default() };
+    assert_eq!(key(p.clone(), Some(&reversed)), Err("justification.word_spacing".into()));
+}
+
+#[test]
+fn file_fonts_draw_type_only_while_its_text_is_the_files() {
+    use super::file_fonts::*;
+    use super::*;
+    // The hash is the same everywhere and in every version (saved files carry it).
+    assert_eq!(text_hash([""]), 0xcbf2_9ce4_8422_2325);
+    assert_eq!(text_hash(["Ham", "burg"]), text_hash(["Hamburg"]));
+    assert_ne!(text_hash(["Hamburg"]), text_hash(["Hamburh"]));
+    let font = FileFont { family: "Source Serif 9".into(), style: "Regular".into(), key: "k".into() };
+    let mut t = TextObject::point(Point::ZERO, "Ham", CharStyle::default());
+    t.runs.push(TextRun::new("burg", CharStyle::default()));
+    assert!(t.file_fonts_in_use().is_empty());
+    t.file_fonts = Some(Box::new(FileFonts::new(vec![font.clone()], "Hamburg")));
+    assert_eq!(t.file_fonts_in_use(), std::slice::from_ref(&font));
+    // Saved and read back.
+    let json = serde_json::to_string(&t).unwrap();
+    assert!(json.contains(r#""fileFonts":{"fonts":[{"family":"Source Serif 9","style":"Regular","key":"k"}]"#), "{json}");
+    assert_eq!(serde_json::from_str::<TextObject>(&json).unwrap(), t);
+    // Edited: none.
+    t.runs[1].text.push('s');
+    assert!(t.file_fonts_in_use().is_empty());
+    // A file's list past the cap: the first ones.
+    t.runs[1].text.pop();
+    t.file_fonts.as_mut().unwrap().fonts = vec![font; MAX_FILE_FONTS + 5];
+    assert_eq!(t.file_fonts_in_use().len(), MAX_FILE_FONTS);
 }

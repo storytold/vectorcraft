@@ -8,7 +8,10 @@ use vectorcraft_geom::shapes;
 use crate::*;
 
 /// Every file reads as a 40×20 artboard filled blue; a file whose bytes start with `loop` also
-/// places itself (the same key) in its middle, and one whose bytes start with `bad` can't be read.
+/// places itself (the same key) in its middle, one whose bytes start with `cut` also shows an
+/// image whose pixels can't be decoded over its left half, one whose bytes start with `pict` also
+/// shows a linked red image over its left half (its own Show Images in Outline Mode off), and one
+/// whose bytes start with `bad` can't be read.
 fn blue_page(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)> {
     if bytes.starts_with(b"bad") {
         return None;
@@ -17,6 +20,35 @@ fn blue_page(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)>
     d.layers.clear();
     let blue = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0);
     let mut children = vec![Arc::new(Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 20.0)), blue))];
+    if bytes.starts_with(b"cut") {
+        d.images.insert("cut-image".into(), ImageBlob::new("image/png", b"not a PNG: placed document".to_vec()));
+        let im = vectorcraft_doc::ImageObject {
+            key: "cut-image".into(),
+            width: 20,
+            height: 20,
+            xf: Affine::IDENTITY,
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        children.push(Arc::new(Node::new(NodeId(3), NodeKind::Image(Box::new(im)))));
+    }
+    if bytes.starts_with(b"pict") {
+        let raw = [255u8, 0, 0, 255].repeat(16);
+        let red = craft_image_codecs::Image::from_raw(4, 4, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, raw).ok()?;
+        let png = craft_image_codecs::encode(&red, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()?;
+        d.images.insert("pict-image".into(), ImageBlob::new("image/png", png.to_vec()));
+        let im = vectorcraft_doc::ImageObject {
+            key: "pict-image".into(),
+            width: 4,
+            height: 4,
+            xf: Affine::scale(5.0),
+            link: Some(LinkInfo::new("/art/red.png")),
+            placement: Default::default(),
+            pixels: None,
+        };
+        children.push(Arc::new(Node::new(NodeId(4), NodeKind::Image(Box::new(im)))));
+    }
     if bytes.starts_with(b"loop") {
         d.images.insert(p.key.clone(), ImageBlob::new("application/json", bytes.to_vec()));
         let me = PlacedDocument { xf: Affine::translate((10.0, 5.0)) * Affine::scale(0.5), ..p.clone() };
@@ -27,7 +59,7 @@ fn blue_page(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)>
 
 /// A 100×100 document showing one placed file (`bytes` under `key`) in the box (10, 10)–(90, 50).
 fn doc_with(key: &str, bytes: &[u8]) -> Document {
-    vectorcraft_doc::placed_document::set_loader(blue_page);
+    vectorcraft_doc::placed_document::set_loader(gated_blue_page);
     let mut d = Document::new(100.0, 100.0);
     d.images.insert(key.into(), ImageBlob::new("application/json", bytes.to_vec()));
     let l = d.layers[0].id;
@@ -48,6 +80,36 @@ fn placed_node(id: u64, key: &str, width: f64, height: f64, xf: Affine) -> Node 
         placement: Default::default(),
     };
     Node::new(NodeId(id), NodeKind::PlacedDocument(Box::new(p)))
+}
+
+/// Held shut, [`gated_blue_page`] makes the background worker wait before reading a file, so a
+/// frame drawn meanwhile shows the placeholders whatever the scheduler does (#5152: a fast worker
+/// could finish between scheduling a bitmap and the frame looking it up again).
+static GATE_SHUT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// The thread drawing while the gate is shut: it never waits (a file read there is drawn exactly).
+static GATE_HOLDER: std::sync::Mutex<Option<std::thread::ThreadId>> = std::sync::Mutex::new(None);
+
+/// [`blue_page`] once the gate opens (at most 10 s), except on the thread that shut it. Every test
+/// here registers it: the first registration stays, so all of them must agree (open, it is
+/// `blue_page`).
+fn gated_blue_page(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)> {
+    let here = std::thread::current().id();
+    let holder = *GATE_HOLDER.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let t = std::time::Instant::now();
+    while holder != Some(here) && GATE_SHUT.load(std::sync::atomic::Ordering::SeqCst) && t.elapsed().as_secs() < 10 {
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    blue_page(p, bytes)
+}
+
+/// Shut the gate for the calling thread's frames.
+fn shut_gate() {
+    *GATE_HOLDER.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(std::thread::current().id());
+    GATE_SHUT.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+fn open_gate() {
+    GATE_SHUT.store(false, std::sync::atomic::Ordering::SeqCst);
 }
 
 /// Held by the tests that draw placed documents from bitmaps, which share the bitmaps, their
@@ -85,12 +147,101 @@ fn a_placed_document_draws_exactly_with_its_own_art() {
 }
 
 #[test]
+fn outline_mode_draws_a_placed_document_as_its_box_crossed_unless_the_setup_shows_images() {
+    let outline = |d: &Document| {
+        let opts = RenderOptions { background: Some([255, 255, 255, 255]), outline: true, ..Default::default() };
+        Renderer::new().render(d, 100, 100, Affine::IDENTITY, &opts)
+    };
+    let inked = |r: &Rendered, x: u32, y: u32| r.pixel(x, y)[0] < 200;
+    // The box is (10, 10)–(90, 50): (20, 15) is on its diagonal from the top left. The file places
+    // itself again in the box (30, 20)–(70, 40), whose top edge passes (50, 20) and whose diagonal
+    // from the top left passes (35, 22).
+    let mut d = doc_with("outline-cross-1", b"loop");
+    let r = outline(&d);
+    assert!(inked(&r, 20, 15), "the box is crossed from corner to corner");
+    assert!(!inked(&r, 50, 20), "none of the file's art is drawn");
+    // The file's own setup has Show Images in Outline Mode off; this document's setting applies
+    // to the art inside it.
+    d.setup.outline_images = true;
+    let r = outline(&d);
+    assert!(!inked(&r, 20, 15), "with Show Images in Outline Mode it is not crossed");
+    assert!(inked(&r, 50, 20), "and its art is drawn in outline");
+    assert!(!inked(&r, 35, 22), "nor is the file it places");
+    // A drop shadow does not change what Outline mode shows.
+    let mut d = doc_with("outline-cross-2", b"loop");
+    let params = serde_json::json!({"x": 4, "y": 4, "blur": 1, "opacity": 100});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params, visible: true });
+    let r = outline(&d);
+    assert!(inked(&r, 20, 15), "a placed document with a drop shadow is crossed");
+    assert!(!inked(&r, 50, 20), "and none of the file's art is drawn");
+    // The same in a clip group, whose members Outline mode draws one by one.
+    let placed = d.remove(NodeId(50)).unwrap();
+    let mut clip = Node::path(NodeId(71), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default());
+    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    let group = Node::new(NodeId(70), NodeKind::Group { children: vec![Arc::new(clip), placed], clip: true });
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, group).unwrap();
+    let r = outline(&d);
+    assert!(inked(&r, 20, 15), "a clipped placed document with a drop shadow is crossed");
+    assert!(!inked(&r, 50, 20), "and none of its file's art is drawn");
+    // A color adjustment changes no geometry either.
+    let mut d = doc_with("outline-cross-3", b"loop");
+    let params = serde_json::json!({"brightness": 50});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect {
+        id: "adjust.brightnessContrast".into(),
+        params,
+        visible: true,
+    });
+    let r = outline(&d);
+    assert!(inked(&r, 20, 15), "a placed document with a color adjustment is crossed");
+    assert!(!inked(&r, 50, 20), "and none of its file's art is drawn");
+    // A Transform effect reshapes the file's art, read when the crossed box was drawn: its rectangle
+    // is drawn moved 40 points down to (10, 50)–(90, 90), its bottom edge at y = 90, with no cross
+    // through it ((20, 55) is on its diagonal) or where the box was.
+    let mut d = doc_with("outline-cross-4", b"loop");
+    assert!(inked(&outline(&d), 20, 15), "first drawn crossed");
+    let params = serde_json::json!({"moveV": 40});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params, visible: true });
+    let r = outline(&d);
+    assert!(inked(&r, 50, 89) || inked(&r, 50, 90), "the file's art is drawn moved");
+    assert!(!inked(&r, 20, 55), "uncrossed");
+    assert!(!inked(&r, 20, 15), "and nothing is drawn where the box was");
+    // The same when the box was first drawn crossed with a drop shadow.
+    let mut d = doc_with("outline-cross-5", b"loop");
+    let shadow = serde_json::json!({"x": 4, "y": 4, "blur": 1, "opacity": 100});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect {
+        id: "stylize.dropShadow".into(),
+        params: shadow,
+        visible: true,
+    });
+    assert!(inked(&outline(&d), 20, 15), "first drawn crossed with a drop shadow");
+    let params = serde_json::json!({"moveV": 40});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params, visible: true });
+    let r = outline(&d);
+    assert!(inked(&r, 50, 89) || inked(&r, 50, 90), "the file's art is drawn moved after a drop shadow");
+}
+
+#[test]
+fn outline_mode_shows_a_linked_image_in_a_placed_document_by_this_documents_setup() {
+    // The file's red image is (10, 10)–(50, 50) here; (35, 30) is inside it, off its diagonals and
+    // off the placed box's.
+    let mut d = doc_with("outline-pict-1", b"pict");
+    d.setup.outline_images = true;
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), outline: true, ..Default::default() };
+    let r = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts);
+    let [red, green, blue, _] = r.pixel(35, 30);
+    assert!(red == green && green == blue && (50..=58).contains(&red), "the image's gray pixels, not crossed: {:?}", r.pixel(35, 30));
+}
+
+#[test]
 fn an_enveloped_placed_document_shows_its_file_once_read() {
     let mut d = doc("enveloped-1");
     let placed = d.remove(NodeId(50)).unwrap();
     let NodeKind::PlacedDocument(p) = &placed.kind else { panic!("a placed document") };
     let p = (**p).clone();
-    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
     let envelope = NodeKind::Envelope {
         content: vec![placed],
         kind: Box::new(kind),
@@ -173,7 +324,7 @@ fn copies_of_one_placed_document_share_its_bitmap() {
 #[test]
 fn nine_large_bitmaps_on_screen_are_not_made_again() {
     let _serial = serial();
-    vectorcraft_doc::placed_document::set_loader(blue_page);
+    vectorcraft_doc::placed_document::set_loader(gated_blue_page);
     let mut d = Document::new(100.0, 100.0);
     let l = d.layers[0].id;
     let keys: Vec<String> = (0..9).map(|i| format!("nine-{i}")).collect();
@@ -224,6 +375,36 @@ fn a_bitmap_that_cant_be_made_is_not_asked_for_again() {
     assert!(shown != [255, 255, 255] && shown != [0, 0, 255], "the placeholder: {shown:?}");
 }
 
+/// A bitmap made for a frame that marks images whose pixels can't be decoded shows such an image
+/// in the file as a crossed box; one made for a frame that does not shows the art under it.
+#[test]
+fn a_bitmap_marks_undecoded_images_when_the_frame_does() {
+    let d = doc_with("cut-1", b"cut");
+    let Some(NodeKind::PlacedDocument(p)) = d.node(NodeId(50)).map(|n| &n.kind) else { panic!("a placed document") };
+    let Some(blob) = d.images.get("cut-1") else { panic!("the file's bytes") };
+    for mark in [false, true] {
+        // 40 × 20 pixels at one pixel a point; the image covers x 0 to 20.
+        let Some(pm) = placed_document::bitmap(p, blob, 1.0, mark) else { panic!("a bitmap") };
+        let pixel = |x: usize, y: usize| pm.data_as_u8_slice()[(y * 40 + x) * 4..][..4].to_vec();
+        assert_eq!(pixel(30, 10), [0, 0, 255, 255], "mark {mark}: the art beside the image");
+        assert_eq!(pixel(5, 10) != [0, 0, 255, 255], mark, "mark {mark}: the crossed box over the art: {:?}", pixel(5, 10));
+    }
+}
+
+/// Frames with and without marks on undecoded images ask for bitmaps of their own, so a bitmap
+/// made for one is not shown in the other. The file can't be read, so no bitmap is made after
+/// the test ends.
+#[test]
+fn bitmaps_with_and_without_undecoded_marks_are_asked_for_apart() {
+    let _serial = serial();
+    let d = doc_with("marks-1", b"bad");
+    for mark in [false, true] {
+        let opts = RenderOptions { progressive_placed: true, mark_undecoded_images: mark, ..Default::default() };
+        Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts);
+    }
+    assert_eq!(placed_document::scheduled("marks-1"), 2, "one for each");
+}
+
 /// Once bitmaps are ready, drawing again where [`placed_area`] says gives what drawing the whole
 /// frame again gives. The area of a file covers every object showing it (a group's member and
 /// an object with a drop shadow too) and no object showing another file; art of a brush or a
@@ -231,7 +412,7 @@ fn a_bitmap_that_cant_be_made_is_not_asked_for_again() {
 #[test]
 fn a_ready_bitmap_draws_again_where_its_file_shows() {
     let _serial = serial();
-    vectorcraft_doc::placed_document::set_loader(blue_page);
+    vectorcraft_doc::placed_document::set_loader(gated_blue_page);
     let mut d = Document::new(100.0, 100.0);
     for key in ["area-a", "area-b"] {
         d.images.insert(key.into(), ImageBlob::new("application/json", format!("{{\"doc\": \"{key}\"}}").into_bytes()));
@@ -251,7 +432,10 @@ fn a_ready_bitmap_draws_again_where_its_file_shows() {
     let opts = RenderOptions { background: Some([255, 255, 255, 255]), progressive_placed: true, ..Default::default() };
     let mut r = Renderer::new();
     let generation = placed_document::generation();
+    // The first frame shows the placeholders: the worker waits until it is drawn.
+    shut_gate();
     let before = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    open_gate();
     settle();
     let made = placed_document::made_between(generation, placed_document::generation()).expect("known");
     let files = |keys: &[&str]| keys.iter().map(|k| k.to_string()).collect::<std::collections::HashSet<_>>();
@@ -281,7 +465,11 @@ fn a_ready_bitmap_draws_again_where_its_file_shows() {
     let brush = vectorcraft_brush::Brush { name: "Cards".into(), kind: vectorcraft_brush::BrushKind::Scatter(scatter) };
     vectorcraft_brush::store(&mut brushed, &[brush]);
     assert_eq!(placed_area(&brushed, &only_a), Changed::Everything);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Card".into(), art: Arc::new(placed_node(65, "area-a", 40.0, 20.0, Affine::IDENTITY)) });
+    d.symbols.push(vectorcraft_doc::Symbol {
+        dynamic: false,
+        name: "Card".into(),
+        art: Arc::new(placed_node(65, "area-a", 40.0, 20.0, Affine::IDENTITY)),
+    });
     assert_eq!(placed_area(&d, &only_a), Changed::Everything);
 }
 
@@ -292,7 +480,41 @@ fn a_placed_document_kept_as_its_preview_draws_the_preview() {
     // Only the preview (a 20×10 green PNG) is there, and the file can't be read here.
     let img = image::RgbaImage::from_pixel(20, 10, image::Rgba([0, 200, 0, 255]));
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let mut blob = ImageBlob::new("image/png", png);
     blob.proxy = Some(blob.bytes.clone());
     d.images.insert("preview-1".into(), blob);

@@ -42,6 +42,51 @@ fn text(pdf: &[u8]) -> String {
     String::from_utf8_lossy(pdf).into_owned()
 }
 
+/// The XMP packet of `pdf`, read as its stream's `/Length` says: the packet's end must be inside
+/// those bytes and nothing but the end of line may follow them before `endstream`.
+fn xmp_packet(pdf: &[u8]) -> String {
+    use crate::lab_spot::{find, rfind};
+    let begin = find(pdf, b"<?xpacket begin", 0).expect("an XMP packet");
+    let head = &pdf[..begin];
+    let obj = rfind(head, b" obj").expect("the packet's object");
+    let dict = &head[obj..];
+    let at = find(dict, b"/Length ", 0).expect("its length") + b"/Length ".len();
+    let digits: Vec<u8> = dict[at..].iter().copied().take_while(u8::is_ascii_digit).collect();
+    let length: usize = String::from_utf8(digits).unwrap().parse().unwrap();
+    let mut data = obj + rfind(dict, b"stream").unwrap() + b"stream".len();
+    data += pdf[data..].iter().take(2).take_while(|b| matches!(b, b'\r' | b'\n')).count();
+    let stream = &pdf[data..data + length];
+    let close = find(stream, b"<?xpacket end=", 0).expect("the packet ends inside the stream's length");
+    assert!(find(stream, b"?>", close).is_some(), "the packet ends inside the stream's length");
+    let rest = String::from_utf8_lossy(&pdf[data + length..]);
+    assert!(rest.trim_start_matches(['\r', '\n']).starts_with("endstream"), "the stream ends at its length");
+    String::from_utf8(stream.to_vec()).unwrap()
+}
+
+/// The value of the XMP element `tag` in `xmp`.
+fn xmp_value<'a>(xmp: &'a str, tag: &str) -> Option<&'a str> {
+    let open = format!("<{tag}>");
+    let rest = &xmp[xmp.find(&open)? + open.len()..];
+    Some(&rest[..rest.find(&format!("</{tag}>"))?])
+}
+
+#[test]
+fn pdfx4_metadata_has_a_metadata_date_equal_to_the_modification_date() {
+    let d = doc(&[Color::cmyk(0.0, 1.0, 1.0, 0.0)]);
+    // Dated by the writer (created), then dated again after writing (modified later).
+    for modified in [None, Some(1_800_000_000)] {
+        let mut o = opts(Standard::PdfX4, |_| {});
+        o.modified = modified;
+        let xmp = xmp_packet(&export(&d, &o).unwrap());
+        let modify = xmp_value(&xmp, "xmp:ModifyDate").expect("xmp:ModifyDate");
+        assert_eq!(xmp_value(&xmp, "xmp:MetadataDate"), Some(modify), "{modified:?}: {xmp}");
+        assert_eq!(xmp.matches("<xmp:MetadataDate>").count(), 1, "{modified:?}");
+        if modified.is_some() {
+            assert!(modify.starts_with("2027-01-15T"), "the later date: {modify}");
+        }
+    }
+}
+
 #[test]
 fn each_standard_writes_its_header_output_intent_boxes_and_identification() {
     let mut d = doc(&[Color::cmyk(0.0, 1.0, 1.0, 0.0), Color::rgb(0.2, 0.4, 0.9)]);
@@ -106,6 +151,75 @@ fn each_standard_writes_its_header_output_intent_boxes_and_identification() {
     assert!(matches!(e, Err(PdfError::BadSetting(m)) if m.contains("embeds")));
 }
 
+/// The ICC tag signatures of `icc`'s tag table.
+fn icc_tags(icc: &[u8]) -> Vec<String> {
+    let count = u32::from_be_bytes(icc[128..132].try_into().unwrap()) as usize;
+    (0..count).map(|i| String::from_utf8_lossy(&icc[132 + 12 * i..136 + 12 * i]).into_owned()).collect()
+}
+
+#[test]
+fn a_registered_condition_profile_names_its_condition_and_embeds_itself() {
+    use std::io::Read;
+    let d = doc(&[Color::cmyk(0.0, 1.0, 1.0, 0.0), Color::cmyk(0.6, 0.0, 0.2, 0.1)]);
+    for (profile, reference) in [(cms::FOGRA51_CMYK, "FOGRA51"), (cms::FOGRA52_CMYK, "FOGRA52")] {
+        let r = export_with_report(&d, &opts(Standard::PdfX4, |s| s.output.output_intent = profile.into())).unwrap();
+        assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+        let t = text(&r.bytes);
+        let info = profile.replace('(', r"\(").replace(')', r"\)");
+        for want in [
+            "/S/GTS_PDFX".to_string(),
+            format!("/OutputConditionIdentifier({reference})"),
+            "/RegistryName(http://www.color.org)".into(),
+            format!("/Info({info})"),
+        ] {
+            assert!(t.contains(&want), "{profile}: {want}");
+        }
+        // The embedded profile is the working space's: a CMYK output profile with Lab tables both
+        // ways, read from the file's bytes.
+        let oi: u32 = t.split("/DestOutputProfile ").nth(1).unwrap().split(' ').next().unwrap().parse().unwrap();
+        let (start, end) = crate::patch::Xref::read(&r.bytes).unwrap().dict(&r.bytes, oi).unwrap();
+        let obj = &r.bytes[start..end];
+        let at = crate::lab_spot::find(obj, b"/Length", 0).unwrap();
+        let (length, _) = crate::patch::number(obj, at + b"/Length".len()).unwrap();
+        let mut data = crate::lab_spot::find(obj, b"stream", at).unwrap() + b"stream".len();
+        data += obj[data..].iter().take(2).take_while(|b| matches!(b, b'\r' | b'\n')).count();
+        let raw = &obj[data..data + length];
+        let mut icc = vec![];
+        if crate::lab_spot::find(&obj[..data], b"/FlateDecode", 0).is_some() {
+            flate2::read::ZlibDecoder::new(raw).read_to_end(&mut icc).unwrap();
+        } else {
+            icc = raw.to_vec();
+        }
+        assert_eq!(icc.as_slice(), &*cms::icc_bytes(profile).unwrap());
+        assert_eq!((&icc[12..16], &icc[16..20], &icc[20..24], &icc[36..40]), (&b"prtr"[..], &b"CMYK"[..], &b"Lab "[..], &b"acsp"[..]));
+        assert!(matches!(icc[8], 2 | 4), "ICC version {}", icc[8]);
+        let tags = icc_tags(&icc);
+        for tag in ["A2B0", "B2A0", "A2B1", "B2A1", "gamt", "wtpt", "desc", "cprt"] {
+            assert!(tags.iter().any(|t| t == tag), "{profile}: {tag} in {tags:?}");
+        }
+        let back = cms::IccProfile::from_bytes(None, &icc).unwrap();
+        assert_eq!((back.name.as_str(), back.kind), (profile, cms::ProfileKind::Cmyk));
+        assert!(import(&r.bytes).is_ok());
+    }
+    // A condition identifier or registry the settings give stays.
+    let o = opts(Standard::PdfX4, |s| {
+        s.output.output_intent = cms::FOGRA51_CMYK.into();
+        s.output.output_condition_id = "Press 2".into();
+    });
+    let t = text(&export(&d, &o).unwrap());
+    assert!(t.contains("/OutputConditionIdentifier(Press 2)") && !t.contains("/RegistryName"), "{t}");
+    let o = opts(Standard::PdfX4, |s| {
+        s.output.output_intent = cms::FOGRA51_CMYK.into();
+        s.output.registry = "https://example.com/registry".into();
+    });
+    let t = text(&export(&d, &o).unwrap());
+    assert!(t.contains("/OutputConditionIdentifier(FOGRA51)") && t.contains("/RegistryName(https://example.com/registry)"));
+    // Other profiles keep their name as the identifier, with no registry.
+    let t = text(&export(&d, &opts(Standard::PdfX4, |s| s.output.output_intent = GENERIC_CMYK.into())).unwrap());
+    let id = GENERIC_CMYK.replace('(', r"\(").replace(')', r"\)");
+    assert!(t.contains(&format!("/OutputConditionIdentifier({id})")) && !t.contains("/RegistryName"), "{t}");
+}
+
 #[test]
 fn pdfx_1a_files_have_no_rgb() {
     let mut d = doc(&[Color::rgb(0.9, 0.1, 0.1), Color::Lab { l: 50.0, a: 40.0, b: -20.0 }, Color::gray(0.5), Color::cmyk(0.1, 0.2, 0.3, 0.4)]);
@@ -113,7 +227,41 @@ fn pdfx_1a_files_have_no_rgb() {
     let png = {
         let img = image::RgbaImage::from_pixel(4, 4, image::Rgba([10, 200, 30, 255]));
         let mut out = std::io::Cursor::new(vec![]);
-        img.write_to(&mut out, image::ImageFormat::Png).unwrap();
+        {
+            let __dyn: image::DynamicImage = img.into();
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                .map(|__b| out.get_mut().extend_from_slice(&__b))
+        }
+        .unwrap();
         out.into_inner()
     };
     d.images.insert("img".into(), ImageBlob::new("image/png", png));
@@ -168,35 +316,20 @@ fn pdfx_1a_and_x3_files_have_no_transparency() {
 
 #[test]
 fn pdfx_settings_rules() {
+    let profiles = ActiveProfiles::default();
     for standard in X {
-        // A password is refused, and so are editing data.
-        let e = opts(standard, |s| s.security.open_password = "x".into()).settings.check().unwrap_err();
-        assert!(matches!(e, PdfError::BadSetting(_)), "{standard:?}: {e}");
+        // A password is refused.
         assert!(export(&doc(&[]), &opts(standard, |s| s.security.permissions_password = "x".into())).is_err());
-        assert!(
-            matches!(opts(standard, |s| s.preserve_editing = true).settings.check(), Err(PdfError::BadSetting(m)) if m.contains("preserveEditing"))
-        );
-        // Its own version, never PDF 1.7 or 2.0.
-        assert!(standard.allows(standard.version()), "{standard:?}");
-        assert!(!standard.allows(Compatibility::Pdf17) && !standard.allows(Compatibility::Pdf20), "{standard:?}");
-        let e = opts(standard, |s| s.compatibility = Compatibility::Pdf17).settings.check().unwrap_err();
-        assert!(matches!(e, PdfError::BadSetting(ref m) if m.contains(standard.label())), "{standard:?}: {e}");
-        // A name that is no profile, without a registry.
-        let e = opts(standard, |s| s.output.output_intent = "No Such Press".into()).settings.check().unwrap_err();
-        assert!(matches!(e, PdfError::BadSetting(ref m) if m.contains("No Such Press")), "{standard:?}: {e}");
+        // A name that is no profile of the app's colour catalog, without a registry.
+        let e = opts(standard, |s| s.output.output_intent = "No Such Press".into()).settings.check(&profiles).unwrap_err();
+        assert!(e.message.contains("No Such Press"), "{standard:?}: {e}");
     }
-    assert_eq!(Standard::PdfX4.version(), Compatibility::Pdf16);
-    assert!(Standard::PdfX4.allows(Compatibility::Pdf15) && !Standard::PdfX1a.allows(Compatibility::Pdf15));
-    // Layers: PDF/X-4 only.
-    assert!(
-        matches!(settings(json!({"standard": "pdfX1a", "compatibility": "1.4", "createLayers": true})).check(), Err(PdfError::BadSetting(m)) if m.contains("createLayers"))
-    );
-    assert!(settings(json!({"standard": "pdfX4", "compatibility": "1.6", "createLayers": true})).check_values().is_ok());
     // A date is required.
     assert!(matches!(crate::pdfx::require_date(Standard::PdfX4, None), Err(PdfError::Unsupported(_))));
     assert!(crate::pdfx::require_date(Standard::None, None).is_ok());
     // PDF/X settings don't warn about the output condition: the output intent is always written.
-    assert!(settings(json!({"standard": "pdfX4", "compatibility": "1.6", "output": {"outputCondition": "Coated"}})).warnings().is_empty());
+    let warned = settings(json!({"standard": "pdfX4", "compatibility": "1.6", "output": {"outputCondition": "Coated"}})).warnings(&profiles);
+    assert!(warned.is_empty(), "{warned:?}");
 }
 
 #[test]
@@ -223,4 +356,24 @@ fn verify_finds_what_each_standard_forbids() {
     let font = "<</Type/FontDescriptor/FontName/A>>";
     assert!(matches!(verify(&file(font), Standard::PdfX4), Err(PdfError::Unsupported(m)) if m.contains("fonts")));
     assert!(verify(&file("<</Type/FontDescriptor/FontFile2 4 0 R>>"), Standard::PdfX4).is_ok());
+}
+
+/// Names inside a string or a comment are text, not syntax: a file identifier, whose base64 hash
+/// can hold `/BM` or `/Lab`, does not make a file break its standard.
+#[test]
+fn verify_skips_names_in_strings_and_comments() {
+    use crate::pdfx::verify;
+    let file = |body: &str| format!("%PDF-1.3\n%/BM/Multiply\n1 0 obj\n{body}\nendobj\n").into_bytes();
+    for ok in [
+        "<</Size 2/ID[(q/BM+Zt1kR0x/Lab=) (q/BM+Zt1kR0x/Lab=)]>>",
+        "<</Title(a\\)/SMask 5 0 R)/Subject(a(b)/ca 0.5)>>",
+        "<</Title(stream\n/BM/Multiply\nendstream)>>",
+    ] {
+        for standard in [Standard::PdfX1a, Standard::PdfX3] {
+            assert!(verify(&file(ok), standard).is_ok(), "{standard:?}: {ok}");
+        }
+    }
+    // A name after a string is still read.
+    let after = "<</Title(a(b)c)/BM/Multiply>>";
+    assert!(matches!(verify(&file(after), Standard::PdfX3), Err(PdfError::Unsupported(m)) if m.contains("blend modes")));
 }

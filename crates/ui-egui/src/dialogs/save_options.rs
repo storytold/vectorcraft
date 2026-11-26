@@ -3,51 +3,69 @@
 //! their own dialogs). The rows come from the format's options in the engine's format table, so a
 //! format gains rows as its encoder gains options.
 //!
-//! Fields: `__action` (the save command it finishes), `__pick` (file name and format
-//! editable), `path`, `format`, and one field per option (agents set them with `ui.dialog.set`).
+//! Fields: `__pick` (file name and format editable), `path`, `format`, and one field per option
+//! (agents set them with `ui.dialog.set`); the save command it finishes is the host's
+//! `Export::Save { action }`.
 //! Native and `.ai` files show their save options (VectorCraft Options after Save As): each
 //! artboard to a separate file, with `all` (true: every artboard) or `range`, Include Linked Files,
-//! Embed ICC Profiles, Create PDF-Compatible File and Use Compression. A `.ai` file's Version comes
-//! first: PDF-compatible, or legacy version 7 (`aiVersion: "7"`, a file per artboard), which takes
-//! only Transparent Images (`transparentImages`), Hidden Objects (`hiddenObjects`: a hidden layer,
-//! omitted or made visible), Text (`outlineText`: editable or outlines) and, with several
-//! artboards, a picker of the artboards to save (thumbnails to check, field `boards`, saved as
-//! `range`).
+//! Embed ICC Profiles, Create PDF-Compatible File and Use Compression. EPS shows Use Artboards
+//! (`useArtboards`, off by default: the bounding box fits the visible art) with the same `all` or
+//! `range` under it, then the options Export's EPS Options shows: Preview, Overprints, Flattener
+//! preset and PostScript are menus that write the option's value (`previewFormat: "tiffColor"`,
+//! `overprints: "preserve"`, `flattenerPreset: "medium"` or a saved preset's name, `level: 3`).
+//! A native file's Version is a menu of the versions VectorCraft writes
+//! (`version`, named by the releases that read each). A
+//! `.ai` file's Version comes first: PDF-compatible, or legacy version 7 (`aiVersion: "7"`, a file
+//! per artboard), which takes only Transparent Images (`transparentImages`), Hidden Objects
+//! (`hiddenObjects`: a hidden layer, omitted or made visible), Text (`outlineText`: editable or
+//! outlines) and, with several artboards, a picker of the artboards to save (thumbnails to check,
+//! field `boards`, saved as `range`).
+//!
+//! A menu holds text, so the numeric options a menu sets (`version`, `level`, `artboard`, and a
+//! legacy file's `outlineText`) are held as the text of their value and read back by [`typed`].
 
-use std::sync::OnceLock;
+use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use serde_json::{Map, Value, json};
+use vectorcraft_doc::Document;
+use vectorcraft_engine::cmd::FlattenOptions;
 use vectorcraft_engine::cmd::fileio::{self, ArtboardPick, Format, FormatOption, SAVE_FORMATS, SaveMode, TEMPLATE_FORMATS};
+use vectorcraft_eps::{Level, Overprint, Preview};
 
-use super::{DialogResult, DialogSpec, form};
-use crate::state::Dialog;
-use crate::theme::Tokens;
-use crate::{VectorcraftApp, io, widgets};
+use craft::theme::variant::Tone;
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Bind, CollectionEvent, Show as _, ShowCollection as _, ShowContainer as _, TooltipSpec};
+use craft::ui::display::Text;
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::list::{ThumbAspect, ToggleState};
+use craft::ui::notices::Notice;
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::runtime::env::Label;
+use craft::ui::tile_grid::{Tile, TileGrid, TilePartEvent};
+
+use super::export_host::{self, After, Export, Open};
+use super::{export_for_screens, form};
+use crate::VectorcraftApp;
 
 /// Dialog kind.
 pub const KIND: &str = "saveOptions";
 
-pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading, body, confirm, min_width: 380.0, ok_enabled: Some(can_save), inputs: |_| &["all", "boards"], ..DialogSpec::FORM };
-
-/// OK saves a legacy `.ai` file only with an artboard checked.
-fn can_save(app: &VectorcraftApp, d: &Dialog) -> bool {
-    !legacy_ai(d) || picked_boards(d, app.session.active().map_or(0, |st| st.doc.artboards.len())).iter().any(|b| *b)
-}
-
-fn heading(d: &Dialog) -> String {
-    if d.bool("__pick") {
-        return match SaveMode::of(&d.str("__action")) {
+/// The window title: the web's Save As names the mode, a legacy `.ai` file and every other format
+/// name themselves.
+fn heading(pick: bool, action: &str, legacy: bool, format: &str) -> String {
+    if pick {
+        return match SaveMode::of(action) {
             Some(SaveMode::Copy) => tl!("Save a Copy"),
             Some(SaveMode::Template) => tl!("Save as Template"),
             _ => tl!("Save As"),
         }
         .into();
     }
-    if legacy_ai(d) {
+    if legacy {
         return tl!("Legacy .ai Options").into();
     }
-    crate::i18n::fmt(tl!("{format} Options"), &[("format", fileio::format(&d.str("format")).map_or("", |f| f.label))])
+    crate::i18n::fmt(tl!("{format} Options"), &[("format", fileio::format(format).map_or("", |f| f.label))])
 }
 
 /// `f`'s options with the values a save would use (`file.formatOptions`: as last saved in that
@@ -75,127 +93,286 @@ fn separates(f: &Format) -> bool {
     f.options.iter().any(|o| o.name == "separateArtboards")
 }
 
-/// The options the dialog shows: arrays and objects are for agents, and a page range replaces the
-/// single artboard choice; none for a format with its own dialog. A `.ait` template has no
-/// Version: Save as Template writes it PDF-compatible only.
+/// The checkbox that `f`'s All or Range shows under: Save each artboard to a separate file, or
+/// for EPS Use Artboards (off: the visible art's bounds).
+fn board_switch(f: &Format) -> Option<&'static str> {
+    if separates(f) {
+        Some("separateArtboards")
+    } else if f.id == "eps" {
+        Some("useArtboards")
+    } else {
+        None
+    }
+}
+
+/// The options the dialog shows: arrays and objects are for agents, as is a native file's
+/// `precision`, and a page range replaces the single artboard choice; none for a format with its
+/// own dialog. A `.ait` template has no Version: Save as Template writes it PDF-compatible only.
 fn shown(f: &Format) -> impl Iterator<Item = &'static FormatOption> {
     let range = f.options.iter().any(|o| o.name == "range");
-    let separate = separates(f);
+    let switched = board_switch(f).is_some();
     let options = if own_dialog(f) { &[][..] } else { f.options };
     options.iter().filter(move |o| {
         !(matches!(o.ty, "array" | "object")
+            || o.name == "precision"
             || (range && o.name == "artboard")
-            || (separate && o.name == "range")
+            || (switched && o.name == "range")
             || (matches!(f.id, "ai" | "ait") && o.name == "useArtboards")
-            // EPS Save keeps a page and the complete editing document; cropped and
-            // selected-only output belongs to Export, never this save dialog.
-            || (f.id == "eps" && matches!(o.name, "useArtboards" | "selectedOnly"))
+            // EPS Save writes all the artwork: selected-only output belongs to Export.
+            || (f.id == "eps" && o.name == "selectedOnly")
             || (f.id == "ait" && o.name == "aiVersion"))
     })
 }
 
-/// An option's label: the save options as the reference app's options dialog names them, the
-/// others from their names.
+/// An option's label: its written label, or for an option without one, its name split into words.
 fn label(o: &FormatOption) -> String {
-    match o.name {
+    written_label(o).unwrap_or_else(|| form::humanize(o.name))
+}
+
+/// The written label of option `o`, translated.
+fn written_label(o: &FormatOption) -> Option<String> {
+    Some(match o.name {
         "separateArtboards" => tl!("Save each artboard to a separate file").into(),
-        "includeLinked" => tl!("Include Linked Files").into(),
+        "useArtboards" => tl!("Use Artboards").into(),
+        "includeLinked" | "includeLinkedFiles" => tl!("Include Linked Files").into(),
         "embedProfiles" => tl!("Embed ICC Profiles").into(),
         "pdfCompatible" => tl!("Create PDF-Compatible File").into(),
         "compress" => tl!("Use Compression").into(),
-        _ => form::humanize(o.name),
+        "editingData" => tl!("Include Editing Data for Other Apps").into(),
+        "version" | "aiVersion" => tl!("Version:").into(),
+        "transparentImages" => tl!("Transparent Images:").into(),
+        "hiddenObjects" => tl!("Hidden Objects:").into(),
+        "outlineText" => tl!("Text:").into(),
+        "preview" => tl!("Preview").into(),
+        "thumbnails" => tl!("Include Document Thumbnails").into(),
+        "previewFormat" => tl!("Preview:").into(),
+        "transparentPreview" => tl!("Transparent").into(),
+        "overprints" => tl!("Overprints:").into(),
+        "flattenerPreset" => tl!("Flattener preset:").into(),
+        "embedFonts" => tl!("Embed Fonts (for other applications)").into(),
+        "cmykPostScript" => tl!("Include CMYK PostScript in RGB Files").into(),
+        "compatibleGradients" => tl!("Compatible Gradient and Gradient Mesh Printing").into(),
+        "level" => tl!("PostScript:").into(),
+        _ => return None,
+    })
+}
+
+/// The values of an option that takes one of a fixed set, each with the name its menu shows. The
+/// first `builtins` names are VectorCraft's own (translated where they are shown); the others are
+/// names the user gave (saved flattener presets), shown as they are.
+struct Choices {
+    values: Vec<Value>,
+    names: Vec<String>,
+    builtins: usize,
+}
+
+/// The choices of `f`'s option `o`, when it takes one of a fixed set of values: EPS's preview
+/// format, overprints, PostScript level and flattener preset (the built-in presets by id, then the
+/// saved ones by name).
+fn choices(app: &VectorcraftApp, f: &Format, o: &FormatOption) -> Option<Choices> {
+    if f.id != "eps" {
+        return None;
     }
+    let (pairs, builtins): (Vec<(Value, String)>, Option<usize>) = match o.name {
+        "previewFormat" => (Preview::ALL.iter().map(|p| (json!(p.id()), p.label().to_string())).collect(), None),
+        "overprints" => (Overprint::ALL.iter().map(|p| (json!(p.id()), p.label().to_string())).collect(), None),
+        // The level is a number in the save options.
+        "level" => (Level::ALL.iter().filter_map(|l| Some((json!(l.id().parse::<u64>().ok()?), l.label().to_string()))).collect(), None),
+        "flattenerPreset" => {
+            let id = |name: &str| FlattenOptions::PRESETS.into_iter().find(|id| FlattenOptions::preset_label(id) == Some(name));
+            let pairs =
+                app.session.flattener_presets().iter().map(|p| (id(&p.name).map_or_else(|| json!(p.name), |id| json!(id)), p.name.clone())).collect();
+            (pairs, Some(FlattenOptions::builtin_presets().len()))
+        }
+        _ => return None,
+    };
+    let builtins = builtins.unwrap_or(pairs.len());
+    let (values, names): (Vec<Value>, Vec<String>) = pairs.into_iter().unzip();
+    Some(Choices { values, names, builtins })
 }
 
-/// Every artboard (the All choice under Save each artboard to a separate file): `all` when set,
-/// else no range given.
-fn all_artboards(d: &Dialog) -> bool {
-    d.fields.get("all").and_then(Value::as_bool).unwrap_or_else(|| d.str("range").trim().is_empty())
+/// What the dialog's rows need of the app, taken once when it opens: a hosted dialog's build
+/// closure runs every pass and must not run commands.
+#[derive(Default)]
+struct Menus {
+    /// The formats the web's Save As lists, in menu order; empty when the format is fixed.
+    formats: Vec<&'static str>,
+    /// Each listed format's option values, as the menu rows hold them ([`for_rows`]).
+    values: BTreeMap<String, Map<String, Value>>,
+    /// The menus of the EPS options, by option name.
+    choices: BTreeMap<&'static str, Choices>,
+    /// The artboards' names.
+    names: Vec<String>,
+    /// The artboards' thumbnails (empty unless a legacy `.ai` save can pick artboards).
+    thumbs: Vec<Option<egui::TextureHandle>>,
+    /// The document, for the file each checked artboard is saved to; it cannot go stale while the
+    /// modal dialog is open.
+    doc: Option<Arc<Document>>,
 }
 
-/// All or Range, under Save each artboard to a separate file (enabled while it is on).
-fn artboard_range(ui: &mut egui::Ui, d: &mut Dialog) {
-    ui.label("");
-    ui.add_enabled_ui(d.bool("separateArtboards"), |ui| {
-        ui.horizontal(|ui| {
-            ui.add_space(22.0);
-            let mut all = all_artboards(d);
-            if ui.radio_value(&mut all, true, tl!("All")).changed() | ui.radio_value(&mut all, false, tl!("Range:")).changed() {
-                d.fields.insert("all".into(), json!(all));
-            }
-            let mut range = d.str("range");
-            let field = egui::TextEdit::singleline(&mut range).align(egui::Align2::LEFT_CENTER).desired_width(90.0).hint_text("1-3, 5");
-            if ui.add_enabled(!all, field).changed() {
-                d.fields.insert("range".into(), json!(range));
-            }
+/// The rows of artboard tiles the legacy picker shows before it scrolls.
+const BOARD_ROWS: u16 = 3;
+
+/// The numeric options a menu sets are held as the text of their value.
+const NUMBER_MENUS: [&str; 3] = ["version", "level", "artboard"];
+
+/// Is a `.ai` file in `format` with Version `version` to be saved in the legacy version 7?
+fn is_legacy(format: &str, version: Option<&str>) -> bool {
+    format == "ai" && version.is_some_and(|v| v.trim() == "7")
+}
+
+/// `values` as the rows hold them: menus of numbers keep the number's text, and the All choice
+/// under the artboard switch is `all` (no range: every artboard).
+fn for_rows(f: &Format, mut values: Map<String, Value>) -> Map<String, Value> {
+    for name in NUMBER_MENUS {
+        if let Some(Value::Number(n)) = values.get(name) {
+            let id = n.to_string();
+            values.insert(name.into(), json!(id));
+        }
+    }
+    if is_legacy(f.id, values.get("aiVersion").and_then(Value::as_str)) {
+        let outlines = values.get("outlineText").and_then(Value::as_bool).unwrap_or(false);
+        values.insert("outlineText".into(), json!(outlines.to_string()));
+    }
+    if let Some(switch) = board_switch(f) {
+        // The check box holds on or off: an option left unset (EPS's Use Artboards) shows off.
+        if values.get(switch).is_none_or(Value::is_null) {
+            values.insert(switch.into(), json!(false));
+        }
+        let all = values.get("range").and_then(Value::as_str).is_none_or(|r| r.trim().is_empty());
+        values.insert("all".into(), json!(all));
+    }
+    values
+}
+
+/// A fixed menu of `(id, label)` entries.
+fn menu(entries: &[(&str, &'static str)]) -> ParamKind {
+    ParamKind::choice(entries.iter().map(|(id, name)| (id.to_string(), Label::from(*name))).collect(), None)
+}
+
+/// The rows of `f`'s dialog, in the order the options are listed: a `.ai` file's Version first,
+/// EPS's PostScript level last; the web's file name and format first of all.
+fn params(f: &Format, menus: &Arc<Menus>, legacy: bool) -> Vec<Param> {
+    let mut rows = vec![];
+    if !menus.formats.is_empty() {
+        rows.push(Param::new("path", tl!("File Name:"), ParamKind::text("")));
+        let formats = menus.formats.iter().filter_map(|id| fileio::format(id)).map(|g| (g.id.to_string(), Label::from(g.label))).collect();
+        rows.push(Param::new("format", tl!("Format:"), ParamKind::choice(formats, None)));
+    }
+    let mut options: Vec<&FormatOption> = shown(f).filter(|o| fileio::file_reads(f, legacy, o.name)).collect();
+    options.sort_by_key(|o| (o.name != "aiVersion", f.id == "eps" && o.name == "level"));
+    for o in options {
+        rows.extend(option_rows(f, o, menus, legacy));
+    }
+    if legacy && menus.names.len() > 1 {
+        let menus = Arc::clone(menus);
+        // PLAN: assumed Param::custom's draw closure answers the response of the whole picker.
+        rows.push(Param::custom("boards", "", move |ui, fields, _| boards_picker(ui, fields, &menus)).full_width());
+    }
+    rows
+}
+
+/// The row or rows of option `o` of format `f`: a menu for a fixed set, a check box for a switch
+/// (with All or Range under an artboard switch), else a field.
+fn option_rows(f: &Format, o: &FormatOption, menus: &Arc<Menus>, legacy: bool) -> Vec<Param> {
+    let label = label(o);
+    let row = |kind| Param::new(o.name, label.clone(), kind).tooltip(o.description);
+    let fixed = |entries: &[(&str, &'static str)]| vec![row(menu(entries))];
+    match o.name {
+        "aiVersion" => return fixed(&[("pdf", tl!("PDF-compatible")), ("7", tl!("Legacy (version 7)"))]),
+        "transparentImages" => return fixed(&[("flatten", tl!("Flatten")), ("omit", tl!("Omit"))]),
+        "hiddenObjects" => return fixed(&[("layer", tl!("Hidden Layer")), ("omit", tl!("Omit")), ("visible", tl!("Make Visible"))]),
+        "outlineText" if legacy => return fixed(&[("false", tl!("Editable")), ("true", tl!("Outlines"))]),
+        "version" if o.ty == "integer" => {
+            let versions = NATIVE_VERSIONS
+                .iter()
+                .map(|(n, release)| {
+                    let name = crate::i18n::fmt(tl!("VectorCraft {release} and later (version {n})"), &[("release", release), ("n", &n.to_string())]);
+                    (n.to_string(), Label::from(name))
+                })
+                .collect();
+            return vec![row(ParamKind::choice(versions, None))];
+        }
+        _ => {}
+    }
+    if let Some(c) = menus.choices.get(o.name).filter(|_| f.id == "eps") {
+        let entries = c.values.iter().zip(&c.names).enumerate().map(|(i, (value, name))| {
+            let id = value.as_str().map_or_else(|| value.to_string(), str::to_string);
+            (id, Label::from(if i < c.builtins { crate::i18n::t(name).to_string() } else { name.clone() }))
         });
-    });
-    ui.end_row();
-}
-
-/// The Save As format menu (labels in [`SAVE_FORMATS`] order).
-fn save_labels() -> &'static [&'static str] {
-    static LABELS: OnceLock<Vec<&'static str>> = OnceLock::new();
-    LABELS.get_or_init(|| SAVE_FORMATS.iter().filter_map(|id| fileio::format(id)).map(|f| f.label).collect())
-}
-
-/// The Save as Template format menu (labels in [`TEMPLATE_FORMATS`] order).
-fn template_labels() -> &'static [&'static str] {
-    static LABELS: OnceLock<Vec<&'static str>> = OnceLock::new();
-    LABELS.get_or_init(|| TEMPLATE_FORMATS.iter().filter_map(|id| fileio::format(id)).map(|f| f.label).collect())
-}
-
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let t = Tokens::get(ui.ctx());
-    let Some(f) = fileio::format(&d.str("format")) else { return false };
-    let mut switch = None;
-    egui::Grid::new("save-options").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
-        if d.bool("__pick") {
-            form::field_w(ui, d, "path", tl!("File Name:"), 240.0);
-            let (ids, labels) = if SaveMode::of(&d.str("__action")) == Some(SaveMode::Template) {
-                (TEMPLATE_FORMATS, template_labels())
-            } else {
-                (SAVE_FORMATS, save_labels())
-            };
-            ui.label(egui::RichText::new(tl!("Format:")).color(t.text_dim));
-            switch = widgets::dropdown(ui, "save-format", f.label, labels, 254.0).and_then(|i| ids.get(i).copied());
-            ui.end_row();
-        }
-        // Version first; the legacy version takes only its own options.
-        let legacy = legacy_ai(d);
-        let mut rows: Vec<&FormatOption> = shown(f).filter(|o| LEGACY_ONLY.contains(&o.name) == legacy || o.name == "aiVersion").collect();
-        rows.sort_by_key(|o| o.name != "aiVersion");
-        for o in rows {
-            option_row(app, ui, d, o);
-        }
-    });
-    if legacy_ai(d) && app.session.active().is_some_and(|st| st.doc.artboards.len() > 1) {
-        artboard_picker(app, ui, d);
+        return vec![row(ParamKind::choice(entries.collect(), None))];
     }
-    if let Some(id) = switch.filter(|id| *id != f.id) {
-        switch_format(app, d, id);
+    // Only the colour preview can keep transparency.
+    if f.id == "eps" && o.name == "transparentPreview" {
+        let kind = ParamKind::radio(vec![("true".into(), tl!("Transparent").into()), ("false".into(), tl!("Opaque").into())], None);
+        return vec![Param::new(o.name, "", kind).enabled_when("previewFormat", "tiffColor")];
     }
-    false
+    // Type is written as glyph outlines, which need no fonts: the row is on, and never enabled.
+    if f.id == "eps" && o.name == "embedFonts" {
+        let reason = TooltipSpec::new(o.description).disabled_text(tl!("Type is written as glyph outlines, which need no fonts."));
+        return vec![Param::new(o.name, label.clone(), ParamKind::bool(true)).enabled_when_in(o.name, Vec::<bool>::new()).tooltip(reason)];
+    }
+    match o.ty {
+        "boolean" => {
+            let check = Param::new(o.name, label.trim_end_matches(':').to_string(), ParamKind::bool(false)).tooltip(o.description);
+            // Versions older than compression read only plain files.
+            let check = if o.name == "compress" { check.enabled_when_in("version", compressed_versions()) } else { check };
+            let mut rows = vec![check];
+            if matches!(o.name, "separateArtboards" | "useArtboards") {
+                let all = ParamKind::radio(vec![("true".into(), tl!("All").into()), ("false".into(), tl!("Range:").into())], None);
+                rows.push(Param::new("all", "", all).enabled_when(o.name, true));
+                rows.push(Param::new("range", "", ParamKind::text("")).hint("1-3, 5").enabled_when("all", "false"));
+            }
+            rows
+        }
+        "string" => vec![row(ParamKind::text(""))],
+        _ if o.name == "artboard" && !menus.names.is_empty() => {
+            let names = menus.names.iter().enumerate().map(|(i, name)| (i.to_string(), Label::from(name.clone()))).collect();
+            vec![row(ParamKind::choice(names, None))]
+        }
+        "integer" => vec![row(ParamKind::int(Some(0), None, 0))],
+        _ => vec![row(ParamKind::number(Some(0.0), None, 0.0, 0.01, 2))],
+    }
 }
 
-/// The `.ai` options only the legacy version takes (and the only ones it takes, besides the
-/// version).
-const LEGACY_ONLY: &[&str] = &["transparentImages", "hiddenObjects", "outlineText"];
+/// The ids of the native versions that can be compressed.
+fn compressed_versions() -> Vec<String> {
+    NATIVE_VERSIONS.iter().filter(|(n, _)| *n >= vectorcraft_format::COMPRESSED_SINCE).map(|(n, _)| n.to_string()).collect()
+}
+
+/// The value of a two-way field of `fields` (a check box, or the All or Range radio's `true` and
+/// `false`).
+fn flag(fields: &DialogFields, key: &str) -> Option<bool> {
+    fields.bool(key).or_else(|| fields.text(key).and_then(|t| t.parse().ok()))
+}
+
+/// Every artboard (the All choice under Save each artboard to a separate file or Use Artboards):
+/// `all` when set, else no range given.
+fn all_artboards(fields: &DialogFields) -> bool {
+    flag(fields, "all").unwrap_or_else(|| fields.text("range").is_none_or(|r| r.trim().is_empty()))
+}
 
 /// Is a `.ai` file to be saved in the legacy version 7 (`aiVersion: "7"`)?
-fn legacy_ai(d: &Dialog) -> bool {
-    d.str("format") == "ai" && d.str("aiVersion").trim() == "7"
+fn legacy_ai(fields: &DialogFields) -> bool {
+    is_legacy(fields.text("format").unwrap_or_default(), fields.text("aiVersion"))
+}
+
+/// The checks of the legacy `.ai` picker as the dialog holds them (`boards`: one bool per artboard).
+fn boards_in(fields: &DialogFields) -> Option<Vec<bool>> {
+    match fields.get("boards")? {
+        FieldValue::Json(Value::Array(a)) => Some(a.iter().map(|b| b.as_bool().unwrap_or(false)).collect()),
+        _ => fields.list("boards").map(|l| l.iter().map(|b| matches!(b, FieldValue::Bool(true))).collect()),
+    }
 }
 
 /// The artboards a legacy `.ai` save writes (field `boards`: one bool per artboard), as last
 /// saved (`range`), else all of them.
-fn picked_boards(d: &Dialog, n: usize) -> Vec<bool> {
-    if let Some(a) = d.fields.get("boards").and_then(Value::as_array) {
-        let mut b: Vec<bool> = a.iter().map(|b| b.as_bool().unwrap_or(false)).collect();
+fn picked_boards(fields: &DialogFields, n: usize) -> Vec<bool> {
+    if let Some(mut b) = boards_in(fields) {
         b.resize(n, false);
         return b;
     }
-    let range = d.str("range");
+    let range = fields.text("range").unwrap_or_default().to_string();
     match (ArtboardPick { range: Some(range.clone()), ..Default::default() }).resolve(n) {
         Ok(Some(chosen)) if !range.trim().is_empty() => (0..n).map(|i| chosen.contains(&i)).collect(),
         _ => vec![true; n],
@@ -204,223 +381,148 @@ fn picked_boards(d: &Dialog, n: usize) -> Vec<bool> {
 
 /// The file each checked artboard is saved to (`None` for the others): the file itself when one
 /// is checked, else `{stem}-{artboard}.ai` beside it, as the save names them.
-fn board_files(app: &VectorcraftApp, d: &Dialog, boards: &[bool]) -> Vec<Option<String>> {
+fn board_files(doc: Option<&Document>, path: &str, boards: &[bool]) -> Vec<Option<String>> {
     let checked: Vec<usize> = boards.iter().enumerate().filter(|(_, on)| **on).map(|(i, _)| i).collect();
-    let path = d.str("path");
     let file = std::path::Path::new(path.trim());
     let name = file.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     let stem = file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-    let mut names = match (app.session.active(), checked.len()) {
+    let mut names = match (doc, checked.len()) {
         (_, 1) => vec![name],
-        (Some(st), _) => fileio::artboard_file_names(&st.doc, &checked).into_iter().map(|b| format!("{stem}-{b}.ai")).collect(),
+        (Some(doc), _) => fileio::artboard_file_names(doc, &checked).into_iter().map(|b| format!("{stem}-{b}.ai")).collect(),
         (None, _) => vec![],
     }
     .into_iter();
     boards.iter().map(|on| if *on { names.next() } else { None }).collect()
 }
 
-/// `text` as it fits in `width` with `font`: whole, else its start cut short before its last
-/// `tail` characters ("desktop-i…-Artboard-1.ai"), else as much of its end as fits.
-fn elide_before_tail(ui: &egui::Ui, text: &str, tail: usize, font: &egui::FontId, width: f32) -> String {
-    let fits = |s: &str| ui.painter().layout_no_wrap(s.to_string(), font.clone(), egui::Color32::WHITE).size().x <= width;
-    if fits(text) {
-        return text.to_string();
-    }
-    let chars: Vec<char> = text.chars().collect();
-    let split = chars.len().saturating_sub(tail);
-    let (head, end) = chars.split_at(split);
-    let end: String = end.iter().collect();
-    for p in (1..head.len()).rev() {
-        let s = format!("{}…{end}", head.iter().take(p).collect::<String>());
-        if fits(&s) {
-            return s;
-        }
-    }
-    for k in (1..=chars.len()).rev() {
-        let s = format!("…{}", chars.iter().skip(chars.len() - k).collect::<String>());
-        if fits(&s) {
-            return s;
-        }
-    }
-    "…".into()
-}
-
 /// Legacy `.ai`: the artboards to save, as thumbnails to check; each is saved as a file of its own.
-fn artboard_picker(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
-    const TILE: egui::Vec2 = egui::vec2(116.0, 84.0);
-    let t = Tokens::get(ui.ctx());
-    let names: Vec<String> = app.session.active().map(|st| st.doc.artboards.iter().map(|a| a.name.clone()).collect()).unwrap_or_default();
-    let n = names.len();
-    let mut boards = picked_boards(d, n);
+fn boards_picker(ui: &mut egui::Ui, fields: &mut DialogFields, menus: &Menus) -> egui::Response {
+    let n = menus.names.len();
+    let mut boards = picked_boards(fields, n);
     let before = boards.clone();
-    ui.add_space(10.0);
-    ui.add(
-        egui::Label::new(
-            egui::RichText::new(tl!("A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.")).color(t.text_dim),
-        )
-        .wrap(),
-    );
-    ui.add_space(4.0);
-    ui.horizontal(|ui| {
-        if ui.small_button(tl!("Select All")).clicked() {
-            boards.iter_mut().for_each(|b| *b = true);
-        }
-        if ui.small_button(tl!("Clear")).clicked() {
-            boards.iter_mut().for_each(|b| *b = false);
-        }
-        let checked = boards.iter().filter(|b| **b).count();
-        let (count, total) = (checked.to_string(), n.to_string());
-        let text = crate::i18n::fmt(tl!("{count} of {total} artboards"), &[("count", &count), ("total", &total)]);
-        ui.label(egui::RichText::new(text).color(if checked == 0 { t.warning } else { t.text_dim }));
-        if checked == 0 {
-            ui.label(egui::RichText::new(tl!("Check an artboard to save.")).color(t.warning));
-        }
-    });
-    ui.add_space(4.0);
-    let files = board_files(app, d, &boards);
-    let stem = std::path::Path::new(d.str("path").trim()).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-    egui::ScrollArea::vertical().max_height(330.0).show(ui, |ui| {
-        ui.with_layout(egui::Layout::left_to_right(egui::Align::Min).with_main_wrap(true), |ui| {
-            ui.spacing_mut().item_spacing = egui::vec2(10.0, 10.0);
-            for (i, name) in names.iter().enumerate() {
-                let on = boards.get(i).copied().unwrap_or(false);
-                ui.allocate_ui(egui::vec2(TILE.x, TILE.y + 44.0), |ui| {
-                    ui.vertical(|ui| {
-                        ui.set_width(TILE.x);
-                        let (r, resp) = ui.allocate_exact_size(TILE, egui::Sense::click());
-                        ui.painter().rect_filled(r, 3.0, t.pasteboard);
-                        let inner = r.shrink(6.0);
-                        match super::export_for_screens::artboard_thumb(app, ui.ctx(), i) {
-                            Some(tex) => {
-                                let sz = tex.size_vec2();
-                                let s = (inner.width() / sz.x).min(inner.height() / sz.y).min(1.0);
-                                let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
-                                ui.painter().image(tex.id(), egui::Rect::from_center_size(inner.center(), sz * s), uv, egui::Color32::WHITE);
-                            }
-                            None => {
-                                ui.painter().rect_filled(inner, 0.0, egui::Color32::WHITE);
-                            }
-                        }
-                        let stroke = if on { egui::Stroke::new(2.0, t.accent) } else { egui::Stroke::new(1.0, t.border) };
-                        ui.painter().rect_stroke(r, 3.0, stroke, egui::StrokeKind::Inside);
-                        let mut flip = resp.on_hover_text(name.as_str()).clicked();
-                        flip |= widgets::check_name(ui, name, on);
-                        let file = files.get(i).cloned().flatten().unwrap_or_default();
-                        // The end tells the files apart: the start gives way first.
-                        let font = egui::TextStyle::Small.resolve(ui.style());
-                        let tail = file.strip_prefix(stem.as_str()).map_or(0, |t| t.chars().count());
-                        let shown = elide_before_tail(ui, &file, tail, &font, TILE.x);
-                        let label = ui.add(egui::Label::new(egui::RichText::new(&shown).small().color(t.text_dim)));
-                        if shown != file {
-                            label.on_hover_text(file);
-                        }
-                        if flip && let Some(b) = boards.get_mut(i) {
-                            *b ^= true;
-                        }
-                    });
-                });
+    let files = board_files(menus.doc.as_deref(), fields.text("path").unwrap_or_default(), &boards);
+    let response = Stack::new()
+        .show(ui, |ui, _| {
+            // Each run of the body starts from the checks as they stood: a check flips them, and the body may run twice.
+            boards.clone_from(&before);
+            Notice::new(Tone::Info, tl!("A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.")).show(ui);
+            Row::new().show(ui, |ui, _| {
+                if Button::new(tl!("Select All")).show(ui).clicks > 0 {
+                    boards.iter_mut().for_each(|b| *b = true);
+                }
+                if Button::new(tl!("Clear")).show(ui).clicks > 0 {
+                    boards.iter_mut().for_each(|b| *b = false);
+                }
+                let checked = boards.iter().filter(|b| **b).count();
+                let (count, total) = (checked.to_string(), n.to_string());
+                Text::new(crate::i18n::fmt(tl!("{count} of {total} artboards"), &[("count", &count), ("total", &total)])).show(ui);
+            });
+            if !boards.iter().any(|b| *b) {
+                Notice::new(Tone::Warn, tl!("Check an artboard to save.")).show(ui);
             }
-        });
-    });
-    if boards != before || !d.fields.contains_key("boards") {
-        d.fields.insert("boards".into(), json!(boards));
+            // PLAN: assumed TileGrid::show_items(ui, &source, &mut |key, _| tile) as the framework's stories call it;
+            // the checks arrive as `CollectionEvent::Item(key, TilePartEvent::Check { .. })` in `response.events`.
+            let grid = TileGrid::new(tl!("Artboards")).checks(true).max_rows(BOARD_ROWS).show_items(ui, &Boards(n), &mut |i, _| {
+                let on = boards.get(*i).copied().unwrap_or(false);
+                let mut tile = Tile::new(menus.names.get(*i).cloned().unwrap_or_default()).check(if on { ToggleState::On } else { ToggleState::Off });
+                if let Some(file) = files.get(*i).cloned().flatten() {
+                    tile = tile.detail(file);
+                }
+                match menus.thumbs.get(*i).cloned().flatten() {
+                    Some(tex) => {
+                        let size = tex.size_vec2();
+                        // The thumbnail's pixel size is at most a few hundred: it fits `u16`.
+                        let aspect = ThumbAspect::new(size.x.max(1.0) as u16, size.y.max(1.0) as u16);
+                        tile.thumb(aspect, move |cx, rect| {
+                            cx.picture(tex.id(), rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), 0.0);
+                        })
+                    }
+                    None => tile,
+                }
+            });
+            for event in &grid.response.events {
+                if let CollectionEvent::Item(i, TilePartEvent::Check { .. }) = event
+                    && let Some(b) = boards.get_mut(*i)
+                {
+                    *b ^= true;
+                }
+            }
+        })
+        .output;
+    if boards != before || boards_in(fields).is_none() {
+        fields.set("boards", FieldValue::Json(json!(boards)));
+    }
+    response
+}
+
+/// The artboards of the picker, keyed by position.
+struct Boards(usize);
+
+// PLAN: assumed DisplayOrder and ItemSource as the tile grid's stories implement them (craft_behavior).
+impl craft::behavior::DisplayOrder<usize> for Boards {
+    fn len(&self) -> usize {
+        self.0
+    }
+
+    fn key(&self, at: usize) -> usize {
+        at
+    }
+
+    fn index_of(&self, key: &usize) -> Option<usize> {
+        (*key < self.0).then_some(*key)
     }
 }
 
-/// One option: a checkbox, an artboard menu, a version menu, a number or a text field.
-fn option_row(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, o: &FormatOption) {
-    let t = Tokens::get(ui.ctx());
-    let label = label(o);
-    let value = d.fields.get(o.name).cloned().unwrap_or(Value::Null);
-    if o.name == "aiVersion" {
-        ui.label(egui::RichText::new(tl!("Version:")).color(t.text_dim)).on_hover_text(o.description);
-        let versions = [tl!("PDF-compatible"), tl!("Legacy (version 7)")];
-        let at = usize::from(legacy_ai(d));
-        if let Some(i) = widgets::dropdown(ui, ("save-option", o.name), versions.get(at).copied().unwrap_or_default(), &versions, 254.0) {
-            d.fields.insert(o.name.into(), json!(if i == 1 { "7" } else { "pdf" }));
-        }
-        ui.end_row();
-        return;
+impl craft::behavior::ItemSource<usize> for Boards {
+    fn size_hint(&self, _: usize) -> craft::behavior::SizeHint {
+        craft::behavior::SizeHint::Aspect(1.0)
     }
-    if o.name == "transparentImages" {
-        ui.label(egui::RichText::new(tl!("Transparent Images:")).color(t.text_dim)).on_hover_text(o.description);
-        let choices = [tl!("Flatten"), tl!("Omit")];
-        let at = usize::from(d.str("transparentImages").trim().eq_ignore_ascii_case("omit"));
-        if let Some(i) = widgets::dropdown(ui, ("save-option", o.name), choices.get(at).copied().unwrap_or_default(), &choices, 254.0) {
-            d.fields.insert(o.name.into(), json!(if i == 1 { "omit" } else { "flatten" }));
-        }
-        ui.end_row();
-        return;
-    }
-    if o.name == "hiddenObjects" {
-        ui.label(egui::RichText::new(tl!("Hidden Objects:")).color(t.text_dim)).on_hover_text(o.description);
-        let choices = [tl!("Hidden Layer"), tl!("Omit"), tl!("Make Visible")];
-        let at = match d.str("hiddenObjects").trim() {
-            "omit" => 1,
-            "visible" => 2,
-            _ => 0,
-        };
-        if let Some(i) = widgets::dropdown(ui, ("save-option", o.name), choices.get(at).copied().unwrap_or_default(), &choices, 254.0) {
-            d.fields.insert(o.name.into(), json!(["layer", "omit", "visible"].get(i).copied().unwrap_or("layer")));
-        }
-        ui.end_row();
-        return;
-    }
-    if o.name == "outlineText" && legacy_ai(d) {
-        ui.label(egui::RichText::new(tl!("Text:")).color(t.text_dim)).on_hover_text(o.description);
-        let choices = [tl!("Editable"), tl!("Outlines")];
-        let at = usize::from(value.as_bool().unwrap_or(false));
-        if let Some(i) = widgets::dropdown(ui, ("save-option", o.name), choices.get(at).copied().unwrap_or_default(), &choices, 254.0) {
-            d.fields.insert(o.name.into(), json!(i == 1));
-        }
-        ui.end_row();
-        return;
-    }
-    if o.ty == "boolean" {
-        ui.label("");
-        let on = value.as_bool().unwrap_or(false);
-        if widgets::check_tip(ui, label.trim_end_matches(':'), on, true, o.description) {
-            d.fields.insert(o.name.into(), json!(!on));
-        }
-        ui.end_row();
-        if o.name == "separateArtboards" {
-            artboard_range(ui, d);
-        }
-        return;
-    }
-    if o.ty == "string" {
-        form::field_w(ui, d, o.name, &label, 240.0);
-        return;
-    }
-    ui.label(egui::RichText::new(&label).color(t.text_dim)).on_hover_text(o.description);
-    let artboards = app.session.active().filter(|_| o.name == "artboard").map(|st| &st.doc.artboards);
-    if let Some(boards) = artboards {
-        let i = value.as_u64().unwrap_or(0) as usize;
-        let names: Vec<&str> = boards.iter().map(|a| a.name.as_str()).collect();
-        if let Some(i) = widgets::dropdown_names(ui, ("save-option", o.name), names.get(i).copied().unwrap_or(""), &names, 254.0) {
-            d.fields.insert(o.name.into(), json!(i));
-        }
-    } else {
-        let integer = o.ty == "integer";
-        let x = value.as_f64().unwrap_or(0.0);
-        let field = ui.scope(|ui| widgets::range_field(ui, ("save-option", o.name), x, 0.0..=f64::MAX, "", if integer { 0 } else { 2 }, 80.0));
-        field.response.on_hover_text(o.description);
-        if let Some(x) = field.inner {
-            d.fields.insert(o.name.into(), if integer { json!(x as i64) } else { json!(x) });
-        }
-    }
-    ui.end_row();
 }
 
-/// Web Save As: another format brings its own options and file extension.
-fn switch_format(app: &mut VectorcraftApp, d: &mut Dialog, id: &str) {
-    let (Some(old), Some(new)) = (fileio::format(&d.str("format")), fileio::format(id)) else { return };
-    for o in old.options {
-        d.fields.remove(o.name);
+/// The native versions VectorCraft writes, newest first, each with the first release that reads
+/// it (the format version each release tag writes: 2 in 0.1, 3 from 0.2, 4 from 0.8).
+const NATIVE_VERSIONS: [(u32, &str); 4] = [(4, "0.8"), (3, "0.2"), (2, "0.1"), (1, "0.1")];
+
+/// The native version the dialog will write (the current one unless chosen).
+fn native_version_of(fields: &DialogFields) -> u32 {
+    let chosen = fields.int("version").or_else(|| fields.text("version").and_then(|t| t.trim().parse().ok()));
+    chosen.and_then(|v| u32::try_from(v).ok()).unwrap_or(vectorcraft_format::VERSION)
+}
+
+/// Is a native file to be saved in a version that can't be compressed?
+fn uncompressed(fields: &DialogFields) -> bool {
+    native_version_of(fields) < vectorcraft_format::COMPRESSED_SINCE
+}
+
+/// Web Save As: when the format picked differs from the one the rows show, the old format's
+/// options go, the new format's values (as last saved) come, and the file name takes the new
+/// extension. A legacy file's Text menu and a native version's text follow the rows.
+fn sync(fields: &mut DialogFields, menus: &Menus) {
+    let shown = fields.text("__shownFormat").map(str::to_string);
+    let picked = fields.text("format").map(str::to_string);
+    if let (Some(shown), Some(picked)) = (shown, picked)
+        && shown != picked
+        && let (Some(old), Some(new), Some(values)) = (fileio::format(&shown), fileio::format(&picked), menus.values.get(&picked))
+    {
+        for o in old.options {
+            fields.remove(o.name);
+        }
+        let legacy = is_legacy(new.id, values.get("aiVersion").and_then(Value::as_str));
+        let fresh = form::fields_of(&params(new, &Arc::new(Menus::default()), legacy), values);
+        for (key, value) in fresh.iter() {
+            fields.set(key, value.clone());
+        }
+        let path = with_extension(fields.text("path").unwrap_or_default(), new);
+        fields.set("path", path);
+        fields.set("__shownFormat", new.id);
     }
-    d.fields.extend(option_values(app, new));
-    d.fields.insert("format".into(), json!(new.id));
-    d.fields.insert("path".into(), json!(with_extension(&d.str("path"), new)));
+    // The Text menu of a legacy file holds `"true"` or `"false"`; the check box of any other, a bool.
+    let outlines = flag(fields, "outlineText");
+    if legacy_ai(fields) {
+        fields.set("outlineText", outlines.unwrap_or(false).to_string());
+    } else if fields.text("outlineText").is_some() {
+        fields.set("outlineText", outlines.unwrap_or(false));
+    }
 }
 
 /// `path` ending in `f`'s extension (kept when it already names `f`).
@@ -431,45 +533,133 @@ fn with_extension(path: &str, f: &Format) -> String {
     std::path::Path::new(path).with_extension(f.extensions[0]).to_string_lossy().to_string()
 }
 
-/// Write the file with the chosen options (blank ones fall back to the format's defaults).
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
-    let f = fileio::format(&d.str("format")).ok_or("unknown format")?;
-    let path = d.str("path");
+/// `value` of option `o` as the save reads it: the menus of numbers and of a legacy file's Text
+/// hold text.
+fn typed(o: &FormatOption, value: Value) -> Value {
+    let Some(text) = value.as_str() else { return value };
+    if o.name == "level" || o.ty == "integer" {
+        return text.trim().parse::<u64>().map_or(value, |n| json!(n));
+    }
+    if o.ty == "boolean" {
+        return text.trim().parse::<bool>().map_or(value, |b| json!(b));
+    }
+    value
+}
+
+/// Opens the save options dialog of format `f` before writing `path`: `action` is the save command
+/// it finishes, and `pick` (the web's Save As) also names the file and chooses the format.
+pub(crate) fn open(app: &mut VectorcraftApp, action: &str, f: &'static Format, path: &str, pick: bool) -> Value {
+    let Some(ctx) = app.ui_ctx.clone() else { return json!({ "pending": Value::Null }) };
+    let formats: Vec<&'static str> = match (pick, SaveMode::of(action)) {
+        (false, _) => vec![],
+        (true, Some(SaveMode::Template)) => TEMPLATE_FORMATS.to_vec(),
+        (true, _) => SAVE_FORMATS.to_vec(),
+    };
+    let listed: Vec<&'static Format> = std::iter::once(f).chain(formats.iter().filter_map(|id| fileio::format(id))).collect();
+    let mut menus = Menus { formats, ..Menus::default() };
+    for g in &listed {
+        if !menus.values.contains_key(g.id) {
+            let values = for_rows(g, option_values(app, g));
+            menus.values.insert(g.id.to_string(), values);
+        }
+        for o in g.options {
+            if let Some(c) = choices(app, g, o) {
+                menus.choices.insert(o.name, c);
+            }
+        }
+    }
+    if let Some(st) = app.session.active() {
+        menus.names = st.doc.artboards.iter().map(|a| a.name.clone()).collect();
+        menus.doc = Some(st.doc.clone());
+    }
+    if menus.names.len() > 1 && listed.iter().any(|g| g.id == "ai") {
+        menus.thumbs = (0..menus.names.len()).map(|i| export_for_screens::artboard_thumb(app, &ctx, i)).collect();
+    }
+    let mut values = menus.values.get(f.id).cloned().unwrap_or_default();
+    values.insert("__pick".into(), json!(pick));
+    values.insert("__shownFormat".into(), json!(f.id));
+    values.insert("path".into(), json!(path));
+    values.insert("format".into(), json!(f.id));
+    let menus = Arc::new(menus);
+    let legacy = is_legacy(f.id, values.get("aiVersion").and_then(Value::as_str));
+    let mut fields = form::fields_of(&params(f, &menus, legacy), &values);
+    if menus.names.len() > 1 && legacy {
+        let boards = picked_boards(&fields, menus.names.len());
+        fields.set("boards", FieldValue::Json(json!(boards)));
+    }
+    let (fallback, action_name) = (f, action.to_string());
+    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |fields| {
+        sync(fields, &menus);
+        let legacy = legacy_ai(fields);
+        let f = fields.text("format").and_then(fileio::format).unwrap_or(fallback);
+        let title = heading(fields.bool("__pick").unwrap_or(false), &action_name, legacy, f.id);
+        let ok = !legacy || picked_boards(fields, menus.names.len()).iter().any(|b| *b);
+        ParamDialog::new(KIND, title, params(f, &menus, legacy)).ok_enabled(ok).values(Bind::bound(fields))
+    });
+    match export_host::open(app, Export::Save { action: action.into() }, false, dialog) {
+        Some(_) => json!({ "pending": KIND }),
+        None => json!({ "pending": Value::Null }),
+    }
+}
+
+/// Checks the chosen options and, when they hold, answers the step that writes the file once the
+/// dialog has closed (blank options fall back to the format's defaults).
+pub(crate) fn confirm(app: &mut VectorcraftApp, open: &Open, fields: &DialogFields) -> Result<After, String> {
+    let Export::Save { action } = &open.kind else { return Err("not a save dialog".into()) };
+    let f = fileio::format(fields.text("format").unwrap_or_default()).ok_or("unknown format")?;
+    let path = fields.text("path").unwrap_or_default().to_string();
     if path.trim().is_empty() {
         return Err("name the file".into());
     }
-    let path = if d.bool("__pick") { with_extension(path.trim(), f) } else { path };
+    let pick = fields.bool("__pick").unwrap_or(false);
+    let path = if pick { with_extension(path.trim(), f) } else { path };
+    let legacy = legacy_ai(fields);
+    let d = form::json_of(&params(f, &Arc::new(Menus::default()), legacy), fields);
+    // Only the options the file reads: a `.ai` file's version takes its own (when the document's
+    // own file is a `.ai`, the save remembers the others as they were).
     let mut options: Map<String, Value> = f
         .options
         .iter()
-        .filter_map(|o| d.fields.get(o.name).filter(|v| !v.is_null() && v.as_str() != Some("")).map(|v| (o.name.to_string(), v.clone())))
+        .filter(|o| fileio::file_reads(f, legacy, o.name))
+        .filter_map(|o| d.get(o.name).filter(|v| !v.is_null() && v.as_str() != Some("")).map(|v| (o.name.to_string(), typed(o, v.clone()))))
         .collect();
-    if legacy_ai(d) {
+    if uncompressed(fields) {
+        // Use Compression shows off there, whatever it held before.
+        options.remove("compress");
+    }
+    let n = app.session.active().map_or(0, |s| s.doc.artboards.len());
+    if legacy {
         // The artboards checked in the picker (all of them: no range).
         options.remove("range");
-        let n = app.session.active().map_or(0, |s| s.doc.artboards.len());
-        let boards = picked_boards(d, n);
+        let boards = picked_boards(fields, n);
         if !boards.iter().any(|b| *b) {
             return Err(tl!("Check an artboard to save.").into());
         }
         if !boards.iter().all(|b| *b) {
-            options.insert("range".into(), json!(super::export_for_screens::range_text(&boards)));
+            options.insert("range".into(), json!(export_for_screens::range_text(&boards)));
         }
-    } else if separates(f) {
-        if !d.bool("separateArtboards") || all_artboards(d) {
+    } else if let Some(switch) = board_switch(f) {
+        let on = flag(fields, switch).unwrap_or(false);
+        if switch == "useArtboards" {
+            // All or Range alone names the artboards: an artboard remembered from an earlier
+            // save would otherwise turn Use Artboards on, or narrow All to itself.
+            options.remove("artboard");
+            options.remove("artboards");
+            options.insert(switch.into(), json!(on));
+        }
+        if !on || all_artboards(fields) {
             options.remove("range");
         } else {
             // A bad range keeps the dialog open.
-            let n = app.session.active().map_or(0, |s| s.doc.artboards.len());
-            ArtboardPick { range: Some(d.str("range")), ..Default::default() }.resolve(n)?;
+            ArtboardPick { range: Some(fields.text("range").unwrap_or_default().to_string()), ..Default::default() }.resolve(n)?;
         }
     }
-    app.ui.dialog = None;
-    match SaveMode::of(&d.str("__action")) {
-        Some(mode) if own_dialog(f) => io::ask_format_options(app, mode, f, &path),
-        Some(mode) => io::save(app, mode, &json!({ "path": path, "format": f.id, "options": options }), false),
-        None => Err(format!("`{}` is no save command", d.str("__action"))),
-    }
+    let action = action.clone();
+    Ok(Some(Box::new(move |app: &mut VectorcraftApp| match SaveMode::of(&action) {
+        Some(mode) if own_dialog(f) => crate::io::ask_format_options(app, mode, f, &path),
+        Some(mode) => crate::io::save(app, mode, &json!({ "path": path, "format": f.id, "options": options }), false),
+        None => Err(format!("`{action}` is no save command")),
+    })))
 }
 
 #[cfg(test)]

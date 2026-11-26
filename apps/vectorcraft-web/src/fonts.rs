@@ -1,12 +1,15 @@
 //! Craft-fonts faces served beside the wasm (`fonts/<sha16>/…`, copied by
 //! `cargo xtask web-fonts`) instead of embedded: [`load_startup_fonts`] fetches the `startup`
-//! ones before the app starts, [`spawn_background_fonts`] the rest once it runs. The browser checks
-//! each file against its SHA-256 (Subresource Integrity). A face that fails is logged and skipped:
-//! the app runs without it. With `WEB_FONTS` empty (built without craft-fonts) both do nothing.
+//! ones before the app starts and [`spawn_background_fonts`] the `background` ones once it runs,
+//! both into the document font database. The interface's own faces are fetched by the font stack
+//! through [`BrowserFetcher`]. The browser checks each file against its SHA-256 (Subresource
+//! Integrity). A face that fails is logged and skipped: the app runs without it. With `WEB_FONTS`
+//! empty (built without craft-fonts) these do nothing.
 
 use std::cell::Cell;
 use std::rc::Rc;
 
+use craft::ui::fonts::{FetchDone, FetchWake, FontFetcher};
 use vectorcraft_text::{FontDb, WEB_FONTS, WebFont};
 use wasm_bindgen::JsCast as _;
 use wasm_bindgen::closure::Closure;
@@ -24,10 +27,31 @@ thread_local! {
     static BACKGROUND_STARTED: Cell<bool> = const { Cell::new(false) };
 }
 
+/// Fetches the interface font stack's served faces with the browser's `fetch`, and keeps its time.
+pub struct BrowserFetcher;
+
+impl FontFetcher for BrowserFetcher {
+    fn fetch(&self, url: &'static str, integrity: &'static str, done: FetchDone) {
+        wasm_bindgen_futures::spawn_local(async move { done(fetch(url, integrity, BACKGROUND_TIMEOUT_MS).await) });
+    }
+
+    fn now(&self) -> f64 {
+        craft::platform::clock::monotonic_ms() / 1000.0
+    }
+
+    fn after(&self, seconds: f64, wake: FetchWake) {
+        let ms = (seconds * 1000.0).ceil().clamp(0.0, f64::from(i32::MAX)) as i32;
+        wasm_bindgen_futures::spawn_local(async move {
+            crate::api::sleep(ms).await;
+            wake();
+        });
+    }
+}
+
 /// Fetch and register the `startup` faces (one after the other). Returns how many loaded.
 pub async fn load_startup_fonts() -> usize {
     let mut loaded = 0;
-    for f in WEB_FONTS.iter().filter(|f| f.startup) {
+    for f in WEB_FONTS.iter().filter(|f| f.startup && !f.demand) {
         if load(f, STARTUP_TIMEOUT_MS).await {
             loaded += 1;
         }
@@ -36,13 +60,13 @@ pub async fn load_startup_fonts() -> usize {
 }
 
 /// Fetch and register the `background` faces, [`BACKGROUND_PARALLEL`] at a time, asking `ctx` for
-/// a frame after each so the font menus and the canvas pick it up. Only the first call does
+/// a frame after each so the font menus and the canvas pick it up. Only the first call fetches
 /// anything.
 pub fn spawn_background_fonts(ctx: egui::Context) {
     if BACKGROUND_STARTED.with(|s| s.replace(true)) {
         return;
     }
-    let queue: Rc<Vec<&'static WebFont>> = Rc::new(WEB_FONTS.iter().filter(|f| !f.startup).collect());
+    let queue: Rc<Vec<&'static WebFont>> = Rc::new(WEB_FONTS.iter().filter(|f| !f.startup && !f.demand).collect());
     let next = Rc::new(Cell::new(0usize));
     for _ in 0..BACKGROUND_PARALLEL.min(queue.len()) {
         let (queue, next, ctx) = (queue.clone(), next.clone(), ctx.clone());

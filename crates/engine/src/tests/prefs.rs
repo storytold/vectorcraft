@@ -7,6 +7,32 @@ use vectorcraft_tools::{PointerEvent, PointerKind};
 use crate::cmd::prefscmds::{PREF_CATEGORIES, PREF_GROUPS, PREF_SPECS, validate};
 use crate::*;
 
+/// The saved preference reaches the real tool; older preferences keep Touching and invalid
+/// values fail without changing the current setting.
+#[test]
+fn marquee_selection_preference_drives_the_selection_tool() {
+    assert_eq!(serde_json::from_value::<Prefs>(json!({})).unwrap().marquee_selection, "touching");
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    for (mode, selected) in [("touching", true), ("enclosed", false), ("directional", false)] {
+        set_pref(&mut s, "marqueeSelection", json!(mode));
+        s.execute("select.none", &json!({})).unwrap();
+        for (k, x, y) in [(PointerKind::Down, 50.0, 50.0), (PointerKind::Drag, 150.0, 150.0), (PointerKind::Up, 150.0, 150.0)] {
+            s.pointer(&PointerEvent::new(k, x, y), v).unwrap();
+        }
+        assert_eq!(!s.doc().unwrap().selection.objects.is_empty(), selected, "{mode}");
+        let persisted = s.prefs.to_json();
+        assert_eq!(serde_json::from_value::<Prefs>(persisted).unwrap().marquee_selection, mode);
+    }
+    assert!(s.execute("prefs.set", &json!({"key": "marqueeSelection", "value": "unknown"})).is_err());
+    assert_eq!(s.prefs.marquee_selection, "directional");
+    s.execute("prefs.reset", &json!({})).unwrap();
+    assert_eq!(s.prefs.marquee_selection, "touching");
+}
+
 #[test]
 fn every_spec_matches_a_prefs_field_and_back() {
     let all = Prefs::default().to_json();
@@ -81,6 +107,23 @@ fn grid_prefs_apply_to_open_documents() {
     s.execute("prefs.set", &json!({"values": {"gridlineEvery": 36, "gridSubdivisions": 4}})).unwrap();
     let g = &s.doc().unwrap().doc.grid;
     assert_eq!((g.spacing, g.subdivisions), (36.0, 4));
+}
+
+/// The grid preferences are not an undo step in the documents they apply to, so undo and redo
+/// leave the grid as the preferences set it.
+#[test]
+fn undo_and_redo_keep_the_grid_prefs() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    s.execute("prefs.set", &json!({"values": {"gridlineEvery": 36, "gridSubdivisions": 4}})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    let g = &s.doc().unwrap().doc.grid;
+    assert_eq!((g.spacing, g.subdivisions), (36.0, 4));
+    s.execute("prefs.set", &json!({"values": {"gridlineEvery": 18, "gridSubdivisions": 3}})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    let g = &s.doc().unwrap().doc.grid;
+    assert_eq!((g.spacing, g.subdivisions), (18.0, 3));
 }
 
 /// Guides & Grid › Gridline every and Subdivisions (#394): set with no document open, as the
@@ -173,6 +216,220 @@ fn reset_category_and_all() {
     assert!(s.execute("prefs.reset", &json!({"category": "Bogus"})).is_err());
 }
 
+/// `prefs.reset` records each category it reset once, `None` for every category, and a failed
+/// reset records nothing.
+#[test]
+fn prefs_reset_records_the_categories_it_reset() {
+    let mut s = Session::new();
+    assert!(s.take_prefs_resets().is_empty());
+    s.execute("prefs.reset", &json!({"category": "general"})).unwrap();
+    s.execute("prefs.reset", &json!({"category": "General"})).unwrap();
+    assert_eq!(s.take_prefs_resets(), vec![Some("General")]);
+    assert!(s.take_prefs_resets().is_empty(), "taking clears the list");
+    assert!(s.execute("prefs.reset", &json!({"category": "Bogus"})).is_err());
+    assert!(s.execute("prefs.reset", &json!({"category": 5})).is_err());
+    assert!(s.take_prefs_resets().is_empty(), "a failed reset records nothing");
+    s.execute("prefs.reset", &json!({})).unwrap();
+    s.execute("prefs.reset", &json!({"category": "Type"})).unwrap();
+    assert_eq!(s.take_prefs_resets(), vec![None, Some("Type")]);
+}
+
+/// A rectangle made into a guide path; nothing is selected after.
+fn guide_path(s: &mut Session, x: f64) -> NodeId {
+    let id = square(s, x, 0.0);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("view.guides.make", &json!({})).unwrap();
+    id
+}
+
+/// Lock Guides by Default is off, and preferences saved before it existed leave guides unlocked.
+#[test]
+fn lock_guides_by_default_is_off_and_older_preferences_leave_guides_unlocked() {
+    assert!(!Prefs::default().lock_guides_by_default);
+    let older: Prefs = serde_json::from_value(json!({"keyboardIncrement": 4})).unwrap();
+    assert!(!older.lock_guides_by_default);
+    let mut s = Session::new();
+    s.apply_prefs(older);
+    assert!(!s.guides_locked());
+    assert!(s.execute("prefs.set", &json!({"key": "lockGuidesByDefault", "value": "yes"})).is_err());
+    assert!(!s.guides_locked() && !s.prefs.lock_guides_by_default);
+}
+
+/// Preferences saved with the option on start a session with guides locked. A document opened in
+/// it has its ruler guides and guide paths locked, and new guides can still be made. View › Guides
+/// › Lock Guides then unlocks them for the session and leaves the preference on.
+#[test]
+fn saved_lock_guides_by_default_locks_a_new_session_and_the_documents_it_opens() {
+    let file = std::env::temp_dir().join(format!("vc-lock-guides-{}.vectorcraft", std::process::id()));
+    let file = file.to_string_lossy().to_string();
+    let mut unlocked = new_doc();
+    assert!(!unlocked.guides_locked(), "a session without the preference");
+    let path = guide_path(&mut unlocked, 100.0);
+    unlocked.execute("guide.add", &json!({"vertical": true, "pos": 50})).unwrap();
+    unlocked.execute("document.save", &json!({"path": file})).unwrap();
+
+    // The preference is set with no document open, as a headless session can.
+    let mut first = Session::new();
+    first.execute("prefs.set", &json!({"key": "lockGuidesByDefault", "value": true})).unwrap();
+    let saved = first.prefs.to_json();
+    assert_eq!(saved["lockGuidesByDefault"], json!(true));
+
+    let mut s = Session::new();
+    s.apply_prefs(serde_json::from_value(saved).unwrap());
+    assert!(s.guides_locked());
+    s.execute("document.open", &json!({"path": file})).unwrap();
+    let _ = std::fs::remove_file(&file);
+    assert!(s.guides_locked(), "opening a document keeps the lock");
+    assert!(matches!(s.execute("guide.select", &json!({"indexes": [0]})), Err(EngineError::Disabled(..))));
+    s.execute("select.set", &json!({"ids": [path.0]})).unwrap();
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "a guide path can't be selected");
+    assert_eq!(s.execute("guide.add", &json!({"vertical": false, "pos": 20})).unwrap()["index"], 1);
+
+    assert_eq!(s.execute("view.guides.lock", &json!({})).unwrap(), json!({"locked": false}));
+    assert!(s.prefs.lock_guides_by_default, "the menu leaves the preference as it is");
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    s.execute("select.set", &json!({"ids": [path.0]})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, [path]);
+}
+
+/// Changing the preference sets the lock at once and deselects guides in every open document.
+/// A change to any other preference, or setting it to the value it has, keeps the session's lock.
+#[test]
+fn changing_lock_guides_by_default_sets_the_lock_and_other_changes_keep_it() {
+    let mut s = new_doc();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 50})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let path = guide_path(&mut s, 100.0);
+    s.execute("select.set", &json!({"ids": [path.0]})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+
+    set_pref(&mut s, "lockGuidesByDefault", json!(true));
+    assert!(s.guides_locked());
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "the guide path in the active document");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    assert!(s.doc().unwrap().selection.guides.is_empty(), "the ruler guide in the other document");
+
+    s.execute("view.guides.lock", &json!({"locked": false})).unwrap();
+    set_pref(&mut s, "keyboardIncrement", json!(4));
+    set_pref(&mut s, "lockGuidesByDefault", json!(true));
+    assert!(!s.guides_locked(), "the session's unlock stays");
+
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    set_pref(&mut s, "lockGuidesByDefault", json!(false));
+    assert!(!s.guides_locked(), "turning the preference off unlocks guides");
+}
+
+/// Reset turns the option off and unlocks guides. With the option already off, a reset keeps a
+/// lock set from the View menu.
+#[test]
+fn resetting_lock_guides_by_default_unlocks_guides_only_when_it_was_on() {
+    let mut s = new_doc();
+    for params in [json!({"category": "Guides & Grid"}), json!({})] {
+        set_pref(&mut s, "lockGuidesByDefault", json!(true));
+        assert!(s.guides_locked());
+        s.execute("prefs.reset", &params).unwrap();
+        assert!(!s.prefs.lock_guides_by_default, "{params}");
+        assert!(!s.guides_locked(), "{params}");
+    }
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    s.execute("prefs.reset", &json!({})).unwrap();
+    assert!(s.guides_locked());
+}
+
+/// `prefs.set` refuses a recovery or plug-ins folder that is missing or is a file. Nothing changes,
+/// other values in the same call included, and the document gets no undo step.
+#[test]
+fn set_refuses_a_missing_folder_or_a_file_as_a_recovery_or_plugins_folder() {
+    let folder = crate::tests_links::Folder::new("prefs-set-refused");
+    let file = folder.file("not-a-folder.txt");
+    std::fs::write(&file, b"x").unwrap();
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let before = s.prefs.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    for key in ["recoveryFolder", "pluginsFolder"] {
+        for path in [file.clone(), folder.file("missing")] {
+            let e = s.execute("prefs.set", &json!({"key": key, "value": path})).unwrap_err();
+            assert_eq!(e.to_string(), format!("{path} is not a folder"), "{key}");
+            let e = s.execute("prefs.set", &json!({"values": {key: path, "keyboardIncrement": 7, "unitsGeneral": "millimeters"}})).unwrap_err();
+            assert_eq!(e.to_string(), format!("{path} is not a folder"), "{key}");
+            assert_eq!(s.prefs, before, "{key}: no preference changes");
+            assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{key}: no undo step");
+        }
+    }
+}
+
+/// `prefs.set` refuses a recovery folder that no folder can be created in or that can't be listed,
+/// and a plug-ins folder that can't be listed.
+#[cfg(unix)]
+#[test]
+fn set_refuses_a_recovery_or_plugins_folder_it_cannot_use() {
+    use std::os::unix::fs::PermissionsExt;
+    /// Gives a folder mode 0o755 again when dropped, also when an assertion fails, so the test
+    /// folder can be removed.
+    struct Unlock(std::path::PathBuf);
+    impl Drop for Unlock {
+        fn drop(&mut self) {
+            let _ = std::fs::set_permissions(&self.0, std::fs::Permissions::from_mode(0o755));
+        }
+    }
+    let folder = crate::tests_links::Folder::new("prefs-set-unusable");
+    let mut s = Session::new();
+    let before = s.prefs.clone();
+    let locked = folder.0.join("locked");
+    std::fs::create_dir(&locked).unwrap();
+    let unlock_locked = Unlock(locked.clone());
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
+    // An account that may write anyway (root) has nothing to refuse.
+    if std::fs::create_dir(locked.join("probe")).is_err() {
+        let e = s.execute("prefs.set", &json!({"key": "recoveryFolder", "value": locked.to_string_lossy()})).unwrap_err();
+        assert!(e.to_string().starts_with("Data Recovery can't keep copies in "), "{e}");
+    }
+    drop(unlock_locked);
+    let unlisted = folder.0.join("unlisted");
+    std::fs::create_dir(&unlisted).unwrap();
+    let unlock_unlisted = Unlock(unlisted.clone());
+    std::fs::set_permissions(&unlisted, std::fs::Permissions::from_mode(0o333)).unwrap();
+    // An account that may list anyway (root) has nothing to refuse.
+    if std::fs::read_dir(&unlisted).is_err() {
+        let e = s.execute("prefs.set", &json!({"key": "recoveryFolder", "value": unlisted.to_string_lossy()})).unwrap_err();
+        assert!(e.to_string().starts_with("Data Recovery can't keep copies in "), "{e}");
+        let e = s.execute("prefs.set", &json!({"key": "pluginsFolder", "value": unlisted.to_string_lossy()})).unwrap_err();
+        assert!(e.to_string().starts_with("Plug-ins can't be loaded from "), "{e}");
+    }
+    drop(unlock_unlisted);
+    assert_eq!(s.prefs, before);
+}
+
+/// `prefs.set` saves a folder that passes as given and leaves nothing behind in it. An empty value
+/// and a folder the preference already holds are not checked, nor is a held folder when the call
+/// leaves it out, so they work while the folder is unavailable.
+#[test]
+fn set_takes_a_usable_empty_or_already_held_recovery_folder() {
+    let folder = crate::tests_links::Folder::new("prefs-set-usable");
+    let mut s = Session::new();
+    let typed = format!(" {} ", folder.0.display());
+    s.execute("prefs.set", &json!({"key": "recoveryFolder", "value": typed})).unwrap();
+    assert_eq!(s.prefs.recovery_folder, typed);
+    assert_eq!(std::fs::read_dir(&folder.0).unwrap().count(), 0, "the write check leaves nothing behind");
+
+    let gone = folder.0.join("gone");
+    std::fs::create_dir(&gone).unwrap();
+    let gone = gone.to_string_lossy().into_owned();
+    s.execute("prefs.set", &json!({"key": "recoveryFolder", "value": gone})).unwrap();
+    std::fs::remove_dir(&gone).unwrap();
+    s.execute("prefs.set", &json!({"values": {"recoveryFolder": gone, "keyboardIncrement": 7}})).unwrap();
+    s.execute("prefs.set", &json!({"key": "keyboardIncrement", "value": 3})).unwrap();
+    assert_eq!((s.prefs.recovery_folder.as_str(), s.prefs.keyboard_increment), (gone.as_str(), 3.0));
+
+    for key in ["recoveryFolder", "pluginsFolder"] {
+        s.execute("prefs.set", &json!({"key": key, "value": ""})).unwrap();
+        assert_eq!(s.prefs.to_json()[key], json!(""), "{key}");
+    }
+}
+
 #[test]
 fn list_describes_every_pref() {
     let mut s = Session::new();
@@ -225,6 +482,69 @@ fn gpu_preference_defaults_to_automatic_and_validates() {
     assert_eq!(s.prefs.gpu_preference, "automatic");
 }
 
+/// Plug-ins & Scratch Disks › Plug-in Instruction Budget: Normal by default, Large by value or
+/// label, kept through a save and load, and reset with its category. Setting another value is an
+/// error that changes nothing; a saved value that is missing, unknown or of another type reads as
+/// Normal and leaves the other saved preferences as they are.
+#[test]
+fn plugin_instruction_budget_defaults_to_normal_and_validates() {
+    let mut s = Session::new();
+    assert_eq!(s.prefs.plugin_instruction_budget, PluginBudget::Normal);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "pluginInstructionBudget"})).unwrap(), json!("normal"));
+    set_pref(&mut s, "pluginInstructionBudget", json!("Large"));
+    assert_eq!(s.prefs.plugin_instruction_budget, PluginBudget::Large);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "pluginInstructionBudget"})).unwrap(), json!("large"));
+    for bad in [json!("unlimited"), json!(""), json!(5), json!(null), json!(true), json!(["large"])] {
+        assert!(s.execute("prefs.set", &json!({"key": "pluginInstructionBudget", "value": bad})).is_err(), "{bad}");
+        assert_eq!(s.prefs.plugin_instruction_budget, PluginBudget::Large, "{bad}");
+    }
+    let back: Prefs = serde_json::from_value(s.prefs.to_json()).unwrap();
+    assert_eq!(back.plugin_instruction_budget, PluginBudget::Large);
+    let other_values = [json!("unlimited"), json!(5), json!(null), json!(["large"]), json!({"large": true}), json!("LARGE")];
+    let saved_files = other_values.map(|v| json!({"keyboardIncrement": 4, "pluginInstructionBudget": v}));
+    for saved in std::iter::once(json!({"keyboardIncrement": 4})).chain(saved_files) {
+        let read: Prefs = serde_json::from_value(saved.clone()).unwrap();
+        assert_eq!((read.plugin_instruction_budget, read.keyboard_increment), (PluginBudget::Normal, 4.0), "{saved}");
+    }
+    let l = s.execute("prefs.list", &json!({})).unwrap();
+    let row = l.as_array().unwrap().iter().find(|e| e["key"] == "pluginInstructionBudget").unwrap().clone();
+    assert_eq!((row["category"].as_str(), row["section"].as_str()), (Some("Plug-ins & Scratch Disks"), Some("Plug-ins")));
+    assert_eq!((&row["options"], &row["value"]), (&json!(["normal", "large"]), &json!("large")));
+    s.execute("prefs.reset", &json!({"category": "Plug-ins & Scratch Disks"})).unwrap();
+    assert_eq!(s.prefs.plugin_instruction_budget, PluginBudget::Normal);
+}
+
+/// Performance › Low-Latency Drawing (#6013): off by default and for preference files written
+/// before it, a boolean only, kept through a save/load round trip, listed under Performance and
+/// reset with it.
+#[test]
+fn low_latency_drawing_defaults_off_and_takes_only_a_boolean() {
+    let mut s = Session::new();
+    assert!(!s.prefs.low_latency_drawing);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "lowLatencyDrawing"})).unwrap(), json!(false));
+    s.execute("prefs.set", &json!({"key": "lowLatencyDrawing", "value": true})).unwrap();
+    assert!(s.prefs.low_latency_drawing);
+    for bad in [json!(1), json!(null), json!("on"), json!("yes"), json!([true])] {
+        assert!(s.execute("prefs.set", &json!({"key": "lowLatencyDrawing", "value": bad})).is_err(), "{bad}");
+        assert!(s.prefs.low_latency_drawing);
+    }
+    // Booleans may be given as "true" and "false", as for every boolean preference.
+    s.execute("prefs.set", &json!({"key": "lowLatencyDrawing", "value": "false"})).unwrap();
+    assert!(!s.prefs.low_latency_drawing);
+    s.execute("prefs.set", &json!({"key": "lowLatencyDrawing", "value": "true"})).unwrap();
+    assert_eq!(s.prefs.to_json()["lowLatencyDrawing"], json!(true));
+    let back: Prefs = serde_json::from_value(s.prefs.to_json()).unwrap();
+    assert!(back.low_latency_drawing);
+    let old: Prefs = serde_json::from_value(json!({"gpuPerformance": true})).unwrap();
+    assert!(!old.low_latency_drawing);
+    let l = s.execute("prefs.list", &json!({})).unwrap();
+    let row = l.as_array().unwrap().iter().find(|e| e["key"] == "lowLatencyDrawing").unwrap().clone();
+    assert_eq!(row["category"], "Performance");
+    assert_eq!(row["label"], "Low-Latency Drawing");
+    s.execute("prefs.reset", &json!({"category": "Performance"})).unwrap();
+    assert!(!s.prefs.low_latency_drawing);
+}
+
 /// Performance › Linux Display Server (#1151): automatic by default, X11 by value or label, and
 /// anything else is an error that changes nothing.
 #[test]
@@ -240,6 +560,34 @@ fn linux_display_server_defaults_to_automatic_and_validates() {
     assert_eq!(s.prefs.to_json()["linuxDisplayServer"], "x11");
     s.execute("prefs.reset", &json!({"category": "Performance"})).unwrap();
     assert_eq!(s.prefs.linux_display_server, "automatic");
+}
+
+/// Performance › Use Monitor Profile for Canvas: on by default and for preference files written
+/// before it, a boolean only, saved, listed under Performance, and set without changing the
+/// document.
+#[test]
+fn monitor_profile_display_is_on_by_default_and_changes_no_document() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    assert!(s.prefs.monitor_profile_display);
+    let old: Prefs = serde_json::from_value(json!({"gpuPerformance": true})).unwrap();
+    assert!(old.monitor_profile_display);
+    let (revision, doc) = (s.active().unwrap().revision, s.active().unwrap().doc.clone());
+    s.execute("prefs.set", &json!({"key": "monitorProfileDisplay", "value": false})).unwrap();
+    assert!(!s.prefs.monitor_profile_display);
+    assert_eq!(s.prefs.to_json()["monitorProfileDisplay"], false);
+    for bad in [json!("off"), json!(0), json!(null)] {
+        assert!(s.execute("prefs.set", &json!({"key": "monitorProfileDisplay", "value": bad})).is_err(), "{bad}");
+        assert!(!s.prefs.monitor_profile_display);
+    }
+    assert_eq!(s.active().unwrap().revision, revision);
+    assert!(std::sync::Arc::ptr_eq(&s.active().unwrap().doc, &doc), "the document is not edited");
+    let l = s.execute("prefs.list", &json!({})).unwrap();
+    let row = l.as_array().unwrap().iter().find(|e| e["key"] == "monitorProfileDisplay").unwrap().clone();
+    assert_eq!((row["category"].as_str(), row["label"].as_str()), (Some("Performance"), Some("Use Monitor Profile for Canvas")));
+    s.execute("prefs.reset", &json!({"category": "Performance"})).unwrap();
+    assert!(s.prefs.monitor_profile_display);
 }
 
 /// Linux Display Server's pen choice (#2028): set by value or by label, saved, and off by default.
@@ -369,7 +717,8 @@ fn double_clicking_a_single_object_isolates_it() {
 }
 
 /// General › Use Precise Cursors (#394): the Pen's pointer becomes a crosshair; the Selection
-/// tool's arrow stays.
+/// tool's arrow stays. The canvas applies the preference to the tool's own pointer
+/// (`Cursor::precise`).
 #[test]
 fn use_precise_cursors_makes_drawing_cursors_crosshairs() {
     use vectorcraft_tools::{Cursor, Mods};
@@ -382,16 +731,31 @@ fn use_precise_cursors_makes_drawing_cursors_crosshairs() {
     assert_eq!(cursor(&mut s, "pen"), Cursor::Pen);
     assert_eq!(cursor(&mut s, "eyedropper"), Cursor::Eyedropper);
     s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": true})).unwrap();
-    assert_eq!(cursor(&mut s, "pen"), Cursor::Crosshair);
-    assert_eq!(cursor(&mut s, "eyedropper"), Cursor::Crosshair);
-    assert_eq!(cursor(&mut s, "selection"), Cursor::Arrow);
+    assert_eq!(cursor(&mut s, "pen").precise(), Cursor::Crosshair);
+    assert_eq!(cursor(&mut s, "eyedropper").precise(), Cursor::Crosshair);
+    assert_eq!(cursor(&mut s, "selection").precise(), Cursor::Arrow);
     s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": false})).unwrap();
     assert_eq!(cursor(&mut s, "eyedropper"), Cursor::Eyedropper);
 }
 
+/// Caps Lock is reported and set through `view.capsLock`, and leaves the saved Use Precise
+/// Cursors preference as it was; the canvas gives the drawing tools the crosshair while it is on.
+#[test]
+fn caps_lock_gives_drawing_tools_the_crosshair() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    assert_eq!(s.execute("view.capsLock", &json!({})).unwrap(), json!({"on": false}));
+    assert_eq!(s.execute("view.capsLock", &json!({"on": true})).unwrap(), json!({"on": true}));
+    assert!(!s.prefs.use_precise_cursors, "Caps Lock leaves the preference off");
+    assert_eq!(s.execute("view.capsLock", &json!({})).unwrap(), json!({"on": true}));
+    assert_eq!(s.execute("view.capsLock", &json!({"on": false})).unwrap(), json!({"on": false}));
+    assert!(s.execute("view.capsLock", &json!({"on": 1})).is_err());
+    assert_eq!(s.execute("view.capsLock", &json!({})).unwrap(), json!({"on": false}));
+}
+
 /// Use Precise Cursors changes the pointer of the tools that have one of their own: off, each shows its own
-/// pointer; on, a crosshair. Every other drawing tool shows a crosshair either way, and the Type tool and the
-/// Scissors over no path keep theirs.
+/// pointer; on, a crosshair (the canvas applies `Cursor::precise` to it). Every other drawing tool shows a
+/// crosshair either way, and the Type tool and the Scissors over no path keep theirs.
 #[test]
 fn use_precise_cursors_swaps_the_tools_own_pointers_for_a_crosshair() {
     use vectorcraft_tools::{Cursor, Mods};
@@ -418,7 +782,6 @@ fn use_precise_cursors_swaps_the_tools_own_pointers_for_a_crosshair() {
         ("blobBrush", Cursor::BlobBrush),
         ("shaper", Cursor::Shaper),
         ("pencil", Cursor::PencilNew),
-        ("smooth", Cursor::Smooth),
         ("pathEraser", Cursor::PathEraser),
         ("join", Cursor::Join),
         ("eraser", Cursor::Eraser),
@@ -450,21 +813,44 @@ fn use_precise_cursors_swaps_the_tools_own_pointers_for_a_crosshair() {
     }
     s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": true})).unwrap();
     for (tool, _) in own {
-        assert_eq!(cursor(&mut s, tool), Cursor::Crosshair, "{tool} on");
+        assert_eq!(cursor(&mut s, tool).precise(), Cursor::Crosshair, "{tool} on");
     }
     for tool in always {
-        assert_eq!(cursor(&mut s, tool), Cursor::Crosshair, "{tool} on");
+        assert_eq!(cursor(&mut s, tool).precise(), Cursor::Crosshair, "{tool} on");
     }
-    assert_eq!(cursor(&mut s, "type"), Cursor::Text);
-    assert_eq!(cursor(&mut s, "scissors"), Cursor::ScissorsNotAllowed);
+    assert_eq!(cursor(&mut s, "type").precise(), Cursor::Text);
+    assert_eq!(cursor(&mut s, "scissors").precise(), Cursor::ScissorsNotAllowed);
     s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": false})).unwrap();
     for (tool, c) in own {
         assert_eq!(cursor(&mut s, tool), c, "{tool} off again");
     }
 }
 
+/// With no selected path, the Smooth tool shows Not Allowed, and Use Precise Cursors leaves it so; with a
+/// selected path, it shows its own pointer, or a crosshair with the preference on (the canvas applies
+/// `Cursor::precise`).
+#[test]
+fn use_precise_cursors_keeps_the_smooth_tools_not_allowed_pointer() {
+    use vectorcraft_tools::{Cursor, Mods};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let at = vectorcraft_geom::Point::new(300.0, 300.0);
+    s.select_tool("smooth", ViewInfo::default()).unwrap();
+    let shown = |c: Cursor, precise: bool| if precise { c.precise() } else { c };
+    for precise in [false, true] {
+        s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": precise})).unwrap();
+        assert_eq!(shown(s.cursor(at, Mods::default(), ViewInfo::default()), precise), Cursor::NotAllowed, "precise {precise}");
+    }
+    let id = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    for (precise, c) in [(false, Cursor::Smooth), (true, Cursor::Crosshair)] {
+        s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": precise})).unwrap();
+        assert_eq!(shown(s.cursor(at, Mods::default(), ViewInfo::default()), precise), c, "precise {precise}");
+    }
+}
+
 /// With Alt held while drawing, the Pencil and the Paintbrush show their closing cursors, and Use Precise Cursors
-/// turns those into a crosshair too.
+/// turns those into a crosshair too (the canvas applies `Cursor::precise`).
 #[test]
 fn alt_shows_the_pencil_and_paintbrush_closing_cursors() {
     use vectorcraft_tools::{Cursor, Mods, PointerEvent, PointerKind};
@@ -478,7 +864,9 @@ fn alt_shows_the_pencil_and_paintbrush_closing_cursors() {
             s.select_tool(tool, ViewInfo::default()).unwrap();
             s.pointer(&PointerEvent::new(PointerKind::Down, 250.0, 250.0), ViewInfo::default()).unwrap();
             s.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 300.0), ViewInfo::default()).unwrap();
-            assert_eq!(s.cursor(at, alt, ViewInfo::default()), if precise { Cursor::Crosshair } else { c }, "{tool}, precise {precise}");
+            let shown = s.cursor(at, alt, ViewInfo::default());
+            assert_eq!(shown, c, "{tool}, precise {precise}");
+            assert_eq!(shown.precise(), Cursor::Crosshair, "{tool}");
             s.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 300.0), ViewInfo::default()).unwrap();
         }
     }
@@ -506,6 +894,12 @@ fn precise_cursors_replace_every_pen_state() {
         Cursor::ShapeBuilderErase,
         Cursor::AnchorPoint,
         Cursor::Curvature,
+        Cursor::LivePaintBucket,
+        Cursor::LivePaintBucketFace,
+        Cursor::LivePaintBucketEdge,
+        Cursor::LivePaintSelectFace,
+        Cursor::LivePaintSelectEdge,
+        Cursor::LivePaintSelectOutside,
     ] {
         assert_eq!(c.precise(), Cursor::Crosshair, "{c:?}");
     }
@@ -555,6 +949,60 @@ fn square(s: &mut Session, x: f64, y: f64) -> NodeId {
 
 fn set_pref(s: &mut Session, key: &str, value: Value) {
     s.execute("prefs.set", &json!({"key": key, "value": value})).unwrap();
+}
+
+/// New type with the session's defaults: its id and language.
+fn new_type(s: &mut Session) -> (NodeId, Option<String>) {
+    let id = NodeId(s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Hello"})).unwrap()["id"].as_u64().unwrap());
+    (id, type_language(s, id))
+}
+
+fn type_language(s: &Session, id: NodeId) -> Option<String> {
+    let Some(NodeKind::Text(t)) = s.doc().unwrap().doc.node(id).map(|n| &n.kind) else { panic!("not text") };
+    t.runs[0].style.language.clone()
+}
+
+/// Preferences › Hyphenation › Default Language (#394) is the language of new type, stored as its
+/// tag. Type already there keeps its language, and a language chosen in Document Setup comes first.
+#[test]
+fn default_language_is_the_language_of_new_type() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let (before, language) = new_type(&mut s);
+    assert_eq!(language, None, "the default language isn't stored");
+
+    set_pref(&mut s, "hyphenationLanguage", json!("German"));
+    assert_eq!(s.prefs.hyphenation_language, "de", "a name is stored as its tag");
+    assert_eq!(new_type(&mut s).1.as_deref(), Some("de"));
+    assert_eq!(type_language(&s, before), None, "type already there stays as it is");
+
+    s.execute("document.setup", &json!({"language": "French"})).unwrap();
+    assert_eq!(new_type(&mut s).1.as_deref(), Some("fr"), "the document's own language comes first");
+
+    set_pref(&mut s, "hyphenationLanguage", json!("en-US"));
+    s.execute("document.setup", &json!({"language": "English: USA"})).unwrap();
+    assert_eq!(new_type(&mut s).1, None);
+}
+
+/// Preferences saved before the language was a tag hold its name; a language no longer in the list
+/// reads as the default.
+#[test]
+fn a_saved_default_language_reads_as_its_tag() {
+    let read = |v: &str| serde_json::from_value::<Prefs>(json!({"hyphenationLanguage": v})).unwrap().hyphenation_language;
+    assert_eq!(read("German"), "de");
+    assert_eq!(read("English: USA"), "en-US");
+    assert_eq!(read("de"), "de");
+    assert_eq!(read("Klingon"), "en-US");
+    assert_eq!(Prefs::default().hyphenation_language, "en-US");
+}
+
+/// The preference offers every language the Character panel and Document Setup do.
+#[test]
+fn default_language_offers_every_language() {
+    let spec = PREF_SPECS.iter().find(|p| p.key == "hyphenationLanguage").unwrap();
+    let crate::cmd::prefscmds::PrefKind::Choice(options) = spec.kind else { panic!("a choice") };
+    let languages: Vec<(&str, &str)> = vectorcraft_doc::setup::LANGUAGES.iter().map(|(name, tag, _)| (*tag, *name)).collect();
+    assert_eq!(options, languages.as_slice());
 }
 
 fn gesture(s: &mut Session, v: ViewInfo, events: &[(vectorcraft_tools::PointerKind, f64, f64)]) {
@@ -641,6 +1089,37 @@ fn invoke_distance_guides_measures_the_selection_to_the_object_under_alt() {
     assert!(shown(&mut s, ViewInfo { smart_guides: false, ..v }).is_empty(), "View › Smart Guides off");
     set_pref(&mut s, "distanceGuides", json!(false));
     assert!(shown(&mut s, v).is_empty(), "Invoke Distance Guides off");
+}
+
+/// Smart Guides › Snap to Last Location (off by default): on, a square dragged 6 pt right and 5 pt
+/// down with a 10 px Snapping Tolerance goes back to where it was; dragged 12 pt away, or with the
+/// option or View › Smart Guides off, it lands where it is dragged. A value that is not a boolean
+/// is refused.
+#[test]
+fn snap_to_last_location_puts_a_dragged_square_back() {
+    use vectorcraft_tools::PointerKind::{Down, Drag, Up};
+    let mut s = new_doc();
+    // Its edges and center stay out of reach of the 400 pt artboard's.
+    let m = square(&mut s, 100.0, 250.0);
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    let drag = |s: &mut Session, v: ViewInfo, to: (f64, f64)| {
+        gesture(s, v, &[(Down, 125.0, 275.0), (Drag, 140.0, 290.0), (Drag, to.0, to.1), (Up, to.0, to.1)]);
+        let at = top_left(s, m);
+        if at != (100.0, 250.0) {
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
+        at
+    };
+    set_pref(&mut s, "snappingTolerance", json!(10));
+    assert_eq!(drag(&mut s, v, (131.0, 280.0)), (106.0, 255.0), "off by default");
+    set_pref(&mut s, "snapToLastLocation", json!(true));
+    assert_eq!(drag(&mut s, v, (131.0, 280.0)), (100.0, 250.0), "7.8 pt away: back where it was");
+    assert_eq!(drag(&mut s, v, (134.0, 283.0)), (109.0, 258.0), "12 pt away");
+    assert_eq!(drag(&mut s, ViewInfo { smart_guides: false, ..v }, (131.0, 280.0)), (106.0, 255.0), "View › Smart Guides off");
+    let refused = s.execute("prefs.set", &json!({"key": "snapToLastLocation", "value": "yes"}));
+    assert!(refused.is_err(), "{refused:?}");
+    assert_eq!(s.execute("prefs.get", &json!({"key": "snapToLastLocation"})).unwrap(), json!(true), "unchanged");
 }
 
 /// Preferences › Smart Guides (#394): Color, Alignment Guides, Anchor/Path Labels, Measurement
@@ -1047,8 +1526,8 @@ fn a_drag_from_a_fill_moves_only_the_selected_anchors_of_partly_selected_paths()
 }
 
 /// A path selected whole inside a selected group moves once, with the group, when the selection
-/// also holds a direct-selected anchor: a Group Selection drag from the path's fill (which adds
-/// the group) and an arrow key move both by 10 pt.
+/// also holds a direct-selected anchor: a completed Group Selection click adds the group, then
+/// a drag and an arrow key move both by 10 pt. A leaf drag before that click keeps its sibling still.
 #[test]
 fn a_path_in_a_selected_group_moves_once_with_selected_anchors() {
     use vectorcraft_tools::PointerKind::{Down, Drag, Up};
@@ -1063,7 +1542,14 @@ fn a_path_in_a_selected_group_moves_once_with_selected_anchors() {
     s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
     s.execute("select.anchors", &json!({"id": other.0, "anchors": [[0, 0]], "mode": "add"})).unwrap();
     gesture(&mut s, v, &[(Down, 125.0, 125.0), (Drag, 130.0, 125.0), (Drag, 135.0, 125.0), (Up, 135.0, 125.0)]);
-    assert!(s.doc().unwrap().selection.contains(g), "the press added the group");
+    assert!(!s.doc().unwrap().selection.contains(g), "the leaf drag keeps its selection");
+    assert_eq!((top_left(&s, a), top_left(&s, b), first_x(&s)), ((110.0, 100.0), (160.0, 100.0), 310.0), "the leaf and selected anchor move");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("select.anchors", &json!({"id": other.0, "anchors": [[0, 0]], "mode": "add"})).unwrap();
+    gesture(&mut s, v, &[(Down, 125.0, 125.0), (Up, 125.0, 125.0)]);
+    assert!(s.doc().unwrap().selection.contains(g), "the completed click added the group");
+    gesture(&mut s, v, &[(Down, 125.0, 125.0), (Drag, 130.0, 125.0), (Drag, 135.0, 125.0), (Up, 135.0, 125.0)]);
     assert_eq!((top_left(&s, a), top_left(&s, b), first_x(&s)), ((110.0, 100.0), (170.0, 100.0), 310.0), "the drag");
     s.execute("edit.undo", &json!({})).unwrap();
     s.execute("select.set", &json!({"ids": [g.0, a.0]})).unwrap();
@@ -1449,6 +1935,29 @@ fn missing_glyph_protection_keeps_the_version_of_the_font_kept() {
     assert_eq!(versions, [moved.clone(), kept, moved]);
 }
 
+/// The font warning of `text.setStyle` and `text.setRangeStyle` names only the fonts the command
+/// set: a character that keeps an unavailable font through Missing Glyph Protection isn't reported.
+#[test]
+fn missing_glyph_protection_leaves_the_font_kept_out_of_the_warning() {
+    let (from, to, c) = ("No Such Font Family", "JetBrains Mono", '\u{180}');
+    let db = vectorcraft_text::FontDb::global();
+    // The unavailable family is drawn in the fallback font, which has the character; the new font is installed and lacks it.
+    let installed = db.resolve(to, "Regular").is_some_and(|(_, m)| m == vectorcraft_text::FontMatch::Exact);
+    if !installed || !db.face(from, "Regular").is_some_and(|f| f.covers(c)) || db.face(to, "Regular").is_some_and(|f| f.covers(c)) {
+        return; // The fonts installed here cover other characters.
+    }
+    let mut s = new_doc();
+    let id = NodeId(s.execute("text.create", &json!({"x": 10, "y": 50, "text": "a\u{180}c", "font": from})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    for change in [json!({"font": to}), json!({"id": id.0, "start": 0, "end": 4, "font": to})] {
+        let cmd = if change.get("id").is_some() { "text.setRangeStyle" } else { "text.setStyle" };
+        let out = s.execute(cmd, &change).unwrap();
+        assert_eq!(style_at(&s, id, 1).font_family, from, "{cmd}: the character keeps its font");
+        assert_eq!(out.get("warning"), None, "{cmd}: {out}");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+}
+
 // ---------- #394, fourth batch ----------
 
 /// Type › Type Object Selection by Path Only (#394): on, a click among point type's glyphs no
@@ -1562,6 +2071,26 @@ fn highlight_alternate_glyphs_preference_is_off_by_default() {
     assert!(!s.prefs.highlight_alternate_glyphs);
 }
 
+/// Preferences › Type › Show Character Alternates: on by default, listed in the Type category,
+/// saved with the other preferences, and a value that is not true or false is refused.
+#[test]
+fn show_character_alternates_preference_is_on_by_default_and_saved() {
+    let mut s = Session::new();
+    assert!(s.prefs.show_character_alternates, "on by default");
+    let spec = crate::cmd::prefscmds::PREF_SPECS.iter().find(|p| p.key == "showCharacterAlternates").expect("listed");
+    assert_eq!((spec.category, spec.label), ("Type", "Show Character Alternates"));
+    assert_eq!(s.execute("prefs.get", &json!({"key": "showCharacterAlternates"})).unwrap(), json!(true));
+    set_pref(&mut s, "showCharacterAlternates", json!(false));
+    assert!(!s.prefs.show_character_alternates);
+    assert!(s.execute("prefs.set", &json!({"key": "showCharacterAlternates", "value": "yes"})).is_err(), "not a boolean");
+    assert!(!s.prefs.show_character_alternates, "a refused value changes nothing");
+    let saved: Prefs = serde_json::from_value(serde_json::to_value(&s.prefs).unwrap()).unwrap();
+    assert!(!saved.show_character_alternates);
+    // Preferences saved before the key existed read it as on.
+    let old: Prefs = serde_json::from_value(json!({"highlightAlternateGlyphs": true})).unwrap();
+    assert!(old.show_character_alternates);
+}
+
 /// Preferences › Type › Highlight Substituted Fonts: on by default, listed in the Type category,
 /// and saved with the other preferences.
 /// <https://helpx.adobe.com/illustrator/desktop/design-with-text/fonts-and-scripts/edit-text-without-replacing-missing-fonts.html>
@@ -1628,9 +2157,40 @@ fn real_time_drawing_off_still_shows_a_dragged_guide() {
     set_pref(&mut s, "realTimeDrawing", json!(false));
     s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 200.0), v).unwrap();
     s.pointer(&PointerEvent::new(PointerKind::Drag, 150.0, 200.0), v).unwrap();
-    assert_eq!(s.doc().unwrap().doc.guides[0].pos, 150.0, "the guide moves while dragged");
+    assert_eq!(s.doc().unwrap().doc.ruler_guides()[0].pos, 150.0, "the guide moves while dragged");
     s.pointer(&PointerEvent::new(PointerKind::Up, 150.0, 200.0), v).unwrap();
-    assert_eq!((s.doc().unwrap().doc.guides[0].pos, s.doc().unwrap().history.undo.last().map(|e| e.label.as_str())), (150.0, Some("Move Guide")));
+    assert_eq!(
+        (s.doc().unwrap().doc.ruler_guides()[0].pos, s.doc().unwrap().history.undo.last().map(|e| e.label.as_str())),
+        (150.0, Some("Move Guide"))
+    );
+}
+
+/// With Real-time Drawing off, a 9-slice guide of the edited symbol moved with the Selection tool
+/// still moves while it is dragged, and the release leaves one Symbol Options undo step.
+#[test]
+fn real_time_drawing_off_still_shows_a_dragged_nine_slice_guide() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Box", "nineSlice": true})).unwrap();
+    s.execute("symbol.edit", &json!({})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    set_pref(&mut s, "realTimeDrawing", json!(false));
+    let left = |s: &Session| s.doc().unwrap().doc.symbol_nine_slice("Box").unwrap().left;
+    assert_eq!(left(&s), 0.25);
+    let steps = s.doc().unwrap().history.undo.len();
+    let drag = crate::tests::symbol_nine_slice::guide_drag(
+        &mut s,
+        v,
+        vectorcraft_geom::Point::new(125.0, 150.0),
+        vectorcraft_geom::Point::new(110.0, 150.0),
+    );
+    assert!((left(&s) - 0.1).abs() < 1e-9, "the guide moves while dragged: {}", left(&s));
+    s.apply_actions(drag.finish()).unwrap();
+    let d = s.doc().unwrap();
+    assert!((left(&s) - 0.1).abs() < 1e-9);
+    assert_eq!((d.history.undo.len(), d.history.undo.last().map(|e| e.label.as_str())), (steps + 1, Some("Symbol Options")));
 }
 
 /// Real-time Drawing turned on mid-drag still applies the deferred preview on commit.
@@ -1658,6 +2218,42 @@ fn real_time_drawing_turned_on_mid_drag_still_commits_deferred_preview() {
     assert_eq!(paths(&s), 1, "the deferred rectangle is committed");
 }
 
+/// With Real-time Drawing off, Undo during a drag keeps the dragged move as its own step and takes
+/// back only that: the rectangle drawn before stays, and Redo brings the move back.
+#[test]
+fn undo_during_a_deferred_drag_takes_back_only_the_drag() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let r = NodeId(s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap());
+    set_pref(&mut s, "realTimeDrawing", json!(false));
+    let x = |s: &Session| s.doc().unwrap().doc.node(r).and_then(vectorcraft_doc::Node::geometric_bounds).map(|b| b.x0);
+    let move_by = vectorcraft_tools::Action::Preview("object.move".into(), json!({"dx": 7, "dy": 0}));
+    s.apply_actions(vec![vectorcraft_tools::Action::Begin("Move".into()), move_by]).unwrap();
+    assert_eq!(x(&s), Some(10.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!s.in_interaction());
+    assert_eq!(x(&s), Some(10.0), "the rectangle stays");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(x(&s), Some(17.0), "Redo brings the move back");
+}
+
+/// Undo during a drag whose stored preview fails cancels the drag, as its release would, and then
+/// takes back the step before it.
+#[test]
+fn undo_during_a_deferred_drag_that_fails_cancels_it() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    set_pref(&mut s, "realTimeDrawing", json!(false));
+    let bad = vectorcraft_tools::Action::Preview("no.such.command".into(), json!({}));
+    s.apply_actions(vec![vectorcraft_tools::Action::Begin("Bad".into()), bad]).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!s.in_interaction());
+    let d = s.doc().unwrap();
+    assert_eq!(d.doc.layers.iter().map(|l| l.children().map_or(0, |c| c.len())).sum::<usize>(), 0, "the rectangle is undone");
+    assert!(d.history.undo.iter().all(|e| e.label != "Bad"));
+}
+
 /// Repeated overlay redraws with Real-time Drawing off reuse the cached deferred feedback.
 #[test]
 fn deferred_preview_overlays_are_cached_across_redraws() {
@@ -1676,6 +2272,348 @@ fn deferred_preview_overlays_are_cached_across_redraws() {
     let second = count(&mut s);
     assert_eq!(first, second);
     assert_eq!(s.doc().unwrap().revision, rev, "the preview command is not run again");
+}
+
+/// With Real-time Drawing off, a moved selection whose outlines have more points than the canvas
+/// outlines (100,000) shows its moved bounds instead (#525, #2460).
+#[test]
+fn real_time_drawing_off_draws_the_bounds_of_a_selection_too_big_to_outline() {
+    use vectorcraft_tools::Overlay;
+    use vectorcraft_tools::draw2::FEEDBACK;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let anchors: Vec<Value> = (0..120_000).map(|i| json!({"x": 100.0 + f64::from(i) * 0.003, "y": if i % 2 == 0 { 100 } else { 150 }})).collect();
+    let id = s.execute("path.create", &json!({"anchors": anchors, "closed": false})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let at_rest = s.doc().unwrap().doc.bounds_of(&s.doc().unwrap().selection.objects, true).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    set_pref(&mut s, "realTimeDrawing", json!(false));
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 260.0, 160.0), v).unwrap();
+    let feedback: Vec<_> = s
+        .overlays(v)
+        .into_iter()
+        .filter_map(|o| match o {
+            Overlay::Path { path, color, .. } if color == FEEDBACK => Some(path),
+            _ => None,
+        })
+        .collect();
+    let points: usize = feedback.iter().map(|p| p.elements().len()).sum();
+    assert!(points <= 100_000, "the drag feedback has {points} points");
+    let [bounds] = feedback.as_slice() else { panic!("one bounds rectangle, got {} paths", feedback.len()) };
+    let b = kurbo::Shape::bounding_box(bounds);
+    let moved = (b.x0 - at_rest.x0, b.y0 - at_rest.y0, b.width() - at_rest.width(), b.height() - at_rest.height());
+    assert!(moved.0 > 1.0 && moved.1 > 1.0 && moved.2.abs() < 1e-6 && moved.3.abs() < 1e-6, "the bounds moved with the drag: {moved:?}");
+}
+
+/// The bounding boxes (left, top, width) of the Real-time Drawing off feedback after a drag by (30, 40)
+/// from (x, y), left to right.
+fn dragged_feedback_boxes(s: &mut Session, x: f64, y: f64) -> Vec<(f64, f64, f64)> {
+    use vectorcraft_tools::Overlay;
+    use vectorcraft_tools::draw2::FEEDBACK;
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    set_pref(s, "realTimeDrawing", json!(false));
+    s.pointer(&PointerEvent::new(PointerKind::Down, x, y), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, x + 30.0, y + 40.0), v).unwrap();
+    let mut boxes: Vec<_> = s
+        .overlays(v)
+        .into_iter()
+        .filter_map(|o| match o {
+            Overlay::Path { path, color, .. } if color == FEEDBACK => Some(kurbo::Shape::bounding_box(&path)),
+            _ => None,
+        })
+        .map(|b| ((b.x0 * 1e3).round() / 1e3, (b.y0 * 1e3).round() / 1e3, (b.width() * 1e3).round() / 1e3))
+        .collect();
+    boxes.sort_by(|p, q| p.0.total_cmp(&q.0));
+    boxes
+}
+
+/// The number of subpaths in each path of the Real-time Drawing off feedback the session shows now.
+fn feedback_subpaths(s: &mut Session) -> Vec<usize> {
+    use vectorcraft_tools::Overlay;
+    use vectorcraft_tools::draw2::FEEDBACK;
+    s.overlays(ViewInfo::default())
+        .into_iter()
+        .filter_map(|o| match o {
+            Overlay::Path { path, color, .. } if color == FEEDBACK => {
+                Some(path.elements().iter().filter(|el| matches!(el, kurbo::PathEl::MoveTo(_))).count())
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// With Real-time Drawing off, a dragged group draws the outline of each member, nested groups'
+/// members included, at the dragged position instead of one union of them all.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_group_member_by_member() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let rect = |s: &mut Session, x: f64| s.execute("shape.rectangle", &json!({"x": x, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let (a, b, c) = (rect(&mut s, 100.0), rect(&mut s, 150.0), rect(&mut s, 200.0));
+    s.execute("select.set", &json!({"ids": [b, c]})).unwrap();
+    let inner = s.execute("object.group", &json!({})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a, inner]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    let boxes = dragged_feedback_boxes(&mut s, 120.0, 120.0);
+    assert_eq!(boxes, [(130.0, 140.0, 100.0), (180.0, 140.0, 100.0), (230.0, 140.0, 100.0)], "one moved outline per member");
+}
+
+/// With Real-time Drawing off, a hidden member of a dragged group draws no outline.
+#[test]
+fn real_time_drawing_off_skips_a_hidden_member_of_a_dragged_group() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let rect = |s: &mut Session, x: f64| s.execute("shape.rectangle", &json!({"x": x, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let (a, b, c) = (rect(&mut s, 100.0), rect(&mut s, 150.0), rect(&mut s, 200.0));
+    s.execute("select.set", &json!({"ids": [b]})).unwrap();
+    s.execute("object.hide", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [a, b, c]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    let boxes = dragged_feedback_boxes(&mut s, 120.0, 120.0);
+    assert_eq!(boxes, [(130.0, 140.0, 100.0), (230.0, 140.0, 100.0)]);
+}
+
+/// With Real-time Drawing off, a dragged blend draws the outline of each of its objects and steps.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_blend_step_by_step() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let b = s.execute("shape.rectangle", &json!({"x": 300, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("object.blend.make", &json!({"steps": 3})).unwrap();
+    let lefts: Vec<f64> = dragged_feedback_boxes(&mut s, 120.0, 120.0).iter().map(|b| b.0).collect();
+    assert_eq!(lefts, [130.0, 180.0, 230.0, 280.0, 330.0], "one moved outline per blended object and step");
+}
+
+/// With Real-time Drawing off, a dragged compound shape draws the outline of the area it makes.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_compound_shape_by_its_area() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let b = s.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    let shape = s.execute("object.compoundShape.make", &json!({"mode": "intersect"})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [shape]})).unwrap();
+    assert_eq!(dragged_feedback_boxes(&mut s, 170.0, 120.0), [(180.0, 140.0, 50.0)]);
+}
+
+/// With Real-time Drawing off, a dragged group with a Pathfinder effect draws the outline of the area
+/// the effect makes.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_pathfinder_group_by_its_area() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let b = s.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "pathfinder.intersect"})).unwrap();
+    assert_eq!(dragged_feedback_boxes(&mut s, 170.0, 120.0), [(180.0, 140.0, 50.0)]);
+}
+
+/// With Real-time Drawing off, a dragged group with a Drop Shadow draws the outline of each member
+/// instead of one union of them.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_group_with_an_effect_member_by_member() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let b = s.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "item": null})).unwrap();
+    assert_eq!(dragged_feedback_boxes(&mut s, 120.0, 120.0), [(130.0, 140.0, 100.0), (180.0, 140.0, 100.0)]);
+}
+
+/// With Real-time Drawing off, a dragged clip group draws only its clipping path, as its selection
+/// highlight does.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_clip_group_by_its_clipping_path() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let art = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 200, "height": 100})).unwrap()["id"].clone();
+    let clip = s.execute("shape.rectangle", &json!({"x": 120, "y": 110, "width": 50, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [art, clip]})).unwrap();
+    s.execute("object.clippingMask.make", &json!({})).unwrap();
+    assert_eq!(dragged_feedback_boxes(&mut s, 140.0, 130.0), [(150.0, 150.0, 50.0)]);
+}
+
+/// With Real-time Drawing off, a dragged envelope draws the outline of each object it evaluates to: each
+/// rectangle's fill and its outlined stroke.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_envelope_object_by_object() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let b = s.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("object.envelope.makeWithMesh", &json!({"rows": 1, "cols": 1})).unwrap();
+    let boxes = dragged_feedback_boxes(&mut s, 120.0, 120.0);
+    assert_eq!(boxes, [(129.5, 139.5, 101.0), (130.0, 140.0, 100.0), (179.5, 139.5, 101.0), (180.0, 140.0, 100.0)]);
+}
+
+/// With Real-time Drawing off, a dragged Shaper group draws the outline of its result and not of the
+/// source art it keeps.
+#[test]
+fn real_time_drawing_off_skips_the_source_art_of_a_dragged_shaper_group() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 100})).unwrap();
+    let points = [[125.0, 120.0], [175.0, 135.0], [130.0, 150.0], [225.0, 165.0], [175.0, 180.0], [225.0, 185.0]];
+    let shaper = s.execute("shaper.scribble", &json!({"points": points})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [shaper]})).unwrap();
+    let boxes = dragged_feedback_boxes(&mut s, 120.0, 120.0);
+    assert_eq!(boxes, [(130.0, 140.0, 150.0), (130.0, 140.0, 150.0)], "the merged result's fill and stroke");
+}
+
+/// With Real-time Drawing off, a dragged symbol instance draws the bounds its selection highlight
+/// shows, alone and as a member of a group.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_symbol_instance_by_its_bounds() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Box"})).unwrap();
+    assert_eq!(dragged_feedback_boxes(&mut s, 120.0, 120.0), [(130.0, 140.0, 100.0)]);
+    s.pointer(&PointerEvent::new(PointerKind::Up, 150.0, 160.0), ViewInfo::default()).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 400, "y": 100, "width": 50, "height": 50})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    assert_eq!(dragged_feedback_boxes(&mut s, 150.0, 160.0), [(160.0, 180.0, 100.0), (430.0, 140.0, 50.0)]);
+}
+
+/// With Real-time Drawing off, a handle resize of a group draws each member's outline at its new size.
+#[test]
+fn real_time_drawing_off_outlines_a_resized_group_member_by_member() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let b = s.execute("shape.rectangle", &json!({"x": 300, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    // The Right handle, dragged 30 pt out: the group goes from 300 pt wide to 330.
+    assert_eq!(dragged_feedback_boxes(&mut s, 400.0, 125.0), [(100.0, 100.0, 110.0), (320.0, 100.0, 110.0)]);
+}
+
+/// With Real-time Drawing off, each copy of a gradient mesh in a dragged repeat draws its mesh lines
+/// once, without the pieces the mesh is drawn with.
+#[test]
+fn real_time_drawing_off_outlines_each_mesh_of_a_dragged_repeat_once() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    s.execute("object.mesh.create", &json!({"rows": 2, "cols": 2})).unwrap();
+    s.execute("object.repeat.grid", &json!({"rows": 1, "cols": 2})).unwrap();
+    let boxes = dragged_feedback_boxes(&mut s, 120.0, 120.0);
+    assert_eq!(boxes.len(), 2, "one outline per copy: {boxes:?}");
+    assert_eq!(boxes[0], (130.0, 140.0, 100.0), "the first copy's mesh lines, moved");
+    let subpaths = feedback_subpaths(&mut s);
+    assert!(subpaths.len() == 2 && subpaths.iter().all(|&n| n > 1), "each copy's mesh lines, not one boundary: {subpaths:?}");
+}
+
+/// With Real-time Drawing off, a dragged gradient mesh with a Drop Shadow draws its mesh lines as one
+/// outline, without the pieces the mesh is drawn with.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_mesh_with_an_effect_by_its_lines() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    s.execute("object.mesh.create", &json!({"rows": 2, "cols": 2})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "item": null})).unwrap();
+    assert_eq!(dragged_feedback_boxes(&mut s, 120.0, 120.0), [(130.0, 140.0, 100.0)]);
+    let subpaths = feedback_subpaths(&mut s);
+    assert!(matches!(subpaths.as_slice(), [n] if *n > 1), "the mesh's lines, not one boundary: {subpaths:?}");
+}
+
+/// With Real-time Drawing off, a dragged group with a Vector Halftone keeps its own fill, which is what
+/// the effect samples, so an unpainted member still gives an outline.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_halftone_group_with_its_own_fill() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].clone();
+    s.execute("paint.setFill", &json!({"ids": [a], "none": true})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [a], "none": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    let group = s.execute("object.group", &json!({})).unwrap()["id"].clone();
+    s.execute("paint.setFill", &json!({"color": "#000000", "ids": []})).unwrap();
+    s.execute("select.set", &json!({"ids": [group]})).unwrap();
+    s.execute("appearance.addFill", &json!({})).unwrap();
+    let fill = s.doc().unwrap().doc.node(vectorcraft_doc::NodeId(group.as_u64().unwrap())).unwrap().appearance.fill_paint().label();
+    assert_eq!(fill, "#000000", "the group's own fill");
+    s.execute("effect.apply", &json!({"effect": "addon.color.halftone", "item": null})).unwrap();
+    // The Right handle: the unpainted member gives nothing to press on.
+    assert!(!dragged_feedback_boxes(&mut s, 200.0, 150.0).is_empty(), "the halftone's dots are outlined");
+}
+
+/// With Real-time Drawing off, a dragged object with Crop Marks draws the object's outline without its
+/// marks.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_object_without_its_crop_marks() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "cropMarks", "item": null})).unwrap();
+    assert_eq!(dragged_feedback_boxes(&mut s, 120.0, 120.0), [(130.0, 140.0, 100.0)]);
+}
+
+/// With Real-time Drawing off, the objects a dragged repeat evaluates to count toward the limit with
+/// the points of their outlines: 18,000 rectangles have 90,000 points, and with the objects they come
+/// to 108,000.
+#[test]
+fn real_time_drawing_off_draws_the_bounds_of_a_repeat_with_too_many_objects() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 10, "height": 10})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    s.execute("object.repeat.grid", &json!({"rows": 120, "cols": 150})).unwrap();
+    let boxes = dragged_feedback_boxes(&mut s, 105.0, 105.0);
+    assert_eq!(boxes.len(), 1, "one bounds rectangle: {} boxes", boxes.len());
+}
+
+/// With Real-time Drawing off, a dragged intertwine draws the outline of each member, without the
+/// area one of them is arranged over the other in.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_intertwine_member_by_member() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let b = s.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("object.intertwine.make", &json!({})).unwrap();
+    s.execute("object.intertwine.arrange", &json!({"at": [175, 125], "order": "back"})).unwrap();
+    let boxes = dragged_feedback_boxes(&mut s, 120.0, 120.0);
+    assert_eq!(boxes, [(130.0, 140.0, 100.0), (180.0, 140.0, 100.0)]);
+}
+
+/// With Real-time Drawing off, a dragged group whose members have more than 100,000 points between
+/// them shows its moved bounds, as a single path of that size does.
+#[test]
+fn real_time_drawing_off_draws_the_bounds_of_a_group_too_big_to_outline() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let path = |s: &mut Session, y: f64| {
+        let anchors: Vec<Value> =
+            (0..60_000).map(|i| json!({"x": 100.0 + f64::from(i) * 0.003, "y": if i % 2 == 0 { y } else { y + 50.0 }})).collect();
+        s.execute("path.create", &json!({"anchors": anchors, "closed": false})).unwrap()["id"].clone()
+    };
+    let (a, b) = (path(&mut s, 100.0), path(&mut s, 200.0));
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    let at_rest = s.doc().unwrap().doc.bounds_of(&s.doc().unwrap().selection.objects, true).unwrap();
+    let boxes = dragged_feedback_boxes(&mut s, 200.0, 100.0);
+    let [(x, y, width)] = boxes.as_slice() else { panic!("one bounds rectangle, got {boxes:?}") };
+    assert!((x - at_rest.x0 - 30.0).abs() < 1e-2 && (y - at_rest.y0 - 40.0).abs() < 1e-2 && (width - at_rest.width()).abs() < 1e-2, "{boxes:?}");
 }
 
 /// A deferred commit that fails its preview cancels the interaction instead of leaving it open.
@@ -1704,6 +2642,94 @@ fn deferred_commit_forwards_preview_warnings() {
     s.doc_mut().unwrap().interaction.as_mut().unwrap().preview = Some(("object.liquify".into(), p));
     let ui = s.apply_actions(vec![vectorcraft_tools::Action::Commit]).unwrap();
     assert!(ui.iter().any(|r| matches!(r, UiRequest::Status(m) if m.contains("type"))), "{ui:?}");
+}
+
+/// A session with a rectangle selected, and type too with `with_type`, tool `tool` chosen,
+/// Real-time Drawing off, and an interaction labeled `label` whose deferred Bloat preview warns
+/// that type is skipped when type is selected.
+fn deferred_bloat(label: &str, with_type: bool, tool: &str) -> Session {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let rect = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 200, "height": 200})).unwrap();
+    let text = s.execute("text.create", &json!({"x": 300, "y": 200, "text": "Hi"})).unwrap();
+    let ids = if with_type { json!([rect["id"], text["id"]]) } else { json!([rect["id"]]) };
+    s.execute("select.set", &json!({ "ids": ids })).unwrap();
+    s.select_tool(tool, ViewInfo::default()).unwrap();
+    set_pref(&mut s, "realTimeDrawing", json!(false));
+    s.begin_interaction(label).unwrap();
+    let p = json!({"tool": "bloat", "points": [[290.0, 200.0]], "width": 200.0, "height": 200.0});
+    s.doc_mut().unwrap().interaction.as_mut().unwrap().preview = Some(("object.liquify".into(), p));
+    s
+}
+
+/// A command that applies a deferred preview before it runs (Undo, Clear History) reports the
+/// preview's warning in its result, as the tool's own commit reports it; the preview is its own
+/// step, which Undo takes back. A preview without a warning adds none.
+#[test]
+fn settling_a_deferred_preview_keeps_its_warning() {
+    let mut s = deferred_bloat("Bloat", true, "selection");
+    let before = s.doc().unwrap().history.undo.len();
+    let r = s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(r["undone"], "Bloat", "{r}");
+    assert!(r["warning"].as_str().is_some_and(|w| w.contains("type")), "{r}");
+    assert_eq!(r["previewWarning"], r["warning"], "{r}");
+    assert_eq!(s.doc().unwrap().history.undo.len(), before, "the preview was a step of its own, and Undo took it back");
+    let r = s.execute("edit.redo", &json!({})).unwrap();
+    assert!(r.get("warning").is_none() && r.get("previewWarning").is_none(), "nothing was settled: {r}");
+
+    let mut s = deferred_bloat("Bloat", true, "selection");
+    let r = s.execute("edit.clearHistory", &json!({})).unwrap();
+    assert!(r["warning"].as_str().is_some_and(|w| w.contains("type")), "{r}");
+
+    let mut s = deferred_bloat("Bloat", false, "selection");
+    let r = s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(r, json!({"undone": "Bloat"}));
+}
+
+/// Typing kept as its own step when a tool's drag begins, or when a Cmd press lends the Selection
+/// tool, shows its applied preview's warning in the status bar.
+#[test]
+fn settling_typing_for_a_tool_shows_its_preview_warning() {
+    use vectorcraft_tools::{Action, Mods};
+    let warned = |ui: &[UiRequest]| ui.iter().any(|r| matches!(r, UiRequest::Status(m) if m.contains("type")));
+    let mut s = deferred_bloat("Typing", true, "selection");
+    let ui = s.apply_actions(vec![Action::Begin("Move".into())]).unwrap();
+    assert!(warned(&ui), "{ui:?}");
+
+    let mut s = deferred_bloat("Typing", true, "rectangle");
+    let cmd = Mods { cmd: true, ..Default::default() };
+    let ui = s.pointer(&PointerEvent::new(PointerKind::Down, 50.0, 380.0).with_mods(cmd), ViewInfo::default()).unwrap();
+    assert!(warned(&ui), "{ui:?}");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 50.0, 380.0).with_mods(cmd), ViewInfo::default()).unwrap();
+}
+
+/// Typing kept as its own step when a dialog or a panel begins its preview, or when the font menus
+/// end the typing session, returns its applied preview's warning for the status bar. A preview
+/// without a warning returns none, and with no typing in progress nothing is kept and no step is
+/// added.
+#[test]
+fn settling_typing_for_a_dialog_returns_its_preview_warning() {
+    let warned = |w: &[String]| w.iter().any(|m| m.contains("type"));
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let mut s = deferred_bloat("Typing", true, "selection");
+    let before = steps(&s);
+    let w = s.begin_interaction_warned("Offset Path").unwrap();
+    assert!(warned(&w), "{w:?}");
+    assert_eq!(steps(&s), before + 1, "the typing is a step of its own");
+    assert_eq!(s.doc().unwrap().interaction.as_ref().map(|it| it.label.as_str()), Some("Offset Path"));
+
+    let mut s = deferred_bloat("Typing", true, "selection");
+    let w = s.keep_typing().unwrap();
+    assert!(warned(&w), "{w:?}");
+    assert!(!s.in_interaction());
+    assert_eq!(steps(&s), before + 1);
+    let w = s.keep_typing().unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    assert_eq!(steps(&s), before + 1, "nothing in progress adds no step");
+
+    let mut s = deferred_bloat("Typing", false, "selection");
+    let w = s.begin_interaction_warned("Offset Path").unwrap();
+    assert!(w.is_empty(), "{w:?}");
 }
 
 /// File Handling › Use Low Resolution Proxy for Linked EPS (#394): off by default; toggling it does
@@ -1842,6 +2868,52 @@ fn a_move_held_by_a_paths_stroke_lands_the_path_on_a_ruler_guide() {
     }
 }
 
+/// #5746: a rectangle dragged until its left edge and its top edge are each 1 px from a ruler
+/// guide lands on both guides, with "align", whichever guide was added last and wherever it was
+/// grabbed; between two upright guides, its left edge lands on the one within reach; and an edge
+/// Smart Guides line up with another object stays there, not on a ruler guide as near.
+#[test]
+fn a_moved_rectangle_lines_its_edges_up_with_two_ruler_guides() {
+    use vectorcraft_tools::Overlay;
+    use vectorcraft_tools::PointerKind::{Down, Drag, Up};
+    let v = ViewInfo::default();
+    // (guides as (vertical, pos), where it is grabbed, the top left it lands on)
+    type Case = (&'static [(bool, f64)], (f64, f64), (f64, f64));
+    let cases: [Case; 3] = [
+        (&[(true, 250.0), (false, 320.0)], (200.0, 100.0), (250.0, 320.0)),
+        (&[(false, 320.0), (true, 250.0)], (100.0, 175.0), (250.0, 320.0)),
+        (&[(true, 250.0), (true, 455.0)], (200.0, 175.0), (250.0, 100.0)),
+    ];
+    for (guides, (x, y), want) in cases {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+        let id = NodeId(s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 200, "height": 150})).unwrap()["id"].as_u64().unwrap());
+        for (vertical, pos) in guides {
+            s.execute("guide.add", &json!({"vertical": vertical, "pos": pos})).unwrap();
+        }
+        s.execute("select.none", &json!({})).unwrap();
+        s.select_tool("selection", v).unwrap();
+        // 1 px past the guides: the left edge at 251, the top edge at 321 (or where it was).
+        let (to_x, to_y) = (x + 151.0, if want.1 == 100.0 { y } else { y + 221.0 });
+        gesture(&mut s, v, &[(Down, x, y), (Drag, (x + to_x) / 2.0, (y + to_y) / 2.0), (Drag, to_x, to_y)]);
+        let align = s.overlays(v).iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "align"));
+        gesture(&mut s, v, &[(Up, to_x, to_y)]);
+        assert_eq!(top_left(&s, id), want, "guides {guides:?}, grabbed at ({x}, {y})");
+        assert!(align, "guides {guides:?}, grabbed at ({x}, {y}): no align");
+    }
+    // Dragged by its centre until its left edge is at 401: 1 px from another rectangle's left
+    // edge (400) and 1 px from a ruler guide (402).
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    let id = NodeId(s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 200, "height": 150})).unwrap()["id"].as_u64().unwrap());
+    s.execute("shape.rectangle", &json!({"x": 400, "y": 400, "width": 60, "height": 60})).unwrap();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 402.0})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.select_tool("selection", v).unwrap();
+    gesture(&mut s, v, &[(Down, 200.0, 175.0), (Drag, 350.0, 175.0), (Drag, 501.0, 175.0), (Up, 501.0, 175.0)]);
+    assert_eq!(top_left(&s, id), (400.0, 100.0), "a Smart Guides alignment gave way to a ruler guide");
+}
+
 /// #3701: at 28,757%, Direct Selection pressed 1.5 px beside a rectangle's straight left side and
 /// dragged until the side is 1 px from a ruler guide lands both its anchors on the guide; so does
 /// the same press and drag on the rectangle selected whole, which moves it.
@@ -1865,6 +2937,20 @@ fn a_straight_segment_dragged_by_direct_selection_lands_on_a_ruler_guide() {
         );
         s.execute("edit.undo", &json!({})).unwrap();
     }
+}
+
+/// General › Scroll Sideways with Cmd/Ctrl + Wheel starts on: in a new session, in a preferences
+/// file saved before the option existed and after a reset.
+#[test]
+fn scroll_sideways_with_cmd_wheel_is_on_by_default() {
+    assert!(Prefs::default().ctrl_wheel_scrolls_sideways);
+    let old: Prefs = serde_json::from_value(json!({"zoomWithMouseWheel": false})).unwrap();
+    assert!(old.ctrl_wheel_scrolls_sideways);
+    let mut s = Session::new();
+    s.execute("prefs.set", &json!({"key": "ctrlWheelScrollsSideways", "value": false})).unwrap();
+    assert!(!s.prefs.ctrl_wheel_scrolls_sideways);
+    s.execute("prefs.reset", &json!({})).unwrap();
+    assert!(s.prefs.ctrl_wheel_scrolls_sideways);
 }
 
 /// The Transform panel menu's choice starts as `default` (the panels follow General › Transform
@@ -1908,4 +2994,54 @@ fn snap_to_glyph_options_read_set_and_reset() {
     assert_eq!(s.execute("view.snapToGlyph.options", &json!({})).unwrap(), set);
     s.execute("prefs.reset", &json!({})).unwrap();
     assert_eq!(s.execute("view.snapToGlyph.options", &json!({})).unwrap(), all);
+}
+
+/// File Handling › Use fonts embedded in imported PDFs (`pdfImportEmbeddedFonts`, on by default)
+/// reaches Open and Place as the `embeddedFonts` choice, unless a call gives its own (#4568).
+#[test]
+fn the_embedded_fonts_preference_reaches_the_import_options() {
+    use crate::cmd::fileio::LoadOptions;
+    let mut s = Session::new();
+    assert!(s.prefs.pdf_import_embedded_fonts, "on by default");
+    let on = s.prefs.with_pdf_font_choice(&json!({}));
+    assert!(LoadOptions::from_params("x", &on).unwrap().embedded_fonts);
+    s.execute("prefs.set", &json!({"key": "pdfImportEmbeddedFonts", "value": false})).unwrap();
+    let off = s.prefs.with_pdf_font_choice(&json!({"page": 2}));
+    assert_eq!(off["page"], 2, "the call's own params stay");
+    assert!(!LoadOptions::from_params("x", &off).unwrap().embedded_fonts);
+    assert!(!LoadOptions::from_params("x", &s.prefs.with_pdf_font_choice(&Value::Null)).unwrap().embedded_fonts);
+    // A call that says so wins over the preference.
+    let own = s.prefs.with_pdf_font_choice(&json!({"embeddedFonts": true}));
+    assert!(LoadOptions::from_params("x", &own).unwrap().embedded_fonts);
+    assert!(LoadOptions::from_params("x", &json!({"embeddedFonts": "yes"})).is_err());
+}
+
+/// Pixel Snapping Options: `view.snapToPixel.options` reads and sets While Drawing, While Moving
+/// and While Scaling, all on by default, kept as the `pixelSnap` preference group; bad keys and
+/// values change nothing, preferences saved without the group read it as all on, and resetting the
+/// preferences turns them all back on.
+#[test]
+fn pixel_snapping_options_read_set_and_reset() {
+    let mut s = Session::new();
+    let all = json!({"drawing": true, "moving": true, "scaling": true});
+    assert_eq!(s.execute("view.snapToPixel.options", &json!({})).unwrap(), all);
+    let set = json!({"drawing": true, "moving": false, "scaling": true});
+    assert_eq!(s.execute("view.snapToPixel.options", &json!({"moving": false})).unwrap(), set);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "pixelSnap"})).unwrap(), set);
+    assert!(!s.prefs.pixel_snap.moving && s.prefs.pixel_snap.drawing && s.prefs.pixel_snap.scaling);
+    for bad in [json!({"moving": 1}), json!({"rotating": false})] {
+        assert!(s.execute("view.snapToPixel.options", &bad).is_err(), "{bad}");
+        assert!(s.execute("prefs.set", &json!({"key": "pixelSnap", "value": bad})).is_err(), "{bad}");
+        assert_eq!(s.execute("view.snapToPixel.options", &json!({})).unwrap(), set, "{bad}");
+    }
+    s.execute("prefs.set", &json!({"key": "pixelSnap", "value": {"scaling": false}})).unwrap();
+    let both = json!({"drawing": true, "moving": false, "scaling": false});
+    assert_eq!(s.execute("view.snapToPixel.options", &json!({})).unwrap(), both);
+    // Preferences written before the group existed, and a group that names only some options.
+    let older: Prefs = serde_json::from_value(json!({"keyboardIncrement": 4})).unwrap();
+    assert_eq!(older.pixel_snap, vectorcraft_tools::PixelSnap::default());
+    let partial: Prefs = serde_json::from_value(json!({"pixelSnap": {"drawing": false}})).unwrap();
+    assert_eq!(partial.pixel_snap, vectorcraft_tools::PixelSnap { drawing: false, moving: true, scaling: true });
+    s.execute("prefs.reset", &json!({})).unwrap();
+    assert_eq!(s.execute("view.snapToPixel.options", &json!({})).unwrap(), all);
 }

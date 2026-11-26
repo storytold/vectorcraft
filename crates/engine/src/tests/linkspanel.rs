@@ -203,6 +203,140 @@ fn unembed_of_pixels_that_cant_be_read_writes_no_file() {
     assert!(image(&s, id).link.is_none());
 }
 
+/// The files of folder `dir`, sorted by name.
+fn files_in(dir: &str) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    names.sort();
+    names
+}
+
+/// The path of the file `name` in folder `dir`.
+fn file_in(dir: &str, name: &str) -> String {
+    std::path::Path::new(dir).join(name).to_string_lossy().into_owned()
+}
+
+/// Several images unembed into one folder: each gets a new file named after it (a taken name
+/// numbered, a file already there never replaced), links to it and keeps its bounds, linked images
+/// are skipped, and one undo step makes them embedded again while the files stay.
+#[test]
+fn unembed_to_a_folder_writes_each_image_and_links_it_in_one_undo_step() {
+    let dir = Folder::new("unembed-folder");
+    let out = dir.file("out");
+    for sub in ["a", "b", "out"] {
+        std::fs::create_dir_all(dir.file(sub)).unwrap();
+    }
+    let (red, blue) = (png(60, 30, RED), png(40, 20, BLUE));
+    write(&dir.file("a/photo.png"), &red);
+    write(&dir.file("b/photo.png"), &blue);
+    write(&dir.file("a/linked.png"), &red);
+    let kept = b"not an image".to_vec();
+    write(&file_in(&out, "photo.png"), &kept);
+    let mut s = session();
+    let a = place_embedded(&mut s, &dir.file("a/photo.png"));
+    let b = place_embedded(&mut s, &dir.file("b/photo.png"));
+    let linked = place(&mut s, &dir.file("a/linked.png"));
+    let linked_path = image(&s, linked).link.unwrap().path;
+    let (bounds_a, bounds_b) = (bounds(&s, a), bounds(&s, b));
+    let undo_before = s.doc().unwrap().history.undo.len();
+    let r = run(&mut s, "links.unembed", json!({"ids": [a.0, linked.0, b.0], "folder": out}));
+    let (path_a, path_b) = (file_in(&out, "photo 2.png"), file_in(&out, "photo 3.png"));
+    assert_eq!(r, json!({"unembedded": [{"id": a.0, "path": path_a}, {"id": b.0, "path": path_b}], "skipped": [linked.0]}));
+    assert_eq!(files_in(&out), ["photo 2.png", "photo 3.png", "photo.png"]);
+    assert_eq!(std::fs::read(file_in(&out, "photo.png")).unwrap(), kept, "a file already there is not replaced");
+    assert_eq!(std::fs::read(&path_a).unwrap(), red);
+    assert_eq!(std::fs::read(&path_b).unwrap(), blue);
+    assert_eq!(image(&s, a).link.unwrap().path, path_a);
+    assert_eq!(image(&s, b).link.unwrap().path, path_b);
+    assert_eq!(image(&s, linked).link.unwrap().path, linked_path, "a linked image is left as it is");
+    assert_eq!((bounds(&s, a), bounds(&s, b)), (bounds_a, bounds_b));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo_before + 1, "one undo step");
+    run(&mut s, "edit.undo", json!({}));
+    assert!(image(&s, a).link.is_none() && image(&s, b).link.is_none(), "both embedded again");
+    assert_eq!(files_in(&out).len(), 3, "undo leaves the files");
+    // `ids` of one image without `folder` is `id`: the bytes, and nothing changes.
+    let one = run(&mut s, "links.unembed", json!({"ids": [a.0]}));
+    assert_eq!(one, run(&mut s, "links.unembed", json!({"id": a.0})));
+    assert!(one["dataBase64"].is_string(), "{one}");
+    assert!(image(&s, a).link.is_none());
+    // With no ids, the selected embedded images.
+    s.doc_mut().unwrap().selection.objects = vec![b, linked];
+    let r = run(&mut s, "links.unembed", json!({"folder": out}));
+    assert_eq!(r, json!({"unembedded": [{"id": b.0, "path": file_in(&out, "photo 4.png")}], "skipped": []}));
+    assert_eq!(std::fs::read(file_in(&out, "photo 4.png")).unwrap(), blue);
+    // `id` with `folder` is `ids` of that one image.
+    let r = run(&mut s, "links.unembed", json!({"id": a.0, "folder": out}));
+    assert_eq!(r, json!({"unembedded": [{"id": a.0, "path": file_in(&out, "photo 5.png")}], "skipped": []}));
+    assert_eq!(image(&s, a).link.unwrap().path, file_in(&out, "photo 5.png"));
+}
+
+/// A batch that fails part way writes no file and changes nothing; requests that don't fit the
+/// command are refused before anything is written.
+#[test]
+fn unembed_to_a_folder_that_fails_leaves_no_file_and_no_change() {
+    let dir = Folder::new("unembed-folder-fail");
+    let out = dir.file("out");
+    std::fs::create_dir_all(&out).unwrap();
+    write(&dir.file("one.png"), &png(60, 30, RED));
+    write(&dir.file("two.png"), &png(60, 30, BLUE));
+    let mut s = session();
+    let a = place_embedded(&mut s, &dir.file("one.png"));
+    let b = place_embedded(&mut s, &dir.file("two.png"));
+    // The second image's pixels can't be read: the first one's file is removed again.
+    let key = image(&s, b).key;
+    let saved = s.doc().unwrap().doc.images.get(&key).cloned().unwrap();
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).images.insert(key.clone(), vectorcraft_doc::ImageBlob::png(png_header(60, 30)));
+    let undo_before = s.doc().unwrap().history.undo.len();
+    let e = s.execute("links.unembed", &json!({"ids": [a.0, b.0], "folder": out})).unwrap_err();
+    assert!(e.to_string().ends_with("the image's pixels can't be read"), "{e}");
+    assert!(files_in(&out).is_empty(), "no file left behind");
+    assert!(image(&s, a).link.is_none() && image(&s, b).link.is_none());
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo_before);
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).images.insert(key, saved);
+
+    let refused = |s: &mut Session, p: Value| s.execute("links.unembed", &p).unwrap_err().to_string();
+    let both = "give `path` or `folder`, not both";
+    assert!(refused(&mut s, json!({"ids": [a.0, a.0], "folder": out})).ends_with("`ids` names an object twice"));
+    assert!(refused(&mut s, json!({"id": a.0, "path": file_in(&out, "x.png"), "folder": out})).ends_with(both));
+    assert!(refused(&mut s, json!({"ids": [a.0], "path": file_in(&out, "x.png"), "folder": out})).ends_with(both));
+    assert!(refused(&mut s, json!({"ids": [a.0, b.0]})).ends_with("missing `folder`"));
+    assert!(refused(&mut s, json!({"ids": []})).ends_with("missing `folder`"));
+    assert!(refused(&mut s, json!({"id": a.0, "ids": [b.0], "folder": out})).ends_with("give `id` or `ids`, not both"));
+    assert!(refused(&mut s, json!({"id": a.0, "ids": [b.0]})).ends_with("give `id` or `ids`, not both"));
+    assert!(refused(&mut s, json!({"ids": [a.0], "folder": 5})).ends_with("`folder` must be a string"));
+    assert!(refused(&mut s, json!({"ids": [], "folder": out})).ends_with("select an image"));
+    let file = dir.file("one.png");
+    assert!(refused(&mut s, json!({"ids": [a.0], "folder": file})).ends_with(&format!("{file} is not a folder")));
+    run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10}));
+    let rect = s.doc().unwrap().selection.objects[0];
+    assert!(refused(&mut s, json!({"ids": [a.0, rect.0], "folder": out})).ends_with(&format!("object {} is not an image", rect.0)));
+    assert!(files_in(&out).is_empty(), "nothing written for a refused request");
+    run(&mut s, "links.unembed", json!({"ids": [a.0], "folder": out}));
+    assert!(refused(&mut s, json!({"ids": [a.0], "folder": out})).ends_with(&format!("image {} is linked already", a.0)));
+    assert_eq!(files_in(&out), ["one.png"]);
+}
+
+/// Under automation write roots, a folder outside them takes no file.
+#[test]
+fn unembed_to_a_folder_outside_the_write_roots_is_refused() {
+    use crate::file_access::{AutomationRoots, confine};
+    let dir = Folder::new("unembed-folder-roots");
+    let (inside, outside) = (dir.file("inside"), dir.file("outside"));
+    std::fs::create_dir_all(&inside).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    write(&file_in(&inside, "pic.png"), &png(60, 30, RED));
+    let mut s = session();
+    let id = place_embedded(&mut s, &file_in(&inside, "pic.png"));
+    let roots = AutomationRoots::new(&[dir.0.as_path()], &[std::path::Path::new(&inside)]).unwrap();
+    let p = json!({"ids": [id.0], "folder": outside});
+    let e = confine(roots.as_ref(), || s.execute("links.unembed", &p)).unwrap_err().to_string();
+    assert!(e.contains("outside the write root"), "{e}");
+    assert!(files_in(&outside).is_empty());
+    assert!(image(&s, id).link.is_none());
+    let p = json!({"ids": [id.0], "folder": inside});
+    confine(roots.as_ref(), || s.execute("links.unembed", &p)).unwrap();
+    assert!(image(&s, id).link.is_some());
+}
+
 #[test]
 fn go_to_selects_the_image() {
     let dir = Folder::new("goto");
@@ -213,7 +347,7 @@ fn go_to_selects_the_image() {
     run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10}));
     assert_ne!(s.doc().unwrap().selection.objects, vec![id]);
     let r = run(&mut s, "links.goTo", json!({"id": id.0}));
-    assert_eq!(r, json!({"id": id.0, "bounds": [-100.0, 0.0, 500.0, 300.0]}));
+    assert_eq!(r, json!({"id": id.0, "bounds": [-100.0, 0.0, 500.0, 300.0], "onCanvas": true}));
     assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
     let rect = s.doc().unwrap().doc.layers[0].children().unwrap()[1].id;
     assert!(s.execute("links.goTo", &json!({"id": rect.0})).is_err(), "not an image");
@@ -248,7 +382,42 @@ fn the_list_shows_each_image_with_its_status() {
     assert_eq!(run(&mut s, "links.list", json!({"show": "missing"}))["links"][0]["id"], linked.0);
     assert_eq!(run(&mut s, "links.list", json!({"sort": "name"}))["links"][0]["name"], "a.png");
     assert!(s.execute("links.list", &json!({"show": "broken"})).is_err());
-    assert!(s.execute("links.list", &json!({"sort": "size"})).is_err());
+    assert!(s.execute("links.list", &json!({"sort": "date"})).is_err());
+}
+
+#[test]
+fn sort_by_size_lists_the_smallest_file_first() {
+    let dir = Folder::new("list-size");
+    let files = [("a.png", png(600, 300, RED)), ("b.png", png(10, 10, BLUE)), ("c.png", png(100, 100, RED)), ("d.png", png(10, 10, BLUE))];
+    let mut s = session();
+    for (name, bytes) in &files {
+        let path = dir.file(name);
+        write(&path, bytes);
+        place(&mut s, &path);
+    }
+    let e = dir.file("e.png");
+    write(&e, &png(1, 1, RED));
+    place_embedded(&mut s, &e);
+    let names = |s: &mut Session| -> Vec<String> {
+        let l = run(s, "links.list", json!({"sort": "size"}));
+        l["links"].as_array().unwrap().iter().map(|r| r["name"].as_str().unwrap_or_default().to_string()).collect()
+    };
+    // Smallest first, equal sizes by name, the embedded image (no file) last.
+    let mut want: Vec<(usize, &str)> = files.iter().map(|(n, b)| (b.len(), *n)).collect();
+    want.sort();
+    assert!(want[0].0 < want[2].0 && want[2].0 < want[3].0, "{want:?}");
+    let mut want: Vec<String> = want.iter().map(|(_, n)| n.to_string()).collect();
+    want.push("e.png".into());
+    assert_eq!(names(&mut s), want);
+    // A missing file sorts by the size the document keeps of it.
+    std::fs::remove_file(dir.file("a.png")).unwrap();
+    assert_eq!(names(&mut s), want);
+    // A modified file sorts by its size now.
+    let bigger = png(900, 900, BLUE);
+    assert!(bigger.len() > files[0].1.len());
+    write(&dir.file("c.png"), &bigger);
+    let got = names(&mut s);
+    assert_eq!(got[got.len() - 2..], ["c.png".to_string(), "e.png".to_string()]);
 }
 
 #[test]
@@ -276,6 +445,77 @@ fn link_info_has_the_file_and_placement_details() {
     let embedded = place_embedded(&mut s, &pic);
     let i = run(&mut s, "links.info", json!({"id": embedded.0}));
     assert_eq!((i["status"].as_str(), i["linked"].as_bool(), i["fileName"].as_str()), (Some("embedded"), Some(false), None));
+}
+
+/// Link Info reads within the opener's roots for an unconfined caller, and never past a confined
+/// caller's own roots.
+#[test]
+fn link_info_stays_within_the_asking_callers_roots() {
+    let dir = Folder::new("info-roots");
+    let other = Folder::new("info-other");
+    let pic = dir.file("photo.png");
+    write(&pic, &png(60, 30, RED));
+    let mut s = session();
+    let id = place(&mut s, &pic);
+    let roots = |p: &std::path::Path| crate::file_access::AutomationRoots::new(&[p], &[]).unwrap().unwrap();
+    s.active_mut().unwrap().opened_by = Some(roots(&dir.0));
+    assert_eq!(run(&mut s, "links.info", json!({"id": id.0}))["status"], "ok");
+    let narrow = roots(&other.0);
+    let i = crate::file_access::confine(Some(&narrow), || run(&mut s, "links.info", json!({"id": id.0})));
+    assert_ne!(i["status"], "ok", "{i}");
+}
+
+/// A confined caller's `links.list`, `links.check` and `links.info` replies, and its
+/// `document.open` reply, leave out the path and folder of a linked file outside its read roots
+/// and keep the row with the file's name. A file found by name inside the roots shows its path.
+#[test]
+fn link_paths_outside_the_read_roots_are_left_out() {
+    let away = Folder::new("lrr-away");
+    let home = Folder::new("lrr-home");
+    let pic = away.file("photo.png");
+    let bytes = png(60, 30, RED);
+    write(&pic, &bytes);
+    let mut s = session();
+    let id = place(&mut s, &pic);
+    let roots = crate::file_access::AutomationRoots::new(&[&home.0], &[]).unwrap().unwrap();
+    let ask = |s: &mut Session, cmd: &str, p: Value| crate::file_access::confine(Some(&roots), || run(s, cmd, p));
+    let hidden = |r: &Value| assert!(!r.to_string().contains("lrr-away"), "{r}");
+    let list = ask(&mut s, "links.list", json!({}));
+    hidden(&list);
+    let row = &list["links"][0];
+    assert_eq!((row["id"].as_u64(), row["name"].as_str(), row["status"].as_str()), (Some(id.0), Some("photo.png"), Some("missing")), "{list}");
+    let check = ask(&mut s, "links.check", json!({}));
+    hidden(&check);
+    assert_eq!((check["links"][0]["name"].as_str(), check["missing"].as_u64()), (Some("photo.png"), Some(1)), "{check}");
+    let info = ask(&mut s, "links.info", json!({"id": id.0}));
+    hidden(&info);
+    assert_eq!(
+        (info["fileName"].as_str(), info["status"].as_str(), info["linked"].as_bool()),
+        (Some("photo.png"), Some("missing"), Some(true)),
+        "{info}"
+    );
+    for k in ["path", "link", "location", "fileSize", "modified", "created"] {
+        assert!(info.get(k).is_none(), "{k}: {info}");
+    }
+    // Unconfined, the same replies carry the paths.
+    assert_eq!(run(&mut s, "links.list", json!({}))["links"][0]["path"], json!(pic));
+    let i = run(&mut s, "links.info", json!({"id": id.0}));
+    assert_eq!((&i["path"], &i["link"], i["fileSize"].as_u64()), (&json!(pic), &json!(pic), Some(bytes.len() as u64)), "{i}");
+    // Saved inside the roots next to a copy of the file: the copy is found by name and shown.
+    save(&mut s, &home.file("poster.vectorcraft"));
+    let copy = home.file("photo.png");
+    write(&copy, &bytes);
+    let check = ask(&mut s, "links.check", json!({}));
+    hidden(&check);
+    assert_eq!((check["links"][0]["status"].as_str(), &check["links"][0]["found"]), (Some("ok"), &json!(copy)), "{check}");
+    let list = ask(&mut s, "links.list", json!({}));
+    hidden(&list);
+    assert_eq!(list["links"][0]["found"], json!(copy), "{list}");
+    // Opened again without the copy: the missing link's row has no path.
+    std::fs::remove_file(&copy).unwrap();
+    let opened = ask(&mut Session::new(), "document.open", json!({"path": home.file("poster.vectorcraft")}));
+    hidden(&opened);
+    assert_eq!(opened["missingLinks"][0]["name"], "photo.png", "{opened}");
 }
 
 /// A 600×300 pt image at the centre of the artboard, its placement options set to `options`,

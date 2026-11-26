@@ -1,8 +1,15 @@
 //! The Type tools: Type (T), Area Type and Type on a Path.
 //!
 //! Type: click places point type, drag draws an area-type frame, clicking into existing text
-//! places the caret. Area Type / Type on a Path: click a path to turn it into a text frame or a
-//! baseline (`text.createInPath`). While type is being edited, a click that lands on no type only
+//! places the caret, and a click on a path's outline makes type in or along it: area type inside a
+//! closed path and type on a path along an open one, as the reference app's Type tool does ("Select
+//! the Type tool […] and click anywhere on the object's path", [Create text](https://web.archive.org/web/20220127090642/https://helpx.adobe.com/illustrator/using/creating-text.html);
+//! "To create horizontal text along a path, select the Type tool or the Type On A Path tool […] If
+//! the path is closed, rather than open, you must use the Type On A Path tool", [Create type on a
+//! path](https://web.archive.org/web/20220127090635/https://helpx.adobe.com/illustrator/using/creating-type-path.html)),
+//! Alt or not: type along a closed path stays with Type on a Path.
+//! Area Type / Type on a Path: click a path to turn it into a text frame or a baseline
+//! (`text.createInPath`). While type is being edited, a click that lands on no type only
 //! ends the editing, and the next click makes new type. Point type placed by a click and left
 //! empty is discarded when editing ends (`text.discardEmpty`); frames keep their shape. Where new
 //! type goes (the click, the frame's corners) snaps to Smart Guides ([`DrawSnap`]), hovering too.
@@ -29,23 +36,26 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use serde_json::{Value, json};
 use vectorcraft_doc::hit::hit_test;
-use vectorcraft_doc::{NodeId, NodeKind, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{NodeId, NodeKind, Quotes, TextKind, TextObject, TextRun};
 use vectorcraft_geom::{BezPath, Point, Rect, Shape};
 use vectorcraft_text::{FontDb, TextLayout, edit};
 
 use crate::guides::DrawSnap;
-use crate::{Action, Cursor, ImeSurrounding, Mods, Overlay, PointerEvent, PointerKind, SurroundingUnit, Tool, ToolContext, ToolKey};
+use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, SurroundingUnit, Tool, ToolContext, ToolKey};
 
+mod missing;
 mod plain;
 mod ports;
 mod tool;
 
+pub use missing::MISSING_FONT_EDIT;
+use missing::PendingEdit;
 #[cfg(test)]
 use plain::char_range_to_bytes;
 use plain::common_affixes;
 pub use plain::step_key;
-pub(crate) use ports::port_at;
 pub use ports::{PORT_RISE_PX, PORTS_MAX, Port, PortMarks, PortState, port_centre, port_states, ported, ports_shown, push_port, thread_ports};
+pub(crate) use ports::{port_at, port_near};
 
 /// Which of the Type tools this is.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -64,6 +74,9 @@ struct Typing {
     /// previewed span starts no later, so Return at a paragraph's end splits that paragraph (its
     /// style continues), not the next one.
     lo: usize,
+    /// The other frames of the story whose text the session removed: it began by replacing the
+    /// whole story that Select All selected ([`TypeTool::story`]).
+    clear: Vec<NodeId>,
 }
 
 /// IME marked text inside the typing session, not yet committed.
@@ -124,8 +137,17 @@ fn text_hash(s: &str) -> u64 {
     h.finish()
 }
 
-/// The edited text's layout, keyed by the font database's generation and the text.
+/// The edited text's layout, keyed by [`vectorcraft_text::layout_inputs`] and the text.
 type CachedLayout = ((u64, TextObject), Arc<TextLayout>);
+
+/// The layouts of the frames other than the edited one that the overlays draw (the ports of the
+/// selected area type and type on a path, the other frames of a selected story), by frame, each
+/// kept with the layout inputs and the text it was made from ([`TypeTool::frame_layout`]).
+type FrameLayouts = std::collections::HashMap<NodeId, CachedLayout>;
+
+/// The most other frames' layouts [`TypeTool::frames`] keeps: every port drawn ([`PORTS_MAX`])
+/// and a long story's frames. The frames an overlays call draws past it are laid out on each call.
+const FRAME_LAYOUTS_MAX: usize = 2_048;
 
 /// Process-global Type-tool edit-session counter: the IME target's replacement epoch.
 ///
@@ -150,7 +172,11 @@ fn next_edit_session() -> u64 {
 pub struct TypeTool {
     vertical: bool,
     mode: Mode,
-    /// The tool to return to on Escape (e.g. when double-clicked from a selection tool).
+    /// The tool whose double-click on type chose this tool, which Escape and Cmd+Enter return to.
+    /// The canvas sets it; choosing the Type tool another way (the toolbar) leaves it unset, and
+    /// Escape then goes to the Selection tool. Clicks that end editing or move it to other text
+    /// keep it. Choosing another tool clears it, and so does deactivating this tool when another
+    /// document or another window of the document becomes active.
     prev_tool: Option<String>,
     /// Text object being edited.
     editing: Option<NodeId>,
@@ -164,14 +190,16 @@ pub struct TypeTool {
     /// Caret and selection anchor (byte offsets into the plain text).
     caret: usize,
     anchor: usize,
+    /// After Select All in a frame of threaded text: the story's frames in thread order then, the
+    /// edited one included. While the selection is the edited frame's whole text and this holds the
+    /// edited frame, the text of the other frames of its current thread is selected too. Empty
+    /// otherwise.
+    story: Vec<NodeId>,
     /// Horizontal position kept by Up/Down (text space).
     goal_x: Option<f64>,
     typing: Option<Typing>,
     preedit: Option<Preedit>,
-    /// A command from outside the tool (`settle_interaction`, an external edit while typing) ended
-    /// the typing session, while the text stays open for editing. A commit over that edit is
-    /// application-origin unless an IME deletion has already begun a fresh typing session.
-    typing_ended: bool,
+
     /// Where the button went down, and where new type goes from there (snapped to Smart Guides).
     press: Option<(Point, Point)>,
     /// The other corner of an area dragged out (snapped).
@@ -182,6 +210,8 @@ pub struct TypeTool {
     snap: DrawSnap,
     /// The press landed in the edited text: dragging selects.
     selecting: bool,
+    /// This saves the edit target, caret, and anchor until the press ends.
+    before_press: Option<BeforePress>,
     /// Click counting for double/triple click (position of the last click, count).
     clicks: (Option<Point>, u8),
     /// Styled copy of the last copied range (pasting the same plain text keeps its styles).
@@ -198,19 +228,38 @@ pub struct TypeTool {
     stepped: bool,
     /// The state at the start of each `command.batch` still running, innermost last.
     batches: Vec<HistoryState>,
+    /// The edit of type set in fonts that aren't available whose question is open ([`missing`]).
+    pending_edit: Option<PendingEdit>,
     cache: Mutex<Option<CachedLayout>>,
+    /// The other frames' layouts the last overlays drew ([`FrameLayouts`]): each overlays call
+    /// keeps only the frames it draws.
+    frames: Mutex<FrameLayouts>,
+}
+
+struct BeforePress {
+    editing: Option<NodeId>,
+    fresh: Option<NodeId>,
+    caret: usize,
+    anchor: usize,
 }
 
 impl TypeTool {
-    pub(super) fn step_attribute(&mut self, key: ToolKey, mods: Mods, a: usize, b: usize, vertical: bool) -> Option<Vec<Action>> {
+    pub(super) fn step_attribute(&mut self, cx: &ToolContext, key: ToolKey, mods: Mods, a: usize, b: usize, vertical: bool) -> Option<Vec<Action>> {
         if !mods.alt {
             return None;
         }
         let id = self.editing?;
-        let (attribute, by) = plain::step_key(key, mods.shift, a == b, vertical)?;
+        let story = !self.story_others(cx).is_empty();
+        let (attribute, by) = plain::step_key(key, mods.shift, a == b && !story, vertical)?;
         let mut out = self.commit();
         let by = if mods.cmd { by * 5.0 } else { by };
-        out.push(Action::Exec("type.step".into(), json!({"id": id.0, "start": a, "end": b, "attribute": attribute, "by": by})));
+        // With the whole story selected, `type.step` steps the text of every frame of it.
+        let p = if story {
+            json!({"attribute": attribute, "by": by})
+        } else {
+            json!({"id": id.0, "start": a, "end": b, "attribute": attribute, "by": by})
+        };
+        out.push(Action::Exec("type.step".into(), p));
         Some(out)
     }
     pub fn new(id: &str) -> Self {
@@ -246,9 +295,9 @@ impl TypeTool {
     }
 
     /// Layout of `t`, cached by content (overlays run every frame) and by the fonts available (the
-    /// web build adds fonts after startup).
+    /// web build adds fonts after startup) and the hyphenation exceptions.
     fn layout(&self, t: &TextObject) -> Arc<TextLayout> {
-        let fonts = FontDb::global().generation();
+        let fonts = vectorcraft_text::layout_inputs();
         let mut c = self.cache.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(((g, k), l)) = c.as_ref()
             && *g == fonts
@@ -258,6 +307,28 @@ impl TypeTool {
         }
         let l = Arc::new(vectorcraft_text::layout(FontDb::global(), t));
         *c = Some(((fonts, t.clone()), l.clone()));
+        l
+    }
+
+    /// Layout of `t`, frame `id`, for an overlays call that draws a frame other than the edited
+    /// one: the layout kept in `now` or `was` for `id` when it was made from the layout inputs
+    /// `fonts` and the same text, otherwise a new one. It is kept in `now` either way while `now`
+    /// holds fewer than [`FRAME_LAYOUTS_MAX`].
+    fn frame_layout(now: &mut FrameLayouts, was: &mut FrameLayouts, fonts: u64, id: NodeId, t: &TextObject) -> Arc<TextLayout> {
+        if let Some(((g, k), l)) = now.get(&id)
+            && *g == fonts
+            && k == t
+        {
+            return l.clone();
+        }
+        let kept = match was.remove(&id) {
+            Some(((g, k), l)) if g == fonts && &k == t => ((g, k), l),
+            _ => ((fonts, t.clone()), Arc::new(vectorcraft_text::layout(FontDb::global(), t))),
+        };
+        let l = kept.1.clone();
+        if now.len() < FRAME_LAYOUTS_MAX {
+            now.insert(id, kept);
+        }
         l
     }
 
@@ -288,19 +359,33 @@ impl TypeTool {
 
     /// The exact text [`Tool::text_input`] would insert for `s`: control characters removed, `\r`
     /// normalized to `\n`, and Typographer's Quotes applied to a straight quote. `None` when
-    /// nothing would be inserted. Shared with [`Tool::text_input_is_verbatim`] so the IME receipt
-    /// and the insertion cannot disagree about what was transformed.
+    /// nothing would be inserted.
     fn input_text(&self, cx: &ToolContext, s: &str) -> Option<String> {
         let s: String = s.chars().filter(|c| !c.is_control() || matches!(c, '\n' | '\t')).map(|c| if c == '\r' { '\n' } else { c }).collect();
         if s.is_empty() {
             return None;
         }
         // Use Typographer's Quotes (Document Setup): a typed straight quote becomes the document's
-        // opening or closing quote, by the character before it.
+        // opening or closing quote, by the character before it. A `”` typed alone (the macOS Serbian
+        // Cyrillic layout's only double quote) becomes the opening quote where one opens, and stays
+        // `”` where one closes.
         let setup = &cx.doc.setup;
-        if setup.typographers_quotes && matches!(s.as_str(), "\"" | "'") {
-            let mut prev = self.char_before(cx, self.caret.min(self.anchor));
-            return Some(setup.quotes.apply(&s, &mut prev));
+        if setup.typographers_quotes {
+            let mut chars = s.chars();
+            if let (Some(c), None) = (chars.next(), chars.next()) {
+                if matches!(c, '"' | '\'') {
+                    let mut prev = self.char_before(cx, self.caret.min(self.anchor));
+                    return Some(setup.quotes.apply(&s, &mut prev));
+                }
+                if cx.typed_from_keyboard
+                    && let Some(q) = Quotes::typed_as_straight(c)
+                {
+                    let mut prev = self.char_before(cx, self.caret.min(self.anchor));
+                    if setup.quotes.opens_after(prev) {
+                        return Some(setup.quotes.apply(&q.to_string(), &mut prev));
+                    }
+                }
+            }
         }
         Some(s)
     }
@@ -359,9 +444,29 @@ impl TypeTool {
             out.push(Action::Exec("text.discardEmpty".into(), json!({"id": id.0})));
         }
         self.editing = None;
+        self.story.clear();
         self.selecting = false;
         self.goal_x = None;
         out
+    }
+
+    /// Stop editing and go back to the tool whose double-click on type chose this tool (or to the
+    /// Selection tool when none did), and leave the type selected.
+    fn end_editing(&mut self, cx: &ToolContext) -> Vec<Action> {
+        let target = self.prev_tool.take().unwrap_or_else(|| "selection".into());
+        let mut out = self.finish(cx);
+        out.push(Action::SwitchTool(target));
+        out
+    }
+
+    /// Enter types a line break, and Shift+Enter types a forced line break. Cmd+Enter (Ctrl+Enter on
+    /// Windows and Linux) ends editing as Escape does and keeps the typed text. `Mods` does not tell
+    /// Ctrl apart from Cmd+Ctrl, so Cmd+Ctrl+Enter on macOS ends editing too.
+    fn enter(&mut self, cx: &ToolContext, mods: Mods) -> Vec<Action> {
+        if mods.cmd && !mods.shift && !mods.alt {
+            return self.end_editing(cx);
+        }
+        self.replace(cx, if mods.shift { "\u{2028}" } else { "\n" }, None)
     }
 
     /// Replace the selection with `insert` (styled `runs` when given) inside the typing session.
@@ -372,8 +477,12 @@ impl TypeTool {
             return vec![];
         };
         let mut out = vec![];
+        // The whole story is selected: the edit replaces it, so the other frames' text goes too, in
+        // a typing session of its own.
+        let others = self.story_others(cx);
+        self.story.clear();
         // The document changed under us (undo, a panel edit): start a new session.
-        if self.typing.as_ref().is_some_and(|ty| ty.cur != t.runs) {
+        if self.typing.as_ref().is_some_and(|ty| ty.cur != t.runs || !others.is_empty()) {
             out.push(Action::Commit);
             self.typing = None;
             self.preedit = None;
@@ -381,9 +490,8 @@ impl TypeTool {
         let fresh = self.typing.is_none();
         if fresh {
             out.push(Action::Begin("Typing".into()));
-            self.typing_ended = false;
         }
-        let ty = self.typing.get_or_insert_with(|| Typing { base: t.runs.clone(), cur: t.runs.clone(), lo: usize::MAX });
+        let ty = self.typing.get_or_insert_with(|| Typing { base: t.runs.clone(), cur: t.runs.clone(), lo: usize::MAX, clear: others });
         let len = edit::runs_len(&ty.cur);
         let (a, b) = (self.caret.min(self.anchor).min(len), self.caret.max(self.anchor).min(len));
         ty.lo = ty.lo.min(a);
@@ -400,9 +508,74 @@ impl TypeTool {
         let (p, s) = common_affixes(&base, &cur, ty.lo);
         let runs = edit::slice_runs(&ty.cur, p, cur.len() - s);
         let runs = if runs.is_empty() { json!([]) } else { serde_json::to_value(&runs).unwrap_or(json!([])) };
-        out.push(Action::Preview("text.editRange".into(), json!({"id": id.0, "start": p, "end": base.len() - s, "runs": runs})));
+        out.push(Action::Preview("text.editRange".into(), edit_range_params(id, p, base.len() - s, runs, &ty.clear)));
         self.note_edit(fresh, id, (&base, base.len() - s), (&cur, cur.len() - s));
         out
+    }
+
+    /// Tab (`by` 1) or Shift+Tab (`by` -1) in type `t` (plain text `text`) with the selection
+    /// `a..b`: with the caret at the start of a list paragraph, the `text.setFormat` that moves the
+    /// paragraph a level down or up (none at the first or the last level: the key then does
+    /// nothing). None when the caret is anywhere else, the selection holds characters, or the
+    /// paragraph is in no list. The start of a threaded frame whose first paragraph continues from
+    /// the frame before ([`TextObject::first_para_continues`]) is not the start of a paragraph.
+    fn list_level_step(&self, t: &TextObject, text: &str, a: usize, b: usize, by: i32) -> Option<Vec<Action>> {
+        let id = self.editing?;
+        if a != b || edit::paragraph_at(text, a).start != a || (a == 0 && t.first_para_continues) {
+            return None;
+        }
+        let para = text.get(..a)?.matches('\n').count();
+        let list = t.para_at(para).list?;
+        let level = i32::try_from(list.depth()).ok()? + by;
+        let max = i32::try_from(vectorcraft_doc::text::LIST_LEVELS).ok()?;
+        if !(1..=max).contains(&level) {
+            return Some(vec![]);
+        }
+        Some(vec![Action::Exec("text.setFormat".into(), json!({"id": id.0, "start": a, "end": a, "listLevel": level}))])
+    }
+
+    /// Tab (Shift+Tab with `shift`) in type `t` (plain text `text`) with the selection `a..b`: with
+    /// the caret at the start of a list paragraph, it moves the paragraph a level down or up
+    /// ([`Self::list_level_step`]); anywhere else Tab inserts a tab.
+    fn tab(&mut self, cx: &ToolContext, t: &TextObject, text: &str, (a, b): (usize, usize), shift: bool) -> Vec<Action> {
+        match self.list_level_step(t, text, a, b, if shift { -1 } else { 1 }) {
+            // At the first or the last level the key does nothing, and the typing goes on.
+            Some(step) if step.is_empty() => step,
+            Some(step) => {
+                let mut out = self.commit();
+                out.extend(step);
+                out
+            }
+            None => self.replace(cx, "\t", None),
+        }
+    }
+
+    /// The other frames whose whole text is selected along with the edited frame's after Select
+    /// All in threaded text ([`Self::story`]), read from the document's current thread: none once
+    /// the selection is not all of the edited frame's text.
+    fn story_others(&self, cx: &ToolContext) -> Vec<NodeId> {
+        let Some(id) = self.editing.filter(|id| self.story.contains(id)) else { return vec![] };
+        let Some(t) = Self::text(cx, id) else { return vec![] };
+        let (a, b) = self.sel();
+        if a != 0 || b < edit::runs_len(&t.runs) {
+            return vec![];
+        }
+        cx.doc.story_of(id).into_iter().filter(|f| *f != id).collect()
+    }
+
+    /// Whether the whole story is selected ([`Self::story_others`]) and its other frames hold text.
+    /// The story stays selected when the edited frame holds no text, as after a frame threaded in
+    /// before it took the text.
+    fn story_selected(&self, cx: &ToolContext) -> bool {
+        self.story_others(cx).into_iter().any(|f| Self::text(cx, f).is_some_and(|o| edit::runs_len(&o.runs) > 0))
+    }
+
+    /// Put back the caret and anchor `selected` that a key clamped to the edited frame's text, when
+    /// the key leaves the whole story selected.
+    fn keep_story_offsets(&mut self, story: bool, selected: (usize, usize)) {
+        if story {
+            (self.caret, self.anchor) = selected;
+        }
     }
 
     /// Move the caret (Shift keeps the anchor). Moving ends the typing session.
@@ -413,6 +586,7 @@ impl TypeTool {
             self.anchor = byte;
         }
         self.listed = None;
+        self.story.clear();
         out
     }
 
@@ -426,17 +600,21 @@ impl TypeTool {
         self.known = None;
         self.caret = caret;
         self.anchor = caret;
+        self.story.clear();
         self.goal_x = None;
         self.typing = None;
         self.preedit = None;
-        self.typing_ended = false;
     }
 
     /// Typed list detection, after a space typed on its own at the caret: when the characters
     /// from the start of the caret's paragraph up to it start a list ([`TextObject::typed_list_at`]),
     /// the typing session ends as one undo step with those characters, and `text.startList`
     /// removes them and makes the paragraph a list as the next one, so one Undo puts them back.
+    /// With Type › Start Lists From Typed Markers off, the characters stay as typed.
     fn start_typed_list(&mut self, cx: &ToolContext) -> Vec<Action> {
+        if !cx.typed_lists {
+            return vec![];
+        }
         let (Some(id), Some(ty)) = (self.editing, &self.typing) else { return vec![] };
         let Some(mut t) = Self::text(cx, id).cloned() else { return vec![] };
         // The document does not have the space yet (its preview is applied after this input).
@@ -506,6 +684,7 @@ impl TypeTool {
     /// leaves the caret and the selection where they are, within the text.
     fn after_history_step(&mut self, cx: &ToolContext, undo: bool) {
         self.stepped = true;
+        self.story.clear();
         let Some(id) = self.editing else { return };
         let Some(text) = Self::text(cx, id).map(TextObject::plain_text) else { return };
         match self.known.take() {
@@ -605,33 +784,99 @@ impl TypeTool {
     fn select_word_or_para(&mut self, cx: &ToolContext, para: bool) {
         let s = self.plain(cx);
         let r = if para { edit::paragraph_at(&s, self.caret) } else { edit::word_at(&s, self.caret) };
+        self.story.clear();
         self.anchor = r.start;
         self.caret = r.end;
     }
 
-    /// Path under `p` for the Area Type / Type on a Path tools.
-    fn path_at(cx: &ToolContext, p: Point, closed: bool) -> Option<NodeId> {
-        let h = hit_test(cx.doc, p, vectorcraft_doc::hit::HitOptions { tol: cx.tol(4.0), outline: true, ..Default::default() })?;
+    /// The path whose outline is under `p`, and whether it is closed: within the isolated group
+    /// being edited, and no guide while guides are hidden or locked ([`ToolContext::hit_options`]).
+    fn path_at(cx: &ToolContext, p: Point) -> Option<(NodeId, bool)> {
+        let h = hit_test(cx.doc, p, vectorcraft_doc::hit::HitOptions { tol: cx.tol(4.0), outline: true, ..cx.hit_options() })?;
         match &cx.doc.node(h.leaf)?.kind {
-            NodeKind::Path { path, .. } if !closed || path.is_closed() => Some(h.leaf),
+            NodeKind::Path { path, .. } => Some((h.leaf, path.is_closed())),
             _ => None,
+        }
+    }
+
+    /// What a click at `p` with the tool acting as `mode` makes of the path there: the path, and
+    /// whether the type goes along it (else inside it); None when it makes no type in a path. The
+    /// Type tools set type inside a closed path and along an open one; Area Type needs a closed
+    /// path and Type on a Path takes either.
+    fn in_path(cx: &ToolContext, p: Point, mode: Mode) -> Option<(NodeId, bool)> {
+        let (id, closed) = Self::path_at(cx, p)?;
+        match mode {
+            Mode::Type => Some((id, !closed)),
+            Mode::Area => closed.then_some((id, false)),
+            Mode::OnPath => Some((id, true)),
         }
     }
 
     /// Start editing the type under `p` with the caret there → the actions (ending the previous
     /// edit, selecting the type); None when no type is under `p`. A click among the characters
-    /// edits them, whatever Type Object Selection by Path Only says.
+    /// edits them, whatever Type Object Selection by Path Only says, and so does a click anywhere
+    /// inside area type's frame. When the story of that type is drawn in a font that isn't
+    /// available as named and is not the story being edited, nothing starts yet: the action asks the
+    /// UI to open the [`MISSING_FONT_EDIT`] question, and OK starts the edit ([`Self::resume_edit`]).
     fn edit_at(&mut self, cx: &ToolContext, p: Point) -> Option<Vec<Action>> {
-        let h = hit_test(cx.doc, p, vectorcraft_doc::hit::HitOptions { type_path_only: false, ..cx.hit_options() })?;
+        self.pending_edit = None;
+        let opt = vectorcraft_doc::hit::HitOptions { type_path_only: false, area_type_interior: true, ..cx.hit_options() };
+        let h = hit_test(cx.doc, p, opt)?;
         let Some(NodeKind::Text(t)) = cx.doc.node(h.leaf).map(|n| &n.kind) else { return None };
         let lay = self.layout(t);
         let byte = vectorcraft_text::hit_byte(&lay, t.xf.inverse() * p);
+        let same_story = self.editing.is_some_and(|e| cx.doc.story_of(e).contains(&h.leaf));
+        if !same_story {
+            let fonts = missing::unavailable_fonts(cx.doc, h.leaf);
+            if !fonts.0.is_empty() {
+                let token = next_edit_session();
+                self.pending_edit = Some(PendingEdit { token, revision: cx.revision, id: h.leaf, byte, accepted: false });
+                self.clicks = (None, 0);
+                return Some(vec![Action::Dialog(MISSING_FONT_EDIT.into(), missing::question(token, h.leaf, &fonts))]);
+            }
+        }
+        Some(self.begin_edit(cx, h.leaf, byte, p))
+    }
+
+    /// End the previous edit and edit type `id` with the caret at `byte` (clicked at `p`), selecting
+    /// it → the actions.
+    fn begin_edit(&mut self, cx: &ToolContext, id: NodeId, byte: usize, p: Point) -> Vec<Action> {
         let mut out = self.finish(cx);
-        self.start_editing(h.leaf, byte);
+        self.start_editing(id, byte);
         self.remember(cx);
         self.clicks = (Some(p), 1);
-        out.push(Action::Exec("select.set".into(), json!({"ids": [h.leaf.0]})));
-        Some(out)
+        out.push(Action::Exec("select.set".into(), json!({"ids": [id.0]})));
+        out
+    }
+
+    /// The answer to the [`MISSING_FONT_EDIT`] question whose token is `token`: OK (`ok`) lets the
+    /// next [`Tool::poll`] start the edit, Cancel forgets it. An answer to another question is
+    /// ignored.
+    fn answer_edit(&mut self, token: u64, ok: bool) {
+        let Some(e) = self.pending_edit.as_mut().filter(|e| e.token == token) else { return };
+        if ok {
+            e.accepted = true;
+        } else {
+            self.pending_edit = None;
+        }
+    }
+
+    /// Start the edit OK accepted: the caret goes where the type was clicked. Nothing starts when
+    /// the document changed since the question, or the type is gone.
+    fn resume_edit(&mut self, cx: &ToolContext) -> Vec<Action> {
+        let Some(e) = self.pending_edit.take_if(|e| e.accepted) else { return vec![] };
+        if e.revision != cx.revision {
+            return vec![];
+        }
+        let Some(t) = Self::text(cx, e.id) else { return vec![] };
+        let text = t.plain_text();
+        let mut byte = e.byte.min(text.len());
+        while !text.is_char_boundary(byte) {
+            byte -= 1;
+        }
+        let out = self.begin_edit(cx, e.id, byte, Point::ZERO);
+        self.clicks = (None, 0);
+        out
     }
 
     /// The button released after a press at `start` (new type goes at `at`). While type is being
@@ -660,18 +905,17 @@ impl TypeTool {
         if was_editing && area.is_none() {
             return out;
         }
-        // Area Type / Type on a Path: click a path.
-        if mode != Mode::Type && drag.is_none() {
-            let on_path = mode == Mode::OnPath;
-            if let Some(pid) = Self::path_at(cx, start, !on_path) {
-                let mode = if on_path { "onPath" } else { "area" };
-                out.push(Action::Exec(
-                    "text.createInPath".into(),
-                    json!({"path": pid.0, "mode": mode, "text": "", "at": [start.x, start.y], "vertical": vertical, "placeholder": cx.placeholder_text}),
-                ));
-                out.push(Action::Notify("text.editNew".into()));
-                return out;
-            }
+        // A click on a path: type in it or along it.
+        if drag.is_none()
+            && let Some((pid, on_path)) = Self::in_path(cx, start, mode)
+        {
+            let mode = if on_path { "onPath" } else { "area" };
+            out.push(Action::Exec(
+                "text.createInPath".into(),
+                json!({"path": pid.0, "mode": mode, "text": "", "at": [start.x, start.y], "vertical": vertical, "placeholder": cx.placeholder_text}),
+            ));
+            out.push(Action::Notify("text.editNew".into()));
+            return out;
         }
         let mut params = match area {
             Some(r) => {
@@ -710,7 +954,6 @@ impl TypeTool {
         let fresh = self.typing.is_none();
         if fresh {
             out.push(Action::Begin("Typing".into()));
-            self.typing_ended = false;
         }
         let len = match &self.typing {
             Some(ty) => edit::runs_len(&ty.cur),
@@ -736,7 +979,7 @@ impl TypeTool {
             p.range.end = shift(p.range.end.min(len));
         }
         self.goal_x = None;
-        let ty = self.typing.get_or_insert_with(|| Typing { base: t.runs.clone(), cur: t.runs.clone(), lo: usize::MAX });
+        let ty = self.typing.get_or_insert_with(|| Typing { base: t.runs.clone(), cur: t.runs.clone(), lo: usize::MAX, clear: vec![] });
         // Delete from the end so earlier offsets stay valid; each call floors to a char boundary
         // and the one Preview below still makes the whole session one undo step.
         for &(a, b) in sorted.iter().rev() {
@@ -749,10 +992,20 @@ impl TypeTool {
         let (p, s) = common_affixes(&base, &cur, ty.lo);
         let runs = edit::slice_runs(&ty.cur, p, cur.len() - s);
         let runs = if runs.is_empty() { json!([]) } else { serde_json::to_value(&runs).unwrap_or(json!([])) };
-        out.push(Action::Preview("text.editRange".into(), json!({"id": id.0, "start": p, "end": base.len() - s, "runs": runs})));
+        out.push(Action::Preview("text.editRange".into(), edit_range_params(id, p, base.len() - s, runs, &ty.clear)));
         self.note_edit(fresh, id, (&base, base.len() - s), (&cur, cur.len() - s));
         out
     }
+}
+
+/// The params of a typing session's `text.editRange` preview: bytes `start..end` of `id` become
+/// `runs`, and the text of the frames in `clear` goes.
+fn edit_range_params(id: NodeId, start: usize, end: usize, runs: Value, clear: &[NodeId]) -> Value {
+    let mut p = json!({"id": id.0, "start": start, "end": end, "runs": runs});
+    if !clear.is_empty() {
+        p["clear"] = json!(clear.iter().map(|f| f.0).collect::<Vec<_>>());
+    }
+    p
 }
 
 #[cfg(test)]

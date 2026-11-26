@@ -1,4 +1,4 @@
-//! The command line, as clap types (RFC-0012). Values are parsed into their types here, so a bad
+//! The command line, as clap types (RFC-0018). Values are parsed into their types here, so a bad
 //! one is a usage error naming its flag (exit 2) and the handlers never see it. A flag a
 //! subcommand doesn't take is a usage error too, so a typo such as `--artbord` can't be silently
 //! ignored, and so is a repeated one (`--scale 1 --scale 2`) where repeating means nothing. A
@@ -13,8 +13,15 @@ use serde_json::Value;
 
 /// vectorcraft-cli: VectorCraft automation
 #[derive(Parser)]
-#[command(name = "vectorcraft-cli", version, arg_required_else_help = true)]
+#[command(name = "vectorcraft-cli", version, propagate_version = true, arg_required_else_help = true)]
 pub(crate) struct Cli {
+    /// Run any subcommand without plug-ins
+    ///
+    /// None loads or runs, and plug-in commands report that Safe Mode is on. Plug-ins stay
+    /// installed. `--safe-mode mcp` serves a headless session and does not take --connect. It goes
+    /// before the subcommand.
+    #[arg(long)]
+    pub(crate) safe_mode: bool,
     #[command(subcommand)]
     pub(crate) command: Command,
 }
@@ -41,10 +48,21 @@ pub(crate) enum Command {
 /// links followed; each may be given more than once, a path inside any of its folders being
 /// allowed, and a kind left out grants none of its access. They imply --headless: a running app
 /// enforces its own (`vectorcraft --control PORT --automation-read-root DIR …`).
+///
+/// --allow-plugin-grants lets plugin.install's grant and allowHeavy take effect in this session,
+/// so whoever sends the commands can give a plug-in the permissions it lists, and a heavy budget,
+/// with nobody approving them. Without it they are refused, and a plug-in that lists permissions
+/// installs only when its hash is already recorded in grants.json, by a person's approval in the
+/// desktop app or by a grant accepted under this flag. A grant accepted under this flag stays
+/// recorded and counts as approved in later sessions. It implies --headless. It can't be used
+/// with --automation-read-root or --automation-write-root: a server confined to folders has no
+/// plug-in store, so it reads no grants.json, and a plug-in that lists permissions or asks for a
+/// heavy budget does not install there. With VECTORCRAFT_NO_PREFS set there is no store either,
+/// and a grant accepted under this flag lasts for that session only.
 #[derive(Args)]
 pub(crate) struct McpArgs {
     /// Connect to the app listening at ADDR, failing if it isn't there
-    #[arg(long, value_name = "ADDR", conflicts_with_all = ["headless", "automation_read_root", "automation_write_root"])]
+    #[arg(long, value_name = "ADDR", conflicts_with_all = ["headless", "automation_read_root", "automation_write_root", "allow_plugin_grants"])]
     pub(crate) connect: Option<String>,
     /// Run an in-process session instead of connecting to the app
     #[arg(long)]
@@ -55,19 +73,27 @@ pub(crate) struct McpArgs {
     /// A folder the session may write to; repeat for several
     #[arg(long, value_name = "DIR", action = ArgAction::Append)]
     pub(crate) automation_write_root: Vec<String>,
+    /// Let plugin.install's grant and allowHeavy take effect, with nobody approving them
+    #[arg(long, conflicts_with_all = ["automation_read_root", "automation_write_root"])]
+    pub(crate) allow_plugin_grants: bool,
 }
 
 /// Headless batch: open a file or start a new document, run commands in order, export
 ///
 /// Opens --in FILE (any readable format) or starts a new document, runs the steps in the order
 /// given, and exports each --export FILE in the format its extension picks (see Writable formats;
-/// a .ait FILE is a template, written as file.saveAsTemplate writes it). Prints one JSON result
-/// per step.
+/// a .ait FILE is a template, written as file.saveAsTemplate writes it). Raster exports use the
+/// document's raster effects resolution unless --scale (pixels per point) or --ppi (pixels per
+/// inch, wins over --scale) is given; other formats leave them out. Prints one JSON result per
+/// step.
 ///
 /// --commands reads steps from FILE, or from standard input for -, where it stands among the --cmd
 /// and --export steps: a JSON array of {"command": ID, "params": {...}} (or "id" for "command"),
 /// or one such object per line (JSON Lines), at most 64 MiB and 100000 steps. Errors name the step,
 /// counting from 0 as "$N" references do.
+///
+/// --allow-plugin-grants lets plugin.install's grant and allowHeavy take effect in this run, as for
+/// mcp.
 #[derive(Args)]
 pub(crate) struct RunArgs {
     /// The document to open first (any readable format)
@@ -85,9 +111,16 @@ pub(crate) struct RunArgs {
     /// Export the document to FILE, in the format its extension picks; repeat for several
     #[arg(short = 'o', long, value_name = "FILE", action = ArgAction::Append)]
     pub(crate) export: Vec<String>,
-    /// Size raster exports, in pixels per point (default 1); other formats leave it out
-    #[arg(short = 's', long, value_name = "N", default_value_t = 1.0, value_parser = positive, allow_negative_numbers = true)]
-    pub(crate) scale: f64,
+    /// Size raster exports, in pixels per point (default: the document's raster effects
+    /// resolution); other formats leave it out
+    #[arg(short = 's', long, value_name = "N", value_parser = positive, allow_negative_numbers = true)]
+    pub(crate) scale: Option<f64>,
+    /// Size raster exports, in pixels per inch; wins over --scale
+    #[arg(long, value_name = "N", value_parser = positive, allow_negative_numbers = true)]
+    pub(crate) ppi: Option<f64>,
+    /// Let plugin.install's grant and allowHeavy take effect, with nobody approving them
+    #[arg(long)]
+    pub(crate) allow_plugin_grants: bool,
     /// `--cmd`, `--params`, `--commands` and `--export` in command-line order, set by [`parse`].
     #[arg(skip)]
     pub(crate) items: Vec<RunItem>,
@@ -103,8 +136,9 @@ pub(crate) enum RunItem {
 
 /// Open IN and export OUT in the format its extension picks
 ///
-/// IN is any readable format (see Readable formats) and OUT any writable one. --scale sizes a
-/// raster OUT (pixels per point, default 1); other formats leave it out. --artboard is 0-based,
+/// IN is any readable format (see Readable formats) and OUT any writable one. Raster resolution:
+/// --ppi, else 72 times --scale, else the document's raster effects resolution; other formats
+/// leave them out. --artboard is 0-based,
 /// --range 1-based ("1-3,5"); a PDF gets every artboard unless one of them is given, EPS the
 /// bounds of the art, the other formats the first artboard. A .ait OUT is a template of every
 /// artboard, written as file.saveAsTemplate writes it (not with --artboard or --range).
@@ -114,7 +148,11 @@ pub(crate) enum RunItem {
 /// precision (1–7, default 3). OUT may not be IN when reading IN left things out (hidden text, art
 /// or layers it could not read; the notes say which) unless --replace-lossy is given.
 /// --editing-data opens a .ai or an EPS with editing data from its editing copy even where that
-/// draws differently from its PDF part or page (which can be older), as long as it can be read. A
+/// draws differently from its PDF part or page (which can be older), as long as it can be read.
+/// --legacy-name-encoding reads the names in a .ai's or an EPS's editing data that aren't UTF-8
+/// (layers, objects, artboards, colors, gradients, patterns, graphic styles, swatches, brushes,
+/// symbols, variables and data sets, and data sets' text values) in windows-1252 (the default),
+/// macintosh, windows-949, shift_jis, gbk or big5. A
 /// PDF OUT omits the embedded native document unless --preserve-editing is given (the app's Save As
 /// PDF still defaults to keeping it). With --preserve-editing, when the attachment is written the
 /// result's warnings say so (it is left out, with its own warning, for --artboard or a --range
@@ -135,9 +173,12 @@ pub(crate) struct ConvertArgs {
     /// The file to write; its extension picks the format
     #[arg(value_name = "OUT")]
     pub(crate) output: String,
-    /// Size a raster OUT, in pixels per point (default 1)
-    #[arg(short = 's', long, value_name = "N", default_value_t = 1.0, value_parser = positive, allow_negative_numbers = true)]
-    pub(crate) scale: f64,
+    /// Size a raster OUT, in pixels per point (default: the document's raster effects resolution)
+    #[arg(short = 's', long, value_name = "N", value_parser = positive, allow_negative_numbers = true)]
+    pub(crate) scale: Option<f64>,
+    /// Size a raster OUT, in pixels per inch; wins over --scale
+    #[arg(long, value_name = "N", value_parser = positive, allow_negative_numbers = true)]
+    pub(crate) ppi: Option<f64>,
     /// Export only this artboard (0-based)
     #[arg(short = 'a', long, value_name = "I", conflicts_with = "range")]
     pub(crate) artboard: Option<u64>,
@@ -156,6 +197,9 @@ pub(crate) struct ConvertArgs {
     /// Open a .ai or EPS from its editing copy
     #[arg(long)]
     pub(crate) editing_data: bool,
+    /// Read the names of a .ai or EPS that aren't UTF-8 in this encoding (default windows-1252)
+    #[arg(long, value_name = "ENC")]
+    pub(crate) legacy_name_encoding: Option<String>,
     /// Embed the native document in a PDF OUT
     #[arg(long)]
     pub(crate) preserve_editing: bool,
@@ -254,6 +298,11 @@ pub(crate) struct BenchArgs {
 /// Checks the budgets (render, pan, hit test, save/load, SVG, Pathfinder, handle and segment drags)
 /// on a synthetic N-path document. Exits non-zero if a budget is exceeded, unless the report says
 /// the machine is busy.
+///
+/// --native-io instead measures the application's native save/open commands (one warmup, five
+/// samples, no disk I/O), including preview, PDF, compression and API base64 costs. It reports the
+/// default and explicit PDF opt-out, with and without preview/compression; --artboards repeats the
+/// same artwork on 1 to 4 overlapping artboards. This mode allows at most 50000 paths.
 #[derive(Args)]
 pub(crate) struct PerfArgs {
     /// Paths in the synthetic document (default 50000)
@@ -261,8 +310,14 @@ pub(crate) struct PerfArgs {
     pub(crate) paths: usize,
     /// Also time work with no budget yet and print memory use (the working set on Windows), with
     /// the peak so far on Windows and Linux
-    #[arg(long)]
+    #[arg(long, conflicts_with = "native_io")]
     pub(crate) deep: bool,
+    /// Measure the native save and open commands instead
+    #[arg(long)]
+    pub(crate) native_io: bool,
+    /// Overlapping artboards for --native-io, 1 to 4
+    #[arg(long, value_name = "N", requires = "native_io", value_parser = clap::value_parser!(u8).range(1..=4))]
+    pub(crate) artboards: Option<u8>,
 }
 
 /// A frame size in pixels.
@@ -320,6 +375,12 @@ enum UsageError {
     StdinTwice,
     #[error("a .ait template holds every artboard: --artboard and --range don't apply")]
     TemplateArtboards,
+    #[error("--native-io allows at most 50000 paths")]
+    NativeIoPaths,
+    #[error(
+        "--safe-mode runs a headless session without plug-ins; a running app loads its own: start it with `vectorcraft --safe-mode --control <port>`"
+    )]
+    SafeModeConnect,
 }
 
 impl UsageError {
@@ -327,11 +388,19 @@ impl UsageError {
         let kind = match self {
             Self::ParamsWithoutCmd => ErrorKind::MissingRequiredArgument,
             Self::ParamsTwice => ErrorKind::ArgumentConflict,
-            Self::StdinTwice | Self::TemplateArtboards => ErrorKind::ArgumentConflict,
+            Self::StdinTwice | Self::TemplateArtboards | Self::NativeIoPaths | Self::SafeModeConnect => ErrorKind::ArgumentConflict,
         };
         cmd.error(kind, self)
     }
 }
+
+const EXIT_STATUS: &str = "\
+Exit status:
+  0  success
+  1  a command failed
+  2  usage error
+
+A process ended by a signal exits 128 + the signal number (130 for Ctrl-C), as in the shell.";
 
 /// The command line's clap definition, also for generating completions and man pages
 /// (`examples/man-and-completions.rs`). The help ends with the formats the commands read and write.
@@ -341,7 +410,7 @@ pub fn command() -> clap::Command {
     let writable = format!("Writable formats: .{}", export_extensions().join(", ."));
     let both = format!("{readable}\n{writable}");
     Cli::command()
-        .after_help(both.clone())
+        .after_help(format!("{both}\n\n{EXIT_STATUS}"))
         .mut_subcommand("run", |c| c.after_help(both.clone()))
         .mut_subcommand("convert", |c| c.after_help(both))
         .mut_subcommand("info", |c| c.after_help(readable.clone()))
@@ -397,6 +466,22 @@ pub(crate) fn parse(args: &[OsString]) -> Result<Cli, clap::Error> {
                 && let Some(sub) = cmd.find_subcommand_mut(name)
             {
                 return Err(UsageError::TemplateArtboards.into_clap(sub));
+            }
+        }
+        (Command::Mcp(m), Some((name, _))) => {
+            if cli.safe_mode
+                && m.connect.is_some()
+                && let Some(sub) = cmd.find_subcommand_mut(name)
+            {
+                return Err(UsageError::SafeModeConnect.into_clap(sub));
+            }
+        }
+        (Command::Perf(p), Some((name, _))) => {
+            if p.native_io
+                && p.paths > 50_000
+                && let Some(sub) = cmd.find_subcommand_mut(name)
+            {
+                return Err(UsageError::NativeIoPaths.into_clap(sub));
             }
         }
         _ => {}
@@ -487,17 +572,17 @@ mod tests {
         assert_eq!(usage_error(&["run", "--cmd", "--export", "a.svg"]), ErrorKind::InvalidValue);
         assert_eq!(usage_error(&["mcp", "--connect", "--headless"]), ErrorKind::InvalidValue);
         // `=` carries a value that starts with `-`.
-        let Ok(Cli { command: Command::Run(r) }) = try_parse(&["run", "--cmd=-x"]) else { panic!("did not parse") };
+        let Ok(Cli { command: Command::Run(r), .. }) = try_parse(&["run", "--cmd=-x"]) else { panic!("did not parse") };
         assert!(matches!(&r.items[..], [RunItem::Cmd(id)] if id == "-x"));
     }
 
     #[test]
     fn values_may_go_with_equals_or_apart_and_a_double_dash_ends_the_flags() {
-        let Ok(Cli { command: Command::Convert(c) }) = try_parse(&["convert", "--scale=2", "in.svg", "-a", "3", "--", "-out.png"]) else {
+        let Ok(Cli { command: Command::Convert(c), .. }) = try_parse(&["convert", "--scale=2", "in.svg", "-a", "3", "--", "-out.png"]) else {
             panic!("did not parse")
         };
-        assert_eq!((c.scale, c.artboard, c.input.as_str(), c.output.as_str()), (2.0, Some(3), "in.svg", "-out.png"));
-        let Ok(Cli { command: Command::Bench(b) }) = try_parse(&["bench", "--size=640x480", "f.svg"]) else { panic!("did not parse") };
+        assert_eq!((c.scale, c.artboard, c.input.as_str(), c.output.as_str()), (Some(2.0), Some(3), "in.svg", "-out.png"));
+        let Ok(Cli { command: Command::Bench(b), .. }) = try_parse(&["bench", "--size=640x480", "f.svg"]) else { panic!("did not parse") };
         assert_eq!(b.size, Size { width: 640, height: 480 });
         assert_eq!(b.iters, 5);
     }
@@ -507,7 +592,7 @@ mod tests {
         assert_eq!(usage_error(&["mcp", "--connect", "a:1", "--headless"]), ErrorKind::ArgumentConflict);
         assert_eq!(usage_error(&["mcp", "--connect", "a:1", "--automation-read-root", "d"]), ErrorKind::ArgumentConflict);
         assert_eq!(usage_error(&["mcp", "--connect=a:1", "--automation-write-root=d"]), ErrorKind::ArgumentConflict);
-        let Ok(Cli { command: Command::Mcp(m) }) =
+        let Ok(Cli { command: Command::Mcp(m), .. }) =
             try_parse(&["mcp", "--headless", "--automation-read-root=a", "--automation-read-root", "b", "--automation-write-root", "c"])
         else {
             panic!("did not parse")
@@ -518,7 +603,7 @@ mod tests {
     #[test]
     fn run_steps_keep_the_order_of_the_command_line() {
         let args = ["run", "--cmd", "a", "--params", "{}", "--export", "x.svg", "--commands", "f.json", "-c", "b", "-o", "y.png"];
-        let Ok(Cli { command: Command::Run(r) }) = try_parse(&args) else { panic!("did not parse") };
+        let Ok(Cli { command: Command::Run(r), .. }) = try_parse(&args) else { panic!("did not parse") };
         let kinds: Vec<&str> = r
             .items
             .iter()
@@ -542,6 +627,53 @@ mod tests {
         assert_eq!(usage_error(&["convert", "a.svg", "b.ait", "--artboard", "0"]), ErrorKind::ArgumentConflict);
         assert_eq!(usage_error(&["convert", "a.svg", "b.ait", "--range", "1"]), ErrorKind::ArgumentConflict);
         assert!(try_parse(&["run"]).is_ok());
+    }
+
+    #[test]
+    fn the_native_io_modes_of_perf_are_checked_at_parse_time() {
+        assert_eq!(usage_error(&["perf", "--native-io", "--deep"]), ErrorKind::ArgumentConflict);
+        assert_eq!(usage_error(&["perf", "--native-io", "--paths", "50001"]), ErrorKind::ArgumentConflict);
+        assert_eq!(usage_error(&["perf", "--artboards", "2"]), ErrorKind::MissingRequiredArgument);
+        for bad in ["0", "5", "x"] {
+            assert_eq!(usage_error(&["perf", "--native-io", "--artboards", bad]), ErrorKind::ValueValidation, "--artboards {bad}");
+        }
+        let Ok(Cli { command: Command::Perf(p), .. }) = try_parse(&["perf", "--native-io", "--artboards", "4", "--paths", "50000"]) else {
+            panic!("did not parse")
+        };
+        assert_eq!((p.native_io, p.artboards, p.paths), (true, Some(4), 50_000));
+    }
+
+    #[test]
+    fn plug_in_and_resolution_flags() {
+        for bad in ["0", "-150", "NaN", "inf", "high"] {
+            assert_eq!(usage_error(&["run", "--ppi", bad]), ErrorKind::ValueValidation, "run --ppi {bad}");
+            assert_eq!(usage_error(&["convert", "a.svg", "b.png", "--ppi", bad]), ErrorKind::ValueValidation, "convert --ppi {bad}");
+        }
+        let Ok(Cli { command: Command::Convert(c), .. }) =
+            try_parse(&["convert", "a.ai", "b.png", "--ppi", "150", "--legacy-name-encoding", "shift_jis"])
+        else {
+            panic!("did not parse")
+        };
+        assert_eq!((c.ppi, c.scale, c.legacy_name_encoding.as_deref()), (Some(150.0), None, Some("shift_jis")));
+        assert_eq!(usage_error(&["mcp", "--allow-plugin-grants", "--connect", "a:1"]), ErrorKind::ArgumentConflict);
+        assert_eq!(usage_error(&["mcp", "--allow-plugin-grants", "--automation-read-root", "d"]), ErrorKind::ArgumentConflict);
+        let Ok(Cli { command: Command::Run(r), .. }) = try_parse(&["run", "--allow-plugin-grants"]) else { panic!("did not parse") };
+        assert!(r.allow_plugin_grants);
+        // --safe-mode goes before the subcommand, and a running app loads its own plug-ins.
+        let Ok(Cli { safe_mode, command: Command::Mcp(_) }) = try_parse(&["--safe-mode", "mcp"]) else { panic!("did not parse") };
+        assert!(safe_mode);
+        assert_eq!(usage_error(&["--safe-mode", "mcp", "--connect", "a:1"]), ErrorKind::ArgumentConflict);
+        assert_eq!(usage_error(&["info", "a.svg", "--safe-mode"]), ErrorKind::UnknownArgument);
+    }
+
+    #[test]
+    fn every_subcommand_takes_version() {
+        for sub in ["mcp", "run", "commands", "convert", "info", "bench", "perf"] {
+            for flag in ["--version", "-V"] {
+                let e = try_parse(&[sub, flag]).err().map(|e| (e.kind(), e.use_stderr(), e.exit_code()));
+                assert_eq!(e, Some((ErrorKind::DisplayVersion, false, 0)), "{sub} {flag}");
+            }
+        }
     }
 
     #[test]

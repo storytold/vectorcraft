@@ -422,7 +422,7 @@ impl Tool for PuppetWarpTool {
                 }
                 None => vec![],
             },
-            PointerKind::DoubleClick => vec![],
+            PointerKind::DoubleClick | PointerKind::TripleClick => vec![],
         }
     }
     /// Delete/Backspace remove the selected pins; with none selected they are the shortcut's
@@ -513,6 +513,15 @@ impl Tool for PuppetWarpTool {
                 self.selected = if value.as_bool() == Some(false) { vec![] } else { (0..n).collect() };
             }
             _ => {}
+        }
+    }
+    /// `showMesh`, `selectAllPins` and `expand`; `pins` and `selected` are read only.
+    fn check_option(&self, key: &str, value: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        match key {
+            "showMesh" | "selectAllPins" => c::boolean(key, value),
+            "expand" => c::number(key, value, 0.0, 1000.0),
+            _ => Err(c::unknown(key)),
         }
     }
     fn busy(&self) -> bool {

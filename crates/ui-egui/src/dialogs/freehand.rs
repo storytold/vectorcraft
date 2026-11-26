@@ -3,36 +3,57 @@
 //! preferences. OK sets them with `tool.setOption {tool, values}`. The Pencil also has `liveFit`
 //! (Live curve fitting, on: its preview fits the stroke while it is drawn).
 //!
-//! Fields: `tool`; `fidelity` (points; Pencil, Paintbrush, Smooth and Blob Brush), `fill` (Pencil and
+//! Fields: `tool`; `fidelity` (screen pixels for the Pencil, Paintbrush and Smooth, points for the
+//! Blob Brush), `smoothness` (percent, 0 to 100; Smooth), `fill` (Pencil and
 //! Paintbrush), `keepSelected` (Pencil, Paintbrush and Blob Brush), `mergeOnlySelection` (Blob
 //! Brush), `closeWithin` and `editWithin` (screen pixels, 0 turns it off; Pencil and Paintbrush),
-//! `angle` (degrees) and `roundness` (percent; Eraser), `livePreview` (Pencil: the stroke shows
+//! `angle` (degrees) and `roundness` (percent; Blob Brush and Eraser), `livePreview` (Pencil: the stroke shows
 //! with its fill and stroke while it is drawn, or as a thin line until the release), `size`
-//! (points; Blob Brush and Eraser), and `sizeMode` (`fixed` or `pressure`) and `sizeVariation`
-//! (points; Blob Brush and Eraser: with Pressure the tip is Size − Variation wide at the lightest
-//! pen pressure and Size + Variation at the heaviest).
+//! (points; Blob Brush and Eraser), and `sizeMode` and `sizeVariation` (points; Blob Brush and
+//! Eraser: with Pressure the tip is Size − Variation wide at the lightest pen pressure and Size +
+//! Variation at the heaviest). The Blob Brush's `sizeMode` is `fixed`, `pressure` or `stylusWheel`. The Eraser's
+//! Angle, Roundness and Size each have a menu (`angleMode`, `roundnessMode`, `sizeMode`: `fixed`,
+//! `random`, `pressure`, `tilt`, `bearing` or `rotation`) before the field and a Variation field
+//! under it (`angleVariation` in degrees, `roundnessVariation` in percent, `sizeVariation`),
+//! greyed while the menu is Fixed.
 
+// PLAN: the imports below assume `craft_ui` paths as the framework's own code uses them; `ui::brush_settings`
+// of the draw crate is where `TipEllipse` and `TipAngle` live.
+use craft::draw::ui::brush_settings::{TipAngle, TipEllipse};
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
+use craft::ui::display::{Picture, PictureSize};
+use craft::ui::layout_components::Row;
+use craft::ui::list::{ThumbAspect, ThumbSize};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::primitives::{ContentPainterCx, PaintShape};
+use craft::ui::runtime::env::UnitKind;
+use craft::ui::text::NumberField;
+use craft::ui::value_drag::{Slider, SliderScale};
+use egui::{Response, Ui};
 use serde_json::{Map, Value, json};
+use vectorcraft_brush::Variation;
 
-use super::document_setup::check;
-use super::{DialogSpec, form, run_and_close};
-use crate::state::Dialog;
-use crate::theme::Tokens;
-use crate::{VectorcraftApp, widgets};
+use super::host::open_held;
+use super::variation::variation_param;
+use super::{form, tool_options};
+use crate::VectorcraftApp;
 
 /// The dialog kind of the freehand tools' Tool Options.
 pub const KIND: &str = "freehandOptions";
-
-pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm, min_width: CONTENT_W, ..DialogSpec::FORM };
 
 /// The tools the dialog serves.
 pub const TOOLS: [&str; 5] = ["pencil", "paintbrush", "smooth", "blobBrush", "eraser"];
 
 /// The options the dialog edits, in the order it shows them (a tool has those it reports).
-const KEYS: [&str; 14] = [
+const KEYS: [&str; 19] = [
     "fidelity",
+    "smoothness",
     "angle",
+    "angleMode",
+    "angleVariation",
     "roundness",
+    "roundnessMode",
+    "roundnessVariation",
     "size",
     "sizeMode",
     "sizeVariation",
@@ -46,24 +67,13 @@ const KEYS: [&str; 14] = [
     "liveFit",
 ];
 
-/// Width of the dialog's rows: every number field ends at its right edge.
-const CONTENT_W: f32 = 330.0;
-
-/// Width of the number fields, Fidelity's among them.
-const FIELD_W: f32 = 72.0;
-
-/// Width of the label column of a row with a number field: what the field leaves of the row. The
-/// Fidelity slider takes the same width under its label.
-fn label_w(ui: &egui::Ui) -> f32 {
-    CONTENT_W - FIELD_W - ui.spacing().item_spacing.x
-}
-
-/// The top of the Fidelity slider (points); it starts at the lowest Fidelity the tool takes, and
-/// the field takes up to 100.
+/// The top of the Fidelity slider, in the tool's unit (screen pixels for the Pencil, Paintbrush
+/// and Smooth, points for the Blob Brush); it starts at the lowest Fidelity the tool takes,
+/// and the field takes up to 100.
 const FIDELITY_MAX: f64 = 20.0;
 
-/// Fidelity `v` stepped `n` steps by the slider's and the field's keys: an arrow steps hundredths up to 0.1 pt,
-/// tenths up to 1 pt and whole points above (a step down from 0.1 or 1 takes the finer step below
+/// Fidelity `v` stepped `n` steps by the slider's and the field's keys: an arrow steps hundredths up to 0.1,
+/// tenths up to 1 and whole units above, in the tool's unit (a step down from 0.1 or 1 takes the finer step below
 /// it); ten steps at once (Shift with an arrow, Page Up/Down) multiply or divide by ten, so they go
 /// 0.01 → 0.1 → 1 → 10.
 fn fidelity_step(v: f64, n: f64) -> f64 {
@@ -93,26 +103,183 @@ fn fidelity_step(v: f64, n: f64) -> f64 {
     v
 }
 
-/// Where Fidelity `v` sits on a slider over `(min, max)`, from 0 to 1. The rail is logarithmic, so
-/// the low values, where the stroke is followed closely, get as much of it as the high ones
-/// (0.01–1 pt takes most of a 0.01–20 rail).
-fn fidelity_at(v: f64, (min, max): (f64, f64)) -> f32 {
-    if !(v.is_finite() && min > 0.0 && max > min) {
-        return 0.0;
-    }
-    ((v.clamp(min, max) / min).ln() / (max / min).ln()) as f32
+/// The unit of tool `tool`'s Fidelity. The Pencil's, the Paintbrush's and the Smooth tool's
+/// Fidelity is on screen, the same at any zoom (#5729); the Blob Brush's is in points.
+fn fidelity_unit(tool: &str) -> UnitKind {
+    if matches!(tool, "pencil" | "paintbrush" | "smooth") { UnitKind::Pixels } else { UnitKind::Points }
 }
 
-/// The Fidelity at `x` (0 to 1) on a slider over `(min, max)`: hundredths below 1 pt, tenths above.
-fn fidelity_from(x: f32, (min, max): (f64, f64)) -> f64 {
-    let v = min * (max / min).powf(f64::from(x.clamp(0.0, 1.0)));
+/// Fidelity `v` as the slider and the field hold it: hundredths below 1, tenths from 1.
+fn fidelity_round(v: f64) -> f64 {
     let step = if v < 1.0 { 100.0 } else { 10.0 };
-    ((v * step).round() / step).clamp(min, max)
+    (v * step).round() / step
 }
 
-fn heading(d: &Dialog) -> String {
-    let label = vectorcraft_tools::tool_info(&d.str("tool")).map_or("", |t| t.label);
-    crate::i18n::fmt(tl!("{tool} Options"), &[("tool", tl!(label))])
+/// The Fidelity field of tool `tool`, showing `v` to two decimals from the tool's lowest Fidelity to
+/// 100 and stepping by [`fidelity_step`], named by the label drawn just before it. Returns the value
+/// typed or stepped to. The Contextual Task Bar shows the Smooth tool's.
+pub(crate) fn fidelity_field(ui: &mut Ui, id: &str, v: f64, tool: &str) -> Option<f64> {
+    let min = vectorcraft_tools::draw2::min_fidelity(tool);
+    NumberField::new(tl!("Fidelity"), Bind::given(Some(v)))
+        .id_salt(id.to_owned())
+        .range(min..=100.0)
+        .unit_kind(fidelity_unit(tool))
+        .fixed_decimals(2)
+        .stepper(|v, dir, scale| fidelity_step(v, f64::from(dir) * scale))
+        .show(ui)
+        .edit
+        .value()
+        .and_then(|typed| typed.to_owned())
+}
+
+/// The Fidelity row: a logarithmic slider from the tool's lowest Fidelity to [`FIDELITY_MAX`] with the field at its
+/// end, and Accurate and Smooth under the slider's ends.
+fn fidelity_row(ui: &mut Ui, fields: &mut DialogFields, tool: &str) -> Response {
+    let min = vectorcraft_tools::draw2::min_fidelity(tool);
+    let v = fields.number("fidelity").unwrap_or(1.5);
+    let mut set = None;
+    let shown = Row::new().show(ui, |ui, _| {
+        let slid = Slider::new(Bind::given(v), min..=FIDELITY_MAX)
+            .scale(SliderScale::Log)
+            .marks_labelled([(min, tl!("Accurate")), (FIDELITY_MAX, tl!("Smooth"))])
+            .label(tl!("Fidelity"))
+            .id_salt("fidelity-slider")
+            .show(ui);
+        if let Some(x) = slid.value() {
+            set = Some(fidelity_round(*x).clamp(min, FIDELITY_MAX));
+        }
+        if let Some(x) = fidelity_field(ui, "fidelity-field", v, tool) {
+            set = Some(x);
+        }
+    });
+    if let Some(x) = set.filter(|x| *x != v) {
+        fields.set("fidelity", FieldValue::Number(x));
+    }
+    shown.output
+}
+
+/// The tip row: the Angle and Roundness widget beside three dabs of the tip, the middle one darker. It edits the
+/// `angle` and `roundness` the rows above it hold; `least` is the lowest roundness the tool's tip takes.
+fn tip_row(ui: &mut Ui, fields: &mut DialogFields, least: f64) -> Response {
+    let (angle, roundness) = (fields.number("angle").unwrap_or(0.0), fields.number("roundness").unwrap_or(100.0));
+    let start = TipAngle::new(angle, roundness / 100.0);
+    let mut tip = start;
+    let shown = Row::new().show(ui, |ui, _| {
+        let _ = TipEllipse::new(tl!("Tip"), Bind::bound(&mut tip)).least_roundness(least).show(ui);
+        dabs(ui, tip);
+    });
+    if tip != start {
+        fields.set("angle", FieldValue::Number(tip.degrees.round()));
+        fields.set("roundness", FieldValue::Number((tip.roundness * 100.0).round()));
+    }
+    shown.output
+}
+
+/// Three dabs of `tip`, as a stroke of it lays them down: a picture seven tip halves wide and two high, at the
+/// small sample size, each dab as long as the picture is high.
+fn dabs(ui: &mut Ui, tip: TipAngle) {
+    // Decorative: the Tip control beside it is the row's accessible control.
+    Picture::painter("", ThumbAspect::new(7, 2), move |cx, rect| paint_dabs(cx, rect, tip)).extent(PictureSize::Sample(ThumbSize::Small)).show(ui);
+}
+
+/// Paints three dabs of `tip` across `rect`, the middle one in the text color and the outer two in the muted one.
+fn paint_dabs(cx: &ContentPainterCx<'_>, rect: egui::Rect, tip: TipAngle) {
+    let style = cx.style_cx();
+    let (dim, ink) = (style.color(style.tokens.color.text.muted), style.color(style.tokens.color.text.normal));
+    let long = rect.height() / 2.0;
+    let a = tip.degrees.clamp(-180.0, 180.0).to_radians();
+    let u = egui::vec2(a.cos() as f32, -a.sin() as f32);
+    let v = egui::vec2(-u.y, u.x);
+    let short = long * (tip.roundness.clamp(0.0, 1.0) as f32).max(0.001);
+    cx.with_draw(|draw| {
+        for (i, color) in [dim, ink, dim].into_iter().enumerate() {
+            let center = egui::pos2(rect.min.x + long + i as f32 * 2.5 * long, rect.center().y);
+            let points = (0..32)
+                .map(|k| {
+                    let s = std::f32::consts::TAU * k as f32 / 32.0;
+                    center + u * (long * s.cos()) + v * (short * s.sin())
+                })
+                .collect();
+            draw.fill(&PaintShape::Polygon(points), color);
+        }
+    });
+}
+
+/// The rows of tool `tool`'s dialog: those of `present` (the option keys the tool reports), in the order the
+/// dialog shows them.
+fn params(tool: &str, present: &[&str]) -> Vec<Param> {
+    let has = |key: &str| present.contains(&key);
+    let blob = tool == "blobBrush";
+    let eraser = has("angleMode");
+    let check = |key: &'static str, label: &'static str| Param::new(key, label, ParamKind::bool(false));
+    let pixels = |key: &'static str, label: &'static str, default: f64| {
+        Param::number(key, label, default, 1.0, 0).unit(UnitKind::Pixels).bounds(Some(0.0), Some(100.0))
+    };
+    let mut rows = vec![];
+    if has("fidelity") {
+        let tool = tool.to_owned();
+        rows.push(Param::custom("fidelity", tl!("Fidelity:"), move |ui, fields, _| fidelity_row(ui, fields, &tool)));
+        rows.push(
+            Param::read_only_text(
+                "fidelityNote",
+                "",
+                tl!("A lower value follows the stroke closely; a higher one gives fewer points and smoother curves."),
+            )
+            .full_width(),
+        );
+    }
+    if has("smoothness") {
+        // The Smooth tool's Smoothness: a slider from 0% to 100% with the field at its end, in whole percent.
+        rows.push(
+            Param::new("smoothness", tl!("Smoothness:"), ParamKind::range(0.0, 100.0, 50.0, SliderScale::Linear)).decimals(0).unit(UnitKind::Percent),
+        );
+    }
+    if eraser {
+        rows.push(variation_param("angle", tl!("Angle:"), UnitKind::Degrees, 0, (-180.0, 180.0), (0.0, 180.0), &Variation::ALL));
+        rows.push(variation_param("roundness", tl!("Roundness:"), UnitKind::Percent, 0, (1.0, 100.0), (0.0, 100.0), &Variation::ALL));
+        rows.push(Param::custom("tip", "", |ui, fields, _| tip_row(ui, fields, 0.01)).full_width());
+        rows.push(variation_param("size", tl!("Size:"), UnitKind::Points, 1, (0.1, 1000.0), (0.0, 1000.0), &Variation::ALL));
+    } else {
+        if has("angle") {
+            rows.push(Param::number("angle", tl!("Angle:"), 0.0, 1.0, 0).unit(UnitKind::Degrees).bounds(Some(-180.0), Some(180.0)));
+        }
+        if has("roundness") {
+            let min = if blob { 0.0 } else { 1.0 };
+            rows.push(Param::number("roundness", tl!("Roundness:"), 100.0, 1.0, 0).unit(UnitKind::Percent).bounds(Some(min), Some(100.0)));
+        }
+        if blob {
+            rows.push(Param::custom("tip", "", |ui, fields, _| tip_row(ui, fields, 0.0)).full_width());
+        }
+        if has("sizeMode") {
+            let offered = &vectorcraft_tools::draw2::BLOB_SIZE_MODES;
+            rows.push(variation_param("size", tl!("Size:"), UnitKind::Points, 1, (0.1, 1000.0), (0.0, 1000.0), offered));
+        } else if has("size") {
+            rows.push(Param::number("size", tl!("Size:"), 10.0, 1.0, 1).unit(UnitKind::Points).bounds(Some(0.1), Some(1000.0)));
+        }
+    }
+    for (key, label) in [
+        ("fill", tl!("Fill new strokes")),
+        ("altSmooth", tl!("Alt key toggles to Smooth Tool")),
+        ("keepSelected", tl!("Keep selected")),
+        ("mergeOnlySelection", tl!("Merge only with selection")),
+    ] {
+        if has(key) {
+            rows.push(check(key, label));
+        }
+    }
+    for (key, label, default) in
+        [("closeWithin", tl!("Close paths when ends are within:"), 15.0), ("editWithin", tl!("Edit selected paths within:"), 12.0)]
+    {
+        if has(key) {
+            rows.push(pixels(key, label, default));
+        }
+    }
+    for (key, label) in [("livePreview", tl!("Live preview")), ("liveFit", tl!("Live curve fitting"))] {
+        if has(key) {
+            rows.push(check(key, label));
+        }
+    }
+    rows
 }
 
 /// Open the options of freehand tool `tool` with their current values.
@@ -121,134 +288,27 @@ pub fn open(app: &mut VectorcraftApp, tool: &str) -> Result<Value, String> {
         return Err(format!("`{tool}` isn't a freehand tool"));
     }
     let o = app.session.tool_options_of(tool);
-    let mut fields: Map<String, Value> = KEYS.iter().filter_map(|key| Some((key.to_string(), o.get(*key)?.clone()))).collect();
-    fields.insert("tool".into(), json!(tool));
-    app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
+    let present: Vec<&'static str> = KEYS.iter().copied().filter(|key| o.get(*key).is_some()).collect();
+    let mut values: Map<String, Value> = present.iter().filter_map(|key| Some((key.to_string(), o.get(*key)?.clone()))).collect();
+    values.insert("tool".into(), json!(tool));
+    let fields = form::fields_of(&params(tool, &present), &values);
+    let ctx = app.ui_ctx.clone().ok_or("no window")?;
+    let dialog = {
+        let (tool, present) = (tool.to_owned(), present.clone());
+        HostedParamDialog::new(&ctx, KIND, fields, move |fields| {
+            ParamDialog::new(KIND, tool_options::title(&tool), params(&tool, &present)).values(Bind::bound(fields))
+        })
+    };
+    let ok = {
+        let (tool, present) = (tool.to_owned(), present);
+        move |app: &mut VectorcraftApp, result: &craft::ui::patterns::form_dialogs::ParamResult| {
+            let values: Map<String, Value> =
+                form::json_of(&params(&tool, &present), &result.fields).into_iter().filter(|(key, _)| present.contains(&key.as_str())).collect();
+            tool_options::set_options(app, &tool, values)
+        }
+    };
+    open_held(app, dialog, ok).ok_or_else(|| "no window".to_string())?;
     Ok(json!({ "dialog": KIND }))
-}
-
-/// A row with a number field for `d.fields[key]` (`suffix` is its unit), kept within `range`.
-fn number(ui: &mut egui::Ui, d: &mut Dialog, (key, label): (&str, &str), suffix: &str, decimals: usize, range: (f64, f64)) {
-    let label_w = label_w(ui);
-    let v = d.f64(key, 0.0);
-    widgets::label_row(ui, label, label_w, |ui| {
-        if let Some(x) = widgets::range_field(ui, ("freehand-field", key), v, range.0..=range.1, suffix, decimals, FIELD_W) {
-            d.fields.insert(key.into(), json!(x));
-        }
-    });
-}
-
-/// Width of the Blob Brush's and the Eraser's Size mode menu.
-const MODE_W: f32 = 96.0;
-
-/// The Blob Brush's and the Eraser's Size rows: Size with its Fixed or Pressure menu before the
-/// field, then the Variation that Pressure adds and takes (greyed while Size is Fixed).
-fn blob_size(ui: &mut egui::Ui, d: &mut Dialog) {
-    const MODES: [&str; 2] = ["fixed", "pressure"];
-    let pressure = d.str("sizeMode") == "pressure";
-    let labels = ["Fixed", "Pressure"];
-    let label_w = label_w(ui) - MODE_W - ui.spacing().item_spacing.x;
-    let size = d.f64("size", 10.0);
-    widgets::label_row(ui, tl!("Size:"), label_w, |ui| {
-        if let Some(m) = widgets::dropdown(ui, "freehand-size-mode", labels[usize::from(pressure)], &labels, MODE_W).and_then(|i| MODES.get(i)) {
-            d.fields.insert("sizeMode".into(), json!(m));
-        }
-        if let Some(x) = widgets::range_field(ui, ("freehand-field", "size"), size, 0.1..=1000.0, "pt", 1, FIELD_W) {
-            d.fields.insert("size".into(), json!(x));
-        }
-    });
-    ui.add_enabled_ui(pressure, |ui| number(ui, d, ("sizeVariation", tl!("Variation:")), "pt", 1, (0.0, 1000.0)));
-}
-
-/// The Fidelity rows: the label on a line of its own, then a logarithmic slider from the tool's
-/// lowest Fidelity to [`FIDELITY_MAX`] across the row with the field at its end, both to two
-/// decimals, and Accurate and Smooth under the slider's ends.
-fn fidelity(ui: &mut egui::Ui, d: &mut Dialog) {
-    let t = Tokens::get(ui.ctx());
-    let v = d.f64("fidelity", 1.5);
-    let rail = (vectorcraft_tools::draw2::min_fidelity(&d.str("tool")), FIDELITY_MAX);
-    let rail_w = label_w(ui);
-    let mut new = None;
-    ui.label(egui::RichText::new(tl!("Fidelity:")).size(12.5).color(t.text));
-    ui.horizontal(|ui| {
-        let shown = widgets::SliderValue::field(v, rail.0..=rail.1, "pt", 2).with_step(fidelity_step);
-        let (x, _, keyed) =
-            widgets::color_slider_stepped(ui, "freehand-fidelity", tl!("Fidelity:"), Some(shown), fidelity_at(v, rail), rail_w, &|_| t.input_border);
-        new = x.map(|x| fidelity_from(x, rail)).or(keyed);
-        if let Some(x) = widgets::range_field_stepped(ui, "freehand-fidelity-field", v, rail.0..=100.0, "pt", 2, FIELD_W, fidelity_step) {
-            new = Some(x);
-        }
-    });
-    if let Some(n) = new.filter(|n| *n != v) {
-        d.fields.insert("fidelity".into(), json!(n));
-    }
-    form::slider_ends_below(ui, rail_w, (tl!("Accurate"), tl!("Smooth")));
-    ui.add_space(4.0);
-    // Wrapped to the rows' width, so the sentence doesn't widen the dialog.
-    ui.allocate_ui(egui::vec2(CONTENT_W, 0.0), |ui| {
-        ui.add(
-            egui::Label::new(
-                egui::RichText::new(tl!("A lower value follows the stroke closely; a higher one gives fewer points and smoother curves."))
-                    .size(11.5)
-                    .color(t.text_dim),
-            )
-            .wrap(),
-        );
-    });
-}
-
-fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    if d.fields.contains_key("fidelity") {
-        fidelity(ui, d);
-        ui.add_space(10.0);
-    }
-    if d.fields.contains_key("angle") {
-        number(ui, d, ("angle", tl!("Angle:")), "°", 0, (-180.0, 180.0));
-    }
-    if d.fields.contains_key("roundness") {
-        number(ui, d, ("roundness", tl!("Roundness:")), "%", 0, (1.0, 100.0));
-    }
-    if d.fields.contains_key("sizeMode") {
-        blob_size(ui, d);
-    } else if d.fields.contains_key("size") {
-        number(ui, d, ("size", tl!("Size:")), "pt", 1, (0.1, 1000.0));
-    }
-    if d.fields.contains_key("fill") {
-        check(ui, d, "fill", tl!("Fill new strokes"));
-    }
-    if d.fields.contains_key("altSmooth") {
-        check(ui, d, "altSmooth", tl!("Alt key toggles to Smooth Tool"));
-    }
-    if d.fields.contains_key("keepSelected") {
-        check(ui, d, "keepSelected", tl!("Keep selected"));
-        if d.fields.contains_key("mergeOnlySelection") {
-            check(ui, d, "mergeOnlySelection", tl!("Merge only with selection"));
-        }
-        ui.add_space(6.0);
-    }
-    if d.fields.contains_key("closeWithin") {
-        number(ui, d, ("closeWithin", tl!("Close paths when ends are within:")), "px", 0, (0.0, 100.0));
-    }
-    if d.fields.contains_key("editWithin") {
-        number(ui, d, ("editWithin", tl!("Edit selected paths within:")), "px", 0, (0.0, 100.0));
-    }
-    if d.fields.contains_key("livePreview") {
-        ui.add_space(6.0);
-        check(ui, d, "livePreview", tl!("Live preview"));
-    }
-    if d.fields.contains_key("liveFit") {
-        if !d.fields.contains_key("livePreview") {
-            ui.add_space(6.0);
-        }
-        check(ui, d, "liveFit", tl!("Live curve fitting"));
-    }
-    false
-}
-
-/// OK: set the tool's options.
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let values: Map<String, Value> = KEYS.iter().filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))).collect();
-    run_and_close(app, "tool.setOption", json!({ "tool": d.str("tool"), "values": values }))
 }
 
 #[cfg(test)]

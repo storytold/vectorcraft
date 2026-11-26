@@ -42,6 +42,12 @@ pick that branch for a full run. Run on any other branch, it is a dry run: the L
 FreeBSD and web jobs build and upload their artifacts, the environment refuses the signing jobs,
 and no draft release is created.
 
+Flatpak permission repairs need one update through the existing host-side installation method.
+After that update, Help > Check for Updates can inspect and update standalone bundles.
+Repository-managed installations continue to use their package manager; launcher-pinned
+versions keep their selected version. Both Flatpak manifests must grant network access,
+the host Flatpak interface, and read-only access to the shared version choices.
+
 ## What gets built
 
 | Platform | Artifacts | Built on |
@@ -65,7 +71,7 @@ pinned commit (the `ref:` of its craft-fonts checkout step) and builds with `CRA
 `CRAFT_FONTS_REQUIRED=1`, so releases embed its Japanese fonts and fail rather than ship without
 them (the web build embeds only the UI font, BIZ UDPGothic Regular, to stay small). The packages carry each embedded font's licence as `OFL-<family>.txt`
 (`copy_font_licences` in `packaging/env.sh`). Bump the pins deliberately, in every job at once.
-The rules are in craftrules `standards/fonts.md`, the build option in
+The build option is in
 [`docs/development.md`](development.md) › Fonts.
 
 ### macOS
@@ -164,7 +170,7 @@ to the target triple, so host build scripts aren't affected.
 AppStream metainfo, the MIME type for VectorCraft documents, the icons and the licence files.
 
 **Document types.** The desktop entry's `MimeType` lists every format File › Open reads but PSD,
-PSB, `.ps` PostScript, Targa and PCX, so file managers list VectorCraft under Open With for them.
+PSB, `.ps` PostScript, Targa, PCX, Pixar, JPEG 2000, HEIC/HEIF and HP-GL, so file managers list VectorCraft under Open With for them.
 `ai.storyteller.vectorcraft.mime.xml` declares the types that shared-mime-info lacks: VectorCraft
 documents and templates, `.ait` templates and Affinity files (`application/x-affinity`). An `.af`
 file gets the Affinity type by its content, and `.afdesign` and `.afpub` files by their extension.
@@ -237,9 +243,16 @@ the job fails and asks for a version bump (`cargo xtask version set`).
 ## Secrets
 
 The jobs that sign (macOS, Windows) and the draft-release job run in the `release` environment,
-which only the `release` branch can use and which holds the signing secrets. The other jobs get no
+which only the `release` branch can use today and which holds the signing secrets. The other jobs get no
 secrets. Every secret is optional: a missing one produces unsigned artifacts and a
 warning, never a failed build.
+
+The supervised nightly signer does not sign from `release`: it runs on `refs/heads/nightly-signer`,
+which only ever fast-forwards to reviewed main commits, and the `release` environment must admit
+`nightly-signer` alongside `release` before the first dispatch. Everything that can reach it is the
+trust closure: all of `.github/` and `packaging/`, including `packaging/env.sh`, which
+`packaging/macos/import-cert.sh` sources with the Apple keys. Stable releases still come only from
+`refs/heads/release`.
 
 | Secret | Used for |
 |---|---|

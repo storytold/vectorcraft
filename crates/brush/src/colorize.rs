@@ -12,16 +12,31 @@ fn luminance(c: &Color) -> f32 {
     0.2126 * r + 0.7152 * g + 0.0722 * b
 }
 
+/// How light `c` is for colorization, 0 black to 1 white. Black ink alone is its own tint: its
+/// amount is the tint, not how light it displays (100% K displays lighter than black).
+fn lightness(c: &Color) -> f32 {
+    match *c {
+        Color::Cmyk { c, m, y, k } if c == 0.0 && m == 0.0 && y == 0.0 => 1.0 - k,
+        _ => luminance(c),
+    }
+}
+
 fn map_color(c: &Color, mode: Colorization, key: &Color) -> Color {
-    let lum = luminance(c);
+    let light = lightness(c);
+    // A process or gray stroke color's tints and shades stay in its model.
+    let (white, black) = match key {
+        Color::Cmyk { .. } => (Color::cmyk(0.0, 0.0, 0.0, 0.0), Color::cmyk(0.0, 0.0, 0.0, 1.0)),
+        Color::Gray { .. } => (Color::gray(0.0), Color::gray(1.0)),
+        _ => (Color::WHITE, Color::BLACK),
+    };
     match mode {
         Colorization::None => *c,
-        Colorization::Tints => key.lerp(&Color::WHITE, lum),
+        Colorization::Tints => key.lerp_keep_model(&white, light),
         Colorization::TintsAndShades => {
-            if lum < 0.5 {
-                Color::BLACK.lerp(key, lum * 2.0)
+            if light < 0.5 {
+                key.lerp_keep_model(&black, 1.0 - light * 2.0)
             } else {
-                key.lerp(&Color::WHITE, (lum - 0.5) * 2.0)
+                key.lerp_keep_model(&white, (light - 0.5) * 2.0)
             }
         }
         Colorization::HueShift { key: art_key } => {
@@ -36,45 +51,61 @@ fn map_color(c: &Color, mode: Colorization, key: &Color) -> Color {
     }
 }
 
-fn map_paint(p: &mut Paint, mode: Colorization, key: &Color) {
+/// The swatch a stroke paint links to and its tint, for colorization: Tints of a linked color are
+/// tints of its swatch (a spot color's tints print on its own plate).
+type Link<'a> = Option<(&'a str, f32)>;
+
+fn map_paint(p: &mut Paint, mode: Colorization, key: &Color, link: Link<'_>) {
     if let Paint::Solid { color, .. } = p {
-        *p = Paint::solid(map_color(color, mode, key));
+        *p = match (mode, link) {
+            (Colorization::Tints, Some((swatch, tint))) => {
+                let t = (1.0 - lightness(color)).clamp(0.0, 1.0);
+                Paint::Solid { color: key.tinted(t), swatch: Some(swatch.to_string()), tint: tint * t }
+            }
+            _ => Paint::solid(map_color(color, mode, key)),
+        };
     }
 }
 
 /// Recolour `n` (recursively) for a stroke painted `stroke`, and strip brushes from its strokes so
-/// brush output never recurses. Non-solid stroke paints leave the art's colours alone. Type is
+/// brush output never recurses. Non-solid stroke paints leave the art's colours alone. Under Tints,
+/// a stroke color linked to a swatch gives tints of that swatch, linked to it, as a spot color's
+/// tints are (the art's darkest parts the stroke's own tint, white none of it). Type is
 /// recolored like paths: its characters' solid fills and strokes as well as its own.
 pub fn colorize(n: &mut Node, mode: Colorization, stroke: &Paint) {
     let key = match (mode, stroke.color()) {
         (Colorization::None, _) | (_, None) => None,
         (_, Some(c)) => Some(c),
     };
-    fn walk(n: &mut Node, mode: Colorization, key: Option<Color>) {
+    let link = match stroke {
+        Paint::Solid { swatch: Some(s), tint, .. } => Some((s.as_str(), *tint)),
+        _ => None,
+    };
+    fn walk(n: &mut Node, mode: Colorization, key: Option<Color>, link: Link<'_>) {
         for it in &mut n.appearance.items {
             match it {
                 AppearanceItem::Fill(f) => {
                     if let Some(k) = &key {
-                        map_paint(&mut f.paint, mode, k);
+                        map_paint(&mut f.paint, mode, k, link);
                     }
                 }
                 AppearanceItem::Stroke(s) => {
                     s.brush = None;
                     if let Some(k) = &key {
-                        map_paint(&mut s.paint, mode, k);
+                        map_paint(&mut s.paint, mode, k, link);
                     }
                 }
             }
         }
         if let (Some(k), NodeKind::Text(t)) = (&key, &mut n.kind) {
             for r in &mut t.runs {
-                map_paint(&mut r.style.fill, mode, k);
-                map_paint(&mut r.style.stroke, mode, k);
+                map_paint(&mut r.style.fill, mode, k, link);
+                map_paint(&mut r.style.stroke, mode, k, link);
             }
         }
         if let Some(ch) = n.children_mut() {
             for c in ch.iter_mut() {
-                walk(Arc::make_mut(c), mode, key);
+                walk(Arc::make_mut(c), mode, key, link);
             }
         }
         // A mask's art is drawn too: a brush on its strokes would run this brush again. Its colours
@@ -83,7 +114,76 @@ pub fn colorize(n: &mut Node, mode: Colorization, stroke: &Paint) {
             strip_brushes(Arc::make_mut(&mut m.art));
         }
     }
-    walk(n, mode, key);
+    walk(n, mode, key, link);
+}
+
+/// Mixed into a stroke's seed for its hue jitter, so the amounts come from a sequence of their own
+/// and a copy's size, spacing, scatter and rotation stay as they were without hue jitter.
+const HUE_JITTER_SALT: u64 = 0x6875_655f_6a69_7474;
+
+/// Turn the hue of each of `copies` (a scatter brush's copies, in order along the path) by its
+/// own amount between −`amount` and `amount` degrees, drawn from `seed` (the stroke's
+/// [`crate::track::seed_of`]).
+pub(crate) fn jitter_hues(copies: &mut [Node], amount: f64, seed: u64) {
+    let mut rng = crate::track::Rng::new(seed ^ HUE_JITTER_SALT);
+    for n in copies {
+        let turn = rng.range(-amount, amount) as f32;
+        turn_hues(n, turn);
+    }
+}
+
+/// `c` with its hue turned by `degrees`, worked out on its own components so nothing else about it
+/// changes: RGB in HSB of its values, CMYK over C, M and Y with K kept (as
+/// [`Color::complement_keep_model`] does), Lab by turning a and b. `None` for a color without a hue:
+/// white, black and grays, in their own model (Gray, CMYK with no C, M or Y ink).
+fn turned(c: &Color, degrees: f32) -> Option<Color> {
+    if !degrees.is_finite() || vectorcraft_color::recolor::Neutral::of(c).is_some() {
+        return None;
+    }
+    let turn = |v: [f32; 3]| {
+        let [h, s, b] = vectorcraft_color::rgb_to_hsb(v);
+        (s > 0.0).then(|| vectorcraft_color::hsb_to_rgb([(h + degrees).rem_euclid(360.0), s, b]))
+    };
+    match *c {
+        Color::Rgb { r, g, b } => turn([r, g, b]).map(|[r, g, b]| Color::rgb(r, g, b)),
+        Color::Cmyk { c, m, y, k } => turn([1.0 - c, 1.0 - m, 1.0 - y]).map(|[r, g, b]| Color::cmyk(1.0 - r, 1.0 - g, 1.0 - b, k)),
+        Color::Gray { .. } => None,
+        Color::Lab { l, a, b } => {
+            let (sin, cos) = f64::from(degrees).to_radians().sin_cos();
+            let (a, b) = (f64::from(a), f64::from(b));
+            Some(Color::lab(l, (a * cos - b * sin) as f32, (a * sin + b * cos) as f32))
+        }
+    }
+}
+
+fn turn_paint(p: &mut Paint, degrees: f32) {
+    if let Paint::Solid { color, .. } = p
+        && let Some(c) = turned(color, degrees)
+    {
+        *p = Paint::solid(c);
+    }
+}
+
+/// Turn the hue of the solid fills and strokes under `n`, its type's characters included. A
+/// mask's colors are its values, so they stay.
+fn turn_hues(n: &mut Node, degrees: f32) {
+    for it in &mut n.appearance.items {
+        match it {
+            AppearanceItem::Fill(f) => turn_paint(&mut f.paint, degrees),
+            AppearanceItem::Stroke(s) => turn_paint(&mut s.paint, degrees),
+        }
+    }
+    if let NodeKind::Text(t) = &mut n.kind {
+        for r in &mut t.runs {
+            turn_paint(&mut r.style.fill, degrees);
+            turn_paint(&mut r.style.stroke, degrees);
+        }
+    }
+    if let Some(ch) = n.children_mut() {
+        for c in ch.iter_mut() {
+            turn_hues(Arc::make_mut(c), degrees);
+        }
+    }
 }
 
 /// Strip the brushes from every stroke under `n`, its masks' art included.
@@ -103,49 +203,9 @@ fn strip_brushes(n: &mut Node) {
     }
 }
 
-/// Mix every solid paint under `n` towards `color` by `amount` (0..1) — the Symbol Stainer.
-pub fn tint_node(n: &mut Node, color: &Color, amount: f32) {
-    let amount = amount.clamp(0.0, 1.0);
-    for it in &mut n.appearance.items {
-        let p = match it {
-            AppearanceItem::Fill(f) => &mut f.paint,
-            AppearanceItem::Stroke(s) => &mut s.paint,
-        };
-        if let Paint::Solid { color: c, .. } = p {
-            *p = Paint::solid(c.lerp(color, amount));
-        }
-    }
-    if let vectorcraft_doc::NodeKind::Text(t) = &mut n.kind {
-        for r in &mut t.runs {
-            for p in [&mut r.style.fill, &mut r.style.stroke] {
-                if let Paint::Solid { color: c, .. } = p {
-                    *p = Paint::solid(c.lerp(color, amount));
-                }
-            }
-        }
-    }
-    if let Some(ch) = n.children_mut() {
-        for c in ch.iter_mut() {
-            tint_node(Arc::make_mut(c), color, amount);
-        }
-    }
-}
-
-/// The stain instance `inst` puts on its symbol's art: its visible fill colour and that fill's
-/// opacity (how far the art mixes towards it). `None` for an unstained instance.
-pub fn stain(inst: &Node) -> Option<(Color, f32)> {
-    let f = inst.appearance.fill().filter(|f| f.visible)?;
-    Some((f.paint.color()?, f.opacity))
-}
-
-/// A symbol's art for instance `inst`, stained by the instance's fill ([`stain`]).
-pub fn instance_art(art: &Node, inst: &Node) -> Node {
-    let mut a = art.clone();
-    if let Some((c, amount)) = stain(inst) {
-        tint_node(&mut a, &c, amount);
-    }
-    a
-}
+/// The Symbol Stainer's mix, an instance's stain and its stained art, from
+/// [`vectorcraft_doc::symbol_overrides`], which the effects that reshape an instance also read.
+pub use vectorcraft_doc::symbol_overrides::{instance_art, stain, tint_node};
 
 /// The solid colours of the fills and strokes under `nodes`, most used first (then in the order
 /// they first appear): the colours Brush Options offers as Hue Shift's key colour, the first being

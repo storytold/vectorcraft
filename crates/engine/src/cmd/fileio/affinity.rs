@@ -4,7 +4,6 @@
 //! native document can't be read opens as its embedded preview instead, with a warning that says
 //! why, and can't be placed.
 
-use std::io::Cursor;
 use std::sync::Arc;
 
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};
@@ -12,7 +11,7 @@ use serde_json::json;
 use vectorcraft_affinity::model::{self as af, Align as AfAlign, Blend, Kind, Pixels};
 use vectorcraft_affinity::paint::{self as ap, Cap, GradientKind as AfKind, Join};
 use vectorcraft_color::{BlendMode, Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
-use vectorcraft_doc::appearance::{Appearance, AppearanceItem, Dash, Effect, FillLayer, LineCap, LineJoin, StrokeAlign, StrokeLayer};
+use vectorcraft_doc::appearance::{Appearance, AppearanceItem, Dash, Effect, FillLayer, LineCap, LineJoin, StrokeAlign, StrokeLayer, WidthProfile};
 use vectorcraft_doc::geom::{FillRule, PathData, shapes};
 use vectorcraft_doc::text::{CharStyle, FirstBaseline, Justify, TextKind, TextObject, TextRun, VerticalAlign};
 use vectorcraft_doc::{Artboard, Document, ImageObject, LayerColor, Node, NodeKind, OpacityMask};

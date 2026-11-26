@@ -10,7 +10,7 @@ use vectorcraft_geom::{PathData, Point, Rect};
 use vectorcraft_pathops::addons as po;
 
 use super::super::super::edit::outermost;
-use super::super::super::layer::empty_artboards;
+use super::super::super::layer::{empty_artboards, remove_artboards};
 use crate::Result;
 
 /// Sine of the turn below which an anchor on a straight run is collinear.
@@ -120,12 +120,12 @@ impl Kind {
         let removable = !place.clips && !is_guide_or_clip(n);
         let gone = |is: bool| is.then(Vec::new);
         match self {
-            Kind::EmptyText => gone(matches!(&n.kind, NodeKind::Text(t) if t.plain_text().trim().is_empty())),
+            Kind::EmptyText => gone(removable && matches!(&n.kind, NodeKind::Text(t) if t.plain_text().trim().is_empty())),
             Kind::StrayPoints => gone(removable && matches!(&n.kind, NodeKind::Path { path, .. } if path.anchor_count() <= 1)),
             Kind::Unpainted => gone(removable && !place.in_compound && is_shape(n) && !is_painted(&n.appearance)),
             Kind::ZeroOpacity => gone(removable && !place.in_compound && n.opacity <= 0.0),
             Kind::DuplicateObjects => gone(removable && duplicates_the_one_below(cx.d, n)),
-            Kind::OffArtboard => gone(place.top && !is_guide_or_clip(n) && off_artboards(cx, n)),
+            Kind::OffArtboard => gone(place.top && removable && off_artboards(cx, n)),
             Kind::NeedlessGroups => needless_group(n),
             Kind::NeedlessCompounds => needless_compound(n),
             Kind::NeedlessClipGroups => needless_clip_group(cx, n),
@@ -175,7 +175,9 @@ fn objects<'a>(d: &'a Document, scope: &Scope) -> Vec<(&'a Node, Place)> {
     let top = Place { top: true, ..Place::default() };
     match scope {
         Scope::Document => d.layers.iter().for_each(|l| visit(l, top, &mut out)),
-        Scope::Objects(ids) => ids.iter().filter_map(|id| d.node(*id)).for_each(|n| visit(n, top, &mut out)),
+        Scope::Objects(ids) => {
+            ids.iter().filter_map(|id| d.node(*id)).for_each(|n| visit(n, Place { clips: is_clipping_path(d, n.id), ..top }, &mut out))
+        }
     }
     let editable = d.editable();
     out.retain(|(n, _)| editable(n.id));
@@ -183,7 +185,7 @@ fn objects<'a>(d: &'a Document, scope: &Scope) -> Vec<(&'a Node, Place)> {
 }
 
 fn visit<'a>(n: &'a Node, place: Place, out: &mut Vec<(&'a Node, Place)>) {
-    if !n.visible || n.locked || out.len() >= MAX_OBJECTS {
+    if !n.visible || n.locked || n.is_ruler_guide() || out.len() >= MAX_OBJECTS {
         return;
     }
     let inner = |clip: bool, i: usize, top: bool| Place { clips: clip && i == 0, top, in_compound: false };
@@ -202,6 +204,11 @@ fn visit<'a>(n: &'a Node, place: Place, out: &mut Vec<(&'a Node, Place)>) {
     }
 }
 
+/// Is `id` the clipping path of its group or layer?
+fn is_clipping_path(d: &Document, id: NodeId) -> bool {
+    d.position(id).is_some_and(|(parent, i, _)| i == 0 && parent.and_then(|p| d.node(p)).is_some_and(Node::clips))
+}
+
 /// A group that stands for live or generated art: its members aren't loose art to clean.
 fn is_generated(n: &Node) -> bool {
     let e = n.extras();
@@ -209,7 +216,7 @@ fn is_generated(n: &Node) -> bool {
 }
 
 fn is_guide_or_clip(n: &Node) -> bool {
-    matches!(n.kind, NodeKind::Path { guide: true, .. } | NodeKind::Path { clipping: true, .. })
+    n.is_guide() || matches!(n.kind, NodeKind::Path { clipping: true, .. })
 }
 
 fn is_shape(n: &Node) -> bool {
@@ -235,15 +242,45 @@ fn is_plain(n: &Node) -> bool {
         && *n.extras() == NodeExtras::default()
 }
 
-/// Is `n` a plain path (full opacity, normal blending) identical to the object just below it?
+/// Is `n` a plain path or type object (full opacity, normal blending) that doubles the object just
+/// below it?
 fn duplicates_the_one_below(d: &Document, n: &Node) -> bool {
-    if !matches!(n.kind, NodeKind::Path { .. }) || n.opacity < 1.0 || n.blend != BlendMode::Normal {
+    if n.opacity < 1.0 || n.blend != BlendMode::Normal {
         return false;
     }
     let below = d.position(n.id).and_then(|(parent, i, _)| d.children(parent)?.get(i.checked_sub(1)?).cloned());
     below.is_some_and(|b| {
-        b.visible && b.kind == n.kind && b.appearance == n.appearance && b.opacity == n.opacity && b.blend == n.blend && b.extras() == n.extras()
+        b.visible
+            && same_art(&b.kind, &n.kind)
+            && b.appearance == n.appearance
+            && b.opacity == n.opacity
+            && b.blend == n.blend
+            && b.extras() == n.extras()
     })
+}
+
+/// Distance (pt) within which doubled type counts as stacked: text set twice from a PDF or an old
+/// file, or for a fake bold, is often a fraction of a point off.
+const DOUBLED_TYPE: f64 = 1.0;
+
+/// The same path, or the same type (text, styles, size and turn) within [`DOUBLED_TYPE`] of it.
+fn same_art(a: &NodeKind, b: &NodeKind) -> bool {
+    match (a, b) {
+        (NodeKind::Path { .. }, NodeKind::Path { .. }) => a == b,
+        (NodeKind::Text(a), NodeKind::Text(b)) => {
+            let ([a0, a1, a2, a3, ax, ay], [b0, b1, b2, b3, bx, by]) = (a.xf.as_coeffs(), b.xf.as_coeffs());
+            [a0, a1, a2, a3] == [b0, b1, b2, b3] && (ax - bx).hypot(ay - by) <= DOUBLED_TYPE && {
+                // `b` placed on `a`, with `a`'s layout caches (they are in document space).
+                let mut moved = (**b).clone();
+                moved.xf = a.xf;
+                moved.cached_bounds = a.cached_bounds;
+                moved.cached_baselines.clone_from(&a.cached_baselines);
+                moved.cached_ink = a.cached_ink;
+                **a == moved
+            }
+        }
+        _ => false,
+    }
 }
 
 fn inside(a: Rect, b: Rect) -> bool {
@@ -332,17 +369,43 @@ fn restructure(d: &mut Document, scope: &mut Scope, kind: Kind) -> Result<Outcom
             break;
         }
         if let Scope::Objects(roots) = scope {
-            for (id, nodes) in &found {
-                if let Some(at) = roots.iter().position(|r| r == id) {
-                    roots.splice(at..=at, nodes.iter().map(|n| n.id));
-                }
-            }
+            *roots = replace_roots(roots, &found);
         }
         out.ids.extend(found.iter().map(|(id, _)| *id));
         d.insert_beside(found, true)?;
     }
     out.count = out.ids.len();
     Ok(out)
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many scope roots [`replace_roots`] looked at on this thread.
+    pub(super) static ROOTS_SEEN: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The scope's objects after a pass replaced `found`: each found object gives way to the ids of
+/// what replaces it, in its place, and the others keep their order. An id that `roots` lists more
+/// than once is replaced at its first places, once for each time `found` lists it. One walk of
+/// `roots`.
+pub(super) fn replace_roots(roots: &[NodeId], found: &[(NodeId, Vec<Node>)]) -> Vec<NodeId> {
+    let mut with: HashMap<NodeId, (&[Node], usize)> = HashMap::with_capacity(found.len());
+    for (id, nodes) in found {
+        with.entry(*id).or_insert((nodes.as_slice(), 0)).1 += 1;
+    }
+    let mut out = Vec::with_capacity(roots.len());
+    for r in roots {
+        #[cfg(test)]
+        ROOTS_SEEN.set(ROOTS_SEEN.get() + 1);
+        match with.get_mut(r) {
+            Some((nodes, left)) if *left > 0 => {
+                *left -= 1;
+                out.extend(nodes.iter().map(|n| n.id));
+            }
+            _ => out.push(*r),
+        }
+    }
+    out
 }
 
 /// Run `f` on a copy of each path in scope (not guides), and keep the copies it changed: `f`
@@ -442,13 +505,9 @@ fn near_points(d: &mut Document, scope: &Scope) -> Result<Outcome> {
 fn artboards(d: &mut Document, sel: &mut Selection, scope: &Scope) -> Result<Outcome> {
     let Scope::Document = scope else { return Ok(Outcome::default()) };
     let empty = empty_artboards(d);
-    // The last first, so the others keep their places.
-    for &i in empty.iter().rev() {
-        if i < d.artboards.len() {
-            let id = d.artboards.remove(i).id;
-            d.retire_artboard_id(id);
-            d.retain_guides(sel, |_, g| g.artboard != Some(id));
-        }
+    if empty.is_empty() {
+        return Ok(Outcome::default());
     }
+    remove_artboards(d, sel, &empty)?;
     Ok(Outcome { count: empty.len(), ids: vec![], artboards: empty })
 }

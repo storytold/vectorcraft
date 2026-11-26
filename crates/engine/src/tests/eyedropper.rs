@@ -69,6 +69,113 @@ fn picking_up_without_weight_keeps_the_target_weight() {
 }
 
 #[test]
+fn bucket_attribute_sample_changes_only_defaults_and_respects_options() {
+    let mut s = session();
+    let (src, dst) = source_and_target(&mut s);
+    let art = s.doc().unwrap().doc.clone();
+    let selection = s.doc().unwrap().selection.clone();
+    let undo = undo_len(&s);
+    s.execute("eyedropper.setOptions", &json!({"pickUp": {"appearance": {"stroke": {"weight": false}}}})).unwrap();
+    let width = s.paint.stroke_width;
+    s.execute("appearance.copyFrom", &json!({"source": src.0, "defaultsOnly": true})).unwrap();
+    assert_eq!(s.paint.fill.color().unwrap().to_hex(), "#ff0000");
+    assert_eq!(s.paint.stroke.color().unwrap().to_hex(), "#0000ff");
+    assert_eq!(s.paint.stroke_width, width);
+    assert_eq!(s.doc().unwrap().doc, art);
+    assert_eq!(s.doc().unwrap().selection, selection);
+    assert_eq!(undo_len(&s), undo);
+    assert_eq!(node(&s, dst).appearance.fill_paint().color().unwrap().to_hex(), "#ffffff");
+    for extra in [json!({"ids": []}), json!({"reverse": true}), json!({"append": true})] {
+        let mut p = json!({"source": src.0, "defaultsOnly": true});
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        assert!(s.execute("appearance.copyFrom", &p).is_err());
+    }
+    assert!(s.execute("appearance.copyFrom", &json!({"source": src.0, "defaultsOnly": "yes"})).is_err());
+    assert_eq!(s.doc().unwrap().doc, art);
+    assert_eq!(undo_len(&s), undo);
+}
+
+#[test]
+fn bucket_attribute_sample_does_not_replace_last_eyedropper_sample() {
+    let mut s = session();
+    let (src, dst) = source_and_target(&mut s);
+    s.execute("appearance.copyFrom", &json!({"source": src.0, "defaultsOnly": true})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    assert!(s.execute("appearance.copyFrom", &json!({"source": dst.0, "reverse": true})).is_err());
+}
+
+#[test]
+fn bucket_attribute_sample_does_not_commit_highlighted_type() {
+    let mut s = session();
+    s.prefs.placeholder_text = false;
+    let src = rect(&mut s, 300.0);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let view = ViewInfo::default();
+    s.select_tool("type", view).unwrap();
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(kind, 20.0, 300.0), view).unwrap();
+    }
+    let dst = s.doc().unwrap().selection.objects[0];
+    s.tool_text("ABCD", view).unwrap();
+    s.set_tool_option("select", &json!({"start": 0, "end": 2}));
+    let before = node(&s, dst);
+    let undo = undo_len(&s);
+    s.execute("appearance.copyFrom", &json!({"source": src.0, "defaultsOnly": true})).unwrap();
+    assert_eq!(node(&s, dst), before);
+    assert_eq!(undo_len(&s), undo, "sampling does not commit pending typing");
+    assert_eq!(s.paint.fill.color().unwrap().to_hex(), "#ff0000");
+}
+
+#[test]
+fn bucket_color_sample_changes_only_defaults_and_supplies_next_fill() {
+    let mut s = session();
+    let src = rect(&mut s, 300.0);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let dst = rect(&mut s, 10.0);
+    s.execute("paint.setFill", &json!({"color": "#0000ff", "ids": [dst.0]})).unwrap();
+    let dst_before = node(&s, dst);
+    let art = s.doc().unwrap().doc.clone();
+    let undo = undo_len(&s);
+    s.execute("paint.sampleColor", &json!({"color": "#00ff00", "ids": []})).unwrap();
+    assert_eq!(s.paint.fill.color().unwrap().to_hex(), "#00ff00");
+    assert_eq!(node(&s, dst), dst_before);
+    assert_eq!(s.doc().unwrap().doc, art);
+    assert_eq!(undo_len(&s), undo);
+    s.execute("appearance.copyFrom", &json!({"source": src.0, "defaultsOnly": true})).unwrap();
+    assert_eq!(node(&s, dst), dst_before);
+    assert_eq!(undo_len(&s), undo);
+    let r = s.execute("livePaint.fill", &json!({"ids": [dst.0], "point": [35, 35]})).unwrap();
+    let face = NodeId(r["face"].as_u64().unwrap());
+    assert_eq!(node(&s, face).appearance.fill_paint().color().unwrap().to_hex(), "#ff0000");
+}
+
+#[test]
+fn image_color_sample_sets_only_fill_default_and_clears_stroke() {
+    let mut s = session();
+    let dst = rect(&mut s, 10.0);
+    s.execute("paint.setStroke", &json!({"color": "#0000ff"})).unwrap();
+    let before = (node(&s, dst), s.doc().unwrap().selection.clone());
+    s.execute("paint.sampleColor", &json!({"color": "#00ff00", "stroke": false, "ids": [], "clearStroke": true})).unwrap();
+    assert_eq!(s.paint.fill.color(), Some(Color::rgb8(0, 255, 0)));
+    assert!(s.paint.stroke.is_none());
+    assert_eq!((node(&s, dst), s.doc().unwrap().selection.clone()), before);
+    let state = (s.paint.clone(), node(&s, dst));
+    for p in [
+        json!({"color": "#ffffff", "stroke": true, "ids": [], "clearStroke": true}),
+        json!({"color": "#ffffff", "ids": [], "clearStroke": true}),
+        json!({"color": "#ffffff", "stroke": false, "clearStroke": true}),
+        json!({"color": "#ffffff", "stroke": false, "ids": [dst.0], "clearStroke": true}),
+        json!({"color": "#ffffff", "stroke": false, "ids": [], "stop": 0, "clearStroke": true}),
+        json!({"color": "#ffffff", "stroke": false, "ids": [], "clearStroke": "yes"}),
+        json!({"color": "#ffffff", "stroke": "no", "ids": [], "clearStroke": true}),
+        json!({"color": {"bad": true}, "stroke": false, "ids": [], "clearStroke": true}),
+    ] {
+        assert!(s.execute("paint.sampleColor", &p).is_err(), "{p}");
+        assert_eq!((s.paint.clone(), node(&s, dst)), state, "{p}");
+    }
+}
+
+#[test]
 fn every_appearance_attribute_copies_the_whole_stack() {
     let mut s = session();
     let (src, dst) = source_and_target(&mut s);
@@ -106,6 +213,291 @@ fn type_picks_up_font_and_size() {
     s.execute("appearance.copyFrom", &json!({"source": src.0, "pickUp": {"character": false, "paragraph": false}})).unwrap();
     let (st, justify) = style(&s, dst2);
     assert_eq!((st.size, justify, st.fill.color().unwrap().to_hex()), (12.0, preserved_alignment, "#00ff00".into()));
+}
+
+/// Sample document-space typography between text objects with different local transforms.
+#[test]
+fn scaled_type_pick_matches_effective_character_dimensions() {
+    for source_area in [false, true] {
+        for target_area in [false, true] {
+            let mut s = session();
+            let create = |s: &mut Session, area: bool, x: f64| {
+                let mut p = json!({"x": x, "y": 100, "text": "Sample", "size": 12});
+                if area {
+                    p["area"] = json!({"width": 160, "height": 80});
+                }
+                id_of(s.execute("text.create", &p).unwrap())
+            };
+            let src = create(&mut s, source_area, 100.0);
+            s.execute("object.transform", &json!({"matrix": [3, 0, 0, 2, 0, 0]})).unwrap();
+            let dst = create(&mut s, target_area, 300.0);
+            s.execute("object.transform", &json!({"matrix": [0.5, 0, 0, 1.5, 0, 0]})).unwrap();
+            let before = node(&s, dst);
+            let source = node(&s, src);
+            let history = undo_len(&s);
+            s.execute("appearance.copyFrom", &json!({"source": src.0})).unwrap();
+            let after = node(&s, dst);
+            let NodeKind::Text(t) = &after.kind else { panic!("not text") };
+            let NodeKind::Text(old) = &before.kind else { panic!("not text") };
+            let effective = t.effective_char_style(&t.first_style()).unwrap();
+            assert!((effective.size - 24.0).abs() < 1e-8, "sampled font size: {}", effective.size);
+            assert!((effective.h_scale - 150.0).abs() < 1e-8, "sampled horizontal scale: {}", effective.h_scale);
+            assert_eq!(t.xf, old.xf, "sampling keeps the target's transform");
+            assert_eq!(node(&s, src), source);
+            assert_eq!(undo_len(&s), history + 1);
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert_eq!(node(&s, dst), before);
+            s.execute("edit.redo", &json!({})).unwrap();
+            assert_eq!(node(&s, dst), after);
+        }
+    }
+}
+
+/// A text object snapshot, including the local attributes and retained affine transform.
+fn sampled_type(s: &Session, id: NodeId) -> vectorcraft_doc::TextObject {
+    let NodeKind::Text(t) = node(s, id).kind else { panic!("not text") };
+    *t
+}
+
+/// Compare the dimensional character attributes that text controls display in document units.
+fn assert_sampled_dimensions(actual: &vectorcraft_doc::CharStyle, expected: &vectorcraft_doc::CharStyle) {
+    assert_eq!(actual.leading.is_some(), expected.leading.is_some());
+    for (a, e) in [
+        (actual.size, expected.size),
+        (actual.h_scale, expected.h_scale),
+        (actual.v_scale, expected.v_scale),
+        (actual.leading.unwrap_or(0.0), expected.leading.unwrap_or(0.0)),
+        (actual.baseline_shift, expected.baseline_shift),
+        (actual.tcy_up_down, expected.tcy_up_down),
+        (actual.tcy_left_right, expected.tcy_left_right),
+    ] {
+        assert!((a - e).abs() < 1e-8, "sampled dimension: {a} != {e}");
+    }
+}
+
+/// Rotation, shear, reflection and grouping stay on the objects while typography is copied.
+#[test]
+fn scaled_type_pick_preserves_affines_and_document_dimensions() {
+    for grouped in [false, true] {
+        let mut s = session();
+        let src = id_of(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Source", "size": 12})).unwrap());
+        s.execute("text.setStyle", &json!({"leading": 18})).unwrap();
+        s.execute("text.setFormat", &json!({"hScale": 80, "vScale": 125, "baselineShift": 3, "tcyUpDown": 2, "tcyLeftRight": -1})).unwrap();
+        if grouped {
+            s.execute("object.group", &json!({})).unwrap();
+        }
+        s.execute("object.transform", &json!({"matrix": [0, -3, -2, 1, 0, 0]})).unwrap();
+        let src_text = sampled_type(&s, src);
+        let expected = src_text.effective_char_style(&src_text.first_style()).unwrap();
+        let dst = id_of(s.execute("text.create", &json!({"x": 300, "y": 100, "text": "Target", "size": 20})).unwrap());
+        if grouped {
+            s.execute("object.group", &json!({})).unwrap();
+        }
+        s.execute("object.transform", &json!({"matrix": [-1, 0.5, 1, 2, 0, 0]})).unwrap();
+        let before = sampled_type(&s, dst);
+        s.execute("appearance.copyFrom", &json!({"source": src.0})).unwrap();
+        let after = sampled_type(&s, dst);
+        assert_sampled_dimensions(&after.effective_char_style(&after.first_style()).unwrap(), &expected);
+        assert_eq!(after.xf, before.xf);
+        assert_eq!(sampled_type(&s, src), src_text);
+        let bytes = vectorcraft_format::save_file(&s.doc().unwrap().doc);
+        let reopened = vectorcraft_format::load(&bytes).unwrap();
+        let NodeKind::Text(t) = &reopened.node(dst).unwrap().kind else { panic!("not text") };
+        assert_sampled_dimensions(&t.effective_char_style(&t.first_style()).unwrap(), &expected);
+    }
+}
+
+/// A transformed target compensates only the highlighted characters, retaining the others.
+#[test]
+fn scaled_type_pick_changes_only_the_highlighted_range() {
+    let mut s = session();
+    let src = id_of(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Source", "size": 12})).unwrap());
+    s.execute("object.transform", &json!({"matrix": [3, 0, 0, 2, 0, 0]})).unwrap();
+    let source = sampled_type(&s, src);
+    let expected = source.effective_char_style(&source.first_style()).unwrap();
+    let dst = id_of(s.execute("text.create", &json!({"x": 300, "y": 100, "text": "Sample", "size": 10})).unwrap());
+    s.execute("object.transform", &json!({"matrix": [0.5, 0, 0, 3, 0, 0]})).unwrap();
+    let before = sampled_type(&s, dst);
+    s.select_tool("type", ViewInfo::default()).unwrap();
+    s.set_tool_option("textSelection", &json!({"id": dst.0, "start": 1, "end": 4}));
+    s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+    let history = undo_len(&s);
+    s.execute("appearance.copyFrom", &json!({"source": src.0})).unwrap();
+    let after = sampled_type(&s, dst);
+    assert_eq!(after.runs.len(), 3);
+    assert_eq!((&*after.runs[0].text, &*after.runs[1].text, &*after.runs[2].text), ("S", "amp", "le"));
+    assert_eq!(after.runs[0].style, before.first_style());
+    assert_eq!(after.runs[2].style, before.first_style());
+    assert_sampled_dimensions(&after.effective_char_style(&after.runs[1].style).unwrap(), &expected);
+    assert_eq!(after.xf, before.xf);
+    assert_eq!(undo_len(&s), history + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(sampled_type(&s, dst), before);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(sampled_type(&s, dst), after);
+}
+
+/// Reject unusable source or target transforms before any part of a multi-object pick changes.
+#[test]
+fn scaled_type_pick_rejects_unrepresentable_dimensions_atomically() {
+    for (bad_source, factor) in [(true, 0.0), (false, 0.0), (false, 1e-306), (true, f64::from_bits(1))] {
+        let mut s = session();
+        let size = if bad_source && factor > 0.0 { 0.1 } else { 24.0 };
+        let src = id_of(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Source", "size": size, "color": "#00ff00"})).unwrap());
+        if bad_source {
+            s.execute("object.transform", &json!({"matrix": [factor, 0, 0, factor, 0, 0]})).unwrap();
+        }
+        let good = id_of(s.execute("text.create", &json!({"x": 300, "y": 100, "text": "Good", "size": 10})).unwrap());
+        let other = id_of(s.execute("text.create", &json!({"x": 300, "y": 200, "text": "Other", "size": 12})).unwrap());
+        if !bad_source {
+            s.execute("object.transform", &json!({"matrix": [factor, 0, 0, factor, 0, 0]})).unwrap();
+        }
+        s.execute("select.set", &json!({"ids": [good.0, other.0]})).unwrap();
+        let doc = s.doc().unwrap().doc.clone();
+        let selection = s.doc().unwrap().selection.clone();
+        let paint = s.paint.clone();
+        let sample = s.eyedropper_sample.clone();
+        let history = undo_len(&s);
+        let error = s.execute("appearance.copyFrom", &json!({"source": src.0})).unwrap_err();
+        assert!(error.to_string().contains("transform"), "{error}");
+        assert_eq!(s.doc().unwrap().doc, doc);
+        assert_eq!(s.doc().unwrap().selection, selection);
+        assert_eq!(s.paint, paint);
+        assert_eq!(s.eyedropper_sample, sample);
+        assert_eq!(undo_len(&s), history);
+        // A paint-only pick does not need a usable text transform.
+        s.execute("appearance.copyFrom", &json!({"source": src.0, "apply": {"character": false, "paragraph": false}})).unwrap();
+    }
+}
+
+/// A failed dimensional pick retains highlighted characters and the previously remembered sample.
+#[test]
+fn scaled_type_pick_rejection_preserves_the_highlighted_range_and_sample() {
+    let mut s = session();
+    let saved = id_of(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Saved", "size": 18})).unwrap());
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("appearance.copyFrom", &json!({"source": saved.0})).unwrap();
+    let src = id_of(s.execute("text.create", &json!({"x": 100, "y": 200, "text": "Source", "size": 24, "color": "#00ff00"})).unwrap());
+    s.execute("object.transform", &json!({"matrix": [0, 0, 0, 0, 0, 0]})).unwrap();
+    let dst = id_of(s.execute("text.create", &json!({"x": 300, "y": 100, "text": "Sample", "size": 10})).unwrap());
+    s.select_tool("type", ViewInfo::default()).unwrap();
+    s.set_tool_option("textSelection", &json!({"id": dst.0, "start": 1, "end": 4}));
+    s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    let selection = s.doc().unwrap().selection.clone();
+    let range = s.tool_options();
+    let paint = s.paint.clone();
+    let sample = s.eyedropper_sample.clone();
+    let history = undo_len(&s);
+    assert!(s.execute("appearance.copyFrom", &json!({"source": src.0})).is_err());
+    assert_eq!(s.doc().unwrap().doc, doc);
+    assert_eq!(s.doc().unwrap().selection, selection);
+    assert_eq!(s.tool_options(), range);
+    assert_eq!(s.paint, paint);
+    assert_eq!(s.eyedropper_sample, sample);
+    assert_eq!(undo_len(&s), history);
+    // Alt-click can still apply the last successful sample after the rejected pick.
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("appearance.copyFrom", &json!({"source": dst.0, "reverse": true})).unwrap();
+    assert_eq!(sampled_type(&s, dst).first_style().size, 18.0);
+}
+
+/// A pick that would extend text beyond the canvas keeps the previous sample and defaults.
+#[test]
+fn scaled_type_pick_canvas_rejection_preserves_sample_and_defaults() {
+    for mode in ["selection", "ids", "reverse", "range"] {
+        let mut s = session();
+        let saved = id_of(s.execute("text.create", &json!({"x": 40, "y": 40, "text": "Saved", "size": 18, "color": "#0000ff"})).unwrap());
+        let src = id_of(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Source", "size": 96, "color": "#ff0000"})).unwrap());
+        let dst = id_of(s.execute("text.create", &json!({"x": MAX_COORD - 100.0, "y": 200, "text": "WWWW", "size": 10})).unwrap());
+        s.execute("appearance.copyFrom", &json!({"source": saved.0, "ids": []})).unwrap();
+        let pick = match mode {
+            "ids" | "reverse" => {
+                s.execute("select.none", &json!({})).unwrap();
+                if mode == "ids" { json!({"source": src.0, "ids": [dst.0]}) } else { json!({"source": dst.0, "ids": [src.0], "reverse": true}) }
+            }
+            "range" => {
+                s.select_tool("type", ViewInfo::default()).unwrap();
+                s.set_tool_option("textSelection", &json!({"id": dst.0, "start": 0, "end": 3}));
+                s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+                json!({"source": src.0})
+            }
+            _ => json!({"source": src.0}),
+        };
+        let doc = s.doc().unwrap().doc.clone();
+        let selection = s.doc().unwrap().selection.clone();
+        let range = s.tool_options();
+        let paint = s.paint.clone();
+        let sample = s.eyedropper_sample.clone();
+        let history = undo_len(&s);
+
+        let error = s.execute("appearance.copyFrom", &pick).unwrap_err();
+        assert!(error.to_string().contains("coordinates out of range"), "{mode}: {error}");
+        assert_eq!(s.doc().unwrap().doc, doc, "{mode}");
+        assert_eq!(s.doc().unwrap().selection, selection, "{mode}");
+        assert_eq!(s.tool_options(), range, "{mode}");
+        assert_eq!(s.paint, paint, "{mode}");
+        assert_eq!(s.eyedropper_sample, sample, "{mode}");
+        assert_eq!(undo_len(&s), history, "{mode}");
+    }
+}
+
+/// Changing justification can move explicitly targeted point text outside the canvas even
+/// when character copying is disabled.
+#[test]
+fn paragraph_only_pick_rejects_out_of_bounds_explicit_target() {
+    let mut s = session();
+    let saved = id_of(s.execute("text.create", &json!({"x": 40, "y": 40, "text": "Saved", "color": "#0000ff"})).unwrap());
+    let src = id_of(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Source", "color": "#ff0000"})).unwrap());
+    s.execute("text.setStyle", &json!({"justify": "left"})).unwrap();
+    let dst = id_of(s.execute("text.create", &json!({"x": 100, "y": 200, "text": "WWWW", "size": 16})).unwrap());
+    s.execute("text.setStyle", &json!({"justify": "right"})).unwrap();
+    s.execute("object.transform", &json!({"matrix": [1, 0, 0, 1, MAX_COORD - 101.0, 0]})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("appearance.copyFrom", &json!({"source": saved.0, "ids": []})).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    let selection = s.doc().unwrap().selection.clone();
+    let paint = s.paint.clone();
+    let sample = s.eyedropper_sample.clone();
+    let history = undo_len(&s);
+
+    let pick = json!({"source": src.0, "ids": [dst.0], "apply": {"character": false}});
+    let error = s.execute("appearance.copyFrom", &pick).unwrap_err();
+    assert!(error.to_string().contains("coordinates out of range"), "{error}");
+    assert_eq!(s.doc().unwrap().doc, doc);
+    assert_eq!(s.doc().unwrap().selection, selection);
+    assert_eq!(s.paint, paint);
+    assert_eq!(s.eyedropper_sample, sample);
+    assert_eq!(undo_len(&s), history);
+}
+
+/// Disabled character copying and append preserve typography; reverse and cached picks convert it.
+#[test]
+fn scaled_type_pick_respects_options_and_reverse_sampling() {
+    let mut s = session();
+    let src = id_of(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Source", "size": 12})).unwrap());
+    s.execute("object.scale", &json!({"sx": 300, "sy": 200})).unwrap();
+    let source = sampled_type(&s, src);
+    let expected = source.effective_char_style(&source.first_style()).unwrap();
+    let dst = id_of(s.execute("text.create", &json!({"x": 300, "y": 100, "text": "Target", "size": 20})).unwrap());
+    s.execute("object.scale", &json!({"sx": 50, "sy": 150})).unwrap();
+    let before = sampled_type(&s, dst);
+    for options in [json!({"pickUp": {"character": false}}), json!({"apply": {"character": false}}), json!({"append": true})] {
+        let mut p = json!({"source": src.0, "ids": [dst.0]});
+        p.as_object_mut().unwrap().extend(options.as_object().unwrap().clone());
+        s.execute("appearance.copyFrom", &p).unwrap();
+        assert_sampled_dimensions(&sampled_type(&s, dst).first_style(), &before.first_style());
+    }
+    s.execute("select.set", &json!({"ids": [src.0]})).unwrap();
+    s.execute("appearance.copyFrom", &json!({"source": dst.0, "reverse": true})).unwrap();
+    let after = sampled_type(&s, dst);
+    assert_sampled_dimensions(&after.effective_char_style(&after.first_style()).unwrap(), &expected);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("appearance.copyFrom", &json!({"source": src.0})).unwrap();
+    s.execute("appearance.copyFrom", &json!({"source": dst.0, "reverse": true})).unwrap();
+    let cached = sampled_type(&s, dst);
+    assert_sampled_dimensions(&cached.effective_char_style(&cached.first_style()).unwrap(), &expected);
 }
 
 #[test]
@@ -170,7 +562,41 @@ fn clicking_an_image_samples_its_pixel() {
     // Two pixels, orange and teal, 100 pt each, at (300, 0).
     let img = image::RgbaImage::from_raw(2, 1, [[255, 128, 0, 255], [0, 128, 128, 255]].concat()).unwrap();
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     s.edit("Place", |d, _| {
         d.images.insert("px".into(), ImageBlob::png(png));
         let l = d.layers[0].id;
@@ -189,6 +615,141 @@ fn clicking_an_image_samples_its_pixel() {
     assert_eq!(node(&s, dst).appearance.fill_paint().color(), Some(Color::rgb8(128, 128, 64)), "5 x 5 average of both pixels");
 }
 
+/// Gradient mesh points picked with Direct Selection or the Mesh tool take the color the
+/// Eyedropper then samples from an image or from other art, each sample one undo step, and only
+/// they change: the mesh's other points and its appearance stay as they were (#8090).
+#[test]
+fn picked_mesh_points_take_the_eyedropper_sample() {
+    let mut s = session();
+    // Two pixels, orange and teal, 100 pt each, at (300, 0).
+    let rgba = [[255u8, 128, 0, 255], [0, 128, 128, 255]].concat();
+    let img = craft_image_codecs::Image::from_raw(2, 1, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, rgba).unwrap();
+    let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
+    s.edit("Place", |d, _| {
+        d.images.insert("px".into(), ImageBlob::png(png.to_vec()));
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let xf = vectorcraft_geom::Affine::translate((300.0, 0.0)) * vectorcraft_geom::Affine::scale(100.0);
+        let im = ImageObject { key: "px".into(), width: 2, height: 1, xf, link: None, placement: Default::default(), pixels: None };
+        d.insert(Some(l), 0, Node::new(id, NodeKind::Image(Box::new(im)))).map_err(|e| crate::EngineError::Other(e.to_string()))
+    })
+    .unwrap();
+    let m = rect(&mut s, 10.0);
+    s.execute("object.mesh.create", &json!({"ids": [m.0], "rows": 1, "cols": 1})).unwrap();
+    let red = rect(&mut s, 100.0);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let colors = |s: &Session| match node(s, m).kind {
+        NodeKind::Mesh(g) => g.points.iter().map(|p| p.color).collect::<Vec<_>>(),
+        k => panic!("not a mesh: {k:?}"),
+    };
+    let white = colors(&s)[0];
+    assert!(colors(&s).iter().all(|c| *c == white && *c != Color::rgb8(255, 0, 0)));
+    let appearance = node(&s, m).appearance;
+    let v = ViewInfo::default();
+    let pick = |s: &mut Session, tool: &str, i: usize, shift: bool| {
+        s.select_tool(tool, v).unwrap();
+        let q = match node(s, m).kind {
+            NodeKind::Mesh(g) => g.points[i].p,
+            k => panic!("not a mesh: {k:?}"),
+        };
+        let mods = Mods { shift, ..Default::default() };
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, q.x, q.y).with_mods(mods), v).unwrap();
+        }
+    };
+    let (teal, orange) = (Color::rgb8(0, 128, 128), Color::rgb8(255, 128, 0));
+    s.execute("select.set", &json!({"ids": [m.0]})).unwrap();
+    pick(&mut s, "directSelection", 0, false);
+    let undo = undo_len(&s);
+    click(&mut s, 450.0, 50.0, Mods::default());
+    assert_eq!(colors(&s), [teal, white, white, white], "the picked point takes the image's color");
+    assert_eq!(node(&s, m).appearance, appearance, "the mesh's appearance stays");
+    assert_eq!(undo_len(&s), undo + 1, "one undo step");
+    // The Eyedropper keeps the picks: a Shift-click samples into the point again.
+    s.pointer(&PointerEvent::new(PointerKind::Down, 350.0, 50.0).with_mods(Mods { shift: true, ..Default::default() }), v).unwrap();
+    assert_eq!(colors(&s), [orange, white, white, white]);
+    assert_eq!(undo_len(&s), undo + 2);
+    // A sample of the color the point already has changes nothing and adds no step.
+    s.pointer(&PointerEvent::new(PointerKind::Down, 350.0, 50.0), v).unwrap();
+    assert_eq!(undo_len(&s), undo + 2, "no step when nothing changes");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(colors(&s), [teal, white, white, white]);
+    // Two points picked with the Mesh tool both take a plain click's sample of other art, and the
+    // art keeps its fill.
+    pick(&mut s, "mesh", 1, false);
+    pick(&mut s, "mesh", 3, true);
+    let undo = undo_len(&s);
+    click(&mut s, 125.0, 35.0, Mods::default());
+    let r = Color::rgb8(255, 0, 0);
+    assert_eq!(colors(&s), [teal, r, white, r]);
+    assert_eq!(undo_len(&s), undo + 1, "one undo step for every picked point");
+    assert_eq!(node(&s, m).appearance, appearance);
+    assert_eq!(node(&s, red).appearance.fill_paint().color(), Some(r));
+    // Back in the Mesh tool the two points are still picked: a fill color recolors just them.
+    s.select_tool("mesh", v).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    let b = Color::rgb8(0, 0, 255);
+    assert_eq!(colors(&s), [teal, b, white, b], "the picks go back to the Mesh tool");
+    // Without picked points a click on an image samples into the whole selected mesh as before.
+    s.select_tool("selection", v).unwrap();
+    s.execute("select.set", &json!({"ids": [m.0]})).unwrap();
+    click(&mut s, 450.0, 50.0, Mods::default());
+    assert_eq!(colors(&s), [teal, b, white, b], "the points keep their colors");
+    assert_ne!(node(&s, m).appearance, appearance);
+}
+
+/// A Cmd-click with the Direct Selection tool the Eyedropper lends picks gradient mesh points for
+/// the Eyedropper: the lent tool starts from the Eyedropper's picks, so a Shift-click adds to
+/// them, and the Eyedropper samples into what the lent tool left picked (#8090).
+#[test]
+fn mesh_points_picked_through_the_lent_tool_take_the_eyedropper_sample() {
+    let mut s = session();
+    // Two pixels, orange and teal, 100 pt each, at (300, 0).
+    let rgba = [[255u8, 128, 0, 255], [0, 128, 128, 255]].concat();
+    let img = craft_image_codecs::Image::from_raw(2, 1, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, rgba).unwrap();
+    let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
+    s.edit("Place", |d, _| {
+        d.images.insert("px".into(), ImageBlob::png(png.to_vec()));
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let xf = vectorcraft_geom::Affine::translate((300.0, 0.0)) * vectorcraft_geom::Affine::scale(100.0);
+        let im = ImageObject { key: "px".into(), width: 2, height: 1, xf, link: None, placement: Default::default(), pixels: None };
+        d.insert(Some(l), 0, Node::new(id, NodeKind::Image(Box::new(im)))).map_err(|e| crate::EngineError::Other(e.to_string()))
+    })
+    .unwrap();
+    let m = rect(&mut s, 10.0);
+    s.execute("object.mesh.create", &json!({"ids": [m.0], "rows": 1, "cols": 1})).unwrap();
+    let colors = |s: &Session| match node(s, m).kind {
+        NodeKind::Mesh(g) => g.points.iter().map(|p| p.color).collect::<Vec<_>>(),
+        k => panic!("not a mesh: {k:?}"),
+    };
+    let white = colors(&s)[0];
+    let v = ViewInfo::default();
+    let press = |s: &mut Session, i: usize, mods: Mods| {
+        let q = match node(s, m).kind {
+            NodeKind::Mesh(g) => g.points[i].p,
+            k => panic!("not a mesh: {k:?}"),
+        };
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, q.x, q.y).with_mods(mods), v).unwrap();
+        }
+    };
+    let (teal, orange) = (Color::rgb8(0, 128, 128), Color::rgb8(255, 128, 0));
+    s.execute("select.set", &json!({"ids": [m.0]})).unwrap();
+    s.select_tool("directSelection", v).unwrap();
+    press(&mut s, 0, Mods::default());
+    s.select_tool("eyedropper", v).unwrap();
+    // Cmd-click point 3: Direct Selection, lent, picks it in place of point 0.
+    press(&mut s, 3, Mods { cmd: true, ..Default::default() });
+    assert_eq!(s.tool_id(), "eyedropper");
+    click(&mut s, 450.0, 50.0, Mods::default());
+    assert_eq!(colors(&s), [white, white, white, teal], "the point the lent tool picked takes the sample");
+    // Cmd+Shift-click point 0 adds it to the Eyedropper's pick.
+    press(&mut s, 0, Mods { cmd: true, shift: true, ..Default::default() });
+    click(&mut s, 350.0, 50.0, Mods::default());
+    assert_eq!(colors(&s), [orange, white, white, orange], "both picked points take the sample");
+}
+
 /// A CMYK document with one image of `px` (one row, 100 pt a pixel) at (300, 0).
 fn cmyk_doc_with_image(px: &[[u8; 4]]) -> Session {
     let mut s = Session::new();
@@ -196,7 +757,41 @@ fn cmyk_doc_with_image(px: &[[u8; 4]]) -> Session {
     let w = px.len() as u32;
     let img = image::RgbaImage::from_raw(w, 1, px.concat()).unwrap();
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     s.edit("Place", |d, _| {
         d.images.insert("px".into(), ImageBlob::png(png));
         let l = d.layers[0].id;
@@ -226,8 +821,8 @@ fn an_rgb_image_sampled_in_a_cmyk_document_separates_through_the_color_settings(
     let got = node(&s, dst).appearance.fill_paint().color().unwrap();
     assert_eq!(got, managed_cmyk(Color::rgb8(83, 170, 223)));
     let Color::Cmyk { c, m, y, k } = got else { panic!("{got:?}") };
-    // Generic CMYK: about C59 M12 Y3 K0, with no black, where the formula gave K13.
-    assert!((0.5..0.75).contains(&c) && (0.05..0.2).contains(&m) && y < 0.05 && k < 0.02, "{c} {m} {y} {k}");
+    // Generic CMYK: about C62 M19 Y0 K0, with no black, where the formula gave K13.
+    assert!((0.5..0.75).contains(&c) && (0.1..0.25).contains(&m) && y < 0.05 && k < 0.02, "{c} {m} {y} {k}");
     // A light blue shows close to the color it was picked from; the formula's C12 M7 showed duller.
     click(&mut s, 450.0, 50.0, Mods::default());
     let got = node(&s, dst).appearance.fill_paint().color().unwrap();

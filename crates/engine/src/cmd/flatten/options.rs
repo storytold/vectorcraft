@@ -1,8 +1,8 @@
 use super::analysis::draws_image;
-use super::apply::{apply, kept_work, plan};
+use super::apply::{apply, plan};
 use super::presets::{FlattenerPreset, saved_preset};
 use super::report::target_roots;
-use super::{BTreeSet, Deserialize, EngineError, Node, Result, Serialize, Session, Value, bad, json, str_param};
+use super::{BTreeSet, Deserialize, Document, EngineError, Node, NodeKind, Paint, Result, Serialize, Session, Value, bad, json, str_param};
 
 /// Object → Flatten Transparency settings: a preset's, adjusted by the command's params.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -34,6 +34,10 @@ pub struct FlattenOptions {
     /// amounts). `None` for ordinary flattening. Not a preset option.
     #[serde(skip)]
     pub no_transparency: Option<BTreeSet<String>>,
+    /// The file writes a colorized image in its colorize paint (EPS), so a colorize paint by
+    /// itself doesn't count as transparency. Not a preset option.
+    #[serde(skip)]
+    pub keeps_colorize: bool,
 }
 
 impl Default for FlattenOptions {
@@ -81,6 +85,7 @@ impl FlattenOptions {
             preserve_alpha: false,
             preserve_overprints: true,
             no_transparency: None,
+            keeps_colorize: false,
         }
     }
 
@@ -138,14 +143,42 @@ impl FlattenOptions {
         Ok(o)
     }
 
+    /// Whether `n`, art of `d`, shows transparency these options flatten
+    /// ([`Node::shows_transparency`], colorized images as [`Self::counts_colorize`] says).
+    pub(crate) fn shows_transparency(&self, d: &Document, n: &Node) -> bool {
+        n.shows_transparency_with(&|c| self.counts_colorize(d, c))
+    }
+
+    /// Whether colorized image `n`, art of `d`, counts as transparency by itself. With
+    /// [`Self::keeps_colorize`], an image colorized with a solid paint whose pixels are grayscale
+    /// or 1-bit doesn't: the EPS writer draws it in that paint. An image whose pixels don't take
+    /// the paint ([`vectorcraft_doc::ImageBlob::takes_colorize`]) never counts: it draws uncolorized.
+    pub(crate) fn counts_colorize(&self, d: &Document, n: &Node) -> bool {
+        let NodeKind::Image(im) = &n.kind else { return true };
+        let shown = d.shown_image(n, im);
+        let blob = d.image_blob(&shown);
+        if blob.is_some_and(|b| !b.takes_colorize()) {
+            return false;
+        }
+        let solid = matches!(n.extras().colorize.as_deref(), Some(Paint::Solid { .. }));
+        !self.keeps_colorize || !solid || blob.is_some_and(|b| b.gray_source().is_none())
+    }
+
     /// `n` shows an image whose see-through pixels count as transparency.
     pub(super) fn draws_see_through_image(&self, n: &Node) -> bool {
         self.no_transparency.as_ref().is_some_and(|keys| draws_image(n, keys))
     }
 
     /// Whether a group that splits into `regions` atomic regions is rasterized whole.
-    pub(super) fn rasterize_all(&self, regions: usize) -> bool {
+    pub(crate) fn rasterize_all(&self, regions: usize) -> bool {
         self.balance <= 0.0 || (self.balance < 100.0 && regions as f64 > 10f64.powf(self.balance / 20.0))
+    }
+
+    /// The most atomic regions a group can split into without being rasterized whole, when a group
+    /// with more needs none of its regions: `None` at a balance of 0 or 100, and with Clip Complex
+    /// Regions (a group rasterized whole is clipped to all of its regions).
+    pub(crate) fn region_limit(&self) -> Option<usize> {
+        (!self.clip_complex_regions && self.balance > 0.0 && self.balance < 100.0).then(|| 10f64.powf(self.balance / 20.0).floor() as usize)
     }
 }
 
@@ -161,7 +194,7 @@ pub(super) fn flatten(s: &mut Session, p: &Value) -> Result<Value> {
     let plan = plan(&src, &roots, &o, true)?;
     let warning = crate::cmd::rasterfx::undecoded_warning(failed);
     let options = serde_json::to_value(&o).unwrap_or_default();
-    if plan.flat.is_empty() && !plan.kept.iter().any(|id| src.node(*id).is_some_and(|n| kept_work(n, &o))) {
+    if plan.flat.is_empty() && !plan.work.iter().any(|k| k.changes) {
         return Ok(json!({ "ids": roots.iter().map(|i| i.0).collect::<Vec<_>>(), "rasterized": 0, "vector": 0, "options": options }));
     }
     let (ids, vector, rasterized) = s.edit("Flatten Transparency", |d, sel| {

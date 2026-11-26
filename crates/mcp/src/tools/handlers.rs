@@ -1,5 +1,6 @@
 use super::dispatch::trace_views;
 use super::{Backend, Map, ToolResult, Value, json};
+use vectorcraft_doc::resample::{Resample, fitted};
 
 // ---------- implementation ----------
 
@@ -80,19 +81,24 @@ fn paint_steps(a: &Args) -> Result<(Vec<Step<'static>>, Map<String, Value>), Str
 }
 
 /// Sets the paint `a` gives on `ids` (default: the selection) and as the default for new art.
-/// Returns the paint applied and the most objects one of its edits painted (the `objects` of the
-/// `paint.setFill`, `paint.setStroke` and `stroke.set` replies).
-pub(super) fn apply_paint(b: &mut dyn Backend, a: &Args, ids: Option<Value>) -> Result<(Value, u64), String> {
+/// Returns the paint applied, the most objects one of its edits painted (the `objects` of the
+/// `paint.setFill`, `paint.setStroke` and `stroke.set` replies) and the commands among them that
+/// painted no object.
+pub(super) fn apply_paint(b: &mut dyn Backend, a: &Args, ids: Option<Value>) -> Result<(Value, u64, Vec<&'static str>), String> {
     let (steps, applied) = paint_steps(a)?;
-    let mut objects = 0;
+    let (mut objects, mut unpainted) = (0, vec![]);
     for (cmd, mut p) in steps {
         if let Some(ids) = &ids {
             p["ids"] = ids.clone();
         }
         let r = exec(b, cmd, p)?;
-        objects = objects.max(r.get("objects").and_then(Value::as_u64).unwrap_or(0));
+        let n = r.get("objects").and_then(Value::as_u64).unwrap_or(0);
+        if n == 0 {
+            unpainted.push(cmd);
+        }
+        objects = objects.max(n);
     }
-    Ok((Value::Object(applied), objects))
+    Ok((Value::Object(applied), objects, unpainted))
 }
 
 /// Checks `draw_path` / `draw_shape`'s `dash`, `cap`, `join`, `opacity`, `name` and `effects`
@@ -246,6 +252,16 @@ pub(super) fn select_ids(b: &mut dyn Backend, a: &Args) -> Result<(), String> {
 
 pub(super) fn add_text(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
     let text = a.get("text").and_then(Value::as_str).ok_or("missing string argument `text`")?;
+    // Creating type on a path replaces the path. Refuse an invalid effect before editing.
+    let path_effect = match a.get("pathEffect") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(effect)) if vectorcraft_doc::PathEffect::parse(effect).is_some() => Some(effect),
+        Some(Value::String(effect)) => return Err(format!("unknown path effect `{effect}`")),
+        Some(_) => return Err("`pathEffect` must be a string".into()),
+    };
+    if path_effect.is_some() && (!a.contains_key("path") || a.get("mode").is_some_and(|m| !matches!(m.as_str(), Some("onPath" | "path")))) {
+        return Err("`pathEffect` requires type on a path".into());
+    }
     let mut style = json!({});
     for k in ["size", "font", "color", "justify", "vertical"] {
         if let Some(v) = a.get(k) {
@@ -275,12 +291,12 @@ pub(super) fn add_text(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
         }
         exec(b, "text.create", p)?
     };
-    if let Some(e) = a.get("pathEffect").and_then(Value::as_str) {
+    if let Some(e) = path_effect {
         exec(b, "type.pathOptions", json!({"effect": e}))?;
     }
     let mut made = json!({"id": r.get("id")});
     // A path effect is applied after the text is made: ask again how it fits then.
-    let overflow = match r.get("id").filter(|_| a.get("pathEffect").is_some()) {
+    let overflow = match r.get("id").filter(|_| path_effect.is_some()) {
         Some(id) => exec(b, "document.node", json!({"id": id, "summary": true}))?.get("overflow").and_then(Value::as_bool) == Some(true),
         None => r.get("overflow").is_some(),
     };
@@ -291,9 +307,42 @@ pub(super) fn add_text(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
 }
 
 pub(super) fn transform(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
+    // Each operation is its own command: check the params the later ones refuse before the first
+    // runs, so a refused request changes nothing. The `transform` arm of `dispatch` has already
+    // refused a `dx`, `dy`, `rotate`, `scale`, `scaleX`, `scaleY` or `shear` that is not a number.
+    fn bad(cmd: &'static str) -> impl Fn(String) -> String {
+        move |e| format!("invalid parameters for `{cmd}`: {e}")
+    }
+    let s = a.get("scale").and_then(Value::as_f64);
+    let (sx, sy) = (a.get("scaleX").and_then(Value::as_f64).or(s), a.get("scaleY").and_then(Value::as_f64).or(s));
+    if sx.is_some() || sy.is_some() {
+        vectorcraft_engine::cmd::scale_factors(sx.unwrap_or(100.0), sy.unwrap_or(100.0)).map_err(bad("object.scale"))?;
+    }
+    // A null `reflect`, `copy` or `origin` is left out.
+    let reflect = match a.get("reflect") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(axis)) => Some(axis.as_str()),
+        Some(v) => return Err(format!("invalid parameters for `object.reflect`: axis must be \"vertical\" or \"horizontal\", not `{v}`")),
+    };
+    if let Some(axis) = reflect {
+        vectorcraft_engine::cmd::reflect_axis(Some(&json!(axis))).map_err(bad("object.reflect"))?;
+    }
+    let shear = a.get("shear").and_then(Value::as_f64);
+    if let Some(sh) = shear {
+        vectorcraft_engine::cmd::shear_tangent(sh).map_err(bad("object.shear"))?;
+    }
+    let copy = match a.get("copy") {
+        None | Some(Value::Null) => false,
+        Some(v) => v.as_bool().ok_or_else(|| format!("`copy` must be true or false, not {v}"))?,
+    };
+    if let Some(o) = a.get("origin").filter(|o| !o.is_null())
+        && !o.as_array().is_some_and(|xy| xy.len() == 2 && xy.iter().all(Value::is_number))
+    {
+        return Err(format!("`origin` must be [x, y], not {o}"));
+    }
     select_ids(b, a)?;
     // With `copy`, the first operation duplicates and the rest transform the copy (the new selection).
-    let copy = std::cell::Cell::new(a.get("copy").and_then(Value::as_bool).unwrap_or(false));
+    let copy = std::cell::Cell::new(copy);
     let with = |mut p: Value| {
         if let Some(o) = a.get("origin") {
             p["origin"] = o.clone();
@@ -311,17 +360,15 @@ pub(super) fn transform(b: &mut dyn Backend, a: &Args) -> Result<Value, String> 
         exec(b, "object.rotate", with(json!({"angle": r})))?;
         done.push("rotate");
     }
-    let s = a.get("scale").and_then(Value::as_f64);
-    let (sx, sy) = (a.get("scaleX").and_then(Value::as_f64).or(s), a.get("scaleY").and_then(Value::as_f64).or(s));
     if sx.is_some() || sy.is_some() {
         exec(b, "object.scale", with(json!({"sx": sx.unwrap_or(100.0), "sy": sy.unwrap_or(100.0)})))?;
         done.push("scale");
     }
-    if let Some(axis) = a.get("reflect").and_then(Value::as_str) {
+    if let Some(axis) = reflect {
         exec(b, "object.reflect", with(json!({"axis": axis})))?;
         done.push("reflect");
     }
-    if let Some(sh) = a.get("shear").and_then(Value::as_f64) {
+    if let Some(sh) = shear {
         exec(b, "object.shear", with(json!({"angle": sh})))?;
         done.push("shear");
     }
@@ -334,9 +381,10 @@ pub(super) fn transform(b: &mut dyn Backend, a: &Args) -> Result<Value, String> 
 /// Most fields one `answer_dialog` call may set.
 pub(super) const MAX_DIALOG_FIELDS: usize = 256;
 
-/// Sets the open dialog's fields in order with one `ui.dialog.set {fields}`, which stores all of
-/// them or none, then confirms or cancels it. Every argument is checked before anything is sent to
-/// the app.
+/// Sets the open dialog's fields in order with one `ui.dialog.set {fields, action?}`, which stores
+/// all of them or none and then confirms or cancels that same dialog, so a dialog another
+/// connection opens in between is not answered in its place. Every argument is checked before
+/// anything is sent to the app.
 pub(super) fn answer_dialog(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
     let set = match a.get("set") {
         None => &[][..],
@@ -355,21 +403,37 @@ pub(super) fn answer_dialog(b: &mut dyn Backend, a: &Args) -> Result<Value, Stri
         let field = item.get("field").and_then(Value::as_str).ok_or_else(|| format!("set {i}: missing string `field`"))?;
         fields.push(json!({"field": field, "value": item.get("value").cloned().unwrap_or(Value::Null)}));
     }
-    let then = match a.get("action") {
-        None => None,
-        Some(v) if v == "confirm" => Some("ui.dialog.confirm"),
-        Some(v) if v == "cancel" => Some("ui.dialog.cancel"),
+    let (action, then) = match a.get("action") {
+        None => (None, None),
+        Some(v) if v == "confirm" => (Some("confirm"), Some("ui.dialog.confirm")),
+        Some(v) if v == "cancel" => (Some("cancel"), Some("ui.dialog.cancel")),
         Some(_) => return Err("`action` must be confirm or cancel".into()),
     };
     if fields.is_empty() && then.is_none() {
         return Err("give `set` and/or `action`".into());
     }
-    let dialog = if fields.is_empty() { Value::Null } else { b.call("ui.dialog.set", json!({"fields": fields}))? };
-    let result = match then {
-        Some(method) => b.call(method, json!({}))?,
-        None => Value::Null,
-    };
-    Ok(json!({"dialog": dialog, "result": result}))
+    if fields.is_empty() {
+        let result = match then {
+            Some(method) => b.call(method, json!({}))?,
+            None => Value::Null,
+        };
+        return Ok(json!({"dialog": Value::Null, "result": result}));
+    }
+    let mut params = json!({"fields": fields});
+    if let Some(action) = action {
+        params["action"] = json!(action);
+    }
+    let reply = b.call("ui.dialog.set", params)?;
+    match then {
+        None => Ok(json!({"dialog": reply, "result": Value::Null})),
+        // The app answered the dialog in the same request.
+        Some(_) if reply.get("dialog").is_some() => Ok(reply),
+        // An app that predates `action` replied with the dialog alone and did not answer it.
+        Some(method) => {
+            let result = b.call(method, json!({}))?;
+            Ok(json!({"dialog": reply, "result": result}))
+        }
+    }
 }
 
 pub(super) fn screenshot(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
@@ -420,16 +484,50 @@ pub(super) fn screenshot(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, St
     }
 }
 
-/// The window of an app from before `ui.screenshot {data}`, captured through a temporary file.
+/// The window of an app from before `ui.screenshot {data}`, captured through a temporary file in a
+/// new folder of its own inside the system's temporary folder ([`new_capture_folder`]). The folder
+/// and everything in it are removed once the capture is read, and also when the app or the read
+/// fails.
 fn old_window_capture(b: &mut dyn Backend, max: Option<u32>) -> Result<ToolResult, String> {
-    let tmp = std::env::temp_dir().join(format!("vectorcraft-window-{}.png", std::process::id())).to_string_lossy().to_string();
-    let r = b.call("ui.screenshot", json!({"path": tmp}))?;
-    let png = std::fs::read(&tmp).map_err(|e| format!("read {tmp}: {e}"))?;
-    // Best effort: a temporary file left behind is harmless.
-    std::fs::remove_file(&tmp).ok();
+    let dir = new_capture_folder(&std::env::temp_dir())?;
+    let tmp = dir.join("window.png").to_string_lossy().to_string();
+    let captured = b.call("ui.screenshot", json!({"path": tmp})).and_then(|r| Ok((std::fs::read(&tmp).map_err(|e| format!("read {tmp}: {e}"))?, r)));
+    // Best effort: a folder that can't be removed holds only this capture, and on unix only its
+    // owner can open it.
+    let _ = std::fs::remove_dir_all(&dir);
+    let (png, r) = captured?;
     let mut info = json!({"window": true, "width": r.get("width"), "height": r.get("height"), "path": Value::Null});
     let png = fit_capture(png, max, &mut info)?;
     Ok(image_result(&png, info))
+}
+
+/// A new folder in `parent` named `vectorcraft-window-` followed by the process id, `-` and a count
+/// of the process's captures; on unix only its owner can open it. A name that is already taken, by
+/// an earlier process with the same id or by anyone else, is skipped for the next count.
+fn new_capture_folder(parent: &std::path::Path) -> Result<std::path::PathBuf, String> {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    loop {
+        let dir = parent.join(format!("vectorcraft-window-{}-{}", std::process::id(), NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
+        match private_folder().create(&dir) {
+            Ok(()) => return Ok(dir),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(format!("{}: {e}", dir.display())),
+        }
+    }
+}
+
+/// A builder for folders that only their owner can read, write or open (mode 0o700).
+#[cfg(unix)]
+fn private_folder() -> std::fs::DirBuilder {
+    let mut b = std::fs::DirBuilder::new();
+    std::os::unix::fs::DirBuilderExt::mode(&mut b, 0o700);
+    b
+}
+
+/// A builder for folders: a plain one outside unix.
+#[cfg(not(unix))]
+fn private_folder() -> std::fs::DirBuilder {
+    std::fs::DirBuilder::new()
 }
 
 /// `max_side`: absent, or an integer in 1..4096.
@@ -442,12 +540,29 @@ pub(super) fn max_side(a: &Args) -> Result<Option<u32>, String> {
     }
 }
 
+/// The longest side of a window capture that is decoded (a screen is never wider).
+const MAX_CAPTURE_SIDE: u32 = 16_384;
+
+/// `png` decoded, refused when a side is longer than `side` or the decode needs more than 256 MiB:
+/// the picture is the app's reply, and its header names the size it is decoded at.
+pub(super) fn decode_png(png: &[u8], side: u32) -> Result<image::DynamicImage, String> {
+    let mut opts = craft_image_codecs::DecodeOptions::default();
+    opts.limits.max_width = side;
+    opts.limits.max_height = side;
+    opts.limits.max_alloc = 256 << 20;
+    let img = craft_image_codecs::decode_as_with(craft_image_codecs::Format::Png, png, &opts).map_err(|e| e.to_string())?;
+    let (w, h) = img.dimensions();
+    image::RgbaImage::from_raw(w, h, img.to_rgba8())
+        .map(image::DynamicImage::ImageRgba8)
+        .ok_or_else(|| "decoded PNG buffer size mismatch".to_string())
+}
+
 /// A window capture with `max_side`: scaled down when its longer side is larger, with its own size
 /// in `capturedWidth` / `capturedHeight` and the returned image's in `width` / `height`. Without
 /// `max_side` the capture and `info` stay as they are.
 fn fit_capture(png: Vec<u8>, max: Option<u32>, info: &mut Value) -> Result<Vec<u8>, String> {
     let Some(max) = max else { return Ok(png) };
-    let img = image::load_from_memory_with_format(&png, image::ImageFormat::Png).map_err(|e| format!("read capture: {e}"))?;
+    let img = decode_png(&png, MAX_CAPTURE_SIDE).map_err(|e| format!("read capture: {e}"))?;
     info["capturedWidth"] = json!(img.width());
     info["capturedHeight"] = json!(img.height());
     if img.width().max(img.height()) <= max {
@@ -455,12 +570,20 @@ fn fit_capture(png: Vec<u8>, max: Option<u32>, info: &mut Value) -> Result<Vec<u
         info["height"] = json!(img.height());
         return Ok(png);
     }
-    let img = img.thumbnail(max, max);
+    let img = fitted(img, max, max, Resample::Average);
     info["width"] = json!(img.width());
     info["height"] = json!(img.height());
-    let mut out = std::io::Cursor::new(Vec::new());
-    img.write_to(&mut out, image::ImageFormat::Png).map_err(|e| format!("encode capture: {e}"))?;
-    Ok(out.into_inner())
+    let rgba = img.to_rgba8();
+    let raw = craft_image_codecs::Image::from_raw(
+        rgba.width(),
+        rgba.height(),
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        rgba.into_raw(),
+    )
+    .map_err(|e| format!("encode capture: {e}"))?;
+    craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+        .map_err(|e| format!("encode capture: {e}"))
 }
 
 pub(super) fn image_result(png: &[u8], info: Value) -> ToolResult {
@@ -470,5 +593,25 @@ pub(super) fn image_result(png: &[u8], info: Value) -> ToolResult {
             json!({"type": "text", "text": info.to_string()}),
         ],
         is_error: false,
+    }
+}
+
+#[cfg(test)]
+mod decode_tests {
+    use super::decode_png;
+
+    #[test]
+    fn a_picture_with_a_side_past_the_limit_is_not_decoded() {
+        let img = craft_image_codecs::Image::from_raw(
+            200,
+            10,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            vec![0; 200 * 10 * 4],
+        )
+        .unwrap();
+        let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
+        assert!(decode_png(&png, 100).is_err());
+        assert_eq!(decode_png(&png, 200).unwrap().width(), 200);
     }
 }

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use kurbo::{CubicBez, ParamCurve, ParamCurveNearest};
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, PressureProfile, Selection};
+use vectorcraft_doc::{AngleProfile, Appearance, Document, Node, NodeId, NodeKind, PressureProfile, Selection};
 use vectorcraft_geom::hit::fill_contains;
 use vectorcraft_geom::{Anchor, AnchorKind, BezPath, FillRule, PathData, Point, Rect, SubPath, Vec2};
 use vectorcraft_pathops as po;
@@ -18,8 +18,8 @@ use super::create::{add_look, insert_look};
 use super::newart::NewArt;
 use super::pathops::{Beside, remove_each};
 use super::{
-    CommandSpec, Result, Session, bad, check_numbers, cmd, f64_or, has_anchors, has_doc, has_selection, id_param, index, number_or, ok, str_param,
-    switch_or,
+    CommandSpec, Result, Session, bad, check_numbers, cmd, f64_or, has_anchors, has_doc, has_selection, index, number_or, object_param, ok,
+    str_param, switch_or,
 };
 use crate::EngineError;
 
@@ -28,8 +28,11 @@ mod commands;
 mod common;
 mod cut;
 mod freehand;
+mod quickpen;
 mod smooth;
 
+pub(super) use anchors::{following_anchors, remove_anchors_of};
 pub use commands::specs;
-pub(super) use common::{ids_json, replace_with_pieces, usize_opt};
+pub(super) use common::{center_strokes, ids_json, replace_with_pieces, usize_opt};
 pub(super) use cut::{components, erase_outline};
+pub(super) use freehand::freehand_brushed;

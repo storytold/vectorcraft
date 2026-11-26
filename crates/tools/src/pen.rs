@@ -3,7 +3,12 @@
 //! Click adds a corner anchor; click-drag adds a smooth anchor with symmetric handles (Alt breaks
 //! them: the incoming handle stays where it was when Alt went down and only the outgoing one
 //! follows the pointer; Space held moves the anchor, handles and all); Shift constrains to 45°.
-//! A press on the first anchor closes the path, the drag shaping the closing curve. Clicking the
+//! A press on the first anchor closes the path, the drag shaping the closing curve: the anchor's
+//! incoming handle mirrors the pointer (a click leaves it retracted and the anchor a corner, so the
+//! closing segment comes in straight). Its outgoing handle stays where it is on a corner, so the first segment keeps its
+//! shape, and on a smooth anchor turns to stay in line at its own length; Alt makes the anchor a
+//! corner, leaving the outgoing handle where it was when Alt went down; Space held moves the
+//! anchor, handles and all. Clicking the
 //! last one retracts its outgoing handle, so the next segment leaves it as a corner; dragging from
 //! it pulls a new one out on its own.
 //! Alt held over a handle end, an anchor or a segment of a selected path (the one being drawn too)
@@ -24,10 +29,11 @@
 //! the other art and of the path being drawn, into line with them, onto the construction guides
 //! through the last anchor; with Shift held it slides along its 45° step into line. Hovering shows
 //! where the next one would go.
+//! While a drag pulls a handle out, the Info panel shows it from the anchor to the handle's end.
 
 use serde_json::json;
 use vectorcraft_doc::{NodeId, NodeKind};
-use vectorcraft_geom::{BezPath, Point, Vec2};
+use vectorcraft_geom::{Anchor, BezPath, Point, Vec2};
 
 use crate::direct::hit_handle;
 use crate::draw2::{AnchorTool, editable_paths, shown_paths};
@@ -45,8 +51,15 @@ pub struct PenTool {
     /// The anchor a press placed, while the drag shapes its handles.
     drag: Option<Place>,
     hover: Option<Point>,
+    /// The pointer at the last hover before snapping: a press picks anchors there first.
+    hover_raw: Option<Point>,
+    /// The modifiers at the last hover: with Alt a press may go to the Anchor Point tool.
+    hover_mods: Mods,
     /// The incoming handle of the anchor being dragged out, as last previewed.
     in_h: Point,
+    /// The first anchor, as it was when a press on it began closing the path, and its outgoing
+    /// handle as the closing drag last left it: Alt pressed mid-drag keeps the handle there.
+    first: Option<(Anchor, Point)>,
     /// The pointer at the last button-down or drag: Space held moves the anchor as far as it moves.
     last: Point,
     /// Where the button went down: the drag threshold is measured from it.
@@ -54,6 +67,10 @@ pub struct PenTool {
     /// The pointer has moved past the drag threshold since the press: a press released inside it
     /// is a click, so the anchor stays a corner without handles.
     dragged: bool,
+    /// The handle a drag past the threshold is pulling out, from the anchor it shapes to the
+    /// handle's end as last previewed (the outgoing handle, or the incoming one of the first
+    /// anchor closing the path): what the Info panel shows ([`Tool::readout`]).
+    vector: Option<Vec2>,
     /// The last anchor of the path being drawn, while a click retracts its outgoing handle or a
     /// drag pulls a new one out: (path, subpath, anchor, its position).
     handle: Option<(NodeId, usize, usize, Point)>,
@@ -69,13 +86,15 @@ const DRAG_THRESHOLD: f64 = 3.0;
 /// An anchor being placed, as the press decided: where it is, the path it goes on (none: the
 /// first anchor of a new path) and whether it closes that path (the press was on its first
 /// anchor). The drag only shapes its handles, whatever the path looks like meanwhile: a closing
-/// preview leaves the path closed, so no longer one the pen draws on.
+/// preview leaves the path closed, so no longer one the pen draws on. `moved`: Space held has
+/// moved the anchor from where the press found it.
 #[derive(Clone, Copy)]
 struct Place {
     at: Point,
     path: Option<NodeId>,
     subpath: Option<usize>,
     closing: bool,
+    moved: bool,
 }
 
 /// The open path the pen is extending: the single selected open path, or the single open path of a
@@ -242,6 +261,16 @@ impl Tool for PenTool {
     fn busy(&self) -> bool {
         self.drag.is_some() || self.handle.is_some() || self.convert.is_some()
     }
+    /// A path being drawn: Escape ends it.
+    fn ends_on_escape(&self, cx: &ToolContext) -> bool {
+        self.active(cx).is_some()
+    }
+    /// The handle a drag is pulling out of the anchor it shapes: the outgoing handle of a new or
+    /// added anchor or of the last anchor, or the incoming handle of the first anchor closing the
+    /// path. None for a click, a hover or an Alt gesture.
+    fn readout(&self, _cx: &ToolContext) -> Option<crate::Readout> {
+        self.vector.filter(|_| self.dragged && (self.drag.is_some() || self.handle.is_some())).map(crate::Readout::drag)
+    }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let tol = cx.tol(5.0).max(cx.point_tol());
         // The path a press began is the selected one by the next event.
@@ -272,12 +301,15 @@ impl Tool for PenTool {
         match ev.kind {
             PointerKind::Move => {
                 self.hover = Some(p);
+                self.hover_raw = Some(ev.pos);
+                self.hover_mods = ev.mods;
                 vec![]
             }
             PointerKind::Down => {
                 self.last = ev.pos;
                 self.pressed = ev.pos;
                 self.dragged = false;
+                self.vector = None;
                 if let Some((id, si, first, last, _)) = active {
                     let end = last_anchor(cx, id, Some(si));
                     let closing_end = end.filter(|(_, ai)| *ai > 0).map(|_| first);
@@ -285,9 +317,7 @@ impl Tool for PenTool {
                     // Pick at the raw pointer before snapping or constraining a new point.
                     // A one-anchor path doesn't close on itself: its anchor is the last one too.
                     if picked == Some(Endpoint::First) {
-                        self.drag = Some(Place { at: first, path: Some(id), subpath: Some(si), closing: true });
-                        let params = json!({"id": id.0, "subpath": si});
-                        return vec![Action::Begin("Close Path".into()), Action::Preview("path.close".into(), params)];
+                        return self.begin_close(cx, id, si, first);
                     }
                     // Alt uses Anchor Point behavior at the terminal anchor too.
                     if let Some(acts) = self.alt_convert(cx, ev) {
@@ -303,9 +333,7 @@ impl Tool for PenTool {
                     if raw_other.is_none() && p != ev.pos {
                         let snapped = pick_endpoint(closing_end, last, p, tol, Endpoint::First);
                         if snapped == Some(Endpoint::First) {
-                            self.drag = Some(Place { at: first, path: Some(id), subpath: Some(si), closing: true });
-                            let params = json!({"id": id.0, "subpath": si});
-                            return vec![Action::Begin("Close Path".into()), Action::Preview("path.close".into(), params)];
+                            return self.begin_close(cx, id, si, first);
                         }
                         if snapped == Some(Endpoint::Last)
                             && let Some((si, ai)) = end
@@ -315,14 +343,16 @@ impl Tool for PenTool {
                         }
                     }
                     // An end of another open path: the two become one, and the path is finished.
-                    if let Some((other, other_si, at_first)) = raw_other.or_else(|| open_end_at(cx, p, tol, Some((id, si)))) {
+                    if let Some((other, other_si, at_first)) =
+                        raw_other.or_else(|| if p != ev.pos { open_end_at(cx, p, tol, Some((id, si))) } else { None })
+                    {
                         self.stop();
                         let end = if at_first { "first" } else { "last" };
                         let mut params = json!({"ids": [id.0, other.0], "ends": ["last", end]});
                         params["subpaths"] = json!([si, other_si]);
                         return vec![Action::Exec("path.join".into(), params)];
                     }
-                    self.drag = Some(Place { at: p, path: Some(id), subpath: Some(si), closing: false });
+                    self.drag = Some(Place { at: p, path: Some(id), subpath: Some(si), closing: false, moved: false });
                     self.in_h = p;
                     let params = json!({"id": id.0, "x": p.x, "y": p.y, "subpath": si});
                     return vec![Action::Begin("Pen".into()), Action::Preview("path.appendAnchor".into(), params)];
@@ -359,7 +389,7 @@ impl Tool for PenTool {
                     return vec![act];
                 }
                 (self.drawing, self.path, self.subpath) = (true, None, None);
-                self.drag = Some(Place { at: p, path: None, subpath: None, closing: false });
+                self.drag = Some(Place { at: p, path: None, subpath: None, closing: false, moved: false });
                 vec![Action::Begin("Pen".into()), Action::Preview("path.create".into(), json!({"anchors": [{"x": p.x, "y": p.y}]}))]
             }
             PointerKind::Drag => {
@@ -381,21 +411,30 @@ impl Tool for PenTool {
                     if ev.mods.shift {
                         h = a + vectorcraft_geom::constrain_angle_from(ev.pos - a, 45.0, cx.constrain_angle);
                     }
+                    self.vector = Some(h - a);
                     return vec![set_out_handle(id, si, ai, h)];
                 }
-                let Some(Place { at: mut a, path, subpath, closing }) = self.drag else { return vec![] };
-                // Space held moves the anchor being placed, handles and all.
-                if ev.mods.space && !closing {
+                let Some(Place { at: mut a, path, subpath, closing, mut moved }) = self.drag else { return vec![] };
+                // Space held moves the anchor being placed, handles and all; while closing, the
+                // first anchor, with the outgoing handle a closing drag keeps.
+                if ev.mods.space {
                     let d = ev.pos - self.last;
                     a += d;
                     self.in_h += d;
-                    self.drag = Some(Place { at: a, path, subpath, closing });
+                    if closing && let Some((anchor, out)) = &mut self.first {
+                        anchor.translate(d);
+                        *out += d;
+                    }
+                    moved |= d != Vec2::ZERO;
+                    self.drag = Some(Place { at: a, path, subpath, closing, moved });
                 }
                 self.last = ev.pos;
                 let mut out_h = ev.pos;
                 if ev.mods.shift {
                     out_h = a + vectorcraft_geom::constrain_angle_from(ev.pos - a, 45.0, cx.constrain_angle);
                 }
+                // A closing drag shapes the first anchor's incoming handle, which mirrors the pointer.
+                self.vector = Some(if closing { a - out_h } else { out_h - a });
                 let alt = ev.mods.alt;
                 let Some(id) = path else {
                     // First anchor of a new path: re-issue create with handles.
@@ -406,11 +445,7 @@ impl Tool for PenTool {
                     )];
                 };
                 if closing {
-                    let mut params = json!({"id": id.0, "in": [2.0 * a.x - out_h.x, 2.0 * a.y - out_h.y], "independent": alt});
-                    if let Some(si) = subpath {
-                        params["subpath"] = json!(si);
-                    }
-                    return vec![Action::Preview("path.close".into(), params)];
+                    return vec![close_drag(id, subpath, moved.then_some(a), a - (out_h - a), alt, self.first.as_mut())];
                 }
                 // Alt pressed mid-drag keeps the curve already shaped into the anchor: only the
                 // outgoing handle follows. Held from the start, the incoming handle stays retracted.
@@ -424,6 +459,7 @@ impl Tool for PenTool {
             }
             PointerKind::Up => {
                 self.snap.clear();
+                self.vector = None;
                 if let Some(mut t) = self.convert.take() {
                     return t.pointer(cx, ev);
                 }
@@ -432,11 +468,12 @@ impl Tool for PenTool {
                 }
                 let Some(place) = self.drag.take() else { return vec![] };
                 if place.closing {
+                    self.first = None;
                     self.stop();
                 }
                 vec![Action::Commit]
             }
-            PointerKind::DoubleClick => vec![],
+            PointerKind::DoubleClick | PointerKind::TripleClick => vec![],
         }
     }
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _m: Mods) -> Vec<Action> {
@@ -445,13 +482,32 @@ impl Tool for PenTool {
             _ => vec![],
         }
     }
+    /// Choosing the Pen again (P, its toolbar button, `tool.select`) ends the path being drawn as
+    /// Escape does: the path stays open, the Pen stays chosen, and the next click starts a new
+    /// path. With no path being drawn it changes nothing.
+    fn chosen_again(&mut self, cx: &ToolContext) -> Vec<Action> {
+        self.deactivate(cx)
+    }
+    /// A dropped press drops only the anchor it was placing, a handle it was dragging or the
+    /// close it was making: the path being drawn goes on with the next click.
+    fn drop_press(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        self.drag = None;
+        self.first = None;
+        self.handle = None;
+        self.convert = None;
+        self.vector = None;
+        self.snap.clear();
+        vec![]
+    }
     /// Deactivate the pen tool, committing in-flight operations and restoring compound path selection.
     fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
         let path = self.path;
         self.stop();
         self.snap.clear();
         let placing = self.drag.take().is_some();
+        self.first = None;
         let handling = self.handle.take().is_some();
+        self.vector = None;
         // Finish the preview as it stands; clearing state alone leaves its transaction open.
         let mut acts = self.convert.take().map(|mut t| t.deactivate(cx)).unwrap_or_default();
         if placing || handling {
@@ -471,21 +527,33 @@ impl Tool for PenTool {
             return t.overlays(cx);
         }
         let mut o = vec![];
-        if cx.pen_rubber_band
-            && self.drag.is_none()
+        // The rubber band preference hides only the preview segment; Measurement Labels decides the readout.
+        if self.drag.is_none()
             && self.handle.is_none()
-            && let (Some((id, _, _, last, out)), Some(h)) = (self.active(cx), self.hover)
+            && let (Some((id, si, first, last, out)), Some(h)) = (self.active(cx), self.hover)
         {
-            let mut bp = BezPath::new();
-            bp.move_to(last);
-            if out.distance(last) > 1e-9 {
-                bp.quad_to(out, h);
-            } else {
-                bp.line_to(h);
+            // The segment a click at `h` adds, if any: it leaves the last anchor along its outgoing
+            // handle and arrives at the anchor the click ends it on, with that anchor's handle.
+            let raw = self.hover_raw.unwrap_or(h);
+            let segment =
+                if cx.pen_rubber_band || cx.measurement_labels { click_end(cx, (id, si, first, last), raw, h, self.hover_mods) } else { None };
+            if cx.pen_rubber_band
+                && let Some((end, end_h)) = segment
+            {
+                let mut bp = BezPath::new();
+                bp.move_to(last);
+                if out.distance(last) > 1e-9 || end_h.distance(end) > 1e-9 {
+                    bp.curve_to(out, end_h, end);
+                } else {
+                    bp.line_to(end);
+                }
+                o.push(Overlay::Path { path: bp, color: cx.doc.layer_color(id), width: 1.0, dashed: false });
             }
-            o.push(Overlay::Path { path: bp, color: cx.doc.layer_color(id), width: 1.0, dashed: false });
-            if cx.measurement_labels && last.distance(h) > 1e-9 {
-                o.push(Overlay::Measure { p: h + Vec2::new(cx.tol(12.0), cx.tol(12.0)), text: cx.segment_measure_label(last, h) });
+            if cx.measurement_labels
+                && let Some((end, _)) = segment
+                && last.distance(end) > 1e-9
+            {
+                o.push(Overlay::Measure { p: h + Vec2::new(cx.tol(12.0), cx.tol(12.0)), text: cx.segment_measure_label(last, end) });
             }
         }
         o.extend_from_slice(self.snap.guides());
@@ -564,12 +632,22 @@ impl PenTool {
         (self.drawing, self.path, self.subpath) = (false, None, None);
     }
 
+    /// A press on the first anchor (at `at`) of subpath `si` of the path being drawn: close it, the
+    /// anchor a corner with its incoming handle retracted until a drag pulls it out, as a click on
+    /// the last anchor retracts its outgoing one ([`set_out_handle`]).
+    fn begin_close(&mut self, cx: &ToolContext, id: NodeId, si: usize, at: Point) -> Vec<Action> {
+        self.drag = Some(Place { at, path: Some(id), subpath: Some(si), closing: true, moved: false });
+        self.first = first_anchor(cx, id, si).map(|a| (a, a.h_out));
+        let params = json!({"id": id.0, "subpath": si, "in": [at.x, at.y], "independent": true});
+        vec![Action::Begin("Close Path".into()), Action::Preview("path.close".into(), params)]
+    }
+
     /// Hand an Alt press on a selected path's handle, anchor or segment to the Anchor Point tool.
     fn alt_convert(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Option<Vec<Action>> {
         if !alt_converts(cx, ev.pos, ev.mods) {
             return None;
         }
-        let mut t = AnchorTool::new("anchorPoint");
+        let mut t = AnchorTool::lent_by_pen();
         let acts = t.pointer(cx, ev);
         if !t.busy() {
             return None;
@@ -577,6 +655,83 @@ impl PenTool {
         self.convert = Some(t);
         Some(acts)
     }
+}
+
+/// Where a click ends the next segment of subpath `si` of path `id` (first anchor `first`, last
+/// anchor `last`), and the incoming handle it arrives with, for a pointer at `raw` that snaps to
+/// `h`. The anchors are picked in the order a press picks them: at `raw` first, then at `h`. On the
+/// first anchor the path closes, with that anchor's incoming handle retracted
+/// ([`PenTool::begin_close`]). On an end of another open path the two join, and the segment arrives
+/// with that end's own handle on the joining side. Anywhere else the click adds a corner anchor at `h`.
+/// None where the click adds no segment: on the last anchor (its outgoing handle retracts), with
+/// Alt over the path (the Anchor Point tool takes the press, [`alt_converts`]), and on an end of
+/// another path that lies on the last anchor (`path.join` merges the two ends into one anchor).
+fn click_end(cx: &ToolContext, (id, si, first, last): (NodeId, usize, Point, Point), raw: Point, h: Point, m: Mods) -> Option<(Point, Point)> {
+    let tol = cx.tol(5.0).max(cx.point_tol());
+    let closing_end = last_anchor(cx, id, Some(si)).filter(|(_, ai)| *ai > 0).map(|_| first);
+    match pick_endpoint(closing_end, last, raw, tol, Endpoint::First) {
+        Some(Endpoint::First) => return Some((first, first)),
+        Some(Endpoint::Last) => return None,
+        None => {}
+    }
+    if alt_converts(cx, raw, m) {
+        return None;
+    }
+    let raw_other = open_end_at(cx, raw, tol, Some((id, si)));
+    if raw_other.is_none() && h != raw {
+        match pick_endpoint(closing_end, last, h, tol, Endpoint::First) {
+            Some(Endpoint::First) => return Some((first, first)),
+            Some(Endpoint::Last) => return None,
+            None => {}
+        }
+    }
+    let other = raw_other.or_else(|| if h != raw { open_end_at(cx, h, tol, Some((id, si))) } else { None });
+    let joined = other.and_then(|(other, osi, at_first)| {
+        let sp = cx.doc.node(other)?.path_data()?.subpaths.get(osi)?;
+        if at_first { sp.anchors.first().map(|a| (a.p, a.h_in)) } else { sp.anchors.last().map(|a| (a.p, a.h_out)) }
+    });
+    match joined {
+        Some((end, _)) if end.distance(last) < 1e-6 => None,
+        Some(joined) => Some(joined),
+        None => Some((h, h)),
+    }
+}
+
+/// The first anchor of subpath `si` of path `id`.
+pub(crate) fn first_anchor(cx: &ToolContext, id: NodeId, si: usize) -> Option<Anchor> {
+    cx.doc.node(id)?.path_data()?.subpaths.get(si)?.anchors.first().copied()
+}
+
+/// The preview of a closing drag that puts the first anchor's incoming handle at `in_h`, the anchor
+/// first moved to `at` when given (Space held). `first` holds that anchor as it was when the press
+/// began closing the path (moved with it), and its outgoing handle as the drag last left it: a
+/// smooth anchor turns that handle to stay in line, and Alt (`alt`), which makes the anchor a
+/// corner, keeps it there.
+pub(crate) fn close_drag(
+    id: NodeId,
+    subpath: Option<usize>,
+    at: Option<Point>,
+    in_h: Point,
+    alt: bool,
+    first: Option<&mut (Anchor, Point)>,
+) -> Action {
+    let mut params = json!({"id": id.0, "in": [in_h.x, in_h.y], "independent": alt});
+    if let Some(at) = at {
+        params["at"] = json!([at.x, at.y]);
+    }
+    if let Some((anchor, out)) = first {
+        if alt {
+            params["out"] = json!([out.x, out.y]);
+        } else {
+            let mut a = *anchor;
+            a.set_handle(false, in_h, false);
+            *out = a.h_out;
+        }
+    }
+    if let Some(si) = subpath {
+        params["subpath"] = json!(si);
+    }
+    Action::Preview("path.close".into(), params)
 }
 
 /// Go on drawing subpath `si` of open path `id` from its last anchor, or from its first
@@ -611,7 +766,7 @@ fn auto_add_delete(cx: &ToolContext, p: Point, m: Mods, tol: f64) -> Option<Acti
 /// A click on a selected blend's spine: delete the point under `p` when no key object sits on it
 /// (a key's point does nothing), else add one where the spine passes within `tol`.
 fn spine_click(cx: &ToolContext, p: Point, tol: f64) -> Option<Vec<Action>> {
-    for (id, path) in crate::direct::spines(cx).into_iter().filter(|(id, _)| cx.selection.contains(*id)) {
+    for (id, path) in crate::direct::selected_spines(cx) {
         let Some(NodeKind::Blend { children, spec }) = cx.doc.node(id).map(|n| &n.kind) else { continue };
         let keys = vectorcraft_doc::live::blend_spine(children, spec).and_then(|(_, a)| a).unwrap_or_default();
         if let Some((_, ai, _)) = path.anchors().find(|(_, _, a)| a.p.distance(p) <= tol) {

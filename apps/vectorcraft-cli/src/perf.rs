@@ -67,6 +67,61 @@ fn median_ms(runs: usize, mut f: impl FnMut()) -> f64 {
     v.get(v.len() / 2).copied().unwrap_or(0.0)
 }
 
+/// Exercise the application's native save/open commands, including previews, PDF output,
+/// compression and API base64 conversion. Session setup and validation are outside timing.
+/// Five measured runs follow one warmup; no filesystem or GPU window is involved.
+fn native_io(doc: &Document, out: &mut dyn Write) -> Result<(), PerfError> {
+    for (label, compatible, preview) in [
+        ("default options", None, false),
+        ("PDF disabled", Some(false), false),
+        ("preview+gzip", None, true),
+        ("preview+gzip, PDF disabled", Some(false), true),
+    ] {
+        let mut session = vectorcraft_engine::Session::new();
+        session.add_document(doc.clone(), None);
+        let mut params = json!({"format":"vectorcraft","modified":null,"preview":preview,"compress":preview});
+        if let Some(value) = compatible {
+            params["pdfCompatible"] = json!(value);
+        }
+        let (mut saves, mut opens) = (Vec::new(), Vec::new());
+        let (mut size, mut has_pdf, mut compressed) = (0, false, false);
+        for run in 0..6 {
+            let start = Instant::now();
+            let saved = session.execute("file.saveAs", &params).map_err(|e| e.to_string())?;
+            let save_ms = start.elapsed().as_secs_f64() * 1000.0;
+            let data = saved["dataBase64"].as_str().ok_or("native save returned no dataBase64")?;
+            let bytes = vectorcraft_format::base64_decode(data).ok_or("native save returned invalid base64")?;
+            size = bytes.len();
+            has_pdf = vectorcraft_format::pdf_content(&bytes).is_some();
+            if compatible == Some(false) && has_pdf {
+                return Err("native save ignored the explicit PDF opt-out".into());
+            }
+            compressed = vectorcraft_format::is_compressed(&bytes);
+            if compressed != preview || vectorcraft_format::preview(&bytes).is_some() != preview {
+                return Err("native save did not apply the requested preview/compression options".into());
+            }
+            let args = json!({"name":"perf.vectorcraft","dataBase64":data});
+            let mut opened = vectorcraft_engine::Session::new();
+            let start = Instant::now();
+            opened.execute("document.open", &args).map_err(|e| e.to_string())?;
+            let open_ms = start.elapsed().as_secs_f64() * 1000.0;
+            if opened.doc().map_err(|e| e.to_string())?.doc.artboards.len() != doc.artboards.len() {
+                return Err("native round trip changed the artboard count".into());
+            }
+            if run > 0 {
+                saves.push(save_ms);
+                opens.push(open_ms);
+            }
+        }
+        saves.sort_by(f64::total_cmp);
+        opens.sort_by(f64::total_cmp);
+        let save = saves.get(2).copied().ok_or("no save measurements")?;
+        let open = opens.get(2).copied().ok_or("no open measurements")?;
+        writeln!(out, "  native {label}: save {save:.2} ms, open {open:.2} ms, {size} bytes, PDF {has_pdf}, compressed {compressed}")?;
+    }
+    Ok(())
+}
+
 /// 1-minute load average (macOS / Linux), if available.
 #[cfg(not(windows))]
 fn load_average() -> Option<f64> {
@@ -119,7 +174,8 @@ fn edit_drags(n: usize) -> Result<(f64, f64), String> {
     let view = vectorcraft_engine::ViewInfo { zoom: 8.0, ..Default::default() };
     let err = |e: vectorcraft_engine::EngineError| e.to_string();
     let mut drag = |down: Point| -> Result<f64, String> {
-        let ev = |kind, y: f64| PointerEvent { kind, pos: down + Vec2::new(0.0, y), mods: Mods::default(), backquote: false, pressure: 1.0 };
+        let ev =
+            |kind, y: f64| PointerEvent { kind, pos: down + Vec2::new(0.0, y), mods: Mods::default(), backquote: false, pressure: 1.0, pen: None };
         s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 400]]})).map_err(err)?;
         s.select_tool("directSelection", view).map_err(err)?;
         let undo = s.doc().map_err(err)?.history.undo.len();
@@ -189,6 +245,48 @@ fn budget_row(name: &str, ms: f64, budget: f64, ok: bool) -> String {
     format!("  {name:<42} {ms:>8.2} ms {budget:>7.0} ms  {}", if ok { "ok" } else { "OVER" })
 }
 
+/// Tracked rows for pointing at things in an n-path document: what hovering, clicking, marquee
+/// selection and snapping cost when nothing narrows the search.
+fn pointing(n: usize, rows: &mut Vec<(String, f64)>) -> Result<(), String> {
+    use vectorcraft_engine::tools::{Mods, PointerEvent, PointerKind};
+    let err = |e: vectorcraft_engine::EngineError| e.to_string();
+    let mut s = vectorcraft_engine::Session::new();
+    s.add_document(synthetic(n)?, None);
+    let view = vectorcraft_engine::ViewInfo { zoom: 1.0, ..Default::default() };
+    s.select_tool("selection", view).map_err(err)?;
+    // Off the art (nothing under the pointer), the case every hover over empty canvas pays.
+    let off = Point::new(-200.0, -200.0);
+    let hover = |s: &mut vectorcraft_engine::Session| {
+        let _ = s.pointer(&PointerEvent::new(PointerKind::Move, off.x, off.y), view);
+        let _ = s.cursor(off, Mods::default(), view);
+    };
+    rows.push((format!("hover over empty canvas ({n} paths)"), median_ms(5, || hover(&mut s))));
+    s.execute("select.all", &json!({})).map_err(err)?;
+    rows.push((format!("hover over empty canvas, all selected ({n} paths)"), median_ms(5, || hover(&mut s))));
+    let doc = s.doc().map_err(err)?.doc.clone();
+    rows.push((format!("hit test, a miss ({n} paths)"), median_ms(5, || drop(hit::hit_test(&doc, off, hit::HitOptions::default())))));
+    let r = Rect::new(600.0, 450.0, 1000.0, 750.0);
+    rows.push((format!("marquee 400×300 ({n} paths)"), median_ms(5, || drop(hit::marquee(&doc, r, None, false)))));
+    let view_rect = Rect::new(0.0, 0.0, 1600.0, 1200.0);
+    rows.push((
+        format!("smart guide targets in view ({n} paths)"),
+        median_ms(5, || drop(vectorcraft_engine::tools::guides::Targets::collect(&doc, &[], Some(view_rect)))),
+    ));
+    // Adding one more object to a selection of half the document: the command a shift-click ends
+    // in, without the pointer handling and hit test before it.
+    let ids: Vec<u64> = doc.layers[0].children().map(|c| c.iter().map(|n| n.id.0).collect()).unwrap_or_default();
+    s.execute("select.set", &json!({"ids": ids[..ids.len() / 2]})).map_err(err)?;
+    let mut k = ids.len() / 2;
+    rows.push((
+        format!("select.toggle in a {}-object selection", ids.len() / 2),
+        median_ms(5, || {
+            k += 1;
+            let _ = s.execute("select.toggle", &json!({"id": ids[k % ids.len()]}));
+        }),
+    ));
+    Ok(())
+}
+
 /// `--deep`: tracked rows (no budget yet) for work the budgets above don't reach: editing a whole
 /// selection, live effects, every Pathfinder operation, typing in a long story, and memory, with
 /// the peak so far where `rss_mb` reads one.
@@ -218,7 +316,14 @@ fn deep(n: usize, out: &mut dyn Write) -> Result<(), PerfError> {
         let first = s.doc().map_err(err)?.selection.objects.first().copied();
         let at = first.and_then(|id| s.doc().ok()?.doc.node(id)?.geometric_bounds()).map(|b| b.center());
         if let Some(down) = at {
-            let ev = |kind, dx: f64| PointerEvent { kind, pos: down + Vec2::new(dx, 0.0), mods: Mods::default(), backquote: false, pressure: 1.0 };
+            let ev = |kind, dx: f64| PointerEvent {
+                kind,
+                pos: down + Vec2::new(dx, 0.0),
+                mods: Mods::default(),
+                backquote: false,
+                pressure: 1.0,
+                pen: None,
+            };
             s.select_tool("selection", view).map_err(err)?;
             s.pointer(&ev(PointerKind::Down, 0.0), view).map_err(err)?;
             let mut dx = 0.0;
@@ -277,6 +382,8 @@ fn deep(n: usize, out: &mut dyn Write) -> Result<(), PerfError> {
         }),
     ));
     note("after typing");
+    pointing(n, &mut rows)?;
+    note("after pointing");
     // Four embedded 24 MP photos drawn at fit page by three renderers, as the app's canvas, render
     // worker and a panel each draw them.
     {
@@ -355,6 +462,12 @@ pub(crate) enum PerfError {
     Stdout(#[from] std::io::Error),
 }
 
+impl From<&str> for PerfError {
+    fn from(message: &str) -> Self {
+        Self::Measure(message.to_owned())
+    }
+}
+
 impl From<String> for PerfError {
     fn from(message: String) -> Self {
         Self::Measure(message)
@@ -363,7 +476,8 @@ impl From<String> for PerfError {
 
 /// Runs `vectorcraft-cli perf`, printing the report to `out`.
 pub(crate) fn run(args: &PerfArgs, out: &mut dyn Write) -> Result<(), PerfError> {
-    let (n, want_deep) = (args.paths, args.deep);
+    let (n, want_deep, want_native) = (args.paths, args.deep, args.native_io);
+    let artboards = usize::from(args.artboards.unwrap_or(1));
     let cores = std::thread::available_parallelism().map_or(1, |c| c.get());
     // The figure is the 1-minute load average, or on Windows the cores busy over one second.
     #[cfg(not(windows))]
@@ -376,8 +490,20 @@ pub(crate) fn run(args: &PerfArgs, out: &mut dyn Write) -> Result<(), PerfError>
         writeln!(out, "WARNING: the machine is busy; wall-clock timings below are not trustworthy.")?;
     }
     let t = Instant::now();
-    let doc = synthetic(n)?;
+    let mut doc = synthetic(n)?;
     writeln!(out, "  (built in {:.0} ms)", t.elapsed().as_secs_f64() * 1000.0)?;
+    if want_native {
+        let first = doc.artboards.first().cloned().ok_or("synthetic document has no artboard")?;
+        // Overlapping artboards intentionally repeat the same paths on every PDF page.
+        for index in 1..artboards {
+            let mut page = first.clone();
+            page.id = first.id.checked_add(index as u32).ok_or("artboard id overflow")?;
+            page.name = format!("Perf {}", index + 1);
+            doc.artboards.push(page);
+        }
+        writeln!(out, "  application native I/O: {artboards} overlapping artboard(s), one warmup + five samples; medians; no disk I/O")?;
+        return native_io(&doc, out);
+    }
 
     let mut rows: Vec<(&str, f64, f64)> = vec![];
     let opts = RenderOptions::default();
@@ -470,6 +596,11 @@ pub(crate) fn run(args: &PerfArgs, out: &mut dyn Write) -> Result<(), PerfError>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_io_exercises_the_application_save_and_open_commands() {
+        native_io(&synthetic(3).unwrap(), &mut Vec::new()).unwrap();
+    }
 
     #[test]
     fn busy_share_leaves_out_idle_time() {

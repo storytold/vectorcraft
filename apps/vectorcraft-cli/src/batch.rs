@@ -8,7 +8,7 @@ use vectorcraft_mcp::{Backend, Headless};
 use crate::cli::{RunArgs, RunItem};
 use crate::convert::{is_template, with_pixel_scale};
 use crate::error::{CliError, CommandsError, StepError};
-use crate::mcp::with_stores;
+use crate::mcp::{accepting_grants, with_stores};
 
 enum Step {
     Cmd(String, Value),
@@ -147,7 +147,7 @@ impl Emitter<'_> {
 
 pub(crate) fn run(args: &RunArgs, out: &mut dyn Write) -> Result<(), CliError> {
     let steps = steps(&args.items)?;
-    let mut h = with_stores(Headless::new());
+    let mut h = accepting_grants(with_stores(Headless::new()), args.allow_plugin_grants);
     let mut emitter = Emitter { out, closed: false };
     if let Some(path) = &args.input {
         let r = h.call("app.open", json!({"path": path})).map_err(|message| CliError::Open { path: path.clone(), message })?;
@@ -176,7 +176,7 @@ pub(crate) fn run(args: &RunArgs, out: &mut dyn Write) -> Result<(), CliError> {
                 let r = if is_template(&path) {
                     h.call("engine.execute", json!({"command": "file.saveAsTemplate", "params": {"path": path, "format": "ait"}}))
                 } else {
-                    h.call("app.export", with_pixel_scale(json!({"path": path}), &path, args.scale))
+                    h.call("app.export", with_pixel_scale(json!({"path": path}), &path, args.scale, args.ppi))
                 };
                 let r = r.map_err(|message| CliError::StepExport { step: n, path: path.clone(), message })?;
                 emitter.emit(&json!({"step": "export", "result": r}))?;

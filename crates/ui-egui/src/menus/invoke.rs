@@ -1,109 +1,64 @@
-use super::state::{SUBJECT_COMMANDS, has_subject, waits_for_ime};
+use super::state::{SUBJECT_COMMANDS, enabled, has_subject, waits_for_ime};
 use super::{Value, VectorcraftApp, json};
 
 /// What a menu click runs: items whose label ends with "…" and that carry default params open a
-/// generic parameter dialog (fields = the defaults) instead of running immediately.
+/// generic parameter dialog (fields = the defaults) instead of running immediately. A script of the
+/// Scripts folder runs, whatever its name ends with, and so does a proof setup saved in the Proof
+/// Setups folder.
 pub fn click_target(label: &str, id: &str, p: &Value) -> (String, Value) {
     let dialog = label.ends_with('…')
         && p.as_object().is_some_and(|o| !o.is_empty())
-        && !matches!(id, "effect.dialog" | "window.panel" | "window.brightness" | "view.screenMode" | "plugin.dialog");
+        && !matches!(
+            id,
+            "effect.dialog"
+                | "window.panel"
+                | "window.brightness"
+                | "view.screenMode"
+                | "plugin.dialog"
+                | crate::scripts_menu::COMMAND
+                | crate::dialogs::proof_setup::LOAD
+        );
     if dialog {
         return ("ui.paramDialog".into(), json!({"command": id, "label": label.trim_end_matches('…'), "params": p}));
     }
     (id.to_string(), if p.is_null() { json!({}) } else { p.clone() })
 }
 
-/// What an in-window menu click on `target` (a [`click_target`]) runs with `held` held: Object ›
-/// Unlock All and Object › Show All chosen with Shift+Alt (Shift+Option) act only inside the groups
-/// that hold the selected objects (`scope: "group"`).
-pub(super) fn with_held_keys(target: (String, Value), held: egui::Modifiers) -> (String, Value) {
-    match target.0.as_str() {
-        "object.unlockAll" | "object.showAll" if held.shift && held.alt => (target.0, json!({"scope": "group"})),
-        _ => target,
-    }
-}
-
 /// The dialog of command `id` that shows the selection's current values (its query): its heading
 /// and the queried values it doesn't show. Type on a Path Options leaves the brackets where they
-/// are.
+/// are. Color Mask opens on the selected image's mask settings (the defaults without one).
 fn queried_dialog(id: &str) -> Option<(&'static str, &'static [&'static str])> {
     Some(match id {
         // Whether the text overflows, and Shrink Text's factor, are read-only facts.
         "text.areaOptions" => ("Area Type Options", &["overflow", "fitScale"]),
         "type.pathOptions" => ("Type on a Path Options", &["start", "end"]),
+        crate::addons::image::COLOR_MASK => ("Color Mask", &["masked"]),
         _ => return None,
     })
 }
 
-/// The dialog (kind, fields) the menu item of command `id` opens, as the reference app's does.
-pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static str, Value)> {
-    Some(match id {
-        // Move opens on the offset moved last and the checkboxes it was last confirmed with.
-        "object.move" => ("move", crate::dialogs::transform::move_fields(app)),
-        "object.rotate" => ("rotate", json!({"angle": 0})),
-        "object.scale" => ("scale", json!({"sx": 100, "sy": 100, "uniform": true})),
-        // Transform Each opens on the values it was last confirmed with (#1732).
-        "object.transformEach" => (crate::dialogs::transform_each::KIND, crate::dialogs::transform_each::open_fields(app)),
-        "object.reflect" => ("reflect", json!({"axis": "vertical", "angle": 90})),
-        "object.shear" => ("shear", json!({"angle": 0, "axis": "horizontal"})),
-        "path.average" => ("average", json!({"axis": "both"})),
-        // Average & Join opens on the joined anchor chosen last (Corner the first time).
-        "path.averageJoin" if app.ui.average_join.is_object() => ("averageJoin", app.ui.average_join.clone()),
-        "path.averageJoin" => ("averageJoin", json!({"to": "corner"})),
-        // Offset Path opens on the values it was last confirmed with.
-        "object.path.offsetPath" if app.ui.offset_path.is_object() => ("offsetPath", app.ui.offset_path.clone()),
-        "object.path.offsetPath" => ("offsetPath", json!({"offset": "10 pt", "joins": "miter", "miterLimit": 4})),
-        // Simplify opens its slider, or the dialog on the fields it was last confirmed with when
-        // "Open this dialog with these settings next time" was ticked.
-        "object.path.simplify" if app.ui.simplify.is_object() => ("simplify", app.ui.simplify.clone()),
-        "object.path.simplify" => (crate::dialogs::simplify_slider::KIND, crate::dialogs::simplify_slider::fields(app)),
-        "object.path.smooth" => (crate::dialogs::smooth_slider::KIND, crate::dialogs::smooth_slider::fields()),
-        "object.path.splitIntoGrid" => {
-            // The grid starts at the size of the selection.
-            let size =
-                app.session.active().and_then(|st| st.doc.bounds_of(&st.selection.objects, false)).map_or((0.0, 0.0), |b| (b.width(), b.height()));
-            ("splitIntoGrid", crate::dialogs::path_ops::split_fields(size.0, size.1))
-        }
-        "object.vectorHalftone" => (crate::dialogs::halftone::KIND, crate::dialogs::halftone::fields()),
-        "artboard.rearrange" => (crate::dialogs::rearrange_artboards::KIND, crate::dialogs::rearrange_artboards::open_fields(app)),
-        _ => return None,
-    })
-}
-
-/// The event a focused text field takes for Edit-menu command `id` (Select All, Cut, Copy,
-/// Paste), as the same keys would send it.
-pub(super) fn field_event(app: &mut VectorcraftApp, id: &str) -> Option<egui::Event> {
-    Some(match id {
-        "select.all" => egui::Event::Key { key: egui::Key::A, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::COMMAND },
-        "edit.copy" => egui::Event::Copy,
-        "edit.cut" => egui::Event::Cut,
-        "edit.paste" | "edit.pasteWithoutFormatting" => egui::Event::Paste(app.written_clipboard_text()?),
-        _ => return None,
-    })
-}
-
-/// Invoke an item clicked in the system menu bar (macOS; its key equivalents come back to egui as
-/// key presses, see [`crate::native_menu`]). While a text field has the keyboard, Select All, Cut,
-/// Copy and Paste act on the field's text, as their keys do. While its keys select every artboard
-/// ([`crate::panels::artboards::selects_all`]), Select All does too. Everything else (and those
-/// commands with no field focused) goes to [`invoke`].
-pub fn invoke_from_system_menu(app: &mut VectorcraftApp, ctx: &egui::Context, id: &str, p: Value) {
-    match focused_text_field(ctx).and_then(|f| Some((f, field_event(app, id)?))) {
-        Some((field, e)) => to_field(ctx, field, e),
-        None if id == "select.all" && crate::panels::artboards::selects_all(app, ctx) => crate::panels::artboards::select_all(app),
-        None => invoke(app, id, p),
+/// Opens the dialog the menu item of command `id` opens, as the reference app's does; `None` when `id`'s
+/// item opens none.
+pub(super) fn open_menu_dialog(app: &mut VectorcraftApp, id: &str) -> Option<Result<Value, String>> {
+    if crate::dialogs::object_dialogs::open_from_menu(app, id) {
+        return Some(Ok(Value::Null));
     }
-}
-
-/// The text field that has the keyboard, if any.
-pub(super) fn focused_text_field(ctx: &egui::Context) -> Option<egui::Id> {
-    ctx.memory(|m| m.focused()).filter(|&id| egui::TextEdit::load_state(ctx, id).is_some())
-}
-
-/// Give text field `field` the keyboard (back) and event `e`, a [`field_event`], this frame.
-pub(super) fn to_field(ctx: &egui::Context, field: egui::Id, e: egui::Event) {
-    ctx.memory_mut(|m| m.request_focus(field));
-    ctx.input_mut(|i| i.events.push(e));
+    if let Some(opened) = crate::addons::dialogs::open_from_menu(app, id) {
+        return Some(opened);
+    }
+    if crate::dialogs::variables::opens(id) {
+        crate::dialogs::variables::open(app, id, None);
+        return Some(Ok(Value::Null));
+    }
+    Some(match id {
+        crate::dialogs::halftone::CMD => crate::dialogs::halftone::open(app),
+        crate::dialogs::rearrange_artboards::CMD => crate::dialogs::rearrange_artboards::open(app),
+        crate::dialogs::rename_artboards::CMD => crate::dialogs::rename_artboards::open(app),
+        crate::dialogs::smart_punctuation::COMMAND => crate::dialogs::smart_punctuation::open(app),
+        // Set Fold Angle… opens on the angle the selected fold lines fold at, and says why while it can change none.
+        crate::addons::packaging::SET_FOLD_ANGLE => crate::addons::packaging::open_dialog(app),
+        _ => return None,
+    })
 }
 
 /// Invoke a menu/command id with UI side effects (dialogs for "…" commands that need input).
@@ -114,13 +69,26 @@ pub(crate) fn graph_dialog(app: &mut VectorcraftApp, id: &str) -> Result<Value, 
     if id == "graph.setData" {
         return crate::dialogs::graph_data::open(app);
     }
-    let v = app.session.execute(id, &json!({})).map_err(|e| e.to_string())?;
-    let (label, fields) = ("Graph Type", v);
-    app.run("ui.paramDialog", json!({"command": id, "label": label, "params": fields})).map(|_| json!({ "dialog": "command" }))
+    crate::dialogs::graph_type::open(app)
 }
 
 pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     if waits_for_ime(app, id) {
+        return;
+    }
+    // A command chosen while the tool computes an edit on another thread (a Shape Builder merge)
+    // comes after it: the edit is applied first, so the command's dialog, or the app's own dialog
+    // (Recolor Artwork), opens on the art as the gesture left it.
+    let r = app.session.finish_tool_edit();
+    crate::canvas::apply_requests(app, r);
+    // So do the plug-ins the launch is still loading, for a command chosen meanwhile that the
+    // engine holds until they install (a plug-in's own command, one that may edit); view commands
+    // and queries go ahead.
+    if vectorcraft_engine::waits_for_plugin_loads(id) {
+        app.session.finish_plugin_loads();
+    }
+    // A shortcut or a palette pick on a filter plug-in does nothing while its menu item is dimmed.
+    if id == "plugin.dialog" && !enabled(app, id) {
         return;
     }
     if SUBJECT_COMMANDS.contains(&id)
@@ -130,11 +98,25 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     {
         return;
     }
+    // The Artboard tool's Rearrange (its canvas menu) opens Rearrange for the artboards it lists,
+    // whose OK waits for a click on the canvas.
+    if id == "artboard.rearrange"
+        && let Some(indices) = crate::dialogs::rearrange_artboards::menu_indices(&p)
+    {
+        crate::dialogs::rearrange_artboards::open_selected(app, &indices);
+        return;
+    }
     // Params first: some dialogs' fields take a look through the session (Move's last move).
     if p.as_object().is_none_or(|o| o.is_empty())
-        && let Some((kind, fields)) = menu_dialog(app, id)
+        && let Some(opened) = open_menu_dialog(app, id)
     {
-        app.ui.dialog = Some(crate::state::Dialog::new(kind, fields));
+        if let Err(e) = opened {
+            app.status(e);
+        }
+        return;
+    }
+    // A plug-in command with parameters asks for them, from its menu item or its shortcut.
+    if p.as_object().is_none_or(|o| o.is_empty()) && crate::dialogs::plugin::open_command(app, id) {
         return;
     }
     if open_view_dialog(app, id, &p) || open_object_dialog(app, id, &p) {
@@ -148,10 +130,7 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     // Object → Align aligns to what the align buttons align to, unless the call names `to`. With
     // anchors selected (Direct Selection) it sends its params unchanged, and the points align to
     // their own bounds.
-    let follows_align_to = id == "object.align"
-        && p.as_object().is_some_and(|o| !o.contains_key("to"))
-        && app.session.active().is_some_and(|st| st.selection.anchors.is_empty());
-    let p = if follows_align_to { crate::panels::align::with_align_to(app, p) } else { p };
+    let p = if id == "object.align" { crate::panels::align::menu_align_params(app, p) } else { p };
     // Image Trace traces off the UI thread, with its progress (#3098).
     if matches!(id, "imageTrace.make" | "imageTrace.makeAndExpand") {
         if let Err(e) = crate::trace_runs::start(app, id, p, false) {
@@ -159,14 +138,29 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         }
         return;
     }
-    if let Err(e) = app.run(id, p) {
+    if let Some(r) = crate::panels::artboards::run_menu_item(app, id, &p) {
+        if let Err(e) = r {
+            app.status(e);
+        }
+        return;
+    }
+    // Check Fold Lines shows its summary and lists its issues in the Fold Lines panel.
+    if id == crate::addons::packaging::CHECK {
+        crate::addons::packaging::check(app, p);
+        return;
+    }
+    // A Paste the user gives decodes a bitmap off the UI thread ([`crate::placing::adopt_for_paste`]).
+    app.placing.for_user = id.starts_with("edit.paste");
+    let r = app.run(id, p);
+    app.placing.for_user = false;
+    if let Err(e) = r {
         app.status(e);
     } else if matches!(id, "object.pattern.make" | "object.pattern.edit") {
         app.ui.open_panel = Some("patternOptions".into());
     }
 }
 
-/// The dialogs the Envelope, Variables, Pathfinder, Repeat, type, graph and View commands open when called without
+/// The dialogs the Envelope, Variables, Pathfinder, Pixel Snapping, Repeat, type, graph and View commands open when called without
 /// params; whether `id` was one of them.
 fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     // Envelope Distort: Warp Options, Envelope Mesh and Envelope Options, from the selection.
@@ -186,6 +180,11 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
         crate::dialogs::pathfinder_options::open(app);
         return true;
     }
+    // Pixel Snapping Options: a dialog with the current options.
+    if id == "view.snapToPixel.options" && p.as_object().is_none_or(|o| o.is_empty()) {
+        crate::dialogs::pixel_snap_options::open(app);
+        return true;
+    }
     // Repeat Options: a dialog with the selected repeat's current values.
     if id == "object.repeat.options"
         && p.as_object().is_none_or(|o| o.is_empty())
@@ -203,6 +202,13 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
             Ok(mut fields) => {
                 if let Some(o) = fields.as_object_mut() {
                     o.retain(|k, _| !hidden.contains(&k.as_str()));
+                    // Area type whose rows have no gutter of their own: its Row Gutter follows the
+                    // Gutter unless it is changed (see `dialogs::command`).
+                    if id == "text.areaOptions"
+                        && let Some(g) = o.get("rowGutter").filter(|g| Some(*g) == o.get("gutter")).cloned()
+                    {
+                        o.insert("__rowGutterLinked".into(), g);
+                    }
                 }
                 let _ = app.run("ui.paramDialog", json!({"command": id, "label": label, "params": fields}));
             }
@@ -235,6 +241,46 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
         let _ = app.run("ui.paramDialog", json!({"command": id, "label": "New View", "params": {"name": name}}));
         return true;
     }
+    // Composite Fonts…: the document's composite fonts, to edit before OK sets them.
+    if id == crate::dialogs::composite_fonts::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::composite_fonts::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Kinsoku Shori Settings…: the document's custom Kinsoku sets, to edit before OK sets them.
+    if id == crate::dialogs::kinsoku_sets::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::kinsoku_sets::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Edit Custom Dictionary…: the custom dictionary's words in a list, to add, delete or change.
+    if id == crate::dialogs::custom_dictionary::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::custom_dictionary::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Find Next with no text to find, as its menu item runs it: the next match of the last Find
+    // and Replace search, or the dialog when there has been none.
+    if id == crate::dialogs::find_replace::NEXT
+        && p.get("find").is_none_or(|f| f.as_str() == Some(""))
+        && p.as_object().is_none_or(|o| o.len() <= 1)
+        && app.session.active().is_some()
+    {
+        if let Err(e) = crate::dialogs::find_replace::find_next(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Check Spelling…: dialog to walk through unknown words.
+    if id == crate::dialogs::check_spelling::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::check_spelling::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
     // Edit Views…: the saved views in a list, to rename or delete.
     if id == "view.saved.edit" && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = crate::dialogs::edit_views::open(app) {
@@ -247,7 +293,7 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     if id == "view.rotate" && p.as_object().is_none_or(|o| o.is_empty()) {
         match app.view_mut().map(|v| v.rotation) {
             Some(angle) => {
-                app.ui.dialog = Some(crate::state::Dialog::new("command", json!({"__command": id, "__label": "Rotate View", "angle": angle})));
+                let _ = app.run("ui.paramDialog", json!({"command": id, "label": "Rotate View", "params": {"angle": angle}}));
             }
             None => app.status("no document"),
         }
@@ -256,8 +302,8 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     false
 }
 
-/// The dialogs the selection, raster, wrap, blend and Expand commands open when called without params; whether `id`
-/// was one of them.
+/// The dialogs the selection, raster, wrap, blend and Expand commands open, and the panel the Asset Export commands
+/// open, when called without params; whether `id` was one of them.
 fn open_object_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     // Save Selection…: a name dialog, starting from the first free "Selection N".
     if id == "select.save" && p.as_object().is_none_or(|o| o.is_empty()) {
@@ -311,6 +357,17 @@ fn open_object_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     // Expand…: its dialog.
     if id == "object.expand" && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = crate::dialogs::expand::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Export Assets, Remove, Rename, Asset Export Settings, Export 3D Assets and 3D Export Format
+    // with no params, as the command palette runs them (#4864): the Asset Export panel, where each
+    // one is done. A panel that already shows stays open.
+    if matches!(id, "assets.export" | "assets.remove" | "assets.rename" | "assets.settings.set" | "assets.export3D" | "assets.set3DFormat")
+        && p.as_object().is_none_or(|o| o.is_empty())
+    {
+        if let Err(e) = crate::panel_docking::reveal_panel(app, crate::panels::asset_export::ID) {
             app.status(e);
         }
         return true;

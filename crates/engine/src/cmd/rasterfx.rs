@@ -174,19 +174,14 @@ pub(crate) fn effects_scale(doc: &Document) -> f64 {
     (doc.raster_effects_ppi / 72.0).clamp(1.0 / 72.0, 2400.0 / 72.0)
 }
 
-/// An embedded image (a new node of `out`, its pixels in `out.images`) of `whole` rendered alone
-/// with `out`'s resources at `scale` over all it paints (the reach of its own, its members' and its
-/// fills' and strokes' raster effects included). With `knockout`, the coverage of that art is knocked out
-/// of the image, which then only holds what the effects add around it (a shadow to go under the
-/// vector object). The document's raster effects settings add room around it and finish its pixels.
-/// `None` when it paints nothing, when the area it covers overflows `f64` or the scale is not
-/// positive, or when its PNG can't be encoded.
-pub(crate) fn effect_image(out: &mut Document, whole: &Node, knockout: Option<&Node>, scale: f64) -> Option<Node> {
+/// The region [`effect_image`] renders `whole` over in `d`, and the scale it renders at (`scale`, or
+/// less for an image past 64 Mpx or a side the renderer can't address). `None` when it paints
+/// nothing, when the area it covers overflows `f64` or the scale is not positive.
+fn effect_region(d: &Document, whole: &Node, scale: f64) -> Option<(Rect, f64)> {
     // What it paints (its members' effects included), and how far its fills' and strokes' raster
     // effects reach beyond that.
-    let b = vectorcraft_render::painted_bounds(out, whole)?;
-    let look = out.raster_effects.clone();
-    let reach = whole.appearance.items.iter().map(|i| effects::outset(i.effects(), b)).fold(0.0, f64::max) + 2.0 + look.add_around;
+    let b = vectorcraft_render::painted_bounds(d, whole)?;
+    let reach = whole.appearance.items.iter().map(|i| effects::outset(i.effects(), b)).fold(0.0, f64::max) + 2.0 + d.raster_effects.add_around;
     let b = b.inflate(reach, reach);
     // An area too large for f64 gives a zero scale and an image transform that is not finite.
     let area = b.width() * b.height();
@@ -201,6 +196,19 @@ pub(crate) fn effect_image(out: &mut Document, whole: &Node, knockout: Option<&N
         return None;
     }
     let region = Rect::new(b.x0, b.y0, b.x0 + (b.width() * scale).ceil().max(1.0) / scale, b.y0 + (b.height() * scale).ceil().max(1.0) / scale);
+    Some((region, scale))
+}
+
+/// An embedded image (a new node of `out`, its pixels in `out.images`) of `whole` rendered alone
+/// with `out`'s resources at `scale` over all it paints (the reach of its own, its members' and its
+/// fills' and strokes' raster effects included). With `knockout`, the coverage of that art is knocked out
+/// of the image, which then only holds what the effects add around it (a shadow to go under the
+/// vector object). The document's raster effects settings add room around it and finish its pixels.
+/// `None` when it paints nothing, when the area it covers overflows `f64` or the scale is not
+/// positive, or when its PNG can't be encoded.
+pub(crate) fn effect_image(out: &mut Document, whole: &Node, knockout: Option<&Node>, scale: f64) -> Option<Node> {
+    let (region, scale) = effect_region(out, whole, scale)?;
+    let look = out.raster_effects.clone();
     // Anti-alias off: hard edges (the effects themselves stay smooth).
     let anti_alias = if look.anti_alias { AntiAlias::Art } else { AntiAlias::None };
     let mut img = render(out, vec![whole.clone()], region, scale, anti_alias);
@@ -263,7 +271,7 @@ fn retain_effects(n: &mut Node, members: bool, keep: &dyn Fn(&Effect) -> bool) {
         it.effects_mut().retain(keep);
     }
     if members {
-        for c in n.children_mut().into_iter().flatten() {
+        for c in n.children_mut().into_iter().flatten().filter(|c| !c.is_ruler_guide()) {
             retain_effects(Arc::make_mut(c), true, keep);
         }
     }
@@ -311,6 +319,19 @@ pub(crate) fn raster_image(d: &mut Document, n: &Node, below: bool, members: boo
     if !below && let Some(image) = rasterize_effect_image(d, n) {
         return Some(image);
     }
+    let whole = effect_art(n, below, members);
+    let bare = below.then(|| {
+        let mut b = whole.clone();
+        strip_raster(&mut b, false);
+        b
+    });
+    effect_image(d, &whole, bare.as_ref(), image_scale(d, n))
+}
+
+/// The art [`raster_image`] renders the raster effects of `n` from with `below` and `members`:
+/// `n` without its transparency, a group's or layer's members without their raster effects when
+/// both are set.
+fn effect_art(n: &Node, below: bool, members: bool) -> Node {
     let mut whole = n.clone();
     (whole.opacity, whole.blend) = (1.0, Default::default());
     whole.extras_mut().mask = None;
@@ -319,26 +340,50 @@ pub(crate) fn raster_image(d: &mut Document, n: &Node, below: bool, members: boo
             strip_raster(Arc::make_mut(c), true);
         }
     }
-    let bare = below.then(|| {
-        let mut b = whole.clone();
-        strip_raster(&mut b, false);
-        b
-    });
-    // A Rasterize effect at a finer resolution than the document's is rendered at its own.
-    let scale = raster_fx(n)
-        .iter()
-        .filter_map(|fx| if let RasterFx::Rasterize(r) = fx { r.ppi } else { None })
-        .fold(effects_scale(d), |s, ppi| s.max(ppi / 72.0));
-    effect_image(d, &whole, bare.as_ref(), scale)
+    whole
+}
+
+/// Pixels per point of the image of the raster effects of `n`: the document's raster effects
+/// resolution, or a Rasterize effect's finer one, which is rendered at its own.
+fn image_scale(d: &Document, n: &Node) -> f64 {
+    raster_fx(n).iter().filter_map(|fx| if let RasterFx::Rasterize(r) = fx { r.ppi } else { None }).fold(effects_scale(d), |s, ppi| s.max(ppi / 72.0))
+}
+
+/// The pixels of the image [`raster_image`] makes of the raster effects of `n` in `d` with `below`
+/// and `members`, as [`effect_image`] sizes it, or at the resolution and with the room around the
+/// art of the object's own Rasterize effect when that is its only one ([`rasterize_effect_image`]);
+/// 0 when it paints nothing.
+pub(crate) fn raster_pixels(d: &Document, n: &Node, below: bool, members: bool) -> u64 {
+    if !below && let Some((art, r, _)) = rasterize_effect_art(d, n) {
+        // Measured as Object › Rasterize measures it.
+        let scale = r.ppi.unwrap_or(d.raster_effects_ppi) / 72.0;
+        let side = f64::from(vectorcraft_render::MAX_RASTER_SIDE);
+        let size = vectorcraft_render::drawn_bounds(d, &art).map(|b| {
+            let b = b.inflate(r.add_around, r.add_around);
+            ((b.width() * scale).ceil().max(1.0), (b.height() * scale).ceil().max(1.0))
+        });
+        // Past Object › Rasterize's limits that image is not made, and the effect's image is.
+        if let Some((w, h)) = size
+            && w * h <= super::menucmds::MAX_PIXELS
+            && w <= side
+            && h <= side
+        {
+            return (w * h) as u64;
+        }
+    }
+    effect_region(d, &effect_art(n, below, members), image_scale(d, n))
+        .map_or(0, |(r, scale)| ((r.width() * scale).round() * (r.height() * scale).round()) as u64)
 }
 
 /// The image Object › Rasterize makes of `n` with the options of `n`'s Effect › Rasterize, when
 /// that is its only visible raster effect and is its own (not a fill's or a stroke's): made of `n`
-/// without that effect and without its transparency, which stays on the object. `None` otherwise,
-/// or when the image can't be made.
+/// without that effect and without its transparency, which stays on the object. When Transform
+/// effects after the Rasterize effect move or copy its image ([`vectorcraft_render::rasterize_stage`]),
+/// the image is made of the art before them once and placed by each of their maps, as the canvas
+/// draws it: with copies, a group of the placements with the lowest first. `None` otherwise, when
+/// those Transform effects flatten every placement, or when the image can't be made.
 fn rasterize_effect_image(d: &mut Document, n: &Node) -> Option<Node> {
-    let [RasterFx::Rasterize(r)] = raster_fx(n)[..] else { return None };
-    let at = n.appearance.effects.iter().position(|e| e.visible && e.id == effects::RASTERIZE)?;
+    let (whole, r, maps) = rasterize_effect_art(d, n)?;
     let p = json!({
         "ppi": r.ppi.unwrap_or(d.raster_effects_ppi),
         "colorModel": r.color_model.id(),
@@ -347,12 +392,62 @@ fn rasterize_effect_image(d: &mut Document, n: &Node) -> Option<Node> {
         "clippingMask": r.clipping_mask,
         "addAround": r.add_around,
     });
+    // shortcut: expanded Rasterize effects stay RGB, as the object keeps its own opacity mask and the
+    // image's transparency would need one too; upgrade when CMYK images carry alpha.
+    let image = super::menucmds::rasterize_art(d, vec![whole], &p, "object.rasterize", false).ok()?;
+    let mut image = image.into_node(d);
+    match maps.as_deref() {
+        None => Some(image),
+        Some([map]) => {
+            image.transform(*map, false);
+            Some(image)
+        }
+        Some(maps) => {
+            // Each placement is an object of its own on the one image's pixels.
+            let placed: Vec<Arc<Node>> = maps
+                .iter()
+                .map(|map| {
+                    let mut copy = d.reid(&image);
+                    copy.transform(*map, false);
+                    Arc::new(copy)
+                })
+                .collect();
+            Some(Node::group(d.alloc_id(), placed))
+        }
+    }
+}
+
+/// What [`rasterize_effect_image`] makes its image of: `n`, or the art before the Transform effects
+/// that move or copy the image, without the Rasterize effect and without its transparency; that
+/// effect's options; and the maps those Transform effects place the image by, the lowest first,
+/// without those that flatten it. `None` when `n` has another raster effect, when the Rasterize
+/// effect is not its own, or when those Transform effects flatten every placement.
+fn rasterize_effect_art(d: &Document, n: &Node) -> Option<(Node, effects::Rasterize, Option<Vec<Affine>>)> {
+    let [RasterFx::Rasterize(r)] = raster_fx(n)[..] else { return None };
+    let (stage, maps) = match vectorcraft_render::rasterize_stage(d, n) {
+        Some((stage, maps)) => {
+            let maps: Vec<Affine> = maps.into_iter().filter(|m| places(*m)).collect();
+            if maps.is_empty() {
+                return None;
+            }
+            (Some(stage), Some(maps))
+        }
+        None => (None, None),
+    };
+    let n = stage.as_ref().unwrap_or(n);
+    let at = n.appearance.effects.iter().position(|e| e.visible && e.id == effects::RASTERIZE)?;
     let mut whole = n.clone();
     whole.appearance.effects.remove(at);
     (whole.opacity, whole.blend) = (1.0, Default::default());
     whole.extras_mut().mask = None;
-    let image = super::menucmds::rasterize_art(d, vec![whole], &p, "object.rasterize").ok()?;
-    Some(image.into_node(d))
+    Some((whole, r, maps))
+}
+
+/// Does `map`, one of those a Rasterize image is placed by ([`vectorcraft_render::rasterize_stage`]),
+/// place it? Not when it flattens it to a line or a point: the canvas draws nothing there.
+fn places(map: Affine) -> bool {
+    let det = map.determinant();
+    det.is_finite() && det.abs() > 1e-12
 }
 
 /// `v` (an object without its raster effects) replaced by `image` of the object with them: the
@@ -360,12 +455,18 @@ fn rasterize_effect_image(d: &mut Document, n: &Node) -> Option<Node> {
 /// member).
 pub(crate) fn replace_with_image(mut v: Node, image: Node) -> Node {
     if !v.is_layer() {
+        // The new pixels already show a distorted image's distortion.
+        if let Some(e) = v.extras_if_any() {
+            e.image_quad = None;
+        }
         return Node { kind: image.kind, appearance: Default::default(), ..v };
     }
     v.appearance = Default::default();
     v.set_clips(false);
     if let Some(ch) = v.children_mut() {
-        *ch = vec![Arc::new(image)];
+        // Its ruler guides stay above the image.
+        let guides = ch.split_off(Node::guide_run_start(ch));
+        *ch = std::iter::once(Arc::new(image)).chain(guides).collect();
     }
     v
 }
@@ -453,8 +554,9 @@ fn placed_symbol(d: &Document, n: &Node) -> Option<Node> {
 enum Which {
     /// Every raster effect (PDF).
     All,
-    /// Effects SVG cannot represent faithfully, with their other raster effects.
-    Pixel { cmyk: bool },
+    /// Effects SVG cannot represent faithfully, with their other raster effects; `filters`: the SVG
+    /// written has filters (SVG Tiny 1.2 has none).
+    Pixel { cmyk: bool, filters: bool },
 }
 
 /// Has `n` (its own, its fills' or strokes') raster effects `which` turns into an image?
@@ -462,8 +564,16 @@ fn imaged(n: &Node, which: Which) -> bool {
     let fx = raster_fx(n);
     match which {
         Which::All => !fx.is_empty(),
-        Which::Pixel { cmyk } => {
-            fx.iter().any(|f| matches!(f, RasterFx::Pixel(_) | RasterFx::Rasterize(_)))
+        Which::Pixel { cmyk, filters } => {
+            // An SVG filter that is the object's last effect, and its only pixel effect, stays a filter.
+            let pixels = fx.iter().filter(|f| matches!(f, RasterFx::Pixel(_) | RasterFx::Rasterize(_))).count();
+            let live = filters
+                && pixels == 1
+                && effects::svg_filter::writes_live(&n.appearance.effects)
+                && fx
+                    .iter()
+                    .any(|f| matches!(f, RasterFx::Pixel(effects::PixelFx::Svg(s)) if (!s.measured() || fx.len() == 1) && s.writes_as_svg11() && s.opens_again()));
+            (pixels > 0 && !live)
                 || (fx.iter().any(|f| matches!(f, RasterFx::DropShadow { darkness: Some(_), .. })) && (cmyk || !simple_rgb_shadow_source(n, &fx)))
         }
     }
@@ -578,6 +688,117 @@ fn walk_all(out: &mut Document, nodes: &[Arc<Node>], report: &mut FlattenReport)
         .then(|| nodes.iter().map(|n| walk(out, n, report).map(Arc::new).unwrap_or_else(|| n.clone())).collect())
 }
 
+/// `n` as an image when its Rasterize image moves with the Transform effects after it, or as a
+/// group of that image's placements when they copy it ([`vectorcraft_render::rasterize_stage`]):
+/// the image is made of the art before those Transform effects and placed by them, as the canvas
+/// draws it, which baking the geometry effects first would lose. Maps that flatten every placement
+/// leave an empty group, as the canvas draws nothing. Inside groups, layers and opacity masks, the
+/// members are looked at the same way. `None` when nothing in `n` changes; hidden objects and
+/// template layers stay as they are.
+fn staged(out: &mut Document, n: &Node, report: &mut FlattenReport) -> Option<Node> {
+    if !n.visible || matches!(n.kind, NodeKind::Layer { template: true, .. }) {
+        return None;
+    }
+    if let Some((_, maps)) = vectorcraft_render::rasterize_stage(out, n) {
+        let mut v = n.clone();
+        strip_raster(&mut v, false);
+        if !maps.iter().any(|m| places(*m)) {
+            v.appearance = Default::default();
+            v.kind = NodeKind::Group { children: vec![], clip: false };
+            return Some(v);
+        }
+        let image = raster_image(out, n, false, false)?;
+        // The placements share one image: its resolution is the first one's.
+        let first = match &image.kind {
+            NodeKind::Group { children, clip: false } => children.first().map_or(&image, |c| &**c),
+            _ => &image,
+        };
+        report.record(n, first);
+        let mut m = replace_with_image(v, image);
+        staged_mask(out, &mut m, report);
+        return Some(m);
+    }
+    let mut m = n.clone();
+    let mut changed = staged_mask(out, &mut m, report);
+    if is_container(n)
+        && let Some(ch) = staged_all(out, n.children()?, report)
+        && let Some(slot) = m.children_mut()
+    {
+        *slot = ch;
+        changed = true;
+    }
+    changed.then_some(m)
+}
+
+/// The art of `n`'s opacity mask with [`staged`] applied; `true` when it changed.
+fn staged_mask(out: &mut Document, n: &mut Node, report: &mut FlattenReport) -> bool {
+    if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut())
+        && let Some(art) = staged(out, &m.art, report)
+    {
+        m.art = Arc::new(art);
+        return true;
+    }
+    false
+}
+
+/// Does `n`, or anything inside it or its opacity mask, list a Rasterize effect whose image the
+/// Transform effects after it move ([`effects::rasterize_stage`])?
+fn holds_stage(n: &Node) -> bool {
+    effects::rasterize_stage(&n.appearance.effects).is_some()
+        || n.extras().mask.as_ref().is_some_and(|m| holds_stage(&m.art))
+        || n.children().is_some_and(|ch| ch.iter().any(|c| holds_stage(c)))
+}
+
+/// A copy of `doc` with [`staged`] applied in its layers, symbol definitions and pattern tiles,
+/// `None` when nothing changes.
+fn staged_document(doc: &Document, report: &mut FlattenReport) -> Option<Document> {
+    let holds = doc.layers.iter().any(|n| holds_stage(n))
+        || doc.symbols.iter().any(|s| holds_stage(&s.art))
+        || doc.patterns.iter().any(|p| p.art.iter().any(|n| holds_stage(n)));
+    if !holds {
+        return None;
+    }
+    let mut out = doc.clone();
+    let mut changed = false;
+    if let Some(layers) = staged_all(&mut out, &doc.layers, report) {
+        out.layers = layers;
+        changed = true;
+    }
+    for i in 0..out.symbols.len() {
+        if let Some(art) = out.symbols.get(i).map(|s| s.art.clone()).and_then(|a| staged(&mut out, &a, report))
+            && let Some(s) = out.symbols.get_mut(i)
+        {
+            s.art = Arc::new(art);
+            changed = true;
+        }
+    }
+    for i in 0..out.patterns.len() {
+        if let Some(art) = out.patterns.get(i).map(|p| p.art.clone()).and_then(|a| staged_all(&mut out, &a, report))
+            && let Some(p) = out.patterns.get_mut(i)
+        {
+            p.art = art;
+            changed = true;
+        }
+    }
+    changed.then_some(out)
+}
+
+/// `nodes` with [`staged`] applied, `None` when none changes.
+fn staged_all(out: &mut Document, nodes: &[Arc<Node>], report: &mut FlattenReport) -> Option<Vec<Arc<Node>>> {
+    let mut changed = false;
+    let all = nodes
+        .iter()
+        .map(|n| match staged(out, n, report) {
+            Some(m) => {
+                changed = true;
+                Arc::new(m)
+            }
+            None => n.clone(),
+        })
+        .collect();
+    changed.then_some(all)
+}
+
 /// A copy of `doc` with raster effects turned into images at the document's raster effects
 /// resolution, or `None` when there are none: on every kind of object (paths, groups and layers,
 /// type, images, symbol instances, live objects) and on single fills and strokes, in the layers,
@@ -590,7 +811,13 @@ pub fn flatten_raster_effects(doc: &Document) -> Option<Document> {
 /// Mask…) or Rasterize are images as [`flatten_raster_effects`] makes them (SVG export: its
 /// filters draw the other raster effects live), or `None` when there are none.
 pub fn flatten_pixel_effects(doc: &Document) -> Option<Document> {
-    flatten(doc, &mut FlattenReport::new(Which::Pixel { cmyk: doc.color_mode == ColorMode::Cmyk }, doc))
+    flatten_pixel_effects_for(doc, true)
+}
+
+/// [`flatten_pixel_effects`] for SVG that has filters (`filters`) or not (SVG Tiny 1.2): without
+/// them an SVG filter (Effect › SVG Filters) also makes its object an image.
+pub fn flatten_pixel_effects_for(doc: &Document, filters: bool) -> Option<Document> {
+    flatten(doc, &mut FlattenReport::new(Which::Pixel { cmyk: doc.color_mode == ColorMode::Cmyk, filters }, doc))
 }
 
 fn flatten(doc: &Document, report: &mut FlattenReport) -> Option<Document> {
@@ -599,6 +826,9 @@ fn flatten(doc: &Document, report: &mut FlattenReport) -> Option<Document> {
     if !any(&doc.layers) && !doc.symbols.iter().any(|s| needs(&s.art, which)) && !doc.patterns.iter().any(|p| any(&p.art)) {
         return None;
     }
+    // Rasterize images that Transform effects after them move, before those effects are baked.
+    let pre = staged_document(doc, report);
+    let doc = pre.as_ref().unwrap_or(doc);
     // Geometry effects first, so the vector objects kept above shadows are final.
     let baked = effects::bake_document(doc);
     let src = baked.as_ref().unwrap_or(doc);
@@ -628,8 +858,8 @@ pub fn export_pdf(doc: &Document, opts: &vectorcraft_pdf::PdfOptions) -> std::re
     export_pdf_with_report(doc, opts).map(|r| r.bytes)
 }
 
-/// Like [`export_pdf`], also returning the writer's warnings (options not applied yet, features
-/// approximated or left out).
+/// Like [`export_pdf`], also returning the writer's warnings (features approximated or left out)
+/// and its notes on the options (options not applied yet).
 pub fn export_pdf_with_report(
     doc: &Document,
     opts: &vectorcraft_pdf::PdfOptions,

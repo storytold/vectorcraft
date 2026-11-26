@@ -23,6 +23,9 @@ pub(crate) enum CliError {
     Commands(#[from] CommandsError),
     #[error("{0}")]
     Roots(String),
+    /// No usable control token for `--connect`; says what to set.
+    #[error("{0}")]
+    ControlToken(String),
     #[error("cannot connect to {addr}: {source}")]
     Connect { addr: String, source: std::io::Error },
     #[error("MCP server: {0}")]

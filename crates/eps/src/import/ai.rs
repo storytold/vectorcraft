@@ -17,7 +17,10 @@
 //! objects and points. Anything it doesn't read is an error: the caller opens the file the way it
 //! did before (the printed page, or the PDF), with a warning saying why.
 
+mod arrowhead;
 mod blend;
+mod brush;
+mod envelope;
 mod frames;
 mod lex;
 mod mesh;
@@ -32,9 +35,43 @@ use std::io::Read as _;
 use super::lex::find;
 use crate::ps;
 
+pub(crate) use blend::{MAX_BLEND_OBJECTS, MAX_KEYS as MAX_BLEND_KEYS, PLUGIN as BLEND_PLUGIN, blend_reads};
+pub(crate) use brush::{
+    BrushesRead, MANAGER_NAME as BRUSH_MANAGER, brushes_kept, plugin_name as brush_plugin_name, read_brush_object, turn_over as turn_brush_art_over,
+};
+#[cfg(test)]
+pub(crate) use envelope::DASH_CHECKS_MADE;
+pub(crate) use envelope::DRAWN as ENVELOPE_DRAWN;
+pub(crate) use envelope::TYPE_DRAWN as ENVELOPE_TYPE_DRAWN;
+pub(crate) use envelope::{GridPoint as EnvelopeGridPoint, PLUGIN as DEFORM_PLUGIN, outline as envelope_outline, upright as envelope_upright};
+pub(crate) use envelope::{MAX_ANY as ENVELOPE_MAX_ANY, MAX_SOLID as ENVELOPE_MAX_SOLID};
+pub(crate) use envelope::{MAX_CHECKED, MAX_DASH_CHECKS};
+pub(crate) use envelope::{WARPED_TYPE_DRAWN, WarpedType};
+#[cfg(test)]
+pub(crate) use frames::TEXT_FRAME_SCANS;
 pub(crate) use frames::text_frames;
-pub use read::{IMAGE_TOO_LARGE, PaletteSwatches, Structure, artboards, palette, read, variables};
-pub(crate) use read::{slot_frame, slot_of};
+pub(crate) use mesh::{MAX_SIDE as MAX_MESH_SIDE, mesh_reads};
+pub use obj::{NameEncoding, Names};
+pub(crate) use paint::MAX_STOPS as MAX_GRADIENT_STOPS;
+#[cfg(test)]
+pub(crate) use read::objects_read;
+#[cfg(test)]
+pub use read::read;
+#[cfg(test)]
+pub(crate) use read::with_image_limits;
+pub(crate) use read::{
+    BLEND_BUDGET, MAX_NODES as MAX_EDITING_OBJECTS, MAX_SYMBOLS, ParsedStyle, join_and, parse_art_style, parsed_moves_with, read_over_page,
+    read_parsed_style, read_program, read_style_list, slot_frame, slot_of, symbol_art_member,
+};
+pub use read::{
+    BindingRef, Brushes, PaletteSwatches, PlacedPage, Structure, Symbols, active_artboard, artboards, bindings_note, brushes, graphic_styles,
+    palette, read_beside, read_in, symbols, variables,
+};
+#[cfg(test)]
+pub(crate) use style::ART_STYLE_PARSES;
+
+pub(crate) use read::{clip_by_type, is_look_slot};
+pub(crate) use style::{MAX_LISTED, MAX_LISTED_NAME, warp_number};
 
 #[cfg(test)]
 mod tests;
@@ -64,6 +101,19 @@ fn data_limit(memory: Option<u64>) -> u64 {
 const MAX_ZSTD_WINDOW: u64 = 64 << 20;
 /// Most Zstandard frames read (the app writes one).
 const MAX_FRAMES: usize = 4096;
+
+#[cfg(test)]
+thread_local! {
+    /// How many bytes [`Codec::decode`] has looked at on this thread to find whether another
+    /// Zstandard frame follows or only zero padding is left.
+    static PADDING_LOOKS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// [`PADDING_LOOKS`] of this thread.
+#[cfg(test)]
+fn padding_looks() -> u64 {
+    PADDING_LOOKS.get()
+}
 
 const EPS_BEGIN: &[u8] = b"%AI9_PrivateDataBegin";
 const EPS_END: &[u8] = b"%AI9_PrivateDataEnd";
@@ -158,11 +208,15 @@ impl Codec {
                 flate2::read::ZlibDecoder::new(data).take(max + 1).read_to_end(&mut out).map_err(|_| damaged("its zlib compression"))?;
             }
             Codec::Zstd => {
-                // The data may be several frames one after the other, padded with zeros.
-                let end = data.iter().rposition(|b| *b != 0).map_or(0, |i| i + 1);
-                let mut src = data.get(..end).unwrap_or_default();
+                // The data may be several frames one after the other, padded with zeros. A frame
+                // can itself end in a zero byte, so the padding is what is left after the last frame.
+                let mut src = data;
                 let mut frames = 0usize;
-                while !src.is_empty() {
+                while src.iter().any(|b| {
+                    #[cfg(test)]
+                    PADDING_LOOKS.set(PADDING_LOOKS.get().saturating_add(1));
+                    *b != 0
+                }) {
                     frames += 1;
                     if frames > MAX_FRAMES {
                         return Err(damaged("its Zstandard compression"));

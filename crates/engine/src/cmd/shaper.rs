@@ -2,7 +2,9 @@
 //! art retained underneath. Recipes select topology regions; source edits re-evaluate them in
 //! the same undo transaction. Rendering and exporters only see ordinary groups and paths.
 use super::pathops::Beside;
-use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, checked_ids_param, cmd, f64_or, has_doc, id_param, point_param};
+use super::{
+    CommandSpec, EngineError, Result, Session, bad, bool_or, checked_ids_param, cmd, f64_or, has_doc, id_param, number_or, object_param, point_param,
+};
 use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, HashMap},
@@ -34,7 +36,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select Shaper Face",
             [],
             None,
-            "{point: [x,y], source?: bool} click selects a group, then a face; source enters construction isolation and selects an original (while an opacity mask or a pattern is edited, it selects the original and the editing layer stays isolated); while a group's originals are isolated, it selects one of that group's originals → {id}",
+            "{point: [x,y], source?: bool, tolerance?: pt (3)} click selects a group, then a face; with the group or one of its faces selected, a click within tolerance of an original shape's outline enters construction isolation and selects that original; source enters construction isolation and selects an original (while an opacity mask or a pattern is edited, it selects the original and the editing layer stays isolated); while a group's originals are isolated, it selects one of that group's originals → {id}",
             has_doc,
             select
         ),
@@ -734,16 +736,50 @@ fn group_at(d: &Document, point: Point, construction: bool, within: Option<NodeI
     });
     groups.last().copied()
 }
+/// The topmost editable Shaper Group that is selected, or has a face selected, with a visible,
+/// unlocked original shape whose outline lies within `tolerance` of `point`, and the topmost such
+/// shape in it; `None` when a Shaper Group that [`group_at`] finds at `point` lies above it.
+fn outline_at(d: &Document, selection: &vectorcraft_doc::Selection, point: Point, tolerance: f64) -> Option<(NodeId, NodeId)> {
+    let mut hit = None;
+    let editable = d.editable();
+    d.walk(|n| {
+        if n.extras().shaper.is_none() || !editable(n.id) {
+            return;
+        }
+        let picked = selection.contains(n.id) || selection.objects.iter().any(|id| d.parent_of(*id) == Some(n.id));
+        let on_outline =
+            |s: &&Arc<Node>| b::node_outline(s).is_some_and(|(path, _)| path.nearest(point).is_some_and(|(_, _, _, _, dist)| dist <= tolerance));
+        let source = if picked { sources(n).iter().rev().filter(|s| s.visible && !s.locked).find(on_outline).map(|s| s.id) } else { None };
+        if let Some(source) = source {
+            hit = Some((n.id, source));
+        } else if n.geometric_bounds().is_some_and(|b| b.inflate(6.0, 6.0).contains(point)) {
+            hit = None;
+        }
+    });
+    hit
+}
 fn select(s: &mut Session, p: &Value) -> Result<Value> {
     let point = point_param(p, "point").filter(|p| finite(*p)).ok_or_else(|| bad("shaper.select", "missing point"))?;
     let st = s.doc()?;
     let source = bool_or(p, "source", false);
+    let tolerance = number_or(p, "tolerance", 3.0, "shaper.select")?;
+    if !tolerance.is_finite() || !(0.0..=1000.0).contains(&tolerance) {
+        return Err(bad("shaper.select", "invalid tolerance"));
+    }
     // In Construction mode a source pick stays in the group whose source shapes are isolated.
     let isolated =
         st.isolation.and_then(|i| st.doc.parent_of(i)).filter(|g| st.doc.node(*g).and_then(source_group).is_some_and(|s| st.isolation == Some(s.id)));
-    let Some(group) = group_at(&st.doc, point, source, isolated.filter(|_| source)) else { return Ok(json!({"id": null})) };
+    // With a group or one of its faces selected, a click on one of its original shapes' outlines
+    // enters Construction mode with the topmost such shape selected, wherever the outline lies.
+    let outline = if source { None } else { outline_at(&st.doc, &st.selection, point, tolerance) };
+    let Some(group) = outline.map(|(g, _)| g).or_else(|| group_at(&st.doc, point, source, isolated.filter(|_| source))) else {
+        return Ok(json!({"id": null}));
+    };
     let node = st.doc.node(group).ok_or(EngineError::NoNode(group))?;
-    let target = if source {
+    let source = source || outline.is_some();
+    let target = if let Some((_, id)) = outline {
+        id
+    } else if source {
         sources(node)
             .iter()
             .rev()
@@ -773,9 +809,10 @@ fn select(s: &mut Session, p: &Value) -> Result<Value> {
     }
     Ok(json!({"id": target.0}))
 }
-/// The layer an opacity mask or a pattern is edited in, which stays isolated while that mode is on.
+/// The layer an opacity mask, a pattern or a symbol is edited in, which stays isolated while that
+/// mode is on.
 fn editing_layer(d: &Document) -> Option<NodeId> {
-    d.mask_edit.map(|m| m.layer).or_else(|| d.pattern_edit.as_ref().map(|e| e.layer))
+    d.mask_edit.map(|m| m.layer).or_else(|| d.pattern_edit.as_ref().map(|e| e.layer)).or_else(|| d.symbol_edit.as_ref().map(|e| e.layer))
 }
 /// Leave isolation mode, Construction mode included. While an opacity mask or a pattern is edited,
 /// its editing layer stays isolated.
@@ -784,15 +821,15 @@ fn end_isolation(s: &mut Session) -> Result<()> {
     st.isolation = editing_layer(&st.doc);
     Ok(())
 }
-fn target(s: &Session, p: &Value) -> Result<NodeId> {
-    let id = id_param(p, "id")
+fn target(s: &Session, p: &Value, cmd: &str) -> Result<NodeId> {
+    let id = object_param(p, "id", cmd)?
         .or_else(|| s.active().and_then(|d| d.selection.objects.first().copied()))
-        .ok_or_else(|| bad("shaper.release", "select a Shaper group"))?;
-    s.doc()?.doc.node(id).filter(|n| n.extras().shaper.is_some()).ok_or_else(|| bad("shaper.release", "select a Shaper group"))?;
+        .ok_or_else(|| bad(cmd, "select a Shaper group"))?;
+    s.doc()?.doc.node(id).filter(|n| n.extras().shaper.is_some()).ok_or_else(|| bad(cmd, "select a Shaper group"))?;
     Ok(id)
 }
 fn release(s: &mut Session, p: &Value) -> Result<Value> {
-    let id = target(s, p)?;
+    let id = target(s, p, "shaper.release")?;
     let ids = s.edit("Release Shaper Group", |d, sel| {
         let original = d.node(id).map(sources).ok_or(EngineError::NoNode(id))?;
         let (parent, index, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
@@ -808,7 +845,7 @@ fn release(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}))
 }
 fn expand(s: &mut Session, p: &Value) -> Result<Value> {
-    let id = target(s, p)?;
+    let id = target(s, p, "shaper.expand")?;
     s.edit("Expand Shaper Group", |d, sel| {
         let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
         n.extras_mut().shaper = None;

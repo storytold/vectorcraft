@@ -8,20 +8,20 @@ use std::sync::Arc;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeKind};
-use vectorcraft_pdf::{Overprint, PdfError, PdfOptions, PdfPreset, PdfSettings, Standard, THUMBNAIL_SIZE, Thumbnail};
+use vectorcraft_pdf::{
+    APP, ActiveProfiles, Overprint, PdfError, PdfOptions, PdfPreset, PdfSettings, Standard, THUMBNAIL_SIZE, Thumbnail, default_preset_name,
+    leaves_out_bleed, page_bleed,
+};
 
 use super::super::flatten::{FlattenOptions, flatten_document, see_through_images};
 use super::super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, str_param};
-use super::{ArtboardPick, FormatOption, write_or_return};
+use super::{ArtboardPick, FormatOption, Note, note_texts, write_or_return};
 use crate::EngineError;
 
 const C: &str = "document.exportPdf";
 
-/// The built-in preset every PDF export starts from.
-pub use vectorcraft_pdf::DEFAULT_PRESET;
-
 /// The PDF options `document.formats` lists; `document.exportPdf` documents every field.
-pub(super) const OPTIONS: &[FormatOption] = &[
+pub(crate) const OPTIONS: &[FormatOption] = &[
     super::ARTBOARD,
     super::ARTBOARDS,
     super::RANGE,
@@ -42,7 +42,7 @@ pub(super) const OPTIONS: &[FormatOption] = &[
         name: "compatibility",
         ty: "string",
         default: "\"1.7\"",
-        description: "PDF version: 1.3 (transparency flattened) | 1.4 | 1.5 | 1.6 | 1.7 | 2.0",
+        description: "PDF version: 1.3 (transparency flattened) | 1.4 | 1.5 | 1.6 | 1.7 | 2.0 (a pdfA2b file at 1.4 with a page longer than 14,400 pt is written as 1.6, with a UserUnit as at 1.6, and a warning; see document.exportPdf)",
     },
     FormatOption {
         name: "preserveEditing",
@@ -50,13 +50,26 @@ pub(super) const OPTIONS: &[FormatOption] = &[
         default: "true",
         description: "embed the native document so VectorCraft reopens the PDF editable (the default preset's choice)",
     },
+    FormatOption { name: "thumbnails", ty: "boolean", default: "false", description: "each page drawn as a /Thumb image, 106 px on its long side" },
+    FormatOption {
+        name: "fastWebView",
+        ty: "boolean",
+        default: "false",
+        description: "a linearized file: the first page shows while the rest downloads",
+    },
+    FormatOption {
+        name: "viewAfterSaving",
+        ty: "boolean",
+        default: "false",
+        description: "in the desktop app's document.exportPdf, the written file opens in the system viewer",
+    },
     FormatOption { name: "compression", ty: "object", default: "null", description: "{color, gray, mono, compressText} (see document.exportPdf)" },
     FormatOption { name: "marks", ty: "object", default: "null", description: "printer's marks (see document.exportPdf)" },
     FormatOption {
         name: "bleed",
         ty: "object",
         default: "null",
-        description: "{useDocument, top, bottom, left, right} in points: the page grows by the bleed (BleedBox) around its artboard (TrimBox)",
+        description: "{useDocument, top, bottom, left, right} in points: the page grows by the bleed (BleedBox) around its artboard (TrimBox); a PDF/X file with no bleed on a side where the document's bleed has one comes back with a warning, and so do objects that reach the trim edge on a side with a bleed but stop short of the bleed edge",
     },
     FormatOption {
         name: "output",
@@ -81,6 +94,12 @@ pub(super) const OPTIONS: &[FormatOption] = &[
         ty: "boolean",
         default: "false",
         description: "keep the layers whose Print option is off (left out otherwise, unless createLayers)",
+    },
+    FormatOption {
+        name: "longPagesInPoints",
+        ty: "boolean",
+        default: "true",
+        description: "a page with a side longer than 14,400 pt (200 in) is written at its size in points, without a UserUnit, at every PDF version, in files without a standard (PDF/A files keep the UserUnit); false writes it with a UserUnit from PDF 1.6 on",
     },
     FormatOption {
         name: "createLayers",
@@ -109,7 +128,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export PDF",
             [],
             None,
-            "{path?, preset?: \"VectorCraft Default\" (built-in or saved: pdf.preset.list), artboard? | artboards?: [i…] | range?: \"1-3, 5\" (1-based; default all, one page each), standard?: none|pdfA2b|pdfX1a (CMYK, grey and spot colours only: colours and images converted to output.destination or the CMYK output intent, untagged; transparency flattened with flattenerPreset; PDF 1.3)|pdfX3 (colours ICC-tagged; transparency flattened; PDF 1.3)|pdfX4 (transparency and layers kept; colours ICC-tagged; PDF 1.6 at most) (PDF/X: a /GTS_PDFX output intent, by default the CMYK profile in effect, embedded; TrimBox, Trapped, GTS_PDFXVersion, title and dates; fonts embedded or outlined), compatibility?: 1.3 (no transparency: it is flattened with flattenerPreset; images keep no see-through pixels)|1.4|1.5|1.6|1.7 (default)|2.0 (choosing a standard sets its version: 1.7 for pdfA2b, 1.6 for pdfX4, 1.3 for pdfX1a and pdfX3, which write 1.4 as 1.3 too; pdfA2b refuses 1.3), preserveEditing? (on in VectorCraft Default: the native document as an embedded file, which document.open restores; choosing a standard turns it off, a standard refuses it), thumbnails? (each page drawn as a /Thumb image, 106 px on its long side), fastWebView? (a linearised file: the first page shows while the rest downloads; it stays linearised when encrypted), viewAfterSaving? (the app opens the written file), createLayers? (each layer and sublayer but template layers as a PDF layer, an optional content group listed under its layer's: hidden layers off, non-printing ones /PrintState /OFF, locked ones locked; needs 1.5 or later; they reopen as layers; choosing pdfX1a or pdfX3 turns it off; they refuse it), includeNonPrinting? (keep layers whose Print option is off; left out by default unless createLayers), flattenerPreset?: \"\" (High Resolution) | high | medium | low | a saved preset (flattener.presets.list): what PDF 1.3 files flatten transparency with, flattener?: {object.flattenTransparency options over it}, compression?: {color?, gray?: {downsample: none|average|subsample|bicubic, ppi: 300, abovePpi: 450, compression: none|zip|jpeg|jpeg2000|auto, quality: minimum|low|medium|high|maximum}, mono?: {downsample, ppi: 1200, abovePpi: 1800, compression: none|ccittG3|ccittG4|zip|runLength} (black-and-white images), compressText?: true} (images above abovePpi are resampled to ppi; auto keeps JPEGs JPEG, the others lossless; JPEG needs opaque images; none, jpeg2000, CCITT and runLength are written as ZIP with a warning), marks?: {trim, registration, colorBars, pageInfo, kind: roman|japanese, weight: 0.25 (trim marks and targets), offset: 6 (pt from the artboard, at least the bleed)} (printer's marks in [Registration], every plate: trim marks, registration targets mid-side, CMYK/spot/black-tint colour bars on top, page information (title, artboard, date UTC) below), bleed?: {useDocument (the document's bleed, document.setup), top, bottom, left, right} (pt; art in the bleed is kept). Each page: TrimBox = artboard, BleedBox = artboard + bleed, MediaBox = that + the marks' room (art clipped to the BleedBox), output?: {conversion: none (default)|destination (every colour into the destination profile's model, CMYK or RGB, also colours of that model in another profile)|preserveNumbers (only colours of the other model and Lab; those in the destination's model keep their numbers) (grey stays grey; images are converted too, printer's marks are not), destination: profile name (edit.colorSettings lists them; default: the document's profile for its colour mode), profiles: none (device colours)|all|destination|taggedSource (documents assigned a profile: edit.assignProfile) (ICC-based colours: CMYK with the destination or document CMYK profile, RGB as sRGB, grey with the sRGB tone curve; PDF/A, pdfX3 and pdfX4 always, whatever profiles says), outputIntent: profile name (embedded as the catalog's /GTS_PDFX output intent; a name that isn't a profile is only named, which pdfX1a and pdfX3 allow only with a registry and pdfX4 refuses; pdfX1a needs a CMYK one), outputCondition, outputConditionId (default: outputIntent), registry, trapped (/Trapped /True; /False when an output intent is written)} (PDF/A files keep their own output intent), advanced?: {fontSubsetPercent: 100 (below 100 is accepted with a warning: fonts are always embedded as subsets), outlineText: false (type as real, selectable and searchable text in embedded subset fonts with a ToUnicode map; fonts whose licence forbids embedding, or allows only whole fonts, stay outlines with a warning; true: every glyph as an outline), overprint: preserve (overprinting fills and strokes set /OP /op true, /OPM 1; white ones knock out with document.setup discardWhiteOverprint)|discard (they knock out)}, security?: {openPassword, permissionsPassword, printing: none|low|high, changes: none|pages|forms|comments|any, copy, screenReader, plaintextMetadata}, acknowledgeLoss?: bool (write over the file the document was read from although reading it left things out), format?: \"pdf\"} → {path, bytes, warnings}; no path → {dataBase64, bytes, warnings}. The options apply over the preset (null keeps its value); options accepted but not applied yet come back as warnings; a standard with a PDF version it doesn't allow and a password with a standard are refused, and so is a PDF/X file that would still break its standard (transparency the flattener left, RGB in pdfX1a, a font not embedded) or a PDF 1.3 file with transparency left. document.export {format: pdf} takes the same options",
+            "{path?, preset?: \"VectorCraft Default\" (built-in or saved: pdf.preset.list), artboard? | artboards?: [i…] | range?: \"1-3, 5\" (1-based; default all, one page each), useArtboards?: true (false: one page, the bounds of the visible art the page draws (non-printing layers left out unless includeNonPrinting or createLayers keeps them), as document.export writes it; artboard, artboards and range are then ignored, Preserve Editing is left out (with a warning when it is on), and a document with no visible art is refused), standard?: none|pdfA2b|pdfX1a (CMYK, grey and spot colours only: colours and images converted to output.destination or the CMYK output intent, untagged; transparency flattened with flattenerPreset; PDF 1.3)|pdfX3 (colours ICC-tagged, CMYK in the output intent's profile as DeviceCMYK; transparency flattened; PDF 1.3)|pdfX4 (transparency and layers kept; colours ICC-tagged, CMYK in the output intent's profile as DeviceCMYK; PDF 1.6 at most) (PDF/X: a /GTS_PDFX output intent, by default the CMYK profile in effect, embedded; TrimBox, Trapped, GTS_PDFXVersion, title and dates; fonts embedded or outlined), compatibility?: 1.3 (no transparency: it is flattened with flattenerPreset, without the layers the file leaves out; images keep no see-through pixels)|1.4|1.5|1.6|1.7 (default)|2.0 (choosing a standard sets its version: 1.7 for pdfA2b, 1.6 for pdfX4, 1.3 for pdfX1a and pdfX3, which write 1.4 as 1.3 too; pdfA2b refuses 1.3; in pdfA2b files, and with longPagesInPoints: false, a page with a side longer than 14,400 pt keeps its size with a UserUnit from 1.6 on: 1.5 is then written as 1.6, with 1.5's encryption, and so is 1.4 in pdfA2b files, with a warning; PDF/X files and other 1.3 and 1.4 files write it in points, and 1.3 and 1.4 (pdfX1a and pdfX3 too) refuse a page past 32,767 pt whose size or art needs a real number past 32,767; a page whose short side is 3 pt or longer but would be under 3 units at that UserUnit gets a smaller one that keeps the short side at 3 units; a warning gives each such page's size), longPagesInPoints?: true (such a page is written at its size in points, without a UserUnit, at every version, and 1.5 stays 1.5, in files without a standard (PDF/A files keep the UserUnit); apps that keep to the limit cut it to 200 in; false: the UserUnit as above, with a warning that names this option), preserveEditing? (on in VectorCraft Default: the native document as an embedded file, which document.open restores; choosing a standard turns it off, a standard refuses it), thumbnails? (each page drawn as a /Thumb image, 106 px on its long side), fastWebView? (a linearised file: the first page shows while the rest downloads; it stays linearised when encrypted), viewAfterSaving? (the app opens the written file), createLayers? (each layer and sublayer but template layers as a PDF layer, an optional content group listed under its layer's: hidden layers off, non-printing ones /PrintState /OFF, locked ones locked; needs 1.5 or later; they reopen as layers; choosing pdfX1a or pdfX3 turns it off; they refuse it), includeNonPrinting? (keep layers whose Print option is off; left out by default unless createLayers), flattenerPreset?: \"\" (High Resolution) | high | medium | low | a saved preset (flattener.presets.list): what PDF 1.3 files flatten transparency with, flattener?: {object.flattenTransparency options over it}, compression?: {color?, gray?: {downsample: none|average|subsample|bicubic, ppi: 300, abovePpi: 450, compression: none|zip|jpeg|jpeg2000|auto, quality: minimum|low|medium|high|maximum}, mono?: {downsample, ppi: 1200, abovePpi: 1800, compression: none|ccittG3|ccittG4|zip|runLength} (black-and-white images), compressText?: true} (images above abovePpi are resampled to ppi; auto keeps JPEGs JPEG, the others lossless; JPEG needs opaque images; none, jpeg2000, CCITT and runLength are written as ZIP with a warning), marks?: {trim, registration, colorBars, pageInfo, kind: roman|japanese, weight: 0.25 (trim marks and targets), offset: 6 (pt from the artboard, at least the bleed)} (printer's marks in [Registration], every plate: trim marks, registration targets mid-side, CMYK/spot/black-tint colour bars on top, page information (title, artboard, date UTC) below), bleed?: {useDocument (the document's bleed, document.setup), top, bottom, left, right} (pt; art in the bleed is kept; a PDF/X file with no bleed on a side where the document's bleed has one comes back with a warning, and so does a count of the visible objects that reach the trim edge (within 0.5 pt) on a side with a bleed but end before the bleed edge; layers that don't print are left out unless includeNonPrinting, and art and boxes are written unchanged). Each page: TrimBox = artboard, BleedBox = artboard + bleed, MediaBox = that + the marks' room (art clipped to the BleedBox), output?: {conversion: none (default)|destination (every colour into the destination profile's model, CMYK or RGB, also colours of that model in another profile)|preserveNumbers (only colours of the other model and Lab; those in the destination's model keep their numbers) (grey stays grey; images are converted too, and with destination and an sRGB destination a gray or RGB image tagged with an ICC profile is converted from it and written untagged; with destination and a CMYK destination, or another RGB one images are converted to (not when colours are ICC-tagged), an RGB image tagged with one is converted from it through sRGB; with preserveNumbers (and pdfX1a) only untagged images keep their numbers: an RGB image tagged with one is converted from it to sRGB or through sRGB to the destination, and a gray one is converted from it in an sRGB destination; any other image whose colors are converted (a CMYK image, an RGB one going to a CMYK destination, or with destination to an RGB one other than sRGB) but whose pixels can't be decoded or written that way is left out with a warning; printer's marks are not), destination: profile name (edit.colorSettings lists them; default: the document's profile for its colour mode), profiles: none (device colours; images are written without the ICC profiles they carry, a JPEG without its ICC_PROFILE segments, but in PDF/A, pdfX3 and pdfX4)|all|destination|taggedSource (documents assigned a profile: edit.assignProfile)|default (not set, the default; \"default\" unsets a preset's value, null keeps it: device colours, and gray and RGB images keep the profiles they carry, but in pdfX1a) (ICC-based colours: CMYK with the destination or document CMYK profile, RGB as sRGB, grey with the sRGB tone curve; PDF/A, pdfX3 and pdfX4 always, whatever profiles says, but in pdfX3 and pdfX4 CMYK colors in the profile of a CMYK output intent are DeviceCMYK, and with none and a CMYK output intent pdfX3 and pdfX4 write every CMYK color as DeviceCMYK, unless colors are converted to a CMYK destination of another profile; a CMYK image that keeps its numbers carries the CMYK profile it embeds with all and taggedSource, and in PDF/A, pdfX3 and pdfX4 unless destination, never in pdfX1a, nor when CMYK colors are DeviceCMYK and either its profile is the output intent's or profiles is none), outputIntent: profile name (embedded as the catalog's /GTS_PDFX output intent; a name that isn't a profile is only named, which pdfX1a and pdfX3 allow only with a registry and pdfX4 refuses; pdfX1a needs a CMYK one), outputCondition, outputConditionId (default: outputIntent; FOGRA51 or FOGRA52 for the built-in profiles computed from that data, with registry http://www.color.org unless registry is given), registry, trapped (/Trapped /True; /False when an output intent is written)} (PDF/A files keep their own output intent), advanced?: {fontSubsetPercent: 100 (below 100 is accepted with a warning: fonts are always embedded as subsets), outlineText: false (type as real, selectable and searchable text in embedded subset fonts with a ToUnicode map; fonts whose licence forbids embedding, or allows only whole fonts, stay outlines with a warning; true: every glyph as an outline), overprint: preserve (overprinting fills and strokes set /OP /op true, /OPM 1; white ones not linked to a spot swatch at a tint above 0% knock out with document.setup discardWhiteOverprint)|discard (they knock out)}, security?: {openPassword, permissionsPassword, printing: none|low|high, changes: none|pages|forms|comments|any, copy, screenReader, plaintextMetadata}, acknowledgeLoss?: bool (write over the file the document was read from although reading it left things out), format?: \"pdf\"} → {path, bytes, warnings}; no path → {dataBase64, bytes, warnings}. The options apply over the preset (null keeps its value); options accepted but not applied yet come back as warnings; a standard with a PDF version it doesn't allow and a password with a standard are refused, and so is a PDF/X file that would still break its standard (transparency the flattener left, RGB in pdfX1a, a font not embedded) or a PDF 1.3 file with transparency left. document.export {format: pdf} takes the same options. A key PDF doesn't take, and an unknown key inside one of the option objects, are refused. Under automation read roots, a PDF that carries the native document (preserveEditing on, every artboard, useArtboards not false) is refused, before any file is written, while the document links a JavaScript file outside them (svgInteractivity; a URL is not checked)",
             has_doc,
             export_pdf
         ),
@@ -118,7 +137,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "PDF Settings",
             [],
             None,
-            "{preset?, includeDocument?: false, …options of document.exportPdf} → {settings (the preset with the options applied), presets: [name…], changed: [{option: \"compression.compressText\", value}] (what differs from the preset), warnings}; includeDocument also exports the active document in memory and adds its warnings (knockout groups approximated, effects left out…)",
+            "{preset?, includeDocument?: false, …options of document.exportPdf} → {settings (the preset with the options applied), presets: [name…], changed: [{option: \"compression.compressText\", value}] (what differs from the preset), warnings}; includeDocument also exports the active document in memory (one page of the art's bounds with useArtboards: false) and adds its warnings (knockout groups approximated, effects left out…). A key PDF doesn't take, and an unknown key inside one of the option objects, are refused",
             always,
             pdf_settings
         ),
@@ -132,13 +151,13 @@ pub fn presets(s: &Session) -> Vec<String> {
 
 /// The built-in preset names, then those of `saved`.
 fn names(saved: &[PdfPreset]) -> Vec<String> {
-    vectorcraft_pdf::builtin_presets().into_iter().map(|p| p.name).chain(saved.iter().map(|p| p.name.clone())).collect()
+    vectorcraft_pdf::builtin_presets(APP).into_iter().map(|p| p.name).chain(saved.iter().map(|p| p.name.clone())).collect()
 }
 
 /// The preset `name` names: a built-in one (any case; `default` is the app default) or one of
 /// `saved`.
 pub fn find_preset(name: &str, saved: &[PdfPreset]) -> Option<PdfPreset> {
-    vectorcraft_pdf::builtin_preset(name).or_else(|| saved.iter().find(|p| p.name.eq_ignore_ascii_case(name.trim())).cloned())
+    vectorcraft_pdf::builtin_preset(name, APP).or_else(|| saved.iter().find(|p| p.name.eq_ignore_ascii_case(name.trim())).cloned())
 }
 
 fn preset(cmd: &str, name: &str, saved: &[PdfPreset]) -> Result<PdfSettings> {
@@ -147,9 +166,10 @@ fn preset(cmd: &str, name: &str, saved: &[PdfPreset]) -> Result<PdfSettings> {
         .ok_or_else(|| bad(cmd, format!("unknown PDF preset `{name}` (presets: {})", names(saved).join(", "))))
 }
 
-/// The settings of the preset `p` names (default: [`DEFAULT_PRESET`]), before `p`'s options.
+/// The settings of the preset `p` names (default: [`default_preset_name`]), before `p`'s options.
 pub fn preset_settings(cmd: &str, p: &Value, saved: &[PdfPreset]) -> Result<PdfSettings> {
-    preset(cmd, str_param(p, "preset").unwrap_or(DEFAULT_PRESET), saved)
+    let default = default_preset_name(APP);
+    preset(cmd, str_param(p, "preset").unwrap_or(&default), saved)
 }
 
 /// Merge `over` into `base`: objects key by key (recursively), `null` keeps the base (the
@@ -175,7 +195,7 @@ pub(crate) fn pdf_error(cmd: &str, e: PdfError) -> EngineError {
 }
 
 /// The settings `p` asks for: its preset (built-in or one of `saved`; default
-/// [`DEFAULT_PRESET`]) with `p`'s options applied over it. Choosing another standard turns
+/// [`default_preset_name`]) with `p`'s options applied over it. Choosing another standard turns
 /// Preserve Editing off, the layers off where it has none, and sets the latest compatibility it
 /// allows, unless `p` asks for those. Checked as a preset is
 /// ([`PdfSettings::check_values`]): profiles that aren't there pass. Keys that aren't PDF options
@@ -200,14 +220,14 @@ pub fn resolve(cmd: &str, p: &Value, saved: &[PdfPreset]) -> Result<PdfSettings>
             s.compatibility = s.standard.version();
         }
     }
-    s.check_values().map_err(|e| pdf_error(cmd, e))?;
+    s.check_values().map_err(|e| pdf_error(cmd, e.into()))?;
     Ok(s)
 }
 
 /// [`resolve`], refusing what the writer can't honour ([`PdfSettings::check`]).
 pub fn settings_with(cmd: &str, p: &Value, saved: &[PdfPreset]) -> Result<PdfSettings> {
     let s = resolve(cmd, p, saved)?;
-    s.check().map_err(|e| pdf_error(cmd, e))?;
+    s.check(&ActiveProfiles::default()).map_err(|e| pdf_error(cmd, e.into()))?;
     Ok(s)
 }
 
@@ -221,7 +241,7 @@ pub fn settings(cmd: &str, p: &Value) -> Result<PdfSettings> {
 /// built-in presets. Params naming none come back as they are.
 pub fn expand_preset<'a>(s: &Session, cmd: &str, p: &'a Value) -> Result<Cow<'a, Value>> {
     let expanded = match str_param(p, "preset") {
-        Some(name) if vectorcraft_pdf::builtin_preset(name).is_none() => {
+        Some(name) if vectorcraft_pdf::builtin_preset(name, APP).is_none() => {
             let set = settings_with(cmd, p, &s.prefs.pdf_presets)?;
             let mut q = p.clone();
             merge(&mut q, &serde_json::to_value(set).map_err(|e| EngineError::Other(e.to_string()))?);
@@ -240,9 +260,13 @@ pub fn expand_preset<'a>(s: &Session, cmd: &str, p: &'a Value) -> Result<Cow<'a,
 /// time of writing. On the web, which has no clock, the creation date is the modification date too,
 /// and a document without one gets neither.
 pub fn options(cmd: &str, doc: &Document, p: &Value) -> Result<PdfOptions> {
+    options_at(cmd, doc, p, vectorcraft_doc::metadata::output_time())
+}
+
+/// [`options`] modified at `now` (Unix seconds) instead of the time of writing.
+fn options_at(cmd: &str, doc: &Document, p: &Value, now: Option<i64>) -> Result<PdfOptions> {
     let pick = if p.is_object() { ArtboardPick::deserialize(p).map_err(|e| bad(cmd, format!("PDF options: {e}")))? } else { ArtboardPick::default() };
     let artboards = pick.resolve(doc.artboards.len()).map_err(|e| bad(cmd, e))?;
-    let now = vectorcraft_doc::metadata::output_time();
     Ok(PdfOptions {
         settings: settings(cmd, p)?,
         artboards,
@@ -257,16 +281,262 @@ pub fn options(cmd: &str, doc: &Document, p: &Value) -> Result<PdfOptions> {
 pub const EDITING_NEEDS_EVERY_ARTBOARD: &str =
     "Preserve editing was left out: it needs a PDF of every artboard, in order (reopened, this one would show the others too)";
 
-/// Encode `doc` as PDF with the options in `p` → (bytes, warnings). Raster effects are rendered
+/// Why a PDF of the art's bounds (`useArtboards: false`) carries no editing data.
+pub const EDITING_NEEDS_THE_ARTBOARDS: &str =
+    "Preserve editing was left out: it needs a PDF of the artboards (reopened, this one would replace them with one artboard around the art)";
+
+/// With `useArtboards: false` in `p`: the PDF of one page, the bounds of `doc`'s visible art
+/// ([`super::encode::art_page`]) → (bytes, notes). It carries no editing data: with Preserve
+/// Editing on, the notes end with [`EDITING_NEEDS_THE_ARTBOARDS`]. `None` when `p` asks for the
+/// artboards.
+pub(super) fn encode_art_page(cmd: &str, doc: &Document, p: &Value) -> Result<Option<(Vec<u8>, Vec<Note>)>> {
+    let Some((art, mut q)) = art_page(cmd, doc, p)? else { return Ok(None) };
+    let left_out = settings(cmd, &q)?.preserve_editing;
+    if left_out && let Some(o) = q.as_object_mut() {
+        o.insert("preserveEditing".into(), json!(false));
+    }
+    let (bytes, mut notes) = encode(cmd, &art, &q)?;
+    // The page is the art's bounds, so every object at its edge would count.
+    notes.retain(|n| !is_short_of_bleed(&n.text));
+    if left_out {
+        notes.push(Note::setting(EDITING_NEEDS_THE_ARTBOARDS));
+    }
+    Ok(Some((bytes, notes)))
+}
+
+/// [`super::encode::art_page`] of a PDF with the options in `p`: the bounds of the visible art on
+/// the layers its pages draw, without the non-printing ones unless `includeNonPrinting` or
+/// `createLayers` keeps them.
+pub(super) fn art_page(cmd: &str, doc: &Document, p: &Value) -> Result<Option<(Document, Value)>> {
+    if super::encode::use_artboards(cmd, p)? != Some(false) {
+        return Ok(None);
+    }
+    let set = settings(cmd, p)?;
+    let keeps = set.include_non_printing || set.create_layers;
+    super::encode::art_page(cmd, doc, p, |l| !keeps && matches!(l.kind, NodeKind::Layer { printable: false, .. }))
+}
+
+/// The warning for a PDF/X file that leaves out the document's bleed
+/// ([`vectorcraft_pdf::leaves_out_bleed`]).
+pub const BLEED_LEFT_OUT: &str = "the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings";
+
+/// How far, in points, an object's edge may sit inside the trim edge, or short of the bleed edge,
+/// and still count as reaching it in [`short_of_bleed`]. A side whose bleed is no larger has none.
+const EDGE_TOLERANCE: f64 = 0.5;
+
+/// How many objects of `doc` reach the trim edge (an artboard's edge, within [`EDGE_TOLERANCE`]) of
+/// one of `artboards` (`None`: all of them) on a side where `bleed` (`[top, bottom, left, right]`
+/// in points) is set, but end before that side's bleed edge. The objects are the members of the
+/// visible layers and sublayers, a group counted as one, measured as [`drawn_bounds`] measures them
+/// and cut to the clipping paths of the layers they are on. Template layers, layers with an opacity
+/// mask and, unless `non_printing`, layers whose Print option is off are left out. A side whose
+/// bleed is [`EDGE_TOLERANCE`] or less counts as having none. Each object counts once.
+pub fn short_of_bleed(doc: &Document, bleed: [f64; 4], artboards: Option<&[usize]>, non_printing: bool) -> usize {
+    let bleed = bleed.map(|b| if b.is_finite() && b > EDGE_TOLERANCE { b } else { 0.0 });
+    if bleed.iter().all(|b| *b == 0.0) {
+        return 0;
+    }
+    let trims: Vec<vectorcraft_geom::Rect> = match artboards {
+        Some(picked) => picked.iter().filter_map(|&i| doc.artboards.get(i)).map(|a| a.rect).collect(),
+        None => doc.artboards.iter().map(|a| a.rect).collect(),
+    };
+    let symbols = doc.symbol_boxes();
+    let mut count = 0;
+    // Each object with the clipping path of the layers above it.
+    let mut stack: Vec<(&Node, Option<vectorcraft_geom::Rect>)> = doc.layers.iter().map(|l| (&**l, None)).collect();
+    while let Some((n, clip)) = stack.pop() {
+        if let NodeKind::Layer { template, printable, children, clip: clipping, .. } = &n.kind {
+            // An opacity mask decides what shows, so a masked layer's art is not measured.
+            if !n.visible || *template || !(*printable || non_printing) || n.opacity <= 0.0 || n.extras().mask.is_some() {
+                continue;
+            }
+            // A clipping layer's first child clips the others, and its fills and strokes are an
+            // object of their own.
+            let (inner, members) = if *clipping {
+                let Some(own) = clip_region(children, &symbols) else { continue };
+                let inner = clip.map_or(own, |c| c.intersect(own));
+                if let Some(first) = children.first()
+                    && let Drawn::Bounds(b) = clip_paint_drawn(first, inner, &symbols)
+                {
+                    let b = clip.map_or(b, |c| c.intersect(b));
+                    if b.area() > 0.0 && trims.iter().any(|t| stops_short(b, *t, bleed)) {
+                        count += 1;
+                    }
+                }
+                (Some(inner), children.get(1..).unwrap_or_default())
+            } else {
+                (clip, &children[..])
+            };
+            stack.extend(members.iter().map(|c| (&**c, inner)));
+            continue;
+        }
+        let Drawn::Bounds(b) = drawn_bounds(n, &symbols) else { continue };
+        let b = clip.map_or(b, |c| c.intersect(b));
+        if b.area() > 0.0 && trims.iter().any(|t| stops_short(b, *t, bleed)) {
+            count += 1;
+        }
+    }
+    count
+}
+
+/// What [`drawn_bounds`] finds an object draws.
+enum Drawn {
+    /// Nothing: it is hidden, a guide, at 0% opacity, or a path that paints nothing.
+    Nothing,
+    /// Art within these bounds.
+    Bounds(vectorcraft_geom::Rect),
+    /// Art whose bounds aren't known, which is not measured: brush art paints past the visual
+    /// bounds by an amount they don't give, an opacity mask hides part of what they hold, and area
+    /// type and type on a path are bounded by their frame or path.
+    Unknown,
+}
+
+/// Whether path or compound path `n` paints: one of its fills and strokes is visible, has a paint
+/// and an opacity above 0 and, a stroke, a width above 0. Other objects count as painting.
+fn paints(n: &Node) -> bool {
+    !matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })
+        || n.appearance.items.iter().any(|i| {
+            i.visible() && i.opacity() > 0.0 && !i.paint().is_none() && !matches!(i, vectorcraft_doc::AppearanceItem::Stroke(s) if s.width <= 0.0)
+        })
+}
+
+/// What `n` draws on a page, by its visual bounds (strokes included): a group without a clipping
+/// path by the members that draw, and a clip group by the part of them inside its clipping path
+/// together with what the clipping path paints itself ([`clip_paint_drawn`]).
+/// Hidden objects, guides, objects at 0% opacity and paths that paint nothing draw nothing. Art
+/// with a brushed stroke that draws, in `n` or (outside groups) in the objects it holds, art with
+/// an opacity mask, and area type and type on a path are [`Drawn::Unknown`].
+fn drawn_bounds(n: &Node, symbols: &vectorcraft_doc::SymbolBoxes) -> Drawn {
+    if !n.visible || n.is_guide() || n.opacity <= 0.0 || !paints(n) {
+        return Drawn::Nothing;
+    }
+    // An opacity mask decides what shows of the object, and the bounds of area type and type on a
+    // path are its frame or path, not its glyphs.
+    let frame_bounds = matches!(&n.kind, NodeKind::Text(t) if !matches!(t.kind, vectorcraft_doc::TextKind::Point));
+    if vectorcraft_brush::reach(n) > 0.0 || n.extras().mask.is_some() || frame_bounds {
+        return Drawn::Unknown;
+    }
+    let members = |children: &[Arc<Node>]| {
+        let mut out = Some(None);
+        for c in children {
+            out = match (out, drawn_bounds(c, symbols)) {
+                (None, _) | (_, Drawn::Unknown) => None,
+                (Some(acc), Drawn::Bounds(b)) => Some(vectorcraft_geom::union_opt(acc, Some(b))),
+                (keep, Drawn::Nothing) => keep,
+            };
+        }
+        out
+    };
+    let measured = match &n.kind {
+        NodeKind::Group { clip: false, .. } => match members(n.editing_children()) {
+            Some(art) => art.and_then(|_| n.visual_of_members(std::iter::once(art))),
+            None => return Drawn::Unknown,
+        },
+        NodeKind::Group { clip: true, children } => {
+            let Some(region) = clip_region(children, symbols) else { return Drawn::Nothing };
+            let Some(art) = members(children.get(1..).unwrap_or_default()) else { return Drawn::Unknown };
+            let art = art.map(|a| region.intersect(a)).filter(|b| b.area() > 0.0);
+            match children.first().map_or(Drawn::Nothing, |first| clip_paint_drawn(first, region, symbols)) {
+                Drawn::Unknown => return Drawn::Unknown,
+                Drawn::Bounds(b) => vectorcraft_geom::union_opt(art, Some(b)),
+                Drawn::Nothing => art,
+            }
+        }
+        _ if vectorcraft_brush::reach_within(n) > 0.0 => return Drawn::Unknown,
+        _ => n.visual_bounds_with(symbols),
+    };
+    measured.map_or(Drawn::Nothing, Drawn::Bounds)
+}
+
+/// The region the clipping path of a clip group or clipping layer with `children` clips to: its
+/// geometric bounds, without its strokes.
+fn clip_region(children: &[Arc<Node>], symbols: &vectorcraft_doc::SymbolBoxes) -> Option<vectorcraft_geom::Rect> {
+    children.first()?.geometric_bounds_with(symbols)
+}
+
+/// What clipping path `clip` paints itself ([`Node::clip_paint`]): its fills inside `region`, the
+/// region it clips to, and its strokes over the clipped art, unclipped.
+fn clip_paint_drawn(clip: &Node, region: vectorcraft_geom::Rect, symbols: &vectorcraft_doc::SymbolBoxes) -> Drawn {
+    let paint = clip.clip_paint();
+    let mut out = None;
+    for (part, clipped) in [(paint.fill, true), (paint.stroke, false)] {
+        let Some(part) = part else { continue };
+        match drawn_bounds(&part, symbols) {
+            Drawn::Unknown => return Drawn::Unknown,
+            Drawn::Nothing => {}
+            Drawn::Bounds(b) => {
+                let b = if clipped { region.intersect(b) } else { b };
+                out = vectorcraft_geom::union_opt(out, Some(b).filter(|b| b.area() > 0.0));
+            }
+        }
+    }
+    out.map_or(Drawn::Nothing, Drawn::Bounds)
+}
+
+/// Whether bounds `b` reach the trim edge `t` (within [`EDGE_TOLERANCE`] on either side of it) on a
+/// side where `bleed` (`[top, bottom, left, right]`) is above 0 and end before the bleed edge there.
+/// Document space has y down.
+fn stops_short(b: vectorcraft_geom::Rect, t: vectorcraft_geom::Rect, [top, bottom, left, right]: [f64; 4]) -> bool {
+    let tol = EDGE_TOLERANCE;
+    let across = b.x0 < t.x1 && b.x1 > t.x0;
+    let down = b.y0 < t.y1 && b.y1 > t.y0;
+    let reaches = |near: f64, far: f64, edge: f64| near <= edge + tol && far >= edge - tol;
+    (across && top > 0.0 && reaches(b.y0, b.y1, t.y0) && b.y0 > t.y0 - top + tol)
+        || (across && bottom > 0.0 && reaches(-b.y1, -b.y0, -t.y1) && b.y1 < t.y1 + bottom - tol)
+        || (down && left > 0.0 && reaches(b.x0, b.x1, t.x0) && b.x0 > t.x0 - left + tol)
+        || (down && right > 0.0 && reaches(-b.x1, -b.x0, -t.x1) && b.x1 < t.x1 + right - tol)
+}
+
+/// The warning for `n` objects that [`short_of_bleed`] finds; `None` for none.
+pub fn short_of_bleed_warning(n: usize) -> Option<String> {
+    match n {
+        0 => None,
+        1 => Some(format!("1 object {SHORT_OF_BLEED_ONE}")),
+        _ => Some(format!("{n} objects {SHORT_OF_BLEED_OTHER}")),
+    }
+}
+
+/// The end of [`short_of_bleed_warning`] for one object and for more.
+const SHORT_OF_BLEED_ONE: &str = "reaches the trim edge but stops short of the bleed";
+const SHORT_OF_BLEED_OTHER: &str = "reach the trim edge but stop short of the bleed";
+
+/// Whether `text` is a warning [`short_of_bleed_warning`] gives.
+pub fn is_short_of_bleed(text: &str) -> bool {
+    text.ends_with(SHORT_OF_BLEED_ONE) || text.ends_with(SHORT_OF_BLEED_OTHER)
+}
+
+/// The end of the writer's warning for a page longer than 14,400 pt written with a `UserUnit`
+/// above 1.
+const SHOWN_SMALLER: &str = "so apps that ignore UserUnit show it that many times smaller";
+
+/// What a PDF without a standard adds to the warning that ends in [`SHOWN_SMALLER`]: the option
+/// that writes such a page in points. PDF/A files keep the `UserUnit` with the option on, and
+/// `.ai` saves don't have the option.
+pub const LONG_PAGES_IN_POINTS: &str = ": turn on Write pages longer than 200 in at full size in points";
+
+/// Encode `doc` as PDF with the options in `p` → (bytes, notes). Raster effects are rendered
 /// to images at the document's raster effects resolution. Preserve Editing embeds `doc` itself
 /// when the PDF has every artboard (a PDF of some reopens as just those).
-pub fn encode(cmd: &str, doc: &Document, p: &Value) -> Result<(Vec<u8>, Vec<String>)> {
+pub fn encode(cmd: &str, doc: &Document, p: &Value) -> Result<(Vec<u8>, Vec<Note>)> {
+    encode_at(cmd, doc, p, None)
+}
+
+/// [`encode`] modified at `modified` (Unix seconds) when given, instead of the time of writing.
+pub(super) fn encode_at(cmd: &str, doc: &Document, p: &Value, modified: Option<i64>) -> Result<(Vec<u8>, Vec<Note>)> {
     // Keep the editable object tree independent of preview fallbacks used by the drawn pages.
-    let (full, mut warnings) = crate::cmd::place::document::full_documents(doc);
-    let (bytes, drawn_warnings) = encode_carrying(cmd, &full, p, || Ok(vectorcraft_format::save(doc, false)))?;
-    warnings.extend(drawn_warnings);
-    warnings.extend(overflow_warning(cmd, &full, p)?);
-    Ok((bytes, warnings))
+    let (full, placed) = crate::cmd::place::document::full_documents(doc);
+    let mut notes: Vec<Note> = placed.into_iter().map(Note::loss).collect();
+    // The editing data leaves out an Export for Screens folder outside the read roots.
+    let native = || Ok(vectorcraft_format::save(&super::access::with_readable_settings_folder(doc), false));
+    let (bytes, drawn) = encode_carrying_at(cmd, &full, p, modified, true, native, || Ok(None))?;
+    notes.extend(drawn);
+    if notes.iter().any(|n| n.text.ends_with(SHOWN_SMALLER)) && options(cmd, &full, p)?.settings.standard == Standard::None {
+        for n in notes.iter_mut().filter(|n| n.text.ends_with(SHOWN_SMALLER)) {
+            n.text.push_str(LONG_PAGES_IN_POINTS);
+        }
+    }
+    notes.extend(overflow_warning(cmd, &full, p)?.map(Note::loss));
+    Ok((bytes, notes))
 }
 
 /// The warning about the type that the pages of a PDF of `doc` with the options in `p` draw and
@@ -281,35 +551,84 @@ fn overflow_warning(cmd: &str, doc: &Document, p: &Value) -> Result<Option<Strin
 }
 
 /// [`encode`] the pages of `doc`, carrying `native()` as the editing data (a `.ai` file: the
-/// native document with its save options, whose pages may be left blank).
-pub(super) fn encode_carrying(cmd: &str, doc: &Document, p: &Value, native: impl FnOnce() -> Result<Vec<u8>>) -> Result<(Vec<u8>, Vec<String>)> {
-    let mut opts = options(cmd, doc, p)?;
+/// native document with its save options, whose pages may be left blank), and `private()`, the
+/// editing copy of the art for other apps with what it couldn't hold, on every page. It doesn't
+/// warn about art that stops short of the bleed ([`short_of_bleed`]), which PDF export does.
+pub(super) fn encode_carrying(
+    cmd: &str,
+    doc: &Document,
+    p: &Value,
+    native: impl FnOnce() -> Result<Vec<u8>>,
+    private: impl FnOnce() -> Result<Option<(vectorcraft_pdf::PrivateData, Vec<String>)>>,
+) -> Result<(Vec<u8>, Vec<Note>)> {
+    encode_carrying_at(cmd, doc, p, None, false, native, private)
+}
+
+/// [`encode_carrying`] modified at `modified` (Unix seconds) when given, instead of the time of
+/// writing, warning about art that stops short of the bleed when `bleed_check` is true.
+fn encode_carrying_at(
+    cmd: &str,
+    doc: &Document,
+    p: &Value,
+    modified: Option<i64>,
+    bleed_check: bool,
+    native: impl FnOnce() -> Result<Vec<u8>>,
+    private: impl FnOnce() -> Result<Option<(vectorcraft_pdf::PrivateData, Vec<String>)>>,
+) -> Result<(Vec<u8>, Vec<Note>)> {
+    let mut opts = options_at(cmd, doc, p, modified.or_else(vectorcraft_doc::metadata::output_time))?;
+    // Measured before the pages' background colors join the art. Only art that prints counts:
+    // createLayers writes non-printing layers with /PrintState /OFF, so they count only with
+    // includeNonPrinting, which writes them as printing art.
+    let set = &opts.settings;
+    let short = if bleed_check { short_of_bleed(doc, page_bleed(&set.bleed, doc), opts.artboards.as_deref(), set.include_non_printing) } else { 0 };
+    // The pages' background colors, behind the art (the editing data keeps them as colors).
+    let pages = opts.artboards.clone().unwrap_or_else(|| (0..doc.artboards.len()).collect());
+    let filled = super::export::with_artboard_fills(doc, p, pages).map_err(|e| bad(cmd, e))?;
+    let doc = &*filled;
+    // A page the file can't hold fails the export before the thumbnails and the flattening.
+    vectorcraft_pdf::check_page_sizes(doc, &opts).map_err(|e| pdf_error(cmd, e))?;
     if opts.settings.thumbnails {
         opts.thumbnails = thumbnails(doc, &opts).map_err(|e| pdf_error(cmd, e))?;
     }
-    let mut warnings = vec![];
+    let mut notes = vec![];
+    // A loss, ahead of the flattening note: the PDF/X pages leave out the bleed that Document
+    // Setup gives.
+    if leaves_out_bleed(&opts.settings, doc) {
+        notes.push(Note::loss(BLEED_LEFT_OUT));
+    }
+    // Art that reaches the trim edge but leaves part of the page's bleed empty.
+    notes.extend(short_of_bleed_warning(short).map(Note::loss));
     if opts.settings.preserve_editing {
         if opts.artboards.as_ref().is_none_or(|v| v.iter().copied().eq(0..doc.artboards.len())) {
             opts.native = Some(native()?);
+            if let Some((data, lost)) = private()? {
+                opts.private_data = Some(data);
+                notes.extend(lost.into_iter().map(Note::loss));
+            }
         } else {
             opts.settings.preserve_editing = false;
-            warnings.push(EDITING_NEEDS_EVERY_ARTBOARD.to_string());
+            notes.push(Note::setting(EDITING_NEEDS_EVERY_ARTBOARD));
         }
     }
     let set = &opts.settings;
     if set.pdf13() {
         vectorcraft_doc::cancel::progress(0, 0, "Flattening transparency");
     }
-    let flat = flatten_for(cmd, doc, set, p)?;
+    let (flat, flattened) = flatten_for(cmd, doc, set, p)?;
     vectorcraft_doc::cancel::check()?;
-    if flat.is_some() {
+    if let Some(o) = flattened {
         let kind = if set.standard.flattens() { set.standard.label() } else { set.compatibility.label() };
-        warnings.push(format!("transparency is flattened into opaque art and images ({kind} files have none): see the flattener preset"));
+        let line_ppi = o.line_art_ppi.round() as u32;
+        let grad_ppi = o.gradient_ppi.round() as u32;
+        notes.push(Note::loss(format!(
+            "transparency is flattened into opaque art and images ({kind} files have none) at {line_ppi} ppi line art and text, {grad_ppi} ppi gradients and meshes: see the flattener preset"
+        )));
     }
     let r = super::super::rasterfx::export_pdf_with_report(flat.as_ref().unwrap_or(doc), &opts).map_err(|e| pdf_error(cmd, e))?;
-    warnings.extend(r.warnings);
-    warnings.extend(crate::cmd::fonts::substitution_warning(doc));
-    Ok((r.bytes, warnings))
+    notes.extend(r.warnings.into_iter().map(Note::loss));
+    notes.extend(r.setting_notes.into_iter().map(Note::setting));
+    notes.extend(crate::cmd::fonts::substitution_warning(doc).map(Note::loss));
+    Ok((r.bytes, notes))
 }
 
 /// The flattener preset of PDF 1.3 files whose `flattenerPreset` is empty.
@@ -317,21 +636,33 @@ pub const DEFAULT_FLATTENER: &str = "High Resolution";
 
 /// `doc` with its transparency flattened for a PDF 1.3 file (asked for, or PDF/X-1a and PDF/X-3,
 /// whose files have none), with `flattenerPreset` (default High Resolution) and `p`'s `flattener`
-/// options over it; images with see-through pixels and colorized images count as transparency,
-/// rasterized areas are clipped to their regions, and discarded overprints are dropped. `None`
-/// when nothing changes (or the file keeps transparency).
-fn flatten_for(cmd: &str, doc: &Document, set: &PdfSettings, p: &Value) -> Result<Option<Document>> {
+/// options over it; images with see-through pixels and colorized images, including those in
+/// pattern tiles, count as transparency. Rasterized areas are clipped to their regions and keep no
+/// alpha, and discarded overprints are dropped. Layers the pages leave out (non-printing ones, unless asked
+/// for) are left out of the flattening, hidden. → the document to write (`None`: `doc` as it is)
+/// and whether its transparency was flattened.
+fn flatten_for(cmd: &str, doc: &Document, set: &PdfSettings, p: &Value) -> Result<(Option<Document>, Option<FlattenOptions>)> {
     if !set.pdf13() {
-        return Ok(None);
+        return Ok((None, None));
     }
+    let printed = if set.include_non_printing || set.create_layers { None } else { without_non_printing(&doc.layers) };
+    let shown = printed.map(|layers| {
+        let mut d = doc.clone();
+        d.layers = layers;
+        d
+    });
     let name = Some(set.flattener_preset.trim()).filter(|n| !n.is_empty()).unwrap_or(DEFAULT_FLATTENER);
     let mut o = FlattenOptions::for_export(Some(name), p.get("flattener"), &[]).map_err(|e| bad(cmd, format!("PDF flattener: {e}")))?;
     o.preserve_overprints &= set.advanced.overprint == Overprint::Preserve;
     o.no_transparency = Some(see_through_images(doc));
     // Without soft masks a rasterized area can't be a rectangle with see-through pixels around
-    // its art: it is clipped to its regions (opaque inside them).
+    // its art: it is clipped to its regions (opaque inside them). Rasters keep no alpha either.
     o.clip_complex_regions = true;
-    flatten_document(doc, &o)
+    o.preserve_alpha = false;
+    Ok(match flatten_document(shown.as_ref().unwrap_or(doc), &o)? {
+        Some(flat) => (Some(flat), Some(o)),
+        None => (shown, None),
+    })
 }
 
 /// The pages `opts` export of `doc` drawn on white, [`THUMBNAIL_SIZE`] pixels on their long side:
@@ -362,29 +693,7 @@ fn thumbnails(doc: &Document, opts: &PdfOptions) -> std::result::Result<Vec<Thum
 /// `layers` with the non-printing layers among them (at any depth) hidden; `None` when there are
 /// none.
 fn without_non_printing(layers: &[Arc<Node>]) -> Option<Vec<Arc<Node>>> {
-    let mut out: Option<Vec<Arc<Node>>> = None;
-    for (i, l) in layers.iter().enumerate() {
-        let NodeKind::Layer { printable, children, .. } = &l.kind else { continue };
-        let new = if !printable {
-            l.visible.then(|| {
-                let mut n = (**l).clone();
-                n.visible = false;
-                Arc::new(n)
-            })
-        } else {
-            without_non_printing(children).map(|c| {
-                let mut n = (**l).clone();
-                if let NodeKind::Layer { children, .. } = &mut n.kind {
-                    *children = c;
-                }
-                Arc::new(n)
-            })
-        };
-        if let Some(slot) = new.and_then(|new| Some((out.get_or_insert_with(|| layers.to_vec()).get_mut(i)?, new))) {
-            *slot.0 = slot.1;
-        }
-    }
-    out
+    super::encode::hidden_nodes(layers, &|l| matches!(l.kind, NodeKind::Layer { printable: false, .. }))
 }
 
 fn export_pdf(s: &mut Session, p: &Value) -> Result<Value> {
@@ -394,6 +703,8 @@ fn export_pdf(s: &mut Session, p: &Value) -> Result<Value> {
     let expanded = expand_preset(s, C, p)?;
     let p = &*expanded;
     let st = s.doc()?;
+    super::check_linked_scripts(C, "pdf", st, p)?;
+    super::check_linked_images(C, "pdf", st, &st.doc, p)?;
     let display_doc_title = super::has_own_title(&st.doc);
     let titled = super::titled_for_export(&st.doc, st.path.as_deref(), "pdf");
     let mut q = p.clone();
@@ -402,8 +713,13 @@ fn export_pdf(s: &mut Session, p: &Value) -> Result<Value> {
     } else {
         q = json!({ "_displayDocTitle": display_doc_title });
     }
-    let (bytes, warnings) = encode(C, titled.as_ref().unwrap_or(&st.doc), &q)?;
-    write_or_return(str_param(p, "path"), &bytes, json!({ "warnings": warnings }))
+    // The opacity-mask or symbol editing layer is left out.
+    let doc = titled.as_ref().unwrap_or(&st.doc).without_edit_modes();
+    let (bytes, notes) = match encode_art_page(C, &doc, &q)? {
+        Some(encoded) => encoded,
+        None => encode(C, &doc, &q)?,
+    };
+    write_or_return(str_param(p, "path"), &bytes, json!({ "warnings": note_texts(&notes) }))
 }
 
 /// `(path, value)` for every leaf of `v` that differs from `default` (`compression.color.ppi`).
@@ -433,10 +749,19 @@ fn pdf_settings(s: &mut Session, p: &Value) -> Result<Value> {
     const Q: &str = "document.pdfSettings";
     let saved = &s.prefs.pdf_presets;
     let set = settings_with(Q, p, saved)?;
+    super::encode::use_artboards(Q, p)?;
     let diff = changes(&set, &preset_settings(Q, p, saved)?);
     let warnings = match s.active() {
-        Some(st) if bool_or(p, "includeDocument", false) => encode(Q, &st.doc, &*expand_preset(s, Q, p)?)?.1,
-        _ => set.warnings(),
+        Some(st) if bool_or(p, "includeDocument", false) => {
+            let q = expand_preset(s, Q, p)?;
+            let doc = st.doc.without_edit_modes();
+            let (_, notes) = match encode_art_page(Q, &doc, &q)? {
+                Some(encoded) => encoded,
+                None => encode(Q, &doc, &q)?,
+            };
+            note_texts(&notes)
+        }
+        _ => set.warnings(&ActiveProfiles::default()).into_iter().map(|w| w.message).collect(),
     };
     let v = serde_json::to_value(&set).map_err(|e| EngineError::Other(e.to_string()))?;
     Ok(json!({ "settings": v, "presets": presets(s), "changed": diff, "warnings": warnings }))

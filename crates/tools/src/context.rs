@@ -1,5 +1,15 @@
 use super::{Document, NodeId, Paint, Point, Selection, Unit, Vec2, distort, select, xform};
 
+/// Which objects a Selection-tool marquee reaches before E reverses its rule for this drag.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MarqueeMode {
+    #[default]
+    Touching,
+    Enclosed,
+    /// Screen-right takes enclosed objects; screen-left takes touched objects.
+    Directional,
+}
+
 /// Paint defaults for new art (the fill/stroke proxy) and the rest of the new-art template.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PaintDefaults {
@@ -107,6 +117,64 @@ impl GlyphSnap {
     }
 }
 
+/// The Pixel Snapping Options (`view.snapToPixel.options`): which edits View › Snap to Pixel lands
+/// on whole pixels. All on by default.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct PixelSnap {
+    /// While Drawing: points placed by the drawing tools, ruler origins and measurements.
+    pub drawing: bool,
+    /// While Moving: the selection, its anchors and segments, artboards and ruler guides moved.
+    pub moving: bool,
+    /// While Scaling: the edges a bounding-box, Free Transform, Scale tool, artboard or slice
+    /// handle drags.
+    pub scaling: bool,
+}
+
+impl Default for PixelSnap {
+    fn default() -> Self {
+        Self { drawing: true, moving: true, scaling: true }
+    }
+}
+
+impl PixelSnap {
+    /// These options with the ones `p` names (booleans), or why `p` can't set them.
+    pub fn merged(self, p: &serde_json::Value) -> Result<Self, String> {
+        let mut o = serde_json::to_value(self).map_err(|e| e.to_string())?;
+        match (p, o.as_object_mut()) {
+            (serde_json::Value::Null, _) => {}
+            (serde_json::Value::Object(given), Some(cur)) => {
+                for (k, v) in given {
+                    let slot = cur.get_mut(k).ok_or_else(|| format!("unknown Pixel Snapping option `{k}`"))?;
+                    *slot = serde_json::Value::Bool(v.as_bool().ok_or_else(|| format!("`{k}` must be true or false"))?);
+                }
+            }
+            _ => return Err("the Pixel Snapping options must be an object".into()),
+        }
+        serde_json::from_value(o).map_err(|e| e.to_string())
+    }
+}
+
+/// The kind of edit a snap serves, which picks the Pixel Snapping option that applies to it
+/// ([`ToolContext::snaps_to_pixel`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PixelOp {
+    Drawing,
+    Moving,
+    Scaling,
+}
+
+/// The isolated group, layer or object in isolation mode, of `isolation` (the document's isolated
+/// node). Pattern editing mode, opacity mask editing and symbol editing mode isolate their own
+/// layer, which does not count here; an object isolated inside them counts.
+pub fn ordinary_isolation(doc: &Document, isolation: Option<NodeId>) -> Option<NodeId> {
+    isolation.filter(|l| {
+        !doc.pattern_edit.as_ref().is_some_and(|e| e.layer == *l)
+            && !doc.mask_edit.as_ref().is_some_and(|e| e.layer == *l)
+            && !doc.symbol_edit.as_ref().is_some_and(|e| e.layer == *l)
+    })
+}
+
 /// Read-only context a tool sees.
 pub struct ToolContext<'a> {
     pub doc: &'a Document,
@@ -120,6 +188,8 @@ pub struct ToolContext<'a> {
     pub selection: &'a Selection,
     /// Screen pixels per document point.
     pub zoom: f64,
+    /// Selection-tool marquee rule; other selection tools keep their own rules.
+    pub marquee_mode: MarqueeMode,
     pub isolation: Option<NodeId>,
     pub paint: &'a PaintDefaults,
     pub outline: bool,
@@ -129,16 +199,21 @@ pub struct ToolContext<'a> {
     pub snap_to_grid: bool,
     /// Bounding box shown (View → Show/Hide Bounding Box).
     pub show_bbox: bool,
-    /// View → Snap to Pixel.
+    /// View → Snap to Pixel. Which edits it snaps is [`Self::pixel_snap`]'s choice
+    /// ([`Self::snaps_to_pixel`]).
     pub snap_to_pixel: bool,
+    /// The Pixel Snapping Options: whether Snap to Pixel snaps drawing, moving and scaling.
+    pub pixel_snap: PixelSnap,
     /// View → Snap to Point: with Smart Guides off, dragged selections, drawn points and picked
     /// points (a transform's reference point) land on anchors and ruler guides within
     /// [`Self::snap_tolerance`].
     pub snap_to_point: bool,
     /// View → Snapping → Snap to Tangent: with Smart Guides on, a line drawn
-    /// from an anchor lands where it touches a nearby curve.
+    /// from an anchor lands where it touches a nearby curve, and a Line Segment
+    /// drag from one convex curved path to another lands on their common tangent.
     pub snap_tangent: bool,
-    /// View → Snapping → Snap to Perpendicular: likewise where it meets a nearby segment square.
+    /// View → Snapping → Snap to Perpendicular: with Smart Guides on, a line drawn from an anchor
+    /// lands where it meets a nearby segment square.
     pub snap_perpendicular: bool,
     /// View → Snap to Glyph: drawn points snap to live-text glyph bounds, and on a single line of type
     /// to its baseline, x-height, character widths and glyph anchor points (with Smart Guides).
@@ -147,10 +222,22 @@ pub struct ToolContext<'a> {
     pub glyph_snap: GlyphSnap,
     /// View → Show Corner Widget: paths show draggable Live Corners widgets in their corners.
     pub corner_widgets: bool,
+    /// The Control bar's Show Shape Widgets: selected live shapes show their corner, pie and side
+    /// widgets to the Selection tool and the shape tools. Direct Selection's corner widgets follow
+    /// [`Self::corner_widgets`] alone.
+    pub shape_widgets: bool,
     /// Which paint proxy is in front (true = Fill): the one the Gradient tool edits.
     pub fill_active: bool,
-    /// The selected gradient stop (`gradient.selectStop`), marked on the gradient annotator.
+    /// The selected gradient stop (`gradient.selectStop`), marked on the gradient annotator. For
+    /// an Eyedropper pick armed for a stop of the gradient a tool paints with, only a stop still
+    /// selected on that gradient.
     pub gradient_stop: Option<usize>,
+    /// Is [`Self::paint`]'s paint behind the proxy in front ([`Self::fill_active`]) the color the
+    /// active tool, or the tool an armed one-shot pick returns to, paints with (the Live Paint
+    /// Bucket's fill and stroke, the Shape Builder's fill), or was the pick armed for a stop of
+    /// that tool's paint? A pick armed for such a stop then ends once [`Self::gradient_stop`] no
+    /// longer names it, also after the stop was cleared or the other proxy came to the front.
+    pub tool_paints: bool,
     /// The Appearance panel's active fill/stroke (paint-order index into the first selected
     /// object's stack); paint tools show and edit that item.
     pub appearance_item: Option<usize>,
@@ -166,6 +253,10 @@ pub struct ToolContext<'a> {
     pub raster_sample: u32,
     /// General → Use Preview Bounds: the bounding box measures visual bounds (strokes included).
     pub preview_bounds: bool,
+    /// Type › Measure Type by Glyph Bounds: the bounding box measures each point type object
+    /// selected as an object (not inside a selected group) by the ink of its glyphs
+    /// ([`vectorcraft_effects::preview::Measure`]).
+    pub glyph_bounds: bool,
     /// The session's memo of the selection tools' measurements for the document as it is
     /// ([`select::PreviewMemo`]); without one they measure on every call.
     pub preview_memo: Option<&'a select::PreviewMemo>,
@@ -176,6 +267,10 @@ pub struct ToolContext<'a> {
     /// Clipboard Handling → When pasting text: Keep Plain Text. Text pasted while typing takes
     /// the style at the caret, even the text the Type tool copied with its formatting.
     pub paste_plain_text: bool,
+    /// The text given to [`crate::Tool::text_input`] was typed on the keyboard (a key or an IME
+    /// commit), not inserted from the Glyphs panel or a paste: a lone typed `”` may then take the
+    /// document's opening quote ([`vectorcraft_doc::Quotes::typed_as_straight`]).
+    pub typed_from_keyboard: bool,
     /// View → Hide Slices: the Slice Selection tool can't pick hidden slices.
     pub slices_hidden: bool,
     /// View → Lock Slices: the Slice Selection tool leaves locked slices alone.
@@ -197,6 +292,9 @@ pub struct ToolContext<'a> {
     /// General → Double Click To Isolate: a double-click on a group with the Selection tool
     /// isolates it.
     pub double_click_isolate: bool,
+    /// General → Double-Click Adds Anchor Points: a plain double-click on a path segment with Direct
+    /// Selection adds an anchor there.
+    pub double_click_adds_anchor: bool,
     /// Selection & Anchor Display → Command Click to Select Objects Behind: Cmd/Ctrl-click with the
     /// Selection tool selects the object under the selected one, the next click the one under
     /// that.
@@ -223,6 +321,9 @@ pub struct ToolContext<'a> {
     /// Type → Fill New Type Objects With Placeholder Text: type the Type tools place starts with
     /// placeholder text, selected.
     pub placeholder_text: bool,
+    /// Type → Start Lists From Typed Markers: a list marker and a space typed at the start of a
+    /// paragraph start a list ([`crate::text::TypeTool`]).
+    pub typed_lists: bool,
     /// Smart Guides → Color: the smart guides' lines and labels (RGB).
     pub smart_guide_color: [u8; 3],
     /// Smart Guides → Alignment Guides: the lines along the edges and centres the art lines up
@@ -242,6 +343,9 @@ pub struct ToolContext<'a> {
     /// object shows how far the selection is from it, and over an empty part of an artboard how
     /// far it is from the artboard's edges ([`guides::distance_guides`]).
     pub distance_guides: bool,
+    /// Smart Guides → Snap to Last Location: a selection moved by dragging goes back to where the
+    /// move began while it is within Snapping Tolerance of it ([`guides::Targets::snap_back`]).
+    pub snap_to_last_location: bool,
     /// Smart Guides → Snapping Tolerance (screen pixels): how near a smart guide target pulls the
     /// pointer, a dragged edge or a drawn point.
     pub snapping_tolerance: f64,
@@ -253,9 +357,26 @@ pub struct ToolContext<'a> {
     pub screen: Option<ScreenFrame>,
     /// Where the Plane Switching Widget sits (Perspective Grid Options); None while it's hidden.
     pub plane_widget: Option<distort::perspective::widget::WidgetCorner>,
+    /// What Automatic Plane Positioning takes a point from (Perspective Grid Options).
+    pub plane_targets: distort::perspective::widget::PlaneTargets,
+    /// General › Use Precise Cursors, or Caps Lock while it is on: the drawing tools' pointers are
+    /// crosshairs ([`crate::Cursor::precise`]), and the Blob Brush and the Eraser show no tip outline.
+    pub precise_cursors: bool,
+    /// The objects of the Global Edit in progress (Select › Start Global Edit), the one it started
+    /// from first, each with its transform; empty while Global Edit is off.
+    pub global_edit: &'a [(NodeId, vectorcraft_geom::Affine)],
+    /// While an interaction is in progress: the document as it was when the interaction began,
+    /// which each preview of the interaction replaces the document with before it applies. None
+    /// outside an interaction.
+    pub interaction_doc: Option<&'a Document>,
 }
 
 impl ToolContext<'_> {
+    /// How the bounding box measures the selection: [`Self::preview_bounds`] and
+    /// [`Self::glyph_bounds`].
+    pub fn bounds_measure(&self) -> vectorcraft_effects::preview::Measure {
+        vectorcraft_effects::preview::Measure { preview: self.preview_bounds, glyphs: self.glyph_bounds }
+    }
     /// Tolerance in document units for `px` screen pixels.
     pub fn tol(&self, px: f64) -> f64 {
         px / self.zoom.max(1e-9)
@@ -305,6 +426,16 @@ impl ToolContext<'_> {
         let (dist, ang, dx, dy) = xform::measure(a, b);
         format!("D: {}\nAngle: {ang:.1}°\n{}", self.len(dist), self.offset_label(dx, dy))
     }
+    /// Does View › Snap to Pixel land an edit of kind `op` on whole pixels: is it on, with the
+    /// Pixel Snapping option for `op` on too?
+    pub fn snaps_to_pixel(&self, op: PixelOp) -> bool {
+        self.snap_to_pixel
+            && match op {
+                PixelOp::Drawing => self.pixel_snap.drawing,
+                PixelOp::Moving => self.pixel_snap.moving,
+                PixelOp::Scaling => self.pixel_snap.scaling,
+            }
+    }
     /// What Snap to Grid snaps to: the grid's subdivisions (or its lines without any).
     pub fn grid_step(&self) -> f64 {
         self.doc.grid.spacing / self.doc.grid.subdivisions.max(1) as f64
@@ -330,6 +461,8 @@ impl ToolContext<'_> {
             scope: self.isolation,
             skip_guides: !self.guides,
             clip_outlines: false,
+            area_type_interior: false,
+            ignore_layer_preview: false,
         }
     }
 

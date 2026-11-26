@@ -40,8 +40,9 @@ pub use vectorcraft_engine::{Session, doc::NodeId};
 pub use {vectorcraft_doc as doc, vectorcraft_format as format, vectorcraft_render as render, vectorcraft_svg as svg};
 
 /// A per-process temporary directory for test output (created on first use). It is made with
-/// `create_dir` (owner-only on Unix), and a directory that already exists is reused only when it is a
-/// real directory, not a link, with no access for others and writable by this user: one pre-made in a shared temp folder is refused.
+/// `create_dir` (owner-only on Unix), and a directory that already exists is reused only when it is
+/// a real directory, not a link, with no access for others and owned by this user: one pre-made in
+/// a shared temp folder is refused.
 /// The first call for a `tag` in a process empties a directory left by an earlier process of the
 /// same id (Windows reuses ids soon); later calls share it.
 pub fn temp_dir(tag: &str) -> std::path::PathBuf {
@@ -60,12 +61,19 @@ pub fn temp_dir(tag: &str) -> std::path::PathBuf {
         assert!(e.kind() == std::io::ErrorKind::AlreadyExists && m.is_dir(), "create temp dir: {e}");
         #[cfg(unix)]
         assert!(std::os::unix::fs::PermissionsExt::mode(&m.permissions()) & 0o077 == 0, "{}: not private", dir.display());
-        // A private directory made by another user passes the mode check but is closed to this one:
-        // writing a probe file tells it apart from ours without needing the user ids.
+        // A directory made by another user may pass the mode check now and be opened up later: a
+        // probe file made new (never through a link left in its place) is this user's, and the
+        // directory must belong to the same user.
         // Named for this call: tests running alongside probe the same directory.
         static PROBES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let probe = dir.join(format!(".probe-{}", PROBES.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
-        assert!(std::fs::write(&probe, b"").and_then(|()| std::fs::remove_file(&probe)).is_ok(), "{}: not owned by this user", dir.display());
+        let made = std::fs::OpenOptions::new().write(true).create_new(true).open(&probe).and_then(|f| f.metadata());
+        let _ = std::fs::remove_file(&probe);
+        let made = made.unwrap_or_else(|e| panic!("{}: not owned by this user ({e})", dir.display()));
+        #[cfg(unix)]
+        assert_eq!(std::os::unix::fs::MetadataExt::uid(&made), std::os::unix::fs::MetadataExt::uid(&m), "{}: not owned by this user", dir.display());
+        #[cfg(not(unix))]
+        let _ = made;
         if first {
             for entry in std::fs::read_dir(&dir).expect("temp dir").flatten() {
                 let path = entry.path();
@@ -75,6 +83,41 @@ pub fn temp_dir(tag: &str) -> std::path::PathBuf {
         }
     }
     dir
+}
+
+/// A test's own temporary directory, removed with everything in it when dropped, also when the
+/// test panics. [`temp_dir`] makes it, with the same checks, under a tag no other `TempDir` in this
+/// process uses, so tests running alongside never share one. A removal that fails (a file still
+/// held open) is ignored; the next process with the same id empties the directory before use.
+pub struct TempDir(std::path::PathBuf);
+
+impl TempDir {
+    /// A new empty directory `vectorcraft-testkit-<tag>-<n>-<process id>` in the system temporary
+    /// folder, where `n` counts the `TempDir`s made in this process.
+    pub fn new(tag: &str) -> Self {
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Self(temp_dir(&format!("{tag}-{n}")))
+    }
+}
+
+impl std::ops::Deref for TempDir {
+    type Target = std::path::PathBuf;
+    fn deref(&self) -> &std::path::PathBuf {
+        &self.0
+    }
+}
+
+impl AsRef<std::path::Path> for TempDir {
+    fn as_ref(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
 }
 
 /// How many shapes an SVG draws: its `<path>` elements and the basic shapes SVG export writes
@@ -125,5 +168,41 @@ mod tests {
         std::fs::write(dir.join("mine.txt"), b"this process").unwrap();
         assert!(super::temp_dir(tag).join("mine.txt").is_file(), "a later call keeps this process's files");
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_test_dir_is_removed_with_its_contents_when_dropped() {
+        let dir = super::TempDir::new("dropped");
+        let path = dir.to_path_buf();
+        std::fs::create_dir_all(path.join("nested")).unwrap();
+        std::fs::write(path.join("nested").join("a.txt"), b"a").unwrap();
+        drop(dir);
+        assert!(!path.exists(), "{} is left", path.display());
+    }
+
+    #[test]
+    fn a_test_dir_is_removed_when_its_test_panics() {
+        let mut path = None;
+        let r = super::catch_quiet::<()>(|| {
+            let dir = super::TempDir::new("panicked");
+            std::fs::write(dir.join("a.txt"), b"a").unwrap();
+            path = Some(dir.to_path_buf());
+            panic!("the test fails");
+        });
+        assert_eq!(r.err().as_deref(), Some("the test fails"));
+        let path = path.unwrap();
+        assert!(!path.exists(), "{} is left", path.display());
+    }
+
+    #[test]
+    fn test_dirs_with_one_tag_are_separate_and_private() {
+        let (a, b) = (super::TempDir::new("shared-tag"), super::TempDir::new("shared-tag"));
+        assert_ne!(*a, *b);
+        std::fs::write(a.join("a.txt"), b"a").unwrap();
+        assert_eq!(std::fs::read_dir(&*b).unwrap().count(), 0, "one test's files are not in another's directory");
+        #[cfg(unix)]
+        assert_eq!(std::os::unix::fs::PermissionsExt::mode(&std::fs::metadata(&*a).unwrap().permissions()) & 0o777, 0o700);
+        drop(a);
+        assert!(b.is_dir(), "dropping one leaves the other");
     }
 }

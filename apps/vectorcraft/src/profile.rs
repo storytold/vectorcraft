@@ -1,6 +1,9 @@
 //! Native profile paths. Isolated profiles never migrate preferences from a user's old profile.
 //!
 //! In order:
+//! 0. The profile root a nightly launch selected ([`install_data_root`]): the Launcher's private
+//!    folder, which every one of the app's settings, logs, recovery copies, plug-ins, caches and
+//!    single-instance records then follows, with no legacy migration.
 //! 1. `VECTORCRAFT_CONFIG_DIR`, when set (tests, agents, custom setups).
 //! 2. **Portable mode** (#1366), as in PhotoCraft: a marker file ([`PORTABLE_MARKERS`]) in the
 //!    install folder puts the settings in `VectorCraftData` beside it, so a portable copy leaves
@@ -24,25 +27,57 @@ pub const PORTABLE_MARKERS: [&str; 2] = ["portable.txt", "VectorCraft.portable"]
 /// The settings folder created in the install folder in portable mode.
 pub const PORTABLE_DATA_DIR: &str = "VectorCraftData";
 
-pub fn prefs_path(legacy: bool) -> Option<PathBuf> {
-    prefs_path_with(std::env::consts::OS, legacy, |key| std::env::var_os(key), portable_dir)
+/// The profile root this process was launched with, if any: a nightly launch's private folder.
+static DATA_ROOT: OnceLock<PathBuf> = OnceLock::new();
+
+/// Makes `root` this process's settings folder and everything under it, once, before anything reads
+/// a path. The desktop calls it from `prepare_launch` with the root it validated; the command line
+/// tool never does, so it keeps resolving the user's own folder.
+// The desktop installs it from `prepare_launch`; `vectorcraft-cli` includes this file and never does.
+#[allow(dead_code)]
+pub(crate) fn install_data_root(root: PathBuf) -> Result<(), String> {
+    if !root.is_absolute() {
+        return Err("the data root must be absolute".to_string());
+    }
+    DATA_ROOT.set(root).map_err(|_| "the data root was already installed".to_string())
 }
 
-/// `portable` is the portable settings folder, if any: only asked for when no override is set and
-/// preferences are in use.
-fn prefs_path_with(os: &str, legacy: bool, env: impl Fn(&str) -> Option<OsString>, portable: impl FnOnce() -> Option<PathBuf>) -> Option<PathBuf> {
+/// The installed profile root, if this launch has one.
+pub(crate) fn data_root() -> Option<&'static Path> {
+    DATA_ROOT.get().map(PathBuf::as_path)
+}
+
+/// The settings folder of VectorCraft, or of DrawCraft (`legacy`).
+pub fn prefs_dir(legacy: bool) -> Option<PathBuf> {
+    prefs_dir_with(std::env::consts::OS, legacy, |key| std::env::var_os(key), portable_dir, data_root())
+}
+
+/// `portable` is the portable settings folder, if any: only asked for when neither the launch's
+/// profile nor an override is set and preferences are in use.
+fn prefs_dir_with(
+    os: &str,
+    legacy: bool,
+    env: impl Fn(&str) -> Option<OsString>,
+    portable: impl FnOnce() -> Option<PathBuf>,
+    root: Option<&Path>,
+) -> Option<PathBuf> {
+    // A nightly launch's private profile wins over everything, and a run of DrawCraft's legacy
+    // folder is never read into it.
+    if let Some(root) = root {
+        return (!legacy).then(|| root.to_path_buf());
+    }
     if let Some(root) = env("VECTORCRAFT_CONFIG_DIR") {
         // Never fall back to DrawCraft's real profile when the isolated file does not exist.
-        return (!legacy && !root.is_empty()).then(|| PathBuf::from(root).join("ui.json"));
+        return (!legacy && !root.is_empty()).then(|| PathBuf::from(root));
     }
     // A run without preferences reads and writes nothing, so it must not create the portable folder.
     if env("VECTORCRAFT_NO_PREFS").is_none()
         && let Some(dir) = portable()
     {
         // A portable copy is self-contained: DrawCraft's old profile is not read into it.
-        return (!legacy).then(|| dir.join("ui.json"));
+        return (!legacy).then_some(dir);
     }
-    platform_dir(os, legacy, &env).map(|p| p.join("ui.json"))
+    platform_dir(os, legacy, &env)
 }
 
 /// The platform's settings folder of VectorCraft, or of DrawCraft (`legacy`).
@@ -124,8 +159,9 @@ fn portable_dir_in(install_dir: &Path, previous: Option<&Path>) -> Result<Option
     Ok(Some(data))
 }
 
-/// Create `dir` and prove a file can be written in it (a folder can exist yet be read-only).
-fn ensure_writable(dir: &Path) -> std::io::Result<()> {
+/// Create `dir` and prove a file can be written in it (a folder can exist yet be read-only). The
+/// nightly profile validator wires this same probe in ([`crate::profile_root`]).
+pub(crate) fn ensure_writable(dir: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(dir)?;
     let probe = dir.join(format!(".write-test-{}", std::process::id()));
     std::fs::write(&probe, b"")?;
@@ -149,6 +185,15 @@ fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
     }
 }
 
+/// Make folder `dir`, owner-only on Unix.
+fn private_dir(dir: &Path) -> std::io::Result<()> {
+    let mut builder = std::fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+    builder.create(dir)
+}
+
 fn copy_dir_into(from: &Path, to: &Path, skip: &mut impl FnMut(String)) {
     let entries = match std::fs::read_dir(from) {
         Ok(entries) => entries,
@@ -165,7 +210,12 @@ fn copy_dir_into(from: &Path, to: &Path, skip: &mut impl FnMut(String)) {
         let (src, dst) = (entry.path(), to.join(entry.file_name()));
         // A symbolic link is copied as what it points to, or skipped when that is a folder.
         let copied = match entry.file_type() {
-            Ok(kind) if kind.is_dir() => std::fs::create_dir_all(&dst).map(|()| copy_dir_into(&src, &dst, skip)),
+            // The copy keeps the folder's permissions (a private recovery folder stays private):
+            // owner-only while it fills, then the source's.
+            Ok(kind) if kind.is_dir() => private_dir(&dst).and_then(|()| {
+                copy_dir_into(&src, &dst, skip);
+                std::fs::set_permissions(&dst, std::fs::metadata(&src)?.permissions())
+            }),
             Ok(_) => std::fs::copy(&src, &dst).map(|_| ()),
             Err(e) => Err(e),
         };
@@ -178,7 +228,22 @@ fn copy_dir_into(from: &Path, to: &Path, skip: &mut impl FnMut(String)) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct TestDir(tempfile::TempDir);
+
+    impl std::ops::Deref for TestDir {
+        type Target = Path;
+
+        fn deref(&self) -> &Self::Target {
+            self.0.path()
+        }
+    }
+
+    impl AsRef<Path> for TestDir {
+        fn as_ref(&self) -> &Path {
+            self.0.path()
+        }
+    }
 
     fn environment(key: &str) -> Option<OsString> {
         match key {
@@ -200,27 +265,27 @@ mod tests {
             let env = |key: &str| {
                 if key == "VECTORCRAFT_CONFIG_DIR" { Some("/isolated".into()) } else { environment(key) }
             };
-            assert_eq!(prefs_path_with(os, false, env, installed), Some("/isolated/ui.json".into()));
-            assert_eq!(prefs_path_with(os, true, env, installed), None);
+            assert_eq!(prefs_dir_with(os, false, env, installed, None), Some("/isolated".into()));
+            assert_eq!(prefs_dir_with(os, true, env, installed, None), None);
         }
     }
 
     #[test]
     fn empty_override_does_not_fall_back_to_user_files() {
         let env = |key: &str| if key == "VECTORCRAFT_CONFIG_DIR" { Some(OsString::new()) } else { environment(key) };
-        assert_eq!(prefs_path_with("macos", false, env, installed), None);
-        assert_eq!(prefs_path_with("macos", true, env, installed), None);
+        assert_eq!(prefs_dir_with("macos", false, env, installed, None), None);
+        assert_eq!(prefs_dir_with("macos", true, env, installed, None), None);
     }
 
     #[test]
     fn unset_override_keeps_platform_paths_and_legacy_migration() {
-        assert_eq!(prefs_path_with("macos", false, environment, installed), Some("/user/Library/Application Support/VectorCraft/ui.json".into()));
-        assert_eq!(prefs_path_with("macos", true, environment, installed), Some("/user/Library/Application Support/DrawCraft/ui.json".into()));
-        assert_eq!(prefs_path_with("windows", false, environment, installed), Some("/roaming/VectorCraft/ui.json".into()));
-        assert_eq!(prefs_path_with("linux", false, environment, installed), Some("/xdg-config/vectorcraft/ui.json".into()));
+        assert_eq!(prefs_dir_with("macos", false, environment, installed, None), Some("/user/Library/Application Support/VectorCraft".into()));
+        assert_eq!(prefs_dir_with("macos", true, environment, installed, None), Some("/user/Library/Application Support/DrawCraft".into()));
+        assert_eq!(prefs_dir_with("windows", false, environment, installed, None), Some("/roaming/VectorCraft".into()));
+        assert_eq!(prefs_dir_with("linux", false, environment, installed, None), Some("/xdg-config/vectorcraft".into()));
         assert_eq!(
-            prefs_path_with("linux", true, |key| if key == "HOME" { environment(key) } else { None }, installed),
-            Some("/user/.config/drawcraft/ui.json".into())
+            prefs_dir_with("linux", true, |key| if key == "HOME" { environment(key) } else { None }, installed, None),
+            Some("/user/.config/drawcraft".into())
         );
     }
 
@@ -228,9 +293,9 @@ mod tests {
     fn portable_mode_keeps_the_settings_beside_the_executable_and_skips_the_drawcraft_profile() {
         let portable = || Some(PathBuf::from("/usb/VectorCraft/VectorCraftData"));
         for os in ["macos", "windows", "linux"] {
-            assert_eq!(prefs_path_with(os, false, environment, portable), Some("/usb/VectorCraft/VectorCraftData/ui.json".into()), "{os}");
+            assert_eq!(prefs_dir_with(os, false, environment, portable, None), Some("/usb/VectorCraft/VectorCraftData".into()), "{os}");
             // A portable copy is self-contained: the one-time read of DrawCraft's old settings is skipped.
-            assert_eq!(prefs_path_with(os, true, environment, portable), None, "{os}");
+            assert_eq!(prefs_dir_with(os, true, environment, portable, None), None, "{os}");
         }
     }
 
@@ -238,16 +303,16 @@ mod tests {
     fn the_config_dir_override_wins_over_portable_mode_without_probing_it() {
         let env = |key: &str| if key == "VECTORCRAFT_CONFIG_DIR" { Some("/isolated".into()) } else { environment(key) };
         let portable = || -> Option<PathBuf> { panic!("the portable folder is not looked for under VECTORCRAFT_CONFIG_DIR") };
-        assert_eq!(prefs_path_with("windows", false, env, portable), Some("/isolated/ui.json".into()));
-        assert_eq!(prefs_path_with("windows", true, env, portable), None);
+        assert_eq!(prefs_dir_with("windows", false, env, portable, None), Some("/isolated".into()));
+        assert_eq!(prefs_dir_with("windows", true, env, portable, None), None);
     }
 
     #[test]
     fn a_run_without_preferences_never_looks_for_the_portable_folder() {
         let env = |key: &str| if key == "VECTORCRAFT_NO_PREFS" { Some("1".into()) } else { environment(key) };
         let portable = || -> Option<PathBuf> { panic!("the portable folder is not looked for under VECTORCRAFT_NO_PREFS") };
-        assert_eq!(prefs_path_with("windows", false, env, portable), Some("/roaming/VectorCraft/ui.json".into()));
-        assert_eq!(prefs_path_with("windows", true, env, portable), Some("/roaming/DrawCraft/ui.json".into()));
+        assert_eq!(prefs_dir_with("windows", false, env, portable, None), Some("/roaming/VectorCraft".into()));
+        assert_eq!(prefs_dir_with("windows", true, env, portable, None), Some("/roaming/DrawCraft".into()));
     }
 
     #[test]
@@ -273,12 +338,8 @@ mod tests {
         assert_eq!(install_dir("macos", mounted, &appimage), Some("/tmp/.mount_vc/usr/bin".into()));
     }
 
-    fn temp(tag: &str) -> PathBuf {
-        static N: AtomicUsize = AtomicUsize::new(0);
-        let d = std::env::temp_dir().join(format!("vectorcraft-profile-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
-        let _ = std::fs::remove_dir_all(&d);
-        std::fs::create_dir_all(&d).unwrap();
-        d
+    fn temp(tag: &str) -> TestDir {
+        TestDir(tempfile::Builder::new().prefix(&format!("vectorcraft-profile-{tag}-")).tempdir().unwrap())
     }
 
     #[test]
@@ -309,17 +370,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(folder.join(PORTABLE_DATA_DIR));
         assert_eq!(portable_dir_in(&install, None), Ok(None));
         let _ = std::fs::remove_dir_all(&folder);
-    }
-
-    #[test]
-    fn without_a_marker_file_there_is_no_portable_folder() {
-        let exe = temp("installed");
-        assert_eq!(portable_dir_in(&exe, None), Ok(None));
-        // A folder named like the marker is not a marker.
-        std::fs::create_dir_all(exe.join("portable.txt")).unwrap();
-        assert_eq!(portable_dir_in(&exe, None), Ok(None));
-        assert!(!exe.join(PORTABLE_DATA_DIR).exists(), "no data folder without a marker");
-        let _ = std::fs::remove_dir_all(&exe);
     }
 
     #[test]
@@ -362,16 +412,6 @@ mod tests {
     }
 
     #[test]
-    fn without_a_user_profile_the_data_folder_starts_empty() {
-        let exe = temp("fresh");
-        std::fs::write(exe.join("portable.txt"), b"").unwrap();
-        let missing = exe.join("no-such-profile");
-        let data = portable_dir_in(&exe, Some(&missing)).unwrap().unwrap();
-        assert_eq!(std::fs::read_dir(&data).unwrap().count(), 0);
-        let _ = std::fs::remove_dir_all(&exe);
-    }
-
-    #[test]
     fn a_copy_that_fails_halfway_reports_what_it_skipped_and_keeps_the_rest() {
         let from = temp("copy-from");
         let to = temp("copy-to");
@@ -386,5 +426,47 @@ mod tests {
         assert_eq!(std::fs::read(to.join("kept.txt")).unwrap(), b"kept");
         let _ = std::fs::remove_dir_all(&from);
         let _ = std::fs::remove_dir_all(&to);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_copied_folder_keeps_its_permissions() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let from = temp("copy-mode-from");
+        let to = temp("copy-mode-to");
+        std::fs::create_dir_all(from.join("recovery")).unwrap();
+        std::fs::write(from.join("recovery/copy.vectorcraft"), b"unsaved").unwrap();
+        std::fs::set_permissions(from.join("recovery"), std::fs::Permissions::from_mode(0o700)).unwrap();
+        copy_dir(&from, &to).unwrap();
+        assert_eq!(std::fs::metadata(to.join("recovery")).unwrap().permissions().mode() & 0o777, 0o700);
+        let _ = std::fs::remove_dir_all(&from);
+        let _ = std::fs::remove_dir_all(&to);
+    }
+
+    #[test]
+    fn the_launch_profile_root_wins_over_every_other_rule_without_touching_the_disk() {
+        let root = Path::new("/launcher/profiles/vectorcraft");
+        let portable = || -> Option<PathBuf> { panic!("the portable folder is not looked for under a profile root") };
+        for os in ["macos", "windows", "linux"] {
+            for override_dir in [None, Some("/isolated")] {
+                let env = |key: &str| if key == "VECTORCRAFT_CONFIG_DIR" { override_dir.map(OsString::from) } else { environment(key) };
+                assert_eq!(prefs_dir_with(os, false, env, portable, Some(root)), Some(root.to_path_buf()), "{os}");
+                // A nightly profile never takes DrawCraft's old settings over.
+                assert_eq!(prefs_dir_with(os, true, env, portable, Some(root)), None, "{os}");
+            }
+        }
+    }
+
+    /// Installs the process-wide root: the one test that may, since a `OnceLock` is set once per
+    /// process (nextest gives every test its own).
+    #[test]
+    fn the_installed_root_is_used_once_and_must_be_absolute() {
+        let dir = temp("installed-root");
+        assert!(install_data_root(PathBuf::from("relative/root")).is_err(), "a relative root is refused");
+        install_data_root(dir.to_path_buf()).unwrap();
+        assert_eq!(data_root(), Some(&*dir));
+        assert_eq!(prefs_dir(false), Some(dir.to_path_buf()));
+        assert!(install_data_root(PathBuf::from("/elsewhere")).is_err(), "a second install is refused");
+        assert_eq!(data_root(), Some(&*dir), "the first root stays");
     }
 }

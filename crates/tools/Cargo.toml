@@ -12,6 +12,7 @@ workspace = true
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }
+vectorcraft-brush = { workspace = true }
 vectorcraft-pathops = { workspace = true }
 vectorcraft-effects = { workspace = true }
 vectorcraft-text = { workspace = true }
@@ -20,6 +21,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
-image = { workspace = true }
+craft-image-codecs = { workspace = true }
 # The tests lay type out in the bundled fonts (the workspace leaves turning them on to the engine).
 vectorcraft-text = { workspace = true, features = ["test-fonts", "bundled-fonts"] }
+# How many times a path is flattened, and how often art is measured for the locked artboards.
+vectorcraft-doc = { workspace = true, features = ["spine-count", "locked-artboard-count"] }

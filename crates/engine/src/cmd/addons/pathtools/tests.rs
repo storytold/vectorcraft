@@ -6,8 +6,8 @@ use std::collections::BTreeSet;
 use serde_json::{Value, json};
 use vectorcraft_doc::{LiveCorners, LiveShape, NodeId};
 use vectorcraft_geom::shapes::CornerKind;
-use vectorcraft_geom::{AnchorKind, PathData, Point};
-use vectorcraft_tools::{PointerEvent, PointerKind};
+use vectorcraft_geom::{AnchorKind, PathData, Point, SubPath};
+use vectorcraft_tools::{Action, Overlay, PointerEvent, PointerKind};
 
 use crate::{Session, ViewInfo};
 
@@ -275,6 +275,152 @@ fn crossings_add_anchors_or_cut_in_one_step() {
     refuses(&mut s, "addon.pathtools.crossings", &[json!({"cut": "yes"}), json!({"ids": [123456]})]);
 }
 
+/// A selected path with an open polyline subpath through each of `subs`; an empty list makes an
+/// empty subpath.
+fn compound(s: &mut Session, subs: &[&[(f64, f64)]]) -> NodeId {
+    let id = line(s, &[(0.0, 0.0), (1.0, 0.0)], false);
+    let pd =
+        PathData::new(subs.iter().map(|pts| SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), false)).collect());
+    s.edit("Test", |d, _| {
+        super::set_path(d, id, pd);
+        Ok(())
+    })
+    .unwrap();
+    select(s, &[id]);
+    id
+}
+
+/// The anchor points of each subpath of `pd`, rounded to a millionth.
+fn points(pd: &PathData) -> Vec<Vec<(f64, f64)>> {
+    let r = |v: f64| (v * 1e6).round() / 1e6;
+    pd.subpaths.iter().map(|sp| sp.anchors.iter().map(|a| (r(a.p.x), r(a.p.y))).collect()).collect()
+}
+
+/// A path's subpaths: A (0), an empty one (1), C (2) and D (3, the last).
+const SUBS: [&[(f64, f64)]; 4] =
+    [&[(0.0, 0.0), (100.0, 0.0), (200.0, 0.0)], &[], &[(0.0, 50.0), (100.0, 50.0)], &[(0.0, 100.0), (100.0, 100.0), (200.0, 100.0)]];
+
+/// Direct-select `segments` of `id` and the anchors `anchors`.
+fn select_segments(s: &mut Session, id: NodeId, anchors: &[(usize, usize)], segments: &[(usize, usize)]) {
+    s.select(|_, sel| {
+        sel.set([id]);
+        sel.anchors.insert(id, anchors.iter().copied().collect());
+        sel.segments.insert(id, segments.iter().copied().collect());
+    })
+    .unwrap();
+}
+
+#[test]
+fn picked_segments_reads_only_its_own_subpath() {
+    let set: BTreeSet<(usize, usize)> = [(0, 0), (0, 2), (1, 1), (3, 0), (3, 1)].into();
+    let sp = SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(1.0, 0.0), Point::new(2.0, 0.0), Point::new(3.0, 0.0)], false);
+    let all: BTreeSet<usize> = (0..4).collect();
+    let picked = |si| super::picked_segments(Some(&set), si, &sp, &all).into_iter().collect::<Vec<_>>();
+    assert_eq!([picked(0), picked(1), picked(2), picked(3), picked(4)], [vec![0, 2], vec![1], vec![], vec![0, 1], vec![]]);
+    // Without direct-selected segments, the segments between two selected anchors.
+    let anchors: BTreeSet<usize> = [0, 1, 3].into();
+    for none in [None, Some(&BTreeSet::new())] {
+        assert_eq!(super::picked_segments(none, 0, &sp, &anchors).into_iter().collect::<Vec<_>>(), [0]);
+    }
+}
+
+#[test]
+fn places_by_subpath_keeps_the_order_and_leaves_out_missing_subpaths() {
+    let on = [(3, 1, 0.75), (0, 0, 0.5), (3, 1, 0.25), (7, 0, 0.5), (0, 1, 0.1), (3, 0, 0.5), (0, 0, 0.2)];
+    let by_sub = super::places_by_subpath(&on, 4);
+    assert_eq!(by_sub, [vec![(0, 0.5), (1, 0.1), (0, 0.2)], vec![], vec![], vec![(1, 0.75), (1, 0.25), (0, 0.5)]]);
+    // The same places as filtering the whole list for each subpath.
+    for (si, here) in by_sub.iter().enumerate() {
+        let filtered: Vec<(usize, f64)> = on.iter().filter(|(s, ..)| *s == si).map(|&(_, seg, t)| (seg, t)).collect();
+        assert_eq!(*here, filtered);
+    }
+    assert!(super::places_by_subpath(&on, 0).is_empty());
+}
+
+#[test]
+fn add_points_adds_to_the_selected_segments_of_each_subpath() {
+    let mut s = session();
+    let c = compound(&mut s, &SUBS);
+    let before = path(&s, c);
+    // The first segment of A and the second of D; a segment of C without its anchors selected.
+    select_segments(&mut s, c, &[(0, 0), (0, 1), (0, 2), (3, 0), (3, 1), (3, 2)], &[(0, 0), (2, 0), (3, 1)]);
+    let n = steps(&s);
+    assert_eq!(s.execute("addon.pathtools.addPoints", &json!({})).unwrap()["added"], json!(2));
+    let want = vec![
+        vec![(0.0, 0.0), (50.0, 0.0), (100.0, 0.0), (200.0, 0.0)],
+        vec![],
+        vec![(0.0, 50.0), (100.0, 50.0)],
+        vec![(0.0, 100.0), (100.0, 100.0), (150.0, 100.0), (200.0, 100.0)],
+    ];
+    let after = path(&s, c);
+    assert_eq!(points(&after), want);
+    assert_eq!(steps(&s), n + 1);
+    let st = s.doc().unwrap();
+    assert_eq!((st.selection.objects.clone(), st.selection.anchors.get(&c), st.selection.segments.get(&c)), (vec![c], None, None));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, c), before);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(path(&s, c), after);
+    // Without selected segments: those between two selected anchors, here on the last subpath only.
+    for segments in [None, Some(BTreeSet::new())] {
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.select(|_, sel| {
+            sel.set([c]);
+            sel.anchors.insert(c, [(0, 0), (3, 1), (3, 2)].into());
+            sel.segments.remove(&c);
+            if let Some(set) = segments.clone() {
+                sel.segments.insert(c, set);
+            }
+        })
+        .unwrap();
+        assert_eq!(s.execute("addon.pathtools.addPoints", &json!({})).unwrap()["added"], json!(1));
+        assert_eq!(
+            points(&path(&s, c)),
+            [points(&before)[..3].to_vec(), vec![vec![(0.0, 100.0), (100.0, 100.0), (150.0, 100.0), (200.0, 100.0)]]].concat()
+        );
+    }
+}
+
+#[test]
+fn crossings_add_anchors_on_each_subpath_of_a_compound_path() {
+    let mut s = session();
+    // A and the last subpath cross both lines; the empty subpath and C, which ends short of them, do not.
+    let c = compound(&mut s, &[&[(0.0, 50.0), (200.0, 50.0)], &[], &[(0.0, 150.0), (40.0, 150.0)], &[(0.0, 250.0), (400.0, 250.0)]]);
+    let q = line(&mut s, &[(100.0, 0.0), (100.0, 300.0)], false);
+    let r = line(&mut s, &[(150.0, 0.0), (150.0, 300.0)], false);
+    select(&mut s, &[c, q, r]);
+    let n = steps(&s);
+    assert_eq!(s.execute("addon.pathtools.crossings", &json!({})).unwrap()["crossings"], json!(8));
+    let want = vec![
+        vec![(0.0, 50.0), (100.0, 50.0), (150.0, 50.0), (200.0, 50.0)],
+        vec![],
+        vec![(0.0, 150.0), (40.0, 150.0)],
+        vec![(0.0, 250.0), (100.0, 250.0), (150.0, 250.0), (400.0, 250.0)],
+    ];
+    assert_eq!(points(&path(&s, c)), want);
+    assert_eq!(points(&path(&s, q)), [vec![(100.0, 0.0), (100.0, 50.0), (100.0, 250.0), (100.0, 300.0)]]);
+    assert_eq!(steps(&s), n + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Cut: the compound path keeps its pieces as subpaths, in order; each line becomes three paths.
+    let out = ids(&s.execute("addon.pathtools.crossings", &json!({"cut": true})).unwrap());
+    assert_eq!(out.len(), 7);
+    assert_eq!(out[0], c);
+    let pieces = vec![
+        vec![(0.0, 50.0), (100.0, 50.0)],
+        vec![(100.0, 50.0), (150.0, 50.0)],
+        vec![(150.0, 50.0), (200.0, 50.0)],
+        vec![],
+        vec![(0.0, 150.0), (40.0, 150.0)],
+        vec![(0.0, 250.0), (100.0, 250.0)],
+        vec![(100.0, 250.0), (150.0, 250.0)],
+        vec![(150.0, 250.0), (400.0, 250.0)],
+    ];
+    assert_eq!(points(&path(&s, c)), pieces);
+    let qs: Vec<Vec<Vec<(f64, f64)>>> = out[1..4].iter().map(|id| points(&path(&s, *id))).collect();
+    assert_eq!(qs, [[vec![(100.0, 0.0), (100.0, 50.0)]], [vec![(100.0, 50.0), (100.0, 250.0)]], [vec![(100.0, 250.0), (100.0, 300.0)]]]);
+    assert_eq!(steps(&s), n + 1);
+}
+
 // ---------- Parametric Shape Tool ----------
 
 /// The parametric shape object `id` is now, as the tool reads it.
@@ -328,6 +474,92 @@ fn set_changes_the_numbers_in_one_step_and_nothing_without_a_change() {
     assert_eq!(path(&s, id).anchor_count(), 7);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(path(&s, id).anchor_count(), 16);
+}
+
+#[test]
+fn set_keeps_the_reference_point_of_the_bounding_box_in_place() {
+    let mut s = session();
+    let corner = |s: &Session, id: NodeId, i: usize| s.transform_box(&[id]).unwrap().reference_point(i);
+    // (kind, its own rotation, a turn with object.rotate, which turns its bounding box too)
+    for (kind, rotation, turn) in [
+        ("rectangle", 0.0, 0.0),
+        ("rectangle", 30.0, 0.0),
+        ("rectangle", 180.0, 0.0),
+        ("rectangle", 0.0, 30.0),
+        ("star", 0.0, 0.0),
+        ("heart", 0.0, 0.0),
+    ] {
+        let r = s.execute("addon.pathtools.shape.create", &json!({"kind": kind, "center": [200, 150], "rotation": rotation})).unwrap();
+        let id = id_of(&r);
+        if turn != 0.0 {
+            s.execute("object.rotate", &json!({"angle": turn, "origin": [200, 150]})).unwrap();
+            assert!(s.transform_box(&[id]).unwrap().angle != 0.0, "the box turns with the object");
+        }
+        // Each of the 9 points of the box the Transform panel shows stays where it was while the
+        // width and then the height change, as `object.setBounds` keeps it.
+        for refi in 0..9 {
+            for key in ["width", "height"] {
+                let (before, was) = (shape_of(&s, id).unwrap(), corner(&s, id, refi));
+                let grown = if key == "width" { before.width } else { before.height } + 10.0;
+                s.execute("addon.pathtools.shape.set", &json!({"id": id.0, key: grown, "reference": refi})).unwrap();
+                let moved = corner(&s, id, refi).distance(was);
+                assert!(moved < 1e-6, "{kind} at {rotation}°, reference {refi}, {key}: the point moved {moved} pt");
+                let after = shape_of(&s, id).unwrap();
+                assert!((if key == "width" { after.width } else { after.height } - grown).abs() < 1e-9, "{kind}, {key}: the new size");
+            }
+        }
+        // Without a reference point, and with an explicit center, the old rules hold.
+        s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "width": 80})).unwrap();
+        let c = shape_of(&s, id).unwrap().center;
+        s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "width": 120})).unwrap();
+        assert!(shape_of(&s, id).unwrap().center.distance(c) < 1e-9, "the center stays by default");
+        s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "width": 60, "center": [10, 20], "reference": 0})).unwrap();
+        assert!(shape_of(&s, id).unwrap().center.distance(Point::new(10.0, 20.0)) < 1e-9, "a center given wins");
+    }
+    let id = star(&mut s);
+    refuses(
+        &mut s,
+        "addon.pathtools.shape.set",
+        &[
+            json!({"id": id.0, "width": 50, "reference": -1}),
+            json!({"id": id.0, "width": 50, "reference": 1.5}),
+            json!({"id": id.0, "width": 50, "reference": 9}),
+            json!({"id": id.0, "width": 50, "reference": 9.0}),
+        ],
+    );
+    // A whole number written with a decimal point picks the same point.
+    s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "width": 50, "reference": 8.0})).unwrap();
+    let written_whole = shape_of(&s, id).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "width": 50, "reference": 8})).unwrap();
+    assert!(shape_of(&s, id).unwrap().center.distance(written_whole.center) < 1e-9, "`8.0` and `8` pick the same point");
+    s.execute("edit.undo", &json!({})).unwrap();
+    // With Use Preview Bounds the point is on the box as drawn: a star's stroked tips reach past
+    // its anchors by more as the star is stretched, so the drawn box and the anchors' box move apart.
+    s.prefs.use_preview_bounds = true;
+    let stroked = id_of(&s.execute("addon.pathtools.shape.create", &json!({"kind": "star", "center": [300, 300], "count": 5})).unwrap());
+    s.execute("paint.setStroke", &json!({"ids": [stroked.0], "color": "#000000"})).unwrap();
+    s.execute("stroke.set", &json!({"ids": [stroked.0], "weight": 12})).unwrap();
+    let geometric = |s: &Session, i: usize| s.doc().unwrap().doc.oriented_bounds(&[stroked], false).unwrap().reference_point(i);
+    for refi in [0, 2, 6, 8] {
+        let (was, anchors_were) = (corner(&s, stroked, refi), geometric(&s, refi));
+        let wide = shape_of(&s, stroked).unwrap().width * 2.5;
+        s.execute("addon.pathtools.shape.set", &json!({"id": stroked.0, "width": wide, "reference": refi})).unwrap();
+        let moved = corner(&s, stroked, refi).distance(was);
+        assert!(moved < 1e-6, "stroked star, reference {refi}: the drawn box's point moved {moved} pt");
+        assert!(geometric(&s, refi).distance(anchors_were) > 1e-3, "reference {refi}: the anchors' box is not the one kept");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    s.prefs.use_preview_bounds = false;
+    // A shape set by id, not selected, that the edit would take past the coordinate limit.
+    let edge = id_of(&s.execute("addon.pathtools.shape.create", &json!({"kind": "rectangle", "center": [3_999_900, 100]})).unwrap());
+    select(&mut s, &[]);
+    refuses(
+        &mut s,
+        "addon.pathtools.shape.set",
+        &[json!({"id": edge.0, "width": 180, "reference": 0}), json!({"id": edge.0, "center": [3_999_990, 100]})],
+    );
+    s.execute("addon.pathtools.shape.set", &json!({"id": edge.0, "width": 180, "reference": 2})).unwrap();
 }
 
 #[test]
@@ -385,8 +617,13 @@ fn an_anchor_edit_makes_it_a_plain_path_and_transforms_keep_it_editable() {
     s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "count": 6})).unwrap();
     assert_eq!((path(&s, id).anchor_count(), steps(&s)), (12, n + 1));
     assert!((shape_of(&s, id).unwrap().rotation + 30.0).abs() < 1e-6, "the turn stays");
-    // Stretched across its own axes (it is turned): skewed, so no longer.
+    // Stretched along its turned bounding box: still the shape, wider along its own axis.
     s.execute("object.scale", &json!({"sx": 150, "sy": 100, "origin": [220, 140]})).unwrap();
+    let r = shape_of(&s, id).unwrap();
+    assert!((r.width - 300.0).abs() < 1e-6 && (r.height - 200.0).abs() < 1e-6 && (r.rotation + 30.0).abs() < 1e-6, "{r:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Stretched across the page's axes (it is turned): skewed, so no longer.
+    s.execute("object.scale", &json!({"sx": 150, "sy": 100, "origin": [220, 140], "basis": "page"})).unwrap();
     assert_eq!(shape_of(&s, id), None);
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(shape_of(&s, id).is_some(), "undo brings it back");
@@ -568,6 +805,235 @@ fn corner_commands_refuse_bad_params() {
 }
 
 #[test]
+fn corner_commands_refuse_an_unknown_item_key() {
+    let mut s = session();
+    let id = square(&mut s);
+    let i = id.0;
+    let set = json!({"items": [{"id": i, "anchor": [0]}], "radius": 5});
+    let e = s.execute("addon.pathtools.cornerSet", &set).unwrap_err().to_string();
+    assert!(e.contains("unknown parameter `items[0].anchor`; did you mean `items[0].anchors`?"), "{e}");
+    let set_late = json!({"items": [{"id": i, "anchors": [0]}, {"id": i, "radius": 3}], "radius": 5});
+    let e = s.execute("addon.pathtools.cornerSet", &set_late).unwrap_err().to_string();
+    assert!(e.contains("unknown parameter `items[1].radius`; the command takes: items[1].id, items[1].anchors"), "{e}");
+    refuses(&mut s, "addon.pathtools.cornerSet", &[set, set_late]);
+    s.execute("addon.pathtools.cornerSet", &json!({"radius": 10})).unwrap();
+    let remove = json!({"items": [{"id": i, "anchor": [0]}]});
+    let e = s.execute("addon.pathtools.cornerRemove", &remove).unwrap_err().to_string();
+    assert!(e.contains("unknown parameter `items[0].anchor`; did you mean `items[0].anchors`?"), "{e}");
+    refuses(&mut s, "addon.pathtools.cornerRemove", &[remove]);
+    assert_eq!(drawn(&s, id, 0), 10.0);
+}
+
+#[test]
+fn corner_items_take_their_documented_keys() {
+    let mut s = session();
+    let id = square(&mut s);
+    let i = id.0;
+    let r = s.execute("addon.pathtools.cornerSet", &json!({"items": [{"id": i, "anchors": [0]}], "radius": 5})).unwrap();
+    assert_eq!((r["corners"].clone(), drawn(&s, id, 0), drawn(&s, id, 1)), (json!(1), 5.0, 0.0));
+    // A member without `anchors` takes the request's.
+    s.execute("addon.pathtools.cornerSet", &json!({"items": [{"id": i}], "anchors": [2], "radius": 6})).unwrap();
+    assert_eq!(drawn(&s, id, 2), 6.0);
+    let r = s.execute("addon.pathtools.cornerRemove", &json!({"items": [{"id": i, "anchors": [0]}]})).unwrap();
+    assert_eq!((r["corners"].clone(), drawn(&s, id, 0), drawn(&s, id, 2)), (json!(1), 0.0, 6.0));
+    // A null `ids` beside `items` counts as not given.
+    s.execute("addon.pathtools.cornerRemove", &json!({"items": [{"id": i}], "ids": null})).unwrap();
+    assert_eq!(drawn(&s, id, 2), 0.0);
+}
+
+#[test]
+fn corner_commands_refuse_items_with_ids() {
+    let mut s = session();
+    let id = square(&mut s);
+    let other = line(&mut s, &[(350.0, 10.0), (390.0, 10.0), (390.0, 50.0)], false);
+    let both = json!({"items": [{"id": id.0, "anchors": [0]}], "ids": [other.0], "radius": 5});
+    let e = s.execute("addon.pathtools.cornerSet", &both).unwrap_err().to_string();
+    assert!(e.contains("give `items` or `ids`, not both"), "{e}");
+    refuses(&mut s, "addon.pathtools.cornerSet", &[both]);
+    s.execute("addon.pathtools.cornerSet", &json!({"ids": [id.0], "radius": 5})).unwrap();
+    let both = json!({"items": [{"id": id.0}], "ids": [id.0]});
+    let e = s.execute("addon.pathtools.cornerRemove", &both).unwrap_err().to_string();
+    assert!(e.contains("give `items` or `ids`, not both"), "{e}");
+    refuses(&mut s, "addon.pathtools.cornerRemove", &[both]);
+}
+
+#[test]
+fn saved_corner_steps_with_older_item_keys_still_play() {
+    let mut s = session();
+    let id = square(&mut s);
+    let other = line(&mut s, &[(350.0, 10.0), (390.0, 10.0), (390.0, 50.0)], false);
+    let saved = json!({"items": [{"id": id.0, "anchors": [0], "old": 1}], "ids": [other.0], "radius": 5});
+    s.replay("addon.pathtools.cornerSet", &saved).unwrap();
+    assert_eq!((drawn(&s, id, 0), drawn(&s, id, 1)), (5.0, 0.0));
+    s.replay("addon.pathtools.cornerRemove", &json!({"items": [{"id": id.0, "old": 1}]})).unwrap();
+    assert_eq!(drawn(&s, id, 0), 0.0);
+}
+
+/// A closed five-pointed star about (200, 150): its points at the even indices 0, 2… (the odd
+/// numbers counting from 1), its inner corners at the odd ones.
+fn star_path(s: &mut Session) -> NodeId {
+    let pts: Vec<(f64, f64)> = (0..10)
+        .map(|i| {
+            let (r, a) = (if i % 2 == 0 { 100.0 } else { 40.0 }, std::f64::consts::PI * f64::from(i) / 5.0);
+            (200.0 + r * a.sin(), 150.0 - r * a.cos())
+        })
+        .collect();
+    line(s, &pts, true)
+}
+
+/// The cut corners of `id`: anchor indices of its uncut outline with a radius drawn.
+fn cut(s: &Session, id: NodeId) -> Vec<usize> {
+    let lc = LiveCorners::of(s.doc().unwrap().doc.node(id).unwrap()).unwrap();
+    (0..lc.base.anchor_count()).filter(|k| lc.drawn_radius(*k) > 0.0).collect()
+}
+
+#[test]
+fn corner_set_every_takes_the_odd_or_even_numbered_anchors_of_each_path() {
+    let mut s = session();
+    let star = star_path(&mut s);
+    // An open zig-zag: its ends (1st and 5th) take no corner but still count.
+    let zig = line(&mut s, &[(10.0, 250.0), (30.0, 210.0), (50.0, 250.0), (70.0, 210.0), (90.0, 250.0)], false);
+    select(&mut s, &[star, zig]);
+    let n = steps(&s);
+    // Odd: the 1st, 3rd, 5th… of each path, as one step.
+    let r = s.execute("addon.pathtools.cornerSet", &json!({"radius": 4, "every": "odd"})).unwrap();
+    assert_eq!((r["corners"].clone(), steps(&s)), (json!(6), n + 1));
+    assert_eq!((cut(&s, star), cut(&s, zig)), (vec![0, 2, 4, 6, 8], vec![2]));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((cut(&s, star), cut(&s, zig), steps(&s)), (vec![], vec![], n));
+    // Even: the 2nd, 4th, 6th….
+    let r = s.execute("addon.pathtools.cornerSet", &json!({"radius": 4, "every": "even"})).unwrap();
+    assert_eq!((r["corners"].clone(), steps(&s)), (json!(7), n + 1));
+    assert_eq!((cut(&s, star), cut(&s, zig)), (vec![1, 3, 5, 7, 9], vec![1, 3]));
+    // "all" (and no `every`) is every chosen corner, as before.
+    s.execute("addon.pathtools.cornerSet", &json!({"ids": [zig.0], "radius": 4, "every": "all"})).unwrap();
+    assert_eq!(cut(&s, zig), vec![1, 2, 3]);
+}
+
+#[test]
+fn corner_set_every_filters_the_named_and_direct_selected_anchors() {
+    let mut s = session();
+    let star = star_path(&mut s);
+    // Of the named anchors, only the even-numbered ones (indices 1 and 3); numbers stay the path's.
+    let r = s.execute("addon.pathtools.cornerSet", &json!({"ids": [star.0], "anchors": [1, 2, 3, 4], "radius": 3, "every": "even"})).unwrap();
+    assert_eq!(r["corners"], json!(2));
+    assert_eq!(cut(&s, star), vec![1, 3]);
+    // Per path through `items`.
+    s.execute("addon.pathtools.cornerSet", &json!({"items": [{"id": star.0, "anchors": [5, 6, 7]}], "radius": 3, "every": "odd"})).unwrap();
+    assert_eq!(cut(&s, star), vec![1, 3, 6]);
+    // Of the direct-selected anchors.
+    s.execute("addon.pathtools.cornerRemove", &json!({"ids": [star.0]})).unwrap();
+    select_anchors(&mut s, star, &[7, 8, 9]);
+    s.execute("addon.pathtools.cornerSet", &json!({"radius": 3, "every": "odd"})).unwrap();
+    assert_eq!(cut(&s, star), vec![8]);
+}
+
+#[test]
+fn corner_set_every_refuses_bad_values_and_says_when_nothing_is_left() {
+    let mut s = session();
+    let zig = line(&mut s, &[(10.0, 250.0), (30.0, 210.0), (50.0, 250.0), (70.0, 210.0)], false);
+    select(&mut s, &[zig]);
+    let i = zig.0;
+    refuses(
+        &mut s,
+        "addon.pathtools.cornerSet",
+        &[
+            json!({"ids": [i], "radius": 5, "every": "third"}),
+            json!({"ids": [i], "radius": 5, "every": "Odd"}),
+            json!({"ids": [i], "radius": 5, "every": 2}),
+            json!({"ids": [i], "radius": 5, "every": true}),
+            json!({"ids": [i], "anchors": [1], "radius": 5, "every": "odd"}),
+            json!({"ids": [i], "anchors": [0, 1], "radius": 5, "every": "odd"}),
+        ],
+    );
+    let e = s.execute("addon.pathtools.cornerSet", &json!({"ids": [i], "radius": 5, "every": "third"})).unwrap_err().to_string();
+    assert!(e.contains("`every` must be \"all\", \"odd\" or \"even\""), "{e}");
+    // The 2nd anchor is a corner, but not an odd-numbered one.
+    let e = s.execute("addon.pathtools.cornerSet", &json!({"ids": [i], "anchors": [1], "radius": 5, "every": "odd"})).unwrap_err().to_string();
+    assert!(e.contains("odd-numbered"), "{e}");
+    // An open end is no corner at all, whatever `every` says.
+    let e = s.execute("addon.pathtools.cornerSet", &json!({"ids": [i], "anchors": [0], "radius": 5, "every": "odd"})).unwrap_err().to_string();
+    assert!(e.contains("two sides meet"), "{e}");
+}
+
+/// A closed house: a 100 × 100 square under a roof, its corners 90°, 90°, 135°, 90° and 135°.
+fn house(s: &mut Session) -> NodeId {
+    line(s, &[(250.0, 100.0), (350.0, 100.0), (350.0, 200.0), (300.0, 250.0), (250.0, 200.0)], true)
+}
+
+#[test]
+fn corner_set_angle_range_rounds_only_the_corners_in_it_on_each_path() {
+    let mut s = session();
+    // The star's points meet at about 38°, its inner corners at about 110°.
+    let (star, home) = (star_path(&mut s), house(&mut s));
+    select(&mut s, &[star, home]);
+    let n = steps(&s);
+    // The sharp spikes only: the house has none, the star five, as one step.
+    let r = s.execute("addon.pathtools.cornerSet", &json!({"radius": 3, "maxAngle": 60})).unwrap();
+    assert_eq!((r["ids"].clone(), r["corners"].clone(), steps(&s)), (json!([star.0]), json!(5), n + 1));
+    assert_eq!((cut(&s, star), cut(&s, home)), (vec![0, 2, 4, 6, 8], vec![]));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((cut(&s, star), steps(&s)), (vec![], n));
+    // Exactly 90°: the house's square corners.
+    s.execute("addon.pathtools.cornerSet", &json!({"radius": 3, "minAngle": 90, "maxAngle": 90})).unwrap();
+    assert_eq!((cut(&s, star), cut(&s, home)), (vec![], vec![0, 1, 3]));
+    // 100° to 140°: the star's inner corners and the roof's; the square corners stay as they are.
+    let r = s.execute("addon.pathtools.cornerSet", &json!({"radius": 2, "minAngle": 100, "maxAngle": 140})).unwrap();
+    assert_eq!(r["corners"], json!(7));
+    assert_eq!((cut(&s, star), cut(&s, home)), (vec![1, 3, 5, 7, 9], vec![0, 1, 2, 3, 4]));
+    assert_eq!((drawn(&s, home, 0), drawn(&s, home, 2)), (3.0, 2.0));
+    // On top of the named anchors and of `every`.
+    s.execute("addon.pathtools.cornerRemove", &json!({})).unwrap();
+    s.execute("addon.pathtools.cornerSet", &json!({"ids": [home.0], "anchors": [1, 2, 3], "radius": 4, "minAngle": 80, "maxAngle": 100})).unwrap();
+    assert_eq!(cut(&s, home), vec![1, 3]);
+    s.execute("addon.pathtools.cornerSet", &json!({"ids": [star.0], "radius": 4, "every": "even", "minAngle": 100})).unwrap();
+    assert_eq!(cut(&s, star), vec![1, 3, 5, 7, 9]);
+}
+
+#[test]
+fn corner_set_angle_range_on_a_three_anchor_path() {
+    let mut s = session();
+    // An open pen path of three anchors: one corner, of 90°.
+    let id = line(&mut s, &[(10.0, 10.0), (60.0, 60.0), (110.0, 10.0)], false);
+    select(&mut s, &[id]);
+    let e = s.execute("addon.pathtools.cornerSet", &json!({"radius": 5, "maxAngle": 45})).unwrap_err().to_string();
+    assert!(e.contains("none of the chosen corners has an angle from 0° to 45°"), "{e}");
+    let r = s.execute("addon.pathtools.cornerSet", &json!({"radius": 5, "minAngle": 80, "maxAngle": 100})).unwrap();
+    assert_eq!(r["corners"], json!(1));
+    assert_eq!(cut(&s, id), vec![1]);
+}
+
+#[test]
+fn corner_set_angle_range_refuses_bad_values_and_says_when_nothing_matches() {
+    let mut s = session();
+    let star = star_path(&mut s);
+    select(&mut s, &[star]);
+    let i = star.0;
+    refuses(
+        &mut s,
+        "addon.pathtools.cornerSet",
+        &[
+            json!({"ids": [i], "radius": 5, "minAngle": -1}),
+            json!({"ids": [i], "radius": 5, "maxAngle": 181}),
+            json!({"ids": [i], "radius": 5, "minAngle": 1e308}),
+            json!({"ids": [i], "radius": 5, "maxAngle": "sharp"}),
+            json!({"ids": [i], "radius": 5, "minAngle": 120, "maxAngle": 60}),
+            json!({"ids": [i], "radius": 5, "minAngle": 50, "maxAngle": 100}),
+            json!({"ids": [i], "radius": 5, "every": "odd", "minAngle": 100}),
+        ],
+    );
+    let err = |s: &mut Session, p: Value| s.execute("addon.pathtools.cornerSet", &p).unwrap_err().to_string();
+    let e = err(&mut s, json!({"ids": [i], "radius": 5, "maxAngle": 200}));
+    assert!(e.contains("`maxAngle` must be from 0 to 180 degrees"), "{e}");
+    let e = err(&mut s, json!({"ids": [i], "radius": 5, "minAngle": 120, "maxAngle": 60}));
+    assert!(e.contains("`minAngle` (120°) can't be more than `maxAngle` (60°)"), "{e}");
+    let e = err(&mut s, json!({"ids": [i], "radius": 5, "minAngle": 50, "maxAngle": 100}));
+    assert!(e.contains("none of the chosen corners has an angle from 50° to 100°"), "{e}");
+    let e = err(&mut s, json!({"ids": [i], "radius": 5, "every": "odd", "minAngle": 100}));
+    assert!(e.contains("none of the chosen corners at an odd-numbered anchor (the 1st, 3rd, 5th…) has an angle from 100° to 180°"), "{e}");
+}
+
+#[test]
 fn the_corner_tool_clicks_drags_and_removes_in_one_step_each() {
     let mut s = session();
     let id = square(&mut s);
@@ -673,4 +1139,319 @@ fn the_slide_tool_previews_and_commits_one_step() {
     assert!(steps(&s) == n + 1 && at(&s).distance(Point::new(280.0, 100.0)) < 1e-3);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(at(&s), Point::new(200.0, 100.0));
+}
+
+/// The Tangent Circle tool's release draws the circle and then tells the tool, which forgets the
+/// first segment. When the command fails the session does not tell the tool, so the first segment
+/// stays picked: the circle shows again over the second segment. The second click draws it in one
+/// undo step.
+#[test]
+fn the_tangent_circle_tool_keeps_its_first_segment_when_drawing_fails() {
+    let mut s = session();
+    line(&mut s, &[(100.0, 100.0), (300.0, 100.0)], false);
+    line(&mut s, &[(100.0, 140.0), (300.0, 140.0)], false);
+    let view = ViewInfo { smart_guides: false, ..ViewInfo::default() };
+    s.select_tool("tangentCircle", view).unwrap();
+    let at = |s: &mut Session, kind, x, y| s.pointer(&PointerEvent::new(kind, x, y), view);
+    let shown = |s: &mut Session| {
+        at(s, PointerKind::Move, 200.0, 139.0).unwrap();
+        s.overlays(view).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text.starts_with("R: 20.00")))
+    };
+    at(&mut s, PointerKind::Down, 150.0, 101.0).unwrap();
+    at(&mut s, PointerKind::Up, 150.0, 101.0).unwrap();
+    assert!(shown(&mut s), "the first segment is picked");
+    // The tool's release with a command that fails: three points on one line.
+    let n = steps(&s);
+    let failing = Action::Exec("shape.circleThroughPoints".into(), json!({"points": [[0, 0], [10, 0], [20, 0]]}));
+    assert!(s.apply_actions(vec![failing, Action::Notify("tangentCircle.drawn".into())]).is_err());
+    assert_eq!(steps(&s), n, "nothing drawn");
+    assert!(shown(&mut s), "the first segment is still picked");
+    at(&mut s, PointerKind::Down, 200.0, 139.0).unwrap();
+    at(&mut s, PointerKind::Up, 200.0, 139.0).unwrap();
+    assert_eq!(steps(&s), n + 1, "one undo step");
+    assert!(!shown(&mut s), "the first segment is forgotten once the circle is drawn");
+}
+
+/// With Add Points to Existing Paths on, the Tangent Circle tool's circle and an anchor point where
+/// it touches each line are one undo step; the lines keep their shape, and one Undo takes all of it
+/// back.
+#[test]
+fn the_tangent_circle_tool_adds_points_where_the_circle_touches_in_one_step() {
+    let mut s = session();
+    let a = line(&mut s, &[(100.0, 100.0), (300.0, 100.0)], false);
+    let b = line(&mut s, &[(100.0, 140.0), (300.0, 140.0)], false);
+    let view = ViewInfo { smart_guides: false, ..ViewInfo::default() };
+    s.select_tool("tangentCircle", view).unwrap();
+    s.set_tool_option("addPoints", &json!(true));
+    let n = steps(&s);
+    for (kind, x, y) in
+        [(PointerKind::Down, 150.0, 101.0), (PointerKind::Up, 150.0, 101.0), (PointerKind::Down, 200.0, 139.0), (PointerKind::Up, 200.0, 139.0)]
+    {
+        s.pointer(&PointerEvent::new(kind, x, y), view).unwrap();
+    }
+    assert_eq!(steps(&s), n + 1, "one undo step");
+    let points = |s: &Session, id| path(s, id).subpaths[0].anchors.iter().map(|a| (a.p.x, a.p.y)).collect::<Vec<_>>();
+    let near = |got: Vec<(f64, f64)>, want: &[(f64, f64)]| {
+        got.len() == want.len() && got.iter().zip(want).all(|(g, w)| (g.0 - w.0).abs() < 1e-6 && (g.1 - w.1).abs() < 1e-6)
+    };
+    assert!(near(points(&s, a), &[(100.0, 100.0), (150.0, 100.0), (300.0, 100.0)]), "{:?}", points(&s, a));
+    assert!(near(points(&s, b), &[(100.0, 140.0), (150.0, 140.0), (300.0, 140.0)]), "{:?}", points(&s, b));
+    let st = s.doc().unwrap();
+    let [circle] = st.selection.objects[..] else { panic!("{:?}", st.selection.objects) };
+    let r = st.doc.node(circle).and_then(|c| c.path_data()).and_then(|pd| pd.bounds()).unwrap();
+    assert!((r.x0 - 130.0).abs() < 1e-6 && (r.y0 - 100.0).abs() < 1e-6 && (r.width() - 40.0).abs() < 1e-6, "{r:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((steps(&s), points(&s, a).len(), points(&s, b).len()), (n, 2, 2));
+    assert!(s.doc().unwrap().doc.node(circle).is_none(), "the circle is gone too");
+}
+
+/// In Draw Behind, the Tangent Circle tool's circle goes behind the object selected before the
+/// clicks, also when Add Points to Existing Paths adds anchors to lines that were not selected.
+#[test]
+fn the_tangent_circle_tool_adding_points_draws_behind_the_selection() {
+    let mut s = session();
+    line(&mut s, &[(100.0, 100.0), (300.0, 100.0)], false);
+    line(&mut s, &[(100.0, 140.0), (300.0, 140.0)], false);
+    let other = line(&mut s, &[(100.0, 400.0), (300.0, 400.0)], false);
+    select(&mut s, &[other]);
+    s.execute("view.drawMode", &json!({"mode": "behind"})).unwrap();
+    let view = ViewInfo { smart_guides: false, ..ViewInfo::default() };
+    s.select_tool("tangentCircle", view).unwrap();
+    s.set_tool_option("addPoints", &json!(true));
+    for (kind, x, y) in
+        [(PointerKind::Down, 150.0, 101.0), (PointerKind::Up, 150.0, 101.0), (PointerKind::Down, 200.0, 139.0), (PointerKind::Up, 200.0, 139.0)]
+    {
+        s.pointer(&PointerEvent::new(kind, x, y), view).unwrap();
+    }
+    let st = s.doc().unwrap();
+    let [circle] = st.selection.objects[..] else { panic!("{:?}", st.selection.objects) };
+    let at = |id| st.doc.position(id).map(|(parent, index, _)| (parent, index));
+    let (Some((p, c)), Some((q, o))) = (at(circle), at(other)) else { panic!("not placed") };
+    assert!(p == q && c + 1 == o, "the circle is right behind the selected line: {c} and {o}");
+}
+
+fn ids(v: &Value) -> Vec<NodeId> {
+    v["ids"].as_array().unwrap().iter().map(|i| NodeId(i.as_u64().unwrap())).collect()
+}
+
+#[test]
+fn divide_into_dashes_cuts_a_path_into_open_pieces_keeping_its_look() {
+    let mut s = session();
+    let l = line(&mut s, &[(0.0, 0.0), (100.0, 0.0)], false);
+    select(&mut s, &[l]);
+    s.execute("stroke.set", &json!({"weight": 3})).unwrap();
+    let n = steps(&s);
+    let r = s.execute("addon.pathtools.divideDashes", &json!({"dash": 30, "gap": 10})).unwrap();
+    assert_eq!(steps(&s), n + 1, "one undo step");
+    // 30 + 10 + 30 + 10 + 20: the gaps are left empty.
+    let pieces = ids(&r);
+    assert_eq!((pieces.len(), r["dashes"].clone()), (3, json!(3)));
+    let st = s.doc().unwrap();
+    let spans: Vec<(f64, f64)> = pieces.iter().map(|id| path(&s, *id).bounds().map(|b| (b.x0, b.x1)).unwrap()).collect();
+    let want = [(0.0, 30.0), (40.0, 70.0), (80.0, 100.0)];
+    assert!(spans.iter().zip(want).all(|(a, b)| (a.0 - b.0).abs() < 1e-6 && (a.1 - b.1).abs() < 1e-6), "{spans:?}");
+    assert!(pieces.iter().all(|id| st.doc.node(*id).unwrap().appearance.stroke_width() == 3.0), "the stroke stays");
+    assert_eq!(st.selection.objects, pieces);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, l).anchor_count(), 2);
+    // Kept gaps; fitted 25s with no gap.
+    let r = s.execute("addon.pathtools.divideDashes", &json!({"dash": 30, "gap": 10, "removeGaps": false})).unwrap();
+    assert_eq!((ids(&r).len(), r["dashes"].clone()), (5, json!(3)));
+    s.execute("edit.undo", &json!({})).unwrap();
+    let r = s.execute("addon.pathtools.divideDashes", &json!({"dash": 30, "fit": true})).unwrap();
+    let spans: Vec<f64> = ids(&r).iter().map(|id| path(&s, *id).bounds().unwrap().width()).collect();
+    assert_eq!(spans.len(), 3);
+    assert!(spans.iter().all(|w| (w - 100.0 / 3.0).abs() < 1e-6), "{spans:?}");
+}
+
+#[test]
+fn divide_into_dashes_divides_only_the_selected_segments() {
+    let mut s = session();
+    let u = line(&mut s, &[(0.0, 0.0), (40.0, 0.0), (40.0, 40.0), (0.0, 40.0)], false);
+    // The middle side, between anchors 1 and 2.
+    select_anchors(&mut s, u, &[1, 2]);
+    let r = s.execute("addon.pathtools.divideDashes", &json!({"dash": 10})).unwrap();
+    let pieces = ids(&r);
+    assert_eq!((pieces.len(), r["dashes"].clone()), (6, json!(4)), "the first side, four dashes, the last side");
+    assert_eq!(path(&s, pieces[0]).bounds().unwrap().width(), 40.0);
+    let layer: Vec<NodeId> = s.doc().unwrap().doc.layers[0].children().unwrap().iter().map(|n| n.id).collect();
+    assert_eq!(layer, pieces, "in the path's place, in order");
+}
+
+#[test]
+fn divide_into_dashes_divides_the_selected_segments_of_each_subpath() {
+    let mut s = session();
+    let c = compound(&mut s, &SUBS);
+    let before = path(&s, c);
+    // The first segment of A and the second of D; a segment of C without its anchors selected.
+    select_segments(&mut s, c, &[(0, 0), (0, 1), (0, 2), (3, 0), (3, 1), (3, 2)], &[(0, 0), (2, 0), (3, 1)]);
+    let n = steps(&s);
+    let r = s.execute("addon.pathtools.divideDashes", &json!({"dash": 25})).unwrap();
+    assert_eq!(steps(&s), n + 1);
+    assert_eq!(r["dashes"], json!(8));
+    let made: Vec<Vec<Vec<(f64, f64)>>> = ids(&r).iter().map(|id| points(&path(&s, *id))).collect();
+    let piece = |x0: f64, x1: f64, y: f64| vec![vec![(x0, y), (x1, y)]];
+    let mut want = vec![vec![vec![], vec![(0.0, 50.0), (100.0, 50.0)]]];
+    want.extend([(0.0, 25.0), (25.0, 50.0), (50.0, 75.0), (75.0, 100.0)].map(|(a, b)| piece(a, b, 0.0)));
+    want.push(vec![vec![(100.0, 0.0), (200.0, 0.0)]]);
+    want.push(vec![vec![(0.0, 100.0), (100.0, 100.0)]]);
+    want.extend([(100.0, 125.0), (125.0, 150.0), (150.0, 175.0), (175.0, 200.0)].map(|(a, b)| piece(a, b, 100.0)));
+    assert_eq!(made, want, "what stays of the path, then each subpath's pieces in order");
+    assert_eq!(s.doc().unwrap().selection.objects, ids(&r));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, c), before);
+    // With no segments selected: those between two selected anchors, here on the last subpath only.
+    select_segments(&mut s, c, &[(0, 0), (3, 1), (3, 2)], &[]);
+    let r = s.execute("addon.pathtools.divideDashes", &json!({"dash": 25})).unwrap();
+    assert_eq!((ids(&r).len(), r["dashes"].clone()), (6, json!(4)));
+    assert_eq!(points(&path(&s, ids(&r)[0])), points(&before)[..3]);
+}
+
+#[test]
+fn divide_into_dashes_refuses_bad_params_and_too_many_pieces() {
+    let mut s = session();
+    let l = line(&mut s, &[(0.0, 0.0), (1e5, 0.0)], false);
+    select(&mut s, &[l]);
+    refuses(
+        &mut s,
+        "addon.pathtools.divideDashes",
+        &[
+            json!({"dash": 0}),
+            json!({"dash": -5}),
+            json!({"dash": 1e308}),
+            json!({"dash": "10"}),
+            json!({"gap": -1}),
+            json!({"gap": 2e6}),
+            json!({"fit": "yes"}),
+            json!({"removeGaps": 1}),
+            json!({"dash": 0.5}),
+        ],
+    );
+    // 200000 pieces refused above; 1000 is fine.
+    assert_eq!(s.execute("addon.pathtools.divideDashes", &json!({"dash": 100})).unwrap()["dashes"], json!(1000));
+    s.execute("select.none", &json!({})).unwrap();
+    refuses(&mut s, "addon.pathtools.divideDashes", &[json!({})]);
+}
+
+/// The dashes made of `r`'s ids: (first x, last x) of each, by its anchors.
+fn dash_spans(s: &Session, r: &Value) -> Vec<(f64, f64)> {
+    ids(r).iter().map(|id| path(s, *id).bounds().map(|b| (b.x0, b.x1)).unwrap()).collect()
+}
+
+fn near(a: &[(f64, f64)], b: &[(f64, f64)]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(a, b)| (a.0 - b.0).abs() < 1e-6 && (a.1 - b.1).abs() < 1e-6)
+}
+
+#[test]
+fn expand_dashes_makes_an_open_path_of_each_dash_keeping_the_stroke() {
+    let mut s = session();
+    let l = line(&mut s, &[(0.0, 0.0), (100.0, 0.0)], false);
+    select(&mut s, &[l]);
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 3, "cap": "round", "dash": [30, 10]})).unwrap();
+    let n = steps(&s);
+    let r = s.execute("addon.pathtools.expandDashes", &json!({})).unwrap();
+    assert_eq!(steps(&s), n + 1, "one undo step");
+    assert!(near(&dash_spans(&s, &r), &[(0.0, 30.0), (40.0, 70.0), (80.0, 100.0)]), "{:?}", dash_spans(&s, &r));
+    assert_eq!(r["dashes"], json!(3));
+    let st = s.doc().unwrap();
+    for id in ids(&r) {
+        let node = st.doc.node(id).unwrap();
+        let stroke = node.appearance.stroke().unwrap();
+        assert_eq!((stroke.width, stroke.cap, stroke.dash.clone()), (3.0, vectorcraft_doc::LineCap::Round, None), "the stroke stays, dashes off");
+        assert!(!path(&s, id).subpaths[0].closed);
+    }
+    assert_eq!(st.selection.objects, ids(&r));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(l).unwrap().appearance.stroke().unwrap().dash.is_some());
+    // The offset shifts the pattern as the stroke draws it: 20 into the first dash.
+    s.execute("stroke.set", &json!({"dashOffset": 20})).unwrap();
+    let r = s.execute("addon.pathtools.expandDashes", &json!({"ids": [l.0]})).unwrap();
+    assert!(near(&dash_spans(&s, &r), &[(0.0, 10.0), (20.0, 50.0), (60.0, 90.0)]), "{:?}", dash_spans(&s, &r));
+}
+
+#[test]
+fn expand_dashes_keeps_the_fill_below_and_follows_aligned_corners() {
+    let mut s = session();
+    let rect = id_of(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 60})).unwrap());
+    select(&mut s, &[rect]);
+    s.execute("stroke.set", &json!({"dash": [20, 20]})).unwrap();
+    let had_fill = !s.doc().unwrap().doc.node(rect).unwrap().appearance.fill_paint().is_none();
+    let r = s.execute("addon.pathtools.expandDashes", &json!({})).unwrap();
+    // 320 round: eight dashes of 20, a dash bending round each corner it meets.
+    let pieces = ids(&r);
+    assert_eq!(pieces.len(), 8);
+    let st = s.doc().unwrap();
+    let layer: Vec<NodeId> = st.doc.layers[0].children().unwrap().iter().map(|n| n.id).collect();
+    if had_fill {
+        let kept = st.doc.node(rect).unwrap();
+        assert!(kept.appearance.stroke().is_none() && kept.appearance.fill().is_some(), "the fill stays on the rectangle");
+        assert_eq!(layer, [vec![rect], pieces.clone()].concat(), "the fill below its dashes");
+    } else {
+        assert_eq!(layer, pieces);
+    }
+    assert!(pieces.iter().all(|id| st.doc.node(*id).unwrap().appearance.fill().is_none()), "an open dash isn't filled");
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Aligned to corners: a dash centred on each corner, the four sides each starting and ending
+    // on half a dash; 12 dashes along the sides.
+    s.execute("stroke.set", &json!({"dash": [10, 10], "alignDashes": true})).unwrap();
+    let r = s.execute("addon.pathtools.expandDashes", &json!({})).unwrap();
+    let corners = [Point::new(0.0, 0.0), Point::new(100.0, 0.0), Point::new(100.0, 60.0), Point::new(0.0, 60.0)];
+    let mut centred = 0;
+    for id in ids(&r) {
+        let sp = path(&s, id).subpaths[0].clone();
+        if let [a, b, c] = &*sp.anchors.to_vec()
+            && corners.iter().any(|k| b.p.distance(*k) < 1e-6)
+        {
+            assert!((a.p.distance(b.p) - 5.0).abs() < 1e-6 && (c.p.distance(b.p) - 5.0).abs() < 1e-6, "{sp:?}");
+            centred += 1;
+        }
+    }
+    assert_eq!((ids(&r).len(), centred), (16, 4));
+}
+
+#[test]
+fn expand_dashes_turns_dots_into_paths_on_their_point_and_releases_compound_paths() {
+    let mut s = session();
+    let l = line(&mut s, &[(0.0, 0.0), (100.0, 0.0)], false);
+    select(&mut s, &[l]);
+    s.execute("stroke.set", &json!({"dash": [0, 20], "cap": "round"})).unwrap();
+    let r = s.execute("addon.pathtools.expandDashes", &json!({})).unwrap();
+    assert_eq!(ids(&r).len(), 6, "a dot every 20 from 0 to 100");
+    assert!(ids(&r).iter().all(|id| path(&s, *id).bounds().unwrap().width() == 0.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Under a butt cap a dot paints nothing, so there is nothing to expand.
+    s.execute("stroke.set", &json!({"cap": "butt"})).unwrap();
+    refuses(&mut s, "addon.pathtools.expandDashes", &[json!({})]);
+    // A compound path's dashes are paths of their own with its stroke.
+    let a = line(&mut s, &[(0.0, 100.0), (50.0, 100.0)], false);
+    let b = line(&mut s, &[(0.0, 120.0), (50.0, 120.0)], false);
+    select(&mut s, &[a, b]);
+    let c = id_of(&s.execute("object.compoundPath.make", &json!({})).unwrap());
+    s.execute("stroke.set", &json!({"weight": 2, "dash": [20, 10], "cap": "butt"})).unwrap();
+    let r = s.execute("addon.pathtools.expandDashes", &json!({})).unwrap();
+    // Each 50 line: 20, gap, 20.
+    let st = s.doc().unwrap();
+    assert_eq!(ids(&r).len(), 4);
+    for id in ids(&r) {
+        let n = st.doc.node(id).unwrap();
+        assert!(matches!(n.kind, vectorcraft_doc::NodeKind::Path { .. }), "a plain path");
+        assert_eq!(n.appearance.stroke_width(), 2.0);
+        assert!(n.appearance.stroke().unwrap().dash.is_none());
+    }
+    assert!(st.doc.node(c).is_none_or(|n| n.appearance.stroke().is_none()), "the compound path's dashes are gone from it");
+}
+
+#[test]
+fn expand_dashes_refuses_without_dashes_and_past_the_limit() {
+    let mut s = session();
+    let l = line(&mut s, &[(0.0, 0.0), (1e5, 0.0)], false);
+    refuses(&mut s, "addon.pathtools.expandDashes", &[json!({})]);
+    select(&mut s, &[l]);
+    refuses(&mut s, "addon.pathtools.expandDashes", &[json!({}), json!({"ids": "x"}), json!({"zzz": 1})]);
+    // 125000 dashes refused; 1000 are fine.
+    s.execute("stroke.set", &json!({"dash": [0.4, 0.4]})).unwrap();
+    refuses(&mut s, "addon.pathtools.expandDashes", &[json!({})]);
+    s.execute("stroke.set", &json!({"dash": [50, 50]})).unwrap();
+    assert_eq!(s.execute("addon.pathtools.expandDashes", &json!({})).unwrap()["dashes"], json!(1000));
 }

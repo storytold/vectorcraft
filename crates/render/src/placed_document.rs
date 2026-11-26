@@ -6,14 +6,18 @@
 //!
 //! On screen ([`RenderOptions::progressive_placed`]): a placed document can't be edited, so what
 //! it shows is cached as a bitmap per file and zoom step (a power of two, in device pixels per
-//! point), shared by every object showing that file. A bitmap not made yet is made on a
+//! point), shared by every object showing that file. Images inside it whose pixels can't be
+//! decoded are drawn as crossed boxes in the bitmap when the frame marks them
+//! ([`RenderOptions::mark_undecoded_images`]), and the bitmaps with and without marks are kept
+//! apart. A bitmap not made yet is made on a
 //! background worker while the frame shows another step's bitmap, or a light placeholder;
 //! [`generation`] changes when one is ready, [`made_between`] says for which files, and [`busy`]
 //! says whether any is coming, so the screen can draw again where those files show
 //! ([`crate::placed_area`]). Bitmaps drawn since a frame began are not dropped to make room for
 //! the ones it asks for, up to [`MAX_BYTES`], and a bitmap that can't be made is not asked for
 //! again. Past [`MAX_SIDE`] pixels, past [`MAX_BYTES`], and in outline, proofing and ink frames,
-//! it is drawn exactly.
+//! it is drawn exactly. An outline frame draws only its box, crossed from corner to corner, unless
+//! Document Setup → Show Images in Outline Mode is on.
 //!
 //! A document opened with only its placed documents' previews ([`ImageBlob::is_proxy`]) shows them
 //! up to their resolution; past it the file is read again in the background
@@ -45,8 +49,9 @@ const MAX_BYTES: usize = 4 * BUDGET;
 /// The smallest zoom step (device pixels per point).
 const MIN_STEP: f64 = 1.0 / 64.0;
 
-/// A bitmap's identity: the file shown (its key) and the zoom step's bits.
-type BitmapKey = (String, u64);
+/// A bitmap's identity: the file shown (its key), the zoom step's bits, and whether images whose
+/// pixels can't be decoded are marked ([`crate::RenderOptions::mark_undecoded_images`]).
+type BitmapKey = (String, u64, bool);
 
 struct Bitmap {
     pm: Arc<Pixmap>,
@@ -130,10 +135,19 @@ pub(crate) fn scheduled(key: &str) -> usize {
     lock(&SCHEDULED).get(key).copied().unwrap_or(0)
 }
 
-/// Mark the bitmap of file `key` at zoom `step` as not kept past [`MAX_BYTES`].
+/// Mark the bitmaps of file `key` at zoom `step`, with and without marks on undecoded images, as
+/// not kept past [`MAX_BYTES`].
 #[cfg(test)]
 pub(crate) fn mark_unkept(key: &str, step: f64) {
-    lock(&UNKEPT).insert((key.to_string(), step.to_bits()));
+    for mark in [false, true] {
+        lock(&UNKEPT).insert((key.to_string(), step.to_bits(), mark));
+    }
+}
+
+/// `object`'s file (`blob`) as a bitmap of `step` device pixels per point, made here and now.
+#[cfg(test)]
+pub(crate) fn bitmap(object: &PlacedDocument, blob: &ImageBlob, step: f64, mark_undecoded_images: bool) -> Option<Pixmap> {
+    make(&mut Renderer::new(), object, blob, step, mark_undecoded_images)
 }
 
 /// The zoom step for `scale` device pixels per point: the power of two at or above it.
@@ -150,11 +164,12 @@ impl Bitmaps {
         Some(b.pm.clone())
     }
 
-    /// The bitmap of another step of the same file, the nearest to `step`.
-    fn nearest(&self, key: &str, step: f64) -> Option<(Arc<Pixmap>, f64)> {
+    /// The bitmap of another step of the same file, with the same marks on undecoded images, the
+    /// nearest to `step`.
+    fn nearest(&self, key: &str, step: f64, mark: bool) -> Option<(Arc<Pixmap>, f64)> {
         self.map
             .iter()
-            .filter(|((k, _), _)| k == key)
+            .filter(|((k, _, m), _)| k == key && *m == mark)
             .min_by(|a, b| (a.1.step / step).log2().abs().total_cmp(&(b.1.step / step).log2().abs()))
             .map(|(_, b)| (b.pm.clone(), b.step))
     }
@@ -245,14 +260,30 @@ fn depth() -> usize {
 /// Render `art` of a placed document's file (`doc`, its resources) into `w`×`h` transparent
 /// pixels through `view`, the placed documents inside it one level deeper.
 pub fn render_inside(r: &mut Renderer, doc: &vectorcraft_doc::Document, art: &Arc<Node>, w: u16, h: u16, view: Affine) -> Option<crate::Rendered> {
+    render_inside_marked(r, doc, art, w, h, view, false)
+}
+
+/// [`render_inside`], drawing images whose pixels can't be decoded as crossed boxes when
+/// `mark_undecoded_images` is set ([`crate::RenderOptions::mark_undecoded_images`]).
+fn render_inside_marked(
+    r: &mut Renderer,
+    doc: &vectorcraft_doc::Document,
+    art: &Arc<Node>,
+    w: u16,
+    h: u16,
+    view: Affine,
+    mark_undecoded_images: bool,
+) -> Option<crate::Rendered> {
     let _inside = Inside::enter();
-    r.render_node(doc, art, w, h, view)
+    let opts = crate::RenderOptions { mark_undecoded_images, ..Default::default() };
+    r.render_node_with(doc, art, w, h, view, &opts)
 }
 
 /// `object`'s file (`blob`) as a bitmap of `step` device pixels per point of its box: from its
 /// preview when that is all there is and is fine enough, else from the file (read again when
-/// needed; the preview when it can't be).
-fn make(r: &mut Renderer, object: &PlacedDocument, blob: &ImageBlob, step: f64) -> Option<Pixmap> {
+/// needed; the preview when it can't be). Images whose pixels can't be decoded are drawn as
+/// crossed boxes when `mark_undecoded_images` is set.
+fn make(r: &mut Renderer, object: &PlacedDocument, blob: &ImageBlob, step: f64, mark_undecoded_images: bool) -> Option<Pixmap> {
     let (w, h) = (pixels(object.width * step), pixels(object.height * step));
     let preview = if blob.is_proxy() { Some(blob.bytes.clone()) } else { blob.proxy.clone() };
     let full = match blob.is_proxy() {
@@ -265,7 +296,7 @@ fn make(r: &mut Renderer, object: &PlacedDocument, blob: &ImageBlob, step: f64) 
     let f = e.frame;
     let (sx, sy) = (w as f64 / f.width(), h as f64 / f.height());
     let view = Affine::scale_non_uniform(sx, sy) * Affine::translate((-f.x0, -f.y0));
-    let img = render_inside(r, &e.doc, &e.art, w, h, view)?;
+    let img = render_inside_marked(r, &e.doc, &e.art, w, h, view, mark_undecoded_images)?;
     let data = img.pixels.as_chunks::<4>().0.iter().map(|&[r, g, b, a]| vello_cpu::color::PremulRgba8 { r, g, b, a }).collect();
     Some(Pixmap::from_parts(data, w, h))
 }
@@ -281,7 +312,7 @@ fn pixels(v: f64) -> u16 {
 fn run(r: &mut Renderer, mut job: Job) {
     let scope = job.scope.take();
     let mut body = || {
-        match make(r, &job.object, &job.blob, job.step) {
+        match make(r, &job.object, &job.blob, job.step, job.key.2) {
             Some(pm) => {
                 if !lock(&BITMAPS).insert(job.key.clone(), pm, job.step, job.keep, (BUDGET, MAX_BYTES)) {
                     lock(&UNKEPT).insert(job.key.clone());
@@ -360,28 +391,37 @@ fn schedule(job: Job) {
     run(&mut Renderer::new(), job);
 }
 
+/// The file `p` shows (its bytes `blob`) read as art, and kept for
+/// [`vectorcraft_doc::placed_document::read_cached`]: from its bytes stored, read again already,
+/// or (inside another placed document, while not too deep) read again now.
+fn read_placed(p: &PlacedDocument, blob: &ImageBlob) -> Option<Arc<vectorcraft_doc::placed_document::ReadDocument>> {
+    let full = match depth() {
+        0 => vectorcraft_doc::placed_document::full_bytes_cached(p, blob),
+        d if d < MAX_DEPTH => vectorcraft_doc::placed_document::full_bytes(p, blob),
+        _ => None,
+    };
+    full.and_then(|bytes| vectorcraft_doc::placed_document::read(p, &bytes))
+}
+
 /// The mean scale of `a`.
 fn mean_scale(a: Affine) -> f64 {
     a.determinant().abs().sqrt()
 }
 
 impl Renderer {
-    /// Draw placed document `p` in frame `f`: from a cached bitmap on screen, else exactly.
+    /// Draw placed document `p` in frame `f`: from a cached bitmap on screen, else exactly; in
+    /// Outline mode without Document Setup → Show Images in Outline Mode, its box crossed from
+    /// corner to corner ([`Self::draw_crossed_box`]) and none of its art.
     pub(crate) fn draw_placed(&mut self, ctx: &mut RenderContext, f: &Frame, p: &PlacedDocument) {
+        if self.crosses_placed(f) {
+            return self.draw_crossed_placed(ctx, f, p);
+        }
         let plain = f.ink == Ink::Display && !f.opts.outline && f.opts.proof.is_none() && !f.opts.overprint_preview;
         if f.opts.progressive_placed && plain && depth() == 0 && self.draw_placed_bitmap(ctx, f, p) {
             return;
         }
         let Some(blob) = f.doc.images.get(&p.key) else { return };
-        // The file's bytes: stored, read again already, or (inside another placed document, while
-        // not too deep) read again now.
-        let full = match depth() {
-            0 => vectorcraft_doc::placed_document::full_bytes_cached(p, blob),
-            d if d < MAX_DEPTH => vectorcraft_doc::placed_document::full_bytes(p, blob),
-            _ => None,
-        };
-        let read = full.and_then(|bytes| vectorcraft_doc::placed_document::read(p, &bytes));
-        let Some(e) = read else {
+        let Some(e) = read_placed(p, blob) else {
             // Only the preview: drawn scaled into the box.
             if blob.is_proxy()
                 && let Some(im) = p.preview_image(&blob.bytes)
@@ -395,12 +435,33 @@ impl Renderer {
         if !k.is_finite() || k <= 1e-12 {
             return;
         }
-        // The art in its own coordinates, with its own resources.
+        // The art in its own coordinates, with its own resources (its composite fonts included, and
+        // none of the host document's).
+        let _lent = vectorcraft_text::FontDb::global().lend_document_composite_fonts(&e.doc.composite_fonts);
         let symbols = e.doc.symbol_boxes().quick();
         let visible = m.inverse().transform_rect_bbox(f.visible);
-        let inner = Frame { doc: &e.doc, symbols: &symbols, view: f.view * m, visible, px: f.px / k, ..*f };
+        let inner = Frame { doc: &e.doc, symbols: &symbols, view: f.view * m, visible, px: f.px / k, output: f.output * m, ..*f };
         let _inside = Inside::enter();
+        // Its art follows this document's Show Images in Outline Mode, not the file's.
+        let host = self.host_outline_images.replace(self.shows_outline_images(f));
         self.draw_arc(ctx, &inner, &e.art);
+        self.host_outline_images = host;
+    }
+
+    /// Draw placed document `p` as its box crossed from corner to corner ([`Self::crosses_placed`]).
+    /// Its file is still read, as when its art is drawn: the art its effects and its group's effects
+    /// make comes from the read kept.
+    pub(crate) fn draw_crossed_placed(&mut self, ctx: &mut RenderContext, f: &Frame, p: &PlacedDocument) {
+        if let Some(blob) = f.doc.images.get(&p.key) {
+            let _ = read_placed(p, blob);
+        }
+        self.draw_crossed_box(ctx, f, p.corners());
+    }
+
+    /// Whether `f` draws a placed document as its box crossed from corner to corner and none of
+    /// its art: in Outline mode without Show Images in Outline Mode ([`Self::shows_outline_images`]).
+    pub(crate) fn crosses_placed(&self, f: &Frame) -> bool {
+        f.opts.outline && !self.shows_outline_images(f)
     }
 
     /// Draw `p` from its bitmap at this zoom step, or (while that is made, or when it can't be)
@@ -413,7 +474,7 @@ impl Renderer {
             return false;
         }
         let Some(blob) = f.doc.images.get(&p.key).cloned() else { return true };
-        let key = (p.key.clone(), step.to_bits());
+        let key = (p.key.clone(), step.to_bits(), f.opts.mark_undecoded_images);
         // Not kept past [`MAX_BYTES`]: drawn exactly.
         if lock(&UNKEPT).contains(&key) {
             return false;
@@ -423,7 +484,7 @@ impl Renderer {
             // The clock when this frame first drew a placed document's bitmap.
             let keep = *self.placed_frame.get_or_insert(b.clock);
             let found = b.get(&key);
-            let nearest = if found.is_none() { b.nearest(&p.key, step) } else { None };
+            let nearest = if found.is_none() { b.nearest(&p.key, step, f.opts.mark_undecoded_images) } else { None };
             (found, nearest, keep)
         };
         let shown = match found {
@@ -434,7 +495,7 @@ impl Renderer {
                 schedule(Job { key, object: p.clone(), blob, step, keep, scope: SCOPE_CAPTURE.get().map(|capture| capture()) });
                 // Made here and now (no threads) or meanwhile another step's.
                 let mut b = lock(&BITMAPS);
-                b.get(&(p.key.clone(), step.to_bits())).or(nearest.map(|n| n.0))
+                b.get(&(p.key.clone(), step.to_bits(), f.opts.mark_undecoded_images)).or(nearest.map(|n| n.0))
             }
         };
         let rect = Rect::new(0.0, 0.0, p.width, p.height);
@@ -480,7 +541,7 @@ mod tests {
         let mut b = Bitmaps::default();
         // 400 bytes each: a budget of 1,000 bytes and at most 2,000.
         let limits = (1000, 2000);
-        let key = |name: &str| (name.to_string(), 1f64.to_bits());
+        let key = |name: &str| (name.to_string(), 1f64.to_bits(), false);
         for name in ["a", "b", "c"] {
             assert!(b.insert(key(name), Pixmap::new(10, 10), 1.0, 0, limits));
         }
@@ -489,7 +550,7 @@ mod tests {
         let frame = b.clock;
         assert!(b.get(&key("a")).is_some());
         assert!(b.insert(key("d"), Pixmap::new(10, 10), 1.0, frame, limits));
-        let mut kept: Vec<&str> = b.map.keys().map(|(name, _)| name.as_str()).collect();
+        let mut kept: Vec<&str> = b.map.keys().map(|(name, _, _)| name.as_str()).collect();
         kept.sort_unstable();
         assert_eq!((kept, b.bytes), (vec!["a", "d"], 800), "b and c, not drawn since, are dropped");
         for name in ["e", "f", "g"] {
@@ -498,5 +559,18 @@ mod tests {
         assert_eq!(b.bytes, 2000);
         assert!(!b.insert(key("h"), Pixmap::new(10, 10), 1.0, frame, limits), "past the most: not kept");
         assert!(!b.map.contains_key(&key("h")) && b.bytes == 2000);
+    }
+
+    /// While a bitmap is made, another step's bitmap stands in only when it has the same marks on
+    /// undecoded images.
+    #[test]
+    fn a_stand_in_bitmap_has_the_same_marks() {
+        let mut b = Bitmaps::default();
+        let limits = (BUDGET, MAX_BYTES);
+        assert!(b.insert(("a".into(), 1f64.to_bits(), false), Pixmap::new(10, 10), 1.0, 0, limits));
+        assert!(b.insert(("a".into(), 4f64.to_bits(), true), Pixmap::new(40, 40), 4.0, 0, limits));
+        assert_eq!(b.nearest("a", 2.0, false).map(|n| n.1), Some(1.0));
+        assert_eq!(b.nearest("a", 2.0, true).map(|n| n.1), Some(4.0));
+        assert!(b.nearest("b", 2.0, false).is_none());
     }
 }

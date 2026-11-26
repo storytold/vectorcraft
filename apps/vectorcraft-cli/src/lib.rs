@@ -1,14 +1,15 @@
-//! `vectorcraft-cli`: VectorCraft from the command line (RFC-0012). `run` is the whole program, so
+//! `vectorcraft-cli`: VectorCraft from the command line (RFC-0018). `run` is the whole program, so
 //! it can be tested in-process as well as through the binary.
 //!
 //! ```text
-//! vectorcraft-cli mcp [--connect ADDR | --headless] [--automation-read-root DIR]... [--automation-write-root DIR]...
-//! vectorcraft-cli run [--in FILE] [--cmd ID [--params JSON] | --commands FILE|-]... [--export FILE]... [--scale N]
+//! vectorcraft-cli --safe-mode SUBCOMMAND ...
+//! vectorcraft-cli mcp [--connect ADDR | --headless] [--automation-read-root DIR]... [--automation-write-root DIR]... [--allow-plugin-grants]
+//! vectorcraft-cli run [--in FILE] [--cmd ID [--params JSON] | --commands FILE|-]... [--export FILE]... [--scale N] [--ppi N] [--allow-plugin-grants]
 //! vectorcraft-cli commands
-//! vectorcraft-cli convert IN OUT [--scale N] [--artboard I | --range R] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--preserve-editing] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
+//! vectorcraft-cli convert IN OUT [--scale N] [--ppi N] [--artboard I | --range R] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--legacy-name-encoding ENC] [--preserve-editing] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
 //! vectorcraft-cli info FILE
 //! vectorcraft-cli bench FILE [--size WxH] [--iters N]
-//! vectorcraft-cli perf [--paths N] [--deep]
+//! vectorcraft-cli perf [--paths N] [--deep] [--native-io [--artboards 1..4]]
 //! ```
 // Denied, not forbidden: the font listers shared with the desktop app allow it for their
 // DirectWrite (Windows) and CoreText (macOS) calls, and nothing else may.
@@ -36,6 +37,11 @@ mod prefs_dir;
 #[path = "../../vectorcraft/src/system_fonts.rs"]
 mod system_fonts;
 
+/// The desktop app's affinity-mask reader, shared: renders start workers only for usable cores.
+#[cfg(windows)]
+#[path = "../../vectorcraft/src/windows_cores.rs"]
+mod windows_cores;
+
 pub use cli::command;
 use cli::{Cli, Command};
 use error::CliError;
@@ -43,6 +49,9 @@ use error::CliError;
 /// Registers the fonts that font services load and the Fonts folder of the preferences (#579). Call
 /// it once, before any font lookup.
 pub fn init() {
+    // Before the first render: the cores the process may run on.
+    #[cfg(windows)]
+    windows_cores::install();
     #[cfg(windows)]
     system_fonts::install();
     #[cfg(target_os = "macos")]
@@ -62,7 +71,7 @@ where
 {
     let args: Vec<OsString> = args.into_iter().map(Into::into).collect();
     // Help and `--version` come back as errors too, for `out` with exit 0: nothing runs.
-    let Cli { command } = match cli::parse(&args) {
+    let Cli { safe_mode, command } = match cli::parse(&args) {
         Ok(cli) => cli,
         Err(e) => {
             let to: &mut dyn Write = if e.use_stderr() { err } else { out };
@@ -71,8 +80,12 @@ where
             return e.exit_code();
         }
     };
+    // Before any subcommand attaches the plug-in folder.
+    if safe_mode {
+        vectorcraft_engine::cmd::plugin::start_in_safe_mode();
+    }
     let result = match &command {
-        Command::Mcp(a) => mcp::mcp(a, err),
+        Command::Mcp(a) => mcp::mcp(a, safe_mode, err),
         Command::Run(a) => batch::run(a, out),
         Command::Commands => inspect::commands(out),
         Command::Convert(a) => convert::convert(a, out),

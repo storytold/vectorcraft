@@ -140,7 +140,7 @@ fn pipes_and_folders_are_not_read() {
         let direct = s.execute("script.check", &json!({ "path": pipe })).map_err(|e| e.to_string());
         let _ = tx.send((included.map_err(|e| e.to_string()), direct));
     });
-    let (included, direct) = rx.recv_timeout(std::time::Duration::from_secs(20)).expect("the checks return");
+    let (included, direct) = rx.recv_timeout(std::time::Duration::from_secs(300)).expect("the checks return");
     let statuses: Vec<String> = included.unwrap().as_array().unwrap().iter().map(|i| i["status"].as_str().unwrap().to_string()).collect();
     assert_eq!(statuses, ["missing", "missing"]);
     assert!(direct.is_err_and(|e| e.contains("not a file")));

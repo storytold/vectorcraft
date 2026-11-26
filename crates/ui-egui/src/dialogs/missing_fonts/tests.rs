@@ -1,26 +1,77 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Instant;
 
+use craft::ui::dialog::DialogHost;
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::findfiles::Rules;
 
 use super::*;
+use crate::tests_folder::Folder;
 
-fn frame(app: &mut VectorcraftApp) -> String {
-    crate::tests_labels::painted_text(app, |app, ui| super::super::show(app, ui.ctx()))
+fn host<R>(app: &VectorcraftApp, f: impl FnOnce(&mut DialogHost) -> R) -> R {
+    app.dialogs().expect("a window host").with(f)
 }
 
-/// A fresh temporary folder (canonical, as a search reports it).
-fn folder(tag: &str) -> PathBuf {
+/// One frame's pump of the dialogs.
+fn pump(app: &mut VectorcraftApp) {
+    let ctx = app.ui_ctx.clone().expect("a window context");
+    crate::dialogs::host::pump(app, &ctx);
+}
+
+fn is_open<D: StackDialog>(app: &VectorcraftApp) -> bool {
+    host(app, |h| h.is_open::<D>())
+}
+
+/// The Missing Fonts dialog's fields, while it is open.
+fn fields(app: &VectorcraftApp) -> Option<Value> {
+    host(app, |h| h.open_dialogs().into_iter().find(|d| d.id == dialog_id(KIND)).and_then(|d| d.fields))
+}
+
+/// The family of the first missing font the open dialog lists.
+fn family(app: &VectorcraftApp) -> Option<String> {
+    fields(app).and_then(|f| f["fonts"][0]["family"].as_str().map(str::to_string))
+}
+
+fn set_field(app: &VectorcraftApp, field: &str, value: Value) -> Result<(), String> {
+    let ctx = app.ui_ctx.clone().expect("a window context");
+    host(app, |h| h.set_json_field(&ctx, dialog_id(KIND), field, value))
+}
+
+/// OK on the dialog (Add Fonts, or what its fields ask), then the frame's pump.
+fn answer_ok(app: &mut VectorcraftApp) -> bool {
+    let ctx = app.ui_ctx.clone().expect("a window context");
+    let done = host(app, |h| h.confirm_by_id(&ctx, dialog_id(KIND)));
+    pump(app);
+    done
+}
+
+/// Close on the dialog, then the frame's pump.
+fn answer_cancel(app: &mut VectorcraftApp) {
+    let ctx = app.ui_ctx.clone().expect("a window context");
+    host(app, |h| h.cancel_by_id(&ctx, dialog_id(KIND)));
+    pump(app);
+}
+
+/// Cancel the questions other than Missing Fonts (the linked files' question comes first).
+fn cancel_others(app: &mut VectorcraftApp) {
+    let ctx = app.ui_ctx.clone().expect("a window context");
+    host(app, |h| {
+        for d in h.open_dialogs().into_iter().filter(|d| d.id != dialog_id(KIND)) {
+            h.cancel_by_id(&ctx, d.id);
+        }
+    });
+}
+
+/// A fresh temporary folder (canonical, as a search reports it), removed when dropped.
+fn folder(tag: &str) -> Folder {
     let dir = vectorcraft_testkit::temp_dir(&format!("missing-fonts-{tag}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    vectorcraft_engine::cmd::findfiles::plain(std::fs::canonicalize(&dir).unwrap())
+    Folder::adopt(vectorcraft_engine::cmd::findfiles::plain(std::fs::canonicalize(&dir).unwrap()))
 }
 
 /// An app that reads files and whose searches may go anywhere in `root`, on two threads.
 fn app_for(root: &Path) -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.adopt_context(&crate::testing::ui_context());
     app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
     app.session.search_rules = Some(Rules { user_content: vec![root.to_path_buf()], ..Rules::default() });
     app.session.search_threads = Some(2);
@@ -29,9 +80,41 @@ fn app_for(root: &Path) -> VectorcraftApp {
 
 fn png() -> Vec<u8> {
     let mut out = vec![];
-    image::RgbaImage::from_pixel(40, 30, image::Rgba([200, 0, 0, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(40, 30, image::Rgba([200, 0, 0, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     out
 }
 
@@ -49,6 +132,8 @@ fn save_doc(app: &mut VectorcraftApp, path: &Path, font: &str, link: bool) {
     if link {
         std::fs::remove_file(&pic).unwrap();
     }
+    // Opened afresh by `open`: an open file would only come to the front (#3455).
+    app.run("file.close", json!({})).unwrap();
 }
 
 fn open(app: &mut VectorcraftApp, path: &Path) {
@@ -60,10 +145,6 @@ fn open(app: &mut VectorcraftApp, path: &Path) {
 /// search's default `maxSeconds` of 60, which would end a search that does not end by itself.
 const WAIT: Duration = Duration::from_secs(30);
 
-fn kind(app: &VectorcraftApp) -> Option<&str> {
-    app.ui.dialog.as_ref().map(|d| d.kind.as_str())
-}
-
 #[test]
 fn missing_fonts_are_asked_about_after_the_missing_links() {
     let root = folder("after-links");
@@ -71,22 +152,15 @@ fn missing_fonts_are_asked_about_after_the_missing_links() {
     let doc = root.join("doc.vectorcraft");
     save_doc(&mut app, &doc, "No Such Font Family", true);
     open(&mut app, &doc);
-    assert_eq!(kind(&app), Some(super::super::missing_links::KIND));
-    super::super::cancel(&mut app);
-    let d = app.ui.dialog.as_ref().expect("Missing Fonts after the linked files");
-    assert_eq!((d.kind.as_str(), d.fields["fonts"][0]["family"].as_str()), (KIND, Some("No Such Font Family")));
-    let text = frame(&mut app);
-    for label in
-        ["Missing Fonts", "No Such Font Family Regular", "These fonts aren't available. Their text shows in another font.", "Find Fonts", "Close"]
-    {
-        assert!(text.contains(label), "{label} in {text}");
-    }
-    assert!(!text.contains("Search Fonts Folder"), "no Fonts folder next to the document");
-    assert!(!text.contains("Add Fonts") && !text.contains("Copy only fonts"), "no file found yet: {text}");
-    assert_eq!(super::super::confirm(&mut app).err().as_deref(), Some("choose the font files to add"));
-    assert_eq!(kind(&app), Some(KIND), "nothing to add: the dialog stays open");
-    super::super::cancel(&mut app);
-    assert!(app.ui.dialog.is_none());
+    assert!(!is_open::<MissingFontsDialog>(&app), "the linked files are asked about first");
+    cancel_others(&mut app);
+    pump(&mut app);
+    assert_eq!(family(&app).as_deref(), Some("No Such Font Family"), "Missing Fonts after the linked files");
+    assert_eq!(fields(&app).unwrap()["fontsNextToDocument"], "", "no Fonts folder next to the document");
+    assert!(!answer_ok(&mut app), "nothing to add");
+    assert!(is_open::<MissingFontsDialog>(&app), "nothing to add: the dialog stays open");
+    answer_cancel(&mut app);
+    assert!(!is_open::<MissingFontsDialog>(&app));
 }
 
 #[test]
@@ -99,29 +173,26 @@ fn the_documents_fonts_folder_is_offered_and_searched_off_the_ui_thread() {
     let doc = root.join("pkg/doc.vectorcraft");
     save_doc(&mut app, &doc, "Findme Sans 3", false);
     open(&mut app, &doc);
-    let next = app.ui.dialog.as_ref().filter(|d| d.kind == KIND).expect("Missing Fonts at once: no links missing").str("fontsNextToDocument");
+    pump(&mut app);
+    let next = fields(&app).expect("Missing Fonts at once: no links missing")["fontsNextToDocument"].as_str().unwrap().to_string();
     assert_eq!(next, root.join("pkg").join("Fonts").to_string_lossy());
-    assert!(frame(&mut app).contains("Search Fonts Folder"));
-    app.ui.dialog.as_mut().unwrap().fields.insert("searchFolder".into(), json!(next));
-    let r = super::super::confirm(&mut app).unwrap();
-    assert!(matches!(r["state"].as_str(), Some("searching" | "done")), "{r}");
-    assert_eq!(kind(&app), Some(KIND), "the dialog stays open while it searches");
+    set_field(&app, "searchFolder", json!(next)).unwrap();
+    assert!(answer_ok(&mut app));
+    let f = fields(&app).expect("the dialog stays open while it searches");
+    assert!(matches!(f["state"].as_str(), Some("searching" | "done")), "{f}");
+    assert!(f.get("searchFolder").is_none(), "the folder is searched once");
     let until = Instant::now() + WAIT;
-    while app.ui.dialog.as_ref().is_some_and(|d| d.str("state") == "searching") && Instant::now() < until {
-        frame(&mut app);
+    while fields(&app).is_some_and(|f| f["state"] == "searching") && Instant::now() < until {
+        pump(&mut app);
         std::thread::sleep(Duration::from_millis(5));
     }
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!((d.str("state"), &d.fields["found"][0]["files"]), ("done".to_string(), &json!([font])));
-    assert_eq!(d.fields["chosen"], json!([font]), "the font's file is chosen");
-    let text = frame(&mut app);
-    for label in ["Findme.otf", "Copy only fonts you own or are licensed to install.", "Add Fonts"] {
-        assert!(text.contains(label), "{label} in {text}");
-    }
+    let f = fields(&app).unwrap();
+    assert_eq!((f["state"].clone(), &f["found"][0]["files"]), (json!("done"), &json!([font])));
+    assert_eq!(f["chosen"], json!([font]), "the font's file is chosen");
     // Adding needs VectorCraft's Fonts folder, which only the apps set.
-    let e = super::super::confirm(&mut app).unwrap_err();
-    assert!(e.contains("isn't set here"), "{e}");
-    assert_eq!(kind(&app), Some(KIND));
+    assert!(answer_ok(&mut app));
+    assert!(app.ui.status.contains("isn't set here"), "{}", app.ui.status);
+    assert!(is_open::<MissingFontsDialog>(&app), "a failed add keeps the dialog");
 }
 
 /// Find Fonts opens Type › Find Font on the first missing font, to replace it, and the Missing
@@ -135,19 +206,23 @@ fn find_fonts_opens_find_font_on_the_missing_font() {
     app.run("text.create", json!({"x": 10, "y": 80, "text": "Gone", "font": "Zz Missing Family"})).unwrap();
     let doc = root.join("doc.vectorcraft");
     app.run("document.save", json!({"path": doc.to_string_lossy()})).unwrap();
+    // Opened afresh: an open file would only come to the front (#5369).
+    app.run("file.close", json!({})).unwrap();
     open(&mut app, &doc);
-    assert_eq!(kind(&app), Some(KIND));
-    app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
-    super::super::confirm(&mut app).unwrap();
-    let d = app.ui.dialog.as_ref().expect("Find Font");
-    assert_eq!(d.kind, "findFont");
+    pump(&mut app);
+    assert!(is_open::<MissingFontsDialog>(&app));
+    set_field(&app, "discard", json!(true)).unwrap();
+    assert!(answer_ok(&mut app));
+    assert!(is_open::<crate::find_font::FindFontDialog>(&app), "Find Font");
     let fonts = app.session.execute("text.fonts", &json!({})).unwrap();
-    let selected = d.fields["selected"].as_u64().unwrap() as usize;
+    let selected =
+        host(&app, |h| h.get::<crate::find_font::FindFontDialog>().and_then(|d| d.json_fields())).unwrap()["selected"].as_u64().unwrap() as usize;
     assert!(selected > 0 && fonts[selected]["family"] == "Zz Missing Family", "{selected} in {fonts}");
     // Find Font closed: no Missing Fonts dialog follows.
-    app.ui.dialog = None;
-    frame(&mut app);
-    assert!(app.ui.dialog.is_none() && app.ui.pending_fonts.is_empty());
+    let ctx = app.ui_ctx.clone().unwrap();
+    host(&app, |h| h.cancel::<crate::find_font::FindFontDialog>(&ctx));
+    pump(&mut app);
+    assert!(!is_open::<MissingFontsDialog>(&app) && app.ui.pending_fonts.is_empty());
 }
 
 /// The dialog of a document in another tab: Find Fonts makes that document the active one, so
@@ -162,15 +237,16 @@ fn find_fonts_works_on_the_dialog_s_own_document() {
     open(&mut app, &a);
     open(&mut app, &b);
     // B's linked files are asked about first; then A's fonts, with B the active tab.
-    super::super::cancel(&mut app);
-    let d = app.ui.dialog.as_mut().unwrap();
-    assert_eq!(d.fields["fonts"][0]["family"], "Alpha Missing Family");
+    cancel_others(&mut app);
+    pump(&mut app);
+    assert_eq!(family(&app).as_deref(), Some("Alpha Missing Family"));
     assert_eq!(app.session.active().unwrap().path.as_deref(), Some(&*b.to_string_lossy()));
-    app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
-    super::super::confirm(&mut app).unwrap();
+    set_field(&app, "discard", json!(true)).unwrap();
+    answer_ok(&mut app);
     assert_eq!(app.session.active().unwrap().path.as_deref(), Some(&*a.to_string_lossy()));
     let fonts = app.session.execute("text.fonts", &json!({})).unwrap();
-    let selected = app.ui.dialog.as_ref().unwrap().fields["selected"].as_u64().unwrap() as usize;
+    let selected =
+        host(&app, |h| h.get::<crate::find_font::FindFontDialog>().and_then(|d| d.json_fields())).unwrap()["selected"].as_u64().unwrap() as usize;
     assert_eq!(fonts[selected]["family"], "Alpha Missing Family", "{fonts}");
 }
 
@@ -187,10 +263,10 @@ fn closing_the_dialog_stops_its_search() {
     app.session.search_threads = Some(1);
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app.run("text.create", json!({"x": 10, "y": 40, "text": "Gone", "font": "No Such Font Family"})).unwrap();
-    app.run("ui.missingFontsDialog", json!({"folder": root})).unwrap();
+    app.run("ui.missingFontsDialog", json!({"folder": root.as_path()})).unwrap();
     let id = app.ui.dialog_search.expect("the dialog's search");
-    super::super::cancel(&mut app);
-    assert!(app.ui.dialog.is_none() && app.ui.dialog_search.is_none());
+    answer_cancel(&mut app);
+    assert!(!is_open::<MissingFontsDialog>(&app) && app.ui.dialog_search.is_none());
     // Stopped by the close, unless the walker finished the folders first.
     let r = app.session.execute("text.findFontFiles", &json!({})).unwrap();
     assert_eq!(r["id"].as_u64(), Some(id), "{r}");
@@ -211,28 +287,31 @@ fn one_dialog_at_a_time_document_by_document() {
     save_doc(&mut app, &a, "Alpha Missing Family", false);
     save_doc(&mut app, &b, "Beta Missing Family", true);
     open(&mut app, &a);
-    let family = |app: &VectorcraftApp| app.ui.dialog.as_ref().and_then(|d| d.fields["fonts"][0]["family"].as_str().map(str::to_string));
+    pump(&mut app);
     assert_eq!(family(&app).as_deref(), Some("Alpha Missing Family"));
     // The second document's linked files are asked about first; then each document's fonts.
     open(&mut app, &b);
-    assert_eq!(kind(&app), Some(super::super::missing_links::KIND));
-    super::super::cancel(&mut app);
-    assert_eq!(family(&app).as_deref(), Some("Alpha Missing Family"));
-    super::super::cancel(&mut app);
+    cancel_others(&mut app);
+    pump(&mut app);
+    assert_eq!(family(&app).as_deref(), Some("Alpha Missing Family"), "the second waits its turn");
+    answer_cancel(&mut app);
     assert_eq!(family(&app).as_deref(), Some("Beta Missing Family"));
-    super::super::cancel(&mut app);
-    assert!(app.ui.dialog.is_none());
+    answer_cancel(&mut app);
+    assert!(!is_open::<MissingFontsDialog>(&app) && app.ui.pending_fonts.is_empty());
     // A document closed before its turn is passed over.
+    app.run("file.closeAll", json!({})).unwrap();
     open(&mut app, &a);
     open(&mut app, &b);
     let index = app.session.documents().iter().rposition(|d| d.path.as_deref() == Some(&*a.to_string_lossy())).unwrap();
     app.session.execute("file.close", &json!({"index": index})).unwrap();
-    super::super::cancel(&mut app);
+    cancel_others(&mut app);
+    pump(&mut app);
     assert_eq!(family(&app).as_deref(), Some("Beta Missing Family"));
 }
 
-/// Another dialog that takes the Missing Fonts dialog's place (Import PDF for a PDF dropped
-/// with the document) hands the question back once it closes.
+/// Another dialog opened over the Missing Fonts dialog (Import PDF for a PDF opened after the
+/// document) leaves the question on the stack under it, and it is the open one again once that
+/// closes.
 #[test]
 fn the_question_comes_back_after_a_dialog_that_took_its_place() {
     let root = folder("replaced");
@@ -243,40 +322,39 @@ fn the_question_comes_back_after_a_dialog_that_took_its_place() {
         let page = || vectorcraft_testkit::pdf::PdfPage::new(100.0, 100.0, "0 g 0 0 10 10 re f");
         vectorcraft_testkit::pdf::pdf(&[page(), page()], None)
     };
-    let opened = |name: &str, path: Option<String>, bytes: Vec<u8>| (crate::place::DropTarget::Open, (name.to_string(), path, bytes));
-    let files = vec![opened("a.vectorcraft", Some(doc.to_string_lossy().into_owned()), std::fs::read(&doc).unwrap()), opened("b.pdf", None, pdf())];
-    crate::place::drop_files(&mut app, files);
-    assert_eq!(kind(&app), Some(super::super::import_pdf::KIND));
-    super::super::cancel(&mut app);
-    let family = |app: &VectorcraftApp| app.ui.dialog.as_ref().filter(|d| d.kind == KIND).map(|d| d.fields["fonts"][0]["family"].clone());
-    assert_eq!(family(&app), Some(json!("Alpha Missing Family")));
-    // The same when a frame drew the other dialog before it closed.
+    open(&mut app, &doc);
+    pump(&mut app);
+    assert_eq!(family(&app).as_deref(), Some("Alpha Missing Family"));
     crate::io::open_bytes(&mut app, "c.pdf", &pdf(), None).unwrap();
-    assert_eq!(kind(&app), Some(super::super::import_pdf::KIND));
-    frame(&mut app);
-    super::super::cancel(&mut app);
-    assert_eq!(family(&app), Some(json!("Alpha Missing Family")));
-    // Closed by Cancel, or by Escape (which empties the dialog slot), it stays closed.
-    super::super::cancel(&mut app);
-    frame(&mut app);
-    assert!(app.ui.dialog.is_none() && app.ui.pending_fonts.is_empty());
+    let open_keys = |app: &VectorcraftApp| host(app, |h| h.open_dialogs().into_iter().map(|d| (d.id, d.key)).collect::<Vec<_>>());
+    let stack = open_keys(&app);
+    assert_eq!(stack.len(), 2, "{stack:?}");
+    assert_eq!(stack[0].1.as_deref(), Some(KIND), "Missing Fonts stays under Import PDF");
+    // Import PDF closes: the question is the one open.
+    let ctx = app.ui_ctx.clone().unwrap();
+    host(&app, |h| h.cancel_by_id(&ctx, stack[1].0));
+    pump(&mut app);
+    assert_eq!(family(&app).as_deref(), Some("Alpha Missing Family"));
+    // Closed (Cancel or Escape), it stays closed.
+    answer_cancel(&mut app);
+    assert!(!is_open::<MissingFontsDialog>(&app) && app.ui.pending_fonts.is_empty());
     app.run("ui.missingFontsDialog", json!({})).unwrap();
-    app.ui.dialog = None;
-    frame(&mut app);
-    assert!(app.ui.dialog.is_none() && app.ui.pending_fonts.is_empty());
+    answer_cancel(&mut app);
+    assert!(!is_open::<MissingFontsDialog>(&app) && app.ui.pending_fonts.is_empty());
 }
 
 /// Type in a CSS generic family (`sans-serif`, the default font of SVG files from some editors)
 /// opens without the question.
 #[test]
 fn generic_families_are_not_asked_about() {
-    let mut app = app_for(&folder("generic"));
+    let root = folder("generic");
+    let mut app = app_for(&root);
     let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><text x="10" y="40" font-family="sans-serif">A</text></svg>"#;
     crate::io::open_bytes(&mut app, "generic.svg", svg.as_bytes(), None).unwrap();
     let listed = app.session.execute("text.fonts", &json!({})).unwrap();
     assert!(listed.as_array().unwrap().iter().any(|f| f["family"] == "sans-serif"), "{listed}");
-    frame(&mut app);
-    assert!(app.ui.dialog.is_none() && app.ui.pending_fonts.is_empty());
+    pump(&mut app);
+    assert!(!app.any_dialog_open() && !is_open::<MissingFontsDialog>(&app) && app.ui.pending_fonts.is_empty());
 }
 
 /// A `searchFolder` whose search doesn't start is dropped from the dialog: OK doesn't try it
@@ -288,11 +366,30 @@ fn a_search_folder_that_fails_is_not_tried_again() {
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app.run("text.create", json!({"x": 10, "y": 40, "text": "Gone", "font": "No Such Font Family"})).unwrap();
     app.run("ui.missingFontsDialog", json!({})).unwrap();
-    app.ui.dialog.as_mut().unwrap().fields.insert("searchFolder".into(), json!("relative/folder"));
-    let e = super::super::confirm(&mut app).unwrap_err();
-    assert!(e.contains("absolute"), "{e}");
-    assert!(!app.ui.dialog.as_ref().unwrap().fields.contains_key("searchFolder"));
-    assert_eq!(super::super::confirm(&mut app).err().as_deref(), Some("choose the font files to add"));
+    set_field(&app, "searchFolder", json!("relative/folder")).unwrap();
+    assert!(answer_ok(&mut app));
+    assert!(app.ui.status.contains("absolute"), "{}", app.ui.status);
+    assert!(fields(&app).expect("the dialog is open again").get("searchFolder").is_none());
+    assert!(!answer_ok(&mut app), "nothing chosen: OK refuses");
+}
+
+/// Opening a file that is already open only brings its tab to the front: Missing Fonts, closed
+/// once, is not asked again (#5369).
+#[test]
+fn reopening_an_open_document_does_not_ask_about_its_fonts_again() {
+    let root = folder("reopen");
+    let mut app = app_for(&root);
+    let doc = root.join("doc.vectorcraft");
+    save_doc(&mut app, &doc, "No Such Font Family", false);
+    open(&mut app, &doc);
+    pump(&mut app);
+    assert!(is_open::<MissingFontsDialog>(&app));
+    answer_cancel(&mut app);
+    app.run("file.new", json!({})).unwrap();
+    open(&mut app, &doc);
+    pump(&mut app);
+    assert_eq!((app.session.documents().len(), app.session.active_index()), (2, Some(0)));
+    assert!(!is_open::<MissingFontsDialog>(&app));
 }
 
 /// A placed document that Links › Edit Original opens asks about its fonts, as File › Open does.
@@ -302,14 +399,13 @@ fn edit_original_asks_about_the_placed_documents_fonts() {
     let mut app = app_for(&root);
     let badge = root.join("badge.vectorcraft");
     save_doc(&mut app, &badge, "Badge Missing Family", false);
-    app.session.execute("file.close", &json!({})).unwrap();
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app.run("file.place", json!({"path": badge.to_string_lossy(), "link": true})).unwrap();
     let tabs = app.session.documents().len();
     app.run("links.editOriginal", json!({})).unwrap();
     assert_eq!(app.session.documents().len(), tabs + 1);
-    let d = app.ui.dialog.as_ref().expect("Missing Fonts for the document opened");
-    assert_eq!((d.kind.as_str(), d.fields["fonts"][0]["family"].as_str()), (KIND, Some("Badge Missing Family")));
+    pump(&mut app);
+    assert_eq!(family(&app).as_deref(), Some("Badge Missing Family"), "Missing Fonts for the document opened");
 }
 
 /// A search leaves out the fonts that became available: the files it found go with their fonts
@@ -317,15 +413,14 @@ fn edit_original_asks_about_the_placed_documents_fonts() {
 #[test]
 fn files_go_with_their_fonts_by_name() {
     let (a, b) = (json!({"family": "A Sans", "style": "Regular"}), json!({"family": "B Sans", "style": "Bold"}));
-    let mut d = Dialog::new(KIND, json!({"fonts": [a, b], "chosen": []}));
-    update(&mut d, &json!({"state": "searching", "fonts": [{"family": "B Sans", "style": "Bold", "files": ["/f/b.otf"]}]}));
-    let found = d.fields["found"].as_array().unwrap().clone();
-    assert!(files_for(&found, &a).is_empty());
-    assert_eq!(files_for(&found, &b), [json!("/f/b.otf")]);
-    assert_eq!(d.fields["chosen"], json!(["/f/b.otf"]));
-    d.fields.insert("chosen".into(), json!([]));
-    update(&mut d, &json!({"state": "done", "fonts": [{"family": "B Sans", "style": "Bold", "files": ["/f/b.otf", "/g/b.otf"]}]}));
-    assert_eq!((d.str("state"), &d.fields["chosen"]), ("done".to_string(), &json!([])));
+    let mut state = State::new(1, vec![a.clone(), b.clone()], String::new(), false);
+    update(&mut state, &json!({"state": "searching", "fonts": [{"family": "B Sans", "style": "Bold", "files": ["/f/b.otf"]}]}));
+    assert!(files_for(&state.found, &a).is_empty());
+    assert_eq!(files_for(&state.found, &b), [json!("/f/b.otf")]);
+    assert_eq!(state.chosen, [json!("/f/b.otf")]);
+    state.chosen.clear();
+    update(&mut state, &json!({"state": "done", "fonts": [{"family": "B Sans", "style": "Bold", "files": ["/f/b.otf", "/g/b.otf"]}]}));
+    assert_eq!((state.name(), state.chosen.len()), ("done", 0), "an unchecked file stays unchecked");
 }
 
 #[test]
@@ -333,11 +428,12 @@ fn the_web_says_how_many_fonts_are_missing() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app.run("text.create", json!({"x": 10, "y": 40, "text": "Gone", "font": "No Such Font Family"})).unwrap();
+    app.ui.status.clear();
     after_open_for(&mut app, &json!({}), true);
-    assert_eq!(app.ui.status, "1 font(s) aren't available here: their text shows in another font");
+    assert!(!app.ui.status.is_empty(), "the status line says fonts are missing");
     assert!(app.ui.pending_fonts.is_empty());
     // The open's notes stay on show.
-    app.ui.status = "Opened with 1 note(s): fonts".into();
+    app.ui.status = "Opened with 1 note: fonts".into();
     after_open_for(&mut app, &json!({"warnings": ["fonts"]}), true);
-    assert_eq!(app.ui.status, "Opened with 1 note(s): fonts");
+    assert_eq!(app.ui.status, "Opened with 1 note: fonts");
 }

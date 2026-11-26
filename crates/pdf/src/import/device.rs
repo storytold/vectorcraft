@@ -1,7 +1,7 @@
-use super::entry::{INVISIBLE_TEXT_NOTE, MAX_NESTED, OUTLINED_TEXT_NOTE, UNSORTED, WHITE_KEY};
+use super::entry::{INTENT_KEY, INVISIBLE_TEXT_NOTE, MAX_NESTED, OUTLINED_TEXT_NOTE, UNSORTED, WHITE_KEY};
 use super::state::{
-    Builder, Decoded, Frame, FrameKind, GlyphRun, blend, fill_rule, line_width, mean_scale, resize_alpha, rgba_png, same_outline, stroke_layer,
-    stroke_outline,
+    Builder, Decoded, Frame, FrameKind, GlyphRun, blend, fill_rule, gray_png, line_width, mean_scale, resize_alpha, rgb_png, rgba_png, same_outline,
+    stroke_layer, stroke_outline,
 };
 use super::{
     Affine, Appearance, AppearanceItem, Arc, BezPath, BlendMode, ClipPath, Device, FillLayer, FillRule, Glyph, GlyphDrawMode, Image, ImageBlob,
@@ -22,7 +22,7 @@ impl<'a> Device<'a> for Builder<'_> {
         }
     }
 
-    fn set_blend_mode(&mut self, blend_mode: craft_pdf::interpret::BlendMode) {
+    fn set_blend_mode(&mut self, blend_mode: craft::pdf::interpret::BlendMode) {
         let b = blend(blend_mode);
         if b != self.blend {
             self.flush_glyphs();
@@ -31,8 +31,9 @@ impl<'a> Device<'a> for Builder<'_> {
         }
     }
 
-    fn draw_path(&mut self, path: &BezPath, transform: Affine, paint: &craft_pdf::interpret::Paint<'a>, draw_mode: &PathDrawMode) {
+    fn draw_path(&mut self, path: &BezPath, transform: Affine, paint: &craft::pdf::interpret::Paint<'a>, draw_mode: &PathDrawMode) {
         self.flush_glyphs();
+        self.flush_type3();
         let walked = self.walked(false);
         if self.hold_glyph_stroke(path, transform, paint, draw_mode, walked) {
             return;
@@ -45,11 +46,11 @@ impl<'a> Device<'a> for Builder<'_> {
             return;
         }
         let shading = match paint {
-            craft_pdf::interpret::Paint::Pattern(p) => match p.as_ref() {
+            craft::pdf::interpret::Paint::Pattern(p) => match p.as_ref() {
                 Pattern::Shading(sp) => Some(sp),
                 Pattern::Tiling(_) => None,
             },
-            craft_pdf::interpret::Paint::Color(_) => None,
+            craft::pdf::interpret::Paint::Color(_) => None,
         };
         // Patch and triangle meshes are gradient meshes; a stroke's, clipped to the stroke's outline
         // (as Illustrator writes a freeform gradient on a stroke).
@@ -148,7 +149,7 @@ impl<'a> Device<'a> for Builder<'_> {
         self.stack.push(Frame::new(kind));
     }
 
-    fn push_transparency_group(&mut self, opacity: f32, mask: Option<SoftMask<'a>>, blend_mode: craft_pdf::interpret::BlendMode) {
+    fn push_transparency_group(&mut self, opacity: f32, mask: Option<SoftMask<'a>>, blend_mode: craft::pdf::interpret::BlendMode) {
         self.flush();
         let mask = mask.map(|m| self.soft_mask(&m));
         self.stack.push(Frame::new(FrameKind::Group { opacity, blend: blend(blend_mode), mask, isolate: false, knockout: false }));
@@ -161,7 +162,7 @@ impl<'a> Device<'a> for Builder<'_> {
         glyph: &Glyph<'a>,
         transform: Affine,
         glyph_transform: Affine,
-        paint: &craft_pdf::interpret::Paint<'a>,
+        paint: &craft::pdf::interpret::Paint<'a>,
         draw_mode: &GlyphDrawMode,
     ) {
         // Clipping text paints nothing; its outlines arrive separately as a clip path.
@@ -174,7 +175,7 @@ impl<'a> Device<'a> for Builder<'_> {
             GlyphDrawMode::Invisible => {
                 let typed = match glyph {
                     Glyph::Outline(o) => self.type_glyph(o, transform * glyph_transform, mean_scale(transform), None, None, false),
-                    Glyph::Type3(_) => false,
+                    Glyph::Type3(t3) => self.type_type3_glyph(t3, transform * glyph_transform, mean_scale(transform), None, None, false),
                 };
                 if !typed {
                     self.warn(INVISIBLE_TEXT_NOTE);
@@ -186,12 +187,14 @@ impl<'a> Device<'a> for Builder<'_> {
         };
         match glyph {
             Glyph::Outline(o) => {
+                self.flush_type3();
                 let scale = mean_scale(transform);
                 let overprint = self.glyph_overprint(stroke.is_some());
                 if self.type_glyph(o, transform * glyph_transform, scale, Some(paint), stroke.as_ref(), overprint) {
                     return;
                 }
-                self.flush_text();
+                // A line kept as outlines leaves them open: this glyph joins them.
+                self.end_text();
                 let mut bp = o.outline();
                 bp.apply_affine(transform * glyph_transform);
                 let (paint, opacity) = self.paint(paint, stroke.is_some(), self.walked(true));
@@ -215,22 +218,35 @@ impl<'a> Device<'a> for Builder<'_> {
                 if self.nested >= MAX_NESTED {
                     return;
                 }
-                self.flush();
-                self.nested += 1;
-                t3.interpret(self, transform, glyph_transform, paint);
-                self.nested -= 1;
+                let scale = mean_scale(transform);
+                let overprint = self.glyph_overprint(stroke.is_some());
+                if self.type_type3_glyph(t3, transform * glyph_transform, scale, Some(paint), stroke.as_ref(), overprint) {
+                    return;
+                }
+                self.flush_glyphs();
+                self.flush_text();
+                let art = self.nested(self.page, self.blend, |b| {
+                    t3.interpret(b, transform, glyph_transform, paint);
+                });
+                if let Some(nodes) = art {
+                    self.push_type3_nodes(nodes);
+                }
             }
         }
     }
 
     fn draw_image(&mut self, image: Image<'a, '_>, transform: Affine) {
         self.flush_glyphs();
+        self.flush_type3();
         self.flush_text();
         match image {
             Image::Raster(r) => {
                 let white = self.white_images;
+                // A DeviceCMYK image takes the output intent's profile only where no DefaultCMYK
+                // replaces DeviceCMYK, so it is cached apart from the same image drawn where one does.
+                let intent = !white && self.intent_cmyk.is_some() && self.scan.cmyk_defaults.get(&r.stream().dict().obj_id()) == Some(&false);
                 // Inside an alpha mask the same image is read again, white (its own cache key).
-                let key = craft_pdf::interpret::CacheKey::cache_key(&r) ^ if white { WHITE_KEY } else { 0 };
+                let key = craft::pdf::interpret::CacheKey::cache_key(&r) ^ if white { WHITE_KEY } else { 0 } ^ if intent { INTENT_KEY } else { 0 };
                 let st = r.stream();
                 let (w, h) = (r.width(), r.height());
                 // CMYK images keep their samples (read once per image).
@@ -238,7 +254,8 @@ impl<'a> Device<'a> for Builder<'_> {
                 let cmyk = if known || white {
                     None
                 } else {
-                    crate::import_image::cmyk(st, w, h).unwrap_or_else(|why| {
+                    let intent = self.intent_cmyk.as_deref().filter(|_| intent);
+                    crate::import_image::cmyk(st, w, h, intent).unwrap_or_else(|why| {
                         self.warn(why);
                         None
                     })
@@ -248,7 +265,26 @@ impl<'a> Device<'a> for Builder<'_> {
                     // Its mask (read by the interpreter, whatever its kind) becomes an opacity
                     // mask, so the inks stay as they are.
                     let mask = if crate::import_image::has_mask(st) { self.alpha_mask(key, &r, w, h, transform) } else { None };
-                    return self.add_image_masked(key, || cmyk.map(|blob| (blob, w, h)), transform, mask);
+                    return self.add_image_masked(key, || cmyk.map(|blob| (blob, w, h)), transform, mask, None);
+                }
+                // An image of one ink keeps it: its tints as a grayscale image that the ink at
+                // 100 % colorizes, as a mask painted in the ink comes in. Its mask becomes an
+                // opacity mask, as a CMYK image's does. Read once per image: the decision is kept,
+                // so one that opens in RGB stays RGB, and the gray pixels have their own key.
+                if !white {
+                    let found = match self.separation_paints.get(&key) {
+                        Some(paint) => paint.clone().map(|p| (p, None)),
+                        None => {
+                            let read = self.separation_image(st, w, h);
+                            self.separation_paints.insert(key, read.as_ref().map(|(p, _)| p.clone()));
+                            read.map(|(p, gray)| (p, Some(gray)))
+                        }
+                    };
+                    if let Some((paint, gray)) = found {
+                        let mask = if crate::import_image::has_mask(st) { self.alpha_mask(key, &r, w, h, transform) } else { None };
+                        let make = || gray.and_then(|g| gray_png(g, w, h)).map(|png| (ImageBlob::new("image/png", png), w, h));
+                        return self.add_image_masked(key ^ 0x5e9_a7e5, make, transform, mask, Some(paint));
+                    }
                 }
                 // JPEG passthrough for plain DeviceRGB/DeviceGray DCT images.
                 let dict = st.dict();
@@ -256,7 +292,7 @@ impl<'a> Device<'a> for Builder<'_> {
                 let cs_ok = dict.get::<Name<'_>>(b"ColorSpace").is_some_and(|n| matches!(n.as_ref(), b"DeviceRGB" | b"DeviceGray"));
                 let jpeg = !white
                     && filters.len() == 1
-                    && matches!(filters[0], craft_pdf::syntax::Filter::DctDecode)
+                    && matches!(filters[0], craft::pdf::syntax::Filter::DctDecode)
                     && cs_ok
                     && !dict.contains_key(b"SMask")
                     && !dict.contains_key(b"Mask")
@@ -266,46 +302,86 @@ impl<'a> Device<'a> for Builder<'_> {
                     self.add_image(key, || Some((ImageBlob::new("image/jpeg", bytes), w, h)), transform);
                     return;
                 }
-                let mut decoded: Option<Decoded> = None;
+                // Drawn before: the image is there already, so its pixels aren't converted again.
+                if let Some(sf) = self.raster_scales.get(&key).copied().filter(|_| self.image_keys.contains_key(&key)) {
+                    let xf = transform * Affine::scale_non_uniform(sf.0 as f64, sf.1 as f64);
+                    self.add_image(key, || None, xf);
+                    return;
+                }
+                // RGB samples, or RGBA when the image has an alpha channel or is drawn white.
+                let mut decoded: Option<(Decoded, bool)> = None;
                 r.with_rgba(
                     |img, alpha| {
                         let (w, h, sf) = (img.width(), img.height(), img.scale_factors());
-                        let a = alpha.map(|a| resize_alpha(&a, w, h)).unwrap_or_else(|| vec![255; (w * h) as usize]);
-                        let rgba: Vec<u8> = match img {
-                            _ if white => a.into_iter().flat_map(|a| [255, 255, 255, a]).collect(),
-                            ImageData::Rgb(d) => d.data.as_chunks::<3>().0.iter().zip(a).flat_map(|(c, a)| [c[0], c[1], c[2], a]).collect(),
-                            ImageData::Luma(d) => d.data.iter().zip(a).flat_map(|(g, a)| [*g, *g, *g, a]).collect(),
+                        let px = match (img, alpha) {
+                            // An opaque image's RGB samples are encoded as they are, with no copy.
+                            (ImageData::Rgb(d), None) if !white => (d.data, false),
+                            // Gray samples are stored as RGB: as a gray PNG, the image would become a
+                            // grayscale image that a fill color colorizes.
+                            (ImageData::Luma(d), None) if !white => (d.data.iter().flat_map(|g| [*g; 3]).collect(), false),
+                            (img, alpha) => {
+                                let a = alpha.map(|a| resize_alpha(&a, w, h)).unwrap_or_else(|| vec![255; (w * h) as usize]);
+                                let rgba: Vec<u8> = match img {
+                                    _ if white => a.into_iter().flat_map(|a| [255, 255, 255, a]).collect(),
+                                    ImageData::Rgb(d) => d.data.as_chunks::<3>().0.iter().zip(a).flat_map(|(c, a)| [c[0], c[1], c[2], a]).collect(),
+                                    ImageData::Luma(d) => d.data.iter().zip(a).flat_map(|(g, a)| [*g, *g, *g, a]).collect(),
+                                };
+                                (rgba, true)
+                            }
                         };
-                        decoded = Some((rgba, w, h, sf));
+                        decoded = Some(((px.0, w, h, sf), px.1));
                     },
                     None,
                 );
-                let Some((rgba, w, h, sf)) = decoded else {
+                let Some(((px, w, h, sf), alpha)) = decoded else {
                     self.warn("an image could not be decoded and was skipped");
                     return;
                 };
+                self.raster_scales.insert(key, sf);
                 let xf = transform * Affine::scale_non_uniform(sf.0 as f64, sf.1 as f64);
-                self.add_image(key, || rgba_png(rgba, w, h).map(|png| (ImageBlob::new("image/png", png), w, h)), xf);
+                let png = move || if alpha { rgba_png(px, w, h) } else { rgb_png(px, w, h) };
+                self.add_image(key, || png().map(|png| (ImageBlob::new("image/png", png), w, h)), xf);
             }
             Image::Stencil(s) => {
                 let white = self.white_images;
-                let key = craft_pdf::interpret::CacheKey::cache_key(&s) ^ if white { WHITE_KEY } else { 0 };
+                let key = craft::pdf::interpret::CacheKey::cache_key(&s) ^ if white { WHITE_KEY } else { 0 };
+                // A mask painted in a solid color comes in as a grayscale image of what it paints
+                // (black, the rest white) colorized by that color, as the `.ai` reader opens an
+                // image mask: Fill and Recolor Artwork reach the color, a spot color keeps its ink,
+                // and the mask drawn again in another color keeps that color. Inside an alpha soft
+                // mask, or painted with a pattern (which isn't drawn), its pixels are white or black.
                 let mut decoded: Option<Decoded> = None;
+                let mut colorize = None;
                 s.with_stencil(
                     |luma, paint| {
-                        let rgb = match paint {
-                            _ if white => [255, 255, 255, 255],
-                            craft_pdf::interpret::Paint::Color(c) => c.to_rgba().to_rgba8(),
-                            _ => [0, 0, 0, 255],
+                        let px = match paint {
+                            craft::pdf::interpret::Paint::Color(_) if !white => {
+                                // The walk doesn't count images: the ink is found by its color space.
+                                colorize = Some(self.paint(paint, false, None).0);
+                                luma.data.iter().map(|a| u8::MAX - a).collect()
+                            }
+                            _ => {
+                                let v = if white { u8::MAX } else { 0 };
+                                luma.data.iter().flat_map(|a| [v, v, v, *a]).collect()
+                            }
                         };
-                        let rgba = luma.data.iter().flat_map(|a| [rgb[0], rgb[1], rgb[2], *a]).collect();
-                        decoded = Some((rgba, luma.width, luma.height, luma.scale_factors));
+                        decoded = Some((px, luma.width, luma.height, luma.scale_factors));
                     },
                     None,
                 );
-                let Some((rgba, w, h, sf)) = decoded else { return };
+                let Some((px, w, h, sf)) = decoded else { return };
                 let xf = transform * Affine::scale_non_uniform(sf.0 as f64, sf.1 as f64);
-                self.add_image(key ^ 0x5_7e9c, || rgba_png(rgba, w, h).map(|png| (ImageBlob::new("image/png", png), w, h)), xf);
+                match colorize {
+                    // Its own key: its pixels are the gray ones, whatever color paints it.
+                    Some(paint) => self.add_image_masked(
+                        key ^ 0x6a7_57e9c,
+                        || gray_png(px, w, h).map(|png| (ImageBlob::new("image/png", png), w, h)),
+                        xf,
+                        None,
+                        Some(paint),
+                    ),
+                    None => self.add_image(key ^ 0x5_7e9c, || rgba_png(px, w, h).map(|png| (ImageBlob::new("image/png", png), w, h)), xf),
+                }
             }
         }
     }
@@ -338,6 +414,7 @@ impl<'a> Device<'a> for Builder<'_> {
         if self.nested > 0 {
             return;
         }
+        self.actual.begin();
         let at = self.tag_at;
         self.tag_at += 1;
         let group = match self.scan.tags.get(at) {
@@ -363,7 +440,8 @@ impl<'a> Device<'a> for Builder<'_> {
         {
             f.group.get_or_insert(g);
         }
-        self.marked.push(group);
+        let current = group.or_else(|| self.current_group());
+        self.marked.push((group, current));
     }
 
     fn end_marked_content(&mut self) {
@@ -371,9 +449,24 @@ impl<'a> Device<'a> for Builder<'_> {
             return;
         }
         // The runs gathered within a layer's sequence are its art: finish them before it ends.
-        if self.marked.last().copied().flatten().is_some() {
+        if self.marked.last().is_some_and(|(group, _)| group.is_some()) {
             self.flush();
         }
         self.marked.pop();
+        // A span's glyphs are stroked within it: a stroke after it goes over none of them.
+        if self.actual.end() {
+            self.end_fills();
+        }
+    }
+
+    fn actual_text(&mut self, text: &[u8]) {
+        let active = self.actual.active();
+        if self.nested == 0 && self.text_as == crate::TextAs::Text && !self.actual.set(text) {
+            self.warn("ActualText beyond the import size or nesting limit was left to glyph mappings");
+        }
+        // Nor does a stroke in a span go over a glyph filled before it.
+        if !active && self.actual.active() {
+            self.end_fills();
+        }
     }
 }

@@ -9,7 +9,7 @@ mod tests;
 mod text;
 
 use serde_json::{Map, Value, json};
-use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
+use vectorcraft_doc::{Document, LockedArtboards, Node, NodeId, NodeKind};
 use vectorcraft_geom::{PathData, SubPath};
 use vectorcraft_pathops::addons as po;
 
@@ -18,9 +18,8 @@ use super::super::edit::selected_roots;
 use super::super::{CommandSpec, bad, checked_ids_or_selection, cmd, has_doc, has_selection, number_or, switch_or, text_param};
 use crate::{EngineError, Result, Session};
 
-/// Simplify Anchors' tolerance by default, and the drift (pt) each step of it allows.
+/// Simplify Anchors' tolerance by default.
 const TOLERANCE: f64 = 20.0;
-pub(super) const PT_PER_TOLERANCE: f64 = 0.02;
 /// Rejoin Path Pieces' gap by default, and the widest (pt).
 const GAP: f64 = 0.1;
 const MAX_GAP: f64 = 6.0;
@@ -38,7 +37,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Simplify Anchors (Keep Shape)…",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{tolerance?: 1..100 (20; higher removes more anchors and lets the outline move further from where it was, up to tolerance × 0.02 pt), protectCorners?: bool (false; anchors where the path turns by more than 30° stay), ids?: [id…] (default: the selection)} remove the anchors each path under the objects can do without, refitting the handles beside each so the outline keeps its shape, as one undo step; open ends stay → {ids, before, after} anchor counts",
+            "{tolerance?: 1..100 (20; higher removes more anchors and lets the outline move further from where it was, up to tolerance × 0.02 pt), protectCorners?: bool (false; anchors where the path turns by more than 30° stay), ids?: [id…] (default: the selection)} remove the anchors each path under the objects can do without, refitting the handles beside each so the outline keeps its shape, as one undo step when a path changes; open ends stay; from the selection, locked and hidden paths are left out, and named by `ids`, the paths of the objects, groups and layers it names are taken even when locked or hidden, but not those on a locked artboard; a changed path loses its selected anchors and segments → {ids, before, after} anchor counts",
             has_selection,
             simplify
         ),
@@ -47,7 +46,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Health Check",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{scope?: \"selection\"|\"document\" (default: the selection, or the document while nothing is selected), kinds?: [kind…] (default: all: emptyText, strayPoints (paths of one anchor), unpainted, zeroOpacity, duplicateObjects (a path stacked on an identical one), offArtboard, duplicateAnchors (neighbours within 0.01 pt), tinyHandles (under 0.01 pt), collinearAnchors (corners on a straight run, turning less than sine 0.005), nearPoints (anchors within 0.01 pt of other paths' anchors), nearlyClosed (ends within 0.01 pt), filledOpenPaths (filled, unstroked open paths), needlessClipGroups (an unpainted clip that clips nothing, hides everything, or is a rectangle round all its art), needlessCompounds (one path or none), needlessGroups (one member or none, nothing of their own), emptyArtboards (the document only))} find issues without changing anything; locked and hidden objects are left out → {scope, total, findings: [{kind, label, count, ids (the objects, at most 1000), artboards (indexes)}]} for the kinds found",
+            "{scope?: \"selection\"|\"document\" (default: the selection, or the document while nothing is selected), kinds?: [kind…] (default: all: emptyText, strayPoints (paths of one anchor), unpainted, zeroOpacity, duplicateObjects (a path stacked on an identical one, or type on the same type within 1 pt), offArtboard, duplicateAnchors (neighbours within 0.01 pt), tinyHandles (under 0.01 pt), collinearAnchors (corners on a straight run, turning less than sine 0.005), nearPoints (anchors within 0.01 pt of other paths' anchors), nearlyClosed (ends within 0.01 pt), filledOpenPaths (filled, unstroked open paths), needlessClipGroups (an unpainted clip that clips nothing, hides everything, or is a rectangle round all its art), needlessCompounds (one path or none), needlessGroups (one member or none, nothing of their own), emptyArtboards (the document only))} find issues without changing anything; locked and hidden objects are left out → {scope, total, findings: [{kind, label, count, ids (the objects, at most 1000), artboards (indexes)}]} for the kinds found",
             has_doc,
             check
         ),
@@ -74,7 +73,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Deep Ungroup…",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{includeClipGroups?: bool (false: clipping groups, and the art inside them, stay as they are; true: they are ungrouped too and their clipping paths become plain paths), ids?: [id…] (default: the selection)} ungroup every level of the groups among the objects, as one undo step; each object keeps the opacity of the groups it was in → {ids (the objects left, selected), ungrouped (groups)}",
+            "{includeClipGroups?: bool (false: clipping groups, and the art inside them, stay as they are; true: they are ungrouped too and their clipping paths become plain paths), ids?: [id…] (default: the selection)} ungroup every level of the groups among the objects, as one undo step when a group goes; each object keeps the opacity of the groups it was in; from the selection, locked and hidden groups stay whole; named by `ids`, the groups it names and the groups in the groups and layers it names are ungrouped even when locked or hidden (a named layer stays), but not those on a locked artboard, and their objects become hidden or locked when a group was; locked and hidden objects stay locked or hidden and are not selected → {ids (the objects selected: those left, or with no group to take apart the selection as it was), ungrouped (groups)}",
             has_selection,
             deep_ungroup
         ),
@@ -83,7 +82,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rejoin Path Pieces…",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{gap?: pt 0..6 (0.1), ids?: [id…] (default: the selection)} weld the open paths under the objects whose ends lie within the gap of each other back into paths: an end joins one other end, the one the path turns least to go on into, pieces may run either way, and a chain whose ends meet closes; each path takes the place and paint of its topmost piece, as one undo step → {ids, joined (paths made), removed (pieces merged into them)}",
+            "{gap?: pt 0..6 (0.1), ids?: [id…] (default: the selection)} weld the open paths under the objects whose ends lie within the gap of each other back into paths: an end joins one other end, the one the path turns least to go on into, pieces may run either way, and a chain whose ends meet closes; each path takes the place and paint of its topmost piece, as one undo step when a path is made; from the selection, locked and hidden paths are left out, and named by `ids`, they are taken, but not those on a locked artboard; only pieces alike in being hidden (by themselves or a group or layer above them) and in being locked join; locked and hidden paths made are not selected → {ids, joined (paths made), removed (pieces merged into them)}",
             has_selection,
             rejoin
         ),
@@ -92,8 +91,28 @@ pub fn specs() -> Vec<CommandSpec> {
     v
 }
 
-/// The paths (not guides) under `roots`, compound path members included.
-fn paths_under(d: &Document, roots: &[NodeId]) -> Vec<NodeId> {
+/// Whether a request names its objects with `ids` (present and not null) rather than taking the
+/// selection.
+fn named(p: &Value) -> bool {
+    p.get("ids").is_some_and(|v| !v.is_null())
+}
+
+/// Keep the items of `items` whose object (`id`) a command acts on: when `named`, every one not on
+/// a locked artboard, locked and hidden ones (and ones in a locked or hidden group or layer)
+/// included; else only those that can be edited.
+fn retain_targets<T>(d: &Document, items: &mut Vec<T>, named: bool, id: impl Fn(&T) -> NodeId) {
+    if named {
+        let locks = d.locked_artboards();
+        items.retain(|t| !locks.holds_id(id(t)));
+    } else {
+        let editable = d.editable();
+        items.retain(|t| editable(id(t)));
+    }
+}
+
+/// The paths (not guides) under `roots`, compound path members included, that a command acts on
+/// ([`retain_targets`]).
+fn paths_under(d: &Document, roots: &[NodeId], named: bool) -> Vec<NodeId> {
     let mut out = vec![];
     for n in roots.iter().filter_map(|id| d.node(*id)) {
         n.walk(&mut |c| {
@@ -102,6 +121,7 @@ fn paths_under(d: &Document, roots: &[NodeId]) -> Vec<NodeId> {
             }
         });
     }
+    retain_targets(d, &mut out, named, |id| *id);
     out
 }
 
@@ -114,7 +134,7 @@ fn simplify(s: &mut Session, p: &Value) -> Result<Value> {
     let protect = switch_or(p, "protectCorners", false, C)?;
     let roots = checked_ids_or_selection(s, p, C)?;
     let d = &s.doc()?.doc;
-    let ids = paths_under(d, &roots);
+    let ids = paths_under(d, &roots, named(p));
     let paths: Vec<(NodeId, &PathData)> = ids.iter().filter_map(|id| Some((*id, d.node(*id)?.path_data()?))).collect();
     let before: usize = paths.iter().map(|(_, p)| p.anchor_count()).sum();
     if before > MAX_ANCHORS {
@@ -123,7 +143,7 @@ fn simplify(s: &mut Session, p: &Value) -> Result<Value> {
     let changed: Vec<(NodeId, PathData)> = paths
         .iter()
         .filter_map(|(id, path)| {
-            let np = po::simplify_keep_shape(path, tolerance * PT_PER_TOLERANCE, protect);
+            let np = po::simplify_keep_shape(path, tolerance * po::PT_PER_TOLERANCE, protect);
             (np != **path).then_some((*id, np))
         })
         .collect();
@@ -256,10 +276,11 @@ fn ungroupable(n: &Node, clips: bool) -> bool {
 }
 
 /// `n` with every level of grouping Deep Ungroup takes apart removed, into `out`; `count` counts
-/// the groups. Members take on the opacity of the groups they were in, and a clipping path
-/// becomes a plain path.
-fn flatten(n: Node, clips: bool, out: &mut Vec<Node>, count: &mut usize) {
-    if !ungroupable(&n, clips) {
+/// the groups. Members take on the opacity of the groups they were in, are hidden when one of them
+/// was hidden and locked when one of them was locked, and a clipping path becomes a plain path. A
+/// locked or hidden group stays whole unless `named`.
+fn flatten(n: Node, clips: bool, named: bool, out: &mut Vec<Node>, count: &mut usize) {
+    if !ungroupable(&n, clips) || (!named && (n.locked || !n.visible)) {
         out.push(n);
         return;
     }
@@ -274,59 +295,113 @@ fn flatten(n: Node, clips: bool, out: &mut Vec<Node>, count: &mut usize) {
             *clipping = false;
         }
         c.opacity *= n.opacity;
-        flatten(c, clips, out, count);
+        c.visible &= n.visible;
+        c.locked |= n.locked;
+        flatten(c, clips, named, out, count);
     }
+}
+
+/// The outermost groups Deep Ungroup takes apart in layer `n`, its sublayers included, in paint
+/// order, leaving out those on a locked artboard.
+fn groups_in_layer(d: &Document, n: &Node, clips: bool, out: &mut Vec<NodeId>) {
+    let locks = d.locked_artboards();
+    fn visit(n: &Node, clips: bool, locks: &LockedArtboards, out: &mut Vec<NodeId>) {
+        for c in n.children().into_iter().flatten() {
+            if c.is_layer() {
+                visit(c, clips, locks, out);
+            } else if ungroupable(c, clips) && !locks.holds_id(c.id) {
+                out.push(c.id);
+            }
+        }
+    }
+    visit(n, clips, &locks, out);
 }
 
 fn deep_ungroup(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "addon.cleanup.deepUngroup";
     let clips = switch_or(p, "includeClipGroups", false, C)?;
-    let roots = checked_ids_or_selection(s, p, C)?;
+    let named = named(p);
+    let mut roots = checked_ids_or_selection(s, p, C)?;
     let d = &s.doc()?.doc;
+    // From the selection, locked and hidden objects, and those in locked or hidden groups, stay as
+    // they are; named, only those on a locked artboard do.
+    retain_targets(d, &mut roots, named, |id| *id);
+    // A named layer stays: the groups in it, and in its sublayers, are taken apart.
+    let mut groups = vec![];
+    for id in roots {
+        match d.node(id) {
+            Some(n) if named && n.is_layer() => {
+                let at = groups.len();
+                groups_in_layer(d, n, clips, &mut groups);
+                if groups.len() == at {
+                    groups.push(id);
+                }
+            }
+            _ => groups.push(id),
+        }
+    }
     let (mut items, mut selected, mut count) = (vec![], vec![], 0);
-    for id in &roots {
+    for id in &groups {
         match d.node(*id).filter(|n| ungroupable(n, clips)) {
             Some(n) => {
                 let mut out = vec![];
-                flatten(n.clone(), clips, &mut out, &mut count);
+                flatten(n.clone(), clips, named, &mut out, &mut count);
                 selected.extend(out.iter().map(|n| n.id));
                 items.push((*id, out));
             }
             None => selected.push(*id),
         }
     }
-    // With no group to take apart, the document and its undo history stay as they are.
-    if !items.is_empty() {
-        let ids = selected.clone();
-        s.edit("Deep Ungroup", |d, sel| {
+    // With no group to take apart, the document, the selection and the undo history stay as they
+    // are, and the reply lists the selection.
+    if count == 0 {
+        selected = s.doc()?.selection.objects.to_vec();
+    } else {
+        selected = s.edit("Deep Ungroup", move |d, sel| {
             d.insert_beside(items, true)?;
-            sel.set(ids);
-            Ok(())
+            // Members that are locked or hidden themselves keep that, and are not selected.
+            let editable = d.editable();
+            selected.retain(|id| editable(*id));
+            sel.set(selected.iter().copied());
+            Ok(selected)
         })?;
     }
     Ok(json!({ "ids": selected.iter().map(|i| i.0).collect::<Vec<_>>(), "ungrouped": count }))
 }
 
+/// One path Rejoin Path Pieces takes: its id, its subpath, and whether it and every group and layer
+/// above it are visible, and whether they are all unlocked.
+type Piece = (NodeId, SubPath, (bool, bool));
+
 /// The open single-subpath paths under `roots` that Rejoin Path Pieces takes, in paint order
-/// (compound path members, clipping paths and guides stay out).
-fn pieces(d: &Document, roots: &[NodeId]) -> Vec<(NodeId, SubPath)> {
-    fn visit(n: &Node, out: &mut Vec<(NodeId, SubPath)>) {
+/// (compound path members, clipping paths and guides stay out; [`retain_targets`]).
+fn pieces(d: &Document, roots: &[NodeId], named: bool) -> Vec<Piece> {
+    fn visit(n: &Node, above: (bool, bool), out: &mut Vec<Piece>) {
+        let state = (above.0 && n.visible, above.1 && !n.locked);
         match &n.kind {
             NodeKind::Path { path, guide: false, clipping: false, .. } => {
                 if let [sp] = path.subpaths.as_slice()
                     && !sp.closed
                 {
-                    out.push((n.id, sp.clone()));
+                    out.push((n.id, sp.clone(), state));
                 }
             }
-            NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => children.iter().for_each(|c| visit(c, out)),
+            NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => children.iter().for_each(|c| visit(c, state, out)),
             _ => {}
         }
     }
     let mut out = vec![];
-    roots.iter().filter_map(|id| d.node(*id)).for_each(|n| visit(n, &mut out));
-    let editable = d.editable();
-    out.retain(|(id, _)| editable(*id));
+    for (id, n) in roots.iter().filter_map(|id| Some((*id, d.node(*id)?))) {
+        // The groups and layers above the root, and their state.
+        let above = d.ancestry(id).unwrap_or_default();
+        let above = above.split_last().map_or(&[][..], |(_, up)| up);
+        if above.last().and_then(|i| d.node(*i)).is_some_and(|parent| matches!(parent.kind, NodeKind::Compound { .. })) {
+            continue;
+        }
+        let state = above.iter().filter_map(|i| d.node(*i)).fold((true, true), |(v, u), a| (v && a.visible, u && !a.locked));
+        visit(n, state, &mut out);
+    }
+    retain_targets(d, &mut out, named, |piece| piece.0);
     out
 }
 
@@ -337,18 +412,26 @@ fn rejoin(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "`gap` must be from 0 to 6 pt"));
     }
     let roots = checked_ids_or_selection(s, p, C)?;
-    let found = pieces(&s.doc()?.doc, &roots);
+    let found = pieces(&s.doc()?.doc, &roots, named(p));
     if found.len() > MAX_OBJECTS {
         return Err(EngineError::Other("Rejoin Path Pieces: too many paths to rejoin at once".into()));
     }
-    let subpaths: Vec<SubPath> = found.iter().map(|(_, sp)| sp.clone()).collect();
-    // Each chain becomes its topmost piece (the last in paint order); the others go.
+    // Only pieces alike in being shown and in being unlocked join, so that a joined path neither
+    // shows hidden art nor hides shown art, nor locks or unlocks a piece.
     let (mut kept, mut gone) = (vec![], vec![]);
-    for j in po::rejoin(&subpaths, gap) {
-        let ids: Vec<NodeId> = j.members.iter().filter_map(|&m| found.get(m).map(|f| f.0)).collect();
-        let Some(&top) = j.members.iter().max().and_then(|&m| found.get(m).map(|f| &f.0)) else { continue };
-        gone.extend(ids.into_iter().filter(|id| *id != top));
-        kept.push((top, j.path));
+    for state in [(true, true), (true, false), (false, true), (false, false)] {
+        let part: Vec<&Piece> = found.iter().filter(|f| f.2 == state).collect();
+        if part.is_empty() {
+            continue;
+        }
+        let subpaths: Vec<SubPath> = part.iter().map(|f| f.1.clone()).collect();
+        // Each chain becomes its topmost piece (the last in paint order); the others go.
+        for j in po::rejoin(&subpaths, gap) {
+            let ids: Vec<NodeId> = j.members.iter().filter_map(|&m| part.get(m).map(|f| f.0)).collect();
+            let Some(top) = j.members.iter().max().and_then(|&m| part.get(m).map(|f| f.0)) else { continue };
+            gone.extend(ids.into_iter().filter(|id| *id != top));
+            kept.push((top, j.path));
+        }
     }
     if !kept.is_empty() {
         let ids: Vec<NodeId> = kept.iter().map(|k| k.0).collect();
@@ -357,7 +440,9 @@ fn rejoin(s: &mut Session, p: &Value) -> Result<Value> {
                 set_path(d, *id, PathData::single(sp.clone()));
             }
             d.remove_many(&gone)?;
-            sel.set(ids);
+            // Locked and hidden paths, and those in locked or hidden groups, are not selected.
+            let editable = d.editable();
+            sel.set(ids.into_iter().filter(|id| editable(*id)));
             Ok(())
         })?;
     }

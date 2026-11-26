@@ -4,15 +4,15 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use craft_pdf::interpret::font::Glyph;
-use craft_pdf::interpret::hayro_cmap::BfString;
-use craft_pdf::interpret::pattern::{Pattern, TilingPattern};
-use craft_pdf::interpret::{
+use craft::pdf::interpret::font::Glyph;
+use craft::pdf::interpret::hayro_cmap::BfString;
+use craft::pdf::interpret::pattern::{Pattern, TilingPattern};
+use craft::pdf::interpret::{
     CacheKey, ClipPath, Context, Device, GlyphDrawMode, Image, ImageData, InterpreterCache, InterpreterSettings, InterpreterWarning, LumaData,
     MaskType, PathDrawMode, SoftMask, StrokeProps,
 };
-use craft_pdf::syntax::object::Name;
-use craft_pdf::syntax::page::Page;
+use craft::pdf::syntax::object::Name;
+use craft::pdf::syntax::page::Page;
 use kurbo::{Affine, BezPath, PathEl, Rect, Shape};
 use vectorcraft_color::{BlendMode, Color, Paint, Swatch};
 use vectorcraft_doc::{
@@ -27,20 +27,24 @@ use crate::import_scan::{FontNames, MAX_NESTING, Ocgs, Scan, TextOverprint, Walk
 use crate::import_shading::{
     FunctionBudget, FunctionPaint, clipped, extend_clip, fold_stop_opacity, function_paint, gradient_shape, mesh_shading, shading_gradient,
 };
-use crate::import_text::{Families, LineFacts, Look, Placement, TextLine, Upright};
+use crate::import_text::{Families, LineFacts, Look, Placement, TextLine, TypeStroke, Upright};
 use crate::{CropTo, ImportOptions, ImportReport, PdfError, TextAs};
 
+mod actual_text;
 mod builder;
 mod cid;
 mod device;
 mod entry;
+mod reshaped;
 mod state;
 
 #[cfg(test)]
 pub(crate) use cid::{CidText, font_chars, identify_glyph, unify_radical};
+#[cfg(any(test, feature = "read-count"))]
+pub use entry::imports_of;
 pub use entry::{
-    INVISIBLE_TEXT_NOTE, OFF_ARTBOARD_NOTE, OUTLINED_TEXT_NOTE, PAST_PAGE_NOTE, UNMATCHED_GLYPHS_NOTE, UNNAMED_CHARACTERS_NOTE, holds_outlines,
-    import, import_with_report, is_glyph_outlines, is_outlines_note,
+    INVISIBLE_TEXT_NOTE, OFF_ARTBOARD_NOTE, OUTLINED_TEXT_NOTE, PAST_PAGE_NOTE, RESHAPED_TEXT_NOTE, UNMATCHED_GLYPHS_NOTE, UNNAMED_CHARACTERS_NOTE,
+    holds_outlines, import, import_opened, import_with_report, is_glyph_outlines, is_outlines_note,
 };
 #[cfg(test)]
 pub(crate) use entry::{TEST_MAX_OBJECTS, import_with_reader_options, read};

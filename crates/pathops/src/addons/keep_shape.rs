@@ -13,6 +13,9 @@ use crate::fit::{end_tangent, start_tangent};
 /// The turn (degrees) at an anchor above which `protect_corners` keeps it.
 pub const SHARP_CORNER_DEG: f64 = 30.0;
 
+/// The drift (pt) each step of the tolerance the add-ons offer allows.
+pub const PT_PER_TOLERANCE: f64 = 0.02;
+
 /// Points sampled along each curve to measure how far two outlines are apart.
 const SAMPLES: usize = 8;
 
@@ -24,7 +27,7 @@ const ACCURACY: f64 = 1e-6;
 fn merged(prev: &Anchor, cur: &Anchor, next: &Anchor) -> CubicBez {
     let mut run = SubPath::new(vec![*prev, *cur, *next], false);
     remove_anchor(&mut run, 1);
-    match run.anchors.as_slice() {
+    match &*run.anchors.contiguous() {
         [a, b] => CubicBez::new(prev.p, a.h_out, b.h_in, next.p),
         _ => CubicBez::new(prev.p, prev.h_out, next.h_in, next.p),
     }

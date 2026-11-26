@@ -1,17 +1,18 @@
 //! Print Ink Fixes (`addon.color.printFixes`, Object › Plug-ins › Color Effects › Print Ink
 //! Fixes…): a CMYK document's inks made ready for print in one undo step. Colours with more total
-//! ink than the limit are scaled down to it, white fills and strokes stop overprinting, and black
+//! ink than the limit are scaled down to it, paper white fills and strokes stop overprinting, and black
 //! ones start to, as Edit › Edit Colors › Overprint Black sets it.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::Color;
 use vectorcraft_color::swatch::REGISTRATION;
-use vectorcraft_doc::overprint::{OverprintBlack, is_white};
+use vectorcraft_doc::overprint::{OverprintBlack, is_paper_white};
 use vectorcraft_doc::{ColorMode, Node, NodeKind};
 
-use super::super::super::colorcmds::{Recolor, Scope};
+use super::super::super::colorcmds::{Recolor, Scope, keeping_series_paint};
 use super::super::super::overprint::edit_counted;
 use super::super::super::{bad, checked_ids_or_selection, number_or, switch_or, text_param};
 use crate::{Result, Session};
@@ -78,8 +79,9 @@ impl Fixes {
     }
 
     /// Remove white overprint from `n`'s own fills and strokes and its characters': true when
-    /// that changed anything.
-    fn unset_white(&self, n: &mut Node) -> bool {
+    /// that changed anything. A white linked to one of the spot inks `inks` is an ink and keeps
+    /// overprinting ([`is_paper_white`]).
+    fn unset_white(&self, n: &mut Node, inks: &BTreeSet<String>) -> bool {
         let mut changed = false;
         let mut off = |aimed: bool, white: bool, flag: &mut bool| {
             if aimed && white && *flag {
@@ -89,26 +91,32 @@ impl Fixes {
         };
         for it in &mut n.appearance.items {
             let aimed = if it.is_fill() { self.fill } else { self.stroke };
-            let white = is_white(it.paint());
+            let white = is_paper_white(it.paint(), inks);
             off(aimed, white, it.overprint_mut());
         }
         if let NodeKind::Text(t) = &mut n.kind {
             for r in &mut t.runs {
-                off(self.fill, is_white(&r.style.fill), &mut r.style.overprint_fill);
-                off(self.stroke, is_white(&r.style.stroke), &mut r.style.overprint_stroke);
+                off(self.fill, is_paper_white(&r.style.fill, inks), &mut r.style.overprint_fill);
+                off(self.stroke, is_paper_white(&r.style.stroke, inks), &mut r.style.overprint_stroke);
             }
+        }
+        // A colorized image's color is its fill.
+        if n.colorize_overprints() {
+            let white = n.extras().colorize.as_deref().is_some_and(|p| is_paper_white(p, inks));
+            off(self.fill, white, &mut n.extras_mut().colorize_overprint);
         }
         changed
     }
 
     /// The overprint fixes on `n` and everything inside it: (objects whose white overprint was
-    /// removed, objects set to overprint black).
-    fn overprint(&self, n: &mut Node, black: &OverprintBlack, spots: &[String]) -> (usize, usize) {
-        let white = usize::from(self.remove_white_overprint && self.unset_white(n));
+    /// removed, objects set to overprint black). `spots`: the document's spot swatch names; `inks`:
+    /// those that linked colors print as ([`vectorcraft_doc::Document::spot_ink_names`]).
+    fn overprint(&self, n: &mut Node, black: &OverprintBlack, spots: &[String], inks: &BTreeSet<String>) -> (usize, usize) {
+        let white = usize::from(self.remove_white_overprint && self.unset_white(n, inks));
         let blacks = self.overprint_black > 0.0 && (!self.text_only || matches!(n.kind, NodeKind::Text(_)));
         let mut counts = (white, usize::from(blacks && black.apply(n, spots)));
-        for c in n.children_mut().into_iter().flatten() {
-            let (w, b) = self.overprint(Arc::make_mut(c), black, spots);
+        for c in n.children_mut().into_iter().flatten().filter(|c| !c.is_ruler_guide()) {
+            let (w, b) = self.overprint(Arc::make_mut(c), black, spots, inks);
             counts = (counts.0 + w, counts.1 + b);
         }
         counts
@@ -149,15 +157,15 @@ pub(super) fn run(s: &mut Session, p: &Value) -> Result<Value> {
                 true
             };
             let scope = Scope { fill: fixes.fill, stroke: fixes.stroke, images: false, patterns: false };
-            ink = Recolor::with_links(scope, &|c| fixes.limit(c), &links).run(d, &ids);
+            ink = keeping_series_paint(d, &ids, |d| Ok(Recolor::with_links(scope, &|c| fixes.limit(c), &links).run(d, &ids)))?;
         }
         if !fixes.remove_white_overprint && fixes.overprint_black <= 0.0 {
             return Ok(ink);
         }
-        let spots = d.spot_names();
+        let (spots, inks) = (d.spot_names(), d.spot_ink_names());
         for id in &ids {
             if let Some(n) = d.node_mut(*id) {
-                let (w, b) = fixes.overprint(n, &black, &spots);
+                let (w, b) = fixes.overprint(n, &black, &spots, &inks);
                 (white, blacks) = (white + w, blacks + b);
             }
         }

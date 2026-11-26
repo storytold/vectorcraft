@@ -38,7 +38,19 @@ fn built_in_presets_are_the_gradient_libraries_by_theme_with_unique_names() {
     // Grouped by library, the gradient libraries first, then the swatch libraries holding gradients.
     let mut libraries: Vec<&str> = rows.iter().map(|r| r["library"].as_str().unwrap()).collect();
     libraries.dedup();
-    assert_eq!(libraries, ["Spectrum Gradients", "Sky Gradients", "Neutral Gradients", "Duotone Gradients", "Radial Glows", "Metallic Gradients"]);
+    assert_eq!(
+        libraries,
+        [
+            "Spectrum Gradients",
+            "Sky Gradients",
+            "Neutral Gradients",
+            "Organic Fades",
+            "Holographic",
+            "Duotone Gradients",
+            "Radial Glows",
+            "Metallic Gradients"
+        ]
+    );
     let mut seen = std::collections::HashSet::new();
     assert!(names(&list).iter().all(|n| seen.insert(n.to_lowercase())), "a name names one preset");
     let vignette = rows.iter().find(|r| r["name"] == "Vignette").unwrap();
@@ -63,6 +75,56 @@ fn applying_a_preset_edits_the_gradient_in_place_as_one_undo_step() {
     assert_eq!(s.gradient_preset_name(&before.gradient), None);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(paint(&s, id, false), before);
+}
+
+#[test]
+fn an_organic_fade_applies_with_its_method_midpoints_and_opacities() {
+    let (mut s, id) = session_with(json!({"color": "#336699"}));
+    let mist = s.gradient_preset("Mist").unwrap();
+    assert_eq!((mist.library, mist.gradient.method), (Some("Organic Fades"), GradientMethod::Perceptual));
+    s.execute("gradient.presets.apply", &json!({"name": "Mist"})).unwrap();
+    let g = paint(&s, id, false).gradient;
+    assert_eq!((g.kind, g.method, &g.stops), (GradientKind::Linear, GradientMethod::Perceptual, &mist.gradient.stops));
+    assert_eq!(s.gradient_preset_name(&g).as_deref(), Some("Mist"));
+    let list = s.execute("gradient.presets.list", &json!({})).unwrap();
+    let row = list["presets"].as_array().unwrap().iter().find(|r| r["name"] == "Mist").unwrap().clone();
+    assert_eq!(row["gradient"]["method"], "perceptual");
+}
+
+#[test]
+fn a_holographic_foil_applies_in_place_as_one_undo_step() {
+    let (mut s, id) = session_with(json!({"gradient": {"angle": 30}}));
+    let before = paint(&s, id, false);
+    let undo = s.doc().unwrap().history.undo.len();
+    let veil = s.gradient_preset("prism veil").unwrap();
+    assert_eq!((veil.library, veil.gradient.method), (Some("Holographic"), GradientMethod::Perceptual));
+    let r = s.execute("gradient.presets.apply", &json!({"name": "prism veil"})).unwrap();
+    assert_eq!(r["name"].as_str(), Some("Prism Veil"));
+    let g = paint(&s, id, false);
+    assert_eq!((g.gradient.kind, g.gradient.method, &g.gradient.stops), (GradientKind::Linear, GradientMethod::Perceptual, &veil.gradient.stops));
+    assert_eq!(g.gradient.stops.len(), 6);
+    assert_eq!(g.angle, before.angle, "the placement stays");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    assert_eq!(s.gradient_preset_name(&g.gradient).as_deref(), Some("Prism Veil"));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(paint(&s, id, false), before);
+}
+
+/// A preset saved as "Mint Halo" before Holographic existed stays listed under a free name.
+#[test]
+fn a_saved_preset_named_like_a_holographic_glow_gets_a_free_name() {
+    let (mut s, id) = session_with(json!({"gradient": {"kind": "radial"}}));
+    let halo = s.gradient_preset("Mint Halo").unwrap().gradient;
+    let mut own = paint(&s, id, false).gradient;
+    own.dither = true;
+    let mut prefs = s.prefs.clone();
+    prefs.gradient_presets = vec![crate::cmd::GradientPreset { name: "MINT HALO".into(), gradient: own.clone() }];
+    s.apply_prefs(prefs);
+    assert_eq!(s.prefs.gradient_presets.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["MINT HALO 2"]);
+    s.execute("gradient.presets.apply", &json!({"name": "mint halo 2"})).unwrap();
+    assert_eq!(paint(&s, id, false).gradient, own);
+    s.execute("gradient.presets.apply", &json!({"name": "Mint Halo"})).unwrap();
+    assert_eq!(paint(&s, id, false).gradient.stops, halo.stops);
 }
 
 #[test]
@@ -137,6 +199,183 @@ fn saving_needs_a_gradient_behind_the_proxy() {
     assert!(s.execute("gradient.presets.save", &json!({"name": 7})).is_err(), "a name is text");
 }
 
+/// Save Gradient Preset is enabled exactly when saving works, with and without a gradient behind
+/// the active proxy: the defaults with nothing selected, a fill or a stroke, a group's first
+/// painted member, type and an Appearance panel row.
+#[test]
+fn the_save_check_matches_saving_with_and_without_a_gradient() {
+    /// What the case is, how its session is made, and whether a gradient is behind the proxy.
+    type Case = (&'static str, fn() -> Session, bool);
+    let cases: [Case; 9] = [
+        (
+            "default solid paint",
+            || {
+                let mut s = Session::new();
+                s.execute("file.new", &json!({"width": 300, "height": 300})).unwrap();
+                s
+            },
+            false,
+        ),
+        (
+            "default gradient paint",
+            || {
+                let (mut s, _) = session_with(json!({"gradient": {}}));
+                s.execute("select.none", &json!({})).unwrap();
+                s
+            },
+            true,
+        ),
+        ("solid fill", || session_with(json!({"color": "#336699"})).0, false),
+        ("gradient fill", || session_with(json!({"gradient": {"kind": "radial"}})).0, true),
+        (
+            "gradient fill, Stroke proxy in front",
+            || {
+                let (mut s, _) = session_with(json!({"gradient": {}}));
+                s.execute("paint.toggleActive", &json!({"fill": false})).unwrap();
+                s
+            },
+            false,
+        ),
+        (
+            "gradient stroke, Stroke proxy in front",
+            || {
+                let (mut s, _) = session_with(json!({"color": "#336699"}));
+                s.execute("paint.setStroke", &json!({"gradient": {}, "focus": false})).unwrap();
+                s.execute("paint.toggleActive", &json!({"fill": false})).unwrap();
+                s
+            },
+            true,
+        ),
+        (
+            "group of a gradient and a solid",
+            || {
+                let (mut s, a) = session_with(json!({"gradient": {}}));
+                let b = NodeId(s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap());
+                s.execute("paint.setFill", &json!({"color": "#336699"})).unwrap();
+                s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+                s.execute("object.group", &json!({})).unwrap();
+                s
+            },
+            true,
+        ),
+        (
+            "type with a gradient fill",
+            || {
+                let mut s = Session::new();
+                s.execute("file.new", &json!({"width": 300, "height": 300})).unwrap();
+                s.execute("text.create", &json!({"x": 10, "y": 100, "text": "type"})).unwrap();
+                s.execute("paint.setFill", &json!({"gradient": {}})).unwrap();
+                s
+            },
+            true,
+        ),
+        (
+            "a solid fill row active under a gradient fill",
+            || {
+                let (mut s, _) = session_with(json!({"color": "#336699"}));
+                s.execute("appearance.addFill", &json!({})).unwrap();
+                s.execute("paint.setFill", &json!({"gradient": {}, "item": null})).unwrap();
+                let items = &s.doc().unwrap().doc.node(s.doc().unwrap().selection.objects[0]).unwrap().appearance.items;
+                let solid = items
+                    .iter()
+                    .position(|i| matches!(i, vectorcraft_doc::AppearanceItem::Fill(f) if matches!(f.paint, Paint::Solid { .. })))
+                    .unwrap();
+                s.execute("appearance.setActiveItem", &json!({"index": solid})).unwrap();
+                s
+            },
+            false,
+        ),
+    ];
+    for (why, make, gradient) in cases {
+        let mut s = make();
+        let enabled = (crate::find_command("gradient.presets.save").unwrap().enabled)(&s).is_ok();
+        assert_eq!((enabled, s.execute("gradient.presets.save", &json!({})).is_ok()), (gradient, gradient), "{why}");
+    }
+}
+
+/// [`Node::proxy_paint_only`] picks the paint [`Node::proxy_paint`] does, for fills and strokes,
+/// with and without an Appearance panel row, on paths with several fills, type, an empty path
+/// and a colorized object.
+#[test]
+fn the_unmeasured_proxy_paint_is_the_measured_one() {
+    let (mut s, id) = session_with(json!({"gradient": {}}));
+    s.execute("appearance.addFill", &json!({})).unwrap();
+    s.execute("appearance.addStroke", &json!({})).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#ff0000"})).unwrap();
+    let plain = NodeId(s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap());
+    let colorized = NodeId(s.execute("shape.rectangle", &json!({"x": 40, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap());
+    s.edit("Colorize", |d, _| {
+        d.node_mut(colorized).unwrap().extras_mut().colorize = Some(Box::new(Paint::solid(Color::rgb8(255, 0, 0))));
+        Ok(())
+    })
+    .unwrap();
+    let text = NodeId(s.execute("text.create", &json!({"x": 10, "y": 200, "text": "type"})).unwrap()["id"].as_u64().unwrap());
+    let d = &s.doc().unwrap().doc;
+    let mut nodes: Vec<vectorcraft_doc::Node> = [id, plain, colorized, text].iter().map(|i| d.node(*i).unwrap().clone()).collect();
+    nodes.push(vectorcraft_doc::Node::path(NodeId(9999), Default::default(), (*d.node(plain).unwrap().appearance).clone()));
+    let mut runless = d.node(text).unwrap().clone();
+    if let vectorcraft_doc::NodeKind::Text(t) = &mut runless.kind {
+        t.runs.clear();
+    }
+    nodes.push(runless);
+    for n in &nodes {
+        for stroke in [false, true] {
+            for item in [None, Some(0), Some(1), Some(2), Some(3), Some(9)] {
+                assert_eq!(n.proxy_paint_only(stroke, item), n.proxy_paint(stroke, item).map(|p| p.0), "{:?} stroke {stroke} item {item:?}", n.id);
+            }
+        }
+    }
+}
+
+/// On objects made from a fixed seed (paths, an empty path, type with and without runs, each
+/// with zero to four fills and strokes of none, a solid color or a gradient, some colorized),
+/// [`Node::proxy_paint_only`] picks the paint [`Node::proxy_paint`] does for every row.
+#[test]
+fn the_unmeasured_proxy_paint_is_the_measured_one_on_varied_objects() {
+    let (mut s, rect) = session_with(json!({"gradient": {}}));
+    let gradient = s.doc().unwrap().doc.node(rect).unwrap().appearance.paint_at(None, true).unwrap().clone();
+    let text = NodeId(s.execute("text.create", &json!({"x": 10, "y": 200, "text": "type"})).unwrap()["id"].as_u64().unwrap());
+    let d = &s.doc().unwrap().doc;
+    let mut runless = d.node(text).unwrap().clone();
+    if let vectorcraft_doc::NodeKind::Text(t) = &mut runless.kind {
+        t.runs.clear();
+    }
+    let empty = vectorcraft_doc::Node::path(NodeId(9999), Default::default(), Default::default());
+    let bases = [d.node(rect).unwrap().clone(), empty, d.node(text).unwrap().clone(), runless];
+    let mut seed: u64 = 0x9a1d_5eed_c0de;
+    let mut next = |n: u64| {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        (seed >> 33) % n
+    };
+    let (mut checked, mut some) = (0, 0);
+    for _ in 0..200 {
+        let mut n = bases[next(4) as usize].clone();
+        let paints = [Paint::None, Paint::solid(Color::rgb8(next(256) as u8, 0, 0)), gradient.clone()];
+        let mut look = vectorcraft_doc::Appearance::default();
+        for _ in 0..next(5) {
+            let p = paints[next(3) as usize].clone();
+            look.items.push(if next(2) == 0 {
+                vectorcraft_doc::AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(p))
+            } else {
+                vectorcraft_doc::AppearanceItem::Stroke(vectorcraft_doc::StrokeLayer::new(p, 1.0 + next(5) as f64))
+            });
+        }
+        n.appearance = look.into();
+        if next(4) == 0 {
+            n.extras_mut().colorize = Some(Box::new(paints[next(3) as usize].clone()));
+        }
+        for stroke in [false, true] {
+            for item in [None, Some(0), Some(1), Some(2), Some(3), Some(4)] {
+                let measured = n.proxy_paint(stroke, item).map(|p| p.0);
+                assert_eq!(n.proxy_paint_only(stroke, item), measured, "{n:?} stroke {stroke} item {item:?}");
+                checked += 1;
+                some += usize::from(measured.is_some());
+            }
+        }
+    }
+    assert!(some > checked / 4 && some < checked, "both answers come up: {some} of {checked} found a paint");
+}
+
 #[test]
 fn saved_presets_round_trip_with_the_preferences() {
     let (mut s, _) = session_with(json!({"gradient": {}}));
@@ -156,4 +395,38 @@ fn saved_presets_round_trip_with_the_preferences() {
     let mut fresh = Session::new();
     fresh.apply_prefs(back);
     assert!(fresh.gradient_preset("mine").is_some_and(|e| e.library.is_none()));
+}
+
+/// Preferences can hold saved presets named like a built-in preset (saved before it existed) or
+/// like each other (edited by hand): applied, each gets a name of its own, any case.
+#[test]
+fn saved_presets_named_like_a_built_in_or_another_saved_one_get_a_free_name() {
+    let (mut s, id) = session_with(json!({"gradient": {"kind": "radial"}}));
+    let mist = s.gradient_preset("Mist").unwrap().gradient;
+    let mut own = paint(&s, id, false).gradient;
+    own.dither = true;
+    let preset = |name: &str| crate::cmd::GradientPreset { name: name.into(), gradient: own.clone() };
+    let mut prefs = s.prefs.clone();
+    prefs.gradient_presets =
+        vec![preset("mist"), preset("Mine"), preset("MINE"), preset("Mist 2"), preset("Plain"), preset("PLAIN"), preset("plain")];
+    s.apply_prefs(prefs);
+    let saved: Vec<&str> = s.prefs.gradient_presets.iter().map(|p| p.name.as_str()).collect();
+    assert_eq!(saved, ["mist 3", "Mine", "MINE 2", "Mist 2", "Plain", "PLAIN 2", "plain 3"]);
+    let list = s.execute("gradient.presets.list", &json!({})).unwrap();
+    let mut seen = std::collections::HashSet::new();
+    assert!(names(&list).iter().all(|n| seen.insert(n.to_lowercase())), "a name names one preset");
+    // The renamed one applies and deletes; the built-in Mist stays as it was.
+    s.execute("gradient.presets.apply", &json!({"name": "mist 3"})).unwrap();
+    assert_eq!(paint(&s, id, false).gradient, own);
+    assert_eq!(s.gradient_preset("Mist").unwrap().gradient, mist);
+    assert_eq!(s.execute("gradient.presets.delete", &json!({"name": "Mist 3"})).unwrap()["deleted"], "mist 3");
+    assert!(s.execute("gradient.presets.delete", &json!({"name": "Mist"})).is_err(), "built in");
+    assert_eq!(s.prefs.gradient_presets.len(), 6);
+    // Many presets with one name each get their own number.
+    let mut prefs = s.prefs.clone();
+    prefs.gradient_presets = (0..2000).map(|_| preset("Same")).collect();
+    s.apply_prefs(prefs);
+    let mut seen = std::collections::HashSet::new();
+    assert!(s.prefs.gradient_presets.iter().all(|p| seen.insert(p.name.to_lowercase())));
+    assert_eq!(s.prefs.gradient_presets.last().map(|p| p.name.as_str()), Some("Same 2000"));
 }

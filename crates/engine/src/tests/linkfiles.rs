@@ -14,12 +14,12 @@ use crate::cmd::linkfiles::{self, LinkSearch, Sought};
 use crate::tests_links::{BLUE, RED, place, png};
 use crate::{EngineError, Session};
 
-/// A fresh temporary folder (canonical, as a search reports it).
-fn folder(tag: &str) -> PathBuf {
-    let dir = vectorcraft_testkit::temp_dir(&format!("linkfiles-{tag}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    findfiles::plain(std::fs::canonicalize(&dir).unwrap())
+/// A fresh temporary folder, removed when the first part is dropped, and its path (canonical, as a
+/// search reports it).
+fn folder(tag: &str) -> (vectorcraft_testkit::TempDir, PathBuf) {
+    let dir = vectorcraft_testkit::TempDir::new(&format!("linkfiles-{tag}"));
+    let path = findfiles::plain(std::fs::canonicalize(&*dir).unwrap());
+    (dir, path)
 }
 
 /// Write `bytes` to the file at `path`, making its folders.
@@ -80,7 +80,7 @@ fn found(r: &Value, name: &str, root: &Path) -> Vec<(String, String, bool)> {
 /// innermost out up to the first that differs.
 #[test]
 fn files_found_are_ranked_by_what_the_link_saved() {
-    let root = folder("rank");
+    let (_dir, root) = folder("rank");
     let mut s = session_for(&root);
     let (logo, photo) = (png(60, 40, RED), png(50, 30, BLUE));
     write(&root.join("orig/logo.png"), &logo);
@@ -123,11 +123,72 @@ fn files_found_are_ranked_by_what_the_link_saved() {
     assert_eq!(photo_row["path"], json!(root.join("orig/photo.png")));
 }
 
+/// A link saved as a classic Mac OS path (`Disk:Folder:file`) is looked for by its file name, and
+/// the files found are ranked by the folder names they share with that path.
+#[test]
+fn a_classic_mac_path_is_found_by_its_name_and_folders() {
+    let (_dir, root) = folder("classic");
+    let mut s = session_for(&root);
+    let photo = png(50, 30, BLUE);
+    write(&root.join("orig/photo.png"), &photo);
+    let id = placed(&mut s, &root.join("orig/photo.png"));
+    s.edit("classic path", |d, _| {
+        if let NodeKind::Image(im) = &mut d.node_mut(NodeId(id)).unwrap().kind {
+            im.link.as_mut().unwrap().path = "Old Disk:Art:Images:photo.png".into();
+        }
+        Ok(())
+    })
+    .unwrap();
+    std::fs::remove_dir_all(root.join("orig")).unwrap();
+    // Other files of the name (a search ends once it finds the same file).
+    let search = root.join("search");
+    let mut changed = photo.clone();
+    *changed.last_mut().unwrap() ^= 1;
+    write(&search.join("a/photo.png"), &changed);
+    write(&search.join("z/Art/Images/photo.png"), &changed);
+    s.execute("links.findFiles", &json!({"folder": search})).unwrap();
+    let r = finished(&mut s);
+    assert_eq!(r["state"].as_str(), Some("done"), "{r}");
+    let files = [("search/z/Art/Images/photo.png", "name", false), ("search/a/photo.png", "name", false)];
+    assert_eq!(found(&r, "photo.png", &root), files.map(|(p, k, c)| (p.to_string(), k.to_string(), c)));
+}
+
+/// The folders a saved path shares with a file found are counted after its parent components are
+/// resolved: `Art::` in a classic Mac OS path and `Art/..` in any other path go back to `Projects`.
+#[test]
+fn parent_components_in_a_saved_path_are_resolved_before_ranking() {
+    for (tag, saved) in [("classic-up", "Old Disk:Projects:Art::photo.png"), ("slash-up", "/old/Projects/Art/../photo.png")] {
+        let (_dir, root) = folder(tag);
+        let mut s = session_for(&root);
+        let photo = png(50, 30, BLUE);
+        write(&root.join("orig/photo.png"), &photo);
+        let id = placed(&mut s, &root.join("orig/photo.png"));
+        s.edit("saved path", |d, _| {
+            if let NodeKind::Image(im) = &mut d.node_mut(NodeId(id)).unwrap().kind {
+                im.link.as_mut().unwrap().path = saved.into();
+            }
+            Ok(())
+        })
+        .unwrap();
+        std::fs::remove_dir_all(root.join("orig")).unwrap();
+        let search = root.join("search");
+        let mut changed = photo.clone();
+        *changed.last_mut().unwrap() ^= 1;
+        write(&search.join("Art/photo.png"), &changed);
+        write(&search.join("Projects/photo.png"), &changed);
+        s.execute("links.findFiles", &json!({"folder": search})).unwrap();
+        let r = finished(&mut s);
+        assert_eq!(r["state"].as_str(), Some("done"), "{saved}: {r}");
+        let files = [("search/Projects/photo.png", "name", false), ("search/Art/photo.png", "name", false)];
+        assert_eq!(found(&r, "photo.png", &root), files.map(|(p, k, c)| (p.to_string(), k.to_string(), c)), "{saved}");
+    }
+}
+
 /// Without `ids`, a search looks for the files that can't be found; with them, for those objects'
 /// files, whatever their status.
 #[test]
 fn a_search_looks_for_the_missing_files_or_the_objects_given() {
-    let root = folder("which");
+    let (_dir, root) = folder("which");
     let mut s = session_for(&root);
     write(&root.join("orig/gone.png"), &png(40, 30, RED));
     write(&root.join("orig/here.png"), &png(40, 30, BLUE));
@@ -164,7 +225,7 @@ fn a_search_looks_for_the_missing_files_or_the_objects_given() {
 /// other contents leaves it to search every folder.
 #[test]
 fn a_search_ends_once_every_linked_file_has_its_same_file() {
-    let root = folder("early");
+    let (_dir, root) = folder("early");
     let mut s = session_for(&root);
     s.search_threads = Some(1);
     let bytes = png(40, 30, RED);
@@ -204,13 +265,13 @@ impl Visitor for Blocked {
 
 #[test]
 fn stop_ends_only_the_search_it_names() {
-    let root = folder("stop");
+    let (_dir, root) = folder("stop");
     std::fs::write(root.join("a.png"), b"png").unwrap();
     let mut s = session_for(&root);
     let (tx, rx) = mpsc::channel();
     let search = findfiles::start(root.clone(), s.search_rules.clone(), Limits::default(), 1, 2, Arc::new(Blocked(Mutex::new(rx)))).unwrap();
     let links = vec![Sought { name: "a.png".into(), path: "/gone/a.png".into(), ids: vec![], size: None, hash: None }];
-    s.link_search = Some(LinkSearch { id: 7, folder: root.to_string_lossy().into_owned(), links, sizes: Arc::default(), search });
+    s.link_search = Some(LinkSearch { id: 7, folder: root.to_string_lossy().into_owned(), doc: None, links, sizes: Arc::default(), search });
     let until = Instant::now() + WAIT;
     while s.execute("links.findFiles", &json!({})).unwrap()["searched"]["read"] != 1 && Instant::now() < until {
         std::thread::sleep(Duration::from_millis(2));
@@ -223,9 +284,116 @@ fn stop_ends_only_the_search_it_names() {
     drop(tx);
 }
 
+/// A caller confined by read roots sees, in the replies to a search another caller started and to
+/// its own, only the paths inside its read roots: the files found outside them, a link's saved path
+/// outside them and the folder searched are left out, and the rows, ids and counts stay. Without
+/// roots, the replies are as before.
+#[test]
+fn a_search_shows_a_confined_caller_only_paths_inside_its_read_roots() {
+    let (_dir, root) = folder("read-roots");
+    let mut s = session_for(&root);
+    let photo = png(40, 30, RED);
+    write(&root.join("lrf-away/photo.png"), &photo);
+    let id = placed(&mut s, &root.join("lrf-away/photo.png"));
+    std::fs::remove_file(root.join("lrf-away/photo.png")).unwrap();
+    // Files of the name with other contents: the search reads every folder.
+    let other = png(40, 30, BLUE);
+    let (home, wide) = (root.join("home"), root.join("lrf-wide"));
+    write(&home.join("photo.png"), &other);
+    write(&wide.join("photo.png"), &other);
+    let roots = |read: &[&Path], write: &[&Path]| crate::file_access::AutomationRoots::new(read, write).unwrap().unwrap();
+    let (narrow, write_only, broad) = (roots(&[&home], &[]), roots(&[], &[&root]), roots(&[&root], &[]));
+    let ask = |s: &mut Session, r: &Arc<crate::file_access::AutomationRoots>, p: Value| {
+        crate::file_access::confine(Some(r), || s.execute("links.findFiles", &p).unwrap())
+    };
+    let hidden = |r: &Value| {
+        let text = r.to_string();
+        assert!(!text.contains("lrf-away") && !text.contains("lrf-wide") && r.get("folder").is_none(), "{r}");
+        let row = &r["links"][0];
+        assert_eq!((row["name"].as_str(), &row["ids"], row.get("path")), (Some("photo.png"), &json!([id]), None), "{r}");
+    };
+    // Started with the broad roots, over the whole folder.
+    let r = ask(&mut s, &broad, json!({"folder": root}));
+    assert_eq!(r["folder"], json!(root), "{r}");
+    finished(&mut s);
+    let all = ask(&mut s, &broad, json!({}));
+    assert_eq!(all["links"][0]["files"].as_array().map(Vec::len), Some(2), "{all}");
+    for r in [ask(&mut s, &narrow, json!({})), ask(&mut s, &narrow, json!({"stop": true}))] {
+        hidden(&r);
+        assert_eq!(r["links"][0]["files"], json!([{"path": home.join("photo.png"), "size": other.len(), "match": "name"}]), "{r}");
+        assert_eq!((&r["state"], &r["searched"], &r["id"]), (&all["state"], &all["searched"], &all["id"]), "{r}");
+    }
+    let r = ask(&mut s, &write_only, json!({}));
+    hidden(&r);
+    assert_eq!(r["links"][0]["files"], json!([]), "{r}");
+    // Without roots, every path shows.
+    let r = s.execute("links.findFiles", &json!({})).unwrap();
+    assert_eq!((&r["folder"], &r["links"][0]["path"]), (&json!(root), &json!(root.join("lrf-away/photo.png"))), "{r}");
+    assert_eq!(r["links"][0]["files"].as_array().map(Vec::len), Some(2), "{r}");
+    // The narrow caller's own search shows the folder it gave.
+    let r = ask(&mut s, &narrow, json!({"folder": home}));
+    assert_eq!(r["folder"], json!(home), "{r}");
+    finished(&mut s);
+    let r = ask(&mut s, &narrow, json!({}));
+    assert_eq!((&r["folder"], r["links"][0].get("path")), (&json!(home), None), "{r}");
+    // A search that failed: the reason shows without the path to a caller outside its folder.
+    ask(&mut s, &broad, json!({"folder": root.join("lrf-wide/gone")}));
+    let r = finished(&mut s);
+    assert!(r["error"].as_str().is_some_and(|e| e.contains("lrf-wide")), "{r}");
+    let r = ask(&mut s, &narrow, json!({}));
+    assert_eq!((r["state"].as_str(), r["error"].as_str()), (Some("failed"), Some("the folder can't be read")), "{r}");
+    hidden(&r);
+}
+
+/// A link's saved path relative to the document is shown to a confined caller when it leads to a
+/// file inside its read roots, and left out when `..` leads out of them.
+#[test]
+fn a_relative_link_path_is_judged_from_the_documents_folder() {
+    let (_dir, root) = folder("read-roots-relative");
+    let mut s = session_for(&root);
+    let home = root.join("home");
+    write(&root.join("lrf-away/photo.png"), &png(40, 30, RED));
+    let id = placed(&mut s, &root.join("lrf-away/photo.png"));
+    std::fs::create_dir_all(&home).unwrap();
+    s.execute("document.save", &json!({"path": home.join("poster.vectorcraft")})).unwrap();
+    let narrow = crate::file_access::AutomationRoots::new(&[&home], &[]).unwrap().unwrap();
+    for (saved, shown) in [("sub/photo.png", true), ("../lrf-away/photo.png", false)] {
+        s.edit("relative path", |d, _| {
+            if let NodeKind::Image(im) = &mut d.node_mut(NodeId(id)).unwrap().kind {
+                im.link.as_mut().unwrap().path = saved.into();
+            }
+            Ok(())
+        })
+        .unwrap();
+        let r = crate::file_access::confine(Some(&narrow), || s.execute("links.findFiles", &json!({"folder": home, "ids": [id]})).unwrap());
+        assert_eq!(r["links"][0].get("path"), shown.then(|| json!(saved)).as_ref(), "{saved}: {r}");
+        finished(&mut s);
+    }
+}
+
+/// `image.info` leaves a linked file outside the confined caller's read roots unnamed (`link`
+/// null), as `links.info` leaves it out, and keeps the other fields.
+#[test]
+fn image_info_leaves_out_a_link_outside_the_read_roots() {
+    let (_dir, root) = folder("read-roots-info");
+    let mut s = session_for(&root);
+    let pic = root.join("lrf-away/photo.png");
+    write(&pic, &png(40, 30, RED));
+    let id = placed(&mut s, &pic);
+    std::fs::create_dir_all(root.join("home")).unwrap();
+    let narrow = crate::file_access::AutomationRoots::new(&[&root.join("home")], &[]).unwrap().unwrap();
+    let ask = |s: &mut Session, cmd: &str| crate::file_access::confine(Some(&narrow), || s.execute(cmd, &json!({"id": id})).unwrap());
+    let r = ask(&mut s, "image.info");
+    assert_eq!((&r["link"], &r["linked"], &r["pixelWidth"], &r["id"]), (&Value::Null, &json!(true), &json!(40), &json!(id)), "{r}");
+    assert!(!r.to_string().contains("lrf-away"), "{r}");
+    let info = ask(&mut s, "links.info");
+    assert!(info.get("link").is_none() && !info.to_string().contains("lrf-away"), "{info}");
+    assert_eq!(s.execute("image.info", &json!({"id": id})).unwrap()["link"], json!(pic));
+}
+
 #[test]
 fn relinking_with_copy_puts_the_file_in_the_documents_folder() {
-    let root = folder("copy");
+    let (_dir, root) = folder("copy");
     let mut s = session_for(&root);
     write(&root.join("orig/photo.png"), &png(40, 30, RED));
     let id = placed(&mut s, &root.join("orig/photo.png"));
@@ -272,14 +440,13 @@ fn relinking_with_copy_puts_the_file_in_the_documents_folder() {
     let image = placed(&mut unsaved, &found);
     let r = unsaved.execute("links.relink", &json!({"ids": [image], "path": found, "copy": true}));
     assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg.contains("save the document first")), "{r:?}");
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// Copy takes images only: with copy, a call that includes a placed document fails and copies
 /// nothing; without it, the document is relinked where its file is.
 #[test]
 fn copy_refuses_placed_documents() {
-    let root = folder("copy-placed");
+    let (_dir, root) = folder("copy-placed");
     let mut s = session_for(&root);
     s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
     let badge = root.join("badge.vectorcraft");
@@ -300,7 +467,7 @@ fn copy_refuses_placed_documents() {
 #[cfg(unix)]
 #[test]
 fn a_copy_stays_inside_the_write_root() {
-    let root = folder("roots");
+    let (_dir, root) = folder("roots");
     let mut s = session_for(&root);
     write(&root.join("orig/photo.png"), &png(40, 30, RED));
     let id = placed(&mut s, &root.join("orig/photo.png"));
@@ -316,14 +483,13 @@ fn a_copy_stays_inside_the_write_root() {
     assert!(matches!(&r, Err(EngineError::Other(m)) if m.contains("outside the write root")), "{r:?}");
     assert!(!root.join("doc/photo 2.png").exists());
     assert_eq!(std::fs::read(allowed.join("photo.png")).unwrap(), b"kept as it is");
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// An SVG's linked files are read on the importer's own thread (it needs a deep stack): the roots
 /// in force on the thread that opens the SVG hold there too.
 #[test]
 fn an_svg_reads_its_links_within_the_read_root() {
-    let root = folder("svg-roots");
+    let (_dir, root) = folder("svg-roots");
     for dir in ["in", "out"] {
         write(&root.join(dir).join("dot.png"), &png(4, 4, RED));
     }
@@ -342,12 +508,11 @@ fn an_svg_reads_its_links_within_the_read_root() {
         assert_eq!(import("in"), inside, "inside the read root: read as before");
         assert_ne!(import("out"), outside, "outside the read root: not read");
     });
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
 fn junk_search_params_never_fail_internally() {
-    let root = folder("junk");
+    let (_dir, root) = folder("junk");
     let mut s = session_for(&root);
     write(&root.join("orig/a.png"), &png(4, 4, RED));
     let id = placed(&mut s, &root.join("orig/a.png"));

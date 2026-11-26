@@ -3,15 +3,15 @@ use super::handlers::{
     Args, absolute_path, add_text, answer_dialog, apply_paint, draw_path, draw_shape, exec, image_result, max_side, need_ui, req_str, screenshot,
     select_ids, transform,
 };
-use super::{ARTBOARD_PARAMS, Backend, Map, ToolResult, Value, format, json, save_reads_option, writable_format};
+use super::{ARTBOARD_PARAMS, Backend, Map, ToolResult, Value, json, writable_format};
+use vectorcraft_doc::resample::{Resample, fitted};
 
 /// The `menu` argument of the command listings.
 pub(super) const MENU_FILTER: &str =
     "Case-insensitive substring of the menu path, its levels joined with \" > \" (e.g. \"Object\", \"Object > Path\")";
 
 /// The `brief` argument of the command listings.
-pub(super) const BRIEF: &str =
-    "Leave out each command's params description (the bulk of the catalogue); run command_list with the id as filter to read it";
+pub(super) const BRIEF: &str = "Leave out each command's params description and its schema and inputSchema (the bulk of the catalogue); run command_list with the id as filter to read them";
 
 /// The `max_side` argument of the window captures.
 pub(super) const MAX_SIDE_WINDOW: &str =
@@ -19,6 +19,29 @@ pub(super) const MAX_SIDE_WINDOW: &str =
 
 /// The `traceViews` argument of the artboard renders.
 pub(super) const TRACE_VIEWS: &str = "Draw Image Trace objects in the view set with imageTrace.setView (outlines, the source image…), as the app's window does; by default they draw their tracing result, as exports do";
+
+/// The `text_wrap` tool's `release` and its `offset` and `invert` for `object.textWrap.make`, checked
+/// before the tool changes the selection: an omitted or null value is left out, an `offset` that is
+/// not a number or lies outside [`vectorcraft_engine::TEXT_WRAP_OFFSET_RANGE`] is an error, and so is
+/// an `invert` or `release` that is not true or false.
+fn text_wrap_args(a: &Args) -> Result<(bool, Value), String> {
+    let mut p = json!({});
+    for k in ["offset", "invert", "release"] {
+        let Some(v) = a.get(k).filter(|v| !v.is_null()) else { continue };
+        if k == "offset" {
+            let range = vectorcraft_engine::TEXT_WRAP_OFFSET_RANGE;
+            let n = v.as_f64().ok_or_else(|| format!("`{k}` must be a number, not {v}"))?;
+            if !range.contains(&n) {
+                return Err(format!("`{k}` must be from {} to {}", range.start(), range.end()));
+            }
+        } else if !v.is_boolean() {
+            return Err(format!("`{k}` must be true or false"));
+        }
+        p[k] = v.clone();
+    }
+    let release = p.as_object_mut().and_then(|m| m.remove("release")).is_some_and(|v| v == true);
+    Ok((release, p))
+}
 
 /// `traceViews`: false when absent.
 pub(super) fn trace_views(a: &Args) -> Result<bool, String> {
@@ -30,7 +53,7 @@ pub(super) fn trace_views(a: &Args) -> Result<bool, String> {
 
 /// The command catalogue narrowed by the listing tools' arguments: `filter` (or `query`) on the
 /// id, label and menu path, `menu` on the menu path, `enabledOnly`, and `brief` (no `params`
-/// text: the full catalogue is too large for many clients, #2173).
+/// text, `schema` or `inputSchema`: the full catalogue is too large for many clients, #2173).
 fn filter_commands(all: Value, a: &Args) -> Value {
     let text = |k: &str| a.get(k).and_then(Value::as_str).map(str::to_lowercase).filter(|s| !s.is_empty());
     let needle = text("filter").or_else(|| text("query"));
@@ -63,7 +86,9 @@ fn filter_commands(all: Value, a: &Args) -> Value {
             .filter(hit)
             .map(|mut c| {
                 if brief && let Some(o) = c.as_object_mut() {
-                    o.remove("params");
+                    for key in ["params", "schema", "inputSchema"] {
+                        o.remove(key);
+                    }
                 }
                 c
             })
@@ -120,11 +145,17 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
             for (i, e) in events.iter().enumerate() {
                 let kind = e.get("kind").and_then(Value::as_str).unwrap_or("");
                 if crate::headless::pointer_kind(kind).is_none() {
-                    return Err(format!("event {i}: unknown kind `{kind}` (down, drag, up, move, doubleclick)"));
+                    return Err(format!("event {i}: unknown kind `{kind}` (down, drag, up, move, doubleclick, tripleclick)"));
                 }
                 if !e.get("x").is_some_and(Value::is_number) || !e.get("y").is_some_and(Value::is_number) {
                     return Err(format!("event {i}: numeric `x` and `y` required"));
                 }
+                if e.get("backquote").is_some_and(|v| !v.is_boolean()) {
+                    return Err(format!("event {i}: `backquote` must be a boolean"));
+                }
+            }
+            if a.get("backquote").is_some_and(|v| !v.is_boolean()) {
+                return Err("`backquote` must be a boolean".into());
             }
             if let Some(t) = a.get("tool").and_then(Value::as_str) {
                 b.call("ui.tool.select", json!({"tool": t}))?;
@@ -152,11 +183,16 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
             if !["fill", "stroke", "strokeWidth"].iter().any(|k| a.contains_key(*k)) {
                 return Err("give at least one of `fill`, `stroke`, `strokeWidth`".into());
             }
-            let (applied, objects) = apply_paint(b, a, a.get("ids").cloned())?;
+            let (applied, objects, unpainted) = apply_paint(b, a, a.get("ids").cloned())?;
             let mut reply = json!({"applied": applied, "objects": objects});
             if objects == 0 {
                 reply["note"] = json!(
-                    "no object was painted (nothing selected, or `ids` is empty or holds no object this paint applies to): only the paint for new art changed"
+                    "no object was painted (nothing selected, the Live Paint Bucket, or for a fill the Shape Builder, is the active tool and no `ids` were given, or `ids` is empty or holds no object this paint applies to): only the paint for new art changed"
+                );
+            } else if !unpainted.is_empty() {
+                reply["unpainted"] = json!(unpainted);
+                reply["note"] = json!(
+                    "the commands in `unpainted` painted no object: no given or selected object takes that paint, or, for a fill, the Shape Builder is the active tool and no `ids` were given, and the fill changed for new art only"
                 );
             }
             j(reply)
@@ -185,7 +221,13 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
         "screenshot" => screenshot(b, a),
         "open_file" => {
             let path = absolute_path(b, req_str(a, "path")?)?;
-            j(b.call("app.open", json!({"path": path}))?)
+            let mut p = json!({"path": path});
+            for k in ["importer", "params"] {
+                if let Some(v) = a.get(k).filter(|v| !v.is_null()) {
+                    p[k] = v.clone();
+                }
+            }
+            j(b.call("app.open", p)?)
         }
         "save_file" => {
             let mut p = json!({"path": a.get("path").and_then(Value::as_str).map(|p| absolute_path(b, p)).transpose()?});
@@ -199,14 +241,7 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
             if b.has_ui() {
                 p["wait"] = json!(true);
             }
-            let mut r = b.call("app.save", p)?;
-            let notes = save_file_warnings(a, r.get("format").and_then(Value::as_str));
-            if let Some(o) = r.as_object_mut().filter(|_| !notes.is_empty()) {
-                let mut all = o.get("warnings").and_then(Value::as_array).cloned().unwrap_or_default();
-                all.extend(notes.into_iter().map(Value::from));
-                o.insert("warnings".into(), Value::Array(all));
-            }
-            j(r)
+            j(b.call("app.save", p)?)
         }
         "export" => {
             // One params object for every backend; the named arguments win over `options` (a named
@@ -245,7 +280,15 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
             select_ids(b, a)?;
             j(exec(b, &format!("object.pathfinder.{}", req_str(a, "operation")?), json!({}))?)
         }
-        "transform" => j(transform(b, a)?),
+        "transform" => {
+            // Validate all numeric steps before the handler changes selection or runs a step.
+            for field in ["dx", "dy", "rotate", "scale", "scaleX", "scaleY", "shear"] {
+                if a.get(field).is_some_and(|value| !value.is_null() && value.as_f64().is_none()) {
+                    return Err(format!("`{field}` must be a number"));
+                }
+            }
+            j(transform(b, a)?)
+        }
         "create_graph" => {
             let mut p = Value::Object(a.clone());
             if p.get("type").is_none() {
@@ -254,15 +297,10 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
             j(exec(b, "graph.create", p)?)
         }
         "text_wrap" => {
+            let (release, p) = text_wrap_args(a)?;
             select_ids(b, a)?;
-            if a.get("release").and_then(Value::as_bool) == Some(true) {
+            if release {
                 return j(exec(b, "object.textWrap.release", json!({}))?);
-            }
-            let mut p = json!({});
-            for k in ["offset", "invert"] {
-                if let Some(v) = a.get(k) {
-                    p[k] = v.clone();
-                }
             }
             j(exec(b, "object.textWrap.make", p)?)
         }
@@ -282,20 +320,6 @@ fn named_export_params(a: &Args) -> &'static [&'static str] {
     } else {
         &["path", "format", "artboard", "range", "outlineText"]
     }
-}
-
-/// What `save_file` with arguments `a` adds to the save's `warnings`, for a file written in format
-/// `written` (none when nothing was written yet): each key in `options` that the format doesn't
-/// read. The save itself warns about `compress`, `version` and `preview` given at the top level.
-fn save_file_warnings(a: &Args, written: Option<&str>) -> Vec<String> {
-    let Some(f) = written.and_then(format) else { return vec![] };
-    let nested = a.get("options").and_then(Value::as_object);
-    nested
-        .into_iter()
-        .flatten()
-        .filter(|(key, v)| !v.is_null() && !save_reads_option(f, key))
-        .map(|(key, _)| format!("`options.{key}` was not used: {} files don't read it", f.label))
-        .collect()
 }
 
 /// Run one tool. Failures (unknown tool, bad arguments, command errors) come back as an
@@ -451,9 +475,19 @@ fn render_preview(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
     let r = b.call("ui.render", p)?;
     let encoded = r.get("pngBase64").and_then(Value::as_str).ok_or("renderer returned no image")?;
     let png = vectorcraft_format::base64_decode(encoded).ok_or("renderer returned bad base64")?;
-    let img = image::load_from_memory_with_format(&png, image::ImageFormat::Png).map_err(|e| format!("read preview: {e}"))?;
-    let img = if img.width() > max || img.height() > max { img.thumbnail(max, max) } else { img };
-    let mut out = std::io::Cursor::new(Vec::new());
-    img.write_to(&mut out, image::ImageFormat::Png).map_err(|e| format!("encode preview: {e}"))?;
-    Ok(image_result(out.get_ref(), json!({"width":img.width(),"height":img.height()})))
+    // The render was asked for at most 4096 a side.
+    let img = super::handlers::decode_png(&png, 8192).map_err(|e| format!("read preview: {e}"))?;
+    let img = if img.width() > max || img.height() > max { fitted(img, max, max, Resample::Average) } else { img };
+    let rgba = img.to_rgba8();
+    let raw = craft_image_codecs::Image::from_raw(
+        rgba.width(),
+        rgba.height(),
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        rgba.into_raw(),
+    )
+    .map_err(|e| format!("encode preview: {e}"))?;
+    let out = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+        .map_err(|e| format!("encode preview: {e}"))?;
+    Ok(image_result(&out, json!({"width":img.width(),"height":img.height()})))
 }

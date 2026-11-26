@@ -116,15 +116,63 @@ fn page_knockout_and_isolated_blending() {
     Arc::make_mut(&mut d.layers[0]).knockout = Knockout::Off;
     assert!(close(render(&d).pixel(50, 50), BLUE_OVER_RED));
 
-    // Page Isolated Blending: a Difference object no longer blends with the white under the page.
+    // A Difference object on the bare page keeps its color: the background goes under the
+    // finished art (#6125), with Page Isolated Blending or without it.
     let mut d = Document::new(100.0, 100.0);
     let mut red = half(&mut d, 10.0, (1.0, 0.0, 0.0));
     red.opacity = 1.0;
     red.blend = Blend::Difference;
     d.insert(Some(d.layers[0].id), 0, red).unwrap();
-    assert!(close(render(&d).pixel(30, 50), [0, 255, 255, 255]), "inverts the white: {:?}", render(&d).pixel(30, 50));
+    assert!(close(render(&d).pixel(30, 50), [255, 0, 0, 255]), "the bare page: {:?}", render(&d).pixel(30, 50));
     d.page_isolate = true;
     assert!(close(render(&d).pixel(30, 50), [255, 0, 0, 255]), "isolated: {:?}", render(&d).pixel(30, 50));
+    // A white object under it is art: the Difference object inverts it.
+    let id = d.alloc_id();
+    let white = Node::path(id, shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(Paint::solid(Color::WHITE), Paint::None, 0.0));
+    d.insert(Some(d.layers[0].id), 0, white).unwrap();
+    assert!(close(render(&d).pixel(30, 50), [0, 255, 255, 255]), "inverts the white object: {:?}", render(&d).pixel(30, 50));
+}
+
+/// On a white or blue background, every blend mode on the bare page gives the transparent
+/// render over that color (#6125).
+#[test]
+fn no_blend_mode_reads_the_background() {
+    for mode in Blend::ALL {
+        let mut d = Document::new(100.0, 100.0);
+        let mut red = half(&mut d, 10.0, (1.0, 0.0, 0.0));
+        red.blend = mode;
+        d.insert(Some(d.layers[0].id), 0, red).unwrap();
+        let clear = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default()).pixel(30, 50);
+        for bg in [[255, 255, 255, 255], [0, 0, 255, 255]] {
+            let got =
+                Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions { background: Some(bg), ..Default::default() }).pixel(30, 50);
+            let a = i32::from(clear[3]);
+            let want = [0, 1, 2].map(|c| (i32::from(clear[c]) * a + i32::from(bg[c]) * (255 - a)) / 255);
+            assert!((0..3).all(|c| (i32::from(got[c]) - want[c]).abs() <= 3) && got[3] == 255, "{mode:?} on {bg:?}: {got:?}, want {want:?}");
+        }
+    }
+}
+
+/// Premultiplied pixels of alpha 0, 128 and 255 over backgrounds of alpha 0, 128 and 255.
+#[test]
+fn over_background_composites_premultiplied_pixels() {
+    let over = |p: [u8; 4], a: u8| {
+        let mut px = p.to_vec();
+        crate::renderer::over_background(&mut px, [200, 100, 0, a]);
+        [px[0], px[1], px[2], px[3]]
+    };
+    const CLEAR: [u8; 4] = [0; 4];
+    const HALF: [u8; 4] = [64, 10, 100, 128];
+    const SOLID: [u8; 4] = [9, 8, 7, 255];
+    assert_eq!(over(CLEAR, 0), CLEAR);
+    assert_eq!(over(HALF, 0), HALF);
+    assert_eq!(over(SOLID, 0), SOLID);
+    assert_eq!(over(CLEAR, 128), [100, 50, 0, 128]);
+    assert_eq!(over(HALF, 128), [114, 35, 100, 192]);
+    assert_eq!(over(SOLID, 128), SOLID);
+    assert_eq!(over(CLEAR, 255), [200, 100, 0, 255]);
+    assert_eq!(over(HALF, 255), [164, 60, 100, 255]);
+    assert_eq!(over(SOLID, 255), SOLID);
 }
 
 #[test]
@@ -182,5 +230,99 @@ fn page_knockout_looks_the_same_when_another_object_blends() {
         }
         let (a, b) = (plain.pixel(35, 65), blending.pixel(35, 65));
         assert!(close(a, b), "the group's middle over {below:?}: {a:?} alone, {b:?} with the Multiply square");
+    }
+}
+
+#[test]
+fn opaque_knockout_fills_keep_pixels_without_per_element_backdrop_rasters() {
+    // Fractional curved edges and holes exercise coverage, not just opaque interiors. A disabled
+    // mask is visually neutral and keeps the general knockout path as an oracle, without adding
+    // another compositing layer or rounding step to each fill.
+    for precise in [false, true] {
+        for (anti_alias, supersample) in [(AntiAlias::Art, false), (AntiAlias::Art, true), (AntiAlias::None, false)] {
+            for copy_backdrop in [false, true] {
+                let make = |reference: bool| {
+                    let mut d = Document::new(80.0, 60.0);
+                    let mut members = Vec::new();
+                    for i in 0..12 {
+                        let outer = shapes::ellipse(Rect::new(2.3 + f64::from(i), 3.7, 65.4, 53.2));
+                        let inner = shapes::ellipse(Rect::new(20.2, 20.8, 40.6, 38.1));
+                        let child = Node::path(d.alloc_id(), inner, Appearance::default());
+                        let first = Node::path(d.alloc_id(), outer, Appearance::default());
+                        let mut n = if i % 2 == 0 {
+                            Node::new(d.alloc_id(), NodeKind::Compound { children: vec![Arc::new(first), Arc::new(child)], rule: FillRule::EvenOdd })
+                        } else {
+                            first
+                        };
+                        n.appearance = Appearance::basic(Paint::solid(Color::rgb(i as f32 / 12.0, 0.3, 0.7)), Paint::None, 0.0).into();
+                        if reference {
+                            let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 80.0, 60.0)), Appearance::default());
+                            let mut mask = vectorcraft_doc::OpacityMask::new(art, false);
+                            mask.disabled = true;
+                            n.extras_mut().mask = Some(Box::new(mask));
+                        }
+                        members.push(Arc::new(n));
+                    }
+                    if copy_backdrop {
+                        let mut blend = half(&mut d, 70.0, (0.5, 0.5, 0.5));
+                        blend.blend = Blend::Multiply;
+                        members.push(Arc::new(blend));
+                    }
+                    let mut g = Node::group(d.alloc_id(), members);
+                    g.knockout = Knockout::On;
+                    g.opacity = 0.5;
+                    d.insert(Some(d.layers[0].id), 0, g).unwrap();
+                    d
+                };
+                let opts = RenderOptions { background: Some([190, 210, 230, 255]), precise, anti_alias, supersample, ..Default::default() };
+                let draw = |reference| {
+                    crate::group::PIXELS_DRAWN.with(|n| n.set(0));
+                    let mut r = Renderer::new();
+                    r.threads = 0;
+                    let img = r.render(&make(reference), 80, 60, Affine::IDENTITY, &opts);
+                    let pixels = crate::group::PIXELS_DRAWN.with(|n| n.get());
+                    (img, pixels, r.stats.drawn)
+                };
+                let (fast, fast_pixels, fast_draws) = draw(false);
+                let (reference, reference_pixels, reference_draws) = draw(true);
+                assert!(fast.pixels == reference.pixels, "precise={precise}, aa={anti_alias:?}, supersample={supersample}, backdrop={copy_backdrop}");
+                if anti_alias == AntiAlias::None || supersample {
+                    assert!(fast_draws < reference_draws, "opaque elements should draw once");
+                    if copy_backdrop {
+                        assert!(fast_pixels < reference_pixels, "opaque elements should not rasterize a backdrop per element");
+                    }
+                } else {
+                    assert_eq!(fast_draws, reference_draws, "analytical AA must keep its rounding");
+                    assert_eq!(fast_pixels, reference_pixels);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn translucent_knockout_objects_and_fills_keep_their_compositing() {
+    for fill_opacity in [false, true] {
+        let d = doc(Knockout::On, |_, g| {
+            if fill_opacity {
+                for n in g.children_mut().unwrap() {
+                    let n = Arc::make_mut(n);
+                    n.opacity = 1.0;
+                    for item in &mut n.appearance.items {
+                        if let vectorcraft_doc::AppearanceItem::Fill(fill) = item {
+                            fill.opacity = 0.5;
+                        }
+                    }
+                }
+            }
+        });
+        let opts = RenderOptions { anti_alias: AntiAlias::None, background: Some([255; 4]), ..Default::default() };
+        let mut renderer = Renderer::new();
+        let r = renderer.render(&d, 100, 100, Affine::IDENTITY, &opts);
+        // Object opacity is ignored by its knockout shape; a fill's own opacity is retained.
+        let want = if fill_opacity { BLUE_OVER_RED } else { BLUE_OVER_WHITE };
+        assert!(close(r.pixel(50, 50), want), "fill opacity={fill_opacity}: {:?}", r.pixel(50, 50));
+        let nodes = d.layers.iter().map(|n| n.count()).sum::<usize>();
+        assert!(renderer.stats.drawn > nodes, "translucent elements keep the separate knockout passes");
     }
 }

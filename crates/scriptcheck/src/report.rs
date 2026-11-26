@@ -370,14 +370,14 @@ impl<'l> Acc<'l> {
     pub fn problem(&mut self, code: &'static str, line: Option<usize>, file: Option<&str>, detail: Option<&str>) {
         if self.room(self.problems.len()) {
             let detail = detail.map(|d| self.echo(d));
-            self.problems.push(Problem { code, line, file: file.map(str::to_string), detail });
+            self.problems.push(Problem { code, line, file: file.map(|f| self.echo(f)), detail });
         }
     }
 
     pub fn directive(&mut self, name: &'static str, value: &str, line: usize, form: &'static str, file: Option<&str>) {
         if self.room(self.directives.len()) {
             let value = self.echo(value);
-            self.directives.push(Directive { name, value, line, form, file: file.map(str::to_string) });
+            self.directives.push(Directive { name, value, line, form, file: file.map(|f| self.echo(f)) });
         }
     }
 
@@ -394,14 +394,14 @@ impl<'l> Acc<'l> {
             version: part(t.version),
             locale: part(t.locale),
             line,
-            file: file.map(str::to_string),
+            file: file.map(|f| self.echo(f)),
         };
         self.targets.push(target);
     }
 
     pub fn include(&mut self, value: &str, line: usize, file: Option<&str>, status: IncludeStatus, path: Option<&str>) {
         if self.room(self.includes.len()) {
-            let include = Include { value: self.echo(value), line, file: file.map(str::to_string), status, path: path.map(|p| self.echo(p)) };
+            let include = Include { value: self.echo(value), line, file: file.map(|f| self.echo(f)), status, path: path.map(|p| self.echo(p)) };
             self.includes.push(include);
         }
     }
@@ -458,6 +458,24 @@ fn echo_cow(s: &str, max: usize) -> Cow<'_, str> {
             let mut out = s.get(..keep).unwrap_or_default().to_string();
             out.push('…');
             Cow::Owned(out)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_file_of_a_row_is_cut_like_the_rest_of_the_echo() {
+        let limits = Limits::default();
+        let mut acc = Acc::new(&limits);
+        let long = "d/".repeat(5000);
+        acc.problem("x", Some(1), Some(&long), None);
+        acc.directive("include", "v", 1, "form", Some(&long));
+        acc.target("illustrator", 1, Some(&long));
+        for file in [&acc.problems[0].file, &acc.directives[0].file, &acc.targets[0].file] {
+            assert_eq!(file.as_deref().map(|f| f.chars().count()), Some(limits.echo));
         }
     }
 }

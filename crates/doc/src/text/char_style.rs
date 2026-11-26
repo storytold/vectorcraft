@@ -7,6 +7,9 @@ pub struct CharStyle {
     pub font_family: String,
     #[serde(default = "regular")]
     pub font_style: String,
+    /// Internal layout selection from a validated file-font binding, never read from a file.
+    #[serde(skip)]
+    pub file_font_id: Option<u32>,
     /// Which installed version of the font (its version string) when several versions of the
     /// family and style are installed and the text was set in one the family and style alone
     /// wouldn't pick (an imported file's type matched to it); None = the one they pick.
@@ -22,12 +25,41 @@ pub struct CharStyle {
     /// Leading in points; None = Auto (120% of size).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub leading: Option<f64>,
-    /// Tracking in 1/1000 em.
+    /// Tracking in 1/1000 em; in horizontal type, of the em as [`Self::h_scale`] draws it.
     #[serde(default)]
     pub tracking: f64,
-    /// Kerning: None = Auto (metrics), Some(v) = manual in 1/1000 em.
+    /// Manual pair spacing in 1/1000 em, as [`Self::tracking`]; None uses the automatic mode.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kerning: Option<f64>,
+    /// Space before the character in 1/1000 em, as [`Self::kerning`], when it starts a line by
+    /// itself: the first character of the text, of a paragraph, or after a forced line break. The
+    /// Type tool's caret before such a character kerns with it (#5111), since there is no character
+    /// before it whose [`Self::kerning`] could space it. Elsewhere it has no effect.
+    #[serde(default, rename = "kerningBefore", skip_serializing_if = "crate::skip::is_default")]
+    pub kerning_before: f64,
+    /// Insert Aki Left (Character panel, East Asian options): space added before the character in
+    /// reading order, in 1/1000 em as [`Self::tracking`], 0 to 1000. Before is on the left in
+    /// left-to-right type, on the right in right-to-left type and above in vertical type. A
+    /// cluster takes the value of its first character, and full justification leaves it as it is.
+    /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
+    #[serde(default, rename = "akiLeft", skip_serializing_if = "crate::skip::is_default")]
+    pub aki_left: f64,
+    /// Insert Aki Right: space added after the character in reading order, as [`Self::aki_left`].
+    #[serde(default, rename = "akiRight", skip_serializing_if = "crate::skip::is_default")]
+    pub aki_right: f64,
+    /// Tsume (Character panel, East Asian options): the percentage of the blank space on each side
+    /// of the character's ink, inside its own width, that is taken away, 0 to [`MAX_TSUME`]. 50
+    /// halves that space and 100 sets the ink edge to edge; the glyph itself is not scaled. A
+    /// cluster takes the value of its first character. Tracking, kerning and Insert Aki are added
+    /// after it. In vertical type an upright character is measured above and below its ink, inside
+    /// its cell down the column.
+    /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
+    /// <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/format-east-asian-characters-in-vertical-text.html>
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub tsume: f64,
+    /// Use glyph shapes for automatic pair spacing; false uses font metrics.
+    #[serde(default, rename = "opticalKerning", skip_serializing_if = "crate::skip::is_default")]
+    pub optical_kerning: bool,
     #[serde(default)]
     pub baseline_shift: f64,
     #[serde(default = "hundred")]
@@ -48,7 +80,9 @@ pub struct CharStyle {
     #[serde(default)]
     pub all_caps: bool,
     /// OpenType features that differ from the defaults (OpenType panel), as tags: `"dlig"` turns
-    /// a feature on, `"-liga"` off.
+    /// a feature on, `"-liga"` off, and `"salt=2"` turns a feature with alternates on at the font's
+    /// alternate number 2 (the value the shaper gets; a plain `"salt"` is value 1). Runs that
+    /// differ only in this list are shaped together, each with its own features.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub features: Vec<String>,
     /// Character style (Character Styles panel) these attributes come from; None = Normal.
@@ -90,6 +124,10 @@ pub struct CharStyle {
     /// them.
     #[serde(default, rename = "charDirection", skip_serializing_if = "Option::is_none")]
     pub char_direction: Option<ParaDirection>,
+    /// Character panel menu › Kashidas: whether these characters may receive a kashida when
+    /// their paragraph is justified with Insert Kashidas. On by default, including old documents.
+    #[serde(default = "crate::yes", skip_serializing_if = "crate::skip::is_true")]
+    pub kashidas: bool,
     /// Proportional Metrics (Character panel menu, East Asian options): full-width glyphs take the
     /// font's own proportional widths, OpenType `palt` (#966); in vertical type upright glyphs take
     /// its proportional heights, `vpal`.
@@ -101,21 +139,228 @@ pub struct CharStyle {
     /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
     #[serde(default, rename = "tateChuYoko", skip_serializing_if = "crate::skip::is_default")]
     pub tate_chu_yoko: bool,
+    /// Tate-chu-yoko Settings › Up/Down (Character panel menu, East Asian options), in points: a
+    /// block of marked characters in vertical type moves up by a positive value and down by a
+    /// negative one. The block takes the value of its first character; automatic digit blocks and
+    /// horizontal type do not move. Saved only when not 0.
+    /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
+    #[serde(default, rename = "tcyUpDown", skip_serializing_if = "crate::skip::is_default")]
+    pub tcy_up_down: f64,
+    /// Tate-chu-yoko Settings › Left/Right, in points: a block of marked characters in vertical type
+    /// moves right by a positive value and left by a negative one, as [`Self::tcy_up_down`] does.
+    #[serde(default, rename = "tcyLeftRight", skip_serializing_if = "crate::skip::is_default")]
+    pub tcy_left_right: f64,
+    /// Standard Vertical Roman Alignment (Character panel menu, East Asian options): in vertical
+    /// type the half-width characters among these (Latin letters, digits and other characters that
+    /// would lie on their side) stand upright one below the other instead of being rotated
+    /// individually. Spaces and tate-chu-yoko blocks do not change, and horizontal type keeps the
+    /// mark and does not change.
+    /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
+    #[serde(default, rename = "standardVerticalRoman", skip_serializing_if = "crate::skip::is_default")]
+    pub standard_vertical_roman: bool,
+    /// Warichu (Character panel menu, East Asian options): these characters are set at
+    /// [`Self::warichu_scale`] percent of their size and stacked on [`Self::warichu_lines`] lines
+    /// inside their line, one above the other in horizontal type and side by side in vertical type.
+    /// A stretch of marked characters is one block that takes the settings of its first character
+    /// and stays whole on one line. Type on a path sets them at their own size on the path.
+    /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub warichu: bool,
+    /// Warichu Settings › Lines: how many lines a warichu block is stacked on, within
+    /// [`WARICHU_LINES`]. Saved only when not 2.
+    #[serde(default = "two", rename = "warichuLines", skip_serializing_if = "is_two")]
+    pub warichu_lines: u8,
+    /// Warichu Settings › Line Gap, in points from 0 to [`MAX_WARICHU_GAP`]: the space between the
+    /// lines of a warichu block. Saved only when not 0.
+    #[serde(default, rename = "warichuGap", skip_serializing_if = "crate::skip::is_default")]
+    pub warichu_gap: f64,
+    /// Warichu Settings › Scale: the size of warichu characters as a percentage of their size,
+    /// within [`WARICHU_SCALE`]. Saved only when not 50.
+    #[serde(default = "fifty", rename = "warichuScale", skip_serializing_if = "is_fifty")]
+    pub warichu_scale: f64,
+    /// Warichu Settings › Alignment: how the lines of a warichu block line up along the block.
+    #[serde(default, rename = "warichuAlign", skip_serializing_if = "crate::skip::is_default")]
+    pub warichu_align: WarichuAlign,
     /// Digits (Character panel menu, Middle Eastern options): the numeral system the digits of
     /// these characters are drawn in, whatever digits were typed.
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub digits: Digits,
+    /// Adjust Horizontal Diacritic Position (Character panel, Middle Eastern options): the font's
+    /// mark glyphs among these characters (GDEF class 3, such as Arabic harakat and Hebrew points)
+    /// move right by a positive value and left by a negative one, relative to their letters, in
+    /// 1/1000 em of the size, from -[`MAX_DIACRITIC_POSITION`] to [`MAX_DIACRITIC_POSITION`].
+    /// Saved only when not 0.
+    /// <https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=549>
+    #[serde(default, rename = "diacriticHorizontal", skip_serializing_if = "crate::skip::is_default")]
+    pub diacritic_horizontal: f64,
+    /// Adjust Vertical Diacritic Position: the mark glyphs move up by a positive value and down by
+    /// a negative one, as [`Self::diacritic_horizontal`] moves them across.
+    #[serde(default, rename = "diacriticVertical", skip_serializing_if = "crate::skip::is_default")]
+    pub diacritic_vertical: f64,
+    /// Font height reference (Character panel menu › Show Font Height Options): the height of the
+    /// font that [`Self::size`] measures, the em box by default.
+    #[serde(default, rename = "fontHeightReference", skip_serializing_if = "crate::skip::is_default")]
+    pub font_height_reference: FontHeightReference,
     /// No Break (Character panel menu): these characters are not broken across lines, including
     /// at a space or a hyphenation point inside the run. A run longer than the line stays together
     /// and can overflow it.
     /// <https://helpx.adobe.com/illustrator/using/hyphenation-line-breaks.html>
     #[serde(default, rename = "noBreak", skip_serializing_if = "crate::skip::is_default")]
     pub no_break: bool,
+    /// Language (Character panel): the BCP 47 tag of one of [`crate::setup::LANGUAGES`] these
+    /// characters are shaped in, so that the font uses that language's forms (OpenType `locl`).
+    /// `None`: the default language, English: USA, shaped without a language, which is what text
+    /// saved without one reads as. A tag the list doesn't have, from a file, is kept and has no
+    /// hyphenation. New type takes the document's language (Document Setup), else the default
+    /// language of Preferences › Hyphenation. Saved only when set. Each run hyphenates in its own
+    /// language (`vectorcraft_text::hyphen`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+    /// Another glyph of the font for the run's first character (Glyphs panel › Show › Alternates
+    /// for Current Selection). The text keeps the character; layout draws the chosen glyph while
+    /// the run starts with that character and is set in the face the choice names, and the
+    /// default glyph otherwise. Saved only when set.
+    #[serde(default, rename = "glyphAlternate", skip_serializing_if = "Option::is_none")]
+    pub glyph_alternate: Option<GlyphChoice>,
+    /// The East Asian glyph form these characters are drawn in (Glyphs panel menu, with Show East
+    /// Asian Options): one OpenType feature of the font, such as JIS 78 forms (`jp78`), or the
+    /// font's default glyphs. The text keeps its characters. Saved only when set.
+    /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
+    #[serde(default, rename = "glyphForm", skip_serializing_if = "crate::skip::is_default")]
+    pub glyph_form: GlyphForm,
+}
+
+/// The East Asian glyph form characters are drawn in ([`CharStyle::glyph_form`]): the font's
+/// default glyphs, or the glyphs one OpenType feature substitutes. One form at a time.
+/// <https://learn.microsoft.com/en-us/typography/opentype/spec/featurelist>
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GlyphForm {
+    /// The font's default glyphs.
+    #[default]
+    Default,
+    /// Traditional forms (`trad`).
+    Traditional,
+    /// Expert forms (`expt`).
+    Expert,
+    /// JIS 2004 forms (`jp04`).
+    Jis04,
+    /// JIS 90 forms (`jp90`).
+    Jis90,
+    /// JIS 78 forms (`jp78`).
+    Jis78,
+    /// JIS 83 forms (`jp83`).
+    Jis83,
+    /// Monospaced full-width forms (`fwid`).
+    FullWidth,
+    /// Monospaced half-width forms (`hwid`).
+    HalfWidth,
+    /// Monospaced third-width forms (`twid`).
+    ThirdWidth,
+    /// Monospaced quarter-width forms (`qwid`).
+    QuarterWidth,
+}
+
+impl GlyphForm {
+    /// Every form, in menu order, the default last.
+    pub const ALL: [GlyphForm; 11] = [
+        GlyphForm::Traditional,
+        GlyphForm::Expert,
+        GlyphForm::Jis04,
+        GlyphForm::Jis90,
+        GlyphForm::Jis78,
+        GlyphForm::Jis83,
+        GlyphForm::FullWidth,
+        GlyphForm::HalfWidth,
+        GlyphForm::ThirdWidth,
+        GlyphForm::QuarterWidth,
+        GlyphForm::Default,
+    ];
+
+    /// The name files and commands give this form (as it is saved).
+    pub fn id(self) -> &'static str {
+        match self {
+            GlyphForm::Default => "default",
+            GlyphForm::Traditional => "traditional",
+            GlyphForm::Expert => "expert",
+            GlyphForm::Jis04 => "jis04",
+            GlyphForm::Jis90 => "jis90",
+            GlyphForm::Jis78 => "jis78",
+            GlyphForm::Jis83 => "jis83",
+            GlyphForm::FullWidth => "fullWidth",
+            GlyphForm::HalfWidth => "halfWidth",
+            GlyphForm::ThirdWidth => "thirdWidth",
+            GlyphForm::QuarterWidth => "quarterWidth",
+        }
+    }
+
+    /// The form [`GlyphForm::id`] names; `None` for any other name.
+    pub fn from_id(id: &str) -> Option<GlyphForm> {
+        GlyphForm::ALL.into_iter().find(|f| f.id() == id)
+    }
+
+    /// The OpenType feature that draws this form; `None` for the default glyphs.
+    pub fn feature(self) -> Option<&'static [u8; 4]> {
+        Some(match self {
+            GlyphForm::Default => return None,
+            GlyphForm::Traditional => b"trad",
+            GlyphForm::Expert => b"expt",
+            GlyphForm::Jis04 => b"jp04",
+            GlyphForm::Jis90 => b"jp90",
+            GlyphForm::Jis78 => b"jp78",
+            GlyphForm::Jis83 => b"jp83",
+            GlyphForm::FullWidth => b"fwid",
+            GlyphForm::HalfWidth => b"hwid",
+            GlyphForm::ThirdWidth => b"twid",
+            GlyphForm::QuarterWidth => b"qwid",
+        })
+    }
+
+    /// Is this one of the monospaced width forms (`fwid`, `hwid`, `twid`, `qwid`)? A font may
+    /// draw them with other glyphs (`GSUB`) or with other widths for the same glyphs (`GPOS`), and
+    /// they set the characters on a fixed width, so Proportional Metrics (`palt`) is not applied
+    /// with them.
+    /// <https://learn.microsoft.com/en-us/typography/opentype/spec/features_fj#tag-fwid>
+    pub fn is_width(self) -> bool {
+        matches!(self, GlyphForm::FullWidth | GlyphForm::HalfWidth | GlyphForm::ThirdWidth | GlyphForm::QuarterWidth)
+    }
+}
+
+/// A glyph chosen for one character ([`CharStyle::glyph_alternate`]): the glyph id and the face it
+/// belongs to, named by its PostScript name and version string, so that a glyph id is never used
+/// in another font or another version of the font.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct GlyphChoice {
+    /// The character the glyph is drawn for.
+    pub ch: char,
+    /// The glyph id in the face.
+    pub gid: u32,
+    /// The face's PostScript name (`SourceSans3-Regular`).
+    pub font: String,
+    /// The face's version string (`Version 3.052`); empty when it has none.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub version: String,
+}
+
+/// What a character's font size measures ([`CharStyle::font_height_reference`]): the em square
+/// of the font, the height of its capitals or of its lowercase letters (the cap height and x
+/// height of its OS/2 table), or its ideographic character face (ICF, OpenType's `icfb` and
+/// `icft` baselines). Layout sets the characters at the em size at which the chosen height equals
+/// the font size; with a font that has no such value, the size measures the em box.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FontHeightReference {
+    #[default]
+    EmBox,
+    CapHeight,
+    XHeight,
+    IcfBox,
 }
 
 /// The numeral system digits are drawn in ([`CharStyle::digits`]): as typed, or every digit of
-/// the Western, Arabic-Indic and Eastern Arabic-Indic sets drawn in one of them. The text keeps
-/// the digits that were typed; only the glyphs change (like All Caps).
+/// the Western, Arabic-Indic and Eastern Arabic-Indic sets drawn in one of them or in the digits
+/// of an Indic script. The text keeps the digits that were typed; only the glyphs change (like
+/// All Caps).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Digits {
@@ -128,9 +373,68 @@ pub enum Digits {
     Hindi,
     /// Eastern Arabic-Indic digits ۰–۹ (U+06F0–U+06F9), used in Persian and Urdu.
     Farsi,
+    /// Devanagari digits ०–९ (U+0966–U+096F), used in Hindi, Marathi, Nepali and Sanskrit.
+    Devanagari,
+    /// Bengali digits ০–৯ (U+09E6–U+09EF), used in Bengali and Assamese.
+    Bengali,
+    /// Gurmukhi digits ੦–੯ (U+0A66–U+0A6F), used in Punjabi.
+    Gurmukhi,
+    /// Gujarati digits ૦–૯ (U+0AE6–U+0AEF).
+    Gujarati,
+    /// Odia digits ୦–୯ (U+0B66–U+0B6F).
+    Odia,
+    /// Tamil digits ௦–௯ (U+0BE6–U+0BEF).
+    Tamil,
+    /// Telugu digits ౦–౯ (U+0C66–U+0C6F).
+    Telugu,
+    /// Kannada digits ೦–೯ (U+0CE6–U+0CEF).
+    Kannada,
+    /// Malayalam digits ൦–൯ (U+0D66–U+0D6F).
+    Malayalam,
 }
 
 impl Digits {
+    /// Every numeral system, in menu order.
+    pub const ALL: [Digits; 13] = [
+        Digits::Default,
+        Digits::Arabic,
+        Digits::Hindi,
+        Digits::Farsi,
+        Digits::Devanagari,
+        Digits::Bengali,
+        Digits::Gurmukhi,
+        Digits::Gujarati,
+        Digits::Odia,
+        Digits::Tamil,
+        Digits::Telugu,
+        Digits::Kannada,
+        Digits::Malayalam,
+    ];
+
+    /// The name files and commands give this numeral system (as it is saved).
+    pub fn id(self) -> &'static str {
+        match self {
+            Digits::Default => "default",
+            Digits::Arabic => "arabic",
+            Digits::Hindi => "hindi",
+            Digits::Farsi => "farsi",
+            Digits::Devanagari => "devanagari",
+            Digits::Bengali => "bengali",
+            Digits::Gurmukhi => "gurmukhi",
+            Digits::Gujarati => "gujarati",
+            Digits::Odia => "odia",
+            Digits::Tamil => "tamil",
+            Digits::Telugu => "telugu",
+            Digits::Kannada => "kannada",
+            Digits::Malayalam => "malayalam",
+        }
+    }
+
+    /// The numeral system [`Digits::id`] names; `None` for any other name.
+    pub fn from_id(id: &str) -> Option<Digits> {
+        Digits::ALL.into_iter().find(|d| d.id() == id)
+    }
+
     /// The digit `c` is drawn as in this numeral system: the same digit in the chosen set, or `c`
     /// itself when `c` isn't a digit of the Western, Arabic-Indic or Eastern Arabic-Indic set.
     pub fn map(self, c: char) -> char {
@@ -145,6 +449,15 @@ impl Digits {
             Digits::Arabic => '0' as u32,
             Digits::Hindi => 0x660,
             Digits::Farsi => 0x6F0,
+            Digits::Devanagari => 0x966,
+            Digits::Bengali => 0x9E6,
+            Digits::Gurmukhi => 0xA66,
+            Digits::Gujarati => 0xAE6,
+            Digits::Odia => 0xB66,
+            Digits::Tamil => 0xBE6,
+            Digits::Telugu => 0xC66,
+            Digits::Kannada => 0xCE6,
+            Digits::Malayalam => 0xD66,
         };
         char::from_u32(base + value).unwrap_or(c)
     }
@@ -251,6 +564,92 @@ fn hundred() -> f64 {
     100.0
 }
 
+/// The largest Insert Aki Left or Right ([`CharStyle::aki_left`]), in 1/1000 em: one em.
+pub const MAX_AKI: f64 = 1000.0;
+
+/// The largest Tsume ([`CharStyle::tsume`]), in percent: all the blank space beside the ink.
+pub const MAX_TSUME: f64 = 100.0;
+
+/// The largest Adjust Horizontal or Vertical Diacritic Position either way
+/// ([`CharStyle::diacritic_horizontal`]), in 1/1000 em: one em.
+pub const MAX_DIACRITIC_POSITION: f64 = 1000.0;
+
+/// The number of lines a warichu block may be stacked on ([`CharStyle::warichu_lines`]).
+pub const WARICHU_LINES: std::ops::RangeInclusive<u8> = 1..=6;
+
+/// The largest Warichu Settings Line Gap ([`CharStyle::warichu_gap`]), in points.
+pub const MAX_WARICHU_GAP: f64 = 100.0;
+
+/// The Warichu Settings Scale ([`CharStyle::warichu_scale`]) range, in percent of the size.
+pub const WARICHU_SCALE: std::ops::RangeInclusive<f64> = 10.0..=100.0;
+
+fn two() -> u8 {
+    2
+}
+
+fn is_two(v: &u8) -> bool {
+    *v == 2
+}
+
+fn fifty() -> f64 {
+    50.0
+}
+
+fn is_fifty(v: &f64) -> bool {
+    *v == 50.0
+}
+
+/// How the lines of a warichu block line up along the block ([`CharStyle::warichu_align`]):
+/// each line set flush left (top, in vertical type), centered or flush right (bottom), or spread
+/// to the block's length with the last line set flush left, centered or flush right, or spread as
+/// well. Auto is the default and sets the lines as [`WarichuAlign::JustifyLeft`] does.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WarichuAlign {
+    #[default]
+    Auto,
+    Left,
+    Center,
+    Right,
+    JustifyLeft,
+    JustifyCenter,
+    JustifyRight,
+    JustifyAll,
+}
+
+impl WarichuAlign {
+    /// Every alignment, in the order Warichu Settings lists them.
+    pub const ALL: [WarichuAlign; 8] = [
+        WarichuAlign::Auto,
+        WarichuAlign::Left,
+        WarichuAlign::Center,
+        WarichuAlign::Right,
+        WarichuAlign::JustifyLeft,
+        WarichuAlign::JustifyCenter,
+        WarichuAlign::JustifyRight,
+        WarichuAlign::JustifyAll,
+    ];
+
+    /// The name files and commands give this alignment (as it is saved).
+    pub fn id(self) -> &'static str {
+        match self {
+            WarichuAlign::Auto => "auto",
+            WarichuAlign::Left => "left",
+            WarichuAlign::Center => "center",
+            WarichuAlign::Right => "right",
+            WarichuAlign::JustifyLeft => "justifyLeft",
+            WarichuAlign::JustifyCenter => "justifyCenter",
+            WarichuAlign::JustifyRight => "justifyRight",
+            WarichuAlign::JustifyAll => "justifyAll",
+        }
+    }
+
+    /// The alignment [`WarichuAlign::id`] names; `None` for any other name.
+    pub fn from_id(id: &str) -> Option<WarichuAlign> {
+        WarichuAlign::ALL.into_iter().find(|a| a.id() == id)
+    }
+}
+
 pub(super) fn yes() -> bool {
     true
 }
@@ -260,12 +659,18 @@ impl Default for CharStyle {
         Self {
             font_family: "Source Sans 3".into(),
             font_style: "Regular".into(),
+            file_font_id: None,
             font_version: None,
             font_axes: std::collections::BTreeMap::new(),
             size: 12.0,
             leading: None,
             tracking: 0.0,
             kerning: None,
+            kerning_before: 0.0,
+            aki_left: 0.0,
+            aki_right: 0.0,
+            tsume: 0.0,
+            optical_kerning: false,
             baseline_shift: 0.0,
             h_scale: 100.0,
             v_scale: 100.0,
@@ -288,11 +693,26 @@ impl Default for CharStyle {
             position: CharPosition::Normal,
             char_align: CharAlign::RomanBaseline,
             char_direction: None,
+            kashidas: true,
             proportional_metrics: false,
             tate_chu_yoko: false,
+            tcy_up_down: 0.0,
+            tcy_left_right: 0.0,
+            standard_vertical_roman: false,
+            warichu: false,
+            warichu_lines: 2,
+            warichu_gap: 0.0,
+            warichu_scale: 50.0,
+            warichu_align: WarichuAlign::Auto,
             small_caps: None,
             digits: Digits::Default,
+            diacritic_horizontal: 0.0,
+            diacritic_vertical: 0.0,
+            font_height_reference: FontHeightReference::EmBox,
             no_break: false,
+            language: None,
+            glyph_alternate: None,
+            glyph_form: GlyphForm::Default,
         }
     }
 }
@@ -305,7 +725,14 @@ impl CharStyle {
     /// or scale of 0 or less becomes the default new type takes (12 pt, 100%), a negative leading
     /// becomes Auto, and a value past [`crate::MAX_COORD`] (a baseline shift past it either way)
     /// becomes the nearer end. A leading of 0, which legacy `.ai` import stores, stays, and a
-    /// baseline shift that is not a number becomes 0.
+    /// baseline shift that is not a number becomes 0. The Tate-chu-yoko Up/Down and Left/Right
+    /// offsets are kept as the baseline shift is. Insert Aki Left and Right are kept from 0 to
+    /// [`MAX_AKI`], and one that is not a number becomes 0; Tsume is kept from 0 to [`MAX_TSUME`] the
+    /// same way. The Warichu Settings Lines and Scale
+    /// are kept to [`WARICHU_LINES`] and [`WARICHU_SCALE`]; a gap or scale that is not a number becomes its default. The gap is kept to 0 to
+    /// [`crate::MAX_COORD`], as the baseline shift is, since a scaled type object holds it in its
+    /// own units. The Adjust Horizontal and Vertical Diacritic Positions are kept within
+    /// [`MAX_DIACRITIC_POSITION`] either way, and one that is not a number becomes 0.
     pub fn keep_dimensions_in_range(&mut self) {
         let default = Self::default();
         let within = |v: f64, or: f64| if v > 0.0 { v.min(crate::MAX_COORD) } else { or };
@@ -313,7 +740,21 @@ impl CharStyle {
         self.h_scale = within(self.h_scale, default.h_scale);
         self.v_scale = within(self.v_scale, default.v_scale);
         self.leading = self.leading.filter(|l| *l >= 0.0).map(|l| l.min(crate::MAX_COORD));
-        self.baseline_shift = if self.baseline_shift.is_nan() { 0.0 } else { self.baseline_shift.clamp(-crate::MAX_COORD, crate::MAX_COORD) };
+        let shift = |v: f64| if v.is_nan() { 0.0 } else { v.clamp(-crate::MAX_COORD, crate::MAX_COORD) };
+        self.baseline_shift = shift(self.baseline_shift);
+        self.tcy_up_down = shift(self.tcy_up_down);
+        self.tcy_left_right = shift(self.tcy_left_right);
+        let aki = |v: f64| if v.is_nan() { 0.0 } else { v.clamp(0.0, MAX_AKI) };
+        self.aki_left = aki(self.aki_left);
+        self.aki_right = aki(self.aki_right);
+        self.tsume = if self.tsume.is_nan() { 0.0 } else { self.tsume.clamp(0.0, MAX_TSUME) };
+        let diacritic = |v: f64| if v.is_nan() { 0.0 } else { v.clamp(-MAX_DIACRITIC_POSITION, MAX_DIACRITIC_POSITION) };
+        self.diacritic_horizontal = diacritic(self.diacritic_horizontal);
+        self.diacritic_vertical = diacritic(self.diacritic_vertical);
+        self.warichu_lines = self.warichu_lines.clamp(*WARICHU_LINES.start(), *WARICHU_LINES.end());
+        self.warichu_gap = if self.warichu_gap.is_nan() { default.warichu_gap } else { self.warichu_gap.clamp(0.0, crate::MAX_COORD) };
+        self.warichu_scale =
+            if self.warichu_scale.is_nan() { default.warichu_scale } else { self.warichu_scale.clamp(*WARICHU_SCALE.start(), *WARICHU_SCALE.end()) };
     }
     /// Do the characters draw a stroke (a paint and a positive weight)?
     pub fn has_stroke(&self) -> bool {
@@ -380,6 +821,15 @@ impl CharStyle {
     pub fn keep_scripts_in_range(&mut self) {
         self.position = self.position.in_range();
         self.small_caps = self.small_caps.map(small_caps_in_range);
+    }
+    /// Sets the East Asian glyph form ([`CharStyle::glyph_form`]). A form other than the default
+    /// also takes away the character's glyph choice ([`CharStyle::glyph_alternate`]), which would
+    /// otherwise keep drawing its own glyph; the default form keeps it.
+    pub fn set_glyph_form(&mut self, form: GlyphForm) {
+        self.glyph_form = form;
+        if form != GlyphForm::Default {
+            self.glyph_alternate = None;
+        }
     }
 }
 

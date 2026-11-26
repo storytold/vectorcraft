@@ -1,15 +1,18 @@
 #[cfg(not(target_arch = "wasm32"))]
 use super::dialogs;
+use craft::ui::runtime::windows::WindowHost;
+
 use super::{VectorcraftApp, browsable_url};
 
 impl VectorcraftApp {
     /// Open a link in the browser (Help → Discord, website, GitHub…).
     pub fn open_url(&mut self, url: &str) {
-        match self.services.open_url.as_mut() {
-            Some(open) => open(url),
-            None => self.pending_url = Some(url.to_string()),
-        }
+        self.pending_url = Some(url.to_string());
         self.ui.status = format!("Opened {url}");
+        // The next frame's tick opens it: one asked for in a frame needs another.
+        if let Some(ctx) = &self.ui_ctx {
+            ctx.request_repaint();
+        }
     }
 
     /// Open `url`, which came from a document (an object's URL attribute), in the browser:
@@ -24,10 +27,23 @@ impl VectorcraftApp {
     /// control or MCP request, or a frame of synthetic input): the automation roots don't confine
     /// what that app does.
     pub(crate) fn refuse_automation(&self, id: &str) -> Result<(), String> {
-        if self.ui.answering_control || self.synthetic_frame {
+        if self.automation_is_acting() {
             return Err(format!("{id} opens another app: only the person at the keyboard can run it"));
         }
         Ok(())
+    }
+
+    /// Did automation send what is being handled now: a control or MCP request, or a pass that
+    /// carries injected input?
+    pub(crate) fn automation_is_acting(&self) -> bool {
+        self.ui.answering_control || self.ui_ctx.as_ref().is_some_and(|ctx| WindowHost::of(ctx).injected_pass())
+    }
+
+    /// Did automation ask for what is being handled now: [`Self::automation_is_acting`], or the
+    /// answer of a file dialog that automation opened ([`crate::file_asks::as_automated`]), even when a
+    /// person picked the file in it?
+    pub(crate) fn automation_asked(&self) -> bool {
+        self.automation_is_acting() || self.file_asks.automated()
     }
 
     /// Run a Help link command and open the URL it returns.
@@ -52,13 +68,18 @@ impl VectorcraftApp {
                 Ok(r) => {
                     let n = |k: &str| r[k].as_array().map_or(0, Vec::len);
                     if n("updated") > 0 {
-                        self.status(format!("Updated {} linked file(s) changed on disk", n("updated")));
+                        self.status(crate::i18n::msg_n(
+                            n("updated") as u64,
+                            "Updated {n} linked file changed on disk",
+                            "Updated {n} linked files changed on disk",
+                            &[],
+                        ));
                     }
                     if n("ask") > 0 {
                         dialogs::missing_links::ask_update_changed(self, r["ask"].as_array().cloned().unwrap_or_default());
                     }
                     if n("modified") > 0 {
-                        self.status(format!("{} linked image(s) changed on disk: Update Links shows the new versions", n("modified")));
+                        self.status(dialogs::missing_links::changed_on_disk_status(n("modified")));
                     }
                 }
                 Err(e) => self.status(e.to_string()),
@@ -68,7 +89,7 @@ impl VectorcraftApp {
         let focused = ctx.input(|i| i.focused);
         let was_focused: bool = ctx.data(|d| d.get_temp(focus_key)).unwrap_or(focused);
         ctx.data_mut(|d| d.insert_temp(focus_key, focused));
-        if self.ui.dialog.is_some() || self.session.active().is_none() {
+        if self.any_dialog_open() || self.session.active().is_none() {
             return;
         }
         let last: f64 = ctx.data(|d| d.get_temp(last_key)).unwrap_or(f64::NEG_INFINITY);

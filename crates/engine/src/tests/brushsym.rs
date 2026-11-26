@@ -1,9 +1,9 @@
 //! Brushes and symbols: commands, tools, rendering and persistence.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, Node, NodeKind};
+use vectorcraft_doc::{AngleProfile, Document, Node, NodeKind, PressureProfile};
 use vectorcraft_geom::Rect;
-use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+use vectorcraft_tools::{Mods, PenPose, PointerEvent, PointerKind};
 
 use crate::*;
 
@@ -79,6 +79,224 @@ fn apply_and_remove_brush_with_undo() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(brush_of(&s, a), None);
     assert!(s.execute("brush.apply", &json!({"name": "Nope"})).is_err());
+}
+
+/// The own brush settings of the first stroke of `id`.
+fn own_options(s: &Session, id: NodeId) -> Value {
+    Value::Object(node(s, id).appearance.stroke().map(|st| st.brush_options.clone()).unwrap_or_default())
+}
+
+/// The height of the brush art of `id`, drawn along a level line.
+fn art_height(s: &Session, id: NodeId) -> f64 {
+    let d = &s.doc().unwrap().doc;
+    vectorcraft_brush::pieces_bounds(&vectorcraft_brush::node_pieces(d, &node(s, id)).unwrap()).unwrap().height()
+}
+
+#[test]
+fn options_of_selected_object_change_one_path_and_leave_the_brush() {
+    let mut s = session();
+    let a = line(&mut s);
+    let b = line(&mut s);
+    select(&mut s, &[a, b]);
+    s.execute("brush.apply", &json!({"name": "Arrow"})).unwrap();
+    let width = s.execute("brush.get", &json!({"name": "Arrow"})).unwrap()["width"].clone();
+    select(&mut s, &[a]);
+    let steps = undo_steps(&s);
+    let r = s.execute("brush.objectOptions", &json!({"params": {"width": 50, "flip_along": false}})).unwrap();
+    assert_eq!(r["changed"], json!([a.0]));
+    assert_eq!(own_options(&s, a), json!({"width": 50.0}), "flip_along equals the brush's own value and is dropped");
+    assert_eq!(own_options(&s, b), json!({}));
+    assert_eq!(s.execute("brush.get", &json!({"name": "Arrow"})).unwrap()["width"], width, "the brush keeps its width");
+    assert_eq!(undo_steps(&s), steps + 1);
+    assert!((art_height(&s, a) * 2.0 - art_height(&s, b)).abs() < 1e-6, "{} vs {}", art_height(&s, a), art_height(&s, b));
+    // The same settings again, and a call without params, change nothing and add no undo step.
+    assert_eq!(s.execute("brush.objectOptions", &json!({"params": {"width": 50}})).unwrap()["changed"], json!([]));
+    assert_eq!(s.execute("brush.objectOptions", &json!({})).unwrap()["options"], json!({"width": 50.0}));
+    assert_eq!(undo_steps(&s), steps + 1);
+    // An edit of the brush reaches the settings the path does not set.
+    s.execute("brush.options", &json!({"name": "Arrow", "params": {"width": 200, "flip_across": true}})).unwrap();
+    assert_eq!(own_options(&s, a), json!({"width": 50.0}));
+    // The settings are saved in the native file.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let st = back.node(a).and_then(|n| n.appearance.stroke().cloned()).unwrap();
+    assert_eq!(Value::Object(st.brush_options), json!({"width": 50.0}));
+    // Undo puts the path back on the brush's settings.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(own_options(&s, a), json!({}));
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(own_options(&s, a), json!({"width": 50.0}));
+    // Reset clears them, and so do applying a brush and removing it.
+    s.execute("brush.objectOptions", &json!({"reset": true})).unwrap();
+    assert_eq!(own_options(&s, a), json!({}));
+    s.execute("brush.objectOptions", &json!({"params": {"overlap": true}})).unwrap();
+    s.execute("brush.apply", &json!({"name": "Arrow"})).unwrap();
+    assert_eq!(own_options(&s, a), json!({}));
+    s.execute("brush.objectOptions", &json!({"params": {"overlap": true}})).unwrap();
+    s.execute("brush.remove", &json!({})).unwrap();
+    assert_eq!(own_options(&s, a), json!({}));
+    // Stroke Options' brush change clears them as well, and keeping the same brush keeps them.
+    s.execute("brush.apply", &json!({"name": "Arrow"})).unwrap();
+    s.execute("brush.objectOptions", &json!({"params": {"overlap": true}})).unwrap();
+    s.execute("stroke.setAdvanced", &json!({"brush": "Arrow"})).unwrap();
+    assert_eq!(own_options(&s, a), json!({"overlap": true}));
+    s.execute("stroke.setAdvanced", &json!({"brush": null})).unwrap();
+    assert_eq!(own_options(&s, a), json!({}));
+    // Asking for the settings changes nothing, even when the brush has come to equal them.
+    s.execute("brush.apply", &json!({"name": "Arrow"})).unwrap();
+    s.execute("brush.objectOptions", &json!({"params": {"overlap": true}})).unwrap();
+    s.execute("brush.options", &json!({"name": "Arrow", "params": {"overlap": true}})).unwrap();
+    let steps = undo_steps(&s);
+    assert_eq!(s.execute("brush.objectOptions", &json!({})).unwrap()["options"], json!({"overlap": true}));
+    assert_eq!(own_options(&s, a), json!({"overlap": true}));
+    assert_eq!(undo_steps(&s), steps);
+}
+
+#[test]
+fn options_of_selected_object_null_items_keep_each_paths_own() {
+    let mut s = session();
+    let a = line(&mut s);
+    let b = line(&mut s);
+    s.execute("brush.apply", &json!({"name": "Confetti", "ids": [a.0, b.0]})).unwrap();
+    let brush_size = s.execute("brush.get", &json!({"name": "Confetti"})).unwrap()["size"].clone();
+    s.execute("brush.objectOptions", &json!({"ids": [a.0], "params": {"size": [50, 80]}})).unwrap();
+    s.execute("brush.objectOptions", &json!({"ids": [b.0], "params": {"size": [60, 120]}})).unwrap();
+    let steps = undo_steps(&s);
+    // Only the smallest size changes: each path keeps its own largest size.
+    let r = s.execute("brush.objectOptions", &json!({"ids": [a.0, b.0], "params": {"size": [40, null]}})).unwrap();
+    assert_eq!(r["changed"], json!([a.0, b.0]));
+    assert_eq!(own_options(&s, a)["size"], json!([40.0, 80.0]));
+    assert_eq!(own_options(&s, b)["size"], json!([40.0, 120.0]));
+    assert_eq!(undo_steps(&s), steps + 1, "one undo step for both paths");
+    // A path without its own value keeps the brush's item.
+    let c = line(&mut s);
+    s.execute("brush.apply", &json!({"name": "Confetti", "ids": [c.0]})).unwrap();
+    s.execute("brush.objectOptions", &json!({"ids": [c.0], "params": {"size": [null, 150]}})).unwrap();
+    assert_eq!(own_options(&s, c)["size"], json!([brush_size[0], 150.0]), "brush size {brush_size}");
+}
+
+/// The size mode the first stroke of `id`, painted with Confetti, draws with.
+fn confetti_size_mode(s: &Session, id: NodeId) -> vectorcraft_brush::Variation {
+    let lib = vectorcraft_brush::library(&s.doc().unwrap().doc);
+    let b = lib.iter().find(|b| b.name == "Confetti").unwrap();
+    match b.with_stroke_options(own_options(s, id).as_object().unwrap()).unwrap().kind {
+        vectorcraft_brush::BrushKind::Scatter(sc) => sc.modes()[0],
+        k => panic!("not a scatter brush: {k:?}"),
+    }
+}
+
+#[test]
+fn options_of_selected_object_keep_the_modes_each_path_draws_with() {
+    use vectorcraft_brush::Variation;
+    let mut s = session();
+    let a = line(&mut s);
+    let b = line(&mut s);
+    select(&mut s, &[a, b]);
+    s.execute("brush.apply", &json!({"name": "Confetti"})).unwrap();
+    // Confetti's sizes vary at random from 60% to 140%; the second path's follow the pressure.
+    select(&mut s, &[b]);
+    s.execute("brush.objectOptions", &json!({"params": {"modes": ["pressure", null, null, null]}})).unwrap();
+    assert_eq!((confetti_size_mode(&s, a), confetti_size_mode(&s, b)), (Variation::Random, Variation::Pressure));
+    // One size with no mode keeps each path's mode.
+    select(&mut s, &[a, b]);
+    s.execute("brush.objectOptions", &json!({"params": {"size": [80, 80]}})).unwrap();
+    assert_eq!((confetti_size_mode(&s, a), confetti_size_mode(&s, b)), (Variation::Random, Variation::Pressure));
+    assert_eq!(own_options(&s, a)["size"], json!([80.0, 80.0]));
+    // A mode the params give is set on each path.
+    s.execute("brush.objectOptions", &json!({"params": {"size": [70, 90], "modes": ["fixed", null, null, null]}})).unwrap();
+    assert_eq!((confetti_size_mode(&s, a), confetti_size_mode(&s, b)), (Variation::Fixed, Variation::Fixed));
+}
+
+/// The widths (%) the first stroke of `id`, painted with Arrow, draws with at the lightest and the
+/// heaviest pressure.
+fn arrow_width_range(s: &Session, id: NodeId) -> (f64, f64) {
+    let lib = vectorcraft_brush::library(&s.doc().unwrap().doc);
+    let b = lib.iter().find(|b| b.name == "Arrow").unwrap();
+    match b.with_stroke_options(own_options(s, id).as_object().unwrap()).unwrap().kind {
+        vectorcraft_brush::BrushKind::Art(a) => a.width_range(),
+        k => panic!("not an art brush: {k:?}"),
+    }
+}
+
+#[test]
+fn options_of_selected_object_keep_each_paths_largest_width_when_the_width_changes() {
+    let mut s = session();
+    let a = line(&mut s);
+    let b = line(&mut s);
+    s.execute("brush.apply", &json!({"name": "Arrow", "ids": [a.0, b.0]})).unwrap();
+    // Both widths follow the pressure; the first path's largest width is its width, the second
+    // path's is its own.
+    s.execute("brush.objectOptions", &json!({"ids": [a.0], "params": {"width": 100, "width_mode": "pressure"}})).unwrap();
+    s.execute("brush.objectOptions", &json!({"ids": [b.0], "params": {"width": 100, "width_mode": "pressure", "width_max": 150}})).unwrap();
+    assert_eq!((arrow_width_range(&s, a), arrow_width_range(&s, b)), ((100.0, 100.0), (100.0, 150.0)));
+    // The width the path has already changes nothing.
+    let steps = undo_steps(&s);
+    assert_eq!(s.execute("brush.objectOptions", &json!({"ids": [a.0], "params": {"width": 100}})).unwrap()["changed"], json!([]));
+    assert_eq!(own_options(&s, a), json!({"width_mode": "pressure"}));
+    assert_eq!(undo_steps(&s), steps);
+    // A new smallest width leaves each path's largest width as it was.
+    s.execute("brush.objectOptions", &json!({"ids": [a.0, b.0], "params": {"width": 50}})).unwrap();
+    assert_eq!((arrow_width_range(&s, a), arrow_width_range(&s, b)), ((50.0, 100.0), (50.0, 150.0)));
+    // A largest width the params give is set on each path.
+    s.execute("brush.objectOptions", &json!({"ids": [a.0, b.0], "params": {"width": 40, "width_max": 120}})).unwrap();
+    assert_eq!((arrow_width_range(&s, a), arrow_width_range(&s, b)), ((40.0, 120.0), (40.0, 120.0)));
+}
+
+#[test]
+fn options_of_selected_object_go_when_a_freehand_stroke_changes_the_brush() {
+    let mut s = session();
+    let a = line(&mut s);
+    s.execute("brush.apply", &json!({"name": "Arrow", "ids": [a.0]})).unwrap();
+    s.execute("brush.objectOptions", &json!({"ids": [a.0], "params": {"width": 50}})).unwrap();
+    let extend = |s: &mut Session, brush: &str, points: Value| {
+        s.execute("brush.freehand", &json!({"points": points, "style": "brush", "brush": brush, "extend": {"id": a.0}})).unwrap();
+    };
+    // Continuing the path with its own brush keeps the settings.
+    extend(&mut s, "Arrow", json!([[0, 0], [40, 30], [80, 10]]));
+    assert_eq!(own_options(&s, a), json!({"width": 50.0}));
+    // Another brush, with a stroke or with only the brush changing, clears them.
+    extend(&mut s, "Diamonds", json!([[0, 0]]));
+    assert_eq!(brush_of(&s, a).as_deref(), Some("Diamonds"));
+    assert_eq!(own_options(&s, a), json!({}));
+}
+
+#[test]
+fn options_of_selected_object_keys_convert_with_the_document() {
+    let mut s = session();
+    let a = line(&mut s);
+    s.execute("brush.apply", &json!({"name": "Arrow", "ids": [a.0]})).unwrap();
+    let key = json!({"model": "rgb", "r": 0.2, "g": 0.6, "b": 0.3});
+    s.execute("brush.objectOptions", &json!({"ids": [a.0], "params": {"colorization": {"method": "hueShift", "key": key}}})).unwrap();
+    assert_eq!(own_options(&s, a)["colorization"]["key"]["model"], json!("rgb"));
+    s.execute("file.documentColorMode", &json!({"mode": "cmyk"})).unwrap();
+    assert_eq!(own_options(&s, a)["colorization"]["key"]["model"], json!("cmyk"), "{}", own_options(&s, a));
+}
+
+#[test]
+fn options_of_selected_object_refuse_what_they_cannot_set() {
+    let mut s = session();
+    let a = line(&mut s);
+    let c = line(&mut s);
+    let plain = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    s.execute("brush.apply", &json!({"name": "Arrow", "ids": [a.0]})).unwrap();
+    s.execute("brush.apply", &json!({"name": "3 pt. Round", "ids": [c.0]})).unwrap();
+    let steps = undo_steps(&s);
+    let err = |s: &mut Session, p: Value| s.execute("brush.objectOptions", &p).unwrap_err().to_string();
+    assert!(err(&mut s, json!({"ids": [plain.0], "params": {"width": 50}})).contains("brush"));
+    assert!(err(&mut s, json!({"ids": [a.0, c.0], "params": {"width": 50}})).contains("different types"));
+    assert!(err(&mut s, json!({"ids": [a.0], "params": {"angle": 10}})).contains("angle"));
+    assert!(!err(&mut s, json!({"ids": [a.0], "params": {"width": "wide"}})).is_empty());
+    assert!(!err(&mut s, json!({"ids": [a.0], "params": [1]})).is_empty());
+    assert!(err(&mut s, json!({"ids": [a.0], "params": {"width": 50}, "reset": true})).contains("reset"));
+    assert!(err(&mut s, json!({"ids": [a.0], "reset": "yes"})).contains("reset"));
+    s.execute("brush.apply", &json!({"name": "Bristle Round", "ids": [c.0]})).unwrap();
+    let steps_bristle = undo_steps(&s);
+    assert!(err(&mut s, json!({"ids": [c.0], "params": {"size": 2}})).contains("bristle"));
+    assert_eq!(undo_steps(&s), steps_bristle);
+    assert_eq!(steps + 1, steps_bristle, "only the bristle brush's apply added a step");
+    // Values outside their ranges are clamped, as brush.options clamps them.
+    s.execute("brush.objectOptions", &json!({"ids": [a.0], "params": {"width": 1e308}})).unwrap();
+    assert_eq!(own_options(&s, a), json!({"width": 1000.0}));
 }
 
 #[test]
@@ -253,6 +471,367 @@ fn selection_art_is_the_art_new_brush_takes() {
     assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "only brush.new is an undo step");
 }
 
+fn undo_steps(s: &Session) -> usize {
+    s.doc().unwrap().history.undo.len()
+}
+
+fn selected(s: &Session) -> Vec<NodeId> {
+    s.doc().unwrap().selection.objects.clone()
+}
+
+/// The JSON of object `id`, as `brush.options` params take art.
+fn art_json(s: &mut Session, id: NodeId) -> Value {
+    s.execute("brush.selectionArt", &json!({"ids": [id.0]})).unwrap()["art"].clone()
+}
+
+/// `brush.placeArt` places a copy of an art or scatter brush's art centered where it is dropped
+/// (by default on the first artboard's center), selected, in one undo step; brushes without art,
+/// unknown brushes and a position that is not a number are refused.
+#[test]
+fn place_art_puts_a_copy_of_the_brush_art_where_it_is_dropped() {
+    let mut s = session();
+    let r = rect(&mut s, 10.0, 20.0, 40.0, 8.0);
+    s.execute("brush.new", &json!({"type": "art", "name": "Bar", "ids": [r.0]})).unwrap();
+    let steps = undo_steps(&s);
+    let id = NodeId(s.execute("brush.placeArt", &json!({"name": "Bar", "x": 100, "y": 80})).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(undo_steps(&s), steps + 1);
+    assert_eq!(selected(&s), vec![id]);
+    assert_ne!(id, r, "a copy, not the art the brush was made from");
+    assert!(close(bounds(&s, id), Rect::new(80.0, 76.0, 120.0, 84.0), 1e-6), "{:?}", bounds(&s, id));
+    // Without a position: the first artboard's center (the document is 400 × 300).
+    let scatter = NodeId(s.execute("brush.placeArt", &json!({"name": "Dots"})).unwrap()["id"].as_u64().unwrap());
+    let c = bounds(&s, scatter).center();
+    assert!((c.x - 200.0).abs() < 1e-6 && (c.y - 150.0).abs() < 1e-6, "{c:?}");
+    let steps = undo_steps(&s);
+    for (p, msg) in [
+        (json!({"name": "3 pt. Round"}), "`3 pt. Round` has no art (only scatter, art and pattern brushes do)"),
+        (json!({"name": "Bristle Round"}), "`Bristle Round` has no art (only scatter, art and pattern brushes do)"),
+        (json!({"name": "Nope"}), "no brush named `Nope`"),
+    ] {
+        let e = s.execute("brush.placeArt", &p).unwrap_err();
+        assert!(e.to_string().contains(msg), "{p}: {e}");
+    }
+    assert!(s.execute("brush.placeArt", &json!({"name": "Bar", "x": "100"})).is_err());
+    assert_eq!(undo_steps(&s), steps, "a refused call adds no undo step");
+}
+
+/// Brush art holding an instance of a symbol whose art lies away from the symbol's origin (as
+/// imported symbols can) is centered by that art, not by the box an instance has without its
+/// document.
+#[test]
+fn placed_art_with_a_symbol_instance_is_centered_by_the_symbols_art() {
+    let mut s = session();
+    let r = rect(&mut s, 300.0, 10.0, 100.0, 40.0);
+    let art = node(&s, r);
+    s.execute("edit.clear", &json!({"ids": [r.0]})).unwrap();
+    let st = s.doc_mut().unwrap();
+    let d = std::sync::Arc::make_mut(&mut st.doc);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Off".into(), art: std::sync::Arc::new(art) });
+    let layer = d.layers[0].id;
+    let inst = d.alloc_id();
+    let xf = vectorcraft_geom::Affine::translate((50.0, 50.0));
+    d.insert(Some(layer), usize::MAX, Node::new(inst, NodeKind::SymbolInstance { symbol: "Off".into(), xf })).unwrap();
+    let inst = inst.0;
+    s.execute("brush.new", &json!({"type": "art", "name": "Stamp", "ids": [inst]})).unwrap();
+    let id = NodeId(s.execute("brush.placeArt", &json!({"name": "Stamp", "x": 200, "y": 150})).unwrap()["id"].as_u64().unwrap());
+    let st = s.doc().unwrap();
+    let b = st.doc.bounds_of(&[id], false).unwrap();
+    assert!((b.center().x - 200.0).abs() < 1e-6 && (b.center().y - 150.0).abs() < 1e-6, "{b:?}");
+    assert!((b.width() - 100.0).abs() < 1e-6, "{b:?}");
+}
+
+/// A pattern brush with side, outer corner and start tiles, the side tile with a repeat frame
+/// wider than its art: → its name.
+fn framed_pattern_brush(s: &mut Session) -> String {
+    let side = rect(s, 0.0, 0.0, 20.0, 10.0);
+    let corner = rect(s, 0.0, 40.0, 10.0, 10.0);
+    let start = rect(s, 0.0, 80.0, 6.0, 10.0);
+    let name = s.execute("brush.new", &json!({"type": "pattern", "name": "Rail", "ids": [side.0]})).unwrap()["name"].as_str().unwrap().to_string();
+    let params = json!({
+        "side": art_json(s, side),
+        "side_frame": Rect::new(-2.0, 0.0, 22.0, 10.0),
+        "outer_corner": art_json(s, corner),
+        "start": art_json(s, start),
+    });
+    s.execute("brush.options", &json!({"name": name, "params": params})).unwrap();
+    name
+}
+
+/// `brush.placeArt` lays a pattern brush's tiles out left to right, each in a group named for its
+/// tile, with an unpainted rectangle at the back of a tile with a repeat frame marking that frame.
+#[test]
+fn pattern_brushes_place_their_tiles_in_a_row() {
+    let mut s = session();
+    let name = framed_pattern_brush(&mut s);
+    let id = NodeId(s.execute("brush.placeArt", &json!({"name": name, "x": 200, "y": 150})).unwrap()["id"].as_u64().unwrap());
+    let placed = node(&s, id);
+    let tiles: Vec<Node> = placed.children().unwrap().iter().map(|c| (**c).clone()).collect();
+    let names: Vec<&str> = tiles.iter().map(|t| t.name.as_deref().unwrap_or("")).collect();
+    assert_eq!(names, ["Side Tile", "Outer Corner Tile", "Start Tile"]);
+    let boxes: Vec<Rect> = tiles.iter().map(|t| t.geometric_bounds().unwrap()).collect();
+    assert!(boxes.windows(2).all(|w| (w[1].x0 - w[0].x1 - 10.0).abs() < 1e-6), "10 pt apart, left to right: {boxes:?}");
+    // The side tile: the frame's rectangle, unpainted, behind the art.
+    let side = tiles[0].children().unwrap();
+    assert_eq!(side.len(), 2);
+    let marker = &side[0];
+    assert!(marker.appearance.items.iter().all(|i| match i {
+        vectorcraft_doc::AppearanceItem::Fill(f) => f.paint.is_none(),
+        vectorcraft_doc::AppearanceItem::Stroke(st) => st.paint.is_none(),
+    }));
+    let frame = marker.geometric_bounds().unwrap();
+    assert!((frame.width() - 24.0).abs() < 1e-6 && (frame.height() - 10.0).abs() < 1e-6, "{frame:?}");
+    assert_eq!(tiles[1].children().unwrap().len(), 1, "no frame, no rectangle");
+}
+
+/// `brush.replaceArt` reads the tiles `brush.placeArt` places back tile by tile, frames included:
+/// every tile and the frame keep their sizes, and the frame keeps its place around the art.
+#[test]
+fn placed_pattern_tiles_go_back_into_the_brush_tile_by_tile() {
+    let mut s = session();
+    let name = framed_pattern_brush(&mut s);
+    let before = s.execute("brush.get", &json!({"name": name})).unwrap();
+    let id = NodeId(s.execute("brush.placeArt", &json!({"name": name, "x": 200, "y": 150})).unwrap()["id"].as_u64().unwrap());
+    let steps = undo_steps(&s);
+    s.execute("brush.replaceArt", &json!({"name": name, "ids": [id.0]})).unwrap();
+    assert_eq!(undo_steps(&s), steps + 1);
+    let after = s.execute("brush.get", &json!({"name": name})).unwrap();
+    let size = |v: &Value| {
+        let n: Node = serde_json::from_value(v.clone()).unwrap();
+        let b = n.geometric_bounds().unwrap();
+        (b.width(), b.height())
+    };
+    for key in ["side", "outer_corner", "start"] {
+        let (a, b) = (size(&before[key]), size(&after[key]));
+        assert!((a.0 - b.0).abs() < 1e-6 && (a.1 - b.1).abs() < 1e-6, "{key}: {a:?} → {b:?}");
+    }
+    assert!(after.get("end").is_none_or(Value::is_null) && after.get("inner_corner").is_none_or(Value::is_null));
+    let frame: Rect = serde_json::from_value(after["side_frame"].clone()).unwrap();
+    let art: Node = serde_json::from_value(after["side"].clone()).unwrap();
+    let art = art.geometric_bounds().unwrap();
+    assert!((frame.width() - 24.0).abs() < 1e-6 && (art.x0 - frame.x0 - 2.0).abs() < 1e-6, "{frame:?} around {art:?}");
+    assert!(after["outer_corner_frame"].is_null() || after.get("outer_corner_frame").is_none());
+}
+
+/// Art that is not the tiles `brush.placeArt` places becomes a pattern brush's side tile, and the
+/// other tiles stay; one tile group alone replaces only that tile.
+#[test]
+fn other_art_replaces_the_side_tile_of_a_pattern_brush() {
+    let mut s = session();
+    let name = framed_pattern_brush(&mut s);
+    let before = s.execute("brush.get", &json!({"name": name})).unwrap();
+    let r = rect(&mut s, 100.0, 100.0, 30.0, 12.0);
+    s.execute("brush.replaceArt", &json!({"name": name, "ids": [r.0]})).unwrap();
+    let after = s.execute("brush.get", &json!({"name": name})).unwrap();
+    let side: Node = serde_json::from_value(after["side"].clone()).unwrap();
+    assert!(close(side.geometric_bounds().unwrap(), Rect::new(100.0, 100.0, 130.0, 112.0), 1e-6));
+    assert!(after.get("side_frame").is_none_or(Value::is_null), "the old frame goes with the old art");
+    assert_eq!((&after["outer_corner"], &after["start"]), (&before["outer_corner"], &before["start"]));
+    // One placed tile, its group dragged back alone: only the start tile changes.
+    let id = NodeId(s.execute("brush.placeArt", &json!({"name": name})).unwrap()["id"].as_u64().unwrap());
+    let start = node(&s, id).children().unwrap()[2].clone();
+    assert_eq!(start.name.as_deref(), Some("Start Tile"));
+    s.execute("brush.replaceArt", &json!({"name": name, "ids": [start.id.0]})).unwrap();
+    let last = s.execute("brush.get", &json!({"name": name})).unwrap();
+    assert_eq!((&last["side"], &last["outer_corner"]), (&after["side"], &after["outer_corner"]));
+    let art: Node = serde_json::from_value(last["start"].clone()).unwrap();
+    assert!(close(art.geometric_bounds().unwrap(), start.geometric_bounds().unwrap(), 1e-6), "the start tile is the placed one");
+    assert!(art.name.is_none(), "the tile's name stays on the canvas");
+}
+
+/// `brush.replaceArt` gives a brush new art in one undo step: strokes that use it redraw with it,
+/// or with `applyToStrokes: false` keep the brush as it was while a copy with the new art becomes
+/// the current brush. A brush no stroke uses changes in place either way.
+#[test]
+fn replace_art_applies_to_strokes_or_leaves_them_on_the_old_brush() {
+    let mut s = session();
+    let r = rect(&mut s, 10.0, 200.0, 40.0, 8.0);
+    s.execute("brush.new", &json!({"type": "art", "name": "Bar", "ids": [r.0]})).unwrap();
+    let path = line(&mut s);
+    s.execute("brush.apply", &json!({"name": "Bar", "ids": [path.0]})).unwrap();
+    let thin = brushed_bounds(&s, path).height();
+    // A path painted with a brush made from the taller art: what the stroke should draw.
+    let tall = rect(&mut s, 10.0, 220.0, 40.0, 20.0);
+    s.execute("brush.new", &json!({"type": "art", "name": "Tall", "ids": [tall.0]})).unwrap();
+    let reference = line(&mut s);
+    s.execute("brush.apply", &json!({"name": "Tall", "ids": [reference.0]})).unwrap();
+    let want = brushed_bounds(&s, reference).height();
+    assert!(want > thin * 2.0, "{want} against {thin}");
+    // Apply to Strokes: the stroke redraws with the taller art.
+    let steps = undo_steps(&s);
+    let r = s.execute("brush.replaceArt", &json!({"name": "Bar", "ids": [tall.0]})).unwrap();
+    assert_eq!(r["name"], "Bar");
+    assert_eq!(undo_steps(&s), steps + 1);
+    assert!((brushed_bounds(&s, path).height() - want).abs() < 1e-6);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!((brushed_bounds(&s, path).height() - thin).abs() < 1e-9, "undo puts the old art back");
+    s.execute("edit.redo", &json!({})).unwrap();
+    // Leave Strokes: the stroke keeps Bar as it was; Bar copy has the new art, after Bar, current.
+    let short = rect(&mut s, 10.0, 260.0, 40.0, 4.0);
+    let bar = s.execute("brush.get", &json!({"name": "Bar"})).unwrap();
+    let r = s.execute("brush.replaceArt", &json!({"name": "Bar", "ids": [short.0], "applyToStrokes": false})).unwrap();
+    assert_eq!(r["name"], "Bar copy");
+    assert_eq!(brush_of(&s, path).as_deref(), Some("Bar"));
+    assert_eq!(s.execute("brush.get", &json!({"name": "Bar"})).unwrap(), bar);
+    assert!((brushed_bounds(&s, path).height() - want).abs() < 1e-6);
+    let copy: Node = serde_json::from_value(s.execute("brush.get", &json!({"name": "Bar copy"})).unwrap()["art"].clone()).unwrap();
+    assert!((copy.geometric_bounds().unwrap().height() - 4.0).abs() < 1e-6);
+    let list = s.execute("brush.list", &json!({})).unwrap();
+    assert_eq!(list["current"], "Bar copy");
+    let names: Vec<&str> = list["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect();
+    let at = names.iter().position(|n| *n == "Bar").unwrap();
+    assert_eq!(names.get(at + 1), Some(&"Bar copy"));
+    // No stroke uses Bar copy: its art changes in place, with or without applying.
+    s.execute("brush.replaceArt", &json!({"name": "Bar copy", "ids": [tall.0], "applyToStrokes": false})).unwrap();
+    assert!(s.execute("brush.get", &json!({"name": "Bar copy 2"})).is_err());
+}
+
+/// `brush.replaceArt` refuses a brush without art, an unknown brush, an empty selection, art with no
+/// width and an `applyToStrokes` that is not a boolean, and changes nothing then.
+#[test]
+fn replace_art_refuses_what_it_cannot_take() {
+    let mut s = session();
+    let r = rect(&mut s, 10.0, 20.0, 40.0, 8.0);
+    let flat = s.execute("shape.line", &json!({"x1": 50, "y1": 100, "x2": 50, "y2": 160})).unwrap()["id"].as_u64().unwrap();
+    let lib = s.execute("brush.list", &json!({})).unwrap();
+    let steps = undo_steps(&s);
+    for (p, msg) in [
+        (json!({"name": "3 pt. Round", "ids": [r.0]}), "`3 pt. Round` has no art (only scatter, art and pattern brushes do)"),
+        (json!({"name": "Bristle Round", "ids": [r.0]}), "`Bristle Round` has no art (only scatter, art and pattern brushes do)"),
+        (json!({"name": "Nope", "ids": [r.0]}), "no brush named `Nope`"),
+        (json!({"name": "Arrow", "ids": [flat]}), "the selected art has no width"),
+        (json!({"name": "Chain", "ids": [flat]}), "the selected art has no width"),
+        (json!({"name": "Arrow", "ids": [r.0], "applyToStrokes": "no"}), "`applyToStrokes` must be true or false"),
+    ] {
+        let e = s.execute("brush.replaceArt", &p).unwrap_err();
+        assert!(e.to_string().contains(msg), "{p}: {e}");
+    }
+    s.select(|_, sel| sel.clear()).unwrap();
+    let e = s.execute("brush.replaceArt", &json!({"name": "Arrow"})).unwrap_err();
+    assert!(e.to_string().contains("nothing selected"), "{e}");
+    assert_eq!(undo_steps(&s), steps);
+    assert_eq!(s.execute("brush.list", &json!({})).unwrap(), lib);
+}
+
+/// An instance of a symbol whose art has no width is art with no width for `brush.new` and
+/// `brush.replaceArt`, although an instance's box without its document has width.
+#[test]
+fn a_symbol_whose_art_has_no_width_makes_no_brush_art() {
+    let mut s = session();
+    let flat = NodeId(s.execute("shape.line", &json!({"x1": 50, "y1": 100, "x2": 50, "y2": 160})).unwrap()["id"].as_u64().unwrap());
+    let art = node(&s, flat);
+    s.execute("edit.clear", &json!({"ids": [flat.0]})).unwrap();
+    let st = s.doc_mut().unwrap();
+    let d = std::sync::Arc::make_mut(&mut st.doc);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Flat".into(), art: std::sync::Arc::new(art) });
+    let layer = d.layers[0].id;
+    let inst = d.alloc_id();
+    d.insert(Some(layer), usize::MAX, Node::new(inst, NodeKind::SymbolInstance { symbol: "Flat".into(), xf: vectorcraft_geom::Affine::IDENTITY }))
+        .unwrap();
+    assert!(node(&s, inst).geometric_bounds().is_some_and(|b| b.width() > 1.0), "the box an instance has without its document");
+    for (cmd, p) in [("brush.new", json!({"type": "art", "ids": [inst.0]})), ("brush.replaceArt", json!({"name": "Arrow", "ids": [inst.0]}))] {
+        let e = s.execute(cmd, &p).unwrap_err();
+        assert!(e.to_string().contains("the selected art has no width"), "{cmd}: {e}");
+    }
+}
+
+/// `brush.replaceArt` checks only the art it is given: a tile the pattern brush already has that
+/// has no width does not stop another tile from being replaced.
+#[test]
+fn replace_art_checks_only_the_tiles_it_is_given() {
+    let mut s = session();
+    let flat = NodeId(s.execute("shape.line", &json!({"x1": 50, "y1": 100, "x2": 50, "y2": 160})).unwrap()["id"].as_u64().unwrap());
+    let end = art_json(&mut s, flat);
+    s.execute("brush.options", &json!({"name": "Chain", "params": {"end": end}})).unwrap();
+    let r = rect(&mut s, 10.0, 20.0, 40.0, 8.0);
+    s.execute("brush.replaceArt", &json!({"name": "Chain", "ids": [r.0]})).unwrap();
+    let side: Node = serde_json::from_value(s.execute("brush.get", &json!({"name": "Chain"})).unwrap()["side"].clone()).unwrap();
+    assert!(close(side.geometric_bounds().unwrap(), bounds(&s, r), 1e-6));
+}
+
+/// Tile `key` (`side`, `start`…) of pattern brush `name`.
+fn tile_art(s: &mut Session, name: &str, key: &str) -> Node {
+    serde_json::from_value(s.execute("brush.get", &json!({"name": name})).unwrap()[key].clone()).unwrap()
+}
+
+/// A pattern brush tile placed with `brush.placeArt` and given back with `brush.replaceArt` is the
+/// art it was, not that art inside the tile's group, however many times it goes out and back.
+#[test]
+fn pattern_tiles_go_out_and_back_without_gaining_a_group() {
+    let mut s = session();
+    let name = framed_pattern_brush(&mut s);
+    let size = |n: &Node| {
+        let b = n.geometric_bounds().unwrap();
+        (b.width(), b.height())
+    };
+    let first = tile_art(&mut s, &name, "side");
+    assert!(matches!(first.kind, NodeKind::Path { .. }), "{:?}", first.kind);
+    for round in 1..=2 {
+        let id = s.execute("brush.placeArt", &json!({"name": name})).unwrap()["id"].as_u64().unwrap();
+        s.execute("brush.replaceArt", &json!({"name": name, "ids": [id]})).unwrap();
+        let side = tile_art(&mut s, &name, "side");
+        assert!(matches!(side.kind, NodeKind::Path { .. }), "round {round}: {:?}", side.kind);
+        let (a, b) = (size(&first), size(&side));
+        assert!((a.0 - b.0).abs() < 1e-6 && (a.1 - b.1).abs() < 1e-6, "round {round}: {a:?} → {b:?}");
+    }
+}
+
+/// A tile group whose art was deleted, leaving only the rectangle that marks its frame, is art with
+/// no width: the brush keeps its tile.
+#[test]
+fn a_tile_group_holding_only_its_frame_is_refused() {
+    let mut s = session();
+    let name = framed_pattern_brush(&mut s);
+    let before = s.execute("brush.get", &json!({"name": name})).unwrap();
+    let id = NodeId(s.execute("brush.placeArt", &json!({"name": name})).unwrap()["id"].as_u64().unwrap());
+    let side = node(&s, id).children().unwrap()[0].clone();
+    assert_eq!(side.name.as_deref(), Some("Side Tile"));
+    let art = side.children().unwrap()[1].id;
+    s.execute("edit.clear", &json!({"ids": [art.0]})).unwrap();
+    let steps = undo_steps(&s);
+    let e = s.execute("brush.replaceArt", &json!({"name": name, "ids": [side.id.0]})).unwrap_err();
+    assert!(e.to_string().contains("the selected art has no width"), "{e}");
+    assert_eq!(undo_steps(&s), steps);
+    assert_eq!(s.execute("brush.get", &json!({"name": name})).unwrap(), before);
+}
+
+/// Two groups named for the same tile: the frontmost one is the tile's art.
+#[test]
+fn the_frontmost_group_named_for_a_tile_is_that_tile() {
+    let mut s = session();
+    let name = framed_pattern_brush(&mut s);
+    let back = rect(&mut s, 10.0, 10.0, 20.0, 10.0);
+    let front = rect(&mut s, 10.0, 40.0, 30.0, 10.0);
+    let (back, front) = (node(&s, back), node(&s, front));
+    s.execute("edit.clear", &json!({"ids": [back.id.0, front.id.0]})).unwrap();
+    let st = s.doc_mut().unwrap();
+    let d = std::sync::Arc::make_mut(&mut st.doc);
+    let tile = |d: &mut Document, n: Node| {
+        let mut g = Node::group(d.alloc_id(), vec![std::sync::Arc::new(n)]);
+        g.name = Some("Start Tile".into());
+        std::sync::Arc::new(g)
+    };
+    let tiles = vec![tile(d, back), tile(d, front)];
+    let both = Node::group(d.alloc_id(), tiles);
+    let both_id = both.id;
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), usize::MAX, both).unwrap();
+    s.execute("brush.replaceArt", &json!({"name": name, "ids": [both_id.0]})).unwrap();
+    let start = tile_art(&mut s, &name, "start");
+    assert!((start.geometric_bounds().unwrap().width() - 30.0).abs() < 1e-6, "{:?}", start.geometric_bounds());
+}
+
+/// Type is art for `brush.replaceArt` as it is for `brush.new`: taken as it is.
+#[test]
+fn replace_art_takes_type_as_brush_new_does() {
+    let mut s = session();
+    let t = s.execute("text.create", &json!({"x": 20, "y": 60, "text": "Hi", "size": 24})).unwrap()["id"].as_u64().unwrap();
+    let want = art_json(&mut s, NodeId(t));
+    s.execute("brush.replaceArt", &json!({"name": "Arrow", "ids": [t]})).unwrap();
+    assert_eq!(s.execute("brush.get", &json!({"name": "Arrow"})).unwrap()["art"], want);
+    let made = s.execute("brush.new", &json!({"type": "art", "ids": [t]})).unwrap()["name"].as_str().unwrap().to_string();
+    assert_eq!(s.execute("brush.get", &json!({"name": made})).unwrap()["art"], want);
+}
+
 #[test]
 fn brush_options_rename_duplicate_and_delete_update_strokes() {
     let mut s = session();
@@ -268,6 +847,37 @@ fn brush_options_rename_duplicate_and_delete_update_strokes() {
     assert_eq!(brush_of(&s, a), None);
     assert!(s.execute("brush.get", &json!({"name": "5 pt. Round"})).is_err());
     assert!(s.execute("brush.delete", &json!({"name": "5 pt. Round"})).is_err());
+}
+
+/// A document whose brushes repeat a name opens with the later brush numbered: strokes of the name
+/// keep the first brush, and renaming or deleting one brush leaves the other and its strokes alone.
+#[test]
+fn a_repeated_brush_name_is_numbered_when_the_document_opens() {
+    use vectorcraft_brush::{Brush, BrushKind, Calligraphic};
+    let nib = |size: f64| Brush { name: "Nib".into(), kind: BrushKind::Calligraphic(Calligraphic { size, ..Default::default() }) };
+    let mut s = session();
+    vectorcraft_brush::store(std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc), &[nib(1.0), nib(2.0)]);
+    let a = rect(&mut s, 10.0, 10.0, 50.0, 50.0);
+    s.execute("brush.apply", &json!({"name": "Nib", "ids": [a.0]})).unwrap();
+    let saved = s.execute("document.serialize", &json!({})).unwrap()["dataBase64"].clone();
+    let mut o = Session::new();
+    o.execute("document.open", &json!({"name": "a.vectorcraft", "dataBase64": saved})).unwrap();
+    let names = |o: &mut Session| -> Vec<String> {
+        let list = o.execute("brush.list", &json!({})).unwrap();
+        list["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap().to_string()).collect()
+    };
+    assert_eq!(names(&mut o), ["Nib", "Nib 2"]);
+    assert_eq!(brush_of(&o, a).as_deref(), Some("Nib"));
+    assert_eq!(o.execute("brush.get", &json!({"name": "Nib"})).unwrap()["size"], json!(1.0));
+    assert_eq!(o.execute("brush.get", &json!({"name": "Nib 2"})).unwrap()["size"], json!(2.0));
+    let b = rect(&mut o, 80.0, 10.0, 50.0, 50.0);
+    o.execute("brush.apply", &json!({"name": "Nib 2", "ids": [b.0]})).unwrap();
+    o.execute("brush.options", &json!({"name": "Nib", "newName": "Pen"})).unwrap();
+    assert_eq!(names(&mut o), ["Pen", "Nib 2"]);
+    assert_eq!((brush_of(&o, a).as_deref(), brush_of(&o, b).as_deref()), (Some("Pen"), Some("Nib 2")));
+    o.execute("brush.delete", &json!({"name": "Nib 2"})).unwrap();
+    assert_eq!(names(&mut o), ["Pen"]);
+    assert_eq!((brush_of(&o, a).as_deref(), brush_of(&o, b)), (Some("Pen"), None));
 }
 
 /// `brush.move`, which the Brushes panel runs when a brush is dragged, reorders brushes among those of
@@ -457,6 +1067,31 @@ fn brush_unused_lists_the_brushes_no_stroke_paints_with() {
     assert_eq!(unused(&mut s), ["3 pt. Round", "6 pt. Flat", "Charcoal"]);
 }
 
+/// A stroke in the tile that pattern editing's Cancel puts back counts as a use, as `brush.delete`
+/// clears it there.
+#[test]
+fn brush_unused_counts_pattern_edit_originals() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, 10.0, 40.0, 20.0);
+    s.execute("brush.apply", &json!({"name": "6 pt. Flat", "ids": [id.0]})).unwrap();
+    let name = s.execute("object.pattern.make", &json!({"ids": [id.0], "edit": false})).unwrap()["name"].clone();
+    s.execute("brush.remove", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.pattern.edit", &json!({ "name": name })).unwrap();
+    // The tile's copies in the editing layer are selected; only the tile kept for Cancel paints with the brush.
+    s.execute("brush.remove", &json!({})).unwrap();
+    let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let original = d.pattern_edit.as_ref().and_then(|pe| pe.original.as_ref()).expect("pattern edit original");
+    assert_eq!(original.art.first().and_then(|n| n.appearance.stroke()).and_then(|k| k.brush.as_deref()), Some("6 pt. Flat"));
+    for pattern in &mut d.patterns {
+        for art in &mut pattern.art {
+            if let Some(stroke) = std::sync::Arc::make_mut(art).appearance.stroke_mut() {
+                stroke.brush = None;
+            }
+        }
+    }
+    assert!(!unused(&mut s).contains(&"6 pt. Flat".to_string()));
+}
+
 /// A brush counts as used when a stroke paints with it in an opacity mask, a symbol, a graph
 /// design, a pattern tile, a graphic style, or the art of a brush that is used. The art of a brush
 /// that is not used, its own strokes included, does not count.
@@ -546,6 +1181,225 @@ fn brush_freehand_paints_with_a_brush_in_one_step() {
     assert_eq!(brush_of(&s, id).as_deref(), Some("Charcoal"));
 }
 
+/// `brush.freehand` refuses a `brush` that is not a string or names no brush in the document,
+/// and a `style` other than "pencil" or "brush", before it draws: the document, the selection
+/// and the undo history stay as they were. A `brush` left out or null draws the plain path.
+#[test]
+fn brush_freehand_refuses_a_brush_or_style_it_cannot_use() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    select(&mut s, &[a]);
+    let points = json!([[10, 10], [60, 40], [120, 10]]);
+    for (extra, words) in [
+        (json!({"brush": "Nope"}), "no brush named `Nope`"),
+        (json!({"brush": ""}), "no brush named ``"),
+        (json!({"brush": 5}), "`brush` must be a string"),
+        (json!({"brush": {"name": "Charcoal"}}), "`brush` must be a string"),
+        (json!({"brush": true}), "`brush` must be a string"),
+        (json!({"brush": "Charcoal", "style": "marker"}), "`style` must be \"pencil\" or \"brush\", not \"marker\""),
+        (json!({"brush": "Charcoal", "style": 1}), "`style` must be \"pencil\" or \"brush\", not 1"),
+    ] {
+        let mut p = extra.clone();
+        p["points"] = points.clone();
+        let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+        let e = s.execute("brush.freehand", &p).expect_err(&format!("{extra} is refused"));
+        assert!(e.to_string().contains(words), "{extra}: {e}");
+        assert!(*s.doc().unwrap().doc == *before, "{extra} leaves the document");
+        assert_eq!(s.doc().unwrap().selection.objects, [a], "{extra} leaves the selection");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{extra} records no undo step");
+    }
+    for extra in [json!({}), json!({"brush": null, "style": null})] {
+        let mut p = extra.clone();
+        p["points"] = points.clone();
+        let id = NodeId(s.execute("brush.freehand", &p).unwrap()["id"].as_u64().unwrap());
+        assert_eq!(brush_of(&s, id), None, "{extra} draws the plain path");
+    }
+    for style in ["pencil", "brush"] {
+        let r = s.execute("brush.freehand", &json!({"points": points, "style": style, "brush": "Charcoal"})).unwrap();
+        assert!(r["id"].is_u64(), "{style}: {r}");
+    }
+}
+
+/// A `brush.freehand` call outside an interaction draws the path and paints it with the brush in
+/// one undo step: one Undo removes the path and gives back the earlier selection, and one Redo
+/// brings back the brushed path. Continuing a path with a brush is one step too.
+#[test]
+fn brush_freehand_direct_call_has_one_undo_step() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    select(&mut s, &[a]);
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("brush.freehand", &json!({"points": [[10, 10], [60, 40], [120, 10]], "style": "brush", "brush": "Charcoal"})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    assert_eq!(brush_of(&s, id).as_deref(), Some("Charcoal"));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(*s.doc().unwrap().doc == *before, "one Undo removes the brushed path");
+    assert_eq!(selected(&s), [a], "Undo gives back the earlier selection");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(brush_of(&s, id).as_deref(), Some("Charcoal"), "Redo brings back the brush");
+    assert_eq!(selected(&s), [id]);
+
+    let undo = s.doc().unwrap().history.undo.len();
+    let p = json!({"points": [[120, 10], [160, 60], [200, 10]], "extend": {"id": id.0, "end": "end"}, "brush": "Dots"});
+    assert_eq!(s.execute("brush.freehand", &p).unwrap()["id"], json!(id.0));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "continuing is one undo step");
+    assert_eq!(brush_of(&s, id).as_deref(), Some("Dots"));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(brush_of(&s, id).as_deref(), Some("Charcoal"), "one Undo takes back the stroke and its brush");
+
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("brush.freehand", &json!({"points": [[10, 100], [60, 140], [120, 100]], "style": "pencil", "brush": "Charcoal"})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Paintbrush"), "a stroke with a brush is a Paintbrush step");
+}
+
+/// A `brush.freehand` call that continues a path by one point changes only the path's brush, and
+/// applies `keepSelected` as a longer continuation does: off, the path is deselected while the
+/// rest of the selection stays; on, the path is selected. A call that leaves the brush as it is
+/// changes neither the selection nor the undo history.
+#[test]
+fn brush_freehand_continued_by_one_point_follows_keep_selected() {
+    let mut s = session();
+    let r = s.execute("brush.freehand", &json!({"points": [[10, 10], [60, 40], [120, 10]], "style": "brush", "brush": "Charcoal"})).unwrap();
+    let p = NodeId(r["id"].as_u64().unwrap());
+    let a = rect(&mut s, 200.0, 200.0, 10.0, 10.0);
+    let extend = json!({"id": p.0, "end": "end"});
+
+    select(&mut s, &[p, a]);
+    let off = json!({"points": [[120, 10]], "extend": extend, "brush": "Dots", "keepSelected": false});
+    assert_eq!(s.execute("brush.freehand", &off).unwrap()["id"], json!(p.0));
+    assert_eq!(brush_of(&s, p).as_deref(), Some("Dots"));
+    assert_eq!(selected(&s), [a], "Keep selected off: the path is deselected and the rest stays");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(brush_of(&s, p).as_deref(), Some("Charcoal"), "one Undo takes back the brush");
+    assert_eq!(selected(&s), [p, a], "Undo gives back the earlier selection");
+
+    select(&mut s, &[a]);
+    let on = json!({"points": [[120, 10]], "extend": extend, "brush": "Dots"});
+    s.execute("brush.freehand", &on).unwrap();
+    assert_eq!(brush_of(&s, p).as_deref(), Some("Dots"));
+    assert_eq!(selected(&s), [p], "Keep selected on: the continued path is selected");
+
+    select(&mut s, &[a]);
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("brush.freehand", &on).unwrap();
+    assert_eq!(selected(&s), [a], "the same brush again: the selection stays");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "the same brush again: no undo step");
+}
+
+/// A `brush.freehand` call that continues a path by one point with a bad `connect` is refused
+/// before the path's brush changes: the brush, the selection and the undo history stay as they were.
+#[test]
+fn brush_freehand_continued_by_one_point_refuses_a_bad_connect() {
+    let mut s = session();
+    let r = s.execute("brush.freehand", &json!({"points": [[10, 10], [60, 40], [120, 10]], "style": "brush", "brush": "Charcoal"})).unwrap();
+    let p = NodeId(r["id"].as_u64().unwrap());
+    let a = rect(&mut s, 200.0, 200.0, 10.0, 10.0);
+    select(&mut s, &[a]);
+    let undo = undo_steps(&s);
+    let one = json!({"points": [[120, 10]], "extend": {"id": p.0, "end": "end"}, "brush": "Dots"});
+    for connect in
+        [json!({"id": p.0, "end": "end"}), json!({"id": a.0, "end": "middle"}), json!({"end": "end"}), json!({"id": 999_999, "end": "end"})]
+    {
+        let mut params = one.clone();
+        params["connect"] = connect;
+        assert!(s.execute("brush.freehand", &params).is_err(), "{params}");
+        assert_eq!(brush_of(&s, p).as_deref(), Some("Charcoal"), "{params}: the brush stays");
+        assert_eq!(selected(&s), [a], "{params}: the selection stays");
+        assert_eq!(undo_steps(&s), undo, "{params}: no undo step");
+    }
+}
+
+/// `brush.freehand` refuses a brush for a path with no stroke (a continued path, a redrawn one
+/// and a new filled pencil path while the stroke is None) instead of reporting it painted: the
+/// document, the selection and the undo history stay as they were. Without a brush the path is
+/// drawn as `path.freehand` draws it.
+#[test]
+fn brush_freehand_refuses_a_brush_on_a_path_without_a_stroke() {
+    let mut s = session();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    let drawn = json!([[10, 10], [60, 20], [90, 80], [20, 90]]);
+    let p = NodeId(s.execute("path.freehand", &json!({"points": drawn, "fill": true})).unwrap()["id"].as_u64().unwrap());
+    assert!(node(&s, p).appearance.stroke_paint().is_none(), "the path has no stroke");
+    // The redraw below replaces a section of the path rather than drawing a new one.
+    let redraw = json!({"points": [[10, 10], [40, 30], [60, 20]], "redraw": {"id": p.0}});
+    assert_eq!(s.execute("path.freehand", &redraw).unwrap()["id"], json!(p.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    select(&mut s, &[p]);
+    let extend = json!({"id": p.0, "end": "end"});
+    for (what, mut params) in [
+        ("continued", json!({"points": [[20, 90], [0, 120], [-10, 150]], "extend": extend})),
+        ("continued by one point", json!({"points": [[20, 90]], "extend": extend})),
+        ("redrawn", redraw.clone()),
+        ("new filled pencil", json!({"points": [[100, 100], [150, 120], [180, 180]], "style": "pencil", "fill": true})),
+    ] {
+        params["brush"] = json!("Charcoal");
+        let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+        let e = s.execute("brush.freehand", &params).expect_err(&format!("{what}: refused"));
+        assert_eq!(e.to_string(), "invalid parameters for `brush.freehand`: cannot apply brush `Charcoal`: path has no stroke", "{what}");
+        assert!(*s.doc().unwrap().doc == *before, "{what}: the document stays");
+        assert_eq!(selected(&s), [p], "{what}: the selection stays");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{what}: no undo step");
+    }
+    let r = s.execute("brush.freehand", &json!({"points": [[20, 90], [0, 120], [-10, 150]], "extend": extend, "brush": null})).unwrap();
+    assert_eq!(r["id"], json!(p.0));
+    assert_eq!(brush_of(&s, p), None, "without a brush the path is continued as it is");
+}
+
+/// `brush.freehand` takes the keys of `path.freehand` and `brush`, and refuses any other key with
+/// the nearest key it takes, before it draws.
+#[test]
+fn brush_freehand_refuses_unknown_keys() {
+    let spec = crate::cmd::find_command("brush.freehand").unwrap();
+    let mut keys = crate::cmd::params::accepted_keys(spec.params).expect("the description names every key");
+    keys.sort_unstable();
+    assert_eq!(keys, ["brush", "closed", "connect", "extend", "fidelity", "fill", "fit", "keepSelected", "points", "preview", "redraw", "style"]);
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    select(&mut s, &[a]);
+    let points = json!([[10, 10], [60, 40], [120, 10]]);
+    let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let e = s.execute("brush.freehand", &json!({"points": points, "brsuh": "Charcoal"})).expect_err("a misspelled key is refused");
+    assert!(e.to_string().contains("unknown parameter `brsuh`; did you mean `brush`?"), "{e}");
+    assert!(*s.doc().unwrap().doc == *before, "the document stays");
+    assert_eq!(selected(&s), [a], "the selection stays");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    let every = json!({
+        "points": points, "fidelity": 2.0, "fit": true, "closed": false, "style": "brush", "fill": false, "keepSelected": true,
+        "extend": null, "connect": null, "redraw": null, "brush": "Charcoal"
+    });
+    let id = NodeId(s.execute("brush.freehand", &every).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(brush_of(&s, id).as_deref(), Some("Charcoal"));
+}
+
+/// The Paintbrush skips a brush deleted after it was chosen: a deleted tool brush gives way to
+/// the document's current brush, and with neither the stroke is drawn without a brush.
+#[test]
+fn paintbrush_tool_skips_a_deleted_brush() {
+    let mut s = session();
+    s.execute("brush.setCurrent", &json!({"name": "Arrow"})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("paintbrush", v).unwrap();
+    s.set_tool_option("brush", &json!("Dots"));
+    s.execute("brush.delete", &json!({"name": "Dots"})).unwrap();
+    let stroke = |s: &mut Session, y: f64| {
+        for (k, x) in [(PointerKind::Down, 10.0), (PointerKind::Drag, 50.0), (PointerKind::Drag, 90.0), (PointerKind::Up, 130.0)] {
+            s.pointer(&PointerEvent::new(k, x, y), v).unwrap();
+        }
+        s.doc().unwrap().selection.objects[0]
+    };
+    let id = stroke(&mut s, 10.0);
+    assert_eq!(brush_of(&s, id).as_deref(), Some("Arrow"));
+    s.execute("brush.delete", &json!({"name": "Arrow"})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.unknown.get("currentBrush"), None);
+    let id = stroke(&mut s, 110.0);
+    assert_eq!(brush_of(&s, id), None);
+}
+
 #[test]
 fn paintbrush_tool_uses_the_current_brush() {
     let mut s = session();
@@ -567,6 +1421,40 @@ fn paintbrush_tool_uses_the_current_brush() {
     let id = s.doc().unwrap().selection.objects[0];
     assert_eq!(brush_of(&s, id).as_deref(), Some("Dots"));
     assert!(s.execute("brush.setCurrent", &json!({"name": "Nope"})).is_err());
+}
+
+/// The current brush and symbol are not undo steps, so undo and redo of other steps leave them as
+/// they are. With nothing else changed outside the history, undo back to the saved document leaves
+/// it saved.
+#[test]
+fn undo_and_redo_keep_the_current_brush_and_symbol() {
+    let mut s = session();
+    rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    s.execute("symbol.new", &json!({"name": "A"})).unwrap();
+    rect(&mut s, 40.0, 10.0, 20.0, 20.0);
+    s.execute("symbol.new", &json!({"name": "B"})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+    rect(&mut s, 70.0, 10.0, 20.0, 20.0);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!s.doc().unwrap().is_dirty(), "back at the saved document");
+    s.execute("edit.redo", &json!({})).unwrap();
+    s.execute("brush.setCurrent", &json!({"name": "Arrow"})).unwrap();
+    s.execute("symbol.setCurrent", &json!({"name": "A"})).unwrap();
+    let current = |s: &mut Session| {
+        let brush = s.execute("brush.list", &json!({})).unwrap()["current"].clone();
+        (brush, s.execute("symbol.list", &json!({})).unwrap()["current"].clone())
+    };
+    let want = (json!("Arrow"), json!("A"));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(current(&mut s), want);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(current(&mut s), want);
+    // A symbol made current between undoing and redoing its deletion is not kept as current.
+    s.execute("symbol.delete", &json!({"name": "B"})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("symbol.setCurrent", &json!({"name": "B"})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.unknown.get("currentSymbol"), Some(&json!("A")));
 }
 
 /// A Size: Pressure variant of "3 pt. Round" (3 ± 3 pt).
@@ -641,20 +1529,221 @@ fn continuing_a_stroke_joins_its_pressure() {
     assert_eq!(p.at(1.0), vectorcraft_doc::PressureProfile::MID, "the old part had no pressure");
 }
 
+/// The pen's tilt, bearing and barrel rotation recorded on the stroke `id`.
+fn pose_of(s: &Session, id: NodeId) -> (Option<PressureProfile>, Option<AngleProfile>, Option<AngleProfile>) {
+    let st = node(s, id).appearance.stroke().cloned().unwrap();
+    (st.tilt, st.bearing, st.rotation)
+}
+
+/// #764: `path.freehand` points carry the pen's tilt and barrel rotation; the stroke keeps how far
+/// the pen leaned (0 upright to 1 flat), which way (counter-clockwise on the page) and how far its
+/// barrel turned (counter-clockwise), and a continued stroke joins them.
+#[test]
+fn freehand_points_record_the_pens_tilt_bearing_and_rotation() {
+    let mut s = session();
+    let draw = |s: &mut Session, points: Value| {
+        NodeId(s.execute("path.freehand", &json!({"points": points, "style": "brush"})).unwrap()["id"].as_u64().unwrap())
+    };
+    // Leaning 30° to the right, the barrel turned 90° clockwise.
+    let id = draw(&mut s, json!([[0, 50, 0.5, 30, 0, 90], [100, 50, 0.5, 30, 0, 90]]));
+    let (tilt, bearing, rotation) = pose_of(&s, id);
+    assert!((tilt.unwrap().at(0.5) - 1.0 / 3.0).abs() < 1e-3);
+    assert!(bearing.unwrap().at(0.5).abs() < 1e-6);
+    assert!((rotation.unwrap().at(0.5) + 90.0).abs() < 1e-6, "counter-clockwise");
+    // Leaning down the page (towards the user) is −90°; no rotation axis, no rotation.
+    let id = draw(&mut s, json!([[0, 150, 0.5, 0, 30, null], {"x": 100, "y": 150, "pressure": 0.5, "tiltY": 30}]));
+    let (_, bearing, rotation) = pose_of(&s, id);
+    assert!((bearing.unwrap().at(0.5) + 90.0).abs() < 1e-6);
+    assert_eq!(rotation, None);
+    // Upright, the pen leans no way: the bearing it leaned before.
+    let id = draw(&mut s, json!([[0, 250, 0.5, 0, -40], [50, 250, 0.5, 0.2, 0.2], [100, 250, 0.5, 0, 0]]));
+    let (tilt, bearing, _) = pose_of(&s, id);
+    let bearing = bearing.unwrap();
+    assert!((bearing.at(1.0) - 90.0).abs() < 1e-6 && tilt.unwrap().at(1.0) < 1e-6, "{bearing:?}");
+    // Pressure alone, or nothing: no pen pose.
+    let id = draw(&mut s, json!([[0, 350, 0.5], [100, 350, 0.5]]));
+    assert_eq!(pose_of(&s, id), (None, None, None));
+    // Continued at its end: the old part keeps its rotation, the new part has none (unturned).
+    let id = draw(&mut s, json!([[0, 450, 0.5, 30, 0, 90], [100, 450, 0.5, 30, 0, 90]]));
+    s.execute("path.freehand", &json!({"points": [[100, 450], [200, 450]], "style": "brush", "extend": {"id": id.0, "end": "end"}})).unwrap();
+    let (tilt, _, rotation) = pose_of(&s, id);
+    let rotation = rotation.unwrap();
+    assert!((rotation.at(0.25) + 90.0).abs() < 1e-6 && rotation.at(0.9).abs() < 1e-6, "{rotation:?}");
+    assert_eq!(tilt.unwrap().at(0.9), vectorcraft_doc::PressureProfile::MID, "half way over without one");
+}
+
+/// The airbrush finger wheel recorded on the stroke `id`.
+fn wheel_of(s: &Session, id: NodeId) -> Option<PressureProfile> {
+    node(s, id).appearance.stroke().and_then(|st| st.wheel.clone())
+}
+
+/// `path.freehand` points carry an airbrush pen's finger wheel seventh (or as `wheel`), 0..1; the
+/// stroke keeps it, a continued or reversed stroke keeps it in step, a wheel that is not a number
+/// or is outside 0..1 is refused, and the Paintbrush records it from the pen. A Calligraphic brush with
+/// Size on Stylus Wheel draws it, and it lasts through saving, new art leaving it behind.
+#[test]
+fn freehand_points_record_the_stylus_wheel() {
+    let mut s = session();
+    let draw = |s: &mut Session, points: Value| {
+        NodeId(s.execute("path.freehand", &json!({"points": points, "style": "brush"})).unwrap()["id"].as_u64().unwrap())
+    };
+    let id = draw(&mut s, json!([[0, 50, null, null, null, null, 0], [100, 50, null, null, null, null, 1]]));
+    let w = wheel_of(&s, id).unwrap();
+    assert!(w.at(0.0) < 1e-6 && (w.at(1.0) - 1.0).abs() < 1e-6, "{w:?}");
+    assert_eq!(pose_of(&s, id), (None, None, None), "the wheel alone");
+    assert_eq!(pressure_of(&s, id), None);
+    // As keys; a point without one is half way.
+    let id = draw(&mut s, json!([{"x": 0, "y": 150, "wheel": 0}, {"x": 50, "y": 150}, {"x": 100, "y": 150, "wheel": 1}]));
+    let w = wheel_of(&s, id).unwrap();
+    assert!(w.at(0.0) < 1e-6 && (w.at(0.5) - 0.5).abs() < 1e-6 && (w.at(1.0) - 1.0).abs() < 1e-6, "{w:?}");
+    // No wheel given: none recorded.
+    let id = draw(&mut s, json!([[0, 250, 0.5, 30, 0, 90], [100, 250, 0.5, 30, 0, 90]]));
+    assert_eq!(wheel_of(&s, id), None);
+    // Not a number: refused, and nothing drawn.
+    let before = s.doc().unwrap().doc.clone();
+    let err = s.execute("path.freehand", &json!({"points": [[0, 0, null, null, null, null, "0.5"], [10, 0]], "style": "brush"}));
+    assert!(err.unwrap_err().to_string().contains("`wheel` must be a number"));
+    assert_eq!(s.doc().unwrap().doc.layers, before.layers, "the document is unchanged");
+    // Outside 0..1: refused, and nothing drawn.
+    for points in [json!([{"x": 0, "y": 0, "wheel": -2}, {"x": 10, "y": 0}]), json!([[0, 0], [10, 0, null, null, null, null, 9]])] {
+        let err = s.execute("path.freehand", &json!({"points": points, "style": "brush"}));
+        assert!(err.unwrap_err().to_string().contains("`wheel` must be from 0 to 1"));
+        assert_eq!(s.doc().unwrap().doc.layers, before.layers, "the document is unchanged");
+    }
+    // Continued at its end by a stroke without a wheel: the old part keeps it, the new one is half way.
+    let id = draw(&mut s, json!([[0, 350, null, null, null, null, 1], [100, 350, null, null, null, null, 1]]));
+    s.execute("path.freehand", &json!({"points": [[100, 350], [200, 350]], "style": "brush", "extend": {"id": id.0, "end": "end"}})).unwrap();
+    let w = wheel_of(&s, id).unwrap();
+    assert!((w.at(0.25) - 1.0).abs() < 1e-6 && (w.at(0.9) - 0.5).abs() < 1e-6, "{w:?}");
+    // The Paintbrush records it, and a brush with Size on Stylus Wheel draws it.
+    let params = json!({"angle": 0, "roundness": 100, "size": 6, "variation": [0, 0, 4], "modes": ["fixed", "fixed", "stylusWheel"]});
+    s.execute("brush.options", &json!({"name": "3 pt. Round", "params": params})).unwrap();
+    s.execute("brush.setCurrent", &json!({"name": "3 pt. Round"})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("paintbrush", v).unwrap();
+    let strokes = |s: &mut Session, y: f64, wheel: Option<f32>| {
+        let pen = wheel.map(|w| PenPose { wheel: Some(w), ..PenPose::default() });
+        for (k, x) in [(PointerKind::Down, 20.0), (PointerKind::Drag, 120.0), (PointerKind::Drag, 220.0), (PointerKind::Up, 320.0)] {
+            s.pointer(&PointerEvent { pen, ..PointerEvent::new(k, x, y) }, v).unwrap();
+        }
+        let id = s.doc().unwrap().selection.objects[0];
+        select(s, &[]);
+        id
+    };
+    let far = strokes(&mut s, 500.0, Some(1.0));
+    let near = strokes(&mut s, 600.0, Some(0.0));
+    let mouse = strokes(&mut s, 700.0, None);
+    assert_eq!(wheel_of(&s, far).map(|w| w.at(0.5)), Some(1.0));
+    assert_eq!(wheel_of(&s, mouse), None, "a mouse has no wheel");
+    let height = |s: &Session, id| brushed_bounds(s, id).height();
+    assert!((height(&s, far) - 10.0).abs() < 0.1 && (height(&s, near) - 2.0).abs() < 0.1, "{} {}", height(&s, far), height(&s, near));
+    assert!((height(&s, mouse) - 6.0).abs() < 0.1, "the brush's own size: {}", height(&s, mouse));
+    // Saved and reopened as it was; new art takes the look without the wheel.
+    let doc: Document = (*s.doc().unwrap().doc).clone();
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+    assert_eq!(back.node(far).unwrap().appearance.stroke(), doc.node(far).unwrap().appearance.stroke());
+    assert!(vectorcraft_doc::Appearance::clone(&doc.node(far).unwrap().appearance).without_pressure().stroke().is_some_and(|st| st.wheel.is_none()));
+}
+
+/// #764: a stroke that connects two paths joins the pen's tilt, bearing and rotation of both, the
+/// connected path's after the stroke's.
+#[test]
+fn connecting_two_strokes_joins_their_pens_rotation() {
+    let mut s = session();
+    let draw = |s: &mut Session, points: Value| {
+        NodeId(s.execute("path.freehand", &json!({"points": points, "style": "brush"})).unwrap()["id"].as_u64().unwrap())
+    };
+    let a = draw(&mut s, json!([[0, 50, 0.5, 30, 0, 90], [100, 50, 0.5, 30, 0, 90]]));
+    let b = draw(&mut s, json!([[200, 50, 0.5, 30, 0, 45], [300, 50, 0.5, 30, 0, 45]]));
+    let connect =
+        json!({"points": [[100, 50], [200, 50]], "style": "brush", "extend": {"id": a.0, "end": "end"}, "connect": {"id": b.0, "end": "start"}});
+    s.execute("path.freehand", &connect).unwrap();
+    assert!(s.doc().unwrap().doc.node(b).is_none(), "joined on");
+    let (_, _, rotation) = pose_of(&s, a);
+    let rotation = rotation.unwrap();
+    assert!((rotation.at(0.1) + 90.0).abs() < 1e-6, "{rotation:?}");
+    assert!(rotation.at(0.5).abs() < 1e-6, "the stroke is unturned: {rotation:?}");
+    assert!((rotation.at(0.9) + 45.0).abs() < 1e-6, "the connected path's: {rotation:?}");
+}
+
+/// #764: the Paintbrush records a pen's tilt, bearing and rotation on the stroke, a brush with
+/// Roundness on Tilt draws it, and it lasts through saving; a mouse stroke records none.
+#[test]
+fn paintbrush_records_the_pens_tilt_on_the_stroke() {
+    let mut s = session();
+    let params = json!({"angle": 0, "roundness": 50, "size": 10, "variation": [0, 50, 0], "modes": ["fixed", "tilt", "fixed"]});
+    s.execute("brush.options", &json!({"name": "3 pt. Round", "params": params})).unwrap();
+    s.execute("brush.setCurrent", &json!({"name": "3 pt. Round"})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("paintbrush", v).unwrap();
+    let strokes = |s: &mut Session, y: f64, pen: Option<PenPose>| {
+        for (k, x) in [(PointerKind::Down, 20.0), (PointerKind::Drag, 120.0), (PointerKind::Drag, 220.0), (PointerKind::Up, 320.0)] {
+            s.pointer(&PointerEvent { pen, ..PointerEvent::new(k, x, y) }, v).unwrap();
+        }
+        let id = s.doc().unwrap().selection.objects[0];
+        select(s, &[]);
+        id
+    };
+    let pen = strokes(&mut s, 60.0, Some(PenPose { tilt: Some([0.0, 0.0]), rotation: Some(30.0), wheel: None }));
+    let (tilt, bearing, rotation) = pose_of(&s, pen);
+    assert_eq!(tilt.as_ref().map(|t| t.at(0.5)), Some(0.0), "upright");
+    assert!(bearing.is_some() && (rotation.unwrap().at(0.5) + 30.0).abs() < 1e-6);
+    let mouse = strokes(&mut s, 200.0, None);
+    assert_eq!(pose_of(&s, mouse), (None, None, None), "a mouse reads no tilt");
+    // Drawn: upright, the nib is round (10 pt); without a tilt, roundness 50 (5 pt).
+    assert!((brushed_bounds(&s, pen).height() - 10.0).abs() < 0.1, "{:?}", brushed_bounds(&s, pen));
+    assert!((brushed_bounds(&s, mouse).height() - 5.0).abs() < 0.1, "{:?}", brushed_bounds(&s, mouse));
+    // Saved and reopened as it was.
+    let doc: Document = (*s.doc().unwrap().doc).clone();
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+    assert_eq!(back.node(pen).unwrap().appearance.stroke(), doc.node(pen).unwrap().appearance.stroke());
+}
+
+/// A Bristle path made from pen samples keeps its input when saved and uses it when exported.
+#[test]
+fn bristle_path_keeps_and_draws_its_pen_pose() {
+    let mut s = session();
+    let id = NodeId(
+        s.execute(
+            "brush.freehand",
+            &json!({"points": [[20, 60, 0.1, 10, 0, 0], [200, 60, 0.9, 35, 0, 90]], "style": "brush", "brush": "Bristle Round"}),
+        )
+        .unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    let doc: Document = (*s.doc().unwrap().doc).clone();
+    let st = doc.node(id).unwrap().appearance.stroke().unwrap();
+    assert!(st.pressure.is_some() && st.tilt.is_some() && st.bearing.is_some() && st.rotation.is_some());
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+    assert_eq!(back.node(id).unwrap().appearance.stroke(), Some(st));
+
+    let mut neutral = doc.clone();
+    let st = neutral.node_mut(id).unwrap().appearance.stroke_mut().unwrap();
+    st.pressure = None;
+    st.tilt = None;
+    st.bearing = None;
+    st.rotation = None;
+    assert_ne!(vectorcraft_svg::export(&doc, &Default::default()), vectorcraft_svg::export(&neutral, &Default::default()));
+}
+
 /// Pen pressure belongs to its path: new art, graphic styles and Brush Options' edits leave it.
 #[test]
 fn pressure_stays_with_its_own_path() {
     let mut s = session();
     s.execute("appearance.setNewArtBasic", &json!({"on": false})).unwrap();
-    let r = s.execute("brush.freehand", &json!({"points": [[0, 50, 0.2], [100, 50, 0.9]], "style": "brush", "brush": "3 pt. Round"})).unwrap();
+    let points = json!([[0, 50, 0.2, 30, 10, 45], [100, 50, 0.9, 20, 0, 90]]);
+    let r = s.execute("brush.freehand", &json!({"points": points, "style": "brush", "brush": "3 pt. Round"})).unwrap();
     let id = NodeId(r["id"].as_u64().unwrap());
     assert!(pressure_of(&s, id).is_some());
+    assert!(matches!(pose_of(&s, id), (Some(_), Some(_), Some(_))));
     select(&mut s, &[id]);
     s.execute("graphicStyle.new", &json!({"name": "Inked"})).unwrap();
     let style = s.doc().unwrap().doc.graphic_style("Inked").unwrap().appearance.clone();
-    assert!(style.stroke().is_some_and(|st| st.pressure.is_none()));
+    assert!(style.stroke().is_some_and(|st| st.pressure.is_none() && st.tilt.is_none() && st.bearing.is_none() && st.rotation.is_none()));
     let other = rect(&mut s, 10.0, 100.0, 50.0, 50.0);
     assert_eq!(pressure_of(&s, other), None, "new art takes the look, not the pressure");
+    assert_eq!(pose_of(&s, other), (None, None, None), "nor the tilt, bearing or rotation");
     pressure_round(&mut s);
     assert!(pressure_of(&s, id).is_some(), "editing the brush keeps the strokes' pressure");
 }
@@ -667,10 +1756,58 @@ fn brush_options_set_variation_modes() {
     let b = s.execute("brush.get", &json!({"name": "3 pt. Round"})).unwrap();
     assert_eq!(b["modes"], json!(["fixed", "fixed", "pressure"]));
     assert_eq!(b["variation"], json!([0.0, 0.0, 3.0]));
-    for bad in [json!({"modes": ["fixed", "fixed", "tilt"]}), json!({"modes": "pressure"}), json!({"variation": "x"}), json!({"modes": [1, 2, 3]})] {
+    for bad in [json!({"modes": ["fixed", "fixed", "wobble"]}), json!({"modes": "pressure"}), json!({"variation": "x"}), json!({"modes": [1, 2, 3]})]
+    {
         assert!(s.execute("brush.options", &json!({"name": "3 pt. Round", "params": bad})).is_err(), "{bad}");
     }
     assert_eq!(s.execute("brush.get", &json!({"name": "3 pt. Round"})).unwrap(), b, "a refused edit changes nothing");
+    // #764: Tilt, Bearing and Rotation, on a Calligraphic and a Scatter brush.
+    let modes = json!(["tilt", "bearing", "rotation"]);
+    s.execute("brush.options", &json!({"name": "3 pt. Round", "params": {"modes": modes}})).unwrap();
+    assert_eq!(s.execute("brush.get", &json!({"name": "3 pt. Round"})).unwrap()["modes"], modes);
+    let modes = json!(["tilt", "bearing", "rotation", "pressure"]);
+    s.execute("brush.options", &json!({"name": "Dots", "params": {"modes": modes}})).unwrap();
+    assert_eq!(s.execute("brush.get", &json!({"name": "Dots"})).unwrap()["modes"], modes);
+}
+
+/// The fill colors of the copies brushed path `id` draws in `doc`, as `#rrggbb`.
+fn piece_fills(doc: &Document, id: NodeId) -> Vec<String> {
+    let pieces = vectorcraft_brush::node_pieces(doc, doc.node(id).unwrap()).expect("brushed");
+    pieces.iter().map(|n| n.appearance.fill_paint().color().unwrap().to_hex()).collect()
+}
+
+/// Scatter Brush Options' `hue_jitter`: shown by `brush.get`, set by `brush.options`, saved with the
+/// document, and the turned colors drawn the same after Open and written by SVG export.
+#[test]
+fn scatter_hue_jitter_saves_and_exports() {
+    let mut s = session();
+    let r = rect(&mut s, 10.0, 200.0, 8.0, 8.0);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let name = s.execute("brush.new", &json!({"type": "scatter", "name": "Confetti", "ids": [r.0]})).unwrap()["name"].as_str().unwrap().to_string();
+    let id = line(&mut s);
+    select(&mut s, &[id]);
+    s.execute("brush.apply", &json!({ "name": name })).unwrap();
+    let plain = piece_fills(&s.doc().unwrap().doc, id);
+    assert!(plain.len() > 10 && plain.iter().all(|c| c == "#ff0000"), "{plain:?}");
+    assert_eq!(s.execute("brush.get", &json!({ "name": name })).unwrap()["hue_jitter"], json!(0.0), "brush.get shows the option at 0");
+    s.execute("brush.options", &json!({"name": name, "params": {"hue_jitter": 120}})).unwrap();
+    assert_eq!(s.execute("brush.get", &json!({ "name": name })).unwrap()["hue_jitter"], json!(120.0));
+    let doc = s.doc().unwrap().doc.clone();
+    let turned = piece_fills(&doc, id);
+    assert_eq!(turned.len(), plain.len());
+    let distinct: std::collections::HashSet<&String> = turned.iter().collect();
+    assert!(distinct.len() > 5, "{turned:?}");
+    // Saved and opened again, the stroke draws the same colors.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+    assert_eq!(piece_fills(&back, id), turned);
+    // SVG export writes each copy's turned color.
+    let svg = vectorcraft_svg::export(&doc, &Default::default());
+    for c in &distinct {
+        assert!(svg.contains(&format!("fill=\"{c}\"")), "{c} missing from the SVG");
+    }
+    // Back to 0, the copies draw the art's own color.
+    s.execute("brush.options", &json!({"name": name, "params": {"hue_jitter": 0}})).unwrap();
+    assert_eq!(piece_fills(&s.doc().unwrap().doc, id), plain);
 }
 
 /// The bounds of the brush art `id`'s strokes draw.
@@ -728,7 +1865,7 @@ fn scatter_art_and_pattern_brush_options_update_strokes() {
     );
     assert!(brushed_bounds(&s, id).is_finite());
     for (name, bad) in [
-        ("Dots", json!({"modes": ["fixed", "tilt", "fixed", "fixed"]})),
+        ("Dots", json!({"modes": ["fixed", "wobble", "fixed", "fixed"]})),
         ("Dots", json!({"modes": ["fixed"]})),
         ("Dots", json!({"colorization": {"method": "sparkle"}})),
         ("Arrow", json!({"direction": "diagonal"})),
@@ -805,6 +1942,194 @@ fn art_brush_options_keep_the_scale_fields_an_edit_leaves_out() {
     // A scale that becomes a plain mode drops the guides.
     s.execute("brush.options", &json!({"name": "Bar", "params": {"scale": {"mode": "stretch"}}})).unwrap();
     assert_eq!(s.execute("brush.get", &json!({"name": "Bar"})).unwrap()["scale"], json!({"mode": "stretch"}));
+}
+
+#[test]
+fn pattern_tile_choices_copy_whole_swatch_art_and_reject_invalid_side() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{PatternDef, StrokeLayer};
+    use vectorcraft_geom::BezPath;
+
+    let mut s = session();
+    s.edit("Pattern", |d, _| {
+        let art =
+            Node::path(d.alloc_id(), vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 30.0, 4.0)), vectorcraft_doc::Appearance::default_art());
+        d.patterns.push(PatternDef { tile: Rect::new(0.0, 0.0, 10.0, 4.0), ..PatternDef::new("Wide", vec![Arc::new(art)]) });
+        Ok(())
+    })
+    .unwrap();
+    let side = s.execute("brush.get", &json!({"name":"Diamonds"})).unwrap()["side"].clone();
+    s.execute("brush.new", &json!({"type":"pattern", "name":"Plain Tiles", "params":{"side":side}})).unwrap();
+    let original = s.execute("brush.get", &json!({"name":"Plain Tiles"})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    for choice in ["none", "Missing"] {
+        let error = s.execute("brush.options", &json!({"name":"Plain Tiles", "params":{"side_tile":choice}})).unwrap_err().to_string();
+        assert!(error.contains(if choice == "none" { "You must choose a side pattern." } else { "no pattern named" }), "{error}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+        assert_eq!(s.execute("brush.get", &json!({"name":"Plain Tiles"})).unwrap(), original);
+    }
+    s.execute("brush.options", &json!({"name":"Plain Tiles", "params":{"side_tile":"Wide", "fit":"addSpace"}})).unwrap();
+    let saved = s.execute("brush.get", &json!({"name":"Plain Tiles"})).unwrap();
+    assert_eq!(saved["side_frame"], json!(Rect::new(0.0, 0.0, 10.0, 4.0)));
+    assert_eq!(saved["side_swatch"], "Wide");
+    let brush: vectorcraft_brush::Brush = serde_json::from_value(saved).unwrap();
+    let mut path = BezPath::new();
+    path.move_to((0.0, 0.0));
+    path.line_to((100.0, 0.0));
+    let pieces = vectorcraft_brush::stroke_pieces(
+        &s.doc().unwrap().doc,
+        &brush,
+        &path,
+        &StrokeLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), 1.0),
+    );
+    assert_eq!(pieces.len(), 10, "10 pt tile frame repeats ten times along 100 pt");
+    assert!(pieces[0].geometric_bounds().unwrap().width() >= 29.9, "whole 30 pt art is copied");
+    s.execute("brush.options", &json!({"name":"Plain Tiles", "params":{"inner_corner_tile":"Wide", "outer_corner_tile":"none"}})).unwrap();
+    let corners: vectorcraft_brush::Brush = serde_json::from_value(s.execute("brush.get", &json!({"name":"Plain Tiles"})).unwrap()).unwrap();
+    let mut fallback = corners.clone();
+    if let (vectorcraft_brush::BrushKind::Pattern(actual), vectorcraft_brush::BrushKind::Pattern(legacy)) = (&corners.kind, &mut fallback.kind) {
+        assert_eq!(actual.outer_source, Some(vectorcraft_brush::CornerSource::None));
+        assert!(actual.inner_corner.is_some());
+        legacy.outer_source = None;
+    }
+    let square = |clockwise: bool| {
+        let mut p = BezPath::new();
+        p.move_to((0.0, 0.0));
+        if clockwise {
+            for point in [(100.0, 0.0), (100.0, 100.0), (0.0, 100.0)] {
+                p.line_to(point);
+            }
+        } else {
+            for point in [(0.0, 100.0), (100.0, 100.0), (100.0, 0.0)] {
+                p.line_to(point);
+            }
+        }
+        p.close_path();
+        p
+    };
+    let stroke = StrokeLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), 1.0);
+    assert!(
+        [false, true].into_iter().any(|clockwise| {
+            let path = square(clockwise);
+            vectorcraft_brush::stroke_pieces(&s.doc().unwrap().doc, &corners, &path, &stroke)
+                != vectorcraft_brush::stroke_pieces(&s.doc().unwrap().doc, &fallback, &path, &stroke)
+        }),
+        "explicit outer None omits the inner corner art on outer turns"
+    );
+    let borrowed_art = s.execute("brush.get", &json!({"name":"Plain Tiles"})).unwrap()["inner_corner"].clone();
+    s.execute("brush.new", &json!({"type":"pattern", "name":"Borrowed Corner", "params":{"side":original["side"], "inner_corner":borrowed_art}}))
+        .unwrap();
+    s.execute("brush.options", &json!({"name":"Borrowed Corner", "params":{"outer_corner_tile":"original", "inner_corner_tile":"none"}})).unwrap();
+    let borrowed = s.execute("brush.get", &json!({"name":"Borrowed Corner"})).unwrap();
+    assert!(borrowed["outer_corner"].is_object());
+    assert_eq!(borrowed["inner_source"], "none");
+    s.edit("Delete pattern", |d, _| {
+        d.patterns.clear();
+        Ok(())
+    })
+    .unwrap();
+    let after: vectorcraft_brush::Brush = serde_json::from_value(s.execute("brush.get", &json!({"name":"Plain Tiles"})).unwrap()).unwrap();
+    assert_eq!(
+        vectorcraft_brush::stroke_pieces(
+            &s.doc().unwrap().doc,
+            &after,
+            &path,
+            &StrokeLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), 1.0)
+        )
+        .len(),
+        10
+    );
+    let copied = s.execute("brush.get", &json!({"name":"Plain Tiles"})).unwrap()["side"].clone();
+    s.execute("brush.options", &json!({"name":"Plain Tiles", "params":{"side_tile":"original"}})).unwrap();
+    let original_choice = s.execute("brush.get", &json!({"name":"Plain Tiles"})).unwrap();
+    assert_eq!(original_choice["side"], copied);
+    assert!(original_choice.get("side_swatch").is_none());
+}
+
+#[test]
+fn pattern_original_corner_keeps_borrowed_art_and_frame_when_source_is_cleared() {
+    let mut s = session();
+    let chain = s.execute("brush.get", &json!({"name": "Chain"})).unwrap();
+    let art = chain["outer_corner"].clone();
+    let frame = json!(Rect::new(1.0, 2.0, 15.0, 18.0));
+    for (name, source, borrowed) in [("Borrow Outer", "inner", "outer"), ("Borrow Inner", "outer", "inner")] {
+        let source_art = format!("{source}_corner");
+        let source_frame = format!("{source_art}_frame");
+        let borrowed_art = format!("{borrowed}_corner");
+        let borrowed_frame = format!("{borrowed_art}_frame");
+        let source_tile = format!("{source_art}_tile");
+        let borrowed_tile = format!("{borrowed_art}_tile");
+        s.execute("brush.new", &json!({"type":"pattern", "name":name, "params":{"side":chain["side"], source_art:art, source_frame:frame}})).unwrap();
+        s.execute("brush.options", &json!({"name":name, "params":{source_tile:"none", borrowed_tile:"original"}})).unwrap();
+        let saved = s.execute("brush.get", &json!({"name":name})).unwrap();
+        assert_eq!(saved[&borrowed_art], chain["outer_corner"], "{borrowed} art");
+        assert_eq!(saved[&borrowed_frame], frame, "{borrowed} frame");
+        assert_eq!(saved[format!("{source}_source")], "none");
+    }
+}
+
+#[test]
+fn pattern_tile_object_selects_reserved_swatch_names() {
+    use std::sync::Arc;
+    use vectorcraft_doc::PatternDef;
+
+    let mut s = session();
+    let names = ["none", "original", "autoCentered", "autoBetween", "autoSliced", "autoOverlap"];
+    s.edit("Patterns", |doc, _| {
+        for name in names {
+            let art = Node::path(
+                doc.alloc_id(),
+                vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 30.0, 4.0)),
+                vectorcraft_doc::Appearance::default_art(),
+            );
+            doc.patterns.push(PatternDef { tile: Rect::new(0.0, 0.0, 10.0, 4.0), ..PatternDef::new(name, vec![Arc::new(art)]) });
+        }
+        Ok(())
+    })
+    .unwrap();
+    let before = s.execute("brush.get", &json!({"name":"Diamonds"})).unwrap();
+    for invalid in [json!({}), json!({"pattern": null}), json!({"pattern": 1})] {
+        let error = s.execute("brush.options", &json!({"name":"Diamonds", "params":{"side_tile":invalid}})).unwrap_err().to_string();
+        assert!(error.contains("invalid pattern tile choice"), "{error}");
+        assert_eq!(s.execute("brush.get", &json!({"name":"Diamonds"})).unwrap(), before);
+    }
+    let slots = ["side_tile", "outer_corner_tile", "inner_corner_tile", "start_tile", "end_tile"];
+    for (slot, name) in slots.into_iter().zip(names) {
+        s.execute("brush.options", &json!({"name":"Diamonds", "params":{(slot):{"pattern":name}}})).unwrap();
+    }
+    let saved = s.execute("brush.get", &json!({"name":"Diamonds"})).unwrap();
+    for (art, name) in ["side", "outer_corner", "inner_corner", "start", "end"].into_iter().zip(names) {
+        assert_eq!(saved[format!("{art}_swatch")], name);
+        assert_eq!(saved[format!("{art}_frame")], json!(Rect::new(0.0, 0.0, 10.0, 4.0)));
+    }
+    s.execute("brush.options", &json!({"name":"Diamonds", "params":{"outer_corner_tile":{"pattern":"autoOverlap"}}})).unwrap();
+    assert_eq!(s.execute("brush.get", &json!({"name":"Diamonds"})).unwrap()["outer_corner_swatch"], "autoOverlap");
+}
+
+#[test]
+fn pattern_end_tile_none_choices_leave_side_art_at_both_path_ends() {
+    use vectorcraft_doc::StrokeLayer;
+    use vectorcraft_geom::BezPath;
+
+    let mut s = session();
+    let side = s.execute("brush.get", &json!({"name":"Diamonds"})).unwrap()["side"].clone();
+    let cap = s.execute("brush.get", &json!({"name":"Chain"})).unwrap()["outer_corner"].clone();
+    s.execute("brush.new", &json!({"type":"pattern", "name":"Capped", "params":{"side":side, "start":cap, "end":cap}})).unwrap();
+    s.execute("brush.options", &json!({"name":"Capped", "params":{"start_tile":"none", "end_tile":"none"}})).unwrap();
+    let def = s.execute("brush.get", &json!({"name":"Capped"})).unwrap();
+    assert!(def.get("start").is_none() && def.get("end").is_none());
+    let brush: vectorcraft_brush::Brush = serde_json::from_value(def).unwrap();
+    let mut path = BezPath::new();
+    path.move_to((0.0, 0.0));
+    path.line_to((100.0, 0.0));
+    let pieces = vectorcraft_brush::stroke_pieces(
+        &s.doc().unwrap().doc,
+        &brush,
+        &path,
+        &StrokeLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), 1.0),
+    );
+    let bounds = pieces.iter().fold(None, |bounds, node| vectorcraft_geom::union_opt(bounds, node.geometric_bounds())).unwrap();
+    assert!((bounds.x0 - 0.0).abs() < 1e-6 && (bounds.x1 - 100.0).abs() < 1e-6, "{bounds:?}");
 }
 
 // ---------- symbols ----------
@@ -903,14 +2228,106 @@ fn place_and_break_link_round_trip_geometry() {
     assert_eq!(n.appearance.stroke_width(), 1.0, "strokes are not scaled by normalisation");
 }
 
+/// In Draw Behind, Place Symbol Instance puts the instance directly below the bottommost selected
+/// object (beside the compound path that holds a selected path, above a clipping path), or at the
+/// bottom of the current layer with nothing selected, selected and in one undo step. Draw Normal
+/// and Draw Inside keep it on top, and a locked layer refuses it with no edit.
 #[test]
-fn edit_then_update_redefines_all_instances() {
+fn placed_instances_go_below_the_selection_in_draw_behind() {
+    let mut s = session();
+    let (inst, name, _) = make_symbol(&mut s);
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 10.0, 10.0), rect(&mut s, 20.0, 0.0, 10.0, 10.0));
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    let kids = |s: &Session, id: NodeId| node(s, id).children().unwrap().iter().map(|c| c.id).collect::<Vec<_>>();
+    let place = |s: &mut Session| NodeId(s.execute("symbol.place", &json!({"name": name, "x": 300, "y": 200})).unwrap()["id"].as_u64().unwrap());
+    s.execute("view.drawMode", &json!({"mode": "behind"})).unwrap();
+    select(&mut s, &[b]);
+    let before = undo_len(&s);
+    let p = place(&mut s);
+    assert_eq!(kids(&s, layer), vec![inst, a, p, b], "directly below the selected object");
+    assert_eq!(undo_len(&s), before + 1);
+    assert_eq!(s.doc().unwrap().selection.objects, [p]);
+    assert!(close(bounds(&s, p), Rect::new(260.0, 180.0, 340.0, 220.0), 1e-9), "{:?}", bounds(&s, p));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(kids(&s, layer), vec![inst, a, b]);
+    // Below the bottommost of several selected objects.
+    select(&mut s, &[b, a]);
+    let p = place(&mut s);
+    assert_eq!(kids(&s, layer), vec![inst, p, a, b]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    // With nothing selected, at the bottom of the current layer.
+    select(&mut s, &[]);
+    let p = place(&mut s);
+    assert_eq!(kids(&s, layer), vec![p, inst, a, b]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    // A path selected in a compound path: beside the compound path, not inside it.
+    select(&mut s, &[a, b]);
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    let compound = kids(&s, layer)[1];
+    let member = kids(&s, compound)[1];
+    select(&mut s, &[member]);
+    let p = place(&mut s);
+    assert_eq!(kids(&s, layer), vec![inst, p, compound]);
+    assert_eq!(kids(&s, compound).len(), 2);
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Draw Normal and Draw Inside put it on top of the layer.
+    for mode in ["normal", "inside"] {
+        select(&mut s, &[compound]);
+        s.execute("view.drawMode", &json!({"mode": mode})).unwrap();
+        let p = place(&mut s);
+        assert_eq!(kids(&s, layer), vec![inst, compound, p], "{mode}");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    // In a clipping layer the clipping path stays at the bottom, the selected clipping path too.
+    s.execute("view.drawMode", &json!({"mode": "behind"})).unwrap();
+    s.execute("layer.clippingMask.toggle", &json!({"id": layer.0})).unwrap();
+    assert_eq!(kids(&s, layer), vec![compound, inst]);
+    for picked in [&[][..], &[compound]] {
+        select(&mut s, picked);
+        let p = place(&mut s);
+        assert_eq!(kids(&s, layer), vec![compound, p, inst], "{picked:?}");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    // A locked layer takes nothing.
+    s.execute("layer.setProps", &json!({"id": layer.0, "locked": true})).unwrap();
+    let before = (undo_len(&s), s.doc().unwrap().doc.clone());
+    assert!(s.execute("symbol.place", &json!({"name": name})).is_err());
+    assert_eq!((undo_len(&s), &s.doc().unwrap().doc), (before.0, &before.1));
+}
+
+#[test]
+fn hidden_instance_fill_does_not_tint_expanded_symbol_art() {
+    for command in ["symbol.breakLink", "object.expand"] {
+        let mut s = session();
+        let source = rect(&mut s, 100.0, 50.0, 80.0, 40.0);
+        s.execute("paint.setFill", &json!({"ids": [source.0], "color": "#0000ff"})).unwrap();
+        let inst = NodeId(s.execute("symbol.new", &json!({"name": "Blue Box"})).unwrap()["id"].as_u64().unwrap());
+        s.execute("appearance.addFill", &json!({"ids": [inst.0]})).unwrap();
+        let fill = node(&s, inst).appearance.items.len() - 1;
+        s.execute("appearance.setItem", &json!({"ids": [inst.0], "index": fill, "color": "#ff0000"})).unwrap();
+        let center = |s: &Session| {
+            let doc = s.doc().unwrap().doc.clone();
+            vectorcraft_render::Renderer::new().render_region(&doc, Rect::new(0.0, 0.0, 400.0, 300.0), 1.0, true).pixel(140, 70)
+        };
+        let tinted = center(&s);
+        assert!(tinted[0] > tinted[2], "the visible instance fill tints the symbol: {tinted:?}");
+        s.execute("appearance.setItem", &json!({"ids": [inst.0], "index": fill, "visible": false})).unwrap();
+        let original = center(&s);
+        assert!(original[2] > original[0], "hiding the fill restores the blue symbol: {original:?}");
+
+        let params = if command == "symbol.breakLink" { json!({"ids": [inst.0]}) } else { json!({"object": true, "fill": false, "stroke": false}) };
+        s.execute(command, &params).unwrap();
+        assert_eq!(center(&s), original, "{command} must keep the untinted colors");
+    }
+}
+
+#[test]
+fn break_link_then_update_redefines_all_instances() {
     let mut s = session();
     let (inst, name, _) = make_symbol(&mut s);
     let other = NodeId(s.execute("symbol.place", &json!({"x": 300, "y": 200})).unwrap()["id"].as_u64().unwrap());
     select(&mut s, &[inst]);
-    let r = s.execute("symbol.edit", &json!({})).unwrap();
-    assert_eq!(r["name"], name);
+    let r = s.execute("symbol.breakLink", &json!({})).unwrap();
     let art = NodeId(r["ids"][0].as_u64().unwrap());
     // Make the art twice as wide, then redefine.
     s.execute("object.transform", &json!({"ids": [art.0], "matrix": [2, 0, 0, 1, -140, 0]})).ok();
@@ -920,6 +2337,365 @@ fn edit_then_update_redefines_all_instances() {
     assert!((bounds(&s, new_inst).width() - w).abs() < 1e-6);
     assert!((bounds(&s, other).width() - w).abs() < 1e-6, "other instances pick up the new size");
     assert!((bounds(&s, other).center().x - 300.0).abs() < 1e-6);
+}
+
+/// Redefine Symbol with `keepArt: true` updates the symbol and its instances from the selection,
+/// and the selected art stays ordinary art in its place, with its ids, still selected; the result
+/// has no instance id. One undo step takes the definition back. Without `keepArt`, or with false,
+/// the art becomes an instance.
+#[test]
+fn redefine_with_keep_art_leaves_the_art_as_ordinary_art() {
+    let mut s = session();
+    let (inst, name, _) = make_symbol(&mut s);
+    let a = rect(&mut s, 20.0, 200.0, 60.0, 30.0);
+    let b = rect(&mut s, 100.0, 200.0, 40.0, 50.0);
+    let spot = |s: &Session, id: NodeId| s.doc().unwrap().doc.position(id).map(|(p, i, _)| (p, i));
+    let before = (node(&s, a), node(&s, b), spot(&s, a), spot(&s, b));
+    let symbol_art = |s: &Session| s.doc().unwrap().doc.symbols.iter().find(|x| x.name == name).map(|x| x.art.clone()).unwrap();
+    let old_art = symbol_art(&s);
+    let steps = s.doc().unwrap().history.undo.len();
+    select(&mut s, &[a, b]);
+    let r = s.execute("symbol.update", &json!({"name": name, "keepArt": true})).unwrap();
+    assert_eq!(r, json!({"name": name, "id": null}));
+    assert_eq!((node(&s, a), node(&s, b), spot(&s, a), spot(&s, b)), before, "the art is unchanged and in its place");
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a, b], "the art stays selected");
+    let instances = |s: &Session| {
+        let mut n = 0;
+        s.doc().unwrap().doc.walk(|c| n += usize::from(matches!(c.kind, NodeKind::SymbolInstance { .. })));
+        n
+    };
+    assert_eq!(instances(&s), 1, "no new instance");
+    // The instance shows the new art: the 120 × 50 pair.
+    let w = bounds(&s, inst);
+    assert!((w.width() - 120.0).abs() < 1e-6 && (w.height() - 50.0).abs() < 1e-6, "{w:?}");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(symbol_art(&s), old_art, "undo takes the definition back");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!((bounds(&s, inst).width() - 120.0).abs() < 1e-6, "{:?}", bounds(&s, inst));
+    // false, like no keepArt, makes the art an instance.
+    for p in [json!({"name": name, "ids": [a.0], "keepArt": false}), json!({"name": name, "ids": [b.0]})] {
+        let r = s.execute("symbol.update", &p).unwrap();
+        let id = NodeId(r["id"].as_u64().expect("an instance id"));
+        assert!(matches!(node(&s, id).kind, NodeKind::SymbolInstance { .. }), "{p}");
+        assert_eq!(s.doc().unwrap().selection.objects, vec![id], "{p}");
+    }
+    assert!(s.doc().unwrap().doc.node(a).is_none() && s.doc().unwrap().doc.node(b).is_none());
+}
+
+/// Redefine Symbol with `keepArt: true` and explicit ids keeps the named art selected only where
+/// it can be selected: locked or hidden art is left out. A `keepArt` that is not true or false is
+/// refused, with no change and no undo step.
+#[test]
+fn redefine_with_keep_art_selects_only_selectable_art_and_refuses_a_bad_switch() {
+    let mut s = session();
+    let (_, name, _) = make_symbol(&mut s);
+    let a = rect(&mut s, 20.0, 200.0, 60.0, 30.0);
+    let locked = rect(&mut s, 100.0, 200.0, 40.0, 50.0);
+    let hidden = rect(&mut s, 200.0, 200.0, 40.0, 50.0);
+    {
+        let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        doc.node_mut(locked).unwrap().locked = true;
+        doc.node_mut(hidden).unwrap().visible = false;
+    }
+    for bad in [json!("true"), json!(1), json!([true])] {
+        let before = s.doc().unwrap().doc.clone();
+        let steps = s.doc().unwrap().history.undo.len();
+        let e = s.execute("symbol.update", &json!({"name": name, "ids": [a.0], "keepArt": bad})).unwrap_err();
+        assert!(e.to_string().contains("`keepArt` must be true or false"), "{bad}: {e}");
+        assert!(std::sync::Arc::ptr_eq(&before, &s.doc().unwrap().doc), "{bad}: the document is unchanged");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps, "{bad}: no undo step");
+    }
+    select(&mut s, &[]);
+    s.execute("symbol.update", &json!({"name": name, "ids": [a.0, locked.0, hidden.0], "keepArt": true})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a], "only the selectable art is selected");
+    for id in [a, locked, hidden] {
+        assert!(matches!(node(&s, id).kind, NodeKind::Path { .. }), "{id:?} stays ordinary art");
+    }
+}
+
+/// The number of symbol instances in the document.
+fn instance_count(s: &Session) -> usize {
+    let mut n = 0;
+    s.doc().unwrap().doc.walk(|c| n += usize::from(matches!(c.kind, NodeKind::SymbolInstance { .. })));
+    n
+}
+
+/// New Symbol with `keepArt: true` makes a symbol of the selection and makes it the current
+/// symbol, and the selected art stays ordinary art in its place, with its ids, still selected; the
+/// result has no instance id and nothing places the symbol. One undo step takes the symbol away
+/// and redo makes it again. Without `keepArt`, or with false, the art becomes an instance.
+#[test]
+fn new_symbol_with_keep_art_leaves_the_art_as_ordinary_art() {
+    let mut s = session();
+    let a = rect(&mut s, 20.0, 200.0, 60.0, 30.0);
+    let b = rect(&mut s, 100.0, 200.0, 40.0, 50.0);
+    let spot = |s: &Session, id: NodeId| s.doc().unwrap().doc.position(id).map(|(p, i, _)| (p, i));
+    let before = (node(&s, a), node(&s, b), spot(&s, a), spot(&s, b));
+    let steps = s.doc().unwrap().history.undo.len();
+    select(&mut s, &[a, b]);
+    let r = s.execute("symbol.new", &json!({"name": "Kept", "keepArt": true})).unwrap();
+    assert_eq!((&r["name"], &r["id"]), (&json!("Kept"), &Value::Null), "{r}");
+    assert_eq!((node(&s, a), node(&s, b), spot(&s, a), spot(&s, b)), before, "the art is unchanged and in its place");
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a, b], "the art stays selected");
+    assert_eq!(instance_count(&s), 0, "no instance");
+    let list = s.execute("symbol.list", &json!({})).unwrap();
+    assert_eq!((&list["current"], &list["symbols"][0]["name"], &list["symbols"][0]["instances"]), (&json!("Kept"), &json!("Kept"), &json!(0)));
+    // The symbol's art is the pair: an instance placed from it is 120 × 50.
+    let placed = NodeId(s.execute("symbol.place", &json!({"name": "Kept"})).unwrap()["id"].as_u64().unwrap());
+    let w = bounds(&s, placed);
+    assert!((w.width() - 120.0).abs() < 1e-6 && (w.height() - 50.0).abs() < 1e-6, "{w:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "New Symbol is one undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.symbols.is_empty(), "undo takes the symbol away");
+    assert_eq!((node(&s, a), node(&s, b)), (before.0.clone(), before.1.clone()), "and leaves the art");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(s.execute("symbol.list", &json!({})).unwrap()["current"], json!("Kept"), "redo");
+    assert_eq!(instance_count(&s), 0, "redo places no instance");
+    // false, like no keepArt, makes the art an instance.
+    for p in [json!({"name": "Plain", "ids": [a.0], "keepArt": false}), json!({"name": "Plain", "ids": [b.0]})] {
+        let r = s.execute("symbol.new", &p).unwrap();
+        let id = NodeId(r["id"].as_u64().expect("an instance id"));
+        assert!(matches!(node(&s, id).kind, NodeKind::SymbolInstance { .. }), "{p}");
+        assert_eq!(s.doc().unwrap().selection.objects, vec![id], "{p}");
+    }
+    assert!(s.doc().unwrap().doc.node(a).is_none() && s.doc().unwrap().doc.node(b).is_none());
+}
+
+/// New Symbol with `keepArt: true` and explicit ids keeps the named art selected only where it
+/// can be selected: locked or hidden art is left out. A symbol instance in the art stays the
+/// instance it was. A `keepArt` that is not true or false is refused, with no symbol, no change and
+/// no undo step.
+#[test]
+fn new_symbol_with_keep_art_selects_only_selectable_art_and_refuses_a_bad_switch() {
+    let mut s = session();
+    let (inst, _, _) = make_symbol(&mut s);
+    let a = rect(&mut s, 20.0, 200.0, 60.0, 30.0);
+    let locked = rect(&mut s, 100.0, 200.0, 40.0, 50.0);
+    let hidden = rect(&mut s, 200.0, 200.0, 40.0, 50.0);
+    {
+        let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        doc.node_mut(locked).unwrap().locked = true;
+        doc.node_mut(hidden).unwrap().visible = false;
+    }
+    for bad in [json!("true"), json!(1), json!([true])] {
+        let before = s.doc().unwrap().doc.clone();
+        let steps = s.doc().unwrap().history.undo.len();
+        let e = s.execute("symbol.new", &json!({"name": "Bad", "ids": [a.0], "keepArt": bad})).unwrap_err();
+        assert!(e.to_string().contains("`keepArt` must be true or false"), "{bad}: {e}");
+        assert!(std::sync::Arc::ptr_eq(&before, &s.doc().unwrap().doc), "{bad}: the document is unchanged");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps, "{bad}: no undo step");
+    }
+    select(&mut s, &[]);
+    let symbols = s.doc().unwrap().doc.symbols.len();
+    let ids = [a.0, locked.0, hidden.0, inst.0];
+    s.execute("symbol.new", &json!({"name": "Kept", "ids": ids, "keepArt": true})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.symbols.len(), symbols + 1);
+    let selected = &s.doc().unwrap().selection.objects;
+    assert!(selected.len() == 2 && selected.contains(&a) && selected.contains(&inst), "only the selectable art is selected: {selected:?}");
+    for id in [a, locked, hidden] {
+        assert!(matches!(node(&s, id).kind, NodeKind::Path { .. }), "{id:?} stays ordinary art");
+    }
+    assert!(matches!(node(&s, inst).kind, NodeKind::SymbolInstance { .. }), "the instance stays an instance");
+    assert_eq!(instance_count(&s), 1, "no new instance");
+}
+
+/// Redefine Symbol refuses art that holds an instance of the symbol it redefines, directly, in a
+/// group, in an opacity mask, or through the art of another symbol it holds an instance of, and
+/// then changes nothing and adds no undo step. An instance of an unrelated symbol still redefines
+/// it.
+#[test]
+fn redefine_refuses_art_holding_an_instance_of_the_symbol() {
+    let mut s = session();
+    let (inst, name, _) = make_symbol(&mut s);
+    // Ring's art is an instance of Box.
+    let ring = NodeId(s.execute("symbol.new", &json!({"name": "Ring", "ids": [inst.0]})).unwrap()["id"].as_u64().unwrap());
+    let place =
+        |s: &mut Session, x: f64| NodeId(s.execute("symbol.place", &json!({"name": name, "x": x, "y": 200})).unwrap()["id"].as_u64().unwrap());
+    let direct = place(&mut s, 300.0);
+    let plain = rect(&mut s, 20.0, 220.0, 30.0, 30.0);
+    let grouped = place(&mut s, 100.0);
+    // A rectangle whose opacity mask is a Box instance.
+    let masked = rect(&mut s, 60.0, 260.0, 30.0, 30.0);
+    let mut mask_art = node(&s, direct);
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    mask_art.id = doc.alloc_id();
+    doc.node_mut(masked).unwrap().extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(mask_art, true)));
+    let cases = [
+        ("a Box instance", vec![direct.0]),
+        ("Ring, whose art holds Box", vec![ring.0]),
+        ("art with a Box instance", vec![plain.0, grouped.0]),
+        ("art masked by a Box instance", vec![masked.0]),
+    ];
+    for (case, ids) in cases {
+        let before = s.doc().unwrap().doc.clone();
+        let undo = s.doc().unwrap().history.undo.len();
+        let e = s.execute("symbol.update", &json!({"name": name, "ids": ids})).unwrap_err();
+        assert!(e.to_string().contains("can't hold an instance of itself"), "{case}: {e}");
+        assert!(std::sync::Arc::ptr_eq(&before, &s.doc().unwrap().doc), "{case}: the document is unchanged");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{case}: no undo step");
+    }
+    // An instance of a symbol that does not hold Box redefines it.
+    let dot = rect(&mut s, 200.0, 20.0, 10.0, 10.0);
+    let dot = NodeId(s.execute("symbol.new", &json!({"name": "Dot", "ids": [dot.0]})).unwrap()["id"].as_u64().unwrap());
+    let r = s.execute("symbol.update", &json!({"name": name, "ids": [dot.0]})).unwrap();
+    assert_eq!(r["name"], json!(name));
+    let art = s.doc().unwrap().doc.symbols.iter().find(|x| x.name == name).map(|x| x.art.clone()).unwrap();
+    assert!(matches!(&art.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Dot"), "{}", art.kind_label());
+}
+
+/// A linked opacity mask of a 10 × 10 square at (100, 50).
+fn square_mask(s: &mut Session) -> Box<vectorcraft_doc::OpacityMask> {
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let art = Node::path(doc.alloc_id(), vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 50.0, 110.0, 60.0)), Default::default());
+    Box::new(vectorcraft_doc::OpacityMask::new(art, true))
+}
+
+/// Break Link to Symbol keeps the instance's opacity mask on the art.
+#[test]
+fn break_link_keeps_the_instances_opacity_mask() {
+    let mut s = session();
+    let (inst, _, _) = make_symbol(&mut s);
+    let m = square_mask(&mut s);
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(inst).unwrap().extras_mut().mask = Some(m.clone());
+    let r = s.execute("symbol.breakLink", &json!({"ids": [inst.0]})).unwrap();
+    let art = node(&s, NodeId(r["ids"][0].as_u64().unwrap()));
+    assert!(matches!(art.kind, NodeKind::Path { .. }), "{}", art.kind_label());
+    assert_eq!(art.extras().mask, Some(m), "the art keeps the mask");
+}
+
+/// When the symbol's art has an opacity mask of its own, Break Link puts the instance's mask on a
+/// group around the art, and the art keeps its own.
+#[test]
+fn break_link_puts_the_instances_mask_on_a_group_around_masked_art() {
+    let mut s = session();
+    let (inst, name, _) = make_symbol(&mut s);
+    let (own, m) = (square_mask(&mut s), square_mask(&mut s));
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let sym = doc.symbols.iter_mut().find(|s| s.name == name).unwrap();
+    std::sync::Arc::make_mut(&mut sym.art).extras_mut().mask = Some(own);
+    doc.node_mut(inst).unwrap().extras_mut().mask = Some(m.clone());
+    let r = s.execute("symbol.breakLink", &json!({"ids": [inst.0]})).unwrap();
+    let art = node(&s, NodeId(r["ids"][0].as_u64().unwrap()));
+    let NodeKind::Group { children, .. } = &art.kind else { panic!("a group around the art: {}", art.kind_label()) };
+    assert_eq!(art.extras().mask, Some(m), "the group holds the instance's mask");
+    assert!(children.len() == 1 && children[0].extras().mask.is_some(), "the art keeps its own mask");
+}
+
+/// The art of the instance's opacity mask counts against Break Link's object limit: an instance
+/// whose mask holds more than a million objects stays an instance.
+#[test]
+fn break_link_counts_the_instances_mask_art() {
+    let mut s = session();
+    let (inst, _, _) = make_symbol(&mut s);
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let square =
+        std::sync::Arc::new(Node::path(doc.alloc_id(), vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 50.0, 110.0, 60.0)), Default::default()));
+    let art = Node::group(doc.alloc_id(), vec![square; 1_000_000]);
+    doc.node_mut(inst).unwrap().extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(art, true)));
+    assert!(s.execute("symbol.breakLink", &json!({"ids": [inst.0]})).is_err(), "too many objects");
+    assert!(matches!(node(&s, inst).kind, NodeKind::SymbolInstance { .. }), "it stays an instance");
+}
+
+/// A hidden, a locked and a plain instance of one symbol in a group, the group selected.
+fn group_with_hidden_and_locked_instances(s: &mut Session) -> (NodeId, String) {
+    let (shown, name, _) = make_symbol(s);
+    let hidden = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 300, "y": 200})).unwrap()["id"].as_u64().unwrap());
+    let locked = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 300, "y": 100})).unwrap()["id"].as_u64().unwrap());
+    select(s, &[shown, hidden, locked]);
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    doc.node_mut(hidden).unwrap().visible = false;
+    doc.node_mut(locked).unwrap().locked = true;
+    select(s, &[group]);
+    (group, name)
+}
+
+/// The visibility and lock state of the children of `group`, in paint order.
+fn shown_and_locked(s: &Session, group: NodeId) -> Vec<(bool, bool)> {
+    let g = node(s, group);
+    let NodeKind::Group { children, .. } = &g.kind else { panic!("a group: {}", g.kind_label()) };
+    assert!(children.iter().all(|c| !matches!(c.kind, NodeKind::SymbolInstance { .. })), "every instance is expanded");
+    children.iter().map(|c| (c.visible, c.locked)).collect()
+}
+
+/// Break Link to Symbol on a selected group keeps a hidden instance's art hidden and a locked
+/// instance's art locked, and selects only the art that can be selected.
+#[test]
+fn break_link_keeps_hidden_and_locked_instances_hidden_and_locked() {
+    let mut s = session();
+    let (group, _) = group_with_hidden_and_locked_instances(&mut s);
+    let r = s.execute("symbol.breakLink", &json!({})).unwrap();
+    assert_eq!(r["ids"].as_array().unwrap().len(), 3, "{r}");
+    assert_eq!(shown_and_locked(&s, group), vec![(true, false), (false, false), (true, true)]);
+    let d = &s.doc().unwrap().doc;
+    let selected: Vec<NodeId> = s.doc().unwrap().selection.objects.to_vec();
+    assert_eq!(selected.len(), 1, "{selected:?}");
+    assert!(selected.iter().all(|id| d.node(*id).is_some_and(|n| n.visible && !n.locked)), "{selected:?}");
+}
+
+/// Break Link to Symbol on a selected group does not select the art of a shown, unlocked instance
+/// that sits in a hidden or a locked group inside it.
+#[test]
+fn break_link_leaves_art_in_hidden_or_locked_groups_unselected() {
+    let mut s = session();
+    let (shown, name, _) = make_symbol(&mut s);
+    let subgroup = |s: &mut Session, y: i64| {
+        let id = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 300, "y": y})).unwrap()["id"].as_u64().unwrap());
+        select(s, &[id]);
+        NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap())
+    };
+    let hidden = subgroup(&mut s, 200);
+    let locked = subgroup(&mut s, 100);
+    select(&mut s, &[shown, hidden, locked]);
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    doc.node_mut(hidden).unwrap().visible = false;
+    doc.node_mut(locked).unwrap().locked = true;
+    select(&mut s, &[group]);
+    let r = s.execute("symbol.breakLink", &json!({})).unwrap();
+    assert_eq!(r["ids"].as_array().unwrap().len(), 3, "{r}");
+    let d = &s.doc().unwrap().doc;
+    let selected: Vec<NodeId> = s.doc().unwrap().selection.objects.to_vec();
+    assert_eq!(selected.len(), 1, "{selected:?}");
+    let a = d.ancestry(selected[0]).unwrap();
+    assert!(!a.contains(&hidden) && !a.contains(&locked), "{a:?}");
+}
+
+/// Break Link to Symbol on an instance just placed on a locked artboard selects the art that
+/// replaces it, which stays new art there. The art of an older instance there, named by id, is not
+/// selected.
+#[test]
+fn break_link_keeps_new_art_on_a_locked_artboard_selected() {
+    let mut s = session();
+    let (old, name, _) = make_symbol(&mut s);
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 400, "height": 400})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+    select(&mut s, &[old]);
+    s.execute("object.move", &json!({"dx": 1000, "dy": 0})).unwrap();
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "moved onto the locked artboard");
+    let inst = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 1100, "y": 100})).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(s.doc().unwrap().selection.objects.to_vec(), [inst], "placed art is selected");
+    let r = s.execute("symbol.breakLink", &json!({})).unwrap();
+    let art: Vec<NodeId> = r["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect();
+    assert_eq!(art.len(), 1, "{r}");
+    assert_eq!(s.doc().unwrap().selection.objects.to_vec(), art, "the art that replaces it");
+    s.execute("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects.to_vec(), art, "the art stays editable");
+    let r = s.execute("symbol.breakLink", &json!({"ids": [old.0]})).unwrap();
+    assert_eq!(r["ids"].as_array().unwrap().len(), 1, "{r}");
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "the older instance's art");
+}
+
+/// Delete Symbol, expanding the instances, keeps a hidden instance's art hidden and a locked
+/// instance's art locked.
+#[test]
+fn delete_symbol_keeps_hidden_and_locked_instances_hidden_and_locked() {
+    let mut s = session();
+    let (group, name) = group_with_hidden_and_locked_instances(&mut s);
+    s.execute("symbol.delete", &json!({"name": name})).unwrap();
+    assert_eq!(shown_and_locked(&s, group), vec![(true, false), (false, false), (true, true)]);
 }
 
 #[test]
@@ -942,6 +2718,150 @@ fn delete_duplicate_and_replace_symbols() {
     doc.walk(|n| plain += matches!(n.kind, NodeKind::Path { .. }) as i32);
     assert_eq!(plain, 2, "both instances of Small were expanded");
     assert!(s.execute("symbol.delete", &json!({"name": "Small"})).is_err());
+}
+
+fn xf_of(s: &Session, id: NodeId) -> vectorcraft_geom::Affine {
+    match node(s, id).kind {
+        NodeKind::SymbolInstance { xf, .. } => xf,
+        _ => panic!("{id:?} is not a symbol instance"),
+    }
+}
+
+fn close_xf(a: vectorcraft_geom::Affine, b: vectorcraft_geom::Affine) -> bool {
+    a.as_coeffs().iter().zip(b.as_coeffs()).all(|(x, y)| (x - y).abs() < 1e-9)
+}
+
+fn undo_len(s: &Session) -> usize {
+    s.doc().unwrap().history.undo.len()
+}
+
+/// Reset Transformation gives rotated, scaled, sheared and reflected instances (in a group too)
+/// their symbol's own scale again, each keeping the center of its bounding box, as one undo step.
+#[test]
+fn reset_transformation_restores_the_symbols_scale_and_keeps_the_center() {
+    let mut s = session();
+    let (a, name, placed) = make_symbol(&mut s);
+    let b = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 300, "y": 200})).unwrap()["id"].as_u64().unwrap());
+    let c = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 100, "y": 220})).unwrap()["id"].as_u64().unwrap());
+    let master = xf_of(&s, b).with_translation(vectorcraft_geom::Vec2::ZERO);
+    select(&mut s, &[a]);
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    s.execute("object.scale", &json!({"sx": 150, "sy": 50})).unwrap();
+    select(&mut s, &[b]);
+    s.execute("object.shear", &json!({"angle": 20})).unwrap();
+    select(&mut s, &[c]);
+    s.execute("object.reflect", &json!({"axis": "vertical"})).unwrap();
+    let turned: Vec<_> = [a, b, c].iter().map(|id| xf_of(&s, *id)).collect();
+    let centers: Vec<_> = [a, b, c].iter().map(|id| bounds(&s, *id).center()).collect();
+    let plain = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    select(&mut s, &[b, c]);
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    select(&mut s, &[a, group, plain]);
+    let plain_before = node(&s, plain);
+    let before = undo_len(&s);
+    let r = s.execute("symbol.instance.resetTransform", &json!({})).unwrap();
+    assert_eq!(r["ids"], json!([a.0, b.0, c.0]));
+    assert_eq!(undo_len(&s), before + 1, "one undo step");
+    for (id, center) in [a, b, c].into_iter().zip(&centers) {
+        let got = bounds(&s, id);
+        assert!((got.width() - placed.width()).abs() < 1e-9 && (got.height() - placed.height()).abs() < 1e-9, "{id:?}: {got:?}");
+        assert!((got.center() - *center).hypot() < 1e-9, "{id:?} keeps its center: {got:?} vs {center:?}");
+        let xf = xf_of(&s, id);
+        assert!(close_xf(xf.with_translation(vectorcraft_geom::Vec2::ZERO), master), "{id:?}: {xf:?}");
+    }
+    assert!(node(&s, plain) == plain_before, "other objects are left as they are");
+    s.execute("edit.undo", &json!({})).unwrap();
+    for (id, xf) in [a, b, c].into_iter().zip(turned) {
+        assert!(close_xf(xf_of(&s, id), xf), "Undo gives {id:?} its own transform back");
+    }
+}
+
+/// An instance of a symbol whose art lies away from the symbol's origin (as imported symbols can)
+/// keeps the center of the box its art fills when Reset Transformation turns it back.
+#[test]
+fn reset_transformation_keeps_the_center_of_art_away_from_the_origin() {
+    let mut s = session();
+    let r = rect(&mut s, 300.0, 10.0, 20.0, 20.0);
+    let art = node(&s, r);
+    s.execute("edit.clear", &json!({"ids": [r.0]})).unwrap();
+    let st = s.doc_mut().unwrap();
+    let d = std::sync::Arc::make_mut(&mut st.doc);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Off".into(), art: std::sync::Arc::new(art) });
+    let layer = d.layers[0].id;
+    let id = d.alloc_id();
+    let xf = vectorcraft_geom::Affine::translate((100.0, 100.0)) * vectorcraft_geom::Affine::rotate(0.5);
+    d.insert(Some(layer), usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: "Off".into(), xf })).unwrap();
+    let measured = |s: &Session| s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+    let before = measured(&s);
+    assert_eq!(s.execute("symbol.instance.resetTransform", &json!({"ids": [id.0]})).unwrap()["ids"], json!([id.0]));
+    let after = measured(&s);
+    assert!((after.center() - before.center()).hypot() < 1e-9, "{after:?} vs {before:?}");
+    assert!((after.width() - 20.0).abs() < 1e-9 && (after.height() - 20.0).abs() < 1e-9, "{after:?}");
+}
+
+/// A stored natural size that is not positive (from a damaged file: zero or negative on either
+/// side) does not flatten or mirror the instance: Reset Transformation gives it the art's own
+/// size, as drawing the symbol does.
+#[test]
+fn reset_transformation_ignores_a_stored_size_that_is_not_positive() {
+    for size in [json!([0.0, 20.0]), json!([-20.0, 20.0]), json!([20.0, -5.0]), json!([-20.0, -20.0])] {
+        let mut s = session();
+        let r = rect(&mut s, 0.0, 0.0, 20.0, 20.0);
+        let art = node(&s, r);
+        s.execute("edit.clear", &json!({"ids": [r.0]})).unwrap();
+        let st = s.doc_mut().unwrap();
+        let d = std::sync::Arc::make_mut(&mut st.doc);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Flat".into(), art: std::sync::Arc::new(art) });
+        d.unknown.insert(vectorcraft_doc::SYMBOL_SIZES.to_string(), json!({ "Flat": size }));
+        let layer = d.layers[0].id;
+        let id = d.alloc_id();
+        let xf = vectorcraft_geom::Affine::translate((100.0, 100.0)) * vectorcraft_geom::Affine::rotate(0.5);
+        d.insert(Some(layer), usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: "Flat".into(), xf })).unwrap();
+        assert_eq!(s.execute("symbol.instance.resetTransform", &json!({"ids": [id.0]})).unwrap()["ids"], json!([id.0]), "{size}");
+        let after = s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+        assert!((after.width() - 20.0).abs() < 1e-9 && (after.height() - 20.0).abs() < 1e-9, "{size}: {after:?}");
+        assert!(close_xf(xf_of(&s, id).with_translation(vectorcraft_geom::Vec2::ZERO), vectorcraft_geom::Affine::IDENTITY), "{size}: not mirrored");
+    }
+}
+
+/// Reset Transformation adds no undo step for an instance already at its symbol's scale or for
+/// one in perspective, and refuses an id naming no object and objects without an instance,
+/// changing nothing.
+#[test]
+fn reset_transformation_leaves_unchanged_instances_and_refuses_bad_ids() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 1000, "height": 800})).unwrap();
+    let (inst, name, _) = make_symbol(&mut s);
+    let before = undo_len(&s);
+    assert_eq!(s.execute("symbol.instance.resetTransform", &json!({"ids": [inst.0]})).unwrap()["ids"], json!([]));
+    assert_eq!(undo_len(&s), before, "nothing changed: no undo step");
+    let plain = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    select(&mut s, &[inst]);
+    s.execute("object.rotate", &json!({"angle": 45})).unwrap();
+    let turned = s.doc().unwrap().doc.clone();
+    let before = undo_len(&s);
+    for bad in [json!({"ids": [inst.0, 999_999]}), json!({"id": 999_999}), json!({"ids": [plain.0]}), json!({"ids": "x"})] {
+        assert!(s.execute("symbol.instance.resetTransform", &bad).is_err(), "{bad}");
+    }
+    assert!(*s.doc().unwrap().doc == *turned && undo_len(&s) == before, "the refusals change nothing");
+    // An instance in perspective is left as it is.
+    s.execute("perspective.grid.preset", &json!({"kind": 2})).unwrap();
+    let projected = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 500, "y": 350})).unwrap()["id"].as_u64().unwrap());
+    select(&mut s, &[projected]);
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    s.execute("perspective.attach", &json!({"ids": [projected.0], "plane": "right"})).unwrap();
+    let xf = xf_of(&s, projected);
+    let before = undo_len(&s);
+    assert_eq!(s.execute("symbol.instance.resetTransform", &json!({"ids": [projected.0]})).unwrap()["ids"], json!([]));
+    assert!(undo_len(&s) == before && close_xf(xf_of(&s, projected), xf), "an instance in perspective stays as it was");
+    // Selected with a turned instance, the instance in perspective still stays as it was, and only
+    // the other one is reset and returned, in one undo step.
+    select(&mut s, &[inst, projected]);
+    assert_eq!(s.execute("symbol.instance.resetTransform", &json!({})).unwrap()["ids"], json!([inst.0]));
+    assert_eq!(undo_len(&s), before + 1, "one undo step");
+    assert!(close_xf(xf_of(&s, projected), xf), "the instance in perspective stays as it was");
+    let reset = xf_of(&s, inst).with_translation(vectorcraft_geom::Vec2::ZERO);
+    assert!(close_xf(reset, s.doc().unwrap().doc.symbol_natural_xf(&name)), "the turned instance is reset: {reset:?}");
 }
 
 /// New Symbol and Duplicate Symbol trim the name they are given, as Symbol Options trims
@@ -1030,6 +2950,26 @@ fn symbolism_adjustments() {
     let far = s.execute("symbol.adjust", &json!({"tool": "size", "points": [[0, 290]], "radius": 5})).unwrap();
     assert_eq!(far["count"], 0);
     assert!(s.execute("symbol.adjust", &json!({"tool": "nope", "points": at})).is_err());
+}
+
+/// The Symbol Stainer's `color` with an alpha part (`#rrggbbaa` or `#rgba`) is refused and changes
+/// nothing, rather than staining with the current fill; `#rrggbb` still stains with it.
+#[test]
+fn a_stain_color_with_an_alpha_part_is_refused() {
+    let mut s = session();
+    let (inst, _, b) = make_symbol(&mut s);
+    let c = b.center();
+    let at = json!([[c.x, c.y]]);
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    for bad in ["#ff000080", "ff000080", "#f008"] {
+        assert!(s.execute("symbol.adjust", &json!({"tool": "stain", "points": at, "color": bad, "intensity": 10})).is_err(), "{bad}");
+    }
+    assert_eq!(*s.doc().unwrap().doc, *before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    s.execute("symbol.adjust", &json!({"tool": "stain", "points": at, "color": "#ff0000", "intensity": 10})).unwrap();
+    let f = node(&s, inst).appearance.fill().cloned().unwrap();
+    assert_eq!(f.paint.color().map(|c| c.to_hex()).as_deref(), Some("#ff0000"));
 }
 
 /// In a CMYK document the Symbol Stainer's RGB `color` separates through the color settings, as
@@ -1218,4 +3158,180 @@ fn symbol_nine_slice_guides_round_trip() {
     s.execute("symbol.options", &json!({"name": "Panel", "nineSlice": false})).unwrap();
     s.execute("symbol.delete", &json!({"name": "Box copy"})).unwrap();
     assert!(s.doc().unwrap().doc.unknown.get(vectorcraft_doc::SYMBOL_NINE_SLICE).is_none());
+}
+
+/// Symbols panel › Select All Unused (#4918): a symbol counts as used when an instance in the art,
+/// a pattern tile, the art of a brush or a used symbol places it; one placed only inside an unused
+/// symbol is unused too. Delete Symbol with `names` deletes several in one undo step.
+#[test]
+fn symbol_unused_lists_the_symbols_nothing_places_and_delete_takes_several() {
+    let mut s = session();
+    // A symbol of the selection (a new square at `x` when `x` is given), left placed.
+    let symbol = |s: &mut Session, name: &str, x: Option<f64>| {
+        if let Some(x) = x {
+            rect(s, x, 0.0, 10.0, 10.0);
+        }
+        NodeId(s.execute("symbol.new", &json!({"name": name})).unwrap()["id"].as_u64().unwrap())
+    };
+    let unused =
+        |s: &mut Session| -> Vec<String> { serde_json::from_value(s.execute("symbol.unused", &json!({})).unwrap()["names"].clone()).unwrap() };
+    // Placed: its instance stays on the artboard.
+    symbol(&mut s, "Placed", Some(0.0));
+    // Inner is placed only inside Outer, whose instance stays: both are used.
+    let inner = symbol(&mut s, "Inner", Some(20.0));
+    s.execute("select.set", &json!({"ids": [inner.0]})).unwrap();
+    symbol(&mut s, "Outer", None);
+    // Lonely's and Nested's instances go; Nested is placed only inside Lonely.
+    let nested = symbol(&mut s, "Nested", Some(40.0));
+    s.execute("select.set", &json!({"ids": [nested.0]})).unwrap();
+    let lonely = symbol(&mut s, "Lonely", None);
+    s.execute("edit.clear", &json!({"ids": [lonely.0]})).unwrap();
+    // In a brush's art only.
+    let in_brush = symbol(&mut s, "Brushed", Some(60.0));
+    s.execute("brush.new", &json!({"type": "art", "name": "B", "ids": [in_brush.0]})).unwrap();
+    s.execute("edit.clear", &json!({"ids": [in_brush.0]})).unwrap();
+    assert_eq!(unused(&mut s), ["Nested", "Lonely"], "in panel order");
+    // A placed one becomes unused when its last instance goes.
+    let placed = s.doc().unwrap().doc.layers[0]
+        .children()
+        .unwrap()
+        .iter()
+        .find(|n| matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Placed"))
+        .unwrap()
+        .id;
+    s.execute("edit.clear", &json!({"ids": [placed.0]})).unwrap();
+    assert_eq!(unused(&mut s), ["Placed", "Nested", "Lonely"]);
+    // Delete Symbol takes them all in one undo step, and Undo brings them back.
+    let before = s.doc().unwrap().history.undo.len();
+    s.execute("symbol.delete", &json!({"names": ["Placed", "Nested", "Lonely"]})).unwrap();
+    let names = |s: &Session| s.doc().unwrap().doc.symbols.iter().map(|x| x.name.clone()).collect::<Vec<_>>();
+    assert_eq!(names(&s), ["Inner", "Outer", "Brushed"]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), before + 1);
+    assert!(unused(&mut s).is_empty());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(names(&s), ["Placed", "Inner", "Outer", "Nested", "Lonely", "Brushed"]);
+    // Deleting a symbol and the one placed inside it, in either order, expands every instance
+    // while both definitions are still there: no instance is left without its symbol.
+    for order in [["Inner", "Outer"], ["Outer", "Inner"]] {
+        s.execute("symbol.delete", &json!({"names": order})).unwrap();
+        let mut dangling = 0;
+        s.doc()
+            .unwrap()
+            .doc
+            .walk(|n| dangling += usize::from(matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Inner" || symbol == "Outer")));
+        assert_eq!(dangling, 0, "{order:?}");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    // Bad `names` are refused and change nothing.
+    for bad in [json!({"names": []}), json!({"names": "Placed"}), json!({"names": [1]}), json!({"names": ["Placed", "Nope"]})] {
+        assert!(s.execute("symbol.delete", &bad).is_err(), "{bad}");
+    }
+    assert_eq!(names(&s).len(), 6);
+}
+
+/// Symbols panel › Sort by Name: the document's symbols in name order, ignoring case, with names
+/// that differ only in case kept in their order, as one undo step that keeps the current symbol
+/// and every instance; sorting symbols already in order adds no undo step.
+#[test]
+fn symbol_sort_by_name_orders_the_symbols_in_one_undo_step() {
+    let mut s = session();
+    let names = |s: &mut Session| -> Vec<String> {
+        let list = s.execute("symbol.list", &json!({})).unwrap();
+        list["symbols"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap_or_default().to_string()).collect()
+    };
+    let current = |s: &mut Session| s.execute("symbol.list", &json!({})).unwrap()["current"].clone();
+    let made = ["leaf", "Badge", "apple", "Leaf", "Zed"];
+    for (i, name) in made.into_iter().enumerate() {
+        rect(&mut s, 20.0 * i as f64, 0.0, 10.0, 10.0);
+        s.execute("symbol.new", &json!({"name": name})).unwrap();
+    }
+    // No current symbol stored: the first one is current.
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).unknown.remove("currentSymbol");
+    assert_eq!(current(&mut s), "leaf");
+    let instances = |s: &Session| {
+        let mut v = vec![];
+        s.doc().unwrap().doc.walk(|n| {
+            if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
+                v.push((n.id, symbol.clone()));
+            }
+        });
+        v
+    };
+    let placed = instances(&s);
+    assert_eq!(placed.len(), 5);
+    let before = s.doc().unwrap().history.undo.len();
+    s.execute("symbol.sortByName", &json!({})).unwrap();
+    assert_eq!(names(&mut s), ["apple", "Badge", "leaf", "Leaf", "Zed"]);
+    assert_eq!(current(&mut s), "leaf", "the current symbol stays current");
+    assert_eq!(instances(&s), placed, "every instance keeps its symbol");
+    assert_eq!(s.doc().unwrap().history.undo.len(), before + 1, "one undo step");
+    // Already in order: nothing changes and no undo step is added.
+    let revision = s.doc().unwrap().revision;
+    s.execute("symbol.sortByName", &json!({})).unwrap();
+    assert_eq!((s.doc().unwrap().history.undo.len(), s.doc().unwrap().revision), (before + 1, revision));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(names(&mut s), made);
+    assert_eq!(current(&mut s), "leaf");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(names(&mut s), ["apple", "Badge", "leaf", "Leaf", "Zed"]);
+    // An explicitly current symbol stays current too.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("symbol.setCurrent", &json!({"name": "Zed"})).unwrap();
+    s.execute("symbol.sortByName", &json!({})).unwrap();
+    assert_eq!(current(&mut s), "Zed");
+    // Run as a batch step it sorts as well, and with no symbols it adds no undo step.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("command.batch", &json!({"commands": [{"command": "symbol.sortByName", "params": {}}]})).unwrap();
+    assert_eq!(names(&mut s), ["apple", "Badge", "leaf", "Leaf", "Zed"]);
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let before = s.doc().unwrap().history.undo.len();
+    s.execute("symbol.sortByName", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), before);
+}
+
+/// `cmd::current_symbol` answers what `symbol.list` answers as `current`, and what `rule` (the
+/// stored name while a symbol has it, else the first of all the names) answers:
+/// with no symbols, with no stored name, with a stored name that is not first, after the current
+/// symbol is deleted, with a stored name no symbol has and with a stored value that is not text.
+#[test]
+fn current_symbol_is_the_current_symbol_list_answers() {
+    fn rule(d: &Document) -> Option<String> {
+        let names: Vec<String> = d.symbols.iter().map(|s| s.name.clone()).collect();
+        let stored = d.unknown.get("currentSymbol").and_then(Value::as_str).filter(|n| d.symbols.iter().any(|s| s.name == *n)).map(str::to_string);
+        stored.or_else(|| names.into_iter().next())
+    }
+    fn check(s: &mut Session, want: Option<&str>, case: &str) {
+        let listed = s.execute("symbol.list", &json!({})).unwrap()["current"].clone();
+        let d = &s.doc().unwrap().doc;
+        let helper = crate::cmd::current_symbol(d);
+        assert_eq!(helper.as_deref(), want, "{case}");
+        assert_eq!(json!(helper), listed, "{case}: symbol.list");
+        assert_eq!(helper, rule(d), "{case}: the rule");
+    }
+    fn store(s: &mut Session, v: Value) {
+        std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).unknown.insert("currentSymbol".into(), v);
+    }
+    let mut s = session();
+    check(&mut s, None, "no symbols");
+    store(&mut s, json!("Gone"));
+    check(&mut s, None, "no symbols and a stored name");
+    for (i, name) in ["A", "B", "C"].into_iter().enumerate() {
+        rect(&mut s, 20.0 * i as f64, 0.0, 10.0, 10.0);
+        s.execute("symbol.new", &json!({"name": name})).unwrap();
+    }
+    check(&mut s, Some("C"), "the newest symbol is current");
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).unknown.remove("currentSymbol");
+    check(&mut s, Some("A"), "no stored name");
+    s.execute("symbol.setCurrent", &json!({"name": "B"})).unwrap();
+    check(&mut s, Some("B"), "a stored name that is not first");
+    s.execute("symbol.delete", &json!({"name": "B"})).unwrap();
+    check(&mut s, Some("A"), "the current symbol deleted");
+    store(&mut s, json!("Renamed"));
+    check(&mut s, Some("A"), "a stored name no symbol has");
+    store(&mut s, json!(3));
+    check(&mut s, Some("A"), "a stored number");
+    store(&mut s, json!(["C"]));
+    check(&mut s, Some("A"), "a stored list");
+    store(&mut s, json!("C"));
+    check(&mut s, Some("C"), "a stored name that is last");
 }
