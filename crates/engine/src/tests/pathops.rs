@@ -1736,11 +1736,17 @@ fn pathfinder_options_round_trip_and_refuse_bad_values() {
     assert_eq!(s.execute("prefs.get", &json!({"key": "pathfinder"})).unwrap(), set);
     let mm = s.execute("object.pathfinder.options", &json!({"precision": "1 mm"})).unwrap()["precision"].as_f64().unwrap();
     assert!((mm - 72.0 / 25.4).abs() < 1e-9, "a length with a unit: {mm}");
+    for (given, want) in [("10 pt", 10.0), ("0.25", 0.25)] {
+        let r = s.execute("object.pathfinder.options", &json!({"precision": given})).unwrap();
+        assert_eq!(r["precision"], json!(want), "{given}");
+    }
     s.execute("object.pathfinder.options", &json!({"precision": 0.5})).unwrap();
     for bad in [
         json!({"precision": 0}),
         json!({"precision": 11}),
         json!({"precision": "x"}),
+        json!({"precision": "1abc"}),
+        json!({"precision": "0.5 extra"}),
         json!({"precision": -1}),
         json!({"removeRedundantPoints": "yes"}),
         json!({"removeUnpainted": 1}),
@@ -1949,6 +1955,31 @@ fn a_pathfinder_effect_keeps_the_options_in_force_when_applied() {
     assert_eq!(mix, &json!({"mixingRate": 50.0, "precision": 0.5, "removeRedundantPoints": true, "removeUnpainted": true}));
 }
 
+/// A Pathfinder effect given some of its options in `params` journals every option it used, so
+/// replaying the journal with other preferences gives the same effect and art.
+#[test]
+fn a_pathfinder_effect_given_some_options_journals_every_option_it_used() {
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 99.5, "width": 100, "height": 50})).unwrap();
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.prefs.pathfinder = PathfinderOptions { precision: 1.0, remove_redundant_points: true, remove_unpainted: true };
+    s.execute("effect.apply", &json!({"effect": "pathfinder.divide", "params": {"precision": 0.25}})).unwrap();
+    let all = json!({"precision": 0.25, "removeRedundantPoints": true, "removeUnpainted": true});
+    assert_eq!(first_effect_params(&s), all);
+    let (id, p) = s.journal.last().unwrap().clone();
+    assert_eq!((id.as_str(), &p["params"]), ("effect.apply", &all), "the journal entry gives every option the effect used");
+    let mut replay = Session::new();
+    for (id, p) in &s.journal {
+        replay.execute(id, p).unwrap();
+    }
+    assert_eq!(replay.prefs.pathfinder, PathfinderOptions::default());
+    let doc = |s: &Session| serde_json::to_value(&*s.doc().unwrap().doc).unwrap();
+    assert_eq!(doc(&replay), doc(&s));
+}
+
 /// A live Pathfinder effect evaluates with its own options as the panel's operations do with
 /// Pathfinder Options: a precision of 1 pt drops a 0.5 pt overlap, Divide leaves out an unfilled
 /// object's pieces, and Remove Redundant Points drops an anchor that shapes nothing.
@@ -2065,6 +2096,23 @@ fn a_precision_set_after_a_scale_past_its_range_is_kept() {
     let steps = s.doc().unwrap().history.undo.len();
     assert_eq!(s.execute("effect.setParams", &json!({"index": 0, "params": {"precision": 5}})).unwrap(), json!({"ids": []}));
     assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+}
+
+/// Soft Mix's Mixing Rate is compared by value: 50 over a stored 50.0 records no undo step, and 51
+/// is an edit.
+#[test]
+fn a_soft_mix_rate_set_to_its_value_records_no_step() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 100.0, 100.0), rect(&mut s, 50.0, 50.0, 100.0, 100.0));
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "pathfinder.softMix", "params": {"mixingRate": 50.0}})).unwrap();
+    assert_eq!(first_effect_params(&s)["mixingRate"], json!(50.0));
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = steps(&s);
+    assert_eq!(s.execute("effect.setParams", &json!({"index": 0, "params": {"mixingRate": 50}})).unwrap(), json!({"ids": []}));
+    assert_eq!((first_effect_params(&s)["mixingRate"].clone(), steps(&s)), (json!(50.0), before), "50 over 50.0: no step");
+    assert_ne!(s.execute("effect.setParams", &json!({"index": 0, "params": {"mixingRate": 51}})).unwrap(), json!({"ids": []}));
+    assert_eq!((first_effect_params(&s)["mixingRate"].clone(), steps(&s)), (json!(51), before + 1), "51 is an edit");
 }
 
 /// A single group containing multiple overlapping paths is accepted by Crop.
