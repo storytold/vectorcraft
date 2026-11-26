@@ -99,3 +99,41 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
         _ => {}
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use craft::ui::dialog::dialog_id;
+    use vectorcraft_engine::Session;
+
+    use super::*;
+
+    fn confirm_graph(app: &mut VectorcraftApp) {
+        let ctx = app.ui_ctx.clone().unwrap();
+        let host = app.dialogs().unwrap();
+        for _ in 0..2 {
+            host.with(|h| h.confirm_by_id(&ctx, dialog_id("graph.create")));
+            super::super::host::pump(app, &ctx);
+        }
+    }
+
+    #[test]
+    fn graph_size_does_not_draw_in_a_different_document() {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let opening = app.session.doc().unwrap().doc.clone();
+        let click = json!({"x": 40.0, "y": 30.0, "type": "column"});
+        open_tool_dialog(&mut app, "graph", click.clone());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let other = app.session.doc().unwrap().doc.clone();
+
+        confirm_graph(&mut app);
+
+        assert_eq!(app.session.doc().unwrap().doc, other, "confirmation leaves the other document unchanged");
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc, opening);
+        open_tool_dialog(&mut app, "graph", click);
+        confirm_graph(&mut app);
+        let doc = &app.session.doc().unwrap().doc;
+        assert_eq!(doc.layers[0].children().unwrap().len(), 1);
+    }
+}
