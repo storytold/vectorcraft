@@ -375,9 +375,23 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     /// own methods are no longer known (`var b = local`, `f(local)`, `local.saveAs = w`,
     /// `local[k] = w`, `delete local.saveAs`). A property assignment whose name is such a variable's
     /// (`this.local = d`, `$.global['local'] = d`) may give the variable a new value through the global
-    /// object, so its methods are no longer known either.
+    /// object, so its methods are no longer known either. An assignment to a property of the global
+    /// object under any other key (`$.global[key] = d`, `this['lo' + 'cal'] = d`) may give any such
+    /// variable a new value: no variable's methods are known after it.
     fn writer_use(&mut self, t: &Sig<'s>) {
         let [h0, h1, h2, h3] = self.h;
+        let global_index_closed = std::mem::take(&mut self.global_index_closed);
+        if t.is("[") {
+            let global = (word(h0, "global") && is(h1, ".") && word(h2, "$") && !member_mark(h3))
+                || ((word(h0, "this") || word(h0, "globalThis")) && !member_mark(h1));
+            if global && self.global_indexes.len() < self.acc.limits.nesting {
+                self.global_indexes.push(self.depth());
+            }
+        } else if t.is("]") {
+            let depth = self.depth();
+            self.global_index_closed = self.global_indexes.last() == Some(&(depth + 1));
+            self.global_indexes.retain(|d| *d <= depth);
+        }
         let writer = |s: Option<Sig<'s>>, before: Option<Sig<'s>>| s.filter(|s| self.writer_bits(Some(*s), before) != 0).map(|s| s.text);
         let changes = t.kind == T::Punct && (t.text == "=" || COMPOUND.contains(&t.text) || matches!(t.text, "++" | "--"));
         let key = t.is(":") && (is(h1, "{") || is(h1, ","));
@@ -415,6 +429,9 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             };
             if let Some(name) = rebound {
                 self.writers.remove(&name);
+            } else if global_index_closed {
+                // `$.global[key] = …`: the key may name any of them.
+                self.writers.clear();
             }
         }
     }

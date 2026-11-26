@@ -673,6 +673,48 @@ fn a_method_call_or_a_global_property_ends_the_own_save_as() {
     assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[10, 11, 12, 13][..]));
 }
 
+/// An assignment to a property of the global object under a key that is not one string literal may
+/// give any such variable another value: after it, their `saveAs` writes the file again. One under a
+/// string literal ends only the variable it names, and an index of another object ends none.
+#[test]
+fn a_computed_global_property_ends_every_own_save_as() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var a = {saveAs: function () {}}; var b = {saveAs: function () {}};\n",
+        "var rows = [];\n",
+        "rows[k] = 1; $.global['b'] = app.activeDocument;\n",
+        "a.saveAs(f);\n",
+        "$.global[key] = app.activeDocument;\n",
+        "a.saveAs(f);\n",
+        "var c = {saveAs: function () {}};\n",
+        "this['lo' + 'cal'] = app.activeDocument;\n",
+        "c.saveAs(f);\n",
+        "var h = {saveAs: function () {}};\n",
+        "globalThis[names[0]] = app.activeDocument;\n",
+        "h.saveAs(f);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[7, 10, 13][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[7, 10, 13][..])]);
+}
+
+/// A `saveAs` whose body uses `this` or the variable's own name may replace the object's methods
+/// when it runs, so it is not the script's own and its calls write the file. A `this` in another
+/// method's body leaves `saveAs` the script's own.
+#[test]
+fn an_own_save_as_that_may_replace_itself_writes_a_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var doc = app.activeDocument;\n",
+        "var a = {saveAs: function () { this.saveAs = function (g) { doc.saveAs(g); }; }};\n",
+        "var b = {saveAs: function () { b.saveAs = w; }};\n",
+        "var c = {saveAs: function (g) { return g; }, install: function () { this.n = 1; }};\n",
+        "a.saveAs(f); a.saveAs(f);\n",
+        "b.saveAs(f);\n",
+        "c.saveAs(f);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[3, 6, 7][..]));
+}
+
 /// Only a `var` statement directly in a function body or the global code that gives its first name
 /// the literal as its whole value makes the literal's `saveAs` the script's own, from the end of the
 /// statement. A literal given in a branch, one the value goes on from, one given by an assignment

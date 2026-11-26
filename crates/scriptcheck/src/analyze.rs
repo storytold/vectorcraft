@@ -646,6 +646,11 @@ struct Analyzer<'s, 'a, 'l> {
     /// What the receiver before the last `[` read defines in [`Analyzer::writers`], 0 for a receiver
     /// that is not such a variable.
     index_receiver: u8,
+    /// The depths of the open `[` that index the global object (`$.global[`, `this[`,
+    /// `globalThis[`), the innermost last, up to [`crate::Limits::nesting`] of them.
+    global_indexes: Vec<usize>,
+    /// The last token was the `]` that closes an index of the global object.
+    global_index_closed: bool,
     /// This file or what the scan started with gives names values the analysis doesn't read
     /// ([`Declared::unsure`]): no object counts as a Folder object whatever the path names.
     unsure: bool,
@@ -726,6 +731,8 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             objects: vec![],
             closed: None,
             index_receiver: 0,
+            global_indexes: vec![],
+            global_index_closed: false,
             unsure: known.unsure || declared.unsure,
             own_names: HashSet::new(),
             scopes: vec![],
@@ -1447,8 +1454,19 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     /// `{saveAs: function () {} && d.saveAs}`) takes it out again ([`ObjectValue::step`]). A closing
     /// brace ends the literals it closes. The variable joins [`Analyzer::writers`] only after the
     /// literal ([`Analyzer::settle_literal`]), so a call inside the literal, and a value that goes on
-    /// (`{…} && d`), see the variable as it was.
+    /// (`{…} && d`), see the variable as it was. A `this` or the variable's own name inside the body
+    /// of such a function expression takes the method out as well: running it may replace the
+    /// object's methods (`{saveAs: function () { this.saveAs = d.saveAs; }}`).
     fn object_key(&mut self, t: &Sig<'s>, before: usize) {
+        if t.kind == T::Ident {
+            for o in self.objects.iter_mut().filter(|o| o.depth < before) {
+                if let Some((bit, Value::Body)) = o.value
+                    && (t.text == "this" || t.text == o.name)
+                {
+                    o.value = Some((bit, Value::Other));
+                }
+            }
+        }
         if let Some(o) = self.objects.last_mut().filter(|o| o.depth == before) {
             o.step(t);
         }
