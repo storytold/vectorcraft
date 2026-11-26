@@ -10585,6 +10585,11 @@ breakText	Glyphs	字形
 	No objects are selected.	オブジェクトが選択されていません。
 	Open a document to mark its fold lines.	ドキュメントを開くと折り線を設定できます。
 	Remove Fold Line Role	線種を解除
+	Fold Angle	折り角度
+	Set Fold Angle…	折り角度を設定…
+	Set Fold Angle	折り角度を設定
+	Reset Fold Angle	折り角度をリセット
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	ロックも非表示もされていない筋入れ線、半抜き線またはミシン目線を選択してください
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	ツールバーのツールとそのキーの働きを、ヒントの代わりにカードで表示。ツールヒントを表示がオンのときに使用
 	Selects whole objects and groups to move, resize or rotate them.	オブジェクトやグループ全体を選択して、移動、サイズ変更、回転を行います。

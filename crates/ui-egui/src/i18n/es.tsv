@@ -6795,6 +6795,8 @@ mark-style	Japanese	Japonesas
 	Variation	Variación
 	VectorCraft Default	Predeterminado de VectorCraft
 	VectorCraft Generic CMYK (SWOP-like)	CMYK genérico de VectorCraft (similar a SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	CMYK estucado de VectorCraft (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	CMYK no estucado de VectorCraft (FOGRA52)
 	VectorCraft Swatches (.vcswatches)	Muestras de VectorCraft (.vcswatches)
 	Vertical Area Type	Texto de área vertical
 	Vertical Type	Texto vertical
@@ -10781,6 +10783,11 @@ breakText	Glyphs	Glifos
 	No objects are selected.	No hay objetos seleccionados.
 	Open a document to mark its fold lines.	Abre un documento para marcar sus líneas de plegado.
 	Remove Fold Line Role	Quitar tipo de línea
+	Fold Angle	Ángulo de plegado
+	Set Fold Angle…	Definir ángulo de plegado…
+	Set Fold Angle	Definir ángulo de plegado
+	Reset Fold Angle	Restablecer ángulo de plegado
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	seleccione una línea de hendido, de corte parcial o de perforación que no esté bloqueada ni oculta
 	Check	Comprobar
 	Check Fold Lines	Comprobar líneas de plegado
 @msg	No cut lines are in the selection.	No hay líneas de corte en la selección.
