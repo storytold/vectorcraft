@@ -143,13 +143,15 @@ struct Edited {
     pick: Option<ColorRequest>,
 }
 
-/// The Properties section's colour picker: the dialog it opened, the colour it answers for and the dimension it edits.
+/// The Properties section's colour picker and the swatch, document and dimension it edits.
 #[derive(Clone, Debug)]
 pub(crate) struct Pick {
     /// The open colour picker.
     pub id: DialogId,
     /// The key of the swatch that asked.
     pub key: String,
+    /// The document that contains the dimension.
+    pub document: u64,
     /// The dimension the colour goes to.
     pub target: NodeId,
 }
@@ -340,8 +342,12 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _: &egui::Context) {
     let Some(pick) = app.object_dialogs.dimension.clone() else { return };
     let Some(finished) = dialogs.with(|host| host.take_by_id::<ColorPickerDialog>(pick.id)) else { return };
     app.object_dialogs.dimension = None;
-    if let Some(ColorPickerResult { picked, .. }) = finished.ok()
-        && let Some(mut o) = options_of(app, pick.target)
+    let Some(ColorPickerResult { picked, .. }) = finished.ok() else { return };
+    if app.session.active().map(|st| st.uid) != Some(pick.document) {
+        app.status("The active document changed while the Color Picker was open");
+        return;
+    }
+    if let Some(mut o) = options_of(app, pick.target)
         && set_color(&mut o, &pick.key, picked.color)
     {
         update(app, pick.target.0, &o);
@@ -715,12 +721,13 @@ pub fn properties_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     }
     if let Some(request) = edited.pick
+        && let Some(document) = app.session.active().map(|st| st.uid)
         && let Some(dialogs) = app.dialogs()
     {
         let key = request.key.clone();
         let picker = ColorPickerDialog::from_request(request).swatch_view(super::color_picker::swatch_view(app));
         let picker = dialogs.with(|host| host.open(picker));
-        app.object_dialogs.dimension = Some(Pick { id: picker, key, target: NodeId(id) });
+        app.object_dialogs.dimension = Some(Pick { id: picker, key, document, target: NodeId(id) });
     }
     Row::new().show(ui, |ui, _| {
         if Button::new(tl!("Apply to All")).show(ui).clicked()
@@ -773,6 +780,46 @@ mod tests {
 
     fn saved_style(app: &Rc<RefCell<VectorcraftApp>>) -> DimensionOptions {
         serde_json::from_value(app.borrow().session.tool_options_of("dimension")["style"].clone()).unwrap()
+    }
+
+    #[test]
+    fn dimension_properties_picker_keeps_its_source_document() {
+        use crate::tests::panel_harness::Panel;
+
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let mut add_dimension = |line_color: [u8; 3]| {
+            app.run("file.new", json!({"width":200,"height":200})).unwrap();
+            let created = app.run("dimension.create", json!({"a":[0,0],"b":[72,0],"options":{"lineColor":line_color}})).unwrap();
+            let id = created["id"].as_u64().unwrap();
+            app.run("select.set", json!({"ids":[id]})).unwrap();
+            NodeId(id)
+        };
+        let source = add_dimension([17, 34, 51]);
+        let other = add_dimension([51, 34, 17]);
+        assert_eq!(source, other, "each drawing allocates its own object ids");
+        app.run("document.activate", json!({"index":0})).unwrap();
+
+        let mut panel = Panel::new(app, properties_section);
+        let ctx = panel.ctx().clone();
+        let host = WindowDialogs::of(&ctx, &WindowKey::main());
+        panel.click("Line Color");
+        let picker = panel.app().object_dialogs.dimension.as_ref().unwrap().id;
+        host.with(|h| h.set_json_field(&ctx, picker, "color", json!("#123456"))).unwrap();
+        panel.app().run("document.activate", json!({"index":1})).unwrap();
+        assert!(host.with(|h| h.confirm_by_id(&ctx, picker)));
+        pump(&mut panel.app(), &ctx);
+        assert_eq!(options_of(&panel.app(), other).unwrap().line_color, [51, 34, 17]);
+
+        panel.app().run("document.activate", json!({"index":0})).unwrap();
+        assert_eq!(options_of(&panel.app(), source).unwrap().line_color, [17, 34, 51]);
+        panel.click("Line Color");
+        let picker = panel.app().object_dialogs.dimension.as_ref().unwrap().id;
+        host.with(|h| h.set_json_field(&ctx, picker, "color", json!("#123456"))).unwrap();
+        assert!(host.with(|h| h.confirm_by_id(&ctx, picker)));
+        pump(&mut panel.app(), &ctx);
+        assert_eq!(options_of(&panel.app(), source).unwrap().line_color, [18, 52, 86]);
+        panel.app().run("edit.undo", json!({})).unwrap();
+        assert_eq!(options_of(&panel.app(), source).unwrap().line_color, [17, 34, 51]);
     }
 
     /// The Arrow Style rule of `ui.dialog.set` and the saved style: a head clears with `arrowStyle`, a built-in head
