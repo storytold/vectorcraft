@@ -46,6 +46,7 @@ fn scope_label(scope: &str) -> Label {
 
 /// Open the dialog on the images and placed documents `ids` (default: the selected ones).
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let document = app.session.active().ok_or("no document open")?.uid;
     let ids = match p.get("ids").filter(|v| !v.is_null()) {
         Some(v) => v.as_array().cloned().ok_or_else(|| format!("`ids` must be an array of object ids, not {v}"))?,
         None => crate::panels::links::selected_ids(app).into_iter().map(Value::from).collect(),
@@ -80,13 +81,18 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
             links.push(json!({ "name": name, "ids": [id] }));
         }
     }
-    let dialog = RelinkDialog::new(ids, links);
+    let dialog = RelinkDialog::new(document, ids, links);
     crate::dialogs::host::open_held(app, dialog, relink).ok_or("no window")?;
     Ok(Value::Null)
 }
 
 /// The relink rule: one `links.relink` call with the answer's parameters, and the status it earns.
-fn relink(app: &mut VectorcraftApp, params: &Value) -> Result<(), String> {
+fn relink(app: &mut VectorcraftApp, (document, params): &(u64, Value)) -> Result<(), String> {
+    if app.session.active().is_none_or(|st| st.uid != *document) {
+        let reason = tl!("Relink can only change links in the document where it was opened.");
+        app.status(reason);
+        return Err(reason.to_owned());
+    }
     let r = app.run(CMD, params.clone())?;
     let missed: Vec<&str> = r["notFound"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
     app.status(crate::panels::links::relinked_status_missed(r["relinked"].as_array().map_or(0, Vec::len), &missed));
@@ -116,6 +122,8 @@ impl ItemSource<usize> for Names<'_> {}
 /// app (`HoldsOk`); with Each Link Separately it stays open until every link has a file.
 pub(crate) struct RelinkDialog {
     id: DialogId,
+    /// The document that owns the link IDs.
+    document: u64,
     ids: Vec<Value>,
     links: Vec<Value>,
     scope: String,
@@ -127,9 +135,10 @@ pub(crate) struct RelinkDialog {
 }
 
 impl RelinkDialog {
-    fn new(ids: Vec<Value>, links: Vec<Value>) -> Self {
+    fn new(document: u64, ids: Vec<Value>, links: Vec<Value>) -> Self {
         RelinkDialog {
             id: dialog_id(KEY),
+            document,
             ids,
             links,
             scope: "selected".into(),
@@ -185,14 +194,14 @@ impl RelinkDialog {
 }
 
 impl HoldsOk for RelinkDialog {
-    type Answer = Value;
+    type Answer = (u64, Value);
 
     fn held_ok(self) -> Self {
         self
     }
 
-    fn take_ok(&mut self) -> Option<Value> {
-        self.held.take()
+    fn take_ok(&mut self) -> Option<Self::Answer> {
+        self.held.take().map(|params| (self.document, params))
     }
 
     fn answer_ok(&mut self, answer: Result<(), Label>) {
@@ -391,6 +400,53 @@ mod tests {
         let id = relink_dialog(app).id;
         answer_dialog(app, id, set, true);
         pass(app);
+    }
+
+    fn check_relink_stays_in_opening_drawing(native_picker: bool) {
+        let (mut app, dir) = setup(if native_picker { "opening-picker" } else { "opening-path" }, &["source.png", "destination.png"]);
+        let picker = scripted(&mut app);
+        let original = dir.join("source.png");
+        let destination = dir.join("destination.png");
+        let source_id = place(&mut app, &original);
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let destination_id = place(&mut app, &destination);
+        assert_eq!(source_id, destination_id, "linked objects may have the same local ID");
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.run("ui.relinkDialog", json!({"ids": [source_id]})).unwrap();
+        if native_picker {
+            ok(&mut app, &[]);
+        }
+
+        let selected = new_file(&dir, "replacement.png");
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        if native_picker {
+            picker.answer(&[&selected]);
+            pass(&mut app);
+        } else {
+            ok(&mut app, &[("path", json!(selected))]);
+        }
+        assert_eq!(link_path(&app, destination_id), destination.to_string_lossy());
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert_eq!(app.ui.status, "Relink can only change links in the document where it was opened.");
+        let dialog = relink_dialog(&app).id;
+        assert!(matches!(app.dialogs().unwrap().with(|h| h.held_state(dialog)), Some(HeldOk::Refused(_))));
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        ok(&mut app, &[("path", json!(selected))]);
+        assert!(open_dialogs(&app).is_empty());
+        assert_eq!(link_path(&app, source_id), selected);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn relink_opening_drawing_is_required_for_a_path_confirmation() {
+        check_relink_stays_in_opening_drawing(false);
+    }
+
+    #[test]
+    fn relink_opening_drawing_is_required_when_the_file_picker_answers() {
+        check_relink_stays_in_opening_drawing(true);
     }
 
     #[test]
