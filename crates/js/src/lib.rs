@@ -26,7 +26,7 @@
 //! with loops. The realm provides the language (sections 10 to 14 of ECMA-262 5.1) and these
 //! built-ins: the global functions and constants (15.1, with Annex B's `escape` and `unescape`),
 //! `Object` (15.2), `Function` with `call`, `apply` and `bind` (15.3), `Array` (15.4), `String`
-//! (15.5), `Boolean.prototype`'s `toString` and `valueOf` (15.6.4), `Number` (15.7), `Math` (15.8),
+//! (15.5), `Boolean` (15.6), `Number` (15.7), `Math` (15.8),
 //! `Date` (15.9), `RegExp` (15.10), the error types (15.11) and `JSON` (15.12). The array methods
 //! visit only the indices an array or array-like object has, so a sparse array of length 2^32-1
 //! costs as much as its elements, and `JSON.parse`, `JSON.stringify` and the reviver walk use no
