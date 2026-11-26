@@ -23,6 +23,11 @@ use crate::token::{Directive, Keyword, Punct, Span, Token, TokenKind, strict_res
 
 type Result<T> = std::result::Result<T, SyntaxError>;
 
+#[cfg(test)]
+thread_local! {
+    pub(crate) static SCOPE_VAR_PEAK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// What the code being parsed allows, saved and replaced at each function body.
 #[derive(Clone, Debug, Default)]
 struct Context {
@@ -312,8 +317,12 @@ impl<'s> Parser<'s> {
     }
 
     fn pop_scope(&mut self) {
-        if self.es2015 {
-            self.scopes.pop();
+        if self.es2015
+            && let Some(scope) = self.scopes.pop()
+            && !scope.function
+            && let Some(parent) = self.scopes.last_mut()
+        {
+            parent.vars.extend(scope.vars);
         }
     }
 
@@ -339,20 +348,24 @@ impl<'s> Parser<'s> {
         Ok(())
     }
 
-    /// Declares a `var` name: in each scope out to the function's, where no lexical declaration
-    /// may have it.
+    /// Declares a `var` name in the current scope after checking lexical declarations through
+    /// the containing function's scope. Closing a block moves its names to the parent scope.
     fn declare_var(&mut self, name: &Name) -> Result<()> {
         let mut clash = false;
-        for scope in self.scopes.iter_mut().rev() {
+        for scope in self.scopes.iter().rev() {
             if scope.lexical.contains_key(&name.name) {
                 clash = true;
                 break;
             }
-            scope.vars.insert(name.name.clone());
             if scope.function {
                 break;
             }
         }
+        if !clash && let Some(scope) = self.scopes.last_mut() {
+            scope.vars.insert(name.name.clone());
+        }
+        #[cfg(test)]
+        SCOPE_VAR_PEAK.with(|peak| peak.set(peak.get().max(self.scopes.iter().map(|scope| scope.vars.len()).sum())));
         if clash { Err(self.redeclared(name)) } else { Ok(()) }
     }
 

@@ -21,6 +21,25 @@ fn truth(src: &str) {
     assert_eq!(run(src), JsValue::Bool(true), "{src}");
 }
 
+#[test]
+fn nested_blocks_retain_one_var_name_entry_per_declaration() {
+    let declarations = (0..1_000).map(|i| format!("v{i}={i}")).collect::<Vec<_>>().join(",");
+    let source = format!("{}var {declarations};{}v999", "{".repeat(64), "}".repeat(64));
+    crate::parser::SCOPE_VAR_PEAK.with(|peak| peak.set(0));
+    assert_eq!(run(&source), JsValue::Number(999.0));
+    let peak = crate::parser::SCOPE_VAR_PEAK.with(std::cell::Cell::get);
+    assert_eq!(peak, 1_000, "retained entries for 1,000 names");
+}
+
+#[test]
+fn nested_var_names_keep_lexical_conflicts_and_function_boundaries() {
+    for source in ["{ { var x; } let x; }", "{ let x; { var x; } }", "function f() { { var x; } let x; }"] {
+        syntax(source);
+    }
+    truth("{ function f() { var x; } let x = 3; if (x !== 3) throw 1; } true");
+    truth("{ { var x; } { let x = 3; if (x !== 3) throw 1; } } true");
+}
+
 fn string(src: &str) -> String {
     match run(src) {
         JsValue::String(s) => s,
