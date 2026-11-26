@@ -113,6 +113,12 @@ fn circle(app: &VectorcraftApp, open: &mut Open, fields: &DialogFields) -> Resul
     found.map(|points| (r, points)).ok_or_else(no_circle)
 }
 
+/// Why the active document cannot take a new circle now: its target layer is locked or hidden. The draw would be
+/// refused, with or without a preview.
+fn target_refusal(app: &VectorcraftApp) -> Option<String> {
+    app.session.doc().ok()?.target_parent().err().map(|e| e.to_string())
+}
+
 /// The words the dialog shows for `why` ([`circle`]'s error), in the interface's language.
 fn shown(why: &str) -> String {
     if why == tangent_circle::NO_CIRCLE { tl!(tangent_circle::NO_CIRCLE).to_string() } else { crate::i18n::msg(why) }
@@ -140,7 +146,9 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     };
     let _ = preview.run(app, previewed.0, "Tangent Circle", DRAW, &previewed.1);
     open.preview = preview;
-    open.note = found.err();
+    // A target layer locked or hidden after the circle previewed refuses the draw: OK stays off. The preview stays,
+    // since rolling it back would also roll back the edit that locked or hid the layer.
+    open.note = found.err().or_else(|| target_refusal(app));
     let ready = open.note.as_deref().map_or(Ok(()), |why| Err(Label::from(shown(why))));
     app.addon_dialogs.tangent_radius = Some(open);
     host.with(|h| {
@@ -360,6 +368,31 @@ mod tests {
         assert!(press_ok(&mut app), "{}", app.ui.status);
         assert_eq!((count(&app), undo_steps(&app)), (paths + 1, steps + 1));
         assert_eq!(app.session.tool_options_of(tool::ID)["radius"], json!(tool::RADIUS));
+    }
+
+    #[test]
+    fn a_circle_the_target_layer_cannot_take_shows_why_and_leaves_ok_off() {
+        let mut app = app_with_lines(&[100, 140]);
+        let paths = count(&app);
+        click(&mut app, 150.0, 100.0, false);
+        click(&mut app, 200.0, 140.0, false);
+        frame(&mut app);
+        assert_eq!(note(&app), None);
+        assert_eq!(count(&app), paths + 1);
+        // A control request locks the only layer while the dialog is open: no layer takes the circle, and OK is off.
+        app.run("layer.setProps", json!({"locked": true})).unwrap();
+        let steps = undo_steps(&app);
+        frame(&mut app);
+        assert!(note(&app).is_some_and(|n| n.contains("locked")), "{:?}", note(&app));
+        press_ok_while_off(&mut app);
+        assert_eq!((count(&app), undo_steps(&app)), (paths + 1, steps));
+        // Unlocked again at the same radius: previewed, and OK draws the circle.
+        app.run("layer.setProps", json!({"locked": false})).unwrap();
+        frame(&mut app);
+        assert_eq!(note(&app), None);
+        assert_eq!(count(&app), paths + 1);
+        assert!(press_ok(&mut app), "{}", app.ui.status);
+        assert_eq!(count(&app), paths + 1);
     }
 
     #[test]

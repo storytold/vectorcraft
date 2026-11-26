@@ -15003,7 +15003,8 @@ Tools:
   which sets the radius, draws at once. The dialog's Radius starts at the radius of the circle found, and each radius
   previews the circle of that radius touching the second segments nearest the click, anywhere along the first segment
   (at the radius it opened with, the circle found). A radius that gives no circle there shows the note and leaves OK
-  off, as do an edit to either segment's path after the click and another active document; one outside 0.01 to
+  off, as do an edit to either segment's path after the click and another active document; a circle the target layer
+  cannot take (locked or hidden) shows why and leaves OK off; a radius outside 0.01 to
   1000000 pt, typed or set, shows the radius error and leaves OK off, except the radius the dialog opened with.
   `ui.dialog.set` gives an error for a radius that is not a number. OK draws the circle in one undo
   step, with `shape.circleThroughPoints`, and with `autoUpdateDefault` on also sets `radius` to the radius given when

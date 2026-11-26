@@ -167,7 +167,11 @@ fn second_set_at(doc: &Document, first: Place, second: Place) -> Vec<CubicBez> {
     }
     let (id, subpath, i) = second;
     let Some(sp) = doc.node(id).and_then(|n| n.path_data()).and_then(|p| p.subpaths.get(subpath)) else { return vec![] };
+    // A subpath edited down to no segments (while the radius dialog is open) has nothing to touch.
     let n = sp.segment_count();
+    if n == 0 {
+        return vec![];
+    }
     let mut indices = vec![i];
     if i > 0 || sp.closed {
         indices.push((i + n - 1) % n);
@@ -766,6 +770,11 @@ mod tests {
             assert!(!segments_unchanged(&doc_at(a, b), &p), "{a} {b}");
         }
         assert!(!segments_unchanged(&Document::new(500.0, 500.0), &p));
+        // The second line edited down to a closed subpath without segments: changed.
+        let mut emptied = d.clone();
+        let (second, ..) = place_of(&p["places"][1]).unwrap();
+        emptied.node_mut(second).and_then(|n| n.path_data_mut()).unwrap().subpaths[0] = SubPath::polyline(&[], true);
+        assert!(!segments_unchanged(&emptied, &p));
         // Parameters the tool did not write.
         for key in ["places", "first", "second"] {
             let mut q = p.clone();
