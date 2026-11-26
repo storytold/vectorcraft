@@ -278,16 +278,13 @@ fn ok_redraws_the_strokes_painted_with_the_brush() {
     assert!((drawn_height(&app, id) - before).abs() < 1e-6);
 }
 
-/// The names screen readers read in the open dialogs, from one 1200 × 900 frame's access tree.
+/// The names screen readers read in the open dialogs, from the access tree of an app frame drawn
+/// once the dialog has settled.
 fn access_names(app: &mut VectorcraftApp) -> Vec<String> {
-    use egui::{Pos2, Rect};
-    let ctx = ctx(app);
-    let dialogs = app.dialogs().expect("a window");
-    let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 900.0))), ..Default::default() };
-    let mut out = ctx.run_ui(raw, |ui| dialogs.with(|host| host.run(ui)));
-    out.textures_delta.clear();
-    let update = out.platform_output.accesskit_update.expect("an accessibility tree");
-    update.nodes.iter().filter_map(|(_, node)| node.label()).map(str::to_string).collect()
+    crate::dialogs::tests::settle(app);
+    let out = crate::dialogs::tests::frame(app, vec![]);
+    let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+    nodes.iter().filter_map(|(_, node)| node.label()).map(str::to_string).collect()
 }
 
 /// Pattern Brush Options' Scale menu: Pressure, Tilt, Bearing, Rotation and Stylus Wheel each take
@@ -301,7 +298,6 @@ fn pattern_options_scale_follows_the_pen() {
     let f = fields_of(&app);
     assert_eq!((f.text("scaleMode"), f.number("scaleMax")), (Some("fixed"), Some(100.0)));
     // Screen readers name the second scale and the menu after the Scale row.
-    access_names(&mut app);
     let names = access_names(&mut app);
     for name in ["Scale: Maximum", "Scale: Mode"] {
         assert!(names.iter().any(|n| n == name), "{name} in {names:?}");
@@ -340,7 +336,6 @@ fn pattern_options_scale_follows_the_pen() {
 fn art_options_name_the_second_width_and_its_menu() {
     let mut app = app();
     open(&mut app, "Tapered Stroke");
-    access_names(&mut app);
     let names = access_names(&mut app);
     for name in ["Width: Maximum", "Width: Mode"] {
         assert!(names.iter().any(|n| n == name), "{name} in {names:?}");
