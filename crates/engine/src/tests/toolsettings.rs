@@ -30,6 +30,55 @@ fn blob_tip_options_report_and_persist() {
     assert_eq!((next.tool_options()["angle"].as_f64(), next.tool_options()["roundness"].as_f64()), (Some(45.0), Some(0.0)));
 }
 
+/// The Circle tool's From Center survives a tool switch and is saved with the preferences.
+#[test]
+fn circle_from_center_persists() {
+    let mut s = session();
+    select(&mut s, "circle");
+    let mut want = s.tool_options();
+    assert_eq!(want["fromCenter"], json!(false));
+    want["fromCenter"] = json!(true);
+    s.set_tool_option("fromCenter", &json!(true));
+    select(&mut s, "selection");
+    select(&mut s, "circle");
+    assert_eq!(s.tool_options(), want);
+    select(&mut s, "selection");
+    let saved = serde_json::to_string(&s.prefs).unwrap();
+    let mut next = session();
+    next.apply_prefs(serde_json::from_str(&saved).unwrap());
+    select(&mut next, "circle");
+    assert_eq!(next.tool_options(), want);
+}
+
+/// An option set during a press (`tool.setOption`, or a Control bar change) is kept when the press
+/// is dropped: the drop gives back only what the press itself changed.
+#[test]
+fn the_circle_from_center_set_during_a_dropped_press_is_kept() {
+    let v = ViewInfo::default();
+    let mut s = session();
+    select(&mut s, "circle");
+    let mut want = s.tool_options();
+    s.set_tool_option("fromCenter", &json!(true));
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+    s.set_tool_option_cmd(&json!({"key": "fromCenter", "value": false})).unwrap();
+    s.drop_tool_press(v).unwrap();
+    want["fromCenter"] = json!(false);
+    assert_eq!(s.tool_options(), want);
+    assert_eq!(s.prefs.tool_settings["circle"]["fromCenter"], json!(false));
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+    s.set_tool_option("fromCenter", &json!(true));
+    s.drop_tool_press(v).unwrap();
+    want["fromCenter"] = json!(true);
+    assert_eq!(s.tool_options(), want);
+    assert_eq!(s.prefs.tool_settings["circle"]["fromCenter"], json!(true));
+    // Setting a Parametric Shape's kind also puts its numbers back to that kind's: those are kept too.
+    select(&mut s, "parametricShape");
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+    let set = s.set_tool_option_cmd(&json!({"key": "kind", "value": "star"})).unwrap();
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.tool_options(), set);
+}
+
 #[test]
 fn options_survive_a_tool_switch() {
     let mut s = session();
@@ -473,6 +522,54 @@ fn alt_smoothing_takes_the_smooth_tools_fidelity() {
     }
 }
 
+/// The Smoothness an Alt smoothing drag sends with `path.smoothRegion` on a selected path.
+fn alt_smoothness(s: &mut Session) -> Option<f64> {
+    use vectorcraft_tools::Action;
+    let mods = Mods { alt: true, ..Default::default() };
+    let mut last = vec![];
+    for (kind, x, y) in [(PointerKind::Down, 50.0, 150.0), (PointerKind::Drag, 150.0, 150.0), (PointerKind::Up, 250.0, 160.0)] {
+        let ev = PointerEvent { mods, ..PointerEvent::new(kind, x, y) };
+        last = s.with_tool_cx(ViewInfo::default(), |t, cx| t.pointer(cx, &ev));
+    }
+    last.iter().find_map(|a| match a {
+        Action::Exec(c, v) if c == "path.smoothRegion" => v["smoothness"].as_f64(),
+        _ => None,
+    })
+}
+
+/// Smooth Tool Options' Smoothness is kept with the preferences (50% until it is set), and Alt
+/// smoothing with the Pencil, Paintbrush and Blob Brush uses it. A Smoothness outside 0 to 100 is
+/// an error that sets nothing.
+#[test]
+fn the_smooth_tools_smoothness_is_kept_and_alt_smoothing_takes_it() {
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    select(&mut s, "smooth");
+    assert_eq!(s.tool_options()["smoothness"], json!(50.0));
+    for bad in [json!(-1), json!(100.5), json!("30"), json!(null)] {
+        let e = s.set_tool_option_cmd(&json!({"key": "smoothness", "value": bad})).unwrap_err();
+        assert_eq!(e, "tool `smooth`: `smoothness` must be a number from 0 to 100", "{bad}");
+    }
+    assert_eq!(s.tool_options()["smoothness"], json!(50.0));
+    s.set_tool_option("smoothness", &json!(80));
+    assert_eq!(s.prefs.tool_settings["smooth"]["smoothness"], json!(80.0));
+    for id in ["pencil", "paintbrush", "blobBrush"] {
+        select(&mut s, id);
+        if id == "pencil" {
+            s.set_tool_option("altSmooth", &json!(true));
+        }
+        assert_eq!(alt_smoothness(&mut s), Some(80.0), "{id}");
+        assert!(s.tool_options().get("smoothness").is_none(), "{id} has no Smoothness of its own");
+    }
+    s.set_tool_option_cmd(&json!({"tool": "smooth", "key": "smoothness", "value": 10})).unwrap();
+    assert_eq!(alt_smoothness(&mut s), Some(10.0), "the Blob Brush takes the new Smoothness");
+    let saved = serde_json::to_string(&s.prefs).unwrap();
+    let mut next = session();
+    next.apply_prefs(serde_json::from_str(&saved).unwrap());
+    select(&mut next, "smooth");
+    assert_eq!(next.tool_options()["smoothness"], json!(10.0));
+}
+
 /// `tool.setOption` with a value of the wrong type, a number out of range, an unknown value or an
 /// option the tool doesn't have is an error naming the tool and the option. Nothing is set, also
 /// when another option given with it is good, and nothing is saved or recorded for undo.
@@ -489,7 +586,10 @@ fn bad_option_values_are_errors_that_set_nothing() {
         (json!({"key": "bogus", "value": 1}), "tool `smooth`: unknown option `bogus`"),
         (json!({"tool": "pencil", "values": {"closeWithin": 5, "fidelity": "x"}}), "tool `pencil`: `fidelity` must be a number from 0.01 to 100"),
         (json!({"tool": "pencil", "key": "fill", "value": "yes"}), "tool `pencil`: `fill` must be true or false"),
-        (json!({"tool": "blobBrush", "key": "sizeMode", "value": "huge"}), "tool `blobBrush`: `sizeMode` must be one of `fixed`, `pressure`"),
+        (
+            json!({"tool": "blobBrush", "key": "sizeMode", "value": "huge"}),
+            "tool `blobBrush`: `sizeMode` must be one of `fixed`, `pressure`, `stylusWheel`",
+        ),
         (json!({"tool": "eraser", "key": "fidelity", "value": 4}), "tool `eraser`: unknown option `fidelity`"),
         (json!({"tool": "polygon", "key": "sides", "value": 2}), "tool `polygon`: `sides` must be a whole number from 3 to 1000"),
         (

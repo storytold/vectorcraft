@@ -639,6 +639,7 @@ pub(crate) mod testutil {
             shape_widgets: true,
             fill_active: true,
             gradient_stop: None,
+            tool_paints: false,
             appearance_item: None,
             constrain_angle: 0.0,
             keyboard_increment: 1.0,

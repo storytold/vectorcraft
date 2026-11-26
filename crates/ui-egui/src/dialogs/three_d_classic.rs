@@ -13,7 +13,7 @@ use craft::ui::canvas::Canvas;
 use craft::ui::canvas::{CanvasSpace, canvas_space};
 use craft::ui::canvas_controls::SelectionOutline;
 use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
-use craft::ui::display::Picture;
+use craft::ui::display::{Picture, Text};
 use craft::ui::layout_components::Row;
 use craft::ui::list::ThumbAspect;
 use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamKind};
@@ -315,7 +315,7 @@ fn navigator(count: usize, seen: Vec<bool>) -> Param {
                 }
             }
             if !seen.get(current - 1).copied().unwrap_or(true) {
-                ui.label(tl!("Hidden"));
+                Text::new(tl!("Hidden")).show(ui);
             }
         });
         let shown = next.map_or(current, |n| n.clamp(1, count));

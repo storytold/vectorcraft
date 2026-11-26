@@ -27,7 +27,7 @@ use craft::ui::runtime::commands::CommandStates;
 use egui::Ui;
 use serde_json::{Map, Value, json};
 use vectorcraft_color::cms;
-use vectorcraft_color::{Color, GradientKind, Paint};
+use vectorcraft_color::{Color, Paint};
 
 use super::{Live, active_paint, color_json, live_run, proxy_events};
 use crate::VectorcraftApp;
@@ -328,7 +328,9 @@ fn target_with(app: &VectorcraftApp, mixed: bool) -> Target {
     }
     let p = active_paint(app);
     match &p {
-        Paint::Gradient(g) if g.gradient.kind == GradientKind::Freeform => {
+        // A freeform gradient on art: its points. The one the active tool paints with has no points
+        // to edit (`paint.freeform.setPoint` refuses it), so its stops are edited below.
+        Paint::Gradient(g) if super::gradient::edits_points(app, g) => {
             // Like stops: without a selected point, the first.
             let f = super::gradient::shown_points(g);
             let index = app.session.selected_freeform_point().filter(|i| *i < f.points.len()).unwrap_or(0);
