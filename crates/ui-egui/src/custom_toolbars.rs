@@ -616,13 +616,8 @@ impl CommandLook {
 /// How each command button of the toolbar with id `id` looks now.
 fn command_looks(app: &mut VectorcraftApp, ui: &egui::Ui, id: u32) -> Vec<CommandLook> {
     let commands = app.ui.custom_toolbars.iter().find(|b| b.id == id).map(|b| b.commands.clone()).unwrap_or_default();
-    commands
-        .into_iter()
-        .map(|id| {
-            let text = crate::palette::is_command(&id).then(|| crate::palette::button_text(app, ui, &id)).flatten();
-            CommandLook { id, text }
-        })
-        .collect()
+    let texts = crate::palette::button_texts(app, ui, &commands);
+    commands.into_iter().zip(texts).map(|(id, text)| CommandLook { id, text }).collect()
 }
 
 /// A command button on the toolbar named `bar`: the command's label, cut short with … when it is

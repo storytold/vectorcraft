@@ -608,10 +608,22 @@ pub(crate) struct ButtonText {
 /// The label, name and command of the palette result `id` in the interface language, from the
 /// entries built once per catalog generation; none when the palette lists no result with that id
 /// now (an uninstalled plug-in's command).
+#[cfg(test)]
 pub(crate) fn button_text(app: &mut VectorcraftApp, ui: &egui::Ui, id: &str) -> Option<ButtonText> {
     let built = kept_build(app, ui);
     let e = built.by_id.get(id).and_then(|&i| built.entries.get(i))?;
     Some(button_text_of(e))
+}
+
+/// The [`ButtonText`] of each result id in `ids`, in order, from one kept build: none for an id
+/// that [`is_command`] does not allow or that the palette lists no longer (an uninstalled plug-in's
+/// command). A toolbar's footer draws all its command buttons from one call.
+pub(crate) fn button_texts(app: &mut VectorcraftApp, ui: &egui::Ui, ids: &[String]) -> Vec<Option<ButtonText>> {
+    if ids.is_empty() {
+        return Vec::new();
+    }
+    let built = kept_build(app, ui);
+    ids.iter().map(|id| if is_command(id) { built.by_id.get(id).and_then(|&i| built.entries.get(i)).map(button_text_of) } else { None }).collect()
 }
 
 /// [`ButtonText`] of the entry `e`.

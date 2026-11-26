@@ -3798,9 +3798,11 @@ A toolbar made with New Toolbar holds command buttons after its tools. `toolbar.
 named `toolbar`, or moves the button when the toolbar has it already: at place `at` among its command buttons, 0 for
 the first, or at the end without `at`. `command` is a Command Palette result's id: a command's id, or
 `plugin:<id>`, `effect:<id>` or `panel:<id>`. `toolbar.removeCommand {command, toolbar}` takes a button off. Both
-answer with the toolbar's command buttons, and `window.toolbar.list` reports `commands` for each toolbar. An unknown
-command, a tool, a command that needs params a click does not give (`toolbar.addTool`), an `at` past the end or a
-missing `toolbar` is an error and changes nothing. A click on a button runs what the command's menu item runs, so a
+answer with the toolbar's command buttons, and `window.toolbar.list` reports `commands` for each toolbar. A missing
+`toolbar` is an error for both and changes nothing. For `toolbar.addCommand`, an unknown command, a tool, a command
+that needs params a click does not give (`toolbar.addTool`) or an `at` past the end is also an error and changes
+nothing. `toolbar.removeCommand` with a command the toolbar has no button for, a tool's id included, is not an error:
+it answers with the toolbar's command buttons unchanged. A click on a button runs what the command's menu item runs, so a
 command whose item ends in … opens its dialog, and the button is dimmed while that item is. A command that is no
 longer installed, such as an uninstalled plug-in's, keeps its button, dimmed and labeled with its id, until it is
 installed again or removed. `toolbar.reset {toolbar}` takes the buttons off with the tools. The buttons are kept with

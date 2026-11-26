@@ -607,6 +607,25 @@ fn a_missing_command_stays_dimmed_until_it_is_removed() {
     assert_eq!(left, json!(["object.group"]));
 }
 
+/// The footer looks up all its command buttons in one call: each id gets what a lookup of it alone
+/// gives, in order, and none for a tool, a command that needs params or a command that is gone.
+#[test]
+fn command_buttons_are_looked_up_together() {
+    let mut app = app();
+    let ctx = ctx();
+    let ids: Vec<String> =
+        ["object.group", "tool:pen", "plugin:x", "toolbar.addTool", "object.path.cleanUp"].into_iter().map(str::to_string).collect();
+    let together = in_pass(&mut app, &ctx, |app, ui| crate::palette::button_texts(app, ui, &ids));
+    let alone: Vec<_> = ids
+        .iter()
+        .map(|id| crate::palette::is_command(id).then(|| in_pass(&mut app, &ctx, |app, ui| crate::palette::button_text(app, ui, id))).flatten())
+        .collect();
+    assert_eq!(together, alone);
+    assert!(together[0].is_some() && together[4].is_some(), "Group and Clean Up are found: {together:?}");
+    assert!(together[1..4].iter().all(Option::is_none), "a tool, a missing command and one that needs params: {together:?}");
+    assert!(in_pass(&mut app, &ctx, |app, ui| crate::palette::button_texts(app, ui, &[])).is_empty());
+}
+
 /// Add Tool…'s menu lists a toolbar's command buttons under Remove Command, where a click takes one
 /// off, and its Add Command submenu searches the Command Palette's results other than tools: a click
 /// on a match adds its button at the end of the toolbar.
