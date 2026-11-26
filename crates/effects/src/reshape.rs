@@ -2400,8 +2400,8 @@ fn separately_copied_painted_art(art: &Node) -> bool {
             || node.blend != Default::default()
             || node.isolate
             || node.extras().mask.is_some()
-            || node.appearance.effects.iter().any(|effect| effect.visible && crate::raster::follows(&effect.id))
-            || node.appearance.items.iter().any(follows_row_raster);
+            || node.appearance.effects.iter().any(|effect| effect.visible && crate::is_raster(&effect.id))
+            || node.appearance.items.iter().any(|item| item.effects().iter().any(|effect| effect.visible && crate::is_raster(&effect.id)));
     });
     found
 }
@@ -3472,7 +3472,7 @@ fn piece_stage(leaf: &mut Node, e: &Effect, at: &PieceStage, (appearance, index)
         return paint_piece(leaf, &item, (appearance, index), (plugin, &params), at.bounds, room, at.doc, Some(at.stage));
     }
     let copied = copies_carry(item.effects(), e, at);
-    let own_raster = e.id == "distort.transform" && leaf.appearance.effects.iter().any(|effect| effect.visible && crate::raster::follows(&effect.id));
+    let own_raster = e.id == "distort.transform" && leaf.appearance.effects.iter().any(|effect| effect.visible && crate::is_raster(&effect.id));
     let own_composite =
         e.id == "distort.transform" && (leaf.opacity != 1.0 || leaf.blend != Default::default() || leaf.isolate || leaf.extras().mask.is_some());
     if reaches_appearance(e) || copied || own_raster || own_composite {

@@ -317,6 +317,42 @@ fn returned_duotone_effects_validate_each_tone() {
 }
 
 #[test]
+fn returned_svg_filters_remain_separate_on_transform_copies() {
+    let path = shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0));
+    let xml = r##"<filter id="f" x="0" y="0" width="100%" height="100%"><feFlood flood-color="#ff0000"/></filter>"##;
+    let filter = Effect { id: crate::SVG_FILTER.into(), params: json!({"xml": xml}), visible: true };
+    assert_eq!(crate::check_returned_effect(&filter, false), Ok(()));
+    let id = "test.effects.returned.svgcopies";
+    let manifest = format!(r#"{{"id":"{id}","name":"SVG copies","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":true,"params":{{}}}}"#);
+    let output = json!({"objects": [{"path": path, "effects": [{"id": crate::SVG_FILTER, "params": filter.params}]}]});
+    let module = wat::parse_str(tpl::returning(&manifest, &output.to_string())).unwrap();
+    vectorcraft_plugins::registry::install_bytes(&module).unwrap();
+    for row in [false, true] {
+        let mut source = Node::path(NodeId(9), path.clone(), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+        let effects = vec![
+            Effect { id: format!("plugin.{id}"), params: json!({}), visible: true },
+            Effect { id: "distort.transform".into(), params: json!({"copies": 1, "moveH": 40.0}), visible: true },
+        ];
+        if row {
+            source.appearance.items.first_mut().unwrap().effects_mut().extend(effects);
+        } else {
+            source.appearance.effects = effects;
+        }
+        let art = reshape(None, &source, None).unwrap();
+        assert_eq!(vectorcraft_plugins::effect::last_error(id), None);
+        let mut filtered = vec![];
+        art.walk(&mut |node| {
+            if node.appearance.effects.iter().any(|effect| effect.id == crate::SVG_FILTER) {
+                filtered.push(node.geometric_bounds().unwrap());
+            }
+        });
+        assert_eq!(filtered.len(), 2, "row={row}: {filtered:?}");
+        assert!(filtered.iter().all(|bounds| bounds.width() == 20.0), "row={row}: {filtered:?}");
+    }
+    vectorcraft_plugins::registry::remove(id);
+}
+
+#[test]
 fn returned_effects_are_built_in_effects_with_their_own_parameters() {
     let e = |id: &str, params: serde_json::Value| Effect { id: id.into(), params, visible: true };
     let check = crate::check_returned_effect;
