@@ -361,10 +361,11 @@ impl KinsokuDialog {
         let rows: Vec<PresetRow<String>> = list.iter().map(|s| PresetRow::item(name_of(s).to_owned(), name_of(s), 0)).collect();
         let mut value = list.get(self.index(list.len())).map(|s| name_of(s).to_owned());
         let suggestion = new_name(&list, &self.opened);
-        // PLAN: PresetPicker has no placeholder: an empty list shows an empty name field, not "None".
         let source = PresetSource::listed(&rows);
         let refuses = |typed: &str| name_problem(&list, typed);
-        let picker = PresetPicker::new(tl!("Kinsoku Set"), Bind::bound(&mut value), &source, Bind::bound(&mut self.picker)).field(PickerField::Name);
+        let picker = PresetPicker::new(tl!("Kinsoku Set"), Bind::bound(&mut value), &source, Bind::bound(&mut self.picker))
+            .field(PickerField::Name)
+            .placeholder(tl!("None"));
         let out = NamedPresetRow::new(tl!("Kinsoku Set"), picker).suggest_name(suggestion).check_name(NameCheck::of_host(&refuses)).show(ui);
         self.apply(out.events);
 
