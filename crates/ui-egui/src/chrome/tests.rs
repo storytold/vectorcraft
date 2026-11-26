@@ -2846,6 +2846,34 @@ fn the_anchor_points_group_holds_convert_and_anchors() {
     assert!(has(&bar, "Anchor Point") && has(&bar, "Stroke:"), "{bar:?}");
 }
 
+/// With three corners of a path Direct-Selected, the Control bar's Corners link opens the Corners
+/// pop-up; a kind picked there sets those three corners and leaves the fourth, in one undo step.
+#[test]
+fn the_control_bar_corners_link_opens_the_pop_up_for_the_picked_corners() {
+    use vectorcraft_geom::shapes::CornerKind;
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.run("object.expandShape", json!({})).unwrap();
+    app.select_tool("directSelection");
+    app.run("select.anchors", json!({"id": id, "anchors": [[0, 0], [0, 1], [0, 2]], "mode": "set"})).unwrap();
+    let mut bar = crate::tests::panel_harness::Panel::new(app, crate::chrome::control_bar);
+    bar.room(egui::vec2(2400.0, 400.0)).frame();
+    assert!(bar.shows("Corners") && !bar.shows("Chamfer"), "the pop-up starts closed");
+    bar.click("Corners");
+    for name in ["Round", "Inverted Round", "Chamfer", "Radius", "Relative", "Absolute"] {
+        assert!(bar.shows(name), "the pop-up has {name}");
+    }
+    let depth = bar.app().session.doc().unwrap().history.undo.len();
+    bar.click("Chamfer");
+    assert_eq!(bar.app().session.doc().unwrap().history.undo.len(), depth + 1, "one undo step");
+    let n = bar.app().session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().clone();
+    let lc = vectorcraft_doc::LiveCorners::of(&n).unwrap();
+    assert_eq!((0..4).map(|k| lc.kind(k)).collect::<Vec<_>>(), [CornerKind::Chamfer, CornerKind::Chamfer, CornerKind::Chamfer, CornerKind::Round]);
+}
+
 /// With the Artboard tool in use, the Control bar shows the Align buttons after the artboard
 /// controls while it has room, and the Distribute buttons for two or more selected artboards with
 /// Align to Artboard and three or more with Align to Selection. A
