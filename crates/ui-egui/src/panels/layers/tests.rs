@@ -570,6 +570,46 @@ fn name_row(app: &mut VectorcraftApp, id: NodeId, name: &str) {
     app.session.execute("layer.setProps", &json!({"ids": [id.0], "name": name})).unwrap();
 }
 
+#[test]
+fn a_selection_square_drop_after_next_document_leaves_the_new_artwork_in_place() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use craft::ui::runtime::drag;
+    use egui::{Key, Modifiers};
+
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut setup = |x| {
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let source = app.session.active().unwrap().doc.layers[0].id;
+        name_row(&mut app, source, "Source");
+        let id = app.run("shape.rectangle", json!({"x": x, "y": 20, "width": 40, "height": 30})).unwrap()["id"].as_u64().unwrap();
+        let dst = app.run("layer.new", json!({"name": "Destination"})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        (app.session.active().unwrap().uid, NodeId(id), source, NodeId(dst))
+    };
+    let (first_doc, first, _, _) = setup(10);
+    let (second_doc, second, source, destination) = setup(60);
+    assert_eq!(first, second, "the documents have different rectangles with the same local ID");
+    assert!(app.session.set_active(0));
+
+    let mut panel = Panel::new(app, show);
+    let from = panel.rect_role("Select art of Source", Role::BUTTON).center();
+    let to = panel.rect("Destination").center();
+    panel.drag_hold_role("Select art of Source", Role::BUTTON, to - from);
+    assert!(drag::mark(panel.ctx()).is_some(), "the destination accepts artwork in its own document");
+    panel.key(Key::F6, Modifiers::COMMAND);
+    assert_eq!(panel.app().session.active().unwrap().uid, second_doc);
+    let carried = drag::active::<cells::ArtDrag>(panel.ctx()).expect("the shortcut leaves the drag held");
+    assert_eq!((carried.document, carried.ids.as_slice()), (first_doc, &[first][..]));
+    assert!(drag::mark(panel.ctx()).is_none(), "the destination rejects the foreign artwork");
+    panel.release();
+    let layer = |app: &VectorcraftApp| app.session.active().unwrap().doc.layer_of(second);
+    assert_eq!(layer(&panel.app()), Some(source), "the same-ID rectangle in this document has not moved");
+
+    panel.drag("Select art of Source", "Destination", Modifiers::NONE);
+    assert_eq!(layer(&panel.app()), Some(destination), "a same-document selection-square drag still moves the rectangle");
+}
+
 /// The target and the selected objects, sorted.
 fn targeted(app: &VectorcraftApp) -> (Option<NodeId>, Vec<NodeId>) {
     let st = app.session.active().unwrap();
