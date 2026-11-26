@@ -105,6 +105,16 @@ fn a_rest_parameter_is_listed_with_the_arguments() {
 }
 
 #[test]
+fn a_symbol_is_described_by_its_prototype() {
+    let mut r = Realm::with_options(Options { es2015: true, ..Options::default() }, Limits::default());
+    r.add_script_extensions().unwrap();
+    r.run(LIST).unwrap();
+    assert_eq!(text(&mut r, "Symbol('s').reflect.name"), "Symbol");
+    assert_eq!(text(&mut r, "Symbol('s').reflect.find('toString').type"), "method");
+    assert_eq!(text(&mut r, "var o = {s: Symbol('s')}; o.reflect.find('s').dataType"), "symbol");
+}
+
+#[test]
 fn a_reflection_info_has_every_field() {
     let mut r = realm();
     let fields = "var i = ({a: 1}).reflect.properties[0]; var k = []; for (var n in i) k.push(n); k.join(' ')";

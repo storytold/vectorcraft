@@ -401,8 +401,18 @@ impl Session {
             // The params' own values win, except a null: it reads as a key left out, so the
             // noted value is the one the command resolved. A noted `defaultsOnly` wins too: the
             // Live Paint Bucket kept the command to the defaults although the params gave `false`.
+            // An object noted for an object the params give (`effect.apply`'s `params`) is merged
+            // by the same rule, so the keys the command filled in stay.
             Value::Object(m) if !note.is_empty() => {
                 for (k, v) in m {
+                    if let (Some(Value::Object(resolved)), Value::Object(given)) = (note.get_mut(k), v) {
+                        for (gk, gv) in given {
+                            if !gv.is_null() || !resolved.contains_key(gk) {
+                                resolved.insert(gk.clone(), gv.clone());
+                            }
+                        }
+                        continue;
+                    }
                     if (!v.is_null() && k != "defaultsOnly") || !note.contains_key(k) {
                         note.insert(k.clone(), v.clone());
                     }

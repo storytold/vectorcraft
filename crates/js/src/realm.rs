@@ -564,6 +564,16 @@ impl Realm {
         }
     }
 
+    /// Adds the global properties `globals`: a name, the function that answers a read, and the
+    /// function that answers an assignment, each called with `undefined` as `this` (and the value
+    /// assigned). Assigning one without a setter keeps its value, and throws in strict mode code.
+    pub fn define_host_globals(&mut self, globals: Vec<(String, crate::HostFunction, Option<crate::HostFunction>)>) -> Result<(), RunError> {
+        match crate::host_classes::install_globals(&mut self.interp, globals) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
     /// Sets `Folder.current` back to the host's `current`, for the next run of a realm that has
     /// `File` and `Folder` ([`Realm::define_file_classes`]); a realm without them keeps its
     /// `Folder.current`. The files an earlier run opened are no longer open. The last run's uncaught

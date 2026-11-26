@@ -1,7 +1,7 @@
 use super::common::{
     PenRecord, SIZE_VARIATIONS, SIZES, Sample, center_strokes, dist_to_polyline, fill_targets, has_fill, has_painted_ancestor_stroke,
     has_painted_stroke, ids_json, path_mut, path_of, points_param, poly_bounds, pressure_region, ranged, replace_with_pieces, samples_param,
-    set_geometry, sibling_with, size_pressure, target_paths, usize_opt,
+    set_geometry, sibling_with, size_profile, target_paths, usize_opt,
 };
 use super::{
     Anchor, AnchorKind, Beside, BezPath, BoolOp, Cap, Document, EngineError, FillRule, Join, NodeId, NodeKind, Paint, ParamCurve, PathData, Point,
@@ -314,7 +314,7 @@ pub(super) fn erase_region(s: &mut Session, p: &Value) -> Result<Value> {
     if varies_beyond_size_pressure(&vary) {
         return erase_varied(s, &samples, [angle, roundness, size], vary);
     }
-    let pressure = if vary[2].0 == Variation::Pressure { size_pressure(p, &samples, C)? } else { None };
+    let pressure = if vary[2].0 == Variation::Pressure { size_profile(p, &samples, C)? } else { None };
     let pts: Vec<Point> = samples.into_iter().map(|s| s.pt).collect();
     let r = size / 2.0;
     // The tip's short axis (its narrowest with Pressure): an open path is sampled at least every half of it.
