@@ -17,7 +17,7 @@
 //! `intent`, `simulatePaper`, `simulateBlack` and `preview`.
 
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use craft::host::queue::{JobQueue, Priority, QueueOptions};
 use craft::host::{PickRequest, Picked, Wake};
@@ -32,7 +32,7 @@ use vectorcraft_render::proof;
 
 use super::host::{HeldOptions, open_held_with};
 use crate::VectorcraftApp;
-use crate::file_asks::{Owner, ask};
+use crate::file_asks::{Owner, ask, ask_while};
 use crate::menus::Node;
 
 /// The dialog kind of Proof Setup › Customize.
@@ -53,6 +53,8 @@ const LOAD_BUTTON: &str = "load";
 pub(crate) struct Open {
     /// The dialog on the window's stack.
     id: DialogId,
+    /// The identity of this opening, since Proof Setup reuses the dialog ID.
+    opening: Arc<()>,
     /// The proof view the dialog found, which Cancel puts back after a preview.
     before: proof::ProofView,
     /// The proof view the preview last put on the canvas; `None` while no preview of this dialog is shown.
@@ -89,7 +91,7 @@ pub fn open(app: &mut VectorcraftApp) {
     let dialog = HostedParamDialog::new(&ctx, KIND, fields, build);
     let options = HeldOptions { cancel: Some(Box::new(cancel)), ..Default::default() };
     match open_held_with(app, dialog, |app, result: &ParamResult| confirm(app, &result.fields), options) {
-        Some(id) => app.ui.proof_setup = Some(Open { id, before, shown: None, sent: None }),
+        Some(id) => app.ui.proof_setup = Some(Open { id, opening: Arc::new(()), before, shown: None, sent: None }),
         None => app.status(tl!("There is no window to show Proof Setup in.")),
     }
 }
@@ -330,12 +332,17 @@ fn save(app: &mut VectorcraftApp, fields: &DialogFields) {
 
 /// Load…: the picked file's settings fill the dialog `id` (Preview then shows them).
 fn load(app: &mut VectorcraftApp, id: DialogId) {
+    let Some(opening) = app.ui.proof_setup.as_ref().filter(|open| open.id == id).map(|open| Arc::clone(&open.opening)) else { return };
     let mut request = PickRequest::open("proof-setups").filter("Proof setups", &[EXT]);
     // Before a setup is saved there is no folder, and the picker starts in its own default folder.
     if let Some(dir) = app.session.proof_setup_dir().filter(|dir| dir.is_dir()) {
         request = request.directory(dir);
     }
-    ask(app, request, Owner::Free, move |app, picked| {
+    let is_live = move |app: &VectorcraftApp| {
+        app.ui.proof_setup.as_ref().is_some_and(|open| open.id == id && Arc::ptr_eq(&opening, &open.opening))
+            && app.dialogs().is_some_and(|dialogs| dialogs.with(|host| host.get_by_id::<HostedParamDialog>(id).is_some()))
+    };
+    ask_while(app, request, Owner::Free, is_live, move |app, picked| {
         let Some(path) = picked.first_path() else { return Ok(Value::Null) };
         let r = app.run("view.proofSetup.read", json!({ "path": path.to_string_lossy() }))?;
         let fields = [
@@ -345,7 +352,6 @@ fn load(app: &mut VectorcraftApp, id: DialogId) {
             ("simulatePaper", "simulatePaper"),
             ("simulateBlack", "simulateBlack"),
         ];
-        // The dialog may have closed while the picker was open: then there is nothing to fill.
         // PLAN: sh.K23's `set_json_fields` refuses a row that is disabled by the file's own device (an RGB
         // device disables paper and black ink), so the whole load would fail; the values are set unchecked.
         if let Some(dialogs) = app.dialogs() {
@@ -809,6 +815,39 @@ mod tests {
         let v = proof::view();
         assert!(v.proof_colors && v.setup.preserve_numbers);
         assert_eq!((v.setup.target, v.setup.intent), (ProofTarget::Rgb(cms::DISPLAY_P3.into()), Intent::Saturation));
+    }
+
+    #[test]
+    fn a_delayed_load_only_changes_the_proof_setup_that_requested_it() {
+        let _view = DefaultProofView::new();
+        let (mut app, ctx) = app();
+        let dir = vectorcraft_testkit::TempDir::new("proof-setup-delayed-load");
+        let file = dir.join(format!("Pending.{EXT}"));
+        app.run("view.proofSetup.save", json!({"path": file.to_string_lossy(), "target": WORKING, "intent": "saturation"})).unwrap();
+        let files = scripted(&mut app, ScriptedFiles::held());
+        app.run("ui.proofSetupDialog", json!({})).unwrap();
+        press(&mut app, &ctx, LOAD_BUTTON);
+        assert_eq!(files.requests().len(), 1, "Load requested a file");
+        cancel_dialog(&mut app, &ctx);
+        app.run("ui.proofSetupDialog", json!({})).unwrap();
+        set(&mut app, &ctx, "intent", json!("perceptual"));
+        set(&mut app, &ctx, "preview", json!(true));
+        let view = proof::view();
+
+        files.answer(Picked::Paths(vec![file.clone()]));
+        crate::file_asks::poll(&mut app);
+        pump(&mut app, &ctx);
+        assert_eq!(values(&app)["intent"], "perceptual", "the reopened dialog keeps its own rendering intent");
+        assert_eq!(proof::view(), view, "the reopened dialog keeps its own proof preview");
+
+        press(&mut app, &ctx, LOAD_BUTTON);
+        assert_eq!(files.requests().len(), 2, "Load in the current opening requested a file");
+        files.answer(Picked::Paths(vec![file]));
+        crate::file_asks::poll(&mut app);
+        pump(&mut app, &ctx);
+        assert_eq!(values(&app)["intent"], "saturation", "a reply to the current opening fills the dialog");
+        assert_eq!(proof::view().setup.intent, Intent::Saturation, "the current opening previews the loaded setup");
+        cancel_dialog(&mut app, &ctx);
     }
 
     /// Save… whose picker is canceled saves nothing and leaves no Proof Setups folder behind; the

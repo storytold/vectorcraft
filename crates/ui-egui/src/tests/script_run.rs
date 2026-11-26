@@ -298,6 +298,84 @@ fn quitting_asks_to_stop_and_stop_undoes_the_run() {
 }
 
 #[test]
+fn a_startup_script_stopped_by_quitting_stays_in_the_status_bar() {
+    let mut app = app();
+    let dir = folder("startup-quit");
+    std::fs::write(dir.join("a.jsx"), "for (;;) {}").unwrap();
+    app.session.attach_startup_scripts_dir(dir.clone());
+    app.session.prefs.show_external_script_warning = false;
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    script_runs::poll(&mut app);
+    assert!(app.session.startup_script_running());
+    script_run::ask_to_close(&mut app);
+    assert!(confirm(&mut app, CLOSE_KIND));
+    finish(&mut app);
+    script_runs::poll(&mut app);
+    let stopped = "The script was stopped and its changes were undone";
+    assert_eq!(app.ui.status, stopped);
+    assert_eq!(app.ui.status_notes.as_ref().and_then(|(_, notes)| notes.first()).map(String::as_str), Some(stopped));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn quitting_between_a_startup_script_and_the_chosen_script_stops_the_chosen_script() {
+    let mut app = app();
+    let dir = folder("startup-quit-between");
+    // A first startup script that cannot start leaves a note for the round.
+    std::fs::write(dir.join("0.jsx"), [0xff, 0xfe, 0x00]).unwrap();
+    std::fs::write(dir.join("a.jsx"), "vc.log(1);").unwrap();
+    app.session.attach_startup_scripts_dir(dir.clone());
+    app.session.prefs.show_external_script_warning = false;
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    for _ in 0..10_000 {
+        if app.session.script_name().is_none() {
+            break;
+        }
+        script_runs::poll(&mut app);
+    }
+    assert!(app.session.script_running() && app.session.script_name().is_none(), "the chosen script waits for the next frame");
+    script_run::ask_to_close(&mut app);
+    // Frames drawn while the question is open do not start the chosen script.
+    for _ in 0..3 {
+        script_runs::poll(&mut app);
+    }
+    assert!(app.session.script_running() && app.session.script_name().is_none(), "the chosen script waits for the answer");
+    // A frame takes the answer before it would start the next run, then pumps the dialogs.
+    let id = open_id(&app, CLOSE_KIND);
+    assert!(script_run::with_host(&app, |host, ctx| host.confirm_by_id(ctx, id)).unwrap());
+    script_runs::poll(&mut app);
+    assert!(!app.session.script_running());
+    pump(&mut app);
+    script_runs::poll(&mut app);
+    let message = "The scripts waiting to run were not run";
+    assert_eq!(app.ui.status, message);
+    let notes = app.ui.status_notes.clone().map(|(_, notes)| notes).unwrap_or_default();
+    assert_eq!(notes.len(), 2, "{notes:?}");
+    assert_eq!(notes[0], message);
+    assert!(notes[1].starts_with("0.jsx: "), "{notes:?}");
+    assert_eq!(objects(&app), 0, "the chosen script did not run");
+    // A later round stopped the same way, with no notes of its own, does not show the earlier round's.
+    std::fs::remove_file(dir.join("0.jsx")).unwrap();
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    for _ in 0..10_000 {
+        if app.session.script_name().is_none() {
+            break;
+        }
+        script_runs::poll(&mut app);
+    }
+    assert!(app.session.script_running() && app.session.script_name().is_none());
+    script_run::ask_to_close(&mut app);
+    assert!(confirm(&mut app, CLOSE_KIND));
+    script_runs::poll(&mut app);
+    assert_eq!(app.ui.status, message);
+    assert_eq!(app.ui.status_notes, None);
+    assert_eq!(objects(&app), 0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn a_stop_names_the_files_the_run_left_written() {
     let mut app = app();
     app.session.prefs.show_external_script_warning = false;
