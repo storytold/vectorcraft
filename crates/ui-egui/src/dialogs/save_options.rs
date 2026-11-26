@@ -422,7 +422,7 @@ fn boards_picker(ui: &mut egui::Ui, fields: &mut DialogFields, menus: &Menus) ->
             }
             // PLAN: assumed TileGrid::show_items(ui, &source, &mut |key, _| tile) as the framework's stories call it;
             // the checks arrive as `CollectionEvent::Item(key, TilePartEvent::Check { .. })` in `response.events`.
-            let grid = TileGrid::new("Artboards").checks(true).max_rows(BOARD_ROWS).show_items(ui, &Boards(n), &mut |i, _| {
+            let grid = TileGrid::new(tl!("Artboards")).checks(true).max_rows(BOARD_ROWS).show_items(ui, &Boards(n), &mut |i, _| {
                 let on = boards.get(*i).copied().unwrap_or(false);
                 let mut tile = Tile::new(menus.names.get(*i).cloned().unwrap_or_default()).check(if on { ToggleState::On } else { ToggleState::Off });
                 if let Some(file) = files.get(*i).cloned().flatten() {
