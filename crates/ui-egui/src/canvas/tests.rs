@@ -905,6 +905,88 @@ fn the_canvas_is_drawn_through_the_display_profile_while_the_preference_is_on() 
     assert_eq!(count(&mut app, red), Some(srgb));
 }
 
+/// With a display profile, in Overprint Preview translucent art around the artboards is blended
+/// with the white canvas before the conversion, as art over the paper is. With the preview off it
+/// converts alone, over the pasteboard.
+#[test]
+fn translucent_art_around_the_artboards_is_blended_with_overprint_previews_white_canvas() {
+    keeping_color_settings(translucent_art_around_the_artboards);
+}
+
+fn translucent_art_around_the_artboards() {
+    use crate::display_profile::{Found, Reading};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    app.canvas.worker_started = true; // every frame on this thread
+    // Left of the artboard.
+    let outside = app.run("shape.rectangle", json!({"x": -60, "y": 100, "width": 40, "height": 40})).unwrap()["id"].clone();
+    app.run("paint.setFill", json!({"ids": [outside], "color": "#00ff00"})).unwrap();
+    app.run("transparency.set", json!({"ids": [outside], "opacity": 50})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    let ctx = crate::testing::ui_context();
+    // The whole art raster one frame uploads: its width and its pixels.
+    let upload = |app: &mut VectorcraftApp| -> Option<(usize, Vec<egui::Color32>)> {
+        let (_, mut delta) = frame_output(app, &ctx);
+        let art = app.canvas.texture.as_ref()?.id();
+        let up = delta.set.iter().find(|e| e.0.eq(&art)).and_then(|e| e.1.last()).filter(|d| d.pos.is_none()).map(|d| {
+            let egui::ImageData::Color(img) = &d.image;
+            (img.width(), img.pixels.clone())
+        });
+        delta.clear();
+        up
+    };
+    upload(&mut app).expect("the first frame");
+    let v = app.view_mut().unwrap();
+    (v.zoom, v.center) = (1.0, Point::new(120.0, 150.0));
+    upload(&mut app).expect("the view at 100%");
+    let p3 = crate::display_profile::tests::p3();
+    let t = crate::display_profile::tests::transform();
+    app.display_profile.report(Reading { display: Some("DP-1".into()), found: Found::Profile { icc: p3, from: "test".into() } });
+    upload(&mut app).expect("drawn again, converted");
+    let white = convert8(&t, [255; 3]);
+    // What the canvas shows of pixel `c` over the converted paper `under`, as egui blends it.
+    let over = |c: egui::Color32, under: [u8; 3]| {
+        let k = 255 - u32::from(c.a());
+        [0, 1, 2].map(|i| u32::from(c.to_array()[i]) + (u32::from(under[i]) * k + 127) / 255)
+    };
+    let plain = |s: egui::Color32| {
+        let mut px = s.to_array();
+        t.apply_premultiplied_rgba8(&mut px);
+        egui::Color32::from_rgba_premultiplied(px[0], px[1], px[2], px[3])
+    };
+    // The pixel at the translucent rectangle's center, in sRGB (the display profile's preference
+    // off) and as the canvas shows it (on).
+    let pixel = |app: &mut VectorcraftApp| {
+        app.session.prefs.monitor_profile_display = false;
+        let (width, srgb) = upload(app).expect("drawn in sRGB");
+        let key = app.canvas.key.clone().unwrap();
+        let (_, _, view) =
+            frame_view(None, (key.w, key.h), &CanvasView::new(egui::Rect::NOTHING, Point::new(key.cx, key.cy), key.zoom).rotation(key.rot), key.ppp);
+        let at = view * Point::new(-40.0, 120.0);
+        let at = at.y as usize * width + at.x as usize;
+        app.session.prefs.monitor_profile_display = true;
+        let (_, shown) = upload(app).expect("drawn again, converted");
+        (srgb[at], shown[at], app.canvas.key.clone().unwrap())
+    };
+    let (s, c, key) = pixel(&mut app);
+    assert!((50..=205).contains(&s.a()), "the 50% fill: {s:?}");
+    assert!(key.backdrop.as_ref().is_some_and(|b| b.everywhere.is_none()), "Preview: the pasteboard is no paper");
+    assert_eq!(c, plain(s), "over the pasteboard the art converts alone");
+    app.run("view.overprintPreview", json!({"on": true})).unwrap();
+    let (s, c, key) = pixel(&mut app);
+    assert!((50..=205).contains(&s.a()), "the 50% fill: {s:?}");
+    assert_eq!(key.backdrop.as_ref().and_then(|b| b.everywhere), Some([255; 3]), "the white canvas is paper");
+    let k = 255 - u32::from(s.a());
+    let mix = [0, 1, 2].map(|j| (u32::from(s.to_array()[j]) + (255 * k + 127) / 255).min(255) as u8);
+    let (want, got) = (convert8(&t, mix), over(c, white));
+    assert!((0..3).all(|j| got[j].abs_diff(u32::from(want[j])) <= 1), "{got:?} shown, {want:?} wanted");
+    // The test tells the two apart: the fill converted alone shows another color over the white canvas.
+    let alone = over(plain(s), white);
+    assert!((0..3).any(|j| alone[j].abs_diff(got[j]) > 2), "{alone:?} and {got:?}");
+}
+
 /// With a display profile, translucent art and the anti-aliased edges of art over the paper are
 /// blended with the paper in sRGB before the conversion: drawn over the converted paper, each such
 /// pixel shows the converted blend. Opaque art, and art over the pasteboard, convert as before. The
