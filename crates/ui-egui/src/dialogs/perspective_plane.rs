@@ -19,6 +19,8 @@ use crate::canvas::general_lengths;
 /// The dialog kind of the plane options.
 pub const KIND: &str = "perspectivePlane";
 
+const OPENING_DOCUMENT: &str = "__openingDocument";
+
 /// What becomes of the objects on the plane: (`objects` value, label).
 const OBJECTS: [(&str, &str); 3] = [("none", "Do Not Move"), ("move", "Move All Objects"), ("copy", "Copy All Objects")];
 
@@ -47,8 +49,9 @@ fn build<'a>(title: &str, lengths: LengthUnits, _fields: &'a mut DialogFields) -
 
 /// Open the options of `plane` (`{plane}`; default the active plane), filled in with its location.
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
-    let doc = &app.session.active().ok_or("no document")?.doc;
-    let g = PerspectiveGrid::current(doc);
+    let state = app.session.active().ok_or("no document")?;
+    let document = state.uid;
+    let g = PerspectiveGrid::current(&state.doc);
     let plane = match p.get("plane").and_then(Value::as_str) {
         Some(s) => Plane::parse(s).ok_or("plane must be left, right or ground")?,
         None => g.plane,
@@ -60,12 +63,20 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let lengths = general_lengths(app);
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let Value::Object(map) = json!({"plane": plane.id(), "location": offset, "objects": "none"}) else { return Err("no window".into()) };
+    let mut fields = form::fields_of(&params(lengths), &map);
+    // The held answer carries the drawing and plane from the same opening.
+    fields.set(OPENING_DOCUMENT, document.to_string());
     let heading = title(plane);
-    let dialog = HostedParamDialog::new(&ctx, KIND, form::fields_of(&params(lengths), &map), move |f| build(&heading, lengths, f));
+    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |f| build(&heading, lengths, f));
     // A refusal keeps the dialog open with the reason under its rows.
-    let ok = move |app: &mut VectorcraftApp, r: &ParamResult| {
+    let ok = |app: &mut VectorcraftApp, r: &ParamResult| {
+        let document = r.fields.text(OPENING_DOCUMENT).and_then(|uid| uid.parse().ok());
+        if !app.session.active().is_some_and(|state| Some(state.uid) == document) {
+            return Err(tl!("Perspective Plane Options can only change the document where it was opened.").to_owned());
+        }
+        let plane = r.fields.text("plane").ok_or_else(|| tl!("The perspective plane is missing").to_owned())?;
         let objects = r.fields.text("objects").unwrap_or("none");
-        let p = json!({"plane": plane.id(), "offset": r.fields.number("location").unwrap_or(0.0), "objects": objects});
+        let p = json!({"plane": plane, "offset": r.fields.number("location").unwrap_or(0.0), "objects": objects});
         app.run("perspective.plane.move", p).map(|_| ())
     };
     open_held(app, dialog, ok).ok_or("no window")?;
@@ -100,12 +111,16 @@ mod tests {
         host(app, |h| h.set_json_field(&ctx, id, field, value)).unwrap();
     }
 
-    /// OK on the open dialog, then the frame's pump runs the held OK.
-    fn ok(app: &mut VectorcraftApp) {
+    fn pump_ok(app: &mut VectorcraftApp) {
         let (ctx, (id, _)) = (app.ui_ctx.clone().unwrap(), the_dialog(app));
         // A held OK reports `false` and files its answer for the app; the dialog closes at its next pass.
         assert!(host(app, |h| h.confirm_by_id(&ctx, id) || h.held_state(id) == Some(craft::ui::dialog::HeldOk::Waiting)), "OK is enabled");
         crate::dialogs::host::pump(app, &ctx);
+    }
+
+    fn ok(app: &mut VectorcraftApp) {
+        pump_ok(app);
+        let ctx = app.ui_ctx.clone().unwrap();
         crate::tests_synthetic::key_frame(app, &ctx, vec![]);
     }
 
@@ -129,7 +144,7 @@ mod tests {
         let other = app.session.doc().unwrap().doc.clone();
         let history = app.session.doc().unwrap().history.undo.len();
         let (id, _) = the_dialog(&app);
-        ok(&mut app);
+        pump_ok(&mut app);
 
         assert_eq!(app.session.doc().unwrap().doc, other, "foreign OK leaves the other drawing and its art unchanged");
         assert_eq!(app.session.doc().unwrap().history.undo.len(), history);
