@@ -258,6 +258,30 @@ fn a_long_rejection_reason_is_reported_cut_to_its_first_500_characters() {
 }
 
 #[test]
+fn combinator_rejection_relays_keep_the_input_location() {
+    for method in ["all", "race"] {
+        let mut r = realm();
+        r.run(&format!("var input =\n  Promise.reject('lost');\nPromise.{method}([input]);")).unwrap();
+        let reported = r.unhandled_rejections();
+        assert_eq!(reported.len(), 1, "{method}: {reported:?}");
+        assert_eq!(reported[0].line, 2, "{method}: {:?}", reported[0]);
+        assert!(reported[0].column > 0);
+        assert_eq!(reported[0].tag, r.script_tag());
+    }
+    let mut r = realm();
+    r.run("var reject; new Promise(function (_, no) { reject = no; });\nPromise.reject('handled').catch(function () {\n  reject('lost');\n});")
+        .unwrap();
+    assert_eq!(r.unhandled_rejections().len(), 1);
+    assert_eq!(r.unhandled_rejections()[0].line, 3);
+    assert!(r.unhandled_rejections()[0].column > 0);
+    let mut r = realm();
+    r.run("eval(\"Promise.reject('eval')\"); Function(\"Promise.reject('function')\")();").unwrap();
+    let reported = r.unhandled_rejections();
+    assert_eq!(reported.len(), 2);
+    assert!(reported.iter().all(|r| r.tag == UNKNOWN_SOURCE), "{reported:?}");
+}
+
+#[test]
 fn an_interpreter_error_given_a_long_message_is_reported_as_the_scripts_text_without_copying_it() {
     let mut r = realm();
     r.run(
