@@ -32,11 +32,10 @@ fn app(opacity: f64) -> VectorcraftApp {
 
 /// Run Copy Color As › `notation` in one frame: its answer and the texts it put on the clipboard.
 fn copy(app: &mut VectorcraftApp, notation: &str) -> (Result<Value, String>, Vec<String>) {
-    let ctx = egui::Context::default();
-    app.ui_ctx = Some(ctx.clone());
+    let ctx = crate::testing::ui_context();
     let mut answer = None;
-    let mut out = ctx.run_ui(Default::default(), |_| answer = run(app, &format!("ui.colorWheel.copy.{notation}"), &json!({})));
-    out.textures_delta.clear();
+    let out =
+        crate::testing::part_frame(app, &ctx, Default::default(), |app, _| answer = run(app, &format!("ui.colorWheel.copy.{notation}"), &json!({})));
     let copied =
         out.platform_output.commands.iter().filter_map(|c| if let egui::OutputCommand::CopyText(t) = c { Some(t.clone()) } else { None }).collect();
     (answer.expect("a Copy Color As item"), copied)
