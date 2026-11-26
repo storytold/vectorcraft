@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use craft::behavior::{Axis, DockSide, IconId};
 use craft::ui::buttons::IconButton;
-use craft::ui::contract::{Bind, BodyCx, PlainData, Props as _, Show as _, Tracked};
+use craft::ui::contract::{Bind, BodyCx, PlainData, Props as _, Show as _, SizeLimits, Tracked};
 use craft::ui::docking::{
     ColumnCards, DockCommands, DockConfig, DockEvent, DockGrid, DockPanels, DockScene, DockSizes, DockTo, DragUnit, FloatSpace, GroupAt, HidePanels,
     PanelKey, PanelSpec, PanelSpecs, actions as command_actions, move_actions, request_actions,
@@ -1202,9 +1202,10 @@ impl PanelSpecs<String> for Specs {
         if panel == CANVAS {
             return spec.canvas();
         }
+        // A toolbar's column is as wide as its grid's steps; every other panel is at least PANEL_MIN_WIDTH wide.
         let spec = match self.grids.iter().find(|(rail, _)| rail == panel) {
             Some((_, grid)) => spec.grid(*grid),
-            None => spec,
+            None => spec.limits(SizeLimits::at_least(egui::vec2(PANEL_MIN_WIDTH, 0.0))),
         };
         let icon = crate::state::rail_panel(panel).map(|p| p.2).or_else(|| crate::panels::library_panel::parse(panel).map(|_| "library"));
         match icon {
