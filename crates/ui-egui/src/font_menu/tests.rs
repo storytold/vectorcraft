@@ -37,6 +37,9 @@ fn the_document_filter_lists_the_families_the_documents_type_uses() {
     app.run("object.lock", serde_json::json!({})).unwrap();
     app.run("text.create", serde_json::json!({"x": 20, "y": 150, "text": "Missing", "font": "Missing Family 7059"})).unwrap();
     let db = vectorcraft_text::FontDb::global();
+    // Tests running alongside register composite fonts and load fonts in the process-wide database;
+    // their changes wait until this test ends, so both listings of every family are the same.
+    let _steady = vectorcraft_text::test_fonts::steady_fonts(db);
     let used_by_doc = super::document_families(db, &app.session.active().unwrap().doc);
     let mut names: Vec<_> = used_by_doc.iter().cloned().collect();
     names.sort();
