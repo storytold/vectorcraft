@@ -11,7 +11,7 @@ use super::artboards::names_an_artboard;
 use super::cursor::still_wait;
 use super::fill::{fill_view, polygon_area};
 use super::marks::{HiddenMarks, thread_overlays};
-use super::outline::{node_outline, walk_drawn};
+use super::outline::{ViewHides, node_outline, walk_drawn};
 use super::raster::{frame_view, pixel_region, placed_changes, placed_key_at, placed_since, poll_worker};
 use super::*;
 use crate::CacheKey;
@@ -31,9 +31,13 @@ fn shaper_selection_highlights_only_the_visible_result() {
     let g = st.doc.node(st.selection.objects[0]).unwrap();
     assert!(g.extras().shaper.is_some());
     let symbols = st.doc.symbol_boxes();
-    let bounds = node_outline(g, &symbols).bounding_box();
+    let bounds = node_outline(g, &symbols, ViewHides::default()).bounding_box();
     assert!((bounds.x0 - 100.0).abs() < 0.01 && (bounds.x1 - 200.0).abs() < 0.01, "{bounds:?}");
-    assert_eq!(node_outline(st.doc.node(line).unwrap(), &symbols).bounding_box().x0, 50.0, "an isolated original still shows its full outline");
+    assert_eq!(
+        node_outline(st.doc.node(line).unwrap(), &symbols, ViewHides::default()).bounding_box().x0,
+        50.0,
+        "an isolated original still shows its full outline"
+    );
 }
 
 #[test]
@@ -50,7 +54,7 @@ fn a_symbol_instance_is_outlined_around_its_art() {
             inst = Some(n);
         }
     });
-    assert_eq!(node_outline(inst.unwrap(), &st.doc.symbol_boxes()).bounding_box(), Rect::new(20.0, 30.0, 40.0, 50.0));
+    assert_eq!(node_outline(inst.unwrap(), &st.doc.symbol_boxes(), ViewHides::default()).bounding_box(), Rect::new(20.0, 30.0, 40.0, 50.0));
 }
 
 /// The points of `bp`'s move and line elements, in order.
@@ -111,7 +115,7 @@ fn a_turned_or_skewed_symbol_instance_is_outlined_along_its_frame() {
         ("skewed", Affine::skew(0.5, 0.0)),
     ] {
         let (n, frame) = placed(a);
-        let got = outline_points(&node_outline(&n, &symbols));
+        let got = outline_points(&node_outline(&n, &symbols, ViewHides::default()));
         assert!(same_points(&got, &frame), "{case}: {got:?} is not the frame {frame:?}");
     }
     // In perspective, the frame's corners go through the projection.
@@ -120,7 +124,7 @@ fn a_turned_or_skewed_symbol_instance_is_outlined_along_its_frame() {
     in_perspective(&mut n, h);
     let (_, flat) = placed(Affine::IDENTITY);
     let drawn = flat.map(|p| h.apply(p).unwrap());
-    let got = outline_points(&node_outline(&n, &symbols));
+    let got = outline_points(&node_outline(&n, &symbols, ViewHides::default()));
     assert!(same_points(&got, &drawn), "in perspective: {got:?} is not the projected frame {drawn:?}");
 }
 
@@ -137,7 +141,7 @@ fn type_in_perspective_is_outlined_by_its_projected_box() {
     let h = vectorcraft_geom::Homography([[1.0, 0.0, 0.0], [0.1, 1.0, 0.0], [0.002, 0.0, 1.0]]);
     in_perspective(&mut n, h);
     let drawn = [(b.x0, b.y0), (b.x1, b.y0), (b.x1, b.y1), (b.x0, b.y1)].map(|(x, y)| h.apply(Point::new(x, y)).unwrap());
-    let got = outline_points(&node_outline(&n, &st.doc.symbol_boxes()));
+    let got = outline_points(&node_outline(&n, &st.doc.symbol_boxes(), ViewHides::default()));
     assert!(same_points(&got, &drawn), "{got:?} is not the projected box {drawn:?}");
 }
 
@@ -4938,17 +4942,83 @@ fn live_trace_selection_highlight_excludes_the_retained_source_rectangle() {
     for view in TraceView::ALL {
         group.extras_mut().trace = Some(Box::new(json!({"view":view.id()})));
         let mut visited = vec![];
-        walk_drawn(&group, &mut |n| visited.push(n.id));
+        walk_drawn(&group, ViewHides::default(), &mut |n| visited.push(n.id));
         assert_eq!(visited.contains(&NodeId(2)), view.shows_source());
         let want = if view.shows_source() {
             vectorcraft_geom::Rect::new(0.0, 0.0, 200.0, 200.0)
         } else {
             vectorcraft_geom::Rect::new(20.0, 30.0, 80.0, 90.0)
         };
-        assert_eq!(node_outline(&group, &symbols).bounding_box(), want);
+        assert_eq!(node_outline(&group, &symbols, ViewHides::default()).bounding_box(), want);
     }
+    // Without a trace the image is an ordinary hidden member, which the canvas does not draw.
     group.extras_mut().trace = None;
-    assert_eq!(node_outline(&group, &symbols).bounding_box(), vectorcraft_geom::Rect::new(0.0, 0.0, 200.0, 200.0));
+    assert_eq!(node_outline(&group, &symbols, ViewHides::default()).bounding_box(), vectorcraft_geom::Rect::new(20.0, 30.0, 80.0, 90.0));
+    // A hidden path sent to the back of a trace is not its source image, in any view.
+    let mut path =
+        Node::path(NodeId(4), vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 200.0, 200.0)), Appearance::default());
+    path.visible = false;
+    let art = Node::path(NodeId(3), vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(20.0, 30.0, 80.0, 90.0)), Appearance::default());
+    let mut group = Node::group(NodeId(1), vec![Arc::new(path), Arc::new(art)]);
+    for view in TraceView::ALL {
+        group.extras_mut().trace = Some(Box::new(json!({"view":view.id()})));
+        assert_eq!(
+            node_outline(&group, &symbols, ViewHides::default()).bounding_box(),
+            vectorcraft_geom::Rect::new(20.0, 30.0, 80.0, 90.0),
+            "{view:?}"
+        );
+    }
+}
+
+/// A compound path draws every path it holds, hidden ones included, so its highlight outlines them
+/// all; a group, a blend, a repeat, an intertwine and a layer leave out a hidden member, and a
+/// layer the art of a hidden sublayer. A clip group shows its clipping path whether or not it is
+/// hidden, and a hidden object on its own keeps its outline.
+#[test]
+fn a_compound_path_outlines_its_hidden_paths_and_a_group_does_not() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Appearance, LayerColor, NodeId};
+    use vectorcraft_geom::{FillRule, PathEl};
+    let rect = |id: u64, r: vectorcraft_geom::Rect, visible: bool| {
+        let mut n = Node::path(NodeId(id), vectorcraft_geom::shapes::rectangle(r), Appearance::default());
+        n.visible = visible;
+        Arc::new(n)
+    };
+    let children = || {
+        vec![rect(2, vectorcraft_geom::Rect::new(0.0, 0.0, 100.0, 100.0), true), rect(3, vectorcraft_geom::Rect::new(30.0, 30.0, 70.0, 70.0), false)]
+    };
+    let doc = vectorcraft_doc::Document::new(300.0, 300.0);
+    let symbols = doc.symbol_boxes();
+    let contours = |n: &Node| node_outline(n, &symbols, ViewHides::default()).elements().iter().filter(|e| matches!(e, PathEl::MoveTo(_))).count();
+    assert_eq!(contours(&Node::new(NodeId(1), NodeKind::Compound { children: children(), rule: FillRule::EvenOdd })), 2, "a compound path");
+    assert_eq!(contours(&Node::new(NodeId(1), NodeKind::Blend { children: children(), spec: Default::default() })), 1, "a blend");
+    assert_eq!(contours(&Node::group(NodeId(1), children())), 1, "a group");
+    assert_eq!(contours(&Node::new(NodeId(1), NodeKind::Intertwine { children: children() })), 1, "an intertwine");
+    assert_eq!(contours(&Node::new(NodeId(1), NodeKind::Repeat(vectorcraft_doc::RepeatSpec::grid(children(), 0.0, 0.0)))), 1, "a repeat");
+    // A clip group shows its clipping path, hidden or not, and none of the art it clips.
+    let clip = |visible: bool| {
+        let mut members = children();
+        members.insert(0, rect(6, vectorcraft_geom::Rect::new(10.0, 10.0, 90.0, 90.0), visible));
+        let mut n = Node::group(NodeId(1), members);
+        if let NodeKind::Group { clip, .. } = &mut n.kind {
+            *clip = true;
+        }
+        contours(&n)
+    };
+    assert_eq!((clip(true), clip(false)), (1, 1), "a clip group");
+    // A hidden object that is itself selected keeps its outline.
+    assert_eq!(contours(&rect(7, vectorcraft_geom::Rect::new(0.0, 0.0, 10.0, 10.0), false)), 1, "a hidden object");
+    let mut layer = Node::layer(NodeId(1), "Layer", LayerColor::Preset(0));
+    let mut sublayer = Node::layer(NodeId(4), "Sublayer", LayerColor::Preset(1));
+    sublayer.visible = false;
+    if let Some(c) = sublayer.children_mut() {
+        c.push(rect(5, vectorcraft_geom::Rect::new(150.0, 150.0, 200.0, 200.0), true));
+    }
+    if let Some(c) = layer.children_mut() {
+        c.extend(children());
+        c.push(Arc::new(sublayer));
+    }
+    assert_eq!(contours(&layer), 1, "a layer");
 }
 
 /// #2572: Show Text Threads links a thread's frames from the out port of one to the in port of
