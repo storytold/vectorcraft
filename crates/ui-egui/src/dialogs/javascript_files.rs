@@ -13,7 +13,7 @@
 //! In a frame automation drives with read roots in force, the list names a file outside them by
 //! its file name alone, as `svgInteractivity.info` does; `selected` keeps the file as linked.
 
-use craft::behavior::{Revision, Selection, keyed};
+use craft::behavior::{Selection, keyed};
 use craft::host::PickRequest;
 use craft::ui::buttons::Button;
 use craft::ui::contract::{Bind, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, Sizing, clicked};
@@ -22,6 +22,7 @@ use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::list::{List, ListRow};
 use craft::ui::patterns::form_dialogs::PathRow;
+use craft::ui::primitives::Revision;
 use craft::ui::sections::{DialogRole, FooterButton};
 use egui::{Context, Ui};
 use serde_json::{Value, json};
