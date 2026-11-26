@@ -71,9 +71,9 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         let zoom = Field::new(tl!("Zoom"))
             .side(SideLabel::new().kind(LabelKind::Hidden))
             .show(ui, |ui, _| ZoomField::new(tl!("Zoom"), app.canvas_view(), document).scrub(true).show(ui));
-        // PLAN: assumed CanvasView::zoom and crate::state::zoom_display_percent(zoom, print) through the scheme (cv.S4).
+        // The field edits the canvas view, whose zoom is divided by UI Scaling; `view.setZoom` takes the view's zoom.
         if let Some(view) = zoom.inner.and_then(|z| z.view.committed().copied()) {
-            zoom_to = Some(crate::state::zoom_display_percent(view.zoom, print));
+            zoom_to = Some(crate::state::zoom_display_percent(crate::state::View::zoom_of_canvas(&view, app.ui_scaling()), print));
         }
         Field::new(tl!("Rotation")).side(SideLabel::new().kind(LabelKind::Hidden)).show(ui, |ui, _| {
             // Entries are keyed by index: an angle is not a hashable value.
