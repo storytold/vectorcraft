@@ -16363,8 +16363,9 @@ describe the document and these angle fields report no editable lines. The range
 `addon.packaging.fold` (`{ids?, base?: [x, y], amount?: 1, tolerance?: 0.1}`) folds a blank into its 3D shape. It reads
 the fold lines as `addon.packaging.check` does, and folds the blank that holds the base panel: the panel under `base`, or
 the largest panel of all the blanks. The base panel stays in place. Every other panel turns about the hinges that join it
-to the base, each by its angle times `amount` (0 is flat, 1 is folded): a Crease or a Perforation folds 90° away from
-the printed side, so the print ends up outside, and a Partial Cut folds 90° toward it. A hinge that closes a loop of
+to the base, each by its angle times `amount` (0 is flat, 1 is folded). A valid stored angle sets the fold angle.
+Without one, a Crease or a Perforation folds 90° away from the printed side, so the print ends up outside, and a
+Partial Cut folds 90° toward it. A hinge that closes a loop of
 panels is not turned about; `gap` says how far apart its two placements end up when every hinge is folded all the way,
 whatever `amount` is, and it `closes` when that is within `tolerance` or 0.5% of its length. A panel that no chain of
 hinges joins to the base stays flat where it is. `amount` must be from 0 to 1 and `base` a point in a panel; anything
