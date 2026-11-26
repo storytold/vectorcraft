@@ -212,7 +212,7 @@ pub fn check_returned_effect(e: &Effect, row: bool) -> Result<(), String> {
 /// `name`; a Free Distort's four `corners`; Curves' `points` as pairs from 0 to 255; a Transform's whole
 /// `copies` and `reference`; a Warp's `version`; a `color` the effect can draw; a
 /// shadow's or glow's blend `mode`; a Levels or Curves `channel`; a Radial
-/// Blur's center; and the type of each parameter without a default.
+/// Blur's center; Duotone's tone records; and the type of each parameter without a default.
 fn check_returned_values(id: &str, given: &Map<String, Value>) -> Result<(), String> {
     let number = |key: &str| given.get(key).is_some_and(|v| !v.is_number());
     let switch = |key: &str| given.get(key).is_some_and(|v| !v.is_boolean());
@@ -242,6 +242,25 @@ fn check_returned_values(id: &str, given: &Map<String, Value>) -> Result<(), Str
     }
     if id == "adjust.curves" && given.get("points").is_some_and(|p| !is_curve_points(p)) {
         return Err("`points` must be \"x,y x,y …\" or [[x, y], …] pairs of numbers from 0 to 255".into());
+    }
+    if id == crate::addons::duotone::DUOTONE
+        && let Some(tones) = given.get("tones").and_then(Value::as_array)
+    {
+        for (index, tone) in tones.iter().enumerate() {
+            let tone = tone.as_object().ok_or_else(|| format!("`tones[{index}]` must be an object"))?;
+            for (key, value) in tone {
+                let valid = match key.as_str() {
+                    "color" => is_color(value),
+                    "swatch" => value.is_string(),
+                    "active" => value.is_boolean(),
+                    "curve" => is_tone_curve(value),
+                    _ => false,
+                };
+                if !valid {
+                    return Err(format!("`tones[{index}].{key}` is not a valid Duotone tone parameter"));
+                }
+            }
+        }
     }
     if id == "distort.transform"
         && let Some(key) = ["copies", "reference"].into_iter().find(|k| given.get(*k).and_then(Value::as_f64).is_some_and(|x| x.fract() != 0.0))
@@ -286,7 +305,23 @@ fn check_returned_values(id: &str, given: &Map<String, Value>) -> Result<(), Str
 /// Can Curves read `v` as its `points`: `"x,y x,y …"` (pairs split by whitespace or `;`) or
 /// `[[x, y], …]`, each number from 0 to 255?
 fn is_curve_points(v: &Value) -> bool {
-    let level = |x: f64| (0.0..=255.0).contains(&x);
+    curve_points_within(v, 255.0)
+}
+
+fn is_tone_curve(v: &Value) -> bool {
+    if !curve_points_within(v, 100.0) {
+        return false;
+    }
+    let count = match v {
+        Value::String(s) => s.split(|c: char| c.is_whitespace() || c == ';').filter(|p| !p.is_empty()).count(),
+        Value::Array(a) => a.len(),
+        _ => return false,
+    };
+    count <= crate::addons::duotone::MAX_CURVE_POINTS
+}
+
+fn curve_points_within(v: &Value, maximum: f64) -> bool {
+    let level = |x: f64| (0.0..=maximum).contains(&x);
     match v {
         Value::String(s) => s
             .split(|c: char| c.is_whitespace() || c == ';')

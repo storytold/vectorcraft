@@ -3244,7 +3244,8 @@ fn transform_piece(
             // Each placing gives the paths, whether `used` counts each of the paths they hold at
             // `piece_cost` (all of a painted run's, and the first of any other result's), and what
             // the art then spends.
-            let mut split = |reserve: bool| -> Option<(Vec<Node>, Vec<bool>, Budget, Vec<usize>)> {
+            type PlacedPieces = (Vec<Node>, Vec<bool>, Budget, Vec<usize>);
+            let mut split = |reserve: bool| -> Option<PlacedPieces> {
                 let mut spent = base;
                 let mut out: Vec<Node> = vec![];
                 let mut counts: Vec<bool> = vec![];

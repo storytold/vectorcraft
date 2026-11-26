@@ -286,6 +286,37 @@ fn returned_effects_refuse_nested_fields_as_top_level_parameters() {
 }
 
 #[test]
+fn returned_duotone_effects_validate_each_tone() {
+    let check = |params| crate::check_returned_effect(&Effect { id: "addon.color.duotone".into(), params, visible: true }, false);
+    let mut accepted = vec![];
+    for tone in [
+        json!(false),
+        json!({"color": "not-a-color"}),
+        json!({"curve": "not-a-curve"}),
+        json!({"curve": [[0, 0], [100, 101]]}),
+        json!({"curve": [[0, 0, 0]]}),
+        json!({"active": "false"}),
+        json!({"swatch": false}),
+        json!({"unknown": 1}),
+        json!({"curve": vec![[0, 0]; 65]}),
+    ] {
+        let params = json!({"tones": [tone]});
+        if check(params.clone()).is_ok() {
+            accepted.push(params);
+        }
+    }
+    assert!(accepted.is_empty(), "accepted invalid tones: {accepted:?}");
+    for params in [
+        json!({"tones": []}),
+        json!({"tones": [{}]}),
+        json!({"tones": [{"color": "#123456", "curve": "0,0 100,100", "active": false, "swatch": "Ink"}]}),
+        json!({"tones": [{"color": [0.1, 0.2, 0.3], "curve": [[0, 0], [100, 100]]}]}),
+    ] {
+        assert_eq!(check(params.clone()), Ok(()), "{params}");
+    }
+}
+
+#[test]
 fn returned_effects_are_built_in_effects_with_their_own_parameters() {
     let e = |id: &str, params: serde_json::Value| Effect { id: id.into(), params, visible: true };
     let check = crate::check_returned_effect;
