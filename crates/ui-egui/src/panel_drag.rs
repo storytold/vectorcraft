@@ -41,12 +41,14 @@ pub enum PanelDrag {
 /// panel order.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SwatchRows {
+    /// The document whose rows the drag started on.
+    pub document: u64,
     pub grabbed: String,
     pub names: Vec<String>,
     /// The names are colour groups.
     pub groups: bool,
-    /// The document of a grabbed, unlinked process color, whose paint can travel on its own.
-    pub process_color_source: Option<u64>,
+    /// Whether the grabbed swatch's paint can travel as an unlinked process color.
+    pub unlinked_process_color: bool,
 }
 
 impl PanelDrag {
