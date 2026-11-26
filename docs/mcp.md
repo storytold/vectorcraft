@@ -3972,6 +3972,16 @@ Selection tool, a double-click with Cmd/Ctrl and Shift held releases the ruler g
 (`pointer_gesture` with a `doubleclick` event and `mods: {cmd: true, shift: true}`), unless guides are hidden or
 locked.
 
+Selected ruler guides rotate with the Rotate tool, `object.rotate` (Object › Transform › Rotate…, with `copy` for
+Copy) and `object.transformAgain`, also when no object is selected, in one undo step. `object.transform`,
+`object.scale`, `object.reflect` and `object.shear` transform them too when objects are selected with them. Each
+guide transforms as the line `view.guides.release` makes of it, and the default origin is the center of the selected
+objects' box and those lines together. A guide that ends up vertical or horizontal stays a ruler guide at its new
+place: a turn of 180° keeps it, and a turn of 90° makes a horizontal guide vertical. A guide at any other angle
+becomes a guide path along its line, on the guide's layer, and is selected as one. Locked or hidden guides do not
+transform, nor do guides when `ids` is given or `objects` is false. `object.rotate` with `absolute` and only ruler
+guides selected is an error, as guides have no bounding box angle.
+
 The Selection, Direct Selection and Group Selection tools pick a guide within the selection tolerance, over the art
 (an anchor on it comes first with Direct Selection), and drag the selected guides: `mods.alt` copies them,
 `mods.shift` snaps the dragged guide to the ruler's ticks, and otherwise it snaps to whole pixels, the grid or, with
