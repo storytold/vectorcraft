@@ -347,6 +347,26 @@ fn art_options_name_the_second_width_and_its_menu() {
     }
 }
 
+/// Art Brush Options draws each Direction segment as an arrow icon named by its tooltip, so the
+/// accessibility tree reads the direction instead of an arrow glyph.
+#[test]
+fn art_brush_direction_segments_are_named_by_their_tooltips() {
+    let mut app = app();
+    open(&mut app, "Arrow");
+    crate::dialogs::tests::settle(&mut app);
+    let out = crate::dialogs::tests::frame(&mut app, vec![]);
+    let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+    // Segmented gives each segment the radio button role.
+    let segments: Vec<&str> =
+        nodes.iter().filter(|(_, node)| node.role() == egui::accesskit::Role::RadioButton).filter_map(|(_, node)| node.label()).collect();
+    for tip in ["Left to Right", "Right to Left", "Top to Bottom", "Bottom to Top"] {
+        assert!(segments.contains(&tip), "no segment is named {tip} in {segments:?}");
+    }
+    for glyph in ["→", "←", "↓", "↑"] {
+        assert!(!segments.contains(&glyph), "a segment is named {glyph}");
+    }
+}
+
 #[test]
 fn a_taken_name_keeps_the_dialog_open() {
     let mut app = app();

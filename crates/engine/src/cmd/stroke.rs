@@ -241,7 +241,7 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
     let change = StrokeChange::parse(p, C)?;
     // The stroke the Live Paint Bucket paints with changes; the selection keeps its own, and its
     // active Appearance row is not a target.
-    let bucket_p = super::paint::bucket_color_params(s, p, C)?;
+    let bucket_p = super::paint::tool_color_params(s, p, C, true)?;
     let bucket = bucket_p.is_some();
     let p = bucket_p.as_ref().unwrap_or(p);
     let item = item_target(s, p, C)?.of_kind(s, false);
@@ -397,7 +397,7 @@ fn stroke_step(s: &mut Session, p: &Value, up: bool) -> Result<Value> {
     let unit = s.stroke_unit();
     // The weight the Live Paint Bucket paints with changes; the selection keeps its own, and its
     // active Appearance row is not a target.
-    let bucket_p = super::paint::bucket_color_params(s, p, c)?;
+    let bucket_p = super::paint::tool_color_params(s, p, c, true)?;
     let bucket = bucket_p.is_some();
     let p = bucket_p.as_ref().unwrap_or(p);
     let item = item_target(s, p, c)?.of_kind(s, false);
@@ -450,7 +450,7 @@ impl Session {
     /// selection's stroke.
     pub fn shown_stroke(&self) -> Option<StrokeLayer> {
         let st = self.active()?;
-        if self.bucket_paints() {
+        if self.tool_paints(true) {
             return Some(self.new_art_stroke());
         }
         if let Some(part) = st.selected_symbol_part() {
@@ -622,7 +622,7 @@ fn stroke_advanced(s: &mut Session, p: &Value) -> Result<Value> {
     if brush.is_some() && super::switch_or(p, "defaultsOnly", false, C)? {
         return Err(bad(C, "`defaultsOnly` cannot be combined with `brush`"));
     }
-    let bucket_p = if brush.is_none() { super::paint::bucket_color_params(s, p, C)? } else { None };
+    let bucket_p = if brush.is_none() { super::paint::tool_color_params(s, p, C, true)? } else { None };
     let bucket = bucket_p.is_some();
     let p = bucket_p.as_ref().unwrap_or(p);
     let item = item_target(s, p, C)?.of_kind(s, false);

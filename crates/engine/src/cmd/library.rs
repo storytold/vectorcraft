@@ -1247,7 +1247,7 @@ fn use_item(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Kind::FillColor | Kind::StrokeColor => {
             let stroke = to_stroke(p, kind)?;
-            let only = super::paint::defaults_only(s, p, C)?;
+            let only = super::paint::defaults_only(s, p, C, stroke)?;
             let color = data.get("color").cloned().ok_or_else(|| bad(C, "no colour"))?;
             let set = if stroke { "paint.setStroke" } else { "paint.setFill" };
             match str_param(&data, "spot").map(str::trim).filter(|n| !n.is_empty()) {
@@ -1260,7 +1260,7 @@ fn use_item(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Kind::FillGradient | Kind::StrokeGradient => {
             let stroke = to_stroke(p, kind)?;
-            let only = super::paint::defaults_only(s, p, C)?;
+            let only = super::paint::defaults_only(s, p, C, stroke)?;
             let damaged = || bad(C, "the library item is damaged");
             let mut g: GradientPaint = data.get("gradient").cloned().and_then(|v| serde_json::from_value(v).ok()).ok_or_else(damaged)?;
             if !clean_gradient(&mut g) {
@@ -1275,7 +1275,7 @@ fn use_item(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Kind::FillPattern | Kind::StrokePattern => {
             let stroke = to_stroke(p, kind)?;
-            let only = super::paint::defaults_only(s, p, C)?;
+            let only = super::paint::defaults_only(s, p, C, stroke)?;
             let pattern = use_pattern(s, &data, stroke, only)?;
             Ok(json!({ "kind": if stroke { "strokePattern" } else { "fillPattern" }, "pattern": pattern }))
         }

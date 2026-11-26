@@ -1421,10 +1421,7 @@ fn brush_freehand_refuses_unknown_keys() {
     let spec = crate::cmd::find_command("brush.freehand").unwrap();
     let mut keys = crate::cmd::params::accepted_keys(spec.params).expect("the description names every key");
     keys.sort_unstable();
-    assert_eq!(
-        keys,
-        ["brush", "closed", "connect", "extend", "fidelity", "fill", "fit", "keepSelected", "leaveSelection", "points", "redraw", "style"]
-    );
+    assert_eq!(keys, ["brush", "closed", "connect", "extend", "fidelity", "fill", "fit", "keepSelected", "points", "preview", "redraw", "style"]);
     let mut s = session();
     let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
     select(&mut s, &[a]);
