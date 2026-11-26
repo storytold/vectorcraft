@@ -7,14 +7,20 @@ pub(super) fn svg_drawn(face: &FontFace, font: &skrifa::FontRef<'_>, gid: u32) -
     face.svg_glyphs && !crate::colr::has_colour_glyph(font, gid)
 }
 
-/// The most path elements one glyph outline keeps. Real outlines have hundreds; a variable
-/// composite glyph can repeat a big base outline into millions. Elements past it are dropped.
+/// Most path elements one glyph outline may have: a glyph that needs more (a variable font's
+/// composite glyph repeating a large component many times) is drawn as nothing, not kept.
 pub(crate) const MAX_OUTLINE_ELEMENTS: usize = 1 << 20;
 
-/// A pen drawing outlines y down, as text space has them.
+/// A pen drawing outlines y down, as text space has them. It stops taking segments once the path
+/// holds [`MAX_OUTLINE_ELEMENTS`], and [`Self::finish`] then gives an empty path.
 pub(crate) struct FlipPen(pub(crate) BezPath);
 
 impl FlipPen {
+    /// The outline drawn, or an empty path when it passed [`MAX_OUTLINE_ELEMENTS`].
+    pub(crate) fn finish(self) -> BezPath {
+        if self.0.elements().len() >= MAX_OUTLINE_ELEMENTS { BezPath::new() } else { self.0 }
+    }
+
     fn full(&self) -> bool {
         self.0.elements().len() >= MAX_OUTLINE_ELEMENTS
     }
@@ -54,7 +60,7 @@ impl OutlinePen for FlipPen {
 }
 
 // Share font decoding while preserving the app's existing y-down geometry and resource budget.
-impl craft_font_catalog::GlyphPen for FlipPen {
+impl craft::font_catalog::GlyphPen for FlipPen {
     fn move_to(&mut self, x: f32, y: f32) {
         OutlinePen::move_to(self, x, y);
     }
@@ -77,12 +83,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_pen_keeps_at_most_the_element_cap() {
+    fn a_pen_past_the_cap_gives_nothing() {
         let mut pen = FlipPen(BezPath::new());
         pen.move_to(0.0, 0.0);
         for i in 0..MAX_OUTLINE_ELEMENTS + 10 {
-            pen.line_to(i as f32, 0.0);
+            pen.line_to(i as f32, 1.0);
         }
-        assert_eq!(pen.0.elements().len(), MAX_OUTLINE_ELEMENTS);
+        assert_eq!(pen.0.elements().len(), MAX_OUTLINE_ELEMENTS, "it stops taking segments");
+        assert!(pen.finish().elements().is_empty());
+        let mut small = FlipPen(BezPath::new());
+        small.move_to(0.0, 0.0);
+        small.line_to(1.0, 1.0);
+        assert_eq!(small.finish().elements().len(), 2);
     }
 }

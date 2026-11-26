@@ -11,7 +11,7 @@ use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Document, LayerColor, Node, NodeId, NodeKind};
 use vectorcraft_geom::{Rect, shapes};
 
-use super::{live_paint_parts, painted, picked_colors, proxy_paint, same_in_proxy};
+use super::{live_paint_covered, painted, picked_colors, proxy_paint, same_in_proxy};
 use crate::{DocState, Session};
 
 thread_local! {
@@ -39,12 +39,11 @@ fn walked(st: &DocState, item: Option<usize>, points: &[(NodeId, Vec<usize>)]) -
     }
     let ids: HashSet<NodeId> = st.selection.objects.iter().copied().collect();
     let (mut selected, mut fills, mut strokes) = (vec![], vec![], vec![]);
-    let mut covered = HashSet::new();
+    let covered = live_paint_covered(&st.doc, &st.selection.objects);
     st.doc.walk(|n| {
         if ids.contains(&n.id) {
             selected.push(n);
             if !covered.contains(&n.id) {
-                covered.extend(live_paint_parts(n));
                 painted(n, true, false, &mut fills);
                 painted(n, true, true, &mut strokes);
             }

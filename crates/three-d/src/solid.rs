@@ -25,14 +25,14 @@ mod side;
 pub(crate) use build::EXTRUDED;
 #[cfg(test)]
 pub(crate) use build::PLANES;
+pub(crate) use build::{Attrs, Face3, Keep, PlaneUv, extrude_faces, plane_faces, rings_bounds};
 #[cfg(test)]
 use build::{Camera, cuts, edge_distance, newell, section};
-pub(crate) use build::{Face3, Keep, extrude_faces, plane_faces};
 pub use build::{extrude, extrude_side_size, extrude_surfaces, plane};
 pub use face_map::{FaceMap, MeshFace, extrude_face_map, extrude_mesh_face, plane_face_map, plane_mesh_face};
-#[cfg(test)]
-use inflate::GRID_WORK;
 pub(crate) use inflate::inflate_faces;
+#[cfg(test)]
+use inflate::{FLAT_BUDGET, FLAT_WORK, GRID_WORK, MAX_FLAT_CORNERS, MAX_FLAT_WORK};
 #[cfg(test)]
 pub(crate) use inflate::{INFLATED, PUFFED, SOLVE_FIRST};
 pub use inflate::{inflate, inflate_each, inflate_together};
@@ -354,11 +354,15 @@ pub struct Inflate {
     pub taper: f64,
     /// A closed back (a solid) or none, so the inflated front is a shell open behind.
     pub cap: bool,
+    /// Graphics are mapped onto the front or the puffed back: the pieces of those faces are drawn
+    /// as triangles, each carrying where its corners lie in the art's plane ([`Facet::surface`]).
+    /// Off by default, which leaves the facets without one.
+    pub map_surface: bool,
 }
 
 impl Default for Inflate {
     fn default() -> Self {
-        Self { depth: 0.0, volume: 50.0, both_sides: false, twist: 0.0, taper: 1.0, cap: true }
+        Self { depth: 0.0, volume: 50.0, both_sides: false, twist: 0.0, taper: 1.0, cap: true, map_surface: false }
     }
 }
 
@@ -414,8 +418,15 @@ pub struct Facet {
     pub end: Option<PlanarFace>,
     /// For a piece of Extrude & Bevel's side built for graphics ([`Extrude::map_surface`]): where
     /// its corners lie on the side unrolled flat, for a graphic mapped onto it. x runs along the
-    /// outline and y from the front toward the back ([`crate::SurfaceCell`]).
+    /// outline and y from the front toward the back ([`crate::SurfaceCell`]). For a piece of
+    /// Inflate's front or puffed back built for graphics ([`Inflate::map_surface`]): where its
+    /// corners lie in the art's plane, as offsets from the center of the bounds the solid was built
+    /// with. The back's corners are where they were in the art before the twist and taper turned
+    /// and scaled it.
     pub surface: Option<crate::SurfaceCell>,
+    /// The face of Inflate's solid that a facet with a [`Facet::surface`] is a piece of: its front
+    /// or its puffed back. `None` for every other facet, Extrude & Bevel's side included.
+    pub membrane: Option<PlanarFace>,
     /// The face's plane in view space and the projection it was drawn with, for its depth at a
     /// point of the drawing ([`Facet::depth_at`]). `None` for a face whose corners lie more than
     /// 0.001 pt off one plane (a piece of a twisted wall) or reach the eye.
@@ -514,6 +525,7 @@ impl Facet {
             away: false,
             // Revolve's graphics are drawn from its faces, before they become facets.
             surface: None,
+            membrane: None,
             plane: face.plane,
             #[cfg(test)]
             view: vec![],
@@ -563,3 +575,6 @@ mod tests_inflate_shading;
 
 #[cfg(test)]
 mod tests_limits;
+
+#[cfg(test)]
+mod tests_curves;

@@ -178,6 +178,7 @@ pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "paint", name: "Paint", make: paint },
     BuiltinBrushLibrary { id: "pattern-borders", name: "Pattern Borders", make: pattern_borders },
     BuiltinBrushLibrary { id: "decorative", name: "Decorative", make: decorative },
+    BuiltinBrushLibrary { id: "ornamental", name: "Ornamental", make: ornamental },
     BuiltinBrushLibrary { id: "scatter-shapes", name: "Scatter Shapes", make: scatter_shapes },
     BuiltinBrushLibrary { id: "stipple", name: "Stipple", make: stipple },
     BuiltinBrushLibrary { id: "game-trails", name: "Game Trails", make: game_trails },
@@ -729,6 +730,53 @@ fn decorative() -> BrushLibrary {
             border("Blossom Chain", flowers, None, PatternFit::Stretch),
             border("Pennant Garland", pennants, None, PatternFit::Stretch),
             border("Lantern String", lanterns, None, PatternFit::Stretch),
+        ],
+    )
+}
+
+/// Ornamental: one-pass flourishes and arrow accents that stretch with the path rather than
+/// repeating a pattern tile. Every shape is original filled vector art.
+fn ornamental() -> BrushLibrary {
+    let scrollwork = group(vec![
+        black(band(100.0, 1.2, 64, |x| 2.6 * (x / 100.0 * std::f64::consts::TAU).sin())),
+        ring(Point::new(7.0, 0.0), 4.0, 2.0),
+        ring(Point::new(93.0, 0.0), 4.0, 2.0),
+        black(polygon(&[(28.0, 1.0), (34.0, -5.0), (40.0, -3.0), (33.0, 2.0)])),
+        black(polygon(&[(60.0, 3.0), (66.0, 5.0), (72.0, -1.0), (67.0, -2.0)])),
+    ]);
+    let arrow = group(vec![
+        // The shaft runs into the head's notch at x = 85 so the two overlap.
+        black(shapes::rectangle(Rect::new(4.0, -0.7, 86.0, 0.7))),
+        black(polygon(&[(80.0, -6.5), (100.0, 0.0), (80.0, 6.5), (85.0, 0.0)])),
+        ring(Point::new(7.0, 0.0), 4.0, 1.7),
+        black(polygon(&[(25.0, -0.4), (31.0, -4.4), (37.0, -2.0), (31.0, 0.8)])),
+        black(polygon(&[(43.0, 0.4), (49.0, 4.4), (55.0, 2.0), (49.0, -0.8)])),
+    ]);
+    let mut petals = vec![black(band(100.0, 1.0, 48, |x| 1.8 * (x / 100.0 * std::f64::consts::PI).sin()))];
+    for x in [19.0, 43.0, 67.0, 87.0] {
+        let y = 1.8 * (x / 100.0 * std::f64::consts::PI).sin();
+        petals.push(black(shapes::ellipse(Rect::new(x - 4.5, y - 7.5, x + 4.5, y - 0.3))));
+        petals.push(black(shapes::ellipse(Rect::new(x - 3.5, y + 0.3, x + 3.5, y + 5.5))));
+    }
+    let petal_sweep = group(petals);
+    let twin_curl = group(vec![
+        black(band(100.0, 0.9, 64, |x| -3.8 + 1.6 * (x / 100.0 * 2.0 * std::f64::consts::TAU).sin())),
+        black(band(100.0, 0.9, 64, |x| 3.8 - 1.6 * (x / 100.0 * 2.0 * std::f64::consts::TAU).sin())),
+        ring(Point::new(8.0, -3.8), 3.0, 1.5),
+        ring(Point::new(92.0, 3.8), 3.0, 1.5),
+    ]);
+    let ornament = |name: &str, art: Node| Brush {
+        name: name.into(),
+        kind: BrushKind::Art(ArtBrush { art, width: 300.0, colorization: Colorization::Tints, ..Default::default() }),
+    };
+    built(
+        "Ornamental",
+        Document::new(100.0, 100.0),
+        vec![
+            ornament("Scrollwork", scrollwork),
+            ornament("Filigree Arrow", arrow),
+            ornament("Petal Sweep", petal_sweep),
+            ornament("Twin Curl", twin_curl),
         ],
     )
 }

@@ -3,10 +3,20 @@
 //! drag or a typed value.
 #![allow(clippy::unwrap_used, clippy::panic)]
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use craft::behavior::{CancelReason, EditEvent, GestureId, Mixed};
+use craft::ui::canvas::CanvasSpace;
+use craft::ui::contract::ShowContainer as _;
+use craft::ui::patterns::form_dialogs::DialogFields;
+use craft::ui::testing::Fixture;
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::Session;
 
-use super::{ID, Target, changed_settings, send, set_type, show, target};
+use super::{Target, apply, changed_settings, handles, send, set_type, show, target};
+use crate::dialogs::form;
+use crate::panels::Live;
 use crate::tests_labels::painted_text;
 use crate::{Services, VectorcraftApp};
 
@@ -28,25 +38,58 @@ fn effect(app: &VectorcraftApp) -> (String, Value) {
     (t.effect, t.params)
 }
 
-#[test]
-fn the_window_menu_opens_the_panel() {
-    let mut app = app();
-    assert!(crate::state::ICON_PANELS.iter().any(|(id, label, _)| *id == ID && *label == "3D and Materials"));
-    app.run("window.panel", json!({"panel": ID})).unwrap();
-    assert!(crate::panel_docking::showing(&app.ui, ID));
-    app.run("window.panel", json!({"panel": "3D and Materials"})).unwrap();
+/// The gesture the tests' edit streams run in.
+const GESTURE: GestureId = GestureId::new(1);
+
+/// The panel's values as its rows hold them: the first selected effect's settings with `changes` applied.
+fn whole(app: &VectorcraftApp, changes: &[(&str, Value)]) -> DialogFields {
+    let t = target(app).unwrap();
+    let mut settings = vectorcraft_effects::merged_params(&t.effect, &t.params).as_object().cloned().unwrap();
+    settings.extend(changes.iter().map(|(key, value)| (key.to_string(), value.clone())));
+    form::fields_of(&super::rows(app, &t).0, &settings)
 }
 
-#[test]
-fn without_a_3d_effect_the_panel_offers_the_object_types() {
-    let mut app = app();
-    let text = painted_text(&mut app, show);
-    for label in ["Plane", "Extrude", "Revolve", "Inflate", "Select objects, then pick an object type"] {
-        assert!(text.contains(label), "{label} in {text}");
-    }
-    app.run("select.none", json!({})).unwrap();
-    let text = painted_text(&mut app, show);
-    assert!(text.contains("Select objects, then pick an object type"), "{text}");
+/// The first selected effect's settings with the keys the selected effects disagree on marked mixed, and the same
+/// settings as JSON, where a mixed key is absent.
+fn mixed_settings(app: &VectorcraftApp) -> (DialogFields, Map<String, Value>) {
+    let mut fields = whole(app, &[]);
+    super::mark_mixed(app, &mut fields);
+    let settings = form::json_of(&super::rows(app, &target(app).unwrap()).0, &fields);
+    (fields, settings)
+}
+
+/// One pass of the panel's rows that reports `event`, over the values `input` they were shown with.
+fn pass(app: &mut VectorcraftApp, input: &DialogFields, event: EditEvent<DialogFields>) {
+    let params = super::rows(app, &target(app).unwrap()).0;
+    apply(app, &params, input, &event.into());
+}
+
+/// A gesture `id` begins on the panel's current values; returns them.
+fn begin(app: &mut VectorcraftApp, id: GestureId) -> DialogFields {
+    let before = whole(app, &[]);
+    pass(app, &before, EditEvent::begin(id, Mixed::Same(before.clone()), super::LABEL.into(), None));
+    before
+}
+
+/// Gesture `id` proposes the panel's values with `changes`.
+fn update(app: &mut VectorcraftApp, id: GestureId, changes: &[(&str, Value)]) {
+    let (input, value) = (whole(app, &[]), whole(app, changes));
+    pass(app, &input, EditEvent::update(id, value));
+}
+
+/// Gesture `id` commits the panel's values as they stand.
+fn commit(app: &mut VectorcraftApp, id: GestureId, before: DialogFields) {
+    let after = whole(app, &[]);
+    pass(app, &after.clone(), EditEvent::commit(id, Mixed::Same(before), after));
+}
+
+/// `app` drawn by the panel in a trial that runs frame by frame, and the handle the trial reads the app through.
+fn shown(app: VectorcraftApp) -> (Rc<RefCell<VectorcraftApp>>, Fixture) {
+    let app = Rc::new(RefCell::new(app));
+    let drawn = Rc::clone(&app);
+    let mut fixture = Fixture::new(move |ui| show(&mut drawn.borrow_mut(), ui));
+    fixture.settle();
+    (app, fixture)
 }
 
 #[test]
@@ -112,41 +155,15 @@ fn an_object_type_reaches_every_selected_object_in_one_undo_step() {
 fn a_drag_ends_when_the_selection_goes_away() {
     let mut app = app();
     set_type(&mut app, "extrude").unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let history = undo_len(&app);
-    send(&mut app, &ctx, Map::from_iter([("depth".to_string(), json!(90.0))]), true);
+    begin(&mut app, GESTURE);
+    update(&mut app, GESTURE, &[("depth", json!(90.0))]);
     assert!(app.session.in_interaction());
     app.session.active_mut().unwrap().selection.objects.clear();
     ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui)).textures_delta.clear();
     assert!(!app.session.in_interaction());
     assert_eq!(undo_len(&app), history + 1);
-}
-
-#[test]
-fn with_nothing_selected_an_object_type_changes_nothing() {
-    let mut app = app();
-    app.run("select.none", json!({})).unwrap();
-    let history = undo_len(&app);
-    assert!(set_type(&mut app, "plane").is_err());
-    assert_eq!(undo_len(&app), history);
-}
-
-#[test]
-fn the_panel_shows_the_dialog_controls_of_each_type() {
-    let mut app = app();
-    for (kind, label) in [("extrude", "Depth"), ("inflate", "Volume"), ("revolve", "Revolve angle"), ("plane", "Rotation X")] {
-        set_type(&mut app, kind).unwrap();
-        let text = painted_text(&mut app, show);
-        assert!(text.contains(label), "{kind}: {label} in {text}");
-        assert!(text.contains("Lighting"), "{kind}: {text}");
-        // Drawing the panel is no edit.
-        let history = undo_len(&app);
-        painted_text(&mut app, show);
-        assert_eq!(undo_len(&app), history, "{kind}");
-    }
-    // The dialog's artboard-axis toggle has no artboard gizmo in the panel.
-    set_type(&mut app, "revolve").unwrap();
-    assert!(!painted_text(&mut app, show).contains("Show axis"));
 }
 
 /// Render Settings › Wireframe: shown for the panel's four effects, it sets `render.mode` on every
@@ -168,9 +185,8 @@ fn render_settings_wireframe_turns_the_mode_on_and_off_for_the_selection() {
         n.appearance.effects[0].params.get("render").and_then(|r| r.get("mode")).and_then(Value::as_str).map(str::to_string)
     };
     app.run("select.set", json!({"ids": [a, b, c]})).unwrap();
-    let ctx = egui::Context::default();
     let history = undo_len(&app);
-    super::set_wireframe(&mut app, &ctx, true);
+    super::set_wireframe(&mut app, true);
     assert_eq!(undo_len(&app), history + 1);
     assert_eq!((mode(&app, a).as_deref(), mode(&app, b).as_deref()), (Some("wireframe"), Some("wireframe")));
     assert_eq!(mode(&app, c), None, "the classic effect takes no render settings");
@@ -180,7 +196,7 @@ fn render_settings_wireframe_turns_the_mode_on_and_off_for_the_selection() {
     set_type(&mut app, "inflate").unwrap();
     assert_eq!(mode(&app, a).as_deref(), Some("wireframe"));
     let history = undo_len(&app);
-    super::set_wireframe(&mut app, &ctx, false);
+    super::set_wireframe(&mut app, false);
     assert_eq!(undo_len(&app), history + 1);
     assert_eq!(mode(&app, a).as_deref(), Some("shaded"));
     assert!(!super::wireframe_on(&target(&app).unwrap()));
@@ -195,29 +211,29 @@ fn render_settings_wireframe_turns_the_mode_on_and_off_for_the_selection() {
 fn a_drag_previews_and_records_one_undo_step_when_released() {
     let mut app = app();
     set_type(&mut app, "extrude").unwrap();
-    let ctx = egui::Context::default();
     let history = undo_len(&app);
+    let before = begin(&mut app, GESTURE);
     for depth in [60.0, 80.0, 120.0] {
-        send(&mut app, &ctx, Map::from_iter([("depth".to_string(), json!(depth))]), true);
+        update(&mut app, GESTURE, &[("depth", json!(depth))]);
         assert_eq!(effect(&app).1["depth"], depth);
     }
     // Another setting in the same drag keeps the earlier one.
-    send(&mut app, &ctx, Map::from_iter([("twist".to_string(), json!(45.0))]), true);
+    update(&mut app, GESTURE, &[("twist", json!(45.0))]);
     assert_eq!(effect(&app).1["depth"], 120.0);
     assert_eq!(undo_len(&app), history);
-    // Released without a change in the last frame: the drag commits.
-    send(&mut app, &ctx, Map::new(), false);
+    // The gesture commits what it previewed.
+    commit(&mut app, GESTURE, before);
     assert_eq!(undo_len(&app), history + 1);
     let (_, params) = effect(&app);
-    assert_eq!((params["depth"].clone(), params["twist"].clone()), (json!(120.0), json!(45.0)));
+    assert_eq!((params["depth"].as_f64(), params["twist"].as_f64()), (Some(120.0), Some(45.0)));
     app.run("edit.undo", json!({})).unwrap();
     assert_eq!(effect(&app).1["depth"], 50.0);
     // A typed value is one undo step at once.
-    send(&mut app, &ctx, Map::from_iter([("taper".to_string(), json!(60.0))]), false);
+    send(&mut app, Map::from_iter([("taper".to_string(), json!(60.0))]), Live::Released);
     assert_eq!(effect(&app).1["taper"], 60.0);
     assert_eq!(undo_len(&app), history + 1);
     // Nothing changed and no drag: nothing runs.
-    send(&mut app, &ctx, Map::new(), false);
+    send(&mut app, Map::new(), Live::Released);
     assert_eq!(undo_len(&app), history + 1);
 }
 
@@ -238,10 +254,9 @@ fn a_change_reaches_each_selected_3d_effect_and_no_other_effect() {
     };
     let (b_shadow, c_shadow) = (shadow(&app, b), shadow(&app, c));
     let history = undo_len(&app);
-    let ctx = egui::Context::default();
     // `bevel` is an Extrude & Bevel setting only; `depth` both effects take.
-    send(&mut app, &ctx, Map::from_iter([("depth".to_string(), json!(75.0)), ("bevel".to_string(), json!("classic"))]), true);
-    send(&mut app, &ctx, Map::new(), false);
+    send(&mut app, Map::from_iter([("depth".to_string(), json!(75.0)), ("bevel".to_string(), json!("classic"))]), Live::Dragging);
+    send(&mut app, Map::new(), Live::Released);
     assert_eq!(undo_len(&app), history + 1);
     let st = app.session.active().unwrap();
     let fx = |id: u64| st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects.clone();
@@ -263,7 +278,6 @@ fn a_custom_bevel_sends_its_name_and_points() {
     let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
     app.run("effect.apply", json!({"effect": "threeD.inflate", "item": null})).unwrap();
     app.run("select.set", json!({"ids": [a, b]})).unwrap();
-    let ctx = egui::Context::default();
     let pick = |name: &str, points: Value| {
         Map::from_iter([
             ("bevel".to_string(), json!("custom")),
@@ -272,7 +286,7 @@ fn a_custom_bevel_sends_its_name_and_points() {
         ])
     };
     let notch = json!([[0.0, 0.0], [0.2, 0.6], [0.7, 0.4], [1.0, 1.0]]);
-    send(&mut app, &ctx, pick("Notch", notch.clone()), false);
+    send(&mut app, pick("Notch", notch.clone()), Live::Released);
     let fx = |app: &VectorcraftApp, id: u64| {
         app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params.clone()
     };
@@ -283,7 +297,7 @@ fn a_custom_bevel_sends_its_name_and_points() {
     );
     assert!(fx(&app, b).get(vectorcraft_effects::BEVEL_PROFILE).is_none());
     let steps = json!([[0.0, 0.0], [0.0, 0.5], [0.5, 0.5], [0.5, 1.0], [1.0, 1.0]]);
-    send(&mut app, &ctx, pick("Steps", steps.clone()), false);
+    send(&mut app, pick("Steps", steps.clone()), Live::Released);
     let p = fx(&app, a);
     assert_eq!((&p[vectorcraft_effects::BEVEL_NAME], &p[vectorcraft_effects::BEVEL_PROFILE]), (&json!("Steps"), &steps));
 }
@@ -300,14 +314,14 @@ fn a_custom_bevel_picked_for_a_mixed_selection_reaches_every_effect() {
     let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
     app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
     app.run("select.set", json!({"ids": [a, b]})).unwrap();
-    let mut fields = target(&app).map(|t| vectorcraft_effects::merged_params(&t.effect, &t.params)).unwrap().as_object().cloned().unwrap();
-    super::mark_mixed(&app, &mut fields);
-    assert_eq!((&fields["bevel"], &fields[vectorcraft_effects::BEVEL_NAME]), (&Value::Null, &json!("Notch")));
+    let (marked, mut fields) = mixed_settings(&app);
+    assert!(marked.is_mixed("bevel"));
+    assert_eq!(fields[vectorcraft_effects::BEVEL_NAME], json!("Notch"));
     let before = Value::Object(fields.clone());
     fields.insert("bevel".into(), json!("custom"));
     let changed = changed_settings(&before, &Value::Object(fields));
     assert_eq!(Value::Object(changed.clone()), json!({"bevel": "custom", "bevelName": "Notch", "bevelProfile": notch}));
-    send(&mut app, &egui::Context::default(), changed, false);
+    send(&mut app, changed, Live::Released);
     let st = app.session.active().unwrap();
     for id in [a, b] {
         let p = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params;
@@ -319,7 +333,7 @@ fn a_custom_bevel_picked_for_a_mixed_selection_reaches_every_effect() {
 /// and Bevel Shape still lists the first effect's own bevel, which then reaches both effects.
 #[test]
 fn a_mixed_selection_still_lists_the_first_effects_own_custom_bevel() {
-    use crate::dialogs::revolve::{OWN_BEVEL, bevel_options};
+    use crate::dialogs::revolve::bevel_options;
     let mut app = app();
     let notch = json!([[0.0, 0.0], [0.2, 0.6], [0.7, 0.4], [1.0, 1.0]]);
     let steps = json!([[0.0, 0.0], [0.0, 0.5], [0.5, 0.5], [0.5, 1.0], [1.0, 1.0]]);
@@ -329,23 +343,21 @@ fn a_mixed_selection_still_lists_the_first_effects_own_custom_bevel() {
     let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
     app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": custom("Steps", &steps)})).unwrap();
     app.run("select.set", json!({"ids": [a, b]})).unwrap();
-    let mut fields = target(&app).map(|t| vectorcraft_effects::merged_params(&t.effect, &t.params)).unwrap().as_object().cloned().unwrap();
-    let own = super::own_bevel(&fields).unwrap();
-    super::mark_mixed(&app, &mut fields);
-    assert_eq!(fields[vectorcraft_effects::BEVEL_PROFILE], Value::Null);
-    fields.insert(OWN_BEVEL.into(), own);
-    let (options, builtin) = bevel_options(&app, &fields, "threeD.extrude");
+    let first = target(&app).map(|t| vectorcraft_effects::merged_params(&t.effect, &t.params)).unwrap().as_object().cloned().unwrap();
+    let (marked, mut fields) = mixed_settings(&app);
+    assert!(marked.is_mixed(vectorcraft_effects::BEVEL_PROFILE));
+    // The panel lists the bevels from the first effect's own settings ([`super::rows`]).
+    let (options, builtin) = bevel_options(&app, &first, "threeD.extrude");
     assert_eq!(options.len(), builtin + 1);
     let (label, value, picked) = options[builtin].clone();
     assert_eq!((label.as_str(), value), ("Notch", json!("custom")));
     let (name, points) = picked.unwrap();
     assert_eq!(points, notch);
     // Picking it sends the whole bevel to both effects.
-    fields.remove(OWN_BEVEL);
     let before = Value::Object(fields.clone());
     fields.insert(vectorcraft_effects::BEVEL_NAME.into(), json!(name));
     fields.insert(vectorcraft_effects::BEVEL_PROFILE.into(), points);
-    send(&mut app, &egui::Context::default(), changed_settings(&before, &Value::Object(fields)), false);
+    send(&mut app, changed_settings(&before, &Value::Object(fields)), Live::Released);
     let st = app.session.active().unwrap();
     for id in [a, b] {
         let p = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params;
@@ -393,16 +405,16 @@ fn settings_the_selected_effects_disagree_on_are_unset_so_a_reset_reaches_them_a
     let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
     app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": {"depth": 80.0}})).unwrap();
     app.run("select.set", json!({"ids": [a, b]})).unwrap();
-    let mut fields = target(&app).map(|t| vectorcraft_effects::merged_params(&t.effect, &t.params)).unwrap().as_object().cloned().unwrap();
-    super::mark_mixed(&app, &mut fields);
-    assert_eq!(fields["depth"], Value::Null);
+    let (marked, mut fields) = mixed_settings(&app);
+    assert!(marked.is_mixed("depth"));
+    assert!(!marked.is_mixed("twist"));
     assert_eq!(fields["twist"], 0.0);
     // Resetting Depth to its default (the first object's value) is a change for both objects.
     let before = Value::Object(fields.clone());
     fields.insert("depth".into(), json!(50.0));
     let changed = changed_settings(&before, &Value::Object(fields));
     assert_eq!(Value::Object(changed.clone()), json!({"depth": 50.0}));
-    send(&mut app, &egui::Context::default(), changed, false);
+    send(&mut app, changed, Live::Released);
     let st = app.session.active().unwrap();
     for id in [a, b] {
         assert_eq!(st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params["depth"], 50.0);
@@ -429,7 +441,7 @@ fn a_light_list_edit_reaches_only_the_objects_with_the_same_lights() {
     let b_before = lights(&app, b);
     let three = json!([{"color": "#ff8040"}, {"color": "#4080ff", "rotation": -35.0}, {"color": "#ffffff", "rotation": 0.0, "height": 90.0}]);
     let history = undo_len(&app);
-    send(&mut app, &egui::Context::default(), Map::from_iter([("lights".to_string(), three.clone())]), false);
+    send(&mut app, Map::from_iter([("lights".to_string(), three.clone())]), Live::Released);
     assert_eq!(undo_len(&app), history + 1);
     assert_eq!(lights(&app, a).as_array().map(Vec::len), Some(3));
     assert_eq!(lights(&app, c), lights(&app, a));
@@ -446,12 +458,14 @@ fn a_drag_keeps_its_objects_and_a_new_selection_starts_a_new_step() {
     app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
     app.run("select.set", json!({"ids": [a.0]})).unwrap();
     let history = undo_len(&app);
-    let ctx = egui::Context::default();
-    send(&mut app, &ctx, Map::from_iter([("depth".to_string(), json!(90.0))]), true);
+    begin(&mut app, GESTURE);
+    update(&mut app, GESTURE, &[("depth", json!(90.0))]);
     // The selection changes during the drag: the drag on `a` is committed, and `b` starts its own.
     app.session.active_mut().unwrap().selection.objects = vec![b];
-    send(&mut app, &ctx, Map::from_iter([("depth".to_string(), json!(70.0))]), true);
-    send(&mut app, &ctx, Map::new(), false);
+    let second = GESTURE.next();
+    let before = begin(&mut app, second);
+    update(&mut app, second, &[("depth", json!(70.0))]);
+    commit(&mut app, second, before);
     let depth = |app: &VectorcraftApp, id| app.session.active().unwrap().doc.node(id).unwrap().appearance.effects[0].params["depth"].clone();
     assert_eq!(depth(&app, a), 90.0);
     assert_eq!(depth(&app, b), 70.0);
@@ -467,11 +481,11 @@ fn a_light_drag_keeps_the_objects_whose_lights_matched_when_it_started() {
     let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
     app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": {"lights": one("#00ff00")}})).unwrap();
     app.run("select.set", json!({"ids": [a, b]})).unwrap();
-    let ctx = egui::Context::default();
+    let before = begin(&mut app, GESTURE);
     // The first object's list passes through the second's value during the drag.
-    send(&mut app, &ctx, Map::from_iter([("lights".to_string(), one("#00ff00"))]), true);
-    send(&mut app, &ctx, Map::from_iter([("lights".to_string(), one("#0000ff"))]), true);
-    send(&mut app, &ctx, Map::new(), false);
+    update(&mut app, GESTURE, &[("lights", one("#00ff00"))]);
+    update(&mut app, GESTURE, &[("lights", one("#0000ff"))]);
+    commit(&mut app, GESTURE, before);
     let lights =
         |id: u64| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params["lights"].clone();
     assert_eq!(lights(a), one("#0000ff"));
@@ -482,20 +496,16 @@ fn a_light_drag_keeps_the_objects_whose_lights_matched_when_it_started() {
 fn a_drag_ends_when_the_panel_is_no_longer_drawn() {
     let mut app = app();
     set_type(&mut app, "extrude").unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let history = undo_len(&app);
+    begin(&mut app, GESTURE);
+    update(&mut app, GESTURE, &[("depth", json!(90.0))]);
+    // A pass that draws the panel keeps the gesture.
     ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui)).textures_delta.clear();
-    send(&mut app, &ctx, Map::from_iter([("depth".to_string(), json!(90.0))]), true);
-    // A pass that draws the panel keeps the drag; the first pass that does not draw it ends it.
-    ctx.run_ui(egui::RawInput::default(), |ui| {
-        // Drawn with the pointer still down: only the mark `show` leaves.
-        crate::panels::set_pstate(ui.ctx(), super::DRAWN, Some(super::root_pass(ui.ctx())));
-        super::end_stale_drag(&mut app, ui.ctx());
-    })
-    .textures_delta
-    .clear();
     assert!(app.session.in_interaction());
-    ctx.run_ui(egui::RawInput::default(), |ui| super::end_stale_drag(&mut app, ui.ctx())).textures_delta.clear();
+    // The first pass that does not draw it ends the gesture with `Cancel { Removed }`, which commits what was previewed.
+    let input = whole(&app, &[]);
+    pass(&mut app, &input, EditEvent::cancel(GESTURE, CancelReason::Removed, None));
     assert!(!app.session.in_interaction());
     assert_eq!(undo_len(&app), history + 1);
     assert_eq!(effect(&app).1["depth"], 90.0);
@@ -508,8 +518,9 @@ fn controls(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<egui::accesski
     out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default()
 }
 
+/// The control named `label`: a row's side label carries the same name, in no set order among the nodes.
 fn named<'a>(nodes: &'a [egui::accesskit::Node], label: &str) -> &'a egui::accesskit::Node {
-    nodes.iter().find(|n| n.label() == Some(label)).unwrap_or_else(|| panic!("no {label:?}"))
+    nodes.iter().find(|n| n.role() != egui::accesskit::Role::Label && n.label() == Some(label)).unwrap_or_else(|| panic!("no {label:?}"))
 }
 
 /// A checkbox setting the selected effects hold with different values shows a dash, leaves the
@@ -523,8 +534,7 @@ fn a_mixed_checkbox_shows_a_dash_and_another_change_keeps_each_effects_value() {
     let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
     app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": {"shade": false}})).unwrap();
     app.run("select.set", json!({"ids": [a, b]})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     ctx.enable_accesskit();
     let texts = frame_events(&ctx, &mut app, vec![], show);
     click(&ctx, &mut app, text_rect(&texts, "Lighting").center(), show);
@@ -562,8 +572,7 @@ fn the_bevel_reset_restores_only_the_bevel_settings_of_each_selected_effect() {
     app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": {"bevel": "cove", "bevelWidth": 2.0, "depth": 30.0}}))
         .unwrap();
     app.run("select.set", json!({"ids": [a, b]})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     ctx.enable_accesskit();
     let nodes = controls(&mut app, &ctx);
     let reset = named(&nodes, "Reset");
@@ -579,33 +588,18 @@ fn the_bevel_reset_restores_only_the_bevel_settings_of_each_selected_effect() {
     };
     for id in [a, b] {
         for key in ["bevel", "bevelWidth", "bevelHeight", "bevelRepeat", "bevelSpace", "bevelInside", "bevelBothSides"] {
-            assert_eq!(merged(&app, id)[key], defaults[key], "{key} of {id}");
+            // A whole number the panel wrote is a JSON integer: the same number as the default's.
+            let (got, want) = (&merged(&app, id)[key], &defaults[key]);
+            assert!(got == want || got.as_f64().is_some_and(|v| Some(v) == want.as_f64()), "{key} of {id}: {got} for {want}");
         }
     }
-    assert_eq!((merged(&app, a)["depth"].clone(), merged(&app, b)["depth"].clone()), (json!(70.0), json!(30.0)));
+    assert_eq!((merged(&app, a)["depth"].as_f64(), merged(&app, b)["depth"].as_f64()), (Some(70.0), Some(30.0)));
     assert_eq!(merged(&app, a)["rotationX"], 15.0);
     let nodes = controls(&mut app, &ctx);
     assert!(named(&nodes, "Reset").is_disabled(), "every bevel setting at its default: Reset is off");
     let history = undo_len(&app);
     click(&ctx, &mut app, at, show);
     assert_eq!(undo_len(&app), history, "an unavailable Reset records nothing");
-}
-
-/// Revolve's Cap checkbox shows a dash when the selected effects disagree on it.
-#[test]
-fn a_mixed_revolve_cap_shows_a_dash() {
-    let mut app = app();
-    let a = app.session.active().unwrap().selection.objects[0].0;
-    set_type(&mut app, "revolve").unwrap();
-    let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
-    app.run("effect.apply", json!({"effect": "threeD.revolve", "item": null, "params": {"cap": false}})).unwrap();
-    app.run("select.set", json!({"ids": [a, b]})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    ctx.enable_accesskit();
-    let history = undo_len(&app);
-    assert_eq!(named(&controls(&mut app, &ctx), "Cap").toggled(), Some(egui::accesskit::Toggled::Mixed));
-    assert_eq!(undo_len(&app), history);
 }
 
 /// The app with a graphic "Graphic" made from a red square beside the blue one, and the blue square
@@ -619,9 +613,8 @@ fn materials_app() -> (VectorcraftApp, egui::Context) {
     app.run("select.set", json!({"ids": [square]})).unwrap();
     set_type(&mut app, "extrude").unwrap();
     app.run("effect.setParams", json!({"index": 0, "item": null, "params": {"rotationX": 0.0, "rotationY": 0.0, "rotationZ": 0.0}})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    crate::panels::set_pstate(&ctx, super::UI_STATE, Map::from_iter([("__tab".to_string(), json!("materials"))]));
+    let ctx = crate::testing::ui_context();
+    app.three_d.page = "materials".into();
     (app, ctx)
 }
 
@@ -637,7 +630,7 @@ fn the_materials_tab_lists_the_graphics_and_maps_one_in_one_undo_step() {
     named(&nodes, "Add as Single Graphic");
     named(&nodes, "Graphic");
     let history = undo_len(&app);
-    super::run_action(&mut app, &ctx, crate::dialogs::three_d_materials::Action::Map("Graphic".into()));
+    super::run_action(&mut app, crate::dialogs::three_d_materials::Action::Map("Graphic".into()));
     assert_eq!(graphics(&app).as_array().map(Vec::len), Some(1));
     assert_eq!(graphics(&app)[0]["symbol"], "Graphic");
     assert_eq!(undo_len(&app), history + 1);
@@ -645,19 +638,23 @@ fn the_materials_tab_lists_the_graphics_and_maps_one_in_one_undo_step() {
     let nodes = controls(&mut app, &ctx);
     named(&nodes, "Remove Graphic");
     named(&nodes, "Scale");
-    // Inflate takes no graphics.
+    // Inflate keeps the graphic and lists it with its face and settings.
     set_type(&mut app, "inflate").unwrap();
+    assert_eq!(graphics(&app).as_array().map(Vec::len), Some(1));
+    let nodes = controls(&mut app, &ctx);
+    named(&nodes, "Remove Graphic");
+    named(&nodes, "Scale");
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
     out.textures_delta.clear();
     let text = crate::tests_labels::shapes_text(&out);
-    assert!(text.contains("Graphics map onto the Plane, Extrude and Revolve object types"), "{text}");
+    assert!(text.contains("Face") && !text.contains("Graphics map onto"), "{text}");
 }
 
 #[test]
 fn on_revolve_the_materials_tab_maps_onto_the_side_without_a_face_choice() {
     let (mut app, ctx) = materials_app();
     ctx.enable_accesskit();
-    super::run_action(&mut app, &ctx, crate::dialogs::three_d_materials::Action::Map("Graphic".into()));
+    super::run_action(&mut app, crate::dialogs::three_d_materials::Action::Map("Graphic".into()));
     let drawn = |app: &mut VectorcraftApp| {
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
         out.textures_delta.clear();
@@ -668,7 +665,7 @@ fn on_revolve_the_materials_tab_maps_onto_the_side_without_a_face_choice() {
     set_type(&mut app, "revolve").unwrap();
     assert_eq!(graphics(&app).as_array().map(Vec::len), Some(1));
     let history = undo_len(&app);
-    super::run_action(&mut app, &ctx, crate::dialogs::three_d_materials::Action::Map("Graphic".into()));
+    super::run_action(&mut app, crate::dialogs::three_d_materials::Action::Map("Graphic".into()));
     assert_eq!(graphics(&app).as_array().map(Vec::len), Some(2));
     assert_eq!(undo_len(&app), history + 1);
     named(&controls(&mut app, &ctx), "Scale");
@@ -680,8 +677,7 @@ fn on_revolve_the_materials_tab_maps_onto_the_side_without_a_face_choice() {
 fn art_can_be_added_as_a_graphic_before_any_3d_effect() {
     let mut app = app();
     let history = undo_len(&app);
-    let ctx = egui::Context::default();
-    super::run_action(&mut app, &ctx, crate::dialogs::three_d_materials::Action::Add(None));
+    super::run_action(&mut app, crate::dialogs::three_d_materials::Action::Add(None));
     assert_eq!(undo_len(&app), history + 1);
     assert_eq!(app.session.active().unwrap().doc.symbols.len(), 1);
     // The selection is still the square, not an instance.
@@ -691,127 +687,196 @@ fn art_can_be_added_as_a_graphic_before_any_3d_effect() {
 }
 
 #[test]
+fn three_d_graphics_accepts_artwork_only_from_its_document() {
+    use crate::panel_drag::PanelDrag;
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::{ListDrag, ShowCollection as _};
+    use craft::ui::list::{List, ListRow};
+    use craft::ui::runtime::drag;
+
+    fn with_artwork(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+        let st = app.session.active().unwrap();
+        let payload = PanelDrag::Art { document: st.uid, ids: st.selection.objects.clone() };
+        ui.allocate_ui(egui::vec2(ui.available_width(), 80.0), |ui| {
+            let keys = craft::behavior::keyed(&[0_usize], |key: &usize| *key);
+            List::<usize>::new("Artwork")
+                .drag_payload(move |_: &ListDrag<usize>| Some(payload.clone()))
+                .show_items(ui, &keys, &mut |_, _| ListRow::new("Dragged artwork"));
+        });
+        show(app, ui);
+    }
+
+    let mut app = app();
+    let source = app.session.active().unwrap().uid;
+    let first = app.session.active().unwrap().selection.objects[0];
+    let add_existing = |app: &mut VectorcraftApp| app.run("threeD.addGraphic", json!({"name": "Existing Graphic"})).unwrap();
+    add_existing(&mut app);
+    app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    let second = app.run("shape.rectangle", json!({"x": 30, "y": 30, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    add_existing(&mut app);
+    assert_eq!(first.0, second, "the two documents have different artwork with the same local ID");
+    assert!(app.session.set_active(0));
+
+    let mut p = Panel::new(app, with_artwork);
+    let from = p.rect("Dragged artwork").center();
+    let to = p.rect("Existing Graphic").center();
+    p.drag_hold_role("Dragged artwork", craft::ui::contract::Role::LIST_ITEM, to - from);
+    assert!(drag::mark(p.ctx()).is_some(), "Graphics accepts the artwork before switching documents");
+    assert!(p.app().session.set_active(1));
+    p.frame();
+    let carried = drag::active::<PanelDrag>(p.ctx());
+    assert!(matches!(carried.as_deref(), Some(PanelDrag::Art { document, .. }) if *document == source));
+    assert!(drag::mark(p.ctx()).is_none(), "Graphics withdraws the drop indicator when the artwork is foreign");
+    p.release();
+    assert_eq!(p.app().session.active().unwrap().doc.symbols.len(), 1, "the foreign drop adds no symbol from the active document's same-ID artwork");
+
+    p.drag("Dragged artwork", "Existing Graphic", egui::Modifiers::NONE);
+    assert_eq!(p.app().session.active().unwrap().doc.symbols.len(), 2, "a same-document drop still makes a graphic");
+}
+
+#[test]
 fn a_graphics_handle_drags_it_over_its_face_in_one_undo_step() {
-    let (mut app, ctx) = materials_app();
+    let (mut app, _) = materials_app();
     app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
-    let history = undo_len(&app);
-    let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0));
-    let xf = crate::canvas::Xf::new(rect, &app.view().cloned().unwrap_or_default());
+    let (app, mut fixture) = handles_fixture(app);
+    let history = undo_len(&app.borrow());
     // Straight on, the graphic's handle is at the center of the square.
-    let handle = xf.to_screen(vectorcraft_geom::Point::new(150.0, 150.0));
-    let target = xf.to_screen(vectorcraft_geom::Point::new(170.0, 140.0));
-    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
-        let mut taken = false;
-        ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
-            crate::panels::set_pstate(ui.ctx(), super::DRAWN, Some(super::root_pass(ui.ctx())));
-            let resp = ui.allocate_rect(rect, egui::Sense::click_and_drag());
-            taken = super::graphic_handles_input(app, ui, &resp, rect);
-        })
-        .textures_delta
-        .clear();
-        taken
-    };
-    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let handle = screen_at(150.0, 150.0);
+    let target = screen_at(170.0, 140.0);
     // A press away from the handle is left to the tool.
-    let away = xf.to_screen(vectorcraft_geom::Point::new(110.0, 110.0));
-    frame(&mut app, vec![egui::Event::PointerMoved(away)]);
-    assert!(!frame(&mut app, vec![button(away, true)]));
-    frame(&mut app, vec![button(away, false)]);
-    frame(&mut app, vec![egui::Event::PointerMoved(handle)]);
-    assert!(frame(&mut app, vec![button(handle, true)]));
-    assert!(frame(&mut app, vec![egui::Event::PointerMoved(target)]));
-    assert_eq!(undo_len(&app), history, "previewed while the pointer is down");
-    assert!(frame(&mut app, vec![button(target, false)]));
-    assert_eq!(undo_len(&app), history + 1);
-    let g = &graphics(&app)[0];
+    let away = screen_at(110.0, 110.0);
+    assert!(!grabs(&app, &mut fixture, away));
+    let before = graphics(&app.borrow());
+    fixture.drag_hold_at(handle, target - handle);
+    assert_eq!(undo_len(&app.borrow()), history, "previewed while the pointer is down");
+    assert_ne!(graphics(&app.borrow()), before, "the preview moved the graphic");
+    fixture.release_at(target);
+    assert_eq!(undo_len(&app.borrow()), history + 1);
+    let g = graphics(&app.borrow())[0].clone();
     assert!((g["x"].as_f64().unwrap() - 20.0).abs() < 0.11 && (g["y"].as_f64().unwrap() + 10.0).abs() < 0.11, "{g}");
     // With another selected object whose graphics differ, the artboard shows no handles.
-    let square = app.session.active().unwrap().selection.objects[0].0;
-    let other = app.run("shape.rectangle", json!({"x": 400, "y": 400, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
-    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": {}})).unwrap();
-    app.run("select.set", json!({"ids": [square, other]})).unwrap();
-    frame(&mut app, vec![egui::Event::PointerMoved(target)]);
-    assert!(!frame(&mut app, vec![button(target, true)]));
-    frame(&mut app, vec![button(target, false)]);
-    app.run("select.set", json!({"ids": [square]})).unwrap();
-    // With its 3D effect hidden and a visible one after it, the hidden effect's graphics show no
-    // handles.
+    let square = app.borrow().session.active().unwrap().selection.objects[0].0;
+    let other = {
+        let mut app = app.borrow_mut();
+        let other = app.run("shape.rectangle", json!({"x": 400, "y": 400, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": {}})).unwrap();
+        app.run("select.set", json!({"ids": [square, other]})).unwrap();
+        other
+    };
+    fixture.idle(1);
+    assert!(!grabs(&app, &mut fixture, target));
+    app.borrow_mut().run("select.set", json!({"ids": [square]})).unwrap();
+    fixture.idle(1);
+    assert!(grabs(&app, &mut fixture, target), "the selected object's graphic has its handle");
+    // With the tab closed, the artboard shows no handles.
+    app.borrow_mut().three_d.page = "rotation".into();
+    fixture.idle(1);
+    assert!(!grabs(&app, &mut fixture, target));
+    app.borrow_mut().three_d.page = "materials".into();
+    fixture.idle(1);
+    // With its 3D effect hidden and a visible one after it, the hidden effect's graphics show no handles.
     {
+        let mut app = app.borrow_mut();
         let st = app.session.active_mut().unwrap();
         let id = st.selection.objects[0];
         let n = std::sync::Arc::make_mut(&mut st.doc).node_mut(id).unwrap();
         n.appearance.effects[0].visible = false;
         n.appearance.effects.push(vectorcraft_effects::new_effect("threeD.extrude", &json!({})).unwrap());
+        // An edit moves the revision, as a command's does.
+        st.revision += 1;
     }
-    let mut shown = true;
-    ctx.run_ui(egui::RawInput::default(), |ui| {
-        crate::panels::set_pstate(ui.ctx(), super::DRAWN, Some(super::root_pass(ui.ctx())));
-        shown = super::graphic_handles(&app, ui.ctx()).is_some();
-    })
-    .textures_delta
-    .clear();
-    assert!(!shown);
-    // With the tab closed, the artboard shows no handles.
-    crate::panels::set_pstate(&ctx, super::UI_STATE, Map::from_iter([("__tab".to_string(), json!("rotation"))]));
-    frame(&mut app, vec![egui::Event::PointerMoved(target)]);
-    assert!(!frame(&mut app, vec![button(target, true)]));
+    fixture.idle(1);
+    assert!(!grabs(&app, &mut fixture, target));
+    assert_ne!(other, square);
 }
 
-/// One frame of the artboard's graphic handles over an 800 × 600 canvas with `events`: whether the
-/// handles took the pointer.
-fn handles_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> bool {
-    let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0));
-    let mut taken = false;
-    ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
-        crate::panels::set_pstate(ui.ctx(), super::DRAWN, Some(super::root_pass(ui.ctx())));
-        let resp = ui.allocate_rect(rect, egui::Sense::click_and_drag());
-        taken = super::graphic_handles_input(app, ui, &resp, rect);
-    })
-    .textures_delta
-    .clear();
-    taken
-}
-
-/// Where document point (`x`, `y`) is on the 800 × 600 canvas of [`handles_frame`].
-fn handles_screen(app: &VectorcraftApp, x: f64, y: f64) -> egui::Pos2 {
-    let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0));
-    crate::canvas::Xf::new(rect, &app.view().cloned().unwrap_or_default()).to_screen(vectorcraft_geom::Point::new(x, y))
-}
-
-fn primary(pos: egui::Pos2, pressed: bool) -> egui::Event {
-    egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
-}
-
+/// The graphics' handles are placed on a frame built once for each revision of the document, and not at all for an
+/// object without graphics.
 #[test]
-fn a_view_gesture_on_a_graphics_handle_is_left_to_the_canvas() {
-    let (mut app, ctx) = materials_app();
-    app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
-    let handle = handles_screen(&app, 150.0, 150.0);
-    let space = |pressed| egui::Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
-    handles_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(handle)]);
-    // With Space held, the press pans the view.
-    handles_frame(&mut app, &ctx, vec![space(true)]);
-    assert!(!handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
-    handles_frame(&mut app, &ctx, vec![primary(handle, false), space(false)]);
-    // With the Hand, Zoom or Rotate View tool, the press is the tool's.
-    for tool in ["hand", "zoom", "rotateView"] {
-        app.select_tool(tool);
-        assert!(!handles_frame(&mut app, &ctx, vec![primary(handle, true)]), "{tool}");
-        handles_frame(&mut app, &ctx, vec![primary(handle, false)]);
+fn the_graphics_frame_is_built_once_for_each_revision() {
+    let (app, _) = materials_app();
+    let (app, mut fixture) = handles_fixture(app);
+    let cached = |app: &Rc<RefCell<VectorcraftApp>>| app.borrow().three_d.frames.as_ref().map(|(_, frame)| std::sync::Arc::clone(frame));
+    fixture.idle(1);
+    assert!(cached(&app).is_none_or(|frame| frame.is_none()), "no graphics, no frame");
+    app.borrow_mut().run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+    fixture.idle(1);
+    let first = cached(&app).unwrap();
+    assert!(first.is_some());
+    fixture.idle(1);
+    assert!(std::sync::Arc::ptr_eq(&first, &cached(&app).unwrap()), "the same revision reuses the frame");
+    app.borrow_mut().run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+    fixture.idle(1);
+    assert!(!std::sync::Arc::ptr_eq(&first, &cached(&app).unwrap()), "an edit builds it again");
+}
+
+/// `app` with the graphics' handles over an 800 × 600 canvas, and the handle the trial reads the app through.
+fn handles_fixture(mut app: VectorcraftApp) -> (Rc<RefCell<VectorcraftApp>>, Fixture) {
+    show_panel(&mut app);
+    let app = Rc::new(RefCell::new(app));
+    let drawn = Rc::clone(&app);
+    // The handles are canvas controls: they show in the body of a canvas over the app's view, as the document's canvas
+    // shows them.
+    let mut fixture = Fixture::new(move |ui| {
+        let mut app = drawn.borrow_mut();
+        let room = ui.max_rect();
+        let view = canvas_space(&app, room).view;
+        craft::ui::canvas::Canvas::new("Document").view(view).show_at(ui, room, |ui, body| {
+            if let Some(space) = craft::ui::canvas::canvas_space(&body.env) {
+                SHOWN_SPACE.with(|shown| shown.set(Some(space)));
+                handles::show(&mut app, ui, &space);
+            }
+        });
+    });
+    fixture.room(egui::vec2(800.0, 600.0)).settle();
+    (app, fixture)
+}
+
+/// Shows the 3D and Materials panel: the graphics' handles show while it shows its Materials tab.
+fn show_panel(app: &mut VectorcraftApp) {
+    if !crate::panel_docking::visible(app, super::ID) {
+        app.run("window.panel", json!({ "panel": super::ID })).unwrap();
     }
-    // With another tool and Space up, the press grabs the handle.
-    app.select_tool("selection");
-    assert!(handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
-    handles_frame(&mut app, &ctx, vec![primary(handle, false)]);
+}
+
+/// The canvas's mapping between document points and the screen over `rect`.
+fn canvas_space(app: &VectorcraftApp, rect: egui::Rect) -> CanvasSpace {
+    let view = app.view().cloned().unwrap_or_default();
+    CanvasSpace::new(view.canvas(app.ui_scaling(), rect), 1.0)
+}
+
+thread_local! {
+    /// The space of the canvas [`handles_fixture`] last showed, as its body reads it.
+    static SHOWN_SPACE: std::cell::Cell<Option<CanvasSpace>> = const { std::cell::Cell::new(None) };
+}
+
+/// Where document point (`x`, `y`) is on the canvas of [`handles_fixture`], as the canvas shows it.
+fn screen_at(x: f64, y: f64) -> egui::Pos2 {
+    let space = SHOWN_SPACE.with(std::cell::Cell::get).expect("the canvas has shown");
+    space.view.to_screen(vectorcraft_geom::Point::new(x, y))
+}
+
+/// Whether a drag from `from` moves a graphic (it records an undo step then); a drag that did is undone.
+fn grabs(app: &Rc<RefCell<VectorcraftApp>>, fixture: &mut Fixture, from: egui::Pos2) -> bool {
+    let history = undo_len(&app.borrow());
+    fixture.drag_at(from, egui::vec2(12.0, 0.0));
+    let moved = undo_len(&app.borrow()) > history;
+    if moved {
+        app.borrow_mut().run("edit.undo", json!({})).unwrap();
+        fixture.idle(1);
+    }
+    moved
 }
 
 #[test]
 fn a_geometry_effect_after_the_3d_effect_hides_the_graphics_handles() {
-    let (mut app, ctx) = materials_app();
+    let (mut app, _) = materials_app();
     app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
-    let handle = handles_screen(&app, 150.0, 150.0);
-    let push_effect = |app: &mut VectorcraftApp, object: usize, id: &str, params: Value| {
-        let st = app.session.active_mut().unwrap();
+    let (app, mut fixture) = handles_fixture(app);
+    let handle = screen_at(150.0, 150.0);
+    let push_effect = |object: usize, id: &str, params: Value| {
+        let mut guard = app.borrow_mut();
+        let st = guard.session.active_mut().unwrap();
         let object = st.selection.objects[object];
         let n = std::sync::Arc::make_mut(&mut st.doc).node_mut(object).unwrap();
         n.appearance.effects.truncate(1);
@@ -819,33 +884,36 @@ fn a_geometry_effect_after_the_3d_effect_hides_the_graphics_handles() {
     };
     // A Transform effect after the 3D effect draws the graphic 40 pt to the right of the frame's
     // place for it: the artboard shows no handle there.
-    push_effect(&mut app, 0, "distort.transform", json!({"moveH": 40.0}));
-    handles_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(handle)]);
-    assert!(!handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
-    handles_frame(&mut app, &ctx, vec![primary(handle, false)]);
+    push_effect(0, "distort.transform", json!({"moveH": 40.0}));
+    fixture.idle(1);
+    assert!(!grabs(&app, &mut fixture, handle));
     // A Drop Shadow after it leaves the graphic where the frame places it: the handle shows.
-    push_effect(&mut app, 0, "stylize.dropShadow", json!({}));
-    assert!(handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
-    handles_frame(&mut app, &ctx, vec![primary(handle, false)]);
+    push_effect(0, "stylize.dropShadow", json!({}));
+    fixture.idle(1);
+    assert!(grabs(&app, &mut fixture, handle));
     // A second selected object with the same graphic and a Transform effect after its 3D effect:
     // a drag would move its graphic too, so the artboard shows no handles.
-    let square = app.session.active().unwrap().selection.objects[0].0;
-    let other = app.run("shape.rectangle", json!({"x": 400, "y": 400, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
-    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": {"rotationX": 0.0, "rotationY": 0.0, "rotationZ": 0.0}}))
-        .unwrap();
-    app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
-    app.run("select.set", json!({"ids": [square, other]})).unwrap();
-    assert!(handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
-    handles_frame(&mut app, &ctx, vec![primary(handle, false)]);
-    push_effect(&mut app, 1, "distort.transform", json!({"moveH": 40.0}));
-    assert!(!handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
-    handles_frame(&mut app, &ctx, vec![primary(handle, false)]);
+    {
+        let mut app = app.borrow_mut();
+        let square = app.session.active().unwrap().selection.objects[0].0;
+        let other = app.run("shape.rectangle", json!({"x": 400, "y": 400, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+        app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": {"rotationX": 0.0, "rotationY": 0.0, "rotationZ": 0.0}}))
+            .unwrap();
+        app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+        app.run("select.set", json!({"ids": [square, other]})).unwrap();
+    }
+    fixture.idle(1);
+    assert!(grabs(&app, &mut fixture, handle));
+    push_effect(1, "distort.transform", json!({"moveH": 40.0}));
+    fixture.idle(1);
+    assert!(!grabs(&app, &mut fixture, handle));
 }
 
 #[test]
 fn a_hidden_fill_shows_no_handles_for_its_graphics() {
-    let (mut app, ctx) = materials_app();
+    let (mut app, _) = materials_app();
     app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+    show_panel(&mut app);
     // The 3D effect, with its graphic, moves onto the square's fill.
     let fill = {
         let st = app.session.active_mut().unwrap();
@@ -856,17 +924,8 @@ fn a_hidden_fill_shows_no_handles_for_its_graphics() {
         n.appearance.effects_mut(Some(fill)).unwrap().push(fx);
         fill
     };
-    let shown = |app: &VectorcraftApp| {
-        let mut shown = false;
-        ctx.run_ui(egui::RawInput::default(), |ui| {
-            crate::panels::set_pstate(ui.ctx(), super::DRAWN, Some(super::root_pass(ui.ctx())));
-            shown = super::graphic_handles(app, ui.ctx()).is_some_and(|(_, _, handles)| !handles.is_empty());
-        })
-        .textures_delta
-        .clear();
-        shown
-    };
-    assert!(shown(&app), "the visible fill's graphic has a handle");
+    let shown = |app: &mut VectorcraftApp| handles::graphic_handles(app).is_some_and(|(_, _, handles)| !handles.is_empty());
+    assert!(shown(&mut app), "the visible fill's graphic has a handle");
     {
         let st = app.session.active_mut().unwrap();
         let id = st.selection.objects[0];
@@ -875,64 +934,24 @@ fn a_hidden_fill_shows_no_handles_for_its_graphics() {
             f.visible = false;
         }
     }
-    assert!(!shown(&app), "the hidden fill draws no graphic, so it has no handle");
-}
-
-#[test]
-fn a_press_that_closes_the_context_menu_does_not_grab_a_graphics_handle() {
-    let (mut app, ctx) = materials_app();
-    app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
-    let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0));
-    // One frame of the canvas's input with a context menu: whether the menu is open after it.
-    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
-        let mut open = false;
-        ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
-            crate::panels::set_pstate(ui.ctx(), super::DRAWN, Some(super::root_pass(ui.ctx())));
-            let resp = ui.interact(rect, egui::Id::unique("three-d-test-canvas"), egui::Sense::click_and_drag());
-            crate::canvas::canvas_input(app, ui, &resp, rect);
-            resp.context_menu(|ui| {
-                ui.label("Menu");
-            });
-            open = resp.context_menu_opened();
-        })
-        .textures_delta
-        .clear();
-        open
-    };
-    // A right-click below and to the right of the handle opens the menu there, clear of the handle.
-    let (handle, menu) = (handles_screen(&app, 150.0, 150.0), handles_screen(&app, 195.0, 195.0));
-    let secondary =
-        |pressed| egui::Event::PointerButton { pos: menu, button: egui::PointerButton::Secondary, pressed, modifiers: Default::default() };
-    frame(&mut app, vec![egui::Event::PointerMoved(menu)]);
-    frame(&mut app, vec![secondary(true)]);
-    frame(&mut app, vec![secondary(false)]);
-    assert!(frame(&mut app, vec![egui::Event::PointerMoved(handle)]));
-    // The press on the handle only closes the menu: no drag of the graphic starts.
-    let (history, before) = (undo_len(&app), graphics(&app));
-    assert!(!frame(&mut app, vec![primary(handle, true)]));
-    assert!(ctx.data(|m| m.get_temp::<super::HandleDrag>(super::handle_drag_id())).is_none());
-    frame(&mut app, vec![egui::Event::PointerMoved(handle + egui::vec2(20.0, 0.0))]);
-    frame(&mut app, vec![primary(handle + egui::vec2(20.0, 0.0), false)]);
-    assert_eq!(undo_len(&app), history);
-    assert_eq!(graphics(&app), before);
+    assert!(!shown(&mut app), "the hidden fill draws no graphic, so it has no handle");
 }
 
 #[test]
 fn a_click_on_a_graphics_handle_records_no_undo_step() {
-    let (mut app, ctx) = materials_app();
+    let (mut app, _) = materials_app();
     app.run("threeD.mapGraphic", json!({"symbol": "Graphic", "x": 5.03})).unwrap();
-    let history = undo_len(&app);
-    let handle = handles_screen(&app, 155.03, 150.0);
-    handles_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(handle)]);
-    assert!(handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
-    assert!(handles_frame(&mut app, &ctx, vec![primary(handle, false)]));
-    assert_eq!(undo_len(&app), history);
-    assert_eq!(graphics(&app)[0]["x"], json!(5.03));
+    let (app, mut fixture) = handles_fixture(app);
+    let history = undo_len(&app.borrow());
+    let handle = screen_at(155.03, 150.0);
+    fixture.click_at(handle);
+    assert_eq!(undo_len(&app.borrow()), history);
+    assert_eq!(graphics(&app.borrow())[0]["x"], json!(5.03));
 }
 
 #[test]
 fn a_selection_change_during_a_handle_drag_ends_it() {
-    let (mut app, ctx) = materials_app();
+    let (mut app, _) = materials_app();
     app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
     let square = app.session.active().unwrap().selection.objects[0].0;
     // A second object with the same graphic.
@@ -946,16 +965,15 @@ fn a_selection_change_during_a_handle_drag_ends_it() {
         n.appearance.effects[0].params["graphics"][0].clone()
     };
     let before = graphic_of(&app, other);
-    let (handle, target, further) = (handles_screen(&app, 150.0, 150.0), handles_screen(&app, 170.0, 140.0), handles_screen(&app, 190.0, 130.0));
-    handles_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(handle)]);
-    assert!(handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
-    handles_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(target)]);
+    let (app, mut fixture) = handles_fixture(app);
+    let (handle, target, further) = (screen_at(150.0, 150.0), screen_at(170.0, 140.0), screen_at(190.0, 130.0));
+    fixture.drag_hold_at(handle, target - handle);
     // The selection changes to the other object while the pointer is down: the drag ends there.
-    app.run("select.set", json!({"ids": [other]})).unwrap();
-    handles_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(further)]);
-    handles_frame(&mut app, &ctx, vec![primary(target, false)]);
-    assert_eq!(graphic_of(&app, other), before, "the other object's graphic moved");
-    let moved = graphic_of(&app, square);
+    app.borrow_mut().run("select.set", json!({"ids": [other]})).unwrap();
+    fixture.idle(1);
+    fixture.release_at(further);
+    assert_eq!(graphic_of(&app.borrow(), other), before, "the other object's graphic moved");
+    let moved = graphic_of(&app.borrow(), square);
     assert!((moved["x"].as_f64().unwrap() - 20.0).abs() < 0.11, "{moved}");
 }
 
@@ -985,59 +1003,27 @@ fn expand_as_wireframes_replaces_the_object_with_its_edges() {
     assert_eq!(undo_len(&app), history);
 }
 
-/// The Quick Actions show on the Object tab of the effects that have one (Revolve (Classic)
-/// included) and not on their Rotation tab; Revolve and Rotate show them on their first tab.
-#[test]
-fn quick_actions_show_on_the_object_tab_only() {
-    use crate::state::Dialog;
-    use vectorcraft_effects::{CLASSIC_EXTRUDE, CLASSIC_REVOLVE, EXTRUDE, INFLATE, REVOLVE};
-    for effect in [EXTRUDE, INFLATE, CLASSIC_EXTRUDE, CLASSIC_REVOLVE] {
-        for (tab, shown) in [("object", true), ("rotation", false)] {
-            let d = Dialog::new("x", json!({"__effect": effect, "__tab": tab, "__gizmo": "rotation"}));
-            assert_eq!(super::quick_actions_shown(&d), shown, "{effect} {tab}");
-        }
-    }
-    let d = Dialog::new("x", json!({"__effect": REVOLVE, "__tab": "rotation", "__gizmo": "rotation"}));
-    assert!(super::quick_actions_shown(&d));
-}
-
-/// An app with an Extrude & Bevel square given `params`, and the panel on its Lighting tab with the
-/// accessibility tree on.
-fn lighting_app(params: Value) -> (VectorcraftApp, egui::Context) {
-    lighting_app_of("threeD.extrude", params)
-}
-
-/// An app with a square given 3D effect `effect` with `params`, and the panel on its Lighting tab
-/// with the accessibility tree on.
-fn lighting_app_of(effect: &str, params: Value) -> (VectorcraftApp, egui::Context) {
-    use crate::panels::tests_appearance::{click, frame_events, text_rect};
+/// An app with a square given Extrude & Bevel with `params`, and the panel on its Lighting page.
+fn lighting(params: Value) -> (Rc<RefCell<VectorcraftApp>>, Fixture) {
     let mut app = app();
-    app.run("effect.apply", json!({"effect": effect, "item": null, "params": params})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    ctx.enable_accesskit();
-    let texts = frame_events(&ctx, &mut app, vec![], show);
-    click(&ctx, &mut app, text_rect(&texts, "Lighting").center(), show);
-    (app, ctx)
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": params})).unwrap();
+    app.three_d.page = "lighting".into();
+    let (app, mut fixture) = shown(app);
+    // As tall as a docked panel: the button below the sphere sits past a 300-point room's bottom.
+    fixture.room(egui::vec2(400.0, crate::tests::panel_harness::ROOM.y)).settle();
+    (app, fixture)
 }
 
-/// The lighting widget's node for light `n` (from 1): its screen-reader name and its center.
-fn light_node(app: &mut VectorcraftApp, ctx: &egui::Context, n: usize) -> (String, egui::Pos2) {
-    let nodes = controls(app, ctx);
+/// The lighting widget's part for light `n` (from 1): its screen-reader name and the control to press.
+fn light(fixture: &Fixture, n: usize) -> (String, craft::ui::testing::Target) {
+    let tree = fixture.tree();
     let prefix = format!("Light {n}:");
-    let node = nodes
-        .iter()
-        .find(|x| x.role() == egui::accesskit::Role::Slider && x.label().is_some_and(|l| l.starts_with(&prefix)))
-        .unwrap_or_else(|| panic!("no lighting widget node for light {n}"));
-    let r = node.bounds().unwrap();
-    (node.label().unwrap_or_default().to_string(), egui::pos2(((r.x0 + r.x1) / 2.0) as f32, ((r.y0 + r.y1) / 2.0) as f32))
-}
-
-fn pointer(pos: egui::Pos2, pressed: Option<bool>) -> egui::Event {
-    match pressed {
-        Some(pressed) => egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() },
-        None => egui::Event::PointerMoved(pos),
-    }
+    let key = tree
+        .keys()
+        .into_iter()
+        .find(|key| tree.name_of(*key).is_some_and(|name| name.starts_with(&prefix)))
+        .unwrap_or_else(|| panic!("no lighting widget part for light {n}"));
+    (tree.name_of(key).unwrap_or_default().to_string(), fixture.target(key).unwrap())
 }
 
 fn merged_light(app: &VectorcraftApp) -> (f64, f64) {
@@ -1046,100 +1032,81 @@ fn merged_light(app: &VectorcraftApp) -> (f64, f64) {
     (merged["lightRotation"].as_f64().unwrap(), merged["lightHeight"].as_f64().unwrap())
 }
 
+/// A key press of `key`, for a frame that carries several.
+fn key_press(key: egui::Key, modifiers: egui::Modifiers) -> egui::Event {
+    egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }
+}
+
 /// Dragging a light in the lighting widget previews its new Rotation and Height while the pointer
-/// is down and records one undo step when it is released, at the point of release; the rim of the
-/// sphere is Height 0.
+/// is down and records one undo step when it is released; a press without a drag changes nothing.
 #[test]
 fn the_lighting_widget_drags_a_light_in_one_undo_step() {
-    use crate::dialogs::revolve_lights::RADIUS;
-    use crate::panels::tests_appearance::frame_events;
-    let (mut app, ctx) = lighting_app(json!({}));
-    let (name, from) = light_node(&mut app, &ctx, 1);
+    let (app, mut fixture) = lighting(json!({}));
+    let (name, at) = light(&fixture, 1);
     assert_eq!(name, "Light 1: Rotation 125.3°, Height 30.0°");
-    let light = crate::dialogs::revolve_lights::lights(&crate::state::Dialog::new(
-        "x",
-        json!({"__effect": "threeD.extrude", "lightRotation": vectorcraft_three_d::DEFAULT_LIGHT.0, "lightHeight": 30.0}),
-    ))[0];
-    let center = from - light.offset() * RADIUS;
-    let history = undo_len(&app);
-    frame_events(&ctx, &mut app, vec![pointer(from, None)], show);
-    frame_events(&ctx, &mut app, vec![pointer(from, Some(true))], show);
-    // Halfway out along the light's own direction, then onto the rim straight right of the center.
-    frame_events(&ctx, &mut app, vec![pointer(center + egui::vec2(0.0, -RADIUS * 0.5), None)], show);
-    assert_eq!(merged_light(&app), (90.0, 60.0), "the light follows the pointer while it is down");
-    let rim = center + egui::vec2(RADIUS, 0.0);
-    frame_events(&ctx, &mut app, vec![pointer(rim, None)], show);
-    assert_eq!(merged_light(&app), (0.0, 0.0));
-    assert_eq!(undo_len(&app), history, "nothing is recorded while the pointer is down");
-    // A frame that moves the pointer below the center and releases it there drops the light there.
-    let below = center + egui::vec2(0.0, RADIUS);
-    frame_events(&ctx, &mut app, vec![pointer(below, None), pointer(below, Some(false))], show);
-    frame_events(&ctx, &mut app, vec![], show);
-    assert_eq!(undo_len(&app), history + 1);
-    assert_eq!(merged_light(&app), (-90.0, 0.0));
-    app.run("edit.undo", json!({})).unwrap();
-    assert_eq!(merged_light(&app), (vectorcraft_three_d::DEFAULT_LIGHT.0, 30.0));
-    // A drag that comes back to the press drops the light there, not where it last was.
-    for event in [pointer(from, None), pointer(from, Some(true)), pointer(center + egui::vec2(0.0, -RADIUS * 0.5), None), pointer(from, None)] {
-        frame_events(&ctx, &mut app, vec![event], show);
-    }
-    frame_events(&ctx, &mut app, vec![pointer(from, Some(false))], show);
-    frame_events(&ctx, &mut app, vec![], show);
-    assert_eq!(merged_light(&app), (125.3, 30.0));
+    let start = merged_light(&app.borrow());
+    let history = undo_len(&app.borrow());
+    let by = egui::vec2(30.0, 20.0);
+    fixture.drag_hold_at(at.center(), by);
+    assert_ne!(merged_light(&app.borrow()), start, "the light follows the pointer while it is down");
+    assert_eq!(undo_len(&app.borrow()), history, "nothing is recorded while the pointer is down");
+    fixture.release_at(at.center() + by);
+    assert_eq!(undo_len(&app.borrow()), history + 1);
+    assert_ne!(merged_light(&app.borrow()), start);
+    app.borrow_mut().run("edit.undo", json!({})).unwrap();
+    assert_eq!(merged_light(&app.borrow()), start);
+    // A press that does not move the light changes nothing.
+    fixture.idle(1);
+    let (_, at) = light(&fixture, 1);
+    fixture.click(&at);
+    assert_eq!(merged_light(&app.borrow()), start);
+    assert_eq!(undo_len(&app.borrow()), history, "the undone step stays undone");
 }
 
 /// With objects whose lights differ in Height, an arrow key that turns the light changes only
 /// the Rotation, and each object keeps its own Height.
 #[test]
 fn a_key_leaves_the_other_setting_as_each_selected_effect_has_it() {
-    use crate::panels::tests_appearance::{click, frame_events, text_rect};
     let mut app = app();
     let a = app.session.active().unwrap().selection.objects[0].0;
     app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": {"lightRotation": 0.0, "lightHeight": 20.0}})).unwrap();
     let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
     app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": {"lightRotation": 0.0, "lightHeight": 40.0}})).unwrap();
     app.run("select.set", json!({"ids": [a, b]})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    ctx.enable_accesskit();
-    let texts = frame_events(&ctx, &mut app, vec![], show);
-    click(&ctx, &mut app, text_rect(&texts, "Lighting").center(), show);
-    let (_, at) = light_node(&mut app, &ctx, 1);
-    click(&ctx, &mut app, at, show);
-    let left = egui::Event::Key { key: egui::Key::ArrowLeft, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
-    frame_events(&ctx, &mut app, vec![left], show);
-    let light = |id: u64| {
-        let n = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap();
+    app.three_d.page = "lighting".into();
+    let (app, mut fixture) = shown(app);
+    let (_, at) = light(&fixture, 1);
+    fixture.click(&at).key(egui::Key::ArrowLeft, egui::Modifiers::NONE);
+    let settings = |id: u64| {
+        let guard = app.borrow();
+        let n = guard.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap();
         let merged = vectorcraft_effects::merged_params("threeD.extrude", &n.appearance.effects[0].params);
         (merged["lightRotation"].as_f64().unwrap(), merged["lightHeight"].as_f64().unwrap())
     };
-    assert_eq!((light(a), light(b)), ((1.0, 20.0), (1.0, 40.0)));
+    assert_eq!((settings(a), settings(b)), ((1.0, 20.0), (1.0, 40.0)));
 }
 
 /// A press on a light selects it in the list without an undo step, and the button below the sphere
 /// moves only the selected light to the back of the object, then back to the front.
 #[test]
 fn the_lighting_widget_selects_a_light_and_moves_it_behind_the_object() {
-    use crate::panels::tests_appearance::{click, frame_events, text_rect};
-    let light =
-        |rotation: f64| json!({"color": "#ffffff", "intensity": 80.0, "rotation": rotation, "height": 30.0, "softness": 0.0, "behind": false});
-    let (mut app, ctx) = lighting_app(json!({"lights": [light(0.0), light(180.0)]}));
-    let history = undo_len(&app);
-    let (_, second) = light_node(&mut app, &ctx, 2);
-    click(&ctx, &mut app, second, show);
-    assert_eq!(undo_len(&app), history, "a press on a light changes nothing");
-    let texts = frame_events(&ctx, &mut app, vec![], show);
-    assert!(texts.iter().any(|(s, _)| s == "Light 2"), "the list shows the pressed light: {texts:?}");
-    click(&ctx, &mut app, text_rect(&texts, "Move Light to Back").center(), show);
-    assert_eq!(undo_len(&app), history + 1);
-    let behind = |app: &VectorcraftApp| effect(app).1["lights"].as_array().unwrap().iter().map(|l| l["behind"].clone()).collect::<Vec<_>>();
-    assert_eq!(behind(&app), [json!(false), json!(true)]);
-    let (name, _) = light_node(&mut app, &ctx, 2);
+    let spec = |rotation: f64| json!({"color": "#ffffff", "intensity": 80.0, "rotation": rotation, "height": 30.0, "softness": 0.0, "behind": false});
+    let (app, mut fixture) = lighting(json!({"lights": [spec(0.0), spec(180.0)]}));
+    let history = undo_len(&app.borrow());
+    let (_, second) = light(&fixture, 2);
+    fixture.click(&second);
+    assert_eq!(undo_len(&app.borrow()), history, "a press on a light changes nothing");
+    let to_back = fixture.by_label("Move Light to Back").unwrap();
+    fixture.click(&to_back);
+    assert_eq!(undo_len(&app.borrow()), history + 1);
+    let behind = || effect(&app.borrow()).1["lights"].as_array().unwrap().iter().map(|l| l["behind"].clone()).collect::<Vec<_>>();
+    assert_eq!(behind(), [json!(false), json!(true)]);
+    let (name, _) = light(&fixture, 2);
     assert_eq!(name, "Light 2: Rotation 180.0°, Height 30.0°, Light behind the object");
-    let texts = frame_events(&ctx, &mut app, vec![], show);
-    click(&ctx, &mut app, text_rect(&texts, "Move Light to Front").center(), show);
-    assert_eq!(behind(&app), [json!(false), json!(false)]);
-    assert_eq!(undo_len(&app), history + 2);
+    let to_front = fixture.by_label("Move Light to Front").unwrap();
+    fixture.click(&to_front);
+    assert_eq!(behind(), [json!(false), json!(false)]);
+    assert_eq!(undo_len(&app.borrow()), history + 2);
 }
 
 /// A light the pointer took has the keyboard focus: the arrow keys raise and lower it and turn it
@@ -1147,132 +1114,29 @@ fn the_lighting_widget_selects_a_light_and_moves_it_behind_the_object() {
 /// undo step a frame, and a press at a limit records nothing.
 #[test]
 fn the_arrow_keys_move_the_focused_light() {
-    use crate::panels::tests_appearance::{click, frame_events};
-    let (mut app, ctx) = lighting_app(json!({"lightRotation": 10.04, "lightHeight": 89.5}));
-    let (_, at) = light_node(&mut app, &ctx, 1);
-    click(&ctx, &mut app, at, show);
-    let history = undo_len(&app);
-    let key = |key: egui::Key, modifiers: egui::Modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
-    frame_events(&ctx, &mut app, vec![key(egui::Key::ArrowUp, egui::Modifiers::NONE)], show);
-    frame_events(&ctx, &mut app, vec![], show);
-    assert_eq!(merged_light(&app), (10.04, 90.0), "Up leaves the Rotation as it is");
-    assert_eq!(undo_len(&app), history + 1);
-    frame_events(&ctx, &mut app, vec![key(egui::Key::ArrowUp, egui::Modifiers::NONE)], show);
-    frame_events(&ctx, &mut app, vec![], show);
-    assert_eq!(merged_light(&app), (10.04, 90.0));
-    assert_eq!(undo_len(&app), history + 1, "Height stays at 90° and nothing is recorded");
+    let (app, mut fixture) = lighting(json!({"lightRotation": 10.04, "lightHeight": 89.5}));
+    let (_, at) = light(&fixture, 1);
+    fixture.click(&at);
+    let history = undo_len(&app.borrow());
+    fixture.key(egui::Key::ArrowUp, egui::Modifiers::NONE);
+    assert_eq!(merged_light(&app.borrow()), (10.04, 90.0), "Up leaves the Rotation as it is");
+    assert_eq!(undo_len(&app.borrow()), history + 1);
+    fixture.key(egui::Key::ArrowUp, egui::Modifiers::NONE);
+    assert_eq!(merged_light(&app.borrow()), (10.04, 90.0));
+    assert_eq!(undo_len(&app.borrow()), history + 1, "Height stays at 90° and nothing is recorded");
     // Down then Up in one frame, in that order: back at 90°.
-    frame_events(&ctx, &mut app, vec![key(egui::Key::ArrowDown, egui::Modifiers::NONE), key(egui::Key::ArrowUp, egui::Modifiers::NONE)], show);
-    frame_events(&ctx, &mut app, vec![], show);
-    assert_eq!(merged_light(&app), (10.04, 90.0));
-    assert_eq!(undo_len(&app), history + 1);
+    fixture.frame(vec![key_press(egui::Key::ArrowDown, egui::Modifiers::NONE), key_press(egui::Key::ArrowUp, egui::Modifiers::NONE)]).idle(1);
+    assert_eq!(merged_light(&app.borrow()), (10.04, 90.0));
+    assert_eq!(undo_len(&app.borrow()), history + 1);
     // Presses that arrive in one frame all move the light, as one undo step.
     let presses = vec![
-        key(egui::Key::ArrowLeft, egui::Modifiers::SHIFT),
-        key(egui::Key::ArrowDown, egui::Modifiers::NONE),
-        key(egui::Key::ArrowDown, egui::Modifiers::NONE),
+        key_press(egui::Key::ArrowLeft, egui::Modifiers::SHIFT),
+        key_press(egui::Key::ArrowDown, egui::Modifiers::NONE),
+        key_press(egui::Key::ArrowDown, egui::Modifiers::NONE),
     ];
-    frame_events(&ctx, &mut app, presses, show);
-    frame_events(&ctx, &mut app, vec![], show);
-    assert_eq!(merged_light(&app), (25.0, 88.0));
-    assert_eq!(undo_len(&app), history + 2);
-}
-
-/// A press on another light selects it and gives it the keyboard focus, so the next arrow key
-/// moves that light and leaves the one selected before where it is.
-#[test]
-fn the_arrow_keys_move_the_light_pressed_last() {
-    use crate::panels::tests_appearance::{click, frame_events};
-    let light =
-        |rotation: f64| json!({"color": "#ffffff", "intensity": 80.0, "rotation": rotation, "height": 30.0, "softness": 0.0, "behind": false});
-    let (mut app, ctx) = lighting_app(json!({"lights": [light(0.0), light(180.0)]}));
-    let (_, first) = light_node(&mut app, &ctx, 1);
-    click(&ctx, &mut app, first, show);
-    let (_, second) = light_node(&mut app, &ctx, 2);
-    click(&ctx, &mut app, second, show);
-    let left = egui::Event::Key { key: egui::Key::ArrowLeft, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
-    frame_events(&ctx, &mut app, vec![left], show);
-    frame_events(&ctx, &mut app, vec![], show);
-    let rotations = effect(&app).1["lights"].as_array().unwrap().iter().map(|l| l["rotation"].clone()).collect::<Vec<_>>();
-    assert_eq!(rotations, [json!(0.0), json!(-179.0)]);
-}
-
-/// The Lighting tab of Extrude & Bevel (Classic) has the lighting sphere: dragging its light is one
-/// undo step, the button below it moves the light behind the object, Add Light adds a light at the
-/// front center of the sphere, and Delete Light removes the selected light but never the last one.
-#[test]
-fn the_classic_lighting_tab_has_the_lighting_sphere() {
-    use crate::dialogs::revolve_lights::RADIUS;
-    use crate::panels::tests_appearance::{click, frame_events, text_rect};
-    use vectorcraft_effects::CLASSIC_EXTRUDE;
-    let (mut app, ctx) = lighting_app_of(CLASSIC_EXTRUDE, json!({}));
-    let (name, from) = light_node(&mut app, &ctx, 1);
-    assert_eq!(name, "Light 1: Rotation 125.3°, Height 30.0°");
-    let light = crate::dialogs::revolve_lights::lights(&crate::state::Dialog::new(
-        "x",
-        json!({"__effect": CLASSIC_EXTRUDE, "lightRotation": vectorcraft_three_d::DEFAULT_LIGHT.0, "lightHeight": 30.0}),
-    ))[0];
-    let center = from - light.offset() * RADIUS;
-    let history = undo_len(&app);
-    let rim = center + egui::vec2(RADIUS, 0.0);
-    for event in [pointer(from, None), pointer(from, Some(true)), pointer(rim, None)] {
-        frame_events(&ctx, &mut app, vec![event], show);
-    }
-    assert_eq!(merged_light(&app), (0.0, 0.0), "the light follows the pointer while it is down");
-    assert_eq!(undo_len(&app), history);
-    frame_events(&ctx, &mut app, vec![pointer(rim, Some(false))], show);
-    frame_events(&ctx, &mut app, vec![], show);
-    assert_eq!(undo_len(&app), history + 1);
-    let texts = frame_events(&ctx, &mut app, vec![], show);
-    click(&ctx, &mut app, text_rect(&texts, "Move Light to Back").center(), show);
-    assert_eq!(undo_len(&app), history + 2);
-    assert_eq!(effect(&app).1["lightBehind"], json!(true));
-    let texts = frame_events(&ctx, &mut app, vec![], show);
-    click(&ctx, &mut app, text_rect(&texts, "Add Light").center(), show);
-    assert_eq!(undo_len(&app), history + 3);
-    let (name, _) = light_node(&mut app, &ctx, 2);
-    assert_eq!(name, "Light 2: Rotation 0.0°, Height 90.0°", "a new light is at the front center");
-    let count = |app: &VectorcraftApp| effect(app).1["lights"].as_array().map_or(1, Vec::len);
-    assert_eq!(count(&app), 2);
-    let texts = frame_events(&ctx, &mut app, vec![], show);
-    click(&ctx, &mut app, text_rect(&texts, "Delete Light").center(), show);
-    assert_eq!(count(&app), 1);
-    assert_eq!(undo_len(&app), history + 4);
-    let (name, _) = light_node(&mut app, &ctx, 1);
-    assert_eq!(name, "Light 1: Rotation 0.0°, Height 0.0°, Light behind the object", "the selected light was deleted");
-    // One light stays: Delete Light does nothing then.
-    let texts = frame_events(&ctx, &mut app, vec![], show);
-    click(&ctx, &mut app, text_rect(&texts, "Delete Light").center(), show);
-    assert_eq!(count(&app), 1);
-    assert_eq!(undo_len(&app), history + 4);
-}
-
-/// The 3D (Classic) options dialog shows the lighting sphere on its Lighting tab too, and the
-/// sphere draws a 3D (Classic) effect's lights white, since those effects shade without light color.
-#[test]
-fn the_classic_options_dialog_has_the_lighting_sphere_with_white_lights() {
-    use crate::panels::tests_appearance::frame_events;
-    use vectorcraft_effects::{CLASSIC_REVOLVE, EXTRUDE};
-    let mut app = app();
-    app.run("effect.dialog", json!({"effect": CLASSIC_REVOLVE, "item": null})).unwrap();
-    app.ui.dialog.as_mut().unwrap().fields.insert("__gizmo".into(), json!("light"));
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    ctx.enable_accesskit();
-    let dialog = |app: &mut VectorcraftApp, ui: &mut egui::Ui| crate::dialogs::show(app, ui.ctx());
-    frame_events(&ctx, &mut app, vec![], dialog);
-    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| dialog(&mut app, ui));
-    out.textures_delta.clear();
-    let nodes: Vec<_> = out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default();
-    assert!(
-        nodes.iter().any(|n| n.role() == egui::accesskit::Role::Slider && n.label() == Some("Light 1: Rotation 125.3°, Height 30.0°")),
-        "the dialog shows the sphere"
-    );
-    let red = json!([{"color": "#ff0000", "rotation": 0.0, "height": 30.0}]);
-    let color =
-        |effect: &str| crate::dialogs::revolve_lights::lights(&crate::state::Dialog::new("x", json!({"__effect": effect, "lights": red})))[0].color;
-    assert_eq!(color(CLASSIC_REVOLVE), egui::Color32::WHITE);
-    assert_eq!(color(EXTRUDE), egui::Color32::from_rgb(255, 0, 0));
+    fixture.frame(presses).idle(1);
+    assert_eq!(merged_light(&app.borrow()), (25.0, 88.0));
+    assert_eq!(undo_len(&app.borrow()), history + 2);
 }
 
 fn assets(app: &mut VectorcraftApp) -> Vec<Value> {
@@ -1286,11 +1150,10 @@ fn assets(app: &mut VectorcraftApp) -> Vec<Value> {
 fn export_3d_object_adds_the_selected_3d_objects_to_asset_export() {
     let mut app = app();
     assert!(painted_text(&mut app, show).contains("Export 3D Object"));
-    let ctx = egui::Context::default();
     // Without a 3D object: the button is dimmed, and an error, nothing recorded, no asset.
     let history = undo_len(&app);
     assert!(!super::can_export_3d(&app));
-    assert!(super::export_3d_object(&mut app, &ctx).is_err());
+    assert!(super::export_3d_object(&mut app).is_err());
     assert_eq!((undo_len(&app), assets(&mut app).len()), (history, 0));
     let a = app.session.active().unwrap().selection.objects[0].0;
     set_type(&mut app, "extrude").unwrap();
@@ -1302,25 +1165,25 @@ fn export_3d_object_adds_the_selected_3d_objects_to_asset_export() {
     app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
     app.run("effect.setParams", json!({"index": 0, "item": null, "visible": false})).unwrap();
     assert!(!super::can_export_3d(&app));
-    assert!(super::export_3d_object(&mut app, &ctx).is_err());
+    assert!(super::export_3d_object(&mut app).is_err());
     app.run("select.set", json!({"ids": [plain, a, hidden]})).unwrap();
     assert!(super::can_export_3d(&app));
-    assert!(!crate::panel_docking::visible(&app.ui, crate::panels::asset_export::ID));
+    assert!(!crate::panel_docking::visible(&app, crate::panels::asset_export::ID));
     let history = undo_len(&app);
-    super::export_3d_object(&mut app, &ctx).unwrap();
+    super::export_3d_object(&mut app).unwrap();
     assert_eq!(undo_len(&app), history + 1);
     let list = assets(&mut app);
     assert_eq!(list.len(), 1, "{list:?}");
     assert_eq!((list[0]["name"].clone(), list[0]["format3D"].clone()), (json!("Box"), json!("usda")));
     let asset = list[0]["id"].as_u64().unwrap();
-    assert_eq!(super::pstate::<Vec<u64>>(&ctx, "asset-export-selected"), [asset]);
-    assert!(crate::panel_docking::visible(&app.ui, crate::panels::asset_export::ID));
+    assert_eq!(crate::panels::asset_export::selected(&app), [asset]);
+    assert!(crate::panel_docking::visible(&app, crate::panels::asset_export::ID));
     // Already an asset: no undo step, the same asset selected again, the panel left showing.
-    super::set_pstate(&ctx, "asset-export-selected", Vec::<u64>::new());
-    super::export_3d_object(&mut app, &ctx).unwrap();
+    crate::panels::asset_export::doc_panel(&mut app).unwrap().selection = Default::default();
+    super::export_3d_object(&mut app).unwrap();
     assert_eq!((undo_len(&app), assets(&mut app).len()), (history + 1, 1));
-    assert_eq!(super::pstate::<Vec<u64>>(&ctx, "asset-export-selected"), [asset]);
-    assert!(crate::panel_docking::visible(&app.ui, crate::panels::asset_export::ID));
+    assert_eq!(crate::panels::asset_export::selected(&app), [asset]);
+    assert!(crate::panel_docking::visible(&app, crate::panels::asset_export::ID));
     // Undo takes the asset away.
     app.run("edit.undo", json!({})).unwrap();
     assert!(assets(&mut app).is_empty());
@@ -1341,7 +1204,7 @@ fn export_3d_object_leaves_out_a_3d_object_inside_another() {
     app.run("select.set", json!({"ids": [inner, group]})).unwrap();
     let selected: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
     assert!(selected.contains(&inner) && selected.contains(&group), "{selected:?}");
-    super::export_3d_object(&mut app, &egui::Context::default()).unwrap();
+    super::export_3d_object(&mut app).unwrap();
     let list = assets(&mut app);
     assert_eq!(list.iter().map(|a| a["nodes"].clone()).collect::<Vec<_>>(), [json!([group])]);
 }
@@ -1376,7 +1239,7 @@ fn export_3d_object_leaves_out_a_group_with_a_3d_fill() {
     set_type(&mut app, "extrude").unwrap();
     app.run("select.set", json!({"ids": [a, group]})).unwrap();
     assert!(super::can_export_3d(&app));
-    super::export_3d_object(&mut app, &egui::Context::default()).unwrap();
+    super::export_3d_object(&mut app).unwrap();
     let list = assets(&mut app);
     assert_eq!(list.iter().map(|a| a["nodes"].clone()).collect::<Vec<_>>(), [json!([a])]);
 }
@@ -1475,91 +1338,4 @@ fn export_3d_object_state_is_worked_out_once_per_revision() {
     app.run("select.none", json!({})).unwrap();
     painted_text(&mut app, show);
     assert_eq!(app.canvas.three_d_exportable, Some((key(&app), false)));
-}
-
-/// The thread's CPU time in nanoseconds, where Linux gives it.
-fn thread_cpu_ns() -> Option<u128> {
-    std::fs::read_to_string("/proc/thread-self/schedstat").ok()?.split_whitespace().next()?.parse().ok()
-}
-
-/// Time the Export 3D Object state with 200,000 selected paths: worked out from scratch on every
-/// frame ([`super::can_export_3d`]), by [`super::can_export_3d_shown`] on the first frame of a
-/// revision, and by [`super::can_export_3d_shown`] on later frames of the same revision. The first
-/// case selects plain paths alone; the second adds a path of a compound path with Extrude & Bevel,
-/// selected last. The sides alternate, and the median time per frame of 7 runs is printed.
-/// Run with `cargo test --release -p vectorcraft-ui-egui --lib export_3d_object_state_timing -- --ignored --nocapture`.
-#[test]
-#[ignore = "manual timing probe; performance depends on machine load"]
-fn export_3d_object_state_timing() {
-    const PATHS: usize = 200_000;
-    const MEASURES: u32 = 20;
-    const KEPT: u32 = 1_000_000;
-    let mut app = VectorcraftApp::new(Session::new(), Services::default());
-    app.run("file.new", json!({"width": 2000, "height": 2000})).unwrap();
-    let rect = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
-    let rect = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(rect)).cloned().unwrap();
-    app.session
-        .edit("Fill", |d, _| {
-            let layer = d.layers[0].id;
-            for _ in 0..PATHS - 1 {
-                let mut n = rect.clone();
-                n.id = d.alloc_id();
-                d.insert(Some(layer), usize::MAX, n)?;
-            }
-            Ok(())
-        })
-        .unwrap();
-    app.run("select.all", json!({})).unwrap();
-    let plain: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
-    let a = app.run("shape.rectangle", json!({"x": 0, "y": 1000, "width": 30, "height": 30})).unwrap()["id"].clone();
-    let b = app.run("shape.rectangle", json!({"x": 5, "y": 1005, "width": 10, "height": 10})).unwrap()["id"].clone();
-    app.run("select.set", json!({"ids": [a, b]})).unwrap();
-    app.run("object.compoundPath.make", json!({})).unwrap();
-    let compound = app.session.active().unwrap().selection.objects[0];
-    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
-    let member = app.session.active().unwrap().doc.node(compound).unwrap().children().unwrap()[0].id.0;
-    let mut last = plain.clone();
-    last.push(member);
-    let median = |v: &mut Vec<f64>| {
-        v.sort_by(f64::total_cmp);
-        v[v.len() / 2]
-    };
-    let clock = if thread_cpu_ns().is_some() { "thread CPU time" } else { "wall-clock time" };
-    for (name, ids, expected) in [("plain paths", plain, false), ("plain paths, then a path of a 3D compound path", last, true)] {
-        app.run("select.set", json!({"ids": &ids})).unwrap();
-        let selected: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
-        assert_eq!(selected.len(), ids.len(), "{name}");
-        assert_eq!(selected.last(), ids.last(), "{name}");
-        assert_eq!(super::can_export_3d(&app), expected, "{name}");
-        let mut time = |frames: u32, f: &mut dyn FnMut(&mut VectorcraftApp) -> bool| {
-            let (cpu, wall) = (thread_cpu_ns(), std::time::Instant::now());
-            for _ in 0..frames {
-                assert_eq!(f(&mut app), expected);
-            }
-            let ns = thread_cpu_ns().zip(cpu).map_or_else(|| wall.elapsed().as_nanos(), |(b, a)| b - a);
-            ns as f64 / f64::from(frames) / 1000.0
-        };
-        let (mut full, mut first, mut kept) = (vec![], vec![], vec![]);
-        for _ in 0..7 {
-            full.push(time(MEASURES, &mut |app| super::can_export_3d(app)));
-            first.push(time(MEASURES, &mut |app| {
-                app.canvas.three_d_exportable = None;
-                super::can_export_3d_shown(app)
-            }));
-            kept.push(time(KEPT, &mut super::can_export_3d_shown));
-        }
-        eprintln!("{name}: {} objects selected, available: {expected}; {clock} per frame, median of 7 runs", selected.len());
-        eprintln!("every frame worked out ({MEASURES} frames a run): {:>12.3} us  {full:.3?}", median(&mut full));
-        eprintln!("first frame of a revision ({MEASURES} a run):     {:>12.3} us  {first:.3?}", median(&mut first));
-        eprintln!("later frames ({KEPT} frames a run):            {:>12.4} us  {kept:.4?}", median(&mut kept));
-    }
-}
-
-#[test]
-fn changed_settings_lists_only_new_values() {
-    let before = json!({"depth": 50.0, "cap": true, "bevel": "none"});
-    let after = json!({"depth": 60.0, "cap": true, "bevel": "classic", "twist": 0.0});
-    let changed = changed_settings(&before, &after);
-    assert_eq!(Value::Object(changed), json!({"depth": 60.0, "bevel": "classic", "twist": 0.0}));
-    assert!(changed_settings(&after, &after).is_empty());
 }

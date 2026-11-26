@@ -27,7 +27,7 @@ image = { workspace = true }
 craft-image-codecs = { workspace = true }
 # CMYK JPEGs (src/images.rs; the image crate writes RGB and grey ones only).
 jpeg-encoder = { workspace = true }
-craft-pdf = { workspace = true }
+craft = { workspace = true, features = ["pdf-interpret", "pdf-write"] }
 craft-stream-codecs = { workspace = true }
 log = { workspace = true }
 chrono = { workspace = true }
@@ -56,6 +56,9 @@ serde_json = { workspace = true }
 krilla = { workspace = true, features = ["simple-text"] }
 # How many times the symbol list is read to find symbols by name.
 vectorcraft-doc = { workspace = true, features = ["symbol-read-count"] }
+# The counters vectorcraft-engine's tests turn on, also when this crate is tested without
+# vectorcraft-engine (`cargo xtask ci shard`).
+vectorcraft-pdf = { path = ".", features = ["read-count"] }
 
 # An independent raster oracle for gradient placement in PDF forms. These are test-only macOS
 # bindings; the exporter stays portable Rust and does not depend on an OS PDF renderer.

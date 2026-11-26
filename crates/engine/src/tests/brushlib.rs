@@ -115,6 +115,7 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
             "paint",
             "pattern-borders",
             "decorative",
+            "ornamental",
             "scatter-shapes",
             "stipple",
             "game-trails",
@@ -197,6 +198,7 @@ fn every_builtin_library_brush_has_its_kind_and_draws() {
         ("paint", "art"),
         ("pattern-borders", "pattern"),
         ("decorative", "pattern"),
+        ("ornamental", "art"),
         ("scatter-shapes", "scatter"),
         ("stipple", "scatter"),
         ("game-trails", "art"),
@@ -659,6 +661,57 @@ fn decorative_brushes_repeat_distinct_art_and_survive_a_saved_library() {
     let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
     let reopened = vectorcraft_format::load(&bytes).unwrap();
     assert_eq!(vectorcraft_brush::library(&reopened), lib.brushes);
+}
+
+#[test]
+fn ornamental_brushes_draw_flourishes_and_survive_a_saved_library() {
+    let mut s = session();
+    let (_, lib) = cmd::brushlib::library(&s, "Ornamental").unwrap();
+    let names = ["Scrollwork", "Filigree Arrow", "Petal Sweep", "Twin Curl"];
+    assert_eq!(lib.brushes.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), names);
+    let path = run(&mut s, "shape.line", json!({"x1": 10, "y1": 40, "x2": 190, "y2": 40}))["id"].as_u64().unwrap();
+    let mut curve = line_to(20.0);
+    curve.curve_to((60.0, -25.0), (140.0, 25.0), (180.0, 0.0));
+    for b in &lib.brushes {
+        let BrushKind::Art(art) = &b.kind else { panic!("{} is not an art brush", b.name) };
+        assert_eq!(art.colorization, vectorcraft_brush::Colorization::Tints);
+        assert_eq!(art.width, 300.0);
+        for line in [line_to(2.0), line_to(180.0), curve.clone()] {
+            let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line, &black_stroke());
+            let points = anchors(&pieces.iter().collect::<Vec<_>>());
+            assert!(!points.is_empty() && points.iter().all(|p| p.x.is_finite() && p.y.is_finite()), "{}", b.name);
+        }
+        let before = undo_len(&s);
+        let added = run(&mut s, "brush.addFromLibrary", json!({"library": "ornamental", "name": b.name, "apply": true, "ids": [path]}));
+        assert_eq!(strs(&added["added"]), [b.name.as_str()]);
+        assert_eq!(added["applied"], json!([path]));
+        assert_eq!(undo_len(&s), before + 1);
+        assert_eq!(doc(&s).node(NodeId(path)).unwrap().appearance.stroke().unwrap().brush.as_deref(), Some(b.name.as_str()));
+    }
+    let saved = run(&mut s, "brush.saveLibrary", json!({"names": names}));
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let reopened = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(vectorcraft_brush::library(&reopened), lib.brushes);
+}
+
+/// Filigree Arrow's shaft runs into its head with no gap, so a straight stroke draws one arrow.
+#[test]
+fn the_filigree_arrow_shaft_meets_its_head() {
+    let s = session();
+    let (_, lib) = cmd::brushlib::library(&s, "Ornamental").unwrap();
+    let BrushKind::Art(art) = &lib.brush("Filigree Arrow").unwrap().kind else { panic!("Filigree Arrow is not an art brush") };
+    let mut parts = vec![];
+    art.art.walk(&mut |c| {
+        if c.path_data().is_some() {
+            parts.push(c.contains_fn());
+        }
+    });
+    for y in [-0.6, 0.0, 0.6] {
+        for i in 0..=930 {
+            let p = vectorcraft_geom::Point::new(4.05 + 0.1 * f64::from(i), y);
+            assert!(parts.iter().any(|inside| inside(p)), "gap at {p:?}");
+        }
+    }
 }
 
 #[test]

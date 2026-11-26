@@ -587,6 +587,30 @@ fn drawn_face_bounds(f: &Node) -> Rect {
     }
 }
 
+/// Under a colored light, an Inflate in a solid color with a graphic on its front lies over an
+/// underlay of its faces, the faces that carry parts of the graphic included.
+#[test]
+fn a_colored_inflate_with_a_graphic_lies_over_an_underlay_of_its_faces() {
+    let mut d = Document::new(1000.0, 1000.0);
+    let mark = Node::path(
+        NodeId(0),
+        vectorcraft_geom::shapes::rectangle(Rect::new(500.0, 500.0, 510.0, 510.0)),
+        Appearance::basic(Paint::solid(BLUE), Paint::None, 0.0),
+    );
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Mark".into(), art: Arc::new(mark) });
+    let square = vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0));
+    let mut n = Node::path(NodeId(7), square, Appearance::basic(Paint::solid(RED), Paint::None, 0.0));
+    let p = json!({"rotationX": -20, "rotationY": -30, "rotationZ": 0, "lights": [{"color": "#ff8080"}], "graphics": [{"symbol": "Mark", "scale": 300.0}]});
+    n.appearance.effects.push(fx(INFLATE, p));
+    let art = solid_art_in(Some(&d), &n).unwrap();
+    let order = art.children().unwrap()[0].children().unwrap();
+    let faces: Vec<Arc<Node>> = order.iter().flat_map(unsealed).collect();
+    assert!(faces.len() > order.len(), "the faces lie over an underlay");
+    let carrying = faces.iter().filter(|f| matches!(f.kind, NodeKind::Group { clip: false, .. })).count();
+    assert!(carrying > 0, "faces carry parts of the graphic");
+    assert!(order.iter().all(|run| !Arc::ptr_eq(&unsealed(run)[0], run)), "every face is in a sealed run");
+}
+
 /// Under a light that is not white, a solid-color fill and a solid-color stroke, plain, dashed or
 /// with a width profile, draw their faces in one order, the faces of both solids in the order of
 /// their depths where they overlap, in Inflate and in Extrude & Bevel, with and without perspective
@@ -775,6 +799,7 @@ fn a_stroke_face_through_a_fill_wall_is_cut_where_their_depths_meet() {
         away: false,
         end: None,
         surface: None,
+        membrane: None,
         plane: Some(DepthPlane { normal, offset, center: Point::ZERO, eye: None }),
         cell: None,
     };
@@ -1204,6 +1229,33 @@ fn a_groups_solids_together_past_the_limit_draw_the_source() {
     assert!(solid_art(&past).is_none(), "the source art draws");
     assert_eq!(three_d_meshes(&past), Err(vectorcraft_three_d::TOO_COMPLEX_SOLID.to_string()));
     assert_eq!(three_d_wireframe_in(None, &past), Err(vectorcraft_three_d::TOO_COMPLEX_SOLID.to_string()));
+}
+
+/// An Inflate group whose second member's fill is past the limits draws its source art, and its
+/// frame places no graphic handle on the first member's puff.
+#[test]
+fn an_inflate_frame_places_no_handle_when_a_fill_is_past_the_limits() {
+    let mut b = BezPath::new();
+    b.move_to((0.0, 0.0));
+    b.line_to((40_000.0, 0.0));
+    b.line_to((40_000.0, 40_000.0));
+    b.line_to((0.0, 40_000.0));
+    b.close_path();
+    let square = Node::path(NodeId(1), PathData::from_bezpath(&b), Appearance::basic(Paint::solid(RED), Paint::None, 0.0));
+    let view = json!({"rotationX": 0.0, "rotationY": 0.0, "rotationZ": 0.0});
+    let group = |members: Vec<Node>| {
+        let mut g = Node::group(NodeId(9999), members.into_iter().map(Arc::new).collect());
+        g.appearance.effects.push(fx(INFLATE, view.clone()));
+        g
+    };
+    let center = MappedGraphic::from_value(&json!({"symbol": "Mark"})).unwrap();
+    // The square alone builds, and the graphic's handle sits on its puff.
+    let alone = group(vec![square.clone()]);
+    assert!(graphic_frame(None, &alone, None).unwrap().handle(&center).is_some());
+    // 70,000 corners: more points than a fill's solid takes.
+    let past = group(vec![square, polygon_node(2, 70_000)]);
+    assert!(solid_art(&past).is_none(), "the source art draws");
+    assert!(graphic_frame(None, &past, None).unwrap().handle(&center).is_none());
 }
 
 /// A fill and strokes whose solids each fit, but not all of them together, draw the source art,

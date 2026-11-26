@@ -19,7 +19,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_brush::Brush;
 use vectorcraft_color::Swatch;
-use vectorcraft_doc::{Document, GraphicStyle, ImageBlob, Node, NodeId, NodeKind, PatternDef, Selection, Symbol, TextStyleDef};
+use vectorcraft_doc::{Document, GraphDesign, GraphicStyle, ImageBlob, Node, NodeId, NodeKind, PatternDef, Selection, Symbol, TextStyleDef};
 use vectorcraft_geom::{PathData, Rect};
 
 pub use flavours::{AI, BITMAP, EMF, EPS, FILE_HEAD, Flavour, PASTE_ORDER, PDF, PNG, SVG, TEXT, file_flavour, is_address, names_a_picture};
@@ -94,6 +94,9 @@ pub struct Clipboard {
     pub para_styles: Vec<TextStyleDef>,
     /// Brushes the objects' strokes use.
     pub brushes: Vec<Brush>,
+    /// Graph designs the copied graphs draw their columns, bars or markers with. Pasting adds the
+    /// ones the document lacks; a design the document has under the same name stays as it is.
+    pub graph_designs: Vec<GraphDesign>,
     /// The artboard the objects were copied from (none when they lie on no artboard; the first of
     /// [`Self::artboards`] when there are any): Paste on All Artboards keeps their offset to it.
     pub source_artboard: Option<Rect>,
@@ -395,7 +398,7 @@ impl Clipboard {
         if self.source_doc == Some(st.uid) && !self.colors_converted {
             return vec![];
         }
-        self.conflicts(&st.doc, &self.used())
+        self.conflicts(&st.doc, &self.used(&st.doc))
     }
 
     /// A standalone document holding the objects and their resources (SVG export).
@@ -408,6 +411,7 @@ impl Clipboard {
         d.graphic_styles.extend(self.graphic_styles.iter().cloned());
         d.char_styles = self.char_styles.clone().into();
         d.para_styles = self.para_styles.clone().into();
+        d.graph_designs = self.graph_designs.clone();
         if !self.brushes.is_empty() {
             let mut lib = vectorcraft_brush::library(&d);
             // Each brush's place in the library by name: finding it by scanning the growing list
@@ -469,6 +473,7 @@ impl Clipboard {
             char_styles: d.char_styles.to_vec(),
             para_styles: d.para_styles.to_vec(),
             brushes: vectorcraft_brush::library(&d),
+            graph_designs: d.graph_designs.clone(),
             images: self.images.clone(),
             symbol_options: self.symbol_options.clone(),
             source_artboard: self.source_artboard,

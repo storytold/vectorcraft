@@ -43,7 +43,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Replace Pattern Art",
             [],
             None,
-            "{name, ids?} make copies of the selected art the tile art of pattern `name`, as Alt-dragging (Option-dragging on macOS) art onto its swatch in the Swatches panel does; the pattern keeps its name, swatch, tile and options (with Size Tile to Art on, the tile fits the new art), every fill and stroke painted with it draws the new tile, and the art stays on the canvas, selected; one undo step, none when the art matches the tile art already; refused while a pattern is edited, with nothing selected, and for art painted with the pattern itself → {name}",
+            "{name, ids?} make copies of the selected art the tile art of pattern `name`, as Alt-dragging (Option-dragging on macOS) art onto its swatch in the Swatches panel does; the pattern keeps its name, swatch, tile and options (with Size Tile to Art on, the tile fits the new art), every fill and stroke painted with it draws the new tile, and the art stays on the canvas, selected; one undo step, none when the art matches the tile art already; refused while a pattern is edited, with nothing selected, for an id that names no object, and for art painted with the pattern itself → {name}",
             can_replace_pattern_art,
             pattern_replace_art
         ),
@@ -244,10 +244,15 @@ fn ids_json(ids: &[NodeId]) -> Value {
     json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })
 }
 
+/// The outermost objects among `ids` (layers left out), else the selected ones. An id that names
+/// no object is an error, so the command never acts on the other ids alone.
 fn roots(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
     match ids_param(p, "ids", cmd)? {
         Some(ids) => {
             let st = s.doc()?;
+            if let Some(id) = ids.iter().find(|id| st.doc.node(**id).is_none()) {
+                return Err(bad(cmd, format!("no such object id {}", id.0)));
+            }
             let mut sel = Selection::default();
             sel.set(ids.iter().copied().filter(|id| st.doc.node(*id).is_some_and(|n| !n.is_layer())));
             Ok(outermost(&st.doc, sel.in_paint_order(&st.doc)))

@@ -96,6 +96,14 @@ fn variables_functions_and_closures() {
 }
 
 #[test]
+fn a_trailing_comma_adds_no_argument_or_parameter() {
+    assert_eq!(num("function f(a, b,) { return arguments.length * 10 + f.length; } f(1,)"), 12.0);
+    assert_eq!(num("function P(x,) { this.n = arguments.length; } new P(5,).n"), 1.0);
+    assert_eq!(num("var f = new Function('a,', 'return arguments.length'); f(1, 2) * 10 + f.length"), 21.0);
+    assert_eq!(num("Function('a', '', 'return a')(4)"), 4.0);
+}
+
+#[test]
 fn call_and_apply_set_this_and_arguments() {
     assert_eq!(num("function f(a, b) { return this.k + a + b; } f.call({k: 1}, 2, 3)"), 6.0);
     assert_eq!(num("function f(a, b) { return this.k + a + b; } f.apply({k: 1}, [2, 3])"), 6.0);
@@ -606,6 +614,26 @@ fn apply_keeps_its_arguments_alive_while_a_native_function_runs() {
 }
 
 #[test]
+fn successive_apply_expansions_keep_getter_receivers_alive() {
+    for queued in [false, true] {
+        let mut realm = Realm::with_options(Options { es2015: true, ..Options::default() }, Limits { heap_bytes: 1 << 20, ..Limits::default() });
+        let src = "var result; function callback(a) { result = this.kept + a; } \
+            var inner = {length: 1, get 0() { for (var i = 0; i < 20000; i++) ({i: i}); return 2; }}; \
+            var outer = {length: 2, get 0() { return {kept: 40}; }, get 1() { return inner; }};";
+        realm.run(src).unwrap();
+        let collections = realm.interp().heap.collections;
+        let call = if queued {
+            "Promise.resolve(outer).then(Function.prototype.apply.bind(Function.prototype.apply, callback));"
+        } else {
+            "Function.prototype.apply.apply(callback, outer);"
+        };
+        realm.run(call).unwrap();
+        assert!(realm.interp().heap.collections > collections);
+        assert_eq!(realm.run("result"), Ok(JsValue::Number(42.0)), "queued: {queued}");
+    }
+}
+
+#[test]
 fn to_number_skips_the_white_space_the_lexer_skips() {
     let mut realm = small(Limits::default());
     assert_eq!(realm.run("var n = +'\\u180E'; n !== n"), Ok(JsValue::Bool(true)), "U+180E is not white space");
@@ -975,6 +1003,18 @@ fn code(ops: Vec<Op>) -> Code {
         uses_arguments: false,
         source,
         span: (0, 0),
+        scopes: Vec::new(),
+        top_scope: None,
+        templates: Vec::new(),
+        rest: None,
+        length: 0,
+        arrow: false,
+        uses_this: false,
+        param_init: false,
+        pattern_names: Vec::new(),
+        es2015: false,
+        own_name: None,
+        method: false,
     }
 }
 

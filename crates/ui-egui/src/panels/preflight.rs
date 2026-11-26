@@ -1,21 +1,40 @@
 //! Window › Production Preflight. Results follow the active document/revision and chosen output;
 //! file and font changes outside the document are rechecked periodically while the panel is open.
 
+use std::borrow::Cow;
+use std::cell::RefCell;
+use std::sync::Arc;
+
+use craft::behavior::{DisplayOrder, ItemSource};
+use craft::theme::variant::Tone;
+use craft::ui::buttons::Button;
+use craft::ui::choice::Checkbox;
+use craft::ui::contract::{Bind, CollectionEvent, Entry, Props as _, Show as _, ShowCollection as _, ShowContainer as _, WordSetCx as _};
+use craft::ui::display::{Divider, Shade, Text};
+use craft::ui::form::{Field, FieldGroup};
+use craft::ui::list::{Finding, FindingsList, FindingsWords, ListRow, Severity};
+use craft::ui::notices::{Notice, NoticeLayout};
+use craft::ui::pickers::Select;
+use craft::ui::runtime::frame::clock;
+use craft::ui::text::NumberField;
 use egui::Ui;
 use serde_json::{Value, json};
 
-use super::{empty_state, pstate, set_pstate};
 use crate::VectorcraftApp;
-use crate::theme::Tokens;
-use crate::widgets::{self, dim_label};
 
 pub const ID: &str = "preflight";
-const OPTIONS: &str = "production-preflight-options";
-const CACHE: &str = "production-preflight-cache";
 const RECHECK: f64 = 2.0;
 
-#[derive(Clone)]
-struct Options {
+/// The Preflight panel's run-only state: the chosen checks and the last report.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct PreflightPanel {
+    pub(crate) options: Options,
+    pub(crate) cache: Cache,
+}
+
+/// What the user chose to check.
+#[derive(Clone, Debug)]
+pub(crate) struct Options {
     output: usize,
     active_only: bool,
     min_ppi: f64,
@@ -27,42 +46,39 @@ impl Default for Options {
     }
 }
 
-#[derive(Clone, Default)]
-struct Cache {
+/// The last report and what it was made for.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct Cache {
     /// Document identity, revision, output, artboard scope and resolution threshold.
     key: Option<(u64, u64, usize, Option<usize>, u64)>,
     at: f64,
-    report: Value,
+    /// Shared so a frame clones a pointer, not the report.
+    report: Arc<Value>,
     error: Option<String>,
 }
 
-fn cached(app: &mut VectorcraftApp, ui: &Ui, o: &Options, force: bool) -> Cache {
+fn cached(app: &mut VectorcraftApp, ui: &Ui, force: bool) -> Cache {
+    let o = app.ui.preflight_panel.options.clone();
     let Some(st) = app.session.active() else { return Cache::default() };
+    let (uid, revision) = (st.uid, st.revision);
     let board = o.active_only.then(|| app.view().map_or(0, |v| v.artboard));
-    let key = Some((st.uid, st.revision, o.output, board, o.min_ppi.to_bits()));
-    let now = ui.input(|i| i.time);
-    let mut c: Cache = pstate(ui.ctx(), CACHE);
+    let key = Some((uid, revision, o.output, board, o.min_ppi.to_bits()));
+    let now = clock(ui.ctx());
+    let c = &app.ui.preflight_panel.cache;
     if force || c.key != key || now - c.at >= RECHECK {
         let output = ["pdf", "print", "screen"].get(o.output).copied().unwrap_or("pdf");
         let mut params = json!({ "output": output, "minPpi": o.min_ppi });
         if let Some(i) = board {
             params["artboards"] = json!([i]);
         }
-        match app.session.execute("document.preflight", &params) {
-            Ok(v) => {
-                c.report = v;
-                c.error = None;
-            }
-            Err(e) => {
-                c.report = Value::Null;
-                c.error = Some(e.to_string());
-            }
-        }
-        (c.key, c.at) = (key, now);
-        set_pstate(ui.ctx(), CACHE, c.clone());
+        let (report, error) = match app.session.execute("document.preflight", &params) {
+            Ok(v) => (v, None),
+            Err(e) => (Value::Null, Some(e.to_string())),
+        };
+        app.ui.preflight_panel.cache = Cache { key, at: now, report: Arc::new(report), error };
     }
     ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64(RECHECK));
-    c
+    app.ui.preflight_panel.cache.clone()
 }
 
 fn kind_label(kind: &str) -> &str {
@@ -115,109 +131,207 @@ fn locate(app: &mut VectorcraftApp, finding: &Value) {
     }
 }
 
+/// Commands the list's buttons ask for; they run once the list has been shown.
+type Pending = RefCell<Vec<(&'static str, Value)>>;
+
+/// A line of the findings list.
+enum Entry_ {
+    /// The check at this index of the report.
+    Heading(usize),
+    /// The finding at this index of the report.
+    Finding(usize),
+}
+
+/// The report as list rows: a heading per check, then its findings. The key of a row is its place in the flat list,
+/// so a heading and a finding never share one.
+struct PreflightRows<'a> {
+    checks: &'a [Value],
+    findings: &'a [Value],
+    entries: Vec<Entry_>,
+}
+
+impl<'a> PreflightRows<'a> {
+    fn new(report: &'a Value) -> Self {
+        let checks = report["checks"].as_array().map_or(&[][..], Vec::as_slice);
+        let findings = report["findings"].as_array().map_or(&[][..], Vec::as_slice);
+        let mut entries = Vec::new();
+        for (c, check) in checks.iter().enumerate() {
+            entries.push(Entry_::Heading(c));
+            entries.extend(findings.iter().enumerate().filter(|(_, f)| f["kind"] == check["kind"]).map(|(f, _)| Entry_::Finding(f)));
+        }
+        Self { checks, findings, entries }
+    }
+}
+
+impl DisplayOrder<u64> for PreflightRows<'_> {
+    fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    fn key(&self, at: usize) -> u64 {
+        at as u64
+    }
+
+    fn index_of(&self, key: &u64) -> Option<usize> {
+        usize::try_from(*key).ok().filter(|at| *at < self.entries.len())
+    }
+
+    fn is_section(&self, at: usize) -> bool {
+        matches!(self.entries.get(at), Some(Entry_::Heading(_)))
+    }
+
+    fn text(&self, at: usize) -> Option<Cow<'_, str>> {
+        match self.entries.get(at)? {
+            Entry_::Heading(c) => Some(Cow::Borrowed(kind_label(self.checks.get(*c)?["kind"].as_str().unwrap_or_default()))),
+            Entry_::Finding(f) => Some(Cow::Borrowed(self.findings.get(*f)?["name"].as_str().unwrap_or_default())),
+        }
+    }
+}
+
+impl ItemSource<u64> for PreflightRows<'_> {}
+
+/// The row that heads a check: its name, its status and count, and Find Font… under the fonts check when it has findings.
+fn heading_row<'r>(check: &Value, pending: &'r Pending) -> ListRow<'r> {
+    let kind = check["kind"].as_str().unwrap_or_default();
+    let count = check["count"].as_u64().unwrap_or(0);
+    let status = match check["status"].as_str() {
+        Some("passed") => Text::new(tl!("Passed").to_owned()),
+        Some("failed") => Text::new(tl!("Needs attention").to_owned()).tone(Tone::Warn),
+        _ => Text::new(tl!("Not checked").to_owned()).shade(Shade::Muted),
+    };
+    let mut row = ListRow::new(kind_label(kind).to_owned()).section_heading().trailing_field(status, |_| {});
+    if count > 0 {
+        row = row.detail(count.to_string());
+    }
+    if kind == "fonts" && count > 0 {
+        row = row.below(Button::new(tl!("Find Font…").to_owned()), move |out| {
+            if out.clicks == 1 {
+                pending.borrow_mut().push(("type.findFont", json!({})));
+            }
+        });
+    }
+    row
+}
+
+/// The row of one finding, with the button that repairs a link under it.
+fn finding_row<'r>(key: u64, finding: &Value, words: &FindingsWords, pending: &'r Pending) -> ListRow<'r> {
+    let code = finding["code"].as_str().unwrap_or_default();
+    let mut detail = reason(code).to_owned();
+    if let Some(ppi) = finding["effectivePpi"].as_array() {
+        let values = ppi.iter().filter_map(Value::as_f64).map(|n| format!("{n:.0}")).collect::<Vec<_>>();
+        detail = format!("{detail}; {}", effective_ppi_line(&values));
+    }
+    let row = Finding::new(key, Severity::Warning, finding["name"].as_str().unwrap_or_default()).detail(detail).row(words);
+    let action = match code {
+        "missingLink" => Some((tl!("Relink…"), "ui.relinkDialog")),
+        "modifiedLink" => Some((tl!("Update Link"), "links.update")),
+        _ => None,
+    };
+    match (action, finding["sourceId"].as_u64()) {
+        (Some((label, command)), Some(id)) => row.below(Button::new(label.to_owned()), move |out| {
+            if out.clicks == 1 {
+                pending.borrow_mut().push((command, json!({ "ids": [id] })));
+            }
+        }),
+        _ => row,
+    }
+}
+
+/// The Output, Minimum PPI, Active Artboard Only and Recheck controls; true when Recheck was pressed.
+fn options(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
+    let current = app.ui.preflight_panel.options.clone();
+    let outputs: Vec<Entry<usize>> =
+        [tl!("PDF"), tl!("Print"), tl!("Screen")].into_iter().enumerate().map(|(i, name)| Entry::new(i, name.to_owned())).collect();
+    let (mut output, mut ppi, mut active_only, mut force) = (None, None, None, false);
+    FieldGroup::new(tl!("Preflight Options").to_owned()).show(ui, |ui, _| {
+        Field::new(tl!("Output:").to_owned()).show(ui, |ui, _| {
+            output = Select::new(tl!("Output:").to_owned(), Bind::given(current.output), &outputs)
+                .show(ui)
+                .value()
+                .copied()
+                .filter(|i| *i != current.output);
+        });
+        Field::new(tl!("Minimum PPI:").to_owned()).show(ui, |ui, _| {
+            ppi = NumberField::new(tl!("Minimum PPI:").to_owned(), Bind::given(Some(current.min_ppi)))
+                .range(1.0..=9600.0)
+                .show(ui)
+                .edit
+                .events
+                .landed()
+                .and_then(|v| *v);
+        });
+        active_only = Checkbox::new(Bind::given(current.active_only)).label(tl!("Active Artboard Only").to_owned()).show(ui).events.landed().copied();
+        force = Button::new(tl!("Recheck").to_owned()).show(ui).clicks == 1;
+    });
+    let options = &mut app.ui.preflight_panel.options;
+    if let Some(i) = output {
+        options.output = i;
+        options.min_ppi = if i == 2 { 96.0 } else { 300.0 };
+    }
+    if let Some(ppi) = ppi {
+        options.min_ppi = ppi;
+    }
+    if let Some(on) = active_only {
+        options.active_only = on;
+    }
+    force
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.session.active().is_none() {
-        empty_state(ui, "dc-list-view", "Production Preflight", "Open a document to check it before delivery.");
+        Notice::new(Tone::Neutral, tl!("Open a document to check it before delivery.").to_owned())
+            .title(tl!("Production Preflight").to_owned())
+            .layout(NoticeLayout::Centred)
+            .show(ui);
         return;
     }
-    let mut options: Options = pstate(ui.ctx(), OPTIONS);
-    let labels = [tl!("PDF"), tl!("Print"), tl!("Screen")];
-    widgets::label_row(ui, tl!("Output:"), 74.0, |ui| {
-        let shown = labels.get(options.output).copied().unwrap_or(labels[0]);
-        if let Some(i) = widgets::dropdown(ui, "preflight-output", shown, &labels, ui.available_width().max(90.0)) {
-            options.output = i;
-            options.min_ppi = if i == 2 { 96.0 } else { 300.0 };
-        }
-    });
-    widgets::label_row(ui, tl!("Minimum PPI:"), 90.0, |ui| {
-        if let Some(ppi) = widgets::range_field(ui, "preflight-ppi", options.min_ppi, 1.0..=9600.0, "", 0, 80.0) {
-            options.min_ppi = ppi;
-        }
-    });
-    ui.checkbox(&mut options.active_only, tl!("Active Artboard Only"));
-    let force = ui.button(tl!("Recheck")).clicked();
-    set_pstate(ui.ctx(), OPTIONS, options.clone());
-    ui.separator();
+    let force = options(app, ui);
+    Divider::horizontal().show(ui);
     if app.session.active().is_some_and(|st| st.interaction.is_some()) || app.session.tool_busy() {
-        dim_label(ui, tl!("Preflight updates when the edit finishes."));
+        Notice::new(Tone::Neutral, tl!("Preflight updates when the edit finishes.").to_owned()).layout(NoticeLayout::Centred).show(ui);
         return;
     }
-    let cache = cached(app, ui, &options, force);
+    let cache = cached(app, ui, force);
     if let Some(error) = cache.error {
-        ui.colored_label(Tokens::get(ui.ctx()).error, tl!("Preflight could not complete"));
-        ui.label(crate::i18n::msg(&error));
+        Notice::new(Tone::Bad, crate::i18n::msg(&error)).title(tl!("Preflight could not complete").to_owned()).layout(NoticeLayout::Centred).show(ui);
         return;
     }
-    let report = &cache.report;
-    let height = ui.available_height().clamp(100.0, 600.0);
-    widgets::panel_scroll(ui, egui::ScrollArea::vertical().id_salt("preflight-findings").max_height(height).auto_shrink([false, true]), |ui| {
-        results(app, ui, report);
-    });
+    results(app, ui, &cache.report);
 }
 
 fn results(app: &mut VectorcraftApp, ui: &mut Ui, report: &Value) {
-    let findings = report["findings"].as_array().map_or(&[][..], Vec::as_slice);
-    let tokens = Tokens::get(ui.ctx());
-    for check in report["checks"].as_array().into_iter().flatten() {
-        let kind = check["kind"].as_str().unwrap_or_default();
-        let count = check["count"].as_u64().unwrap_or(0);
-        let (status, color) = match check["status"].as_str() {
-            Some("passed") => (tl!("Passed"), tokens.text),
-            Some("failed") => (tl!("Needs attention"), tokens.warning),
-            _ => (tl!("Not checked"), tokens.text_dim),
-        };
-        ui.horizontal_wrapped(|ui| {
-            ui.strong(kind_label(kind));
-            ui.colored_label(color, status);
-            if count > 0 {
-                ui.label(count.to_string());
-            }
-        });
-        for (index, finding) in findings.iter().enumerate().filter(|(_, f)| f["kind"] == kind) {
-            let name = finding["name"].as_str().unwrap_or_default();
-            let code = finding["code"].as_str().unwrap_or_default();
-            let text = format!("{name}\n{}", reason(code));
-            ui.push_id(index, |ui| {
-                if ui
-                    .add(egui::Button::new(text).wrap().min_size(egui::vec2(ui.available_width(), 0.0)))
-                    .on_hover_text(tl!("Select and zoom to affected artwork"))
-                    .clicked()
-                {
-                    locate(app, finding);
-                }
-                if let Some(ppi) = finding["effectivePpi"].as_array() {
-                    let values = ppi.iter().filter_map(Value::as_f64).map(|n| format!("{n:.0}")).collect::<Vec<_>>();
-                    dim_label(ui, &effective_ppi_line(&values));
-                }
-                let source = finding["sourceId"].as_u64();
-                if code == "missingLink"
-                    && ui.small_button(tl!("Relink…")).clicked()
-                    && let Some(id) = source
-                {
-                    app.run("ui.relinkDialog", json!({"ids": [id]})).ok();
-                }
-                if code == "modifiedLink"
-                    && ui.small_button(tl!("Update Link")).clicked()
-                    && let Some(id) = source
-                {
-                    app.run("links.update", json!({"ids": [id]})).ok();
-                }
-            });
+    let rows = PreflightRows::new(report);
+    let pending = Pending::default();
+    let out = FindingsList::new(tl!("Findings")).show_items(ui, &rows, &mut |key, icx| match rows.entries.get(*key as usize) {
+        Some(Entry_::Heading(c)) => heading_row(&rows.checks[*c], &pending),
+        Some(Entry_::Finding(f)) => finding_row(*key, &rows.findings[*f], &icx.words::<FindingsWords>(), &pending),
+        None => ListRow::new(String::new()),
+    });
+    let mut located = None;
+    for event in out.events {
+        if let CollectionEvent::Activate(key) = event
+            && let Some(Entry_::Finding(f)) = usize::try_from(key).ok().and_then(|at| rows.entries.get(at))
+        {
+            located = rows.findings.get(*f);
         }
-        if kind == "fonts" && count > 0 && ui.small_button(tl!("Find Font…")).clicked() {
-            app.run("type.findFont", json!({})).ok();
-        }
-        if check["notChecked"].as_u64().unwrap_or(0) > 0 {
-            dim_label(ui, tl!("Resolution inside resource art or placed documents is not checked."));
-        }
-        ui.add_space(6.0);
+    }
+    if let Some(finding) = located {
+        locate(app, finding);
+    }
+    for (command, params) in pending.into_inner() {
+        // A failed command leaves the findings as they were; the next recheck shows the truth.
+        app.run(command, params).ok();
+    }
+    for check in rows.checks.iter().filter(|c| c["notChecked"].as_u64().unwrap_or(0) > 0) {
+        let _ = check;
+        Text::new(tl!("Resolution inside resource art or placed documents is not checked.").to_owned()).shade(Shade::Muted).show(ui);
     }
     for warning in report["outputWarnings"].as_array().into_iter().flatten().filter_map(Value::as_str) {
-        ui.colored_label(tokens.warning, crate::i18n::msg(warning));
+        Text::new(crate::i18n::msg(warning)).tone(Tone::Warn).show(ui);
     }
-    ui.separator();
-    dim_label(ui, tl!("Checks update after edits. Linked files are rechecked every two seconds."));
-    dim_label(ui, tl!("These checks do not certify an exported file."));
+    Divider::horizontal().show(ui);
+    Text::new(tl!("Checks update after edits. Linked files are rechecked every two seconds.").to_owned()).shade(Shade::Muted).show(ui);
+    Text::new(tl!("These checks do not certify an exported file.").to_owned()).shade(Shade::Muted).show(ui);
 }
 
 /// A low-resolution finding's effective resolution, one value per axis.
