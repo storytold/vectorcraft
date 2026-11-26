@@ -91,6 +91,12 @@ fn adjustment(i: usize) -> (&'static str, &'static str, &'static [AdjustValue]) 
     ADJUSTMENTS.get(i).copied().unwrap_or(ADJUSTMENTS[0])
 }
 
+/// The adjustments' names in `lang`, in [`ADJUSTMENTS`] order: each effect's name as the Effect
+/// menu, History and Edit › Undo show it ([`crate::i18n::effect_name`]).
+fn adjustment_names(lang: crate::i18n::Lang) -> Vec<String> {
+    ADJUSTMENTS.iter().map(|a| crate::i18n::effect_name(lang, a.0).unwrap_or_else(|| crate::i18n::tr(lang, a.1).to_string())).collect()
+}
+
 /// Object › Plug-ins › Color Effects.
 pub fn menu() -> Vec<Node> {
     let cmd = |(label, id, p): (&'static str, &'static str, Value)| cp(label, id, p);
@@ -153,7 +159,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     }
     let mut st = std::mem::take(&mut app.addon_panels.color);
-    let entries: Vec<Entry<usize>> = ADJUSTMENTS.iter().enumerate().map(|(i, a)| Entry::new(i, tl!(a.1).to_string())).collect();
+    let entries: Vec<Entry<usize>> = adjustment_names(crate::i18n::current()).into_iter().enumerate().map(|(i, name)| Entry::new(i, name)).collect();
     FieldGroup::new(tl!("Adjustment").to_string()).show(ui, |ui, _| {
         Field::new(tl!("Adjustment").to_string()).show(ui, |ui, _| {
             Select::new(tl!("Adjustment").to_string(), Bind::bound(&mut st.index), &entries).show(ui);

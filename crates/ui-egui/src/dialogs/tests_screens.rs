@@ -67,6 +67,36 @@ fn stays_open(app: &mut VectorcraftApp) {
     assert_eq!(kind(app).as_deref(), Some(export_for_screens::KIND));
 }
 
+#[test]
+fn a_queued_export_requires_fresh_confirmation_after_switching_documents() {
+    use craft::ui::dialog::{HeldOk, dialog_id};
+
+    let (mut app, log) = app(1, true);
+    let source = app.session.active().unwrap().uid;
+    app.run("file.new", json!({"width": 40, "height": 30})).unwrap();
+    app.run("artboard.rename", json!({"indices": [0], "name": "Destination"})).unwrap();
+    let destination = app.session.active().unwrap().uid;
+    app.run("window.previousDocument", json!({})).unwrap();
+    assert_eq!(app.session.active().unwrap().uid, source);
+    open(&mut app);
+
+    let ctx = app.ui_ctx.clone().unwrap();
+    let dialogs = app.dialogs().unwrap();
+    let id = dialog_id(export_for_screens::KIND);
+    dialogs.with(|host| {
+        assert!(!host.confirm_by_id(&ctx, id));
+        assert_eq!(host.held_state(id), Some(HeldOk::Waiting));
+    });
+    app.run("window.nextDocument", json!({})).unwrap();
+    assert_eq!(app.session.active().unwrap().uid, destination);
+    export_for_screens::pump(&mut app, &ctx);
+
+    assert!(log.borrow().is_empty(), "the earlier OK cannot download from the destination tab");
+    assert!(matches!(dialogs.with(|host| host.held_state(id)), Some(HeldOk::Refused(_))));
+    try_confirm(&mut app).unwrap();
+    assert_eq!(log.borrow().iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(), ["Destination.png"]);
+}
+
 fn temp_folder(tag: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!("vc-efs-{tag}-{}", std::process::id()))
 }

@@ -304,9 +304,9 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
         o.remove(ASKED);
         o.remove(DROPPED);
     }
-    if matches!(read, Read::ForUser { .. }) {
-        crate::dialogs::import_pdf::place_with_preferred_text_as(app, &mut p);
-    }
+    // An embedded PDF without `textAs` takes the `pdfTextAs` preference, placed by the user or run
+    // as a command.
+    crate::dialogs::import_pdf::place_with_preferred_text_as(app, &mut p);
     match read {
         Read::ForUser { dropped } if crate::placing::available(app) => {
             let r = crate::placing::start(app, &p, dropped);

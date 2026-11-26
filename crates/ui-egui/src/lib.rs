@@ -72,6 +72,7 @@ pub mod prefs_dialog;
 pub mod print;
 pub mod recovery;
 pub mod render_worker;
+pub mod retype_runs;
 pub mod screen_color;
 pub mod script_runs;
 pub mod scripts_menu;
@@ -249,6 +250,8 @@ pub struct VectorcraftApp {
     pub placing: placing::Placing,
     /// Image Traces running off the UI thread ([`trace_runs`]).
     pub trace_runs: trace_runs::TraceRuns,
+    /// Retype's search of the installed fonts, off the UI thread ([`retype_runs`]).
+    pub retype_runs: retype_runs::RetypeRuns,
     /// Data Recovery's timer and startup question ([`recovery`]).
     pub recovery: recovery::Timer,
     /// The Close, Close All or Quit in progress, which asks about each unsaved document in turn.
@@ -270,6 +273,8 @@ pub struct VectorcraftApp {
     pub(crate) missing_font_edit_token: Option<u64>,
     /// The hosted dialogs whose OK the app answers, one record each.
     pub(crate) held: dialogs::host::Held,
+    /// The document whose settings the open Document Setup dialog edits.
+    pub(crate) document_setup_source: Option<u64>,
     /// The undo step each value gesture in progress edits under: a scrub or a slider drag is one
     /// step however many values it sets.
     pub(crate) edit_scopes: HashMap<GestureId, UndoScope>,
