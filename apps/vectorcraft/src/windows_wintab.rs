@@ -153,6 +153,8 @@ const MAX_DEVICES: u32 = 16;
 const MAX_SKEW_MS: u32 = 200;
 /// At most this many cursors' readings are kept.
 const MAX_READINGS: usize = 4;
+/// At most this many pens' ends are kept.
+const MAX_PENS: usize = 16;
 
 /// Sets up the driver's default context, `words`, for the wheel: packet and cursor messages on,
 /// the system cursor and pen messages off, the [`PACKET_DATA`] fields in absolute mode, packets on
@@ -247,6 +249,52 @@ fn device_of(cursor: u32, devices: &[(u32, u32)]) -> Option<usize> {
     found.next().is_none().then_some(d)
 }
 
+/// What the driver said about a cursor's wheel range.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Lookup {
+    /// The range, or `None` for a cursor the driver describes without a wheel.
+    Known(Option<Axis>),
+    /// A `WTInfoW` call failed at this message time.
+    Failed { at: u32 },
+}
+
+/// Each cursor's wheel range, as the driver reported it, until the driver's information changes.
+#[derive(Clone, Debug, Default)]
+struct Cursors(Vec<(u32, Lookup)>);
+
+impl Cursors {
+    /// The wheel range of `cursor` for a packet at the message time `time`, asking the driver with
+    /// `query` the first time, or again once [`retry_due`] after a query that failed (`Err`).
+    /// Until then a cursor whose query failed reads no wheel.
+    fn axis(&mut self, cursor: u32, time: u32, query: impl FnOnce() -> Result<Option<Axis>, ()>) -> Option<Axis> {
+        if let Some(i) = self.0.iter().position(|(c, _)| *c == cursor) {
+            match self.0[i].1 {
+                Lookup::Known(axis) => return axis,
+                Lookup::Failed { at } if !retry_due(at, time) => return None,
+                Lookup::Failed { .. } => {
+                    self.0.remove(i);
+                }
+            }
+        }
+        let lookup = match query() {
+            Ok(axis) => Lookup::Known(axis),
+            Err(()) => Lookup::Failed { at: time },
+        };
+        if self.0.len() >= MAX_READINGS * 4 {
+            self.0.remove(0);
+        }
+        self.0.push((cursor, lookup));
+        match lookup {
+            Lookup::Known(axis) => axis,
+            Lookup::Failed { .. } => None,
+        }
+    }
+
+    fn clear(&mut self) {
+        self.0.clear();
+    }
+}
+
 /// Whether two times of the message clock, which wraps, are at most [`MAX_SKEW_MS`] apart.
 fn near(a: u32, b: u32) -> bool {
     (a.wrapping_sub(b) as i32).unsigned_abs() <= MAX_SKEW_MS
@@ -269,8 +317,10 @@ struct Reading {
 #[derive(Clone, Debug, Default)]
 struct Readings {
     list: Vec<Reading>,
-    /// The end of the pen the last pointer message read, `Some(true)` for the eraser end.
-    eraser: Option<bool>,
+    /// The pointer id of each pen whose pointer messages were read since the readings started
+    /// afresh, with the end its last message read (`true` for the eraser end), at most
+    /// [`MAX_PENS`] of them.
+    ends: Vec<(u32, bool)>,
     /// The pointer id of the pen whose message first read the wheel since the readings started
     /// afresh; another pen's messages read none.
     pen: Option<u32>,
@@ -322,7 +372,7 @@ impl Readings {
     /// could not be read, the context's queue overflowed, or the context closed.
     fn forget(&mut self) {
         self.list.clear();
-        self.eraser = None;
+        self.ends.clear();
         self.pen = None;
         self.cursor = None;
     }
@@ -339,16 +389,25 @@ impl Readings {
     /// readings, the one cursor read since they started afresh, however long ago its last packet
     /// came (a pen held still sends none). `None` when no cursor, or more than one, is that recent,
     /// or the cursor has read only 0 since the readings started afresh, or another pen's message
-    /// read a wheel first since then, or the pen read another cursor's wheel since then. A turn to
-    /// the other end starts them afresh first.
+    /// read a wheel first since then, or the pen read another cursor's wheel since then. The same
+    /// pen's turn to its other end starts them afresh first; another pen's message with another end
+    /// does not.
     fn wheel_for(&mut self, time: u32, pen: u32, eraser: bool) -> Option<f32> {
         if self.pen.is_some_and(|p| p != pen) {
             return None;
         }
-        if self.eraser.is_some_and(|e| e != eraser) {
+        if self.ends.iter().any(|&(p, e)| p == pen && e != eraser) {
             self.forget();
         }
-        self.eraser = Some(eraser);
+        match self.ends.iter_mut().find(|(p, _)| *p == pen) {
+            Some(end) => end.1 = eraser,
+            None => {
+                if self.ends.len() >= MAX_PENS {
+                    self.ends.remove(0);
+                }
+                self.ends.push((pen, eraser));
+            }
+        }
         let r = match self.list.as_slice() {
             [one] if self.pen == Some(pen) => one,
             list => {
@@ -517,10 +576,11 @@ impl Notices {
 }
 
 /// Opens a context with `open` only when `hook` put the window procedure that notes the driver's
-/// notices in front of the window's own; otherwise opens none, and the window is tried again as
+/// notices in front of the window's own and, asked after every other driver call, this app is
+/// still the active one (`active`); otherwise opens none, and the window is tried again as
 /// [`next_context`] says.
-fn hooked_open<H>(hook: impl FnOnce() -> bool, open: impl FnOnce() -> Option<H>) -> Option<H> {
-    if hook() { open() } else { None }
+fn hooked_open<H>(hook: impl FnOnce() -> bool, active: impl FnOnce() -> bool, open: impl FnOnce() -> Option<H>) -> Option<H> {
+    if hook() && active() { open() } else { None }
 }
 
 /// What a message does to the readings and the context.
@@ -586,9 +646,10 @@ mod win {
     use windows::core::{PCWSTR, s, w};
 
     use super::{
-        Axis, CSR_PKTDATA, CSR_TYPE, Current, DVC_FIRSTCSR, DVC_NCSRTYPES, DVC_TPRESSURE, IFC_NDEVICES, LOGCONTEXT_WORDS, MAX_DEVICES, MAX_INDEX,
-        MAX_READINGS, Message, Notice, Notices, PACKET_BUFFER, PACKET_DATA, Readings, WTI_CURSORS, WTI_DEFCONTEXT, WTI_DEVICES, WTI_INTERFACE, Wheel,
-        calls_driver, configure, decode, device_of, hooked_open, message, next_context, retry_due, unused_context, wheel_axis,
+        Axis, CSR_PKTDATA, CSR_TYPE, Current, Cursors, DVC_FIRSTCSR, DVC_NCSRTYPES, DVC_TPRESSURE, IFC_NDEVICES, LOGCONTEXT_WORDS, MAX_DEVICES,
+        MAX_INDEX, Message, Notice, Notices, PACKET_BUFFER, PACKET_DATA, PK_TANGENT_PRESSURE, Readings, WTI_CURSORS, WTI_DEFCONTEXT, WTI_DEVICES,
+        WTI_INTERFACE, Wheel, calls_driver, configure, decode, device_of, hooked_open, is_airbrush, message, next_context, retry_due, unused_context,
+        wheel_axis,
     };
 
     /// `WTInfoW`, `WTOpenW`, `WTClose` and `WTPacket` (`wintab.h`).
@@ -621,8 +682,7 @@ mod win {
         /// The window an open was last tried for, and the message time it was tried at
         /// ([`next_context`]).
         tried: Option<(*mut c_void, u32)>,
-        /// Each cursor's wheel range, as the driver reported it.
-        cursors: Vec<(u32, Option<Axis>)>,
+        cursors: Cursors,
         readings: Readings,
     }
 
@@ -821,21 +881,27 @@ mod win {
         (wrote == N * 4).then_some(out)
     }
 
-    /// The wheel range of `cursor`, `None` for a cursor without one or one the driver does not
-    /// describe.
-    fn cursor_axis(api: Api, cursor: u32) -> Option<Axis> {
+    /// The wheel range of `cursor`: `Ok(None)` for a cursor the driver describes without one, and
+    /// `Err` when a `WTInfoW` call it needs fails.
+    fn cursor_axis(api: Api, cursor: u32) -> Result<Option<Axis>, ()> {
         if cursor >= MAX_INDEX {
-            return None;
+            return Ok(None);
         }
-        let [csr_type] = info::<1>(api, WTI_CURSORS + cursor, CSR_TYPE)?;
-        let [csr_pktdata] = info::<1>(api, WTI_CURSORS + cursor, CSR_PKTDATA)?;
-        let [count] = info::<1>(api, WTI_INTERFACE, IFC_NDEVICES)?;
+        let [csr_type] = info::<1>(api, WTI_CURSORS + cursor, CSR_TYPE).ok_or(())?;
+        let [csr_pktdata] = info::<1>(api, WTI_CURSORS + cursor, CSR_PKTDATA).ok_or(())?;
+        if !is_airbrush(csr_type) || csr_pktdata & PK_TANGENT_PRESSURE == 0 {
+            return Ok(None);
+        }
+        let [count] = info::<1>(api, WTI_INTERFACE, IFC_NDEVICES).ok_or(())?;
         let mut devices = vec![];
         for d in 0..count.min(MAX_DEVICES) {
-            devices.push((info::<1>(api, WTI_DEVICES + d, DVC_FIRSTCSR)?[0], info::<1>(api, WTI_DEVICES + d, DVC_NCSRTYPES)?[0]));
+            let [first] = info::<1>(api, WTI_DEVICES + d, DVC_FIRSTCSR).ok_or(())?;
+            let [n] = info::<1>(api, WTI_DEVICES + d, DVC_NCSRTYPES).ok_or(())?;
+            devices.push((first, n));
         }
-        let device = u32::try_from(device_of(cursor, &devices)?).ok()?;
-        wheel_axis(csr_type, csr_pktdata, info::<4>(api, WTI_DEVICES + device, DVC_TPRESSURE))
+        let Some(device) = device_of(cursor, &devices).and_then(|d| u32::try_from(d).ok()) else { return Ok(None) };
+        let range = info::<4>(api, WTI_DEVICES + device, DVC_TPRESSURE).ok_or(())?;
+        Ok(wheel_axis(csr_type, csr_pktdata, Some(range)))
     }
 
     /// Whether a context is open, or may be: [`STATE`] is borrowed for a driver call.
@@ -912,8 +978,10 @@ mod win {
             self.tried = Some((owner, time));
             let Some(mut words) = info::<LOGCONTEXT_WORDS>(api, WTI_DEFCONTEXT, 0) else { return };
             configure(&mut words);
+            // Whether the app is active is asked again here, after the close and `WTInfoW` above.
             let handle = hooked_open(
                 || subclass(owner),
+                is_active,
                 || {
                     // SAFETY: `words` is a `LOGCONTEXTW` of the size `WTInfoW` gave, and lives for
                     // the call.
@@ -930,16 +998,8 @@ mod win {
             self.context.as_ref().filter(|c| c.hwnd == hwnd && c.handle as usize == ctx).map(|c| c.handle)
         }
 
-        fn axis(&mut self, api: Api, cursor: u32) -> Option<Axis> {
-            if let Some(&(_, axis)) = self.cursors.iter().find(|(c, _)| *c == cursor) {
-                return axis;
-            }
-            let axis = cursor_axis(api, cursor);
-            if self.cursors.len() >= MAX_READINGS * 4 {
-                self.cursors.remove(0);
-            }
-            self.cursors.push((cursor, axis));
-            axis
+        fn axis(&mut self, api: Api, cursor: u32, time: u32) -> Option<Axis> {
+            self.cursors.axis(cursor, time, || cursor_axis(api, cursor))
         }
     }
 
@@ -967,7 +1027,7 @@ mod win {
                     // SAFETY: the handle is the open context's, and `buf` holds more bytes than a
                     // packet of every field.
                     let read = unsafe { (api.packet)(handle, serial, buf.0.as_mut_ptr().cast()) } != 0;
-                    let read = read.then(|| decode(&buf.0, PACKET_DATA)).flatten().map(|p| (p, s.axis(api, p.cursor)));
+                    let read = read.then(|| decode(&buf.0, PACKET_DATA)).flatten().map(|p| (p, s.axis(api, p.cursor, msg.time)));
                     s.readings.read(read, msg.time);
                 }
                 Message::Forget { ctx } => {
@@ -1409,15 +1469,69 @@ mod tests {
             opens.set(opens.get() + 1);
             Some(7)
         };
-        assert_eq!(hooked_open(|| true, open), Some(7));
+        assert_eq!(hooked_open(|| true, || true, open), Some(7));
         assert_eq!(opens.get(), 1);
         let open = || {
             opens.set(opens.get() + 1);
             Some(7)
         };
-        assert_eq!(hooked_open(|| false, open), None, "no context without the procedure");
+        assert_eq!(hooked_open(|| false, || true, open), None, "no context without the procedure");
         assert_eq!(opens.get(), 1, "and the driver is not asked for one");
-        assert_eq!(hooked_open(|| true, || None::<u8>), None, "an open that fails");
+        assert_eq!(hooked_open(|| true, || true, || None::<u8>), None, "an open that fails");
+    }
+
+    #[test]
+    fn no_context_opens_when_another_app_became_active_before_the_open() {
+        let opens = std::cell::Cell::new(0);
+        let open = || {
+            opens.set(opens.get() + 1);
+            Some(7)
+        };
+        assert_eq!(hooked_open(|| true, || false, open), None);
+        assert_eq!(opens.get(), 0, "the driver is not asked for one");
+    }
+
+    #[test]
+    fn another_pens_end_does_not_start_the_readings_afresh() {
+        let other = 2;
+        let mut r = Readings::default();
+        assert_eq!(r.wheel_for(100, other, true), None, "an eraser end before any packet");
+        r.packet(packet(1, 300), AXIS, 110);
+        assert_eq!(r.wheel_at(120, false), Some(0.3), "another pen's tip still reads the packet");
+        assert_eq!(r.wheel_at(130, true), None, "the same pen turned over starts them afresh");
+        // Pen 1's tip, then pen 2's, then pen 1's eraser, before either reads a wheel.
+        r.forget();
+        assert_eq!(r.wheel_at(200, false), None, "no packet yet");
+        assert_eq!(r.wheel_for(210, other, false), None);
+        r.packet(packet(1, 300), AXIS, 220);
+        assert_eq!(r.wheel_at(230, true), None, "pen 1's turn is seen past pen 2's message");
+        for pen in 10..40 {
+            r.wheel_for(5000, pen, false);
+        }
+        assert_eq!(r.ends.len(), MAX_PENS, "bounded");
+    }
+
+    #[test]
+    fn a_failed_cursor_lookup_is_asked_again_later() {
+        let asks = std::cell::Cell::new(0);
+        let failing = || {
+            asks.set(asks.get() + 1);
+            Err(())
+        };
+        let mut c = Cursors::default();
+        assert_eq!(c.axis(1, 1000, failing), None);
+        assert_eq!(c.axis(1, 1000 + RETRY_MS - 1, || Ok(AXIS)), None, "not asked again before the interval");
+        assert_eq!(asks.get(), 1);
+        assert_eq!(c.axis(1, 1000 + RETRY_MS, || Ok(AXIS)), AXIS, "asked again after it");
+        assert_eq!(c.axis(1, 9000, || Ok(None)), AXIS, "a range the driver gave is kept");
+        assert_eq!(c.axis(2, 9000, || Ok(None)), None, "a cursor without a wheel");
+        assert_eq!(c.axis(2, 9000 + RETRY_MS, || Ok(AXIS)), None, "is not asked again");
+        c.clear();
+        assert_eq!(c.axis(2, 9000, || Ok(AXIS)), AXIS, "until the driver's information changes");
+        for cursor in 10..40 {
+            c.axis(cursor, 9000, || Ok(None));
+        }
+        assert_eq!(c.0.len(), MAX_READINGS * 4, "bounded");
     }
 
     #[test]
