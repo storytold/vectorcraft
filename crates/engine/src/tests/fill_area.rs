@@ -232,6 +232,29 @@ fn fill_area_takes_clipped_art_only_where_its_mask_shows_it() {
     assert_eq!((undo_len(&s), stack(&s)), (undo, kids));
 }
 
+/// Parts of an outline that lie on the mask's edge show: a square without a fill, clipped by a mask
+/// of the same square, keeps all four sides and bounds its whole area. A square just outside the
+/// mask is hidden and bounds nothing.
+#[test]
+fn fill_area_keeps_outline_parts_on_the_mask_edge() {
+    let mut s = session();
+    let square = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    clip_by(&mut s, &[square], 0.0, 0.0, 100.0, 100.0);
+    deselect(&mut s);
+    let r = s.execute("shapeBuilder.copyRegion", &json!({"point": [50, 50]})).unwrap();
+    assert!((area(&s, id_of(&r)) - 10000.0).abs() < 1.0, "{}", area(&s, id_of(&r)));
+
+    let mut s = session();
+    let square = rect(&mut s, -0.005, -0.005, 100.01, 100.01);
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    clip_by(&mut s, &[square], 0.0, 0.0, 100.0, 100.0);
+    deselect(&mut s);
+    let (undo, kids) = (undo_len(&s), stack(&s));
+    assert!(s.execute("shapeBuilder.copyRegion", &json!({"point": [50, 50]})).is_err());
+    assert_eq!((undo_len(&s), stack(&s)), (undo, kids));
+}
+
 /// In a clipping group inside another, clipped art shows only where both masks show it.
 #[test]
 fn fill_area_takes_art_in_nested_clipping_groups_only_where_every_mask_shows_it() {
