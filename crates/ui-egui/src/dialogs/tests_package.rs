@@ -609,3 +609,28 @@ fn package_without_a_location_says_so() {
     assert!(matches!(held_state(&app), Some(HeldOk::Refused(_))), "OK is refused with its reason");
     assert!(with_package(&app, |_| ()).is_some(), "stays open");
 }
+
+#[test]
+fn package_save_first_does_not_save_a_different_drawing() {
+    let mut app = windowed();
+    let picker = crate::tests::picks::scripted(&mut app);
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.run("ui.packageDialog", json!({})).unwrap();
+    assert_eq!(confirm::open_question(&app).unwrap().2, "file.saveAs");
+
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    answer_question(&mut app);
+    let ctx = app.ui_ctx.clone().unwrap();
+    crate::tests::picks::poll(&mut app, &ctx);
+
+    assert!(picker.requests().is_empty(), "Package in drawing A must never start Save As for drawing B");
+    assert_eq!(app.ui.status, "This dialog was opened in a different document.");
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.run("ui.packageDialog", json!({})).unwrap();
+    answer_question(&mut app);
+    crate::tests::picks::poll(&mut app, &ctx);
+    assert_eq!(picker.requests().len(), 1, "approval in the opening drawing starts Save As");
+}

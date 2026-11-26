@@ -494,3 +494,24 @@ fn file_save_writes_opened_eps_back_without_another_save_as_dialog() {
     assert_eq!(app.session.active().unwrap().path.as_deref(), Some(path.as_str()));
     std::fs::remove_dir_all(d).unwrap();
 }
+
+#[test]
+fn revert_confirmation_never_discards_another_drawings_changes() {
+    let d = dir("revert-drawing-switch");
+    let mut app = app();
+    for name in ["first.vectorcraft", "second.vectorcraft"] {
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        let path = d.join(name).to_string_lossy().to_string();
+        app.run("file.saveAs", json!({"path": path})).unwrap();
+        rect(&mut app);
+    }
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.run("file.revert", json!({})).unwrap();
+    assert!(confirm::open_question(&app).unwrap().0.contains("first"));
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    let count = objects(&app);
+    answer_top(&mut app, true);
+    let result = (objects(&app), app.session.active().unwrap().is_dirty());
+    let _ = std::fs::remove_dir_all(d);
+    assert_eq!(result, (count, true), "the second drawing must retain its unsaved edits");
+}
