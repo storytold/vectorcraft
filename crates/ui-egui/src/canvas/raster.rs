@@ -835,7 +835,7 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
             app.perf.render_ms = monotonic_ms() - t0;
             app.canvas.last_ms = app.perf.render_ms;
             app.canvas.moved = app.canvas.renderer.stats.moved > 0;
-            app.canvas.whole_frames = app.canvas.renderer.stats.view_sized > 0;
+            app.canvas.whole_frames = app.canvas.renderer.stats.view_sized > 0 || app.canvas.renderer.stats.previewed > 0;
             app.canvas.from_worker = false;
             app.canvas.reused = None;
         }

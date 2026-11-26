@@ -1591,10 +1591,15 @@ fn dragging_with_raster_effects() {
 /// without a drag, renders without `dragging` and draws the same.
 #[test]
 fn a_drag_on_the_canvas_draws_raster_effects_at_a_lower_resolution() {
-    keeping_color_settings(a_drag_at_a_lower_resolution);
+    keeping_color_settings(|| a_drag_at_a_lower_resolution(false));
 }
 
-fn a_drag_at_a_lower_resolution() {
+#[test]
+fn a_whole_drag_preview_keeps_the_next_canvas_render_whole() {
+    keeping_color_settings(|| a_drag_at_a_lower_resolution(true));
+}
+
+fn a_drag_at_a_lower_resolution(fits_frame: bool) {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.canvas.worker_started = true; // render on this thread
@@ -1617,7 +1622,7 @@ fn a_drag_at_a_lower_resolution() {
     };
     run(&mut app, vec![]);
     if let Some(vm) = app.view_mut() {
-        (vm.zoom, vm.center) = (32.0, Point::new(200.0, 155.0));
+        (vm.zoom, vm.center) = (if fits_frame { 6.4 } else { 32.0 }, Point::new(200.0, 155.0));
     }
     let still = run(&mut app, vec![]).expect("the zoomed view renders");
     assert_eq!(app.canvas.renderer.stats.previewed, 0, "a still frame");
@@ -1625,10 +1630,19 @@ fn a_drag_at_a_lower_resolution() {
     let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     run(&mut app, vec![egui::Event::PointerMoved(at)]);
     run(&mut app, vec![button(at, true)]);
+    if fits_frame {
+        // Force the first move to draw a whole frame without a previous effect raster.
+        app.canvas.renderer = vectorcraft_render::Renderer::new();
+        app.canvas.key = None;
+    }
     for step in [1.0, 2.0] {
         let drawn = run(&mut app, vec![egui::Event::PointerMoved(at + vec2(13.0, 7.0) * step)]).expect("each frame of the drag renders");
         assert!(app.canvas.key.as_ref().is_some_and(|k| k.interacting && k.dragging), "step {step}");
         assert_eq!(app.canvas.renderer.stats.previewed, 1, "the filtered content, step {step}");
+        if fits_frame {
+            assert_eq!(app.canvas.renderer.stats.view_sized, 0, "only the drag budget reduced the raster");
+            assert!(app.canvas.whole_frames, "a whole drag preview cannot accept a full-resolution patch");
+        }
         assert!(app.canvas.moved);
         assert!(drawn != still, "the rectangle moved, step {step}");
     }
