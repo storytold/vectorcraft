@@ -370,6 +370,12 @@ pub(crate) fn apply_drop(app: &mut VectorcraftApp, drop: &Dropped) -> Result<(),
             params["ids"] = json!([owner(app, &hit)?]);
             params["focus"] = json!(false);
             let cmd = crate::panels::proxy_cmd(app, false);
+            if let Some(gradient) = params.get_mut("gradient").and_then(Value::as_object_mut) {
+                if cmd == "paint.setStroke" {
+                    gradient.remove("dither");
+                }
+                params["keepModel"] = json!(true);
+            }
             run(app, cmd, params)
         }
         Payload::Panel(PanelDrag::Appearance(source)) => {

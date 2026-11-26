@@ -10904,6 +10904,11 @@ swatch	Yellow Green	Verde-amarelado
 	No objects are selected.	Nenhum objeto selecionado.
 	Open a document to mark its fold lines.	Abra um documento para marcar suas linhas de dobra.
 	Remove Fold Line Role	Remover Tipo de Linha
+	Fold Angle	Ângulo de Dobra
+	Set Fold Angle…	Definir Ângulo de Dobra…
+	Set Fold Angle	Definir Ângulo de Dobra
+	Reset Fold Angle	Redefinir Ângulo de Dobra
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	selecione uma linha de vinco, de meio-corte ou de perfuração que não esteja bloqueada nem oculta
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Mostra um cartão com o que uma ferramenta da barra e suas teclas fazem, no lugar da dica; requer Mostrar Dicas de Ferramenta.
 	Selects whole objects and groups to move, resize or rotate them.	Seleciona objetos e grupos inteiros para movê-los, redimensioná-los ou girá-los.

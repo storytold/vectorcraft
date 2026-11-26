@@ -2,7 +2,7 @@ use super::*;
 use crate::dialogs::swatch_options::KIND;
 use crate::tests::picks::{answer_dialog, cancel_dialog, draw_dialogs, open_dialogs};
 use craft::keymap::Mods;
-use craft::ui::contract::ReorderMove;
+use craft::ui::contract::{DropAt, ReorderMove};
 use craft::ui::dialog::DialogId;
 use egui::Pos2;
 use vectorcraft_color::Color;
@@ -617,6 +617,29 @@ fn art_dropped_on_the_panel_becomes_a_pattern_swatch() {
     assert_eq!(patterns["patterns"].as_array().map(Vec::len), Some(1), "{patterns}");
     assert_eq!(patterns["editing"], Value::Null, "no pattern editing mode");
     assert_eq!(doc(&app).node(vectorcraft_doc::NodeId(id)), before.node(vectorcraft_doc::NodeId(id)), "the art stays as it was");
+}
+
+#[test]
+fn swatches_ignore_artwork_from_another_document_with_the_same_object_id() {
+    let mut app = app();
+    let shape = json!({"x": 10, "y": 10, "width": 20, "height": 20});
+    let source = app.run("shape.rectangle", shape.clone()).unwrap()["id"].as_u64().unwrap();
+    let drag = art_drag(&app, vec![vectorcraft_doc::NodeId(source)]);
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let local = app.run("shape.rectangle", shape).unwrap()["id"].as_u64().unwrap();
+    assert_eq!(source, local);
+
+    dropped_below(&mut app, drag.clone(), none());
+    assert!(doc(&app).patterns.is_empty(), "foreign artwork cannot create a pattern");
+
+    let star = app.run("shape.star", json!({"cx": 50, "cy": 50, "radius1": 20, "radius2": 9, "points": 5})).unwrap()["id"].as_u64().unwrap();
+    let local_drag = art_drag(&app, vec![vectorcraft_doc::NodeId(star)]);
+    dropped_below(&mut app, local_drag, none());
+    assert_eq!(doc(&app).patterns.len(), 1, "the same document's artwork can create a pattern");
+    let before = doc(&app).patterns[0].clone();
+    let name = before.name.clone();
+    dropped(&mut app, drag, &name, alt());
+    assert_eq!(doc(&app).patterns[0].art, before.art, "foreign artwork cannot replace an existing pattern");
 }
 
 /// Art released with Alt held over a pattern swatch becomes that pattern's tile art in one undo

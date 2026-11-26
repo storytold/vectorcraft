@@ -4,6 +4,15 @@ use craft::color_ui::ui::SwatchKey;
 use craft::keymap::Mods;
 use craft::ui::contract::{DropAt, ReorderMove};
 
+/// Swatches take paint payloads and artwork from the current document's canvas.
+pub(super) fn accepts(drag: &PanelDrag, document: u64) -> bool {
+    match drag {
+        PanelDrag::Paint { .. } => true,
+        PanelDrag::Art { document: source, .. } => *source == document,
+        _ => false,
+    }
+}
+
 /// A drag released on the panel.
 pub(super) enum Drop {
     /// Swatches (or colour groups) dropped before or `after` row `target`, into folder `target`, or
@@ -78,6 +87,9 @@ fn place(shown: &[SwatchKey], at: &DropAt<SwatchKey>) -> (Option<String>, bool) 
 /// `drag` dropped onto a swatch or between rows of the `shown` list (ap.AP2 `Dropped`); a gap with no
 /// row under the pointer is the end of the list.
 pub(super) fn on_dropped(app: &mut VectorcraftApp, shown: &[SwatchKey], at: &DropAt<SwatchKey>, drag: &PanelDrag, mods: Mods) {
+    if !app.session.active().is_some_and(|st| accepts(drag, st.uid)) {
+        return;
+    }
     let (target, after) = place(shown, at);
     if let Some(drop) = Drop::of(drag, target, after, mods) {
         apply_drop(app, drop);

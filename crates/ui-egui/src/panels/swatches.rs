@@ -14,7 +14,7 @@ use craft::color_ui::palette::{SwatchColor, SwatchEntry, SwatchGroup, SwatchKind
 use craft::color_ui::ui::{SwatchKey, SwatchesPanel, SwatchesState};
 use craft::theme::Srgba;
 use craft::ui::choice::SwatchFace;
-use craft::ui::contract::{Bind, DropAt, DropPlace, ListDrag, MemoProps, SelectMode};
+use craft::ui::contract::{Bind, DropPlace, ListDrag, MemoProps, SelectMode};
 use craft::ui::contract::{Entry, Props as _, Show as _, ShowContainer as _, Trigger};
 use craft::ui::menu::{Menu, MenuItem};
 use craft::ui::patterns::presets::{PresetEvent, PresetView, ThumbInfo};
@@ -417,8 +417,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui) {
             _ => vec![],
         })
         .row_items(|key| row_items(shown_app, key))
-        .takes_drop::<PanelDrag>(DropPlace::Between, takes)
-        .takes_drop::<PanelDrag>(DropPlace::Onto, takes)
+        .takes_drop::<PanelDrag>(DropPlace::Between, |drag, _| dnd::accepts(drag, document))
+        .takes_drop::<PanelDrag>(DropPlace::Onto, |drag, _| dnd::accepts(drag, document))
         .select(SelectMode::Multi)
         .search(model.show_find)
         .reveal(focus.map(SwatchKey::Swatch))
@@ -466,12 +466,6 @@ fn on_event(app: &mut VectorcraftApp, shown: &[SwatchKey], event: PresetEvent<Sw
         PresetEvent::Reorder(EditEvent::Commit { after, .. } | EditEvent::Set { after, .. }) => dnd::on_reorder(app, shown, &after),
         _ => {}
     }
-}
-
-/// What a swatch's drag or row menu may carry: paints and art dragged off the canvas, not the Appearance panel's
-/// thumbnail.
-fn takes(d: &PanelDrag, _at: &DropAt<SwatchKey>) -> bool {
-    matches!(d, PanelDrag::Paint { .. } | PanelDrag::Art { .. })
 }
 
 /// A double click or Enter: Swatch Options for a swatch, Edit or Apply Color Group for a group.
