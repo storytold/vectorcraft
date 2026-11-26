@@ -912,6 +912,7 @@ fn pointer_replies_name_the_key_object() {
 
 /// A Shape Builder click on a large selection merges on another thread: the frames go on, and
 /// the `ui.pointer` reply comes once the merge is applied, with the selection after it.
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn pointer_reply_waits_for_a_merge_on_another_thread() {
     let (tx, rx) = std::sync::mpsc::channel();
@@ -933,7 +934,9 @@ fn pointer_reply_waits_for_a_merge_on_another_thread() {
     assert_eq!(hover.try_recv().unwrap()["ok"], true, "a hover is answered at once");
     app.session.tool_poll(app.view_info(), true).unwrap();
     let revision = app.session.active().unwrap().revision;
+    let mut merge = vectorcraft_tools::builder::testing::pause_next_merge().unwrap();
     let click = send(&mut app, json!([{"kind": "down", "x": 15, "y": 10}, {"kind": "up", "x": 15, "y": 10}]));
+    merge.wait_started().unwrap();
     assert!(click.try_recv().is_err() && app.session.tool_editing(), "the click is not answered before the merge is applied");
     // A hover sent meanwhile is answered at once; a click is made after the merge, and its
     // reply waits until then.
@@ -944,32 +947,20 @@ fn pointer_reply_waits_for_a_merge_on_another_thread() {
     assert!(press.try_recv().is_err(), "a Cmd-click during the merge waits for it");
     let hover = send(&mut app, json!([{"kind": "move", "x": 45, "y": 10}]));
     assert_eq!(hover.try_recv().map(|r| r["ok"].clone()), Ok(json!(true)), "a hover after the held Cmd-click");
-    let start = std::time::Instant::now();
-    let reply = loop {
-        if let Ok(r) = click.try_recv() {
-            break r;
-        }
-        assert!(app.session.tool_editing(), "the merge is being computed until the reply goes");
-        assert_eq!(app.session.active().unwrap().revision, revision);
-        assert!(start.elapsed() < std::time::Duration::from_secs(60), "no reply");
-        std::thread::sleep(std::time::Duration::from_millis(2));
-        // A frame: the canvas checks on the tool, then the replies are answered.
-        let r = app.session.tool_poll(app.view_info(), false);
-        crate::canvas::apply_requests(&mut app, r);
-        app.run_control(&ctx);
-    };
+    assert!(app.session.tool_editing(), "the merge is being computed until the reply goes");
+    assert_eq!(app.session.active().unwrap().revision, revision);
+    merge.release();
+    let r = app.session.tool_poll(app.view_info(), true);
+    crate::canvas::apply_requests(&mut app, r);
+    app.run_control(&ctx);
+    let reply = click.try_recv().expect("the merge was applied before answering the click");
     assert_eq!(reply["ok"], true, "{reply}");
     assert_eq!(reply["result"]["selection"].as_array().map(Vec::len), Some(41), "{reply}: the selection after the merge");
     assert_ne!(app.session.active().unwrap().revision, revision);
-    let press = loop {
-        if let Ok(r) = press.try_recv() {
-            break r;
-        }
-        assert!(start.elapsed() < std::time::Duration::from_secs(60), "no reply to the Cmd-click");
-        let r = app.session.tool_poll(app.view_info(), false);
-        crate::canvas::apply_requests(&mut app, r);
-        app.run_control(&ctx);
-    };
+    let r = app.session.tool_poll(app.view_info(), true);
+    crate::canvas::apply_requests(&mut app, r);
+    app.run_control(&ctx);
+    let press = press.try_recv().expect("the held Cmd-click was applied after the merge");
     assert_eq!(press["result"]["selection"].as_array().map(Vec::len), Some(0), "{press}: the lent selection tool deselected after the merge");
     assert_eq!(press["result"]["tool"], "shapeBuilder", "{press}");
 }
