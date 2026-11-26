@@ -688,6 +688,79 @@ mod tests {
         h.run_steps(3);
     }
 
+    fn open_with_two_documents() -> (Harness, NodeId) {
+        let (mut app, first) = square_app();
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 70, "y": 50, "width": 30, "height": 65})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        let mut h = start(app);
+        open(h.state_mut());
+        h.run_steps(2);
+        (h, first)
+    }
+
+    #[test]
+    fn preview_and_ok_stay_on_the_opening_document() {
+        let (mut h, first) = open_with_two_documents();
+        set(&mut h, "moveH", json!(45));
+        h.run_steps(2);
+        assert!(h.state().session.in_interaction(), "the opening document has a preview");
+
+        h.state_mut().run("document.activate", json!({"index": 1})).unwrap();
+        let other = h.state().session.doc().unwrap().doc.clone();
+        set(&mut h, "moveH", json!(100));
+        h.run_steps(2);
+        assert_eq!(h.state().session.doc().unwrap().doc, other, "Preview must leave the other document unchanged");
+        assert!(!h.state().session.in_interaction());
+        confirm(&mut h);
+        assert_eq!(h.state().session.doc().unwrap().doc, other, "OK must leave the other document unchanged");
+        assert!(h.state().object_dialogs.each.is_some(), "the draft is still open");
+
+        h.state_mut().run("document.activate", json!({"index": 0})).unwrap();
+        confirm(&mut h);
+        let doc = &h.state().session.doc().unwrap().doc;
+        assert!((doc.node(first).unwrap().geometric_bounds().unwrap().x0 - 120.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn copy_stays_on_the_opening_document() {
+        let (mut h, _) = open_with_two_documents();
+        set(&mut h, "preview", json!(false));
+        set(&mut h, "moveH", json!(100));
+        h.run_steps(2);
+        h.state_mut().run("document.activate", json!({"index": 1})).unwrap();
+        let other = h.state().session.doc().unwrap().doc.clone();
+        h.get_by_role_and_label(egui::accesskit::Role::Button, "Copy").click();
+        h.run_steps(4);
+        assert_eq!(h.state().session.doc().unwrap().doc, other, "Copy must leave the other document unchanged");
+        assert_eq!(field(&h, COPY), Some(FieldValue::Bool(false)), "a refused Copy clears its flag");
+
+        h.state_mut().run("document.activate", json!({"index": 0})).unwrap();
+        h.get_by_role_and_label(egui::accesskit::Role::Button, "Copy").click();
+        h.run_steps(4);
+        assert_eq!(h.state().session.doc().unwrap().doc.layers[0].children().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn cancel_keeps_the_other_documents_gesture_active() {
+        let (mut h, _) = open_with_two_documents();
+        set(&mut h, "moveH", json!(45));
+        h.run_steps(2);
+        assert!(h.state().session.in_interaction());
+        h.state_mut().run("document.activate", json!({"index": 1})).unwrap();
+        let app = h.state_mut();
+        app.session.begin_interaction("Another gesture").unwrap();
+        app.session.preview("object.move", &json!({"dx": 20, "dy": 0})).unwrap();
+        let other = app.session.doc().unwrap().doc.clone();
+
+        let (ctx, id) = (h.ctx.clone(), id(&h));
+        assert!(h.state().dialogs().unwrap().with(|host| host.cancel_by_id(&ctx, id)));
+        h.run_steps(3);
+        assert_eq!(h.state().session.doc().unwrap().doc, other, "Cancel preserves the other document's gesture");
+        assert!(h.state().session.in_interaction());
+    }
+
     #[test]
     fn ok_transforms_each_and_keeps_the_scale_options() {
         let (mut app, node) = square_app();
