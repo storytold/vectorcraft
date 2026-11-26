@@ -716,6 +716,33 @@ fn the_status_bar_show_choice_is_checked_and_saved() {
     );
 }
 
+/// The status bar's Rotation box shows the view's angle: a preset angle shows its row's label, an angle between the
+/// presets shows rounded to a whole degree, and a pick from the list still turns the view.
+#[test]
+fn the_status_bar_rotation_box_shows_the_view_angle() {
+    let mut bar = status_readout_app();
+    let rotation = |bar: &mut Shown, angle: f64| {
+        bar.app().run("view.rotate", json!({ "angle": angle })).unwrap();
+        let rotation = bar.settle().find("Rotation").unwrap_or_else(|| panic!("the status bar has the Rotation box"));
+        let value = bar.tree().value_of(rotation.node).map(str::to_owned);
+        (rotation, value)
+    };
+    for (angle, shown) in [(17.0, "17°"), (37.4, "37°"), (-0.3, "0°"), (-122.6, "-123°")] {
+        let (_, value) = rotation(&mut bar, angle);
+        assert_eq!(value.as_deref(), Some(shown), "the box at {angle}°");
+        assert!(bar.texts().iter().any(|t| t.text == shown), "the box draws {shown}");
+    }
+    let (_, value) = rotation(&mut bar, 45.0);
+    assert_eq!(value.as_deref(), Some("45°"));
+    // From an angle between the presets, the list still turns the view to the row picked.
+    let (opener, _) = rotation(&mut bar, 17.0);
+    bar.click_on(&opener).settle();
+    bar.click("-45°").settle();
+    assert_eq!(bar.app().view().map(|v| v.rotation), Some(-45.0));
+    let rotation = bar.find("Rotation").unwrap_or_else(|| panic!("the status bar has the Rotation box"));
+    assert_eq!(bar.tree().value_of(rotation.node), Some("-45°"));
+}
+
 /// While background work runs the status bar shows it where the message was, with the count of the jobs after the
 /// first, and the message of the work's result takes the same place when it ends. Screen readers find the progress.
 #[test]
