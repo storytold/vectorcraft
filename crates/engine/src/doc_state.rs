@@ -53,6 +53,9 @@ pub struct DocState {
     pub interaction: Option<Interaction>,
     /// Edits made while this is open are one undo step (a scrubbed numeric field).
     pub undo_group: Option<UndoGroup>,
+    /// The built-in effect the edit in progress applies ([`crate::Session::edit_effect`]): the
+    /// undo step it records keeps it ([`DocState::push_undo`]).
+    pub(crate) effect_step: Option<&'static str>,
     /// For Object → Transform → Transform Again (⌘D): what the last transformation was. A
     /// transform command keeps the `copy`, `typeAreas` and `patterns` it used, and `strokes` and
     /// `corners` when it scales; a drag keeps the params of its last preview with the values that
@@ -410,6 +413,7 @@ impl DocState {
             symbol_edit_return: Default::default(),
             interaction: None,
             undo_group: None,
+            effect_step: None,
             last_transform: None,
             last_selection_cmd: None,
             recalled_selection: RecalledSelection::default(),
@@ -593,7 +597,9 @@ impl DocState {
                 Some(l) if l.selection == it.selection => l.selection.clone(),
                 _ => it.selection,
             };
+            let effect = std::mem::replace(&mut self.effect_step, it.effect);
             self.push_undo(it.label, it.doc, selection);
+            self.effect_step = effect;
             if let Some(paints) = it.color_mode_paints
                 && let Some(e) = self.history.undo.last_mut()
             {
@@ -609,8 +615,10 @@ impl DocState {
     }
     /// Record an undo step: `doc` and `selection` as they were before an edit (the document now is
     /// the one after it). In an undo group only the group's first edit records one: the edits
-    /// after it extend that step.
+    /// after it extend that step. A new step named after the effect in [`DocState::effect_step`]
+    /// keeps that effect ([`HistoryEntry::effect`]); a step an undo group names keeps none.
     pub(crate) fn push_undo(&mut self, mut label: String, doc: Arc<Document>, selection: Arc<Selection>) {
+        let mut effect = self.effect_step;
         if let Some(g) = &mut self.undo_group {
             let recorded = |first: &Arc<Document>| self.history.undo.last().is_some_and(|l| Arc::ptr_eq(&l.doc, first));
             if g.first.as_ref().is_some_and(recorded) {
@@ -621,9 +629,11 @@ impl DocState {
             g.first = Some(doc.clone());
             if let Some(l) = &g.label {
                 label = l.clone();
+                effect = None;
             }
         }
-        let e = HistoryEntry::kept(label, doc, selection, &self.doc);
+        let mut e = HistoryEntry::kept(label, doc, selection, &self.doc);
+        e.effect = effect.filter(|id| crate::history::effect_step_label(id) == Some(e.label.as_str()));
         self.history.undo.push(e);
         self.history.clear_redo();
         self.history.trim();

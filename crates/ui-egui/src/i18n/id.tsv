@@ -643,6 +643,21 @@
 @msg	time budget	anggaran waktu
 @msg	memory budget (the selection is too large to hand over)	anggaran memori (seleksi terlalu besar untuk diserahkan)
 @msg	output size ({what} is {len} bytes, limit {max})	ukuran keluaran ({what} berukuran {len} byte, batas {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} baris {line}, kolom {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	anggaran memori
+@msg	call depth	kedalaman panggilan
+@msg	run(input, params) returned no output object	run(input, params) tidak mengembalikan objek keluaran
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" memerlukan `script`: nama file .js plug-in, di samping manifes
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` harus berupa nama file .js di folder manifes: 1-128 byte, tanpa folder, tanpa `:`, tidak diawali `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` adalah teks skrip dan hanya diberikan dalam JSON yang diterima dataBase64 plugin.install: file .vcplugin menamai skripnya di `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	manifes plug-in JavaScript memberikan `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" untuk filter objek (`kind` "filter"), bukan `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	plug-in JavaScript tidak dapat mencantumkan izin `{name}`: dari izin host, plug-in ini boleh mencantumkan `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	manifes modul WebAssembly menghilangkan `runtime`: "js" untuk plug-in JavaScript
+@msg	a JavaScript plug-in makes no command calls	plug-in JavaScript tidak memanggil perintah
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) menerima dua angka
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) menerima level, 0 (kesalahan), 1 (peringatan), 2 (informasi), atau 3 (debug), dan string
 @msg	the plug-in's grant can't be removed from the plug-in store	izin yang diberikan kepada plug-in tidak dapat dihapus dari penyimpanan plug-in
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	izin `{shown}` dicadangkan untuk API plug-in yang lebih baru; host ini tidak memberikannya
 @msg	unknown permission `{shown}`	izin tidak dikenal `{shown}`
@@ -5609,6 +5624,14 @@ imageTrace	Outline	Kontur
 	The script asks to read and write a folder you choose, with everything in it.	Skrip meminta izin untuk membaca dan menulis folder yang Anda pilih, beserta seluruh isinya.
 	Allow Once	Izinkan Sekali
 	Always Allow This Script	Selalu Izinkan Skrip Ini
+	No script has kept file access.	Tidak ada skrip yang memiliki akses berkas tersimpan.
+	Read file	Baca Berkas
+	Read and write file	Baca dan Tulis Berkas
+	Read and write folder	Baca dan Tulis Folder
+	Revoke	Cabut
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Cabut menghapus akses yang disimpan untuk setiap versi skrip. Akses ke folder mencakup semua isinya.
+@msg	Script file access revoked	Akses berkas skrip dicabut
+@msg	The script file access was already revoked	Akses berkas skrip sudah dicabut
 	Deny	Tolak
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrip dapat mengubah dokumen yang terbuka dan menulis file melalui perintah yang dijalankannya. Jalankan hanya skrip yang Anda percayai.
 	Do not show this warning again	Jangan tampilkan peringatan ini lagi
@@ -8863,6 +8886,7 @@ breakText	Glyphs	Glif
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` untuk dialog file skrip harus salah satu dari: once, always, deny, stop
 @msg	choose a file or folder first, or deny	pilih file atau folder terlebih dahulu, atau tolak
 @msg	the script file permissions could not be saved: {e}	izin file skrip tidak dapat disimpan: {e}
+@msg	the script file permissions could not be read: {e}	izin file skrip tidak dapat dibaca: {e}
 @msg	this script's file access can be allowed only once	akses file skrip ini hanya dapat diizinkan sekali
 @msg	Only the person at the keyboard can allow a script's file access	Hanya orang yang berada di depan keyboard yang dapat mengizinkan akses file skrip
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Skrip diberi paling banyak 2.048 file: file yang dipilih sesudahnya dihilangkan

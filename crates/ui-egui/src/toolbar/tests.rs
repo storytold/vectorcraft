@@ -592,7 +592,14 @@ fn review_8758_layout(double: bool) {
             "one column keeps both controls in a fitted stack"
         );
     }
-    assert!(review_8758_hovered_texts(&mut app, &ctx, 4.0, search.center()).iter().any(|t| t == "Search commands, tools, panels and effects"));
+    let chord = crate::menus::shortcut_of(&app, "help.commandPalette").expect("the native Search command has its current shortcut");
+    let expected = craft::ui::contract::tooltip::with_chord(
+        "Search commands, tools, panels and effects",
+        &chord,
+        crate::keymap::platform(),
+    );
+    let tips = review_8758_hovered_texts(&mut app, &ctx, 4.0, search.center());
+    assert!(tips.iter().any(|tip| tip == &expected), "the native Search tooltip includes its command shortcut: {tips:?}");
     let before = review_8758_unchanged_content(&app);
     let tool = app.session.tool_id().to_string();
     click(&mut app, &ctx, 8.0, search.center(), 1400.0);

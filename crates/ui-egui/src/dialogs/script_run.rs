@@ -4,7 +4,8 @@
 //!
 //! `ui.runScript {path? | source?, name?}` shows the warning for that script; without either it
 //! asks for a `.js` or `.jsx` file through the app's file asks. With Preferences › General › Show
-//! External Script Warning off, the chosen script runs at once. The warning (kind `scriptRun`) is a
+//! External Script Warning off, the chosen script runs at once. With General › Run Startup Scripts
+//! on, the startup scripts run first (`script.startup.run`). The warning (kind `scriptRun`) is a
 //! prompt: its `choice` field (`proceed` runs, `cancel` does not) and `skip` (true: turn the
 //! warning off). The growth question (`scriptGrowth`) and the question quitting asks
 //! (`scriptClose`) have the `choice` field alone.
@@ -421,6 +422,11 @@ pub(crate) fn with_host<R>(app: &VectorcraftApp, f: impl FnOnce(&mut DialogHost,
     Some(app.dialogs()?.with(|host| f(host, &ctx)))
 }
 
+/// Whether the question asked on quitting with a script running is open.
+pub(crate) fn asking_to_close(app: &VectorcraftApp) -> bool {
+    with_host(app, |host, _| host.is_open::<CloseQuestion>()).unwrap_or(false)
+}
+
 /// Whether a dialog is open or waits to open: a script's dialog opens only over nothing.
 pub(crate) fn busy(app: &VectorcraftApp) -> bool {
     app.any_dialog_open() || with_host(app, |host, _| !host.is_empty()).unwrap_or(false)
@@ -477,7 +483,7 @@ pub(crate) fn chosen(app: &mut VectorcraftApp, params: Value) -> Result<Value, S
         return Err("Choose a .js or .jsx script".into());
     }
     if !app.session.prefs.show_external_script_warning {
-        return app.run("script.run", params);
+        return crate::script_runs::run_chosen(app, params);
     }
     let name = params.get("name").and_then(Value::as_str).or(path).map_or_else(|| "script".to_string(), vectorcraft_engine::cmd::fileio::file_name);
     // The script's name is the message: it is what the person reads first.
@@ -577,7 +583,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         && let Some(RunWarning { params, scope, automated }) = answer.take_tag::<RunWarning>()
     {
         let stored = if answer.skip { app.run("prefs.set", json!({"key": "showExternalScriptWarning", "value": false})).map(drop) } else { Ok(()) };
-        let run = |app: &mut VectorcraftApp| app.run("script.run", params).map(drop);
+        let run = |app: &mut VectorcraftApp| crate::script_runs::run_chosen(app, params).map(drop);
         let automated = automated || app.automation_asked();
         if let Err(e) = stored.and_then(|()| scope.within_current().run(|| file_asks::as_automated(app, automated, run))) {
             app.status(e);
@@ -593,18 +599,41 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         }
         None => {}
     }
+    answer_close(app, close);
+    if with_host(app, |host, _| host.get_mut::<ScriptFiles>().is_some_and(|d| std::mem::take(&mut d.choose))).unwrap_or(false) {
+        choose(app);
+    }
+}
+
+/// Takes the answer to the quit question given between two queued runs, before the next run
+/// starts. True when it stopped the runs.
+pub(crate) fn answer_close_between_runs(app: &mut VectorcraftApp) -> bool {
+    let Some(close) = with_host(app, |host, _| host.take::<CloseQuestion>()).flatten() else {
+        return false;
+    };
+    answer_close(app, Some(close));
+    !app.session.script_running()
+}
+
+/// With Stop as the answer to the quit question, stops the run, or between two queued runs, the
+/// runs not yet started.
+fn answer_close(app: &mut VectorcraftApp, close: Option<DialogResult<<CloseQuestion as StackDialog>::Result>>) {
+    let startup = app.session.startup_script_running();
+    // Between two queued runs: none runs, and the report is the last run's.
+    let between = app.session.script_running() && app.session.script_name().is_none();
     if let Some(DialogResult::Ok(answer)) = close
         && answer.choice == PromptChoice::Proceed
         && app.session.script_abandon()
     {
-        let error = app.session.script_failure_text().unwrap_or_default();
-        crate::script_runs::failed(app, error);
+        if between {
+            crate::script_runs::stopped_between_runs(app);
+        } else {
+            let error = app.session.script_failure_text().unwrap_or_default();
+            crate::script_runs::ended_with_error(app, startup, error);
+        }
         forget::<ScriptNotice>(app);
         forget::<ScriptFiles>(app);
         app.sync_views();
-    }
-    if with_host(app, |host, _| host.get_mut::<ScriptFiles>().is_some_and(|d| std::mem::take(&mut d.choose))).unwrap_or(false) {
-        choose(app);
     }
 }
 
