@@ -15471,7 +15471,7 @@ Commands:
 - `addon.pathtools.shape.set {id, …}` changes a parametric shape's numbers (the same keys; a new `kind` takes its own
   defaults for the values not given) and redraws it in place. With `reference` (0 to 8 on the 9-point grid of the
   bounding box as `object.setBounds` measures it, rotated with rotated objects) and no `center`, that point of the box
-  keeps its place, as with the Transform panel's W and H; otherwise the shape's center stays. Snapping to the pixel
+  keeps its place, as with the Transform panel's W and H; with `center`, the shape's center moves to it; otherwise the shape's center stays. Snapping to the pixel
   grid and an attachment to a path apply after that, as they do for the Transform panel's W and H, and can move the
   point. A `reference` outside 0 to 8 is an error. With no change it makes no step. → `{id, shape}` (its numbers now, so `{id}` alone reads them;
   `null` when snapping to the pixel grid left a plain path).
