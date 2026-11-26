@@ -2,11 +2,11 @@
 //! typed is set to the frame's width by changing its font size, after every edit
 //! ([`super::refresh_bounds`]).
 
-use vectorcraft_doc::{TextKind, TextObject, TextRun};
+use vectorcraft_doc::{CharStyle, TextKind, TextObject, TextRun};
 
 /// The font size range a line's first character is fitted within, in document points (the
 /// Character panel's).
-const SIZES: (f64, f64) = (0.1, 1296.0);
+pub(crate) const SIZES: (f64, f64) = (0.1, 1296.0);
 
 /// Most passes a refit runs to correct lines that still wrap after the first fit; each pass measures
 /// the lines and runs at most one more area layout.
@@ -54,6 +54,19 @@ pub(crate) fn size_at(runs: &[TextRun], byte: usize) -> f64 {
         off = end;
     }
     vectorcraft_text::edit::style_at(runs, byte).size
+}
+
+/// The run that holds the character at `byte` (not the one before it), else the last run.
+fn run_at(runs: &[TextRun], byte: usize) -> Option<&TextRun> {
+    let mut off = 0;
+    for r in runs {
+        let end = off + r.text.len();
+        if (off..end).contains(&byte) {
+            return Some(r);
+        }
+        off = end;
+    }
+    runs.last()
 }
 
 /// The stored size of each line's first character, in one pass over the runs.
@@ -122,6 +135,71 @@ pub(crate) fn needed_room(t: &TextObject) -> Option<(f64, usize, usize)> {
         .reduce(|a, b| if b.0 > a.0 { b } else { a })
 }
 
+/// Whether every character's leading is the one Block gives it: its size plus the frame's line
+/// gap (in text space, at least the least size), as [`block_fit`] sets it.
+fn block_leadings(t: &TextObject, points: f64) -> bool {
+    let gap = t.area.block_gaps().1 / points;
+    let min_leading = SIZES.0 / points;
+    t.runs.iter().all(|r| r.style.leading == Some((r.style.size + gap).max(min_leading)))
+}
+
+/// A leading change on area type with Block on ([`TextObject::dynamic_text`]), called after the
+/// change is applied to the characters: Block sets each character's leading to its size plus the
+/// frame's line gap, so the change goes to the line gap instead. The lines are fitted, so the
+/// character at `at` has the size Block gives it (a size set by the same change included); the gap
+/// is then the leading `leading` gives that character (in text space; None: Auto) less its size, in
+/// document points and kept within [`vectorcraft_doc::AreaOptions::LINE_GAP`]. That moves the gap
+/// by the change to the character's leading, so every line spreads or tightens by the same amount.
+/// A new gap moves the lines, which in a shaped frame changes the room each one has and so the size
+/// Block gives the character, so the lines are fitted again and the gap worked out again from the
+/// new size, at most [`BLOCK_PASSES`] times. True when the lines are fitted for the final gap, so the
+/// caller lays the text out without fitting it again. Point type, type on a path and area type with
+/// Block off are left as they are.
+pub(crate) fn leading_to_line_gap(t: &mut TextObject, at: usize, leading: Option<f64>) -> bool {
+    if !t.dynamic_text || !matches!(t.kind, TextKind::Area { .. }) {
+        return false;
+    }
+    let Some(points) = t.style_scale().map(|s| s.points).filter(|p| p.is_finite() && *p > 1e-12) else { return false };
+    t.normalize_paras();
+    let para = t.plain_text().get(..at).map_or(0, |s| s.bytes().filter(|&c| c == b'\n').count());
+    for _ in 0..BLOCK_PASSES {
+        block_fit(t);
+        // A frame Block could not fit leaves the characters as they were.
+        if !block_leadings(t, points) {
+            return false;
+        }
+        let Some(run) = run_at(&t.runs, at) else { return true };
+        let size = run.style.size;
+        let new = match leading {
+            Some(l) => l,
+            None => {
+                // Auto leading as the layout sets it: the paragraph's Auto Leading share of the em size
+                // the font height reference gives the character. An inline graphic keeps its size.
+                let em = if run.inline.is_some() { size } else { vectorcraft_text::FontDb::global().em_size(&run.style, t.vertical) };
+                t.para_at(para).effective_leading(&CharStyle { size: em, leading: None, ..run.style.clone() })
+            }
+        };
+        let gap = (new - size) * points;
+        if !gap.is_finite() {
+            return true;
+        }
+        let (lo, hi) = vectorcraft_doc::AreaOptions::LINE_GAP;
+        let next = gap.clamp(lo, hi);
+        if (next - t.area.line_gap).abs() <= 1e-9 {
+            return true;
+        }
+        t.area.line_gap = next;
+    }
+    false
+}
+
+/// [`leading_to_line_gap`] with the leading the character at `at` was just given (a character
+/// style, Text Tweaker), read before Block sets it again.
+pub(crate) fn given_leading_to_line_gap(t: &mut TextObject, at: usize) -> bool {
+    let Some(leading) = run_at(&t.runs, at).map(|r| r.style.leading) else { return false };
+    leading_to_line_gap(t, at, leading)
+}
+
 /// The size a line set at `size` points and `width` wide takes to fill `avail`, its width growing
 /// by `slope` a point of size (`width / size` when the whole line follows its size): rounded down
 /// to tenths and kept within [`SIZES`]. A line that fits and would not fit a tenth larger keeps its
@@ -140,6 +218,21 @@ fn tenths(points: f64) -> f64 {
     ((points * 10.0 + 1e-6).floor() / 10.0).clamp(SIZES.0, SIZES.1)
 }
 
+pub(crate) fn fit_metrics(t: &TextObject) -> Option<(f64, f64, f64)> {
+    if !t.dynamic_text {
+        return None;
+    }
+    let TextKind::Area { frame } = &t.kind else { return None };
+    let (_, line_gap) = t.area.block_gaps();
+    let b = frame.bounds().filter(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite()))?;
+    let points = t.style_scale().map(|s| s.points).filter(|p| p.is_finite() && *p > 1e-12)?;
+    let a = &t.area;
+    let (along, cells, gutter) = if t.vertical { (b.height(), a.rows, a.row_gutter.unwrap_or(a.gutter)) } else { (b.width(), a.columns, a.gutter) };
+    let cells = cells.max(1) as f64;
+    let cell = (along - 2.0 * a.inset.max(0.0) - gutter.max(0.0) * (cells - 1.0)) / cells;
+    (cell.is_finite() && cell > 1e-9).then_some((points, line_gap, cell))
+}
+
 /// Fit area type with Dynamic Text (Block) on: with the word gap as every paragraph's Desired word
 /// spacing ([`TextObject::layout_justification`]; the paragraphs keep their own values), each line
 /// as typed gets the size (its first character's, in steps of 0.1 pt within 0.1 to
@@ -150,23 +243,8 @@ fn tenths(points: f64) -> f64 {
 /// has no size. A line that still wraps at its first fit is made smaller, in at most
 /// [`BLOCK_PASSES`] more passes. True when the text changed.
 pub(crate) fn block_fit(t: &mut TextObject) -> bool {
-    if !t.dynamic_text {
-        return false;
-    }
-    let TextKind::Area { frame } = &t.kind else { return false };
-    let (_, line_gap) = t.area.block_gaps();
-    let Some(b) = frame.bounds().filter(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite())) else { return false };
-    let Some(points) = t.style_scale().map(|s| s.points).filter(|p| p.is_finite() && *p > 1e-12) else { return false };
+    let Some((points, line_gap, cell)) = fit_metrics(t) else { return false };
     let before = t.runs.clone();
-
-    // The room along a line in one cell of the frame, before indents.
-    let a = &t.area;
-    let (along, cells, gutter) = if t.vertical { (b.height(), a.rows, a.row_gutter.unwrap_or(a.gutter)) } else { (b.width(), a.columns, a.gutter) };
-    let cells = cells.max(1) as f64;
-    let cell = (along - 2.0 * a.inset.max(0.0) - gutter.max(0.0) * (cells - 1.0)) / cells;
-    if !(cell.is_finite() && cell > 1e-9) {
-        return t.runs != before;
-    }
 
     let db = vectorcraft_text::FontDb::global();
     let text = t.plain_text();

@@ -185,6 +185,10 @@ pub(crate) struct Es2015Objects {
     pub(crate) array_values: ObjId,
     /// `Function.prototype[@@hasInstance]`.
     pub(crate) has_instance: ObjId,
+    /// `%GeneratorPrototype%`, which each generator function's `prototype` inherits from.
+    pub(crate) generator_proto: ObjId,
+    /// `%GeneratorFunction.prototype%`, the `[[Prototype]]` of every generator function.
+    pub(crate) generator_function_proto: ObjId,
 }
 
 /// The estimated bytes of a registry entry without its Symbol.
@@ -208,7 +212,17 @@ impl Symbols {
 
     /// The objects the collector starts from.
     pub(crate) fn root_objects(&self) -> Vec<ObjId> {
-        self.objects.map_or_else(Vec::new, |o| vec![o.symbol_proto, o.array_iterator_proto, o.string_iterator_proto, o.array_values, o.has_instance])
+        self.objects.map_or_else(Vec::new, |o| {
+            vec![
+                o.symbol_proto,
+                o.array_iterator_proto,
+                o.string_iterator_proto,
+                o.array_values,
+                o.has_instance,
+                o.generator_proto,
+                o.generator_function_proto,
+            ]
+        })
     }
 
     /// The bytes the registry's entries hold besides their Symbols, which a collection adds.

@@ -96,7 +96,61 @@ fn dropped_below(app: &mut VectorcraftApp, drag: PanelDrag, mods: Mods) {
 
 /// The drag the row `name` starts, carrying rows `names`.
 fn rows_drag(app: &VectorcraftApp, name: &str, names: &[&str]) -> PanelDrag {
-    dnd::drag_of(&doc(app), &key_of(app, name), names.iter().map(|n| n.to_string()).collect())
+    let document = app.session.active().unwrap().uid;
+    dnd::drag_of(&doc(app), document, &key_of(app, name), names.iter().map(|n| n.to_string()).collect())
+}
+
+#[test]
+fn a_swatch_row_drag_reorders_only_its_source_document() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::{ListDrag, Role};
+    use craft::ui::runtime::drag;
+    use egui::{Key, Modifiers};
+
+    let mut app = app();
+    let source = app.session.active().unwrap().uid;
+    let before_source = names_of(&app, None);
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let destination = app.session.active().unwrap().uid;
+    let before_destination = names_of(&app, None);
+    app.run("window.previousDocument", json!({})).unwrap();
+    assert_eq!(app.session.active().unwrap().uid, source);
+
+    let mut panel = Panel::new(app, show);
+    let drag_red = |panel: &mut Panel| {
+        let red = "Red, #ed1c24";
+        let from = panel.rect(red).center();
+        let to = panel.rect("Green, #39b54a").center();
+        panel.drag_hold_role(red, Role::LIST_ITEM, to - from);
+        let grabbed = drag::active::<ListDrag<SwatchKey>>(panel.ctx()).map(|d| d.grabbed.clone());
+        assert_eq!(grabbed, Some(SwatchKey::Swatch("Red".into())));
+    };
+    drag_red(&mut panel);
+    panel.key(Key::F6, Modifiers::COMMAND);
+    assert_eq!(panel.app().session.active().unwrap().uid, destination);
+    panel.release();
+    assert_eq!(names_of(&panel.app(), None), before_destination);
+
+    panel.key(Key::F6, Modifiers::COMMAND);
+    assert_eq!(panel.app().session.active().unwrap().uid, source);
+    assert_eq!(names_of(&panel.app(), None), before_source);
+    drag_red(&mut panel);
+    panel.release();
+    assert_ne!(names_of(&panel.app(), None), before_source);
+    panel.app().run("edit.undo", json!({})).unwrap();
+    assert_eq!(names_of(&panel.app(), None), before_source);
+}
+
+#[test]
+fn a_foreign_swatch_row_payload_cannot_move_or_replace_local_swatches() {
+    let mut app = app();
+    let drag = rows_drag(&app, "Red", &["Red"]);
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let before = doc(&app);
+    assert!(!dnd::accepts(&drag, app.session.active().unwrap().uid));
+    dropped_below(&mut app, drag.clone(), none());
+    dropped(&mut app, drag, "Green", alt());
+    assert_eq!(doc(&app).swatches, before.swatches);
 }
 
 /// Art `ids` dragged off the canvas.
@@ -548,6 +602,22 @@ fn drops_on_the_buttons_and_the_panel_run_their_commands() {
         let drag = rows_drag(&app, name, &[name]);
         dnd::on_footer_drop(&mut app, dnd::FooterTarget::New, &drag);
         assert_eq!(doc(&app), kept, "{name}");
+    }
+}
+
+#[test]
+fn footer_drops_ignore_rows_from_another_document() {
+    let mut app = app();
+    let drag = rows_drag(&app, "Orange", &["Orange"]);
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    app.run("swatch.new", json!({"name": "Orange", "color": "#ff8000"})).unwrap();
+    let before = doc(&app);
+    let undo = undo_steps(&app);
+    for target in [dnd::FooterTarget::New, dnd::FooterTarget::Delete] {
+        dnd::on_footer_drop(&mut app, target, &drag);
+        assert_eq!(doc(&app), before);
+        assert_eq!(undo_steps(&app), undo);
+        assert!(!dialog_open(&app, crate::dialogs::confirm::KIND));
     }
 }
 
