@@ -150,6 +150,7 @@ impl VectorcraftApp {
                 carry_target: None,
                 last_drag: None,
                 escaped_press: false,
+                host_caps_lock: None,
                 committed_preview: false,
                 panes: Default::default(),
                 windows: crate::doc_windows::Windows::new(known),

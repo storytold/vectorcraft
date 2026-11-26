@@ -194,6 +194,11 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
     };
     let pasteboard = app.session.documents().get(win.0).map(|st| artboards::pasteboard_color(app, st, app.outline_view()));
     let layers = move || bounds;
+    let host_caps_lock = craft::ui::runtime::lock_keys::caps_lock(ui.ctx());
+    app.follow_caps_lock(host_caps_lock);
+    // The canvas reverses the state it is given while the host's Caps Lock is on: given this, it shows the precise
+    // cursors the tools are told about.
+    let precise = app.precise_cursors() != host_caps_lock;
     let prefs = &app.session.prefs;
     let mut canvas = Canvas::new("Document")
         .id(canvas_id(win))
@@ -205,7 +210,7 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
         .body_nudges(ARROWS)
         .rulers(x, y)
         .with_rulers(strips)
-        .precise_cursors(prefs.use_precise_cursors);
+        .precise_cursors(precise);
     if let Some(pasteboard) = pasteboard {
         canvas = canvas.pasteboard(pasteboard);
     }

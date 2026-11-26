@@ -67,3 +67,72 @@ fn bucket_modifier_only_hover_updates_the_visible_cursor() {
     assert_ne!(alt, plain, "Alt shows the Eyedropper's cursor");
     assert_eq!(shown(&mut app, egui::Modifiers::NONE), plain, "and letting go brings the bucket back");
 }
+
+/// The Blob Brush's or the Eraser's tip outline at the pointer, as the canvas draws it this pass.
+fn shows_tip(app: &mut VectorcraftApp) -> bool {
+    let view = app.view_info();
+    app.session.overlays(view).iter().any(|o| matches!(o, vectorcraft_tools::Overlay::Path { .. }))
+}
+
+/// Use Precise Cursors or Caps Lock, or both, gives the Blob Brush and the Eraser only the crosshair: the tool draws no
+/// tip outline around it. With both off, each shows its own pointer and the tip outline.
+#[test]
+fn precise_cursors_hide_the_brush_tip_outline() {
+    use craft::ui::runtime::windows::WindowHost;
+    let crosshair = Some(crate::cursors::tool_cursor(vectorcraft_tools::Cursor::Crosshair));
+    for tool in ["blobBrush", "eraser"] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", serde_json::json!({"width": 400, "height": 300})).unwrap();
+        app.select_tool(tool);
+        let ctx = crate::testing::ui_context();
+        frame(&mut app, &ctx, vec![]);
+        let at = app.canvas_view().unwrap().to_screen(Point::new(200.0, 150.0));
+        for (preference, caps_lock) in [(false, false), (true, false), (false, true), (true, true), (false, false)] {
+            app.run("prefs.set", serde_json::json!({"key": "usePreciseCursors", "value": preference})).unwrap();
+            WindowHost::of(&ctx).set_caps_lock(Some(caps_lock));
+            frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+            frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at + egui::vec2(1.0, 0.0))]);
+            let precise = preference || caps_lock;
+            let case = format!("{tool}, Use Precise Cursors {preference}, Caps Lock {caps_lock}");
+            assert_eq!(app.session.caps_lock, caps_lock, "{case}: the session takes the host's Caps Lock state");
+            assert_eq!(app.view_info().precise, precise, "{case}");
+            assert_eq!(shows_tip(&mut app), !precise, "{case}");
+            assert_eq!(craft::ui::runtime::cursor::current(&ctx) == crosshair, precise, "{case}");
+        }
+    }
+}
+
+/// `view.capsLock` sets the Caps Lock state the tools and the canvas's pointer follow until the host's state changes.
+#[test]
+fn the_caps_lock_command_gives_the_brushes_the_crosshair() {
+    use craft::ui::runtime::windows::WindowHost;
+    let crosshair = Some(crate::cursors::tool_cursor(vectorcraft_tools::Cursor::Crosshair));
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", serde_json::json!({"width": 400, "height": 300})).unwrap();
+    app.select_tool("blobBrush");
+    let ctx = crate::testing::ui_context();
+    WindowHost::of(&ctx).set_caps_lock(Some(false));
+    frame(&mut app, &ctx, vec![]);
+    let at = app.canvas_view().unwrap().to_screen(Point::new(200.0, 150.0));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    assert!(shows_tip(&mut app));
+    app.run("view.capsLock", serde_json::json!({"on": true})).unwrap();
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at + egui::vec2(1.0, 0.0))]);
+    assert!(app.session.caps_lock, "the host's unchanged state leaves the command's in place");
+    assert!(!shows_tip(&mut app));
+    assert_eq!(craft::ui::runtime::cursor::current(&ctx), crosshair);
+    app.run("view.capsLock", serde_json::json!({"on": false})).unwrap();
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    assert!(shows_tip(&mut app));
+    assert_ne!(craft::ui::runtime::cursor::current(&ctx), crosshair);
+    // With the host's Caps Lock on, the command turns it off for the tools and the canvas's pointer alike.
+    WindowHost::of(&ctx).set_caps_lock(Some(true));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at + egui::vec2(1.0, 0.0))]);
+    assert!(!shows_tip(&mut app));
+    assert_eq!(craft::ui::runtime::cursor::current(&ctx), crosshair);
+    app.run("view.capsLock", serde_json::json!({"on": false})).unwrap();
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    assert!(!app.session.caps_lock);
+    assert!(shows_tip(&mut app));
+    assert_ne!(craft::ui::runtime::cursor::current(&ctx), crosshair);
+}
