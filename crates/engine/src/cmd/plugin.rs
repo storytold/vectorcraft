@@ -42,7 +42,9 @@
 //!
 //! A filter whose manifest lists `inputs` (plug-in API level 2) is also given the selected type,
 //! images or symbol instances of those kinds, to read only: its output must return each of them
-//! unchanged ([`objects::decode_output_with`]).
+//! unchanged ([`objects::decode_output_with`]). At level 3 its manifest's `writes` lists the kinds
+//! among them it may change: type's runs and paragraph styles, an image's transform and opacity,
+//! an instance's symbol and transform, and each one's name ([`objects::decode_output_writing`]).
 //!
 //! A filter, or a live effect's command, whose manifest lists `context` (plug-in API level 3) is
 //! also given the parts of the active document it names in `_context.document`, whether or not
@@ -57,7 +59,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 
 use serde_json::{Map, Value, json};
-use vectorcraft_doc::{Document, Effect, Node};
+use vectorcraft_doc::{Document, Effect, Node, NodeKind};
 use vectorcraft_plugins::{Budget, Command, Kind, Plugin, effect, export, objects, registry, safe_mode};
 
 use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, has_doc, ids_param, str_param, switch_or};
@@ -116,6 +118,9 @@ pub fn describe(p: &Plugin) -> Value {
     }
     if !m.inputs.is_empty() {
         v["inputs"] = json!(m.inputs);
+    }
+    if !m.writes.is_empty() {
+        v["writes"] = json!(m.writes);
     }
     if !m.context.is_empty() {
         v["context"] = json!(m.context);
@@ -385,7 +390,7 @@ impl FilterRun {
     fn finish(self, s: &mut Session, output: &[u8]) -> Result<Value> {
         let m = self.plugin.manifest();
         let may = m.permissions();
-        let out = objects::decode_output_with(output, &self.input, &self.read_only).map_err(err)?;
+        let out = objects::decode_output_writing(output, &self.input, &self.read_only, &m.write_kinds()).map_err(err)?;
         if out.document_data.is_some() && !may.contains(&Permission::State) {
             return Err(not_granted(&m.name, Permission::State));
         }
@@ -401,18 +406,52 @@ impl FilterRun {
         if s.script_running() {
             return Err(EngineError::Busy);
         }
-        if !s.previewing && super::typing_in_progress(s) {
+        // Typing whose text Real-time Drawing off left out of the document isn't in what the
+        // plug-in was given, and the output would replace it ([`keep_unapplied_typing`] keeps it
+        // before the run is prepared).
+        if unapplied_typing(s) {
+            return Err(err(vectorcraft_plugins::Error::Output(
+                "typing in progress isn't in what the plug-in was given: nothing was changed".into(),
+            )));
+        }
+        let data = out.document_data;
+        // The output applied to `now`, with the checks that refuse it.
+        let build = |now: &Document, objects: Vec<objects::OutObject>| -> Result<(Document, Vec<NodeId>)> {
+            let mut d = now.clone();
+            let before = (!may_write).then(|| d.layers.clone());
+            let ids = objects::apply_output(&mut d, &inputs, objects, parent, &admit_effects).map_err(err)?;
+            if before.is_some_and(|b| b != d.layers) {
+                return Err(not_granted(&m.name, Permission::DocWrite));
+            }
+            // Type whose text the output changed is laid out again.
+            let retyped: Vec<NodeId> = ids
+                .iter()
+                .copied()
+                .filter(|&id| match (d.node(id).map(|n| &n.kind), now.node(id).map(|n| &n.kind)) {
+                    (Some(NodeKind::Text(new)), Some(NodeKind::Text(old))) => new.runs != old.runs || new.paras != old.paras || new.para != old.para,
+                    _ => false,
+                })
+                .collect();
+            super::typecmd::refresh_bounds_of(&mut d, &retyped);
+            if let Some(data) = data.clone() {
+                d.set_plugin_data(&m.id, data);
+            }
+            Ok((d, ids))
+        };
+        // Typing in progress, its text already in the document, is kept as `s.edit` keeps it once
+        // nothing can refuse the output, so a refused output leaves it in progress. Keeping it can
+        // change the document, and the output is then applied to the document as kept.
+        let typing = !s.previewing && super::typing_in_progress(s);
+        let again = typing.then(|| out.objects.clone());
+        let mut now = s.doc()?.doc.clone();
+        let (mut d, mut ids) = build(&now, out.objects)?;
+        if let Some(objects) = again {
             super::settle_interaction(s)?;
-        }
-        let now = s.doc()?.doc.clone();
-        let mut d = (*now).clone();
-        let before = (!may_write).then(|| d.layers.clone());
-        let ids = objects::apply_output(&mut d, &inputs, out.objects, parent, &admit_effects).map_err(err)?;
-        if before.is_some_and(|b| b != d.layers) {
-            return Err(not_granted(&m.name, Permission::DocWrite));
-        }
-        if let Some(data) = out.document_data {
-            d.set_plugin_data(&m.id, data);
+            let kept = s.doc()?.doc.clone();
+            if !Arc::ptr_eq(&kept, &now) {
+                now = kept;
+                (d, ids) = build(&now, objects)?;
+            }
         }
         let selectable = |d: &Document| ids.iter().copied().filter(|&id| d.node(id).is_some_and(objects::selectable)).collect::<Vec<_>>();
         if same_art(&d.layers, &now.layers) && d.plugin_data(&m.id) == now.plugin_data(&m.id) {
@@ -455,6 +494,23 @@ fn not_granted(name: &str, permission: Permission) -> EngineError {
     err(vectorcraft_plugins::Error::Output(format!("“{name}” wasn't granted `{p}`, which its output needs: nothing was changed")))
 }
 
+/// Is typing in progress whose text Real-time Drawing off left out of the document (not in a
+/// preview's run)? A run prepared now isn't given that text.
+pub fn unapplied_typing(s: &Session) -> bool {
+    !s.previewing && super::typing_in_progress(s) && s.unapplied_interaction_preview().is_some()
+}
+
+/// Keeps typing in progress whose text Real-time Drawing off left out of the document
+/// ([`super::settle_interaction`]) → whether there was any. A run prepared after it is given the
+/// typed text; one prepared before it is prepared again.
+pub fn keep_unapplied_typing(s: &mut Session) -> Result<bool> {
+    if !unapplied_typing(s) {
+        return Ok(false);
+    }
+    super::settle_interaction(s)?;
+    Ok(true)
+}
+
 /// `plugin.run`: runs filter `id` on `ids` (else the selected paths and compound paths) with its
 /// parameters and `_context` (what it keeps with the document included), and applies its output as
 /// one undo step ([`objects::apply_output`]; effect records as [`admit_effects`] admits them), with
@@ -472,6 +528,8 @@ fn run(s: &mut Session, p: &Value) -> Result<Value> {
         let r = if super::plugin_call::settle(s)? { FilterRun::prepare(s, p)? } else { r };
         return r.run_with_calls(s);
     }
+    // Typing Real-time Drawing off left out of the document is kept first, so the plug-in is given it.
+    let r = if keep_unapplied_typing(s)? { FilterRun::prepare(s, p)? } else { r };
     // Handed in for this very run (the app ran it in the background), it is what running the
     // plug-in again would return.
     let handed = handed.filter(|h| (h.serial, &h.input, &h.params) == (r.plugin.serial(), &r.input, &r.params));
@@ -895,6 +953,13 @@ pub(crate) fn run_command(s: &mut Session, id: &str, p: &Value) -> Result<Value>
         };
         return r.run_with_calls(s).map_err(failed);
     }
+    let r = match keep_unapplied_typing(s)? {
+        true => {
+            let (plugin, command) = command_of(id).ok_or_else(|| EngineError::UnknownCommand(id.into()))?;
+            FilterRun::prepare_with(s, plugin, Some(command), id, p)?
+        }
+        false => r,
+    };
     let output = r.run().map_err(&failed)?;
     r.finish(s, &output).map_err(failed)
 }
@@ -1828,18 +1893,49 @@ fn remove(s: &mut Session, p: &Value) -> Result<Value> {
     let installed = registry::get(id).is_some();
     // Settings and cache the store keeps for an id that isn't installed are deleted too.
     let stored = !installed && vectorcraft_plugins::manifest::valid_id(id) && s.has_plugin_storage(id);
-    // Installed again, it asks again. A grant that can't be removed still approves the module, and
-    // so may a grants file that can't be opened or read. One that is too large or doesn't hold a
-    // list approves nothing and doesn't stop the removal.
-    let forget = || s.store_grant_in(&turn, id, None) || !s.holds_plugin_grant(id);
-    // Its settings and cache are moved aside and its grant removed before anything is deleted: when
-    // either can't be done, the plug-in stays installed, as it was, and a second `plugin.remove`
-    // tries again.
+    // A module stored for an id that isn't installed (one no grant covers is skipped at startup)
+    // counts as removed once its file is gone.
+    let module = !installed && vectorcraft_plugins::manifest::valid_id(id) && s.holds_stored_plugin(id);
+    // An installed plug-in's stored module is deleted with its grant too, so that one that can't be
+    // deleted leaves the plug-in installed. Without a plug-in folder it has none.
+    let unstore = module || (installed && s.plugin_dir.is_some());
+    // The grant the store keeps for an installed plug-in, which may differ from the one the session
+    // holds (an update whose module couldn't be stored): written back when its module can't be
+    // deleted, so that the stored module still loads at the next launch.
+    let kept_grant = if installed { s.stored_plugin_grant(id) } else { None };
+    let module_left = std::cell::Cell::new(false);
+    let cant_delete = || format!("plugin.remove: can't delete {}", s.stored_plugin_file(id).unwrap_or_default());
+    // Installed again, it asks again. A grant that can't be removed may still approve the module, and
+    // so may a grants file that can't be opened or read, or a signed copy of the file put back when
+    // the generation couldn't be raised (the key store can't be reached). Without a plug-in folder
+    // nothing keeps a grant. The stored module is deleted next, while its settings and cache can
+    // still be moved back.
+    let forget = || {
+        if !s.store_grant_in(&turn, id, None) && s.plugin_dir.is_some() {
+            return false;
+        }
+        let deleted = !unstore || s.unstore_plugin(&turn, id);
+        if !deleted
+            && let Some(grant) = kept_grant.clone()
+            && !s.store_grant_in(&turn, id, Some(grant))
+        {
+            log::warn!("plugin.remove: can't keep the grant of {id}, whose module stays: it asks again at the next launch");
+        }
+        module_left.set(!deleted);
+        deleted
+    };
+    // Its settings and cache are moved aside, its grant removed and its stored module deleted before
+    // anything else is deleted: when one of them can't be done, the settings and cache are moved back,
+    // the plug-in stays installed, as it was, and a second `plugin.remove` tries again. An invalid id
+    // names no grant and no module.
     let failed = if installed || stored {
         s.remove_plugin_storage(&turn, id, forget).err().map(|e| e.to_string())
-    } else {
+    } else if vectorcraft_plugins::manifest::valid_id(id) {
         (!forget()).then(|| crate::store::GRANT_NOT_REMOVED.to_string())
+    } else {
+        None
     };
+    let failed = failed.map(|e| if module_left.get() && e == crate::store::GRANT_NOT_REMOVED { cant_delete() } else { e });
     if let Some(e) = failed {
         if installed {
             s.attach_plugin_storage(&turn, id);
@@ -1847,8 +1943,10 @@ fn remove(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(EngineError::Other(e));
     }
     registry::revoke(id);
-    s.unstore_plugin(&turn, id);
-    if !stored && (!installed || !registry::remove(id)) {
+    if !s.unstore_plugin(&turn, id) && module {
+        return Err(EngineError::Other(cant_delete()));
+    }
+    if !stored && !module && (!installed || !registry::remove(id)) {
         return Err(err(vectorcraft_plugins::Error::NotFound(id.into())));
     }
     Ok(json!({"removed": id}))
@@ -1880,7 +1978,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Plug-ins",
             [],
             None,
-            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), place?: true (an importer whose files file.place also reads, see file.place's importer), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), context?: [\"settings\"|\"artboards\"|\"layers\"|\"swatches\"] (the parts of the active document a filter's runs and its or a live effect's commands are given in _context.document, with or without a selection, see docs/plugins.md), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1, 2 or 3), runtime?: \"js\" and script?: its .js file name (a JavaScript filter, see docs/plugins.md), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema, menu?: {path: [menu label], after?: item label (escaped), placed?: false (it stays in its plug-in's submenu: its label reads like a built-in item or submenu of that menu or another plug-in command placed there)} (the menu its manifest places it in, see docs/plugins.md)}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}], leftOut} | null (under automation read roots, a folder outside them is null, and a failed file and a plug-in's source outside them are named by their file name), safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
+            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), place?: true (an importer whose files file.place also reads, see file.place's importer), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), writes?: [\"type\"|\"image\"|\"symbolInstance\"] (the kinds among inputs a filter may change, see plugin.run), context?: [\"settings\"|\"artboards\"|\"layers\"|\"swatches\"] (the parts of the active document a filter's runs and its or a live effect's commands are given in _context.document, with or without a selection, see docs/plugins.md), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1, 2 or 3), runtime?: \"js\" and script?: its .js file name (a JavaScript filter, see docs/plugins.md), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema, menu?: {path: [menu label], after?: item label (escaped), placed?: false (it stays in its plug-in's submenu: its label reads like a built-in item or submenu of that menu or another plug-in command placed there)} (the menu its manifest places it in, see docs/plugins.md)}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}], leftOut} | null (under automation read roots, a folder outside them is null, and a failed file and a plug-in's source outside them are named by their file name), safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
             always,
             list
         ),
@@ -1898,7 +1996,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Run Plug-in",
             [],
             None,
-            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [object id] (left out or null: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths, compound paths that clip a clip group and paths inside a group that clips one are left out): it may change, delete or add objects, as one undo step (an output that changes no object and no kept data records none and leaves the document unmodified); the result is selected, except the objects it locked or made guides. A filter whose manifest lists inputs (type, image, symbolInstance; it lists doc.read in permissions, so plugin.install needs grant) is also given the selected objects of those kinds to read, in paint order from the bottom, with at most 16 MiB of pixels and 16 MiB of type runs per run (an object that doesn't fit what the objects before it left comes with pixelsOmitted or truncated; an image that reaches the decoder counts toward the pixels even when decoding fails); every object counts toward the input's half of the plug-in's memory cap, ids, bounds, transforms and names included, and an object whose fields besides its pixels and runs don't fit fails the run with a memory-budget error naming it and its size (a path or compound path fails it with the memory-budget error for a selection too large to hand over), and more than 100,000 of these objects fail it with an object-budget error: its output returns each as {id} or exactly as given, or the run is refused and nothing changes. With nothing selected it gets no objects (generators add theirs to the current layer). A filter with a commandAllowlist runs the commands it names while it runs (vc_call, see docs/plugins.md): its calls and its output are one undo step, and a run that fails or makes a call that fails changes nothing → {plugin, ids, notice?, pluginName?} (notice: the text the output reports in its notice key once applied, escaped and cut at 200 characters; pluginName: the plug-in's name, with it)",
+            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [object id] (left out or null: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths, compound paths that clip a clip group and paths inside a group that clips one are left out): it may change, delete or add objects, as one undo step (an output that changes no object and no kept data records none and leaves the document unmodified); the result is selected, except the objects it locked or made guides. A filter whose manifest lists inputs (type, image, symbolInstance; it lists doc.read in permissions, so plugin.install needs grant) is also given the selected objects of those kinds to read, in paint order from the bottom, with at most 16 MiB of pixels and 16 MiB of type runs per run (an object that doesn't fit what the objects before it left comes with pixelsOmitted or truncated; an image that reaches the decoder counts toward the pixels even when decoding fails); every object counts toward the input's half of the plug-in's memory cap, ids, bounds, transforms and names included, and an object whose fields besides its pixels and runs don't fit fails the run with a memory-budget error naming it and its size (a path or compound path fails it with the memory-budget error for a selection too large to hand over), and more than 100,000 of these objects fail it with an object-budget error: its output returns each as {id} or exactly as given (an image may leave out opacity), or the run is refused and nothing changes. A filter at api 3 whose manifest lists some of those kinds in writes (with doc.write) may return an object of such a kind with only the fields it changes: name and transform (6 numbers within ±4,000,000 that don't flatten it), type's text.runs ({text, style, inline?} with the native character attributes; inline graphics stay as they were; at most 4,096 runs, 4,096 paragraphs and 256 KiB of text; every number of every run's style in the range charStyle.new takes, fills and strokes with only the keys their type reads, and a style of its own needs a font family) and text.paragraphs (one style per paragraph, also when given as they were next to changed runs, each number in the range paraStyle.new takes, a custom Kinsoku set only one of the document's by name), an image's opacity (0 to 1), an instance's symbolId (a symbol in the document); any other field changed, or a value out of range, refuses the run naming the object and the field, and nothing changes. With nothing selected it gets no objects (generators add theirs to the current layer). A filter with a commandAllowlist runs the commands it names while it runs (vc_call, see docs/plugins.md): its calls and its output are one undo step, and a run that fails or makes a call that fails changes nothing → {plugin, ids, notice?, pluginName?} (notice: the text the output reports in its notice key once applied, escaped and cut at 200 characters; pluginName: the plug-in's name, with it)",
             has_doc,
             run
         ),
@@ -1907,7 +2005,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Install Plug-in",
             [],
             None,
-            "{path: a .wasm file or a JavaScript plug-in's .vcplugin manifest (read with the .js file its script names) (desktop) | dataBase64: the module or a JavaScript plug-in as one JSON object (its manifest, with the script's text in source) (+ name?: shown as its source), replace?: bool (true once the user agreed: a module with other bytes than the plug-in installed with its id, or with none installed, one whose id has settings or a cache in the plug-in store, installs only with it, takes that plug-in's place and gets its settings and cache; false: one whose id is installed is refused; left out, the same module installs again), name?: file name (with dataBase64), allowHeavy?: bool (a filter whose manifest asks for a heavy budget, budget \"heavy\" in plugin.inspect, installs only with it), grant?: [permission] (a plug-in whose manifest lists permissions, needsApproval in plugin.inspect, installs only when grant holds every one of them; the grant is recorded with the module's hash and covers only that module, so a module with other bytes needs a new grant even when it lists the same permissions; installing a module that lists no permissions forgets the grant held for its id; a refused install keeps the grant, a failed write of the module to the plug-in store leaves the grant in the store, and a stored module that is disabled or not read in Safe Mode keeps the grant for its id; with a plug-in store attached, only the grants kept there count; a request's allowHeavy and grant are refused unless the session was started with vectorcraft-cli --allow-plugin-grants: in the desktop app a person approves the install, see ui.installPlugin, and a module whose hash is already recorded, by a person's approval or by a grant accepted under that flag, needs no grant), hash?: string (the module's SHA-256 as plugin.inspect gave it: a module with other bytes is refused)} validate and install a plug-in for this session (with a plug-in store, the install waits while another window or process changes the store and writes the module and its grant before that window or process changes it again; when the store's disabled.lock can't be locked, nothing is installed) (a module whose commandAllowlist names a command no plug-in may call, such as one that reads or writes files, is refused) → its plugin.list entry, plus unknownCommands?: [id] (commandAllowlist ids no command has; a call of one fails)",
+            "{path: a .wasm file or a JavaScript plug-in's .vcplugin manifest (read with the .js file its script names) (desktop) | dataBase64: the module or a JavaScript plug-in as one JSON object (its manifest, with the script's text in source) (+ name?: shown as its source), replace?: bool (true once the user agreed: a module with other bytes than the plug-in installed with its id, or with none installed, one whose id has settings or a cache in the plug-in store, installs only with it, takes that plug-in's place and gets its settings and cache; false: one whose id is installed is refused; left out, the same module installs again), name?: file name (with dataBase64), allowHeavy?: bool (a filter whose manifest asks for a heavy budget, budget \"heavy\" in plugin.inspect, installs only with it), grant?: [permission] (a plug-in whose manifest lists permissions, needsApproval in plugin.inspect, installs only when grant holds every one of them; the grant is recorded with the module's hash and covers only that module, so a module with other bytes needs a new grant even when it lists the same permissions; installing a module that lists no permissions forgets the grant held for its id; a refused install keeps the grant, a failed write of the module to the plug-in store leaves the grant in the store, and a stored module that is disabled or not read in Safe Mode keeps the grant for its id; with a plug-in store attached, only the grants kept there count, and a grants.json without VectorCraft's MAC for that folder grants nothing; when the system key store can't be reached, the grant lasts for this session only; a request's allowHeavy and grant are refused unless the session was started with vectorcraft-cli --allow-plugin-grants: in the desktop app a person approves the install, see ui.installPlugin, and a module whose hash is already recorded, by a person's approval or by a grant accepted under that flag, needs no grant), hash?: string (the module's SHA-256 as plugin.inspect gave it: a module with other bytes is refused)} validate and install a plug-in for this session (with a plug-in store, the install waits while another window or process changes the store and writes the module and its grant before that window or process changes it again; when the store's disabled.lock can't be locked, nothing is installed) (a module whose commandAllowlist names a command no plug-in may call, such as one that reads or writes files, is refused) → its plugin.list entry, plus unknownCommands?: [id] (commandAllowlist ids no command has; a call of one fails)",
             always,
             install
         ),
@@ -1925,7 +2023,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Remove Plug-in",
             [],
             None,
-            "{id} uninstall a plug-in (its live effects then leave the geometry as it is) and delete the settings and cache it kept (when their folder can't be moved aside, or its grant can't be removed from the plug-in store, the command fails and the plug-in stays installed; when the settings can't be moved back either, the error names the folder they stay in, and the next load, install or removal of the plug-in moves them back); for an id that isn't installed, deletes the settings and cache the plug-in store still keeps for it; it waits while another window or process changes the plug-in store, and when the store's disabled.lock can't be locked, the command fails and nothing is removed → {removed}",
+            "{id} uninstall a plug-in (its live effects then leave the geometry as it is) and delete the settings and cache it kept (when their folder can't be moved aside, or its grant can't be removed from the plug-in store, or its stored module can't be deleted, the command fails and the plug-in stays installed, as it does when the system key store can't be reached to make sure no earlier copy of grants.json grants it again; when the settings can't be moved back either, the error names the folder they stay in, and the next load, install or removal of the plug-in moves them back); for an id that isn't installed, deletes the settings and cache the plug-in store still keeps for it and the module stored for it that didn't load, and reports it removed; it waits while another window or process changes the plug-in store, and when the store's disabled.lock can't be locked, the command fails and nothing is removed → {removed}",
             always,
             remove
         ),

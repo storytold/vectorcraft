@@ -7527,6 +7527,35 @@ axis	Y Axis	Y tengely
 @msg	`inputs` lists `{shown}` twice	az `inputs` kétszer sorolja fel ezt: `{shown}`
 @msg	`inputs` needs `api` 2 or later	az `inputs` használatához `api` 2 vagy újabb szükséges
 @msg	`inputs` needs the permission `doc.read`	az `inputs` használatához a(z) `doc.read` engedély szükséges
+@msg	only a filter declares `writes`	`writes` kulcsot csak szűrő adhat meg
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	a `writes` ismeretlen objektumfajtát nevez meg: `{shown}`; használja a type, image vagy symbolInstance értéket
+@msg	`writes` lists `{shown}` twice	a `writes` kétszer sorolja fel ezt: `{shown}`
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	a `writes` felsorolja ezt: `{shown}`, de az `inputs` nem sorolja fel
+@msg	`writes` needs `api` {WRITES_API} or later	a `writes` használatához `api` {WRITES_API} vagy újabb szükséges
+@msg	`writes` needs the permission `doc.write`	a `writes` használatához a(z) `doc.write` engedély szükséges
+@msg	{_1} is not type, an image or a symbol instance	{_1} nem szöveg, nem kép és nem szimbólumpéldány
+@msg	the text of type given as `truncated` can't be changed	a `truncated` jelöléssel átadott szövegobjektum szövege nem módosítható
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	legfeljebb {MAX_INPUT_RUNS} elemű lista legyen
+@msg	type needs at least one run	a szövegnek legalább egy szakaszra van szüksége
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} bájt szöveg (korlát: {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} bekezdés (korlát: {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	több mint {MAX_INPUT_TEXT_TOTAL} bájt szöveg a teljes kimenetben
+@msg	unknown key '{k}'	ismeretlen kulcs: '{k}'
+@msg	must be a list of 6 numbers	6 számból álló lista legyen
+@msg	a number is out of range (limit ±{MAX_COORD})	egy szám a tartományon kívül esik (korlát: ±{MAX_COORD})
+@msg	flattens the object to a line or a point	vonallá vagy ponttá lapítja az objektumot
+@msg	an object flattened to a line or a point can't be placed again	a vonallá vagy ponttá lapított objektum nem helyezhető el újra
+@msg	must be a number from 0 to 1	0 és 1 közötti szám legyen
+@msg	must be the name of a symbol	egy szimbólum neve legyen
+@msg	'{shown}' is not a symbol in this document	'{shown}' nem szimbólum ebben a dokumentumban
+@msg	a run must be {{"text", "style", "inline"?}}	egy szakasz formája {{"text", "style", "inline"?}} legyen
+@msg	`text` holds the character of an inline graphic	a `text` egy szövegközi grafika karakterét tartalmazza
+@msg	inline graphics can't be added, removed, reordered or changed	szövegközi grafikák nem adhatók hozzá, nem távolíthatók el, nem rendezhetők át és nem módosíthatók
+@msg	the characters of threaded type can't be changed	a láncolt szöveg karakterei nem módosíthatók
+@msg	the characters of type with ruby can't be changed	a rubyt tartalmazó szöveg karakterei nem módosíthatók
+@msg	expected {count} paragraph styles, one per paragraph	{count} bekezdésstílus volt várható, bekezdésenként egy
+@msg	the document has no Kinsoku set named '{shown}'	a dokumentumban nincs '{shown}' nevű Kinsoku-készlet
+@msg	must be 1-{MAX_FAMILY} printable characters	1-{MAX_FAMILY} nyomtatható karakter legyen
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Olvashatja a kapott objektumokat, valamint a dokumentum beállításait, rajztábláit, rétegeit és színmintáit
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	a `context` csak különböző szakaszokat sorolhat fel: settings, artboards, layers vagy swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	a `context` szűrőhöz vagy `commands` kulccsal rendelkező élő effektushoz való, `api` 3 vagy újabb mellett, a(z) `doc.read` engedéllyel

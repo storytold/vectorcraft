@@ -1,8 +1,9 @@
 //! Window → Flattener Preview: what flattening the document would touch (`flattener.preview`),
 //! highlighted in red over a grey preview of the art. Refresh takes a new snapshot of the
 //! document; Highlight picks what shows; Overprints, the preset and the options (Show Options in
-//! the panel menu) set how it flattens. The preview is a `PreviewPane`: the wheel and the pane's
-//! gestures zoom and pan, and a double click fits.
+//! the panel menu) set how it flattens. The preview is a `PreviewPane`: a click zooms in about the
+//! point clicked and an Alt-click (Option on macOS) zooms out, a drag pans, Ctrl or Cmd with the
+//! wheel zooms, and a double click fits. The zoom row under it zooms from the keyboard.
 //!
 //! The settings live in `UiState::flattener_preview` (`ui.inspect`); `ui.flattenerPreview` sets
 //! them and refreshes. The snapshot, the view and the texture live in [`FlattenerPreviewModel`]
@@ -10,12 +11,13 @@
 
 use std::sync::Arc;
 
+use craft::behavior::CanvasTransform;
 use craft::ui::buttons::Button;
 use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
 use craft::ui::display::{Divider, Shade, Text};
 use craft::ui::layout_components::Row;
 use craft::ui::menu::PanelRow;
-use craft::ui::patterns::form_dialogs::{DialogFields, ParamRows, PreviewPane, PreviewView};
+use craft::ui::patterns::form_dialogs::{DialogFields, ParamRows, PreviewPane, PreviewView, PreviewZoom};
 use craft::ui::pickers::Select;
 use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
 use craft::ui::runtime::env::Env;
@@ -258,6 +260,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// The preview: the whole snapshot rendered once per [`Key`], grey under a highlight with the
 /// highlighted art in the theme's error colour, in a pane that zooms and pans it.
+/// A click zooms in 2× about the point clicked and an Alt-click zooms out 2×, within [`fitting_view`]'s range.
 fn preview_area(app: &mut VectorcraftApp, ui: &mut Ui, highlight: egui::Color32, h: Highlight, overprints: Overprints) {
     let FlattenerPreviewModel { shot, renderer, view, drawn, .. } = &mut app.flattener_preview;
     let Some(shot) = shot.as_ref() else { return };
@@ -282,10 +285,44 @@ fn preview_area(app: &mut VectorcraftApp, ui: &mut Ui, highlight: egui::Color32,
     // At scale 1 the picture is the fit of the well (width `w`, height `w / ASPECT`), so the zoom reads relative to the fit.
     let s = (f64::from(w) / shot.fit.width()).min(f64::from(w / ASPECT) / shot.fit.height());
     let size = vec2((shot.fit.width() * s) as f32, (shot.fit.height() * s) as f32);
-    let out = PreviewPane::new(tl!("Flattener Preview"), SizedTexture::new(tx.id(), size), view).aspect(ASPECT).show(ui);
-    if let Some(v) = out.view {
+    let out = PreviewPane::new(tl!("Flattener Preview"), SizedTexture::new(tx.id(), size), view)
+        .aspect(ASPECT)
+        .click_centres(false)
+        .tooltip(tl!("Click to zoom in, Alt-click to zoom out, drag to pan, double-click to fit"))
+        .show(ui);
+    *view = match out.clicked {
+        Some(at) => {
+            let factor = if craft::ui::runtime::pointer::frame(ui.ctx()).pick_mods.alt { 0.5 } else { 2.0 };
+            zoomed_about(&out.shown, at, size, out.response.rect.size(), factor)
+        }
+        // The view as drawn, so the zoom row steps from what is on screen while the pane fits.
+        None => out.view.unwrap_or(out.shown),
+    };
+    // The zoom row zooms from the keyboard too.
+    if let Some(v) = PreviewZoom::new(view).show(ui).view {
         *view = v;
     }
+}
+
+/// `shown` zoomed by `factor` within its zoom range, keeping the point `at` of a picture of `picture` points (from its
+/// top-left corner) under the pointer, settled in a well of `well` points. A zoom out to the fit or past it returns
+/// to the fitting view.
+fn zoomed_about(shown: &PreviewView, at: egui::Pos2, picture: egui::Vec2, well: egui::Vec2, factor: f32) -> PreviewView {
+    let t = shown.transform;
+    let fit = PreviewPane::fit_view(picture, well, &shown.range);
+    let scale = (t.scale * factor).min(*shown.range.end());
+    let mut next = shown.clone();
+    if scale <= fit.scale {
+        next.transform = PreviewPane::settled(fit, picture, well);
+        next.fit = true;
+        return next;
+    }
+    // Where the point lies from the well's center; the new offset keeps it there at the new zoom.
+    let about = (at.to_vec2() - picture / 2.0) * t.scale + t.offset;
+    let offset = about - (about - t.offset) * (scale / t.scale);
+    next.transform = PreviewPane::settled(CanvasTransform::new(scale, offset), picture, well);
+    next.fit = false;
+    next
 }
 
 /// `visible` of the snapshot at most `px` pixels: in colour without a highlight, else in grey with
@@ -445,5 +482,96 @@ mod tests {
         // The settings persist with the UI state.
         let back: crate::UiState = serde_json::from_value(serde_json::to_value(&app.ui).unwrap()).unwrap();
         assert_eq!(back.flattener_preview, app.ui.flattener_preview);
+    }
+
+    /// The panel in a fixture, and the preview pane's bounds.
+    fn shown_pane() -> (std::rc::Rc<std::cell::RefCell<VectorcraftApp>>, craft::ui::testing::Fixture, egui::Rect) {
+        let app = std::rc::Rc::new(std::cell::RefCell::new(app()));
+        let drawn = std::rc::Rc::clone(&app);
+        let mut fixture = craft::ui::testing::Fixture::new(move |ui| show(&mut drawn.borrow_mut(), ui));
+        fixture.settle();
+        let pane = fixture.by_label("Flattener Preview").unwrap_or_else(|| panic!("no preview pane"));
+        (app, fixture, pane.rect)
+    }
+
+    /// One click at `at` with `modifiers` held, far enough from the last that the two make no double click.
+    fn click(fixture: &mut craft::ui::testing::Fixture, at: egui::Pos2, modifiers: egui::Modifiers) {
+        fixture.advance(2.0).hold(modifiers).click_at(at).hold(egui::Modifiers::NONE).idle(1);
+    }
+
+    fn view(app: &std::rc::Rc<std::cell::RefCell<VectorcraftApp>>) -> PreviewView {
+        app.borrow().flattener_preview.view.clone()
+    }
+
+    #[test]
+    fn a_click_zooms_in_about_the_point_and_an_alt_click_zooms_out() {
+        let (app, mut fixture, well) = shown_pane();
+        assert!(view(&app).fit);
+        let at = well.center() + egui::vec2(well.width() * 0.1, well.height() * 0.1);
+        click(&mut fixture, at, egui::Modifiers::NONE);
+        let zoomed = view(&app);
+        assert!(!zoomed.fit, "a click leaves fit");
+        // 1 is about the fit: the picture is sized to the well.
+        assert!(zoomed.transform.scale > 1.5, "a click zooms in: {zoomed:?}");
+        // The point clicked stays under the pointer: off center, the picture moved away from the well's center.
+        assert!(zoomed.transform.offset.x < 0.0 && zoomed.transform.offset.y < 0.0, "{zoomed:?}");
+        click(&mut fixture, at, egui::Modifiers::NONE);
+        let closer = view(&app);
+        assert!(closer.transform.scale > zoomed.transform.scale * 1.9, "a second click zooms in further");
+        click(&mut fixture, at, egui::Modifiers::ALT);
+        let out = view(&app);
+        assert!((out.transform.scale - zoomed.transform.scale).abs() < 1e-3, "an Alt-click zooms back out: {out:?}");
+        click(&mut fixture, at, egui::Modifiers::ALT);
+        assert!(view(&app).fit, "an Alt-click to the fit returns to fit");
+    }
+
+    #[test]
+    fn a_click_with_alt_latched_by_the_app_zooms_out() {
+        let mut app = app();
+        let mut frames = craft::ui::testing::Frames::new();
+        let mut pane = None;
+        for _ in 0..60 {
+            frames.frame(Vec::new(), |ui| show(&mut app, ui));
+            let tree = frames.tree();
+            pane = tree
+                .keys()
+                .into_iter()
+                .filter(|key| tree.name_of(*key) == Some("Flattener Preview"))
+                .filter_map(|key| tree.bounds_of(key))
+                .max_by(|a, b| a.area().total_cmp(&b.area()));
+            if pane.is_some() {
+                break;
+            }
+        }
+        let well = pane.unwrap_or_else(|| panic!("no preview pane"));
+        let at = well.center();
+        let primary =
+            |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        let click = |frames: &mut craft::ui::testing::Frames, app: &mut VectorcraftApp| {
+            frames.advance(2.0);
+            frames.frame(vec![egui::Event::PointerMoved(at), primary(true)], |ui| show(app, ui));
+            frames.frame(vec![primary(false)], |ui| show(app, ui));
+            frames.idle(1, |ui| show(app, ui));
+        };
+        click(&mut frames, &mut app);
+        assert!(!app.flattener_preview.view.fit, "a click zooms in");
+        // Alt held for the user by the app (the Modifier Keys panel), with no Alt key down.
+        frames.latched(craft::keymap::Mods { alt: true, ..Default::default() });
+        click(&mut frames, &mut app);
+        assert!(app.flattener_preview.view.fit, "a click with Alt latched zooms back out to fit");
+    }
+
+    #[test]
+    fn click_zoom_stays_inside_the_zoom_range() {
+        let (app, mut fixture, well) = shown_pane();
+        // Alt-click at fit stays at fit.
+        click(&mut fixture, well.center(), egui::Modifiers::ALT);
+        assert!(view(&app).fit, "no zoom below the fit");
+        for _ in 0..6 {
+            click(&mut fixture, well.center(), egui::Modifiers::NONE);
+        }
+        let most = view(&app);
+        assert!(most.transform.scale <= *most.range.end(), "no zoom past the range: {most:?}");
+        assert!(!most.can_zoom_in(), "clicks reach the most zoom: {most:?}");
     }
 }

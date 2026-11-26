@@ -269,6 +269,7 @@ fn js_error(realm: &Realm, e: RunError, tag: u32, named: &Named<'_>) -> Error {
     match e.kind {
         RunErrorKind::Syntax => Error::Module(located(&message, named, at)),
         RunErrorKind::Thrown | RunErrorKind::Limit(LimitKind::Host) => Error::Failed(located(&message, named, at)),
+        RunErrorKind::Limit(LimitKind::Jobs) => Error::Limit(located(&message, named, at)),
         RunErrorKind::Limit(LimitKind::Fuel | LimitKind::Unbroken) => Error::Limit(located("instruction budget", named, at)),
         RunErrorKind::Limit(LimitKind::Heap) => Error::Limit(located("memory budget", named, at)),
         RunErrorKind::Limit(LimitKind::Frames | LimitKind::Reentry) => Error::Limit(located(CALL_DEPTH, named, at)),
