@@ -1533,9 +1533,11 @@ fn start_folder(s: &Session, folder: &str, record: Option<u64>) -> FolderPending
     let allow = move |f: &std::path::Path| {
         scope.clone().run(|| match f.to_str() {
             Some(f) => crate::file_access::check_read(f),
-            // A lossy name would check another file than the one loaded.
-            None if crate::file_access::current().is_none() => Ok(()),
-            None => Err(format!("automation path rejected: {} isn't valid text", f.display())),
+            // A lossy name would check another file than the one loaded, so such a file loads only
+            // where no read is checked: without roots and outside a script's command.
+            None if crate::file_access::current().is_some() => Err(format!("automation path rejected: {} isn't valid text", f.display())),
+            None if crate::file_access::in_script_command() => Err(format!("Script file access denied: {} isn't valid text", f.display())),
+            None => Ok(()),
         })
     };
     // The modules start loading once the loads queued before them are done.

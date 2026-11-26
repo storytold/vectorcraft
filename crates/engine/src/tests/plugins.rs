@@ -2126,6 +2126,42 @@ fn plugin_list_leaves_out_paths_outside_the_read_root() {
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
+/// A command a script runs loads a plug-in folder's files through the script's read gate also
+/// without automation roots: a link in a folder the script may read, to a module outside it, is
+/// refused whether or not its name is valid text.
+#[cfg(unix)]
+#[test]
+fn a_script_loads_no_plugin_from_outside_its_folder_through_a_name_that_is_not_text() {
+    use crate::file_access::{ScriptGate, ScriptScope, with_script_gate};
+    use std::os::unix::ffi::OsStrExt;
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
+    let base = crate::tests_links::Folder::new("plugin-script-name-not-text");
+    let (inside, outside) = (base.0.join("in"), base.0.join("out"));
+    std::fs::create_dir_all(&inside).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    let (text_id, bytes_id) = ("test.engine.script.textname", "test.engine.script.bytesname");
+    for (id, file, link) in [(text_id, "text.wasm", &b"a.wasm"[..]), (bytes_id, "bytes.wasm", &b"b\xff.wasm"[..])] {
+        let src = tpl::returning(&tpl::manifest(id, "filter", "{}"), r#"{"objects":[]}"#);
+        std::fs::write(outside.join(file), wat::parse_str(src).unwrap()).unwrap();
+        std::os::unix::fs::symlink(outside.join(file), inside.join(std::ffi::OsStr::from_bytes(link))).unwrap();
+    }
+    let gate = ScriptGate {
+        read: ScriptScope::of_folder(&inside),
+        write: ScriptScope::default(),
+        documents: vec![],
+        linked: Default::default(),
+        also: None,
+    };
+    let mut s = session();
+    let folder = inside.to_string_lossy().to_string();
+    let r = with_script_gate(gate, || s.execute("plugin.reload", &json!({"path": folder})));
+    let installed = [text_id, bytes_id].map(vectorcraft_plugins::registry::remove);
+    assert_eq!(installed, [false, false], "a script loaded a module from outside its folder: {r:?}");
+    let r = r.unwrap();
+    assert_eq!(r["loaded"], json!([]), "{r}");
+    assert_eq!(r["failed"].as_array().map(Vec::len), Some(2), "{r}");
+}
+
 /// Under automation read roots, a plug-in turned off for the next launch is listed with a file
 /// outside them named by its file name, and `plugin.setEnabled` turns it on by that name.
 #[test]
