@@ -55,6 +55,8 @@ use serde::{Deserializer, Serialize};
 use vectorcraft_brush::stored_art::StoredArt;
 use vectorcraft_doc::{Document, ImageBlob};
 
+#[cfg(all(unix, not(target_arch = "wasm32")))]
+pub use atomic::sync_parent;
 #[cfg(not(target_arch = "wasm32"))]
 pub use atomic::{read_only_location, sync_file, write_atomic, write_atomic_with, write_new_with};
 use craft_gzip::Gz;
