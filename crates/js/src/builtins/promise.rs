@@ -140,7 +140,7 @@ enum Job {
 /// What happens when the running job's call ends.
 enum Then {
     /// The result resolves this promise, and an exception rejects it.
-    Settle(ObjId),
+    Settle(ObjId, Option<Site>),
     /// An exception rejects through this resolving record.
     Reject(ObjId),
     /// The call was a `finally` callback that a reaction job runs in place of the Then Finally or
@@ -214,7 +214,7 @@ impl Promises {
         roots.objects.extend(self.proto.iter().chain(&self.ctor).chain(&self.natives).chain(&self.rejected));
         roots.values.extend(self.completion.iter());
         match &self.running {
-            Some(Then::Settle(o) | Then::Reject(o)) => roots.objects.push(*o),
+            Some(Then::Settle(o, _) | Then::Reject(o)) => roots.objects.push(*o),
             Some(Then::Finally { derived, value, .. }) => {
                 roots.objects.push(*derived);
                 roots.values.push(value);
@@ -662,7 +662,7 @@ impl Interp {
                             interp.temp_roots.extend([handler, argument.clone()]);
                             (on_finally, Value::Undefined, Vec::new(), Then::Finally { derived, value: argument, throws })
                         }
-                        None => (handler, Value::Undefined, vec![argument], Then::Settle(derived)),
+                        None => (handler, Value::Undefined, vec![argument], Then::Settle(derived, site)),
                     }
                 }
                 Job::Thenable { promise, thenable, then } => {
@@ -689,8 +689,8 @@ impl Interp {
         let site = if r.is_err() { caught(self) } else { None };
         let Some(then) = self.promises.running.take() else { return Err(Abrupt::Internal("no promise job is running".into())) };
         match (then, r) {
-            (Then::Settle(d), Ok(v)) => resolve_promise(self, d, v),
-            (Then::Settle(d), Err(e)) => reject_promise(self, d, e, site),
+            (Then::Settle(d, _), Ok(v)) => resolve_promise(self, d, v),
+            (Then::Settle(d, _), Err(e)) => reject_promise(self, d, e, site),
             (Then::Reject(_), Ok(_)) => Ok(()),
             (Then::Reject(rec), Err(e)) => scoped(self, |interp| {
                 root(interp, &Value::Object(rec));
@@ -796,7 +796,10 @@ fn resolve_function(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> J
 /// A promise's reject function (section 25.6.1.3.1).
 fn reject_function(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let rec = arg(args, 0).as_object().ok_or_else(|| Abrupt::Internal("a reject function lost its record".into()))?;
-    let site = here(interp);
+    let site = here(interp).or_else(|| match &interp.promises.running {
+        Some(Then::Settle(_, site)) => site.clone(),
+        _ => None,
+    });
     reject_through(interp, rec, arg(args, 1), site)?;
     Ok(Value::Undefined)
 }
