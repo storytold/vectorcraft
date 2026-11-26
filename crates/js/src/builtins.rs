@@ -17,6 +17,7 @@ pub(crate) mod iterator;
 mod json;
 mod math;
 mod object;
+pub(crate) mod promise;
 mod symbol;
 
 use std::rc::Rc;
@@ -263,6 +264,9 @@ fn try_install(interp: &mut Interp) -> JsResult<()> {
     }
     if interp.options.e4x {
         crate::xml_builtins::install(interp)?;
+    }
+    if interp.options.es2015 {
+        promise::install(interp)?;
     }
     Ok(())
 }

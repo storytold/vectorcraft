@@ -78,6 +78,14 @@
 //! `TypeError`. A string converts to a number in the `0b` and `0o` forms as well. Every iterator
 //! step and every prototype a Symbol-keyed lookup passes takes fuel, and every Symbol and registry
 //! entry counts against the heap limit.
+//!
+//! With [`Options::es2015`], the realm also provides `Promise` (ECMA-262 11th edition, section
+//! 25.6, <https://262.ecma-international.org/11.0/#sec-promise-objects>): the constructor, `then`,
+//! `catch`, `finally`, `Promise.resolve`, `reject`, `all`, `allSettled` and `race`. The promise
+//! jobs a script queues run in order once its code has ended, before its run ends, on the run's
+//! limits; a promise still rejected with no handler at the end is reported by
+//! [`Realm::unhandled_rejections`]. [`Realm::add_es2015`] gives a realm made without the option
+//! `Promise` for its next runs.
 #![forbid(unsafe_code)]
 
 pub mod ast;
@@ -121,7 +129,9 @@ pub use host::{Arg, CallSite, Data, DataLimits, HostError, HostFunction, HostIte
 pub use host_classes::{HOST_REF_KEY, HostClass, HostMember, host_ref, host_ref_parts};
 pub use lexer::{Goal, Lexer};
 pub use number::to_string as number_to_string;
-pub use realm::{Interrupt, JsValue, LimitKind, Limits, MAX_UNBROKEN_FUEL, Progress, Realm, RunError, RunErrorKind, SourceLocator, UNKNOWN_SOURCE};
+pub use realm::{
+    Interrupt, JsValue, LimitKind, Limits, MAX_UNBROKEN_FUEL, Progress, Realm, Rejection, RunError, RunErrorKind, SourceLocator, UNKNOWN_SOURCE,
+};
 pub use token::{Directive, DirectiveName, Keyword, Punct, Span, Token, TokenKind};
 
 /// How a script is read.
@@ -145,11 +155,12 @@ pub struct Options {
     /// `f?.()`) and `??`. Off, they are syntax errors and the language is ES5.1's. Code a
     /// script evaluates at run time (`eval`, `Function`) is read the way the realm reads scripts.
     /// A realm made with it on also has the later editions' built-ins this engine has: `Symbol`
-    /// with Symbol-keyed properties and the iterators of arrays, strings and `arguments` objects.
-    /// A realm made with it off has the ES5.1 built-ins only, as the app's scripts expect. Those
-    /// built-ins are chosen when the realm is made: turning the option on or off later with
-    /// [`Realm::set_es2015`] changes the language later runs read, and does not add or remove
-    /// them. Runs with it on also convert `0b` and `0o` strings to numbers.
+    /// with Symbol-keyed properties, the iterators of arrays, strings and `arguments` objects, and
+    /// `Promise` with its job queue. A realm made with it off has the ES5.1 built-ins only, as the
+    /// app's scripts expect. Those built-ins are chosen when the realm is made: turning the option
+    /// on or off later with [`Realm::set_es2015`] changes the language later runs read, and does
+    /// not add or remove them; [`Realm::add_es2015`] adds `Promise` to a realm made without it.
+    /// Runs with it on also convert `0b` and `0o` strings to numbers.
     pub es2015: bool,
 }
 
@@ -265,6 +276,8 @@ mod extension_tests;
 mod host_tests;
 #[cfg(test)]
 mod interp_tests;
+#[cfg(test)]
+mod promise_tests;
 #[cfg(test)]
 mod symbol_tests;
 #[cfg(test)]
