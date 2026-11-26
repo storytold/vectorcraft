@@ -1347,24 +1347,24 @@ fn editable_measures_a_group_on_a_locked_artboard_once() {
 #[test]
 fn get_is_file_open_cannot_probe_outside_script_scope() {
     let (mut s, _, _) = doc();
-    let path = std::env::temp_dir().join(format!("vc-dom-open-{}.svg", std::process::id()));
+    let fixture = vectorcraft_testkit::TempDir::new("script-file-open-quoting");
+    let path = fixture.join("quote's open.svg");
     s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
-    let p = path.to_string_lossy().replace('\\', "\\\\");
-    let query = format!("vc.log(app.getIsFileOpen('{p}')); vc.log(app.getIsFileOpen('{p}.other'));");
+    let p = serde_json::to_string(&path.to_string_lossy()).unwrap();
+    let other = serde_json::to_string(&format!("{}.other", path.to_string_lossy())).unwrap();
+    let query = format!("vc.log(app.getIsFileOpen({p})); vc.log(app.getIsFileOpen({other}));");
     let out = log(&mut s, &query);
     assert_eq!(out, vec![json!(true), json!(false)]);
     // Read roots that leave out the document's file: the same path does not count.
-    let elsewhere = std::env::temp_dir().join(format!("vc-dom-roots-{}", std::process::id()));
+    let elsewhere = fixture.join("elsewhere");
     std::fs::create_dir_all(&elsewhere).unwrap();
     let roots = crate::file_access::AutomationRoots::new(&[&elsewhere], &[]).unwrap().unwrap();
     let out = crate::file_access::confine(Some(&roots), || log(&mut s, &query));
     assert_eq!(out, vec![json!(false), json!(false)]);
-    let _ = std::fs::remove_dir_all(&elsewhere);
     for bad in ["../x.svg", "a/../b.svg", "\\\\\\\\host\\\\share\\\\x.svg", "//host/share/x.svg", "a\\u0000b", ""] {
         assert!(failure(&mut s, &format!("app.getIsFileOpen('{bad}');")).contains("cannot check"), "{bad}");
     }
     assert!(failure(&mut s, "app.getIsFileOpen(new Array(5000).join('a'));").contains("too long"));
-    let _ = std::fs::remove_file(path);
 }
 
 #[test]
