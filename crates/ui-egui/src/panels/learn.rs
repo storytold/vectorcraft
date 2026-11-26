@@ -73,10 +73,12 @@ fn run(app: &mut VectorcraftApp, cmd: &str, params: Value) {
     }
 }
 
-/// The key a collection's last selection change set, if any: a click on a row or a tab.
+/// The key a collection's last pick chose, if any: a click on a row or a tab, a click on the row or tab already
+/// selected, or Enter on one.
 fn picked<K, E>(events: Vec<CollectionEvent<K, E>>) -> Option<K> {
     events.into_iter().rev().find_map(|event| match event {
         CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } => keys.into_iter().last(),
+        CollectionEvent::Picked { key, .. } | CollectionEvent::Activate(key) => Some(key),
         _ => None,
     })
 }
@@ -158,8 +160,6 @@ fn skill_list(app: &mut VectorcraftApp, ui: &mut Ui) {
     let rings: Vec<(&'static catalog::Skill, SkillRing)> =
         catalog::SKILLS.iter().map(|s| (s, SkillRing { done: progress.done(s), total: s.tutorials.len() })).collect();
     let source = keyed(&keys, |key: &&'static str| *key);
-    // PLAN: a single-select list keeps its last pick highlighted and reports no change when the same key is
-    // picked again; the keys differ between the levels, but the list is the framework's to reset on a new view.
     // A few skills: the list is as tall as its rows, so Reset progress shows under them.
     let out = List::new(tl!("Skills")).select(SelectMode::Single).natural_height(true).show_items(ui, &source, &mut |key, _| {
         let row = ListRow::new(*key);

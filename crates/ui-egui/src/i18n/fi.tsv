@@ -2136,6 +2136,17 @@ digits	Malayalam	Malajalam
 	Create New Sublayer	Luo uusi alataso
 	Search All	Hae kaikista
 	Graphics	Grafiikka
+	Show Contrast	Näytä kontrasti
+	Contrast For	Kontrasti kohteelle
+	Normal Text	Tavallinen teksti
+	Large Text	Suuri teksti
+	Contrast Background	Kontrastin tausta
+	Behind Selection	Valinnan takana
+	Current Color	Nykyinen väri
+	Pass	Läpäisee
+	Fail	Ei läpäise
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2:n vähimmäiskontrastit: tavallinen teksti AA 4.5:1 (1.4.3) ja AAA 7:1 (1.4.6), suuri teksti AA 3:1 ja AAA 4.5:1, grafiikka ja säätimet AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Tausta luetaan valinnan keskeltä.
 	Local Libraries	Paikalliset kirjastot
 	Add Content	Lisää sisältöä
 	Click to apply to the selected type	Käytä valittuun tekstiin napsauttamalla
@@ -4727,7 +4738,7 @@ font-technology	Variable	Muuttuvat
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Valinta › Sama › Täyttöväri, Viivan väri sekä Täyttö ja viiva löytävät vain globaalin tai spottivärimallin saman sävyn, eivät mitä tahansa sen sävyä.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Näyttää aloitusnäytön, kun yhtään asiakirjaa ei ole auki; kun asetus ei ole käytössä, ikkuna pysyy tyhjänä, kunnes napsautat Aloitus.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Mittaa objektit viivoineen ja muotoa muuttavine tehosteineen kokoa, sijaintia ja tasausta varten; varjoja, hehkuja ja sumennuksia ei mitata.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100 %:n zoomauksella asiakirjan tuuma vie 96 näyttöpistettä 72:n sijaan.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	100 %:n zoomauksella asiakirjan tuuma täyttää näytön tuuman, tai 96 näyttöpistettä, jos järjestelmä ei ilmoita käyttökelpoista näytön kokoa.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Ryhmän, polun tai kuvan kaksoisnapsautus Valinta-työkalulla avaa sen eristystilaan.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Kuviotäytöt ja -viivat muuntuvat grafiikan mukana, ellei muunnos tai Muunna-paneelin valikko valitse toisin.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Dynaamisten kulmien säteet skaalautuvat grafiikan mukana, ellei skaalaus valitse toisin.
@@ -5809,6 +5820,12 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	finish editing the pattern first	lopeta ensin kuvion muokkaus
 @msg	nothing encoded	mitään ei koodattu
 @msg	nothing selected	mitään ei ole valittu
+@msg	`{key}` must be a color or {_1}	`{key}` on oltava väri tai {_1}
+@msg	the selected objects' colors differ: give `color`	valittujen objektien värit eroavat: anna `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	valittujen objektien värit eroavat: anna `opacity` tai `color`
+@msg	the active fill or stroke has no color: give `color`	aktiivisella täytöllä tai viivalla ei ole väriä: anna `color`
+@msg	the active fill or stroke is hidden: give `color`	aktiivinen täyttö tai viiva on piilotettu: anna `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	aktiivinen täyttö tai viiva piirretään peittävyysmaskin läpi: anna `color`
 @msg	nothing selected is in a group	mikään valituista ei ole ryhmässä
 @msg	nothing to align	ei tasattavaa
 @msg	nothing to distort	ei vääristettävää
@@ -7380,6 +7397,8 @@ axis	Y Axis	Y-akseli
 	Cancel Plug-in Run	Peruuta laajennuksen ajo
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} valmistui, mutta asiakirja tai laajennus muuttui sillä välin: suorita se uudelleen
 @msg	Running “{name}”…	Suoritetaan ”{name}”…
+@msg	Plug-in “{name}”: {notice}	Laajennus ”{name}”: {notice}
+@msg	`notice` must be a string with visible text	`notice` on oltava merkkijono, jossa on näkyvää tekstiä
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	live-tehoste suoritetaan asiakirjaa piirrettäessä, joten se ei voi olla `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	vientilaajennus saa aina viennin budjetin: jätä `budget` pois
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	”{_1}” pyytää suurta laskentabudjettia (jokainen ajo enintään {minutes} minuuttia ja {times} kertaa tavallinen määrä käskyjä): ihmisen on hyväksyttävä se työpöytäsovelluksessa, tai anna `allowHeavy: true` istunnossa, joka on käynnistetty valitsimella --allow-plugin-grants
@@ -7472,7 +7491,7 @@ axis	Y Axis	Y-akseli
 @msg	a list of {min_items} to {max_items} numbers	{min_items}-{max_items} luvun luettelo
 @msg	a new object needs a `path`	uusi objekti tarvitsee kentän `path`
 @msg	a number	luku
-@msg	a painted live effect returns only `objects`	maalaava live-tehoste palauttaa vain kentän `objects`
+@msg	a painted live effect returns only `objects` and `notice`	maalaava live-tehoste palauttaa vain kentät `objects` ja `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	maalaavan live-tehosteen osalla on vain `path`, `fillRule`, `fills` ja `strokes`
 @msg	a read-only object was left out	vain luku -objekti jätettiin pois
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	vain luku -objekti jätettiin pois: palauta se pelkkänä {{"id": …}}-muotona tai sellaisena kuin se annettiin
@@ -7577,6 +7596,8 @@ axis	Y Axis	Y-akseli
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` on {_1}; tämä isäntä tukee laajennus-API:n tasoja 1 ja {API_LEVEL} välillä
 @msg	`paintOutput` may only be true	`paintOutput` voi olla vain true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` on vain reaaliaikaiselle tehosteelle (`kind` "effect") tasolla `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` on vain tuojalle (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	”{shown}” avaa tiedostoja mutta ei sijoita niitä: sen manifesti ei aseta `place`-avainta
 @msg	`grant` must be a list of permission names	`grant` on oltava luettelo käyttöoikeuksien nimistä
 @msg	`grant` names an unknown permission `{shown}`	`grant` nimeää tuntemattoman käyttöoikeuden `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	lajin `{_1}` laajennus tarvitsee käyttöoikeuden `{_2}`
@@ -7588,6 +7609,35 @@ axis	Y Axis	Y-akseli
 @msg	`inputs` lists `{shown}` twice	`inputs` luettelee kohteen `{shown}` kahdesti
 @msg	`inputs` needs `api` 2 or later	`inputs` edellyttää `api`-tasoa 2 tai uudempaa
 @msg	`inputs` needs the permission `doc.read`	`inputs` edellyttää käyttöoikeutta `doc.read`
+@msg	only a filter declares `writes`	vain suodatin voi määrittää `writes`-avaimen
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` nimeää tuntemattoman objektilajin `{shown}`: käytä arvoa type, image tai symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` luettelee kohteen `{shown}` kahdesti
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` luettelee kohteen `{shown}`, jota `inputs` ei luettele
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` edellyttää `api`-tasoa {WRITES_API} tai uudempaa
+@msg	`writes` needs the permission `doc.write`	`writes` edellyttää käyttöoikeutta `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} ei ole teksti, kuva eikä symbolin ilmentymä
+@msg	the text of type given as `truncated` can't be changed	`truncated`-merkinnällä annetun tekstiobjektin tekstiä ei voi muuttaa
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	on oltava luettelo, jossa on enintään {MAX_INPUT_RUNS} kohdetta
+@msg	type needs at least one run	tekstissä on oltava vähintään yksi tekstijakso
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} tavua tekstiä (raja {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} kappaletta (raja {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	yli {MAX_INPUT_TEXT_TOTAL} tavua tekstiä koko tulosteessa
+@msg	unknown key '{k}'	tuntematon avain '{k}'
+@msg	must be a list of 6 numbers	on oltava 6 luvun luettelo
+@msg	a number is out of range (limit ±{MAX_COORD})	luku on alueen ulkopuolella (raja ±{MAX_COORD})
+@msg	flattens the object to a line or a point	litistää objektin viivaksi tai pisteeksi
+@msg	an object flattened to a line or a point can't be placed again	viivaksi tai pisteeksi litistynyttä objektia ei voi sijoittaa uudelleen
+@msg	must be a number from 0 to 1	on oltava luku väliltä 0-1
+@msg	must be the name of a symbol	on oltava symbolin nimi
+@msg	'{shown}' is not a symbol in this document	'{shown}' ei ole symboli tässä dokumentissa
+@msg	a run must be {{"text", "style", "inline"?}}	tekstijakson on oltava {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` sisältää upotetun grafiikan merkin
+@msg	inline graphics can't be added, removed, reordered or changed	upotettuja grafiikoita ei voi lisätä, poistaa, järjestää uudelleen eikä muuttaa
+@msg	the characters of threaded type can't be changed	ketjutetun tekstin merkkejä ei voi muuttaa
+@msg	the characters of type with ruby can't be changed	ruby-merkintöjä sisältävän tekstin merkkejä ei voi muuttaa
+@msg	expected {count} paragraph styles, one per paragraph	odotettiin {count} kappaletyyliä, yksi kutakin kappaletta kohden
+@msg	the document has no Kinsoku set named '{shown}'	dokumentissa ei ole Kinsoku-joukkoa nimeltä '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	siinä on oltava 1-{MAX_FAMILY} tulostettavaa merkkiä
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Lukea sille annetut objektit sekä asiakirjan asetukset, piirtoalustat, tasot ja värimallit
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context`-avaimen on lueteltava eri osiot: settings, artboards, layers tai swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` on suodattimelle tai reaaliaikaiselle tehosteelle, jolla on `commands`, tasolla `api` 3 tai uudempi ja käyttöoikeudella `doc.read`
