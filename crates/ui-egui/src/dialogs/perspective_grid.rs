@@ -482,7 +482,6 @@ impl StackDialog for GridDialog {
             .opened(Bind::bound(&mut self.open))
             .ok_enabled(finish || !self.held.is_waiting())
             .accept_stays_open(true)
-            .enter_confirms(false)
             .show(ui, |ui, form, draft| {
                 if finish {
                     form.request_close_as(CloseReason::Activated);

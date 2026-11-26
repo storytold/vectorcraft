@@ -718,7 +718,8 @@ pub fn properties_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         && let Some(dialogs) = app.dialogs()
     {
         let key = request.key.clone();
-        let picker = dialogs.with(|host| host.open(ColorPickerDialog::from_request(request)));
+        let picker = ColorPickerDialog::from_request(request).swatch_view(super::color_picker::swatch_view(app));
+        let picker = dialogs.with(|host| host.open(picker));
         app.object_dialogs.dimension = Some(Pick { id: picker, key, target: NodeId(id) });
     }
     Row::new().show(ui, |ui, _| {

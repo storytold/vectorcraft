@@ -212,7 +212,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     };
     w.state = state;
     if let Some(request) = out.pick_color {
-        w.nested.open(ColorPickerDialog::from_request(request));
+        w.nested.open(ColorPickerDialog::from_request(request).swatch_view(crate::dialogs::color_picker::swatch_view(app)));
     }
     if out.closed.is_none() {
         app.prefs = Some(w);
