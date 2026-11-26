@@ -16354,8 +16354,9 @@ one plane, such as the top flaps of a closed box, are not listed. Without a blan
 null and the lists are empty; `issues` are those of `addon.packaging.check`.
 
 Overlapping panels in one plane stack according to the fold tree from the largest panel. Choosing another base
-preserves that order when both trees place the panels in the same positions. Panels in different planes draw by
-depth, including when their separation is smaller than the depth tie tolerance. Nearly parallel panels that cross
+preserves that order when both trees place the panels in the same positions. Every member of a coplanar group must
+match every other member. The group uses one comparison depth, and its panels stack by rank at that depth. Panels in
+different planes draw by depth, with the plane number resolving an exact crossing. Nearly parallel panels that cross
 draw by depth on each side of the intersection. A hinge uses the role of the line
 with the most total length along it; the lowest line id wins a tie.
 

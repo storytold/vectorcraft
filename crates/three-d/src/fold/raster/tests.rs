@@ -37,6 +37,62 @@ fn moved(z: f64) -> Pose {
     Pose { t: [0.0, 0.0, z], ..Pose::IDENTITY }
 }
 
+#[test]
+fn a_middle_plane_does_not_join_two_separate_planes_into_one_stack() {
+    let whole = || panel(vec![square(0.0, 0.0, 100.0, 100.0)]);
+    let (b, f) = scene_of(vec![whole(), whole(), whole()], vec![moved(4e-13), moved(8e-13), moved(0.0)]);
+    let image = render(&Scene { blank: &b, folded: &f, print: None, inside: [0; 4], outside: WHITE, camera: front() }).expect("drawn");
+    assert_eq!(image.panel_at(50, 50), Some(1), "the separate farther panel does not cover the near stack");
+}
+
+#[test]
+fn a_caller_supplied_scene_past_the_panel_limit_keeps_actual_depth() {
+    let n = super::super::MAX_PANELS + 1;
+    let panels = (0..n).map(|_| panel(vec![square(0.0, 0.0, 100.0, 100.0)])).collect();
+    let mut poses = vec![Pose::IDENTITY; n];
+    poses[1] = moved(5.0);
+    let (b, f) = scene_of(panels, poses);
+    let image = render(&Scene { blank: &b, folded: &f, print: None, inside: [0; 4], outside: WHITE, camera: front() }).expect("drawn");
+    assert_eq!(image.panel_at(50, 50), Some(1));
+}
+
+#[test]
+fn crossing_a_stack_selects_the_same_pixel_in_every_draw_order() {
+    let angle = 1e-4_f64;
+    let (s, c) = angle.sin_cos();
+    let crossing = Pose { m: [[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]], t: [0.0, 0.0, s * 50.5 / c + 2e-13] };
+    let maps = [Pose::IDENTITY, crossing, moved(4e-13)].map(|p| map_panel(&front(), &p).expect("mapped"));
+    let planes = [0, 1, 0];
+    let ranks = [3, 2, 1];
+    let mut winners = vec![];
+    for order in [[0, 1, 2], [2, 1, 0], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1]] {
+        let mut target = Target {
+            width: 100,
+            height: 100,
+            color: vec![0; 40_000],
+            depth: vec![f64::NEG_INFINITY; 10_000],
+            rank: vec![0; 10_000],
+            panel: vec![0; 10_000],
+        };
+        for i in order {
+            Fill {
+                mapped: &maps[i],
+                plane: &maps[usize::from(planes[i])],
+                rank: ranks[i],
+                planes: &planes,
+                panel: (i + 1) as u16,
+                print: None,
+                origin: [0.0; 2],
+                inside: [0.0; 4],
+                outside: [0.0; 4],
+            }
+            .span(&mut target, 50, 50.0, 51.0);
+        }
+        winners.push(target.panel[5050]);
+    }
+    assert!(winners.iter().all(|&winner| winner == winners[0]), "{winners:?}");
+}
+
 fn pixel(img: &Image, x: u32, y: u32) -> [u8; 4] {
     let i = (y * img.width + x) as usize * 4;
     [img.pixels[i], img.pixels[i + 1], img.pixels[i + 2], img.pixels[i + 3]]
@@ -155,7 +211,7 @@ fn nearly_parallel_panels_that_cross_use_depth_on_both_sides() {
 
 #[test]
 fn of_two_parallel_panels_the_nearer_shows_however_close() {
-    // 2 and 2.0001 points deep: a hair more than `TIE` apart once subtracted, though 2 + `TIE`
+    // 2 and 2.0001 points deep: a hair more than 0.0001 apart once subtracted, though 2 + 0.0001
     // equals 2.0001. The panels lie in different planes, so the nearer shows whichever is drawn
     // first.
     let whole = || panel(vec![square(0.0, 0.0, 100.0, 100.0)]);
