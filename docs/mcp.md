@@ -13949,7 +13949,8 @@ as one group named after the file. Layers are placed from bottom to top, with ob
 Without layers, objects keep their returned order. Guides are omitted. Placement records one undo step and embeds
 the group whatever `link` says (`linked: false`). `plugin.run` of an importer is
 an error that names `document.open`. Placement rejects transformed art beyond ±4,000,000 pt on either axis,
-including template placement, before changing the document. An importer returns new paths with geometry and
+including geometry retained outside a crop frame and template placement, before changing the document.
+An importer returns new paths with geometry and
 without object IDs. An artboard's positive width and height must produce distinct finite endpoints within the canvas.
 In the app, File › Open With lists the installed importers, and
 `file.openWith {importer, path?, params?}` opens `path`, or a file picked among the importer's extensions, with one (on

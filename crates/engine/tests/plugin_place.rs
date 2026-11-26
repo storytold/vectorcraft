@@ -90,6 +90,24 @@ fn placing_importer_checks_the_transformed_bounds_before_editing() {
     }
 }
 
+#[test]
+fn cropped_svg_placement_checks_art_outside_its_frame_before_editing() {
+    let svg = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M-20 -20 L120 -20 L120 120 L-20 120 Z"/></svg>"#;
+    for at in [[3_999_940.0, 400.0], [-3_999_940.0, 400.0], [400.0, 3_999_940.0], [400.0, -3_999_940.0]] {
+        for template in [false, true] {
+            let mut s = with_document();
+            let before = state(&mut s);
+            assert!(
+                place(&mut s, "cropped.svg", svg, json!({"at": at, "crop": "crop", "template": template})).is_err(),
+                "{at:?}, template: {template}"
+            );
+            assert_eq!(state(&mut s), before);
+        }
+    }
+    let mut s = with_document();
+    assert!(place(&mut s, "cropped.svg", svg, json!({"at": [3_999_930.0, 400.0], "crop": "crop"})).is_ok());
+}
+
 /// A placed group: its name, the names of its children, and its bounds as `(x0, y0, x1, y1)`.
 type Placed = (Option<String>, Vec<Option<String>>, (f64, f64, f64, f64));
 
