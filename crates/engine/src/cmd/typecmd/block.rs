@@ -218,6 +218,21 @@ fn tenths(points: f64) -> f64 {
     ((points * 10.0 + 1e-6).floor() / 10.0).clamp(SIZES.0, SIZES.1)
 }
 
+pub(crate) fn fit_metrics(t: &TextObject) -> Option<(f64, f64, f64)> {
+    if !t.dynamic_text {
+        return None;
+    }
+    let TextKind::Area { frame } = &t.kind else { return None };
+    let (_, line_gap) = t.area.block_gaps();
+    let b = frame.bounds().filter(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite()))?;
+    let points = t.style_scale().map(|s| s.points).filter(|p| p.is_finite() && *p > 1e-12)?;
+    let a = &t.area;
+    let (along, cells, gutter) = if t.vertical { (b.height(), a.rows, a.row_gutter.unwrap_or(a.gutter)) } else { (b.width(), a.columns, a.gutter) };
+    let cells = cells.max(1) as f64;
+    let cell = (along - 2.0 * a.inset.max(0.0) - gutter.max(0.0) * (cells - 1.0)) / cells;
+    (cell.is_finite() && cell > 1e-9).then_some((points, line_gap, cell))
+}
+
 /// Fit area type with Dynamic Text (Block) on: with the word gap as every paragraph's Desired word
 /// spacing ([`TextObject::layout_justification`]; the paragraphs keep their own values), each line
 /// as typed gets the size (its first character's, in steps of 0.1 pt within 0.1 to
@@ -228,23 +243,8 @@ fn tenths(points: f64) -> f64 {
 /// has no size. A line that still wraps at its first fit is made smaller, in at most
 /// [`BLOCK_PASSES`] more passes. True when the text changed.
 pub(crate) fn block_fit(t: &mut TextObject) -> bool {
-    if !t.dynamic_text {
-        return false;
-    }
-    let TextKind::Area { frame } = &t.kind else { return false };
-    let (_, line_gap) = t.area.block_gaps();
-    let Some(b) = frame.bounds().filter(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite())) else { return false };
-    let Some(points) = t.style_scale().map(|s| s.points).filter(|p| p.is_finite() && *p > 1e-12) else { return false };
+    let Some((points, line_gap, cell)) = fit_metrics(t) else { return false };
     let before = t.runs.clone();
-
-    // The room along a line in one cell of the frame, before indents.
-    let a = &t.area;
-    let (along, cells, gutter) = if t.vertical { (b.height(), a.rows, a.row_gutter.unwrap_or(a.gutter)) } else { (b.width(), a.columns, a.gutter) };
-    let cells = cells.max(1) as f64;
-    let cell = (along - 2.0 * a.inset.max(0.0) - gutter.max(0.0) * (cells - 1.0)) / cells;
-    if !(cell.is_finite() && cell > 1e-9) {
-        return t.runs != before;
-    }
 
     let db = vectorcraft_text::FontDb::global();
     let text = t.plain_text();

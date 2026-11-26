@@ -12053,7 +12053,8 @@ lines. The rest are VectorCraft's own rules:
   leading set. Otherwise each character takes its own size plus the gap, and the field is blank where those differ.
   `keepLineGap: true` on `text.setStyle` and `text.setRangeStyle` leaves `lineGap` as it is, and the Character panel's
   Reset Panel sends it, so a reset to Auto leading keeps the frame's Line Gap. Point type, type on a path and area type
-  with Block off keep their own leading.
+  with Block off keep their own leading. If Block cannot fit a frame, editing a character style keeps each run's
+  manual leading override. When Block can fit the frame, its generated leading follows the edited style.
 - The sizes are written into the characters, so every export and the Character panel see them. After every edit to
   the text or the frame (typing, `text.editRange`, character and paragraph changes, `text.areaOptions {width}`, a
   frame resize) the lines are fitted again, in the edit's own undo step. The lines are then measured again, in at

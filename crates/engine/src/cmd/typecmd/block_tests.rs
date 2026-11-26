@@ -31,6 +31,22 @@ fn undo_len(s: &Session) -> usize {
     s.doc().unwrap().history.undo.len()
 }
 
+#[test]
+fn editing_a_character_style_keeps_manual_leading_when_block_has_no_room() {
+    for manual_leading in [42.0, 12.0] {
+        let mut s = session();
+        let id = area(&mut s, 50.0, 400.0, "Inset");
+        s.execute("text.areaOptions", &json!({"inset": 30})).unwrap();
+        s.execute("charStyle.new", &json!({"name": "Body", "attrs": {"leading": 30}})).unwrap();
+        s.execute("charStyle.apply", &json!({"name": "Body", "id": id})).unwrap();
+        s.execute("text.setStyle", &json!({"ids": [id], "leading": manual_leading})).unwrap();
+        s.execute("type.dynamicText", &json!({"ids": [id], "on": true})).unwrap();
+        assert_eq!(text(&s, id).runs[0].style.leading, Some(manual_leading));
+        s.execute("charStyle.edit", &json!({"name": "Body", "to": "Body", "attrs": {"leading": 60}})).unwrap();
+        assert_eq!(text(&s, id).runs[0].style.leading, Some(manual_leading));
+    }
+}
+
 /// The size of the character at `byte`.
 fn size_at(t: &TextObject, byte: usize) -> f64 {
     super::block::size_at(&t.runs, byte)
