@@ -3677,6 +3677,11 @@ given and show none. These limits are VectorCraft's own values.
 {"name":"run_command","arguments":{"command":"app.toast","params":{"message":"Exported 4 artboards","level":"success"}}}
 ```
 
+A filter or plug-in command that only reports what it did needs neither `app.toast` nor any permission: its output's
+`notice` ([plug-ins](plugins.md#output)) comes back in the run's result, and the desktop app and the web build show it
+in the status bar as `Plug-in “name”: notice` once the output is applied. A run that fails, is refused or is canceled
+shows no notice.
+
 ## Navigator panel options
 
 The Navigator panel menu's Panel Options… opens the `navigatorPanelOptions` dialog (fields `color`, `solidDashes`),
@@ -13639,7 +13644,10 @@ be locked, `plugin.install` and `plugin.remove` fail and change nothing:
 `plugin.install {path | dataBase64}` installs one, `plugin.list` / `plugin.info {id}` describe them (parameters,
 schema, defaults). An object filter runs on the selected paths and compound paths with `plugin.run {id, params}` (one
 undo step; it may change, delete or add objects, and the result is selected; a run that changes no object and no kept
-data records no undo step and leaves the document unmodified). A filter whose manifest lists `inputs`
+data records no undo step and leaves the document unmodified) → `{plugin, ids, notice?, pluginName?}`.
+`notice` is the text the filter's output reports in its `notice` key, escaped and cut at 200 characters
+([plug-ins](plugins.md#output)); it is returned only when the output was applied, with `pluginName`, the manifest name
+of the plug-in that ran, and the desktop app shows it in the status bar after that name. A filter whose manifest lists `inputs`
 (`type`, `image`, `symbolInstance`; `inputs` in its `plugin.list` entry) also lists `doc.read` in its `permissions`, so
 installing it needs a person's approval. It is also given the selected objects of those kinds to read, in paint order from the
 bottom, with at most 16 MiB of pixels and 16 MiB of type runs over one run (an object that doesn't fit what the objects
@@ -13768,7 +13776,8 @@ A filter or live effect may declare commands of its own ([plugins.md](plugins.md
 (`commands: [{id, command, label, params, paramsSchema, menu?}]`; `menu`, `{path, after?, placed?}`, is the menu its
 manifest places it in, with `placed: false` when the command stays in its plug-in's submenu, see
 [plugins.md](plugins.md#placing-a-command-in-another-menu)). Run it with `{ids?, params?}` (its parameters may also
-be top-level keys): the parameters are checked before the plug-in runs, a run is one undo step named after the
+be top-level keys) → `{plugin, command, ids, notice?, pluginName?}`, with `notice` and `pluginName` as `plugin.run`
+returns them: the parameters are checked before the plug-in runs, a run is one undo step named after the
 command, and a run that traps or runs out of its instruction budget returns an error that starts with the plug-in's
 name and the command's label and leaves the document and the undo history as they were. For `plugin.run` and plug-in
 commands, `ids` left out or null means the selection, and an `ids` that is not a list of object ids is an error.

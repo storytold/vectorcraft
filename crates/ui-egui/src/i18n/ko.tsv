@@ -6908,6 +6908,8 @@ axis	Y Axis	Y축
 	Cancel Plug-in Run	플러그인 실행 취소
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1}이(가) 끝났지만 그동안 문서나 플러그인이 변경되었습니다. 다시 실행하세요
 @msg	Running “{name}”…	“{name}” 실행 중…
+@msg	Plug-in “{name}”: {notice}	플러그인 “{name}”: {notice}
+@msg	`notice` must be a string with visible text	`notice`는 보이는 텍스트가 있는 문자열이어야 합니다
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	라이브 효과는 문서를 그리는 동안 실행되므로 `heavy`일 수 없습니다
 @msg	an exporter always gets an export's budget: leave `budget` out	내보내기 플러그인은 항상 내보내기 예산을 받습니다. `budget`은 생략하세요
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}”은(는) 큰 계산 예산을 요청합니다(실행당 최대 {minutes}분, 평소의 {times}배 명령어). 데스크톱 앱에서 사람이 승인하거나 --allow-plugin-grants로 시작한 세션에서 `allowHeavy: true`를 전달하세요
@@ -6999,7 +7001,7 @@ axis	Y Axis	Y축
 @msg	a list of {min_items} to {max_items} numbers	숫자 {min_items}-{max_items}개의 목록
 @msg	a new object needs a `path`	새 개체에는 `path`가 필요합니다
 @msg	a number	숫자
-@msg	a painted live effect returns only `objects`	페인트형 라이브 효과는 `objects`만 반환합니다
+@msg	a painted live effect returns only `objects` and `notice`	페인트형 라이브 효과는 `objects`와 `notice`만 반환합니다
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	페인트형 라이브 효과의 조각에는 `path`, `fillRule`, `fills`, `strokes`만 있습니다
 @msg	a read-only object was left out	읽기 전용 개체가 빠졌습니다
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	읽기 전용 개체가 빠졌습니다: {{"id": …}}만 있는 형태나 받은 그대로 반환하십시오

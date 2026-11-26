@@ -7011,6 +7011,8 @@ axis	Y Axis	Y 軸
 	Cancel Plug-in Run	プラグインの実行をキャンセル
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} は完了しましたが、その間にドキュメントまたはプラグインが変更されました。もう一度実行してください
 @msg	Running “{name}”…	「{name}」を実行中…
+@msg	Plug-in “{name}”: {notice}	プラグイン「{name}」: {notice}
+@msg	`notice` must be a string with visible text	`notice` は表示される文字を含む文字列にしてください
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	ライブ効果はドキュメントの描画中に実行されるため、`heavy` にはできません
 @msg	an exporter always gets an export's budget: leave `budget` out	書き出しプラグインには常に書き出しの予算が割り当てられます。`budget` は省略してください
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	「{_1}」は大きな計算予算を求めています (1 回の実行につき最大 {minutes} 分、通常の {times} 倍の命令)。デスクトップ アプリで人が承認するか、--allow-plugin-grants を付けて開始したセッションで `allowHeavy: true` を指定してください
@@ -7102,7 +7104,7 @@ axis	Y Axis	Y 軸
 @msg	a list of {min_items} to {max_items} numbers	{min_items} から {max_items} 個の数値のリスト
 @msg	a new object needs a `path`	新しいオブジェクトには `path` が必要です
 @msg	a number	数値
-@msg	a painted live effect returns only `objects`	ペイント型のライブ効果が返すのは `objects` だけです
+@msg	a painted live effect returns only `objects` and `notice`	ペイント型のライブ効果が返すのは `objects` と `notice` だけです
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	ペイント型のライブ効果のピースに使えるのは `path`、`fillRule`、`fills`、`strokes` だけです
 @msg	a read-only object was left out	読み取り専用のオブジェクトが省かれています
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	読み取り専用のオブジェクトが省かれています: {{"id": …}} だけの形か、渡されたとおりの形で返してください

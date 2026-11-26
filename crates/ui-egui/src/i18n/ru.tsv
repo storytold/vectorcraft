@@ -6935,6 +6935,8 @@ axis	Y Axis	Ось Y
 	Cancel Plug-in Run	Отменить запуск модуля
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} завершился, но документ или модуль за это время изменился: запустите его снова
 @msg	Running “{name}”…	Выполняется «{name}»…
+@msg	Plug-in “{name}”: {notice}	Модуль «{name}»: {notice}
+@msg	`notice` must be a string with visible text	`notice` должен быть строкой с видимым текстом
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	динамический эффект выполняется во время отрисовки документа, поэтому он не может быть `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	модуль экспорта всегда получает бюджет экспорта: не указывайте `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	«{_1}» запрашивает большой вычислительный бюджет (каждый запуск до {minutes} минут и в {times} раз больше инструкций, чем обычно): его должен одобрить человек в настольном приложении, либо передайте `allowHeavy: true` в сеансе, запущенном с --allow-plugin-grants
@@ -7027,7 +7029,7 @@ axis	Y Axis	Ось Y
 @msg	a list of {min_items} to {max_items} numbers	список из {min_items}-{max_items} чисел
 @msg	a new object needs a `path`	новому объекту нужен `path`
 @msg	a number	число
-@msg	a painted live effect returns only `objects`	рисующий динамический эффект возвращает только `objects`
+@msg	a painted live effect returns only `objects` and `notice`	рисующий динамический эффект возвращает только `objects` и `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	у части рисующего динамического эффекта есть только `path`, `fillRule`, `fills` и `strokes`
 @msg	a read-only object was left out	пропущен объект только для чтения
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	пропущен объект только для чтения: верните его как один {{"id": …}} или в том виде, в каком он был передан

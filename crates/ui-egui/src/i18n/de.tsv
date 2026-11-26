@@ -6897,6 +6897,8 @@ axis	Y Axis	Y-Achse
 	Cancel Plug-in Run	Plug-in-Ausführung abbrechen
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} ist fertig, aber das Dokument oder das Plug-in hat sich inzwischen geändert: Führen Sie es erneut aus
 @msg	Running “{name}”…	„{name}“ wird ausgeführt…
+@msg	Plug-in “{name}”: {notice}	Plug-in „{name}“: {notice}
+@msg	`notice` must be a string with visible text	`notice` muss eine Zeichenkette mit sichtbarem Text sein
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	ein Live-Effekt läuft, während das Dokument gezeichnet wird, daher kann er nicht `heavy` sein
 @msg	an exporter always gets an export's budget: leave `budget` out	ein Export-Plug-in erhält immer das Budget eines Exports: Lassen Sie `budget` weg
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	„{_1}“ verlangt ein großes Rechenbudget (jede Ausführung bis zu {minutes} Minuten und {times}-mal so viele Anweisungen wie üblich): Eine Person muss es in der Desktop-App genehmigen, oder übergeben Sie `allowHeavy: true` in einer mit --allow-plugin-grants gestarteten Sitzung
@@ -6988,7 +6990,7 @@ axis	Y Axis	Y-Achse
 @msg	a list of {min_items} to {max_items} numbers	eine Liste von {min_items} bis {max_items} Zahlen
 @msg	a new object needs a `path`	ein neues Objekt braucht einen `path`
 @msg	a number	eine Zahl
-@msg	a painted live effect returns only `objects`	ein malender Live-Effekt gibt nur `objects` zurück
+@msg	a painted live effect returns only `objects` and `notice`	ein malender Live-Effekt gibt nur `objects` und `notice` zurück
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	ein Teil eines malenden Live-Effekts hat nur `path`, `fillRule`, `fills` und `strokes`
 @msg	a read-only object was left out	ein schreibgeschütztes Objekt wurde weggelassen
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	ein schreibgeschütztes Objekt wurde weggelassen: Geben Sie es zurück, als {{"id": …}} allein oder so, wie es übergeben wurde

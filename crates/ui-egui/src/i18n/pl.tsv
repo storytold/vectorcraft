@@ -7169,6 +7169,8 @@ axis	Y Axis	Oś Y
 	Cancel Plug-in Run	Anuluj działanie wtyczki
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} zakończył działanie, ale w międzyczasie zmienił się dokument lub wtyczka: uruchom ją ponownie
 @msg	Running “{name}”…	Uruchamianie „{name}”…
+@msg	Plug-in “{name}”: {notice}	Wtyczka „{name}”: {notice}
+@msg	`notice` must be a string with visible text	`notice` musi być ciągiem znaków z widocznym tekstem
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	efekt na żywo działa podczas rysowania dokumentu, więc nie może być `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	wtyczka eksportu zawsze dostaje budżet eksportu: pomiń `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	„{_1}” prosi o duży budżet obliczeń (każde uruchomienie do {minutes} minut i {times} razy więcej instrukcji niż zwykle): musi ją zatwierdzić osoba w aplikacji desktopowej albo przekaż `allowHeavy: true` w sesji uruchomionej z --allow-plugin-grants
@@ -7260,7 +7262,7 @@ axis	Y Axis	Oś Y
 @msg	a list of {min_items} to {max_items} numbers	listą od {min_items} do {max_items} liczb
 @msg	a new object needs a `path`	nowy obiekt wymaga `path`
 @msg	a number	liczbą
-@msg	a painted live effect returns only `objects`	malujący efekt dynamiczny zwraca tylko `objects`
+@msg	a painted live effect returns only `objects` and `notice`	malujący efekt dynamiczny zwraca tylko `objects` i `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	element malującego efektu dynamicznego ma tylko `path`, `fillRule`, `fills` i `strokes`
 @msg	a read-only object was left out	pominięto obiekt tylko do odczytu
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	pominięto obiekt tylko do odczytu: zwróć go jako samo {{"id": …}} lub w postaci, w jakiej został przekazany

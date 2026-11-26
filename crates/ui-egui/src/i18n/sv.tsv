@@ -7361,6 +7361,8 @@ axis	Y Axis	Y-axel
 	Cancel Plug-in Run	Avbryt körning av plugin
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} är klar, men dokumentet eller pluginet ändrades under tiden: kör det igen
 @msg	Running “{name}”…	Kör ”{name}”…
+@msg	Plug-in “{name}”: {notice}	Plugin ”{name}”: {notice}
+@msg	`notice` must be a string with visible text	`notice` måste vara en sträng med synlig text
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	en live-effekt körs medan dokumentet ritas, så den kan inte vara `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	ett exportinsticksprogram får alltid en exports budget: utelämna `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	”{_1}” begär en stor beräkningsbudget (varje körning upp till {minutes} minuter och {times} gånger de vanliga instruktionerna): en person måste godkänna det i skrivbordsappen, eller skicka `allowHeavy: true` i en session som startats med --allow-plugin-grants
@@ -7405,7 +7407,7 @@ axis	Y Axis	Y-axel
 @msg	a list of {min_items} to {max_items} numbers	en lista med {min_items} till {max_items} tal
 @msg	a new object needs a `path`	ett nytt objekt behöver en `path`
 @msg	a number	ett tal
-@msg	a painted live effect returns only `objects`	en målande live-effekt returnerar bara `objects`
+@msg	a painted live effect returns only `objects` and `notice`	en målande live-effekt returnerar bara `objects` och `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	en del av en målande live-effekt har bara `path`, `fillRule`, `fills` och `strokes`
 @msg	a read-only object was left out	ett skrivskyddat objekt utelämnades
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	ett skrivskyddat objekt utelämnades: returnera det som enbart {{"id": …}} eller som det gavs

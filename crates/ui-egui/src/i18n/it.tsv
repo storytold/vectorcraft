@@ -6936,6 +6936,8 @@ axis	Y Axis	Asse Y
 	Cancel Plug-in Run	Annulla esecuzione plug-in
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} è terminato, ma nel frattempo il documento o il plug-in è cambiato: va eseguito di nuovo
 @msg	Running “{name}”…	Esecuzione di “{name}”…
+@msg	Plug-in “{name}”: {notice}	Dal plug-in “{name}”: {notice}
+@msg	`notice` must be a string with visible text	`notice` deve essere una stringa con testo visibile
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	un effetto dinamico viene eseguito mentre il documento viene disegnato, quindi non può essere `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	un plug-in di esportazione riceve sempre il budget di un’esportazione: ometti `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” chiede un budget di calcolo elevato (ogni esecuzione fino a {minutes} minuti e {times} volte le istruzioni consuete): una persona deve approvarlo nell’app desktop, oppure passa `allowHeavy: true` in una sessione avviata con --allow-plugin-grants
@@ -7027,7 +7029,7 @@ axis	Y Axis	Asse Y
 @msg	a list of {min_items} to {max_items} numbers	un elenco da {min_items} a {max_items} numeri
 @msg	a new object needs a `path`	un nuovo oggetto richiede un `path`
 @msg	a number	un numero
-@msg	a painted live effect returns only `objects`	un effetto dinamico di pittura restituisce solo `objects`
+@msg	a painted live effect returns only `objects` and `notice`	un effetto dinamico di pittura restituisce solo `objects` e `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	un pezzo di un effetto dinamico di pittura ha solo `path`, `fillRule`, `fills` e `strokes`
 @msg	a read-only object was left out	è stato omesso un oggetto di sola lettura
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	è stato omesso un oggetto di sola lettura: restituiscilo come {{"id": …}} da solo o così come è stato fornito

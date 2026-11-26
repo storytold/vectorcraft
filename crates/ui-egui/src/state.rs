@@ -701,6 +701,11 @@ pub struct UiState {
     /// Not saved.
     #[serde(skip)]
     pub status_notes: Option<(String, Vec<String>)>,
+    /// The status text a plug-in wrote, with the app's words before and after it: while the status
+    /// is these three together, the status bar translates the app's words and shows the plug-in's
+    /// as they are ([`crate::plugin_runs::show_notice`]). Not saved.
+    #[serde(skip)]
+    pub status_kept: Option<(String, String, String)>,
     pub palette_open: bool,
     pub palette_query: String,
     /// Set when the palette's shortcut, its command or the search icon opens or closes the palette,
@@ -1471,6 +1476,7 @@ impl Default for UiState {
             replace_font_warning: None,
             last_find: None,
             status_notes: None,
+            status_kept: None,
             palette_open: false,
             palette_query: String::new(),
             palette_toggled: false,

@@ -7154,6 +7154,8 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	S’ha restaurat {n} document recuperat: desa’l per conservar-lo|S’han restaurat {n} documents recuperats: desa’ls per conservar-los
 @msg	result would exceed the canvas (coordinates out of range)	el resultat excediria el llenç (coordenades fora de rang)
 @msg	Running “{name}”…	S’està executant «{name}»…
+@msg	Plug-in “{name}”: {notice}	Complement «{name}»: {notice}
+@msg	`notice` must be a string with visible text	`notice` ha de ser una cadena amb text visible
 @msg	Save for Web: the image is empty	Desa per a la web: la imatge és buida
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Desa escriu {_1}, no {_2}: fes servir document.export per a altres formats
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Desa escriu {_1}, no {_2}: fes servir file.saveAsTemplate per escriure’l
@@ -7792,7 +7794,7 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	a list of {min_items} to {max_items} numbers	una llista de {min_items} a {max_items} nombres
 @msg	a new object needs a `path`	un objecte nou necessita un `path`
 @msg	a number	un nombre
-@msg	a painted live effect returns only `objects`	un efecte dinàmic de pintura només retorna `objects`
+@msg	a painted live effect returns only `objects` and `notice`	un efecte dinàmic de pintura només retorna `objects` i `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	una peça d’un efecte dinàmic de pintura només té `path`, `fillRule`, `fills` i `strokes`
 @msg	a read-only object was left out	s’ha omès un objecte de només lectura
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	s’ha omès un objecte de només lectura: retorneu-lo com a {{"id": …}} sol o tal com s’ha rebut

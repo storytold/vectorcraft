@@ -7213,6 +7213,8 @@ axis	Y Axis	Eixo Y
 	Cancel Plug-in Run	Cancelar Execução do Plug-in
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} terminou, mas o documento ou o plug-in mudou nesse meio-tempo: execute-o novamente
 @msg	Running “{name}”…	Executando “{name}”…
+@msg	Plug-in “{name}”: {notice}	Do plug-in “{name}”: {notice}
+@msg	`notice` must be a string with visible text	`notice` deve ser uma string com texto visível
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	um efeito dinâmico é executado enquanto o documento é desenhado, então não pode ser `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	um plug-in de exportação sempre recebe o orçamento de uma exportação: omita `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” pede um orçamento de processamento grande (cada execução até {minutes} minutos e {times} vezes as instruções habituais): uma pessoa precisa aprová-lo no aplicativo de desktop, ou passe `allowHeavy: true` em uma sessão iniciada com --allow-plugin-grants
@@ -7304,7 +7306,7 @@ axis	Y Axis	Eixo Y
 @msg	a list of {min_items} to {max_items} numbers	uma lista de {min_items} a {max_items} números
 @msg	a new object needs a `path`	um objeto novo precisa de um `path`
 @msg	a number	um número
-@msg	a painted live effect returns only `objects`	um efeito dinâmico de pintura retorna apenas `objects`
+@msg	a painted live effect returns only `objects` and `notice`	um efeito dinâmico de pintura retorna apenas `objects` e `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	uma peça de um efeito dinâmico de pintura tem apenas `path`, `fillRule`, `fills` e `strokes`
 @msg	a read-only object was left out	um objeto somente leitura foi omitido
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	um objeto somente leitura foi omitido: retorne-o como {{"id": …}} sozinho ou como foi recebido

@@ -413,6 +413,8 @@
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` berlaku untuk gradien linear, radial, conic, dan diamond
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} selesai, tetapi dokumen atau plug-in berubah sementara itu: jalankan lagi
 @msg	Running “{name}”…	Menjalankan “{name}”…
+@msg	Plug-in “{name}”: {notice}	Plug-in “{name}” melaporkan: {notice}
+@msg	`notice` must be a string with visible text	`notice` harus berupa string dengan teks yang terlihat
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	efek langsung berjalan saat dokumen digambar, sehingga tidak dapat `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	pengekspor selalu mendapat anggaran ekspor: hilangkan `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” meminta anggaran berat (setiap proses hingga {minutes} menit dan {times} kali instruksi biasa): seseorang harus menyetujuinya di aplikasi desktop, atau berikan `allowHeavy: true` dalam sesi yang dimulai dengan --allow-plugin-grants
@@ -503,7 +505,7 @@
 @msg	a list of {min_items} to {max_items} numbers	daftar berisi {min_items} sampai {max_items} angka
 @msg	a new object needs a `path`	objek baru memerlukan `path`
 @msg	a number	angka
-@msg	a painted live effect returns only `objects`	efek langsung yang dicat hanya mengembalikan `objects`
+@msg	a painted live effect returns only `objects` and `notice`	efek langsung yang dicat hanya mengembalikan `objects` dan `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	potongan efek langsung yang dicat hanya memiliki `path`, `fillRule`, `fills` dan `strokes`
 @msg	a read-only object was left out	objek baca-saja dihilangkan
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	objek baca-saja dihilangkan: kembalikan objek itu, sebagai {{"id": …}} saja atau seperti yang diberikan

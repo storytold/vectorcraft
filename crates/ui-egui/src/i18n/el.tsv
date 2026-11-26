@@ -7303,6 +7303,8 @@ axis	Y Axis	Άξονας Y
 	Cancel Plug-in Run	Ακύρωση εκτέλεσης προσθέτου
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	Το {_1} ολοκληρώθηκε, αλλά το έγγραφο ή το πρόσθετο άλλαξε στο μεταξύ: εκτελέστε το ξανά
 @msg	Running “{name}”…	Εκτέλεση του «{name}»…
+@msg	Plug-in “{name}”: {notice}	Πρόσθετο «{name}»: {notice}
+@msg	`notice` must be a string with visible text	το `notice` πρέπει να είναι συμβολοσειρά με ορατό κείμενο
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	ένα δυναμικό εφέ εκτελείται κατά τη σχεδίαση του εγγράφου, οπότε δεν μπορεί να είναι `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	ένα πρόσθετο εξαγωγής παίρνει πάντα τον προϋπολογισμό μιας εξαγωγής: παραλείψτε το `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	το «{_1}» ζητά μεγάλο υπολογιστικό προϋπολογισμό (κάθε εκτέλεση έως {minutes} λεπτά και {times} φορές τις συνήθεις εντολές): πρέπει να το εγκρίνει ένα άτομο στην εφαρμογή επιφάνειας εργασίας ή περάστε `allowHeavy: true` σε μια συνεδρία που ξεκίνησε με --allow-plugin-grants
@@ -7395,7 +7397,7 @@ axis	Y Axis	Άξονας Y
 @msg	a list of {min_items} to {max_items} numbers	λίστα {min_items} έως {max_items} αριθμών
 @msg	a new object needs a `path`	ένα νέο αντικείμενο χρειάζεται `path`
 @msg	a number	αριθμός
-@msg	a painted live effect returns only `objects`	ένα ζωντανό εφέ βαφής επιστρέφει μόνο `objects`
+@msg	a painted live effect returns only `objects` and `notice`	ένα ζωντανό εφέ βαφής επιστρέφει μόνο `objects` και `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	ένα κομμάτι ζωντανού εφέ βαφής έχει μόνο `path`, `fillRule`, `fills` και `strokes`
 @msg	a read-only object was left out	παραλείφθηκε ένα αντικείμενο μόνο για ανάγνωση
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	παραλείφθηκε ένα αντικείμενο μόνο για ανάγνωση: επιστρέψτε το ως {{"id": …}} μόνο ή όπως δόθηκε

@@ -7386,6 +7386,8 @@ axis	Y Axis	Y ekseni
 	Cancel Plug-in Run	Eklenti Çalıştırmasını İptal Et
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} bitti, ancak bu sırada belge veya eklenti değişti: yeniden çalıştırın
 @msg	Running “{name}”…	“{name}” çalıştırılıyor…
+@msg	Plug-in “{name}”: {notice}	“{name}” eklentisi: {notice}
+@msg	`notice` must be a string with visible text	`notice` görünür metin içeren bir dize olmalıdır
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	canlı efekt belge çizilirken çalışır, bu yüzden `heavy` olamaz
 @msg	an exporter always gets an export's budget: leave `budget` out	dışa aktarma eklentisi her zaman bir dışa aktarmanın bütçesini alır: `budget` anahtarını çıkarın
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” büyük bir hesaplama bütçesi istiyor (her çalıştırma en fazla {minutes} dakika ve olağan komutların {times} katı): masaüstü uygulamasında bir kişinin onaylaması gerekir veya --allow-plugin-grants ile başlatılan bir oturumda `allowHeavy: true` geçirin
@@ -7477,7 +7479,7 @@ axis	Y Axis	Y ekseni
 @msg	a list of {min_items} to {max_items} numbers	{min_items} ile {max_items} arasında sayıdan oluşan bir liste
 @msg	a new object needs a `path`	yeni bir nesnenin `path` değerine ihtiyacı vardır
 @msg	a number	bir sayı
-@msg	a painted live effect returns only `objects`	boyama türü canlı efekt yalnızca `objects` döndürür
+@msg	a painted live effect returns only `objects` and `notice`	boyama türü canlı efekt yalnızca `objects` ve `notice` döndürür
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	boyama türü canlı efektin bir parçasında yalnızca `path`, `fillRule`, `fills` ve `strokes` bulunur
 @msg	a read-only object was left out	salt okunur bir nesne atlandı
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	salt okunur bir nesne atlandı: onu yalnızca {{"id": …}} olarak veya verildiği gibi döndürün

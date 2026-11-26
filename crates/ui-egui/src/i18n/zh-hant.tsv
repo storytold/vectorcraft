@@ -6967,6 +6967,8 @@ axis	Y Axis	Y 軸
 	Cancel Plug-in Run	取消執行增效模組
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} 已完成，但文件或增效模組在此期間已變更：請重新執行
 @msg	Running “{name}”…	正在執行「{name}」…
+@msg	Plug-in “{name}”: {notice}	增效模組「{name}」：{notice}
+@msg	`notice` must be a string with visible text	`notice` 必須是包含可見文字的字串
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	即時效果會在繪製文件時執行，因此不能是 `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	匯出增效模組一律使用匯出的預算：請移除 `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	「{_1}」需要大量運算預算（每次執行最多 {minutes} 分鐘，指令數為一般的 {times} 倍）：需要有人在桌面應用程式中核准，或在以 --allow-plugin-grants 啟動的工作階段中傳入 `allowHeavy: true`
@@ -7058,7 +7060,7 @@ axis	Y Axis	Y 軸
 @msg	a list of {min_items} to {max_items} numbers	包含 {min_items} 到 {max_items} 個數字的清單
 @msg	a new object needs a `path`	新物件需要 `path`
 @msg	a number	數字
-@msg	a painted live effect returns only `objects`	繪製型即時效果只傳回 `objects`
+@msg	a painted live effect returns only `objects` and `notice`	繪製型即時效果只傳回 `objects` 和 `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	繪製型即時效果的片段只有 `path`、`fillRule`、`fills` 和 `strokes`
 @msg	a read-only object was left out	漏掉了一個唯讀物件
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	漏掉了一個唯讀物件：請以單獨的 {{"id": …}} 或原樣傳回它

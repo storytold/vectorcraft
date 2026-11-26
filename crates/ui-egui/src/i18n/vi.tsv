@@ -6964,6 +6964,8 @@ axis	Y Axis	Trục Y
 	Cancel Plug-in Run	Hủy lần chạy plug-in
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} đã chạy xong, nhưng tài liệu hoặc plug-in đã thay đổi trong lúc đó: hãy chạy lại
 @msg	Running “{name}”…	Đang chạy “{name}”…
+@msg	Plug-in “{name}”: {notice}	Plug-in “{name}” báo: {notice}
+@msg	`notice` must be a string with visible text	`notice` phải là một chuỗi có văn bản hiển thị
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	hiệu ứng trực tiếp chạy trong lúc tài liệu được vẽ nên không thể là `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	plug-in xuất luôn nhận ngân sách của một lần xuất: hãy bỏ `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” yêu cầu ngân sách tính toán lớn (mỗi lần chạy tới {minutes} phút và gấp {times} lần số lệnh thông thường): cần một người phê duyệt trong ứng dụng máy tính, hoặc truyền `allowHeavy: true` trong phiên khởi động bằng --allow-plugin-grants
@@ -7056,7 +7058,7 @@ axis	Y Axis	Trục Y
 @msg	a list of {min_items} to {max_items} numbers	một danh sách gồm {min_items} đến {max_items} số
 @msg	a new object needs a `path`	đối tượng mới cần một `path`
 @msg	a number	một số
-@msg	a painted live effect returns only `objects`	hiệu ứng động kiểu tô chỉ trả về `objects`
+@msg	a painted live effect returns only `objects` and `notice`	hiệu ứng động kiểu tô chỉ trả về `objects` và `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	một phần của hiệu ứng động kiểu tô chỉ có `path`, `fillRule`, `fills` và `strokes`
 @msg	a read-only object was left out	một đối tượng chỉ đọc đã bị bỏ sót
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	một đối tượng chỉ đọc đã bị bỏ sót: hãy trả lại nó dưới dạng chỉ {{"id": …}} hoặc như khi được nhận

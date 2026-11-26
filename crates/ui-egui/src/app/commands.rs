@@ -81,6 +81,9 @@ impl VectorcraftApp {
         if id == "prefs.import" && result.is_ok() {
             crate::prefs_dialog::imported(self, touch_workspace);
         }
+        if let Ok(r) = &result {
+            crate::plugin_runs::show_notice(self, id, r);
+        }
         placing::settle_swatch_paste(self);
         result
     }

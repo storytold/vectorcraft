@@ -6918,6 +6918,8 @@ axis	Y Axis	Вісь Y
 	Cancel Plug-in Run	Скасувати запуск модуля
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} завершився, але документ або модуль тим часом змінився: запустіть його знову
 @msg	Running “{name}”…	Виконується «{name}»…
+@msg	Plug-in “{name}”: {notice}	Модуль «{name}»: {notice}
+@msg	`notice` must be a string with visible text	`notice` має бути рядком із видимим текстом
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	динамічний ефект виконується під час відмальовування документа, тому він не може бути `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	модуль експорту завжди отримує бюджет експорту: не вказуйте `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	«{_1}» запитує великий обчислювальний бюджет (кожен запуск до {minutes} хвилин і в {times} разів більше інструкцій, ніж зазвичай): його має схвалити людина в настільному застосунку, або передайте `allowHeavy: true` у сеансі, запущеному з --allow-plugin-grants
@@ -7009,7 +7011,7 @@ axis	Y Axis	Вісь Y
 @msg	a list of {min_items} to {max_items} numbers	список із {min_items}-{max_items} чисел
 @msg	a new object needs a `path`	новому об’єкту потрібен `path`
 @msg	a number	число
-@msg	a painted live effect returns only `objects`	малювальний динамічний ефект повертає лише `objects`
+@msg	a painted live effect returns only `objects` and `notice`	малювальний динамічний ефект повертає лише `objects` і `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	частина малювального динамічного ефекту має лише `path`, `fillRule`, `fills` і `strokes`
 @msg	a read-only object was left out	пропущено об’єкт лише для читання
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	пропущено об’єкт лише для читання: поверніть його як один {{"id": …}} або в тому вигляді, у якому його передано

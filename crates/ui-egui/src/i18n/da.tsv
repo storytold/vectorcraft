@@ -530,6 +530,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` gælder for lineære, radiale, koniske og diamantformede gradienter
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} blev færdig, men dokumentet eller plug-in'et ændrede sig i mellemtiden: kør det igen
 @msg	Running “{name}”…	Kører »{name}«…
+@msg	Plug-in “{name}”: {notice}	Plug-in »{name}«: {notice}
+@msg	`notice` must be a string with visible text	`notice` skal være en streng med synlig tekst
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	en live-effekt kører, mens dokumentet tegnes, så den kan ikke være `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	en eksportør får altid et eksportbudget: udelad `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	»{_1}« beder om et tungt budget (hver kørsel op til {minutes} minutter og {times} gange de sædvanlige instruktioner): en person skal godkende det i skrivebordsappen, eller send `allowHeavy: true` i en session startet med --allow-plugin-grants
@@ -621,7 +623,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	a list of {min_items} to {max_items} numbers	en liste med {min_items} til {max_items} tal
 @msg	a new object needs a `path`	et nyt objekt kræver en `path`
 @msg	a number	et tal
-@msg	a painted live effect returns only `objects`	en malet live-effekt returnerer kun `objects`
+@msg	a painted live effect returns only `objects` and `notice`	en malet live-effekt returnerer kun `objects` og `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	et stykke fra en malet live-effekt har kun `path`, `fillRule`, `fills` og `strokes`
 @msg	a read-only object was left out	et skrivebeskyttet objekt blev udeladt
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	et skrivebeskyttet objekt blev udeladt: returnér det, som {{"id": …}} alene eller som det blev givet

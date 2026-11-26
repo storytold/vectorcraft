@@ -382,6 +382,7 @@ impl FilterRun {
         // A command's undo step is named after the command.
         let label = self.label();
         let (inputs, parent) = (self.inputs, self.parent);
+        let notice = out.notice;
         // The output is applied to a copy of the document, as `colorcmds::edit_if_changed` applies
         // its pass: only a copy whose objects or kept data differ becomes the document, as one undo
         // step. Otherwise the document, its undo and redo steps and its saved state stay as they
@@ -423,6 +424,11 @@ impl FilterRun {
         if let Some(cmd) = &self.command {
             out["command"] = json!(cmd.id);
         }
+        // Only an output that was applied reports its notice, with the name of the plug-in that ran.
+        if let Some(notice) = notice {
+            out["notice"] = json!(notice);
+            out["pluginName"] = json!(m.name);
+        }
         Ok(out)
     }
 }
@@ -442,8 +448,9 @@ fn not_granted(name: &str, permission: Permission) -> EngineError {
 /// parameters and `_context` (what it keeps with the document included), and applies its output as
 /// one undo step ([`objects::apply_output`]; effect records as [`admit_effects`] admits them), with
 /// what it keeps with the document from now on: the output handed in for this very run when there
-/// is one ([`FilterRun::hand_in`]), else the plug-in's, run now. → `{plugin, ids}`: what it made or
-/// changed, which is then selected.
+/// is one ([`FilterRun::hand_in`]), else the plug-in's, run now. → `{plugin, ids, notice?,
+/// pluginName?}`: what it made or changed, which is then selected, and the output's `notice` once it
+/// was applied, with the plug-in's name.
 fn run(s: &mut Session, p: &Value) -> Result<Value> {
     // An output handed in is for this run only (the app hands it in just before), whatever it does.
     let handed = s.plugin_output.take();
@@ -816,7 +823,7 @@ fn spec_of(p: &Plugin, c: &Command) -> &'static CommandSpec {
         fields.push_str(own);
     }
     let params = format!(
-        "{{{fields}}} run “{label}”, a command of plug-in {}, on the selected paths and compound paths as plugin.run runs a filter, with _context.command {:?}: one undo step, none when the run changes nothing → {{plugin, command, ids}}",
+        "{{{fields}}} run “{label}”, a command of plug-in {}, on the selected paths and compound paths as plugin.run runs a filter, with _context.command {:?}: one undo step, none when the run changes nothing → {{plugin, command, ids, notice?, pluginName?}} (pluginName, the plug-in's name, comes with notice)",
         m.id, c.id
     );
     let mut made = MADE.lock().unwrap_or_else(|e| e.into_inner());
@@ -852,9 +859,9 @@ fn unrouted(_: &mut Session, _: &Value) -> Result<Value> {
 /// Runs plug-in command `id` (`plugin.<plug-in id>.<command id>`): a filter run of the plug-in on
 /// `ids` (else the selection) with the command's own parameters, checked before it runs, and
 /// `_context.command`, under the plug-in's permissions and budget, applied as one undo step named
-/// after the command → `{plugin, command, ids}`. A run that fails (a trap, an exhausted budget, an
-/// output it may not make) leaves the document as it was, and the error names the plug-in and the
-/// command.
+/// after the command → `{plugin, command, ids, notice?, pluginName?}`. A run that fails (a trap, an exhausted
+/// budget, an output it may not make) leaves the document as it was, and the error names the
+/// plug-in and the command.
 pub(crate) fn run_command(s: &mut Session, id: &str, p: &Value) -> Result<Value> {
     // An output handed in is for `plugin.run` alone.
     s.plugin_output = None;
@@ -1868,7 +1875,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Run Plug-in",
             [],
             None,
-            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [object id] (left out or null: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths, compound paths that clip a clip group and paths inside a group that clips one are left out): it may change, delete or add objects, as one undo step (an output that changes no object and no kept data records none and leaves the document unmodified); the result is selected, except the objects it locked or made guides. A filter whose manifest lists inputs (type, image, symbolInstance; it lists doc.read in permissions, so plugin.install needs grant) is also given the selected objects of those kinds to read, in paint order from the bottom, with at most 16 MiB of pixels and 16 MiB of type runs per run (an object that doesn't fit what the objects before it left comes with pixelsOmitted or truncated; an image that reaches the decoder counts toward the pixels even when decoding fails); every object counts toward the input's half of the plug-in's memory cap, ids, bounds, transforms and names included, and an object whose fields besides its pixels and runs don't fit fails the run with a memory-budget error naming it and its size (a path or compound path fails it with the memory-budget error for a selection too large to hand over), and more than 100,000 of these objects fail it with an object-budget error: its output returns each as {id} or exactly as given, or the run is refused and nothing changes. With nothing selected it gets no objects (generators add theirs to the current layer). A filter with a commandAllowlist runs the commands it names while it runs (vc_call, see docs/plugins.md): its calls and its output are one undo step, and a run that fails or makes a call that fails changes nothing → {plugin, ids}",
+            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [object id] (left out or null: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths, compound paths that clip a clip group and paths inside a group that clips one are left out): it may change, delete or add objects, as one undo step (an output that changes no object and no kept data records none and leaves the document unmodified); the result is selected, except the objects it locked or made guides. A filter whose manifest lists inputs (type, image, symbolInstance; it lists doc.read in permissions, so plugin.install needs grant) is also given the selected objects of those kinds to read, in paint order from the bottom, with at most 16 MiB of pixels and 16 MiB of type runs per run (an object that doesn't fit what the objects before it left comes with pixelsOmitted or truncated; an image that reaches the decoder counts toward the pixels even when decoding fails); every object counts toward the input's half of the plug-in's memory cap, ids, bounds, transforms and names included, and an object whose fields besides its pixels and runs don't fit fails the run with a memory-budget error naming it and its size (a path or compound path fails it with the memory-budget error for a selection too large to hand over), and more than 100,000 of these objects fail it with an object-budget error: its output returns each as {id} or exactly as given, or the run is refused and nothing changes. With nothing selected it gets no objects (generators add theirs to the current layer). A filter with a commandAllowlist runs the commands it names while it runs (vc_call, see docs/plugins.md): its calls and its output are one undo step, and a run that fails or makes a call that fails changes nothing → {plugin, ids, notice?, pluginName?} (notice: the text the output reports in its notice key once applied, escaped and cut at 200 characters; pluginName: the plug-in's name, with it)",
             has_doc,
             run
         ),

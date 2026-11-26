@@ -7299,6 +7299,8 @@ axis	Y Axis	Y tengely
 	Cancel Plug-in Run	Bővítmény futásának megszakítása
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} lefutott, de közben megváltozott a dokumentum vagy a bővítmény: futtasd újra
 @msg	Running “{name}”…	Futtatás: „{name}”…
+@msg	Plug-in “{name}”: {notice}	„{name}” bővítmény: {notice}
+@msg	`notice` must be a string with visible text	a `notice` látható szöveget tartalmazó karakterlánc legyen
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	az élő effektus a dokumentum rajzolása közben fut, ezért nem lehet `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	az exportáló bővítmény mindig az exportálás keretét kapja: hagyd ki a `budget` kulcsot
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	a(z) „{_1}” nagy számítási keretet kér (futásonként legfeljebb {minutes} perc és a szokásos utasításszám {times}-szorosa): egy személynek jóvá kell hagynia az asztali alkalmazásban, vagy add meg az `allowHeavy: true` értéket egy --allow-plugin-grants kapcsolóval indított munkamenetben
@@ -7390,7 +7392,7 @@ axis	Y Axis	Y tengely
 @msg	a list of {min_items} to {max_items} numbers	{min_items}-{max_items} számból álló lista
 @msg	a new object needs a `path`	az új objektumhoz `path` kell
 @msg	a number	szám
-@msg	a painted live effect returns only `objects`	a festő élő effektus csak `objects` értéket ad vissza
+@msg	a painted live effect returns only `objects` and `notice`	a festő élő effektus csak `objects` és `notice` értéket ad vissza
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	a festő élő effektus darabjának csak `path`, `fillRule`, `fills` és `strokes` kulcsa van
 @msg	a read-only object was left out	kimaradt egy írásvédett objektum
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	kimaradt egy írásvédett objektum: adja vissza önmagában {{"id": …}} formában vagy úgy, ahogy megkapta
