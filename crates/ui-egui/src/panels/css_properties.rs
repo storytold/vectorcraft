@@ -10,7 +10,7 @@ use std::sync::Arc;
 use craft::behavior::IconId;
 use craft::keymap::CommandRef;
 use craft::theme::variant::Tone;
-use craft::ui::contract::{Scroll, Show as _, ShowContainer as _};
+use craft::ui::contract::{Props as _, Scroll, Show as _, ShowContainer as _};
 use craft::ui::display::{Shade, Text};
 use craft::ui::layout_components::Stack;
 use craft::ui::menu::PanelRow;
@@ -132,19 +132,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let opts = app.ui.css_properties_panel.options.clone();
     let all = !selected && app.ui.css_properties_panel.all;
     let Some(shown) = shown(app, &opts, all) else { return };
-    Stack::new().fill().surface(SurfaceKind::Well).scroll(Scroll::both()).show(ui, |ui, _| {
-        let globe = NoticeIcon::Custom(IconSpec::svg(IconId::new("globe")));
-        if shown.rules > 0 {
-            SelectableText::spans(tl!("CSS code"), spans(&shown.text)).mono().multiline().show(ui);
-        } else if selected {
-            let hint = tl!("The selected objects have no CSS of their own (see below).");
-            Notice::new(Tone::Neutral, hint).title(tl!("No CSS")).layout(NoticeLayout::Centred).icon(globe).show(ui);
-        } else {
-            let hint = tl!("Select objects to see their CSS, or Generate CSS for the whole document.");
-            Notice::new(Tone::Neutral, hint).title(tl!("No selection")).layout(NoticeLayout::Centred).icon(globe).show(ui);
-        }
-    });
-    let notes = (shown.more > 0)
+    let notes: Vec<_> = (shown.more > 0)
         .then(|| crate::i18n::tn(shown.more as u64, "{n} more rule: Export writes it.", "{n} more rules: Export writes every one."))
         .into_iter()
         .chain((shown.skipped > 0).then(|| {
@@ -154,23 +142,50 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 "{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.",
             )
         }))
-        .chain(shown.warnings.iter().map(|w| sentence(w)));
-    for n in notes {
-        Text::new(n).role(TypeRole::Caption).shade(Shade::Muted).show(ui);
-    }
+        .chain(shown.warnings.iter().map(|w| sentence(w)))
+        .collect();
     let has_css = shown.rules > 0;
     let scope = if all { "all" } else { "selection" };
     // Generate at the start edge; Export at the end edge with Copy before it.
-    let footer = FooterBar::actions([
+    let actions = [
         FooterAction::new(IconId::new("sparkles"), tl!("Generate CSS: the whole document's CSS while nothing is selected"))
             .pressed(all)
             .enabled(!selected),
         FooterAction::new(IconId::new("save"), if all { tl!("Export All…") } else { tl!("Export Selected CSS…") }).enabled(has_css),
         FooterAction::new(IconId::new("copy"), if all { tl!("Copy All Styles") } else { tl!("Copy Selected Style") }).enabled(has_css),
-    ])
-    .at_start(1)
-    .show_footer(ui);
-    match footer.picked {
+    ];
+    let mut picked = None;
+    let notes_room = (ui.available_height() / 3.0).min(72.0);
+    Stack::new()
+        .fill()
+        .footer(|ui, _| {
+            if !notes.is_empty() {
+                Stack::new().label(tl!("Notes")).fill_width().scroll(Scroll::vertical()).room_height(notes_room).show(ui, |ui, _| {
+                    for note in &notes {
+                        Text::new(note.clone()).role(TypeRole::Caption).shade(Shade::Muted).show(ui);
+                    }
+                });
+            }
+            let footer = FooterBar::actions(actions.clone()).at_start(1).show_footer(ui);
+            if !ui.is_sizing_pass() {
+                picked = footer.picked;
+            }
+        })
+        .show(ui, |ui, _| {
+            Stack::new().label(tl!("CSS Properties")).fill().surface(SurfaceKind::Well).scroll(Scroll::both()).show(ui, |ui, _| {
+                let globe = NoticeIcon::Custom(IconSpec::svg(IconId::new("globe")));
+                if shown.rules > 0 {
+                    SelectableText::spans(tl!("CSS code"), spans(&shown.text)).mono().multiline().show(ui);
+                } else if selected {
+                    let hint = tl!("The selected objects have no CSS of their own (see below).");
+                    Notice::new(Tone::Neutral, hint).title(tl!("No CSS")).layout(NoticeLayout::Centred).icon(globe).show(ui);
+                } else {
+                    let hint = tl!("Select objects to see their CSS, or Generate CSS for the whole document.");
+                    Notice::new(Tone::Neutral, hint).title(tl!("No selection")).layout(NoticeLayout::Centred).icon(globe).show(ui);
+                }
+            });
+        });
+    match picked {
         Some(0) => {
             crate::menus::invoke(app, GENERATE, json!({}));
         }
@@ -310,4 +325,40 @@ pub(crate) fn run(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resul
         },
         _ => return None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::panel_harness::Panel;
+    use vectorcraft_engine::Session;
+
+    #[test]
+    fn generated_css_notices_keep_the_actions_in_a_short_panel() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({ "width": 100, "height": 100 })).unwrap();
+        for card in 0..12 {
+            let id = app.run("shape.rectangle", json!({ "x": 0, "y": 0, "width": 20, "height": 20 })).unwrap()["id"].clone();
+            app.run("layer.setProps", json!({ "id": id, "name": format!("Card-{card}") })).unwrap();
+        }
+        app.run("shape.ellipse", json!({ "x": 30, "y": 0, "width": 20, "height": 20 })).unwrap();
+        app.run("select.none", json!({})).unwrap();
+        let options = CssOptions { unnamed: false, ..CssOptions::default() };
+        let styles = shown(&mut app, &options, true).unwrap();
+        assert_eq!((styles.rules, styles.skipped), (12, 1));
+        app.ui.css_properties_panel = CssPropertiesPanel { options, all: true };
+
+        let mut panel = Panel::new(app, show);
+        let room = egui::vec2(220.0, 220.0);
+        panel.room(room).frame();
+        panel.frame();
+        for name in ["Copy All Styles", "Export All…"] {
+            let action = panel.rect(name);
+            assert!(action.bottom() <= room.y && action.right() <= room.x, "{name} overflows the panel at {action:?}");
+            assert!(panel.enabled(name), "{name} is enabled when there is CSS");
+        }
+        let notice = panel.rect("1 unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.");
+        assert!(notice.top() >= 0.0 && notice.bottom() <= panel.rect("Copy All Styles").top(), "the notice fits above the actions: {notice:?}");
+        assert!(notice.left() >= 0.0 && notice.right() <= room.x, "the notice wraps within the panel: {notice:?}");
+    }
 }
