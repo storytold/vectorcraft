@@ -183,6 +183,34 @@ mod tests {
     use crate::tests::panel_harness::Panel;
     use vectorcraft_engine::Session;
 
+    #[test]
+    fn script_draft_does_not_follow_the_editor_to_other_artwork() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        for name in ["First", "Second"] {
+            app.run("file.new", json!({ "name": name, "width": 100, "height": 100 })).unwrap();
+            run(&mut app, "shape.rectangle", json!({ "x": 0, "y": 0, "width": 50, "height": 50 }));
+        }
+        let mut panel = Panel::new(app, show);
+        let field = caption("JavaScript:");
+        let doc = panel.app().session.active().unwrap().uid;
+        panel.click_role(field, craft::ui::contract::Role::TEXT_INPUT);
+        panel.type_text("1;");
+        assert_eq!(panel.value(field).as_deref(), Some("1;"));
+
+        panel.app().run("window.nextDocument", json!({})).unwrap();
+        panel.frame();
+        assert_ne!(panel.app().session.active().unwrap().uid, doc);
+        assert_eq!(panel.value(field).as_deref(), Some(""));
+        assert_eq!(run(&mut panel.app(), "svgInteractivity.info", json!({}))["events"], json!([]));
+
+        panel.click_role(field, craft::ui::contract::Role::TEXT_INPUT);
+        panel.type_text("2;");
+        run(&mut panel.app(), "shape.ellipse", json!({ "x": 0, "y": 0, "width": 10, "height": 20 }));
+        panel.frame();
+        assert_eq!(panel.value(field).as_deref(), Some(""));
+        assert_eq!(run(&mut panel.app(), "svgInteractivity.info", json!({}))["events"], json!([]));
+    }
+
     fn run(app: &mut VectorcraftApp, id: &str, p: Value) -> Value {
         app.session.execute(id, &p).unwrap()
     }
