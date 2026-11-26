@@ -446,6 +446,11 @@ impl VectorcraftApp {
         let now = self.now();
         self.perf.fps = self.frame_rate.frame(now, self.perf.frame_ms / 1000.0);
         self.sync_views();
+        // With no document open too, so closing the last one stops the host reading the wheel. A
+        // held press, whose previews change the document each frame, keeps what it was told.
+        if self.canvas.grab.is_none() {
+            crate::stylus::sync_wheel_use(self);
+        }
         // A document that moved between the main window and a floating OS window, or opened, takes
         // the density of the display that shows it.
         self.settle_screen_ppi_if_changed();

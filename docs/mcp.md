@@ -4525,9 +4525,12 @@ already walks Image Trace. Short agent entry points:
   value goes from the value less the variation (a Scatter brush's first value, an Art brush's `width`) at 0 to the
   value plus the variation (the second value, `width_max`) at 1, and a stroke without a wheel draws the value half
   way. Brush Options offers Stylus Wheel for a Calligraphic or Scatter brush's Size and an Art brush's Width. The
-  desktop app reads the wheel from XInput2 (`Abs Wheel`) under X11 and from AppKit (`tangentialPressure`) on macOS;
-  it does not read it on Windows or in the web build. `.ai` brush definitions read and write the wheel as variation
-  code 3.
+  desktop app reads the wheel from XInput2 (`Abs Wheel`) under X11, from AppKit (`tangentialPressure`) on macOS, and
+  on Windows from the tablet driver's Wintab interface (`pkTangentPressure`) of an airbrush pen, when `Wintab32.dll`
+  is installed; without it a Windows pen reads no wheel. Windows opens the Wintab context only while the active tool
+  uses the wheel (the Paintbrush with a brush on Stylus Wheel whose range the wheel can change, or the Blob Brush or
+  the Eraser with a value on it and a variation above 0), so there a Paintbrush stroke drawn with another brush keeps
+  no wheel. The web build does not read it. `.ai` brush definitions read and write the wheel as variation code 3.
 - Freehand Fidelity: the `fidelity` of `path.freehand` and `brush.freehand` is in points, 1.5 pt when left out. A
   value must be from 0.000015625 pt (0.01 / 640) to 100 / 0.0313 pt (about 3194.89 pt), and a value outside that range
   is rejected with an error. The Pencil and the Paintbrush give Fidelity in screen pixels, 0.01 to 100 px, and send it
