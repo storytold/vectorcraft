@@ -231,6 +231,13 @@ mod tests {
             assert_eq!(end_line(icon), butt_end, "the {name} cap icon marks the end of the path where the butt cap icon does");
             assert!(stroke_opacity(icon) < 1.0, "the {name} cap icon's stroke is lighter than its end-of-path line");
         }
+        // The stroke bar, everything before the end-of-path line, shows each cap differently.
+        let bar = |icon: &str| -> String { icon.rsplit_once("<path").map(|(b, _)| b.to_string()).unwrap_or_default() };
+        for (i, (a, icon_a)) in icons.iter().enumerate() {
+            for (b, icon_b) in &icons[i + 1..] {
+                assert_ne!(bar(icon_a), bar(icon_b), "the {a} and {b} cap icons draw the same stroke");
+            }
+        }
     }
 
     /// These tools used general-purpose library icons whose picture did not show the tool (a tornado
