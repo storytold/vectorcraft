@@ -416,7 +416,9 @@ the type shortcuts (tracking/kerning/leading/baseline steps with Alt/Shift), and
 Layers panel. The shortcut editor also lists the commands that are in no menu but run without parameters (Edit › Duplicate,
 panel-menu commands such as Break Link to Symbol), so they can be given shortcuts (#1539). It lists each button of the
 Align panel's Align Objects, Distribute Objects and Distribute Spacing rows under Align, with no default shortcut, and a
-shortcut set there runs what a click on the button runs, with the panel's Align To choice and Distribute Spacing value. The [ and ] keys reach the Blob Brush, the Eraser and the Symbolism tools in the app (#1734, part of #1661).
+shortcut set there runs what a click on the button runs, with the panel's Align To choice and Distribute Spacing value.
+It also lists the panel and dialog commands whose parameters are all optional, such as New Swatch…, Brush Options…
+and Corners…, and a shortcut set there opens the dialog for the selection or says in the status bar why it cannot. The [ and ] keys reach the Blob Brush, the Eraser and the Symbolism tools in the app (#1734, part of #1661).
 
 Cmd/Ctrl+Alt+. (`stroke.weightUp`, Stroke Weight Up) and Cmd/Ctrl+Alt+, (`stroke.weightDown`, Stroke Weight Down), the keys a [public feature request reply](https://illustrator.uservoice.com/forums/333657-illustrator-desktop-feature-requests/suggestions/32307397-increment-decrement-stroke-weight-key-commands) gives them, step the weight of each selected stroke from its own weight: by a quarter unit of Units › Stroke up to one
 unit, then by whole units, down to a quarter unit; with nothing selected they step the weight of the next object drawn (#5797).

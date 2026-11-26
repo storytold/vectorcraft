@@ -614,6 +614,29 @@ const NEEDS_A_PARAM: [&str; 77] = [
     "type.ruby",
 ];
 
+/// UI commands with no default key, no menu bar item and a params doc whose fields are all optional
+/// that a key press can run with no params: each opens its dialog for the selection, the current
+/// item or the panel's selection, or reports in the status bar why it cannot. Rename names the
+/// selection, Color Picker… opens for the proxy in front, Brush Options… for the selected path's
+/// brush, and Layer Options for the highlighted rows.
+pub(crate) const KEY_ONLY_UI: [&str; 15] = [
+    "ui.rename",
+    "ui.colorPicker",
+    "ui.newSwatch",
+    "ui.newColorGroup",
+    "ui.colorGroupOptions",
+    "ui.newBrush",
+    "ui.brushOptions",
+    "ui.layerOptions",
+    "ui.corners",
+    "ui.placementOptionsDialog",
+    "ui.relinkDialog",
+    "ui.perspectivePlane",
+    "ui.bulletsAndNumbering",
+    "ui.missingFontsDialog",
+    "ui.findFontsInFolder",
+];
+
 /// The (label, params) of each menu bar item, by command id.
 fn menu_bar_items() -> &'static HashMap<String, Vec<(String, Value)>> {
     static ITEMS: OnceLock<HashMap<String, Vec<(String, Value)>>> = OnceLock::new();
@@ -704,11 +727,9 @@ fn listed_on_its_own(c: &vectorcraft_engine::CommandSpec) -> bool {
 
 /// Is UI command `id` (default key `sc`, params doc `params`) listed in Edit › Keyboard Shortcuts
 /// whether or not an item of the menu bar runs it? It is when it has a default key or a params doc
-/// of `{}` or `{path…}`. Rename has no default key, and a key press names the selection: it needs
-/// no `id`. Color Picker… has no default key either, and a key press opens it for the proxy in
-/// front.
+/// of `{}` or `{path…}`, or is one of [`KEY_ONLY_UI`].
 fn ui_listed_on_its_own(id: &str, sc: &str, params: &str) -> bool {
-    !sc.is_empty() || params.starts_with("{}") || params.starts_with("{path") || id == "ui.rename" || id == "ui.colorPicker"
+    !sc.is_empty() || params.starts_with("{}") || params.starts_with("{path") || KEY_ONLY_UI.contains(&id)
 }
 
 /// Does a menu bar item run the command with no params, so that it does what its label says and opens
