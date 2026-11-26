@@ -1050,6 +1050,15 @@ fn recall<T: Clone>(
     kept
 }
 
+/// Move the record in `slot` from owner `was` to owner `now`, when `was` holds it.
+fn rekey<T>(slot: &mut Option<(Owner, [f32; 3], T)>, was: &Owner, now: &Owner) {
+    if let Some((owner, ..)) = slot
+        && owner == was
+    {
+        *owner = now.clone();
+    }
+}
+
 /// The HSB a color shows on the wheel: that of its display sRGB through `cms`.
 pub(crate) fn display_hsb(cms: &Cms, c: &Color) -> [f32; 3] {
     rgb_to_hsb(cms.display_rgb(c))
@@ -1510,13 +1519,13 @@ fn show_rows(app: &mut VectorcraftApp, panel: &mut WheelUi, ui: &mut Ui, cx: &Pi
         let shown = color.unwrap_or(app.session.last_solid);
         let owner = color.map(|c| Owner::of(app, tgt, c));
         opacity_row(app, panel, ui, tgt, &shown, cx.cms);
-        // An opacity edit of a gradient stop or point changes the gradient its owner holds, and the
-        // HSB picked last stays with the new gradient.
-        if let (Some(c), Some(was)) = (color, owner)
-            && let Some((remembered, ..)) = &mut panel.hsb
-            && *remembered == was
-        {
-            *remembered = Owner::of(app, tgt, c);
+        // An opacity edit adds an undo step, and on a gradient stop or point it also changes the
+        // gradient its owner holds. The HSB, HSL and OKLCH picked last stay with the edited paint.
+        if let (Some(c), Some(was)) = (color, owner) {
+            let now = Owner::of(app, tgt, c);
+            rekey(&mut panel.hsb, &was, &now);
+            rekey(&mut panel.hsl, &was, &now);
+            rekey(&mut panel.oklch, &was, &now);
         }
     } else {
         end_opacity_drag(app, panel);
