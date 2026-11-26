@@ -157,6 +157,8 @@ fn write_export(app: &mut VectorcraftApp, export: Export, path: String) -> Resul
     let (exists, allowed) = checks_replaced(app);
     let allowed_before = allowed.clone();
     let rerun = with_path(&again, &path);
+    // The question whether the export may replace files is asked under the request's scope.
+    let asked_access = (vectorcraft_engine::file_access::ScopeHandle::capture(), app.automation_asked());
     let work = move |write: Writer| {
         progress::scope(&reporting, || {
             cancel::check().map_err(|e| e.to_string())?;
@@ -192,7 +194,7 @@ fn write_export(app: &mut VectorcraftApp, export: Export, path: String) -> Resul
         // Nothing written: asked first.
         if let Some(files) = r.get("replaces").and_then(Value::as_array) {
             let files: Vec<String> = files.iter().filter_map(Value::as_str).map(str::to_string).collect();
-            return Ok(ask_to_replace_files(app, uid, &files, &allowed_before, "file.exportAs", &rerun));
+            return Ok(ask_to_replace_files(app, uid, &files, &allowed_before, "file.exportAs", &rerun, asked_access));
         }
         let what = match r["files"].as_array() {
             Some(files) => format!("{} files", files.len()),
